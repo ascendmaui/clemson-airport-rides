@@ -44,8 +44,18 @@ export default function App() {
 
   return (
     <div className="desktop-frame">
-      <div className="app-shell">
-        <div key={path} className="route-fade" style={{ height: '100%' }}>
+      <div className="app-shell" style={{ position: 'relative', height: '100%' }}>
+        <div
+          key={path}
+          className="route-fade"
+          style={{
+            position: 'absolute',
+            inset: 0,
+            width: '100%',
+            height: '100%',
+            overflow: path === 'driver' ? 'hidden' : 'auto',
+          }}
+        >
           <Screen path={path} params={params} />
         </div>
       </div>

@@ -10,7 +10,18 @@ export function DriverHome() {
   const silverTotal = 4
 
   return (
-    <div className="route-fade" style={{ position: 'relative', height: '100%', background: '#e8eaed' }}>
+    <div
+      className="route-fade"
+      style={{
+        position: 'absolute',
+        inset: 0,
+        width: '100%',
+        height: '100%',
+        minHeight: '100dvh',
+        background: '#e8eaed',
+        overflow: 'hidden',
+      }}
+    >
       <CampusMap height="100%" interactive showHeat center={CLEMSON} zoom={13} />
 
       {/* Top chrome */}
