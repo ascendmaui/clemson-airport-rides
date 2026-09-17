@@ -105,16 +105,9 @@ export function seedPractice() {
   s.trips.push({ id: crypto.randomUUID(), riderId: "practice-rider", driverId: null, status: "searching", destId: "gsp", pickupLabel: "Tillman Hall, Clemson", dropoffLabel: "GSP Airport", pickupLat: CAMPUS.lat, pickupLng: CAMPUS.lng, dropoffLat: GSP.lat, dropoffLng: GSP.lng, fareCents: 7500, depositCents: 1875, passengers: 1, flight: "AA 1234", requestedAt: Date.now() });
   return save(s);
 }
+/** Demo fleet dispatch removed — use Supabase online drivers + trips Realtime. */
 export function maybeDispatchFleet() {
-  const s = load();
-  const open = s.trips.filter((t) => t.status === "searching" && t.riderId === s.session);
-  const othersOnline = s.users.some((u) => u.id !== s.session && u.driver?.online);
-  for (const trip of open) {
-    if (Date.now() - trip.requestedAt < (othersOnline ? 18000 : 5000)) continue;
-    trip.status = "accepted"; trip.driverId = "fleet-corolla"; trip.acceptedAt = Date.now();
-    trip.driverName = "John"; trip.vehicle = "Blue Toyota Corolla"; trip.plate = "TIGER 1";
-  }
-  return save(s);
+  return load();
 }
 export function addBooking(booking) {
   const s = load(); s.bookings.push({ ...booking, id: crypto.randomUUID(), createdAt: Date.now() }); return save(s);

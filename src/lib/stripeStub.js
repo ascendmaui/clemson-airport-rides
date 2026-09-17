@@ -1,75 +1,116 @@
 /**
- * Stripe deposit stub — drop-in client shape for Phase A.
+ * Stripe client helpers — airport flat rates in CENTS.
+ * GSP 7500 → 25% deposit 1875 · CLT 17500 → 4375
  *
- * Airport flat rates: GSP $75 · CLT $175 · 25% deposit.
- *
- * Client needs only VITE_STRIPE_PUBLISHABLE_KEY.
- * The Stripe secret key (sk_…) MUST stay server-side — never ship it in Vite.
- *
- * Required env for a real PaymentIntent:
- *   Client: VITE_STRIPE_PUBLISHABLE_KEY (pk_test_… / pk_live_…)
- *   Server: STRIPE_SECRET_KEY (sk_…) + POST /api/stripe/create-deposit-intent
+ * Client: VITE_STRIPE_PUBLISHABLE_KEY / NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
+ * Server: STRIPE_SECRET_KEY (never ship in Vite)
  */
 
 export const AIRPORT_RATES = {
-  GSP: { code: 'GSP', name: 'Greenville-Spartanburg (GSP)', total: 75 },
-  CLT: { code: 'CLT', name: 'Charlotte Douglas (CLT)', total: 175 },
+  GSP: {
+    code: 'GSP',
+    name: 'Greenville-Spartanburg (GSP)',
+    fareCents: 7500,
+    total: 75,
+  },
+  CLT: {
+    code: 'CLT',
+    name: 'Charlotte Douglas (CLT)',
+    fareCents: 17500,
+    total: 175,
+  },
 }
 
-/**
- * Read publishable Stripe config from Vite env.
- * Returns { publishableKey, configured } — never invents secrets.
- */
+export function depositCents(fareCents) {
+  return Math.round(Number(fareCents) * 0.25)
+}
+
+/** @deprecated prefer depositCents — kept for dollar UI display */
+export function depositAmount(totalDollars) {
+  return Math.round(totalDollars * 0.25 * 100) / 100
+}
+
 export function getStripeConfig() {
-  const publishableKey = (import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || '').trim()
+  const publishableKey = (
+    import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY ||
+    import.meta.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY ||
+    ''
+  ).trim()
   return {
     publishableKey: publishableKey || null,
     configured: Boolean(publishableKey && publishableKey.startsWith('pk_')),
   }
 }
 
-export function depositAmount(total) {
-  return Math.round(total * 0.25 * 100) / 100
-}
-
 /**
- * Stub deposit intent. Does not call Stripe.
- *
- * When wiring live:
- *   1. Server: STRIPE_SECRET_KEY + create PaymentIntent for `deposit` (cents)
- *   2. Client: getStripeConfig().publishableKey + Stripe.js Payment Element
- *   3. Replace this body with POST /api/stripe/create-deposit-intent
- *
- * Returns a stub-shaped intent (no fake client secrets that look real).
+ * Create a checkout / deposit session via Vercel serverless.
+ * Falls back to stub when API returns stub or is unreachable.
  */
-export async function createDepositIntent({ airport, riderName }) {
+export async function createCheckoutSession({
+  airport,
+  riderName,
+  successUrl,
+  cancelUrl,
+}) {
   const rate = AIRPORT_RATES[airport]
   if (!rate) throw new Error('Unknown airport')
 
-  const deposit = depositAmount(rate.total)
+  const deposit = depositCents(rate.fareCents)
   const { publishableKey, configured } = getStripeConfig()
+  const body = {
+    airport: rate.code,
+    fareCents: rate.fareCents,
+    depositCents: deposit,
+    riderName: riderName || 'Rider',
+    successUrl:
+      successUrl ||
+      `${window.location.origin}${window.location.pathname}#/schedule?paid=1`,
+    cancelUrl:
+      cancelUrl ||
+      `${window.location.origin}${window.location.pathname}#/schedule?canceled=1`,
+  }
 
-  // Stub only — no network, no fabricated secret keys
-  console.log('[Stripe stub] createDepositIntent', {
-    airport,
-    riderName,
-    total: rate.total,
-    deposit,
-    currency: 'usd',
-    publishableKeyConfigured: configured,
-    publishableKeyPrefix: publishableKey ? `${publishableKey.slice(0, 7)}…` : null,
-  })
+  try {
+    const res = await fetch('/api/create-checkout-session', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    })
+    const data = await res.json()
+    if (res.ok) return data
+    console.warn('[Stripe] checkout API error', data)
+  } catch (err) {
+    console.warn('[Stripe] checkout API unreachable, stubbing', err)
+  }
 
   return {
     stub: true,
-    // Placeholder — not a valid Stripe secret; UI must not treat as live
-    clientSecret: null,
-    deposit,
-    total: rate.total,
+    depositCents: deposit,
+    fareCents: rate.fareCents,
     airport: rate.code,
     currency: 'usd',
+    publishableKeyConfigured: configured,
     message: configured
-      ? 'Publishable key present — wire Payment Element + server intent next'
-      : 'Set VITE_STRIPE_PUBLISHABLE_KEY; server secret stays server-side',
+      ? 'API stub — set STRIPE_SECRET_KEY on Vercel for live Checkout'
+      : 'Set VITE_STRIPE_PUBLISHABLE_KEY + server STRIPE_SECRET_KEY',
+  }
+}
+
+/** @deprecated use createCheckoutSession */
+export async function createDepositIntent({ airport, riderName }) {
+  const rate = AIRPORT_RATES[airport]
+  if (!rate) throw new Error('Unknown airport')
+  const session = await createCheckoutSession({ airport, riderName })
+  return {
+    stub: Boolean(session.stub),
+    clientSecret: session.clientSecret || null,
+    deposit: depositAmount(rate.total),
+    depositCents: session.depositCents ?? depositCents(rate.fareCents),
+    total: rate.total,
+    fareCents: rate.fareCents,
+    airport: rate.code,
+    currency: 'usd',
+    url: session.url || null,
+    message: session.message,
   }
 }
