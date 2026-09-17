@@ -10,7 +10,10 @@
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.ascendmaui.clemsonairportrides"
+      "bundleIdentifier": "com.ascendmaui.clemsonairportrides",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "package": "com.ascendmaui.clemsonairportrides",
@@ -44,8 +47,10 @@
     },
     "extra": {
       "eas": {
-        "projectId": ""
-      }
-    }
+        "projectId": "1440e29e-13f0-4571-8f32-596ec81f3369"
+      },
+      "router": {}
+    },
+    "owner": "johnmatveyev"
   }
 }
