@@ -21,3 +21,7 @@ export const supabaseConfigured = Boolean(url && key)
 export const supabase = supabaseConfigured
   ? createClient(url, key)
   : null
+
+export function isSupabaseConfigured() {
+  return supabaseConfigured
+}

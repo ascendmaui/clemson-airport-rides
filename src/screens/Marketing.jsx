@@ -1,46 +1,31 @@
 import { navigate } from '../lib/navigation'
 import { PrimaryButton } from '../components/PrimaryButton'
 
-function QrPlaceholder({ label }) {
+const IOS_BUILD = 'https://expo.dev/accounts/johnmatveyev/projects/clemson-airport-rides/builds/f621dc95-c634-4a2b-8f01-2b4c44ce2484'
+const ANDROID_BUILD = 'https://expo.dev/accounts/johnmatveyev/projects/clemson-airport-rides/builds/b7646c77-2864-4da7-9d1d-ac20cc275b77'
+
+function QrCard({ label, href, caption }) {
+  const qr = `https://api.qrserver.com/v1/create-qr-code/?size=160x160&margin=8&data=${encodeURIComponent(href)}`
   return (
-    <div style={{ textAlign: 'center' }}>
-      <div
+    <a href={href} target="_blank" rel="noreferrer" style={{ textAlign: 'center', textDecoration: 'none', color: 'inherit' }}>
+      <img
+        src={qr}
+        width={120}
+        height={120}
+        alt={`${label} download QR`}
         style={{
           width: 120,
           height: 120,
           borderRadius: 16,
-          background: `
-            repeating-conic-gradient(#0B1220 0% 25%, #fff 0% 50%) 0 0 / 12px 12px,
-            #fff
-          `,
-          border: '2px solid var(--border)',
-          display: 'grid',
-          placeItems: 'center',
+          border: '1px solid var(--border)',
+          background: '#fff',
+          display: 'block',
           margin: '0 auto 8px',
-          position: 'relative',
-          overflow: 'hidden',
         }}
-      >
-        <div
-          style={{
-            position: 'absolute',
-            inset: 28,
-            background: '#fff',
-            borderRadius: 8,
-            display: 'grid',
-            placeItems: 'center',
-            fontWeight: 700,
-            fontSize: 11,
-            color: 'var(--purple)',
-            letterSpacing: 0.5,
-          }}
-        >
-          QR
-        </div>
-      </div>
+      />
       <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink-secondary)' }}>{label}</div>
-      <div style={{ fontSize: 11, color: 'var(--ink-tertiary)', marginTop: 2 }}>Coming soon</div>
-    </div>
+      <div style={{ fontSize: 11, color: 'var(--ink-tertiary)', marginTop: 2 }}>{caption}</div>
+    </a>
   )
 }
 
@@ -51,11 +36,7 @@ export function Marketing() {
         style={{
           position: 'relative',
           height: 280,
-          background: `
-            linear-gradient(180deg, rgba(11,18,32,0.15) 0%, rgba(82,45,128,0.55) 55%, rgba(11,18,32,0.85) 100%),
-            linear-gradient(135deg, #F56600 0%, #522D80 60%, #1a0f2e 100%),
-            url(https://images.unsplash.com/photo-1566577739112-5180d4bf9390?w=1200&q=80) center/cover
-          `,
+          background: `linear-gradient(180deg, rgba(11,18,32,0.15) 0%, rgba(82,45,128,0.55) 55%, rgba(11,18,32,0.85) 100%), linear-gradient(135deg, #F56600 0%, #522D80 60%, #1a0f2e 100%)`,
           color: '#fff',
           padding: '28px 24px 32px',
           display: 'flex',
@@ -115,16 +96,16 @@ export function Marketing() {
             Get the native apps
           </h3>
           <p style={{ fontSize: 13, color: 'var(--ink-secondary)', textAlign: 'center', marginBottom: 20 }}>
-            Scan to download when Expo EAS builds ship
+            Scan for Expo internal preview installs (ad hoc / APK)
           </p>
           <div style={{ display: 'flex', justifyContent: 'center', gap: 36 }}>
-            <QrPlaceholder label="iOS App Store" />
-            <QrPlaceholder label="Google Play" />
+            <QrCard label="iOS preview" href={IOS_BUILD} caption="Install via Expo" />
+            <QrCard label="Android APK" href={ANDROID_BUILD} caption="Direct APK page" />
           </div>
         </div>
 
         <p style={{ marginTop: 24, textAlign: 'center', fontSize: 12, color: 'var(--ink-tertiary)' }}>
-          Web skeleton · Stripe & push stubbed · Schema live on Supabase
+          Preview builds live · Glass restyle on next iOS build · Stripe test keys on Vercel
         </p>
       </div>
     </div>

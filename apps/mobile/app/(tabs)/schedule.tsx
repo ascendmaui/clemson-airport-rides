@@ -1,36 +1,39 @@
-import { StyleSheet, Text, View } from 'react-native';
-import Colors from '@/constants/Colors';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { AppBackdrop, FadeIn, GlassCard, SpringButton } from '@/components/Glass';
+import { orange, purple } from '@/constants/Colors';
 
 export default function ScheduleScreen() {
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Schedule</Text>
-      <Text style={styles.body}>
-        Placeholder for rider trip calendar and departure windows (GSP / ATL / CLT). Backend hooks
-        TBD.
-      </Text>
-      <View style={styles.box}>
-        <Text style={styles.boxLabel}>No trips yet</Text>
-        <Text style={styles.boxHint}>Book from Home once booking flow is live.</Text>
-      </View>
-    </View>
+    <AppBackdrop>
+      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+        <FadeIn>
+          <GlassCard>
+            <Text style={styles.kicker}>SCHEDULE</Text>
+            <Text style={styles.title}>Your trips</Text>
+            <Text style={styles.body}>
+              Open without login. When you book, upcoming GSP / ATL / CLT windows show up here.
+            </Text>
+          </GlassCard>
+        </FadeIn>
+        <FadeIn delay={80}>
+          <GlassCard style={{ marginTop: 12, alignItems: 'center' }}>
+            <Text style={styles.empty}>No trips yet</Text>
+            <Text style={styles.hint}>Pick a tier on Home, then sign in only to confirm.</Text>
+            <View style={{ width: '100%', marginTop: 14 }}>
+              <SpringButton label="Browse ride tiers" variant="purple" onPress={() => {}} />
+            </View>
+          </GlassCard>
+        </FadeIn>
+      </ScrollView>
+    </AppBackdrop>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 24, backgroundColor: '#fff', gap: 12 },
-  title: { fontSize: 28, fontWeight: '800', color: Colors.purple },
-  body: { fontSize: 16, lineHeight: 24, color: '#444' },
-  box: {
-    marginTop: 8,
-    padding: 20,
-    borderRadius: 12,
-    borderWidth: 2,
-    borderColor: Colors.orange,
-    borderStyle: 'dashed',
-    alignItems: 'center',
-    gap: 6,
-  },
-  boxLabel: { fontWeight: '700', color: Colors.purple, fontSize: 16 },
-  boxHint: { color: '#666', textAlign: 'center' },
+  scroll: { padding: 20, paddingTop: 56, paddingBottom: 40 },
+  kicker: { fontSize: 12, fontWeight: '800', letterSpacing: 1.2, color: orange, marginBottom: 6 },
+  title: { fontSize: 26, fontWeight: '800', color: purple, marginBottom: 8 },
+  body: { fontSize: 15, lineHeight: 22, color: '#5B6472' },
+  empty: { fontWeight: '800', fontSize: 16, color: purple },
+  hint: { marginTop: 6, textAlign: 'center', color: '#5B6472', fontSize: 13, lineHeight: 18 },
 });
