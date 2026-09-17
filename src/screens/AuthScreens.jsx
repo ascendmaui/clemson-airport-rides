@@ -83,12 +83,12 @@ function AuthShell({ title, subtitle, children, back = 'landing' }) {
 
 function afterAuthSuccess() {
   const { params } = getHashRoute()
-  if (params?.next) {
-    resumeAfterAuth()
-    return
-  }
-  if (typeof window !== 'undefined' && window.__clemsonAuthNext?.path) {
-    resumeAfterAuth()
+  const stash = typeof window !== 'undefined' ? window.__clemsonAuthNext : null
+  const merged = { ...(stash?.params || {}), ...params }
+  if (!merged.next && stash?.path) merged.next = stash.path
+  if (typeof window !== 'undefined') window.__clemsonAuthNext = null
+  if (merged.next) {
+    resumeAfterAuth(merged)
     return
   }
   navigate('home')
