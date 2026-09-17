@@ -113,10 +113,12 @@ function DriverShell({ driverId }) {
             width: 44,
             height: 44,
             borderRadius: '50%',
-            background: 'rgba(255,255,255,0.95)',
+            background: 'rgba(255,255,255,0.72)',
             boxShadow: 'var(--shadow-pill)',
             fontSize: 18,
-            backdropFilter: 'blur(8px)',
+            backdropFilter: 'blur(18px) saturate(1.4)',
+            WebkitBackdropFilter: 'blur(18px) saturate(1.4)',
+            border: '1px solid rgba(255,255,255,0.55)',
           }}
         >
           ☰
@@ -125,11 +127,13 @@ function DriverShell({ driverId }) {
           style={{
             padding: '10px 18px',
             borderRadius: 999,
-            background: 'rgba(255,255,255,0.95)',
+            background: 'rgba(255,255,255,0.72)',
             fontWeight: 700,
             fontSize: 17,
             boxShadow: 'var(--shadow-pill)',
-            backdropFilter: 'blur(8px)',
+            backdropFilter: 'blur(18px) saturate(1.4)',
+            WebkitBackdropFilter: 'blur(18px) saturate(1.4)',
+            border: '1px solid rgba(255,255,255,0.55)',
           }}
         >
           $0.00
@@ -139,12 +143,15 @@ function DriverShell({ driverId }) {
             width: 44,
             height: 44,
             borderRadius: '50%',
-            background: 'rgba(255,255,255,0.95)',
+            background: 'rgba(255,255,255,0.72)',
             boxShadow: 'var(--shadow-pill)',
             display: 'grid',
             placeItems: 'center',
             fontSize: 12,
             fontWeight: 700,
+            backdropFilter: 'blur(18px) saturate(1.4)',
+            WebkitBackdropFilter: 'blur(18px) saturate(1.4)',
+            border: '1px solid rgba(255,255,255,0.55)',
             color: online ? 'var(--success)' : 'var(--ink-tertiary)',
           }}
           title={online ? 'Online' : 'Offline'}
@@ -155,7 +162,7 @@ function DriverShell({ driverId }) {
 
       {!offer && (
         <div
-          className="sheet"
+          className="sheet glass-panel--elevated"
           style={{
             position: 'absolute',
             left: 0,
@@ -163,6 +170,7 @@ function DriverShell({ driverId }) {
             bottom: 0,
             zIndex: 20,
             padding: '12px 20px calc(20px + var(--safe-bottom))',
+            borderTop: '1px solid rgba(255,255,255,0.65)',
           }}
         >
           <div className="sheet-handle" />
@@ -252,7 +260,7 @@ function DriverShell({ driverId }) {
 
       {offer && (
         <div
-          className="sheet"
+          className="sheet glass-panel--elevated"
           style={{
             position: 'absolute',
             left: 0,
@@ -260,6 +268,7 @@ function DriverShell({ driverId }) {
             bottom: 0,
             zIndex: 30,
             padding: '12px 20px calc(24px + var(--safe-bottom))',
+            borderTop: '1px solid rgba(255,255,255,0.65)',
           }}
         >
           <div className="sheet-handle" />

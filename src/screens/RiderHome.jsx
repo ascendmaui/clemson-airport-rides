@@ -20,7 +20,7 @@ export function RiderHome({ riderName = 'John' }) {
   }
 
   return (
-    <div className="fade-in" style={{ display: 'flex', flexDirection: 'column', minHeight: '100%', background: 'var(--surface-muted)' }}>
+    <div className="fade-in" style={{ display: 'flex', flexDirection: 'column', minHeight: '100%', background: 'transparent' }}>
       <div style={{ flex: 1, overflowY: 'auto', paddingBottom: 8 }}>
         {/* Hero */}
         <header
@@ -58,8 +58,10 @@ export function RiderHome({ riderName = 'John' }) {
               alignSelf: 'flex-start',
               padding: '4px 10px',
               borderRadius: 999,
-              background: 'rgba(255,255,255,0.14)',
-              border: '1px solid rgba(255,255,255,0.22)',
+              background: 'rgba(255,255,255,0.18)',
+              backdropFilter: 'blur(12px)',
+              WebkitBackdropFilter: 'blur(12px)',
+              border: '1px solid rgba(255,255,255,0.28)',
               fontSize: 10,
               fontWeight: 700,
               letterSpacing: 0.7,
@@ -129,16 +131,13 @@ export function RiderHome({ riderName = 'John' }) {
               <button
                 key={s.id}
                 type="button"
-                className="pressable"
+                className="pressable glass-panel card-soft"
                 onClick={() => goSearch(s.sub)}
                 style={{
                   flex: '0 0 auto',
                   minWidth: 118,
                   padding: '14px 14px',
                   borderRadius: 16,
-                  background: 'var(--surface)',
-                  boxShadow: 'var(--shadow-pill)',
-                  border: '1px solid var(--border)',
                   textAlign: 'left',
                 }}
               >
@@ -150,13 +149,11 @@ export function RiderHome({ riderName = 'John' }) {
           </div>
 
           <div
+            className="glass-panel card-soft"
             style={{
               marginTop: 22,
-              background: 'var(--surface)',
               borderRadius: 18,
               padding: 14,
-              boxShadow: 'var(--shadow-soft)',
-              border: '1px solid var(--border)',
             }}
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, padding: '0 4px' }}>
@@ -168,14 +165,12 @@ export function RiderHome({ riderName = 'John' }) {
 
           {/* Game Day promo */}
           <div
+            className="glass-panel glass-panel--orange card-soft"
             style={{
               marginTop: 18,
               marginBottom: 18,
               borderRadius: 18,
               padding: 16,
-              background: 'var(--surface)',
-              border: '1px solid var(--border)',
-              boxShadow: 'var(--shadow-soft)',
               display: 'flex',
               gap: 14,
               alignItems: 'center',

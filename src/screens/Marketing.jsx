@@ -1,42 +1,61 @@
 import { navigate } from '../lib/navigation'
 import { PrimaryButton } from '../components/PrimaryButton'
 
-const IOS_BUILD = 'https://expo.dev/accounts/johnmatveyev/projects/clemson-airport-rides/builds/e3dd26af-bc4a-46b4-9e5d-738238b5d63a'
-const ANDROID_BUILD = 'https://expo.dev/accounts/johnmatveyev/projects/clemson-airport-rides/builds/b7646c77-2864-4da7-9d1d-ac20cc275b77'
-
-function QrCard({ label, href, caption }) {
-  const qr = `https://api.qrserver.com/v1/create-qr-code/?size=160x160&margin=8&data=${encodeURIComponent(href)}`
+function QrPlaceholder({ label }) {
   return (
-    <a href={href} target="_blank" rel="noreferrer" style={{ textAlign: 'center', textDecoration: 'none', color: 'inherit' }}>
-      <img
-        src={qr}
-        width={120}
-        height={120}
-        alt={`${label} download QR`}
+    <div style={{ textAlign: 'center' }}>
+      <div
         style={{
           width: 120,
           height: 120,
           borderRadius: 16,
-          border: '1px solid var(--border)',
-          background: '#fff',
-          display: 'block',
+          background: `
+            repeating-conic-gradient(#0B1220 0% 25%, #fff 0% 50%) 0 0 / 12px 12px,
+            #fff
+          `,
+          border: '2px solid var(--border)',
+          display: 'grid',
+          placeItems: 'center',
           margin: '0 auto 8px',
+          position: 'relative',
+          overflow: 'hidden',
         }}
-      />
+      >
+        <div
+          style={{
+            position: 'absolute',
+            inset: 28,
+            background: '#fff',
+            borderRadius: 8,
+            display: 'grid',
+            placeItems: 'center',
+            fontWeight: 700,
+            fontSize: 11,
+            color: 'var(--purple)',
+            letterSpacing: 0.5,
+          }}
+        >
+          QR
+        </div>
+      </div>
       <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink-secondary)' }}>{label}</div>
-      <div style={{ fontSize: 11, color: 'var(--ink-tertiary)', marginTop: 2 }}>{caption}</div>
-    </a>
+      <div style={{ fontSize: 11, color: 'var(--ink-tertiary)', marginTop: 2 }}>Coming soon</div>
+    </div>
   )
 }
 
 export function Marketing() {
   return (
-    <div className="fade-in" style={{ minHeight: '100%', background: 'var(--surface)' }}>
+    <div className="fade-in" style={{ minHeight: '100%', background: 'transparent' }}>
       <header
         style={{
           position: 'relative',
           height: 280,
-          background: `linear-gradient(180deg, rgba(11,18,32,0.15) 0%, rgba(82,45,128,0.55) 55%, rgba(11,18,32,0.85) 100%), linear-gradient(135deg, #F56600 0%, #522D80 60%, #1a0f2e 100%)`,
+          background: `
+            linear-gradient(180deg, rgba(11,18,32,0.15) 0%, rgba(82,45,128,0.55) 55%, rgba(11,18,32,0.85) 100%),
+            linear-gradient(135deg, #F56600 0%, #522D80 60%, #1a0f2e 100%),
+            url(https://images.unsplash.com/photo-1566577739112-5180d4bf9390?w=1200&q=80) center/cover
+          `,
           color: '#fff',
           padding: '28px 24px 32px',
           display: 'flex',
@@ -58,8 +77,10 @@ export function Marketing() {
             alignSelf: 'flex-start',
             padding: '6px 12px',
             borderRadius: 999,
-            background: 'rgba(255,255,255,0.15)',
-            border: '1px solid rgba(255,255,255,0.25)',
+            background: 'rgba(255,255,255,0.18)',
+            backdropFilter: 'blur(14px)',
+            WebkitBackdropFilter: 'blur(14px)',
+            border: '1px solid rgba(255,255,255,0.30)',
             fontSize: 12,
             fontWeight: 700,
             letterSpacing: 0.8,
@@ -85,27 +106,26 @@ export function Marketing() {
         </div>
 
         <div
+          className="glass-panel glass-panel--elevated"
           style={{
-            background: 'var(--surface-muted)',
             borderRadius: 20,
             padding: 24,
-            border: '1px solid var(--border)',
           }}
         >
           <h3 style={{ fontSize: 17, fontWeight: 600, marginBottom: 6, textAlign: 'center' }}>
             Get the native apps
           </h3>
           <p style={{ fontSize: 13, color: 'var(--ink-secondary)', textAlign: 'center', marginBottom: 20 }}>
-            Scan for Expo internal preview installs (ad hoc / APK)
+            QR placeholders · pending Expo EAS links (Production Lead)
           </p>
           <div style={{ display: 'flex', justifyContent: 'center', gap: 36 }}>
-            <QrCard label="iOS preview" href={IOS_BUILD} caption="Install via Expo" />
-            <QrCard label="Android APK" href={ANDROID_BUILD} caption="Direct APK page" />
+            <QrPlaceholder label="iOS App Store" />
+            <QrPlaceholder label="Google Play" />
           </div>
         </div>
 
         <p style={{ marginTop: 24, textAlign: 'center', fontSize: 12, color: 'var(--ink-tertiary)' }}>
-          Preview builds live · Glass restyle on next iOS build · Stripe test keys on Vercel
+          Web skeleton · Stripe & push stubbed · Schema live on Supabase
         </p>
       </div>
     </div>

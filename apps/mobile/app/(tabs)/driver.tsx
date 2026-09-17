@@ -1,77 +1,63 @@
-import { useRef, useState } from 'react';
-import { Alert, Animated, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { AppBackdrop, FadeIn, GlassCard, SpringButton } from '@/components/Glass';
-import { orange, purple } from '@/constants/Colors';
+import { useEffect, useState } from 'react';
+import { StyleSheet, Text, View } from 'react-native';
+import Colors from '@/constants/Colors';
+import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 
-const QUEUE = [
-  { id: '1', rider: 'Alex · Tiger', route: 'Campus → GSP', when: 'Today 2:40p', fare: '$75' },
-  { id: '2', rider: 'Sam · Tesla Autopilot', route: 'Campus → CLT', when: 'Today 5:10p', fare: '$175' },
-];
-
+/** Driver stays behind auth — guests see a soft sign-in prompt, not the accept UI. */
 export default function DriverScreen() {
-  const [online, setOnline] = useState(true);
-  const pulse = useRef(new Animated.Value(1)).current;
+  const [authed, setAuthed] = useState<boolean | null>(null);
 
-  const toggleOnline = () => {
-    const next = !online;
-    setOnline(next);
-    Animated.sequence([
-      Animated.spring(pulse, { toValue: 1.08, useNativeDriver: true, friction: 4, tension: 180 }),
-      Animated.spring(pulse, { toValue: 1, useNativeDriver: true, friction: 5, tension: 140 }),
-    ]).start();
-  };
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      if (!isSupabaseConfigured() || !supabase) {
+        if (alive) setAuthed(false);
+        return;
+      }
+      const { data } = await supabase.auth.getSession();
+      if (alive) setAuthed(Boolean(data.session));
+    })();
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  if (authed === false) {
+    return (
+      <View style={styles.container}>
+        <Text style={styles.title}>Driver</Text>
+        <Text style={styles.body}>Sign in to go online and accept rides. Rider browse stays open without login.</Text>
+        <View style={styles.pill}>
+          <Text style={styles.pillText}>Auth required</Text>
+        </View>
+      </View>
+    );
+  }
 
   return (
-    <AppBackdrop>
-      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-        <FadeIn>
-          <GlassCard>
-            <Text style={styles.kicker}>DRIVER</Text>
-            <Text style={styles.title}>Accept rides</Text>
-            <Text style={styles.body}>Glass queue with spring accept. Stay online to see new requests.</Text>
-            <Animated.View style={{ transform: [{ scale: pulse }], marginTop: 14 }}>
-              <SpringButton
-                label={online ? 'Online · tap to go offline' : 'Offline · go online'}
-                variant={online ? 'primary' : 'ghost'}
-                onPress={toggleOnline}
-              />
-            </Animated.View>
-          </GlassCard>
-        </FadeIn>
-
-        {QUEUE.map((job, i) => (
-          <FadeIn key={job.id} delay={60 + i * 60}>
-            <GlassCard style={{ marginTop: 12 }}>
-              <Text style={styles.jobRider}>{job.rider}</Text>
-              <Text style={styles.jobRoute}>{job.route}</Text>
-              <Text style={styles.jobMeta}>{job.when} · {job.fare}</Text>
-              <View style={styles.row}>
-                <View style={{ flex: 1 }}>
-                  <SpringButton
-                    label="Accept"
-                    onPress={() => Alert.alert('Accepted', `${job.rider} locked in.`)}
-                    disabled={!online}
-                  />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <SpringButton label="Skip" variant="ghost" onPress={() => {}} />
-                </View>
-              </View>
-            </GlassCard>
-          </FadeIn>
-        ))}
-      </ScrollView>
-    </AppBackdrop>
+    <View style={styles.container}>
+      <Text style={styles.title}>Driver</Text>
+      <Text style={styles.body}>
+        Online shell · Accept offers via Supabase Realtime (parity with web DriverHome).
+      </Text>
+      <View style={styles.pill}>
+        <Text style={styles.pillText}>Signed in</Text>
+      </View>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  scroll: { padding: 20, paddingTop: 56, paddingBottom: 40, gap: 4 },
-  kicker: { fontSize: 12, fontWeight: '800', letterSpacing: 1.2, color: orange, marginBottom: 6 },
-  title: { fontSize: 26, fontWeight: '800', color: purple, marginBottom: 8 },
-  body: { fontSize: 15, lineHeight: 22, color: '#5B6472' },
-  jobRider: { fontSize: 17, fontWeight: '800', color: purple },
-  jobRoute: { marginTop: 4, fontSize: 14, color: '#0B1220' },
-  jobMeta: { marginTop: 4, marginBottom: 12, fontSize: 13, color: '#5B6472' },
-  row: { flexDirection: 'row', gap: 10 },
+  container: { flex: 1, padding: 24, backgroundColor: '#fff', gap: 12 },
+  title: { fontSize: 28, fontWeight: '800', color: Colors.purple },
+  body: { fontSize: 16, lineHeight: 24, color: '#444' },
+  pill: {
+    alignSelf: 'flex-start',
+    marginTop: 8,
+    backgroundColor: Colors.orange,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 999,
+  },
+  pillText: { color: '#fff', fontWeight: '700' },
 });
