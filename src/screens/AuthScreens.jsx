@@ -1,14 +1,17 @@
 import { useState } from 'react'
 import { useAuth } from '../lib/auth'
-import { navigate } from '../lib/navigation'
+import { getHashRoute, navigate } from '../lib/navigation'
+import { resumeAfterAuth } from '../components/SignInToBookModal'
 
 const fieldStyle = {
   width: '100%',
   marginTop: 6,
   padding: '14px 16px',
   borderRadius: 14,
-  border: '1px solid var(--border)',
-  background: 'var(--surface)',
+  border: '1px solid rgba(255,255,255,0.35)',
+  background: 'rgba(255,255,255,0.55)',
+  backdropFilter: 'blur(12px)',
+  WebkitBackdropFilter: 'blur(12px)',
   boxShadow: 'inset 0 1px 2px rgba(11,18,32,0.03)',
   outline: 'none',
   transition: 'border-color 200ms var(--ease-soft), box-shadow 200ms var(--ease-soft)',
@@ -25,12 +28,12 @@ function AuthShell({ title, subtitle, children, back = 'landing' }) {
         alignItems: 'center',
         justifyContent: 'center',
         padding: 24,
-        background: 'linear-gradient(180deg, var(--purple-soft) 0%, var(--surface-muted) 42%, var(--surface-muted) 100%)',
+        background: 'linear-gradient(165deg, rgba(82,45,128,0.18) 0%, rgba(245,102,0,0.08) 42%, var(--surface-muted) 100%)',
       }}
     >
       <button
         type="button"
-        className="pressable"
+        className="pressable glass-pill"
         onClick={() => navigate(back)}
         style={{
           alignSelf: 'flex-start',
@@ -38,22 +41,18 @@ function AuthShell({ title, subtitle, children, back = 'landing' }) {
           width: 44,
           height: 44,
           borderRadius: 14,
-          background: 'var(--surface)',
-          boxShadow: 'var(--shadow-pill)',
           fontSize: 18,
         }}
       >
         ←
       </button>
       <div
-        className="modal-card"
+        className="modal-card glass-panel glass-panel--elevated"
         style={{
           width: '100%',
           maxWidth: 400,
           padding: 28,
-          background: 'var(--surface)',
           borderRadius: 24,
-          boxShadow: 'var(--shadow-modal)',
         }}
       >
         <div
@@ -82,6 +81,19 @@ function AuthShell({ title, subtitle, children, back = 'landing' }) {
   )
 }
 
+function afterAuthSuccess() {
+  const { params } = getHashRoute()
+  if (params?.next) {
+    resumeAfterAuth()
+    return
+  }
+  if (typeof window !== 'undefined' && window.__clemsonAuthNext?.path) {
+    resumeAfterAuth()
+    return
+  }
+  navigate('home')
+}
+
 export function SignInScreen() {
   const { signIn } = useAuth()
   const [email, setEmail] = useState('')
@@ -95,7 +107,7 @@ export function SignInScreen() {
     setBusy(true)
     try {
       await signIn(email.trim(), password)
-      navigate('home')
+      afterAuthSuccess()
     } catch (err) {
       setError(err.message || 'Sign in failed')
     } finally {
@@ -121,7 +133,10 @@ export function SignInScreen() {
       </form>
       <p style={{ marginTop: 18, fontSize: 14, color: 'var(--ink-secondary)', textAlign: 'center' }}>
         New here?{' '}
-        <button type="button" className="pressable" onClick={() => navigate('sign-up')} style={{ color: 'var(--purple)', fontWeight: 700 }}>
+        <button type="button" className="pressable" onClick={() => {
+          const { params } = getHashRoute()
+          navigate('sign-up', params)
+        }} style={{ color: 'var(--purple)', fontWeight: 700 }}>
           Create an account
         </button>
       </p>
@@ -143,7 +158,7 @@ export function SignUpScreen() {
     setBusy(true)
     try {
       await signUp(email.trim(), password, fullName.trim())
-      navigate('home')
+      afterAuthSuccess()
     } catch (err) {
       setError(err.message || 'Sign up failed')
     } finally {
@@ -173,7 +188,10 @@ export function SignUpScreen() {
       </form>
       <p style={{ marginTop: 18, fontSize: 14, color: 'var(--ink-secondary)', textAlign: 'center' }}>
         Already have an account?{' '}
-        <button type="button" className="pressable" onClick={() => navigate('sign-in')} style={{ color: 'var(--purple)', fontWeight: 700 }}>
+        <button type="button" className="pressable" onClick={() => {
+          const { params } = getHashRoute()
+          navigate('sign-in', params)
+        }} style={{ color: 'var(--purple)', fontWeight: 700 }}>
           Sign in
         </button>
       </p>

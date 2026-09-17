@@ -2,7 +2,7 @@ export function TierRow({ tier, selected, onSelect }) {
   return (
     <button
       type="button"
-      className="pressable"
+      className={`pressable tier-row-glass ${selected ? 'selected' : ''}`}
       onClick={() => onSelect(tier)}
       style={{
         display: 'flex',
@@ -11,10 +11,12 @@ export function TierRow({ tier, selected, onSelect }) {
         width: '100%',
         padding: '14px 12px',
         borderRadius: 14,
-        background: selected ? 'var(--orange-soft)' : 'transparent',
-        border: selected ? '1.5px solid rgba(245,102,0,0.35)' : '1.5px solid transparent',
+        background: selected
+          ? 'linear-gradient(135deg, rgba(245,102,0,0.12), rgba(255,255,255,0.55))'
+          : 'transparent',
+        border: selected ? '1.5px solid rgba(245,102,0,0.28)' : '1.5px solid transparent',
         textAlign: 'left',
-        transition: 'background 200ms var(--ease-soft), border-color 200ms var(--ease-soft), transform 180ms var(--ease-soft)',
+        boxShadow: selected ? 'var(--shadow-pill)' : 'none',
       }}
     >
       <div
@@ -22,12 +24,16 @@ export function TierRow({ tier, selected, onSelect }) {
           width: 48,
           height: 48,
           borderRadius: 12,
-          background: tier.premium ? 'var(--purple-soft)' : 'var(--surface-muted)',
+          background: tier.premium
+            ? 'linear-gradient(145deg, rgba(82,45,128,0.14), rgba(255,255,255,0.6))'
+            : 'rgba(255,255,255,0.55)',
+          border: '1px solid rgba(255,255,255,0.45)',
           display: 'grid',
           placeItems: 'center',
           fontSize: 24,
           boxShadow: selected ? 'var(--shadow-pill)' : 'none',
-          transition: 'box-shadow 200ms var(--ease-soft)',
+          transition: 'box-shadow 200ms var(--ease-soft), transform 200ms var(--ease-spring)',
+          transform: selected ? 'scale(1.04)' : 'scale(1)',
         }}
       >
         {tier.icon}
@@ -42,7 +48,8 @@ export function TierRow({ tier, selected, onSelect }) {
                 fontWeight: 700,
                 letterSpacing: 0.4,
                 color: 'var(--purple)',
-                background: 'var(--purple-soft)',
+                background: 'rgba(82,45,128,0.12)',
+                border: '1px solid rgba(82,45,128,0.18)',
                 padding: '2px 7px',
                 borderRadius: 999,
               }}

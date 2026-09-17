@@ -10,9 +10,12 @@ import {
 import { formatUsdFromCents } from '../lib/pricing'
 import { useAuth } from '../lib/auth'
 import { navigate } from '../lib/navigation'
+import { SignInToBookModal, useRequireAuthForAction } from '../components/SignInToBookModal'
 
 export function ScheduleAirport() {
   const { user } = useAuth()
+  const { runOrPrompt } = useRequireAuthForAction()
+  const [promptOpen, setPromptOpen] = useState(false)
   const [airport, setAirport] = useState('GSP')
   const [date, setDate] = useState('')
   const [time, setTime] = useState('')
@@ -51,10 +54,17 @@ export function ScheduleAirport() {
     }
   }
 
+  const onPayClick = () => {
+    runOrPrompt(onBook, {
+      setPromptOpen,
+      nextPath: 'schedule',
+    })
+  }
+
   return (
-    <div className="fade-in" style={{ display: 'flex', flexDirection: 'column', minHeight: '100%', background: 'var(--surface-muted)' }}>
+    <div className="fade-in" style={{ display: 'flex', flexDirection: 'column', minHeight: '100%', background: 'transparent' }}>
       <div style={{ flex: 1, padding: '20px 20px 24px', overflowY: 'auto' }}>
-        <button type="button" className="pressable" onClick={() => navigate('home')} style={{ fontSize: 20, marginBottom: 12 }}>←</button>
+        <button type="button" className="pressable glass-pill" onClick={() => navigate('home')} style={{ fontSize: 20, marginBottom: 12, width: 40, height: 40, borderRadius: 12 }}>←</button>
         <h1 style={{ fontSize: 24, fontWeight: 600, letterSpacing: -0.4 }}>Schedule airport</h1>
         <p style={{ color: 'var(--ink-secondary)', fontSize: 14, marginTop: 6, marginBottom: 20 }}>
           Flat rates · 25% deposit holds your ride
@@ -65,17 +75,15 @@ export function ScheduleAirport() {
             <button
               key={a.code}
               type="button"
-              className="pressable"
+              className={`pressable glass-panel card-soft ${airport === a.code ? 'glass-panel--orange' : ''}`}
               onClick={() => setAirport(a.code)}
               style={{
                 flex: 1,
                 padding: 16,
                 borderRadius: 16,
-                background: airport === a.code ? 'var(--orange-soft)' : 'var(--surface)',
-                border: `1.5px solid ${airport === a.code ? 'rgba(245,102,0,0.4)' : 'var(--border)'}`,
                 textAlign: 'left',
-                boxShadow: 'var(--shadow-pill)',
-                transition: 'background 200ms var(--ease-soft), border-color 200ms var(--ease-soft)',
+                border: airport === a.code ? '1.5px solid rgba(245,102,0,0.35)' : undefined,
+                transition: 'background 200ms var(--ease-soft), border-color 200ms var(--ease-soft), transform 200ms var(--ease-spring)',
               }}
             >
               <div style={{ fontWeight: 700, fontSize: 18 }}>{a.code}</div>
@@ -90,6 +98,7 @@ export function ScheduleAirport() {
         <label style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink-secondary)' }}>Date</label>
         <input
           type="date"
+          className="glass-input"
           value={date}
           onChange={(e) => setDate(e.target.value)}
           style={{
@@ -98,13 +107,12 @@ export function ScheduleAirport() {
             marginBottom: 14,
             padding: '12px 14px',
             borderRadius: 12,
-            border: '1px solid var(--border)',
-            background: 'var(--surface)',
           }}
         />
         <label style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink-secondary)' }}>Pickup time</label>
         <input
           type="time"
+          className="glass-input"
           value={time}
           onChange={(e) => setTime(e.target.value)}
           style={{
@@ -113,18 +121,15 @@ export function ScheduleAirport() {
             marginBottom: 20,
             padding: '12px 14px',
             borderRadius: 12,
-            border: '1px solid var(--border)',
-            background: 'var(--surface)',
           }}
         />
 
         <div
-          className="sheet"
+          className="glass-panel glass-panel--elevated"
           style={{
             padding: 16,
             borderRadius: 16,
             marginBottom: 16,
-            boxShadow: 'var(--shadow-pill)',
           }}
         >
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
@@ -141,18 +146,19 @@ export function ScheduleAirport() {
           </p>
         </div>
 
-        <PrimaryButton onClick={onBook} disabled={busy}>
+        <PrimaryButton className="primary-cta" onClick={onPayClick} disabled={busy}>
           {busy ? 'Starting checkout…' : `Pay ${formatUsdFromCents(deposit)} deposit`}
         </PrimaryButton>
 
         {error && (
           <p
             role="alert"
+            className="glass-panel"
             style={{
               marginTop: 14,
               padding: 12,
               borderRadius: 12,
-              background: 'rgba(217,45,32,0.08)',
+              background: 'rgba(217,45,32,0.10)',
               color: 'var(--danger)',
               fontSize: 13,
               fontWeight: 600,
@@ -165,14 +171,13 @@ export function ScheduleAirport() {
 
         {result && (
           <pre
+            className="glass-panel"
             style={{
               marginTop: 16,
               padding: 12,
               borderRadius: 12,
-              background: 'var(--surface)',
               fontSize: 11,
               overflow: 'auto',
-              boxShadow: 'var(--shadow-pill)',
             }}
           >
             {JSON.stringify(result, null, 2)}
@@ -180,6 +185,11 @@ export function ScheduleAirport() {
         )}
       </div>
       <BottomTabs active="rides" />
+      <SignInToBookModal
+        open={promptOpen}
+        onClose={() => setPromptOpen(false)}
+        nextPath="schedule"
+      />
     </div>
   )
 }
