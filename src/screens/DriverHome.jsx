@@ -3,6 +3,7 @@ import { useUser } from '@clerk/clerk-react'
 import { CampusMap, CLEMSON } from '../components/CampusMap'
 import { PurpleAcceptButton } from '../components/PrimaryButton'
 import { navigate } from '../lib/navigation'
+import { isClerkConfigured } from '../lib/clerkConfig'
 import { setDriverOnline, subscribeTrips, supabase } from '../lib/supabase'
 
 function centsToDollars(cents) {
@@ -11,13 +12,21 @@ function centsToDollars(cents) {
 }
 
 export function DriverHome() {
+  if (isClerkConfigured) return <DriverHomeAuthed />
+  return <DriverShell driverId={null} />
+}
+
+function DriverHomeAuthed() {
   const { user } = useUser()
+  return <DriverShell driverId={user?.id || null} />
+}
+
+function DriverShell({ driverId }) {
   const [priority, setPriority] = useState(false)
   const [offer, setOffer] = useState(null)
   const [online, setOnline] = useState(true)
   const silverProgress = 2
   const silverTotal = 4
-  const driverId = user?.id
 
   useEffect(() => {
     if (!driverId) return undefined
@@ -63,7 +72,10 @@ export function DriverHome() {
       setOffer(null)
       return
     }
-    await supabase.from('trips').update({ status: 'canceled', canceled_at: new Date().toISOString() }).eq('id', offer.id)
+    await supabase
+      .from('trips')
+      .update({ status: 'canceled', canceled_at: new Date().toISOString() })
+      .eq('id', offer.id)
     setOffer(null)
   }
 
@@ -156,7 +168,15 @@ export function DriverHome() {
         >
           <div className="sheet-handle" />
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
-            <span style={{ width: 10, height: 10, borderRadius: '50%', background: 'var(--success)', boxShadow: '0 0 0 3px rgba(31,138,76,0.2)' }} />
+            <span
+              style={{
+                width: 10,
+                height: 10,
+                borderRadius: '50%',
+                background: 'var(--success)',
+                boxShadow: '0 0 0 3px rgba(31,138,76,0.2)',
+              }}
+            />
             <span style={{ fontWeight: 600, fontSize: 18 }}>You&apos;re online</span>
           </div>
           <p style={{ fontSize: 13, color: 'var(--ink-secondary)', marginBottom: 12 }}>
@@ -208,7 +228,9 @@ export function DriverHome() {
           <div style={{ padding: '12px 0 4px', borderTop: '1px solid var(--border)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
               <span style={{ fontWeight: 600 }}>Unlock Silver</span>
-              <span style={{ fontSize: 13, color: 'var(--ink-secondary)' }}>{silverProgress}/{silverTotal}</span>
+              <span style={{ fontSize: 13, color: 'var(--ink-secondary)' }}>
+                {silverProgress}/{silverTotal}
+              </span>
             </div>
             <div style={{ height: 8, borderRadius: 999, background: 'var(--surface-muted)', overflow: 'hidden' }}>
               <div
@@ -242,7 +264,9 @@ export function DriverHome() {
         >
           <div className="sheet-handle" />
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-            <div style={{ fontSize: 32, fontWeight: 700, letterSpacing: -0.5 }}>{centsToDollars(offer.fare_cents)}</div>
+            <div style={{ fontSize: 32, fontWeight: 700, letterSpacing: -0.5 }}>
+              {centsToDollars(offer.fare_cents)}
+            </div>
             <div style={{ fontSize: 13, color: 'var(--ink-secondary)' }}>Live offer</div>
           </div>
           <div style={{ marginTop: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>

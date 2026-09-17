@@ -1,7 +1,39 @@
 import { SignedIn, SignedOut, useAuth } from '@clerk/clerk-react'
 import { navigate } from '../lib/navigation'
+import { isClerkConfigured } from '../lib/clerkConfig'
 
 export function RequireAuth({ children }) {
+  if (!isClerkConfigured) {
+    return (
+      <>
+        <div
+          style={{
+            position: 'absolute',
+            top: 8,
+            left: 8,
+            right: 8,
+            zIndex: 50,
+            padding: '8px 12px',
+            borderRadius: 10,
+            background: 'rgba(82,45,128,0.92)',
+            color: '#fff',
+            fontSize: 12,
+            fontWeight: 600,
+            textAlign: 'center',
+            pointerEvents: 'none',
+          }}
+        >
+          Clerk key not set — preview mode (sign-in unlocked once VITE_CLERK_PUBLISHABLE_KEY is live)
+        </div>
+        {children}
+      </>
+    )
+  }
+
+  return <RequireAuthClerk>{children}</RequireAuthClerk>
+}
+
+function RequireAuthClerk({ children }) {
   const { isLoaded } = useAuth()
 
   if (!isLoaded) {
@@ -26,7 +58,6 @@ function RedirectToSignIn() {
   if (typeof window !== 'undefined') {
     const hash = window.location.hash || ''
     if (!hash.includes('sign-in') && !hash.includes('sign-up')) {
-      // Defer navigate to avoid render-phase side effects stacking
       queueMicrotask(() => navigate('sign-in'))
     }
   }
