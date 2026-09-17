@@ -1,7 +1,6 @@
 import { navigate } from '../lib/navigation'
 import { PrimaryButton } from '../components/PrimaryButton'
 
-function QrPlaceholder({ label }) {
   return (
     <div style={{ textAlign: 'center' }}>
       <div
