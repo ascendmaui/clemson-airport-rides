@@ -9,3 +9,6 @@ DEPLOY_ARGS*.json
 MCP_*.json
 *.bundled.jsx
 .vercel
+clemson-rides-prod/
+clemson-rides-mobile/
+clemson-rides-*.tgz

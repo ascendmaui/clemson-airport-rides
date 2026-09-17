@@ -4,6 +4,7 @@ Vite + React rider/driver shell · Clemson orange `#F56600` · purple `#522D80`.
 
 **Production SoT:** https://github.com/ascendmaui/clemson-airport-rides  
 **Live:** https://clemson-airport-rides.vercel.app  
+**Deploy rule:** production ships only via `git push` to `main` (SHA-tracked Vercel). Do not CLI-deploy over SoT.  
 **Supabase:** `awktabuhijrshmsmagpq` (do not migrate/drop schema)
 
 ## Stack
