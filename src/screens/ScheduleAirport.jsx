@@ -6,15 +6,18 @@ import {
   depositCents,
   createCheckoutSession,
   getStripeConfig,
-} from '../lib/stripeStub'
+} from '../lib/stripeCheckout'
 import { formatUsdFromCents } from '../lib/pricing'
+import { useAuth } from '../lib/auth'
 import { navigate } from '../lib/navigation'
 
 export function ScheduleAirport() {
+  const { user } = useAuth()
   const [airport, setAirport] = useState('GSP')
   const [date, setDate] = useState('')
   const [time, setTime] = useState('')
   const [busy, setBusy] = useState(false)
+  const [error, setError] = useState(null)
   const [result, setResult] = useState(null)
 
   const rate = AIRPORT_RATES[airport]
@@ -23,15 +26,26 @@ export function ScheduleAirport() {
 
   const onBook = async () => {
     setBusy(true)
+    setError(null)
+    setResult(null)
     try {
       const session = await createCheckoutSession({
         airport,
-        riderName: 'John',
+        riderName:
+          user?.user_metadata?.full_name ||
+          user?.email?.split('@')[0] ||
+          'Rider',
+        riderId: user?.id || '',
       })
       setResult(session)
-      if (session.url && !session.stub) {
+      if (session.url) {
         window.location.href = session.url
+        return
       }
+      setError('Checkout did not return a payment URL. No charge was made.')
+    } catch (err) {
+      setError(err.message || 'Checkout failed. No charge was made.')
+      if (err.payload) setResult(err.payload)
     } finally {
       setBusy(false)
     }
@@ -130,6 +144,24 @@ export function ScheduleAirport() {
         <PrimaryButton onClick={onBook} disabled={busy}>
           {busy ? 'Starting checkout…' : `Pay ${formatUsdFromCents(deposit)} deposit`}
         </PrimaryButton>
+
+        {error && (
+          <p
+            role="alert"
+            style={{
+              marginTop: 14,
+              padding: 12,
+              borderRadius: 12,
+              background: 'rgba(217,45,32,0.08)',
+              color: 'var(--danger)',
+              fontSize: 13,
+              fontWeight: 600,
+              lineHeight: 1.4,
+            }}
+          >
+            {error}
+          </p>
+        )}
 
         {result && (
           <pre
