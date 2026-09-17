@@ -31,8 +31,7 @@ export function RideTiers({ dest = '1900 GSP Dr' }) {
       setUpsell('tesla')
       return
     }
-    alert(`Requested ${selected.name} to ${dest} — stub (no live dispatch yet)`)
-    navigate('home')
+    navigate('pick-driver', { dest })
   }
 
   return (

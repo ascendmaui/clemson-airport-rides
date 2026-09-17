@@ -1,4 +1,12 @@
-export function PrimaryButton({ children, onClick, variant = 'orange', fullWidth = true, disabled, className = '' }) {
+export function PrimaryButton({
+  children,
+  onClick,
+  variant = 'orange',
+  fullWidth = true,
+  disabled,
+  className = '',
+  type = 'button',
+}) {
   const bg = variant === 'purple'
     ? 'var(--purple)'
     : variant === 'gradient'
@@ -6,7 +14,7 @@ export function PrimaryButton({ children, onClick, variant = 'orange', fullWidth
       : 'var(--orange)'
   return (
     <button
-      type="button"
+      type={type}
       className={`pressable ${className}`}
       disabled={disabled}
       onClick={onClick}

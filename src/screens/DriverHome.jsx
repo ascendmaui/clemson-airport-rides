@@ -99,10 +99,28 @@ export function DriverHome() {
           }}
         >
           <div className="sheet-handle" />
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
             <span style={{ width: 10, height: 10, borderRadius: '50%', background: 'var(--success)', boxShadow: '0 0 0 3px rgba(31,138,76,0.2)' }} />
             <span style={{ fontWeight: 600, fontSize: 18 }}>You're online</span>
           </div>
+          <button
+            type="button"
+            className="pressable"
+            onClick={() => navigate('driver-onboarding')}
+            style={{
+              width: '100%',
+              marginBottom: 12,
+              padding: '10px 14px',
+              borderRadius: 12,
+              background: 'var(--purple-soft)',
+              color: 'var(--purple)',
+              fontWeight: 600,
+              fontSize: 13,
+              textAlign: 'left',
+            }}
+          >
+            Driver onboarding →
+          </button>
 
           <div
             style={{

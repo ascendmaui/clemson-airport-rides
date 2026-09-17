@@ -1,7 +1,13 @@
 import { useState } from 'react'
 import { PrimaryButton } from '../components/PrimaryButton'
 import { BottomTabs } from '../components/BottomTabs'
-import { AIRPORT_RATES, depositAmount, createDepositIntent, getStripeConfig } from '../lib/stripeStub'
+import {
+  AIRPORT_RATES,
+  depositCents,
+  createCheckoutSession,
+  getStripeConfig,
+} from '../lib/stripeStub'
+import { formatUsdFromCents } from '../lib/pricing'
 import { navigate } from '../lib/navigation'
 
 export function ScheduleAirport() {
@@ -12,17 +18,20 @@ export function ScheduleAirport() {
   const [result, setResult] = useState(null)
 
   const rate = AIRPORT_RATES[airport]
-  const deposit = depositAmount(rate.total)
+  const deposit = depositCents(rate.fareCents)
   const stripe = getStripeConfig()
 
   const onBook = async () => {
     setBusy(true)
     try {
-      // Stub path: createDepositIntent logs + returns stub shape (no fake secrets).
-      // TODO: mount Stripe Payment Element with getStripeConfig().publishableKey
-      //       after server POST /api/stripe/create-deposit-intent returns a real clientSecret.
-      const intent = await createDepositIntent({ airport, riderName: 'John' })
-      setResult(intent)
+      const session = await createCheckoutSession({
+        airport,
+        riderName: 'John',
+      })
+      setResult(session)
+      if (session.url && !session.stub) {
+        window.location.href = session.url
+      }
     } finally {
       setBusy(false)
     }
@@ -57,7 +66,9 @@ export function ScheduleAirport() {
             >
               <div style={{ fontWeight: 700, fontSize: 18 }}>{a.code}</div>
               <div style={{ fontSize: 12, color: 'var(--ink-secondary)', marginTop: 4 }}>{a.name.split('(')[0].trim()}</div>
-              <div style={{ fontWeight: 600, fontSize: 20, marginTop: 10, color: 'var(--orange)' }}>${a.total}</div>
+              <div style={{ fontWeight: 600, fontSize: 20, marginTop: 10, color: 'var(--orange)' }}>
+                {formatUsdFromCents(a.fareCents)}
+              </div>
             </button>
           ))}
         </div>
@@ -94,54 +105,49 @@ export function ScheduleAirport() {
         />
 
         <div
+          className="sheet"
           style={{
-            background: 'var(--surface)',
-            borderRadius: 18,
-            padding: 18,
-            border: '1px solid var(--border)',
-            marginBottom: 20,
+            padding: 16,
+            borderRadius: 16,
+            marginBottom: 16,
             boxShadow: 'var(--shadow-pill)',
           }}
         >
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-            <span style={{ color: 'var(--ink-secondary)' }}>Trip total</span>
-            <span style={{ fontWeight: 600 }}>${rate.total.toFixed(2)}</span>
+            <span style={{ color: 'var(--ink-secondary)' }}>Fare</span>
+            <strong>{formatUsdFromCents(rate.fareCents)}</strong>
           </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-            <span style={{ color: 'var(--ink-secondary)' }}>Deposit due now (25%)</span>
-            <span style={{ fontWeight: 700, color: 'var(--purple)', fontSize: 18 }}>${deposit.toFixed(2)}</span>
+          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+            <span style={{ color: 'var(--ink-secondary)' }}>25% deposit</span>
+            <strong style={{ color: 'var(--orange)' }}>{formatUsdFromCents(deposit)}</strong>
           </div>
-          <div style={{ fontSize: 12, color: 'var(--ink-tertiary)' }}>
-            Remainder charged after drop-off · Stripe stub
-            {stripe.configured ? ' · pk configured' : ' · set VITE_STRIPE_PUBLISHABLE_KEY'}
-          </div>
+          <p style={{ fontSize: 12, color: 'var(--ink-tertiary)', marginTop: 10 }}>
+            {rate.code} · {rate.fareCents}¢ fare → {deposit}¢ deposit
+            {stripe.configured ? ' · publishable key ready' : ' · set VITE_STRIPE_PUBLISHABLE_KEY'}
+          </p>
         </div>
 
-        <PrimaryButton variant="gradient" disabled={busy} onClick={onBook}>
-          {busy ? 'Creating deposit…' : `Pay $${deposit.toFixed(2)} deposit`}
+        <PrimaryButton onClick={onBook} disabled={busy}>
+          {busy ? 'Starting checkout…' : `Pay ${formatUsdFromCents(deposit)} deposit`}
         </PrimaryButton>
 
         {result && (
-          <div
-            className="fade-in"
+          <pre
             style={{
               marginTop: 16,
-              padding: 14,
-              borderRadius: 14,
-              background: 'var(--purple-soft)',
-              fontSize: 13,
-              color: 'var(--purple)',
-              lineHeight: 1.45,
+              padding: 12,
+              borderRadius: 12,
+              background: 'var(--surface)',
+              fontSize: 11,
+              overflow: 'auto',
+              boxShadow: 'var(--shadow-pill)',
             }}
           >
-            ✓ Deposit intent stubbed (see console). {result.message}
-            <br />
-            {/* TODO: Stripe Payment Element — load with getStripeConfig().publishableKey once server returns clientSecret */}
-            TODO: wire live Stripe Payment Element (no fake clientSecret).
-          </div>
+            {JSON.stringify(result, null, 2)}
+          </pre>
         )}
       </div>
-      <BottomTabs active="schedule" onChange={(id) => navigate(id === 'home' ? 'home' : id)} />
+      <BottomTabs active="rides" />
     </div>
   )
 }
