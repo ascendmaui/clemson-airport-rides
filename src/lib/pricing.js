@@ -1,5 +1,5 @@
 import { supabase } from './supabase'
-import { AIRPORT_RATES, depositCents } from './stripeStub'
+import { AIRPORT_RATES, depositCents } from './stripeCheckout'
 
 const STUDENT_PERCENT_OFF = 10
 
