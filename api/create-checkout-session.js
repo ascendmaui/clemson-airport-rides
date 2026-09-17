@@ -1,7 +1,7 @@
 /**
  * Vercel serverless — POST /api/create-checkout-session
  * GSP 7500 → 1875 · CLT 17500 → 4375
- * Missing STRIPE_SECRET_KEY → 200 { stub: true, message }
+ * Missing STRIPE_SECRET_KEY → 503 JSON error (never stub success)
  */
 import Stripe from 'stripe'
 
@@ -37,13 +37,13 @@ export default async function handler(req, res) {
   const cancelUrl = body.cancelUrl || 'https://clemson-airport-rides.vercel.app/#/schedule?canceled=1'
 
   if (!stripeSecret || !stripeSecret.startsWith('sk_') || stripeSecret.includes('placeholder')) {
-    return json(res, 200, {
-      stub: true,
+    return json(res, 503, {
+      error: 'Payments unavailable',
+      message: 'STRIPE_SECRET_KEY is not configured. Checkout cannot start.',
       airport,
       fareCents,
       depositCents,
       currency: 'usd',
-      message: 'STRIPE_SECRET_KEY not set — stub checkout. Deposit calculated; no charge created.',
     })
   }
 
@@ -75,7 +75,6 @@ export default async function handler(req, res) {
       },
     })
     return json(res, 200, {
-      stub: false,
       id: session.id,
       url: session.url,
       airport,
@@ -87,11 +86,10 @@ export default async function handler(req, res) {
     console.error('[create-checkout-session]', err)
     return json(res, 500, {
       error: err.message || 'Stripe error',
-      stub: true,
+      message: 'Stripe Checkout Session create failed',
       airport,
       fareCents,
       depositCents,
-      message: 'Stripe call failed — returning stub shape',
     })
   }
 }
