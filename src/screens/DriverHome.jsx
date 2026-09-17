@@ -1,13 +1,71 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { useUser } from '@clerk/clerk-react'
 import { CampusMap, CLEMSON } from '../components/CampusMap'
 import { PurpleAcceptButton } from '../components/PrimaryButton'
 import { navigate } from '../lib/navigation'
+import { setDriverOnline, subscribeTrips, supabase } from '../lib/supabase'
+
+function centsToDollars(cents) {
+  if (cents == null) return '—'
+  return `$${(Number(cents) / 100).toFixed(2)}`
+}
 
 export function DriverHome() {
+  const { user } = useUser()
   const [priority, setPriority] = useState(false)
-  const [offer, setOffer] = useState(false)
+  const [offer, setOffer] = useState(null)
+  const [online, setOnline] = useState(true)
   const silverProgress = 2
   const silverTotal = 4
+  const driverId = user?.id
+
+  useEffect(() => {
+    if (!driverId) return undefined
+    setDriverOnline(driverId, true).catch(() => {})
+    setOnline(true)
+    return () => {
+      setDriverOnline(driverId, false).catch(() => {})
+    }
+  }, [driverId])
+
+  useEffect(() => {
+    return subscribeTrips((payload) => {
+      const row = payload?.new || payload?.record
+      if (!row) return
+      if (row.status === 'searching' || row.status === 'offered') {
+        setOffer(row)
+      }
+      if (row.status === 'canceled' && offer?.id === row.id) {
+        setOffer(null)
+      }
+    })
+  }, [offer?.id])
+
+  async function acceptOffer() {
+    if (!offer?.id || !supabase || !driverId) return
+    const { error } = await supabase
+      .from('trips')
+      .update({
+        status: 'accepted',
+        driver_id: driverId,
+        accepted_at: new Date().toISOString(),
+      })
+      .eq('id', offer.id)
+    if (error) {
+      console.error(error)
+      return
+    }
+    setOffer(null)
+  }
+
+  async function declineOffer() {
+    if (!offer?.id || !supabase) {
+      setOffer(null)
+      return
+    }
+    await supabase.from('trips').update({ status: 'canceled', canceled_at: new Date().toISOString() }).eq('id', offer.id)
+    setOffer(null)
+  }
 
   return (
     <div
@@ -24,7 +82,6 @@ export function DriverHome() {
     >
       <CampusMap height="100%" interactive showHeat center={CLEMSON} zoom={13} />
 
-      {/* Top chrome */}
       <div
         style={{
           position: 'absolute',
@@ -66,26 +123,25 @@ export function DriverHome() {
         >
           $0.00
         </div>
-        <button
-          type="button"
-          className="pressable"
-          onClick={() => setOffer(true)}
+        <div
           style={{
             width: 44,
             height: 44,
             borderRadius: '50%',
             background: 'rgba(255,255,255,0.95)',
             boxShadow: 'var(--shadow-pill)',
-            fontSize: 18,
-            backdropFilter: 'blur(8px)',
+            display: 'grid',
+            placeItems: 'center',
+            fontSize: 12,
+            fontWeight: 700,
+            color: online ? 'var(--success)' : 'var(--ink-tertiary)',
           }}
-          title="Simulate incoming offer"
+          title={online ? 'Online' : 'Offline'}
         >
-          🔔
-        </button>
+          {online ? 'ON' : 'OFF'}
+        </div>
       </div>
 
-      {/* Bottom dock */}
       {!offer && (
         <div
           className="sheet"
@@ -99,28 +155,13 @@ export function DriverHome() {
           }}
         >
           <div className="sheet-handle" />
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
             <span style={{ width: 10, height: 10, borderRadius: '50%', background: 'var(--success)', boxShadow: '0 0 0 3px rgba(31,138,76,0.2)' }} />
-            <span style={{ fontWeight: 600, fontSize: 18 }}>You're online</span>
+            <span style={{ fontWeight: 600, fontSize: 18 }}>You&apos;re online</span>
           </div>
-          <button
-            type="button"
-            className="pressable"
-            onClick={() => navigate('driver-onboarding')}
-            style={{
-              width: '100%',
-              marginBottom: 12,
-              padding: '10px 14px',
-              borderRadius: 12,
-              background: 'var(--purple-soft)',
-              color: 'var(--purple)',
-              fontWeight: 600,
-              fontSize: 13,
-              textAlign: 'left',
-            }}
-          >
-            Driver onboarding →
-          </button>
+          <p style={{ fontSize: 13, color: 'var(--ink-secondary)', marginBottom: 12 }}>
+            Looking for rides in Clemson. Offers arrive live via Realtime — no simulated requests.
+          </p>
 
           <div
             style={{
@@ -184,19 +225,9 @@ export function DriverHome() {
               Complete {silverTotal - silverProgress} more trips for Silver perks
             </p>
           </div>
-
-          <button
-            type="button"
-            className="pressable"
-            onClick={() => setOffer(true)}
-            style={{ marginTop: 12, width: '100%', padding: 10, fontSize: 13, color: 'var(--purple)', fontWeight: 600 }}
-          >
-            Simulate incoming ride →
-          </button>
         </div>
       )}
 
-      {/* Incoming offer card */}
       {offer && (
         <div
           className="sheet"
@@ -211,58 +242,30 @@ export function DriverHome() {
         >
           <div className="sheet-handle" />
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-            <div style={{ fontSize: 32, fontWeight: 700, letterSpacing: -0.5 }}>$22.40</div>
-            <div style={{ fontSize: 13, color: 'var(--ink-secondary)' }}>~$38/hr est.</div>
+            <div style={{ fontSize: 32, fontWeight: 700, letterSpacing: -0.5 }}>{centsToDollars(offer.fare_cents)}</div>
+            <div style={{ fontSize: 13, color: 'var(--ink-secondary)' }}>Live offer</div>
           </div>
           <div style={{ marginTop: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
             <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
               <span style={{ color: 'var(--orange)', fontWeight: 700 }}>●</span>
               <div>
-                <div style={{ fontWeight: 600 }}>Pickup · 3 min (0.8 mi)</div>
-                <div style={{ fontSize: 13, color: 'var(--ink-secondary)' }}>Memorial Stadium Lot 5</div>
+                <div style={{ fontWeight: 600 }}>Pickup</div>
+                <div style={{ fontSize: 13, color: 'var(--ink-secondary)' }}>{offer.pickup_label}</div>
               </div>
             </div>
             <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
               <span style={{ color: 'var(--purple)', fontWeight: 700 }}>■</span>
               <div>
-                <div style={{ fontWeight: 600 }}>Dropoff · 18 min (11 mi)</div>
-                <div style={{ fontSize: 13, color: 'var(--ink-secondary)' }}>GSP Airport · Terminal</div>
+                <div style={{ fontWeight: 600 }}>Dropoff</div>
+                <div style={{ fontSize: 13, color: 'var(--ink-secondary)' }}>{offer.dropoff_label}</div>
               </div>
             </div>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '16px 0' }}>
-            <div
-              style={{
-                width: 40,
-                height: 40,
-                borderRadius: '50%',
-                background: 'var(--orange-soft)',
-                display: 'grid',
-                placeItems: 'center',
-                fontWeight: 700,
-                color: 'var(--orange)',
-                boxShadow: 'var(--shadow-pill)',
-              }}
-            >
-              J
-            </div>
-            <div>
-              <div style={{ fontWeight: 600 }}>John</div>
-              <div style={{ fontSize: 13, color: 'var(--ink-secondary)' }}>★ 4.97</div>
-            </div>
-          </div>
-          <PurpleAcceptButton
-            onClick={() => {
-              setOffer(false)
-              alert('Ride accepted — stub (no live dispatch)')
-            }}
-          >
-            Accept
-          </PurpleAcceptButton>
+          <PurpleAcceptButton onClick={acceptOffer}>Accept</PurpleAcceptButton>
           <button
             type="button"
             className="pressable"
-            onClick={() => setOffer(false)}
+            onClick={declineOffer}
             style={{ width: '100%', marginTop: 10, padding: 12, fontWeight: 600, color: 'var(--ink-secondary)' }}
           >
             Decline
