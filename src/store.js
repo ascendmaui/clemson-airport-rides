@@ -1,3 +1,7 @@
+/**
+ * Local place/pricing helpers + legacy trip stubs.
+ * Auth is Supabase-only (src/lib/auth.jsx). Do not use localStorage passwords.
+ */
 const KEY = "car.v1";
 const CAMPUS = { lat: 34.6834, lng: -82.8374, label: "Tillman Hall, Clemson" };
 const GSP = { lat: 34.8956, lng: -82.2189, label: "GSP Airport" };
@@ -19,96 +23,88 @@ export const DESTINATIONS = [
 export function usd(cents) {
   return (cents / 100).toLocaleString("en-US", { style: "currency", currency: "USD" });
 }
+
+function authRemoved(fn) {
+  throw new Error(`${fn}: use Supabase Auth (src/lib/auth.jsx) — localStorage password auth removed`);
+}
+export function currentUser() { authRemoved("currentUser"); }
+export function signUp() { authRemoved("signUp"); }
+export function signIn() { authRemoved("signIn"); }
+export function signOut() { authRemoved("signOut"); }
+
 function load() {
   try { return JSON.parse(localStorage.getItem(KEY) || "null") || seed(); }
   catch { return seed(); }
 }
-function seed() { return { users: [], session: null, trips: [], bookings: [] }; }
-function save(state) { localStorage.setItem(KEY, JSON.stringify(state)); return state; }
-export function currentUser() {
-  const s = load();
-  return s.users.find((u) => u.id === s.session) || null;
+function seed() { return { trips: [], bookings: [] }; }
+function save(state) {
+  const clean = { trips: state.trips || [], bookings: state.bookings || [] };
+  localStorage.setItem(KEY, JSON.stringify(clean));
+  return clean;
 }
-export function signUp({ name, email, password }) {
-  const s = load();
-  const existing = s.users.find((u) => u.email.toLowerCase() === email.toLowerCase());
-  if (existing) {
-    if (existing.password !== password) throw new Error("That email is already in use.");
-    s.session = existing.id; return save(s);
-  }
-  const user = { id: crypto.randomUUID(), name: name || email.split("@")[0], email, password, driver: null };
-  s.users.push(user); s.session = user.id; return save(s);
+
+/** @deprecated Driver onboarding lives in Supabase (upsertDriverOnboarding). */
+export function onboardDriver() {
+  throw new Error("onboardDriver: use Supabase upsertDriverOnboarding");
 }
-export function signIn({ email, password }) {
-  const s = load();
-  const user = s.users.find((u) => u.email.toLowerCase() === email.toLowerCase());
-  if (!user || user.password !== password) throw new Error("Email or password is wrong.");
-  s.session = user.id; return save(s);
+/** @deprecated Online status via setDriverOnline in supabase.js */
+export function setOnline() {
+  throw new Error("setOnline: use Supabase setDriverOnline");
 }
-export function signOut() { const s = load(); s.session = null; return save(s); }
-export function onboardDriver(data) {
-  const s = load(); const user = s.users.find((u) => u.id === s.session);
-  if (!user) throw new Error("Sign in first.");
-  user.driver = { ...data, online: false, tripsCompleted: user.driver?.tripsCompleted || 0, earningsCents: user.driver?.earningsCents || 0 };
-  return save(s);
-}
-export function setOnline(online) {
-  const s = load(); const user = s.users.find((u) => u.id === s.session);
-  if (!user?.driver) throw new Error("Onboard first."); user.driver.online = online; return save(s);
-}
+
 export function requestRide({ destId, direction, pickup, passengers, flight }) {
-  const s = load(); const user = s.users.find((u) => u.id === s.session);
-  if (!user) throw new Error("Sign in first.");
+  const s = load();
   const dest = DESTINATIONS.find((d) => d.id === destId);
+  if (!dest) throw new Error("Unknown destination");
   const fromAirport = dest.kind === "airport" && direction === "from_airport";
   const pickupPt = fromAirport ? PLACES[destId] : { ...CAMPUS, label: pickup };
   const dropPt = fromAirport ? { ...CAMPUS, label: pickup } : PLACES[destId];
-  s.trips.push({ id: crypto.randomUUID(), riderId: user.id, driverId: null, status: "searching", destId, pickupLabel: pickupPt.label, dropoffLabel: dropPt.label, pickupLat: pickupPt.lat, pickupLng: pickupPt.lng, dropoffLat: dropPt.lat, dropoffLng: dropPt.lng, fareCents: dest.fare, depositCents: Math.round(dest.fare * 0.25), passengers, flight: flight || null, requestedAt: Date.now(), acceptedAt: null });
+  s.trips.push({
+    id: crypto.randomUUID(),
+    riderId: null,
+    driverId: null,
+    status: "searching",
+    destId,
+    pickupLabel: pickupPt.label,
+    dropoffLabel: dropPt.label,
+    pickupLat: pickupPt.lat,
+    pickupLng: pickupPt.lng,
+    dropoffLat: dropPt.lat,
+    dropoffLng: dropPt.lng,
+    fareCents: dest.fare,
+    depositCents: Math.round(dest.fare * 0.25),
+    passengers,
+    flight: flight || null,
+    requestedAt: Date.now(),
+    acceptedAt: null,
+  });
   return save(s);
 }
 export function cancelTrip(id) {
-  const s = load(); const trip = s.trips.find((t) => t.id === id);
+  const s = load();
+  const trip = s.trips.find((t) => t.id === id);
   if (trip && (trip.status === "searching" || trip.status === "accepted")) trip.status = "canceled";
   return save(s);
 }
-export function riderActive() {
-  const s = load(); const uid = s.session;
-  return s.trips.find((t) => t.riderId === uid && ["searching","accepted","arriving","in_progress"].includes(t.status)) || s.trips.filter((t) => t.riderId === uid && t.status === "completed" && Date.now() - (t.completedAt || 0) < 45000).at(-1) || null;
+export function riderActive() { return null; }
+export function riderHistory() { return load().trips.slice().reverse(); }
+export function driverOffers() { return load().trips.filter((t) => t.status === "searching"); }
+export function driverActive() { return null; }
+export function acceptTrip() {
+  throw new Error("acceptTrip: use Supabase trips Realtime (DriverHome)");
 }
-export function riderHistory() { const s = load(); return s.trips.filter((t) => t.riderId === s.session).slice().reverse(); }
-export function driverOffers() { const s = load(); return s.trips.filter((t) => t.status === "searching" && t.riderId !== s.session); }
-export function driverActive() { const s = load(); return s.trips.find((t) => t.driverId === s.session && ["accepted","arriving","in_progress"].includes(t.status)); }
-export function acceptTrip(id) {
-  const s = load(); const user = s.users.find((u) => u.id === s.session);
-  const trip = s.trips.find((t) => t.id === id && t.status === "searching");
-  if (!user?.driver || !trip) throw new Error("That request is gone.");
-  trip.status = "accepted"; trip.driverId = user.id; trip.acceptedAt = Date.now();
-  trip.driverName = user.driver.displayName || user.name;
-  trip.vehicle = `${user.driver.vehicleColor} ${user.driver.vehicleMake} ${user.driver.vehicleModel}`;
-  trip.plate = user.driver.plate; return save(s);
+export function advanceTrip() {
+  throw new Error("advanceTrip: use Supabase trips updates");
 }
-export function advanceTrip(id) {
-  const s = load(); const trip = s.trips.find((t) => t.id === id && t.driverId === s.session);
-  if (!trip) throw new Error("No active trip.");
-  if (trip.status === "accepted") trip.status = "arriving";
-  else if (trip.status === "arriving") trip.status = "in_progress";
-  else if (trip.status === "in_progress") {
-    trip.status = "completed"; trip.completedAt = Date.now();
-    const driver = s.users.find((u) => u.id === s.session);
-    if (driver?.driver) { driver.driver.tripsCompleted += 1; driver.driver.earningsCents += trip.fareCents; }
-  }
-  return save(s);
-}
+/** Practice / simulate offers removed — drivers wait on Realtime. */
 export function seedPractice() {
-  const s = load(); const user = s.users.find((u) => u.id === s.session);
-  if (!user?.driver) throw new Error("Onboard first.");
-  s.trips.push({ id: crypto.randomUUID(), riderId: "practice-rider", driverId: null, status: "searching", destId: "gsp", pickupLabel: "Tillman Hall, Clemson", dropoffLabel: "GSP Airport", pickupLat: CAMPUS.lat, pickupLng: CAMPUS.lng, dropoffLat: GSP.lat, dropoffLng: GSP.lng, fareCents: 7500, depositCents: 1875, passengers: 1, flight: "AA 1234", requestedAt: Date.now() });
-  return save(s);
+  throw new Error("seedPractice removed — use live Realtime trips");
 }
-/** Demo fleet dispatch removed — use Supabase online drivers + trips Realtime. */
 export function maybeDispatchFleet() {
   return load();
 }
 export function addBooking(booking) {
-  const s = load(); s.bookings.push({ ...booking, id: crypto.randomUUID(), createdAt: Date.now() }); return save(s);
+  const s = load();
+  s.bookings.push({ ...booking, id: crypto.randomUUID(), createdAt: Date.now() });
+  return save(s);
 }
