@@ -113,7 +113,7 @@ input, textarea {
   border-radius: var(--radius-sheet) var(--radius-sheet) 0 0;
   box-shadow: var(--shadow-sheet);
   background: var(--surface);
-  animation: sheetUp 420ms var(--ease-spring) both;
+  animation: sheetUp 480ms var(--ease-spring) both;
 }
 .sheet-handle {
   width: 40px;
@@ -158,4 +158,33 @@ input, textarea {
 }
 .tab-item:active {
   transform: scale(0.94);
+}
+
+
+/* Premium CTA glow */
+.primary-cta {
+  transition: transform 180ms var(--ease-soft), box-shadow 220ms var(--ease-soft), filter 220ms var(--ease-soft);
+}
+.primary-cta:hover {
+  filter: brightness(1.03);
+  box-shadow: var(--shadow-cta);
+}
+.primary-cta:active {
+  transform: scale(0.97);
+}
+
+@keyframes sheetUp {
+  from { transform: translateY(42px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+.sheet {
+  animation: sheetUp 480ms var(--ease-spring) both;
+}
+
+@keyframes onlinePulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(31, 138, 76, 0.35); }
+  50% { box-shadow: 0 0 0 8px rgba(31, 138, 76, 0); }
+}
+.driver-online-dot {
+  animation: onlinePulse 2s var(--ease-soft) infinite;
 }

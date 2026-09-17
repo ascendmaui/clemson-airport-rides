@@ -81,9 +81,9 @@ export function PickDriver({ dest = 'GSP Airport' }) {
               boxShadow: 'var(--shadow-pill)',
             }}
           >
-            <p style={{ fontWeight: 600, marginBottom: 8 }}>No drivers online</p>
+            <p style={{ fontWeight: 600, marginBottom: 8 }}>No drivers available</p>
             <p style={{ fontSize: 13, color: 'var(--ink-secondary)' }}>
-              When a driver goes online in <code>driver_status</code>, they appear here.
+              No drivers available right now. When a driver goes online, they will show up here.
             </p>
           </div>
         )}

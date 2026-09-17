@@ -8,3 +8,4 @@ dist
 DEPLOY_ARGS*.json
 MCP_*.json
 *.bundled.jsx
+.vercel

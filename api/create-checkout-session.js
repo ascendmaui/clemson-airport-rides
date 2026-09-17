@@ -31,10 +31,12 @@ export default async function handler(req, res) {
   const fareCents = Number(body.fareCents) || DEFAULT_FARES[airport] || 7500
   const depositCents = Number(body.depositCents) || Math.round(fareCents * 0.25)
   const riderName = body.riderName || 'Rider'
+  const tripId = body.tripId || ''
+  const riderId = body.riderId || ''
   const successUrl = body.successUrl || 'https://clemson-airport-rides.vercel.app/#/schedule?paid=1'
   const cancelUrl = body.cancelUrl || 'https://clemson-airport-rides.vercel.app/#/schedule?canceled=1'
 
-  if (!stripeSecret || !stripeSecret.startsWith('sk_')) {
+  if (!stripeSecret || !stripeSecret.startsWith('sk_') || stripeSecret.includes('placeholder')) {
     return json(res, 200, {
       stub: true,
       airport,
@@ -68,6 +70,8 @@ export default async function handler(req, res) {
         depositCents: String(depositCents),
         riderName,
         kind: 'airport_deposit',
+        tripId: String(tripId || ''),
+        riderId: String(riderId || ''),
       },
     })
     return json(res, 200, {

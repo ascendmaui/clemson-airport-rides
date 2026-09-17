@@ -6,7 +6,7 @@ export default function DriverScreen() {
     <View style={styles.container}>
       <Text style={styles.title}>Driver</Text>
       <Text style={styles.body}>
-        Placeholder for driver onboarding, availability, and trip acceptance. Wire to Clerk roles +
+        Placeholder for driver onboarding, availability, and trip acceptance. Wire to Supabase roles +
         Supabase tables next.
       </Text>
       <View style={styles.pill}>

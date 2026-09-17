@@ -3,37 +3,23 @@
 Vite + React rider/driver shell · Clemson orange `#F56600` · purple `#522D80`.
 
 **Production SoT:** https://github.com/ascendmaui/clemson-airport-rides  
-**Live:** https://clemson-airport-rides.vercel.app · preview https://clemson-rides-lyft-preview.vercel.app  
+**Live:** https://clemson-airport-rides.vercel.app  
 **Supabase:** `awktabuhijrshmsmagpq` (do not migrate/drop schema)
 
-## Stack (this pass)
+## Stack
 
 | Layer | Wiring |
 |-------|--------|
-| Auth | `@clerk/clerk-react` · `ClerkProvider` in `main.jsx` · `#/sign-in` `#/sign-up` · protected `#/home` `#/driver` `#/schedule` `#/confirm` `#/tiers` (and pick-driver / onboarding) |
-| Payments | Client `src/lib/stripeStub.js` · Vercel serverless `/api/create-checkout-session` + `/api/stripe-webhook` · 25% deposit GSP `7500→1875` · CLT `17500→4375` |
-| Data | Real Supabase client · online drivers from `driver_status` + `profiles` + `vehicles` · trips Realtime · **no demo fleet** |
-| Screens | `DriverOnboarding`, `PickDriver`, Tesla tier in `RideTiers`, geofence + game-day/student pricing helpers |
-
-## Hash routes
-
-| Route | Screen |
-|-------|--------|
-| `#/landing` | Marketing |
-| `#/sign-in` `#/sign-up` | Clerk |
-| `#/home` | Rider home (auth) |
-| `#/confirm` | Confirm pickup (auth) |
-| `#/tiers` | Ride tiers + Tesla (auth) |
-| `#/pick-driver` | Live online drivers (auth) |
-| `#/schedule` | Airport deposit checkout (auth) |
-| `#/driver` | Driver map shell (auth) |
-| `#/driver-onboarding` | Driver profile/vehicle → Supabase (auth) |
+| Auth | **Supabase Auth only** · `AuthProvider` · `#/sign-in` `#/sign-up` · protected rider/driver routes |
+| Payments | Vercel `/api/create-checkout-session` + `/api/stripe-webhook` · 25% deposit · writes `payments` when service role + trip metadata present |
+| Data | Real Supabase queries · online drivers from `driver_status` · trips Realtime · **no demo fleet** |
+| UI | Lyft-style soft shadows, spring sheets, Clemson brand |
 
 ## Env
 
-Copy `.env.example`. Vite reads `VITE_*`. `NEXT_PUBLIC_*` aliases are documented for a future Next migration. Server secrets (`STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`) belong only on Vercel `/api`.
+Copy `.env.example`. Vite reads `VITE_*`. Server secrets (`STRIPE_*`, `SUPABASE_SERVICE_ROLE_KEY`) belong only on Vercel `/api`.
 
-Placeholder keys are OK for build; without `STRIPE_SECRET_KEY` the checkout API returns `{ stub: true, message }` with HTTP 200.
+Placeholder Stripe keys are OK for build; checkout returns `{ stub: true }` until a real `sk_` key is set.
 
 ## Dev / build
 
@@ -43,13 +29,6 @@ npm run build
 npm run dev
 ```
 
-## Coordinate
+## Mobile
 
-Another executor may add `apps/mobile` — `git pull --rebase` before push; never delete `apps/mobile`.
-
-## Still stubbed / next
-
-- Live Stripe keys + Clerk production instance
-- Clerk↔Supabase user sync (JWT template)
-- Expo native apps + push
-- Full dispatch matching
+See `apps/mobile` (Expo + EAS). Supabase Auth — no Clerk.

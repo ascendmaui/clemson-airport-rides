@@ -1,27 +1,15 @@
-# Clemson RIDES — mobile (Expo)
+# Clemson RIDES — Expo mobile
 
-Expo Router app for Clemson Airport Rides.
+Bundle id: `com.ascendmaui.clemsonairportrides`
 
-- **Bundle ID / package:** `com.ascendmaui.clemsonairportrides`
-- **Scheme:** `clemsonrides`
-- **Brand:** orange `#F56600`, purple `#522D80`
-
-## Setup
+Auth: **Supabase Auth only** (Clerk removed). Data: Supabase.
 
 ```bash
-cd apps/mobile
+cp .env.example .env
+# fill EXPO_PUBLIC_SUPABASE_URL + EXPO_PUBLIC_SUPABASE_ANON_KEY
 npm install
-cp .env.example .env   # fill Clerk + Supabase public keys only
 npx expo start
 ```
 
-## EAS
-
-```bash
-npm i -g eas-cli
-eas login
-eas build:configure   # fills projectId in app.json if empty
-eas build --platform ios --profile preview
-```
-
-Do not commit `.env`, keystores, or service-role keys.
+EAS: see `eas.json` (preview / production). Requires Xcode developer dir:
+`sudo xcode-select -s /Applications/Xcode.app/Contents/Developer`

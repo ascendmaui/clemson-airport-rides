@@ -1,9 +1,8 @@
 import { useEffect, useState } from 'react'
-import { useUser } from '@clerk/clerk-react'
+import { useAuth } from '../lib/auth'
 import { CampusMap, CLEMSON } from '../components/CampusMap'
 import { PurpleAcceptButton } from '../components/PrimaryButton'
 import { navigate } from '../lib/navigation'
-import { isClerkConfigured } from '../lib/clerkConfig'
 import { setDriverOnline, subscribeTrips, supabase } from '../lib/supabase'
 
 function centsToDollars(cents) {
@@ -12,12 +11,12 @@ function centsToDollars(cents) {
 }
 
 export function DriverHome() {
-  if (isClerkConfigured) return <DriverHomeAuthed />
-  return <DriverShell driverId={null} />
-}
-
-function DriverHomeAuthed() {
-  const { user } = useUser()
+  const { user, loading } = useAuth()
+  if (loading) {
+    return (
+      <div style={{ padding: 40, textAlign: 'center', color: 'var(--ink-secondary)' }}>Loading…</div>
+    )
+  }
   return <DriverShell driverId={user?.id || null} />
 }
 
@@ -169,6 +168,7 @@ function DriverShell({ driverId }) {
           <div className="sheet-handle" />
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
             <span
+              className="driver-online-dot"
               style={{
                 width: 10,
                 height: 10,

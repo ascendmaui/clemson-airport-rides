@@ -1,6 +1,5 @@
 import { StyleSheet, Text, View } from 'react-native';
 import Colors from '@/constants/Colors';
-import { isClerkConfigured } from '@/lib/clerk';
 import { isSupabaseConfigured } from '@/lib/supabase';
 
 export default function HomeScreen() {
@@ -16,7 +15,7 @@ export default function HomeScreen() {
       <View style={styles.card}>
         <Text style={styles.cardTitle}>Integrations</Text>
         <Text style={styles.row}>
-          Clerk: {isClerkConfigured() ? 'configured' : 'stub (set EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY)'}
+          Auth: Supabase
         </Text>
         <Text style={styles.row}>
           Supabase:{' '}

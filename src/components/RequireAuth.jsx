@@ -1,42 +1,10 @@
-import { SignedIn, SignedOut, useAuth } from '@clerk/clerk-react'
+import { useAuth } from '../lib/auth'
 import { navigate } from '../lib/navigation'
-import { isClerkConfigured } from '../lib/clerkConfig'
 
 export function RequireAuth({ children }) {
-  if (!isClerkConfigured) {
-    return (
-      <>
-        <div
-          style={{
-            position: 'absolute',
-            top: 8,
-            left: 8,
-            right: 8,
-            zIndex: 50,
-            padding: '8px 12px',
-            borderRadius: 10,
-            background: 'rgba(82,45,128,0.92)',
-            color: '#fff',
-            fontSize: 12,
-            fontWeight: 600,
-            textAlign: 'center',
-            pointerEvents: 'none',
-          }}
-        >
-          Clerk key not set — preview mode (sign-in unlocked once VITE_CLERK_PUBLISHABLE_KEY is live)
-        </div>
-        {children}
-      </>
-    )
-  }
+  const { session, loading, configured } = useAuth()
 
-  return <RequireAuthClerk>{children}</RequireAuthClerk>
-}
-
-function RequireAuthClerk({ children }) {
-  const { isLoaded } = useAuth()
-
-  if (!isLoaded) {
+  if (loading) {
     return (
       <div style={{ padding: 40, textAlign: 'center', color: 'var(--ink-secondary)' }}>
         Loading…
@@ -44,41 +12,45 @@ function RequireAuthClerk({ children }) {
     )
   }
 
-  return (
-    <>
-      <SignedIn>{children}</SignedIn>
-      <SignedOut>
-        <RedirectToSignIn />
-      </SignedOut>
-    </>
-  )
-}
-
-function RedirectToSignIn() {
-  if (typeof window !== 'undefined') {
-    const hash = window.location.hash || ''
-    if (!hash.includes('sign-in') && !hash.includes('sign-up')) {
-      queueMicrotask(() => navigate('sign-in'))
-    }
+  if (!configured) {
+    return (
+      <div style={{ padding: 40, textAlign: 'center' }}>
+        <p style={{ color: 'var(--danger)', fontWeight: 600, marginBottom: 8 }}>Supabase not configured</p>
+        <p style={{ color: 'var(--ink-secondary)', fontSize: 14 }}>
+          Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY on Vercel.
+        </p>
+      </div>
+    )
   }
-  return (
-    <div style={{ padding: 40, textAlign: 'center' }}>
-      <p style={{ marginBottom: 16, color: 'var(--ink-secondary)' }}>Sign in to continue</p>
-      <button
-        type="button"
-        className="pressable"
-        onClick={() => navigate('sign-in')}
-        style={{
-          padding: '12px 20px',
-          borderRadius: 12,
-          background: 'var(--orange)',
-          color: '#fff',
-          fontWeight: 700,
-          boxShadow: 'var(--shadow-pill)',
-        }}
-      >
-        Go to sign in
-      </button>
-    </div>
-  )
+
+  if (!session) {
+    if (typeof window !== 'undefined') {
+      const hash = window.location.hash || ''
+      if (!hash.includes('sign-in') && !hash.includes('sign-up')) {
+        queueMicrotask(() => navigate('sign-in'))
+      }
+    }
+    return (
+      <div className="fade-in" style={{ padding: 40, textAlign: 'center' }}>
+        <p style={{ marginBottom: 16, color: 'var(--ink-secondary)' }}>Sign in to continue</p>
+        <button
+          type="button"
+          className="pressable primary-cta"
+          onClick={() => navigate('sign-in')}
+          style={{
+            padding: '14px 22px',
+            borderRadius: 14,
+            background: 'var(--orange)',
+            color: '#fff',
+            fontWeight: 700,
+            boxShadow: 'var(--shadow-cta)',
+          }}
+        >
+          Go to sign in
+        </button>
+      </div>
+    )
+  }
+
+  return children
 }

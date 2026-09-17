@@ -9,7 +9,6 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@clerk/clerk-react": "^5.25.0",
     "@supabase/supabase-js": "^2.49.1",
     "leaflet": "^1.9.4",
     "react": "^18.3.1",

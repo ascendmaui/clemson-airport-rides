@@ -7,7 +7,7 @@ export default function ModalScreen() {
     <View style={styles.container}>
       <Text style={styles.title}>Clemson RIDES</Text>
       <Text style={styles.body}>
-        Mobile scaffold for airport rides. Auth via Clerk, data via Supabase. Built with Expo + EAS.
+        Mobile scaffold for airport rides. Auth via Supabase Auth, data via Supabase. Built with Expo + EAS.
       </Text>
       <StatusBar style={Platform.OS === 'ios' ? 'light' : 'auto'} />
     </View>

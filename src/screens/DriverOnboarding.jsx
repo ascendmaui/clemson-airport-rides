@@ -1,11 +1,12 @@
 import { useState } from 'react'
-import { useUser } from '@clerk/clerk-react'
+import { useAuth } from '../lib/auth'
 import { PrimaryButton } from '../components/PrimaryButton'
 import { navigate } from '../lib/navigation'
 import { upsertDriverOnboarding, supabaseConfigured } from '../lib/supabase'
 
 export function DriverOnboarding() {
-  const { user, isLoaded } = useUser()
+  const { user, loading } = useAuth()
+  const isLoaded = !loading
   const [fullName, setFullName] = useState(user?.fullName || '')
   const [phone, setPhone] = useState('')
   const [make, setMake] = useState('')
