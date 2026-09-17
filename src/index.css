@@ -34,7 +34,7 @@ input, textarea {
   margin: 0 auto;
   background: var(--surface-muted);
   position: relative;
-  box-shadow: 0 0 60px rgba(11, 18, 32, 0.08);
+  box-shadow: 0 0 60px rgba(82, 45, 128, 0.10);
   overflow: hidden;
 }
 
@@ -64,11 +64,10 @@ input, textarea {
     height: calc(100vh - 80px);
     overflow: hidden;
     border-radius: 28px;
-    border: 1px solid rgba(255,255,255,0.08);
+    border: 1px solid rgba(245, 102, 0, 0.12);
   }
 }
 
-/* Pressable scale — prefer CSS transition over jank */
 .pressable {
   transition: transform 180ms var(--ease-soft), opacity 180ms var(--ease-soft), box-shadow 220ms var(--ease-soft);
   will-change: transform;
@@ -82,12 +81,11 @@ input, textarea {
   cursor: not-allowed;
 }
 
-/* Route / tab fades */
 .fade-in {
   animation: fadeIn 320ms var(--ease-out) both;
 }
 .route-fade {
-  animation: routeFade 280ms var(--ease-soft) both;
+  animation: routeFade 340ms var(--ease-spring) both;
 }
 
 @keyframes fadeIn {
@@ -95,13 +93,12 @@ input, textarea {
   to { opacity: 1; transform: translateY(0); }
 }
 @keyframes routeFade {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from { opacity: 0; transform: translateY(6px) scale(0.995); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
 }
 
-/* Springy sheet + modal */
 @keyframes sheetUp {
-  from { transform: translateY(36px); opacity: 0; }
+  from { transform: translateY(42px); opacity: 0; }
   to { transform: translateY(0); opacity: 1; }
 }
 @keyframes modalIn {
@@ -128,7 +125,14 @@ input, textarea {
   animation: modalIn 380ms var(--ease-spring) both;
 }
 
-/* Blur tab bar */
+.card-soft {
+  transition: transform 220ms var(--ease-soft), box-shadow 220ms var(--ease-soft);
+  box-shadow: var(--shadow-soft);
+}
+.card-soft:hover {
+  box-shadow: var(--shadow-modal);
+}
+
 .tab-bar {
   position: sticky;
   bottom: 0;
@@ -147,7 +151,7 @@ input, textarea {
   flex-direction: column;
   align-items: center;
   gap: 2px;
-  font-size: 11;
+  font-size: 11px;
   font-weight: 500;
   color: var(--ink-tertiary);
   transition: color 200ms var(--ease-soft), transform 180ms var(--ease-soft);
@@ -160,8 +164,6 @@ input, textarea {
   transform: scale(0.94);
 }
 
-
-/* Premium CTA glow */
 .primary-cta {
   transition: transform 180ms var(--ease-soft), box-shadow 220ms var(--ease-soft), filter 220ms var(--ease-soft);
 }
@@ -171,14 +173,6 @@ input, textarea {
 }
 .primary-cta:active {
   transform: scale(0.97);
-}
-
-@keyframes sheetUp {
-  from { transform: translateY(42px); opacity: 0; }
-  to { transform: translateY(0); opacity: 1; }
-}
-.sheet {
-  animation: sheetUp 480ms var(--ease-spring) both;
 }
 
 @keyframes onlinePulse {
