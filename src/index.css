@@ -32,9 +32,12 @@ input, textarea {
   width: 100%;
   max-width: 480px;
   margin: 0 auto;
-  background: var(--surface-muted);
+  background:
+    radial-gradient(120% 80% at 10% -10%, rgba(245, 102, 0, 0.10), transparent 55%),
+    radial-gradient(100% 70% at 100% 0%, rgba(82, 45, 128, 0.12), transparent 50%),
+    var(--surface-muted);
   position: relative;
-  box-shadow: 0 0 60px rgba(82, 45, 128, 0.10);
+  box-shadow: 0 0 60px rgba(82, 45, 128, 0.12);
   overflow: hidden;
 }
 
@@ -64,17 +67,68 @@ input, textarea {
     height: calc(100vh - 80px);
     overflow: hidden;
     border-radius: 28px;
-    border: 1px solid rgba(245, 102, 0, 0.12);
+    border: 1px solid rgba(255, 255, 255, 0.10);
   }
 }
 
+/* —— Glassmorphism / iOS-26-inspired —— */
+.glass-panel {
+  background: var(--glass-white);
+  backdrop-filter: var(--blur-glass);
+  -webkit-backdrop-filter: var(--blur-glass);
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  box-shadow: var(--shadow-soft);
+}
+
+.glass-panel--elevated {
+  background: var(--glass-white-strong);
+  backdrop-filter: var(--blur-glass-strong);
+  -webkit-backdrop-filter: var(--blur-glass-strong);
+  border: 1px solid rgba(255, 255, 255, 0.72);
+  box-shadow: var(--shadow-modal);
+}
+
+.glass-panel--orange {
+  background: linear-gradient(145deg, rgba(255,255,255,0.55), rgba(245,102,0,0.10));
+  border: 1px solid rgba(245, 102, 0, 0.18);
+}
+
+.glass-panel--purple {
+  background: linear-gradient(145deg, rgba(255,255,255,0.55), rgba(82,45,128,0.12));
+  border: 1px solid rgba(82, 45, 128, 0.18);
+}
+
+.glass-pill {
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(16px) saturate(1.4);
+  -webkit-backdrop-filter: blur(16px) saturate(1.4);
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  box-shadow: var(--shadow-pill);
+}
+
+.glass-input {
+  background: rgba(255, 255, 255, 0.55) !important;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.45) !important;
+  box-shadow: inset 0 1px 2px rgba(11, 18, 32, 0.04);
+}
+
+.map-pin-glow {
+  filter: drop-shadow(0 4px 12px rgba(245, 102, 0, 0.35)) drop-shadow(0 2px 4px rgba(82, 45, 128, 0.25));
+  transition: transform 280ms var(--ease-spring), filter 280ms var(--ease-soft);
+}
+.map-pin-glow:hover {
+  transform: scale(1.08) translateY(-2px);
+}
+
 .pressable {
-  transition: transform 180ms var(--ease-soft), opacity 180ms var(--ease-soft), box-shadow 220ms var(--ease-soft);
+  transition: transform 200ms var(--ease-spring), opacity 180ms var(--ease-soft), box-shadow 240ms var(--ease-soft);
   will-change: transform;
   -webkit-tap-highlight-color: transparent;
 }
 .pressable:active {
-  transform: scale(0.97);
+  transform: scale(0.96);
 }
 .pressable:disabled {
   transform: none;
@@ -82,54 +136,58 @@ input, textarea {
 }
 
 .fade-in {
-  animation: fadeIn 320ms var(--ease-out) both;
+  animation: fadeIn 340ms var(--ease-out) both;
 }
 .route-fade {
-  animation: routeFade 340ms var(--ease-spring) both;
+  animation: routeFade 380ms var(--ease-spring) both;
 }
 
 @keyframes fadeIn {
-  from { opacity: 0; transform: translateY(10px); }
+  from { opacity: 0; transform: translateY(12px); }
   to { opacity: 1; transform: translateY(0); }
 }
 @keyframes routeFade {
-  from { opacity: 0; transform: translateY(6px) scale(0.995); }
+  from { opacity: 0; transform: translateY(8px) scale(0.992); }
   to { opacity: 1; transform: translateY(0) scale(1); }
 }
 
 @keyframes sheetUp {
-  from { transform: translateY(42px); opacity: 0; }
+  from { transform: translateY(48px); opacity: 0; }
   to { transform: translateY(0); opacity: 1; }
 }
 @keyframes modalIn {
-  from { opacity: 0; transform: scale(0.94) translateY(8px); }
+  from { opacity: 0; transform: scale(0.92) translateY(12px); }
   to { opacity: 1; transform: scale(1) translateY(0); }
 }
 
 .sheet {
   border-radius: var(--radius-sheet) var(--radius-sheet) 0 0;
   box-shadow: var(--shadow-sheet);
-  background: var(--surface);
-  animation: sheetUp 480ms var(--ease-spring) both;
+  background: var(--glass-white-strong);
+  backdrop-filter: var(--blur-glass-strong);
+  -webkit-backdrop-filter: var(--blur-glass-strong);
+  border-top: 1px solid rgba(255, 255, 255, 0.65);
+  animation: sheetUp 520ms var(--ease-spring) both;
 }
 .sheet-handle {
   width: 40px;
   height: 4px;
   border-radius: 2px;
-  background: var(--border);
+  background: rgba(11, 18, 32, 0.14);
   margin: 0 auto 14px;
 }
 .modal-card {
   border-radius: var(--radius-sheet);
   box-shadow: var(--shadow-modal);
-  animation: modalIn 380ms var(--ease-spring) both;
+  animation: modalIn 400ms var(--ease-spring) both;
 }
 
 .card-soft {
-  transition: transform 220ms var(--ease-soft), box-shadow 220ms var(--ease-soft);
+  transition: transform 240ms var(--ease-spring), box-shadow 240ms var(--ease-soft);
   box-shadow: var(--shadow-soft);
 }
 .card-soft:hover {
+  transform: translateY(-2px);
   box-shadow: var(--shadow-modal);
 }
 
@@ -138,10 +196,10 @@ input, textarea {
   bottom: 0;
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  background: rgba(255, 255, 255, 0.82);
-  backdrop-filter: blur(20px) saturate(1.4);
-  -webkit-backdrop-filter: blur(20px) saturate(1.4);
-  border-top: 1px solid rgba(230, 232, 236, 0.7);
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(24px) saturate(1.5);
+  -webkit-backdrop-filter: blur(24px) saturate(1.5);
+  border-top: 1px solid rgba(255, 255, 255, 0.45);
   padding-bottom: var(--safe-bottom);
   z-index: 40;
 }
@@ -154,25 +212,25 @@ input, textarea {
   font-size: 11px;
   font-weight: 500;
   color: var(--ink-tertiary);
-  transition: color 200ms var(--ease-soft), transform 180ms var(--ease-soft);
+  transition: color 200ms var(--ease-soft), transform 200ms var(--ease-spring);
 }
 .tab-item.active {
   color: var(--orange);
   font-weight: 600;
 }
 .tab-item:active {
-  transform: scale(0.94);
+  transform: scale(0.92);
 }
 
 .primary-cta {
-  transition: transform 180ms var(--ease-soft), box-shadow 220ms var(--ease-soft), filter 220ms var(--ease-soft);
+  transition: transform 200ms var(--ease-spring), box-shadow 240ms var(--ease-soft), filter 220ms var(--ease-soft);
 }
 .primary-cta:hover {
-  filter: brightness(1.03);
+  filter: brightness(1.04);
   box-shadow: var(--shadow-cta);
 }
 .primary-cta:active {
-  transform: scale(0.97);
+  transform: scale(0.96);
 }
 
 @keyframes onlinePulse {
@@ -181,4 +239,13 @@ input, textarea {
 }
 .driver-online-dot {
   animation: onlinePulse 2s var(--ease-soft) infinite;
+}
+
+.tier-row-glass {
+  transition: background 220ms var(--ease-soft), border-color 220ms var(--ease-soft), transform 200ms var(--ease-spring), box-shadow 220ms var(--ease-soft);
+}
+.tier-row-glass.selected {
+  background: linear-gradient(135deg, rgba(245,102,0,0.12), rgba(255,255,255,0.55));
+  border: 1.5px solid rgba(245,102,0,0.28);
+  box-shadow: var(--shadow-pill);
 }
