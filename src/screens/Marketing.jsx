@@ -1,7 +1,7 @@
 import { navigate } from '../lib/navigation'
 import { PrimaryButton } from '../components/PrimaryButton'
 
-const IOS_BUILD = 'https://expo.dev/accounts/johnmatveyev/projects/clemson-airport-rides/builds/e3dd26af-bc4a-46b4-9e5d-738238b5d63a'
+const IOS_BUILD = 'https://expo.dev/accounts/johnmatveyev/projects/clemson-airport-rides/builds/ae9bb5b6-e4b8-49ac-b8e3-471bdced9357'
 const ANDROID_BUILD = 'https://expo.dev/accounts/johnmatveyev/projects/clemson-airport-rides/builds/eccc2bb8-195e-4342-ac99-9c0c9c13f1e2'
 
 function QrCard({ label, href, caption }) {
