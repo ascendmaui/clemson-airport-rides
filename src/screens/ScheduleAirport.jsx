@@ -10,7 +10,49 @@ import {
 import { formatUsdFromCents } from '../lib/pricing'
 import { useAuth } from '../lib/auth'
 import { navigate } from '../lib/navigation'
+import { supabase } from '../lib/supabase'
+import { STADIUM } from '../components/CampusMap'
 import { SignInToBookModal, useRequireAuthForAction } from '../components/SignInToBookModal'
+
+const AIRPORT_COORDS = {
+  GSP: { label: 'Greenville-Spartanburg International (GSP)', lat: 34.8956, lng: -82.2189 },
+  CLT: { label: 'Charlotte Douglas International (CLT)', lat: 35.2144, lng: -80.9473 },
+}
+
+async function createAirportTrip({ user, airport, fareCents, deposit, date, time }) {
+  if (!supabase) throw new Error('Supabase is not configured')
+  if (!user?.id) throw new Error('Sign in required to book')
+
+  const dest = AIRPORT_COORDS[airport] || AIRPORT_COORDS.GSP
+  let scheduledFor = null
+  if (date) {
+    const hhmm = time || '12:00'
+    scheduledFor = new Date(`${date}T${hhmm}:00`).toISOString()
+  }
+
+  const { data, error } = await supabase
+    .from('trips')
+    .insert({
+      rider_id: user.id,
+      status: 'searching',
+      tier: 'standard',
+      pickup_label: 'Memorial Stadium',
+      dropoff_label: dest.label,
+      pickup_lat: STADIUM[0],
+      pickup_lng: STADIUM[1],
+      dropoff_lat: dest.lat,
+      dropoff_lng: dest.lng,
+      fare_cents: fareCents,
+      deposit_cents: deposit,
+      passengers: 1,
+      scheduled_for: scheduledFor,
+    })
+    .select('id')
+    .single()
+
+  if (error) throw new Error(error.message || 'Could not create trip')
+  return data.id
+}
 
 export function ScheduleAirport() {
   const { user } = useAuth()
@@ -32,15 +74,24 @@ export function ScheduleAirport() {
     setError(null)
     setResult(null)
     try {
+      const tripId = await createAirportTrip({
+        user,
+        airport,
+        fareCents: rate.fareCents,
+        deposit,
+        date,
+        time,
+      })
       const session = await createCheckoutSession({
         airport,
         riderName:
           user?.user_metadata?.full_name ||
           user?.email?.split('@')[0] ||
           'Rider',
-        riderId: user?.id || '',
+        riderId: user.id,
+        tripId,
       })
-      setResult(session)
+      setResult({ tripId, ...session })
       if (session.url) {
         window.location.href = session.url
         return
@@ -142,7 +193,7 @@ export function ScheduleAirport() {
           </div>
           <p style={{ fontSize: 12, color: 'var(--ink-tertiary)', marginTop: 10 }}>
             {rate.code} · {rate.fareCents}¢ fare → {deposit}¢ deposit
-            {stripe.configured ? ' · publishable key ready' : ' · set VITE_STRIPE_PUBLISHABLE_KEY'}
+            {stripe.configured ? ' · Stripe ready' : ' · set VITE_STRIPE_PUBLISHABLE_KEY'}
           </p>
         </div>
 

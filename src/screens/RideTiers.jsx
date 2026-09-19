@@ -111,8 +111,7 @@ export function RideTiers({ dest = '1900 GSP Dr' }) {
         upgradePrice={4.5}
         onClose={() => {
           setUpsell(null)
-          alert(`Requested ${selected.name} — stub`)
-          navigate('home')
+          navigate('pick-driver', { dest })
         }}
         onUpgrade={() => {
           setSelected(TIERS.find((t) => t.id === 'comfort'))
@@ -125,8 +124,7 @@ export function RideTiers({ dest = '1900 GSP Dr' }) {
         upgradePrice={13.0}
         onClose={() => {
           setUpsell(null)
-          alert(`Requested Extra Comfort — stub`)
-          navigate('home')
+          navigate('pick-driver', { dest })
         }}
         onUpgrade={() => {
           setSelected(TIERS.find((t) => t.id === 'tesla'))
