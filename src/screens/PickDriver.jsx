@@ -2,13 +2,20 @@ import { useEffect, useState } from 'react'
 import { PrimaryButton } from '../components/PrimaryButton'
 import { navigate } from '../lib/navigation'
 import { fetchOnlineDrivers, subscribeTrips, supabaseConfigured } from '../lib/supabase'
+import { requestDriverTrip } from '../lib/trips'
+import { useAuth } from '../lib/auth'
+import { SignInToBookModal, useRequireAuthForAction } from '../components/SignInToBookModal'
 
 export function PickDriver({ dest = 'GSP Airport' }) {
+  const { user } = useAuth()
+  const { runOrPrompt } = useRequireAuthForAction()
   const [drivers, setDrivers] = useState([])
   const [error, setError] = useState(null)
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState(null)
   const [tripFlash, setTripFlash] = useState(null)
+  const [busy, setBusy] = useState(false)
+  const [promptOpen, setPromptOpen] = useState(false)
 
   const load = async () => {
     setLoading(true)
@@ -22,42 +29,39 @@ export function PickDriver({ dest = 'GSP Airport' }) {
     load()
     const unsub = subscribeTrips((payload) => {
       setTripFlash(`${payload.eventType} · trip ${payload.new?.id || payload.old?.id || ''}`)
-      // Refresh online list when trip activity changes
       load()
     })
     return unsub
   }, [])
 
+  const onRequest = async () => {
+    if (!selected) return
+    setBusy(true)
+    setError(null)
+    try {
+      const trip = await requestDriverTrip({
+        riderId: user.id,
+        driverId: selected.id,
+        dest,
+      })
+      navigate('requested', { dest, trip: trip.id, driver: selected.name })
+    } catch (err) {
+      setError(err.message || 'Could not request that driver')
+    } finally {
+      setBusy(false)
+    }
+  }
+
   return (
-    <div
-      className="fade-in"
-      style={{
-        minHeight: '100%',
-        background: 'var(--surface-muted)',
-        display: 'flex',
-        flexDirection: 'column',
-      }}
-    >
+    <div className="fade-in" style={{ minHeight: '100%', background: 'var(--surface-muted)', display: 'flex', flexDirection: 'column' }}>
       <div style={{ padding: '20px 20px 8px' }}>
-        <button type="button" className="pressable" onClick={() => navigate('tiers', { dest })} style={{ fontSize: 20 }}>
-          ←
-        </button>
+        <button type="button" className="pressable" onClick={() => navigate('tiers', { dest })} style={{ fontSize: 20 }}>←</button>
         <h1 style={{ fontSize: 24, fontWeight: 700, marginTop: 12 }}>Pick a driver</h1>
         <p style={{ color: 'var(--ink-secondary)', fontSize: 14, marginTop: 6 }}>
-          Live from Supabase <code>driver_status</code> where online=true
+          Live from Supabase driver_status where online=true
         </p>
         {tripFlash && (
-          <div
-            style={{
-              marginTop: 10,
-              padding: '8px 12px',
-              borderRadius: 12,
-              background: 'var(--purple-soft)',
-              color: 'var(--purple)',
-              fontSize: 12,
-              fontWeight: 600,
-            }}
-          >
+          <div style={{ marginTop: 10, padding: '8px 12px', borderRadius: 12, background: 'var(--purple-soft)', color: 'var(--purple)', fontSize: 12, fontWeight: 600 }}>
             Realtime: {tripFlash}
           </div>
         )}
@@ -66,24 +70,16 @@ export function PickDriver({ dest = 'GSP Airport' }) {
       <div style={{ flex: 1, padding: '8px 16px 24px', overflowY: 'auto' }}>
         {!supabaseConfigured && (
           <p style={{ color: '#b00020', padding: 12 }}>
-            Configure VITE_SUPABASE_URL + VITE_SUPABASE_ANON_KEY — no demo fleet.
+            Configure VITE_SUPABASE_ANON_KEY — no demo fleet.
           </p>
         )}
         {loading && <p style={{ color: 'var(--ink-secondary)', padding: 12 }}>Loading online drivers…</p>}
         {error && <p style={{ color: '#b00020', padding: 12 }}>{error}</p>}
         {!loading && !error && drivers.length === 0 && (
-          <div
-            className="sheet"
-            style={{
-              padding: 24,
-              borderRadius: 20,
-              textAlign: 'center',
-              boxShadow: 'var(--shadow-pill)',
-            }}
-          >
+          <div className="sheet" style={{ padding: 24, borderRadius: 20, textAlign: 'center', boxShadow: 'var(--shadow-pill)' }}>
             <p style={{ fontWeight: 600, marginBottom: 8 }}>No drivers available</p>
             <p style={{ fontSize: 13, color: 'var(--ink-secondary)' }}>
-              No drivers available right now. When a driver goes online, they will show up here.
+              When a driver goes online in Driver mode, they show up here.
             </p>
           </div>
         )}
@@ -111,22 +107,10 @@ export function PickDriver({ dest = 'GSP Airport' }) {
                 <div>
                   <div style={{ fontWeight: 700, fontSize: 16 }}>{d.name}</div>
                   <div style={{ fontSize: 13, color: 'var(--ink-secondary)', marginTop: 4 }}>
-                    {d.vehicleLabel}
-                    {d.plate ? ` · ${d.plate}` : ''}
+                    {d.vehicleLabel}{d.plate ? ` · ${d.plate}` : ''}
                   </div>
                   {d.isTesla && (
-                    <span
-                      style={{
-                        display: 'inline-block',
-                        marginTop: 8,
-                        fontSize: 11,
-                        fontWeight: 700,
-                        color: 'var(--purple)',
-                        background: 'var(--purple-soft)',
-                        padding: '4px 8px',
-                        borderRadius: 999,
-                      }}
-                    >
+                    <span style={{ display: 'inline-block', marginTop: 8, fontSize: 11, fontWeight: 700, color: 'var(--purple)', background: 'var(--purple-soft)', padding: '4px 8px', borderRadius: 999 }}>
                       TESLA
                     </span>
                   )}
@@ -143,15 +127,13 @@ export function PickDriver({ dest = 'GSP Airport' }) {
 
       <div style={{ padding: '12px 20px calc(20px + var(--safe-bottom))' }}>
         <PrimaryButton
-          disabled={!selected}
-          onClick={() => {
-            alert(`Requested ${selected.name} to ${dest}`)
-            navigate('home')
-          }}
+          disabled={!selected || busy}
+          onClick={() => runOrPrompt(onRequest, { setPromptOpen, nextPath: 'pick-driver', nextParams: { dest } })}
         >
-          {selected ? `Request ${selected.name}` : 'Select a driver'}
+          {busy ? 'Requesting…' : selected ? `Request ${selected.name}` : 'Select a driver'}
         </PrimaryButton>
       </div>
+      <SignInToBookModal open={promptOpen} onClose={() => setPromptOpen(false)} nextPath="pick-driver" nextParams={{ dest }} />
     </div>
   )
 }

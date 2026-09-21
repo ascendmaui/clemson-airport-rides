@@ -11,8 +11,8 @@ import { FriendsScreen, AccountScreen } from './screens/FriendsAccount'
 import { SignInScreen, SignUpScreen } from './screens/AuthScreens'
 import { DriverOnboarding } from './screens/DriverOnboarding'
 import { PickDriver } from './screens/PickDriver'
+import { Requested } from './screens/Requested'
 
-/** Account-like + driver stay gated. Rider browse routes are open to guests. */
 const PROTECTED = new Set(['driver', 'driver-onboarding', 'friends', 'account'])
 
 function Screen({ path, params }) {
@@ -33,6 +33,8 @@ function Screen({ path, params }) {
       return <RideTiers dest={params.dest || '1900 GSP Dr'} />
     case 'pick-driver':
       return <PickDriver dest={params.dest || 'GSP Airport'} />
+    case 'requested':
+      return <Requested dest={params.dest} trip={params.trip} driver={params.driver} />
     case 'schedule':
       return <ScheduleAirport />
     case 'driver':
@@ -81,13 +83,7 @@ export default function App() {
         <div
           key={path}
           className="route-fade"
-          style={{
-            position: 'absolute',
-            inset: 0,
-            width: '100%',
-            height: '100%',
-            overflow,
-          }}
+          style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', overflow }}
           data-protected={PROTECTED.has(path) ? '1' : '0'}
           data-guest-browse={PROTECTED.has(path) ? '0' : '1'}
         >
