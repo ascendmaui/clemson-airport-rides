@@ -1,6 +1,6 @@
 /** Typical downtown Clemson nightlife intensity by weekday hour.
  *  Not live Uber/Lyft demand. Curves follow Fri/Sat College Ave nights.
- *  Intensity is 0–1 relative to that venue's peak week hour.
+ *  Intensity is 0-1 relative to that venue's peak week hour.
  */
 
 export const DOWNTOWN_CENTER = [34.6836, -82.8364]
@@ -15,7 +15,7 @@ export const DOWNTOWN_VENUES = [
   { id: 'study-hall', name: 'The Study Hall',
     lat: 34.6835, lng: -82.8368, radius: 80,
     curve: 'bar' },
-  { id: 'es tes', name: 'Keith St pickup',
+  { id: 'keith-st', name: 'Keith St pickup',
     lat: 34.6848, lng: -82.8374, radius: 70,
     curve: 'late' },
 ]
@@ -25,7 +25,6 @@ function clamp01(n) {
 }
 
 function barCurve(day, hour) {
-  // 0=Sun … 5=Fri 6=Sat
   const weekend = day === 5 || day === 6
   const thu = day === 4
   if (hour < 16) return weekend ? 0.08 : 0.04
@@ -33,7 +32,6 @@ function barCurve(day, hour) {
   if (hour < 21) return weekend ? 0.55 : thu ? 0.35 : 0.18
   if (hour < 23) return weekend ? 0.92 : thu ? 0.58 : 0.28
   if (hour === 23) return weekend ? 1 : thu ? 0.7 : 0.32
-  // 0–2am next calendar day still counts as night-out
   if (hour < 2) return weekend ? 0.78 : thu ? 0.45 : 0.16
   return weekend ? 0.18 : 0.06
 }
