@@ -1,9 +1,10 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { SearchField } from '../components/SearchField'
 import { Pill } from '../components/Pill'
 import { BottomTabs } from '../components/BottomTabs'
 import { CampusMap, STADIUM } from '../components/CampusMap'
 import { navigate } from '../lib/navigation'
+import { DOWNTOWN_CENTER, downtownNow } from '../lib/downtownHeat'
 
 const SHORTCUTS = [
   { id: 'home', label: 'Home', sub: 'Simpsonville', icon: '🏠' },
@@ -14,6 +15,8 @@ const SHORTCUTS = [
 export function RiderHome({ riderName = 'John' }) {
   const [query, setQuery] = useState('')
   const [tab, setTab] = useState('home')
+  const [downtown, setDowntown] = useState(true)
+  const heat = useMemo(() => downtownNow(), [])
 
   const goSearch = (dest) => {
     navigate('confirm', { dest: dest || query || 'GSP Airport' })
@@ -22,7 +25,6 @@ export function RiderHome({ riderName = 'John' }) {
   return (
     <div className="fade-in" style={{ display: 'flex', flexDirection: 'column', minHeight: '100%', background: 'transparent' }}>
       <div style={{ flex: 1, overflowY: 'auto', paddingBottom: 8 }}>
-        {/* Hero */}
         <header
           style={{
             position: 'relative',
@@ -41,9 +43,6 @@ export function RiderHome({ riderName = 'John' }) {
         >
           <div style={{ position: 'absolute', top: 16, right: 16, opacity: 0.18, fontSize: 72, lineHeight: 1, userSelect: 'none' }}>
             🐾
-          </div>
-          <div style={{ position: 'absolute', top: 88, right: 20, opacity: 0.22, fontFamily: 'Georgia, serif', fontStyle: 'italic', fontSize: 18, transform: 'rotate(-8deg)' }}>
-            GO TIGERS!
           </div>
           <div style={{ fontSize: 11, letterSpacing: 2.2, fontWeight: 600, opacity: 0.85, marginBottom: 6 }}>
             RIDE • GAME • REPEAT
@@ -72,22 +71,6 @@ export function RiderHome({ riderName = 'John' }) {
         </header>
 
         <div style={{ padding: '20px 20px 0', position: 'relative' }}>
-          {/* watermark */}
-          <div
-            aria-hidden
-            style={{
-              position: 'absolute',
-              right: -10,
-              top: 40,
-              fontSize: 140,
-              opacity: 0.04,
-              pointerEvents: 'none',
-              userSelect: 'none',
-            }}
-          >
-            🐾
-          </div>
-
           <h1 style={{ fontSize: 24, fontWeight: 600, letterSpacing: -0.4 }}>
             Welcome, {riderName}
           </h1>
@@ -106,13 +89,7 @@ export function RiderHome({ riderName = 'John' }) {
             type="button"
             className="pressable"
             onClick={() => goSearch()}
-            style={{
-              width: '100%',
-              padding: '10px',
-              fontSize: 13,
-              fontWeight: 600,
-              color: 'var(--orange)',
-            }}
+            style={{ width: '100%', padding: '10px', fontSize: 13, fontWeight: 600, color: 'var(--orange)' }}
           >
             Search destination →
           </button>
@@ -133,13 +110,7 @@ export function RiderHome({ riderName = 'John' }) {
                 type="button"
                 className="pressable glass-panel card-soft"
                 onClick={() => goSearch(s.sub)}
-                style={{
-                  flex: '0 0 auto',
-                  minWidth: 118,
-                  padding: '14px 14px',
-                  borderRadius: 16,
-                  textAlign: 'left',
-                }}
+                style={{ flex: '0 0 auto', minWidth: 118, padding: '14px 14px', borderRadius: 16, textAlign: 'left' }}
               >
                 <div style={{ fontSize: 22, marginBottom: 8 }}>{s.icon}</div>
                 <div style={{ fontWeight: 600, fontSize: 13 }}>{s.label}</div>
@@ -148,46 +119,40 @@ export function RiderHome({ riderName = 'John' }) {
             ))}
           </div>
 
-          <div
-            className="glass-panel card-soft"
-            style={{
-              marginTop: 22,
-              borderRadius: 18,
-              padding: 14,
-            }}
-          >
+          <div className="glass-panel card-soft" style={{ marginTop: 22, borderRadius: 18, padding: 14 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, padding: '0 4px' }}>
-              <span style={{ fontWeight: 600, fontSize: 15 }}>You are here</span>
-              <span style={{ fontSize: 12, color: 'var(--ink-secondary)' }}>Memorial Stadium</span>
+              <span style={{ fontWeight: 600, fontSize: 15 }}>
+                {downtown ? 'Downtown tonight' : 'You are here'}
+              </span>
+              <button
+                type="button"
+                className="pressable"
+                onClick={() => setDowntown((v) => !v)}
+                style={{ fontSize: 12, fontWeight: 600, color: 'var(--orange)' }}
+              >
+                {downtown ? 'Show campus' : 'Show downtown'}
+              </button>
             </div>
-            <CampusMap height={150} marker={STADIUM} />
+            {downtown && (
+              <div style={{ fontSize: 12, color: 'var(--ink-secondary)', margin: '0 4px 8px' }}>
+                College Ave is <strong>{heat.label}</strong> for this hour — typical Fri/Sat night pattern, not live Uber demand.
+              </div>
+            )}
+            <CampusMap
+              height={180}
+              showHeat={downtown}
+              interactive={downtown}
+              center={downtown ? DOWNTOWN_CENTER : STADIUM}
+              zoom={downtown ? 16 : 14}
+              marker={downtown ? DOWNTOWN_CENTER : STADIUM}
+            />
           </div>
 
-          {/* Game Day promo */}
           <div
             className="glass-panel glass-panel--orange card-soft"
-            style={{
-              marginTop: 18,
-              marginBottom: 18,
-              borderRadius: 18,
-              padding: 16,
-              display: 'flex',
-              gap: 14,
-              alignItems: 'center',
-            }}
+            style={{ marginTop: 18, marginBottom: 18, borderRadius: 18, padding: 16, display: 'flex', gap: 14, alignItems: 'center' }}
           >
-            <div
-              style={{
-                width: 48,
-                height: 48,
-                borderRadius: 14,
-                background: 'var(--orange-soft)',
-                display: 'grid',
-                placeItems: 'center',
-                fontSize: 24,
-                flexShrink: 0,
-              }}
-            >
+            <div style={{ width: 48, height: 48, borderRadius: 14, background: 'var(--orange-soft)', display: 'grid', placeItems: 'center', fontSize: 24, flexShrink: 0 }}>
               🏈
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>

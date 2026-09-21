@@ -1,6 +1,7 @@
 import { MapContainer, TileLayer, Marker, Circle, Polyline, useMapEvents } from 'react-leaflet'
 import L from 'leaflet'
 import { useEffect } from 'react'
+import { downtownNow, heatColor } from '../lib/downtownHeat'
 
 const CLEMSON = [34.6784, -82.8397]
 const STADIUM = [34.6788, -82.8430]
@@ -21,9 +22,7 @@ const purplePin = new L.DivIcon({
 
 function DragHandler({ onDrag }) {
   useMapEvents({
-    move() {
-      /* visual only */
-    },
+    move() {},
     dragend(e) {
       const c = e.target.getCenter()
       onDrag?.([c.lat, c.lng])
@@ -43,9 +42,8 @@ export function CampusMap({
   onPinMove,
   marker = STADIUM,
 }) {
-  useEffect(() => {
-    // fix default icon path issues in bundlers
-  }, [])
+  useEffect(() => {}, [])
+  const heat = showHeat ? downtownNow() : null
 
   const wrapStyle = typeof height === 'number'
     ? { height, borderRadius: 16, overflow: 'hidden', position: 'relative' }
@@ -63,12 +61,19 @@ export function CampusMap({
         attributionControl={false}
       >
         <TileLayer url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png" />
-        {showHeat && (
-          <>
-            <Circle center={[34.6795, -82.837]} radius={350} pathOptions={{ color: '#522D80', fillColor: '#522D80', fillOpacity: 0.22, weight: 0 }} />
-            <Circle center={[34.676, -82.845]} radius={280} pathOptions={{ color: '#F56600', fillColor: '#F56600', fillOpacity: 0.16, weight: 0 }} />
-          </>
-        )}
+        {heat && heat.spots.map((s) => (
+          <Circle
+            key={s.id}
+            center={[s.lat, s.lng]}
+            radius={s.radius}
+            pathOptions={{
+              color: heatColor(s.intensity),
+              fillColor: heatColor(s.intensity),
+              fillOpacity: 0.12 + s.intensity * 0.32,
+              weight: 0,
+            }}
+          />
+        ))}
         {route && <Polyline positions={route} pathOptions={{ color: '#522D80', weight: 4, opacity: 0.85 }} />}
         <Marker position={marker || center} icon={showHeat ? purplePin : pinIcon} />
         {dragPin && <DragHandler onDrag={onPinMove} />}
