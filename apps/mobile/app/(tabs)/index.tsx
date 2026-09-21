@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Alert, Modal, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { AppBackdrop, FadeIn, GlassCard, GlassSheet, MapPin, SpringButton } from '@/components/Glass';
 import Colors, { orange, purple } from '@/constants/Colors';
 import { isSupabaseConfigured } from '@/lib/supabase';
+import { downtownNow } from '@/lib/downtownHeat';
 
 const TIERS = [
   { id: 'tiger', name: 'Tiger', blurb: 'Shared campus van', price: 'From $75 · GSP', accent: 'orange' as const },
@@ -15,7 +16,8 @@ export default function HomeScreen() {
   const [loginOpen, setLoginOpen] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const guest = true; // browse open; auth only at book
+  const guest = true;
+  const heat = useMemo(() => downtownNow(), []);
 
   return (
     <AppBackdrop>
@@ -34,13 +36,26 @@ export default function HomeScreen() {
 
         <FadeIn delay={40}>
           <GlassCard style={{ marginBottom: 14 }}>
+            <Text style={styles.kicker}>DOWNTOWN TONIGHT</Text>
+            <Text style={styles.title}>College Ave is {heat.label}</Text>
+            <Text style={styles.subtitle}>
+              Typical Fri/Sat night pattern for Tiger Town / Study Hall — not live Uber demand.
+            </Text>
+            <View style={styles.barTrack}>
+              <View style={[styles.barFill, { width: `${Math.round(heat.avg * 100)}%` }]} />
+            </View>
+          </GlassCard>
+        </FadeIn>
+
+        <FadeIn delay={70}>
+          <GlassCard style={{ marginBottom: 14 }}>
             <Text style={styles.kicker}>CLEMSON RIDES</Text>
             <Text style={styles.title}>Airport rides, glass-smooth</Text>
             <Text style={styles.subtitle}>
               Browse tiers freely. Sign in only when you book or pay the 25% deposit.
             </Text>
             <Text style={styles.meta}>
-              Supabase {isSupabaseConfigured() ? 'ready' : 'stub'} · Stripe deposit at checkout
+              Supabase {isSupabaseConfigured() ? 'ready' : 'needs keys'} · Stripe deposit at checkout
             </Text>
           </GlassCard>
         </FadeIn>
@@ -75,23 +90,8 @@ export default function HomeScreen() {
           <GlassSheet>
             <Text style={styles.sheetTitle}>Sign in to book</Text>
             <Text style={styles.sheetBody}>Guests can browse. Booking and the 25% deposit need an account.</Text>
-            <TextInput
-              autoCapitalize="none"
-              keyboardType="email-address"
-              placeholder="Email"
-              placeholderTextColor="#8B939E"
-              value={email}
-              onChangeText={setEmail}
-              style={styles.input}
-            />
-            <TextInput
-              secureTextEntry
-              placeholder="Password"
-              placeholderTextColor="#8B939E"
-              value={password}
-              onChangeText={setPassword}
-              style={styles.input}
-            />
+            <TextInput autoCapitalize="none" keyboardType="email-address" placeholder="Email" placeholderTextColor="#8B939E" value={email} onChangeText={setEmail} style={styles.input} />
+            <TextInput secureTextEntry placeholder="Password" placeholderTextColor="#8B939E" value={password} onChangeText={setPassword} style={styles.input} />
             <View style={{ gap: 10, marginTop: 8 }}>
               <SpringButton
                 label="Continue to deposit"
@@ -101,7 +101,7 @@ export default function HomeScreen() {
                     return;
                   }
                   setLoginOpen(false);
-                  Alert.alert('Ready', `Tier ${selected} queued — connect Supabase session next.`);
+                  Alert.alert('Ready', `Tier ${selected} queued — complete checkout on the web if Stripe keys are set.`);
                 }}
               />
               <SpringButton label="Keep browsing" variant="ghost" onPress={() => setLoginOpen(false)} />
@@ -126,10 +126,7 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: 'rgba(82,45,128,0.18)',
   },
-  mapWash: {
-    ...StyleSheet.absoluteFill,
-    backgroundColor: 'rgba(255,255,255,0.25)',
-  },
+  mapWash: { ...StyleSheet.absoluteFill, backgroundColor: 'rgba(255,255,255,0.25)' },
   pinRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   routeLine: { width: 64, height: 3, borderRadius: 2, backgroundColor: 'rgba(82,45,128,0.45)' },
   guestChip: {
@@ -149,6 +146,8 @@ const styles = StyleSheet.create({
   title: { fontSize: 26, fontWeight: '800', color: purple, letterSpacing: -0.4, marginBottom: 8 },
   subtitle: { fontSize: 15, lineHeight: 22, color: '#0B1220', opacity: 0.72 },
   meta: { marginTop: 10, fontSize: 12, color: '#5B6472' },
+  barTrack: { height: 8, borderRadius: 999, backgroundColor: 'rgba(82,45,128,0.12)', marginTop: 14, overflow: 'hidden' },
+  barFill: { height: 8, borderRadius: 999, backgroundColor: orange },
   tierRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   tierName: { fontSize: 18, fontWeight: '800' },
   tierBlurb: { fontSize: 13, color: '#5B6472', marginTop: 2 },

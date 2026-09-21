@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { PrimaryButton } from '../components/PrimaryButton'
 import { BottomTabs } from '../components/BottomTabs'
 import {
@@ -9,7 +9,7 @@ import {
 } from '../lib/stripeCheckout'
 import { formatUsdFromCents } from '../lib/pricing'
 import { useAuth } from '../lib/auth'
-import { navigate } from '../lib/navigation'
+import { getHashRoute, navigate } from '../lib/navigation'
 import { supabase } from '../lib/supabase'
 import { STADIUM } from '../components/CampusMap'
 import { SignInToBookModal, useRequireAuthForAction } from '../components/SignInToBookModal'
@@ -63,7 +63,7 @@ export function ScheduleAirport() {
   const [time, setTime] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
-  const [result, setResult] = useState(null)
+  const returnFlags = useMemo(() => getHashRoute().params, [])
 
   const rate = AIRPORT_RATES[airport]
   const deposit = depositCents(rate.fareCents)
@@ -72,7 +72,6 @@ export function ScheduleAirport() {
   const onBook = async () => {
     setBusy(true)
     setError(null)
-    setResult(null)
     try {
       const tripId = await createAirportTrip({
         user,
@@ -91,7 +90,6 @@ export function ScheduleAirport() {
         riderId: user.id,
         tripId,
       })
-      setResult({ tripId, ...session })
       if (session.url) {
         window.location.href = session.url
         return
@@ -99,7 +97,6 @@ export function ScheduleAirport() {
       setError('Checkout did not return a payment URL. No charge was made.')
     } catch (err) {
       setError(err.message || 'Checkout failed. No charge was made.')
-      if (err.payload) setResult(err.payload)
     } finally {
       setBusy(false)
     }
@@ -121,6 +118,23 @@ export function ScheduleAirport() {
           Flat rates · 25% deposit holds your ride
         </p>
 
+        {returnFlags.paid === '1' && (
+          <div className="glass-panel glass-panel--orange" style={{ padding: 14, borderRadius: 16, marginBottom: 16 }}>
+            <div style={{ fontWeight: 700 }}>Deposit received</div>
+            <div style={{ fontSize: 13, color: 'var(--ink-secondary)', marginTop: 4 }}>
+              Stripe confirmed the 25% hold. We’ll match a driver for this pickup.
+            </div>
+          </div>
+        )}
+        {returnFlags.canceled === '1' && (
+          <div className="glass-panel" style={{ padding: 14, borderRadius: 16, marginBottom: 16 }}>
+            <div style={{ fontWeight: 700 }}>Checkout canceled</div>
+            <div style={{ fontSize: 13, color: 'var(--ink-secondary)', marginTop: 4 }}>
+              Nothing was charged. You can start checkout again when you’re ready.
+            </div>
+          </div>
+        )}
+
         <div style={{ display: 'flex', gap: 10, marginBottom: 20 }}>
           {Object.values(AIRPORT_RATES).map((a) => (
             <button
@@ -134,7 +148,6 @@ export function ScheduleAirport() {
                 borderRadius: 16,
                 textAlign: 'left',
                 border: airport === a.code ? '1.5px solid rgba(245,102,0,0.35)' : undefined,
-                transition: 'background 200ms var(--ease-soft), border-color 200ms var(--ease-soft), transform 200ms var(--ease-spring)',
               }}
             >
               <div style={{ fontWeight: 700, fontSize: 18 }}>{a.code}</div>
@@ -147,42 +160,11 @@ export function ScheduleAirport() {
         </div>
 
         <label style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink-secondary)' }}>Date</label>
-        <input
-          type="date"
-          className="glass-input"
-          value={date}
-          onChange={(e) => setDate(e.target.value)}
-          style={{
-            width: '100%',
-            marginTop: 6,
-            marginBottom: 14,
-            padding: '12px 14px',
-            borderRadius: 12,
-          }}
-        />
+        <input type="date" className="glass-input" value={date} onChange={(e) => setDate(e.target.value)} style={{ width: '100%', marginTop: 6, marginBottom: 14, padding: '12px 14px', borderRadius: 12 }} />
         <label style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink-secondary)' }}>Pickup time</label>
-        <input
-          type="time"
-          className="glass-input"
-          value={time}
-          onChange={(e) => setTime(e.target.value)}
-          style={{
-            width: '100%',
-            marginTop: 6,
-            marginBottom: 20,
-            padding: '12px 14px',
-            borderRadius: 12,
-          }}
-        />
+        <input type="time" className="glass-input" value={time} onChange={(e) => setTime(e.target.value)} style={{ width: '100%', marginTop: 6, marginBottom: 20, padding: '12px 14px', borderRadius: 12 }} />
 
-        <div
-          className="glass-panel glass-panel--elevated"
-          style={{
-            padding: 16,
-            borderRadius: 16,
-            marginBottom: 16,
-          }}
-        >
+        <div className="glass-panel glass-panel--elevated" style={{ padding: 16, borderRadius: 16, marginBottom: 16 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
             <span style={{ color: 'var(--ink-secondary)' }}>Fare</span>
             <strong>{formatUsdFromCents(rate.fareCents)}</strong>
@@ -192,7 +174,7 @@ export function ScheduleAirport() {
             <strong style={{ color: 'var(--orange)' }}>{formatUsdFromCents(deposit)}</strong>
           </div>
           <p style={{ fontSize: 12, color: 'var(--ink-tertiary)', marginTop: 10 }}>
-            {rate.code} · {rate.fareCents}¢ fare → {deposit}¢ deposit
+            {rate.code} · {formatUsdFromCents(rate.fareCents)} fare → {formatUsdFromCents(deposit)} deposit
             {stripe.configured ? ' · Stripe ready' : ' · set VITE_STRIPE_PUBLISHABLE_KEY'}
           </p>
         </div>
@@ -202,45 +184,13 @@ export function ScheduleAirport() {
         </PrimaryButton>
 
         {error && (
-          <p
-            role="alert"
-            className="glass-panel"
-            style={{
-              marginTop: 14,
-              padding: 12,
-              borderRadius: 12,
-              background: 'rgba(217,45,32,0.10)',
-              color: 'var(--danger)',
-              fontSize: 13,
-              fontWeight: 600,
-              lineHeight: 1.4,
-            }}
-          >
+          <p role="alert" className="glass-panel" style={{ marginTop: 14, padding: 12, borderRadius: 12, background: 'rgba(217,45,32,0.10)', color: 'var(--danger)', fontSize: 13, fontWeight: 600, lineHeight: 1.4 }}>
             {error}
           </p>
         )}
-
-        {result && (
-          <pre
-            className="glass-panel"
-            style={{
-              marginTop: 16,
-              padding: 12,
-              borderRadius: 12,
-              fontSize: 11,
-              overflow: 'auto',
-            }}
-          >
-            {JSON.stringify(result, null, 2)}
-          </pre>
-        )}
       </div>
       <BottomTabs active="rides" />
-      <SignInToBookModal
-        open={promptOpen}
-        onClose={() => setPromptOpen(false)}
-        nextPath="schedule"
-      />
+      <SignInToBookModal open={promptOpen} onClose={() => setPromptOpen(false)} nextPath="schedule" />
     </div>
   )
 }
