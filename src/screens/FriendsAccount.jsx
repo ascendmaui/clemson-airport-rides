@@ -54,7 +54,7 @@ export function FriendsScreen() {
     let alive = true
     supabase
       .from('friend_rides')
-      .select('id, token, status, total_fare_cents, created_at, trip_id')
+      .select('id, token, status, kind, total_fare_cents, created_at, trip_id')
       .eq('organizer_id', user.id)
       .order('created_at', { ascending: false })
       .limit(5)
@@ -123,6 +123,14 @@ export function FriendsScreen() {
             split the fare, and auto-charge saved cards or Apple Pay. One driver for everyone.
           </div>
           <PrimaryButton onClick={() => navigate('friend-ride')}>Start group ride</PrimaryButton>
+          <button
+            type="button"
+            className="pressable"
+            onClick={() => navigate('carpool')}
+            style={{ display: 'block', width: '100%', marginTop: 10, padding: 12, borderRadius: 12, fontWeight: 700, color: 'var(--purple)', border: '1.5px solid rgba(82,45,128,0.35)', background: 'rgba(255,255,255,0.55)' }}
+          >
+            Offer a carpool →
+          </button>
           {myRides.length > 0 && (
             <div style={{ marginTop: 14 }}>
               <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--ink-secondary)', marginBottom: 6 }}>
@@ -133,10 +141,10 @@ export function FriendsScreen() {
                   key={r.id}
                   type="button"
                   className="pressable"
-                  onClick={() => navigate(`friends/${r.token}`)}
+                  onClick={() => navigate(`${r.kind === 'carpool' ? 'carpool' : 'friends'}/${r.token}`)}
                   style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 0', borderBottom: '1px solid var(--border)', fontSize: 13 }}
                 >
-                  <span style={{ fontWeight: 600 }}>{r.status}</span>
+                  <span style={{ fontWeight: 600 }}>{r.kind === 'carpool' ? 'carpool' : 'friends'} · {r.status}</span>
                   <span style={{ color: 'var(--ink-tertiary)' }}> · {r.token.slice(0, 8)}…</span>
                 </button>
               ))}
