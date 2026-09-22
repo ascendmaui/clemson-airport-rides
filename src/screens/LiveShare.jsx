@@ -3,9 +3,20 @@ import { CampusMap, CLEMSON } from '../components/CampusMap'
 import { getHashRoute, navigate } from '../lib/navigation'
 import { getLiveShare } from '../lib/locationShare'
 
-export function LiveShare() {
-  const { params } = getHashRoute()
-  const token = params.token || ''
+export function LiveShare({ token: tokenProp = '' } = {}) {
+  const routed = getHashRoute()
+  const token =
+    tokenProp ||
+    routed.params.token ||
+    (typeof window !== 'undefined'
+      ? (() => {
+          try {
+            return window.sessionStorage.getItem('clemson_live_share_token') || ''
+          } catch {
+            return ''
+          }
+        })()
+      : '')
   const [state, setState] = useState({ loading: true, data: null, error: null })
 
   useEffect(() => {

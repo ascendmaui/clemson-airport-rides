@@ -34,7 +34,7 @@ function Screen({ path, params }) {
       return <LegalTerms />
     case 'share':
     case 'live':
-      return <LiveShare />
+      return <LiveShare token={params.token || ''} />
     case 'profile':
       return <ProfileView />
     case 'rate':
@@ -82,12 +82,19 @@ function Screen({ path, params }) {
 }
 
 export default function App() {
-  const [{ path, params }, setRoute] = useState(getHashRoute)
+  const [{ path, params }, setRoute] = useState(() => getHashRoute())
 
   useEffect(() => {
-    const onHash = () => setRoute(getHashRoute())
-    window.addEventListener('hashchange', onHash)
-    return () => window.removeEventListener('hashchange', onHash)
+    const onRoute = () => setRoute(getHashRoute())
+    window.addEventListener('hashchange', onRoute)
+    window.addEventListener('popstate', onRoute)
+    // Re-read once after mount in case auth briefly touched the URL
+    const t = window.setTimeout(onRoute, 0)
+    return () => {
+      window.removeEventListener('hashchange', onRoute)
+      window.removeEventListener('popstate', onRoute)
+      window.clearTimeout(t)
+    }
   }, [])
 
   const overflow = path === 'driver' ? 'hidden' : 'auto'
@@ -96,11 +103,12 @@ export default function App() {
     <div className="desktop-frame">
       <div className="app-shell" style={{ position: 'relative', height: '100%' }}>
         <div
-          key={path}
+          key={`${path}:${params.token || params.id || params.trip || ''}`}
           className="route-fade"
           style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', overflow }}
           data-protected={PROTECTED.has(path) ? '1' : '0'}
           data-guest-browse={PROTECTED.has(path) ? '0' : '1'}
+          data-route={path}
         >
           <Screen path={path} params={params} />
         </div>
