@@ -4,6 +4,7 @@ import { CampusMap, CLEMSON } from '../components/CampusMap'
 import { PurpleAcceptButton } from '../components/PrimaryButton'
 import { navigate } from '../lib/navigation'
 import { setDriverOnline, subscribeTrips, supabase } from '../lib/supabase'
+import { publishDriverLocation } from '../lib/driverTrack'
 
 function centsToDollars(cents) {
   if (cents == null) return '—'
@@ -40,6 +41,7 @@ function DriverShell({ driverId }) {
   const [earningsCents, setEarningsCents] = useState(0)
   const [recentCompleted, setRecentCompleted] = useState([])
   const [advancing, setAdvancing] = useState(false)
+  const [selfPos, setSelfPos] = useState(null)
   const silverProgress = 2
   const silverTotal = 4
 
@@ -68,6 +70,25 @@ function DriverShell({ driverId }) {
     return () => {
       setDriverOnline(driverId, false).catch(() => {})
     }
+  }, [driverId])
+
+  useEffect(() => {
+    if (!driverId || !navigator.geolocation) return undefined
+    const watchId = navigator.geolocation.watchPosition(
+      (pos) => {
+        const next = [pos.coords.latitude, pos.coords.longitude]
+        setSelfPos(next)
+        publishDriverLocation(driverId, {
+          lat: next[0],
+          lng: next[1],
+          heading: pos.coords.heading,
+          online: true,
+        }).catch(() => {})
+      },
+      () => {},
+      { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 },
+    )
+    return () => navigator.geolocation.clearWatch(watchId)
   }, [driverId])
 
   useEffect(() => {
@@ -255,7 +276,23 @@ function DriverShell({ driverId }) {
         overflow: 'hidden',
       }}
     >
-      <CampusMap height="100%" interactive showHeat center={CLEMSON} zoom={13} />
+      <CampusMap
+        height="100%"
+        interactive
+        showHeat={!activeTrip}
+        center={selfPos || (activeTrip?.pickup_lat != null ? [activeTrip.pickup_lat, activeTrip.pickup_lng] : CLEMSON)}
+        zoom={13}
+        marker={selfPos || CLEMSON}
+        pickupPosition={
+          activeTrip?.pickup_lat != null && activeTrip?.pickup_lng != null
+            ? [Number(activeTrip.pickup_lat), Number(activeTrip.pickup_lng)]
+            : activeTrip
+              ? CLEMSON
+              : null
+        }
+        selfPosition={selfPos}
+        driverPosition={selfPos}
+      />
 
       <div
         style={{
