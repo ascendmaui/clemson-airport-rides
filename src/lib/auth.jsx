@@ -4,6 +4,21 @@ import { isClemsonEmail } from './studentDomain'
 
 const AuthContext = createContext(null)
 
+const RATE_LIMIT_MSG =
+  'Too many signup emails just now. Wait a minute and try again, or sign in if you already created an account.'
+
+function mapAuthError(error) {
+  const msg = error?.message || ''
+  const status = error?.status
+  if (
+    status === 429 ||
+    /rate limit|over_email_send_rate_limit|email rate/i.test(msg)
+  ) {
+    return new Error(RATE_LIMIT_MSG)
+  }
+  return error instanceof Error ? error : new Error(msg || 'Auth failed')
+}
+
 async function ensureProfile(user) {
   if (!supabase || !user?.id) return
   const fullName =
@@ -95,7 +110,7 @@ export function AuthProvider({ children }) {
     async signIn(email, password) {
       if (!supabase) throw new Error('Supabase is not configured')
       const { data, error } = await supabase.auth.signInWithPassword({ email, password })
-      if (error) throw error
+      if (error) throw mapAuthError(error)
       return data
     },
     async signUp(email, password, fullName) {
@@ -105,28 +120,15 @@ export function AuthProvider({ children }) {
         password,
         options: { data: { full_name: fullName || '' } },
       })
-      if (error) {
-        const code = error.code || error.status || ''
-        const msg = (error.message || '').toLowerCase()
-        if (
-          code === 'over_email_send_rate_limit' ||
-          error.status === 429 ||
-          msg.includes('rate limit') ||
-          msg.includes('only request this after')
-        ) {
-          throw new Error(
-            'Too many signup emails were sent just now. Wait about a minute, then try again with the same email.',
-          )
-        }
-        throw error
-      }
+      if (error) throw mapAuthError(error)
+      // Session may be null when Confirm email is ON — callers handle check-email UX.
       if (data.user) await ensureProfile(data.user)
       return data
     },
     async signOut() {
       if (!supabase) return
       const { error } = await supabase.auth.signOut()
-      if (error) throw error
+      if (error) throw mapAuthError(error)
     },
   }), [session, user, loading])
 
