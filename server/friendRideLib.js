@@ -85,7 +85,7 @@ export function randomToken(bytes = 16) {
   } else {
     for (let i = 0; i < bytes; i++) arr[i] = Math.floor(Math.random() * 256)
   }
-  for (let i = 0; i < bytes; i++) out += alphabet[arr[i] % alphabet.length
+  for (let i = 0; i < bytes; i++) out += alphabet[arr[i] % alphabet.length]
   return out
 }
 
