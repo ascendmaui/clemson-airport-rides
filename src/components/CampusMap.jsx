@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { GoogleMap, useJsApiLoader, Marker, Circle, Polyline, HeatmapLayer } from '@react-google-maps/api'
+import { GoogleMap, useJsApiLoader, Marker, Circle, Polyline } from '@react-google-maps/api'
 import { downtownNow, heatColor } from '../lib/downtownHeat'
-import { fetchRideDemand, HEAT_GRADIENT, toWeightedLocations } from '../lib/rideDemand'
+import { fetchRideDemand } from '../lib/rideDemand'
 
 export const CLEMSON = [34.6784, -82.8397]
 export const STADIUM = [34.6788, -82.8430]
@@ -9,7 +9,8 @@ export const STADIUM = [34.6788, -82.8430]
 const ORANGE = '#F56600'
 const PURPLE = '#522D80'
 
-const MAP_LIBRARIES = ['visualization']
+// visualization library no longer required — HeatmapLayer deprecated/crashes Maps JS.
+const MAP_LIBRARIES = []
 
 const CLEMSON_MAP_STYLES = [
   { elementType: 'geometry', stylers: [{ color: '#f5f2ef' }] },
@@ -101,6 +102,24 @@ function FallbackMap({ wrapStyle, message }) {
   )
 }
 
+/** Render demand as Circles — avoids deprecated google.maps.visualization.HeatmapLayer crash. */
+function demandToSpots(points, heatMode) {
+  if (!points?.length) return []
+  const maxW = Math.max(...points.map((p) => Number(p.weight) || Number(p.count) || 1), 1)
+  return points.map((p, i) => {
+    const w = Number(p.weight) || Number(p.count) || 1
+    const intensity = Math.min(1, w / maxW)
+    const baseR = heatMode === 'surge' ? 90 : 70
+    return {
+      id: p.id || `d-${i}`,
+      lat: Number(p.lat),
+      lng: Number(p.lng),
+      intensity: heatMode === 'surge' ? Math.min(1, intensity * 1.15) : intensity,
+      radius: baseR + intensity * (heatMode === 'surge' ? 80 : 60),
+    }
+  }).filter((s) => Number.isFinite(s.lat) && Number.isFinite(s.lng))
+}
+
 export function CampusMap({
   height = 160,
   interactive = false,
@@ -157,28 +176,41 @@ export function CampusMap({
   const resolvedMapType = mapTypeId === 'satellite' || mapTypeId === 'hybrid' ? mapTypeId : 'roadmap'
   const useClemsonStyles = resolvedMapType === 'roadmap'
   const [demand, setDemand] = useState(null)
-  const [heatReady, setHeatReady] = useState(false)
+
   useEffect(() => {
-    if (!showHeat) { setDemand(null); onHeatMeta?.(null); return undefined }
+    if (!showHeat) {
+      setDemand(null)
+      onHeatMeta?.(null)
+      return undefined
+    }
     let cancelled = false
     ;(async () => {
-      const result = await fetchRideDemand({ mode: heatMode, windowId: heatWindow })
-      if (cancelled) return
-      setDemand(result)
-      onHeatMeta?.(result)
+      try {
+        const result = await fetchRideDemand({ mode: heatMode, windowId: heatWindow })
+        if (cancelled) return
+        setDemand(result)
+        onHeatMeta?.(result)
+      } catch (e) {
+        if (cancelled) return
+        // Fall back to typical downtown pattern — never crash the map shell.
+        const syn = downtownNow()
+        setDemand({ points: [], blended: true, label: 'Live + typical', error: e?.message })
+        onHeatMeta?.({ blended: true, label: 'Live + typical', error: e?.message })
+      }
     })()
-    return () => { cancelled = true }
+    return () => {
+      cancelled = true
+    }
   }, [showHeat, heatMode, heatWindow])
-  const weighted = useMemo(() => {
-    if (!showHeat || !isLoaded || !demand?.points?.length) return []
-    return toWeightedLocations(demand.points)
-  }, [showHeat, isLoaded, demand])
-  useEffect(() => {
-    if (!isLoaded) return
-    setHeatReady(Boolean(window.google?.maps?.visualization?.HeatmapLayer))
-  }, [isLoaded])
-  const useLayer = showHeat && heatReady && weighted.length > 0
-  const heat = showHeat && !useLayer ? downtownNow() : null
+
+  const heatSpots = useMemo(() => {
+    if (!showHeat) return []
+    const fromDemand = demandToSpots(demand?.points, heatMode)
+    if (fromDemand.length) return fromDemand
+    // Low volume / RPC miss → synthetic typical campus heat
+    return downtownNow()?.spots || []
+  }, [showHeat, demand, heatMode])
+
   const path = useMemo(() => {
     if (!route?.length) return null
     return route.map((p) => toLatLng(p))
@@ -195,7 +227,11 @@ export function CampusMap({
   }, [driverTarget?.lat, driverTarget?.lng, animateDriver])
   useEffect(() => {
     if (!mapRef.current || !isLoaded) return
-    mapRef.current.setMapTypeId(resolvedMapType)
+    try {
+      mapRef.current.setMapTypeId(resolvedMapType)
+    } catch {
+      /* ignore */
+    }
   }, [resolvedMapType, isLoaded])
 
   if (!apiKey) {
@@ -216,9 +252,10 @@ export function CampusMap({
   const orangeIcon = pinSvg(ORANGE, 18)
   const purpleIcon = pinSvg(PURPLE, 16)
   const driverIcon = pinSvg(ORANGE, 20)
+  const surgeHot = heatMode === 'surge'
 
   return (
-    <div style={wrapStyle}>
+    <div style={wrapStyle} data-heat-fallback="circles">
       <GoogleMap
         mapContainerStyle={{ height: '100%', width: '100%' }}
         center={animatedDriver && animateDriver ? animatedDriver : mapCenter}
@@ -241,19 +278,7 @@ export function CampusMap({
           if (c) onPinMove([c.lat(), c.lng()])
         }}
       >
-        {useLayer && (
-          <HeatmapLayer
-            data={weighted}
-            options={{
-              radius: heatMode === 'surge' ? 42 : 36,
-              opacity: heatMode === 'surge' ? 0.78 : 0.62,
-              gradient: HEAT_GRADIENT,
-              maxIntensity: heatMode === 'surge' ? 8 : 12,
-              dissipating: true,
-            }}
-          />
-        )}
-        {heat?.spots?.map((s) => (
+        {heatSpots.map((s) => (
           <Circle
             key={s.id}
             center={{ lat: s.lat, lng: s.lng }}
@@ -261,7 +286,7 @@ export function CampusMap({
             options={{
               strokeWeight: 0,
               fillColor: heatColor(s.intensity),
-              fillOpacity: 0.12 + s.intensity * 0.32,
+              fillOpacity: (surgeHot ? 0.18 : 0.12) + s.intensity * (surgeHot ? 0.4 : 0.32),
             }}
           />
         ))}
