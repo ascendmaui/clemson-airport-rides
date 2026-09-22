@@ -13,6 +13,9 @@ import { DriverOnboarding } from './screens/DriverOnboarding'
 import { PickDriver } from './screens/PickDriver'
 import { Requested } from './screens/Requested'
 import { LegalPrivacy, LegalTerms } from './screens/LegalPages'
+import { LiveShare } from './screens/LiveShare'
+import { ProfileView } from './screens/ProfileView'
+import { RateRide } from './screens/RateRide'
 
 const PROTECTED = new Set(['driver', 'driver-onboarding', 'friends', 'account'])
 
@@ -29,6 +32,13 @@ function Screen({ path, params }) {
       return <LegalPrivacy />
     case 'terms':
       return <LegalTerms />
+    case 'share':
+    case 'live':
+      return <LiveShare />
+    case 'profile':
+      return <ProfileView />
+    case 'rate':
+      return <RateRide />
     case 'home':
     case 'rides':
       return <RiderHome />

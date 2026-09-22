@@ -32,9 +32,7 @@ export function ProfileView() {
 
   return (
     <div className="fade-in" style={{ minHeight: '100%', padding: '20px 20px 40px', maxWidth: 480, margin: '0 auto' }}>
-      <button type="button" className="pressable glass-pill" onClick={() => window.history.back()} style={{ width: 40, height: 40, borderRadius: 12, marginBottom: 12 }}>
-        ←
-      </button>
+      <button type="button" className="pressable glass-pill" onClick={() => window.history.back()} style={{ width: 40, height: 40, borderRadius: 12, marginBottom: 12 }}>←</button>
       <div className="glass-panel glass-panel--elevated" style={{ padding: 20, borderRadius: 20 }}>
         <div style={{ display: 'flex', gap: 14, alignItems: 'center' }}>
           <div style={{
@@ -49,9 +47,7 @@ export function ProfileView() {
             <div style={{ fontSize: 13, color: 'var(--ink-secondary)' }}>
               {profile.role || 'rider'}{student ? ' · Clemson student' : ''}
             </div>
-            <div style={{ marginTop: 4, fontWeight: 600 }}>
-              ★ {avg} <span style={{ fontWeight: 500, color: 'var(--ink-tertiary)' }}>({count})</span>
-            </div>
+            <div style={{ marginTop: 4, fontWeight: 600 }}>★ {avg} <span style={{ fontWeight: 500, color: 'var(--ink-tertiary)' }}>({count})</span></div>
           </div>
         </div>
         {profile.bio && <p style={{ marginTop: 14, fontSize: 14, lineHeight: 1.45, color: 'var(--ink-secondary)' }}>{profile.bio}</p>}
