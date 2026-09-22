@@ -13,15 +13,32 @@ import { getHashRoute, navigate } from '../lib/navigation'
 import { supabase } from '../lib/supabase'
 import { STADIUM } from '../components/CampusMap'
 import { SignInToBookModal, useRequireAuthForAction } from '../components/SignInToBookModal'
+import { isClemsonEmail } from '../lib/studentDomain'
 
 const AIRPORT_COORDS = {
   GSP: { label: 'Greenville-Spartanburg International (GSP)', lat: 34.8956, lng: -82.2189 },
   CLT: { label: 'Charlotte Douglas International (CLT)', lat: 35.2144, lng: -80.9473 },
 }
 
+
+async function assertStudentEligible(user) {
+  if (!user?.id) throw new Error('Sign in required to book')
+  if (isClemsonEmail(user.email)) return true
+  if (!supabase) throw new Error('Supabase is not configured')
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('student_verified_at')
+    .eq('id', user.id)
+    .maybeSingle()
+  if (error) throw new Error(error.message || 'Could not verify student status')
+  if (data?.student_verified_at) return true
+  throw new Error('Use your @clemson.edu email to join Clemson RIDES.')
+}
+
 async function createAirportTrip({ user, airport, fareCents, deposit, date, time }) {
   if (!supabase) throw new Error('Supabase is not configured')
   if (!user?.id) throw new Error('Sign in required to book')
+  await assertStudentEligible(user)
 
   const dest = AIRPORT_COORDS[airport] || AIRPORT_COORDS.GSP
   let scheduledFor = null
