@@ -12,6 +12,7 @@ import { SignInScreen, SignUpScreen } from './screens/AuthScreens'
 import { DriverOnboarding } from './screens/DriverOnboarding'
 import { PickDriver } from './screens/PickDriver'
 import { Requested } from './screens/Requested'
+import { LegalPrivacy, LegalTerms } from './screens/LegalPages'
 
 const PROTECTED = new Set(['driver', 'driver-onboarding', 'friends', 'account'])
 
@@ -24,6 +25,10 @@ function Screen({ path, params }) {
       return <SignInScreen />
     case 'sign-up':
       return <SignUpScreen />
+    case 'privacy':
+      return <LegalPrivacy />
+    case 'terms':
+      return <LegalTerms />
     case 'home':
     case 'rides':
       return <RiderHome />
