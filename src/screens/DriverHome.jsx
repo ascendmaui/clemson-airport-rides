@@ -10,6 +10,16 @@ function centsToDollars(cents) {
   return `$${(Number(cents) / 100).toFixed(2)}`
 }
 
+async function writeTripEvent(tripId, kind, payload = {}) {
+  if (!supabase || !tripId) return
+  const { error } = await supabase.from('trip_events').insert({
+    trip_id: tripId,
+    kind,
+    payload,
+  })
+  if (error) console.error('[trip_events]', kind, error.message)
+}
+
 export function DriverHome() {
   const { user, loading } = useAuth()
   if (loading) {
@@ -36,14 +46,48 @@ function DriverShell({ driverId }) {
     }
   }, [driverId])
 
+  // Load existing searching/offered trips (Realtime alone misses rows already open).
+  useEffect(() => {
+    if (!supabase) return undefined
+    let alive = true
+    supabase
+      .from('trips')
+      .select('*')
+      .in('status', ['searching', 'offered'])
+      .order('requested_at', { ascending: false })
+      .limit(1)
+      .then(async ({ data, error }) => {
+        if (!alive || error) return
+        const row = data?.[0]
+        if (!row) return
+        setOffer(row)
+        if (row.status === 'searching') {
+          await supabase
+            .from('trips')
+            .update({ status: 'offered' })
+            .eq('id', row.id)
+            .eq('status', 'searching')
+          await writeTripEvent(row.id, 'offered', { source: 'driver_home_poll' })
+          setOffer({ ...row, status: 'offered' })
+        }
+      })
+    return () => {
+      alive = false
+    }
+  }, [driverId])
+
   useEffect(() => {
     return subscribeTrips((payload) => {
       const row = payload?.new || payload?.record
       if (!row) return
       if (row.status === 'searching' || row.status === 'offered') {
         setOffer(row)
+        if (row.status === 'searching' && supabase) {
+          writeTripEvent(row.id, 'offered', { source: 'realtime' })
+          supabase.from('trips').update({ status: 'offered' }).eq('id', row.id).eq('status', 'searching')
+        }
       }
-      if (row.status === 'canceled' && offer?.id === row.id) {
+      if ((row.status === 'canceled' || row.status === 'accepted') && offer?.id === row.id) {
         setOffer(null)
       }
     })
@@ -51,18 +95,24 @@ function DriverShell({ driverId }) {
 
   async function acceptOffer() {
     if (!offer?.id || !supabase || !driverId) return
+    const acceptedAt = new Date().toISOString()
     const { error } = await supabase
       .from('trips')
       .update({
         status: 'accepted',
         driver_id: driverId,
-        accepted_at: new Date().toISOString(),
+        accepted_at: acceptedAt,
       })
       .eq('id', offer.id)
     if (error) {
       console.error(error)
       return
     }
+    await writeTripEvent(offer.id, 'accepted', {
+      driver_id: driverId,
+      accepted_at: acceptedAt,
+      fare_cents: offer.fare_cents,
+    })
     setOffer(null)
   }
 
@@ -71,10 +121,12 @@ function DriverShell({ driverId }) {
       setOffer(null)
       return
     }
+    const canceledAt = new Date().toISOString()
     await supabase
       .from('trips')
-      .update({ status: 'canceled', canceled_at: new Date().toISOString() })
+      .update({ status: 'canceled', canceled_at: canceledAt })
       .eq('id', offer.id)
+    await writeTripEvent(offer.id, 'canceled', { reason: 'driver_decline', canceled_at: canceledAt })
     setOffer(null)
   }
 
