@@ -1,6 +1,7 @@
 /**
  * POST /api/friend-rides-create
  * Auth required. Creates friend_rides + organizer participant.
+ * body.kind = "friends" | "carpool" (carpool sets driver_profile_id = organizer).
  */
 import {
   admin, cors, json, parseBody, userFromAuth, randomToken, MAX_PARTICIPANTS,
@@ -27,17 +28,23 @@ export default async function handler(req, res) {
   const pickup = body.pickup || null
   const dropoff = body.dropoff || null
   const splitMode = body.splitMode === 'by_distance' ? 'by_distance' : 'even'
+  const kind = body.kind === 'carpool' ? 'carpool' : 'friends'
 
   const token = randomToken(18)
+  const insertRow = {
+    organizer_id: user.id,
+    token,
+    status: 'collecting',
+    split_mode: splitMode,
+    stops: [],
+    kind,
+  }
+  // Carpool organizer is the assigned driver (student-with-car).
+  if (kind === 'carpool') insertRow.driver_profile_id = user.id
+
   const { data: ride, error } = await sb
     .from('friend_rides')
-    .insert({
-      organizer_id: user.id,
-      token,
-      status: 'collecting',
-      split_mode: splitMode,
-      stops: [],
-    })
+    .insert(insertRow)
     .select('*')
     .single()
   if (error) return json(res, 500, { error: error.message })
@@ -57,11 +64,13 @@ export default async function handler(req, res) {
     .single()
   if (pErr) return json(res, 500, { error: pErr.message })
 
+  const urlPath = kind === 'carpool' ? `/carpool/${ride.token}` : `/friends/${ride.token}`
   return json(res, 200, {
     ride,
     participant,
     token: ride.token,
-    urlPath: `/friends/${ride.token}`,
+    kind,
+    urlPath,
     maxParticipants: MAX_PARTICIPANTS,
   })
 }
