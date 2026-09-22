@@ -79,9 +79,17 @@ export function Marketing() {
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 28 }}>
           <PrimaryButton onClick={() => navigate('home')}>Open rider app</PrimaryButton>
-          <PrimaryButton variant="purple" onClick={() => navigate('driver')}>
-            Driver mode
+          <PrimaryButton variant="purple" onClick={() => navigate('driver-signup')}>
+            Sign up as a driver
           </PrimaryButton>
+          <button
+            type="button"
+            className="pressable"
+            onClick={() => navigate('driver')}
+            style={{ fontWeight: 600, color: 'var(--purple)', padding: 8 }}
+          >
+            Already a driver? Open driver mode →
+          </button>
         </div>
 
         <div

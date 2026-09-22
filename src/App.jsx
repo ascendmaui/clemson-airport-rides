@@ -10,6 +10,7 @@ import { DriverHome } from './screens/DriverHome'
 import { FriendsScreen, AccountScreen } from './screens/FriendsAccount'
 import { SignInScreen, SignUpScreen } from './screens/AuthScreens'
 import { DriverOnboarding } from './screens/DriverOnboarding'
+import { DriverSignup } from './screens/DriverSignup'
 import { PickDriver } from './screens/PickDriver'
 import { Requested } from './screens/Requested'
 import { LegalPrivacy, LegalTerms } from './screens/LegalPages'
@@ -18,7 +19,7 @@ import { ProfileView } from './screens/ProfileView'
 import { RateRide } from './screens/RateRide'
 import { FriendRideScreen } from './screens/FriendRide'
 
-const PROTECTED = new Set(['driver', 'driver-onboarding', 'account'])
+const PROTECTED = new Set(['driver', 'driver-onboarding', 'account', 'driver-signup'])
 
 function Screen({ path, params }) {
   switch (path) {
@@ -65,8 +66,13 @@ function Screen({ path, params }) {
           <DriverOnboarding />
         </RequireAuth>
       )
+    case 'driver-signup':
+      return (
+        <RequireAuth>
+          <DriverSignup />
+        </RequireAuth>
+      )
     case 'friends':
-      // Public join when token present; create/lobby behind soft auth inside screen
       if (params.token) {
         return <FriendRideScreen token={params.token} />
       }
