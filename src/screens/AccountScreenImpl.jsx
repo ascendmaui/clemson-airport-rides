@@ -284,6 +284,9 @@ export function AccountScreen() {
           <div style={{ fontSize: 13, color: 'var(--ink-tertiary)', marginBottom: 12 }}>
             {configured ? user?.email || 'Signed in' : 'Set VITE_SUPABASE_URL + VITE_SUPABASE_ANON_KEY'}
           </div>
+          <button type="button" className="pressable" onClick={() => navigate('carpool')} style={{ display: 'block', fontWeight: 700, color: 'var(--purple)', marginBottom: 10 }}>
+            Offer a carpool →
+          </button>
           <button type="button" className="pressable" onClick={() => navigate('driver')} style={{ fontWeight: 600, color: 'var(--purple)' }}>
             Switch to driver mode →
           </button>
