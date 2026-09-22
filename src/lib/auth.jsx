@@ -4,19 +4,56 @@ import { isClemsonEmail } from './studentDomain'
 
 const AuthContext = createContext(null)
 
+export const SIGNUP_RATE_LIMIT_COOLDOWN_SEC = 60
+export const SIGNUP_RATE_LIMIT_STORAGE_KEY = 'clemson_signup_rate_limit_until'
+
 const RATE_LIMIT_MSG =
   'Too many signup emails just now. Wait a minute and try again, or sign in if you already created an account.'
 
-function mapAuthError(error) {
+export function isRateLimitError(error) {
   const msg = error?.message || ''
   const status = error?.status
-  if (
+  return (
     status === 429 ||
-    /rate limit|over_email_send_rate_limit|email rate/i.test(msg)
-  ) {
-    return new Error(RATE_LIMIT_MSG)
+    /rate limit|over_email_send_rate_limit|email rate|too many signup emails/i.test(msg)
+  )
+}
+
+export function mapAuthError(error) {
+  if (isRateLimitError(error)) {
+    const err = new Error(RATE_LIMIT_MSG)
+    err.code = 'over_email_send_rate_limit'
+    err.status = 429
+    err.retryAfterSec = SIGNUP_RATE_LIMIT_COOLDOWN_SEC
+    return err
   }
-  return error instanceof Error ? error : new Error(msg || 'Auth failed')
+  return error instanceof Error ? error : new Error(error?.message || 'Auth failed')
+}
+
+export function markSignupRateLimited(retryAfterSec = SIGNUP_RATE_LIMIT_COOLDOWN_SEC) {
+  if (typeof window === 'undefined') return
+  const until = Date.now() + Math.max(1, Number(retryAfterSec) || SIGNUP_RATE_LIMIT_COOLDOWN_SEC) * 1000
+  try {
+    window.sessionStorage.setItem(SIGNUP_RATE_LIMIT_STORAGE_KEY, String(until))
+  } catch {
+    /* ignore */
+  }
+}
+
+export function getSignupRateLimitRemainingSec() {
+  if (typeof window === 'undefined') return 0
+  try {
+    const until = Number(window.sessionStorage.getItem(SIGNUP_RATE_LIMIT_STORAGE_KEY) || 0)
+    if (!until) return 0
+    const left = Math.ceil((until - Date.now()) / 1000)
+    if (left <= 0) {
+      window.sessionStorage.removeItem(SIGNUP_RATE_LIMIT_STORAGE_KEY)
+      return 0
+    }
+    return left
+  } catch {
+    return 0
+  }
 }
 
 async function ensureProfile(user) {
@@ -48,7 +85,6 @@ async function ensureProfile(user) {
       },
       { onConflict: 'profile_id' },
     )
-    // Unique on profile_id may not exist — fall back to insert-ignore style
     if (svErr) {
       const { data: existing } = await supabase
         .from('student_verifications')
@@ -115,13 +151,24 @@ export function AuthProvider({ children }) {
     },
     async signUp(email, password, fullName) {
       if (!supabase) throw new Error('Supabase is not configured')
+      const remaining = getSignupRateLimitRemainingSec()
+      if (remaining > 0) {
+        const err = mapAuthError({ status: 429, message: 'rate limit' })
+        err.retryAfterSec = remaining
+        throw err
+      }
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
         options: { data: { full_name: fullName || '' } },
       })
-      if (error) throw mapAuthError(error)
-      // Session may be null when Confirm email is ON — callers handle check-email UX.
+      if (error) {
+        const mapped = mapAuthError(error)
+        if (mapped.code === 'over_email_send_rate_limit') {
+          markSignupRateLimited(mapped.retryAfterSec)
+        }
+        throw mapped
+      }
       if (data.user) await ensureProfile(data.user)
       return data
     },
