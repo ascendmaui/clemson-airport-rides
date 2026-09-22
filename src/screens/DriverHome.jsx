@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useAuth } from '../lib/auth'
 import { CampusMap, CLEMSON } from '../components/CampusMap'
+import { HEAT_WINDOWS, MAP_TYPES, loadMapType, saveMapType } from '../lib/rideDemand'
 import { PurpleAcceptButton } from '../components/PrimaryButton'
 import { navigate } from '../lib/navigation'
 import { setDriverOnline, subscribeTrips, supabase } from '../lib/supabase'
@@ -42,6 +43,10 @@ function DriverShell({ driverId }) {
   const [recentCompleted, setRecentCompleted] = useState([])
   const [advancing, setAdvancing] = useState(false)
   const [selfPos, setSelfPos] = useState(null)
+  const [showSurge, setShowSurge] = useState(true)
+  const [heatWindow, setHeatWindow] = useState('now')
+  const [heatMeta, setHeatMeta] = useState(null)
+  const [mapTypeId, setMapTypeId] = useState(() => loadMapType())
   const silverProgress = 2
   const silverTotal = 4
 
@@ -279,16 +284,18 @@ function DriverShell({ driverId }) {
       <CampusMap
         height="100%"
         interactive
-        showHeat={!activeTrip}
+        showHeat={!activeTrip && showSurge}
+        heatMode="surge"
+        heatWindow={heatWindow}
+        onHeatMeta={setHeatMeta}
+        mapTypeId={mapTypeId}
         center={selfPos || (activeTrip?.pickup_lat != null ? [activeTrip.pickup_lat, activeTrip.pickup_lng] : CLEMSON)}
         zoom={13}
         marker={selfPos || CLEMSON}
         pickupPosition={
           activeTrip?.pickup_lat != null && activeTrip?.pickup_lng != null
             ? [Number(activeTrip.pickup_lat), Number(activeTrip.pickup_lng)]
-            : activeTrip
-              ? CLEMSON
-              : null
+            : activeTrip ? CLEMSON : null
         }
         selfPosition={selfPos}
         driverPosition={selfPos}
@@ -361,6 +368,46 @@ function DriverShell({ driverId }) {
           {online ? 'ON' : 'OFF'}
         </div>
       </div>
+
+      
+      {!activeTrip && (
+        <div style={{ position: 'absolute', top: 72, left: 16, right: 16, zIndex: 20, display: 'flex', flexDirection: 'column', gap: 8, pointerEvents: 'none' }}>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', pointerEvents: 'auto' }}>
+            <button type="button" className="pressable" onClick={() => setShowSurge((v) => !v)}
+              style={{ fontSize: 12, fontWeight: 700, color: showSurge ? '#fff' : 'var(--purple)',
+                background: showSurge ? 'linear-gradient(135deg, #522D80 0%, #F56600 100%)' : 'rgba(255,255,255,0.85)',
+                border: '1px solid rgba(82,45,128,0.35)', borderRadius: 999, padding: '8px 12px', boxShadow: 'var(--shadow-pill)' }}>
+              {showSurge ? 'Surge Zones · On' : 'Surge Zones · Off'}
+            </button>
+            {MAP_TYPES.map((mt) => (
+              <button key={mt.id} type="button" className="pressable" onClick={() => { setMapTypeId(mt.id); saveMapType(mt.id) }}
+                style={{ fontSize: 11, fontWeight: 600, padding: '8px 10px', borderRadius: 999,
+                  border: `1px solid ${mapTypeId === mt.id ? 'rgba(82,45,128,0.55)' : 'rgba(255,255,255,0.5)'}`,
+                  background: mapTypeId === mt.id ? 'var(--purple-soft)' : 'rgba(255,255,255,0.85)', color: 'var(--purple)', boxShadow: 'var(--shadow-pill)' }}>
+                {mt.label}
+              </button>
+            ))}
+          </div>
+          {showSurge && (
+            <div style={{ display: 'flex', gap: 8, overflowX: 'auto', pointerEvents: 'auto' }}>
+              {HEAT_WINDOWS.map((w) => (
+                <button key={w.id} type="button" className="pressable" onClick={() => setHeatWindow(w.id)}
+                  style={{ flex: '0 0 auto', fontSize: 11, fontWeight: 600, padding: '6px 10px', borderRadius: 999,
+                    border: `1px solid ${heatWindow === w.id ? 'rgba(245,102,0,0.55)' : 'rgba(255,255,255,0.5)'}`,
+                    background: heatWindow === w.id ? 'var(--orange-soft)' : 'rgba(255,255,255,0.85)',
+                    color: heatWindow === w.id ? 'var(--orange)' : 'var(--purple)', boxShadow: 'var(--shadow-pill)' }}>
+                  {w.label}
+                </button>
+              ))}
+            </div>
+          )}
+          {showSurge && heatMeta?.caption && (
+            <div style={{ pointerEvents: 'none', fontSize: 11, fontWeight: 600, color: 'var(--ink)', background: 'rgba(255,255,255,0.88)', borderRadius: 12, padding: '8px 10px', boxShadow: 'var(--shadow-pill)', alignSelf: 'flex-start', maxWidth: '92%' }}>
+              {heatMeta.caption}{heatMeta.blended ? ' · Live + typical' : ''}
+            </div>
+          )}
+        </div>
+      )}
 
       {showIdle && (
         <div

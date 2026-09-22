@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { GoogleMap, useJsApiLoader, Marker, Circle, Polyline } from '@react-google-maps/api'
+import { GoogleMap, useJsApiLoader, Marker, Circle, Polyline, HeatmapLayer } from '@react-google-maps/api'
 import { downtownNow, heatColor } from '../lib/downtownHeat'
+import { fetchRideDemand, HEAT_GRADIENT, toWeightedLocations } from '../lib/rideDemand'
 
 export const CLEMSON = [34.6784, -82.8397]
 export const STADIUM = [34.6788, -82.8430]
@@ -8,7 +9,7 @@ export const STADIUM = [34.6788, -82.8430]
 const ORANGE = '#F56600'
 const PURPLE = '#522D80'
 
-const MAP_LIBRARIES = []
+const MAP_LIBRARIES = ['visualization']
 
 const CLEMSON_MAP_STYLES = [
   { elementType: 'geometry', stylers: [{ color: '#f5f2ef' }] },
@@ -106,6 +107,10 @@ export function CampusMap({
   center = CLEMSON,
   zoom = 14,
   showHeat = false,
+  heatMode = 'busy',
+  heatWindow = 'now',
+  onHeatMeta,
+  mapTypeId = 'roadmap',
   route = null,
   dragPin = false,
   onPinMove,
@@ -149,7 +154,31 @@ export function CampusMap({
     () => (selfPosition ? toLatLng(selfPosition) : null),
     [selfPosition?.[0], selfPosition?.[1]],
   )
-  const heat = showHeat ? downtownNow() : null
+  const resolvedMapType = mapTypeId === 'satellite' || mapTypeId === 'hybrid' ? mapTypeId : 'roadmap'
+  const useClemsonStyles = resolvedMapType === 'roadmap'
+  const [demand, setDemand] = useState(null)
+  const [heatReady, setHeatReady] = useState(false)
+  useEffect(() => {
+    if (!showHeat) { setDemand(null); onHeatMeta?.(null); return undefined }
+    let cancelled = false
+    ;(async () => {
+      const result = await fetchRideDemand({ mode: heatMode, windowId: heatWindow })
+      if (cancelled) return
+      setDemand(result)
+      onHeatMeta?.(result)
+    })()
+    return () => { cancelled = true }
+  }, [showHeat, heatMode, heatWindow])
+  const weighted = useMemo(() => {
+    if (!showHeat || !isLoaded || !demand?.points?.length) return []
+    return toWeightedLocations(demand.points)
+  }, [showHeat, isLoaded, demand])
+  useEffect(() => {
+    if (!isLoaded) return
+    setHeatReady(Boolean(window.google?.maps?.visualization?.HeatmapLayer))
+  }, [isLoaded])
+  const useLayer = showHeat && heatReady && weighted.length > 0
+  const heat = showHeat && !useLayer ? downtownNow() : null
   const path = useMemo(() => {
     if (!route?.length) return null
     return route.map((p) => toLatLng(p))
@@ -164,6 +193,10 @@ export function CampusMap({
     if (!mapRef.current || !driverTarget || !animateDriver) return
     mapRef.current.panTo(driverTarget)
   }, [driverTarget?.lat, driverTarget?.lng, animateDriver])
+  useEffect(() => {
+    if (!mapRef.current || !isLoaded) return
+    mapRef.current.setMapTypeId(resolvedMapType)
+  }, [resolvedMapType, isLoaded])
 
   if (!apiKey) {
     return (
@@ -191,11 +224,12 @@ export function CampusMap({
         center={animatedDriver && animateDriver ? animatedDriver : mapCenter}
         zoom={zoom}
         onLoad={onLoad}
+        mapTypeId={resolvedMapType}
         options={{
           disableDefaultUI: !interactive,
           zoomControl: interactive,
           gestureHandling: interactive || dragPin ? 'greedy' : 'none',
-          styles: CLEMSON_MAP_STYLES,
+          styles: useClemsonStyles ? CLEMSON_MAP_STYLES : null,
           clickableIcons: false,
           fullscreenControl: false,
           mapTypeControl: false,
@@ -207,6 +241,18 @@ export function CampusMap({
           if (c) onPinMove([c.lat(), c.lng()])
         }}
       >
+        {useLayer && (
+          <HeatmapLayer
+            data={weighted}
+            options={{
+              radius: heatMode === 'surge' ? 42 : 36,
+              opacity: heatMode === 'surge' ? 0.78 : 0.62,
+              gradient: HEAT_GRADIENT,
+              maxIntensity: heatMode === 'surge' ? 8 : 12,
+              dissipating: true,
+            }}
+          />
+        )}
         {heat?.spots?.map((s) => (
           <Circle
             key={s.id}

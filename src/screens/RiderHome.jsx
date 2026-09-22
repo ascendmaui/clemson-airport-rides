@@ -1,10 +1,11 @@
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import { SearchField } from '../components/SearchField'
 import { Pill } from '../components/Pill'
 import { BottomTabs } from '../components/BottomTabs'
 import { CampusMap, STADIUM } from '../components/CampusMap'
 import { navigate } from '../lib/navigation'
-import { DOWNTOWN_CENTER, downtownNow } from '../lib/downtownHeat'
+import { DOWNTOWN_CENTER } from '../lib/downtownHeat'
+import { HEAT_WINDOWS, MAP_TYPES, loadMapType, saveMapType } from '../lib/rideDemand'
 
 const SHORTCUTS = [
   { id: 'home', label: 'Home', sub: 'Simpsonville', icon: '🏠' },
@@ -15,8 +16,10 @@ const SHORTCUTS = [
 export function RiderHome({ riderName = 'John' }) {
   const [query, setQuery] = useState('')
   const [tab, setTab] = useState('home')
-  const [downtown, setDowntown] = useState(true)
-  const heat = useMemo(() => downtownNow(), [])
+  const [showBusy, setShowBusy] = useState(true)
+  const [heatWindow, setHeatWindow] = useState('now')
+  const [heatMeta, setHeatMeta] = useState(null)
+  const [mapTypeId, setMapTypeId] = useState(() => loadMapType())
 
   const goSearch = (dest) => {
     navigate('confirm', { dest: dest || query || 'GSP Airport' })
@@ -120,32 +123,49 @@ export function RiderHome({ riderName = 'John' }) {
           </div>
 
           <div className="glass-panel card-soft" style={{ marginTop: 22, borderRadius: 18, padding: 14 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, padding: '0 4px' }}>
-              <span style={{ fontWeight: 600, fontSize: 15 }}>
-                {downtown ? 'Downtown tonight' : 'You are here'}
-              </span>
-              <button
-                type="button"
-                className="pressable"
-                onClick={() => setDowntown((v) => !v)}
-                style={{ fontSize: 12, fontWeight: 600, color: 'var(--orange)' }}
-              >
-                {downtown ? 'Show campus' : 'Show downtown'}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, padding: '0 4px', gap: 8 }}>
+              <span style={{ fontWeight: 600, fontSize: 15 }}>Campus map</span>
+              <button type="button" className="pressable" onClick={() => setShowBusy((v) => !v)}
+                style={{ fontSize: 12, fontWeight: 700, color: showBusy ? '#fff' : 'var(--purple)',
+                  background: showBusy ? 'linear-gradient(135deg, #522D80 0%, #F56600 100%)' : 'var(--purple-soft)',
+                  border: '1px solid rgba(82,45,128,0.35)', borderRadius: 999, padding: '6px 12px' }}>
+                {showBusy ? 'Busy Areas · On' : 'Busy Areas · Off'}
               </button>
             </div>
-            {downtown && (
-              <div style={{ fontSize: 12, color: 'var(--ink-secondary)', margin: '0 4px 8px' }}>
-                College Ave is <strong>{heat.label}</strong> for this hour — typical Fri/Sat night pattern, not live Uber demand.
-              </div>
+            <div style={{ display: 'flex', gap: 8, overflowX: 'auto', padding: '0 4px 8px' }}>
+              {MAP_TYPES.map((mt) => (
+                <button key={mt.id} type="button" className="pressable"
+                  onClick={() => { setMapTypeId(mt.id); saveMapType(mt.id) }}
+                  style={{ flex: '0 0 auto', fontSize: 11, fontWeight: 600, padding: '6px 10px', borderRadius: 999,
+                    border: `1px solid ${mapTypeId === mt.id ? 'rgba(82,45,128,0.55)' : 'rgba(82,45,128,0.2)'}`,
+                    background: mapTypeId === mt.id ? 'var(--purple-soft)' : 'var(--surface)', color: 'var(--purple)' }}>
+                  {mt.label}
+                </button>
+              ))}
+            </div>
+            {showBusy && (
+              <>
+                <div style={{ display: 'flex', gap: 8, overflowX: 'auto', padding: '0 4px 8px' }}>
+                  {HEAT_WINDOWS.map((w) => (
+                    <button key={w.id} type="button" className="pressable" onClick={() => setHeatWindow(w.id)}
+                      style={{ flex: '0 0 auto', fontSize: 11, fontWeight: 600, padding: '6px 10px', borderRadius: 999,
+                        border: `1px solid ${heatWindow === w.id ? 'rgba(245,102,0,0.55)' : 'rgba(82,45,128,0.25)'}`,
+                        background: heatWindow === w.id ? 'var(--orange-soft)' : 'var(--surface)',
+                        color: heatWindow === w.id ? 'var(--orange)' : 'var(--purple)' }}>
+                      {w.label}
+                    </button>
+                  ))}
+                </div>
+                <div style={{ fontSize: 12, color: 'var(--ink-secondary)', margin: '0 4px 8px' }}>
+                  {heatMeta?.caption || 'Popular campus spots from ride requests — dorms, downtown, stadium.'}
+                  {heatMeta?.blended ? <span style={{ marginLeft: 6, fontWeight: 700, color: 'var(--purple)' }}>Live + typical</span> : null}
+                </div>
+              </>
             )}
-            <CampusMap
-              height={180}
-              showHeat={downtown}
-              interactive={downtown}
-              center={downtown ? DOWNTOWN_CENTER : STADIUM}
-              zoom={downtown ? 16 : 14}
-              marker={downtown ? DOWNTOWN_CENTER : STADIUM}
-            />
+            <CampusMap height={180} showHeat={showBusy} heatMode="busy" heatWindow={heatWindow}
+              onHeatMeta={setHeatMeta} mapTypeId={mapTypeId} interactive={showBusy}
+              center={showBusy ? DOWNTOWN_CENTER : STADIUM} zoom={showBusy ? 15 : 14}
+              marker={showBusy ? DOWNTOWN_CENTER : STADIUM} />
           </div>
 
           <div
