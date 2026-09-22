@@ -223,8 +223,10 @@ function DriverShell({ driverId }) {
         ...(patch.completed_at ? { completed_at: patch.completed_at } : {}),
       })
       if (nextStatus === 'completed') {
+        const doneId = activeTrip.id
         setActiveTrip(null)
         await loadEarnings()
+        if (doneId) navigate('rate', { trip: doneId })
       } else {
         setActiveTrip({ ...activeTrip, ...patch })
       }
@@ -548,6 +550,17 @@ function DriverShell({ driverId }) {
               {advancing ? 'Updating…' : 'Complete'}
             </PurpleAcceptButton>
           )}
+          {activeTrip.rider_id && (
+            <button
+              type="button"
+              className="pressable"
+              onClick={() => navigate('profile', { id: activeTrip.rider_id })}
+              style={{ marginTop: 8, fontWeight: 600, color: 'var(--purple)' }}
+            >
+              View rider profile
+            </button>
+          )}
+
         </div>
       )}
     </div>

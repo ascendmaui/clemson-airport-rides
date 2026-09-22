@@ -1,6 +1,8 @@
+import { useEffect, useState } from 'react'
 import { BottomTabs } from '../components/BottomTabs'
 import { useAuth } from '../lib/auth'
 import { navigate } from '../lib/navigation'
+import { fetchProfile, updateMyProfile } from '../lib/ratings'
 
 export function FriendsScreen() {
   return (
@@ -50,21 +52,55 @@ export function FriendsScreen() {
   )
 }
 
+
 export function AccountScreen() {
-  const { user, signOut, configured } = useAuth()
+  const { user, configured, signOut } = useAuth()
   const displayName =
     user?.user_metadata?.full_name ||
-    user?.user_metadata?.name ||
-    (user?.email ? user.email.split('@')[0] : 'Tiger rider')
+    user?.email?.split('@')[0] ||
+    'Rider'
+  const [profile, setProfile] = useState(null)
+  const [bio, setBio] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [msg, setMsg] = useState(null)
+
+  useEffect(() => {
+    if (!user?.id) return
+    fetchProfile(user.id)
+      .then((p) => {
+        setProfile(p)
+        setBio(p?.bio || '')
+      })
+      .catch(() => {})
+  }, [user?.id])
 
   async function onSignOut() {
     try {
       await signOut()
-    } catch (err) {
-      console.warn('[account] signOut', err)
+    } catch {
+      /* ignore */
     }
-    navigate('sign-in')
+    navigate('landing')
   }
+
+  async function onSaveBio() {
+    if (!user?.id) return
+    setSaving(true)
+    setMsg(null)
+    try {
+      await updateMyProfile(user.id, { bio: bio.trim() || null, full_name: displayName })
+      setMsg('Saved')
+      const p = await fetchProfile(user.id)
+      setProfile(p)
+    } catch (e) {
+      setMsg(e.message || 'Save failed')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const avg = profile?.rating_avg != null ? Number(profile.rating_avg).toFixed(1) : '—'
+  const count = profile?.rating_count || 0
 
   return (
     <div className="route-fade" style={{ display: 'flex', flexDirection: 'column', minHeight: '100%' }}>
@@ -86,11 +122,49 @@ export function AccountScreen() {
           ←
         </button>
         <h1 style={{ fontSize: 24, fontWeight: 700, color: 'var(--purple)', letterSpacing: -0.3 }}>
-          Account
+          {displayName}
         </h1>
-        <p style={{ color: 'var(--ink-secondary)', marginTop: 8 }}>
-          Welcome, {displayName}
-        </p>
+        <p style={{ color: 'var(--ink-secondary)', marginTop: 8 }}>Account & profile</p>
+
+        <div
+          className="card-soft"
+          style={{
+            marginTop: 20,
+            padding: 16,
+            borderRadius: 16,
+            background: 'var(--surface)',
+            border: '1px solid var(--border)',
+            boxShadow: 'var(--shadow-soft)',
+          }}
+        >
+          <div style={{ fontWeight: 600, marginBottom: 6 }}>Your rating</div>
+          <div style={{ fontSize: 14, color: 'var(--ink-secondary)', marginBottom: 12 }}>
+            ★ {avg} ({count} ratings)
+          </div>
+          <div style={{ fontWeight: 600, marginBottom: 6 }}>Bio</div>
+          <textarea
+            value={bio}
+            onChange={(e) => setBio(e.target.value)}
+            rows={3}
+            placeholder="Short bio for riders and drivers"
+            style={{ width: '100%', padding: 10, borderRadius: 12, border: '1px solid var(--border)', marginBottom: 10 }}
+          />
+          <button type="button" className="pressable" onClick={onSaveBio} disabled={saving} style={{ fontWeight: 600, color: 'var(--purple)' }}>
+            {saving ? 'Saving…' : 'Save profile'}
+          </button>
+          {msg && <div style={{ fontSize: 12, marginTop: 8, color: 'var(--ink-tertiary)' }}>{msg}</div>}
+          {user?.id && (
+            <button
+              type="button"
+              className="pressable"
+              onClick={() => navigate('profile', { id: user.id })}
+              style={{ display: 'block', marginTop: 12, fontWeight: 600, color: 'var(--purple)' }}
+            >
+              View public profile →
+            </button>
+          )}
+        </div>
+
         <div
           className="card-soft"
           style={{
@@ -104,9 +178,7 @@ export function AccountScreen() {
         >
           <div style={{ fontWeight: 600, marginBottom: 6 }}>Supabase session</div>
           <div style={{ fontSize: 13, color: 'var(--ink-tertiary)', marginBottom: 12 }}>
-            {configured
-              ? user?.email || 'Signed in'
-              : 'Set VITE_SUPABASE_URL + VITE_SUPABASE_ANON_KEY'}
+            {configured ? user?.email || 'Signed in' : 'Set VITE_SUPABASE_URL + VITE_SUPABASE_ANON_KEY'}
           </div>
           <button
             type="button"
