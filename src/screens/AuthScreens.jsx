@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useAuth } from '../lib/auth'
 import { getHashRoute, navigate } from '../lib/navigation'
 import { resumeAfterAuth } from '../components/SignInToBookModal'
+import { isClemsonEmail } from '../lib/studentDomain'
 
 const fieldStyle = {
   width: '100%',
@@ -155,9 +156,14 @@ export function SignUpScreen() {
   async function onSubmit(e) {
     e.preventDefault()
     setError(null)
+    const trimmed = email.trim()
+    if (!isClemsonEmail(trimmed)) {
+      setError('Use your @clemson.edu email to join Clemson RIDES.')
+      return
+    }
     setBusy(true)
     try {
-      await signUp(email.trim(), password, fullName.trim())
+      await signUp(trimmed, password, fullName.trim())
       afterAuthSuccess()
     } catch (err) {
       setError(err.message || 'Sign up failed')
@@ -174,8 +180,8 @@ export function SignUpScreen() {
           <input required type="text" autoComplete="name" value={fullName} onChange={(e) => setFullName(e.target.value)} style={fieldStyle} />
         </label>
         <label style={{ display: 'block', marginBottom: 14 }}>
-          <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink-secondary)' }}>Email</span>
-          <input required type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} style={fieldStyle} />
+          <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink-secondary)' }}>Email <span style={{ fontWeight: 500, color: 'var(--ink-tertiary)' }}>(@clemson.edu required)</span></span>
+          <input required type="email" autoComplete="email" placeholder="tiger@clemson.edu" value={email} onChange={(e) => setEmail(e.target.value)} style={fieldStyle} />
         </label>
         <label style={{ display: 'block', marginBottom: 18 }}>
           <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink-secondary)' }}>Password</span>
