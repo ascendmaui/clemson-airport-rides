@@ -2,6 +2,7 @@
  * POST /api/driver-signup
  * Student driver quiz → driver_applications + profiles.role=driver + vehicles + driver_status.
  * Soft-verify @clemson.edu → student_verified_at (open signup — other emails not blocked).
+ * Idempotent: re-open quiz upserts driver_applications on profile_id and refreshes vehicle fields.
  * Self-contained (does not import friendRideLib).
  */
 import { createClient } from '@supabase/supabase-js'
@@ -116,18 +117,22 @@ export default async function handler(req, res) {
     const { error: profileErr } = await sb.from('profiles').upsert(profilePatch)
     if (profileErr) return json(res, 500, { error: profileErr.message })
 
+    // Idempotent re-open: UNIQUE(profile_id) — update quiz answers + keep approved
     const { data: app, error: appErr } = await sb
       .from('driver_applications')
-      .insert({
-        profile_id: user.id,
-        is_student: true,
-        has_car: true,
-        has_insurance: true,
-        wants_extra_money: true,
-        attestation_accepted_at: now,
-        status: 'approved',
-        reviewed_at: now,
-      })
+      .upsert(
+        {
+          profile_id: user.id,
+          is_student: true,
+          has_car: true,
+          has_insurance: true,
+          wants_extra_money: true,
+          attestation_accepted_at: now,
+          status: 'approved',
+          reviewed_at: now,
+        },
+        { onConflict: 'profile_id' },
+      )
       .select('*')
       .single()
     if (appErr) return json(res, 500, { error: appErr.message })
@@ -138,24 +143,33 @@ export default async function handler(req, res) {
       .eq('driver_id', user.id)
       .limit(1)
     let vehicle = existingVeh?.[0] || null
+    const vehFields = {
+      make,
+      model,
+      color,
+      plate,
+      seats,
+      is_tesla: Boolean(body.isTesla),
+      autonomous_capable: Boolean(body.isTesla),
+      tier: body.isTesla ? 'tesla_self_driving' : 'standard',
+    }
     if (!vehicle) {
       const { data: inserted, error: vErr } = await sb
         .from('vehicles')
-        .insert({
-          driver_id: user.id,
-          make,
-          model,
-          color,
-          plate,
-          seats,
-          is_tesla: Boolean(body.isTesla),
-          autonomous_capable: Boolean(body.isTesla),
-          tier: body.isTesla ? 'tesla_self_driving' : 'standard',
-        })
+        .insert({ driver_id: user.id, ...vehFields })
         .select('*')
         .single()
       if (vErr) return json(res, 500, { error: vErr.message })
       vehicle = inserted
+    } else {
+      const { data: updated, error: vUpErr } = await sb
+        .from('vehicles')
+        .update(vehFields)
+        .eq('id', vehicle.id)
+        .select('*')
+        .single()
+      if (vUpErr) return json(res, 500, { error: vUpErr.message })
+      vehicle = updated
     }
 
     const { error: statusErr } = await sb.from('driver_status').upsert({
