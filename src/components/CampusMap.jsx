@@ -9,8 +9,10 @@ export const STADIUM = [34.6788, -82.8430]
 const ORANGE = '#F56600'
 const PURPLE = '#522D80'
 
-// visualization library no longer required — HeatmapLayer deprecated/crashes Maps JS.
+// Never load visualization — HeatmapLayer is deprecated and crashes Maps JS.
+// Loader id bumped so stale tabs that once loaded visualization get a fresh Maps instance.
 const MAP_LIBRARIES = []
+const MAPS_LOADER_ID = 'clemson-google-maps-circles-v2'
 
 const CLEMSON_MAP_STYLES = [
   { elementType: 'geometry', stylers: [{ color: '#f5f2ef' }] },
@@ -141,7 +143,7 @@ export function CampusMap({
 }) {
   const apiKey = (import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '').trim()
   const { isLoaded, loadError } = useJsApiLoader({
-    id: 'clemson-google-maps',
+    id: MAPS_LOADER_ID,
     googleMapsApiKey: apiKey || ' ',
     libraries: MAP_LIBRARIES,
   })
@@ -192,8 +194,6 @@ export function CampusMap({
         onHeatMeta?.(result)
       } catch (e) {
         if (cancelled) return
-        // Fall back to typical downtown pattern — never crash the map shell.
-        const syn = downtownNow()
         setDemand({ points: [], blended: true, label: 'Live + typical', error: e?.message })
         onHeatMeta?.({ blended: true, label: 'Live + typical', error: e?.message })
       }
@@ -207,7 +207,6 @@ export function CampusMap({
     if (!showHeat) return []
     const fromDemand = demandToSpots(demand?.points, heatMode)
     if (fromDemand.length) return fromDemand
-    // Low volume / RPC miss → synthetic typical campus heat
     return downtownNow()?.spots || []
   }, [showHeat, demand, heatMode])
 
@@ -255,7 +254,7 @@ export function CampusMap({
   const surgeHot = heatMode === 'surge'
 
   return (
-    <div style={wrapStyle} data-heat-fallback="circles">
+    <div style={wrapStyle} data-heat-fallback="circles" data-maps-loader={MAPS_LOADER_ID}>
       <GoogleMap
         mapContainerStyle={{ height: '100%', width: '100%' }}
         center={animatedDriver && animateDriver ? animatedDriver : mapCenter}
