@@ -18,6 +18,7 @@ import { LiveShare } from './screens/LiveShare'
 import { ProfileView } from './screens/ProfileView'
 import { RateRide } from './screens/RateRide'
 import { FriendRideScreen } from './screens/FriendRide'
+import { CarpoolScreen } from './screens/CarpoolScreen'
 
 const PROTECTED = new Set(['driver', 'driver-onboarding', 'account', 'driver-signup'])
 
@@ -74,7 +75,12 @@ function Screen({ path, params }) {
       )
     case 'friends':
       if (params.token) {
-        return <FriendRideScreen token={params.token} />
+        return (
+          <FriendRideScreen
+            token={params.token}
+            kind={params.kind === 'carpool' ? 'carpool' : 'friends'}
+          />
+        )
       }
       return (
         <RequireAuth>
@@ -82,7 +88,9 @@ function Screen({ path, params }) {
         </RequireAuth>
       )
     case 'friend-ride':
-      return <FriendRideScreen token={params.token || ''} />
+      return <FriendRideScreen token={params.token || ''} kind="friends" />
+    case 'carpool':
+      return <CarpoolScreen token={params.token || ''} />
     case 'account':
       return (
         <RequireAuth>
