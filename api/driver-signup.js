@@ -166,14 +166,11 @@ export default async function handler(req, res) {
     if (statusErr) return json(res, 500, { error: statusErr.message })
 
     if (isClemson) {
-      const { error: svErr } = await sb.from('student_verifications').insert({
-        profile_id: user.id,
-        email,
-        verified_at: now,
-      })
-      if (svErr && !String(svErr.message || '').toLowerCase().includes('duplicate')) {
-        console.warn('[driver-signup] student_verifications', svErr.message)
-      }
+      const { error: svErr } = await sb.from('student_verifications').upsert(
+        { profile_id: user.id, email, verified_at: now },
+        { onConflict: 'profile_id' },
+      )
+      if (svErr) console.warn('[driver-signup] student_verifications', svErr.message)
     }
 
     return json(res, 200, {
