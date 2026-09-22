@@ -192,4 +192,99 @@ export function FriendsScreen() {
   )
 }
 
-export { AccountScreen } from './AccountScreen'
+export function AccountScreen() {
+  const { user, configured, signOut } = useAuth()
+  const displayName = user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Rider'
+  const [profile, setProfile] = useState(null)
+  const [bio, setBio] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [msg, setMsg] = useState(null)
+
+  useEffect(() => {
+    if (!user?.id) return
+    fetchProfile(user.id).then((p) => { setProfile(p); setBio(p?.bio || '') }).catch(() => {})
+  }, [user?.id])
+
+  async function onSignOut() {
+    try { await signOut() } catch {}
+    navigate('landing')
+  }
+
+  async function onSaveBio() {
+    if (!user?.id) return
+    setSaving(true)
+    setMsg(null)
+    try {
+      await updateMyProfile(user.id, { bio: bio.trim() || null, full_name: displayName })
+      setMsg('Saved')
+      setProfile(await fetchProfile(user.id))
+    } catch (e) {
+      setMsg(e.message || 'Save failed')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const avg = profile?.rating_avg != null ? Number(profile.rating_avg).toFixed(1) : '—'
+  const count = profile?.rating_count || 0
+  const card = {
+    marginTop: 20, padding: 16, borderRadius: 16, background: 'var(--surface)',
+    border: '1px solid var(--border)', boxShadow: 'var(--shadow-soft)',
+  }
+
+  return (
+    <div className="route-fade" style={{ display: 'flex', flexDirection: 'column', minHeight: '100%' }}>
+      <div style={{ flex: 1, padding: 24 }}>
+        <button type="button" className="pressable" onClick={() => navigate('home')}
+          style={{ fontSize: 20, marginBottom: 12, width: 44, height: 44, borderRadius: 14, background: 'var(--surface)', boxShadow: 'var(--shadow-pill)' }}>←</button>
+        <h1 style={{ fontSize: 24, fontWeight: 700, color: 'var(--purple)' }}>{displayName}</h1>
+        <p style={{ color: 'var(--ink-secondary)', marginTop: 8 }}>Account & profile</p>
+        <div className="card-soft" style={card}>
+          <div style={{ fontWeight: 600, marginBottom: 6 }}>Your rating</div>
+          <div style={{ fontSize: 14, color: 'var(--ink-secondary)', marginBottom: 12 }}>★ {avg} ({count} ratings)</div>
+          <textarea value={bio} onChange={(e) => setBio(e.target.value)} rows={3} placeholder="Short bio"
+            style={{ width: '100%', padding: 10, borderRadius: 12, border: '1px solid var(--border)', marginBottom: 10 }} />
+          <button type="button" className="pressable" onClick={onSaveBio} disabled={saving} style={{ fontWeight: 600, color: 'var(--purple)' }}>
+            {saving ? 'Saving…' : 'Save profile'}
+          </button>
+          {msg && <div style={{ fontSize: 12, marginTop: 8, color: 'var(--ink-tertiary)' }}>{msg}</div>}
+        </div>
+        <div className="card-soft" style={card}>
+          <div style={{ fontWeight: 600, marginBottom: 6 }}>Wallet</div>
+          <button type="button" className="pressable" onClick={() => navigate('friend-ride')} style={{ fontWeight: 600, color: 'var(--purple)' }}>
+            Save card for Ride with friends →
+          </button>
+        </div>
+        <div className="card-soft" style={card}>
+          <div style={{ fontSize: 13, color: 'var(--ink-tertiary)', marginBottom: 12 }}>
+            {configured ? user?.email || 'Signed in' : 'Set VITE_SUPABASE_URL + VITE_SUPABASE_ANON_KEY'}
+          </div>
+          <button
+            type="button"
+            className="pressable"
+            onClick={() => navigate('driver-signup')}
+            style={{
+              display: 'block', width: '100%', marginBottom: 10, padding: 14, borderRadius: 14,
+              background: 'linear-gradient(135deg, var(--purple) 0%, #6b3fa0 100%)',
+              color: '#fff', fontWeight: 700, boxShadow: 'var(--shadow-cta)', textAlign: 'center',
+            }}
+          >
+            Sign up as a driver
+          </button>
+          <p style={{ fontSize: 12, color: 'var(--ink-tertiary)', marginBottom: 10, lineHeight: 1.4 }}>
+            Drive fellow Clemson students — same university trust. Quiz + vehicle → approved driver.
+          </p>
+          <button type="button" className="pressable" onClick={() => navigate('driver')} style={{ fontWeight: 600, color: 'var(--purple)' }}>
+            Switch to driver mode →
+          </button>
+          <button type="button" className="pressable primary-cta" onClick={onSignOut}
+            style={{ display: 'block', width: '100%', marginTop: 18, padding: 14, borderRadius: 14,
+              background: 'linear-gradient(135deg, var(--orange) 0%, #ff7a1a 100%)', color: '#fff', fontWeight: 700 }}>
+            Sign out
+          </button>
+        </div>
+      </div>
+      <BottomTabs active="account" onChange={(id) => navigate(id === 'home' ? 'home' : id)} />
+    </div>
+  )
+}
