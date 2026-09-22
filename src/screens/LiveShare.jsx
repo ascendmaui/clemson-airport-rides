@@ -84,8 +84,18 @@ export function LiveShare({ token: tokenProp = '' } = {}) {
           {d.trip_status ? ` · ${d.trip_status}` : ''}
         </p>
       </div>
-      <div style={{ flex: 1, minHeight: 280, position: 'relative' }}>
-        <CampusMap height="100%" interactive center={marker} zoom={15} marker={marker} />
+      <div
+        data-map="google-campus"
+        style={{ flex: 1, minHeight: 360, position: 'relative', padding: '0 16px' }}
+      >
+        <CampusMap
+          height={360}
+          interactive
+          center={marker}
+          zoom={15}
+          marker={marker}
+          selfPosition={marker}
+        />
       </div>
       {!expired && (
         <p style={{ padding: 16, fontSize: 12, color: 'var(--ink-tertiary)', textAlign: 'center' }}>
