@@ -1,12 +1,12 @@
 /**
- * If the URL is still on the legacy hash form (#/share|:live|:friends/:token),
+ * If the URL is still on the legacy hash form (#/share|:live|:friends|:carpool/:token),
  * immediately replace with the path form. Path form is what production serves
  * reliably for Google CampusMap / public invite links.
  */
 export function redirectShareHashToPath() {
   if (typeof window === 'undefined') return false
   const hash = window.location.hash || ''
-  const m = hash.match(/^#\/(share|live|friends)\/([^/?#]+)\/?(?:[?#].*)?$/)
+  const m = hash.match(/^#\/(share|live|friends|carpool)\/([^/?#]+)\/?(?:[?#].*)?$/)
   if (!m) return false
   const kind = m[1]
   const token = decodeURIComponent(m[2])
@@ -33,8 +33,8 @@ export function getHashRoute() {
   const segments = pathPart.split('/').filter(Boolean)
   const path = segments[0] || 'landing'
   const params = Object.fromEntries(new URLSearchParams(qs || ''))
-  // Support #/share|live|friends/<token> and path equivalents
-  if ((path === 'share' || path === 'live' || path === 'friends') && segments[1] && !params.token) {
+  // Support #/share|live|friends|carpool/<token> and path equivalents
+  if ((path === 'share' || path === 'live' || path === 'friends' || path === 'carpool') && segments[1] && !params.token) {
     params.token = decodeURIComponent(segments[1])
   }
   if (path === 'profile' && segments[1] && !params.id) params.id = segments[1]
@@ -55,6 +55,13 @@ export function getHashRoute() {
       /* ignore */
     }
   }
+  if (typeof window !== 'undefined' && params.token && path === 'carpool') {
+    try {
+      window.sessionStorage.setItem('clemson_carpool_token', params.token)
+    } catch {
+      /* ignore */
+    }
+  }
   if ((path === 'share' || path === 'live') && !params.token && typeof window !== 'undefined') {
     try {
       const saved = window.sessionStorage.getItem('clemson_live_share_token')
@@ -71,15 +78,23 @@ export function getHashRoute() {
       /* ignore */
     }
   }
+  if (path === 'carpool' && !params.token && typeof window !== 'undefined') {
+    try {
+      const saved = window.sessionStorage.getItem('clemson_carpool_token')
+      if (saved) params.token = saved
+    } catch {
+      /* ignore */
+    }
+  }
   return { path, params, segments }
 }
 
 export function navigate(path, params = {}) {
-  // Allow path like 'share/tokenValue' or 'friends/tokenValue'
+  // Allow path like 'share/tokenValue' or 'friends/tokenValue' or 'carpool/tokenValue'
   if (path.includes('/') && Object.keys(params).length === 0) {
     const clean = path.replace(/^\//, '')
     const [head, ...rest] = clean.split('/')
-    if ((head === 'share' || head === 'live' || head === 'friends') && rest[0]) {
+    if ((head === 'share' || head === 'live' || head === 'friends' || head === 'carpool') && rest[0]) {
       const url = `${window.location.origin}/${head}/${encodeURIComponent(rest[0])}`
       window.location.assign(url)
       return
@@ -88,14 +103,18 @@ export function navigate(path, params = {}) {
     return
   }
   const qs = new URLSearchParams(params).toString()
-  if ((path === 'share' || path === 'live' || path === 'friends') && params.token) {
+  if ((path === 'share' || path === 'live' || path === 'friends' || path === 'carpool') && params.token) {
     const url = `${window.location.origin}/${path}/${encodeURIComponent(params.token)}`
     window.location.assign(url)
     return
   }
-  // bare 'friends' create screen uses hash
+  // bare 'friends' / 'carpool' create screen uses hash
   if (path === 'friends' && !params.token) {
     window.location.hash = '#/friends'
+    return
+  }
+  if (path === 'carpool' && !params.token) {
+    window.location.hash = '#/carpool'
     return
   }
   window.location.hash = qs ? `#/${path}?${qs}` : `#/${path}`
@@ -110,4 +129,9 @@ export function shareUrl(token) {
 export function friendsInviteUrl(token) {
   const origin = typeof window !== 'undefined' ? window.location.origin : 'https://clemson-airport-rides.vercel.app'
   return `${origin}/friends/${encodeURIComponent(token)}`
+}
+
+export function carpoolInviteUrl(token) {
+  const origin = typeof window !== 'undefined' ? window.location.origin : 'https://clemson-airport-rides.vercel.app'
+  return `${origin}/carpool/${encodeURIComponent(token)}`
 }
