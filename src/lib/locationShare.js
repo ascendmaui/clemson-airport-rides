@@ -4,7 +4,6 @@ import { shareUrl } from './navigation'
 export async function createLocationShare(tripId, riderId) {
   if (!supabase) throw new Error('Supabase is not configured')
   if (!tripId || !riderId) throw new Error('trip and rider required')
-  // Reuse active share for trip if present
   const { data: existing } = await supabase
     .from('location_shares')
     .select('id, token, active')
@@ -22,14 +21,13 @@ export async function createLocationShare(tripId, riderId) {
   return { ...data, url: shareUrl(data.token) }
 }
 
-export async function postLocationPoint({ shareId, tripId, lat, lng, accuracy }) {
+export async function postLocationPoint({ shareId, lat, lng, accuracy }) {
   if (!supabase) throw new Error('Supabase is not configured')
   const { error } = await supabase.from('location_points').insert({
     share_id: shareId,
-    trip_id: tripId,
     lat,
     lng,
-    accuracy: accuracy ?? null,
+    accuracy_m: accuracy ?? null,
   })
   if (error) throw new Error(error.message)
 }
@@ -49,7 +47,6 @@ export async function revokeLocationShare(shareId) {
     .eq('id', shareId)
 }
 
-/** Start watchPosition → post points; returns stop fn */
 export function startSharingLocation({ shareId, tripId, onError }) {
   if (!navigator.geolocation) {
     onError?.(new Error('Geolocation not available'))
@@ -59,7 +56,6 @@ export function startSharingLocation({ shareId, tripId, onError }) {
     (pos) => {
       postLocationPoint({
         shareId,
-        tripId,
         lat: pos.coords.latitude,
         lng: pos.coords.longitude,
         accuracy: pos.coords.accuracy,
