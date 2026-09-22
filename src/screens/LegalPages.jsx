@@ -51,7 +51,7 @@ export function LegalPrivacy() {
           To run the service we collect account and trip data, including:
         </p>
         <ul style={{ paddingLeft: 20, margin: 0 }}>
-          <li>Account details: name, Clemson email (@clemson.edu), and authentication identifiers from Supabase Auth.</li>
+          <li>Account details: name, email, and authentication identifiers from Supabase Auth. A Clemson (@clemson.edu) email may unlock student pricing.</li>
           <li>Student verification markers such as <code>student_verified_at</code> when your Clemson email is confirmed.</li>
           <li>Trip details: pickup/dropoff labels and coordinates, scheduled time, fare/deposit amounts, status history, and driver assignment.</li>
           <li>Payment metadata from Stripe Checkout (we do not store full card numbers on Clemson RIDES servers).</li>
@@ -60,7 +60,7 @@ export function LegalPrivacy() {
       </Section>
       <Section heading="How we use information">
         <p>
-          We use this data to create accounts, verify Clemson student eligibility, match riders with drivers,
+          We use this data to create accounts, apply student pricing when a Clemson email is used, match riders with drivers,
           process deposit payments, show live trip status, calculate driver earnings from completed fares,
           prevent abuse, and improve reliability of the campus airport-ride experience. We do not sell your
           personal information.
@@ -79,14 +79,14 @@ export function LegalPrivacy() {
           Trip and account records are retained while your account is active and for a reasonable period
           afterward for dispute resolution, accounting, and safety. We use industry-standard controls via
           our providers (encrypted transport, access-controlled databases). No method of transmission is
-          100% secure; please use a strong password and your Clemson email only.
+          100% secure; please use a strong password.
         </p>
       </Section>
       <Section heading="Your choices">
         <p>
           You may update profile details in Account, sign out at any time, and request deletion of your
           account/trip history by contacting Clemson RIDES support. Marketing browse screens remain available
-          without signup; booking and payment require a verified Clemson student account.
+          without signup; booking and payment require a signed-in account.
         </p>
       </Section>
       <Section heading="Children">
@@ -111,9 +111,9 @@ export function LegalTerms() {
       </Section>
       <Section heading="Eligibility">
         <p>
-          Rider signup and book/pay flows are limited to users with a valid <strong>@clemson.edu</strong> email
-          (or a profile already marked student-verified). Drivers must complete onboarding and remain in good
-          standing. You are responsible for the accuracy of the information you provide.
+          Anyone may create a rider or driver account with a valid email. Riders with a verified
+          <strong>@clemson.edu</strong> address receive student pricing where offered. Drivers must complete
+          onboarding and remain in good standing. You are responsible for the accuracy of the information you provide.
         </p>
       </Section>
       <Section heading="The service">

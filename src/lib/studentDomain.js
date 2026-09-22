@@ -1,6 +1,6 @@
 /**
- * Optional Clemson student discount / verification helper.
- * NOT a signup or book/pay gate — any email may join.
+ * Clemson student domain gate — optional student pricing when @clemson.edu.
+ * Guest browse stays open.
  */
 export function isClemsonEmail(email) {
   if (!email || typeof email !== 'string') return false

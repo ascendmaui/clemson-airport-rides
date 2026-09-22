@@ -7,7 +7,7 @@ import {
   createCheckoutSession,
   getStripeConfig,
 } from '../lib/stripeCheckout'
-import { formatUsdFromCents } from '../lib/pricing'
+import { formatUsdFromCents, applyStudentDiscount } from '../lib/pricing'
 import { useAuth } from '../lib/auth'
 import { getHashRoute, navigate } from '../lib/navigation'
 import { supabase } from '../lib/supabase'
@@ -21,24 +21,13 @@ const AIRPORT_COORDS = {
 }
 
 
-async function assertStudentEligible(user) {
-  if (!user?.id) throw new Error('Sign in required to book')
-  if (isClemsonEmail(user.email)) return true
-  if (!supabase) throw new Error('Supabase is not configured')
-  const { data, error } = await supabase
-    .from('profiles')
-    .select('student_verified_at')
-    .eq('id', user.id)
-    .maybeSingle()
-  if (error) throw new Error(error.message || 'Could not verify student status')
-  if (data?.student_verified_at) return true
-  throw new Error('Use your @clemson.edu email to join Clemson RIDES.')
+function isStudentRider(user) {
+  return Boolean(user?.email && isClemsonEmail(user.email))
 }
 
 async function createAirportTrip({ user, airport, fareCents, deposit, date, time }) {
   if (!supabase) throw new Error('Supabase is not configured')
   if (!user?.id) throw new Error('Sign in required to book')
-  await assertStudentEligible(user)
 
   const dest = AIRPORT_COORDS[airport] || AIRPORT_COORDS.GSP
   let scheduledFor = null
@@ -90,11 +79,17 @@ export function ScheduleAirport() {
     setBusy(true)
     setError(null)
     try {
+      const student = applyStudentDiscount(rate.fareCents, {
+        isStudent: isStudentRider(user),
+        tier: 'standard',
+      })
+      const fareCents = student.fareCents
+      const depositAmount = depositCents(fareCents)
       const tripId = await createAirportTrip({
         user,
         airport,
-        fareCents: rate.fareCents,
-        deposit,
+        fareCents,
+        deposit: depositAmount,
         date,
         time,
       })
@@ -133,6 +128,7 @@ export function ScheduleAirport() {
         <h1 style={{ fontSize: 24, fontWeight: 600, letterSpacing: -0.4 }}>Schedule airport</h1>
         <p style={{ color: 'var(--ink-secondary)', fontSize: 14, marginTop: 6, marginBottom: 20 }}>
           Flat rates · 25% deposit holds your ride
+          {isStudentRider(user) ? ' · Clemson student discount applied at checkout' : ''}
         </p>
 
         {returnFlags.paid === '1' && (
