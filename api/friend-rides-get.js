@@ -28,15 +28,31 @@ export default async function handler(req, res) {
     if (!loaded) return json(res, 404, { error: 'Friend ride not found' })
     const summary = publicRideSummary(loaded.ride, loaded.participants)
 
+    // Trust UI fields (student badge + ratings) — public enough for lobby.
+    const ids = loaded.participants.map((p) => p.user_id).filter(Boolean)
+    let byId = {}
+    if (ids.length) {
+      const { data: profiles } = await sb
+        .from('profiles')
+        .select('id, stripe_default_pm_id, stripe_customer_id, student_verified_at, rating_avg, rating_count, avatar_url, full_name')
+        .in('id', ids)
+      byId = Object.fromEntries((profiles || []).map((p) => [p.id, p]))
+      summary.participants = summary.participants.map((p) => {
+        const full = loaded.participants.find((x) => x.id === p.id)
+        const prof = full?.user_id ? byId[full.user_id] : null
+        return {
+          ...p,
+          student_verified_at: prof?.student_verified_at || null,
+          rating_avg: prof?.rating_avg != null ? Number(prof.rating_avg) : null,
+          rating_count: prof?.rating_count != null ? Number(prof.rating_count) : 0,
+          avatar_url: prof?.avatar_url || null,
+        }
+      })
+    }
+
     const user = await userFromAuth(req)
     if (user) {
-      const ids = loaded.participants.map((p) => p.user_id).filter(Boolean)
       if (ids.length) {
-        const { data: profiles } = await sb
-          .from('profiles')
-          .select('id, stripe_default_pm_id, stripe_customer_id')
-          .in('id', ids)
-        const byId = Object.fromEntries((profiles || []).map((p) => [p.id, p]))
         summary.participants = summary.participants.map((p) => {
           const full = loaded.participants.find((x) => x.id === p.id)
           const prof = full?.user_id ? byId[full.user_id] : null
@@ -49,12 +65,12 @@ export default async function handler(req, res) {
             is_self: full?.user_id === user.id,
           }
         })
-        summary.is_organizer = user.id === loaded.ride.organizer_id
-        summary.viewer_id = user.id
-      } else {
-        summary.is_organizer = user.id === loaded.ride.organizer_id
-        summary.viewer_id = user.id
       }
+      summary.is_organizer = user.id === loaded.ride.organizer_id
+      summary.is_driver = Boolean(
+        loaded.ride.driver_profile_id && user.id === loaded.ride.driver_profile_id,
+      )
+      summary.viewer_id = user.id
     }
 
     return json(res, 200, summary)
