@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { getHashRoute } from './lib/navigation'
+import { getHashRoute, redirectShareHashToPath } from './lib/navigation'
 import { RequireAuth } from './components/RequireAuth'
 import { Marketing } from './screens/Marketing'
 import { RiderHome } from './screens/RiderHome'
@@ -85,7 +85,12 @@ export default function App() {
   const [{ path, params }, setRoute] = useState(() => getHashRoute())
 
   useEffect(() => {
-    const onRoute = () => setRoute(getHashRoute())
+    // Belt-and-suspenders: hash share/live → path form before rendering map shell
+    if (redirectShareHashToPath()) return undefined
+    const onRoute = () => {
+      if (redirectShareHashToPath()) return
+      setRoute(getHashRoute())
+    }
     window.addEventListener('hashchange', onRoute)
     window.addEventListener('popstate', onRoute)
     // Re-read once after mount in case auth briefly touched the URL
