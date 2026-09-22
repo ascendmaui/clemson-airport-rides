@@ -16,8 +16,9 @@ import { LegalPrivacy, LegalTerms } from './screens/LegalPages'
 import { LiveShare } from './screens/LiveShare'
 import { ProfileView } from './screens/ProfileView'
 import { RateRide } from './screens/RateRide'
+import { FriendRideScreen } from './screens/FriendRide'
 
-const PROTECTED = new Set(['driver', 'driver-onboarding', 'friends', 'account'])
+const PROTECTED = new Set(['driver', 'driver-onboarding', 'account'])
 
 function Screen({ path, params }) {
   switch (path) {
@@ -65,11 +66,17 @@ function Screen({ path, params }) {
         </RequireAuth>
       )
     case 'friends':
+      // Public join when token present; create/lobby behind soft auth inside screen
+      if (params.token) {
+        return <FriendRideScreen token={params.token} />
+      }
       return (
         <RequireAuth>
           <FriendsScreen />
         </RequireAuth>
       )
+    case 'friend-ride':
+      return <FriendRideScreen token={params.token || ''} />
     case 'account':
       return (
         <RequireAuth>
@@ -85,7 +92,6 @@ export default function App() {
   const [{ path, params }, setRoute] = useState(() => getHashRoute())
 
   useEffect(() => {
-    // Belt-and-suspenders: hash share/live → path form before rendering map shell
     if (redirectShareHashToPath()) return undefined
     const onRoute = () => {
       if (redirectShareHashToPath()) return
@@ -93,7 +99,6 @@ export default function App() {
     }
     window.addEventListener('hashchange', onRoute)
     window.addEventListener('popstate', onRoute)
-    // Re-read once after mount in case auth briefly touched the URL
     const t = window.setTimeout(onRoute, 0)
     return () => {
       window.removeEventListener('hashchange', onRoute)
