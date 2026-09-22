@@ -22,6 +22,18 @@ export function friendsUrl(token) {
   return `${origin}/friends/${encodeURIComponent(token)}`
 }
 
+export function carpoolUrl(token) {
+  const origin =
+    typeof window !== 'undefined'
+      ? window.location.origin
+      : 'https://clemson-airport-rides.vercel.app'
+  return `${origin}/carpool/${encodeURIComponent(token)}`
+}
+
+export function inviteUrl(token, kind = 'friends') {
+  return kind === 'carpool' ? carpoolUrl(token) : friendsUrl(token)
+}
+
 async function authHeaders() {
   const headers = { 'Content-Type': 'application/json' }
   if (!supabase) return headers
@@ -58,10 +70,10 @@ async function api(path, { method = 'GET', body } = {}) {
   return data
 }
 
-export async function createFriendRide({ displayName, pickup, dropoff, splitMode } = {}) {
+export async function createFriendRide({ displayName, pickup, dropoff, splitMode, kind } = {}) {
   return api('/api/friend-rides-create', {
     method: 'POST',
-    body: { displayName, pickup, dropoff, splitMode },
+    body: { displayName, pickup, dropoff, splitMode, kind: kind === 'carpool' ? 'carpool' : 'friends' },
   })
 }
 
