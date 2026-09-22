@@ -107,6 +107,34 @@ export function Marketing() {
         <p style={{ marginTop: 24, textAlign: 'center', fontSize: 12, color: 'var(--ink-tertiary)' }}>
           Supabase Auth + Stripe Checkout live · 25% airport deposit · Expo previews above
         </p>
+        <footer
+          style={{
+            marginTop: 28,
+            paddingTop: 18,
+            borderTop: '1px solid var(--border)',
+            display: 'flex',
+            justifyContent: 'center',
+            gap: 20,
+            flexWrap: 'wrap',
+          }}
+        >
+          <button
+            type="button"
+            className="pressable"
+            onClick={() => navigate('privacy')}
+            style={{ fontSize: 13, fontWeight: 600, color: 'var(--purple)' }}
+          >
+            Privacy
+          </button>
+          <button
+            type="button"
+            className="pressable"
+            onClick={() => navigate('terms')}
+            style={{ fontSize: 13, fontWeight: 600, color: 'var(--purple)' }}
+          >
+            Terms
+          </button>
+        </footer>
       </div>
     </div>
   )
