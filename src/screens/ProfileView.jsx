@@ -65,8 +65,7 @@ export function ProfileView() {
             <div style={{ fontWeight: 700, marginBottom: 8 }}>Recent ratings</div>
             {profile.recentRatings.map((r, i) => (
               <div key={i} style={{ fontSize: 13, marginBottom: 8, color: 'var(--ink-secondary)' }}>
-                {'★'.repeat(r.stars)}{'☆'.repeat(5 - r.stars)}
-                {r.comment ? ` — ${r.comment}` : ''}
+                {'★'.repeat(r.stars)}{'☆'.repeat(5 - r.stars)}{r.comment ? ` — ${r.comment}` : ''}
               </div>
             ))}
           </div>
