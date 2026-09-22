@@ -57,16 +57,34 @@ function RateForm() {
   return (
     <div className="fade-in" style={{ padding: 24, maxWidth: 420, margin: '0 auto' }}>
       <h1 style={{ fontSize: 24, fontWeight: 700, color: 'var(--purple)' }}>{label}</h1>
-      <p style={{ color: 'var(--ink-secondary)', marginTop: 6, marginBottom: 16 }}>{trip.pickup_label} → {trip.dropoff_label}</p>
+      <p style={{ color: 'var(--ink-secondary)', marginTop: 6, marginBottom: 16 }}>
+        {trip.pickup_label} → {trip.dropoff_label}
+      </p>
       <form onSubmit={onSubmit}>
         <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
           {[1, 2, 3, 4, 5].map((n) => (
-            <button key={n} type="button" className="pressable" onClick={() => setStars(n)} style={{ width: 44, height: 44, borderRadius: 12, fontSize: 20, background: n <= stars ? 'var(--orange)' : 'rgba(0,0,0,0.06)', color: n <= stars ? '#fff' : 'var(--ink-secondary)' }}>
+            <button
+              key={n}
+              type="button"
+              className="pressable"
+              onClick={() => setStars(n)}
+              style={{
+                width: 44, height: 44, borderRadius: 12, fontSize: 20,
+                background: n <= stars ? 'var(--orange)' : 'rgba(0,0,0,0.06)',
+                color: n <= stars ? '#fff' : 'var(--ink-secondary)',
+              }}
+            >
               ★
             </button>
           ))}
         </div>
-        <textarea value={comment} onChange={(e) => setComment(e.target.value)} placeholder="Optional comment" rows={3} style={{ width: '100%', padding: 12, borderRadius: 12, border: '1px solid var(--border)', marginBottom: 14 }} />
+        <textarea
+          value={comment}
+          onChange={(e) => setComment(e.target.value)}
+          placeholder="Optional comment"
+          rows={3}
+          style={{ width: '100%', padding: 12, borderRadius: 12, border: '1px solid var(--border)', marginBottom: 14 }}
+        />
         {error && <p style={{ color: 'var(--danger)', fontSize: 13, marginBottom: 10 }}>{error}</p>}
         <PrimaryButton disabled={busy}>{busy ? 'Saving…' : 'Submit rating'}</PrimaryButton>
       </form>
