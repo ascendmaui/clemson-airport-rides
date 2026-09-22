@@ -100,15 +100,26 @@ export function AuthProvider({ children }) {
     },
     async signUp(email, password, fullName) {
       if (!supabase) throw new Error('Supabase is not configured')
-      if (!isClemsonEmail(email)) {
-        throw new Error('Use your @clemson.edu email to join Clemson RIDES.')
-      }
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
         options: { data: { full_name: fullName || '' } },
       })
-      if (error) throw error
+      if (error) {
+        const code = error.code || error.status || ''
+        const msg = (error.message || '').toLowerCase()
+        if (
+          code === 'over_email_send_rate_limit' ||
+          error.status === 429 ||
+          msg.includes('rate limit') ||
+          msg.includes('only request this after')
+        ) {
+          throw new Error(
+            'Too many signup emails were sent just now. Wait about a minute, then try again with the same email.',
+          )
+        }
+        throw error
+      }
       if (data.user) await ensureProfile(data.user)
       return data
     },
