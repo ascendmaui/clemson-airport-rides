@@ -85,6 +85,21 @@ export function Marketing() {
           <button
             type="button"
             className="pressable"
+            onClick={() => navigate('carpool')}
+            style={{
+              fontWeight: 700,
+              color: 'var(--purple)',
+              padding: 14,
+              borderRadius: 14,
+              border: '1.5px solid rgba(82,45,128,0.35)',
+              background: 'rgba(82,45,128,0.06)',
+            }}
+          >
+            Offer a carpool
+          </button>
+          <button
+            type="button"
+            className="pressable"
             onClick={() => navigate('driver')}
             style={{ fontWeight: 600, color: 'var(--purple)', padding: 8 }}
           >
