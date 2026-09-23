@@ -27,8 +27,11 @@ import { ToastProvider, ToastStack } from './lib/toasts'
 import { RideToastWatcher } from './components/RideToastWatcher'
 import { DriverBillingEntry } from './components/DriverBillingEntry'
 import { IncentivesAdmin } from './screens/IncentivesAdmin'
+import { LostFoundWatcher } from './components/LostFoundWatcher'
+import { LostFound } from './screens/LostFound'
+import { RidesHistory } from './screens/RidesHistory'
 
-const PROTECTED = new Set(['driver', 'driver-onboarding', 'account', 'driver-signup', 'admin', 'incentives'])
+const PROTECTED = new Set(['driver', 'driver-onboarding', 'account', 'driver-signup', 'admin', 'incentives', 'lost-found', 'history'])
 
 function Screen({ path, params }) {
   switch (path) {
@@ -122,6 +125,10 @@ function Screen({ path, params }) {
           <IncentivesAdmin />
         </RequireAuth>
       )
+    case 'lost-found':
+      return <LostFound />
+    case 'history':
+      return <RidesHistory />
     default:
       return <Marketing />
   }
@@ -154,6 +161,7 @@ export default function App() {
       <div className="desktop-frame">
         <div className="app-shell" style={{ position: 'relative', height: '100%' }}>
           <RideToastWatcher />
+          <LostFoundWatcher />
           <ToastStack />
           <div
             key={`${path}:${params.token || params.id || params.trip || ''}`}

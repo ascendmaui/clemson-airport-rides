@@ -166,6 +166,17 @@ export function Requested({ dest = 'GSP Airport', trip = '', driver = 'your driv
               View driver profile
             </button>
           )}
+          {status === 'completed' && trip && (
+            <button
+              type="button"
+              className="pressable"
+              data-testid="post-ride-lost-found"
+              onClick={() => navigate('lost-found', { trip })}
+              style={{ fontWeight: 700, color: 'var(--orange)', padding: '4px 0' }}
+            >
+              Left something in the car?
+            </button>
+          )}
           {rateNudge && trip && (
             <div className="glass-panel" style={{ padding: 12, borderRadius: 14, background: 'rgba(245,102,0,0.12)' }}>
               <div style={{ fontWeight: 700, color: 'var(--purple)', marginBottom: 6, fontSize: 13 }}>Trip complete — rate your driver?</div>

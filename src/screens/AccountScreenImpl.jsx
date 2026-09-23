@@ -600,6 +600,22 @@ export function AccountScreen() {
             >
               Email support →
             </a>
+            <button
+              type="button"
+              className="pressable"
+              data-testid="help-lost-found"
+              onClick={() => navigate('lost-found')}
+              style={{
+                display: 'block', width: '100%', textAlign: 'left', padding: 14, borderRadius: 14, fontWeight: 700,
+                color: 'var(--purple)', background: 'rgba(255,255,255,0.55)',
+                border: '1px solid rgba(82,45,128,0.12)', marginBottom: 10,
+              }}
+            >
+              Lost & found →
+            </button>
+            <p style={{ fontSize: 12, color: 'var(--ink-tertiary)', margin: '0 0 8px', lineHeight: 1.45 }}>
+              Separate from help. Report an item left in a vehicle after a ride.
+            </p>
             <button type="button" className="pressable" onClick={() => navigate('terms')}
               style={{ display: 'block', width: '100%', textAlign: 'left', padding: 12, fontWeight: 600, color: 'var(--ink-secondary)' }}>
               Terms of service
