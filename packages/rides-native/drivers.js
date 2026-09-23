@@ -117,6 +117,7 @@ export async function requestDriverTrip(supabase, {
   pickupLabel = 'Memorial Stadium',
   pickupPoint = STADIUM,
   tier = 'standard',
+  isStudent = false,
 }) {
   if (!supabase) throw new Error('Supabase is not configured')
   if (!riderId) throw new Error('Sign in required to request a driver')
@@ -136,6 +137,10 @@ export async function requestDriverTrip(supabase, {
       dropoff_lat: destPoint.latitude,
       dropoff_lng: destPoint.longitude,
       passengers: 1,
+      metadata: {
+        ...(isStudent ? { isStudent: true, studentLabel: 'Clemson student · 10% off Standard' } : {}),
+        ...(tier === 'tesla' ? { tesla: true, tier: 'tesla' } : {}),
+      },
     })
     .select('id, status, driver_id, dropoff_label')
     .single()

@@ -34,6 +34,19 @@
       "expo-router",
       "expo-secure-store",
       [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Clemson RIDES uses your location while you are online so riders can see your car on the map."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Clemson RIDES uses your photo library for license, insurance, and vehicle documents.",
+          "cameraPermission": "Clemson RIDES uses the camera to photograph driver documents."
+        }
+      ],
+      [
         "expo-splash-screen",
         {
           "image": "./assets/images/splash-icon.png",

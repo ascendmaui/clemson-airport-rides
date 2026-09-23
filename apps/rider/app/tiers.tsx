@@ -8,6 +8,7 @@ import { setAuthNext } from '@/lib/authNext'
 import { useAuth } from '@/lib/auth'
 import { oneParam } from '@/lib/oneParam'
 import { formatUsd, INK, INK_SECONDARY, ORANGE, PURPLE, RIDE_TIERS, SURFACE } from 'rides-native/places.js'
+import { TESLA_FLEET_NOTICE } from 'rides-native/tripTags'
 
 export default function RideTiers() {
   const router = useRouter()
@@ -63,6 +64,11 @@ export default function RideTiers() {
           )
         })}
       </ScrollView>
+      {selected === 'tesla' ? (
+        <View style={styles.stub}>
+          <Text style={styles.stubText}>{TESLA_FLEET_NOTICE}</Text>
+        </View>
+      ) : null}
       <View style={styles.footer}>
         <PrimaryButton label="Choose a driver" onPress={onConfirm} />
       </View>
@@ -117,4 +123,6 @@ const styles = StyleSheet.create({
   meta: { color: INK_SECONDARY, fontSize: 12, marginTop: 2 },
   price: { fontWeight: '800', color: INK, fontSize: 16 },
   footer: { padding: 16, paddingBottom: 28, backgroundColor: '#fff' },
+  stub: { marginHorizontal: 16, marginBottom: 8, backgroundColor: 'rgba(245,102,0,0.12)', borderRadius: 16, padding: 12 },
+  stubText: { color: PURPLE, fontSize: 13, lineHeight: 18, fontWeight: '600' },
 })

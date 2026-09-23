@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "test": "node --test scripts/carpoolEngine.test.mjs scripts/trip-chat-rules.test.mjs tests/driverOnboarding.test.js tests/apiRoutes.test.js src/lib/fareRates.test.js src/lib/platformFee.test.js src/lib/waitFee.test.js src/lib/driverEarnings.test.js src/lib/alertTone.test.js server/midrideFare.test.js server/collectTripCharge.test.js server/paymentFailure.test.js server/collectPayment.test.js server/helpSupportAgents.test.js packages/rides-native/authErrors.test.js packages/rides-native/secureChunks.test.js",
+    "test": "node --test scripts/carpoolEngine.test.mjs scripts/trip-chat-rules.test.mjs tests/driverOnboarding.test.js tests/apiRoutes.test.js src/lib/fareRates.test.js src/lib/platformFee.test.js src/lib/waitFee.test.js src/lib/driverEarnings.test.js src/lib/alertTone.test.js server/midrideFare.test.js server/collectTripCharge.test.js server/paymentFailure.test.js server/collectPayment.test.js server/helpSupportAgents.test.js packages/rides-native/authErrors.test.js packages/rides-native/secureChunks.test.js packages/rides-native/tripTags.test.js",
     "preview": "vite preview"
   },
   "dependencies": {

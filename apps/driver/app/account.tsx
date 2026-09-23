@@ -39,6 +39,22 @@ export default function AccountScreen() {
       </Text>
       {error ? <Text style={styles.error}>{error}</Text> : null}
       {user ? (
+        <>
+          <Pressable onPress={() => router.push('/onboarding')} style={styles.linkRow}>
+            <Text style={styles.linkText}>Driver application</Text>
+          </Pressable>
+          <Pressable onPress={() => router.push('/queue')} style={styles.linkRow}>
+            <Text style={styles.linkText}>Ride queue</Text>
+          </Pressable>
+          <Pressable onPress={() => router.push('/earnings')} style={styles.linkRow}>
+            <Text style={styles.linkText}>Earnings and deposits</Text>
+          </Pressable>
+          <Pressable onPress={() => router.push('/fleet')} style={styles.linkRow}>
+            <Text style={styles.linkText}>Tesla Model 3 fleet</Text>
+          </Pressable>
+        </>
+      ) : null}
+      {user ? (
         <Pressable onPress={onSignOut} disabled={busy} style={styles.primary}>
           <Text style={styles.primaryText}>{busy ? 'Signing out…' : 'Sign out'}</Text>
         </Pressable>
@@ -58,6 +74,8 @@ const styles = StyleSheet.create({
   title: { fontSize: 28, fontWeight: '800', color: PURPLE },
   copy: { color: INK_SECONDARY, fontSize: 15, lineHeight: 21 },
   error: { color: '#B42318' },
+  linkRow: { backgroundColor: '#fff', borderRadius: 16, paddingVertical: 14, paddingHorizontal: 16 },
+  linkText: { color: PURPLE, fontWeight: '800' },
   primary: { backgroundColor: ORANGE, borderRadius: 16, paddingVertical: 16, alignItems: 'center', marginTop: 8 },
   primaryText: { color: '#fff', fontWeight: '700', fontSize: 16 },
 })

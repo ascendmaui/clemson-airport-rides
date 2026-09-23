@@ -134,6 +134,9 @@ export function ScheduledRidePlanner() {
         fareCents: priced?.fareCents || 0,
         depositCents: priced?.estimate ? 0 : (priced?.depositCents || 0),
         fareIsEstimate: priced?.estimate !== false,
+        isStudent,
+        studentDiscountCents: priced?.discountCents || 0,
+        studentLabel: priced?.studentLabel || null,
       })
       setSaved(row)
       setDate('')

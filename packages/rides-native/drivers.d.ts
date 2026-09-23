@@ -39,5 +39,6 @@ export function requestDriverTrip(
     pickupLabel?: string
     pickupPoint?: { latitude: number; longitude: number }
     tier?: string
+    isStudent?: boolean
   },
 ): Promise<{ id: string; status: string; driver_id: string; dropoff_label: string }>

@@ -8,6 +8,7 @@ import { setAuthNext } from '@/lib/authNext'
 import { useAuth } from '@/lib/auth'
 import { oneParam } from '@/lib/oneParam'
 import { supabase } from '@/lib/supabase'
+import { isClemsonEmail } from 'rides-native/authErrors'
 import { fetchOnlineDrivers, requestDriverTrip, type OnlineDriver } from 'rides-native/drivers'
 import { destPoint, INK, INK_SECONDARY, ORANGE, PURPLE, STADIUM, SURFACE } from 'rides-native/places.js'
 
@@ -60,6 +61,7 @@ export default function PickDriver() {
         pickupLabel: pickup,
         pickupPoint: STADIUM,
         tier,
+        isStudent: isClemsonEmail(user.email),
       })
       const driver = drivers.find((row) => row.id === selected)
       router.replace({
