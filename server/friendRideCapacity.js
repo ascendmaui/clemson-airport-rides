@@ -28,7 +28,7 @@ export async function loadDriverVehicle(sb, driverId) {
   if (!driverId) return null
   const { data } = await sb
     .from('vehicles')
-    .select('id, make, model, color, plate, seats, is_tesla, tier, type')
+    .select('id, make, model, color, plate, seats, is_tesla, tier')
     .eq('driver_id', driverId)
     .order('created_at', { ascending: false })
     .limit(1)
