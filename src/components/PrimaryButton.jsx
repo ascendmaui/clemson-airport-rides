@@ -6,6 +6,7 @@ export function PrimaryButton({
   disabled,
   className = '',
   type = 'button',
+  ...rest
 }) {
   const bg = variant === 'purple'
     ? 'linear-gradient(135deg, #522D80 0%, #6b3fa0 100%)'
@@ -18,6 +19,7 @@ export function PrimaryButton({
       className={`pressable primary-cta ${className}`}
       disabled={disabled}
       onClick={onClick}
+      {...rest}
       style={{
         width: fullWidth ? '100%' : undefined,
         padding: '15px 20px',

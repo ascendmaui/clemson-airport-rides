@@ -25,6 +25,7 @@ import { CarpoolHub } from './screens/CarpoolHub'
 import { AmbassadorScreen } from './screens/AmbassadorScreen'
 import { ToastProvider, ToastStack } from './lib/toasts'
 import { RideToastWatcher } from './components/RideToastWatcher'
+import { DriverBillingEntry } from './components/DriverBillingEntry'
 
 const PROTECTED = new Set(['driver', 'driver-onboarding', 'account', 'driver-signup', 'admin'])
 
@@ -157,6 +158,7 @@ export default function App() {
           >
             <Screen path={path} params={params} />
           </div>
+          {path === 'driver' && <DriverBillingEntry />}
         </div>
       </div>
     </ToastProvider>

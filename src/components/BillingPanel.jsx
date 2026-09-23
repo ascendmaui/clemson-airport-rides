@@ -2,10 +2,14 @@ import { useEffect, useRef, useState } from 'react'
 import { PrimaryButton } from './PrimaryButton'
 import { IconCard } from './icons'
 import { useAuth } from '../lib/auth'
-import { createSetupIntent, savePaymentMethod } from '../lib/friendRides'
-import { loadStripeJs } from '../lib/stripeElements'
+import {
+  createSetupIntent, savePaymentMethod, listPaymentMethods, updatePaymentMethod,
+} from '../lib/friendRides'
+import { loadStripeJs, PAYMENT_ELEMENT_APPEARANCE } from '../lib/stripeElements'
+import { stripeMountNode, waitForStripeMountNode } from '../lib/stripeMountTarget'
 import { getStripeConfig } from '../lib/stripeCheckout'
 import { fetchMyRideBills } from '../lib/rideBills'
+import { getHashRoute } from '../lib/navigation'
 import { supabase } from '../lib/supabase'
 import { pushToast } from '../lib/toasts'
 
@@ -28,6 +32,44 @@ function saveCardDisplay(uid, info) {
   }
 }
 
+function billingPurpose(role) {
+  if (role === 'driver') {
+    return 'Card on file when a ride charges your driver account. Friend-ride shares use this default card.'
+  }
+  if (role === 'both') {
+    return 'Default card for rider fares, airport deposits, and charges to your driver account.'
+  }
+  return 'Default card for friend rides and airport deposits.'
+}
+
+function roleLabel(role) {
+  if (role === 'driver') return 'Driver'
+  if (role === 'both') return 'Rider & driver'
+  return 'Rider'
+}
+
+function redirectSetupParams() {
+  const hashParams = getHashRoute().params || {}
+  const search = typeof window !== 'undefined'
+    ? new URLSearchParams(window.location.search)
+    : new URLSearchParams()
+  return {
+    setupIntentId: hashParams.setup_intent || search.get('setup_intent') || '',
+    status: hashParams.redirect_status || search.get('redirect_status') || '',
+  }
+}
+
+function clearSetupRedirect() {
+  if (typeof window === 'undefined') return
+  const url = new URL(window.location.href)
+  url.searchParams.delete('setup_intent')
+  url.searchParams.delete('setup_intent_client_secret')
+  url.searchParams.delete('redirect_status')
+  url.hash = '#/account?tab=billing'
+  const next = `${url.pathname}${url.search}${url.hash}`
+  window.history.replaceState(null, '', next)
+}
+
 async function markBillingActivated(userId) {
   if (!supabase || !userId) return { softFail: null }
   const now = new Date().toISOString()
@@ -41,32 +83,72 @@ async function markBillingActivated(userId) {
 
 export function BillingPanel({ profile, onProfileRefresh }) {
   const { user } = useAuth()
-  const mountRef = useRef(null)
-  const elementsRef = useRef(null)
   const stripeRef = useRef(null)
+  const elementsRef = useRef(null)
+  const paymentElementRef = useRef(null)
+  const redirectHandled = useRef(false)
+  const mountRef = useRef(null)
   const [card, setCard] = useState(() => loadCardDisplay(user?.id))
   const [activatedAt, setActivatedAt] = useState(profile?.billing_activated_at || null)
   const [hasPm, setHasPm] = useState(Boolean(profile?.stripe_default_pm_id))
+  const [methods, setMethods] = useState([])
+  const [defaultPmId, setDefaultPmId] = useState(profile?.stripe_default_pm_id || null)
   const [showForm, setShowForm] = useState(false)
+  const [clientSecret, setClientSecret] = useState(null)
+  const [formReady, setFormReady] = useState(false)
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState(null)
   const [err, setErr] = useState(null)
   const [bills, setBills] = useState([])
   const [billsErr, setBillsErr] = useState(null)
+  const [listTick, setListTick] = useState(0)
   const { configured: stripeConfigured } = getStripeConfig()
+
+  function rememberCard(info) {
+    if (info?.last4 || info?.brand) {
+      setCard(info)
+      saveCardDisplay(user?.id, info)
+      return
+    }
+    setCard(null)
+    saveCardDisplay(user?.id, null)
+  }
+
+  function applySaved(saved) {
+    const info = {
+      brand: saved.brand || saved.cardBrand || card?.brand || 'card',
+      last4: saved.last4 || saved.cardLast4 || card?.last4 || null,
+    }
+    if (info.last4) rememberCard(info)
+    setHasPm(true)
+    if (saved.paymentMethodId) setDefaultPmId(saved.paymentMethodId)
+    if (saved.billingActivatedAt) setActivatedAt(saved.billingActivatedAt)
+    setListTick((n) => n + 1)
+    pushToast({
+      kind: 'fare_charged',
+      title: 'Payment method saved',
+      body: info.last4 ? `${String(info.brand || 'Card').toUpperCase()} ···· ${info.last4}` : 'Card on file',
+      category: 'billing',
+    })
+  }
 
   useEffect(() => {
     setHasPm(Boolean(profile?.stripe_default_pm_id))
-    setActivatedAt(profile?.billing_activated_at || activatedAt)
+    if (profile?.stripe_default_pm_id) setDefaultPmId(profile.stripe_default_pm_id)
+    if (profile?.billing_activated_at) setActivatedAt(profile.billing_activated_at)
     if (profile?.stripe_card_brand || profile?.stripe_card_last4) {
-      const info = {
-        brand: profile.stripe_card_brand || card?.brand,
-        last4: profile.stripe_card_last4 || card?.last4,
-      }
-      setCard(info)
-      saveCardDisplay(user?.id, info)
+      rememberCard({
+        brand: profile.stripe_card_brand || null,
+        last4: profile.stripe_card_last4 || null,
+      })
     }
-  }, [profile, user?.id]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [
+    profile?.stripe_default_pm_id,
+    profile?.billing_activated_at,
+    profile?.stripe_card_brand,
+    profile?.stripe_card_last4,
+    user?.id,
+  ]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!user?.id) return undefined
@@ -77,69 +159,195 @@ export function BillingPanel({ profile, onProfileRefresh }) {
     return () => { alive = false }
   }, [user?.id])
 
-  async function mountElements() {
-    setErr(null)
-    setMsg(null)
-    setBusy(true)
-    try {
-      if (!stripeConfigured) throw new Error('Stripe publishable key not configured')
-      const setup = await createSetupIntent()
-      const stripe = await loadStripeJs()
-      if (!stripe) throw new Error('Stripe.js failed to load')
-      stripeRef.current = stripe
+  useEffect(() => {
+    if (!user?.id) return undefined
+    let alive = true
+    listPaymentMethods()
+      .then((data) => {
+        if (!alive) return
+        const rows = data?.methods || []
+        setMethods(rows)
+        const nextDefault = data?.defaultPmId || null
+        if (nextDefault) setDefaultPmId(nextDefault)
+        setHasPm(Boolean(nextDefault) || rows.length > 0)
+        const current = rows.find((m) => m.id === nextDefault) || rows[0]
+        if (current?.last4 || current?.brand) {
+          rememberCard({ brand: current.brand, last4: current.last4 })
+        }
+      })
+      .catch(() => {
+        /* Profile fields still show the saved card when the list route is down. */
+      })
+    return () => { alive = false }
+  }, [user?.id, listTick]) // eslint-disable-line react-hooks/exhaustive-deps
 
-      if (setup.cardBrand || setup.cardLast4) {
-        const info = { brand: setup.cardBrand, last4: setup.cardLast4 }
-        setCard(info)
-        saveCardDisplay(user?.id, info)
+  useEffect(() => {
+    if (!user?.id || redirectHandled.current) return undefined
+    const { setupIntentId, status } = redirectSetupParams()
+    if (!setupIntentId) return undefined
+    redirectHandled.current = true
+    if (status && status !== 'succeeded') {
+      setErr('Card setup did not finish. Add the card again.')
+      clearSetupRedirect()
+      return undefined
+    }
+    let alive = true
+    ;(async () => {
+      setBusy(true)
+      setErr(null)
+      try {
+        const saved = await savePaymentMethod({ setupIntentId })
+        if (!alive) return
+        applySaved(saved)
+        const act = await markBillingActivated(user.id)
+        if (act.at) setActivatedAt(act.at)
+        setMsg(act.softFail
+          ? `Card saved. billing_activated_at soft-fail: ${act.softFail}`
+          : 'Account activated — card on file.')
+        clearSetupRedirect()
+        onProfileRefresh?.()
+      } catch (e) {
+        if (alive) setErr(e.message || 'Could not save card after redirect')
+      } finally {
+        if (alive) setBusy(false)
       }
-      if (setup.hasDefaultPm) setHasPm(true)
+    })()
+    return () => { alive = false }
+  }, [user?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
-      const elements = stripe.elements({
-        clientSecret: setup.clientSecret,
-        appearance: {
-          theme: 'stripe',
-          variables: {
-            colorPrimary: '#F56600',
-            colorText: '#0B1220',
-            borderRadius: '12px',
-            fontFamily: 'Inter, system-ui, sans-serif',
-          },
-        },
-      })
-      elementsRef.current = elements
-      const paymentElement = elements.create('payment', {
-        layout: 'tabs',
-      })
-      // Clear previous mount
-      if (mountRef.current) mountRef.current.innerHTML = ''
-      paymentElement.mount(mountRef.current)
-      setShowForm(true)
-      setMsg('Add a card or Apple Pay (domain must be verified in Stripe).')
-    } catch (e) {
-      setErr(e.message || 'Could not start card setup')
-      setShowForm(false)
-    } finally {
+  // Fetch the SetupIntent only after the form is open. Mount happens in the next effect.
+  useEffect(() => {
+    if (!showForm) return undefined
+    let cancelled = false
+    setBusy(true)
+    setErr(null)
+    setFormReady(false)
+    ;(async () => {
+      try {
+        if (!stripeConfigured) throw new Error('Stripe publishable key not configured')
+        const setup = await createSetupIntent()
+        if (cancelled) return
+        if (!setup?.clientSecret) throw new Error('SetupIntent did not return a client secret')
+        if (setup.cardBrand || setup.cardLast4) {
+          rememberCard({ brand: setup.cardBrand, last4: setup.cardLast4 })
+        }
+        if (setup.hasDefaultPm) setHasPm(true)
+        setClientSecret(setup.clientSecret)
+      } catch (e) {
+        if (cancelled) return
+        setClientSecret(null)
+        setShowForm(false)
+        setErr(e.message || 'Could not start card setup')
+      } finally {
+        if (!cancelled) setBusy(false)
+      }
+    })()
+    return () => {
+      cancelled = true
       setBusy(false)
     }
+  }, [showForm, stripeConfigured]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // setShowForm(true) renders/expands the stable container first.
+  // This effect mounts only after a frame where mountRef.current is in the document.
+  useEffect(() => {
+    if (!showForm || !clientSecret) return undefined
+    let cancelled = false
+    let paymentElement = null
+    let slowTimer = 0
+
+    ;(async () => {
+      try {
+        const target = await waitForStripeMountNode(
+          () => mountRef.current,
+          () => cancelled,
+        )
+        if (cancelled) return
+        if (!target) {
+          setErr('Card form container is not in the document yet.')
+          return
+        }
+        const stripe = await loadStripeJs()
+        if (cancelled) return
+        const stillThere = stripeMountNode(mountRef.current)
+        if (!stillThere) return
+        stripeRef.current = stripe
+        const elements = stripe.elements({
+          clientSecret,
+          appearance: PAYMENT_ELEMENT_APPEARANCE,
+        })
+        paymentElement = elements.create('payment', { layout: 'tabs' })
+        paymentElement.on('ready', () => {
+          window.clearTimeout(slowTimer)
+          if (!cancelled) {
+            setFormReady(true)
+            setErr((prev) => (prev && /did not finish loading/i.test(prev) ? null : prev))
+          }
+        })
+        paymentElement.on('loaderror', (event) => {
+          if (!cancelled) setErr(event?.error?.message || 'Card form failed to load')
+        })
+        if (cancelled) return
+        paymentElement.mount(stillThere)
+        if (cancelled) {
+          try { paymentElement.unmount() } catch { /* already gone */ }
+          return
+        }
+        slowTimer = window.setTimeout(() => {
+          if (!cancelled) setErr('Card form did not finish loading. Close it and try Add card again.')
+        }, 15000)
+        elementsRef.current = elements
+        paymentElementRef.current = paymentElement
+      } catch (e) {
+        if (!cancelled) {
+          setFormReady(false)
+          setErr(e.message || 'Could not mount card form')
+        }
+      }
+    })()
+
+    return () => {
+      cancelled = true
+      setFormReady(false)
+      window.clearTimeout(slowTimer)
+      const pe = paymentElement || paymentElementRef.current
+      paymentElementRef.current = null
+      elementsRef.current = null
+      if (pe) {
+        try { pe.unmount() } catch { /* already unmounted */ }
+      }
+    }
+  }, [showForm, clientSecret])
+
+  function openCardForm() {
+    setErr(null)
+    setMsg(null)
+    setFormReady(false)
+    setClientSecret(null)
+    // Show the container before any Stripe mount. The effect mounts on the next frame.
+    setShowForm(true)
+  }
+
+  function closeCardForm() {
+    setShowForm(false)
+    setClientSecret(null)
+    setFormReady(false)
   }
 
   async function onSaveCard() {
-    if (!stripeRef.current || !elementsRef.current) {
-      setErr('Card form not ready')
+    if (!stripeRef.current || !elementsRef.current || !formReady) {
+      setErr('Card form is still loading')
       return
     }
     setBusy(true)
     setErr(null)
     setMsg(null)
     try {
-      const stripe = stripeRef.current
-      const elements = elementsRef.current
-      const { error, setupIntent } = await stripe.confirmSetup({
-        elements,
+      const { error, setupIntent } = await stripeRef.current.confirmSetup({
+        elements: elementsRef.current,
         redirect: 'if_required',
         confirmParams: {
-          return_url: `${window.location.origin}${window.location.pathname}#/account`,
+          return_url: `${window.location.origin}${window.location.pathname}#/account?tab=billing`,
         },
       })
       if (error) throw new Error(error.message || 'Card confirmation failed')
@@ -150,14 +358,7 @@ export function BillingPanel({ profile, onProfileRefresh }) {
           : setupIntent?.payment_method?.id
 
       const saved = await savePaymentMethod({ paymentMethodId, setupIntentId })
-      const info = {
-        brand: saved.brand || saved.cardBrand || card?.brand || 'card',
-        last4: saved.last4 || saved.cardLast4 || card?.last4 || '••••',
-      }
-      setCard(info)
-      saveCardDisplay(user?.id, info)
-      setHasPm(true)
-
+      applySaved(saved)
       const act = await markBillingActivated(user.id)
       if (act.at) setActivatedAt(act.at)
       if (act.softFail) {
@@ -165,13 +366,7 @@ export function BillingPanel({ profile, onProfileRefresh }) {
       } else {
         setMsg('Account activated — card on file.')
       }
-      setShowForm(false)
-      pushToast({
-        kind: 'fare_charged',
-        title: 'Payment method saved',
-        body: info.last4 ? `${String(info.brand || 'Card').toUpperCase()} ···· ${info.last4}` : 'Card on file',
-        category: 'billing',
-      })
+      closeCardForm()
       onProfileRefresh?.()
     } catch (e) {
       setErr(e.message || 'Save failed')
@@ -180,7 +375,48 @@ export function BillingPanel({ profile, onProfileRefresh }) {
     }
   }
 
+  async function onUseCard(paymentMethodId) {
+    setBusy(true)
+    setErr(null)
+    setMsg(null)
+    try {
+      const saved = await updatePaymentMethod({ action: 'default', paymentMethodId })
+      setDefaultPmId(saved.defaultPmId || paymentMethodId)
+      setMethods(saved.methods || methods)
+      setHasPm(true)
+      if (saved.last4 || saved.brand) rememberCard({ brand: saved.brand, last4: saved.last4 })
+      setMsg('This card will be charged for ride fares.')
+      onProfileRefresh?.()
+    } catch (e) {
+      setErr(e.message || 'Could not set default card')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function onRemoveCard(paymentMethodId) {
+    setBusy(true)
+    setErr(null)
+    setMsg(null)
+    try {
+      const saved = await updatePaymentMethod({ action: 'detach', paymentMethodId })
+      const rows = saved.methods || []
+      setMethods(rows)
+      setDefaultPmId(saved.defaultPmId || null)
+      setHasPm(Boolean(saved.defaultPmId) || rows.length > 0)
+      if (saved.last4 || saved.brand) rememberCard({ brand: saved.brand, last4: saved.last4 })
+      else if (!rows.length) rememberCard(null)
+      setMsg(rows.length ? 'Card removed.' : 'No card on file.')
+      onProfileRefresh?.()
+    } catch (e) {
+      setErr(e.message || 'Could not remove card')
+    } finally {
+      setBusy(false)
+    }
+  }
+
   const brandLabel = card?.brand ? String(card.brand).toUpperCase() : null
+  const showSavedSummary = !methods.length && (hasPm || card?.last4)
 
   return (
     <div>
@@ -206,14 +442,80 @@ export function BillingPanel({ profile, onProfileRefresh }) {
             <IconCard size={24} />
           </div>
           <div style={{ flex: 1 }}>
-            <div style={{ fontWeight: 800, color: 'var(--purple)' }}>Payment method</div>
+            <div style={{ fontWeight: 800, color: 'var(--purple)' }}>
+              Payment method
+              <span style={{ marginLeft: 8, fontSize: 11, fontWeight: 700, color: 'var(--orange)' }}>
+                {roleLabel(profile?.role)}
+              </span>
+            </div>
             <div style={{ fontSize: 12, color: 'var(--ink-tertiary)' }}>
-              Saved card for friend rides & airport deposits
+              {billingPurpose(profile?.role)}
             </div>
           </div>
         </div>
 
-        {hasPm || card?.last4 ? (
+        {methods.length > 0 && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 12 }}>
+            {methods.map((m) => {
+              const inUse = m.id === defaultPmId
+              const label = `${String(m.brand || 'Card').toUpperCase()} ···· ${m.last4 || 'saved'}`
+              return (
+                <div
+                  key={m.id}
+                  style={{
+                    padding: 14,
+                    borderRadius: 14,
+                    background: 'rgba(255,255,255,0.65)',
+                    border: inUse ? '1.5px solid rgba(245,102,0,0.55)' : '1px solid rgba(82,45,128,0.12)',
+                  }}
+                >
+                  <div style={{ fontWeight: 700, color: 'var(--ink)' }}>{label}</div>
+                  <div style={{ fontSize: 12, color: 'var(--ink-tertiary)', marginTop: 4 }}>
+                    {inUse ? 'Used for ride charges' : 'Saved on your Stripe customer'}
+                    {activatedAt && inUse ? ` · activated ${new Date(activatedAt).toLocaleDateString()}` : ''}
+                  </div>
+                  <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+                    {!inUse && (
+                      <button
+                        type="button"
+                        className="pressable"
+                        disabled={busy}
+                        onClick={() => onUseCard(m.id)}
+                        style={{
+                          padding: '8px 12px',
+                          borderRadius: 12,
+                          fontWeight: 700,
+                          color: '#fff',
+                          background: 'linear-gradient(135deg, var(--orange), #ff7a1a)',
+                        }}
+                      >
+                        Use this card
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      className="pressable"
+                      disabled={busy}
+                      onClick={() => onRemoveCard(m.id)}
+                      style={{
+                        padding: '8px 12px',
+                        borderRadius: 12,
+                        fontWeight: 700,
+                        color: 'var(--ink-secondary)',
+                        border: '1px solid rgba(82,45,128,0.18)',
+                        background: 'rgba(255,255,255,0.7)',
+                      }}
+                    >
+                      Remove
+                    </button>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
+
+        {showSavedSummary && (
           <div
             style={{
               padding: 14,
@@ -229,23 +531,34 @@ export function BillingPanel({ profile, onProfileRefresh }) {
             <div style={{ fontSize: 12, color: 'var(--ink-tertiary)', marginTop: 4 }}>
               {activatedAt
                 ? `Account activated ${new Date(activatedAt).toLocaleDateString()}`
-                : hasPm
-                  ? 'Card on file — tap Activate to confirm'
-                  : 'Card details cached locally'}
+                : 'Card on file — used for ride charges'}
             </div>
           </div>
-        ) : (
+        )}
+
+        {!showSavedSummary && methods.length === 0 && (
           <div style={{ fontSize: 13, color: 'var(--ink-secondary)', marginBottom: 12, lineHeight: 1.45 }}>
             No card on file yet. Add a payment method to activate your account for auto-charged friend rides.
           </div>
         )}
 
+        <div
+          ref={mountRef}
+          data-testid="stripe-payment-mount"
+          style={{
+            marginBottom: showForm ? 12 : 0,
+            minHeight: showForm ? 80 : 0,
+            maxHeight: showForm ? 'none' : 0,
+            overflow: showForm ? 'visible' : 'hidden',
+          }}
+        />
+
         {!showForm ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            <PrimaryButton onClick={mountElements} disabled={busy || !stripeConfigured}>
-              {busy ? 'Loading…' : hasPm || card?.last4 ? 'Replace card' : 'Add card'}
+            <PrimaryButton onClick={openCardForm} disabled={busy || !stripeConfigured} data-testid="add-card">
+              {busy ? 'Loading…' : 'Add card'}
             </PrimaryButton>
-            {(hasPm || card?.last4) && !activatedAt && (
+            {(hasPm || card?.last4 || methods.length > 0) && !activatedAt && (
               <button
                 type="button"
                 className="pressable"
@@ -282,17 +595,18 @@ export function BillingPanel({ profile, onProfileRefresh }) {
           </div>
         ) : (
           <div>
-            <div ref={mountRef} style={{ marginBottom: 12, minHeight: 80 }} />
-            <PrimaryButton onClick={onSaveCard} disabled={busy}>
+            {!formReady && !err && (
+              <div style={{ fontSize: 13, color: 'var(--ink-tertiary)', marginBottom: 10 }}>
+                {busy ? 'Preparing secure card form…' : 'Loading card form…'}
+              </div>
+            )}
+            <PrimaryButton onClick={onSaveCard} disabled={busy || !formReady} data-testid="save-card">
               {busy ? 'Saving…' : activatedAt || hasPm ? 'Save & replace' : 'Save card & activate'}
             </PrimaryButton>
             <button
               type="button"
               className="pressable"
-              onClick={() => {
-                setShowForm(false)
-                if (mountRef.current) mountRef.current.innerHTML = ''
-              }}
+              onClick={closeCardForm}
               style={{ display: 'block', width: '100%', marginTop: 10, fontWeight: 600, color: 'var(--ink-secondary)' }}
             >
               Cancel
