@@ -63,11 +63,13 @@ function TripDetail({ trip }) {
   return (
     <div style={{ marginTop: 10, paddingTop: 4 }} data-testid="trip-breakdown">
       <Line label="Fare" value={money(trip.fareCents)} />
-      <Line label="Platform fee" value={`−${money(trip.platformFeeCents)}`} hint="20% of fare after refunds" />
       {trip.refundCents > 0 ? <Line label="Refund" value={`−${money(trip.refundCents)}`} /> : null}
-      {trip.tipCents != null ? <Line label="Tip" value={money(trip.tipCents)} hint="Tips are not reduced by the platform fee" /> : null}
+      {trip.tipCents != null ? <Line label="Tip" value={money(trip.tipCents)} /> : null}
       {trip.waitFeeCents != null ? <Line label="Wait fee" value={money(trip.waitFeeCents)} /> : null}
-      <Line label="Your net" value={money(trip.earnedCents)} strong />
+      {trip.cancelFeeCents != null ? <Line label="Cancel fee" value={money(trip.cancelFeeCents)} /> : null}
+      <Line label="Gross" value={money(trip.grossCents)} />
+      <Line label="Platform fee" value={`−${money(trip.platformFeeCents)}`} hint="20% of fares, tips, wait, and cancel fees" />
+      <Line label="Your net" value={money(trip.earnedCents)} hint="80%" strong />
       <Line label="Distance" value={formatMiles(trip.distanceM, { approximate: trip.distanceApproximate })} />
       <Line label="Duration" value={formatDuration(trip.durationS, { approximate: trip.durationApproximate })} />
       {trip.fareParts?.length > 0 && (
@@ -124,7 +126,7 @@ export function DriverEarningsView({
         <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--orange)', letterSpacing: 0.3 }}>Your net</div>
         <h1 style={{ fontSize: 28, fontWeight: 800, letterSpacing: -0.6, color: 'var(--purple)', marginTop: 2 }}>Earnings</h1>
         <p style={{ fontSize: 13, color: 'var(--ink-secondary)', marginTop: 4, lineHeight: 1.45 }}>
-          After the 20% platform fee. Tips stay yours.
+          Your 80% after the 20% platform fee on fares, tips, wait, and cancel fees.
         </p>
 
         {error ? (
@@ -141,6 +143,9 @@ export function DriverEarningsView({
               <div style={{ marginTop: 6, fontSize: 13, color: 'var(--ink-secondary)' }}>
                 {summary.weekTripCount} {summary.weekTripCount === 1 ? 'trip' : 'trips'}
                 {summary.weekTipsCents != null ? ` · Tips ${money(summary.weekTipsCents)}` : ''}
+              </div>
+              <div style={{ marginTop: 4, fontSize: 12, color: 'var(--ink-tertiary)' }}>
+                Gross {money(summary.weekGrossCents)} · platform cut {money(summary.weekPlatformFeeCents)}
               </div>
             </div>
             <div style={{ textAlign: 'right' }}>
@@ -213,7 +218,9 @@ export function DriverEarningsView({
                     <span style={{ fontSize: 12, color: 'var(--ink-tertiary)', fontWeight: 700 }}>{formatTripWhen(trip.completedAt, timeZone)}</span>
                     <strong style={{ color: 'var(--orange)' }}>{money(trip.earnedCents)}</strong>
                   </div>
-                  <div style={{ marginTop: 4, fontSize: 14, fontWeight: 700, color: 'var(--ink)' }}>{trip.routeLabel}</div>
+                  <div style={{ marginTop: 4, fontSize: 14, fontWeight: 700, color: 'var(--ink)' }}>
+                    {trip.status === 'canceled' ? 'Canceled · ' : ''}{trip.routeLabel}
+                  </div>
                   {trip.riderFirstName ? (
                     <div style={{ marginTop: 2, fontSize: 12, color: 'var(--ink-secondary)' }}>{trip.riderFirstName}</div>
                   ) : null}
@@ -268,11 +275,12 @@ function TaxSummary({ tax, years, year, onYear, onDownload }) {
       <div style={{ marginTop: 8 }}>
         <Line label="Gross fares" value={money(tax.grossFareCents)} />
         {tax.refundCents > 0 ? <Line label="Refunds" value={`−${money(tax.refundCents)}`} /> : null}
-        <Line label="Platform fees" value={`−${money(tax.platformFeeCents)}`} hint="20% of fares after refunds" />
-        <Line label="Net fares" value={money(tax.netFareCents)} />
-        <Line label="Tips" value={trackedMoney(tax.tipsCents)} hint="Not reduced by the platform fee" />
+        <Line label="Tips" value={trackedMoney(tax.tipsCents)} />
         <Line label="Wait fees" value={trackedMoney(tax.waitFeeCents)} />
-        <Line label="Driver net" value={money(tax.driverNetCents)} strong />
+        <Line label="Cancel fees" value={trackedMoney(tax.cancelFeeCents)} />
+        <Line label="Gross" value={money(tax.grossCents)} />
+        <Line label="Platform fees" value={`−${money(tax.platformFeeCents)}`} hint="20% of fares, tips, wait, and cancel fees" />
+        <Line label="Driver net" value={money(tax.driverNetCents)} hint="80%" strong />
         <Line label="Trips" value={String(tax.tripCount)} />
       </div>
       <p style={{ marginTop: 12, fontSize: 12, color: 'var(--ink-secondary)', lineHeight: 1.45 }} data-testid="tax-disclaimer">
@@ -310,16 +318,17 @@ function TaxPrintSheet({ tax, timeZone }) {
     <article className="tax-print-sheet" aria-hidden="true">
       <h1>Clemson RIDES · {tax.year} driver earnings summary</h1>
       <p>{tax.disclaimer}</p>
-      <p>Timezone: {timeZone}. Platform fee is 20% of each fare after refunds. Tips are listed separately and are not reduced by that fee.</p>
+      <p>Timezone: {timeZone}. Platform fee is 20% of fares, tips, wait fees, and cancel fees. Driver net is the remaining 80%.</p>
       <table>
         <tbody>
           <tr><th>Gross fares</th><td>{money(tax.grossFareCents)}</td></tr>
           <tr><th>Refunds</th><td>{money(tax.refundCents)}</td></tr>
-          <tr><th>Platform fees (20%)</th><td>{money(tax.platformFeeCents)}</td></tr>
-          <tr><th>Net fares</th><td>{money(tax.netFareCents)}</td></tr>
           <tr><th>Tips</th><td>{trackedMoney(tax.tipsCents)}</td></tr>
           <tr><th>Wait fees</th><td>{trackedMoney(tax.waitFeeCents)}</td></tr>
-          <tr><th>Driver net</th><td>{money(tax.driverNetCents)}</td></tr>
+          <tr><th>Cancel fees</th><td>{trackedMoney(tax.cancelFeeCents)}</td></tr>
+          <tr><th>Gross</th><td>{money(tax.grossCents)}</td></tr>
+          <tr><th>Platform fees (20%)</th><td>{money(tax.platformFeeCents)}</td></tr>
+          <tr><th>Driver net (80%)</th><td>{money(tax.driverNetCents)}</td></tr>
           <tr><th>Trip count</th><td>{tax.tripCount}</td></tr>
         </tbody>
       </table>
@@ -387,6 +396,8 @@ export function DriverEarnings() {
   const years = taxYears(trips, new Date(), timeZone)
   const summary = report?.summary || {
     weekEarningsCents: 0,
+    weekGrossCents: 0,
+    weekPlatformFeeCents: 0,
     weekTripCount: 0,
     weekTipsCents: null,
     todayEarningsCents: 0,

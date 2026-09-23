@@ -53,7 +53,7 @@ export default async function handler(req, res) {
     .from('trips')
     .select('id')
     .eq('driver_id', user.id)
-    .eq('status', 'completed')
+    .in('status', ['completed', 'canceled'])
     .order('completed_at', { ascending: false })
     .limit(1000)
 
