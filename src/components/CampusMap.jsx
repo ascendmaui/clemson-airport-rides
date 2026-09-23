@@ -131,11 +131,14 @@ export function CampusMap({
   showMapTypeControl = false,
   onMapTypeChange,
   route = null,
+  routeSecondary = null,
+  areaCircles = null,
   dragPin = false,
   onPinMove,
   marker = STADIUM,
   driverPosition = null,
   pickupPosition = null,
+  dropoffPosition = null,
   selfPosition = null,
   animateDriver = false,
 }) {
@@ -220,6 +223,26 @@ export function CampusMap({
     if (!route?.length) return null
     return route.map((p) => toLatLng(p))
   }, [route])
+  const secondaryPath = useMemo(() => {
+    if (!routeSecondary?.length) return null
+    return routeSecondary.map((p) => toLatLng(p))
+  }, [routeSecondary])
+  const dropoff = useMemo(
+    () => (dropoffPosition ? toLatLng(dropoffPosition) : null),
+    [dropoffPosition?.[0], dropoffPosition?.[1]],
+  )
+  const areas = useMemo(() => {
+    if (!areaCircles?.length) return []
+    return areaCircles
+      .map((c, i) => ({
+        id: c.id || `area-${i}`,
+        lat: Number(c.lat),
+        lng: Number(c.lng),
+        radius: Number(c.radius) || 450,
+        color: c.color || PURPLE,
+      }))
+      .filter((c) => Number.isFinite(c.lat) && Number.isFinite(c.lng))
+  }, [areaCircles])
 
   const mapRef = useRef(null)
   const onLoad = useCallback((map) => {
@@ -295,13 +318,31 @@ export function CampusMap({
             }}
           />
         ))}
-        {path && (
-          <Polyline path={path} options={{ strokeColor: PURPLE, strokeWeight: 4, strokeOpacity: 0.85 }} />
+        {areas.map((c) => (
+          <Circle
+            key={c.id}
+            center={{ lat: c.lat, lng: c.lng }}
+            radius={c.radius}
+            options={{
+              strokeColor: c.color,
+              strokeOpacity: 0.8,
+              strokeWeight: 1,
+              fillColor: c.color,
+              fillOpacity: 0.18,
+            }}
+          />
+        ))}
+        {secondaryPath && (
+          <Polyline path={secondaryPath} options={{ strokeColor: ORANGE, strokeWeight: 4, strokeOpacity: 0.8 }} />
         )}
-        {!driverTarget && !pickup && !self && (
+        {path && (
+          <Polyline path={path} options={{ strokeColor: PURPLE, strokeWeight: 5, strokeOpacity: 0.9 }} />
+        )}
+        {!areas.length && !driverTarget && !pickup && !self && (
           <Marker position={primary} icon={showHeat ? purpleIcon : orangeIcon} />
         )}
-        {pickup && <Marker position={pickup} icon={purpleIcon} title="Pickup" />}
+        {!areas.length && pickup && <Marker position={pickup} icon={purpleIcon} title="Pickup" />}
+        {!areas.length && dropoff && <Marker position={dropoff} icon={orangeIcon} title="Dropoff" />}
         {self && <Marker position={self} icon={purpleIcon} title="You" />}
         {(animatedDriver || driverTarget) && (
           <Marker position={animatedDriver || driverTarget} icon={driverIcon} title="Driver" />

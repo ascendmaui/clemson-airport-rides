@@ -7,6 +7,7 @@ import { useAuth } from '../lib/auth'
 import { navigate } from '../lib/navigation'
 import { formatUsdFromCents } from '../lib/pricing'
 import { supabase } from '../lib/supabase'
+import { displayFirstName } from '../lib/privacyDisplay'
 import {
   FRIEND_PLACES, confirmFriendCharges, createFriendRide, decodePolyline,
   formatEta, formatMiles, inviteUrl, getFriendRide, joinFriendRide, recomputeFriendRide,
@@ -375,7 +376,7 @@ export function FriendRideScreen({ token: tokenProp, kind: kindProp = 'friends' 
             </div>
             {(ride.participants || []).map((p) => (
               <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid var(--border)', fontSize: 13 }}>
-                <span>{p.display_name} · {p.status}</span>
+                <span>{displayFirstName(p.display_name, 'Rider')} · {p.status}</span>
                 <span style={{ fontWeight: 700 }}>{p.fare_cents != null ? formatUsdFromCents(p.fare_cents) : '-'}</span>
               </div>
             ))}
@@ -395,7 +396,7 @@ export function FriendRideScreen({ token: tokenProp, kind: kindProp = 'friends' 
           {(ride?.participants || []).map((p) => (
             <div key={p.id} style={{ padding: '8px 0', borderBottom: '1px solid var(--border)', fontSize: 13 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                <strong>{p.display_name}</strong>
+                <strong>{displayFirstName(p.display_name, 'Rider')}</strong>
                 <span style={{ color: 'var(--ink-tertiary)' }}>· {p.status}</span>
                 {p.student_verified_at && (
                   <span style={{

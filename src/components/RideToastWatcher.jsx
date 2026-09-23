@@ -7,6 +7,7 @@ import { useAuth } from '../lib/auth'
 import { supabase } from '../lib/supabase'
 import { pushToast } from '../lib/toasts'
 import { fetchNotificationPrefs } from '../lib/notificationPrefs'
+import { navigate } from '../lib/navigation'
 import { useToasts } from '../lib/toasts'
 
 const TRIP_STATUS_KIND = {
@@ -107,6 +108,9 @@ export function RideToastWatcher() {
         title: titles[kind] || 'Trip update',
         body: tripBody(row),
       })
+      if (row.status === 'completed' && row.rider_id === user.id) {
+        navigate('rate', { trip: row.id })
+      }
     }
 
     function onFriendRow(row) {
@@ -188,7 +192,7 @@ export function RideToastWatcher() {
       try {
         const { data: trips } = await supabase
           .from('trips')
-          .select('id, status, pickup_label, dropoff_label')
+          .select('id, status, pickup_label, dropoff_label, rider_id, driver_id')
           .or(`rider_id.eq.${user.id},driver_id.eq.${user.id}`)
           .order('requested_at', { ascending: false })
           .limit(8)

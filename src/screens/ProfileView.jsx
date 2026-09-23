@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useAuth } from '../lib/auth'
 import { getHashRoute } from '../lib/navigation'
 import { fetchFullProfile } from '../lib/profiles'
+import { displayFirstName } from '../lib/privacyDisplay'
 
 export function ProfileView() {
   const { user } = useAuth()
@@ -45,6 +46,7 @@ export function ProfileView() {
     .map((s) => s.trim())
     .filter(Boolean)
   const gallery = (profile.gallery || []).filter((g) => g.public_url)
+  const peerName = displayFirstName(profile.full_name, 'Rider')
 
   return (
     <div
@@ -87,7 +89,7 @@ export function ProfileView() {
               flexShrink: 0,
             }}
           >
-            {!profile.avatar_url && (profile.full_name || '?').slice(0, 1).toUpperCase()}
+            {!profile.avatar_url && peerName.slice(0, 1).toUpperCase()}
           </div>
           <div>
             <div
@@ -101,7 +103,7 @@ export function ProfileView() {
               CLEMSON RIDES
             </div>
             <h1 style={{ fontSize: 24, fontWeight: 800, color: 'var(--purple)', letterSpacing: -0.3 }}>
-              {profile.full_name || 'Rider'}
+              {peerName}
             </h1>
             <div style={{ fontSize: 13, color: 'var(--ink-secondary)' }}>
               {profile.role || 'rider'}
@@ -110,6 +112,12 @@ export function ProfileView() {
             <div style={{ marginTop: 4, fontWeight: 700 }}>
               ★ {avg}{' '}
               <span style={{ fontWeight: 500, color: 'var(--ink-tertiary)' }}>({count})</span>
+              {profile.standing === 'watch' && (
+                <span style={{ marginLeft: 8, fontSize: 12, fontWeight: 700, color: 'var(--orange)' }}>Low rating</span>
+              )}
+              {profile.standing === 'restricted' && (
+                <span style={{ marginLeft: 8, fontSize: 12, fontWeight: 700, color: 'var(--danger)' }}>Not available for new rides</span>
+              )}
             </div>
           </div>
         </div>

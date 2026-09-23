@@ -39,6 +39,7 @@ export function getHashRoute() {
   }
   if (path === 'profile' && segments[1] && !params.id) params.id = segments[1]
   if (path === 'rate' && segments[1] && !params.trip) params.trip = segments[1]
+  if (path === 'receipt' && segments[1] && !params.trip) params.trip = segments[1]
 
   // Persist share/friends token so a later hash clear (auth) can recover.
   if (typeof window !== 'undefined' && params.token && (path === 'share' || path === 'live')) {

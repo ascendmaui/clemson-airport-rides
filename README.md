@@ -30,6 +30,18 @@ npm run build
 npm run dev
 ```
 
+## Two-way ratings
+
+Riders rate drivers and drivers rate riders on the post-ride screen (`#/rate?trip=`). One rating per person per completed trip. Both directions write `ratings` and the refresh triggers recompute `profiles.rating_avg` and `profiles.rating_count` for whoever was rated, then set `profiles.standing`.
+
+| `standing` | Rule | Effect |
+| --- | --- | --- |
+| `good` | Anything else, including fewer ratings than the floors below | Matchable |
+| `watch` | Average **below 3.0** and at least **3** ratings | Soft flag. Still matchable. UI shows “Low rating”. |
+| `restricted` | Average **below 2.5** and at least **5** ratings | Hidden from match. Drivers drop out of the online list. Riders are not offered. `profiles.standing` is the admin flag. |
+
+Clients cannot overwrite `standing`, `rating_avg`, or `rating_count` on their own profile. Thresholds match `src/lib/standing.js` and `public.profile_standing`.
+
 ## Mobile
 
 See `apps/mobile` (Expo + EAS). Supabase Auth — no Clerk.

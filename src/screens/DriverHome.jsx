@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useAuth } from '../lib/auth'
 import { CampusMap, CLEMSON } from '../components/CampusMap'
 import { HEAT_WINDOWS } from '../lib/rideDemand'
@@ -6,6 +6,17 @@ import { PurpleAcceptButton } from '../components/PrimaryButton'
 import { navigate } from '../lib/navigation'
 import { setDriverOnline, subscribeTrips, supabase } from '../lib/supabase'
 import { publishDriverLocation } from '../lib/driverTrack'
+import { pushToast } from '../lib/toasts'
+import { fetchNotificationPrefs, saveNotificationPrefs } from '../lib/notificationPrefs'
+import { playRideRequestAlert, shouldAlertForRide } from '../lib/rideAlert'
+import {
+  claimTrip, enqueueClaimedTrip, fetchOfferPreview, finishQueuedTrip,
+  listPasses, listQueue, NEAR_DROPOFF_MINUTES, passOffer, QUEUE_CAP, takeNextQueued,
+} from '../lib/driverOffers'
+import { estimateLeg, fetchDrivingLeg, minutesUntilDropoff } from '../lib/rideGeometry'
+import { coarsePlaceLabel } from '../lib/tripPrivacy'
+import { DriverOfferSheet } from '../components/DriverOfferSheet'
+import { QuietHoursCard } from '../components/QuietHoursCard'
 
 function centsToDollars(cents) {
   if (cents == null) return '—'
@@ -46,25 +57,51 @@ function DriverShell({ driverId }) {
   const [showSurge, setShowSurge] = useState(true)
   const [heatWindow, setHeatWindow] = useState('now')
   const [heatMeta, setHeatMeta] = useState(null)
+  const [queue, setQueue] = useState([])
+  const [passed, setPassed] = useState([])
+  const [prefs, setPrefs] = useState(null)
+  const [prefsReady, setPrefsReady] = useState(false)
+  const [riderPreview, setRiderPreview] = useState(null)
+  const [estimate, setEstimate] = useState(null)
+  const [offerBusy, setOfferBusy] = useState(false)
+  const [offerError, setOfferError] = useState(null)
+  const [nextPrompt, setNextPrompt] = useState(null)
+  const alerted = useRef(new Set())
+  const activeRef = useRef(null)
+  const nearRef = useRef(false)
+  const passedRef = useRef(new Set())
+  const queueRef = useRef([])
+  const onlineRef = useRef(true)
+  const prefsRef = useRef(null)
   const silverProgress = 2
   const silverTotal = 4
 
   const loadEarnings = useCallback(async () => {
     if (!supabase || !driverId) return
-    const { data, error } = await supabase
+    let res = await supabase
       .from('trips')
-      .select('id, fare_cents, dropoff_label, completed_at')
+      .select('id, fare_cents, tip_cents, dropoff_label, completed_at')
       .eq('driver_id', driverId)
       .eq('status', 'completed')
       .order('completed_at', { ascending: false })
       .limit(20)
+    if (res.error && /tip_cents|column|schema cache/i.test(res.error.message || '')) {
+      res = await supabase
+        .from('trips')
+        .select('id, fare_cents, dropoff_label, completed_at')
+        .eq('driver_id', driverId)
+        .eq('status', 'completed')
+        .order('completed_at', { ascending: false })
+        .limit(20)
+    }
+    const { data, error } = res
     if (error) {
       console.error('[earnings]', error.message)
       return
     }
     const rows = data || []
     setRecentCompleted(rows)
-    setEarningsCents(rows.reduce((sum, t) => sum + (Number(t.fare_cents) || 0), 0))
+    setEarningsCents(rows.reduce((sum, t) => sum + (Number(t.fare_cents) || 0) + (Number(t.tip_cents) || 0), 0))
   }, [driverId])
 
   useEffect(() => {
@@ -99,35 +136,94 @@ function DriverShell({ driverId }) {
     loadEarnings()
   }, [loadEarnings])
 
-  // Load open offers (searching/offered) — Realtime alone misses rows already open.
   useEffect(() => {
-    if (!supabase) return undefined
-    let alive = true
-    supabase
-      .from('trips')
-      .select('*')
-      .in('status', ['searching', 'offered'])
-      .order('requested_at', { ascending: false })
-      .limit(1)
-      .then(async ({ data, error }) => {
-        if (!alive || error) return
-        const row = data?.[0]
-        if (!row) return
-        setOffer(row)
-        if (row.status === 'searching') {
-          await supabase
-            .from('trips')
-            .update({ status: 'offered' })
-            .eq('id', row.id)
-            .eq('status', 'searching')
-          await writeTripEvent(row.id, 'offered', { source: 'driver_home_poll' })
-          setOffer({ ...row, status: 'offered' })
-        }
-      })
-    return () => {
-      alive = false
+    activeRef.current = activeTrip
+  }, [activeTrip])
+  useEffect(() => {
+    passedRef.current = new Set(passed)
+  }, [passed])
+  useEffect(() => {
+    queueRef.current = queue
+  }, [queue])
+  useEffect(() => {
+    onlineRef.current = online
+  }, [online])
+  useEffect(() => {
+    prefsRef.current = prefs
+  }, [prefs])
+
+  const refreshQueue = useCallback(async () => {
+    if (!driverId) return
+    const [q, p] = await Promise.all([listQueue(driverId), listPasses(driverId)])
+    setQueue(q)
+    setPassed(p)
+  }, [driverId])
+
+  useEffect(() => {
+    if (!driverId) return undefined
+    refreshQueue()
+    fetchNotificationPrefs(driverId).then(({ prefs: next }) => {
+      setPrefs(next)
+      setPrefsReady(true)
+    })
+    return undefined
+  }, [driverId, refreshQueue])
+
+  const minutesToDrop = useMemo(() => {
+    if (!activeTrip || activeTrip.status !== 'in_progress') return Infinity
+    return minutesUntilDropoff({
+      selfPos,
+      dropoff: activeTrip.dropoff_lat != null ? [Number(activeTrip.dropoff_lat), Number(activeTrip.dropoff_lng)] : null,
+      pickup: activeTrip.pickup_lat != null ? [Number(activeTrip.pickup_lat), Number(activeTrip.pickup_lng)] : null,
+      acceptedAt: activeTrip.accepted_at,
+      status: activeTrip.status,
+    })
+  }, [activeTrip, selfPos])
+  const canQueue = Boolean(activeTrip) && minutesToDrop < NEAR_DROPOFF_MINUTES
+  useEffect(() => {
+    nearRef.current = canQueue
+  }, [canQueue])
+
+  const considerOffer = useCallback(async (row) => {
+    if (!row?.id || !onlineRef.current) return
+    if (!['searching', 'offered'].includes(row.status)) return
+    if (row.driver_id && row.driver_id !== driverId) return
+    if (passedRef.current.has(row.id)) return
+    if (queueRef.current.some((q) => q.trip_id === row.id)) return
+    const current = activeRef.current
+    if (current && ACTIVE_STATUSES.includes(current.status) && !nearRef.current) return
+    if (current?.id === row.id) return
+    const preview = await fetchOfferPreview(row.id)
+    if (preview.standing === 'restricted') return
+    setRiderPreview(preview)
+    setOffer(row)
+    if (row.status === 'searching' && supabase) {
+      supabase.from('trips').update({ status: 'offered' }).eq('id', row.id).eq('status', 'searching')
+      writeTripEvent(row.id, 'offered', { source: 'driver_home' })
     }
   }, [driverId])
+
+  useEffect(() => {
+    if (!supabase || !driverId) return undefined
+    let alive = true
+    async function pollOffers() {
+      const { data, error } = await supabase
+        .from('trips')
+        .select('*')
+        .in('status', ['searching', 'offered'])
+        .order('requested_at', { ascending: false })
+        .limit(8)
+      if (!alive || error) return
+      const row = (data || []).find((t) => !passedRef.current.has(t.id) && !queueRef.current.some((q) => q.trip_id === t.id))
+      if (row) considerOffer(row)
+    }
+    pollOffers()
+    const timer = setInterval(pollOffers, 8000)
+    return () => {
+      alive = false
+      clearInterval(timer)
+    }
+  }, [driverId, considerOffer])
 
   // Poll/load active trips for this driver so E2E accepted trips appear without re-offer.
   useEffect(() => {
@@ -140,9 +236,13 @@ function DriverShell({ driverId }) {
         .eq('driver_id', driverId)
         .in('status', ACTIVE_STATUSES)
         .order('accepted_at', { ascending: false })
-        .limit(1)
+        .limit(6)
       if (!alive || error) return
-      const row = data?.[0]
+      const queuedIds = new Set((queueRef.current || []).filter((q) => q.status === 'queued').map((q) => q.trip_id))
+      const rows = (data || []).filter((t) => !queuedIds.has(t.id))
+      const rank = { in_progress: 0, arriving: 1, accepted: 2 }
+      rows.sort((a, b) => (rank[a.status] ?? 9) - (rank[b.status] ?? 9))
+      const row = rows[0]
       if (row) {
         setActiveTrip(row)
         setOffer((prev) => (prev?.id === row.id ? null : prev))
@@ -161,71 +261,105 @@ function DriverShell({ driverId }) {
       const row = payload?.new || payload?.record
       if (!row) return
       if (row.status === 'searching' || row.status === 'offered') {
-        if (!activeTrip) {
-          setOffer(row)
-          if (row.status === 'searching' && supabase) {
-            writeTripEvent(row.id, 'offered', { source: 'realtime' })
-            supabase.from('trips').update({ status: 'offered' }).eq('id', row.id).eq('status', 'searching')
-          }
-        }
+        considerOffer(row)
       }
-      if (row.status === 'accepted' && row.driver_id === driverId) {
+      if (row.status === 'accepted' && row.driver_id === driverId && !queueRef.current.some((q) => q.trip_id === row.id && q.status === 'queued')) {
         setActiveTrip(row)
         setOffer((prev) => (prev?.id === row.id ? null : prev))
       }
-      if (ACTIVE_STATUSES.includes(row.status) && row.driver_id === driverId) {
+      if (ACTIVE_STATUSES.includes(row.status) && row.driver_id === driverId && !queueRef.current.some((q) => q.trip_id === row.id)) {
         setActiveTrip(row)
       }
       if (row.status === 'completed' && row.driver_id === driverId) {
-        setActiveTrip(null)
+        if (activeRef.current?.id === row.id) setActiveTrip(null)
         loadEarnings()
       }
-      if (row.status === 'canceled' && offer?.id === row.id) {
-        setOffer(null)
+      if (row.status === 'canceled') {
+        setOffer((prev) => (prev?.id === row.id ? null : prev))
       }
-      if (row.status === 'canceled' && activeTrip?.id === row.id) {
-        setActiveTrip(null)
-      }
+      if (row.status === 'canceled' && activeRef.current?.id === row.id) setActiveTrip(null)
     })
-  }, [offer?.id, activeTrip?.id, driverId, loadEarnings])
+  }, [driverId, loadEarnings, considerOffer])
 
-  async function acceptOffer() {
-    if (!offer?.id || !supabase || !driverId) return
-    const acceptedAt = new Date().toISOString()
-    const { error } = await supabase
-      .from('trips')
-      .update({
-        status: 'accepted',
-        driver_id: driverId,
-        accepted_at: acceptedAt,
-      })
-      .eq('id', offer.id)
-    if (error) {
-      console.error(error)
-      return
-    }
-    await writeTripEvent(offer.id, 'accepted', {
-      driver_id: driverId,
-      accepted_at: acceptedAt,
-      fare_cents: offer.fare_cents,
+  useEffect(() => {
+    if (!offer?.id) return undefined
+    if (alerted.current.has(offer.id)) return undefined
+    if (!prefsReady || !shouldAlertForRide(prefsRef.current)) return undefined
+    alerted.current.add(offer.id)
+    const fare = offer.fare_cents != null ? `$${(Number(offer.fare_cents) / 100).toFixed(2)}` : 'New ride'
+    pushToast({
+      kind: 'ride_requested',
+      title: 'New ride request',
+      body: `${fare} · ${offer.pickup_label || 'Pickup'} → ${offer.dropoff_label || 'Dropoff'}`,
+      durationMs: 8000,
     })
-    const kept = { ...offer, status: 'accepted', driver_id: driverId, accepted_at: acceptedAt }
-    setActiveTrip(kept)
-    setOffer(null)
+    playRideRequestAlert()
+    return undefined
+  }, [offer?.id, offer?.fare_cents, offer?.pickup_label, offer?.dropoff_label, prefs, prefsReady])
+
+  useEffect(() => {
+    if (!offer) {
+      setEstimate(null)
+      return undefined
+    }
+    const pickup = offer.pickup_lat != null ? [Number(offer.pickup_lat), Number(offer.pickup_lng)] : null
+    const drop = offer.dropoff_lat != null ? [Number(offer.dropoff_lat), Number(offer.dropoff_lng)] : null
+    let cancelled = false
+    async function run() {
+      const tripLeg = estimateLeg(pickup, drop)
+      const toPickupLeg = selfPos && pickup ? estimateLeg(selfPos, pickup) : null
+      const base = {
+        tripMeters: tripLeg?.meters ?? null,
+        tripSec: tripLeg?.seconds ?? null,
+        tripPath: tripLeg?.path ?? null,
+        toPickupSec: toPickupLeg?.seconds ?? null,
+        toPickupPath: toPickupLeg?.path ?? null,
+      }
+      if (!cancelled) setEstimate(base)
+      const [roadTrip, roadPickup] = await Promise.all([
+        fetchDrivingLeg(pickup, drop),
+        selfPos && pickup ? fetchDrivingLeg(selfPos, pickup) : null,
+      ])
+      if (cancelled) return
+      setEstimate({
+        tripMeters: roadTrip?.meters ?? base.tripMeters,
+        tripSec: roadTrip?.seconds ?? base.tripSec,
+        tripPath: roadTrip?.path ?? base.tripPath,
+        toPickupSec: roadPickup?.seconds ?? base.toPickupSec,
+        toPickupPath: roadPickup?.path ?? base.toPickupPath,
+      })
+    }
+    run()
+    return () => { cancelled = true }
+  }, [offer?.id, selfPos?.[0], selfPos?.[1]])
+
+  async function acceptOffer(asQueue = false) {
+    if (!offer?.id || !driverId || offerBusy) return
+    setOfferBusy(true)
+    setOfferError(null)
+    try {
+      const { acceptedAt } = await claimTrip(driverId, offer.id)
+      const kept = { ...offer, status: 'accepted', driver_id: driverId, accepted_at: acceptedAt }
+      if (asQueue || activeTrip) {
+        await enqueueClaimedTrip(driverId, offer.id, { front: !asQueue })
+        await refreshQueue()
+        pushToast({ kind: 'ride_requested', title: asQueue ? 'Added to queue' : 'Next ride saved', body: offer.pickup_label || 'Pickup' })
+      } else {
+        setActiveTrip(kept)
+      }
+      setOffer(null)
+    } catch (err) {
+      setOfferError(err.message || 'Could not accept')
+    } finally {
+      setOfferBusy(false)
+    }
   }
 
   async function declineOffer() {
-    if (!offer?.id || !supabase) {
-      setOffer(null)
-      return
-    }
-    const canceledAt = new Date().toISOString()
-    await supabase
-      .from('trips')
-      .update({ status: 'canceled', canceled_at: canceledAt })
-      .eq('id', offer.id)
-    await writeTripEvent(offer.id, 'canceled', { reason: 'driver_decline', canceled_at: canceledAt })
+    if (offer?.id && driverId) await passOffer(driverId, offer.id)
+    if (offer?.id) setPassed((prev) => [...prev, offer.id])
     setOffer(null)
+    setOfferError(null)
   }
 
   async function advanceTrip(nextStatus) {
@@ -249,9 +383,21 @@ function DriverShell({ driverId }) {
       })
       if (nextStatus === 'completed') {
         const doneId = activeTrip.id
-        setActiveTrip(null)
+        await finishQueuedTrip(driverId, doneId)
+        const next = await takeNextQueued(driverId)
+        await refreshQueue()
+        setActiveTrip(next || null)
         await loadEarnings()
-        if (doneId) navigate('rate', { trip: doneId })
+        if (next) {
+          setNextPrompt({ ...next, rateTripId: doneId })
+          pushToast({
+            kind: 'ride_requested',
+            title: 'Next queued ride',
+            body: `${next.pickup_label || 'Pickup'} → ${next.dropoff_label || 'Dropoff'}`,
+          })
+        } else if (doneId) {
+          navigate('rate', { trip: doneId })
+        }
       } else {
         setActiveTrip({ ...activeTrip, ...patch })
       }
@@ -283,7 +429,7 @@ function DriverShell({ driverId }) {
       <CampusMap
         height="100%"
         interactive
-        showHeat={!activeTrip && showSurge}
+        showHeat={!activeTrip && !offer && showSurge}
         heatMode="surge"
         heatWindow={heatWindow}
         onHeatMeta={setHeatMeta}
@@ -292,10 +438,17 @@ function DriverShell({ driverId }) {
         zoom={13}
         marker={selfPos || CLEMSON}
         pickupPosition={
-          activeTrip?.pickup_lat != null && activeTrip?.pickup_lng != null
-            ? [Number(activeTrip.pickup_lat), Number(activeTrip.pickup_lng)]
+          (offer || activeTrip)?.pickup_lat != null
+            ? [Number((offer || activeTrip).pickup_lat), Number((offer || activeTrip).pickup_lng)]
             : activeTrip ? CLEMSON : null
         }
+        dropoffPosition={
+          (offer || activeTrip)?.dropoff_lat != null
+            ? [Number((offer || activeTrip).dropoff_lat), Number((offer || activeTrip).dropoff_lng)]
+            : null
+        }
+        route={estimate?.tripPath || null}
+        routeSecondary={estimate?.toPickupPath || null}
         selfPosition={selfPos}
         driverPosition={selfPos}
       />
@@ -498,6 +651,18 @@ function DriverShell({ driverId }) {
             </p>
           </div>
 
+          <QuietHoursCard
+            prefs={prefs}
+            onChange={async (quiet) => {
+              const next = { ...(prefs || {}), quiet }
+              setPrefs(next)
+              if (driverId) {
+                const res = await saveNotificationPrefs(driverId, next)
+                setPrefs(res.prefs)
+              }
+            }}
+          />
+
           {recentCompleted.length > 0 && (
             <div style={{ padding: '12px 0 4px', borderTop: '1px solid var(--border)', marginTop: 8 }}>
               <div style={{ fontWeight: 600, marginBottom: 8 }}>Recent earnings</div>
@@ -513,9 +678,9 @@ function DriverShell({ driverId }) {
                   }}
                 >
                   <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '70%' }}>
-                    {t.dropoff_label || 'Trip'}
+                    {coarsePlaceLabel(t.dropoff_label)}
                   </span>
-                  <strong style={{ color: 'var(--ink)' }}>{centsToDollars(t.fare_cents)}</strong>
+                  <strong style={{ color: 'var(--ink)' }}>{centsToDollars((Number(t.fare_cents) || 0) + (Number(t.tip_cents) || 0))}</strong>
                 </div>
               ))}
             </div>
@@ -523,52 +688,22 @@ function DriverShell({ driverId }) {
         </div>
       )}
 
-      {offer && !activeTrip && (
-        <div
-          className="sheet glass-panel--elevated"
-          style={{
-            position: 'absolute',
-            left: 0,
-            right: 0,
-            bottom: 0,
-            zIndex: 30,
-            padding: '12px 20px calc(24px + var(--safe-bottom))',
-            borderTop: '1px solid rgba(255,255,255,0.65)',
-          }}
-        >
-          <div className="sheet-handle" />
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-            <div style={{ fontSize: 32, fontWeight: 700, letterSpacing: -0.5 }}>
-              {centsToDollars(offer.fare_cents)}
-            </div>
-            <div style={{ fontSize: 13, color: 'var(--ink-secondary)' }}>Live offer</div>
-          </div>
-          <div style={{ marginTop: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
-            <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
-              <span style={{ color: 'var(--orange)', fontWeight: 700 }}>●</span>
-              <div>
-                <div style={{ fontWeight: 600 }}>Pickup</div>
-                <div style={{ fontSize: 13, color: 'var(--ink-secondary)' }}>{offer.pickup_label}</div>
-              </div>
-            </div>
-            <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
-              <span style={{ color: 'var(--purple)', fontWeight: 700 }}>■</span>
-              <div>
-                <div style={{ fontWeight: 600 }}>Dropoff</div>
-                <div style={{ fontSize: 13, color: 'var(--ink-secondary)' }}>{offer.dropoff_label}</div>
-              </div>
-            </div>
-          </div>
-          <PurpleAcceptButton onClick={acceptOffer}>Accept</PurpleAcceptButton>
-          <button
-            type="button"
-            className="pressable"
-            onClick={declineOffer}
-            style={{ width: '100%', marginTop: 10, padding: 12, fontWeight: 600, color: 'var(--ink-secondary)' }}
-          >
-            Decline
-          </button>
-        </div>
+      {offer && (
+        <DriverOfferSheet
+          offer={offer}
+          riderName={riderPreview?.riderFirstName}
+          ratingAvg={riderPreview?.ratingAvg}
+          ratingCount={riderPreview?.ratingCount}
+          standing={riderPreview?.standing}
+          estimate={estimate}
+          canQueue={canQueue}
+          queueCount={queue.length}
+          busy={offerBusy}
+          error={offerError}
+          onAccept={() => acceptOffer(false)}
+          onQueue={() => acceptOffer(true)}
+          onDecline={declineOffer}
+        />
       )}
 
       {activeTrip && (
@@ -585,9 +720,33 @@ function DriverShell({ driverId }) {
           }}
         >
           <div className="sheet-handle" />
+          {nextPrompt && (
+            <div style={{ marginBottom: 10, padding: 10, borderRadius: 12, background: 'rgba(245,102,0,0.12)' }}>
+              <div style={{ fontWeight: 800, color: 'var(--purple)' }}>Next ride is ready</div>
+              <div style={{ fontSize: 13, color: 'var(--ink-secondary)' }}>
+                {nextPrompt.pickup_label} → {nextPrompt.dropoff_label}
+              </div>
+              {nextPrompt.rateTripId && (
+                <button
+                  type="button"
+                  className="pressable"
+                  onClick={() => navigate('rate', { trip: nextPrompt.rateTripId })}
+                  style={{ marginTop: 6, fontWeight: 700, color: 'var(--orange)' }}
+                >
+                  Rate the rider you just dropped off
+                </button>
+              )}
+            </div>
+          )}
+          {queue.length > 0 && (
+            <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--purple)', marginBottom: 6 }}>
+              {queue.length} ride{queue.length > 1 ? 's' : ''} queued (max {QUEUE_CAP})
+              {canQueue ? ` · ${Math.max(1, Math.round(minutesToDrop))} min to drop-off` : ''}
+            </div>
+          )}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
             <div style={{ fontSize: 32, fontWeight: 700, letterSpacing: -0.5 }}>
-              {centsToDollars(activeTrip.fare_cents)}
+              {centsToDollars((Number(activeTrip.fare_cents) || 0) + (Number(activeTrip.tip_cents) || 0))}
             </div>
             <div style={{ fontSize: 13, color: 'var(--purple)', fontWeight: 700 }}>
               {statusLabel[activeTrip.status] || activeTrip.status}

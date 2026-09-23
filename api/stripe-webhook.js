@@ -25,6 +25,36 @@ function readRawBody(req) {
   })
 }
 
+async function recordTip(pi) {
+  if (!serviceKey) return { skipped: true, reason: 'no_service_role' }
+  const tripId = pi?.metadata?.tripId
+  const riderId = pi?.metadata?.riderId
+  if (!tripId || !riderId) return { skipped: true, reason: 'missing_metadata' }
+  const supabase = createClient(supabaseUrl, serviceKey, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  })
+  const amount = Number(pi.amount) || Number(pi.metadata?.tipCents) || 0
+  const { data: existing } = await supabase
+    .from('payments')
+    .select('id')
+    .eq('stripe_payment_intent_id', pi.id)
+    .maybeSingle()
+  if (!existing) {
+    const { error } = await supabase.from('payments').insert({
+      trip_id: tripId,
+      rider_id: riderId,
+      stripe_payment_intent_id: pi.id,
+      kind: 'tip',
+      amount_cents: amount,
+      status: 'succeeded',
+    })
+    if (error) return { ok: false, error: error.message }
+  }
+  const { error: upErr } = await supabase.from('trips').update({ tip_cents: amount }).eq('id', tripId)
+  if (upErr) return { ok: false, error: upErr.message }
+  return { ok: true }
+}
+
 async function recordDeposit(session) {
   if (!serviceKey) {
     console.warn('[stripe-webhook] SUPABASE_SERVICE_ROLE_KEY missing — skip payments insert')
@@ -81,6 +111,13 @@ export default async function handler(req, res) {
       event = stripe.webhooks.constructEvent(rawBody, sig, webhookSecret)
     } else {
       event = JSON.parse(rawBody.toString('utf8'))
+    }
+
+    if (event.type === 'payment_intent.succeeded' && event.data?.object?.metadata?.kind === 'tip') {
+      const pi = event.data.object
+      const recorded = await recordTip(pi)
+      res.statusCode = 200
+      return res.end(JSON.stringify({ received: true, type: event.type, recorded }))
     }
 
     if (event.type === 'checkout.session.completed') {

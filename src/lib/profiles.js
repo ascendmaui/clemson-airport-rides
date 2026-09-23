@@ -1,4 +1,5 @@
 import { supabase } from './supabase'
+import { displayFirstName } from './privacyDisplay.js'
 
 export const CAMPUS_SPOTS = [
   // Neighborhoods / housing
@@ -55,20 +56,25 @@ export const GALLERY_KINDS = [
 ]
 
 const PROFILE_COLS =
-  'id, role, full_name, email, bio, avatar_url, student_verified_at, rating_avg, rating_count, phone, favorite_spots, music_taste, ride_style, profile_privacy, stripe_customer_id, stripe_default_pm_id, notification_prefs, billing_activated_at, stripe_card_brand, stripe_card_last4'
+  'id, role, full_name, email, bio, avatar_url, student_verified_at, rating_avg, rating_count, standing, phone, favorite_spots, music_taste, ride_style, profile_privacy, stripe_customer_id, stripe_default_pm_id, notification_prefs, billing_activated_at, stripe_card_brand, stripe_card_last4'
 
 export function filterProfileByPrivacy(profile, { isOwner = false, isMatched = false } = {}) {
   if (!profile) return null
   if (isOwner) return { ...profile, _access: 'owner' }
-  const privacy = profile.profile_privacy || 'matched'
+  const named = {
+    ...profile,
+    full_name: displayFirstName(profile.full_name, 'Rider'),
+  }
+  const privacy = named.profile_privacy || 'matched'
   if (privacy === 'private' && !isMatched) {
     return {
       id: profile.id,
-      full_name: profile.full_name,
+      full_name: named.full_name,
       avatar_url: profile.avatar_url,
       rating_avg: profile.rating_avg,
       rating_count: profile.rating_count,
       role: profile.role,
+      standing: named.standing || null,
       profile_privacy: privacy,
       _access: 'minimal',
     }
@@ -76,11 +82,12 @@ export function filterProfileByPrivacy(profile, { isOwner = false, isMatched = f
   if (privacy === 'matched' && !isMatched) {
     return {
       id: profile.id,
-      full_name: profile.full_name,
+      full_name: named.full_name,
       avatar_url: profile.avatar_url,
       rating_avg: profile.rating_avg,
       rating_count: profile.rating_count,
       role: profile.role,
+      standing: named.standing || null,
       bio: null,
       favorite_spots: [],
       music_taste: null,
@@ -90,7 +97,7 @@ export function filterProfileByPrivacy(profile, { isOwner = false, isMatched = f
       _access: 'matched_locked',
     }
   }
-  return { ...profile, _access: privacy === 'public' ? 'public' : 'matched' }
+  return { ...named, _access: privacy === 'public' ? 'public' : 'matched' }
 }
 
 export async function fetchFullProfile(userId, { viewerId = null, assumeMatched = false } = {}) {

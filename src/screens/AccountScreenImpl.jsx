@@ -7,7 +7,7 @@ import {
   IconSettings, IconSignOut, IconStudent,
 } from '../components/icons'
 import { useAuth } from '../lib/auth'
-import { navigate } from '../lib/navigation'
+import { getHashRoute, navigate } from '../lib/navigation'
 import { fetchProfile, updateMyProfile, findPendingRatingTrip } from '../lib/ratings'
 import {
   CAMPUS_SPOTS, RIDE_STYLES, PRIVACY_OPTIONS, GALLERY_KINDS,
@@ -17,6 +17,8 @@ import {
   NOTIFICATION_CATEGORIES, DEFAULT_NOTIFICATION_PREFS,
   fetchNotificationPrefs, saveNotificationPrefs,
 } from '../lib/notificationPrefs'
+import { QuietHoursCard } from '../components/QuietHoursCard'
+import { coarsePlaceLabel } from '../lib/tripPrivacy'
 import { useToasts, pushToast } from '../lib/toasts'
 import { isClemsonEmail } from '../lib/studentDomain'
 
@@ -57,7 +59,10 @@ export function AccountScreen() {
   const { setPrefsCache } = useToasts()
   const fileRef = useRef(null)
   const galleryRef = useRef(null)
-  const [tab, setTab] = useState('profile')
+  const [tab, setTab] = useState(() => {
+    const initial = getHashRoute().params.tab
+    return NAV.some((n) => n.id === initial) ? initial : 'profile'
+  })
   const [profile, setProfile] = useState(null)
   const [fullName, setFullName] = useState('')
   const [bio, setBio] = useState('')
@@ -207,7 +212,9 @@ export function AccountScreen() {
             background: 'linear-gradient(135deg, rgba(245,102,0,0.16), rgba(82,45,128,0.14))' }}>
             <div style={{ fontWeight: 700, color: 'var(--purple)', marginBottom: 4 }}>Rate your last ride?</div>
             <div style={{ fontSize: 13, color: 'var(--ink-secondary)', marginBottom: 10 }}>
-              Soft reminder — {pendingRate.pickup_label || 'Pickup'} → {pendingRate.dropoff_label || 'Dropoff'}
+              Soft reminder — {user?.id === pendingRate.driver_id
+                ? `${coarsePlaceLabel(pendingRate.pickup_label)} → ${coarsePlaceLabel(pendingRate.dropoff_label)}`
+                : `${pendingRate.pickup_label || 'Pickup'} → ${pendingRate.dropoff_label || 'Dropoff'}`}
             </div>
             <div style={{ display: 'flex', gap: 10 }}>
               <button type="button" className="pressable" onClick={() => navigate('rate', { trip: pendingRate.id })}
@@ -397,6 +404,22 @@ export function AccountScreen() {
                 )
               })}
             </div>
+            <QuietHoursCard
+              prefs={prefs}
+              saving={prefsSaving}
+              onChange={async (quiet) => {
+                if (!user?.id) return
+                const next = { ...prefs, quiet }
+                setPrefs(next)
+                setPrefsCache(next)
+                setPrefsSaving(true)
+                const res = await saveNotificationPrefs(user.id, next)
+                setPrefsSaving(false)
+                setPrefs(res.prefs)
+                setPrefsCache(res.prefs)
+                setPrefsNote(res.softFail ? `Local only — ${res.softFail}` : 'Saved to profile')
+              }}
+            />
             {prefsNote && (
               <div style={{ fontSize: 12, color: 'var(--ink-tertiary)', marginTop: 12 }}>{prefsNote}</div>
             )}

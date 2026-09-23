@@ -1,4 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
+import { displayFirstName } from './privacyDisplay.js'
+import { standingFromRatings } from './standing.js'
 
 const url =
   import.meta.env.VITE_SUPABASE_URL ||
@@ -54,18 +56,26 @@ export async function fetchOnlineDrivers() {
 
   const ids = statuses.map((s) => s.driver_id)
 
-  const [{ data: profiles }, { data: vehicles }] = await Promise.all([
-    supabase
+  const vehicleQuery = supabase
+    .from('vehicles')
+    .select(
+      'id, driver_id, make, model, color, plate, seats, is_tesla, autonomous_capable, tier',
+    )
+    .in('driver_id', ids)
+
+  let profileRes = await supabase
+    .from('profiles')
+    .select('id, full_name, phone, email, avatar_url, role, rating_avg, rating_count, standing')
+    .in('id', ids)
+  if (profileRes.error && /standing|column|schema cache/i.test(profileRes.error.message || '')) {
+    profileRes = await supabase
       .from('profiles')
-      .select('id, full_name, phone, email, avatar_url, role')
-      .in('id', ids),
-    supabase
-      .from('vehicles')
-      .select(
-        'id, driver_id, make, model, color, plate, seats, is_tesla, autonomous_capable, tier',
-      )
-      .in('driver_id', ids),
-  ])
+      .select('id, full_name, phone, email, avatar_url, role, rating_avg, rating_count')
+      .in('id', ids)
+  }
+  const { data: vehicles } = await vehicleQuery
+  if (profileRes.error) return { drivers: [], error: profileRes.error.message }
+  const profiles = profileRes.data
 
   const profileById = Object.fromEntries((profiles || []).map((p) => [p.id, p]))
   const vehicleByDriver = {}
@@ -76,9 +86,14 @@ export async function fetchOnlineDrivers() {
   const drivers = statuses.map((s) => {
     const profile = profileById[s.driver_id] || {}
     const vehicle = vehicleByDriver[s.driver_id] || null
+    const standing = profile.standing || standingFromRatings(profile.rating_avg, profile.rating_count)
+    if (standing === 'restricted') return null
     return {
       id: s.driver_id,
-      name: profile.full_name || 'Driver',
+      name: displayFirstName(profile.full_name, 'Driver'),
+      ratingAvg: profile.rating_avg != null ? Number(profile.rating_avg) : null,
+      ratingCount: Number(profile.rating_count) || 0,
+      standing,
       phone: profile.phone || null,
       avatarUrl: profile.avatar_url || null,
       online: s.online,
@@ -97,7 +112,7 @@ export async function fetchOnlineDrivers() {
       tier: vehicle?.tier || 'standard',
       updatedAt: s.updated_at,
     }
-  })
+  }).filter(Boolean)
 
   return { drivers, error: null }
 }

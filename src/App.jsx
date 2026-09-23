@@ -17,6 +17,7 @@ import { LegalPrivacy, LegalTerms } from './screens/LegalPages'
 import { LiveShare } from './screens/LiveShare'
 import { ProfileView } from './screens/ProfileView'
 import { RateRide } from './screens/RateRide'
+import { ReceiptScreen } from './screens/ReceiptScreen'
 import { FriendRideScreen } from './screens/FriendRide'
 import { CarpoolScreen } from './screens/CarpoolScreen'
 import { ToastProvider, ToastStack } from './lib/toasts'
@@ -44,6 +45,8 @@ function Screen({ path, params }) {
       return <ProfileView />
     case 'rate':
       return <RateRide />
+    case 'receipt':
+      return <ReceiptScreen />
     case 'home':
     case 'rides':
       return <RiderHome />

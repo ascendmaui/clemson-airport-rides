@@ -1,6 +1,8 @@
 import { supabase } from './supabase'
 import { fetchFullProfile } from './profiles'
 
+export { RATING_STANDING, standingFromRatings } from './standing.js'
+
 /** Prefer fetchFullProfile — kept for existing callers */
 export async function fetchProfile(userId, opts = {}) {
   return fetchFullProfile(userId, opts)
@@ -37,6 +39,19 @@ export async function submitRating({ tripId, raterId, rateeId, stars, comment })
   const s = Number(stars)
   if (!Number.isFinite(s) || s < 1 || s > 5) throw new Error('Stars must be 1–5')
 
+  const trip = await fetchTripForRating(tripId)
+  if (!trip) throw new Error('Trip not found')
+  if (trip.status !== 'completed') {
+    throw new Error('You can rate this trip once it is completed')
+  }
+  const expectedRatee = raterId === trip.rider_id ? trip.driver_id : trip.rider_id
+  if (raterId !== trip.rider_id && raterId !== trip.driver_id) {
+    throw new Error('Only the rider and driver can rate this trip')
+  }
+  if (!expectedRatee || expectedRatee !== rateeId) {
+    throw new Error('Rate the other person on this trip')
+  }
+
   const { data: existing } = await supabase
     .from('ratings')
     .select('id')
@@ -52,7 +67,12 @@ export async function submitRating({ tripId, raterId, rateeId, stars, comment })
     stars: s,
     comment: comment?.trim() || null,
   })
-  if (error) throw new Error(error.message)
+  if (error) {
+    if (/row-level security|permission/i.test(error.message || '')) {
+      throw new Error('Could not save rating. The trip must be completed and you must be the rider or driver.')
+    }
+    throw new Error(error.message)
+  }
 }
 
 export async function hasRatedTrip(tripId, raterId) {
@@ -66,15 +86,37 @@ export async function hasRatedTrip(tripId, raterId) {
   return Boolean(data?.id)
 }
 
+const TRIP_RATING_COLS = 'id, status, rider_id, driver_id, pickup_label, dropoff_label, pickup_lat, pickup_lng, dropoff_lat, dropoff_lng, fare_cents, tip_cents, completed_at, safety_status, requested_at'
+const TRIP_RATING_BASE = 'id, status, rider_id, driver_id, pickup_label, dropoff_label, fare_cents, completed_at'
+
 export async function fetchTripForRating(tripId) {
   if (!supabase) return null
-  const { data, error } = await supabase
-    .from('trips')
-    .select('id, status, rider_id, driver_id, pickup_label, dropoff_label, fare_cents, completed_at')
-    .eq('id', tripId)
-    .maybeSingle()
-  if (error) throw new Error(error.message)
-  return data
+  const rich = await supabase.from('trips').select(TRIP_RATING_COLS).eq('id', tripId).maybeSingle()
+  if (rich.error && /column|schema cache|tip_cents|safety_status/i.test(rich.error.message || '')) {
+    const basic = await supabase.from('trips').select(TRIP_RATING_BASE).eq('id', tripId).maybeSingle()
+    if (basic.error) throw new Error(basic.error.message)
+    return basic.data
+  }
+  if (rich.error) throw new Error(rich.error.message)
+  return rich.data
+}
+
+export async function saveSafetyCheck(tripId, status) {
+  if (!supabase || !tripId) return { ok: false }
+  const patch = {
+    safety_status: status === 'help' ? 'help' : 'ok',
+    safety_checked_at: new Date().toISOString(),
+  }
+  const { error } = await supabase.from('trips').update(patch).eq('id', tripId)
+  await supabase.from('trip_events').insert({
+    trip_id: tripId,
+    kind: status === 'help' ? 'safety_help' : 'safety_ok',
+    payload: patch,
+  })
+  if (error && !/column|schema cache|safety_status/i.test(error.message || '')) {
+    return { ok: false, error: error.message }
+  }
+  return { ok: true }
 }
 
 /** Soft-remind: latest completed trip still needing this user's rating. */

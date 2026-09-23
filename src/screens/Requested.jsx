@@ -6,7 +6,6 @@ import { useAuth } from '../lib/auth'
 import { createLocationShare, startSharingLocation } from '../lib/locationShare'
 import { subscribeDriverStatus } from '../lib/driverTrack'
 import { supabase } from '../lib/supabase'
-import { hasRatedTrip } from '../lib/ratings'
 
 export function Requested({ dest = 'GSP Airport', trip = '', driver = 'your driver', driverId = '' }) {
   const { user } = useAuth()
@@ -16,7 +15,6 @@ export function Requested({ dest = 'GSP Airport', trip = '', driver = 'your driv
   const [tripRow, setTripRow] = useState(null)
   const [driverPos, setDriverPos] = useState(null)
   const [resolvedDriverId, setResolvedDriverId] = useState(driverId || '')
-  const [rateNudge, setRateNudge] = useState(false)
   const stopRef = useRef(null)
 
   useEffect(() => () => { stopRef.current?.() }, [])
@@ -33,9 +31,9 @@ export function Requested({ dest = 'GSP Airport', trip = '', driver = 'your driv
         if (!alive || !data) return
         setTripRow(data)
         if (data.driver_id) setResolvedDriverId(data.driver_id)
-        if (data.status === 'completed' && user?.id) {
-          const rated = await hasRatedTrip(data.id, user.id)
-          if (alive && !rated) setRateNudge(true)
+        if (data.status === 'completed' && user?.id && data.rider_id === user.id) {
+          navigate('rate', { trip: data.id })
+          return
         }
       })
     return () => { alive = false }
@@ -127,15 +125,6 @@ export function Requested({ dest = 'GSP Airport', trip = '', driver = 'your driv
             <button type="button" className="pressable" onClick={() => navigate('profile', { id: resolvedDriverId, matched: '1' })} style={{ fontWeight: 600, color: 'var(--purple)' }}>
               View driver profile
             </button>
-          )}
-          {rateNudge && trip && (
-            <div className="glass-panel" style={{ padding: 12, borderRadius: 14, background: 'rgba(245,102,0,0.12)' }}>
-              <div style={{ fontWeight: 700, color: 'var(--purple)', marginBottom: 6, fontSize: 13 }}>Trip complete — rate your driver?</div>
-              <PrimaryButton onClick={() => navigate('rate', { trip })}>Rate now ★</PrimaryButton>
-              <button type="button" className="pressable" onClick={() => setRateNudge(false)} style={{ marginTop: 8, fontWeight: 600, color: 'var(--ink-tertiary)', width: '100%' }}>
-                Soft remind later
-              </button>
-            </div>
           )}
           <PrimaryButton onClick={() => navigate('home')}>Back home</PrimaryButton>
         </div>
