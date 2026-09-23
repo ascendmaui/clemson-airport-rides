@@ -90,7 +90,7 @@ export function randomToken(bytes = 16) {
 }
 
 /** Clemson MVP fare: base + per-mile + per-min, min $8. Documented heuristic. */
-export function computeFriendFareCents(distanceM, durationS, { surgeMultiplier = 1 } = {}) {
+export function computeFriendFareCents(distanceM, durationS, { surgeMultiplier = 1, vehicleMultiplier = 1 } = {}) {
   // Clemson MVP automatic fare — mirrors src/lib/pricing.js spirit (no manual entry).
   const BASE = 250 // $2.50
   const PER_MILE = 175 // $1.75
@@ -99,7 +99,8 @@ export function computeFriendFareCents(distanceM, durationS, { surgeMultiplier =
   const miles = Math.max(0, Number(distanceM) || 0) / 1609.344
   const mins = Math.max(0, Number(durationS) || 0) / 60
   const base = Math.round(BASE + miles * PER_MILE + mins * PER_MIN)
-  const surged = Math.round(Math.max(MIN_FARE, base) * (Number(surgeMultiplier) || 1))
+  const vehMul = Number(vehicleMultiplier) || 1
+  const surged = Math.round(Math.max(MIN_FARE, base) * (Number(surgeMultiplier) || 1) * vehMul)
   return {
     fareCents: surged,
     breakdown: {
@@ -108,6 +109,7 @@ export function computeFriendFareCents(distanceM, durationS, { surgeMultiplier =
       time_cents: Math.round(mins * PER_MIN),
       subtotal_cents: Math.max(MIN_FARE, base),
       surge_multiplier: Number(surgeMultiplier) || 1,
+      vehicle_multiplier: vehMul,
       min_fare_applied: base < MIN_FARE,
     },
   }
@@ -236,6 +238,8 @@ export function publicRideSummary(ride, participants) {
     token: ride.token,
     status: ride.status,
     kind: ride.kind || 'friends',
+    max_participants: ride.max_participants || null,
+    vehicle_label: ride.vehicle_label || null,
     split_mode: ride.split_mode,
     route_polyline: ride.route_polyline,
     distance_m: ride.distance_m,
@@ -523,3 +527,12 @@ export async function writeRideBills(sb, { ride, participants, tripId, fareBreak
   }
   return { ok: true, count: rows.length }
 }
+
+// Re-export capacity helpers (canonical module: friendRideCapacity.js)
+export {
+  DEFAULT_MAX_PARTICIPANTS,
+  inferVehicleCategory,
+  vehicleMaxSeats,
+  loadDriverVehicle,
+  vehicleFareMultiplier,
+} from './friendRideCapacity.js'
