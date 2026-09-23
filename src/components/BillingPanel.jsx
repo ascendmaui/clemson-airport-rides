@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { PrimaryButton } from './PrimaryButton'
 import { IconCard } from './icons'
 import { useAuth } from '../lib/auth'
@@ -6,7 +6,7 @@ import {
   createSetupIntent, savePaymentMethod, listPaymentMethods, updatePaymentMethod,
 } from '../lib/friendRides'
 import { loadStripeJs, PAYMENT_ELEMENT_APPEARANCE } from '../lib/stripeElements'
-import { stripeMountNode } from '../lib/stripeMountTarget'
+import { stripeMountNode, waitForStripeMountNode } from '../lib/stripeMountTarget'
 import { getStripeConfig } from '../lib/stripeCheckout'
 import { fetchMyRideBills } from '../lib/rideBills'
 import { getHashRoute } from '../lib/navigation'
@@ -87,7 +87,7 @@ export function BillingPanel({ profile, onProfileRefresh }) {
   const elementsRef = useRef(null)
   const paymentElementRef = useRef(null)
   const redirectHandled = useRef(false)
-  const [mountNode, setMountNode] = useState(null)
+  const mountRef = useRef(null)
   const [card, setCard] = useState(() => loadCardDisplay(user?.id))
   const [activatedAt, setActivatedAt] = useState(profile?.billing_activated_at || null)
   const [hasPm, setHasPm] = useState(Boolean(profile?.stripe_default_pm_id))
@@ -103,9 +103,6 @@ export function BillingPanel({ profile, onProfileRefresh }) {
   const [billsErr, setBillsErr] = useState(null)
   const [listTick, setListTick] = useState(0)
   const { configured: stripeConfigured } = getStripeConfig()
-  const onMountNode = useCallback((node) => {
-    setMountNode(node)
-  }, [])
 
   function rememberCard(info) {
     if (info?.last4 || info?.brand) {
@@ -251,20 +248,29 @@ export function BillingPanel({ profile, onProfileRefresh }) {
     }
   }, [showForm, stripeConfigured]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Mount only once the container ref is a connected element. Unmount on close / secret change.
+  // setShowForm(true) renders/expands the stable container first.
+  // This effect mounts only after a frame where mountRef.current is in the document.
   useEffect(() => {
-    const node = stripeMountNode(mountNode)
-    if (!showForm || !clientSecret || !node) return undefined
+    if (!showForm || !clientSecret) return undefined
     let cancelled = false
     let paymentElement = null
     let slowTimer = 0
 
     ;(async () => {
       try {
+        const target = await waitForStripeMountNode(
+          () => mountRef.current,
+          () => cancelled,
+        )
+        if (cancelled) return
+        if (!target) {
+          setErr('Card form container is not in the document yet.')
+          return
+        }
         const stripe = await loadStripeJs()
         if (cancelled) return
-        const target = stripeMountNode(mountNode)
-        if (!target) return
+        const stillThere = stripeMountNode(mountRef.current)
+        if (!stillThere) return
         stripeRef.current = stripe
         const elements = stripe.elements({
           clientSecret,
@@ -282,7 +288,7 @@ export function BillingPanel({ profile, onProfileRefresh }) {
           if (!cancelled) setErr(event?.error?.message || 'Card form failed to load')
         })
         if (cancelled) return
-        paymentElement.mount(target)
+        paymentElement.mount(stillThere)
         if (cancelled) {
           try { paymentElement.unmount() } catch { /* already gone */ }
           return
@@ -311,13 +317,14 @@ export function BillingPanel({ profile, onProfileRefresh }) {
         try { pe.unmount() } catch { /* already unmounted */ }
       }
     }
-  }, [showForm, clientSecret, mountNode])
+  }, [showForm, clientSecret])
 
   function openCardForm() {
     setErr(null)
     setMsg(null)
     setFormReady(false)
     setClientSecret(null)
+    // Show the container before any Stripe mount. The effect mounts on the next frame.
     setShowForm(true)
   }
 
@@ -325,7 +332,6 @@ export function BillingPanel({ profile, onProfileRefresh }) {
     setShowForm(false)
     setClientSecret(null)
     setFormReady(false)
-    setMountNode(null)
   }
 
   async function onSaveCard() {
@@ -536,6 +542,17 @@ export function BillingPanel({ profile, onProfileRefresh }) {
           </div>
         )}
 
+        <div
+          ref={mountRef}
+          data-testid="stripe-payment-mount"
+          style={{
+            marginBottom: showForm ? 12 : 0,
+            minHeight: showForm ? 80 : 0,
+            maxHeight: showForm ? 'none' : 0,
+            overflow: showForm ? 'visible' : 'hidden',
+          }}
+        />
+
         {!showForm ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             <PrimaryButton onClick={openCardForm} disabled={busy || !stripeConfigured} data-testid="add-card">
@@ -578,11 +595,6 @@ export function BillingPanel({ profile, onProfileRefresh }) {
           </div>
         ) : (
           <div>
-            <div
-              ref={onMountNode}
-              data-testid="stripe-payment-mount"
-              style={{ marginBottom: 12, minHeight: 80 }}
-            />
             {!formReady && !err && (
               <div style={{ fontSize: 13, color: 'var(--ink-tertiary)', marginBottom: 10 }}>
                 {busy ? 'Preparing secure card form…' : 'Loading card form…'}
