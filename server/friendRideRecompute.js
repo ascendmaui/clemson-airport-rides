@@ -39,10 +39,17 @@ export async function recomputeRideFares(sb, token, { splitMode } = {}) {
   const driverId = ride.driver_profile_id || ride.organizer_id
   const vehicle = await loadDriverVehicle(sb, driverId)
   const vehMul = vehicleFareMultiplier(vehicle, participants.length)
-  const fareResult = computeFriendFareCents(route.distanceM, route.durationS, {
-    vehicleMultiplier: vehMul,
-  })
-  const totalFare = fareResult.fareCents
+  // Apply vehicle/party multiplier here so fares are correct even if
+  // computeFriendFareCents ignores vehicleMultiplier (pre-lib-patch tip).
+  const baseFare = computeFriendFareCents(route.distanceM, route.durationS)
+  const totalFare = Math.round((baseFare.fareCents || 0) * (Number(vehMul) || 1))
+  const fareResult = {
+    fareCents: totalFare,
+    breakdown: {
+      ...(baseFare.breakdown || {}),
+      vehicle_multiplier: Number(vehMul) || 1,
+    },
+  }
   const weights =
     ride.split_mode === 'by_distance' && route.legs?.length
       ? participants.map((_, i) => {
