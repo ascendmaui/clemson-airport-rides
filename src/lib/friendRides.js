@@ -87,7 +87,7 @@ export function rememberedAmbassador() {
 }
 
 export async function createFriendRide({ displayName, pickup, dropoff, splitMode, kind, partyType, ambassadorCode } = {}) {
-  return api('/api/friend-rides-create', {
+  return api('/api/friend-rides?action=create', {
     method: 'POST',
     body: {
       displayName,
@@ -102,61 +102,61 @@ export async function createFriendRide({ displayName, pickup, dropoff, splitMode
 }
 
 export async function matchCarpool(body) {
-  return api('/api/carpool-match', {
+  return api('/api/carpool?action=match', {
     method: 'POST',
     body: { ...body, ambassadorCode: body.ambassadorCode || rememberedAmbassador() },
   })
 }
 
 export async function createCarpoolGroup(body) {
-  return api('/api/carpool-group', {
+  return api('/api/carpool?action=group', {
     method: 'POST',
     body: { ...body, ambassadorCode: body.ambassadorCode || rememberedAmbassador() },
   })
 }
 
 export async function carpoolProgram(action) {
-  return api('/api/carpool-program', {
+  return api('/api/carpool?action=program', {
     method: 'POST',
     body: { action, origin: typeof window !== 'undefined' ? window.location.origin : undefined },
   })
 }
 
 export async function getFriendRide(token) {
-  return api(`/api/friend-rides-get?token=${encodeURIComponent(token)}`)
+  return api(`/api/friend-rides?action=get&token=${encodeURIComponent(token)}`)
 }
 
 export async function joinFriendRide(payload) {
-  return api('/api/friend-rides-join', { method: 'POST', body: payload })
+  return api('/api/friend-rides?action=join', { method: 'POST', body: payload })
 }
 
 export async function recomputeFriendRide(token, splitMode) {
-  return api('/api/friend-rides-recompute', {
+  return api('/api/friend-rides?action=recompute', {
     method: 'POST',
     body: { token, splitMode },
   })
 }
 
 export async function confirmFriendCharges(token) {
-  return api('/api/friend-rides-confirm-charges', {
+  return api('/api/friend-rides?action=confirm-charges', {
     method: 'POST',
     body: { token, origin: typeof window !== 'undefined' ? window.location.origin : undefined },
   })
 }
 
 export async function retryFriendCharge(token, participantId) {
-  return api('/api/friend-rides-retry-charge', {
+  return api('/api/friend-rides?action=retry-charge', {
     method: 'POST',
     body: { token, participantId },
   })
 }
 
 export async function createSetupIntent() {
-  return api('/api/stripe-setup-intent', { method: 'POST', body: {} })
+  return api('/api/stripe-payment-methods?action=setup-intent', { method: 'POST', body: {} })
 }
 
 export async function savePaymentMethod({ paymentMethodId, setupIntentId }) {
-  return api('/api/stripe-save-payment-method', {
+  return api('/api/stripe-payment-methods?action=save', {
     method: 'POST',
     body: { paymentMethodId, setupIntentId },
   })

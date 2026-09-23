@@ -288,7 +288,7 @@ async function saveDriverInfoDirect(userId, payload, email) {
 export async function saveDriverInfo(user, payload) {
   if (!user?.id) throw new Error('Sign in required')
   try {
-    return await postJson('/api/driver-signup', payload)
+    return await postJson('/api/driver?action=signup', payload)
   } catch (err) {
     if (!err.unavailable && !err.network) throw err
     return saveDriverInfoDirect(user.id, payload, user.email)
@@ -446,7 +446,7 @@ async function submitDriverReviewDirect(userId) {
 
 export async function submitDriverReview() {
   try {
-    return await postJson('/api/driver-submit-review', {})
+    return await postJson('/api/driver?action=submit-review', {})
   } catch (err) {
     if (!err.unavailable && !err.network) throw err
     const { data } = await supabase.auth.getUser()

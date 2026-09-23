@@ -4,7 +4,7 @@ Carpool is the flagship. Airport flats stay. Friend rides stay. This layer exten
 
 ## How matching works
 
-Open requests live in `carpool_requests` (service role only). `POST /api/carpool-match` inserts the signed-in rider, loads other `open` requests within ±30 minutes, and runs `matchCarpoolRequests` in `src/lib/carpoolEngine.js`.
+Open requests live in `carpool_requests` (service role only). `POST /api/carpool?action=match` inserts the signed-in rider, loads other `open` requests within ±30 minutes, and runs `matchCarpoolRequests` in `src/lib/carpoolEngine.js`.
 
 1. **Normalize.** Each request needs pickup and dropoff coordinates. Missing coordinates are rejected. The same `userId` keeps only the latest row, so one person cannot fill a car alone.
 2. **Destination cluster.** The dropoff label is matched to a Clemson neighborhood (`NEIGHBORHOODS`, including Grand Marc / Grand Mark and College Avenue, aligned with `CAMPUS_SPOTS`). Otherwise the nearest neighborhood centroid within 700m wins. A geohash precision 6 (~1.2km) is stored for riders who are between named spots.
@@ -19,7 +19,7 @@ Open requests live in `carpool_requests` (service role only). `POST /api/carpool
    - pickups within 1.6km, or route-polyline overlap ≥ 45% (samples within 400m of the other line; a straight pickup→dropoff corridor is used when Google has not returned a polyline)
    - score ≥ 0.62, weighted 45% destination, 25% pickup, 15% time, 15% route overlap. Same neighborhood and pickups within 900m floor the score at 0.70.
 5. **Seat cap.** Greedy fill in priority order, earliest departure first. A pool stops at **4 riders** even if the vehicle has more seats. A 5th mutual match stays `waiting` in the next pool. Tailgate links driven by a student can hold up to 6 in the lobby; stranger auto-match never exceeds 4.
-6. **Book.** A pool of 2–4 becomes one `friend_rides` row, `kind = carpool`, `fare_breakdown.match_mode = marketplace` (no organizer-as-driver). Riders join with the existing lobby. A shared link (`POST /api/carpool-group` or the student-driver create flow) is the same lobby at `/carpool/:token`.
+6. **Book.** A pool of 2–4 becomes one `friend_rides` row, `kind = carpool`, `fare_breakdown.match_mode = marketplace` (no organizer-as-driver). Riders join with the existing lobby. A shared link (`POST /api/carpool?action=group` or the student-driver create flow) is the same lobby at `/carpool/:token`.
 
 Student drivers who offer their own car still use `match_mode = student_driver`. Booking assigns them and skips the open driver search. Marketplace pools go to `trips.status = searching` so any online driver can take them.
 
@@ -38,7 +38,7 @@ Riders do **not** divide that solo price by headcount. Each pays a fraction of t
 | 3 | 42% | |
 | 4 | 35% | about **$10.50–$14** |
 
-The confirm control sits under a delta card: struck-through solo surge price, the 4-rider seat, **You save $X**, and how much more the driver earns than a one-rider trip. If the party is not full yet, the card also states the amount this confirm will charge. `POST /api/friend-rides-confirm-charges` refreshes that quote, then creates **one PaymentIntent per rider** for `fare_cents` (saved card off-session, or Payment Element). The trip is booked only when every rider is paid.
+The confirm control sits under a delta card: struck-through solo surge price, the 4-rider seat, **You save $X**, and how much more the driver earns than a one-rider trip. If the party is not full yet, the card also states the amount this confirm will charge. `POST /api/friend-rides?action=confirm-charges` refreshes that quote, then creates **one PaymentIntent per rider** for `fare_cents` (saved card off-session, or Payment Element). The trip is booked only when every rider is paid.
 
 Platform fee is **20%** of cash collected (`platformFeeCents + driver payout = gross`), except when a first-ride comp has to be funded.
 
