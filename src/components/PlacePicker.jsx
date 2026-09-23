@@ -1,10 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useJsApiLoader } from '@react-google-maps/api'
 import { FRIEND_PLACES } from '../lib/friendRides'
-
-/** Separate loader from CampusMap circles-v2 — do not add places to CampusMap. */
-const PLACES_LIBRARIES = ['places']
-const PLACES_LOADER_ID = 'clemson-google-maps-places-v1'
+import { MAPS_LOADER_ID, MAP_LIBRARIES, mapsLoaderOptions } from '../lib/googleMapsLoader'
 
 const CURRENT = { label: 'Current location', lat: null, lng: null, _current: true }
 
@@ -53,11 +50,7 @@ export function PlacePicker({
   presets = FRIEND_PLACES,
 }) {
   const apiKey = (import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '').trim()
-  const { isLoaded } = useJsApiLoader({
-    id: PLACES_LOADER_ID,
-    googleMapsApiKey: apiKey || ' ',
-    libraries: PLACES_LIBRARIES,
-  })
+  const { isLoaded } = useJsApiLoader(mapsLoaderOptions(apiKey))
   const [locBusy, setLocBusy] = useState(false)
   const [locError, setLocError] = useState(null)
   const [confirmOpen, setConfirmOpen] = useState(false)
@@ -120,7 +113,7 @@ export function PlacePicker({
   const isPickup = mode === 'pickup'
 
   return (
-    <div style={{ marginBottom: 12 }} data-places-loader={PLACES_LOADER_ID}>
+    <div style={{ marginBottom: 12 }} data-places-loader={MAPS_LOADER_ID}>
       <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--ink-secondary)', marginBottom: 4 }}>{label}</div>
 
       {isPickup ? (
@@ -230,4 +223,6 @@ export function PlacePicker({
   )
 }
 
-export { PLACES_LOADER_ID, PLACES_LIBRARIES }
+export { MAPS_LOADER_ID, MAP_LIBRARIES }
+/** @deprecated aliases — use MAPS_LOADER_ID / MAP_LIBRARIES */
+export { MAPS_LOADER_ID as PLACES_LOADER_ID, MAP_LIBRARIES as PLACES_LIBRARIES }
