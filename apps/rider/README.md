@@ -4,7 +4,7 @@ Version **1.1.0**. Bundle id `com.ascendmaui.clemsonrides.rider`.
 
 This is a separate binary from TestFlight 1.0.0 (1) `com.ascendmaui.clemsonairportrides` in `apps/mobile`. Do not point EAS at that project.
 
-Map-first home uses Clemson orange `#F56600` / `#F66733` and purple `#522D80`, with the same campus anchors as the web Campus map. Sign-in calls Supabase `signInWithPassword`. There is no `Alert` stub on the booking path.
+Map-first home uses Clemson orange `#F56600` / `#F66733` and purple `#522D80`, with the same campus anchors as the web Campus map. Sign-in calls Supabase `signInWithPassword`. The session is persisted with `expo-secure-store` (chunked so the full session fits the keychain limit). There is no `Alert` stub on the booking path.
 
 ## EAS environment variables
 

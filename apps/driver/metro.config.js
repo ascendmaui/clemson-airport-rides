@@ -9,6 +9,7 @@ config.watchFolders = [sharedRoot]
 config.resolver.extraNodeModules = {
   react: path.resolve(projectRoot, 'node_modules/react'),
   'react-native': path.resolve(projectRoot, 'node_modules/react-native'),
+  'expo-secure-store': path.resolve(projectRoot, 'node_modules/expo-secure-store'),
   'rides-native': sharedRoot,
 }
 

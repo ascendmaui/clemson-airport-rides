@@ -4,7 +4,7 @@ Version **1.1.0**. Bundle id `com.ascendmaui.clemsonrides.driver`.
 
 Separate binary, icon, `eas.json`, and Expo project from the rider app and from TestFlight 1.0.0 (1) `com.ascendmaui.clemsonairportrides`.
 
-Going online calls the same approval gate as the web app: `driver_applications.onboarding_status` must be `approved`. Email and password only.
+Going online calls the same approval gate as the web app: `driver_applications.onboarding_status` must be `approved`. Email and password only. The session stays in SecureStore.
 
 ## EAS environment variables
 
