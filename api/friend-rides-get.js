@@ -3,6 +3,7 @@
  * Public summary via service role (avoids RLS fights).
  */
 import { admin, cors, json, loadRideByToken, publicRideSummary, userFromAuth } from '../server/friendRideLib.js'
+import { loadDriverVehicle, vehicleMaxSeats, DEFAULT_MAX_PARTICIPANTS } from '../server/friendRideCapacity.js'
 
 export default async function handler(req, res) {
   if (cors(req, res)) return
@@ -27,6 +28,15 @@ export default async function handler(req, res) {
     const loaded = await loadRideByToken(sb, token)
     if (!loaded) return json(res, 404, { error: 'Friend ride not found' })
     const summary = publicRideSummary(loaded.ride, loaded.participants)
+
+    const driverId = loaded.ride.driver_profile_id || loaded.ride.organizer_id
+    const vehicle = await loadDriverVehicle(sb, driverId)
+    const maxParticipants =
+      Number(loaded.ride.max_participants) ||
+      vehicleMaxSeats(vehicle) ||
+      DEFAULT_MAX_PARTICIPANTS
+    summary.max_participants = maxParticipants
+    summary.vehicle_label = loaded.ride.vehicle_label || (vehicle ? `${vehicle.make || ''} ${vehicle.model || ''}`.trim() : null)
 
     // Trust UI fields (student badge + ratings) — public enough for lobby.
     const ids = loaded.participants.map((p) => p.user_id).filter(Boolean)

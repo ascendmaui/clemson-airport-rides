@@ -1,10 +1,13 @@
 /**
  * POST /api/friend-rides-join
- * Soft auth ok — email + name. Caps at 5 total.
+ * Soft auth ok — email + name. Caps at organizer vehicle capacity.
  */
 import {
-  admin, cors, json, parseBody, userFromAuth, loadRideByToken, MAX_PARTICIPANTS, publicRideSummary,
+  admin, cors, json, parseBody, userFromAuth, loadRideByToken, publicRideSummary,
 } from '../server/friendRideLib.js'
+import {
+  loadDriverVehicle, vehicleMaxSeats, DEFAULT_MAX_PARTICIPANTS,
+} from '../server/friendRideCapacity.js'
 
 export default async function handler(req, res) {
   if (cors(req, res)) return
@@ -41,6 +44,13 @@ export default async function handler(req, res) {
       return json(res, 409, { error: 'Stops are locked while payment is in progress' })
     }
 
+    const driverId = ride.driver_profile_id || ride.organizer_id
+    const vehicle = await loadDriverVehicle(sb, driverId)
+    const maxParticipants =
+      Number(ride.max_participants) ||
+      vehicleMaxSeats(vehicle) ||
+      DEFAULT_MAX_PARTICIPANTS
+
     let existing = null
     if (participantId) {
       existing = participants.find((p) => p.id === participantId)
@@ -72,12 +82,19 @@ export default async function handler(req, res) {
       const reloaded = await loadRideByToken(sb, token)
       return json(res, 200, {
         participant: updated,
-        ride: publicRideSummary(reloaded.ride, reloaded.participants),
+        ride: {
+          ...publicRideSummary(reloaded.ride, reloaded.participants),
+          max_participants: maxParticipants,
+        },
       })
     }
 
-    if (participants.length >= MAX_PARTICIPANTS) {
-      return json(res, 409, { error: `Max ${MAX_PARTICIPANTS} participants (including organizer)` })
+    if (participants.length >= maxParticipants) {
+      return json(res, 409, {
+        error: `This ride is full (${maxParticipants} max for this vehicle).`,
+        code: 'capacity_full',
+        maxParticipants,
+      })
     }
 
     const { data: inserted, error } = await sb
@@ -102,7 +119,10 @@ export default async function handler(req, res) {
     const reloaded = await loadRideByToken(sb, token)
     return json(res, 200, {
       participant: inserted,
-      ride: publicRideSummary(reloaded.ride, reloaded.participants),
+      ride: {
+        ...publicRideSummary(reloaded.ride, reloaded.participants),
+        max_participants: maxParticipants,
+      },
     })
   } catch (e) {
     return json(res, 500, { error: e.message || 'Server error' })
