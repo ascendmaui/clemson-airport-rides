@@ -37,22 +37,29 @@ export async function submitRating({ tripId, raterId, rateeId, stars, comment })
   const s = Number(stars)
   if (!Number.isFinite(s) || s < 1 || s > 5) throw new Error('Stars must be 1–5')
 
-  const { data: existing } = await supabase
+  const { data: existing, error: lookupError } = await supabase
     .from('ratings')
     .select('id')
     .eq('trip_id', tripId)
     .eq('rater_id', raterId)
     .maybeSingle()
+  if (lookupError) throw new Error(lookupError.message)
   if (existing?.id) throw new Error('You already rated this trip')
 
-  const { error } = await supabase.from('ratings').insert({
-    trip_id: tripId,
-    rater_id: raterId,
-    ratee_id: rateeId,
-    stars: s,
-    comment: comment?.trim() || null,
-  })
+  const { data, error } = await supabase
+    .from('ratings')
+    .insert({
+      trip_id: tripId,
+      rater_id: raterId,
+      ratee_id: rateeId,
+      stars: s,
+      comment: comment?.trim() || null,
+    })
+    .select('id, stars')
+    .single()
   if (error) throw new Error(error.message)
+  if (!data?.id) throw new Error('Rating was not saved')
+  return data
 }
 
 export async function hasRatedTrip(tripId, raterId) {

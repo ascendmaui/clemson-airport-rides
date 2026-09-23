@@ -150,7 +150,7 @@ export function RiderHome({ riderName = 'John' }) {
                 </div>
               </>
             )}
-            <CampusMap height={180} showHeat={showBusy} heatMode="busy" heatWindow={heatWindow}
+            <CampusMap height={240} showHeat={showBusy} heatMode="busy" heatWindow={heatWindow}
               onHeatMeta={setHeatMeta} showMapTypeControl interactive={showBusy}
               center={showBusy ? DOWNTOWN_CENTER : STADIUM} zoom={showBusy ? 15 : 14}
               marker={showBusy ? DOWNTOWN_CENTER : STADIUM} />
