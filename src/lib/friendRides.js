@@ -162,3 +162,36 @@ export function formatMiles(meters) {
   const mi = (Number(meters) || 0) / 1609.344
   return `${mi.toFixed(1)} mi`
 }
+
+
+/** Default party size when no registered vehicle (friends rides). */
+export const DEFAULT_MAX_PARTICIPANTS = 5
+
+/** Infer sedan | van | suv from make/model/type/tier text. */
+export function inferVehicleCategory(vehicle) {
+  if (!vehicle) return null
+  const blob = `${vehicle.type || ''} ${vehicle.tier || ''} ${vehicle.make || ''} ${vehicle.model || ''}`.toLowerCase()
+  if (/\b(van|minivan|transit|odyssey|sienna|carnival|pacifica|caravan)\b/.test(blob)) return 'van'
+  if (/\b(suv|crossover|suburban|tahoe|explorer|pilot|highlander|4runner|traverse|durango|escalade|yukon|wrangler|bronco|rav4|cr-?v|cx-?5|cx-?9|rogue|pathfinder|murano|model y|model x)\b/.test(blob)) return 'suv'
+  if (/\b(sedan|camry|accord|civic|corolla|altima|malibu|sonata|elantra|model 3|model s)\b/.test(blob)) return 'sedan'
+  return 'sedan'
+}
+
+/**
+ * Max participants (including organizer) from registered vehicle.
+ * Prefer vehicles.seats when set; else sedan≤4, van≤5, SUV≤6.
+ */
+export function vehicleMaxSeats(vehicle) {
+  if (!vehicle) return DEFAULT_MAX_PARTICIPANTS
+  const seats = Number(vehicle.seats)
+  if (Number.isFinite(seats) && seats > 0) return Math.max(1, Math.min(8, Math.floor(seats)))
+  const cat = inferVehicleCategory(vehicle)
+  if (cat === 'van') return 5
+  if (cat === 'suv') return 6
+  return 4
+}
+
+export function capacityMessage(max, { hasVehicle = true } = {}) {
+  if (!hasVehicle) return 'Add your vehicle before offering a group ride.'
+  return `This vehicle seats up to ${max} total (including you).`
+}
