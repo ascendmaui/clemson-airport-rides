@@ -7,6 +7,17 @@ import {
 } from '../lib/auth'
 import { getHashRoute, navigate } from '../lib/navigation'
 import { resumeAfterAuth } from '../components/SignInToBookModal'
+import {
+  captureReferralFromLocation,
+  clearStoredReferral,
+  formatCreditCents,
+  isValidReferralCode,
+  normalizeReferralCode,
+  previewReferralCode,
+  REFERRAL_REFEREE_CENTS,
+  REFERRAL_REFERRER_CENTS,
+  storeReferralCode,
+} from '../lib/referrals'
 
 const fieldStyle = {
   width: '100%',
@@ -157,7 +168,29 @@ export function SignUpScreen() {
   const [error, setError] = useState(null)
   const [busy, setBusy] = useState(false)
   const [cooldownSec, setCooldownSec] = useState(() => getSignupRateLimitRemainingSec())
+  const [refCode, setRefCode] = useState(() => captureReferralFromLocation())
+  const [referrerFirstName, setReferrerFirstName] = useState('')
   const submitLock = useRef(false)
+
+  useEffect(() => {
+    const code = normalizeReferralCode(refCode)
+    if (!isValidReferralCode(code)) {
+      setReferrerFirstName('')
+      return undefined
+    }
+    let alive = true
+    previewReferralCode(code)
+      .then((data) => {
+        if (!alive) return
+        setReferrerFirstName(data?.valid ? data.referrerFirstName || 'Friend' : '')
+      })
+      .catch(() => {
+        if (alive) setReferrerFirstName('')
+      })
+    return () => {
+      alive = false
+    }
+  }, [refCode])
 
   useEffect(() => {
     if (cooldownSec <= 0) return undefined
@@ -180,6 +213,16 @@ export function SignUpScreen() {
     }
     setError(null)
     const trimmed = email.trim()
+    const normalizedRef = normalizeReferralCode(refCode)
+    if (normalizedRef) {
+      if (!isValidReferralCode(normalizedRef)) {
+        setError('Referral code should look like TGR-ABC234.')
+        return
+      }
+      storeReferralCode(normalizedRef)
+    } else {
+      clearStoredReferral()
+    }
     submitLock.current = true
     setBusy(true)
     try {
@@ -217,9 +260,33 @@ export function SignUpScreen() {
           <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink-secondary)' }}>Email <span style={{ fontWeight: 500, color: 'var(--ink-tertiary)' }}>(Clemson email gets student pricing)</span></span>
           <input required type="email" autoComplete="email" placeholder="you@gmail.com" value={email} onChange={(e) => setEmail(e.target.value)} style={fieldStyle} disabled={blocked} />
         </label>
-        <label style={{ display: 'block', marginBottom: 18 }}>
+        <label style={{ display: 'block', marginBottom: 14 }}>
           <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink-secondary)' }}>Password</span>
           <input required type="password" autoComplete="new-password" minLength={6} value={password} onChange={(e) => setPassword(e.target.value)} style={fieldStyle} disabled={blocked} />
+        </label>
+        <label style={{ display: 'block', marginBottom: 18 }}>
+          <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink-secondary)' }}>Referral code <span style={{ fontWeight: 500, color: 'var(--ink-tertiary)' }}>(optional)</span></span>
+          <input
+            type="text"
+            autoCapitalize="characters"
+            autoComplete="off"
+            placeholder="TGR-ABC234"
+            value={refCode}
+            onChange={(e) => {
+              const next = e.target.value.toUpperCase()
+              setRefCode(next)
+              const normalized = normalizeReferralCode(next)
+              if (!next.trim()) clearStoredReferral()
+              else if (isValidReferralCode(normalized)) storeReferralCode(normalized)
+            }}
+            style={fieldStyle}
+            disabled={blocked}
+          />
+          <span style={{ display: 'block', marginTop: 6, fontSize: 12, color: '#522D80', lineHeight: 1.4 }}>
+            {referrerFirstName
+              ? `Referred by ${referrerFirstName}. You get ${formatCreditCents(REFERRAL_REFEREE_CENTS)} and they get ${formatCreditCents(REFERRAL_REFERRER_CENTS)} after your first trip.`
+              : `After your first ride or first drive, you get ${formatCreditCents(REFERRAL_REFEREE_CENTS)} and the person who invited you gets ${formatCreditCents(REFERRAL_REFERRER_CENTS)}.`}
+          </span>
         </label>
         {error && <p style={{ color: 'var(--danger)', fontSize: 13, marginBottom: 12 }}>{error}</p>}
         {cooldownSec > 0 && !error && (

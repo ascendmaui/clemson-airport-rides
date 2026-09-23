@@ -6,6 +6,7 @@ import { PurpleAcceptButton } from '../components/PrimaryButton'
 import { navigate } from '../lib/navigation'
 import { setDriverOnline, subscribeTrips, supabase } from '../lib/supabase'
 import { publishDriverLocation } from '../lib/driverTrack'
+import { qualifyReferralForTrip } from '../lib/referrals'
 
 function centsToDollars(cents) {
   if (cents == null) return '—'
@@ -249,6 +250,8 @@ function DriverShell({ driverId }) {
       })
       if (nextStatus === 'completed') {
         const doneId = activeTrip.id
+        // Credit grant hook: both sides, once, on first rider trip or first drive.
+        qualifyReferralForTrip(doneId).catch(() => {})
         setActiveTrip(null)
         await loadEarnings()
         if (doneId) navigate('rate', { trip: doneId })

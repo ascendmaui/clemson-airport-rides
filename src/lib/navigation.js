@@ -39,6 +39,13 @@ export function getHashRoute() {
   }
   if (path === 'profile' && segments[1] && !params.id) params.id = segments[1]
   if (path === 'rate' && segments[1] && !params.trip) params.trip = segments[1]
+  if (path === 'r' && segments[1] && !params.ref) {
+    params.ref = decodeURIComponent(segments.slice(1).join('/'))
+  }
+  if (!params.ref && typeof window !== 'undefined') {
+    const fromSearch = new URLSearchParams(window.location.search).get('ref')
+    if (fromSearch) params.ref = fromSearch
+  }
 
   // Persist share/friends token so a later hash clear (auth) can recover.
   if (typeof window !== 'undefined' && params.token && (path === 'share' || path === 'live')) {

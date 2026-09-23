@@ -4,8 +4,9 @@ import { PrimaryButton } from '../components/PrimaryButton'
 import { BillingPanel } from '../components/BillingPanel'
 import {
   IconBell, IconCard, IconCar, IconHelp, IconPrivacy, IconProfile,
-  IconSettings, IconSignOut, IconStudent,
+  IconSettings, IconShare, IconSignOut, IconStudent,
 } from '../components/icons'
+import { ReferralPanel } from '../components/ReferralPanel'
 import { useAuth } from '../lib/auth'
 import { navigate } from '../lib/navigation'
 import { fetchProfile, updateMyProfile, findPendingRatingTrip } from '../lib/ratings'
@@ -44,6 +45,7 @@ function Section({ title, subtitle, children, icon: Icon }) {
 
 const NAV = [
   { id: 'profile', label: 'Profile', Icon: IconProfile },
+  { id: 'refer', label: 'Refer', Icon: IconShare },
   { id: 'notifications', label: 'Alerts', Icon: IconBell },
   { id: 'billing', label: 'Billing', Icon: IconCard },
   { id: 'vehicle', label: 'Vehicle', Icon: IconCar },
@@ -354,6 +356,8 @@ export function AccountScreen() {
             )}
           </>
         )}
+
+        {tab === 'refer' && <ReferralPanel />}
 
         {tab === 'notifications' && (
           <Section title="Notifications" subtitle="Choose which toasts you see" icon={IconBell}>

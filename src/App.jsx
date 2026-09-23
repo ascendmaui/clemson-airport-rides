@@ -21,6 +21,7 @@ import { FriendRideScreen } from './screens/FriendRide'
 import { CarpoolScreen } from './screens/CarpoolScreen'
 import { ToastProvider, ToastStack } from './lib/toasts'
 import { RideToastWatcher } from './components/RideToastWatcher'
+import { ReferralCapture } from './components/ReferralCapture'
 
 const PROTECTED = new Set(['driver', 'driver-onboarding', 'account', 'driver-signup'])
 
@@ -93,6 +94,8 @@ function Screen({ path, params }) {
       return <FriendRideScreen token={params.token || ''} kind="friends" />
     case 'carpool':
       return <CarpoolScreen token={params.token || ''} />
+    case 'r':
+      return <SignUpScreen />
     case 'account':
       return (
         <RequireAuth>
@@ -130,6 +133,7 @@ export default function App() {
       <div className="desktop-frame">
         <div className="app-shell" style={{ position: 'relative', height: '100%' }}>
           <RideToastWatcher />
+          <ReferralCapture />
           <ToastStack />
           <div
             key={`${path}:${params.token || params.id || params.trip || ''}`}
