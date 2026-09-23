@@ -7,6 +7,7 @@ import {
   admin, cors, json, parseBody, userFromAuth, loadRideByToken, stripeClient, stripeOk,
   ensureStripeCustomer, markParticipantPaid, maybeBookFriendRide, publicRideSummary,
 } from '../server/friendRideLib.js'
+import { recomputeRideFares } from '../server/friendRideRecompute.js'
 
 export default async function handler(req, res) {
   if (cors(req, res)) return
@@ -39,12 +40,26 @@ export default async function handler(req, res) {
   try {
     const loaded = await loadRideByToken(sb, token)
     if (!loaded) return json(res, 404, { error: 'Friend ride not found' })
-    const { ride, participants } = loaded
+    let { ride, participants } = loaded
     if (ride.organizer_id !== user.id) return json(res, 403, { error: 'Organizer only' })
     if (ride.trip_id) return json(res, 409, { error: 'Already booked', trip_id: ride.trip_id })
 
+    // Always refresh fares from live route + vehicle + party size before charge.
+    const recomputed = await recomputeRideFares(sb, token, { splitMode: ride.split_mode })
+    if (!recomputed.ok) {
+      return json(res, 400, {
+        error: recomputed.message || recomputed.error || 'Could not calculate fares',
+        code: recomputed.code || 'recompute_failed',
+        message: recomputed.message || recomputed.error,
+      })
+    }
+    ride = recomputed.ride
+    participants = recomputed.participants
     if (!ride.total_fare_cents || !participants.every((p) => p.fare_cents != null)) {
-      return json(res, 400, { error: 'Recompute route/fares before charging' })
+      return json(res, 400, {
+        error: 'Could not calculate fares for this ride. Check pickups/dropoffs and try again.',
+        code: 'fares_missing',
+      })
     }
 
     await sb
