@@ -6,8 +6,10 @@
  */
 import {
   admin, cors, json, parseBody, userFromAuth, randomToken,
-  loadDriverVehicle, vehicleMaxSeats, DEFAULT_MAX_PARTICIPANTS,
 } from '../server/friendRideLib.js'
+import {
+  loadDriverVehicle, vehicleMaxSeats, DEFAULT_MAX_PARTICIPANTS,
+} from '../server/friendRideCapacity.js'
 
 export default async function handler(req, res) {
   if (cors(req, res)) return
