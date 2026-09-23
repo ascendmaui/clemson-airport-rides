@@ -668,27 +668,39 @@ function DriverShell({ driverId }) {
 
           {recentCompleted.length > 0 && (
             <div style={{ padding: '12px 0 4px', borderTop: '1px solid var(--border)', marginTop: 8 }}>
-              <div style={{ fontWeight: 600, marginBottom: 8 }}>Recent earnings</div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8 }}>
+                <div style={{ fontWeight: 600 }}>Recent earnings</div>
+                <button type="button" className="pressable" onClick={() => navigate('history')} style={{ fontSize: 12, fontWeight: 700, color: 'var(--purple)' }}>
+                  Rides history
+                </button>
+              </div>
               {recentCompleted.slice(0, 5).map((t) => (
                 <div
                   key={t.id}
                   style={{
                     display: 'flex',
                     justifyContent: 'space-between',
+                    alignItems: 'center',
+                    gap: 8,
                     fontSize: 13,
                     padding: '6px 0',
                     color: 'var(--ink-secondary)',
                   }}
                 >
-                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '70%' }}>
+                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '58%' }}>
                     {t.dropoff_label || 'Trip'}
                   </span>
-                  <strong style={{ color: 'var(--ink)' }}>
-                    {centsToDollars(driverTakeCents(t))}
-                    {extraByTrip[t.id] ? (
-                      <span style={{ color: '#F56600' }}> +{centsToDollars(extraByTrip[t.id])}</span>
-                    ) : null}
-                  </strong>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <button type="button" className="pressable" onClick={() => navigate('lost-found', { trip: t.id })} style={{ fontWeight: 700, color: 'var(--orange)', fontSize: 12 }}>
+                      Lost item
+                    </button>
+                    <strong style={{ color: 'var(--ink)' }}>
+                      {centsToDollars(driverTakeCents(t))}
+                      {extraByTrip[t.id] ? (
+                        <span style={{ color: '#F56600' }}> +{centsToDollars(extraByTrip[t.id])}</span>
+                      ) : null}
+                    </strong>
+                  </span>
                 </div>
               ))}
             </div>

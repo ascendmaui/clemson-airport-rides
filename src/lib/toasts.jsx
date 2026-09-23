@@ -24,6 +24,7 @@ const KIND_META = {
   carpool_booked: { title: 'Carpool booked', Icon: IconCarpool, tone: 'orange' },
   location_shared: { title: 'Location shared', Icon: IconShare, tone: 'purple' },
   driver_incentive: { title: 'Driver incentive', Icon: IconBell, tone: 'orange' },
+  ride_lost_found: { title: 'Lost & found', Icon: IconBell, tone: 'orange' },
   system: { title: 'Update', Icon: IconBell, tone: 'purple' },
 }
 

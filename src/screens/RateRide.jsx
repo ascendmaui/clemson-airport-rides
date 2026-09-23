@@ -142,6 +142,16 @@ function RateForm() {
             >
               Skip for now
             </button>
+            {tripId && (
+              <button
+                type="button"
+                className="pressable"
+                onClick={() => navigate('lost-found', { trip: tripId })}
+                style={{ fontWeight: 700, color: 'var(--orange)', padding: 8 }}
+              >
+                Left something in the car?
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -174,6 +184,16 @@ function RateForm() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             <RideMessagesEntry trip={trip} userId={user?.id} />
             <PrimaryButton onClick={() => navigate(isRider ? 'home' : 'driver')}>Done</PrimaryButton>
+            {tripId && (
+              <button
+                type="button"
+                className="pressable"
+                onClick={() => navigate('lost-found', { trip: tripId })}
+                style={{ display: 'block', width: '100%', fontWeight: 700, color: 'var(--orange)' }}
+              >
+                Left something in the car?
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -301,6 +321,16 @@ function RateForm() {
           >
             Skip for now
           </button>
+          {tripId && (
+            <button
+              type="button"
+              className="pressable"
+              onClick={() => navigate('lost-found', { trip: tripId })}
+              style={{ display: 'block', width: '100%', marginTop: 8, fontWeight: 700, color: 'var(--orange)' }}
+            >
+              Left something in the car?
+            </button>
+          )}
         </form>
       </div>
     </div>

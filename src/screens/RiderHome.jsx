@@ -103,6 +103,9 @@ export function RiderHome({ riderName = 'John' }) {
             <Pill icon="👥" tone="purple" onClick={() => navigate('carpool', { hub: '1' })}>
               Carpool · split the surge
             </Pill>
+            <Pill icon="🧾" tone="purple" onClick={() => navigate('history')}>
+              Your rides
+            </Pill>
           </div>
 
           <div style={{ display: 'flex', gap: 10, marginTop: 18, overflowX: 'auto' }}>
