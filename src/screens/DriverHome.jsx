@@ -6,6 +6,7 @@ import { PurpleAcceptButton } from '../components/PrimaryButton'
 import { navigate } from '../lib/navigation'
 import { setDriverOnline, subscribeTrips, supabase } from '../lib/supabase'
 import { publishDriverLocation } from '../lib/driverTrack'
+import { DriverApprovalGate } from './DriverApprovalGate'
 
 function centsToDollars(cents) {
   if (cents == null) return '—'
@@ -38,7 +39,7 @@ function DriverShell({ driverId }) {
   const [priority, setPriority] = useState(false)
   const [offer, setOffer] = useState(null)
   const [activeTrip, setActiveTrip] = useState(null)
-  const [online, setOnline] = useState(true)
+  const [online, setOnline] = useState(false)
   const [earningsCents, setEarningsCents] = useState(0)
   const [recentCompleted, setRecentCompleted] = useState([])
   const [advancing, setAdvancing] = useState(false)
@@ -46,6 +47,9 @@ function DriverShell({ driverId }) {
   const [showSurge, setShowSurge] = useState(true)
   const [heatWindow, setHeatWindow] = useState('now')
   const [heatMeta, setHeatMeta] = useState(null)
+  const [application, setApplication] = useState(undefined)
+  const [activeChecked, setActiveChecked] = useState(false)
+  const approved = application?.onboarding_status === 'approved'
   const silverProgress = 2
   const silverTotal = 4
 
@@ -68,16 +72,41 @@ function DriverShell({ driverId }) {
   }, [driverId])
 
   useEffect(() => {
-    if (!driverId) return undefined
+    if (!supabase || !driverId) {
+      setApplication(null)
+      return undefined
+    }
+    let alive = true
+    supabase
+      .from('driver_applications')
+      .select('onboarding_status, rejection_reason, submitted_at')
+      .eq('profile_id', driverId)
+      .maybeSingle()
+      .then(({ data, error }) => {
+        if (!alive) return
+        if (error) {
+          console.error('[driver approval]', error.message)
+          setApplication(null)
+          return
+        }
+        setApplication(data)
+      })
+    return () => {
+      alive = false
+    }
+  }, [driverId])
+
+  useEffect(() => {
+    if (!driverId || !approved) return undefined
     setDriverOnline(driverId, true).catch(() => {})
     setOnline(true)
     return () => {
       setDriverOnline(driverId, false).catch(() => {})
     }
-  }, [driverId])
+  }, [driverId, approved])
 
   useEffect(() => {
-    if (!driverId || !navigator.geolocation) return undefined
+    if (!driverId || !approved || !navigator.geolocation) return undefined
     const watchId = navigator.geolocation.watchPosition(
       (pos) => {
         const next = [pos.coords.latitude, pos.coords.longitude]
@@ -93,7 +122,7 @@ function DriverShell({ driverId }) {
       { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 },
     )
     return () => navigator.geolocation.clearWatch(watchId)
-  }, [driverId])
+  }, [driverId, approved])
 
   useEffect(() => {
     loadEarnings()
@@ -101,7 +130,7 @@ function DriverShell({ driverId }) {
 
   // Load open offers (searching/offered) — Realtime alone misses rows already open.
   useEffect(() => {
-    if (!supabase) return undefined
+    if (!supabase || !approved) return undefined
     let alive = true
     supabase
       .from('trips')
@@ -127,11 +156,14 @@ function DriverShell({ driverId }) {
     return () => {
       alive = false
     }
-  }, [driverId])
+  }, [driverId, approved])
 
   // Poll/load active trips for this driver so E2E accepted trips appear without re-offer.
   useEffect(() => {
-    if (!supabase || !driverId) return undefined
+    if (!supabase || !driverId) {
+      setActiveChecked(true)
+      return undefined
+    }
     let alive = true
     async function loadActive() {
       const { data, error } = await supabase
@@ -141,12 +173,15 @@ function DriverShell({ driverId }) {
         .in('status', ACTIVE_STATUSES)
         .order('accepted_at', { ascending: false })
         .limit(1)
-      if (!alive || error) return
-      const row = data?.[0]
-      if (row) {
-        setActiveTrip(row)
-        setOffer((prev) => (prev?.id === row.id ? null : prev))
+      if (!alive) return
+      if (!error) {
+        const row = data?.[0]
+        if (row) {
+          setActiveTrip(row)
+          setOffer((prev) => (prev?.id === row.id ? null : prev))
+        }
       }
+      setActiveChecked(true)
     }
     loadActive()
     const timer = setInterval(loadActive, 8000)
@@ -157,6 +192,7 @@ function DriverShell({ driverId }) {
   }, [driverId])
 
   useEffect(() => {
+    if (!approved) return undefined
     return subscribeTrips((payload) => {
       const row = payload?.new || payload?.record
       if (!row) return
@@ -187,9 +223,10 @@ function DriverShell({ driverId }) {
         setActiveTrip(null)
       }
     })
-  }, [offer?.id, activeTrip?.id, driverId, loadEarnings])
+  }, [approved, offer?.id, activeTrip?.id, driverId, loadEarnings])
 
   async function acceptOffer() {
+    if (!approved) return
     if (!offer?.id || !supabase || !driverId) return
     const acceptedAt = new Date().toISOString()
     const { error } = await supabase
@@ -258,6 +295,18 @@ function DriverShell({ driverId }) {
     } finally {
       setAdvancing(false)
     }
+  }
+
+  if (application === undefined || !activeChecked) {
+    return (
+      <div style={{ padding: 40, textAlign: 'center', color: 'var(--ink-secondary)' }}>
+        Checking driver approval…
+      </div>
+    )
+  }
+
+  if (!approved && !activeTrip) {
+    return <DriverApprovalGate application={application} />
   }
 
   const showIdle = !offer && !activeTrip

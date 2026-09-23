@@ -1,65 +1,16 @@
 /**
  * POST /api/driver-signup
- * Student driver quiz → driver_applications + profiles.role=driver + vehicles + driver_status.
- * Soft-verify @clemson.edu → student_verified_at (open signup — other emails not blocked).
- * Idempotent: re-open quiz upserts driver_applications on profile_id and refreshes vehicle fields.
- * Self-contained (does not import friendRideLib).
+ * Saves driver quiz + vehicle. Never auto-approves.
+ * onboarding_status becomes pending_docs (or stays approved / pending_review).
  */
-import { createClient } from '@supabase/supabase-js'
-
-const supabaseUrl =
-  process.env.SUPABASE_URL ||
-  process.env.NEXT_PUBLIC_SUPABASE_URL ||
-  process.env.VITE_SUPABASE_URL ||
-  'https://awktabuhijrshmsmagpq.supabase.co'
-const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || ''
-
-function json(res, status, body) {
-  res.statusCode = status
-  res.setHeader('Content-Type', 'application/json')
-  res.setHeader('Access-Control-Allow-Origin', '*')
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization')
-  res.end(JSON.stringify(body))
-}
-
-function cors(req, res) {
-  if (req.method === 'OPTIONS') {
-    json(res, 204, {})
-    return true
-  }
-  return false
-}
-
-function parseBody(req) {
-  let body = req.body
-  if (typeof body === 'string') {
-    try {
-      body = JSON.parse(body || '{}')
-    } catch {
-      return { error: 'Invalid JSON' }
-    }
-  }
-  return { body: body || {} }
-}
-
-function admin() {
-  if (!serviceKey) return null
-  return createClient(supabaseUrl, serviceKey, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  })
-}
-
-async function userFromAuth(req) {
-  const h = req.headers.authorization || req.headers.Authorization || ''
-  const m = String(h).match(/^Bearer\s+(.+)$/i)
-  if (!m) return null
-  const sb = admin()
-  if (!sb) return null
-  const { data, error } = await sb.auth.getUser(m[1])
-  if (error || !data?.user) return null
-  return data.user
-}
+import {
+  ADMIN_EMAIL,
+  legacyStatusFor,
+  statusAfterInfoSave,
+} from '../shared/driverOnboarding.js'
+import {
+  admin, cors, json, parseBody, userFromAuth,
+} from '../server/friendRideLib.js'
 
 export default async function handler(req, res) {
   if (cors(req, res)) return
@@ -91,33 +42,51 @@ export default async function handler(req, res) {
   const model = String(body.model || '').trim()
   const plate = String(body.plate || '').trim()
   const color = String(body.color || '').trim() || null
-  const fullName = String(body.fullName || user.user_metadata?.full_name || '').trim() || null
-  const phone = String(body.phone || '').trim() || null
-  const seats = Number(body.seats) > 0 ? Number(body.seats) : 4
+  const fullName = String(body.fullName || user.user_metadata?.full_name || '').trim()
+  const phone = String(body.phone || '').trim()
+  const seats = Number(body.seats) > 0 ? Math.min(8, Number(body.seats)) : 4
 
+  if (!fullName) return json(res, 400, { error: 'Full name is required' })
+  if (phone.replace(/\D/g, '').length < 7) return json(res, 400, { error: 'A real phone number is required' })
   if (!make || !model || !plate) {
     return json(res, 400, { error: 'Vehicle make, model, and plate are required' })
   }
 
   const email = (user.email || '').toLowerCase()
-  const isClemson = email.endsWith('@clemson.edu')
+  const isClemson = email.endsWith('@clemson.edu') || email.endsWith('@g.clemson.edu')
   const now = new Date().toISOString()
 
   try {
+    const { data: existing, error: existingErr } = await sb
+      .from('driver_applications')
+      .select('onboarding_status')
+      .eq('profile_id', user.id)
+      .maybeSingle()
+    if (existingErr) return json(res, 500, { error: existingErr.message })
+
+    const { data: profileRow, error: profileReadErr } = await sb
+      .from('profiles')
+      .select('role')
+      .eq('id', user.id)
+      .maybeSingle()
+    if (profileReadErr) return json(res, 500, { error: profileReadErr.message })
+
+    const nextStatus = statusAfterInfoSave(existing?.onboarding_status || null)
+    const keepRole = profileRow?.role === 'admin' || profileRow?.role === 'ops' || email === ADMIN_EMAIL
+
     const profilePatch = {
       id: user.id,
-      role: 'driver',
       full_name: fullName,
       phone,
       email: user.email || null,
       updated_at: now,
     }
     if (isClemson) profilePatch.student_verified_at = now
+    if (nextStatus === 'approved' && !keepRole) profilePatch.role = 'driver'
 
     const { error: profileErr } = await sb.from('profiles').upsert(profilePatch)
     if (profileErr) return json(res, 500, { error: profileErr.message })
 
-    // Idempotent re-open: UNIQUE(profile_id) — update quiz answers + keep approved
     const { data: app, error: appErr } = await sb
       .from('driver_applications')
       .upsert(
@@ -128,8 +97,8 @@ export default async function handler(req, res) {
           has_insurance: true,
           wants_extra_money: true,
           attestation_accepted_at: now,
-          status: 'approved',
-          reviewed_at: now,
+          onboarding_status: nextStatus,
+          status: legacyStatusFor(nextStatus),
         },
         { onConflict: 'profile_id' },
       )
@@ -187,15 +156,17 @@ export default async function handler(req, res) {
       if (svErr) console.warn('[driver-signup] student_verifications', svErr.message)
     }
 
+    const approved = nextStatus === 'approved'
     return json(res, 200, {
       ok: true,
       application: app,
-      role: 'driver',
+      onboarding_status: nextStatus,
+      approved,
       student_verified: isClemson,
       vehicle,
-      message: isClemson
-        ? 'Approved as Clemson student driver'
-        : 'Approved as driver (open signup — verify Clemson email later for student badge)',
+      message: approved
+        ? 'Your driver profile is already approved.'
+        : 'Info saved. Upload license, insurance, registration, and car photos next. An admin must approve you before you can receive rides.',
     })
   } catch (e) {
     return json(res, 500, { error: e.message || 'Server error' })

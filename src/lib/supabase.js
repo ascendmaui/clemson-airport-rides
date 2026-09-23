@@ -53,18 +53,29 @@ export async function fetchOnlineDrivers() {
   }
 
   const ids = statuses.map((s) => s.driver_id)
+  const { data: approvedRows, error: approvedErr } = await supabase.rpc('list_approved_driver_ids', { ids })
+  if (approvedErr) {
+    return { drivers: [], error: approvedErr.message }
+  }
+  const approved = new Set((approvedRows || []).map((row) => row.profile_id))
+  const visible = statuses.filter((s) => approved.has(s.driver_id))
+  if (!visible.length) {
+    return { drivers: [], error: null }
+  }
+
+  const visibleIds = visible.map((s) => s.driver_id)
 
   const [{ data: profiles }, { data: vehicles }] = await Promise.all([
     supabase
       .from('profiles')
       .select('id, full_name, phone, email, avatar_url, role')
-      .in('id', ids),
+      .in('id', visibleIds),
     supabase
       .from('vehicles')
       .select(
         'id, driver_id, make, model, color, plate, seats, is_tesla, autonomous_capable, tier',
       )
-      .in('driver_id', ids),
+      .in('driver_id', visibleIds),
   ])
 
   const profileById = Object.fromEntries((profiles || []).map((p) => [p.id, p]))
@@ -73,7 +84,7 @@ export async function fetchOnlineDrivers() {
     if (!vehicleByDriver[v.driver_id]) vehicleByDriver[v.driver_id] = v
   }
 
-  const drivers = statuses.map((s) => {
+  const drivers = visible.map((s) => {
     const profile = profileById[s.driver_id] || {}
     const vehicle = vehicleByDriver[s.driver_id] || null
     return {
@@ -120,47 +131,23 @@ export function subscribeTrips(onChange) {
   }
 }
 
-export async function upsertDriverOnboarding({
-  userId,
-  fullName,
-  phone,
-  vehicle,
-}) {
-  if (!supabase) throw new Error('Supabase not configured')
-  const { error: profileErr } = await supabase.from('profiles').upsert({
-    id: userId,
-    role: 'driver',
-    full_name: fullName,
-    phone,
-    updated_at: new Date().toISOString(),
-  })
-  if (profileErr) throw new Error(profileErr.message)
-
-  const { error: vehicleErr } = await supabase.from('vehicles').insert({
-    driver_id: userId,
-    make: vehicle.make,
-    model: vehicle.model,
-    color: vehicle.color || null,
-    plate: vehicle.plate,
-    seats: vehicle.seats || 4,
-    is_tesla: Boolean(vehicle.isTesla),
-    autonomous_capable: Boolean(vehicle.autonomousCapable),
-    tier: vehicle.isTesla ? 'tesla_self_driving' : vehicle.tier || 'standard',
-  })
-  if (vehicleErr) throw new Error(vehicleErr.message)
-
-  const { error: statusErr } = await supabase.from('driver_status').upsert({
-    driver_id: userId,
-    online: false,
-    updated_at: new Date().toISOString(),
-  })
-  if (statusErr) throw new Error(statusErr.message)
-
-  return { ok: true }
+export async function upsertDriverOnboarding() {
+  throw new Error('Use driver onboarding. New drivers are not approved until an admin reviews their documents.')
 }
 
 export async function setDriverOnline(driverId, online) {
   if (!supabase) throw new Error('Supabase not configured')
+  if (online) {
+    const { data, error: gateErr } = await supabase
+      .from('driver_applications')
+      .select('onboarding_status')
+      .eq('profile_id', driverId)
+      .maybeSingle()
+    if (gateErr) throw new Error(gateErr.message)
+    if (data?.onboarding_status !== 'approved') {
+      throw new Error('Admin approval is required before you can go online.')
+    }
+  }
   const { error } = await supabase
     .from('driver_status')
     .upsert({

@@ -19,6 +19,7 @@ import {
 } from '../lib/notificationPrefs'
 import { useToasts, pushToast } from '../lib/toasts'
 import { isClemsonEmail } from '../lib/studentDomain'
+import { fetchMyDriverApplication, isAdminIdentity, onboardingLabel } from '../lib/driverOnboarding'
 
 const chip = (on) => ({
   padding: '8px 12px', borderRadius: 999, fontSize: 13, fontWeight: 600,
@@ -75,7 +76,13 @@ export function AccountScreen() {
   const [prefs, setPrefs] = useState({ ...DEFAULT_NOTIFICATION_PREFS })
   const [prefsNote, setPrefsNote] = useState(null)
   const [prefsSaving, setPrefsSaving] = useState(false)
+  const [application, setApplication] = useState(null)
   const isDriver = profile?.role === 'driver' || profile?.role === 'both'
+  const isAdmin = isAdminIdentity({
+    jwtEmail: user?.email,
+    role: profile?.role,
+    isAdmin: profile?.is_admin,
+  })
 
   async function reload() {
     if (!user?.id) return
@@ -88,6 +95,7 @@ export function AccountScreen() {
     setStyles((p?.ride_style || '').split('|').map((s) => s.trim()).filter(Boolean))
     setPrivacy(p?.profile_privacy || 'matched')
     setGallery(p?.gallery || [])
+    fetchMyDriverApplication(user.id).then(setApplication).catch(() => setApplication(null))
   }
 
   useEffect(() => {
@@ -427,7 +435,18 @@ export function AccountScreen() {
         )}
 
         {tab === 'vehicle' && (
-          <Section title="Vehicle / Driver" subtitle="Required to offer carpools or go online" icon={IconCar}>
+          <Section title="Vehicle / Driver" subtitle="Approval required before you can receive rides" icon={IconCar}>
+            <div style={{
+              marginBottom: 12,
+              padding: '10px 12px',
+              borderRadius: 12,
+              background: application?.onboarding_status === 'approved' ? 'rgba(31,138,76,0.1)' : 'rgba(245,102,0,0.1)',
+              color: 'var(--purple)',
+              fontWeight: 700,
+              fontSize: 13,
+            }}>
+              {onboardingLabel(application?.onboarding_status)}
+            </div>
             {profile?.vehicle ? (
               <div style={{ fontSize: 14, lineHeight: 1.5, color: 'var(--ink)' }}>
                 <div style={{ fontWeight: 700 }}>
@@ -444,11 +463,18 @@ export function AccountScreen() {
                 No registered vehicle yet. Sign up as a driver to add make, model, color, plate, and capacity.
               </div>
             )}
-            <button type="button" className="pressable" onClick={() => navigate('driver-signup')}
+            <button type="button" className="pressable" onClick={() => navigate('driver-onboarding')}
               style={{ display: 'block', width: '100%', marginTop: 12, padding: 12, borderRadius: 14, fontWeight: 700,
                 color: '#fff', background: 'linear-gradient(135deg, var(--orange), #ff7a1a)' }}>
-              {profile?.vehicle ? 'Update driver signup' : 'Driver signup'}
+              {application?.onboarding_status === 'approved' ? 'View driver application' : 'Continue driver application'}
             </button>
+            {isAdmin && (
+              <button type="button" className="pressable" onClick={() => navigate('admin')}
+                style={{ display: 'block', width: '100%', marginTop: 10, padding: 12, borderRadius: 14, fontWeight: 700,
+                  color: '#fff', background: 'linear-gradient(135deg, #522D80, #6b3fa0)' }}>
+                Review driver applications
+              </button>
+            )}
             <button type="button" className="pressable" onClick={() => navigate('driver')}
               style={{ display: 'block', width: '100%', marginTop: 10, padding: 12, borderRadius: 14, fontWeight: 700,
                 color: 'var(--purple)', border: '1.5px solid rgba(82,45,128,0.3)', background: 'rgba(255,255,255,0.55)' }}>

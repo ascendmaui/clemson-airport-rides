@@ -112,8 +112,9 @@ export function LegalTerms() {
       <Section heading="Eligibility">
         <p>
           Anyone may create a rider or driver account with a valid email. Riders with a verified
-          <strong>@clemson.edu</strong> address receive student pricing where offered. Drivers must complete
-          onboarding and remain in good standing. You are responsible for the accuracy of the information you provide.
+          <strong>@clemson.edu</strong> address receive student pricing where offered. Drivers must submit
+          their info and documents and wait for admin approval before they can receive rides. You are
+          responsible for the accuracy of the information you provide.
         </p>
       </Section>
       <Section heading="The service">

@@ -4,6 +4,7 @@
  */
 import { createClient } from '@supabase/supabase-js'
 import Stripe from 'stripe'
+import { driverApprovalStatus } from './driverApproval.js'
 
 export const MAX_PARTICIPANTS = 5
 
@@ -376,6 +377,14 @@ export async function maybeBookFriendRide(sb, rideId) {
     },
   }
   if (assignedDriver) {
+    const gate = await driverApprovalStatus(sb, assignedDriver)
+    if (!gate.approved) {
+      return {
+        booked: false,
+        reason: 'driver_not_approved',
+        message: 'This driver is not approved to receive rides yet.',
+      }
+    }
     tripRow.driver_id = assignedDriver
     tripRow.accepted_at = acceptedAt
   }
