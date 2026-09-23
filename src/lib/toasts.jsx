@@ -20,6 +20,7 @@ const KIND_META = {
   canceled_midride: { title: 'Ride canceled mid-trip', Icon: IconCar, tone: 'orange' },
   fare_charged: { title: 'Fare charged', Icon: IconCard, tone: 'purple' },
   payment_failed: { title: 'Payment failed', Icon: IconCard, tone: 'danger' },
+  payment_required: { title: 'Payment required', Icon: IconCard, tone: 'danger' },
   payment_retry: { title: 'Retry payment', Icon: IconCard, tone: 'orange' },
   friend_joined: { title: 'Friend joined', Icon: IconCarpool, tone: 'purple' },
   friend_left: { title: 'Friend left', Icon: IconCarpool, tone: 'orange' },
@@ -64,7 +65,7 @@ export function ToastProvider({ children }) {
     const kind = toast?.kind || 'system'
     const cat = toast?.category || categoryForToastKind(kind)
     const prefs = prefsRef.current || loadLocalPrefs(user?.id)
-    const critical = kind === 'canceled_midride' || toast?.force === true
+    const critical = kind === 'canceled_midride' || kind === 'payment_required' || toast?.force === true
     if (!critical && prefs[cat] === false) return null
 
     const id = toast.id || `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`

@@ -32,6 +32,7 @@ export function RideToastWatcher() {
   const { user } = useAuth()
   const { setPrefsCache } = useToasts()
   const seenTrip = useRef(new Map()) // id -> status
+  const seenPay = useRef(new Map()) // id -> midride payment status
   const seenFriend = useRef(new Map()) // id -> status|participantCount
   const seenBill = useRef(new Map()) // id -> status
   const primed = useRef(false)
@@ -73,7 +74,10 @@ export function RideToastWatcher() {
           .limit(8),
       ])
       if (!alive) return
-      ;(trips || []).forEach((t) => seenTrip.current.set(t.id, t.status))
+      ;(trips || []).forEach((t) => {
+        seenTrip.current.set(t.id, t.status)
+        seenPay.current.set(t.id, t.metadata?.midride_cancel?.paymentStatus || null)
+      })
       ;(rides || []).forEach((r) => seenFriend.current.set(r.id, r.status))
       ;(bills || []).forEach((b) => seenBill.current.set(b.id, b.status))
       primed.current = true
@@ -81,13 +85,33 @@ export function RideToastWatcher() {
 
     function onTripRow(row) {
       if (!row?.id) return
+      const pay = row.metadata?.midride_cancel?.paymentStatus || null
       if (!primed.current) {
         seenTrip.current.set(row.id, row.status)
+        seenPay.current.set(row.id, pay)
         return
       }
       const prev = seenTrip.current.get(row.id)
-      if (prev === row.status) return
+      const prevPay = seenPay.current.get(row.id)
+      const statusSame = prev === row.status
+      const paySame = prevPay === pay
+      if (statusSame && paySame) return
       seenTrip.current.set(row.id, row.status)
+      seenPay.current.set(row.id, pay)
+      if (prev != null && pay === 'payment_required' && prevPay !== 'payment_required') {
+        const owed = Number(row.metadata?.midride_cancel?.toCollectCents || row.metadata?.midride_cancel?.obligationCents) || 0
+        const owedLabel = (owed / 100).toLocaleString('en-US', { style: 'currency', currency: 'USD' })
+        pushToast({
+          id: `pay-required-${row.id}`,
+          kind: 'payment_required',
+          force: true,
+          title: 'Payment required',
+          body: row.driver_id === user.id
+            ? `Mid-ride cancel ended. ${owedLabel} is still unpaid.`
+            : `The ride ended. ${owedLabel} still needs a card.`,
+        })
+      }
+      if (statusSame) return
       if (prev == null && row.status === 'searching') {
         // first sight of a brand-new trip after prime — still toast
       } else if (prev == null) {

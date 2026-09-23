@@ -32,6 +32,7 @@
 - Platform 20% / driver 80% of the obligation. Succeeded deposits reduce the new card charge only.
 - Blocked after 3 mid-ride cancels in 30 days (`MIDRIDE_CANCEL_MAX`, `MIDRIDE_CANCEL_WINDOW_DAYS`).
 - API: `POST /api/trip-cancel-midride` (`confirm: true` charges; omit confirm to preview).
+- Card collection goes through `server/collectPayment.js` when that module is present. A decline still ends the trip and surfaces `payment_required` (toast + trip event). The trip is not left in progress.
 
 ## Env / blockers
 - GOOGLE_MAPS_API_KEY (Vercel server Routes)

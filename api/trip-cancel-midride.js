@@ -7,8 +7,9 @@
  * This is not the wait-fee cancel used when the driver is waiting at pickup.
  */
 import {
-  admin, cors, json, parseBody, userFromAuth, stripeClient, stripeOk,
+  admin, cors, json, parseBody, userFromAuth,
 } from '../server/friendRideLib.js'
+import { collectMidrideCharge } from '../server/collectTripCharge.js'
 import {
   MIDRIDE_STATUS,
   abuseDecision,
@@ -273,60 +274,42 @@ export default async function handler(req, res) {
     let paymentStatus = 'uncollected'
     let stripePaymentIntentId = null
     let chargeError = null
+    let clientSecret = null
+    let creditsAppliedCents = 0
+    let chargeSource = null
 
     if (quote.toCollectCents <= 0) {
       paymentStatus = 'covered_by_deposit'
     } else if (quote.toCollectCents < 50) {
       // Stripe's minimum charge is $0.50. A leftover below that is not sent to the card.
       paymentStatus = 'waived_below_minimum'
-    } else if (!stripeOk()) {
-      paymentStatus = 'uncollected'
-      chargeError = 'STRIPE_SECRET_KEY is not configured'
     } else {
       const { data: profile } = await sb
         .from('profiles')
         .select('stripe_customer_id, stripe_default_pm_id, full_name, email')
         .eq('id', user.id)
         .maybeSingle()
-
-      if (!profile?.stripe_customer_id || !profile?.stripe_default_pm_id) {
-        paymentStatus = 'requires_payment_method'
-        chargeError = 'No card on file'
-      } else {
-        try {
-          const stripe = stripeClient()
-          const pi = await stripe.paymentIntents.create({
-            amount: quote.toCollectCents,
-            currency: 'usd',
-            customer: profile.stripe_customer_id,
-            payment_method: profile.stripe_default_pm_id,
-            off_session: true,
-            confirm: true,
-            description: 'Clemson RIDES mid-ride cancellation',
-            metadata: {
-              kind: 'midride_cancel',
-              trip_id: trip.id,
-              rider_id: user.id,
-              driver_id: trip.driver_id || '',
-              obligation_cents: String(quote.obligationCents),
-              driver_cents: String(quote.driverCents),
-              platform_cents: String(quote.platformCents),
-            },
-          }, {
-            idempotencyKey: `midride_cancel_${trip.id}`,
-          })
-          stripePaymentIntentId = pi.id
-          if (pi.status === 'succeeded') paymentStatus = 'succeeded'
-          else {
-            paymentStatus = pi.status || 'failed'
-            chargeError = `Payment status ${pi.status}`
-          }
-        } catch (err) {
-          paymentStatus = 'failed'
-          chargeError = err?.message || 'Card charge failed'
-          stripePaymentIntentId = err?.payment_intent?.id || err?.raw?.payment_intent?.id || null
-        }
-      }
+      // collectMidrideCharge never throws. A decline ends as payment_required
+      // while the trip stays canceled_midride.
+      const charged = await collectMidrideCharge({
+        sb,
+        profile,
+        amountCents: quote.toCollectCents,
+        riderId: user.id,
+        tripId: trip.id,
+        driverId: trip.driver_id,
+        metadata: {
+          obligation_cents: String(quote.obligationCents),
+          driver_cents: String(quote.driverCents),
+          platform_cents: String(quote.platformCents),
+        },
+      })
+      paymentStatus = charged.paymentStatus
+      stripePaymentIntentId = charged.stripePaymentIntentId
+      chargeError = charged.chargeError
+      clientSecret = charged.clientSecret
+      creditsAppliedCents = charged.creditsAppliedCents
+      chargeSource = charged.source
     }
 
     const finalQuote = {
@@ -334,8 +317,11 @@ export default async function handler(req, res) {
       paymentStatus,
       stripePaymentIntentId,
       chargeError,
+      creditsAppliedCents,
+      chargeSource,
       canceledAt: now,
       limitReached: abuse.remaining <= 1,
+      paymentRequired: paymentStatus === 'payment_required',
     }
 
     const nextMeta = {
@@ -406,11 +392,27 @@ export default async function handler(req, res) {
       },
     })
 
+    if (paymentStatus === 'payment_required') {
+      await sb.from('trip_events').insert({
+        trip_id: trip.id,
+        kind: 'payment_required',
+        payload: {
+          reason: 'midride_cancel_decline',
+          rider_id: user.id,
+          driver_id: trip.driver_id,
+          amount_cents: quote.toCollectCents,
+          charge_error: chargeError,
+          trip_status: MIDRIDE_STATUS,
+        },
+      })
+    }
+
     return json(res, 200, {
       ok: true,
       tripId: trip.id,
       status: MIDRIDE_STATUS,
-      quote: finalQuote,
+      code: paymentStatus === 'payment_required' ? 'payment_required' : null,
+      quote: { ...finalQuote, clientSecret },
     })
   } catch (err) {
     console.error('[trip-cancel-midride]', err)

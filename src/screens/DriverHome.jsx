@@ -729,6 +729,9 @@ function DriverShell({ driverId }) {
             {cancelNotice.metadata?.midride_cancel?.driverCents != null
               ? ` You keep ${centsToDollars(cancelNotice.metadata.midride_cancel.driverCents)} (80% of the charge).`
               : ' Your share is recorded on the trip.'}
+            {cancelNotice.metadata?.midride_cancel?.paymentStatus === 'payment_required'
+              ? ' The rider still owes this charge — payment required.'
+              : ''}
           </p>
           <textarea
             disabled

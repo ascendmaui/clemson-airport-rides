@@ -41,6 +41,19 @@ export function formatMidrideMoney(cents) {
   return formatUsdFromCents(cents || 0)
 }
 
+export function isPaymentRequired(quote) {
+  const status = quote?.paymentStatus
+  return status === 'payment_required'
+    || status === 'failed'
+    || status === 'requires_payment_method'
+}
+
+export function paymentRequiredMessage(quote) {
+  if (!isPaymentRequired(quote)) return null
+  const amount = formatMidrideMoney(quote.toCollectCents || quote.obligationCents)
+  return `Payment required. The ride has ended, but ${amount} still needs a card.`
+}
+
 export function midrideChargeSummary(quote) {
   if (!quote) return ''
   const total = formatMidrideMoney(quote.obligationCents)

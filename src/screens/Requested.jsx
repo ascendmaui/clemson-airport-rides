@@ -8,7 +8,8 @@ import { createLocationShare, revokeLocationShare, startSharingLocation } from '
 import { subscribeDriverStatus } from '../lib/driverTrack'
 import { supabase } from '../lib/supabase'
 import { hasRatedTrip } from '../lib/ratings'
-import { formatMidrideMoney } from '../lib/midrideCancel'
+import { formatMidrideMoney, isPaymentRequired, paymentRequiredMessage } from '../lib/midrideCancel'
+import { pushToast } from '../lib/toasts'
 import { isMidrideStatus, isTripSurfaceFrozen, isTripSurfaceLive, tripStatusLabel } from '../lib/tripPhase'
 
 const TRIP_COLUMNS = 'id, status, driver_id, rider_id, pickup_label, dropoff_label, pickup_lat, pickup_lng, fare_cents, metadata, canceled_at'
@@ -183,9 +184,7 @@ export function Requested({ dest = 'GSP Airport', trip = '', driver = 'your driv
           }}>
             This ride is closed. Tracking and chat are off.
             {quote?.obligationCents != null ? ` Charge ${formatMidrideMoney(quote.obligationCents)}.` : ''}
-            {quote?.paymentStatus === 'failed' || quote?.paymentStatus === 'requires_payment_method'
-              ? ' Payment still needs a card on file.'
-              : ''}
+            {isPaymentRequired(quote) ? ` ${paymentRequiredMessage(quote)}` : ''}
           </div>
         )}
         <div style={{ marginTop: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -284,6 +283,15 @@ export function Requested({ dest = 'GSP Airport', trip = '', driver = 'your driv
               status: data.status || 'canceled_midride',
               metadata: { ...(prev?.metadata || {}), midride_cancel: data.quote },
             }))
+            if (isPaymentRequired(data.quote)) {
+              pushToast({
+                id: `pay-required-${trip}`,
+                kind: 'payment_required',
+                force: true,
+                title: 'Payment required',
+                body: paymentRequiredMessage(data.quote),
+              })
+            }
           }}
         />
       )}
