@@ -13,14 +13,14 @@ export function inferVehicleCategory(vehicle) {
   return 'sedan'
 }
 
-/** Prefer vehicles.seats; else sedan≤4, van≤5, SUV≤6. */
+/** Prefer vehicles.seats; else sedan≤4, van≤5, SUV≤7. */
 export function vehicleMaxSeats(vehicle) {
   if (!vehicle) return DEFAULT_MAX_PARTICIPANTS
   const seats = Number(vehicle.seats)
   if (Number.isFinite(seats) && seats > 0) return Math.max(1, Math.min(8, Math.floor(seats)))
   const cat = inferVehicleCategory(vehicle)
   if (cat === 'van') return 5
-  if (cat === 'suv') return 6
+  if (cat === 'suv') return 7
   return 4
 }
 
