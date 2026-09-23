@@ -2,9 +2,11 @@
  * POST /api/friend-rides-create
  * Auth required. Creates friend_rides + organizer participant.
  * body.kind = "friends" | "carpool" (carpool sets driver_profile_id = organizer).
+ * Requires a registered vehicle — party cap comes from vehicles.seats / type.
  */
 import {
-  admin, cors, json, parseBody, userFromAuth, randomToken, MAX_PARTICIPANTS,
+  admin, cors, json, parseBody, userFromAuth, randomToken,
+  loadDriverVehicle, vehicleMaxSeats, DEFAULT_MAX_PARTICIPANTS,
 } from '../server/friendRideLib.js'
 
 export default async function handler(req, res) {
@@ -30,6 +32,16 @@ export default async function handler(req, res) {
   const splitMode = body.splitMode === 'by_distance' ? 'by_distance' : 'even'
   const kind = body.kind === 'carpool' ? 'carpool' : 'friends'
 
+  const vehicle = await loadDriverVehicle(sb, user.id)
+  if (!vehicle) {
+    return json(res, 400, {
+      error: 'Add your vehicle before offering a group ride.',
+      code: 'vehicle_required',
+    })
+  }
+  const maxParticipants = vehicleMaxSeats(vehicle) || DEFAULT_MAX_PARTICIPANTS
+  const vehicleLabel = `${vehicle.make || ''} ${vehicle.model || ''}`.trim() || null
+
   const token = randomToken(18)
   const insertRow = {
     organizer_id: user.id,
@@ -49,6 +61,12 @@ export default async function handler(req, res) {
     .single()
   if (error) return json(res, 500, { error: error.message })
 
+  // Best-effort capacity metadata (ignore if columns absent)
+  await sb
+    .from('friend_rides')
+    .update({ max_participants: maxParticipants, vehicle_label: vehicleLabel })
+    .eq('id', ride.id)
+
   const { data: participant, error: pErr } = await sb
     .from('friend_ride_participants')
     .insert({
@@ -66,11 +84,12 @@ export default async function handler(req, res) {
 
   const urlPath = kind === 'carpool' ? `/carpool/${ride.token}` : `/friends/${ride.token}`
   return json(res, 200, {
-    ride,
+    ride: { ...ride, max_participants: maxParticipants, vehicle_label: vehicleLabel },
     participant,
     token: ride.token,
     kind,
     urlPath,
-    maxParticipants: MAX_PARTICIPANTS,
+    maxParticipants,
+    vehicleLabel,
   })
 }
