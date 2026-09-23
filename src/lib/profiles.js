@@ -1,16 +1,37 @@
 import { supabase } from './supabase'
 
 export const CAMPUS_SPOTS = [
+  // Neighborhoods / housing
+  'White C',
+  'Bigsby',
+  'U on College',
+  'Grand Mark',
+  'The Pier',
+  'The Reserve at Clemson',
+  'Highpointe',
+  'Campus View',
+  'Clemson Lofts',
+  '114 Earle',
+  'The Enclave',
+  'Hartwell Landing',
+  'Patrick Square',
+  'Downtown / College Ave',
+  // Campus landmarks
   'Tillman Hall',
-  'Library Bridge',
-  'CORE',
   'Memorial Stadium',
-  'Bowman Field',
+  'Cooper Library',
   'Schilletter',
-  'Hwy 93',
-  'Tiger Town',
-  'Sloan Street',
+  'Bowman Field',
   'Littlejohn',
+  // Downtown bars
+  "Tiger Town Tavern (Triple T's)",
+  "TD's",
+  'The Esso Club',
+  'Backstreets',
+  "Nick's Tavern",
+  'Loose Change',
+  '356',
+  'Study Hall',
 ]
 
 export const RIDE_STYLES = [
@@ -99,7 +120,7 @@ export async function fetchFullProfile(userId, { viewerId = null, assumeMatched 
   if (profile.role === 'driver' || profile.role === 'both') {
     const { data: veh } = await supabase
       .from('vehicles')
-      .select('make, model, color, plate, seats, is_tesla')
+      .select('make, model, color, plate, seats, is_tesla, tier, type')
       .eq('driver_id', userId)
       .order('created_at', { ascending: false })
       .limit(1)
