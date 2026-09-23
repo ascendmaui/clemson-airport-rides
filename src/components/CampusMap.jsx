@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { GoogleMap, useJsApiLoader, Marker, Circle, Polyline } from '@react-google-maps/api'
 import { downtownNow, heatColor } from '../lib/downtownHeat'
+import { MAPS_LOADER_ID, MAP_LIBRARIES, mapsLoaderOptions } from '../lib/googleMapsLoader'
 import { fetchRideDemand, MAP_TYPES, loadMapType, saveMapType } from '../lib/rideDemand'
 
 export const CLEMSON = [34.6784, -82.8397]
@@ -8,11 +9,6 @@ export const STADIUM = [34.6788, -82.8430]
 
 const ORANGE = '#F56600'
 const PURPLE = '#522D80'
-
-// Never load visualization — HeatmapLayer is deprecated and crashes Maps JS.
-// Loader id bumped so stale tabs that once loaded visualization get a fresh Maps instance.
-const MAP_LIBRARIES = []
-const MAPS_LOADER_ID = 'clemson-google-maps-circles-v2'
 
 const CLEMSON_MAP_STYLES = [
   { elementType: 'geometry', stylers: [{ color: '#f5f2ef' }] },
@@ -144,11 +140,7 @@ export function CampusMap({
   animateDriver = false,
 }) {
   const apiKey = (import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '').trim()
-  const { isLoaded, loadError } = useJsApiLoader({
-    id: MAPS_LOADER_ID,
-    googleMapsApiKey: apiKey || ' ',
-    libraries: MAP_LIBRARIES,
-  })
+  const { isLoaded, loadError } = useJsApiLoader(mapsLoaderOptions(apiKey))
 
   const wrapStyle =
     typeof height === 'number'
