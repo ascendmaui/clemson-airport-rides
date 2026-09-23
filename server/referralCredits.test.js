@@ -21,6 +21,18 @@ test('credit amounts match the SQL grant defaults', () => {
   assert.match(sql, new RegExp(`p_referee_cents integer DEFAULT ${REFERRAL_REFEREE_CENTS}`))
 })
 
+test('one welcome grant per new user is documented for social promo', () => {
+  const sql = readFileSync(new URL('../supabase/referrals_credit_ledger.sql', import.meta.url), 'utf8')
+  const contract = readFileSync(new URL('./signupReward.js', import.meta.url), 'utf8')
+  assert.match(sql, /One reward grant per new user/)
+  assert.match(sql, /claim_signup_reward/)
+  assert.match(sql, /social_promo/)
+  assert.match(sql, /signup_already_rewarded/)
+  assert.match(contract, /ONE REWARD GRANT PER NEW USER/)
+  assert.match(contract, /credit_ledger/)
+  assert.match(contract, /rider_credit_ledger/)
+})
+
 test('formatCreditCents', () => {
   assert.equal(formatCreditCents(1000), '$10.00')
   assert.equal(formatCreditCents(0), '$0.00')

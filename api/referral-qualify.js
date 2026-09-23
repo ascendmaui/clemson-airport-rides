@@ -2,6 +2,8 @@
  * POST /api/referral-qualify
  * Credit grant hook. Idempotent. Amounts come from server/referralCredits.js,
  * never from the client body. The trips trigger calls the same SQL function.
+ * One reward grant per new user: claim_signup_reward is shared with social promo.
+ * See server/signupReward.js.
  */
 import { admin, cors, json, parseBody, userFromAuth } from '../server/friendRideLib.js'
 import { qualifyReferralTrip } from '../server/referralService.js'

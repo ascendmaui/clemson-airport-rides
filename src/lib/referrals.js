@@ -179,6 +179,6 @@ export function referralStatusLabel(row) {
   if (row?.status === 'rewarded') {
     return row.qualifyRole === 'driver' ? 'Credited · first drive' : 'Credited · first ride'
   }
-  if (row?.status === 'void') return 'Void'
+  if (row?.status === 'void') return 'Welcome credit already used'
   return 'Waiting for first trip'
 }

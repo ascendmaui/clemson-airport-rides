@@ -19,6 +19,7 @@ const PURPLE = '#522D80'
 function ledgerLabel(reason) {
   if (reason === 'referral_referrer') return 'Referral reward'
   if (reason === 'referral_referee') return 'Welcome credit'
+  if (reason === 'social_promo_referrer' || reason === 'social_promo_invitee') return 'Rider promo credit'
   return 'Platform credit'
 }
 
@@ -115,7 +116,8 @@ export function ReferralPanel() {
       </div>
       <p style={{ fontSize: 12, color: 'var(--ink-tertiary)', margin: '6px 0 12px', lineHeight: 1.45 }}>
         Riders and drivers can share a code. You both receive platform credits when they finish
-        their first ride, or their first completed trip as a driver.
+        their first ride, or their first completed trip as a driver. One welcome credit per new
+        account — a referral and a rider promo code do not both pay.
       </p>
 
       {error && (

@@ -1,85 +1,16 @@
--- Referral program: shareable codes + prepaid platform credit ledger.
--- No credit_ledger / referrals tables existed on project awktabuhijrshmsmagpq.
--- Amounts must match server/referralCredits.js
--- REFERRAL_REFERRER_CENTS=1000
--- REFERRAL_REFEREE_CENTS=1000
+-- Incremental: one welcome grant per new user, shared with rider-to-rider social promo.
+-- Applied after referrals_credit_ledger. Fresh installs get the same objects from that file.
 
-CREATE TABLE IF NOT EXISTS public.referrals (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  code text NOT NULL,
-  referrer_id uuid NOT NULL REFERENCES public.profiles (id) ON DELETE CASCADE,
-  referee_id uuid REFERENCES public.profiles (id) ON DELETE CASCADE,
-  status text NOT NULL DEFAULT 'pending'
-    CHECK (status = ANY (ARRAY['pending'::text, 'rewarded'::text, 'void'::text])),
-  qualify_role text
-    CHECK (qualify_role IS NULL OR qualify_role = ANY (ARRAY['rider'::text, 'driver'::text])),
-  qualifying_trip_id uuid REFERENCES public.trips (id) ON DELETE SET NULL,
-  created_at timestamptz NOT NULL DEFAULT now(),
-  rewarded_at timestamptz,
-  void_reason text,
-  CONSTRAINT referrals_no_self CHECK (referee_id IS NULL OR referrer_id <> referee_id)
-);
+ALTER TABLE public.referrals ADD COLUMN IF NOT EXISTS void_reason text;
 
-COMMENT ON TABLE public.referrals IS
-  'Anchor row (referee_id IS NULL) holds a user''s shareable code. Child rows attach a new user until their first completed rider or driver trip pays both sides.';
-
-CREATE UNIQUE INDEX IF NOT EXISTS referrals_anchor_referrer_uidx
-  ON public.referrals (referrer_id)
-  WHERE referee_id IS NULL;
-
-CREATE UNIQUE INDEX IF NOT EXISTS referrals_anchor_code_uidx
-  ON public.referrals (code)
-  WHERE referee_id IS NULL;
-
-CREATE UNIQUE INDEX IF NOT EXISTS referrals_referee_uidx
-  ON public.referrals (referee_id)
-  WHERE referee_id IS NOT NULL;
-
-CREATE INDEX IF NOT EXISTS referrals_referrer_idx
-  ON public.referrals (referrer_id);
-
-CREATE TABLE IF NOT EXISTS public.credit_ledger (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  profile_id uuid NOT NULL REFERENCES public.profiles (id) ON DELETE CASCADE,
-  amount_cents integer NOT NULL CHECK (amount_cents <> 0),
-  reason text NOT NULL,
-  referral_id uuid REFERENCES public.referrals (id) ON DELETE SET NULL,
-  trip_id uuid REFERENCES public.trips (id) ON DELETE SET NULL,
-  idempotency_key text NOT NULL UNIQUE,
-  source text NOT NULL DEFAULT 'referral'
-    CHECK (source = ANY (ARRAY['referral'::text, 'social_promo'::text])),
-  created_at timestamptz NOT NULL DEFAULT now()
-);
+ALTER TABLE public.credit_ledger ADD COLUMN IF NOT EXISTS source text NOT NULL DEFAULT 'referral';
+ALTER TABLE public.credit_ledger DROP CONSTRAINT IF EXISTS credit_ledger_source_check;
+ALTER TABLE public.credit_ledger
+  ADD CONSTRAINT credit_ledger_source_check
+  CHECK (source = ANY (ARRAY['referral'::text, 'social_promo'::text]));
 
 COMMENT ON TABLE public.credit_ledger IS
   'Shared platform reward ledger for referral credits and rider-to-rider social promo credits. Not purchased packs (those live in rider_credit_lots / rider_credit_ledger). One welcome grant per new user is enforced by signup_reward_grants.';
-
-CREATE INDEX IF NOT EXISTS credit_ledger_profile_idx
-  ON public.credit_ledger (profile_id, created_at DESC);
-
-ALTER TABLE public.referrals ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.credit_ledger ENABLE ROW LEVEL SECURITY;
-
-DROP POLICY IF EXISTS referrals_select_parties ON public.referrals;
-CREATE POLICY referrals_select_parties
-  ON public.referrals
-  FOR SELECT
-  TO authenticated
-  USING (auth.uid() = referrer_id OR auth.uid() = referee_id);
-
-DROP POLICY IF EXISTS credit_ledger_select_own ON public.credit_ledger;
-CREATE POLICY credit_ledger_select_own
-  ON public.credit_ledger
-  FOR SELECT
-  TO authenticated
-  USING (auth.uid() = profile_id);
-
-REVOKE ALL ON public.referrals FROM anon, authenticated;
-REVOKE ALL ON public.credit_ledger FROM anon, authenticated;
-GRANT SELECT ON public.referrals TO authenticated;
-GRANT SELECT ON public.credit_ledger TO authenticated;
-GRANT ALL ON public.referrals TO service_role;
-GRANT ALL ON public.credit_ledger TO service_role;
 
 -- One reward grant per new user across referral and rider-to-rider social promo.
 -- The first system to claim this row pays. The other pays nothing for that signup.
