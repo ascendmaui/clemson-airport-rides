@@ -63,24 +63,26 @@ test('late auto-cancel still caps the wait fee at $4', () => {
   assert.equal(settleWait(AUTO_CANCEL_MS + 90 * 1000, 'auto').driverEarningsCents, 400)
 })
 
-test('optional driver cancel charges wait only', () => {
+test('optional driver cancel is 20% platform / 80% driver on the wait fee', () => {
   const atFive = settleWait(CANCEL_AVAILABLE_MS, 'driver')
   assert.equal(atFive.waitFeeCents, 200)
   assert.equal(atFive.cancelFeeCents, 0)
-  assert.equal(atFive.platformFeeCents, 0)
+  assert.equal(atFive.platformFeeCents, 40)
   assert.equal(atFive.riderChargeCents, 200)
-  assert.equal(atFive.driverEarningsCents, 200)
+  assert.equal(atFive.driverEarningsCents, 160)
 
   const atSixThirty = settleWait(6.5 * 60 * 1000, 'driver')
   assert.equal(atSixThirty.waitFeeCents, 400)
+  assert.equal(atSixThirty.platformFeeCents, 80)
   assert.equal(atSixThirty.riderChargeCents, 400)
-  assert.equal(atSixThirty.driverEarningsCents, 400)
+  assert.equal(atSixThirty.driverEarningsCents, 320)
 })
 
-test('completed trip keeps the accrued wait fee with no cancel fee', () => {
+test('completed trip wait fee is 20% platform / 80% driver', () => {
   const done = settleWait(GRACE_MS + 90 * 1000, 'complete')
   assert.equal(done.waitFeeCents, 200)
   assert.equal(done.cancelFeeCents, 0)
-  assert.equal(done.platformFeeCents, 0)
-  assert.equal(done.driverEarningsCents, 200)
+  assert.equal(done.platformFeeCents, 40)
+  assert.equal(done.riderChargeCents, 200)
+  assert.equal(done.driverEarningsCents, 160)
 })

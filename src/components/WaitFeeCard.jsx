@@ -3,6 +3,7 @@ import { useAuth } from '../lib/auth'
 import { supabase } from '../lib/supabase'
 import { useTripWait } from '../lib/useTripWait'
 import { formatUsd } from '../lib/waitFee'
+import { splitPlatformCut } from '../lib/platformFee'
 import { navigate } from '../lib/navigation'
 
 function firstNameOnly(fullName) {
@@ -61,7 +62,7 @@ export function WaitFeeCard({
     if ((trip.status === 'in_progress' || trip.status === 'completed') && Number(trip.wait_fee_cents) > 0) {
       return (
         <p style={{ marginTop: 10, fontSize: 13, color: 'var(--ink-secondary)' }}>
-          Wait fee {formatUsd(trip.wait_fee_cents)} included for the driver.
+          Wait fee {formatUsd(trip.wait_fee_cents)} is charged on complete. Platform keeps 20%.
         </p>
       )
     }
@@ -70,6 +71,12 @@ export function WaitFeeCard({
 
   const waitingFor = who || (role === 'driver' ? 'rider' : 'driver')
   const note = chargeNote(charge)
+  const split = splitPlatformCut({
+    waitFeeCents: quote?.waitFeeCents || 0,
+    cancelFeeCents: quote?.autoDue ? 100 : 0,
+  })
+  const badgeCents = role === 'driver' ? split.driverNetCents : split.grossCents
+  const badgeLabel = role === 'driver' ? 'You earn' : (quote?.inGrace ? 'Grace' : 'Wait fee')
 
   return (
     <div style={{ marginTop: 14 }}>
@@ -95,10 +102,10 @@ export function WaitFeeCard({
         </div>
         <div style={{ textAlign: 'right' }}>
           <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 0.4 }}>
-            {quote?.inGrace ? 'Grace' : 'Wait fee'}
+            {badgeLabel}
           </div>
           <div style={{ fontSize: 22, fontWeight: 800, color: '#F56600' }}>
-            {formatUsd(quote?.waitFeeCents || 0)}
+            {formatUsd(badgeCents)}
           </div>
         </div>
       </div>
@@ -107,8 +114,8 @@ export function WaitFeeCard({
           ? `3-minute grace, then $1.00 per minute. Waiting for ${waitingFor}.`
           : `$1.00 per minute after grace. Waiting for ${waitingFor}.`}
         {role === 'driver'
-          ? ' You can keep waiting. At 7:00 the ride cancels automatically.'
-          : ' At 7:00 the ride cancels automatically ($4.00 wait + $1.00 cancel fee).'}
+          ? ' You keep 80% of the wait fee; the platform keeps 20%. You can keep waiting. At 7:00 the ride cancels automatically and you earn $4.00.'
+          : ' Platform keeps 20%. At 7:00 the ride cancels automatically ($4.00 wait + $1.00 cancel fee).'}
       </p>
       {role === 'driver' && quote?.autoDue && (
         <p style={{ margin: '8px 0 0', fontSize: 13, fontWeight: 700, color: '#522D80' }}>
@@ -156,7 +163,7 @@ export function WaitFeeCard({
       {role === 'driver' && confirmCancel && (
         <div style={{ marginTop: 8 }}>
           <p style={{ fontSize: 13, color: 'var(--ink-secondary)' }}>
-            Cancel now and charge {formatUsd(quote?.waitFeeCents || 0)} wait fee? You can keep waiting instead.
+            Cancel now? Rider pays {formatUsd(split.grossCents)}. You earn {formatUsd(split.driverNetCents)} (80%). You can keep waiting instead.
           </p>
           <button
             type="button"
@@ -214,7 +221,7 @@ export function WaitReceipt({ trip, role, who = '', charge = null }) {
           <p style={{ margin: '6px 0 0', fontSize: 14, color: 'var(--ink-secondary)', lineHeight: 1.45 }}>
             {auto
               ? `${formatUsd(wait)} wait + ${formatUsd(cancel)} cancel fee. Platform keeps ${formatUsd(platform)}. ${name} receives ${formatUsd(driverEarn)}.`
-              : `Wait fee ${formatUsd(wait)}. ${name} receives ${formatUsd(driverEarn)}.`}
+              : `Wait fee ${formatUsd(wait)}. Platform keeps ${formatUsd(platform)} (20%). ${name} receives ${formatUsd(driverEarn)}.`}
           </p>
         </>
       ) : (
@@ -225,7 +232,7 @@ export function WaitReceipt({ trip, role, who = '', charge = null }) {
           <p style={{ margin: '6px 0 0', fontSize: 14, color: 'var(--ink-secondary)', lineHeight: 1.45 }}>
             {auto
               ? `${name} is charged ${formatUsd(total)} (${formatUsd(wait)} wait + ${formatUsd(cancel)} cancel). Platform keeps ${formatUsd(platform)}.`
-              : `Wait fee ${formatUsd(wait)} goes to you.`}
+              : `You keep 80% of the ${formatUsd(wait)} wait fee. Platform keeps ${formatUsd(platform)}.`}
           </p>
         </>
       )}

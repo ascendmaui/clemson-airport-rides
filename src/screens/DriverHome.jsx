@@ -9,6 +9,7 @@ import { publishDriverLocation } from '../lib/driverTrack'
 import { useTripWait } from '../lib/useTripWait'
 import { WaitFeeCard } from '../components/WaitFeeCard'
 import { formatUsd } from '../lib/waitFee'
+import { splitPlatformCut } from '../lib/platformFee'
 
 function centsToDollars(cents) {
   if (cents == null) return '—'
@@ -646,7 +647,7 @@ function DriverShell({ driverId }) {
               {centsToDollars(activeTrip.fare_cents)}
               {activeTrip.status === 'arrived' && wait.quote.waitFeeCents > 0 && (
                 <span style={{ fontSize: 14, fontWeight: 700, color: '#F56600' }}>
-                  {' '}+ {formatUsd(wait.quote.waitFeeCents)}
+                  {' '}+ {formatUsd(splitPlatformCut({ waitFeeCents: wait.quote.waitFeeCents }).driverNetCents)} you earn
                 </span>
               )}
             </div>
@@ -703,7 +704,7 @@ function DriverShell({ driverId }) {
             <>
               {Number(activeTrip.wait_fee_cents) > 0 && (
                 <p style={{ marginTop: 10, fontSize: 13, color: 'var(--ink-secondary)' }}>
-                  Wait fee {formatUsd(activeTrip.wait_fee_cents)} will be charged when you complete.
+                  Wait fee {formatUsd(activeTrip.wait_fee_cents)} is charged on complete. You earn {formatUsd(activeTrip.driver_wait_earnings_cents)} (80%).
                 </p>
               )}
               <PurpleAcceptButton onClick={onComplete} disabled={wait.busy}>

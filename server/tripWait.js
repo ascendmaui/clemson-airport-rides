@@ -5,10 +5,11 @@
  * Charge behavior:
  * - Trip still running (start): nothing is charged. wait_fee_cents is frozen on the row.
  * - Complete: off-session PaymentIntent for wait_fee_cents only (airport deposit is separate).
- *   Driver earnings include that wait fee. Platform fee is $0.
+ *   splitPlatformCut keeps 20% platform / 80% driver of that wait fee.
  * - Driver wait-cancel (5:00–7:00): charge the accrued wait fee only. No $1 cancel fee.
- * - Auto-cancel at 7:00: charge $4 wait + $1 cancel = $5. Platform keeps $1
- *   (payments.kind = cancel_fee). Driver keeps $4 (driver_wait_earnings_cents).
+ *   Same 20/80 split. Driver does not keep 100% of the wait.
+ * - Auto-cancel at 7:00: charge $4 wait + $1 cancel = $5. That gross is the 20% package:
+ *   platform $1, driver $4 (driver keeps the full wait fee only in this case).
  * - No saved card, or Stripe not configured: trip still settles and payments rows
  *   are stored as pending. The fee is owed; nothing is marked succeeded.
  */

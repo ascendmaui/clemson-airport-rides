@@ -141,14 +141,15 @@ export function LegalTerms() {
       </Section>
       <Section heading="Payments & earnings">
         <p>
-          Deposits are processed by Stripe. Drivers see earnings based on completed trip fares recorded in
-          Clemson RIDES, plus any pickup wait fee. After a driver taps Arrive there is a 3-minute grace at
-          $0, then $1 per minute (rounded up) while the trip stays arrived. From 5 minutes the driver may
-          cancel and the rider owes the wait fee accrued so far. At 7 minutes the ride cancels automatically:
-          the rider is charged $5 ($4 wait + $1 cancellation fee), the driver keeps $4, and the platform keeps
-          $1. If a saved card cannot be charged, the fee is still owed and recorded as pending. Platform fees,
-          payout timing, and tax reporting (if any) will be disclosed in driver onboarding or Account.
-          Chargebacks or fraud may result in account suspension.
+          Deposits are processed by Stripe. The platform keeps 20% of rider charges (fares, wait fees, and
+          cancellation fees) and the driver keeps 80%. After a driver taps Arrive there is a 3-minute grace at
+          $0, then $1 per minute (rounded up) while the trip stays arrived. On a completed trip that wait fee
+          is split 20% platform / 80% driver. From 5 minutes the driver may cancel; the rider owes the wait
+          fee accrued so far, with the same 20/80 split. At 7 minutes the ride cancels automatically: the
+          rider is charged $5 ($4 wait + $1 cancellation fee), the driver keeps $4, and the platform keeps $1.
+          If a saved card cannot be charged, the fee is still owed and recorded as pending. Payout timing and
+          tax reporting (if any) will be disclosed in driver onboarding or Account. Chargebacks or fraud may
+          result in account suspension.
         </p>
       </Section>
       <Section heading="Disclaimers">

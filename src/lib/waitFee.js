@@ -8,13 +8,16 @@
  * Examples (elapsed from arrived_at):
  * - 0:00–3:00 inclusive → $0 (grace)
  * - 3:00.001 → 1 billable minute → $1
- * - 5:00 → $2, driver may optionally cancel (rider pays the $2 wait fee)
- * - 7:00 → $4 wait. Auto-cancel: rider pays $5 ($4 wait + $1 cancel).
- *   Platform keeps the $1 cancel fee. Driver keeps $4.
+ * - 5:00 → $2 wait. Optional cancel charges that $2. Platform keeps 20% ($0.40), driver 80% ($1.60).
+ * - Completed trip: same 20/80 split on wait_fee_cents via splitPlatformCut. No cancel fee.
+ * - 7:00 auto-cancel package only: rider pays $5 ($4 wait + $1 cancel).
+ *   splitPlatformCut on that $5 is platform $1, driver $4 (driver keeps the full wait fee).
  *
  * Driver cancel from 5:00 until 7:00 is optional — they can keep waiting.
  * Waiting stops accruing once status leaves `arrived` (start trip or cancel).
  */
+
+import { splitPlatformCut } from './platformFee.js'
 
 export const GRACE_MS = 3 * 60 * 1000
 export const CANCEL_AVAILABLE_MS = 5 * 60 * 1000
@@ -81,22 +84,14 @@ export function quoteWait(arrivedAt, now = Date.now()) {
 export function settleWait(elapsed, reason) {
   const at = reason === 'auto' ? AUTO_CANCEL_MS : elapsed
   const waitFeeCents = waitFeeCentsFromElapsed(at)
-  if (reason === 'auto') {
-    return {
-      reason,
-      waitFeeCents,
-      cancelFeeCents: AUTO_CANCEL_FEE_CENTS,
-      platformFeeCents: AUTO_CANCEL_FEE_CENTS,
-      riderChargeCents: waitFeeCents + AUTO_CANCEL_FEE_CENTS,
-      driverEarningsCents: waitFeeCents,
-    }
-  }
+  const cancelFeeCents = reason === 'auto' ? AUTO_CANCEL_FEE_CENTS : 0
+  const cut = splitPlatformCut({ waitFeeCents, cancelFeeCents })
   return {
     reason,
     waitFeeCents,
-    cancelFeeCents: 0,
-    platformFeeCents: 0,
-    riderChargeCents: waitFeeCents,
-    driverEarningsCents: waitFeeCents,
+    cancelFeeCents,
+    platformFeeCents: cut.platformFeeCents,
+    riderChargeCents: cut.grossCents,
+    driverEarningsCents: cut.driverNetCents,
   }
 }

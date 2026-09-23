@@ -4,10 +4,11 @@
 --
 -- Clock: trips.arrived_at (server now() when status becomes arrived).
 -- Fee: $0 for 3 minutes, then ceil($1 per minute), capped at 7:00 = $4 wait.
--- Driver may cancel from 5:00 until 7:00 (wait fee only, no cancel fee).
+-- Platform keeps 20% of the rider charge (public.platform_fee_cents), driver the rest.
+-- Completed trips and optional driver cancel: 20/80 on wait_fee_cents only.
 -- At 7:00 the row becomes cancelled_wait with reason auto:
---   wait_fee_cents 400, cancel_fee_cents 100, platform_fee_cents 100,
---   driver_wait_earnings_cents 400. Rider total $5. Platform keeps the $1.
+--   wait_fee_cents 400, cancel_fee_cents 100, rider $5.
+--   platform_fee_cents 100, driver_wait_earnings_cents 400 (20% of the $5 package).
 
 ALTER TABLE public.trips ADD COLUMN IF NOT EXISTS arrived_at timestamptz;
 ALTER TABLE public.trips ADD COLUMN IF NOT EXISTS wait_fee_cents integer NOT NULL DEFAULT 0;
@@ -32,8 +33,8 @@ ALTER TABLE public.trips ADD CONSTRAINT trips_wait_fee_nonneg
 COMMENT ON COLUMN public.trips.arrived_at IS 'Server timestamp when the driver tapped Arrive. Wait fee clock.';
 COMMENT ON COLUMN public.trips.wait_fee_cents IS 'Accrued rider wait fee in cents. $0 during 3 min grace, then $1 per ceil minute, cap $4 at 7:00.';
 COMMENT ON COLUMN public.trips.cancel_fee_cents IS 'Cancellation fee in cents. $1 (100) on 7:00 auto-cancel only.';
-COMMENT ON COLUMN public.trips.platform_fee_cents IS 'Platform fee in cents. Equals the $1 auto-cancel fee; $0 on driver wait-cancel and on completed trips.';
-COMMENT ON COLUMN public.trips.driver_wait_earnings_cents IS 'Driver share of the wait. Auto-cancel: wait fee ($4 at 7:00). Otherwise the full wait fee.';
+COMMENT ON COLUMN public.trips.platform_fee_cents IS 'Platform 20% of the rider wait/cancel charge. Auto-cancel $5 package: 100. Otherwise 20% of wait_fee_cents.';
+COMMENT ON COLUMN public.trips.driver_wait_earnings_cents IS 'Driver 80% of the rider charge. Auto-cancel $5 package: 400 (the full wait fee). Otherwise 80% of wait_fee_cents.';
 COMMENT ON COLUMN public.trips.wait_cancel_reason IS 'driver = optional cancel after 5:00; auto = forced at 7:00.';
 
 ALTER TABLE public.payments DROP CONSTRAINT IF EXISTS payments_kind_check;
@@ -46,6 +47,15 @@ ALTER TABLE public.payments ADD CONSTRAINT payments_kind_check
     'wait_fee'::text,
     'cancel_fee'::text
   ]));
+
+-- Mirrors src/lib/platformFee.js platformFeeCents (Math.round(amount * 0.2)).
+CREATE OR REPLACE FUNCTION public.platform_fee_cents(amount_cents integer)
+RETURNS integer
+LANGUAGE sql
+IMMUTABLE
+AS $$
+  SELECT ROUND(GREATEST(0, COALESCE(amount_cents, 0)) * 0.2)::integer;
+$$;
 
 CREATE OR REPLACE FUNCTION public.compute_wait_fee_cents(arrived timestamptz, at_time timestamptz)
 RETURNS integer
@@ -98,8 +108,8 @@ BEGIN
   IF OLD.status = 'arrived'::public.trip_status AND NEW.status = 'arrived'::public.trip_status THEN
     NEW.wait_fee_cents := public.compute_wait_fee_cents(OLD.arrived_at, now());
     NEW.cancel_fee_cents := 0;
-    NEW.platform_fee_cents := 0;
-    NEW.driver_wait_earnings_cents := 0;
+    NEW.platform_fee_cents := public.platform_fee_cents(NEW.wait_fee_cents);
+    NEW.driver_wait_earnings_cents := NEW.wait_fee_cents - NEW.platform_fee_cents;
     NEW.wait_cancel_reason := NULL;
     RETURN NEW;
   END IF;
@@ -113,22 +123,22 @@ BEGIN
       NEW.wait_cancel_reason := 'auto';
       NEW.canceled_at := COALESCE(NEW.canceled_at, now());
       NEW.cancel_fee_cents := 100;
-      NEW.platform_fee_cents := 100;
-      NEW.driver_wait_earnings_cents := NEW.wait_fee_cents;
+      NEW.platform_fee_cents := public.platform_fee_cents(NEW.wait_fee_cents + NEW.cancel_fee_cents);
+      NEW.driver_wait_earnings_cents := NEW.wait_fee_cents + NEW.cancel_fee_cents - NEW.platform_fee_cents;
     ELSIF NEW.status = 'cancelled_wait'::public.trip_status THEN
       IF elapsed_sec < 300 THEN
         RAISE EXCEPTION 'wait_cancel_too_early';
       END IF;
       NEW.wait_cancel_reason := 'driver';
       NEW.cancel_fee_cents := 0;
-      NEW.platform_fee_cents := 0;
-      NEW.driver_wait_earnings_cents := NEW.wait_fee_cents;
+      NEW.platform_fee_cents := public.platform_fee_cents(NEW.wait_fee_cents);
+      NEW.driver_wait_earnings_cents := NEW.wait_fee_cents - NEW.platform_fee_cents;
       NEW.canceled_at := COALESCE(NEW.canceled_at, now());
     ELSE
       NEW.wait_cancel_reason := NULL;
       NEW.cancel_fee_cents := 0;
-      NEW.platform_fee_cents := 0;
-      NEW.driver_wait_earnings_cents := NEW.wait_fee_cents;
+      NEW.platform_fee_cents := public.platform_fee_cents(NEW.wait_fee_cents);
+      NEW.driver_wait_earnings_cents := NEW.wait_fee_cents - NEW.platform_fee_cents;
     END IF;
     RETURN NEW;
   END IF;
