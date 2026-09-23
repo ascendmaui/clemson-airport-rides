@@ -9,6 +9,8 @@ import { grantRiderSocialForTrip } from '../lib/riderReferral'
 import { publishDriverLocation } from '../lib/driverTrack'
 import { DriverApprovalGate } from './DriverApprovalGate'
 import { driverOfferCopy, driverTakeCents, formatUsd } from '../lib/carpoolEngine'
+import { RideChat, RideMessageButton } from '../components/RideChat'
+import { rideChatMode } from '../lib/tripChatRules'
 
 function centsToDollars(cents) {
   if (cents == null) return '—'
@@ -53,6 +55,18 @@ function DriverShell({ driverId }) {
   const [application, setApplication] = useState(undefined)
   const [activeChecked, setActiveChecked] = useState(false)
   const approved = application?.onboarding_status === 'approved'
+  const [chatTrip, setChatTrip] = useState(null)
+
+  useEffect(() => {
+    if (!chatTrip || !activeTrip || chatTrip.id !== activeTrip.id) return
+    if (
+      chatTrip.status !== activeTrip.status
+      || chatTrip.completed_at !== activeTrip.completed_at
+      || chatTrip.canceled_at !== activeTrip.canceled_at
+    ) {
+      setChatTrip(activeTrip)
+    }
+  }, [activeTrip, chatTrip])
   const silverProgress = 2
   const silverTotal = 4
 
@@ -720,6 +734,11 @@ function DriverShell({ driverId }) {
             </div>
           </div>
 
+          {rideChatMode(activeTrip) !== 'closed' && activeTrip.rider_id && (
+            <div style={{ marginTop: 16 }}>
+              <RideMessageButton onClick={() => setChatTrip(activeTrip)} />
+            </div>
+          )}
           {activeTrip.status === 'accepted' && (
             <PurpleAcceptButton onClick={() => advanceTrip('arriving')} disabled={advancing}>
               {advancing ? 'Updating…' : 'Arriving'}
@@ -750,6 +769,14 @@ function DriverShell({ driverId }) {
           )}
 
         </div>
+      )}
+      {chatTrip && driverId && (
+        <RideChat
+          tripId={chatTrip.id}
+          userId={driverId}
+          initialTrip={chatTrip}
+          onClose={() => setChatTrip(null)}
+        />
       )}
     </div>
   )
