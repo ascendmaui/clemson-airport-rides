@@ -7,6 +7,7 @@ import { ConfirmPickup } from './screens/ConfirmPickup'
 import { RideTiers } from './screens/RideTiers'
 import { ScheduleAirport } from './screens/ScheduleAirport'
 import { DriverHome } from './screens/DriverHome'
+import { DriverEarnings } from './screens/DriverEarnings'
 import { FriendsScreen, AccountScreen } from './screens/FriendsAccount'
 import { SignInScreen, SignUpScreen } from './screens/AuthScreens'
 import { DriverOnboarding } from './screens/DriverOnboarding'
@@ -22,7 +23,7 @@ import { CarpoolScreen } from './screens/CarpoolScreen'
 import { ToastProvider, ToastStack } from './lib/toasts'
 import { RideToastWatcher } from './components/RideToastWatcher'
 
-const PROTECTED = new Set(['driver', 'driver-onboarding', 'account', 'driver-signup'])
+const PROTECTED = new Set(['driver', 'driver-onboarding', 'account', 'driver-signup', 'earnings'])
 
 function Screen({ path, params }) {
   switch (path) {
@@ -61,6 +62,12 @@ function Screen({ path, params }) {
       return (
         <RequireAuth>
           <DriverHome />
+        </RequireAuth>
+      )
+    case 'earnings':
+      return (
+        <RequireAuth>
+          <DriverEarnings />
         </RequireAuth>
       )
     case 'driver-onboarding':

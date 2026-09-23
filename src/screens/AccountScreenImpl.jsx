@@ -449,6 +449,16 @@ export function AccountScreen() {
                 color: '#fff', background: 'linear-gradient(135deg, var(--orange), #ff7a1a)' }}>
               {profile?.vehicle ? 'Update driver signup' : 'Driver signup'}
             </button>
+            <button type="button" className="pressable" onClick={() => navigate('earnings')}
+              style={{ display: 'block', width: '100%', marginTop: 10, padding: 12, borderRadius: 14, fontWeight: 700,
+                color: 'var(--purple)', border: '1.5px solid rgba(82,45,128,0.3)', background: 'rgba(255,255,255,0.55)' }}>
+              Earnings dashboard
+            </button>
+            <button type="button" className="pressable" onClick={() => navigate('earnings', { doc: 'tax' })}
+              style={{ display: 'block', width: '100%', marginTop: 10, padding: 12, borderRadius: 14, fontWeight: 700,
+                color: '#fff', background: 'var(--purple)' }}>
+              Year-end tax summary
+            </button>
             <button type="button" className="pressable" onClick={() => navigate('driver')}
               style={{ display: 'block', width: '100%', marginTop: 10, padding: 12, borderRadius: 14, fontWeight: 700,
                 color: 'var(--purple)', border: '1.5px solid rgba(82,45,128,0.3)', background: 'rgba(255,255,255,0.55)' }}>

@@ -6,6 +6,7 @@ import { PurpleAcceptButton } from '../components/PrimaryButton'
 import { navigate } from '../lib/navigation'
 import { setDriverOnline, subscribeTrips, supabase } from '../lib/supabase'
 import { publishDriverLocation } from '../lib/driverTrack'
+import { fetchDriverEarningsReport } from '../lib/driverEarnings'
 
 function centsToDollars(cents) {
   if (cents == null) return '—'
@@ -50,21 +51,14 @@ function DriverShell({ driverId }) {
   const silverTotal = 4
 
   const loadEarnings = useCallback(async () => {
-    if (!supabase || !driverId) return
-    const { data, error } = await supabase
-      .from('trips')
-      .select('id, fare_cents, dropoff_label, completed_at')
-      .eq('driver_id', driverId)
-      .eq('status', 'completed')
-      .order('completed_at', { ascending: false })
-      .limit(20)
-    if (error) {
-      console.error('[earnings]', error.message)
-      return
+    if (!driverId) return
+    try {
+      const report = await fetchDriverEarningsReport(driverId)
+      setEarningsCents(report.summary.weekEarningsCents)
+      setRecentCompleted(report.summary.rides.slice(0, 3))
+    } catch (err) {
+      console.error('[earnings]', err.message)
     }
-    const rows = data || []
-    setRecentCompleted(rows)
-    setEarningsCents(rows.reduce((sum, t) => sum + (Number(t.fare_cents) || 0), 0))
   }, [driverId])
 
   useEffect(() => {
@@ -330,7 +324,10 @@ function DriverShell({ driverId }) {
         >
           ☰
         </button>
-        <div
+        <button
+          type="button"
+          className="pressable"
+          onClick={() => navigate('earnings')}
           style={{
             padding: '10px 18px',
             borderRadius: 999,
@@ -342,10 +339,10 @@ function DriverShell({ driverId }) {
             WebkitBackdropFilter: 'blur(18px) saturate(1.4)',
             border: '1px solid rgba(255,255,255,0.55)',
           }}
-          title="Completed trip earnings"
+          title="This week · your net. Opens earnings."
         >
           {centsToDollars(earningsCents)}
-        </div>
+        </button>
         <div
           style={{
             width: 44,
@@ -501,23 +498,37 @@ function DriverShell({ driverId }) {
           {recentCompleted.length > 0 && (
             <div style={{ padding: '12px 0 4px', borderTop: '1px solid var(--border)', marginTop: 8 }}>
               <div style={{ fontWeight: 600, marginBottom: 8 }}>Recent earnings</div>
-              {recentCompleted.slice(0, 5).map((t) => (
-                <div
+              {recentCompleted.slice(0, 3).map((t) => (
+                <button
                   key={t.id}
+                  type="button"
+                  className="pressable"
+                  onClick={() => navigate('earnings')}
                   style={{
                     display: 'flex',
                     justifyContent: 'space-between',
+                    gap: 8,
+                    width: '100%',
                     fontSize: 13,
                     padding: '6px 0',
                     color: 'var(--ink-secondary)',
+                    textAlign: 'left',
                   }}
                 >
                   <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '70%' }}>
-                    {t.dropoff_label || 'Trip'}
+                    {t.routeLabel || 'Trip completed'}
                   </span>
-                  <strong style={{ color: 'var(--ink)' }}>{centsToDollars(t.fare_cents)}</strong>
-                </div>
+                  <strong style={{ color: 'var(--ink)' }}>{centsToDollars(t.earnedCents)}</strong>
+                </button>
               ))}
+              <button
+                type="button"
+                className="pressable"
+                onClick={() => navigate('earnings')}
+                style={{ marginTop: 6, fontWeight: 700, color: 'var(--purple)', fontSize: 13 }}
+              >
+                Earnings dashboard
+              </button>
             </div>
           )}
         </div>
