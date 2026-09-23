@@ -21,6 +21,7 @@ import { useToasts, pushToast } from '../lib/toasts'
 import { isClemsonEmail } from '../lib/studentDomain'
 import { fetchMyDriverApplication, isAdminIdentity, onboardingLabel } from '../lib/driverOnboarding'
 import { ReferFriendsPanel } from './ReferFriends'
+import { isIncentiveAdmin } from '../lib/driverIncentiveMath'
 
 const chip = (on) => ({
   padding: '8px 12px', borderRadius: 999, fontSize: 13, fontWeight: 600,
@@ -233,6 +234,25 @@ export function AccountScreen() {
         <p style={{ fontSize: 13, color: 'var(--ink-secondary)', marginBottom: 12 }}>
           Profile, alerts, billing & driver settings
         </p>
+
+        {isIncentiveAdmin(user, profile) && (
+          <button
+            type="button"
+            className="pressable"
+            onClick={() => navigate('incentives')}
+            style={{
+              width: '100%',
+              marginBottom: 12,
+              padding: '12px 14px',
+              borderRadius: 14,
+              fontWeight: 800,
+              color: '#fff',
+              background: 'linear-gradient(135deg, #F56600, #522D80)',
+            }}
+          >
+            Driver incentives
+          </button>
+        )}
 
         {pendingRate && (
           <div className="glass-panel" style={{ padding: 14, borderRadius: 16, marginBottom: 14,

@@ -55,7 +55,7 @@ export const GALLERY_KINDS = [
 ]
 
 const PROFILE_COLS =
-  'id, role, full_name, email, bio, avatar_url, student_verified_at, rating_avg, rating_count, phone, favorite_spots, music_taste, ride_style, profile_privacy, stripe_customer_id, stripe_default_pm_id, notification_prefs, billing_activated_at, stripe_card_brand, stripe_card_last4, is_admin'
+  'id, role, is_admin, full_name, email, bio, avatar_url, student_verified_at, rating_avg, rating_count, phone, favorite_spots, music_taste, ride_style, profile_privacy, stripe_customer_id, stripe_default_pm_id, notification_prefs, billing_activated_at, stripe_card_brand, stripe_card_last4'
 
 export function filterProfileByPrivacy(profile, { isOwner = false, isMatched = false } = {}) {
   if (!profile) return null

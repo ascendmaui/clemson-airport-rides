@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useAuth } from '../lib/auth'
 import { CampusMap, CLEMSON } from '../components/CampusMap'
+import { DriverIncentiveBanner, useDriverIncentiveWatch } from '../components/DriverIncentiveBanner'
 import { HEAT_WINDOWS } from '../lib/rideDemand'
 import { PurpleAcceptButton } from '../components/PrimaryButton'
 import { navigate } from '../lib/navigation'
@@ -12,6 +13,9 @@ import { driverOfferCopy, driverTakeCents, formatUsd } from '../lib/carpoolEngin
 import { RideChat, RideMessageButton } from '../components/RideChat'
 import { rideChatMode } from '../lib/tripChatRules'
 import { SosControl } from '../components/SosControl'
+import { applyTripDriverIncentives, fetchDriverIncentiveExtras } from '../lib/driverIncentives'
+import { isIncentiveAdmin } from '../lib/driverIncentiveMath'
+import { fetchFullProfile } from '../lib/profiles'
 
 function centsToDollars(cents) {
   if (cents == null) return '—'
@@ -41,12 +45,17 @@ export function DriverHome() {
 }
 
 function DriverShell({ driverId }) {
+  const { user } = useAuth()
   const [priority, setPriority] = useState(false)
   const [offer, setOffer] = useState(null)
   const [activeTrip, setActiveTrip] = useState(null)
   const [online, setOnline] = useState(false)
   const [earningsCents, setEarningsCents] = useState(0)
+  const [incentiveExtraCents, setIncentiveExtraCents] = useState(0)
+  const [extraByTrip, setExtraByTrip] = useState({})
   const [recentCompleted, setRecentCompleted] = useState([])
+  const [canEditIncentives, setCanEditIncentives] = useState(() => isIncentiveAdmin(user, null))
+  const { banner: incentiveBanner } = useDriverIncentiveWatch({ driverId, online })
   const [advancing, setAdvancing] = useState(false)
   const [advanceError, setAdvanceError] = useState(null)
   const [selfPos, setSelfPos] = useState(null)
@@ -98,6 +107,9 @@ function DriverShell({ driverId }) {
     const rows = data || []
     setRecentCompleted(rows)
     setEarningsCents(rows.reduce((sum, t) => sum + (Number(t.fare_cents) || 0), 0))
+    const extras = await fetchDriverIncentiveExtras(driverId, rows.map((t) => t.id))
+    setExtraByTrip(extras)
+    setIncentiveExtraCents(Object.values(extras).reduce((sum, n) => sum + n, 0))
   }, [driverId])
 
   useEffect(() => {
@@ -156,6 +168,19 @@ function DriverShell({ driverId }) {
   useEffect(() => {
     loadEarnings()
   }, [loadEarnings])
+
+  useEffect(() => {
+    if (!driverId) return undefined
+    let alive = true
+    fetchFullProfile(driverId, { viewerId: driverId })
+      .then((profile) => {
+        if (alive) setCanEditIncentives(isIncentiveAdmin(user, profile))
+      })
+      .catch(() => {})
+    return () => {
+      alive = false
+    }
+  }, [driverId, user])
 
   // Load open offers (searching/offered) — Realtime alone misses rows already open.
   useEffect(() => {
@@ -338,6 +363,8 @@ function DriverShell({ driverId }) {
         // rider_social credits: DB trigger is the source of truth. This call is
         // idempotent and no-ops unless the rider's first ride just completed.
         if (doneId) grantRiderSocialForTrip(doneId)
+        const applied = await applyTripDriverIncentives(doneId)
+        if (!applied.ok) console.error('[driver_incentives]', applied.reason)
         setActiveTrip(null)
         await loadEarnings()
         if (doneId) navigate('rate', { trip: doneId })
@@ -470,8 +497,14 @@ function DriverShell({ driverId }) {
       </div>
 
       
+      {incentiveBanner && (
+        <div style={{ position: 'absolute', top: 68, left: 16, right: 16, zIndex: 22 }}>
+          <DriverIncentiveBanner text={incentiveBanner} />
+        </div>
+      )}
+
       {!activeTrip && (
-        <div style={{ position: 'absolute', top: 72, left: 16, right: 16, zIndex: 20, display: 'flex', flexDirection: 'column', gap: 8, pointerEvents: 'none' }}>
+        <div style={{ position: 'absolute', top: incentiveBanner ? 128 : 72, left: 16, right: 16, zIndex: 20, display: 'flex', flexDirection: 'column', gap: 8, pointerEvents: 'none' }}>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', pointerEvents: 'auto' }}>
             <button type="button" className="pressable" onClick={() => setShowSurge((v) => !v)}
               style={{ fontSize: 12, fontWeight: 700, color: showSurge ? '#fff' : 'var(--purple)',
@@ -616,6 +649,23 @@ function DriverShell({ driverId }) {
             </p>
           </div>
 
+          {incentiveExtraCents > 0 && (
+            <p style={{ fontSize: 12, color: 'var(--purple)', fontWeight: 700, marginTop: 8 }}>
+              Includes {centsToDollars(incentiveExtraCents)} driver incentive on top of your 80% share.
+            </p>
+          )}
+
+          {canEditIncentives && (
+            <button
+              type="button"
+              className="pressable"
+              onClick={() => navigate('incentives')}
+              style={{ marginTop: 12, fontWeight: 700, color: 'var(--purple)' }}
+            >
+              Edit driver incentives
+            </button>
+          )}
+
           {recentCompleted.length > 0 && (
             <div style={{ padding: '12px 0 4px', borderTop: '1px solid var(--border)', marginTop: 8 }}>
               <div style={{ fontWeight: 600, marginBottom: 8 }}>Recent earnings</div>
@@ -633,7 +683,12 @@ function DriverShell({ driverId }) {
                   <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '70%' }}>
                     {t.dropoff_label || 'Trip'}
                   </span>
-                  <strong style={{ color: 'var(--ink)' }}>{centsToDollars(driverTakeCents(t))}</strong>
+                  <strong style={{ color: 'var(--ink)' }}>
+                    {centsToDollars(driverTakeCents(t))}
+                    {extraByTrip[t.id] ? (
+                      <span style={{ color: '#F56600' }}> +{centsToDollars(extraByTrip[t.id])}</span>
+                    ) : null}
+                  </strong>
                 </div>
               ))}
             </div>

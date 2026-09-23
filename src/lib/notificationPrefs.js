@@ -123,6 +123,7 @@ export function categoryForToastKind(kind) {
   if (/^ride_|^trip_|^driver_|^arrived|^en_route/.test(k)) return 'ride'
   if (/^pay|^fare|^billing|^receipt/.test(k)) return 'billing'
   if (/^friend|^carpool|^location_shared/.test(k)) return 'friends'
+  if (k === 'driver_incentive' || k === 'incentive_started') return 'system'
   if (/^promo|^surge|^busy/.test(k)) return 'promotions'
   return 'system'
 }

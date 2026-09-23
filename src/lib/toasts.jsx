@@ -23,6 +23,7 @@ const KIND_META = {
   friend_left: { title: 'Friend left', Icon: IconCarpool, tone: 'orange' },
   carpool_booked: { title: 'Carpool booked', Icon: IconCarpool, tone: 'orange' },
   location_shared: { title: 'Location shared', Icon: IconShare, tone: 'purple' },
+  driver_incentive: { title: 'Driver incentive', Icon: IconBell, tone: 'orange' },
   system: { title: 'Update', Icon: IconBell, tone: 'purple' },
 }
 
