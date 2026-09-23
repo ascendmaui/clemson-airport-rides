@@ -5,6 +5,8 @@
 import { createClient } from '@supabase/supabase-js'
 import Stripe from 'stripe'
 import { driverApprovalStatus } from './driverApproval.js'
+import { firstName, presentStop } from '../src/lib/carpoolEngine.js'
+import { settleCarpoolSideEffects } from './carpoolSettle.js'
 
 export const MAX_PARTICIPANTS = 5
 
@@ -234,6 +236,8 @@ export async function computeRoutes(origin, destination, intermediates) {
 }
 
 export function publicRideSummary(ride, participants) {
+  const carpool = ride.kind === 'carpool'
+  const approximate = carpool && ['booked', 'completed', 'canceled'].includes(ride.status)
   return {
     id: ride.id,
     token: ride.token,
@@ -255,11 +259,11 @@ export function publicRideSummary(ride, participants) {
     updated_at: ride.updated_at,
     participants: (participants || []).map((p) => ({
       id: p.id,
-      display_name: p.display_name,
+      display_name: carpool ? firstName(p.display_name) : p.display_name,
       email: p.email ? maskEmail(p.email) : null,
       user_id: p.user_id,
-      pickup: p.pickup,
-      dropoff: p.dropoff,
+      pickup: presentStop(p.pickup, { approximate }),
+      dropoff: presentStop(p.dropoff, { approximate }),
       fare_cents: p.fare_cents,
       status: p.status,
       paid_at: p.paid_at,
@@ -336,9 +340,11 @@ export async function maybeBookFriendRide(sb, rideId) {
   ]
 
   const rideKind = ride.kind === 'carpool' ? 'carpool' : 'friend_ride'
-  const assignedDriver =
-    ride.driver_profile_id ||
-    (ride.kind === 'carpool' ? ride.organizer_id : null)
+  const marketplace = ride.fare_breakdown?.match_mode === 'marketplace'
+  const quote = ride.fare_breakdown?.carpool || null
+  const assignedDriver = marketplace
+    ? (ride.driver_profile_id || null)
+    : (ride.driver_profile_id || (ride.kind === 'carpool' ? ride.organizer_id : null))
   // Carpool: organizer drives — skip open matching (accepted + assigned).
   // Friends: open searching as before.
   const primaryRider =
@@ -369,6 +375,11 @@ export async function maybeBookFriendRide(sb, rideId) {
       duration_s: ride.duration_s,
       route_polyline: ride.route_polyline,
       preferred_driver_id: assignedDriver || null,
+      carpool: quote,
+      driver_payout_cents: quote?.driver?.payoutCents ?? null,
+      platform_fee_cents: quote?.platformFeeCents ?? null,
+      incentive_id: quote?.driver?.incentiveId || null,
+      party_type: ride.fare_breakdown?.party_type || null,
       participants: list.map((p) => ({
         id: p.id,
         display_name: p.display_name,
@@ -420,7 +431,25 @@ export async function maybeBookFriendRide(sb, rideId) {
     fareBreakdown: ride.fare_breakdown || null,
   })
 
+  await settleCarpoolSideEffects(sb, { ride, trip, participants: list })
+
   return { booked: true, trip }
+}
+
+/** Game-week first ride. No Stripe charge and no payments row. */
+export async function markParticipantComped(sb, participant, reason) {
+  const { error } = await sb
+    .from('friend_ride_participants')
+    .update({
+      status: 'paid',
+      paid_at: new Date().toISOString(),
+      fare_cents: 0,
+      charge_error: null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', participant.id)
+  if (error) throw new Error(error.message)
+  return { comped: true, reason }
 }
 
 export async function markParticipantPaid(sb, participant, paymentIntent) {

@@ -70,10 +70,55 @@ async function api(path, { method = 'GET', body } = {}) {
   return data
 }
 
-export async function createFriendRide({ displayName, pickup, dropoff, splitMode, kind } = {}) {
+export function rememberAmbassador(code) {
+  try {
+    if (code) window.sessionStorage.setItem('clemson_ambassador_code', code)
+  } catch {
+    /* ignore */
+  }
+}
+
+export function rememberedAmbassador() {
+  try {
+    return window.sessionStorage.getItem('clemson_ambassador_code') || null
+  } catch {
+    return null
+  }
+}
+
+export async function createFriendRide({ displayName, pickup, dropoff, splitMode, kind, partyType, ambassadorCode } = {}) {
   return api('/api/friend-rides-create', {
     method: 'POST',
-    body: { displayName, pickup, dropoff, splitMode, kind: kind === 'carpool' ? 'carpool' : 'friends' },
+    body: {
+      displayName,
+      pickup,
+      dropoff,
+      splitMode,
+      kind: kind === 'carpool' ? 'carpool' : 'friends',
+      partyType: partyType === 'tailgate' ? 'tailgate' : 'carpool',
+      ambassadorCode: ambassadorCode || rememberedAmbassador(),
+    },
+  })
+}
+
+export async function matchCarpool(body) {
+  return api('/api/carpool-match', {
+    method: 'POST',
+    body: { ...body, ambassadorCode: body.ambassadorCode || rememberedAmbassador() },
+  })
+}
+
+export async function createCarpoolGroup(body) {
+  return api('/api/carpool-group', {
+    method: 'POST',
+    body: { ...body, ambassadorCode: body.ambassadorCode || rememberedAmbassador() },
+  })
+}
+
+export async function carpoolProgram(action) {
+  return api('/api/carpool-program', {
+    method: 'POST',
+    body: { action, origin: typeof window !== 'undefined' ? window.location.origin : undefined },
   })
 }
 

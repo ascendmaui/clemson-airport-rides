@@ -100,8 +100,8 @@ export function RiderHome({ riderName = 'John' }) {
             <Pill icon="🕐" tone="orange" onClick={() => navigate('schedule')}>
               Schedule a ride
             </Pill>
-            <Pill icon="👥" tone="purple" onClick={() => navigate('friends')}>
-              Ride with friends
+            <Pill icon="👥" tone="purple" onClick={() => navigate('carpool', { hub: '1' })}>
+              Carpool · split the surge
             </Pill>
           </div>
 
@@ -164,15 +164,15 @@ export function RiderHome({ riderName = 'John' }) {
               🏈
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontWeight: 700, fontSize: 15 }}>Game Day Rides</div>
+              <div style={{ fontWeight: 700, fontSize: 15 }}>Game day carpool</div>
               <div style={{ fontSize: 13, color: 'var(--ink-secondary)', marginTop: 2 }}>
-                Skip the surge. Book ahead!
+                About $10–$15 each instead of $30–$40.
               </div>
             </div>
             <button
               type="button"
               className="pressable"
-              onClick={() => navigate('schedule')}
+              onClick={() => navigate('carpool', { hub: '1' })}
               style={{
                 padding: '10px 14px',
                 borderRadius: 12,
@@ -184,7 +184,7 @@ export function RiderHome({ riderName = 'John' }) {
                 boxShadow: 'var(--shadow-pill)',
               }}
             >
-              Schedule Now
+              Find a carpool
             </button>
           </div>
         </div>

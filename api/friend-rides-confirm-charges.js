@@ -5,7 +5,7 @@
  */
 import {
   admin, cors, json, parseBody, userFromAuth, loadRideByToken, stripeClient, stripeOk,
-  ensureStripeCustomer, markParticipantPaid, maybeBookFriendRide, publicRideSummary,
+  ensureStripeCustomer, markParticipantPaid, markParticipantComped, maybeBookFriendRide, publicRideSummary,
 } from '../server/friendRideLib.js'
 import { recomputeRideFares } from '../server/friendRideRecompute.js'
 
@@ -75,6 +75,14 @@ export default async function handler(req, res) {
         results.push({ participantId: p.id, status: 'already_paid' })
         continue
       }
+      const comp = (ride.fare_breakdown?.carpool?.shares || []).find(
+        (share) => share.id === p.id && share.firstRideFree,
+      )
+      if (comp) {
+        await markParticipantComped(sb, p, 'first_ride_free')
+        results.push({ participantId: p.id, status: 'comped', reason: 'first_ride_free' })
+        continue
+      }
       if (!p.fare_cents || p.fare_cents <= 0) {
         results.push({ participantId: p.id, status: 'skipped', error: 'No fare' })
         continue
@@ -114,6 +122,8 @@ export default async function handler(req, res) {
               friend_ride_id: ride.id,
               participant_id: p.id,
               token: ride.token,
+              carpool: ride.kind === 'carpool' ? '1' : '0',
+              share_cents: String(p.fare_cents),
             },
           })
 
@@ -184,6 +194,8 @@ export default async function handler(req, res) {
             friend_ride_id: ride.id,
             participant_id: p.id,
             token: ride.token,
+            carpool: ride.kind === 'carpool' ? '1' : '0',
+            share_cents: String(p.fare_cents),
           },
         }
         if (customerId) piParams.customer = customerId

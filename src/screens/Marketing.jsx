@@ -71,21 +71,22 @@ export function Marketing() {
 
       <div style={{ padding: '28px 24px 40px' }}>
         <h2 style={{ fontSize: 22, fontWeight: 600, marginBottom: 10, letterSpacing: -0.3 }}>
-          Clemson-only airport rides
+          Carpool is the reason to skip Uber
         </h2>
         <p style={{ color: 'var(--ink-secondary)', fontSize: 15, lineHeight: 1.45, marginBottom: 20 }}>
-          Flat rates to GSP ($75) & CLT ($175). Skip the surge on game day. Premium self-driving Tesla fleet available.
+          Game night to Grand Marc or College Ave is about $30–$40 alone. Four Tigers split it to about $10–$15 each,
+          and the driver earns more than a solo trip. Airport flats to GSP ($75) and CLT ($175) are still here.
         </p>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 28 }}>
-          <PrimaryButton onClick={() => navigate('home')}>Open rider app</PrimaryButton>
+          <PrimaryButton onClick={() => navigate('carpool', { hub: '1' })}>Find a carpool</PrimaryButton>
           <PrimaryButton variant="purple" onClick={() => navigate('driver-signup')}>
             Sign up as a driver
           </PrimaryButton>
           <button
             type="button"
             className="pressable"
-            onClick={() => navigate('carpool')}
+            onClick={() => navigate('carpool', { drive: '1' })}
             style={{
               fontWeight: 700,
               color: 'var(--purple)',
