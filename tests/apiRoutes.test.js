@@ -144,6 +144,44 @@ test('consolidated handlers reject unknown actions and wrong methods', async () 
   assert.equal(stripeMissing.status, 400)
 })
 
+test('held routes fold into existing routers and ignore body sub-actions', () => {
+  const driver = {
+    allowed: ['signup', 'submit-review', 'earnings', 'offer-preview', 'tip', 'wait', 'cancel-midride', 'payouts'],
+    legacy: {
+      'driver-earnings': 'earnings',
+      'trip-wait': 'wait',
+      'trip-cancel-midride': 'cancel-midride',
+      'driver-payouts': 'payouts',
+    },
+  }
+  assert.equal(resolveRouteAction({ url: '/api/driver?action=wait', body: { action: 'arrive', tripId: 't' } }, driver), 'wait')
+  assert.equal(resolveRouteAction({ url: '/api/trip-wait', body: { action: 'tick' } }, driver), 'wait')
+  assert.equal(resolveRouteAction({ url: '/api/driver-earnings' }, driver), 'earnings')
+
+  const pay = {
+    allowed: ['setup-intent', 'save', 'quote', 'airport-checkout', 'buy-credits', 'credits-confirm', 'credit-lots', 'credits', 'collect', 'settle'],
+    legacy: {
+      'quote-fare': 'quote',
+      'collect-payment': 'collect',
+      'trip-settle': 'settle',
+    },
+  }
+  assert.equal(
+    resolveRouteAction({ url: '/api/stripe-payment-methods?action=credits', body: { action: 'buy', tierId: 'pack' } }, pay),
+    'credits',
+  )
+  assert.equal(resolveRouteAction({ url: '/api/stripe-payment-methods', body: { action: 'default' } }, pay), null)
+  assert.equal(resolveRouteAction({ url: '/api/trip-settle', body: { action: 'complete', tripId: 't' } }, pay), 'settle')
+
+  const support = {
+    allowed: ['help-chat', 'support-chat', 'ticket'],
+    legacy: { 'help-chat': 'help-chat', 'support-chat': 'support-chat', 'support-ticket': 'ticket' },
+  }
+  assert.equal(resolveRouteAction({ url: '/api/help-chat' }, support), 'help-chat')
+  assert.equal(resolveRouteAction({ url: '/api/admin-drivers?action=ticket' }, support), 'ticket')
+  assert.equal(resolveRouteAction({ url: '/api/admin-drivers', body: { profileId: 'p', decision: 'approve' } }, support), null)
+})
+
 test('GET friend ride with a token reaches the get handler', async () => {
   const viaQuery = await call(friendRidesHandler, {
     method: 'GET',

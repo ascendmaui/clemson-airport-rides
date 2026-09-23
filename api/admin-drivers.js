@@ -2,12 +2,31 @@
  * GET  /api/admin-drivers            queue for john@gmail.com / admins
  * GET  /api/admin-drivers?profile_id signed document URLs
  * POST /api/admin-drivers            { profileId, decision: approve|reject, reason }
+ * Help and Support (any signed-in rider, not the admin gate):
+ *   /api/admin-drivers?action=help-chat|support-chat|ticket
+ * Legacy /api/help-chat, /api/support-chat, /api/support-ticket are rewritten here.
  */
 import { blockerLabel, isAdminIdentity, onboardingLabel, submissionBlockers } from '../shared/driverOnboarding.js'
 import { loadSubmissionContext } from '../server/driverApproval.js'
 import {
   admin, cors, json, parseBody, userFromAuth,
 } from '../server/friendRideLib.js'
+import { resolveRouteAction } from '../server/routeAction.js'
+import handleHelpChat from '../server/endpoints/helpChat.js'
+import handleSupportChat from '../server/endpoints/supportChat.js'
+import handleSupportTicket from '../server/endpoints/supportTicket.js'
+
+const SUPPORT_HANDLERS = {
+  'help-chat': handleHelpChat,
+  'support-chat': handleSupportChat,
+  ticket: handleSupportTicket,
+}
+
+const SUPPORT_LEGACY = {
+  'help-chat': 'help-chat',
+  'support-chat': 'support-chat',
+  'support-ticket': 'ticket',
+}
 
 const APP_COLS = 'id, profile_id, onboarding_status, status, is_student, has_car, has_insurance, wants_extra_money, attestation_accepted_at, background_authorized_at, work_eligibility_attested_at, work_eligibility_category, submitted_at, reviewed_at, reviewed_by, rejection_reason, review_note, admin_notified_at, notify_error, created_at'
 
@@ -29,6 +48,11 @@ async function requireAdmin(sb, user) {
 
 export default async function handler(req, res) {
   if (cors(req, res)) return
+  const supportAction = resolveRouteAction(req, {
+    allowed: Object.keys(SUPPORT_HANDLERS),
+    legacy: SUPPORT_LEGACY,
+  })
+  if (supportAction) return SUPPORT_HANDLERS[supportAction](req, res)
   if (req.method !== 'GET' && req.method !== 'POST') return json(res, 405, { error: 'Method not allowed' })
 
   const sb = admin()

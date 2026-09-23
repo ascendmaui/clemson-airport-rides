@@ -11,6 +11,8 @@ import { RideChat, RideMessageButton } from '../components/RideChat'
 import { rideChatMode } from '../lib/tripChatRules'
 import { SosControl } from '../components/SosControl'
 import { isActiveRideStatus } from '../lib/sosAlert'
+import { MidrideCancelSheet } from '../components/MidrideCancelSheet'
+import { isMidrideStatus } from '../lib/tripPhase'
 
 export function Requested({ dest = 'GSP Airport', trip = '', driver = 'your driver', driverId = '' }) {
   const { user } = useAuth()
@@ -22,6 +24,7 @@ export function Requested({ dest = 'GSP Airport', trip = '', driver = 'your driv
   const [resolvedDriverId, setResolvedDriverId] = useState(driverId || '')
   const [rateNudge, setRateNudge] = useState(false)
   const [chatOpen, setChatOpen] = useState(false)
+  const [cancelOpen, setCancelOpen] = useState(false)
   const stopRef = useRef(null)
   const ratedCheck = useRef(false)
 
@@ -186,6 +189,16 @@ export function Requested({ dest = 'GSP Airport', trip = '', driver = 'your driv
               </button>
             </div>
           )}
+          {isMidrideStatus(status) && trip && (
+            <button
+              type="button"
+              className="pressable"
+              onClick={() => setCancelOpen(true)}
+              style={{ fontWeight: 700, color: 'var(--danger, #b42318)', padding: '4px 0' }}
+            >
+              Cancel this ride
+            </button>
+          )}
           <PrimaryButton onClick={() => navigate('home')}>Back home</PrimaryButton>
         </div>
         {error && <p style={{ color: 'var(--danger)', fontSize: 13, marginTop: 12 }}>{error}</p>}
@@ -196,6 +209,16 @@ export function Requested({ dest = 'GSP Airport', trip = '', driver = 'your driv
           userId={user.id}
           initialTrip={tripRow}
           onClose={() => setChatOpen(false)}
+        />
+      )}
+      {cancelOpen && trip && (
+        <MidrideCancelSheet
+          tripId={trip}
+          onClose={() => setCancelOpen(false)}
+          onCanceled={() => {
+            setCancelOpen(false)
+            setTripRow((row) => (row ? { ...row, status: 'canceled' } : row))
+          }}
         />
       )}
     </div>

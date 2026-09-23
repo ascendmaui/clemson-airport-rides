@@ -7,6 +7,7 @@ import Stripe from 'stripe'
 import { driverApprovalStatus } from './driverApproval.js'
 import { firstName, presentStop } from '../src/lib/carpoolEngine.js'
 import { settleCarpoolSideEffects } from './carpoolSettle.js'
+import { insertChargePayment } from './creditLots.js'
 
 export const MAX_PARTICIPANTS = 5
 
@@ -452,11 +453,50 @@ export async function markParticipantComped(sb, participant, reason) {
   return { comped: true, reason }
 }
 
-export async function markParticipantPaid(sb, participant, paymentIntent) {
-  const amount = paymentIntent?.amount || participant.fare_cents || 0
+export async function markParticipantPaid(sb, participant, paymentIntent, extra = null) {
   const piId = typeof paymentIntent === 'string' ? paymentIntent : paymentIntent?.id
+  const settlement = extra && (
+    extra.cashCents != null || extra.debits || extra.riderPaysCents != null
+  )
+    ? extra
+    : null
+  const amount = settlement
+    ? (settlement.riderPaysCents ?? paymentIntent?.amount ?? participant.fare_cents ?? 0)
+    : (paymentIntent?.amount || participant.fare_cents || 0)
 
-  let paymentId = participant.payment_id
+  let paymentId = extra?.paymentId || participant.payment_id
+  if (!paymentId && settlement) {
+    let riderId = participant.user_id
+    if (!riderId) {
+      const { data: ride } = await sb
+        .from('friend_rides')
+        .select('organizer_id')
+        .eq('id', participant.friend_ride_id)
+        .single()
+      riderId = ride?.organizer_id
+    }
+    const note = { participant_id: participant.id, friend_ride_id: participant.friend_ride_id }
+    if (riderId && settlement.creditsDebitedCents > 0) {
+      const creditPay = await insertChargePayment(sb, {
+        riderId,
+        kind: 'ride_fare',
+        amountCents: settlement.creditsDebitedCents,
+        metadata: { ...note, method: 'credits', discount_cents: settlement.creditDiscountCents || 0 },
+      })
+      paymentId = creditPay?.id || paymentId
+    }
+    const cashCents = settlement.cashCents ?? 0
+    if (riderId && cashCents > 0) {
+      const cashPay = await insertChargePayment(sb, {
+        riderId,
+        kind: 'friend_ride_share',
+        amountCents: cashCents,
+        stripePaymentIntentId: piId,
+        metadata: { ...note, method: 'card' },
+      })
+      paymentId = cashPay?.id || paymentId
+    }
+  }
   if (!paymentId) {
     const riderId = participant.user_id
     if (!riderId) {
@@ -498,16 +538,18 @@ export async function markParticipantPaid(sb, participant, paymentIntent) {
     }
   }
 
+  const patch = {
+    status: 'paid',
+    paid_at: new Date().toISOString(),
+    payment_id: paymentId,
+    stripe_payment_intent_id: piId,
+    charge_error: null,
+    updated_at: new Date().toISOString(),
+  }
+  if (settlement?.riderPaysCents != null) patch.fare_cents = settlement.riderPaysCents
   await sb
     .from('friend_ride_participants')
-    .update({
-      status: 'paid',
-      paid_at: new Date().toISOString(),
-      payment_id: paymentId,
-      stripe_payment_intent_id: piId,
-      charge_error: null,
-      updated_at: new Date().toISOString(),
-    })
+    .update(patch)
     .eq('id', participant.id)
 
   return maybeBookFriendRide(sb, participant.friend_ride_id)

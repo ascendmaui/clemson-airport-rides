@@ -22,6 +22,11 @@ import { isClemsonEmail } from '../lib/studentDomain'
 import { fetchMyDriverApplication, isAdminIdentity, onboardingLabel } from '../lib/driverOnboarding'
 import { ReferFriendsPanel } from './ReferFriends'
 import { isIncentiveAdmin } from '../lib/driverIncentiveMath'
+import { HelpChatPanel } from '../components/HelpChatPanel'
+import { SupportChatPanel } from '../components/SupportChatPanel'
+import { CreditPacksPanel } from '../components/CreditPacksPanel'
+import { PrepaidCreditsPanel } from '../components/PrepaidCreditsPanel'
+import { QuietHoursCard } from '../components/QuietHoursCard'
 
 const chip = (on) => ({
   padding: '8px 12px', borderRadius: 999, fontSize: 13, fontWeight: 600,
@@ -54,6 +59,7 @@ const NAV = [
   { id: 'student', label: 'Student', Icon: IconStudent },
   { id: 'privacy', label: 'Privacy', Icon: IconPrivacy },
   { id: 'help', label: 'Help', Icon: IconHelp },
+  { id: 'support', label: 'Support', Icon: IconHelp },
 ]
 
 const ACCOUNT_TABS = new Set(NAV.map((n) => n.id))
@@ -191,9 +197,8 @@ export function AccountScreen() {
     finally { setUploading(false) }
   }
 
-  async function onTogglePref(id) {
+  async function savePrefs(next) {
     if (!user?.id) return
-    const next = { ...prefs, [id]: !prefs[id] }
     setPrefs(next)
     setPrefsCache(next)
     setPrefsSaving(true)
@@ -207,6 +212,17 @@ export function AccountScreen() {
       setPrefsNote('Saved to profile')
       setTimeout(() => setPrefsNote(null), 1800)
     }
+  }
+
+  async function onTogglePref(id) {
+    if (!user?.id) return
+    const next = { ...prefs, [id]: !prefs[id] }
+    await savePrefs(next)
+  }
+
+  async function onQuietChange(quiet) {
+    if (!user?.id) return
+    await savePrefs({ ...prefs, quiet })
   }
 
   async function onSignOut() {
@@ -451,6 +467,32 @@ export function AccountScreen() {
                 )
               })}
             </div>
+            <QuietHoursCard
+              prefs={prefs}
+              saving={prefsSaving}
+              onChange={onQuietChange}
+            />
+            <button
+              type="button"
+              className="pressable"
+              onClick={() => onTogglePref('dndNewRequestTones')}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 12, textAlign: 'left',
+                marginTop: 10, padding: 12, borderRadius: 14,
+                background: 'rgba(255,255,255,0.45)',
+                border: '1px solid rgba(82,45,128,0.1)',
+              }}
+            >
+              <span style={{ flex: 1 }}>
+                <div style={{ fontWeight: 700, color: 'var(--purple)' }}>Do not disturb — new requests</div>
+                <div style={{ fontSize: 12, color: 'var(--ink-tertiary)' }}>
+                  Mutes the new-request tone. Mid-ride cancel tones still play.
+                </div>
+              </span>
+              <span style={{ fontWeight: 800, color: prefs.dndNewRequestTones ? 'var(--orange)' : 'var(--ink-tertiary)' }}>
+                {prefs.dndNewRequestTones ? 'On' : 'Off'}
+              </span>
+            </button>
             {prefsNote && (
               <div style={{ fontSize: 12, color: 'var(--ink-tertiary)', marginTop: 12 }}>{prefsNote}</div>
             )}
@@ -477,6 +519,8 @@ export function AccountScreen() {
         {tab === 'billing' && (
           <div style={{ marginTop: 14 }}>
             <BillingPanel profile={profile} onProfileRefresh={() => reload().catch(() => {})} />
+            <CreditPacksPanel />
+            <PrepaidCreditsPanel />
           </div>
         )}
 
@@ -526,6 +570,11 @@ export function AccountScreen() {
                 Review driver applications
               </button>
             )}
+            <button type="button" className="pressable" onClick={() => navigate('earnings')}
+              style={{ display: 'block', width: '100%', marginTop: 10, padding: 12, borderRadius: 14, fontWeight: 700,
+                color: 'var(--purple)', border: '1.5px solid rgba(82,45,128,0.3)', background: 'rgba(255,255,255,0.55)' }}>
+              Earnings and tax summary
+            </button>
             <button type="button" className="pressable" onClick={() => navigate('driver')}
               style={{ display: 'block', width: '100%', marginTop: 10, padding: 12, borderRadius: 14, fontWeight: 700,
                 color: 'var(--purple)', border: '1.5px solid rgba(82,45,128,0.3)', background: 'rgba(255,255,255,0.55)' }}>
@@ -589,7 +638,19 @@ export function AccountScreen() {
         )}
 
         {tab === 'help' && (
-          <Section title="Help & support" subtitle="We’re here for campus rides" icon={IconHelp}>
+          <Section title="Help" subtitle="Walkthroughs for campus and airport rides" icon={IconHelp}>
+            <HelpChatPanel accountRole={profile?.role || null} active={tab === 'help'} />
+          </Section>
+        )}
+
+        {tab === 'support' && (
+          <Section title="Support" subtitle="Tickets for problems, not how-to" icon={IconHelp}>
+            <SupportChatPanel accountRole={profile?.role || null} active={tab === 'support'} />
+          </Section>
+        )}
+
+        {tab === 'help' && (
+          <Section title="Also in Help" subtitle="Email, lost and found, and policies" icon={IconHelp}>
             <a
               href="mailto:rides@clemson.edu?subject=Clemson%20RIDES%20help"
               className="pressable"

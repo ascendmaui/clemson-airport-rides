@@ -1,12 +1,15 @@
 import { createClient } from '@supabase/supabase-js'
+import { displayFirstName } from './privacyDisplay.js'
+import { standingFromRatings } from './standing.js'
 
+const env = import.meta.env || {}
 const url =
-  import.meta.env.VITE_SUPABASE_URL ||
-  import.meta.env.NEXT_PUBLIC_SUPABASE_URL ||
+  env.VITE_SUPABASE_URL ||
+  env.NEXT_PUBLIC_SUPABASE_URL ||
   'https://awktabuhijrshmsmagpq.supabase.co'
 const key = (
-  import.meta.env.VITE_SUPABASE_ANON_KEY ||
-  import.meta.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+  env.VITE_SUPABASE_ANON_KEY ||
+  env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
   ''
 ).trim()
 
@@ -65,18 +68,26 @@ export async function fetchOnlineDrivers() {
 
   const visibleIds = visible.map((s) => s.driver_id)
 
-  const [{ data: profiles }, { data: vehicles }] = await Promise.all([
-    supabase
+  const vehicleQuery = supabase
+    .from('vehicles')
+    .select(
+      'id, driver_id, make, model, color, plate, seats, is_tesla, autonomous_capable, tier',
+    )
+    .in('driver_id', visibleIds)
+
+  let profileRes = await supabase
+    .from('profiles')
+    .select('id, full_name, phone, email, avatar_url, role, rating_avg, rating_count, standing')
+    .in('id', visibleIds)
+  if (profileRes.error && /standing|rating_avg|rating_count|column|schema cache/i.test(profileRes.error.message || '')) {
+    profileRes = await supabase
       .from('profiles')
       .select('id, full_name, phone, email, avatar_url, role')
-      .in('id', visibleIds),
-    supabase
-      .from('vehicles')
-      .select(
-        'id, driver_id, make, model, color, plate, seats, is_tesla, autonomous_capable, tier',
-      )
-      .in('driver_id', visibleIds),
-  ])
+      .in('id', visibleIds)
+  }
+  const { data: vehicles } = await vehicleQuery
+  if (profileRes.error) return { drivers: [], error: profileRes.error.message }
+  const profiles = profileRes.data
 
   const profileById = Object.fromEntries((profiles || []).map((p) => [p.id, p]))
   const vehicleByDriver = {}
@@ -87,9 +98,14 @@ export async function fetchOnlineDrivers() {
   const drivers = visible.map((s) => {
     const profile = profileById[s.driver_id] || {}
     const vehicle = vehicleByDriver[s.driver_id] || null
+    const standing = profile.standing || standingFromRatings(profile.rating_avg, profile.rating_count)
+    if (standing === 'restricted') return null
     return {
       id: s.driver_id,
-      name: profile.full_name || 'Driver',
+      name: displayFirstName(profile.full_name, 'Driver'),
+      ratingAvg: profile.rating_avg != null ? Number(profile.rating_avg) : null,
+      ratingCount: Number(profile.rating_count) || 0,
+      standing,
       phone: profile.phone || null,
       avatarUrl: profile.avatar_url || null,
       online: s.online,
@@ -108,7 +124,7 @@ export async function fetchOnlineDrivers() {
       tier: vehicle?.tier || 'standard',
       updatedAt: s.updated_at,
     }
-  })
+  }).filter(Boolean)
 
   return { drivers, error: null }
 }

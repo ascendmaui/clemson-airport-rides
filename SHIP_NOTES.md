@@ -1,5 +1,11 @@
 # Ride with friends + Carpool — ship notes
 
+## Payments (failure handling)
+- Canonical collector: `collectPayment({ tripId, amountCents, methods: ['credits','card'] })` in `server/collectPayment.js` (re-exported from `server/friendRideLib.js`).
+- 20% platform fee only: `shared/platformFee.js`. Wait-time and mid-ride cancel fees stay with their owners — pass `amountCents` or write `metadata.wait_fee_cents` / `metadata.cancel_fee_cents`. Do not fork that math.
+- Trip complete/cancel that costs money goes through `POST /api/trip-settle`. `$0` proceeds. Otherwise status stays put and `metadata.payment_hold.status` is `payment_required`.
+- Driver payout failures stay `metadata.payout.status = pending` and retry with backoff (`POST /api/driver-payouts`, cron when `CRON_SECRET` is set).
+
 ## Payments (FINAL LOCK)
 - SetupIntent save card (off_session)
 - Organizer Confirm → off_session PI OR Payment Element / Apple Pay
@@ -28,6 +34,18 @@ See `docs/CARPOOL_MATCHING.md` for the matching algorithm, the $30–$40 vs $10�
 7. All paid → one trips row; `driver_id` = organizer (skip open matching → status accepted)
 8. Trust UI: "Clemson student" badge when `student_verified_at`; show ratings
 9. Entry: Marketing / Friends / Account / DriverHome "Offer a carpool"
+
+## Mid-ride cancel
+- Status `canceled_midride` after pickup (`in_progress`, or `arriving` only if the trip already started). Pickup wait-fee cancel is a different flow.
+- Obligation = min(quoted fare, max(meter, progress × quoted)) + cancel fee ($5 default, `MIDRIDE_CANCEL_FEE_CENTS`).
+- Meter = $2.50 + $1.75/mi + $0.35/min. Progress = max(GPS distance / straight-line trip, elapsed / expected at 30 mph).
+- Platform 20% / driver 80% of the obligation. Succeeded deposits reduce the new card charge only.
+- Blocked after 3 mid-ride cancels in 30 days (`MIDRIDE_CANCEL_MAX`, `MIDRIDE_CANCEL_WINDOW_DAYS`).
+- API: `POST /api/trip-cancel-midride` (`confirm: true` charges; omit confirm to preview).
+- Card collection goes through `server/collectPayment.js` when that module is present. A decline still ends the trip and surfaces `payment_required` (toast + trip event). The trip is not left in progress.
+
+## Payment kinds
+Held SQL files each replace `payments_kind_check`. Apply `supabase/payments_kind_union.sql` last so tip, wait, cancel, mid-ride, and both credit purchase kinds can be inserted together.
 
 ## Env / blockers
 - GOOGLE_MAPS_API_KEY (Vercel server Routes)

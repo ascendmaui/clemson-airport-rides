@@ -4,6 +4,9 @@
  * always mirror to localStorage. Soft-fail writes if column missing.
  */
 import { supabase } from './supabase'
+import { DEFAULT_QUIET } from './quietHours.js'
+
+export { DEFAULT_QUIET, isQuietNow, quietFromPrefs } from './quietHours.js'
 
 export const NOTIFICATION_CATEGORIES = [
   { id: 'ride', label: 'Ride updates', hint: 'Requested, accepted, en route, arrived, trip started/completed' },
@@ -19,6 +22,9 @@ export const DEFAULT_NOTIFICATION_PREFS = {
   friends: true,
   promotions: false,
   system: true,
+  quiet: { ...DEFAULT_QUIET },
+  /** Mutes the tone for new ride requests only. Mid-ride cancel tones ignore this. */
+  dndNewRequestTones: false,
 }
 
 const LS_KEY = (userId) => `clemson.notification_prefs.${userId || 'anon'}`
@@ -42,13 +48,17 @@ export function saveLocalPrefs(userId, prefs) {
 }
 
 export function normalizePrefs(raw) {
-  if (!raw || typeof raw !== 'object') return { ...DEFAULT_NOTIFICATION_PREFS }
+  const base = raw && typeof raw === 'object' ? { ...raw } : {}
+  if (!raw || typeof raw !== 'object') return { ...DEFAULT_NOTIFICATION_PREFS, quiet: { ...DEFAULT_QUIET } }
   return {
-    ride: raw.ride !== false,
+    ...base,
+    ride: raw.ride !== false && raw.ride_updates !== false,
     billing: raw.billing !== false,
-    friends: raw.friends !== false,
+    friends: raw.friends !== false && raw.friends_carpool !== false,
     promotions: Boolean(raw.promotions),
     system: raw.system !== false,
+    quiet: quietFromPrefs(raw),
+    dndNewRequestTones: Boolean(raw.dndNewRequestTones),
   }
 }
 
@@ -120,6 +130,7 @@ export async function saveNotificationPrefs(userId, next) {
 /** Category for a toast kind — used to gate pushToast */
 export function categoryForToastKind(kind) {
   const k = String(kind || '')
+  if (k === 'canceled_midride') return 'ride'
   if (/^ride_|^trip_|^driver_|^arrived|^en_route/.test(k)) return 'ride'
   if (/^pay|^fare|^billing|^receipt/.test(k)) return 'billing'
   if (/^friend|^carpool|^location_shared/.test(k)) return 'friends'
