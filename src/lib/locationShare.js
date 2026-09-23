@@ -1,6 +1,19 @@
 import { supabase } from './supabase'
 import { shareUrl } from './navigation'
 
+function makeShareToken() {
+  try {
+    if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
+      const bytes = new Uint8Array(16)
+      crypto.getRandomValues(bytes)
+      return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('')
+    }
+  } catch {
+    /* fall through */
+  }
+  return `share_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 12)}`
+}
+
 export async function createLocationShare(tripId, riderId) {
   if (!supabase) throw new Error('Supabase is not configured')
   if (!tripId || !riderId) throw new Error('trip and rider required')
@@ -12,12 +25,14 @@ export async function createLocationShare(tripId, riderId) {
     .maybeSingle()
   if (existing?.token) return { ...existing, url: shareUrl(existing.token) }
 
+  const token = makeShareToken()
   const { data, error } = await supabase
     .from('location_shares')
-    .insert({ trip_id: tripId, rider_id: riderId, active: true })
+    .insert({ trip_id: tripId, rider_id: riderId, active: true, token })
     .select('id, token, active')
     .single()
   if (error) throw new Error(error.message)
+  if (!data?.token) throw new Error('Share created without token')
   return { ...data, url: shareUrl(data.token) }
 }
 
