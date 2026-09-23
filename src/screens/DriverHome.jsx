@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useAuth } from '../lib/auth'
 import { CampusMap, CLEMSON } from '../components/CampusMap'
 import { DriverIncentiveBanner, useDriverIncentiveWatch } from '../components/DriverIncentiveBanner'
 import { HEAT_WINDOWS } from '../lib/rideDemand'
 import { PurpleAcceptButton } from '../components/PrimaryButton'
+import { ScheduledRideQueue } from '../components/ScheduledRideQueue'
 import { navigate } from '../lib/navigation'
 import { setDriverOnline, subscribeTrips, supabase } from '../lib/supabase'
 import { grantRiderSocialForTrip } from '../lib/riderReferral'
@@ -16,6 +17,15 @@ import { SosControl } from '../components/SosControl'
 import { applyTripDriverIncentives, fetchDriverIncentiveExtras } from '../lib/driverIncentives'
 import { isIncentiveAdmin } from '../lib/driverIncentiveMath'
 import { fetchFullProfile } from '../lib/profiles'
+import { formatPickupAt, isDueNow } from '../lib/scheduledRideModel'
+import {
+  acceptScheduledTrip,
+  listDriverScheduledTrips,
+  listOpenScheduledTrips,
+  reminderCopy,
+  takeReminder,
+} from '../lib/scheduledRides'
+import { pushToast } from '../lib/toasts'
 
 function centsToDollars(cents) {
   if (cents == null) return '—'
@@ -66,6 +76,11 @@ function DriverShell({ driverId }) {
   const [activeChecked, setActiveChecked] = useState(false)
   const approved = application?.onboarding_status === 'approved'
   const [chatTrip, setChatTrip] = useState(null)
+  const [scheduledOpen, setScheduledOpen] = useState([])
+  const [scheduledMine, setScheduledMine] = useState([])
+  const [acceptingScheduledId, setAcceptingScheduledId] = useState(null)
+  const knownOpen = useRef(new Set())
+  const scheduledPrimed = useRef(false)
 
   useEffect(() => {
     if (!chatTrip || !activeTrip || chatTrip.id !== activeTrip.id) return
@@ -182,6 +197,46 @@ function DriverShell({ driverId }) {
     }
   }, [driverId, user])
 
+  const loadScheduled = useCallback(async () => {
+    if (!supabase || !driverId) return
+    try {
+      const [open, mine] = await Promise.all([
+        listOpenScheduledTrips(),
+        listDriverScheduledTrips(driverId),
+      ])
+      setScheduledOpen(open)
+      setScheduledMine(mine)
+      if (!scheduledPrimed.current) {
+        open.forEach((row) => knownOpen.current.add(row.id))
+        scheduledPrimed.current = true
+      } else {
+        open.forEach((row) => {
+          if (knownOpen.current.has(row.id)) return
+          knownOpen.current.add(row.id)
+          pushToast({
+            kind: 'ride_scheduled',
+            title: 'New scheduled ride',
+            body: `${row.pickup_label || 'Pickup'} → ${row.dropoff_label || 'Drop-off'} · ${formatPickupAt(row.pickup_at)}`,
+          })
+        })
+      }
+      open.forEach((row) => {
+        const decision = takeReminder(row, new Date(), { windows: ['h1', 'm15', 'now'] })
+        if (!decision) return
+        const copy = reminderCopy(row, decision)
+        pushToast({ ...copy, kind: 'ride_scheduled', title: 'Scheduled ride still open' })
+      })
+    } catch (err) {
+      console.error('[scheduled]', err.message)
+    }
+  }, [driverId])
+
+  useEffect(() => {
+    loadScheduled()
+    const timer = setInterval(loadScheduled, 20000)
+    return () => clearInterval(timer)
+  }, [loadScheduled])
+
   // Load open offers (searching/offered) — Realtime alone misses rows already open.
   useEffect(() => {
     if (!supabase || !approved) return undefined
@@ -226,14 +281,12 @@ function DriverShell({ driverId }) {
         .eq('driver_id', driverId)
         .in('status', ACTIVE_STATUSES)
         .order('accepted_at', { ascending: false })
-        .limit(1)
-      if (!alive) return
-      if (!error) {
-        const row = data?.[0]
-        if (row) {
-          setActiveTrip(row)
-          setOffer((prev) => (prev?.id === row.id ? null : prev))
-        }
+        .limit(8)
+      if (!alive || error) return
+      const row = (data || []).find((trip) => isDueNow(trip))
+      if (row) {
+        setActiveTrip(row)
+        setOffer((prev) => (prev?.id === row.id ? null : prev))
       }
       setActiveChecked(true)
     }
@@ -250,6 +303,9 @@ function DriverShell({ driverId }) {
     return subscribeTrips((payload) => {
       const row = payload?.new || payload?.record
       if (!row) return
+      if (row.status === 'scheduled') {
+        loadScheduled()
+      }
       if (row.status === 'searching' || row.status === 'offered') {
         if (!activeTrip) {
           setOffer(row)
@@ -260,10 +316,14 @@ function DriverShell({ driverId }) {
         }
       }
       if (row.status === 'accepted' && row.driver_id === driverId) {
-        setActiveTrip(row)
-        setOffer((prev) => (prev?.id === row.id ? null : prev))
+        if (isDueNow(row)) {
+          setActiveTrip(row)
+          setOffer((prev) => (prev?.id === row.id ? null : prev))
+        } else {
+          loadScheduled()
+        }
       }
-      if (ACTIVE_STATUSES.includes(row.status) && row.driver_id === driverId) {
+      if (ACTIVE_STATUSES.includes(row.status) && row.driver_id === driverId && isDueNow(row)) {
         setActiveTrip(row)
       }
       if (row.status === 'completed' && row.driver_id === driverId) {
@@ -277,7 +337,7 @@ function DriverShell({ driverId }) {
         setActiveTrip(null)
       }
     })
-  }, [approved, offer?.id, activeTrip?.id, driverId, loadEarnings])
+  }, [approved, offer?.id, activeTrip?.id, driverId, loadEarnings, loadScheduled])
 
   async function acceptOffer() {
     if (!approved) return
@@ -304,6 +364,55 @@ function DriverShell({ driverId }) {
     setActiveTrip(kept)
     setOffer(null)
   }
+
+  async function acceptScheduled(tripId) {
+    if (!tripId || acceptingScheduledId) return
+    setAcceptingScheduledId(tripId)
+    try {
+      const accepted = await acceptScheduledTrip(tripId)
+      pushToast({
+        kind: 'driver_accepted',
+        title: 'Scheduled ride accepted',
+        body: accepted?.acceptance_message || 'You are booked for this pickup.',
+      })
+      knownOpen.current.add(tripId)
+      await loadScheduled()
+      if (accepted && isDueNow(accepted)) {
+        setActiveTrip({
+          id: accepted.id,
+          status: 'accepted',
+          driver_id: driverId,
+          fare_cents: accepted.fare_cents,
+          pickup_label: accepted.pickup_label,
+          dropoff_label: accepted.dropoff_label,
+          pickup_at: accepted.pickup_at,
+          rider_id: accepted.rider_id,
+          accepted_at: accepted.accepted_at,
+        })
+        setOffer(null)
+      }
+    } catch (err) {
+      pushToast({
+        kind: 'system',
+        title: 'Could not accept',
+        body: err.message || 'That scheduled ride is no longer available.',
+      })
+    } finally {
+      setAcceptingScheduledId(null)
+    }
+  }
+
+  const futureMine = scheduledMine.filter((trip) => !isDueNow(trip))
+  const scheduledPanel = (
+    <>
+      <ScheduledRideQueue
+        rides={scheduledOpen}
+        acceptingId={acceptingScheduledId}
+        onAccept={acceptScheduled}
+      />
+      <ScheduledRideQueue rides={futureMine} title="Your upcoming" />
+    </>
+  )
 
   async function declineOffer() {
     if (!offer?.id || !supabase) {
@@ -389,6 +498,7 @@ function DriverShell({ driverId }) {
   }
 
   const showIdle = !offer && !activeTrip
+  const scheduledNotDone = Boolean(activeTrip?.pickup_at) && activeTrip.status !== 'completed'
   const statusLabel = {
     accepted: 'Accepted — head to pickup',
     arriving: 'Arriving at pickup',
@@ -416,13 +526,15 @@ function DriverShell({ driverId }) {
         heatWindow={heatWindow}
         onHeatMeta={setHeatMeta}
         showMapTypeControl={!activeTrip}
-        center={selfPos || (activeTrip?.pickup_lat != null ? [activeTrip.pickup_lat, activeTrip.pickup_lng] : CLEMSON)}
+        center={selfPos || (!scheduledNotDone && activeTrip?.pickup_lat != null ? [activeTrip.pickup_lat, activeTrip.pickup_lng] : CLEMSON)}
         zoom={13}
         marker={selfPos || CLEMSON}
         pickupPosition={
-          activeTrip?.pickup_lat != null && activeTrip?.pickup_lng != null
-            ? [Number(activeTrip.pickup_lat), Number(activeTrip.pickup_lng)]
-            : activeTrip ? CLEMSON : null
+          scheduledNotDone
+            ? null
+            : activeTrip?.pickup_lat != null && activeTrip?.pickup_lng != null
+              ? [Number(activeTrip.pickup_lat), Number(activeTrip.pickup_lng)]
+              : activeTrip ? CLEMSON : null
         }
         selfPosition={selfPos}
         driverPosition={selfPos}
@@ -550,6 +662,7 @@ function DriverShell({ driverId }) {
           }}
         >
           <div className="sheet-handle" />
+          {scheduledPanel}
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
             <span
               className="driver-online-dot"
@@ -722,6 +835,7 @@ function DriverShell({ driverId }) {
           }}
         >
           <div className="sheet-handle" />
+          <div style={{ maxHeight: 168, overflowY: 'auto', marginBottom: 8 }}>{scheduledPanel}</div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
             <div style={{ fontSize: 32, fontWeight: 700, letterSpacing: -0.5 }}>
               {centsToDollars(driverTakeCents(offer))}
@@ -777,6 +891,7 @@ function DriverShell({ driverId }) {
           }}
         >
           <div className="sheet-handle" />
+          <div style={{ maxHeight: 168, overflowY: 'auto', marginBottom: 8 }}>{scheduledPanel}</div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
             <div style={{ fontSize: 32, fontWeight: 700, letterSpacing: -0.5 }}>
               {centsToDollars(activeTrip.fare_cents)}

@@ -11,6 +11,8 @@ const MAX_VISIBLE = 4
 
 const KIND_META = {
   ride_requested: { title: 'Ride requested', Icon: IconCar, tone: 'orange' },
+  ride_scheduled: { title: 'Scheduled ride', Icon: IconCar, tone: 'orange' },
+  ride_reminder: { title: 'Pickup reminder', Icon: IconBell, tone: 'purple' },
   driver_accepted: { title: 'Driver accepted', Icon: IconCar, tone: 'purple' },
   driver_en_route: { title: 'Driver en route', Icon: IconCar, tone: 'orange' },
   arrived_pickup: { title: 'Arrived at pickup', Icon: IconCar, tone: 'purple' },
