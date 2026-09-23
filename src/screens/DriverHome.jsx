@@ -45,6 +45,7 @@ function DriverShell({ driverId }) {
   const [earningsCents, setEarningsCents] = useState(0)
   const [recentCompleted, setRecentCompleted] = useState([])
   const [advancing, setAdvancing] = useState(false)
+  const [advanceError, setAdvanceError] = useState(null)
   const [selfPos, setSelfPos] = useState(null)
   const [showSurge, setShowSurge] = useState(true)
   const [heatWindow, setHeatWindow] = useState('now')
@@ -282,13 +283,28 @@ function DriverShell({ driverId }) {
     if (!activeTrip?.id || !supabase || advancing) return
     setAdvancing(true)
     try {
+      setAdvanceError(null)
       const patch = { status: nextStatus }
       if (nextStatus === 'completed') {
         patch.completed_at = new Date().toISOString()
       }
-      const { error } = await supabase.from('trips').update(patch).eq('id', activeTrip.id)
+      const { data: saved, error } = await supabase
+        .from('trips')
+        .update(patch)
+        .eq('id', activeTrip.id)
+        .select('id, status, driver_id, completed_at')
+        .maybeSingle()
       if (error) {
         console.error(error)
+        setAdvanceError(error.message || 'Could not update this trip')
+        return
+      }
+      if (!saved || saved.status !== nextStatus) {
+        setAdvanceError(
+          nextStatus === 'completed'
+            ? 'This ride is not completed yet, so rating stays closed.'
+            : 'Trip status did not update.',
+        )
         return
       }
       await writeTripEvent(activeTrip.id, nextStatus, {
@@ -298,7 +314,12 @@ function DriverShell({ driverId }) {
         ...(patch.completed_at ? { completed_at: patch.completed_at } : {}),
       })
       if (nextStatus === 'completed') {
-        const doneId = activeTrip.id
+        if (!saved.driver_id) {
+          setAdvanceError('This trip has no driver yet, so it cannot be rated.')
+          setActiveTrip({ ...activeTrip, ...saved })
+          return
+        }
+        const doneId = saved.id
         // rider_social credits: DB trigger is the source of truth. This call is
         // idempotent and no-ops unless the rider's first ride just completed.
         if (doneId) grantRiderSocialForTrip(doneId)
@@ -306,7 +327,7 @@ function DriverShell({ driverId }) {
         await loadEarnings()
         if (doneId) navigate('rate', { trip: doneId })
       } else {
-        setActiveTrip({ ...activeTrip, ...patch })
+        setActiveTrip({ ...activeTrip, ...saved })
       }
     } finally {
       setAdvancing(false)
@@ -713,6 +734,9 @@ function DriverShell({ driverId }) {
             <PurpleAcceptButton onClick={() => advanceTrip('completed')} disabled={advancing}>
               {advancing ? 'Updating…' : 'Complete'}
             </PurpleAcceptButton>
+          )}
+          {advanceError && (
+            <p style={{ color: 'var(--danger)', fontSize: 13, marginTop: 10 }}>{advanceError}</p>
           )}
           {activeTrip.rider_id && (
             <button

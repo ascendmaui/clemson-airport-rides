@@ -30,6 +30,28 @@ export async function updateMyProfile(userId, patch) {
   if (error) throw new Error(error.message)
 }
 
+function explainRatingError(message) {
+  if (/row-level security|42501/i.test(message || '')) {
+    return 'Rating was not saved. You can rate only after the trip is completed, and only the other person on that trip.'
+  }
+  return message || 'Could not submit rating'
+}
+
+/** Null when this user may rate the trip. Matches ratings INSERT RLS. */
+export function ratingBlockReason(trip, userId) {
+  if (!trip) return 'Trip not found'
+  if (!userId) return 'Sign in to rate this ride'
+  if (trip.status !== 'completed') {
+    return 'This trip is not completed yet. Finish the ride, then rate.'
+  }
+  if (!trip.driver_id) return 'This trip has no driver yet, so it cannot be rated.'
+  const isParty = userId === trip.rider_id || userId === trip.driver_id
+  if (!isParty) return 'Only the rider or driver on this trip can leave a rating.'
+  const rateeId = userId === trip.rider_id ? trip.driver_id : trip.rider_id
+  if (!rateeId || rateeId === userId) return 'Cannot rate yourself'
+  return null
+}
+
 export async function submitRating({ tripId, raterId, rateeId, stars, comment }) {
   if (!supabase) throw new Error('Supabase is not configured')
   if (!tripId || !raterId || !rateeId) throw new Error('Missing rating fields')
@@ -37,22 +59,35 @@ export async function submitRating({ tripId, raterId, rateeId, stars, comment })
   const s = Number(stars)
   if (!Number.isFinite(s) || s < 1 || s > 5) throw new Error('Stars must be 1–5')
 
-  const { data: existing } = await supabase
+  const trip = await fetchTripForRating(tripId)
+  const blocked = ratingBlockReason(trip, raterId)
+  if (blocked) throw new Error(blocked)
+  const expectedRatee = raterId === trip.rider_id ? trip.driver_id : trip.rider_id
+  if (rateeId !== expectedRatee) throw new Error('You can only rate the other person on this trip.')
+
+  const { data: existing, error: lookupError } = await supabase
     .from('ratings')
     .select('id')
     .eq('trip_id', tripId)
     .eq('rater_id', raterId)
     .maybeSingle()
+  if (lookupError) throw new Error(explainRatingError(lookupError.message))
   if (existing?.id) throw new Error('You already rated this trip')
 
-  const { error } = await supabase.from('ratings').insert({
-    trip_id: tripId,
-    rater_id: raterId,
-    ratee_id: rateeId,
-    stars: s,
-    comment: comment?.trim() || null,
-  })
-  if (error) throw new Error(error.message)
+  const { data, error } = await supabase
+    .from('ratings')
+    .insert({
+      trip_id: tripId,
+      rater_id: raterId,
+      ratee_id: rateeId,
+      stars: s,
+      comment: comment?.trim() || null,
+    })
+    .select('id, stars')
+    .single()
+  if (error) throw new Error(explainRatingError(error.message))
+  if (!data?.id) throw new Error('Rating was not saved')
+  return data
 }
 
 export async function hasRatedTrip(tripId, raterId) {
@@ -91,7 +126,7 @@ export async function findPendingRatingTrip(userId) {
   if (!trips?.length) return null
   for (const t of trips) {
     const counterpart = t.rider_id === userId ? t.driver_id : t.rider_id
-    if (!counterpart) continue
+    if (!counterpart || counterpart === userId) continue
     const already = await hasRatedTrip(t.id, userId)
     if (!already) return t
   }

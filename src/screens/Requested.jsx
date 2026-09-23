@@ -33,7 +33,7 @@ export function Requested({ dest = 'GSP Airport', trip = '', driver = 'your driv
         if (!alive || !data) return
         setTripRow(data)
         if (data.driver_id) setResolvedDriverId(data.driver_id)
-        if (data.status === 'completed' && user?.id) {
+        if (data.status === 'completed' && data.driver_id && user?.id) {
           const rated = await hasRatedTrip(data.id, user.id)
           if (alive && !rated) setRateNudge(true)
         }

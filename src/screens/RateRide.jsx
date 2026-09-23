@@ -6,6 +6,7 @@ import {
   submitRating,
   hasRatedTrip,
   fetchProfile,
+  ratingBlockReason,
 } from '../lib/ratings'
 import { PrimaryButton } from '../components/PrimaryButton'
 import { RequireAuth } from '../components/RequireAuth'
@@ -64,9 +65,14 @@ function RateForm() {
   const rateeId = isRider ? trip?.driver_id : trip?.rider_id
   const label = isRider ? 'Rate your driver' : 'Rate your rider'
   const sideHint = isRider ? 'Drivers see this on their profile' : 'Riders see this on their profile'
+  const blockReason = ratingBlockReason(trip, user?.id)
 
   async function onSubmit(e) {
     e.preventDefault()
+    if (blockReason) {
+      setError(blockReason)
+      return
+    }
     if (!rateeId) {
       setError('No counterparty on this trip yet')
       return
@@ -247,10 +253,12 @@ function RateForm() {
               background: 'rgba(255,255,255,0.65)',
             }}
           />
-          {error && (
-            <p style={{ color: 'var(--danger)', fontSize: 13, marginBottom: 10 }}>{error}</p>
+          {(blockReason || error) && (
+            <p style={{ color: 'var(--danger)', fontSize: 13, marginBottom: 10 }}>{blockReason || error}</p>
           )}
-          <PrimaryButton disabled={busy}>{busy ? 'Saving…' : 'Submit rating'}</PrimaryButton>
+          <PrimaryButton type="submit" disabled={busy || Boolean(blockReason)}>
+            {busy ? 'Saving…' : 'Submit rating'}
+          </PrimaryButton>
           <button
             type="button"
             className="pressable"
