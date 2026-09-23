@@ -250,7 +250,7 @@ function RateForm() {
           {error && (
             <p style={{ color: 'var(--danger)', fontSize: 13, marginBottom: 10 }}>{error}</p>
           )}
-          <PrimaryButton type="submit" disabled={busy}>{busy ? 'Saving…' : 'Submit rating'}</PrimaryButton>
+          <PrimaryButton disabled={busy}>{busy ? 'Saving…' : 'Submit rating'}</PrimaryButton>
           <button
             type="button"
             className="pressable"
