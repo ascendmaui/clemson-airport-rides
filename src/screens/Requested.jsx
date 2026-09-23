@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { PrimaryButton } from '../components/PrimaryButton'
+import { WaitFeeCard } from '../components/WaitFeeCard'
 import { CampusMap, CLEMSON, STADIUM } from '../components/CampusMap'
 import { navigate, shareUrl } from '../lib/navigation'
 import { useAuth } from '../lib/auth'
@@ -7,6 +8,7 @@ import { createLocationShare, startSharingLocation } from '../lib/locationShare'
 import { subscribeDriverStatus } from '../lib/driverTrack'
 import { supabase } from '../lib/supabase'
 import { hasRatedTrip } from '../lib/ratings'
+import { useTripWait } from '../lib/useTripWait'
 
 export function Requested({ dest = 'GSP Airport', trip = '', driver = 'your driver', driverId = '' }) {
   const { user } = useAuth()
@@ -26,7 +28,7 @@ export function Requested({ dest = 'GSP Airport', trip = '', driver = 'your driv
     let alive = true
     supabase
       .from('trips')
-      .select('id, status, driver_id, pickup_label, dropoff_label, pickup_lat, pickup_lng')
+      .select('id, status, driver_id, rider_id, pickup_label, dropoff_label, pickup_lat, pickup_lng, arrived_at, wait_fee_cents, cancel_fee_cents, platform_fee_cents, driver_wait_earnings_cents, wait_cancel_reason, canceled_at')
       .eq('id', trip)
       .maybeSingle()
       .then(async ({ data }) => {
@@ -38,8 +40,25 @@ export function Requested({ dest = 'GSP Airport', trip = '', driver = 'your driv
           if (alive && !rated) setRateNudge(true)
         }
       })
-    return () => { alive = false }
+    const channel = supabase
+      .channel(`requested-trip-${trip}`)
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'trips', filter: `id=eq.${trip}` },
+        (payload) => {
+          if (payload.new) setTripRow((prev) => ({ ...(prev || {}), ...payload.new }))
+        },
+      )
+      .subscribe()
+    return () => {
+      alive = false
+      supabase.removeChannel(channel)
+    }
   }, [trip, user?.id])
+
+  const wait = useTripWait(tripRow, (next) => {
+    setTripRow((prev) => (prev && next && prev.id === next.id ? { ...prev, ...next } : next))
+  })
 
   useEffect(() => {
     if (!resolvedDriverId) return undefined
@@ -80,7 +99,7 @@ export function Requested({ dest = 'GSP Airport', trip = '', driver = 'your driv
   }
 
   const status = tripRow?.status || ''
-  const trackLive = ['accepted', 'arriving', 'in_progress'].includes(status) || Boolean(resolvedDriverId)
+  const trackLive = ['accepted', 'arriving', 'arrived', 'in_progress'].includes(status) || Boolean(resolvedDriverId)
   const pickup =
     tripRow?.pickup_lat != null && tripRow?.pickup_lng != null
       ? [Number(tripRow.pickup_lat), Number(tripRow.pickup_lng)]
@@ -114,6 +133,13 @@ export function Requested({ dest = 'GSP Airport', trip = '', driver = 'your driv
           {trip ? ` ID ${String(trip).slice(0, 8)}…` : ''}
           {status ? ` · ${status}` : ''}
         </p>
+        <WaitFeeCard
+          trip={tripRow}
+          quote={wait.quote}
+          role="rider"
+          error={wait.error}
+          charge={wait.charge}
+        />
         <div style={{ marginTop: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
           <PrimaryButton onClick={onShare} disabled={busy || !trip}>
             {busy ? 'Starting…' : share ? 'Sharing — tap to refresh link' : 'Share my location'}

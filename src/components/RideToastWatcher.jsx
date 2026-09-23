@@ -14,9 +14,11 @@ const TRIP_STATUS_KIND = {
   offered: 'ride_requested',
   accepted: 'driver_accepted',
   arriving: 'driver_en_route',
+  arrived: 'arrived_pickup',
   in_progress: 'trip_started',
   completed: 'trip_completed',
   canceled: 'system',
+  cancelled_wait: 'ride_wait_cancelled',
 }
 
 function tripBody(row) {
@@ -92,7 +94,31 @@ export function RideToastWatcher() {
         return
       }
       let kind = TRIP_STATUS_KIND[row.status] || 'system'
-      if (row.status === 'arriving') kind = 'arrived_pickup'
+      if (row.status === 'cancelled_wait') {
+        const isRider = row.rider_id === user.id
+        const waitCents = Number(row.wait_fee_cents) || 0
+        const cancelCents = Number(row.cancel_fee_cents) || 0
+        const earned = Number(row.driver_wait_earnings_cents) || 0
+        const money = (cents) => (cents / 100).toLocaleString('en-US', { style: 'currency', currency: 'USD' })
+        pushToast({
+          kind: 'ride_wait_cancelled',
+          title: isRider ? 'Ride canceled' : 'Wait canceled',
+          body: isRider
+            ? (cancelCents
+              ? `${money(waitCents + cancelCents)} · ${money(waitCents)} wait + ${money(cancelCents)} cancel fee`
+              : `Wait fee ${money(waitCents)}`)
+            : `You earned ${money(earned)} for the wait`,
+        })
+        return
+      }
+      if (row.status === 'arrived') {
+        pushToast({
+          kind: 'arrived_pickup',
+          title: 'Arrived at pickup',
+          body: '3-minute grace, then $1 per minute.',
+        })
+        return
+      }
       const titles = {
         ride_requested: 'Ride requested',
         driver_accepted: 'Driver accepted',
@@ -188,7 +214,7 @@ export function RideToastWatcher() {
       try {
         const { data: trips } = await supabase
           .from('trips')
-          .select('id, status, pickup_label, dropoff_label')
+          .select('id, status, pickup_label, dropoff_label, rider_id, driver_id, wait_fee_cents, cancel_fee_cents, platform_fee_cents, driver_wait_earnings_cents, wait_cancel_reason')
           .or(`rider_id.eq.${user.id},driver_id.eq.${user.id}`)
           .order('requested_at', { ascending: false })
           .limit(8)

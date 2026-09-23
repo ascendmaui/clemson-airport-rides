@@ -6,6 +6,9 @@ import { PurpleAcceptButton } from '../components/PrimaryButton'
 import { navigate } from '../lib/navigation'
 import { setDriverOnline, subscribeTrips, supabase } from '../lib/supabase'
 import { publishDriverLocation } from '../lib/driverTrack'
+import { useTripWait } from '../lib/useTripWait'
+import { WaitFeeCard } from '../components/WaitFeeCard'
+import { formatUsd } from '../lib/waitFee'
 
 function centsToDollars(cents) {
   if (cents == null) return '—'
@@ -22,7 +25,13 @@ async function writeTripEvent(tripId, kind, payload = {}) {
   if (error) console.error('[trip_events]', kind, error.message)
 }
 
-const ACTIVE_STATUSES = ['accepted', 'arriving', 'in_progress']
+const ACTIVE_STATUSES = ['accepted', 'arriving', 'arrived', 'in_progress']
+
+function earningsOf(trip) {
+  const wait = Number(trip.driver_wait_earnings_cents) || 0
+  if (trip.status === 'cancelled_wait') return wait
+  return (Number(trip.fare_cents) || 0) + wait
+}
 
 export function DriverHome() {
   const { user, loading } = useAuth()
@@ -51,20 +60,33 @@ function DriverShell({ driverId }) {
 
   const loadEarnings = useCallback(async () => {
     if (!supabase || !driverId) return
-    const { data, error } = await supabase
+    const rich = await supabase
       .from('trips')
-      .select('id, fare_cents, dropoff_label, completed_at')
+      .select('id, fare_cents, dropoff_label, completed_at, status, driver_wait_earnings_cents, canceled_at')
       .eq('driver_id', driverId)
-      .eq('status', 'completed')
+      .in('status', ['completed', 'cancelled_wait'])
       .order('completed_at', { ascending: false })
       .limit(20)
+    let data = rich.data
+    let error = rich.error
+    if (error && /column|schema cache|driver_wait_earnings|cancelled_wait/i.test(error.message || '')) {
+      const basic = await supabase
+        .from('trips')
+        .select('id, fare_cents, dropoff_label, completed_at')
+        .eq('driver_id', driverId)
+        .eq('status', 'completed')
+        .order('completed_at', { ascending: false })
+        .limit(20)
+      data = basic.data
+      error = basic.error
+    }
     if (error) {
       console.error('[earnings]', error.message)
       return
     }
     const rows = data || []
     setRecentCompleted(rows)
-    setEarningsCents(rows.reduce((sum, t) => sum + (Number(t.fare_cents) || 0), 0))
+    setEarningsCents(rows.reduce((sum, t) => sum + earningsOf(t), 0))
   }, [driverId])
 
   useEffect(() => {
@@ -186,6 +208,10 @@ function DriverShell({ driverId }) {
       if (row.status === 'canceled' && activeTrip?.id === row.id) {
         setActiveTrip(null)
       }
+      if (row.status === 'cancelled_wait' && row.driver_id === driverId) {
+        setActiveTrip(row)
+        loadEarnings()
+      }
     })
   }, [offer?.id, activeTrip?.id, driverId, loadEarnings])
 
@@ -260,11 +286,41 @@ function DriverShell({ driverId }) {
     }
   }
 
+  const wait = useTripWait(activeTrip, (next) => {
+    if (!next || next.status === 'completed') return
+    setActiveTrip((prev) => (prev && prev.id === next.id ? { ...prev, ...next } : next))
+  })
+
+  async function onArrive() {
+    const res = await wait.act('arrive')
+    if (res?.trip) setActiveTrip(res.trip)
+  }
+
+  async function onStartWait() {
+    await wait.act('start')
+  }
+
+  async function onCancelWait() {
+    await wait.act('cancel')
+  }
+
+  async function onComplete() {
+    const res = await wait.act('complete')
+    if (res?.trip?.status === 'completed') {
+      const doneId = res.trip.id
+      setActiveTrip(null)
+      await loadEarnings()
+      if (doneId) navigate('rate', { trip: doneId })
+    }
+  }
+
   const showIdle = !offer && !activeTrip
   const statusLabel = {
     accepted: 'Accepted — head to pickup',
-    arriving: 'Arriving at pickup',
+    arriving: 'On the way to pickup',
+    arrived: 'Arrived — waiting',
     in_progress: 'Trip in progress',
+    cancelled_wait: 'Wait canceled',
   }
 
   return (
@@ -513,9 +569,9 @@ function DriverShell({ driverId }) {
                   }}
                 >
                   <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '70%' }}>
-                    {t.dropoff_label || 'Trip'}
+                    {t.status === 'cancelled_wait' ? 'Wait cancel' : (t.dropoff_label || 'Trip')}
                   </span>
-                  <strong style={{ color: 'var(--ink)' }}>{centsToDollars(t.fare_cents)}</strong>
+                  <strong style={{ color: 'var(--ink)' }}>{centsToDollars(earningsOf(t))}</strong>
                 </div>
               ))}
             </div>
@@ -588,6 +644,11 @@ function DriverShell({ driverId }) {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
             <div style={{ fontSize: 32, fontWeight: 700, letterSpacing: -0.5 }}>
               {centsToDollars(activeTrip.fare_cents)}
+              {activeTrip.status === 'arrived' && wait.quote.waitFeeCents > 0 && (
+                <span style={{ fontSize: 14, fontWeight: 700, color: '#F56600' }}>
+                  {' '}+ {formatUsd(wait.quote.waitFeeCents)}
+                </span>
+              )}
             </div>
             <div style={{ fontSize: 13, color: 'var(--purple)', fontWeight: 700 }}>
               {statusLabel[activeTrip.status] || activeTrip.status}
@@ -610,20 +671,58 @@ function DriverShell({ driverId }) {
             </div>
           </div>
 
-          {activeTrip.status === 'accepted' && (
-            <PurpleAcceptButton onClick={() => advanceTrip('arriving')} disabled={advancing}>
-              {advancing ? 'Updating…' : 'Arriving'}
+          {(activeTrip.status === 'accepted' || activeTrip.status === 'arriving') && (
+            <PurpleAcceptButton onClick={onArrive} disabled={wait.busy || advancing}>
+              {wait.busy ? 'Updating…' : 'Arrive'}
             </PurpleAcceptButton>
           )}
-          {activeTrip.status === 'arriving' && (
-            <PurpleAcceptButton onClick={() => advanceTrip('in_progress')} disabled={advancing}>
-              {advancing ? 'Updating…' : 'Start trip'}
-            </PurpleAcceptButton>
+          {activeTrip.status === 'accepted' && (
+            <button
+              type="button"
+              className="pressable"
+              onClick={() => advanceTrip('arriving')}
+              disabled={advancing}
+              style={{ width: '100%', marginTop: 8, padding: 12, fontWeight: 600, color: '#522D80' }}
+            >
+              On my way
+            </button>
+          )}
+          {(activeTrip.status === 'arrived' || activeTrip.status === 'cancelled_wait') && (
+            <WaitFeeCard
+              trip={activeTrip}
+              quote={wait.quote}
+              role="driver"
+              busy={wait.busy}
+              error={wait.error}
+              charge={wait.charge}
+              onStart={activeTrip.status === 'arrived' ? onStartWait : undefined}
+              onCancel={activeTrip.status === 'arrived' ? onCancelWait : undefined}
+            />
           )}
           {activeTrip.status === 'in_progress' && (
-            <PurpleAcceptButton onClick={() => advanceTrip('completed')} disabled={advancing}>
-              {advancing ? 'Updating…' : 'Complete'}
-            </PurpleAcceptButton>
+            <>
+              {Number(activeTrip.wait_fee_cents) > 0 && (
+                <p style={{ marginTop: 10, fontSize: 13, color: 'var(--ink-secondary)' }}>
+                  Wait fee {formatUsd(activeTrip.wait_fee_cents)} will be charged when you complete.
+                </p>
+              )}
+              <PurpleAcceptButton onClick={onComplete} disabled={wait.busy}>
+                {wait.busy ? 'Updating…' : 'Complete'}
+              </PurpleAcceptButton>
+            </>
+          )}
+          {activeTrip.status === 'cancelled_wait' && (
+            <button
+              type="button"
+              className="pressable"
+              onClick={() => { setActiveTrip(null); loadEarnings() }}
+              style={{ width: '100%', marginTop: 8, padding: 12, fontWeight: 700, color: '#522D80' }}
+            >
+              Done
+            </button>
+          )}
+          {wait.error && activeTrip.status !== 'arrived' && activeTrip.status !== 'cancelled_wait' && (
+            <p style={{ marginTop: 8, fontSize: 13, color: 'var(--danger)' }}>{wait.error}</p>
           )}
           {activeTrip.rider_id && (
             <button

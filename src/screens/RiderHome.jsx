@@ -6,6 +6,7 @@ import { CampusMap, STADIUM } from '../components/CampusMap'
 import { navigate } from '../lib/navigation'
 import { DOWNTOWN_CENTER } from '../lib/downtownHeat'
 import { HEAT_WINDOWS } from '../lib/rideDemand'
+import { RiderWaitBanner } from '../components/WaitFeeCard'
 
 const SHORTCUTS = [
   { id: 'home', label: 'Home', sub: 'Simpsonville', icon: '🏠' },
@@ -79,6 +80,7 @@ export function RiderHome({ riderName = 'John' }) {
           <p style={{ color: 'var(--ink-secondary)', fontSize: 15, marginTop: 4, marginBottom: 16 }}>
             Where are you headed, Tiger?
           </p>
+          <RiderWaitBanner />
 
           <SearchField
             value={query}

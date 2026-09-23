@@ -7,7 +7,7 @@ import { createLocationShare, startSharingLocation } from '../lib/locationShare'
 import { fetchProfile, updateMyProfile } from '../lib/ratings'
 import { supabase } from '../lib/supabase'
 
-const ACTIVE = ['searching', 'offered', 'accepted', 'arriving', 'in_progress']
+const ACTIVE = ['searching', 'offered', 'accepted', 'arriving', 'arrived', 'in_progress']
 
 export function FriendsScreen() {
   const { user } = useAuth()

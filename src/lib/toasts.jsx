@@ -14,6 +14,7 @@ const KIND_META = {
   driver_accepted: { title: 'Driver accepted', Icon: IconCar, tone: 'purple' },
   driver_en_route: { title: 'Driver en route', Icon: IconCar, tone: 'orange' },
   arrived_pickup: { title: 'Arrived at pickup', Icon: IconCar, tone: 'purple' },
+  ride_wait_cancelled: { title: 'Ride canceled', Icon: IconCar, tone: 'orange' },
   trip_started: { title: 'Trip started', Icon: IconCar, tone: 'orange' },
   trip_completed: { title: 'Trip completed', Icon: IconStar, tone: 'purple' },
   fare_charged: { title: 'Fare charged', Icon: IconCard, tone: 'purple' },
