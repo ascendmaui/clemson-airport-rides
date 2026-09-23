@@ -19,6 +19,8 @@ import { ProfileView } from './screens/ProfileView'
 import { RateRide } from './screens/RateRide'
 import { FriendRideScreen } from './screens/FriendRide'
 import { CarpoolScreen } from './screens/CarpoolScreen'
+import { ToastProvider, ToastStack } from './lib/toasts'
+import { RideToastWatcher } from './components/RideToastWatcher'
 
 const PROTECTED = new Set(['driver', 'driver-onboarding', 'account', 'driver-signup'])
 
@@ -124,19 +126,23 @@ export default function App() {
   const overflow = path === 'driver' ? 'hidden' : 'auto'
 
   return (
-    <div className="desktop-frame">
-      <div className="app-shell" style={{ position: 'relative', height: '100%' }}>
-        <div
-          key={`${path}:${params.token || params.id || params.trip || ''}`}
-          className="route-fade"
-          style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', overflow }}
-          data-protected={PROTECTED.has(path) ? '1' : '0'}
-          data-guest-browse={PROTECTED.has(path) ? '0' : '1'}
-          data-route={path}
-        >
-          <Screen path={path} params={params} />
+    <ToastProvider>
+      <div className="desktop-frame">
+        <div className="app-shell" style={{ position: 'relative', height: '100%' }}>
+          <RideToastWatcher />
+          <ToastStack />
+          <div
+            key={`${path}:${params.token || params.id || params.trip || ''}`}
+            className="route-fade"
+            style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', overflow }}
+            data-protected={PROTECTED.has(path) ? '1' : '0'}
+            data-guest-browse={PROTECTED.has(path) ? '0' : '1'}
+            data-route={path}
+          >
+            <Screen path={path} params={params} />
+          </div>
         </div>
       </div>
-    </div>
+    </ToastProvider>
   )
 }

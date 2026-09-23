@@ -1,6 +1,6 @@
 /**
  * POST /api/stripe-save-payment-method
- * After SetupIntent succeeds, persist profiles.stripe_default_pm_id.
+ * After SetupIntent succeeds, persist profiles.stripe_default_pm_id (+ billing_activated_at best-effort).
  */
 import {
   admin, cors, json, parseBody, userFromAuth, stripeClient, stripeOk,
@@ -39,6 +39,10 @@ export default async function handler(req, res) {
     }
     if (!pmId) return json(res, 400, { error: 'No payment method on SetupIntent' })
 
+    const pm = await stripe.paymentMethods.retrieve(pmId)
+    const brand = pm.card?.brand || pm.type || null
+    const last4 = pm.card?.last4 || null
+
     const { data: profile } = await sb
       .from('profiles')
       .select('id, stripe_customer_id')
@@ -51,16 +55,48 @@ export default async function handler(req, res) {
       })
     }
 
-    const { error } = await sb
+    const now = new Date().toISOString()
+    const basePatch = {
+      stripe_default_pm_id: pmId,
+      updated_at: now,
+    }
+
+    let { error } = await sb
       .from('profiles')
       .update({
-        stripe_default_pm_id: pmId,
-        updated_at: new Date().toISOString(),
+        ...basePatch,
+        billing_activated_at: now,
+        stripe_card_brand: brand,
+        stripe_card_last4: last4,
       })
       .eq('id', user.id)
+
+    // Soft-fail optional columns (billing_activated_at / card display)
+    if (error && /column|schema cache|billing_activated|stripe_card_/i.test(error.message || '')) {
+      const retry = await sb
+        .from('profiles')
+        .update(basePatch)
+        .eq('id', user.id)
+      error = retry.error
+      if (!error) {
+        // Try billing_activated_at alone
+        await sb
+          .from('profiles')
+          .update({ billing_activated_at: now, updated_at: now })
+          .eq('id', user.id)
+      }
+    }
     if (error) return json(res, 500, { error: error.message })
 
-    return json(res, 200, { ok: true, paymentMethodId: pmId })
+    return json(res, 200, {
+      ok: true,
+      paymentMethodId: pmId,
+      brand,
+      last4,
+      cardBrand: brand,
+      cardLast4: last4,
+      billingActivatedAt: now,
+    })
   } catch (e) {
     return json(res, 500, { error: e.message || 'Server error' })
   }

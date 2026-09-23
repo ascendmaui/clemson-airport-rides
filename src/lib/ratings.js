@@ -17,6 +17,8 @@ export async function updateMyProfile(userId, patch) {
     ride_style: patch.ride_style,
     profile_privacy: patch.profile_privacy,
     phone: patch.phone,
+    notification_prefs: patch.notification_prefs,
+    billing_activated_at: patch.billing_activated_at,
   }
   const clean = Object.fromEntries(
     Object.entries(allowed).filter(([, v]) => v !== undefined),

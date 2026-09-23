@@ -55,7 +55,7 @@ export const GALLERY_KINDS = [
 ]
 
 const PROFILE_COLS =
-  'id, role, full_name, email, bio, avatar_url, student_verified_at, rating_avg, rating_count, phone, favorite_spots, music_taste, ride_style, profile_privacy'
+  'id, role, full_name, email, bio, avatar_url, student_verified_at, rating_avg, rating_count, phone, favorite_spots, music_taste, ride_style, profile_privacy, stripe_customer_id, stripe_default_pm_id, notification_prefs, billing_activated_at, stripe_card_brand, stripe_card_last4'
 
 export function filterProfileByPrivacy(profile, { isOwner = false, isMatched = false } = {}) {
   if (!profile) return null
@@ -95,12 +95,27 @@ export function filterProfileByPrivacy(profile, { isOwner = false, isMatched = f
 
 export async function fetchFullProfile(userId, { viewerId = null, assumeMatched = false } = {}) {
   if (!supabase || !userId) return null
-  const { data: profile, error } = await supabase
-    .from('profiles')
-    .select(PROFILE_COLS)
-    .eq('id', userId)
-    .maybeSingle()
-  if (error) throw new Error(error.message)
+  let profile = null
+  {
+    const rich = await supabase
+      .from('profiles')
+      .select(PROFILE_COLS)
+      .eq('id', userId)
+      .maybeSingle()
+    if (rich.error && /column|schema cache|notification_prefs|billing_activated|stripe_card_/i.test(rich.error.message || '')) {
+      const basic = await supabase
+        .from('profiles')
+        .select('id, role, full_name, email, bio, avatar_url, student_verified_at, rating_avg, rating_count, phone, favorite_spots, music_taste, ride_style, profile_privacy, stripe_customer_id, stripe_default_pm_id')
+        .eq('id', userId)
+        .maybeSingle()
+      if (basic.error) throw new Error(basic.error.message)
+      profile = basic.data
+    } else if (rich.error) {
+      throw new Error(rich.error.message)
+    } else {
+      profile = rich.data
+    }
+  }
   if (!profile) return null
 
   const isOwner = viewerId && viewerId === userId

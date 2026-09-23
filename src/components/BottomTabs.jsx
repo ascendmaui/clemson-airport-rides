@@ -1,8 +1,10 @@
+import { IconCar, IconCarpool, IconProfile, IconSchedule } from './icons'
+
 const TABS = [
-  { id: 'home', label: 'Rides', icon: '🚗' },
-  { id: 'schedule', label: 'Schedule', icon: '📅' },
-  { id: 'friends', label: 'Friends', icon: '👥' },
-  { id: 'account', label: 'Account', icon: '👤' },
+  { id: 'home', label: 'Rides', Icon: IconCar },
+  { id: 'schedule', label: 'Schedule', Icon: IconSchedule },
+  { id: 'friends', label: 'Friends', Icon: IconCarpool },
+  { id: 'account', label: 'Account', Icon: IconProfile },
 ]
 
 export function BottomTabs({ active, onChange }) {
@@ -10,6 +12,8 @@ export function BottomTabs({ active, onChange }) {
     <nav className="tab-bar">
       {TABS.map((t) => {
         const isActive = active === t.id
+        const Icon = t.Icon
+        const color = isActive ? '#F56600' : '#8B939E'
         return (
           <button
             key={t.id}
@@ -17,7 +21,7 @@ export function BottomTabs({ active, onChange }) {
             className={`tab-item pressable${isActive ? ' active' : ''}`}
             onClick={() => onChange(t.id)}
           >
-            <span style={{ fontSize: 20, lineHeight: 1 }}>{t.icon}</span>
+            <Icon size={22} color={color} />
             {t.label}
           </button>
         )

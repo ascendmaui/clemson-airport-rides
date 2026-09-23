@@ -7,6 +7,25 @@ import {
   admin, cors, json, parseBody, userFromAuth, stripeClient, stripeOk, ensureStripeCustomer,
 } from '../server/friendRideLib.js'
 
+async function loadProfile(sb, userId) {
+  const rich = await sb
+    .from('profiles')
+    .select('id, email, full_name, stripe_customer_id, stripe_default_pm_id, billing_activated_at, stripe_card_brand, stripe_card_last4')
+    .eq('id', userId)
+    .maybeSingle()
+  if (!rich.error) return { profile: rich.data, softFail: null }
+  if (/column|schema cache|billing_activated|stripe_card_/i.test(rich.error.message || '')) {
+    const basic = await sb
+      .from('profiles')
+      .select('id, email, full_name, stripe_customer_id, stripe_default_pm_id')
+      .eq('id', userId)
+      .maybeSingle()
+    if (basic.error) throw new Error(basic.error.message)
+    return { profile: basic.data, softFail: rich.error.message }
+  }
+  throw new Error(rich.error.message)
+}
+
 export default async function handler(req, res) {
   if (cors(req, res)) return
   if (req.method !== 'POST') return json(res, 405, { error: 'Method not allowed' })
@@ -27,11 +46,7 @@ export default async function handler(req, res) {
   const { body } = parseBody(req)
 
   try {
-    let { data: profile } = await sb
-      .from('profiles')
-      .select('id, email, full_name, stripe_customer_id, stripe_default_pm_id')
-      .eq('id', user.id)
-      .maybeSingle()
+    let { profile, softFail } = await loadProfile(sb, user.id)
 
     if (!profile) {
       const { data: created, error } = await sb
@@ -63,12 +78,28 @@ export default async function handler(req, res) {
       },
     })
 
+    let cardBrand = profile.stripe_card_brand || null
+    let cardLast4 = profile.stripe_card_last4 || null
+    if (profile.stripe_default_pm_id && (!cardBrand || !cardLast4)) {
+      try {
+        const pm = await stripe.paymentMethods.retrieve(profile.stripe_default_pm_id)
+        cardBrand = pm.card?.brand || pm.type || cardBrand
+        cardLast4 = pm.card?.last4 || cardLast4
+      } catch {
+        /* ignore retrieve errors */
+      }
+    }
+
     return json(res, 200, {
       clientSecret: setupIntent.client_secret,
       setupIntentId: setupIntent.id,
       customerId,
       hasDefaultPm: Boolean(profile.stripe_default_pm_id),
       defaultPmId: profile.stripe_default_pm_id || null,
+      cardBrand,
+      cardLast4,
+      billingActivatedAt: profile.billing_activated_at || null,
+      schemaNote: softFail || undefined,
       publishableKeyHint: 'Use VITE_STRIPE_PUBLISHABLE_KEY with Payment Element',
       note: body?.note || 'Apple Pay: register domain in Stripe Dashboard.',
     })
