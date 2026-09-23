@@ -10,6 +10,7 @@ import {
 import {
   loadDriverVehicle, vehicleMaxSeats, DEFAULT_MAX_PARTICIPANTS,
 } from '../server/friendRideCapacity.js'
+import { driverApprovalStatus } from '../server/driverApproval.js'
 
 export default async function handler(req, res) {
   if (cors(req, res)) return
@@ -33,6 +34,16 @@ export default async function handler(req, res) {
   const dropoff = body.dropoff || null
   const splitMode = body.splitMode === 'by_distance' ? 'by_distance' : 'even'
   const kind = body.kind === 'carpool' ? 'carpool' : 'friends'
+
+  if (kind === 'carpool') {
+    const gate = await driverApprovalStatus(sb, user.id)
+    if (!gate.approved) {
+      return json(res, 403, {
+        error: 'Admin must approve your driver application before you can offer a carpool.',
+        code: 'driver_not_approved',
+      })
+    }
+  }
 
   const vehicle = await loadDriverVehicle(sb, user.id)
   if (!vehicle) {
