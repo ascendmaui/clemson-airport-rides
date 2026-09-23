@@ -10,6 +10,28 @@ import {
 } from '../lib/ratings'
 import { PrimaryButton } from '../components/PrimaryButton'
 import { RequireAuth } from '../components/RequireAuth'
+import { RideChat, RideMessageButton } from '../components/RideChat'
+import { rideChatMode } from '../lib/tripChatRules'
+
+function RideMessagesEntry({ trip, userId }) {
+  const [open, setOpen] = useState(false)
+  if (!trip?.id || !userId || !trip.rider_id || !trip.driver_id) return null
+  const mode = rideChatMode(trip)
+  if (mode === 'closed') return null
+  return (
+    <div style={{ margin: '8px 0' }}>
+      <RideMessageButton readOnly={mode !== 'compose'} onClick={() => setOpen(true)} />
+      {open && (
+        <RideChat
+          tripId={trip.id}
+          userId={userId}
+          initialTrip={trip}
+          onClose={() => setOpen(false)}
+        />
+      )}
+    </div>
+  )
+}
 
 function RateForm() {
   const { user } = useAuth()
@@ -110,6 +132,7 @@ function RateForm() {
             aggregates update live on profiles.
           </p>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 16 }}>
+            <RideMessagesEntry trip={trip} userId={user?.id} />
             <PrimaryButton onClick={() => setSkipped(false)}>Actually, rate now ★</PrimaryButton>
             <button
               type="button"
@@ -148,7 +171,10 @@ function RateForm() {
               View their profile →
             </button>
           )}
-          <PrimaryButton onClick={() => navigate(isRider ? 'home' : 'driver')}>Done</PrimaryButton>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <RideMessagesEntry trip={trip} userId={user?.id} />
+            <PrimaryButton onClick={() => navigate(isRider ? 'home' : 'driver')}>Done</PrimaryButton>
+          </div>
         </div>
       </div>
     )
@@ -256,6 +282,7 @@ function RateForm() {
           {(blockReason || error) && (
             <p style={{ color: 'var(--danger)', fontSize: 13, marginBottom: 10 }}>{blockReason || error}</p>
           )}
+          <RideMessagesEntry trip={trip} userId={user?.id} />
           <PrimaryButton type="submit" disabled={busy || Boolean(blockReason)}>
             {busy ? 'Saving…' : 'Submit rating'}
           </PrimaryButton>

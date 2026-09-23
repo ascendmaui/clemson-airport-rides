@@ -7,6 +7,8 @@ import { createLocationShare, startSharingLocation } from '../lib/locationShare'
 import { subscribeDriverStatus } from '../lib/driverTrack'
 import { supabase } from '../lib/supabase'
 import { hasRatedTrip } from '../lib/ratings'
+import { RideChat, RideMessageButton } from '../components/RideChat'
+import { rideChatMode } from '../lib/tripChatRules'
 
 export function Requested({ dest = 'GSP Airport', trip = '', driver = 'your driver', driverId = '' }) {
   const { user } = useAuth()
@@ -17,28 +19,47 @@ export function Requested({ dest = 'GSP Airport', trip = '', driver = 'your driv
   const [driverPos, setDriverPos] = useState(null)
   const [resolvedDriverId, setResolvedDriverId] = useState(driverId || '')
   const [rateNudge, setRateNudge] = useState(false)
+  const [chatOpen, setChatOpen] = useState(false)
   const stopRef = useRef(null)
+  const ratedCheck = useRef(false)
 
   useEffect(() => () => { stopRef.current?.() }, [])
 
   useEffect(() => {
     if (!supabase || !trip) return undefined
+    const tripIdOk = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(trip)
+    if (!tripIdOk) return undefined
     let alive = true
-    supabase
-      .from('trips')
-      .select('id, status, driver_id, pickup_label, dropoff_label, pickup_lat, pickup_lng')
-      .eq('id', trip)
-      .maybeSingle()
-      .then(async ({ data }) => {
-        if (!alive || !data) return
-        setTripRow(data)
-        if (data.driver_id) setResolvedDriverId(data.driver_id)
-        if (data.status === 'completed' && data.driver_id && user?.id) {
-          const rated = await hasRatedTrip(data.id, user.id)
-          if (alive && !rated) setRateNudge(true)
-        }
-      })
-    return () => { alive = false }
+    async function load() {
+      const { data } = await supabase
+        .from('trips')
+        .select('id, status, rider_id, driver_id, pickup_label, dropoff_label, pickup_lat, pickup_lng, completed_at, canceled_at')
+        .eq('id', trip)
+        .maybeSingle()
+      if (!alive || !data) return
+      setTripRow(data)
+      if (data.driver_id) setResolvedDriverId(data.driver_id)
+      if (data.status === 'completed' && user?.id && !ratedCheck.current) {
+        ratedCheck.current = true
+        const rated = await hasRatedTrip(data.id, user.id)
+        if (alive && !rated) setRateNudge(true)
+      }
+    }
+    load()
+    const channel = supabase
+      .channel(`requested-trip-${trip}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'trips', filter: `id=eq.${trip}` },
+        () => { load() },
+      )
+      .subscribe()
+    const timer = setInterval(load, 8000)
+    return () => {
+      alive = false
+      clearInterval(timer)
+      supabase.removeChannel(channel)
+    }
   }, [trip, user?.id])
 
   useEffect(() => {
@@ -80,6 +101,8 @@ export function Requested({ dest = 'GSP Airport', trip = '', driver = 'your driv
   }
 
   const status = tripRow?.status || ''
+  const chatMode = rideChatMode(tripRow)
+  const showMessages = Boolean(user?.id && tripRow?.driver_id && tripRow?.rider_id && chatMode !== 'closed')
   const trackLive = ['accepted', 'arriving', 'in_progress'].includes(status) || Boolean(resolvedDriverId)
   const pickup =
     tripRow?.pickup_lat != null && tripRow?.pickup_lng != null
@@ -123,6 +146,9 @@ export function Requested({ dest = 'GSP Airport', trip = '', driver = 'your driv
               {shareUrl(share.token)}
             </p>
           )}
+          {showMessages && (
+            <RideMessageButton readOnly={chatMode !== 'compose'} onClick={() => setChatOpen(true)} />
+          )}
           {resolvedDriverId && (
             <button type="button" className="pressable" onClick={() => navigate('profile', { id: resolvedDriverId, matched: '1' })} style={{ fontWeight: 600, color: 'var(--purple)' }}>
               View driver profile
@@ -141,6 +167,14 @@ export function Requested({ dest = 'GSP Airport', trip = '', driver = 'your driv
         </div>
         {error && <p style={{ color: 'var(--danger)', fontSize: 13, marginTop: 12 }}>{error}</p>}
       </div>
+      {chatOpen && user?.id && tripRow && (
+        <RideChat
+          tripId={tripRow.id}
+          userId={user.id}
+          initialTrip={tripRow}
+          onClose={() => setChatOpen(false)}
+        />
+      )}
     </div>
   )
 }
