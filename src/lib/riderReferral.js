@@ -94,7 +94,7 @@ export async function loadRiderReferralAccount(userId) {
       .from('credit_ledger')
       .select('amount_cents, reason, source')
       .eq('profile_id', userId)
-      .eq('source', 'social_promo')
+      .eq('source', 'rider_social')
       .like('reason', 'rider_social%'),
     supabase.from('profiles').select('referred_by, promo_code').eq('id', userId).maybeSingle(),
     supabase.rpc('is_admin'),

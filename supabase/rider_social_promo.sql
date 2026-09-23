@@ -9,18 +9,20 @@
 --   or a paid friend-ride seat on a completed trip). Idempotent.
 --   States: pending → rewarded. Never auto-reward on signup.
 --
--- ANTI-DOUBLE-DIP — one reward path per new user:
---   rider_referrals.referred_id is UNIQUE across every type.
---   This job writes type = 'rider_social' on promo_codes and rider_referrals.
---   Shared credit_ledger rows use source = 'social_promo' (allowed by
---   credit_ledger_source_check) and reason rider_social_referrer / rider_social_referred.
---   referral_id on credit_ledger stays null — that FK points at public.referrals,
---   which belongs to the general referral job.
---   One reward path per new user is public.signup_reward_grants (unique profile_id).
---   This grant calls claim_signup_reward(profile, 'social_promo', rider_referrals.id)
---   only when the first ride completes. If the general job already claimed 'referral',
---   this path does not insert credits.
---   Idempotency keys: rider_social:<referral id>:referrer|referred.
+-- ANTI-DOUBLE-DIP — rider_social vs the general referral job only:
+--   rider_referrals.referred_id is UNIQUE. This job writes type = 'rider_social'
+--   on promo_codes and rider_referrals.
+--   credit_ledger rows use source = 'rider_social' (not 'social_promo') and
+--   reason rider_social_referrer / rider_social_referred.
+--   referral_id on credit_ledger stays null — that FK points at public.referrals.
+--   If signup_reward_grants.source is already 'referral' for this rider, or the
+--   general job already wrote a referral_referee credit, this path records
+--   rewarded with $0 and does not insert credits.
+--   This path does NOT call claim_signup_reward and does NOT insert
+--   signup_reward_grants. Campus ambassadors (code_type ambassador) and
+--   game-week first-ride-free own their own grants. Those codes live on
+--   ambassador_codes / ambassador_payout_ledger and must not be blocked by
+--   this program. Idempotency keys: rider_social:<referral id>:referrer|referred.
 --
 -- Defaults (change with the admin UPDATE at the bottom of this file):
 --   referrer: $5.00 ride credit (500 cents)
@@ -148,9 +150,9 @@ COMMENT ON TABLE public.rider_referrals IS
 COMMENT ON COLUMN public.rider_referrals.referred_id IS
   'ANTI-DOUBLE-DIP: unique. If a row exists, do not pay a second new-user first-trip reward (any program).';
 
--- credit_ledger already exists (shared with the general referral job).
--- This job inserts source = 'social_promo', reason rider_social_*, idempotency_key
--- rider_social:<id>:referrer|referred, and referral_id NULL.
+-- credit_ledger is shared. This job inserts source = 'rider_social' only.
+-- It does not write source 'social_promo' (left for other promo programs)
+-- and it does not write ambassador_payout_ledger.
 
 -- ---------------------------------------------------------------------------
 -- Helpers
@@ -257,6 +259,18 @@ BEGIN
     RETURN jsonb_build_object('ok', true, 'claimed', false, 'reason', 'no_code');
   END IF;
 
+  -- Campus ambassador / game-week codes are a different program.
+  IF to_regclass('public.ambassador_codes') IS NOT NULL
+     AND EXISTS (
+       SELECT 1 FROM public.ambassador_codes
+       WHERE upper(code) = norm
+     ) THEN
+    RETURN jsonb_build_object(
+      'ok', false,
+      'error', 'That code is a campus ambassador code, not a rider promo.'
+    );
+  END IF;
+
   IF EXISTS (SELECT 1 FROM public.profiles WHERE id = uid AND referred_by IS NOT NULL)
      OR EXISTS (SELECT 1 FROM public.rider_referrals WHERE referred_id = uid) THEN
     RETURN jsonb_build_object('ok', true, 'claimed', false, 'reason', 'already_referred');
@@ -334,7 +348,7 @@ END;
 $$;
 
 COMMENT ON FUNCTION public.claim_rider_social_promo(text) IS
-  'Apply a rider_social code at signup. Writes referred_by / promo_code and status pending. Does not grant credits.';
+  'Apply a rider_social code at signup. Writes referred_by / promo_code and status pending. Does not grant credits. Rejects ambassador codes.';
 
 CREATE OR REPLACE FUNCTION public.ensure_rider_social_code()
 RETURNS text
@@ -365,6 +379,12 @@ BEGIN
 
   FOR i IN 1..8 LOOP
     candidate := public.rider_social_random_code(8);
+    IF to_regclass('public.ambassador_codes') IS NOT NULL
+       AND EXISTS (
+         SELECT 1 FROM public.ambassador_codes WHERE upper(code) = candidate
+       ) THEN
+      CONTINUE;
+    END IF;
     BEGIN
       INSERT INTO public.promo_codes (code, owner_id, type, active)
       VALUES (candidate, uid, 'rider_social', true);
@@ -413,7 +433,7 @@ DECLARE
   reward_referred integer;
   updated_id uuid;
   granted integer := 0;
-  v_claim jsonb;
+  referral_already boolean;
 BEGIN
   IF p_trip_id IS NULL THEN
     RETURN jsonb_build_object('ok', true, 'granted', false, 'reason', 'no_trip');
@@ -478,9 +498,24 @@ BEGIN
       CONTINUE;
     END IF;
 
-    -- One reward path per new user. Do not reserve this at signup.
-    v_claim := public.claim_signup_reward(cand.uid, 'social_promo', ref.id::text);
-    IF COALESCE((v_claim->>'claimed')::boolean, false) IS NOT TRUE THEN
+    -- General referral already paid this signup. Do not also pay rider_social.
+    -- Do not call claim_signup_reward: that unique row would block campus
+    -- ambassador and game-week grants for the same rider.
+    referral_already := EXISTS (
+      SELECT 1 FROM public.signup_reward_grants g
+      WHERE g.profile_id = cand.uid
+        AND g.source = 'referral'
+    ) OR EXISTS (
+      SELECT 1 FROM public.referrals r
+      WHERE r.referee_id = cand.uid
+        AND r.status = 'rewarded'
+    ) OR EXISTS (
+      SELECT 1 FROM public.credit_ledger cl
+      WHERE cl.profile_id = cand.uid
+        AND cl.source = 'referral'
+        AND cl.reason = 'referral_referee'
+    );
+    IF referral_already THEN
       UPDATE public.rider_referrals
       SET status = 'rewarded',
           rewarded_at = now(),
@@ -521,7 +556,7 @@ BEGIN
         profile_id, amount_cents, reason, referral_id, trip_id, idempotency_key, source
       ) VALUES (
         ref.referrer_id, reward_referrer, 'rider_social_referrer', NULL, trip_uuid,
-        'rider_social:' || ref.id::text || ':referrer', 'social_promo'
+        'rider_social:' || ref.id::text || ':referrer', 'rider_social'
       )
       ON CONFLICT (idempotency_key) DO NOTHING;
     END IF;
@@ -531,7 +566,7 @@ BEGIN
         profile_id, amount_cents, reason, referral_id, trip_id, idempotency_key, source
       ) VALUES (
         ref.referred_id, reward_referred, 'rider_social_referred', NULL, trip_uuid,
-        'rider_social:' || ref.id::text || ':referred', 'social_promo'
+        'rider_social:' || ref.id::text || ':referred', 'rider_social'
       )
       ON CONFLICT (idempotency_key) DO NOTHING;
     END IF;
@@ -641,11 +676,11 @@ SELECT
   idempotency_key,
   created_at
 FROM public.credit_ledger
-WHERE source = 'social_promo'
+WHERE source = 'rider_social'
   AND reason LIKE 'rider_social%';
 
 COMMENT ON VIEW public.rider_social_credit_report IS
-  'Admin query for rider_social credits on the shared ledger (source social_promo). No names or emails.';
+  'Admin query for rider_social credits. Source rider_social only — not ambassador or social_promo.';
 
 -- ---------------------------------------------------------------------------
 -- RLS

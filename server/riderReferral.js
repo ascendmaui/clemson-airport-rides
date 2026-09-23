@@ -4,10 +4,10 @@
  * unless that trip is already completed and it is the referred user's first ride.
  * The trips status trigger is the trip-complete hook. Both are idempotent.
  *
- * ANTI-DOUBLE-DIP: promo_codes / rider_referrals type rider_social.
- * Shared credit_ledger source is social_promo (reason rider_social_*).
- * claim_signup_reward(profile, 'social_promo', id) is one grant per new user.
- * If public.referrals already claimed source referral, this path pays nothing.
+ * ANTI-DOUBLE-DIP with the general referral job only (source referral).
+ * Ledger source is rider_social, not social_promo.
+ * Does not call claim_signup_reward and does not write ambassador grants.
+ * Campus ambassador code_type and game-week first-ride-free stay separate.
  */
 
 export async function grantRiderSocialForTrip(sb, tripId) {
