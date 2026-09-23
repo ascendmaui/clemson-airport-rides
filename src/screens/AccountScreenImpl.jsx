@@ -7,7 +7,9 @@ import {
   IconSettings, IconSignOut, IconStudent,
 } from '../components/icons'
 import { useAuth } from '../lib/auth'
-import { navigate } from '../lib/navigation'
+import { getHashRoute, navigate } from '../lib/navigation'
+import { HelpChatPanel } from '../components/HelpChatPanel'
+import { SupportChatPanel } from '../components/SupportChatPanel'
 import { fetchProfile, updateMyProfile, findPendingRatingTrip } from '../lib/ratings'
 import {
   CAMPUS_SPOTS, RIDE_STYLES, PRIVACY_OPTIONS, GALLERY_KINDS,
@@ -42,6 +44,18 @@ function Section({ title, subtitle, children, icon: Icon }) {
   )
 }
 
+const ACCOUNT_TABS = ['profile', 'notifications', 'billing', 'vehicle', 'student', 'privacy', 'help', 'support']
+
+function tabFromLocation() {
+  try {
+    const { path, params } = getHashRoute()
+    if (path === 'account' && ACCOUNT_TABS.includes(params.tab)) return params.tab
+  } catch {
+    /* ignore */
+  }
+  return 'profile'
+}
+
 const NAV = [
   { id: 'profile', label: 'Profile', Icon: IconProfile },
   { id: 'notifications', label: 'Alerts', Icon: IconBell },
@@ -50,6 +64,7 @@ const NAV = [
   { id: 'student', label: 'Student', Icon: IconStudent },
   { id: 'privacy', label: 'Privacy', Icon: IconPrivacy },
   { id: 'help', label: 'Help', Icon: IconHelp },
+  { id: 'support', label: 'Support', Icon: IconSupport },
 ]
 
 export function AccountScreen() {
@@ -57,7 +72,11 @@ export function AccountScreen() {
   const { setPrefsCache } = useToasts()
   const fileRef = useRef(null)
   const galleryRef = useRef(null)
-  const [tab, setTab] = useState('profile')
+  const [tab, setTab] = useState(tabFromLocation)
+  const [chatSeen, setChatSeen] = useState(() => {
+    const initial = tabFromLocation()
+    return { help: initial === 'help', support: initial === 'support' }
+  })
   const [profile, setProfile] = useState(null)
   const [fullName, setFullName] = useState('')
   const [bio, setBio] = useState('')
@@ -89,6 +108,18 @@ export function AccountScreen() {
     setPrivacy(p?.profile_privacy || 'matched')
     setGallery(p?.gallery || [])
   }
+
+  useEffect(() => {
+    const sync = () => {
+      const next = tabFromLocation()
+      setTab(next)
+      if (next === 'help' || next === 'support') {
+        setChatSeen((seen) => ({ ...seen, [next]: true }))
+      }
+    }
+    window.addEventListener('hashchange', sync)
+    return () => window.removeEventListener('hashchange', sync)
+  }, [])
 
   useEffect(() => {
     if (!user?.id) return
@@ -230,7 +261,13 @@ export function AccountScreen() {
                 role="tab"
                 aria-selected={on}
                 className={`account-nav-item pressable${on ? ' active' : ''}`}
-                onClick={() => setTab(n.id)}
+                onClick={() => {
+                  setTab(n.id)
+                  if (n.id === 'help' || n.id === 'support') {
+                    setChatSeen((seen) => ({ ...seen, [n.id]: true }))
+                  }
+                  navigate('account', { tab: n.id })
+                }}
               >
                 <Icon size={18} color={on ? '#F56600' : '#522D80'} />
                 <span>{n.label}</span>
@@ -511,30 +548,56 @@ export function AccountScreen() {
           </Section>
         )}
 
-        {tab === 'help' && (
-          <Section title="Help & support" subtitle="We’re here for campus rides" icon={IconHelp}>
-            <a
-              href="mailto:rides@clemson.edu?subject=Clemson%20RIDES%20help"
-              className="pressable"
-              style={{
-                display: 'block', padding: 14, borderRadius: 14, fontWeight: 700, color: 'var(--purple)',
-                background: 'rgba(255,255,255,0.55)', border: '1px solid rgba(82,45,128,0.12)', marginBottom: 10,
-              }}
-            >
-              Email support →
-            </a>
-            <button type="button" className="pressable" onClick={() => navigate('terms')}
-              style={{ display: 'block', width: '100%', textAlign: 'left', padding: 12, fontWeight: 600, color: 'var(--ink-secondary)' }}>
-              Terms of service
-            </button>
-            <button type="button" className="pressable" onClick={() => navigate('privacy')}
-              style={{ display: 'block', width: '100%', textAlign: 'left', padding: 12, fontWeight: 600, color: 'var(--ink-secondary)' }}>
-              Privacy policy
-            </button>
-            <div style={{ fontSize: 12, color: 'var(--ink-tertiary)', marginTop: 8, lineHeight: 1.45 }}>
-              FAQ: Book from Home · Schedule airports · Friends for group splits · Account → Billing to activate card.
-            </div>
-          </Section>
+        {(tab === 'help' || chatSeen.help) && (
+          <div hidden={tab !== 'help'}>
+            <Section title="Help" subtitle="Walkthroughs for campus and airport rides" icon={IconHelp}>
+              <HelpChatPanel accountRole={profile?.role || null} active={tab === 'help'} />
+              <button
+                type="button"
+                className="pressable"
+                onClick={() => {
+                  setTab('support')
+                  setChatSeen((seen) => ({ ...seen, support: true }))
+                  navigate('account', { tab: 'support' })
+                }}
+                style={{
+                  display: 'block', width: '100%', textAlign: 'left', padding: 14, borderRadius: 14, fontWeight: 700,
+                  color: '#522D80', background: 'rgba(245,102,0,0.1)', border: '1px solid rgba(245,102,0,0.28)', marginBottom: 10,
+                }}
+              >
+                Contact support
+                <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--ink-secondary)', marginTop: 2 }}>
+                  Bugs, charges, and ride disputes open a different chat.
+                </div>
+              </button>
+              <a
+                href="mailto:rides@clemson.edu?subject=Clemson%20RIDES%20help"
+                className="pressable"
+                style={{
+                  display: 'block', padding: 14, borderRadius: 14, fontWeight: 700, color: 'var(--purple)',
+                  background: 'rgba(255,255,255,0.55)', border: '1px solid rgba(82,45,128,0.12)', marginBottom: 10,
+                }}
+              >
+                Email support →
+              </a>
+              <button type="button" className="pressable" onClick={() => navigate('terms')}
+                style={{ display: 'block', width: '100%', textAlign: 'left', padding: 12, fontWeight: 600, color: 'var(--ink-secondary)' }}>
+                Terms of service
+              </button>
+              <button type="button" className="pressable" onClick={() => navigate('privacy')}
+                style={{ display: 'block', width: '100%', textAlign: 'left', padding: 12, fontWeight: 600, color: 'var(--ink-secondary)' }}>
+                Privacy policy
+              </button>
+            </Section>
+          </div>
+        )}
+
+        {(tab === 'support' || chatSeen.support) && (
+          <div hidden={tab !== 'support'}>
+            <Section title="Support" subtitle="Tickets for problems, not how-to" icon={IconSupport}>
+              <SupportChatPanel accountRole={profile?.role || null} active={tab === 'support'} />
+            </Section>
+          </div>
         )}
 
         <div className="glass-panel" style={{ marginTop: 18, padding: 16, borderRadius: 18 }}>
@@ -554,6 +617,15 @@ export function AccountScreen() {
       </div>
       <BottomTabs active="account" onChange={(id) => navigate(id === 'home' ? 'home' : id)} />
     </div>
+  )
+}
+
+function IconSupport({ size = 20, color = '#522D80' }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden>
+      <path d="M12 4.5a6.5 6.5 0 0 0-6.5 6.5V13a2 2 0 0 0 2 2h1.2v-4.2H6.2v-0.3A5.8 5.8 0 0 1 18 11.5v.3h-2.5V15H17a2 2 0 0 0 2-2v-2A6.5 6.5 0 0 0 12 4.5Z" stroke={color} strokeWidth="1.7" strokeLinejoin="round" />
+      <path d="M9 18.2c.6.8 1.7 1.3 3 1.3s2.4-.5 3-1.3" stroke={color} strokeWidth="1.7" strokeLinecap="round" />
+    </svg>
   )
 }
 

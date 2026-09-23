@@ -9,12 +9,15 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@ai-sdk/openai": "^4.0.72",
     "@react-google-maps/api": "^2.20.6",
     "@stripe/stripe-js": "^5.6.0",
     "@supabase/supabase-js": "^2.49.1",
+    "ai": "^7.0.111",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "stripe": "^17.7.0"
+    "stripe": "^17.7.0",
+    "zod": "^3.25.76"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.3.4",
