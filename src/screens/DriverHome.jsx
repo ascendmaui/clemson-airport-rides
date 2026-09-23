@@ -6,6 +6,10 @@ import { PurpleAcceptButton } from '../components/PrimaryButton'
 import { navigate } from '../lib/navigation'
 import { setDriverOnline, subscribeTrips, supabase } from '../lib/supabase'
 import { publishDriverLocation } from '../lib/driverTrack'
+import { settleTrip, retryDriverPayouts } from '../lib/payments'
+import { summarizeDriverEarnings } from '../../shared/paymentFailure.js'
+import { PaymentFailedSheet } from '../components/PaymentFailedSheet'
+import { pushToast } from '../lib/toasts'
 
 function centsToDollars(cents) {
   if (cents == null) return '—'
@@ -40,6 +44,8 @@ function DriverShell({ driverId }) {
   const [activeTrip, setActiveTrip] = useState(null)
   const [online, setOnline] = useState(true)
   const [earningsCents, setEarningsCents] = useState(0)
+  const [pendingPayouts, setPendingPayouts] = useState([])
+  const [payFailure, setPayFailure] = useState(null)
   const [recentCompleted, setRecentCompleted] = useState([])
   const [advancing, setAdvancing] = useState(false)
   const [selfPos, setSelfPos] = useState(null)
@@ -53,7 +59,7 @@ function DriverShell({ driverId }) {
     if (!supabase || !driverId) return
     const { data, error } = await supabase
       .from('trips')
-      .select('id, fare_cents, dropoff_label, completed_at')
+      .select('id, fare_cents, dropoff_label, completed_at, metadata')
       .eq('driver_id', driverId)
       .eq('status', 'completed')
       .order('completed_at', { ascending: false })
@@ -65,6 +71,8 @@ function DriverShell({ driverId }) {
     const rows = data || []
     setRecentCompleted(rows)
     setEarningsCents(rows.reduce((sum, t) => sum + (Number(t.fare_cents) || 0), 0))
+    setPendingPayouts(summarizeDriverEarnings(rows).pending)
+    retryDriverPayouts().catch(() => {})
   }, [driverId])
 
   useEffect(() => {
@@ -232,10 +240,37 @@ function DriverShell({ driverId }) {
     if (!activeTrip?.id || !supabase || advancing) return
     setAdvancing(true)
     try {
-      const patch = { status: nextStatus }
       if (nextStatus === 'completed') {
-        patch.completed_at = new Date().toISOString()
+        try {
+          await settleTrip({ tripId: activeTrip.id, action: 'complete' })
+        } catch (err) {
+          const failure = err.failure || {
+            code: 'charge_failed',
+            message: err.message || 'Trip was not completed because payment did not succeed.',
+            alternatives: ['retry', 'add_card', 'use_credits'],
+            amountDueCents: activeTrip.fare_cents,
+            tripId: activeTrip.id,
+          }
+          setPayFailure(failure)
+          setActiveTrip({
+            ...activeTrip,
+            metadata: {
+              ...(activeTrip.metadata || {}),
+              payment_hold: { status: 'payment_required', ...failure },
+            },
+          })
+          pushToast({ kind: 'payment_failed', title: 'Payment needed', body: failure.message, category: 'billing' })
+          return
+        }
+        const doneId = activeTrip.id
+        setPayFailure(null)
+        setActiveTrip(null)
+        await loadEarnings()
+        if (doneId) navigate('rate', { trip: doneId })
+        return
       }
+
+      const patch = { status: nextStatus }
       const { error } = await supabase.from('trips').update(patch).eq('id', activeTrip.id)
       if (error) {
         console.error(error)
@@ -245,16 +280,8 @@ function DriverShell({ driverId }) {
         driver_id: driverId,
         from: activeTrip.status,
         source: 'driver_home',
-        ...(patch.completed_at ? { completed_at: patch.completed_at } : {}),
       })
-      if (nextStatus === 'completed') {
-        const doneId = activeTrip.id
-        setActiveTrip(null)
-        await loadEarnings()
-        if (doneId) navigate('rate', { trip: doneId })
-      } else {
-        setActiveTrip({ ...activeTrip, ...patch })
-      }
+      setActiveTrip({ ...activeTrip, ...patch })
     } finally {
       setAdvancing(false)
     }
@@ -498,6 +525,25 @@ function DriverShell({ driverId }) {
             </p>
           </div>
 
+          {pendingPayouts.length > 0 && (
+            <div style={{ padding: '12px 0 4px', borderTop: '1px solid var(--border)', marginTop: 8 }}>
+              <div style={{ fontWeight: 700, marginBottom: 8, color: 'var(--orange)' }}>Payouts pending</div>
+              {pendingPayouts.slice(0, 5).map((row) => (
+                <div key={row.tripId} style={{ fontSize: 13, padding: '6px 0', color: 'var(--ink-secondary)' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span>{row.dropoffLabel || 'Trip'}</span>
+                    <strong style={{ color: 'var(--ink)' }}>{centsToDollars(row.amountCents)}</strong>
+                  </div>
+                  <div style={{ fontSize: 11, color: 'var(--ink-tertiary)' }}>
+                    Pending · attempt {row.attempts || 0}
+                    {row.lastError ? ` · ${row.lastError}` : ''}
+                    {row.nextRetryAt ? ` · retry ${new Date(row.nextRetryAt).toLocaleString()}` : ''}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
           {recentCompleted.length > 0 && (
             <div style={{ padding: '12px 0 4px', borderTop: '1px solid var(--border)', marginTop: 8 }}>
               <div style={{ fontWeight: 600, marginBottom: 8 }}>Recent earnings</div>
@@ -610,6 +656,12 @@ function DriverShell({ driverId }) {
             </div>
           </div>
 
+          {activeTrip.metadata?.payment_hold?.status === 'payment_required' && (
+            <p style={{ fontSize: 13, color: 'var(--orange)', fontWeight: 700, marginTop: 8 }}>
+              Rider payment is still due. Completing stays blocked until it succeeds.
+            </p>
+          )}
+
           {activeTrip.status === 'accepted' && (
             <PurpleAcceptButton onClick={() => advanceTrip('arriving')} disabled={advancing}>
               {advancing ? 'Updating…' : 'Arriving'}
@@ -622,7 +674,7 @@ function DriverShell({ driverId }) {
           )}
           {activeTrip.status === 'in_progress' && (
             <PurpleAcceptButton onClick={() => advanceTrip('completed')} disabled={advancing}>
-              {advancing ? 'Updating…' : 'Complete'}
+              {advancing ? 'Charging…' : activeTrip.metadata?.payment_hold ? 'Retry payment & complete' : 'Complete'}
             </PurpleAcceptButton>
           )}
           {activeTrip.rider_id && (
@@ -638,6 +690,15 @@ function DriverShell({ driverId }) {
 
         </div>
       )}
+      <PaymentFailedSheet
+        failure={payFailure}
+        busy={advancing}
+        onRetry={() => advanceTrip('completed')}
+        onAddCard={() => navigate('account', { tab: 'billing' })}
+        onUseCredits={() => advanceTrip('completed')}
+        onBuyCredits={() => navigate('account', { tab: 'billing' })}
+        onDismiss={() => setPayFailure(null)}
+      />
     </div>
   )
 }

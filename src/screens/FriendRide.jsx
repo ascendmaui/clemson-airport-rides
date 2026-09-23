@@ -10,8 +10,10 @@ import { supabase } from '../lib/supabase'
 import {
   FRIEND_PLACES, confirmFriendCharges, createFriendRide, decodePolyline,
   formatEta, formatMiles, inviteUrl, getFriendRide, joinFriendRide, recomputeFriendRide,
-  vehicleMaxSeats, capacityMessage, DEFAULT_MAX_PARTICIPANTS,
+  retryFriendCharge, vehicleMaxSeats, capacityMessage, DEFAULT_MAX_PARTICIPANTS,
 } from '../lib/friendRides'
+import { PaymentFailedSheet } from '../components/PaymentFailedSheet'
+import { pushToast } from '../lib/toasts'
 
 const card = {
   marginTop: 16, padding: 16, borderRadius: 16, background: 'var(--surface)',
@@ -47,6 +49,7 @@ export function FriendRideScreen({ token: tokenProp, kind: kindProp = 'friends' 
   const [mapsHint, setMapsHint] = useState(null)
   const [vehicle, setVehicle] = useState(null)
   const [vehicleLoaded, setVehicleLoaded] = useState(false)
+  const [payFailure, setPayFailure] = useState(null)
 
   useEffect(() => { if (tokenProp) setToken(tokenProp) }, [tokenProp])
   useEffect(() => {
@@ -198,6 +201,20 @@ export function FriendRideScreen({ token: tokenProp, kind: kindProp = 'friends' 
       setBusyLabel('Charging…')
       const data = await confirmFriendCharges(token)
       setRide(data.ride)
+      const failed = (data.results || []).find((row) => row.status === 'failed' || row.status === 'needs_card' || row.paymentRequired)
+      if (failed) {
+        const failure = {
+          code: failed.code || 'card_declined',
+          message: failed.message || failed.error || 'A card was declined. Add another card or use prepaid credits.',
+          alternatives: failed.alternatives || ['add_card', 'use_credits', 'buy_credits', 'retry'],
+          amountDueCents: failed.amountDueCents,
+          participantId: failed.participantId,
+        }
+        setPayFailure(failure)
+        pushToast({ kind: 'payment_failed', title: 'Payment needed', body: failure.message, category: 'billing' })
+      } else {
+        setPayFailure(null)
+      }
       if (data.booked) {
         const assigned = data.trip?.driver_id || ride?.driver_profile_id
         setMapsHint(
@@ -474,6 +491,21 @@ export function FriendRideScreen({ token: tokenProp, kind: kindProp = 'friends' 
         )}
 
         {error && <p style={{ color: 'var(--danger)', fontSize: 13, marginTop: 12 }}>{error}</p>}
+        <PaymentFailedSheet
+          failure={payFailure}
+          busy={busy}
+          onRetry={() => payFailure?.participantId && retryFriendCharge(token, payFailure.participantId).then((data) => {
+            setRide(data.ride || ride)
+            setPayFailure(null)
+          }).catch((err) => setPayFailure(err.payload?.failure || { ...payFailure, message: err.message }))}
+          onAddCard={() => navigate('account', { tab: 'billing' })}
+          onUseCredits={() => payFailure?.participantId && retryFriendCharge(token, payFailure.participantId, { methods: ['credits', 'card'] }).then((data) => {
+            setRide(data.ride || ride)
+            setPayFailure(null)
+          }).catch((err) => setPayFailure(err.payload?.failure || { ...payFailure, message: err.message }))}
+          onBuyCredits={() => navigate('account', { tab: 'billing' })}
+          onDismiss={() => setPayFailure(null)}
+        />
         {ride?.trip_id && (
           <div style={card}>
             <div style={{ fontWeight: 700 }}>

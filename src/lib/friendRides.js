@@ -99,10 +99,10 @@ export async function confirmFriendCharges(token) {
   })
 }
 
-export async function retryFriendCharge(token, participantId) {
+export async function retryFriendCharge(token, participantId, extra = {}) {
   return api('/api/friend-rides-retry-charge', {
     method: 'POST',
-    body: { token, participantId },
+    body: { token, participantId, ...extra },
   })
 }
 

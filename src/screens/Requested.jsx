@@ -7,8 +7,20 @@ import { createLocationShare, startSharingLocation } from '../lib/locationShare'
 import { subscribeDriverStatus } from '../lib/driverTrack'
 import { supabase } from '../lib/supabase'
 import { hasRatedTrip } from '../lib/ratings'
+import { PaymentFailedSheet } from '../components/PaymentFailedSheet'
+import { settleTrip } from '../lib/payments'
+import { failureResult } from '../../shared/paymentFailure.js'
+import { pushToast } from '../lib/toasts'
 
-export function Requested({ dest = 'GSP Airport', trip = '', driver = 'your driver', driverId = '' }) {
+const DEMO_CODES = {
+  declined: 'card_declined',
+  expired: 'expired_card',
+  funds: 'insufficient_funds',
+  removed: 'card_removed',
+  credits: 'credits_exhausted',
+}
+
+export function Requested({ dest = 'GSP Airport', trip = '', driver = 'your driver', driverId = '', payfail = '' }) {
   const { user } = useAuth()
   const [share, setShare] = useState(null)
   const [busy, setBusy] = useState(false)
@@ -17,7 +29,21 @@ export function Requested({ dest = 'GSP Airport', trip = '', driver = 'your driv
   const [driverPos, setDriverPos] = useState(null)
   const [resolvedDriverId, setResolvedDriverId] = useState(driverId || '')
   const [rateNudge, setRateNudge] = useState(false)
+  const [payFailure, setPayFailure] = useState(() => (
+    DEMO_CODES[payfail] ? failureResult(DEMO_CODES[payfail], { amountCents: 4200, creditsBalanceCents: payfail === 'credits' ? 0 : 500, tripId: trip || 'demo' }) : null
+  ))
+  const [payNote, setPayNote] = useState(null)
   const stopRef = useRef(null)
+
+  useEffect(() => {
+    if (!DEMO_CODES[payfail]) return
+    setPayFailure(failureResult(DEMO_CODES[payfail], {
+      amountCents: 4200,
+      creditsBalanceCents: payfail === 'credits' ? 0 : 500,
+      tripId: trip || 'demo',
+    }))
+    setPayNote(null)
+  }, [payfail, trip])
 
   useEffect(() => () => { stopRef.current?.() }, [])
 
@@ -26,12 +52,15 @@ export function Requested({ dest = 'GSP Airport', trip = '', driver = 'your driv
     let alive = true
     supabase
       .from('trips')
-      .select('id, status, driver_id, pickup_label, dropoff_label, pickup_lat, pickup_lng')
+      .select('id, status, driver_id, pickup_label, dropoff_label, pickup_lat, pickup_lng, metadata, fare_cents')
       .eq('id', trip)
       .maybeSingle()
       .then(async ({ data }) => {
         if (!alive || !data) return
         setTripRow(data)
+        if (data.metadata?.payment_hold?.status === 'payment_required') {
+          setPayFailure(data.metadata.payment_hold)
+        }
         if (data.driver_id) setResolvedDriverId(data.driver_id)
         if (data.status === 'completed' && user?.id) {
           const rated = await hasRatedTrip(data.id, user.id)
@@ -47,6 +76,28 @@ export function Requested({ dest = 'GSP Airport', trip = '', driver = 'your driv
       setDriverPos([loc.lat, loc.lng])
     })
   }, [resolvedDriverId])
+
+  async function onCancelRide() {
+    if (!trip) return
+    setBusy(true)
+    setError(null)
+    try {
+      const result = await settleTrip({ tripId: trip, action: 'cancel', feeKind: 'cancel_fee' })
+      setTripRow((prev) => ({ ...(prev || {}), status: result.status || 'canceled' }))
+      setPayFailure(null)
+      pushToast({ kind: 'system', title: 'Ride canceled', body: result.reason === 'zero_due' ? 'No fee was due.' : 'Cancellation fee paid.', category: 'billing' })
+    } catch (err) {
+      const failure = err.failure || {
+        code: 'charge_failed',
+        message: err.message || 'Cancellation needs a successful payment.',
+        alternatives: ['add_card', 'use_credits', 'retry'],
+      }
+      setPayFailure(failure)
+      pushToast({ kind: 'payment_failed', title: 'Cancellation unpaid', body: failure.message, category: 'billing' })
+    } finally {
+      setBusy(false)
+    }
+  }
 
   async function onShare() {
     if (!trip || !user?.id) {
@@ -138,9 +189,65 @@ export function Requested({ dest = 'GSP Airport', trip = '', driver = 'your driv
             </div>
           )}
           <PrimaryButton onClick={() => navigate('home')}>Back home</PrimaryButton>
+          {trip && status && !['completed', 'canceled'].includes(status) && (
+            <button type="button" className="pressable" onClick={onCancelRide} disabled={busy} style={{ fontWeight: 700, color: 'var(--ink-secondary)' }}>
+              Cancel ride
+            </button>
+          )}
         </div>
+        {payNote && <p style={{ color: 'var(--purple)', fontSize: 13, marginTop: 12 }}>{payNote}</p>}
         {error && <p style={{ color: 'var(--danger)', fontSize: 13, marginTop: 12 }}>{error}</p>}
       </div>
+      <PaymentFailedSheet
+        failure={payFailure}
+        busy={busy}
+        onRetry={async () => {
+          if (DEMO_CODES[payfail] && !trip) {
+            setPayNote('Retry is ready. Add a card or credits, then try the charge again.')
+            return
+          }
+          if (!trip) return
+          setBusy(true)
+          try {
+            await settleTrip({
+              tripId: trip,
+              action: tripRow?.status === 'in_progress' ? 'charge' : 'complete',
+              feeKind: tripRow?.metadata?.payment_hold?.kind || 'balance',
+              amountCents: payFailure?.amountDueCents,
+            })
+            setPayFailure(null)
+            setPayNote('Payment succeeded.')
+          } catch (err) {
+            setPayFailure(err.failure || payFailure)
+          } finally {
+            setBusy(false)
+          }
+        }}
+        onAddCard={() => navigate('account', { tab: 'billing' })}
+        onUseCredits={async () => {
+          if (!trip) {
+            setPayNote('Use prepaid credits after you buy a pack in Billing, then retry.')
+            return
+          }
+          setBusy(true)
+          try {
+            await settleTrip({
+              tripId: trip,
+              action: 'charge',
+              feeKind: payFailure?.kind || 'balance',
+              amountCents: payFailure?.amountDueCents,
+              methods: ['credits', 'card'],
+            })
+            setPayFailure(null)
+          } catch (err) {
+            setPayFailure(err.failure || { ...payFailure, message: err.message })
+          } finally {
+            setBusy(false)
+          }
+        }}
+        onBuyCredits={() => navigate('account', { tab: 'billing' })}
+        onDismiss={() => setPayFailure(null)}
+      />
     </div>
   )
 }

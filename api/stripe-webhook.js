@@ -4,6 +4,8 @@
  */
 import Stripe from 'stripe'
 import { createClient } from '@supabase/supabase-js'
+import { setPaymentHold } from '../server/collectPayment.js'
+import { classifyStripeError, failureResult } from '../shared/paymentFailure.js'
 
 export const config = { api: { bodyParser: false } }
 
@@ -54,6 +56,15 @@ async function recordDeposit(session) {
     console.error('[stripe-webhook] payments insert', error)
     return { ok: false, error: error.message }
   }
+  const paid = Number(session.amount_total) || Number(session.metadata?.depositCents) || 0
+  if (paid > 0) {
+    const { data: trip } = await supabase.from('trips').select('metadata').eq('id', tripId).maybeSingle()
+    if (trip) {
+      const metadata = { ...(trip.metadata || {}) }
+      metadata.fare_paid_cents = Math.max(0, Math.round(Number(metadata.fare_paid_cents) || 0) + paid)
+      await supabase.from('trips').update({ metadata }).eq('id', tripId)
+    }
+  }
   return { ok: true }
 }
 
@@ -94,6 +105,32 @@ export default async function handler(req, res) {
       })
       res.statusCode = 200
       return res.end(JSON.stringify({ received: true, type: event.type, recorded }))
+    }
+
+    if (event.type === 'payment_intent.payment_failed') {
+      const pi = event.data?.object
+      const tripId = pi?.metadata?.tripId || pi?.metadata?.trip_id
+      const code = classifyStripeError({
+        code: pi?.last_payment_error?.code,
+        decline_code: pi?.last_payment_error?.decline_code,
+        message: pi?.last_payment_error?.message,
+      })
+      let held = false
+      if (tripId && serviceKey) {
+        const supabase = createClient(supabaseUrl, serviceKey, {
+          auth: { persistSession: false, autoRefreshToken: false },
+        })
+        const failure = failureResult(code, {
+          amountCents: pi?.amount || 0,
+          tripId,
+          kind: pi?.metadata?.kind || 'balance',
+        })
+        await setPaymentHold(supabase, tripId, failure)
+        held = true
+        console.error('[stripe-webhook] payment_failed', { tripId, code, pi: pi?.id })
+      }
+      res.statusCode = 200
+      return res.end(JSON.stringify({ received: true, type: event.type, held, code }))
     }
 
     console.log('[stripe-webhook] unhandled', event.type)

@@ -1,5 +1,11 @@
 # Ride with friends + Carpool — ship notes
 
+## Payments (failure handling)
+- Canonical collector: `collectPayment({ tripId, amountCents, methods: ['credits','card'] })` in `server/collectPayment.js` (re-exported from `server/friendRideLib.js`).
+- 20% platform fee only: `shared/platformFee.js`. Wait-time and mid-ride cancel fees stay with their owners — pass `amountCents` or write `metadata.wait_fee_cents` / `metadata.cancel_fee_cents`. Do not fork that math.
+- Trip complete/cancel that costs money goes through `POST /api/trip-settle`. `$0` proceeds. Otherwise status stays put and `metadata.payment_hold.status` is `payment_required`.
+- Driver payout failures stay `metadata.payout.status = pending` and retry with backoff (`POST /api/driver-payouts`, cron when `CRON_SECRET` is set).
+
 ## Payments (FINAL LOCK)
 - SetupIntent save card (off_session)
 - Organizer Confirm → off_session PI OR Payment Element / Apple Pay

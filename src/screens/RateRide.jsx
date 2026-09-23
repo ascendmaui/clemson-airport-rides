@@ -8,6 +8,7 @@ import {
   fetchProfile,
 } from '../lib/ratings'
 import { PrimaryButton } from '../components/PrimaryButton'
+import { TipCharge } from '../components/TipCharge'
 import { RequireAuth } from '../components/RequireAuth'
 
 function RateForm() {
@@ -251,6 +252,7 @@ function RateForm() {
             <p style={{ color: 'var(--danger)', fontSize: 13, marginBottom: 10 }}>{error}</p>
           )}
           <PrimaryButton disabled={busy}>{busy ? 'Saving…' : 'Submit rating'}</PrimaryButton>
+          {isRider && tripId && <TipCharge tripId={tripId} />}
           <button
             type="button"
             className="pressable"

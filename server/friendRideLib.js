@@ -414,12 +414,37 @@ export async function maybeBookFriendRide(sb, rideId) {
   return { booked: true, trip }
 }
 
-export async function markParticipantPaid(sb, participant, paymentIntent) {
-  const amount = paymentIntent?.amount || participant.fare_cents || 0
+export async function markParticipantPaid(sb, participant, paymentIntent, options = {}) {
+  const amount = paymentIntent?.amount ?? participant.fare_cents ?? 0
   const piId = typeof paymentIntent === 'string' ? paymentIntent : paymentIntent?.id
 
-  let paymentId = participant.payment_id
-  if (!paymentId) {
+  let paymentId = options.paymentId || participant.payment_id
+  if (!paymentId && options.zero) {
+    const riderId = participant.user_id
+    let payer = riderId
+    if (!payer) {
+      const { data: ride } = await sb
+        .from('friend_rides')
+        .select('organizer_id')
+        .eq('id', participant.friend_ride_id)
+        .single()
+      payer = ride?.organizer_id
+    }
+    const { data: pay, error } = await sb
+      .from('payments')
+      .insert({
+        trip_id: null,
+        rider_id: payer,
+        stripe_payment_intent_id: piId || `zero:${participant.id}`,
+        kind: 'friend_ride_share',
+        amount_cents: 0,
+        status: 'succeeded',
+      })
+      .select('id')
+      .single()
+    if (error) throw new Error(error.message)
+    paymentId = pay.id
+  } else if (!paymentId) {
     const riderId = participant.user_id
     if (!riderId) {
       // payments.rider_id is required — use organizer as fallback via join
@@ -536,3 +561,7 @@ export {
   loadDriverVehicle,
   vehicleFareMultiplier,
 } from './friendRideCapacity.js'
+
+export { collectPayment } from './collectPayment.js'
+export { platformFeeCents, driverNetCents, PLATFORM_FEE_RATE } from './platformFee.js'
+export { readPrecomputedFeeCents, progressionGate } from '../shared/paymentFailure.js'

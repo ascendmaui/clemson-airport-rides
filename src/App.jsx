@@ -54,7 +54,7 @@ function Screen({ path, params }) {
     case 'pick-driver':
       return <PickDriver dest={params.dest || 'GSP Airport'} />
     case 'requested':
-      return <Requested dest={params.dest} trip={params.trip} driver={params.driver} />
+      return <Requested dest={params.dest} trip={params.trip} driver={params.driver} payfail={params.payfail || ''} />
     case 'schedule':
       return <ScheduleAirport />
     case 'driver':

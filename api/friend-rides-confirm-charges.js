@@ -5,9 +5,10 @@
  */
 import {
   admin, cors, json, parseBody, userFromAuth, loadRideByToken, stripeClient, stripeOk,
-  ensureStripeCustomer, markParticipantPaid, maybeBookFriendRide, publicRideSummary,
+  maybeBookFriendRide, publicRideSummary,
 } from '../server/friendRideLib.js'
 import { recomputeRideFares } from '../server/friendRideRecompute.js'
+import { chargeFriendShare } from '../server/chargeFriendShare.js'
 
 export default async function handler(req, res) {
   if (cors(req, res)) return
@@ -75,144 +76,25 @@ export default async function handler(req, res) {
         results.push({ participantId: p.id, status: 'already_paid' })
         continue
       }
-      if (!p.fare_cents || p.fare_cents <= 0) {
-        results.push({ participantId: p.id, status: 'skipped', error: 'No fare' })
-        continue
-      }
-
-      // Need linked profile with card for off_session
-      let profile = null
-      if (p.user_id) {
-        const { data } = await sb
-          .from('profiles')
-          .select('id, email, full_name, stripe_customer_id, stripe_default_pm_id')
-          .eq('id', p.user_id)
-          .maybeSingle()
-        profile = data
-      }
-
-      if (profile?.stripe_default_pm_id && profile?.stripe_customer_id) {
-        try {
-          await sb
-            .from('friend_ride_participants')
-            .update({
-              charge_attempts: (p.charge_attempts || 0) + 1,
-              charge_error: null,
-              updated_at: new Date().toISOString(),
-            })
-            .eq('id', p.id)
-
-          const pi = await stripe.paymentIntents.create({
-            amount: p.fare_cents,
-            currency: 'usd',
-            customer: profile.stripe_customer_id,
-            payment_method: profile.stripe_default_pm_id,
-            off_session: true,
-            confirm: true,
-            metadata: {
-              kind: 'friend_ride_share',
-              friend_ride_id: ride.id,
-              participant_id: p.id,
-              token: ride.token,
-            },
-          })
-
-          if (pi.status === 'succeeded') {
-            await markParticipantPaid(sb, p, pi)
-            results.push({ participantId: p.id, status: 'paid', paymentIntentId: pi.id })
-          } else if (pi.status === 'requires_action') {
-            paymentElementSecrets.push({
-              participantId: p.id,
-              clientSecret: pi.client_secret,
-              reason: 'requires_action',
-            })
-            await sb
-              .from('friend_ride_participants')
-              .update({
-                stripe_payment_intent_id: pi.id,
-                charge_error: 'requires_authentication',
-                updated_at: new Date().toISOString(),
-              })
-              .eq('id', p.id)
-            results.push({ participantId: p.id, status: 'requires_action', paymentIntentId: pi.id })
-          } else {
-            await sb
-              .from('friend_ride_participants')
-              .update({
-                stripe_payment_intent_id: pi.id,
-                charge_error: `status:${pi.status}`,
-                updated_at: new Date().toISOString(),
-              })
-              .eq('id', p.id)
-            results.push({ participantId: p.id, status: 'failed', error: pi.status })
-          }
-        } catch (err) {
-          const msg = err?.message || 'Charge failed'
-          await sb
-            .from('friend_ride_participants')
-            .update({
-              charge_error: msg,
-              charge_attempts: (p.charge_attempts || 0) + 1,
-              updated_at: new Date().toISOString(),
-            })
-            .eq('id', p.id)
-          results.push({ participantId: p.id, status: 'failed', error: msg })
-        }
-        continue
-      }
-
-      // No saved card - create PaymentIntent for Payment Element / Apple Pay (user-present)
       try {
-        let customerId = null
-        if (profile) {
-          customerId = await ensureStripeCustomer(stripe, sb, profile)
-        } else if (p.email) {
-          const customer = await stripe.customers.create({
-            email: p.email,
-            name: p.display_name,
-            metadata: { participant_id: p.id, friend_ride_id: ride.id },
-          })
-          customerId = customer.id
-        }
-
-        const piParams = {
-          amount: p.fare_cents,
-          currency: 'usd',
-          automatic_payment_methods: { enabled: true },
-          metadata: {
-            kind: 'friend_ride_share',
-            friend_ride_id: ride.id,
-            participant_id: p.id,
-            token: ride.token,
-          },
-        }
-        if (customerId) piParams.customer = customerId
-
-        const pi = await stripe.paymentIntents.create(piParams)
-        await sb
-          .from('friend_ride_participants')
-          .update({
-            stripe_payment_intent_id: pi.id,
-            charge_error: 'needs_card',
-            charge_attempts: (p.charge_attempts || 0) + 1,
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', p.id)
-
-        paymentElementSecrets.push({
-          participantId: p.id,
-          clientSecret: pi.client_secret,
-          displayName: p.display_name,
-          fareCents: p.fare_cents,
-          reason: 'needs_card',
-        })
-        results.push({ participantId: p.id, status: 'needs_card', paymentIntentId: pi.id })
+        const charged = await chargeFriendShare({ sb, stripe, ride, participant: p })
+        if (charged.paymentElement) paymentElementSecrets.push(charged.paymentElement)
+        results.push(charged.result)
       } catch (err) {
+        const message = err?.message || 'Charge failed'
         await sb
           .from('friend_ride_participants')
-          .update({ charge_error: err.message, updated_at: new Date().toISOString() })
+          .update({ charge_error: message, updated_at: new Date().toISOString() })
           .eq('id', p.id)
-        results.push({ participantId: p.id, status: 'failed', error: err.message })
+        results.push({
+          participantId: p.id,
+          status: 'failed',
+          code: 'charge_failed',
+          error: message,
+          message: 'Payment did not go through. Retry, add a card, or use prepaid credits.',
+          alternatives: ['add_card', 'use_credits', 'retry'],
+          paymentRequired: true,
+        })
       }
     }
 
