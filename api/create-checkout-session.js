@@ -4,6 +4,7 @@
  * Missing STRIPE_SECRET_KEY → 503 JSON error (never stub success)
  */
 import Stripe from 'stripe'
+import { splitPlatformFee, feeMetadata } from '../src/lib/fareRates.js'
 
 const stripeSecret = process.env.STRIPE_SECRET_KEY || ''
 const DEFAULT_FARES = { GSP: 7500, CLT: 17500 }
@@ -64,15 +65,17 @@ export default async function handler(req, res) {
           },
         },
       }],
-      metadata: {
+      metadata: feeMetadata(depositCents, {
         airport,
-        fareCents: String(fareCents),
-        depositCents: String(depositCents),
+        fareCents,
+        depositCents,
         riderName,
         kind: 'airport_deposit',
-        tripId: String(tripId || ''),
-        riderId: String(riderId || ''),
-      },
+        tripId: tripId || '',
+        riderId: riderId || '',
+        fare_platform_fee_cents: splitPlatformFee(fareCents).platformFeeCents,
+        fare_driver_earnings_cents: splitPlatformFee(fareCents).driverEarningsCents,
+      }),
     })
     return json(res, 200, {
       id: session.id,

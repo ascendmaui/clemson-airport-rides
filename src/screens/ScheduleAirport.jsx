@@ -1,63 +1,21 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { PrimaryButton } from '../components/PrimaryButton'
 import { BottomTabs } from '../components/BottomTabs'
+import { SurgeBadge } from '../components/SurgeBadge'
 import {
   AIRPORT_RATES,
-  depositCents,
-  createCheckoutSession,
   getStripeConfig,
 } from '../lib/stripeCheckout'
-import { formatUsdFromCents, applyStudentDiscount } from '../lib/pricing'
+import { formatUsdFromCents, priceAirportRide } from '../lib/pricing'
+import { startAirportCheckout, fetchCredits } from '../lib/billingApi'
+import { applyCreditLots, cardDepositCents, finalizeSettlement } from '../lib/fareRates'
 import { useAuth } from '../lib/auth'
 import { getHashRoute, navigate } from '../lib/navigation'
-import { supabase } from '../lib/supabase'
-import { STADIUM } from '../components/CampusMap'
 import { SignInToBookModal, useRequireAuthForAction } from '../components/SignInToBookModal'
 import { isClemsonEmail } from '../lib/studentDomain'
 
-const AIRPORT_COORDS = {
-  GSP: { label: 'Greenville-Spartanburg International (GSP)', lat: 34.8956, lng: -82.2189 },
-  CLT: { label: 'Charlotte Douglas International (CLT)', lat: 35.2144, lng: -80.9473 },
-}
-
-
 function isStudentRider(user) {
   return Boolean(user?.email && isClemsonEmail(user.email))
-}
-
-async function createAirportTrip({ user, airport, fareCents, deposit, date, time }) {
-  if (!supabase) throw new Error('Supabase is not configured')
-  if (!user?.id) throw new Error('Sign in required to book')
-
-  const dest = AIRPORT_COORDS[airport] || AIRPORT_COORDS.GSP
-  let scheduledFor = null
-  if (date) {
-    const hhmm = time || '12:00'
-    scheduledFor = new Date(`${date}T${hhmm}:00`).toISOString()
-  }
-
-  const { data, error } = await supabase
-    .from('trips')
-    .insert({
-      rider_id: user.id,
-      status: 'searching',
-      tier: 'standard',
-      pickup_label: 'Memorial Stadium',
-      dropoff_label: dest.label,
-      pickup_lat: STADIUM[0],
-      pickup_lng: STADIUM[1],
-      dropoff_lat: dest.lat,
-      dropoff_lng: dest.lng,
-      fare_cents: fareCents,
-      deposit_cents: deposit,
-      passengers: 1,
-      scheduled_for: scheduledFor,
-    })
-    .select('id')
-    .single()
-
-  if (error) throw new Error(error.message || 'Could not create trip')
-  return data.id
 }
 
 export function ScheduleAirport() {
@@ -69,39 +27,59 @@ export function ScheduleAirport() {
   const [time, setTime] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
+  const [priced, setPriced] = useState(null)
+  const [useCredits, setUseCredits] = useState(true)
+  const [creditLots, setCreditLots] = useState([])
+  const [creditNote, setCreditNote] = useState(null)
   const returnFlags = useMemo(() => getHashRoute().params, [])
 
   const rate = AIRPORT_RATES[airport]
-  const deposit = depositCents(rate.fareCents)
   const stripe = getStripeConfig()
+  const fareCents = priced?.fareCents ?? rate.fareCents
+  const creditPreview = useCredits && creditLots.length
+    ? finalizeSettlement(applyCreditLots(fareCents, creditLots))
+    : null
+  const deposit = creditPreview
+    ? cardDepositCents(creditPreview.cashCents)
+    : (priced?.depositCents ?? Math.round(fareCents * 0.25))
+
+  useEffect(() => {
+    if (!user?.id) return undefined
+    let alive = true
+    fetchCredits()
+      .then((data) => { if (alive) setCreditLots(data.lots || []) })
+      .catch(() => { if (alive) setCreditLots([]) })
+    return () => { alive = false }
+  }, [user?.id])
+
+  useEffect(() => {
+    let alive = true
+    const at = date ? new Date(`${date}T${time || '12:00'}:00`) : new Date()
+    priceAirportRide({
+      airport,
+      isStudent: isStudentRider(user),
+      at: Number.isNaN(at.getTime()) ? new Date() : at,
+    })
+      .then((q) => { if (alive) setPriced(q) })
+      .catch(() => { if (alive) setPriced(null) })
+    return () => { alive = false }
+  }, [airport, date, time, user])
 
   const onBook = async () => {
     setBusy(true)
     setError(null)
+    setCreditNote(null)
     try {
-      const student = applyStudentDiscount(rate.fareCents, {
-        isStudent: isStudentRider(user),
-        tier: 'standard',
-      })
-      const fareCents = student.fareCents
-      const depositAmount = depositCents(fareCents)
-      const tripId = await createAirportTrip({
-        user,
+      const session = await startAirportCheckout({
         airport,
-        fareCents,
-        deposit: depositAmount,
         date,
         time,
+        useCredits,
       })
-      const session = await createCheckoutSession({
-        airport,
-        riderName:
-          user?.user_metadata?.full_name ||
-          user?.email?.split('@')[0] ||
-          'Rider',
-        riderId: user.id,
-        tripId,
-      })
+      if (session.paidWithCredits) {
+        setCreditNote(`Ride covered with credits. Trip ${session.tripId} is searching for a driver.`)
+        return
+      }
       if (session.url) {
         window.location.href = session.url
         return
@@ -127,8 +105,8 @@ export function ScheduleAirport() {
         <button type="button" className="pressable glass-pill" onClick={() => navigate('home')} style={{ fontSize: 20, marginBottom: 12, width: 40, height: 40, borderRadius: 12 }}>←</button>
         <h1 style={{ fontSize: 24, fontWeight: 600, letterSpacing: -0.4 }}>Schedule airport</h1>
         <p style={{ color: 'var(--ink-secondary)', fontSize: 14, marginTop: 6, marginBottom: 20 }}>
-          Flat rates · 25% deposit holds your ride
-          {isStudentRider(user) ? ' · Clemson student discount applied at checkout' : ''}
+          Metered fare · 25% deposit holds your ride
+          {isStudentRider(user) ? ' · 10% Clemson student discount on Standard' : ''}
         </p>
 
         {returnFlags.paid === '1' && (
@@ -166,7 +144,7 @@ export function ScheduleAirport() {
               <div style={{ fontWeight: 700, fontSize: 18 }}>{a.code}</div>
               <div style={{ fontSize: 12, color: 'var(--ink-secondary)', marginTop: 4 }}>{a.name.split('(')[0].trim()}</div>
               <div style={{ fontWeight: 600, fontSize: 20, marginTop: 10, color: 'var(--orange)' }}>
-                {formatUsdFromCents(a.fareCents)}
+                {airport === a.code ? formatUsdFromCents(fareCents) : formatUsdFromCents(a.fareCents)}
               </div>
             </button>
           ))}
@@ -178,23 +156,47 @@ export function ScheduleAirport() {
         <input type="time" className="glass-input" value={time} onChange={(e) => setTime(e.target.value)} style={{ width: '100%', marginTop: 6, marginBottom: 20, padding: '12px 14px', borderRadius: 12 }} />
 
         <div className="glass-panel glass-panel--elevated" style={{ padding: 16, borderRadius: 16, marginBottom: 16 }}>
+          <div style={{ marginBottom: 8 }}><SurgeBadge surge={priced?.surge} /></div>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
             <span style={{ color: 'var(--ink-secondary)' }}>Fare</span>
-            <strong>{formatUsdFromCents(rate.fareCents)}</strong>
+            <strong>{formatUsdFromCents(fareCents)}</strong>
           </div>
+          {priced?.discountCents > 0 && (
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8, fontSize: 13 }}>
+              <span style={{ color: 'var(--ink-secondary)' }}>Student discount</span>
+              <strong>−{formatUsdFromCents(priced.discountCents)}</strong>
+            </div>
+          )}
+          {creditPreview?.creditDiscountCents > 0 && (
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8, fontSize: 13 }}>
+              <span style={{ color: 'var(--ink-secondary)' }}>Prepaid credit discount</span>
+              <strong>−{formatUsdFromCents(creditPreview.creditDiscountCents)}</strong>
+            </div>
+          )}
           <div style={{ display: 'flex', justifyContent: 'space-between' }}>
             <span style={{ color: 'var(--ink-secondary)' }}>25% deposit</span>
             <strong style={{ color: 'var(--orange)' }}>{formatUsdFromCents(deposit)}</strong>
           </div>
+          <label style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 12, fontSize: 13 }}>
+            <input type="checkbox" checked={useCredits} onChange={(e) => setUseCredits(e.target.checked)} />
+            Apply ride credits to this fare (pack discount, then 20% platform / 80% driver)
+          </label>
           <p style={{ fontSize: 12, color: 'var(--ink-tertiary)', marginTop: 10 }}>
-            {rate.code} · {formatUsdFromCents(rate.fareCents)} fare → {formatUsdFromCents(deposit)} deposit
+            {rate.code} · base $1.19 + $2.65 booking + $1.14/mi + $0.18/min, min $5.90
+            {priced?.surge?.multiplier > 1 ? ` · ${priced.surge.rule?.label || 'Surge'} ${priced.surge.multiplier}×` : ''}
             {stripe.configured ? ' · Stripe ready' : ' · set VITE_STRIPE_PUBLISHABLE_KEY'}
           </p>
         </div>
 
         <PrimaryButton className="primary-cta" onClick={onPayClick} disabled={busy}>
-          {busy ? 'Starting checkout…' : `Pay ${formatUsdFromCents(deposit)} deposit`}
+          {busy ? 'Starting checkout…' : deposit > 0 ? `Pay ${formatUsdFromCents(deposit)} deposit` : 'Book with credits'}
         </PrimaryButton>
+
+        {creditNote && (
+          <p className="glass-panel" style={{ marginTop: 14, padding: 12, borderRadius: 12, fontSize: 13, fontWeight: 600 }}>
+            {creditNote}
+          </p>
+        )}
 
         {error && (
           <p role="alert" className="glass-panel" style={{ marginTop: 14, padding: 12, borderRadius: 12, background: 'rgba(217,45,32,0.10)', color: 'var(--danger)', fontSize: 13, fontWeight: 600, lineHeight: 1.4 }}>

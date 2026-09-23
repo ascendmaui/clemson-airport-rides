@@ -1,23 +1,32 @@
 /**
- * Stripe client helpers — airport flat rates in CENTS.
- * GSP 7500 → 25% deposit 1875 · CLT 17500 → 4375
+ * Stripe client helpers.
+ * Airport amounts are the unsurged, non-student fallback quote from the
+ * UberX Greenville–Spartanburg card in src/lib/fareRates.js (not the old
+ * $75 / $175 flats). Live checkout uses /api/airport-checkout, which adds
+ * surge, the student discount, and prepaid credits.
  *
  * Client: VITE_STRIPE_PUBLISHABLE_KEY
  * Server: STRIPE_SECRET_KEY (never ship in Vite)
  */
+import { quoteFare, AIRPORT_ROUTE_FALLBACK } from './fareRates'
+
+function fallbackFareCents(code) {
+  const route = AIRPORT_ROUTE_FALLBACK[code]
+  return quoteFare({ miles: route.miles, minutes: route.minutes }).fareBeforeCreditsCents
+}
 
 export const AIRPORT_RATES = {
   GSP: {
     code: 'GSP',
     name: 'Greenville-Spartanburg (GSP)',
-    fareCents: 7500,
-    total: 75,
+    fareCents: fallbackFareCents('GSP'),
+    total: fallbackFareCents('GSP') / 100,
   },
   CLT: {
     code: 'CLT',
     name: 'Charlotte Douglas (CLT)',
-    fareCents: 17500,
-    total: 175,
+    fareCents: fallbackFareCents('CLT'),
+    total: fallbackFareCents('CLT') / 100,
   },
 }
 
@@ -53,14 +62,17 @@ export async function createCheckoutSession({
   cancelUrl,
   tripId,
   riderId,
+  fareCents,
+  depositCents: depositOverride,
 }) {
   const rate = AIRPORT_RATES[airport]
   if (!rate) throw new Error('Unknown airport')
 
-  const deposit = depositCents(rate.fareCents)
+  const fare = fareCents ?? rate.fareCents
+  const deposit = depositOverride ?? depositCents(fare)
   const body = {
     airport: rate.code,
-    fareCents: rate.fareCents,
+    fareCents: fare,
     depositCents: deposit,
     riderName: riderName || 'Rider',
     tripId: tripId || '',

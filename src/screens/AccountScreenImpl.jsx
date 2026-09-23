@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { BottomTabs } from '../components/BottomTabs'
 import { PrimaryButton } from '../components/PrimaryButton'
 import { BillingPanel } from '../components/BillingPanel'
+import { CreditsPanel } from '../components/CreditsPanel'
 import {
   IconBell, IconCard, IconCar, IconHelp, IconPrivacy, IconProfile,
   IconSettings, IconSignOut, IconStudent,
@@ -423,6 +424,7 @@ export function AccountScreen() {
         {tab === 'billing' && (
           <div style={{ marginTop: 14 }}>
             <BillingPanel profile={profile} onProfileRefresh={() => reload().catch(() => {})} />
+            <CreditsPanel />
           </div>
         )}
 

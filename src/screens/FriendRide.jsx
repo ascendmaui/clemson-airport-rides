@@ -44,6 +44,7 @@ export function FriendRideScreen({ token: tokenProp, kind: kindProp = 'friends' 
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [splitMode, setSplitMode] = useState('even')
+  const [useCredits, setUseCredits] = useState(true)
   const [mapsHint, setMapsHint] = useState(null)
   const [vehicle, setVehicle] = useState(null)
   const [vehicleLoaded, setVehicleLoaded] = useState(false)
@@ -196,7 +197,7 @@ export function FriendRideScreen({ token: tokenProp, kind: kindProp = 'friends' 
         }
       }
       setBusyLabel('Charging…')
-      const data = await confirmFriendCharges(token)
+      const data = await confirmFriendCharges(token, { useCredits })
       setRide(data.ride)
       if (data.booked) {
         const assigned = data.trip?.driver_id || ride?.driver_profile_id
@@ -358,6 +359,15 @@ export function FriendRideScreen({ token: tokenProp, kind: kindProp = 'friends' 
             <div><div style={{ fontSize: 11, color: 'var(--ink-tertiary)' }}>Total</div><div style={{ fontWeight: 700 }}>{formatUsdFromCents(ride.total_fare_cents)}</div></div>
           </div>
         )}
+        {ride?.fare_breakdown?.surge_multiplier > 1 && (
+          <p style={{ fontSize: 12, fontWeight: 700, color: 'var(--orange)', marginTop: 8 }}>
+            Surge · {ride.fare_breakdown.surge_label || 'Peak'} {Number(ride.fare_breakdown.surge_multiplier).toFixed(2)}×
+            {ride.fare_breakdown.carpool_discount_cents ? ' · carpool 15% off' : ''}
+          </p>
+        )}
+        {ride?.fare_breakdown && !(ride.fare_breakdown.surge_multiplier > 1) && ride.fare_breakdown.carpool_discount_cents > 0 && (
+          <p style={{ fontSize: 12, fontWeight: 700, color: 'var(--purple)', marginTop: 8 }}>Carpool 15% off the metered fare</p>
+        )}
 
         {mapsHint && <p style={{ fontSize: 12, color: 'var(--orange)', marginTop: 10 }}>{mapsHint}</p>}
 
@@ -457,6 +467,10 @@ export function FriendRideScreen({ token: tokenProp, kind: kindProp = 'friends' 
               {busy && busyLabel === 'Calculating fares…' ? 'Calculating fares…' : 'Optimize route & fares'}
             </PrimaryButton>
             <div style={{ height: 10 }} />
+            <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 13, marginBottom: 10 }}>
+              <input type="checkbox" checked={useCredits} onChange={(e) => setUseCredits(e.target.checked)} />
+              Use my ride credits on my share
+            </label>
             <PrimaryButton onClick={onConfirmCharges} disabled={busy || ride?.status === 'booked'}>
               {ride?.status === 'booked'
                 ? 'Booked'

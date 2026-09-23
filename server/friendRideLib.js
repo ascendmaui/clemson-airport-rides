@@ -4,6 +4,8 @@
  */
 import { createClient } from '@supabase/supabase-js'
 import Stripe from 'stripe'
+import { quoteFare, splitPlatformFee } from '../src/lib/fareRates.js'
+import { insertChargePayment } from './credits.js'
 
 export const MAX_PARTICIPANTS = 5
 
@@ -89,29 +91,27 @@ export function randomToken(bytes = 16) {
   return out
 }
 
-/** Clemson MVP fare: base + per-mile + per-min, min $8. Documented heuristic. */
-export function computeFriendFareCents(distanceM, durationS, { surgeMultiplier = 1, vehicleMultiplier = 1 } = {}) {
-  // Clemson MVP automatic fare — mirrors src/lib/pricing.js spirit (no manual entry).
-  const BASE = 250 // $2.50
-  const PER_MILE = 175 // $1.75
-  const PER_MIN = 35 // $0.35
-  const MIN_FARE = 800 // $8
-  const miles = Math.max(0, Number(distanceM) || 0) / 1609.344
-  const mins = Math.max(0, Number(durationS) || 0) / 60
-  const base = Math.round(BASE + miles * PER_MILE + mins * PER_MIN)
-  const vehMul = Number(vehicleMultiplier) || 1
-  const surged = Math.round(Math.max(MIN_FARE, base) * (Number(surgeMultiplier) || 1) * vehMul)
+/**
+ * Metered fare from src/lib/fareRates.js (UberX Greenville–Spartanburg card).
+ * Surge is applied here when passed; carpool/student/credits are applied by
+ * recompute and charge settlement so a group can mix student and non-student.
+ */
+export function computeFriendFareCents(distanceM, durationS, {
+  surgeMultiplier = 1,
+  vehicleMultiplier = 1,
+  isCarpool = false,
+} = {}) {
+  const quote = quoteFare({
+    distanceM,
+    durationS,
+    surgeMultiplier,
+    vehicleMultiplier,
+    isCarpool,
+    isStudent: false,
+  })
   return {
-    fareCents: surged,
-    breakdown: {
-      base_cents: BASE,
-      distance_cents: Math.round(miles * PER_MILE),
-      time_cents: Math.round(mins * PER_MIN),
-      subtotal_cents: Math.max(MIN_FARE, base),
-      surge_multiplier: Number(surgeMultiplier) || 1,
-      vehicle_multiplier: vehMul,
-      min_fare_applied: base < MIN_FARE,
-    },
+    fareCents: quote.fareBeforeCreditsCents,
+    breakdown: quote.breakdown,
   }
 }
 
@@ -344,6 +344,8 @@ export async function maybeBookFriendRide(sb, rideId) {
     list.find((p) => p.user_id && p.user_id !== assignedDriver)?.user_id ||
     ride.organizer_id
   const acceptedAt = assignedDriver ? new Date().toISOString() : null
+  const collectedCents = list.reduce((sum, p) => sum + (Number(p.fare_cents) || 0), 0) || ride.total_fare_cents || 0
+  const fareSplit = splitPlatformFee(collectedCents)
   const tripRow = {
     rider_id: primaryRider,
     status: assignedDriver ? 'accepted' : 'searching',
@@ -354,8 +356,12 @@ export async function maybeBookFriendRide(sb, rideId) {
     pickup_lng: origin.lng,
     dropoff_lat: dest.lat,
     dropoff_lng: dest.lng,
-    fare_cents: ride.total_fare_cents || 0,
-    deposit_cents: ride.total_fare_cents || 0,
+    fare_cents: collectedCents,
+    deposit_cents: collectedCents,
+    platform_fee_cents: fareSplit.platformFeeCents,
+    driver_earnings_cents: fareSplit.driverEarningsCents,
+    surge_multiplier: ride.fare_breakdown?.surge_multiplier || 1,
+    fare_breakdown: ride.fare_breakdown || null,
     passengers: list.length,
     rider_note: `${rideKind === 'carpool' ? 'Carpool' : 'Friend ride'} ${ride.token} · ${list.length} riders`,
     stops: stopMeta,
@@ -394,15 +400,10 @@ export async function maybeBookFriendRide(sb, rideId) {
     .eq('id', ride.id)
 
   // Link payments that were trip_id-null to the new trip
-  await sb
-    .from('payments')
-    .update({ trip_id: trip.id })
-    .is('trip_id', null)
-    .eq('kind', 'friend_ride_share')
-    .in(
-      'id',
-      list.map((p) => p.payment_id).filter(Boolean),
-    )
+  const paymentIds = list.map((p) => p.payment_id).filter(Boolean)
+  if (paymentIds.length) {
+    await sb.from('payments').update({ trip_id: trip.id }).in('id', paymentIds)
+  }
 
   await writeRideBills(sb, {
     ride,
@@ -414,49 +415,45 @@ export async function maybeBookFriendRide(sb, rideId) {
   return { booked: true, trip }
 }
 
-export async function markParticipantPaid(sb, participant, paymentIntent) {
-  const amount = paymentIntent?.amount || participant.fare_cents || 0
-  const piId = typeof paymentIntent === 'string' ? paymentIntent : paymentIntent?.id
+export async function markParticipantPaid(sb, participant, paymentIntent, settlement = null) {
+  const piId = typeof paymentIntent === 'string' ? paymentIntent : paymentIntent?.id || null
+  const riderPays = settlement?.riderPaysCents
+    ?? paymentIntent?.amount
+    ?? participant.fare_cents
+    ?? 0
+
+  let riderId = participant.user_id
+  if (!riderId) {
+    const { data: ride } = await sb
+      .from('friend_rides')
+      .select('organizer_id')
+      .eq('id', participant.friend_ride_id)
+      .single()
+    riderId = ride?.organizer_id
+  }
 
   let paymentId = participant.payment_id
-  if (!paymentId) {
-    const riderId = participant.user_id
-    if (!riderId) {
-      // payments.rider_id is required — use organizer as fallback via join
-      const { data: ride } = await sb
-        .from('friend_rides')
-        .select('organizer_id')
-        .eq('id', participant.friend_ride_id)
-        .single()
-      const { data: pay, error } = await sb
-        .from('payments')
-        .insert({
-          trip_id: null,
-          rider_id: riderId || ride?.organizer_id,
-          stripe_payment_intent_id: piId,
-          kind: 'friend_ride_share',
-          amount_cents: amount,
-          status: 'succeeded',
-        })
-        .select('id')
-        .single()
-      if (error) throw new Error(error.message)
-      paymentId = pay.id
-    } else {
-      const { data: pay, error } = await sb
-        .from('payments')
-        .insert({
-          trip_id: null,
-          rider_id: riderId,
-          stripe_payment_intent_id: piId,
-          kind: 'friend_ride_share',
-          amount_cents: amount,
-          status: 'succeeded',
-        })
-        .select('id')
-        .single()
-      if (error) throw new Error(error.message)
-      paymentId = pay.id
+  if (!paymentId && riderId) {
+    const note = { participant_id: participant.id, friend_ride_id: participant.friend_ride_id }
+    if (settlement?.creditsDebitedCents > 0) {
+      const creditPay = await insertChargePayment(sb, {
+        riderId,
+        kind: 'ride_fare',
+        amountCents: settlement.creditsDebitedCents,
+        metadata: { ...note, method: 'credits', discount_cents: settlement.creditDiscountCents || 0 },
+      })
+      paymentId = creditPay?.id || paymentId
+    }
+    const cashCents = settlement ? settlement.cashCents : riderPays
+    if (cashCents > 0) {
+      const cashPay = await insertChargePayment(sb, {
+        riderId,
+        kind: 'friend_ride_share',
+        amountCents: cashCents,
+        stripePaymentIntentId: piId,
+        metadata: { ...note, method: 'card' },
+      })
+      paymentId = cashPay?.id || paymentId
     }
   }
 
@@ -464,6 +461,7 @@ export async function markParticipantPaid(sb, participant, paymentIntent) {
     .from('friend_ride_participants')
     .update({
       status: 'paid',
+      fare_cents: riderPays,
       paid_at: new Date().toISOString(),
       payment_id: paymentId,
       stripe_payment_intent_id: piId,
@@ -488,6 +486,10 @@ export async function writeRideBills(sb, { ride, participants, tripId, fareBreak
     const time = Math.round((bd.time_cents || 0) * ratio)
     const sub = Math.round((bd.subtotal_cents || total) * ratio)
     const surge = Math.max(0, Math.round(sub * ((bd.surge_multiplier || 1) - 1)))
+    const shareSplit = splitPlatformFee(share)
+    const discountCents = Math.max(0, Math.round(
+      ((bd.carpool_discount_cents || 0) + (bd.student_discount_cents || 0) + (bd.credit_discount_cents || 0)) * ratio,
+    ))
     rows.push({
       trip_id: tripId || null,
       friend_ride_id: ride.id,
@@ -503,6 +505,9 @@ export async function writeRideBills(sb, { ride, participants, tripId, fareBreak
       surge_multiplier: bd.surge_multiplier || 1,
       subtotal_cents: sub,
       split_cents: share,
+      discount_cents: discountCents,
+      platform_fee_cents: shareSplit.platformFeeCents,
+      driver_earnings_cents: shareSplit.driverEarningsCents,
       total_fare_cents: total,
       split_mode: ride.split_mode,
       payment_method: (paymentMethodByParticipant || {})[p.id] || (p.stripe_payment_intent_id ? 'card_on_file' : 'payment_element'),
@@ -514,7 +519,10 @@ export async function writeRideBills(sb, { ride, participants, tripId, fareBreak
         { label: 'Distance', cents: dist },
         { label: 'Time', cents: time },
         { label: 'Surge', cents: surge, multiplier: bd.surge_multiplier || 1 },
-        { label: 'Your split', cents: share },
+        { label: 'Discounts', cents: -discountCents },
+        { label: 'Your share', cents: share },
+        { label: 'Platform fee (20%)', cents: shareSplit.platformFeeCents },
+        { label: 'Driver earnings (80%)', cents: shareSplit.driverEarningsCents },
       ],
       charged_at: p.paid_at || new Date().toISOString(),
     })

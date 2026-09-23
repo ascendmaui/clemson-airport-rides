@@ -121,7 +121,7 @@ export function SignInScreen() {
   }
 
   return (
-    <AuthShell title="Welcome back" subtitle="Sign in to book airport rides without surge.">
+    <AuthShell title="Welcome back" subtitle="Sign in to book airport rides. Surge applies on busy hours and game days.">
       <form onSubmit={onSubmit}>
         <label style={{ display: 'block', marginBottom: 14 }}>
           <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink-secondary)' }}>Email</span>
@@ -207,7 +207,7 @@ export function SignUpScreen() {
     busy ? 'Creating…' : cooldownSec > 0 ? `Wait ${cooldownSec}s…` : 'Create account'
 
   return (
-    <AuthShell title="Join Clemson RIDES" subtitle="Flat rates to GSP & CLT. Skip the surge.">
+    <AuthShell title="Join Clemson RIDES" subtitle="Metered fares to GSP and CLT. Students save 10% on Standard.">
       <form onSubmit={onSubmit}>
         <label style={{ display: 'block', marginBottom: 14 }}>
           <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink-secondary)' }}>Full name</span>

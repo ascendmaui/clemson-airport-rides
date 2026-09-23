@@ -74,7 +74,7 @@ export function Marketing() {
           Clemson-only airport rides
         </h2>
         <p style={{ color: 'var(--ink-secondary)', fontSize: 15, lineHeight: 1.45, marginBottom: 20 }}>
-          Flat rates to GSP ($75) & CLT ($175). Skip the surge on game day. Premium self-driving Tesla fleet available.
+          Metered Uber-style fares to GSP and CLT, with surge on airport rush, weekends, and game days. Premium self-driving Tesla fleet available.
         </p>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 28 }}>

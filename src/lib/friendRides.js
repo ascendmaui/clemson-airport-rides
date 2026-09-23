@@ -92,10 +92,14 @@ export async function recomputeFriendRide(token, splitMode) {
   })
 }
 
-export async function confirmFriendCharges(token) {
+export async function confirmFriendCharges(token, { useCredits = true } = {}) {
   return api('/api/friend-rides-confirm-charges', {
     method: 'POST',
-    body: { token, origin: typeof window !== 'undefined' ? window.location.origin : undefined },
+    body: {
+      token,
+      useCredits,
+      origin: typeof window !== 'undefined' ? window.location.origin : undefined,
+    },
   })
 }
 

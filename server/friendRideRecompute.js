@@ -8,6 +8,9 @@ import {
 import {
   loadDriverVehicle, vehicleMaxSeats, vehicleFareMultiplier,
 } from './friendRideCapacity.js'
+import { loadGameDayMultiplier } from './credits.js'
+import { resolveSurge, percentOffCents, STUDENT_DISCOUNT_BPS } from '../src/lib/fareRates.js'
+import { isClemsonEmail } from '../src/lib/studentDomain.js'
 
 export async function recomputeRideFares(sb, token, { splitMode } = {}) {
   const loaded = await loadRideByToken(sb, token)
@@ -39,17 +42,17 @@ export async function recomputeRideFares(sb, token, { splitMode } = {}) {
   const driverId = ride.driver_profile_id || ride.organizer_id
   const vehicle = await loadDriverVehicle(sb, driverId)
   const vehMul = vehicleFareMultiplier(vehicle, participants.length)
-  // Apply vehicle/party multiplier here so fares are correct even if
-  // computeFriendFareCents ignores vehicleMultiplier (pre-lib-patch tip).
-  const baseFare = computeFriendFareCents(route.distanceM, route.durationS)
-  const totalFare = Math.round((baseFare.fareCents || 0) * (Number(vehMul) || 1))
-  const fareResult = {
-    fareCents: totalFare,
-    breakdown: {
-      ...(baseFare.breakdown || {}),
-      vehicle_multiplier: Number(vehMul) || 1,
-    },
-  }
+  const isCarpool = ride.kind === 'carpool' || participants.length >= 2
+  const airport = rideTouchesAirport(participants)
+  const when = new Date()
+  const game = await loadGameDayMultiplier(sb, when)
+  const surge = resolveSurge({ at: when, airport, gameDayMultiplier: game.multiplier })
+  const baseFare = computeFriendFareCents(route.distanceM, route.durationS, {
+    surgeMultiplier: surge.multiplier,
+    vehicleMultiplier: vehMul,
+    isCarpool,
+  })
+  const groupFare = baseFare.fareCents
   const weights =
     ride.split_mode === 'by_distance' && route.legs?.length
       ? participants.map((_, i) => {
@@ -57,7 +60,29 @@ export async function recomputeRideFares(sb, token, { splitMode } = {}) {
           return leg?.distanceM || 1
         })
       : null
-  const fares = splitFares(totalFare, participants, ride.split_mode, weights)
+  const shares = splitFares(groupFare, participants, ride.split_mode, weights)
+  const studentFlags = await studentFlagsFor(sb, participants)
+  let studentDiscountCents = 0
+  const fares = shares.map((share, i) => {
+    if (!studentFlags[i]) return share
+    const off = percentOffCents(share, STUDENT_DISCOUNT_BPS)
+    studentDiscountCents += off.discountCents
+    return off.amountCents
+  })
+  const totalFare = fares.reduce((sum, n) => sum + n, 0)
+  const fareResult = {
+    fareCents: totalFare,
+    breakdown: {
+      ...(baseFare.breakdown || {}),
+      vehicle_multiplier: Number(vehMul) || 1,
+      surge_multiplier: surge.multiplier,
+      surge_rule: surge.rule?.id || null,
+      surge_label: surge.rule?.label || null,
+      student_discount_cents: studentDiscountCents,
+      student_discount_bps: studentDiscountCents ? STUDENT_DISCOUNT_BPS : 0,
+      rider_pays_cents: totalFare,
+    },
+  }
 
   const stopMeta = [
     { ...wp.origin, order: 0 },
@@ -115,6 +140,28 @@ export async function recomputeRideFares(sb, token, { splitMode } = {}) {
     },
     maxParticipants: maxSeats,
     vehicleLabel,
-    fareHeuristic: 'base $2.50 + $1.75/mi + $0.35/min × vehicle/party, min $8 (Clemson MVP)',
+    fareHeuristic: 'UberX GSP card v2026-09-23: $1.19 + $2.65 booking + $1.14/mi + $0.18/min, min $5.90; surge; carpool 15%; student 10%',
+    surge,
   }
+}
+
+function rideTouchesAirport(participants) {
+  const blob = JSON.stringify(participants.map((p) => ({ pickup: p.pickup, dropoff: p.dropoff }))).toLowerCase()
+  return /airport|\bgsp\b|\bclt\b|greenville-spartanburg|charlotte douglas/.test(blob)
+}
+
+async function studentFlagsFor(sb, participants) {
+  const ids = participants.map((p) => p.user_id).filter(Boolean)
+  const byId = {}
+  if (ids.length) {
+    const { data } = await sb
+      .from('profiles')
+      .select('id, email, student_verified_at')
+      .in('id', ids)
+    for (const row of data || []) byId[row.id] = row
+  }
+  return participants.map((p) => {
+    const prof = p.user_id ? byId[p.user_id] : null
+    return Boolean(prof?.student_verified_at) || isClemsonEmail(prof?.email || p.email)
+  })
 }

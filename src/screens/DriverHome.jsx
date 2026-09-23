@@ -6,6 +6,8 @@ import { PurpleAcceptButton } from '../components/PrimaryButton'
 import { navigate } from '../lib/navigation'
 import { setDriverOnline, subscribeTrips, supabase } from '../lib/supabase'
 import { publishDriverLocation } from '../lib/driverTrack'
+import { driverEarningsFromTrip } from '../lib/fareRates'
+import { SurgeBadge } from '../components/SurgeBadge'
 
 function centsToDollars(cents) {
   if (cents == null) return '—'
@@ -51,20 +53,31 @@ function DriverShell({ driverId }) {
 
   const loadEarnings = useCallback(async () => {
     if (!supabase || !driverId) return
-    const { data, error } = await supabase
+    let { data, error } = await supabase
       .from('trips')
-      .select('id, fare_cents, dropoff_label, completed_at')
+      .select('id, fare_cents, driver_earnings_cents, surge_multiplier, dropoff_label, completed_at')
       .eq('driver_id', driverId)
       .eq('status', 'completed')
       .order('completed_at', { ascending: false })
       .limit(20)
+    if (error) {
+      const retry = await supabase
+        .from('trips')
+        .select('id, fare_cents, dropoff_label, completed_at')
+        .eq('driver_id', driverId)
+        .eq('status', 'completed')
+        .order('completed_at', { ascending: false })
+        .limit(20)
+      data = retry.data
+      error = retry.error
+    }
     if (error) {
       console.error('[earnings]', error.message)
       return
     }
     const rows = data || []
     setRecentCompleted(rows)
-    setEarningsCents(rows.reduce((sum, t) => sum + (Number(t.fare_cents) || 0), 0))
+    setEarningsCents(rows.reduce((sum, t) => sum + driverEarningsFromTrip(t), 0))
   }, [driverId])
 
   useEffect(() => {
@@ -515,7 +528,7 @@ function DriverShell({ driverId }) {
                   <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '70%' }}>
                     {t.dropoff_label || 'Trip'}
                   </span>
-                  <strong style={{ color: 'var(--ink)' }}>{centsToDollars(t.fare_cents)}</strong>
+                  <strong style={{ color: 'var(--ink)' }}>{centsToDollars(driverEarningsFromTrip(t))}</strong>
                 </div>
               ))}
             </div>
@@ -538,10 +551,24 @@ function DriverShell({ driverId }) {
         >
           <div className="sheet-handle" />
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-            <div style={{ fontSize: 32, fontWeight: 700, letterSpacing: -0.5 }}>
-              {centsToDollars(offer.fare_cents)}
+            <div>
+              <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--ink-secondary)' }}>You earn</div>
+              <div style={{ fontSize: 32, fontWeight: 700, letterSpacing: -0.5 }}>
+                {centsToDollars(driverEarningsFromTrip(offer))}
+              </div>
             </div>
             <div style={{ fontSize: 13, color: 'var(--ink-secondary)' }}>Live offer</div>
+          </div>
+          <div style={{ marginTop: 8, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+            <SurgeBadge
+              surge={{
+                multiplier: offer.surge_multiplier || offer.metadata?.surge_multiplier || offer.fare_breakdown?.surge_multiplier,
+                label: offer.fare_breakdown?.surge_label || offer.metadata?.surge_label,
+              }}
+            />
+            <span style={{ fontSize: 12, color: 'var(--ink-tertiary)' }}>
+              Fare {centsToDollars(offer.fare_cents)} · 80% to you
+            </span>
           </div>
           <div style={{ marginTop: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
             <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>

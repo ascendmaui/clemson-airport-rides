@@ -4,6 +4,7 @@
  */
 import { createClient } from '@supabase/supabase-js'
 import Stripe from 'stripe'
+import { quoteFare } from '../src/lib/fareRates.js'
 
 export const MAX_PARTICIPANTS = 5
 
@@ -89,28 +90,17 @@ export function randomToken(bytes = 16) {
   return out
 }
 
-/** Clemson MVP fare: base + per-mile + per-min, min $8. Documented heuristic. */
-export function computeFriendFareCents(distanceM, durationS, { surgeMultiplier = 1 } = {}) {
-  // Clemson MVP automatic fare — mirrors src/lib/pricing.js spirit (no manual entry).
-  const BASE = 250 // $2.50
-  const PER_MILE = 175 // $1.75
-  const PER_MIN = 35 // $0.35
-  const MIN_FARE = 800 // $8
-  const miles = Math.max(0, Number(distanceM) || 0) / 1609.344
-  const mins = Math.max(0, Number(durationS) || 0) / 60
-  const base = Math.round(BASE + miles * PER_MILE + mins * PER_MIN)
-  const surged = Math.round(Math.max(MIN_FARE, base) * (Number(surgeMultiplier) || 1))
-  return {
-    fareCents: surged,
-    breakdown: {
-      base_cents: BASE,
-      distance_cents: Math.round(miles * PER_MILE),
-      time_cents: Math.round(mins * PER_MIN),
-      subtotal_cents: Math.max(MIN_FARE, base),
-      surge_multiplier: Number(surgeMultiplier) || 1,
-      min_fare_applied: base < MIN_FARE,
-    },
-  }
+/** Metered fare — same card as src/lib/fareRates.js. Prefer friendRideLib in new code. */
+export function computeFriendFareCents(distanceM, durationS, { surgeMultiplier = 1, vehicleMultiplier = 1, isCarpool = false } = {}) {
+  const quote = quoteFare({
+    distanceM,
+    durationS,
+    surgeMultiplier,
+    vehicleMultiplier,
+    isCarpool,
+    isStudent: false,
+  })
+  return { fareCents: quote.fareBeforeCreditsCents, breakdown: quote.breakdown }
 }
 
 /** @deprecated use computeFriendFareCents(...).fareCents */

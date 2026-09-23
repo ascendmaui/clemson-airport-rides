@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { SearchField } from '../components/SearchField'
 import { Pill } from '../components/Pill'
 import { BottomTabs } from '../components/BottomTabs'
@@ -6,6 +6,8 @@ import { CampusMap, STADIUM } from '../components/CampusMap'
 import { navigate } from '../lib/navigation'
 import { DOWNTOWN_CENTER } from '../lib/downtownHeat'
 import { HEAT_WINDOWS } from '../lib/rideDemand'
+import { quoteWithSurge } from '../lib/pricing'
+import { SurgeBadge } from '../components/SurgeBadge'
 
 const SHORTCUTS = [
   { id: 'home', label: 'Home', sub: 'Simpsonville', icon: '🏠' },
@@ -18,6 +20,15 @@ export function RiderHome({ riderName = 'John' }) {
   const [tab, setTab] = useState('home')
   const [showBusy, setShowBusy] = useState(true)
   const [heatWindow, setHeatWindow] = useState('now')
+  const [surge, setSurge] = useState(null)
+
+  useEffect(() => {
+    let alive = true
+    quoteWithSurge({ airport: true, miles: 48, minutes: 55 })
+      .then((q) => { if (alive) setSurge(q.surge) })
+      .catch(() => {})
+    return () => { alive = false }
+  }, [])
   const [heatMeta, setHeatMeta] = useState(null)
   const goSearch = (dest) => {
     navigate('confirm', { dest: dest || query || 'GSP Airport' })
@@ -166,8 +177,11 @@ export function RiderHome({ riderName = 'John' }) {
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontWeight: 700, fontSize: 15 }}>Game Day Rides</div>
               <div style={{ fontSize: 13, color: 'var(--ink-secondary)', marginTop: 2 }}>
-                Skip the surge. Book ahead!
+                {surge?.multiplier > 1
+                  ? 'Surge is on — drivers earn more, fares include the multiplier.'
+                  : 'Book ahead. Surge turns on for airport rush, weekends, and game days.'}
               </div>
+              <div style={{ marginTop: 6 }}><SurgeBadge surge={surge} /></div>
             </div>
             <button
               type="button"
