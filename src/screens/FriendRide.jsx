@@ -1,13 +1,16 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { CampusMap, CLEMSON } from '../components/CampusMap'
+import { PlacePicker } from '../components/PlacePicker'
 import { PrimaryButton } from '../components/PrimaryButton'
 import { BottomTabs } from '../components/BottomTabs'
 import { useAuth } from '../lib/auth'
 import { navigate } from '../lib/navigation'
 import { formatUsdFromCents } from '../lib/pricing'
+import { supabase } from '../lib/supabase'
 import {
   FRIEND_PLACES, confirmFriendCharges, createFriendRide, decodePolyline,
   formatEta, formatMiles, inviteUrl, getFriendRide, joinFriendRide, recomputeFriendRide,
+  vehicleMaxSeats, capacityMessage, DEFAULT_MAX_PARTICIPANTS,
 } from '../lib/friendRides'
 
 const card = {
@@ -15,20 +18,16 @@ const card = {
   border: '1px solid var(--border)', boxShadow: 'var(--shadow-soft)',
 }
 
-function PlaceSelect({ label, value, onChange }) {
-  return (
-    <label style={{ display: 'block', marginBottom: 10 }}>
-      <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--ink-secondary)', marginBottom: 4 }}>{label}</div>
-      <select
-        value={value?.label || ''}
-        onChange={(e) => onChange(FRIEND_PLACES.find((x) => x.label === e.target.value) || null)}
-        style={{ width: '100%', padding: 12, borderRadius: 12, border: '1px solid var(--border)', background: '#fff' }}
-      >
-        <option value="">Select place…</option>
-        {FRIEND_PLACES.map((p) => <option key={p.label} value={p.label}>{p.label}</option>)}
-      </select>
-    </label>
-  )
+async function fetchOrganizerVehicle(userId) {
+  if (!supabase || !userId) return null
+  const { data } = await supabase
+    .from('vehicles')
+    .select('make, model, color, plate, seats, is_tesla, tier, type')
+    .eq('driver_id', userId)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  return data || null
 }
 
 export function FriendRideScreen({ token: tokenProp, kind: kindProp = 'friends' }) {
@@ -39,12 +38,15 @@ export function FriendRideScreen({ token: tokenProp, kind: kindProp = 'friends' 
   const [ride, setRide] = useState(null)
   const [error, setError] = useState(null)
   const [busy, setBusy] = useState(false)
+  const [busyLabel, setBusyLabel] = useState('')
   const [pickup, setPickup] = useState(FRIEND_PLACES[0])
   const [dropoff, setDropoff] = useState(FRIEND_PLACES[4])
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [splitMode, setSplitMode] = useState('even')
   const [mapsHint, setMapsHint] = useState(null)
+  const [vehicle, setVehicle] = useState(null)
+  const [vehicleLoaded, setVehicleLoaded] = useState(false)
 
   useEffect(() => { if (tokenProp) setToken(tokenProp) }, [tokenProp])
   useEffect(() => {
@@ -53,6 +55,32 @@ export function FriendRideScreen({ token: tokenProp, kind: kindProp = 'friends' 
       setEmail(user.email || '')
     }
   }, [user])
+
+  useEffect(() => {
+    let alive = true
+    ;(async () => {
+      if (!user?.id) {
+        if (alive) { setVehicle(null); setVehicleLoaded(true) }
+        return
+      }
+      try {
+        const v = await fetchOrganizerVehicle(user.id)
+        if (alive) { setVehicle(v); setVehicleLoaded(true) }
+      } catch {
+        if (alive) { setVehicle(null); setVehicleLoaded(true) }
+      }
+    })()
+    return () => { alive = false }
+  }, [user?.id])
+
+  const maxParticipants = useMemo(() => {
+    if (ride?.max_participants) return Number(ride.max_participants)
+    if (vehicle) return vehicleMaxSeats(vehicle)
+    return DEFAULT_MAX_PARTICIPANTS
+  }, [ride?.max_participants, vehicle])
+
+  const hasVehicle = Boolean(vehicle)
+  const needsVehicleToCreate = true // group + carpool both require registered vehicle
 
   const refresh = useCallback(async () => {
     if (!token) return
@@ -70,11 +98,31 @@ export function FriendRideScreen({ token: tokenProp, kind: kindProp = 'friends' 
   }, [refresh, token])
 
   const routePath = useMemo(() => decodePolyline(ride?.route_polyline), [ride?.route_polyline])
-  const mapCenter = ride?.stops?.[0] ? [ride.stops[0].lat, ride.stops[0].lng] : CLEMSON
+  const mapCenter = ride?.stops?.[0]
+    ? [ride.stops[0].lat, ride.stops[0].lng]
+    : (pickup?.lat != null ? [pickup.lat, pickup.lng] : CLEMSON)
+
+  function onPickupPinMove([lat, lng]) {
+    setPickup((prev) => ({
+      label: prev?.label && !String(prev.label).startsWith('Pinned')
+        ? prev.label
+        : `Pinned (${Number(lat).toFixed(4)}, ${Number(lng).toFixed(4)})`,
+      lat,
+      lng,
+    }))
+  }
 
   async function onCreate() {
     if (!user) { navigate('sign-in'); return }
-    setBusy(true); setError(null)
+    if (needsVehicleToCreate && !hasVehicle) {
+      setError('Add your vehicle before offering a group ride.')
+      return
+    }
+    if (!pickup?.lat || !dropoff?.lat) {
+      setError('Choose pickup and dropoff (with a map pin or place).')
+      return
+    }
+    setBusy(true); setBusyLabel('Creating…'); setError(null)
     try {
       const data = await createFriendRide({
         displayName: name || (isCarpool ? 'Driver' : 'Organizer'),
@@ -87,38 +135,67 @@ export function FriendRideScreen({ token: tokenProp, kind: kindProp = 'friends' 
       setToken(t)
       const pathKind = isCarpool ? 'carpool' : 'friends'
       window.history.replaceState({}, '', `/${pathKind}/${encodeURIComponent(t)}`)
-      try { await recomputeFriendRide(t, splitMode) } catch (e) { setMapsHint(e.payload?.message || e.message) }
+      try {
+        setBusyLabel('Calculating fares…')
+        await recomputeFriendRide(t, splitMode)
+      } catch (e) { setMapsHint(e.payload?.message || e.message) }
       setRide(await getFriendRide(t))
     } catch (e) { setError(e.message) }
-    finally { setBusy(false) }
+    finally { setBusy(false); setBusyLabel('') }
   }
 
   async function onJoin() {
     if (!token) return
-    setBusy(true); setError(null)
+    const count = ride?.participants?.length || 0
+    const alreadyIn = (ride?.participants || []).some(
+      (p) => (user?.id && p.user_id === user.id) || (email && p.email && p.email.toLowerCase() === email.toLowerCase()),
+    )
+    const cap = ride?.max_participants || maxParticipants
+    if (!alreadyIn && count >= cap) {
+      setError(`This ride is full (${cap} max for this vehicle).`)
+      return
+    }
+    setBusy(true); setBusyLabel('Saving…'); setError(null)
     try {
       await joinFriendRide({ token, displayName: name || 'Friend', email: email || undefined, pickup, dropoff })
-      try { await recomputeFriendRide(token, splitMode); setMapsHint(null) }
-      catch (e) { setMapsHint(e.payload?.message || e.message) }
+      try {
+        setBusyLabel('Calculating fares…')
+        await recomputeFriendRide(token, splitMode)
+        setMapsHint(null)
+      } catch (e) { setMapsHint(e.payload?.message || e.message) }
       await refresh()
     } catch (e) { setError(e.message) }
-    finally { setBusy(false) }
+    finally { setBusy(false); setBusyLabel('') }
   }
 
   async function onRecompute() {
-    setBusy(true); setError(null)
+    setBusy(true); setBusyLabel('Calculating fares…'); setError(null)
     try {
       setRide(await recomputeFriendRide(token, splitMode))
       setMapsHint(null)
     } catch (e) {
       setMapsHint(e.payload?.message || e.message)
       setError(e.message)
-    } finally { setBusy(false) }
+    } finally { setBusy(false); setBusyLabel('') }
   }
 
   async function onConfirmCharges() {
     setBusy(true); setError(null)
     try {
+      setBusyLabel('Calculating fares…')
+      try {
+        const recomputed = await recomputeFriendRide(token, splitMode)
+        setRide(recomputed)
+        setMapsHint(null)
+      } catch (e) {
+        // If recompute fails (e.g. maps key), still try charge if fares already present
+        setMapsHint(e.payload?.message || e.message)
+        if (!ride?.total_fare_cents) {
+          setError(e.payload?.message || e.message || 'Could not update fares. Try Optimize route & fares first.')
+          return
+        }
+      }
+      setBusyLabel('Charging…')
       const data = await confirmFriendCharges(token)
       setRide(data.ride)
       if (data.booked) {
@@ -128,9 +205,11 @@ export function FriendRideScreen({ token: tokenProp, kind: kindProp = 'friends' 
             ? `Booked trip ${data.trip?.id} - driver assigned (carpool organizer).`
             : `Booked trip ${data.trip?.id} - searching for a driver.`,
         )
+      } else if (data.paymentElementSecrets?.length) {
+        setMapsHint('Some riders need to finish payment (saved card missing or requires authentication).')
       }
     } catch (e) { setError(e.message) }
-    finally { setBusy(false) }
+    finally { setBusy(false); setBusyLabel('') }
   }
 
   async function onCopy() {
@@ -142,25 +221,93 @@ export function FriendRideScreen({ token: tokenProp, kind: kindProp = 'friends' 
   }
 
   if (!token) {
+    const vehicleBlock = needsVehicleToCreate && vehicleLoaded && !hasVehicle
     return (
       <div className="route-fade" style={{ display: 'flex', flexDirection: 'column', minHeight: '100%' }}>
         <div style={{ flex: 1, padding: 24, paddingBottom: 96 }}>
           <button type="button" className="pressable" onClick={() => navigate('friends')}
             style={{ fontSize: 20, marginBottom: 12, width: 44, height: 44, borderRadius: 14, background: 'var(--surface)', boxShadow: 'var(--shadow-pill)' }}>←</button>
-          <h1 style={{ fontSize: 24, fontWeight: 700, color: 'var(--purple)' }}>{productLabel}</h1>
-          <p style={{ color: 'var(--ink-secondary)', marginTop: 8, lineHeight: 1.45 }}>
-            {isCarpool
-              ? 'Offer seats in your car (max 5 total). Riders join with pickup/dropoff; you drive when everyone pays.'
-              : 'Invite up to 4 friends (5 total). Optimize multi-stop route, split fare, auto-charge.'}
-          </p>
+          <h1 style={{ fontSize: 24, fontWeight: 700, color: 'var(--purple)' }}>
+            {isCarpool ? 'Offer a carpool' : 'Ride with friends'}
+          </h1>
+
+          {isCarpool ? (
+            <div style={{ ...card, marginTop: 12, background: 'linear-gradient(160deg, rgba(82,45,128,0.06), rgba(245,102,0,0.08))' }}>
+              <div style={{ fontWeight: 800, color: 'var(--purple)', marginBottom: 8 }}>How carpool works</div>
+              <ol style={{ margin: 0, paddingLeft: 18, color: 'var(--ink-secondary)', fontSize: 13, lineHeight: 1.55 }}>
+                <li>Set your start and end, then create an invite link.</li>
+                <li>Share the link — friends join with their own pickup/dropoff.</li>
+                <li>We build one optimized route and split the fare automatically.</li>
+                <li>Hit confirm to charge everyone; you are the assigned driver.</li>
+              </ol>
+              <p style={{ fontSize: 12, color: 'var(--ink-tertiary)', marginTop: 10, lineHeight: 1.45 }}>
+                For Clemson student drivers with a registered car. Capacity comes from your vehicle
+                {hasVehicle
+                  ? ` (${vehicle.make || ''} ${vehicle.model || ''} · up to ${maxParticipants} total)`.replace(/\s+/g, ' ').trim()
+                  : ''}.
+              </p>
+            </div>
+          ) : (
+            <p style={{ color: 'var(--ink-secondary)', marginTop: 8, lineHeight: 1.45 }}>
+              Invite friends, optimize a multi-stop route, split the fare, and auto-charge.
+              Party size is capped by your registered vehicle
+              {hasVehicle ? ` (max ${maxParticipants} total)` : ''}.
+            </p>
+          )}
+
+          {vehicleBlock && (
+            <div style={{ ...card, borderColor: 'rgba(245,102,0,0.45)' }}>
+              <div style={{ fontWeight: 700, color: 'var(--orange)', marginBottom: 6 }}>Vehicle required</div>
+              <p style={{ fontSize: 13, color: 'var(--ink-secondary)', lineHeight: 1.45 }}>
+                Add your vehicle before offering a group ride. We use your registered seats to cap the party.
+              </p>
+              <button
+                type="button"
+                className="pressable"
+                onClick={() => navigate('driver-signup')}
+                style={{ marginTop: 10, fontWeight: 700, color: 'var(--purple)' }}
+              >
+                Add your vehicle →
+              </button>
+            </div>
+          )}
+
           <div style={card}>
             <label style={{ display: 'block', marginBottom: 10 }}>
               <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 4 }}>Your name</div>
               <input value={name} onChange={(e) => setName(e.target.value)}
                 style={{ width: '100%', padding: 12, borderRadius: 12, border: '1px solid var(--border)' }} />
             </label>
-            <PlaceSelect label={isCarpool ? 'Your start' : 'Your pickup'} value={pickup} onChange={setPickup} />
-            <PlaceSelect label={isCarpool ? 'Your end' : 'Your dropoff'} value={dropoff} onChange={setDropoff} />
+            <PlacePicker
+              label={isCarpool ? 'Your start' : 'Your pickup'}
+              mode="pickup"
+              value={pickup}
+              onChange={setPickup}
+              presets={FRIEND_PLACES}
+            />
+            <PlacePicker
+              label={isCarpool ? 'Your end' : 'Your dropoff'}
+              mode="dropoff"
+              value={dropoff}
+              onChange={setDropoff}
+              presets={FRIEND_PLACES}
+            />
+            {pickup?.lat != null && (
+              <div style={{ marginBottom: 12, borderRadius: 16, overflow: 'hidden' }}>
+                <div style={{ fontSize: 11, color: 'var(--ink-tertiary)', marginBottom: 6 }}>
+                  Drag the map to fine-tune pickup
+                </div>
+                <CampusMap
+                  height={160}
+                  interactive
+                  dragPin
+                  center={[pickup.lat, pickup.lng]}
+                  marker={[pickup.lat, pickup.lng]}
+                  onPinMove={onPickupPinMove}
+                  zoom={15}
+                />
+              </div>
+            )}
             <div style={{ marginBottom: 12 }}>
               <label style={{ marginRight: 16 }}>
                 <input type="radio" checked={splitMode === 'even'} onChange={() => setSplitMode('even')} /> Even
@@ -169,8 +316,13 @@ export function FriendRideScreen({ token: tokenProp, kind: kindProp = 'friends' 
                 <input type="radio" checked={splitMode === 'by_distance'} onChange={() => setSplitMode('by_distance')} /> By distance
               </label>
             </div>
-            <PrimaryButton onClick={onCreate} disabled={busy}>
-              {busy ? 'Creating…' : isCarpool ? 'Offer a carpool' : 'Create invite link'}
+            {hasVehicle && (
+              <p style={{ fontSize: 12, color: 'var(--ink-tertiary)', marginBottom: 10 }}>
+                {capacityMessage(maxParticipants, { hasVehicle: true })}
+              </p>
+            )}
+            <PrimaryButton onClick={onCreate} disabled={busy || vehicleBlock}>
+              {busy ? (busyLabel || 'Creating…') : isCarpool ? 'Offer a carpool' : 'Create invite link'}
             </PrimaryButton>
             {error && <p style={{ color: 'var(--danger)', fontSize: 13, marginTop: 10 }}>{error}</p>}
           </div>
@@ -181,6 +333,7 @@ export function FriendRideScreen({ token: tokenProp, kind: kindProp = 'friends' 
   }
 
   const isOrganizer = ride?.is_organizer
+  const cap = ride?.max_participants || maxParticipants
 
   return (
     <div className="route-fade" style={{ display: 'flex', flexDirection: 'column', minHeight: '100%' }}>
@@ -233,7 +386,12 @@ export function FriendRideScreen({ token: tokenProp, kind: kindProp = 'friends' 
         )}
 
         <div style={card}>
-          <div style={{ fontWeight: 700, marginBottom: 10 }}>Participants ({ride?.participants?.length || 0}/5)</div>
+          <div style={{ fontWeight: 700, marginBottom: 10 }}>
+            Participants ({ride?.participants?.length || 0}/{cap})
+          </div>
+          <div style={{ fontSize: 12, color: 'var(--ink-tertiary)', marginBottom: 8 }}>
+            Max {cap} for this vehicle{ride?.vehicle_label ? ` · ${ride.vehicle_label}` : ''}.
+          </div>
           {(ride?.participants || []).map((p) => (
             <div key={p.id} style={{ padding: '8px 0', borderBottom: '1px solid var(--border)', fontSize: 13 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
@@ -267,9 +425,22 @@ export function FriendRideScreen({ token: tokenProp, kind: kindProp = 'friends' 
             <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email"
               style={{ width: '100%', padding: 12, borderRadius: 12, border: '1px solid var(--border)', marginBottom: 10 }} />
           )}
-          <PlaceSelect label="Pickup" value={pickup} onChange={setPickup} />
-          <PlaceSelect label="Dropoff" value={dropoff} onChange={setDropoff} />
-          <PrimaryButton onClick={onJoin} disabled={busy}>{busy ? 'Saving…' : 'Save stops'}</PrimaryButton>
+          <PlacePicker label="Pickup" mode="pickup" value={pickup} onChange={setPickup} presets={FRIEND_PLACES} />
+          <PlacePicker label="Dropoff" mode="dropoff" value={dropoff} onChange={setDropoff} presets={FRIEND_PLACES} />
+          {pickup?.lat != null && (
+            <div style={{ marginBottom: 12, borderRadius: 16, overflow: 'hidden' }}>
+              <CampusMap
+                height={140}
+                interactive
+                dragPin
+                center={[pickup.lat, pickup.lng]}
+                marker={[pickup.lat, pickup.lng]}
+                onPinMove={onPickupPinMove}
+                zoom={15}
+              />
+            </div>
+          )}
+          <PrimaryButton onClick={onJoin} disabled={busy}>{busy ? (busyLabel || 'Saving…') : 'Save stops'}</PrimaryButton>
         </div>
 
         {isOrganizer && (
@@ -282,18 +453,22 @@ export function FriendRideScreen({ token: tokenProp, kind: kindProp = 'friends' 
               <input type="radio" checked={splitMode === 'by_distance'} onChange={() => setSplitMode('by_distance')} /> By distance
             </label>
             <div style={{ height: 10 }} />
-            <PrimaryButton onClick={onRecompute} disabled={busy}>Optimize route & fares</PrimaryButton>
+            <PrimaryButton onClick={onRecompute} disabled={busy}>
+              {busy && busyLabel === 'Calculating fares…' ? 'Calculating fares…' : 'Optimize route & fares'}
+            </PrimaryButton>
             <div style={{ height: 10 }} />
             <PrimaryButton onClick={onConfirmCharges} disabled={busy || ride?.status === 'booked'}>
               {ride?.status === 'booked'
                 ? 'Booked'
-                : isCarpool
-                  ? 'Confirm & charge riders'
-                  : 'Confirm & charge friends'}
+                : busy && (busyLabel === 'Calculating fares…' || busyLabel === 'Charging…')
+                  ? busyLabel
+                  : isCarpool
+                    ? 'Confirm & charge riders'
+                    : 'Confirm & charge friends'}
             </PrimaryButton>
             <p style={{ fontSize: 11, color: 'var(--ink-tertiary)', marginTop: 8 }}>
-              Full share · saved card off-session or Apple Pay / Payment Element. Books when all Paid
-              {isCarpool ? ' · you are the assigned driver' : ''}.
+              Confirm updates fares from the live route, then charges full shares · saved card or Apple Pay / Payment Element.
+              Books when all Paid{isCarpool ? ' · you are the assigned driver' : ''}.
             </p>
           </div>
         )}
