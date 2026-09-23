@@ -11,6 +11,7 @@ import { DriverApprovalGate } from './DriverApprovalGate'
 import { driverOfferCopy, driverTakeCents, formatUsd } from '../lib/carpoolEngine'
 import { RideChat, RideMessageButton } from '../components/RideChat'
 import { rideChatMode } from '../lib/tripChatRules'
+import { SosControl } from '../components/SosControl'
 
 function centsToDollars(cents) {
   if (cents == null) return '—'
@@ -769,6 +770,9 @@ function DriverShell({ driverId }) {
           )}
 
         </div>
+      )}
+      {activeTrip?.id && (
+        <SosControl tripId={activeTrip.id} viewerRole="driver" knownActive insetTop={76} />
       )}
       {chatTrip && driverId && (
         <RideChat

@@ -9,6 +9,8 @@ import { supabase } from '../lib/supabase'
 import { hasRatedTrip } from '../lib/ratings'
 import { RideChat, RideMessageButton } from '../components/RideChat'
 import { rideChatMode } from '../lib/tripChatRules'
+import { SosControl } from '../components/SosControl'
+import { isActiveRideStatus } from '../lib/sosAlert'
 
 export function Requested({ dest = 'GSP Airport', trip = '', driver = 'your driver', driverId = '' }) {
   const { user } = useAuth()
@@ -103,7 +105,10 @@ export function Requested({ dest = 'GSP Airport', trip = '', driver = 'your driv
   const status = tripRow?.status || ''
   const chatMode = rideChatMode(tripRow)
   const showMessages = Boolean(user?.id && tripRow?.driver_id && tripRow?.rider_id && chatMode !== 'closed')
-  const trackLive = ['accepted', 'arriving', 'in_progress'].includes(status) || Boolean(resolvedDriverId)
+  const rideLive = isActiveRideStatus(status)
+  const devSosPreview = import.meta.env.DEV && typeof window !== 'undefined'
+    && window.location.hash.includes('sos=preview')
+  const trackLive = rideLive || Boolean(resolvedDriverId) || ['accepted', 'arriving', 'in_progress'].includes(status)
   const pickup =
     tripRow?.pickup_lat != null && tripRow?.pickup_lng != null
       ? [Number(tripRow.pickup_lat), Number(tripRow.pickup_lng)]
@@ -111,6 +116,13 @@ export function Requested({ dest = 'GSP Airport', trip = '', driver = 'your driv
 
   return (
     <div className="fade-in" style={{ minHeight: '100%', padding: 24, display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 16 }}>
+      {(rideLive || devSosPreview) && (
+        <SosControl
+          tripId={trip || '00000000-0000-4000-8000-000000000001'}
+          viewerRole="rider"
+          knownActive
+        />
+      )}
       {trackLive && (
         <div className="glass-panel" style={{ borderRadius: 20, overflow: 'hidden', height: 220 }}>
           <CampusMap

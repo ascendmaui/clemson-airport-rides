@@ -5,6 +5,7 @@ import { PrimaryButton } from '../components/PrimaryButton'
 import { CarpoolCompare } from '../components/CarpoolCompare'
 import { formatUsd, NEIGHBORHOODS, quoteCarpool, surgeDelta } from '../lib/carpoolEngine'
 import { BottomTabs } from '../components/BottomTabs'
+import { SosControl } from '../components/SosControl'
 import { useAuth } from '../lib/auth'
 import { navigate } from '../lib/navigation'
 import { formatUsdFromCents } from '../lib/pricing'
@@ -376,8 +377,13 @@ export function FriendRideScreen({ token: tokenProp, kind: kindProp = 'friends' 
   const isOrganizer = ride?.is_organizer
   const cap = ride?.max_participants || maxParticipants
 
+  const sosViewer = isCarpool && isOrganizer ? 'driver' : 'rider'
+
   return (
     <div className="route-fade" style={{ display: 'flex', flexDirection: 'column', minHeight: '100%' }}>
+      {ride?.trip_id && (
+        <SosControl tripId={ride.trip_id} viewerRole={sosViewer} />
+      )}
       <div style={{ flex: 1, padding: 24, paddingBottom: 96, overflow: 'auto' }}>
         <button type="button" className="pressable" onClick={() => navigate('friends')}
           style={{ fontSize: 20, marginBottom: 12, width: 44, height: 44, borderRadius: 14, background: 'var(--surface)', boxShadow: 'var(--shadow-pill)' }}>←</button>
