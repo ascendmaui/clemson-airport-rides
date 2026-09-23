@@ -46,10 +46,10 @@
       "typedRoutes": false
     },
     "extra": {
+      "router": {},
       "eas": {
-        "projectId": "a11a11a1-11a1-41a1-81a1-111111111111"
-      },
-      "router": {}
+        "projectId": "d02319c9-69ef-4523-a0a5-6712c037d5fa"
+      }
     },
     "owner": "johnmatveyev"
   }
