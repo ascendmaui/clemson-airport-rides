@@ -8,6 +8,7 @@ import {
 import {
   loadDriverVehicle, vehicleMaxSeats, DEFAULT_MAX_PARTICIPANTS,
 } from '../server/friendRideCapacity.js'
+import { carpoolSeatCap } from '../src/lib/carpoolEngine.js'
 
 export default async function handler(req, res) {
   if (cors(req, res)) return
@@ -46,10 +47,16 @@ export default async function handler(req, res) {
 
     const driverId = ride.driver_profile_id || ride.organizer_id
     const vehicle = await loadDriverVehicle(sb, driverId)
-    const maxParticipants =
+    const vehicleSeats =
       Number(ride.max_participants) ||
       vehicleMaxSeats(vehicle) ||
       DEFAULT_MAX_PARTICIPANTS
+    const maxParticipants = carpoolSeatCap({
+      kind: ride.kind,
+      partyType: ride.fare_breakdown?.party_type,
+      matchMode: ride.fare_breakdown?.match_mode,
+      vehicleSeats,
+    })
 
     let existing = null
     if (participantId) {

@@ -21,6 +21,8 @@ import { ProfileView } from './screens/ProfileView'
 import { RateRide } from './screens/RateRide'
 import { FriendRideScreen } from './screens/FriendRide'
 import { CarpoolScreen } from './screens/CarpoolScreen'
+import { CarpoolHub } from './screens/CarpoolHub'
+import { AmbassadorScreen } from './screens/AmbassadorScreen'
 import { ToastProvider, ToastStack } from './lib/toasts'
 import { RideToastWatcher } from './components/RideToastWatcher'
 
@@ -100,7 +102,12 @@ function Screen({ path, params }) {
     case 'friend-ride':
       return <FriendRideScreen token={params.token || ''} kind="friends" />
     case 'carpool':
-      return <CarpoolScreen token={params.token || ''} />
+      if (params.drive === '1') return <CarpoolScreen token="" />
+      if (params.token && params.hub !== '1') return <CarpoolScreen token={params.token} />
+      return <CarpoolHub />
+    case 'ambassador':
+    case 'a':
+      return <AmbassadorScreen code={params.code || ''} />
     case 'account':
       return (
         <RequireAuth>

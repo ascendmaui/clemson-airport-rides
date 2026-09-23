@@ -484,7 +484,7 @@ export function AccountScreen() {
                 color: 'var(--purple)', border: '1.5px solid rgba(82,45,128,0.3)', background: 'rgba(255,255,255,0.55)' }}>
               Switch to driver mode →
             </button>
-            <button type="button" className="pressable" onClick={() => navigate('carpool')}
+            <button type="button" className="pressable" onClick={() => navigate('carpool', { drive: '1' })}
               style={{ display: 'block', marginTop: 10, fontWeight: 700, color: 'var(--purple)' }}>
               Offer a carpool →
             </button>

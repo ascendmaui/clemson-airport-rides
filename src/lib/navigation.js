@@ -78,7 +78,10 @@ export function getHashRoute() {
       /* ignore */
     }
   }
-  if (path === 'carpool' && !params.token && typeof window !== 'undefined') {
+  if ((path === 'a' || path === 'ambassador') && segments[1] && !params.code) {
+    params.code = decodeURIComponent(segments[1])
+  }
+  if (path === 'carpool' && !params.token && !params.hub && !params.drive && typeof window !== 'undefined') {
     try {
       const saved = window.sessionStorage.getItem('clemson_carpool_token')
       if (saved) params.token = saved
@@ -114,7 +117,8 @@ export function navigate(path, params = {}) {
     return
   }
   if (path === 'carpool' && !params.token) {
-    window.location.hash = '#/carpool'
+    const qs = new URLSearchParams(params).toString()
+    window.location.hash = qs ? `#/carpool?${qs}` : '#/carpool?hub=1'
     return
   }
   window.location.hash = qs ? `#/${path}?${qs}` : `#/${path}`

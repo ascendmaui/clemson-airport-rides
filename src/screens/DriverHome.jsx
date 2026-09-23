@@ -8,6 +8,7 @@ import { setDriverOnline, subscribeTrips, supabase } from '../lib/supabase'
 import { grantRiderSocialForTrip } from '../lib/riderReferral'
 import { publishDriverLocation } from '../lib/driverTrack'
 import { DriverApprovalGate } from './DriverApprovalGate'
+import { driverOfferCopy, driverTakeCents, formatUsd } from '../lib/carpoolEngine'
 
 function centsToDollars(cents) {
   if (cents == null) return '—'
@@ -56,13 +57,24 @@ function DriverShell({ driverId }) {
 
   const loadEarnings = useCallback(async () => {
     if (!supabase || !driverId) return
-    const { data, error } = await supabase
+    let { data, error } = await supabase
       .from('trips')
-      .select('id, fare_cents, dropoff_label, completed_at')
+      .select('id, fare_cents, dropoff_label, completed_at, metadata')
       .eq('driver_id', driverId)
       .eq('status', 'completed')
       .order('completed_at', { ascending: false })
       .limit(20)
+    if (error && /metadata|column/i.test(error.message || '')) {
+      const retry = await supabase
+        .from('trips')
+        .select('id, fare_cents, dropoff_label, completed_at')
+        .eq('driver_id', driverId)
+        .eq('status', 'completed')
+        .order('completed_at', { ascending: false })
+        .limit(20)
+      data = retry.data
+      error = retry.error
+    }
     if (error) {
       console.error('[earnings]', error.message)
       return
@@ -483,8 +495,25 @@ function DriverShell({ driverId }) {
             <span style={{ fontWeight: 600, fontSize: 18 }}>You're online</span>
           </div>
           <p style={{ fontSize: 13, color: 'var(--ink-secondary)', marginBottom: 12 }}>
-            Looking for rides in Clemson. Offers arrive live via Realtime — no simulated requests.
+            Looking for rides in Clemson. Carpool offers pay more than a solo trip — take those first.
           </p>
+          <div style={{
+            marginBottom: 12,
+            padding: 12,
+            borderRadius: 14,
+            background: 'linear-gradient(135deg, rgba(245,102,0,0.14), rgba(82,45,128,0.12))',
+            border: '1px solid rgba(245,102,0,0.35)',
+          }}>
+            <div style={{ fontWeight: 800, color: 'var(--purple)' }}>Carpool bonus</div>
+            <p style={{ fontSize: 12, color: 'var(--ink-secondary)', margin: '4px 0 0', lineHeight: 1.45 }}>
+              Multi-rider hops pay you 80% of the pool, which is built to beat a solo fare plus a
+              <strong> driver_carpool_bonus</strong> ($2 per extra rider and $0.40 per mile). Riders see their split before anyone is charged.
+            </p>
+            <button type="button" className="pressable" onClick={() => navigate('carpool', { drive: '1' })}
+              style={{ marginTop: 8, fontWeight: 800, color: '#F56600' }}>
+              Offer seats in your car →
+            </button>
+          </div>
 
           <div
             style={{
@@ -568,7 +597,7 @@ function DriverShell({ driverId }) {
                   <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '70%' }}>
                     {t.dropoff_label || 'Trip'}
                   </span>
-                  <strong style={{ color: 'var(--ink)' }}>{centsToDollars(t.fare_cents)}</strong>
+                  <strong style={{ color: 'var(--ink)' }}>{centsToDollars(driverTakeCents(t))}</strong>
                 </div>
               ))}
             </div>
@@ -592,10 +621,17 @@ function DriverShell({ driverId }) {
           <div className="sheet-handle" />
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
             <div style={{ fontSize: 32, fontWeight: 700, letterSpacing: -0.5 }}>
-              {centsToDollars(offer.fare_cents)}
+              {centsToDollars(driverTakeCents(offer))}
             </div>
-            <div style={{ fontSize: 13, color: 'var(--ink-secondary)' }}>Live offer</div>
+            <div style={{ fontSize: 13, color: 'var(--ink-secondary)' }}>
+              {offer.metadata?.carpool ? 'You net · carpool' : 'Live offer'}
+            </div>
           </div>
+          {offer.metadata?.carpool && (
+            <p style={{ fontSize: 13, color: 'var(--purple)', margin: '8px 0 0', lineHeight: 1.4, fontWeight: 700 }}>
+              {driverOfferCopy(offer.metadata.carpool)?.sub}. Riders already agreed to {formatUsd(offer.metadata.carpool.grossCents)} total.
+            </p>
+          )}
           <div style={{ marginTop: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
             <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
               <span style={{ color: 'var(--orange)', fontWeight: 700 }}>●</span>

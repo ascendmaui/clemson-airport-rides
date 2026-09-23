@@ -11,6 +11,7 @@ import {
   loadDriverVehicle, vehicleMaxSeats, DEFAULT_MAX_PARTICIPANTS,
 } from '../server/friendRideCapacity.js'
 import { driverApprovalStatus } from '../server/driverApproval.js'
+import { carpoolSeatCap } from '../src/lib/carpoolEngine.js'
 
 export default async function handler(req, res) {
   if (cors(req, res)) return
@@ -34,6 +35,8 @@ export default async function handler(req, res) {
   const dropoff = body.dropoff || null
   const splitMode = body.splitMode === 'by_distance' ? 'by_distance' : 'even'
   const kind = body.kind === 'carpool' ? 'carpool' : 'friends'
+  const partyType = body.partyType === 'tailgate' ? 'tailgate' : 'carpool'
+  const ambassadorCode = typeof body.ambassadorCode === 'string' ? body.ambassadorCode.slice(0, 40) : null
 
   if (kind === 'carpool') {
     const gate = await driverApprovalStatus(sb, user.id)
@@ -52,7 +55,13 @@ export default async function handler(req, res) {
       code: 'vehicle_required',
     })
   }
-  const maxParticipants = vehicleMaxSeats(vehicle) || DEFAULT_MAX_PARTICIPANTS
+  const vehicleSeats = vehicleMaxSeats(vehicle) || DEFAULT_MAX_PARTICIPANTS
+  const maxParticipants = carpoolSeatCap({
+    kind,
+    partyType,
+    matchMode: 'student_driver',
+    vehicleSeats,
+  })
   const vehicleLabel = `${vehicle.make || ''} ${vehicle.model || ''}`.trim() || null
 
   const token = randomToken(18)
@@ -63,15 +72,27 @@ export default async function handler(req, res) {
     split_mode: splitMode,
     stops: [],
     kind,
+    fare_breakdown: {
+      match_mode: kind === 'carpool' ? 'student_driver' : 'friends',
+      party_type: partyType,
+      ambassador_code: ambassadorCode,
+      carpool: { max_riders: maxParticipants },
+    },
   }
   // Carpool organizer is the assigned driver (student-with-car).
   if (kind === 'carpool') insertRow.driver_profile_id = user.id
 
-  const { data: ride, error } = await sb
+  let { data: ride, error } = await sb
     .from('friend_rides')
     .insert(insertRow)
     .select('*')
     .single()
+  if (error && /fare_breakdown|column/i.test(error.message || '')) {
+    delete insertRow.fare_breakdown
+    const retry = await sb.from('friend_rides').insert(insertRow).select('*').single()
+    ride = retry.data
+    error = retry.error
+  }
   if (error) return json(res, 500, { error: error.message })
 
   // Capacity is computed from vehicles.seats and returned in JSON only.

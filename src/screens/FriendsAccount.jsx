@@ -126,10 +126,10 @@ export function FriendsScreen() {
           <button
             type="button"
             className="pressable"
-            onClick={() => navigate('carpool')}
+            onClick={() => navigate('carpool', { hub: '1' })}
             style={{ display: 'block', width: '100%', marginTop: 10, padding: 12, borderRadius: 12, fontWeight: 700, color: 'var(--purple)', border: '1.5px solid rgba(82,45,128,0.35)', background: 'rgba(255,255,255,0.55)' }}
           >
-            Offer a carpool →
+            Find a carpool →
           </button>
           {myRides.length > 0 && (
             <div style={{ marginTop: 14 }}>
