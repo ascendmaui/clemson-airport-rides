@@ -27,7 +27,7 @@ function isStudentRider(user) {
   return Boolean(user?.email && isClemsonEmail(user.email))
 }
 
-async function createAirportTrip({ user, airport, fareCents, deposit, date, time }) {
+async function createAirportTrip({ user, airport, fareCents, deposit, date, time, student }) {
   if (!supabase) throw new Error('Supabase is not configured')
   if (!user?.id) throw new Error('Sign in required to book')
 
@@ -57,17 +57,17 @@ async function createAirportTrip({ user, airport, fareCents, deposit, date, time
       pickup_at: scheduledFor,
       scheduled_for: scheduledFor,
       rider_note: ahead ? 'airport' : null,
-      metadata: ahead
-        ? {
-            kind: 'scheduled',
-            purpose: 'airport',
-            rider_first_name: firstName(
-              user.user_metadata?.full_name || user.user_metadata?.name || user.email?.split('@')[0],
-            ),
-            fare_is_estimate: false,
-            reminders: {},
-          }
-        : {},
+      metadata: {
+        ...(ahead
+          ? { kind: 'scheduled', purpose: 'airport', fare_is_estimate: false, reminders: {} }
+          : {}),
+        rider_first_name: firstName(
+          user.user_metadata?.full_name || user.user_metadata?.name || user.email?.split('@')[0],
+        ),
+        isStudent: Boolean(student?.discountCents),
+        student_discount_cents: Math.max(0, Math.round(Number(student?.discountCents) || 0)),
+        studentLabel: student?.label || null,
+      },
     })
     .select('id')
     .single()
@@ -108,6 +108,7 @@ export function ScheduleAirport() {
         deposit: depositAmount,
         date,
         time,
+        student,
       })
       const session = await createCheckoutSession({
         airport,

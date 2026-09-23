@@ -1,11 +1,27 @@
 import { StyleSheet, Text, View } from 'react-native'
 import { PURPLE } from 'rides-native/places.js'
 
-export function CampusMap() {
+export type MapPin = {
+  id: string
+  latitude: number
+  longitude: number
+  title: string
+  pinColor?: string
+}
+
+export function CampusMap({
+  center,
+}: {
+  pins?: MapPin[]
+  center?: { latitude: number; longitude: number } | null
+  route?: { latitude: number; longitude: number }[]
+}) {
   return (
     <View style={styles.map}>
       <Text style={styles.label}>Clemson campus</Text>
-      <Text style={styles.sub}>Driver map · Apple Maps on device</Text>
+      <Text style={styles.sub}>
+        {center ? `${center.latitude.toFixed(3)}, ${center.longitude.toFixed(3)}` : 'Driver map · Apple Maps on device'}
+      </Text>
     </View>
   )
 }

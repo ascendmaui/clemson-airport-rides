@@ -57,6 +57,9 @@ export async function createScheduledTrip({
   fareCents,
   depositCents = 0,
   fareIsEstimate = true,
+  isStudent = false,
+  studentDiscountCents = 0,
+  studentLabel = null,
 }) {
   if (!supabase) throw new Error('Supabase is not configured')
   if (!user?.id) throw new Error('Sign in required to schedule a ride')
@@ -92,6 +95,9 @@ export async function createScheduledTrip({
         rider_first_name: riderFirst,
         fare_is_estimate: Boolean(fareIsEstimate),
         reminders: {},
+        isStudent: Boolean(isStudent),
+        student_discount_cents: Math.max(0, Math.round(Number(studentDiscountCents) || 0)),
+        studentLabel: studentLabel || null,
       },
     })
     .select('id, status, pickup_at, pickup_label, dropoff_label')
