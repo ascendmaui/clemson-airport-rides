@@ -1,0 +1,6 @@
+{
+  "name": "@clemson/rides-native",
+  "private": true,
+  "version": "1.1.0",
+  "type": "module"
+}

@@ -1,15 +1,14 @@
-# Clemson RIDES — Expo mobile
+# Clemson RIDES — Expo mobile (frozen)
 
-Bundle id: `com.ascendmaui.clemsonairportrides`
+**Do not ship new TestFlight builds from this folder.**
 
-Auth: **Supabase Auth only** (Clerk removed). Data: Supabase.
+TestFlight **1.0.0 (1)** for `com.ascendmaui.clemsonairportrides` stays on this tree and this EAS project (`1440e29e-13f0-4571-8f32-596ec81f3369`).
 
-```bash
-cp .env.example .env
-# fill EXPO_PUBLIC_SUPABASE_URL + EXPO_PUBLIC_SUPABASE_ANON_KEY
-npm install
-npx expo start
-```
+Phase 1 native work lives in two new apps:
 
-EAS: see `eas.json` (preview / production). Requires Xcode developer dir:
-`sudo xcode-select -s /Applications/Xcode.app/Contents/Developer`
+| App | Path | Bundle id |
+|-----|------|-----------|
+| Rider | [`apps/rider`](../rider) | `com.ascendmaui.clemsonrides.rider` |
+| Driver | [`apps/driver`](../driver) | `com.ascendmaui.clemsonrides.driver` |
+
+The sign-in sheet in this 1.0.0 binary does not call Supabase. Use the rider app.
