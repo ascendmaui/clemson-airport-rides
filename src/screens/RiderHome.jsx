@@ -26,50 +26,59 @@ export function RiderHome({ riderName = 'John' }) {
   return (
     <div className="fade-in" style={{ display: 'flex', flexDirection: 'column', minHeight: '100%', background: 'transparent' }}>
       <div style={{ flex: 1, overflowY: 'auto', paddingBottom: 8 }}>
-        <header
-          style={{
-            position: 'relative',
-            height: 200,
-            background: `
-              linear-gradient(180deg, rgba(11,18,32,0.05) 0%, rgba(82,45,128,0.45) 50%, rgba(11,18,32,0.88) 100%),
-              linear-gradient(120deg, #c45a12 0%, #522D80 70%),
-              url(https://images.unsplash.com/photo-1508098682722-e99c43a406b2?w=1200&q=80) center/cover
-            `,
-            color: '#fff',
-            padding: '20px 20px 18px',
-            display: 'flex',
-            flexDirection: 'column',
-            justifyContent: 'flex-end',
-          }}
-        >
-          <div style={{ position: 'absolute', top: 16, right: 16, opacity: 0.18, fontSize: 72, lineHeight: 1, userSelect: 'none' }}>
-            🐾
-          </div>
-          <div style={{ fontSize: 11, letterSpacing: 2.2, fontWeight: 600, opacity: 0.85, marginBottom: 6 }}>
-            RIDE • GAME • REPEAT
-          </div>
-          <div style={{ fontSize: 26, fontWeight: 700, letterSpacing: -0.5 }}>
-            <span style={{ color: '#FFB370' }}>Clemson</span>{' '}
-            <span style={{ color: '#E8D5FF' }}>RIDES</span>
-          </div>
-          <div
+        <div style={{ padding: '14px 20px 0' }}>
+          <header
             style={{
-              marginTop: 8,
-              alignSelf: 'flex-start',
-              padding: '4px 10px',
-              borderRadius: 999,
-              background: 'rgba(255,255,255,0.18)',
-              backdropFilter: 'blur(12px)',
-              WebkitBackdropFilter: 'blur(12px)',
-              border: '1px solid rgba(255,255,255,0.28)',
-              fontSize: 10,
-              fontWeight: 700,
-              letterSpacing: 0.7,
+              position: 'relative',
+              width: '52%',
+              maxWidth: 220,
+              minHeight: 96,
+              borderRadius: 18,
+              background: 'linear-gradient(145deg, #F56600 0%, #e05a00 55%, #c24e00 100%)',
+              boxShadow: '0 10px 28px -12px rgba(245,102,0,0.55), 0 4px 12px -6px rgba(82,45,128,0.25)',
+              color: '#fff',
+              padding: '14px 16px 12px',
+              display: 'flex',
+              flexDirection: 'column',
+              justifyContent: 'flex-end',
+              overflow: 'hidden',
             }}
           >
-            TIGERS GET YOU THERE
-          </div>
-        </header>
+            <div
+              style={{
+                position: 'absolute',
+                inset: 0,
+                background: 'radial-gradient(120% 80% at 100% 0%, rgba(82,45,128,0.28) 0%, transparent 55%)',
+                pointerEvents: 'none',
+              }}
+            />
+            <div style={{ position: 'absolute', top: 8, right: 10, opacity: 0.22, fontSize: 36, lineHeight: 1, userSelect: 'none' }}>
+              🐾
+            </div>
+            <div style={{ position: 'relative', fontSize: 9, letterSpacing: 1.6, fontWeight: 700, opacity: 0.9, marginBottom: 4 }}>
+              RIDE • GAME • REPEAT
+            </div>
+            <div style={{ position: 'relative', fontSize: 18, fontWeight: 800, letterSpacing: -0.3, lineHeight: 1.15 }}>
+              Clemson <span style={{ fontWeight: 700, opacity: 0.95 }}>RIDES</span>
+            </div>
+            <div
+              style={{
+                position: 'relative',
+                marginTop: 8,
+                alignSelf: 'flex-start',
+                padding: '3px 8px',
+                borderRadius: 999,
+                background: 'rgba(255,255,255,0.2)',
+                border: '1px solid rgba(255,255,255,0.32)',
+                fontSize: 9,
+                fontWeight: 700,
+                letterSpacing: 0.6,
+              }}
+            >
+              TIGERS GET YOU THERE
+            </div>
+          </header>
+        </div>
 
         <div style={{ padding: '20px 20px 0', position: 'relative' }}>
           <h1 style={{ fontSize: 24, fontWeight: 600, letterSpacing: -0.4 }}>

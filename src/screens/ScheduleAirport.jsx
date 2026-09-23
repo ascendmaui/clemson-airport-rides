@@ -202,7 +202,7 @@ export function ScheduleAirport() {
           </p>
         )}
       </div>
-      <BottomTabs active="rides" />
+      <BottomTabs active="schedule" onChange={(id) => navigate(id === 'home' || id === 'rides' ? 'home' : id)} />
       <SignInToBookModal open={promptOpen} onClose={() => setPromptOpen(false)} nextPath="schedule" />
     </div>
   )
