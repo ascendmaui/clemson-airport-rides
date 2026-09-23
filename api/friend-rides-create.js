@@ -2,7 +2,7 @@
  * POST /api/friend-rides-create
  * Auth required. Creates friend_rides + organizer participant.
  * body.kind = "friends" | "carpool" (carpool sets driver_profile_id = organizer).
- * Requires a registered vehicle — party cap comes from vehicles.seats / type.
+ * Requires a registered vehicle — party cap comes from vehicles.seats (returned in JSON).
  */
 import {
   admin, cors, json, parseBody, userFromAuth, randomToken,
@@ -63,11 +63,8 @@ export default async function handler(req, res) {
     .single()
   if (error) return json(res, 500, { error: error.message })
 
-  // Best-effort capacity metadata (ignore if columns absent)
-  await sb
-    .from('friend_rides')
-    .update({ max_participants: maxParticipants, vehicle_label: vehicleLabel })
-    .eq('id', ride.id)
+  // Capacity is computed from vehicles.seats and returned in JSON only.
+  // Do not write max_participants / vehicle_label — those columns are absent on prod.
 
   const { data: participant, error: pErr } = await sb
     .from('friend_ride_participants')
