@@ -14,9 +14,12 @@ const TRIP_STATUS_KIND = {
   offered: 'ride_requested',
   accepted: 'driver_accepted',
   arriving: 'driver_en_route',
+  arrived: 'arrived_pickup',
   in_progress: 'trip_started',
   completed: 'trip_completed',
   canceled: 'system',
+  cancelled_wait: 'system',
+  canceled_midride: 'canceled_midride',
 }
 
 function tripBody(row) {
@@ -52,7 +55,7 @@ export function RideToastWatcher() {
       const [{ data: trips }, { data: rides }, { data: bills }] = await Promise.all([
         supabase
           .from('trips')
-          .select('id, status, pickup_label, dropoff_label, rider_id, driver_id, updated_at')
+          .select('id, status, pickup_label, dropoff_label, rider_id, driver_id, metadata, updated_at')
           .or(`rider_id.eq.${user.id},driver_id.eq.${user.id}`)
           .order('requested_at', { ascending: false })
           .limit(12),
@@ -92,7 +95,7 @@ export function RideToastWatcher() {
         return
       }
       let kind = TRIP_STATUS_KIND[row.status] || 'system'
-      if (row.status === 'arriving') kind = 'arrived_pickup'
+      if (row.status === 'arriving' || row.status === 'arrived') kind = 'arrived_pickup'
       const titles = {
         ride_requested: 'Ride requested',
         driver_accepted: 'Driver accepted',
@@ -100,12 +103,32 @@ export function RideToastWatcher() {
         arrived_pickup: 'Arrived at pickup',
         trip_started: 'Trip started',
         trip_completed: 'Trip completed',
-        system: row.status === 'canceled' ? 'Trip canceled' : 'Trip update',
+        canceled_midride: 'Ride canceled mid-trip',
+        system: row.status === 'canceled'
+          ? 'Trip canceled'
+          : row.status === 'cancelled_wait'
+            ? 'Canceled at pickup'
+            : 'Trip update',
+      }
+      const midride = row.status === 'canceled_midride'
+      const payout = row.metadata?.midride_cancel
+      const money = (cents) => ((Number(cents) || 0) / 100).toLocaleString('en-US', { style: 'currency', currency: 'USD' })
+      let body = tripBody(row)
+      if (midride) {
+        if (row.driver_id && row.driver_id === user.id && payout) {
+          body = `Trip ended. You keep ${money(payout.driverCents)}.`
+        } else if (payout) {
+          body = `Trip ended. Charge ${money(payout.obligationCents)}.`
+        } else {
+          body = 'Trip ended. Live tracking is closed.'
+        }
       }
       pushToast({
+        id: `trip-${row.id}-${row.status}`,
         kind,
         title: titles[kind] || 'Trip update',
-        body: tripBody(row),
+        body,
+        force: midride,
       })
     }
 
@@ -188,7 +211,7 @@ export function RideToastWatcher() {
       try {
         const { data: trips } = await supabase
           .from('trips')
-          .select('id, status, pickup_label, dropoff_label')
+          .select('id, status, pickup_label, dropoff_label, rider_id, driver_id, metadata')
           .or(`rider_id.eq.${user.id},driver_id.eq.${user.id}`)
           .order('requested_at', { ascending: false })
           .limit(8)

@@ -397,6 +397,28 @@ export function AccountScreen() {
                 )
               })}
             </div>
+            <button
+              type="button"
+              className="pressable"
+              onClick={() => onTogglePref('dndNewRequestTones')}
+              disabled={prefsSaving}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 12, textAlign: 'left',
+                marginTop: 12, padding: 12, borderRadius: 14,
+                background: prefs.dndNewRequestTones ? 'rgba(245,102,0,0.12)' : 'rgba(255,255,255,0.45)',
+                border: prefs.dndNewRequestTones ? '1.5px solid rgba(245,102,0,0.45)' : '1px solid rgba(82,45,128,0.1)',
+              }}
+            >
+              <span style={{ flex: 1 }}>
+                <div style={{ fontWeight: 700, color: 'var(--purple)' }}>Do not disturb — new requests</div>
+                <div style={{ fontSize: 12, color: 'var(--ink-tertiary)' }}>
+                  Mutes the tone for new ride requests. Mid-ride cancel alerts still play.
+                </div>
+              </span>
+              <span style={{ fontWeight: 800, color: prefs.dndNewRequestTones ? 'var(--orange)' : 'var(--ink-tertiary)' }}>
+                {prefs.dndNewRequestTones ? 'On' : 'Off'}
+              </span>
+            </button>
             {prefsNote && (
               <div style={{ fontSize: 12, color: 'var(--ink-tertiary)', marginTop: 12 }}>{prefsNote}</div>
             )}

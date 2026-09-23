@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useAuth } from '../lib/auth'
 import { CampusMap, CLEMSON } from '../components/CampusMap'
 import { HEAT_WINDOWS } from '../lib/rideDemand'
@@ -6,10 +6,19 @@ import { PurpleAcceptButton } from '../components/PrimaryButton'
 import { navigate } from '../lib/navigation'
 import { setDriverOnline, subscribeTrips, supabase } from '../lib/supabase'
 import { publishDriverLocation } from '../lib/driverTrack'
+import { isMidrideStatus, tripStatusLabel } from '../lib/tripPhase'
 
 function centsToDollars(cents) {
   if (cents == null) return '—'
   return `$${(Number(cents) / 100).toFixed(2)}`
+}
+
+function driverEarningCents(row) {
+  if (isMidrideStatus(row?.status)) {
+    const share = Number(row?.metadata?.midride_cancel?.driverCents)
+    return Number.isFinite(share) ? share : 0
+  }
+  return Number(row?.fare_cents) || 0
 }
 
 async function writeTripEvent(tripId, kind, payload = {}) {
@@ -22,7 +31,7 @@ async function writeTripEvent(tripId, kind, payload = {}) {
   if (error) console.error('[trip_events]', kind, error.message)
 }
 
-const ACTIVE_STATUSES = ['accepted', 'arriving', 'in_progress']
+const ACTIVE_STATUSES = ['accepted', 'arriving', 'arrived', 'in_progress']
 
 export function DriverHome() {
   const { user, loading } = useAuth()
@@ -42,6 +51,10 @@ function DriverShell({ driverId }) {
   const [earningsCents, setEarningsCents] = useState(0)
   const [recentCompleted, setRecentCompleted] = useState([])
   const [advancing, setAdvancing] = useState(false)
+  const [cancelNotice, setCancelNotice] = useState(null)
+  const [driverDraft, setDriverDraft] = useState('')
+  const [driverNotes, setDriverNotes] = useState([])
+  const activeIdRef = useRef(null)
   const [selfPos, setSelfPos] = useState(null)
   const [showSurge, setShowSurge] = useState(true)
   const [heatWindow, setHeatWindow] = useState('now')
@@ -53,10 +66,10 @@ function DriverShell({ driverId }) {
     if (!supabase || !driverId) return
     const { data, error } = await supabase
       .from('trips')
-      .select('id, fare_cents, dropoff_label, completed_at')
+      .select('id, fare_cents, dropoff_label, completed_at, canceled_at, status, metadata, requested_at')
       .eq('driver_id', driverId)
-      .eq('status', 'completed')
-      .order('completed_at', { ascending: false })
+      .in('status', ['completed', 'canceled_midride'])
+      .order('requested_at', { ascending: false })
       .limit(20)
     if (error) {
       console.error('[earnings]', error.message)
@@ -64,7 +77,7 @@ function DriverShell({ driverId }) {
     }
     const rows = data || []
     setRecentCompleted(rows)
-    setEarningsCents(rows.reduce((sum, t) => sum + (Number(t.fare_cents) || 0), 0))
+    setEarningsCents(rows.reduce((sum, t) => sum + driverEarningCents(t), 0))
   }, [driverId])
 
   useEffect(() => {
@@ -131,6 +144,10 @@ function DriverShell({ driverId }) {
 
   // Poll/load active trips for this driver so E2E accepted trips appear without re-offer.
   useEffect(() => {
+    activeIdRef.current = activeTrip?.id || null
+  }, [activeTrip?.id])
+
+  useEffect(() => {
     if (!supabase || !driverId) return undefined
     let alive = true
     async function loadActive() {
@@ -146,7 +163,18 @@ function DriverShell({ driverId }) {
       if (row) {
         setActiveTrip(row)
         setOffer((prev) => (prev?.id === row.id ? null : prev))
+        return
       }
+      const previousId = activeIdRef.current
+      if (!previousId) return
+      const { data: ended } = await supabase
+        .from('trips')
+        .select('*')
+        .eq('id', previousId)
+        .maybeSingle()
+      if (!alive) return
+      setActiveTrip(null)
+      if (isMidrideStatus(ended?.status)) setCancelNotice(ended)
     }
     loadActive()
     const timer = setInterval(loadActive, 8000)
@@ -180,11 +208,17 @@ function DriverShell({ driverId }) {
         setActiveTrip(null)
         loadEarnings()
       }
-      if (row.status === 'canceled' && offer?.id === row.id) {
+      if ((row.status === 'canceled' || row.status === 'cancelled_wait') && offer?.id === row.id) {
         setOffer(null)
       }
-      if (row.status === 'canceled' && activeTrip?.id === row.id) {
+      if ((row.status === 'canceled' || row.status === 'cancelled_wait') && activeTrip?.id === row.id) {
         setActiveTrip(null)
+      }
+      if (isMidrideStatus(row.status) && (row.driver_id === driverId || activeTrip?.id === row.id || offer?.id === row.id)) {
+        setActiveTrip(null)
+        setOffer((prev) => (prev?.id === row.id ? null : prev))
+        setCancelNotice(row)
+        loadEarnings()
       }
     })
   }, [offer?.id, activeTrip?.id, driverId, loadEarnings])
@@ -260,10 +294,11 @@ function DriverShell({ driverId }) {
     }
   }
 
-  const showIdle = !offer && !activeTrip
+  const showIdle = !offer && !activeTrip && !cancelNotice
   const statusLabel = {
     accepted: 'Accepted — head to pickup',
     arriving: 'Arriving at pickup',
+    arrived: 'Arrived at pickup',
     in_progress: 'Trip in progress',
   }
 
@@ -513,9 +548,9 @@ function DriverShell({ driverId }) {
                   }}
                 >
                   <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '70%' }}>
-                    {t.dropoff_label || 'Trip'}
+                    {isMidrideStatus(t.status) ? 'Mid-ride cancel' : (t.dropoff_label || 'Trip')}
                   </span>
-                  <strong style={{ color: 'var(--ink)' }}>{centsToDollars(t.fare_cents)}</strong>
+                  <strong style={{ color: 'var(--ink)' }}>{centsToDollars(driverEarningCents(t))}</strong>
                 </div>
               ))}
             </div>
@@ -523,7 +558,7 @@ function DriverShell({ driverId }) {
         </div>
       )}
 
-      {offer && !activeTrip && (
+      {offer && !activeTrip && !cancelNotice && (
         <div
           className="sheet glass-panel--elevated"
           style={{
@@ -590,7 +625,7 @@ function DriverShell({ driverId }) {
               {centsToDollars(activeTrip.fare_cents)}
             </div>
             <div style={{ fontSize: 13, color: 'var(--purple)', fontWeight: 700 }}>
-              {statusLabel[activeTrip.status] || activeTrip.status}
+              {statusLabel[activeTrip.status] || tripStatusLabel(activeTrip.status)}
             </div>
           </div>
           <div style={{ marginTop: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -615,7 +650,7 @@ function DriverShell({ driverId }) {
               {advancing ? 'Updating…' : 'Arriving'}
             </PurpleAcceptButton>
           )}
-          {activeTrip.status === 'arriving' && (
+          {(activeTrip.status === 'arriving' || activeTrip.status === 'arrived') && (
             <PurpleAcceptButton onClick={() => advanceTrip('in_progress')} disabled={advancing}>
               {advancing ? 'Updating…' : 'Start trip'}
             </PurpleAcceptButton>
@@ -635,7 +670,77 @@ function DriverShell({ driverId }) {
               View rider profile
             </button>
           )}
+          <form
+            data-composer-frozen="0"
+            onSubmit={(e) => {
+              e.preventDefault()
+              const text = driverDraft.trim()
+              if (!text) return
+              setDriverNotes((prev) => [...prev, text])
+              setDriverDraft('')
+            }}
+            style={{ marginTop: 8 }}
+          >
+            <label htmlFor="driver-composer" style={{ fontSize: 12, fontWeight: 700, color: 'var(--purple)' }}>
+              Message rider
+            </label>
+            {driverNotes.map((note, i) => (
+              <div key={`${i}-${note}`} style={{ fontSize: 13, marginTop: 6, color: 'var(--ink-secondary)' }}>{note}</div>
+            ))}
+            <textarea
+              id="driver-composer"
+              value={driverDraft}
+              onChange={(e) => setDriverDraft(e.target.value)}
+              rows={2}
+              placeholder="Message stays with this trip"
+              style={{ width: '100%', marginTop: 6, borderRadius: 12, padding: 10, border: '1px solid rgba(82,45,128,0.2)', resize: 'none' }}
+            />
+          </form>
 
+        </div>
+      )}
+
+      {cancelNotice && (
+        <div
+          className="sheet glass-panel--elevated"
+          data-tracking-frozen="1"
+          data-composer-frozen="1"
+          data-queue-held="1"
+          style={{
+            position: 'absolute',
+            left: 0,
+            right: 0,
+            bottom: 0,
+            zIndex: 32,
+            padding: '12px 20px calc(24px + var(--safe-bottom))',
+            borderTop: '1px solid rgba(255,255,255,0.65)',
+            background: 'linear-gradient(180deg, rgba(245,102,0,0.18), rgba(82,45,128,0.12) 40%, rgba(255,255,255,0.94))',
+          }}
+        >
+          <div className="sheet-handle" />
+          <div style={{ fontSize: 13, letterSpacing: 1.2, fontWeight: 800, color: 'var(--orange)' }}>
+            CANCELED MID-RIDE
+          </div>
+          <h2 style={{ fontSize: 22, fontWeight: 800, color: 'var(--purple)', margin: '6px 0' }}>
+            Rider canceled during the trip
+          </h2>
+          <p style={{ color: 'var(--ink-secondary)', fontSize: 14, lineHeight: 1.45 }}>
+            The trip is closed, location sharing stopped, and this request left your queue.
+            {cancelNotice.metadata?.midride_cancel?.driverCents != null
+              ? ` You keep ${centsToDollars(cancelNotice.metadata.midride_cancel.driverCents)} (80% of the charge).`
+              : ' Your share is recorded on the trip.'}
+          </p>
+          <textarea
+            disabled
+            rows={2}
+            value=""
+            placeholder="Chat closed — trip canceled"
+            aria-label="Message rider"
+            style={{ width: '100%', marginTop: 10, borderRadius: 12, padding: 10, resize: 'none', background: 'rgba(11,18,32,0.04)' }}
+          />
+          <PurpleAcceptButton onClick={() => setCancelNotice(null)}>
+            Back to requests
+          </PurpleAcceptButton>
         </div>
       )}
     </div>

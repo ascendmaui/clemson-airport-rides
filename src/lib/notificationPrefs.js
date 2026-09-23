@@ -19,6 +19,8 @@ export const DEFAULT_NOTIFICATION_PREFS = {
   friends: true,
   promotions: false,
   system: true,
+  /** Mutes the tone for new ride requests only. Mid-ride cancel tones ignore this. */
+  dndNewRequestTones: false,
 }
 
 const LS_KEY = (userId) => `clemson.notification_prefs.${userId || 'anon'}`
@@ -49,6 +51,7 @@ export function normalizePrefs(raw) {
     friends: raw.friends !== false,
     promotions: Boolean(raw.promotions),
     system: raw.system !== false,
+    dndNewRequestTones: Boolean(raw.dndNewRequestTones),
   }
 }
 
@@ -120,6 +123,7 @@ export async function saveNotificationPrefs(userId, next) {
 /** Category for a toast kind — used to gate pushToast */
 export function categoryForToastKind(kind) {
   const k = String(kind || '')
+  if (k === 'canceled_midride') return 'ride'
   if (/^ride_|^trip_|^driver_|^arrived|^en_route/.test(k)) return 'ride'
   if (/^pay|^fare|^billing|^receipt/.test(k)) return 'billing'
   if (/^friend|^carpool|^location_shared/.test(k)) return 'friends'
