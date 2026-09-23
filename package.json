@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "test": "node --test scripts/carpoolEngine.test.mjs",
+    "test": "node --test scripts/carpoolEngine.test.mjs tests/driverOnboarding.test.js tests/apiRoutes.test.js",
     "preview": "vite preview"
   },
   "dependencies": {

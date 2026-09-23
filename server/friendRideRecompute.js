@@ -1,6 +1,6 @@
 /**
  * Shared route + fare recompute for friend rides.
- * Used by /api/friend-rides-recompute and auto-run before confirm-charges.
+ * Used by /api/friend-rides?action=recompute and auto-run before confirm-charges.
  */
 import {
   loadRideByToken, buildWaypointList, computeRoutes, computeFriendFareCents, splitFares,

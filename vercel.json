@@ -5,6 +5,74 @@
       "destination": "/api/stripe-webhook"
     },
     {
+      "source": "/api/carpool-match",
+      "destination": "/api/carpool?action=match"
+    },
+    {
+      "source": "/api/carpool-group",
+      "destination": "/api/carpool?action=group"
+    },
+    {
+      "source": "/api/carpool-program",
+      "destination": "/api/carpool?action=program"
+    },
+    {
+      "source": "/api/carpool/:action",
+      "destination": "/api/carpool?action=:action"
+    },
+    {
+      "source": "/api/friend-rides-create",
+      "destination": "/api/friend-rides?action=create"
+    },
+    {
+      "source": "/api/friend-rides-get",
+      "destination": "/api/friend-rides?action=get"
+    },
+    {
+      "source": "/api/friend-rides-join",
+      "destination": "/api/friend-rides?action=join"
+    },
+    {
+      "source": "/api/friend-rides-recompute",
+      "destination": "/api/friend-rides?action=recompute"
+    },
+    {
+      "source": "/api/friend-rides-confirm-charges",
+      "destination": "/api/friend-rides?action=confirm-charges"
+    },
+    {
+      "source": "/api/friend-rides-retry-charge",
+      "destination": "/api/friend-rides?action=retry-charge"
+    },
+    {
+      "source": "/api/friend-rides/:action",
+      "destination": "/api/friend-rides?action=:action"
+    },
+    {
+      "source": "/api/driver-signup",
+      "destination": "/api/driver?action=signup"
+    },
+    {
+      "source": "/api/driver-submit-review",
+      "destination": "/api/driver?action=submit-review"
+    },
+    {
+      "source": "/api/driver/:action",
+      "destination": "/api/driver?action=:action"
+    },
+    {
+      "source": "/api/stripe-setup-intent",
+      "destination": "/api/stripe-payment-methods?action=setup-intent"
+    },
+    {
+      "source": "/api/stripe-save-payment-method",
+      "destination": "/api/stripe-payment-methods?action=save"
+    },
+    {
+      "source": "/api/stripe-payment-methods/:action",
+      "destination": "/api/stripe-payment-methods?action=:action"
+    },
+    {
       "source": "/api/(.*)",
       "destination": "/api/$1"
     },

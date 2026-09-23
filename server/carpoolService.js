@@ -1,6 +1,6 @@
 /**
  * Marketplace carpool queue on top of friend_rides.
- * Student-driver offers still go through /api/friend-rides-create.
+ * Student-driver offers still go through /api/friend-rides?action=create.
  */
 import { randomToken } from './friendRideLib.js'
 import { recomputeRideFares } from './friendRideRecompute.js'

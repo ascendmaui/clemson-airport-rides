@@ -1,11 +1,17 @@
 /**
- * POST /api/stripe-setup-intent
- * Auth required. Creates/ensures Stripe Customer + SetupIntent (off_session usage).
- * Client confirms with Payment Element / Apple Pay; then call /api/stripe-save-payment-method.
+ * Saved-card handlers served by /api/stripe-payment-methods.
+ * Response bodies match the previous standalone routes.
  */
 import {
-  admin, cors, json, parseBody, userFromAuth, stripeClient, stripeOk, ensureStripeCustomer,
-} from '../server/friendRideLib.js'
+  admin,
+  cors,
+  json,
+  parseBody,
+  userFromAuth,
+  stripeClient,
+  stripeOk,
+  ensureStripeCustomer,
+} from './friendRideLib.js'
 
 async function loadProfile(sb, userId) {
   const rich = await sb
@@ -26,7 +32,7 @@ async function loadProfile(sb, userId) {
   throw new Error(rich.error.message)
 }
 
-export default async function handler(req, res) {
+export async function handleStripeSetupIntent(req, res) {
   if (cors(req, res)) return
   if (req.method !== 'POST') return json(res, 405, { error: 'Method not allowed' })
   if (!stripeOk()) {
@@ -105,6 +111,100 @@ export default async function handler(req, res) {
     })
   } catch (e) {
     console.error('[stripe-setup-intent]', e)
+    return json(res, 500, { error: e.message || 'Server error' })
+  }
+}
+
+export async function handleStripeSavePaymentMethod(req, res) {
+  if (cors(req, res)) return
+  if (req.method !== 'POST') return json(res, 405, { error: 'Method not allowed' })
+  if (!stripeOk()) return json(res, 503, { error: 'Payments unavailable' })
+
+  const sb = admin()
+  if (!sb) return json(res, 503, { error: 'SUPABASE_SERVICE_ROLE_KEY not configured' })
+
+  const user = await userFromAuth(req)
+  if (!user) return json(res, 401, { error: 'Sign in required' })
+
+  const { body, error: pe } = parseBody(req)
+  if (pe) return json(res, 400, { error: pe })
+
+  const paymentMethodId = body.paymentMethodId || body.payment_method
+  const setupIntentId = body.setupIntentId || body.setup_intent
+  if (!paymentMethodId && !setupIntentId) {
+    return json(res, 400, { error: 'paymentMethodId or setupIntentId required' })
+  }
+
+  const stripe = stripeClient()
+
+  try {
+    let pmId = paymentMethodId
+    if (!pmId && setupIntentId) {
+      const si = await stripe.setupIntents.retrieve(setupIntentId)
+      if (si.status !== 'succeeded') {
+        return json(res, 400, { error: `SetupIntent status ${si.status}` })
+      }
+      pmId = typeof si.payment_method === 'string' ? si.payment_method : si.payment_method?.id
+    }
+    if (!pmId) return json(res, 400, { error: 'No payment method on SetupIntent' })
+
+    const pm = await stripe.paymentMethods.retrieve(pmId)
+    const brand = pm.card?.brand || pm.type || null
+    const last4 = pm.card?.last4 || null
+
+    const { data: profile } = await sb
+      .from('profiles')
+      .select('id, stripe_customer_id')
+      .eq('id', user.id)
+      .single()
+
+    if (profile?.stripe_customer_id) {
+      await stripe.customers.update(profile.stripe_customer_id, {
+        invoice_settings: { default_payment_method: pmId },
+      })
+    }
+
+    const now = new Date().toISOString()
+    const basePatch = {
+      stripe_default_pm_id: pmId,
+      updated_at: now,
+    }
+
+    let { error } = await sb
+      .from('profiles')
+      .update({
+        ...basePatch,
+        billing_activated_at: now,
+        stripe_card_brand: brand,
+        stripe_card_last4: last4,
+      })
+      .eq('id', user.id)
+
+    if (error && /column|schema cache|billing_activated|stripe_card_/i.test(error.message || '')) {
+      const retry = await sb
+        .from('profiles')
+        .update(basePatch)
+        .eq('id', user.id)
+      error = retry.error
+      if (!error) {
+        await sb
+          .from('profiles')
+          .update({ billing_activated_at: now, updated_at: now })
+          .eq('id', user.id)
+      }
+    }
+    if (error) return json(res, 500, { error: error.message })
+
+    return json(res, 200, {
+      ok: true,
+      paymentMethodId: pmId,
+      brand,
+      last4,
+      cardBrand: brand,
+      cardLast4: last4,
+      billingActivatedAt: now,
+    })
+  } catch (e) {
     return json(res, 500, { error: e.message || 'Server error' })
   }
 }
