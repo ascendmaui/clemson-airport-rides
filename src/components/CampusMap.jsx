@@ -276,7 +276,7 @@ export function CampusMap({
         onLoad={onLoad}
         mapTypeId={resolvedMapType}
         options={{
-          disableDefaultUI: !interactive,
+          disableDefaultUI: true,
           zoomControl: interactive,
           gestureHandling: interactive || dragPin ? 'greedy' : 'none',
           styles: useClemsonStyles ? CLEMSON_MAP_STYLES : null,
@@ -316,53 +316,63 @@ export function CampusMap({
         )}
       </GoogleMap>
       {showMapTypeControl ? (
-        <label
+        <div
+          data-map-type-control="dropdown"
           style={{
             position: 'absolute',
-            top: 10,
-            right: 10,
-            zIndex: 5,
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: 0,
-            margin: 0,
-            pointerEvents: 'auto',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            zIndex: 1000,
+            pointerEvents: 'none',
           }}
         >
-          <span className="sr-only" style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0 0 0 0)' }}>
-            Map type
-          </span>
-          <select
-            aria-label="Map type"
-            value={resolvedMapType}
-            onChange={(e) => setMapType(e.target.value)}
+          <label
             style={{
-              appearance: 'none',
-              WebkitAppearance: 'none',
-              MozAppearance: 'none',
-              fontSize: 12,
-              fontWeight: 700,
-              letterSpacing: 0.2,
-              padding: '8px 28px 8px 12px',
-              borderRadius: 999,
-              border: '1px solid rgba(255,255,255,0.65)',
-              background:
-                'rgba(255,255,255,0.88) url("data:image/svg+xml;charset=UTF-8,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 width=%2712%27 height=%2712%27 viewBox=%270 0 12 12%27%3E%3Cpath fill=%27%23522D80%27 d=%27M3 4.5L6 8l3-3.5%27/%3E%3C/svg%3E") no-repeat right 10px center',
-              color: 'var(--purple, #522D80)',
-              boxShadow: '0 4px 14px rgba(11,18,32,0.18)',
-              backdropFilter: 'blur(12px) saturate(1.3)',
-              WebkitBackdropFilter: 'blur(12px) saturate(1.3)',
-              cursor: 'pointer',
-              maxWidth: 140,
+              position: 'absolute',
+              top: 10,
+              right: 10,
+              display: 'inline-flex',
+              alignItems: 'center',
+              margin: 0,
+              pointerEvents: 'auto',
             }}
           >
-            {MAP_TYPES.map((mt) => (
-              <option key={mt.id} value={mt.id}>
-                {mt.label}
-              </option>
-            ))}
-          </select>
-        </label>
+            <span className="sr-only" style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0 0 0 0)' }}>
+              Map type
+            </span>
+            <select
+              aria-label="Map type"
+              value={resolvedMapType}
+              onChange={(e) => setMapType(e.target.value)}
+              style={{
+                appearance: 'none',
+                WebkitAppearance: 'none',
+                MozAppearance: 'none',
+                fontSize: 12,
+                fontWeight: 700,
+                letterSpacing: 0.2,
+                padding: '7px 30px 7px 10px',
+                borderRadius: 10,
+                border: '1px solid rgba(82,45,128,0.35)',
+                background:
+                  '#fff url("data:image/svg+xml;charset=UTF-8,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 width=%2712%27 height=%2712%27 viewBox=%270 0 12 12%27%3E%3Cpath fill=%27%23522D80%27 d=%27M3 4.5L6 8l3-3.5%27/%3E%3C/svg%3E") no-repeat right 10px center',
+                color: '#522D80',
+                boxShadow: '0 2px 10px rgba(11,18,32,0.22)',
+                cursor: 'pointer',
+                minWidth: 108,
+                maxWidth: 148,
+              }}
+            >
+              {MAP_TYPES.map((mt) => (
+                <option key={mt.id} value={mt.id}>
+                  {mt.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
       ) : null}
     </div>
   )
