@@ -1,5 +1,5 @@
 import { useAuth } from '../lib/auth'
-import { navigate } from '../lib/navigation'
+import { getHashRoute, navigate } from '../lib/navigation'
 
 export function RequireAuth({ children }) {
   const { session, loading, configured } = useAuth()
@@ -23,11 +23,23 @@ export function RequireAuth({ children }) {
     )
   }
 
+  function goSignIn() {
+    const { path, params } = getHashRoute()
+    if (path === 'account') {
+      navigate('sign-in', {
+        next: 'account',
+        ...(params.tab ? { tab: params.tab } : {}),
+      })
+      return
+    }
+    navigate('sign-in')
+  }
+
   if (!session) {
     if (typeof window !== 'undefined') {
       const hash = window.location.hash || ''
       if (!hash.includes('sign-in') && !hash.includes('sign-up')) {
-        queueMicrotask(() => navigate('sign-in'))
+        queueMicrotask(goSignIn)
       }
     }
     return (
@@ -36,7 +48,7 @@ export function RequireAuth({ children }) {
         <button
           type="button"
           className="pressable primary-cta"
-          onClick={() => navigate('sign-in')}
+          onClick={goSignIn}
           style={{
             padding: '14px 22px',
             borderRadius: 14,

@@ -1,5 +1,15 @@
 import { getStripeConfig } from './stripeCheckout'
 
+export const PAYMENT_ELEMENT_APPEARANCE = {
+  theme: 'stripe',
+  variables: {
+    colorPrimary: '#F56600',
+    colorText: '#0B1220',
+    borderRadius: '12px',
+    fontFamily: 'Inter, system-ui, sans-serif',
+  },
+}
+
 let stripePromise = null
 
 export async function loadStripeJs() {

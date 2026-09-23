@@ -7,7 +7,7 @@ import {
   IconSettings, IconSignOut, IconStudent, IconShare,
 } from '../components/icons'
 import { useAuth } from '../lib/auth'
-import { navigate } from '../lib/navigation'
+import { getHashRoute, navigate } from '../lib/navigation'
 import { fetchProfile, updateMyProfile, findPendingRatingTrip } from '../lib/ratings'
 import {
   CAMPUS_SPOTS, RIDE_STYLES, PRIVACY_OPTIONS, GALLERY_KINDS,
@@ -55,12 +55,20 @@ const NAV = [
   { id: 'help', label: 'Help', Icon: IconHelp },
 ]
 
+const ACCOUNT_TABS = new Set(NAV.map((n) => n.id))
+
+function tabFromHash() {
+  const { path, params } = getHashRoute()
+  if (path === 'account' && ACCOUNT_TABS.has(params.tab)) return params.tab
+  return 'profile'
+}
+
 export function AccountScreen() {
   const { user, configured, signOut } = useAuth()
   const { setPrefsCache } = useToasts()
   const fileRef = useRef(null)
   const galleryRef = useRef(null)
-  const [tab, setTab] = useState('profile')
+  const [tab, setTab] = useState(tabFromHash)
   const [profile, setProfile] = useState(null)
   const [fullName, setFullName] = useState('')
   const [bio, setBio] = useState('')
@@ -98,6 +106,20 @@ export function AccountScreen() {
     setPrivacy(p?.profile_privacy || 'matched')
     setGallery(p?.gallery || [])
     fetchMyDriverApplication(user.id).then(setApplication).catch(() => setApplication(null))
+  }
+
+  useEffect(() => {
+    const sync = () => setTab(tabFromHash())
+    window.addEventListener('hashchange', sync)
+    return () => window.removeEventListener('hashchange', sync)
+  }, [])
+
+  function selectTab(id) {
+    if (!ACCOUNT_TABS.has(id)) return
+    setTab(id)
+    const { path, params } = getHashRoute()
+    if (path === 'account' && params.tab === id) return
+    navigate('account', { tab: id })
   }
 
   useEffect(() => {
@@ -240,7 +262,7 @@ export function AccountScreen() {
                 role="tab"
                 aria-selected={on}
                 className={`account-nav-item pressable${on ? ' active' : ''}`}
-                onClick={() => setTab(n.id)}
+                onClick={() => selectTab(n.id)}
               >
                 <Icon size={18} color={on ? '#F56600' : '#522D80'} />
                 <span>{n.label}</span>
@@ -467,6 +489,11 @@ export function AccountScreen() {
                 No registered vehicle yet. Sign up as a driver to add make, model, color, plate, and capacity.
               </div>
             )}
+            <button type="button" className="pressable" onClick={() => selectTab('billing')}
+              style={{ display: 'block', width: '100%', marginTop: 12, padding: 12, borderRadius: 14, fontWeight: 700,
+                color: 'var(--purple)', border: '1.5px solid rgba(82,45,128,0.3)', background: 'rgba(255,255,255,0.55)' }}>
+              Payment method
+            </button>
             <button type="button" className="pressable" onClick={() => navigate('driver-onboarding')}
               style={{ display: 'block', width: '100%', marginTop: 12, padding: 12, borderRadius: 14, fontWeight: 700,
                 color: '#fff', background: 'linear-gradient(135deg, var(--orange), #ff7a1a)' }}>

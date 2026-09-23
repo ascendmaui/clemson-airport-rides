@@ -162,6 +162,17 @@ export async function savePaymentMethod({ paymentMethodId, setupIntentId }) {
   })
 }
 
+export async function listPaymentMethods() {
+  return api('/api/stripe-payment-methods', { method: 'GET' })
+}
+
+export async function updatePaymentMethod({ action, paymentMethodId }) {
+  return api('/api/stripe-payment-methods', {
+    method: 'POST',
+    body: { action, paymentMethodId },
+  })
+}
+
 /** Decode Google encoded polyline → [[lat,lng], ...] for CampusMap.route */
 export function decodePolyline(encoded) {
   if (!encoded) return null
