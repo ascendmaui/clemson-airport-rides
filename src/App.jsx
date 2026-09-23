@@ -26,8 +26,9 @@ import { AmbassadorScreen } from './screens/AmbassadorScreen'
 import { ToastProvider, ToastStack } from './lib/toasts'
 import { RideToastWatcher } from './components/RideToastWatcher'
 import { DriverBillingEntry } from './components/DriverBillingEntry'
+import { IncentivesAdmin } from './screens/IncentivesAdmin'
 
-const PROTECTED = new Set(['driver', 'driver-onboarding', 'account', 'driver-signup', 'admin'])
+const PROTECTED = new Set(['driver', 'driver-onboarding', 'account', 'driver-signup', 'admin', 'incentives'])
 
 function Screen({ path, params }) {
   switch (path) {
@@ -113,6 +114,12 @@ function Screen({ path, params }) {
       return (
         <RequireAuth>
           <AccountScreen />
+        </RequireAuth>
+      )
+    case 'incentives':
+      return (
+        <RequireAuth>
+          <IncentivesAdmin />
         </RequireAuth>
       )
     default:

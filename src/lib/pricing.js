@@ -20,7 +20,9 @@ export function applyStudentDiscount(fareCents, { isStudent = false, tier = 'sta
 }
 
 /**
- * Game-day surge from public.game_day_events (active overlapping now).
+ * Rider surge from public.game_day_events.surge_multiplier (active overlapping now).
+ * Driver incentives use driver_incentives and never read this multiplier.
+ * A 1.5 rider surge and a 1.5 driver incentive can both be on and do not stack into each other.
  */
 export async function getGameDayMultiplier(at = new Date()) {
   if (!supabase) return { multiplier: 1, event: null }
