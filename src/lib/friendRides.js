@@ -179,7 +179,7 @@ export function inferVehicleCategory(vehicle) {
 
 /**
  * Max participants (including organizer) from registered vehicle.
- * Prefer vehicles.seats when set; else sedan≤4, van≤5, SUV≤6.
+ * Prefer vehicles.seats when set; else sedan≤4, van≤5, SUV≤7.
  */
 export function vehicleMaxSeats(vehicle) {
   if (!vehicle) return DEFAULT_MAX_PARTICIPANTS
@@ -187,7 +187,7 @@ export function vehicleMaxSeats(vehicle) {
   if (Number.isFinite(seats) && seats > 0) return Math.max(1, Math.min(8, Math.floor(seats)))
   const cat = inferVehicleCategory(vehicle)
   if (cat === 'van') return 5
-  if (cat === 'suv') return 6
+  if (cat === 'suv') return 7
   return 4
 }
 
