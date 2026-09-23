@@ -105,7 +105,17 @@ export function PickDriver({ dest = 'GSP Airport' }) {
             >
               <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
                 <div>
-                  <div style={{ fontWeight: 700, fontSize: 16 }}>{d.name}</div>
+                  <div style={{ fontWeight: 700, fontSize: 16 }}>
+                    {d.name}
+                    {d.ratingCount > 0 && (
+                      <span style={{ marginLeft: 8, fontSize: 12, color: 'var(--purple)' }}>
+                        ★ {Number(d.ratingAvg).toFixed(1)}
+                      </span>
+                    )}
+                  </div>
+                  {d.standing === 'watch' && (
+                    <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--orange)', marginTop: 2 }}>Low rating</div>
+                  )}
                   <div style={{ fontSize: 13, color: 'var(--ink-secondary)', marginTop: 4 }}>
                     {d.vehicleLabel}{d.plate ? ` · ${d.plate}` : ''}
                   </div>

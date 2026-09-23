@@ -3,13 +3,16 @@
  * Used by /api/friend-rides?action=recompute and auto-run before confirm-charges.
  */
 import {
-  loadRideByToken, buildWaypointList, computeRoutes, computeFriendFareCents, splitFares,
+  loadRideByToken, buildWaypointList, computeRoutes, splitFares,
 } from './friendRideLib.js'
 import {
   loadDriverVehicle, vehicleMaxSeats, vehicleFareMultiplier,
 } from './friendRideCapacity.js'
 import { quoteCarpool, carpoolSeatCap } from '../src/lib/carpoolEngine.js'
 import { eligibleFirstRideIds, gameDayActive } from './carpoolSettle.js'
+import { loadGameDayMultiplier } from './creditLots.js'
+import { quoteFare, resolveSurge, percentOffCents, STUDENT_DISCOUNT_BPS } from '../src/lib/fareRates.js'
+import { isClemsonEmail } from '../src/lib/studentDomain.js'
 
 function preserveRideMeta(ride, breakdown) {
   const prev = ride?.fare_breakdown || {}
@@ -88,17 +91,18 @@ export async function recomputeRideFares(sb, token, { splitMode } = {}) {
     fares = participants.map((p) => byId.get(p.id) ?? 0)
   } else {
     const vehMul = vehicleFareMultiplier(vehicle, participants.length)
-    // Apply vehicle/party multiplier here so fares are correct even if
-    // computeFriendFareCents ignores vehicleMultiplier (pre-lib-patch tip).
-    const baseFare = computeFriendFareCents(route.distanceM, route.durationS)
-    totalFare = Math.round((baseFare.fareCents || 0) * (Number(vehMul) || 1))
-    fareResult = {
-      fareCents: totalFare,
-      breakdown: preserveRideMeta(ride, {
-        ...(baseFare.breakdown || {}),
-        vehicle_multiplier: Number(vehMul) || 1,
-      }),
-    }
+    const when = new Date()
+    const airport = rideTouchesAirport(participants)
+    const game = await loadGameDayMultiplier(sb, when)
+    const surge = resolveSurge({ at: when, airport, gameDayMultiplier: game.multiplier })
+    const baseFare = quoteFare({
+      distanceM: route.distanceM,
+      durationS: route.durationS,
+      surgeMultiplier: surge.multiplier,
+      vehicleMultiplier: vehMul,
+      isCarpool: participants.length >= 2,
+    })
+    const groupFare = baseFare.fareBeforeCreditsCents
     const weights =
       ride.split_mode === 'by_distance' && route.legs?.length
         ? participants.map((_, i) => {
@@ -106,7 +110,29 @@ export async function recomputeRideFares(sb, token, { splitMode } = {}) {
             return leg?.distanceM || 1
           })
         : null
-    fares = splitFares(totalFare, participants, ride.split_mode, weights)
+    const shares = splitFares(groupFare, participants, ride.split_mode, weights)
+    const studentFlags = await studentFlagsFor(sb, participants)
+    let studentDiscountCents = 0
+    fares = shares.map((share, i) => {
+      if (!studentFlags[i]) return share
+      const off = percentOffCents(share, STUDENT_DISCOUNT_BPS)
+      studentDiscountCents += off.discountCents
+      return off.amountCents
+    })
+    totalFare = fares.reduce((sum, n) => sum + n, 0)
+    fareResult = {
+      fareCents: totalFare,
+      breakdown: preserveRideMeta(ride, {
+        ...(baseFare.breakdown || {}),
+        vehicle_multiplier: Number(vehMul) || 1,
+        surge_multiplier: surge.multiplier,
+        surge_rule: surge.rule?.id || null,
+        surge_label: surge.rule?.label || null,
+        student_discount_cents: studentDiscountCents,
+        student_discount_bps: studentDiscountCents ? STUDENT_DISCOUNT_BPS : 0,
+        rider_pays_cents: totalFare,
+      }),
+    }
   }
 
   const stopMeta = [
@@ -178,6 +204,27 @@ export async function recomputeRideFares(sb, token, { splitMode } = {}) {
     vehicleLabel,
     fareHeuristic: isCarpool
       ? 'Carpool: each rider pays a fraction of their solo surge price (35% when 4). Driver nets 80% and at least a solo trip plus driver_carpool_bonus. Platform 20%.'
-      : 'base $2.50 + $1.75/mi + $0.35/min × vehicle/party, min $8 (Clemson MVP)',
+      : 'UberX GSP card: base + booking + per mile/minute, min fare, surge, carpool 15% on the group, student 10% per verified share.',
   }
+}
+
+function rideTouchesAirport(participants) {
+  const blob = JSON.stringify(participants.map((p) => ({ pickup: p.pickup, dropoff: p.dropoff }))).toLowerCase()
+  return /airport|\bgsp\b|\bclt\b|greenville-spartanburg|charlotte douglas/.test(blob)
+}
+
+async function studentFlagsFor(sb, participants) {
+  const ids = participants.map((p) => p.user_id).filter(Boolean)
+  const byId = {}
+  if (ids.length) {
+    const { data } = await sb
+      .from('profiles')
+      .select('id, email, student_verified_at')
+      .in('id', ids)
+    for (const row of data || []) byId[row.id] = row
+  }
+  return participants.map((p) => {
+    const prof = p.user_id ? byId[p.user_id] : null
+    return Boolean(prof?.student_verified_at) || isClemsonEmail(prof?.email || p.email)
+  })
 }

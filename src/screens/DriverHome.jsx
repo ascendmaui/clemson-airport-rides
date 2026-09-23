@@ -17,6 +17,10 @@ import { SosControl } from '../components/SosControl'
 import { applyTripDriverIncentives, fetchDriverIncentiveExtras } from '../lib/driverIncentives'
 import { isIncentiveAdmin } from '../lib/driverIncentiveMath'
 import { fetchFullProfile } from '../lib/profiles'
+import { useTripWait } from '../lib/useTripWait'
+import { WaitFeeCard } from '../components/WaitFeeCard'
+import { settleTrip } from '../lib/payments'
+import { PaymentFailedSheet } from '../components/PaymentFailedSheet'
 import { formatPickupAt, isDueNow } from '../lib/scheduledRideModel'
 import {
   acceptScheduledTrip,
@@ -42,7 +46,7 @@ async function writeTripEvent(tripId, kind, payload = {}) {
   if (error) console.error('[trip_events]', kind, error.message)
 }
 
-const ACTIVE_STATUSES = ['accepted', 'arriving', 'in_progress']
+const ACTIVE_STATUSES = ['accepted', 'arriving', 'arrived', 'in_progress']
 
 export function DriverHome() {
   const { user, loading } = useAuth()
@@ -59,6 +63,10 @@ function DriverShell({ driverId }) {
   const [priority, setPriority] = useState(false)
   const [offer, setOffer] = useState(null)
   const [activeTrip, setActiveTrip] = useState(null)
+  const [payFailure, setPayFailure] = useState(null)
+  const wait = useTripWait(activeTrip, (next) => {
+    setActiveTrip((prev) => (prev && next && prev.id === next.id ? { ...prev, ...next } : prev))
+  })
   const [online, setOnline] = useState(false)
   const [earningsCents, setEarningsCents] = useState(0)
   const [incentiveExtraCents, setIncentiveExtraCents] = useState(0)
@@ -333,7 +341,7 @@ function DriverShell({ driverId }) {
       if (row.status === 'canceled' && offer?.id === row.id) {
         setOffer(null)
       }
-      if (row.status === 'canceled' && activeTrip?.id === row.id) {
+      if ((row.status === 'canceled' || row.status === 'cancelled_wait') && activeTrip?.id === row.id) {
         setActiveTrip(null)
       }
     })
@@ -435,6 +443,16 @@ function DriverShell({ driverId }) {
       setAdvanceError(null)
       const patch = { status: nextStatus }
       if (nextStatus === 'completed') {
+        try {
+          await settleTrip({ tripId: activeTrip.id, action: 'complete' })
+        } catch (err) {
+          setPayFailure(err.failure || err.payload?.failure || {
+            message: err.message || 'Payment required before this trip can complete',
+            alternatives: ['retry', 'add_card', 'use_credits'],
+          })
+          setAdvanceError(err.message || 'Payment required before this trip can complete')
+          return
+        }
         patch.completed_at = new Date().toISOString()
       }
       const { data: saved, error } = await supabase
@@ -584,7 +602,9 @@ function DriverShell({ driverId }) {
           }}
           title="Completed trip earnings"
         >
-          {centsToDollars(earningsCents)}
+          <button type="button" className="pressable" onClick={() => navigate('earnings')} style={{ font: 'inherit', fontWeight: 700 }}>
+            {centsToDollars(earningsCents)}
+          </button>
         </div>
         <div
           style={{
@@ -927,7 +947,19 @@ function DriverShell({ driverId }) {
               {advancing ? 'Updating…' : 'Arriving'}
             </PurpleAcceptButton>
           )}
-          {activeTrip.status === 'arriving' && (
+          {(activeTrip.status === 'arriving' || activeTrip.status === 'arrived') && (
+            <WaitFeeCard
+              trip={activeTrip}
+              quote={wait.quote}
+              role="driver"
+              busy={wait.busy}
+              error={wait.error}
+              charge={wait.charge}
+              onStart={() => wait.act('arrive')}
+              onCancel={() => wait.act('cancel')}
+            />
+          )}
+          {activeTrip.status === 'arrived' && (
             <PurpleAcceptButton onClick={() => advanceTrip('in_progress')} disabled={advancing}>
               {advancing ? 'Updating…' : 'Start trip'}
             </PurpleAcceptButton>
@@ -956,6 +988,15 @@ function DriverShell({ driverId }) {
       {activeTrip?.id && (
         <SosControl tripId={activeTrip.id} viewerRole="driver" knownActive insetTop={76} />
       )}
+      <PaymentFailedSheet
+        failure={payFailure}
+        busy={advancing}
+        onRetry={() => { setPayFailure(null); advanceTrip('completed') }}
+        onAddCard={() => navigate('account', { tab: 'billing' })}
+        onUseCredits={() => navigate('account', { tab: 'billing' })}
+        onBuyCredits={() => navigate('account', { tab: 'billing' })}
+        onDismiss={() => setPayFailure(null)}
+      />
       {chatTrip && driverId && (
         <RideChat
           tripId={chatTrip.id}

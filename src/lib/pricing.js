@@ -1,21 +1,29 @@
 import { supabase } from './supabase'
-import { AIRPORT_RATES, depositCents } from './stripeCheckout'
+import { depositCents } from './stripeCheckout'
+import {
+  quoteFare,
+  resolveSurge,
+  percentOffCents,
+  STUDENT_DISCOUNT_BPS,
+  AIRPORT_ROUTE_FALLBACK,
+} from './fareRates'
 
-const STUDENT_PERCENT_OFF = 10
+export { STUDENT_DISCOUNT_BPS }
 
 /**
- * Student pricing helper — 10% off Standard when student verified.
+ * Student pricing — 10% off Standard after surge and carpool.
+ * Kept for callers that already have a fare in cents.
  */
 export function applyStudentDiscount(fareCents, { isStudent = false, tier = 'standard' } = {}) {
   const base = Number(fareCents) || 0
-  if (!isStudent || tier !== 'standard') {
+  if (!isStudent || (tier && tier !== 'standard')) {
     return { fareCents: base, discountCents: 0, label: null }
   }
-  const discountCents = Math.round(base * (STUDENT_PERCENT_OFF / 100))
+  const off = percentOffCents(base, STUDENT_DISCOUNT_BPS)
   return {
-    fareCents: base - discountCents,
-    discountCents,
-    label: `Clemson student · ${STUDENT_PERCENT_OFF}% off Standard`,
+    fareCents: off.amountCents,
+    discountCents: off.discountCents,
+    label: `Clemson student · ${STUDENT_DISCOUNT_BPS / 100}% off Standard`,
   }
 }
 
@@ -25,25 +33,55 @@ export function applyStudentDiscount(fareCents, { isStudent = false, tier = 'sta
  * A 1.5 rider surge and a 1.5 driver incentive can both be on and do not stack into each other.
  */
 export async function getGameDayMultiplier(at = new Date()) {
-  if (!supabase) return { multiplier: 1, event: null }
-  const iso = at.toISOString()
+  if (!supabase) return { multiplier: null, event: null }
+  const iso = (at instanceof Date ? at : new Date(at)).toISOString()
   const { data, error } = await supabase
     .from('game_day_events')
-    .select(
-      'id, title, starts_at, ends_at, surge_multiplier, pickup_zone_label, active',
-    )
+    .select('id, title, starts_at, ends_at, surge_multiplier, pickup_zone_label, active')
     .eq('active', true)
     .lte('starts_at', iso)
     .gte('ends_at', iso)
     .order('surge_multiplier', { ascending: false })
     .limit(1)
 
-  if (error || !data?.length) {
-    return { multiplier: 1, event: null }
-  }
+  if (error || !data?.length) return { multiplier: null, event: null }
   const event = data[0]
-  const multiplier = Number(event.surge_multiplier) || 1
-  return { multiplier, event }
+  const multiplier = Number(event.surge_multiplier)
+  return { multiplier: Number.isFinite(multiplier) ? multiplier : null, event }
+}
+
+export async function quoteWithSurge({
+  at = new Date(),
+  airport = false,
+  miles,
+  minutes,
+  distanceM,
+  durationS,
+  isStudent = false,
+  isCarpool = false,
+  tier = 'standard',
+  vehicleMultiplier = 1,
+} = {}) {
+  const { multiplier: gameDayMultiplier, event } = await getGameDayMultiplier(at)
+  const surge = resolveSurge({ at, airport, gameDayMultiplier })
+  const quote = quoteFare({
+    miles,
+    minutes,
+    distanceM,
+    durationS,
+    surgeMultiplier: surge.multiplier,
+    isStudent,
+    isCarpool,
+    tier,
+    vehicleMultiplier,
+  })
+  return {
+    quote,
+    surge,
+    gameDay: event
+      ? { title: event.title, multiplier: surge.multiplier, zone: event.pickup_zone_label }
+      : null,
+  }
 }
 
 export async function priceAirportRide({
@@ -51,26 +89,35 @@ export async function priceAirportRide({
   isStudent = false,
   tier = 'standard',
   at = new Date(),
+  distanceM,
+  durationS,
 }) {
-  const rate = AIRPORT_RATES[airport]
-  if (!rate) throw new Error('Unknown airport')
-
-  const { multiplier, event } = await getGameDayMultiplier(at)
-  // Airport flat rates stay flat; game-day note is informational for local tiers.
-  // Still surface surge for local/stadium pricing callers.
-  const surged = Math.round(rate.fareCents * (tier === 'standard' || airport ? 1 : multiplier))
-  const student = applyStudentDiscount(surged, { isStudent, tier })
-  const deposit = depositCents(student.fareCents)
-
+  const fallback = AIRPORT_ROUTE_FALLBACK[airport]
+  if (!fallback) throw new Error('Unknown airport')
+  const priced = await quoteWithSurge({
+    at,
+    airport: true,
+    distanceM,
+    durationS,
+    miles: distanceM == null ? fallback.miles : undefined,
+    minutes: durationS == null ? fallback.minutes : undefined,
+    isStudent,
+    tier,
+  })
+  const fareCents = priced.quote.fareBeforeCreditsCents
   return {
-    airport: rate.code,
-    fareCents: student.fareCents,
-    depositCents: deposit,
-    discountCents: student.discountCents,
-    studentLabel: student.label,
-    gameDay: event
-      ? { title: event.title, multiplier, zone: event.pickup_zone_label }
+    airport,
+    fareCents,
+    depositCents: depositCents(fareCents),
+    discountCents: priced.quote.breakdown.student_discount_cents,
+    studentLabel: priced.quote.breakdown.student_discount_cents
+      ? `Clemson student · ${STUDENT_DISCOUNT_BPS / 100}% off Standard`
       : null,
+    surge: priced.surge,
+    gameDay: priced.gameDay,
+    quote: priced.quote,
+    platformFeeCents: priced.quote.platformFeeCents,
+    driverEarningsCents: priced.quote.driverEarningsCents,
   }
 }
 

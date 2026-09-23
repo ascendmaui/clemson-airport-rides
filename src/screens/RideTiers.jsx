@@ -1,10 +1,12 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { CampusMap, STADIUM } from '../components/CampusMap'
 import { TierRow } from '../components/TierRow'
 import { PrimaryButton } from '../components/PrimaryButton'
 import { UpsellModal } from '../components/UpsellModal'
 import { navigate } from '../lib/navigation'
 import { SignInToBookModal, useRequireAuthForAction } from '../components/SignInToBookModal'
+import { SurgeBadge } from '../components/SurgeBadge'
+import { quoteWithSurge } from '../lib/pricing'
 
 const TIERS = [
   { id: 'standard', name: 'Standard', icon: '🚗', eta: '4 min', meta: '4 seats', price: 18.5 },
@@ -19,7 +21,18 @@ export function RideTiers({ dest = '1900 GSP Dr' }) {
   const [selected, setSelected] = useState(TIERS[0])
   const [upsell, setUpsell] = useState(null)
   const [promptOpen, setPromptOpen] = useState(false)
+  const [surge, setSurge] = useState(null)
   const { runOrPrompt } = useRequireAuthForAction()
+
+  useEffect(() => {
+    let alive = true
+    quoteWithSurge({ miles: 3, minutes: 10, airport: false })
+      .then((q) => { if (alive) setSurge(q.surge) })
+      .catch(() => {})
+    return () => { alive = false }
+  }, [])
+
+  const surgeMul = surge?.multiplier > 1 ? surge.multiplier : 1
 
   const onSelectTier = (tier) => {
     setSelected(tier)
@@ -72,6 +85,9 @@ export function RideTiers({ dest = '1900 GSP Dr' }) {
         >
           🐯 Clemson student promo · 10% off Standard
         </div>
+        <div style={{ marginTop: 8 }}>
+          <SurgeBadge surge={surge} />
+        </div>
         <p style={{ marginTop: 8, fontSize: 13, color: 'var(--ink-secondary)' }}>
           To <strong style={{ color: 'var(--ink)' }}>{dest}</strong>
         </p>
@@ -91,7 +107,12 @@ export function RideTiers({ dest = '1900 GSP Dr' }) {
         <div className="sheet-handle" />
         <div style={{ flex: 1 }}>
           {TIERS.map((t) => (
-            <TierRow key={t.id} tier={t} selected={selected.id === t.id} onSelect={onSelectTier} />
+            <TierRow
+              key={t.id}
+              tier={{ ...t, price: Math.round(t.price * surgeMul * 100) / 100 }}
+              selected={selected.id === t.id}
+              onSelect={onSelectTier}
+            />
           ))}
         </div>
         <div style={{ padding: '12px 8px 0' }}>

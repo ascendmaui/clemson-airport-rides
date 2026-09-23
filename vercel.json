@@ -73,12 +73,78 @@
       "destination": "/api/stripe-payment-methods?action=:action"
     },
     {
+      "source": "/api/driver-earnings",
+      "destination": "/api/driver?action=earnings"
+    },
+    {
+      "source": "/api/trip-offer-preview",
+      "destination": "/api/driver?action=offer-preview"
+    },
+    {
+      "source": "/api/trip-tip",
+      "destination": "/api/driver?action=tip"
+    },
+    {
+      "source": "/api/trip-wait",
+      "destination": "/api/driver?action=wait"
+    },
+    {
+      "source": "/api/trip-cancel-midride",
+      "destination": "/api/driver?action=cancel-midride"
+    },
+    {
+      "source": "/api/driver-payouts",
+      "destination": "/api/driver?action=payouts"
+    },
+    {
+      "source": "/api/quote-fare",
+      "destination": "/api/stripe-payment-methods?action=quote"
+    },
+    {
+      "source": "/api/airport-checkout",
+      "destination": "/api/stripe-payment-methods?action=airport-checkout"
+    },
+    {
+      "source": "/api/buy-credits",
+      "destination": "/api/stripe-payment-methods?action=buy-credits"
+    },
+    {
+      "source": "/api/credits-confirm",
+      "destination": "/api/stripe-payment-methods?action=credits-confirm"
+    },
+    {
+      "source": "/api/collect-payment",
+      "destination": "/api/stripe-payment-methods?action=collect"
+    },
+    {
+      "source": "/api/trip-settle",
+      "destination": "/api/stripe-payment-methods?action=settle"
+    },
+    {
+      "source": "/api/help-chat",
+      "destination": "/api/admin-drivers?action=help-chat"
+    },
+    {
+      "source": "/api/support-chat",
+      "destination": "/api/admin-drivers?action=support-chat"
+    },
+    {
+      "source": "/api/support-ticket",
+      "destination": "/api/admin-drivers?action=ticket"
+    },
+    {
       "source": "/api/(.*)",
       "destination": "/api/$1"
     },
     {
       "source": "/((?!api/).*)",
       "destination": "/index.html"
+    }
+  ],
+  "crons": [
+    {
+      "path": "/api/driver-payouts",
+      "schedule": "*/15 * * * *"
     }
   ]
 }

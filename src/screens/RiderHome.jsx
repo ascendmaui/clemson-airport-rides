@@ -6,6 +6,7 @@ import { CampusMap, STADIUM } from '../components/CampusMap'
 import { navigate } from '../lib/navigation'
 import { DOWNTOWN_CENTER } from '../lib/downtownHeat'
 import { HEAT_WINDOWS } from '../lib/rideDemand'
+import { RiderWaitBanner } from '../components/WaitFeeCard'
 
 const SHORTCUTS = [
   { id: 'home', label: 'Home', sub: 'Simpsonville', icon: '🏠' },
@@ -158,6 +159,8 @@ export function RiderHome({ riderName = 'John' }) {
               center={showBusy ? DOWNTOWN_CENTER : STADIUM} zoom={showBusy ? 15 : 14}
               marker={showBusy ? DOWNTOWN_CENTER : STADIUM} />
           </div>
+
+          <RiderWaitBanner />
 
           <div
             className="glass-panel glass-panel--orange card-soft"

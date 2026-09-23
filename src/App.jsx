@@ -8,6 +8,7 @@ import { ConfirmPickup } from './screens/ConfirmPickup'
 import { RideTiers } from './screens/RideTiers'
 import { ScheduleAirport } from './screens/ScheduleAirport'
 import { DriverHome } from './screens/DriverHome'
+import { DriverEarnings } from './screens/DriverEarnings'
 import { FriendsScreen, AccountScreen } from './screens/FriendsAccount'
 import { SignInScreen, SignUpScreen } from './screens/AuthScreens'
 import { DriverOnboarding } from './screens/DriverOnboarding'
@@ -19,6 +20,7 @@ import { LegalPrivacy, LegalTerms } from './screens/LegalPages'
 import { LiveShare } from './screens/LiveShare'
 import { ProfileView } from './screens/ProfileView'
 import { RateRide } from './screens/RateRide'
+import { ReceiptScreen } from './screens/ReceiptScreen'
 import { FriendRideScreen } from './screens/FriendRide'
 import { CarpoolScreen } from './screens/CarpoolScreen'
 import { CarpoolHub } from './screens/CarpoolHub'
@@ -31,7 +33,7 @@ import { LostFoundWatcher } from './components/LostFoundWatcher'
 import { LostFound } from './screens/LostFound'
 import { RidesHistory } from './screens/RidesHistory'
 
-const PROTECTED = new Set(['driver', 'driver-onboarding', 'account', 'driver-signup', 'admin', 'incentives', 'lost-found', 'history'])
+const PROTECTED = new Set(['driver', 'driver-onboarding', 'account', 'driver-signup', 'admin', 'incentives', 'lost-found', 'history', 'earnings'])
 
 function Screen({ path, params }) {
   switch (path) {
@@ -53,6 +55,8 @@ function Screen({ path, params }) {
       return <ProfileView />
     case 'rate':
       return <RateRide />
+    case 'receipt':
+      return <ReceiptScreen />
     case 'home':
     case 'rides':
       return <RiderHome />
@@ -63,13 +67,19 @@ function Screen({ path, params }) {
     case 'pick-driver':
       return <PickDriver dest={params.dest || 'GSP Airport'} />
     case 'requested':
-      return <Requested dest={params.dest} trip={params.trip} driver={params.driver} />
+      return <Requested dest={params.dest} trip={params.trip} driver={params.driver} payfail={params.payfail || ''} />
     case 'schedule':
       return <ScheduleAirport />
     case 'driver':
       return (
         <RequireAuth>
           <DriverHome />
+        </RequireAuth>
+      )
+    case 'earnings':
+      return (
+        <RequireAuth>
+          <DriverEarnings />
         </RequireAuth>
       )
     case 'driver-onboarding':

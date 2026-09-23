@@ -3,6 +3,7 @@ import {
 } from 'react'
 import { IconBell, IconCar, IconCard, IconCarpool, IconClose, IconShare, IconStar } from '../components/icons'
 import { categoryForToastKind, loadLocalPrefs } from './notificationPrefs'
+import { playAlertTone, shouldPlayAlertTone } from './alertTone'
 import { useAuth } from './auth'
 
 const ToastContext = createContext(null)
@@ -16,10 +17,13 @@ const KIND_META = {
   driver_accepted: { title: 'Driver accepted', Icon: IconCar, tone: 'purple' },
   driver_en_route: { title: 'Driver en route', Icon: IconCar, tone: 'orange' },
   arrived_pickup: { title: 'Arrived at pickup', Icon: IconCar, tone: 'purple' },
+  ride_wait_cancelled: { title: 'Ride canceled', Icon: IconCar, tone: 'orange' },
   trip_started: { title: 'Trip started', Icon: IconCar, tone: 'orange' },
   trip_completed: { title: 'Trip completed', Icon: IconStar, tone: 'purple' },
+  canceled_midride: { title: 'Ride canceled mid-trip', Icon: IconCar, tone: 'orange' },
   fare_charged: { title: 'Fare charged', Icon: IconCard, tone: 'purple' },
   payment_failed: { title: 'Payment failed', Icon: IconCard, tone: 'danger' },
+  payment_required: { title: 'Payment required', Icon: IconCard, tone: 'danger' },
   payment_retry: { title: 'Retry payment', Icon: IconCard, tone: 'orange' },
   friend_joined: { title: 'Friend joined', Icon: IconCarpool, tone: 'purple' },
   friend_left: { title: 'Friend left', Icon: IconCarpool, tone: 'orange' },
@@ -66,9 +70,11 @@ export function ToastProvider({ children }) {
     const kind = toast?.kind || 'system'
     const cat = toast?.category || categoryForToastKind(kind)
     const prefs = prefsRef.current || loadLocalPrefs(user?.id)
-    if (prefs[cat] === false) return null
+    const critical = kind === 'canceled_midride' || kind === 'payment_required' || toast?.force === true
+    if (!critical && prefs[cat] === false) return null
 
     const id = toast.id || `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+    if (shouldPlayAlertTone(kind, prefs)) playAlertTone()
     const meta = KIND_META[kind] || KIND_META.system
     const entry = {
       id,
@@ -81,6 +87,7 @@ export function ToastProvider({ children }) {
       createdAt: Date.now(),
     }
     setItems((prev) => {
+      if (prev.some((t) => t.id === id)) return prev
       const next = [...prev, entry]
       // Keep queue bounded; drop oldest beyond MAX_VISIBLE + buffer
       return next.slice(-MAX_VISIBLE - 6)
