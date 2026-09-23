@@ -22,7 +22,7 @@ async function fetchOrganizerVehicle(userId) {
   if (!supabase || !userId) return null
   const { data } = await supabase
     .from('vehicles')
-    .select('make, model, color, plate, seats, is_tesla, tier, type')
+    .select('make, model, color, plate, seats, is_tesla, tier')
     .eq('driver_id', userId)
     .order('created_at', { ascending: false })
     .limit(1)
