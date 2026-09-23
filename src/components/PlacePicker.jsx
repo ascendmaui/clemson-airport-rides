@@ -48,6 +48,7 @@ export function PlacePicker({
   onChange,
   mode = 'pickup',
   presets = FRIEND_PLACES,
+  showCoordinates = true,
 }) {
   const apiKey = (import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '').trim()
   const { isLoaded } = useJsApiLoader(mapsLoaderOptions(apiKey))
@@ -148,7 +149,7 @@ export function PlacePicker({
       {selectedLabel ? (
         <div style={{ fontSize: 12, color: 'var(--ink-tertiary)', marginTop: 6 }}>
           Selected: <strong style={{ color: 'var(--ink-secondary)' }}>{selectedLabel}</strong>
-          {value?.lat != null && value?.lng != null ? ` · ${Number(value.lat).toFixed(4)}, ${Number(value.lng).toFixed(4)}` : ''}
+          {showCoordinates && value?.lat != null && value?.lng != null ? ` · ${Number(value.lat).toFixed(4)}, ${Number(value.lng).toFixed(4)}` : ''}
         </div>
       ) : null}
 

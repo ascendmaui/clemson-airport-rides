@@ -14,6 +14,8 @@ import { supabase } from '../lib/supabase'
 import { STADIUM } from '../components/CampusMap'
 import { SignInToBookModal, useRequireAuthForAction } from '../components/SignInToBookModal'
 import { isClemsonEmail } from '../lib/studentDomain'
+import { firstName } from '../lib/scheduledRideModel'
+import { ScheduledRidePlanner } from '../components/ScheduledRidePlanner'
 
 const AIRPORT_COORDS = {
   GSP: { label: 'Greenville-Spartanburg International (GSP)', lat: 34.8956, lng: -82.2189 },
@@ -35,12 +37,13 @@ async function createAirportTrip({ user, airport, fareCents, deposit, date, time
     const hhmm = time || '12:00'
     scheduledFor = new Date(`${date}T${hhmm}:00`).toISOString()
   }
+  const ahead = Boolean(scheduledFor)
 
   const { data, error } = await supabase
     .from('trips')
     .insert({
       rider_id: user.id,
-      status: 'searching',
+      status: ahead ? 'scheduled' : 'searching',
       tier: 'standard',
       pickup_label: 'Memorial Stadium',
       dropoff_label: dest.label,
@@ -51,7 +54,20 @@ async function createAirportTrip({ user, airport, fareCents, deposit, date, time
       fare_cents: fareCents,
       deposit_cents: deposit,
       passengers: 1,
+      pickup_at: scheduledFor,
       scheduled_for: scheduledFor,
+      rider_note: ahead ? 'airport' : null,
+      metadata: ahead
+        ? {
+            kind: 'scheduled',
+            purpose: 'airport',
+            rider_first_name: firstName(
+              user.user_metadata?.full_name || user.user_metadata?.name || user.email?.split('@')[0],
+            ),
+            fare_is_estimate: false,
+            reminders: {},
+          }
+        : {},
     })
     .select('id')
     .single()
@@ -125,10 +141,19 @@ export function ScheduleAirport() {
     <div className="fade-in" style={{ display: 'flex', flexDirection: 'column', minHeight: '100%', background: 'transparent' }}>
       <div style={{ flex: 1, padding: '20px 20px 24px', overflowY: 'auto' }}>
         <button type="button" className="pressable glass-pill" onClick={() => navigate('home')} style={{ fontSize: 20, marginBottom: 12, width: 40, height: 40, borderRadius: 12 }}>←</button>
-        <h1 style={{ fontSize: 24, fontWeight: 600, letterSpacing: -0.4 }}>Schedule airport</h1>
+        <h1 style={{ fontSize: 24, fontWeight: 600, letterSpacing: -0.4, color: '#522D80' }}>Schedule</h1>
         <p style={{ color: 'var(--ink-secondary)', fontSize: 14, marginTop: 6, marginBottom: 20 }}>
-          Flat rates · 25% deposit holds your ride
-          {isStudentRider(user) ? ' · Clemson student discount applied at checkout' : ''}
+          Plan a pickup ahead of time, or hold an airport ride with a 25% deposit.
+          {isStudentRider(user) ? ' Clemson student discount applies on standard fares.' : ''}
+        </p>
+
+        <ScheduledRidePlanner />
+
+        <h2 style={{ fontSize: 20, fontWeight: 700, letterSpacing: -0.3, color: '#522D80', marginBottom: 8 }}>
+          Airport deposit
+        </h2>
+        <p style={{ color: 'var(--ink-secondary)', fontSize: 14, marginTop: 0, marginBottom: 16 }}>
+          Flat rates from Memorial Stadium. A date keeps the ride scheduled for drivers to accept. Leave the date empty to request a driver now.
         </p>
 
         {returnFlags.paid === '1' && (

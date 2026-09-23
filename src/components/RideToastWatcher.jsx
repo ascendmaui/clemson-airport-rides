@@ -8,6 +8,7 @@ import { supabase } from '../lib/supabase'
 import { pushToast } from '../lib/toasts'
 import { fetchNotificationPrefs } from '../lib/notificationPrefs'
 import { useToasts } from '../lib/toasts'
+import { reminderCopy, stampScheduledReminder, takeReminder } from '../lib/scheduledRides'
 
 const TRIP_STATUS_KIND = {
   searching: 'ride_requested',
@@ -52,7 +53,7 @@ export function RideToastWatcher() {
       const [{ data: trips }, { data: rides }, { data: bills }] = await Promise.all([
         supabase
           .from('trips')
-          .select('id, status, pickup_label, dropoff_label, rider_id, driver_id, updated_at')
+          .select('id, status, pickup_label, dropoff_label, rider_id, driver_id, updated_at, pickup_at, scheduled_for, metadata')
           .or(`rider_id.eq.${user.id},driver_id.eq.${user.id}`)
           .order('requested_at', { ascending: false })
           .limit(12),
@@ -74,6 +75,14 @@ export function RideToastWatcher() {
       ;(rides || []).forEach((r) => seenFriend.current.set(r.id, r.status))
       ;(bills || []).forEach((b) => seenBill.current.set(b.id, b.status))
       primed.current = true
+      ;(trips || []).forEach(maybeRemind)
+    }
+
+    function maybeRemind(row) {
+      const decision = takeReminder(row)
+      if (!decision) return
+      pushToast(reminderCopy(row, decision))
+      stampScheduledReminder(row, decision.id).catch(() => {})
     }
 
     function onTripRow(row) {
@@ -82,6 +91,7 @@ export function RideToastWatcher() {
         seenTrip.current.set(row.id, row.status)
         return
       }
+      maybeRemind(row)
       const prev = seenTrip.current.get(row.id)
       if (prev === row.status) return
       seenTrip.current.set(row.id, row.status)
@@ -89,6 +99,14 @@ export function RideToastWatcher() {
         // first sight of a brand-new trip after prime — still toast
       } else if (prev == null) {
         // late discover of existing trip — skip noise
+        return
+      }
+      if (prev === 'scheduled' && row.status === 'accepted') {
+        pushToast({
+          kind: 'driver_accepted',
+          title: 'Scheduled ride accepted',
+          body: row.metadata?.acceptance_message || `${tripBody(row)}. Your driver accepted this scheduled ride.`,
+        })
         return
       }
       let kind = TRIP_STATUS_KIND[row.status] || 'system'
@@ -188,7 +206,7 @@ export function RideToastWatcher() {
       try {
         const { data: trips } = await supabase
           .from('trips')
-          .select('id, status, pickup_label, dropoff_label')
+          .select('id, status, pickup_label, dropoff_label, pickup_at, scheduled_for, metadata')
           .or(`rider_id.eq.${user.id},driver_id.eq.${user.id}`)
           .order('requested_at', { ascending: false })
           .limit(8)
