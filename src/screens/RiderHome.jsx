@@ -30,11 +30,11 @@ export function RiderHome({ riderName = 'John' }) {
           <header
             style={{
               position: 'relative',
-              width: '52%',
+              width: '50%',
               maxWidth: 220,
               minHeight: 96,
               borderRadius: 18,
-              background: 'linear-gradient(145deg, #F56600 0%, #e05a00 55%, #c24e00 100%)',
+              background: '#F56600',
               boxShadow: '0 10px 28px -12px rgba(245,102,0,0.55), 0 4px 12px -6px rgba(82,45,128,0.25)',
               color: '#fff',
               padding: '14px 16px 12px',
@@ -44,14 +44,6 @@ export function RiderHome({ riderName = 'John' }) {
               overflow: 'hidden',
             }}
           >
-            <div
-              style={{
-                position: 'absolute',
-                inset: 0,
-                background: 'radial-gradient(120% 80% at 100% 0%, rgba(82,45,128,0.28) 0%, transparent 55%)',
-                pointerEvents: 'none',
-              }}
-            />
             <div style={{ position: 'absolute', top: 8, right: 10, opacity: 0.22, fontSize: 36, lineHeight: 1, userSelect: 'none' }}>
               🐾
             </div>
