@@ -147,13 +147,7 @@ export function CarpoolHub() {
         </header>
 
         <div style={{ padding: '8px 20px 24px' }}>
-          {pitch && (
-            <CarpoolCompare
-              quote={pitch.full}
-              selfId="you"
-              title={peakOn ? 'Full car, right now' : 'Full car on a peak night'}
-            />
-          )}
+          <CarpoolCompare pickup={pickup} dropoff={dropoff} mode="pitch" />
           {nowPitch && !peakOn && (
             <p style={{ fontSize: 12, color: 'var(--ink-secondary)', marginTop: 10, lineHeight: 1.45 }}>
               Off-peak right now, this hop is {formatUsd(nowPitch.soloCents)} alone.

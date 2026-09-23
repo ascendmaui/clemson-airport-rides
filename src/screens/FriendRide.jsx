@@ -3,7 +3,7 @@ import { CampusMap, CLEMSON } from '../components/CampusMap'
 import { PlacePicker } from '../components/PlacePicker'
 import { PrimaryButton } from '../components/PrimaryButton'
 import { CarpoolCompare } from '../components/CarpoolCompare'
-import { quoteCarpool } from '../lib/carpoolEngine'
+import { formatUsd, NEIGHBORHOODS, quoteCarpool, surgeDelta } from '../lib/carpoolEngine'
 import { BottomTabs } from '../components/BottomTabs'
 import { useAuth } from '../lib/auth'
 import { navigate } from '../lib/navigation'
@@ -41,8 +41,14 @@ export function FriendRideScreen({ token: tokenProp, kind: kindProp = 'friends' 
   const [error, setError] = useState(null)
   const [busy, setBusy] = useState(false)
   const [busyLabel, setBusyLabel] = useState('')
-  const [pickup, setPickup] = useState(FRIEND_PLACES[0])
-  const [dropoff, setDropoff] = useState(FRIEND_PLACES[4])
+  const grand = NEIGHBORHOODS.find((n) => n.id === 'grand-marc')
+  const college = NEIGHBORHOODS.find((n) => n.id === 'college-ave')
+  const [pickup, setPickup] = useState(isCarpool
+    ? { label: grand.label, lat: grand.lat, lng: grand.lng }
+    : FRIEND_PLACES[0])
+  const [dropoff, setDropoff] = useState(isCarpool
+    ? { label: college.label, lat: college.lat, lng: college.lng }
+    : FRIEND_PLACES[4])
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [splitMode, setSplitMode] = useState('even')
@@ -116,6 +122,15 @@ export function FriendRideScreen({ token: tokenProp, kind: kindProp = 'friends' 
     return quoteCarpool({ riders })
   }, [isCarpool, ride])
   const selfId = (ride?.participants || []).find((p) => p.is_self)?.id || null
+  const selfPart = (ride?.participants || []).find((p) => p.is_self) || (ride?.participants || [])[0]
+  const hopPickup = selfPart?.pickup?.lat != null ? selfPart.pickup : pickup
+  const hopDropoff = selfPart?.dropoff?.lat != null ? selfPart.dropoff : dropoff
+  const delta = useMemo(
+    () => (isCarpool || ride?.kind === 'carpool'
+      ? surgeDelta({ pickup: hopPickup, dropoff: hopDropoff, quote: carpoolQuote, selfId })
+      : null),
+    [isCarpool, ride?.kind, hopPickup, hopDropoff, carpoolQuote, selfId],
+  )
   const mapCenter = ride?.stops?.[0]
     ? [ride.stops[0].lat, ride.stops[0].lng]
     : (pickup?.lat != null ? [pickup.lat, pickup.lng] : CLEMSON)
@@ -346,6 +361,7 @@ export function FriendRideScreen({ token: tokenProp, kind: kindProp = 'friends' 
                 {capacityMessage(maxParticipants, { hasVehicle: true })}
               </p>
             )}
+            {isCarpool && <CarpoolCompare pickup={pickup} dropoff={dropoff} mode="pitch" />}
             <PrimaryButton onClick={onCreate} disabled={busy || vehicleBlock}>
               {busy ? (busyLabel || 'Creating…') : isCarpool ? 'Offer a carpool' : 'Create invite link'}
             </PrimaryButton>
@@ -389,14 +405,10 @@ export function FriendRideScreen({ token: tokenProp, kind: kindProp = 'friends' 
         <div style={card}>
           <div style={{ fontWeight: 700, marginBottom: 8 }}>Invite link</div>
           <p style={{ fontSize: 12, wordBreak: 'break-all', color: 'var(--ink-secondary)' }}>{inviteUrl(token, isCarpool || ride?.kind === 'carpool' ? 'carpool' : 'friends')}</p>
-          <button type="button" className="pressable" onClick={onCopy} style={{ marginTop: 8, fontWeight: 600, color: 'var(--purple)' }}>Copy / share -></button>
+          <button type="button" className="pressable" onClick={onCopy} style={{ marginTop: 8, fontWeight: 600, color: 'var(--purple)' }}>Copy / share →</button>
         </div>
 
-        {(isCarpool || ride?.kind === 'carpool') && (
-          <CarpoolCompare quote={carpoolQuote} selfId={selfId} />
-        )}
-
-        {ride?.total_fare_cents != null && (ride?.participants || []).length > 0 && (
+        {ride?.total_fare_cents != null && !isCarpool && ride?.kind !== 'carpool' && (ride?.participants || []).length > 0 && (
           <div style={card}>
             <div style={{ fontWeight: 700, marginBottom: 8 }}>Fare split preview</div>
             <div style={{ fontSize: 12, color: 'var(--ink-tertiary)', marginBottom: 10 }}>
@@ -440,7 +452,7 @@ export function FriendRideScreen({ token: tokenProp, kind: kindProp = 'friends' 
                 )}
               </div>
               <div style={{ fontSize: 11, color: 'var(--ink-tertiary)' }}>
-                {p.pickup?.label || '-'} -> {p.dropoff?.label || '-'}
+                {p.pickup?.label || '-'} → {p.dropoff?.label || '-'}
               </div>
             </div>
           ))}
@@ -469,6 +481,15 @@ export function FriendRideScreen({ token: tokenProp, kind: kindProp = 'friends' 
               />
             </div>
           )}
+          {(isCarpool || ride?.kind === 'carpool') && !isOrganizer && (
+            <CarpoolCompare
+              pickup={hopPickup}
+              dropoff={hopDropoff}
+              quote={carpoolQuote}
+              selfId={selfId}
+              mode="confirm"
+            />
+          )}
           <PrimaryButton onClick={onJoin} disabled={busy}>{busy ? (busyLabel || 'Saving…') : 'Save stops'}</PrimaryButton>
         </div>
 
@@ -486,13 +507,24 @@ export function FriendRideScreen({ token: tokenProp, kind: kindProp = 'friends' 
               {busy && busyLabel === 'Calculating fares…' ? 'Calculating fares…' : 'Optimize route & fares'}
             </PrimaryButton>
             <div style={{ height: 10 }} />
+            {isCarpool && (
+              <CarpoolCompare
+                pickup={hopPickup}
+                dropoff={hopDropoff}
+                quote={carpoolQuote}
+                selfId={selfId}
+                mode="confirm"
+              />
+            )}
             <PrimaryButton onClick={onConfirmCharges} disabled={busy || ride?.status === 'booked' || (isCarpool && !carpoolQuote)}>
               {ride?.status === 'booked'
                 ? 'Booked'
                 : busy && (busyLabel === 'Calculating fares…' || busyLabel === 'Charging…')
                   ? busyLabel
                   : isCarpool
-                    ? (carpoolQuote ? 'Confirm split & charge each rider' : 'Waiting for the split')
+                    ? (delta?.currentShareCents != null
+                      ? `Confirm · charge ${formatUsd(delta.currentShareCents)} each`
+                      : 'Waiting for the split')
                     : 'Confirm & charge friends'}
             </PrimaryButton>
             <p style={{ fontSize: 11, color: 'var(--ink-tertiary)', marginTop: 8 }}>
@@ -511,7 +543,7 @@ export function FriendRideScreen({ token: tokenProp, kind: kindProp = 'friends' 
                 : 'Driver searching'}
             </div>
             <button type="button" className="pressable" onClick={() => navigate('requested', { trip: ride.trip_id })}
-              style={{ marginTop: 8, fontWeight: 600, color: 'var(--purple)' }}>Open trip -></button>
+              style={{ marginTop: 8, fontWeight: 600, color: 'var(--purple)' }}>Open trip →</button>
           </div>
         )}
       </div>

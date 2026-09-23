@@ -726,6 +726,34 @@ export function quoteCarpool({
   }
 }
 
+/**
+ * Numbers for the pre-confirm card.
+ * soloSurge / fullCar are always the peak-night 1-vs-4 story.
+ * currentShare is what this confirm will actually charge when a live quote exists.
+ */
+export function surgeDelta({ pickup, dropoff, at = new Date(), quote = null, selfId = null } = {}) {
+  if (pickup?.lat == null || dropoff?.lat == null) return null
+  const when = at instanceof Date ? at : new Date(at)
+  const peakAt = illustrativePeakAt(when)
+  const pitch = pitchQuote({ pickup, dropoff, at: peakAt, displayName: 'You' })
+  const share = (quote?.shares || []).find((row) => selfId && row.id === selfId) || quote?.shares?.[0] || null
+  const currentShareCents = share ? share.shareCents : null
+  const currentRiderCount = quote?.riderCount || null
+  return {
+    soloSurgeCents: pitch.soloCents,
+    fullCarShareCents: pitch.fullShareCents,
+    savingsCents: Math.max(0, pitch.soloCents - pitch.fullShareCents),
+    driverPayoutCents: pitch.full.driver.payoutCents,
+    driverSoloPayoutCents: pitch.full.driver.soloPayoutCents,
+    driverBonusCents: pitch.full.driver.carpoolBonusCents,
+    driverBeatsSolo: pitch.full.driver.beatsSolo,
+    window: pitch.window,
+    currentShareCents,
+    currentRiderCount,
+    currentSavingsCents: currentShareCents == null ? null : Math.max(0, pitch.soloCents - currentShareCents),
+  }
+}
+
 /** Pitch card: this rider alone vs a full car of the same hop. */
 export function pitchQuote({ pickup, dropoff, at = new Date(), gameDay = false, displayName = 'You' } = {}) {
   const seed = {

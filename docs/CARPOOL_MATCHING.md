@@ -38,7 +38,7 @@ Riders do **not** divide that solo price by headcount. Each pays a fraction of t
 | 3 | 42% | |
 | 4 | 35% | about **$10.50–$14** |
 
-The confirm screen shows, for every rider, the struck-through solo price and the share they will actually be charged. `POST /api/friend-rides-confirm-charges` refreshes that quote, then creates **one PaymentIntent per rider** for `fare_cents` (saved card off-session, or Payment Element). The trip is booked only when every rider is paid.
+The confirm control sits under a delta card: struck-through solo surge price, the 4-rider seat, **You save $X**, and how much more the driver earns than a one-rider trip. If the party is not full yet, the card also states the amount this confirm will charge. `POST /api/friend-rides-confirm-charges` refreshes that quote, then creates **one PaymentIntent per rider** for `fare_cents` (saved card off-session, or Payment Element). The trip is booked only when every rider is paid.
 
 Platform fee is **20%** of cash collected (`platformFeeCents + driver payout = gross`), except when a first-ride comp has to be funded.
 

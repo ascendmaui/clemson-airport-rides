@@ -7,6 +7,7 @@ import {
   matchCarpoolRequests,
   quoteCarpool,
   pitchQuote,
+  surgeDelta,
   chargePlan,
   mvpRouteFareCents,
   demandWindow,
@@ -197,6 +198,37 @@ test('two riders still leave the driver ahead of a solo trip', () => {
   const plan = chargePlan(quote)
   assert.equal(plan.chargedCents, quote.grossCents)
   assert.equal(plan.lines.length, 2)
+})
+
+test('pre-confirm delta stays in the surge band even off-peak', () => {
+  const delta = surgeDelta({
+    pickup: GRAND,
+    dropoff: { ...COLLEGE, label: 'College Avenue' },
+    at: OFF_PEAK,
+  })
+  assert.ok(delta.soloSurgeCents >= 3000 && delta.soloSurgeCents <= 4000)
+  assert.ok(delta.fullCarShareCents >= 1000 && delta.fullCarShareCents <= 1500)
+  assert.ok(delta.savingsCents > 1500)
+  assert.equal(delta.driverBeatsSolo, true)
+  assert.ok(delta.driverBonusCents > 0)
+  assert.ok(delta.driverPayoutCents > delta.driverSoloPayoutCents)
+})
+
+test('a 2-rider confirm still shows the 4-way delta beside the live charge', () => {
+  const depart = PEAK_SAT_NIGHT
+  const riders = [0, 1].map((i) => rider(`r${i}`, near(GRAND, i * 20), { ...COLLEGE, label: 'College Avenue' }, depart))
+  const quote = quoteCarpool({ riders, at: depart })
+  const delta = surgeDelta({
+    pickup: GRAND,
+    dropoff: COLLEGE,
+    at: depart,
+    quote,
+    selfId: 'r0',
+  })
+  assert.equal(delta.currentRiderCount, 2)
+  assert.ok(delta.currentShareCents > delta.fullCarShareCents)
+  assert.ok(delta.fullCarShareCents >= 1000 && delta.fullCarShareCents <= 1500)
+  assert.ok(delta.soloSurgeCents >= 3000 && delta.soloSurgeCents <= 4000)
 })
 
 test('pitch quote shows solo surge versus a full-car seat', () => {
