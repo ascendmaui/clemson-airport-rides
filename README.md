@@ -65,4 +65,23 @@ Clients cannot overwrite `standing`, `rating_avg`, or `rating_count` on their ow
 
 ## Mobile
 
-See `apps/mobile` (Expo + EAS). Supabase Auth — no Clerk.
+Two native apps, version **1.1.0**. They do not replace TestFlight **1.0.0 (1)** for `com.ascendmaui.clemsonairportrides` (`apps/mobile`, frozen).
+
+| App | Path | Bundle id |
+|-----|------|-----------|
+| Rider | `apps/rider` | `com.ascendmaui.clemsonrides.rider` |
+| Driver | `apps/driver` | `com.ascendmaui.clemsonrides.driver` |
+
+Auth matches the web `AuthProvider`: email and password via `signInWithPassword` / `signUp`. The session is stored in the iOS keychain / Android keystore through `expo-secure-store` (chunked, because a Supabase session is larger than one SecureStore item). Confirm-email is off on the project. Apple and Google sign-in are not used.
+
+EAS builds do not read a gitignored `.env`. Set these as EAS environment variables on **each** new project (production, preview, and development) before a cloud build:
+
+```bash
+cd apps/rider   # repeat in apps/driver after eas init
+npx eas-cli env:create --name EXPO_PUBLIC_SUPABASE_URL --value https://awktabuhijrshmsmagpq.supabase.co --environment production --visibility plaintext
+npx eas-cli env:create --name EXPO_PUBLIC_SUPABASE_ANON_KEY --value <anon key> --environment production --visibility sensitive
+```
+
+Repeat for `--environment preview` and `--environment development`. Do not commit the anon key. `app.json` `extra.eas.projectId` values are placeholders — run `eas init` in each app and do not reuse `1440e29e-13f0-4571-8f32-596ec81f3369`.
+
+See `apps/rider/README.md` and `apps/driver/README.md`.
