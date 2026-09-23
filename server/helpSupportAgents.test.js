@@ -3,7 +3,8 @@ import test from 'node:test'
 import { buildHelpTurn, helpSystemPrompt } from './helpAgent.js'
 import { buildSupportTurn, extractTicketDraft, supportSystemPrompt, validateTicket } from './supportAgent.js'
 import { sanitizeActions } from './productKnowledge.js'
-import { contextSummary, resolveRoleVariant } from './userContext.js'
+import { contextForPrompt, contextSummary, resolveRoleVariant } from './userContext.js'
+import { fallbackDisplayFirstName, redactPeerText } from './privacyName.js'
 import { resetRateLimits } from './agentHttp.js'
 import helpHandler from '../api/help-chat.js'
 import supportHandler from '../api/support-chat.js'
@@ -145,6 +146,47 @@ test('actions stay on known screens', () => {
   ])
   assert.equal(actions.length, 2)
   assert.deepEqual(actions[0].params, { tab: 'billing' })
+})
+
+test('peer last names are not shown in help, support, or prompts', () => {
+  assert.equal(fallbackDisplayFirstName('Jordan Smith'), 'Jordan')
+  assert.equal(fallbackDisplayFirstName('Smith, Jordan'), 'Jordan')
+  const context = {
+    ...rider,
+    name: 'Ada',
+    _peerFullNames: ['Jordan Smith'],
+    recentTrips: [{ ...rider.recentTrips[0], peerFirstName: 'Jordan' }],
+    pendingRating: { ...rider.pendingRating, peerFirstName: 'Jordan' },
+  }
+  const prompt = JSON.stringify(contextForPrompt(context))
+  assert.equal(prompt.includes('Smith'), false)
+  assert.equal(prompt.includes('_peerFullNames'), false)
+  assert.match(prompt, /Jordan/)
+
+  const help = buildHelpTurn({
+    messages: [{ role: 'user', content: 'Jordan Smith never showed up and I still need to rate the trip' }],
+    context,
+    roleVariant: 'rider',
+  })
+  assert.equal(help.reply.includes('Smith'), false)
+  assert.equal(help.system.includes('Smith'), false)
+  assert.match(help.reply, /Jordan/)
+  assert.match(help.system, /first name only/i)
+
+  const support = buildSupportTurn({
+    messages: [{ role: 'user', content: 'Ride dispute: Jordan Smith never showed up at Memorial Stadium yesterday.' }],
+    context,
+    roleVariant: 'rider',
+  })
+  assert.equal(JSON.stringify(support.ticketDraft).includes('Smith'), false)
+  assert.match(support.ticketDraft.body, /Jordan/)
+  assert.equal(support.reply.includes('Smith'), false)
+  assert.match(support.system, /first name only/i)
+  assert.equal(help.messages[0].content.includes('Smith'), false)
+
+  const comma = { ...context, _peerFullNames: ['Smith, Jordan'] }
+  assert.equal(redactPeerText('Jordan Smith never showed. Smith was late.', comma).includes('Smith'), false)
+  assert.match(redactPeerText('Smith was late.', context), /^Jordan was late/)
 })
 
 test('help and support HTTP handlers answer offline without keys', async () => {

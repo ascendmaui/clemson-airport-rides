@@ -7,6 +7,7 @@ import { adminClient, userFromAuth } from '../server/supabaseAdmin.js'
 import { cors, json, parseBody, rateLimit } from '../server/agentHttp.js'
 import { validateTicket } from '../server/supportAgent.js'
 import { loadUserContext, resolveRoleVariant } from '../server/userContext.js'
+import { redactPeerText } from '../server/privacyName.js'
 
 const MISSING_TABLE = /support_tickets|schema cache|does not exist/i
 
@@ -50,7 +51,14 @@ export default async function handler(req, res) {
       }
       return json(res, 500, { error: 'Could not load tickets.' })
     }
-    return json(res, 200, { tickets: data || [], isAdmin: isAdmin(user) })
+    let viewer = { signedIn: true }
+    try { viewer = await loadUserContext(sb, user) } catch { /* list without extra redaction context */ }
+    const tickets = (data || []).map((ticket) => ({
+      ...ticket,
+      subject: redactPeerText(ticket.subject, viewer),
+      body: redactPeerText(ticket.body, viewer),
+    }))
+    return json(res, 200, { tickets, isAdmin: isAdmin(user) })
   }
 
   if (!rateLimit(req, { bucket: 'ticket', userId: user.id, limit: 5, windowMs: 10 * 60_000 })) {
@@ -67,7 +75,13 @@ export default async function handler(req, res) {
     console.error('[support-ticket] context', err?.message || err)
   }
   const roleVariant = resolveRoleVariant(context, body.roleVariant)
-  const checked = validateTicket({ ...body, roleVariant, confirmed: body.confirmed === true })
+  const checked = validateTicket({
+    ...body,
+    roleVariant,
+    confirmed: body.confirmed === true,
+    subject: redactPeerText(body.subject, context),
+    body: redactPeerText(body.body, context),
+  })
   if (!checked.ok) return json(res, 400, { error: checked.error })
 
   const metadata = {

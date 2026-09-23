@@ -65,6 +65,6 @@ export default async function handler(req, res) {
     name: 'help-chat',
     roleVariant,
     context: loaded.context,
-    turn: { ...turn, messages, ticketDraft: null },
+    turn: { ...turn, ticketDraft: null },
   })
 }

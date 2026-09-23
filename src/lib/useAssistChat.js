@@ -98,10 +98,11 @@ export function useAssistChat({ scope, endpoint, accountRole, welcome, active })
     if (!content || busy) return
     const history = [...messages.filter((message) => message.id !== 'welcome'), { role: 'user', content }]
       .map(({ role, content: value }) => ({ role, content: value }))
+    const userId = nextId()
     const pendingId = nextId()
     setMessages((current) => [
       ...current,
-      { id: nextId(), role: 'user', content },
+      { id: userId, role: 'user', content },
       { id: pendingId, role: 'assistant', content: 'Looking at your account…' },
     ])
     setDraft('')
@@ -117,11 +118,15 @@ export function useAssistChat({ scope, endpoint, accountRole, welcome, active })
           )))
         },
       })
-      setMessages((current) => current.map((message) => (
-        message.id === pendingId
-          ? { ...message, content: result.reply, actions: result.actions || [] }
-          : message
-      )))
+      setMessages((current) => current.map((message) => {
+        if (message.id === userId && result.redactedUserText) {
+          return { ...message, content: result.redactedUserText }
+        }
+        if (message.id === pendingId) {
+          return { ...message, content: result.reply, actions: result.actions || [] }
+        }
+        return message
+      }))
       setContextSummary(result.contextSummary || '')
       setNotice(result.notice || '')
       setTicketDraft(result.ticketDraft || null)

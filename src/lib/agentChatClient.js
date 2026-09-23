@@ -53,6 +53,7 @@ export async function sendAgentMessage({ url, body, onDelta }) {
       roleVariant: data.roleVariant,
       contextSummary: data.contextSummary || null,
       ticketDraft: data.ticketDraft || null,
+      redactedUserText: data.redactedUserText || null,
     }
   }
 
@@ -74,6 +75,7 @@ export async function sendAgentMessage({ url, body, onDelta }) {
     roleVariant: meta?.roleVariant,
     contextSummary: meta?.contextSummary || null,
     ticketDraft: pickDraft(extracted.draft, meta),
+    redactedUserText: meta?.redactedUserText || null,
   }
 }
 

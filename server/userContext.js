@@ -1,14 +1,17 @@
+import { displayFirstName, primeDisplayFirstName } from './privacyName.js'
+
 const PROFILE_SELECTS = [
   'id, role, full_name, email, student_verified_at, rating_avg, rating_count, billing_activated_at, stripe_card_brand, stripe_card_last4, stripe_default_pm_id',
   'id, role, full_name, email, student_verified_at, rating_avg, rating_count, stripe_default_pm_id',
   'id, role, full_name, email, student_verified_at',
 ]
 
-function firstName(profile, user) {
+function ownFirstName(profile, user) {
   const full = profile?.full_name || user?.user_metadata?.full_name || ''
-  if (full.trim()) return full.trim().split(/\s+/)[0]
+  const named = displayFirstName(full)
+  if (named) return named
   const email = profile?.email || user?.email || ''
-  if (email.includes('@')) return email.split('@')[0]
+  if (email.includes('@')) return displayFirstName(email) || email.split('@')[0]
   return ''
 }
 
@@ -32,8 +35,29 @@ async function selectMaybe(sb, table, build) {
   }
 }
 
+async function peerNames(sb, userId, trips) {
+  const ids = []
+  for (const trip of trips) {
+    const peerId = trip.driver_id === userId ? trip.rider_id : trip.driver_id
+    if (peerId && peerId !== userId) ids.push(peerId)
+  }
+  const unique = [...new Set(ids)]
+  if (!unique.length) return { byId: {}, fullNames: [] }
+  const { data, error } = await selectMaybe(sb, 'profiles', (q) => q.select('id, full_name').in('id', unique))
+  if (error || !Array.isArray(data)) return { byId: {}, fullNames: [] }
+  const byId = {}
+  const fullNames = []
+  for (const row of data) {
+    const full = String(row.full_name || '').trim()
+    if (full) fullNames.push(full)
+    byId[row.id] = displayFirstName(full)
+  }
+  return { byId, fullNames }
+}
+
 export async function loadUserContext(sb, user) {
   if (!user?.id) return { signedIn: false }
+  await primeDisplayFirstName()
 
   let profile = null
   for (const columns of PROFILE_SELECTS) {
@@ -71,23 +95,30 @@ export async function loadUserContext(sb, user) {
   }
 
   const rated = new Set((ratingsRes.data || []).map((row) => row.trip_id))
-  const recentTrips = trips.map((trip) => ({
-    id: trip.id,
-    status: trip.status,
-    as: trip.driver_id === user.id ? 'driver' : 'rider',
-    pickup: trip.pickup_label || '',
-    dropoff: trip.dropoff_label || '',
-    fareUsd: trip.fare_cents == null ? null : Number((Number(trip.fare_cents) / 100).toFixed(2)),
-    tier: trip.tier || null,
-    when: trip.completed_at || trip.scheduled_for || trip.requested_at || null,
-  }))
+  const peers = await peerNames(sb, user.id, trips)
+  const recentTrips = trips.map((trip) => {
+    const peerId = trip.driver_id === user.id ? trip.rider_id : trip.driver_id
+    const peerFirstName = peerId && peerId !== user.id ? (peers.byId[peerId] || '') : ''
+    return {
+      id: trip.id,
+      status: trip.status,
+      as: trip.driver_id === user.id ? 'driver' : 'rider',
+      pickup: trip.pickup_label || '',
+      dropoff: trip.dropoff_label || '',
+      fareUsd: trip.fare_cents == null ? null : Number((Number(trip.fare_cents) / 100).toFixed(2)),
+      tier: trip.tier || null,
+      when: trip.completed_at || trip.scheduled_for || trip.requested_at || null,
+      peerFirstName: peerFirstName || null,
+    }
+  })
 
   const pending = recentTrips.find((trip) => trip.status === 'completed' && trip.id && !rated.has(trip.id)) || null
   const vehicleRow = Array.isArray(vehicleRes.data) ? vehicleRes.data[0] : null
 
   return {
     signedIn: true,
-    name: firstName(profile, user),
+    name: ownFirstName(profile, user),
+    _peerFullNames: peers.fullNames,
     email,
     role,
     student: {
@@ -120,7 +151,12 @@ export async function loadUserContext(sb, user) {
       : null,
     driverOnline: statusRes.data ? Boolean(statusRes.data.online) : null,
     pendingRating: pending
-      ? { tripId: pending.id, pickup: pending.pickup, dropoff: pending.dropoff }
+      ? {
+        tripId: pending.id,
+        pickup: pending.pickup,
+        dropoff: pending.dropoff,
+        peerFirstName: pending.peerFirstName || null,
+      }
       : null,
     recentTrips,
   }
@@ -135,7 +171,7 @@ export function resolveRoleVariant(context, requested) {
 
 export function contextSummary(context) {
   if (!context?.signedIn) return 'Not signed in — general guidance only'
-  const bits = [context.name || 'Signed in']
+  const bits = [displayFirstName(context.name) || context.name || 'Signed in']
   bits.push(context.role === 'both' ? 'rider and driver' : context.role)
   bits.push(context.student?.verified ? 'student verified' : 'student discount off')
   if (context.billing?.hasCard) {
@@ -163,7 +199,7 @@ export function contextForPrompt(context) {
   }
   return {
     signedIn: true,
-    name: context.name || null,
+    name: displayFirstName(context.name) || context.name || null,
     email: context.email || null,
     role: context.role,
     student: context.student,
@@ -172,7 +208,24 @@ export function contextForPrompt(context) {
     vehicle: context.vehicle,
     driverApplication: context.driverApplication,
     driverOnline: context.driverOnline,
-    pendingRating: context.pendingRating,
-    recentTrips: context.recentTrips,
+    pendingRating: context.pendingRating
+      ? {
+        tripId: context.pendingRating.tripId,
+        pickup: context.pendingRating.pickup,
+        dropoff: context.pendingRating.dropoff,
+        peerFirstName: context.pendingRating.peerFirstName || null,
+      }
+      : null,
+    recentTrips: (context.recentTrips || []).map((trip) => ({
+      id: trip.id,
+      status: trip.status,
+      as: trip.as,
+      pickup: trip.pickup,
+      dropoff: trip.dropoff,
+      fareUsd: trip.fareUsd,
+      tier: trip.tier,
+      when: trip.when,
+      peerFirstName: trip.peerFirstName || null,
+    })),
   }
 }

@@ -2,6 +2,7 @@ import { PRODUCT_BRIEF, action, sanitizeActions } from './productKnowledge.js'
 import { contextForPrompt } from './userContext.js'
 import { SUPPORT_CHIPS, categoryLabel } from './agentChips.js'
 import { TICKET_CATEGORIES, extractTicketDraft } from './ticketDraft.js'
+import { redactPeerText, scrubMessages } from './privacyName.js'
 
 export { SUPPORT_CHIPS, categoryLabel, TICKET_CATEGORIES, extractTicketDraft }
 
@@ -53,7 +54,7 @@ function draftBody({ category, detail, context, role }) {
     context?.signedIn ? `Name: ${context.name || 'signed in'}` : 'Name: signed out',
     `Card on file: ${context?.billing?.hasCard ? 'yes' : 'no'}`,
     `Student verified: ${context?.student?.verified ? 'yes' : 'no'}`,
-    latest ? `Latest trip: ${latest.status || 'unknown'} · ${latest.pickup || 'pickup'} → ${latest.dropoff || 'dropoff'}` : 'Latest trip: none on file',
+    latest ? `Latest trip: ${latest.status || 'unknown'} · ${latest.pickup || 'pickup'} → ${latest.dropoff || 'dropoff'}${latest.peerFirstName ? ` · with ${latest.peerFirstName}` : ''}` : 'Latest trip: none on file',
   ]
   if (role === 'driver') {
     lines.push(context?.vehicle
@@ -61,7 +62,7 @@ function draftBody({ category, detail, context, role }) {
       : 'Vehicle: none')
     if (context?.driverApplication?.status) lines.push(`Driver application: ${context.driverApplication.status}`)
   }
-  return lines.join('\n').slice(0, 4000)
+  return redactPeerText(lines.join('\n'), context).slice(0, 4000)
 }
 
 export function validateTicket(input) {
@@ -105,7 +106,8 @@ function diagnosis(category, context, role) {
     return 'Driver mode needs a vehicle. If you cannot go online, finish Account → Vehicle → Driver signup first. If signup already succeeded and the map still fails, say what you see and we will file that.'
   }
   if (category === 'ride_dispute' && latest) {
-    return `The newest trip I can see is ${latest.status || 'unknown'}: ${latest.pickup || 'pickup'} → ${latest.dropoff || 'dropoff'}. Tell me what went wrong on that ride, or name a different one.`
+    const who = latest.peerFirstName ? ` The other person on that trip is ${latest.peerFirstName}.` : ''
+    return `The newest trip I can see is ${latest.status || 'unknown'}: ${latest.pickup || 'pickup'} → ${latest.dropoff || 'dropoff'}.${who} Tell me what went wrong on that ride, or name a different one.`
   }
   if (category === 'account') {
     return context?.student?.verified
@@ -128,6 +130,7 @@ Rules:
 - Use USER CONTEXT. Never invent charges, trips, or policies.
 - Do not invent refunds or payout dates.
 - Never ask for a full card number, password, or API key.
+- Other riders and drivers are first name only. Never write or repeat a last name, including in a ticket subject or body. peerFirstName is already a first name.
 - Safety: if someone may be in danger, tell them to contact local emergency services first.
 - If PREPARED DRAFT is present, ask them to review the confirm card. Do not output TICKET_DRAFT.
 - If PREPARED DRAFT is null and you truly have a category plus a concrete story, you may end with one line:
@@ -146,28 +149,40 @@ ${draft ? JSON.stringify(draft) : 'null'}
 Active support variant: ${role}.`
 }
 
+function scrubDraft(draft, context) {
+  if (!draft) return null
+  return {
+    ...draft,
+    subject: redactPeerText(draft.subject, context).slice(0, 140),
+    body: redactPeerText(draft.body, context).slice(0, 4000),
+  }
+}
+
 export function buildSupportTurn({ messages, context, roleVariant }) {
+  const safeMessages = scrubMessages(messages, context)
   const role = roleVariant === 'driver' ? 'driver' : 'rider'
-  const question = lastUserText(messages)
-  const category = detectCategory(messages)
-  const detail = detailFrom(messages)
+  const question = lastUserText(safeMessages)
+  const category = detectCategory(safeMessages)
+  const detail = detailFrom(safeMessages)
   const actions = [action('Open Help', 'account', { tab: 'help' })]
   const name = context?.signedIn ? (context.name || 'there') : 'there'
 
   if (!question) {
     return {
-      reply: `Hi ${name}. This is Support, separate from Help. Tell me about a billing issue, a ride, a bug, your account, or a safety concern. I will not file a ticket until you confirm it.`,
+      reply: redactPeerText(`Hi ${name}. This is Support, separate from Help. Tell me about a billing issue, a ride, a bug, your account, or a safety concern. I will not file a ticket until you confirm it.`, context),
       actions: sanitizeActions(actions),
       ticketDraft: null,
+      messages: safeMessages,
       system: supportSystemPrompt(role, context, null),
     }
   }
 
   if (!category) {
     return {
-      reply: `Hi ${name}. I can file a ticket after we agree on it. What kind of issue is this: billing, a ride dispute, a bug, account access, or safety?`,
+      reply: redactPeerText(`Hi ${name}. I can file a ticket after we agree on it. What kind of issue is this: billing, a ride dispute, a bug, account access, or safety?`, context),
       actions: sanitizeActions(actions),
       ticketDraft: null,
+      messages: safeMessages,
       system: supportSystemPrompt(role, context, null),
     }
   }
@@ -178,26 +193,28 @@ export function buildSupportTurn({ messages, context, roleVariant }) {
 
   if (detail.length < 12) {
     return {
-      reply: `${lead}\n\n${diagnosis(category, context, role)}\n\nI have not filed a ticket yet.`,
+      reply: redactPeerText(`${lead}\n\n${diagnosis(category, context, role)}\n\nI have not filed a ticket yet.`, context),
       actions: sanitizeActions(actions),
       ticketDraft: null,
+      messages: safeMessages,
       system: supportSystemPrompt(role, context, null),
     }
   }
 
-  const ticketDraft = {
+  const ticketDraft = scrubDraft({
     category,
     subject: subjectFor(category, detail),
     body: draftBody({ category, detail, context, role }),
     ready: true,
-  }
+  }, context)
 
   return {
-    reply: `${lead}\n\n${diagnosis(category, context, role)}\n\nI put a ticket summary in the confirm card. Nothing is filed until you press Confirm and file. I cannot refund a charge or change a trip from here.`,
+    reply: redactPeerText(`${lead}\n\n${diagnosis(category, context, role)}\n\nI put a ticket summary in the confirm card. Nothing is filed until you press Confirm and file. I cannot refund a charge or change a trip from here.`, context),
     actions: sanitizeActions(category === 'billing'
       ? [action('Open Billing', 'account', { tab: 'billing' }), ...actions]
       : actions),
     ticketDraft,
+    messages: safeMessages,
     system: supportSystemPrompt(role, context, ticketDraft),
   }
 }
