@@ -4,7 +4,7 @@ import { PrimaryButton } from '../components/PrimaryButton'
 import { BillingPanel } from '../components/BillingPanel'
 import {
   IconBell, IconCard, IconCar, IconHelp, IconPrivacy, IconProfile,
-  IconSettings, IconSignOut, IconStudent,
+  IconSettings, IconSignOut, IconStudent, IconShare,
 } from '../components/icons'
 import { useAuth } from '../lib/auth'
 import { navigate } from '../lib/navigation'
@@ -20,6 +20,7 @@ import {
 import { useToasts, pushToast } from '../lib/toasts'
 import { isClemsonEmail } from '../lib/studentDomain'
 import { fetchMyDriverApplication, isAdminIdentity, onboardingLabel } from '../lib/driverOnboarding'
+import { ReferFriendsPanel } from './ReferFriends'
 
 const chip = (on) => ({
   padding: '8px 12px', borderRadius: 999, fontSize: 13, fontWeight: 600,
@@ -45,6 +46,7 @@ function Section({ title, subtitle, children, icon: Icon }) {
 
 const NAV = [
   { id: 'profile', label: 'Profile', Icon: IconProfile },
+  { id: 'refer', label: 'Refer friends', Icon: IconShare },
   { id: 'notifications', label: 'Alerts', Icon: IconBell },
   { id: 'billing', label: 'Billing', Icon: IconCard },
   { id: 'vehicle', label: 'Vehicle', Icon: IconCar },
@@ -362,6 +364,8 @@ export function AccountScreen() {
             )}
           </>
         )}
+
+        {tab === 'refer' && <ReferFriendsPanel userId={user?.id} />}
 
         {tab === 'notifications' && (
           <Section title="Notifications" subtitle="Choose which toasts you see" icon={IconBell}>

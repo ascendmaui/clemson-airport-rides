@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { getHashRoute, redirectShareHashToPath } from './lib/navigation'
+import { capturePromoFromLocation } from './lib/riderPromo'
 import { RequireAuth } from './components/RequireAuth'
 import { Marketing } from './screens/Marketing'
 import { RiderHome } from './screens/RiderHome'
@@ -117,6 +118,7 @@ export default function App() {
   useEffect(() => {
     if (redirectShareHashToPath()) return undefined
     const onRoute = () => {
+      capturePromoFromLocation()
       if (redirectShareHashToPath()) return
       setRoute(getHashRoute())
     }

@@ -5,6 +5,7 @@ import { HEAT_WINDOWS } from '../lib/rideDemand'
 import { PurpleAcceptButton } from '../components/PrimaryButton'
 import { navigate } from '../lib/navigation'
 import { setDriverOnline, subscribeTrips, supabase } from '../lib/supabase'
+import { grantRiderSocialForTrip } from '../lib/riderReferral'
 import { publishDriverLocation } from '../lib/driverTrack'
 import { DriverApprovalGate } from './DriverApprovalGate'
 
@@ -286,6 +287,9 @@ function DriverShell({ driverId }) {
       })
       if (nextStatus === 'completed') {
         const doneId = activeTrip.id
+        // rider_social credits: DB trigger is the source of truth. This call is
+        // idempotent and no-ops unless the rider's first ride just completed.
+        if (doneId) grantRiderSocialForTrip(doneId)
         setActiveTrip(null)
         await loadEarnings()
         if (doneId) navigate('rate', { trip: doneId })

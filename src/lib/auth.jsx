@@ -1,6 +1,8 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react'
 import { supabase, supabaseConfigured } from './supabase'
 import { isClemsonEmail } from './studentDomain'
+import { maybeClaimStoredPromo } from './riderReferral'
+import { normalizePromoCode } from './riderPromo'
 
 const AuthContext = createContext(null)
 
@@ -87,8 +89,8 @@ async function ensureStudentVerification(user, now) {
   }
 }
 
-async function ensureProfile(user) {
-  if (!supabase || !user?.id) return
+async function ensureProfile(user, { promoCode } = {}) {
+  if (!supabase || !user?.id) return null
   const fullName =
     user.user_metadata?.full_name ||
     user.user_metadata?.name ||
@@ -108,6 +110,12 @@ async function ensureProfile(user) {
   if (error) console.warn('[auth] profile upsert', error.message)
 
   if (clemson) await ensureStudentVerification(user, now)
+
+  // Code entered at signup. Claim stores referred_by / promo and status pending.
+  // It does not grant credits — those wait for the first completed ride.
+  const code = normalizePromoCode(promoCode || user?.user_metadata?.promo_code)
+  if (!code) return null
+  return maybeClaimStoredPromo(user, code)
 }
 
 export function AuthProvider({ children }) {
@@ -151,7 +159,7 @@ export function AuthProvider({ children }) {
       if (error) throw mapAuthError(error)
       return data
     },
-    async signUp(email, password, fullName) {
+    async signUp(email, password, fullName, promoCode) {
       if (!supabase) throw new Error('Supabase is not configured')
       const remaining = getSignupRateLimitRemainingSec()
       if (remaining > 0) {
@@ -159,10 +167,13 @@ export function AuthProvider({ children }) {
         err.retryAfterSec = remaining
         throw err
       }
+      const code = normalizePromoCode(promoCode)
+      const meta = { full_name: fullName || '' }
+      if (code) meta.promo_code = code
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
-        options: { data: { full_name: fullName || '' } },
+        options: { data: meta },
       })
       if (error) {
         const mapped = mapAuthError(error)
@@ -171,8 +182,9 @@ export function AuthProvider({ children }) {
         }
         throw mapped
       }
-      if (data.user) await ensureProfile(data.user)
-      return data
+      let promoClaim = null
+      if (data.user) promoClaim = await ensureProfile(data.user, { promoCode: code })
+      return { ...data, promoClaim }
     },
     async signOut() {
       if (!supabase) return

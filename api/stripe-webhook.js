@@ -4,6 +4,7 @@
  */
 import Stripe from 'stripe'
 import { createClient } from '@supabase/supabase-js'
+import { grantRiderSocialForTrip } from '../server/riderReferral.js'
 
 export const config = { api: { bodyParser: false } }
 
@@ -86,14 +87,25 @@ export default async function handler(req, res) {
     if (event.type === 'checkout.session.completed') {
       const session = event.data?.object
       const recorded = await recordDeposit(session)
+      // Payment success hook. Grant is idempotent and does nothing until the
+      // trip itself is completed (deposits alone do not reward signups).
+      let referral = null
+      const tripId = session?.metadata?.tripId
+      if (serviceKey && tripId) {
+        const supabase = createClient(supabaseUrl, serviceKey, {
+          auth: { persistSession: false, autoRefreshToken: false },
+        })
+        referral = await grantRiderSocialForTrip(supabase, tripId)
+      }
       console.log('[stripe-webhook] checkout.session.completed', {
         id: session?.id,
         metadata: session?.metadata,
         amount_total: session?.amount_total,
         recorded,
+        referral,
       })
       res.statusCode = 200
-      return res.end(JSON.stringify({ received: true, type: event.type, recorded }))
+      return res.end(JSON.stringify({ received: true, type: event.type, recorded, referral }))
     }
 
     console.log('[stripe-webhook] unhandled', event.type)

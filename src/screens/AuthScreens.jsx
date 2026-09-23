@@ -7,6 +7,7 @@ import {
 } from '../lib/auth'
 import { getHashRoute, navigate } from '../lib/navigation'
 import { resumeAfterAuth } from '../components/SignInToBookModal'
+import { capturePromoFromLocation } from '../lib/riderPromo'
 
 const fieldStyle = {
   width: '100%',
@@ -154,7 +155,10 @@ export function SignUpScreen() {
   const [fullName, setFullName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [promo, setPromo] = useState(() => capturePromoFromLocation())
   const [error, setError] = useState(null)
+  const [info, setInfo] = useState(null)
+  const [created, setCreated] = useState(false)
   const [busy, setBusy] = useState(false)
   const [cooldownSec, setCooldownSec] = useState(() => getSignupRateLimitRemainingSec())
   const submitLock = useRef(false)
@@ -171,7 +175,7 @@ export function SignUpScreen() {
 
   async function onSubmit(e) {
     e.preventDefault()
-    if (submitLock.current || busy) return
+    if (created || submitLock.current || busy) return
     const left = getSignupRateLimitRemainingSec()
     if (left > 0) {
       setCooldownSec(left)
@@ -179,11 +183,23 @@ export function SignUpScreen() {
       return
     }
     setError(null)
+    setInfo(null)
     const trimmed = email.trim()
     submitLock.current = true
     setBusy(true)
     try {
-      await signUp(trimmed, password, fullName.trim())
+      const result = await signUp(trimmed, password, fullName.trim(), promo)
+      const claim = result?.promoClaim
+      if (claim?.error) {
+        setError(`Account created. ${claim.error}`)
+        setCreated(true)
+        return
+      }
+      if (promo.trim() && !result?.session) {
+        setInfo('Account created. Confirm your email to sign in. Your promo code is stored with this signup and saved on your profile when you sign in. Rewards are issued only after your first completed ride.')
+        setCreated(true)
+        return
+      }
       afterAuthSuccess()
     } catch (err) {
       if (isRateLimitError(err)) {
@@ -217,19 +233,42 @@ export function SignUpScreen() {
           <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink-secondary)' }}>Email <span style={{ fontWeight: 500, color: 'var(--ink-tertiary)' }}>(Clemson email gets student pricing)</span></span>
           <input required type="email" autoComplete="email" placeholder="you@gmail.com" value={email} onChange={(e) => setEmail(e.target.value)} style={fieldStyle} disabled={blocked} />
         </label>
-        <label style={{ display: 'block', marginBottom: 18 }}>
+        <label style={{ display: 'block', marginBottom: 14 }}>
           <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink-secondary)' }}>Password</span>
-          <input required type="password" autoComplete="new-password" minLength={6} value={password} onChange={(e) => setPassword(e.target.value)} style={fieldStyle} disabled={blocked} />
+          <input required type="password" autoComplete="new-password" minLength={6} value={password} onChange={(e) => setPassword(e.target.value)} style={fieldStyle} disabled={blocked || created} />
+        </label>
+        <label style={{ display: 'block', marginBottom: 18 }}>
+          <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink-secondary)' }}>Promo code <span style={{ fontWeight: 500, color: 'var(--ink-tertiary)' }}>(optional)</span></span>
+          <input
+            type="text"
+            autoComplete="off"
+            autoCapitalize="characters"
+            placeholder="Friend's code"
+            value={promo}
+            onChange={(e) => setPromo(e.target.value.toUpperCase())}
+            style={fieldStyle}
+            disabled={blocked || created}
+          />
+          <span style={{ display: 'block', marginTop: 6, fontSize: 12, color: '#522D80', lineHeight: 1.4 }}>
+            Applied when you create the account. You and your friend are rewarded only after you complete your first ride.
+          </span>
         </label>
         {error && <p style={{ color: 'var(--danger)', fontSize: 13, marginBottom: 12 }}>{error}</p>}
+        {info && <p style={{ color: '#522D80', fontSize: 13, marginBottom: 12, lineHeight: 1.45 }}>{info}</p>}
         {cooldownSec > 0 && !error && (
           <p style={{ color: 'var(--ink-secondary)', fontSize: 13, marginBottom: 12 }}>
             Email send limit cooling down — retry in {cooldownSec}s.
           </p>
         )}
-        <button type="submit" className="pressable primary-cta" disabled={blocked} style={{ width: '100%', padding: 16, borderRadius: 16, background: 'linear-gradient(135deg, var(--orange) 0%, #ff7a1a 100%)', color: '#fff', fontWeight: 700, fontSize: 16, boxShadow: 'var(--shadow-cta)', opacity: blocked ? 0.7 : 1 }}>
-          {cta}
-        </button>
+        {created ? (
+          <button type="button" className="pressable primary-cta" onClick={afterAuthSuccess} style={{ width: '100%', padding: 16, borderRadius: 16, background: 'linear-gradient(135deg, #F56600 0%, #ff7a1a 100%)', color: '#fff', fontWeight: 700, fontSize: 16, boxShadow: 'var(--shadow-cta)' }}>
+            Continue
+          </button>
+        ) : (
+          <button type="submit" className="pressable primary-cta" disabled={blocked} style={{ width: '100%', padding: 16, borderRadius: 16, background: 'linear-gradient(135deg, var(--orange) 0%, #ff7a1a 100%)', color: '#fff', fontWeight: 700, fontSize: 16, boxShadow: 'var(--shadow-cta)', opacity: blocked ? 0.7 : 1 }}>
+            {cta}
+          </button>
+        )}
       </form>
       <p style={{ marginTop: 18, fontSize: 14, color: 'var(--ink-secondary)', textAlign: 'center' }}>
         Already have an account?{' '}

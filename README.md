@@ -15,6 +15,7 @@ Vite + React rider/driver shell · Clemson orange `#F56600` · purple `#522D80`.
 | Payments | Vercel `/api/create-checkout-session` + `/api/stripe-webhook` · 25% deposit · writes `payments` when service role + trip metadata present |
 | Data | Real Supabase queries · online drivers from `driver_status` · trips Realtime · **no demo fleet** |
 | UI | Lyft-style soft shadows, spring sheets, Clemson brand |
+| Rider promos | Account → Refer friends · signup `?ref=` code · rewards after first completed ride (`supabase/rider_social_promo.sql`, type `rider_social`) |
 
 ## Env
 
