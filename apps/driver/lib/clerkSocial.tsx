@@ -40,7 +40,7 @@ type FlowResult = {
 }
 
 const redirectUrl = AuthSession.makeRedirectUri({
-  scheme: 'clemsonrides',
+  scheme: 'clemsonrides-driver',
   path: 'sso-callback',
 })
 

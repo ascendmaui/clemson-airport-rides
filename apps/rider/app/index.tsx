@@ -21,6 +21,7 @@ import { MainTabs } from '@/components/MainTabs'
 import { Skeleton } from '@/components/Skeleton'
 import { loadBusySpots, type BusySpot } from '@/lib/busySpots'
 import { useAuth } from '@/lib/auth'
+import { setAuthNext } from '@/lib/authNext'
 import { playTigerCue, tapHaptic } from '@/lib/feedback'
 import { displayFirstName } from 'rides-native/authErrors'
 import { campusOverlays } from 'rides-native/riderShell.js'
@@ -242,6 +243,12 @@ export default function RiderHome() {
               accessibilityLabel="Account"
               onPress={() => {
                 void tapHaptic()
+                // No loaded account: go to login instead of a gated screen.
+                if (!user) {
+                  setAuthNext('/account')
+                  router.push('/sign-in')
+                  return
+                }
                 router.push('/account')
               }}
               style={[styles.avatar, lift(colors, 'rest')]}

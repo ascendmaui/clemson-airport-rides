@@ -7,6 +7,8 @@ import type { Palette } from '@/lib/palette'
 import { useTheme } from '@/lib/theme'
 import { useThemedStyles } from '@/lib/useThemedStyles'
 import { tapHaptic } from '@/lib/feedback'
+import { useAuth } from '@/lib/auth'
+import { setAuthNext } from '@/lib/authNext'
 
 const TABS = [
   { id: 'home', href: '/', label: 'Rides', icon: 'car-outline' as const },
@@ -17,6 +19,7 @@ const TABS = [
 
 export function MainTabs({ active }: { active: 'schedule' | 'friends' | 'account' | 'home' }) {
   const router = useRouter()
+  const { user } = useAuth()
   const insets = useSafeAreaInsets()
   const { colors } = useTheme()
   const styles = useThemedStyles(makeStyles)
@@ -33,6 +36,11 @@ export function MainTabs({ active }: { active: 'schedule' | 'friends' | 'account
             onPress={() => {
               if (on) return
               void tapHaptic()
+              if (tab.id === 'account' && !user) {
+                setAuthNext('/account')
+                router.push('/sign-in')
+                return
+              }
               router.replace(tab.href)
             }}
             style={styles.item}

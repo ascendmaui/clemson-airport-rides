@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import {
+  clerkSecrets,
   configuredSecret,
+  verifyWithAnySecret,
   handleClerkSupabaseSession,
   verifiedEmailFromClerkUser,
 } from './clerkSupabaseBridge.js'
@@ -134,4 +136,21 @@ test('clerk user email helper requires a verified primary address', () => {
   assert.equal(parsed.email, 'ada@clemson.edu')
   assert.equal(parsed.emailVerified, true)
   assert.equal(parsed.fullName, 'Ada Lovelace')
+})
+
+test('bridge accepts both the prod and the dev Clerk instance secrets', () => {
+  assert.deepEqual(clerkSecrets({ CLERK_SECRET_KEY: 'sk_live_prod_value', CLERK_SECRET_KEY_DEV: 'sk_test_dev_value' }), ['sk_live_prod_value', 'sk_test_dev_value'])
+  assert.deepEqual(clerkSecrets({ CLERK_SECRET_KEY: 'sk_live_prod_value' }), ['sk_live_prod_value'])
+  assert.deepEqual(clerkSecrets({ CLERK_SECRET_KEY_DEV: 'sk_test_placeholder' }), [])
+})
+
+test('a dev-instance token verifies with the dev secret after the prod secret rejects it', async () => {
+  const verify = async (token, secret) => {
+    if (secret !== 'sk_test_dev_value') throw new Error('jwk-kid-mismatch')
+    return { sub: 'user_dev' }
+  }
+  const out = await verifyWithAnySecret('jwt', ['sk_live_prod_value', 'sk_test_dev_value'], verify)
+  assert.equal(out.secret, 'sk_test_dev_value')
+  assert.equal(out.payload.sub, 'user_dev')
+  await assert.rejects(() => verifyWithAnySecret('jwt', ['sk_live_prod_value'], verify), /jwk-kid-mismatch/)
 })

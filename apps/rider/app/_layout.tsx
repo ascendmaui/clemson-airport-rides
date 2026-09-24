@@ -7,10 +7,12 @@ import { View } from 'react-native'
 import { ApproachAlert } from '@/components/ApproachAlert'
 import { AuthProvider, bindClerkSignOut, useAuth } from '@/lib/auth'
 import { clerkPublishableKey } from '@/lib/clerkEnv'
+import { clearClerkTokenCache } from '@/lib/freshAuth'
 import { PasswordRecoveryListener } from '@/lib/passwordRecovery'
 import { ThemeProvider, useTheme } from '@/lib/theme'
 import { useApproachingTrip } from '@/lib/useRiderTrip'
 import { BootScreen } from '@/components/BootScreen'
+import { StaleSessionGuard } from '@/components/StaleSessionGuard'
 import { supabase } from '@/lib/supabase'
 import { ProfileRequiredGate } from 'rides-native/PartyScreens'
 import { setCarpoolApiBase } from 'rides-native/shared/carpoolApi.js'
@@ -23,12 +25,13 @@ function ApproachHost() {
   return <ApproachAlert status={trip?.status ?? null} driverId={trip?.driver_id ?? null} />
 }
 
-function Gate({ children }: { children: ReactNode }) {
+function Gate({ children, clerk }: { children: ReactNode; clerk: boolean }) {
   const { loading, user } = useAuth()
   const { colors } = useTheme()
   if (loading) return <BootScreen />
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
+      {clerk ? <StaleSessionGuard /> : null}
       <ProfileRequiredGate user={user} supabase={supabase} />
       {children}
     </View>
@@ -44,6 +47,7 @@ function ClerkSignOutSync() {
       } catch {
         // Email-only sessions have no Clerk session to clear.
       }
+      await clearClerkTokenCache()
     })
     return () => bindClerkSignOut(null)
   }, [signOut])
@@ -60,12 +64,12 @@ function ThemedStack() {
   )
 }
 
-function AppTree() {
+function AppTree({ clerk = false }: { clerk?: boolean }) {
   return (
     <ThemeProvider>
       <AuthProvider>
         <PasswordRecoveryListener />
-        <Gate>
+        <Gate clerk={clerk}>
           <ThemedStack />
           <ApproachHost />
         </Gate>
@@ -80,7 +84,7 @@ export default function RootLayout() {
   return (
     <ClerkProvider publishableKey={publishableKey} tokenCache={tokenCache}>
       <ClerkSignOutSync />
-      <AppTree />
+      <AppTree clerk />
     </ClerkProvider>
   )
 }

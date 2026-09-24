@@ -1,10 +1,16 @@
-/** Rider social providers. Driver screens omit these props and stay email-only. */
+/**
+ * Social providers for both apps. Rider and driver both sign in through Clerk
+ * (useSSO / native Apple / native Google), then bridge into Supabase via
+ * /api/clerk-supabase-session. Supabase's own Google/Apple/Facebook providers are off.
+ */
 
 export const RIDER_SOCIAL_PROVIDERS = [
   { id: 'apple', strategy: 'oauth_apple', label: 'Apple' },
   { id: 'google', strategy: 'oauth_google', label: 'Google' },
   { id: 'facebook', strategy: 'oauth_facebook', label: 'Facebook' },
 ]
+
+export const DRIVER_SOCIAL_PROVIDERS = RIDER_SOCIAL_PROVIDERS
 
 export function socialStrategy(providerId) {
   const match = RIDER_SOCIAL_PROVIDERS.find((provider) => provider.id === providerId)
