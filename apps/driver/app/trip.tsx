@@ -1,10 +1,10 @@
 import { useLocalSearchParams, useRouter } from 'expo-router'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { CampusMap, type MapPin } from '@/components/CampusMap'
 import { FarePanel } from '@/components/FarePanel'
-import { ErrorText, Primary, Tag, cardShadow } from '@/components/chrome'
+import { ErrorText, Primary, Tag, useCardShadow } from '@/components/chrome'
 import { useAuth } from '@/lib/auth'
 import { useFeedback } from '@/lib/feedback'
 import { oneParam } from '@/lib/oneParam'
@@ -19,7 +19,9 @@ import {
   TESLA_FLEET_NOTICE,
   type DriverCard,
 } from 'rides-native/tripTags'
-import { INK, INK_SECONDARY, ORANGE, PURPLE } from 'rides-native/places.js'
+import { ORANGE, PURPLE } from 'rides-native/places.js'
+import { useTheme } from '@/lib/theme'
+import type { Palette } from '@/lib/palette'
 
 const STEPS = ['accepted', 'arriving', 'arrived', 'in_progress', 'completed'] as const
 
@@ -32,6 +34,9 @@ export default function TripScreen() {
   const id = oneParam(params.id)
   const { user } = useAuth()
   const { pulse } = useFeedback()
+  const { colors, navApp } = useTheme()
+  const shadow = useCardShadow()
+  const styles = useMemo(() => tripStyles(colors), [colors])
   const [trip, setTrip] = useState<DriverCard | null>(null)
   const [self, setSelf] = useState<{ latitude: number; longitude: number } | null>(null)
   const [rider, setRider] = useState<RiderFix | null>(null)
@@ -131,7 +136,7 @@ export default function TripScreen() {
   return (
     <View style={styles.screen}>
       <CampusMap pins={pins} center={focus} route={route.length > 1 ? route : undefined} />
-      <View pointerEvents="box-none" style={[styles.sheet, { paddingBottom: insets.bottom + 12 }]}>
+      <View pointerEvents="box-none" style={[styles.sheet, shadow, { paddingBottom: insets.bottom + 12 }]}>
         <ScrollView style={styles.sheetScroll} contentContainerStyle={styles.sheetContent} showsVerticalScrollIndicator={false}>
         <Text style={styles.kicker} onPress={() => router.back()}>← LIVE TRIP</Text>
         <Text style={styles.title}>{trip ? statusHeadline(trip.status) : 'Loading trip'}</Text>
@@ -154,13 +159,19 @@ export default function TripScreen() {
             </View>
             <FarePanel card={trip} />
             <View style={styles.navRow}>
-              <Pressable onPress={() => openNavigation('apple', target).catch((err) => setError(err instanceof Error ? err.message : 'Could not open Apple Maps'))} style={styles.nav}>
-                <Text style={styles.navText}>Apple Maps</Text>
-              </Pressable>
-              <Pressable onPress={() => openNavigation('google', target).catch((err) => setError(err instanceof Error ? err.message : 'Could not open Google Maps'))} style={styles.nav}>
-                <Text style={styles.navText}>Google Maps</Text>
-              </Pressable>
+              {(navApp === 'google' ? ['google', 'apple'] as const : ['apple', 'google'] as const).map((provider) => (
+                <Pressable
+                  key={provider}
+                  onPress={() => openNavigation(provider, target).catch((err) => setError(err instanceof Error ? err.message : 'Could not open maps'))}
+                  style={styles.nav}
+                >
+                  <Text style={styles.navText}>{provider === 'apple' ? 'Apple Maps' : 'Google Maps'}</Text>
+                </Pressable>
+              ))}
             </View>
+            <Pressable onPress={() => router.push({ pathname: '/trip-details', params: { id: trip.id } })}>
+              <Text style={styles.settle}>Trip details</Text>
+            </Pressable>
             <Text style={styles.copy}>Directions to {headingToDropoff ? 'drop-off' : 'pickup'} · {target.label}</Text>
             {trip.teslaStub ? <Text style={styles.copy}>{TESLA_FLEET_NOTICE}</Text> : null}
             {settleNote ? <Text style={styles.settle}>{settleNote}</Text> : null}
@@ -177,29 +188,30 @@ export default function TripScreen() {
   )
 }
 
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#F7F4F0' },
-  sheet: {
-    backgroundColor: '#fff',
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-    padding: 18,
-    gap: 8,
-    maxHeight: '62%',
-    ...cardShadow,
-  },
-  sheetScroll: { flexGrow: 0 },
-  sheetContent: { gap: 8, paddingBottom: 8 },
-  kicker: { color: ORANGE, fontWeight: '800', letterSpacing: 1 },
-  title: { fontSize: 26, fontWeight: '800', color: PURPLE },
-  copy: { color: INK_SECONDARY, fontSize: 14, lineHeight: 20 },
-  fare: { color: INK, fontWeight: '800', fontSize: 16 },
-  tags: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-  track: { flexDirection: 'row', gap: 8, marginVertical: 4 },
-  dot: { flex: 1, height: 6, borderRadius: 999, backgroundColor: 'rgba(82,45,128,0.15)' },
-  dotOn: { backgroundColor: ORANGE },
-  navRow: { flexDirection: 'row', gap: 8 },
-  nav: { flex: 1, backgroundColor: PURPLE, borderRadius: 14, paddingVertical: 12, alignItems: 'center' },
-  navText: { color: '#fff', fontWeight: '800' },
-  settle: { color: PURPLE, fontWeight: '700', lineHeight: 20 },
-})
+function tripStyles(colors: Palette) {
+  return StyleSheet.create({
+    screen: { flex: 1, backgroundColor: colors.background },
+    sheet: {
+      backgroundColor: colors.card,
+      borderTopLeftRadius: 28,
+      borderTopRightRadius: 28,
+      padding: 18,
+      gap: 8,
+      maxHeight: '62%',
+    },
+    sheetScroll: { flexGrow: 0 },
+    sheetContent: { gap: 8, paddingBottom: 8 },
+    kicker: { color: colors.orange, fontWeight: '800', letterSpacing: 1 },
+    title: { fontSize: 26, fontWeight: '800', color: colors.title },
+    copy: { color: colors.inkSecondary, fontSize: 14, lineHeight: 20 },
+    fare: { color: colors.ink, fontWeight: '800', fontSize: 16 },
+    tags: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+    track: { flexDirection: 'row', gap: 8, marginVertical: 4 },
+    dot: { flex: 1, height: 6, borderRadius: 999, backgroundColor: colors.track },
+    dotOn: { backgroundColor: colors.orange },
+    navRow: { flexDirection: 'row', gap: 8 },
+    nav: { flex: 1, backgroundColor: colors.fill, borderRadius: 14, paddingVertical: 12, alignItems: 'center' },
+    navText: { color: colors.onAccent, fontWeight: '800' },
+    settle: { color: colors.title, fontWeight: '700', lineHeight: 20 },
+  })
+}

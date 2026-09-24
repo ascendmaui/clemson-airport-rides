@@ -2,6 +2,7 @@ import { createAudioPlayer, setAudioModeAsync, type AudioPlayer } from 'expo-aud
 import * as Haptics from 'expo-haptics'
 import { createContext, useContext, useEffect, useMemo, useRef, type ReactNode } from 'react'
 import requestSound from '@/assets/sounds/request.wav'
+import { useTheme } from '@/lib/theme'
 
 export type Pulse = 'request' | 'accept' | 'decline' | 'online' | 'complete'
 
@@ -27,6 +28,9 @@ function hapticFor(kind: Pulse) {
 }
 
 export function FeedbackProvider({ children }: { children: ReactNode }) {
+  const { sounds } = useTheme()
+  const soundsRef = useRef(sounds)
+  soundsRef.current = sounds
   const playerRef = useRef<AudioPlayer | null>(null)
 
   useEffect(() => {
@@ -48,6 +52,7 @@ export function FeedbackProvider({ children }: { children: ReactNode }) {
   const api = useMemo<FeedbackApi>(() => ({
     pulse(kind) {
       Haptics.notificationAsync(hapticFor(kind)).catch(() => {})
+      if (!soundsRef.current) return
       if (kind !== 'request' && kind !== 'accept' && kind !== 'complete') return
       const player = playerRef.current
       if (!player) return

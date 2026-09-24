@@ -30,6 +30,16 @@ Optional API base (defaults to production):
 npx eas-cli env:create --name EXPO_PUBLIC_API_BASE --value https://clemson-airport-rides.vercel.app --environment production --visibility plaintext
 ```
 
+## Driver shell
+
+Bottom tabs are Home, Discover, Earnings, Inbox, and Menu. Home keeps the existing go-online gate, live offers, and trip accept flow on the campus map. The orange GO button is the online toggle.
+
+Earnings reads the same `/api/driver?action=earnings` and payouts routes. Day, week, month, and year charts bucket those completed trips. Booked hours and online time are not invented when the server does not send them. Cash out retries due Stripe payouts with `POST /api/driver?action=payouts`.
+
+Menu reaches Vehicles, Documents, Insurance, Tax, Payouts, Learning, Bug Reporter, About, Settings, Refer, and Switch account. Vehicles save through the existing registered-vehicle call. Bug reports file `/api/support-ticket`.
+
+Display follows sunrise and sunset for the last known location, or Clemson, SC when no fix is stored. Settings → Display can force light or dark. Light keeps the current warm paper look. Dark uses the proposed night field (`#0E0B14` surface, `#16121F` cards) with the same orange `#F56600` and purple `#522D80`. Reference screenshots were used for screen flow only.
+
 ## Driver track
 
 Same Supabase tables and `/api/driver` routes as the web app. The rider app is a separate binary.

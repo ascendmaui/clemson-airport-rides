@@ -1,19 +1,31 @@
 import type { ReactNode } from 'react'
+import { useMemo } from 'react'
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
-import { INK, INK_SECONDARY, ORANGE, PURPLE, SURFACE } from 'rides-native/places.js'
+import { useTheme } from '@/lib/theme'
+import type { Palette } from '@/lib/palette'
 
-export const cardShadow = {
-  shadowColor: '#1A1033',
-  shadowOpacity: 0.12,
-  shadowRadius: 18,
-  shadowOffset: { width: 0, height: 10 },
-  elevation: 8,
-} as const
+export function useCardShadow() {
+  const { colors } = useTheme()
+  return useMemo(() => ({
+    shadowColor: colors.shadow,
+    shadowOpacity: 0.12,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 8,
+  }), [colors.shadow])
+}
 
 export function BackButton({ onPress }: { onPress: () => void }) {
+  const { colors } = useTheme()
+  const shadow = useCardShadow()
   return (
-    <Pressable onPress={onPress} style={styles.back} accessibilityRole="button">
-      <Text style={styles.backLabel}>←</Text>
+    <Pressable
+      onPress={onPress}
+      style={[styles.back, shadow, { backgroundColor: colors.card }]}
+      accessibilityRole="button"
+      accessibilityLabel="Back"
+    >
+      <Text style={[styles.backLabel, { color: colors.title }]}>←</Text>
     </Pressable>
   )
 }
@@ -29,14 +41,16 @@ export function Primary({
   disabled?: boolean
   tone?: 'orange' | 'purple' | 'ghost'
 }) {
-  const background = tone === 'orange' ? ORANGE : tone === 'purple' ? PURPLE : '#fff'
-  const color = tone === 'ghost' ? PURPLE : '#fff'
+  const { colors } = useTheme()
+  const shadow = useCardShadow()
+  const background = tone === 'orange' ? colors.orange : tone === 'purple' ? colors.fill : colors.card
+  const color = tone === 'ghost' ? colors.title : colors.onAccent
   return (
     <Pressable
       onPress={onPress}
       disabled={disabled}
       accessibilityRole="button"
-      style={[styles.primary, { backgroundColor: background, opacity: disabled ? 0.5 : 1 }, cardShadow]}
+      style={[styles.primary, shadow, { backgroundColor: background, opacity: disabled ? 0.5 : 1 }]}
     >
       <Text style={[styles.primaryLabel, { color }]}>{label}</Text>
     </Pressable>
@@ -44,10 +58,11 @@ export function Primary({
 }
 
 export function Tag({ label, tone = 'purple' }: { label: string; tone?: 'purple' | 'orange' }) {
+  const { colors } = useTheme()
   const on = tone === 'orange'
   return (
-    <View style={[styles.tag, on ? styles.tagOrange : styles.tagPurple]}>
-      <Text style={[styles.tagLabel, on ? styles.tagLabelOrange : styles.tagLabelPurple]}>{label}</Text>
+    <View style={[styles.tag, { backgroundColor: on ? 'rgba(245,102,0,0.16)' : colors.track }]}>
+      <Text style={[styles.tagLabel, { color: on ? colors.orange : colors.title }]}>{label}</Text>
     </View>
   )
 }
@@ -59,38 +74,62 @@ export function Field({
   secure,
   keyboard,
   placeholder,
+  multiline,
 }: {
   label: string
   value: string
   onChangeText: (value: string) => void
   secure?: boolean
-  keyboard?: 'default' | 'phone-pad' | 'number-pad'
+  keyboard?: 'default' | 'phone-pad' | 'number-pad' | 'email-address'
   placeholder?: string
+  multiline?: boolean
 }) {
+  const { colors } = useTheme()
   return (
     <View style={styles.field}>
-      <Text style={styles.fieldLabel}>{label}</Text>
+      <Text style={[styles.fieldLabel, { color: colors.inkSecondary }]}>{label}</Text>
       <TextInput
         value={value}
         onChangeText={onChangeText}
         secureTextEntry={secure}
         keyboardType={keyboard || 'default'}
         placeholder={placeholder}
-        placeholderTextColor="#8B939E"
-        autoCapitalize={keyboard ? 'none' : 'words'}
+        placeholderTextColor={colors.inkSecondary}
+        autoCapitalize={keyboard && keyboard !== 'default' ? 'none' : 'sentences'}
         autoCorrect={false}
-        style={styles.input}
+        multiline={multiline}
+        style={[
+          styles.input,
+          {
+            backgroundColor: colors.input,
+            color: colors.ink,
+            minHeight: multiline ? 96 : undefined,
+            textAlignVertical: multiline ? 'top' : 'center',
+          },
+        ]}
       />
     </View>
   )
 }
 
 export function Card({ children }: { children: ReactNode }) {
-  return <View style={[styles.card, cardShadow]}>{children}</View>
+  const { colors } = useTheme()
+  const shadow = useCardShadow()
+  return <View style={[styles.card, shadow, { backgroundColor: colors.card }]}>{children}</View>
 }
 
 export function ErrorText({ children }: { children: string }) {
-  return <Text style={styles.error}>{children}</Text>
+  const { colors } = useTheme()
+  return <Text style={[styles.error, { color: colors.danger }]}>{children}</Text>
+}
+
+export function screenColors(colors: Palette) {
+  return {
+    screen: { flex: 1, backgroundColor: colors.background },
+    kicker: { color: colors.orange, fontWeight: '800' as const, letterSpacing: 1.1, fontSize: 12 },
+    title: { fontSize: 28, fontWeight: '800' as const, color: colors.title, letterSpacing: -0.4 },
+    copy: { color: colors.inkSecondary, fontSize: 14, lineHeight: 20 },
+  }
 }
 
 const styles = StyleSheet.create({
@@ -98,30 +137,22 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 14,
-    backgroundColor: '#fff',
     alignItems: 'center',
     justifyContent: 'center',
-    ...cardShadow,
   },
-  backLabel: { color: PURPLE, fontSize: 18, fontWeight: '700' },
+  backLabel: { fontSize: 18, fontWeight: '700' },
   primary: { borderRadius: 16, paddingVertical: 16, alignItems: 'center', paddingHorizontal: 16 },
   primaryLabel: { fontWeight: '700', fontSize: 16 },
   tag: { borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5 },
-  tagPurple: { backgroundColor: 'rgba(82,45,128,0.1)' },
-  tagOrange: { backgroundColor: 'rgba(245,102,0,0.14)' },
   tagLabel: { fontSize: 11, fontWeight: '800' },
-  tagLabelPurple: { color: PURPLE },
-  tagLabelOrange: { color: ORANGE },
   field: { gap: 6 },
-  fieldLabel: { color: INK_SECONDARY, fontSize: 13, fontWeight: '700' },
+  fieldLabel: { fontSize: 13, fontWeight: '700' },
   input: {
-    backgroundColor: SURFACE,
     borderRadius: 14,
     paddingHorizontal: 14,
     paddingVertical: 12,
     fontSize: 16,
-    color: INK,
   },
-  card: { backgroundColor: '#fff', borderRadius: 22, padding: 16, gap: 10 },
-  error: { color: '#B42318', fontSize: 13, lineHeight: 18 },
+  card: { borderRadius: 22, padding: 16, gap: 10 },
+  error: { fontSize: 13, lineHeight: 18 },
 })

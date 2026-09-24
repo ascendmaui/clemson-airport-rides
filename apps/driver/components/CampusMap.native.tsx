@@ -4,14 +4,27 @@ import MapView, { Marker, Polyline, PROVIDER_DEFAULT } from 'react-native-maps'
 import { DOWNTOWN, ORANGE, PURPLE, STADIUM } from 'rides-native/places.js'
 import type { MapPin } from './CampusMap'
 
+const DARK_MAP = [
+  { elementType: 'geometry', stylers: [{ color: '#0e0b14' }] },
+  { elementType: 'labels.text.fill', stylers: [{ color: '#f5f6f8' }] },
+  { elementType: 'labels.text.stroke', stylers: [{ color: '#0e0b14' }] },
+  { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#2a2438' }] },
+  { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#16121f' }] },
+  { featureType: 'poi', elementType: 'geometry', stylers: [{ color: '#120e18' }] },
+]
+
 export function CampusMap({
   pins,
   center,
   route,
+  colorScheme = 'light',
+  focusToken = 0,
 }: {
   pins?: MapPin[]
   center?: { latitude: number; longitude: number } | null
   route?: { latitude: number; longitude: number }[]
+  colorScheme?: 'light' | 'dark'
+  focusToken?: number
 }) {
   const mapRef = useRef<MapView>(null)
   const pinsRef = useRef(pins)
@@ -50,7 +63,7 @@ export function CampusMap({
       },
       450,
     )
-  }, [centerKey, pinKey])
+  }, [centerKey, pinKey, focusToken])
 
   return (
     <View style={styles.fill}>
@@ -65,6 +78,8 @@ export function CampusMap({
           longitudeDelta: 0.04,
         }}
         mapType="standard"
+        userInterfaceStyle={colorScheme}
+        customMapStyle={colorScheme === 'dark' ? DARK_MAP : undefined}
         rotateEnabled={false}
         pitchEnabled={false}
         showsUserLocation={false}

@@ -1,7 +1,7 @@
 import { useRouter } from 'expo-router'
 import * as DocumentPicker from 'expo-document-picker'
 import * as ImagePicker from 'expo-image-picker'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { BackButton, Card, ErrorText, Field, Primary, Tag } from '@/components/chrome'
@@ -30,7 +30,8 @@ import {
 } from 'rides-native/driverOnboardingClient'
 import { loadDriverProfile, loadVehicle } from 'rides-native/driverDesk'
 import { TESLA_FLEET_NOTICE } from 'rides-native/tripTags'
-import { INK, INK_SECONDARY, ORANGE, PURPLE, SURFACE } from 'rides-native/places.js'
+import { useTheme } from '@/lib/theme'
+import type { Palette } from '@/lib/palette'
 
 const STEP_KINDS = ['account', 'documents', 'employment', 'tax', 'agreement', 'review'] as const
 type StepKind = (typeof STEP_KINDS)[number]
@@ -79,6 +80,7 @@ async function takePhoto(): Promise<PickedFile | null> {
 }
 
 export default function OnboardingScreen() {
+  const styles = useOnboardingStyles()
   const router = useRouter()
   const insets = useSafeAreaInsets()
   const { user } = useAuth()
@@ -530,6 +532,7 @@ function DocRow({
   onFile: (file: PickedFile | null) => void
   onError: (message: string) => void
 }) {
+  const styles = useOnboardingStyles()
   async function camera() {
     try {
       onFile(await takePhoto())
@@ -563,37 +566,41 @@ function DocRow({
   )
 }
 
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: SURFACE },
-  scroll: { padding: 16, paddingBottom: 48, gap: 12 },
-  kicker: { color: ORANGE, fontWeight: '800', letterSpacing: 1.1, fontSize: 12, marginTop: 12 },
-  title: { fontSize: 28, fontWeight: '800', color: PURPLE, letterSpacing: -0.4 },
-  copy: { color: INK_SECONDARY, fontSize: 15, lineHeight: 21 },
-  progressTrack: { height: 8, borderRadius: 999, backgroundColor: 'rgba(82,45,128,0.12)', overflow: 'hidden' },
-  progressFill: { height: '100%', backgroundColor: ORANGE, borderRadius: 999 },
-  progressLabel: { color: PURPLE, fontWeight: '700', fontSize: 13 },
-  steps: { gap: 8 },
-  stepChip: { borderRadius: 999, paddingHorizontal: 12, paddingVertical: 8, backgroundColor: '#fff' },
-  stepChipOn: { backgroundColor: PURPLE },
-  stepChipText: { color: PURPLE, fontWeight: '700', fontSize: 12 },
-  stepChipTextOn: { color: '#fff' },
-  cardTitle: { fontSize: 20, fontWeight: '800', color: PURPLE },
-  question: { gap: 8 },
-  questionLabel: { color: INK, fontWeight: '700', fontSize: 14 },
-  yesNo: { flexDirection: 'row', gap: 8 },
-  choices: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  choice: { borderRadius: 12, borderWidth: 1, borderColor: 'rgba(82,45,128,0.18)', paddingHorizontal: 12, paddingVertical: 10, backgroundColor: SURFACE },
-  choiceOn: { borderColor: PURPLE, backgroundColor: 'rgba(82,45,128,0.1)' },
-  choiceText: { color: INK, fontWeight: '700' },
-  choiceTextOn: { color: PURPLE },
-  checkRow: { flexDirection: 'row', gap: 10, alignItems: 'flex-start' },
-  box: { width: 22, height: 22, borderRadius: 6, borderWidth: 1.5, borderColor: PURPLE, marginTop: 2 },
-  boxOn: { backgroundColor: ORANGE, borderColor: ORANGE },
-  checkCopy: { flex: 1, color: INK, fontSize: 14, lineHeight: 20 },
-  hint: { color: INK_SECONDARY, fontSize: 13, lineHeight: 18 },
-  saved: { color: PURPLE, fontWeight: '700', fontSize: 13 },
-  agreement: { maxHeight: 220, backgroundColor: SURFACE, borderRadius: 14, padding: 12 },
-  agreementText: { color: INK, fontSize: 13, lineHeight: 19 },
-  blocker: { color: '#B42318', fontSize: 13 },
-  doc: { gap: 6, paddingTop: 8 },
-})
+function useOnboardingStyles() {
+  const { colors, scheme } = useTheme()
+  const mark = scheme === 'dark' ? colors.ink : colors.purple
+  return useMemo(() => StyleSheet.create({
+    screen: { flex: 1, backgroundColor: colors.background },
+    scroll: { padding: 16, paddingBottom: 48, gap: 12 },
+    kicker: { color: colors.orange, fontWeight: '800' as const, letterSpacing: 1.1, fontSize: 12, marginTop: 12 },
+    title: { fontSize: 28, fontWeight: '800' as const, color: colors.title, letterSpacing: -0.4 },
+    copy: { color: colors.inkSecondary, fontSize: 15, lineHeight: 21 },
+    progressTrack: { height: 8, borderRadius: 999, backgroundColor: colors.track, overflow: 'hidden' as const },
+    progressFill: { height: '100%' as const, backgroundColor: colors.orange, borderRadius: 999 },
+    progressLabel: { color: colors.title, fontWeight: '700' as const, fontSize: 13 },
+    steps: { gap: 8 },
+    stepChip: { borderRadius: 999, paddingHorizontal: 12, paddingVertical: 8, backgroundColor: colors.card },
+    stepChipOn: { backgroundColor: colors.fill },
+    stepChipText: { color: colors.title, fontWeight: '700' as const, fontSize: 12 },
+    stepChipTextOn: { color: colors.onAccent },
+    cardTitle: { fontSize: 20, fontWeight: '800' as const, color: colors.title },
+    question: { gap: 8 },
+    questionLabel: { color: colors.ink, fontWeight: '700' as const, fontSize: 14 },
+    yesNo: { flexDirection: 'row' as const, gap: 8 },
+    choices: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: 8 },
+    choice: { borderRadius: 12, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 12, paddingVertical: 10, backgroundColor: colors.input },
+    choiceOn: { borderColor: mark, backgroundColor: colors.track },
+    choiceText: { color: colors.ink, fontWeight: '700' as const },
+    choiceTextOn: { color: colors.title },
+    checkRow: { flexDirection: 'row' as const, gap: 10, alignItems: 'flex-start' as const },
+    box: { width: 22, height: 22, borderRadius: 6, borderWidth: 1.5, borderColor: mark, marginTop: 2 },
+    boxOn: { backgroundColor: colors.orange, borderColor: colors.orange },
+    checkCopy: { flex: 1, color: colors.ink, fontSize: 14, lineHeight: 20 },
+    hint: { color: colors.inkSecondary, fontSize: 13, lineHeight: 18 },
+    saved: { color: colors.title, fontWeight: '700' as const, fontSize: 13 },
+    agreement: { maxHeight: 220, backgroundColor: colors.input, borderRadius: 14, padding: 12 },
+    agreementText: { color: colors.ink, fontSize: 13, lineHeight: 19 },
+    blocker: { color: colors.danger, fontSize: 13 },
+    doc: { gap: 6, paddingTop: 8 },
+  }), [colors, mark])
+}

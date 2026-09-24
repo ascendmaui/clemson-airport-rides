@@ -1,17 +1,20 @@
 import { useRouter } from 'expo-router'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useAuth } from '@/lib/auth'
 import { registerDriverPush, type PushState } from '@/lib/push'
 import { supabase } from '@/lib/supabase'
 import { displayFirstName } from 'rides-native/authErrors'
-import { INK_SECONDARY, ORANGE, PURPLE, SURFACE } from 'rides-native/places.js'
+import { useTheme } from '@/lib/theme'
+import type { Palette } from '@/lib/palette'
 
 export default function AccountScreen() {
   const router = useRouter()
   const insets = useSafeAreaInsets()
   const { user, configured, signOut } = useAuth()
+  const { colors } = useTheme()
+  const styles = useMemo(() => accountStyles(colors), [colors])
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [push, setPush] = useState<PushState | null>(null)
@@ -83,15 +86,17 @@ export default function AccountScreen() {
   )
 }
 
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: SURFACE, padding: 20, gap: 12 },
-  back: { width: 40, height: 40, borderRadius: 12, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center' },
-  backText: { color: PURPLE, fontSize: 18, fontWeight: '700' },
-  title: { fontSize: 28, fontWeight: '800', color: PURPLE },
-  copy: { color: INK_SECONDARY, fontSize: 15, lineHeight: 21 },
-  error: { color: '#B42318' },
-  linkRow: { backgroundColor: '#fff', borderRadius: 16, paddingVertical: 14, paddingHorizontal: 16 },
-  linkText: { color: PURPLE, fontWeight: '800' },
-  primary: { backgroundColor: ORANGE, borderRadius: 16, paddingVertical: 16, alignItems: 'center', marginTop: 8 },
-  primaryText: { color: '#fff', fontWeight: '700', fontSize: 16 },
-})
+function accountStyles(colors: Palette) {
+  return StyleSheet.create({
+    screen: { flex: 1, backgroundColor: colors.background, padding: 20, gap: 12 },
+    back: { width: 40, height: 40, borderRadius: 12, backgroundColor: colors.card, alignItems: 'center', justifyContent: 'center' },
+    backText: { color: colors.title, fontSize: 18, fontWeight: '700' },
+    title: { fontSize: 28, fontWeight: '800', color: colors.title },
+    copy: { color: colors.inkSecondary, fontSize: 15, lineHeight: 21 },
+    error: { color: colors.danger },
+    linkRow: { backgroundColor: colors.card, borderRadius: 16, paddingVertical: 14, paddingHorizontal: 16 },
+    linkText: { color: colors.title, fontWeight: '800' },
+    primary: { backgroundColor: colors.orange, borderRadius: 16, paddingVertical: 16, alignItems: 'center', marginTop: 8 },
+    primaryText: { color: colors.onAccent, fontWeight: '700', fontSize: 16 },
+  })
+}
