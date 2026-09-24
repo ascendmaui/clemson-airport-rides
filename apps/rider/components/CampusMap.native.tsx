@@ -35,6 +35,7 @@ export const CampusMap = forwardRef<CampusMapHandle, CampusMapProps>(function Ca
     surge = false,
     userCoordinate = null,
     pins = [],
+    fitPins = false,
   },
   ref,
 ) {
@@ -57,6 +58,29 @@ export const CampusMap = forwardRef<CampusMapHandle, CampusMapProps>(function Ca
       )
     },
   }))
+
+  const fitKey = pins
+    .map((pin) => `${pin.id}:${pin.badge || ''}:${pin.id === 'driver' ? 'd' : pin.latitude.toFixed(5)}:${pin.id === 'driver' ? '' : pin.longitude.toFixed(5)}`)
+    .join('|')
+
+  useEffect(() => {
+    if (!fitPins || !pins.length || !mapRef.current) return undefined
+    const coords = pins.map((pin) => ({ latitude: pin.latitude, longitude: pin.longitude }))
+    if (coords.length === 1) {
+      mapRef.current.animateToRegion({
+        latitude: coords[0].latitude,
+        longitude: coords[0].longitude,
+        latitudeDelta: 0.04,
+        longitudeDelta: 0.04,
+      }, 500)
+      return undefined
+    }
+    mapRef.current.fitToCoordinates(coords, {
+      edgePadding: { top: 48, right: 48, bottom: 48, left: 48 },
+      animated: true,
+    })
+    return undefined
+  }, [fitPins, fitKey])
 
   useEffect(() => {
     if (!theater) return undefined
@@ -150,8 +174,15 @@ export const CampusMap = forwardRef<CampusMapHandle, CampusMapProps>(function Ca
             key={pin.id}
             coordinate={{ latitude: pin.latitude, longitude: pin.longitude }}
             title={pin.title}
-            pinColor={pin.color}
-          />
+            pinColor={pin.badge ? undefined : pin.color}
+            anchor={pin.badge ? { x: 0.5, y: 0.5 } : undefined}
+          >
+            {pin.badge ? (
+              <View style={[styles.stop, { backgroundColor: pin.color }]}>
+                <Text style={styles.stopText}>{pin.badge}</Text>
+              </View>
+            ) : null}
+          </Marker>
         ))}
         {userCoordinate ? (
           <Marker coordinate={userCoordinate} pinColor={colors.purple} title="You" />
@@ -180,6 +211,17 @@ const styles = StyleSheet.create({
     borderColor: '#FFFFFF',
   },
   carGlyph: { fontSize: 14 },
+  stop: {
+    minWidth: 26,
+    height: 26,
+    paddingHorizontal: 6,
+    borderRadius: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+  },
+  stopText: { color: '#FFFFFF', fontSize: 12, fontWeight: '800' },
   zone: { position: 'absolute', left: 12, bottom: 12, right: 12, alignItems: 'flex-start' },
   zoneText: { overflow: 'hidden', borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6, fontSize: 12, fontWeight: '800' },
 })
