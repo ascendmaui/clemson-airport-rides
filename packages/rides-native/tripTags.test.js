@@ -3,6 +3,8 @@ import test from 'node:test'
 import {
   declineDisposition,
   depositSliceCents,
+  queueEmptyCopy,
+  scheduledQueueTitle,
   driverNetCents,
   fareCollection,
   isDueNow,
@@ -57,6 +59,29 @@ test('weekend and party covers scheduled Friday night through Sunday only', () =
     metadata: {},
   })
   assert.equal(immediate.includes('weekend_party'), false)
+})
+
+test('weekend queue copy names scheduled airport and campus pickups', () => {
+  const empty = queueEmptyCopy('weekend_party')
+  assert.equal(empty.title, 'No weekend or party rides')
+  assert.match(empty.body, /Friday evening through Sunday/)
+  assert.match(empty.body, /airport and campus/)
+  assert.equal(scheduledQueueTitle('weekend_party'), 'Scheduled weekend and party rides')
+  assert.equal(scheduledQueueTitle('all'), 'Scheduled')
+  assert.equal(scheduledQueueTitle('student'), 'Scheduled')
+  assert.throws(() => queueEmptyCopy('nope'), /Unknown queue filter/)
+})
+
+test('an explicit party weekend purpose tags the weekend filter and a Tesla tier stays a stub tag', () => {
+  const tags = tripTags({
+    status: 'scheduled',
+    tier: 'tesla',
+    pickup_at: '2026-09-30T22:00:00.000Z',
+    metadata: { purpose: 'party_weekend', kind: 'scheduled', tesla: true },
+  })
+  assert.equal(tags.includes('weekend_party'), true)
+  assert.equal(tags.includes('tesla'), true)
+  assert.equal(tags.includes('scheduled'), true)
 })
 
 test('queue filters and the live-trip lead window', () => {

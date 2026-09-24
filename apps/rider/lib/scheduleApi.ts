@@ -32,6 +32,7 @@ export type ScheduledRow = {
   pickup_at: string | null
   scheduled_for: string | null
   rider_note: string | null
+  tier: string | null
   metadata: { purpose?: string; recurrence?: { weekdays?: string[] }; fare_is_estimate?: boolean } | null
 }
 
@@ -77,6 +78,7 @@ export async function createScheduledTrip({
   purpose,
   weekdays,
   quote,
+  tier = 'standard',
 }: {
   user: AuthUser
   pickup: RidePlace
@@ -85,6 +87,7 @@ export async function createScheduledTrip({
   purpose: SchedulePurpose
   weekdays: string[]
   quote: RideQuote
+  tier?: 'standard' | 'tesla'
 }) {
   if (!supabase) throw new Error('Supabase is not configured')
   const when = pickupAt ? pickupAt.toISOString() : null
@@ -102,13 +105,15 @@ export async function createScheduledTrip({
     studentLabel: quote.label,
     recurrence: purpose === 'recurring' ? { interval: 'weekly', weekdays } : null,
     party: purpose === 'party_weekend' ? 'weekend' : null,
+    tesla: tier === 'tesla',
+    fleet: tier === 'tesla' ? 'tesla_model_3' : 'standard',
   }
   const { data, error } = await supabase
     .from('trips')
     .insert({
       rider_id: user.id,
       status: when ? 'scheduled' : 'searching',
-      tier: 'standard',
+      tier: tier === 'tesla' ? 'tesla' : 'standard',
       pickup_label: pickup.label,
       dropoff_label: dropoff.label,
       pickup_lat: pickup.lat,
@@ -133,7 +138,7 @@ export async function listScheduledTrips(riderId: string) {
   if (!supabase) return []
   const { data, error } = await supabase
     .from('trips')
-    .select('id, status, pickup_label, dropoff_label, fare_cents, pickup_at, scheduled_for, rider_note, metadata')
+    .select('id, status, pickup_label, dropoff_label, fare_cents, pickup_at, scheduled_for, rider_note, tier, metadata')
     .eq('rider_id', riderId)
     .not('pickup_at', 'is', null)
     .order('pickup_at', { ascending: true })

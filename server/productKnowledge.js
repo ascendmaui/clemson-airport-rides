@@ -42,16 +42,22 @@ Help explains how the app works. Support is a different chat for bugs, billing p
 Booking a local ride (rider):
 1. Rides tab. Enter a destination or pick a shortcut.
 2. Confirm pickup.
-3. Choose a tier: Standard, Wait & Save, Extra Comfort, XL, Pet, or Self-Driving Tesla Model 3. The tier screen shows sample local prices and a "10% off Standard" student promo. Standard on that screen can open an upsell before Pick driver.
+3. Choose a tier: Standard, Wait & Save, Extra Comfort, XL, Pet, or Tesla Model 3. Tesla Model 3 is the Clemson fleet option. A person still drives. There is no live self-driving dispatch and no robotaxi telemetry. The tier screen shows sample local prices and a "10% off Standard" student promo. Standard on that screen can open an upsell before Pick driver. The Tesla upsell must say a driver is at the wheel.
 4. Pick driver (online drivers come from driver_status).
 5. Requested screen tracks the trip.
 Sign-in is required to book. Guest browsing of marketing and schedule is allowed.
 
+Weekend and party schedule (rider):
+1. Schedule tab, Weekend / party.
+2. Choose Airport (GSP or CLT) or Campus.
+3. Set date and time at least 30 minutes ahead. Friday 9:00 PM is the starting suggestion.
+4. Confirm saves a scheduled trip with purpose party_weekend. It shows under Upcoming. Drivers see it in the Weekend filter. Optional Tesla Model 3 is the same driver-operated fleet stub.
+
 Airport schedule (rider):
-1. Schedule tab.
+1. Schedule tab, Airport deposit.
 2. Choose GSP (Greenville-Spartanburg, flat $75) or CLT (Charlotte Douglas, flat $175).
 3. Optional date and time.
-4. Book creates a trip in status "searching" (pickup Memorial Stadium) and starts Stripe Checkout for a 25% deposit.
+4. Book creates a trip in status "searching" (pickup Memorial Stadium) and starts Stripe Checkout for a 25% deposit. A date keeps that hold scheduled.
 Airport flat rates are not game-day surged. A verified Clemson student gets 10% off Standard, which includes these airport fares because Schedule prices them as Standard. Deposit is 25% of the fare after that discount.
 Do not invent a refund window. Terms say cancel promptly and deposit refund rules follow the in-app and Stripe receipt terms.
 

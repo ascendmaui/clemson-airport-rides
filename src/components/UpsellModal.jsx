@@ -47,12 +47,12 @@ export function UpsellModal({ open, onClose, onUpgrade, variant = 'comfort', upg
         </div>
         <h2 style={{ fontSize: 22, fontWeight: 600, letterSpacing: -0.3, marginBottom: 8 }}>
           {isTesla
-            ? 'Upgrade to a self-driving Tesla Model 3'
+            ? 'Clemson Tesla Model 3'
             : 'Ride in a roomy, clean new car'}
         </h2>
         <p style={{ color: 'var(--ink-secondary)', fontSize: 15, lineHeight: 1.45, marginBottom: 22 }}>
           {isTesla
-            ? 'Premium Tesla · self-driving capable. Treat yourself to the Clemson fleet upgrade.'
+            ? 'Orange and purple fleet option. A driver still takes the wheel. This is not a live self-driving car.'
             : 'Upgrade and treat yourself to Extra Comfort.'}
         </p>
         <PrimaryButton variant={isTesla ? 'purple' : 'orange'} onClick={onUpgrade}>

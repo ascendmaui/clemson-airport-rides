@@ -416,14 +416,19 @@ function DriverShell({ driverId }) {
   }
 
   const futureMine = scheduledMine.filter((trip) => !isDueNow(trip))
-  const scheduledPanel = (
+  const scheduledLists = (withEmpty) => (
     <>
       <ScheduledRideQueue
         rides={scheduledOpen}
         acceptingId={acceptingScheduledId}
         onAccept={acceptScheduled}
+        emptyHint={withEmpty ? 'No scheduled rides waiting. Weekend and party airport or campus pickups show up here after a rider confirms a time.' : undefined}
       />
-      <ScheduledRideQueue rides={futureMine} title="Your upcoming" />
+      <ScheduledRideQueue
+        rides={futureMine}
+        title="Your upcoming"
+        emptyHint={withEmpty ? 'Accepted pickups more than 45 minutes out stay in this list.' : undefined}
+      />
     </>
   )
 
@@ -691,7 +696,7 @@ function DriverShell({ driverId }) {
           }}
         >
           <div className="sheet-handle" />
-          {scheduledPanel}
+          {scheduledLists(true)}
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
             <span
               className="driver-online-dot"
@@ -864,7 +869,7 @@ function DriverShell({ driverId }) {
           }}
         >
           <div className="sheet-handle" />
-          <div style={{ maxHeight: 168, overflowY: 'auto', marginBottom: 8 }}>{scheduledPanel}</div>
+          <div style={{ maxHeight: 168, overflowY: 'auto', marginBottom: 8 }}>{scheduledLists(false)}</div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
             <div style={{ fontSize: 32, fontWeight: 700, letterSpacing: -0.5 }}>
               {centsToDollars(driverTakeCents(offer))}
@@ -920,7 +925,7 @@ function DriverShell({ driverId }) {
           }}
         >
           <div className="sheet-handle" />
-          <div style={{ maxHeight: 168, overflowY: 'auto', marginBottom: 8 }}>{scheduledPanel}</div>
+          <div style={{ maxHeight: 168, overflowY: 'auto', marginBottom: 8 }}>{scheduledLists(false)}</div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
             <div style={{ fontSize: 32, fontWeight: 700, letterSpacing: -0.5 }}>
               {centsToDollars(activeTrip.fare_cents)}

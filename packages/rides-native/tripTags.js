@@ -380,6 +380,40 @@ export function queueFilters() {
   return QUEUE_FILTERS.slice()
 }
 
+/** Empty-state copy for the driver queue. Filters stay student, game day, and weekend. */
+export function queueEmptyCopy(filter) {
+  switch (filter) {
+    case 'all':
+      return {
+        title: 'Queue is clear',
+        body: 'Open requests and scheduled pickups show up here. Go online so riders can choose you.',
+      }
+    case 'student':
+      return {
+        title: 'No student rides',
+        body: 'Clemson student discounts show up in this filter. Other requests stay on All.',
+      }
+    case 'game_day':
+      return {
+        title: 'No game-day rides',
+        body: 'Stadium and tailgate rides show up here when the trip is marked game day.',
+      }
+    case 'weekend_party':
+      return {
+        title: 'No weekend or party rides',
+        body: 'Friday evening through Sunday airport and campus pickups show up here, including ones riders schedule ahead.',
+      }
+    default: {
+      const unknown = filter
+      throw new Error(`Unknown queue filter: ${unknown}`)
+    }
+  }
+}
+
+export function scheduledQueueTitle(filter) {
+  return filter === 'weekend_party' ? 'Scheduled weekend and party rides' : 'Scheduled'
+}
+
 function succeeded(status) {
   return /succeeded|paid|complete/i.test(String(status || ''))
 }

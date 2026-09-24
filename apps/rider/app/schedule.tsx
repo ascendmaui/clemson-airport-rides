@@ -33,10 +33,12 @@ import {
   studentStatus,
 } from 'rides-native/riderMoney.js'
 import { localDateInput, localTimeInput, nextPickupDate, RIDE_PLACES } from 'rides-native/riderShell.js'
-import { formatCents } from 'rides-native/tripTags.js'
+import { formatCents, formatPickupAt, TESLA_FLEET_NOTICE } from 'rides-native/tripTags.js'
 import { RequireAuth } from '@/components/RequireAuth'
 
-const CAMPUS_PURPOSES: SchedulePurpose[] = ['early_class', 'planned', 'party_weekend', 'recurring']
+const CAMPUS_PURPOSES: SchedulePurpose[] = ['early_class', 'planned', 'recurring']
+type WeekendSpot = 'airport' | 'campus'
+type FleetChoice = 'standard' | 'tesla'
 const WEEKDAYS = [
   { id: 'mon', label: 'Mon' },
   { id: 'tue', label: 'Tue' },
@@ -71,7 +73,7 @@ function purposeLabel(id: SchedulePurpose) {
     case 'planned':
       return 'Planned trip'
     case 'party_weekend':
-      return 'Party weekend'
+      return 'Weekend / party'
     case 'recurring':
       return 'Recurring'
     default: {
@@ -84,6 +86,27 @@ function purposeLabel(id: SchedulePurpose) {
 function placeByLabel(label: string): RidePlace {
   const found = RIDE_PLACES.find((place) => place.label === label)
   return found || RIDE_PLACES[0]
+}
+
+function airportPlace(code: 'GSP' | 'CLT'): RidePlace {
+  return placeByLabel(code === 'GSP' ? 'GSP Airport' : 'CLT Airport')
+}
+
+function initialWeekendWhen() {
+  return nextPickupDate({ time: '21:00', weekdays: ['fri'] })
+}
+
+function spotLabel(spot: WeekendSpot) {
+  switch (spot) {
+    case 'airport':
+      return 'Airport'
+    case 'campus':
+      return 'Campus'
+    default: {
+      const exhaustive: never = spot
+      return exhaustive
+    }
+  }
 }
 
 function ScheduleScreen() {
@@ -108,11 +131,25 @@ function ScheduleScreen() {
   const [dropoff, setDropoff] = useState<RidePlace>(placeByLabel('Sikes Hall'))
   const [campusDate, setCampusDate] = useState('')
   const [campusTime, setCampusTime] = useState('')
+  const seededWeekend = initialWeekendWhen()
+  const [weekendSpot, setWeekendSpot] = useState<WeekendSpot>('airport')
+  const [weekendAirport, setWeekendAirport] = useState<'GSP' | 'CLT'>('GSP')
+  const [weekendDate, setWeekendDate] = useState(seededWeekend ? localDateInput(seededWeekend) : '')
+  const [weekendTime, setWeekendTime] = useState(seededWeekend ? localTimeInput(seededWeekend) : '21:00')
+  const [weekendPickup, setWeekendPickup] = useState<RidePlace>(placeByLabel('Memorial Stadium'))
+  const [weekendDropoff, setWeekendDropoff] = useState<RidePlace>(placeByLabel('Downtown Clemson'))
+  const [fleet, setFleet] = useState<FleetChoice>('standard')
   const [mine, setMine] = useState<ScheduledRow[]>([])
   const [loadingList, setLoadingList] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
   const generation = useRef(0)
   const quote = useMemo(() => quoteRide(pickup, dropoff, studentOn), [pickup, dropoff, studentOn])
+  const weekendDestination = weekendSpot === 'airport' ? airportPlace(weekendAirport) : weekendDropoff
+  const weekendQuote = useMemo(
+    () => quoteRide(weekendPickup, weekendDestination, studentOn && fleet !== 'tesla'),
+    [weekendPickup, weekendDestination, studentOn, fleet],
+  )
+  const weekendWhen = nextPickupDate({ date: weekendDate, time: weekendTime })
 
   useFocusEffect(useCallback(() => {
     setFocusTick((n) => n + 1)
@@ -181,16 +218,24 @@ function ScheduleScreen() {
   function choosePurpose(next: SchedulePurpose) {
     void tapHaptic()
     setPurpose(next)
-    if (next === 'party_weekend') {
-      const when = nextPickupDate({ time: '21:00', weekdays: ['fri'] })
-      if (when) {
-        setCampusDate(localDateInput(when))
-        setCampusTime(localTimeInput(when))
-      }
-      setPickup(placeByLabel('White C'))
-      setDropoff(placeByLabel('Downtown Clemson'))
-    }
     if (next === 'recurring') setWeekdays((days) => (days.length ? days : ['fri']))
+  }
+
+  function chooseWeekendSpot(next: WeekendSpot) {
+    void tapHaptic()
+    setWeekendSpot(next)
+    if (next === 'airport') {
+      setWeekendPickup(placeByLabel('Memorial Stadium'))
+    }
+    if (next === 'campus') {
+      setWeekendPickup(placeByLabel('White C'))
+      setWeekendDropoff(placeByLabel('Downtown Clemson'))
+    }
+  }
+
+  function chooseFleet(next: FleetChoice) {
+    void tapHaptic()
+    setFleet(next)
   }
 
   async function pay() {
@@ -246,6 +291,49 @@ function ScheduleScreen() {
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Checkout failed. No charge was made.'
       setError(message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function confirmWeekend() {
+    if (!user) {
+      setAuthNext('/schedule')
+      setPromptOpen(true)
+      return
+    }
+    setError(null)
+    setBanner(null)
+    if (!weekendWhen) {
+      setError('Choose a date and time.')
+      return
+    }
+    if (weekendWhen.getTime() < Date.now() + 30 * 60 * 1000) {
+      setError('Schedule at least 30 minutes ahead.')
+      return
+    }
+    if (weekendPickup.label === weekendDestination.label) {
+      setError('Pickup and drop-off need to be different places.')
+      return
+    }
+    setBusy(true)
+    try {
+      await createScheduledTrip({
+        user,
+        pickup: weekendPickup,
+        dropoff: weekendDestination,
+        pickupAt: weekendWhen,
+        purpose: 'party_weekend',
+        weekdays: [],
+        quote: weekendQuote,
+        tier: fleet,
+      })
+      const fleetLine = fleet === 'tesla' ? ' Tesla Model 3 stays driver-operated.' : ''
+      setBanner(`Weekend / party confirmed for ${formatPickupAt(weekendWhen.toISOString())}. It is under Upcoming, and drivers can accept it from Weekend.${fleetLine}`)
+      await successHaptic()
+      await reload()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not schedule ride')
     } finally {
       setBusy(false)
     }
@@ -314,10 +402,117 @@ function ScheduleScreen() {
           />
         )}
       >
-        <Text style={styles.kicker}>AIRPORT</Text>
+        <Text style={styles.kicker}>SCHEDULE</Text>
         <Text style={styles.title}>Schedule a ride</Text>
         <Text style={styles.copy}>
-          Hold GSP or CLT with a 25% deposit. The amount updates when the airport, time, surge, or student discount changes.
+          Weekend and party nights to the airport or around campus. Pick a date and time, confirm, then find it under Upcoming.
+        </Text>
+
+        <Text style={styles.section}>Weekend / party</Text>
+        <Text style={styles.copy}>
+          Friday night through Sunday. Airport runs and campus hops use the same confirm step. Drivers see these in the Weekend filter.
+        </Text>
+        <View style={styles.pills}>
+          {(['airport', 'campus'] as const).map((spot) => (
+            <Pill key={spot} label={spotLabel(spot)} active={weekendSpot === spot} onPress={() => chooseWeekendSpot(spot)} />
+          ))}
+        </View>
+        {weekendSpot === 'airport' ? (
+          <View style={styles.choices}>
+            {(['GSP', 'CLT'] as const).map((code) => {
+              const on = code === weekendAirport
+              return (
+                <Pressable
+                  key={`wk-${code}`}
+                  onPress={() => setWeekendAirport(code)}
+                  style={[styles.choice, on && styles.choiceOn]}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: on }}
+                >
+                  <Text style={styles.choiceCode}>{code}</Text>
+                  <Text style={styles.choiceName}>{code === 'GSP' ? 'Greenville-Spartanburg' : 'Charlotte Douglas'}</Text>
+                </Pressable>
+              )
+            })}
+          </View>
+        ) : null}
+        <Text style={styles.label}>Date</Text>
+        <TextInput
+          value={weekendDate}
+          onChangeText={setWeekendDate}
+          placeholder="YYYY-MM-DD"
+          placeholderTextColor={colors.placeholder}
+          autoCapitalize="none"
+          style={styles.input}
+        />
+        <Text style={styles.label}>Pickup time</Text>
+        <TextInput
+          value={weekendTime}
+          onChangeText={setWeekendTime}
+          placeholder="HH:MM"
+          placeholderTextColor={colors.placeholder}
+          autoCapitalize="none"
+          style={styles.input}
+        />
+        <Text style={styles.fine}>Friday 9:00 PM is filled in. Change it for another slot, at least 30 minutes ahead.</Text>
+        <Text style={styles.label}>Pickup</Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.pills}>
+          {RIDE_PLACES.map((place) => (
+            <Pill key={`wpu-${place.label}`} label={place.label} active={weekendPickup.label === place.label} onPress={() => setWeekendPickup(place)} />
+          ))}
+        </ScrollView>
+        {weekendSpot === 'campus' ? (
+          <>
+            <Text style={styles.label}>Drop-off</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.pills}>
+              {RIDE_PLACES.map((place) => (
+                <Pill key={`wdo-${place.label}`} label={place.label} active={weekendDropoff.label === place.label} onPress={() => setWeekendDropoff(place)} />
+              ))}
+            </ScrollView>
+          </>
+        ) : (
+          <Text style={styles.fine}>Drop-off is {weekendDestination.label}.</Text>
+        )}
+        <Text style={styles.label}>Vehicle</Text>
+        <View style={styles.pills}>
+          <Pill label="Standard" active={fleet === 'standard'} onPress={() => chooseFleet('standard')} />
+          <Pill label="Tesla Model 3" active={fleet === 'tesla'} onPress={() => chooseFleet('tesla')} />
+        </View>
+        {fleet === 'tesla' ? (
+          <View style={styles.fleetNote}>
+            <Text style={styles.fleetKicker}>CLEMSON FLEET</Text>
+            <Text style={styles.fleetText}>{TESLA_FLEET_NOTICE}</Text>
+          </View>
+        ) : null}
+        <View style={styles.panel}>
+          <Text style={styles.cardLine}>Confirm weekend / party</Text>
+          <Text style={styles.fine}>
+            {weekendWhen ? formatPickupAt(weekendWhen.toISOString()) : 'Choose a date and time.'}
+          </Text>
+          <Text style={styles.fine}>{weekendPickup.label} → {weekendDestination.label}</Text>
+          <Text style={styles.cardLine}>
+            {weekendQuote.estimate ? 'Fare estimate' : 'Fare'} · {formatUsd(weekendQuote.fareCents / 100)}
+          </Text>
+          {weekendQuote.label ? <Text style={styles.student}>{weekendQuote.label}</Text> : null}
+          <Text style={styles.fine}>
+            {fleet === 'tesla' ? 'Tesla Model 3 · a driver is at the wheel.' : 'Standard vehicle.'}
+            {weekendQuote.airport
+              ? ` ${weekendQuote.airport} quote. Pay the 25% deposit below if you want to hold it now.`
+              : ' Final fare can change when a driver accepts.'}
+          </Text>
+        </View>
+        <PrimaryButton
+          label={busy ? 'Confirming…' : 'Confirm weekend ride'}
+          onPress={confirmWeekend}
+          disabled={busy}
+          tone="purple"
+        />
+        {error ? <Text style={styles.error}>{error}</Text> : null}
+        {banner ? <Text style={styles.banner}>{banner}</Text> : null}
+
+        <Text style={styles.section}>Airport deposit</Text>
+        <Text style={styles.copy}>
+          Hold GSP or CLT with a 25% deposit. The amount updates when the airport, time, surge, or student discount changes. Leave the date empty to request a driver now.
         </Text>
 
         <View style={styles.choices}>
@@ -396,8 +591,8 @@ function ScheduleScreen() {
           <Text style={styles.link}>Clemson students save 10% on Standard</Text>
         </Pressable>
 
-        <Text style={styles.section}>Campus, recurring, and party weekend</Text>
-        <Text style={styles.copy}>These rides save a pickup. Airport deposits stay on the checkout above.</Text>
+        <Text style={styles.section}>Class, planned, and weekly rides</Text>
+        <Text style={styles.copy}>These rides save a pickup. Weekend and party trips use the confirm step above. Airport deposits stay on the checkout above.</Text>
         <View style={styles.pills}>
           {CAMPUS_PURPOSES.map((id) => (
             <Pill key={id} label={purposeLabel(id)} active={purpose === id} onPress={() => choosePurpose(id)} />
@@ -448,14 +643,20 @@ function ScheduleScreen() {
         <Text style={styles.section}>Upcoming</Text>
         {loadingList ? <Skeleton height={64} /> : null}
         {!user ? <Text style={styles.copy}>Sign in to see rides saved on this account.</Text> : null}
-        {user && !loadingList && mine.length === 0 ? <Text style={styles.copy}>No scheduled rides yet.</Text> : null}
+        {user && !loadingList && mine.filter((row) => row.status !== 'canceled').length === 0 ? (
+          <View style={styles.panel}>
+            <Text style={styles.cardLine}>No upcoming rides</Text>
+            <Text style={styles.copy}>Confirm a weekend airport or campus trip and it will show up here.</Text>
+          </View>
+        ) : null}
         {mine.filter((row) => row.status !== 'canceled').map((row) => (
           <View key={row.id} style={styles.panel}>
             <Text style={styles.cardLine}>{row.pickup_label} → {row.dropoff_label}</Text>
             <Text style={styles.fine}>
-              {row.rider_note || 'planned'} · {row.status} · {row.pickup_at ? new Date(row.pickup_at).toLocaleString() : 'Time TBD'}
+              {rowPurpose(row)} · {row.status} · {formatPickupAt(row.pickup_at || row.scheduled_for)}
               {row.metadata?.recurrence?.weekdays?.length ? ` · weekly ${row.metadata.recurrence.weekdays.join(', ')}` : ''}
             </Text>
+            {row.tier === 'tesla' ? <Text style={styles.student}>Tesla Model 3 · driver at the wheel</Text> : null}
             {row.status === 'scheduled' || row.status === 'accepted' ? (
               <Pressable
                 onPress={() => {
@@ -557,6 +758,30 @@ function makeStyles(colors: Palette) {
     cardLine: { fontWeight: '800' as const, color: colors.ink },
     student: { color: colors.orange, fontWeight: '700' as const, fontSize: 12 },
     cancel: { color: colors.danger, fontWeight: '700' as const, marginTop: 6 },
+    fleetNote: {
+      marginTop: 8,
+      backgroundColor: colors.purpleSoft,
+      borderRadius: 16,
+      padding: 12,
+      borderWidth: 1,
+      borderColor: colors.purple,
+    },
+    fleetKicker: { color: colors.orange, fontWeight: '800' as const, letterSpacing: 1, fontSize: 11, marginBottom: 4 },
+    fleetText: { color: colors.link, fontSize: 13, lineHeight: 18, fontWeight: '600' as const },
+  }
+}
+
+function rowPurpose(row: ScheduledRow) {
+  const id = row.metadata?.purpose || row.rider_note || ''
+  switch (id) {
+    case 'early_class':
+    case 'airport':
+    case 'planned':
+    case 'party_weekend':
+    case 'recurring':
+      return purposeLabel(id)
+    default:
+      return 'Planned trip'
   }
 }
 

@@ -8,7 +8,7 @@ import { downtownNow } from '@/lib/downtownHeat';
 const TIERS = [
   { id: 'tiger', name: 'Tiger', blurb: 'Shared campus van', price: 'From $75 · GSP', accent: 'orange' as const },
   { id: 'purple', name: 'Purple', blurb: 'Private sedan', price: 'From $95 · GSP', accent: 'purple' as const },
-  { id: 'tesla', name: 'Tesla Autopilot', blurb: 'Self-driving Model Y', price: 'From $145 · GSP', accent: 'orange' as const },
+  { id: 'tesla', name: 'Tesla Model 3', blurb: 'Clemson fleet · a driver is at the wheel', price: 'From $145 · GSP', accent: 'orange' as const },
 ];
 
 export default function HomeScreen() {
