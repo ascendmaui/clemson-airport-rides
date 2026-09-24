@@ -2,6 +2,22 @@
 
 Persistent knowledge base for recurring failures. When a matching issue appears, apply the saved fix first.
 
+## 2026-09-24 — Friend confirm could ask for review forever (PR #63)
+
+- **Track / machine:** Clemson RIDES · Max (/tmp worktree) / PR review
+- **Problem:** PR #63 re-priced the friend ride on every Confirm tap and held the charge whenever the refreshed shares differed from the screen. Friend fares use `computeRoutes` with `routingPreference: 'TRAFFIC_AWARE'` and bill 18¢/min, so each re-price can drift by a cent. A legitimate payment could be held with "Review each share" on every tap.
+- **Root cause:** The gate compared against a fresh re-price each time instead of remembering which server quote the organizer had already been shown.
+- **Fix:** `markFriendQuoteReviewed` stores the id:fare signature of the quote put on screen for review. On the next Confirm, `reviewedFriendQuoteFresh` (same signature, within 10 min) skips the client re-price and goes straight to confirm-charges. At most one review round. Web `FriendRide.jsx` and native `carpool/[token].tsx`. Tests in `src/lib/friendSplitPreview.test.js`.
+- **Still open:** `confirm-charges` runs its own `recomputeRideFares` on the server, so the charged share can still differ by a few cents from the reviewed one. The Stripe idempotency key `friend:<ride>:<participant>:<fare_cents>` includes the fare, so a retry after drift is not deduplicated for an unpaid (e.g. requires_action) participant. Not changed here.
+
+## 2026-09-24 — Friend lobby preview disagreed with the charged share
+
+- **Track / machine:** Clemson RIDES · Pro
+- **Symptom:** Friends lobby showed a two-rider haversine guess (cents passed through `formatUsd` after dividing by 100) and the native lobby priced friend rides with the carpool engine. Confirm charges `participant.fare_cents`.
+- **Root cause:** Preview math was client-side and separate from `recomputeRideFares` / confirm-charges. `formatUsd` already expects cents.
+- **Fix:** Recompute stores `fare_breakdown.friend_split`. The lobby renders those shares, strikes this-route-alone only when the stored share still matches `fare_cents`, and holds the charge until that quote is on screen. Payment stays saved-card off-session or Payment Element.
+- **Reuse:** Do not invent a friend-ride dollar amount from `quoteRide` or `quoteCarpool`. If `friend_split.share_cents` does not match `fare_cents`, show the share and omit the struck solo.
+
 ## 2026-09-24 — Driver earnings showed 80% of fare on carpool trips
 
 - **Track / machine:** Clemson RIDES · Pro
