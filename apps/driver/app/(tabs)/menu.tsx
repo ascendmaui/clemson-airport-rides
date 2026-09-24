@@ -8,6 +8,7 @@ import { supabase } from '@/lib/supabase'
 import { useTheme } from '@/lib/theme'
 import { displayFirstName } from 'rides-native/authErrors'
 import { loadVehicle, type VehicleRow } from 'rides-native/driverDesk'
+import { knowledgeQuizStatus, knowledgeQuizStatusLabel, loadKnowledgeQuiz } from 'rides-native/driverKnowledgeQuiz'
 import { loadRatingSummary } from 'rides-native/PartyScreens'
 
 function vehicleSubtitle(vehicle: VehicleRow | null): string {
@@ -25,15 +26,18 @@ export default function MenuScreen() {
   const [vehicle, setVehicle] = useState<VehicleRow | null>(null)
   const [ratingLine, setRatingLine] = useState('New · no ratings yet')
   const [pendingTrip, setPendingTrip] = useState<string | null>(null)
+  const [quizLabel, setQuizLabel] = useState('Not started')
   const name = user ? displayFirstName(user.user_metadata?.full_name || user.email?.split('@')[0], 'Driver') : 'Guest'
 
   const refresh = useCallback(async () => {
     if (!user || !supabase) return
-    const [nextVehicle, summary] = await Promise.all([
+    const [nextVehicle, summary, quiz] = await Promise.all([
       loadVehicle(supabase, user.id),
       loadRatingSummary(supabase, user.id).catch(() => null),
+      loadKnowledgeQuiz(supabase, user.id).catch(() => null),
     ])
     setVehicle(nextVehicle)
+    setQuizLabel(knowledgeQuizStatusLabel(knowledgeQuizStatus(quiz?.row)))
     if (summary) {
       setRatingLine(summary.line)
       setPendingTrip(summary.pending?.id || null)
@@ -68,7 +72,7 @@ export default function MenuScreen() {
         <ListRow icon="calculator" title="Tax info" subtitle="W-9 on your application" onPress={() => router.push('/tax')} />
         <ListRow icon="card" title="Payout methods" subtitle="Stripe balance and cash out" onPress={() => router.push('/payouts')} />
         <SectionLabel>Resources</SectionLabel>
-        <ListRow icon="school" title="Learning Center" onPress={() => router.push('/learning')} />
+        <ListRow icon="school" title="Learning Center" subtitle={quizLabel} onPress={() => router.push('/learning')} />
         <ListRow icon="bug" title="Bug Reporter" onPress={() => router.push('/bug-report')} />
         <ListRow icon="information-circle" title="About" onPress={() => router.push('/about')} />
         <SectionLabel>Account</SectionLabel>
