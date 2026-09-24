@@ -1,8 +1,9 @@
-import { StyleSheet, View } from 'react-native'
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react'
+import { StyleSheet, Text, View } from 'react-native'
 import MapView, { Circle, Marker, PROVIDER_DEFAULT } from 'react-native-maps'
-import type { BusySpot } from '@/lib/busySpots'
 import { heatColor } from 'rides-native/heat.js'
 import { DOWNTOWN, ORANGE, PURPLE, STADIUM } from 'rides-native/places.js'
+import type { CampusMapHandle, CampusMapProps } from '@/components/mapTypes'
 
 function rgba(hex: string, alpha: number) {
   const raw = hex.replace('#', '')
@@ -12,29 +13,74 @@ function rgba(hex: string, alpha: number) {
   return `rgba(${r},${g},${b},${alpha})`
 }
 
-export function CampusMap({
-  spots,
-  showHeat,
-}: {
-  spots: BusySpot[]
-  showHeat: boolean
-}) {
+function theaterCar(index: number, tick: number) {
+  const angle = tick * 0.45 + index * (Math.PI / 2)
+  const radius = 0.0034 + (index % 2) * 0.0015
+  return {
+    latitude: STADIUM.latitude + Math.sin(angle) * radius,
+    longitude: STADIUM.longitude + Math.cos(angle) * radius * 1.2,
+    color: index % 2 === 0 ? ORANGE : PURPLE,
+  }
+}
+
+export const CampusMap = forwardRef<CampusMapHandle, CampusMapProps>(function CampusMap(
+  {
+    spots,
+    showHeat,
+    mapType = 'standard',
+    theater = false,
+    gameDay = false,
+    surge = false,
+    userCoordinate = null,
+    pins = [],
+  },
+  ref,
+) {
+  const mapRef = useRef<MapView>(null)
+  const [tick, setTick] = useState(0)
+  const [radar, setRadar] = useState(90)
   const center = showHeat ? DOWNTOWN : STADIUM
+
+  useImperativeHandle(ref, () => ({
+    animateTo(coord, delta = 0.018) {
+      mapRef.current?.animateToRegion(
+        {
+          latitude: coord.latitude,
+          longitude: coord.longitude,
+          latitudeDelta: delta,
+          longitudeDelta: delta,
+        },
+        700,
+      )
+    },
+  }))
+
+  useEffect(() => {
+    if (!theater) return undefined
+    const id = setInterval(() => {
+      setTick((value) => value + 1)
+      setRadar((value) => (value > 320 ? 80 : value + 36))
+    }, 700)
+    return () => clearInterval(id)
+  }, [theater])
+
   return (
     <View style={styles.fill}>
       <MapView
+        ref={mapRef}
         provider={PROVIDER_DEFAULT}
         style={StyleSheet.absoluteFill}
         initialRegion={{
           latitude: center.latitude,
           longitude: center.longitude,
-          latitudeDelta: showHeat ? 0.028 : 0.035,
-          longitudeDelta: showHeat ? 0.028 : 0.035,
+          latitudeDelta: showHeat ? 0.028 : 0.04,
+          longitudeDelta: showHeat ? 0.028 : 0.04,
         }}
-        mapType="standard"
+        mapType={mapType}
         rotateEnabled={false}
         pitchEnabled={false}
         toolbarEnabled={false}
+        showsUserLocation={false}
       >
         <Marker coordinate={STADIUM} pinColor={ORANGE} title="Memorial Stadium" />
         <Marker coordinate={DOWNTOWN} pinColor={PURPLE} title="Downtown Clemson" />
@@ -50,11 +96,77 @@ export function CampusMap({
               />
             ))
           : null}
+        {gameDay ? (
+          <Circle
+            center={STADIUM}
+            radius={420}
+            fillColor="rgba(245,102,0,0.16)"
+            strokeColor={ORANGE}
+            strokeWidth={2}
+          />
+        ) : null}
+        {surge ? (
+          <Circle
+            center={DOWNTOWN}
+            radius={260}
+            fillColor="rgba(82,45,128,0.18)"
+            strokeColor={PURPLE}
+            strokeWidth={2}
+          />
+        ) : null}
+        {theater ? (
+          <Circle
+            center={STADIUM}
+            radius={radar}
+            fillColor="rgba(245,102,0,0.14)"
+            strokeColor={tick % 2 === 0 ? ORANGE : PURPLE}
+            strokeWidth={2}
+          />
+        ) : null}
+        {theater
+          ? [0, 1, 2, 3].map((index) => {
+              const car = theaterCar(index, tick)
+              return (
+                <Marker
+                  key={`preview-${index}`}
+                  coordinate={{ latitude: car.latitude, longitude: car.longitude }}
+                  title="Preview"
+                  description="Ambient car. Not a driver you can request."
+                  anchor={{ x: 0.5, y: 0.5 }}
+                >
+                  <View style={[styles.car, { backgroundColor: car.color }]}>
+                    <Text style={styles.carGlyph}>🚗</Text>
+                  </View>
+                </Marker>
+              )
+            })
+          : null}
+        {pins.map((pin) => (
+          <Marker
+            key={pin.id}
+            coordinate={{ latitude: pin.latitude, longitude: pin.longitude }}
+            title={pin.title}
+            pinColor={pin.color}
+          />
+        ))}
+        {userCoordinate ? (
+          <Marker coordinate={userCoordinate} pinColor={PURPLE} title="You" />
+        ) : null}
       </MapView>
     </View>
   )
-}
+})
 
 const styles = StyleSheet.create({
   fill: { flex: 1 },
+  car: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#fff',
+  },
+  carGlyph: { fontSize: 14 },
 })

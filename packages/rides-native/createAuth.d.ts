@@ -32,7 +32,7 @@ export type AuthApi = {
     promoClaim?: { error?: string; claimed?: boolean } | null
   }>
   signOut: () => Promise<void>
-  resetPassword: (email: string) => Promise<unknown>
+  resetPassword: (email: string, redirectTo?: string) => Promise<unknown>
   updatePassword: (password: string) => Promise<unknown>
 }
 

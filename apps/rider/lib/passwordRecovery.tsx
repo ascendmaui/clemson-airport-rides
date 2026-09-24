@@ -27,7 +27,7 @@ export function PasswordRecoveryListener() {
 
   useEffect(() => {
     bindPasswordRecovery(() => {
-      router.replace('/reset-password')
+      router.replace('/set-password')
     })
     return () => bindPasswordRecovery(null)
   }, [router])
@@ -37,7 +37,7 @@ export function PasswordRecoveryListener() {
     async function open(url: string | null) {
       try {
         const recovery = await applyAuthUrl(url)
-        if (alive && recovery) router.replace('/reset-password')
+        if (alive && recovery) router.replace('/set-password')
       } catch (err) {
         console.warn('[auth] recovery link', err instanceof Error ? err.message : err)
       }

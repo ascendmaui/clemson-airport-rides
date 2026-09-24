@@ -8,6 +8,7 @@ import {
   PROMO_CLAIM_STATE_KEY,
 } from './authErrors.js'
 import { requestPasswordReset, signInWithEmail, updatePassword } from './emailAuth.js'
+import { PASSWORD_RESET_REDIRECT } from './riderShell.js'
 
 async function ensureStudentVerification(supabase, user, now) {
   if (!supabase || !user?.id || !user.email) return
@@ -145,8 +146,8 @@ export function createAuth({
       async signIn(email, password) {
         return signInWithEmail(supabase, email, password)
       },
-      async resetPassword(email) {
-        return requestPasswordReset(supabase, email, passwordResetRedirectTo)
+      async resetPassword(email, redirectTo = passwordResetRedirectTo || PASSWORD_RESET_REDIRECT) {
+        return requestPasswordReset(supabase, email, redirectTo)
       },
       async updatePassword(password) {
         return updatePassword(supabase, password)

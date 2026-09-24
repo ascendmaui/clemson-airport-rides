@@ -29,6 +29,7 @@ function SignInForm({
       subtitle="Sign in to book airport rides. Surge applies on busy hours and game days."
       onSuccess={() => finish(router)}
       onCreateAccount={() => router.push('/sign-up')}
+      onForgotPassword={() => router.push('/forgot-password')}
       onBack={() => {
         if (router.canGoBack()) router.back()
         else router.replace('/')

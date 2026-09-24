@@ -40,7 +40,7 @@ The anon key and the Clerk publishable key are public in the app binary by desig
 
 ### Supabase
 
-Allow redirect URL `clemsonrides://reset-password` under Authentication URL configuration so forgot-password can open the app. Linking an Apple, Google, or Facebook account uses the verified email. The same email keeps the existing Supabase user, so `auth.uid()` and profile rows stay put. A new email gets a new `auth.users` UUID.
+Allow redirect URLs `clemsonrides://set-password` and `clemsonrides://reset-password` under Authentication URL configuration. Forgot password emails use `clemsonrides://set-password`. Linking an Apple, Google, or Facebook account uses the verified email. The same email keeps the existing Supabase user, so `auth.uid()` and profile rows stay put. A new email gets a new `auth.users` UUID.
 
 ### Vercel
 
@@ -61,6 +61,10 @@ npx expo start
 ```
 
 Native Apple and Google buttons need a development build (`npx expo run:ios` / `npx expo run:android`), not Expo Go. Browser SSO for Facebook, and the Apple/Google fallback, run through `useSSO`.
+
+## Rider shell
+
+Tabs are Rides, Schedule, Friends, and Account. The Rides header avatar opens Account. The campus map has locate, Busy Areas, a draggable welcome card, and Roadmap, Satellite, and Hybrid. Choose-driver plays a short Clemson loader over a map theater of preview cars. Friends keeps the carpool hub and also adds a rider, ride together, activity, and a fare split. Account keeps Billing, Student, Promo codes, Notifications, and Safety, and adds favorite spots plus the tiger-sound toggle. Password reset uses Supabase `resetPasswordForEmail` and `clemsonrides://set-password`. Tiger sounds use expo-audio and stay quiet on silent or vibrate.
 
 ## Payments, discounts, and alerts
 
@@ -95,4 +99,4 @@ On a device or simulator (`npx expo start` from `apps/rider`):
 5. While the trip is accepted, arriving, or in progress, tap SOS, then Confirm SOS, then Call 911. The first step does not dial. A sos_events row is stored with channel banner.
 6. On a finished trip, live share shows "This ride is finished" instead of a new token.
 
-Driver offer accept and live trip tracking are still later. Campus ride requests already insert a `trips` row the same way the web app does.
+The ride-requested screen keeps SOS and live share, and shows the driver pin when a location is available. Campus ride requests already insert a `trips` row the same way the web app does.

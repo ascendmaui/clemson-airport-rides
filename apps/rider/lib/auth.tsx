@@ -1,5 +1,5 @@
-import * as Linking from 'expo-linking'
 import { createAuth } from 'rides-native/createAuth'
+import { PASSWORD_RESET_REDIRECT } from 'rides-native/riderShell.js'
 import { authStorage } from '@/lib/storage'
 import { supabase, supabaseConfigured } from '@/lib/supabase'
 
@@ -18,7 +18,7 @@ const auth = createAuth({
   supabase,
   supabaseConfigured,
   storage: authStorage,
-  passwordResetRedirectTo: Linking.createURL('/reset-password'),
+  passwordResetRedirectTo: PASSWORD_RESET_REDIRECT,
   onSignOut: () => clerkSignOutRef.current?.(),
   onPasswordRecovery: () => passwordRecoveryRef.current?.(),
 })

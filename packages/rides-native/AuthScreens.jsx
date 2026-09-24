@@ -84,6 +84,7 @@ export function SignInScreen({
   signIn,
   onSuccess,
   onCreateAccount,
+  onForgotPassword,
   onBack,
   subtitle = 'Sign in to book airport rides. Surge applies on busy hours and game days.',
   mark = 'CR',
@@ -168,7 +169,11 @@ export function SignInScreen({
         value={password}
         onChangeText={setPassword}
       />
-      {resetPassword ? (
+      {onForgotPassword ? (
+        <Pressable onPress={onForgotPassword} accessibilityRole="button">
+          <Text style={styles.forgot}>Forgot password?</Text>
+        </Pressable>
+      ) : resetPassword ? (
         <Pressable onPress={onForgot} disabled={resetBusy} accessibilityRole="button">
           <Text style={styles.forgot}>{resetBusy ? 'Sending reset email…' : 'Forgot password?'}</Text>
         </Pressable>
@@ -365,6 +370,144 @@ export function SignUpScreen({
         Already have an account?{' '}
         <Text onPress={onSignIn} style={styles.switch}>Sign in</Text>
       </Text>
+    </AuthShell>
+  )
+}
+
+export function ForgotPasswordScreen({
+  resetPassword,
+  onBack,
+  onSignIn,
+  mark = 'CR',
+}) {
+  const [email, setEmail] = useState('')
+  const [error, setError] = useState(null)
+  const [sent, setSent] = useState(false)
+  const [busy, setBusy] = useState(false)
+
+  async function onSubmit() {
+    setError(null)
+    setBusy(true)
+    try {
+      await resetPassword(email.trim())
+      setSent(true)
+    } catch (err) {
+      setError(err?.message || 'Could not send reset email')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <AuthShell
+      title="Forgot password"
+      subtitle="We'll email a reset link that opens Clemson RIDES so you can choose a new password."
+      mark={mark}
+      onBack={onBack}
+    >
+      <Field
+        label="Email"
+        autoCapitalize="none"
+        autoComplete="email"
+        keyboardType="email-address"
+        textContentType="emailAddress"
+        value={email}
+        onChangeText={setEmail}
+        editable={!sent}
+      />
+      {sent ? (
+        <Text style={styles.info}>
+          Check {email.trim()} for a reset link. It opens this app with the clemsonrides://set-password link.
+        </Text>
+      ) : null}
+      {error ? <Text style={styles.error}>{error}</Text> : null}
+      {sent ? (
+        <Pressable onPress={onSignIn} style={styles.primary} accessibilityRole="button">
+          <Text style={styles.primaryLabel}>Back to sign in</Text>
+        </Pressable>
+      ) : (
+        <Pressable
+          onPress={onSubmit}
+          disabled={busy || !email.trim()}
+          style={[styles.primary, (busy || !email.trim()) && styles.disabled]}
+          accessibilityRole="button"
+        >
+          <Text style={styles.primaryLabel}>{busy ? 'Sending…' : 'Email reset link'}</Text>
+        </Pressable>
+      )}
+    </AuthShell>
+  )
+}
+
+export function SetNewPasswordScreen({
+  updatePassword,
+  onSuccess,
+  onBack,
+  ready = true,
+  statusNote = null,
+  mark = 'CR',
+}) {
+  const [password, setPassword] = useState('')
+  const [confirm, setConfirm] = useState('')
+  const [error, setError] = useState(null)
+  const [busy, setBusy] = useState(false)
+
+  async function onSubmit() {
+    if (password.length < 6) {
+      setError('Use at least 6 characters.')
+      return
+    }
+    if (password !== confirm) {
+      setError('Passwords do not match.')
+      return
+    }
+    setError(null)
+    setBusy(true)
+    try {
+      await updatePassword(password)
+      onSuccess?.()
+    } catch (err) {
+      setError(err?.message || 'Could not update password')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const canSubmit = ready && !busy && password.length >= 6 && password === confirm
+
+  return (
+    <AuthShell
+      title="Set a new password"
+      subtitle="This replaces the password on your Supabase account."
+      mark={mark}
+      onBack={onBack}
+    >
+      {statusNote ? <Text style={styles.info}>{statusNote}</Text> : null}
+      <Field
+        label="New password"
+        secureTextEntry
+        autoComplete="new-password"
+        textContentType="newPassword"
+        value={password}
+        onChangeText={setPassword}
+      />
+      <Field
+        label="Confirm password"
+        secureTextEntry
+        autoComplete="new-password"
+        textContentType="newPassword"
+        value={confirm}
+        onChangeText={setConfirm}
+      />
+      {error ? <Text style={styles.error}>{error}</Text> : null}
+      <Pressable
+        onPress={onSubmit}
+        disabled={!canSubmit}
+        style={[styles.primary, !canSubmit && styles.disabled]}
+        accessibilityRole="button"
+      >
+        <Text style={styles.primaryLabel}>{busy ? 'Saving…' : 'Update password'}</Text>
+      </Pressable>
     </AuthShell>
   )
 }

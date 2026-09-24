@@ -1,15 +1,26 @@
 import { useFocusEffect, useRouter } from 'expo-router'
 import { LinearGradient } from 'expo-linear-gradient'
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { ScrollView, Share, StyleSheet, Switch, Text, View } from 'react-native'
+import { ScrollView, Share, StyleSheet, Switch, Text, TextInput, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { PrimaryButton } from '@/components/Button'
+import { Pill, PrimaryButton } from '@/components/Button'
+import { SignInToBookSheet } from '@/components/SignInToBookSheet'
 import { CarpoolCompare } from '@/components/carpool/CarpoolCompare'
 import { NeighborhoodPicker } from '@/components/carpool/NeighborhoodPicker'
 import { Card, EmptyState, ErrorText, Field, SkeletonBlock } from '@/components/carpool/ui'
 import { MainTabs } from '@/components/MainTabs'
 import { setAuthNext } from '@/lib/authNext'
 import { useAuth } from '@/lib/auth'
+import { successHaptic, tapHaptic } from '@/lib/feedback'
+import {
+  addFriendByEmail,
+  listFriendActivity,
+  loadSavedFriends,
+  startRideTogether,
+  type FriendActivity,
+  type SavedFriend,
+} from '@/lib/friendsApi'
+import { quoteRide } from '@/lib/scheduleApi'
 import { supabase } from '@/lib/supabase'
 import { useRegisteredVehicle } from '@/lib/useRegisteredVehicle'
 import {
@@ -34,7 +45,8 @@ import {
   type Place,
 } from 'rides-native/shared/carpool.js'
 import { offerCapacity } from 'rides-native/shared/vehicle.js'
-import { INK_SECONDARY, PURPLE, SURFACE } from 'rides-native/places.js'
+import { INK, INK_SECONDARY, PURPLE, SURFACE } from 'rides-native/places.js'
+import { RIDE_PLACES } from 'rides-native/riderShell.js'
 
 const START = defaultCarpoolEnds()
 
@@ -67,6 +79,20 @@ export default function CarpoolHubScreen() {
   )
   const capacity = offerCapacity(vehicleState.vehicle, { tailgate })
   const cluster = clusterOf(dropoff)
+  const [friendEmail, setFriendEmail] = useState('')
+  const [friends, setFriends] = useState<SavedFriend[]>([])
+  const [activity, setActivity] = useState<FriendActivity[]>([])
+  const [friendPickup, setFriendPickup] = useState('White C')
+  const [friendDropoff, setFriendDropoff] = useState('Downtown Clemson')
+  const [splitMode, setSplitMode] = useState<'even' | 'by_distance'>('even')
+  const [friendBusy, setFriendBusy] = useState(false)
+  const [friendError, setFriendError] = useState<string | null>(null)
+  const [friendNote, setFriendNote] = useState<string | null>(null)
+  const [promptOpen, setPromptOpen] = useState(false)
+  const friendFrom = RIDE_PLACES.find((place) => place.label === friendPickup) || RIDE_PLACES[0]
+  const friendTo = RIDE_PLACES.find((place) => place.label === friendDropoff) || RIDE_PLACES[2]
+  const friendQuote = quoteRide(friendFrom, friendTo, false)
+  const shareCents = splitMode === 'even' ? Math.round(friendQuote.fareCents / 2) : friendQuote.fareCents
 
   useFocusEffect(useCallback(() => {
     void vehicleState.reload()
@@ -92,6 +118,31 @@ export default function CarpoolHubScreen() {
       alive = false
     }
   }, [user])
+
+  useEffect(() => {
+    let alive = true
+    loadSavedFriends()
+      .then((rows) => {
+        if (alive) setFriends(rows)
+      })
+      .catch((err: unknown) => {
+        if (alive) setFriendError(err instanceof Error ? err.message : 'Could not load friends')
+      })
+    if (!user?.id) {
+      setActivity([])
+      return () => {
+        alive = false
+      }
+    }
+    listFriendActivity(user.id)
+      .then((rows) => {
+        if (alive) setActivity(rows)
+      })
+      .catch(() => {})
+    return () => {
+      alive = false
+    }
+  }, [user?.id])
 
   function requireUser(next: '/friends' | '/carpool/offer') {
     if (user) return true
@@ -162,6 +213,59 @@ export default function CarpoolHubScreen() {
     }
     setError(null)
     router.push(`/carpool/${token}`)
+  }
+
+  async function onAddFriend() {
+    if (!user) {
+      setAuthNext('/friends')
+      setPromptOpen(true)
+      return
+    }
+    setFriendBusy(true)
+    setFriendError(null)
+    setFriendNote(null)
+    try {
+      setFriends(await addFriendByEmail(friendEmail))
+      setFriendEmail('')
+      setFriendNote('Friend added.')
+      await successHaptic()
+    } catch (err) {
+      setFriendError(err instanceof Error ? err.message : 'Could not add that friend')
+    } finally {
+      setFriendBusy(false)
+    }
+  }
+
+  async function onRideTogether() {
+    if (!user) {
+      setAuthNext('/friends')
+      setPromptOpen(true)
+      return
+    }
+    if (friendFrom.label === friendTo.label) {
+      setFriendError('Pickup and drop-off need to be different places.')
+      return
+    }
+    setFriendBusy(true)
+    setFriendError(null)
+    setFriendNote(null)
+    try {
+      const created = await startRideTogether({
+        displayName: riderDisplayName(user),
+        pickup: friendFrom,
+        dropoff: friendTo,
+        splitMode,
+        partyType: tailgate ? 'tailgate' : 'carpool',
+      })
+      const token = typeof created.token === 'string' ? created.token : ''
+      setFriendNote(token ? `Ride together started · ${token.slice(0, 8)}` : 'Ride together request sent.')
+      await successHaptic()
+      setActivity(await listFriendActivity(user.id))
+    } catch (err) {
+      setFriendError(err instanceof Error ? err.message : 'Could not start the group ride')
+    } finally {
+      setFriendBusy(false)
+    }
   }
 
   const waiting = Boolean(result?.pool?.waiting)
@@ -290,9 +394,83 @@ export default function CarpoolHubScreen() {
             />
             <PrimaryButton label="Open lobby" onPress={onJoinCode} tone="purple" />
           </Card>
+
+          <Card>
+            <Text style={styles.cardTitle}>Add a rider</Text>
+            <Text style={styles.note}>Saved on this phone, then used when you start a ride together.</Text>
+            <TextInput
+              value={friendEmail}
+              onChangeText={setFriendEmail}
+              placeholder="friend@clemson.edu"
+              placeholderTextColor="#8B939E"
+              autoCapitalize="none"
+              autoComplete="email"
+              keyboardType="email-address"
+              style={styles.input}
+            />
+            <PrimaryButton label={friendBusy ? 'Working…' : 'Add friend'} onPress={onAddFriend} disabled={friendBusy || !friendEmail.trim()} />
+            {friends.length === 0 ? <Text style={styles.note}>No saved friends on this phone yet.</Text> : null}
+            {friends.map((friend) => (
+              <Text key={friend.id} style={styles.note}>{friend.name} · {friend.email}</Text>
+            ))}
+          </Card>
+
+          <Card>
+            <Text style={styles.cardTitle}>Ride together</Text>
+            <Text style={styles.note}>Split evenly or by distance. Party weekend follows the tailgate switch above.</Text>
+            <Text style={styles.tailgateLabel}>Pickup</Text>
+            <View style={styles.friendPills}>
+              {RIDE_PLACES.map((place) => (
+                <Pill key={`fpu-${place.label}`} label={place.label} active={friendPickup === place.label} onPress={() => setFriendPickup(place.label)} />
+              ))}
+            </View>
+            <Text style={styles.tailgateLabel}>Drop-off</Text>
+            <View style={styles.friendPills}>
+              {RIDE_PLACES.map((place) => (
+                <Pill key={`fdo-${place.label}`} label={place.label} active={friendDropoff === place.label} onPress={() => setFriendDropoff(place.label)} />
+              ))}
+            </View>
+            <View style={styles.friendPills}>
+              <Pill label="Split evenly" active={splitMode === 'even'} onPress={() => { void tapHaptic(); setSplitMode('even') }} />
+              <Pill label="Split by distance" active={splitMode === 'by_distance'} onPress={() => { void tapHaptic(); setSplitMode('by_distance') }} />
+            </View>
+            <Text style={styles.note}>
+              {splitMode === 'even'
+                ? `About ${formatUsd(shareCents / 100)} each on a two-rider share of ${formatUsd(friendQuote.fareCents / 100)}.`
+                : 'The server weights each stop when friends add their own pickups. This preview is the full leg until then.'}
+            </Text>
+            <PrimaryButton label={friendBusy ? 'Starting…' : 'Start group ride'} onPress={onRideTogether} disabled={friendBusy} tone="purple" />
+          </Card>
+
+          <Card>
+            <Text style={styles.cardTitle}>Activity</Text>
+            {!user ? <Text style={styles.note}>Sign in to see group rides you organized.</Text> : null}
+            {user && activity.length === 0 ? <Text style={styles.note}>No group rides yet.</Text> : null}
+            {activity.map((row) => (
+              <Text key={row.id} style={styles.note}>
+                {row.kind || 'friends'} · {row.status || 'open'}
+                {row.split_mode === 'by_distance' ? ' · by distance' : ' · even split'}
+                {row.total_fare_cents ? ` · ${formatUsd(row.total_fare_cents / 100)}` : ''}
+              </Text>
+            ))}
+            {friendError ? <ErrorText>{friendError}</ErrorText> : null}
+            {friendNote ? <Text style={styles.note}>{friendNote}</Text> : null}
+          </Card>
         </View>
       </ScrollView>
       <MainTabs active="friends" />
+      <SignInToBookSheet
+        open={promptOpen}
+        onClose={() => setPromptOpen(false)}
+        onSignIn={() => {
+          setPromptOpen(false)
+          router.push('/sign-in')
+        }}
+        onSignUp={() => {
+          setPromptOpen(false)
+          router.push('/sign-up')
+        }}
+      />
     </View>
   )
 }
@@ -341,4 +519,17 @@ const styles = StyleSheet.create({
     color: INK_SECONDARY,
     paddingVertical: 8,
   },
+  input: {
+    borderWidth: 1,
+    borderColor: 'rgba(82,45,128,0.18)',
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 16,
+    color: INK,
+    marginTop: 8,
+    marginBottom: 8,
+  },
+  friendPills: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8, marginBottom: 8 },
 })

@@ -1,12 +1,15 @@
 import { useRouter } from 'expo-router'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { PrimaryButton } from '@/components/Button'
+import { Pill, PrimaryButton } from '@/components/Button'
 import { MainTabs } from '@/components/MainTabs'
+import { loadAccount, saveProfile } from '@/lib/accountApi'
 import { useAuth } from '@/lib/auth'
+import { playTigerCue, setSoundsEnabled, soundsEnabled, tapHaptic } from '@/lib/feedback'
 import { displayFirstName, isClemsonEmail } from 'rides-native/authErrors'
 import { INK, INK_SECONDARY, ORANGE, PURPLE, SURFACE } from 'rides-native/places.js'
+import { FAVORITE_SPOTS } from 'rides-native/riderShell.js'
 
 const LINKS: { href: '/billing' | '/student' | '/promo' | '/notifications' | '/history' | '/schedule'; label: string; hint: string }[] = [
   { href: '/billing', label: 'Billing', hint: 'Card on file, deposits, and ride history' },
@@ -22,8 +25,62 @@ export default function AccountScreen() {
   const insets = useSafeAreaInsets()
   const { user, configured, signOut } = useAuth()
   const [error, setError] = useState<string | null>(null)
+  const [note, setNote] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const [spots, setSpots] = useState<string[]>([])
+  const [fullName, setFullName] = useState('')
+  const [bio, setBio] = useState('')
+  const [soundsOn, setSoundsOn] = useState(true)
   const name = user ? displayFirstName(user.user_metadata?.full_name || user.email?.split('@')[0], 'Rider') : null
+
+  useEffect(() => {
+    let alive = true
+    soundsEnabled().then((on) => {
+      if (alive) setSoundsOn(on)
+    })
+    if (!user?.id) {
+      setSpots([])
+      return () => {
+        alive = false
+      }
+    }
+    loadAccount(user.id).then((account) => {
+      if (!alive) return
+      setSpots(account.profile?.favorite_spots || [])
+      setFullName(account.profile?.full_name || user.user_metadata?.full_name || '')
+      setBio(account.profile?.bio || '')
+      if (account.error) setError(account.error)
+    })
+    return () => {
+      alive = false
+    }
+  }, [user?.id])
+
+  function toggleSpot(spot: string) {
+    void tapHaptic()
+    setSpots((prev) => (prev.includes(spot) ? prev.filter((item) => item !== spot) : [...prev, spot].slice(0, 6)))
+  }
+
+  async function onSaveSpots() {
+    if (!user?.id) {
+      router.push('/sign-in')
+      return
+    }
+    setBusy(true)
+    setNote(null)
+    try {
+      await saveProfile(user.id, {
+        full_name: fullName || user.user_metadata?.full_name || '',
+        bio,
+        favorite_spots: spots,
+      })
+      setNote('Favorite spots saved')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not save spots')
+    } finally {
+      setBusy(false)
+    }
+  }
 
   async function onSignOut() {
     setBusy(true)
@@ -63,7 +120,33 @@ export default function AccountScreen() {
             <Text style={styles.copy}>{link.hint}</Text>
           </Pressable>
         ))}
+        <View style={styles.row}>
+          <Text style={styles.rowTitle}>Favorite spots</Text>
+          <Text style={styles.copy}>Pick up to six, including White C and Bigsby.</Text>
+          <View style={styles.pills}>
+            {FAVORITE_SPOTS.map((spot) => (
+              <Pill key={spot} label={spot} active={spots.includes(spot)} onPress={() => toggleSpot(spot)} />
+            ))}
+          </View>
+          <PrimaryButton label={busy ? 'Saving…' : 'Save spots'} onPress={onSaveSpots} disabled={busy} tone="ghost" />
+        </View>
+        <View style={styles.row}>
+          <Text style={styles.rowTitle}>Sounds</Text>
+          <Text style={styles.copy}>Tiger sounds use expo-audio and stay quiet when the phone is on silent or vibrate.</Text>
+          <PrimaryButton
+            label={soundsOn ? 'Tiger sounds · On' : 'Tiger sounds · Off'}
+            tone={soundsOn ? 'orange' : 'ghost'}
+            onPress={async () => {
+              const next = !soundsOn
+              await setSoundsEnabled(next)
+              setSoundsOn(next)
+              void tapHaptic()
+              if (next) await playTigerCue()
+            }}
+          />
+        </View>
         {error ? <Text style={styles.error}>{error}</Text> : null}
+        {note ? <Text style={styles.note}>{note}</Text> : null}
         {user ? (
           <PrimaryButton label={busy ? 'Signing out…' : 'Sign out'} onPress={onSignOut} disabled={busy} tone="purple" />
         ) : (
@@ -104,5 +187,7 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   rowTitle: { color: INK, fontWeight: '800', fontSize: 16 },
+  pills: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 },
+  note: { color: PURPLE, fontWeight: '700', fontSize: 13 },
   error: { color: '#B42318', fontSize: 13 },
 })
