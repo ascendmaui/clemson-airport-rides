@@ -12,7 +12,11 @@ import {
   isWeekendPartyWindow,
   matchesQueueFilter,
   nextTripStatus,
+  PREFERRED_REQUEST_NOTE,
+  preferredRequestNote,
   summarizeDepositAwareness,
+  tagLabel,
+  tagTone,
   toDriverCard,
   tripTags,
   weekNetCents,
@@ -33,6 +37,11 @@ test('student, game day, tesla, and chosen-driver tags come from stored trip fie
     metadata: { student_discount_cents: 180, window: 'game_day', purpose: 'tailgate' },
   })
   assert.deepEqual(tags.sort(), ['direct', 'game_day', 'student', 'tesla', 'weekend_party'].sort())
+  assert.equal(tagLabel('direct'), 'Preferred by rider')
+  assert.equal(preferredRequestNote({ tags }), PREFERRED_REQUEST_NOTE)
+  assert.equal(preferredRequestNote({ tags: ['student'] }), null)
+  assert.equal(tagTone('Preferred by rider'), 'orange')
+  assert.equal(tagTone('Chosen later'), 'purple')
 })
 
 test('a stadium pickup is not game day unless a game is live or the trip says so', () => {

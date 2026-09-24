@@ -43,7 +43,7 @@ Booking a local ride (rider):
 1. Rides tab. Enter a destination or pick a shortcut.
 2. Confirm pickup.
 3. Choose a tier: Standard, Wait & Save, Extra Comfort, XL, Pet, or Tesla Model 3. Tesla Model 3 is the Clemson fleet option. A person still drives. There is no live self-driving dispatch and no robotaxi telemetry. The tier screen shows sample local prices and a "10% off Standard" student promo. Standard on that screen can open an upsell before Pick driver. The Tesla upsell must say a driver is at the wheel.
-4. Pick driver (online drivers come from driver_status).
+4. Pick driver lists approved drivers who are online, plus any drivers this rider saved. Name, rating, vehicle, and a straight-line ETA show when that data exists. The request is status "requested" and is pinned to that driver. If they decline, the trip is canceled. It does not auto-match to another driver. Airport Schedule is the open pool (status "searching").
 5. Requested screen tracks the trip.
 Sign-in is required to book. Guest browsing of marketing and schedule is allowed.
 
@@ -108,7 +108,8 @@ export const TOPICS = [
       'Enter where you are headed, or tap a shortcut.',
       'Confirm the pickup.',
       'Choose a tier. Student pricing is 10% off Standard only.',
-      'Pick an online driver, then watch the trip on Requested.',
+      'Pick an online driver. That request stays with them. If they decline, it is canceled and does not auto-match.',
+      'Watch the trip on Requested.',
     ],
     actions: [action('Open Rides', 'home'), action('Confirm pickup', 'confirm')],
   },

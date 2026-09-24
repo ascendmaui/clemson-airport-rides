@@ -1,6 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
-import { displayFirstName } from './privacyDisplay.js'
-import { standingFromRatings } from './standing.js'
+import { fetchOnlineDrivers as fetchSharedOnlineDrivers } from '../../packages/rides-native/drivers.js'
 
 const env = import.meta.env || {}
 const url =
@@ -36,97 +35,10 @@ export async function pingSupabase() {
 
 /**
  * Online drivers from driver_status + profiles + vehicles.
- * No demo / simulated fleet arrays.
+ * Shared with the rider app. No demo / simulated fleet arrays.
  */
 export async function fetchOnlineDrivers() {
-  if (!supabase) {
-    return { drivers: [], error: 'Supabase not configured' }
-  }
-
-  const { data: statuses, error: statusErr } = await supabase
-    .from('driver_status')
-    .select('driver_id, online, priority_mode, lat, lng, heading, unlock_progress, unlock_target, updated_at')
-    .eq('online', true)
-
-  if (statusErr) {
-    return { drivers: [], error: statusErr.message }
-  }
-  if (!statuses?.length) {
-    return { drivers: [], error: null }
-  }
-
-  const ids = statuses.map((s) => s.driver_id)
-  const { data: approvedRows, error: approvedErr } = await supabase.rpc('list_approved_driver_ids', { ids })
-  if (approvedErr) {
-    return { drivers: [], error: approvedErr.message }
-  }
-  const approved = new Set((approvedRows || []).map((row) => row.profile_id))
-  const visible = statuses.filter((s) => approved.has(s.driver_id))
-  if (!visible.length) {
-    return { drivers: [], error: null }
-  }
-
-  const visibleIds = visible.map((s) => s.driver_id)
-
-  const vehicleQuery = supabase
-    .from('vehicles')
-    .select(
-      'id, driver_id, make, model, color, plate, seats, is_tesla, autonomous_capable, tier',
-    )
-    .in('driver_id', visibleIds)
-
-  let profileRes = await supabase
-    .from('profiles')
-    .select('id, full_name, phone, email, avatar_url, role, rating_avg, rating_count, standing')
-    .in('id', visibleIds)
-  if (profileRes.error && /standing|rating_avg|rating_count|column|schema cache/i.test(profileRes.error.message || '')) {
-    profileRes = await supabase
-      .from('profiles')
-      .select('id, full_name, phone, email, avatar_url, role')
-      .in('id', visibleIds)
-  }
-  const { data: vehicles } = await vehicleQuery
-  if (profileRes.error) return { drivers: [], error: profileRes.error.message }
-  const profiles = profileRes.data
-
-  const profileById = Object.fromEntries((profiles || []).map((p) => [p.id, p]))
-  const vehicleByDriver = {}
-  for (const v of vehicles || []) {
-    if (!vehicleByDriver[v.driver_id]) vehicleByDriver[v.driver_id] = v
-  }
-
-  const drivers = visible.map((s) => {
-    const profile = profileById[s.driver_id] || {}
-    const vehicle = vehicleByDriver[s.driver_id] || null
-    const standing = profile.standing || standingFromRatings(profile.rating_avg, profile.rating_count)
-    if (standing === 'restricted') return null
-    return {
-      id: s.driver_id,
-      name: displayFirstName(profile.full_name, 'Driver'),
-      ratingAvg: profile.rating_avg != null ? Number(profile.rating_avg) : null,
-      ratingCount: Number(profile.rating_count) || 0,
-      standing,
-      phone: profile.phone || null,
-      avatarUrl: profile.avatar_url || null,
-      online: s.online,
-      priorityMode: s.priority_mode,
-      lat: s.lat,
-      lng: s.lng,
-      heading: s.heading,
-      unlockProgress: s.unlock_progress,
-      unlockTarget: s.unlock_target,
-      vehicle,
-      vehicleLabel: vehicle
-        ? [vehicle.color, vehicle.make, vehicle.model].filter(Boolean).join(' ')
-        : 'Vehicle TBD',
-      plate: vehicle?.plate || null,
-      isTesla: Boolean(vehicle?.is_tesla),
-      tier: vehicle?.tier || 'standard',
-      updatedAt: s.updated_at,
-    }
-  }).filter(Boolean)
-
-  return { drivers, error: null }
+  return fetchSharedOnlineDrivers(supabase)
 }
 
 /** Subscribe to trips Realtime changes. Returns unsubscribe fn. */

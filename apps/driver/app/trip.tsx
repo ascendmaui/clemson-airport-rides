@@ -14,8 +14,10 @@ import { useDriverLocation } from '@/lib/useDriverLocation'
 import { advanceTrip, loadRiderFix, loadTrip, publishDriverLocation, subscribeTrips } from 'rides-native/driverDesk'
 import {
   formatCents,
+  preferredRequestNote,
   statusActionLabel,
   statusHeadline,
+  tagTone,
   TESLA_FLEET_NOTICE,
   type DriverCard,
 } from 'rides-native/tripTags'
@@ -185,9 +187,10 @@ export default function TripScreen() {
             </Text>
             <View style={styles.tags}>
               {trip.tagLabels.map((label) => (
-                <Tag key={label} label={label} tone={label.includes('Game') || label.includes('Student') ? 'orange' : 'purple'} />
+                <Tag key={label} label={label} tone={tagTone(label)} />
               ))}
             </View>
+            {preferredRequestNote(trip) ? <Text style={styles.note}>{preferredRequestNote(trip)}</Text> : null}
             <View style={styles.track}>
               {STEPS.map((step, index) => (
                 <View key={step} style={[styles.dot, index <= stepIndex && styles.dotOn]} />
@@ -239,6 +242,7 @@ function tripStyles(colors: Palette) {
     kicker: { color: colors.orange, fontWeight: '800', letterSpacing: 1 },
     title: { fontSize: 26, fontWeight: '800', color: colors.title },
     copy: { color: colors.inkSecondary, fontSize: 14, lineHeight: 20 },
+    note: { color: colors.orange, fontSize: 13, lineHeight: 18, fontWeight: '700' },
     fare: { color: colors.ink, fontWeight: '800', fontSize: 16 },
     tags: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
     track: { flexDirection: 'row', gap: 8, marginVertical: 4 },
