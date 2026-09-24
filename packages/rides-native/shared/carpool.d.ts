@@ -51,7 +51,9 @@ export type SurgeDelta = {
   driverBeatsSolo: boolean
   window: DemandWindow
   currentShareCents: number | null
+  currentShareId: string | null
   currentRiderCount: number | null
+  currentFirstRideFree: boolean
   currentSavingsCents: number | null
 }
 
@@ -74,6 +76,37 @@ export function demandWindow(at?: Date, options?: { gameDay?: boolean }): Demand
 export function formatUsd(cents: number): string
 export function illustrativePeakAt(from?: Date): Date
 export function isGameWeek(at?: Date): boolean
+export function firstRideWindowOpen(at?: Date, options?: { gameDay?: boolean; enabled?: boolean }): boolean
+export function firstRideEligible(input?: {
+  windowOpen?: boolean
+  alreadyUsed?: boolean
+  completedTrips?: number
+  schemaMissing?: boolean
+  lookupFailed?: boolean
+}): boolean
+export function firstRideOfferCopy(input?: {
+  windowOpen?: boolean
+  signedIn?: boolean
+  alreadyUsed?: boolean
+  completedTrips?: number
+  schemaMissing?: boolean
+  lookupFailed?: boolean
+}): { eligible: boolean; title: string; body: string } | null
+export function confirmChargeLabel(input?: {
+  booked?: boolean
+  busyLabel?: string
+  isCarpool?: boolean
+  shareCents?: number | null
+  firstRideFree?: boolean
+}): string
+export function confirmChargeNote(input?: {
+  shareCents?: number | null
+  firstRideFree?: boolean
+  riderCount?: number | null
+  fullCarShareCents?: number | null
+  fullCarNow?: boolean
+}): string | null
+export function otherFirstRideLabels(quote: CarpoolQuote | null | undefined, exceptId?: string | null): string[]
 export function pitchQuote(input: {
   pickup: Place
   dropoff: Place

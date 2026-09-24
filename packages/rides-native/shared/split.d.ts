@@ -7,6 +7,7 @@ export type SplitRow = {
   shareCents: number
   soloCents: number | null
   savingsCents: number | null
+  firstRideFree?: boolean
 }
 
 export function quoteFromRide(ride: RideSummary | null | undefined): CarpoolQuote | null

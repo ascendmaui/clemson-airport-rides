@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { formatUsd, surgeDelta } from '../lib/carpoolEngine'
+import { confirmChargeNote, formatUsd, otherFirstRideLabels, surgeDelta } from '../lib/carpoolEngine'
 
 /**
  * Pre-confirm price story. The big numbers are always
@@ -21,8 +21,20 @@ export function CarpoolCompare({
   if (!delta) return null
 
   const chargingNow = mode === 'confirm' && delta.currentShareCents != null
-  const fullCarNow = chargingNow && delta.currentRiderCount === 4
+  const fullCarNow = chargingNow && !delta.currentFirstRideFree && delta.currentRiderCount === 4
     && Math.abs(delta.currentShareCents - delta.fullCarShareCents) <= 75
+  const chargeNote = mode === 'confirm'
+    ? confirmChargeNote({
+      shareCents: delta.currentShareCents,
+      firstRideFree: delta.currentFirstRideFree,
+      riderCount: delta.currentRiderCount,
+      fullCarShareCents: delta.fullCarShareCents,
+      fullCarNow,
+    })
+    : null
+  const otherFree = mode === 'confirm'
+    ? otherFirstRideLabels(quote, delta.currentFirstRideFree ? delta.currentShareId : null)
+    : []
 
   return (
     <section
@@ -65,16 +77,14 @@ export function CarpoolCompare({
         Driver earns {formatUsd(delta.driverBonusCents)} more
         {' '}({formatUsd(delta.driverPayoutCents)} vs {formatUsd(delta.driverSoloPayoutCents)} for one rider).
       </p>
-      {chargingNow && !fullCarNow && (
+      {chargeNote && (
         <p style={{ margin: '8px 0 0', fontSize: 13, lineHeight: 1.45, color: 'var(--ink)' }}>
-          This confirm charges {formatUsd(delta.currentShareCents)} each
-          {delta.currentRiderCount ? ` for ${delta.currentRiderCount} rider${delta.currentRiderCount === 1 ? '' : 's'}` : ''}.
-          {' '}A full car on a surge night is {formatUsd(delta.fullCarShareCents)}.
+          {chargeNote}
         </p>
       )}
-      {chargingNow && fullCarNow && (
-        <p style={{ margin: '8px 0 0', fontSize: 13, lineHeight: 1.45, color: 'var(--ink)' }}>
-          This confirm charges {formatUsd(delta.currentShareCents)} each. That is the full-car price above.
+      {otherFree.length > 0 && (
+        <p style={{ margin: '8px 0 0', fontSize: 13, lineHeight: 1.45, color: 'var(--ink)', fontWeight: 700 }}>
+          First ride free for {otherFree.join(', ')}.
         </p>
       )}
     </section>

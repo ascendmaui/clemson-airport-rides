@@ -36,6 +36,8 @@ import {
   clusterOf,
   defaultCarpoolEnds,
   demandWindow,
+  firstRideOfferCopy,
+  firstRideWindowOpen,
   formatUsd,
   illustrativePeakAt,
   isGameWeek,
@@ -75,6 +77,17 @@ export default function CarpoolHubScreen() {
   const windowNow = demandWindow(now)
   const peakOn = windowNow === 'game_day' || windowNow === 'peak_night'
   const gameWeek = isGameWeek(now)
+  const firstRideOffer = !user
+    ? firstRideOfferCopy({ windowOpen: firstRideWindowOpen(now), signedIn: false })
+    : firstRideLoaded
+      ? firstRideOfferCopy({
+        windowOpen: Boolean(firstRide?.windowOpen),
+        signedIn: true,
+        alreadyUsed: Boolean(firstRide?.alreadyUsed),
+        completedTrips: firstRide?.completedTrips || 0,
+        schemaMissing: Boolean(firstRide?.schemaMissing),
+      })
+      : null
   const pitch = useMemo(
     () => pitchQuote({ pickup, dropoff, at: peakAt, displayName: 'You' }),
     [pickup, dropoff, peakAt],
@@ -312,7 +325,7 @@ export default function CarpoolHubScreen() {
             </Text>
           ) : null}
 
-          {gameWeek && !firstRideLoaded ? (
+          {user && !firstRideLoaded && firstRideWindowOpen(now) ? (
             <Card>
               <SkeletonBlock height={16} width="70%" />
               <View style={{ height: 8 }} />
@@ -321,14 +334,10 @@ export default function CarpoolHubScreen() {
               <SkeletonBlock height={12} width="80%" />
             </Card>
           ) : null}
-          {gameWeek && firstRideLoaded ? (
+          {firstRideOffer ? (
             <Card>
-              <Text style={styles.cardTitle}>First ride free during game-week peaks</Text>
-              <Text style={styles.note}>
-                One comp per account, only Thu–Sat nights, class change, and game day. Not a rider promo code.
-                {firstRide?.eligible ? ' You are eligible on the next peak ride.' : ''}
-                {firstRide?.alreadyUsed ? ' This account already used it.' : ''}
-              </Text>
+              <Text style={styles.cardTitle}>{firstRideOffer.title}</Text>
+              <Text style={styles.note}>{firstRideOffer.body}</Text>
             </Card>
           ) : null}
 

@@ -31,6 +31,7 @@ export function splitRows(ride) {
       shareCents: share.shareCents,
       soloCents: share.soloCents,
       savingsCents: share.savingsCents ?? Math.max(0, (share.soloCents || 0) - (share.shareCents || 0)),
+      firstRideFree: Boolean(share.firstRideFree),
     }))
   }
   return (ride?.participants || [])

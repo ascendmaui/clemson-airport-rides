@@ -3,7 +3,7 @@ import { CampusMap, CLEMSON } from '../components/CampusMap'
 import { PlacePicker } from '../components/PlacePicker'
 import { PrimaryButton } from '../components/PrimaryButton'
 import { CarpoolCompare } from '../components/CarpoolCompare'
-import { formatUsd, NEIGHBORHOODS, quoteCarpool, surgeDelta } from '../lib/carpoolEngine'
+import { confirmChargeLabel, firstRideOfferCopy, firstRideWindowOpen, NEIGHBORHOODS, quoteCarpool, surgeDelta } from '../lib/carpoolEngine'
 import { BottomTabs } from '../components/BottomTabs'
 import { SosControl } from '../components/SosControl'
 import { useAuth } from '../lib/auth'
@@ -11,7 +11,7 @@ import { navigate } from '../lib/navigation'
 import { formatUsdFromCents } from '../lib/pricing'
 import { supabase } from '../lib/supabase'
 import {
-  FRIEND_PLACES, confirmFriendCharges, createFriendRide, decodePolyline,
+  FRIEND_PLACES, carpoolProgram, confirmFriendCharges, createFriendRide, decodePolyline,
   formatEta, formatMiles, inviteUrl, getFriendRide, joinFriendRide, recomputeFriendRide,
   vehicleMaxSeats, capacityMessage, DEFAULT_MAX_PARTICIPANTS,
 } from '../lib/friendRides'
@@ -48,6 +48,7 @@ export function FriendRideScreen({ token: tokenProp, kind: kindProp = 'friends' 
   const [pickup, setPickup] = useState(isCarpool
     ? { label: grand.label, lat: grand.lat, lng: grand.lng }
     : FRIEND_PLACES[0])
+  const [firstRide, setFirstRide] = useState(null)
   const [dropoff, setDropoff] = useState(isCarpool
     ? { label: college.label, lat: college.lat, lng: college.lng }
     : FRIEND_PLACES[4])
@@ -107,6 +108,31 @@ export function FriendRideScreen({ token: tokenProp, kind: kindProp = 'friends' 
     const t = setInterval(refresh, 8000)
     return () => clearInterval(t)
   }, [refresh, token])
+
+  useEffect(() => {
+    if (!isCarpool) return undefined
+    if (!user) {
+      setFirstRide(null)
+      return undefined
+    }
+    let alive = true
+    carpoolProgram('first_ride')
+      .then((data) => { if (alive) setFirstRide(data) })
+      .catch(() => {})
+    return () => { alive = false }
+  }, [isCarpool, user])
+
+  const firstRideOffer = !isCarpool
+    ? null
+    : firstRideOfferCopy(user
+      ? {
+        windowOpen: Boolean(firstRide?.windowOpen),
+        signedIn: true,
+        alreadyUsed: Boolean(firstRide?.alreadyUsed),
+        completedTrips: firstRide?.completedTrips || 0,
+        schemaMissing: Boolean(firstRide?.schemaMissing),
+      }
+      : { windowOpen: firstRideWindowOpen(new Date()), signedIn: false })
 
   const routePath = useMemo(() => decodePolyline(ride?.route_polyline), [ride?.route_polyline])
   const carpoolQuote = useMemo(() => {
@@ -392,6 +418,12 @@ export function FriendRideScreen({ token: tokenProp, kind: kindProp = 'friends' 
             : (isOrganizer ? 'Friend ride lobby' : 'Join friend ride')}
         </h1>
         <p style={{ fontSize: 13, color: 'var(--ink-tertiary)', marginTop: 4 }}>Status: {ride?.status || '…'}</p>
+        {isCarpool && !(user && !firstRide) && firstRideOffer && (
+          <div style={{ ...card, background: 'rgba(82,45,128,0.06)' }}>
+            <div style={{ fontWeight: 800, color: 'var(--purple)' }}>{firstRideOffer.title}</div>
+            <p style={{ fontSize: 13, color: 'var(--ink-secondary)', margin: '6px 0 0', lineHeight: 1.45 }}>{firstRideOffer.body}</p>
+          </div>
+        )}
 
         <div style={{ marginTop: 12, borderRadius: 16, overflow: 'hidden' }}>
           <CampusMap height={200} interactive center={mapCenter} zoom={routePath ? 11 : 14} route={routePath} marker={mapCenter} />
@@ -443,6 +475,9 @@ export function FriendRideScreen({ token: tokenProp, kind: kindProp = 'friends' 
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                 <strong>{p.display_name}</strong>
                 <span style={{ color: 'var(--ink-tertiary)' }}>· {p.status}</span>
+                {(carpoolQuote?.shares || []).some((share) => share.id === p.id && share.firstRideFree) && (
+                  <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: 0.3, color: '#F56600' }}>First ride free</span>
+                )}
                 {p.student_verified_at && (
                   <span style={{
                     fontSize: 10, fontWeight: 700, letterSpacing: 0.4, padding: '2px 8px', borderRadius: 999,
@@ -522,15 +557,13 @@ export function FriendRideScreen({ token: tokenProp, kind: kindProp = 'friends' 
               />
             )}
             <PrimaryButton onClick={onConfirmCharges} disabled={busy || ride?.status === 'booked' || (isCarpool && !carpoolQuote)}>
-              {ride?.status === 'booked'
-                ? 'Booked'
-                : busy && (busyLabel === 'Calculating fares…' || busyLabel === 'Charging…')
-                  ? busyLabel
-                  : isCarpool
-                    ? (delta?.currentShareCents != null
-                      ? `Confirm · charge ${formatUsd(delta.currentShareCents)} each`
-                      : 'Waiting for the split')
-                    : 'Confirm & charge friends'}
+              {confirmChargeLabel({
+                booked: ride?.status === 'booked',
+                busyLabel: busy && (busyLabel === 'Calculating fares…' || busyLabel === 'Charging…') ? busyLabel : '',
+                isCarpool,
+                shareCents: delta?.currentShareCents,
+                firstRideFree: Boolean(delta?.currentFirstRideFree),
+              })}
             </PrimaryButton>
             <p style={{ fontSize: 11, color: 'var(--ink-tertiary)', marginTop: 8 }}>
               Confirm updates fares from the live route, then charges full shares · saved card or Apple Pay / Payment Element.

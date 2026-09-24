@@ -1,7 +1,7 @@
 import { LinearGradient } from 'expo-linear-gradient'
 import { useMemo } from 'react'
 import { Text, View } from 'react-native'
-import { formatUsd, surgeDelta, type CarpoolQuote, type Place } from 'rides-native/shared/carpool.js'
+import { confirmChargeNote, formatUsd, otherFirstRideLabels, surgeDelta, type CarpoolQuote, type Place } from 'rides-native/shared/carpool.js'
 import type { Palette } from '@/lib/palette'
 import { useTheme } from '@/lib/theme'
 import { useThemedStyles } from '@/lib/useThemedStyles'
@@ -46,9 +46,21 @@ export function CarpoolCompare({
 
   const chargingNow = mode === 'confirm' && delta.currentShareCents != null
   const fullCarNow = chargingNow
+    && !delta.currentFirstRideFree
     && delta.currentRiderCount === 4
     && Math.abs((delta.currentShareCents || 0) - delta.fullCarShareCents) <= 75
-  const riders = delta.currentRiderCount || 0
+  const chargeNote = mode === 'confirm'
+    ? confirmChargeNote({
+      shareCents: delta.currentShareCents,
+      firstRideFree: delta.currentFirstRideFree,
+      riderCount: delta.currentRiderCount,
+      fullCarShareCents: delta.fullCarShareCents,
+      fullCarNow,
+    })
+    : null
+  const otherFree = mode === 'confirm'
+    ? otherFirstRideLabels(quote, delta.currentFirstRideFree ? delta.currentShareId : null)
+    : []
 
   return (
     <LinearGradient
@@ -68,17 +80,9 @@ export function CarpoolCompare({
       <Text style={styles.driver}>
         Driver earns {formatUsd(delta.driverBonusCents)} more ({formatUsd(delta.driverPayoutCents)} vs {formatUsd(delta.driverSoloPayoutCents)} for one rider).
       </Text>
-      {chargingNow && !fullCarNow ? (
-        <Text style={styles.charge}>
-          This confirm charges {formatUsd(delta.currentShareCents || 0)} each
-          {riders ? ` for ${riders} rider${riders === 1 ? '' : 's'}` : ''}.
-          {' '}A full car on a surge night is {formatUsd(delta.fullCarShareCents)}.
-        </Text>
-      ) : null}
-      {chargingNow && fullCarNow ? (
-        <Text style={styles.charge}>
-          This confirm charges {formatUsd(delta.currentShareCents || 0)} each. That is the full-car price above.
-        </Text>
+      {chargeNote ? <Text style={styles.charge}>{chargeNote}</Text> : null}
+      {otherFree.length > 0 ? (
+        <Text style={styles.charge}>First ride free for {otherFree.join(', ')}.</Text>
       ) : null}
     </LinearGradient>
   )
