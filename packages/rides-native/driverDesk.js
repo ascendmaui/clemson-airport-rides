@@ -9,6 +9,7 @@ import {
   formatCents,
   isActiveStatus,
   isDueNow,
+  isUnpaidAirportDepositTrip,
   nextTripStatus,
   summarizeDepositAwareness,
   toDriverCard,
@@ -197,7 +198,9 @@ export async function loadDriverDesk(supabase, driverId) {
   if (statusRes.error) throw new Error(statusRes.error.message)
 
   const passedIds = new Set(await listPassedTripIds(supabase, driverId))
-  const offers = cards(openRows, gameDayLive).filter((card) => {
+  const claimableOpen = openRows.filter((row) => !isUnpaidAirportDepositTrip(row))
+  const claimableScheduled = scheduledRows.filter((row) => !isUnpaidAirportDepositTrip(row))
+  const offers = cards(claimableOpen, gameDayLive).filter((card) => {
     if (card.status !== 'requested' && passedIds.has(card.id)) return false
     if (card.status === 'requested') return card.driverId === driverId
     if ((card.status === 'searching' || card.status === 'offered') && !isDueNow(card)) return false
@@ -207,7 +210,7 @@ export async function loadDriverDesk(supabase, driverId) {
   const upcoming = cards(mineRows, gameDayLive).filter((card) => !isDueNow(card))
   return {
     offers,
-    scheduledOpen: cards(scheduledRows, gameDayLive),
+    scheduledOpen: cards(claimableScheduled, gameDayLive),
     upcoming,
     active,
     online: Boolean(statusRes.data?.online),
@@ -262,6 +265,11 @@ export async function acceptTrip(supabase, trip, driverId) {
   if (!trip?.id) throw new Error('Missing ride')
   if (trip.isSynthetic === true || String(trip.id).startsWith('synthetic-')) {
     throw new Error('Finish approval to go online. Your account is still under review.')
+  }
+  const freshRows = await listTrips(supabase, (query) => query.eq('id', trip.id).limit(1))
+  const fresh = freshRows[0] || trip
+  if (isUnpaidAirportDepositTrip(fresh)) {
+    throw new Error('Airport deposit still unpaid. This ride is not claimable until the rider pays the deposit.')
   }
   const gate = await supabase
     .from('driver_applications')

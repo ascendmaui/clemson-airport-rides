@@ -38,6 +38,54 @@ function metaOf(row) {
   return row?.metadata && typeof row.metadata === 'object' ? row.metadata : {}
 }
 
+
+/** Required cash deposit cents for an airport hold (0 means no card deposit). */
+export function airportDepositRequiredCents(row) {
+  if (!row || typeof row !== 'object') return 0
+  const meta = metaOf(row)
+  const stored = row.deposit_cents != null && row.deposit_cents !== ''
+    ? row.deposit_cents
+    : meta.depositCents
+  return Math.max(0, Math.round(Number(stored) || 0))
+}
+
+/** Airport trip markers used by checkout + driver desk. */
+export function isAirportDepositTrip(row) {
+  if (!row || typeof row !== 'object') return false
+  if (airportDepositRequiredCents(row) <= 0) return false
+  const meta = metaOf(row)
+  if (meta.purpose === 'airport' || meta.kind === 'airport') return true
+  if (meta.airport) return true
+  const note = String(row.rider_note || '').trim().toLowerCase()
+  return note === 'airport'
+}
+
+/**
+ * Paid markers that survive without a payments join:
+ * - checkout_deposit stamped by webhook restore / happy-path deposit
+ * - fare_paid_cents bumped when the deposit Checkout succeeds
+ */
+export function isAirportDepositPaid(row) {
+  if (!row || typeof row !== 'object') return false
+  const meta = metaOf(row)
+  if (meta.checkout_deposit && typeof meta.checkout_deposit === 'object') return true
+  const required = airportDepositRequiredCents(row)
+  if (required <= 0) return true
+  const paid = Math.max(0, Math.round(Number(meta.fare_paid_cents) || 0))
+  return paid >= required
+}
+
+/** Searching/scheduled airport holds still waiting on the 25% card deposit. */
+export function isUnpaidAirportDepositTrip(row) {
+  return isAirportDepositTrip(row) && !isAirportDepositPaid(row)
+}
+
+/** Open-pool / accept eligibility for driver match. */
+export function isOpenPoolClaimable(row) {
+  return !isUnpaidAirportDepositTrip(row)
+}
+
+
 function purposeId(row) {
   const meta = metaOf(row)
   return String(meta.purpose || meta.partyType || meta.party_type || row?.rider_note || '').toLowerCase()

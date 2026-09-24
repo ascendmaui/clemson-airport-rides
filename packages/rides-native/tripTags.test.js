@@ -3,6 +3,10 @@ import test from 'node:test'
 import {
   declineDisposition,
   depositSliceCents,
+  isAirportDepositPaid,
+  isAirportDepositTrip,
+  isOpenPoolClaimable,
+  isUnpaidAirportDepositTrip,
   queueEmptyCopy,
   scheduledQueueTitle,
   driverNetCents,
@@ -175,4 +179,78 @@ test('decline keeps an open match available and cancels a chosen-driver request'
   assert.equal(declineDisposition('offered'), 'release')
   assert.equal(declineDisposition('scheduled'), 'leave')
   assert.equal(declineDisposition('requested'), 'cancel')
+})
+
+
+test('unpaid airport deposit trips are gated out of the open pool until paid', () => {
+  const unpaid = {
+    id: 't1',
+    status: 'searching',
+    deposit_cents: 2500,
+    rider_note: null,
+    metadata: {
+      kind: 'airport',
+      purpose: 'airport',
+      airport: 'GSP',
+      stripe_checkout_session_id: 'cs_1',
+    },
+  }
+  assert.equal(isAirportDepositTrip(unpaid), true)
+  assert.equal(isAirportDepositPaid(unpaid), false)
+  assert.equal(isUnpaidAirportDepositTrip(unpaid), true)
+  assert.equal(isOpenPoolClaimable(unpaid), false)
+
+  const paidViaFare = {
+    ...unpaid,
+    metadata: { ...unpaid.metadata, fare_paid_cents: 2500 },
+  }
+  assert.equal(isAirportDepositPaid(paidViaFare), true)
+  assert.equal(isUnpaidAirportDepositTrip(paidViaFare), false)
+  assert.equal(isOpenPoolClaimable(paidViaFare), true)
+
+  const paidViaStamp = {
+    ...unpaid,
+    metadata: {
+      ...unpaid.metadata,
+      checkout_deposit: { session_id: 'cs_1', at: '2026-09-24T14:00:00.000Z' },
+    },
+  }
+  assert.equal(isAirportDepositPaid(paidViaStamp), true)
+  assert.equal(isUnpaidAirportDepositTrip(paidViaStamp), false)
+
+  const creditsOnly = {
+    id: 't2',
+    status: 'searching',
+    deposit_cents: 0,
+    metadata: { kind: 'airport', purpose: 'airport', airport: 'GSP' },
+  }
+  assert.equal(isAirportDepositTrip(creditsOnly), false)
+  assert.equal(isUnpaidAirportDepositTrip(creditsOnly), false)
+  assert.equal(isOpenPoolClaimable(creditsOnly), true)
+
+  const campus = {
+    id: 't3',
+    status: 'searching',
+    deposit_cents: null,
+    metadata: { purpose: 'campus' },
+  }
+  assert.equal(isAirportDepositTrip(campus), false)
+  assert.equal(isUnpaidAirportDepositTrip(campus), false)
+  assert.equal(isOpenPoolClaimable(campus), true)
+
+  const scheduledAirport = {
+    id: 't4',
+    status: 'scheduled',
+    deposit_cents: 1800,
+    rider_note: 'airport',
+    metadata: { kind: 'scheduled', airport: 'CLT' },
+  }
+  assert.equal(isUnpaidAirportDepositTrip(scheduledAirport), true)
+  assert.equal(
+    isUnpaidAirportDepositTrip({
+      ...scheduledAirport,
+      metadata: { ...scheduledAirport.metadata, fare_paid_cents: 1800 },
+    }),
+    false,
+  )
 })

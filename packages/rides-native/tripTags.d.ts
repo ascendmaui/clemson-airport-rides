@@ -61,6 +61,11 @@ export type PaymentRow = {
 export function formatCents(cents: number): string
 export function driverNetCents(fareCents: number): number
 export function depositSliceCents(fareCents: number, stored?: number | string | null): number
+export function airportDepositRequiredCents(row: Record<string, unknown> | null | undefined): number
+export function isAirportDepositTrip(row: Record<string, unknown> | null | undefined): boolean
+export function isAirportDepositPaid(row: Record<string, unknown> | null | undefined): boolean
+export function isUnpaidAirportDepositTrip(row: Record<string, unknown> | null | undefined): boolean
+export function isOpenPoolClaimable(row: Record<string, unknown> | null | undefined): boolean
 export function zonedWeekdayHour(iso: string | null | undefined, timeZone?: string): { weekday: string; hour: number } | null
 export function isWeekendPartyWindow(iso: string | null | undefined): boolean
 export function formatPickupAt(iso: string | null | undefined): string
