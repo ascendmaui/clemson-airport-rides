@@ -1,17 +1,18 @@
 import { useEffect, useRef } from 'react'
 import { StyleSheet, View } from 'react-native'
-import MapView, { Marker, Polyline, PROVIDER_DEFAULT } from 'react-native-maps'
+import MapView, { Circle, Marker, Polyline, PROVIDER_DEFAULT } from 'react-native-maps'
+import { heatColor } from 'rides-native/heat.js'
 import { DOWNTOWN, ORANGE, PURPLE, STADIUM } from 'rides-native/places.js'
+import type { BusySpot } from '@/lib/busySpots'
 import type { MapPin } from './CampusMap'
 
-const DARK_MAP = [
-  { elementType: 'geometry', stylers: [{ color: '#0e0b14' }] },
-  { elementType: 'labels.text.fill', stylers: [{ color: '#f5f6f8' }] },
-  { elementType: 'labels.text.stroke', stylers: [{ color: '#0e0b14' }] },
-  { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#2a2438' }] },
-  { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#16121f' }] },
-  { featureType: 'poi', elementType: 'geometry', stylers: [{ color: '#120e18' }] },
-]
+function rgba(hex: string, alpha: number) {
+  const raw = hex.replace('#', '')
+  const r = parseInt(raw.slice(0, 2), 16)
+  const g = parseInt(raw.slice(2, 4), 16)
+  const b = parseInt(raw.slice(4, 6), 16)
+  return `rgba(${r},${g},${b},${alpha})`
+}
 
 export function CampusMap({
   pins,
@@ -19,12 +20,16 @@ export function CampusMap({
   route,
   colorScheme = 'light',
   focusToken = 0,
+  spots = [],
+  showHeat = false,
 }: {
   pins?: MapPin[]
   center?: { latitude: number; longitude: number } | null
   route?: { latitude: number; longitude: number }[]
   colorScheme?: 'light' | 'dark'
   focusToken?: number
+  spots?: BusySpot[]
+  showHeat?: boolean
 }) {
   const mapRef = useRef<MapView>(null)
   const pinsRef = useRef(pins)
@@ -41,29 +46,37 @@ export function CampusMap({
 
   const pinKey = (pins || []).map((pin) => `${pin.id}:${pin.latitude.toFixed(4)},${pin.longitude.toFixed(4)}`).join('|')
   const centerKey = center ? `${center.latitude.toFixed(4)},${center.longitude.toFixed(4)}` : ''
+  const heatKey = showHeat ? spots.map((spot) => spot.id).join('|') : ''
 
   useEffect(() => {
     if (!mapRef.current) return
-    const spots = (pinsRef.current || []).filter((pin) => Number.isFinite(pin.latitude) && Number.isFinite(pin.longitude))
-    if (spots.length > 1) {
+    if (showHeat && spots.length > 1) {
       mapRef.current.fitToCoordinates(
-        spots.map((pin) => ({ latitude: pin.latitude, longitude: pin.longitude })),
+        spots.map((spot) => ({ latitude: spot.lat, longitude: spot.lng })),
         { edgePadding: { top: 80, right: 40, bottom: 220, left: 40 }, animated: true },
       )
       return
     }
-    const focus = centerRef.current
-    if (!focus) return
+    const list = (pinsRef.current || []).filter((pin) => Number.isFinite(pin.latitude) && Number.isFinite(pin.longitude))
+    if (list.length > 1) {
+      mapRef.current.fitToCoordinates(
+        list.map((pin) => ({ latitude: pin.latitude, longitude: pin.longitude })),
+        { edgePadding: { top: 80, right: 40, bottom: 220, left: 40 }, animated: true },
+      )
+      return
+    }
+    const next = centerRef.current
+    if (!next) return
     mapRef.current.animateToRegion(
       {
-        latitude: focus.latitude,
-        longitude: focus.longitude,
+        latitude: next.latitude,
+        longitude: next.longitude,
         latitudeDelta: 0.03,
         longitudeDelta: 0.03,
       },
       450,
     )
-  }, [centerKey, pinKey, focusToken])
+  }, [centerKey, pinKey, focusToken, heatKey, showHeat])
 
   return (
     <View style={styles.fill}>
@@ -74,16 +87,39 @@ export function CampusMap({
         initialRegion={{
           latitude: focus.latitude,
           longitude: focus.longitude,
-          latitudeDelta: 0.04,
-          longitudeDelta: 0.04,
+          latitudeDelta: showHeat ? 0.028 : 0.04,
+          longitudeDelta: showHeat ? 0.028 : 0.04,
         }}
         mapType="standard"
         userInterfaceStyle={colorScheme}
-        customMapStyle={colorScheme === 'dark' ? DARK_MAP : undefined}
+        customMapStyle={
+          colorScheme === 'dark'
+            ? [
+                { elementType: 'geometry', stylers: [{ color: '#0e0b14' }] },
+                { elementType: 'labels.text.fill', stylers: [{ color: '#f5f6f8' }] },
+                { elementType: 'labels.text.stroke', stylers: [{ color: '#0e0b14' }] },
+                { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#2a2438' }] },
+                { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#16121f' }] },
+                { featureType: 'poi', elementType: 'geometry', stylers: [{ color: '#120e18' }] },
+              ]
+            : undefined
+        }
         rotateEnabled={false}
         pitchEnabled={false}
         showsUserLocation={false}
       >
+        {showHeat
+          ? spots.map((spot) => (
+              <Circle
+                key={spot.id}
+                center={{ latitude: spot.lat, longitude: spot.lng }}
+                radius={spot.radius}
+                fillColor={rgba(heatColor(spot.intensity), 0.28)}
+                strokeColor={heatColor(spot.intensity)}
+                strokeWidth={1}
+              />
+            ))
+          : null}
         {route && route.length > 1 ? (
           <Polyline coordinates={route} strokeColor={ORANGE} strokeWidth={4} />
         ) : null}
