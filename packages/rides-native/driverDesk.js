@@ -11,6 +11,7 @@ import {
   isDueNow,
   isUnpaidAirportDepositTrip,
   nextTripStatus,
+  UNPAID_AIRPORT_DEPOSIT_ACCEPT_ERROR,
   summarizeDepositAwareness,
   toDriverCard,
 } from './tripTags.js'
@@ -268,8 +269,10 @@ export async function acceptTrip(supabase, trip, driverId) {
   }
   const freshRows = await listTrips(supabase, (query) => query.eq('id', trip.id).limit(1))
   const fresh = freshRows[0] || trip
+  // trips.update and accept_scheduled_trip both hit
+  // trips_block_unpaid_airport_deposit_accept. This is the desk copy of that error.
   if (isUnpaidAirportDepositTrip(fresh)) {
-    throw new Error('Airport deposit still unpaid. This ride is not claimable until the rider pays the deposit.')
+    throw new Error(UNPAID_AIRPORT_DEPOSIT_ACCEPT_ERROR)
   }
   const gate = await supabase
     .from('driver_applications')

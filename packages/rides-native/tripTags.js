@@ -8,6 +8,10 @@ export const TESLA_FLEET_NOTICE =
 
 export const ACTIONABLE_LEAD_MS = 45 * 60 * 1000
 
+/** Same sentence the database raises when an accept of an unpaid airport deposit is rejected. */
+export const UNPAID_AIRPORT_DEPOSIT_ACCEPT_ERROR =
+  'Airport deposit still unpaid. This ride is not claimable until the rider pays the deposit.'
+
 const QUEUE_FILTERS = ['all', 'student', 'game_day', 'weekend_party']
 
 export function formatCents(cents) {

@@ -1,5 +1,6 @@
 export const TESLA_FLEET_NOTICE: string
 export const ACTIONABLE_LEAD_MS: number
+export const UNPAID_AIRPORT_DEPOSIT_ACCEPT_ERROR: string
 
 export type TripTag = 'student' | 'game_day' | 'weekend_party' | 'carpool' | 'tesla' | 'direct' | 'scheduled'
 
