@@ -1,16 +1,52 @@
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useEffect, useState } from 'react'
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { PrimaryButton } from '@/components/Button'
+import { CampusMap } from '@/components/CampusMap'
+import type { MapPin } from '@/components/mapTypes'
 import { LiveShareCard } from '@/components/LiveShareCard'
 import { SosButton, SosIncomingBanner, SosSheet } from '@/components/SosSheet'
 import { useAuth } from '@/lib/auth'
 import { oneParam } from '@/lib/oneParam'
 import { supabase } from '@/lib/supabase'
+import { isLiveStatus, loadLiveTrip, type LiveTrip } from '@/lib/tripWatch'
 import { useTripById } from '@/lib/useRiderTrip'
 import { isActiveRideStatus, listEmergencyContacts, type EmergencyContact } from 'rides-native/safety.js'
 import { INK, INK_SECONDARY, ORANGE, PURPLE, SURFACE } from 'rides-native/places.js'
+
+function pinsFor(trip: LiveTrip | null): MapPin[] {
+  if (!trip) return []
+  const pins: MapPin[] = []
+  if (trip.pickup_lat != null && trip.pickup_lng != null) {
+    pins.push({
+      id: 'pickup',
+      latitude: trip.pickup_lat,
+      longitude: trip.pickup_lng,
+      title: trip.pickup_label || 'Pickup',
+      color: PURPLE,
+    })
+  }
+  if (trip.dropoff_lat != null && trip.dropoff_lng != null) {
+    pins.push({
+      id: 'dropoff',
+      latitude: trip.dropoff_lat,
+      longitude: trip.dropoff_lng,
+      title: trip.dropoff_label || 'Drop-off',
+      color: ORANGE,
+    })
+  }
+  if (trip.driverLat != null && trip.driverLng != null) {
+    pins.push({
+      id: 'driver',
+      latitude: trip.driverLat,
+      longitude: trip.driverLng,
+      title: trip.driverName || 'Driver',
+      color: ORANGE,
+    })
+  }
+  return pins
+}
 
 export default function Requested() {
   const router = useRouter()
@@ -20,16 +56,42 @@ export default function Requested() {
   const dest = oneParam(params.dest, '')
   const driver = oneParam(params.driver, 'Your driver')
   const { user } = useAuth()
-  const { trip, error, loading } = useTripById(tripId || null)
+  const { trip, error: tripError, loading } = useTripById(tripId || null)
+  const [live, setLive] = useState<LiveTrip | null>(null)
+  const [mapError, setMapError] = useState<string | null>(null)
+  const [refreshing, setRefreshing] = useState(false)
   const [sosOpen, setSosOpen] = useState(false)
   const [contacts, setContacts] = useState<EmergencyContact[]>([])
   const rideLive = isActiveRideStatus(trip?.status)
+  const tracking = isLiveStatus(trip?.status || live?.status || null)
+  const located = live?.driverLat != null && live?.driverLng != null
+  const driverName = live?.driverName || driver
+  const error = tripError || mapError
+
+  async function reloadMap() {
+    if (!tripId) return
+    try {
+      setLive(await loadLiveTrip(tripId))
+      setMapError(null)
+    } catch (err) {
+      setMapError(err instanceof Error ? err.message : 'Could not load this trip')
+    }
+  }
+
+  useEffect(() => {
+    if (!tripId) return undefined
+    void reloadMap()
+    const id = setInterval(() => {
+      void reloadMap()
+    }, 5000)
+    return () => clearInterval(id)
+  }, [tripId])
   const shown = trip || (tripId
     ? {
         id: tripId,
-        status: null,
-        pickup_label: null,
-        dropoff_label: dest || null,
+        status: live?.status ?? null,
+        pickup_label: live?.pickup_label ?? null,
+        dropoff_label: dest || live?.dropoff_label || null,
         rider_id: user?.id || null,
       }
     : null)
@@ -53,11 +115,33 @@ export default function Requested() {
         </Pressable>
         <View style={styles.headerCopy}>
           <Text style={styles.kicker}>ON TRIP</Text>
-          <Text style={styles.title}>Ride requested</Text>
+          <Text style={styles.title}>{tracking ? 'Live trip' : 'Ride requested'}</Text>
         </View>
         <SosButton onPress={() => setSosOpen(true)} />
       </View>
-      <ScrollView contentContainerStyle={styles.list}>
+      <ScrollView
+        contentContainerStyle={styles.list}
+        refreshControl={(
+          <RefreshControl
+            refreshing={refreshing}
+            tintColor={ORANGE}
+            onRefresh={() => {
+              setRefreshing(true)
+              reloadMap().finally(() => setRefreshing(false))
+            }}
+          />
+        )}
+      >
+        <View style={styles.map}>
+          <CampusMap
+            spots={[]}
+            showHeat={false}
+            theater={tracking && !located}
+            pins={pinsFor(live)}
+            gameDay={false}
+            surge={false}
+          />
+        </View>
         <SosIncomingBanner tripId={shown?.id || null} userId={user?.id || null} active={rideLive} />
         {!tripId ? (
           <View style={styles.empty}>
@@ -66,13 +150,18 @@ export default function Requested() {
           </View>
         ) : (
           <View style={styles.summary}>
-            <Text style={styles.summaryTitle}>{driver} has the request</Text>
+            <Text style={styles.summaryTitle}>{driverName} has the request</Text>
             <Text style={styles.body}>
               {shown?.pickup_label || 'Pickup'} → {shown?.dropoff_label || dest || 'your destination'}
               {shown?.status ? ` · ${shown.status}` : loading ? ' · loading' : ''}
             </Text>
             <Text style={styles.meta}>Trip {tripId.slice(0, 8)}</Text>
             <Text style={styles.body}>Airport holds use the 25% Stripe deposit on Schedule.</Text>
+            <Text style={styles.body}>
+              {located
+                ? 'The orange pin is the driver location from driver_status. This map refreshes every few seconds.'
+                : 'Driver coordinates show up here after someone accepts and shares a location. Until then the map stays on campus.'}
+            </Text>
           </View>
         )}
         {error ? <Text style={styles.error}>{error}</Text> : null}
@@ -126,6 +215,7 @@ const styles = StyleSheet.create({
   kicker: { color: ORANGE, fontWeight: '800', letterSpacing: 1.1, fontSize: 11 },
   title: { color: PURPLE, fontSize: 22, fontWeight: '800' },
   list: { padding: 16, gap: 14, paddingBottom: 32 },
+  map: { height: 240, borderRadius: 20, overflow: 'hidden' },
   summary: { backgroundColor: '#fff', borderRadius: 20, padding: 16 },
   summaryTitle: { color: INK, fontSize: 18, fontWeight: '800', marginBottom: 6 },
   body: { color: INK_SECONDARY, fontSize: 14, lineHeight: 20 },

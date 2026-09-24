@@ -1,37 +1,113 @@
 import { useRouter } from 'expo-router'
-import { useEffect, useState } from 'react'
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native'
+import * as Location from 'expo-location'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import {
+  Animated,
+  PanResponder,
+  Pressable,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  useWindowDimensions,
+  View,
+} from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { Pill } from '@/components/Button'
+import { Pill, SheetHandle } from '@/components/Button'
 import { CampusMap } from '@/components/CampusMap'
+import type { CampusMapHandle, LatLng, MapKind } from '@/components/mapTypes'
+import { mapKindLabel } from '@/components/mapTypes'
 import { MainTabs } from '@/components/MainTabs'
+import { Skeleton } from '@/components/Skeleton'
 import { loadBusySpots, type BusySpot } from '@/lib/busySpots'
 import { useAuth } from '@/lib/auth'
+import { playTigerCue, tapHaptic } from '@/lib/feedback'
 import { displayFirstName } from 'rides-native/authErrors'
+import { campusOverlays } from 'rides-native/riderShell.js'
 import { HEAT_WINDOWS, INK, INK_SECONDARY, ORANGE, PURPLE, SHORTCUTS, SURFACE } from 'rides-native/places.js'
+
+const MAP_KINDS: MapKind[] = ['standard', 'satellite', 'hybrid']
 
 export default function RiderHome() {
   const router = useRouter()
   const insets = useSafeAreaInsets()
+  const { height: windowH } = useWindowDimensions()
   const { user, configured } = useAuth()
+  const mapRef = useRef<CampusMapHandle>(null)
   const [query, setQuery] = useState('')
   const [showBusy, setShowBusy] = useState(true)
   const [heatWindow, setHeatWindow] = useState('now')
   const [spots, setSpots] = useState<BusySpot[]>([])
   const [caption, setCaption] = useState('Popular campus spots from ride requests — dorms, downtown, stadium.')
   const [blended, setBlended] = useState(false)
+  const [spotsLoading, setSpotsLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
+  const [mapType, setMapType] = useState<MapKind>('standard')
+  const [userCoord, setUserCoord] = useState<LatLng | null>(null)
+  const [locateNote, setLocateNote] = useState<string | null>(null)
+  const [locating, setLocating] = useState(false)
+  const overlays = useMemo(() => campusOverlays(), [])
+  const [gameDay, setGameDay] = useState(overlays.gameDay)
+  const [surge, setSurge] = useState(overlays.surge)
 
   const name = user
     ? displayFirstName(user.user_metadata?.full_name || user.email?.split('@')[0], 'Tiger')
     : 'Tiger'
+  const initial = name.slice(0, 1).toUpperCase()
+
+  const minMap = Math.round(windowH * 0.28)
+  const maxMap = Math.round(windowH * 0.58)
+  const mapH = useRef(new Animated.Value(minMap)).current
+  const limits = useRef({ min: minMap, max: maxMap })
+  limits.current = { min: minMap, max: maxMap }
+  const dragStart = useRef(minMap)
+  const pan = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_, gesture) => Math.abs(gesture.dy) > 8 && Math.abs(gesture.dy) > Math.abs(gesture.dx),
+      onPanResponderGrant: () => {
+        mapH.stopAnimation((value) => {
+          dragStart.current = value
+        })
+      },
+      onPanResponderMove: (_, gesture) => {
+        const { min, max } = limits.current
+        const next = Math.min(max, Math.max(min, dragStart.current + gesture.dy))
+        mapH.setValue(next)
+      },
+      onPanResponderRelease: (_, gesture) => {
+        const { min, max } = limits.current
+        const current = Math.min(max, Math.max(min, dragStart.current + gesture.dy))
+        const expand = gesture.vy > 0.35 || (gesture.vy >= -0.35 && current > (min + max) / 2)
+        Animated.spring(mapH, {
+          toValue: expand ? max : min,
+          useNativeDriver: false,
+          friction: 7,
+          tension: 80,
+        }).start()
+      },
+    }),
+  ).current
+
+  async function reloadSpots(windowId: string) {
+    const result = await loadBusySpots(windowId)
+    setSpots(result.spots)
+    setCaption(result.caption)
+    setBlended(result.blended)
+    setSpotsLoading(false)
+  }
 
   useEffect(() => {
     let alive = true
+    setSpotsLoading(true)
     loadBusySpots(heatWindow).then((result) => {
       if (!alive) return
       setSpots(result.spots)
       setCaption(result.caption)
       setBlended(result.blended)
+      setSpotsLoading(false)
+    }).catch(() => {
+      if (alive) setSpotsLoading(false)
     })
     return () => {
       alive = false
@@ -39,126 +115,230 @@ export default function RiderHome() {
   }, [heatWindow])
 
   const goSearch = (dest?: string) => {
+    void tapHaptic()
     router.push({ pathname: '/confirm', params: { dest: dest || query || 'GSP Airport' } })
+  }
+
+  async function onLocate() {
+    void tapHaptic()
+    setLocating(true)
+    setLocateNote(null)
+    try {
+      const permission = await Location.requestForegroundPermissionsAsync()
+      if (permission.status !== 'granted') {
+        setLocateNote('Location permission is off.')
+        return
+      }
+      const position = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced })
+      const coord = { latitude: position.coords.latitude, longitude: position.coords.longitude }
+      setUserCoord(coord)
+      mapRef.current?.animateTo(coord)
+    } catch (err) {
+      setLocateNote(err instanceof Error ? err.message : 'Could not read your location.')
+    } finally {
+      setLocating(false)
+    }
   }
 
   return (
     <View style={styles.screen}>
-      <CampusMap spots={spots} showHeat={showBusy} />
-      <View pointerEvents="box-none" style={styles.overlay}>
-        <View style={[styles.topBar, { paddingTop: insets.top + 8 }]} pointerEvents="box-none">
-          <View style={styles.brand}>
-            <Text style={styles.brandKicker}>RIDE • GAME • REPEAT</Text>
-            <Text style={styles.brandTitle}>Clemson <Text style={styles.brandSoft}>RIDES</Text></Text>
-            <View style={styles.brandPill}>
-              <Text style={styles.brandPillText}>TIGERS GET YOU THERE</Text>
+      <Animated.View style={[styles.mapSlot, { height: mapH }]}>
+        <CampusMap
+          ref={mapRef}
+          spots={spots}
+          showHeat={showBusy}
+          mapType={mapType}
+          gameDay={gameDay}
+          surge={surge}
+          userCoordinate={userCoord}
+        />
+        <View pointerEvents="box-none" style={[styles.mapChrome, { paddingTop: insets.top + 8 }]}>
+          <View style={styles.topBar}>
+            <View style={styles.brand}>
+              <Text style={styles.brandKicker}>RIDE • GAME • REPEAT</Text>
+              <Text style={styles.brandTitle}>Clemson <Text style={styles.brandSoft}>RIDES</Text></Text>
+              <View style={styles.brandPill}>
+                <Text style={styles.brandPillText}>TIGERS GET YOU THERE</Text>
+              </View>
             </View>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Account"
+              onPress={() => {
+                void tapHaptic()
+                router.push('/account')
+              }}
+              style={styles.avatar}
+            >
+              <Text style={styles.avatarText}>{initial}</Text>
+            </Pressable>
           </View>
-          <View style={styles.guestChip}>
-            <Text style={styles.guestText}>{user ? 'Signed in' : 'Browsing as guest'}</Text>
+          <View style={styles.mapControls}>
+            <View style={styles.kindRow}>
+              {MAP_KINDS.map((kind) => {
+                const on = mapType === kind
+                return (
+                  <Pressable key={kind} onPress={() => setMapType(kind)} style={[styles.kindChip, on && styles.kindOn]}>
+                    <Text style={[styles.kindText, on && styles.kindTextOn]}>{mapKindLabel(kind)}</Text>
+                  </Pressable>
+                )
+              })}
+            </View>
+            <Pressable onPress={onLocate} style={styles.locate} accessibilityRole="button" accessibilityLabel="Center on me">
+              <Text style={styles.locateText}>{locating ? '…' : '◎'}</Text>
+            </Pressable>
           </View>
         </View>
+      </Animated.View>
 
-        <View style={styles.sheetWrap} pointerEvents="box-none">
-          <View style={styles.sheet}>
-            <ScrollView style={styles.sheetScroll} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+      <View style={styles.busyStrip}>
+        <View style={styles.mapHead}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.mapTitle}>Campus map</Text>
+            <Text style={styles.busyDays}>Busy days</Text>
+          </View>
+          <Pressable
+            onPress={() => {
+              void tapHaptic()
+              setShowBusy((value) => !value)
+            }}
+            style={[styles.busy, showBusy && styles.busyOn]}
+          >
+            <Text style={[styles.busyText, showBusy && styles.busyTextOn]}>
+              {showBusy ? 'Busy Areas · On' : 'Busy Areas · Off'}
+            </Text>
+          </Pressable>
+        </View>
+        {spotsLoading ? (
+          <Skeleton height={32} width="70%" />
+        ) : (
+          <>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
+              {showBusy
+                ? HEAT_WINDOWS.map((window) => (
+                    <Pill
+                      key={window.id}
+                      label={window.label}
+                      active={heatWindow === window.id}
+                      onPress={() => setHeatWindow(window.id)}
+                    />
+                  ))
+                : null}
+              <Pill label={gameDay ? 'Game day · On' : 'Game day'} active={gameDay} onPress={() => setGameDay((value) => !value)} />
+              <Pill label={surge ? 'Surge · On' : 'Surge'} active={surge} onPress={() => setSurge((value) => !value)} />
+            </ScrollView>
+            <Text style={styles.caption}>
+              {showBusy ? caption : 'Busy areas are hidden.'}
+              {showBusy && blended ? <Text style={styles.live}>  Live + typical</Text> : null}
+              {gameDay ? '  Game day overlay' : ''}
+              {surge ? `  ${overlays.surgeLabel || 'Surge overlay'}` : ''}
+            </Text>
+          </>
+        )}
+        {locateNote ? <Text style={styles.locateNote}>{locateNote}</Text> : null}
+      </View>
+
+      <View style={styles.sheet}>
+        <View {...pan.panHandlers} accessibilityLabel="Drag down to expand the map" accessibilityRole="adjustable">
+          <SheetHandle />
+          <Text style={styles.dragHint}>Drag down to expand the map</Text>
+        </View>
+        <ScrollView
+          style={styles.sheetScroll}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+          refreshControl={(
+            <RefreshControl
+              refreshing={refreshing}
+              tintColor={ORANGE}
+              onRefresh={() => {
+                setRefreshing(true)
+                reloadSpots(heatWindow).finally(() => setRefreshing(false))
+              }}
+            />
+          )}
+        >
+          {spotsLoading ? (
+            <View style={styles.skeletonBlock}>
+              <Skeleton height={26} width="55%" />
+              <Skeleton height={16} width="72%" />
+              <Skeleton height={48} />
+            </View>
+          ) : (
+            <>
               <Text style={styles.welcome}>Welcome, {name}</Text>
               <Text style={styles.prompt}>Where are you headed, Tiger?</Text>
-              <TextInput
-                value={query}
-                onChangeText={setQuery}
-                placeholder="Campus, GSP, CLT…"
-                placeholderTextColor="#8B939E"
-                style={styles.search}
-                autoCorrect={false}
-              />
-              <Pressable onPress={() => goSearch()} style={styles.searchLink}>
-                <Text style={styles.searchLinkText}>Search destination →</Text>
+            </>
+          )}
+          <TextInput
+            value={query}
+            onChangeText={setQuery}
+            placeholder="Campus, GSP, CLT…"
+            placeholderTextColor="#8B939E"
+            style={styles.search}
+            autoCorrect={false}
+          />
+          <Pressable accessibilityRole="button" onPress={() => goSearch()} style={styles.searchLink}>
+            <Text style={styles.searchLinkText}>Search destination →</Text>
+          </Pressable>
+
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
+            <Pill label="🕐  Schedule a ride" onPress={() => router.push('/schedule')} />
+            <Pill label="👥  Carpool · split the surge" onPress={() => router.push('/friends')} />
+            <Pill label="🧾  Your rides" onPress={() => router.push('/history')} />
+            <Pill label="🛡  Safety" onPress={() => router.push('/safety')} />
+          </ScrollView>
+
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.shortcuts}>
+            {SHORTCUTS.map((shortcut) => (
+              <Pressable key={shortcut.id} onPress={() => goSearch(shortcut.sub)} style={styles.shortcut}>
+                <Text style={styles.shortcutIcon}>{shortcut.icon}</Text>
+                <Text style={styles.shortcutLabel}>{shortcut.label}</Text>
+                <Text style={styles.shortcutSub}>{shortcut.sub}</Text>
               </Pressable>
+            ))}
+          </ScrollView>
 
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
-                <Pill label="🕐  Schedule a ride" onPress={() => router.push('/schedule')} />
-                <Pill label="👥  Carpool · split the surge" onPress={() => router.push('/friends')} />
-                <Pill label="🧾  Your rides" onPress={() => router.push('/history')} />
-                <Pill label="🛡  Safety" onPress={() => router.push('/safety')} />
-              </ScrollView>
+          {!configured ? (
+            <Text style={styles.keys}>
+              This build needs EXPO_PUBLIC_SUPABASE_ANON_KEY as an EAS environment variable before sign-in works.
+            </Text>
+          ) : null}
 
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.shortcuts}>
-                {SHORTCUTS.map((shortcut) => (
-                  <Pressable key={shortcut.id} onPress={() => goSearch(shortcut.sub)} style={styles.shortcut}>
-                    <Text style={styles.shortcutIcon}>{shortcut.icon}</Text>
-                    <Text style={styles.shortcutLabel}>{shortcut.label}</Text>
-                    <Text style={styles.shortcutSub}>{shortcut.sub}</Text>
-                  </Pressable>
-                ))}
-              </ScrollView>
-
-              <View style={styles.mapCard}>
-                <View style={styles.mapHead}>
-                  <Text style={styles.mapTitle}>Campus map</Text>
-                  <Pressable onPress={() => setShowBusy((value) => !value)} style={[styles.busy, showBusy && styles.busyOn]}>
-                    <Text style={[styles.busyText, showBusy && styles.busyTextOn]}>
-                      {showBusy ? 'Busy Areas · On' : 'Busy Areas · Off'}
-                    </Text>
-                  </Pressable>
-                </View>
-                {showBusy ? (
-                  <>
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
-                      {HEAT_WINDOWS.map((window) => (
-                        <Pill
-                          key={window.id}
-                          label={window.label}
-                          active={heatWindow === window.id}
-                          onPress={() => setHeatWindow(window.id)}
-                        />
-                      ))}
-                    </ScrollView>
-                    <Text style={styles.caption}>
-                      {caption}
-                      {blended ? <Text style={styles.live}>  Live + typical</Text> : null}
-                    </Text>
-                  </>
-                ) : null}
-              </View>
-
-              {!configured ? (
-                <Text style={styles.keys}>
-                  This build needs EXPO_PUBLIC_SUPABASE_ANON_KEY as an EAS environment variable before sign-in works.
-                </Text>
-              ) : null}
-
-              <Pressable onPress={() => router.push('/friends')} style={styles.gameday}>
-                <Text style={styles.gamedayIcon}>🏈</Text>
-                <View style={styles.gamedayCopy}>
-                  <Text style={styles.gamedayTitle}>Game day carpool</Text>
-                  <Text style={styles.gamedayBody}>About $10–$15 each instead of $30–$40.</Text>
-                </View>
-                <View style={styles.gamedayBtn}>
-                  <Text style={styles.gamedayBtnText}>Find a carpool</Text>
-                </View>
-              </Pressable>
-            </ScrollView>
-          </View>
-          <MainTabs active="home" />
-        </View>
+          <Pressable
+            onPress={() => {
+              void playTigerCue()
+              router.push('/friends')
+            }}
+            style={styles.gameday}
+          >
+            <Text style={styles.gamedayIcon}>🏈</Text>
+            <View style={styles.gamedayCopy}>
+              <Text style={styles.gamedayTitle}>Game day carpool</Text>
+              <Text style={styles.gamedayBody}>About $10–$15 each instead of $30–$40.</Text>
+            </View>
+            <View style={styles.gamedayBtn}>
+              <Text style={styles.gamedayBtnText}>Find a carpool</Text>
+            </View>
+          </Pressable>
+        </ScrollView>
       </View>
+      <MainTabs active="home" />
     </View>
   )
 }
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: SURFACE },
-  overlay: { ...StyleSheet.absoluteFill, justifyContent: 'space-between' },
+  mapSlot: { backgroundColor: '#E7D7EA', overflow: 'hidden' },
+  mapChrome: { ...StyleSheet.absoluteFill, justifyContent: 'space-between' },
   topBar: {
     paddingHorizontal: 16,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    gap: 12,
   },
   brand: {
-    alignSelf: 'flex-start',
     width: '52%',
     maxWidth: 220,
     minHeight: 96,
@@ -168,10 +348,6 @@ const styles = StyleSheet.create({
     paddingTop: 14,
     paddingBottom: 12,
     justifyContent: 'flex-end',
-    shadowColor: ORANGE,
-    shadowOpacity: 0.35,
-    shadowRadius: 16,
-    shadowOffset: { width: 0, height: 8 },
   },
   brandKicker: { color: '#fff', fontSize: 9, fontWeight: '700', letterSpacing: 1.4, marginBottom: 4 },
   brandTitle: { color: '#fff', fontSize: 18, fontWeight: '800' },
@@ -183,32 +359,74 @@ const styles = StyleSheet.create({
     paddingVertical: 3,
     borderRadius: 999,
     backgroundColor: 'rgba(255,255,255,0.2)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.32)',
   },
   brandPillText: { color: '#fff', fontSize: 9, fontWeight: '700', letterSpacing: 0.4 },
-  guestChip: {
+  avatar: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    backgroundColor: PURPLE,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#fff',
+  },
+  avatarText: { color: '#fff', fontWeight: '800', fontSize: 18 },
+  mapControls: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-end',
+    paddingHorizontal: 12,
+    paddingBottom: 10,
+  },
+  kindRow: { flexDirection: 'row', gap: 6 },
+  kindChip: {
     backgroundColor: 'rgba(255,255,255,0.92)',
     borderRadius: 999,
     paddingHorizontal: 10,
     paddingVertical: 6,
-    marginTop: 4,
   },
-  guestText: { color: PURPLE, fontSize: 11, fontWeight: '700' },
-  sheetWrap: { height: '64%' },
+  kindOn: { backgroundColor: PURPLE },
+  kindText: { color: PURPLE, fontSize: 11, fontWeight: '800' },
+  kindTextOn: { color: '#fff' },
+  locate: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#fff',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  locateText: { color: ORANGE, fontSize: 22, fontWeight: '800' },
+  busyStrip: {
+    backgroundColor: '#fff',
+    paddingHorizontal: 16,
+    paddingTop: 10,
+    paddingBottom: 8,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(82,45,128,0.12)',
+    gap: 6,
+  },
+  mapHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8 },
+  mapTitle: { fontWeight: '800', fontSize: 15, color: INK },
+  busyDays: { color: INK_SECONDARY, fontSize: 12, fontWeight: '700' },
+  busy: { borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6, backgroundColor: 'rgba(82,45,128,0.08)' },
+  busyOn: { backgroundColor: ORANGE },
+  busyText: { color: PURPLE, fontSize: 12, fontWeight: '700' },
+  busyTextOn: { color: '#fff' },
+  row: { gap: 8, paddingVertical: 4 },
+  caption: { color: INK_SECONDARY, fontSize: 12, lineHeight: 17 },
+  live: { color: PURPLE, fontWeight: '700' },
+  locateNote: { color: '#B42318', fontSize: 12 },
   sheet: {
     flex: 1,
-    backgroundColor: 'rgba(255,255,255,0.96)',
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
+    backgroundColor: 'rgba(255,255,255,0.98)',
     paddingHorizontal: 20,
-    paddingTop: 18,
-    shadowColor: PURPLE,
-    shadowOpacity: 0.16,
-    shadowRadius: 18,
-    shadowOffset: { width: 0, height: -6 },
+    paddingTop: 8,
   },
+  dragHint: { textAlign: 'center', color: '#8B939E', fontSize: 11, fontWeight: '700', marginBottom: 6 },
   sheetScroll: { flex: 1 },
+  skeletonBlock: { gap: 10, marginBottom: 12 },
   welcome: { fontSize: 24, fontWeight: '600', letterSpacing: -0.4, color: INK },
   prompt: { color: INK_SECONDARY, fontSize: 15, marginTop: 4, marginBottom: 12 },
   search: {
@@ -223,7 +441,6 @@ const styles = StyleSheet.create({
   },
   searchLink: { paddingVertical: 10 },
   searchLinkText: { color: ORANGE, fontWeight: '700', fontSize: 13 },
-  row: { gap: 8, paddingVertical: 4 },
   shortcuts: { gap: 10, paddingTop: 10 },
   shortcut: {
     minWidth: 118,
@@ -236,15 +453,6 @@ const styles = StyleSheet.create({
   shortcutIcon: { fontSize: 22, marginBottom: 8 },
   shortcutLabel: { fontWeight: '600', fontSize: 13, color: INK },
   shortcutSub: { fontSize: 11, color: '#8B939E', marginTop: 2 },
-  mapCard: { marginTop: 16, paddingBottom: 4 },
-  mapHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, gap: 8 },
-  mapTitle: { fontWeight: '700', fontSize: 15, color: INK },
-  busy: { borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6, backgroundColor: 'rgba(82,45,128,0.08)' },
-  busyOn: { backgroundColor: PURPLE },
-  busyText: { color: PURPLE, fontSize: 12, fontWeight: '700' },
-  busyTextOn: { color: '#fff' },
-  caption: { color: INK_SECONDARY, fontSize: 12, marginTop: 8, marginBottom: 4, lineHeight: 17 },
-  live: { color: PURPLE, fontWeight: '700' },
   keys: { color: '#B42318', fontSize: 12, marginTop: 8, lineHeight: 17 },
   gameday: {
     marginTop: 14,

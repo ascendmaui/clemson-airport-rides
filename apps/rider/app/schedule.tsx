@@ -1,16 +1,27 @@
 import { useFocusEffect, useRouter } from 'expo-router'
-import { useCallback, useEffect, useRef, useState } from 'react'
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { PrimaryButton } from '@/components/Button'
+import { Pill, PrimaryButton } from '@/components/Button'
 import { MainTabs } from '@/components/MainTabs'
 import { SignInToBookSheet } from '@/components/SignInToBookSheet'
+import { Skeleton } from '@/components/Skeleton'
 import { setAuthNext } from '@/lib/authNext'
 import { useAuth } from '@/lib/auth'
+import { successHaptic, tapHaptic } from '@/lib/feedback'
 import { openStripeCheckout } from '@/lib/openCheckout'
-import { supabase } from '@/lib/supabase'
 import {
-  AIRPORT_CHOICES,
+  cancelScheduledTrip,
+  createScheduledTrip,
+  listScheduledTrips,
+  quoteRide,
+  type RidePlace,
+  type SchedulePurpose,
+  type ScheduledRow,
+} from '@/lib/scheduleApi'
+import { supabase } from '@/lib/supabase'
+import { formatUsd, INK, INK_SECONDARY, ORANGE, PURPLE, SURFACE } from 'rides-native/places.js'
+import {
   loadStudentProfile,
   loadTripDeposit,
   quoteAirportFare,
@@ -18,8 +29,19 @@ import {
   startAirportDeposit,
   studentStatus,
 } from 'rides-native/riderMoney.js'
+import { localDateInput, localTimeInput, nextPickupDate, RIDE_PLACES } from 'rides-native/riderShell.js'
 import { formatCents } from 'rides-native/tripTags.js'
-import { INK, INK_SECONDARY, ORANGE, PURPLE, SURFACE } from 'rides-native/places.js'
+
+const CAMPUS_PURPOSES: SchedulePurpose[] = ['early_class', 'planned', 'party_weekend', 'recurring']
+const WEEKDAYS = [
+  { id: 'mon', label: 'Mon' },
+  { id: 'tue', label: 'Tue' },
+  { id: 'wed', label: 'Wed' },
+  { id: 'thu', label: 'Thu' },
+  { id: 'fri', label: 'Fri' },
+  { id: 'sat', label: 'Sat' },
+  { id: 'sun', label: 'Sun' },
+]
 
 type Quote = {
   fareCents: number
@@ -36,6 +58,30 @@ type Phase =
   | { status: 'ready'; key: string; quote: Quote }
   | { status: 'error'; key: string; message: string }
 
+function purposeLabel(id: SchedulePurpose) {
+  switch (id) {
+    case 'early_class':
+      return 'Early class'
+    case 'airport':
+      return 'Airport'
+    case 'planned':
+      return 'Planned trip'
+    case 'party_weekend':
+      return 'Party weekend'
+    case 'recurring':
+      return 'Recurring'
+    default: {
+      const exhaustive: never = id
+      return exhaustive
+    }
+  }
+}
+
+function placeByLabel(label: string): RidePlace {
+  const found = RIDE_PLACES.find((place) => place.label === label)
+  return found || RIDE_PLACES[0]
+}
+
 export default function ScheduleScreen() {
   const router = useRouter()
   const insets = useSafeAreaInsets()
@@ -50,7 +96,17 @@ export default function ScheduleScreen() {
   const [banner, setBanner] = useState<string | null>(null)
   const [promptOpen, setPromptOpen] = useState(false)
   const [studentOn, setStudentOn] = useState(false)
+  const [purpose, setPurpose] = useState<SchedulePurpose>('early_class')
+  const [weekdays, setWeekdays] = useState<string[]>(['fri'])
+  const [pickup, setPickup] = useState<RidePlace>(placeByLabel('Memorial Stadium'))
+  const [dropoff, setDropoff] = useState<RidePlace>(placeByLabel('Sikes Hall'))
+  const [campusDate, setCampusDate] = useState('')
+  const [campusTime, setCampusTime] = useState('')
+  const [mine, setMine] = useState<ScheduledRow[]>([])
+  const [loadingList, setLoadingList] = useState(false)
+  const [refreshing, setRefreshing] = useState(false)
   const generation = useRef(0)
+  const quote = useMemo(() => quoteRide(pickup, dropoff, studentOn), [pickup, dropoff, studentOn])
 
   useFocusEffect(useCallback(() => {
     setFocusTick((n) => n + 1)
@@ -81,9 +137,9 @@ export default function ScheduleScreen() {
       const ticket = ++generation.current
       setPhase({ status: 'loading', key })
       quoteAirportFare(supabase, { airport, date, time, isStudent: studentOn })
-        .then((quote) => {
+        .then((next) => {
           if (generation.current !== ticket) return
-          setPhase({ status: 'ready', key, quote: quote as Quote })
+          setPhase({ status: 'ready', key, quote: next as Quote })
         })
         .catch((err: unknown) => {
           if (generation.current !== ticket) return
@@ -94,8 +150,42 @@ export default function ScheduleScreen() {
     return () => clearTimeout(handle)
   }, [airport, date, time, key, focusTick, studentOn, user?.id])
 
-  const quote = phase.status === 'ready' && phase.key === key ? phase.quote : null
+  const airportQuote = phase.status === 'ready' && phase.key === key ? phase.quote : null
   const quoting = phase.status === 'loading' || phase.key !== key
+
+  async function reload() {
+    if (!user?.id) {
+      setMine([])
+      return
+    }
+    setLoadingList(true)
+    try {
+      setMine(await listScheduledTrips(user.id))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not load scheduled rides')
+    } finally {
+      setLoadingList(false)
+    }
+  }
+
+  useEffect(() => {
+    void reload()
+  }, [user?.id])
+
+  function choosePurpose(next: SchedulePurpose) {
+    void tapHaptic()
+    setPurpose(next)
+    if (next === 'party_weekend') {
+      const when = nextPickupDate({ time: '21:00', weekdays: ['fri'] })
+      if (when) {
+        setCampusDate(localDateInput(when))
+        setCampusTime(localTimeInput(when))
+      }
+      setPickup(placeByLabel('White C'))
+      setDropoff(placeByLabel('Downtown Clemson'))
+    }
+    if (next === 'recurring') setWeekdays((days) => (days.length ? days : ['fri']))
+  }
 
   async function pay() {
     if (!user) {
@@ -103,7 +193,7 @@ export default function ScheduleScreen() {
       setPromptOpen(true)
       return
     }
-    if (!quote || quoting) return
+    if (!airportQuote || quoting) return
     setBusy(true)
     setError(null)
     setBanner(null)
@@ -112,9 +202,9 @@ export default function ScheduleScreen() {
         airport,
         date,
         time,
-        fareCents: quote.fareCents,
-        depositCents: quote.depositCents,
-        studentDiscountCents: quote.studentDiscountCents,
+        fareCents: airportQuote.fareCents,
+        depositCents: airportQuote.depositCents,
+        studentDiscountCents: airportQuote.studentDiscountCents,
         riderId: user.id,
         riderName: user.user_metadata?.full_name || user.email?.split('@')[0] || 'Rider',
       })
@@ -122,6 +212,8 @@ export default function ScheduleScreen() {
       const tripId = typeof session.tripId === 'string' ? session.tripId : ''
       if (session.paidWithCredits) {
         setBanner(`Ride covered by credits. No card deposit.${tripId ? ` Trip ${tripId}.` : ''}`)
+        await successHaptic()
+        await reload()
         return
       }
       const url = typeof session.url === 'string' ? session.url : ''
@@ -138,11 +230,13 @@ export default function ScheduleScreen() {
       const settled = await loadTripDeposit(supabase, tripId)
       if (settled.settled) {
         setBanner(`Deposit received · ${formatCents(depositCents)}. We’ll match a driver for this pickup.`)
+        await successHaptic()
       } else if (settled.error) {
         setBanner(`Checkout closed. Could not confirm the deposit yet (${settled.error}). Nothing is marked paid.`)
       } else {
         setBanner('Checkout closed. Nothing was charged unless Stripe already confirmed it.')
       }
+      await reload()
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Checkout failed. No charge was made.'
       setError(message)
@@ -151,9 +245,69 @@ export default function ScheduleScreen() {
     }
   }
 
+  async function onSchedule() {
+    if (!user) {
+      setAuthNext('/schedule')
+      setPromptOpen(true)
+      return
+    }
+    setError(null)
+    setBanner(null)
+    const when = nextPickupDate({
+      date: purpose === 'recurring' ? campusDate || undefined : campusDate,
+      time: campusTime,
+      weekdays: purpose === 'recurring' ? weekdays : undefined,
+    })
+    if (!when) {
+      setError(purpose === 'recurring' ? 'Pick at least one weekday and a time.' : 'Choose a date and time.')
+      return
+    }
+    if (when.getTime() < Date.now() + 30 * 60 * 1000) {
+      setError('Schedule at least 30 minutes ahead.')
+      return
+    }
+    if (pickup.label === dropoff.label) {
+      setError('Pickup and drop-off need to be different places.')
+      return
+    }
+    setBusy(true)
+    try {
+      const row = await createScheduledTrip({
+        user,
+        pickup,
+        dropoff,
+        pickupAt: when,
+        purpose,
+        weekdays,
+        quote,
+      })
+      setBanner(`${purposeLabel(purpose)} saved · ${row.id}`)
+      await successHaptic()
+      await reload()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not schedule ride')
+    } finally {
+      setBusy(false)
+    }
+  }
+
   return (
     <View style={[styles.screen, { paddingTop: insets.top + 12 }]}>
-      <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
+      <ScrollView
+        contentContainerStyle={styles.body}
+        keyboardShouldPersistTaps="handled"
+        refreshControl={(
+          <RefreshControl
+            refreshing={refreshing}
+            tintColor={ORANGE}
+            onRefresh={() => {
+              setRefreshing(true)
+              setFocusTick((n) => n + 1)
+              reload().finally(() => setRefreshing(false))
+            }}
+          />
+        )}
+      >
         <Text style={styles.kicker}>AIRPORT</Text>
         <Text style={styles.title}>Schedule a ride</Text>
         <Text style={styles.copy}>
@@ -161,18 +315,18 @@ export default function ScheduleScreen() {
         </Text>
 
         <View style={styles.choices}>
-          {AIRPORT_CHOICES.map((choice) => {
-            const on = choice.code === airport
+          {(['GSP', 'CLT'] as const).map((code) => {
+            const on = code === airport
             return (
               <Pressable
-                key={choice.code}
-                onPress={() => setAirport(choice.code === 'CLT' ? 'CLT' : 'GSP')}
+                key={code}
+                onPress={() => setAirport(code)}
                 style={[styles.choice, on && styles.choiceOn]}
                 accessibilityRole="button"
                 accessibilityState={{ selected: on }}
               >
-                <Text style={styles.choiceCode}>{choice.code}</Text>
-                <Text style={styles.choiceName}>{choice.name}</Text>
+                <Text style={styles.choiceCode}>{code}</Text>
+                <Text style={styles.choiceName}>{code === 'GSP' ? 'Greenville-Spartanburg' : 'Charlotte Douglas'}</Text>
               </Pressable>
             )
           })}
@@ -198,23 +352,23 @@ export default function ScheduleScreen() {
         />
 
         <View style={styles.panel}>
-          <Row label="Fare" value={quote ? formatCents(quote.fareCents) : quoting ? 'Updating…' : '—'} />
-          {quote && quote.studentDiscountCents > 0 ? (
-            <Row label="Student discount" value={`−${formatCents(quote.studentDiscountCents)}`} />
+          <Row label="Fare" value={airportQuote ? formatCents(airportQuote.fareCents) : quoting ? 'Updating…' : '—'} />
+          {airportQuote && airportQuote.studentDiscountCents > 0 ? (
+            <Row label="Student discount" value={`−${formatCents(airportQuote.studentDiscountCents)}`} />
           ) : null}
-          {quote && quote.surgeMultiplier > 1 ? (
-            <Row label={quote.surgeLabel || 'Surge'} value={`${quote.surgeMultiplier}×`} />
+          {airportQuote && airportQuote.surgeMultiplier > 1 ? (
+            <Row label={airportQuote.surgeLabel || 'Surge'} value={`${airportQuote.surgeMultiplier}×`} />
           ) : null}
           <Row
             label="25% deposit"
-            value={quote ? formatCents(quote.depositCents) : quoting ? 'Updating…' : '—'}
+            value={airportQuote ? formatCents(airportQuote.depositCents) : quoting ? 'Updating…' : '—'}
             strong
           />
           <Text style={styles.fine}>
-            {quote
-              ? `${airport} · ${formatCents(quote.fareCents)} fare → ${formatCents(quote.depositCents)} deposit`
+            {airportQuote
+              ? `${airport} · ${formatCents(airportQuote.fareCents)} fare → ${formatCents(airportQuote.depositCents)} deposit`
               : 'Pay stays off until this quote matches the airport and time on screen.'}
-            {quote?.routeSource === 'fallback' ? ' · fare card estimate' : quote?.routeSource ? ` · ${quote.routeSource}` : ''}
+            {airportQuote?.routeSource === 'fallback' ? ' · fare card estimate' : airportQuote?.routeSource ? ` · ${airportQuote.routeSource}` : ''}
           </Text>
         </View>
 
@@ -225,9 +379,9 @@ export default function ScheduleScreen() {
         {banner ? <Text style={styles.banner}>{banner}</Text> : null}
 
         <PrimaryButton
-          label={busy ? 'Starting checkout…' : quote ? `Pay ${formatCents(quote.depositCents)} deposit` : 'Waiting for fare'}
+          label={busy ? 'Starting checkout…' : airportQuote ? `Pay ${formatCents(airportQuote.depositCents)} deposit` : 'Waiting for fare'}
           onPress={pay}
-          disabled={busy || !quote || quoting}
+          disabled={busy || !airportQuote || quoting}
         />
         {!user ? (
           <Text style={styles.copy}>Browse the quote. Sign in when you pay the deposit.</Text>
@@ -235,6 +389,80 @@ export default function ScheduleScreen() {
         <Pressable onPress={() => router.push('/student')} accessibilityRole="button">
           <Text style={styles.link}>Clemson students save 10% on Standard</Text>
         </Pressable>
+
+        <Text style={styles.section}>Campus, recurring, and party weekend</Text>
+        <Text style={styles.copy}>These rides save a pickup. Airport deposits stay on the checkout above.</Text>
+        <View style={styles.pills}>
+          {CAMPUS_PURPOSES.map((id) => (
+            <Pill key={id} label={purposeLabel(id)} active={purpose === id} onPress={() => choosePurpose(id)} />
+          ))}
+        </View>
+        {purpose === 'recurring' ? (
+          <View style={styles.pills}>
+            {WEEKDAYS.map((day) => {
+              const on = weekdays.includes(day.id)
+              return (
+                <Pill
+                  key={day.id}
+                  label={day.label}
+                  active={on}
+                  onPress={() => setWeekdays((prev) => (on ? prev.filter((item) => item !== day.id) : [...prev, day.id]))}
+                />
+              )
+            })}
+          </View>
+        ) : null}
+        <Text style={styles.label}>{purpose === 'recurring' ? 'First date (optional)' : 'Date'}</Text>
+        <TextInput value={campusDate} onChangeText={setCampusDate} placeholder="YYYY-MM-DD" placeholderTextColor="#8B939E" style={styles.input} autoCapitalize="none" />
+        <Text style={styles.label}>Pickup time</Text>
+        <TextInput value={campusTime} onChangeText={setCampusTime} placeholder="HH:MM" placeholderTextColor="#8B939E" style={styles.input} autoCapitalize="none" />
+        <Text style={styles.label}>Pickup</Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.pills}>
+          {RIDE_PLACES.map((place) => (
+            <Pill key={`pu-${place.label}`} label={place.label} active={pickup.label === place.label} onPress={() => setPickup(place)} />
+          ))}
+        </ScrollView>
+        <Text style={styles.label}>Drop-off</Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.pills}>
+          {RIDE_PLACES.map((place) => (
+            <Pill key={`do-${place.label}`} label={place.label} active={dropoff.label === place.label} onPress={() => setDropoff(place)} />
+          ))}
+        </ScrollView>
+        <View style={styles.panel}>
+          <Text style={styles.cardLine}>{quote.estimate ? 'Fare estimate' : 'Fare'} · {formatUsd(quote.fareCents / 100)}</Text>
+          {quote.label ? <Text style={styles.student}>{quote.label}</Text> : null}
+          <Text style={styles.fine}>
+            {quote.airport
+              ? `${quote.airport} quote. The 25% deposit is collected with Pay deposit above.`
+              : `About ${quote.miles ?? '—'} mi. Final fare can change when a driver accepts.`}
+          </Text>
+        </View>
+        <PrimaryButton label={busy ? 'Scheduling…' : 'Schedule ride'} onPress={onSchedule} disabled={busy} tone="purple" />
+
+        <Text style={styles.section}>Upcoming</Text>
+        {loadingList ? <Skeleton height={64} /> : null}
+        {!user ? <Text style={styles.copy}>Sign in to see rides saved on this account.</Text> : null}
+        {user && !loadingList && mine.length === 0 ? <Text style={styles.copy}>No scheduled rides yet.</Text> : null}
+        {mine.filter((row) => row.status !== 'canceled').map((row) => (
+          <View key={row.id} style={styles.panel}>
+            <Text style={styles.cardLine}>{row.pickup_label} → {row.dropoff_label}</Text>
+            <Text style={styles.fine}>
+              {row.rider_note || 'planned'} · {row.status} · {row.pickup_at ? new Date(row.pickup_at).toLocaleString() : 'Time TBD'}
+              {row.metadata?.recurrence?.weekdays?.length ? ` · weekly ${row.metadata.recurrence.weekdays.join(', ')}` : ''}
+            </Text>
+            {row.status === 'scheduled' || row.status === 'accepted' ? (
+              <Pressable
+                onPress={() => {
+                  cancelScheduledTrip(row.id).then(reload).catch((err) => {
+                    setError(err instanceof Error ? err.message : 'Could not cancel')
+                  })
+                }}
+              >
+                <Text style={styles.cancel}>Cancel</Text>
+              </Pressable>
+            ) : null}
+          </View>
+        ))}
       </ScrollView>
       <MainTabs active="schedule" />
       <SignInToBookSheet
@@ -267,6 +495,7 @@ const styles = StyleSheet.create({
   body: { padding: 20, paddingBottom: 28, gap: 8 },
   kicker: { color: ORANGE, fontWeight: '800', letterSpacing: 1.2, fontSize: 12 },
   title: { fontSize: 28, fontWeight: '800', color: PURPLE, letterSpacing: -0.4 },
+  section: { marginTop: 18, fontSize: 20, fontWeight: '800', color: PURPLE },
   copy: { fontSize: 15, lineHeight: 22, color: INK_SECONDARY, marginBottom: 8 },
   choices: { flexDirection: 'row', gap: 10, marginVertical: 8 },
   choice: {
@@ -316,4 +545,8 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   link: { color: PURPLE, fontWeight: '700', marginTop: 14, marginBottom: 8 },
+  pills: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  cardLine: { fontWeight: '800', color: INK },
+  student: { color: ORANGE, fontWeight: '700', fontSize: 12 },
+  cancel: { color: '#B42318', fontWeight: '700', marginTop: 6 },
 })
