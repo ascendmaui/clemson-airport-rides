@@ -147,7 +147,19 @@ export function SignInScreen() {
           Create an account
         </button>
       </p>
+      <PolicyLinks />
     </AuthShell>
+  )
+}
+
+function PolicyLinks() {
+  const link = { color: 'var(--purple)', fontWeight: 700 }
+  return (
+    <p style={{ marginTop: 10, fontSize: 13, color: 'var(--ink-tertiary)', textAlign: 'center' }}>
+      <button type="button" className="pressable" onClick={() => navigate('privacy')} style={link}>Privacy</button>
+      {' · '}
+      <button type="button" className="pressable" onClick={() => navigate('terms')} style={link}>Terms</button>
+    </p>
   )
 }
 
@@ -327,6 +339,7 @@ export function SignUpScreen() {
           Sign in
         </button>
       </p>
+      <PolicyLinks />
     </AuthShell>
   )
 }

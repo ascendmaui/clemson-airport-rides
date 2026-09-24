@@ -4,9 +4,10 @@ const path = require('path')
 const projectRoot = __dirname
 const repoRoot = path.resolve(projectRoot, '../..')
 const sharedRoot = path.resolve(repoRoot, 'packages/rides-native')
+const productRoot = path.resolve(repoRoot, 'shared')
 
 const config = getDefaultConfig(projectRoot)
-config.watchFolders = [sharedRoot, path.join(repoRoot, 'src'), path.join(repoRoot, 'server')]
+config.watchFolders = [sharedRoot, productRoot, path.join(repoRoot, 'src'), path.join(repoRoot, 'server')]
 config.resolver.nodeModulesPaths = [path.resolve(projectRoot, 'node_modules')]
 config.resolver.disableHierarchicalLookup = true
 config.resolver.extraNodeModules = {

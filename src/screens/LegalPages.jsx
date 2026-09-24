@@ -1,4 +1,5 @@
 import { navigate } from '../lib/navigation'
+import { LEGAL_UPDATED, PRIVACY_SECTIONS, TERMS_SECTIONS } from '../../shared/legalCopy.js'
 
 function LegalShell({ title, children }) {
   return (
@@ -16,7 +17,7 @@ function LegalShell({ title, children }) {
           {title}
         </h1>
         <p style={{ fontSize: 13, color: 'var(--ink-tertiary)', marginBottom: 24 }}>
-          Clemson RIDES · Campus airport rides · Last updated September 22, 2026
+          Clemson RIDES · Campus airport rides · Last updated {LEGAL_UPDATED}
         </p>
         <div style={{ fontSize: 15, lineHeight: 1.55, color: 'var(--ink-secondary)' }}>{children}</div>
         <p style={{ marginTop: 32, fontSize: 13, color: 'var(--ink-tertiary)' }}>
@@ -36,65 +37,25 @@ function Section({ heading, children }) {
   )
 }
 
+function LegalBody({ sections }) {
+  return sections.map((section) => (
+    <Section key={section.heading} heading={section.heading}>
+      {section.paragraphs?.map((paragraph) => (
+        <p key={paragraph.slice(0, 48)} style={{ marginBottom: 10 }}>{paragraph}</p>
+      ))}
+      {section.bullets ? (
+        <ul style={{ paddingLeft: 20, margin: 0 }}>
+          {section.bullets.map((bullet) => <li key={bullet.slice(0, 48)}>{bullet}</li>)}
+        </ul>
+      ) : null}
+    </Section>
+  ))
+}
+
 export function LegalPrivacy() {
   return (
     <LegalShell title="Privacy Policy">
-      <Section heading="Who we are">
-        <p>
-          Clemson RIDES (“we”, “us”) is a campus-focused airport ride product for Clemson University
-          students and approved drivers. We help riders book flat-rate trips between campus and GSP/CLT
-          airports, and we help drivers accept and complete those trips.
-        </p>
-      </Section>
-      <Section heading="Information we collect">
-        <p style={{ marginBottom: 10 }}>
-          To run the service we collect account and trip data, including:
-        </p>
-        <ul style={{ paddingLeft: 20, margin: 0 }}>
-          <li>Account details: name, email, and authentication identifiers from Supabase Auth. A Clemson (@clemson.edu) email may unlock student pricing.</li>
-          <li>Student verification markers such as <code>student_verified_at</code> when your Clemson email is confirmed.</li>
-          <li>Trip details: pickup/dropoff labels and coordinates, scheduled time, fare/deposit amounts, status history, and driver assignment.</li>
-          <li>Payment metadata from Stripe Checkout (we do not store full card numbers on Clemson RIDES servers).</li>
-          <li>Optional profile fields you provide (phone, home/work labels) and device/session signals needed for realtime trip updates.</li>
-        </ul>
-      </Section>
-      <Section heading="How we use information">
-        <p>
-          We use this data to create accounts, apply student pricing when a Clemson email is used, match riders with drivers,
-          process deposit payments, show live trip status, calculate driver earnings from completed fares,
-          prevent abuse, and improve reliability of the campus airport-ride experience. We do not sell your
-          personal information.
-        </p>
-      </Section>
-      <Section heading="Sharing">
-        <p>
-          We share data only as needed to operate the product: with Stripe for deposits, with Supabase for
-          auth/database/realtime, with drivers assigned to your trip (pickup, dropoff, and status), and when
-          required by law or university policy. Aggregated, non-identifying stats may be used for campus
-          operations reporting.
-        </p>
-      </Section>
-      <Section heading="Retention & security">
-        <p>
-          Trip and account records are retained while your account is active and for a reasonable period
-          afterward for dispute resolution, accounting, and safety. We use industry-standard controls via
-          our providers (encrypted transport, access-controlled databases). No method of transmission is
-          100% secure; please use a strong password.
-        </p>
-      </Section>
-      <Section heading="Your choices">
-        <p>
-          You may update profile details in Account, sign out at any time, and request deletion of your
-          account/trip history by contacting Clemson RIDES support. Marketing browse screens remain available
-          without signup; booking and payment require a signed-in account.
-        </p>
-      </Section>
-      <Section heading="Children">
-        <p>
-          Clemson RIDES is intended for university students and adults. We do not knowingly collect personal
-          information from children under 13.
-        </p>
-      </Section>
+      <LegalBody sections={PRIVACY_SECTIONS} />
     </LegalShell>
   )
 }
@@ -102,83 +63,7 @@ export function LegalPrivacy() {
 export function LegalTerms() {
   return (
     <LegalShell title="Terms of Service">
-      <Section heading="Agreement">
-        <p>
-          By creating a Clemson RIDES account or booking an airport ride, you agree to these Terms. If you
-          do not agree, do not use the booking or driver features. Guest browsing of marketing and schedule
-          information is allowed without an account.
-        </p>
-      </Section>
-      <Section heading="Eligibility">
-        <p>
-          Anyone may create a rider or driver account with a valid email. Riders with a verified
-          <strong>@clemson.edu</strong> address receive student pricing where offered. Drivers must submit
-          their info and documents and wait for admin approval before they can receive rides. You are
-          responsible for the accuracy of the information you provide.
-        </p>
-      </Section>
-      <Section heading="The service">
-        <p>
-          Clemson RIDES connects student riders with drivers for scheduled campus↔airport trips at published
-          flat rates (e.g. GSP and CLT). A 25% deposit via Stripe holds your ride; remaining balance and any
-          tips or adjustments may be handled as described in-app at the time of trip. Availability depends on
-          online drivers and is not guaranteed for every requested time.
-        </p>
-      </Section>
-      <Section heading="Rider responsibilities">
-        <ul style={{ paddingLeft: 20, margin: 0 }}>
-          <li>Be ready at the stated pickup location and time.</li>
-          <li>Share accurate flight/schedule notes when relevant.</li>
-          <li>Treat drivers and property respectfully; no illegal activity in vehicles.</li>
-          <li>Cancel promptly if plans change; deposit refund rules follow the in-app and Stripe receipt terms.</li>
-        </ul>
-      </Section>
-      <Section heading="Driver responsibilities">
-        <ul style={{ paddingLeft: 20, margin: 0 }}>
-          <li>Maintain a valid license, insurance, and vehicle fit for passenger transport.</li>
-          <li>Advance trip status honestly (accepted → arriving → arrived → in progress → completed). Tap Arrive at pickup; a wait fee applies after a 3-minute grace.</li>
-          <li>Complete only trips you accepted; do not solicit off-platform cash for Clemson RIDES bookings.</li>
-        </ul>
-      </Section>
-      <Section heading="Payments & earnings">
-        <p>
-          Deposits are processed by Stripe. The platform keeps 20% of rider charges (fares, wait fees, and
-          cancellation fees) and the driver keeps 80%. After a driver taps Arrive there is a 3-minute grace at
-          $0, then $1 per minute (rounded up) while the trip stays arrived. On a completed trip that wait fee
-          is split 20% platform / 80% driver. From 5 minutes the driver may cancel; the rider owes the wait
-          fee accrued so far, with the same 20/80 split. At 7 minutes the ride cancels automatically: the
-          rider is charged $5 ($4 wait + $1 cancellation fee), the driver keeps $4, and the platform keeps $1.
-          If a saved card cannot be charged, the fee is still owed and recorded as pending. Payout timing and
-          tax reporting (if any) will be disclosed in driver onboarding or Account. Chargebacks or fraud may
-          result in account suspension.
-        </p>
-      </Section>
-      <Section heading="Disclaimers">
-        <p>
-          Rides are provided by independent drivers, not as a university-operated transit service. Clemson
-          RIDES is a software marketplace and is not a common carrier. To the fullest extent permitted by law,
-          we disclaim warranties of uninterrupted availability and are not liable for indirect or consequential
-          damages arising from delayed, canceled, or missed flights, traffic, or driver unavailability.
-        </p>
-      </Section>
-      <Section heading="Termination">
-        <p>
-          We may suspend or terminate accounts that abuse the service, falsify Clemson affiliation, harass
-          others, or violate these Terms. You may stop using the service at any time.
-        </p>
-      </Section>
-      <Section heading="Changes">
-        <p>
-          We may update these Terms and the Privacy Policy. Material changes will be reflected by the “Last
-          updated” date on this page. Continued use after changes constitutes acceptance.
-        </p>
-      </Section>
-      <Section heading="Contact">
-        <p>
-          For terms or privacy questions related to Clemson RIDES campus airport rides, use the Account
-          screen contact path or your campus program administrator.
-        </p>
-      </Section>
+      <LegalBody sections={TERMS_SECTIONS} />
     </LegalShell>
   )
 }

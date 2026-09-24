@@ -36,6 +36,7 @@ function SignUpForm({
       subtitle="Metered fares to GSP and CLT. Students save 10% on Standard."
       onSuccess={() => finish(router)}
       onSignIn={() => router.replace('/sign-in')}
+      onOpenLegal={(doc) => router.push({ pathname: '/legal', params: { doc } })}
       onBack={() => {
         if (router.canGoBack()) router.back()
         else router.replace('/')

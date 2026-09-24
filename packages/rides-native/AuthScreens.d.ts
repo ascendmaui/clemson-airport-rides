@@ -22,6 +22,7 @@ export function SignInScreen(props: {
   socialProviders?: SocialProvider[]
   onSocial?: (providerId: SocialProvider['id']) => Promise<{ cancelled?: boolean } | void>
   resetPassword?: (email: string) => Promise<unknown>
+  onOpenLegal?: (doc: 'privacy' | 'terms') => void
 }): ReactNode
 
 export function ForgotPasswordScreen(props: {
@@ -64,6 +65,7 @@ export function SignUpScreen(props: {
     providerId: SocialProvider['id'],
     extra?: { promo?: string; fullName?: string },
   ) => Promise<{ cancelled?: boolean } | void>
+  onOpenLegal?: (doc: 'privacy' | 'terms') => void
 }): ReactNode
 
 export function ResetPasswordScreen(props: {

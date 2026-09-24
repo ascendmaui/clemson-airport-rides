@@ -93,6 +93,7 @@ export function SignInScreen({
   socialProviders,
   onSocial,
   resetPassword,
+  onOpenLegal,
 }) {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -194,7 +195,19 @@ export function SignInScreen({
         New here?{' '}
         <Text onPress={onCreateAccount} style={styles.switch}>Create an account</Text>
       </Text>
+      <LegalLinks onOpenLegal={onOpenLegal} />
     </AuthShell>
+  )
+}
+
+function LegalLinks({ onOpenLegal }) {
+  if (!onOpenLegal) return null
+  return (
+    <Text style={styles.switchRow}>
+      <Text onPress={() => onOpenLegal('privacy')} style={styles.switch}>Privacy</Text>
+      {' · '}
+      <Text onPress={() => onOpenLegal('terms')} style={styles.switch}>Terms</Text>
+    </Text>
   )
 }
 
@@ -210,6 +223,7 @@ export function SignUpScreen({
   showPromo = true,
   socialProviders,
   onSocial,
+  onOpenLegal,
 }) {
   const [fullName, setFullName] = useState('')
   const [phone, setPhone] = useState('')
@@ -442,6 +456,7 @@ export function SignUpScreen({
         Already have an account?{' '}
         <Text onPress={onSignIn} style={styles.switch}>Sign in</Text>
       </Text>
+      <LegalLinks onOpenLegal={onOpenLegal} />
     </AuthShell>
   )
 }
