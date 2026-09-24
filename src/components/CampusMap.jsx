@@ -29,6 +29,25 @@ function toLatLng(pair, fallback = CLEMSON) {
   return { lat: Number(pair[0]), lng: Number(pair[1]) }
 }
 
+function numberedPinSvg(color, badge) {
+  const label = String(badge ?? '')
+  const w = label.length > 1 ? 28 : 22
+  return {
+    url: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(
+      `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${w}" viewBox="0 0 ${w} ${w}">
+        <circle cx="${w / 2}" cy="${w / 2}" r="${w / 2 - 2}" fill="${color}" stroke="#fff" stroke-width="2"/>
+        <text x="50%" y="54%" text-anchor="middle" dominant-baseline="middle" fill="#fff" font-family="Arial,sans-serif" font-size="12" font-weight="700">${label}</text>
+      </svg>`,
+    )}`,
+    scaledSize: typeof window !== 'undefined' && window.google?.maps
+      ? new window.google.maps.Size(w, w)
+      : undefined,
+    anchor: typeof window !== 'undefined' && window.google?.maps
+      ? new window.google.maps.Point(w / 2, w / 2)
+      : undefined,
+  }
+}
+
 function pinSvg(color, size = 18) {
   const s = size
   return {
@@ -160,6 +179,7 @@ export function CampusMap({
   selfPosition = null,
   animateDriver = false,
   gameDayLabel = null,
+  stops = null,
 }) {
   const apiKey = (import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '').trim()
   const { isLoaded, loadError } = useJsApiLoader(mapsLoaderOptions(apiKey))
@@ -250,6 +270,19 @@ export function CampusMap({
     () => (dropoffPosition ? toLatLng(dropoffPosition) : null),
     [dropoffPosition?.[0], dropoffPosition?.[1]],
   )
+  const stopMarkers = useMemo(() => {
+    if (!Array.isArray(stops)) return []
+    return stops
+      .map((stop, index) => ({
+        id: stop.id || `stop-${index}`,
+        lat: Number(stop.lat),
+        lng: Number(stop.lng),
+        label: stop.label || stop.title || `Stop ${index + 1}`,
+        color: stop.color || (index === stops.length - 1 ? ORANGE : PURPLE),
+        badge: stop.badge != null ? String(stop.badge) : String(index + 1),
+      }))
+      .filter((stop) => Number.isFinite(stop.lat) && Number.isFinite(stop.lng))
+  }, [stops])
   const areas = useMemo(() => {
     if (!areaCircles?.length) return []
     return areaCircles
@@ -264,9 +297,31 @@ export function CampusMap({
   }, [areaCircles])
 
   const mapRef = useRef(null)
+  const fittedKey = useRef('')
+  const stopRef = useRef(stopMarkers)
+  const driverRef = useRef(driverTarget)
+  stopRef.current = stopMarkers
+  driverRef.current = driverTarget
+  const fitStopBounds = useCallback((map) => {
+    const list = stopRef.current
+    if (!map || !list.length || typeof window === 'undefined' || !window.google?.maps) return
+    const driver = driverRef.current
+    const key = `${driver ? 'd' : 'x'}|${list.map((stop) => `${stop.lat.toFixed(5)},${stop.lng.toFixed(5)}`).join(';')}`
+    if (fittedKey.current === key) return
+    const bounds = new window.google.maps.LatLngBounds()
+    for (const stop of list) bounds.extend({ lat: stop.lat, lng: stop.lng })
+    if (driver) bounds.extend(driver)
+    map.fitBounds(bounds, 40)
+    fittedKey.current = key
+  }, [])
   const onLoad = useCallback((map) => {
     mapRef.current = map
-  }, [])
+    fitStopBounds(map)
+  }, [fitStopBounds])
+
+  useEffect(() => {
+    fitStopBounds(mapRef.current)
+  }, [fitStopBounds, stopMarkers, driverTarget, isLoaded])
 
   useEffect(() => {
     if (!mapRef.current || !driverTarget || !animateDriver) return
@@ -371,11 +426,19 @@ export function CampusMap({
         {path && (
           <Polyline path={path} options={{ strokeColor: PURPLE, strokeWeight: 5, strokeOpacity: 0.9 }} />
         )}
-        {!areas.length && !driverTarget && !pickup && !self && (
+        {!areas.length && !stopMarkers.length && !driverTarget && !pickup && !self && (
           <Marker position={primary} icon={showHeat ? purpleIcon : orangeIcon} />
         )}
-        {!areas.length && pickup && <Marker position={pickup} icon={purpleIcon} title="Pickup" />}
-        {!areas.length && dropoff && <Marker position={dropoff} icon={orangeIcon} title="Dropoff" />}
+        {!areas.length && !stopMarkers.length && pickup && <Marker position={pickup} icon={purpleIcon} title="Pickup" />}
+        {!areas.length && !stopMarkers.length && dropoff && <Marker position={dropoff} icon={orangeIcon} title="Dropoff" />}
+        {stopMarkers.map((stop) => (
+          <Marker
+            key={stop.id}
+            position={{ lat: stop.lat, lng: stop.lng }}
+            icon={numberedPinSvg(stop.color, stop.badge)}
+            title={stop.label}
+          />
+        ))}
         {self && <Marker position={self} icon={purpleIcon} title="You" />}
         {(animatedDriver || driverTarget) && (
           <Marker position={animatedDriver || driverTarget} icon={driverIcon} title="Driver" />

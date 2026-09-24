@@ -11,8 +11,20 @@ export function FarePanel({ card }: { card: DriverCard }) {
       <Row label="Trip fare" value={formatCents(fare.fareCents)} />
       <Row label="25% deposit" value={formatCents(fare.depositCents)} />
       <Row label="Collected on complete" value={formatCents(fare.remainderCents)} />
-      <Row label="You net · 80%" value={formatCents(fare.driverNetCents)} strong />
-      <Text style={[styles.note, { color: colors.inkSecondary }]}>Platform fee {formatCents(fare.platformFeeCents)} · 20%.</Text>
+      {fare.carpoolIncentiveId ? (
+        <>
+          <Row label="Base net" value={formatCents(fare.baseNetCents || 0)} />
+          <Row label={`Carpool bonus · ${fare.carpoolIncentiveId}`} value={formatCents(fare.carpoolBonusCents || 0)} />
+          <Row label="You net" value={formatCents(fare.driverNetCents)} strong />
+        </>
+      ) : (
+        <Row label={fare.usesStoredPayout ? 'You net' : 'You net · 80%'} value={formatCents(fare.driverNetCents)} strong />
+      )}
+      <Text style={[styles.note, { color: colors.inkSecondary }]}>
+        {fare.carpoolIncentiveId
+          ? `Platform fee ${formatCents(fare.platformFeeCents)}.`
+          : `Platform fee ${formatCents(fare.platformFeeCents)} · 20%.`}
+      </Text>
       {fare.shares.length > 1 ? (
         <View style={styles.splits}>
           <Text style={[styles.splitTitle, { color: colors.orange }]}>Carpool split</Text>

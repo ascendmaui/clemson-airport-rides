@@ -82,7 +82,7 @@ export function advanceTrip(
 ): Promise<{ status?: string; settle?: { payment?: unknown; payout?: { status?: string; amountCents?: number } | null } | null }>
 export function loadTrip(supabase: unknown, tripId: string, driverId?: string): Promise<DriverCard | null>
 export function loadEarnings(supabase: unknown, driverId: string): Promise<{
-  trips: { id: string; status?: string; fare_cents?: number; dropoff_label?: string | null; completed_at?: string | null; pickup_label?: string | null }[]
+  trips: { id: string; status?: string; fare_cents?: number; dropoff_label?: string | null; completed_at?: string | null; pickup_label?: string | null; metadata?: Record<string, unknown> | null }[]
   paymentsByTrip: Record<string, { kind?: string; amountCents?: number; status?: string }[]>
   payouts: { paidCents?: number; pendingCents?: number; pending?: unknown[] } | null
   summary: {
