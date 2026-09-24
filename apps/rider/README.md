@@ -64,7 +64,7 @@ Native Apple and Google buttons need a development build (`npx expo run:ios` / `
 
 ## Follow-ups
 
-Stripe 25% PaymentSheet, driver offer accept, student pricing checkout, gameday carpool, and scheduled airport holds are not in this binary yet. Campus ride requests already insert a `trips` row the same way the web app does. Live location sharing, the trip link, SOS, and emergency contacts are on Safety and the ride-requested screen.
+Stripe 25% PaymentSheet, driver offer accept, student pricing checkout, and scheduled airport holds are not in this binary yet. Game-day carpool (neighborhood match, fare split, offer-a-car, and vehicle seats) calls the same `/api/carpool` and `/api/friend-rides` routes as the web flagship. Campus ride requests already insert a `trips` row the same way the web app does. Live location sharing, the trip link, SOS, and emergency contacts are on Safety and the ride-requested screen.
 
 ## Safety smoke
 

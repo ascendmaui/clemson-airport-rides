@@ -1,6 +1,30 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { ORANGE, PURPLE } from 'rides-native/places.js'
 
+type ButtonTone = 'orange' | 'purple' | 'ghost' | 'outline'
+
+function toneStyle(tone: ButtonTone) {
+  switch (tone) {
+    case 'orange':
+      return { backgroundColor: ORANGE, color: '#fff', borderColor: 'transparent', borderWidth: 0 }
+    case 'purple':
+      return { backgroundColor: PURPLE, color: '#fff', borderColor: 'transparent', borderWidth: 0 }
+    case 'ghost':
+      return { backgroundColor: 'rgba(255,255,255,0.7)', color: PURPLE, borderColor: 'transparent', borderWidth: 0 }
+    case 'outline':
+      return {
+        backgroundColor: 'rgba(82,45,128,0.06)',
+        color: PURPLE,
+        borderColor: 'rgba(82,45,128,0.35)',
+        borderWidth: 1.5,
+      }
+    default: {
+      const neverTone: never = tone
+      return neverTone
+    }
+  }
+}
+
 export function PrimaryButton({
   label,
   onPress,
@@ -10,18 +34,25 @@ export function PrimaryButton({
   label: string
   onPress: () => void
   disabled?: boolean
-  tone?: 'orange' | 'purple' | 'ghost'
+  tone?: ButtonTone
 }) {
-  const background = tone === 'orange' ? ORANGE : tone === 'purple' ? PURPLE : 'rgba(255,255,255,0.7)'
-  const color = tone === 'ghost' ? PURPLE : '#fff'
+  const look = toneStyle(tone)
   return (
     <Pressable
       onPress={onPress}
       disabled={disabled}
       accessibilityRole="button"
-      style={[styles.btn, { backgroundColor: background, opacity: disabled ? 0.55 : 1 }]}
+      style={[
+        styles.btn,
+        {
+          backgroundColor: look.backgroundColor,
+          borderColor: look.borderColor,
+          borderWidth: look.borderWidth,
+          opacity: disabled ? 0.55 : 1,
+        },
+      ]}
     >
-      <Text style={[styles.label, { color }]}>{label}</Text>
+      <Text style={[styles.label, { color: look.color }]}>{label}</Text>
     </Pressable>
   )
 }
