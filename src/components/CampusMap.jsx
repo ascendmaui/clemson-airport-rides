@@ -81,7 +81,7 @@ function useAnimatedPosition(target, enabled) {
   return pos
 }
 
-function FallbackMap({ wrapStyle, message }) {
+function FallbackMap({ wrapStyle, message, badge }) {
   return (
     <div
       style={{
@@ -95,7 +95,25 @@ function FallbackMap({ wrapStyle, message }) {
         fontSize: 13,
       }}
     >
-      {message}
+      {badge ? (
+        <div style={{
+          position: 'absolute',
+          left: 12,
+          bottom: 12,
+          maxWidth: '80%',
+          padding: '6px 10px',
+          borderRadius: 999,
+          background: '#F56600',
+          color: '#fff',
+          fontWeight: 800,
+          fontSize: 12,
+        }}
+        >
+          {badge}
+        </div>
+      ) : null}
+      {/* TODO: a live stadium ring on this preview needs Maps JavaScript billing (VITE_GOOGLE_MAPS_API_KEY). The zone and fare multiplier stay on the badge. */}
+      <div>{message}</div>
     </div>
   )
 }
@@ -141,6 +159,7 @@ export function CampusMap({
   dropoffPosition = null,
   selfPosition = null,
   animateDriver = false,
+  gameDayLabel = null,
 }) {
   const apiKey = (import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '').trim()
   const { isLoaded, loadError } = useJsApiLoader(mapsLoaderOptions(apiKey))
@@ -266,15 +285,16 @@ export function CampusMap({
     return (
       <FallbackMap
         wrapStyle={wrapStyle}
+        badge={gameDayLabel}
         message="Map preview needs VITE_GOOGLE_MAPS_API_KEY (Maps JavaScript API)."
       />
     )
   }
   if (loadError) {
-    return <FallbackMap wrapStyle={wrapStyle} message="Google Maps failed to load. Check the API key / referrer." />
+    return <FallbackMap wrapStyle={wrapStyle} badge={gameDayLabel} message="Google Maps failed to load. Check the API key / referrer." />
   }
   if (!isLoaded) {
-    return <FallbackMap wrapStyle={wrapStyle} message="Loading map…" />
+    return <FallbackMap wrapStyle={wrapStyle} badge={gameDayLabel} message="Loading map…" />
   }
 
   const orangeIcon = pinSvg(ORANGE, 18)
@@ -306,6 +326,19 @@ export function CampusMap({
           if (c) onPinMove([c.lat(), c.lng()])
         }}
       >
+        {gameDayLabel ? (
+          <Circle
+            center={{ lat: STADIUM[0], lng: STADIUM[1] }}
+            radius={420}
+            options={{
+              strokeColor: ORANGE,
+              strokeOpacity: 0.95,
+              strokeWeight: 2,
+              fillColor: ORANGE,
+              fillOpacity: 0.22,
+            }}
+          />
+        ) : null}
         {heatSpots.map((s) => (
           <Circle
             key={s.id}
@@ -348,6 +381,24 @@ export function CampusMap({
           <Marker position={animatedDriver || driverTarget} icon={driverIcon} title="Driver" />
         )}
       </GoogleMap>
+      {gameDayLabel ? (
+        <div style={{
+          position: 'absolute',
+          left: 12,
+          bottom: 12,
+          zIndex: 2,
+          maxWidth: '70%',
+          padding: '6px 10px',
+          borderRadius: 999,
+          background: '#F56600',
+          color: '#fff',
+          fontWeight: 800,
+          fontSize: 12,
+        }}
+        >
+          {gameDayLabel}
+        </div>
+      ) : null}
       {showMapTypeControl ? (
         <div
           data-map-type-control="dropdown"

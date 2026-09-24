@@ -13,7 +13,7 @@ import { getHashRoute, navigate } from '../lib/navigation'
 import { supabase } from '../lib/supabase'
 import { STADIUM } from '../components/CampusMap'
 import { SignInToBookModal, useRequireAuthForAction } from '../components/SignInToBookModal'
-import { isClemsonEmail } from '../lib/studentDomain'
+import { useStudentStatus } from '../lib/useStudentStatus'
 import { firstName } from '../lib/scheduledRideModel'
 import { ScheduledRidePlanner } from '../components/ScheduledRidePlanner'
 
@@ -22,10 +22,6 @@ const AIRPORT_COORDS = {
   CLT: { label: 'Charlotte Douglas International (CLT)', lat: 35.2144, lng: -80.9473 },
 }
 
-
-function isStudentRider(user) {
-  return Boolean(user?.email && isClemsonEmail(user.email))
-}
 
 async function createAirportTrip({ user, airport, fareCents, deposit, date, time, student }) {
   if (!supabase) throw new Error('Supabase is not configured')
@@ -78,6 +74,7 @@ async function createAirportTrip({ user, airport, fareCents, deposit, date, time
 
 export function ScheduleAirport() {
   const { user } = useAuth()
+  const studentStatusNow = useStudentStatus()
   const { runOrPrompt } = useRequireAuthForAction()
   const [promptOpen, setPromptOpen] = useState(false)
   const [airport, setAirport] = useState('GSP')
@@ -88,19 +85,19 @@ export function ScheduleAirport() {
   const returnFlags = useMemo(() => getHashRoute().params, [])
 
   const rate = AIRPORT_RATES[airport]
-  const deposit = depositCents(rate.fareCents)
+  const student = applyStudentDiscount(rate.fareCents, {
+    isStudent: studentStatusNow.verified,
+    tier: 'standard',
+  })
+  const fareCents = student.fareCents
+  const deposit = depositCents(fareCents)
   const stripe = getStripeConfig()
 
   const onBook = async () => {
     setBusy(true)
     setError(null)
     try {
-      const student = applyStudentDiscount(rate.fareCents, {
-        isStudent: isStudentRider(user),
-        tier: 'standard',
-      })
-      const fareCents = student.fareCents
-      const depositAmount = depositCents(fareCents)
+      const depositAmount = deposit
       const tripId = await createAirportTrip({
         user,
         airport,
@@ -145,7 +142,7 @@ export function ScheduleAirport() {
         <h1 style={{ fontSize: 24, fontWeight: 600, letterSpacing: -0.4, color: '#522D80' }}>Schedule</h1>
         <p style={{ color: 'var(--ink-secondary)', fontSize: 14, marginTop: 6, marginBottom: 20 }}>
           Plan a pickup ahead of time, or hold an airport ride with a 25% deposit.
-          {isStudentRider(user) ? ' Clemson student discount applies on standard fares.' : ''}
+          {studentStatusNow.verified ? ' Clemson student discount applies on standard fares.' : ''}
         </p>
 
         <ScheduledRidePlanner />
@@ -175,7 +172,12 @@ export function ScheduleAirport() {
         )}
 
         <div style={{ display: 'flex', gap: 10, marginBottom: 20 }}>
-          {Object.values(AIRPORT_RATES).map((a) => (
+          {Object.values(AIRPORT_RATES).map((a) => {
+            const shown = applyStudentDiscount(a.fareCents, {
+              isStudent: studentStatusNow.verified,
+              tier: 'standard',
+            })
+            return (
             <button
               key={a.code}
               type="button"
@@ -192,10 +194,11 @@ export function ScheduleAirport() {
               <div style={{ fontWeight: 700, fontSize: 18 }}>{a.code}</div>
               <div style={{ fontSize: 12, color: 'var(--ink-secondary)', marginTop: 4 }}>{a.name.split('(')[0].trim()}</div>
               <div style={{ fontWeight: 600, fontSize: 20, marginTop: 10, color: 'var(--orange)' }}>
-                {formatUsdFromCents(a.fareCents)}
+                {formatUsdFromCents(shown.fareCents)}
               </div>
             </button>
-          ))}
+            )
+          })}
         </div>
 
         <label style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink-secondary)' }}>Date</label>
@@ -206,14 +209,21 @@ export function ScheduleAirport() {
         <div className="glass-panel glass-panel--elevated" style={{ padding: 16, borderRadius: 16, marginBottom: 16 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
             <span style={{ color: 'var(--ink-secondary)' }}>Fare</span>
-            <strong>{formatUsdFromCents(rate.fareCents)}</strong>
+            <strong>{formatUsdFromCents(fareCents)}</strong>
           </div>
+          {student.discountCents > 0 && (
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+              <span style={{ color: 'var(--ink-secondary)' }}>Student discount</span>
+              <strong style={{ color: '#F56600' }}>−{formatUsdFromCents(student.discountCents)}</strong>
+            </div>
+          )}
           <div style={{ display: 'flex', justifyContent: 'space-between' }}>
             <span style={{ color: 'var(--ink-secondary)' }}>25% deposit</span>
             <strong style={{ color: 'var(--orange)' }}>{formatUsdFromCents(deposit)}</strong>
           </div>
           <p style={{ fontSize: 12, color: 'var(--ink-tertiary)', marginTop: 10 }}>
-            {rate.code} · {formatUsdFromCents(rate.fareCents)} fare → {formatUsdFromCents(deposit)} deposit
+            {rate.code} · {formatUsdFromCents(fareCents)} fare → {formatUsdFromCents(deposit)} deposit
+            {student.label ? ` · ${student.label}` : ''}
             {stripe.configured ? ' · Stripe ready' : ' · set VITE_STRIPE_PUBLISHABLE_KEY'}
           </p>
         </div>

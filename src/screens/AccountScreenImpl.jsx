@@ -18,7 +18,8 @@ import {
   fetchNotificationPrefs, saveNotificationPrefs,
 } from '../lib/notificationPrefs'
 import { useToasts, pushToast } from '../lib/toasts'
-import { isClemsonEmail } from '../lib/studentDomain'
+import { supabase } from '../lib/supabase'
+import { STUDENT_CLAIM_COPY, STUDENT_DISCOUNT_LABEL, markStudentVerified, studentStatus } from '../../packages/rides-native/riderMoney.js'
 import { fetchMyDriverApplication, isAdminIdentity, onboardingLabel } from '../lib/driverOnboarding'
 import { ReferFriendsPanel } from './ReferFriends'
 import { isIncentiveAdmin } from '../lib/driverIncentiveMath'
@@ -99,6 +100,8 @@ export function AccountScreen() {
   const [application, setApplication] = useState(null)
   const [deleteBusy, setDeleteBusy] = useState(false)
   const [deleteNote, setDeleteNote] = useState(null)
+  const [studentNote, setStudentNote] = useState(null)
+  const [studentBusy, setStudentBusy] = useState(false)
   const isDriver = profile?.role === 'driver' || profile?.role === 'both'
   const isAdmin = isAdminIdentity({
     jwtEmail: user?.email,
@@ -238,7 +241,11 @@ export function AccountScreen() {
   const avg = profile?.rating_avg != null ? Number(profile.rating_avg).toFixed(1) : '—'
   const count = profile?.rating_count || 0
   const kinds = GALLERY_KINDS.filter((k) => !k.driversOnly || isDriver)
-  const studentOk = Boolean(profile?.student_verified_at) || isClemsonEmail(user?.email)
+  const studentNow = studentStatus({
+    email: profile?.email || user?.email,
+    studentVerifiedAt: profile?.student_verified_at,
+  })
+  const studentOk = studentNow.verified
 
   return (
     <div className="route-fade" style={{ display: 'flex', flexDirection: 'column', minHeight: '100%' }}>
@@ -596,23 +603,70 @@ export function AccountScreen() {
           <Section title="Student verification" subtitle="Clemson email unlocks student rates" icon={IconStudent}>
             <div style={{
               padding: 14, borderRadius: 14,
-              background: studentOk ? 'rgba(31,138,76,0.10)' : 'rgba(245,102,0,0.10)',
-              border: `1px solid ${studentOk ? 'rgba(31,138,76,0.25)' : 'rgba(245,102,0,0.25)'}`,
+              background: studentOk ? 'rgba(245,102,0,0.10)' : 'rgba(82,45,128,0.08)',
+              border: `1px solid ${studentOk ? 'rgba(245,102,0,0.35)' : 'rgba(82,45,128,0.22)'}`,
             }}>
-              <div style={{ fontWeight: 700, color: 'var(--purple)' }}>
-                {studentOk ? 'Verified student' : 'Not verified'}
+              <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: 1, color: studentOk ? '#F56600' : '#522D80' }}>
+                {studentOk ? 'CLEMSON STUDENT' : 'NOT VERIFIED'}
+              </div>
+              <div style={{ fontWeight: 800, color: '#522D80', marginTop: 4 }}>
+                {studentOk ? STUDENT_DISCOUNT_LABEL : 'Full price'}
               </div>
               <div style={{ fontSize: 13, color: 'var(--ink-secondary)', marginTop: 4 }}>
-                {user?.email || 'No email'}
+                {user?.email || profile?.email || 'No email'}
                 {profile?.student_verified_at
                   ? ` · verified ${new Date(profile.student_verified_at).toLocaleDateString()}`
                   : ''}
               </div>
             </div>
-            {!studentOk && (
-              <p style={{ fontSize: 13, color: 'var(--ink-secondary)', marginTop: 12, lineHeight: 1.45 }}>
-                Sign up or update your account with a @clemson.edu / @g.clemson.edu email to unlock student discount.
+            <p style={{ fontSize: 13, color: 'var(--ink-secondary)', marginTop: 12, lineHeight: 1.45 }}>
+              {STUDENT_CLAIM_COPY}
+            </p>
+            {studentOk ? (
+              <p style={{ fontSize: 13, fontWeight: 700, color: '#F56600', marginTop: 8 }}>
+                Standard quotes on Confirm and Schedule include this discount.
               </p>
+            ) : (
+              <p style={{ fontSize: 13, color: 'var(--ink-secondary)', marginTop: 8, lineHeight: 1.45 }}>
+                Sign in with a @clemson.edu or @g.clemson.edu email. A flag already on your profile counts too.
+              </p>
+            )}
+            {user && studentNow.viaEmail && !profile?.student_verified_at && (
+              <div style={{ marginTop: 12 }}>
+                <PrimaryButton
+                  disabled={studentBusy}
+                  onClick={async () => {
+                    setStudentBusy(true)
+                    setStudentNote(null)
+                    const result = await markStudentVerified(supabase, user)
+                    setStudentNote(result.error || (result.verified ? 'Saved. Standard quotes include 10% off.' : 'Not verified.'))
+                    if (result.verified) await reload().catch(() => {})
+                    setStudentBusy(false)
+                  }}
+                >
+                  {studentBusy ? 'Saving…' : 'Save student pricing'}
+                </PrimaryButton>
+              </div>
+            )}
+            {user && !studentOk && (
+              <div style={{ marginTop: 12 }}>
+                <PrimaryButton
+                  disabled={studentBusy}
+                  onClick={async () => {
+                    setStudentBusy(true)
+                    setStudentNote(null)
+                    const result = await markStudentVerified(supabase, user)
+                    setStudentNote(result.error || 'Not verified.')
+                    if (result.verified) await reload().catch(() => {})
+                    setStudentBusy(false)
+                  }}
+                >
+                  {studentBusy ? 'Checking…' : 'Check Clemson email'}
+                </PrimaryButton>
+              </div>
+            )}
+            {studentNote && (
+              <p style={{ fontSize: 13, marginTop: 10, color: '#522D80', fontWeight: 700 }}>{studentNote}</p>
             )}
           </Section>
         )}

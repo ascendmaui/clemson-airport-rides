@@ -3,6 +3,8 @@ import { CampusMap, STADIUM } from '../components/CampusMap'
 import { PrimaryButton } from '../components/PrimaryButton'
 import { navigate } from '../lib/navigation'
 import { SignInToBookModal, useRequireAuthForAction } from '../components/SignInToBookModal'
+import { useStudentStatus } from '../lib/useStudentStatus'
+import { STUDENT_DISCOUNT_LABEL } from '../../packages/rides-native/riderMoney.js'
 
 export function ConfirmPickup({ dest = 'GSP Airport' }) {
   const [address, setAddress] = useState('Memorial Stadium · Lot 5')
@@ -10,6 +12,7 @@ export function ConfirmPickup({ dest = 'GSP Airport' }) {
   const [pin, setPin] = useState(STADIUM)
   const [promptOpen, setPromptOpen] = useState(false)
   const { runOrPrompt } = useRequireAuthForAction()
+  const student = useStudentStatus()
 
   const goTiers = () => navigate('tiers', { dest, pickup: address })
 
@@ -74,9 +77,27 @@ export function ConfirmPickup({ dest = 'GSP Airport' }) {
             marginBottom: 8,
           }}
         />
-        <p style={{ fontSize: 13, color: 'var(--ink-secondary)', marginBottom: 14 }}>
+        <p style={{ fontSize: 13, color: 'var(--ink-secondary)', marginBottom: 8 }}>
           Going to <strong>{dest}</strong>
         </p>
+        <button
+          type="button"
+          className="pressable"
+          onClick={() => navigate('account', { tab: 'student' })}
+          style={{
+            display: 'block',
+            width: '100%',
+            textAlign: 'left',
+            marginBottom: 14,
+            fontSize: 13,
+            fontWeight: 800,
+            color: student.verified ? '#F56600' : '#522D80',
+          }}
+        >
+          {student.verified
+            ? `${STUDENT_DISCOUNT_LABEL} applies on the Standard quote.`
+            : 'Claim Clemson student pricing · 10% off Standard'}
+        </button>
         <PrimaryButton className="primary-cta" onClick={onConfirm}>
           Confirm and request
         </PrimaryButton>

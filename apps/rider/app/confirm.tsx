@@ -9,6 +9,8 @@ import { setAuthNext } from '@/lib/authNext'
 import { useAuth } from '@/lib/auth'
 import { oneParam } from '@/lib/oneParam'
 import { lookupCatalogPlace, placeFromStop, type Place } from 'rides-native/shared/carpool.js'
+import { STUDENT_DISCOUNT_LABEL } from 'rides-native/riderMoney.js'
+import { useStudentStatus } from '@/lib/useStudentStatus'
 import { NeighborhoodPicker } from '@/components/carpool/NeighborhoodPicker'
 import { lift } from '@/lib/elevation'
 import type { Palette } from '@/lib/palette'
@@ -21,6 +23,7 @@ export default function ConfirmPickup() {
   const params = useLocalSearchParams<{ dest?: string }>()
   const dest = oneParam(params.dest, 'GSP Airport')
   const { user } = useAuth()
+  const student = useStudentStatus()
   const initialPickup = placeFromStop(lookupCatalogPlace('Memorial Stadium')) || { label: 'Memorial Stadium', lat: 34.6788, lng: -82.843 }
   const [pickup, setPickup] = useState<Place>(initialPickup)
   const [address, setAddress] = useState(initialPickup.label)
@@ -87,6 +90,13 @@ export default function ConfirmPickup() {
         <Text style={styles.going}>
           Going to <Text style={styles.goingStrong}>{dest}</Text>
         </Text>
+        <Pressable onPress={() => router.push(user ? '/student' : '/sign-in')} accessibilityRole="button">
+          <Text style={student.verified ? styles.studentOn : styles.studentOff}>
+            {student.verified
+              ? `${STUDENT_DISCOUNT_LABEL} applies on the Standard quote.`
+              : 'Claim Clemson student pricing · 10% off Standard'}
+          </Text>
+        </Pressable>
         <PrimaryButton label="Confirm pickup" onPress={onConfirm} />
       </View>
       </ScrollView>
@@ -138,5 +148,7 @@ function makeStyles(colors: Palette) {
     note: { minHeight: 64, textAlignVertical: 'top' as const },
     going: { fontSize: 13, color: colors.inkSecondary, marginBottom: 14 },
     goingStrong: { color: colors.ink, fontWeight: '700' as const },
+    studentOn: { color: colors.orange, fontWeight: '800' as const, fontSize: 13, marginBottom: 12 },
+    studentOff: { color: colors.link, fontWeight: '800' as const, fontSize: 13, marginBottom: 12 },
   }
 }

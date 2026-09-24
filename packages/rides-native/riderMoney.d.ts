@@ -40,6 +40,26 @@ export function startAirportDeposit(
   },
 ): Promise<CheckoutSession>
 
+export const STUDENT_DISCOUNT_LABEL: string
+export const STUDENT_CLAIM_COPY: string
+
+export function displayTierPrice(
+  priceDollars: number,
+  input?: { isStudent?: boolean; tier?: string; surgeMultiplier?: number },
+): {
+  price: number
+  discount: number
+  label: string | null
+  fareCents: number
+  discountCents: number
+}
+
+export function studentTripMeta(input?: {
+  isStudent?: boolean
+  tier?: string
+  fareCents?: number
+}): { isStudent?: boolean; studentLabel?: string; student_discount_cents?: number }
+
 export function studentStatus(input?: { email?: string | null; studentVerifiedAt?: string | null }): {
   verified: boolean
   viaEmail: boolean

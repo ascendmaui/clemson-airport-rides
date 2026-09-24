@@ -18,6 +18,7 @@ export type CampusMapProps = {
   mapType?: MapKind
   theater?: boolean
   gameDay?: boolean
+  gameDayLabel?: string | null
   surge?: boolean
   userCoordinate?: LatLng | null
   pins?: MapPin[]

@@ -15,7 +15,8 @@ import { playTigerCue, successHaptic, tapHaptic } from '@/lib/feedback'
 import { oneParam } from '@/lib/oneParam'
 import { authStorage } from '@/lib/storage'
 import { supabase } from '@/lib/supabase'
-import { isClemsonEmail } from 'rides-native/authErrors'
+import { STUDENT_DISCOUNT_LABEL } from 'rides-native/riderMoney.js'
+import { useStudentStatus } from '@/lib/useStudentStatus'
 import { fetchOnlineDrivers, requestDriverTrip, type OnlineDriver } from 'rides-native/drivers'
 import { destPoint, pickupPoint } from 'rides-native/places.js'
 import { lift } from '@/lib/elevation'
@@ -35,6 +36,7 @@ export default function PickDriver() {
   const pickup = oneParam(params.pickup, 'Memorial Stadium')
   const tier = oneParam(params.tier, 'standard')
   const { user } = useAuth()
+  const student = useStudentStatus()
   const [drivers, setDrivers] = useState<OnlineDriver[]>([])
   const [error, setError] = useState<string | null>(null)
   const [phase, setPhase] = useState<'loading' | 'results'>('loading')
@@ -98,7 +100,7 @@ export default function PickDriver() {
         pickupLabel: pickup,
         pickupPoint: pickupPoint(pickup),
         tier,
-        isStudent: isClemsonEmail(user.email),
+        isStudent: student.verified,
       })
       const driver = drivers.find((row) => row.id === selected)
       await successHaptic()
@@ -179,6 +181,12 @@ export default function PickDriver() {
         })}
       </ScrollView>
       <View style={styles.footer}>
+        {student.verified && tier === 'standard' ? (
+          <Text style={styles.student}>{STUDENT_DISCOUNT_LABEL} is on this request.</Text>
+        ) : null}
+        {student.verified && tier !== 'standard' ? (
+          <Text style={styles.student}>Student pricing is 10% off Standard. This tier stays full price.</Text>
+        ) : null}
         <PrimaryButton label={busy ? 'Requesting…' : 'Request this driver'} onPress={onRequest} disabled={busy || !selected} />
       </View>
       <SignInToBookSheet
@@ -231,6 +239,7 @@ function makeStyles(colors: Palette) {
     cardOn: { borderColor: colors.orange },
     name: { fontSize: 18, fontWeight: '800' as const, color: colors.ink },
     meta: { marginTop: 6, color: colors.link, fontSize: 12, fontWeight: '600' as const },
-    footer: { padding: 16, paddingBottom: 28, backgroundColor: colors.card, borderTopWidth: 1, borderTopColor: colors.border },
+    footer: { padding: 16, paddingBottom: 28, backgroundColor: colors.card, borderTopWidth: 1, borderTopColor: colors.border, gap: 8 },
+    student: { color: colors.orange, fontWeight: '800' as const, fontSize: 13 },
   }
 }

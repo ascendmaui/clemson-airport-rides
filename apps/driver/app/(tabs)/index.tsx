@@ -23,6 +23,7 @@ import {
   declineTrip,
   formatCents,
   loadDriverDesk,
+  loadGameDay,
   loadEarnings,
   publishDriverCapacity,
   publishDriverLocation,
@@ -39,6 +40,7 @@ import {
   type DriverCard,
 } from 'rides-native/tripTags'
 import { ORANGE, PURPLE } from 'rides-native/places.js'
+import { gameDayNotice, type GameDayNotice } from 'rides-native/gameDayNotice.js'
 import { approvalGateMessage, isSyntheticOffer, syntheticOffers } from 'rides-native/syntheticOffers'
 import { loadCounterpart } from 'rides-native/partyProfile.js'
 
@@ -102,11 +104,28 @@ export default function DriverHome() {
   const [heatLoading, setHeatLoading] = useState(true)
   const [riderLine, setRiderLine] = useState<string | null>(null)
   const [hiddenOffers, setHiddenOffers] = useState<string[]>([])
+  const [gameNotice, setGameNotice] = useState<GameDayNotice | null>(null)
   const approved = status === 'approved'
   const pendingReview = status === 'pending_review'
   const online = Boolean(desk?.online)
   const name = user ? displayFirstName(user.user_metadata?.full_name || user.email?.split('@')[0], 'Driver') : 'Driver'
   const tabClearance = insets.bottom + 72
+
+  useEffect(() => {
+    if (!supabase) {
+      setGameNotice(gameDayNotice(null))
+      return undefined
+    }
+    let alive = true
+    loadGameDay(supabase).then((row) => {
+      if (alive) setGameNotice(gameDayNotice(row))
+    }).catch(() => {
+      if (alive) setGameNotice(gameDayNotice(null))
+    })
+    return () => {
+      alive = false
+    }
+  }, [])
 
   const refresh = useCallback(async () => {
     if (!user || !supabase) return
@@ -323,7 +342,16 @@ export default function DriverHome() {
 
   return (
     <View style={[styles.screen, { backgroundColor: colors.background }]}>
-      <CampusMap pins={pins} center={self} colorScheme={scheme} focusToken={focusToken} spots={spots} showHeat={showHeat} />
+      <CampusMap
+        pins={pins}
+        center={self}
+        colorScheme={scheme}
+        focusToken={focusToken}
+        spots={spots}
+        showHeat={showHeat}
+        gameDay={Boolean(gameNotice?.live)}
+        gameDayLabel={gameNotice?.live ? gameNotice.headline : null}
+      />
       <View pointerEvents="box-none" style={styles.overlay}>
         <View style={[styles.top, { paddingTop: insets.top + 8 }]} pointerEvents="box-none">
           <CircleButton icon="home" label="Menu" onPress={() => router.push('/menu')} />
@@ -399,11 +427,11 @@ export default function DriverHome() {
             {heatLoading ? 'Loading campus demand…' : showHeat ? `${heatCaption}${heatBlended ? ' · Live + typical' : ''}` : 'Busy areas are hidden.'}
           </Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.hotspots} style={styles.hotspotRow}>
-            {desk?.gameDay ? (
-              <View style={[styles.hotspot, { backgroundColor: colors.orange }]}>
-                <Text style={styles.hotspotOn}>Game day{desk.gameDay.surge_multiplier ? ` · ${desk.gameDay.surge_multiplier}×` : ''}</Text>
-              </View>
-            ) : null}
+            <View style={[styles.hotspot, { backgroundColor: gameNotice?.live ? colors.orange : colors.card }]}>
+              <Text style={[gameNotice?.live ? styles.hotspotOn : styles.hotspotOff, gameNotice?.live ? null : { color: colors.purple }]}>
+                {gameNotice == null ? 'Game day…' : gameNotice.headline}
+              </Text>
+            </View>
             {hotspots.map((spot) => (
               <View key={spot.id} style={[styles.hotspot, { backgroundColor: colors.card }, shadow]}>
                 <Text style={{ color: colors.title, fontWeight: '800' }}>{spot.name}</Text>
@@ -411,6 +439,11 @@ export default function DriverHome() {
               </View>
             ))}
           </ScrollView>
+          {gameNotice ? (
+            <Text style={{ color: colors.inkSecondary, fontSize: 12, marginHorizontal: 16, marginTop: 6 }}>
+              {gameNotice.live ? `${gameNotice.detail}. ${gameNotice.body}` : gameNotice.body}
+            </Text>
+          ) : null}
         </View>
 
         <View style={styles.flex} pointerEvents="box-none" />
@@ -555,7 +588,8 @@ const styles = StyleSheet.create({
   hotspotRow: { flexGrow: 0, marginTop: 10 },
   hotspots: { paddingHorizontal: 16, gap: 8 },
   hotspot: { borderRadius: 999, paddingHorizontal: 12, paddingVertical: 8 },
-  hotspotOn: { color: '#fff', fontWeight: '800' },
+  hotspotOn: { color: '#fff', fontWeight: '800' as const },
+  hotspotOff: { fontWeight: '800' as const },
   flex: { flex: 1 },
   dock: { position: 'absolute', left: 12, right: 12, gap: 10, alignItems: 'center' },
   cardTitle: { fontWeight: '800', fontSize: 18 },

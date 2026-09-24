@@ -1,5 +1,7 @@
 import { supabase } from './supabase'
 import { STADIUM } from '../components/CampusMap'
+import { RIDE_TIERS } from '../../packages/rides-native/places.js'
+import { studentTripMeta } from '../../packages/rides-native/riderMoney.js'
 
 export async function requestDriverTrip({
   riderId,
@@ -7,6 +9,9 @@ export async function requestDriverTrip({
   dest = 'GSP Airport',
   destLat = 34.8956,
   destLng = -82.2189,
+  tier = 'standard',
+  isStudent = false,
+  listCents = 0,
 }) {
   if (!supabase) throw new Error('Supabase is not configured')
   if (!riderId) throw new Error('Sign in required to request a driver')
@@ -18,7 +23,7 @@ export async function requestDriverTrip({
       rider_id: riderId,
       driver_id: driverId,
       status: 'requested',
-      tier: 'standard',
+      tier: tier || 'standard',
       pickup_label: 'Memorial Stadium',
       dropoff_label: dest,
       pickup_lat: STADIUM[0],
@@ -26,6 +31,14 @@ export async function requestDriverTrip({
       dropoff_lat: destLat,
       dropoff_lng: destLng,
       passengers: 1,
+      metadata: studentTripMeta({
+        isStudent,
+        tier: tier || 'standard',
+        fareCents: Math.max(
+          0,
+          Math.round(Number(listCents) || 0) || Math.round((Number(RIDE_TIERS.find((row) => row.id === (tier || 'standard'))?.price) || 0) * 100),
+        ),
+      }),
     })
     .select('id, status, driver_id, dropoff_label')
     .single()

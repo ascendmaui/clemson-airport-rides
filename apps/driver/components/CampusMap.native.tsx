@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { StyleSheet, View } from 'react-native'
+import { StyleSheet, Text, View } from 'react-native'
 import MapView, { Circle, Marker, Polyline, PROVIDER_DEFAULT } from 'react-native-maps'
 import { heatColor } from 'rides-native/heat.js'
 import { DOWNTOWN, ORANGE, PURPLE, STADIUM } from 'rides-native/places.js'
@@ -22,6 +22,8 @@ export function CampusMap({
   focusToken = 0,
   spots = [],
   showHeat = false,
+  gameDay = false,
+  gameDayLabel = null,
 }: {
   pins?: MapPin[]
   center?: { latitude: number; longitude: number } | null
@@ -30,6 +32,8 @@ export function CampusMap({
   focusToken?: number
   spots?: BusySpot[]
   showHeat?: boolean
+  gameDay?: boolean
+  gameDayLabel?: string | null
 }) {
   const mapRef = useRef<MapView>(null)
   const pinsRef = useRef(pins)
@@ -123,6 +127,15 @@ export function CampusMap({
         {route && route.length > 1 ? (
           <Polyline coordinates={route} strokeColor={ORANGE} strokeWidth={4} />
         ) : null}
+        {gameDay ? (
+          <Circle
+            center={STADIUM}
+            radius={420}
+            fillColor="rgba(245,102,0,0.28)"
+            strokeColor={ORANGE}
+            strokeWidth={2}
+          />
+        ) : null}
         {markers.map((pin) => (
           <Marker
             key={pin.id}
@@ -132,10 +145,26 @@ export function CampusMap({
           />
         ))}
       </MapView>
+      {gameDay ? (
+        <View pointerEvents="none" style={styles.zone}>
+          <Text style={styles.zoneText}>{gameDayLabel || 'Game day'}</Text>
+        </View>
+      ) : null}
     </View>
   )
 }
 
 const styles = StyleSheet.create({
   fill: { flex: 1 },
+  zone: { position: 'absolute', left: 16, top: 88, right: 16, alignItems: 'flex-start' },
+  zoneText: {
+    backgroundColor: ORANGE,
+    color: '#fff',
+    overflow: 'hidden',
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    fontSize: 12,
+    fontWeight: '800',
+  },
 })

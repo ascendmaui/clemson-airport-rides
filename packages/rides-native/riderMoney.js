@@ -16,6 +16,9 @@ import { CLT, GSP, STADIUM } from './places.js'
 export { cardDepositCents }
 
 export const STUDENT_DISCOUNT_BPS = 1000
+export const STUDENT_DISCOUNT_LABEL = 'Clemson student · 10% off Standard'
+export const STUDENT_CLAIM_COPY =
+  'A @clemson.edu or @g.clemson.edu email, or the student flag already on your profile, unlocks 10% off Standard. Confirm and Schedule use that price. There is no separate student ID check.'
 export const NATIVE_CHECKOUT_ORIGIN = 'https://clemson-airport-rides.vercel.app'
 
 export const AIRPORT_CHOICES = [
@@ -47,7 +50,34 @@ export function studentDiscountCents(fareCents, { isStudent = false, tier = 'sta
   return {
     fareCents: base - discountCents,
     discountCents,
-    label: `Clemson student · ${STUDENT_DISCOUNT_BPS / 100}% off Standard`,
+    label: STUDENT_DISCOUNT_LABEL,
+  }
+}
+
+/** Catalog or surged dollar price with the Standard student discount applied. */
+export function displayTierPrice(priceDollars, { isStudent = false, tier = 'standard', surgeMultiplier = 1 } = {}) {
+  const surge = Number(surgeMultiplier)
+  const factor = Number.isFinite(surge) && surge > 0 ? surge : 1
+  const list = Math.round(Math.max(0, Number(priceDollars) || 0) * factor * 100) / 100
+  const priced = studentDiscountCents(Math.round(list * 100), { isStudent, tier })
+  return {
+    price: priced.fareCents / 100,
+    discount: priced.discountCents / 100,
+    label: priced.label,
+    fareCents: priced.fareCents,
+    discountCents: priced.discountCents,
+  }
+}
+
+/** Metadata stored on a requested trip. Discount cents apply to Standard only. */
+export function studentTripMeta({ isStudent = false, tier = 'standard', fareCents = 0 } = {}) {
+  if (!isStudent) return {}
+  const priced = studentDiscountCents(fareCents, { isStudent: true, tier })
+  if (priced.discountCents <= 0) return { isStudent: true }
+  return {
+    isStudent: true,
+    studentLabel: priced.label,
+    student_discount_cents: priced.discountCents,
   }
 }
 
@@ -58,7 +88,7 @@ export function studentStatus({ email, studentVerifiedAt } = {}) {
     verified,
     viaEmail,
     verifiedAt: studentVerifiedAt || null,
-    discountLabel: verified ? 'Clemson student · 10% off Standard' : null,
+    discountLabel: verified ? STUDENT_DISCOUNT_LABEL : null,
   }
 }
 
@@ -132,6 +162,7 @@ export async function quoteAirportFare(supabase, { airport, date, time, isStuden
         airport: airport === 'CLT' ? 'CLT' : 'GSP',
         at: quoteAtIso({ date, time }),
         tier: 'standard',
+        isStudent: Boolean(isStudent),
       },
     })
     return { ...parseQuoteResponse(data), source: 'api' }

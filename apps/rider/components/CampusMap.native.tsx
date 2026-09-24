@@ -31,6 +31,7 @@ export const CampusMap = forwardRef<CampusMapHandle, CampusMapProps>(function Ca
     mapType = 'standard',
     theater = false,
     gameDay = false,
+    gameDayLabel = null,
     surge = false,
     userCoordinate = null,
     pins = [],
@@ -156,6 +157,13 @@ export const CampusMap = forwardRef<CampusMapHandle, CampusMapProps>(function Ca
           <Marker coordinate={userCoordinate} pinColor={colors.purple} title="You" />
         ) : null}
       </MapView>
+      {gameDay ? (
+        <View pointerEvents="none" style={styles.zone}>
+          <Text style={[styles.zoneText, { backgroundColor: colors.orange, color: colors.onAccent }]}>
+            {gameDayLabel || 'Game day'}
+          </Text>
+        </View>
+      ) : null}
     </View>
   )
 })
@@ -172,4 +180,6 @@ const styles = StyleSheet.create({
     borderColor: '#FFFFFF',
   },
   carGlyph: { fontSize: 14 },
+  zone: { position: 'absolute', left: 12, bottom: 12, right: 12, alignItems: 'flex-start' },
+  zoneText: { overflow: 'hidden', borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6, fontSize: 12, fontWeight: '800' },
 })

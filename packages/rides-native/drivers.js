@@ -1,5 +1,6 @@
 import { displayFirstName, standingFromRatings } from './authErrors.js'
-import { GSP, STADIUM } from './places.js'
+import { GSP, RIDE_TIERS, STADIUM } from './places.js'
+import { studentTripMeta } from './riderMoney.js'
 import { approvalGateMessage } from './syntheticOffers.js'
 
 export async function fetchOnlineDrivers(supabase) {
@@ -124,13 +125,16 @@ export async function requestDriverTrip(supabase, {
   if (!riderId) throw new Error('Sign in required to request a driver')
   if (!driverId) throw new Error('Select a driver first')
 
+  const tierId = tier || 'standard'
+  const catalog = RIDE_TIERS.find((row) => row.id === tierId)
+  const listCents = Math.round((Number(catalog?.price) || 0) * 100)
   const { data, error } = await supabase
     .from('trips')
     .insert({
       rider_id: riderId,
       driver_id: driverId,
       status: 'requested',
-      tier: tier || 'standard',
+      tier: tierId,
       pickup_label: pickupLabel,
       dropoff_label: dest,
       pickup_lat: pickupPoint.latitude,
@@ -139,8 +143,8 @@ export async function requestDriverTrip(supabase, {
       dropoff_lng: destPoint.longitude,
       passengers: 1,
       metadata: {
-        ...(isStudent ? { isStudent: true, studentLabel: 'Clemson student · 10% off Standard' } : {}),
-        ...(tier === 'tesla' ? { tesla: true, tier: 'tesla' } : {}),
+        ...studentTripMeta({ isStudent, tier: tierId, fareCents: listCents }),
+        ...(tierId === 'tesla' ? { tesla: true, tier: 'tesla' } : {}),
       },
     })
     .select('id, status, driver_id, dropoff_label')
