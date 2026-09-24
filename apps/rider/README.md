@@ -96,7 +96,8 @@ On a device or simulator (`npx expo start` from `apps/rider`):
 2. With no contacts, the list says "No emergency contacts yet". Add a name and phone, edit it, and confirm it is listed.
 3. Request a ride so a trips row exists. On Ride requested, tap Share my location. The link looks like `https://clemson-airport-rides.vercel.app/share/<token>` and a location_shares row is active.
 4. Tap Share trip link and send that same URL from the share sheet.
-5. While the trip is accepted, arriving, or in progress, tap SOS, then Confirm SOS, then Call 911. The first step does not dial. A sos_events row is stored with channel banner.
-6. On a finished trip, live share shows "This ride is finished" instead of a new token.
+5. While the trip is accepted, arriving, or in progress, tap SOS. The screen is full-bleed red and says to press the button to call police. The first press on Call 911 or Call Clemson Police does not dial. A sos_events row is stored with channel banner. Press Call 911 again to dial.
+6. On a trip that is accepted, arriving, or arrived, with a driver_status lat/lng and location permission on, the rider sees "Driver N ft away" (meters underneath). Inside about 500, 200, and 100 feet the screen pulses Clemson orange and the phone haptics. Getting closer from farther out pulses once, then rests. in_progress does not alert.
+7. On a finished trip, live share shows "This ride is finished" instead of a new token. Share my location still creates the same link as before.
 
 The ride-requested screen keeps SOS and live share, and shows the driver pin when a location is available. Campus ride requests already insert a `trips` row the same way the web app does.

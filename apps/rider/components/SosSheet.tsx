@@ -1,7 +1,11 @@
-import { useEffect, useState } from 'react'
-import { Linking, Modal, Pressable, Share, StyleSheet, Text, View } from 'react-native'
+import { LinearGradient } from 'expo-linear-gradient'
+import { StatusBar } from 'expo-status-bar'
+import { useEffect, useRef, useState } from 'react'
+import { Animated, Linking, Modal, Pressable, ScrollView, Share, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { warningHaptic } from '@/lib/feedback'
 import { readLivePosition } from '@/lib/readLivePosition'
+import { setSosEngaged } from '@/lib/sosEngaged'
 import { supabase } from '@/lib/supabase'
 import {
   ALERT_CHANNELS,
@@ -16,9 +20,9 @@ import {
   type EmergencyContact,
   type SosEvent,
 } from 'rides-native/safety.js'
-import { INK, INK_SECONDARY, ORANGE, PURPLE } from 'rides-native/places.js'
+import { ORANGE } from 'rides-native/places.js'
 
-type Phase = 'confirm' | 'channels'
+const MORE_CHANNELS = ALERT_CHANNELS.filter((channel) => channel !== 'tel_911' && channel !== 'tel_cupd')
 
 export function SosButton({ onPress }: { onPress: () => void }) {
   return (
@@ -91,7 +95,8 @@ export function SosSheet({
   contacts: EmergencyContact[]
 }) {
   const insets = useSafeAreaInsets()
-  const [phase, setPhase] = useState<Phase>('confirm')
+  const breathe = useRef(new Animated.Value(0.12)).current
+  const [armed, setArmed] = useState(false)
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null)
   const [locating, setLocating] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -100,8 +105,10 @@ export function SosSheet({
   const canLog = Boolean(tripId && userId && isActiveRideStatus(tripStatus))
 
   useEffect(() => {
-    if (!open) return undefined
-    setPhase('confirm')
+    setSosEngaged(open)
+    if (!open) return () => setSosEngaged(false)
+    void warningHaptic()
+    setArmed(false)
     setLogError(null)
     setShareNote(null)
     setBusy(false)
@@ -112,13 +119,22 @@ export function SosSheet({
       if (pos) setCoords(pos)
       setLocating(false)
     })
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(breathe, { toValue: 0.38, duration: 1400, useNativeDriver: true }),
+        Animated.timing(breathe, { toValue: 0.1, duration: 1400, useNativeDriver: true }),
+      ]),
+    )
+    loop.start()
     return () => {
       alive = false
+      loop.stop()
+      setSosEngaged(false)
     }
-  }, [open])
+  }, [breathe, open])
 
-  async function onConfirm() {
-    if (busy) return
+  async function armSos() {
+    if (busy || armed) return
     setBusy(true)
     setLogError(null)
     if (canLog) {
@@ -132,7 +148,17 @@ export function SosSheet({
       if (!result.ok) setLogError(result.error)
     }
     setBusy(false)
-    setPhase('channels')
+    setArmed(true)
+    setShareNote('Confirmed. Press the button again to call.')
+  }
+
+  async function onPolice(channel: 'tel_911' | 'tel_cupd') {
+    if (busy) return
+    if (!armed) {
+      await armSos()
+      return
+    }
+    await onChannel(channel)
   }
 
   async function onChannel(channel: string) {
@@ -182,86 +208,115 @@ export function SosSheet({
       ? 'Getting your location…'
       : 'GPS unavailable. You can still call.'
 
+  const callHint = armed
+    ? 'Dials now and logs the call on this trip.'
+    : 'Confirms the alert. Does not dial until you press again.'
+
   return (
-    <Modal visible={open} animationType="slide" transparent onRequestClose={onClose}>
-      <Pressable style={styles.backdrop} onPress={onClose}>
-        <Pressable style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, 20) }]} onPress={() => {}}>
-          <View style={styles.handle} />
-          <Text style={styles.heading}>Emergency SOS</Text>
-          {phase === 'confirm' ? (
+    <Modal
+      visible={open}
+      animationType="fade"
+      presentationStyle="fullScreen"
+      statusBarTranslucent
+      onRequestClose={onClose}
+    >
+      <View style={styles.emergency} accessibilityViewIsModal>
+        <StatusBar style="light" />
+        <LinearGradient colors={['#4A0C0C', '#B42318', '#6E1212']} style={StyleSheet.absoluteFill} />
+        <Animated.View pointerEvents="none" style={[styles.breathe, { opacity: breathe }]} />
+        <ScrollView
+          contentContainerStyle={[
+            styles.emergencyBody,
+            { paddingTop: insets.top + 8, paddingBottom: Math.max(insets.bottom, 24) },
+          ]}
+        >
+          <View style={styles.emergencyTop}>
+            <Text style={styles.emergencyKicker}>EMERGENCY</Text>
+            <Pressable accessibilityRole="button" accessibilityLabel="Close SOS" onPress={onClose} hitSlop={8}>
+              <Text style={styles.close}>Close</Text>
+            </Pressable>
+          </View>
+          <Text style={styles.emergencyTitle}>Press the button to call police</Text>
+          <Text style={styles.emergencyCopy}>
+            {armed
+              ? canLog
+                ? 'Your driver has the in-app SOS. Press Call 911 or Call Clemson Police to dial.'
+                : 'Press Call 911 or Call Clemson Police to dial. This ride is not logging an in-app alert.'
+              : canLog
+                ? 'The first press confirms and alerts your driver. It does not dial.'
+                : 'The first press confirms. It does not dial. There is no active ride to log.'}
+          </Text>
+          <Text style={styles.emergencyMeta}>{locationLine}</Text>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Call 911"
+            accessibilityHint={callHint}
+            disabled={busy}
+            onPress={() => { void onPolice('tel_911') }}
+            style={[styles.call911, busy && styles.disabled]}
+          >
+            <Text style={styles.call911Label}>{busy && !armed ? 'Confirming…' : 'Call 911'}</Text>
+            <Text style={styles.call911Detail}>
+              {armed ? 'Emergency voice call' : 'Tap to confirm · does not dial yet'}
+            </Text>
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Call Clemson Police"
+            accessibilityHint={callHint}
+            disabled={busy}
+            onPress={() => { void onPolice('tel_cupd') }}
+            style={[styles.callPolice, busy && styles.disabled]}
+          >
+            <Text style={styles.callPoliceLabel}>Call Clemson Police</Text>
+            <Text style={styles.callPoliceDetail}>
+              {armed ? 'Campus safety' : 'Tap to confirm · does not dial yet'}
+            </Text>
+          </Pressable>
+          {armed ? (
             <>
-              <Text style={styles.copy}>
-                {canLog
-                  ? 'This does not call anyone yet. Confirm to alert your driver in the app, then choose 911 or Clemson Police. Your GPS and trip id go with the alert.'
-                  : 'There is no active ride to log. You can still call 911 or Clemson Police. Confirm to see those options.'}
-              </Text>
-              <Text style={styles.meta}>{locationLine}</Text>
-              <Pressable
-                accessibilityRole="button"
-                disabled={busy}
-                onPress={onConfirm}
-                style={[styles.confirm, busy && styles.disabled]}
-              >
-                <Text style={styles.confirmLabel}>{busy ? 'Sending…' : 'Confirm SOS'}</Text>
-              </Pressable>
-              <Pressable accessibilityRole="button" onPress={onClose} style={styles.cancel}>
-                <Text style={styles.cancelLabel}>Cancel</Text>
-              </Pressable>
-            </>
-          ) : (
-            <>
-              <Text style={styles.copy}>
-                {canLog
-                  ? 'Your driver sees an in-app SOS banner. Pick a way to reach help. Each choice is logged.'
-                  : 'These calls are not saved on a trip. If you are in danger, call 911 first.'}
-              </Text>
-              <Text style={styles.meta}>{locationLine}</Text>
-              {ALERT_CHANNELS.map((channel) => {
+              {MORE_CHANNELS.map((channel) => {
                 const button = sosChannelButton(channel)
-                const primary = channel === 'tel_911'
                 return (
                   <Pressable
                     key={channel}
                     accessibilityRole="button"
-                    onPress={() => onChannel(channel)}
-                    style={[styles.action, primary && styles.actionPrimary]}
+                    onPress={() => { void onChannel(channel) }}
+                    style={styles.more}
                   >
-                    <Text style={[styles.actionTitle, primary && styles.actionTitlePrimary]}>{button.title}</Text>
-                    <Text style={[styles.actionDetail, primary && styles.actionTitlePrimary]}>{button.detail}</Text>
+                    <Text style={styles.moreTitle}>{button.title}</Text>
+                    <Text style={styles.moreDetail}>{button.detail}</Text>
                   </Pressable>
                 )
               })}
               {contacts.length === 0 ? (
-                <View style={styles.emptyContacts}>
-                  <Text style={styles.emptyTitle}>No emergency contacts</Text>
-                  <Text style={styles.meta}>Add someone on the Safety screen to call them from here.</Text>
+                <View style={styles.more}>
+                  <Text style={styles.moreTitle}>No emergency contacts</Text>
+                  <Text style={styles.moreDetail}>Add someone on the Safety screen to call them from here.</Text>
                 </View>
               ) : (
                 contacts.map((contact) => (
                   <Pressable
                     key={contact.id}
                     accessibilityRole="button"
-                    onPress={() => callContact(contact.phone)}
-                    style={styles.action}
+                    onPress={() => { void callContact(contact.phone) }}
+                    style={styles.more}
                   >
-                    <Text style={styles.actionTitle}>Call {contact.name}</Text>
-                    <Text style={styles.actionDetail}>
+                    <Text style={styles.moreTitle}>Call {contact.name}</Text>
+                    <Text style={styles.moreDetail}>
                       {contact.relationship ? `${contact.relationship} · ` : ''}{contact.phone}
                     </Text>
                   </Pressable>
                 ))
               )}
-              {shareNote ? <Text style={styles.meta}>{shareNote}</Text> : null}
-              {logError ? (
-                <Text style={styles.error}>Could not save the SOS log ({logError}). You can still call 911.</Text>
-              ) : null}
-              <Pressable accessibilityRole="button" onPress={onClose} style={styles.cancel}>
-                <Text style={styles.cancelLabel}>Close</Text>
-              </Pressable>
             </>
-          )}
-        </Pressable>
-      </Pressable>
+          ) : null}
+          {shareNote ? <Text style={styles.emergencyMeta}>{shareNote}</Text> : null}
+          {logError ? (
+            <Text style={styles.emergencyError}>Could not save the SOS log ({logError}). You can still call 911.</Text>
+          ) : null}
+        </ScrollView>
+      </View>
     </Modal>
   )
 }
@@ -294,48 +349,61 @@ const styles = StyleSheet.create({
   bannerTitle: { color: '#fff', fontWeight: '700', marginTop: 2 },
   bannerMeta: { color: 'rgba(255,255,255,0.75)', fontSize: 12, marginTop: 2 },
   bannerDismiss: { color: '#fff', fontSize: 22, fontWeight: '700', paddingHorizontal: 6 },
-  backdrop: { flex: 1, backgroundColor: 'rgba(11,18,32,0.45)', justifyContent: 'flex-end' },
-  sheet: {
+  emergency: { flex: 1, backgroundColor: '#6E1212' },
+  breathe: { ...StyleSheet.absoluteFill, backgroundColor: '#FF8A75' },
+  emergencyBody: { paddingHorizontal: 22, gap: 12, flexGrow: 1 },
+  emergencyTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  emergencyKicker: { color: '#FFE4DC', fontWeight: '800', letterSpacing: 1.6, fontSize: 13 },
+  close: { color: '#fff', fontWeight: '700', fontSize: 16 },
+  emergencyTitle: {
+    color: '#fff',
+    fontSize: 36,
+    lineHeight: 42,
+    fontWeight: '800',
+    letterSpacing: -0.8,
+    marginTop: 12,
+  },
+  emergencyCopy: { color: 'rgba(255,255,255,0.92)', fontSize: 17, lineHeight: 24 },
+  emergencyMeta: { color: 'rgba(255,255,255,0.78)', fontSize: 14, lineHeight: 20 },
+  call911: {
     backgroundColor: '#fff',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
+    borderRadius: 28,
+    minHeight: 96,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 18,
     paddingHorizontal: 20,
-    paddingTop: 10,
+    marginTop: 8,
+    shadowColor: '#3B0707',
+    shadowOpacity: 0.35,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 8,
   },
-  handle: {
-    alignSelf: 'center',
-    width: 42,
-    height: 5,
-    borderRadius: 999,
-    backgroundColor: 'rgba(11,18,32,0.16)',
-    marginBottom: 12,
+  call911Label: { color: '#9B1B1B', fontSize: 28, fontWeight: '800', letterSpacing: -0.4 },
+  call911Detail: { color: '#9B1B1B', fontSize: 14, fontWeight: '600', marginTop: 4 },
+  callPolice: {
+    borderRadius: 24,
+    minHeight: 76,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 18,
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,255,255,0.85)',
+    backgroundColor: 'rgba(255,255,255,0.08)',
   },
-  heading: { fontSize: 24, fontWeight: '800', color: PURPLE, marginBottom: 8 },
-  copy: { color: INK, fontSize: 15, lineHeight: 22 },
-  meta: { color: INK_SECONDARY, fontSize: 13, marginTop: 8, marginBottom: 12 },
-  confirm: { backgroundColor: '#B42318', borderRadius: 16, paddingVertical: 16, alignItems: 'center' },
-  confirmLabel: { color: '#fff', fontWeight: '800', fontSize: 16 },
+  callPoliceLabel: { color: '#fff', fontSize: 20, fontWeight: '800' },
+  callPoliceDetail: { color: 'rgba(255,255,255,0.84)', fontSize: 13, fontWeight: '600', marginTop: 2 },
+  more: {
+    borderRadius: 18,
+    padding: 14,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,255,255,0.28)',
+  },
+  moreTitle: { color: '#fff', fontWeight: '800', fontSize: 16 },
+  moreDetail: { color: 'rgba(255,255,255,0.78)', fontSize: 13, marginTop: 2 },
   disabled: { opacity: 0.6 },
-  cancel: { paddingVertical: 14, alignItems: 'center' },
-  cancelLabel: { color: PURPLE, fontWeight: '700' },
-  action: {
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(82,45,128,0.16)',
-    padding: 12,
-    marginBottom: 8,
-    backgroundColor: '#fff',
-  },
-  actionPrimary: { backgroundColor: ORANGE, borderColor: ORANGE },
-  actionTitle: { color: PURPLE, fontWeight: '800', fontSize: 16 },
-  actionTitlePrimary: { color: '#fff' },
-  actionDetail: { color: INK_SECONDARY, fontSize: 12, marginTop: 2 },
-  emptyContacts: {
-    backgroundColor: 'rgba(82,45,128,0.06)',
-    borderRadius: 16,
-    padding: 12,
-    marginBottom: 8,
-  },
-  emptyTitle: { color: PURPLE, fontWeight: '800' },
-  error: { color: '#B42318', fontSize: 13, marginTop: 4 },
+  emergencyError: { color: '#FFE4DC', fontSize: 14, lineHeight: 20, fontWeight: '700' },
 })

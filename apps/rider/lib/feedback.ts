@@ -34,6 +34,39 @@ export async function successHaptic() {
   }
 }
 
+export async function warningHaptic() {
+  try {
+    await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning)
+  } catch {
+    /* web and simulators can omit the motor */
+  }
+}
+
+export type ApproachHapticLevel = 'light' | 'medium' | 'heavy'
+
+/** Approach buzz uses the same try/catch motor path as tap and success haptics. */
+export async function approachHaptic(level: ApproachHapticLevel) {
+  try {
+    switch (level) {
+      case 'light':
+        await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+        return
+      case 'medium':
+        await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
+        return
+      case 'heavy':
+        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning)
+        return
+      default: {
+        const neverLevel: never = level
+        return neverLevel
+      }
+    }
+  } catch {
+    /* web and simulators can omit the motor */
+  }
+}
+
 /**
  * Clemson cue via expo-audio. playsInSilentMode is false so iOS mute and
  * Android silent/vibrate suppress the clip.
