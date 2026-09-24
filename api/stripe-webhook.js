@@ -126,6 +126,10 @@ async function recordDeposit(session) {
   if (amount > 0) {
     nextMeta.fare_paid_cents = Math.max(0, Math.round(Number(meta.fare_paid_cents) || 0) + amount)
   }
+  // Happy-path paid marker for the driver match gate (restore path also stamps this).
+  if (!nextMeta.checkout_deposit || typeof nextMeta.checkout_deposit !== 'object') {
+    nextMeta.checkout_deposit = { session_id: session?.id || null, at: new Date().toISOString() }
+  }
   if (debits.length && !meta.credits_applied) {
     const credits = debits.reduce((sum, d) => sum + (Number(d.debitCents) || 0), 0)
     await debitLots(supabase, {

@@ -167,6 +167,26 @@ export async function restoreLiveTripAfterDeposit(sb, session, { depositPaid = f
   const trip = loaded.trip
   const decision = liveStatusAfterPaidDeposit(trip, session, { depositPaid })
   if (!decision || decision.action !== 'restore') {
+    // Still stamp checkout_deposit on an already-live paid trip so the driver
+    // match gate can see deposit paid without joining payments.
+    if (trip && decision?.reason === 'already_live') {
+      const meta = { ...metaObject(trip) }
+      if (!meta.checkout_deposit || typeof meta.checkout_deposit !== 'object') {
+        meta.checkout_deposit = { session_id: session?.id || null, at: new Date().toISOString() }
+        const { error: stampErr } = await sb
+          .from('trips')
+          .update({ metadata: meta })
+          .eq('id', tripId)
+        if (stampErr) {
+          return {
+            restored: false,
+            reason: decision?.reason || 'already_live',
+            status: trip?.status || null,
+            stampError: stampErr.message,
+          }
+        }
+      }
+    }
     return { restored: false, reason: decision?.reason || 'already_live', status: trip?.status || null }
   }
   const meta = { ...metaObject(trip) }

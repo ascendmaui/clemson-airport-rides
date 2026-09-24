@@ -245,6 +245,7 @@ test('a late paid deposit restores searching, and a second success does not canc
   assert.equal(db.trips.get('trip_1').canceled_at, null)
   assert.equal(db.trips.get('trip_1').metadata.checkout_abandoned, undefined)
   assert.equal(db.trips.get('trip_1').metadata.purpose, 'airport')
+  assert.equal(db.trips.get('trip_1').metadata.checkout_deposit.session_id, 'cs_1')
   const again = await restoreLiveTripAfterDeposit(db, paid)
   assert.equal(again.restored, false)
   assert.equal(again.reason, 'already_live')
@@ -402,12 +403,32 @@ test('an unpaid session does not restore a canceled trip', async () => {
   assert.equal(db.events.length, 0)
 })
 
+
+test('a paid deposit on an already-live searching trip stamps checkout_deposit', async () => {
+  const db = memoryDb()
+  db.seedTrip({
+    id: 'trip_1',
+    status: 'searching',
+    metadata: { purpose: 'airport', stripe_checkout_session_id: 'cs_1' },
+  })
+  const paid = airportSession({ status: 'complete', payment_status: 'paid' })
+  const result = await restoreLiveTripAfterDeposit(db, paid)
+  assert.equal(result.restored, false)
+  assert.equal(result.reason, 'already_live')
+  assert.equal(db.trips.get('trip_1').status, 'searching')
+  assert.equal(db.trips.get('trip_1').metadata.checkout_deposit.session_id, 'cs_1')
+  const again = await restoreLiveTripAfterDeposit(db, paid)
+  assert.equal(again.reason, 'already_live')
+  assert.equal(db.trips.get('trip_1').metadata.checkout_deposit.session_id, 'cs_1')
+})
+
 test('the stripe webhook releases expired checkouts and restores a paid deposit', () => {
   const webhook = readFileSync(new URL('../api/stripe-webhook.js', import.meta.url), 'utf8')
   assert.match(webhook, /checkout\.session\.expired/)
   assert.match(webhook, /checkout\.session\.async_payment_failed/)
   assert.match(webhook, /releaseFromCheckoutEvent/)
   assert.match(webhook, /restoreLiveTripAfterDeposit/)
+  assert.match(webhook, /checkout_deposit/)
   const checkout = readFileSync(new URL('../api/create-checkout-session.js', import.meta.url), 'utf8')
   const airport = readFileSync(new URL('./endpoints/airportCheckout.js', import.meta.url), 'utf8')
   assert.match(checkout, /rememberCheckoutSession/)
