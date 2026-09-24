@@ -20,7 +20,6 @@ import {
   type FriendActivity,
   type SavedFriend,
 } from '@/lib/friendsApi'
-import { quoteRide } from '@/lib/scheduleApi'
 import { supabase } from '@/lib/supabase'
 import { useRegisteredVehicle } from '@/lib/useRegisteredVehicle'
 import {
@@ -95,9 +94,6 @@ export default function CarpoolHubScreen() {
   const [friendError, setFriendError] = useState<string | null>(null)
   const [friendNote, setFriendNote] = useState<string | null>(null)
   const [promptOpen, setPromptOpen] = useState(false)
-  const friendQuote = quoteRide(friendPickup, friendDropoff, false)
-  const shareCents = splitMode === 'even' ? Math.round(friendQuote.fareCents / 2) : friendQuote.fareCents
-
   useFocusEffect(useCallback(() => {
     void vehicleState.reload()
   }, [vehicleState.reload]))
@@ -437,8 +433,8 @@ export default function CarpoolHubScreen() {
             </View>
             <Text style={styles.note}>
               {splitMode === 'even'
-                ? `About ${formatUsd(shareCents / 100)} each on a two-rider share of ${formatUsd(friendQuote.fareCents / 100)}.`
-                : 'The server weights each stop when friends add their own pickups. This preview is the full leg until then.'}
+                ? 'Even split divides the server route fare. The lobby shows each person’s share, with this route alone struck, before anyone is charged.'
+                : 'By distance uses each stop’s weight from the server route. The lobby shows each person’s share before anyone is charged.'}
             </Text>
             <PrimaryButton label={friendBusy ? 'Starting…' : 'Start group ride'} onPress={onRideTogether} disabled={friendBusy} tone="purple" />
           </Card>
@@ -451,7 +447,7 @@ export default function CarpoolHubScreen() {
               <Text key={row.id} style={styles.note}>
                 {row.kind || 'friends'} · {row.status || 'open'}
                 {row.split_mode === 'by_distance' ? ' · by distance' : ' · even split'}
-                {row.total_fare_cents ? ` · ${formatUsd(row.total_fare_cents / 100)}` : ''}
+                {row.total_fare_cents != null ? ` · ${formatUsd(row.total_fare_cents)}` : ''}
               </Text>
             ))}
             {friendError ? <ErrorText>{friendError}</ErrorText> : null}

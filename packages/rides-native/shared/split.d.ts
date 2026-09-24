@@ -9,6 +9,23 @@ export type SplitRow = {
   savingsCents: number | null
 }
 
+export type FriendSplitPreview = {
+  rows: SplitRow[]
+  totalCents: number | null
+  splitMode: 'even' | 'by_distance' | null
+  eachCents: number | null
+  headline: { soloCents: number; shareCents: number; savingsCents: number } | null
+}
+
+export function friendSplitPreview(ride: RideSummary | null | undefined): FriendSplitPreview
+export function friendChargeNeedsReview(
+  shown: RideSummary | null | undefined,
+  refreshed: RideSummary | null | undefined,
+): boolean
+export function mergeFriendQuote<T extends RideSummary | null | undefined>(
+  shown: T,
+  refreshed: RideSummary | null | undefined,
+): T | RideSummary | null
 export function quoteFromRide(ride: RideSummary | null | undefined): CarpoolQuote | null
 export function liveCarpoolQuote(ride: {
   fare_breakdown?: { carpool?: CarpoolQuote } | null

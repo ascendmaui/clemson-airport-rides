@@ -28,7 +28,14 @@ import {
   surgeDelta,
   type Place,
 } from 'rides-native/shared/carpool.js'
-import { liveCarpoolQuote, selfParticipantId, splitRows } from 'rides-native/shared/split.js'
+import {
+  friendChargeNeedsReview,
+  friendSplitPreview,
+  liveCarpoolQuote,
+  mergeFriendQuote,
+  selfParticipantId,
+  splitRows,
+} from 'rides-native/shared/split.js'
 import type { Palette } from '@/lib/palette'
 import { useTheme } from '@/lib/theme'
 import { useThemedStyles } from '@/lib/useThemedStyles'
@@ -98,7 +105,8 @@ export default function CarpoolLobbyScreen() {
     seeded.current = true
   }, [ride])
 
-  const quote = useMemo(() => (ride ? liveCarpoolQuote(ride) : null), [ride])
+  const quote = useMemo(() => (ride && ride.kind !== 'friends' ? liveCarpoolQuote(ride) : null), [ride])
+  const friendPreview = useMemo(() => (ride?.kind === 'friends' ? friendSplitPreview(ride) : null), [ride])
   const rows = useMemo(() => (ride ? splitRows(ride) : []), [ride])
   const selfId = selfParticipantId(ride)
   const self = ride?.participants?.find((row) => row.is_self)
@@ -174,18 +182,31 @@ export default function CarpoolLobbyScreen() {
   async function onConfirm() {
     setBusy(true)
     setError(null)
+    const shown = ride
     try {
       setBusyLabel('Calculating fares…')
+      let priced = shown
+      let refreshed = false
       try {
-        await recomputeFriendRide(supabase, token, splitMode)
-        await load()
+        const next = await recomputeFriendRide(supabase, token, splitMode)
+        if (shown?.kind === 'friends') {
+          priced = mergeFriendQuote(shown, next)
+          setRide(priced)
+        } else {
+          await load()
+        }
+        refreshed = true
         setHint(null)
       } catch (err) {
         setHint(apiErrorMessage(err))
-        if (!ride?.total_fare_cents) {
+        if (!shown?.total_fare_cents) {
           setError(apiErrorMessage(err))
           return
         }
+      }
+      if (shown?.kind === 'friends' && refreshed && friendChargeNeedsReview(shown, priced)) {
+        setHint('Review each share, then confirm to charge.')
+        return
       }
       setBusyLabel('Charging…')
       const data = await confirmFriendCharges(supabase, token)
@@ -208,13 +229,20 @@ export default function CarpoolLobbyScreen() {
     }
   }
 
+  const isFriends = ride?.kind === 'friends'
   const confirmLabel = ride?.status === 'booked'
     ? 'Booked'
     : busy
       ? (busyLabel || 'Working…')
-      : delta?.currentShareCents != null
-        ? `Confirm · charge ${formatUsd(delta.currentShareCents)} each`
-        : 'Waiting for the split'
+      : isFriends
+        ? (friendPreview?.eachCents != null
+          ? `Confirm · charge ${formatUsd(friendPreview.eachCents)} each`
+          : friendPreview?.rows.length
+            ? 'Confirm & charge friends'
+            : 'Price the split')
+        : delta?.currentShareCents != null
+          ? `Confirm · charge ${formatUsd(delta.currentShareCents)} each`
+          : 'Waiting for the split'
 
   return (
     <View style={styles.screen}>
@@ -273,6 +301,31 @@ export default function CarpoolLobbyScreen() {
 
             <Card>
               <Text style={styles.cardTitle}>Fare split</Text>
+              {isFriends ? (
+                <Text style={styles.kicker}>BEFORE YOU CONFIRM</Text>
+              ) : null}
+              {isFriends && friendPreview?.headline ? (
+                <View style={styles.compareRow}>
+                  <View style={styles.soloBox}>
+                    <Text style={styles.meta}>This route alone</Text>
+                    <Text style={styles.struck}>{formatUsd(friendPreview.headline.soloCents)}</Text>
+                  </View>
+                  <Text style={styles.arrow}>→</Text>
+                  <View style={styles.shareBox}>
+                    <Text style={styles.shareLabel}>Your share</Text>
+                    <Text style={styles.shareBig}>{formatUsd(friendPreview.headline.shareCents)}</Text>
+                  </View>
+                </View>
+              ) : null}
+              {isFriends && friendPreview?.headline ? (
+                <Text style={styles.saveBanner}>You save {formatUsd(friendPreview.headline.savingsCents)}</Text>
+              ) : null}
+              {isFriends ? (
+                <Text style={styles.meta}>
+                  Server quote · {friendPreview?.splitMode === 'by_distance' ? 'by distance' : 'even'}.
+                  Confirm charges these shares with a saved card off-session, or Apple Pay / Payment Element.
+                </Text>
+              ) : null}
               {rows.length === 0 ? (
                 <EmptyState
                   title="Split not priced yet"
@@ -284,13 +337,15 @@ export default function CarpoolLobbyScreen() {
                 <View key={row.id} style={styles.splitLine}>
                   <View style={{ flex: 1 }}>
                     <Text style={styles.person}>{row.name}</Text>
-                    {row.soloCents != null ? (
-                      <Text style={styles.solo}>Alone {formatUsd(row.soloCents)}</Text>
+                    {row.soloCents != null && !(isFriends && friendPreview?.headline) ? (
+                      <Text style={styles.solo}>
+                        {isFriends ? 'This route alone' : 'Alone'} {formatUsd(row.soloCents)}
+                      </Text>
                     ) : null}
                   </View>
                   <View style={styles.splitMoney}>
                     <Text style={styles.share}>{formatUsd(row.shareCents)}</Text>
-                    {row.savingsCents != null && row.savingsCents > 0 ? (
+                    {row.savingsCents != null && row.savingsCents > 0 && !(isFriends && friendPreview?.headline) ? (
                       <Text style={styles.save}>Save {formatUsd(row.savingsCents)}</Text>
                     ) : null}
                   </View>
@@ -329,7 +384,7 @@ export default function CarpoolLobbyScreen() {
               <Field label="Name" value={name} onChangeText={setName} />
               <NeighborhoodPicker label="Pickup" value={pickup} onChange={setPickup} />
               <NeighborhoodPicker label="Dropoff" value={dropoff} onChange={setDropoff} />
-              {!isOrganizer ? (
+              {!isOrganizer && !isFriends ? (
                 <CarpoolCompare pickup={hopPickup} dropoff={hopDropoff} quote={quote} selfId={selfId} mode="confirm" />
               ) : null}
               <View style={{ height: 12 }} />
@@ -346,16 +401,18 @@ export default function CarpoolLobbyScreen() {
                   disabled={busy}
                   tone="purple"
                 />
-                <CarpoolCompare pickup={hopPickup} dropoff={hopDropoff} quote={quote} selfId={selfId} mode="confirm" />
+                {!isFriends ? (
+                  <CarpoolCompare pickup={hopPickup} dropoff={hopDropoff} quote={quote} selfId={selfId} mode="confirm" />
+                ) : null}
                 <View style={{ height: 12 }} />
                 <PrimaryButton
                   label={confirmLabel}
                   onPress={onConfirm}
-                  disabled={busy || ride.status === 'booked' || !quote}
+                  disabled={busy || ride.status === 'booked' || (!isFriends && !quote)}
                 />
                 <Text style={styles.meta}>
                   Confirm updates fares from the live route, then charges full shares · saved card or Apple Pay / Payment Element.
-                  Books when all Paid · you are the assigned driver.
+                  Books when all paid{isFriends ? '.' : ' · you are the assigned driver.'}
                 </Text>
               </Card>
             ) : null}
@@ -406,6 +463,25 @@ function makeStyles(colors: Palette) {
     stat: { flex: 1 },
     hint: { marginTop: 10, color: colors.orange, fontSize: 13, lineHeight: 18 },
     cardTitle: { color: colors.title, fontWeight: '800' as const, fontSize: 16, marginBottom: 8 },
+    kicker: { color: colors.orange, fontSize: 11, fontWeight: '800' as const, letterSpacing: 0.8, marginBottom: 8 },
+    compareRow: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 8, marginBottom: 8 },
+    soloBox: { flex: 1, borderRadius: 14, padding: 12, backgroundColor: colors.input },
+    shareBox: { flex: 1, borderRadius: 14, padding: 12, borderWidth: 1.5, borderColor: colors.orange, backgroundColor: colors.card },
+    struck: { marginTop: 4, color: colors.inkSecondary, fontSize: 22, fontWeight: '800' as const, textDecorationLine: 'line-through' as const },
+    shareLabel: { color: colors.orange, fontSize: 11, fontWeight: '800' as const },
+    shareBig: { marginTop: 4, color: colors.orange, fontSize: 22, fontWeight: '800' as const },
+    arrow: { color: colors.orange, fontSize: 22, fontWeight: '800' as const },
+    saveBanner: {
+      marginBottom: 8,
+      borderRadius: 12,
+      backgroundColor: colors.orange,
+      color: colors.onAccent,
+      fontWeight: '800' as const,
+      fontSize: 16,
+      overflow: 'hidden' as const,
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+    },
     linkText: { color: colors.inkSecondary, fontSize: 12 },
     link: { marginTop: 8, color: colors.link, fontWeight: '800' as const },
     splitLine: {

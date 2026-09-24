@@ -2,6 +2,14 @@
 
 Persistent knowledge base for recurring failures. When a matching issue appears, apply the saved fix first.
 
+## 2026-09-24 — Friend lobby preview disagreed with the charged share
+
+- **Track / machine:** Clemson RIDES · Pro
+- **Symptom:** Friends lobby showed a two-rider haversine guess (cents passed through `formatUsd` after dividing by 100) and the native lobby priced friend rides with the carpool engine. Confirm charges `participant.fare_cents`.
+- **Root cause:** Preview math was client-side and separate from `recomputeRideFares` / confirm-charges. `formatUsd` already expects cents.
+- **Fix:** Recompute stores `fare_breakdown.friend_split`. The lobby renders those shares, strikes this-route-alone only when the stored share still matches `fare_cents`, and holds the charge until that quote is on screen. Payment stays saved-card off-session or Payment Element.
+- **Reuse:** Do not invent a friend-ride dollar amount from `quoteRide` or `quoteCarpool`. If `friend_split.share_cents` does not match `fare_cents`, show the share and omit the struck solo.
+
 ## 2026-09-24 — Driver EAS Bundle JS: Unable to resolve `expo-router` from `rides-native`
 
 - **Track / machine:** Clemson RIDES Track 1 · Max; EAS iOS driver
