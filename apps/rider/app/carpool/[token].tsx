@@ -114,7 +114,7 @@ export default function CarpoolLobbyScreen() {
 
   async function onShare() {
     try {
-      await Share.share({ message: inviteUrl(token, 'carpool') })
+      await Share.share({ message: inviteUrl(token, ride?.kind === 'friends' ? 'friends' : 'carpool') })
     } catch (err) {
       setError(apiErrorMessage(err))
     }
@@ -234,7 +234,11 @@ export default function CarpoolLobbyScreen() {
         )}
       >
         <BackButton onPress={() => (router.canGoBack() ? router.back() : router.replace('/friends'))} />
-        <Text style={styles.title}>{isOrganizer ? 'Carpool lobby' : 'Join carpool'}</Text>
+        <Text style={styles.title}>
+          {ride?.kind === 'friends'
+            ? (isOrganizer ? 'Friend ride lobby' : 'Join friend ride')
+            : (isOrganizer ? 'Carpool lobby' : 'Join carpool')}
+        </Text>
         {!ride && !loadError ? (
           <Card>
             <SkeletonBlock height={18} width="40%" />
@@ -263,7 +267,7 @@ export default function CarpoolLobbyScreen() {
 
             <Card>
               <Text style={styles.cardTitle}>Invite link</Text>
-              <Text style={styles.linkText}>{inviteUrl(token, 'carpool')}</Text>
+              <Text style={styles.linkText}>{inviteUrl(token, ride.kind === 'friends' ? 'friends' : 'carpool')}</Text>
               <Text accessibilityRole="button" onPress={onShare} style={styles.link}>Copy / share →</Text>
             </Card>
 
@@ -272,7 +276,9 @@ export default function CarpoolLobbyScreen() {
               {rows.length === 0 ? (
                 <EmptyState
                   title="Split not priced yet"
-                  body="The split shows up once every rider has a pickup and dropoff. Optimize the route to lock the shares."
+                  body={ride.kind === 'friends'
+                    ? 'Stops are saved. Friend-ride miles come from Google Routes, which needs the server Maps key before the split can lock.'
+                    : 'The split shows up once every rider has a pickup and dropoff. Optimize the route to lock the shares. Campus distance still prices the card if Google Routes is unavailable.'}
                 />
               ) : rows.map((row) => (
                 <View key={row.id} style={styles.splitLine}>

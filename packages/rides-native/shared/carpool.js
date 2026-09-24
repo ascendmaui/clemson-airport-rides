@@ -16,6 +16,15 @@ import {
   resolveNeighborhood,
   carpoolSeatCap,
 } from '../../../src/lib/carpoolEngine.js'
+import {
+  catalogStops,
+  searchCatalogPlaces,
+  lookupCatalogPlace,
+  placeFromStop,
+  hotCatalogPlaces,
+  OFFER_CARPOOL_STEPS,
+  OFFER_CARPOOL_MAPS_NOTE,
+} from '../../../src/lib/placeCatalog.js'
 
 export {
   NEIGHBORHOODS,
@@ -30,6 +39,13 @@ export {
   quoteCarpool,
   resolveNeighborhood,
   carpoolSeatCap,
+  catalogStops,
+  searchCatalogPlaces,
+  lookupCatalogPlace,
+  placeFromStop,
+  hotCatalogPlaces,
+  OFFER_CARPOOL_STEPS,
+  OFFER_CARPOOL_MAPS_NOTE,
 }
 
 /** Same chips as the web hub. */

@@ -22,4 +22,5 @@ export const RIDE_TIERS: {
   premium?: boolean
 }[]
 export function destPoint(label: string): { latitude: number; longitude: number }
+export function pickupPoint(label: string): { latitude: number; longitude: number }
 export function formatUsd(amount: number): string

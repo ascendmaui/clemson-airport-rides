@@ -12,7 +12,7 @@ import { useAuth } from '@/lib/auth'
 import { supabase } from '@/lib/supabase'
 import { useRegisteredVehicle } from '@/lib/useRegisteredVehicle'
 import { apiErrorMessage, createCarpoolOffer, recomputeFriendRide } from 'rides-native/shared/carpoolApi.js'
-import { defaultCarpoolEnds, riderDisplayName, type Place } from 'rides-native/shared/carpool.js'
+import { defaultCarpoolEnds, OFFER_CARPOOL_MAPS_NOTE, OFFER_CARPOOL_STEPS, riderDisplayName, type Place } from 'rides-native/shared/carpool.js'
 import { capacityMessage, offerCapacity, vehicleMaxSeats } from 'rides-native/shared/vehicle.js'
 import type { Palette } from '@/lib/palette'
 import { useTheme } from '@/lib/theme'
@@ -59,7 +59,7 @@ export default function OfferCarpoolScreen() {
       return
     }
     if (!pickup.lat || !dropoff.lat) {
-      setError('Choose pickup and dropoff (with a map pin or place).')
+      setError('Choose a campus or airport stop for pickup and dropoff.')
       return
     }
     setBusy(true)
@@ -96,12 +96,11 @@ export default function OfferCarpoolScreen() {
         <Text style={styles.title}>Offer a carpool</Text>
         <Card>
           <Text style={styles.cardTitle}>How carpool works</Text>
-          <Text style={styles.step}>1. Set your start and end, then create an invite link.</Text>
-          <Text style={styles.step}>2. Share the link — friends join with their own pickup/dropoff.</Text>
-          <Text style={styles.step}>3. We build one optimized route and split the fare automatically.</Text>
-          <Text style={styles.step}>4. Hit confirm to charge everyone; you are the assigned driver.</Text>
+          {OFFER_CARPOOL_STEPS.map((step, index) => (
+            <Text key={step} style={styles.step}>{index + 1}. {step}</Text>
+          ))}
           <Text style={styles.meta}>
-            For Clemson student drivers with a registered car. Capacity comes from your vehicle{carLine ? ` ${carLine}` : ''}.
+            For Clemson student drivers with a registered car. Capacity comes from your vehicle{carLine ? ` ${carLine}` : ''}. {OFFER_CARPOOL_MAPS_NOTE}
           </Text>
         </Card>
 

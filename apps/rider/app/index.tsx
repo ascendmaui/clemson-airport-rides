@@ -25,6 +25,7 @@ import { playTigerCue, tapHaptic } from '@/lib/feedback'
 import { displayFirstName } from 'rides-native/authErrors'
 import { campusOverlays } from 'rides-native/riderShell.js'
 import { HEAT_WINDOWS, SHORTCUTS } from 'rides-native/places.js'
+import { hotCatalogPlaces, lookupCatalogPlace, searchCatalogPlaces } from 'rides-native/shared/carpool.js'
 import { lift } from '@/lib/elevation'
 import type { Palette } from '@/lib/palette'
 import { useTheme } from '@/lib/theme'
@@ -41,6 +42,12 @@ export default function RiderHome() {
   const styles = useThemedStyles(makeStyles)
   const mapRef = useRef<CampusMapHandle>(null)
   const [query, setQuery] = useState('')
+  const [destError, setDestError] = useState<string | null>(null)
+  const suggestions = useMemo(() => {
+    const found = searchCatalogPlaces(query)
+    if (query.trim().length >= 2) return found.slice(0, 6)
+    return hotCatalogPlaces()
+  }, [query])
   const [showBusy, setShowBusy] = useState(true)
   const [heatWindow, setHeatWindow] = useState('now')
   const [spots, setSpots] = useState<BusySpot[]>([])
@@ -120,8 +127,20 @@ export default function RiderHome() {
   }, [heatWindow])
 
   const goSearch = (dest?: string) => {
+    if (dest) {
+      const known = lookupCatalogPlace(dest)
+      void tapHaptic()
+      router.push({ pathname: '/confirm', params: { dest: known?.label || dest } })
+      return
+    }
+    const typed = lookupCatalogPlace(query)
+    if (!typed) {
+      setDestError('Pick a campus or airport stop. Try Grand Marc, the stadium, or GSP.')
+      return
+    }
+    setDestError(null)
     void tapHaptic()
-    router.push({ pathname: '/confirm', params: { dest: dest || query || 'GSP Airport' } })
+    router.push({ pathname: '/confirm', params: { dest: typed.label } })
   }
 
   async function onLocate() {
@@ -283,9 +302,29 @@ export default function RiderHome() {
             style={[styles.search, lift(colors, 'rest')]}
             autoCorrect={false}
           />
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
+            {suggestions.map((stop) => (
+              <Pressable
+                key={stop.id}
+                accessibilityRole="button"
+                onPress={() => {
+                  setQuery(stop.label)
+                  setDestError(null)
+                  goSearch(stop.label)
+                }}
+                style={[styles.destChip, query === stop.label && styles.destChipOn]}
+              >
+                <Text style={[styles.destChipText, query === stop.label && styles.destChipTextOn]}>{stop.label}</Text>
+              </Pressable>
+            ))}
+          </ScrollView>
+          {query.trim().length >= 2 && suggestions.length === 0 ? (
+            <Text style={styles.locateNote}>No campus or airport match. Try Grand Marc, the stadium, or GSP.</Text>
+          ) : null}
           <Pressable accessibilityRole="button" onPress={() => goSearch()} style={styles.searchLink}>
             <Text style={styles.searchLinkText}>Search destination →</Text>
           </Pressable>
+          {destError ? <Text style={styles.locateNote}>{destError}</Text> : null}
 
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
             <Pill label="🕐  Schedule a ride" onPress={() => router.push('/schedule')} />
@@ -423,6 +462,17 @@ function makeStyles(colors: Palette) {
     row: { gap: 8, paddingVertical: 4 },
     caption: { color: colors.inkSecondary, fontSize: 12, lineHeight: 17 },
     live: { color: colors.link, fontWeight: '700' as const },
+    destChip: {
+      borderRadius: 999,
+      paddingHorizontal: 12,
+      paddingVertical: 7,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.chip,
+    },
+    destChipOn: { backgroundColor: colors.purple, borderColor: colors.purple },
+    destChipText: { color: colors.link, fontWeight: '700' as const, fontSize: 12 },
+    destChipTextOn: { color: colors.onAccent },
     locateNote: { color: colors.danger, fontSize: 12 },
     sheet: {
       flex: 1,

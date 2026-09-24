@@ -15,6 +15,7 @@ import {
   formatEta, formatMiles, inviteUrl, getFriendRide, joinFriendRide, recomputeFriendRide,
   vehicleMaxSeats, capacityMessage, DEFAULT_MAX_PARTICIPANTS,
 } from '../lib/friendRides'
+import { OFFER_CARPOOL_MAPS_NOTE, OFFER_CARPOOL_STEPS } from '../lib/placeCatalog'
 
 const card = {
   marginTop: 16, padding: 16, borderRadius: 16, background: 'var(--surface)',
@@ -270,23 +271,21 @@ export function FriendRideScreen({ token: tokenProp, kind: kindProp = 'friends' 
             <div style={{ ...card, marginTop: 12, background: 'linear-gradient(160deg, rgba(82,45,128,0.06), rgba(245,102,0,0.08))' }}>
               <div style={{ fontWeight: 800, color: 'var(--purple)', marginBottom: 8 }}>How carpool works</div>
               <ol style={{ margin: 0, paddingLeft: 18, color: 'var(--ink-secondary)', fontSize: 13, lineHeight: 1.55 }}>
-                <li>Set your start and end, then create an invite link.</li>
-                <li>Share the link — friends join with their own pickup/dropoff.</li>
-                <li>We build one optimized route and split the fare automatically.</li>
-                <li>Hit confirm to charge everyone; you are the assigned driver.</li>
+                {OFFER_CARPOOL_STEPS.map((step) => <li key={step}>{step}</li>)}
               </ol>
               <p style={{ fontSize: 12, color: 'var(--ink-tertiary)', marginTop: 10, lineHeight: 1.45 }}>
                 For Clemson student drivers with a registered car. Capacity comes from your vehicle
                 {hasVehicle
                   ? ` (${vehicle.make || ''} ${vehicle.model || ''} · up to ${maxParticipants} total)`.replace(/\s+/g, ' ').trim()
-                  : ''}.
+                  : ''}. {OFFER_CARPOOL_MAPS_NOTE}
               </p>
             </div>
           ) : (
             <p style={{ color: 'var(--ink-secondary)', marginTop: 8, lineHeight: 1.45 }}>
-              Invite friends, optimize a multi-stop route, split the fare, and auto-charge.
+              Invite friends, pick campus or airport stops, and split the fare evenly or by each rider's hop.
               Party size is capped by your registered vehicle
               {hasVehicle ? ` (max ${maxParticipants} total)` : ''}.
+              {' '}Stops save without a Maps key. Optimizing friend-ride miles still needs the server Routes key.
             </p>
           )}
 

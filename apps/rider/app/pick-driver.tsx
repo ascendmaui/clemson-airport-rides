@@ -17,7 +17,7 @@ import { authStorage } from '@/lib/storage'
 import { supabase } from '@/lib/supabase'
 import { isClemsonEmail } from 'rides-native/authErrors'
 import { fetchOnlineDrivers, requestDriverTrip, type OnlineDriver } from 'rides-native/drivers'
-import { destPoint, STADIUM } from 'rides-native/places.js'
+import { destPoint, pickupPoint } from 'rides-native/places.js'
 import { lift } from '@/lib/elevation'
 import type { Palette } from '@/lib/palette'
 import { useTheme } from '@/lib/theme'
@@ -96,7 +96,7 @@ export default function PickDriver() {
         dest,
         destPoint: destPoint(dest),
         pickupLabel: pickup,
-        pickupPoint: STADIUM,
+        pickupPoint: pickupPoint(pickup),
         tier,
         isStudent: isClemsonEmail(user.email),
       })
