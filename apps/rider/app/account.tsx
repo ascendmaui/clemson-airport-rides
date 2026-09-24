@@ -1,12 +1,21 @@
 import { useRouter } from 'expo-router'
 import { useState } from 'react'
-import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { PrimaryButton } from '@/components/Button'
 import { MainTabs } from '@/components/MainTabs'
 import { useAuth } from '@/lib/auth'
 import { displayFirstName, isClemsonEmail } from 'rides-native/authErrors'
-import { INK_SECONDARY, ORANGE, PURPLE, SURFACE } from 'rides-native/places.js'
+import { INK, INK_SECONDARY, ORANGE, PURPLE, SURFACE } from 'rides-native/places.js'
+
+const LINKS: { href: '/billing' | '/student' | '/promo' | '/notifications' | '/history' | '/schedule'; label: string; hint: string }[] = [
+  { href: '/billing', label: 'Billing', hint: 'Card on file, deposits, and ride history' },
+  { href: '/student', label: 'Student', hint: 'Verify a Clemson email · 10% off Standard' },
+  { href: '/promo', label: 'Promo codes', hint: 'Apply a friend code or share yours' },
+  { href: '/notifications', label: 'Notifications', hint: 'Ride, billing, friends, and promo alerts' },
+  { href: '/history', label: 'Your rides', hint: 'Fare and deposit on each trip' },
+  { href: '/schedule', label: 'Airport deposit', hint: '25% Stripe checkout for GSP and CLT' },
+]
 
 export default function AccountScreen() {
   const router = useRouter()
@@ -31,7 +40,7 @@ export default function AccountScreen() {
 
   return (
     <View style={[styles.screen, { paddingTop: insets.top + 16 }]}>
-      <View style={styles.body}>
+      <ScrollView contentContainerStyle={styles.body}>
         <Text style={styles.kicker}>ACCOUNT</Text>
         <Text style={styles.title}>{name || 'Guest'}</Text>
         {user?.email ? <Text style={styles.copy}>{user.email}</Text> : null}
@@ -45,9 +54,15 @@ export default function AccountScreen() {
         </Pressable>
         <Text style={styles.copy}>
           {configured
-            ? 'Supabase Auth is configured for this build.'
+            ? 'Payments, student pricing, promos, and alerts use the same account as the web app.'
             : 'Supabase anon key is missing. Add EXPO_PUBLIC_SUPABASE_ANON_KEY as an EAS environment variable, then rebuild.'}
         </Text>
+        {LINKS.map((link) => (
+          <Pressable key={link.href} onPress={() => router.push(link.href)} style={styles.row} accessibilityRole="button">
+            <Text style={styles.rowTitle}>{link.label}</Text>
+            <Text style={styles.copy}>{link.hint}</Text>
+          </Pressable>
+        ))}
         {error ? <Text style={styles.error}>{error}</Text> : null}
         {user ? (
           <PrimaryButton label={busy ? 'Signing out…' : 'Sign out'} onPress={onSignOut} disabled={busy} tone="purple" />
@@ -57,7 +72,7 @@ export default function AccountScreen() {
             <PrimaryButton label="Create account" onPress={() => router.push('/sign-up')} tone="ghost" />
           </View>
         )}
-      </View>
+      </ScrollView>
       <MainTabs active="account" />
     </View>
   )
@@ -65,10 +80,10 @@ export default function AccountScreen() {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: SURFACE },
-  body: { flex: 1, padding: 20, gap: 12 },
+  body: { padding: 20, gap: 12, paddingBottom: 24 },
   kicker: { color: '#F56600', fontWeight: '800', letterSpacing: 1.2, fontSize: 12 },
   title: { fontSize: 28, fontWeight: '800', color: PURPLE, letterSpacing: -0.4 },
-  copy: { fontSize: 15, lineHeight: 22, color: INK_SECONDARY },
+  copy: { fontSize: 14, lineHeight: 20, color: INK_SECONDARY },
   badge: { color: PURPLE, fontWeight: '700' },
   safety: {
     backgroundColor: '#fff',
@@ -80,5 +95,14 @@ const styles = StyleSheet.create({
   safetyKicker: { color: ORANGE, fontWeight: '800', letterSpacing: 1.1, fontSize: 11 },
   safetyTitle: { color: PURPLE, fontWeight: '800', fontSize: 16, marginTop: 4 },
   safetyBody: { color: INK_SECONDARY, fontSize: 13, lineHeight: 18, marginTop: 4 },
+  row: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(82,45,128,0.1)',
+    gap: 4,
+  },
+  rowTitle: { color: INK, fontWeight: '800', fontSize: 16 },
   error: { color: '#B42318', fontSize: 13 },
 })

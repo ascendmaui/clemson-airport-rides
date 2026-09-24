@@ -14,4 +14,14 @@ config.resolver.extraNodeModules = {
   'rides-native': sharedRoot,
 }
 
+const virtualEnv = path.resolve(projectRoot, 'node_modules/expo/virtual/env.js')
+const defaultResolve = config.resolver.resolveRequest
+config.resolver.resolveRequest = (context, moduleName, platform) => {
+  if (moduleName === 'expo/virtual/env') {
+    return { type: 'sourceFile', filePath: virtualEnv }
+  }
+  if (defaultResolve) return defaultResolve(context, moduleName, platform)
+  return context.resolveRequest(context, moduleName, platform)
+}
+
 module.exports = config

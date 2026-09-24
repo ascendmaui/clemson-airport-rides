@@ -9,7 +9,8 @@ const RATE_LIMIT_MSG =
 
 export function isClemsonEmail(email) {
   if (!email || typeof email !== 'string') return false
-  return email.trim().toLowerCase().endsWith('@clemson.edu')
+  const value = email.trim().toLowerCase()
+  return value.endsWith('@clemson.edu') || value.endsWith('@g.clemson.edu')
 }
 
 export function normalizePromoCode(raw) {

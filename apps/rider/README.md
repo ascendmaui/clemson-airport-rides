@@ -62,9 +62,29 @@ npx expo start
 
 Native Apple and Google buttons need a development build (`npx expo run:ios` / `npx expo run:android`), not Expo Go. Browser SSO for Facebook, and the Apple/Google fallback, run through `useSSO`.
 
-## Follow-ups
+## Payments, discounts, and alerts
 
-Stripe 25% PaymentSheet, driver offer accept, student pricing checkout, and scheduled airport holds are not in this binary yet. Game-day carpool (neighborhood match, fare split, offer-a-car, and vehicle seats) calls the same `/api/carpool` and `/api/friend-rides` routes as the web flagship. Campus ride requests already insert a `trips` row the same way the web app does. Live location sharing, the trip link, SOS, and emergency contacts are on Safety and the ride-requested screen.
+Schedule quotes `/api/stripe-payment-methods?action=quote` and recomputes the 25% deposit whenever the airport, date, time, or student status changes. If that route is not on the server yet, the screen uses the shared fare card and Pay calls `/api/create-checkout-session` with that deposit. When the route is present, Pay calls `action=airport-checkout` (surge, student 10% on Standard, ride credits). A deposit is shown as received only after a succeeded `payments` row exists.
+
+Account → Student writes `profiles.student_verified_at` for `@clemson.edu` / `@g.clemson.edu`. Account → Promo codes calls `claim_rider_social_promo` and `ensure_rider_social_code`. Account → Billing reads the saved card, deposit rows, and ride fares. Account → Notifications reads and writes `profiles.notification_prefs`.
+
+Live location sharing, the trip link, SOS, and emergency contacts stay on Safety and the ride-requested screen. Game-day carpool (neighborhood match, fare split, offer-a-car, and vehicle seats) calls the same `/api/carpool` and `/api/friend-rides` routes as the web flagship. Campus ride requests already insert a `trips` row the same way the web app does.
+
+## Smoke
+
+```bash
+npm test
+cd apps/rider && npx tsc --noEmit
+```
+
+On a device or simulator (`npx expo start` from `apps/rider`):
+
+1. Schedule: switch GSP and CLT, and edit the date or time. The deposit line leaves the previous fare, then shows 25% of the new quote. Pay stays disabled while that quote is in flight.
+2. Sign in and pay. Stripe Checkout opens. Closing it does not say the deposit was received unless `payments.status` is succeeded.
+3. Account → Student: a Clemson email shows verified and can save `student_verified_at`. Return to Schedule and confirm the student line is on the new quote.
+4. Account → Promo codes: apply a code and share the account code. Rewards stay pending until the first completed ride.
+5. Account → Billing: card last4 (when one is saved), deposit rows, and ride history with fare and deposit.
+6. Account → Notifications: toggle ride, billing, and promotions. The note says the prefs were saved. Relaunch and confirm the switches stick.
 
 ## Safety smoke
 
@@ -74,3 +94,5 @@ Stripe 25% PaymentSheet, driver offer accept, student pricing checkout, and sche
 4. Tap Share trip link and send that same URL from the share sheet.
 5. While the trip is accepted, arriving, or in progress, tap SOS, then Confirm SOS, then Call 911. The first step does not dial. A sos_events row is stored with channel banner.
 6. On a finished trip, live share shows "This ride is finished" instead of a new token.
+
+Driver offer accept and live trip tracking are still later. Campus ride requests already insert a `trips` row the same way the web app does.

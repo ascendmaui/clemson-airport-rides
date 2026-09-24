@@ -46,6 +46,7 @@ test('keeps a non-rate-limit auth error', () => {
 
 test('clemson.edu emails qualify for student verification', () => {
   assert.equal(isClemsonEmail(' Tiger@Clemson.edu '), true)
+  assert.equal(isClemsonEmail('tiger@g.clemson.edu'), true)
   assert.equal(isClemsonEmail('tiger@gmail.com'), false)
   assert.equal(isClemsonEmail(''), false)
 })
