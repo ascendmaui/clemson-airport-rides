@@ -16,6 +16,11 @@ import {
   approxCoord,
   carpoolSeatCap,
   firstRideWindowOpen,
+  firstRideEligible,
+  firstRideOfferCopy,
+  confirmChargeLabel,
+  confirmChargeNote,
+  otherFirstRideLabels,
   driverTakeCents,
   overlapScore,
   NEIGHBORHOODS,
@@ -295,4 +300,37 @@ test('first ride free is only during game-week peaks', () => {
   assert.equal(firstRideWindowOpen(OFF_PEAK), false)
   assert.equal(firstRideWindowOpen(GAME_SAT, { enabled: false }), false)
   assert.equal(firstRideWindowOpen(atEt('2026-12-05T18:00:00Z')), false)
+})
+
+test('first ride eligibility never promises a comp outside the window', () => {
+  const open = { windowOpen: true, alreadyUsed: false, completedTrips: 0 }
+  assert.equal(firstRideEligible(open), true)
+  assert.equal(firstRideEligible({ ...open, windowOpen: false }), false)
+  assert.equal(firstRideEligible({ ...open, alreadyUsed: true }), false)
+  assert.equal(firstRideEligible({ ...open, completedTrips: 1 }), false)
+  assert.equal(firstRideEligible({ ...open, schemaMissing: true }), false)
+  assert.equal(firstRideEligible({ ...open, lookupFailed: true }), false)
+
+  assert.equal(firstRideOfferCopy({ windowOpen: false, signedIn: true }), null)
+  assert.equal(firstRideOfferCopy({ windowOpen: true, schemaMissing: true, signedIn: true }), null)
+  const eligible = firstRideOfferCopy({ windowOpen: true, signedIn: true })
+  assert.equal(eligible.eligible, true)
+  assert.equal(eligible.title, 'First ride free')
+  const used = firstRideOfferCopy({ windowOpen: true, signedIn: true, alreadyUsed: true })
+  assert.equal(used.eligible, false)
+  assert.match(used.body, /already used/)
+  const ridden = firstRideOfferCopy({ windowOpen: true, signedIn: true, completedTrips: 2 })
+  assert.equal(ridden.eligible, false)
+  assert.match(ridden.body, /completed trip/)
+  const guest = firstRideOfferCopy({ windowOpen: true, signedIn: false })
+  assert.equal(guest.eligible, false)
+  assert.match(guest.body, /Sign in/)
+
+  assert.equal(confirmChargeLabel({ firstRideFree: true, shareCents: 0 }), 'Confirm · First ride free')
+  assert.equal(confirmChargeLabel({ shareCents: 1200 }), 'Confirm · charge $12.00 each')
+  assert.equal(confirmChargeNote({ firstRideFree: true, shareCents: 0 }), 'First ride free. This confirm charges $0 for your seat.')
+  assert.deepEqual(
+    otherFirstRideLabels({ shares: [{ id: 'a', firstRideFree: true, firstName: 'Ava' }, { id: 'b', firstRideFree: true, firstName: 'Bea' }] }, 'a'),
+    ['Bea'],
+  )
 })

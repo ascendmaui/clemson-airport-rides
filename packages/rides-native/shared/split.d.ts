@@ -7,6 +7,7 @@ export type SplitRow = {
   shareCents: number
   soloCents: number | null
   savingsCents: number | null
+  firstRideFree?: boolean
 }
 
 export type FriendSplitPreview = {

@@ -78,6 +78,8 @@ export type FirstRideStatus = {
   eligible?: boolean
   alreadyUsed?: boolean
   windowOpen?: boolean
+  completedTrips?: number
+  schemaMissing?: boolean
 }
 
 export type ConfirmResult = {

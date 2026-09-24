@@ -12,6 +12,7 @@ import { oneParam } from '@/lib/oneParam'
 import { supabase } from '@/lib/supabase'
 import {
   apiErrorMessage,
+  carpoolProgram,
   confirmFriendCharges,
   getFriendRide,
   inviteUrl,
@@ -20,7 +21,10 @@ import {
   type RideSummary,
 } from 'rides-native/shared/carpoolApi.js'
 import {
+  confirmChargeLabel,
   defaultCarpoolEnds,
+  firstRideOfferCopy,
+  firstRideWindowOpen,
   formatEta,
   formatMiles,
   formatUsd,
@@ -73,6 +77,8 @@ export default function CarpoolLobbyScreen() {
   const [pickup, setPickup] = useState<Place>(START.pickup)
   const [dropoff, setDropoff] = useState<Place>(START.dropoff)
   const [splitMode, setSplitMode] = useState<'even' | 'by_distance'>('even')
+  const [firstRide, setFirstRide] = useState<{ windowOpen?: boolean; alreadyUsed?: boolean; completedTrips?: number; schemaMissing?: boolean } | null>(null)
+  const [firstRideLoaded, setFirstRideLoaded] = useState(false)
   const seeded = useRef(false)
   const missing = useRef(false)
   const reviewRef = useRef<FriendQuoteReview | null>(null)
@@ -123,6 +129,42 @@ export default function CarpoolLobbyScreen() {
   const cap = Number(ride?.max_participants) || 4
   const count = ride?.participants?.length || 0
   const isOrganizer = Boolean(ride?.is_organizer)
+  const carpoolRide = ride?.kind !== 'friends'
+  const firstRideOffer = !carpoolRide
+    ? null
+    : !user
+      ? firstRideOfferCopy({ windowOpen: firstRideWindowOpen(new Date()), signedIn: false })
+      : firstRideLoaded
+        ? firstRideOfferCopy({
+          windowOpen: Boolean(firstRide?.windowOpen),
+          signedIn: true,
+          alreadyUsed: Boolean(firstRide?.alreadyUsed),
+          completedTrips: firstRide?.completedTrips || 0,
+          schemaMissing: Boolean(firstRide?.schemaMissing),
+        })
+        : null
+
+  useEffect(() => {
+    if (ride?.kind === 'friends') return undefined
+    if (!user) {
+      setFirstRide(null)
+      setFirstRideLoaded(true)
+      return undefined
+    }
+    let alive = true
+    setFirstRideLoaded(false)
+    carpoolProgram(supabase, 'first_ride')
+      .then((data) => {
+        if (alive) setFirstRide(data)
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (alive) setFirstRideLoaded(true)
+      })
+    return () => {
+      alive = false
+    }
+  }, [ride?.kind, user])
 
   async function onShare() {
     try {
@@ -239,19 +281,19 @@ export default function CarpoolLobbyScreen() {
   }
 
   const isFriends = ride?.kind === 'friends'
-  const confirmLabel = ride?.status === 'booked'
-    ? 'Booked'
-    : busy
-      ? (busyLabel || 'Working…')
-      : isFriends
-        ? (friendPreview?.eachCents != null
-          ? `Confirm · charge ${formatUsd(friendPreview.eachCents)} each`
-          : friendPreview?.rows.length
-            ? 'Confirm & charge friends'
-            : 'Price the split')
-        : delta?.currentShareCents != null
-          ? `Confirm · charge ${formatUsd(delta.currentShareCents)} each`
-          : 'Waiting for the split'
+  const confirmLabel = isFriends && ride?.status !== 'booked' && !busy
+    ? (friendPreview?.eachCents != null
+      ? `Confirm · charge ${formatUsd(friendPreview.eachCents)} each`
+      : friendPreview?.rows.length
+        ? 'Confirm & charge friends'
+        : 'Price the split')
+    : confirmChargeLabel({
+      booked: ride?.status === 'booked',
+      busyLabel: busy ? (busyLabel || 'Working…') : '',
+      isCarpool: !isFriends,
+      shareCents: delta?.currentShareCents,
+      firstRideFree: Boolean(delta?.currentFirstRideFree),
+    })
 
   return (
     <View style={styles.screen}>
@@ -293,6 +335,12 @@ export default function CarpoolLobbyScreen() {
         {ride ? (
           <>
             <Text style={styles.status}>Status: {ride.status || '…'}</Text>
+            {firstRideOffer ? (
+              <Card>
+                <Text style={styles.cardTitle}>{firstRideOffer.title}</Text>
+                <Text style={styles.meta}>{firstRideOffer.body}</Text>
+              </Card>
+            ) : null}
             {(ride.distance_m || ride.total_fare_cents) ? (
               <View style={styles.stats}>
                 <Stat label="Distance" value={formatMiles(ride.distance_m || 0)} />
@@ -353,7 +401,7 @@ export default function CarpoolLobbyScreen() {
                     ) : null}
                   </View>
                   <View style={styles.splitMoney}>
-                    <Text style={styles.share}>{formatUsd(row.shareCents)}</Text>
+                    <Text style={styles.share}>{row.firstRideFree ? 'First ride free' : formatUsd(row.shareCents)}</Text>
                     {row.savingsCents != null && row.savingsCents > 0 && !(isFriends && friendPreview?.headline) ? (
                       <Text style={styles.save}>Save {formatUsd(row.savingsCents)}</Text>
                     ) : null}
