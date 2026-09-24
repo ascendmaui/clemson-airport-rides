@@ -34,6 +34,16 @@ import {
   takeReminder,
 } from '../lib/scheduledRides'
 import { pushToast } from '../lib/toasts'
+import { declineTrip } from '../../packages/rides-native/driverDesk.js'
+import {
+  acceptActionLabel,
+  declineActionLabel,
+  PREFERRED_REQUEST_NOTE,
+  driverStatusDetail,
+  statusHeadline,
+} from '../../packages/rides-native/tripTags.js'
+import { DRIVER_TRACK_STEPS, etaLineFor } from '../../packages/rides-native/liveTrip.js'
+import { LivePhase } from '../components/LivePhase'
 
 function centsToDollars(cents) {
   if (cents == null) return '—'
@@ -92,6 +102,7 @@ function DriverShell({ driverId }) {
   const [scheduledOpen, setScheduledOpen] = useState([])
   const [scheduledMine, setScheduledMine] = useState([])
   const [acceptingScheduledId, setAcceptingScheduledId] = useState(null)
+  const dismissedOffers = useRef(new Set())
   const knownOpen = useRef(new Set())
   const scheduledPrimed = useRef(false)
 
@@ -250,31 +261,43 @@ function DriverShell({ driverId }) {
     return () => clearInterval(timer)
   }, [loadScheduled])
 
-  // Load open offers (searching/offered) — Realtime alone misses rows already open.
+  // Load open offers and preferred requests — Realtime alone misses rows already open.
   useEffect(() => {
     if (!supabase || !approved) return undefined
     let alive = true
-    supabase
-      .from('trips')
-      .select('*')
-      .in('status', ['searching', 'offered'])
-      .order('requested_at', { ascending: false })
-      .limit(1)
-      .then(async ({ data, error }) => {
-        if (!alive || error) return
-        const row = data?.[0]
-        if (!row) return
-        setOffer(row)
-        if (row.status === 'searching') {
-          await supabase
+    async function loadOffers() {
+      const [open, preferred] = await Promise.all([
+        supabase
+          .from('trips')
+          .select('*')
+          .in('status', ['searching', 'offered'])
+          .order('requested_at', { ascending: false })
+          .limit(1),
+        driverId
+          ? supabase
             .from('trips')
-            .update({ status: 'offered' })
-            .eq('id', row.id)
-            .eq('status', 'searching')
-          await writeTripEvent(row.id, 'offered', { source: 'driver_home_poll' })
-          setOffer({ ...row, status: 'offered' })
-        }
-      })
+            .select('*')
+            .eq('status', 'requested')
+            .eq('driver_id', driverId)
+            .order('requested_at', { ascending: false })
+            .limit(1)
+          : Promise.resolve({ data: [], error: null }),
+      ])
+      if (!alive || open.error) return
+      const row = preferred.data?.[0] || open.data?.[0]
+      if (!row || dismissedOffers.current.has(row.id)) return
+      setOffer(row)
+      if (row.status === 'searching') {
+        await supabase
+          .from('trips')
+          .update({ status: 'offered' })
+          .eq('id', row.id)
+          .eq('status', 'searching')
+        await writeTripEvent(row.id, 'offered', { source: 'driver_home_poll' })
+        if (alive && !dismissedOffers.current.has(row.id)) setOffer({ ...row, status: 'offered' })
+      }
+    }
+    loadOffers()
     return () => {
       alive = false
     }
@@ -319,9 +342,12 @@ function DriverShell({ driverId }) {
       if (row.status === 'scheduled') {
         loadScheduled()
       }
+      if (row.status === 'requested' && row.driver_id === driverId && !activeTrip && !dismissedOffers.current.has(row.id)) {
+        setOffer(row)
+      }
       if (row.status === 'searching' || row.status === 'offered') {
-        if (!activeTrip) {
-          setOffer(row)
+        if (!activeTrip && !dismissedOffers.current.has(row.id)) {
+          setOffer((current) => (current?.status === 'requested' ? current : row))
           if (row.status === 'searching' && supabase) {
             writeTripEvent(row.id, 'offered', { source: 'realtime' })
             supabase.from('trips').update({ status: 'offered' }).eq('id', row.id).eq('status', 'searching')
@@ -437,13 +463,14 @@ function DriverShell({ driverId }) {
       setOffer(null)
       return
     }
-    const canceledAt = new Date().toISOString()
-    await supabase
-      .from('trips')
-      .update({ status: 'canceled', canceled_at: canceledAt })
-      .eq('id', offer.id)
-    await writeTripEvent(offer.id, 'canceled', { reason: 'driver_decline', canceled_at: canceledAt })
-    setOffer(null)
+    dismissedOffers.current.add(offer.id)
+    try {
+      await declineTrip(supabase, { id: offer.id, status: offer.status })
+      setOffer(null)
+    } catch (err) {
+      dismissedOffers.current.delete(offer.id)
+      console.error(err)
+    }
   }
 
   async function advanceTrip(nextStatus) {
@@ -527,11 +554,9 @@ function DriverShell({ driverId }) {
 
   const showIdle = !offer && !activeTrip
   const scheduledNotDone = Boolean(activeTrip?.pickup_at) && activeTrip.status !== 'completed'
-  const statusLabel = {
-    accepted: 'Accepted — head to pickup',
-    arriving: 'Arriving at pickup',
-    in_progress: 'Trip in progress',
-  }
+  const driverFix = selfPos ? { lat: selfPos[0], lng: selfPos[1] } : null
+  const activeEta = activeTrip ? etaLineFor(activeTrip.status, driverFix, activeTrip) : null
+  const activeStep = activeTrip ? DRIVER_TRACK_STEPS.findIndex((step) => step.id === activeTrip.status) : -1
 
   return (
     <div
@@ -899,14 +924,19 @@ function DriverShell({ driverId }) {
               </div>
             </div>
           </div>
-          <PurpleAcceptButton onClick={acceptOffer}>Accept</PurpleAcceptButton>
+          {offer.status === 'requested' && (
+            <p style={{ color: 'var(--orange)', fontWeight: 700, fontSize: 13, lineHeight: 1.4, marginTop: 10 }}>
+              {PREFERRED_REQUEST_NOTE}
+            </p>
+          )}
+          <PurpleAcceptButton onClick={acceptOffer}>{acceptActionLabel(offer.status)}</PurpleAcceptButton>
           <button
             type="button"
             className="pressable"
             onClick={declineOffer}
-            style={{ width: '100%', marginTop: 10, padding: 12, fontWeight: 600, color: 'var(--ink-secondary)' }}
+            style={{ width: '100%', marginTop: 10, padding: 12, fontWeight: 700, color: offer.status === 'requested' ? 'var(--orange)' : 'var(--ink-secondary)' }}
           >
-            Decline
+            {declineActionLabel(offer.status)}
           </button>
         </div>
       )}
@@ -930,9 +960,19 @@ function DriverShell({ driverId }) {
             <div style={{ fontSize: 32, fontWeight: 700, letterSpacing: -0.5 }}>
               {centsToDollars(activeTrip.fare_cents)}
             </div>
-            <div style={{ fontSize: 13, color: 'var(--purple)', fontWeight: 700 }}>
-              {statusLabel[activeTrip.status] || activeTrip.status}
+            <div style={{ fontSize: 13, color: 'var(--orange)', fontWeight: 800, letterSpacing: 1 }}>
+              LIVE TRIP
             </div>
+          </div>
+          <div style={{ marginTop: 10 }}>
+            {/* TODO: road tiles and a traffic ETA need a billed Maps key. This card uses coordinates already on the trip. */}
+            <LivePhase
+              title={statusHeadline(activeTrip.status)}
+              body={driverStatusDetail(activeTrip.status)}
+              eta={activeEta}
+              steps={DRIVER_TRACK_STEPS}
+              activeIndex={activeStep}
+            />
           </div>
           <div style={{ marginTop: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
             <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>

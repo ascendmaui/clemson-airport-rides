@@ -21,6 +21,28 @@ export function isLiveStatus(status: string | null) {
   return ACTIVE.has(String(status || ''))
 }
 
+export function subscribeLiveTrip(tripId: string, driverId: string | null, onChange: () => void) {
+  const client = supabase
+  if (!client || !tripId) return () => {}
+  const channel = client.channel(`rider-live-${tripId}-${driverId || 'open'}`)
+  channel.on(
+    'postgres_changes',
+    { event: '*', schema: 'public', table: 'trips', filter: `id=eq.${tripId}` },
+    () => onChange(),
+  )
+  if (driverId) {
+    channel.on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'driver_status', filter: `driver_id=eq.${driverId}` },
+      () => onChange(),
+    )
+  }
+  channel.subscribe()
+  return () => {
+    void client.removeChannel(channel)
+  }
+}
+
 export async function loadLiveTrip(tripId: string): Promise<LiveTrip | null> {
   if (!supabase || !tripId) return null
   const { data, error } = await supabase

@@ -61,9 +61,10 @@ export function useDriverApproach(status: string | null, driverId: string | null
 
   useEffect(() => {
     if (!active || !driverId || !supabase) return undefined
+    const client = supabase
     let alive = true
     async function pull() {
-      const { data, error } = await supabase!
+      const { data, error } = await client
         .from('driver_status')
         .select('lat, lng')
         .eq('driver_id', driverId)
@@ -74,13 +75,31 @@ export function useDriverApproach(status: string | null, driverId: string | null
       if (!Number.isFinite(lat) || !Number.isFinite(lng)) return
       setDriver({ lat, lng })
     }
+    function apply(row: { lat?: unknown; lng?: unknown } | null | undefined) {
+      const lat = Number(row?.lat)
+      const lng = Number(row?.lng)
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) return
+      setDriver({ lat, lng })
+    }
     void pull()
+    const channel = client
+      .channel(`approach-driver-${driverId}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'driver_status', filter: `driver_id=eq.${driverId}` },
+        (payload) => {
+          if (!alive) return
+          apply((payload.new || null) as { lat?: unknown; lng?: unknown } | null)
+        },
+      )
+      .subscribe()
     const timer = setInterval(() => {
       void pull()
-    }, 2000)
+    }, 8000)
     return () => {
       alive = false
       clearInterval(timer)
+      void client.removeChannel(channel)
     }
   }, [active, driverId])
 

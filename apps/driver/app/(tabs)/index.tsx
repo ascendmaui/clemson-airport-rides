@@ -33,6 +33,9 @@ import {
 } from 'rides-native/driverDesk'
 import { CUPD_PHONE_DISPLAY, CUPD_PHONE_E164 } from 'rides-native/safety.js'
 import {
+  acceptActionLabel,
+  declineActionLabel,
+  declineDisposition,
   formatPickupAt,
   preferredRequestNote,
   statusHeadline,
@@ -41,6 +44,7 @@ import {
   weekNetCents,
   type DriverCard,
 } from 'rides-native/tripTags'
+import { etaLineFor } from 'rides-native/liveTrip'
 import { ORANGE, PURPLE } from 'rides-native/places.js'
 import { gameDayNotice, type GameDayNotice } from 'rides-native/gameDayNotice.js'
 import { approvalGateMessage, isSyntheticOffer, syntheticOffers } from 'rides-native/syntheticOffers'
@@ -311,6 +315,12 @@ export default function DriverHome() {
     ? syntheticOffers().filter((card) => !hiddenOffers.includes(card.id))
     : []
   const offer = (approved ? desk?.offers[0] : null) || synthetic[0] || null
+  const liveFrom = self
+    ? { lat: self.latitude, lng: self.longitude }
+    : desk?.lat != null && desk?.lng != null
+      ? { lat: Number(desk.lat), lng: Number(desk.lng) }
+      : null
+  const liveEta = desk?.active ? etaLineFor(desk.active.status, liveFrom, desk.active) : null
   const hotspots = spots.slice().sort((a, b) => b.intensity - a.intensity).slice(0, 4)
   const pins: MapPin[] = []
   if (self) pins.push({ id: 'me', ...self, title: 'You', pinColor: ORANGE })
@@ -472,6 +482,7 @@ export default function DriverHome() {
               <Text style={[styles.liveKicker, { color: colors.orange }]}>LIVE TRIP</Text>
               <Text style={[styles.liveTitle, { color: colors.onAccent }]}>{statusHeadline(desk.active.status)}</Text>
               <Text style={{ color: colors.onAccent }}>{desk.active.pickupLabel} → {desk.active.dropoffLabel}</Text>
+              {liveEta ? <Text style={{ color: colors.orange, fontWeight: '800' }}>{liveEta}</Text> : null}
               {riderLine ? <Text style={{ color: colors.onAccent, fontWeight: '700' }}>{riderLine}</Text> : null}
             </Pressable>
           ) : null}
@@ -556,9 +567,11 @@ function RideCard({
         {card.depositCents > 0 ? <Text style={{ color: colors.inkSecondary }}>25% deposit · {formatCents(card.depositCents)}</Text> : null}
         {card.teslaStub ? <Text style={{ color: colors.inkSecondary }}>{TESLA_FLEET_NOTICE}</Text> : null}
         <FarePanel card={card} />
-        <Primary label={busy ? 'Saving…' : 'Accept'} onPress={onAccept} disabled={busy} />
+        <Primary label={busy ? 'Saving…' : acceptActionLabel(card.status)} onPress={onAccept} disabled={busy} />
         <Pressable onPress={onDecline} disabled={busy} style={styles.decline}>
-          <Text style={{ color: colors.inkSecondary, fontWeight: '700' }}>Decline</Text>
+          <Text style={{ color: declineDisposition(card.status) === 'cancel' ? colors.orange : colors.inkSecondary, fontWeight: '700' }}>
+            {declineActionLabel(card.status)}
+          </Text>
         </Pressable>
       </Card>
     </Animated.View>
