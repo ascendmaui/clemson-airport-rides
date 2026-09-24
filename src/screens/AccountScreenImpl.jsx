@@ -568,7 +568,7 @@ export function AccountScreen() {
               <button type="button" className="pressable" onClick={() => navigate('admin')}
                 style={{ display: 'block', width: '100%', marginTop: 10, padding: 12, borderRadius: 14, fontWeight: 700,
                   color: '#fff', background: 'linear-gradient(135deg, #522D80, #6b3fa0)' }}>
-                Review driver applications
+                Admin dashboard
               </button>
             )}
             <button type="button" className="pressable" onClick={() => navigate('earnings')}

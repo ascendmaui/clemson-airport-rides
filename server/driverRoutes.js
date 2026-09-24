@@ -3,7 +3,7 @@
  * Response bodies match the previous standalone routes.
  */
 import {
-  ADMIN_EMAIL,
+  isAdminIdentity,
   blockerLabel,
   legacyStatusFor,
   statusAfterInfoSave,
@@ -71,7 +71,7 @@ export async function handleDriverSignup(req, res) {
     if (profileReadErr) return json(res, 500, { error: profileReadErr.message })
 
     const nextStatus = statusAfterInfoSave(existing?.onboarding_status || null)
-    const keepRole = profileRow?.role === 'admin' || profileRow?.role === 'ops' || email === ADMIN_EMAIL
+    const keepRole = isAdminIdentity({ jwtEmail: email, role: profileRow?.role })
 
     const profilePatch = {
       id: user.id,

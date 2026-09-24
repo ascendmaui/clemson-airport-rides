@@ -165,12 +165,16 @@ test('compliance migration stores the exact agreement and every required doc typ
   assert.equal(sql.includes(hash), false)
 })
 
-test('admin is john@gmail.com, is_admin, or admin/ops role — not a copied profile email', () => {
+test('admin is a seeded email, is_admin, or admin/ops role — not a copied profile email', () => {
   assert.equal(isAdminIdentity({ jwtEmail: ADMIN_EMAIL }), true)
   assert.equal(isAdminIdentity({ jwtEmail: 'JOHN@gmail.com' }), true)
+  assert.equal(isAdminIdentity({ jwtEmail: 'johnmatveev@gmail.com' }), true)
+  assert.equal(isAdminIdentity({ jwtEmail: 'JohnMatveyev@gmail.com' }), true)
+  assert.equal(isAdminIdentity({ jwtEmail: 'jmat2019@icloud.com' }), true)
   assert.equal(isAdminIdentity({ jwtEmail: 'student@clemson.edu', isAdmin: true }), true)
   assert.equal(isAdminIdentity({ jwtEmail: 'student@clemson.edu', role: 'admin' }), true)
   assert.equal(isAdminIdentity({ jwtEmail: 'student@clemson.edu', role: 'ops' }), true)
   assert.equal(isAdminIdentity({ jwtEmail: 'student@clemson.edu', role: 'driver' }), false)
   assert.equal(isAdminIdentity({ jwtEmail: 'student@clemson.edu' }), false)
+  assert.equal(isAdminIdentity({ jwtEmail: 'student@clemson.edu', role: 'support' }), false)
 })

@@ -12,6 +12,7 @@ import {
   progressionGate,
   readPrecomputedFeeCents,
 } from '../shared/paymentFailure.js'
+import { isAdminIdentity } from '../shared/adminAccess.js'
 
 const ACTIVE_KEEP = new Set(['accepted', 'arriving', 'in_progress', 'payment_required', 'searching', 'offered'])
 
@@ -21,8 +22,11 @@ export function isAdminUser(user, profile) {
     .map((part) => part.trim().toLowerCase())
     .filter(Boolean)
   if (user?.email && allow.includes(String(user.email).toLowerCase())) return true
-  if (profile?.role === 'admin') return true
-  return false
+  return isAdminIdentity({
+    jwtEmail: user?.email || profile?.email,
+    role: profile?.role,
+    isAdmin: profile?.is_admin,
+  })
 }
 
 function feeKindFor(action, requested) {

@@ -41,7 +41,7 @@ export function SupportChatPanel({ accountRole = null, active = true }) {
       .then((data) => {
         if (!alive) return
         setTickets(data.tickets || [])
-        setIsAdmin(Boolean(data.isAdmin))
+        setIsAdmin(Boolean(data.isAdmin || data.isStaff))
         setListNote('')
       })
       .catch((error) => {
@@ -67,13 +67,17 @@ export function SupportChatPanel({ accountRole = null, active = true }) {
         }),
       })
       const id = data.ticket?.id
+      const botReply = data.bot?.reply
+      const status = data.ticket?.status || data.bot?.status || 'open'
       chat.setTicketDraft(null)
       chat.setMessages((current) => [...current, {
         id: `filed-${id || Date.now()}`,
         role: 'assistant',
-        content: id
-          ? `Ticket ${id} is open. A person can read it in the support_tickets table. You can also email rides@clemson.edu and mention that id.`
-          : 'The ticket was filed.',
+        content: botReply
+          ? `${botReply}\n\nTicket ${id || ''} is ${status}.`
+          : (id
+            ? `Ticket ${id} is ${status}.`
+            : 'The ticket was filed.'),
       }])
       setReload((value) => value + 1)
     } catch (error) {
@@ -178,7 +182,7 @@ export function SupportChatPanel({ accountRole = null, active = true }) {
       />
       <div style={{ marginTop: 12 }}>
         <div style={{ fontSize: 12, fontWeight: 800, color: '#522D80' }}>
-          {isAdmin ? 'All tickets' : 'Your tickets'}
+          {isAdmin ? 'Support inbox' : 'Your tickets'}
         </div>
         {listNote && <div style={{ fontSize: 12, color: 'var(--ink-secondary)', marginTop: 4 }}>{listNote}</div>}
         {tickets.length === 0 && !listNote && (

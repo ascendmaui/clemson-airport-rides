@@ -52,3 +52,9 @@ export function saveDriverTaxInfo(
 ): Promise<{ legal_name?: string; tin_last4?: string; tax_classification?: string }>
 export function signDriverAgreement(supabase: unknown, signatureName: string): Promise<unknown>
 export function submitDriverReview(supabase: unknown, userId: string): Promise<Record<string, unknown>>
+
+export type ApplicantInboxMessage = { id: string; author_role: string; kind?: string; body: string }
+export type ApplicantInboxRequest = { id: string; prompt: string; status: string }
+export type ApplicantInbox = { messages?: ApplicantInboxMessage[]; requests?: ApplicantInboxRequest[] }
+export function loadApplicantInbox(supabase: unknown): Promise<ApplicantInbox>
+export function replyApplicantInbox(supabase: unknown, body: string): Promise<ApplicantInbox>

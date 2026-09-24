@@ -1,8 +1,10 @@
 /** Driver approval gate — shared by the Vite client, Vercel API, and tests. */
 
 import { IC_AGREEMENT_VERSION } from './icAgreement.js'
+import { isAdminIdentity, isSeedAdminEmail, SEEDED_ADMIN_EMAILS } from './adminAccess.js'
 
 export { IC_AGREEMENT_HTML, IC_AGREEMENT_TITLE, IC_AGREEMENT_VERSION } from './icAgreement.js'
+export { isAdminIdentity, isSeedAdminEmail, SEEDED_ADMIN_EMAILS }
 
 export const ADMIN_EMAIL = 'john@gmail.com'
 
@@ -229,7 +231,7 @@ export function progressSnapshot(ctx = {}) {
 }
 
 export const EMAIL_TODO =
-  'TODO: set RESEND_API_KEY and RESEND_FROM (verified domain) so new driver applications email john@gmail.com. The in-app admin queue at #/admin works without email.'
+  'TODO: set RESEND_API_KEY and RESEND_FROM (verified domain) to email seeded admins when a driver applies. The in-app admin dashboard at #/admin lists the application without email.'
 
 const DOC_ID_SET = new Set(REQUIRED_DOC_IDS)
 
@@ -318,14 +320,6 @@ export function statusAfterInfoSave(current) {
       throw new Error(`Unknown onboarding status: ${unknown}`)
     }
   }
-}
-
-export function isAdminIdentity({ jwtEmail, role, isAdmin } = {}) {
-  const jwt = String(jwtEmail || '').trim().toLowerCase()
-  if (jwt === ADMIN_EMAIL) return true
-  if (isAdmin === true) return true
-  if (role === 'admin' || role === 'ops') return true
-  return false
 }
 
 export function onboardingLabel(status) {

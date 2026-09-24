@@ -16,6 +16,7 @@ import {
   fetchDriverReviewDetail,
   reviewDriverApplication,
 } from '../lib/driverOnboarding'
+import { fetchApplicantThread, messageApplicant, requestApplicantInfo } from '../lib/adminDesk'
 
 const FILTERS = [
   ['pending_review', 'Needs review'],
@@ -24,7 +25,7 @@ const FILTERS = [
   ['', 'All'],
 ]
 
-export function AdminDrivers() {
+export function AdminDrivers({ embedded = false }) {
   const { user, loading } = useAuth()
   const [allowed, setAllowed] = useState(null)
   const [filter, setFilter] = useState('pending_review')
@@ -38,6 +39,9 @@ export function AdminDrivers() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
   const [note, setNote] = useState(null)
+  const [thread, setThread] = useState({ messages: [], requests: [] })
+  const [messageBody, setMessageBody] = useState('')
+  const [requestPrompt, setRequestPrompt] = useState('')
 
   useEffect(() => {
     if (loading) return
@@ -87,8 +91,33 @@ export function AdminDrivers() {
       const payload = await fetchDriverReviewDetail(profileId)
       setDocs(payload.documents || [])
       setDetail(payload)
+      const conversation = await fetchApplicantThread(profileId).catch((err) => ({ messages: [], requests: [], error: err.message }))
+      setThread({ messages: conversation.messages || [], requests: conversation.requests || [] })
+      if (conversation.error) setNote(conversation.error)
     } catch (err) {
       setDocsError(err.message || String(err))
+    }
+  }
+
+  async function sendApplicant(profileId, kind) {
+    setBusy(true)
+    setError(null)
+    try {
+      if (kind === 'info') {
+        const data = await requestApplicantInfo({ profileId, prompt: requestPrompt })
+        setNote(data.emailed ? 'Asked for more information and emailed the applicant.' : (data.email_todo || 'Asked for more information in the driver app.'))
+        setRequestPrompt('')
+      } else {
+        const data = await messageApplicant({ profileId, body: messageBody })
+        setNote(data.emailed ? 'Message sent.' : (data.email_todo || 'Message is in the driver application.'))
+        setMessageBody('')
+      }
+      const conversation = await fetchApplicantThread(profileId)
+      setThread({ messages: conversation.messages || [], requests: conversation.requests || [] })
+    } catch (err) {
+      setError(err.message || String(err))
+    } finally {
+      setBusy(false)
     }
   }
 
@@ -125,9 +154,9 @@ export function AdminDrivers() {
   }
 
   return (
-    <div className="fade-in" style={{ minHeight: '100%', background: 'var(--surface-muted)', padding: '20px 20px 48px' }}>
-      <button type="button" className="pressable" onClick={() => navigate('account')} style={{ fontSize: 20 }}>←</button>
-      <h1 style={{ fontSize: 26, fontWeight: 800, color: 'var(--purple)', marginTop: 12, letterSpacing: -0.4 }}>
+    <div className="fade-in" style={{ minHeight: embedded ? undefined : '100%', background: embedded ? 'transparent' : 'var(--surface-muted)', padding: embedded ? '8px 0 24px' : '20px 20px 48px' }}>
+      {!embedded && <button type="button" className="pressable" onClick={() => navigate('account')} style={{ fontSize: 20 }}>←</button>}
+      <h1 style={{ fontSize: embedded ? 18 : 26, fontWeight: 800, color: 'var(--purple)', marginTop: embedded ? 16 : 12, letterSpacing: -0.4 }}>
         Driver review
       </h1>
       <p style={{ color: 'var(--ink-secondary)', fontSize: 14, lineHeight: 1.45 }}>
@@ -244,6 +273,21 @@ export function AdminDrivers() {
                       }}
                     />
                   </label>
+                  <ThreadList thread={thread} />
+                  <label style={{ display: 'block', marginTop: 12, fontSize: 13, fontWeight: 650 }}>
+                    Message applicant
+                    <textarea value={messageBody} onChange={(e) => setMessageBody(e.target.value)} rows={2} style={fieldStyle} />
+                  </label>
+                  <button type="button" className="pressable" disabled={busy || !messageBody.trim()} onClick={() => sendApplicant(row.profile_id, 'message')} style={quietButton}>
+                    Send message
+                  </button>
+                  <label style={{ display: 'block', marginTop: 12, fontSize: 13, fontWeight: 650 }}>
+                    Request more information
+                    <textarea value={requestPrompt} onChange={(e) => setRequestPrompt(e.target.value)} rows={2} placeholder="Which document or answer do you need?" style={fieldStyle} />
+                  </label>
+                  <button type="button" className="pressable" disabled={busy || requestPrompt.trim().length < 4} onClick={() => sendApplicant(row.profile_id, 'info')} style={quietButton}>
+                    Send request
+                  </button>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 12 }}>
                     <PrimaryButton
                       variant="purple"
@@ -275,6 +319,44 @@ export function AdminDrivers() {
           )
         })}
       </div>
+    </div>
+  )
+}
+
+const fieldStyle = {
+  display: 'block',
+  width: '100%',
+  marginTop: 6,
+  borderRadius: 12,
+  border: '1px solid var(--border)',
+  padding: 10,
+}
+
+const quietButton = {
+  marginTop: 8,
+  padding: 12,
+  borderRadius: 16,
+  fontWeight: 700,
+  color: 'var(--purple)',
+  border: '1.5px solid rgba(82,45,128,0.3)',
+  background: 'white',
+}
+
+function ThreadList({ thread }) {
+  const messages = thread?.messages || []
+  const requests = thread?.requests || []
+  if (!messages.length && !requests.length) return null
+  return (
+    <div style={{ marginTop: 12, fontSize: 13, lineHeight: 1.45 }}>
+      {requests.filter((row) => row.status === 'open').map((row) => (
+        <div key={row.id} style={{ color: '#F56600' }}>Open request: {row.prompt}</div>
+      ))}
+      {messages.map((row) => (
+        <div key={row.id} style={{ marginTop: 6 }}>
+          <strong style={{ color: '#522D80' }}>{row.author_role}{row.kind === 'info_request' ? ' · info request' : ''}</strong>
+          {' · '}{row.body}
+        </div>
+      ))}
     </div>
   )
 }

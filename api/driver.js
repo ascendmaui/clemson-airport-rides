@@ -13,6 +13,7 @@ import handleTripTip from '../server/endpoints/tripTip.js'
 import handleTripWait from '../server/endpoints/tripWait.js'
 import handleCancelMidride from '../server/endpoints/tripCancelMidride.js'
 import handleDriverPayouts from '../server/endpoints/driverPayouts.js'
+import handleApplicantInbox from '../server/endpoints/applicantInbox.js'
 
 const HANDLERS = {
   signup: handleDriverSignup,
@@ -23,6 +24,7 @@ const HANDLERS = {
   wait: handleTripWait,
   'cancel-midride': handleCancelMidride,
   payouts: handleDriverPayouts,
+  inbox: handleApplicantInbox,
 }
 
 const LEGACY = {
@@ -42,7 +44,7 @@ export default async function handler(req, res) {
   const handle = HANDLERS[action]
   if (!handle) {
     return json(res, 400, {
-      error: 'Unknown driver action. Use action=signup, submit-review, earnings, offer-preview, tip, wait, cancel-midride, or payouts.',
+      error: 'Unknown driver action. Use action=signup, submit-review, earnings, offer-preview, tip, wait, cancel-midride, payouts, or inbox.',
     })
   }
   return handle(req, res)
