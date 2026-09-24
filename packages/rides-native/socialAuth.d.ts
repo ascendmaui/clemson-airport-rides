@@ -4,6 +4,8 @@ export const RIDER_SOCIAL_PROVIDERS: Array<{
   label: string
 }>
 
+export const DRIVER_SOCIAL_PROVIDERS: typeof RIDER_SOCIAL_PROVIDERS
+
 export function socialStrategy(
   providerId: 'apple' | 'google' | 'facebook',
 ): 'oauth_apple' | 'oauth_google' | 'oauth_facebook'

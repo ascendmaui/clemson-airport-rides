@@ -22,6 +22,35 @@ export function missingBridgeEnv({ clerkSecret, serviceConfigured }) {
   return missing
 }
 
+/**
+ * Configured Clerk secrets, primary first. The apps ship a pk_test (development
+ * instance) while CLERK_SECRET_KEY on Vercel is the production instance's
+ * sk_live, so dev session JWTs never verified. CLERK_SECRET_KEY_DEV holds the
+ * development instance secret so both instances can bridge.
+ */
+export function clerkSecrets(env = {}) {
+  const out = []
+  for (const name of ['CLERK_SECRET_KEY', 'CLERK_SECRET_KEY_DEV']) {
+    const value = String(env[name] || '').trim()
+    if (configuredSecret('CLERK_SECRET_KEY', value) && !out.includes(value)) out.push(value)
+  }
+  return out
+}
+
+/** Try each secret; return the payload plus the secret whose instance signed the token. */
+export async function verifyWithAnySecret(token, secrets, verify) {
+  let lastError = null
+  for (const secret of secrets || []) {
+    try {
+      const payload = await verify(token, secret)
+      if (payload?.sub) return { payload, secret }
+    } catch (err) {
+      lastError = err
+    }
+  }
+  throw lastError || new Error('Clerk session token was rejected')
+}
+
 export function bearerToken(req) {
   const header = req?.headers?.authorization || req?.headers?.Authorization || ''
   const match = String(header).match(/^Bearer\s+(\S+)/i)

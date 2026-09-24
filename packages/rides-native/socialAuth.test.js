@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import {
+  DRIVER_SOCIAL_PROVIDERS,
   RIDER_SOCIAL_PROVIDERS,
   clerkErrorMessage,
   clerkSessionOutcome,
@@ -40,4 +41,11 @@ test('native hook stubs fall back to browser SSO', () => {
 test('clerk API errors prefer the long message', () => {
   assert.equal(clerkErrorMessage({ errors: [{ message: 'short', longMessage: 'Use a verified email' }] }), 'Use a verified email')
   assert.deepEqual(splitPersonName('Ada Lovelace'), { firstName: 'Ada', lastName: 'Lovelace' })
+})
+
+test('driver uses the same Clerk social providers as the rider', () => {
+  assert.deepEqual(
+    DRIVER_SOCIAL_PROVIDERS.map((provider) => provider.strategy),
+    ['oauth_apple', 'oauth_google', 'oauth_facebook'],
+  )
 })

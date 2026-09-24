@@ -10,10 +10,12 @@
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
+      "buildNumber": "16",
       "bundleIdentifier": "com.ascendmaui.clemsonrides.driver",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
-      }
+      },
+      "usesAppleSignIn": true
     },
     "android": {
       "package": "com.ascendmaui.clemsonrides.driver",
@@ -61,7 +63,9 @@
           "resizeMode": "contain",
           "backgroundColor": "#522D80"
         }
-      ]
+      ],
+      "@clerk/expo",
+      "@clerk/expo-google-signin"
     ],
     "experiments": {
       "typedRoutes": false

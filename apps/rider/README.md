@@ -27,6 +27,7 @@ npx eas-cli env:create --name EXPO_PUBLIC_CLERK_GOOGLE_IOS_URL_SCHEME --value <r
 | `EXPO_PUBLIC_SUPABASE_URL` | Rider EAS | Already used for email auth. |
 | `EXPO_PUBLIC_SUPABASE_ANON_KEY` | Rider EAS | Public in the binary. Stays out of git. |
 | `CLERK_SECRET_KEY` | Vercel only | `sk_test_` or `sk_live_`. Never `EXPO_PUBLIC_` and never in EAS. The bridge rejects the Clerk session without it. |
+| `CLERK_SECRET_KEY_DEV` | Vercel only | Secret of the Clerk instance the apps' `pk_` key belongs to, when that differs from `CLERK_SECRET_KEY` (today: apps ship `pk_test_` for choice-gibbon-3653 while `CLERK_SECRET_KEY` is the production `sk_live_`). Without it every social sign-in fails at the bridge with 401 "Clerk session token was rejected". |
 | `SUPABASE_SERVICE_ROLE_KEY` | Vercel only | Already required by other `/api` routes. The bridge uses it to mint the Supabase session. |
 
 The anon key and the Clerk publishable key are public in the app binary by design. Secret keys stay on Vercel.
