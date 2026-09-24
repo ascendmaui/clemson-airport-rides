@@ -567,7 +567,8 @@ function DocRow({
 }
 
 function useOnboardingStyles() {
-  const { colors } = useTheme()
+  const { colors, scheme } = useTheme()
+  const mark = scheme === 'dark' ? colors.ink : colors.purple
   return useMemo(() => StyleSheet.create({
     screen: { flex: 1, backgroundColor: colors.background },
     scroll: { padding: 16, paddingBottom: 48, gap: 12 },
@@ -588,11 +589,11 @@ function useOnboardingStyles() {
     yesNo: { flexDirection: 'row' as const, gap: 8 },
     choices: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: 8 },
     choice: { borderRadius: 12, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 12, paddingVertical: 10, backgroundColor: colors.input },
-    choiceOn: { borderColor: colors.purple, backgroundColor: colors.track },
+    choiceOn: { borderColor: mark, backgroundColor: colors.track },
     choiceText: { color: colors.ink, fontWeight: '700' as const },
     choiceTextOn: { color: colors.title },
     checkRow: { flexDirection: 'row' as const, gap: 10, alignItems: 'flex-start' as const },
-    box: { width: 22, height: 22, borderRadius: 6, borderWidth: 1.5, borderColor: colors.purple, marginTop: 2 },
+    box: { width: 22, height: 22, borderRadius: 6, borderWidth: 1.5, borderColor: mark, marginTop: 2 },
     boxOn: { backgroundColor: colors.orange, borderColor: colors.orange },
     checkCopy: { flex: 1, color: colors.ink, fontSize: 14, lineHeight: 20 },
     hint: { color: colors.inkSecondary, fontSize: 13, lineHeight: 18 },
@@ -601,5 +602,5 @@ function useOnboardingStyles() {
     agreementText: { color: colors.ink, fontSize: 13, lineHeight: 19 },
     blocker: { color: colors.danger, fontSize: 13 },
     doc: { gap: 6, paddingTop: 8 },
-  }), [colors])
+  }), [colors, mark])
 }

@@ -35,7 +35,7 @@ function categoryLabel(category: Category): string {
 export default function BugReportScreen() {
   const router = useRouter()
   const { user } = useAuth()
-  const { colors } = useTheme()
+  const { colors, scheme } = useTheme()
   const [category, setCategory] = useState<Category>('bug')
   const [subject, setSubject] = useState('')
   const [body, setBody] = useState('')
@@ -88,7 +88,7 @@ export default function BugReportScreen() {
         <Field label="Subject" value={subject} onChangeText={setSubject} placeholder="What broke" />
         <Field label="What happened" value={body} onChangeText={setBody} placeholder="Steps and what you expected" multiline />
         <Pressable onPress={() => setConfirmed((value) => !value)} style={styles.confirm}>
-          <View style={[styles.box, { borderColor: colors.purple, backgroundColor: confirmed ? colors.orange : 'transparent' }]} />
+          <View style={[styles.box, { borderColor: scheme === 'dark' ? colors.ink : colors.purple, backgroundColor: confirmed ? colors.orange : 'transparent' }]} />
           <Text style={{ color: colors.ink, flex: 1 }}>I confirm this ticket should be filed.</Text>
         </Pressable>
         <Primary label={busy ? 'Sending…' : 'File ticket'} onPress={submit} disabled={busy} />

@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import { Ionicons } from '@expo/vector-icons'
+import { LinearGradient } from 'expo-linear-gradient'
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useTheme } from '@/lib/theme'
@@ -46,9 +47,16 @@ export function GoButton({
       disabled={busy}
       accessibilityRole="button"
       accessibilityLabel={online ? 'Go offline' : 'Go online'}
-      style={[styles.go, { backgroundColor: colors.orange, opacity: busy ? 0.7 : 1 }]}
+      style={{ opacity: busy ? 0.7 : 1 }}
     >
-      <Text style={[styles.goText, { color: colors.onAccent }]}>{online ? 'END' : 'GO'}</Text>
+      <LinearGradient
+        colors={[colors.goStart, colors.orange]}
+        start={{ x: 0.72, y: 0 }}
+        end={{ x: 0.28, y: 1 }}
+        style={styles.go}
+      >
+        <Text style={[styles.goText, { color: colors.onAccent }]}>{online ? 'END' : 'GO'}</Text>
+      </LinearGradient>
     </Pressable>
   )
 }

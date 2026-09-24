@@ -5,12 +5,12 @@ import { DOWNTOWN, ORANGE, PURPLE, STADIUM } from 'rides-native/places.js'
 import type { MapPin } from './CampusMap'
 
 const DARK_MAP = [
-  { elementType: 'geometry', stylers: [{ color: '#1d142c' }] },
-  { elementType: 'labels.text.fill', stylers: [{ color: '#e4d2f8' }] },
-  { elementType: 'labels.text.stroke', stylers: [{ color: '#140e22' }] },
-  { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#3a2a52' }] },
-  { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#241833' }] },
-  { featureType: 'poi', elementType: 'geometry', stylers: [{ color: '#2a1c3e' }] },
+  { elementType: 'geometry', stylers: [{ color: '#0e0b14' }] },
+  { elementType: 'labels.text.fill', stylers: [{ color: '#f5f6f8' }] },
+  { elementType: 'labels.text.stroke', stylers: [{ color: '#0e0b14' }] },
+  { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#2a2438' }] },
+  { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#16121f' }] },
+  { featureType: 'poi', elementType: 'geometry', stylers: [{ color: '#120e18' }] },
 ]
 
 export function CampusMap({

@@ -38,7 +38,7 @@ Earnings reads the same `/api/driver?action=earnings` and payouts routes. Day, w
 
 Menu reaches Vehicles, Documents, Insurance, Tax, Payouts, Learning, Bug Reporter, About, Settings, Refer, and Switch account. Vehicles save through the existing registered-vehicle call. Bug reports file `/api/support-ticket`.
 
-Display follows sunrise and sunset for the last known location, or Clemson, SC when no fix is stored. Settings → Display can force light or dark. Both modes use the Clemson orange and purple tokens. Reference screenshots were used for screen flow only.
+Display follows sunrise and sunset for the last known location, or Clemson, SC when no fix is stored. Settings → Display can force light or dark. Light keeps the current warm paper look. Dark uses the proposed night field (`#0E0B14` surface, `#16121F` cards) with the same orange `#F56600` and purple `#522D80`. Reference screenshots were used for screen flow only.
 
 ## Driver track
 

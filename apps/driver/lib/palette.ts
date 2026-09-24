@@ -24,6 +24,7 @@ export type Palette = {
   input: string
   bar: string
   barPeak: string
+  goStart: string
   segment: string
   segmentOn: string
   segmentText: string
@@ -54,6 +55,7 @@ export const lightPalette: Palette = {
   input: SURFACE,
   bar: PURPLE,
   barPeak: ORANGE,
+  goStart: '#FF7A1A',
   segment: '#EFE8F6',
   segmentOn: PURPLE,
   segmentText: PURPLE,
@@ -62,33 +64,38 @@ export const lightPalette: Palette = {
   online: '#1F7A4D',
 }
 
-/** Night uses the same orange and purple family on a deep purple field. */
+/**
+ * Proposed night field from the Clemson theme preview.
+ * Surface #0E0B14, muted cards #16121F, ink #F5F6F8.
+ * Orange and purple stay #F56600 and #522D80.
+ */
 export const darkPalette: Palette = {
-  background: '#140E22',
-  card: '#241833',
-  elevated: '#2E2042',
-  ink: '#F7F4F0',
-  inkSecondary: '#C9B8DC',
-  title: '#E4D2F8',
+  background: '#0E0B14',
+  card: '#16121F',
+  elevated: '#1E192A',
+  ink: '#F5F6F8',
+  inkSecondary: '#A7A2B3',
+  title: '#F5F6F8',
   orange: ORANGE,
-  purple: '#C9A6E8',
+  purple: PURPLE,
   fill: PURPLE,
   onAccent: '#FFFFFF',
-  border: 'rgba(228,210,248,0.16)',
-  track: 'rgba(228,210,248,0.12)',
-  mapFallback: '#2A1C3E',
-  tabBar: '#1B122C',
-  tabInactive: '#B7A4CC',
+  border: 'rgba(245,246,248,0.14)',
+  track: 'rgba(245,246,248,0.12)',
+  mapFallback: '#120E18',
+  tabBar: '#0E0B14',
+  tabInactive: '#A7A2B3',
   danger: '#FF8B80',
   shadow: '#000000',
-  chip: '#2E2042',
-  input: '#1B122C',
-  bar: '#C9A6E8',
+  chip: '#1E192A',
+  input: '#120E18',
+  bar: PURPLE,
   barPeak: ORANGE,
-  segment: '#2E2042',
-  segmentOn: '#C9A6E8',
-  segmentText: '#E4D2F8',
-  segmentTextOn: '#1B122C',
+  goStart: '#FF7A1A',
+  segment: '#16121F',
+  segmentOn: PURPLE,
+  segmentText: '#F5F6F8',
+  segmentTextOn: '#FFFFFF',
   statusBar: 'light',
   online: '#7DCEA0',
 }

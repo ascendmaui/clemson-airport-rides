@@ -66,8 +66,9 @@ export function CapsuleChart({
   return (
     <View style={styles.chart}>
       {bars.map((bar) => {
-        const peak = bar.cents > 0 && bar.cents === max
-        const height = bar.cents <= 0 ? 10 : Math.max(22, Math.round((bar.cents / max) * 112))
+        const empty = bar.cents <= 0
+        const peak = !empty && bar.cents === max
+        const height = empty ? 10 : Math.max(22, Math.round((bar.cents / max) * 112))
         return (
           <View key={bar.key} style={styles.column}>
             <Text style={[styles.amount, { color: colors.inkSecondary }]} numberOfLines={1}>
@@ -78,8 +79,7 @@ export function CapsuleChart({
                 width: bars.length > 8 ? 10 : 16,
                 height,
                 borderRadius: 999,
-                backgroundColor: peak ? colors.barPeak : colors.bar,
-                opacity: bar.cents > 0 ? 1 : 0.28,
+                backgroundColor: empty ? colors.segment : peak ? colors.barPeak : colors.bar,
               }}
             />
             <Text style={[styles.axis, { color: colors.inkSecondary }]} numberOfLines={1}>
