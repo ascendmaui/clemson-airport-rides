@@ -26,7 +26,7 @@ import { displayFirstName } from 'rides-native/authErrors'
 import { campusOverlays } from 'rides-native/riderShell.js'
 import { loadGameDay } from 'rides-native/driverDesk'
 import { gameDayNotice, type GameDayNotice } from 'rides-native/gameDayNotice.js'
-import { STUDENT_DISCOUNT_LABEL } from 'rides-native/riderMoney.js'
+import { STUDENT_DISCOUNT_LABEL, STUDENT_EMAIL_HINT } from 'rides-native/riderMoney.js'
 import { supabase } from '@/lib/supabase'
 import { useStudentStatus } from '@/lib/useStudentStatus'
 import { HEAT_WINDOWS, SHORTCUTS } from 'rides-native/places.js'
@@ -386,7 +386,7 @@ export default function RiderHome() {
               <Text style={styles.gamedayBody}>
                 {student.verified
                   ? 'Standard quotes on Confirm include this 10% off.'
-                  : 'Use a Clemson email or the student flag on your profile.'}
+                  : STUDENT_EMAIL_HINT}
               </Text>
             </View>
           </Pressable>

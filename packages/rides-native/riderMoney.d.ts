@@ -41,7 +41,10 @@ export function startAirportDeposit(
 ): Promise<CheckoutSession>
 
 export const STUDENT_DISCOUNT_LABEL: string
+export const STUDENT_EMAIL_HINT: string
 export const STUDENT_CLAIM_COPY: string
+export const STUDENT_EMAIL_REQUIRED_COPY: string
+export const STUDENT_CONFIRM_EMAIL_COPY: string
 
 export function displayTierPrice(
   priceDollars: number,
@@ -60,11 +63,17 @@ export function studentTripMeta(input?: {
   fareCents?: number
 }): { isStudent?: boolean; studentLabel?: string; student_discount_cents?: number }
 
-export function studentStatus(input?: { email?: string | null; studentVerifiedAt?: string | null }): {
+export function studentStatus(input?: {
+  email?: string | null
+  studentVerifiedAt?: string | null
+  user?: { email?: string | null; email_confirmed_at?: string | null; confirmed_at?: string | null; identities?: unknown[] } | null
+}): {
   verified: boolean
   viaEmail: boolean
+  confirmed: boolean
   verifiedAt: string | null
   discountLabel: string | null
+  gateCopy: string | null
 }
 
 export function loadStudentProfile(

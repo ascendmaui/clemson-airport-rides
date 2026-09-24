@@ -3,7 +3,13 @@
  * Quote and checkout go through the existing payment router.
  * Deposit is always 25% of the current cash remainder (Stripe minimum included).
  */
-import { isClemsonEmail, normalizePromoCode } from './authErrors.js'
+import { normalizePromoCode } from './authErrors.js'
+import {
+  STUDENT_CONFIRM_EMAIL_COPY,
+  STUDENT_EMAIL_REQUIRED_COPY,
+  emailConfirmationState,
+  isClemsonEmail,
+} from '../../src/lib/studentDomain.js'
 import { authedJson } from './apiClient.js'
 import {
   AIRPORT_ROUTE_FALLBACK,
@@ -21,8 +27,10 @@ export { cardDepositCents }
 
 export const STUDENT_DISCOUNT_BPS = 1000
 export const STUDENT_DISCOUNT_LABEL = 'Clemson student · 10% off Standard'
+export const STUDENT_EMAIL_HINT = 'Needs a confirmed @clemson.edu or @g.clemson.edu email.'
 export const STUDENT_CLAIM_COPY =
-  'A @clemson.edu or @g.clemson.edu email, or the student flag already on your profile, unlocks 10% off Standard. Confirm and Schedule use that price. There is no separate student ID check.'
+  '10% off Standard applies when the signed-in email ends with @clemson.edu or @g.clemson.edu and that address is already confirmed. Confirm and Schedule use that price. There is no separate student ID check.'
+export { STUDENT_EMAIL_REQUIRED_COPY, STUDENT_CONFIRM_EMAIL_COPY }
 export const NATIVE_CHECKOUT_ORIGIN = 'https://clemson-airport-rides.vercel.app'
 
 export const AIRPORT_CHOICES = [
@@ -154,14 +162,24 @@ export function studentTripMeta({ isStudent = false, tier = 'standard', fareCent
   }
 }
 
-export function studentStatus({ email, studentVerifiedAt } = {}) {
-  const viaEmail = isClemsonEmail(email)
-  const verified = Boolean(studentVerifiedAt) || viaEmail
+export function studentStatus({ email, studentVerifiedAt, user } = {}) {
+  const address = user?.email || email || null
+  const viaEmail = isClemsonEmail(address)
+  const confirmation = user ? emailConfirmationState(user) : 'unknown'
+  const verified = user ? viaEmail && confirmation === 'confirmed' : viaEmail
+  let gateCopy = null
+  if (!verified) {
+    gateCopy = viaEmail && confirmation !== 'confirmed'
+      ? STUDENT_CONFIRM_EMAIL_COPY
+      : STUDENT_EMAIL_REQUIRED_COPY
+  }
   return {
     verified,
     viaEmail,
-    verifiedAt: studentVerifiedAt || null,
+    confirmed: confirmation === 'confirmed',
+    verifiedAt: verified ? (studentVerifiedAt || null) : null,
     discountLabel: verified ? STUDENT_DISCOUNT_LABEL : null,
+    gateCopy,
   }
 }
 
@@ -426,7 +444,10 @@ export async function loadPromoDesk(supabase, userId) {
 export async function markStudentVerified(supabase, user) {
   if (!supabase || !user?.id) return { verified: false, error: 'Sign in required' }
   if (!isClemsonEmail(user.email)) {
-    return { verified: false, error: 'Use a @clemson.edu or @g.clemson.edu email to verify.' }
+    return { verified: false, error: STUDENT_EMAIL_REQUIRED_COPY }
+  }
+  if (emailConfirmationState(user) !== 'confirmed') {
+    return { verified: false, error: STUDENT_CONFIRM_EMAIL_COPY }
   }
   const now = new Date().toISOString()
   const email = String(user.email).trim().toLowerCase()

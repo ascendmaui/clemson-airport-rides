@@ -242,8 +242,9 @@ export function AccountScreen() {
   const count = profile?.rating_count || 0
   const kinds = GALLERY_KINDS.filter((k) => !k.driversOnly || isDriver)
   const studentNow = studentStatus({
-    email: profile?.email || user?.email,
+    email: user?.email,
     studentVerifiedAt: profile?.student_verified_at,
+    user,
   })
   const studentOk = studentNow.verified
 
@@ -613,8 +614,8 @@ export function AccountScreen() {
                 {studentOk ? STUDENT_DISCOUNT_LABEL : 'Full price'}
               </div>
               <div style={{ fontSize: 13, color: 'var(--ink-secondary)', marginTop: 4 }}>
-                {user?.email || profile?.email || 'No email'}
-                {profile?.student_verified_at
+                {user?.email || 'No email'}
+                {studentOk && profile?.student_verified_at
                   ? ` · verified ${new Date(profile.student_verified_at).toLocaleDateString()}`
                   : ''}
               </div>
@@ -628,10 +629,10 @@ export function AccountScreen() {
               </p>
             ) : (
               <p style={{ fontSize: 13, color: 'var(--ink-secondary)', marginTop: 8, lineHeight: 1.45 }}>
-                Sign in with a @clemson.edu or @g.clemson.edu email. A flag already on your profile counts too.
+                {studentNow.gateCopy}
               </p>
             )}
-            {user && studentNow.viaEmail && !profile?.student_verified_at && (
+            {user && studentNow.verified && !profile?.student_verified_at && (
               <div style={{ marginTop: 12 }}>
                 <PrimaryButton
                   disabled={studentBusy}

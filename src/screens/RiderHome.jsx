@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { GameDayStatus } from '../components/GameDayStatus'
 import { useGameDayNotice } from '../lib/useGameDayNotice'
 import { useStudentStatus } from '../lib/useStudentStatus'
-import { STUDENT_DISCOUNT_LABEL } from '../../packages/rides-native/riderMoney.js'
+import { STUDENT_DISCOUNT_LABEL, STUDENT_EMAIL_HINT } from '../../packages/rides-native/riderMoney.js'
 import { SearchField } from '../components/SearchField'
 import { Pill } from '../components/Pill'
 import { BottomTabs } from '../components/BottomTabs'
@@ -227,7 +227,7 @@ export function RiderHome({ riderName = 'John' }) {
               <div style={{ fontSize: 13, color: 'var(--ink-secondary)', marginTop: 2 }}>
                 {student.verified
                   ? 'Standard quotes on Confirm include this 10% off.'
-                  : 'Use a Clemson email or the student flag on your profile.'}
+                  : STUDENT_EMAIL_HINT}
               </div>
             </div>
           </button>

@@ -13,7 +13,7 @@ import {
 import {
   loadGameDayMultiplier, planSettlement, debitLots, insertChargePayment,
 } from '../creditLots.js'
-import { isClemsonEmail } from '../../src/lib/studentDomain.js'
+import { studentDiscountGranted } from '../../src/lib/studentDomain.js'
 import {
   quoteFare,
   resolveSurge,
@@ -60,10 +60,10 @@ export default async function handler(req, res) {
 
   const { data: profile } = await sb
     .from('profiles')
-    .select('id, email, full_name, student_verified_at, stripe_customer_id')
+    .select('id, email, full_name, stripe_customer_id')
     .eq('id', user.id)
     .maybeSingle()
-  const isStudent = Boolean(profile?.student_verified_at) || isClemsonEmail(profile?.email || user.email)
+  const isStudent = studentDiscountGranted(user)
 
   let distanceM = null
   let durationS = null
@@ -178,6 +178,7 @@ export default async function handler(req, res) {
       tripId: trip.id,
       fareCents: settlement.riderPaysCents,
       depositCents: 0,
+      studentDiscountApplied: isStudent,
       surge,
       routeSource,
     })
@@ -227,6 +228,7 @@ export default async function handler(req, res) {
       airport,
       fareCents: settlement.riderPaysCents,
       depositCents,
+      studentDiscountApplied: isStudent,
       platformFeeCents: depositFee.platformFeeCents,
       driverEarningsCents: depositFee.driverEarningsCents,
       surge,

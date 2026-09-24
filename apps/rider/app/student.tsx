@@ -37,7 +37,11 @@ function StudentScreen() {
 
   useFocusEffect(load)
 
-  const status = studentStatus({ email: email || user?.email, studentVerifiedAt: verifiedAt })
+  const status = studentStatus({
+    email: user?.email || email,
+    studentVerifiedAt: verifiedAt,
+    user,
+  })
 
   async function onVerify() {
     if (!user || !supabase) return
@@ -71,9 +75,7 @@ function StudentScreen() {
             {STUDENT_DISCOUNT_LABEL} is on Standard quotes. Comfort, XL, Pet, and Tesla stay full price. The airport deposit uses the discounted fare.
           </Text>
         ) : (
-          <Text style={styles.copy}>
-            Sign in with a Clemson email, or save the flag if your profile already qualifies. Other email domains stay at full price.
-          </Text>
+          <Text style={styles.copy}>{status.gateCopy}</Text>
         )}
         {!user ? <PrimaryButton label="Sign in" onPress={() => router.push('/sign-in')} /> : null}
         {user && status.verified && !verifiedAt ? (

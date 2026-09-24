@@ -3,6 +3,9 @@ import type { ReactNode } from 'react'
 export type AuthUser = {
   id: string
   email?: string | null
+  email_confirmed_at?: string | null
+  confirmed_at?: string | null
+  identities?: { identity_data?: { email_verified?: boolean | string } }[]
   user_metadata?: {
     full_name?: string
     name?: string

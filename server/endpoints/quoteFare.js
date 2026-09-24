@@ -8,7 +8,7 @@ import {
   admin, cors, json, parseBody, userFromAuth, computeRoutes,
 } from '../friendRideLib.js'
 import { loadGameDayMultiplier } from '../creditLots.js'
-import { isClemsonEmail } from '../../src/lib/studentDomain.js'
+import { studentDiscountGranted } from '../../src/lib/studentDomain.js'
 import {
   quoteFare,
   resolveSurge,
@@ -64,20 +64,13 @@ export default async function handler(req, res) {
   }
 
   let gameMul = null
-  let isStudent = Boolean(body.isStudent)
+  let isStudent = false
   const sb = admin()
   if (sb) {
     const game = await loadGameDayMultiplier(sb, at)
     gameMul = game.multiplier
     const user = await userFromAuth(req)
-    if (user) {
-      const { data: profile } = await sb
-        .from('profiles')
-        .select('student_verified_at, email')
-        .eq('id', user.id)
-        .maybeSingle()
-      isStudent = Boolean(profile?.student_verified_at) || isClemsonEmail(profile?.email || user.email)
-    }
+    isStudent = studentDiscountGranted(user)
   }
 
   const touchesAirport = Boolean(airport) || Boolean(body.airport)
@@ -98,6 +91,7 @@ export default async function handler(req, res) {
     version: FARE_RATES_VERSION,
     routeSource,
     surge,
+    studentDiscountApplied: isStudent,
     quote,
     fareCents: quote.fareCents,
     platformFeeCents: quote.platformFeeCents,

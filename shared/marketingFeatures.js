@@ -9,7 +9,7 @@ export const MARKETING_FEATURES = [
   {
     id: 'student',
     title: 'Student discount',
-    body: '10% off Standard for a @clemson.edu or @g.clemson.edu email, or when the student flag is already on the profile. Comfort, XL, Pet, and Tesla are not included.',
+    body: '10% off Standard when the signed-in email is confirmed and ends with @clemson.edu or @g.clemson.edu. Comfort, XL, Pet, and Tesla are not included.',
   },
   {
     id: 'gameday',

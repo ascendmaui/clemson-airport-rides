@@ -67,7 +67,23 @@ test('student discount is 10% of Standard only', () => {
   assert.equal(studentDiscountCents(10000, { isStudent: true, tier: 'xl' }).discountCents, 0)
   assert.equal(studentDiscountCents(10000, { isStudent: false }).discountCents, 0)
   assert.equal(studentStatus({ email: 'a@g.clemson.edu' }).verified, true)
-  assert.equal(studentStatus({ email: 'a@gmail.com', studentVerifiedAt: '2026-01-01' }).discountLabel, 'Clemson student · 10% off Standard')
+  assert.equal(studentStatus({ email: 'a@gmail.com', studentVerifiedAt: '2026-01-01' }).verified, false)
+  assert.equal(studentStatus({ email: 'a@gmail.com', studentVerifiedAt: '2026-01-01' }).discountLabel, null)
+  assert.match(studentStatus({ email: 'a@gmail.com', studentVerifiedAt: '2026-01-01' }).gateCopy || '', /Clemson student email/)
+  assert.equal(studentStatus({
+    email: 'tiger@clemson.edu',
+    studentVerifiedAt: '2026-01-01',
+    user: { email: 'rider@gmail.com', email_confirmed_at: '2026-01-01T00:00:00Z' },
+  }).verified, false)
+  assert.equal(studentStatus({
+    user: { email: 'Tiger@G.Clemson.edu', email_confirmed_at: '2026-01-01T00:00:00Z' },
+  }).verified, true)
+  assert.equal(studentStatus({
+    user: { email: 'tiger@clemson.edu', email_confirmed_at: null },
+  }).verified, false)
+  assert.match(studentStatus({
+    user: { email: 'tiger@clemson.edu', email_confirmed_at: null },
+  }).gateCopy || '', /Confirm the Clemson email/)
   assert.equal(studentStatus({ email: 'a@gmail.com' }).verified, false)
   const shown = displayTierPrice(18.5, { isStudent: true, tier: 'standard', surgeMultiplier: 1.8 })
   assert.equal(shown.discountCents, 333)

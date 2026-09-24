@@ -112,7 +112,7 @@ export function RideTiers({ dest = '1900 GSP Dr' }) {
           onClick={() => navigate('account', { tab: 'student' })}
           style={{ display: 'block', marginTop: 8, fontSize: 12, fontWeight: 700, color: '#522D80' }}
         >
-          {student.verified ? 'Student pricing is saved on your profile' : 'Verify a Clemson email'}
+          {student.verified ? 'Your confirmed Clemson email applies this price.' : 'Clemson student email required'}
         </button>
         <div style={{ marginTop: 8 }}>
           <SurgeBadge surge={surge} />

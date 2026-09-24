@@ -23,16 +23,15 @@ import { supabase } from '@/lib/supabase'
 import { formatUsd } from 'rides-native/places.js'
 import type { Palette } from '@/lib/palette'
 import { useTheme } from '@/lib/theme'
+import { useStudentStatus } from '@/lib/useStudentStatus'
 import { useThemedStyles } from '@/lib/useThemedStyles'
 import {
   checkoutFailureCopy,
   depositSurfaceCopy,
-  loadStudentProfile,
   loadTripDeposit,
   quoteAirportFare,
   quoteInputKey,
   startAirportDeposit,
-  studentStatus,
 } from 'rides-native/riderMoney.js'
 import { localDateInput, localTimeInput, nextPickupDate, RIDE_PLACES } from 'rides-native/riderShell.js'
 import { formatCents, formatPickupAt, TESLA_FLEET_NOTICE } from 'rides-native/tripTags.js'
@@ -115,6 +114,7 @@ function ScheduleScreen() {
   const router = useRouter()
   const insets = useSafeAreaInsets()
   const { user } = useAuth()
+  const studentOn = useStudentStatus().verified
   const { colors } = useTheme()
   const styles = useThemedStyles(makeStyles)
   const [airport, setAirport] = useState<'GSP' | 'CLT'>('GSP')
@@ -126,7 +126,6 @@ function ScheduleScreen() {
   const [error, setError] = useState<string | null>(null)
   const [banner, setBanner] = useState<string | null>(null)
   const [promptOpen, setPromptOpen] = useState(false)
-  const [studentOn, setStudentOn] = useState(false)
   const [purpose, setPurpose] = useState<SchedulePurpose>('early_class')
   const [weekdays, setWeekdays] = useState<string[]>(['fri'])
   const [pickup, setPickup] = useState<RidePlace>(placeByLabel('Memorial Stadium'))
@@ -158,24 +157,6 @@ function ScheduleScreen() {
   }, []))
 
   const key = `${quoteInputKey({ airport, date, time })}|${studentOn ? 'student' : 'standard'}`
-
-  useEffect(() => {
-    if (!user || !supabase) {
-      setStudentOn(false)
-      return undefined
-    }
-    let alive = true
-    loadStudentProfile(supabase, user.id).then((row) => {
-      if (!alive) return
-      setStudentOn(studentStatus({
-        email: row.email || user.email,
-        studentVerifiedAt: row.studentVerifiedAt,
-      }).verified)
-    })
-    return () => {
-      alive = false
-    }
-  }, [user, focusTick])
 
   useEffect(() => {
     const handle = setTimeout(() => {
