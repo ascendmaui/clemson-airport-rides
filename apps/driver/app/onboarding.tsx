@@ -1,4 +1,4 @@
-import { useRouter } from 'expo-router'
+import { useFocusEffect, useRouter } from 'expo-router'
 import * as DocumentPicker from 'expo-document-picker'
 import * as ImagePicker from 'expo-image-picker'
 import { useCallback, useEffect, useMemo, useState } from 'react'
@@ -37,6 +37,7 @@ import { loadDriverProfile, loadVehicle } from 'rides-native/driverDesk'
 import { TESLA_FLEET_NOTICE } from 'rides-native/tripTags'
 import { isTeslaMakeModel, modelsForMake, VEHICLE_COLORS, VEHICLE_MAKES } from 'rides-native/vehicleCatalog'
 import { useTheme } from '@/lib/theme'
+import { knowledgeQuizStatus, knowledgeQuizStatusLabel, loadKnowledgeQuiz } from 'rides-native/driverKnowledgeQuiz'
 
 const HEADLINE = 'Become a driver'
 const TAGLINE = 'For Clemson University students — and for drivers already on Uber or Lyft.'
@@ -171,6 +172,7 @@ export default function OnboardingScreen() {
   const [signedOn, setSignedOn] = useState(todayDate())
   const [mark, setMark] = useState<{ x: number; y: number }[]>([])
   const [readAgreement, setReadAgreement] = useState(false)
+  const [quizLabel, setQuizLabel] = useState('Not started')
 
   const refresh = useCallback(async () => {
     if (!user || !supabase) return
@@ -197,7 +199,7 @@ export default function OnboardingScreen() {
         hasInsurance: boolAnswer(app.has_insurance),
         wantsExtraMoney: boolAnswer(app.wants_extra_money),
       })
-      setAttestation(Boolean(app.attestation_accepted_at) || Boolean(app.onboarding_status))
+      setAttestation(app.has_car === true && app.has_insurance === true && Boolean(app.attestation_accepted_at))
     }
     if (vehicle) {
       setMake(String(vehicle.make || ''))
@@ -213,9 +215,19 @@ export default function OnboardingScreen() {
     if (next.agreement?.signature_name) setSignature(String(next.agreement.signature_name))
   }, [user])
 
+  const loadQuizLabel = useCallback(async () => {
+    if (!user || !supabase) return
+    const result = await loadKnowledgeQuiz(supabase, user.id)
+    setQuizLabel(knowledgeQuizStatusLabel(knowledgeQuizStatus(result.row)))
+  }, [user])
+
   useEffect(() => {
     refresh().catch((err) => setError(err instanceof Error ? err.message : 'Could not load your application'))
   }, [refresh])
+
+  useFocusEffect(useCallback(() => {
+    loadQuizLabel().catch(() => setQuizLabel('Not started'))
+  }, [loadQuizLabel]))
 
   useEffect(() => {
     if (stepId !== 'review' || !supabase) return undefined
@@ -516,6 +528,10 @@ export default function OnboardingScreen() {
         {bundle?.application?.rejection_reason ? <ErrorText>{String(bundle.application.rejection_reason)}</ErrorText> : null}
         {error ? <ErrorText>{error}</ErrorText> : null}
 
+        {kind === 'account' || kind === 'review' ? (
+          <KnowledgeQuizHook label={quizLabel} onPress={() => router.push('/learning')} />
+        ) : null}
+
         {kind === 'account' ? (
           <Card>
             <Text style={styles.cardTitle}>Account</Text>
@@ -746,6 +762,20 @@ export default function OnboardingScreen() {
         </Pressable>
       </Modal>
     </View>
+  )
+}
+
+function KnowledgeQuizHook({ label, onPress }: { label: string; onPress: () => void }) {
+  const styles = useOnboardingStyles()
+  return (
+    <Card>
+      <Text style={styles.cardTitle}>Knowledge quiz</Text>
+      <Text style={styles.hint}>
+        Required Learning Center step. A pass is saved on your application and does not approve you. Accepting rides stays locked until an admin approves you.
+      </Text>
+      <Tag label={label} tone={label === 'Passed' ? 'orange' : 'purple'} />
+      <Primary label="Open knowledge quiz" onPress={onPress} tone="purple" />
+    </Card>
   )
 }
 
