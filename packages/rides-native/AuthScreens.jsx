@@ -653,6 +653,12 @@ const styles = StyleSheet.create({
     padding: 28,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: 'rgba(82,45,128,0.12)',
+    // Subtle Clemson-purple shadow (iOS) + Android elevation
+    shadowColor: PURPLE,
+    shadowOpacity: 0.14,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 6,
   },
   mark: {
     width: 48,

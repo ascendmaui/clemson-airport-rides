@@ -12,6 +12,7 @@ import { lift } from '@/lib/elevation'
 import type { Palette } from '@/lib/palette'
 import { useTheme } from '@/lib/theme'
 import { useThemedStyles } from '@/lib/useThemedStyles'
+import { RequireAuth } from '@/components/RequireAuth'
 
 type Card = { brand: string; last4: string | null; billingActivatedAt: string | null }
 type Deposit = { id: string; amount_cents: number | null; status: string | null; created_at: string | null; trip_id: string | null }
@@ -25,7 +26,7 @@ type Ride = {
   created_at: string | null
 }
 
-export default function BillingScreen() {
+function BillingScreen() {
   const router = useRouter()
   const insets = useSafeAreaInsets()
   const { user } = useAuth()
@@ -131,4 +132,13 @@ function makeStyles(colors: Palette) {
     copy: { color: colors.inkSecondary, fontSize: 14, lineHeight: 20 },
     error: { color: colors.danger, fontSize: 13, lineHeight: 18 },
   }
+}
+
+
+export default function BillingScreenRoute() {
+  return (
+    <RequireAuth>
+      <BillingScreen />
+    </RequireAuth>
+  )
 }
