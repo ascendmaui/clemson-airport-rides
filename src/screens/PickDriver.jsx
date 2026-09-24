@@ -19,6 +19,7 @@ import {
   sortPreferredDrivers,
 } from '../../packages/rides-native/drivers.js'
 import { SignInToBookModal, useRequireAuthForAction } from '../components/SignInToBookModal'
+import { teslaFleetNotice } from '../../packages/rides-native/tripTags.js'
 
 const browserStorage = {
   async getItem(key) {
@@ -122,6 +123,7 @@ export function PickDriver({ dest = 'GSP Airport', tier = 'standard', listCents 
     }
   }
 
+  const teslaNotice = teslaFleetNotice(tier === 'tesla' || tier === 'tesla_self_driving' || Boolean(selected?.isTesla))
   const groups = groupDriversForPicker(sortPreferredDrivers(drivers, favoriteIds, approachPickup), favoriteIds)
   const anyOnline = drivers.some((driver) => driver.online)
   const sections = [
@@ -255,6 +257,11 @@ export function PickDriver({ dest = 'GSP Airport', tier = 'standard', listCents 
       </div>
 
       <div style={{ padding: '12px 20px calc(20px + var(--safe-bottom))' }}>
+        {teslaNotice ? (
+          <p style={{ fontSize: 13, lineHeight: 1.4, color: '#522D80', fontWeight: 650, marginBottom: 8 }}>
+            {teslaNotice}
+          </p>
+        ) : null}
         {student.verified && tier === 'standard' ? (
           <p style={{ fontSize: 13, fontWeight: 800, color: '#F56600', marginBottom: 8 }}>
             {STUDENT_DISCOUNT_LABEL} is on this request.

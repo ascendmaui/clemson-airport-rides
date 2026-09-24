@@ -34,6 +34,7 @@ import {
   readOnboardingStep,
   writeOnboardingStep,
 } from '../lib/driverOnboarding'
+import { TESLA_FLEET_NOTICE } from '../../packages/rides-native/tripTags.js'
 
 const QUESTIONS = [
   { key: 'isStudent', label: 'Are you a student?' },
@@ -495,10 +496,15 @@ export function DriverOnboarding() {
           <Field label="Color" value={color} onChange={setColor} required={false} />
           <Field label="Plate" value={plate} onChange={setPlate} />
           <Field label="Seats" value={seats} onChange={setSeats} type="number" />
-          <label style={{ display: 'flex', gap: 10, alignItems: 'center', fontWeight: 650, marginBottom: 16 }}>
+          <label style={{ display: 'flex', gap: 10, alignItems: 'center', fontWeight: 650, marginBottom: isTesla ? 8 : 16 }}>
             <input type="checkbox" checked={isTesla} onChange={(e) => setIsTesla(e.target.checked)} />
             Tesla Model 3 · a driver still drives
           </label>
+          {isTesla ? (
+            <p style={{ margin: '0 0 16px', fontSize: 13, lineHeight: 1.4, color: '#522D80', fontWeight: 650 }}>
+              {TESLA_FLEET_NOTICE}
+            </p>
+          ) : null}
           <PrimaryButton type="submit" disabled={busy || !allYes || !attestation}>
             {busy ? 'Saving…' : `Continue to ${adjacentStep('account', 1)?.label || 'the next step'}`}
           </PrimaryButton>
