@@ -1,6 +1,6 @@
 import { useFocusEffect, useRouter } from 'expo-router'
 import { useCallback, useState } from 'react'
-import { ScrollView, StyleSheet, Switch, Text, View } from 'react-native'
+import { ScrollView, Switch, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { PrimaryButton } from '@/components/Button'
 import { StackHeader } from '@/components/StackHeader'
@@ -13,7 +13,9 @@ import {
   NOTIFICATION_CATEGORIES,
   saveNotificationPrefs,
 } from 'rides-native/notificationPrefs.js'
-import { INK_SECONDARY, ORANGE, PURPLE, SURFACE } from 'rides-native/places.js'
+import type { Palette } from '@/lib/palette'
+import { useTheme } from '@/lib/theme'
+import { useThemedStyles } from '@/lib/useThemedStyles'
 
 type Prefs = typeof DEFAULT_NOTIFICATION_PREFS
 
@@ -24,6 +26,8 @@ export default function NotificationsScreen() {
   const [prefs, setPrefs] = useState<Prefs>(DEFAULT_NOTIFICATION_PREFS)
   const [note, setNote] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
+  const { colors } = useTheme()
+  const styles = useThemedStyles(makeStyles)
 
   const load = useCallback(() => {
     if (!user) return undefined
@@ -76,8 +80,8 @@ export default function NotificationsScreen() {
                 value={on}
                 onValueChange={() => toggleCategory(category.id)}
                 disabled={!user || saving}
-                trackColor={{ false: 'rgba(11,18,32,0.15)', true: ORANGE }}
-                thumbColor="#fff"
+                trackColor={{ false: colors.track, true: colors.orange }}
+                thumbColor={colors.onAccent}
               />
             </View>
           )
@@ -91,8 +95,8 @@ export default function NotificationsScreen() {
             value={prefs.dndNewRequestTones}
             onValueChange={(value) => void update({ ...prefs, dndNewRequestTones: value })}
             disabled={!user || saving}
-            trackColor={{ false: 'rgba(11,18,32,0.15)', true: ORANGE }}
-            thumbColor="#fff"
+            trackColor={{ false: colors.track, true: colors.orange }}
+            thumbColor={colors.onAccent}
           />
         </View>
         <View style={styles.row}>
@@ -104,8 +108,8 @@ export default function NotificationsScreen() {
             value={prefs.quiet.dnd}
             onValueChange={(value) => void update({ ...prefs, quiet: { ...prefs.quiet, dnd: value } })}
             disabled={!user || saving}
-            trackColor={{ false: 'rgba(11,18,32,0.15)', true: ORANGE }}
-            thumbColor="#fff"
+            trackColor={{ false: colors.track, true: colors.orange }}
+            thumbColor={colors.onAccent}
           />
         </View>
         {note ? <Text style={styles.note}>{note}</Text> : null}
@@ -114,21 +118,23 @@ export default function NotificationsScreen() {
   )
 }
 
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: SURFACE },
-  body: { padding: 20, gap: 10, paddingBottom: 32 },
-  copy: { color: INK_SECONDARY, fontSize: 13, lineHeight: 18 },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: 'rgba(82,45,128,0.1)',
-  },
-  rowOn: { backgroundColor: 'rgba(82,45,128,0.06)', borderColor: 'rgba(82,45,128,0.28)' },
-  rowTitle: { color: PURPLE, fontWeight: '800', fontSize: 15, marginBottom: 2 },
-  note: { color: PURPLE, fontSize: 13, lineHeight: 18 },
-})
+function makeStyles(colors: Palette) {
+  return {
+    screen: { flex: 1, backgroundColor: colors.background },
+    body: { padding: 20, gap: 10, paddingBottom: 32 },
+    copy: { color: colors.inkSecondary, fontSize: 13, lineHeight: 18 },
+    row: {
+      flexDirection: 'row' as const,
+      alignItems: 'center' as const,
+      gap: 12,
+      backgroundColor: colors.card,
+      borderRadius: 16,
+      padding: 14,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    rowOn: { backgroundColor: colors.purpleSoft, borderColor: colors.purple },
+    rowTitle: { color: colors.title, fontWeight: '800' as const, fontSize: 15, marginBottom: 2 },
+    note: { color: colors.link, fontSize: 13, lineHeight: 18 },
+  }
+}

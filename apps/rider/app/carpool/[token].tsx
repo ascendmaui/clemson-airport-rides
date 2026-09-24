@@ -1,6 +1,6 @@
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { RefreshControl, ScrollView, Share, StyleSheet, Text, View } from 'react-native'
+import { RefreshControl, ScrollView, Share, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { PrimaryButton } from '@/components/Button'
 import { CarpoolCompare } from '@/components/carpool/CarpoolCompare'
@@ -29,7 +29,9 @@ import {
   type Place,
 } from 'rides-native/shared/carpool.js'
 import { liveCarpoolQuote, selfParticipantId, splitRows } from 'rides-native/shared/split.js'
-import { INK, INK_SECONDARY, ORANGE, PURPLE, SURFACE } from 'rides-native/places.js'
+import type { Palette } from '@/lib/palette'
+import { useTheme } from '@/lib/theme'
+import { useThemedStyles } from '@/lib/useThemedStyles'
 
 const START = defaultCarpoolEnds()
 
@@ -48,6 +50,8 @@ export default function CarpoolLobbyScreen() {
   const params = useLocalSearchParams<{ token?: string }>()
   const token = oneParam(params.token)
   const { user } = useAuth()
+  const { colors } = useTheme()
+  const styles = useThemedStyles(makeStyles)
   const [ride, setRide] = useState<RideSummary | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -221,7 +225,7 @@ export default function CarpoolLobbyScreen() {
         refreshControl={(
           <RefreshControl
             refreshing={refreshing}
-            tintColor={ORANGE}
+            tintColor={colors.orange}
             onRefresh={() => {
               setRefreshing(true)
               load().finally(() => setRefreshing(false))
@@ -368,6 +372,7 @@ export default function CarpoolLobbyScreen() {
 }
 
 function Stat({ label, value }: { label: string; value: string }) {
+  const styles = useThemedStyles(makeStyles)
   return (
     <View style={styles.stat}>
       <Text style={styles.meta}>{label}</Text>
@@ -376,50 +381,52 @@ function Stat({ label, value }: { label: string; value: string }) {
   )
 }
 
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: SURFACE },
-  scroll: { flex: 1 },
-  title: { fontSize: 28, fontWeight: '800', color: PURPLE, letterSpacing: -0.4 },
-  status: { marginTop: 6, color: INK_SECONDARY, fontSize: 13 },
-  stats: {
-    marginTop: 16,
-    padding: 16,
-    borderRadius: 16,
-    backgroundColor: '#fff',
-    borderWidth: 1,
-    borderColor: 'rgba(82,45,128,0.12)',
-    flexDirection: 'row',
-    gap: 8,
-  },
-  stat: { flex: 1 },
-  hint: { marginTop: 10, color: ORANGE, fontSize: 13, lineHeight: 18 },
-  cardTitle: { color: PURPLE, fontWeight: '800', fontSize: 16, marginBottom: 8 },
-  linkText: { color: INK_SECONDARY, fontSize: 12 },
-  link: { marginTop: 8, color: PURPLE, fontWeight: '800' },
-  splitLine: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingVertical: 8,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: 'rgba(82,45,128,0.12)',
-  },
-  person: { fontWeight: '700', color: INK, fontSize: 14 },
-  solo: { color: INK_SECONDARY, fontSize: 12, textDecorationLine: 'line-through', marginTop: 2 },
-  splitMoney: { alignItems: 'flex-end' },
-  share: { color: ORANGE, fontWeight: '800', fontSize: 16 },
-  save: { color: ORANGE, fontSize: 11, fontWeight: '700' },
-  meta: { color: INK_SECONDARY, fontSize: 12, lineHeight: 18, marginTop: 4 },
-  personBlock: { paddingVertical: 8, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: 'rgba(82,45,128,0.12)' },
-  personRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 6 },
-  badge: {
-    fontSize: 10,
-    fontWeight: '800',
-    color: PURPLE,
-    backgroundColor: 'rgba(82,45,128,0.12)',
-    overflow: 'hidden',
-    borderRadius: 999,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-  },
-})
+function makeStyles(colors: Palette) {
+  return {
+    screen: { flex: 1, backgroundColor: colors.background },
+    scroll: { flex: 1 },
+    title: { fontSize: 28, fontWeight: '800' as const, color: colors.title, letterSpacing: -0.4 },
+    status: { marginTop: 6, color: colors.inkSecondary, fontSize: 13 },
+    stats: {
+      marginTop: 16,
+      padding: 16,
+      borderRadius: 16,
+      backgroundColor: colors.card,
+      borderWidth: 1,
+      borderColor: colors.border,
+      flexDirection: 'row' as const,
+      gap: 8,
+    },
+    stat: { flex: 1 },
+    hint: { marginTop: 10, color: colors.orange, fontSize: 13, lineHeight: 18 },
+    cardTitle: { color: colors.title, fontWeight: '800' as const, fontSize: 16, marginBottom: 8 },
+    linkText: { color: colors.inkSecondary, fontSize: 12 },
+    link: { marginTop: 8, color: colors.link, fontWeight: '800' as const },
+    splitLine: {
+      flexDirection: 'row' as const,
+      alignItems: 'center' as const,
+      gap: 8,
+      paddingVertical: 8,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+    },
+    person: { fontWeight: '700' as const, color: colors.ink, fontSize: 14 },
+    solo: { color: colors.inkSecondary, fontSize: 12, textDecorationLine: 'line-through' as const, marginTop: 2 },
+    splitMoney: { alignItems: 'flex-end' as const },
+    share: { color: colors.orange, fontWeight: '800' as const, fontSize: 16 },
+    save: { color: colors.orange, fontSize: 11, fontWeight: '700' as const },
+    meta: { color: colors.inkSecondary, fontSize: 12, lineHeight: 18, marginTop: 4 },
+    personBlock: { paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: colors.border },
+    personRow: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, alignItems: 'center' as const, gap: 6 },
+    badge: {
+      fontSize: 10,
+      fontWeight: '800' as const,
+      color: colors.link,
+      backgroundColor: colors.purpleSoft,
+      overflow: 'hidden' as const,
+      borderRadius: 999,
+      paddingHorizontal: 8,
+      paddingVertical: 2,
+    },
+  }
+}

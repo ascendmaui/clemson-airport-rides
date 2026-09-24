@@ -1,7 +1,7 @@
 import { useFocusEffect, useRouter } from 'expo-router'
 import { LinearGradient } from 'expo-linear-gradient'
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { ScrollView, Share, StyleSheet, Switch, Text, TextInput, View } from 'react-native'
+import { ScrollView, Share, Switch, Text, TextInput, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Pill, PrimaryButton } from '@/components/Button'
 import { SignInToBookSheet } from '@/components/SignInToBookSheet'
@@ -45,7 +45,9 @@ import {
   type Place,
 } from 'rides-native/shared/carpool.js'
 import { offerCapacity } from 'rides-native/shared/vehicle.js'
-import { INK, INK_SECONDARY, PURPLE, SURFACE } from 'rides-native/places.js'
+import type { Palette } from '@/lib/palette'
+import { useTheme } from '@/lib/theme'
+import { useThemedStyles } from '@/lib/useThemedStyles'
 import { RIDE_PLACES } from 'rides-native/riderShell.js'
 
 const START = defaultCarpoolEnds()
@@ -54,6 +56,8 @@ export default function CarpoolHubScreen() {
   const router = useRouter()
   const insets = useSafeAreaInsets()
   const { user } = useAuth()
+  const { colors } = useTheme()
+  const styles = useThemedStyles(makeStyles)
   const vehicleState = useRegisteredVehicle(user?.id)
   const [pickup, setPickup] = useState<Place>(START.pickup)
   const [dropoff, setDropoff] = useState<Place>(START.dropoff)
@@ -275,7 +279,7 @@ export default function CarpoolHubScreen() {
     <View style={styles.screen}>
       <ScrollView style={styles.scroll} contentContainerStyle={{ paddingBottom: 24 }} keyboardShouldPersistTaps="handled">
         <LinearGradient
-          colors={['#F56600', '#522D80']}
+          colors={[colors.orange, colors.purple]}
           start={{ x: 0, y: 0 }}
           end={{ x: 0.85, y: 1 }}
           style={[styles.hero, { paddingTop: insets.top + 28 }]}
@@ -337,8 +341,8 @@ export default function CarpoolHubScreen() {
               <Switch
                 value={tailgate}
                 onValueChange={setTailgate}
-                trackColor={{ false: 'rgba(82,45,128,0.2)', true: '#F56600' }}
-                thumbColor="#fff"
+                trackColor={{ false: colors.track, true: colors.orange }}
+                thumbColor={colors.onAccent}
               />
             </View>
             <PrimaryButton label={busy ? 'Looking…' : 'Find my carpool'} onPress={onMatch} disabled={busy} />
@@ -402,7 +406,7 @@ export default function CarpoolHubScreen() {
               value={friendEmail}
               onChangeText={setFriendEmail}
               placeholder="friend@clemson.edu"
-              placeholderTextColor="#8B939E"
+              placeholderTextColor={colors.placeholder}
               autoCapitalize="none"
               autoComplete="email"
               keyboardType="email-address"
@@ -476,6 +480,7 @@ export default function CarpoolHubScreen() {
 }
 
 function PressOffer({ onPress }: { onPress: () => void }) {
+  const styles = useThemedStyles(makeStyles)
   return (
     <Text onPress={onPress} style={styles.offer} accessibilityRole="button">
       I have the car — offer seats
@@ -483,53 +488,55 @@ function PressOffer({ onPress }: { onPress: () => void }) {
   )
 }
 
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: SURFACE },
-  scroll: { flex: 1 },
-  hero: { paddingHorizontal: 22, paddingBottom: 22 },
-  brand: { color: '#fff', fontSize: 12, fontWeight: '800', letterSpacing: 1.4 },
-  heroTitle: { color: '#fff', fontSize: 32, fontWeight: '800', letterSpacing: -0.8, marginTop: 8 },
-  heroBody: { color: '#fff', fontSize: 15, lineHeight: 22, marginTop: 10 },
-  pills: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 14 },
-  pill: {
-    color: '#fff',
-    backgroundColor: 'rgba(255,255,255,0.16)',
-    overflow: 'hidden',
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  body: { paddingHorizontal: 20, paddingBottom: 12 },
-  note: { marginTop: 8, color: INK_SECONDARY, fontSize: 13, lineHeight: 18 },
-  cardTitle: { color: PURPLE, fontWeight: '800', fontSize: 16 },
-  tailgate: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 12,
-    marginTop: 4,
-  },
-  tailgateLabel: { fontWeight: '700', fontSize: 14, color: '#0B1220' },
-  offer: {
-    marginTop: 12,
-    textAlign: 'center',
-    fontWeight: '700',
-    color: INK_SECONDARY,
-    paddingVertical: 8,
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: 'rgba(82,45,128,0.18)',
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: 16,
-    color: INK,
-    marginTop: 8,
-    marginBottom: 8,
-  },
-  friendPills: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8, marginBottom: 8 },
-})
+function makeStyles(colors: Palette) {
+  return {
+    screen: { flex: 1, backgroundColor: colors.background },
+    scroll: { flex: 1 },
+    hero: { paddingHorizontal: 22, paddingBottom: 22 },
+    brand: { color: colors.onAccent, fontSize: 12, fontWeight: '800' as const, letterSpacing: 1.4 },
+    heroTitle: { color: colors.onAccent, fontSize: 32, fontWeight: '800' as const, letterSpacing: -0.8, marginTop: 8 },
+    heroBody: { color: colors.onAccent, fontSize: 15, lineHeight: 22, marginTop: 10 },
+    pills: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: 8, marginTop: 14 },
+    pill: {
+      color: colors.onAccent,
+      backgroundColor: 'rgba(255,255,255,0.16)',
+      overflow: 'hidden' as const,
+      borderRadius: 999,
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+      fontSize: 12,
+      fontWeight: '700' as const,
+    },
+    body: { paddingHorizontal: 20, paddingBottom: 12 },
+    note: { marginTop: 8, color: colors.inkSecondary, fontSize: 13, lineHeight: 18 },
+    cardTitle: { color: colors.title, fontWeight: '800' as const, fontSize: 16 },
+    tailgate: {
+      flexDirection: 'row' as const,
+      alignItems: 'center' as const,
+      justifyContent: 'space-between' as const,
+      marginBottom: 12,
+      marginTop: 4,
+    },
+    tailgateLabel: { fontWeight: '700' as const, fontSize: 14, color: colors.ink },
+    offer: {
+      marginTop: 12,
+      textAlign: 'center' as const,
+      fontWeight: '700' as const,
+      color: colors.inkSecondary,
+      paddingVertical: 8,
+    },
+    input: {
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.input,
+      borderRadius: 12,
+      paddingHorizontal: 14,
+      paddingVertical: 12,
+      fontSize: 16,
+      color: colors.ink,
+      marginTop: 8,
+      marginBottom: 8,
+    },
+    friendPills: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: 8, marginTop: 8, marginBottom: 8 },
+  }
+}

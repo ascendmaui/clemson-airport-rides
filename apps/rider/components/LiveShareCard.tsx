@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { ActivityIndicator, Pressable, Share, StyleSheet, Text, View } from 'react-native'
+import { ActivityIndicator, Pressable, Share, Text, View } from 'react-native'
 import { PrimaryButton } from '@/components/Button'
 import { useLiveShare } from '@/lib/useLiveShare'
 import { supabase } from '@/lib/supabase'
@@ -11,8 +11,11 @@ import {
   tripShareMessage,
   type LocationShare,
 } from 'rides-native/safety.js'
-import { INK_SECONDARY, ORANGE, PURPLE } from 'rides-native/places.js'
 import type { RiderTrip } from '@/lib/useRiderTrip'
+import { lift } from '@/lib/elevation'
+import type { Palette } from '@/lib/palette'
+import { useTheme } from '@/lib/theme'
+import { useThemedStyles } from '@/lib/useThemedStyles'
 
 export function LiveShareCard({
   trip,
@@ -31,6 +34,8 @@ export function LiveShareCard({
   const shareable = Boolean(trip && (isShareableTripStatus(trip.status) || !trip.status))
   const finished = Boolean(trip?.status && !isShareableTripStatus(trip.status))
   const waitingOnStatus = Boolean(loading && trip && !trip.status)
+  const { colors } = useTheme()
+  const styles = useThemedStyles(makeStyles)
 
   useEffect(() => {
     setShare(null)
@@ -125,10 +130,10 @@ export function LiveShareCard({
   }
 
   return (
-    <View style={styles.card}>
+    <View style={[styles.card, lift(colors, 'rest')]}>
       <Text style={styles.kicker}>LIVE LOCATION</Text>
       <Text style={styles.title}>Share my location</Text>
-      {loading ? <ActivityIndicator color={ORANGE} style={styles.spinner} /> : null}
+      {loading ? <ActivityIndicator color={colors.orange} style={styles.spinner} /> : null}
       {!loading && !trip ? (
         <View style={styles.empty}>
           <Text style={styles.emptyTitle}>No active trip</Text>
@@ -183,28 +188,30 @@ export function LiveShareCard({
   )
 }
 
-const styles = StyleSheet.create({
-  card: {
-    backgroundColor: '#fff',
-    borderRadius: 20,
-    padding: 16,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(82,45,128,0.12)',
-  },
-  kicker: { color: ORANGE, fontWeight: '800', letterSpacing: 1.1, fontSize: 11 },
-  title: { color: PURPLE, fontSize: 20, fontWeight: '800', marginTop: 4, marginBottom: 8 },
-  body: { color: INK_SECONDARY, fontSize: 14, lineHeight: 20, marginBottom: 12 },
-  empty: {
-    backgroundColor: 'rgba(82,45,128,0.06)',
-    borderRadius: 16,
-    padding: 14,
-  },
-  emptyTitle: { color: PURPLE, fontWeight: '800', fontSize: 16, marginBottom: 4 },
-  hint: { color: INK_SECONDARY, fontSize: 12, lineHeight: 18, marginTop: 10 },
-  link: { color: PURPLE, fontSize: 12, lineHeight: 18, marginTop: 12 },
-  live: { color: ORANGE, fontWeight: '700', fontSize: 13, marginTop: 8 },
-  stop: { color: '#B42318', fontWeight: '700', marginTop: 12 },
-  error: { color: '#B42318', fontSize: 13, marginTop: 8 },
-  gap: { height: 10 },
-  spinner: { marginVertical: 8 },
-})
+function makeStyles(colors: Palette) {
+  return {
+    card: {
+      backgroundColor: colors.card,
+      borderRadius: 20,
+      padding: 16,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    kicker: { color: colors.orange, fontWeight: '800' as const, letterSpacing: 1.1, fontSize: 11 },
+    title: { color: colors.title, fontSize: 20, fontWeight: '800' as const, marginTop: 4, marginBottom: 8 },
+    body: { color: colors.inkSecondary, fontSize: 14, lineHeight: 20, marginBottom: 12 },
+    empty: {
+      backgroundColor: colors.purpleSoft,
+      borderRadius: 16,
+      padding: 14,
+    },
+    emptyTitle: { color: colors.title, fontWeight: '800' as const, fontSize: 16, marginBottom: 4 },
+    hint: { color: colors.inkSecondary, fontSize: 12, lineHeight: 18, marginTop: 10 },
+    link: { color: colors.link, fontSize: 12, lineHeight: 18, marginTop: 12 },
+    live: { color: colors.orange, fontWeight: '700' as const, fontSize: 13, marginTop: 8 },
+    stop: { color: colors.danger, fontWeight: '700' as const, marginTop: 12 },
+    error: { color: colors.danger, fontSize: 13, marginTop: 8 },
+    gap: { height: 10 },
+    spinner: { marginVertical: 8 },
+  }
+}

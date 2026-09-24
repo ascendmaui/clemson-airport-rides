@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Alert, Linking, Modal, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
+import { Alert, Linking, Modal, Pressable, Text, TextInput, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { PrimaryButton } from '@/components/Button'
 import { supabase } from '@/lib/supabase'
@@ -11,7 +11,10 @@ import {
   saveEmergencyContact,
   type EmergencyContact,
 } from 'rides-native/safety.js'
-import { INK, INK_SECONDARY, ORANGE, PURPLE } from 'rides-native/places.js'
+import { lift } from '@/lib/elevation'
+import type { Palette } from '@/lib/palette'
+import { useTheme } from '@/lib/theme'
+import { useThemedStyles } from '@/lib/useThemedStyles'
 
 type Draft = {
   id?: string
@@ -35,6 +38,8 @@ export function EmergencyContactsCard({
   const [error, setError] = useState<string | null>(null)
   const [draft, setDraft] = useState<Draft | null>(null)
   const [saving, setSaving] = useState(false)
+  const { colors } = useTheme()
+  const styles = useThemedStyles(makeStyles)
 
   function publish(next: EmergencyContact[]) {
     setContacts(next)
@@ -107,7 +112,7 @@ export function EmergencyContactsCard({
   }
 
   return (
-    <View style={styles.card}>
+    <View style={[styles.card, lift(colors, 'rest')]}>
       <Text style={styles.kicker}>PEOPLE YOU TRUST</Text>
       <Text style={styles.title}>Emergency contacts</Text>
       <Text style={styles.body}>Add, edit, or call someone from this phone. The list stays on your Clemson RIDES account.</Text>
@@ -161,7 +166,7 @@ export function EmergencyContactsCard({
               value={draft?.name || ''}
               onChangeText={(name) => setDraft((prev) => (prev ? { ...prev, name } : prev))}
               placeholder="Name"
-              placeholderTextColor="#8B939E"
+              placeholderTextColor={colors.placeholder}
               style={styles.input}
             />
             <Text style={styles.label}>Phone</Text>
@@ -169,7 +174,7 @@ export function EmergencyContactsCard({
               value={draft?.phone || ''}
               onChangeText={(phone) => setDraft((prev) => (prev ? { ...prev, phone } : prev))}
               placeholder="(864) 555-0100"
-              placeholderTextColor="#8B939E"
+              placeholderTextColor={colors.placeholder}
               keyboardType="phone-pad"
               style={styles.input}
             />
@@ -178,7 +183,7 @@ export function EmergencyContactsCard({
               value={draft?.relationship || ''}
               onChangeText={(relationship) => setDraft((prev) => (prev ? { ...prev, relationship } : prev))}
               placeholder="Roommate, parent…"
-              placeholderTextColor="#8B939E"
+              placeholderTextColor={colors.placeholder}
               style={styles.input}
             />
             {error ? <Text style={styles.error}>{error}</Text> : null}
@@ -198,57 +203,60 @@ export function EmergencyContactsCard({
   )
 }
 
-const styles = StyleSheet.create({
-  card: {
-    backgroundColor: '#fff',
-    borderRadius: 20,
-    padding: 16,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(82,45,128,0.12)',
-  },
-  kicker: { color: ORANGE, fontWeight: '800', letterSpacing: 1.1, fontSize: 11 },
-  title: { color: PURPLE, fontSize: 20, fontWeight: '800', marginTop: 4, marginBottom: 8 },
-  body: { color: INK_SECONDARY, fontSize: 14, lineHeight: 20, marginBottom: 8 },
-  empty: { backgroundColor: 'rgba(245,102,0,0.08)', borderRadius: 16, padding: 14, marginBottom: 12 },
-  emptyTitle: { color: PURPLE, fontWeight: '800', fontSize: 16, marginBottom: 4 },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingVertical: 10,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: 'rgba(82,45,128,0.12)',
-  },
-  rowCopy: { flex: 1 },
-  name: { color: INK, fontWeight: '700', fontSize: 16 },
-  meta: { color: INK_SECONDARY, fontSize: 12, marginTop: 2 },
-  chip: {
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    backgroundColor: 'rgba(82,45,128,0.08)',
-  },
-  chipText: { color: PURPLE, fontWeight: '700', fontSize: 12 },
-  addWrap: { marginTop: 12 },
-  error: { color: '#B42318', fontSize: 13, marginTop: 8 },
-  backdrop: { flex: 1, backgroundColor: 'rgba(11,18,32,0.45)', justifyContent: 'flex-end' },
-  sheet: {
-    backgroundColor: '#fff',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    padding: 20,
-  },
-  label: { color: INK_SECONDARY, fontWeight: '700', fontSize: 13, marginBottom: 6 },
-  input: {
-    borderWidth: 1,
-    borderColor: 'rgba(82,45,128,0.16)',
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    marginBottom: 12,
-    fontSize: 16,
-    color: INK,
-  },
-  remove: { color: '#B42318', fontWeight: '700', textAlign: 'center', marginTop: 14 },
-  cancel: { color: PURPLE, fontWeight: '700', textAlign: 'center', marginTop: 12 },
-})
+function makeStyles(colors: Palette) {
+  return {
+    card: {
+      backgroundColor: colors.card,
+      borderRadius: 20,
+      padding: 16,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    kicker: { color: colors.orange, fontWeight: '800' as const, letterSpacing: 1.1, fontSize: 11 },
+    title: { color: colors.title, fontSize: 20, fontWeight: '800' as const, marginTop: 4, marginBottom: 8 },
+    body: { color: colors.inkSecondary, fontSize: 14, lineHeight: 20, marginBottom: 8 },
+    empty: { backgroundColor: colors.orangeSoft, borderRadius: 16, padding: 14, marginBottom: 12 },
+    emptyTitle: { color: colors.title, fontWeight: '800' as const, fontSize: 16, marginBottom: 4 },
+    row: {
+      flexDirection: 'row' as const,
+      alignItems: 'center' as const,
+      gap: 8,
+      paddingVertical: 10,
+      borderTopWidth: 1,
+      borderTopColor: colors.border,
+    },
+    rowCopy: { flex: 1 },
+    name: { color: colors.ink, fontWeight: '700' as const, fontSize: 16 },
+    meta: { color: colors.inkSecondary, fontSize: 12, marginTop: 2 },
+    chip: {
+      borderRadius: 999,
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+      backgroundColor: colors.purpleSoft,
+    },
+    chipText: { color: colors.link, fontWeight: '700' as const, fontSize: 12 },
+    addWrap: { marginTop: 12 },
+    error: { color: colors.danger, fontSize: 13, marginTop: 8 },
+    backdrop: { flex: 1, backgroundColor: colors.scrim, justifyContent: 'flex-end' as const },
+    sheet: {
+      backgroundColor: colors.card,
+      borderTopLeftRadius: 24,
+      borderTopRightRadius: 24,
+      padding: 20,
+    },
+    label: { color: colors.inkSecondary, fontWeight: '700' as const, fontSize: 13, marginBottom: 6 },
+    input: {
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 12,
+      paddingHorizontal: 14,
+      paddingVertical: 12,
+      marginBottom: 12,
+      fontSize: 16,
+      color: colors.ink,
+      backgroundColor: colors.input,
+    },
+    remove: { color: colors.danger, fontWeight: '700' as const, textAlign: 'center' as const, marginTop: 14 },
+    cancel: { color: colors.link, fontWeight: '700' as const, textAlign: 'center' as const, marginTop: 12 },
+  }
+}

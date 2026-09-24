@@ -1,6 +1,6 @@
 import { useRouter } from 'expo-router'
 import { useState } from 'react'
-import { Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native'
+import { Pressable, ScrollView, Switch, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { PrimaryButton } from '@/components/Button'
 import { BackButton, Card, EmptyState, ErrorText, Field } from '@/components/carpool/ui'
@@ -9,12 +9,16 @@ import { setAuthNext } from '@/lib/authNext'
 import { useAuth } from '@/lib/auth'
 import { supabase } from '@/lib/supabase'
 import { saveRegisteredVehicle } from 'rides-native/shared/vehicle.js'
-import { INK, INK_SECONDARY, PURPLE, SURFACE } from 'rides-native/places.js'
+import type { Palette } from '@/lib/palette'
+import { useTheme } from '@/lib/theme'
+import { useThemedStyles } from '@/lib/useThemedStyles'
 
 export default function AddVehicleScreen() {
   const router = useRouter()
   const insets = useSafeAreaInsets()
   const { user } = useAuth()
+  const { colors } = useTheme()
+  const styles = useThemedStyles(makeStyles)
   const [make, setMake] = useState('')
   const [model, setModel] = useState('')
   const [color, setColor] = useState('')
@@ -92,8 +96,8 @@ export default function AddVehicleScreen() {
               <Switch
                 value={isTesla}
                 onValueChange={setIsTesla}
-                trackColor={{ false: 'rgba(82,45,128,0.2)', true: '#F56600' }}
-                thumbColor="#fff"
+                trackColor={{ false: colors.track, true: colors.orange }}
+                thumbColor={colors.onAccent}
               />
             </View>
             <PrimaryButton label={busy ? 'Saving…' : 'Save vehicle'} onPress={onSave} disabled={busy} />
@@ -117,23 +121,25 @@ export default function AddVehicleScreen() {
   )
 }
 
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: SURFACE },
-  scroll: { flex: 1 },
-  title: { fontSize: 28, fontWeight: '800', color: PURPLE, letterSpacing: -0.4 },
-  copy: { marginTop: 8, color: INK_SECONDARY, fontSize: 15, lineHeight: 22 },
-  seatLabel: { fontSize: 12, fontWeight: '700', color: INK, marginBottom: 8 },
-  stepper: { flexDirection: 'row', alignItems: 'center', gap: 16, marginBottom: 16 },
-  stepBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
-    backgroundColor: 'rgba(82,45,128,0.08)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  stepBtnText: { fontSize: 22, fontWeight: '700', color: PURPLE },
-  seatCount: { fontSize: 22, fontWeight: '800', color: INK, minWidth: 24, textAlign: 'center' },
-  tesla: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
-  teslaLabel: { fontWeight: '700', color: INK, fontSize: 15 },
-})
+function makeStyles(colors: Palette) {
+  return {
+    screen: { flex: 1, backgroundColor: colors.background },
+    scroll: { flex: 1 },
+    title: { fontSize: 28, fontWeight: '800' as const, color: colors.title, letterSpacing: -0.4 },
+    copy: { marginTop: 8, color: colors.inkSecondary, fontSize: 15, lineHeight: 22 },
+    seatLabel: { fontSize: 12, fontWeight: '700' as const, color: colors.ink, marginBottom: 8 },
+    stepper: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 16, marginBottom: 16 },
+    stepBtn: {
+      width: 44,
+      height: 44,
+      borderRadius: 14,
+      backgroundColor: colors.purpleSoft,
+      alignItems: 'center' as const,
+      justifyContent: 'center' as const,
+    },
+    stepBtnText: { fontSize: 22, fontWeight: '700' as const, color: colors.link },
+    seatCount: { fontSize: 22, fontWeight: '800' as const, color: colors.ink, minWidth: 24, textAlign: 'center' as const },
+    tesla: { flexDirection: 'row' as const, justifyContent: 'space-between' as const, alignItems: 'center' as const, marginBottom: 12 },
+    teslaLabel: { fontWeight: '700' as const, color: colors.ink, fontSize: 15 },
+  }
+}

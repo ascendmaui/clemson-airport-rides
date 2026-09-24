@@ -1,6 +1,9 @@
-import { Modal, Pressable, StyleSheet, Text, View } from 'react-native'
+import { Modal, Pressable, Text, View } from 'react-native'
 import { PrimaryButton, SheetHandle } from '@/components/Button'
-import { INK_SECONDARY, PURPLE } from 'rides-native/places.js'
+import { lift } from '@/lib/elevation'
+import type { Palette } from '@/lib/palette'
+import { useTheme } from '@/lib/theme'
+import { useThemedStyles } from '@/lib/useThemedStyles'
 
 export function SignInToBookSheet({
   open,
@@ -13,10 +16,12 @@ export function SignInToBookSheet({
   onSignIn: () => void
   onSignUp: () => void
 }) {
+  const { colors } = useTheme()
+  const styles = useThemedStyles(makeStyles)
   return (
     <Modal visible={open} animationType="slide" transparent onRequestClose={onClose}>
       <Pressable style={styles.backdrop} onPress={onClose}>
-        <Pressable style={styles.sheet} onPress={() => undefined}>
+        <Pressable style={[styles.sheet, lift(colors, 'float')]} onPress={() => undefined}>
           <SheetHandle />
           <View style={styles.badge}>
             <Text style={styles.badgeText}>🐯</Text>
@@ -38,29 +43,31 @@ export function SignInToBookSheet({
   )
 }
 
-const styles = StyleSheet.create({
-  backdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(11,18,32,0.42)' },
-  sheet: {
-    margin: 12,
-    marginBottom: 24,
-    backgroundColor: '#fff',
-    borderRadius: 24,
-    padding: 22,
-  },
-  badge: {
-    width: 48,
-    height: 48,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(82,45,128,0.1)',
-    marginBottom: 14,
-  },
-  badgeText: { fontSize: 22 },
-  title: { fontSize: 22, fontWeight: '700', color: '#0B1220', letterSpacing: -0.4 },
-  body: { marginTop: 8, marginBottom: 18, color: INK_SECONDARY, fontSize: 14, lineHeight: 20 },
-  link: { paddingVertical: 12, alignItems: 'center' },
-  linkText: { color: PURPLE, fontWeight: '700', fontSize: 16 },
-  quiet: { paddingVertical: 8, alignItems: 'center' },
-  quietText: { color: '#8B939E', fontSize: 13, fontWeight: '500' },
-})
+function makeStyles(colors: Palette) {
+  return {
+    backdrop: { flex: 1, justifyContent: 'flex-end' as const, backgroundColor: colors.scrim },
+    sheet: {
+      margin: 12,
+      marginBottom: 24,
+      backgroundColor: colors.card,
+      borderRadius: 24,
+      padding: 22,
+    },
+    badge: {
+      width: 48,
+      height: 48,
+      borderRadius: 14,
+      alignItems: 'center' as const,
+      justifyContent: 'center' as const,
+      backgroundColor: colors.purpleSoft,
+      marginBottom: 14,
+    },
+    badgeText: { fontSize: 22 },
+    title: { fontSize: 22, fontWeight: '700' as const, color: colors.title, letterSpacing: -0.4 },
+    body: { marginTop: 8, marginBottom: 18, color: colors.inkSecondary, fontSize: 14, lineHeight: 20 },
+    link: { paddingVertical: 12, alignItems: 'center' as const },
+    linkText: { color: colors.link, fontWeight: '700' as const, fontSize: 16 },
+    quiet: { paddingVertical: 8, alignItems: 'center' as const },
+    quietText: { color: colors.placeholder, fontSize: 13, fontWeight: '500' as const },
+  }
+}

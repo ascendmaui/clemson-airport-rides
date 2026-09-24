@@ -8,6 +8,7 @@ import { ApproachAlert } from '@/components/ApproachAlert'
 import { AuthProvider, bindClerkSignOut, useAuth } from '@/lib/auth'
 import { clerkPublishableKey } from '@/lib/clerkEnv'
 import { PasswordRecoveryListener } from '@/lib/passwordRecovery'
+import { ThemeProvider, useTheme } from '@/lib/theme'
 import { useApproachingTrip } from '@/lib/useRiderTrip'
 import { BootScreen } from '@/components/BootScreen'
 import { setCarpoolApiBase } from 'rides-native/shared/carpoolApi.js'
@@ -22,8 +23,9 @@ function ApproachHost() {
 
 function Gate({ children }: { children: ReactNode }) {
   const { loading } = useAuth()
+  const { colors } = useTheme()
   if (loading) return <BootScreen />
-  return <View style={{ flex: 1 }}>{children}</View>
+  return <View style={{ flex: 1, backgroundColor: colors.background }}>{children}</View>
 }
 
 function ClerkSignOutSync() {
@@ -41,16 +43,27 @@ function ClerkSignOutSync() {
   return null
 }
 
+function ThemedStack() {
+  const { colors } = useTheme()
+  return (
+    <>
+      <StatusBar style={colors.statusBar} />
+      <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.background } }} />
+    </>
+  )
+}
+
 function AppTree() {
   return (
-    <AuthProvider>
-      <PasswordRecoveryListener />
-      <Gate>
-        <StatusBar style="dark" />
-        <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: '#F7F4F0' } }} />
-        <ApproachHost />
-      </Gate>
-    </AuthProvider>
+    <ThemeProvider>
+      <AuthProvider>
+        <PasswordRecoveryListener />
+        <Gate>
+          <ThemedStack />
+          <ApproachHost />
+        </Gate>
+      </AuthProvider>
+    </ThemeProvider>
   )
 }
 

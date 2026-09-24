@@ -20,13 +20,19 @@ import {
   type EmergencyContact,
   type SosEvent,
 } from 'rides-native/safety.js'
-import { ORANGE } from 'rides-native/places.js'
+import { useTheme } from '@/lib/theme'
 
 const MORE_CHANNELS = ALERT_CHANNELS.filter((channel) => channel !== 'tel_911' && channel !== 'tel_cupd')
 
 export function SosButton({ onPress }: { onPress: () => void }) {
+  const { colors } = useTheme()
   return (
-    <Pressable accessibilityRole="button" accessibilityLabel="SOS" onPress={onPress} style={styles.fab}>
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel="SOS"
+      onPress={onPress}
+      style={[styles.fab, { backgroundColor: colors.danger, shadowColor: colors.danger }]}
+    >
       <Text style={styles.fabText}>SOS</Text>
     </Pressable>
   )
@@ -64,11 +70,12 @@ export function SosIncomingBanner({
     }
   }, [active, tripId, userId])
 
+  const { colors } = useTheme()
   if (!event || event.id === dismissedId) return null
   return (
     <View style={styles.banner}>
       <View style={styles.bannerCopy}>
-        <Text style={styles.bannerKicker}>SOS</Text>
+        <Text style={[styles.bannerKicker, { color: colors.orange }]}>SOS</Text>
         <Text style={styles.bannerTitle}>Your driver {sosChannelPhrase(event.channel)}</Text>
         <Text style={styles.bannerMeta}>Trip {String(event.trip_id).slice(0, 8)}</Text>
       </View>
@@ -345,7 +352,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   bannerCopy: { flex: 1 },
-  bannerKicker: { color: ORANGE, fontWeight: '800', fontSize: 11, letterSpacing: 1 },
+  bannerKicker: { color: '#F56600', fontWeight: '800', fontSize: 11, letterSpacing: 1 },
   bannerTitle: { color: '#fff', fontWeight: '700', marginTop: 2 },
   bannerMeta: { color: 'rgba(255,255,255,0.75)', fontSize: 12, marginTop: 2 },
   bannerDismiss: { color: '#fff', fontSize: 22, fontWeight: '700', paddingHorizontal: 6 },

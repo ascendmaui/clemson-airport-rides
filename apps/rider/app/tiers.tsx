@@ -1,13 +1,17 @@
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useState } from 'react'
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { Pressable, ScrollView, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { PrimaryButton } from '@/components/Button'
 import { SignInToBookSheet } from '@/components/SignInToBookSheet'
 import { setAuthNext } from '@/lib/authNext'
 import { useAuth } from '@/lib/auth'
 import { oneParam } from '@/lib/oneParam'
-import { formatUsd, INK, INK_SECONDARY, ORANGE, PURPLE, RIDE_TIERS, SURFACE } from 'rides-native/places.js'
+import { formatUsd, RIDE_TIERS } from 'rides-native/places.js'
+import { lift } from '@/lib/elevation'
+import type { Palette } from '@/lib/palette'
+import { useTheme } from '@/lib/theme'
+import { useThemedStyles } from '@/lib/useThemedStyles'
 import { TESLA_FLEET_NOTICE } from 'rides-native/tripTags'
 
 export default function RideTiers() {
@@ -20,6 +24,8 @@ export default function RideTiers() {
   const { user } = useAuth()
   const [selected, setSelected] = useState(RIDE_TIERS[0].id)
   const [promptOpen, setPromptOpen] = useState(false)
+  const { colors } = useTheme()
+  const styles = useThemedStyles(makeStyles)
 
   const next = {
     pathname: '/pick-driver' as const,
@@ -38,7 +44,7 @@ export default function RideTiers() {
   return (
     <View style={[styles.screen, { paddingTop: insets.top }]}>
       <View style={styles.header}>
-        <Pressable onPress={() => router.back()} style={styles.back}>
+        <Pressable onPress={() => router.back()} style={[styles.back, lift(colors, 'rest')]}>
           <Text style={styles.backLabel}>←</Text>
         </Pressable>
         <View style={{ flex: 1 }}>
@@ -88,41 +94,43 @@ export default function RideTiers() {
   )
 }
 
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: SURFACE },
-  header: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingBottom: 8 },
-  back: { width: 40, height: 40, borderRadius: 12, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center' },
-  backLabel: { fontSize: 18, color: PURPLE, fontWeight: '700' },
-  kicker: { fontSize: 18, fontWeight: '700', color: INK },
-  sub: { color: INK_SECONDARY, fontSize: 13, marginTop: 2 },
-  promo: {
-    marginHorizontal: 16,
-    marginBottom: 8,
-    alignSelf: 'flex-start',
-    backgroundColor: 'rgba(82,45,128,0.08)',
-    borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-  },
-  promoText: { color: PURPLE, fontWeight: '600', fontSize: 12 },
-  list: { padding: 16, paddingBottom: 24 },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 14,
-    marginBottom: 10,
-    borderWidth: 1,
-    borderColor: 'transparent',
-  },
-  rowOn: { borderColor: ORANGE },
-  icon: { fontSize: 22 },
-  name: { fontWeight: '700', fontSize: 16, color: INK },
-  meta: { color: INK_SECONDARY, fontSize: 12, marginTop: 2 },
-  price: { fontWeight: '800', color: INK, fontSize: 16 },
-  footer: { padding: 16, paddingBottom: 28, backgroundColor: '#fff' },
-  stub: { marginHorizontal: 16, marginBottom: 8, backgroundColor: 'rgba(245,102,0,0.12)', borderRadius: 16, padding: 12 },
-  stubText: { color: PURPLE, fontSize: 13, lineHeight: 18, fontWeight: '600' },
-})
+function makeStyles(colors: Palette) {
+  return {
+    screen: { flex: 1, backgroundColor: colors.background },
+    header: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 12, paddingHorizontal: 16, paddingBottom: 8 },
+    back: { width: 40, height: 40, borderRadius: 14, backgroundColor: colors.card, alignItems: 'center' as const, justifyContent: 'center' as const },
+    backLabel: { fontSize: 18, color: colors.title, fontWeight: '700' as const },
+    kicker: { fontSize: 18, fontWeight: '700' as const, color: colors.ink },
+    sub: { color: colors.inkSecondary, fontSize: 13, marginTop: 2 },
+    promo: {
+      marginHorizontal: 16,
+      marginBottom: 8,
+      alignSelf: 'flex-start' as const,
+      backgroundColor: colors.purpleSoft,
+      borderRadius: 999,
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+    },
+    promoText: { color: colors.link, fontWeight: '600' as const, fontSize: 12 },
+    list: { padding: 16, paddingBottom: 24 },
+    row: {
+      flexDirection: 'row' as const,
+      alignItems: 'center' as const,
+      gap: 12,
+      backgroundColor: colors.card,
+      borderRadius: 16,
+      padding: 14,
+      marginBottom: 10,
+      borderWidth: 1,
+      borderColor: 'transparent',
+    },
+    rowOn: { borderColor: colors.orange },
+    icon: { fontSize: 22 },
+    name: { fontWeight: '700' as const, fontSize: 16, color: colors.ink },
+    meta: { color: colors.inkSecondary, fontSize: 12, marginTop: 2 },
+    price: { fontWeight: '800' as const, color: colors.ink, fontSize: 16 },
+    footer: { padding: 16, paddingBottom: 28, backgroundColor: colors.card, borderTopWidth: 1, borderTopColor: colors.border },
+    stub: { marginHorizontal: 16, marginBottom: 8, backgroundColor: colors.orangeSoft, borderRadius: 16, padding: 12 },
+    stubText: { color: colors.link, fontSize: 13, lineHeight: 18, fontWeight: '600' as const },
+  }
+}

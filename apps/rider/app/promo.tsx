@@ -1,6 +1,6 @@
 import { useFocusEffect, useRouter } from 'expo-router'
 import { useCallback, useState } from 'react'
-import { Share, StyleSheet, Text, TextInput, View } from 'react-native'
+import { Share, Text, TextInput, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { PrimaryButton } from '@/components/Button'
 import { StackHeader } from '@/components/StackHeader'
@@ -15,7 +15,9 @@ import {
   riderPromoShareUrl,
 } from 'rides-native/riderMoney.js'
 import { normalizePromoCode } from 'rides-native/authErrors'
-import { INK, INK_SECONDARY, ORANGE, PURPLE, SURFACE } from 'rides-native/places.js'
+import type { Palette } from '@/lib/palette'
+import { useTheme } from '@/lib/theme'
+import { useThemedStyles } from '@/lib/useThemedStyles'
 
 type Desk = {
   code: string | null
@@ -33,6 +35,8 @@ export default function PromoScreen() {
   const [desk, setDesk] = useState<Desk | null>(null)
   const [note, setNote] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const { colors } = useTheme()
+  const styles = useThemedStyles(makeStyles)
 
   const load = useCallback(() => {
     if (!user || !supabase) return undefined
@@ -97,7 +101,7 @@ export default function PromoScreen() {
               onChangeText={(value) => setCode(normalizePromoCode(value))}
               autoCapitalize="characters"
               placeholder="FRIEND CODE"
-              placeholderTextColor="#8B939E"
+              placeholderTextColor={colors.placeholder}
               style={styles.input}
             />
             <PrimaryButton label={busy ? 'Applying…' : 'Apply code'} onPress={onClaim} disabled={busy || !code} />
@@ -123,35 +127,37 @@ export default function PromoScreen() {
   )
 }
 
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: SURFACE },
-  body: { padding: 20, gap: 12 },
-  copy: { color: INK_SECONDARY, fontSize: 14, lineHeight: 20 },
-  label: { fontWeight: '700', color: INK },
-  input: {
-    borderWidth: 1,
-    borderColor: 'rgba(82,45,128,0.16)',
-    borderRadius: 12,
-    backgroundColor: '#fff',
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: 18,
-    fontWeight: '800',
-    letterSpacing: 1,
-    color: INK,
-  },
-  codeCard: {
-    marginTop: 8,
-    borderRadius: 16,
-    padding: 16,
-    backgroundColor: 'rgba(245,102,0,0.10)',
-    borderWidth: 1,
-    borderColor: 'rgba(245,102,0,0.35)',
-    gap: 4,
-  },
-  kicker: { color: PURPLE, fontWeight: '800', letterSpacing: 1, fontSize: 12 },
-  code: { color: ORANGE, fontSize: 28, fontWeight: '800', letterSpacing: 1.4 },
-  link: { color: PURPLE, fontSize: 12 },
-  note: { color: PURPLE, fontSize: 13, lineHeight: 18 },
-  error: { color: '#B42318', fontSize: 13, lineHeight: 18 },
-})
+function makeStyles(colors: Palette) {
+  return {
+    screen: { flex: 1, backgroundColor: colors.background },
+    body: { padding: 20, gap: 12 },
+    copy: { color: colors.inkSecondary, fontSize: 14, lineHeight: 20 },
+    label: { fontWeight: '700' as const, color: colors.ink },
+    input: {
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 12,
+      backgroundColor: colors.input,
+      paddingHorizontal: 14,
+      paddingVertical: 12,
+      fontSize: 18,
+      fontWeight: '800' as const,
+      letterSpacing: 1,
+      color: colors.ink,
+    },
+    codeCard: {
+      marginTop: 8,
+      borderRadius: 16,
+      padding: 16,
+      backgroundColor: colors.orangeSoft,
+      borderWidth: 1,
+      borderColor: colors.orange,
+      gap: 4,
+    },
+    kicker: { color: colors.link, fontWeight: '800' as const, letterSpacing: 1, fontSize: 12 },
+    code: { color: colors.orange, fontSize: 28, fontWeight: '800' as const, letterSpacing: 1.4 },
+    link: { color: colors.link, fontSize: 12 },
+    note: { color: colors.link, fontSize: 13, lineHeight: 18 },
+    error: { color: colors.danger, fontSize: 13, lineHeight: 18 },
+  }
+}

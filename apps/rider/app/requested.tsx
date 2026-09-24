@@ -1,6 +1,6 @@
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useEffect, useState } from 'react'
-import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { Pressable, RefreshControl, ScrollView, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { PrimaryButton } from '@/components/Button'
 import { CampusMap } from '@/components/CampusMap'
@@ -13,7 +13,11 @@ import { supabase } from '@/lib/supabase'
 import { isLiveStatus, loadLiveTrip, type LiveTrip } from '@/lib/tripWatch'
 import { useTripById } from '@/lib/useRiderTrip'
 import { isActiveRideStatus, listEmergencyContacts, type EmergencyContact } from 'rides-native/safety.js'
-import { INK, INK_SECONDARY, ORANGE, PURPLE, SURFACE } from 'rides-native/places.js'
+import { ORANGE, PURPLE } from 'rides-native/places.js'
+import { lift } from '@/lib/elevation'
+import type { Palette } from '@/lib/palette'
+import { useTheme } from '@/lib/theme'
+import { useThemedStyles } from '@/lib/useThemedStyles'
 
 function pinsFor(trip: LiveTrip | null): MapPin[] {
   if (!trip) return []
@@ -62,6 +66,8 @@ export default function Requested() {
   const [refreshing, setRefreshing] = useState(false)
   const [sosOpen, setSosOpen] = useState(false)
   const [contacts, setContacts] = useState<EmergencyContact[]>([])
+  const { colors } = useTheme()
+  const styles = useThemedStyles(makeStyles)
   const rideLive = isActiveRideStatus(trip?.status)
   const tracking = isLiveStatus(trip?.status || live?.status || null)
   const located = live?.driverLat != null && live?.driverLng != null
@@ -110,7 +116,7 @@ export default function Requested() {
   return (
     <View style={[styles.screen, { paddingTop: insets.top }]}>
       <View style={styles.header}>
-        <Pressable accessibilityRole="button" accessibilityLabel="Back" onPress={() => router.back()} style={styles.back}>
+        <Pressable accessibilityRole="button" accessibilityLabel="Back" onPress={() => router.back()} style={[styles.back, lift(colors, 'rest')]}>
           <Text style={styles.backLabel}>←</Text>
         </Pressable>
         <View style={styles.headerCopy}>
@@ -124,7 +130,7 @@ export default function Requested() {
         refreshControl={(
           <RefreshControl
             refreshing={refreshing}
-            tintColor={ORANGE}
+            tintColor={colors.orange}
             onRefresh={() => {
               setRefreshing(true)
               reloadMap().finally(() => setRefreshing(false))
@@ -206,25 +212,27 @@ export default function Requested() {
   )
 }
 
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: SURFACE },
-  header: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingBottom: 8 },
-  back: { width: 40, height: 40, borderRadius: 12, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center' },
-  backLabel: { fontSize: 18, color: PURPLE, fontWeight: '700' },
-  headerCopy: { flex: 1 },
-  kicker: { color: ORANGE, fontWeight: '800', letterSpacing: 1.1, fontSize: 11 },
-  title: { color: PURPLE, fontSize: 22, fontWeight: '800' },
-  list: { padding: 16, gap: 14, paddingBottom: 140 },
-  map: { height: 240, borderRadius: 20, overflow: 'hidden' },
-  summary: { backgroundColor: '#fff', borderRadius: 20, padding: 16 },
-  summaryTitle: { color: INK, fontSize: 18, fontWeight: '800', marginBottom: 6 },
-  body: { color: INK_SECONDARY, fontSize: 14, lineHeight: 20 },
-  meta: { color: PURPLE, fontWeight: '700', fontSize: 12, marginTop: 8 },
-  empty: { backgroundColor: '#fff', borderRadius: 20, padding: 16, gap: 8 },
-  emptyTitle: { color: PURPLE, fontWeight: '800', fontSize: 16 },
-  inlineEmpty: { backgroundColor: 'rgba(82,45,128,0.06)', borderRadius: 16, padding: 12, marginBottom: 12 },
-  error: { color: '#B42318', fontSize: 13 },
-  sosCard: { backgroundColor: '#fff', borderRadius: 20, padding: 16 },
-  cardTitle: { color: PURPLE, fontSize: 20, fontWeight: '800', marginTop: 4, marginBottom: 8 },
-  link: { color: PURPLE, fontWeight: '800', fontSize: 15 },
-})
+function makeStyles(colors: Palette) {
+  return {
+    screen: { flex: 1, backgroundColor: colors.background },
+    header: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 12, paddingHorizontal: 16, paddingBottom: 8 },
+    back: { width: 40, height: 40, borderRadius: 14, backgroundColor: colors.card, alignItems: 'center' as const, justifyContent: 'center' as const },
+    backLabel: { fontSize: 18, color: colors.title, fontWeight: '700' as const },
+    headerCopy: { flex: 1 },
+    kicker: { color: colors.orange, fontWeight: '800' as const, letterSpacing: 1.1, fontSize: 11 },
+    title: { color: colors.title, fontSize: 22, fontWeight: '800' as const },
+    list: { padding: 16, gap: 14, paddingBottom: 140 },
+    map: { height: 240, borderRadius: 20, overflow: 'hidden' as const },
+    summary: { backgroundColor: colors.card, borderRadius: 20, padding: 16 },
+    summaryTitle: { color: colors.ink, fontSize: 18, fontWeight: '800' as const, marginBottom: 6 },
+    body: { color: colors.inkSecondary, fontSize: 14, lineHeight: 20 },
+    meta: { color: colors.link, fontWeight: '700' as const, fontSize: 12, marginTop: 8 },
+    empty: { backgroundColor: colors.card, borderRadius: 20, padding: 16, gap: 8 },
+    emptyTitle: { color: colors.title, fontWeight: '800' as const, fontSize: 16 },
+    inlineEmpty: { backgroundColor: colors.purpleSoft, borderRadius: 16, padding: 12, marginBottom: 12 },
+    error: { color: colors.danger, fontSize: 13 },
+    sosCard: { backgroundColor: colors.card, borderRadius: 20, padding: 16 },
+    cardTitle: { color: colors.title, fontSize: 20, fontWeight: '800' as const, marginTop: 4, marginBottom: 8 },
+    link: { color: colors.link, fontWeight: '800' as const, fontSize: 15 },
+  }
+}

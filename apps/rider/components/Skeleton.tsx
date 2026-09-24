@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { Animated, type StyleProp, type ViewStyle } from 'react-native'
+import { useTheme } from '@/lib/theme'
 
 export function Skeleton({
   height = 14,
@@ -10,6 +11,7 @@ export function Skeleton({
   width?: number | `${number}%`
   style?: StyleProp<ViewStyle>
 }) {
+  const { colors } = useTheme()
   const opacity = useRef(new Animated.Value(0.45)).current
 
   useEffect(() => {
@@ -30,7 +32,7 @@ export function Skeleton({
           height,
           width,
           borderRadius: 10,
-          backgroundColor: 'rgba(82,45,128,0.14)',
+          backgroundColor: colors.track,
           opacity,
         },
         style,

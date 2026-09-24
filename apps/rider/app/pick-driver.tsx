@@ -1,6 +1,6 @@
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useEffect, useState } from 'react'
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { Pressable, ScrollView, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { PrimaryButton } from '@/components/Button'
 import { CampusMap } from '@/components/CampusMap'
@@ -17,7 +17,11 @@ import { authStorage } from '@/lib/storage'
 import { supabase } from '@/lib/supabase'
 import { isClemsonEmail } from 'rides-native/authErrors'
 import { fetchOnlineDrivers, requestDriverTrip, type OnlineDriver } from 'rides-native/drivers'
-import { destPoint, INK, INK_SECONDARY, ORANGE, PURPLE, STADIUM, SURFACE } from 'rides-native/places.js'
+import { destPoint, STADIUM } from 'rides-native/places.js'
+import { lift } from '@/lib/elevation'
+import type { Palette } from '@/lib/palette'
+import { useTheme } from '@/lib/theme'
+import { useThemedStyles } from '@/lib/useThemedStyles'
 import { searchDelayMs } from 'rides-native/riderShell.js'
 
 const MAP_KINDS: MapKind[] = ['standard', 'satellite', 'hybrid']
@@ -40,6 +44,8 @@ export default function PickDriver() {
   const [promptOpen, setPromptOpen] = useState(false)
   const [mapType, setMapType] = useState<MapKind>('standard')
   const [notified, setNotified] = useState(false)
+  const { colors } = useTheme()
+  const styles = useThemedStyles(makeStyles)
 
   useEffect(() => {
     let alive = true
@@ -68,7 +74,7 @@ export default function PickDriver() {
       latitude: Number(driver.lat),
       longitude: Number(driver.lng),
       title: driver.name,
-      color: ORANGE,
+      color: colors.orange,
     }))
 
   const onRequest = async () => {
@@ -111,7 +117,7 @@ export default function PickDriver() {
   return (
     <View style={[styles.screen, { paddingTop: insets.top }]}>
       <View style={styles.header}>
-        <Pressable onPress={() => router.back()} style={styles.back}>
+        <Pressable onPress={() => router.back()} style={[styles.back, lift(colors, 'rest')]}>
           <Text style={styles.backLabel}>←</Text>
         </Pressable>
         <View style={{ flex: 1 }}>
@@ -160,7 +166,7 @@ export default function PickDriver() {
         {drivers.map((driver) => {
           const on = selected === driver.id
           return (
-            <Pressable key={driver.id} onPress={() => { void tapHaptic(); setSelected(driver.id) }} style={[styles.card, on && styles.cardOn]}>
+            <Pressable key={driver.id} onPress={() => { void tapHaptic(); setSelected(driver.id) }} style={[styles.card, lift(colors, 'rest'), on && styles.cardOn]}>
               <Text style={styles.name}>{driver.name}</Text>
               <Text style={styles.sub}>{driver.vehicleLabel}</Text>
               <Text style={styles.meta}>
@@ -191,38 +197,40 @@ export default function PickDriver() {
   )
 }
 
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: SURFACE },
-  header: { flexDirection: 'row', gap: 12, paddingHorizontal: 16, paddingBottom: 8 },
-  back: { width: 40, height: 40, borderRadius: 12, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center' },
-  backLabel: { fontSize: 18, color: PURPLE, fontWeight: '700' },
-  title: { fontSize: 24, fontWeight: '700', color: INK },
-  sub: { color: INK_SECONDARY, fontSize: 13, marginTop: 4, lineHeight: 18 },
-  mapWrap: { height: 280, marginHorizontal: 16, borderRadius: 20, overflow: 'hidden' },
-  loader: {
-    position: 'absolute',
-    top: 64,
-    left: 36,
-    right: 36,
-    alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.9)',
-    borderRadius: 20,
-    paddingTop: 12,
-    paddingBottom: 14,
-    minHeight: 132,
-  },
-  kinds: { position: 'absolute', left: 10, bottom: 10, flexDirection: 'row', gap: 6 },
-  kind: { backgroundColor: 'rgba(255,255,255,0.94)', borderRadius: 999, paddingHorizontal: 8, paddingVertical: 5 },
-  kindOn: { backgroundColor: PURPLE },
-  kindText: { color: PURPLE, fontSize: 11, fontWeight: '800' },
-  kindTextOn: { color: '#fff' },
-  list: { padding: 16, gap: 10 },
-  error: { color: '#B42318', fontSize: 13, lineHeight: 18 },
-  empty: { backgroundColor: '#fff', borderRadius: 20, padding: 20, gap: 10 },
-  emptyTitle: { fontWeight: '800', fontSize: 18, color: INK },
-  card: { backgroundColor: '#fff', borderRadius: 16, padding: 16, borderWidth: 1, borderColor: 'transparent' },
-  cardOn: { borderColor: ORANGE },
-  name: { fontSize: 18, fontWeight: '800', color: INK },
-  meta: { marginTop: 6, color: PURPLE, fontSize: 12, fontWeight: '600' },
-  footer: { padding: 16, paddingBottom: 28, backgroundColor: '#fff' },
-})
+function makeStyles(colors: Palette) {
+  return {
+    screen: { flex: 1, backgroundColor: colors.background },
+    header: { flexDirection: 'row' as const, gap: 12, paddingHorizontal: 16, paddingBottom: 8 },
+    back: { width: 40, height: 40, borderRadius: 14, backgroundColor: colors.card, alignItems: 'center' as const, justifyContent: 'center' as const },
+    backLabel: { fontSize: 18, color: colors.title, fontWeight: '700' as const },
+    title: { fontSize: 24, fontWeight: '700' as const, color: colors.title },
+    sub: { color: colors.inkSecondary, fontSize: 13, marginTop: 4, lineHeight: 18 },
+    mapWrap: { height: 280, marginHorizontal: 16, borderRadius: 20, overflow: 'hidden' as const },
+    loader: {
+      position: 'absolute' as const,
+      top: 64,
+      left: 36,
+      right: 36,
+      alignItems: 'center' as const,
+      backgroundColor: colors.tabBar,
+      borderRadius: 20,
+      paddingTop: 12,
+      paddingBottom: 14,
+      minHeight: 132,
+    },
+    kinds: { position: 'absolute' as const, left: 10, bottom: 10, flexDirection: 'row' as const, gap: 6 },
+    kind: { backgroundColor: colors.card, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 5 },
+    kindOn: { backgroundColor: colors.purple },
+    kindText: { color: colors.link, fontSize: 11, fontWeight: '800' as const },
+    kindTextOn: { color: colors.onAccent },
+    list: { padding: 16, gap: 10 },
+    error: { color: colors.danger, fontSize: 13, lineHeight: 18 },
+    empty: { backgroundColor: colors.card, borderRadius: 20, padding: 20, gap: 10 },
+    emptyTitle: { fontWeight: '800' as const, fontSize: 18, color: colors.ink },
+    card: { backgroundColor: colors.card, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: 'transparent' },
+    cardOn: { borderColor: colors.orange },
+    name: { fontSize: 18, fontWeight: '800' as const, color: colors.ink },
+    meta: { marginTop: 6, color: colors.link, fontSize: 12, fontWeight: '600' as const },
+    footer: { padding: 16, paddingBottom: 28, backgroundColor: colors.card, borderTopWidth: 1, borderTopColor: colors.border },
+  }
+}

@@ -5,7 +5,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { approachHaptic } from '@/lib/feedback'
 import { useSosEngaged } from '@/lib/sosEngaged'
 import { useDriverApproach } from '@/lib/useDriverApproach'
-import { ORANGE, ORANGE_BRIGHT, PURPLE } from 'rides-native/places.js'
+import { lift } from '@/lib/elevation'
+import type { Palette } from '@/lib/palette'
+import { useTheme } from '@/lib/theme'
+import { useThemedStyles } from '@/lib/useThemedStyles'
 
 const STAGE_HAPTIC_GAP_MS = 12000
 
@@ -17,6 +20,8 @@ export function ApproachAlert({
   driverId: string | null
 }) {
   const insets = useSafeAreaInsets()
+  const { colors } = useTheme()
+  const styles = useThemedStyles(makeStyles)
   const paused = useSosEngaged()
   const { active, reading, attention, statusLine, waiting } = useDriverApproach(status, driverId)
   const wash = useRef(new Animated.Value(0)).current
@@ -93,15 +98,15 @@ export function ApproachAlert({
 
   const body = (
     <View pointerEvents="box-none" style={styles.host}>
-      <Animated.View pointerEvents="none" style={[styles.wash, { backgroundColor: ORANGE, opacity: wash }]} />
-      <Animated.View pointerEvents="none" style={[styles.wash, { backgroundColor: ORANGE_BRIGHT, opacity: bright }]} />
+      <Animated.View pointerEvents="none" style={[styles.wash, { backgroundColor: colors.orange, opacity: wash }]} />
+      <Animated.View pointerEvents="none" style={[styles.wash, { backgroundColor: colors.orangeBright, opacity: bright }]} />
       <View pointerEvents="none" style={[styles.dock, { bottom: Math.max(insets.bottom, 10) + 74 }]}>
         <View
           accessible
           accessibilityRole="text"
           accessibilityLiveRegion="polite"
           accessibilityLabel={reading ? `${reading.primary}, ${reading.secondary}. ${statusLine}` : primary}
-          style={styles.card}
+          style={[styles.card, lift(colors, 'float')]}
         >
           <View style={styles.dot} />
           <View style={styles.copy}>
@@ -124,58 +129,55 @@ export function ApproachAlert({
   return body
 }
 
-const styles = StyleSheet.create({
-  host: {
-    ...StyleSheet.absoluteFill,
-    zIndex: 40,
-    elevation: 40,
-  },
-  wash: {
-    ...StyleSheet.absoluteFill,
-  },
-  dock: {
-    position: 'absolute',
-    left: 16,
-    right: 16,
-  },
-  card: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    backgroundColor: '#fff',
-    borderRadius: 22,
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    shadowColor: PURPLE,
-    shadowOpacity: 0.18,
-    shadowRadius: 18,
-    shadowOffset: { width: 0, height: 10 },
-    elevation: 8,
-  },
-  dot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    backgroundColor: ORANGE,
-  },
-  copy: { flex: 1 },
-  kicker: {
-    color: ORANGE,
-    fontSize: 11,
-    fontWeight: '800',
-    letterSpacing: 1.1,
-  },
-  primary: {
-    color: PURPLE,
-    fontSize: 22,
-    fontWeight: '800',
-    letterSpacing: -0.3,
-    marginTop: 2,
-  },
-  secondary: {
-    color: '#5C6570',
-    fontSize: 13,
-    fontWeight: '600',
-    marginTop: 2,
-  },
-})
+function makeStyles(colors: Palette) {
+  return {
+    host: {
+      ...StyleSheet.absoluteFill,
+      zIndex: 40,
+      elevation: 40,
+    },
+    wash: {
+      ...StyleSheet.absoluteFill,
+    },
+    dock: {
+      position: 'absolute' as const,
+      left: 16,
+      right: 16,
+    },
+    card: {
+      flexDirection: 'row' as const,
+      alignItems: 'center' as const,
+      gap: 12,
+      backgroundColor: colors.card,
+      borderRadius: 22,
+      paddingVertical: 14,
+      paddingHorizontal: 16,
+    },
+    dot: {
+      width: 12,
+      height: 12,
+      borderRadius: 6,
+      backgroundColor: colors.orange,
+    },
+    copy: { flex: 1 },
+    kicker: {
+      color: colors.orange,
+      fontSize: 11,
+      fontWeight: '800' as const,
+      letterSpacing: 1.1,
+    },
+    primary: {
+      color: colors.title,
+      fontSize: 22,
+      fontWeight: '800' as const,
+      letterSpacing: -0.3,
+      marginTop: 2,
+    },
+    secondary: {
+      color: colors.inkSecondary,
+      fontSize: 13,
+      fontWeight: '600' as const,
+      marginTop: 2,
+    },
+  }
+}

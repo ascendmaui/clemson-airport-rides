@@ -1,8 +1,11 @@
 import { Ionicons } from '@expo/vector-icons'
 import { useRouter } from 'expo-router'
-import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { Pressable, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { ORANGE } from 'rides-native/places.js'
+import { lift } from '@/lib/elevation'
+import type { Palette } from '@/lib/palette'
+import { useTheme } from '@/lib/theme'
+import { useThemedStyles } from '@/lib/useThemedStyles'
 import { tapHaptic } from '@/lib/feedback'
 
 const TABS = [
@@ -15,11 +18,13 @@ const TABS = [
 export function MainTabs({ active }: { active: 'schedule' | 'friends' | 'account' | 'home' }) {
   const router = useRouter()
   const insets = useSafeAreaInsets()
+  const { colors } = useTheme()
+  const styles = useThemedStyles(makeStyles)
   return (
-    <View style={[styles.bar, { paddingBottom: Math.max(insets.bottom, 10) }]}>
+    <View style={[styles.bar, lift(colors, 'bar'), { paddingBottom: Math.max(insets.bottom, 10) }]}>
       {TABS.map((tab) => {
         const on = tab.id === active
-        const color = on ? ORANGE : '#8B939E'
+        const color = on ? colors.orange : colors.tabInactive
         return (
           <Pressable
             key={tab.id}
@@ -41,14 +46,16 @@ export function MainTabs({ active }: { active: 'schedule' | 'friends' | 'account
   )
 }
 
-const styles = StyleSheet.create({
-  bar: {
-    flexDirection: 'row',
-    backgroundColor: 'rgba(255,255,255,0.96)',
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: 'rgba(82,45,128,0.12)',
-    paddingTop: 8,
-  },
-  item: { flex: 1, alignItems: 'center', gap: 2 },
-  label: { fontSize: 11, fontWeight: '700' },
-})
+function makeStyles(colors: Palette) {
+  return {
+    bar: {
+      flexDirection: 'row' as const,
+      backgroundColor: colors.tabBar,
+      borderTopWidth: 1,
+      borderTopColor: colors.border,
+      paddingTop: 8,
+    },
+    item: { flex: 1, alignItems: 'center' as const, gap: 2 },
+    label: { fontSize: 11, fontWeight: '700' as const },
+  }
+}

@@ -2,8 +2,9 @@ import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 're
 import { StyleSheet, Text, View } from 'react-native'
 import MapView, { Circle, Marker, PROVIDER_DEFAULT } from 'react-native-maps'
 import { heatColor } from 'rides-native/heat.js'
-import { DOWNTOWN, ORANGE, PURPLE, STADIUM } from 'rides-native/places.js'
+import { DOWNTOWN, STADIUM } from 'rides-native/places.js'
 import type { CampusMapHandle, CampusMapProps } from '@/components/mapTypes'
+import { useTheme } from '@/lib/theme'
 
 function rgba(hex: string, alpha: number) {
   const raw = hex.replace('#', '')
@@ -13,13 +14,13 @@ function rgba(hex: string, alpha: number) {
   return `rgba(${r},${g},${b},${alpha})`
 }
 
-function theaterCar(index: number, tick: number) {
+function theaterCar(index: number, tick: number, orange: string, purple: string) {
   const angle = tick * 0.45 + index * (Math.PI / 2)
   const radius = 0.0034 + (index % 2) * 0.0015
   return {
     latitude: STADIUM.latitude + Math.sin(angle) * radius,
     longitude: STADIUM.longitude + Math.cos(angle) * radius * 1.2,
-    color: index % 2 === 0 ? ORANGE : PURPLE,
+    color: index % 2 === 0 ? orange : purple,
   }
 }
 
@@ -36,6 +37,7 @@ export const CampusMap = forwardRef<CampusMapHandle, CampusMapProps>(function Ca
   },
   ref,
 ) {
+  const { colors, scheme } = useTheme()
   const mapRef = useRef<MapView>(null)
   const [tick, setTick] = useState(0)
   const [radar, setRadar] = useState(90)
@@ -77,13 +79,14 @@ export const CampusMap = forwardRef<CampusMapHandle, CampusMapProps>(function Ca
           longitudeDelta: showHeat ? 0.028 : 0.04,
         }}
         mapType={mapType}
+        userInterfaceStyle={scheme}
         rotateEnabled={false}
         pitchEnabled={false}
         toolbarEnabled={false}
         showsUserLocation={false}
       >
-        <Marker coordinate={STADIUM} pinColor={ORANGE} title="Memorial Stadium" />
-        <Marker coordinate={DOWNTOWN} pinColor={PURPLE} title="Downtown Clemson" />
+        <Marker coordinate={STADIUM} pinColor={colors.orange} title="Memorial Stadium" />
+        <Marker coordinate={DOWNTOWN} pinColor={colors.purple} title="Downtown Clemson" />
         {showHeat
           ? spots.map((spot) => (
               <Circle
@@ -100,8 +103,8 @@ export const CampusMap = forwardRef<CampusMapHandle, CampusMapProps>(function Ca
           <Circle
             center={STADIUM}
             radius={420}
-            fillColor="rgba(245,102,0,0.16)"
-            strokeColor={ORANGE}
+            fillColor={colors.orangeSoft}
+            strokeColor={colors.orange}
             strokeWidth={2}
           />
         ) : null}
@@ -109,8 +112,8 @@ export const CampusMap = forwardRef<CampusMapHandle, CampusMapProps>(function Ca
           <Circle
             center={DOWNTOWN}
             radius={260}
-            fillColor="rgba(82,45,128,0.18)"
-            strokeColor={PURPLE}
+            fillColor={colors.purpleSoft}
+            strokeColor={colors.purple}
             strokeWidth={2}
           />
         ) : null}
@@ -118,14 +121,14 @@ export const CampusMap = forwardRef<CampusMapHandle, CampusMapProps>(function Ca
           <Circle
             center={STADIUM}
             radius={radar}
-            fillColor="rgba(245,102,0,0.14)"
-            strokeColor={tick % 2 === 0 ? ORANGE : PURPLE}
+            fillColor={colors.orangeSoft}
+            strokeColor={tick % 2 === 0 ? colors.orange : colors.purple}
             strokeWidth={2}
           />
         ) : null}
         {theater
           ? [0, 1, 2, 3].map((index) => {
-              const car = theaterCar(index, tick)
+              const car = theaterCar(index, tick, colors.orange, colors.purple)
               return (
                 <Marker
                   key={`preview-${index}`}
@@ -150,7 +153,7 @@ export const CampusMap = forwardRef<CampusMapHandle, CampusMapProps>(function Ca
           />
         ))}
         {userCoordinate ? (
-          <Marker coordinate={userCoordinate} pinColor={PURPLE} title="You" />
+          <Marker coordinate={userCoordinate} pinColor={colors.purple} title="You" />
         ) : null}
       </MapView>
     </View>
@@ -166,7 +169,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,
-    borderColor: '#fff',
+    borderColor: '#FFFFFF',
   },
   carGlyph: { fontSize: 14 },
 })

@@ -1,13 +1,16 @@
 import { useRouter } from 'expo-router'
 import { useEffect, useState } from 'react'
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { Pressable, ScrollView, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { PrimaryButton } from '@/components/Button'
 import { useAuth } from '@/lib/auth'
 import { supabase } from '@/lib/supabase'
 import { isShareableTripStatus } from 'rides-native/safety.js'
 import { formatCents } from 'rides-native/tripTags.js'
-import { INK, INK_SECONDARY, ORANGE, PURPLE, SURFACE } from 'rides-native/places.js'
+import { lift } from '@/lib/elevation'
+import type { Palette } from '@/lib/palette'
+import { useTheme } from '@/lib/theme'
+import { useThemedStyles } from '@/lib/useThemedStyles'
 
 type RideRow = {
   id: string
@@ -26,6 +29,8 @@ export default function HistoryScreen() {
   const [rows, setRows] = useState<RideRow[]>([])
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+  const { colors } = useTheme()
+  const styles = useThemedStyles(makeStyles)
 
   useEffect(() => {
     if (!user || !supabase) return undefined
@@ -51,7 +56,7 @@ export default function HistoryScreen() {
   return (
     <View style={[styles.screen, { paddingTop: insets.top }]}>
       <View style={styles.header}>
-        <Pressable onPress={() => router.back()} style={styles.back}>
+        <Pressable onPress={() => router.back()} style={[styles.back, lift(colors, 'rest')]}>
           <Text style={styles.backLabel}>←</Text>
         </Pressable>
         <Text style={styles.title}>Your rides</Text>
@@ -69,7 +74,7 @@ export default function HistoryScreen() {
           <Text style={styles.copy}>No rides yet. Campus → GSP starts from the map.</Text>
         ) : null}
         {rows.map((row) => (
-          <View key={row.id} style={styles.card}>
+          <View key={row.id} style={[styles.card, lift(colors, 'rest')]}>
             <Text style={styles.cardTitle}>{row.dropoff_label || 'Ride'}</Text>
             <Text style={styles.copy}>{row.pickup_label || 'Pickup'} · {row.status || 'requested'}</Text>
             <Text style={styles.copy}>Fare {formatCents(row.fare_cents || 0)} · deposit {formatCents(row.deposit_cents || 0)}</Text>
@@ -88,16 +93,18 @@ export default function HistoryScreen() {
   )
 }
 
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: SURFACE },
-  header: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingBottom: 8 },
-  back: { width: 40, height: 40, borderRadius: 12, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center' },
-  backLabel: { fontSize: 18, color: PURPLE, fontWeight: '700' },
-  title: { fontSize: 24, fontWeight: '800', color: INK },
-  list: { padding: 16, gap: 10 },
-  copy: { color: INK_SECONDARY, fontSize: 14, lineHeight: 20 },
-  error: { color: '#B42318', fontSize: 13 },
-  card: { backgroundColor: '#fff', borderRadius: 16, padding: 16 },
-  cardTitle: { fontWeight: '700', fontSize: 16, color: INK, marginBottom: 4 },
-  safety: { color: ORANGE, fontWeight: '800', marginTop: 8 },
-})
+function makeStyles(colors: Palette) {
+  return {
+    screen: { flex: 1, backgroundColor: colors.background },
+    header: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 12, paddingHorizontal: 16, paddingBottom: 8 },
+    back: { width: 40, height: 40, borderRadius: 14, backgroundColor: colors.card, alignItems: 'center' as const, justifyContent: 'center' as const },
+    backLabel: { fontSize: 18, color: colors.title, fontWeight: '700' as const },
+    title: { fontSize: 24, fontWeight: '800' as const, color: colors.title },
+    list: { padding: 16, gap: 10 },
+    copy: { color: colors.inkSecondary, fontSize: 14, lineHeight: 20 },
+    error: { color: colors.danger, fontSize: 13 },
+    card: { backgroundColor: colors.card, borderRadius: 16, padding: 16 },
+    cardTitle: { fontWeight: '700' as const, fontSize: 16, color: colors.ink, marginBottom: 4 },
+    safety: { color: colors.orange, fontWeight: '800' as const, marginTop: 8 },
+  }
+}
