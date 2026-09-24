@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { GameDayStatus } from '../components/GameDayStatus'
 import { useGameDayNotice } from '../lib/useGameDayNotice'
 import { useStudentStatus } from '../lib/useStudentStatus'
-import { STUDENT_DISCOUNT_LABEL, STUDENT_EMAIL_HINT } from '../../packages/rides-native/riderMoney.js'
+import { studentSurfaceCopy } from '../../packages/rides-native/riderMoney.js'
 import { SearchField } from '../components/SearchField'
 import { Pill } from '../components/Pill'
 import { BottomTabs } from '../components/BottomTabs'
@@ -25,6 +25,7 @@ const SHORTCUTS = [
 export function RiderHome({ riderName = 'John' }) {
   const { notice, ready } = useGameDayNotice()
   const student = useStudentStatus()
+  const studentOffer = studentSurfaceCopy(student, 'home')
   const { user } = useAuth()
   const [liveTrip, setLiveTrip] = useState(null)
   const [query, setQuery] = useState('')
@@ -266,19 +267,18 @@ export function RiderHome({ riderName = 'John' }) {
               display: 'flex',
               gap: 12,
               alignItems: 'center',
-              border: student.verified ? '1px solid rgba(245,102,0,0.45)' : '1px solid rgba(82,45,128,0.28)',
-              background: student.verified ? 'rgba(245,102,0,0.10)' : 'rgba(82,45,128,0.08)',
+              whiteSpace: 'normal',
+              border: studentOffer.granted ? '1px solid rgba(245,102,0,0.45)' : '1px solid rgba(82,45,128,0.28)',
+              background: studentOffer.granted ? 'rgba(245,102,0,0.10)' : 'rgba(82,45,128,0.08)',
             }}
           >
             <div style={{ fontSize: 24 }}>🎓</div>
-            <div>
+            <div style={{ minWidth: 0 }}>
               <div style={{ fontWeight: 800, color: '#522D80' }}>
-                {student.verified ? STUDENT_DISCOUNT_LABEL : 'Claim student pricing'}
+                {studentOffer.title}
               </div>
               <div style={{ fontSize: 13, color: 'var(--ink-secondary)', marginTop: 2 }}>
-                {student.verified
-                  ? 'Standard quotes on Confirm include this 10% off.'
-                  : STUDENT_EMAIL_HINT}
+                {studentOffer.detail}
               </div>
             </div>
           </button>

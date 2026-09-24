@@ -28,8 +28,8 @@ import { displayFirstName } from 'rides-native/authErrors'
 import { campusOverlays } from 'rides-native/riderShell.js'
 import { loadGameDay } from 'rides-native/driverDesk'
 import { gameDayNotice, type GameDayNotice } from 'rides-native/gameDayNotice.js'
+import { studentSurfaceCopy } from 'rides-native/riderMoney.js'
 import { dueScheduleReminders } from '../../../src/lib/scheduledRideModel.js'
-import { STUDENT_DISCOUNT_LABEL, STUDENT_EMAIL_HINT } from 'rides-native/riderMoney.js'
 import { supabase } from '@/lib/supabase'
 import { useStudentStatus } from '@/lib/useStudentStatus'
 import { RIDER_TRACK_STATUSES, riderLiveView } from 'rides-native/liveTrip'
@@ -75,6 +75,7 @@ export default function RiderHome() {
   const [scheduledRows, setScheduledRows] = useState<ScheduledRow[]>([])
   const [clock, setClock] = useState(() => new Date())
   const student = useStudentStatus()
+  const studentOffer = studentSurfaceCopy(student, 'home')
   const gameDay = Boolean(gameNotice?.live)
   const reminders = useMemo(() => dueScheduleReminders(scheduledRows, clock), [scheduledRows, clock])
 
@@ -513,16 +514,12 @@ export default function RiderHome() {
               void tapHaptic()
               router.push(user ? '/student' : '/sign-in')
             }}
-            style={[styles.studentCard, student.verified && styles.studentOn, lift(colors, 'rest')]}
+            style={[styles.studentCard, studentOffer.granted && styles.studentOn, lift(colors, 'rest')]}
           >
             <Text style={styles.gamedayIcon}>🎓</Text>
             <View style={styles.gamedayCopy}>
-              <Text style={styles.gamedayTitle}>{student.verified ? STUDENT_DISCOUNT_LABEL : 'Claim student pricing'}</Text>
-              <Text style={styles.gamedayBody}>
-                {student.verified
-                  ? 'Standard quotes on Confirm include this 10% off.'
-                  : STUDENT_EMAIL_HINT}
-              </Text>
+              <Text style={styles.gamedayTitle}>{studentOffer.title}</Text>
+              <Text style={styles.gamedayBody}>{studentOffer.detail}</Text>
             </View>
           </Pressable>
 

@@ -65,6 +65,10 @@ Riders rate drivers and drivers rate riders on the post-ride screen (`#/rate?tri
 
 Clients cannot overwrite `standing`, `rating_avg`, or `rating_count` on their own profile. Thresholds match `src/lib/standing.js` and `public.profile_standing`.
 
+## Student discount
+
+10% off Standard when the signed-in email is confirmed and ends with `@clemson.edu` or `@g.clemson.edu`. Comfort, XL, Pet, and Tesla are not included. Home, confirm pickup, and ride tiers show that discount only for a confirmed Clemson email, and they say why it is off otherwise. The server applies the same rule.
+
 ## Mobile
 
 Two native apps, version **1.1.0**. They do not replace TestFlight **1.0.0 (1)** for `com.ascendmaui.clemsonairportrides` (`apps/mobile`, frozen).

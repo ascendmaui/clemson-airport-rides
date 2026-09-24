@@ -160,7 +160,8 @@ export function studentStatus({ email, studentVerifiedAt, user } = {}) {
   const address = user?.email || email || null
   const viaEmail = isClemsonEmail(address)
   const confirmation = user ? emailConfirmationState(user) : 'unknown'
-  const verified = user ? viaEmail && confirmation === 'confirmed' : viaEmail
+  // A bare email cannot prove the address was confirmed.
+  const verified = viaEmail && confirmation === 'confirmed'
   let gateCopy = null
   if (!verified) {
     gateCopy = viaEmail && confirmation !== 'confirmed'
@@ -174,6 +175,45 @@ export function studentStatus({ email, studentVerifiedAt, user } = {}) {
     verifiedAt: verified ? (studentVerifiedAt || null) : null,
     discountLabel: verified ? STUDENT_DISCOUNT_LABEL : null,
     gateCopy,
+  }
+}
+
+const STUDENT_SURFACES = {
+  home: {
+    title: STUDENT_DISCOUNT_LABEL,
+    detail: 'Standard quotes on Confirm include this 10% off.',
+  },
+  tiers: {
+    title: `🐯 ${STUDENT_DISCOUNT_LABEL}`,
+    detail: 'Your confirmed Clemson email applies this price.',
+  },
+  confirm: {
+    title: `${STUDENT_DISCOUNT_LABEL} applies on the Standard quote.`,
+    detail: null,
+  },
+}
+
+/**
+ * Home, confirm, and tiers. Granted copy is the Standard 10% line.
+ * Gated copy is the reason student pricing is off and does not offer 10% off.
+ */
+export function studentSurfaceCopy(status, surface) {
+  const grantedCopy = STUDENT_SURFACES[surface]
+  if (!grantedCopy) {
+    const unknown = surface
+    throw new Error(`Unknown student surface: ${unknown}`)
+  }
+  if (status?.verified) {
+    return { ...grantedCopy, granted: true }
+  }
+  const reason = status?.gateCopy || STUDENT_EMAIL_REQUIRED_COPY
+  if (surface === 'confirm') {
+    return { title: reason, detail: null, granted: false }
+  }
+  return {
+    title: surface === 'tiers' ? '🐯 Student pricing is off' : 'Student pricing is off',
+    detail: reason,
+    granted: false,
   }
 }
 

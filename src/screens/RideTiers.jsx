@@ -10,7 +10,7 @@ import { GameDayStatus } from '../components/GameDayStatus'
 import { quoteWithSurge } from '../lib/pricing'
 import { useGameDayNotice } from '../lib/useGameDayNotice'
 import { useStudentStatus } from '../lib/useStudentStatus'
-import { STUDENT_DISCOUNT_LABEL, displayTierPrice } from '../../packages/rides-native/riderMoney.js'
+import { displayTierPrice, studentSurfaceCopy } from '../../packages/rides-native/riderMoney.js'
 import { TESLA_FLEET_NOTICE } from '../../packages/rides-native/tripTags.js'
 
 const TIERS = [
@@ -29,6 +29,7 @@ export function RideTiers({ dest = '1900 GSP Dr' }) {
   const [surge, setSurge] = useState(null)
   const { runOrPrompt } = useRequireAuthForAction()
   const student = useStudentStatus()
+  const studentOffer = studentSurfaceCopy(student, 'tiers')
   const game = useGameDayNotice()
 
   useEffect(() => {
@@ -104,15 +105,15 @@ export function RideTiers({ dest = '1900 GSP Dr' }) {
             alignItems: 'center',
           }}
         >
-          {student.verified ? `🐯 ${STUDENT_DISCOUNT_LABEL}` : '🐯 Claim Clemson student pricing · 10% off Standard'}
+          {studentOffer.title}
         </div>
         <button
           type="button"
           className="pressable"
           onClick={() => navigate('account', { tab: 'student' })}
-          style={{ display: 'block', marginTop: 8, fontSize: 12, fontWeight: 700, color: '#522D80' }}
+          style={{ display: 'block', width: '100%', marginTop: 8, fontSize: 12, fontWeight: 700, color: '#522D80', textAlign: 'left', lineHeight: 1.45, whiteSpace: 'normal', overflowWrap: 'anywhere' }}
         >
-          {student.verified ? 'Your confirmed Clemson email applies this price.' : 'Clemson student email required'}
+          {studentOffer.detail}
         </button>
         <div style={{ marginTop: 8 }}>
           <SurgeBadge surge={surge} />

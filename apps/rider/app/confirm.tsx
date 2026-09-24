@@ -10,10 +10,10 @@ import { useAuth } from '@/lib/auth'
 import { oneParam } from '@/lib/oneParam'
 import { lookupCatalogPlace, placeFromStop, type Place } from 'rides-native/shared/carpool.js'
 import {
-  STUDENT_DISCOUNT_LABEL,
   airportCodeFromLabel,
   depositSurfaceCopy,
   previewAirportFare,
+  studentSurfaceCopy,
 } from 'rides-native/riderMoney.js'
 import { useStudentStatus } from '@/lib/useStudentStatus'
 import { NeighborhoodPicker } from '@/components/carpool/NeighborhoodPicker'
@@ -29,6 +29,7 @@ export default function ConfirmPickup() {
   const dest = oneParam(params.dest, 'GSP Airport')
   const { user } = useAuth()
   const student = useStudentStatus()
+  const studentOffer = studentSurfaceCopy(student, 'confirm')
   const airport = airportCodeFromLabel(dest)
   const airportQuote = airport ? previewAirportFare({ airport, isStudent: student.verified }) : null
   const depositCopy = airportQuote
@@ -102,10 +103,8 @@ export default function ConfirmPickup() {
         </Text>
         {depositCopy ? <Text style={styles.deposit}>{depositCopy}</Text> : null}
         <Pressable onPress={() => router.push(user ? '/student' : '/sign-in')} accessibilityRole="button">
-          <Text style={student.verified ? styles.studentOn : styles.studentOff}>
-            {student.verified
-              ? `${STUDENT_DISCOUNT_LABEL} applies on the Standard quote.`
-              : 'Claim Clemson student pricing · 10% off Standard'}
+          <Text style={studentOffer.granted ? styles.studentOn : styles.studentOff}>
+            {studentOffer.title}
           </Text>
         </Pressable>
         <PrimaryButton label="Confirm pickup" onPress={onConfirm} />

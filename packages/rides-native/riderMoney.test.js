@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
+import { readFileSync } from 'node:fs'
 import { cardDepositCents as fareCardDeposit } from '../../src/lib/fareRates.js'
 import { normalizePrefs } from './notificationPrefs.js'
 import { buildReceiptText } from '../../src/lib/receiptText.js'
@@ -22,6 +23,7 @@ import {
   STRIPE_NOT_CONFIGURED_COPY,
   studentDiscountCents,
   studentStatus,
+  studentSurfaceCopy,
   studentTripMeta,
 } from './riderMoney.js'
 
@@ -67,7 +69,9 @@ test('student discount is 10% of Standard only', () => {
   assert.equal(standard.fareCents, 9000)
   assert.equal(studentDiscountCents(10000, { isStudent: true, tier: 'xl' }).discountCents, 0)
   assert.equal(studentDiscountCents(10000, { isStudent: false }).discountCents, 0)
-  assert.equal(studentStatus({ email: 'a@g.clemson.edu' }).verified, true)
+  assert.equal(studentStatus({ email: 'a@g.clemson.edu' }).verified, false)
+  assert.equal(studentStatus({ email: 'a@g.clemson.edu' }).discountLabel, null)
+  assert.match(studentStatus({ email: 'a@g.clemson.edu' }).gateCopy || '', /Confirm the Clemson email/)
   assert.equal(studentStatus({ email: 'a@gmail.com', studentVerifiedAt: '2026-01-01' }).verified, false)
   assert.equal(studentStatus({ email: 'a@gmail.com', studentVerifiedAt: '2026-01-01' }).discountLabel, null)
   assert.match(studentStatus({ email: 'a@gmail.com', studentVerifiedAt: '2026-01-01' }).gateCopy || '', /Clemson student email/)
@@ -97,6 +101,52 @@ test('student discount is 10% of Standard only', () => {
   })
   assert.deepEqual(studentTripMeta({ isStudent: false, fareCents: 1850 }), {})
   assert.deepEqual(studentTripMeta({ isStudent: true, tier: 'comfort', fareCents: 2300 }), { isStudent: true })
+})
+
+test('home, confirm, and tiers promise 10% off Standard only for a confirmed Clemson email', () => {
+  const confirmed = studentStatus({
+    user: { email: 'ada@g.clemson.edu', email_confirmed_at: '2026-09-01T00:00:00Z' },
+  })
+  const unconfirmed = studentStatus({
+    user: { email: 'ada@clemson.edu', email_confirmed_at: null },
+  })
+  const other = studentStatus({
+    user: { email: 'ada@gmail.com', email_confirmed_at: '2026-09-01T00:00:00Z' },
+  })
+  const guest = studentStatus()
+  for (const surface of ['home', 'tiers', 'confirm']) {
+    const on = studentSurfaceCopy(confirmed, surface)
+    assert.equal(on.granted, true)
+    assert.match(`${on.title} ${on.detail || ''}`, /10% off Standard/)
+    for (const status of [unconfirmed, other, guest]) {
+      const off = studentSurfaceCopy(status, surface)
+      assert.equal(off.granted, false)
+      const text = `${off.title} ${off.detail || ''}`
+      assert.doesNotMatch(text, /10%/)
+      assert.doesNotMatch(text, /Claim/)
+      assert.equal(text.includes(status.gateCopy), true)
+    }
+  }
+  assert.match(studentSurfaceCopy(unconfirmed, 'home').detail, /Confirm the Clemson email/)
+  assert.match(studentSurfaceCopy(other, 'confirm').title, /Other emails stay at full price/)
+  assert.match(studentSurfaceCopy(guest, 'tiers').detail, /@g\.clemson\.edu/)
+  for (const tier of ['comfort', 'xl', 'pet', 'tesla', 'wait']) {
+    assert.equal(displayTierPrice(20, { isStudent: true, tier }).discount, 0)
+  }
+  assert.throws(() => studentSurfaceCopy(confirmed, 'receipt'), /Unknown student surface/)
+  const screens = [
+    '../../src/screens/RiderHome.jsx',
+    '../../src/screens/ConfirmPickup.jsx',
+    '../../src/screens/RideTiers.jsx',
+    '../../apps/rider/app/index.tsx',
+    '../../apps/rider/app/confirm.tsx',
+    '../../apps/rider/app/tiers.tsx',
+  ]
+  for (const file of screens) {
+    const source = readFileSync(new URL(file, import.meta.url), 'utf8')
+    assert.match(source, /studentSurfaceCopy\(/)
+    assert.doesNotMatch(source, /Claim Clemson|Claim student pricing/)
+  }
 })
 
 test('fallback fare recomputes the 25% deposit for airport, surge, and student', () => {
