@@ -34,6 +34,7 @@ import { LostFound } from './screens/LostFound'
 import { RidesHistory } from './screens/RidesHistory'
 
 const PROTECTED = new Set(['driver', 'driver-onboarding', 'account', 'driver-signup', 'admin', 'incentives', 'lost-found', 'history', 'earnings'])
+const SITE_ROUTES = new Set(['landing', '', 'privacy', 'terms'])
 
 function Screen({ path, params }) {
   switch (path) {
@@ -171,18 +172,19 @@ export default function App() {
   }, [])
 
   const overflow = path === 'driver' ? 'hidden' : 'auto'
+  const site = SITE_ROUTES.has(path)
 
   return (
     <ToastProvider>
-      <div className="desktop-frame">
-        <div className="app-shell" style={{ position: 'relative', height: '100%' }}>
+      <div className={site ? 'desktop-frame desktop-frame--site' : 'desktop-frame'}>
+        <div className={site ? 'app-shell app-shell--site' : 'app-shell'} style={{ position: 'relative', height: '100%' }}>
           <RideToastWatcher />
           <LostFoundWatcher />
           <ToastStack />
           <div
             key={`${path}:${params.token || params.id || params.trip || ''}`}
-            className="route-fade"
-            style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', overflow }}
+            className={site ? 'route-fade route-site' : 'route-fade'}
+            style={site ? undefined : { position: 'absolute', inset: 0, width: '100%', height: '100%', overflow }}
             data-protected={PROTECTED.has(path) ? '1' : '0'}
             data-guest-browse={PROTECTED.has(path) ? '0' : '1'}
             data-route={path}
