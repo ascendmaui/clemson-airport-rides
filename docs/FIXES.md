@@ -2,6 +2,15 @@
 
 Persistent knowledge base for recurring failures. When a matching issue appears, apply the saved fix first.
 
+## 2026-09-24 — iOS build 17 (rider + driver) local Archive on Max: notes
+
+- **Track / machine:** Clemson RIDES · Max / TestFlight 1.1.0(17) from main a795b18 (PRs #59–#66)
+- **Build number:** `ios.buildNumber` in apps/{rider,driver}/app.json is the source of CFBundleVersion after prebuild (Info.plist is written with the literal value). Bumped 16 → 17 in both; `CURRENT_PROJECT_VERSION` is also set by the signing patch script.
+- **Recipe (same as b16, worked first try):** `npm install` per app (postinstall re-applies `expo-modules-jsi+57.1.0.patch`) → `CI=1 npx expo prebuild -p ios --clean` (restore `ios/.xcode.env.local` afterwards, and revert the `package.json` script rewrite / lockfile churn prebuild and npm leave behind) → patch Release config of the app target only to Manual signing (`iPhone Distribution: John Mathews (L85AF3V872)`, profile UUID) → `xcodebuild archive` + `-exportArchive` (method app-store-connect, manual) → `xcrun altool --upload-app --apiKey 4848BPQ54J --apiIssuer …`. Scripts in /tmp/clemson-archives/b17/.
+- **Problem:** A build started with `nohup bash -c '…' &` from a non-interactive remote shell was killed when that shell call returned (log stopped at "Resolve Package Graph", no xcodebuild process left).
+- **Fix:** Run the archive in a managed background job (or keep the call in the foreground) instead of a detached `nohup … &`.
+- **TestFlight groups:** "App Store Connect Users" (both apps) and "Tonight Internal" (rider) have `hasAccessToAllBuilds = true`, so a VALID build joins them on its own. `POST /v1/betaGroups/{id}/relationships/builds` answers 422 "Cannot add internal group to a build". That is expected, not a failure. Check with `GET /v1/builds?filter[app]=…&filter[version]=N&include=betaGroups`.
+
 ## 2026-09-24 — Rider tsc fails on ambassador attribution (PR #65)
 
 - **Track / machine:** Clemson RIDES · Max (/tmp worktree) / PR review
