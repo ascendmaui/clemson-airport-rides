@@ -6,6 +6,14 @@
  */
 import { supabaseCreditStore } from './credits.js'
 import {
+  cardIntentKey,
+  creditsIntentKey,
+  isOpenPaymentIntent,
+  isPaidPaymentIntent,
+  openIntentCode,
+  resolveExistingPaymentIntent,
+} from './chargeIdempotency.js'
+import {
   classifyStripeError,
   failureResult,
   isFareKind,
@@ -50,6 +58,39 @@ export async function loadPayerProfile(sb, riderId) {
 
 export async function insertPaymentRow(sb, row) {
   if (!sb) return { id: null, error: 'no_db' }
+  if (row.idempotency_key) {
+    const existing = await sb
+      .from('payments')
+      .select('id, status, stripe_payment_intent_id')
+      .eq('idempotency_key', row.idempotency_key)
+      .maybeSingle()
+    if (!existing.error && existing.data?.id) {
+      const nextPi = row.stripe_payment_intent_id
+      const samePi = !nextPi || nextPi === existing.data.stripe_payment_intent_id
+      if (existing.data.status === 'succeeded' && row.status !== 'succeeded' && samePi) {
+        return { id: existing.data.id, error: null }
+      }
+      const patch = {
+        amount_cents: row.amount_cents,
+        status: row.status,
+        kind: row.kind,
+      }
+      if (row.stripe_payment_intent_id) patch.stripe_payment_intent_id = row.stripe_payment_intent_id
+      const richPatch = {
+        ...patch,
+        metadata: { ...(row.metadata || {}), logical_kind: row.kind },
+      }
+      let upd = await sb.from('payments').update(richPatch).eq('id', existing.data.id)
+      if (upd.error && /metadata|column|schema cache/i.test(upd.error.message || '')) {
+        upd = await sb.from('payments').update(patch).eq('id', existing.data.id)
+      }
+      if (upd.error) {
+        console.error('[collectPayment] payments update', upd.error.message)
+        return { id: existing.data.id, error: upd.error.message }
+      }
+      return { id: existing.data.id, error: null }
+    }
+  }
   const logicalKind = row.kind
   const core = {
     trip_id: row.trip_id ?? null,
@@ -92,6 +133,29 @@ export async function findPaymentByIdempotency(sb, idempotencyKey) {
     status: row.data.status,
     amountCents: row.data.amount_cents,
     paymentIntentId: row.data.stripe_payment_intent_id,
+  }
+}
+
+/** Any payments row for this key that already points at a Stripe PaymentIntent. */
+export async function findPaymentIntentByKey(sb, idempotencyKey) {
+  if (!sb || !idempotencyKey) return null
+  const row = await sb
+    .from('payments')
+    .select('id, status, amount_cents, stripe_payment_intent_id, kind, metadata')
+    .eq('idempotency_key', idempotencyKey)
+    .maybeSingle()
+  if (row.error) {
+    if (/column|schema cache|idempotency/i.test(row.error.message || '')) return null
+    console.error('[collectPayment] intent lookup', row.error.message)
+    return null
+  }
+  const pi = row.data?.stripe_payment_intent_id
+  if (!pi || !String(pi).startsWith('pi_')) return null
+  return {
+    id: row.data.id,
+    status: row.data.status,
+    amountCents: row.data.amount_cents,
+    paymentIntentId: pi,
   }
 }
 
@@ -153,9 +217,20 @@ export function defaultCollectDeps(sb, stripe) {
     applyCredits: (userId, delta, meta) => credits.applyCredits(userId, delta, meta),
     insertPayment: (row) => insertPaymentRow(sb, row),
     findPayment: (key) => findPaymentByIdempotency(sb, key),
+    findPaymentIntent: (key) => findPaymentIntentByKey(sb, key),
     setHold: (tripId, failure) => setPaymentHold(sb, tripId, failure),
     clearHold: (tripId, extra) => clearPaymentHold(sb, tripId, extra),
     loadProfile: (userId) => loadPayerProfile(sb, userId),
+    retrievePaymentIntent: async (id) => {
+      if (!stripe?.paymentIntents?.retrieve) return null
+      return stripe.paymentIntents.retrieve(id)
+    },
+    updatePaymentIntent: async (id, params) => {
+      if (!stripe?.paymentIntents?.update) {
+        throw Object.assign(new Error('PaymentIntent is not updatable'), { code: 'payment_intent_unexpected_state' })
+      }
+      return stripe.paymentIntents.update(id, params)
+    },
     createPaymentIntent: async (params, options) => {
       if (!stripe?.paymentIntents?.create) {
         const err = new Error('Stripe is not configured')
@@ -186,6 +261,7 @@ export async function collectPayment(input) {
     methods = ['credits', 'card'],
     kind = 'balance',
     idempotencyKey = null,
+    existingPaymentIntentId = null,
     metadata = {},
     adminOverride = false,
     paymentMethodId = null,
@@ -226,7 +302,7 @@ export async function collectPayment(input) {
 
   if (idempotencyKey && io.findPayment) {
     const existing = await io.findPayment(idempotencyKey)
-    if (existing) {
+    if (existing && !(await succeededChargeWasCanceled(io, existing, existingPaymentIntentId))) {
       return {
         ok: true,
         status: 'succeeded',
@@ -234,7 +310,7 @@ export async function collectPayment(input) {
         method: 'idempotent',
         amountCents: existing.amountCents ?? amount,
         paymentId: existing.id,
-        paymentIntentId: existing.paymentIntentId || null,
+        paymentIntentId: existing.paymentIntentId || existing.stripe_payment_intent_id || null,
         creditsAppliedCents: 0,
         cardChargedCents: 0,
         kind,
@@ -282,6 +358,28 @@ export async function collectPayment(input) {
     midRide,
   })
 
+  const cardCents = plan.ok
+    ? (plan.allocations.find((row) => row.method === 'card')?.cents ?? null)
+    : null
+  let chargeAttempt = null
+  const existingIntent = await lookupExistingIntent(io, {
+    idempotencyKey,
+    existingPaymentIntentId,
+    amountCents: cardCents ?? amount,
+  })
+  if (existingIntent.action === 'already_paid') {
+    return recordPaidIntent(io, existingIntent.paymentIntent, {
+      tripId, riderId, kind, amount, idempotencyKey, metadata, hold,
+    })
+  }
+  if (existingIntent.action === 'return') {
+    return recordOpenIntent(io, existingIntent.paymentIntent, {
+      tripId, riderId, kind, amount, idempotencyKey, metadata, hold,
+      creditsBalanceCents: creditState.balanceCents,
+    })
+  }
+  if (existingIntent.action === 'create_attempt') chargeAttempt = existingIntent.attempt
+
   if (!plan.ok) {
     const failure = { ...plan, kind, tripId }
     console.error('[collectPayment]', failure.code, { tripId, riderId, kind, amount })
@@ -299,7 +397,7 @@ export async function collectPayment(input) {
   }
 
   let creditsDebited = 0
-  const creditKey = idempotencyKey ? `${idempotencyKey}:credits` : null
+  const creditKey = creditsIntentKey(idempotencyKey, chargeAttempt)
   try {
     const creditAlloc = plan.allocations.find((row) => row.method === 'credits')
     if (creditAlloc && riderId) {
@@ -344,9 +442,11 @@ export async function collectPayment(input) {
           tripId: tripId || '',
           riderId: riderId || '',
         },
-      }, idempotencyKey ? { idempotencyKey: `${idempotencyKey}:card` } : undefined)
+      }, cardIntentKey(idempotencyKey, chargeAttempt)
+        ? { idempotencyKey: cardIntentKey(idempotencyKey, chargeAttempt) }
+        : undefined)
 
-      if (paymentIntent.status === 'requires_action') {
+      if (isOpenPaymentIntent(paymentIntent.status)) {
         if (creditsDebited && riderId) {
           await io.applyCredits(riderId, creditsDebited, {
             kind: `${kind}_reversal`,
@@ -355,13 +455,12 @@ export async function collectPayment(input) {
           })
           creditsDebited = 0
         }
-        const failure = failureResult('authentication_required', { amountCents: amount, creditsBalanceCents: creditState.balanceCents, kind, tripId })
-        failure.clientSecret = paymentIntent.client_secret || null
-        failure.paymentIntentId = paymentIntent.id
-        if (hold && tripId) await io.setHold(tripId, failure)
-        return failure
+        return recordOpenIntent(io, paymentIntent, {
+          tripId, riderId, kind, amount, idempotencyKey, metadata, hold,
+          creditsBalanceCents: creditState.balanceCents,
+        })
       }
-      if (paymentIntent.status !== 'succeeded') {
+      if (!isPaidPaymentIntent(paymentIntent.status)) {
         throw Object.assign(new Error(`Payment status ${paymentIntent.status}`), { code: 'card_declined' })
       }
     }
@@ -418,17 +517,100 @@ export async function collectPayment(input) {
     }
     console.error('[collectPayment]', code, err?.message || err, { tripId, riderId, kind, amount })
     if (hold && tripId) await io.setHold(tripId, failure)
+    const stripeIntentId = err?.payment_intent?.id || err?.raw?.payment_intent?.id || null
     await io.insertPayment({
       trip_id: tripId,
       rider_id: riderId,
       kind,
       amount_cents: amount,
       status: 'failed',
-      stripe_payment_intent_id: err?.payment_intent?.id || err?.raw?.payment_intent?.id || null,
+      stripe_payment_intent_id: stripeIntentId,
+      idempotency_key: stripeIntentId ? idempotencyKey : null,
       metadata: { ...metadata, logical_kind: kind, code },
     })
     return failure
   }
+}
+
+async function succeededChargeWasCanceled(io, existing, existingPaymentIntentId) {
+  const rowPi = existing?.paymentIntentId || existing?.stripe_payment_intent_id || null
+  if (existingPaymentIntentId && rowPi && existingPaymentIntentId !== rowPi) return true
+  const livePi = existingPaymentIntentId || rowPi
+  if (!livePi || !String(livePi).startsWith('pi_') || !io.retrievePaymentIntent) return false
+  try {
+    const pi = await io.retrievePaymentIntent(livePi)
+    return pi?.status === 'canceled'
+  } catch {
+    return false
+  }
+}
+
+async function lookupExistingIntent(io, { idempotencyKey, existingPaymentIntentId, amountCents }) {
+  let paymentIntentId = existingPaymentIntentId || null
+  if (!paymentIntentId && idempotencyKey && io.findPaymentIntent) {
+    const row = await io.findPaymentIntent(idempotencyKey)
+    paymentIntentId = row?.paymentIntentId || null
+  }
+  if (!paymentIntentId) return { action: 'create' }
+  return resolveExistingPaymentIntent({
+    retrieve: io.retrievePaymentIntent,
+    update: io.updatePaymentIntent,
+    paymentIntentId,
+    amountCents,
+  })
+}
+
+async function recordPaidIntent(io, pi, fields) {
+  const { tripId, riderId, kind, amount, idempotencyKey, metadata, hold } = fields
+  const recorded = await io.insertPayment({
+    trip_id: tripId,
+    rider_id: riderId,
+    kind,
+    amount_cents: amount,
+    status: 'succeeded',
+    stripe_payment_intent_id: pi.id,
+    idempotency_key: idempotencyKey,
+    metadata: { ...(metadata || {}), logical_kind: kind, stripe_status: pi.status, idempotent: true },
+  })
+  if (hold && tripId) await io.clearHold(tripId, { farePaidDelta: isFareKind(kind) ? amount : 0 })
+  return {
+    ok: true,
+    status: 'succeeded',
+    idempotent: true,
+    method: 'idempotent',
+    amountCents: amount,
+    creditsAppliedCents: 0,
+    cardChargedCents: 0,
+    paymentId: recorded.id,
+    paymentIntentId: pi.id,
+    kind,
+  }
+}
+
+async function recordOpenIntent(io, pi, fields) {
+  const { tripId, riderId, kind, amount, idempotencyKey, metadata, hold, creditsBalanceCents } = fields
+  const code = openIntentCode(pi.status)
+  const failure = failureResult(code, {
+    amountCents: amount,
+    creditsBalanceCents,
+    kind,
+    tripId,
+  })
+  failure.clientSecret = pi.client_secret || null
+  failure.paymentIntentId = pi.id
+  failure.reused = true
+  if (hold && tripId) await io.setHold(tripId, failure)
+  await io.insertPayment({
+    trip_id: tripId,
+    rider_id: riderId,
+    kind,
+    amount_cents: amount,
+    status: pi.status || 'pending',
+    stripe_payment_intent_id: pi.id,
+    idempotency_key: idempotencyKey,
+    metadata: { ...(metadata || {}), logical_kind: kind, stripe_status: pi.status },
+  })
+  return failure
 }
 
 function stringifyMeta(metadata) {

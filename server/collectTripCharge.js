@@ -10,6 +10,7 @@ import { existsSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { stripeClient, stripeOk } from './friendRideLib.js'
+import { reuseStoredIntent } from './chargeIdempotency.js'
 
 const SETTLED = new Set([
   'succeeded',
@@ -100,7 +101,27 @@ async function chargeCardDirect({ stripe, profile, amountCents, tripId, riderId,
       source: 'card',
     })
   }
+  const idempotencyKey = `midride_cancel_${tripId}`
+  const { stripePaymentIntentId, ...chargeMeta } = metadata || {}
   try {
+    const reused = await reuseStoredIntent(stripe, stripePaymentIntentId, amountCents)
+    if (reused.action === 'already_paid') {
+      return normalizeChargeOutcome({
+        status: 'succeeded',
+        paymentIntentId: reused.paymentIntent.id,
+        source: 'card',
+      })
+    }
+    if (reused.action === 'return') {
+      return normalizeChargeOutcome({
+        status: 'payment_required',
+        paymentIntentId: reused.paymentIntent.id,
+        clientSecret: reused.paymentIntent.client_secret || null,
+        error: `Payment status ${reused.paymentIntent.status}`,
+        source: 'card',
+      })
+    }
+    const attempt = reused.action === 'create_attempt' ? reused.attempt : null
     const pi = await stripe.paymentIntents.create({
       amount: amountCents,
       currency: 'usd',
@@ -114,10 +135,10 @@ async function chargeCardDirect({ stripe, profile, amountCents, tripId, riderId,
         trip_id: tripId,
         rider_id: riderId,
         driver_id: driverId || '',
-        ...(metadata || {}),
+        ...chargeMeta,
       },
     }, {
-      idempotencyKey: `midride_cancel_${tripId}`,
+      idempotencyKey: attempt ? `${idempotencyKey}:${attempt}` : idempotencyKey,
     })
     if (pi.status === 'succeeded') {
       return normalizeChargeOutcome({
