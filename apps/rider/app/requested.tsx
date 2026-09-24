@@ -6,6 +6,7 @@ import { PrimaryButton } from '@/components/Button'
 import { CampusMap } from '@/components/CampusMap'
 import type { MapPin } from '@/components/mapTypes'
 import { LiveShareCard } from '@/components/LiveShareCard'
+import { RideMessages } from '@/components/RideMessages'
 import { SosButton, SosIncomingBanner, SosSheet } from '@/components/SosSheet'
 import { useAuth } from '@/lib/auth'
 import { oneParam } from '@/lib/oneParam'
@@ -188,6 +189,14 @@ export default function Requested() {
             </Text>
             <Text style={styles.meta}>Trip {tripId.slice(0, 8)}</Text>
             <Text style={styles.body}>Airport holds use the 25% Stripe deposit on Schedule.</Text>
+            {shown?.status === 'completed' ? (
+              <PrimaryButton
+                label="Lost & found"
+                tone="ghost"
+                onPress={() => router.push({ pathname: '/lost-found', params: { trip: tripId } })}
+              />
+            ) : null}
+            {user ? <RideMessages tripId={tripId} userId={user.id} /> : null}
             <Text style={styles.body}>
               {located
                 ? 'The orange pin is the driver location from driver_status. While they are on the way, a live distance in feet stays on screen and the screen pulses orange as they get closer.'

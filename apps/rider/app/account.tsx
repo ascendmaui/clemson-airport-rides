@@ -23,13 +23,16 @@ const DISPLAY: { id: DisplayMode; label: string }[] = [
   { id: 'dark', label: 'Dark' },
 ]
 
-const LINKS: { href: '/billing' | '/student' | '/promo' | '/notifications' | '/history' | '/schedule'; label: string; hint: string }[] = [
+const LINKS: { href: '/billing' | '/student' | '/promo' | '/notifications' | '/history' | '/schedule' | '/help' | '/support' | '/lost-found'; label: string; hint: string }[] = [
   { href: '/billing', label: 'Billing', hint: 'Card on file, deposits, and ride history' },
   { href: '/student', label: 'Student', hint: 'Verify a Clemson email · 10% off Standard' },
   { href: '/promo', label: 'Promo codes', hint: 'Apply a friend code or share yours' },
   { href: '/notifications', label: 'Notifications', hint: 'Ride, billing, friends, and promo alerts' },
   { href: '/history', label: 'Your rides', hint: 'Fare and deposit on each trip' },
   { href: '/schedule', label: 'Airport deposit', hint: '25% Stripe checkout for GSP and CLT' },
+  { href: '/help', label: 'Help', hint: 'How booking, Schedule, friends, and billing work' },
+  { href: '/support', label: 'Support', hint: 'Charge, ride, bug, or safety tickets' },
+  { href: '/lost-found', label: 'Lost & found', hint: 'An item left in the car after a ride' },
 ]
 
 function AccountScreen() {
@@ -191,6 +194,18 @@ function AccountScreen() {
             }}
           />
         </View>
+        <Pressable onPress={() => router.push({ pathname: '/legal', params: { doc: 'privacy' } })} style={[styles.row, lift(colors, 'rest')]} accessibilityRole="button">
+          <Text style={styles.rowTitle}>Privacy policy</Text>
+          <Text style={styles.copy}>Same policy as the website.</Text>
+        </Pressable>
+        <Pressable onPress={() => router.push({ pathname: '/legal', params: { doc: 'terms' } })} style={[styles.row, lift(colors, 'rest')]} accessibilityRole="button">
+          <Text style={styles.rowTitle}>Terms of service</Text>
+          <Text style={styles.copy}>Airport deposits, wait fees, and driver duties.</Text>
+        </Pressable>
+        <Pressable onPress={() => router.push('/delete-account')} style={[styles.row, lift(colors, 'rest')]} accessibilityRole="button">
+          <Text style={styles.rowTitle}>Delete account</Text>
+          <Text style={styles.copy}>Files a confirmed support request. The account stays until that request is processed.</Text>
+        </Pressable>
         {error ? <Text style={styles.error}>{error}</Text> : null}
         {note ? <Text style={styles.note}>{note}</Text> : null}
         {user ? (

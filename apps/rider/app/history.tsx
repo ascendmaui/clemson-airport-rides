@@ -88,6 +88,14 @@ function HistoryScreen() {
                 <Text style={styles.safety}>Rate this ride</Text>
               </Pressable>
             ) : null}
+            {row.status === 'completed' && row.driver_id ? (
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => router.push({ pathname: '/lost-found', params: { trip: row.id } })}
+              >
+                <Text style={styles.safety}>Lost & found</Text>
+              </Pressable>
+            ) : null}
             {isShareableTripStatus(row.status) ? (
               <Pressable
                 accessibilityRole="button"

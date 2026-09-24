@@ -30,6 +30,7 @@ function SignInForm({
       onSuccess={() => finish(router)}
       onCreateAccount={() => router.push('/sign-up')}
       onForgotPassword={() => router.push('/forgot-password')}
+      onOpenLegal={(doc) => router.push({ pathname: '/legal', params: { doc } })}
       onBack={() => {
         if (router.canGoBack()) router.back()
         else router.replace('/')

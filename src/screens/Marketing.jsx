@@ -1,8 +1,6 @@
 import { navigate } from '../lib/navigation'
 import { PrimaryButton } from '../components/PrimaryButton'
-
-const IOS_BUILD = 'https://expo.dev/accounts/johnmatveyev/projects/clemson-airport-rides/builds/ae9bb5b6-e4b8-49ac-b8e3-471bdced9357'
-const ANDROID_BUILD = 'https://expo.dev/accounts/johnmatveyev/projects/clemson-airport-rides/builds/a9cfec15-97bf-4104-9332-06c7b6b659b0'
+import { DRIVER_EXPO_PROJECT, RIDER_EXPO_PROJECT } from '../../shared/productLinks.js'
 
 function QrCard({ label, href, caption }) {
   const qr = `https://api.qrserver.com/v1/create-qr-code/?size=160x160&margin=8&data=${encodeURIComponent(href)}`
@@ -79,10 +77,16 @@ export function Marketing() {
         </p>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 28 }}>
-          <PrimaryButton onClick={() => navigate('carpool', { hub: '1' })}>Find a carpool</PrimaryButton>
-          <PrimaryButton variant="purple" onClick={() => navigate('driver-signup')}>
+          <PrimaryButton onClick={() => navigate('home')}>Book a ride</PrimaryButton>
+          <PrimaryButton variant="purple" onClick={() => navigate('carpool', { hub: '1' })}>Find a carpool</PrimaryButton>
+          <button
+            type="button"
+            className="pressable"
+            onClick={() => navigate('driver-signup')}
+            style={{ fontWeight: 700, color: 'var(--purple)', padding: 8 }}
+          >
             Sign up as a driver
-          </PrimaryButton>
+          </button>
           <button
             type="button"
             className="pressable"
@@ -117,19 +121,19 @@ export function Marketing() {
           }}
         >
           <h3 style={{ fontSize: 17, fontWeight: 600, marginBottom: 6, textAlign: 'center' }}>
-            Get the native apps
+            Rider app and driver app
           </h3>
           <p style={{ fontSize: 13, color: 'var(--ink-secondary)', textAlign: 'center', marginBottom: 20 }}>
-            Scan for Expo internal preview installs (ad hoc / APK)
+            Same account as this website. Scan the current Expo projects. The older Airport Rides 1.0.0 install is a different app.
           </p>
           <div style={{ display: 'flex', justifyContent: 'center', gap: 36 }}>
-            <QrCard label="iOS preview" href={IOS_BUILD} caption="Install via Expo" />
-            <QrCard label="Android APK" href={ANDROID_BUILD} caption="Direct APK page" />
+            <QrCard label="Rider" href={RIDER_EXPO_PROJECT} caption="Clemson RIDES" />
+            <QrCard label="Driver" href={DRIVER_EXPO_PROJECT} caption="Clemson RIDES Driver" />
           </div>
         </div>
 
         <p style={{ marginTop: 24, textAlign: 'center', fontSize: 12, color: 'var(--ink-tertiary)' }}>
-          Supabase Auth + Stripe Checkout live · 25% airport deposit · Expo previews above
+          One account on the web, the rider app, and the driver app · 25% airport deposit
         </p>
         <footer
           style={{

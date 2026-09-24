@@ -24,6 +24,8 @@ import { ReferFriendsPanel } from './ReferFriends'
 import { isIncentiveAdmin } from '../lib/driverIncentiveMath'
 import { HelpChatPanel } from '../components/HelpChatPanel'
 import { SupportChatPanel } from '../components/SupportChatPanel'
+import { supportTicketRequest } from '../lib/agentChatClient'
+import { ACCOUNT_DELETION_TICKET } from '../../shared/accountDeletion.js'
 import { CreditPacksPanel } from '../components/CreditPacksPanel'
 import { PrepaidCreditsPanel } from '../components/PrepaidCreditsPanel'
 import { QuietHoursCard } from '../components/QuietHoursCard'
@@ -95,6 +97,8 @@ export function AccountScreen() {
   const [prefsNote, setPrefsNote] = useState(null)
   const [prefsSaving, setPrefsSaving] = useState(false)
   const [application, setApplication] = useState(null)
+  const [deleteBusy, setDeleteBusy] = useState(false)
+  const [deleteNote, setDeleteNote] = useState(null)
   const isDriver = profile?.role === 'driver' || profile?.role === 'both'
   const isAdmin = isAdminIdentity({
     jwtEmail: user?.email,
@@ -698,6 +702,36 @@ export function AccountScreen() {
           <div style={{ fontSize: 13, color: 'var(--ink-tertiary)', marginBottom: 12 }}>
             {configured ? user?.email || 'Signed in' : 'Set VITE_SUPABASE_URL + VITE_SUPABASE_ANON_KEY'}
           </div>
+          <button
+            type="button"
+            className="pressable"
+            disabled={deleteBusy}
+            onClick={async () => {
+              setDeleteBusy(true)
+              setDeleteNote(null)
+              try {
+                const data = await supportTicketRequest('/api/admin-drivers?action=ticket', {
+                  method: 'POST',
+                  body: JSON.stringify({
+                    ...ACCOUNT_DELETION_TICKET,
+                    body: `${ACCOUNT_DELETION_TICKET.body} Account email: ${user?.email || 'on file'}.`,
+                  }),
+                })
+                const id = data.ticket?.id
+                setDeleteNote(id
+                  ? `Deletion request ${id} is open. This account stays until support processes it.`
+                  : 'Deletion request filed.')
+              } catch (err) {
+                setDeleteNote(err.message || 'Could not file the deletion request.')
+              } finally {
+                setDeleteBusy(false)
+              }
+            }}
+            style={{ display: 'block', width: '100%', textAlign: 'left', padding: 12, marginBottom: 8, fontWeight: 700, color: 'var(--purple)' }}
+          >
+            {deleteBusy ? 'Filing deletion request…' : 'Request account deletion'}
+          </button>
+          {deleteNote ? <div style={{ fontSize: 13, color: 'var(--ink-secondary)', marginBottom: 12 }}>{deleteNote}</div> : null}
           <button type="button" className="pressable primary-cta" onClick={onSignOut}
             style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
               width: '100%', marginTop: 4, padding: 14, borderRadius: 14,
