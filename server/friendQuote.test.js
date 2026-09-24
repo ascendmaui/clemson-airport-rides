@@ -169,7 +169,7 @@ test('expired quote re-quotes and requires review with no charge', async () => {
 test('tampered or unknown quote id requires review and does not charge', async () => {
   const quote = quoteAt([850, 851])
   const next = quoteAt([870, 871], { id: 'quote-next' })
-  for (const quoteId of ['quote-tampered', null, undefined]) {
+  for (const quoteId of ['quote-tampered', 'unknown-quote']) {
     let charged = false
     const outcome = await settleFriendQuote({
       ride: rideFor(quote),
@@ -191,6 +191,114 @@ test('tampered or unknown quote id requires review and does not charge', async (
     assert.equal(outcome.reason, 'quote_mismatch')
     assert.equal(outcome.quote.id, 'quote-next')
     assert.notEqual(outcome.quote.shares[0].share_cents, 5)
+  }
+})
+
+test('legacy confirm with no quote id charges a fresh stored quote', async () => {
+  const quote = quoteAt([850, 851])
+  const bodies = [
+    { fare_cents: 1, amountCents: 1, shares: [{ id: 'a', share_cents: 1 }, { id: 'b', share_cents: 1 }] },
+    { quoteId: null, fare_cents: 1, amountCents: 1 },
+    { quoteId: undefined, amountCents: 4 },
+  ]
+  for (const body of bodies) {
+    let recomputed = 0
+    let chargedCents = null
+    const logs = []
+    const original = console.info
+    console.info = (...args) => { logs.push(args) }
+    try {
+      const outcome = await settleFriendQuote({
+        ride: rideFor(quote),
+        participants: people([900, 901]),
+        body,
+        now: T0 + 60_000,
+        recompute: async () => {
+          recomputed += 1
+          throw new Error('recompute must not run for a fresh legacy quote')
+        },
+        charge: async ({ participants, ride }) => {
+          chargedCents = participants.map((person) => [person.id, person.fare_cents])
+          assert.equal(ride.total_fare_cents, 1701)
+          return { results: chargedCents }
+        },
+      })
+      assert.equal(recomputed, 0)
+      assert.deepEqual(chargedCents, [['b', 851], ['a', 850]])
+      assert.equal(outcome.status, 'charged')
+      assert.equal(outcome.reason, 'legacy_no_quote_id')
+      assert.equal(logs.length, 1)
+      assert.equal(logs[0][0], '[confirm-charges] legacy_no_quote_id')
+      assert.equal(logs[0][1].quoteId, 'quote-1')
+    } finally {
+      console.info = original
+    }
+  }
+})
+
+test('legacy confirm with no quote id re-quotes an expired stored quote', async () => {
+  const quote = quoteAt([850, 851])
+  const drifted = quoteAt([860, 861], {
+    id: 'quote-2',
+    now: T0 + FRIEND_QUOTE_TTL_MS + 1,
+  })
+  let charged = false
+  let recomputed = 0
+  const outcome = await settleFriendQuote({
+    ride: rideFor(quote),
+    participants: people([850, 851]),
+    body: { fare_cents: 1, amountCents: 1, shares: [{ id: 'a', share_cents: 1 }] },
+    now: T0 + FRIEND_QUOTE_TTL_MS + 1,
+    recompute: async () => {
+      recomputed += 1
+      return {
+        ok: true,
+        ride: rideFor(drifted),
+        participants: people([860, 861]),
+      }
+    },
+    charge: async () => {
+      charged = true
+      return {}
+    },
+  })
+  assert.equal(charged, false)
+  assert.equal(recomputed, 1)
+  assert.equal(outcome.status, 'review_required')
+  assert.equal(outcome.reason, 'expired')
+  assert.equal(outcome.quote.id, 'quote-2')
+  assert.deepEqual(
+    outcome.quote.shares.map((share) => share.share_cents),
+    [860, 861],
+  )
+})
+
+test('a mismatched signature requires review and does not charge', async () => {
+  const quote = quoteAt([850, 851])
+  const next = quoteAt([870, 871], { id: 'quote-next' })
+  for (const body of [
+    { quoteId: 'quote-1', quoteSignature: 'a:1|b:1', fare_cents: 1 },
+    { quoteSignature: 'a:1|b:1', amountCents: 1 },
+  ]) {
+    let charged = false
+    const outcome = await settleFriendQuote({
+      ride: rideFor(quote),
+      participants: people([850, 851]),
+      body,
+      now: T0 + 1000,
+      recompute: async () => ({
+        ok: true,
+        ride: rideFor(next),
+        participants: people([870, 871]),
+      }),
+      charge: async () => {
+        charged = true
+        return {}
+      },
+    })
+    assert.equal(charged, false)
+    assert.equal(outcome.status, 'review_required')
+    assert.equal(outcome.reason, 'signature_mismatch')
   }
 })
 

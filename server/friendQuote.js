@@ -1,6 +1,7 @@
 /**
  * Server friend-ride quote. Confirm charges these stored shares for 10 minutes.
  * The client may send the quote id and signature. Amount fields are ignored.
+ * A request with no quote id still charges a fresh stored quote (legacy apps).
  * Pass `now` (ms) to tests; otherwise the clock is Date.now.
  */
 import { randomUUID } from 'node:crypto'
@@ -97,6 +98,8 @@ function firstScalar(source, keys) {
 /**
  * Charge the stored quote, or send the ride back for review.
  * Does not read client amounts. `now` is the server clock in ms.
+ * No quote id charges a fresh stored quote with reason `legacy_no_quote_id`.
+ * A quote id that does not match, or a signature that does not match, requires review.
  */
 export function evaluateFriendQuote({ ride, participants, quoteId, signature, now } = {}) {
   const quote = storedFriendQuote(ride)
@@ -104,7 +107,8 @@ export function evaluateFriendQuote({ ride, participants, quoteId, signature, no
   if (!quote.ride_id || String(quote.ride_id) !== String(ride?.id || '')) {
     return { action: 'review', reason: 'ride_mismatch' }
   }
-  if (!quoteId || String(quote.id) !== String(quoteId)) {
+  const quotedId = quoteId == null || String(quoteId).trim() === '' ? null : String(quoteId)
+  if (quotedId && quotedId !== String(quote.id)) {
     return { action: 'review', reason: 'quote_mismatch' }
   }
   if (signature && String(quote.signature || '') !== String(signature)) {
@@ -131,6 +135,9 @@ export function evaluateFriendQuote({ ride, participants, quoteId, signature, no
   for (const share of quote.shares || []) {
     const cents = normalizeCents(share?.share_cents)
     if (cents == null || cents < 0) return { action: 'review', reason: 'missing' }
+  }
+  if (!quotedId) {
+    return { action: 'charge', reason: 'legacy_no_quote_id', quote, shares: quote.shares }
   }
   return { action: 'charge', quote, shares: quote.shares }
 }
@@ -177,7 +184,13 @@ export async function settleFriendQuote({
     const priced = applyQuotedShares(participants, decision.quote)
     const total = quotedTotalCents(decision.quote)
     if (!total || priced.some((person) => person.fare_cents == null)) {
-      return { status: 'fares_missing', quote: decision.quote, participants: priced }
+      return { status: 'fares_missing', reason: decision.reason || null, quote: decision.quote, participants: priced }
+    }
+    if (decision.reason === 'legacy_no_quote_id') {
+      console.info('[confirm-charges] legacy_no_quote_id', {
+        rideId: ride?.id || null,
+        quoteId: decision.quote?.id || null,
+      })
     }
     if (typeof charge !== 'function') throw new Error('charge is required')
     const charged = await charge({
@@ -185,7 +198,13 @@ export async function settleFriendQuote({
       participants: priced,
       quote: decision.quote,
     })
-    return { status: 'charged', quote: decision.quote, participants: priced, charged }
+    return {
+      status: 'charged',
+      reason: decision.reason || null,
+      quote: decision.quote,
+      participants: priced,
+      charged,
+    }
   }
   if (typeof recompute !== 'function') throw new Error('recompute is required')
   const repriced = await recompute({ reason: decision.reason })
