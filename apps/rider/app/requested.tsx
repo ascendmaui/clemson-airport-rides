@@ -72,6 +72,7 @@ export default function Requested() {
               {shown?.status ? ` · ${shown.status}` : loading ? ' · loading' : ''}
             </Text>
             <Text style={styles.meta}>Trip {tripId.slice(0, 8)}</Text>
+            <Text style={styles.body}>Airport holds use the 25% Stripe deposit on Schedule.</Text>
           </View>
         )}
         {error ? <Text style={styles.error}>{error}</Text> : null}
