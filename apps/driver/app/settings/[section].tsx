@@ -43,7 +43,7 @@ function sectionTitle(section: Section): string {
 const DISPLAY_OPTIONS: { id: DisplayMode; label: string; body: string }[] = [
   { id: 'auto', label: 'Auto (solar)', body: 'Light after sunrise and dark after sunset for your last known location, or Clemson, SC.' },
   { id: 'light', label: 'Light', body: 'The current Clemson cream, orange, and purple look.' },
-  { id: 'dark', label: 'Dark', body: 'Same orange and purple on a deep purple night background.' },
+  { id: 'dark', label: 'Dark', body: 'Same orange and purple on the night field (#0E0B14).' },
 ]
 
 export default function SettingsSection() {
