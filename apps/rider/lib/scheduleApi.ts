@@ -1,5 +1,5 @@
-import { displayFirstName } from 'rides-native/authErrors'
 import { studentDiscountGranted } from '../../../src/lib/studentDomain.js'
+import { authedJson } from 'rides-native/apiClient'
 import type { AuthUser } from 'rides-native/createAuth'
 import {
   airportFareCents,
@@ -79,7 +79,6 @@ export async function createScheduledTrip({
   pickupAt,
   purpose,
   weekdays,
-  quote,
   tier = 'standard',
 }: {
   user: AuthUser
@@ -88,52 +87,24 @@ export async function createScheduledTrip({
   pickupAt: Date | null
   purpose: SchedulePurpose
   weekdays: string[]
-  quote: RideQuote
   tier?: 'standard' | 'tesla'
 }) {
   if (!supabase) throw new Error('Supabase is not configured')
+  if (!user?.id) throw new Error('Sign in required to schedule a ride')
   const when = pickupAt ? pickupAt.toISOString() : null
-  const metadata = {
-    kind: when ? 'scheduled' : 'airport',
-    purpose,
-    rider_first_name: displayFirstName(
-      user.user_metadata?.full_name || user.email?.split('@')[0],
-      'Rider',
-    ),
-    fare_is_estimate: quote.estimate,
-    reminders: {},
-    isStudent: Boolean(quote.label),
-    student_discount_cents: quote.discountCents,
-    studentLabel: quote.label,
-    recurrence: purpose === 'recurring' ? { interval: 'weekly', weekdays } : null,
-    party: purpose === 'party_weekend' ? 'weekend' : null,
-    tesla: tier === 'tesla',
-    fleet: tier === 'tesla' ? 'tesla_model_3' : 'standard',
-  }
-  const { data, error } = await supabase
-    .from('trips')
-    .insert({
-      rider_id: user.id,
-      status: when ? 'scheduled' : 'searching',
-      tier: tier === 'tesla' ? 'tesla' : 'standard',
-      pickup_label: pickup.label,
-      dropoff_label: dropoff.label,
-      pickup_lat: pickup.lat,
-      pickup_lng: pickup.lng,
-      dropoff_lat: dropoff.lat,
-      dropoff_lng: dropoff.lng,
-      fare_cents: quote.fareCents,
-      deposit_cents: quote.depositCents,
-      passengers: 1,
-      pickup_at: when,
-      scheduled_for: when,
-      rider_note: purpose,
-      metadata,
-    })
-    .select('id, status, pickup_at, pickup_label, dropoff_label')
-    .single()
-  if (error) throw new Error(error.message || 'Could not schedule ride')
-  return data
+  const data = await authedJson(supabase, '/api/stripe-payment-methods?action=schedule-trip', {
+    method: 'POST',
+    body: {
+      pickup,
+      dropoff,
+      pickupAt: when,
+      purpose,
+      weekdays,
+      tier,
+    },
+  }) as { trip: { id: string; status: string | null; pickup_at: string | null; pickup_label: string | null; dropoff_label: string | null } }
+  if (!data?.trip?.id) throw new Error('Could not schedule ride')
+  return data.trip
 }
 
 export async function listScheduledTrips(riderId: string) {

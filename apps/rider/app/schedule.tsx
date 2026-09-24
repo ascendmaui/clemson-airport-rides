@@ -309,7 +309,6 @@ function ScheduleScreen() {
         pickupAt: weekendWhen,
         purpose: 'party_weekend',
         weekdays: [],
-        quote: weekendQuote,
         tier: fleet,
       })
       const fleetLine = fleet === 'tesla' ? ' Tesla Model 3 stays driver-operated.' : ''
@@ -357,7 +356,6 @@ function ScheduleScreen() {
         pickupAt: when,
         purpose,
         weekdays,
-        quote,
       })
       setBanner(`${purposeLabel(purpose)} saved · ${row.id}`)
       await successHaptic()

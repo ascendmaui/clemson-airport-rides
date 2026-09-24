@@ -22,7 +22,7 @@ const NOW_GRACE_MS = 20 * 60 * 1000
 const BASE_CENTS = 500
 const PER_MILE_CENTS = 180
 const MIN_CENTS = 800
-const ATL_FLOOR_CENTS = 19500
+export const ATL_FLOOR_CENTS = 19500
 const METERS_PER_MILE = 1609.344
 
 export const AIRPORT_PLACES = [

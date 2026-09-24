@@ -1,10 +1,10 @@
 import { supabase } from './supabase'
+import { createServerScheduledTrip } from './payments'
 import { applyStudentDiscount, priceAirportRide } from './pricing'
 import {
   airportCodeForPlace,
   distanceFareCents,
   DRIVER_QUEUE_SELECT,
-  firstName,
   formatPickupAt,
   nextReminder,
   tripMeters,
@@ -54,12 +54,6 @@ export async function createScheduledTrip({
   dropoff,
   pickupAt,
   purpose = 'planned',
-  fareCents,
-  depositCents = 0,
-  fareIsEstimate = true,
-  isStudent = false,
-  studentDiscountCents = 0,
-  studentLabel = null,
   tier = 'standard',
 }) {
   if (!supabase) throw new Error('Supabase is not configured')
@@ -67,60 +61,20 @@ export async function createScheduledTrip({
   if (!pickupAt) throw new Error('Choose a pickup time')
 
   const when = pickupAt instanceof Date ? pickupAt.toISOString() : new Date(pickupAt).toISOString()
-  const riderFirst = firstName(
-    user.user_metadata?.full_name || user.user_metadata?.name || user.email?.split('@')[0],
-    'Rider',
-  )
-
-  const { data, error } = await supabase
-    .from('trips')
-    .insert({
-      rider_id: user.id,
-      status: 'scheduled',
-      tier: tier === 'tesla' ? 'tesla' : 'standard',
-      pickup_label: pickup.label,
-      dropoff_label: dropoff.label,
-      pickup_lat: pickup.lat,
-      pickup_lng: pickup.lng,
-      dropoff_lat: dropoff.lat,
-      dropoff_lng: dropoff.lng,
-      fare_cents: Math.round(Number(fareCents) || 0),
-      deposit_cents: Math.round(Number(depositCents) || 0),
-      passengers: 1,
-      pickup_at: when,
-      scheduled_for: when,
-      rider_note: purpose,
-      metadata: {
-        kind: 'scheduled',
-        purpose,
-        rider_first_name: riderFirst,
-        fare_is_estimate: Boolean(fareIsEstimate),
-        reminders: {},
-        isStudent: Boolean(isStudent),
-        student_discount_cents: Math.max(0, Math.round(Number(studentDiscountCents) || 0)),
-        studentLabel: studentLabel || null,
-        tesla: tier === 'tesla',
-        fleet: tier === 'tesla' ? 'tesla_model_3' : 'standard',
-      },
-    })
-    .select('id, status, pickup_at, pickup_label, dropoff_label')
-    .single()
-
-  if (error) throw new Error(error.message || 'Could not schedule ride')
-
-  const { error: eventError } = await supabase.from('trip_events').insert({
-    trip_id: data.id,
-    kind: 'scheduled',
-    payload: {
-      pickup_at: when,
-      purpose,
-      pickup_label: pickup.label,
-      dropoff_label: dropoff.label,
-    },
+  const data = await createServerScheduledTrip({
+    pickup,
+    dropoff,
+    pickupAt: when,
+    purpose,
+    tier,
+    weekdays: [],
   })
-  if (eventError) console.warn('[scheduled]', eventError.message)
-
-  return data
+  return {
+    ...data.trip,
+    fare_cents: data.trip?.fare_cents ?? data.fareCents,
+    deposit_cents: data.trip?.deposit_cents ?? data.depositCents,
+    discountCents: data.discountCents,
+  }
 }
 
 export async function listMyScheduledTrips(riderId) {

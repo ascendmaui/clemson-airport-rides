@@ -8,6 +8,7 @@ import {
   admin, cors, json, parseBody, userFromAuth, stripeClient, stripeOk,
 } from '../friendRideLib.js'
 import { collectPayment } from '../collectPayment.js'
+import { serverCollectCents } from '../authoritativeFare.js'
 
 const KINDS = new Set(['balance', 'tip', 'wait_fee', 'cancel_fee', 'mid_ride', 'friend_ride_share', 'deposit', 'credits_purchase'])
 
@@ -25,25 +26,36 @@ export default async function handler(req, res) {
 
   const kind = body.kind || 'balance'
   if (!KINDS.has(kind)) return json(res, 400, { error: 'Unsupported payment kind' })
-  if (body.amountCents == null) return json(res, 400, { error: 'amountCents required' })
 
-  const amountCents = Math.round(Number(body.amountCents))
+  let trip = null
+  if (body.tripId) {
+    const loaded = await sb.from('trips').select('id, rider_id, driver_id, status, fare_cents, deposit_cents, metadata, fare_breakdown').eq('id', body.tripId).maybeSingle()
+    if (loaded.error || !loaded.data) return json(res, 404, { error: 'Trip not found' })
+    trip = loaded.data
+    if (trip.rider_id !== user.id && trip.driver_id !== user.id) {
+      return json(res, 403, { error: 'Not allowed on this trip' })
+    }
+  }
+
+  let payments = []
+  if (trip) {
+    const payRes = await sb.from('payments').select('id, status, kind, amount_cents, metadata').eq('trip_id', trip.id)
+    payments = payRes.error ? [] : (payRes.data || [])
+  }
+  const owed = serverCollectCents({
+    kind,
+    trip,
+    payments,
+    clientAmountCents: body.amountCents ?? body.amount ?? body.total,
+  })
+  if (owed.error) return json(res, owed.status || 400, { error: owed.error, code: owed.code || null })
+  const amountCents = owed.amountCents
   if (!Number.isFinite(amountCents) || amountCents < 0) {
     return json(res, 400, { error: 'amountCents must be a non-negative number' })
   }
 
   if (amountCents > 0 && !stripeOk()) {
     return json(res, 503, { error: 'Payments unavailable', message: 'STRIPE_SECRET_KEY not configured' })
-  }
-
-  let trip = null
-  if (body.tripId) {
-    const loaded = await sb.from('trips').select('id, rider_id, driver_id, status, fare_cents, metadata').eq('id', body.tripId).maybeSingle()
-    if (loaded.error || !loaded.data) return json(res, 404, { error: 'Trip not found' })
-    trip = loaded.data
-    if (trip.rider_id !== user.id && trip.driver_id !== user.id) {
-      return json(res, 403, { error: 'Not allowed on this trip' })
-    }
   }
 
   const riderId = trip?.rider_id || user.id

@@ -14,12 +14,10 @@ import {
   loadGameDayMultiplier, planSettlement, debitLots, insertChargePayment,
 } from '../creditLots.js'
 import { studentDiscountGranted } from '../../src/lib/studentDomain.js'
+import { quoteAirportCheckout } from '../authoritativeFare.js'
 import {
-  quoteFare,
-  resolveSurge,
   splitPlatformFee,
   feeMetadata,
-  AIRPORT_ROUTE_FALLBACK,
   cardDepositCents,
   depositSplit,
   depositSplitLabel,
@@ -74,20 +72,17 @@ export default async function handler(req, res) {
     durationS = route.durationS
     routeSource = 'google'
   }
-  const fb = AIRPORT_ROUTE_FALLBACK[airport]
-
   const game = await loadGameDayMultiplier(sb, at)
-  const surge = resolveSurge({ at, airport: true, gameDayMultiplier: game.multiplier })
-  const quoted = quoteFare({
+  const priced = quoteAirportCheckout({
+    airport,
+    at,
+    isStudent,
+    gameDayMultiplier: game.multiplier,
     distanceM,
     durationS,
-    miles: distanceM == null ? fb.miles : undefined,
-    minutes: durationS == null ? fb.minutes : undefined,
-    surgeMultiplier: surge.multiplier,
-    isStudent,
-    isCarpool: false,
-    tier: 'standard',
   })
+  const quoted = priced.quote
+  const surge = priced.surge
 
   const useCredits = body.useCredits !== false
   const settlement = await planSettlement(sb, {
