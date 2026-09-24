@@ -11,76 +11,9 @@ import { formatUsdFromCents, applyStudentDiscount } from '../lib/pricing'
 import { depositSurfaceCopy, STRIPE_NOT_CONFIGURED_COPY } from '../../packages/rides-native/riderMoney.js'
 import { useAuth } from '../lib/auth'
 import { getHashRoute, navigate } from '../lib/navigation'
-import { supabase } from '../lib/supabase'
-import { STADIUM } from '../components/CampusMap'
 import { SignInToBookModal, useRequireAuthForAction } from '../components/SignInToBookModal'
 import { useStudentStatus } from '../lib/useStudentStatus'
-import { firstName } from '../lib/scheduledRideModel'
 import { ScheduledRidePlanner } from '../components/ScheduledRidePlanner'
-
-const AIRPORT_COORDS = {
-  GSP: { label: 'Greenville-Spartanburg International (GSP)', lat: 34.8956, lng: -82.2189 },
-  CLT: { label: 'Charlotte Douglas International (CLT)', lat: 35.2144, lng: -80.9473 },
-}
-
-
-async function createAirportTrip({ user, airport, fareCents, deposit, date, time, student }) {
-  if (!supabase) throw new Error('Supabase is not configured')
-  if (!user?.id) throw new Error('Sign in required to book')
-
-  const dest = AIRPORT_COORDS[airport] || AIRPORT_COORDS.GSP
-  let scheduledFor = null
-  if (date) {
-    const hhmm = time || '12:00'
-    scheduledFor = new Date(`${date}T${hhmm}:00`).toISOString()
-  }
-  const ahead = Boolean(scheduledFor)
-
-  const { data, error } = await supabase
-    .from('trips')
-    .insert({
-      rider_id: user.id,
-      status: ahead ? 'scheduled' : 'searching',
-      tier: 'standard',
-      pickup_label: 'Memorial Stadium',
-      dropoff_label: dest.label,
-      pickup_lat: STADIUM[0],
-      pickup_lng: STADIUM[1],
-      dropoff_lat: dest.lat,
-      dropoff_lng: dest.lng,
-      fare_cents: fareCents,
-      deposit_cents: deposit,
-      passengers: 1,
-      pickup_at: scheduledFor,
-      scheduled_for: scheduledFor,
-      rider_note: ahead ? 'airport' : null,
-      metadata: {
-        ...(ahead
-          ? { kind: 'scheduled', purpose: 'airport', fare_is_estimate: false, reminders: {} }
-          : {}),
-        rider_first_name: firstName(
-          user.user_metadata?.full_name || user.user_metadata?.name || user.email?.split('@')[0],
-        ),
-        isStudent: Boolean(student?.discountCents),
-        student_discount_cents: Math.max(0, Math.round(Number(student?.discountCents) || 0)),
-        studentLabel: student?.label || null,
-      },
-    })
-    .select('id')
-    .single()
-
-  if (error) throw new Error(error.message || 'Could not create trip')
-  return data.id
-}
-
-async function releaseUnpaidTrip(tripId) {
-  if (!supabase || !tripId) return
-  await supabase
-    .from('trips')
-    .update({ status: 'canceled', canceled_at: new Date().toISOString() })
-    .eq('id', tripId)
-    .in('status', ['searching', 'scheduled'])
-}
 
 export function ScheduleAirport() {
   const { user } = useAuth()
@@ -112,37 +45,23 @@ export function ScheduleAirport() {
   const onBook = async () => {
     setBusy(true)
     setError(null)
-    let tripId = ''
     try {
-      const depositAmount = deposit
-      tripId = await createAirportTrip({
-        user,
-        airport,
-        fareCents,
-        deposit: depositAmount,
-        date,
-        time,
-        student,
-      })
       const session = await createCheckoutSession({
         airport,
-        fareCents,
-        depositCents: deposit,
+        date,
+        time,
         riderName:
           user?.user_metadata?.full_name ||
           user?.email?.split('@')[0] ||
           'Rider',
         riderId: user.id,
-        tripId,
       })
       if (session.url) {
         window.location.href = session.url
         return
       }
-      await releaseUnpaidTrip(tripId)
       setError('Checkout did not return a payment URL. No charge was made.')
     } catch (err) {
-      try { await releaseUnpaidTrip(tripId) } catch { /* keep the checkout error */ }
       setError(err.message || STRIPE_NOT_CONFIGURED_COPY)
     } finally {
       setBusy(false)

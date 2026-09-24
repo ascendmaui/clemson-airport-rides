@@ -11,6 +11,7 @@ import {
   admin, cors, json, parseBody, userFromAuth, stripeClient, stripeOk,
 } from '../friendRideLib.js'
 import { isAdminUser, settleTrip } from '../tripSettle.js'
+import { amountDueIgnoringClient } from '../authoritativeFare.js'
 
 export default async function handler(req, res) {
   if (cors(req, res)) return
@@ -47,8 +48,14 @@ export default async function handler(req, res) {
   const payRes = await sb.from('payments').select('id, status, kind, amount_cents, metadata').eq('trip_id', trip.id)
   const payments = payRes.error ? [] : (payRes.data || [])
 
-  const duePreview = body.amountCents != null ? Number(body.amountCents) : null
-  if ((duePreview == null || duePreview > 0) && body.action === 'charge' && !stripeOk()) {
+  const duePreview = amountDueIgnoringClient({
+    action: body.action,
+    trip,
+    payments,
+    feeKind: body.feeKind || null,
+    clientAmountCents: body.amountCents ?? body.amount ?? body.total ?? body.fare_cents,
+  })
+  if (Number(duePreview.amountCents) > 0 && body.action === 'charge' && !stripeOk()) {
     return json(res, 503, { error: 'Payments unavailable' })
   }
 
@@ -59,7 +66,7 @@ export default async function handler(req, res) {
       trip,
       payments,
       action: body.action,
-      explicitAmountCents: body.amountCents,
+      explicitAmountCents: null,
       feeKind: body.feeKind || null,
       requireFee: Boolean(body.requireFee),
       adminOverride: Boolean(body.adminOverride),

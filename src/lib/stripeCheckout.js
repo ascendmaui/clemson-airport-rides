@@ -9,6 +9,7 @@
  * Server: STRIPE_SECRET_KEY (never ship in Vite)
  */
 import { quoteFare, AIRPORT_ROUTE_FALLBACK, cardDepositCents, STRIPE_NOT_CONFIGURED_COPY } from './fareRates'
+import { supabase } from './supabase'
 
 function fallbackFareCents(code) {
   const route = AIRPORT_ROUTE_FALLBACK[code]
@@ -62,21 +63,26 @@ export async function createCheckoutSession({
   cancelUrl,
   tripId,
   riderId,
-  fareCents,
-  depositCents: depositOverride,
+  date,
+  time,
 }) {
   const rate = AIRPORT_RATES[airport]
   if (!rate) throw new Error('Unknown airport')
 
-  const fare = fareCents ?? rate.fareCents
-  const deposit = depositOverride ?? depositCents(fare)
+  const headers = { 'Content-Type': 'application/json' }
+  if (supabase) {
+    const { data } = await supabase.auth.getSession()
+    const token = data?.session?.access_token
+    if (token) headers.Authorization = `Bearer ${token}`
+  }
   const body = {
     airport: rate.code,
-    fareCents: fare,
-    depositCents: deposit,
     riderName: riderName || 'Rider',
     tripId: tripId || '',
     riderId: riderId || '',
+    date: date || undefined,
+    time: time || undefined,
+    origin: window.location.origin,
     successUrl:
       successUrl ||
       `${window.location.origin}${window.location.pathname}#/schedule?paid=1`,
@@ -89,7 +95,7 @@ export async function createCheckoutSession({
   try {
     res = await fetch('/api/create-checkout-session', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify(body),
     })
   } catch (err) {

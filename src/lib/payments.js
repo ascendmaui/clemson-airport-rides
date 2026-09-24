@@ -41,6 +41,10 @@ export function collectTripPayment(body) {
   return api('/api/stripe-payment-methods?action=collect', body)
 }
 
+export function createServerScheduledTrip(body) {
+  return api('/api/stripe-payment-methods?action=schedule-trip', body)
+}
+
 export function settleTrip(body) {
   return api('/api/stripe-payment-methods?action=settle', body)
 }

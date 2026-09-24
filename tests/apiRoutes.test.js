@@ -159,7 +159,7 @@ test('held routes fold into existing routers and ignore body sub-actions', () =>
   assert.equal(resolveRouteAction({ url: '/api/driver-earnings' }, driver), 'earnings')
 
   const pay = {
-    allowed: ['setup-intent', 'save', 'quote', 'airport-checkout', 'buy-credits', 'credits-confirm', 'credit-lots', 'credits', 'collect', 'settle'],
+    allowed: ['setup-intent', 'save', 'quote', 'airport-checkout', 'schedule-trip', 'buy-credits', 'credits-confirm', 'credit-lots', 'credits', 'collect', 'settle'],
     legacy: {
       'quote-fare': 'quote',
       'collect-payment': 'collect',

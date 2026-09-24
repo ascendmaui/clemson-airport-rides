@@ -127,28 +127,20 @@ export function ScheduledRidePlanner() {
     }
     setBusy(true)
     try {
-      const priced = quote || await estimateScheduledFare({ pickup, dropoff, isStudent: isStudent && fleet !== 'tesla', at: check.pickupAt })
       const row = await createScheduledTrip({
         user,
         pickup,
         dropoff,
         pickupAt: check.pickupAt,
         purpose,
-        fareCents: priced?.fareCents || 0,
-        depositCents: priced?.estimate ? 0 : (priced?.depositCents || 0),
-        fareIsEstimate: priced?.estimate !== false,
-        isStudent: fleet === 'tesla' ? false : isStudent,
-        studentDiscountCents: fleet === 'tesla' ? 0 : (priced?.discountCents || 0),
-        studentLabel: fleet === 'tesla' ? null : (priced?.studentLabel || null),
         tier: fleet,
       })
-      const held = priced?.estimate ? 0 : (priced?.depositCents || 0)
       setSaved({
         ...row,
         depositCopy: depositSurfaceCopy(
-          { fareCents: priced?.fareCents, depositCents: held },
+          { fareCents: row.fare_cents, depositCents: row.deposit_cents },
           'confirm',
-          { studentDiscountCents: fleet === 'tesla' ? 0 : priced?.discountCents },
+          { studentDiscountCents: row.discountCents },
         ),
       })
       setDate('')

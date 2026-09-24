@@ -20,25 +20,6 @@ const PURPOSES = [
   { id: 'planned', label: 'Planned trip' },
 ];
 
-function roughFareCents(a: { lat: number; lng: number }, b: { lat: number; lng: number }) {
-  const toRad = (d: number) => (d * Math.PI) / 180;
-  const dLat = toRad(b.lat - a.lat);
-  const dLng = toRad(b.lng - a.lng);
-  const h =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(toRad(a.lat)) * Math.cos(toRad(b.lat)) * Math.sin(dLng / 2) ** 2;
-  const meters = 2 * 6371000 * Math.asin(Math.sqrt(h));
-  const miles = meters / 1609.344;
-  return Math.max(800, 500 + Math.round(miles * 180));
-}
-
-function firstName(fullName: string | null | undefined) {
-  const raw = String(fullName || '').trim();
-  const token = raw.split(/\s+/)[0] || 'Rider';
-  const cleaned = token.includes('@') ? token.split('@')[0] : token;
-  return cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
-}
-
 /** Rider schedule tab — date, time, campus/airport spots, persisted as status scheduled. */
 export default function ScheduleScreen() {
   const [purpose, setPurpose] = useState('party_weekend');
@@ -94,31 +75,25 @@ export default function ScheduleScreen() {
     setBusy(true);
     try {
       const iso = when.toISOString();
-      const { error } = await supabase.from('trips').insert({
-        rider_id: user.id,
-        status: 'scheduled',
-        tier: 'standard',
-        pickup_label: pickup.label,
-        dropoff_label: dropoff.label,
-        pickup_lat: pickup.lat,
-        pickup_lng: pickup.lng,
-        dropoff_lat: dropoff.lat,
-        dropoff_lng: dropoff.lng,
-        fare_cents: roughFareCents(pickup, dropoff),
-        deposit_cents: 0,
-        passengers: 1,
-        pickup_at: iso,
-        scheduled_for: iso,
-        rider_note: purpose,
-        metadata: {
-          kind: 'scheduled',
-          purpose,
-          rider_first_name: firstName(user.user_metadata?.full_name || user.email?.split('@')[0]),
-          fare_is_estimate: true,
-          reminders: {},
+      const base = (process.env.EXPO_PUBLIC_API_BASE || 'https://clemson-airport-rides.vercel.app').replace(/\/$/, '');
+      const token = data.session?.access_token;
+      const res = await fetch(`${base}/api/stripe-payment-methods?action=schedule-trip`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
+        body: JSON.stringify({
+          pickup,
+          dropoff,
+          pickupAt: iso,
+          purpose,
+          tier: 'standard',
+        }),
       });
-      if (error) throw new Error(error.message);
+      const payload = await res.json().catch(() => ({})) as { error?: string; message?: string };
+      if (!res.ok) throw new Error(payload.error || payload.message || 'Could not schedule ride');
       Alert.alert('Scheduled', 'Drivers can accept this ride. Your first name is all they see before the trip.');
       setDate('');
       setTime('');

@@ -19,7 +19,6 @@ import {
   resolveSurge,
   STRIPE_NOT_CONFIGURED_COPY,
 } from '../../src/lib/fareRates.js'
-import { CLT, GSP, STADIUM } from './places.js'
 
 export { STRIPE_NOT_CONFIGURED_COPY }
 
@@ -37,11 +36,6 @@ export const AIRPORT_CHOICES = [
   { code: 'GSP', name: 'Greenville-Spartanburg' },
   { code: 'CLT', name: 'Charlotte Douglas' },
 ]
-
-const AIRPORT_DEST = {
-  GSP: { label: 'Greenville-Spartanburg International (GSP)', lat: GSP.latitude, lng: GSP.longitude },
-  CLT: { label: 'Charlotte Douglas International (CLT)', lat: CLT.latitude, lng: CLT.longitude },
-}
 
 export function recomputeDeposit({ fareCents, cashCents } = {}) {
   const fare = Math.max(0, Math.round(Number(fareCents) || 0))
@@ -264,84 +258,26 @@ export async function quoteAirportFare(supabase, { airport, date, time, isStuden
   }
 }
 
-function scheduledIso({ date, time }) {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(date || '')) return null
-  const clock = /^\d{2}:\d{2}$/.test(time || '') ? time : '12:00'
-  const parsed = new Date(`${date}T${clock}:00`)
-  if (Number.isNaN(parsed.getTime())) return null
-  return parsed.toISOString()
-}
-
-async function insertAirportTrip(supabase, params) {
-  const code = params.airport === 'CLT' ? 'CLT' : 'GSP'
-  const dest = AIRPORT_DEST[code]
-  const scheduledFor = scheduledIso(params)
-  const studentDiscountCents = Math.max(0, Math.round(Number(params.studentDiscountCents) || 0))
-  const { data, error } = await supabase
-    .from('trips')
-    .insert({
-      rider_id: params.riderId,
-      status: scheduledFor ? 'scheduled' : 'searching',
-      tier: 'standard',
-      pickup_label: 'Memorial Stadium',
-      dropoff_label: dest.label,
-      pickup_lat: STADIUM.latitude,
-      pickup_lng: STADIUM.longitude,
-      dropoff_lat: dest.lat,
-      dropoff_lng: dest.lng,
-      fare_cents: params.fareCents,
-      deposit_cents: params.depositCents,
-      passengers: 1,
-      pickup_at: scheduledFor,
-      scheduled_for: scheduledFor,
-      rider_note: scheduledFor ? 'airport' : null,
-      metadata: {
-        kind: scheduledFor ? 'scheduled' : 'airport',
-        purpose: 'airport',
-        airport: code,
-        isStudent: studentDiscountCents > 0,
-        student_discount_cents: studentDiscountCents,
-      },
-    })
-    .select('id')
-    .single()
-  if (error) throw new Error(error.message || 'Could not create trip')
-  return data.id
-}
-
 async function startLegacyDeposit(supabase, params) {
   if (!supabase) throw new Error('Supabase is not configured')
   if (!params.riderId) throw new Error('Sign in required')
   const code = params.airport === 'CLT' ? 'CLT' : 'GSP'
-  const tripId = await insertAirportTrip(supabase, params)
-  try {
-    const session = await authedJson(supabase, '/api/create-checkout-session', {
-      method: 'POST',
-      body: {
-        airport: code,
-        fareCents: params.fareCents,
-        depositCents: params.depositCents,
-        riderName: params.riderName || 'Rider',
-        riderId: params.riderId,
-        tripId,
-        successUrl: `${NATIVE_CHECKOUT_ORIGIN}/#/schedule?paid=1&trip=${tripId}`,
-        cancelUrl: `${NATIVE_CHECKOUT_ORIGIN}/#/schedule?canceled=1&trip=${tripId}`,
-      },
-    })
-    return {
-      ...session,
-      tripId,
-      fareCents: params.fareCents,
-      depositCents: params.depositCents,
-      legacy: true,
-    }
-  } catch (err) {
-    await supabase
-      .from('trips')
-      .update({ status: 'canceled', canceled_at: new Date().toISOString() })
-      .eq('id', tripId)
-      .in('status', ['searching', 'scheduled'])
-    throw err
+  const day = /^\d{4}-\d{2}-\d{2}$/.test(params.date || '') ? params.date : undefined
+  const clock = /^\d{2}:\d{2}$/.test(params.time || '') ? params.time : undefined
+  const session = await authedJson(supabase, '/api/create-checkout-session', {
+    method: 'POST',
+    body: {
+      airport: code,
+      date: day,
+      time: day ? (clock || '12:00') : undefined,
+      riderName: params.riderName || 'Rider',
+      riderId: params.riderId,
+      origin: NATIVE_CHECKOUT_ORIGIN,
+    },
+  })
+  return {
+    ...session,
+    legacy: true,
   }
 }
 
