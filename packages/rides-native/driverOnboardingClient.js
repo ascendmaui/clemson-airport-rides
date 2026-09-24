@@ -3,6 +3,7 @@
  * The TIN is sent only to save_driver_tax_info. Callers must not log it.
  */
 import { authedJson } from './apiClient.js'
+import { driverQuizError } from '../../shared/driverQuiz.js'
 import {
   IC_AGREEMENT_HTML,
   IC_AGREEMENT_TITLE,
@@ -26,6 +27,8 @@ import {
   submissionBlockers,
 } from '../../shared/driverOnboarding.js'
 
+export { driverQuizError } from '../../shared/driverQuiz.js'
+
 export {
   IC_AGREEMENT_TITLE,
   IC_AGREEMENT_VERSION,
@@ -44,6 +47,15 @@ export {
 }
 
 const MAX_BYTES = 8 * 1024 * 1024
+
+export const BACKGROUND_CONSENT_VERSION = 'background-auth-2026-09-24'
+export const WORK_ELIGIBILITY_VERSION = 'work-eligibility-2026-09-24'
+export const W9_FORM_VERSION = 'w9-2026-09-24'
+
+function registrationMatchFrom(documents) {
+  const row = (documents || []).find((doc) => doc.doc_type === 'registration')
+  return row?.match_status || null
+}
 
 export function agreementPlainText(html = IC_AGREEMENT_HTML) {
   return String(html)
@@ -67,6 +79,7 @@ function complianceContext({ application, documents, tax, agreement }) {
     taxSaved: Boolean(tax?.legal_name && /^[0-9]{4}$/.test(String(tax?.tin_last4 || ''))),
     agreementSigned: Boolean(agreement?.signed_at && agreement?.signature_name),
     agreementVersion: agreement?.agreement_version || null,
+    registrationMatch: registrationMatchFrom(documents),
   }
 }
 
@@ -74,7 +87,7 @@ export async function fetchMyDriverApplication(supabase, userId) {
   if (!supabase || !userId) return null
   const { data, error } = await supabase
     .from('driver_applications')
-    .select('id, profile_id, onboarding_status, status, rejection_reason, review_note, submitted_at, reviewed_at, background_authorized_at, work_eligibility_attested_at, work_eligibility_category')
+    .select('id, profile_id, onboarding_status, status, rejection_reason, review_note, submitted_at, reviewed_at, background_authorized_at, work_eligibility_attested_at, work_eligibility_category, is_student, has_car, has_insurance, wants_extra_money, attestation_accepted_at')
     .eq('profile_id', userId)
     .maybeSingle()
   if (error) throw new Error(error.message)
@@ -83,12 +96,20 @@ export async function fetchMyDriverApplication(supabase, userId) {
 
 export async function fetchMyDriverDocuments(supabase, userId) {
   if (!supabase || !userId) return []
-  const { data, error } = await supabase
+  const rich = await supabase
+    .from('driver_documents')
+    .select('id, doc_type, storage_path, created_at, review_status, review_note, match_status')
+    .eq('profile_id', userId)
+  if (!rich.error) return rich.data || []
+  if (!/review_status|match_status|review_note|schema cache/i.test(rich.error.message || '')) {
+    throw new Error(rich.error.message)
+  }
+  const basic = await supabase
     .from('driver_documents')
     .select('id, doc_type, storage_path, created_at')
     .eq('profile_id', userId)
-  if (error) throw new Error(error.message)
-  return data || []
+  if (basic.error) throw new Error(basic.error.message)
+  return basic.data || []
 }
 
 export async function fetchMyTaxProfile(supabase, userId) {
@@ -135,15 +156,34 @@ export async function loadOnboarding(supabase, userId) {
   }
 }
 
-export async function uploadDriverDocument(supabase, userId, docType, file) {
+async function upsertDriverDocument(supabase, row) {
+  const first = await supabase.from('driver_documents').upsert(row, { onConflict: 'profile_id,doc_type' })
+  if (!first.error) return
+  if (!/review_status|match_status|review_note|schema cache/i.test(first.error.message || '')) {
+    throw new Error(first.error.message)
+  }
+  const basic = {
+    profile_id: row.profile_id,
+    doc_type: row.doc_type,
+    storage_path: row.storage_path,
+    created_at: row.created_at,
+  }
+  const second = await supabase.from('driver_documents').upsert(basic, { onConflict: 'profile_id,doc_type' })
+  if (second.error) throw new Error(second.error.message)
+}
+
+export async function uploadDriverDocument(supabase, userId, docType, file, meta = {}) {
   if (!supabase) throw new Error('Supabase is not configured')
   if (!userId) throw new Error('Sign in required')
   if (!isRequiredDocType(docType)) throw new Error('Unknown document type')
   if (!file?.uri) throw new Error('Choose a file')
   if (file.size > MAX_BYTES) throw new Error('Each file must be 8MB or smaller')
   const mime = file.mimeType || ''
-  const allowed = !mime || mime.startsWith('image/') || mime === 'application/pdf'
-  if (!allowed) throw new Error('Upload a photo or PDF')
+  const imageOnly = docType === 'license_front' || docType === 'license_back'
+  const allowed = imageOnly
+    ? mime.startsWith('image/')
+    : !mime || mime.startsWith('image/') || mime === 'application/pdf'
+  if (!allowed) throw new Error(imageOnly ? 'Upload a photo of the license.' : 'Upload a photo or PDF')
 
   const ext = (file.name?.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg'
   const path = `${userId}/${docType}/${Date.now()}.${ext}`
@@ -162,21 +202,37 @@ export async function uploadDriverDocument(supabase, userId, docType, file) {
     .eq('doc_type', docType)
     .maybeSingle()
 
-  const { error: rowErr } = await supabase.from('driver_documents').upsert(
-    {
-      profile_id: userId,
-      doc_type: docType,
-      storage_path: path,
-      created_at: new Date().toISOString(),
-    },
-    { onConflict: 'profile_id,doc_type' },
-  )
-  if (rowErr) throw new Error(rowErr.message)
+  await upsertDriverDocument(supabase, {
+    profile_id: userId,
+    doc_type: docType,
+    storage_path: path,
+    created_at: new Date().toISOString(),
+    review_status: meta.reviewStatus || null,
+    review_note: meta.reviewNote || null,
+    match_status: meta.matchStatus || null,
+  })
 
   if (previous?.storage_path && previous.storage_path !== path) {
     await supabase.storage.from('driver-documents').remove([previous.storage_path])
   }
-  return { doc_type: docType, storage_path: path }
+  return { doc_type: docType, storage_path: path, bytes, reviewStatus: meta.reviewStatus || null, matchStatus: meta.matchStatus || null }
+}
+
+export async function recordFormSignature(supabase, userId, row) {
+  if (!supabase || !userId) return null
+  const payload = {
+    profile_id: userId,
+    form_id: row.formId,
+    form_version: row.formVersion,
+    signature_name: row.signatureName,
+    signed_on: row.signedOn,
+    signature_mark: row.signatureMark || null,
+    signed_at: new Date().toISOString(),
+  }
+  const { error } = await supabase.from('driver_form_signatures').upsert(payload, { onConflict: 'profile_id,form_id,form_version' })
+  if (error && /driver_form_signatures|schema cache|relation/i.test(error.message || '')) return null
+  if (error) throw new Error(error.message)
+  return payload
 }
 
 async function saveDriverInfoDirect(supabase, user, payload) {
@@ -208,10 +264,10 @@ async function saveDriverInfoDirect(supabase, user, payload) {
     .upsert(
       {
         profile_id: userId,
-        is_student: true,
+        is_student: payload.isStudent === true,
         has_car: true,
         has_insurance: true,
-        wants_extra_money: true,
+        wants_extra_money: payload.wantsExtraMoney === true,
         attestation_accepted_at: now,
         onboarding_status: nextStatus,
         status: legacyStatusFor(nextStatus),
@@ -272,6 +328,12 @@ async function keepTeslaStub(supabase, userId, payload) {
 
 export async function saveDriverInfo(supabase, user, payload) {
   if (!user?.id) throw new Error('Sign in required')
+  const quizError = driverQuizError({
+    hasCar: payload?.hasCar,
+    hasInsurance: payload?.hasInsurance,
+    attestation: payload?.attestationAccepted,
+  })
+  if (quizError) throw new Error(quizError)
   try {
     const saved = await authedJson(supabase, '/api/driver?action=signup', { method: 'POST', body: payload })
     await keepTeslaStub(supabase, user.id, payload)
@@ -284,26 +346,65 @@ export async function saveDriverInfo(supabase, user, payload) {
   }
 }
 
-export async function saveEmploymentVerification(supabase, userId, { backgroundAuthorized, category }) {
+export async function saveEmploymentVerification(supabase, userId, input) {
   if (!supabase) throw new Error('Supabase is not configured')
   if (!userId) throw new Error('Sign in required')
-  if (!backgroundAuthorized) throw new Error('Authorize the background check to continue.')
+  const backgroundAuthorized = input?.backgroundAuthorized
+  const category = input?.category
+  if (!backgroundAuthorized) throw new Error('Sign the background-check authorization to continue.')
   if (!WORK_ELIGIBILITY_CATEGORIES.some((item) => item.id === category)) {
     throw new Error('Select your eligibility to work.')
   }
+  const signatureName = String(input?.signatureName || '').trim()
+  if (signatureName.length < 2) throw new Error('Type your legal name to sign.')
+  const signedOn = input?.signedOn || new Date().toISOString().slice(0, 10)
   const now = new Date().toISOString()
-  const { data, error } = await supabase
+  const full = {
+    background_authorized_at: now,
+    work_eligibility_attested_at: now,
+    work_eligibility_category: category,
+    background_signature_name: signatureName,
+    background_signed_on: signedOn,
+    background_consent_version: BACKGROUND_CONSENT_VERSION,
+    background_check_status: 'pending',
+    work_eligibility_signature_name: signatureName,
+    work_eligibility_signed_on: signedOn,
+    work_eligibility_consent_version: WORK_ELIGIBILITY_VERSION,
+  }
+  let saved = await supabase
     .from('driver_applications')
-    .update({
-      background_authorized_at: now,
-      work_eligibility_attested_at: now,
-      work_eligibility_category: category,
-    })
+    .update(full)
     .eq('profile_id', userId)
     .select('background_authorized_at, work_eligibility_attested_at, work_eligibility_category')
     .single()
-  if (error) throw new Error(error.message)
-  return data
+  if (saved.error && /column|schema cache/i.test(saved.error.message || '')) {
+    saved = await supabase
+      .from('driver_applications')
+      .update({
+        background_authorized_at: now,
+        work_eligibility_attested_at: now,
+        work_eligibility_category: category,
+      })
+      .eq('profile_id', userId)
+      .select('background_authorized_at, work_eligibility_attested_at, work_eligibility_category')
+      .single()
+  }
+  if (saved.error) throw new Error(saved.error.message)
+  await recordFormSignature(supabase, userId, {
+    formId: 'background_authorization',
+    formVersion: BACKGROUND_CONSENT_VERSION,
+    signatureName,
+    signedOn,
+    signatureMark: input?.signatureMark || null,
+  })
+  await recordFormSignature(supabase, userId, {
+    formId: 'work_eligibility',
+    formVersion: WORK_ELIGIBILITY_VERSION,
+    signatureName,
+    signedOn,
+    signatureMark: input?.signatureMark || null,
+  })
+  return saved.data
 }
 
 export async function saveDriverTaxInfo(supabase, { legalName, tin, taxClassification }) {
@@ -327,12 +428,92 @@ export async function saveDriverTaxInfo(supabase, { legalName, tin, taxClassific
   }
 }
 
-export async function signDriverAgreement(supabase, signatureName) {
+export async function saveDriverW9(supabase, userId, payload) {
+  const digits = String(payload.tin || '').replace(/\D/g, '')
+  if (digits.length !== 9) {
+    if (!userId || String(payload.signatureName || '').trim().length < 2) {
+      throw new Error('Sign the W-9.')
+    }
+    await recordFormSignature(supabase, userId, {
+      formId: 'w9',
+      formVersion: W9_FORM_VERSION,
+      signatureName: payload.signatureName,
+      signedOn: payload.signedOn,
+      signatureMark: payload.signatureMark || null,
+    })
+    return { legal_name: payload.legalName }
+  }
+  if (supabase) {
+    const rpc = await supabase.rpc('save_driver_w9', {
+      legal_name: payload.legalName,
+      tin: String(payload.tin || '').replace(/\D/g, ''),
+      tax_classification: payload.taxClassification,
+      business_name: payload.businessName || null,
+      address_line: payload.address || null,
+      signature_name: payload.signatureName || null,
+      signed_on: payload.signedOn || null,
+    })
+    if (!rpc.error) {
+      if (userId) {
+        await recordFormSignature(supabase, userId, {
+          formId: 'w9',
+          formVersion: W9_FORM_VERSION,
+          signatureName: payload.signatureName,
+          signedOn: payload.signedOn,
+          signatureMark: payload.signatureMark || null,
+        })
+      }
+      const row = rpc.data && typeof rpc.data === 'object' ? rpc.data : {}
+      return {
+        legal_name: row.legal_name || payload.legalName,
+        tin_last4: row.tin_last4,
+        tax_classification: row.tax_classification || payload.taxClassification,
+      }
+    }
+    if (!/save_driver_w9|schema cache|function|PGRST202/i.test(rpc.error.message || '')) {
+      throw new Error(rpc.error.message)
+    }
+  }
+  const saved = await saveDriverTaxInfo(supabase, payload)
+  if (supabase && userId) {
+    const extra = {
+      business_name: payload.businessName || null,
+      address_line: payload.address || null,
+      w9_signature_name: payload.signatureName || null,
+      w9_signed_on: payload.signedOn || null,
+      w9_version: W9_FORM_VERSION,
+    }
+    const extraSave = await supabase.from('driver_tax_info').update(extra).eq('profile_id', userId)
+    if (extraSave.error && !/column|schema cache|permission|policy/i.test(extraSave.error.message || '')) {
+      throw new Error(extraSave.error.message)
+    }
+    await recordFormSignature(supabase, userId, {
+      formId: 'w9',
+      formVersion: W9_FORM_VERSION,
+      signatureName: payload.signatureName,
+      signedOn: payload.signedOn,
+      signatureMark: payload.signatureMark || null,
+    })
+  }
+  return saved
+}
+
+export async function signDriverAgreement(supabase, signatureName, extras = {}) {
   if (!supabase) throw new Error('Supabase is not configured')
   const { data, error } = await supabase.rpc('sign_driver_agreement', {
     signature_name: signatureName,
   })
   if (error) throw new Error(error.message)
+  const userId = data?.signer_user_id || extras.userId || null
+  if (userId) {
+    await recordFormSignature(supabase, userId, {
+      formId: 'ic_agreement',
+      formVersion: IC_AGREEMENT_VERSION,
+      signatureName,
+      signedOn: extras.signedOn || new Date().toISOString().slice(0, 10),
+      signatureMark: extras.signatureMark || { typedName: signatureName },
+    })
+  }
   return data
 }
 

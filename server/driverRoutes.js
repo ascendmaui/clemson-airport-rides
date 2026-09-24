@@ -8,6 +8,7 @@ import {
   legacyStatusFor,
   statusAfterInfoSave,
 } from '../shared/driverOnboarding.js'
+import { driverQuizError } from '../shared/driverQuiz.js'
 import { admin, cors, json, parseBody, userFromAuth } from './friendRideLib.js'
 import { loadSubmissionContext, notifyAdminOfApplication } from './driverApproval.js'
 
@@ -30,9 +31,10 @@ export async function handleDriverSignup(req, res) {
   const wantsExtraMoney = body.wantsExtraMoney === true
   const attestation = body.attestationAccepted === true
 
-  if (!isStudent || !hasCar || !hasInsurance || !wantsExtraMoney || !attestation) {
+  const quizError = driverQuizError({ hasCar, hasInsurance, attestation })
+  if (quizError) {
     return json(res, 400, {
-      error: 'All quiz answers must be Yes and attestation accepted',
+      error: quizError,
       code: 'quiz_incomplete',
     })
   }
@@ -91,10 +93,10 @@ export async function handleDriverSignup(req, res) {
       .upsert(
         {
           profile_id: user.id,
-          is_student: true,
+          is_student: isStudent,
           has_car: true,
           has_insurance: true,
-          wants_extra_money: true,
+          wants_extra_money: wantsExtraMoney,
           attestation_accepted_at: now,
           onboarding_status: nextStatus,
           status: legacyStatusFor(nextStatus),

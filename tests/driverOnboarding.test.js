@@ -16,6 +16,7 @@ import {
   progressSnapshot,
   resolveResumeStep,
   statusAfterInfoSave,
+  blockerLabel,
   submissionBlockers,
 } from '../shared/driverOnboarding.js'
 
@@ -47,10 +48,10 @@ test('legacy status column stays inside pending|approved|rejected', () => {
   assert.equal(legacyStatusFor('rejected'), 'rejected')
 })
 
-test('required documents come from one config and cover employment plus W-9', () => {
-  assert.ok(REQUIRED_DOC_IDS.includes('background_authorization'))
-  assert.ok(REQUIRED_DOC_IDS.includes('work_eligibility'))
-  assert.ok(REQUIRED_DOC_IDS.includes('w9'))
+test('required file uploads are license, insurance, registration, and car photos', () => {
+  assert.equal(REQUIRED_DOC_IDS.includes('background_authorization'), false)
+  assert.equal(REQUIRED_DOC_IDS.includes('work_eligibility'), false)
+  assert.equal(REQUIRED_DOC_IDS.includes('w9'), false)
   const owned = ONBOARDING_FLOW.flatMap((step) => step.docIds || [])
   assert.deepEqual([...owned].sort(), [...REQUIRED_DOC_IDS].sort())
   assert.deepEqual(missingDocuments([]), REQUIRED_DOC_IDS)
@@ -112,6 +113,22 @@ test('progress percent fills as documents land and hits 100 at review', () => {
   assert.equal(submitted.percent, 100)
   assert.equal(submitted.stepNumber, ONBOARDING_FLOW.length)
   assert.equal(submitted.label, 'Pending review')
+})
+
+test('a flagged registration blocks submit until it matches the vehicle', () => {
+  const blocked = submissionBlockers({
+    status: 'pending_docs',
+    uploaded: REQUIRED_DOC_IDS,
+    registrationMatch: 'mismatch',
+    backgroundAuthorized: true,
+    workEligibilityAttested: true,
+    workEligibilityCategory: 'citizen',
+    taxSaved: true,
+    agreementSigned: true,
+    agreementVersion: IC_AGREEMENT_VERSION,
+  })
+  assert.ok(blocked.includes('registration_match'))
+  assert.match(blockerLabel('registration_match'), /Registration/)
 })
 
 test('submit stays blocked until employment, W-9, and the signed agreement exist', () => {

@@ -14,7 +14,7 @@ test('email sign-in still calls Supabase signInWithPassword', async () => {
   }
   const data = await signInWithEmail(supabase, '  Rider@clemson.edu ', 'secret')
   assert.equal(calls.length, 1)
-  assert.equal(calls[0].email, 'Rider@clemson.edu')
+  assert.equal(calls[0].email, 'rider@clemson.edu')
   assert.equal(calls[0].password, 'secret')
   assert.equal(data.user.id, 'user-1')
 })

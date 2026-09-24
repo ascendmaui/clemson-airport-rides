@@ -9,6 +9,7 @@ import { registerDriverPush } from '@/lib/push'
 import { supabase } from '@/lib/supabase'
 import { ThemeProvider, useTheme } from '@/lib/theme'
 import { ProfileRequiredGate } from 'rides-native/PartyScreens'
+import { PasswordRecoveryListener } from '@/lib/passwordRecovery'
 
 function Gate({ children }: { children: ReactNode }) {
   const { loading, user } = useAuth()
@@ -56,6 +57,7 @@ export default function RootLayout() {
       <AuthProvider>
         <FeedbackProvider>
           <Gate>
+            <PasswordRecoveryListener />
             <PushBridge />
             <ThemedStack />
           </Gate>

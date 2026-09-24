@@ -221,6 +221,7 @@ export function SignUpScreen({
   const [error, setError] = useState(null)
   const [info, setInfo] = useState(null)
   const [created, setCreated] = useState(false)
+  const [accountExists, setAccountExists] = useState(false)
   const [busy, setBusy] = useState(false)
   const [socialId, setSocialId] = useState(null)
   const [cooldownSec, setCooldownSec] = useState(0)
@@ -257,6 +258,7 @@ export function SignUpScreen({
     }
     setError(null)
     setInfo(null)
+    setAccountExists(false)
     submitLock.current = true
     setBusy(true)
     try {
@@ -295,6 +297,7 @@ export function SignUpScreen({
         setCooldownSec(shown)
         setError(`Too many signup emails just now. Try again in ${shown}s, or sign in if you already created an account.`)
       } else {
+        setAccountExists(err?.code === 'account_exists')
         setError(err?.message || 'Sign up failed')
       }
     } finally {
@@ -412,6 +415,11 @@ export function SignUpScreen({
       ) : null}
       {!created && profileHint ? <Text style={styles.cooldown}>{profileHint}</Text> : null}
       {error ? <Text style={styles.error}>{error}</Text> : null}
+      {accountExists ? (
+        <Pressable onPress={onSignIn} style={styles.primary} accessibilityRole="button">
+          <Text style={styles.primaryLabel}>Sign in</Text>
+        </Pressable>
+      ) : null}
       {info ? <Text style={styles.info}>{info}</Text> : null}
       {cooldownSec > 0 && !error ? (
         <Text style={styles.cooldown}>Email send limit cooling down — retry in {cooldownSec}s.</Text>
@@ -443,6 +451,7 @@ export function ForgotPasswordScreen({
   onBack,
   onSignIn,
   mark = 'CR',
+  sentDetail = 'Check your email for a reset link. It opens this app with the clemsonrides://set-password link.',
 }) {
   const [email, setEmail] = useState('')
   const [error, setError] = useState(null)
@@ -481,7 +490,7 @@ export function ForgotPasswordScreen({
       />
       {sent ? (
         <Text style={styles.info}>
-          Check {email.trim()} for a reset link. It opens this app with the clemsonrides://set-password link.
+          Check {email.trim()}. {sentDetail}
         </Text>
       ) : null}
       {error ? <Text style={styles.error}>{error}</Text> : null}

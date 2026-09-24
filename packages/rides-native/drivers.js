@@ -1,5 +1,6 @@
 import { displayFirstName, standingFromRatings } from './authErrors.js'
 import { GSP, STADIUM } from './places.js'
+import { approvalGateMessage } from './syntheticOffers.js'
 
 export async function fetchOnlineDrivers(supabase) {
   if (!supabase) return { drivers: [], error: 'Supabase not configured' }
@@ -83,7 +84,7 @@ export async function setDriverOnline(supabase, driverId, online) {
       .maybeSingle()
     if (gateErr) throw new Error(gateErr.message)
     if (data?.onboarding_status !== 'approved') {
-      const err = new Error('Admin approval is required before you can go online.')
+      const err = new Error(approvalGateMessage())
       err.application = data
       throw err
     }

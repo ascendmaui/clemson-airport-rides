@@ -231,6 +231,18 @@ export function subscribeTrips(supabase, onChange) {
 
 export async function acceptTrip(supabase, trip, driverId) {
   if (!trip?.id) throw new Error('Missing ride')
+  if (trip.isSynthetic === true || String(trip.id).startsWith('synthetic-')) {
+    throw new Error('Finish approval to go online. Your account is still under review.')
+  }
+  const gate = await supabase
+    .from('driver_applications')
+    .select('onboarding_status')
+    .eq('profile_id', driverId)
+    .maybeSingle()
+  if (gate.error) throw new Error(gate.error.message)
+  if (gate.data?.onboarding_status !== 'approved') {
+    throw new Error('Finish approval to go online. Your account is still under review.')
+  }
   if (trip.status === 'scheduled') {
     const { data, error } = await supabase.rpc('accept_scheduled_trip', { p_trip_id: trip.id })
     if (error) throw new Error(error.message || 'Could not accept scheduled ride')

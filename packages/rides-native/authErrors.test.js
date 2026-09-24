@@ -3,9 +3,12 @@ import test from 'node:test'
 import {
   displayFirstName,
   getSignupRateLimitRemainingSec,
+  isAccountExistsError,
   isClemsonEmail,
+  isInvalidCredentialsError,
   isRateLimitError,
   mapAuthError,
+  normalizeAuthEmail,
   markSignupRateLimited,
   normalizePromoCode,
   SIGNUP_RATE_LIMIT_COOLDOWN_SEC,
@@ -39,9 +42,27 @@ test('maps signup rate limits to the web copy and cooldown', () => {
 })
 
 test('keeps a non-rate-limit auth error', () => {
-  const err = mapAuthError(new Error('Invalid login credentials'))
-  assert.equal(err.message, 'Invalid login credentials')
+  const err = mapAuthError(new Error('Email address is invalid'))
+  assert.equal(err.message, 'Email address is invalid')
   assert.equal(err.code, undefined)
+})
+
+test('existing email signup points to sign in instead of a raw already-registered block', () => {
+  const err = mapAuthError({ message: 'User already registered', code: 'user_already_exists', status: 422 })
+  assert.equal(err.code, 'account_exists')
+  assert.equal(err.status, 422)
+  assert.match(err.message, /already have an account/i)
+  assert.match(err.message, /Sign in/)
+  assert.equal(isAccountExistsError(err), true)
+})
+
+test('wrong password sign-in explains the mismatch and offers a reset', () => {
+  const err = mapAuthError({ message: 'Invalid login credentials', code: 'invalid_credentials', status: 400 })
+  assert.equal(err.code, 'invalid_credentials')
+  assert.match(err.message, /do not match/)
+  assert.match(err.message, /Reset your password/)
+  assert.equal(isInvalidCredentialsError(err), true)
+  assert.equal(normalizeAuthEmail('  John@Gmail.com '), 'john@gmail.com')
 })
 
 test('clemson.edu emails qualify for student verification', () => {
