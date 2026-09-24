@@ -13,6 +13,55 @@ export const DRIVER_TRACK_STEPS = [
   { id: 'completed', label: 'Done' },
 ]
 
+/** Statuses a rider can open from home into the live track screen. */
+export const RIDER_TRACK_STATUSES = [
+  'searching',
+  'offered',
+  'requested',
+  'accepted',
+  'arriving',
+  'arrived',
+  'in_progress',
+]
+
+export const STILL_SEARCHING_MS = 45000
+
+export const STILL_SEARCHING_COPY =
+  'Still looking. No driver has accepted yet. Map motion is a preview, not a driver you can pick.'
+
+export const SEARCH_PREVIEW_COPY =
+  'Orange and purple motion is a preview. Only a real driver accept moves this ride.'
+
+export const STRAIGHT_LINE_WAIT =
+  'Straight-line ETA shows when the driver shares a location. Road time needs a billed Maps key.'
+
+/** Preview cars belong on the open-pool search, not after a driver is assigned. */
+export function showSearchTheater(status) {
+  return status === 'searching' || status === 'offered'
+}
+
+/** Keep a status line when coordinates are missing so the card is not blank. */
+export function etaHoldLine(status, etaLine) {
+  if (etaLine) return etaLine
+  switch (status) {
+    case 'accepted':
+    case 'arriving':
+    case 'arrived':
+    case 'in_progress':
+      return STRAIGHT_LINE_WAIT
+    default:
+      return null
+  }
+}
+
+/** Where Stripe should return. A dated hold stays on Schedule. An immediate ride opens track. */
+export function checkoutSuccessHash({ tripId, scheduled = false } = {}) {
+  if (!tripId) return '#/schedule?paid=1'
+  const id = encodeURIComponent(tripId)
+  if (scheduled) return `#/schedule?paid=1&trip=${id}`
+  return `#/requested?trip=${id}&paid=1`
+}
+
 function matchStepLabel(status) {
   return status === 'requested' ? 'Requested' : 'Offered'
 }
@@ -125,10 +174,13 @@ export function riderLiveCopy(status, { preferred = false } = {}) {
 
 export function riderLiveView(status, options) {
   const preferred = Boolean(options?.preferred)
+  const waitingMs = Number(options?.waitingMs) || 0
   const known = status || (preferred ? 'requested' : '')
   const copy = riderLiveCopy(known, { preferred })
+  const stillSearching = (known === 'searching' || known === 'offered') && waitingMs >= STILL_SEARCHING_MS
   return {
     ...copy,
+    body: stillSearching ? STILL_SEARCHING_COPY : copy.body,
     steps: riderLiveSteps(known),
     stepIndex: riderLiveStepIndex(known),
   }

@@ -22,6 +22,15 @@ export type StraightLineEta = {
 }
 
 export const DRIVER_TRACK_STEPS: LiveStep[]
+export const RIDER_TRACK_STATUSES: string[]
+export const STILL_SEARCHING_MS: number
+export const STILL_SEARCHING_COPY: string
+export const SEARCH_PREVIEW_COPY: string
+export const STRAIGHT_LINE_WAIT: string
+
+export function showSearchTheater(status: string | null | undefined): boolean
+export function etaHoldLine(status: string | null | undefined, etaLine: string | null | undefined): string | null
+export function checkoutSuccessHash(input?: { tripId?: string | null; scheduled?: boolean }): string
 
 export function riderLiveSteps(status: string | null | undefined): LiveStep[]
 export function riderLiveStepIndex(status: string | null | undefined): number
@@ -31,7 +40,7 @@ export function riderLiveCopy(
 ): RiderLiveCopy
 export function riderLiveView(
   status: string | null | undefined,
-  options?: { preferred?: boolean },
+  options?: { preferred?: boolean; waitingMs?: number },
 ): RiderLiveView
 export function etaTargetForStatus(
   status: string | null | undefined,

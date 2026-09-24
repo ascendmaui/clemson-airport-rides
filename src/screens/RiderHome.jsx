@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { GameDayStatus } from '../components/GameDayStatus'
 import { useGameDayNotice } from '../lib/useGameDayNotice'
 import { useStudentStatus } from '../lib/useStudentStatus'
@@ -8,6 +8,9 @@ import { Pill } from '../components/Pill'
 import { BottomTabs } from '../components/BottomTabs'
 import { CampusMap, STADIUM } from '../components/CampusMap'
 import { navigate } from '../lib/navigation'
+import { useAuth } from '../lib/auth'
+import { supabase } from '../lib/supabase'
+import { RIDER_TRACK_STATUSES, riderLiveView } from '../../packages/rides-native/liveTrip.js'
 import { hotCatalogPlaces, lookupCatalogPlace, searchCatalogPlaces } from '../lib/placeCatalog'
 import { DOWNTOWN_CENTER } from '../lib/downtownHeat'
 import { HEAT_WINDOWS } from '../lib/rideDemand'
@@ -22,12 +25,39 @@ const SHORTCUTS = [
 export function RiderHome({ riderName = 'John' }) {
   const { notice, ready } = useGameDayNotice()
   const student = useStudentStatus()
+  const { user } = useAuth()
+  const [liveTrip, setLiveTrip] = useState(null)
   const [query, setQuery] = useState('')
   const [tab, setTab] = useState('home')
   const [showBusy, setShowBusy] = useState(true)
   const [heatWindow, setHeatWindow] = useState('now')
   const [heatMeta, setHeatMeta] = useState(null)
   const suggestions = query.trim().length >= 2 ? searchCatalogPlaces(query).slice(0, 6) : hotCatalogPlaces()
+  useEffect(() => {
+    if (!user?.id || !supabase) {
+      setLiveTrip(null)
+      return undefined
+    }
+    let alive = true
+    async function load() {
+      const { data } = await supabase
+        .from('trips')
+        .select('id, status, dropoff_label')
+        .eq('rider_id', user.id)
+        .in('status', RIDER_TRACK_STATUSES)
+        .order('requested_at', { ascending: false })
+        .limit(1)
+      if (!alive) return
+      setLiveTrip(data?.[0] || null)
+    }
+    load()
+    const timer = setInterval(load, 8000)
+    return () => {
+      alive = false
+      clearInterval(timer)
+    }
+  }, [user?.id])
+
   const goSearch = (dest) => {
     const known = lookupCatalogPlace(dest || query)
     navigate('confirm', { dest: known?.label || dest || query || 'GSP Airport' })
@@ -90,6 +120,27 @@ export function RiderHome({ riderName = 'John' }) {
           <p style={{ color: 'var(--ink-secondary)', fontSize: 15, marginTop: 4, marginBottom: 16 }}>
             Where are you headed, Tiger?
           </p>
+          {liveTrip && (
+            <button
+              type="button"
+              className="pressable glass-panel glass-panel--orange"
+              onClick={() => navigate('requested', { trip: liveTrip.id, dest: liveTrip.dropoff_label || '' })}
+              style={{
+                width: '100%',
+                textAlign: 'left',
+                marginBottom: 16,
+                padding: '14px 16px',
+                borderRadius: 16,
+                border: '1px solid rgba(245,102,0,0.35)',
+              }}
+            >
+              <div style={{ fontSize: 11, letterSpacing: 1.1, fontWeight: 800, color: '#F56600' }}>LIVE RIDE</div>
+              <div style={{ fontWeight: 800, color: '#522D80', marginTop: 4 }}>{riderLiveView(liveTrip.status).title}</div>
+              <div style={{ fontSize: 13, color: 'var(--ink-secondary)', marginTop: 4 }}>
+                Open tracking for {liveTrip.dropoff_label || 'this trip'}.
+              </div>
+            </button>
+          )}
 
           <SearchField
             value={query}

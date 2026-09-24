@@ -29,6 +29,7 @@ import { gameDayNotice, type GameDayNotice } from 'rides-native/gameDayNotice.js
 import { STUDENT_DISCOUNT_LABEL, STUDENT_EMAIL_HINT } from 'rides-native/riderMoney.js'
 import { supabase } from '@/lib/supabase'
 import { useStudentStatus } from '@/lib/useStudentStatus'
+import { RIDER_TRACK_STATUSES, riderLiveView } from 'rides-native/liveTrip'
 import { HEAT_WINDOWS, SHORTCUTS } from 'rides-native/places.js'
 import { hotCatalogPlaces, lookupCatalogPlace, searchCatalogPlaces } from 'rides-native/shared/carpool.js'
 import { lift } from '@/lib/elevation'
@@ -48,6 +49,7 @@ export default function RiderHome() {
   const mapRef = useRef<CampusMapHandle>(null)
   const [query, setQuery] = useState('')
   const [destError, setDestError] = useState<string | null>(null)
+  const [liveTrip, setLiveTrip] = useState<{ id: string; status: string | null; dropoff_label: string | null } | null>(null)
   const suggestions = useMemo(() => {
     const found = searchCatalogPlaces(query)
     if (query.trim().length >= 2) return found.slice(0, 6)
@@ -115,6 +117,32 @@ export default function RiderHome() {
     setBlended(result.blended)
     setSpotsLoading(false)
   }
+
+  useEffect(() => {
+    if (!user?.id || !supabase) {
+      setLiveTrip(null)
+      return undefined
+    }
+    let alive = true
+    async function loadLive() {
+      const { data } = await supabase!
+        .from('trips')
+        .select('id, status, dropoff_label')
+        .eq('rider_id', user!.id)
+        .in('status', [...RIDER_TRACK_STATUSES])
+        .order('requested_at', { ascending: false })
+        .limit(1)
+      if (!alive) return
+      const row = Array.isArray(data) ? data[0] : data
+      setLiveTrip(row ? { id: row.id, status: row.status, dropoff_label: row.dropoff_label } : null)
+    }
+    void loadLive()
+    const timer = setInterval(() => { void loadLive() }, 8000)
+    return () => {
+      alive = false
+      clearInterval(timer)
+    }
+  }, [user?.id])
 
   useEffect(() => {
     if (!supabase) {
@@ -316,6 +344,17 @@ export default function RiderHome() {
             <>
               <Text style={styles.welcome}>Welcome, {name}</Text>
               <Text style={styles.prompt}>Where are you headed, Tiger?</Text>
+              {liveTrip ? (
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => router.push({ pathname: '/requested', params: { trip: liveTrip.id, dest: liveTrip.dropoff_label || '' } })}
+                  style={[styles.liveCard, lift(colors, 'rest')]}
+                >
+                  <Text style={styles.liveKicker}>LIVE RIDE</Text>
+                  <Text style={styles.liveTitle}>{riderLiveView(liveTrip.status).title}</Text>
+                  <Text style={styles.liveBody}>Open tracking for {liveTrip.dropoff_label || 'this trip'}.</Text>
+                </Pressable>
+              ) : null}
             </>
           )}
           <TextInput
@@ -527,6 +566,17 @@ function makeStyles(colors: Palette) {
     skeletonBlock: { gap: 10, marginBottom: 12 },
     welcome: { fontSize: 24, fontWeight: '600' as const, letterSpacing: -0.4, color: colors.title },
     prompt: { color: colors.inkSecondary, fontSize: 15, marginTop: 4, marginBottom: 12 },
+    liveCard: {
+      backgroundColor: colors.card,
+      borderRadius: 16,
+      padding: 14,
+      marginBottom: 12,
+      borderWidth: 1,
+      borderColor: colors.orange,
+    },
+    liveKicker: { color: colors.orange, fontSize: 11, fontWeight: '800' as const, letterSpacing: 1.1 },
+    liveTitle: { color: colors.purple, fontSize: 16, fontWeight: '800' as const, marginTop: 4 },
+    liveBody: { color: colors.inkSecondary, fontSize: 13, marginTop: 4 },
     search: {
       borderWidth: 1.5,
       borderColor: colors.orange,

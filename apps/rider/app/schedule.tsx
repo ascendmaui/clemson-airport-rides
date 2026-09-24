@@ -250,6 +250,12 @@ function ScheduleScreen() {
         setBanner(`Ride covered by credits. No card deposit, so there is no remaining card balance.${tripId ? ` Trip ${tripId}.` : ''}`)
         await successHaptic()
         await reload()
+        if (tripId && !date) {
+          router.replace({
+            pathname: '/requested',
+            params: { trip: tripId, dest: airport === 'CLT' ? 'Charlotte Douglas (CLT)' : 'Greenville-Spartanburg (GSP)' },
+          })
+        }
         return
       }
       const url = typeof session.url === 'string' ? session.url : ''
@@ -267,6 +273,13 @@ function ScheduleScreen() {
       if (settled.settled) {
         setBanner(`Deposit received · ${formatCents(depositPaid)}. Remaining balance ${formatCents(remaining)} is collected when the trip is complete.`)
         await successHaptic()
+        if (!date) {
+          router.replace({
+            pathname: '/requested',
+            params: { trip: tripId, dest: airport === 'CLT' ? 'Charlotte Douglas (CLT)' : 'Greenville-Spartanburg (GSP)', paid: '1' },
+          })
+          return
+        }
       } else if (settled.error) {
         setBanner(`Checkout closed. Could not confirm the deposit yet (${settled.error}). Nothing is marked paid.`)
       } else {

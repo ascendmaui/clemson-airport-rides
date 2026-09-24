@@ -22,6 +22,7 @@ import {
   depositSplit,
   depositSplitLabel,
 } from '../../src/lib/fareRates.js'
+import { checkoutSuccessHash } from '../../packages/rides-native/liveTrip.js'
 
 const CAMPUS = { label: 'Memorial Stadium', lat: 34.6788, lng: -82.843 }
 const AIRPORTS = {
@@ -108,7 +109,7 @@ export default async function handler(req, res) {
     .from('trips')
     .insert({
       rider_id: user.id,
-      status: 'searching',
+      status: scheduledFor ? 'scheduled' : 'searching',
       tier: 'standard',
       pickup_label: CAMPUS.label,
       dropoff_label: dest.label,
@@ -132,9 +133,10 @@ export default async function handler(req, res) {
         rider_pays_cents: settlement.riderPaysCents,
       },
       passengers: 1,
+      pickup_at: scheduledFor,
       scheduled_for: scheduledFor,
       metadata: {
-        kind: 'airport',
+        kind: scheduledFor ? 'scheduled' : 'airport',
         airport,
         pending_credit_debits: depositCents > 0 ? settlement.debits : [],
         credits_applied: false,
@@ -166,7 +168,12 @@ export default async function handler(req, res) {
       }
     }
     await sb.from('trips').update({
-      metadata: { kind: 'airport', airport, pending_credit_debits: [], credits_applied: true },
+      metadata: {
+        kind: scheduledFor ? 'scheduled' : 'airport',
+        airport,
+        pending_credit_debits: [],
+        credits_applied: true,
+      },
     }).eq('id', trip.id)
     return json(res, 200, {
       paidWithCredits: true,
@@ -190,7 +197,7 @@ export default async function handler(req, res) {
     const session = await stripe.checkout.sessions.create({
       mode: 'payment',
       customer: customerId || undefined,
-      success_url: `${origin}/#/schedule?paid=1&trip=${trip.id}`,
+      success_url: `${origin}/${checkoutSuccessHash({ tripId: trip.id, scheduled: Boolean(scheduledFor) })}`,
       cancel_url: `${origin}/#/schedule?canceled=1&trip=${trip.id}`,
       line_items: [{
         quantity: 1,

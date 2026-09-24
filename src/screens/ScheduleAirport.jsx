@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { PrimaryButton } from '../components/PrimaryButton'
 import { BottomTabs } from '../components/BottomTabs'
 import {
@@ -11,6 +11,7 @@ import { formatUsdFromCents, applyStudentDiscount } from '../lib/pricing'
 import { depositSurfaceCopy, STRIPE_NOT_CONFIGURED_COPY } from '../../packages/rides-native/riderMoney.js'
 import { useAuth } from '../lib/auth'
 import { getHashRoute, navigate } from '../lib/navigation'
+import { supabase } from '../lib/supabase'
 import { SignInToBookModal, useRequireAuthForAction } from '../components/SignInToBookModal'
 import { useStudentStatus } from '../lib/useStudentStatus'
 import { ScheduledRidePlanner } from '../components/ScheduledRidePlanner'
@@ -25,7 +26,30 @@ export function ScheduleAirport() {
   const [time, setTime] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
+  const [bookedNote, setBookedNote] = useState(null)
   const returnFlags = useMemo(() => getHashRoute().params, [])
+
+  useEffect(() => {
+    const tripId = returnFlags.trip
+    if (!tripId || !supabase) return undefined
+    if (returnFlags.paid !== '1') return undefined
+    let alive = true
+    supabase
+      .from('trips')
+      .select('id, status, dropoff_label')
+      .eq('id', tripId)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (!alive || !data) return
+        if (data.status === 'scheduled') return
+        if (['searching', 'offered', 'accepted', 'arriving', 'arrived', 'in_progress'].includes(data.status)) {
+          navigate('requested', { trip: data.id, dest: data.dropoff_label || '', paid: '1' })
+        }
+      })
+    return () => {
+      alive = false
+    }
+  }, [returnFlags.paid, returnFlags.trip])
 
   const rate = AIRPORT_RATES[airport]
   const student = applyStudentDiscount(rate.fareCents, {
@@ -58,6 +82,14 @@ export function ScheduleAirport() {
       })
       if (session.url) {
         window.location.href = session.url
+        return
+      }
+      if (session.tripId && date) {
+        setBookedNote('This pickup stays scheduled. Drivers can accept it from their upcoming list. Nothing else was charged.')
+        return
+      }
+      if (session.tripId) {
+        navigate('requested', { trip: session.tripId, dest: rate.name, paid: '1' })
         return
       }
       setError('Checkout did not return a payment URL. No charge was made.')
@@ -94,6 +126,12 @@ export function ScheduleAirport() {
           Flat rates from Memorial Stadium. A date keeps the ride scheduled for drivers to accept. Leave the date empty to request a driver now.
         </p>
 
+        {bookedNote && (
+          <div className="glass-panel glass-panel--purple" style={{ padding: 14, borderRadius: 16, marginBottom: 16 }}>
+            <div style={{ fontWeight: 700, color: '#522D80' }}>Scheduled</div>
+            <div style={{ fontSize: 13, color: 'var(--ink-secondary)', marginTop: 4 }}>{bookedNote}</div>
+          </div>
+        )}
         {returnFlags.paid === '1' && (
           <div className="glass-panel glass-panel--orange" style={{ padding: 14, borderRadius: 16, marginBottom: 16 }}>
             <div style={{ fontWeight: 700 }}>Deposit received</div>

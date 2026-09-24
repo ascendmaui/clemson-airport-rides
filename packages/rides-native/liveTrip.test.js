@@ -2,12 +2,20 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { OPEN_POOL_COPY, PREFERRED_CANCELED_COPY, PREFERRED_MATCH_COPY } from './drivers.js'
 import { acceptActionLabel, declineActionLabel, driverStatusDetail } from './tripTags.js'
+import { acceptNeedsDriverOnline } from './tripTags.js'
 import {
   DRIVER_TRACK_STEPS,
+  SEARCH_PREVIEW_COPY,
+  STILL_SEARCHING_COPY,
+  STILL_SEARCHING_MS,
+  STRAIGHT_LINE_WAIT,
+  checkoutSuccessHash,
+  etaHoldLine,
   etaLineFor,
   riderLiveStepIndex,
   riderLiveSteps,
   riderLiveView,
+  showSearchTheater,
   straightLineEta,
 } from './liveTrip.js'
 
@@ -65,4 +73,19 @@ test('driver accept and decline labels keep preferred cancel semantics', () => {
   assert.match(driverStatusDetail('requested'), /does not return to the open pool/)
   assert.match(driverStatusDetail('offered'), /open pool/)
   assert.equal(DRIVER_TRACK_STEPS.map((step) => step.id).join(','), 'accepted,arriving,arrived,in_progress,completed')
+})
+
+test('searching stays honest and an accept opens track without a Maps key', () => {
+  assert.equal(riderLiveView('searching', { waitingMs: STILL_SEARCHING_MS }).body, STILL_SEARCHING_COPY)
+  assert.equal(showSearchTheater('searching'), true)
+  assert.equal(showSearchTheater('accepted'), false)
+  assert.match(SEARCH_PREVIEW_COPY, /preview/)
+  assert.equal(etaHoldLine('accepted', null), STRAIGHT_LINE_WAIT)
+  assert.match(etaHoldLine('in_progress', 'About 4 min · 1.2 mi straight line to drop-off'), /drop-off/)
+  assert.equal(etaHoldLine('searching', null), null)
+  assert.equal(checkoutSuccessHash({ tripId: 'abc', scheduled: false }), '#/requested?trip=abc&paid=1')
+  assert.equal(checkoutSuccessHash({ tripId: 'abc', scheduled: true }), '#/schedule?paid=1&trip=abc')
+  assert.equal(acceptNeedsDriverOnline('searching'), true)
+  assert.equal(acceptNeedsDriverOnline('requested'), true)
+  assert.equal(acceptNeedsDriverOnline('scheduled'), false)
 })
