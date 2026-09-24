@@ -42,10 +42,19 @@ export function useTripById(tripId: string | null) {
       setLoading(false)
     }
     load()
-    const timer = setInterval(load, 8000)
+    const channel = supabase
+      .channel(`rider-trip-${tripId}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'trips', filter: `id=eq.${tripId}` },
+        () => { void load() },
+      )
+      .subscribe()
+    const timer = setInterval(load, 15000)
     return () => {
       alive = false
       clearInterval(timer)
+      void supabase!.removeChannel(channel)
     }
   }, [tripId])
 
@@ -121,12 +130,21 @@ export function useApproachingTrip(userId: string | null) {
       setTrip((row as ApproachingTrip | undefined) || null)
     }
     void load()
+    const channel = supabase
+      .channel(`rider-approach-${userId}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'trips', filter: `rider_id=eq.${userId}` },
+        () => { void load() },
+      )
+      .subscribe()
     const timer = setInterval(() => {
       void load()
-    }, 5000)
+    }, 15000)
     return () => {
       alive = false
       clearInterval(timer)
+      void supabase!.removeChannel(channel)
     }
   }, [userId])
 

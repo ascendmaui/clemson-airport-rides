@@ -242,6 +242,47 @@ export function statusHeadline(status) {
   }
 }
 
+export function driverStatusDetail(status) {
+  switch (status) {
+    case 'requested':
+      return 'Accept to head to pickup. Declining cancels this request. It does not return to the open pool.'
+    case 'searching':
+    case 'offered':
+      return 'Accept to take this ride. Declining leaves it in the open pool for another driver.'
+    case 'scheduled':
+      return 'This pickup is on the calendar. Accepting keeps it on your upcoming list.'
+    case 'accepted':
+      return 'Head to pickup. The time on this screen is a straight-line estimate from the coordinates already shared.'
+    case 'arriving':
+      return 'You are on the way. Mark that you are here when you reach pickup.'
+    case 'arrived':
+      return 'You are at pickup. Start the trip once the rider is in the car.'
+    case 'in_progress':
+      return 'The trip is underway. Head to drop-off, then complete it.'
+    case 'completed':
+      return 'This trip is complete.'
+    case 'canceled':
+    case 'cancelled_wait':
+      return 'This trip is canceled.'
+    default:
+      return 'Trip status updates as you move through the ride.'
+  }
+}
+
+export function acceptActionLabel(status) {
+  switch (status) {
+    case 'scheduled':
+      return 'Accept scheduled ride'
+    case 'requested':
+      return 'Accept preferred ride'
+    case 'searching':
+    case 'offered':
+      return 'Accept'
+    default:
+      return 'Accept'
+  }
+}
+
 export function toDriverCard(row, options) {
   if (!row?.id) return null
   const meta = metaOf(row)
@@ -368,6 +409,23 @@ export function declineDisposition(status) {
       return 'cancel'
     default:
       return 'cancel'
+  }
+}
+
+/** Button copy for declineDisposition. Preferred requests cancel. Open-pool requests go back to searching. */
+export function declineActionLabel(status) {
+  const disposition = declineDisposition(status)
+  switch (disposition) {
+    case 'cancel':
+      return 'Decline and cancel'
+    case 'release':
+      return 'Decline'
+    case 'leave':
+      return 'Not this one'
+    default: {
+      const unknown = disposition
+      throw new Error(`Unknown decline disposition: ${unknown}`)
+    }
   }
 }
 

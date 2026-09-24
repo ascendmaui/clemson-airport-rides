@@ -76,6 +76,8 @@ export function isActiveStatus(status: string): boolean
 export function nextTripStatus(status: string): string | null
 export function statusActionLabel(status: string): string | null
 export function statusHeadline(status: string): string
+export function driverStatusDetail(status: string | null | undefined): string
+export function acceptActionLabel(status: string | null | undefined): string
 export function toDriverCard(row: Record<string, unknown> | null | undefined, options?: { gameDayLive?: boolean }): DriverCard | null
 export function matchesQueueFilter(card: { tags: string[] } | null, filter: QueueFilter): boolean
 export function queueFilters(): QueueFilter[]
@@ -98,6 +100,7 @@ export function weekNetCents(
   now?: Date,
 ): number
 export function declineDisposition(status: string | null | undefined): 'release' | 'leave' | 'cancel'
+export function declineActionLabel(status: string | null | undefined): string
 export function summarizeDepositAwareness(
   trips: Array<{ id: string; status?: string; fare_cents?: number; completed_at?: string | null; dropoff_label?: string | null }> | null | undefined,
   paymentsByTrip: Record<string, PaymentRow[]> | null | undefined,

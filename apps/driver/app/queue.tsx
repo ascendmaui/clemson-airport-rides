@@ -17,6 +17,9 @@ import {
   formatCents,
   formatPickupAt,
   matchesQueueFilter,
+  acceptActionLabel,
+  declineActionLabel,
+  declineDisposition,
   preferredRequestNote,
   queueEmptyCopy,
   queueFilters,
@@ -66,11 +69,13 @@ function QueueCard({
       {active ? (
         <Primary label="Open live trip" onPress={onOpen} tone="purple" />
       ) : (
-        <Primary label={busy ? 'Saving…' : card.status === 'scheduled' ? 'Accept scheduled ride' : 'Accept'} onPress={onAccept} disabled={busy} />
+        <Primary label={busy ? 'Saving…' : acceptActionLabel(card.status)} onPress={onAccept} disabled={busy} />
       )}
       {!active ? (
         <Pressable onPress={onDecline} disabled={busy} style={styles.decline}>
-          <Text style={styles.declineText}>{card.status === 'scheduled' ? 'Not this one' : 'Decline'}</Text>
+          <Text style={[styles.declineText, declineDisposition(card.status) === 'cancel' && styles.declineCancel]}>
+            {declineActionLabel(card.status)}
+          </Text>
         </Pressable>
       ) : null}
     </Card>
@@ -250,6 +255,7 @@ function queueStyles(colors: Palette) {
     cardTitle: { color: colors.title, fontWeight: '800', fontSize: 18 },
     decline: { alignItems: 'center', paddingVertical: 4 },
     declineText: { color: colors.inkSecondary, fontWeight: '700' },
+    declineCancel: { color: colors.orange },
     fare: { color: colors.ink, fontWeight: '800', fontSize: 22 },
     tags: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   })

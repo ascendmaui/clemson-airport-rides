@@ -13,6 +13,7 @@ import { supabase } from '@/lib/supabase'
 import { useDriverLocation } from '@/lib/useDriverLocation'
 import { advanceTrip, loadRiderFix, loadTrip, publishDriverLocation, subscribeTrips } from 'rides-native/driverDesk'
 import {
+  driverStatusDetail,
   formatCents,
   preferredRequestNote,
   statusActionLabel,
@@ -21,13 +22,13 @@ import {
   TESLA_FLEET_NOTICE,
   type DriverCard,
 } from 'rides-native/tripTags'
+import { DRIVER_TRACK_STEPS, etaLineFor } from 'rides-native/liveTrip'
+import { LivePhase } from 'rides-native/LivePhase'
 import { ORANGE, PURPLE } from 'rides-native/places.js'
 import { CounterpartCard, RateTripPanel, partyColorsFromPalette } from 'rides-native/PartyScreens'
 import { loadCounterpart, type CounterpartView } from 'rides-native/partyProfile.js'
 import { useTheme } from '@/lib/theme'
 import type { Palette } from '@/lib/palette'
-
-const STEPS = ['accepted', 'arriving', 'arrived', 'in_progress', 'completed'] as const
 
 type RiderFix = { latitude: number; longitude: number }
 
@@ -157,15 +158,30 @@ export default function TripScreen() {
     ? { latitude: target.latitude, longitude: target.longitude }
     : self)
   const action = trip ? statusActionLabel(trip.status) : null
-  const stepIndex = STEPS.indexOf((trip?.status || '') as (typeof STEPS)[number])
+  const stepIndex = DRIVER_TRACK_STEPS.findIndex((step) => step.id === trip?.status)
+  const etaLine = trip
+    ? etaLineFor(
+      trip.status,
+      self ? { lat: self.latitude, lng: self.longitude } : null,
+      trip,
+    )
+    : null
 
   return (
     <View style={styles.screen}>
+      {/* TODO: road-following tiles need a billed Maps key. Progress and straight-line ETA use coordinates already on this trip. */}
       <CampusMap pins={pins} center={focus} route={route.length > 1 ? route : undefined} />
       <View pointerEvents="box-none" style={[styles.sheet, shadow, { paddingBottom: insets.bottom + 12 }]}>
         <ScrollView style={styles.sheetScroll} contentContainerStyle={styles.sheetContent} showsVerticalScrollIndicator={false}>
         <Text style={styles.kicker} onPress={() => router.back()}>← LIVE TRIP</Text>
-        <Text style={styles.title}>{trip ? statusHeadline(trip.status) : 'Loading trip'}</Text>
+        <LivePhase
+          title={trip ? statusHeadline(trip.status) : 'Loading trip'}
+          body={trip ? driverStatusDetail(trip.status) : 'Loading this ride.'}
+          eta={etaLine}
+          steps={DRIVER_TRACK_STEPS}
+          activeIndex={stepIndex}
+          colors={colors}
+        />
         {trip ? (
           <>
             {trip.status === 'completed' && user ? (
@@ -191,11 +207,6 @@ export default function TripScreen() {
               ))}
             </View>
             {preferredRequestNote(trip) ? <Text style={styles.note}>{preferredRequestNote(trip)}</Text> : null}
-            <View style={styles.track}>
-              {STEPS.map((step, index) => (
-                <View key={step} style={[styles.dot, index <= stepIndex && styles.dotOn]} />
-              ))}
-            </View>
             <FarePanel card={trip} />
             <View style={styles.navRow}>
               {(navApp === 'google' ? ['google', 'apple'] as const : ['apple', 'google'] as const).map((provider) => (
@@ -240,14 +251,10 @@ function tripStyles(colors: Palette) {
     sheetScroll: { flexGrow: 0 },
     sheetContent: { gap: 8, paddingBottom: 8 },
     kicker: { color: colors.orange, fontWeight: '800', letterSpacing: 1 },
-    title: { fontSize: 26, fontWeight: '800', color: colors.title },
     copy: { color: colors.inkSecondary, fontSize: 14, lineHeight: 20 },
     note: { color: colors.orange, fontSize: 13, lineHeight: 18, fontWeight: '700' },
     fare: { color: colors.ink, fontWeight: '800', fontSize: 16 },
     tags: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-    track: { flexDirection: 'row', gap: 8, marginVertical: 4 },
-    dot: { flex: 1, height: 6, borderRadius: 999, backgroundColor: colors.track },
-    dotOn: { backgroundColor: colors.orange },
     navRow: { flexDirection: 'row', gap: 8 },
     nav: { flex: 1, backgroundColor: colors.fill, borderRadius: 14, paddingVertical: 12, alignItems: 'center' },
     navText: { color: colors.onAccent, fontWeight: '800' },

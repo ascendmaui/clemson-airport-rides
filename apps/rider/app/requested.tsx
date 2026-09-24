@@ -11,10 +11,12 @@ import { SosButton, SosIncomingBanner, SosSheet } from '@/components/SosSheet'
 import { useAuth } from '@/lib/auth'
 import { oneParam } from '@/lib/oneParam'
 import { supabase } from '@/lib/supabase'
-import { isLiveStatus, loadLiveTrip, type LiveTrip } from '@/lib/tripWatch'
+import { isLiveStatus, loadLiveTrip, subscribeLiveTrip, type LiveTrip } from '@/lib/tripWatch'
 import { useTripById } from '@/lib/useRiderTrip'
 import { isActiveRideStatus, listEmergencyContacts, type EmergencyContact } from 'rides-native/safety.js'
-import { OPEN_POOL_COPY, PREFERRED_CANCELED_COPY, PREFERRED_MATCH_COPY } from 'rides-native/drivers'
+import { etaLineFor, riderLiveView } from 'rides-native/liveTrip'
+import { LivePhase } from 'rides-native/LivePhase'
+import { isApproachStatus } from '@/lib/approachAlert'
 import { ORANGE, PURPLE } from 'rides-native/places.js'
 import { CounterpartCard, partyColorsFromPalette } from 'rides-native/PartyScreens'
 import { loadCounterpart, type CounterpartView } from 'rides-native/partyProfile.js'
@@ -92,11 +94,17 @@ export default function Requested() {
   useEffect(() => {
     if (!tripId) return undefined
     void reloadMap()
+    const unsub = subscribeLiveTrip(tripId, live?.driver_id || null, () => {
+      void reloadMap()
+    })
     const id = setInterval(() => {
       void reloadMap()
-    }, 5000)
-    return () => clearInterval(id)
-  }, [tripId])
+    }, 12000)
+    return () => {
+      unsub()
+      clearInterval(id)
+    }
+  }, [tripId, live?.driver_id])
   const shown = trip || (tripId
     ? {
         id: tripId,
@@ -107,13 +115,14 @@ export default function Requested() {
       }
     : null)
   const namedDriver = driver !== 'Your driver'
-  const matchCopy = shown?.status === 'requested' || (!shown?.status && namedDriver)
-    ? PREFERRED_MATCH_COPY
-    : shown?.status === 'canceled' && namedDriver
-      ? PREFERRED_CANCELED_COPY
-      : shown?.status === 'searching' || shown?.status === 'offered'
-        ? OPEN_POOL_COPY
-        : null
+  const preferred = shown?.status === 'requested' || (!shown?.status && namedDriver) || (shown?.status === 'canceled' && namedDriver)
+  const phase = riderLiveView(shown?.status || null, { preferred })
+  const etaLine = etaLineFor(
+    shown?.status || null,
+    live?.driverLat != null && live.driverLng != null ? { lat: live.driverLat, lng: live.driverLng } : null,
+    live,
+  )
+  const approachLive = isApproachStatus(shown?.status || null)
 
   useEffect(() => {
     if (!user?.id || !supabase) return undefined
@@ -151,8 +160,8 @@ export default function Requested() {
           <Text style={styles.backLabel}>←</Text>
         </Pressable>
         <View style={styles.headerCopy}>
-          <Text style={styles.kicker}>ON TRIP</Text>
-          <Text style={styles.title}>{tracking ? 'Live trip' : 'Ride requested'}</Text>
+          <Text style={styles.kicker}>LIVE RIDE</Text>
+          <Text style={styles.title}>{phase.title}</Text>
         </View>
         <SosButton onPress={() => setSosOpen(true)} />
       </View>
@@ -170,6 +179,7 @@ export default function Requested() {
         )}
       >
         <View style={styles.map}>
+          {/* TODO: road-following tiles need a billed Maps key. Pins, status, and straight-line ETA use coordinates already on the trip. */}
           <CampusMap
             spots={[]}
             showHeat={false}
@@ -188,14 +198,27 @@ export default function Requested() {
         ) : (
           <View style={styles.summary}>
             <CounterpartCard person={person} colors={partyColorsFromPalette(colors)} />
+            <LivePhase
+              kicker={phase.kicker}
+              title=""
+              body={phase.body}
+              eta={etaLine}
+              steps={phase.steps}
+              activeIndex={phase.stepIndex}
+              colors={colors}
+            />
+            {approachLive ? (
+              <Text style={styles.approach}>
+                An orange card tracks how close they are, in feet, from the location they already share.
+              </Text>
+            ) : null}
             {shown?.status === 'completed' ? (
               <PrimaryButton label="Rate your driver" onPress={() => router.push({ pathname: '/rate', params: { trip: tripId } })} />
             ) : null}
-            <Text style={styles.summaryTitle}>{driverName} has the request</Text>
-            {matchCopy ? <Text style={styles.match}>{matchCopy}</Text> : null}
+            <Text style={styles.summaryTitle}>{driverName}</Text>
             <Text style={styles.body}>
               {shown?.pickup_label || 'Pickup'} → {shown?.dropoff_label || dest || 'your destination'}
-              {shown?.status ? ` · ${shown.status}` : loading ? ' · loading' : ''}
+              {loading && !shown?.status ? ' · loading' : ''}
             </Text>
             <Text style={styles.meta}>Trip {tripId.slice(0, 8)}</Text>
             <Text style={styles.body}>Airport holds use the 25% Stripe deposit on Schedule.</Text>
@@ -269,7 +292,7 @@ function makeStyles(colors: Palette) {
     map: { height: 240, borderRadius: 20, overflow: 'hidden' as const },
     summary: { backgroundColor: colors.card, borderRadius: 20, padding: 16 },
     summaryTitle: { color: colors.ink, fontSize: 18, fontWeight: '800' as const, marginBottom: 6 },
-    match: { color: colors.link, fontSize: 13, lineHeight: 18, fontWeight: '700' as const, marginBottom: 8 },
+    approach: { color: colors.purple, fontSize: 13, lineHeight: 18, fontWeight: '700' as const, marginTop: 8 },
     body: { color: colors.inkSecondary, fontSize: 14, lineHeight: 20 },
     meta: { color: colors.link, fontWeight: '700' as const, fontSize: 12, marginTop: 8 },
     empty: { backgroundColor: colors.card, borderRadius: 20, padding: 16, gap: 8 },

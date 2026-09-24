@@ -15,7 +15,8 @@ import { MidrideCancelSheet } from '../components/MidrideCancelSheet'
 import { isMidrideStatus } from '../lib/tripPhase'
 import { CounterpartChip } from '../components/CounterpartChip'
 import { PARTY_VISIBLE_STATUSES } from '../../packages/rides-native/partyProfile.js'
-import { OPEN_POOL_COPY, PREFERRED_CANCELED_COPY, PREFERRED_MATCH_COPY } from '../../packages/rides-native/drivers.js'
+import { etaLineFor, riderLiveView } from '../../packages/rides-native/liveTrip.js'
+import { LivePhase } from '../components/LivePhase'
 
 export function Requested({ dest = 'GSP Airport', trip = '', driver = 'your driver', driverId = '' }) {
   const { user } = useAuth()
@@ -41,7 +42,7 @@ export function Requested({ dest = 'GSP Airport', trip = '', driver = 'your driv
     async function load() {
       const { data } = await supabase
         .from('trips')
-        .select('id, status, rider_id, driver_id, pickup_label, dropoff_label, pickup_lat, pickup_lng, completed_at, canceled_at')
+        .select('id, status, rider_id, driver_id, pickup_label, dropoff_label, pickup_lat, pickup_lng, dropoff_lat, dropoff_lng, completed_at, canceled_at')
         .eq('id', trip)
         .maybeSingle()
       if (!alive || !data) return
@@ -114,19 +115,16 @@ export function Requested({ dest = 'GSP Airport', trip = '', driver = 'your driv
   const rideLive = isActiveRideStatus(status)
   const devSosPreview = import.meta.env.DEV && typeof window !== 'undefined'
     && window.location.hash.includes('sos=preview')
-  const trackLive = rideLive || Boolean(resolvedDriverId) || ['accepted', 'arriving', 'in_progress'].includes(status)
   const pickup =
     tripRow?.pickup_lat != null && tripRow?.pickup_lng != null
       ? [Number(tripRow.pickup_lat), Number(tripRow.pickup_lng)]
       : STADIUM
   const namedDriver = driver && driver !== 'your driver'
-  const matchCopy = status === 'requested' || (!status && namedDriver)
-    ? PREFERRED_MATCH_COPY
-    : status === 'canceled' && namedDriver
-      ? PREFERRED_CANCELED_COPY
-      : status === 'searching' || status === 'offered'
-        ? OPEN_POOL_COPY
-        : null
+  const preferred = status === 'requested' || (!status && namedDriver) || (status === 'canceled' && namedDriver)
+  const phase = riderLiveView(status, { preferred })
+  const driverFix = driverPos ? { lat: driverPos[0], lng: driverPos[1] } : null
+  const etaLine = etaLineFor(status, driverFix, tripRow)
+  const showMap = Boolean(trip) || Boolean(status) || preferred
 
   return (
     <div className="fade-in" style={{ minHeight: '100%', padding: 24, display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 16 }}>
@@ -137,8 +135,9 @@ export function Requested({ dest = 'GSP Airport', trip = '', driver = 'your driv
           knownActive
         />
       )}
-      {trackLive && (
+      {showMap && (
         <div className="glass-panel" style={{ borderRadius: 20, overflow: 'hidden', height: 220 }}>
+          {/* TODO: road-following tiles need a billed Maps key (VITE_GOOGLE_MAPS_API_KEY). Status, progress, and straight-line ETA stay on the card. */}
           <CampusMap
             height={220}
             interactive
@@ -152,21 +151,17 @@ export function Requested({ dest = 'GSP Airport', trip = '', driver = 'your driv
         </div>
       )}
       <div className="glass-panel glass-panel--elevated" style={{ padding: 24, borderRadius: 20 }}>
-        <div style={{ fontSize: 13, letterSpacing: 1.4, fontWeight: 700, color: 'var(--orange)', marginBottom: 8 }}>
-          REQUESTED
-        </div>
-        <h1 style={{ fontSize: 26, fontWeight: 700, letterSpacing: -0.4, marginBottom: 8 }}>
-          {driver} is on the list
-        </h1>
-        {matchCopy && (
-          <p style={{ color: 'var(--purple)', fontSize: 14, lineHeight: 1.45, fontWeight: 700, marginBottom: 8 }}>
-            {matchCopy}
-          </p>
-        )}
-        <p style={{ color: 'var(--ink-secondary)', fontSize: 15, lineHeight: 1.45 }}>
-          Trip toward {dest}.
+        <LivePhase
+          kicker={phase.kicker}
+          title={phase.title}
+          body={phase.body}
+          eta={etaLine}
+          steps={phase.steps}
+          activeIndex={phase.stepIndex}
+        />
+        <p style={{ color: 'var(--ink-secondary)', fontSize: 15, lineHeight: 1.45, marginTop: 12 }}>
+          {driver} · {tripRow?.pickup_label || 'Pickup'} → {dest || tripRow?.dropoff_label || 'Drop-off'}.
           {trip ? ` ID ${String(trip).slice(0, 8)}…` : ''}
-          {status ? ` · ${status}` : ''}
         </p>
         <div style={{ marginTop: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
           <PrimaryButton onClick={onShare} disabled={busy || !trip}>
