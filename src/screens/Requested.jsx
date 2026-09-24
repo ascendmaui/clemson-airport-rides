@@ -15,7 +15,8 @@ import { MidrideCancelSheet } from '../components/MidrideCancelSheet'
 import { isMidrideStatus } from '../lib/tripPhase'
 import { CounterpartChip } from '../components/CounterpartChip'
 import { PARTY_VISIBLE_STATUSES } from '../../packages/rides-native/partyProfile.js'
-import { etaHoldLine, etaLineFor, riderLiveView, SEARCH_PREVIEW_COPY, showSearchTheater } from '../../packages/rides-native/liveTrip.js'
+import { etaHoldLine, etaLineFor, orderedLiveStops, riderLiveView, SEARCH_PREVIEW_COPY, showSearchTheater } from '../../packages/rides-native/liveTrip.js'
+import { decodePolyline } from '../lib/friendRides.js'
 import { LivePhase } from '../components/LivePhase'
 
 export function Requested({ dest = 'GSP Airport', trip = '', driver = 'your driver', driverId = '', paid = '' }) {
@@ -52,7 +53,7 @@ export function Requested({ dest = 'GSP Airport', trip = '', driver = 'your driv
     async function load() {
       const { data } = await supabase
         .from('trips')
-        .select('id, status, rider_id, driver_id, pickup_label, dropoff_label, pickup_lat, pickup_lng, dropoff_lat, dropoff_lng, completed_at, canceled_at, requested_at')
+        .select('id, status, rider_id, driver_id, pickup_label, dropoff_label, pickup_lat, pickup_lng, dropoff_lat, dropoff_lng, completed_at, canceled_at, requested_at, stops, metadata')
         .eq('id', trip)
         .maybeSingle()
       if (!alive) return
@@ -61,7 +62,28 @@ export function Requested({ dest = 'GSP Airport', trip = '', driver = 'your driv
         return
       }
       setTripMissing(false)
-      setTripRow(data)
+      let row = data
+      const meta = data.metadata && typeof data.metadata === 'object' ? data.metadata : {}
+      const hasStops = Array.isArray(data.stops) && data.stops.length > 0
+      if (!hasStops && meta.friend_ride_id) {
+        try {
+          const { data: ride, error: rideError } = await supabase
+            .from('friend_rides')
+            .select('stops, kind, status')
+            .eq('id', meta.friend_ride_id)
+            .maybeSingle()
+          if (!rideError && ride && Array.isArray(ride.stops) && ride.stops.length) {
+            row = {
+              ...data,
+              stops: ride.stops,
+              metadata: { ...meta, kind: meta.kind || ride.kind || null },
+            }
+          }
+        } catch {
+          /* Pickup pin stays if the friend ride row is not readable. */
+        }
+      }
+      setTripRow(row)
       if (data.driver_id) setResolvedDriverId(data.driver_id)
       if (data.status === 'completed' && user?.id && !ratedCheck.current) {
         ratedCheck.current = true
@@ -159,6 +181,26 @@ export function Requested({ dest = 'GSP Airport', trip = '', driver = 'your driv
   const etaLine = etaHoldLine(status, etaLineFor(status, driverFix, tripRow))
   const showMap = Boolean(trip) || Boolean(status) || preferred
   const preview = showSearchTheater(status) && !driverPos
+  const liveStops = orderedLiveStops(tripRow)
+  const stopPins = liveStops.map((stop) => ({
+    id: stop.id,
+    lat: stop.lat,
+    lng: stop.lng,
+    label: stop.title,
+    badge: String(stop.order),
+    color: stop.order === 1 ? '#522D80' : (stop.order === liveStops.length || stop.kind === 'dropoff' ? '#F56600' : '#522D80'),
+  }))
+  const encodedRoute = tripRow?.metadata?.route_polyline
+  let routePath = null
+  if (typeof encodedRoute === 'string' && encodedRoute) {
+    try {
+      const decoded = decodePolyline(encodedRoute)
+      routePath = Array.isArray(decoded) && decoded.length ? decoded : null
+    } catch {
+      routePath = null
+    }
+  }
+  const mapCenter = driverPos || (liveStops[0] ? [liveStops[0].lat, liveStops[0].lng] : pickup) || CLEMSON
 
   return (
     <div className="fade-in" style={{ minHeight: '100%', padding: 24, display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 16 }}>
@@ -175,12 +217,14 @@ export function Requested({ dest = 'GSP Airport', trip = '', driver = 'your driv
           <CampusMap
             height={220}
             interactive
-            center={driverPos || pickup || CLEMSON}
-            zoom={14}
+            center={mapCenter}
+            zoom={liveStops.length > 1 ? 12 : 14}
             marker={pickup}
             pickupPosition={pickup}
             driverPosition={driverPos}
-            animateDriver={Boolean(driverPos)}
+            animateDriver={Boolean(driverPos) && liveStops.length === 0}
+            stops={stopPins}
+            route={routePath}
           />
         </div>
       )}
@@ -212,6 +256,15 @@ export function Requested({ dest = 'GSP Airport', trip = '', driver = 'your driv
           {driver} · {tripRow?.pickup_label || 'Pickup'} → {dest || tripRow?.dropoff_label || 'Drop-off'}.
           {trip ? ` ID ${String(trip).slice(0, 8)}…` : ''}
         </p>
+        {liveStops.length > 0 && (
+          <ol style={{ margin: '8px 0 0', paddingLeft: 18, color: 'var(--ink)', fontSize: 14 }}>
+            {liveStops.map((stop) => (
+              <li key={stop.id} style={{ marginTop: 4, fontWeight: 700, color: stop.order === liveStops.length ? 'var(--orange)' : 'var(--purple)' }}>
+                {stop.label}
+              </li>
+            ))}
+          </ol>
+        )}
         <div style={{ marginTop: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
           <PrimaryButton onClick={onShare} disabled={busy || !trip || tripMissing}>
             {busy ? 'Starting…' : share ? 'Sharing — tap to refresh link' : 'Share my location'}

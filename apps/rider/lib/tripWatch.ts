@@ -14,6 +14,8 @@ export type LiveTrip = {
   driverLat: number | null
   driverLng: number | null
   requested_at: string | null
+  stops: unknown[] | null
+  metadata: Record<string, unknown> | null
 }
 
 const ACTIVE = new Set(['searching', 'offered', 'accepted', 'arriving', 'arrived', 'in_progress'])
@@ -48,7 +50,7 @@ export async function loadLiveTrip(tripId: string): Promise<LiveTrip | null> {
   if (!supabase || !tripId) return null
   const { data, error } = await supabase
     .from('trips')
-    .select('id, status, pickup_label, dropoff_label, pickup_lat, pickup_lng, dropoff_lat, dropoff_lng, driver_id, requested_at')
+    .select('id, status, pickup_label, dropoff_label, pickup_lat, pickup_lng, dropoff_lat, dropoff_lng, driver_id, requested_at, stops, metadata')
     .eq('id', tripId)
     .maybeSingle()
   if (error) throw new Error(error.message)
@@ -65,6 +67,26 @@ export async function loadLiveTrip(tripId: string): Promise<LiveTrip | null> {
     driverLat = status.data?.lat ?? null
     driverLng = status.data?.lng ?? null
   }
+  const metadata = data.metadata && typeof data.metadata === 'object' && !Array.isArray(data.metadata)
+    ? data.metadata as Record<string, unknown>
+    : null
+  let stops = Array.isArray(data.stops) ? data.stops : null
+  const friendRideId = typeof metadata?.friend_ride_id === 'string' ? metadata.friend_ride_id : ''
+  if ((!stops || stops.length === 0) && friendRideId) {
+    try {
+      const { data: ride, error: rideError } = await supabase
+        .from('friend_rides')
+        .select('stops, kind, status')
+        .eq('id', friendRideId)
+        .maybeSingle()
+      if (!rideError && ride && Array.isArray(ride.stops) && ride.stops.length) {
+        stops = ride.stops
+        if (metadata && ride.kind && metadata.kind == null) metadata.kind = ride.kind
+      }
+    } catch {
+      /* Pickup and drop-off pins remain if the friend ride row is not readable. */
+    }
+  }
   return {
     id: data.id,
     status: data.status,
@@ -79,5 +101,7 @@ export async function loadLiveTrip(tripId: string): Promise<LiveTrip | null> {
     driverLat,
     driverLng,
     requested_at: data.requested_at || null,
+    stops,
+    metadata,
   }
 }
