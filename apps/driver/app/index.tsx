@@ -1,10 +1,13 @@
 import { useRouter } from 'expo-router'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Animated, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { CampusMap, type MapPin } from '@/components/CampusMap'
+import { FarePanel } from '@/components/FarePanel'
 import { ErrorText, Primary, Tag, cardShadow } from '@/components/chrome'
 import { useAuth } from '@/lib/auth'
+import { useFeedback } from '@/lib/feedback'
+import { notifyNewRequest } from '@/lib/push'
 import { supabase } from '@/lib/supabase'
 import { useDriverLocation } from '@/lib/useDriverLocation'
 import { fetchDriverApplication, setDriverOnline } from 'rides-native/drivers'
@@ -13,6 +16,7 @@ import {
   acceptTrip,
   declineTrip,
   loadDriverDesk,
+  publishDriverCapacity,
   publishDriverLocation,
   setPriorityMode,
   subscribeTrips,
@@ -54,6 +58,9 @@ export default function DriverHome() {
   const router = useRouter()
   const insets = useSafeAreaInsets()
   const { user, configured } = useAuth()
+  const { pulse } = useFeedback()
+  const seenOffers = useRef(new Set<string>())
+  const offersPrimed = useRef(false)
   const [desk, setDesk] = useState<DriverDesk | null>(null)
   const [status, setStatus] = useState('none')
   const [reason, setReason] = useState<string | null>(null)
@@ -91,6 +98,21 @@ export default function DriverHome() {
     })
   }, [approved, refresh])
 
+  useEffect(() => {
+    const offers = desk?.offers || []
+    if (!offersPrimed.current) {
+      offers.forEach((card) => seenOffers.current.add(card.id))
+      offersPrimed.current = true
+      return
+    }
+    const fresh = offers.filter((card) => !seenOffers.current.has(card.id))
+    fresh.forEach((card) => seenOffers.current.add(card.id))
+    const next = fresh[0]
+    if (!next) return
+    pulse('request')
+    notifyNewRequest(next).catch(() => {})
+  }, [desk?.offers, pulse])
+
   useDriverLocation(Boolean(user && approved && online), (fix) => {
     setSelf({ latitude: fix.lat, longitude: fix.lng })
     if (!supabase || !user) return
@@ -109,7 +131,10 @@ export default function DriverHome() {
     setBusy(true)
     setError(null)
     try {
-      await setDriverOnline(supabase, user.id, !online)
+      const nextOnline = !online
+      await setDriverOnline(supabase, user.id, nextOnline)
+      if (nextOnline) await publishDriverCapacity(supabase, user.id, desk?.vehicle?.seats)
+      pulse('online')
       await refresh()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not update online status')
@@ -124,6 +149,7 @@ export default function DriverHome() {
     setError(null)
     try {
       await acceptTrip(supabase, card, user.id)
+      pulse('accept')
       await refresh()
       router.push({ pathname: '/trip', params: { id: card.id } })
     } catch (err) {
@@ -138,7 +164,8 @@ export default function DriverHome() {
     setBusy(true)
     setError(null)
     try {
-      await declineTrip(supabase, card.id)
+      await declineTrip(supabase, card)
+      pulse('decline')
       await refresh()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not decline')
@@ -171,8 +198,11 @@ export default function DriverHome() {
       <View pointerEvents="box-none" style={styles.overlay}>
         <View style={[styles.top, { paddingTop: insets.top + 8 }]} pointerEvents="box-none">
           <View style={styles.brand}>
-            <Text style={styles.kicker}>DRIVER</Text>
-            <Text style={styles.brandTitle}>Clemson RIDES</Text>
+            <Text style={styles.kicker}>DRIVE • GAME • REPEAT</Text>
+            <Text style={styles.brandTitle}>Clemson <Text style={styles.brandSoft}>RIDES</Text></Text>
+            <View style={styles.brandPill}>
+              <Text style={styles.brandPillText}>DRIVER</Text>
+            </View>
           </View>
           <Pressable onPress={() => router.push('/earnings')} style={styles.earn}>
             <Text style={styles.earnText}>{online ? 'Online' : 'Offline'}</Text>
@@ -209,6 +239,20 @@ export default function DriverHome() {
                     <Text style={styles.copy}>
                       {desk.gameDay.pickup_zone_label || 'Stadium rides'} are in the queue
                       {desk.gameDay.surge_multiplier ? ` · rider surge ${desk.gameDay.surge_multiplier}×` : ''}.
+                    </Text>
+                  </View>
+                ) : null}
+                {desk?.facing ? (
+                  <View style={styles.visible}>
+                    <Text style={styles.bannerTitle}>{online ? 'Riders can pick you' : 'Hidden while offline'}</Text>
+                    <Text style={styles.copy}>
+                      {desk.facing.name} · {desk.facing.vehicleLabel}
+                      {desk.facing.seats ? ` · ${desk.facing.seats} seats` : ' · seats not set'}
+                    </Text>
+                    <Text style={styles.copy}>
+                      {online
+                        ? 'Name, vehicle, and your live pin are on Pick a driver.'
+                        : 'Go online to publish availability and capacity.'}
                     </Text>
                   </View>
                 ) : null}
@@ -283,7 +327,7 @@ function RideCard({
       <Text style={styles.copy}>{statusHeadline(card.status)} · you net 80%</Text>
       <View style={styles.tags}>
         {card.tagLabels.map((label) => (
-          <Tag key={label} label={label} tone={label.includes('Tesla') || label.includes('Game') ? 'orange' : 'purple'} />
+          <Tag key={label} label={label} tone={/Tesla|Game|Weekend|Student/.test(label) ? 'orange' : 'purple'} />
         ))}
       </View>
       <Text style={styles.place}>Pickup · {card.pickupLabel}</Text>
@@ -293,6 +337,7 @@ function RideCard({
         <Text style={styles.copy}>25% deposit on this fare · {formatCents(card.depositCents)}</Text>
       ) : null}
       {card.teslaStub ? <Text style={styles.copy}>{TESLA_FLEET_NOTICE}</Text> : null}
+      <FarePanel card={card} />
       <Primary label={busy ? 'Saving…' : 'Accept'} onPress={onAccept} disabled={busy} tone="purple" />
       <Pressable onPress={onDecline} disabled={busy} style={styles.decline}>
         <Text style={styles.declineText}>Decline</Text>
@@ -313,9 +358,28 @@ const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: SURFACE },
   overlay: { ...StyleSheet.absoluteFill, justifyContent: 'space-between' },
   top: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 16 },
-  brand: { backgroundColor: PURPLE, borderRadius: 18, paddingHorizontal: 16, paddingVertical: 12, ...cardShadow },
-  kicker: { color: ORANGE, fontSize: 11, fontWeight: '800', letterSpacing: 1.2 },
-  brandTitle: { color: '#fff', fontSize: 18, fontWeight: '800', marginTop: 2 },
+  brand: {
+    backgroundColor: ORANGE,
+    borderRadius: 18,
+    paddingHorizontal: 16,
+    paddingTop: 14,
+    paddingBottom: 12,
+    maxWidth: 220,
+    ...cardShadow,
+    shadowColor: ORANGE,
+  },
+  kicker: { color: '#fff', fontSize: 9, fontWeight: '700', letterSpacing: 1.2 },
+  brandTitle: { color: '#fff', fontSize: 18, fontWeight: '800', marginTop: 4 },
+  brandSoft: { fontWeight: '700' },
+  brandPill: {
+    marginTop: 8,
+    alignSelf: 'flex-start',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+  },
+  brandPillText: { color: '#fff', fontSize: 9, fontWeight: '800', letterSpacing: 0.6 },
   earn: { backgroundColor: '#fff', borderRadius: 999, paddingHorizontal: 14, paddingVertical: 10, alignSelf: 'flex-start', ...cardShadow },
   earnText: { color: PURPLE, fontWeight: '800' },
   sheet: {
@@ -332,6 +396,7 @@ const styles = StyleSheet.create({
   handle: { alignSelf: 'center', width: 42, height: 5, borderRadius: 999, backgroundColor: 'rgba(11,18,32,0.16)', marginVertical: 10 },
   title: { fontSize: 24, fontWeight: '800', color: PURPLE, letterSpacing: -0.3 },
   copy: { color: INK_SECONDARY, fontSize: 14, lineHeight: 20 },
+  visible: { backgroundColor: 'rgba(82,45,128,0.08)', borderRadius: 16, padding: 12, gap: 4 },
   banner: { backgroundColor: 'rgba(245,102,0,0.1)', borderRadius: 16, padding: 12, gap: 4 },
   bannerTitle: { color: PURPLE, fontWeight: '800' },
   live: { backgroundColor: PURPLE, borderRadius: 18, padding: 14, gap: 4 },

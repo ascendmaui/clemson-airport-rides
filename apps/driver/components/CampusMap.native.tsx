@@ -14,6 +14,10 @@ export function CampusMap({
   route?: { latitude: number; longitude: number }[]
 }) {
   const mapRef = useRef<MapView>(null)
+  const pinsRef = useRef(pins)
+  const centerRef = useRef(center)
+  pinsRef.current = pins
+  centerRef.current = center
   const markers = pins?.length
     ? pins
     : [
@@ -22,18 +26,31 @@ export function CampusMap({
       ]
   const focus = center || markers[0]
 
+  const pinKey = (pins || []).map((pin) => `${pin.id}:${pin.latitude.toFixed(4)},${pin.longitude.toFixed(4)}`).join('|')
+  const centerKey = center ? `${center.latitude.toFixed(4)},${center.longitude.toFixed(4)}` : ''
+
   useEffect(() => {
-    if (!center || !mapRef.current) return
+    if (!mapRef.current) return
+    const spots = (pinsRef.current || []).filter((pin) => Number.isFinite(pin.latitude) && Number.isFinite(pin.longitude))
+    if (spots.length > 1) {
+      mapRef.current.fitToCoordinates(
+        spots.map((pin) => ({ latitude: pin.latitude, longitude: pin.longitude })),
+        { edgePadding: { top: 80, right: 40, bottom: 220, left: 40 }, animated: true },
+      )
+      return
+    }
+    const focus = centerRef.current
+    if (!focus) return
     mapRef.current.animateToRegion(
       {
-        latitude: center.latitude,
-        longitude: center.longitude,
+        latitude: focus.latitude,
+        longitude: focus.longitude,
         latitudeDelta: 0.03,
         longitudeDelta: 0.03,
       },
       450,
     )
-  }, [center])
+  }, [centerKey, pinKey])
 
   return (
     <View style={styles.fill}>

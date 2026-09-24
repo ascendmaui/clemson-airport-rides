@@ -1,15 +1,19 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import {
+  declineDisposition,
   depositSliceCents,
   driverNetCents,
+  fareCollection,
   isDueNow,
+  isSameZonedWeek,
   isWeekendPartyWindow,
   matchesQueueFilter,
   nextTripStatus,
   summarizeDepositAwareness,
   toDriverCard,
   tripTags,
+  weekNetCents,
 } from './tripTags.js'
 
 test('driver net is 80 percent and the deposit slice is 25 percent', () => {
@@ -89,4 +93,52 @@ test('status advances one step and deposits summarize from payment rows', () => 
   assert.equal(summary.driverNetCents, 3200)
   assert.equal(summary.todayNetCents, 3200)
   assert.match(summary.lines[0].line, /Deposit \$10\.00 paid/)
+})
+
+test('carpool shares replace the listed fare and keep the 25 percent deposit', () => {
+  const card = toDriverCard({
+    id: 'c1',
+    status: 'requested',
+    driver_id: 'drv',
+    fare_cents: 1800,
+    passengers: 3,
+    metadata: {
+      kind: 'carpool',
+      fare_breakdown: {
+        carpool: {
+          shares: [
+            { id: 'a', label: 'Alex', shareCents: 1200 },
+            { id: 'b', name: 'Blair', shareCents: 1200 },
+          ],
+        },
+      },
+    },
+  })
+  assert.equal(card.tags.includes('carpool'), true)
+  assert.equal(card.passengers, 3)
+  const fare = fareCollection(card)
+  assert.equal(fare.fareCents, 2400)
+  assert.equal(fare.depositCents, 600)
+  assert.equal(fare.remainderCents, 1800)
+  assert.equal(fare.driverNetCents, 1920)
+  assert.equal(fare.platformFeeCents, 480)
+  assert.equal(fare.shares[1].label, 'Blair')
+})
+
+test('week net uses Monday through Sunday in America/New_York', () => {
+  const now = new Date('2026-10-07T15:00:00.000Z')
+  assert.equal(isSameZonedWeek('2026-10-05T14:00:00.000Z', now), true)
+  assert.equal(isSameZonedWeek('2026-10-04T15:00:00.000Z', now), false)
+  assert.equal(weekNetCents([
+    { status: 'completed', fare_cents: 1000, completed_at: '2026-10-05T14:00:00.000Z' },
+    { status: 'completed', fare_cents: 1000, completed_at: '2026-10-04T15:00:00.000Z' },
+    { status: 'canceled', fare_cents: 5000, completed_at: '2026-10-06T15:00:00.000Z' },
+  ], now), 800)
+})
+
+test('decline keeps an open match available and cancels a chosen-driver request', () => {
+  assert.equal(declineDisposition('searching'), 'release')
+  assert.equal(declineDisposition('offered'), 'release')
+  assert.equal(declineDisposition('scheduled'), 'leave')
+  assert.equal(declineDisposition('requested'), 'cancel')
 })

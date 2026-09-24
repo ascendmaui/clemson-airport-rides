@@ -6,7 +6,7 @@ import { BackButton, Card, ErrorText } from '@/components/chrome'
 import { useAuth } from '@/lib/auth'
 import { supabase } from '@/lib/supabase'
 import { formatCents, loadEarnings } from 'rides-native/driverDesk'
-import { driverNetCents } from 'rides-native/tripTags'
+import { driverNetCents, weekNetCents } from 'rides-native/tripTags'
 import { INK, INK_SECONDARY, ORANGE, PURPLE, SURFACE } from 'rides-native/places.js'
 
 type EarningsState = Awaited<ReturnType<typeof loadEarnings>> | null
@@ -45,14 +45,20 @@ export default function EarningsScreen() {
         {data?.payoutError ? <ErrorText>{`Payout status: ${data.payoutError}`}</ErrorText> : null}
         <View style={styles.stats}>
           <Stat label="Today" value={formatCents(summary?.todayNetCents || 0)} />
-          <Stat label="Your net" value={formatCents(summary?.driverNetCents || 0)} />
-          <Stat label="Deposits paid" value={formatCents(summary?.depositPaidCents || 0)} />
-          <Stat label="Deposits open" value={formatCents(summary?.depositOpenCents || 0)} />
+          <Stat label="This week" value={formatCents(weekNetCents(data?.trips || []))} />
+          <Stat label="Balance" value={formatCents(Number(payouts?.pendingCents) || 0)} />
+          <Stat label="Paid out" value={formatCents(Number(payouts?.paidCents) || 0)} />
         </View>
+        <Card>
+          <Text style={styles.cardTitle}>Deposits</Text>
+          <Text style={styles.copy}>
+            Paid {formatCents(summary?.depositPaidCents || 0)} · still open {formatCents(summary?.depositOpenCents || 0)}. Your lifetime net on completed trips is {formatCents(summary?.driverNetCents || 0)}.
+          </Text>
+        </Card>
         <Card>
           <Text style={styles.cardTitle}>Payouts</Text>
           <Text style={styles.copy}>
-            Paid {formatCents(Number(payouts?.paidCents) || 0)} · pending {formatCents(Number(payouts?.pendingCents) || 0)}. Failed payouts stay pending and retry from the web cron.
+            Balance is money still pending a Stripe payout. Paid out is what already landed. Failed payouts stay pending and retry from the web cron.
           </Text>
         </Card>
         {(summary?.lines || []).map((line) => (
@@ -62,9 +68,13 @@ export default function EarningsScreen() {
             <Text style={styles.copy}>Fare {formatCents(line.fareCents)} · you net {formatCents(driverNetCents(line.fareCents))}</Text>
           </Card>
         ))}
-        {(data?.trips || []).slice(0, 12).map((trip) => (
+        <Text style={styles.cardTitle}>Trip history</Text>
+        {(data?.trips || []).slice(0, 20).map((trip) => (
           <View key={trip.id} style={styles.row}>
-            <Text style={styles.rowLabel}>{trip.dropoff_label || trip.pickup_label || 'Trip'}</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.rowLabel}>{trip.dropoff_label || trip.pickup_label || 'Trip'}</Text>
+              <Text style={styles.copy}>{trip.status || 'trip'}{trip.completed_at ? ` · ${trip.completed_at.slice(0, 10)}` : ''}</Text>
+            </View>
             <Text style={styles.rowValue}>{formatCents(driverNetCents(Number(trip.fare_cents) || 0))}</Text>
           </View>
         ))}
