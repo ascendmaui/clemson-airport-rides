@@ -30,6 +30,7 @@ export function ForgotPasswordScreen(props: {
   onBack: () => void
   onSignIn: () => void
   mark?: string
+  sentDetail?: string
 }): ReactNode
 
 export function SetNewPasswordScreen(props: {
