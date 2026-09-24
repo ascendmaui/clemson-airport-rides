@@ -4,7 +4,13 @@ import { PrimaryButton } from '../components/PrimaryButton'
 import { navigate } from '../lib/navigation'
 import { SignInToBookModal, useRequireAuthForAction } from '../components/SignInToBookModal'
 import { useStudentStatus } from '../lib/useStudentStatus'
-import { STUDENT_DISCOUNT_LABEL } from '../../packages/rides-native/riderMoney.js'
+import { applyStudentDiscount } from '../lib/pricing'
+import { AIRPORT_RATES, depositCents } from '../lib/stripeCheckout'
+import {
+  STUDENT_DISCOUNT_LABEL,
+  airportCodeFromLabel,
+  depositSurfaceCopy,
+} from '../../packages/rides-native/riderMoney.js'
 
 export function ConfirmPickup({ dest = 'GSP Airport' }) {
   const [address, setAddress] = useState('Memorial Stadium · Lot 5')
@@ -13,6 +19,18 @@ export function ConfirmPickup({ dest = 'GSP Airport' }) {
   const [promptOpen, setPromptOpen] = useState(false)
   const { runOrPrompt } = useRequireAuthForAction()
   const student = useStudentStatus()
+  const airport = airportCodeFromLabel(dest)
+  const rate = airport ? AIRPORT_RATES[airport] : null
+  const studentFare = rate
+    ? applyStudentDiscount(rate.fareCents, { isStudent: student.verified, tier: 'standard' })
+    : null
+  const depositCopy = studentFare
+    ? depositSurfaceCopy(
+      { fareCents: studentFare.fareCents, depositCents: depositCents(studentFare.fareCents) },
+      'confirm',
+      { studentDiscountCents: studentFare.discountCents },
+    )
+    : null
 
   const goTiers = () => navigate('tiers', { dest, pickup: address })
 
@@ -80,6 +98,11 @@ export function ConfirmPickup({ dest = 'GSP Airport' }) {
         <p style={{ fontSize: 13, color: 'var(--ink-secondary)', marginBottom: 8 }}>
           Going to <strong>{dest}</strong>
         </p>
+        {depositCopy && (
+          <p style={{ fontSize: 13, color: '#522D80', fontWeight: 700, lineHeight: 1.45, marginTop: 0 }}>
+            {depositCopy}
+          </p>
+        )}
         <button
           type="button"
           className="pressable"

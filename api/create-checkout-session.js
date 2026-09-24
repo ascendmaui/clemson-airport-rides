@@ -4,7 +4,7 @@
  * Missing STRIPE_SECRET_KEY → 503 JSON error (never stub success)
  */
 import Stripe from 'stripe'
-import { splitPlatformFee, feeMetadata } from '../src/lib/fareRates.js'
+import { splitPlatformFee, feeMetadata, cardDepositCents, depositSplit, depositSplitLabel } from '../src/lib/fareRates.js'
 
 const stripeSecret = process.env.STRIPE_SECRET_KEY || ''
 const DEFAULT_FARES = { GSP: 7500, CLT: 17500 }
@@ -30,7 +30,8 @@ export default async function handler(req, res) {
 
   const airport = String(body.airport || 'GSP').toUpperCase()
   const fareCents = Number(body.fareCents) || DEFAULT_FARES[airport] || 7500
-  const depositCents = Number(body.depositCents) || Math.round(fareCents * 0.25)
+  const depositCents = Number(body.depositCents) || cardDepositCents(fareCents)
+  const split = depositSplit(fareCents, depositCents)
   const riderName = body.riderName || 'Rider'
   const tripId = body.tripId || ''
   const riderId = body.riderId || ''
@@ -61,7 +62,7 @@ export default async function handler(req, res) {
           unit_amount: depositCents,
           product_data: {
             name: `Clemson RIDES ${airport} deposit (25%)`,
-            description: `${riderName} · fare $${(fareCents / 100).toFixed(2)} · deposit $${(depositCents / 100).toFixed(2)}`,
+            description: `${riderName} · ${depositSplitLabel(split)}`,
           },
         },
       }],

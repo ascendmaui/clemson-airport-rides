@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { purposeLabel, toDriverQueueCard } from './scheduledRideModel.js'
+import { purposeLabel, toDriverQueueCard, toRiderScheduleCard } from './scheduledRideModel.js'
 
 test('weekend and party purpose is labeled for the driver queue', () => {
   assert.equal(purposeLabel('party_weekend'), 'Weekend / party')
@@ -20,4 +20,21 @@ test('weekend and party purpose is labeled for the driver queue', () => {
   assert.equal(card.pickupLabel, 'Memorial Stadium')
   assert.equal(card.dropoffLabel, 'GSP Airport')
   assert.equal(card.firstName, 'Ava')
+})
+
+test('rider upcoming card keeps fare and deposit for the remaining balance', () => {
+  const card = toRiderScheduleCard({
+    id: 'a1',
+    status: 'scheduled',
+    pickup_label: 'Memorial Stadium',
+    dropoff_label: 'Charlotte Douglas (CLT)',
+    fare_cents: 9000,
+    deposit_cents: 2250,
+    pickup_at: '2026-10-03T15:00:00.000Z',
+    metadata: { purpose: 'airport', fare_is_estimate: false },
+  })
+  assert.equal(card.fareCents, 9000)
+  assert.equal(card.depositCents, 2250)
+  assert.equal(card.purpose, 'Airport')
+  assert.equal(card.estimate, false)
 })

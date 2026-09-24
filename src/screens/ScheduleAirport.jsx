@@ -8,6 +8,7 @@ import {
   getStripeConfig,
 } from '../lib/stripeCheckout'
 import { formatUsdFromCents, applyStudentDiscount } from '../lib/pricing'
+import { depositSurfaceCopy, STRIPE_NOT_CONFIGURED_COPY } from '../../packages/rides-native/riderMoney.js'
 import { useAuth } from '../lib/auth'
 import { getHashRoute, navigate } from '../lib/navigation'
 import { supabase } from '../lib/supabase'
@@ -72,6 +73,15 @@ async function createAirportTrip({ user, airport, fareCents, deposit, date, time
   return data.id
 }
 
+async function releaseUnpaidTrip(tripId) {
+  if (!supabase || !tripId) return
+  await supabase
+    .from('trips')
+    .update({ status: 'canceled', canceled_at: new Date().toISOString() })
+    .eq('id', tripId)
+    .in('status', ['searching', 'scheduled'])
+}
+
 export function ScheduleAirport() {
   const { user } = useAuth()
   const studentStatusNow = useStudentStatus()
@@ -91,14 +101,21 @@ export function ScheduleAirport() {
   })
   const fareCents = student.fareCents
   const deposit = depositCents(fareCents)
+  const remaining = Math.max(0, fareCents - deposit)
+  const quoteCopy = depositSurfaceCopy(
+    { fareCents, depositCents: deposit, remainingCents: remaining },
+    'quote',
+    { studentDiscountCents: student.discountCents },
+  )
   const stripe = getStripeConfig()
 
   const onBook = async () => {
     setBusy(true)
     setError(null)
+    let tripId = ''
     try {
       const depositAmount = deposit
-      const tripId = await createAirportTrip({
+      tripId = await createAirportTrip({
         user,
         airport,
         fareCents,
@@ -109,6 +126,8 @@ export function ScheduleAirport() {
       })
       const session = await createCheckoutSession({
         airport,
+        fareCents,
+        depositCents: deposit,
         riderName:
           user?.user_metadata?.full_name ||
           user?.email?.split('@')[0] ||
@@ -120,9 +139,11 @@ export function ScheduleAirport() {
         window.location.href = session.url
         return
       }
+      await releaseUnpaidTrip(tripId)
       setError('Checkout did not return a payment URL. No charge was made.')
     } catch (err) {
-      setError(err.message || 'Checkout failed. No charge was made.')
+      try { await releaseUnpaidTrip(tripId) } catch { /* keep the checkout error */ }
+      setError(err.message || STRIPE_NOT_CONFIGURED_COPY)
     } finally {
       setBusy(false)
     }
@@ -158,7 +179,7 @@ export function ScheduleAirport() {
           <div className="glass-panel glass-panel--orange" style={{ padding: 14, borderRadius: 16, marginBottom: 16 }}>
             <div style={{ fontWeight: 700 }}>Deposit received</div>
             <div style={{ fontSize: 13, color: 'var(--ink-secondary)', marginTop: 4 }}>
-              Stripe confirmed the 25% hold. We’ll match a driver for this pickup.
+              Stripe confirmed the 25% deposit. The remaining balance is collected when the trip is complete.
             </div>
           </div>
         )}
@@ -206,10 +227,11 @@ export function ScheduleAirport() {
         <label style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink-secondary)' }}>Pickup time</label>
         <input type="time" className="glass-input" value={time} onChange={(e) => setTime(e.target.value)} style={{ width: '100%', marginTop: 6, marginBottom: 20, padding: '12px 14px', borderRadius: 12 }} />
 
-        <div className="glass-panel glass-panel--elevated" style={{ padding: 16, borderRadius: 16, marginBottom: 16 }}>
+        <div className="glass-panel glass-panel--orange" style={{ padding: 16, borderRadius: 16, marginBottom: 16 }}>
+          <div style={{ fontSize: 11, letterSpacing: 1.1, fontWeight: 800, color: '#F56600', marginBottom: 8 }}>AIRPORT DEPOSIT</div>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-            <span style={{ color: 'var(--ink-secondary)' }}>Fare</span>
-            <strong>{formatUsdFromCents(fareCents)}</strong>
+            <span style={{ color: 'var(--ink-secondary)' }}>Full fare</span>
+            <strong style={{ color: '#522D80' }}>{formatUsdFromCents(fareCents)}</strong>
           </div>
           {student.discountCents > 0 && (
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
@@ -217,18 +239,25 @@ export function ScheduleAirport() {
               <strong style={{ color: '#F56600' }}>−{formatUsdFromCents(student.discountCents)}</strong>
             </div>
           )}
-          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
             <span style={{ color: 'var(--ink-secondary)' }}>25% deposit</span>
-            <strong style={{ color: 'var(--orange)' }}>{formatUsdFromCents(deposit)}</strong>
+            <strong style={{ color: '#F56600' }}>{formatUsdFromCents(deposit)}</strong>
           </div>
-          <p style={{ fontSize: 12, color: 'var(--ink-tertiary)', marginTop: 10 }}>
-            {rate.code} · {formatUsdFromCents(fareCents)} fare → {formatUsdFromCents(deposit)} deposit
-            {student.label ? ` · ${student.label}` : ''}
-            {stripe.configured ? ' · Stripe ready' : ' · set VITE_STRIPE_PUBLISHABLE_KEY'}
+          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+            <span style={{ color: '#522D80', fontWeight: 700 }}>Remaining balance</span>
+            <strong style={{ color: '#522D80' }}>{formatUsdFromCents(remaining)}</strong>
+          </div>
+          <p style={{ fontSize: 12, color: '#522D80', marginTop: 10, lineHeight: 1.45 }}>
+            {quoteCopy}
           </p>
+          {!stripe.configured && (
+            <p style={{ fontSize: 12, color: '#522D80', marginTop: 8, lineHeight: 1.45 }}>
+              This browser has no Stripe publishable key. Pay deposit still asks the server. If Checkout cannot start, nothing is charged and live mode stays off.
+            </p>
+          )}
         </div>
 
-        <PrimaryButton className="primary-cta" onClick={onPayClick} disabled={busy}>
+        <PrimaryButton className="primary-cta" onClick={onPayClick} disabled={busy || deposit <= 0}>
           {busy ? 'Starting checkout…' : `Pay ${formatUsdFromCents(deposit)} deposit`}
         </PrimaryButton>
 

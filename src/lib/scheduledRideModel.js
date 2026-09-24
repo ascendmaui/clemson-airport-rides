@@ -212,6 +212,7 @@ export function toRiderScheduleCard(row) {
     dropoffLabel: row.dropoff_label,
     pickupAt: row.pickup_at || row.scheduled_for,
     fareCents: row.fare_cents,
+    depositCents: Math.max(0, Math.round(Number(row.deposit_cents) || 0)),
     purpose: purposeLabel(row.metadata?.purpose) || row.rider_note || '',
     estimate: Boolean(row.metadata?.fare_is_estimate),
     approxPin: pinForDisplay(row),

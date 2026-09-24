@@ -5,6 +5,7 @@ import { FRIEND_PLACES } from '../lib/friendRides'
 import { useAuth } from '../lib/auth'
 import { useStudentStatus } from '../lib/useStudentStatus'
 import { formatUsdFromCents } from '../lib/pricing'
+import { depositSurfaceCopy } from '../../packages/rides-native/riderMoney.js'
 import { SignInToBookModal, useRequireAuthForAction } from './SignInToBookModal'
 import {
   AIRPORT_PLACES,
@@ -141,7 +142,15 @@ export function ScheduledRidePlanner() {
         studentLabel: fleet === 'tesla' ? null : (priced?.studentLabel || null),
         tier: fleet,
       })
-      setSaved(row)
+      const held = priced?.estimate ? 0 : (priced?.depositCents || 0)
+      setSaved({
+        ...row,
+        depositCopy: depositSurfaceCopy(
+          { fareCents: priced?.fareCents, depositCents: held },
+          'confirm',
+          { studentDiscountCents: fleet === 'tesla' ? 0 : priced?.discountCents },
+        ),
+      })
       setDate('')
       setTime('')
       await refreshMine()
@@ -174,7 +183,7 @@ export function ScheduledRidePlanner() {
         Schedule a ride
       </h2>
       <p style={{ color: 'var(--ink-secondary)', fontSize: 14, marginTop: 6, marginBottom: 14 }}>
-        Weekend and party trips to the airport or campus, plus early classes and other planned pickups. Pick a date and time, confirm, then find it under Your scheduled rides. Drivers see your first name. Map pins stay hidden until the ride is done, then only an approximate pin is shown.
+        Weekend and party trips to the airport or campus, plus early classes and other planned pickups. Pick a date and time, confirm, then find it under Upcoming. Drivers see your first name. Map pins stay hidden until the ride is done, then only an approximate pin is shown.
       </p>
 
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
@@ -297,10 +306,13 @@ export function ScheduledRidePlanner() {
         {quote?.studentLabel && (
           <div style={{ fontSize: 12, color: '#F56600', fontWeight: 700 }}>{quote.studentLabel}</div>
         )}
-        <p style={{ fontSize: 12, color: 'var(--ink-tertiary)', marginTop: 8 }}>
-          {quote?.source === 'airport_flat'
-            ? `${quote.airport} flat rate. Pay the deposit in Airport deposit below if you want to hold it now.`
+        <p style={{ fontSize: 12, color: '#522D80', marginTop: 8, lineHeight: 1.45 }}>
+          {quote?.depositCents > 0
+            ? `${depositSurfaceCopy(quote, 'confirm', { studentDiscountCents: quote.discountCents })} Pay that deposit below to hold the ride.`
             : 'Estimate from distance. Final fare can change when a driver accepts.'}
+          {quote?.source === 'airport_flat' && !(quote?.depositCents > 0)
+            ? ` ${quote.airport} flat rate. Pay the deposit in Airport deposit below if you want to hold it now.`
+            : ''}
           {quote?.miles != null ? ` · ${quote.miles} mi` : ''}
         </p>
         {quoteError && <p style={{ color: 'var(--danger)', fontSize: 12, marginTop: 6 }}>{quoteError}</p>}
@@ -329,13 +341,14 @@ export function ScheduledRidePlanner() {
         <p role="alert" style={{ marginTop: 12, color: 'var(--danger)', fontSize: 13, fontWeight: 600 }}>{error}</p>
       )}
       {saved && (
-        <p style={{ marginTop: 12, color: '#522D80', fontSize: 13, fontWeight: 700 }}>
-          Scheduled for {formatPickupAt(saved.pickup_at)}. Drivers can accept it from their queue.
+        <p style={{ marginTop: 12, color: '#522D80', fontSize: 13, fontWeight: 700, lineHeight: 1.45 }}>
+          Confirmed for {formatPickupAt(saved.pickup_at)}.
+          {saved.depositCopy ? ` ${saved.depositCopy}` : ' Drivers can accept it from their queue.'}
         </p>
       )}
 
       <div style={{ marginTop: 22 }}>
-        <h3 style={{ fontSize: 16, fontWeight: 700, color: '#522D80' }}>Your scheduled rides</h3>
+        <h3 style={{ fontSize: 16, fontWeight: 700, color: '#522D80' }}>Upcoming</h3>
         {listError && <p style={{ color: 'var(--danger)', fontSize: 13 }}>{listError}</p>}
         {!user && (
           <p style={{ fontSize: 13, color: 'var(--ink-secondary)' }}>Sign in to see rides you have scheduled.</p>
@@ -380,6 +393,14 @@ function RideRow({ ride, onCancel }) {
         {ride.estimate ? ' estimate' : ''}
         {ride.approxPin ? ` · Approx pin ${ride.approxPin}` : ''}
       </div>
+      {ride.depositCents > 0 && (
+        <div style={{ fontSize: 12, color: '#522D80', fontWeight: 700, marginTop: 4 }}>
+          {depositSurfaceCopy(
+            { fareCents: ride.fareCents, depositCents: ride.depositCents },
+            'upcoming',
+          )}
+        </div>
+      )}
       {ride.canCancel && onCancel && (
         <button
           type="button"

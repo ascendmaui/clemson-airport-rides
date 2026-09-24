@@ -29,6 +29,7 @@ export type ScheduledRow = {
   pickup_label: string | null
   dropoff_label: string | null
   fare_cents: number | null
+  deposit_cents: number | null
   pickup_at: string | null
   scheduled_for: string | null
   rider_note: string | null
@@ -138,7 +139,7 @@ export async function listScheduledTrips(riderId: string) {
   if (!supabase) return []
   const { data, error } = await supabase
     .from('trips')
-    .select('id, status, pickup_label, dropoff_label, fare_cents, pickup_at, scheduled_for, rider_note, tier, metadata')
+    .select('id, status, pickup_label, dropoff_label, fare_cents, deposit_cents, pickup_at, scheduled_for, rider_note, tier, metadata')
     .eq('rider_id', riderId)
     .not('pickup_at', 'is', null)
     .order('pickup_at', { ascending: true })

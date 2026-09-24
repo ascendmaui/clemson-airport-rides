@@ -127,7 +127,7 @@ export async function listMyScheduledTrips(riderId) {
   if (!supabase || !riderId) return []
   const { data, error } = await supabase
     .from('trips')
-    .select('id, status, pickup_label, dropoff_label, pickup_lat, pickup_lng, dropoff_lat, dropoff_lng, fare_cents, pickup_at, scheduled_for, rider_note, metadata, driver_id')
+    .select('id, status, pickup_label, dropoff_label, pickup_lat, pickup_lng, dropoff_lat, dropoff_lng, fare_cents, deposit_cents, pickup_at, scheduled_for, rider_note, metadata, driver_id')
     .eq('rider_id', riderId)
     .not('pickup_at', 'is', null)
     .order('pickup_at', { ascending: true })

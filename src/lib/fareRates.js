@@ -95,6 +95,9 @@ export const CREDIT_PACKS = [
 /** Stripe USD minimum charge. Smaller card remainders are waived (platform comps). */
 export const MIN_CARD_CHARGE_CENTS = 50
 
+export const STRIPE_NOT_CONFIGURED_COPY =
+  'Stripe checkout is not configured on this machine. No charge was made. Live mode stays off.'
+
 /** 25% of the card remainder, never below Stripe's minimum when cash remains. */
 export function cardDepositCents(cashCents) {
   const cash = Math.max(0, Math.round(Number(cashCents) || 0))
@@ -103,6 +106,29 @@ export function cardDepositCents(cashCents) {
   if (quarter >= MIN_CARD_CHARGE_CENTS) return Math.min(cash, quarter)
   if (cash >= MIN_CARD_CHARGE_CENTS) return Math.min(cash, MIN_CARD_CHARGE_CENTS)
   return 0
+}
+
+/**
+ * Fare, 25% deposit, and the balance still due.
+ * A stored deposit (including 0) wins. Otherwise the deposit is 25% of the fare
+ * already in hand — call this after the Standard student discount, not before.
+ */
+export function depositSplit(fareCents, storedDeposit) {
+  const fare = Math.max(0, Math.round(Number(fareCents) || 0))
+  const hasStored = storedDeposit != null && storedDeposit !== ''
+  const deposit = hasStored
+    ? Math.max(0, Math.min(fare, Math.round(Number(storedDeposit) || 0)))
+    : cardDepositCents(fare)
+  return {
+    fareCents: fare,
+    depositCents: deposit,
+    remainingCents: Math.max(0, fare - deposit),
+  }
+}
+
+export function depositSplitLabel(split) {
+  const usd = (cents) => `$${(Math.max(0, Math.round(Number(cents) || 0)) / 100).toFixed(2)}`
+  return `Fare ${usd(split?.fareCents)} · 25% deposit ${usd(split?.depositCents)} · remaining balance ${usd(split?.remainingCents)}`
 }
 
 export const WAIT_CANCEL = {

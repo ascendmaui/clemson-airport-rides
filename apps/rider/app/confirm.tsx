@@ -9,7 +9,12 @@ import { setAuthNext } from '@/lib/authNext'
 import { useAuth } from '@/lib/auth'
 import { oneParam } from '@/lib/oneParam'
 import { lookupCatalogPlace, placeFromStop, type Place } from 'rides-native/shared/carpool.js'
-import { STUDENT_DISCOUNT_LABEL } from 'rides-native/riderMoney.js'
+import {
+  STUDENT_DISCOUNT_LABEL,
+  airportCodeFromLabel,
+  depositSurfaceCopy,
+  previewAirportFare,
+} from 'rides-native/riderMoney.js'
 import { useStudentStatus } from '@/lib/useStudentStatus'
 import { NeighborhoodPicker } from '@/components/carpool/NeighborhoodPicker'
 import { lift } from '@/lib/elevation'
@@ -24,6 +29,11 @@ export default function ConfirmPickup() {
   const dest = oneParam(params.dest, 'GSP Airport')
   const { user } = useAuth()
   const student = useStudentStatus()
+  const airport = airportCodeFromLabel(dest)
+  const airportQuote = airport ? previewAirportFare({ airport, isStudent: student.verified }) : null
+  const depositCopy = airportQuote
+    ? depositSurfaceCopy(airportQuote, 'confirm', { studentDiscountCents: airportQuote.studentDiscountCents })
+    : null
   const initialPickup = placeFromStop(lookupCatalogPlace('Memorial Stadium')) || { label: 'Memorial Stadium', lat: 34.6788, lng: -82.843 }
   const [pickup, setPickup] = useState<Place>(initialPickup)
   const [address, setAddress] = useState(initialPickup.label)
@@ -90,6 +100,7 @@ export default function ConfirmPickup() {
         <Text style={styles.going}>
           Going to <Text style={styles.goingStrong}>{dest}</Text>
         </Text>
+        {depositCopy ? <Text style={styles.deposit}>{depositCopy}</Text> : null}
         <Pressable onPress={() => router.push(user ? '/student' : '/sign-in')} accessibilityRole="button">
           <Text style={student.verified ? styles.studentOn : styles.studentOff}>
             {student.verified
@@ -148,6 +159,7 @@ function makeStyles(colors: Palette) {
     note: { minHeight: 64, textAlignVertical: 'top' as const },
     going: { fontSize: 13, color: colors.inkSecondary, marginBottom: 14 },
     goingStrong: { color: colors.ink, fontWeight: '700' as const },
+    deposit: { color: colors.purple, fontWeight: '700' as const, fontSize: 13, lineHeight: 18, marginBottom: 12 },
     studentOn: { color: colors.orange, fontWeight: '800' as const, fontSize: 13, marginBottom: 12 },
     studentOff: { color: colors.link, fontWeight: '800' as const, fontSize: 13, marginBottom: 12 },
   }

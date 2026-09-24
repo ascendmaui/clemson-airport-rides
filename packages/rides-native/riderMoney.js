@@ -8,10 +8,14 @@ import { authedJson } from './apiClient.js'
 import {
   AIRPORT_ROUTE_FALLBACK,
   cardDepositCents,
+  depositSplit,
   quoteFare,
   resolveSurge,
+  STRIPE_NOT_CONFIGURED_COPY,
 } from '../../src/lib/fareRates.js'
 import { CLT, GSP, STADIUM } from './places.js'
+
+export { STRIPE_NOT_CONFIGURED_COPY }
 
 export { cardDepositCents }
 
@@ -39,6 +43,75 @@ export function recomputeDeposit({ fareCents, cashCents } = {}) {
     cashCents: cash,
     depositCents: cardDepositCents(cash),
   }
+}
+
+export function formatUsdCents(cents) {
+  const n = Math.round(Number(cents) || 0)
+  const sign = n < 0 ? '-' : ''
+  const abs = Math.abs(n)
+  const dollars = Math.floor(abs / 100).toLocaleString('en-US')
+  const rem = String(abs % 100).padStart(2, '0')
+  return `${sign}$${dollars}.${rem}`
+}
+
+/** Fare already includes any Standard student discount. Stored deposit cents win, including 0. */
+export function depositBalance({ fareCents, depositCents } = {}) {
+  return depositSplit(fareCents, depositCents)
+}
+
+export function airportCodeFromLabel(label) {
+  const text = String(label || '')
+  if (/gsp|greenville/i.test(text)) return 'GSP'
+  if (/\bclt\b|charlotte/i.test(text)) return 'CLT'
+  return null
+}
+
+export function depositSurfaceCopy(input, surface, { studentDiscountCents = 0 } = {}) {
+  const balance = input?.remainingCents == null ? depositBalance(input) : {
+    fareCents: Math.max(0, Math.round(Number(input.fareCents) || 0)),
+    depositCents: Math.max(0, Math.round(Number(input.depositCents) || 0)),
+    remainingCents: Math.max(0, Math.round(Number(input.remainingCents) || 0)),
+  }
+  if (balance.depositCents <= 0) return null
+  const fare = formatUsdCents(balance.fareCents)
+  const deposit = formatUsdCents(balance.depositCents)
+  const remaining = formatUsdCents(balance.remainingCents)
+  const student = Math.round(Number(studentDiscountCents) || 0) > 0
+    ? ' The 10% Standard student discount is already in that fare.'
+    : ''
+  switch (surface) {
+    case 'quote':
+      return `Full fare ${fare}. Pay the 25% deposit of ${deposit} now. Remaining balance ${remaining} is collected when the trip is complete.${student}`
+    case 'confirm':
+      return `Airport fare ${fare}. 25% deposit ${deposit}. Remaining balance ${remaining} is due when the trip is complete.${student}`
+    case 'receipt':
+      return `25% deposit ${deposit}. Remaining balance ${remaining}.${student}`
+    case 'upcoming':
+      return `Deposit ${deposit} · remaining balance ${remaining}`
+    default: {
+      const unknown = surface
+      throw new Error(`Unknown deposit surface: ${unknown}`)
+    }
+  }
+}
+
+export function depositReceiptLines(trip) {
+  const stored = trip?.deposit_cents
+  if (stored == null || stored === '') return []
+  const balance = depositBalance({ fareCents: trip?.fare_cents, depositCents: stored })
+  if (balance.depositCents <= 0) return []
+  return [
+    `25% deposit: ${formatUsdCents(balance.depositCents)}`,
+    `Remaining balance: ${formatUsdCents(balance.remainingCents)}`,
+  ]
+}
+
+export function checkoutFailureCopy(err) {
+  const payloadMessage = String(err?.payload?.message || '')
+  const message = String(err?.message || '')
+  const combined = `${payloadMessage} ${message}`
+  if (/not configured|payments unavailable/i.test(combined)) return STRIPE_NOT_CONFIGURED_COPY
+  return message || 'Checkout failed. No charge was made.'
 }
 
 export function studentDiscountCents(fareCents, { isStudent = false, tier = 'standard' } = {}) {
@@ -130,7 +203,8 @@ export function quoteAtIso({ date, time } = {}, now = new Date()) {
 
 export function paymentRouteMissing(err) {
   if (err?.payload?.tripId) return false
-  const message = String(err?.message || '')
+  const message = `${err?.message || ''} ${err?.payload?.message || ''}`
+  if (/stripe_secret_key|checkout cannot start|payments unavailable/i.test(message)) return false
   if (err?.status === 404 || /unknown payment|not_found/i.test(message)) return true
   return err?.status === 503 && /not configured|service_role/i.test(message)
 }
@@ -222,25 +296,34 @@ async function startLegacyDeposit(supabase, params) {
   if (!params.riderId) throw new Error('Sign in required')
   const code = params.airport === 'CLT' ? 'CLT' : 'GSP'
   const tripId = await insertAirportTrip(supabase, params)
-  const session = await authedJson(supabase, '/api/create-checkout-session', {
-    method: 'POST',
-    body: {
-      airport: code,
+  try {
+    const session = await authedJson(supabase, '/api/create-checkout-session', {
+      method: 'POST',
+      body: {
+        airport: code,
+        fareCents: params.fareCents,
+        depositCents: params.depositCents,
+        riderName: params.riderName || 'Rider',
+        riderId: params.riderId,
+        tripId,
+        successUrl: `${NATIVE_CHECKOUT_ORIGIN}/#/schedule?paid=1&trip=${tripId}`,
+        cancelUrl: `${NATIVE_CHECKOUT_ORIGIN}/#/schedule?canceled=1&trip=${tripId}`,
+      },
+    })
+    return {
+      ...session,
+      tripId,
       fareCents: params.fareCents,
       depositCents: params.depositCents,
-      riderName: params.riderName || 'Rider',
-      riderId: params.riderId,
-      tripId,
-      successUrl: `${NATIVE_CHECKOUT_ORIGIN}/#/schedule?paid=1&trip=${tripId}`,
-      cancelUrl: `${NATIVE_CHECKOUT_ORIGIN}/#/schedule?canceled=1&trip=${tripId}`,
-    },
-  })
-  return {
-    ...session,
-    tripId,
-    fareCents: params.fareCents,
-    depositCents: params.depositCents,
-    legacy: true,
+      legacy: true,
+    }
+  } catch (err) {
+    await supabase
+      .from('trips')
+      .update({ status: 'canceled', canceled_at: new Date().toISOString() })
+      .eq('id', tripId)
+      .in('status', ['searching', 'scheduled'])
+    throw err
   }
 }
 

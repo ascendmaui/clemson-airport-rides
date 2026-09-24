@@ -1,3 +1,4 @@
+import { depositReceiptLines } from '../../packages/rides-native/riderMoney.js'
 import { maskCompletedTripForDriver } from './privacyDisplay.js'
 
 export function money(cents) {
@@ -19,6 +20,7 @@ export function buildReceiptText(trip, { forDriver = false } = {}) {
     `To: ${view.dropoff_label || 'Dropoff'}`,
     when ? `Completed: ${when}` : null,
     `Fare: ${money(fare)}`,
+    ...depositReceiptLines(trip),
     `Tip: ${money(tip)}`,
     `Total: ${money(fare + tip)}`,
   ].filter(Boolean).join('\n')
