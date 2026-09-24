@@ -17,7 +17,9 @@ import {
   formatCents,
   formatPickupAt,
   matchesQueueFilter,
+  queueEmptyCopy,
   queueFilters,
+  scheduledQueueTitle,
   statusHeadline,
   TESLA_FLEET_NOTICE,
   type DriverCard,
@@ -179,6 +181,7 @@ export default function QueueScreen() {
   const visible = rows.filter((card) => matchesQueueFilter(card, filter) && !passed.includes(card.id))
   const scheduled = visible.filter((card) => card.status === 'scheduled')
   const live = visible.filter((card) => card.status !== 'scheduled')
+  const empty = queueEmptyCopy(filter)
 
   return (
     <View style={[styles.screen, { paddingTop: insets.top + 8 }]}>
@@ -203,15 +206,21 @@ export default function QueueScreen() {
         {!user ? <Primary label="Sign in" onPress={() => router.push('/sign-in')} /> : null}
         {user && visible.length === 0 ? (
           <Card>
-            <Text style={styles.cardTitle}>Nothing in this filter</Text>
-            <Text style={styles.copy}>New requests show up here while you are approved. Go online so riders can choose you.</Text>
+            <Text style={styles.cardTitle}>{empty.title}</Text>
+            <Text style={styles.copy}>{empty.body}</Text>
           </Card>
         ) : null}
         {live.length > 0 ? <Text style={styles.section}>Open now</Text> : null}
         {live.map((card) => (
           <QueueCard key={card.id} card={card} busy={busyId === card.id} onAccept={() => onAccept(card)} onDecline={() => onDecline(card)} onOpen={() => { if (!isSyntheticOffer(card)) router.push({ pathname: '/trip', params: { id: card.id } }) }} />
         ))}
-        {scheduled.length > 0 ? <Text style={styles.section}>Scheduled weekend and party rides</Text> : null}
+        {filter === 'weekend_party' && scheduled.length === 0 && live.length > 0 ? (
+          <Card>
+            <Text style={styles.cardTitle}>No scheduled weekend pickups</Text>
+            <Text style={styles.copy}>Airport and campus rides booked ahead for Friday night through Sunday show up in this list.</Text>
+          </Card>
+        ) : null}
+        {scheduled.length > 0 ? <Text style={styles.section}>{scheduledQueueTitle(filter)}</Text> : null}
         {scheduled.map((card) => (
           <QueueCard key={card.id} card={card} busy={busyId === card.id} onAccept={() => onAccept(card)} onDecline={() => onDecline(card)} onOpen={() => { if (!isSyntheticOffer(card)) router.push({ pathname: '/trip', params: { id: card.id } }) }} />
         ))}

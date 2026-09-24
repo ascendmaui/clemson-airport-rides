@@ -34,7 +34,7 @@ export const RIDE_TIERS = [
   { id: 'comfort', name: 'Extra Comfort', icon: '✨', eta: '6 min', meta: 'Newer cars', price: 23 },
   { id: 'xl', name: 'XL', icon: '🚐', eta: '8 min', meta: '6 seats', price: 28.75 },
   { id: 'pet', name: 'Pet', icon: '🐶', eta: '9 min', meta: 'Pet-friendly', price: 21 },
-  { id: 'tesla', name: 'Self-Driving Tesla Model 3', icon: '⚡', eta: '7 min', meta: 'Premium · self-driving capable', price: 36, premium: true },
+  { id: 'tesla', name: 'Tesla Model 3', icon: '⚡', eta: '7 min', meta: 'Clemson fleet · a driver is at the wheel', price: 36, premium: true },
 ]
 
 const DEST_POINTS = [

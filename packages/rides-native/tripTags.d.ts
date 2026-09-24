@@ -76,6 +76,8 @@ export function statusHeadline(status: string): string
 export function toDriverCard(row: Record<string, unknown> | null | undefined, options?: { gameDayLive?: boolean }): DriverCard | null
 export function matchesQueueFilter(card: { tags: string[] } | null, filter: QueueFilter): boolean
 export function queueFilters(): QueueFilter[]
+export function queueEmptyCopy(filter: QueueFilter): { title: string; body: string }
+export function scheduledQueueTitle(filter: QueueFilter): string
 export function depositStatusLine(payments: PaymentRow[] | null | undefined): string | null
 export function carpoolShareLines(metadata: Record<string, unknown> | null | undefined): FareShare[]
 export function fareCollection(card: {

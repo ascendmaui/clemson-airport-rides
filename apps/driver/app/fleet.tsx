@@ -100,10 +100,10 @@ export default function FleetScreen() {
               </Pressable>
             ) : null}
             <Pressable
-              onPress={() => setStubNote('Fleet dispatch is not available. No car was assigned and no self-driving session was started.')}
+              onPress={() => setStubNote('Self-driving dispatch is not available. No car was assigned, and no autonomy session was started. Clemson fleet rides are driven by a person.')}
               style={styles.stubButton}
             >
-              <Text style={styles.stubButtonText}>Request a self-driving trip</Text>
+              <Text style={styles.stubButtonText}>Check self-driving dispatch</Text>
             </Pressable>
           </>
         )}

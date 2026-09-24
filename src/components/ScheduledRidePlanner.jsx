@@ -19,6 +19,7 @@ import {
   estimateScheduledFare,
   listMyScheduledTrips,
 } from '../lib/scheduledRides'
+import { TESLA_FLEET_NOTICE } from '../../packages/rides-native/tripTags.js'
 
 const PLACES = [
   ...FRIEND_PLACES,
@@ -35,9 +36,10 @@ export function ScheduledRidePlanner() {
   const { user } = useAuth()
   const { runOrPrompt } = useRequireAuthForAction()
   const [promptOpen, setPromptOpen] = useState(false)
-  const [purpose, setPurpose] = useState('early_class')
+  const [purpose, setPurpose] = useState('party_weekend')
   const [date, setDate] = useState('')
-  const [time, setTime] = useState('')
+  const [time, setTime] = useState('21:00')
+  const [fleet, setFleet] = useState('standard')
   const [pickup, setPickup] = useState(null)
   const [dropoff, setDropoff] = useState(null)
   const [quote, setQuote] = useState(null)
@@ -98,7 +100,7 @@ export function ScheduledRidePlanner() {
       setQuoteError(null)
       return undefined
     }
-    estimateScheduledFare({ pickup, dropoff, isStudent })
+    estimateScheduledFare({ pickup, dropoff, isStudent: isStudent && fleet !== 'tesla' })
       .then((next) => {
         if (!alive) return
         setQuote(next)
@@ -112,7 +114,7 @@ export function ScheduledRidePlanner() {
     return () => {
       alive = false
     }
-  }, [pickup, dropoff, isStudent])
+  }, [pickup, dropoff, isStudent, fleet])
 
   async function onSchedule() {
     setError(null)
@@ -124,7 +126,7 @@ export function ScheduledRidePlanner() {
     }
     setBusy(true)
     try {
-      const priced = quote || await estimateScheduledFare({ pickup, dropoff, isStudent, at: check.pickupAt })
+      const priced = quote || await estimateScheduledFare({ pickup, dropoff, isStudent: isStudent && fleet !== 'tesla', at: check.pickupAt })
       const row = await createScheduledTrip({
         user,
         pickup,
@@ -134,9 +136,10 @@ export function ScheduledRidePlanner() {
         fareCents: priced?.fareCents || 0,
         depositCents: priced?.estimate ? 0 : (priced?.depositCents || 0),
         fareIsEstimate: priced?.estimate !== false,
-        isStudent,
-        studentDiscountCents: priced?.discountCents || 0,
-        studentLabel: priced?.studentLabel || null,
+        isStudent: fleet === 'tesla' ? false : isStudent,
+        studentDiscountCents: fleet === 'tesla' ? 0 : (priced?.discountCents || 0),
+        studentLabel: fleet === 'tesla' ? null : (priced?.studentLabel || null),
+        tier: fleet,
       })
       setSaved(row)
       setDate('')
@@ -171,7 +174,7 @@ export function ScheduledRidePlanner() {
         Schedule a ride
       </h2>
       <p style={{ color: 'var(--ink-secondary)', fontSize: 14, marginTop: 6, marginBottom: 14 }}>
-        Early classes, airport runs to ATL, CLT, or GSP, and other planned trips. Drivers see your first name. Map pins stay hidden until the ride is done, then only an approximate pin is shown.
+        Weekend and party trips to the airport or campus, plus early classes and other planned pickups. Pick a date and time, confirm, then find it under Your scheduled rides. Drivers see your first name. Map pins stay hidden until the ride is done, then only an approximate pin is shown.
       </p>
 
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
@@ -199,6 +202,38 @@ export function ScheduledRidePlanner() {
         })}
       </div>
 
+      {purpose === 'party_weekend' && (
+        <div style={{ marginBottom: 14 }}>
+          <p style={{ fontSize: 13, color: 'var(--ink-secondary)', marginTop: 0 }}>
+            Friday night through Sunday. Use a campus spot or GSP, CLT, or ATL.
+          </p>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <button
+              type="button"
+              className="pressable"
+              onClick={() => {
+                setPickup(PLACES.find((place) => place.label === 'Memorial Stadium') || null)
+                setDropoff(PLACES.find((place) => place.label === 'GSP Airport') || null)
+              }}
+              style={{ padding: '8px 12px', borderRadius: 999, fontWeight: 700, fontSize: 13, color: '#522D80', background: 'rgba(245,102,0,0.12)', border: '1px solid rgba(245,102,0,0.45)' }}
+            >
+              Stadium → GSP
+            </button>
+            <button
+              type="button"
+              className="pressable"
+              onClick={() => {
+                setPickup(PLACES.find((place) => place.label === 'Downtown Clemson') || null)
+                setDropoff(PLACES.find((place) => place.label === 'Cooper Library') || null)
+              }}
+              style={{ padding: '8px 12px', borderRadius: 999, fontWeight: 700, fontSize: 13, color: '#fff', background: '#522D80', border: '1px solid #522D80' }}
+            >
+              Downtown → campus
+            </button>
+          </div>
+        </div>
+      )}
+
       <label style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink-secondary)' }}>Date</label>
       <input
         type="date"
@@ -220,6 +255,40 @@ export function ScheduledRidePlanner() {
       <PlacePicker label="Pickup" mode="pickup" value={pickup} onChange={setPickup} presets={PLACES} showCoordinates={false} />
       <PlacePicker label="Drop-off" mode="dropoff" value={dropoff} onChange={setDropoff} presets={PLACES} showCoordinates={false} />
 
+      <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink-secondary)', marginBottom: 8 }}>Vehicle</div>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
+        {[
+          { id: 'standard', label: 'Standard' },
+          { id: 'tesla', label: 'Tesla Model 3' },
+        ].map((option) => {
+          const on = fleet === option.id
+          return (
+            <button
+              key={option.id}
+              type="button"
+              className="pressable"
+              onClick={() => setFleet(option.id)}
+              style={{
+                padding: '8px 12px',
+                borderRadius: 999,
+                fontWeight: 700,
+                fontSize: 13,
+                color: on ? '#fff' : '#522D80',
+                background: on ? (option.id === 'tesla' ? '#522D80' : '#F56600') : 'rgba(82,45,128,0.08)',
+                border: on ? '1px solid transparent' : '1px solid rgba(82,45,128,0.25)',
+              }}
+            >
+              {option.label}
+            </button>
+          )
+        })}
+      </div>
+      {fleet === 'tesla' && (
+        <p style={{ fontSize: 13, lineHeight: 1.45, color: '#522D80', fontWeight: 650, marginTop: 0 }}>
+          {TESLA_FLEET_NOTICE}
+        </p>
+      )}
+
       <div className="glass-panel glass-panel--elevated" style={{ padding: 16, borderRadius: 16, marginBottom: 16 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
           <span style={{ color: 'var(--ink-secondary)' }}>{quote?.estimate === false ? 'Fare' : 'Fare estimate'}</span>
@@ -237,11 +306,23 @@ export function ScheduledRidePlanner() {
         {quoteError && <p style={{ color: 'var(--danger)', fontSize: 12, marginTop: 6 }}>{quoteError}</p>}
       </div>
 
+      <div className="glass-panel" style={{ padding: 12, borderRadius: 14, marginBottom: 12 }}>
+        <div style={{ fontWeight: 800, color: '#522D80', marginBottom: 4 }}>
+          {purpose === 'party_weekend' ? 'Confirm weekend / party' : 'Confirm this ride'}
+        </div>
+        <div style={{ fontSize: 13, color: 'var(--ink-secondary)' }}>
+          {date && time ? `${date} · ${time}` : 'Choose a date and time.'}
+          {pickup?.label && dropoff?.label ? ` · ${pickup.label} → ${dropoff.label}` : ''}
+          {fleet === 'tesla' ? ' · Tesla Model 3, driver at the wheel' : ''}
+        </div>
+      </div>
+
       <PrimaryButton
         onClick={() => runOrPrompt(onSchedule, { setPromptOpen, nextPath: 'schedule' })}
         disabled={busy}
+        variant={purpose === 'party_weekend' || fleet === 'tesla' ? 'purple' : 'orange'}
       >
-        {busy ? 'Scheduling…' : 'Schedule ride'}
+        {busy ? 'Confirming…' : purpose === 'party_weekend' ? 'Confirm weekend ride' : 'Confirm scheduled ride'}
       </PrimaryButton>
 
       {error && (
@@ -260,7 +341,9 @@ export function ScheduledRidePlanner() {
           <p style={{ fontSize: 13, color: 'var(--ink-secondary)' }}>Sign in to see rides you have scheduled.</p>
         )}
         {user && upcoming.length === 0 && completed.length === 0 && !listError && (
-          <p style={{ fontSize: 13, color: 'var(--ink-secondary)' }}>Nothing scheduled yet.</p>
+          <p style={{ fontSize: 13, color: 'var(--ink-secondary)' }}>
+            No upcoming rides. Confirm a weekend airport or campus trip and it will show up here.
+          </p>
         )}
         {upcoming.map((ride) => (
           <RideRow key={ride.id} ride={ride} onCancel={onCancel} />

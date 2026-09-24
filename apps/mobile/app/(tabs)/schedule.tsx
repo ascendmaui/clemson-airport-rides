@@ -14,8 +14,9 @@ const PLACES = [
 ];
 
 const PURPOSES = [
-  { id: 'early_class', label: 'Early class' },
+  { id: 'party_weekend', label: 'Weekend / party' },
   { id: 'airport', label: 'Airport' },
+  { id: 'early_class', label: 'Early class' },
   { id: 'planned', label: 'Planned trip' },
 ];
 
@@ -40,7 +41,7 @@ function firstName(fullName: string | null | undefined) {
 
 /** Rider schedule tab — date, time, campus/airport spots, persisted as status scheduled. */
 export default function ScheduleScreen() {
-  const [purpose, setPurpose] = useState('early_class');
+  const [purpose, setPurpose] = useState('party_weekend');
   const [date, setDate] = useState('');
   const [time, setTime] = useState('');
   const [pickup, setPickup] = useState(PLACES[0]);
@@ -133,7 +134,7 @@ export default function ScheduleScreen() {
     <ScrollView contentContainerStyle={styles.container}>
       <Text style={styles.title}>Schedule</Text>
       <Text style={styles.body}>
-        Early classes, ATL / CLT / GSP, and planned trips. Exact pins stay private until the ride is complete.
+        Weekend and party airport or campus trips, early classes, and other planned pickups. Exact pins stay private until the ride is complete.
       </Text>
 
       <View style={styles.row}>
@@ -172,7 +173,7 @@ export default function ScheduleScreen() {
 
       <Text style={styles.section}>Your scheduled rides</Text>
       {upcoming.length === 0 ? (
-        <Text style={styles.body}>Nothing scheduled yet.</Text>
+        <Text style={styles.body}>No upcoming rides. Confirm a date and time for a weekend airport or campus trip and it will show up here.</Text>
       ) : (
         upcoming.map((ride) => (
           <View key={ride.id} style={styles.card}>

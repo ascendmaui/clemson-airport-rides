@@ -60,6 +60,7 @@ export async function createScheduledTrip({
   isStudent = false,
   studentDiscountCents = 0,
   studentLabel = null,
+  tier = 'standard',
 }) {
   if (!supabase) throw new Error('Supabase is not configured')
   if (!user?.id) throw new Error('Sign in required to schedule a ride')
@@ -76,7 +77,7 @@ export async function createScheduledTrip({
     .insert({
       rider_id: user.id,
       status: 'scheduled',
-      tier: 'standard',
+      tier: tier === 'tesla' ? 'tesla' : 'standard',
       pickup_label: pickup.label,
       dropoff_label: dropoff.label,
       pickup_lat: pickup.lat,
@@ -98,6 +99,8 @@ export async function createScheduledTrip({
         isStudent: Boolean(isStudent),
         student_discount_cents: Math.max(0, Math.round(Number(studentDiscountCents) || 0)),
         studentLabel: studentLabel || null,
+        tesla: tier === 'tesla',
+        fleet: tier === 'tesla' ? 'tesla_model_3' : 'standard',
       },
     })
     .select('id, status, pickup_at, pickup_label, dropoff_label')

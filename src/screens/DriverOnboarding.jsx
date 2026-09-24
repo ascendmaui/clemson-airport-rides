@@ -497,7 +497,7 @@ export function DriverOnboarding() {
           <Field label="Seats" value={seats} onChange={setSeats} type="number" />
           <label style={{ display: 'flex', gap: 10, alignItems: 'center', fontWeight: 650, marginBottom: 16 }}>
             <input type="checkbox" checked={isTesla} onChange={(e) => setIsTesla(e.target.checked)} />
-            Tesla / self-driving capable
+            Tesla Model 3 · a driver still drives
           </label>
           <PrimaryButton type="submit" disabled={busy || !allYes || !attestation}>
             {busy ? 'Saving…' : `Continue to ${adjacentStep('account', 1)?.label || 'the next step'}`}

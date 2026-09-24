@@ -5,8 +5,9 @@ export const ACTIONABLE_LEAD_MS = 45 * 60 * 1000
 export const APPROX_PIN_DECIMALS = 3
 
 export const SCHEDULE_PURPOSES = [
-  { id: 'early_class', label: 'Early class' },
+  { id: 'party_weekend', label: 'Weekend / party' },
   { id: 'airport', label: 'Airport' },
+  { id: 'early_class', label: 'Early class' },
   { id: 'planned', label: 'Planned trip' },
 ]
 

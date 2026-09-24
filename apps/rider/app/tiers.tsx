@@ -65,10 +65,11 @@ export default function RideTiers() {
           const on = tier.id === selected
           const quoted = displayTierPrice(tier.price, { isStudent: student.verified, tier: tier.id })
           return (
-            <Pressable key={tier.id} onPress={() => setSelected(tier.id)} style={[styles.row, on && styles.rowOn]}>
+            <Pressable key={tier.id} onPress={() => setSelected(tier.id)} style={[styles.row, tier.id === 'tesla' && styles.rowFleet, on && styles.rowOn]}>
               <Text style={styles.icon}>{tier.icon}</Text>
               <View style={{ flex: 1 }}>
                 <Text style={styles.name}>{tier.name}</Text>
+                {tier.id === 'tesla' ? <Text style={styles.fleetBadge}>Clemson fleet</Text> : null}
                 <Text style={styles.meta}>{tier.eta} · {tier.meta}</Text>
                 {quoted.label ? <Text style={styles.discount}>{quoted.label}</Text> : null}
               </View>
@@ -86,7 +87,7 @@ export default function RideTiers() {
         </View>
       ) : null}
       <View style={styles.footer}>
-        <PrimaryButton label="Choose a driver" onPress={onConfirm} />
+        <PrimaryButton label={selected === 'tesla' ? 'Request Tesla Model 3' : 'Choose a driver'} onPress={onConfirm} tone={selected === 'tesla' ? 'purple' : 'orange'} />
       </View>
       <SignInToBookSheet
         open={promptOpen}
@@ -134,7 +135,21 @@ function makeStyles(colors: Palette) {
       borderWidth: 1,
       borderColor: 'transparent',
     },
-    rowOn: { borderColor: colors.orange },
+    rowOn: { borderColor: colors.orange, backgroundColor: colors.orangeSoft },
+    rowFleet: { borderColor: colors.purple, backgroundColor: colors.purpleSoft },
+    fleetBadge: {
+      alignSelf: 'flex-start' as const,
+      marginTop: 4,
+      color: colors.orange,
+      backgroundColor: colors.card,
+      fontSize: 10,
+      fontWeight: '800' as const,
+      letterSpacing: 0.4,
+      paddingHorizontal: 8,
+      paddingVertical: 2,
+      borderRadius: 999,
+      overflow: 'hidden' as const,
+    },
     icon: { fontSize: 22 },
     name: { fontWeight: '700' as const, fontSize: 16, color: colors.ink },
     meta: { color: colors.inkSecondary, fontSize: 12, marginTop: 2 },
