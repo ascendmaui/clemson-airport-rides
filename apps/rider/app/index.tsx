@@ -24,6 +24,11 @@ import { useAuth } from '@/lib/auth'
 import { playTigerCue, tapHaptic } from '@/lib/feedback'
 import { displayFirstName } from 'rides-native/authErrors'
 import { campusOverlays } from 'rides-native/riderShell.js'
+import { loadGameDay } from 'rides-native/driverDesk'
+import { gameDayNotice, type GameDayNotice } from 'rides-native/gameDayNotice.js'
+import { STUDENT_DISCOUNT_LABEL } from 'rides-native/riderMoney.js'
+import { supabase } from '@/lib/supabase'
+import { useStudentStatus } from '@/lib/useStudentStatus'
 import { HEAT_WINDOWS, SHORTCUTS } from 'rides-native/places.js'
 import { hotCatalogPlaces, lookupCatalogPlace, searchCatalogPlaces } from 'rides-native/shared/carpool.js'
 import { lift } from '@/lib/elevation'
@@ -60,8 +65,10 @@ export default function RiderHome() {
   const [locateNote, setLocateNote] = useState<string | null>(null)
   const [locating, setLocating] = useState(false)
   const overlays = useMemo(() => campusOverlays(), [])
-  const [gameDay, setGameDay] = useState(overlays.gameDay)
   const [surge, setSurge] = useState(overlays.surge)
+  const [gameNotice, setGameNotice] = useState<GameDayNotice | null>(null)
+  const student = useStudentStatus()
+  const gameDay = Boolean(gameNotice?.live)
 
   const name = user
     ? displayFirstName(user.user_metadata?.full_name || user.email?.split('@')[0], 'Tiger')
@@ -108,6 +115,22 @@ export default function RiderHome() {
     setBlended(result.blended)
     setSpotsLoading(false)
   }
+
+  useEffect(() => {
+    if (!supabase) {
+      setGameNotice(gameDayNotice(null))
+      return undefined
+    }
+    let alive = true
+    loadGameDay(supabase).then((row) => {
+      if (alive) setGameNotice(gameDayNotice(row))
+    }).catch(() => {
+      if (alive) setGameNotice(gameDayNotice(null))
+    })
+    return () => {
+      alive = false
+    }
+  }, [])
 
   useEffect(() => {
     let alive = true
@@ -173,6 +196,7 @@ export default function RiderHome() {
           showHeat={showBusy}
           mapType={mapType}
           gameDay={gameDay}
+          gameDayLabel={gameNotice?.live ? gameNotice.headline : null}
           surge={surge}
           userCoordinate={userCoord}
         />
@@ -248,13 +272,13 @@ export default function RiderHome() {
                     />
                   ))
                 : null}
-              <Pill label={gameDay ? 'Game day · On' : 'Game day'} active={gameDay} onPress={() => setGameDay((value) => !value)} />
+              <Pill label={gameNotice == null ? 'Game day…' : gameNotice.headline} active={gameDay} />
               <Pill label={surge ? 'Surge · On' : 'Surge'} active={surge} onPress={() => setSurge((value) => !value)} />
             </ScrollView>
             <Text style={styles.caption}>
               {showBusy ? caption : 'Busy areas are hidden.'}
               {showBusy && blended ? <Text style={styles.live}>  Live + typical</Text> : null}
-              {gameDay ? '  Game day overlay' : ''}
+              {gameNotice ? `  ${gameNotice.live ? gameNotice.detail : gameNotice.body}` : '  Checking game day…'}
               {surge ? `  ${overlays.surgeLabel || 'Surge overlay'}` : ''}
             </Text>
           </>
@@ -348,6 +372,24 @@ export default function RiderHome() {
               This build needs EXPO_PUBLIC_SUPABASE_ANON_KEY as an EAS environment variable before sign-in works.
             </Text>
           ) : null}
+
+          <Pressable
+            onPress={() => {
+              void tapHaptic()
+              router.push(user ? '/student' : '/sign-in')
+            }}
+            style={[styles.studentCard, student.verified && styles.studentOn, lift(colors, 'rest')]}
+          >
+            <Text style={styles.gamedayIcon}>🎓</Text>
+            <View style={styles.gamedayCopy}>
+              <Text style={styles.gamedayTitle}>{student.verified ? STUDENT_DISCOUNT_LABEL : 'Claim student pricing'}</Text>
+              <Text style={styles.gamedayBody}>
+                {student.verified
+                  ? 'Standard quotes on Confirm include this 10% off.'
+                  : 'Use a Clemson email or the student flag on your profile.'}
+              </Text>
+            </View>
+          </Pressable>
 
           <Pressable
             onPress={() => {
@@ -510,6 +552,18 @@ function makeStyles(colors: Palette) {
     shortcutLabel: { fontWeight: '600' as const, fontSize: 13, color: colors.ink },
     shortcutSub: { fontSize: 11, color: colors.placeholder, marginTop: 2 },
     keys: { color: colors.danger, fontSize: 12, marginTop: 8, lineHeight: 17 },
+    studentCard: {
+      marginTop: 14,
+      borderRadius: 18,
+      padding: 14,
+      backgroundColor: colors.purpleSoft,
+      flexDirection: 'row' as const,
+      alignItems: 'center' as const,
+      gap: 10,
+      borderWidth: 1,
+      borderColor: colors.purple,
+    },
+    studentOn: { backgroundColor: colors.orangeSoft, borderColor: colors.orange },
     gameday: {
       marginTop: 14,
       marginBottom: 16,

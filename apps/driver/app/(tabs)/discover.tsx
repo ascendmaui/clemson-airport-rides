@@ -6,6 +6,7 @@ import { Card, Primary } from '@/components/chrome'
 import { useTheme } from '@/lib/theme'
 import { supabase } from '@/lib/supabase'
 import { loadGameDay } from 'rides-native/driverDesk'
+import { gameDayNotice, type GameDayNotice } from 'rides-native/gameDayNotice.js'
 import { HEAT_WINDOWS } from 'rides-native/places.js'
 import { loadBusySpots, type BusySpot } from '@/lib/busySpots'
 
@@ -21,7 +22,7 @@ export default function DiscoverScreen() {
   const insets = useSafeAreaInsets()
   const { colors } = useTheme()
   const [windowId, setWindowId] = useState('now')
-  const [game, setGame] = useState<string | null>(null)
+  const [game, setGame] = useState<GameDayNotice | null>(null)
   const [spots, setSpots] = useState<BusySpot[]>([])
   const [caption, setCaption] = useState('Typical campus patterns for College Ave, the stadium, and the dorms.')
   const [blended, setBlended] = useState(false)
@@ -52,15 +53,19 @@ export default function DiscoverScreen() {
   }, [windowId])
 
   useEffect(() => {
-    if (!supabase) return
+    if (!supabase) {
+      setGame(gameDayNotice(null))
+      return undefined
+    }
+    let alive = true
     loadGameDay(supabase).then((row) => {
-      if (!row) {
-        setGame(null)
-        return
-      }
-      const surge = row.surge_multiplier ? ` · rider fare ${row.surge_multiplier}×` : ''
-      setGame(`${row.title || 'Game day'}${row.pickup_zone_label ? ` · ${row.pickup_zone_label}` : ''}${surge}`)
-    }).catch(() => setGame(null))
+      if (alive) setGame(gameDayNotice(row))
+    }).catch(() => {
+      if (alive) setGame(gameDayNotice(null))
+    })
+    return () => {
+      alive = false
+    }
   }, [])
 
   return (
@@ -81,11 +86,18 @@ export default function DiscoverScreen() {
             )
           })}
         </ScrollView>
-        {game ? (
-          <Card>
-            <Text style={[styles.cardTitle, { color: colors.title }]}>Game day</Text>
-            <Text style={{ color: colors.ink }}>{game}</Text>
-          </Card>
+        <Card>
+          <Text style={[styles.kicker, { color: game?.live ? colors.orange : colors.purple }]}>
+            {game == null ? 'GAME DAY' : game.live ? 'GAME DAY' : 'GAME DAY OFF'}
+          </Text>
+          <Text style={[styles.cardTitle, { color: colors.title }]}>
+            {game == null ? 'Checking the server…' : game.headline}
+          </Text>
+          {game?.detail ? <Text style={{ color: colors.orange, fontWeight: '800' }}>{game.detail}</Text> : null}
+          {game ? <Text style={{ color: colors.inkSecondary, lineHeight: 20 }}>{game.body}</Text> : null}
+        </Card>
+        {!loading && spots.length === 0 ? (
+          <Text style={{ color: colors.inkSecondary }}>Campus demand is quiet in this window.</Text>
         ) : null}
         {spots.map((spot) => (
           <Card key={spot.id}>

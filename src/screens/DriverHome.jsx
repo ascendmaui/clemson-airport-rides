@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useAuth } from '../lib/auth'
 import { CampusMap, CLEMSON } from '../components/CampusMap'
+import { GameDayStatus } from '../components/GameDayStatus'
+import { useGameDayNotice } from '../lib/useGameDayNotice'
 import { DriverIncentiveBanner, useDriverIncentiveWatch } from '../components/DriverIncentiveBanner'
 import { HEAT_WINDOWS } from '../lib/rideDemand'
 import { PurpleAcceptButton } from '../components/PrimaryButton'
@@ -62,6 +64,7 @@ export function DriverHome() {
 
 function DriverShell({ driverId }) {
   const { user } = useAuth()
+  const game = useGameDayNotice()
   const [priority, setPriority] = useState(false)
   const [offer, setOffer] = useState(null)
   const [activeTrip, setActiveTrip] = useState(null)
@@ -549,6 +552,7 @@ function DriverShell({ driverId }) {
         center={selfPos || (!scheduledNotDone && activeTrip?.pickup_lat != null ? [activeTrip.pickup_lat, activeTrip.pickup_lng] : CLEMSON)}
         zoom={13}
         marker={selfPos || CLEMSON}
+        gameDayLabel={game.notice.live ? game.notice.headline : null}
         pickupPosition={
           scheduledNotDone
             ? null
@@ -639,6 +643,9 @@ function DriverShell({ driverId }) {
 
       {!activeTrip && (
         <div style={{ position: 'absolute', top: incentiveBanner ? 128 : 72, left: 16, right: 16, zIndex: 20, display: 'flex', flexDirection: 'column', gap: 8, pointerEvents: 'none' }}>
+          <div style={{ pointerEvents: 'auto' }}>
+            <GameDayStatus notice={game.notice} ready={game.ready} compact />
+          </div>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', pointerEvents: 'auto' }}>
             <button type="button" className="pressable" onClick={() => setShowSurge((v) => !v)}
               style={{ fontSize: 12, fontWeight: 700, color: showSurge ? '#fff' : 'var(--purple)',

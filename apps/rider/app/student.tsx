@@ -6,7 +6,7 @@ import { PrimaryButton } from '@/components/Button'
 import { StackHeader } from '@/components/StackHeader'
 import { useAuth } from '@/lib/auth'
 import { supabase } from '@/lib/supabase'
-import { loadStudentProfile, markStudentVerified, studentStatus } from 'rides-native/riderMoney.js'
+import { STUDENT_CLAIM_COPY, STUDENT_DISCOUNT_LABEL, loadStudentProfile, markStudentVerified, studentStatus } from 'rides-native/riderMoney.js'
 import type { Palette } from '@/lib/palette'
 import { useThemedStyles } from '@/lib/useThemedStyles'
 import { RequireAuth } from '@/components/RequireAuth'
@@ -65,15 +65,25 @@ function StudentScreen() {
           ) : null}
           {status.discountLabel ? <Text style={styles.badge}>{status.discountLabel}</Text> : null}
         </View>
-        <Text style={styles.copy}>
-          A @clemson.edu or @g.clemson.edu email unlocks the student discount. Other tiers stay full price. The airport deposit recomputes from the discounted fare.
-        </Text>
+        <Text style={styles.copy}>{STUDENT_CLAIM_COPY}</Text>
+        {status.verified ? (
+          <Text style={styles.copy}>
+            {STUDENT_DISCOUNT_LABEL} is on Standard quotes. Comfort, XL, Pet, and Tesla stay full price. The airport deposit uses the discounted fare.
+          </Text>
+        ) : (
+          <Text style={styles.copy}>
+            Sign in with a Clemson email, or save the flag if your profile already qualifies. Other email domains stay at full price.
+          </Text>
+        )}
         {!user ? <PrimaryButton label="Sign in" onPress={() => router.push('/sign-in')} /> : null}
-        {user && !status.verified ? (
-          <PrimaryButton label={busy ? 'Checking…' : 'Verify Clemson email'} onPress={onVerify} disabled={busy} />
+        {user && status.verified && !verifiedAt ? (
+          <PrimaryButton label={busy ? 'Saving…' : 'Save student pricing'} onPress={onVerify} disabled={busy} />
         ) : null}
-        {user && status.viaEmail && !verifiedAt ? (
-          <PrimaryButton label={busy ? 'Saving…' : 'Save verification'} onPress={onVerify} disabled={busy} tone="purple" />
+        {user && !status.verified ? (
+          <PrimaryButton label={busy ? 'Checking…' : 'Check Clemson email'} onPress={onVerify} disabled={busy} tone="purple" />
+        ) : null}
+        {status.verified ? (
+          <PrimaryButton label="See it on your quote" onPress={() => router.push('/')} tone="ghost" />
         ) : null}
         {note ? <Text style={styles.note}>{note}</Text> : null}
       </View>

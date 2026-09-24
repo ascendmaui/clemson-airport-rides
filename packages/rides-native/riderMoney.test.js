@@ -12,8 +12,10 @@ import {
   previewAirportFare,
   quoteInputKey,
   recomputeDeposit,
+  displayTierPrice,
   studentDiscountCents,
   studentStatus,
+  studentTripMeta,
 } from './riderMoney.js'
 
 test('25% deposit matches the fare card and recomputes when the fare changes', () => {
@@ -61,6 +63,17 @@ test('student discount is 10% of Standard only', () => {
   assert.equal(studentStatus({ email: 'a@g.clemson.edu' }).verified, true)
   assert.equal(studentStatus({ email: 'a@gmail.com', studentVerifiedAt: '2026-01-01' }).discountLabel, 'Clemson student · 10% off Standard')
   assert.equal(studentStatus({ email: 'a@gmail.com' }).verified, false)
+  const shown = displayTierPrice(18.5, { isStudent: true, tier: 'standard', surgeMultiplier: 1.8 })
+  assert.equal(shown.discountCents, 333)
+  assert.equal(shown.fareCents, 2997)
+  assert.equal(displayTierPrice(18.5, { isStudent: true, tier: 'xl' }).discount, 0)
+  assert.deepEqual(studentTripMeta({ isStudent: true, tier: 'standard', fareCents: 1850 }), {
+    isStudent: true,
+    studentLabel: 'Clemson student · 10% off Standard',
+    student_discount_cents: 185,
+  })
+  assert.deepEqual(studentTripMeta({ isStudent: false, fareCents: 1850 }), {})
+  assert.deepEqual(studentTripMeta({ isStudent: true, tier: 'comfort', fareCents: 2300 }), { isStudent: true })
 })
 
 test('fallback fare recomputes the 25% deposit for airport, surge, and student', () => {

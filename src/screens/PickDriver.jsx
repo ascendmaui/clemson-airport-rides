@@ -4,10 +4,13 @@ import { navigate } from '../lib/navigation'
 import { fetchOnlineDrivers, subscribeTrips, supabaseConfigured } from '../lib/supabase'
 import { requestDriverTrip } from '../lib/trips'
 import { useAuth } from '../lib/auth'
+import { useStudentStatus } from '../lib/useStudentStatus'
+import { STUDENT_DISCOUNT_LABEL } from '../../packages/rides-native/riderMoney.js'
 import { SignInToBookModal, useRequireAuthForAction } from '../components/SignInToBookModal'
 
-export function PickDriver({ dest = 'GSP Airport' }) {
+export function PickDriver({ dest = 'GSP Airport', tier = 'standard', listCents = '' }) {
   const { user } = useAuth()
+  const student = useStudentStatus()
   const { runOrPrompt } = useRequireAuthForAction()
   const [drivers, setDrivers] = useState([])
   const [error, setError] = useState(null)
@@ -43,6 +46,9 @@ export function PickDriver({ dest = 'GSP Airport' }) {
         riderId: user.id,
         driverId: selected.id,
         dest,
+        tier,
+        isStudent: student.verified,
+        listCents,
       })
       navigate('requested', { dest, trip: trip.id, driver: selected.name })
     } catch (err) {
@@ -136,6 +142,16 @@ export function PickDriver({ dest = 'GSP Airport' }) {
       </div>
 
       <div style={{ padding: '12px 20px calc(20px + var(--safe-bottom))' }}>
+        {student.verified && tier === 'standard' ? (
+          <p style={{ fontSize: 13, fontWeight: 800, color: '#F56600', marginBottom: 8 }}>
+            {STUDENT_DISCOUNT_LABEL} is on this request.
+          </p>
+        ) : null}
+        {student.verified && tier !== 'standard' ? (
+          <p style={{ fontSize: 13, fontWeight: 700, color: '#522D80', marginBottom: 8 }}>
+            Student pricing is 10% off Standard. This tier stays full price.
+          </p>
+        ) : null}
         <PrimaryButton
           disabled={!selected || busy}
           onClick={() => runOrPrompt(onRequest, { setPromptOpen, nextPath: 'pick-driver', nextParams: { dest } })}

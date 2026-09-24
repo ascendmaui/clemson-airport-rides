@@ -17,6 +17,8 @@ export function CampusMap({
   colorScheme,
   spots = [],
   showHeat = false,
+  gameDay = false,
+  gameDayLabel = null,
 }: {
   pins?: MapPin[]
   center?: { latitude: number; longitude: number } | null
@@ -25,6 +27,8 @@ export function CampusMap({
   focusToken?: number
   spots?: BusySpot[]
   showHeat?: boolean
+  gameDay?: boolean
+  gameDayLabel?: string | null
 }) {
   const { colors, scheme } = useTheme()
   const mode = colorScheme || scheme
@@ -48,6 +52,11 @@ export function CampusMap({
             />
           ))
         : null}
+      {gameDay ? (
+        <Text style={[styles.zone, { backgroundColor: colors.orange, color: colors.onAccent }]}>
+          {gameDayLabel || 'Game day'}
+        </Text>
+      ) : null}
       <Text style={[styles.label, { color: colors.title }]}>Clemson campus</Text>
       <Text style={[styles.sub, { color: colors.title }]}>
         {showHeat
@@ -70,5 +79,17 @@ const styles = StyleSheet.create({
   label: { fontWeight: '800', fontSize: 18, zIndex: 1 },
   sub: { marginTop: 6, fontSize: 12, zIndex: 1 },
   pin: { marginTop: 4, fontSize: 11, fontWeight: '700', zIndex: 1 },
+  zone: {
+    position: 'absolute',
+    top: 16,
+    left: 16,
+    overflow: 'hidden',
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    fontSize: 12,
+    fontWeight: '800',
+    zIndex: 2,
+  },
   blob: { position: 'absolute', borderRadius: 999 },
 })

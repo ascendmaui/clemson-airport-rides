@@ -8,6 +8,8 @@ import { setAuthNext } from '@/lib/authNext'
 import { useAuth } from '@/lib/auth'
 import { oneParam } from '@/lib/oneParam'
 import { formatUsd, RIDE_TIERS } from 'rides-native/places.js'
+import { STUDENT_DISCOUNT_LABEL, displayTierPrice } from 'rides-native/riderMoney.js'
+import { useStudentStatus } from '@/lib/useStudentStatus'
 import { lift } from '@/lib/elevation'
 import type { Palette } from '@/lib/palette'
 import { useTheme } from '@/lib/theme'
@@ -22,6 +24,7 @@ export default function RideTiers() {
   const pickup = oneParam(params.pickup, 'Memorial Stadium · Lot 5')
   const note = oneParam(params.note)
   const { user } = useAuth()
+  const student = useStudentStatus()
   const [selected, setSelected] = useState(RIDE_TIERS[0].id)
   const [promptOpen, setPromptOpen] = useState(false)
   const { colors } = useTheme()
@@ -52,20 +55,27 @@ export default function RideTiers() {
           <Text style={styles.sub}>Pickup {pickup}</Text>
         </View>
       </View>
-      <View style={styles.promo}>
-        <Text style={styles.promoText}>🐯 Clemson student promo · 10% off Standard</Text>
-      </View>
+      <Pressable onPress={() => router.push(user ? '/student' : '/sign-in')} style={styles.promo} accessibilityRole="button">
+        <Text style={styles.promoText}>
+          {student.verified ? `🐯 ${STUDENT_DISCOUNT_LABEL}` : '🐯 Claim Clemson student pricing · 10% off Standard'}
+        </Text>
+      </Pressable>
       <ScrollView contentContainerStyle={styles.list}>
         {RIDE_TIERS.map((tier) => {
           const on = tier.id === selected
+          const quoted = displayTierPrice(tier.price, { isStudent: student.verified, tier: tier.id })
           return (
             <Pressable key={tier.id} onPress={() => setSelected(tier.id)} style={[styles.row, on && styles.rowOn]}>
               <Text style={styles.icon}>{tier.icon}</Text>
               <View style={{ flex: 1 }}>
                 <Text style={styles.name}>{tier.name}</Text>
                 <Text style={styles.meta}>{tier.eta} · {tier.meta}</Text>
+                {quoted.label ? <Text style={styles.discount}>{quoted.label}</Text> : null}
               </View>
-              <Text style={styles.price}>{formatUsd(tier.price)}</Text>
+              <View style={{ alignItems: 'flex-end' }}>
+                <Text style={styles.price}>{formatUsd(quoted.price)}</Text>
+                {quoted.discount > 0 ? <Text style={styles.was}>{formatUsd(tier.price)}</Text> : null}
+              </View>
             </Pressable>
           )
         })}
@@ -129,6 +139,8 @@ function makeStyles(colors: Palette) {
     name: { fontWeight: '700' as const, fontSize: 16, color: colors.ink },
     meta: { color: colors.inkSecondary, fontSize: 12, marginTop: 2 },
     price: { fontWeight: '800' as const, color: colors.ink, fontSize: 16 },
+    was: { color: colors.inkSecondary, fontSize: 11, textDecorationLine: 'line-through' as const },
+    discount: { color: colors.orange, fontSize: 11, fontWeight: '700' as const, marginTop: 2 },
     footer: { padding: 16, paddingBottom: 28, backgroundColor: colors.card, borderTopWidth: 1, borderTopColor: colors.border },
     stub: { marginHorizontal: 16, marginBottom: 8, backgroundColor: colors.orangeSoft, borderRadius: 16, padding: 12 },
     stubText: { color: colors.link, fontSize: 13, lineHeight: 18, fontWeight: '600' as const },

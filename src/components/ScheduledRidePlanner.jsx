@@ -3,7 +3,7 @@ import { PlacePicker } from './PlacePicker'
 import { PrimaryButton } from './PrimaryButton'
 import { FRIEND_PLACES } from '../lib/friendRides'
 import { useAuth } from '../lib/auth'
-import { isClemsonEmail } from '../lib/studentDomain'
+import { useStudentStatus } from '../lib/useStudentStatus'
 import { formatUsdFromCents } from '../lib/pricing'
 import { SignInToBookModal, useRequireAuthForAction } from './SignInToBookModal'
 import {
@@ -48,7 +48,7 @@ export function ScheduledRidePlanner() {
   const [mine, setMine] = useState([])
   const [listError, setListError] = useState(null)
 
-  const isStudent = Boolean(user?.email && isClemsonEmail(user.email))
+  const isStudent = useStudentStatus().verified
   const minDate = useMemo(() => todayInputValue(), [])
 
   async function refreshMine() {

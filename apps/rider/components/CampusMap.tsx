@@ -8,7 +8,7 @@ import { useTheme } from '@/lib/theme'
 import { useThemedStyles } from '@/lib/useThemedStyles'
 
 export const CampusMap = forwardRef<CampusMapHandle, CampusMapProps>(function CampusMap(
-  { spots, showHeat, mapType = 'standard', theater = false, gameDay = false, surge = false, userCoordinate = null, pins = [] },
+  { spots, showHeat, mapType = 'standard', theater = false, gameDay = false, gameDayLabel = null, surge = false, userCoordinate = null, pins = [] },
   ref,
 ) {
   const { colors } = useTheme()
@@ -47,7 +47,7 @@ export const CampusMap = forwardRef<CampusMapHandle, CampusMapProps>(function Ca
         </View>
       ) : null}
       <View style={styles.badges}>
-        {gameDay ? <Text style={styles.badge}>Game day</Text> : null}
+        {gameDay ? <Text style={styles.badge}>{gameDayLabel || 'Game day'}</Text> : null}
         {surge ? <Text style={[styles.badge, styles.surge]}>Surge</Text> : null}
         {userCoordinate ? <Text style={styles.badge}>You</Text> : null}
       </View>

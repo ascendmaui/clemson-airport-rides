@@ -1,4 +1,8 @@
 import { useState } from 'react'
+import { GameDayStatus } from '../components/GameDayStatus'
+import { useGameDayNotice } from '../lib/useGameDayNotice'
+import { useStudentStatus } from '../lib/useStudentStatus'
+import { STUDENT_DISCOUNT_LABEL } from '../../packages/rides-native/riderMoney.js'
 import { SearchField } from '../components/SearchField'
 import { Pill } from '../components/Pill'
 import { BottomTabs } from '../components/BottomTabs'
@@ -16,6 +20,8 @@ const SHORTCUTS = [
 ]
 
 export function RiderHome({ riderName = 'John' }) {
+  const { notice, ready } = useGameDayNotice()
+  const student = useStudentStatus()
   const [query, setQuery] = useState('')
   const [tab, setTab] = useState('home')
   const [showBusy, setShowBusy] = useState(true)
@@ -184,11 +190,46 @@ export function RiderHome({ riderName = 'John' }) {
             )}
             <CampusMap height={240} showHeat={showBusy} heatMode="busy" heatWindow={heatWindow}
               onHeatMeta={setHeatMeta} showMapTypeControl interactive={showBusy}
+              gameDayLabel={notice.live ? notice.headline : null}
               center={showBusy ? DOWNTOWN_CENTER : STADIUM} zoom={showBusy ? 15 : 14}
               marker={showBusy ? DOWNTOWN_CENTER : STADIUM} />
           </div>
 
+          <div style={{ marginTop: 12 }}>
+            <GameDayStatus notice={notice} ready={ready} />
+          </div>
+
           <RiderWaitBanner />
+
+          <button
+            type="button"
+            className="pressable glass-panel card-soft"
+            onClick={() => navigate('account', { tab: 'student' })}
+            style={{
+              marginTop: 18,
+              width: '100%',
+              textAlign: 'left',
+              borderRadius: 18,
+              padding: 14,
+              display: 'flex',
+              gap: 12,
+              alignItems: 'center',
+              border: student.verified ? '1px solid rgba(245,102,0,0.45)' : '1px solid rgba(82,45,128,0.28)',
+              background: student.verified ? 'rgba(245,102,0,0.10)' : 'rgba(82,45,128,0.08)',
+            }}
+          >
+            <div style={{ fontSize: 24 }}>🎓</div>
+            <div>
+              <div style={{ fontWeight: 800, color: '#522D80' }}>
+                {student.verified ? STUDENT_DISCOUNT_LABEL : 'Claim student pricing'}
+              </div>
+              <div style={{ fontSize: 13, color: 'var(--ink-secondary)', marginTop: 2 }}>
+                {student.verified
+                  ? 'Standard quotes on Confirm include this 10% off.'
+                  : 'Use a Clemson email or the student flag on your profile.'}
+              </div>
+            </div>
+          </button>
 
           <div
             className="glass-panel glass-panel--orange card-soft"

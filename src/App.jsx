@@ -65,7 +65,13 @@ function Screen({ path, params }) {
     case 'tiers':
       return <RideTiers dest={params.dest || '1900 GSP Dr'} />
     case 'pick-driver':
-      return <PickDriver dest={params.dest || 'GSP Airport'} />
+      return (
+        <PickDriver
+          dest={params.dest || 'GSP Airport'}
+          tier={params.tier || 'standard'}
+          listCents={params.listCents || ''}
+        />
+      )
     case 'requested':
       return <Requested dest={params.dest} trip={params.trip} driver={params.driver} payfail={params.payfail || ''} />
     case 'schedule':

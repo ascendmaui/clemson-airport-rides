@@ -70,12 +70,14 @@ export function Pill({
 }: {
   label: string
   active?: boolean
-  onPress: () => void
+  onPress?: () => void
 }) {
   const styles = useThemedStyles(makeStyles)
+  const body = <Text style={[styles.pillLabel, active && styles.pillLabelOn]}>{label}</Text>
+  if (!onPress) return <View style={[styles.pill, active && styles.pillOn]}>{body}</View>
   return (
     <Pressable onPress={onPress} style={[styles.pill, active && styles.pillOn]} accessibilityRole="button">
-      <Text style={[styles.pillLabel, active && styles.pillLabelOn]}>{label}</Text>
+      {body}
     </Pressable>
   )
 }
