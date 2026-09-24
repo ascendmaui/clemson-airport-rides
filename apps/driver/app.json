@@ -47,6 +47,14 @@
         }
       ],
       [
+        "expo-notifications",
+        {
+          "color": "#F56600",
+          "sounds": ["./assets/sounds/request.wav"]
+        }
+      ],
+      "expo-audio",
+      [
         "expo-splash-screen",
         {
           "image": "./assets/images/splash-icon.png",

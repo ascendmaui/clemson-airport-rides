@@ -115,10 +115,15 @@ export const TAG_LABELS = {
   student: 'Student discount',
   game_day: 'Game day',
   weekend_party: 'Weekend / party',
+  carpool: 'Carpool · split fare',
   tesla: 'Tesla Model 3 · stub',
   direct: 'Chosen you',
   scheduled: 'Scheduled',
 }
+
+/** Rider Apple Pay is authorized on the rider's phone. Settle charges it off-session. */
+export const APPLE_PAY_DRIVER_COPY =
+  'The 25% deposit and the rest of the fare are collected by Stripe from the rider’s saved card or Apple Pay. Completing the trip calls settle on the server. This phone does not show an Apple Pay sheet — the rider is not here to authorize one.'
 
 export function tagLabel(id) {
   return TAG_LABELS[id] || String(id)
@@ -152,6 +157,9 @@ export function tripTags(row, { gameDayLive = false } = {}) {
   const tier = String(row?.tier || meta.tier || '')
   if (tier === 'tesla' || tier === 'tesla_self_driving' || meta.tesla === true || meta.is_tesla === true) {
     tags.push('tesla')
+  }
+  if (meta.kind === 'carpool' || meta.carpool || meta.fare_breakdown?.carpool) {
+    tags.push('carpool')
   }
   if (row?.status === 'requested' && row?.driver_id) tags.push('direct')
   if (row?.status === 'scheduled' || meta.kind === 'scheduled') tags.push('scheduled')
@@ -242,6 +250,7 @@ export function toDriverCard(row, options) {
     dropoffLng: row.dropoff_lng != null ? Number(row.dropoff_lng) : null,
     fareCents,
     depositCents: depositSliceCents(fareCents, storedDeposit),
+    depositExplicit: row.deposit_cents != null && row.deposit_cents !== '',
     driverNetCents: driverNetCents(fareCents),
     firstName: first,
     purpose: meta.purpose || row.rider_note || '',
@@ -250,6 +259,102 @@ export function toDriverCard(row, options) {
     tagLabels: tags.map(tagLabel),
     teslaStub: tags.includes('tesla'),
     arrivedAt: row.arrived_at || null,
+    passengers: Math.max(1, Math.round(Number(row.passengers) || 1)),
+    shares: carpoolShareLines(meta),
+    riderLat: readLiveLat(meta),
+    riderLng: readLiveLng(meta),
+  }
+}
+
+function readLiveLat(meta) {
+  const live = meta.rider_location || meta.riderLocation || null
+  const lat = live?.lat ?? live?.latitude ?? meta.rider_lat
+  return lat != null && Number.isFinite(Number(lat)) ? Number(lat) : null
+}
+
+function readLiveLng(meta) {
+  const live = meta.rider_location || meta.riderLocation || null
+  const lng = live?.lng ?? live?.longitude ?? meta.rider_lng
+  return lng != null && Number.isFinite(Number(lng)) ? Number(lng) : null
+}
+
+export function carpoolShareLines(metadata) {
+  const meta = metadata && typeof metadata === 'object' ? metadata : {}
+  const raw = meta.fare_breakdown?.carpool?.shares || meta.carpool?.shares || []
+  if (!Array.isArray(raw)) return []
+  return raw.map((share, index) => ({
+    id: String(share?.id || index),
+    label: String(share?.label || share?.name || `Rider ${index + 1}`),
+    shareCents: Math.max(0, Math.round(Number(share?.shareCents ?? share?.amountCents) || 0)),
+  }))
+}
+
+/** Fare, 25% deposit, remainder still collected on complete, and the 80/20 split. */
+export function fareCollection(card) {
+  const shares = Array.isArray(card?.shares) ? card.shares : carpoolShareLines(card?.metadata)
+  const shareSum = shares.reduce((sum, share) => sum + (Number(share.shareCents) || 0), 0)
+  const listed = Math.max(0, Math.round(Number(card?.fareCents ?? card?.fare_cents) || 0))
+  const fareCents = shareSum > 0 ? shareSum : listed
+  const depositCents = card?.depositExplicit
+    ? Math.max(0, Math.round(Number(card.depositCents ?? card.deposit_cents) || 0))
+    : depositSliceCents(fareCents, shareSum > 0 ? card?.deposit_cents : (card?.depositCents ?? card?.deposit_cents))
+  const net = driverNetCents(fareCents)
+  return {
+    fareCents,
+    depositCents,
+    remainderCents: Math.max(0, fareCents - depositCents),
+    driverNetCents: net,
+    platformFeeCents: Math.max(0, fareCents - net),
+    shares,
+  }
+}
+
+const WEEKDAY_MON0 = { Mon: 0, Tue: 1, Wed: 2, Thu: 3, Fri: 4, Sat: 5, Sun: 6 }
+
+function zonedDateKey(date, timeZone) {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(date)
+}
+
+/** Monday–Sunday in America/New_York, compared by the zoned calendar date of each Monday. */
+export function isSameZonedWeek(iso, now = new Date(), timeZone = 'America/New_York') {
+  if (!iso) return false
+  const date = new Date(iso)
+  if (Number.isNaN(date.getTime())) return false
+  const shift = (value) => {
+    const parts = zonedWeekdayHour(value.toISOString(), timeZone)
+    const index = parts ? WEEKDAY_MON0[parts.weekday] ?? 0 : 0
+    return new Date(value.getTime() - index * 24 * 60 * 60 * 1000)
+  }
+  return zonedDateKey(shift(date), timeZone) === zonedDateKey(shift(now), timeZone)
+}
+
+export function weekNetCents(trips, now = new Date()) {
+  let total = 0
+  for (const trip of trips || []) {
+    if (trip?.status && trip.status !== 'completed') continue
+    if (!isSameZonedWeek(trip?.completed_at, now)) continue
+    total += driverNetCents(trip.fare_cents)
+  }
+  return total
+}
+
+/** Open-pool declines go back to searching. A rider who chose this driver is canceled. Scheduled stays listed. */
+export function declineDisposition(status) {
+  switch (status) {
+    case 'searching':
+    case 'offered':
+      return 'release'
+    case 'scheduled':
+      return 'leave'
+    case 'requested':
+      return 'cancel'
+    default:
+      return 'cancel'
   }
 }
 

@@ -4,6 +4,7 @@
  */
 import { authedJson } from './apiClient.js'
 import {
+  declineDisposition,
   formatCents,
   isActiveStatus,
   isDueNow,
@@ -249,16 +250,68 @@ export async function acceptTrip(supabase, trip, driverId) {
   return data
 }
 
-export async function declineTrip(supabase, tripId) {
-  if (!tripId) return
+export async function publishDriverCapacity(supabase, driverId, seats) {
+  if (!supabase || !driverId) return { seats: null, stored: false }
+  const count = Math.max(1, Math.round(Number(seats) || 0))
+  if (!count) return { seats: null, stored: false }
+  const row = { driver_id: driverId, seats: count, updated_at: new Date().toISOString() }
+  const first = await supabase.from('driver_status').upsert(row)
+  if (!first.error) return { seats: count, stored: true }
+  if (/seats|column|schema cache/i.test(first.error.message || '')) return { seats: count, stored: false }
+  throw new Error(first.error.message)
+}
+
+export async function declineTrip(supabase, tripOrId) {
+  const trip = typeof tripOrId === 'string' ? { id: tripOrId, status: 'requested' } : tripOrId
+  if (!trip?.id) return { disposition: 'leave' }
+  const disposition = declineDisposition(trip.status)
+  if (disposition === 'leave') return { disposition }
+  if (disposition === 'release') {
+    const { error } = await supabase
+      .from('trips')
+      .update({ status: 'searching', driver_id: null })
+      .eq('id', trip.id)
+      .in('status', ['searching', 'offered'])
+    if (error) throw new Error(error.message)
+    await writeTripEvent(supabase, trip.id, 'released', { reason: 'driver_decline', source: 'driver_app' })
+    return { disposition }
+  }
   const canceledAt = new Date().toISOString()
   const { error } = await supabase
     .from('trips')
     .update({ status: 'canceled', canceled_at: canceledAt })
-    .eq('id', tripId)
+    .eq('id', trip.id)
     .in('status', ['requested', 'searching', 'offered'])
   if (error) throw new Error(error.message)
-  await writeTripEvent(supabase, tripId, 'canceled', { reason: 'driver_decline', source: 'driver_app', canceled_at: canceledAt })
+  await writeTripEvent(supabase, trip.id, 'canceled', { reason: 'driver_decline', source: 'driver_app', canceled_at: canceledAt })
+  return { disposition: 'cancel' }
+}
+
+export async function loadRiderFix(supabase, tripId) {
+  if (!supabase || !tripId) return null
+  try {
+    const share = await supabase
+      .from('location_shares')
+      .select('id')
+      .eq('trip_id', tripId)
+      .eq('active', true)
+      .maybeSingle()
+    if (share.error || !share.data?.id) return null
+    const point = await supabase
+      .from('location_points')
+      .select('lat, lng, created_at')
+      .eq('share_id', share.data.id)
+      .order('created_at', { ascending: false })
+      .limit(1)
+    const row = point.data?.[0]
+    if (point.error || !row) return null
+    const latitude = Number(row.lat)
+    const longitude = Number(row.lng)
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null
+    return { latitude, longitude, updatedAt: row.created_at || null }
+  } catch {
+    return null
+  }
 }
 
 export async function advanceTrip(supabase, trip, driverId) {
@@ -278,8 +331,9 @@ export async function advanceTrip(supabase, trip, driverId) {
     await writeTripEvent(supabase, trip.id, 'arrived', { driver_id: driverId, source: 'driver_app' })
     return { status: 'arrived' }
   }
+  let settle = null
   if (next === 'completed') {
-    await authedJson(supabase, '/api/stripe-payment-methods?action=settle', {
+    settle = await authedJson(supabase, '/api/stripe-payment-methods?action=settle', {
       method: 'POST',
       body: { tripId: trip.id, action: 'complete' },
     })
@@ -308,7 +362,7 @@ export async function advanceTrip(supabase, trip, driverId) {
     throw new Error('Trip status did not update.')
   }
   await writeTripEvent(supabase, trip.id, next, { driver_id: driverId, from: trip.status, source: 'driver_app' })
-  return data
+  return settle ? { ...data, settle } : data
 }
 
 export async function loadTrip(supabase, tripId, driverId) {

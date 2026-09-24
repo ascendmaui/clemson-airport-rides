@@ -1,8 +1,10 @@
 import { useRouter } from 'expo-router'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useAuth } from '@/lib/auth'
+import { registerDriverPush, type PushState } from '@/lib/push'
+import { supabase } from '@/lib/supabase'
 import { displayFirstName } from 'rides-native/authErrors'
 import { INK_SECONDARY, ORANGE, PURPLE, SURFACE } from 'rides-native/places.js'
 
@@ -12,6 +14,19 @@ export default function AccountScreen() {
   const { user, configured, signOut } = useAuth()
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const [push, setPush] = useState<PushState | null>(null)
+
+  useEffect(() => {
+    if (!user) return
+    registerDriverPush(supabase, user.id).then(setPush).catch((err) => {
+      setPush({
+        granted: false,
+        token: null,
+        stored: false,
+        detail: err instanceof Error ? err.message : 'Could not register notifications',
+      })
+    })
+  }, [user])
   const name = user ? displayFirstName(user.user_metadata?.full_name || user.email?.split('@')[0], 'Driver') : null
 
   async function onSignOut() {
@@ -37,6 +52,7 @@ export default function AccountScreen() {
       <Text style={styles.copy}>
         {configured ? 'Supabase Auth is configured for this build.' : 'Missing EXPO_PUBLIC_SUPABASE_ANON_KEY on this build.'}
       </Text>
+      {push?.detail ? <Text style={styles.copy}>{push.detail}</Text> : null}
       {error ? <Text style={styles.error}>{error}</Text> : null}
       {user ? (
         <>

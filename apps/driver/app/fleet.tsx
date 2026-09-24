@@ -4,6 +4,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { BackButton, Card, ErrorText, Primary } from '@/components/chrome'
 import { useAuth } from '@/lib/auth'
+import { useFeedback } from '@/lib/feedback'
 import { supabase } from '@/lib/supabase'
 import { loadDriverProfile, loadVehicle, riderFacingCard, setTeslaListing, type FacingCard, type VehicleRow } from 'rides-native/driverDesk'
 import { TESLA_FLEET_NOTICE } from 'rides-native/tripTags'
@@ -13,6 +14,7 @@ export default function FleetScreen() {
   const router = useRouter()
   const insets = useSafeAreaInsets()
   const { user } = useAuth()
+  const { pulse } = useFeedback()
   const [vehicle, setVehicle] = useState<VehicleRow | null>(null)
   const [facing, setFacing] = useState<FacingCard | null>(null)
   const [stubNote, setStubNote] = useState<string | null>(null)
@@ -41,6 +43,7 @@ export default function FleetScreen() {
     try {
       const saved = await setTeslaListing(supabase, user.id, { enabled, claimModel3 })
       setVehicle(saved)
+      pulse('online')
       await refresh()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not update the Tesla listing')

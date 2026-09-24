@@ -2,10 +2,12 @@ import { useRouter } from 'expo-router'
 import { useCallback, useEffect, useState } from 'react'
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { FarePanel } from '@/components/FarePanel'
 import { BackButton, Card, ErrorText, Primary, Tag } from '@/components/chrome'
 import { useAuth } from '@/lib/auth'
+import { useFeedback } from '@/lib/feedback'
 import { supabase } from '@/lib/supabase'
-import { acceptTrip, loadDriverDesk, subscribeTrips } from 'rides-native/driverDesk'
+import { acceptTrip, declineTrip, loadDriverDesk, subscribeTrips } from 'rides-native/driverDesk'
 import {
   formatCents,
   formatPickupAt,
@@ -17,6 +19,48 @@ import {
   type QueueFilter,
 } from 'rides-native/tripTags'
 import { INK, INK_SECONDARY, ORANGE, PURPLE, SURFACE } from 'rides-native/places.js'
+
+function QueueCard({
+  card,
+  busy,
+  onAccept,
+  onDecline,
+  onOpen,
+}: {
+  card: DriverCard
+  busy: boolean
+  onAccept: () => void
+  onDecline: () => void
+  onOpen: () => void
+}) {
+  const active = card.status === 'accepted' || card.status === 'arriving'
+  return (
+    <Card>
+      <Text style={styles.cardTitle}>{statusHeadline(card.status)}</Text>
+      <Text style={styles.fare}>{formatCents(card.driverNetCents)} net</Text>
+      <Text style={styles.copy}>{card.firstName} · {card.pickupLabel} → {card.dropoffLabel}</Text>
+      {card.pickupAt ? <Text style={styles.copy}>{formatPickupAt(card.pickupAt)}</Text> : null}
+      {card.passengers > 1 ? <Text style={styles.copy}>{card.passengers} riders · capacity check is your seat count</Text> : null}
+      <View style={styles.tags}>
+        {card.tagLabels.map((label) => (
+          <Tag key={label} label={label} tone={/Game|Weekend|Tesla|Student/.test(label) ? 'orange' : 'purple'} />
+        ))}
+      </View>
+      <FarePanel card={card} />
+      {card.teslaStub ? <Text style={styles.copy}>{TESLA_FLEET_NOTICE}</Text> : null}
+      {active ? (
+        <Primary label="Open live trip" onPress={onOpen} tone="purple" />
+      ) : (
+        <Primary label={busy ? 'Saving…' : card.status === 'scheduled' ? 'Accept scheduled ride' : 'Accept'} onPress={onAccept} disabled={busy} />
+      )}
+      {!active ? (
+        <Pressable onPress={onDecline} disabled={busy} style={styles.decline}>
+          <Text style={styles.declineText}>{card.status === 'scheduled' ? 'Not this one' : 'Decline'}</Text>
+        </Pressable>
+      ) : null}
+    </Card>
+  )
+}
 
 function filterLabel(filter: QueueFilter): string {
   switch (filter) {
@@ -39,6 +83,8 @@ export default function QueueScreen() {
   const router = useRouter()
   const insets = useSafeAreaInsets()
   const { user } = useAuth()
+  const { pulse } = useFeedback()
+  const [passed, setPassed] = useState<string[]>([])
   const [rows, setRows] = useState<DriverCard[]>([])
   const [filter, setFilter] = useState<QueueFilter>('all')
   const [busyId, setBusyId] = useState<string | null>(null)
@@ -75,6 +121,7 @@ export default function QueueScreen() {
     setError(null)
     try {
       await acceptTrip(supabase, card, user.id)
+      pulse('accept')
       await refresh()
       if (card.status !== 'scheduled') router.push({ pathname: '/trip', params: { id: card.id } })
     } catch (err) {
@@ -84,7 +131,29 @@ export default function QueueScreen() {
     }
   }
 
-  const visible = rows.filter((card) => matchesQueueFilter(card, filter))
+  async function onDecline(card: DriverCard) {
+    if (card.status === 'scheduled') {
+      setPassed((current) => (current.includes(card.id) ? current : [...current, card.id]))
+      pulse('decline')
+      return
+    }
+    if (!supabase) return
+    setBusyId(card.id)
+    setError(null)
+    try {
+      await declineTrip(supabase, card)
+      pulse('decline')
+      await refresh()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not decline')
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  const visible = rows.filter((card) => matchesQueueFilter(card, filter) && !passed.includes(card.id))
+  const scheduled = visible.filter((card) => card.status === 'scheduled')
+  const live = visible.filter((card) => card.status !== 'scheduled')
 
   return (
     <View style={[styles.screen, { paddingTop: insets.top + 8 }]}>
@@ -111,23 +180,13 @@ export default function QueueScreen() {
             <Text style={styles.copy}>New requests show up here while you are approved. Go online so riders can choose you.</Text>
           </Card>
         ) : null}
-        {visible.map((card) => (
-          <Card key={card.id}>
-            <Text style={styles.cardTitle}>{statusHeadline(card.status)}</Text>
-            <Text style={styles.fare}>{formatCents(card.driverNetCents)} net</Text>
-            <Text style={styles.copy}>{card.firstName} · {card.pickupLabel} → {card.dropoffLabel}</Text>
-            {card.pickupAt ? <Text style={styles.copy}>{formatPickupAt(card.pickupAt)}</Text> : null}
-            {card.depositCents > 0 ? <Text style={styles.copy}>25% deposit · {formatCents(card.depositCents)}</Text> : null}
-            <View style={styles.tags}>
-              {card.tagLabels.map((label) => <Tag key={label} label={label} />)}
-            </View>
-            {card.teslaStub ? <Text style={styles.copy}>{TESLA_FLEET_NOTICE}</Text> : null}
-            {card.status === 'accepted' || card.status === 'arriving' ? (
-              <Primary label="Open live trip" onPress={() => router.push({ pathname: '/trip', params: { id: card.id } })} tone="purple" />
-            ) : (
-              <Primary label={busyId === card.id ? 'Saving…' : 'Accept'} onPress={() => onAccept(card)} disabled={busyId === card.id} />
-            )}
-          </Card>
+        {live.length > 0 ? <Text style={styles.section}>Open now</Text> : null}
+        {live.map((card) => (
+          <QueueCard key={card.id} card={card} busy={busyId === card.id} onAccept={() => onAccept(card)} onDecline={() => onDecline(card)} onOpen={() => router.push({ pathname: '/trip', params: { id: card.id } })} />
+        ))}
+        {scheduled.length > 0 ? <Text style={styles.section}>Scheduled weekend and party rides</Text> : null}
+        {scheduled.map((card) => (
+          <QueueCard key={card.id} card={card} busy={busyId === card.id} onAccept={() => onAccept(card)} onDecline={() => onDecline(card)} onOpen={() => router.push({ pathname: '/trip', params: { id: card.id } })} />
         ))}
       </ScrollView>
     </View>
@@ -145,7 +204,10 @@ const styles = StyleSheet.create({
   filterOn: { backgroundColor: PURPLE },
   filterText: { color: PURPLE, fontWeight: '800' },
   filterTextOn: { color: '#fff' },
+  section: { color: PURPLE, fontWeight: '800', marginTop: 4 },
   cardTitle: { color: PURPLE, fontWeight: '800', fontSize: 18 },
+  decline: { alignItems: 'center', paddingVertical: 4 },
+  declineText: { color: INK_SECONDARY, fontWeight: '700' },
   fare: { color: INK, fontWeight: '800', fontSize: 22 },
   tags: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
 })
