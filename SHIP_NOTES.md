@@ -5,6 +5,7 @@
 - 20% platform fee only: `shared/platformFee.js`. Wait-time and mid-ride cancel fees stay with their owners — pass `amountCents` or write `metadata.wait_fee_cents` / `metadata.cancel_fee_cents`. Do not fork that math.
 - Trip complete/cancel that costs money goes through `POST /api/trip-settle`. `$0` proceeds. Otherwise status stays put and `metadata.payment_hold.status` is `payment_required`.
 - Driver payout failures stay `metadata.payout.status = pending` and retry with backoff (`POST /api/driver-payouts`, cron when `CRON_SECRET` is set).
+- Unpaid airport-deposit searching/offered/scheduled holds leave the pool 20 minutes after `created_at` or Checkout session bind (`metadata.stripe_checkout_created_at`, whichever is later). `GET /api/expire-unpaid-airport-holds` writes the same `trip_events` cancel and `checkout_abandoned` stamp as Checkout abandon, so a later paid deposit still restores the trip. Paid deposits, `deposit_cents = 0`, and non-airport trips are skipped. No new secret: reuse `CRON_SECRET` when it is set, otherwise Vercel’s `x-vercel-cron: 1` header. Hobby cron is daily, so add this on a plan that allows a 15-minute schedule: `{ "path": "/api/expire-unpaid-airport-holds", "schedule": "*/15 * * * *" }`.
 
 ## Payments (FINAL LOCK)
 - SetupIntent save card (off_session)

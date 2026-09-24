@@ -3,28 +3,54 @@ import test from 'node:test'
 import { readFileSync } from 'node:fs'
 import {
   cancelUnopenedCheckoutTrip,
+  decideUnpaidAirportHoldTtl,
+  releaseExpiredUnpaidAirportHold,
+  releaseExpiredUnpaidAirportHolds,
   releaseFromCheckoutEvent,
   releaseUnpaidCheckoutTrip,
   rememberCheckoutSession,
   restoreLiveTripAfterDeposit,
+  UNPAID_AIRPORT_HOLD_TTL_MS,
 } from './abandonedCheckout.js'
+import expireUnpaidAirportHolds, { holdTtlCronAuthorized } from './endpoints/expireUnpaidAirportHolds.js'
 
 function memoryDb() {
   const trips = new Map()
   const payments = []
   const events = []
 
+  function compareFilter(rowVal, filterVal, op) {
+    if (rowVal == null) return false
+    if (typeof filterVal === 'number') {
+      const n = Number(rowVal)
+      if (!Number.isFinite(n)) return false
+      if (op === 'gt') return n > filterVal
+      if (op === 'lt') return n < filterVal
+      if (op === 'lte') return n <= filterVal
+      return false
+    }
+    const left = String(rowVal)
+    const right = String(filterVal)
+    if (op === 'gt') return left > right
+    if (op === 'lt') return left < right
+    if (op === 'lte') return left <= right
+    return false
+  }
+
   function match(row, filters) {
     return filters.every((filter) => {
       if (filter.type === 'eq') return row[filter.col] === filter.val
       if (filter.type === 'in') return filter.vals.includes(row[filter.col])
       if (filter.type === 'is') return filter.val == null ? row[filter.col] == null : row[filter.col] === filter.val
+      if (filter.type === 'gt' || filter.type === 'lt' || filter.type === 'lte') {
+        return compareFilter(row[filter.col], filter.val, filter.type)
+      }
       return false
     })
   }
 
   function query(table) {
-    const state = { table, filters: [], op: 'select', patch: null }
+    const state = { table, filters: [], op: 'select', patch: null, order: null, limit: null }
     const exec = () => {
       if (state.table === 'trip_events' && state.op === 'insert') {
         events.push(state.patch)
@@ -34,7 +60,7 @@ function memoryDb() {
         return { data: payments.filter((row) => match(row, state.filters)), error: null }
       }
       if (state.table !== 'trips') return { data: null, error: { message: `unknown table ${state.table}` } }
-      const rows = [...trips.values()].filter((row) => match(row, state.filters))
+      let rows = [...trips.values()].filter((row) => match(row, state.filters))
       if (state.op === 'update') {
         const updated = rows.map((row) => {
           const next = { ...row, ...state.patch }
@@ -43,6 +69,19 @@ function memoryDb() {
         })
         return { data: updated, error: null }
       }
+      if (state.order) {
+        const { col, ascending } = state.order
+        rows.sort((a, b) => {
+          const av = a[col]
+          const bv = b[col]
+          if (av === bv) return 0
+          if (av == null) return 1
+          if (bv == null) return -1
+          const cmp = av < bv ? -1 : 1
+          return ascending ? cmp : -cmp
+        })
+      }
+      if (state.limit != null) rows = rows.slice(0, state.limit)
       return { data: rows, error: null }
     }
     const api = {
@@ -50,6 +89,11 @@ function memoryDb() {
       eq(col, val) { state.filters.push({ type: 'eq', col, val }); return api },
       in(col, vals) { state.filters.push({ type: 'in', col, vals }); return api },
       is(col, val) { state.filters.push({ type: 'is', col, val }); return api },
+      gt(col, val) { state.filters.push({ type: 'gt', col, val }); return api },
+      lt(col, val) { state.filters.push({ type: 'lt', col, val }); return api },
+      lte(col, val) { state.filters.push({ type: 'lte', col, val }); return api },
+      order(col, opts = {}) { state.order = { col, ascending: opts.ascending !== false }; return api },
+      limit(n) { state.limit = n; return api },
       update(patch) { state.op = 'update'; state.patch = patch; return api },
       insert(patch) { state.op = 'insert'; state.patch = patch; return api },
       maybeSingle() {
@@ -435,4 +479,368 @@ test('the stripe webhook releases expired checkouts and restores a paid deposit'
   assert.match(checkout, /cancelUnopenedCheckoutTrip/)
   assert.match(airport, /rememberCheckoutSession/)
   assert.match(airport, /cancelUnopenedCheckoutTrip/)
+})
+
+const HOLD_NOW = Date.parse('2026-09-24T15:00:00.000Z')
+
+function holdIso(ageMs) {
+  return new Date(HOLD_NOW - ageMs).toISOString()
+}
+
+function seedAirportHold(db, overrides = {}) {
+  const { metadata: metaOverrides, ...rest } = overrides
+  db.seedTrip({
+    id: 'trip_1',
+    status: 'searching',
+    deposit_cents: 2500,
+    driver_id: null,
+    created_at: holdIso(UNPAID_AIRPORT_HOLD_TTL_MS),
+    ...rest,
+    metadata: {
+      purpose: 'airport',
+      kind: 'airport',
+      airport: 'GSP',
+      stripe_checkout_session_id: 'cs_1',
+      ...(metaOverrides || {}),
+    },
+  })
+}
+
+function mockRes() {
+  return {
+    statusCode: 0,
+    headers: {},
+    body: '',
+    setHeader(name, value) {
+      this.headers[name.toLowerCase()] = value
+    },
+    end(payload) {
+      this.body = payload == null ? '' : String(payload)
+    },
+  }
+}
+
+test('an unpaid airport hold is canceled at 20 minutes and kept one millisecond earlier', () => {
+  const trip = {
+    id: 'trip_1',
+    status: 'searching',
+    deposit_cents: 2500,
+    driver_id: null,
+    created_at: '2026-09-24T14:40:00.000Z',
+    metadata: { purpose: 'airport', airport: 'GSP' },
+  }
+  const due = decideUnpaidAirportHoldTtl({ trip, payments: [], now: HOLD_NOW })
+  assert.equal(due.action, 'cancel')
+  assert.equal(due.reason, 'unpaid_hold_ttl')
+  const young = { ...trip, created_at: '2026-09-24T14:40:00.001Z' }
+  assert.equal(decideUnpaidAirportHoldTtl({ trip: young, payments: [], now: HOLD_NOW }).reason, 'within_ttl')
+  const rebound = {
+    ...trip,
+    created_at: '2026-09-24T14:00:00.000Z',
+    metadata: {
+      purpose: 'airport',
+      airport: 'GSP',
+      stripe_checkout_created_at: '2026-09-24T14:50:00.000Z',
+    },
+  }
+  assert.equal(decideUnpaidAirportHoldTtl({ trip: rebound, payments: [], now: HOLD_NOW }).reason, 'within_ttl')
+})
+
+test('ttl sweep cancels stale unpaid airport holds and leaves paid and non-airport trips', async () => {
+  const db = memoryDb()
+  seedAirportHold(db, { id: 'trip_old', created_at: holdIso(UNPAID_AIRPORT_HOLD_TTL_MS + 60_000) })
+  seedAirportHold(db, {
+    id: 'trip_scheduled',
+    status: 'scheduled',
+    scheduled_for: '2026-10-01T16:00:00.000Z',
+    created_at: holdIso(30 * 60 * 1000),
+    metadata: { kind: 'scheduled', airport: 'CLT', stripe_checkout_session_id: 'cs_sched' },
+  })
+  seedAirportHold(db, {
+    id: 'trip_offered',
+    status: 'offered',
+    created_at: holdIso(25 * 60 * 1000),
+    metadata: { stripe_checkout_session_id: 'cs_offered' },
+  })
+  seedAirportHold(db, { id: 'trip_young', created_at: holdIso(5 * 60 * 1000) })
+  seedAirportHold(db, {
+    id: 'trip_paid_row',
+    created_at: holdIso(40 * 60 * 1000),
+    metadata: { stripe_checkout_session_id: 'cs_paid' },
+  })
+  db.payments.push({ trip_id: 'trip_paid_row', kind: 'airport_deposit', status: 'succeeded', amount_cents: 2500 })
+  seedAirportHold(db, {
+    id: 'trip_stamped',
+    created_at: holdIso(40 * 60 * 1000),
+    metadata: { checkout_deposit: { session_id: 'cs_stamp' }, stripe_checkout_session_id: 'cs_stamp' },
+  })
+  seedAirportHold(db, {
+    id: 'trip_fare_paid',
+    created_at: holdIso(40 * 60 * 1000),
+    metadata: { fare_paid_cents: 2500, stripe_checkout_session_id: 'cs_fare' },
+  })
+  seedAirportHold(db, {
+    id: 'trip_fresh_session',
+    created_at: holdIso(50 * 60 * 1000),
+    metadata: { stripe_checkout_created_at: holdIso(5 * 60 * 1000), stripe_checkout_session_id: 'cs_fresh' },
+  })
+  db.seedTrip({
+    id: 'trip_campus',
+    status: 'searching',
+    deposit_cents: 2500,
+    created_at: holdIso(40 * 60 * 1000),
+    metadata: { purpose: 'campus' },
+  })
+  db.seedTrip({
+    id: 'trip_credits',
+    status: 'searching',
+    deposit_cents: 0,
+    created_at: holdIso(40 * 60 * 1000),
+    metadata: { purpose: 'airport', airport: 'GSP' },
+  })
+  db.seedTrip({
+    id: 'trip_driver',
+    status: 'searching',
+    deposit_cents: 2500,
+    driver_id: 'driver_1',
+    created_at: holdIso(40 * 60 * 1000),
+    metadata: { purpose: 'airport', airport: 'GSP' },
+  })
+  db.seedTrip({
+    id: 'trip_requested',
+    status: 'requested',
+    deposit_cents: 2500,
+    created_at: holdIso(40 * 60 * 1000),
+    metadata: { purpose: 'airport', airport: 'GSP' },
+  })
+
+  const sweep = await releaseExpiredUnpaidAirportHolds(db, { now: HOLD_NOW })
+  assert.equal(sweep.ok, true)
+  assert.equal(sweep.released, 3)
+  assert.equal(db.trips.get('trip_old').status, 'canceled')
+  assert.equal(db.trips.get('trip_scheduled').status, 'canceled')
+  assert.equal(db.trips.get('trip_offered').status, 'canceled')
+  assert.equal(db.trips.get('trip_young').status, 'searching')
+  assert.equal(db.trips.get('trip_paid_row').status, 'searching')
+  assert.equal(db.trips.get('trip_stamped').status, 'searching')
+  assert.equal(db.trips.get('trip_fare_paid').status, 'searching')
+  assert.equal(db.trips.get('trip_fresh_session').status, 'searching')
+  assert.equal(db.trips.get('trip_campus').status, 'searching')
+  assert.equal(db.trips.get('trip_credits').status, 'searching')
+  assert.equal(db.trips.get('trip_driver').status, 'searching')
+  assert.equal(db.trips.get('trip_requested').status, 'requested')
+
+  const canceledEvents = db.events.filter((event) => event.kind === 'canceled')
+  assert.equal(canceledEvents.length, 3)
+  assert.equal(canceledEvents.every((event) => event.payload.reason === 'unpaid_hold_ttl'), true)
+  assert.equal(canceledEvents.every((event) => event.payload.source === 'hold_ttl'), true)
+  assert.ok(db.trips.get('trip_old').metadata.checkout_abandoned)
+  assert.equal(db.trips.get('trip_old').metadata.purpose, 'airport')
+
+  const again = await releaseExpiredUnpaidAirportHolds(db, { now: HOLD_NOW })
+  assert.equal(again.released, 0)
+  assert.equal(db.events.filter((event) => event.kind === 'canceled').length, 3)
+
+  const restored = await restoreLiveTripAfterDeposit(db, airportSession({
+    id: 'cs_sched',
+    status: 'complete',
+    payment_status: 'paid',
+    metadata: { tripId: 'trip_scheduled' },
+  }))
+  assert.equal(restored.restored, true)
+  assert.equal(restored.status, 'scheduled')
+  assert.equal(db.trips.get('trip_scheduled').status, 'scheduled')
+  assert.equal(db.trips.get('trip_old').status, 'canceled')
+})
+
+test('ttl cancel is idempotent with the checkout expired webhook and a paid deposit restores', async () => {
+  const db = memoryDb()
+  seedAirportHold(db)
+  const stale = { ...db.trips.get('trip_1') }
+  const first = await releaseExpiredUnpaidAirportHold(db, stale, { now: HOLD_NOW })
+  assert.equal(first.released, true)
+  assert.equal(db.events[0].payload.reason, 'unpaid_hold_ttl')
+  assert.equal(db.events[0].payload.checkout_session, 'cs_1')
+
+  const second = await releaseExpiredUnpaidAirportHold(db, stale, { now: HOLD_NOW })
+  assert.equal(second.released, false)
+  assert.equal(second.reason, 'not_in_pool')
+  assert.equal(db.events.length, 1)
+
+  const webhook = await releaseFromCheckoutEvent(db, expiredEvent(airportSession()))
+  assert.equal(webhook.released, false)
+  assert.equal(webhook.reason, 'not_in_pool')
+  assert.equal(db.events.length, 1)
+
+  const restored = await restoreLiveTripAfterDeposit(db, airportSession({ status: 'complete', payment_status: 'paid' }))
+  assert.equal(restored.restored, true)
+  assert.equal(restored.status, 'searching')
+  assert.equal(db.trips.get('trip_1').metadata.checkout_abandoned, undefined)
+  assert.equal(db.trips.get('trip_1').metadata.checkout_deposit.session_id, 'cs_1')
+})
+
+test('a checkout webhook cancel is not canceled again by the ttl sweep', async () => {
+  const db = memoryDb()
+  seedAirportHold(db, { created_at: holdIso(40 * 60 * 1000) })
+  const expired = await releaseFromCheckoutEvent(db, expiredEvent(airportSession()))
+  assert.equal(expired.released, true)
+  const sweep = await releaseExpiredUnpaidAirportHolds(db, { now: HOLD_NOW })
+  assert.equal(sweep.scanned, 0)
+  assert.equal(sweep.released, 0)
+  assert.equal(db.events.length, 1)
+  assert.equal(db.events[0].payload.reason, 'checkout_expired')
+  assert.equal(db.trips.get('trip_1').status, 'canceled')
+})
+
+test('ttl expire closes an open Checkout session and does not cancel a paid or pending one', async () => {
+  const db = memoryDb()
+  seedAirportHold(db)
+  let expired = 0
+  const closed = await releaseExpiredUnpaidAirportHold(db, db.trips.get('trip_1'), {
+    now: HOLD_NOW,
+    retrieveSession: async () => airportSession({ status: 'open' }),
+    expireSession: async () => {
+      expired += 1
+      return { id: 'cs_1', status: 'expired', payment_status: 'unpaid' }
+    },
+  })
+  assert.equal(expired, 1)
+  assert.equal(closed.released, true)
+  assert.equal(db.events[0].payload.reason, 'unpaid_hold_ttl')
+  assert.equal(db.events[0].payload.source, 'hold_ttl')
+
+  seedAirportHold(db, { id: 'trip_paid', metadata: { stripe_checkout_session_id: 'cs_paid' } })
+  const paid = await releaseExpiredUnpaidAirportHold(db, db.trips.get('trip_paid'), {
+    now: HOLD_NOW,
+    retrieveSession: async () => airportSession({
+      id: 'cs_paid',
+      status: 'complete',
+      payment_status: 'paid',
+      metadata: { tripId: 'trip_paid' },
+    }),
+  })
+  assert.equal(paid.released, false)
+  assert.equal(paid.reason, 'paid')
+  assert.equal(db.trips.get('trip_paid').status, 'searching')
+
+  seedAirportHold(db, { id: 'trip_pending', metadata: { stripe_checkout_session_id: 'cs_pending' } })
+  const pending = await releaseExpiredUnpaidAirportHold(db, db.trips.get('trip_pending'), {
+    now: HOLD_NOW,
+    retrieveSession: async () => airportSession({
+      id: 'cs_pending',
+      status: 'complete',
+      payment_status: 'unpaid',
+      metadata: { tripId: 'trip_pending' },
+    }),
+  })
+  assert.equal(pending.reason, 'async_pending')
+  assert.equal(db.trips.get('trip_pending').status, 'searching')
+  assert.equal(db.events.filter((event) => event.trip_id === 'trip_pending').length, 0)
+})
+
+test('a bound session that is not the airport deposit still drops the stale hold', async () => {
+  const db = memoryDb()
+  seedAirportHold(db)
+  let expired = 0
+  const result = await releaseExpiredUnpaidAirportHold(db, db.trips.get('trip_1'), {
+    now: HOLD_NOW,
+    retrieveSession: async () => airportSession({ metadata: { kind: 'credit_purchase' } }),
+    expireSession: async () => {
+      expired += 1
+      return { id: 'cs_1', status: 'expired', payment_status: 'unpaid' }
+    },
+  })
+  assert.equal(expired, 0)
+  assert.equal(result.released, true)
+  assert.equal(db.trips.get('trip_1').status, 'canceled')
+  assert.equal(db.events[0].payload.source, 'hold_ttl')
+})
+
+test('a Stripe read failure still removes the stale unpaid hold', async () => {
+  const db = memoryDb()
+  seedAirportHold(db)
+  const result = await releaseExpiredUnpaidAirportHold(db, db.trips.get('trip_1'), {
+    now: HOLD_NOW,
+    retrieveSession: async () => {
+      throw new Error('stripe down')
+    },
+  })
+  assert.equal(result.released, true)
+  assert.equal(db.trips.get('trip_1').status, 'canceled')
+  assert.equal(db.events[0].payload.reason, 'unpaid_hold_ttl')
+  assert.equal(db.events[0].payload.source, 'hold_ttl')
+})
+
+test('the ttl sweep cancels the oldest holds first when the batch is capped', async () => {
+  const db = memoryDb()
+  seedAirportHold(db, { id: 'trip_newer', created_at: holdIso(21 * 60 * 1000) })
+  seedAirportHold(db, { id: 'trip_oldest', created_at: holdIso(50 * 60 * 1000) })
+  const sweep = await releaseExpiredUnpaidAirportHolds(db, { now: HOLD_NOW, limit: 1 })
+  assert.equal(sweep.scanned, 1)
+  assert.equal(sweep.released, 1)
+  assert.equal(db.trips.get('trip_oldest').status, 'canceled')
+  assert.equal(db.trips.get('trip_newer').status, 'searching')
+})
+
+test('remembering a checkout session records the bind time used as the ttl anchor', async () => {
+  const db = memoryDb()
+  db.seedTrip({ id: 'trip_1', status: 'searching', metadata: { airport: 'GSP', purpose: 'airport' } })
+  const remembered = await rememberCheckoutSession(db, 'trip_1', 'cs_new', {
+    createdAt: '2026-09-24T14:50:00.000Z',
+  })
+  assert.equal(remembered.ok, true)
+  assert.equal(db.trips.get('trip_1').metadata.stripe_checkout_session_id, 'cs_new')
+  assert.equal(db.trips.get('trip_1').metadata.stripe_checkout_created_at, '2026-09-24T14:50:00.000Z')
+  assert.equal(db.trips.get('trip_1').metadata.airport, 'GSP')
+})
+
+test('hold ttl cron auth reuses CRON_SECRET and does not require a new secret', () => {
+  const req = (headers) => ({ headers })
+  assert.equal(holdTtlCronAuthorized(req({}), { CRON_SECRET: '' }), false)
+  assert.equal(holdTtlCronAuthorized(req({ 'x-vercel-cron': '1' }), { CRON_SECRET: '' }), true)
+  assert.equal(holdTtlCronAuthorized(req({ 'x-vercel-cron': '1' }), { CRON_SECRET: 'placeholder' }), true)
+  assert.equal(holdTtlCronAuthorized(req({ 'x-vercel-cron': '1' }), { CRON_SECRET: 'real-secret' }), false)
+  assert.equal(
+    holdTtlCronAuthorized(req({ authorization: 'Bearer real-secret' }), { CRON_SECRET: 'real-secret' }),
+    true,
+  )
+  assert.equal(
+    holdTtlCronAuthorized(req({ authorization: 'Bearer other', 'x-vercel-cron': '1' }), { CRON_SECRET: 'real-secret' }),
+    false,
+  )
+})
+
+test('the expire endpoint rejects non-cron callers and documents the cron path', async () => {
+  const denied = mockRes()
+  await expireUnpaidAirportHolds({
+    method: 'POST',
+    headers: {},
+    url: '/api/expire-unpaid-airport-holds',
+  }, denied)
+  assert.equal(denied.statusCode, 401)
+
+  const wrongMethod = mockRes()
+  await expireUnpaidAirportHolds({
+    method: 'PUT',
+    headers: { 'x-vercel-cron': '1' },
+    url: '/api/expire-unpaid-airport-holds',
+  }, wrongMethod)
+  assert.equal(wrongMethod.statusCode, 405)
+
+  const preflight = mockRes()
+  await expireUnpaidAirportHolds({
+    method: 'OPTIONS',
+    headers: {},
+    url: '/api/expire-unpaid-airport-holds',
+  }, preflight)
+  assert.equal(preflight.statusCode, 204)
+
+  const endpoint = readFileSync(new URL('./endpoints/expireUnpaidAirportHolds.js', import.meta.url), 'utf8')
+  const route = readFileSync(new URL('../api/expire-unpaid-airport-holds.js', import.meta.url), 'utf8')
+  assert.match(endpoint, /\/api\/expire-unpaid-airport-holds/)
+  assert.match(endpoint, /every 15 minutes/)
+  assert.match(endpoint, /CRON_SECRET/)
+  assert.match(endpoint, /x-vercel-cron/)
+  assert.doesNotMatch(endpoint, /HOLD_TTL_SECRET|EXPIRE_HOLDS_SECRET/)
+  assert.match(route, /expireUnpaidAirportHolds/)
 })
