@@ -6,8 +6,8 @@ import { Card, Primary } from '@/components/chrome'
 import { useTheme } from '@/lib/theme'
 import { supabase } from '@/lib/supabase'
 import { loadGameDay } from 'rides-native/driverDesk'
-import { previewDate, typicalSpots } from 'rides-native/heat.js'
 import { HEAT_WINDOWS } from 'rides-native/places.js'
+import { loadBusySpots, type BusySpot } from '@/lib/busySpots'
 
 function demandWord(intensity: number): string {
   if (intensity >= 0.75) return 'Busy'
@@ -22,7 +22,34 @@ export default function DiscoverScreen() {
   const { colors } = useTheme()
   const [windowId, setWindowId] = useState('now')
   const [game, setGame] = useState<string | null>(null)
-  const spots = typicalSpots(previewDate(windowId)).slice().sort((a, b) => b.intensity - a.intensity)
+  const [spots, setSpots] = useState<BusySpot[]>([])
+  const [caption, setCaption] = useState('Typical campus patterns for College Ave, the stadium, and the dorms.')
+  const [blended, setBlended] = useState(false)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    let alive = true
+    setLoading(true)
+    loadBusySpots(windowId)
+      .then((result) => {
+        if (!alive) return
+        setSpots(result.spots.slice().sort((a, b) => b.intensity - a.intensity))
+        setCaption(result.caption)
+        setBlended(result.blended)
+      })
+      .catch(() => {
+        if (!alive) return
+        setSpots([])
+        setCaption('Could not load campus demand.')
+        setBlended(false)
+      })
+      .finally(() => {
+        if (alive) setLoading(false)
+      })
+    return () => {
+      alive = false
+    }
+  }, [windowId])
 
   useEffect(() => {
     if (!supabase) return
@@ -42,7 +69,7 @@ export default function DiscoverScreen() {
         <Text style={[styles.kicker, { color: colors.orange }]}>DISCOVER</Text>
         <Text style={[styles.title, { color: colors.title }]}>Campus demand</Text>
         <Text style={{ color: colors.inkSecondary, lineHeight: 20 }}>
-          Typical campus patterns for College Ave, the stadium, and the dorms. This is not a live surge map.
+          {loading ? 'Loading campus demand…' : `${caption}${blended ? ' Live requests are blended in when available.' : ' Typical patterns when live demand is quiet.'}`}
         </Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
           {HEAT_WINDOWS.map((item) => {

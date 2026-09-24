@@ -15,7 +15,9 @@ import { useTheme } from '@/lib/theme'
 import { useDriverLocation } from '@/lib/useDriverLocation'
 import { fetchDriverApplication, setDriverOnline } from 'rides-native/drivers'
 import { displayFirstName } from 'rides-native/authErrors'
-import { heatColor, typicalSpots } from 'rides-native/heat.js'
+import { heatColor } from 'rides-native/heat.js'
+import { HEAT_WINDOWS } from 'rides-native/places.js'
+import { loadBusySpots, type BusySpot } from '@/lib/busySpots'
 import {
   acceptTrip,
   declineTrip,
@@ -92,6 +94,12 @@ export default function DriverHome() {
   const [peekPage, setPeekPage] = useState(0)
   const [safetyOpen, setSafetyOpen] = useState(false)
   const [focusToken, setFocusToken] = useState(0)
+  const [showHeat, setShowHeat] = useState(true)
+  const [heatWindow, setHeatWindow] = useState('now')
+  const [spots, setSpots] = useState<BusySpot[]>([])
+  const [heatCaption, setHeatCaption] = useState('Popular campus spots from ride requests.')
+  const [heatBlended, setHeatBlended] = useState(false)
+  const [heatLoading, setHeatLoading] = useState(true)
   const [riderLine, setRiderLine] = useState<string | null>(null)
   const [hiddenOffers, setHiddenOffers] = useState<string[]>([])
   const approved = status === 'approved'
@@ -169,6 +177,30 @@ export default function DriverHome() {
     pulse('request')
     notifyNewRequest(next).catch(() => {})
   }, [desk?.offers, pulse])
+
+  useEffect(() => {
+    let alive = true
+    setHeatLoading(true)
+    loadBusySpots(heatWindow)
+      .then((result) => {
+        if (!alive) return
+        setSpots(result.spots)
+        setHeatCaption(result.caption)
+        setHeatBlended(result.blended)
+      })
+      .catch(() => {
+        if (!alive) return
+        setSpots([])
+        setHeatCaption('Could not load campus demand.')
+        setHeatBlended(false)
+      })
+      .finally(() => {
+        if (alive) setHeatLoading(false)
+      })
+    return () => {
+      alive = false
+    }
+  }, [heatWindow])
 
   useDriverLocation(Boolean(user && approved && online), (fix) => {
     setSelf({ latitude: fix.lat, longitude: fix.lng })
@@ -258,21 +290,26 @@ export default function DriverHome() {
     ? syntheticOffers().filter((card) => !hiddenOffers.includes(card.id))
     : []
   const offer = (approved ? desk?.offers[0] : null) || synthetic[0] || null
-  const hotspots = typicalSpots().slice().sort((a, b) => b.intensity - a.intensity).slice(0, 4)
+  const hotspots = spots.slice().sort((a, b) => b.intensity - a.intensity).slice(0, 4)
   const pins: MapPin[] = []
   if (self) pins.push({ id: 'me', ...self, title: 'You', pinColor: ORANGE })
   if (offer?.pickupLat != null && offer.pickupLng != null) {
     pins.push({ id: 'pickup', latitude: offer.pickupLat, longitude: offer.pickupLng, title: 'Pickup', pinColor: PURPLE })
   }
-  hotspots.forEach((spot) => {
-    pins.push({
-      id: spot.id,
-      latitude: spot.lat,
-      longitude: spot.lng,
-      title: `${spot.name} · ${demandWord(spot.intensity)}`,
-      pinColor: heatColor(spot.intensity),
+  // When heat is on, circles carry demand — keep pins to you + pickup only.
+  if (!showHeat) {
+    hotspots.forEach((spot) => {
+      pins.push({
+        id: spot.id,
+        latitude: spot.lat,
+        longitude: spot.lng,
+        title: `${spot.name} · ${demandWord(spot.intensity)}`,
+        pinColor: heatColor(spot.intensity),
+      })
     })
-  })
+  }
+
+
 
   const statusLine = !user
     ? 'Sign in to drive'
@@ -286,7 +323,7 @@ export default function DriverHome() {
 
   return (
     <View style={[styles.screen, { backgroundColor: colors.background }]}>
-      <CampusMap pins={pins} center={self} colorScheme={scheme} focusToken={focusToken} />
+      <CampusMap pins={pins} center={self} colorScheme={scheme} focusToken={focusToken} spots={spots} showHeat={showHeat} />
       <View pointerEvents="box-none" style={styles.overlay}>
         <View style={[styles.top, { paddingTop: insets.top + 8 }]} pointerEvents="box-none">
           <CircleButton icon="home" label="Menu" onPress={() => router.push('/menu')} />
@@ -328,19 +365,53 @@ export default function DriverHome() {
           </View>
         ) : null}
 
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.hotspots} style={styles.hotspotRow}>
-          {desk?.gameDay ? (
-            <View style={[styles.hotspot, { backgroundColor: colors.orange }]}>
-              <Text style={styles.hotspotOn}>Game day{desk.gameDay.surge_multiplier ? ` · ${desk.gameDay.surge_multiplier}×` : ''}</Text>
-            </View>
+        <View style={styles.heatPanel}>
+          <View style={styles.heatRow}>
+            <Text style={[styles.heatLabel, { color: colors.inkSecondary }]}>Busy areas</Text>
+            <Pressable
+              onPress={() => setShowHeat((value) => !value)}
+              style={[styles.heatToggle, { backgroundColor: showHeat ? colors.orange : colors.card }]}
+              accessibilityRole="button"
+              accessibilityLabel={showHeat ? 'Hide busy areas' : 'Show busy areas'}
+            >
+              <Text style={{ color: showHeat ? '#fff' : colors.title, fontWeight: '800', fontSize: 12 }}>
+                {showHeat ? 'On' : 'Off'}
+              </Text>
+            </Pressable>
+          </View>
+          {showHeat ? (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.heatWindows}>
+              {HEAT_WINDOWS.map((item) => {
+                const on = item.id === heatWindow
+                return (
+                  <Pressable
+                    key={item.id}
+                    onPress={() => setHeatWindow(item.id)}
+                    style={[styles.heatChip, { backgroundColor: on ? colors.orange : colors.card }]}
+                  >
+                    <Text style={{ color: on ? '#fff' : colors.title, fontWeight: '800', fontSize: 12 }}>{item.label}</Text>
+                  </Pressable>
+                )
+              })}
+            </ScrollView>
           ) : null}
-          {hotspots.map((spot) => (
-            <View key={spot.id} style={[styles.hotspot, { backgroundColor: colors.card }, shadow]}>
-              <Text style={{ color: colors.title, fontWeight: '800' }}>{spot.name}</Text>
-              <Text style={{ color: colors.orange, fontWeight: '700', fontSize: 12 }}>{demandWord(spot.intensity)}</Text>
-            </View>
-          ))}
-        </ScrollView>
+          <Text style={{ color: colors.inkSecondary, fontSize: 12, marginHorizontal: 16, marginTop: 6 }}>
+            {heatLoading ? 'Loading campus demand…' : showHeat ? `${heatCaption}${heatBlended ? ' · Live + typical' : ''}` : 'Busy areas are hidden.'}
+          </Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.hotspots} style={styles.hotspotRow}>
+            {desk?.gameDay ? (
+              <View style={[styles.hotspot, { backgroundColor: colors.orange }]}>
+                <Text style={styles.hotspotOn}>Game day{desk.gameDay.surge_multiplier ? ` · ${desk.gameDay.surge_multiplier}×` : ''}</Text>
+              </View>
+            ) : null}
+            {hotspots.map((spot) => (
+              <View key={spot.id} style={[styles.hotspot, { backgroundColor: colors.card }, shadow]}>
+                <Text style={{ color: colors.title, fontWeight: '800' }}>{spot.name}</Text>
+                <Text style={{ color: colors.orange, fontWeight: '700', fontSize: 12 }}>{demandWord(spot.intensity)}</Text>
+              </View>
+            ))}
+          </ScrollView>
+        </View>
 
         <View style={styles.flex} pointerEvents="box-none" />
 
@@ -475,6 +546,12 @@ const styles = StyleSheet.create({
   peekAmount: { fontSize: 36, fontWeight: '800', letterSpacing: -0.8 },
   dots: { flexDirection: 'row', justifyContent: 'center', gap: 6 },
   dot: { width: 8, height: 8, borderRadius: 4 },
+  heatPanel: { marginTop: 8 },
+  heatRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16 },
+  heatLabel: { fontSize: 12, fontWeight: '700' },
+  heatToggle: { borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6 },
+  heatWindows: { paddingHorizontal: 16, gap: 8, marginTop: 8 },
+  heatChip: { borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6 },
   hotspotRow: { flexGrow: 0, marginTop: 10 },
   hotspots: { paddingHorizontal: 16, gap: 8 },
   hotspot: { borderRadius: 999, paddingHorizontal: 12, paddingVertical: 8 },
