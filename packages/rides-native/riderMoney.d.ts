@@ -12,12 +12,30 @@ export type AirportQuote = {
 }
 
 export type CheckoutSession = {
+  id?: string
   url?: string
   tripId?: string
   depositCents?: number
   fareCents?: number
   paidWithCredits?: boolean
 }
+
+export type CheckoutCloseResult = {
+  ok?: boolean
+  released?: boolean
+  restored?: boolean
+  reason?: string
+  status?: string
+}
+
+export function checkoutCloseOutcome(
+  result: CheckoutCloseResult | null | undefined,
+): 'paid' | 'released' | 'unchanged' | 'unknown'
+
+export function abandonAirportCheckout(
+  supabase: unknown,
+  input?: { tripId?: string; sessionId?: string },
+): Promise<CheckoutCloseResult>
 
 export function quoteInputKey(input?: { airport?: string; date?: string; time?: string }): string
 

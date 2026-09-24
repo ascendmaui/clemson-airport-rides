@@ -23,6 +23,7 @@ import {
   depositSplitLabel,
 } from '../../src/lib/fareRates.js'
 import { checkoutSuccessHash } from '../../packages/rides-native/liveTrip.js'
+import { cancelUnopenedCheckoutTrip, rememberCheckoutSession } from '../abandonedCheckout.js'
 
 const CAMPUS = { label: 'Memorial Stadium', lat: 34.6788, lng: -82.843 }
 const AIRPORTS = {
@@ -223,6 +224,8 @@ export default async function handler(req, res) {
         fare_driver_earnings_cents: String(fareSplit.driverEarningsCents),
       },
     })
+    const remembered = await rememberCheckoutSession(sb, trip.id, session.id)
+    if (!remembered.ok) console.error('[airport-checkout] session bind', remembered.error)
     return json(res, 200, {
       id: session.id,
       url: session.url,
@@ -239,6 +242,10 @@ export default async function handler(req, res) {
     })
   } catch (err) {
     console.error('[airport-checkout]', err)
+    await cancelUnopenedCheckoutTrip(sb, trip.id, {
+      reason: 'checkout_create_failed',
+      source: 'airport_checkout',
+    })
     return json(res, 500, { error: err.message || 'Stripe error', tripId: trip.id })
   }
 }

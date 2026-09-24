@@ -9,6 +9,7 @@ import { splitPlatformFee } from '../src/lib/fareRates.js'
 import { debitLots, grantCreditPack, insertChargePayment } from '../server/creditLots.js'
 import { setPaymentHold } from '../server/collectPayment.js'
 import { classifyStripeError, failureResult } from '../shared/paymentFailure.js'
+import { releaseFromCheckoutEvent, restoreLiveTripAfterDeposit } from '../server/abandonedCheckout.js'
 
 export const config = { api: { bodyParser: false } }
 
@@ -206,7 +207,18 @@ export default async function handler(req, res) {
       return res.end(JSON.stringify({ received: true, type: event.type, held, code }))
     }
 
-    if (event.type === 'checkout.session.completed') {
+    if (event.type === 'checkout.session.expired' || event.type === 'checkout.session.async_payment_failed') {
+      let released = { released: false, reason: 'no_service_role' }
+      if (serviceKey) released = await releaseFromCheckoutEvent(serviceClient(), event)
+      console.log('[stripe-webhook] checkout abandoned', { type: event.type, id: event.data?.object?.id, released })
+      const retryable = released?.reason === 'update_failed'
+        || released?.reason === 'trip_unreadable'
+        || released?.reason === 'payments_unreadable'
+      res.statusCode = retryable ? 500 : 200
+      return res.end(JSON.stringify({ received: true, type: event.type, released }))
+    }
+
+    if (event.type === 'checkout.session.completed' || event.type === 'checkout.session.async_payment_succeeded') {
       const session = event.data?.object
       if (session?.metadata?.kind === 'credit_purchase') {
         const granted = await recordCreditPurchase(session)
@@ -215,6 +227,13 @@ export default async function handler(req, res) {
         return res.end(JSON.stringify({ received: true, type: event.type, granted }))
       }
       const recorded = await recordDeposit(session)
+      const paid = session?.payment_status === 'paid'
+        || session?.payment_status === 'no_payment_required'
+        || event.type === 'checkout.session.async_payment_succeeded'
+      // A canceled Checkout can mark the trip canceled before a late success
+      // lands. Put that paid trip back in searching (or scheduled) once.
+      let live = null
+      if (serviceKey && paid) live = await restoreLiveTripAfterDeposit(serviceClient(), session)
       // Payment success hook. Grant is idempotent and does nothing until the
       // trip itself is completed (deposits alone do not reward signups).
       let referral = null
@@ -230,10 +249,11 @@ export default async function handler(req, res) {
         metadata: session?.metadata,
         amount_total: session?.amount_total,
         recorded,
+        live,
         referral,
       })
       res.statusCode = 200
-      return res.end(JSON.stringify({ received: true, type: event.type, recorded, referral }))
+      return res.end(JSON.stringify({ received: true, type: event.type, recorded, live, referral }))
     }
 
     console.log('[stripe-webhook] unhandled', event.type)

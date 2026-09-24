@@ -19,6 +19,7 @@ import {
   priceCheckoutBody,
 } from '../server/authoritativeFare.js'
 import { checkoutSuccessHash } from '../packages/rides-native/liveTrip.js'
+import { cancelUnopenedCheckoutTrip, rememberCheckoutSession } from '../server/abandonedCheckout.js'
 
 function checkoutOrigin(body) {
   for (const raw of [body.origin, body.successUrl]) {
@@ -160,6 +161,8 @@ export default async function handler(req, res) {
         fare_driver_earnings_cents: fareSplit.driverEarningsCents,
       }),
     })
+    const remembered = await rememberCheckoutSession(sb, tripId, session.id)
+    if (!remembered.ok) console.error('[create-checkout-session] session bind', remembered.error)
     return json(res, 200, {
       id: session.id,
       url: session.url,
@@ -168,10 +171,10 @@ export default async function handler(req, res) {
     })
   } catch (err) {
     console.error('[create-checkout-session]', err)
-    await sb.from('trips').update({
-      status: 'canceled',
-      canceled_at: new Date().toISOString(),
-    }).eq('id', tripId).in('status', ['searching', 'scheduled'])
+    await cancelUnopenedCheckoutTrip(sb, tripId, {
+      reason: 'checkout_create_failed',
+      source: 'create_checkout_session',
+    })
     return json(res, 500, {
       error: err.message || 'Stripe error',
       message: 'Stripe Checkout Session create failed',

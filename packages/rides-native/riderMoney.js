@@ -311,6 +311,25 @@ export function depositSettled(payments) {
   })
 }
 
+/** What the rider should do after Checkout closes or the cancel return replays. */
+export function checkoutCloseOutcome(result) {
+  if (!result || typeof result !== 'object') return 'unknown'
+  if (result.reason === 'paid' || result.restored === true) return 'paid'
+  if (result.released === true) return 'released'
+  return 'unchanged'
+}
+
+export async function abandonAirportCheckout(supabase, { tripId, sessionId } = {}) {
+  if (!tripId) throw new Error('Missing trip')
+  return authedJson(supabase, '/api/stripe-payment-methods?action=abandon-checkout', {
+    method: 'POST',
+    body: {
+      tripId,
+      sessionId: sessionId || undefined,
+    },
+  })
+}
+
 export function promoClaimMessage(result) {
   if (!result || typeof result !== 'object') return 'Promo claim did not return a result.'
   if (result.error) return String(result.error)
