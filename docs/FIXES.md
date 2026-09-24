@@ -2,6 +2,13 @@
 
 Persistent knowledge base for recurring failures. When a matching issue appears, apply the saved fix first.
 
+## 2026-09-24 — Friend confirm charged a few cents off the reviewed share
+
+- **Track / machine:** Clemson RIDES · Pro (Grok Build, worktree fix/quote-ttl)
+- **Problem:** Confirming a friend ride re-priced the route on the server and charged that new share. Friend fares use traffic-aware routes billed per minute, so the charged share could differ by a few cents from the share the organizer had just reviewed.
+- **Root cause:** `confirm-charges` always called `recomputeRideFares`. The 10-minute review memo in `reviewedFriendQuoteFresh` only skipped the client re-price. The server did not keep the reviewed cents.
+- **Fix:** Pricing a friend ride stores `fare_breakdown.friend_quote` (quote id, per-participant share cents, signature, created_at, expires_at, 10-minute TTL). Confirm sends that quote id. A fresh quote for the same ride and the same participant set is charged exactly, and the server does not re-price. A missing, expired, mismatched, or participant-changed quote is re-priced, stored, and returned as `review_required` with no charge. Shipped rider builds that call confirm-charges with no quote id still charge a fresh stored quote; that path is logged as `legacy_no_quote_id`. A quote id that is present but does not match, or a signature that does not match, still requires review and does not charge. Web `FriendRide.jsx` and native `carpool/[token].tsx` show a new quote once in the existing review UI, then the next confirm charges it. Client amount fields are ignored. The Stripe idempotency key format is unchanged.
+
 ## 2026-09-24 — iOS build 17 (rider + driver) local Archive on Max: notes
 
 - **Track / machine:** Clemson RIDES · Max / TestFlight 1.1.0(17) from main a795b18 (PRs #59–#66)
@@ -31,7 +38,7 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
 - **Problem:** PR #63 re-priced the friend ride on every Confirm tap and held the charge whenever the refreshed shares differed from the screen. Friend fares use `computeRoutes` with `routingPreference: 'TRAFFIC_AWARE'` and bill 18¢/min, so each re-price can drift by a cent. A legitimate payment could be held with "Review each share" on every tap.
 - **Root cause:** The gate compared against a fresh re-price each time instead of remembering which server quote the organizer had already been shown.
 - **Fix:** `markFriendQuoteReviewed` stores the id:fare signature of the quote put on screen for review. On the next Confirm, `reviewedFriendQuoteFresh` (same signature, within 10 min) skips the client re-price and goes straight to confirm-charges. At most one review round. Web `FriendRide.jsx` and native `carpool/[token].tsx`. Tests in `src/lib/friendSplitPreview.test.js`.
-- **Still open:** `confirm-charges` runs its own `recomputeRideFares` on the server, so the charged share can still differ by a few cents from the reviewed one. The Stripe idempotency key `friend:<ride>:<participant>:<fare_cents>` includes the fare, so a retry after drift is not deduplicated for an unpaid (e.g. requires_action) participant. Not changed here.
+- **Still open:** Re-price drift is fixed: a fresh server quote is charged exactly, and an expired or mismatched quote is re-quoted for review without a charge. The Stripe idempotency key `friend:<ride>:<participant>:<fare_cents>` still includes the fare, so a retry after a later fare change is not deduplicated for an unpaid (e.g. requires_action) participant. That key format is not changed here.
 
 ## 2026-09-24 — Friend lobby preview disagreed with the charged share
 

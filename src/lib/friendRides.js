@@ -187,14 +187,17 @@ export async function recomputeFriendRide(token, splitMode) {
   })
 }
 
-export async function confirmFriendCharges(token, { useCredits = true } = {}) {
+export async function confirmFriendCharges(token, { useCredits = true, quoteId, quoteSignature } = {}) {
+  const body = {
+    token,
+    useCredits,
+    origin: typeof window !== 'undefined' ? window.location.origin : undefined,
+  }
+  if (quoteId) body.quoteId = String(quoteId)
+  if (quoteSignature) body.quoteSignature = String(quoteSignature)
   return api('/api/friend-rides?action=confirm-charges', {
     method: 'POST',
-    body: {
-      token,
-      useCredits,
-      origin: typeof window !== 'undefined' ? window.location.origin : undefined,
-    },
+    body,
   })
 }
 

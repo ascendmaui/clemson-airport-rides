@@ -35,7 +35,9 @@ import {
   type Place,
 } from 'rides-native/shared/carpool.js'
 import {
+  applyFriendChargeReview,
   friendChargeNeedsReview,
+  friendQuoteRef,
   friendSplitPreview,
   liveCarpoolQuote,
   markFriendQuoteReviewed,
@@ -263,7 +265,15 @@ export default function CarpoolLobbyScreen() {
         return
       }
       setBusyLabel('Charging…')
-      const data = await confirmFriendCharges(supabase, token)
+      const quoteRef = shown?.kind === 'friends' ? friendQuoteRef(priced) : null
+      const data = await confirmFriendCharges(supabase, token, quoteRef)
+      if (shown?.kind === 'friends' && data?.status === 'review_required') {
+        const next = applyFriendChargeReview(priced, data)
+        setRide(next)
+        reviewRef.current = markFriendQuoteReviewed(next)
+        setHint('Review each share, then confirm to charge.')
+        return
+      }
       await load()
       if (data.booked) {
         const assigned = data.trip?.driver_id || ride?.driver_profile_id

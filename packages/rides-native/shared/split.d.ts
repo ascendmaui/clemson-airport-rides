@@ -19,8 +19,23 @@ export type FriendSplitPreview = {
 }
 
 export type FriendQuoteReview = { signature: string; at: number }
+export type FriendQuoteRef = { quoteId: string; quoteSignature: string | null }
+export type FriendReviewPayload = {
+  ride?: RideSummary | null
+  quoteId?: string | null
+  quote_id?: string | null
+  quoteSignature?: string | null
+  quote_signature?: string | null
+  shares?: { id: string; share_cents: number }[] | null
+  status?: string
+}
 export const FRIEND_REVIEW_TTL_MS: number
 export function friendQuoteSignature(ride: RideSummary | null | undefined): string | null
+export function friendQuoteRef(ride: RideSummary | null | undefined): FriendQuoteRef | null
+export function applyFriendChargeReview(
+  shown: RideSummary | null | undefined,
+  payload: FriendReviewPayload | null | undefined,
+): RideSummary | null
 export function markFriendQuoteReviewed(ride: RideSummary | null | undefined, now?: number): FriendQuoteReview | null
 export function reviewedFriendQuoteFresh(
   review: FriendQuoteReview | null | undefined,

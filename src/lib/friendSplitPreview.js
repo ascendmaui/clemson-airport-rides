@@ -86,8 +86,8 @@ export function markFriendQuoteReviewed(ride, now = Date.now()) {
 
 /**
  * True when the quote on screen is the one the organizer was just asked to review.
- * Confirm then charges without another client re-price, so live-traffic drift in
- * the route duration cannot hold the charge forever (at most one review round).
+ * The next confirm sends that server quote id and skips another client re-price.
+ * At most one review round.
  */
 export function reviewedFriendQuoteFresh(review, ride, now = Date.now()) {
   if (!review?.signature) return false
@@ -104,6 +104,62 @@ export function friendChargeNeedsReview(shown, refreshed) {
   const prev = new Map((shown?.participants || []).map((person) => [String(person.id), centsOrNull(person.fare_cents)]))
   if (prev.size !== next.length) return true
   return next.some((person) => prev.get(String(person.id)) !== centsOrNull(person.fare_cents))
+}
+
+/** Quote id the confirm request may send. Amounts stay on the server. */
+export function friendQuoteRef(ride) {
+  const quote = ride?.fare_breakdown?.friend_quote
+  if (!quote?.id) return null
+  return {
+    quoteId: String(quote.id),
+    quoteSignature: quote.signature ? String(quote.signature) : null,
+  }
+}
+
+/**
+ * Put a review_required payload on the lobby. Server shares and quote id win.
+ * Top-level amount fields on the payload are ignored.
+ */
+export function applyFriendChargeReview(shown, payload) {
+  const merged = payload?.ride ? (mergeFriendQuote(shown, payload.ride) || shown || null) : (shown || null)
+  if (!merged) return null
+  const shares = Array.isArray(payload?.shares) ? payload.shares : null
+  const quoteId = scalar(payload?.quoteId) || scalar(payload?.quote_id) || scalar(merged?.fare_breakdown?.friend_quote?.id)
+  const quoteSignature = scalar(payload?.quoteSignature)
+    || scalar(payload?.quote_signature)
+    || scalar(merged?.fare_breakdown?.friend_quote?.signature)
+  let participants = merged.participants || []
+  if (shares?.length) {
+    const byId = new Map(shares.map((row) => [String(row.id), centsOrNull(row.share_cents)]))
+    participants = participants.map((person) => {
+      const cents = byId.get(String(person.id))
+      if (cents == null || cents < 0) return person
+      return { ...person, fare_cents: cents }
+    })
+  }
+  const previous = merged.fare_breakdown?.friend_quote || {}
+  const friend_quote = quoteId
+    ? {
+        ...previous,
+        id: quoteId,
+        signature: quoteSignature,
+        shares: shares || previous.shares || null,
+      }
+    : (previous.id ? previous : null)
+  return {
+    ...merged,
+    participants,
+    fare_breakdown: {
+      ...(merged.fare_breakdown || {}),
+      ...(friend_quote ? { friend_quote } : {}),
+    },
+  }
+}
+
+function scalar(value) {
+  if (typeof value === 'string' && value.trim()) return value.trim()
+  if (typeof value === 'number' && Number.isFinite(value)) return String(value)
+  return null
 }
 
 /** Keep organizer/self flags when a recompute payload omits them. Fares come from refreshed. */
