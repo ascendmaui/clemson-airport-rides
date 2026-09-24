@@ -2,6 +2,14 @@
 
 Persistent knowledge base for recurring failures. When a matching issue appears, apply the saved fix first.
 
+## 2026-09-24 — Driver earnings showed 80% of fare on carpool trips
+
+- **Track / machine:** Clemson RIDES · Pro
+- **Symptom:** Driver app earnings, recent activity, and trip details showed 80% of fare_cents and hid driver_carpool_bonus.
+- **Root cause:** Period totals, the earnings list, and trip cards used driverNetCents(fare). loadEarnings did not select trips.metadata.
+- **Fix:** Recent earnings and trip net use metadata.driver_payout_cents when set. Screens show base net, carpool bonus id driver_carpool_bonus, and that total.
+- **Reuse:** Carpool driver take is trips.metadata.driver_payout_cents. Do not recompute 80% of the rider gross for those rows.
+
 ## 2026-09-24 — Driver EAS Bundle JS: Unable to resolve `expo-router` from `rides-native`
 
 - **Track / machine:** Clemson RIDES Track 1 · Max; EAS iOS driver

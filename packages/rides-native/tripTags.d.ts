@@ -25,6 +25,10 @@ export type DriverCard = {
   depositCents: number
   depositExplicit: boolean
   driverNetCents: number
+  baseNetCents?: number | null
+  carpoolBonusCents?: number | null
+  carpoolIncentiveId?: string | null
+  driverPayoutCents?: number | null
   firstName: string
   purpose: string
   tier: string | null
@@ -50,7 +54,39 @@ export type FareCollection = {
   driverNetCents: number
   platformFeeCents: number
   shares: FareShare[]
+  baseNetCents?: number | null
+  carpoolBonusCents?: number | null
+  carpoolIncentiveId?: string | null
+  usesStoredPayout?: boolean
 }
+
+export const DRIVER_CARPOOL_BONUS_ID: string
+
+export function carpoolPayFromTrip(row: {
+  fare_cents?: number
+  fareCents?: number
+  metadata?: Record<string, unknown> | null
+  driverPayoutCents?: number | null
+  baseNetCents?: number | null
+  carpoolBonusCents?: number | null
+  carpoolIncentiveId?: string | null
+} | null | undefined): {
+  baseNetCents: number
+  bonusCents: number
+  payoutCents: number
+  incentiveId: string
+  showBonus: boolean
+} | null
+
+export function tripEarnedCents(trip: {
+  fare_cents?: number
+  fareCents?: number
+  metadata?: Record<string, unknown> | null
+  driverPayoutCents?: number | null
+  baseNetCents?: number | null
+  carpoolBonusCents?: number | null
+  carpoolIncentiveId?: string | null
+} | null | undefined): number
 
 export type PaymentRow = {
   kind?: string
@@ -103,7 +139,7 @@ export function fareCollection(card: {
 } | null | undefined): FareCollection
 export function isSameZonedWeek(iso: string | null | undefined, now?: Date, timeZone?: string): boolean
 export function weekNetCents(
-  trips: Array<{ status?: string; fare_cents?: number; completed_at?: string | null }> | null | undefined,
+  trips: Array<{ status?: string; fare_cents?: number; completed_at?: string | null; metadata?: Record<string, unknown> | null }> | null | undefined,
   now?: Date,
 ): number
 export function declineDisposition(status: string | null | undefined): 'release' | 'leave' | 'cancel'
