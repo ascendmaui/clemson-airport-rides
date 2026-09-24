@@ -58,11 +58,11 @@ Airport schedule (rider):
 2. Choose GSP (Greenville-Spartanburg, flat $75) or CLT (Charlotte Douglas, flat $175).
 3. Optional date and time.
 4. Book creates a trip in status "searching" (pickup Memorial Stadium) and starts Stripe Checkout for a 25% deposit. A date keeps that hold scheduled.
-Airport flat rates are not game-day surged. A verified Clemson student gets 10% off Standard, which includes these airport fares because Schedule prices them as Standard. Deposit is 25% of the fare after that discount.
+Airport flat rates are not game-day surged. A confirmed @clemson.edu or @g.clemson.edu account gets 10% off Standard, which includes these airport fares because Schedule prices them as Standard. Deposit is 25% of the fare after that discount. A profile student flag does not apply the discount.
 Do not invent a refund window. Terms say cancel promptly and deposit refund rules follow the in-app and Stripe receipt terms.
 
 Student discount:
-10% off Standard only. Account → Student. Eligible when the account email ends with @clemson.edu, which includes @g.clemson.edu, or when student_verified_at is set. Other tiers are not discounted by this rule.
+10% off Standard only. Account → Student. Eligible only when the signed-in account email is confirmed and ends with @clemson.edu or @g.clemson.edu. @g.clemson.edu does not end with the characters @clemson.edu, and both domains count. profiles.student_verified_at and a client student flag do not apply the discount. Other tiers are not discounted by this rule.
 
 Friends / group ride:
 Friends tab → Ride with friends. The organizer needs a registered vehicle. Set pickup and dropoff, create an invite link (/friends/:token). Friends join with their own stops. Capacity is the vehicle seat count and never more than 5 people total. The route is optimized and the fare is split. Confirm charges every share (saved card off-session, or the Payment Element / Apple Pay). The trip is booked only when every share is paid. Do not describe Checkout pay-links for friend rides.
@@ -189,7 +189,7 @@ export const TOPICS = [
     steps: [
       'Open Account → Student.',
       'The discount is 10% off Standard fares, including GSP and CLT airport rates.',
-      'It applies when your email ends with @clemson.edu (that includes @g.clemson.edu) or student_verified_at is set.',
+      'It applies only when the signed-in email is confirmed and ends with @clemson.edu or @g.clemson.edu. A student flag on the profile does not.',
       'Comfort, XL, Pet, and Tesla prices are not covered by this discount.',
     ],
     actions: [action('Open Student', 'account', { tab: 'student' })],
@@ -254,7 +254,7 @@ export const TOPICS = [
       'Answer Yes to student, car, insurance, and driving for extra money, and accept the attestation.',
       'Enter make, model, and plate.',
       'When that quiz succeeds, the application is marked approved and your role becomes driver. The app does not ask for a license upload.',
-      'A @clemson.edu email is marked student-verified at the same time.',
+      'A confirmed @clemson.edu or @g.clemson.edu email is what applies 10% off Standard. Saving a student flag does not grant that discount by itself.',
     ],
     actions: [action('Driver signup', 'driver-signup'), action('Vehicle tab', 'account', { tab: 'vehicle' })],
   },

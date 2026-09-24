@@ -11,7 +11,8 @@ import { lift } from '@/lib/elevation'
 import type { Palette } from '@/lib/palette'
 import { useTheme, type DisplayMode } from '@/lib/theme'
 import { useThemedStyles } from '@/lib/useThemedStyles'
-import { displayFirstName, isClemsonEmail } from 'rides-native/authErrors'
+import { displayFirstName } from 'rides-native/authErrors'
+import { useStudentStatus } from '@/lib/useStudentStatus'
 import { FAVORITE_SPOTS } from 'rides-native/riderShell.js'
 import { loadRatingSummary } from 'rides-native/PartyScreens'
 import { supabase } from '@/lib/supabase'
@@ -25,7 +26,7 @@ const DISPLAY: { id: DisplayMode; label: string }[] = [
 
 const LINKS: { href: '/billing' | '/student' | '/promo' | '/notifications' | '/history' | '/schedule' | '/help' | '/support' | '/lost-found'; label: string; hint: string }[] = [
   { href: '/billing', label: 'Billing', hint: 'Card on file, deposits, and ride history' },
-  { href: '/student', label: 'Student', hint: 'Verify a Clemson email · 10% off Standard' },
+  { href: '/student', label: 'Student', hint: 'Confirmed Clemson email · 10% off Standard' },
   { href: '/promo', label: 'Promo codes', hint: 'Apply a friend code or share yours' },
   { href: '/notifications', label: 'Notifications', hint: 'Ride, billing, friends, and promo alerts' },
   { href: '/history', label: 'Your rides', hint: 'Fare and deposit on each trip' },
@@ -39,6 +40,7 @@ function AccountScreen() {
   const router = useRouter()
   const insets = useSafeAreaInsets()
   const { user, configured, signOut } = useAuth()
+  const student = useStudentStatus()
   const { colors, displayMode, setDisplayMode, solarPlace } = useTheme()
   const styles = useThemedStyles(makeStyles)
   const [error, setError] = useState<string | null>(null)
@@ -131,8 +133,10 @@ function AccountScreen() {
         {pendingTrip ? (
           <PrimaryButton label="Rate your last ride" onPress={() => router.push({ pathname: '/rate', params: { trip: pendingTrip } })} />
         ) : null}
-        {user && isClemsonEmail(user.email) ? (
+        {student.verified ? (
           <Text style={styles.badge}>Clemson student · 10% off Standard</Text>
+        ) : user ? (
+          <Text style={styles.copy}>{student.gateCopy}</Text>
         ) : null}
         <Pressable accessibilityRole="button" onPress={() => router.push('/safety')} style={[styles.safety, lift(colors, 'rest')]}>
           <Text style={styles.safetyKicker}>SAFETY</Text>

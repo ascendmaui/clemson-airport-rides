@@ -1,4 +1,5 @@
-import { displayFirstName, isClemsonEmail } from 'rides-native/authErrors'
+import { displayFirstName } from 'rides-native/authErrors'
+import { studentDiscountGranted } from '../../../src/lib/studentDomain.js'
 import type { AuthUser } from 'rides-native/createAuth'
 import {
   airportFareCents,
@@ -68,7 +69,7 @@ export function quoteRide(pickup: RidePlace, dropoff: RidePlace, isStudent: bool
 }
 
 export function riderIsStudent(user: AuthUser | null) {
-  return Boolean(user?.email && isClemsonEmail(user.email))
+  return studentDiscountGranted(user)
 }
 
 export async function createScheduledTrip({

@@ -7,11 +7,7 @@ export const PROMO_CLAIM_STATE_KEY = 'clemson_promo_claim_state'
 const RATE_LIMIT_MSG =
   'Too many signup emails just now. Wait a minute and try again, or sign in if you already created an account.'
 
-export function isClemsonEmail(email) {
-  if (!email || typeof email !== 'string') return false
-  const value = email.trim().toLowerCase()
-  return value.endsWith('@clemson.edu') || value.endsWith('@g.clemson.edu')
-}
+export { isClemsonEmail } from '../../src/lib/studentDomain.js'
 
 export function normalizePromoCode(raw) {
   return String(raw || '')

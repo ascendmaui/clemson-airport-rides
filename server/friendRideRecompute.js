@@ -12,7 +12,7 @@ import { quoteCarpool, carpoolSeatCap } from '../src/lib/carpoolEngine.js'
 import { eligibleFirstRideIds, gameDayActive } from './carpoolSettle.js'
 import { loadGameDayMultiplier } from './creditLots.js'
 import { quoteFare, resolveSurge, percentOffCents, STUDENT_DISCOUNT_BPS } from '../src/lib/fareRates.js'
-import { isClemsonEmail } from '../src/lib/studentDomain.js'
+import { studentFlagsFor } from './studentEligibility.js'
 
 function preserveRideMeta(ride, breakdown) {
   const prev = ride?.fare_breakdown || {}
@@ -213,20 +213,4 @@ export async function recomputeRideFares(sb, token, { splitMode } = {}) {
 function rideTouchesAirport(participants) {
   const blob = JSON.stringify(participants.map((p) => ({ pickup: p.pickup, dropoff: p.dropoff }))).toLowerCase()
   return /airport|\bgsp\b|\bclt\b|greenville-spartanburg|charlotte douglas/.test(blob)
-}
-
-async function studentFlagsFor(sb, participants) {
-  const ids = participants.map((p) => p.user_id).filter(Boolean)
-  const byId = {}
-  if (ids.length) {
-    const { data } = await sb
-      .from('profiles')
-      .select('id, email, student_verified_at')
-      .in('id', ids)
-    for (const row of data || []) byId[row.id] = row
-  }
-  return participants.map((p) => {
-    const prof = p.user_id ? byId[p.user_id] : null
-    return Boolean(prof?.student_verified_at) || isClemsonEmail(prof?.email || p.email)
-  })
 }

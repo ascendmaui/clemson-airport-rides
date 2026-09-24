@@ -1,4 +1,5 @@
 import { displayFirstName, primeDisplayFirstName } from './privacyName.js'
+import { isClemsonEmail, studentDiscountGranted } from '../src/lib/studentDomain.js'
 
 const PROFILE_SELECTS = [
   'id, role, full_name, email, student_verified_at, rating_avg, rating_count, billing_activated_at, stripe_card_brand, stripe_card_last4, stripe_default_pm_id',
@@ -16,7 +17,7 @@ function ownFirstName(profile, user) {
 }
 
 function emailEligible(email) {
-  return String(email || '').trim().toLowerCase().endsWith('@clemson.edu')
+  return isClemsonEmail(email)
 }
 
 function normalizeRole(role) {
@@ -122,9 +123,9 @@ export async function loadUserContext(sb, user) {
     email,
     role,
     student: {
-      verified: Boolean(profile?.student_verified_at) || emailEligible(email),
-      verifiedAt: profile?.student_verified_at || null,
-      emailEligible: emailEligible(email),
+      verified: studentDiscountGranted(user),
+      verifiedAt: studentDiscountGranted(user) ? (profile?.student_verified_at || null) : null,
+      emailEligible: emailEligible(user?.email),
     },
     ratings: {
       avg: profile?.rating_avg == null ? null : Number(profile.rating_avg),
