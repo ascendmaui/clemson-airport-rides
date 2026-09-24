@@ -1,7 +1,15 @@
 import { quoteCarpool } from './carpool.js'
 import { friendSplitPreview } from '../../../src/lib/friendSplitPreview.js'
 
-export { friendChargeNeedsReview, friendSplitPreview, mergeFriendQuote } from '../../../src/lib/friendSplitPreview.js'
+export {
+  FRIEND_REVIEW_TTL_MS,
+  friendChargeNeedsReview,
+  friendQuoteSignature,
+  friendSplitPreview,
+  markFriendQuoteReviewed,
+  mergeFriendQuote,
+  reviewedFriendQuoteFresh,
+} from '../../../src/lib/friendSplitPreview.js'
 
 export function quoteFromRide(ride) {
   const shares = ride?.fare_breakdown?.carpool?.shares

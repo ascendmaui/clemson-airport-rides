@@ -32,8 +32,11 @@ import {
   friendChargeNeedsReview,
   friendSplitPreview,
   liveCarpoolQuote,
+  markFriendQuoteReviewed,
   mergeFriendQuote,
+  reviewedFriendQuoteFresh,
   selfParticipantId,
+  type FriendQuoteReview,
   splitRows,
 } from 'rides-native/shared/split.js'
 import type { Palette } from '@/lib/palette'
@@ -72,6 +75,7 @@ export default function CarpoolLobbyScreen() {
   const [splitMode, setSplitMode] = useState<'even' | 'by_distance'>('even')
   const seeded = useRef(false)
   const missing = useRef(false)
+  const reviewRef = useRef<FriendQuoteReview | null>(null)
 
   const load = useCallback(async () => {
     if (!token || missing.current) return
@@ -183,28 +187,33 @@ export default function CarpoolLobbyScreen() {
     setBusy(true)
     setError(null)
     const shown = ride
+    const reviewed = shown?.kind === 'friends' && reviewedFriendQuoteFresh(reviewRef.current, shown)
+    reviewRef.current = null
     try {
       setBusyLabel('Calculating fares…')
       let priced = shown
       let refreshed = false
-      try {
-        const next = await recomputeFriendRide(supabase, token, splitMode)
-        if (shown?.kind === 'friends') {
-          priced = mergeFriendQuote(shown, next)
-          setRide(priced)
-        } else {
-          await load()
-        }
-        refreshed = true
-        setHint(null)
-      } catch (err) {
-        setHint(apiErrorMessage(err))
-        if (!shown?.total_fare_cents) {
-          setError(apiErrorMessage(err))
-          return
+      if (!reviewed) {
+        try {
+          const next = await recomputeFriendRide(supabase, token, splitMode)
+          if (shown?.kind === 'friends') {
+            priced = mergeFriendQuote(shown, next)
+            setRide(priced)
+          } else {
+            await load()
+          }
+          refreshed = true
+          setHint(null)
+        } catch (err) {
+          setHint(apiErrorMessage(err))
+          if (!shown?.total_fare_cents) {
+            setError(apiErrorMessage(err))
+            return
+          }
         }
       }
       if (shown?.kind === 'friends' && refreshed && friendChargeNeedsReview(shown, priced)) {
+        reviewRef.current = markFriendQuoteReviewed(priced)
         setHint('Review each share, then confirm to charge.')
         return
       }

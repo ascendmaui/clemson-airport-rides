@@ -17,6 +17,15 @@ export type FriendSplitPreview = {
   headline: { soloCents: number; shareCents: number; savingsCents: number } | null
 }
 
+export type FriendQuoteReview = { signature: string; at: number }
+export const FRIEND_REVIEW_TTL_MS: number
+export function friendQuoteSignature(ride: RideSummary | null | undefined): string | null
+export function markFriendQuoteReviewed(ride: RideSummary | null | undefined, now?: number): FriendQuoteReview | null
+export function reviewedFriendQuoteFresh(
+  review: FriendQuoteReview | null | undefined,
+  ride: RideSummary | null | undefined,
+  now?: number,
+): boolean
 export function friendSplitPreview(ride: RideSummary | null | undefined): FriendSplitPreview
 export function friendChargeNeedsReview(
   shown: RideSummary | null | undefined,

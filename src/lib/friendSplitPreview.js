@@ -62,6 +62,39 @@ export function friendSplitPreview(ride) {
   }
 }
 
+/** A reviewed quote is honored for this long before confirm re-prices it. */
+export const FRIEND_REVIEW_TTL_MS = 10 * 60 * 1000
+
+/** Stable id:fare signature. Null unless every participant has a server fare. */
+export function friendQuoteSignature(ride) {
+  const people = ride?.participants || []
+  if (!people.length) return null
+  const parts = []
+  for (const person of people) {
+    const cents = centsOrNull(person?.fare_cents)
+    if (cents == null) return null
+    parts.push(`${String(person.id)}:${cents}`)
+  }
+  return parts.sort().join('|')
+}
+
+/** Record that the organizer has now seen this server quote. */
+export function markFriendQuoteReviewed(ride, now = Date.now()) {
+  const signature = friendQuoteSignature(ride)
+  return signature ? { signature, at: now } : null
+}
+
+/**
+ * True when the quote on screen is the one the organizer was just asked to review.
+ * Confirm then charges without another client re-price, so live-traffic drift in
+ * the route duration cannot hold the charge forever (at most one review round).
+ */
+export function reviewedFriendQuoteFresh(review, ride, now = Date.now()) {
+  if (!review?.signature) return false
+  if (!(now - review.at >= 0 && now - review.at <= FRIEND_REVIEW_TTL_MS)) return false
+  return friendQuoteSignature(ride) === review.signature
+}
+
 /** True when the quote on screen is not the quote confirm would charge. */
 export function friendChargeNeedsReview(shown, refreshed) {
   if (!refreshed) return true

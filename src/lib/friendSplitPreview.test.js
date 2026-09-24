@@ -1,9 +1,13 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import {
+  FRIEND_REVIEW_TTL_MS,
   friendChargeNeedsReview,
+  friendQuoteSignature,
   friendSplitPreview,
+  markFriendQuoteReviewed,
   mergeFriendQuote,
+  reviewedFriendQuoteFresh,
 } from './friendSplitPreview.js'
 import { splitRows } from '../../packages/rides-native/shared/split.js'
 
@@ -96,4 +100,32 @@ test('merge keeps organizer flags and takes the refreshed fare', () => {
   assert.equal(merged.is_organizer, true)
   assert.equal(merged.participants[0].fare_cents, 850)
   assert.equal(merged.participants[0].is_self, true)
+})
+
+test('a reviewed quote lets the next confirm charge, so traffic drift cannot hold it forever', () => {
+  // Each server re-price drifts by a cent (TRAFFIC_AWARE duration). Without the review
+  // memo every confirm would re-price, differ from the screen, and ask for review again.
+  const quoteAt = (cents) => ({ kind: 'friends', participants: [{ id: 'a', fare_cents: cents }, { id: 'b', fare_cents: cents }] })
+  const shown = quoteAt(850)
+  const priced = quoteAt(851)
+  assert.equal(friendChargeNeedsReview(shown, priced), true)
+  const review = markFriendQuoteReviewed(priced, 1_000)
+  assert.ok(review)
+  // Second tap: the screen shows exactly what was reviewed, so confirm skips the re-price.
+  assert.equal(reviewedFriendQuoteFresh(review, priced, 1_000 + 60_000), true)
+  // Anything else still re-prices and reviews again.
+  assert.equal(reviewedFriendQuoteFresh(review, quoteAt(852), 1_000 + 60_000), false)
+  assert.equal(reviewedFriendQuoteFresh(review, priced, 1_000 + FRIEND_REVIEW_TTL_MS + 1), false)
+  assert.equal(reviewedFriendQuoteFresh(null, priced, 1_000), false)
+})
+
+test('quote signature needs a server fare for every participant', () => {
+  assert.equal(friendQuoteSignature(null), null)
+  assert.equal(friendQuoteSignature({ participants: [] }), null)
+  assert.equal(friendQuoteSignature({ participants: [{ id: 'a', fare_cents: null }] }), null)
+  assert.equal(markFriendQuoteReviewed({ participants: [{ id: 'a', fare_cents: null }] }), null)
+  assert.equal(
+    friendQuoteSignature({ participants: [{ id: 'b', fare_cents: 2 }, { id: 'a', fare_cents: 1 }] }),
+    friendQuoteSignature({ participants: [{ id: 'a', fare_cents: 1 }, { id: 'b', fare_cents: 2 }] }),
+  )
 })

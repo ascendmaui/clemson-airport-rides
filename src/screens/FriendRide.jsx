@@ -1,10 +1,16 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { CampusMap, CLEMSON } from '../components/CampusMap'
 import { PlacePicker } from '../components/PlacePicker'
 import { PrimaryButton } from '../components/PrimaryButton'
 import { CarpoolCompare } from '../components/CarpoolCompare'
 import { formatUsd, NEIGHBORHOODS, quoteCarpool, surgeDelta } from '../lib/carpoolEngine'
-import { friendChargeNeedsReview, friendSplitPreview, mergeFriendQuote } from '../lib/friendSplitPreview'
+import {
+  friendChargeNeedsReview,
+  friendSplitPreview,
+  markFriendQuoteReviewed,
+  mergeFriendQuote,
+  reviewedFriendQuoteFresh,
+} from '../lib/friendSplitPreview'
 import { BottomTabs } from '../components/BottomTabs'
 import { SosControl } from '../components/SosControl'
 import { useAuth } from '../lib/auth'
@@ -43,6 +49,7 @@ export function FriendRideScreen({ token: tokenProp, kind: kindProp = 'friends' 
   const [ride, setRide] = useState(null)
   const [error, setError] = useState(null)
   const [busy, setBusy] = useState(false)
+  const reviewRef = useRef(null)
   const [busyLabel, setBusyLabel] = useState('')
   const grand = NEIGHBORHOODS.find((n) => n.id === 'grand-marc')
   const college = NEIGHBORHOODS.find((n) => n.id === 'college-ave')
@@ -224,25 +231,30 @@ export function FriendRideScreen({ token: tokenProp, kind: kindProp = 'friends' 
   async function onConfirmCharges() {
     setBusy(true); setError(null)
     const shown = ride
+    const reviewed = friendsLobby && reviewedFriendQuoteFresh(reviewRef.current, shown)
+    reviewRef.current = null
     try {
       setBusyLabel('Calculating fares…')
       let priced = shown
       let refreshed = false
-      try {
-        const next = await recomputeFriendRide(token, splitMode)
-        priced = friendsLobby ? mergeFriendQuote(shown, next) : next
-        setRide(priced)
-        refreshed = true
-        setMapsHint(null)
-      } catch (e) {
-        // If recompute fails (e.g. maps key), still try charge if fares already present
-        setMapsHint(e.payload?.message || e.message)
-        if (!shown?.total_fare_cents) {
-          setError(e.payload?.message || e.message || 'Could not update fares. Try Optimize route & fares first.')
-          return
+      if (!reviewed) {
+        try {
+          const next = await recomputeFriendRide(token, splitMode)
+          priced = friendsLobby ? mergeFriendQuote(shown, next) : next
+          setRide(priced)
+          refreshed = true
+          setMapsHint(null)
+        } catch (e) {
+          // If recompute fails (e.g. maps key), still try charge if fares already present
+          setMapsHint(e.payload?.message || e.message)
+          if (!shown?.total_fare_cents) {
+            setError(e.payload?.message || e.message || 'Could not update fares. Try Optimize route & fares first.')
+            return
+          }
         }
       }
       if (friendsLobby && refreshed && friendChargeNeedsReview(shown, priced)) {
+        reviewRef.current = markFriendQuoteReviewed(priced)
         setMapsHint('Review each share, then confirm to charge.')
         return
       }
