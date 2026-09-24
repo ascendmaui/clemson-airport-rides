@@ -5,8 +5,9 @@ import { ProfileSetupScreen, partyColorsFromPalette } from 'rides-native/PartySc
 import { useAuth } from '@/lib/auth'
 import { supabase } from '@/lib/supabase'
 import { useTheme } from '@/lib/theme'
+import { RequireAuth } from '@/components/RequireAuth'
 
-export default function ProfileSetupRoute() {
+function ProfileSetupRoute() {
   const router = useRouter()
   const insets = useSafeAreaInsets()
   const { user, signOut } = useAuth()
@@ -26,5 +27,14 @@ export default function ProfileSetupRoute() {
         }}
       />
     </ScrollView>
+  )
+}
+
+
+export default function ProfileSetupScreenRoute() {
+  return (
+    <RequireAuth>
+      <ProfileSetupRoute />
+    </RequireAuth>
   )
 }

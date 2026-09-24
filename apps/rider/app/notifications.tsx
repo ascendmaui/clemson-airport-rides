@@ -16,10 +16,11 @@ import {
 import type { Palette } from '@/lib/palette'
 import { useTheme } from '@/lib/theme'
 import { useThemedStyles } from '@/lib/useThemedStyles'
+import { RequireAuth } from '@/components/RequireAuth'
 
 type Prefs = typeof DEFAULT_NOTIFICATION_PREFS
 
-export default function NotificationsScreen() {
+function NotificationsScreen() {
   const router = useRouter()
   const insets = useSafeAreaInsets()
   const { user } = useAuth()
@@ -137,4 +138,13 @@ function makeStyles(colors: Palette) {
     rowTitle: { color: colors.title, fontWeight: '800' as const, fontSize: 15, marginBottom: 2 },
     note: { color: colors.link, fontSize: 13, lineHeight: 18 },
   }
+}
+
+
+export default function NotificationsScreenRoute() {
+  return (
+    <RequireAuth>
+      <NotificationsScreen />
+    </RequireAuth>
+  )
 }

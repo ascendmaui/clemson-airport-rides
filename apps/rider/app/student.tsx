@@ -9,8 +9,9 @@ import { supabase } from '@/lib/supabase'
 import { loadStudentProfile, markStudentVerified, studentStatus } from 'rides-native/riderMoney.js'
 import type { Palette } from '@/lib/palette'
 import { useThemedStyles } from '@/lib/useThemedStyles'
+import { RequireAuth } from '@/components/RequireAuth'
 
-export default function StudentScreen() {
+function StudentScreen() {
   const router = useRouter()
   const insets = useSafeAreaInsets()
   const { user } = useAuth()
@@ -99,4 +100,13 @@ function makeStyles(colors: Palette) {
     copy: { color: colors.inkSecondary, fontSize: 14, lineHeight: 20 },
     note: { color: colors.link, fontSize: 13, lineHeight: 18 },
   }
+}
+
+
+export default function StudentScreenRoute() {
+  return (
+    <RequireAuth>
+      <StudentScreen />
+    </RequireAuth>
+  )
 }
