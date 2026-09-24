@@ -7,6 +7,9 @@ export type AuthUser = {
     full_name?: string
     name?: string
     promo_code?: string
+    phone?: string
+    bio?: string
+    ride_style?: string
   }
 }
 
@@ -26,6 +29,7 @@ export type AuthApi = {
     password: string,
     fullName?: string,
     promoCode?: string,
+    profile?: { phone?: string; bio?: string; rideStyle?: string },
   ) => Promise<{
     session: AuthSession | null
     user: AuthUser | null

@@ -39,7 +39,7 @@ export default function HomeScreen() {
             <Text style={styles.kicker}>DOWNTOWN TONIGHT</Text>
             <Text style={styles.title}>College Ave is {heat.label}</Text>
             <Text style={styles.subtitle}>
-              Typical Fri/Sat night pattern for Tiger Town / Study Hall — not live Uber demand.
+              Typical Fri/Sat night pattern for Tiger Town / Study Hall. Campus pattern, not a live demand feed.
             </Text>
             <View style={styles.barTrack}>
               <View style={[styles.barFill, { width: `${Math.round(heat.avg * 100)}%` }]} />

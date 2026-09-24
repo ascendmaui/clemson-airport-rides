@@ -8,6 +8,7 @@ import {
 import { getHashRoute, navigate } from '../lib/navigation'
 import { resumeAfterAuth } from '../components/SignInToBookModal'
 import { capturePromoFromLocation } from '../lib/riderPromo'
+import { RIDE_STYLES, isProfileComplete, profileFieldError } from '../../packages/rides-native/partyProfile.js'
 
 const fieldStyle = {
   width: '100%',
@@ -153,6 +154,9 @@ export function SignInScreen() {
 export function SignUpScreen() {
   const { signUp } = useAuth()
   const [fullName, setFullName] = useState('')
+  const [phone, setPhone] = useState('')
+  const [bio, setBio] = useState('')
+  const [rideStyle, setRideStyle] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [promo, setPromo] = useState(() => capturePromoFromLocation())
@@ -188,7 +192,13 @@ export function SignUpScreen() {
     submitLock.current = true
     setBusy(true)
     try {
-      const result = await signUp(trimmed, password, fullName.trim(), promo)
+      const draft = { full_name: fullName, phone, bio, ride_style: rideStyle }
+      const problem = profileFieldError(draft)
+      if (problem) {
+        setError(problem)
+        return
+      }
+      const result = await signUp(trimmed, password, fullName.trim(), promo, { phone, bio, rideStyle })
       const claim = result?.promoClaim
       if (claim?.error) {
         setError(`Account created. ${claim.error}`)
@@ -219,16 +229,54 @@ export function SignUpScreen() {
   }
 
   const blocked = busy || cooldownSec > 0
+  const profileReady = isProfileComplete({ full_name: fullName, phone, bio, ride_style: rideStyle })
   const cta =
     busy ? 'Creating…' : cooldownSec > 0 ? `Wait ${cooldownSec}s…` : 'Create account'
 
   return (
     <AuthShell title="Join Clemson RIDES" subtitle="Metered fares to GSP and CLT. Students save 10% on Standard.">
       <form onSubmit={onSubmit}>
+        <p style={{ fontSize: 12, color: '#522D80', lineHeight: 1.4, marginBottom: 14 }}>
+          A profile is required. The other person sees your name, bio, and ride style after a ride is accepted.
+        </p>
         <label style={{ display: 'block', marginBottom: 14 }}>
           <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink-secondary)' }}>Full name</span>
           <input required type="text" autoComplete="name" value={fullName} onChange={(e) => setFullName(e.target.value)} style={fieldStyle} disabled={blocked} />
         </label>
+        <label style={{ display: 'block', marginBottom: 14 }}>
+          <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink-secondary)' }}>Mobile number</span>
+          <input required type="tel" autoComplete="tel" placeholder="864-555-0100" value={phone} onChange={(e) => setPhone(e.target.value)} style={fieldStyle} disabled={blocked} />
+        </label>
+        <label style={{ display: 'block', marginBottom: 14 }}>
+          <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink-secondary)' }}>Short bio</span>
+          <input required type="text" placeholder="How you like to ride" value={bio} onChange={(e) => setBio(e.target.value)} style={fieldStyle} disabled={blocked} />
+        </label>
+        <div style={{ marginBottom: 14 }}>
+          <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink-secondary)' }}>Ride style</span>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 8 }}>
+            {RIDE_STYLES.map((style) => {
+              const on = rideStyle === style
+              return (
+                <button
+                  key={style}
+                  type="button"
+                  onClick={() => setRideStyle(style)}
+                  disabled={blocked}
+                  style={{
+                    borderRadius: 999,
+                    padding: '8px 12px',
+                    fontWeight: 700,
+                    border: on ? '1px solid #522D80' : '1px solid rgba(82,45,128,0.2)',
+                    background: on ? '#522D80' : '#fff',
+                    color: on ? '#fff' : '#522D80',
+                  }}
+                >
+                  {style}
+                </button>
+              )
+            })}
+          </div>
+        </div>
         <label style={{ display: 'block', marginBottom: 14 }}>
           <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink-secondary)' }}>Email <span style={{ fontWeight: 500, color: 'var(--ink-tertiary)' }}>(Clemson email gets student pricing)</span></span>
           <input required type="email" autoComplete="email" placeholder="you@gmail.com" value={email} onChange={(e) => setEmail(e.target.value)} style={fieldStyle} disabled={blocked} />
@@ -265,7 +313,7 @@ export function SignUpScreen() {
             Continue
           </button>
         ) : (
-          <button type="submit" className="pressable primary-cta" disabled={blocked} style={{ width: '100%', padding: 16, borderRadius: 16, background: 'linear-gradient(135deg, var(--orange) 0%, #ff7a1a 100%)', color: '#fff', fontWeight: 700, fontSize: 16, boxShadow: 'var(--shadow-cta)', opacity: blocked ? 0.7 : 1 }}>
+          <button type="submit" className="pressable primary-cta" disabled={blocked || !profileReady} style={{ width: '100%', padding: 16, borderRadius: 16, background: 'linear-gradient(135deg, var(--orange) 0%, #ff7a1a 100%)', color: '#fff', fontWeight: 700, fontSize: 16, boxShadow: 'var(--shadow-cta)', opacity: blocked || !profileReady ? 0.7 : 1 }}>
             {cta}
           </button>
         )}

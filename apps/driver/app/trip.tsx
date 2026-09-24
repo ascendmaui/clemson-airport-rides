@@ -20,6 +20,8 @@ import {
   type DriverCard,
 } from 'rides-native/tripTags'
 import { ORANGE, PURPLE } from 'rides-native/places.js'
+import { CounterpartCard, RateTripPanel, partyColorsFromPalette } from 'rides-native/PartyScreens'
+import { loadCounterpart, type CounterpartView } from 'rides-native/partyProfile.js'
 import { useTheme } from '@/lib/theme'
 import type { Palette } from '@/lib/palette'
 
@@ -43,6 +45,8 @@ export default function TripScreen() {
   const [error, setError] = useState<string | null>(null)
   const [settleNote, setSettleNote] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const [person, setPerson] = useState<CounterpartView | null>(null)
+  const partyColors = partyColorsFromPalette(colors)
 
   const refresh = useCallback(async () => {
     if (!supabase || !id) return
@@ -56,6 +60,26 @@ export default function TripScreen() {
   useEffect(() => {
     refresh().catch((err) => setError(err instanceof Error ? err.message : 'Could not load this trip'))
   }, [refresh])
+
+  useEffect(() => {
+    if (!supabase || !user || !trip?.riderId) {
+      setPerson(null)
+      return undefined
+    }
+    let alive = true
+    loadCounterpart(supabase, {
+      status: trip.status,
+      rider_id: trip.riderId,
+      driver_id: user.id,
+    }, user.id).then((next) => {
+      if (alive) setPerson(next)
+    }).catch(() => {
+      if (alive) setPerson(null)
+    })
+    return () => {
+      alive = false
+    }
+  }, [trip?.id, trip?.status, trip?.riderId, user?.id])
 
   useEffect(() => {
     if (!supabase) return undefined
@@ -142,6 +166,18 @@ export default function TripScreen() {
         <Text style={styles.title}>{trip ? statusHeadline(trip.status) : 'Loading trip'}</Text>
         {trip ? (
           <>
+            {trip.status === 'completed' && user ? (
+              <RateTripPanel
+                supabase={supabase}
+                userId={user.id}
+                tripId={trip.id}
+                colors={partyColors}
+                onDone={() => router.replace('/')}
+                onLater={() => router.replace('/')}
+              />
+            ) : (
+              <CounterpartCard person={person} colors={partyColors} />
+            )}
             <Text style={styles.copy}>{trip.pickupLabel} → {trip.dropoffLabel}</Text>
             <Text style={styles.fare}>{formatCents(trip.driverNetCents)} net · deposit {formatCents(trip.depositCents)}</Text>
             <Text style={styles.copy}>
@@ -181,7 +217,6 @@ export default function TripScreen() {
         )}
         {error ? <ErrorText>{error}</ErrorText> : null}
         {action ? <Primary label={busy ? 'Updating…' : action} onPress={onAdvance} disabled={busy} tone="purple" /> : null}
-        {trip?.status === 'completed' ? <Primary label="Done" onPress={() => router.replace('/')} /> : null}
         </ScrollView>
       </View>
     </View>
@@ -197,7 +232,7 @@ function tripStyles(colors: Palette) {
       borderTopRightRadius: 28,
       padding: 18,
       gap: 8,
-      maxHeight: '62%',
+      maxHeight: '78%',
     },
     sheetScroll: { flexGrow: 0 },
     sheetContent: { gap: 8, paddingBottom: 8 },

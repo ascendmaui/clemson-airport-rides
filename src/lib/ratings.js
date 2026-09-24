@@ -1,5 +1,8 @@
 import { supabase } from './supabase'
 import { fetchFullProfile } from './profiles'
+import { ratingBlockReason } from '../../packages/rides-native/partyProfile.js'
+
+export { ratingBlockReason }
 
 /** Prefer fetchFullProfile — kept for existing callers */
 export async function fetchProfile(userId, opts = {}) {
@@ -35,21 +38,6 @@ function explainRatingError(message) {
     return 'Rating was not saved. You can rate only after the trip is completed, and only the other person on that trip.'
   }
   return message || 'Could not submit rating'
-}
-
-/** Null when this user may rate the trip. Matches ratings INSERT RLS. */
-export function ratingBlockReason(trip, userId) {
-  if (!trip) return 'Trip not found'
-  if (!userId) return 'Sign in to rate this ride'
-  if (trip.status !== 'completed') {
-    return 'This trip is not completed yet. Finish the ride, then rate.'
-  }
-  if (!trip.driver_id) return 'This trip has no driver yet, so it cannot be rated.'
-  const isParty = userId === trip.rider_id || userId === trip.driver_id
-  if (!isParty) return 'Only the rider or driver on this trip can leave a rating.'
-  const rateeId = userId === trip.rider_id ? trip.driver_id : trip.rider_id
-  if (!rateeId || rateeId === userId) return 'Cannot rate yourself'
-  return null
 }
 
 export async function submitRating({ tripId, raterId, rateeId, stars, comment }) {
