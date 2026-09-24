@@ -35,6 +35,11 @@ export type DriverCard = {
   shares: FareShare[]
   riderLat: number | null
   riderLng: number | null
+  riderRating?: number
+  etaMin?: number
+  distanceMi?: number
+  rideType?: string
+  isSynthetic?: boolean
 }
 
 export type FareCollection = {

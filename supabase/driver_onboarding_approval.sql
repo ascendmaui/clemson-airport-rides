@@ -311,7 +311,7 @@ set search_path = public
 as $$
 begin
   if new.online = true and not public.driver_is_approved(new.driver_id) then
-    raise exception 'Driver is not approved to go online';
+    raise exception 'Finish approval to go online. Your account is still under review.';
   end if;
   return new;
 end;
@@ -343,7 +343,7 @@ begin
   end if;
 
   if assigning and not public.driver_is_approved(new.driver_id) then
-    raise exception 'Driver is not approved to receive rides';
+    raise exception 'Finish approval to go online. Your account is still under review.';
   end if;
   return new;
 end;

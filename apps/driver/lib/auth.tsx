@@ -6,6 +6,7 @@ const auth = createAuth({
   supabase,
   supabaseConfigured,
   storage: authStorage,
+  passwordResetRedirectTo: 'clemsonrides-driver://set-password',
 })
 
 export const AuthProvider = auth.AuthProvider

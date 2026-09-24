@@ -11,6 +11,8 @@ import { supabase } from '@/lib/supabase'
 import { useTheme } from '@/lib/theme'
 import type { Palette } from '@/lib/palette'
 import { acceptTrip, declineTrip, loadDriverDesk, subscribeTrips } from 'rides-native/driverDesk'
+import { fetchDriverApplication } from 'rides-native/drivers'
+import { isSyntheticOffer, syntheticOffers } from 'rides-native/syntheticOffers'
 import {
   formatCents,
   formatPickupAt,
@@ -99,11 +101,16 @@ export default function QueueScreen() {
   const [busyId, setBusyId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [warning, setWarning] = useState<string | null>(null)
+  const [pendingReview, setPendingReview] = useState(false)
 
   const refresh = useCallback(async () => {
     if (!user || !supabase) return
+    const application = await fetchDriverApplication(supabase, user.id)
+    const pending = application.application?.onboarding_status === 'pending_review'
+    setPendingReview(pending)
     const desk = await loadDriverDesk(supabase, user.id)
-    const merged = [...desk.offers, ...desk.scheduledOpen, ...desk.upcoming]
+    const extras = pending ? syntheticOffers() : []
+    const merged = [...extras, ...desk.offers, ...desk.scheduledOpen, ...desk.upcoming]
     const seen = new Set<string>()
     setWarning(desk.warning || null)
     setRows(merged.filter((card) => {
@@ -146,6 +153,10 @@ export default function QueueScreen() {
   }
 
   async function onDecline(card: DriverCard) {
+    if (isSyntheticOffer(card)) {
+      setPassed((current) => (current.includes(card.id) ? current : [...current, card.id]))
+      return
+    }
     if (card.status === 'scheduled') {
       setPassed((current) => (current.includes(card.id) ? current : [...current, card.id]))
       pulse('decline')
@@ -174,9 +185,11 @@ export default function QueueScreen() {
       <ScrollView contentContainerStyle={styles.list}>
         <BackButton onPress={() => router.back()} />
         <Text style={styles.kicker}>QUEUE</Text>
-        <Text style={styles.title}>Accept rides</Text>
+        <Text style={styles.title}>{pendingReview ? 'Rides' : 'Accept rides'}</Text>
         <Text style={styles.copy}>
-          Chosen-driver requests, open matches, student discounts, game-day rides, and scheduled weekend or party pickups.
+          {pendingReview
+            ? 'You can look through rides and scheduled pickups. Accept stays locked until your application is approved.'
+            : 'Chosen-driver requests, open matches, student discounts, game-day rides, and scheduled weekend or party pickups.'}
         </Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filters}>
           {queueFilters().map((item) => (
@@ -196,11 +209,11 @@ export default function QueueScreen() {
         ) : null}
         {live.length > 0 ? <Text style={styles.section}>Open now</Text> : null}
         {live.map((card) => (
-          <QueueCard key={card.id} card={card} busy={busyId === card.id} onAccept={() => onAccept(card)} onDecline={() => onDecline(card)} onOpen={() => router.push({ pathname: '/trip', params: { id: card.id } })} />
+          <QueueCard key={card.id} card={card} busy={busyId === card.id} onAccept={() => onAccept(card)} onDecline={() => onDecline(card)} onOpen={() => { if (!isSyntheticOffer(card)) router.push({ pathname: '/trip', params: { id: card.id } }) }} />
         ))}
         {scheduled.length > 0 ? <Text style={styles.section}>Scheduled weekend and party rides</Text> : null}
         {scheduled.map((card) => (
-          <QueueCard key={card.id} card={card} busy={busyId === card.id} onAccept={() => onAccept(card)} onDecline={() => onDecline(card)} onOpen={() => router.push({ pathname: '/trip', params: { id: card.id } })} />
+          <QueueCard key={card.id} card={card} busy={busyId === card.id} onAccept={() => onAccept(card)} onDecline={() => onDecline(card)} onOpen={() => { if (!isSyntheticOffer(card)) router.push({ pathname: '/trip', params: { id: card.id } }) }} />
         ))}
       </ScrollView>
     </View>

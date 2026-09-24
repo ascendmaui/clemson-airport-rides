@@ -1,6 +1,8 @@
 import { useRouter } from 'expo-router'
 import { SignInScreen } from 'rides-native/AuthScreens'
+import { DRIVER_GOOGLE_PROVIDER } from 'rides-native/googleAuth'
 import { useAuth } from '@/lib/auth'
+import { signInWithGoogle } from '@/lib/googleSignIn'
 
 export default function SignInRoute() {
   const router = useRouter()
@@ -9,7 +11,10 @@ export default function SignInRoute() {
     <SignInScreen
       signIn={signIn}
       mark="CD"
-      subtitle="Sign in to go online. Apple and Google sign-in are off — email and password only."
+      subtitle="Sign in with Google or with the email and password on your driver account."
+      socialProviders={DRIVER_GOOGLE_PROVIDER}
+      onSocial={() => signInWithGoogle()}
+      onForgotPassword={() => router.push('/forgot-password')}
       onSuccess={() => router.replace('/')}
       onCreateAccount={() => router.push('/sign-up')}
       onBack={() => {
