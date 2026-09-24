@@ -2,6 +2,13 @@
 
 Persistent knowledge base for recurring failures. When a matching issue appears, apply the saved fix first.
 
+## 2026-09-24 — Ambassador payout ledger could record the same trip twice
+
+- **Track / machine:** Clemson RIDES · Pro (Grok Build, worktree fix/payout-unique)
+- **Problem:** Settling a carpool could insert two `public.ambassador_payout_ledger` rows for the same trip and ambassador code, so one completed trip could be paid out twice.
+- **Root cause:** `settleCarpoolSideEffects` in `server/carpoolSettle.js` did a plain `.insert()` on every run. The table had no unique key on `(trip_id, code)`. The ambassador identity column is `code` (`profile_id` is nullable and is not written). `ambassadorStats` in `server/carpoolService.js` only reads the ledger.
+- **Fix:** Additive unique index `ambassador_payout_ledger_trip_code_uniq` on `(trip_id, code)`, mirrored in `supabase/carpool_flagship.sql`. The settle path upserts with `onConflict: 'trip_id,code'` and `ignoreDuplicates: true` (`INSERT ... ON CONFLICT DO NOTHING`) and reports `ledgered` or `already_ledgered`. A Postgres 23505 unique violation is `already_ledgered`. A read-only check of production found 0 ledger rows and 0 duplicate `(trip_id, code)` pairs, so the unique index is safe to add.
+
 ## 2026-09-24 — Rider tsc fails on ambassador attribution (PR #65)
 
 - **Track / machine:** Clemson RIDES · Max (/tmp worktree) / PR review

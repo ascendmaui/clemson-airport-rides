@@ -13,6 +13,18 @@ function missingTable(error) {
   return /relation|does not exist|schema cache/i.test(error?.message || '')
 }
 
+function uniqueViolation(error) {
+  const text = `${error?.code || ''} ${error?.message || ''} ${error?.details || ''}`
+  return /\b23505\b|duplicate key value violates unique constraint/i.test(text)
+}
+
+/** Empty representation means ON CONFLICT DO NOTHING inserted zero rows. */
+function ambassadorLedgerStatus(data, error) {
+  if (error) return uniqueViolation(error) ? 'already_ledgered' : error.message
+  const rows = Array.isArray(data) ? data : (data ? [data] : [])
+  return rows.length > 0 ? 'ledgered' : 'already_ledgered'
+}
+
 export async function gameDayActive(sb, at = new Date()) {
   if (!sb) return false
   const iso = at.toISOString()
@@ -83,7 +95,7 @@ export async function settleCarpoolSideEffects(sb, { ride, trip, participants })
   const code = ride?.fare_breakdown?.ambassador_code
   if (code && trip?.id) {
     const seats = (participants || []).length
-    const { error } = await sb.from('ambassador_payout_ledger').insert({
+    const { data, error } = await sb.from('ambassador_payout_ledger').upsert({
       code,
       code_type: AMBASSADOR_CODE_TYPE,
       trip_id: trip.id,
@@ -91,8 +103,8 @@ export async function settleCarpoolSideEffects(sb, { ride, trip, participants })
       seats,
       amount_cents: seats * AMBASSADOR_CENTS_PER_SEAT,
       status: 'pending',
-    })
-    results.ambassador = error ? error.message : 'ledgered'
+    }, { onConflict: 'trip_id,code', ignoreDuplicates: true }).select('id')
+    results.ambassador = ambassadorLedgerStatus(data, error)
   }
   return { ok: true, results }
 }
