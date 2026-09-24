@@ -51,6 +51,38 @@ test('year view has twelve bars', () => {
   assert.equal(report.label, '2026')
 })
 
+test('carpool period totals use metadata.driver_payout_cents', () => {
+  const report = reportPeriod(
+    [
+      {
+        id: 'pool',
+        status: 'completed',
+        fare_cents: 4200,
+        completed_at: '2026-09-24T15:00:00Z',
+        metadata: {
+          kind: 'carpool',
+          driver_payout_cents: 3600,
+          incentive_id: 'driver_carpool_bonus',
+          carpool: {
+            driver: {
+              payoutCents: 3600,
+              soloPayoutCents: 2400,
+              carpoolBonusCents: 1200,
+              incentiveId: 'driver_carpool_bonus',
+            },
+          },
+        },
+      },
+    ],
+    'day',
+    new Date('2026-09-24T16:00:00Z'),
+  )
+  assert.equal(report.completed, 1)
+  assert.equal(report.totalCents, 3600)
+  assert.equal(report.youCents, 3600)
+  assert.equal(report.platformCents, 600)
+})
+
 test('shifting the month anchor moves the label', () => {
   const next = shiftAnchor('month', new Date('2026-09-15T16:00:00Z'), -1)
   const report = reportPeriod([], 'month', next)

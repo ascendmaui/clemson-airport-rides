@@ -67,6 +67,11 @@ export default function TripDetailsScreen() {
           <Text style={{ color: colors.inkSecondary }}>Clemson RIDES · {when}</Text>
           <Text style={{ color: colors.ink, fontSize: 40, fontWeight: '800' }}>{shownCents(trip.driverNetCents, earningsPrivate)}</Text>
           <Text style={{ color: colors.inkSecondary }}>Upfront fare {shownCents(trip.fareCents, earningsPrivate)}</Text>
+          {trip.carpoolIncentiveId ? (
+            <Text style={{ color: colors.inkSecondary }}>
+              Base net {shownCents(trip.baseNetCents || 0, earningsPrivate)} · {trip.carpoolIncentiveId} {shownCents(trip.carpoolBonusCents || 0, earningsPrivate)} · total {shownCents(trip.driverPayoutCents || trip.driverNetCents, earningsPrivate)}
+            </Text>
+          ) : null}
           {tip != null && tip > 0 ? (
             <Card>
               <Text style={{ color: colors.online, fontWeight: '800' }}>

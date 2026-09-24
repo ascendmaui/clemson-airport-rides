@@ -1,5 +1,7 @@
 /** Period buckets for the driver earnings details screen. */
 
+import { tripEarnedCents } from '../../../packages/rides-native/tripTags.js'
+
 export type EarningsPeriod = 'day' | 'week' | 'month' | 'year'
 
 export type EarningTrip = {
@@ -9,6 +11,7 @@ export type EarningTrip = {
   completed_at?: string | null
   pickup_label?: string | null
   dropoff_label?: string | null
+  metadata?: Record<string, unknown> | null
 }
 
 export type EarningBar = {
@@ -41,10 +44,8 @@ type Zoned = {
 
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 
-function driverNetCents(fareCents: number): number {
-  const fare = Math.max(0, Math.round(Number(fareCents) || 0))
-  const fee = Math.round(fare * 0.2)
-  return fare - fee
+function periodNetCents(trip: EarningTrip): number {
+  return tripEarnedCents(trip)
 }
 
 function zoned(date: Date, timeZone = ZONE): Zoned {
@@ -301,7 +302,7 @@ export function reportPeriod(
     if (trip.status && trip.status !== 'completed') continue
     completed += 1
     const fare = Math.max(0, Math.round(Number(trip.fare_cents) || 0))
-    const net = driverNetCents(fare)
+    const net = periodNetCents(trip)
     const fee = Math.max(0, fare - net)
     totalCents += net
     youCents += net
