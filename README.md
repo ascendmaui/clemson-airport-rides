@@ -72,7 +72,7 @@ Two native apps, version **1.1.0**. They do not replace TestFlight **1.0.0 (1)**
 | Rider | `apps/rider` | `com.ascendmaui.clemsonrides.rider` |
 | Driver | `apps/driver` | `com.ascendmaui.clemsonrides.driver` |
 
-Auth matches the web `AuthProvider`: email and password via `signInWithPassword` / `signUp`. The session is stored in the iOS keychain / Android keystore through `expo-secure-store` (chunked, because a Supabase session is larger than one SecureStore item). Confirm-email is off on the project. Apple and Google sign-in are not used.
+Email and password still use Supabase `signInWithPassword` / `signUp`, including forgot-password. The session is stored in the iOS keychain / Android keystore through `expo-secure-store` (chunked, because a Supabase session is larger than one SecureStore item). Confirm-email is off on the project. The driver app stays email and password only. The rider app adds Clerk sign-in for Apple, Google, and Facebook, then `POST /api/clerk-supabase-session` opens a normal Supabase session so RLS `auth.uid()` stays the `auth.users` UUID. Do not send the Clerk JWT as the Supabase access token.
 
 EAS builds do not read a gitignored `.env`. Set these as EAS environment variables on **each** new project (production, preview, and development) before a cloud build:
 

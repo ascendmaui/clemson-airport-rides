@@ -32,6 +32,8 @@ export type AuthApi = {
     promoClaim?: { error?: string; claimed?: boolean } | null
   }>
   signOut: () => Promise<void>
+  resetPassword: (email: string) => Promise<unknown>
+  updatePassword: (password: string) => Promise<unknown>
 }
 
 export function createAuth(opts: {
@@ -42,6 +44,9 @@ export function createAuth(opts: {
     setItem: (key: string, value: string) => Promise<void>
     removeItem: (key: string) => Promise<void>
   }
+  passwordResetRedirectTo?: string
+  onSignOut?: () => Promise<void> | void
+  onPasswordRecovery?: () => void
 }): {
   AuthProvider: (props: { children: ReactNode }) => ReactNode
   useAuth: () => AuthApi

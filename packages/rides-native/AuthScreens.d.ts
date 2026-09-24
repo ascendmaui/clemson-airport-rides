@@ -6,6 +6,11 @@ type Storage = {
   removeItem: (key: string) => Promise<void>
 }
 
+export type SocialProvider = {
+  id: 'apple' | 'google' | 'facebook'
+  label: string
+}
+
 export function SignInScreen(props: {
   signIn: (email: string, password: string) => Promise<unknown>
   onSuccess: () => void
@@ -13,6 +18,9 @@ export function SignInScreen(props: {
   onBack: () => void
   subtitle?: string
   mark?: string
+  socialProviders?: SocialProvider[]
+  onSocial?: (providerId: SocialProvider['id']) => Promise<{ cancelled?: boolean } | void>
+  resetPassword?: (email: string) => Promise<unknown>
 }): ReactNode
 
 export function SignUpScreen(props: {
@@ -25,6 +33,19 @@ export function SignUpScreen(props: {
   onSignIn: () => void
   onBack: () => void
   initialPromo?: string
+  subtitle?: string
+  mark?: string
+  socialProviders?: SocialProvider[]
+  onSocial?: (
+    providerId: SocialProvider['id'],
+    extra?: { promo?: string; fullName?: string },
+  ) => Promise<{ cancelled?: boolean } | void>
+}): ReactNode
+
+export function ResetPasswordScreen(props: {
+  updatePassword: (password: string) => Promise<unknown>
+  onSuccess: () => void
+  onBack: () => void
   subtitle?: string
   mark?: string
 }): ReactNode

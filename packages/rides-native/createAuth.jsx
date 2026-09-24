@@ -7,6 +7,7 @@ import {
   normalizePromoCode,
   PROMO_CLAIM_STATE_KEY,
 } from './authErrors.js'
+import { requestPasswordReset, signInWithEmail, updatePassword } from './emailAuth.js'
 
 async function ensureStudentVerification(supabase, user, now) {
   if (!supabase || !user?.id || !user.email) return
@@ -95,7 +96,14 @@ async function ensureProfile(supabase, storage, user, { promoCode } = {}) {
   return maybeClaimStoredPromo(supabase, storage, user, code)
 }
 
-export function createAuth({ supabase, supabaseConfigured, storage }) {
+export function createAuth({
+  supabase,
+  supabaseConfigured,
+  storage,
+  passwordResetRedirectTo,
+  onSignOut,
+  onPasswordRecovery,
+}) {
   const AuthContext = createContext(null)
 
   function AuthProvider({ children }) {
@@ -116,11 +124,12 @@ export function createAuth({ supabase, supabaseConfigured, storage }) {
         setLoading(false)
         if (data.session?.user) ensureProfile(supabase, storage, data.session.user)
       })
-      const { data: sub } = supabase.auth.onAuthStateChange((_event, next) => {
+      const { data: sub } = supabase.auth.onAuthStateChange((event, next) => {
         setSession(next)
         setUser(next?.user ?? null)
         setLoading(false)
         if (next?.user) ensureProfile(supabase, storage, next.user)
+        if (event === 'PASSWORD_RECOVERY') onPasswordRecovery?.()
       })
       return () => {
         alive = false
@@ -134,13 +143,13 @@ export function createAuth({ supabase, supabaseConfigured, storage }) {
       loading,
       configured: supabaseConfigured,
       async signIn(email, password) {
-        if (!supabase) throw new Error('Supabase is not configured. Set EXPO_PUBLIC_SUPABASE_ANON_KEY for this EAS build.')
-        const { data, error } = await supabase.auth.signInWithPassword({
-          email: String(email || '').trim(),
-          password,
-        })
-        if (error) throw mapAuthError(error)
-        return data
+        return signInWithEmail(supabase, email, password)
+      },
+      async resetPassword(email) {
+        return requestPasswordReset(supabase, email, passwordResetRedirectTo)
+      },
+      async updatePassword(password) {
+        return updatePassword(supabase, password)
       },
       async signUp(email, password, fullName, promoCode) {
         if (!supabase) throw new Error('Supabase is not configured. Set EXPO_PUBLIC_SUPABASE_ANON_KEY for this EAS build.')
@@ -170,9 +179,11 @@ export function createAuth({ supabase, supabaseConfigured, storage }) {
         return { ...data, promoClaim }
       },
       async signOut() {
-        if (!supabase) return
-        const { error } = await supabase.auth.signOut()
-        if (error) throw mapAuthError(error)
+        if (supabase) {
+          const { error } = await supabase.auth.signOut()
+          if (error) throw mapAuthError(error)
+        }
+        if (onSignOut) await onSignOut()
       },
     }), [session, user, loading])
 
