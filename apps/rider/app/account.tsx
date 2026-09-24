@@ -1,12 +1,12 @@
 import { useRouter } from 'expo-router'
 import { useState } from 'react'
-import { StyleSheet, Text, View } from 'react-native'
+import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { PrimaryButton } from '@/components/Button'
 import { MainTabs } from '@/components/MainTabs'
 import { useAuth } from '@/lib/auth'
 import { displayFirstName, isClemsonEmail } from 'rides-native/authErrors'
-import { INK_SECONDARY, PURPLE, SURFACE } from 'rides-native/places.js'
+import { INK_SECONDARY, ORANGE, PURPLE, SURFACE } from 'rides-native/places.js'
 
 export default function AccountScreen() {
   const router = useRouter()
@@ -38,6 +38,11 @@ export default function AccountScreen() {
         {user && isClemsonEmail(user.email) ? (
           <Text style={styles.badge}>Clemson student · 10% off Standard</Text>
         ) : null}
+        <Pressable accessibilityRole="button" onPress={() => router.push('/safety')} style={styles.safety}>
+          <Text style={styles.safetyKicker}>SAFETY</Text>
+          <Text style={styles.safetyTitle}>SOS, live location, emergency contacts</Text>
+          <Text style={styles.safetyBody}>Share a trip link and confirm an alert before anyone is called.</Text>
+        </Pressable>
         <Text style={styles.copy}>
           {configured
             ? 'Supabase Auth is configured for this build.'
@@ -65,5 +70,15 @@ const styles = StyleSheet.create({
   title: { fontSize: 28, fontWeight: '800', color: PURPLE, letterSpacing: -0.4 },
   copy: { fontSize: 15, lineHeight: 22, color: INK_SECONDARY },
   badge: { color: PURPLE, fontWeight: '700' },
+  safety: {
+    backgroundColor: '#fff',
+    borderRadius: 18,
+    padding: 14,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(82,45,128,0.14)',
+  },
+  safetyKicker: { color: ORANGE, fontWeight: '800', letterSpacing: 1.1, fontSize: 11 },
+  safetyTitle: { color: PURPLE, fontWeight: '800', fontSize: 16, marginTop: 4 },
+  safetyBody: { color: INK_SECONDARY, fontSize: 13, lineHeight: 18, marginTop: 4 },
   error: { color: '#B42318', fontSize: 13 },
 })

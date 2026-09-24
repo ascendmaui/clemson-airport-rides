@@ -28,4 +28,13 @@ npx expo start
 
 ## Follow-ups
 
-Stripe 25% PaymentSheet, driver offer accept, student pricing checkout, gameday carpool, scheduled airport holds, and live trip tracking are not in this binary yet. Campus ride requests already insert a `trips` row the same way the web app does.
+Stripe 25% PaymentSheet, driver offer accept, student pricing checkout, gameday carpool, and scheduled airport holds are not in this binary yet. Campus ride requests already insert a `trips` row the same way the web app does. Live location sharing, the trip link, SOS, and emergency contacts are on Safety and the ride-requested screen.
+
+## Safety smoke
+
+1. Sign in, then open Safety from Account or the home pill.
+2. With no contacts, the list says "No emergency contacts yet". Add a name and phone, edit it, and confirm it is listed.
+3. Request a ride so a trips row exists. On Ride requested, tap Share my location. The link looks like `https://clemson-airport-rides.vercel.app/share/<token>` and a location_shares row is active.
+4. Tap Share trip link and send that same URL from the share sheet.
+5. While the trip is accepted, arriving, or in progress, tap SOS, then Confirm SOS, then Call 911. The first step does not dial. A sos_events row is stored with channel banner.
+6. On a finished trip, live share shows "This ride is finished" instead of a new token.

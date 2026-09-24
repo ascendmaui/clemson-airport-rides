@@ -80,6 +80,7 @@ export default function RiderHome() {
                 <Pill label="🕐  Schedule a ride" onPress={() => router.push('/schedule')} />
                 <Pill label="👥  Carpool · split the surge" onPress={() => router.push('/friends')} />
                 <Pill label="🧾  Your rides" onPress={() => router.push('/history')} />
+                <Pill label="🛡  Safety" onPress={() => router.push('/safety')} />
               </ScrollView>
 
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.shortcuts}>

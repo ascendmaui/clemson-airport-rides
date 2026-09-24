@@ -5,7 +5,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { PrimaryButton } from '@/components/Button'
 import { useAuth } from '@/lib/auth'
 import { supabase } from '@/lib/supabase'
-import { INK, INK_SECONDARY, PURPLE, SURFACE } from 'rides-native/places.js'
+import { isShareableTripStatus } from 'rides-native/safety.js'
+import { INK, INK_SECONDARY, ORANGE, PURPLE, SURFACE } from 'rides-native/places.js'
 
 type RideRow = {
   id: string
@@ -68,6 +69,14 @@ export default function HistoryScreen() {
           <View key={row.id} style={styles.card}>
             <Text style={styles.cardTitle}>{row.dropoff_label || 'Ride'}</Text>
             <Text style={styles.copy}>{row.pickup_label || 'Pickup'} · {row.status || 'requested'}</Text>
+            {isShareableTripStatus(row.status) ? (
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => router.push({ pathname: '/requested', params: { trip: row.id, dest: row.dropoff_label || '' } })}
+              >
+                <Text style={styles.safety}>Share location & SOS</Text>
+              </Pressable>
+            ) : null}
           </View>
         ))}
       </ScrollView>
@@ -86,4 +95,5 @@ const styles = StyleSheet.create({
   error: { color: '#B42318', fontSize: 13 },
   card: { backgroundColor: '#fff', borderRadius: 16, padding: 16 },
   cardTitle: { fontWeight: '700', fontSize: 16, color: INK, marginBottom: 4 },
+  safety: { color: ORANGE, fontWeight: '800', marginTop: 8 },
 })
