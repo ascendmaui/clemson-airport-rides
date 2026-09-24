@@ -1,7 +1,11 @@
 export const TESLA_FLEET_NOTICE: string
 export const ACTIONABLE_LEAD_MS: number
 
-export type TripTag = 'student' | 'game_day' | 'weekend_party' | 'tesla' | 'direct' | 'scheduled'
+export type TripTag = 'student' | 'game_day' | 'weekend_party' | 'carpool' | 'tesla' | 'direct' | 'scheduled'
+
+export type FareShare = { id: string; label: string; shareCents: number }
+
+export const APPLE_PAY_DRIVER_COPY: string
 export type QueueFilter = 'all' | 'student' | 'game_day' | 'weekend_party'
 
 export type DriverCard = {
@@ -18,6 +22,7 @@ export type DriverCard = {
   dropoffLng: number | null
   fareCents: number
   depositCents: number
+  depositExplicit: boolean
   driverNetCents: number
   firstName: string
   purpose: string
@@ -26,6 +31,19 @@ export type DriverCard = {
   tagLabels: string[]
   teslaStub: boolean
   arrivedAt: string | null
+  passengers: number
+  shares: FareShare[]
+  riderLat: number | null
+  riderLng: number | null
+}
+
+export type FareCollection = {
+  fareCents: number
+  depositCents: number
+  remainderCents: number
+  driverNetCents: number
+  platformFeeCents: number
+  shares: FareShare[]
 }
 
 export type PaymentRow = {
@@ -54,6 +72,22 @@ export function toDriverCard(row: Record<string, unknown> | null | undefined, op
 export function matchesQueueFilter(card: { tags: string[] } | null, filter: QueueFilter): boolean
 export function queueFilters(): QueueFilter[]
 export function depositStatusLine(payments: PaymentRow[] | null | undefined): string | null
+export function carpoolShareLines(metadata: Record<string, unknown> | null | undefined): FareShare[]
+export function fareCollection(card: {
+  fareCents?: number
+  fare_cents?: number
+  depositCents?: number
+  deposit_cents?: number
+  depositExplicit?: boolean
+  shares?: FareShare[]
+  metadata?: Record<string, unknown>
+} | null | undefined): FareCollection
+export function isSameZonedWeek(iso: string | null | undefined, now?: Date, timeZone?: string): boolean
+export function weekNetCents(
+  trips: Array<{ status?: string; fare_cents?: number; completed_at?: string | null }> | null | undefined,
+  now?: Date,
+): number
+export function declineDisposition(status: string | null | undefined): 'release' | 'leave' | 'cancel'
 export function summarizeDepositAwareness(
   trips: Array<{ id: string; status?: string; fare_cents?: number; completed_at?: string | null; dropoff_label?: string | null }> | null | undefined,
   paymentsByTrip: Record<string, PaymentRow[]> | null | undefined,

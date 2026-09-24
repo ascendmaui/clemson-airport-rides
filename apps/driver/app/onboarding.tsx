@@ -28,6 +28,7 @@ import {
   uploadDriverDocument,
   type OnboardingBundle,
 } from 'rides-native/driverOnboardingClient'
+import { loadDriverProfile, loadVehicle } from 'rides-native/driverDesk'
 import { TESLA_FLEET_NOTICE } from 'rides-native/tripTags'
 import { INK, INK_SECONDARY, ORANGE, PURPLE, SURFACE } from 'rides-native/places.js'
 
@@ -111,10 +112,32 @@ export default function OnboardingScreen() {
 
   const refresh = useCallback(async () => {
     if (!user || !supabase) return
-    const next = await loadOnboarding(supabase, user.id)
+    const [next, profile, vehicle] = await Promise.all([
+      loadOnboarding(supabase, user.id),
+      loadDriverProfile(supabase, user.id).catch(() => null),
+      loadVehicle(supabase, user.id).catch(() => null),
+    ])
     setBundle(next)
     setStepId(next.stepId)
     const tax = next.tax
+    const profileName = String(profile?.full_name || user.user_metadata?.full_name || user.email?.split('@')[0] || '')
+    if (profileName) {
+      setFullName(profileName)
+      setLegalName((current) => current || String(tax?.legal_name || profileName))
+    }
+    if (profile?.phone) setPhone(String(profile.phone))
+    if (next.application) {
+      setAnswers({ isStudent: true, hasCar: true, hasInsurance: true, wantsExtraMoney: true })
+      setAttestation(true)
+    }
+    if (vehicle) {
+      setMake(String(vehicle.make || ''))
+      setModel(String(vehicle.model || ''))
+      setColor(String(vehicle.color || ''))
+      setPlate(String(vehicle.plate || ''))
+      setSeats(String(vehicle.seats || 4))
+      setIsTesla(Boolean(vehicle.is_tesla))
+    }
     if (tax?.legal_name) setLegalName(String(tax.legal_name))
     if (tax?.tax_classification) setTaxClass(String(tax.tax_classification))
     const app = next.application

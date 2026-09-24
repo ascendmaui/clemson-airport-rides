@@ -59,9 +59,25 @@ export function setTeslaListing(
 ): Promise<VehicleRow>
 export function loadDriverDesk(supabase: unknown, driverId: string): Promise<DriverDesk>
 export function subscribeTrips(supabase: unknown, onChange: () => void): () => void
+export function publishDriverCapacity(
+  supabase: unknown,
+  driverId: string,
+  seats: number | null | undefined,
+): Promise<{ seats: number | null; stored: boolean }>
 export function acceptTrip(supabase: unknown, trip: { id: string; status: string }, driverId: string): Promise<unknown>
-export function declineTrip(supabase: unknown, tripId: string): Promise<void>
-export function advanceTrip(supabase: unknown, trip: { id: string; status: string }, driverId: string): Promise<{ status?: string }>
+export function declineTrip(
+  supabase: unknown,
+  tripOrId: string | { id: string; status?: string },
+): Promise<{ disposition: 'release' | 'leave' | 'cancel' }>
+export function loadRiderFix(
+  supabase: unknown,
+  tripId: string,
+): Promise<{ latitude: number; longitude: number; updatedAt: string | null } | null>
+export function advanceTrip(
+  supabase: unknown,
+  trip: { id: string; status: string },
+  driverId: string,
+): Promise<{ status?: string; settle?: { payment?: unknown; payout?: { status?: string; amountCents?: number } | null } | null }>
 export function loadTrip(supabase: unknown, tripId: string, driverId?: string): Promise<DriverCard | null>
 export function loadEarnings(supabase: unknown, driverId: string): Promise<{
   trips: { id: string; status?: string; fare_cents?: number; dropoff_label?: string | null; completed_at?: string | null; pickup_label?: string | null }[]
