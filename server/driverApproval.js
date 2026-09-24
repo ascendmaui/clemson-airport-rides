@@ -6,6 +6,7 @@ import {
   ADMIN_EMAIL,
   EMAIL_TODO,
   IC_AGREEMENT_VERSION,
+  SEEDED_ADMIN_EMAILS,
   canReceiveRides,
   submissionBlockers,
 } from '../shared/driverOnboarding.js'
@@ -89,7 +90,11 @@ export async function driverApprovalStatus(sb, profileId) {
 }
 
 export async function notifyAdminOfApplication({ profile, vehicle }) {
-  const to = (process.env.ADMIN_NOTIFY_EMAIL || ADMIN_EMAIL).trim()
+  const configured = (process.env.ADMIN_NOTIFY_EMAIL || '').trim()
+  const recipients = configured
+    ? configured.split(',').map((email) => email.trim()).filter(Boolean)
+    : SEEDED_ADMIN_EMAILS
+  const to = recipients[0] || ADMIN_EMAIL
   const key = (process.env.RESEND_API_KEY || '').trim()
   const appUrl = (process.env.VITE_APP_URL || process.env.APP_URL || 'https://clemson-airport-rides.vercel.app').replace(/\/$/, '')
   const name = profile?.full_name || profile?.email || 'New driver'
@@ -127,7 +132,7 @@ export async function notifyAdminOfApplication({ profile, vehicle }) {
       },
       body: JSON.stringify({
         from,
-        to: [to],
+        to: recipients,
         subject: `Driver application ready for review — ${name}`,
         text,
       }),

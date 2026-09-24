@@ -25,9 +25,10 @@ export function RequireAuth({ children }) {
 
   function goSignIn() {
     const { path, params } = getHashRoute()
-    if (path === 'account') {
+    if (path === 'sign-in' || path === 'sign-up') return
+    if (path === 'account' || path === 'admin') {
       navigate('sign-in', {
-        next: 'account',
+        next: path,
         ...(params.tab ? { tab: params.tab } : {}),
       })
       return

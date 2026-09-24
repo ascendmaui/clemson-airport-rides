@@ -1,3 +1,5 @@
+import { isSeedAdminEmail } from '../../shared/adminAccess.js'
+
 /**
  * Driver incentives — pay math and window matching.
  *
@@ -106,6 +108,7 @@ function assertNever(type) {
 export function isIncentiveAdmin(user, profile) {
   const email = String(profile?.email || user?.email || '').trim().toLowerCase()
   if (email === INCENTIVE_ADMIN_EMAIL) return true
+  if (isSeedAdminEmail(email)) return true
   if (profile?.is_admin === true) return true
   const role = profile?.role
   return role === 'admin' || role === 'ops'

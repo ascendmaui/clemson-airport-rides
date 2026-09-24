@@ -135,6 +135,14 @@ export async function fetchMyAgreement(supabase, userId) {
   return data
 }
 
+export async function loadApplicantInbox(supabase) {
+  return authedJson(supabase, '/api/driver?action=inbox')
+}
+
+export async function replyApplicantInbox(supabase, body) {
+  return authedJson(supabase, '/api/driver?action=inbox', { method: 'POST', body: { body } })
+}
+
 export async function loadOnboarding(supabase, userId) {
   const [application, documents, tax, agreement] = await Promise.all([
     fetchMyDriverApplication(supabase, userId),

@@ -25,7 +25,9 @@ Copy `.env.example`. Vite reads `VITE_*`. Server secrets (`STRIPE_*`, `SUPABASE_
 
 Account → Help (`/api/help-chat`) explains the product. It does not create tickets.
 
-Account → Support (`/api/support-chat` and `/api/support-ticket`) diagnoses problems and files a row in `support_tickets` only after the user confirms. Apply `supabase/migrations/20260923120000_support_tickets.sql` before filing will succeed.
+Account → Support (`/api/support-chat` and `/api/support-ticket`) diagnoses problems and files a row in `support_tickets` only after the user confirms. The support bot then replies. It resolves common account, payment, ride, and driver-application questions, and escalates to an admin when confidence is low, the intent is unknown, or the person asks for a human. Apply `supabase/migrations/20260923120000_support_tickets.sql` and `supabase/migrations/20260924190000_admin_support.sql` before filing will succeed.
+
+Admins sign in with a seeded email (see `docs/ADMIN_SUPPORT.md`) and open `#/admin`.
 
 Set **one** of these on Vercel:
 
@@ -34,7 +36,7 @@ Set **one** of these on Vercel:
 | `AI_GATEWAY_API_KEY` | Vercel AI Gateway (`openai/gpt-4o-mini` by default). Used when this is set, even if `OPENAI_API_KEY` is also set. |
 | `OPENAI_API_KEY` | Direct OpenAI (`gpt-4o-mini` by default). |
 | `HELP_CHAT_MODEL` | Optional model id. Prefix `openai/` yourself for the gateway if you override it. |
-| `SUPPORT_ADMIN_EMAILS` | Optional. Comma-separated. Defaults to `john@gmail.com` for a full ticket list. |
+| `SUPPORT_ADMIN_EMAILS` | Optional. Comma-separated support-inbox readers. Seeded admins already see every ticket. |
 | `SUPABASE_SERVICE_ROLE_KEY` | Already required for other `/api` routes. Help and Support use it to read the signed-in user's profile, trips, billing flags, and vehicle. The browser sends the Supabase access token as `Authorization: Bearer`. |
 
 If neither AI key is set, both chats still answer from the curated knowledge base and whatever account context loaded. They do not call a model.

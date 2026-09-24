@@ -26,6 +26,8 @@ import {
   saveEmploymentVerification,
   signDriverAgreement,
   stepIsComplete,
+  loadApplicantInbox,
+  replyApplicantInbox,
   submitDriverReview,
   uploadDriverDocument,
   type OnboardingBundle,
@@ -163,6 +165,9 @@ export default function OnboardingScreen() {
   const [tin, setTin] = useState('')
   const [w9Step, setW9Step] = useState(0)
   const [signature, setSignature] = useState('')
+  const [inboxMessages, setInboxMessages] = useState<{ id: string; author_role: string; kind?: string; body: string }[]>([])
+  const [inboxRequests, setInboxRequests] = useState<{ id: string; prompt: string; status: string }[]>([])
+  const [inboxDraft, setInboxDraft] = useState('')
   const [signedOn, setSignedOn] = useState(todayDate())
   const [mark, setMark] = useState<{ x: number; y: number }[]>([])
   const [readAgreement, setReadAgreement] = useState(false)
@@ -211,6 +216,35 @@ export default function OnboardingScreen() {
   useEffect(() => {
     refresh().catch((err) => setError(err instanceof Error ? err.message : 'Could not load your application'))
   }, [refresh])
+
+  useEffect(() => {
+    if (stepId !== 'review' || !supabase) return undefined
+    let alive = true
+    loadApplicantInbox(supabase)
+      .then((data) => {
+        if (!alive) return
+        setInboxMessages(data.messages || [])
+        setInboxRequests(data.requests || [])
+      })
+      .catch(() => {})
+    return () => { alive = false }
+  }, [stepId])
+
+  async function sendInbox() {
+    if (!supabase || !inboxDraft.trim()) return
+    setBusy(true)
+    setError(null)
+    try {
+      const data = await replyApplicantInbox(supabase, inboxDraft.trim())
+      setInboxMessages(data.messages || [])
+      setInboxRequests(data.requests || [])
+      setInboxDraft('')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not send the reply')
+    } finally {
+      setBusy(false)
+    }
+  }
 
   const step = ONBOARDING_FLOW.find((item) => item.id === stepId) || ONBOARDING_FLOW[0]
   const kind = step && isStepKind(step.kind) ? step.kind : 'account'
@@ -658,6 +692,21 @@ export default function OnboardingScreen() {
             {(bundle?.blockers || []).map((code) => (
               <Text key={code} style={styles.blocker}>Still needed · {blockerLabel(code)}</Text>
             ))}
+            {status === 'pending_review' ? <Tag label="Waiting for admin review" /> : null}
+            {inboxRequests.filter((row) => row.status === 'open').map((row) => (
+              <Text key={row.id} style={styles.copy}>More information needed. {row.prompt}</Text>
+            ))}
+            {inboxMessages.map((row) => (
+              <Text key={row.id} style={styles.copy}>
+                {row.author_role === 'admin' ? 'Admin' : 'You'}: {row.body}
+              </Text>
+            ))}
+            {(inboxMessages.length > 0 || inboxRequests.some((row) => row.status === 'open')) ? (
+              <>
+                <Field label="Reply to admin" value={inboxDraft} onChangeText={setInboxDraft} multiline />
+                <Primary label={busy ? 'Sending…' : 'Send reply'} onPress={sendInbox} disabled={busy || !inboxDraft.trim()} />
+              </>
+            ) : null}
             {status === 'pending_review' || status === 'approved' ? (
               <Primary label="Enter the app" onPress={() => router.replace('/')} />
             ) : (

@@ -78,3 +78,9 @@ export function signDriverAgreement(
   extras?: { userId?: string; signedOn?: string; signatureMark?: unknown },
 ): Promise<unknown>
 export function submitDriverReview(supabase: unknown, userId: string): Promise<Record<string, unknown>>
+
+export type ApplicantInboxMessage = { id: string; author_role: string; kind?: string; body: string }
+export type ApplicantInboxRequest = { id: string; prompt: string; status: string }
+export type ApplicantInbox = { messages?: ApplicantInboxMessage[]; requests?: ApplicantInboxRequest[] }
+export function loadApplicantInbox(supabase: unknown): Promise<ApplicantInbox>
+export function replyApplicantInbox(supabase: unknown, body: string): Promise<ApplicantInbox>

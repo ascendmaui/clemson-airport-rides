@@ -13,7 +13,7 @@ import { FriendsScreen, AccountScreen } from './screens/FriendsAccount'
 import { SignInScreen, SignUpScreen } from './screens/AuthScreens'
 import { DriverOnboarding } from './screens/DriverOnboarding'
 import { DriverSignup } from './screens/DriverSignup'
-import { AdminDrivers } from './screens/AdminDrivers'
+import { AdminDesk } from './screens/AdminDesk'
 import { PickDriver } from './screens/PickDriver'
 import { Requested } from './screens/Requested'
 import { LegalPrivacy, LegalTerms } from './screens/LegalPages'
@@ -97,7 +97,7 @@ function Screen({ path, params }) {
     case 'admin':
       return (
         <RequireAuth>
-          <AdminDrivers />
+          <AdminDesk />
         </RequireAuth>
       )
     case 'friends':

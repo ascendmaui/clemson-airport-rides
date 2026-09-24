@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../lib/auth'
 import { PrimaryButton } from '../components/PrimaryButton'
+import { ApplicantThread } from '../components/ApplicantThread'
 import { OnboardingProgress } from '../components/OnboardingProgress'
 import { navigate } from '../lib/navigation'
 import { supabase } from '../lib/supabase'
@@ -722,6 +723,7 @@ export function DriverOnboarding() {
               </PrimaryButton>
             </>
           )}
+          <ApplicantThread />
         </div>
       )}
 
