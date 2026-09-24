@@ -94,6 +94,8 @@ type SupabaseAuth = {
   }
 } | null
 
+export function setCarpoolApiBase(base: string | undefined): void
+export function apiBase(): string
 export function inviteUrl(token: string, kind?: 'carpool' | 'friends'): string
 export function apiErrorMessage(err: unknown): string
 export function matchCarpool(

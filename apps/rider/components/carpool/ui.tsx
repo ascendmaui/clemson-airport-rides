@@ -1,5 +1,5 @@
 import { useEffect, useRef, type ReactNode } from 'react'
-import { Animated, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
+import { Animated, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
 import { INK, INK_SECONDARY, PURPLE } from 'rides-native/places.js'
 
 export function SkeletonBlock({
@@ -15,8 +15,8 @@ export function SkeletonBlock({
   useEffect(() => {
     const loop = Animated.loop(
       Animated.sequence([
-        Animated.timing(opacity, { toValue: 1, duration: 700, useNativeDriver: true }),
-        Animated.timing(opacity, { toValue: 0.45, duration: 700, useNativeDriver: true }),
+        Animated.timing(opacity, { toValue: 1, duration: 700, useNativeDriver: Platform.OS !== 'web' }),
+        Animated.timing(opacity, { toValue: 0.45, duration: 700, useNativeDriver: Platform.OS !== 'web' }),
       ]),
     )
     loop.start()

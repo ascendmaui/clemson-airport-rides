@@ -60,19 +60,23 @@ export default function CarpoolLobbyScreen() {
   const [dropoff, setDropoff] = useState<Place>(START.dropoff)
   const [splitMode, setSplitMode] = useState<'even' | 'by_distance'>('even')
   const seeded = useRef(false)
+  const missing = useRef(false)
 
   const load = useCallback(async () => {
-    if (!token) return
+    if (!token || missing.current) return
     try {
       const next = await getFriendRide(supabase, token)
       setRide(next)
       setLoadError(null)
     } catch (err) {
       setLoadError(apiErrorMessage(err))
+      const status = err && typeof err === 'object' && 'status' in err ? Number((err as { status?: number }).status) : 0
+      if (status === 404) missing.current = true
     }
   }, [token])
 
   useEffect(() => {
+    missing.current = false
     void load()
     if (!token) return undefined
     const timer = setInterval(() => {

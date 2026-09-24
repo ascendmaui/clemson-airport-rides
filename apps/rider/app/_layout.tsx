@@ -7,6 +7,9 @@ import { AuthProvider, bindClerkSignOut, useAuth } from '@/lib/auth'
 import { clerkPublishableKey } from '@/lib/clerkEnv'
 import { PasswordRecoveryListener } from '@/lib/passwordRecovery'
 import { BootScreen } from '@/components/BootScreen'
+import { setCarpoolApiBase } from 'rides-native/shared/carpoolApi.js'
+
+setCarpoolApiBase(process.env.EXPO_PUBLIC_API_BASE || 'https://clemson-airport-rides.vercel.app')
 
 function Gate({ children }: { children: ReactNode }) {
   const { loading } = useAuth()

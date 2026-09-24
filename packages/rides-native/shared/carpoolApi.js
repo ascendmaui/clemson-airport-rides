@@ -1,5 +1,55 @@
-/** Same /api/carpool and /api/friend-rides routes as the web hub. */
-import { apiBase, authedJson } from '../apiClient.js'
+/**
+ * Same /api/carpool and /api/friend-rides routes as the web hub.
+ * The host is a constant here so this file can live outside the Expo app.
+ * The rider app may override it with setCarpoolApiBase.
+ */
+
+const DEFAULT_API = 'https://clemson-airport-rides.vercel.app'
+let baseOverride = ''
+
+export function setCarpoolApiBase(base) {
+  baseOverride = String(base || '').replace(/\/$/, '')
+}
+
+export function apiBase() {
+  return baseOverride || DEFAULT_API
+}
+
+async function authedJson(supabase, path, { method = 'GET', body } = {}) {
+  const headers = { 'Content-Type': 'application/json', Accept: 'application/json' }
+  if (supabase) {
+    const { data } = await supabase.auth.getSession()
+    const token = data?.session?.access_token
+    if (token) headers.Authorization = `Bearer ${token}`
+  }
+  const url = path.startsWith('http') ? path : `${apiBase()}${path}`
+  let res
+  try {
+    res = await fetch(url, {
+      method,
+      headers,
+      body: body == null ? undefined : JSON.stringify(body),
+    })
+  } catch (err) {
+    throw new Error(err?.message || 'Network error')
+  }
+  const text = await res.text()
+  let data = {}
+  try {
+    data = text ? JSON.parse(text) : {}
+  } catch {
+    const error = new Error('API unavailable')
+    error.status = res.status
+    throw error
+  }
+  if (!res.ok) {
+    const error = new Error(data.error || data.message || `HTTP ${res.status}`)
+    error.status = res.status
+    error.payload = data
+    throw error
+  }
+  return data
+}
 
 export function inviteUrl(token, kind = 'carpool') {
   const path = kind === 'friends' ? 'friends' : 'carpool'
