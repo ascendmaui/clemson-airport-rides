@@ -1,7 +1,9 @@
+import { Ionicons } from '@expo/vector-icons'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useEffect, useState } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { Card, ErrorText, Primary } from '@/components/chrome'
+import { EmptyState, FadeIn } from '@/components/day'
 import { StackPage, Toggle } from '@/components/shell'
 import { oneParam } from '@/lib/oneParam'
 import { useAuth } from '@/lib/auth'
@@ -75,72 +77,106 @@ export default function SettingsSection() {
 
   return (
     <StackPage title={sectionTitle(section)} onBack={() => router.back()}>
-      {section === 'display' ? (
-        <>
-          <Text style={{ color: colors.inkSecondary, lineHeight: 20 }}>
-            Auto follows the sun. It does not follow the phone’s system appearance. Place used now: {theme.solarPlace}.
-          </Text>
-          {DISPLAY_OPTIONS.map((option) => {
-            const on = theme.displayMode === option.id
-            return (
-              <Pressable key={option.id} onPress={() => theme.setDisplayMode(option.id)}>
-                <Card>
-                  <Text style={{ color: on ? colors.orange : colors.title, fontWeight: '800' }}>{option.label}</Text>
-                  <Text style={{ color: colors.inkSecondary }}>{option.body}</Text>
-                </Card>
-              </Pressable>
-            )
-          })}
-        </>
-      ) : null}
-      {section === 'privacy' ? (
-        <Card>
-          <View style={styles.row}>
-            <Text style={{ color: colors.ink, fontWeight: '800', flex: 1 }}>Make earnings private</Text>
-            <Toggle on={theme.earningsPrivate} onPress={() => theme.setEarningsPrivate(!theme.earningsPrivate)} label="Make earnings private" />
-          </View>
-          <Text style={{ color: colors.inkSecondary }}>
-            Hides dollar amounts on this phone. Your live pin is still shared with riders while you are online.
-          </Text>
-        </Card>
-      ) : null}
-      {section === 'address' ? (
-        <Card>
-          <Text style={{ color: colors.title, fontWeight: '800' }}>Home address</Text>
-          <Text style={{ color: colors.inkSecondary }}>
-            Saving a home address is not available yet. Your profile phone {phone ? `is ${phone}` : 'is not on file'}.
-          </Text>
-          <Primary label="Open driver application" onPress={() => router.push('/onboarding')} tone="ghost" />
-        </Card>
-      ) : null}
-      {section === 'accessibility' ? (
-        <Card>
-          <Text style={{ color: colors.title, fontWeight: '800' }}>Text size</Text>
-          <Text style={{ color: colors.inkSecondary }}>
-            Labels follow the phone’s text size. A separate contrast theme is not in this build.
-          </Text>
-        </Card>
-      ) : null}
-      {section === 'communication' ? (
-        <Card>
-          <Text style={{ color: colors.title, fontWeight: '800' }}>Trip alerts</Text>
-          <Text style={{ color: colors.inkSecondary }}>{push?.detail || 'Checking notification permission…'}</Text>
-        </Card>
-      ) : null}
-      {section === 'navigation' ? <NavChoices /> : null}
-      {section === 'sounds' ? (
-        <Card>
-          <View style={styles.row}>
-            <Text style={{ color: colors.ink, fontWeight: '800', flex: 1 }}>Request chime</Text>
-            <Toggle on={theme.sounds} onPress={() => theme.setSounds(!theme.sounds)} label="Request chime" />
-          </View>
-          <Text style={{ color: colors.inkSecondary }}>
-            The chime stays silent when the phone is on silent. Haptics still fire for new requests.
-          </Text>
-        </Card>
-      ) : null}
-      {error ? <ErrorText>{error}</ErrorText> : null}
+      <FadeIn style={{ gap: 12 }}>
+        {section === 'display' ? (
+          <>
+            <Text style={{ color: colors.inkSecondary, lineHeight: 20 }}>
+              Auto follows the sun. It does not follow the phone’s system appearance. Place used now: {theme.solarPlace}.
+            </Text>
+            <ChoiceCards
+              options={DISPLAY_OPTIONS}
+              value={theme.displayMode}
+              onChange={theme.setDisplayMode}
+            />
+          </>
+        ) : null}
+        {section === 'privacy' ? (
+          <Card>
+            <View style={styles.row}>
+              <Text style={{ color: colors.ink, fontWeight: '800', flex: 1 }}>Make earnings private</Text>
+              <Toggle on={theme.earningsPrivate} onPress={() => theme.setEarningsPrivate(!theme.earningsPrivate)} label="Make earnings private" />
+            </View>
+            <Text style={{ color: colors.inkSecondary, lineHeight: 20 }}>
+              Hides dollar amounts on this phone. Your live pin is still shared with riders while you are online.
+            </Text>
+          </Card>
+        ) : null}
+        {section === 'address' ? (
+          <EmptyState
+            icon="home"
+            title="Home address"
+            body={`Saving a home address is not available yet. Your profile phone ${phone ? `is ${phone}` : 'is not on file'}. Update the driver application if that number should change.`}
+            action={<Primary label="Open driver application" onPress={() => router.push('/onboarding')} tone="ghost" />}
+          />
+        ) : null}
+        {section === 'accessibility' ? (
+          <EmptyState
+            icon="accessibility"
+            title="Text size"
+            body="Labels follow the phone’s text size. A separate high-contrast theme is not in this build. Orange and purple stay the Clemson colors in light and dark."
+          />
+        ) : null}
+        {section === 'communication' ? (
+          <Card>
+            <Text style={{ color: colors.title, fontWeight: '800', fontSize: 17 }}>Trip alerts</Text>
+            <Text style={{ color: colors.inkSecondary, lineHeight: 20 }}>
+              {push?.detail || 'Checking notification permission…'}
+            </Text>
+            <Text style={{ color: colors.inkSecondary, lineHeight: 20 }}>
+              Offers still appear in the queue while you are online and this app is open.
+            </Text>
+          </Card>
+        ) : null}
+        {section === 'navigation' ? <NavChoices /> : null}
+        {section === 'sounds' ? (
+          <Card>
+            <View style={styles.row}>
+              <Text style={{ color: colors.ink, fontWeight: '800', flex: 1 }}>Request chime</Text>
+              <Toggle on={theme.sounds} onPress={() => theme.setSounds(!theme.sounds)} label="Request chime" />
+            </View>
+            <Text style={{ color: colors.inkSecondary, lineHeight: 20 }}>
+              The chime stays silent when the phone is on silent. Haptics still fire for new requests.
+            </Text>
+          </Card>
+        ) : null}
+        {error ? <ErrorText>{error}</ErrorText> : null}
+      </FadeIn>
     </StackPage>
+  )
+}
+
+function ChoiceCards<T extends string>({
+  options,
+  value,
+  onChange,
+}: {
+  options: { id: T; label: string; body?: string }[]
+  value: T
+  onChange: (id: T) => void
+}) {
+  const { colors } = useTheme()
+  return (
+    <>
+      {options.map((option) => {
+        const on = option.id === value
+        return (
+          <Pressable
+            key={option.id}
+            onPress={() => onChange(option.id)}
+            accessibilityRole="button"
+            accessibilityState={{ selected: on }}
+          >
+            <Card style={{ borderColor: on ? colors.orange : colors.border, borderWidth: on ? 1.5 : StyleSheet.hairlineWidth }}>
+              <View style={styles.choice}>
+                <Text style={{ color: on ? colors.orange : colors.title, fontWeight: '800', fontSize: 16, flex: 1 }}>{option.label}</Text>
+                {on ? <Ionicons name="checkmark-circle" size={22} color={colors.orange} /> : null}
+              </View>
+              {option.body ? <Text style={{ color: colors.inkSecondary, lineHeight: 20 }}>{option.body}</Text> : null}
+            </Card>
+          </Pressable>
+        )
+      })}
+    </>
   )
 }
 
@@ -152,21 +188,15 @@ function NavChoices() {
   ]
   return (
     <>
-      <Text style={{ color: colors.inkSecondary }}>The live trip screen opens this app first.</Text>
-      {options.map((option) => {
-        const on = navApp === option.id
-        return (
-          <Pressable key={option.id} onPress={() => setNavApp(option.id)}>
-            <Card>
-              <Text style={{ color: on ? colors.orange : colors.title, fontWeight: '800' }}>{option.label}</Text>
-            </Card>
-          </Pressable>
-        )
-      })}
+      <Text style={{ color: colors.inkSecondary, lineHeight: 20 }}>
+        The live trip screen opens this app first. This does not add a maps key or turn-by-turn inside Clemson RIDES.
+      </Text>
+      <ChoiceCards options={options} value={navApp} onChange={setNavApp} />
     </>
   )
 }
 
 const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  choice: { flexDirection: 'row', alignItems: 'center', gap: 12 },
 })

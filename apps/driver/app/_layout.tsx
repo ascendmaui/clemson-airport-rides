@@ -46,7 +46,13 @@ function ThemedStack() {
   return (
     <>
       <StatusBar style={colors.statusBar} />
-      <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.background } }} />
+      <Stack
+        screenOptions={{
+          headerShown: false,
+          contentStyle: { backgroundColor: colors.background },
+          animation: 'slide_from_right',
+        }}
+      />
     </>
   )
 }

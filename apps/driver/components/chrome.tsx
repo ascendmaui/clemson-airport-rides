@@ -1,18 +1,18 @@
 import type { ReactNode } from 'react'
 import { useMemo } from 'react'
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
+import { Pressable, StyleSheet, Text, TextInput, View, type StyleProp, type ViewStyle } from 'react-native'
 import { useTheme } from '@/lib/theme'
 import type { Palette } from '@/lib/palette'
 
 export function useCardShadow() {
-  const { colors } = useTheme()
+  const { colors, scheme } = useTheme()
   return useMemo(() => ({
     shadowColor: colors.shadow,
-    shadowOpacity: 0.12,
+    shadowOpacity: scheme === 'dark' ? 0.45 : 0.12,
     shadowRadius: 18,
     shadowOffset: { width: 0, height: 10 },
     elevation: 8,
-  }), [colors.shadow])
+  }), [colors.shadow, scheme])
 }
 
 export function BackButton({ onPress }: { onPress: () => void }) {
@@ -112,10 +112,25 @@ export function Field({
   )
 }
 
-export function Card({ children }: { children: ReactNode }) {
+export function Card({ children, style }: { children: ReactNode; style?: StyleProp<ViewStyle> }) {
   const { colors } = useTheme()
   const shadow = useCardShadow()
-  return <View style={[styles.card, shadow, { backgroundColor: colors.card }]}>{children}</View>
+  return (
+    <View
+      style={[
+        styles.card,
+        shadow,
+        {
+          backgroundColor: colors.card,
+          borderColor: colors.border,
+          borderWidth: StyleSheet.hairlineWidth,
+        },
+        style,
+      ]}
+    >
+      {children}
+    </View>
+  )
 }
 
 export function ErrorText({ children }: { children: string }) {

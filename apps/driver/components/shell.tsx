@@ -119,17 +119,30 @@ export function ListRow({
   title,
   subtitle,
   onPress,
+  last = false,
 }: {
   icon: IconName
   title: string
   subtitle?: string
   onPress: () => void
+  last?: boolean
 }) {
   const { colors } = useTheme()
   return (
-    <Pressable onPress={onPress} accessibilityRole="button" style={[styles.row, { borderBottomColor: colors.border }]}>
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      style={({ pressed }) => [
+        styles.row,
+        {
+          borderBottomColor: colors.border,
+          borderBottomWidth: last ? 0 : StyleSheet.hairlineWidth,
+          opacity: pressed ? 0.72 : 1,
+        },
+      ]}
+    >
       <View style={[styles.rowIcon, { backgroundColor: colors.track }]}>
-        <Ionicons name={icon} size={18} color={colors.title} />
+        <Ionicons name={icon} size={18} color={colors.purple} />
       </View>
       <View style={styles.rowBody}>
         <Text style={[styles.rowTitle, { color: colors.ink }]}>{title}</Text>
@@ -209,7 +222,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 12,
     paddingVertical: 14,
-    borderBottomWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: 14,
   },
   rowIcon: { width: 36, height: 36, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   rowBody: { flex: 1, gap: 2 },
