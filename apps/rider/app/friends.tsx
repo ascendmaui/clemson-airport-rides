@@ -194,7 +194,7 @@ export default function CarpoolHubScreen() {
         dropoff,
         displayName: riderDisplayName(user),
         partyType: tailgate ? 'tailgate' : 'carpool',
-        ambassadorCode: (await loadAmbassadorCode(user.id)) || undefined,
+        ambassadorCode: (await loadAmbassadorCode(user?.id)) || undefined,
       })
       setResult(data)
       if (data.token) router.push(`/carpool/${data.token}`)
@@ -219,7 +219,7 @@ export default function CarpoolHubScreen() {
         dropoff,
         displayName: riderDisplayName(user),
         partyType: tailgate ? 'tailgate' : 'carpool',
-        ambassadorCode: (await loadAmbassadorCode(user.id)) || undefined,
+        ambassadorCode: (await loadAmbassadorCode(user?.id)) || undefined,
       })
       const url = inviteUrl(data.token, 'carpool')
       try {

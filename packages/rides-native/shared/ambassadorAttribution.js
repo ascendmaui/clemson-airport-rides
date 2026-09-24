@@ -67,6 +67,10 @@ export function ambassadorSavedCopy() {
   }
 }
 
+/**
+ * @param {string | null | undefined} code
+ * @param {string | null | undefined} [userId]
+ */
 export function packAttribution(code, userId = null) {
   const normalized = normalizeAmbassadorCode(code)
   if (!normalized) return ''
@@ -77,6 +81,7 @@ export function packAttribution(code, userId = null) {
   })
 }
 
+/** @param {string | null | undefined} raw */
 export function unpackAttribution(raw) {
   if (!raw || typeof raw !== 'string') return null
   try {
@@ -95,6 +100,10 @@ export function unpackAttribution(raw) {
 /**
  * Signed-out readers only see an unbound code.
  * A signed-in reader sees their own code, or a code saved before sign-in.
+ */
+/**
+ * @param {string | null | undefined} raw
+ * @param {string | null | undefined} [userId]
  */
 export function attributionForUser(raw, userId) {
   const record = unpackAttribution(raw)
