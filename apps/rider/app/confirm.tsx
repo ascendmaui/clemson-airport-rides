@@ -1,6 +1,6 @@
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useState } from 'react'
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
+import { Pressable, Text, TextInput, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { PrimaryButton, SheetHandle } from '@/components/Button'
 import { CampusMap } from '@/components/CampusMap'
@@ -8,7 +8,10 @@ import { SignInToBookSheet } from '@/components/SignInToBookSheet'
 import { setAuthNext } from '@/lib/authNext'
 import { useAuth } from '@/lib/auth'
 import { oneParam } from '@/lib/oneParam'
-import { INK, INK_SECONDARY, PURPLE, SURFACE } from 'rides-native/places.js'
+import { lift } from '@/lib/elevation'
+import type { Palette } from '@/lib/palette'
+import { useTheme } from '@/lib/theme'
+import { useThemedStyles } from '@/lib/useThemedStyles'
 
 export default function ConfirmPickup() {
   const router = useRouter()
@@ -19,6 +22,8 @@ export default function ConfirmPickup() {
   const [address, setAddress] = useState('Memorial Stadium · Lot 5')
   const [note, setNote] = useState('')
   const [promptOpen, setPromptOpen] = useState(false)
+  const { colors } = useTheme()
+  const styles = useThemedStyles(makeStyles)
 
   const goTiers = () => {
     router.push({ pathname: '/tiers', params: { dest, pickup: address, note } })
@@ -36,7 +41,7 @@ export default function ConfirmPickup() {
   return (
     <View style={[styles.screen, { paddingTop: insets.top }]}>
       <View style={styles.header}>
-        <Pressable onPress={() => router.back()} style={styles.back}>
+        <Pressable onPress={() => router.back()} style={[styles.back, lift(colors, 'rest')]}>
           <Text style={styles.backLabel}>←</Text>
         </Pressable>
         <Text style={styles.title}>Confirm pickup spot</Text>
@@ -45,7 +50,7 @@ export default function ConfirmPickup() {
         <CampusMap spots={[]} showHeat={false} />
       </View>
       <Text style={styles.hint}>Pin stays on Memorial Stadium. Drag-to-adjust ships with live tracking.</Text>
-      <View style={styles.sheet}>
+      <View style={[styles.sheet, lift(colors, 'float')]}>
         <SheetHandle />
         <Text style={styles.fieldLabel}>Pickup address</Text>
         <TextInput value={address} onChangeText={setAddress} style={styles.input} />
@@ -54,7 +59,7 @@ export default function ConfirmPickup() {
           value={note}
           onChangeText={setNote}
           placeholder="e.g. Near the orange gates, wearing purple hoodie"
-          placeholderTextColor="#8B939E"
+          placeholderTextColor={colors.placeholder}
           style={[styles.input, styles.note]}
           multiline
         />
@@ -79,34 +84,37 @@ export default function ConfirmPickup() {
   )
 }
 
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: SURFACE },
-  header: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingBottom: 8 },
-  back: { width: 40, height: 40, borderRadius: 12, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center' },
-  backLabel: { fontSize: 18, color: PURPLE, fontWeight: '700' },
-  title: { fontSize: 20, fontWeight: '600', color: INK },
-  map: { height: 260, marginHorizontal: 16, borderRadius: 18, overflow: 'hidden' },
-  hint: { textAlign: 'center', color: '#8B939E', fontSize: 12, marginTop: 8 },
-  sheet: {
-    marginTop: 'auto',
-    backgroundColor: '#fff',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    padding: 20,
-    paddingBottom: 28,
-  },
-  fieldLabel: { fontSize: 13, fontWeight: '600', color: INK_SECONDARY, marginBottom: 6 },
-  input: {
-    borderWidth: 1,
-    borderColor: 'rgba(82,45,128,0.16)',
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    marginBottom: 14,
-    fontSize: 16,
-    color: INK,
-  },
-  note: { minHeight: 64, textAlignVertical: 'top' },
-  going: { fontSize: 13, color: INK_SECONDARY, marginBottom: 14 },
-  goingStrong: { color: INK, fontWeight: '700' },
-})
+function makeStyles(colors: Palette) {
+  return {
+    screen: { flex: 1, backgroundColor: colors.background },
+    header: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 12, paddingHorizontal: 16, paddingBottom: 8 },
+    back: { width: 40, height: 40, borderRadius: 14, backgroundColor: colors.card, alignItems: 'center' as const, justifyContent: 'center' as const },
+    backLabel: { fontSize: 18, color: colors.title, fontWeight: '700' as const },
+    title: { fontSize: 20, fontWeight: '600' as const, color: colors.ink },
+    map: { height: 260, marginHorizontal: 16, borderRadius: 18, overflow: 'hidden' as const },
+    hint: { textAlign: 'center' as const, color: colors.placeholder, fontSize: 12, marginTop: 8 },
+    sheet: {
+      marginTop: 'auto' as const,
+      backgroundColor: colors.card,
+      borderTopLeftRadius: 24,
+      borderTopRightRadius: 24,
+      padding: 20,
+      paddingBottom: 28,
+    },
+    fieldLabel: { fontSize: 13, fontWeight: '600' as const, color: colors.inkSecondary, marginBottom: 6 },
+    input: {
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 12,
+      paddingHorizontal: 14,
+      paddingVertical: 12,
+      marginBottom: 14,
+      fontSize: 16,
+      color: colors.ink,
+      backgroundColor: colors.input,
+    },
+    note: { minHeight: 64, textAlignVertical: 'top' as const },
+    going: { fontSize: 13, color: colors.inkSecondary, marginBottom: 14 },
+    goingStrong: { color: colors.ink, fontWeight: '700' as const },
+  }
+}

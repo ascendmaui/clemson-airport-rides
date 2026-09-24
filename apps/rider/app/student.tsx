@@ -1,13 +1,14 @@
 import { useFocusEffect, useRouter } from 'expo-router'
 import { useCallback, useState } from 'react'
-import { StyleSheet, Text, View } from 'react-native'
+import { Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { PrimaryButton } from '@/components/Button'
 import { StackHeader } from '@/components/StackHeader'
 import { useAuth } from '@/lib/auth'
 import { supabase } from '@/lib/supabase'
 import { loadStudentProfile, markStudentVerified, studentStatus } from 'rides-native/riderMoney.js'
-import { INK_SECONDARY, ORANGE, PURPLE, SURFACE } from 'rides-native/places.js'
+import type { Palette } from '@/lib/palette'
+import { useThemedStyles } from '@/lib/useThemedStyles'
 
 export default function StudentScreen() {
   const router = useRouter()
@@ -17,6 +18,7 @@ export default function StudentScreen() {
   const [email, setEmail] = useState<string | null>(user?.email || null)
   const [note, setNote] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const styles = useThemedStyles(makeStyles)
 
   const load = useCallback(() => {
     if (!user || !supabase) return undefined
@@ -78,21 +80,23 @@ export default function StudentScreen() {
   )
 }
 
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: SURFACE },
-  body: { padding: 20, gap: 12 },
-  kicker: { color: ORANGE, fontWeight: '800', letterSpacing: 1.1, fontSize: 12 },
-  panel: {
-    backgroundColor: 'rgba(245,102,0,0.08)',
-    borderRadius: 16,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(245,102,0,0.28)',
-    gap: 4,
-  },
-  panelOn: { backgroundColor: 'rgba(31,138,76,0.10)', borderColor: 'rgba(31,138,76,0.28)' },
-  state: { color: PURPLE, fontWeight: '800', fontSize: 18 },
-  badge: { color: PURPLE, fontWeight: '700', marginTop: 6 },
-  copy: { color: INK_SECONDARY, fontSize: 14, lineHeight: 20 },
-  note: { color: PURPLE, fontSize: 13, lineHeight: 18 },
-})
+function makeStyles(colors: Palette) {
+  return {
+    screen: { flex: 1, backgroundColor: colors.background },
+    body: { padding: 20, gap: 12 },
+    kicker: { color: colors.orange, fontWeight: '800' as const, letterSpacing: 1.1, fontSize: 12 },
+    panel: {
+      backgroundColor: colors.orangeSoft,
+      borderRadius: 16,
+      padding: 16,
+      borderWidth: 1,
+      borderColor: colors.orange,
+      gap: 4,
+    },
+    panelOn: { backgroundColor: colors.onlineSoft, borderColor: colors.online },
+    state: { color: colors.title, fontWeight: '800' as const, fontSize: 18 },
+    badge: { color: colors.link, fontWeight: '700' as const, marginTop: 6 },
+    copy: { color: colors.inkSecondary, fontSize: 14, lineHeight: 20 },
+    note: { color: colors.link, fontSize: 13, lineHeight: 18 },
+  }
+}

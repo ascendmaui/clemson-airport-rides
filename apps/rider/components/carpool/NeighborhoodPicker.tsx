@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native'
+import { Pressable, ScrollView, Text, TextInput, View } from 'react-native'
 import {
   clusterOf,
   hotNeighborhoods,
@@ -10,8 +10,10 @@ import {
   type NeighborhoodGroup,
   type Place,
 } from 'rides-native/shared/carpool.js'
-import { INK, INK_SECONDARY, ORANGE, PURPLE } from 'rides-native/places.js'
 import { EmptyState } from '@/components/carpool/ui'
+import type { Palette } from '@/lib/palette'
+import { useTheme } from '@/lib/theme'
+import { useThemedStyles } from '@/lib/useThemedStyles'
 
 type GroupFilter = NeighborhoodGroup['id'] | 'all'
 
@@ -37,6 +39,8 @@ export function NeighborhoodPicker({
   const results = useMemo(() => searchNeighborhoods(query), [query])
   const listed = query.trim() ? results : neighborhoodsInGroup(group)
   const cluster = clusterOf(value)
+  const { colors } = useTheme()
+  const styles = useThemedStyles(makeStyles)
 
   return (
     <View style={styles.wrap}>
@@ -45,7 +49,7 @@ export function NeighborhoodPicker({
         value={query}
         onChangeText={setQuery}
         placeholder="Grand Marc, stadium, bars…"
-        placeholderTextColor="#8B939E"
+        placeholderTextColor={colors.placeholder}
         autoCorrect={false}
         autoCapitalize="words"
         style={styles.search}
@@ -91,6 +95,7 @@ export function NeighborhoodPicker({
 }
 
 function Chip({ spot, selected, onPress }: { spot: Neighborhood; selected: boolean; onPress: () => void }) {
+  const styles = useThemedStyles(makeStyles)
   return (
     <Pressable
       accessibilityRole="button"
@@ -103,41 +108,43 @@ function Chip({ spot, selected, onPress }: { spot: Neighborhood; selected: boole
   )
 }
 
-const styles = StyleSheet.create({
-  wrap: { marginBottom: 8 },
-  label: { fontSize: 12, fontWeight: '800', color: INK, marginBottom: 8 },
-  search: {
-    backgroundColor: '#fff',
-    borderWidth: 1,
-    borderColor: 'rgba(82,45,128,0.18)',
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 15,
-    color: INK,
-    marginBottom: 10,
-  },
-  row: { gap: 8, paddingBottom: 8 },
-  chip: {
-    borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderWidth: 1,
-    borderColor: 'rgba(82,45,128,0.25)',
-    backgroundColor: '#fff',
-  },
-  chipOn: { backgroundColor: PURPLE, borderColor: PURPLE },
-  chipText: { color: PURPLE, fontWeight: '700', fontSize: 12 },
-  chipTextOn: { color: '#fff' },
-  filters: { flexDirection: 'row', gap: 8, marginBottom: 8 },
-  filter: {
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    backgroundColor: 'rgba(82,45,128,0.06)',
-  },
-  filterOn: { backgroundColor: 'rgba(245,102,0,0.14)' },
-  filterText: { color: PURPLE, fontWeight: '700', fontSize: 12 },
-  filterTextOn: { color: ORANGE },
-  cluster: { color: INK_SECONDARY, fontSize: 12, fontWeight: '700', marginBottom: 8 },
-})
+function makeStyles(colors: Palette) {
+  return {
+    wrap: { marginBottom: 8 },
+    label: { fontSize: 12, fontWeight: '800' as const, color: colors.ink, marginBottom: 8 },
+    search: {
+      backgroundColor: colors.input,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 12,
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+      fontSize: 15,
+      color: colors.ink,
+      marginBottom: 10,
+    },
+    row: { gap: 8, paddingBottom: 8 },
+    chip: {
+      borderRadius: 999,
+      paddingHorizontal: 12,
+      paddingVertical: 7,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.chip,
+    },
+    chipOn: { backgroundColor: colors.purple, borderColor: colors.purple },
+    chipText: { color: colors.link, fontWeight: '700' as const, fontSize: 12 },
+    chipTextOn: { color: colors.onAccent },
+    filters: { flexDirection: 'row' as const, gap: 8, marginBottom: 8 },
+    filter: {
+      borderRadius: 999,
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+      backgroundColor: colors.purpleSoft,
+    },
+    filterOn: { backgroundColor: colors.orangeSoft },
+    filterText: { color: colors.link, fontWeight: '700' as const, fontSize: 12 },
+    filterTextOn: { color: colors.orange },
+    cluster: { color: colors.inkSecondary, fontSize: 12, fontWeight: '700' as const, marginBottom: 8 },
+  }
+}

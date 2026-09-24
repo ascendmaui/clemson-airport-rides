@@ -1,8 +1,10 @@
 import { LinearGradient } from 'expo-linear-gradient'
 import { useMemo } from 'react'
-import { StyleSheet, Text, View } from 'react-native'
+import { Text, View } from 'react-native'
 import { formatUsd, surgeDelta, type CarpoolQuote, type Place } from 'rides-native/shared/carpool.js'
-import { INK, INK_SECONDARY, ORANGE, PURPLE } from 'rides-native/places.js'
+import type { Palette } from '@/lib/palette'
+import { useTheme } from '@/lib/theme'
+import { useThemedStyles } from '@/lib/useThemedStyles'
 
 type CompareMode = 'pitch' | 'confirm'
 
@@ -38,6 +40,8 @@ export function CarpoolCompare({
     () => surgeDelta({ pickup, dropoff, quote, selfId, at }),
     [pickup, dropoff, quote, selfId, at],
   )
+  const { colors } = useTheme()
+  const styles = useThemedStyles(makeStyles)
   if (!delta) return null
 
   const chargingNow = mode === 'confirm' && delta.currentShareCents != null
@@ -48,7 +52,7 @@ export function CarpoolCompare({
 
   return (
     <LinearGradient
-      colors={['rgba(245,102,0,0.16)', 'rgba(82,45,128,0.10)']}
+      colors={[colors.orangeSoft, colors.purpleSoft]}
       style={styles.card}
       accessibilityLabel="Carpool price compared with riding alone"
     >
@@ -81,6 +85,7 @@ export function CarpoolCompare({
 }
 
 function PriceBox({ label, amount, muted = false }: { label: string; amount: string; muted?: boolean }) {
+  const styles = useThemedStyles(makeStyles)
   return (
     <View style={[styles.box, muted ? styles.boxMuted : styles.boxLive]}>
       <Text style={[styles.boxLabel, muted && styles.boxLabelMuted]}>{label}</Text>
@@ -89,26 +94,28 @@ function PriceBox({ label, amount, muted = false }: { label: string; amount: str
   )
 }
 
-const styles = StyleSheet.create({
-  card: {
-    marginTop: 16,
-    padding: 16,
-    borderRadius: 18,
-    borderWidth: 1.5,
-    borderColor: 'rgba(245,102,0,0.45)',
-  },
-  kicker: { color: ORANGE, fontSize: 11, fontWeight: '800', letterSpacing: 0.8 },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 10 },
-  arrow: { fontSize: 22, fontWeight: '800', color: ORANGE },
-  save: { marginTop: 12, backgroundColor: ORANGE, borderRadius: 12, paddingVertical: 10, paddingHorizontal: 12 },
-  saveText: { color: '#fff', fontWeight: '800', fontSize: 16 },
-  driver: { marginTop: 10, color: PURPLE, fontWeight: '700', fontSize: 13, lineHeight: 18 },
-  charge: { marginTop: 8, color: INK, fontSize: 13, lineHeight: 18 },
-  box: { flex: 1, borderRadius: 14, padding: 12 },
-  boxMuted: { backgroundColor: 'rgba(255,255,255,0.72)' },
-  boxLive: { backgroundColor: '#fff', borderWidth: 1.5, borderColor: ORANGE },
-  boxLabel: { fontSize: 11, fontWeight: '800', color: ORANGE },
-  boxLabelMuted: { color: '#8B939E' },
-  boxAmount: { marginTop: 4, fontSize: 26, fontWeight: '800', letterSpacing: -0.5, color: ORANGE },
-  boxAmountMuted: { color: INK_SECONDARY, textDecorationLine: 'line-through' },
-})
+function makeStyles(colors: Palette) {
+  return {
+    card: {
+      marginTop: 16,
+      padding: 16,
+      borderRadius: 18,
+      borderWidth: 1.5,
+      borderColor: colors.orange,
+    },
+    kicker: { color: colors.orange, fontSize: 11, fontWeight: '800' as const, letterSpacing: 0.8 },
+    row: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 8, marginTop: 10 },
+    arrow: { fontSize: 22, fontWeight: '800' as const, color: colors.orange },
+    save: { marginTop: 12, backgroundColor: colors.orange, borderRadius: 12, paddingVertical: 10, paddingHorizontal: 12 },
+    saveText: { color: colors.onAccent, fontWeight: '800' as const, fontSize: 16 },
+    driver: { marginTop: 10, color: colors.link, fontWeight: '700' as const, fontSize: 13, lineHeight: 18 },
+    charge: { marginTop: 8, color: colors.ink, fontSize: 13, lineHeight: 18 },
+    box: { flex: 1, borderRadius: 14, padding: 12 },
+    boxMuted: { backgroundColor: colors.purpleSoft },
+    boxLive: { backgroundColor: colors.card, borderWidth: 1.5, borderColor: colors.orange },
+    boxLabel: { fontSize: 11, fontWeight: '800' as const, color: colors.orange },
+    boxLabelMuted: { color: colors.placeholder },
+    boxAmount: { marginTop: 4, fontSize: 26, fontWeight: '800' as const, letterSpacing: -0.5, color: colors.orange },
+    boxAmountMuted: { color: colors.inkSecondary, textDecorationLine: 'line-through' as const },
+  }
+}

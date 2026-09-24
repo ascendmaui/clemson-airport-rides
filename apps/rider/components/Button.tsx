@@ -1,21 +1,24 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native'
-import { ORANGE, PURPLE } from 'rides-native/places.js'
+import { lift } from '@/lib/elevation'
+import type { Palette } from '@/lib/palette'
+import { useTheme } from '@/lib/theme'
+import { useThemedStyles } from '@/lib/useThemedStyles'
 
 type ButtonTone = 'orange' | 'purple' | 'ghost' | 'outline'
 
-function toneStyle(tone: ButtonTone) {
+function toneStyle(colors: Palette, tone: ButtonTone) {
   switch (tone) {
     case 'orange':
-      return { backgroundColor: ORANGE, color: '#fff', borderColor: 'transparent', borderWidth: 0 }
+      return { backgroundColor: colors.orange, color: colors.onAccent, borderColor: 'transparent', borderWidth: 0 }
     case 'purple':
-      return { backgroundColor: PURPLE, color: '#fff', borderColor: 'transparent', borderWidth: 0 }
+      return { backgroundColor: colors.purple, color: colors.onAccent, borderColor: 'transparent', borderWidth: 0 }
     case 'ghost':
-      return { backgroundColor: 'rgba(255,255,255,0.7)', color: PURPLE, borderColor: 'transparent', borderWidth: 0 }
+      return { backgroundColor: colors.elevated, color: colors.link, borderColor: 'transparent', borderWidth: 0 }
     case 'outline':
       return {
-        backgroundColor: 'rgba(82,45,128,0.06)',
-        color: PURPLE,
-        borderColor: 'rgba(82,45,128,0.35)',
+        backgroundColor: colors.purpleSoft,
+        color: colors.link,
+        borderColor: colors.purple,
         borderWidth: 1.5,
       }
     default: {
@@ -36,7 +39,9 @@ export function PrimaryButton({
   disabled?: boolean
   tone?: ButtonTone
 }) {
-  const look = toneStyle(tone)
+  const { colors } = useTheme()
+  const look = toneStyle(colors, tone)
+  const raised = tone === 'orange' || tone === 'purple'
   return (
     <Pressable
       onPress={onPress}
@@ -44,6 +49,7 @@ export function PrimaryButton({
       accessibilityRole="button"
       style={[
         styles.btn,
+        raised ? lift(colors, 'rest') : null,
         {
           backgroundColor: look.backgroundColor,
           borderColor: look.borderColor,
@@ -66,6 +72,7 @@ export function Pill({
   active?: boolean
   onPress: () => void
 }) {
+  const styles = useThemedStyles(makeStyles)
   return (
     <Pressable onPress={onPress} style={[styles.pill, active && styles.pillOn]} accessibilityRole="button">
       <Text style={[styles.pillLabel, active && styles.pillLabelOn]}>{label}</Text>
@@ -74,29 +81,35 @@ export function Pill({
 }
 
 export function SheetHandle() {
+  const styles = useThemedStyles(makeStyles)
   return <View style={styles.handle} />
+}
+
+function makeStyles(colors: Palette) {
+  return {
+    pill: {
+      borderRadius: 999,
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.chip,
+    },
+    pillOn: { borderColor: colors.orange, backgroundColor: colors.orangeSoft },
+    pillLabel: { color: colors.link, fontWeight: '700' as const, fontSize: 12 },
+    pillLabelOn: { color: colors.orange },
+    handle: {
+      alignSelf: 'center' as const,
+      width: 42,
+      height: 5,
+      borderRadius: 999,
+      backgroundColor: colors.track,
+      marginBottom: 12,
+    },
+  }
 }
 
 const styles = StyleSheet.create({
   btn: { borderRadius: 16, paddingVertical: 16, alignItems: 'center', paddingHorizontal: 16 },
   label: { fontWeight: '700', fontSize: 16 },
-  pill: {
-    borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderWidth: 1,
-    borderColor: 'rgba(82,45,128,0.25)',
-    backgroundColor: '#fff',
-  },
-  pillOn: { borderColor: 'rgba(245,102,0,0.55)', backgroundColor: 'rgba(245,102,0,0.12)' },
-  pillLabel: { color: PURPLE, fontWeight: '700', fontSize: 12 },
-  pillLabelOn: { color: ORANGE },
-  handle: {
-    alignSelf: 'center',
-    width: 42,
-    height: 5,
-    borderRadius: 999,
-    backgroundColor: 'rgba(11,18,32,0.16)',
-    marginBottom: 12,
-  },
 })

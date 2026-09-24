@@ -1,6 +1,6 @@
 import { useFocusEffect, useRouter } from 'expo-router'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native'
+import { Pressable, RefreshControl, ScrollView, Text, TextInput, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Pill, PrimaryButton } from '@/components/Button'
 import { MainTabs } from '@/components/MainTabs'
@@ -20,7 +20,10 @@ import {
   type ScheduledRow,
 } from '@/lib/scheduleApi'
 import { supabase } from '@/lib/supabase'
-import { formatUsd, INK, INK_SECONDARY, ORANGE, PURPLE, SURFACE } from 'rides-native/places.js'
+import { formatUsd } from 'rides-native/places.js'
+import type { Palette } from '@/lib/palette'
+import { useTheme } from '@/lib/theme'
+import { useThemedStyles } from '@/lib/useThemedStyles'
 import {
   loadStudentProfile,
   loadTripDeposit,
@@ -86,6 +89,8 @@ export default function ScheduleScreen() {
   const router = useRouter()
   const insets = useSafeAreaInsets()
   const { user } = useAuth()
+  const { colors } = useTheme()
+  const styles = useThemedStyles(makeStyles)
   const [airport, setAirport] = useState<'GSP' | 'CLT'>('GSP')
   const [date, setDate] = useState('')
   const [time, setTime] = useState('')
@@ -299,7 +304,7 @@ export default function ScheduleScreen() {
         refreshControl={(
           <RefreshControl
             refreshing={refreshing}
-            tintColor={ORANGE}
+            tintColor={colors.orange}
             onRefresh={() => {
               setRefreshing(true)
               setFocusTick((n) => n + 1)
@@ -337,7 +342,7 @@ export default function ScheduleScreen() {
           value={date}
           onChangeText={setDate}
           placeholder="YYYY-MM-DD · empty requests a driver now"
-          placeholderTextColor="#8B939E"
+          placeholderTextColor={colors.placeholder}
           autoCapitalize="none"
           style={styles.input}
         />
@@ -346,7 +351,7 @@ export default function ScheduleScreen() {
           value={time}
           onChangeText={setTime}
           placeholder="HH:MM"
-          placeholderTextColor="#8B939E"
+          placeholderTextColor={colors.placeholder}
           autoCapitalize="none"
           style={styles.input}
         />
@@ -413,9 +418,9 @@ export default function ScheduleScreen() {
           </View>
         ) : null}
         <Text style={styles.label}>{purpose === 'recurring' ? 'First date (optional)' : 'Date'}</Text>
-        <TextInput value={campusDate} onChangeText={setCampusDate} placeholder="YYYY-MM-DD" placeholderTextColor="#8B939E" style={styles.input} autoCapitalize="none" />
+        <TextInput value={campusDate} onChangeText={setCampusDate} placeholder="YYYY-MM-DD" placeholderTextColor={colors.placeholder} style={styles.input} autoCapitalize="none" />
         <Text style={styles.label}>Pickup time</Text>
-        <TextInput value={campusTime} onChangeText={setCampusTime} placeholder="HH:MM" placeholderTextColor="#8B939E" style={styles.input} autoCapitalize="none" />
+        <TextInput value={campusTime} onChangeText={setCampusTime} placeholder="HH:MM" placeholderTextColor={colors.placeholder} style={styles.input} autoCapitalize="none" />
         <Text style={styles.label}>Pickup</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.pills}>
           {RIDE_PLACES.map((place) => (
@@ -482,6 +487,7 @@ export default function ScheduleScreen() {
 }
 
 function Row({ label, value, strong }: { label: string; value: string; strong?: boolean }) {
+  const styles = useThemedStyles(makeStyles)
   return (
     <View style={styles.row}>
       <Text style={styles.rowLabel}>{label}</Text>
@@ -490,63 +496,65 @@ function Row({ label, value, strong }: { label: string; value: string; strong?: 
   )
 }
 
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: SURFACE },
-  body: { padding: 20, paddingBottom: 28, gap: 8 },
-  kicker: { color: ORANGE, fontWeight: '800', letterSpacing: 1.2, fontSize: 12 },
-  title: { fontSize: 28, fontWeight: '800', color: PURPLE, letterSpacing: -0.4 },
-  section: { marginTop: 18, fontSize: 20, fontWeight: '800', color: PURPLE },
-  copy: { fontSize: 15, lineHeight: 22, color: INK_SECONDARY, marginBottom: 8 },
-  choices: { flexDirection: 'row', gap: 10, marginVertical: 8 },
-  choice: {
-    flex: 1,
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: 'rgba(82,45,128,0.12)',
-  },
-  choiceOn: { borderColor: 'rgba(245,102,0,0.55)', backgroundColor: 'rgba(245,102,0,0.08)' },
-  choiceCode: { fontSize: 18, fontWeight: '800', color: INK },
-  choiceName: { marginTop: 4, color: INK_SECONDARY, fontSize: 12 },
-  label: { marginTop: 8, fontSize: 13, fontWeight: '700', color: INK_SECONDARY },
-  input: {
-    borderWidth: 1,
-    borderColor: 'rgba(82,45,128,0.16)',
-    borderRadius: 12,
-    backgroundColor: '#fff',
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: 16,
-    color: INK,
-  },
-  panel: {
-    marginTop: 12,
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 16,
-    gap: 8,
-    borderWidth: 1,
-    borderColor: 'rgba(82,45,128,0.08)',
-  },
-  row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  rowLabel: { color: INK_SECONDARY, fontSize: 14 },
-  rowValue: { color: INK, fontWeight: '700', fontSize: 16 },
-  rowStrong: { color: ORANGE, fontSize: 18 },
-  fine: { color: '#8B939E', fontSize: 12, lineHeight: 18 },
-  error: { color: '#B42318', fontSize: 13, lineHeight: 18, marginVertical: 6 },
-  banner: {
-    backgroundColor: 'rgba(82,45,128,0.08)',
-    color: PURPLE,
-    borderRadius: 12,
-    padding: 12,
-    fontSize: 13,
-    lineHeight: 18,
-    overflow: 'hidden',
-  },
-  link: { color: PURPLE, fontWeight: '700', marginTop: 14, marginBottom: 8 },
-  pills: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  cardLine: { fontWeight: '800', color: INK },
-  student: { color: ORANGE, fontWeight: '700', fontSize: 12 },
-  cancel: { color: '#B42318', fontWeight: '700', marginTop: 6 },
-})
+function makeStyles(colors: Palette) {
+  return {
+    screen: { flex: 1, backgroundColor: colors.background },
+    body: { padding: 20, paddingBottom: 28, gap: 8 },
+    kicker: { color: colors.orange, fontWeight: '800' as const, letterSpacing: 1.2, fontSize: 12 },
+    title: { fontSize: 28, fontWeight: '800' as const, color: colors.title, letterSpacing: -0.4 },
+    section: { marginTop: 18, fontSize: 20, fontWeight: '800' as const, color: colors.title },
+    copy: { fontSize: 15, lineHeight: 22, color: colors.inkSecondary, marginBottom: 8 },
+    choices: { flexDirection: 'row' as const, gap: 10, marginVertical: 8 },
+    choice: {
+      flex: 1,
+      backgroundColor: colors.card,
+      borderRadius: 16,
+      padding: 14,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    choiceOn: { borderColor: colors.orange, backgroundColor: colors.orangeSoft },
+    choiceCode: { fontSize: 18, fontWeight: '800' as const, color: colors.ink },
+    choiceName: { marginTop: 4, color: colors.inkSecondary, fontSize: 12 },
+    label: { marginTop: 8, fontSize: 13, fontWeight: '700' as const, color: colors.inkSecondary },
+    input: {
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 12,
+      backgroundColor: colors.input,
+      paddingHorizontal: 14,
+      paddingVertical: 12,
+      fontSize: 16,
+      color: colors.ink,
+    },
+    panel: {
+      marginTop: 12,
+      backgroundColor: colors.card,
+      borderRadius: 16,
+      padding: 16,
+      gap: 8,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    row: { flexDirection: 'row' as const, justifyContent: 'space-between' as const, alignItems: 'center' as const },
+    rowLabel: { color: colors.inkSecondary, fontSize: 14 },
+    rowValue: { color: colors.ink, fontWeight: '700' as const, fontSize: 16 },
+    rowStrong: { color: colors.orange, fontSize: 18 },
+    fine: { color: colors.placeholder, fontSize: 12, lineHeight: 18 },
+    error: { color: colors.danger, fontSize: 13, lineHeight: 18, marginVertical: 6 },
+    banner: {
+      backgroundColor: colors.purpleSoft,
+      color: colors.link,
+      borderRadius: 12,
+      padding: 12,
+      fontSize: 13,
+      lineHeight: 18,
+      overflow: 'hidden' as const,
+    },
+    link: { color: colors.link, fontWeight: '700' as const, marginTop: 14, marginBottom: 8 },
+    pills: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: 8 },
+    cardLine: { fontWeight: '800' as const, color: colors.ink },
+    student: { color: colors.orange, fontWeight: '700' as const, fontSize: 12 },
+    cancel: { color: colors.danger, fontWeight: '700' as const, marginTop: 6 },
+  }
+}

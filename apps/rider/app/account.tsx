@@ -1,17 +1,26 @@
 import { useRouter } from 'expo-router'
 import { useEffect, useState } from 'react'
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { Pressable, ScrollView, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Pill, PrimaryButton } from '@/components/Button'
 import { MainTabs } from '@/components/MainTabs'
 import { loadAccount, saveProfile } from '@/lib/accountApi'
 import { useAuth } from '@/lib/auth'
 import { playTigerCue, setSoundsEnabled, soundsEnabled, tapHaptic } from '@/lib/feedback'
+import { lift } from '@/lib/elevation'
+import type { Palette } from '@/lib/palette'
+import { useTheme, type DisplayMode } from '@/lib/theme'
+import { useThemedStyles } from '@/lib/useThemedStyles'
 import { displayFirstName, isClemsonEmail } from 'rides-native/authErrors'
-import { INK, INK_SECONDARY, ORANGE, PURPLE, SURFACE } from 'rides-native/places.js'
 import { FAVORITE_SPOTS } from 'rides-native/riderShell.js'
 import { loadRatingSummary } from 'rides-native/PartyScreens'
 import { supabase } from '@/lib/supabase'
+
+const DISPLAY: { id: DisplayMode; label: string }[] = [
+  { id: 'auto', label: 'Auto' },
+  { id: 'light', label: 'Light' },
+  { id: 'dark', label: 'Dark' },
+]
 
 const LINKS: { href: '/billing' | '/student' | '/promo' | '/notifications' | '/history' | '/schedule'; label: string; hint: string }[] = [
   { href: '/billing', label: 'Billing', hint: 'Card on file, deposits, and ride history' },
@@ -26,6 +35,8 @@ export default function AccountScreen() {
   const router = useRouter()
   const insets = useSafeAreaInsets()
   const { user, configured, signOut } = useAuth()
+  const { colors, displayMode, setDisplayMode, solarPlace } = useTheme()
+  const styles = useThemedStyles(makeStyles)
   const [error, setError] = useState<string | null>(null)
   const [note, setNote] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -119,7 +130,7 @@ export default function AccountScreen() {
         {user && isClemsonEmail(user.email) ? (
           <Text style={styles.badge}>Clemson student · 10% off Standard</Text>
         ) : null}
-        <Pressable accessibilityRole="button" onPress={() => router.push('/safety')} style={styles.safety}>
+        <Pressable accessibilityRole="button" onPress={() => router.push('/safety')} style={[styles.safety, lift(colors, 'rest')]}>
           <Text style={styles.safetyKicker}>SAFETY</Text>
           <Text style={styles.safetyTitle}>SOS, live location, emergency contacts</Text>
           <Text style={styles.safetyBody}>Share a trip link and confirm an alert before anyone is called.</Text>
@@ -130,12 +141,31 @@ export default function AccountScreen() {
             : 'Supabase anon key is missing. Add EXPO_PUBLIC_SUPABASE_ANON_KEY as an EAS environment variable, then rebuild.'}
         </Text>
         {LINKS.map((link) => (
-          <Pressable key={link.href} onPress={() => router.push(link.href)} style={styles.row} accessibilityRole="button">
+          <Pressable key={link.href} onPress={() => router.push(link.href)} style={[styles.row, lift(colors, 'rest')]} accessibilityRole="button">
             <Text style={styles.rowTitle}>{link.label}</Text>
             <Text style={styles.copy}>{link.hint}</Text>
           </Pressable>
         ))}
-        <View style={styles.row}>
+        <View style={[styles.row, lift(colors, 'rest')]}>
+          <Text style={styles.rowTitle}>Display</Text>
+          <Text style={styles.copy}>
+            Auto follows sunrise and sunset for {solarPlace}. Clemson orange and purple stay the same at night.
+          </Text>
+          <View style={styles.pills}>
+            {DISPLAY.map((option) => (
+              <Pill
+                key={option.id}
+                label={option.label}
+                active={displayMode === option.id}
+                onPress={() => {
+                  void tapHaptic()
+                  setDisplayMode(option.id)
+                }}
+              />
+            ))}
+          </View>
+        </View>
+        <View style={[styles.row, lift(colors, 'rest')]}>
           <Text style={styles.rowTitle}>Favorite spots</Text>
           <Text style={styles.copy}>Pick up to six, including White C and Bigsby.</Text>
           <View style={styles.pills}>
@@ -145,7 +175,7 @@ export default function AccountScreen() {
           </View>
           <PrimaryButton label={busy ? 'Saving…' : 'Save spots'} onPress={onSaveSpots} disabled={busy} tone="ghost" />
         </View>
-        <View style={styles.row}>
+        <View style={[styles.row, lift(colors, 'rest')]}>
           <Text style={styles.rowTitle}>Sounds</Text>
           <Text style={styles.copy}>Tiger sounds use expo-audio and stay quiet when the phone is on silent or vibrate.</Text>
           <PrimaryButton
@@ -176,33 +206,35 @@ export default function AccountScreen() {
   )
 }
 
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: SURFACE },
-  body: { padding: 20, gap: 12, paddingBottom: 24 },
-  kicker: { color: '#F56600', fontWeight: '800', letterSpacing: 1.2, fontSize: 12 },
-  title: { fontSize: 28, fontWeight: '800', color: PURPLE, letterSpacing: -0.4 },
-  copy: { fontSize: 14, lineHeight: 20, color: INK_SECONDARY },
-  badge: { color: PURPLE, fontWeight: '700' },
-  safety: {
-    backgroundColor: '#fff',
-    borderRadius: 18,
-    padding: 14,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(82,45,128,0.14)',
-  },
-  safetyKicker: { color: ORANGE, fontWeight: '800', letterSpacing: 1.1, fontSize: 11 },
-  safetyTitle: { color: PURPLE, fontWeight: '800', fontSize: 16, marginTop: 4 },
-  safetyBody: { color: INK_SECONDARY, fontSize: 13, lineHeight: 18, marginTop: 4 },
-  row: {
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: 'rgba(82,45,128,0.1)',
-    gap: 4,
-  },
-  rowTitle: { color: INK, fontWeight: '800', fontSize: 16 },
-  pills: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 },
-  note: { color: PURPLE, fontWeight: '700', fontSize: 13 },
-  error: { color: '#B42318', fontSize: 13 },
-})
+function makeStyles(colors: Palette) {
+  return {
+    screen: { flex: 1, backgroundColor: colors.background },
+    body: { padding: 20, gap: 12, paddingBottom: 24 },
+    kicker: { color: colors.orange, fontWeight: '800' as const, letterSpacing: 1.2, fontSize: 12 },
+    title: { fontSize: 28, fontWeight: '800' as const, color: colors.title, letterSpacing: -0.4 },
+    copy: { fontSize: 14, lineHeight: 20, color: colors.inkSecondary },
+    badge: { color: colors.link, fontWeight: '700' as const },
+    safety: {
+      backgroundColor: colors.card,
+      borderRadius: 18,
+      padding: 14,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    safetyKicker: { color: colors.orange, fontWeight: '800' as const, letterSpacing: 1.1, fontSize: 11 },
+    safetyTitle: { color: colors.title, fontWeight: '800' as const, fontSize: 16, marginTop: 4 },
+    safetyBody: { color: colors.inkSecondary, fontSize: 13, lineHeight: 18, marginTop: 4 },
+    row: {
+      backgroundColor: colors.card,
+      borderRadius: 16,
+      padding: 14,
+      borderWidth: 1,
+      borderColor: colors.border,
+      gap: 4,
+    },
+    rowTitle: { color: colors.ink, fontWeight: '800' as const, fontSize: 16 },
+    pills: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: 8, marginTop: 8 },
+    note: { color: colors.link, fontWeight: '700' as const, fontSize: 13 },
+    error: { color: colors.danger, fontSize: 13 },
+  }
+}

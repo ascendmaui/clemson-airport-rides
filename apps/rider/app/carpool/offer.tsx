@@ -1,6 +1,6 @@
 import { useFocusEffect, useRouter } from 'expo-router'
 import { useCallback, useState } from 'react'
-import { ScrollView, StyleSheet, Switch, Text, View } from 'react-native'
+import { ScrollView, Switch, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { PrimaryButton } from '@/components/Button'
 import { CarpoolCompare } from '@/components/carpool/CarpoolCompare'
@@ -14,7 +14,9 @@ import { useRegisteredVehicle } from '@/lib/useRegisteredVehicle'
 import { apiErrorMessage, createCarpoolOffer, recomputeFriendRide } from 'rides-native/shared/carpoolApi.js'
 import { defaultCarpoolEnds, riderDisplayName, type Place } from 'rides-native/shared/carpool.js'
 import { capacityMessage, offerCapacity, vehicleMaxSeats } from 'rides-native/shared/vehicle.js'
-import { INK_SECONDARY, ORANGE, PURPLE, SURFACE } from 'rides-native/places.js'
+import type { Palette } from '@/lib/palette'
+import { useTheme } from '@/lib/theme'
+import { useThemedStyles } from '@/lib/useThemedStyles'
 
 const START = defaultCarpoolEnds()
 
@@ -22,6 +24,8 @@ export default function OfferCarpoolScreen() {
   const router = useRouter()
   const insets = useSafeAreaInsets()
   const { user } = useAuth()
+  const { colors } = useTheme()
+  const styles = useThemedStyles(makeStyles)
   const vehicleState = useRegisteredVehicle(user?.id)
   const [name, setName] = useState(riderDisplayName(user))
   const [pickup, setPickup] = useState<Place>(START.pickup)
@@ -145,8 +149,8 @@ export default function OfferCarpoolScreen() {
             <Switch
               value={tailgate}
               onValueChange={setTailgate}
-              trackColor={{ false: 'rgba(82,45,128,0.2)', true: '#F56600' }}
-              thumbColor="#fff"
+              trackColor={{ false: colors.track, true: colors.orange }}
+              thumbColor={colors.onAccent}
             />
           </View>
           <SplitModePicker value={splitMode} onChange={setSplitMode} />
@@ -165,15 +169,17 @@ export default function OfferCarpoolScreen() {
   )
 }
 
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: SURFACE },
-  scroll: { flex: 1 },
-  title: { fontSize: 28, fontWeight: '800', color: PURPLE, letterSpacing: -0.4 },
-  cardTitle: { color: PURPLE, fontWeight: '800', fontSize: 16, marginBottom: 8 },
-  step: { color: INK_SECONDARY, fontSize: 14, lineHeight: 22 },
-  meta: { marginTop: 8, color: INK_SECONDARY, fontSize: 13, lineHeight: 18 },
-  warn: { color: ORANGE, fontWeight: '800', fontSize: 16 },
-  link: { marginTop: 10, color: PURPLE, fontWeight: '800', fontSize: 15 },
-  tailgate: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 12 },
-  tailgateLabel: { flex: 1, fontWeight: '700', fontSize: 14, color: '#0B1220' },
-})
+function makeStyles(colors: Palette) {
+  return {
+    screen: { flex: 1, backgroundColor: colors.background },
+    scroll: { flex: 1 },
+    title: { fontSize: 28, fontWeight: '800' as const, color: colors.title, letterSpacing: -0.4 },
+    cardTitle: { color: colors.title, fontWeight: '800' as const, fontSize: 16, marginBottom: 8 },
+    step: { color: colors.inkSecondary, fontSize: 14, lineHeight: 22 },
+    meta: { marginTop: 8, color: colors.inkSecondary, fontSize: 13, lineHeight: 18 },
+    warn: { color: colors.orange, fontWeight: '800' as const, fontSize: 16 },
+    link: { marginTop: 10, color: colors.link, fontWeight: '800' as const, fontSize: 15 },
+    tailgate: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'space-between' as const, gap: 12, marginBottom: 12 },
+    tailgateLabel: { flex: 1, fontWeight: '700' as const, fontSize: 14, color: colors.ink },
+  }
+}

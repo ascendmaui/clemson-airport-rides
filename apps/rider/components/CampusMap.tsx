@@ -3,11 +3,16 @@ import { StyleSheet, Text, View } from 'react-native'
 import { heatColor } from 'rides-native/heat.js'
 import { DOWNTOWN, STADIUM } from 'rides-native/places.js'
 import { mapKindLabel, type CampusMapHandle, type CampusMapProps } from '@/components/mapTypes'
+import type { Palette } from '@/lib/palette'
+import { useTheme } from '@/lib/theme'
+import { useThemedStyles } from '@/lib/useThemedStyles'
 
 export const CampusMap = forwardRef<CampusMapHandle, CampusMapProps>(function CampusMap(
   { spots, showHeat, mapType = 'standard', theater = false, gameDay = false, surge = false, userCoordinate = null, pins = [] },
   ref,
 ) {
+  const { colors } = useTheme()
+  const styles = useThemedStyles(makeStyles)
   useImperativeHandle(ref, () => ({
     animateTo() {},
   }))
@@ -36,8 +41,8 @@ export const CampusMap = forwardRef<CampusMapHandle, CampusMapProps>(function Ca
         : null}
       {theater ? (
         <View style={styles.theaterRow}>
-          <View style={[styles.car, { backgroundColor: '#F56600' }]} />
-          <View style={[styles.car, { backgroundColor: '#522D80' }]} />
+          <View style={[styles.car, { backgroundColor: colors.orange }]} />
+          <View style={[styles.car, { backgroundColor: colors.purple }]} />
           <Text style={styles.preview}>Preview cars</Text>
         </View>
       ) : null}
@@ -47,11 +52,11 @@ export const CampusMap = forwardRef<CampusMapHandle, CampusMapProps>(function Ca
         {userCoordinate ? <Text style={styles.badge}>You</Text> : null}
       </View>
       <View style={styles.row}>
-        <View style={[styles.pin, { backgroundColor: '#522D80' }]}>
+        <View style={[styles.pin, { backgroundColor: colors.purple }]}>
           <Text style={styles.pinText}>Campus</Text>
         </View>
         <View style={styles.line} />
-        <View style={[styles.pin, { backgroundColor: '#F56600' }]}>
+        <View style={[styles.pin, { backgroundColor: colors.orange }]}>
           <Text style={styles.pinText}>GSP</Text>
         </View>
       </View>
@@ -65,21 +70,23 @@ export const CampusMap = forwardRef<CampusMapHandle, CampusMapProps>(function Ca
   )
 })
 
-const styles = StyleSheet.create({
-  map: { flex: 1, backgroundColor: '#E7D7EA', alignItems: 'center', justifyContent: 'center' },
-  wash: { ...StyleSheet.absoluteFill, backgroundColor: 'rgba(245,102,0,0.12)' },
-  kind: { position: 'absolute', top: 12, left: 12, color: '#522D80', fontWeight: '800', fontSize: 11 },
-  blob: { position: 'absolute', borderRadius: 999 },
-  theaterRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
-  car: { width: 18, height: 12, borderRadius: 4 },
-  preview: { color: '#522D80', fontSize: 11, fontWeight: '700' },
-  badges: { flexDirection: 'row', gap: 6, marginBottom: 8 },
-  badge: { backgroundColor: '#522D80', color: '#fff', overflow: 'hidden', borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3, fontSize: 11, fontWeight: '800' },
-  surge: { backgroundColor: '#F56600' },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  pin: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12 },
-  pinText: { color: '#fff', fontWeight: '800', fontSize: 12 },
-  line: { width: 64, height: 3, borderRadius: 2, backgroundColor: 'rgba(82,45,128,0.45)' },
-  pinLabel: { marginTop: 4, color: '#522D80', fontSize: 11, fontWeight: '700' },
-  caption: { marginTop: 12, color: '#522D80', fontWeight: '700', fontSize: 12 },
-})
+function makeStyles(colors: Palette) {
+  return {
+    map: { flex: 1, backgroundColor: colors.mapFallback, alignItems: 'center' as const, justifyContent: 'center' as const },
+    wash: { ...StyleSheet.absoluteFill, backgroundColor: colors.orangeSoft },
+    kind: { position: 'absolute' as const, top: 12, left: 12, color: colors.link, fontWeight: '800' as const, fontSize: 11 },
+    blob: { position: 'absolute' as const, borderRadius: 999 },
+    theaterRow: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 8, marginBottom: 8 },
+    car: { width: 18, height: 12, borderRadius: 4 },
+    preview: { color: colors.link, fontSize: 11, fontWeight: '700' as const },
+    badges: { flexDirection: 'row' as const, gap: 6, marginBottom: 8 },
+    badge: { backgroundColor: colors.purple, color: colors.onAccent, overflow: 'hidden' as const, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3, fontSize: 11, fontWeight: '800' as const },
+    surge: { backgroundColor: colors.orange },
+    row: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 8 },
+    pin: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12 },
+    pinText: { color: colors.onAccent, fontWeight: '800' as const, fontSize: 12 },
+    line: { width: 64, height: 3, borderRadius: 2, backgroundColor: colors.border },
+    pinLabel: { marginTop: 4, color: colors.link, fontSize: 11, fontWeight: '700' as const },
+    caption: { marginTop: 12, color: colors.link, fontWeight: '700' as const, fontSize: 12 },
+  }
+}

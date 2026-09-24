@@ -7,7 +7,6 @@ import {
   Pressable,
   RefreshControl,
   ScrollView,
-  StyleSheet,
   Text,
   TextInput,
   useWindowDimensions,
@@ -25,7 +24,11 @@ import { useAuth } from '@/lib/auth'
 import { playTigerCue, tapHaptic } from '@/lib/feedback'
 import { displayFirstName } from 'rides-native/authErrors'
 import { campusOverlays } from 'rides-native/riderShell.js'
-import { HEAT_WINDOWS, INK, INK_SECONDARY, ORANGE, PURPLE, SHORTCUTS, SURFACE } from 'rides-native/places.js'
+import { HEAT_WINDOWS, SHORTCUTS } from 'rides-native/places.js'
+import { lift } from '@/lib/elevation'
+import type { Palette } from '@/lib/palette'
+import { useTheme } from '@/lib/theme'
+import { useThemedStyles } from '@/lib/useThemedStyles'
 
 const MAP_KINDS: MapKind[] = ['standard', 'satellite', 'hybrid']
 
@@ -34,6 +37,8 @@ export default function RiderHome() {
   const insets = useSafeAreaInsets()
   const { height: windowH } = useWindowDimensions()
   const { user, configured } = useAuth()
+  const { colors } = useTheme()
+  const styles = useThemedStyles(makeStyles)
   const mapRef = useRef<CampusMapHandle>(null)
   const [query, setQuery] = useState('')
   const [showBusy, setShowBusy] = useState(true)
@@ -154,7 +159,7 @@ export default function RiderHome() {
         />
         <View pointerEvents="box-none" style={[styles.mapChrome, { paddingTop: insets.top + 8 }]}>
           <View style={styles.topBar}>
-            <View style={styles.brand}>
+            <View style={[styles.brand, lift(colors, 'float')]}>
               <Text style={styles.brandKicker}>RIDE • GAME • REPEAT</Text>
               <Text style={styles.brandTitle}>Clemson <Text style={styles.brandSoft}>RIDES</Text></Text>
               <View style={styles.brandPill}>
@@ -168,7 +173,7 @@ export default function RiderHome() {
                 void tapHaptic()
                 router.push('/account')
               }}
-              style={styles.avatar}
+              style={[styles.avatar, lift(colors, 'rest')]}
             >
               <Text style={styles.avatarText}>{initial}</Text>
             </Pressable>
@@ -184,7 +189,7 @@ export default function RiderHome() {
                 )
               })}
             </View>
-            <Pressable onPress={onLocate} style={styles.locate} accessibilityRole="button" accessibilityLabel="Center on me">
+            <Pressable onPress={onLocate} style={[styles.locate, lift(colors, 'rest')]} accessibilityRole="button" accessibilityLabel="Center on me">
               <Text style={styles.locateText}>{locating ? '…' : '◎'}</Text>
             </Pressable>
           </View>
@@ -250,7 +255,7 @@ export default function RiderHome() {
           refreshControl={(
             <RefreshControl
               refreshing={refreshing}
-              tintColor={ORANGE}
+              tintColor={colors.orange}
               onRefresh={() => {
                 setRefreshing(true)
                 reloadSpots(heatWindow).finally(() => setRefreshing(false))
@@ -274,8 +279,8 @@ export default function RiderHome() {
             value={query}
             onChangeText={setQuery}
             placeholder="Campus, GSP, CLT…"
-            placeholderTextColor="#8B939E"
-            style={styles.search}
+            placeholderTextColor={colors.placeholder}
+            style={[styles.search, lift(colors, 'rest')]}
             autoCorrect={false}
           />
           <Pressable accessibilityRole="button" onPress={() => goSearch()} style={styles.searchLink}>
@@ -291,7 +296,7 @@ export default function RiderHome() {
 
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.shortcuts}>
             {SHORTCUTS.map((shortcut) => (
-              <Pressable key={shortcut.id} onPress={() => goSearch(shortcut.sub)} style={styles.shortcut}>
+              <Pressable key={shortcut.id} onPress={() => goSearch(shortcut.sub)} style={[styles.shortcut, lift(colors, 'rest')]}>
                 <Text style={styles.shortcutIcon}>{shortcut.icon}</Text>
                 <Text style={styles.shortcutLabel}>{shortcut.label}</Text>
                 <Text style={styles.shortcutSub}>{shortcut.sub}</Text>
@@ -310,7 +315,7 @@ export default function RiderHome() {
               void playTigerCue()
               router.push('/friends')
             }}
-            style={styles.gameday}
+            style={[styles.gameday, lift(colors, 'rest')]}
           >
             <Text style={styles.gamedayIcon}>🏈</Text>
             <View style={styles.gamedayCopy}>
@@ -328,146 +333,148 @@ export default function RiderHome() {
   )
 }
 
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: SURFACE },
-  mapSlot: { backgroundColor: '#E7D7EA', overflow: 'hidden' },
-  mapChrome: { ...StyleSheet.absoluteFill, justifyContent: 'space-between' },
-  topBar: {
-    paddingHorizontal: 16,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-  },
-  brand: {
-    width: '52%',
-    maxWidth: 220,
-    minHeight: 96,
-    borderRadius: 18,
-    backgroundColor: ORANGE,
-    paddingHorizontal: 16,
-    paddingTop: 14,
-    paddingBottom: 12,
-    justifyContent: 'flex-end',
-  },
-  brandKicker: { color: '#fff', fontSize: 9, fontWeight: '700', letterSpacing: 1.4, marginBottom: 4 },
-  brandTitle: { color: '#fff', fontSize: 18, fontWeight: '800' },
-  brandSoft: { fontWeight: '700' },
-  brandPill: {
-    marginTop: 8,
-    alignSelf: 'flex-start',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 999,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-  },
-  brandPillText: { color: '#fff', fontSize: 9, fontWeight: '700', letterSpacing: 0.4 },
-  avatar: {
-    width: 46,
-    height: 46,
-    borderRadius: 23,
-    backgroundColor: PURPLE,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: '#fff',
-  },
-  avatarText: { color: '#fff', fontWeight: '800', fontSize: 18 },
-  mapControls: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-end',
-    paddingHorizontal: 12,
-    paddingBottom: 10,
-  },
-  kindRow: { flexDirection: 'row', gap: 6 },
-  kindChip: {
-    backgroundColor: 'rgba(255,255,255,0.92)',
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-  },
-  kindOn: { backgroundColor: PURPLE },
-  kindText: { color: PURPLE, fontSize: 11, fontWeight: '800' },
-  kindTextOn: { color: '#fff' },
-  locate: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#fff',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  locateText: { color: ORANGE, fontSize: 22, fontWeight: '800' },
-  busyStrip: {
-    backgroundColor: '#fff',
-    paddingHorizontal: 16,
-    paddingTop: 10,
-    paddingBottom: 8,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: 'rgba(82,45,128,0.12)',
-    gap: 6,
-  },
-  mapHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8 },
-  mapTitle: { fontWeight: '800', fontSize: 15, color: INK },
-  busyDays: { color: INK_SECONDARY, fontSize: 12, fontWeight: '700' },
-  busy: { borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6, backgroundColor: 'rgba(82,45,128,0.08)' },
-  busyOn: { backgroundColor: ORANGE },
-  busyText: { color: PURPLE, fontSize: 12, fontWeight: '700' },
-  busyTextOn: { color: '#fff' },
-  row: { gap: 8, paddingVertical: 4 },
-  caption: { color: INK_SECONDARY, fontSize: 12, lineHeight: 17 },
-  live: { color: PURPLE, fontWeight: '700' },
-  locateNote: { color: '#B42318', fontSize: 12 },
-  sheet: {
-    flex: 1,
-    backgroundColor: 'rgba(255,255,255,0.98)',
-    paddingHorizontal: 20,
-    paddingTop: 8,
-  },
-  dragHint: { textAlign: 'center', color: '#8B939E', fontSize: 11, fontWeight: '700', marginBottom: 6 },
-  sheetScroll: { flex: 1 },
-  skeletonBlock: { gap: 10, marginBottom: 12 },
-  welcome: { fontSize: 24, fontWeight: '600', letterSpacing: -0.4, color: INK },
-  prompt: { color: INK_SECONDARY, fontSize: 15, marginTop: 4, marginBottom: 12 },
-  search: {
-    borderWidth: 1.5,
-    borderColor: ORANGE,
-    borderRadius: 16,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    fontSize: 16,
-    color: INK,
-    backgroundColor: '#fff',
-  },
-  searchLink: { paddingVertical: 10 },
-  searchLinkText: { color: ORANGE, fontWeight: '700', fontSize: 13 },
-  shortcuts: { gap: 10, paddingTop: 10 },
-  shortcut: {
-    minWidth: 118,
-    padding: 14,
-    borderRadius: 16,
-    backgroundColor: '#fff',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(82,45,128,0.14)',
-  },
-  shortcutIcon: { fontSize: 22, marginBottom: 8 },
-  shortcutLabel: { fontWeight: '600', fontSize: 13, color: INK },
-  shortcutSub: { fontSize: 11, color: '#8B939E', marginTop: 2 },
-  keys: { color: '#B42318', fontSize: 12, marginTop: 8, lineHeight: 17 },
-  gameday: {
-    marginTop: 14,
-    marginBottom: 16,
-    borderRadius: 18,
-    padding: 14,
-    backgroundColor: 'rgba(245,102,0,0.08)',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  gamedayIcon: { fontSize: 24 },
-  gamedayCopy: { flex: 1 },
-  gamedayTitle: { fontWeight: '700', fontSize: 15, color: INK },
-  gamedayBody: { fontSize: 13, color: INK_SECONDARY, marginTop: 2 },
-  gamedayBtn: { backgroundColor: PURPLE, borderRadius: 12, paddingHorizontal: 10, paddingVertical: 8 },
-  gamedayBtnText: { color: '#fff', fontWeight: '700', fontSize: 12 },
-})
+function makeStyles(colors: Palette) {
+  return {
+    screen: { flex: 1, backgroundColor: colors.background },
+    mapSlot: { backgroundColor: colors.mapFallback, overflow: 'hidden' as const },
+    mapChrome: { position: 'absolute' as const, top: 0, right: 0, bottom: 0, left: 0, justifyContent: 'space-between' as const },
+    topBar: {
+      paddingHorizontal: 16,
+      flexDirection: 'row' as const,
+      justifyContent: 'space-between' as const,
+      alignItems: 'flex-start' as const,
+    },
+    brand: {
+      width: '52%' as const,
+      maxWidth: 220,
+      minHeight: 96,
+      borderRadius: 18,
+      backgroundColor: colors.orange,
+      paddingHorizontal: 16,
+      paddingTop: 14,
+      paddingBottom: 12,
+      justifyContent: 'flex-end' as const,
+    },
+    brandKicker: { color: colors.onAccent, fontSize: 9, fontWeight: '700' as const, letterSpacing: 1.4, marginBottom: 4 },
+    brandTitle: { color: colors.onAccent, fontSize: 18, fontWeight: '800' as const },
+    brandSoft: { fontWeight: '700' as const },
+    brandPill: {
+      marginTop: 8,
+      alignSelf: 'flex-start' as const,
+      paddingHorizontal: 8,
+      paddingVertical: 3,
+      borderRadius: 999,
+      backgroundColor: 'rgba(255,255,255,0.2)',
+    },
+    brandPillText: { color: colors.onAccent, fontSize: 9, fontWeight: '700' as const, letterSpacing: 0.4 },
+    avatar: {
+      width: 46,
+      height: 46,
+      borderRadius: 23,
+      backgroundColor: colors.purple,
+      alignItems: 'center' as const,
+      justifyContent: 'center' as const,
+      borderWidth: 2,
+      borderColor: colors.onAccent,
+    },
+    avatarText: { color: colors.onAccent, fontWeight: '800' as const, fontSize: 18 },
+    mapControls: {
+      flexDirection: 'row' as const,
+      justifyContent: 'space-between' as const,
+      alignItems: 'flex-end' as const,
+      paddingHorizontal: 12,
+      paddingBottom: 10,
+    },
+    kindRow: { flexDirection: 'row' as const, gap: 6 },
+    kindChip: {
+      backgroundColor: colors.card,
+      borderRadius: 999,
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+    },
+    kindOn: { backgroundColor: colors.purple },
+    kindText: { color: colors.link, fontSize: 11, fontWeight: '800' as const },
+    kindTextOn: { color: colors.onAccent },
+    locate: {
+      width: 44,
+      height: 44,
+      borderRadius: 22,
+      backgroundColor: colors.card,
+      alignItems: 'center' as const,
+      justifyContent: 'center' as const,
+    },
+    locateText: { color: colors.orange, fontSize: 22, fontWeight: '800' as const },
+    busyStrip: {
+      backgroundColor: colors.card,
+      paddingHorizontal: 16,
+      paddingTop: 10,
+      paddingBottom: 8,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+      gap: 6,
+    },
+    mapHead: { flexDirection: 'row' as const, justifyContent: 'space-between' as const, alignItems: 'center' as const, gap: 8 },
+    mapTitle: { fontWeight: '800' as const, fontSize: 15, color: colors.ink },
+    busyDays: { color: colors.inkSecondary, fontSize: 12, fontWeight: '700' as const },
+    busy: { borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6, backgroundColor: colors.purpleSoft },
+    busyOn: { backgroundColor: colors.orange },
+    busyText: { color: colors.link, fontSize: 12, fontWeight: '700' as const },
+    busyTextOn: { color: colors.onAccent },
+    row: { gap: 8, paddingVertical: 4 },
+    caption: { color: colors.inkSecondary, fontSize: 12, lineHeight: 17 },
+    live: { color: colors.link, fontWeight: '700' as const },
+    locateNote: { color: colors.danger, fontSize: 12 },
+    sheet: {
+      flex: 1,
+      backgroundColor: colors.elevated,
+      paddingHorizontal: 20,
+      paddingTop: 8,
+    },
+    dragHint: { textAlign: 'center' as const, color: colors.placeholder, fontSize: 11, fontWeight: '700' as const, marginBottom: 6 },
+    sheetScroll: { flex: 1 },
+    skeletonBlock: { gap: 10, marginBottom: 12 },
+    welcome: { fontSize: 24, fontWeight: '600' as const, letterSpacing: -0.4, color: colors.title },
+    prompt: { color: colors.inkSecondary, fontSize: 15, marginTop: 4, marginBottom: 12 },
+    search: {
+      borderWidth: 1.5,
+      borderColor: colors.orange,
+      borderRadius: 16,
+      paddingHorizontal: 16,
+      paddingVertical: 14,
+      fontSize: 16,
+      color: colors.ink,
+      backgroundColor: colors.input,
+    },
+    searchLink: { paddingVertical: 10 },
+    searchLinkText: { color: colors.orange, fontWeight: '700' as const, fontSize: 13 },
+    shortcuts: { gap: 10, paddingTop: 10 },
+    shortcut: {
+      minWidth: 118,
+      padding: 14,
+      borderRadius: 16,
+      backgroundColor: colors.card,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    shortcutIcon: { fontSize: 22, marginBottom: 8 },
+    shortcutLabel: { fontWeight: '600' as const, fontSize: 13, color: colors.ink },
+    shortcutSub: { fontSize: 11, color: colors.placeholder, marginTop: 2 },
+    keys: { color: colors.danger, fontSize: 12, marginTop: 8, lineHeight: 17 },
+    gameday: {
+      marginTop: 14,
+      marginBottom: 16,
+      borderRadius: 18,
+      padding: 14,
+      backgroundColor: colors.orangeSoft,
+      flexDirection: 'row' as const,
+      alignItems: 'center' as const,
+      gap: 10,
+    },
+    gamedayIcon: { fontSize: 24 },
+    gamedayCopy: { flex: 1 },
+    gamedayTitle: { fontWeight: '700' as const, fontSize: 15, color: colors.ink },
+    gamedayBody: { fontSize: 13, color: colors.inkSecondary, marginTop: 2 },
+    gamedayBtn: { backgroundColor: colors.purple, borderRadius: 12, paddingHorizontal: 10, paddingVertical: 8 },
+    gamedayBtnText: { color: colors.onAccent, fontWeight: '700' as const, fontSize: 12 },
+  }
+}
