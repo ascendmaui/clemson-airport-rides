@@ -7,8 +7,35 @@ export type SplitRow = {
   shareCents: number
   soloCents: number | null
   savingsCents: number | null
+  firstRideFree?: boolean
 }
 
+export type FriendSplitPreview = {
+  rows: SplitRow[]
+  totalCents: number | null
+  splitMode: 'even' | 'by_distance' | null
+  eachCents: number | null
+  headline: { soloCents: number; shareCents: number; savingsCents: number } | null
+}
+
+export type FriendQuoteReview = { signature: string; at: number }
+export const FRIEND_REVIEW_TTL_MS: number
+export function friendQuoteSignature(ride: RideSummary | null | undefined): string | null
+export function markFriendQuoteReviewed(ride: RideSummary | null | undefined, now?: number): FriendQuoteReview | null
+export function reviewedFriendQuoteFresh(
+  review: FriendQuoteReview | null | undefined,
+  ride: RideSummary | null | undefined,
+  now?: number,
+): boolean
+export function friendSplitPreview(ride: RideSummary | null | undefined): FriendSplitPreview
+export function friendChargeNeedsReview(
+  shown: RideSummary | null | undefined,
+  refreshed: RideSummary | null | undefined,
+): boolean
+export function mergeFriendQuote<T extends RideSummary | null | undefined>(
+  shown: T,
+  refreshed: RideSummary | null | undefined,
+): T | RideSummary | null
 export function quoteFromRide(ride: RideSummary | null | undefined): CarpoolQuote | null
 export function liveCarpoolQuote(ride: {
   fare_breakdown?: { carpool?: CarpoolQuote } | null

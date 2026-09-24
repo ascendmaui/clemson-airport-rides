@@ -9,6 +9,10 @@ import {
   hotNeighborhoods,
   neighborhoodsInGroup,
   parseCarpoolToken,
+  confirmChargeLabel,
+  confirmChargeNote,
+  firstRideEligible,
+  firstRideOfferCopy,
   pitchQuote,
   searchNeighborhoods,
 } from './carpool.js'
@@ -59,6 +63,18 @@ test('vehicle seats cap the offer, tailgate can use six', () => {
   assert.equal(offerCapacity(suv, { tailgate: true })?.cap, 6)
   assert.match(capacityMessage(7, { hasVehicle: true }), /seats up to 7/)
   assert.match(capacityMessage(4, { hasVehicle: false }), /Add your vehicle/)
+})
+
+test('first ride copy stays quiet outside the window and names a comped seat', () => {
+  assert.equal(firstRideEligible({ windowOpen: true }), true)
+  assert.equal(firstRideEligible({ windowOpen: false }), false)
+  assert.equal(firstRideEligible({ windowOpen: true, alreadyUsed: true }), false)
+  assert.equal(firstRideEligible({ windowOpen: true, completedTrips: 1 }), false)
+  assert.equal(firstRideOfferCopy({ windowOpen: false, signedIn: true }), null)
+  const open = firstRideOfferCopy({ windowOpen: true, signedIn: true })
+  assert.equal(open.title, 'First ride free')
+  assert.equal(confirmChargeLabel({ firstRideFree: true, shareCents: 0 }), 'Confirm · First ride free')
+  assert.match(confirmChargeNote({ firstRideFree: true, shareCents: 0 }), /First ride free/)
 })
 
 test('split rows come from each rider hop, not solo divided by headcount', () => {

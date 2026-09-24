@@ -27,6 +27,7 @@ import { HelpChatPanel } from '../components/HelpChatPanel'
 import { SupportChatPanel } from '../components/SupportChatPanel'
 import { supportTicketRequest } from '../lib/agentChatClient'
 import { ACCOUNT_DELETION_TICKET } from '../../shared/accountDeletion.js'
+import { TESLA_FLEET_NOTICE, teslaFleetNotice } from '../../packages/rides-native/tripTags.js'
 import { CreditPacksPanel } from '../components/CreditPacksPanel'
 import { PrepaidCreditsPanel } from '../components/PrepaidCreditsPanel'
 import { QuietHoursCard } from '../components/QuietHoursCard'
@@ -560,6 +561,11 @@ export function AccountScreen() {
                   {profile.vehicle.seats ? ` · ${profile.vehicle.seats} seats` : ''}
                   {profile.vehicle.tier ? ` · ${profile.vehicle.tier}` : ''}
                 </div>
+                {teslaFleetNotice(Boolean(profile.vehicle.is_tesla) || profile.vehicle.tier === 'tesla' || profile.vehicle.tier === 'tesla_self_driving') ? (
+                  <p style={{ fontSize: 13, lineHeight: 1.4, color: '#522D80', fontWeight: 650, marginTop: 8 }}>
+                    {TESLA_FLEET_NOTICE}
+                  </p>
+                ) : null}
               </div>
             ) : (
               <div style={{ fontSize: 13, color: 'var(--ink-secondary)', marginBottom: 12 }}>

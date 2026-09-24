@@ -8,6 +8,7 @@ export type MapPin = {
   longitude: number
   title: string
   color: string
+  badge?: string
 }
 
 export type LatLng = { latitude: number; longitude: number }
@@ -22,6 +23,7 @@ export type CampusMapProps = {
   surge?: boolean
   userCoordinate?: LatLng | null
   pins?: MapPin[]
+  fitPins?: boolean
 }
 
 export type CampusMapHandle = {

@@ -7,6 +7,8 @@ import { useAuth } from '../lib/auth'
 import {
   NEIGHBORHOODS,
   demandWindow,
+  firstRideOfferCopy,
+  firstRideWindowOpen,
   formatUsd,
   illustrativePeakAt,
   isGameWeek,
@@ -49,6 +51,15 @@ export function CarpoolHub() {
   const peakAt = useMemo(() => illustrativePeakAt(now), [now])
   const windowNow = demandWindow(now)
   const peakOn = windowNow === 'game_day' || windowNow === 'peak_night'
+  const firstRideOffer = firstRideOfferCopy(user
+    ? {
+      windowOpen: Boolean(firstRide?.windowOpen),
+      signedIn: true,
+      alreadyUsed: Boolean(firstRide?.alreadyUsed),
+      completedTrips: firstRide?.completedTrips || 0,
+      schemaMissing: Boolean(firstRide?.schemaMissing),
+    }
+    : { windowOpen: firstRideWindowOpen(now), signedIn: false })
 
   const pitch = useMemo(() => {
     if (!pickup?.lat || !dropoff?.lat) return null
@@ -158,13 +169,11 @@ export function CarpoolHub() {
             </p>
           )}
 
-          {isGameWeek(now) && (
+          {user && !firstRide ? null : firstRideOffer && (
             <div style={{ ...card, background: 'rgba(82,45,128,0.06)' }}>
-              <div style={{ fontWeight: 800, color: 'var(--purple)' }}>First ride free during game-week peaks</div>
+              <div style={{ fontWeight: 800, color: 'var(--purple)' }}>{firstRideOffer.title}</div>
               <p style={{ fontSize: 13, color: 'var(--ink-secondary)', margin: '6px 0 0', lineHeight: 1.45 }}>
-                One comp per account, only Thu–Sat nights, class change, and game day. Not a rider promo code.
-                {firstRide?.eligible ? ' You are eligible on the next peak ride.' : ''}
-                {firstRide?.alreadyUsed ? ' This account already used it.' : ''}
+                {firstRideOffer.body}
               </p>
             </div>
           )}

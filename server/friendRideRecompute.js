@@ -121,6 +121,18 @@ export async function recomputeRideFares(sb, token, { splitMode } = {}) {
       studentDiscountCents += off.discountCents
       return off.amountCents
     })
+    const soloRouteCents = quoteFare({
+      distanceM: route.distanceM,
+      durationS: route.durationS,
+      surgeMultiplier: surge.multiplier,
+      vehicleMultiplier: vehMul,
+      isCarpool: false,
+    }).fareBeforeCreditsCents
+    const soloCents = participants.map((_, i) => (
+      studentFlags[i]
+        ? percentOffCents(soloRouteCents, STUDENT_DISCOUNT_BPS).amountCents
+        : soloRouteCents
+    ))
     totalFare = fares.reduce((sum, n) => sum + n, 0)
     fareResult = {
       fareCents: totalFare,
@@ -133,6 +145,15 @@ export async function recomputeRideFares(sb, token, { splitMode } = {}) {
         student_discount_cents: studentDiscountCents,
         student_discount_bps: studentDiscountCents ? STUDENT_DISCOUNT_BPS : 0,
         rider_pays_cents: totalFare,
+        friend_split: {
+          solo_route_cents: soloRouteCents,
+          shares: participants.map((p, i) => ({
+            id: p.id,
+            solo_cents: soloCents[i],
+            share_cents: fares[i],
+            savings_cents: Math.max(0, soloCents[i] - fares[i]),
+          })),
+        },
       }),
     }
   }

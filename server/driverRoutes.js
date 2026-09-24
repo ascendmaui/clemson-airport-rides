@@ -120,7 +120,7 @@ export async function handleDriverSignup(req, res) {
       plate,
       seats,
       is_tesla: Boolean(body.isTesla),
-      autonomous_capable: Boolean(body.isTesla),
+      autonomous_capable: false,
       tier: body.isTesla ? 'tesla_self_driving' : 'standard',
     }
     if (!vehicle) {

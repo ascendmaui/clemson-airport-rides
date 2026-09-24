@@ -5,8 +5,12 @@
 import { admin, cors, json, parseBody, userFromAuth } from './friendRideLib.js'
 import { ambassadorFrom, ambassadorStats, createGroupRide, matchRider } from './carpoolService.js'
 import { saveAmbassadorAttribution } from './ambassadorAttribution.js'
-import { firstRideWindowOpen } from '../src/lib/carpoolEngine.js'
+import { firstRideEligible, firstRideWindowOpen } from '../src/lib/carpoolEngine.js'
 import { gameDayActive } from './carpoolSettle.js'
+
+function missingTable(error) {
+  return /relation|does not exist|schema cache/i.test(error?.message || '')
+}
 
 export async function handleCarpoolMatch(req, res) {
   if (cors(req, res)) return
@@ -118,20 +122,42 @@ export async function handleCarpoolProgram(req, res) {
     const gameDay = await gameDayActive(sb, now)
     const windowOpen = firstRideWindowOpen(now, { gameDay })
     const grant = await sb.from('first_ride_grants').select('user_id, created_at').eq('user_id', user.id).maybeSingle()
+    let schemaMissing = missingTable(grant.error)
+    let lookupFailed = Boolean(grant.error) && !schemaMissing
+    let alreadyUsed = Boolean(grant.data)
+    const email = user.email ? String(user.email).toLowerCase() : ''
+    if (email && !schemaMissing) {
+      const byEmail = await sb
+        .from('first_ride_grants')
+        .select('user_id')
+        .eq('email_norm', email)
+        .maybeSingle()
+      if (missingTable(byEmail.error)) schemaMissing = true
+      else if (byEmail.error) lookupFailed = true
+      else if (byEmail.data) alreadyUsed = true
+    }
     const prior = await sb
       .from('trips')
       .select('id', { count: 'exact', head: true })
       .eq('rider_id', user.id)
       .eq('status', 'completed')
-    const schemaMissing = /relation|does not exist|schema cache/i.test(grant.error?.message || '')
-    const eligible = windowOpen && !schemaMissing && !grant.data && !prior.error && (prior.count || 0) === 0
+    if (missingTable(prior.error)) schemaMissing = true
+    else if (prior.error) lookupFailed = true
+    const completedTrips = prior.error ? 0 : (prior.count || 0)
+    const eligible = firstRideEligible({
+      windowOpen,
+      alreadyUsed,
+      completedTrips,
+      schemaMissing,
+      lookupFailed,
+    })
     return json(res, 200, {
       ok: true,
       code_type: 'first_ride',
       windowOpen,
       gameDay,
-      alreadyUsed: Boolean(grant.data),
-      completedTrips: prior.count || 0,
+      alreadyUsed,
+      completedTrips,
       eligible,
       schemaMissing,
     })

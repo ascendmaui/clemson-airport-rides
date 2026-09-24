@@ -1,4 +1,15 @@
 import { quoteCarpool } from './carpool.js'
+import { friendSplitPreview } from '../../../src/lib/friendSplitPreview.js'
+
+export {
+  FRIEND_REVIEW_TTL_MS,
+  friendChargeNeedsReview,
+  friendQuoteSignature,
+  friendSplitPreview,
+  markFriendQuoteReviewed,
+  mergeFriendQuote,
+  reviewedFriendQuoteFresh,
+} from '../../../src/lib/friendSplitPreview.js'
 
 export function quoteFromRide(ride) {
   const shares = ride?.fare_breakdown?.carpool?.shares
@@ -23,6 +34,7 @@ export function liveCarpoolQuote(ride) {
 }
 
 export function splitRows(ride) {
+  if (ride?.kind === 'friends') return friendSplitPreview(ride).rows
   const quote = liveCarpoolQuote(ride)
   if (quote?.shares?.length) {
     return quote.shares.map((share) => ({
@@ -31,6 +43,7 @@ export function splitRows(ride) {
       shareCents: share.shareCents,
       soloCents: share.soloCents,
       savingsCents: share.savingsCents ?? Math.max(0, (share.soloCents || 0) - (share.shareCents || 0)),
+      firstRideFree: Boolean(share.firstRideFree),
     }))
   }
   return (ride?.participants || [])

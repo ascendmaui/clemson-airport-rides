@@ -739,6 +739,7 @@ export function surgeDelta({ pickup, dropoff, at = new Date(), quote = null, sel
   const share = (quote?.shares || []).find((row) => selfId && row.id === selfId) || quote?.shares?.[0] || null
   const currentShareCents = share ? share.shareCents : null
   const currentRiderCount = quote?.riderCount || null
+  const currentFirstRideFree = Boolean(share?.firstRideFree)
   return {
     soloSurgeCents: pitch.soloCents,
     fullCarShareCents: pitch.fullShareCents,
@@ -749,7 +750,9 @@ export function surgeDelta({ pickup, dropoff, at = new Date(), quote = null, sel
     driverBeatsSolo: pitch.full.driver.beatsSolo,
     window: pitch.window,
     currentShareCents,
+    currentShareId: share?.id || null,
     currentRiderCount,
+    currentFirstRideFree,
     currentSavingsCents: currentShareCents == null ? null : Math.max(0, pitch.soloCents - currentShareCents),
   }
 }
@@ -845,6 +848,115 @@ export function firstRideWindowOpen(at = new Date(), { gameDay = false, enabled 
   if (!isGameWeek(at, weeks)) return false
   const window = demandWindow(at, { gameDay })
   return window === 'game_day' || window === 'peak_night' || window === 'class_change'
+}
+
+/**
+ * One comp: the window is open, this user/email has no grant, and they
+ * have never completed a trip. A missing table or a failed lookup is not eligible.
+ */
+export function firstRideEligible({
+  windowOpen = false,
+  alreadyUsed = false,
+  completedTrips = 0,
+  schemaMissing = false,
+  lookupFailed = false,
+} = {}) {
+  if (!windowOpen || schemaMissing || lookupFailed || alreadyUsed) return false
+  if ((Number(completedTrips) || 0) > 0) return false
+  return true
+}
+
+/**
+ * Hub and lobby copy. Null means show nothing, so a closed window
+ * never promises a free ride.
+ */
+export function firstRideOfferCopy({
+  windowOpen = false,
+  signedIn = false,
+  alreadyUsed = false,
+  completedTrips = 0,
+  schemaMissing = false,
+  lookupFailed = false,
+} = {}) {
+  if (!windowOpen || schemaMissing || lookupFailed) return null
+  if (!signedIn) {
+    return {
+      eligible: false,
+      title: 'First ride free this window',
+      body: 'Sign in to check this account. One grant per person and email, and only with no completed trip.',
+    }
+  }
+  const eligible = firstRideEligible({
+    windowOpen,
+    alreadyUsed,
+    completedTrips,
+    schemaMissing,
+    lookupFailed,
+  })
+  if (eligible) {
+    return {
+      eligible: true,
+      title: 'First ride free',
+      body: 'Your seat is $0 if you confirm during this game-day, peak-night, or class-change window. One grant per account and email.',
+    }
+  }
+  if ((Number(completedTrips) || 0) > 0) {
+    return {
+      eligible: false,
+      title: 'First ride free is not available',
+      body: 'A completed trip is already on this account.',
+    }
+  }
+  return {
+    eligible: false,
+    title: 'First ride free is not available',
+    body: 'This account or email already used the one grant.',
+  }
+}
+
+/** Confirm button. A comped seat says First ride free instead of charging $0. */
+export function confirmChargeLabel({
+  booked = false,
+  busyLabel = '',
+  isCarpool = true,
+  shareCents = null,
+  firstRideFree = false,
+} = {}) {
+  if (booked) return 'Booked'
+  if (busyLabel) return busyLabel
+  if (!isCarpool) return 'Confirm & charge friends'
+  if (firstRideFree) return 'Confirm · First ride free'
+  if (shareCents == null) return 'Waiting for the split'
+  return `Confirm · charge ${formatUsd(shareCents)} each`
+}
+
+/** Sentence under the confirm card. Null when there is no live share yet. */
+export function confirmChargeNote({
+  shareCents = null,
+  firstRideFree = false,
+  riderCount = null,
+  fullCarShareCents = null,
+  fullCarNow = false,
+} = {}) {
+  if (firstRideFree) return 'First ride free. This confirm charges $0 for your seat.'
+  if (shareCents == null) return null
+  if (fullCarNow) {
+    return `This confirm charges ${formatUsd(shareCents)} each. That is the full-car price above.`
+  }
+  const count = Number(riderCount) || 0
+  const riders = count ? ` for ${count} rider${count === 1 ? '' : 's'}` : ''
+  const full = fullCarShareCents != null
+    ? ` A full car on a surge night is ${formatUsd(fullCarShareCents)}.`
+    : ''
+  return `This confirm charges ${formatUsd(shareCents)} each${riders}.${full}`
+}
+
+/** First names of comped seats, skipping the seat already called out as yours. */
+export function otherFirstRideLabels(quote, exceptId = null) {
+  const skip = exceptId == null ? null : String(exceptId)
+  return (quote?.shares || [])
+    .filter((share) => share.firstRideFree && String(share.id) !== skip)
+    .map((share) => share.firstName || 'Rider')
 }
 
 /** Next Thu–Sat peak if `from` is off-peak, otherwise `from`. Used for the hero pitch. */

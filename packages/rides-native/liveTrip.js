@@ -228,3 +228,129 @@ export function etaLineFor(status, from, places) {
   const eta = straightLineEta(from, target.point)
   return eta.label ? `${eta.label} to ${target.noun}` : null
 }
+
+/** ~111m. Same 3-decimal grid as docs/CARPOOL_MATCHING.md Privacy. */
+export function approxPublicCoord(value) {
+  const n = Number(value)
+  if (!Number.isFinite(n)) return null
+  return Math.round(n * 1000) / 1000
+}
+
+function asStopArray(value) {
+  if (Array.isArray(value)) return value
+  if (typeof value !== 'string') return []
+  const trimmed = value.trim()
+  if (!trimmed.startsWith('[')) return []
+  try {
+    const parsed = JSON.parse(trimmed)
+    return Array.isArray(parsed) ? parsed : []
+  } catch {
+    return []
+  }
+}
+
+function rideKind(source) {
+  if (!source || typeof source !== 'object') return null
+  return source.kind || source.metadata?.kind || source.friend_ride?.kind || source.friendRide?.kind || source.ride?.kind || null
+}
+
+function stopBuckets(source) {
+  return [
+    source.stops,
+    source.metadata?.stops,
+    source.friend_ride?.stops,
+    source.friendRide?.stops,
+    source.ride?.stops,
+  ]
+}
+
+/**
+ * Booked carpool pins on a public map use the 3-decimal grid.
+ * Friend rides and pre-book lobbies stay exact. A trips row is post-book
+ * once metadata.friend_ride_id is set.
+ */
+export function carpoolPublicPinsApproximate(source) {
+  if (!source || typeof source !== 'object') return false
+  if (rideKind(source) !== 'carpool') return false
+  const status = String(source.status || '')
+  if (status === 'booked' || status === 'completed' || status === 'canceled' || status === 'cancelled') return true
+  return Boolean(source.metadata?.friend_ride_id)
+}
+
+function stopPoint(stop) {
+  if (!stop || typeof stop !== 'object') return null
+  const lat = stop.lat ?? stop.latitude ?? stop.location?.lat ?? stop.location?.latitude
+  const lng = stop.lng ?? stop.longitude ?? stop.location?.lng ?? stop.location?.longitude
+  return point(lat, lng)
+}
+
+function stopKind(stop, index, total) {
+  const raw = String(stop?.kind || stop?.type || '').toLowerCase()
+  if (raw === 'pickup' || raw === 'origin') return 'pickup'
+  if (raw === 'dropoff' || raw === 'destination' || raw === 'drop-off') return 'dropoff'
+  if (index === 0) return 'pickup'
+  if (index === total - 1) return 'dropoff'
+  return 'stop'
+}
+
+function stopLabel(stop, kind) {
+  const raw = stop?.label || stop?.name || stop?.address || stop?.title
+  if (typeof raw === 'string' && raw.trim()) return raw.trim()
+  if (kind === 'pickup') return 'Pickup'
+  if (kind === 'dropoff') return 'Drop-off'
+  return 'Stop'
+}
+
+/**
+ * Ordered friend/carpool stop pins. Empty when the trip has no stop list,
+ * so callers keep the single pickup and drop-off pins. Does not need a
+ * Google polyline — pins still return when route_polyline is missing.
+ * Pass `{ approximate: false }` to keep exact coordinates.
+ */
+export function orderedLiveStops(source, options = {}) {
+  if (!source || typeof source !== 'object') return []
+  let raw = []
+  for (const bucket of stopBuckets(source)) {
+    const list = asStopArray(bucket)
+    if (list.length) {
+      raw = list
+      break
+    }
+  }
+  if (!raw.length) return []
+  const indexed = raw.map((stop, index) => ({ stop, index }))
+  indexed.sort((a, b) => {
+    const ao = Number(a.stop?.order)
+    const bo = Number(b.stop?.order)
+    const aOk = Number.isFinite(ao)
+    const bOk = Number.isFinite(bo)
+    if (aOk && bOk && ao !== bo) return ao - bo
+    if (aOk !== bOk) return aOk ? -1 : 1
+    return a.index - b.index
+  })
+  const approximate = options.approximate === true
+    || (options.approximate !== false && carpoolPublicPinsApproximate(source))
+  const pins = []
+  for (const entry of indexed) {
+    const coords = stopPoint(entry.stop)
+    if (!coords) continue
+    pins.push({ coords, stop: entry.stop })
+  }
+  return pins.map((entry, index) => {
+    const kind = stopKind(entry.stop, index, pins.length)
+    const label = stopLabel(entry.stop, kind)
+    const lat = approximate ? approxPublicCoord(entry.coords.lat) : entry.coords.lat
+    const lng = approximate ? approxPublicCoord(entry.coords.lng) : entry.coords.lng
+    const order = index + 1
+    return {
+      id: `stop-${order}`,
+      order,
+      lat,
+      lng,
+      label,
+      title: `${order} · ${label}`,
+      kind,
+      approximate,
+    }
+  })
+}

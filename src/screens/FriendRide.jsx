@@ -1,9 +1,16 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { CampusMap, CLEMSON } from '../components/CampusMap'
 import { PlacePicker } from '../components/PlacePicker'
 import { PrimaryButton } from '../components/PrimaryButton'
 import { CarpoolCompare } from '../components/CarpoolCompare'
-import { formatUsd, NEIGHBORHOODS, quoteCarpool, surgeDelta } from '../lib/carpoolEngine'
+import { confirmChargeLabel, firstRideOfferCopy, firstRideWindowOpen, formatUsd, NEIGHBORHOODS, quoteCarpool, surgeDelta } from '../lib/carpoolEngine'
+import {
+  friendChargeNeedsReview,
+  friendSplitPreview,
+  markFriendQuoteReviewed,
+  mergeFriendQuote,
+  reviewedFriendQuoteFresh,
+} from '../lib/friendSplitPreview'
 import { BottomTabs } from '../components/BottomTabs'
 import { SosControl } from '../components/SosControl'
 import { ambassadorLobbyCopy } from '../../packages/rides-native/shared/ambassadorAttribution.js'
@@ -12,7 +19,7 @@ import { navigate } from '../lib/navigation'
 import { formatUsdFromCents } from '../lib/pricing'
 import { supabase } from '../lib/supabase'
 import {
-  FRIEND_PLACES, confirmFriendCharges, createFriendRide, decodePolyline,
+  FRIEND_PLACES, carpoolProgram, confirmFriendCharges, createFriendRide, decodePolyline,
   formatEta, formatMiles, inviteUrl, getFriendRide, joinFriendRide, recomputeFriendRide,
   vehicleMaxSeats, capacityMessage, DEFAULT_MAX_PARTICIPANTS,
 } from '../lib/friendRides'
@@ -43,12 +50,14 @@ export function FriendRideScreen({ token: tokenProp, kind: kindProp = 'friends' 
   const [ride, setRide] = useState(null)
   const [error, setError] = useState(null)
   const [busy, setBusy] = useState(false)
+  const reviewRef = useRef(null)
   const [busyLabel, setBusyLabel] = useState('')
   const grand = NEIGHBORHOODS.find((n) => n.id === 'grand-marc')
   const college = NEIGHBORHOODS.find((n) => n.id === 'college-ave')
   const [pickup, setPickup] = useState(isCarpool
     ? { label: grand.label, lat: grand.lat, lng: grand.lng }
     : FRIEND_PLACES[0])
+  const [firstRide, setFirstRide] = useState(null)
   const [dropoff, setDropoff] = useState(isCarpool
     ? { label: college.label, lat: college.lat, lng: college.lng }
     : FRIEND_PLACES[4])
@@ -109,6 +118,31 @@ export function FriendRideScreen({ token: tokenProp, kind: kindProp = 'friends' 
     return () => clearInterval(t)
   }, [refresh, token])
 
+  useEffect(() => {
+    if (!isCarpool) return undefined
+    if (!user) {
+      setFirstRide(null)
+      return undefined
+    }
+    let alive = true
+    carpoolProgram('first_ride')
+      .then((data) => { if (alive) setFirstRide(data) })
+      .catch(() => {})
+    return () => { alive = false }
+  }, [isCarpool, user])
+
+  const firstRideOffer = !isCarpool
+    ? null
+    : firstRideOfferCopy(user
+      ? {
+        windowOpen: Boolean(firstRide?.windowOpen),
+        signedIn: true,
+        alreadyUsed: Boolean(firstRide?.alreadyUsed),
+        completedTrips: firstRide?.completedTrips || 0,
+        schemaMissing: Boolean(firstRide?.schemaMissing),
+      }
+      : { windowOpen: firstRideWindowOpen(new Date()), signedIn: false })
+
   const routePath = useMemo(() => decodePolyline(ride?.route_polyline), [ride?.route_polyline])
   const carpoolQuote = useMemo(() => {
     if (!isCarpool && ride?.kind !== 'carpool') return null
@@ -134,6 +168,11 @@ export function FriendRideScreen({ token: tokenProp, kind: kindProp = 'friends' 
       : null),
     [isCarpool, ride?.kind, hopPickup, hopDropoff, carpoolQuote, selfId],
   )
+  const friendPreview = useMemo(
+    () => (isCarpool || ride?.kind === 'carpool' ? null : friendSplitPreview(ride)),
+    [isCarpool, ride],
+  )
+  const friendsLobby = !isCarpool && ride?.kind !== 'carpool'
   const mapCenter = ride?.stops?.[0]
     ? [ride.stops[0].lat, ride.stops[0].lng]
     : (pickup?.lat != null ? [pickup.lat, pickup.lng] : CLEMSON)
@@ -209,7 +248,7 @@ export function FriendRideScreen({ token: tokenProp, kind: kindProp = 'friends' 
   async function onRecompute() {
     setBusy(true); setBusyLabel('Calculating fares…'); setError(null)
     try {
-      setRide(await recomputeFriendRide(token, splitMode))
+      setRide(mergeFriendQuote(ride, await recomputeFriendRide(token, splitMode)))
       setMapsHint(null)
     } catch (e) {
       setMapsHint(e.payload?.message || e.message)
@@ -219,19 +258,33 @@ export function FriendRideScreen({ token: tokenProp, kind: kindProp = 'friends' 
 
   async function onConfirmCharges() {
     setBusy(true); setError(null)
+    const shown = ride
+    const reviewed = friendsLobby && reviewedFriendQuoteFresh(reviewRef.current, shown)
+    reviewRef.current = null
     try {
       setBusyLabel('Calculating fares…')
-      try {
-        const recomputed = await recomputeFriendRide(token, splitMode)
-        setRide(recomputed)
-        setMapsHint(null)
-      } catch (e) {
-        // If recompute fails (e.g. maps key), still try charge if fares already present
-        setMapsHint(e.payload?.message || e.message)
-        if (!ride?.total_fare_cents) {
-          setError(e.payload?.message || e.message || 'Could not update fares. Try Optimize route & fares first.')
-          return
+      let priced = shown
+      let refreshed = false
+      if (!reviewed) {
+        try {
+          const next = await recomputeFriendRide(token, splitMode)
+          priced = friendsLobby ? mergeFriendQuote(shown, next) : next
+          setRide(priced)
+          refreshed = true
+          setMapsHint(null)
+        } catch (e) {
+          // If recompute fails (e.g. maps key), still try charge if fares already present
+          setMapsHint(e.payload?.message || e.message)
+          if (!shown?.total_fare_cents) {
+            setError(e.payload?.message || e.message || 'Could not update fares. Try Optimize route & fares first.')
+            return
+          }
         }
+      }
+      if (friendsLobby && refreshed && friendChargeNeedsReview(shown, priced)) {
+        reviewRef.current = markFriendQuoteReviewed(priced)
+        setMapsHint('Review each share, then confirm to charge.')
+        return
       }
       setBusyLabel('Charging…')
       const data = await confirmFriendCharges(token)
@@ -405,6 +458,12 @@ export function FriendRideScreen({ token: tokenProp, kind: kindProp = 'friends' 
             </p>
           </div>
         )}
+        {isCarpool && !(user && !firstRide) && firstRideOffer && (
+          <div style={{ ...card, background: 'rgba(82,45,128,0.06)' }}>
+            <div style={{ fontWeight: 800, color: 'var(--purple)' }}>{firstRideOffer.title}</div>
+            <p style={{ fontSize: 13, color: 'var(--ink-secondary)', margin: '6px 0 0', lineHeight: 1.45 }}>{firstRideOffer.body}</p>
+          </div>
+        )}
 
         <div style={{ marginTop: 12, borderRadius: 16, overflow: 'hidden' }}>
           <CampusMap height={200} interactive center={mapCenter} zoom={routePath ? 11 : 14} route={routePath} marker={mapCenter} />
@@ -426,21 +485,55 @@ export function FriendRideScreen({ token: tokenProp, kind: kindProp = 'friends' 
           <button type="button" className="pressable" onClick={onCopy} style={{ marginTop: 8, fontWeight: 600, color: 'var(--purple)' }}>Copy / share →</button>
         </div>
 
-        {ride?.total_fare_cents != null && !isCarpool && ride?.kind !== 'carpool' && (ride?.participants || []).length > 0 && (
-          <div style={card}>
-            <div style={{ fontWeight: 700, marginBottom: 8 }}>Fare split preview</div>
-            <div style={{ fontSize: 12, color: 'var(--ink-tertiary)', marginBottom: 10 }}>
-              Automatic · {ride.split_mode === 'by_distance' ? 'by distance' : 'even'}
+        {friendsLobby && friendPreview?.rows?.length > 0 && (
+          <div style={card} aria-label="Fare split preview">
+            <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: 0.8, color: '#F56600' }}>BEFORE YOU CONFIRM</div>
+            <div style={{ fontWeight: 700, marginTop: 6 }}>Fare split preview</div>
+            <div style={{ fontSize: 12, color: 'var(--ink-tertiary)', margin: '6px 0 10px', lineHeight: 1.45 }}>
+              Server quote · {friendPreview.splitMode === 'by_distance' ? 'by distance' : 'even'}.
+              Struck prices are this route alone. Confirm charges these shares with a saved card off-session, or Apple Pay / Payment Element.
             </div>
-            {(ride.participants || []).map((p) => (
-              <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid var(--border)', fontSize: 13 }}>
-                <span>{p.display_name} · {p.status}</span>
-                <span style={{ fontWeight: 700 }}>{p.fare_cents != null ? formatUsdFromCents(p.fare_cents) : '-'}</span>
+            {friendPreview.headline && (
+              <>
+                <div style={{ display: 'flex', alignItems: 'stretch', gap: 8 }}>
+                  <div style={{ flex: 1, background: 'rgba(255,255,255,0.7)', borderRadius: 14, padding: 12 }}>
+                    <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--ink-tertiary)' }}>This route alone</div>
+                    <div style={{ fontSize: 26, fontWeight: 800, color: 'var(--ink-secondary)', textDecoration: 'line-through' }}>{formatUsd(friendPreview.headline.soloCents)}</div>
+                  </div>
+                  <div style={{ alignSelf: 'center', fontSize: 22, fontWeight: 800, color: '#F56600' }} aria-hidden="true">→</div>
+                  <div style={{ flex: 1, background: '#fff', borderRadius: 14, padding: 12, border: '1.5px solid #F56600' }}>
+                    <div style={{ fontSize: 11, fontWeight: 800, color: '#F56600' }}>Your share</div>
+                    <div style={{ fontSize: 26, fontWeight: 800, color: '#F56600' }}>{formatUsd(friendPreview.headline.shareCents)}</div>
+                  </div>
+                </div>
+                <div style={{ marginTop: 12, padding: '10px 12px', borderRadius: 12, background: '#F56600', color: '#fff', fontWeight: 800, fontSize: 16 }}>
+                  You save {formatUsd(friendPreview.headline.savingsCents)}
+                </div>
+              </>
+            )}
+            {friendPreview.rows.map((row) => (
+              <div key={row.id} style={{ display: 'flex', justifyContent: 'space-between', gap: 12, padding: '8px 0', borderBottom: '1px solid var(--border)' }}>
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: 14 }}>{row.name}</div>
+                  {!friendPreview.headline && row.soloCents != null && (
+                    <div style={{ fontSize: 12, color: 'var(--ink-tertiary)', textDecoration: 'line-through' }}>
+                      This route alone {formatUsd(row.soloCents)}
+                    </div>
+                  )}
+                </div>
+                <div style={{ textAlign: 'right' }}>
+                  <div style={{ fontWeight: 800, color: '#F56600' }}>{formatUsd(row.shareCents)}</div>
+                  {!friendPreview.headline && row.savingsCents > 0 && (
+                    <div style={{ fontSize: 12, fontWeight: 700, color: '#F56600' }}>Save {formatUsd(row.savingsCents)}</div>
+                  )}
+                </div>
               </div>
             ))}
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 10, fontWeight: 700 }}>
-              <span>Total</span><span>{formatUsdFromCents(ride.total_fare_cents)}</span>
-            </div>
+            {friendPreview.totalCents != null && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 10, fontWeight: 700 }}>
+                <span>Total</span><span>{formatUsd(friendPreview.totalCents)}</span>
+              </div>
+            )}
           </div>
         )}
 
@@ -456,6 +549,9 @@ export function FriendRideScreen({ token: tokenProp, kind: kindProp = 'friends' 
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                 <strong>{p.display_name}</strong>
                 <span style={{ color: 'var(--ink-tertiary)' }}>· {p.status}</span>
+                {(carpoolQuote?.shares || []).some((share) => share.id === p.id && share.firstRideFree) && (
+                  <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: 0.3, color: '#F56600' }}>First ride free</span>
+                )}
                 {p.student_verified_at && (
                   <span style={{
                     fontSize: 10, fontWeight: 700, letterSpacing: 0.4, padding: '2px 8px', borderRadius: 999,
@@ -535,15 +631,19 @@ export function FriendRideScreen({ token: tokenProp, kind: kindProp = 'friends' 
               />
             )}
             <PrimaryButton onClick={onConfirmCharges} disabled={busy || ride?.status === 'booked' || (isCarpool && !carpoolQuote)}>
-              {ride?.status === 'booked'
-                ? 'Booked'
-                : busy && (busyLabel === 'Calculating fares…' || busyLabel === 'Charging…')
-                  ? busyLabel
-                  : isCarpool
-                    ? (delta?.currentShareCents != null
-                      ? `Confirm · charge ${formatUsd(delta.currentShareCents)} each`
-                      : 'Waiting for the split')
-                    : 'Confirm & charge friends'}
+              {friendsLobby && ride?.status !== 'booked' && !(busy && (busyLabel === 'Calculating fares…' || busyLabel === 'Charging…'))
+                ? (friendPreview?.eachCents != null
+                  ? `Confirm · charge ${formatUsd(friendPreview.eachCents)} each`
+                  : friendPreview?.rows?.length
+                    ? 'Confirm & charge friends'
+                    : 'Price the split')
+                : confirmChargeLabel({
+                  booked: ride?.status === 'booked',
+                  busyLabel: busy && (busyLabel === 'Calculating fares…' || busyLabel === 'Charging…') ? busyLabel : '',
+                  isCarpool,
+                  shareCents: delta?.currentShareCents,
+                  firstRideFree: Boolean(delta?.currentFirstRideFree),
+                })}
             </PrimaryButton>
             <p style={{ fontSize: 11, color: 'var(--ink-tertiary)', marginTop: 8 }}>
               Confirm updates fares from the live route, then charges full shares · saved card or Apple Pay / Payment Element.
