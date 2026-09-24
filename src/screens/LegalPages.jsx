@@ -3,8 +3,8 @@ import { LEGAL_UPDATED, PRIVACY_SECTIONS, TERMS_SECTIONS } from '../../shared/le
 
 function LegalShell({ title, children }) {
   return (
-    <div className="fade-in" style={{ minHeight: '100%', background: 'var(--surface)' }}>
-      <div style={{ padding: '20px 24px 48px', maxWidth: 640, margin: '0 auto' }}>
+    <div className="mkt-legal fade-in">
+      <div className="mkt-legal-card">
         <button
           type="button"
           className="pressable glass-pill"
@@ -13,6 +13,7 @@ function LegalShell({ title, children }) {
         >
           ←
         </button>
+        <p className="mkt-kicker">Clemson RIDES</p>
         <h1 style={{ fontSize: 26, fontWeight: 700, letterSpacing: -0.4, color: 'var(--purple)', marginBottom: 8 }}>
           {title}
         </h1>
