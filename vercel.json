@@ -144,7 +144,7 @@
   "crons": [
     {
       "path": "/api/driver-payouts",
-      "schedule": "*/15 * * * *"
+      "schedule": "0 12 * * *"
     }
   ]
 }
