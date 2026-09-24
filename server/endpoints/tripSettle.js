@@ -3,7 +3,8 @@
  * { tripId, action: 'complete'|'cancel'|'charge', amountCents?, feeKind?, methods?, adminOverride? }
  *
  * Complete and paid-cancel do not change trip status until collectPayment succeeds.
- * $0 and fully discounted trips proceed. Admin override requires ADMIN_EMAILS or role=admin.
+ * A stored $0 fare can proceed. A null fare is not $0: settle prices it on the
+ * server or refuses. Admin override requires ADMIN_EMAILS or role=admin.
  * feeKind wait_fee / cancel_fee reads a precomputed metadata amount — it does not
  * recalculate wait minutes or cancel percentages.
  */

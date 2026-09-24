@@ -3,7 +3,8 @@
  * Student eligibility is studentDiscountGranted (confirmed @clemson.edu / @g.clemson.edu).
  * Client amount, fare_cents, total, and isStudent are not pricing inputs.
  */
-import { airportCodeForPlace, tripMeters, ATL_FLOOR_CENTS } from '../src/lib/scheduledRideModel.js'
+import { lookupCatalogPlace } from '../src/lib/placeCatalog.js'
+import { AIRPORT_PLACES, airportCodeForPlace, tripMeters, ATL_FLOOR_CENTS } from '../src/lib/scheduledRideModel.js'
 import { studentDiscountGranted } from '../src/lib/studentDomain.js'
 import {
   AIRPORT_ROUTE_FALLBACK,
@@ -19,6 +20,7 @@ import {
   paidTowardFareCents,
   readPrecomputedFeeCents,
 } from '../shared/paymentFailure.js'
+import { loadGameDayMultiplier } from './creditLots.js'
 
 export const CAMPUS_PICKUP = { label: 'Memorial Stadium', lat: 34.6788, lng: -82.843 }
 
@@ -259,6 +261,284 @@ export function airportTripRow({ user, priced, scheduledFor = null, riderFirst =
   }
 }
 
+/** Finite fare already stored on the trip. Null, blank, and NaN are unset — not $0. */
+export function storedFareCents(trip) {
+  const raw = trip && typeof trip === 'object' ? trip.fare_cents : trip
+  if (raw == null || raw === '') return null
+  const n = Number(raw)
+  if (!Number.isFinite(n)) return null
+  return Math.max(0, Math.round(n))
+}
+
+function finiteCoord(value) {
+  if (value == null || value === '') return null
+  const n = Number(value)
+  return Number.isFinite(n) ? n : null
+}
+
+function canonicalAirportStop(code) {
+  if (code === 'GSP' || code === 'CLT') return AIRPORT_DROPOFFS[code]
+  if (code === 'ATL') {
+    const place = AIRPORT_PLACES.find((row) => row.code === 'ATL')
+    if (!place) return null
+    return { label: place.label, lat: place.lat, lng: place.lng }
+  }
+  return null
+}
+
+function stopFromFields(label, lat, lng) {
+  const name = String(label || '').trim().slice(0, 160)
+  const catalog = name ? lookupCatalogPlace(name) : null
+  const code = airportCodeForPlace({ label: name }) || airportCodeForPlace(catalog)
+  if (code === 'GSP' || code === 'CLT' || code === 'ATL') return canonicalAirportStop(code)
+  const la = finiteCoord(lat)
+  const ln = finiteCoord(lng)
+  if (name && la != null && ln != null) return { label: name, lat: la, lng: ln }
+  if (catalog && Number.isFinite(Number(catalog.lat)) && Number.isFinite(Number(catalog.lng))) {
+    return { label: catalog.label, lat: Number(catalog.lat), lng: Number(catalog.lng) }
+  }
+  return null
+}
+
+function stopFromTrip(trip, which) {
+  if (which === 'pickup') return stopFromFields(trip?.pickup_label, trip?.pickup_lat, trip?.pickup_lng)
+  return stopFromFields(trip?.dropoff_label, trip?.dropoff_lat, trip?.dropoff_lng)
+}
+
+/**
+ * Places for a driver-requested trip. GSP, CLT, and ATL drop-offs use the
+ * canonical airport pin so a short client coordinate cannot underprice the ride.
+ */
+export function resolveDriverRequestPlaces({
+  pickupLabel = 'Memorial Stadium',
+  pickupLat = null,
+  pickupLng = null,
+  dropoffLabel = 'GSP Airport',
+  dropoffLat = null,
+  dropoffLng = null,
+  dest = null,
+  destLat = null,
+  destLng = null,
+} = {}) {
+  const dropoff = stopFromFields(dropoffLabel || dest || 'GSP Airport', dropoffLat ?? destLat, dropoffLng ?? destLng)
+  let pickup = stopFromFields(pickupLabel || 'Memorial Stadium', pickupLat, pickupLng)
+  const code = airportCodeForPlace(dropoff) || airportCodeForPlace(pickup)
+  if ((code === 'GSP' || code === 'CLT' || code === 'ATL') && (!pickup || pickup.lat == null)) {
+    pickup = CAMPUS_PICKUP
+  }
+  if (!pickup || !dropoff || pickup.lat == null || dropoff.lat == null) {
+    return { error: 'Choose a pickup and a drop-off.' }
+  }
+  if (pickup.label === dropoff.label) return { error: 'Pickup and drop-off need to be different places.' }
+  return {
+    pickup,
+    dropoff,
+    airport: code === 'GSP' || code === 'CLT' || code === 'ATL' ? code : null,
+  }
+}
+
+/** Server price for a driver request. Airport routes do not use a client distance. */
+export function priceDriverRequest(places, {
+  isStudent = false,
+  at = new Date(),
+  tier = 'standard',
+  gameDayMultiplier = null,
+  distanceM = null,
+  durationS = null,
+} = {}) {
+  const airport = places?.airport === 'GSP' || places?.airport === 'CLT' ? places.airport : null
+  const atl = places?.airport === 'ATL'
+  return priceScheduledRequest({
+    pickup: airport || atl ? CAMPUS_PICKUP : places.pickup,
+    dropoff: airport ? AIRPORT_DROPOFFS[airport] : places.dropoff,
+    airport,
+    at,
+    isStudent: Boolean(isStudent),
+    tier: tier === 'tesla' ? 'tesla' : 'standard',
+    gameDayMultiplier,
+    distanceM,
+    durationS,
+  })
+}
+
+/**
+ * Price a trip row that has no fare_cents yet.
+ * GSP/CLT use the airport quote (published miles when no server route is passed).
+ * ATL uses the canonical airport pin and the existing floor.
+ * Other trips need stored coordinates. A missing route is not a $0 fare.
+ */
+export function priceRecordedTrip(trip, {
+  isStudent = false,
+  at = new Date(),
+  gameDayMultiplier = null,
+} = {}) {
+  const pickup = stopFromTrip(trip, 'pickup')
+  const dropoff = stopFromTrip(trip, 'dropoff')
+  const code = airportCodeForPlace(dropoff) || airportCodeForPlace(pickup)
+  const tier = trip?.tier === 'tesla' || trip?.metadata?.tesla === true ? 'tesla' : 'standard'
+  const when = at instanceof Date && !Number.isNaN(at.getTime()) ? at : new Date()
+  if (code === 'GSP' || code === 'CLT') {
+    return {
+      priced: priceScheduledRequest({
+        pickup: CAMPUS_PICKUP,
+        dropoff: AIRPORT_DROPOFFS[code],
+        airport: code,
+        at: when,
+        isStudent: Boolean(isStudent),
+        tier,
+        gameDayMultiplier,
+      }),
+    }
+  }
+  const pricedPickup = code === 'ATL' ? CAMPUS_PICKUP : pickup
+  const pricedDropoff = code === 'ATL' ? canonicalAirportStop('ATL') : dropoff
+  if (!pricedPickup || !pricedDropoff || tripMeters(pricedPickup, pricedDropoff) == null) {
+    return { error: 'Fare is not set. This trip has no server fare and no route.', code: 'fare_not_set' }
+  }
+  return {
+    priced: priceScheduledRequest({
+      pickup: pricedPickup,
+      dropoff: pricedDropoff,
+      at: when,
+      isStudent: Boolean(isStudent),
+      tier,
+      gameDayMultiplier,
+    }),
+  }
+}
+
+export function fareRowPatch(trip, priced) {
+  const split = splitPlatformFee(priced.fareCents)
+  const previous = trip?.metadata && typeof trip.metadata === 'object' ? trip.metadata : {}
+  const patch = {
+    fare_cents: priced.fareCents,
+    platform_fee_cents: split.platformFeeCents,
+    driver_earnings_cents: split.driverEarningsCents,
+    surge_multiplier: priced.surge?.multiplier || 1,
+    fare_breakdown: {
+      ...(priced.breakdown || priced.quote?.breakdown || {}),
+      route_source: priced.routeSource || null,
+      fare_source: 'server',
+      rider_pays_cents: priced.fareCents,
+    },
+    metadata: {
+      ...previous,
+      fare_source: 'server',
+      fare_is_estimate: Boolean(priced.estimate),
+      isStudent: Boolean(priced.isStudent && priced.discountCents > 0),
+      student_discount_cents: Math.max(0, Math.round(Number(priced.discountCents) || 0)),
+      studentLabel: priced.discountCents > 0 ? 'Clemson student · 10% off Standard' : null,
+      airport: priced.airport || null,
+    },
+  }
+  if (trip?.deposit_cents == null || trip.deposit_cents === '') {
+    patch.deposit_cents = priced.depositCents
+  }
+  return patch
+}
+
+const TRIP_FARE_SELECT = [
+  'id', 'rider_id', 'driver_id', 'status', 'tier', 'fare_cents', 'deposit_cents',
+  'pickup_label', 'dropoff_label', 'pickup_lat', 'pickup_lng', 'dropoff_lat', 'dropoff_lng',
+  'pickup_at', 'scheduled_for', 'requested_at', 'metadata', 'fare_breakdown',
+  'platform_fee_cents', 'driver_earnings_cents',
+].join(', ')
+
+const TRIP_FARE_SELECT_NARROW = [
+  'id', 'rider_id', 'driver_id', 'status', 'tier', 'fare_cents', 'deposit_cents',
+  'pickup_label', 'dropoff_label', 'pickup_lat', 'pickup_lng', 'dropoff_lat', 'dropoff_lng',
+  'metadata',
+].join(', ')
+
+function rideAtFromTrip(trip, at) {
+  if (at instanceof Date && !Number.isNaN(at.getTime())) return at
+  const raw = trip?.pickup_at || trip?.scheduled_for || trip?.requested_at || trip?.created_at
+  const parsed = raw ? new Date(raw) : new Date()
+  return Number.isNaN(parsed.getTime()) ? new Date() : parsed
+}
+
+async function loadTripForFare(sb, id) {
+  const full = await sb.from('trips').select(TRIP_FARE_SELECT).eq('id', id).maybeSingle()
+  if (!full.error && full.data) return full.data
+  if (full.error && /column|schema cache/i.test(full.error.message || '')) {
+    const narrow = await sb.from('trips').select(TRIP_FARE_SELECT_NARROW).eq('id', id).maybeSingle()
+    if (!narrow.error && narrow.data) return narrow.data
+  }
+  return null
+}
+
+/**
+ * Persist a server fare on a trip whose fare_cents is still null.
+ * A stored 0 stays 0. Student eligibility is the rider's confirmed Clemson email.
+ */
+export async function ensureAuthoritativeFare({ sb, trip, at = null } = {}) {
+  if (!trip?.id) return { error: 'Trip not found', status: 404, code: 'fare_not_set' }
+  let row = trip
+  if (storedFareCents(row) != null) return { trip: row, filled: false }
+  if (!sb) {
+    return { error: 'Fare is not set. This trip cannot settle at $0.', status: 409, code: 'fare_not_set', trip: row }
+  }
+
+  const loaded = await loadTripForFare(sb, trip.id)
+  if (loaded) row = { ...row, ...loaded }
+  if (storedFareCents(row) != null) return { trip: row, filled: false }
+
+  let rider = null
+  if (sb.auth?.admin?.getUserById && row.rider_id) {
+    try {
+      const { data, error } = await sb.auth.admin.getUserById(row.rider_id)
+      if (!error) rider = data?.user || null
+    } catch {
+      rider = null
+    }
+  }
+
+  const when = rideAtFromTrip(row, at)
+  let gameDayMultiplier = null
+  try {
+    const game = await loadGameDayMultiplier(sb, when)
+    gameDayMultiplier = game?.multiplier ?? null
+  } catch {
+    gameDayMultiplier = null
+  }
+
+  const quoted = priceRecordedTrip(row, {
+    isStudent: studentDiscountGranted(rider),
+    at: when,
+    gameDayMultiplier,
+  })
+  if (quoted.error || quoted.priced?.fareCents == null) {
+    return {
+      error: quoted.error || 'Fare is not set. This trip cannot settle at $0.',
+      status: 409,
+      code: 'fare_not_set',
+      trip: row,
+    }
+  }
+
+  const patch = fareRowPatch(row, quoted.priced)
+  const updated = await sb.from('trips').update(patch).eq('id', row.id).is('fare_cents', null).select(TRIP_FARE_SELECT).maybeSingle()
+  if (!updated.error && storedFareCents(updated.data) != null) {
+    return { trip: updated.data, priced: quoted.priced, filled: true }
+  }
+  if (updated.error && /column|schema cache/i.test(updated.error.message || '')) {
+    const narrowPatch = { fare_cents: patch.fare_cents, metadata: patch.metadata }
+    if (patch.deposit_cents != null) narrowPatch.deposit_cents = patch.deposit_cents
+    const retry = await sb.from('trips').update(narrowPatch).eq('id', row.id).is('fare_cents', null).select(TRIP_FARE_SELECT_NARROW).maybeSingle()
+    if (!retry.error && storedFareCents(retry.data) != null) {
+      return { trip: { ...row, ...retry.data }, priced: quoted.priced, filled: true }
+    }
+    if (retry.error && !/column|schema cache/i.test(retry.error.message || '')) {
+      return { error: retry.error.message || 'Could not store fare', status: 500, code: 'fare_not_set' }
+    }
+  } else if (updated.error) {
+    return { error: updated.error.message || 'Could not store fare', status: 500, code: 'fare_not_set' }
+  }
+  const again = await loadTripForFare(sb, row.id)
+  if (storedFareCents(again) != null) return { trip: again, filled: false }
+  return { error: 'Fare is not set. This trip cannot settle at $0.', status: 409, code: 'fare_not_set', trip: row }
+}
+
 function sumSucceeded(payments, kinds) {
   return (payments || []).reduce((sum, row) => {
     if (row?.status !== 'succeeded') return sum
@@ -296,7 +576,8 @@ export function serverCollectCents({ kind, trip, payments = [], clientAmountCent
     }
     case 'deposit': {
       if (!trip) return { error: 'tripId required', status: 400 }
-      const fare = Math.max(0, Math.round(Number(trip.fare_cents) || 0))
+      const fare = storedFareCents(trip)
+      if (fare == null) return { error: 'Fare is not set. This trip cannot be charged as $0.', status: 409, code: 'fare_not_set' }
       const stored = trip.deposit_cents == null || trip.deposit_cents === ''
         ? cardDepositCents(fare)
         : Math.max(0, Math.round(Number(trip.deposit_cents) || 0))
@@ -316,7 +597,8 @@ export function serverCollectCents({ kind, trip, payments = [], clientAmountCent
     case 'balance':
     case 'friend_ride_share': {
       if (!trip) return { error: 'tripId required', status: 400 }
-      const fare = Math.max(0, Math.round(Number(trip.fare_cents) || 0))
+      const fare = storedFareCents(trip)
+      if (fare == null) return { error: 'Fare is not set. This trip cannot be charged as $0.', status: 409, code: 'fare_not_set' }
       const paid = paidTowardFareCents(trip, payments)
       const amountCents = Math.max(0, fare - paid)
       const client = finiteCents(clientAmountCents)

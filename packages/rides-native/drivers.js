@@ -1,7 +1,7 @@
+import { authedJson } from './apiClient.js'
 import { displayFirstName, standingFromRatings } from './authErrors.js'
-import { GSP, RIDE_TIERS, STADIUM } from './places.js'
+import { GSP, STADIUM } from './places.js'
 import { haversineMeters } from './riderShell.js'
-import { studentTripMeta } from './riderMoney.js'
 import { approvalGateMessage } from './syntheticOffers.js'
 
 /** Straight-line campus pace. TODO: a traffic ETA needs a billed GOOGLE_MAPS_API_KEY (Routes). */
@@ -326,7 +326,10 @@ export async function fetchDriverApplication(supabase, driverId) {
   return { application: data, error: null }
 }
 
-/** Same insert as src/lib/trips.js requestDriverTrip. No Stripe charge. */
+/**
+ * Preferred-driver request. The server writes fare_cents. Client list price
+ * and isStudent are not pricing inputs.
+ */
 export async function requestDriverTrip(supabase, {
   riderId,
   driverId,
@@ -337,36 +340,24 @@ export async function requestDriverTrip(supabase, {
   tier = 'standard',
   isStudent = false,
 }) {
+  void isStudent
   if (!supabase) throw new Error('Supabase is not configured')
   if (!riderId) throw new Error('Sign in required to request a driver')
   if (!driverId) throw new Error('Select a driver first')
 
-  const tierId = tier || 'standard'
-  const catalog = RIDE_TIERS.find((row) => row.id === tierId)
-  const listCents = Math.round((Number(catalog?.price) || 0) * 100)
-  const { data, error } = await supabase
-    .from('trips')
-    .insert({
-      rider_id: riderId,
-      driver_id: driverId,
-      status: 'requested',
-      tier: tierId,
-      pickup_label: pickupLabel,
-      dropoff_label: dest,
-      pickup_lat: pickupPoint.latitude,
-      pickup_lng: pickupPoint.longitude,
-      dropoff_lat: destPoint.latitude,
-      dropoff_lng: destPoint.longitude,
-      passengers: 1,
-      metadata: {
-        ...studentTripMeta({ isStudent, tier: tierId, fareCents: listCents }),
-        ...preferredTripFields(driverId),
-        ...(tierId === 'tesla' ? { tesla: true, tier: 'tesla' } : {}),
-      },
-    })
-    .select('id, status, driver_id, dropoff_label')
-    .single()
-
-  if (error) throw new Error(error.message || 'Could not request trip')
-  return data
+  const data = await authedJson(supabase, '/api/stripe-payment-methods?action=request-driver', {
+    method: 'POST',
+    body: {
+      driverId,
+      dest,
+      destLat: destPoint?.latitude,
+      destLng: destPoint?.longitude,
+      pickupLabel,
+      pickupLat: pickupPoint?.latitude,
+      pickupLng: pickupPoint?.longitude,
+      tier: tier || 'standard',
+    },
+  })
+  if (!data?.trip?.id) throw new Error('Could not request trip')
+  return data.trip
 }

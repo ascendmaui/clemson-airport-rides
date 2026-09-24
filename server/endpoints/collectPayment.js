@@ -8,7 +8,7 @@ import {
   admin, cors, json, parseBody, userFromAuth, stripeClient, stripeOk,
 } from '../friendRideLib.js'
 import { collectPayment } from '../collectPayment.js'
-import { serverCollectCents } from '../authoritativeFare.js'
+import { ensureAuthoritativeFare, serverCollectCents, storedFareCents } from '../authoritativeFare.js'
 
 const KINDS = new Set(['balance', 'tip', 'wait_fee', 'cancel_fee', 'mid_ride', 'friend_ride_share', 'deposit', 'credits_purchase'])
 
@@ -35,6 +35,17 @@ export default async function handler(req, res) {
     if (trip.rider_id !== user.id && trip.driver_id !== user.id) {
       return json(res, 403, { error: 'Not allowed on this trip' })
     }
+  }
+
+  if (trip && (kind === 'balance' || kind === 'deposit' || kind === 'friend_ride_share') && storedFareCents(trip) == null) {
+    const ensured = await ensureAuthoritativeFare({ sb, trip })
+    if (ensured.error || storedFareCents(ensured.trip) == null) {
+      return json(res, ensured.status || 409, {
+        error: ensured.error || 'Fare is not set. This trip cannot be charged as $0.',
+        code: 'fare_not_set',
+      })
+    }
+    trip = ensured.trip
   }
 
   let payments = []

@@ -1,7 +1,9 @@
 -- Client inserts and updates cannot set the fare that Stripe or settlement
--- treats as owed. Service role (checkout, schedule-trip, airport checkout)
--- writes fare_cents and deposit_cents. Authenticated clients may still insert
--- a trip that leaves those columns null.
+-- treats as owed. Service role (checkout, schedule-trip, request-driver,
+-- airport checkout, settle) writes fare_cents and deposit_cents.
+-- Authenticated clients may still insert a trip that leaves those columns
+-- null. Settle and collect must not treat that null as $0 owed: the server
+-- prices the row or refuses the charge.
 
 CREATE OR REPLACE FUNCTION public.protect_trip_fare_cents()
 RETURNS trigger

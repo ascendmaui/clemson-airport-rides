@@ -282,6 +282,11 @@ export function amountDueForAction({
   precomputedFeeCents = null,
   requireFee = false,
 }) {
+  if (action === 'complete') {
+    const fareMissing = fareCents == null || fareCents === '' || !Number.isFinite(Number(fareCents))
+    if (fareMissing) return { amountCents: null, code: 'fare_not_set' }
+  }
+
   if (explicitAmountCents != null && explicitAmountCents !== '') {
     return { amountCents: Math.max(0, Math.round(Number(explicitAmountCents))), code: null }
   }

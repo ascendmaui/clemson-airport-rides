@@ -7,8 +7,11 @@ import { ATL_FLOOR_CENTS } from '../src/lib/scheduledRideModel.js'
 import {
   amountDueIgnoringClient,
   priceCheckoutBody,
+  priceDriverRequest,
+  priceRecordedTrip,
   priceScheduledRequest,
   quoteAirportCheckout,
+  resolveDriverRequestPlaces,
   serverCollectCents,
 } from './authoritativeFare.js'
 
@@ -192,4 +195,103 @@ test('checkout and trip create do not price from client money or isStudent', () 
   assert.doesNotMatch(collect, /Math\.round\(Number\(body\.amountCents\)\)/)
   assert.doesNotMatch(settle, /explicitAmountCents:\s*body\.amountCents/)
   assert.match(settle, /amountDueIgnoringClient/)
+  const settleLib = readFileSync(new URL('./tripSettle.js', import.meta.url), 'utf8')
+  const requestDriver = readFileSync(new URL('./endpoints/requestDriverTrip.js', import.meta.url), 'utf8')
+  const nativeRequest = readFileSync(new URL('../packages/rides-native/drivers.js', import.meta.url), 'utf8')
+  const webRequest = readFileSync(new URL('../src/lib/trips.js', import.meta.url), 'utf8')
+  const webPay = readFileSync(new URL('../src/lib/payments.js', import.meta.url), 'utf8')
+  assert.match(settleLib, /ensureAuthoritativeFare/)
+  assert.match(collect, /ensureAuthoritativeFare/)
+  assert.match(requestDriver, /studentDiscountGranted/)
+  assert.match(requestDriver, /priceDriverRequest/)
+  assert.doesNotMatch(requestDriver, /body\.isStudent|body\.fareCents|body\.fare_cents|body\.listCents|body\.amount/)
+  assert.match(nativeRequest, /request-driver/)
+  assert.match(webRequest, /createServerDriverTrip/)
+  assert.match(webPay, /request-driver/)
+  assert.doesNotMatch(nativeRequest, /\.from\('trips'\)/)
+  assert.doesNotMatch(webRequest, /\.from\('trips'\)/)
+})
+
+test('a null fare is not $0 due on collect or settle', () => {
+  const trip = { fare_cents: null, deposit_cents: null, metadata: { isStudent: true } }
+  for (const kind of ['balance', 'deposit', 'friend_ride_share']) {
+    const owed = serverCollectCents({ kind, trip, payments: [], clientAmountCents: 0 })
+    assert.equal(owed.code, 'fare_not_set', kind)
+    assert.equal(owed.amountCents, undefined, kind)
+  }
+  const settle = amountDueIgnoringClient({
+    action: 'complete',
+    trip,
+    payments: [],
+    clientAmountCents: 0,
+  })
+  assert.equal(settle.code, 'fare_not_set')
+  assert.equal(settle.amountCents, null)
+  const free = serverCollectCents({
+    kind: 'balance',
+    trip: { fare_cents: 0, deposit_cents: 0, metadata: {} },
+    payments: [],
+  })
+  assert.equal(free.amountCents, 0)
+  assert.equal(free.code, undefined)
+})
+
+test('driver-request airport pricing ignores a short pin and keeps the 25% deposit', () => {
+  const places = resolveDriverRequestPlaces({
+    pickupLabel: 'Memorial Stadium',
+    pickupLat: 34.6788,
+    pickupLng: -82.843,
+    dropoffLabel: 'GSP Airport',
+    dropoffLat: 34.6788,
+    dropoffLng: -82.843,
+  })
+  assert.equal(places.airport, 'GSP')
+  assert.ok(Math.abs(places.dropoff.lat - 34.6788) > 0.1)
+  const full = quoteAirportCheckout({ airport: 'GSP', at: QUIET, isStudent: false })
+  const priced = priceDriverRequest(places, { isStudent: false, at: QUIET, tier: 'standard' })
+  assert.equal(priced.fareCents, full.fareCents)
+  assert.equal(priced.depositCents, cardDepositCents(full.fareCents))
+  const student = priceDriverRequest(places, { isStudent: true, at: QUIET, tier: 'standard' })
+  assert.equal(student.fareCents, full.fareCents - Math.round((full.fareCents * STUDENT_DISCOUNT_BPS) / 10000))
+  assert.equal(student.depositCents, cardDepositCents(student.fareCents))
+  const tesla = priceDriverRequest(places, { isStudent: true, at: QUIET, tier: 'tesla' })
+  assert.equal(tesla.isStudent, false)
+  assert.equal(tesla.fareCents, full.fareCents)
+  assert.equal(tesla.depositCents, cardDepositCents(full.fareCents))
+})
+
+test('a recorded null-fare airport trip prices from the canonical quote', () => {
+  const recorded = priceRecordedTrip({
+    tier: 'standard',
+    pickup_label: 'Memorial Stadium',
+    dropoff_label: 'GSP Airport',
+    pickup_lat: 34.6788,
+    pickup_lng: -82.843,
+    dropoff_lat: 34.6789,
+    dropoff_lng: -82.844,
+    metadata: { isStudent: true },
+  }, { isStudent: false, at: QUIET, gameDayMultiplier: null })
+  const full = quoteAirportCheckout({ airport: 'GSP', at: QUIET, isStudent: false })
+  assert.equal(recorded.priced.fareCents, full.fareCents)
+  assert.equal(recorded.priced.depositCents, cardDepositCents(full.fareCents))
+  const nowhere = priceRecordedTrip({
+    pickup_label: '',
+    dropoff_label: '',
+    metadata: {},
+  }, { isStudent: false, at: QUIET })
+  assert.equal(nowhere.code, 'fare_not_set')
+  assert.equal(nowhere.priced, undefined)
+})
+
+test('a short ATL pin on a driver request still meets the Atlanta floor', () => {
+  const places = resolveDriverRequestPlaces({
+    pickupLabel: 'Memorial Stadium',
+    dropoffLabel: 'Hartsfield-Jackson Atlanta (ATL)',
+    dropoffLat: 34.6788,
+    dropoffLng: -82.843,
+  })
+  assert.equal(places.airport, 'ATL')
+  assert.ok(Math.abs(places.dropoff.lat - 34.6788) > 0.5)
+  const priced = priceDriverRequest(places, { isStudent: false, at: QUIET, tier: 'standard' })
+  assert.ok(priced.fareCents >= ATL_FLOOR_CENTS)
 })

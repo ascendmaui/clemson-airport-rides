@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
+import { cardDepositCents } from '../src/lib/fareRates.js'
 import { memoryCreditStore } from './credits.js'
 import { collectPayment } from './collectPayment.js'
+import { quoteAirportCheckout } from './authoritativeFare.js'
 import { settleTrip } from './tripSettle.js'
 import { attemptDriverPayout } from './payouts.js'
 
@@ -240,6 +242,171 @@ test('cancel with a precomputed fee does not complete when the card is declined'
   assert.equal(settled.body.progressed, false)
   assert.equal(settled.body.failure.code, 'insufficient_funds')
   assert.notEqual(settled.body.status, 'canceled')
+})
+
+function fareDb(initial, user) {
+  let trip = { ...initial, metadata: { ...(initial.metadata || {}) } }
+  const patches = []
+  function from(table) {
+    const state = { table, op: 'select', patch: null, filters: [] }
+    const api = {
+      select() { return api },
+      insert(row) { state.op = 'insert'; state.patch = row; return api },
+      update(row) { state.op = 'update'; state.patch = row; return api },
+      upsert(row) { state.op = 'upsert'; state.patch = row; return api },
+      eq(col, val) { state.filters.push([col, val]); return api },
+      is(col, val) { state.filters.push([col, val]); return api },
+      lte() { return api },
+      gte() { return api },
+      order() { return api },
+      limit() { return api },
+      maybeSingle() { return Promise.resolve(apply(state, true)) },
+      single() { return Promise.resolve(apply(state, true)) },
+      then(resolve, reject) { return Promise.resolve(apply(state, false)).then(resolve, reject) },
+    }
+    return api
+  }
+  function apply(state, single) {
+    if (state.table === 'game_day_events') return { data: [], error: null }
+    if (state.table !== 'trips') return { data: null, error: null }
+    if (state.op === 'update') {
+      const guarded = state.filters.some(([col, val]) => col === 'fare_cents' && val == null)
+      if (guarded && trip.fare_cents != null) return { data: null, error: null }
+      trip = {
+        ...trip,
+        ...state.patch,
+        metadata: state.patch.metadata || trip.metadata,
+      }
+      patches.push(state.patch)
+      return { data: single ? trip : null, error: null }
+    }
+    return { data: single ? trip : [trip], error: null }
+  }
+  return {
+    from,
+    patches: () => patches,
+    trip: () => trip,
+    auth: { admin: { getUserById: async () => ({ data: { user }, error: null }) } },
+  }
+}
+
+test('a completed null-fare airport trip is priced before it can settle', async () => {
+  const when = '2026-09-23T15:00:00.000Z'
+  const h = ioHarness({ balance: 0, hasCard: true })
+  const refused = await settleTrip({
+    trip: {
+      id: 'trip_null',
+      rider_id: 'rider',
+      driver_id: 'driver',
+      status: 'in_progress',
+      fare_cents: null,
+      pickup_label: 'Memorial Stadium',
+      dropoff_label: 'GSP Airport',
+      metadata: { isStudent: true },
+    },
+    payments: [],
+    action: 'complete',
+    deps: h.deps,
+  })
+  assert.equal(refused.http, 409)
+  assert.equal(refused.body.code, 'fare_not_set')
+  assert.equal(refused.body.progressed, false)
+  assert.equal(h.intents.length, 0)
+
+  const bare = fareDb({
+    id: 'trip_bare',
+    rider_id: 'rider',
+    driver_id: 'driver',
+    status: 'in_progress',
+    fare_cents: null,
+    pickup_label: '',
+    dropoff_label: '',
+    requested_at: when,
+    metadata: {},
+  }, { id: 'rider', email: 'spoof@gmail.com', email_confirmed_at: '2026-01-01T00:00:00Z' })
+  const unpriced = await settleTrip({
+    sb: bare,
+    trip: bare.trip(),
+    payments: [],
+    action: 'complete',
+    deps: h.deps,
+  })
+  assert.equal(unpriced.http, 409)
+  assert.equal(unpriced.body.code, 'fare_not_set')
+  assert.equal(unpriced.body.progressed, false)
+  assert.equal(bare.trip().fare_cents, null)
+  assert.equal(h.intents.length, 0)
+
+  const gmail = { id: 'rider', email: 'spoof@gmail.com', email_confirmed_at: '2026-01-01T00:00:00Z', student_verified_at: '2026-01-01T00:00:00Z' }
+  const db = fareDb({
+    id: 'trip_gsp',
+    rider_id: 'rider',
+    driver_id: 'driver',
+    status: 'in_progress',
+    fare_cents: null,
+    deposit_cents: null,
+    tier: 'standard',
+    pickup_label: 'Memorial Stadium',
+    dropoff_label: 'GSP Airport',
+    pickup_lat: 34.6788,
+    pickup_lng: -82.843,
+    dropoff_lat: 34.6788,
+    dropoff_lng: -82.843,
+    requested_at: when,
+    metadata: { isStudent: true },
+  }, gmail)
+  const settled = await settleTrip({
+    sb: db,
+    trip: db.trip(),
+    payments: [],
+    action: 'complete',
+    deps: h.deps,
+  })
+  const full = quoteAirportCheckout({ airport: 'GSP', at: new Date(when), isStudent: false })
+  assert.equal(settled.http, 200)
+  assert.equal(settled.body.progressed, true)
+  assert.equal(db.trip().fare_cents, full.fareCents)
+  assert.equal(db.trip().deposit_cents, cardDepositCents(full.fareCents))
+  assert.equal(db.trip().metadata.isStudent, false)
+  assert.equal(db.trip().metadata.fare_source, 'server')
+  assert.equal(h.intents.at(-1).amount, full.fareCents)
+  assert.ok(full.fareCents > 0)
+})
+
+test('a confirmed Clemson rider gets 10% off when a null fare is filled at settle', async () => {
+  const when = '2026-09-23T15:00:00.000Z'
+  const h = ioHarness({ balance: 0, hasCard: true })
+  const tiger = { id: 'rider', email: 'tiger@g.clemson.edu', email_confirmed_at: '2026-01-01T00:00:00Z' }
+  const db = fareDb({
+    id: 'trip_student',
+    rider_id: 'rider',
+    driver_id: 'driver',
+    status: 'in_progress',
+    fare_cents: null,
+    tier: 'standard',
+    pickup_label: 'Memorial Stadium',
+    dropoff_label: 'CLT Airport',
+    pickup_lat: 34.6788,
+    pickup_lng: -82.843,
+    dropoff_lat: 34.679,
+    dropoff_lng: -82.84,
+    requested_at: when,
+    metadata: {},
+  }, tiger)
+  const settled = await settleTrip({
+    sb: db,
+    trip: { id: 'trip_student', rider_id: 'rider', driver_id: 'driver', status: 'in_progress', fare_cents: null, metadata: {} },
+    payments: [],
+    action: 'complete',
+    deps: h.deps,
+  })
+  const full = quoteAirportCheckout({ airport: 'CLT', at: new Date(when), isStudent: false })
+  const student = quoteAirportCheckout({ airport: 'CLT', at: new Date(when), isStudent: true })
+  assert.equal(settled.http, 200)
+  assert.equal(db.trip().fare_cents, student.fareCents)
+  assert.ok(student.fareCents < full.fareCents)
+  assert.equal(db.trip().deposit_cents, cardDepositCents(student.fareCents))
+  assert.equal(h.intents.at(-1).amount, student.fareCents)
 })
 
 test('payout failure is logged as pending and a later attempt can pay', async () => {
