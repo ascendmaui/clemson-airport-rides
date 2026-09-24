@@ -114,4 +114,4 @@ export function requestDriverTrip(
     tier?: string
     isStudent?: boolean
   },
-): Promise<{ id: string; status: string; driver_id: string; dropoff_label: string }>
+): Promise<{ id: string; status: string; driver_id: string; dropoff_label: string; fare_cents?: number | null; deposit_cents?: number | null }>

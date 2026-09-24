@@ -1,52 +1,41 @@
-import { supabase } from './supabase'
-import { STADIUM } from '../components/CampusMap'
-import { RIDE_TIERS } from '../../packages/rides-native/places.js'
-import { preferredTripFields } from '../../packages/rides-native/drivers.js'
-import { studentTripMeta } from '../../packages/rides-native/riderMoney.js'
+import { destPoint, pickupPoint } from '../../packages/rides-native/places.js'
+import { createServerDriverTrip } from './payments'
 
+/**
+ * Preferred-driver request. The server writes fare_cents. A client list price
+ * or student flag is not the fare (the fare trigger would reject it anyway).
+ * Pins only tell the server where the ride is. Airport labels are canonicalized
+ * there, so these coordinates cannot set the amount.
+ */
 export async function requestDriverTrip({
   riderId,
   driverId,
   dest = 'GSP Airport',
-  destLat = 34.8956,
-  destLng = -82.2189,
+  destLat = null,
+  destLng = null,
   tier = 'standard',
   isStudent = false,
   listCents = 0,
 }) {
-  if (!supabase) throw new Error('Supabase is not configured')
+  void isStudent
+  void listCents
   if (!riderId) throw new Error('Sign in required to request a driver')
   if (!driverId) throw new Error('Select a driver first')
 
-  const { data, error } = await supabase
-    .from('trips')
-    .insert({
-      rider_id: riderId,
-      driver_id: driverId,
-      status: 'requested',
-      tier: tier || 'standard',
-      pickup_label: 'Memorial Stadium',
-      dropoff_label: dest,
-      pickup_lat: STADIUM[0],
-      pickup_lng: STADIUM[1],
-      dropoff_lat: destLat,
-      dropoff_lng: destLng,
-      passengers: 1,
-      metadata: {
-        ...studentTripMeta({
-          isStudent,
-          tier: tier || 'standard',
-          fareCents: Math.max(
-            0,
-            Math.round(Number(listCents) || 0) || Math.round((Number(RIDE_TIERS.find((row) => row.id === (tier || 'standard'))?.price) || 0) * 100),
-          ),
-        }),
-        ...preferredTripFields(driverId),
-      },
-    })
-    .select('id, status, driver_id, dropoff_label')
-    .single()
-
-  if (error) throw new Error(error.message || 'Could not request trip')
-  return data
+  const drop = Number.isFinite(Number(destLat)) && Number.isFinite(Number(destLng))
+    ? { latitude: Number(destLat), longitude: Number(destLng) }
+    : destPoint(dest)
+  const pickup = pickupPoint('Memorial Stadium')
+  const data = await createServerDriverTrip({
+    driverId,
+    dest,
+    destLat: drop.latitude,
+    destLng: drop.longitude,
+    pickupLabel: 'Memorial Stadium',
+    pickupLat: pickup.latitude,
+    pickupLng: pickup.longitude,
+    tier: tier || 'standard',
+  })
+  if (!data?.trip?.id) throw new Error('Could not request trip')
+  return data.trip
 }

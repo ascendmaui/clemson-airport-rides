@@ -13,6 +13,7 @@ import {
   readPrecomputedFeeCents,
 } from '../shared/paymentFailure.js'
 import { isAdminIdentity } from '../shared/adminAccess.js'
+import { ensureAuthoritativeFare, storedFareCents } from './authoritativeFare.js'
 
 const ACTIVE_KEEP = new Set(['accepted', 'arriving', 'in_progress', 'payment_required', 'searching', 'offered'])
 
@@ -66,6 +67,21 @@ export async function settleTrip({
     return { http: 403, body: { error: 'Admin override is not available for this account' } }
   }
 
+  if (action === 'complete' && storedFareCents(trip) == null) {
+    const ensured = await ensureAuthoritativeFare({ sb, trip })
+    if (ensured.error || storedFareCents(ensured.trip) == null) {
+      return {
+        http: ensured.status || 409,
+        body: {
+          error: ensured.error || 'Fare is not set. This trip cannot settle at $0.',
+          code: 'fare_not_set',
+          progressed: false,
+        },
+      }
+    }
+    trip = ensured.trip
+  }
+
   const kind = feeKindFor(action, feeKind)
   const precomputed = explicitAmountCents == null ? readPrecomputedFeeCents(trip, kind) : null
   const due = amountDueForAction({
@@ -77,6 +93,17 @@ export async function settleTrip({
     precomputedFeeCents: precomputed,
     requireFee: requireFee || action === 'charge',
   })
+
+  if (due.code === 'fare_not_set') {
+    return {
+      http: 409,
+      body: {
+        error: 'Fare is not set. This trip cannot settle at $0.',
+        code: 'fare_not_set',
+        progressed: false,
+      },
+    }
+  }
 
   if (due.code === 'fee_not_computed') {
     const failure = failureResult('fee_not_computed', { amountCents: 0, tripId: trip.id, kind })

@@ -1,6 +1,6 @@
 /**
  * Payment method, quote, checkout, credit, and trip-settlement actions.
- * POST /api/stripe-payment-methods?action=setup-intent|save|quote|airport-checkout|schedule-trip|buy-credits|credits-confirm|collect|settle|credits|credit-lots
+ * POST /api/stripe-payment-methods?action=setup-intent|save|quote|airport-checkout|schedule-trip|request-driver|buy-credits|credits-confirm|collect|settle|credits|credit-lots
  * GET  /api/stripe-payment-methods?action=credit-lots|credits
  * Legacy paths are rewritten in vercel.json.
  * Body sub-actions such as buy (prepaid credits) are not route names.
@@ -20,6 +20,7 @@ import handlePrepaidCredits from '../server/endpoints/prepaidCredits.js'
 import handleCollectPayment from '../server/endpoints/collectPayment.js'
 import handleTripSettle from '../server/endpoints/tripSettle.js'
 import handleScheduleTrip from '../server/endpoints/scheduleTrip.js'
+import handleRequestDriverTrip from '../server/endpoints/requestDriverTrip.js'
 
 const HANDLERS = {
   'setup-intent': handleStripeSetupIntent,
@@ -27,6 +28,7 @@ const HANDLERS = {
   quote: handleQuoteFare,
   'airport-checkout': handleAirportCheckout,
   'schedule-trip': handleScheduleTrip,
+  'request-driver': handleRequestDriverTrip,
   'buy-credits': handleBuyCredits,
   'credits-confirm': handleCreditsConfirm,
   'credit-lots': handleCreditLots,
@@ -52,7 +54,7 @@ export default async function handler(req, res) {
   const handle = HANDLERS[action]
   if (!handle) {
     return json(res, 400, {
-      error: 'Unknown payment action. Use action=setup-intent, save, quote, airport-checkout, schedule-trip, buy-credits, credits-confirm, credit-lots, credits, collect, or settle.',
+      error: 'Unknown payment action. Use action=setup-intent, save, quote, airport-checkout, schedule-trip, request-driver, buy-credits, credits-confirm, credit-lots, credits, collect, or settle.',
     })
   }
   return handle(req, res)
