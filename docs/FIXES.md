@@ -2,6 +2,12 @@
 
 Persistent knowledge base for recurring failures. When a matching issue appears, apply the saved fix first.
 
+## 2026-09-24 — Rider home misses live game day; scheduled reminders never surface
+- **Problem:** Rider home folded `game_day_events` into the map caption, which stays hidden while busy spots load and does not reload on pull-to-refresh. Scheduled rides stored reminder windows (`m15` / `h1` / `h24`) but the rider app never showed a due reminder.
+- **Root cause:** `loadGameDay` ran once on mount and only fed a pill. `nextReminder` was used by the web toast watcher, not by rider home or Schedule.
+- **Fix:** Home shows a live card from `gameDayNotice` (pickup zone + rider fare multiplier) and reloads it with the map. `dueScheduleReminders` turns `REMINDER_WINDOWS` into an in-app card on home and Schedule. No push infra.
+- **Machine/track:** Max / Clemson rider
+
 ## 2026-09-24 — Driver EAS Bundle JS: Unable to resolve `expo-router` from `rides-native`
 
 - **Track / machine:** Clemson RIDES Track 1 · Max; EAS iOS driver

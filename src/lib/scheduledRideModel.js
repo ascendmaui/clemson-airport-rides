@@ -173,6 +173,47 @@ export function nextReminder(trip, now = new Date(), already = {}) {
   return tightest
 }
 
+/**
+ * In-app cards for scheduled rides inside a REMINDER_WINDOWS window.
+ * Stamps in metadata.reminders are ignored so the card stays up for the whole window.
+ * Soonest pickup first. Trips outside the windows, or not scheduled/accepted/arriving, are omitted.
+ * @param {Array<{ id?: string, status?: string, pickup_at?: string, scheduled_for?: string, pickup_label?: string, dropoff_label?: string, pickupLabel?: string, dropoffLabel?: string }> | null | undefined} trips
+ * @param {Date} [now]
+ * @returns {Array<{ tripId: string, windowId: string, label: string, pickupLabel: string, dropoffLabel: string, pickupAt: string | null, whenLabel: string, body: string }>}
+ */
+export function dueScheduleReminders(trips, now = new Date()) {
+  if (!Array.isArray(trips)) return []
+  const cards = []
+  for (const trip of trips) {
+    if (!trip?.id) continue
+    const reminder = nextReminder(trip, now)
+    if (!reminder) continue
+    const pickupAt = trip.pickup_at || trip.scheduled_for || null
+    const pickupLabel = trip.pickup_label || trip.pickupLabel || 'Pickup'
+    const dropoffLabel = trip.dropoff_label || trip.dropoffLabel || 'Drop-off'
+    const whenLabel = formatPickupAt(pickupAt)
+    cards.push({
+      tripId: String(trip.id),
+      windowId: reminder.id,
+      label: reminder.label,
+      pickupLabel,
+      dropoffLabel,
+      pickupAt,
+      whenLabel,
+      body: `${pickupLabel} → ${dropoffLabel} · ${whenLabel}`,
+    })
+  }
+  cards.sort((a, b) => {
+    const ta = a.pickupAt ? new Date(a.pickupAt).getTime() : Number.POSITIVE_INFINITY
+    const tb = b.pickupAt ? new Date(b.pickupAt).getTime() : Number.POSITIVE_INFINITY
+    if (ta !== tb) return ta - tb
+    if (a.tripId < b.tripId) return -1
+    if (a.tripId > b.tripId) return 1
+    return 0
+  })
+  return cards
+}
+
 const OPEN_QUEUE_FIELDS = [
   'id',
   'status',
