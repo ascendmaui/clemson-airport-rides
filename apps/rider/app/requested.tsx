@@ -14,6 +14,8 @@ import { isLiveStatus, loadLiveTrip, type LiveTrip } from '@/lib/tripWatch'
 import { useTripById } from '@/lib/useRiderTrip'
 import { isActiveRideStatus, listEmergencyContacts, type EmergencyContact } from 'rides-native/safety.js'
 import { ORANGE, PURPLE } from 'rides-native/places.js'
+import { CounterpartCard, partyColorsFromPalette } from 'rides-native/PartyScreens'
+import { loadCounterpart, type CounterpartView } from 'rides-native/partyProfile.js'
 import { lift } from '@/lib/elevation'
 import type { Palette } from '@/lib/palette'
 import { useTheme } from '@/lib/theme'
@@ -66,6 +68,7 @@ export default function Requested() {
   const [refreshing, setRefreshing] = useState(false)
   const [sosOpen, setSosOpen] = useState(false)
   const [contacts, setContacts] = useState<EmergencyContact[]>([])
+  const [person, setPerson] = useState<CounterpartView | null>(null)
   const { colors } = useTheme()
   const styles = useThemedStyles(makeStyles)
   const rideLive = isActiveRideStatus(trip?.status)
@@ -113,6 +116,24 @@ export default function Requested() {
     }
   }, [user?.id])
 
+  useEffect(() => {
+    if (!supabase || !user || !shown?.id) return undefined
+    let alive = true
+    loadCounterpart(supabase, {
+      id: shown.id,
+      status: shown.status,
+      rider_id: shown.rider_id || user.id,
+      driver_id: live?.driver_id || trip?.driver_id || null,
+    }, user.id).then((next) => {
+      if (alive) setPerson(next)
+    }).catch(() => {
+      if (alive) setPerson(null)
+    })
+    return () => {
+      alive = false
+    }
+  }, [shown?.id, shown?.status, shown?.rider_id, live?.driver_id, trip?.driver_id, user])
+
   return (
     <View style={[styles.screen, { paddingTop: insets.top }]}>
       <View style={styles.header}>
@@ -156,6 +177,10 @@ export default function Requested() {
           </View>
         ) : (
           <View style={styles.summary}>
+            <CounterpartCard person={person} colors={partyColorsFromPalette(colors)} />
+            {shown?.status === 'completed' ? (
+              <PrimaryButton label="Rate your driver" onPress={() => router.push({ pathname: '/rate', params: { trip: tripId } })} />
+            ) : null}
             <Text style={styles.summaryTitle}>{driverName} has the request</Text>
             <Text style={styles.body}>
               {shown?.pickup_label || 'Pickup'} → {shown?.dropoff_label || dest || 'your destination'}

@@ -37,6 +37,7 @@ import {
   type DriverCard,
 } from 'rides-native/tripTags'
 import { ORANGE, PURPLE } from 'rides-native/places.js'
+import { loadCounterpart } from 'rides-native/partyProfile.js'
 
 const GATE: Record<string, { title: string; body: string }> = {
   pending_info: {
@@ -90,6 +91,7 @@ export default function DriverHome() {
   const [peekPage, setPeekPage] = useState(0)
   const [safetyOpen, setSafetyOpen] = useState(false)
   const [focusToken, setFocusToken] = useState(0)
+  const [riderLine, setRiderLine] = useState<string | null>(null)
   const approved = status === 'approved'
   const online = Boolean(desk?.online)
   const name = user ? displayFirstName(user.user_metadata?.full_name || user.email?.split('@')[0], 'Driver') : 'Driver'
@@ -117,6 +119,27 @@ export default function DriverHome() {
       }
     }
   }, [user])
+
+  useEffect(() => {
+    const active = desk?.active
+    if (!supabase || !user || !active?.riderId) {
+      setRiderLine(null)
+      return undefined
+    }
+    let alive = true
+    loadCounterpart(supabase, {
+      status: active.status,
+      rider_id: active.riderId,
+      driver_id: user.id,
+    }, user.id).then((person) => {
+      if (alive) setRiderLine(person ? `${person.name} · ${person.ratingLine}` : null)
+    }).catch(() => {
+      if (alive) setRiderLine(null)
+    })
+    return () => {
+      alive = false
+    }
+  }, [desk?.active?.id, desk?.active?.status, desk?.active?.riderId, user])
 
   useEffect(() => {
     refresh().catch((err) => setError(err instanceof Error ? err.message : 'Could not load driver home'))
@@ -311,6 +334,7 @@ export default function DriverHome() {
               <Text style={[styles.liveKicker, { color: colors.orange }]}>LIVE TRIP</Text>
               <Text style={[styles.liveTitle, { color: colors.onAccent }]}>{statusHeadline(desk.active.status)}</Text>
               <Text style={{ color: colors.onAccent }}>{desk.active.pickupLabel} → {desk.active.dropoffLabel}</Text>
+              {riderLine ? <Text style={{ color: colors.onAccent, fontWeight: '700' }}>{riderLine}</Text> : null}
             </Pressable>
           ) : null}
           {offer && !desk?.active && approved ? (

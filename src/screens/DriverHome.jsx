@@ -17,6 +17,8 @@ import { SosControl } from '../components/SosControl'
 import { applyTripDriverIncentives, fetchDriverIncentiveExtras } from '../lib/driverIncentives'
 import { isIncentiveAdmin } from '../lib/driverIncentiveMath'
 import { fetchFullProfile } from '../lib/profiles'
+import { CounterpartChip } from '../components/CounterpartChip'
+import { PARTY_VISIBLE_STATUSES } from '../../packages/rides-native/partyProfile.js'
 import { useTripWait } from '../lib/useTripWait'
 import { WaitFeeCard } from '../components/WaitFeeCard'
 import { settleTrip } from '../lib/payments'
@@ -972,14 +974,21 @@ function DriverShell({ driverId }) {
           {advanceError && (
             <p style={{ color: 'var(--danger)', fontSize: 13, marginTop: 10 }}>{advanceError}</p>
           )}
-          {activeTrip.rider_id && (
+          {activeTrip.rider_id && PARTY_VISIBLE_STATUSES.includes(activeTrip.status) && (
+            <CounterpartChip
+              profileId={activeTrip.rider_id}
+              noun="rider"
+              onOpen={() => navigate('profile', { id: activeTrip.rider_id, matched: '1' })}
+            />
+          )}
+          {activeTrip.status === 'completed' && (
             <button
               type="button"
               className="pressable"
-              onClick={() => navigate('profile', { id: activeTrip.rider_id })}
-              style={{ marginTop: 8, fontWeight: 600, color: 'var(--purple)' }}
+              onClick={() => navigate('rate', { trip: activeTrip.id })}
+              style={{ marginTop: 8, fontWeight: 800, color: '#F56600' }}
             >
-              View rider profile
+              Rate your rider
             </button>
           )}
 

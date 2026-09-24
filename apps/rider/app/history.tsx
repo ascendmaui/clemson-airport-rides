@@ -20,6 +20,7 @@ type RideRow = {
   fare_cents: number | null
   deposit_cents: number | null
   created_at: string | null
+  driver_id: string | null
 }
 
 export default function HistoryScreen() {
@@ -38,7 +39,7 @@ export default function HistoryScreen() {
     setLoading(true)
     supabase
       .from('trips')
-      .select('id, status, pickup_label, dropoff_label, fare_cents, deposit_cents, created_at')
+      .select('id, status, pickup_label, dropoff_label, fare_cents, deposit_cents, created_at, driver_id')
       .eq('rider_id', user.id)
       .order('created_at', { ascending: false })
       .limit(20)
@@ -78,6 +79,14 @@ export default function HistoryScreen() {
             <Text style={styles.cardTitle}>{row.dropoff_label || 'Ride'}</Text>
             <Text style={styles.copy}>{row.pickup_label || 'Pickup'} · {row.status || 'requested'}</Text>
             <Text style={styles.copy}>Fare {formatCents(row.fare_cents || 0)} · deposit {formatCents(row.deposit_cents || 0)}</Text>
+            {row.status === 'completed' && row.driver_id ? (
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => router.push({ pathname: '/rate', params: { trip: row.id } })}
+              >
+                <Text style={styles.safety}>Rate this ride</Text>
+              </Pressable>
+            ) : null}
             {isShareableTripStatus(row.status) ? (
               <Pressable
                 accessibilityRole="button"

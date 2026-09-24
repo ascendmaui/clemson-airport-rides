@@ -105,6 +105,9 @@ export default function TripDetailsScreen() {
           <Text style={{ color: colors.inkSecondary }}>Thanks notes are not sent from the driver app yet.</Text>
           <FarePanel card={trip} />
           <Primary label="Open live trip" onPress={() => router.push({ pathname: '/trip', params: { id: trip.id } })} tone="purple" />
+          {trip.status === 'completed' ? (
+            <Primary label="Rate your rider" onPress={() => router.push({ pathname: '/rate', params: { trip: trip.id } })} />
+          ) : null}
         </>
       ) : null}
       {error ? <ErrorText>{error}</ErrorText> : null}

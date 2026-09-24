@@ -9,6 +9,14 @@ import {
 } from './authErrors.js'
 import { requestPasswordReset, signInWithEmail, updatePassword } from './emailAuth.js'
 import { PASSWORD_RESET_REDIRECT } from './riderShell.js'
+import {
+  SIGNUP_PROFILE_DRAFT_KEY,
+  buildEnsureProfilePatch,
+  isProfileComplete,
+  readSignupDraft,
+  signupProfileMetadata,
+  userWithDraft,
+} from './partyProfile.js'
 
 async function ensureStudentVerification(supabase, user, now) {
   if (!supabase || !user?.id || !user.email) return
@@ -76,23 +84,49 @@ async function maybeClaimStoredPromo(supabase, storage, user, promoCode) {
 
 async function ensureProfile(supabase, storage, user, { promoCode } = {}) {
   if (!supabase || !user?.id) return null
-  const fullName =
-    user.user_metadata?.full_name ||
-    user.user_metadata?.name ||
-    (user.email ? user.email.split('@')[0] : 'Rider')
-  const now = new Date().toISOString()
-  const clemson = isClemsonEmail(user.email)
-  const row = {
-    id: user.id,
-    email: user.email || null,
-    full_name: fullName,
-    updated_at: now,
+  let draft = null
+  try {
+    draft = readSignupDraft(await storage?.getItem?.(SIGNUP_PROFILE_DRAFT_KEY))
+  } catch {
+    draft = null
   }
-  if (clemson) row.student_verified_at = now
-  const { error } = await supabase.from('profiles').upsert(row, { onConflict: 'id' })
+  const enriched = userWithDraft(user, draft)
+  const now = new Date().toISOString()
+  const clemson = isClemsonEmail(enriched.email || user.email)
+  let existing = null
+  const existingRes = await supabase
+    .from('profiles')
+    .select('id, full_name, phone, bio, ride_style, student_verified_at')
+    .eq('id', user.id)
+    .maybeSingle()
+  if (existingRes.error && /column|schema cache/i.test(existingRes.error.message || '')) {
+    const basic = await supabase.from('profiles').select('id, full_name').eq('id', user.id).maybeSingle()
+    existing = basic.data
+  } else if (!existingRes.error) {
+    existing = existingRes.data
+  }
+  const patch = buildEnsureProfilePatch(existing, enriched, now, clemson)
+  let { error } = await supabase.from('profiles').upsert(patch, { onConflict: 'id' })
+  if (error && /column|schema cache/i.test(error.message || '')) {
+    const minimal = {
+      id: user.id,
+      email: user.email || null,
+      full_name: patch.full_name || existing?.full_name || (user.email ? user.email.split('@')[0] : 'Rider'),
+      updated_at: now,
+    }
+    const retry = await supabase.from('profiles').upsert(minimal, { onConflict: 'id' })
+    error = retry.error
+  }
   if (error) console.warn('[auth] profile upsert', error.message)
+  else if (storage && isProfileComplete({ ...existing, ...patch })) {
+    try {
+      await storage.removeItem(SIGNUP_PROFILE_DRAFT_KEY)
+    } catch {
+      /* draft can stay until the next successful save */
+    }
+  }
   if (clemson) await ensureStudentVerification(supabase, user, now)
-  const code = normalizePromoCode(promoCode || user?.user_metadata?.promo_code)
+  const code = normalizePromoCode(promoCode || enriched?.user_metadata?.promo_code)
   if (!code) return null
   return maybeClaimStoredPromo(supabase, storage, user, code)
 }
@@ -152,7 +186,7 @@ export function createAuth({
       async updatePassword(password) {
         return updatePassword(supabase, password)
       },
-      async signUp(email, password, fullName, promoCode) {
+      async signUp(email, password, fullName, promoCode, profile) {
         if (!supabase) throw new Error('Supabase is not configured. Set EXPO_PUBLIC_SUPABASE_ANON_KEY for this EAS build.')
         const remaining = await getSignupRateLimitRemainingSec(storage)
         if (remaining > 0) {
@@ -161,8 +195,13 @@ export function createAuth({
           throw err
         }
         const code = normalizePromoCode(promoCode)
-        const meta = { full_name: fullName || '' }
-        if (code) meta.promo_code = code
+        const meta = signupProfileMetadata({
+          fullName,
+          phone: profile?.phone,
+          bio: profile?.bio,
+          rideStyle: profile?.rideStyle,
+          promoCode: code,
+        })
         const { data, error } = await supabase.auth.signUp({
           email: String(email || '').trim(),
           password,

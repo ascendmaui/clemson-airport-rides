@@ -16,6 +16,8 @@ import {
   normalizePromoCode,
 } from './authErrors.js'
 import { DANGER, INK, INK_SECONDARY, ORANGE, PURPLE, SURFACE } from './places.js'
+import { SIGNUP_PROFILE_DRAFT_KEY, isProfileComplete, profileFieldError } from './partyProfile.js'
+import { RideStyleChips } from './PartyScreens.jsx'
 
 function AuthShell({ title, subtitle, mark, onBack, children }) {
   return (
@@ -205,10 +207,14 @@ export function SignUpScreen({
   initialPromo = '',
   subtitle = 'Metered fares to GSP and CLT. Students save 10% on Standard.',
   mark = 'CR',
+  showPromo = true,
   socialProviders,
   onSocial,
 }) {
   const [fullName, setFullName] = useState('')
+  const [phone, setPhone] = useState('')
+  const [bio, setBio] = useState('')
+  const [rideStyle, setRideStyle] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [promo, setPromo] = useState(initialPromo)
@@ -254,7 +260,21 @@ export function SignUpScreen({
     submitLock.current = true
     setBusy(true)
     try {
-      const result = await signUp(email.trim(), password, fullName.trim(), promo)
+      const profile = { phone, bio, rideStyle }
+      if (storage) {
+        try {
+          await storage.setItem(SIGNUP_PROFILE_DRAFT_KEY, JSON.stringify({
+            fullName: fullName.trim(),
+            phone,
+            bio,
+            rideStyle,
+            promo,
+          }))
+        } catch {
+          /* signup metadata still carries the profile */
+        }
+      }
+      const result = await signUp(email.trim(), password, fullName.trim(), promo, profile)
       const claim = result?.promoClaim
       if (claim?.error) {
         setError(`Account created. ${claim.error}`)
@@ -291,6 +311,19 @@ export function SignUpScreen({
     setInfo(null)
     setSocialId(provider.id)
     try {
+      if (storage) {
+        try {
+          await storage.setItem(SIGNUP_PROFILE_DRAFT_KEY, JSON.stringify({
+            fullName: fullName.trim(),
+            phone,
+            bio,
+            rideStyle,
+            promo,
+          }))
+        } catch {
+          /* the profile screen still asks if this draft is missing */
+        }
+      }
       const result = await onSocial(provider.id, { promo, fullName })
       if (result?.cancelled) return
       onSuccess?.()
@@ -302,7 +335,9 @@ export function SignUpScreen({
   }
 
   const cta = busy ? 'Creating…' : cooldownSec > 0 ? `Wait ${cooldownSec}s…` : 'Create account'
-  const canSubmit = !blocked && !created && fullName.trim() && email.trim() && password.length >= 6
+  const profileReady = isProfileComplete({ full_name: fullName, phone, bio, ride_style: rideStyle })
+  const canSubmit = !blocked && !created && profileReady && email.trim() && password.length >= 6
+  const profileHint = profileFieldError({ full_name: fullName, phone, bio, ride_style: rideStyle })
 
   return (
     <AuthShell title="Join Clemson RIDES" subtitle={subtitle} mark={mark} onBack={onBack}>
@@ -312,7 +347,31 @@ export function SignUpScreen({
         disabled={blocked || created}
         onPress={onSocialPress}
       />
+      <Text style={styles.promoNote}>
+        A profile is required. Name, mobile number, a short bio, and ride style are saved with this account. The other person sees them after a ride is accepted.
+      </Text>
       <Field label="Full name" autoComplete="name" textContentType="name" value={fullName} onChangeText={setFullName} editable={!blocked} />
+      <Field
+        label="Mobile number"
+        keyboardType="phone-pad"
+        autoComplete="tel"
+        textContentType="telephoneNumber"
+        placeholder="864-555-0100"
+        value={phone}
+        onChangeText={setPhone}
+        editable={!blocked}
+      />
+      <Field
+        label="Short bio"
+        placeholder="How you like to ride"
+        value={bio}
+        onChangeText={setBio}
+        editable={!blocked}
+      />
+      <Text style={styles.label}>Ride style</Text>
+      <View style={{ marginBottom: 14 }}>
+        <RideStyleChips value={rideStyle} onChange={setRideStyle} />
+      </View>
       <Field
         label="Email"
         hint="(Clemson email gets student pricing)"
@@ -334,19 +393,24 @@ export function SignUpScreen({
         onChangeText={setPassword}
         editable={!blocked && !created}
       />
-      <Field
-        label="Promo code"
-        hint="(optional)"
-        autoCapitalize="characters"
-        autoCorrect={false}
-        placeholder="Friend's code"
-        value={promo}
-        onChangeText={(value) => setPromo(normalizePromoCode(value))}
-        editable={!blocked && !created}
-      />
-      <Text style={styles.promoNote}>
-        Applied when you create the account. You and your friend are rewarded only after you complete your first ride.
-      </Text>
+      {showPromo ? (
+        <>
+          <Field
+            label="Promo code"
+            hint="(optional)"
+            autoCapitalize="characters"
+            autoCorrect={false}
+            placeholder="Friend's code"
+            value={promo}
+            onChangeText={(value) => setPromo(normalizePromoCode(value))}
+            editable={!blocked && !created}
+          />
+          <Text style={styles.promoNote}>
+            Applied when you create the account. You and your friend are rewarded only after you complete your first ride.
+          </Text>
+        </>
+      ) : null}
+      {!created && profileHint ? <Text style={styles.cooldown}>{profileHint}</Text> : null}
       {error ? <Text style={styles.error}>{error}</Text> : null}
       {info ? <Text style={styles.info}>{info}</Text> : null}
       {cooldownSec > 0 && !error ? (

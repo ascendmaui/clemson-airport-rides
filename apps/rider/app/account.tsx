@@ -13,6 +13,8 @@ import { useTheme, type DisplayMode } from '@/lib/theme'
 import { useThemedStyles } from '@/lib/useThemedStyles'
 import { displayFirstName, isClemsonEmail } from 'rides-native/authErrors'
 import { FAVORITE_SPOTS } from 'rides-native/riderShell.js'
+import { loadRatingSummary } from 'rides-native/PartyScreens'
+import { supabase } from '@/lib/supabase'
 
 const DISPLAY: { id: DisplayMode; label: string }[] = [
   { id: 'auto', label: 'Auto' },
@@ -42,6 +44,8 @@ export default function AccountScreen() {
   const [fullName, setFullName] = useState('')
   const [bio, setBio] = useState('')
   const [soundsOn, setSoundsOn] = useState(true)
+  const [ratingLine, setRatingLine] = useState('New · no ratings yet')
+  const [pendingTrip, setPendingTrip] = useState<string | null>(null)
   const name = user ? displayFirstName(user.user_metadata?.full_name || user.email?.split('@')[0], 'Rider') : null
 
   useEffect(() => {
@@ -62,6 +66,13 @@ export default function AccountScreen() {
       setBio(account.profile?.bio || '')
       if (account.error) setError(account.error)
     })
+    if (supabase) {
+      loadRatingSummary(supabase, user.id).then((summary) => {
+        if (!alive) return
+        setRatingLine(summary.line)
+        setPendingTrip(summary.pending?.id || null)
+      }).catch(() => {})
+    }
     return () => {
       alive = false
     }
@@ -112,6 +123,10 @@ export default function AccountScreen() {
         <Text style={styles.kicker}>ACCOUNT</Text>
         <Text style={styles.title}>{name || 'Guest'}</Text>
         {user?.email ? <Text style={styles.copy}>{user.email}</Text> : null}
+        {user ? <Text style={styles.badge}>{ratingLine}</Text> : null}
+        {pendingTrip ? (
+          <PrimaryButton label="Rate your last ride" onPress={() => router.push({ pathname: '/rate', params: { trip: pendingTrip } })} />
+        ) : null}
         {user && isClemsonEmail(user.email) ? (
           <Text style={styles.badge}>Clemson student · 10% off Standard</Text>
         ) : null}

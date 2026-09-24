@@ -11,7 +11,8 @@ export default function SignUpRoute() {
       signUp={signUp}
       storage={authStorage}
       mark="CD"
-      subtitle="Create the driver account. Admin approval is still required before you can go online."
+      showPromo={false}
+      subtitle="Create the driver account and ride profile. Admin approval is still required before you can go online."
       onSuccess={() => router.replace('/')}
       onSignIn={() => router.replace('/sign-in')}
       onBack={() => {

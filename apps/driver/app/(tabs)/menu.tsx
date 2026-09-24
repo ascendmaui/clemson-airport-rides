@@ -8,6 +8,7 @@ import { supabase } from '@/lib/supabase'
 import { useTheme } from '@/lib/theme'
 import { displayFirstName } from 'rides-native/authErrors'
 import { loadVehicle, type VehicleRow } from 'rides-native/driverDesk'
+import { loadRatingSummary } from 'rides-native/PartyScreens'
 
 function vehicleSubtitle(vehicle: VehicleRow | null): string {
   if (!vehicle) return 'Add your car'
@@ -22,11 +23,21 @@ export default function MenuScreen() {
   const { user } = useAuth()
   const { colors } = useTheme()
   const [vehicle, setVehicle] = useState<VehicleRow | null>(null)
+  const [ratingLine, setRatingLine] = useState('New · no ratings yet')
+  const [pendingTrip, setPendingTrip] = useState<string | null>(null)
   const name = user ? displayFirstName(user.user_metadata?.full_name || user.email?.split('@')[0], 'Driver') : 'Guest'
 
   const refresh = useCallback(async () => {
     if (!user || !supabase) return
-    setVehicle(await loadVehicle(supabase, user.id))
+    const [nextVehicle, summary] = await Promise.all([
+      loadVehicle(supabase, user.id),
+      loadRatingSummary(supabase, user.id).catch(() => null),
+    ])
+    setVehicle(nextVehicle)
+    if (summary) {
+      setRatingLine(summary.line)
+      setPendingTrip(summary.pending?.id || null)
+    }
   }, [user])
 
   useFocusEffect(useCallback(() => {
@@ -37,7 +48,16 @@ export default function MenuScreen() {
     <View style={[styles.screen, { backgroundColor: colors.background, paddingTop: insets.top + 12 }]}>
       <ScrollView contentContainerStyle={styles.list}>
         <Text style={[styles.title, { color: colors.title }]}>{name}</Text>
+        <Text style={{ color: colors.orange, fontWeight: '800' }}>{user ? ratingLine : 'Sign in to manage driving'}</Text>
         <Text style={{ color: colors.inkSecondary }}>{user?.email || 'Sign in to manage driving'}</Text>
+        {pendingTrip ? (
+          <ListRow
+            icon="star"
+            title="Rate your last rider"
+            subtitle="1–5 stars after the trip is complete"
+            onPress={() => router.push({ pathname: '/rate', params: { trip: pendingTrip } })}
+          />
+        ) : null}
         <ListRow icon="gift" title="Refer friends" subtitle="Share Clemson RIDES" onPress={() => router.push('/refer')} />
         <SectionLabel>Manage</SectionLabel>
         <ListRow icon="car" title="Vehicles" subtitle={vehicleSubtitle(vehicle)} onPress={() => router.push('/vehicles')} />

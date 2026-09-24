@@ -71,7 +71,7 @@ export function Marketing() {
 
       <div style={{ padding: '28px 24px 40px' }}>
         <h2 style={{ fontSize: 22, fontWeight: 600, marginBottom: 10, letterSpacing: -0.3 }}>
-          Carpool is the reason to skip Uber
+          Carpool is how Tigers split the ride
         </h2>
         <p style={{ color: 'var(--ink-secondary)', fontSize: 15, lineHeight: 1.45, marginBottom: 20 }}>
           Game night to Grand Marc or College Ave is about $30–$40 alone. Four Tigers split it to about $10–$15 each,
