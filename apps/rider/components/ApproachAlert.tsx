@@ -1,0 +1,181 @@
+import { useEffect, useRef } from 'react'
+import { Animated, Platform, StyleSheet, Text, View } from 'react-native'
+import { FullWindowOverlay } from 'react-native-screens'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { approachHaptic } from '@/lib/feedback'
+import { useSosEngaged } from '@/lib/sosEngaged'
+import { useDriverApproach } from '@/lib/useDriverApproach'
+import { ORANGE, ORANGE_BRIGHT, PURPLE } from 'rides-native/places.js'
+
+const STAGE_HAPTIC_GAP_MS = 12000
+
+export function ApproachAlert({
+  status,
+  driverId,
+}: {
+  status: string | null
+  driverId: string | null
+}) {
+  const insets = useSafeAreaInsets()
+  const paused = useSosEngaged()
+  const { active, reading, attention, statusLine, waiting } = useDriverApproach(status, driverId)
+  const wash = useRef(new Animated.Value(0)).current
+  const bright = useRef(new Animated.Value(0)).current
+  const lastStageHaptic = useRef<string | null>(null)
+  const lastClosingHaptic = useRef(0)
+  const pulseMode = attention?.pulseMode ?? 'off'
+  const washPeak = attention?.washPeak ?? 0
+  const brightPeak = attention?.brightPeak ?? 0
+  const stage = attention?.stage ?? null
+  const haptic = attention?.haptic ?? null
+  const hapticReason = attention?.hapticReason ?? null
+
+  useEffect(() => {
+    if (!active) return
+    if (stage === 'far' || stage == null) lastStageHaptic.current = null
+    else if (hapticReason !== 'stage') lastStageHaptic.current = null
+    if (paused || !haptic) return
+    if (hapticReason === 'stage') {
+      if (lastStageHaptic.current === stage) return
+      lastStageHaptic.current = stage
+      void approachHaptic(haptic)
+      return
+    }
+    if (hapticReason === 'closing') {
+      const now = Date.now()
+      if (now - lastClosingHaptic.current < STAGE_HAPTIC_GAP_MS) return
+      lastClosingHaptic.current = now
+      void approachHaptic(haptic)
+    }
+  }, [active, haptic, hapticReason, paused, stage])
+
+  useEffect(() => {
+    let loop: Animated.CompositeAnimation | null = null
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const fade = () => {
+      loop?.stop()
+      Animated.timing(wash, { toValue: 0, duration: 480, useNativeDriver: true }).start()
+      Animated.timing(bright, { toValue: 0, duration: 480, useNativeDriver: true }).start()
+    }
+    if (!active || paused || pulseMode === 'off') {
+      fade()
+      return () => {
+        loop?.stop()
+      }
+    }
+    const half = stage === 'here' ? 820 : 980
+    wash.setValue(0.04)
+    bright.setValue(0)
+    loop = Animated.loop(
+      Animated.sequence([
+        Animated.parallel([
+          Animated.timing(wash, { toValue: washPeak, duration: half, useNativeDriver: true }),
+          Animated.timing(bright, { toValue: brightPeak, duration: half, useNativeDriver: true }),
+        ]),
+        Animated.parallel([
+          Animated.timing(wash, { toValue: 0.04, duration: half, useNativeDriver: true }),
+          Animated.timing(bright, { toValue: 0, duration: half, useNativeDriver: true }),
+        ]),
+      ]),
+    )
+    loop.start()
+    if (pulseMode === 'burst') timer = setTimeout(fade, half * 6)
+    return () => {
+      if (timer) clearTimeout(timer)
+      loop?.stop()
+    }
+  }, [active, bright, brightPeak, paused, pulseMode, stage, wash, washPeak])
+
+  if (!active || paused) return null
+
+  const primary = reading?.primary ?? waiting ?? 'Updating distance…'
+  const secondary = reading?.secondary ?? statusLine
+
+  const body = (
+    <View pointerEvents="box-none" style={styles.host}>
+      <Animated.View pointerEvents="none" style={[styles.wash, { backgroundColor: ORANGE, opacity: wash }]} />
+      <Animated.View pointerEvents="none" style={[styles.wash, { backgroundColor: ORANGE_BRIGHT, opacity: bright }]} />
+      <View pointerEvents="none" style={[styles.dock, { bottom: Math.max(insets.bottom, 10) + 74 }]}>
+        <View
+          accessible
+          accessibilityRole="text"
+          accessibilityLiveRegion="polite"
+          accessibilityLabel={reading ? `${reading.primary}, ${reading.secondary}. ${statusLine}` : primary}
+          style={styles.card}
+        >
+          <View style={styles.dot} />
+          <View style={styles.copy}>
+            <Text style={styles.kicker}>{statusLine.toUpperCase()}</Text>
+            <Text style={styles.primary}>{primary}</Text>
+            <Text style={styles.secondary}>{secondary}</Text>
+          </View>
+        </View>
+      </View>
+    </View>
+  )
+
+  if (Platform.OS === 'ios') {
+    return (
+      <FullWindowOverlay unstable_accessibilityContainerViewIsModal={false}>
+        {body}
+      </FullWindowOverlay>
+    )
+  }
+  return body
+}
+
+const styles = StyleSheet.create({
+  host: {
+    ...StyleSheet.absoluteFill,
+    zIndex: 40,
+    elevation: 40,
+  },
+  wash: {
+    ...StyleSheet.absoluteFill,
+  },
+  dock: {
+    position: 'absolute',
+    left: 16,
+    right: 16,
+  },
+  card: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: '#fff',
+    borderRadius: 22,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    shadowColor: PURPLE,
+    shadowOpacity: 0.18,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 8,
+  },
+  dot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: ORANGE,
+  },
+  copy: { flex: 1 },
+  kicker: {
+    color: ORANGE,
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 1.1,
+  },
+  primary: {
+    color: PURPLE,
+    fontSize: 22,
+    fontWeight: '800',
+    letterSpacing: -0.3,
+    marginTop: 2,
+  },
+  secondary: {
+    color: '#5C6570',
+    fontSize: 13,
+    fontWeight: '600',
+    marginTop: 2,
+  },
+})

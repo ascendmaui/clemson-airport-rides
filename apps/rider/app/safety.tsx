@@ -52,7 +52,7 @@ export default function SafetyScreen() {
               <Text style={styles.cardTitle}>SOS</Text>
               {rideLive ? (
                 <Text style={styles.body}>
-                  This ride is {trip?.status}. SOS asks you to confirm before anyone is called, then logs the alert on the trip.
+                  This ride is {trip?.status}. SOS fills the screen in red. The first press confirms and does not dial, then logs the alert on the trip.
                 </Text>
               ) : (
                 <View style={styles.inlineEmpty}>

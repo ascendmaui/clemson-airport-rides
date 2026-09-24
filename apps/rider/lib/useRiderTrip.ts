@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { APPROACH_STATUSES } from '@/lib/approachAlert'
 import { SHAREABLE_TRIP_STATUSES } from 'rides-native/safety.js'
 import { supabase } from '@/lib/supabase'
 
@@ -89,4 +90,44 @@ export function useActiveRiderTrip(userId: string | null) {
   }, [userId])
 
   return { trip, error, loading }
+}
+
+export type ApproachingTrip = {
+  id: string
+  status: string | null
+  driver_id: string | null
+}
+
+export function useApproachingTrip(userId: string | null) {
+  const [trip, setTrip] = useState<ApproachingTrip | null>(null)
+
+  useEffect(() => {
+    if (!userId || !supabase) {
+      setTrip(null)
+      return undefined
+    }
+    let alive = true
+    async function load() {
+      const { data, error: queryError } = await supabase!
+        .from('trips')
+        .select('id, status, driver_id')
+        .eq('rider_id', userId)
+        .in('status', [...APPROACH_STATUSES])
+        .order('requested_at', { ascending: false })
+        .limit(1)
+      if (!alive || queryError) return
+      const row = Array.isArray(data) ? data[0] : data
+      setTrip((row as ApproachingTrip | undefined) || null)
+    }
+    void load()
+    const timer = setInterval(() => {
+      void load()
+    }, 5000)
+    return () => {
+      alive = false
+      clearInterval(timer)
+    }
+  }, [userId])
+
+  return trip
 }

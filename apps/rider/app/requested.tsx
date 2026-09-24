@@ -159,7 +159,7 @@ export default function Requested() {
             <Text style={styles.body}>Airport holds use the 25% Stripe deposit on Schedule.</Text>
             <Text style={styles.body}>
               {located
-                ? 'The orange pin is the driver location from driver_status. This map refreshes every few seconds.'
+                ? 'The orange pin is the driver location from driver_status. While they are on the way, a live distance in feet stays on screen and the screen pulses orange as they get closer.'
                 : 'Driver coordinates show up here after someone accepts and shares a location. Until then the map stays on campus.'}
             </Text>
           </View>
@@ -178,7 +178,7 @@ export default function Requested() {
           <Text style={styles.kicker}>SOS</Text>
           <Text style={styles.cardTitle}>Need help on this ride?</Text>
           {rideLive ? (
-            <Text style={styles.body}>Confirm before the alert is sent. 911 is a separate step after that.</Text>
+            <Text style={styles.body}>SOS fills the screen in red. The first press confirms and does not dial. Call 911 is the next press.</Text>
           ) : (
             <View style={styles.inlineEmpty}>
               <Text style={styles.emptyTitle}>Waiting for an active ride</Text>
@@ -214,7 +214,7 @@ const styles = StyleSheet.create({
   headerCopy: { flex: 1 },
   kicker: { color: ORANGE, fontWeight: '800', letterSpacing: 1.1, fontSize: 11 },
   title: { color: PURPLE, fontSize: 22, fontWeight: '800' },
-  list: { padding: 16, gap: 14, paddingBottom: 32 },
+  list: { padding: 16, gap: 14, paddingBottom: 140 },
   map: { height: 240, borderRadius: 20, overflow: 'hidden' },
   summary: { backgroundColor: '#fff', borderRadius: 20, padding: 16 },
   summaryTitle: { color: INK, fontSize: 18, fontWeight: '800', marginBottom: 6 },
