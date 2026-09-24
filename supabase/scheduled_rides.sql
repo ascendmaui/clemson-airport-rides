@@ -36,6 +36,10 @@ USING (
   )
 );
 
+-- Unpaid airport-deposit accepts are rejected by
+-- supabase/migrations/20260924233000_block_unpaid_airport_deposit_accept.sql.
+-- Do not reapply the function body below on awktabuhijrshmsmagpq after that
+-- migration; it would drop the deposit check.
 CREATE OR REPLACE FUNCTION public.accept_scheduled_trip(p_trip_id uuid)
 RETURNS jsonb
 LANGUAGE plpgsql
