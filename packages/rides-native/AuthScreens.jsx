@@ -40,6 +40,30 @@ function AuthShell({ title, subtitle, mark, onBack, children }) {
   )
 }
 
+function SocialButtons({ providers, busyId, disabled, onPress }) {
+  if (!providers?.length) return null
+  return (
+    <View style={styles.socialBlock}>
+      {providers.map((provider) => {
+        const pending = busyId === provider.id
+        return (
+          <Pressable
+            key={provider.id}
+            onPress={() => onPress(provider)}
+            disabled={disabled || Boolean(busyId)}
+            style={[styles.social, (disabled || busyId) && styles.disabled]}
+            accessibilityRole="button"
+            accessibilityLabel={`Continue with ${provider.label}`}
+          >
+            <Text style={styles.socialLabel}>{pending ? 'Opening…' : `Continue with ${provider.label}`}</Text>
+          </Pressable>
+        )
+      })}
+      <Text style={styles.or}>or use email</Text>
+    </View>
+  )
+}
+
 function Field({ label, hint, ...inputProps }) {
   return (
     <View style={styles.field}>
@@ -63,11 +87,17 @@ export function SignInScreen({
   onBack,
   subtitle = 'Sign in to book airport rides. Surge applies on busy hours and game days.',
   mark = 'CR',
+  socialProviders,
+  onSocial,
+  resetPassword,
 }) {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState(null)
+  const [info, setInfo] = useState(null)
   const [busy, setBusy] = useState(false)
+  const [socialId, setSocialId] = useState(null)
+  const [resetBusy, setResetBusy] = useState(false)
 
   async function onSubmit() {
     setError(null)
@@ -82,8 +112,45 @@ export function SignInScreen({
     }
   }
 
+  async function onSocialPress(provider) {
+    if (!onSocial || busy || socialId) return
+    setError(null)
+    setInfo(null)
+    setSocialId(provider.id)
+    try {
+      const result = await onSocial(provider.id)
+      if (result?.cancelled) return
+      onSuccess?.()
+    } catch (err) {
+      setError(err?.message || 'Social sign-in failed')
+    } finally {
+      setSocialId(null)
+    }
+  }
+
+  async function onForgot() {
+    if (!resetPassword || resetBusy) return
+    setError(null)
+    setInfo(null)
+    setResetBusy(true)
+    try {
+      await resetPassword(email.trim())
+      setInfo('Check your email for a link to choose a new password.')
+    } catch (err) {
+      setError(err?.message || 'Could not send a reset email')
+    } finally {
+      setResetBusy(false)
+    }
+  }
+
   return (
     <AuthShell title="Welcome back" subtitle={subtitle} mark={mark} onBack={onBack}>
+      <SocialButtons
+        providers={socialProviders}
+        busyId={socialId}
+        disabled={busy || resetBusy}
+        onPress={onSocialPress}
+      />
       <Field
         label="Email"
         autoCapitalize="none"
@@ -101,7 +168,13 @@ export function SignInScreen({
         value={password}
         onChangeText={setPassword}
       />
+      {resetPassword ? (
+        <Pressable onPress={onForgot} disabled={resetBusy} accessibilityRole="button">
+          <Text style={styles.forgot}>{resetBusy ? 'Sending reset email…' : 'Forgot password?'}</Text>
+        </Pressable>
+      ) : null}
       {error ? <Text style={styles.error}>{error}</Text> : null}
+      {info ? <Text style={styles.info}>{info}</Text> : null}
       <Pressable
         onPress={onSubmit}
         disabled={busy || !email.trim() || !password}
@@ -127,6 +200,8 @@ export function SignUpScreen({
   initialPromo = '',
   subtitle = 'Metered fares to GSP and CLT. Students save 10% on Standard.',
   mark = 'CR',
+  socialProviders,
+  onSocial,
 }) {
   const [fullName, setFullName] = useState('')
   const [email, setEmail] = useState('')
@@ -136,6 +211,7 @@ export function SignUpScreen({
   const [info, setInfo] = useState(null)
   const [created, setCreated] = useState(false)
   const [busy, setBusy] = useState(false)
+  const [socialId, setSocialId] = useState(null)
   const [cooldownSec, setCooldownSec] = useState(0)
   const submitLock = useRef(false)
 
@@ -203,11 +279,34 @@ export function SignUpScreen({
   }
 
   const blocked = busy || cooldownSec > 0
+
+  async function onSocialPress(provider) {
+    if (!onSocial || blocked || socialId || created) return
+    setError(null)
+    setInfo(null)
+    setSocialId(provider.id)
+    try {
+      const result = await onSocial(provider.id, { promo, fullName })
+      if (result?.cancelled) return
+      onSuccess?.()
+    } catch (err) {
+      setError(err?.message || 'Social sign-in failed')
+    } finally {
+      setSocialId(null)
+    }
+  }
+
   const cta = busy ? 'Creating…' : cooldownSec > 0 ? `Wait ${cooldownSec}s…` : 'Create account'
   const canSubmit = !blocked && !created && fullName.trim() && email.trim() && password.length >= 6
 
   return (
     <AuthShell title="Join Clemson RIDES" subtitle={subtitle} mark={mark} onBack={onBack}>
+      <SocialButtons
+        providers={socialProviders}
+        busyId={socialId}
+        disabled={blocked || created}
+        onPress={onSocialPress}
+      />
       <Field label="Full name" autoComplete="name" textContentType="name" value={fullName} onChangeText={setFullName} editable={!blocked} />
       <Field
         label="Email"
@@ -270,6 +369,55 @@ export function SignUpScreen({
   )
 }
 
+export function ResetPasswordScreen({
+  updatePassword,
+  onSuccess,
+  onBack,
+  subtitle = 'Choose a new password for the email on this account.',
+  mark = 'CR',
+}) {
+  const [password, setPassword] = useState('')
+  const [error, setError] = useState(null)
+  const [busy, setBusy] = useState(false)
+
+  async function onSubmit() {
+    setError(null)
+    setBusy(true)
+    try {
+      await updatePassword(password)
+      onSuccess?.()
+    } catch (err) {
+      setError(err?.message || 'Could not update the password')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const canSubmit = !busy && password.length >= 6
+
+  return (
+    <AuthShell title="New password" subtitle={subtitle} mark={mark} onBack={onBack}>
+      <Field
+        label="New password"
+        secureTextEntry
+        autoComplete="new-password"
+        textContentType="newPassword"
+        value={password}
+        onChangeText={setPassword}
+      />
+      {error ? <Text style={styles.error}>{error}</Text> : null}
+      <Pressable
+        onPress={onSubmit}
+        disabled={!canSubmit}
+        style={[styles.primary, !canSubmit && styles.disabled]}
+        accessibilityRole="button"
+      >
+        <Text style={styles.primaryLabel}>{busy ? 'Saving…' : 'Save password'}</Text>
+      </Pressable>
+    </AuthShell>
+  )
+}
+
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: SURFACE },
   scroll: { flexGrow: 1, padding: 24, paddingTop: 56, justifyContent: 'center' },
@@ -315,6 +463,19 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: INK,
   },
+  socialBlock: { marginBottom: 8 },
+  social: {
+    borderWidth: 1,
+    borderColor: 'rgba(82,45,128,0.22)',
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    paddingVertical: 14,
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  socialLabel: { color: PURPLE, fontWeight: '700', fontSize: 15 },
+  or: { textAlign: 'center', color: INK_SECONDARY, fontSize: 13, marginTop: 4, marginBottom: 16 },
+  forgot: { color: PURPLE, fontWeight: '700', fontSize: 13, marginBottom: 14 },
   promoNote: { color: PURPLE, fontSize: 12, lineHeight: 17, marginBottom: 14 },
   error: { color: DANGER, fontSize: 13, marginBottom: 12, lineHeight: 18 },
   info: { color: PURPLE, fontSize: 13, marginBottom: 12, lineHeight: 18 },
