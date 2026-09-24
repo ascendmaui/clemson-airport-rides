@@ -2,6 +2,13 @@
 
 Persistent knowledge base for recurring failures. When a matching issue appears, apply the saved fix first.
 
+## 2026-09-24 — Rider tsc fails on ambassador attribution (PR #65)
+
+- **Track / machine:** Clemson RIDES · Max (/tmp worktree) / PR review
+- **Problem:** `tsc --noEmit` in apps/rider failed with 3 errors: TS18047 `'user' is possibly 'null'` twice in app/friends.tsx (`loadAmbassadorCode(user.id)`), and TS2345 in lib/ambassadorCode.ts (`string | null` not assignable to `null | undefined`).
+- **Root cause:** `packAttribution(code, userId = null)` and `attributionForUser(raw, userId)` in packages/rides-native/shared/ambassadorAttribution.js had no JSDoc, so tsc inferred the `userId` parameter as the literal `null` from the default. friends.tsx dereferenced `user` after `requireUser`, which TypeScript cannot narrow.
+- **Fix:** JSDoc `string | null | undefined` on `packAttribution`, `unpackAttribution`, `attributionForUser`; `user?.id` in friends.tsx (loadAmbassadorCode already treats a missing id as signed out). No behavior change.
+
 ## 2026-09-24 — Friend confirm could ask for review forever (PR #63)
 
 - **Track / machine:** Clemson RIDES · Max (/tmp worktree) / PR review

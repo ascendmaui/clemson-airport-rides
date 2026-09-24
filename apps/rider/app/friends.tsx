@@ -9,6 +9,7 @@ import { CarpoolCompare } from '@/components/carpool/CarpoolCompare'
 import { NeighborhoodPicker } from '@/components/carpool/NeighborhoodPicker'
 import { Card, EmptyState, ErrorText, Field, SkeletonBlock } from '@/components/carpool/ui'
 import { MainTabs } from '@/components/MainTabs'
+import { loadAmbassadorCode } from '@/lib/ambassadorCode'
 import { setAuthNext } from '@/lib/authNext'
 import { useAuth } from '@/lib/auth'
 import { successHaptic, tapHaptic } from '@/lib/feedback'
@@ -22,6 +23,7 @@ import {
 } from '@/lib/friendsApi'
 import { supabase } from '@/lib/supabase'
 import { useRegisteredVehicle } from '@/lib/useRegisteredVehicle'
+import { ambassadorSavedCopy } from 'rides-native/shared/ambassadorAttribution.js'
 import {
   apiErrorMessage,
   carpoolProgram,
@@ -70,6 +72,7 @@ export default function CarpoolHubScreen() {
   const [result, setResult] = useState<MatchResult | null>(null)
   const [code, setCode] = useState('')
   const [firstRide, setFirstRide] = useState<FirstRideStatus | null>(null)
+  const [ambassadorCode, setAmbassadorCode] = useState('')
   const [firstRideLoaded, setFirstRideLoaded] = useState(false)
   const now = useMemo(() => new Date(), [])
   const peakAt = useMemo(() => illustrativePeakAt(now), [now])
@@ -110,6 +113,18 @@ export default function CarpoolHubScreen() {
   useFocusEffect(useCallback(() => {
     void vehicleState.reload()
   }, [vehicleState.reload]))
+
+  useEffect(() => {
+    let alive = true
+    loadAmbassadorCode(user?.id)
+      .then((code) => {
+        if (alive) setAmbassadorCode(code)
+      })
+      .catch(() => {})
+    return () => {
+      alive = false
+    }
+  }, [user?.id])
 
   useEffect(() => {
     if (!user) {
@@ -179,6 +194,7 @@ export default function CarpoolHubScreen() {
         dropoff,
         displayName: riderDisplayName(user),
         partyType: tailgate ? 'tailgate' : 'carpool',
+        ambassadorCode: (await loadAmbassadorCode(user?.id)) || undefined,
       })
       setResult(data)
       if (data.token) router.push(`/carpool/${data.token}`)
@@ -203,6 +219,7 @@ export default function CarpoolHubScreen() {
         dropoff,
         displayName: riderDisplayName(user),
         partyType: tailgate ? 'tailgate' : 'carpool',
+        ambassadorCode: (await loadAmbassadorCode(user?.id)) || undefined,
       })
       const url = inviteUrl(data.token, 'carpool')
       try {
@@ -354,6 +371,11 @@ export default function CarpoolHubScreen() {
                 thumbColor={colors.onAccent}
               />
             </View>
+            {ambassadorCode ? (
+              <Text style={styles.note}>
+                {ambassadorSavedCopy().title}. {ambassadorSavedCopy().body}
+              </Text>
+            ) : null}
             <PrimaryButton label={busy ? 'Looking…' : 'Find my carpool'} onPress={onMatch} disabled={busy} />
             <View style={{ height: 10 }} />
             <PrimaryButton label="Share a link with my group" onPress={onShare} disabled={busy} tone="outline" />

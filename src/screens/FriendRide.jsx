@@ -13,6 +13,7 @@ import {
 } from '../lib/friendSplitPreview'
 import { BottomTabs } from '../components/BottomTabs'
 import { SosControl } from '../components/SosControl'
+import { ambassadorLobbyCopy } from '../../packages/rides-native/shared/ambassadorAttribution.js'
 import { useAuth } from '../lib/auth'
 import { navigate } from '../lib/navigation'
 import { formatUsdFromCents } from '../lib/pricing'
@@ -205,6 +206,7 @@ export function FriendRideScreen({ token: tokenProp, kind: kindProp = 'friends' 
         splitMode,
         kind: isCarpool ? 'carpool' : 'friends',
         partyType: tailgate ? 'tailgate' : 'carpool',
+        userId: user.id,
       })
       const t = data.token
       setToken(t)
@@ -232,7 +234,7 @@ export function FriendRideScreen({ token: tokenProp, kind: kindProp = 'friends' 
     }
     setBusy(true); setBusyLabel('Saving…'); setError(null)
     try {
-      await joinFriendRide({ token, displayName: name || 'Friend', email: email || undefined, pickup, dropoff })
+      await joinFriendRide({ token, displayName: name || 'Friend', email: email || undefined, pickup, dropoff, userId: user?.id })
       try {
         setBusyLabel('Calculating fares…')
         await recomputeFriendRide(token, splitMode)
@@ -430,6 +432,9 @@ export function FriendRideScreen({ token: tokenProp, kind: kindProp = 'friends' 
   const cap = ride?.max_participants || maxParticipants
 
   const sosViewer = isCarpool && isOrganizer ? 'driver' : 'rider'
+  const ambassadorNotice = (isCarpool || ride?.kind === 'carpool')
+    ? ambassadorLobbyCopy(ride?.fare_breakdown?.ambassador_code)
+    : null
 
   return (
     <div className="route-fade" style={{ display: 'flex', flexDirection: 'column', minHeight: '100%' }}>
@@ -445,6 +450,14 @@ export function FriendRideScreen({ token: tokenProp, kind: kindProp = 'friends' 
             : (isOrganizer ? 'Friend ride lobby' : 'Join friend ride')}
         </h1>
         <p style={{ fontSize: 13, color: 'var(--ink-tertiary)', marginTop: 4 }}>Status: {ride?.status || '…'}</p>
+        {ambassadorNotice && (
+          <div style={card}>
+            <div style={{ fontWeight: 800 }}>{ambassadorNotice.title}</div>
+            <p style={{ fontSize: 13, color: 'var(--ink-secondary)', margin: '6px 0 0' }}>
+              {ambassadorNotice.body}
+            </p>
+          </div>
+        )}
         {isCarpool && !(user && !firstRide) && firstRideOffer && (
           <div style={{ ...card, background: 'rgba(82,45,128,0.06)' }}>
             <div style={{ fontWeight: 800, color: 'var(--purple)' }}>{firstRideOffer.title}</div>

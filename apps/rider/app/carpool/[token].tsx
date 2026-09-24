@@ -7,9 +7,11 @@ import { CarpoolCompare } from '@/components/carpool/CarpoolCompare'
 import { NeighborhoodPicker } from '@/components/carpool/NeighborhoodPicker'
 import { BackButton, Card, EmptyState, ErrorText, Field, SkeletonBlock, SplitModePicker } from '@/components/carpool/ui'
 import { MainTabs } from '@/components/MainTabs'
+import { loadAmbassadorCode } from '@/lib/ambassadorCode'
 import { useAuth } from '@/lib/auth'
 import { oneParam } from '@/lib/oneParam'
 import { supabase } from '@/lib/supabase'
+import { ambassadorLobbyCopy } from 'rides-native/shared/ambassadorAttribution.js'
 import {
   apiErrorMessage,
   carpoolProgram,
@@ -190,6 +192,7 @@ export default function CarpoolLobbyScreen() {
         email: user?.email || undefined,
         pickup,
         dropoff,
+        ambassadorCode: (await loadAmbassadorCode(user?.id)) || undefined,
       })
       try {
         setBusyLabel('Calculating fares…')
@@ -335,6 +338,12 @@ export default function CarpoolLobbyScreen() {
         {ride ? (
           <>
             <Text style={styles.status}>Status: {ride.status || '…'}</Text>
+            {ride.kind !== 'friends' && ambassadorLobbyCopy(ride.fare_breakdown?.ambassador_code) ? (
+              <Card>
+                <Text style={styles.cardTitle}>{ambassadorLobbyCopy(ride.fare_breakdown?.ambassador_code)?.title}</Text>
+                <Text style={styles.meta}>{ambassadorLobbyCopy(ride.fare_breakdown?.ambassador_code)?.body}</Text>
+              </Card>
+            ) : null}
             {firstRideOffer ? (
               <Card>
                 <Text style={styles.cardTitle}>{firstRideOffer.title}</Text>
