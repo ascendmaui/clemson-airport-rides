@@ -68,6 +68,9 @@ export function isSameZonedDay(iso: string | null | undefined, now?: Date, timeZ
 export function isDueNow(trip: { pickupAt?: string | null; pickup_at?: string | null; scheduled_for?: string | null } | null, now?: Date): boolean
 export const TAG_LABELS: Record<string, string>
 export function tagLabel(id: string): string
+export function tagTone(label: string): 'orange' | 'purple'
+export const PREFERRED_REQUEST_NOTE: string
+export function preferredRequestNote(card: { tags?: string[] | null } | null | undefined): string | null
 export function tripTags(row: Record<string, unknown> | null | undefined, options?: { gameDayLive?: boolean }): TripTag[]
 export function isActiveStatus(status: string): boolean
 export function nextTripStatus(status: string): string | null

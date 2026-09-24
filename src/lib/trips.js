@@ -1,6 +1,7 @@
 import { supabase } from './supabase'
 import { STADIUM } from '../components/CampusMap'
 import { RIDE_TIERS } from '../../packages/rides-native/places.js'
+import { preferredTripFields } from '../../packages/rides-native/drivers.js'
 import { studentTripMeta } from '../../packages/rides-native/riderMoney.js'
 
 export async function requestDriverTrip({
@@ -31,14 +32,17 @@ export async function requestDriverTrip({
       dropoff_lat: destLat,
       dropoff_lng: destLng,
       passengers: 1,
-      metadata: studentTripMeta({
-        isStudent,
-        tier: tier || 'standard',
-        fareCents: Math.max(
-          0,
-          Math.round(Number(listCents) || 0) || Math.round((Number(RIDE_TIERS.find((row) => row.id === (tier || 'standard'))?.price) || 0) * 100),
-        ),
-      }),
+      metadata: {
+        ...studentTripMeta({
+          isStudent,
+          tier: tier || 'standard',
+          fareCents: Math.max(
+            0,
+            Math.round(Number(listCents) || 0) || Math.round((Number(RIDE_TIERS.find((row) => row.id === (tier || 'standard'))?.price) || 0) * 100),
+          ),
+        }),
+        ...preferredTripFields(driverId),
+      },
     })
     .select('id, status, driver_id, dropoff_label')
     .single()

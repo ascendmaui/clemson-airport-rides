@@ -15,6 +15,7 @@ import { MidrideCancelSheet } from '../components/MidrideCancelSheet'
 import { isMidrideStatus } from '../lib/tripPhase'
 import { CounterpartChip } from '../components/CounterpartChip'
 import { PARTY_VISIBLE_STATUSES } from '../../packages/rides-native/partyProfile.js'
+import { OPEN_POOL_COPY, PREFERRED_CANCELED_COPY, PREFERRED_MATCH_COPY } from '../../packages/rides-native/drivers.js'
 
 export function Requested({ dest = 'GSP Airport', trip = '', driver = 'your driver', driverId = '' }) {
   const { user } = useAuth()
@@ -118,6 +119,14 @@ export function Requested({ dest = 'GSP Airport', trip = '', driver = 'your driv
     tripRow?.pickup_lat != null && tripRow?.pickup_lng != null
       ? [Number(tripRow.pickup_lat), Number(tripRow.pickup_lng)]
       : STADIUM
+  const namedDriver = driver && driver !== 'your driver'
+  const matchCopy = status === 'requested' || (!status && namedDriver)
+    ? PREFERRED_MATCH_COPY
+    : status === 'canceled' && namedDriver
+      ? PREFERRED_CANCELED_COPY
+      : status === 'searching' || status === 'offered'
+        ? OPEN_POOL_COPY
+        : null
 
   return (
     <div className="fade-in" style={{ minHeight: '100%', padding: 24, display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 16 }}>
@@ -149,6 +158,11 @@ export function Requested({ dest = 'GSP Airport', trip = '', driver = 'your driv
         <h1 style={{ fontSize: 26, fontWeight: 700, letterSpacing: -0.4, marginBottom: 8 }}>
           {driver} is on the list
         </h1>
+        {matchCopy && (
+          <p style={{ color: 'var(--purple)', fontSize: 14, lineHeight: 1.45, fontWeight: 700, marginBottom: 8 }}>
+            {matchCopy}
+          </p>
+        )}
         <p style={{ color: 'var(--ink-secondary)', fontSize: 15, lineHeight: 1.45 }}>
           Trip toward {dest}.
           {trip ? ` ID ${String(trip).slice(0, 8)}…` : ''}

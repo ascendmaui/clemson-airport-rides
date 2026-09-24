@@ -17,7 +17,19 @@ import { authStorage } from '@/lib/storage'
 import { supabase } from '@/lib/supabase'
 import { STUDENT_DISCOUNT_LABEL } from 'rides-native/riderMoney.js'
 import { useStudentStatus } from '@/lib/useStudentStatus'
-import { fetchOnlineDrivers, requestDriverTrip, type OnlineDriver } from 'rides-native/drivers'
+import {
+  describeDriver,
+  fetchDriversByIds,
+  fetchOnlineDrivers,
+  groupDriversForPicker,
+  loadFavoriteDriverIds,
+  PREFERRED_MATCH_COPY,
+  PREFERRED_OFFLINE_COPY,
+  requestDriverTrip,
+  saveFavoriteDriverIds,
+  sortPreferredDrivers,
+  type OnlineDriver,
+} from 'rides-native/drivers'
 import { destPoint, pickupPoint } from 'rides-native/places.js'
 import { lift } from '@/lib/elevation'
 import type { Palette } from '@/lib/palette'
@@ -46,6 +58,8 @@ export default function PickDriver() {
   const [promptOpen, setPromptOpen] = useState(false)
   const [mapType, setMapType] = useState<MapKind>('standard')
   const [notified, setNotified] = useState(false)
+  const [favoriteIds, setFavoriteIds] = useState<string[]>([])
+  const [favNote, setFavNote] = useState<string | null>(null)
   const { colors } = useTheme()
   const styles = useThemedStyles(makeStyles)
 
@@ -54,12 +68,25 @@ export default function PickDriver() {
     setPhase('loading')
     setSelected(null)
     const wait = new Promise((resolve) => setTimeout(resolve, searchDelayMs()))
-    Promise.all([fetchOnlineDrivers(supabase), wait]).then(async ([result]) => {
+    const here = pickupPoint(pickup)
+    const pickupAt = { lat: here.latitude, lng: here.longitude }
+    const favorites = user?.id
+      ? loadFavoriteDriverIds(supabase, authStorage, user.id)
+      : Promise.resolve({ ids: [] as string[], note: null })
+    Promise.all([fetchOnlineDrivers(supabase), favorites, wait]).then(async ([result, fav]) => {
       if (!alive) return
-      setDrivers(result.drivers)
-      setError(result.error)
+      const extraIds = fav.ids.filter((id) => !result.drivers.some((driver) => driver.id === id))
+      const extra = extraIds.length
+        ? await fetchDriversByIds(supabase, extraIds)
+        : { drivers: [] as OnlineDriver[], error: null }
+      if (!alive) return
+      const merged = sortPreferredDrivers([...result.drivers, ...extra.drivers], fav.ids, pickupAt)
+      setDrivers(merged)
+      setFavoriteIds(fav.ids)
+      setFavNote(fav.note)
+      setError(extra.error || result.error)
       setPhase('results')
-      if (result.drivers.length) {
+      if (merged.some((driver) => driver.online)) {
         await successHaptic()
         await playTigerCue()
       }
@@ -67,7 +94,77 @@ export default function PickDriver() {
     return () => {
       alive = false
     }
-  }, [attempt])
+  }, [attempt, pickup, user?.id])
+
+  const pickupAt = pickupPoint(pickup)
+  const approachPickup = { lat: pickupAt.latitude, lng: pickupAt.longitude }
+  const selectedDriver = drivers.find((row) => row.id === selected) || null
+  const groups = groupDriversForPicker(sortPreferredDrivers(drivers, favoriteIds, approachPickup), favoriteIds)
+
+  async function toggleFavorite(driverId: string) {
+    if (!user) {
+      setAuthNext({ pathname: '/pick-driver', params: { dest, pickup, tier } })
+      setPromptOpen(true)
+      return
+    }
+    const next = favoriteIds.includes(driverId)
+      ? favoriteIds.filter((id) => id !== driverId)
+      : [...favoriteIds, driverId]
+    setFavoriteIds(next)
+    const saved = await saveFavoriteDriverIds(supabase, authStorage, user.id, next)
+    setFavoriteIds(saved.ids)
+    setFavNote(saved.note)
+    await tapHaptic()
+  }
+
+  function renderDriver(driver: OnlineDriver) {
+    const on = selected === driver.id
+    const saved = favoriteIds.includes(driver.id)
+    const lines = describeDriver(driver, approachPickup)
+    const eta = driver.online
+      ? [lines.etaLabel, lines.distanceLabel ? `${lines.distanceLabel} from pickup` : null].filter(Boolean).join(' · ') || 'ETA unavailable'
+      : 'Not available now'
+    return (
+      <Pressable key={driver.id} onPress={() => { void tapHaptic(); setSelected(driver.id) }} style={[styles.card, lift(colors, 'rest'), on && styles.cardOn, !driver.online && styles.cardOff]}>
+        <View style={styles.cardTop}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.name}>{driver.name}</Text>
+            <Text style={styles.sub}>{driver.vehicleLabel}{driver.plate ? ` · ${driver.plate}` : ''}</Text>
+          </View>
+          <View style={styles.etaCol}>
+            <Text style={[styles.eta, !driver.online && styles.etaOff]}>{driver.online ? (lines.etaLabel || 'No ETA') : 'Offline'}</Text>
+            <Text style={styles.meta}>{lines.availability}</Text>
+          </View>
+        </View>
+        <Text style={styles.meta}>
+          {lines.ratingLabel}
+          {driver.standing === 'watch' ? ' · Low rating' : ''}
+          {` · ${eta}`}
+        </Text>
+        <View style={styles.badges}>
+          {saved ? <Text style={styles.badgePurple}>Preferred</Text> : null}
+          {driver.isTesla ? <Text style={styles.badgeOrange}>Tesla</Text> : null}
+          {driver.priorityMode && driver.online ? <Text style={styles.badgePurple}>Priority</Text> : null}
+          <Pressable onPress={() => { void toggleFavorite(driver.id) }} hitSlop={8} accessibilityRole="button" accessibilityLabel={saved ? 'Remove preferred driver' : 'Save preferred driver'}>
+            <Text style={saved ? styles.saveOn : styles.saveOff}>{saved ? 'Saved' : 'Save'}</Text>
+          </Pressable>
+        </View>
+      </Pressable>
+    )
+  }
+
+  function renderGroups() {
+    const blocks = [
+      groups.preferred.length ? { title: 'Preferred', rows: groups.preferred } : null,
+      groups.online.length ? { title: 'Online now', rows: groups.online } : null,
+    ].filter((block): block is { title: string; rows: OnlineDriver[] } => Boolean(block))
+    return blocks.map((block) => (
+      <View key={block.title} style={styles.section}>
+        {blocks.length > 1 ? <Text style={styles.sectionTitle}>{block.title}</Text> : null}
+        {block.rows.map((driver) => renderDriver(driver))}
+      </View>
+    ))
+  }
 
   const pins = drivers
     .filter((driver) => driver.lat != null && driver.lng != null)
@@ -80,8 +177,13 @@ export default function PickDriver() {
     }))
 
   const onRequest = async () => {
-    if (!selected) {
+    const chosen = drivers.find((row) => row.id === selected)
+    if (!chosen) {
       setError('Select a driver first')
+      return
+    }
+    if (!chosen.online) {
+      setError('That driver is offline. This request does not auto-match.')
       return
     }
     if (!user) {
@@ -94,7 +196,7 @@ export default function PickDriver() {
     try {
       const trip = await requestDriverTrip(supabase, {
         riderId: user.id,
-        driverId: selected,
+        driverId: chosen.id,
         dest,
         destPoint: destPoint(dest),
         pickupLabel: pickup,
@@ -102,12 +204,11 @@ export default function PickDriver() {
         tier,
         isStudent: student.verified,
       })
-      const driver = drivers.find((row) => row.id === selected)
       await successHaptic()
       await playTigerCue()
       router.replace({
         pathname: '/requested',
-        params: { dest, trip: trip.id, driver: driver?.name || 'Driver' },
+        params: { dest, trip: trip.id, driver: chosen.name },
       })
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not request that driver')
@@ -124,7 +225,7 @@ export default function PickDriver() {
         </Pressable>
         <View style={{ flex: 1 }}>
           <Text style={styles.title}>Pick a driver</Text>
-          <Text style={styles.sub}>Live matches come from drivers who are online. Cars drifting on the map are theater only.</Text>
+          <Text style={styles.sub}>{PREFERRED_MATCH_COPY}</Text>
         </View>
       </View>
       <View style={styles.mapWrap}>
@@ -147,11 +248,13 @@ export default function PickDriver() {
       </View>
       <ScrollView contentContainerStyle={styles.list}>
         {phase === 'loading' ? <Skeleton height={72} /> : null}
-        {phase === 'results' && drivers.length === 0 ? (
+        {phase === 'results' && !drivers.some((driver) => driver.online) ? (
           <View style={styles.empty}>
-            <Text style={styles.emptyTitle}>Still searching</Text>
+            <Text style={styles.emptyTitle}>{drivers.length ? 'Preferred drivers are offline' : 'Still searching'}</Text>
             <Text style={styles.sub}>
-              {error || 'No approved driver is online. The orange and purple cars are a preview, not people you can request.'}
+              {error || (drivers.length
+                ? PREFERRED_OFFLINE_COPY
+                : 'No approved driver is online. The orange and purple cars are a preview, not people you can request.')}
             </Text>
             <PrimaryButton
               label={notified ? 'Notify me · saved' : 'Notify me'}
@@ -165,20 +268,8 @@ export default function PickDriver() {
             <PrimaryButton label="Retry" tone="ghost" onPress={() => setAttempt((value) => value + 1)} />
           </View>
         ) : null}
-        {drivers.map((driver) => {
-          const on = selected === driver.id
-          return (
-            <Pressable key={driver.id} onPress={() => { void tapHaptic(); setSelected(driver.id) }} style={[styles.card, lift(colors, 'rest'), on && styles.cardOn]}>
-              <Text style={styles.name}>{driver.name}</Text>
-              <Text style={styles.sub}>{driver.vehicleLabel}</Text>
-              <Text style={styles.meta}>
-                {driver.ratingAvg != null ? `${driver.ratingAvg.toFixed(1)} · ${driver.ratingCount} ratings` : 'New driver'}
-                {driver.standing === 'watch' ? ' · Low rating' : ''}
-                {driver.isTesla ? ' · Tesla' : ''}
-              </Text>
-            </Pressable>
-          )
-        })}
+        {favNote ? <Text style={styles.meta}>{favNote}</Text> : null}
+        {phase === 'results' ? renderGroups() : null}
       </ScrollView>
       <View style={styles.footer}>
         {student.verified && tier === 'standard' ? (
@@ -187,7 +278,12 @@ export default function PickDriver() {
         {student.verified && tier !== 'standard' ? (
           <Text style={styles.student}>Student pricing is 10% off Standard. This tier stays full price.</Text>
         ) : null}
-        <PrimaryButton label={busy ? 'Requesting…' : 'Request this driver'} onPress={onRequest} disabled={busy || !selected} />
+        {error && drivers.some((driver) => driver.online) ? <Text style={styles.error}>{error}</Text> : null}
+        <PrimaryButton
+          label={busy ? 'Requesting…' : selectedDriver ? `Request ${selectedDriver.name}` : 'Select a driver'}
+          onPress={onRequest}
+          disabled={busy || !selectedDriver?.online}
+        />
       </View>
       <SignInToBookSheet
         open={promptOpen}
@@ -235,10 +331,22 @@ function makeStyles(colors: Palette) {
     error: { color: colors.danger, fontSize: 13, lineHeight: 18 },
     empty: { backgroundColor: colors.card, borderRadius: 20, padding: 20, gap: 10 },
     emptyTitle: { fontWeight: '800' as const, fontSize: 18, color: colors.ink },
-    card: { backgroundColor: colors.card, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: 'transparent' },
-    cardOn: { borderColor: colors.orange },
+    section: { gap: 10 },
+    sectionTitle: { color: colors.link, fontSize: 12, fontWeight: '800' as const, letterSpacing: 0.6, textTransform: 'uppercase' as const },
+    card: { backgroundColor: colors.card, borderRadius: 16, padding: 16, borderWidth: 1.5, borderColor: 'transparent', gap: 6 },
+    cardOn: { borderColor: colors.orange, backgroundColor: colors.orangeSoft },
+    cardOff: { opacity: 0.72 },
+    cardTop: { flexDirection: 'row' as const, gap: 12, alignItems: 'flex-start' as const },
+    etaCol: { alignItems: 'flex-end' as const, maxWidth: 120 },
+    eta: { color: colors.orange, fontWeight: '800' as const, fontSize: 16 },
+    etaOff: { color: colors.inkSecondary },
     name: { fontSize: 18, fontWeight: '800' as const, color: colors.ink },
-    meta: { marginTop: 6, color: colors.link, fontSize: 12, fontWeight: '600' as const },
+    meta: { color: colors.link, fontSize: 12, fontWeight: '600' as const },
+    badges: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: 8, alignItems: 'center' as const, marginTop: 4 },
+    badgeOrange: { color: colors.orange, backgroundColor: colors.orangeSoft, overflow: 'hidden' as const, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 4, fontSize: 11, fontWeight: '800' as const },
+    badgePurple: { color: colors.link, backgroundColor: colors.purpleSoft, overflow: 'hidden' as const, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 4, fontSize: 11, fontWeight: '800' as const },
+    saveOn: { color: colors.onAccent, backgroundColor: colors.purple, overflow: 'hidden' as const, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4, fontSize: 12, fontWeight: '800' as const },
+    saveOff: { color: colors.orange, fontSize: 12, fontWeight: '800' as const },
     footer: { padding: 16, paddingBottom: 28, backgroundColor: colors.card, borderTopWidth: 1, borderTopColor: colors.border, gap: 8 },
     student: { color: colors.orange, fontWeight: '800' as const, fontSize: 13 },
   }

@@ -14,6 +14,7 @@ import { supabase } from '@/lib/supabase'
 import { isLiveStatus, loadLiveTrip, type LiveTrip } from '@/lib/tripWatch'
 import { useTripById } from '@/lib/useRiderTrip'
 import { isActiveRideStatus, listEmergencyContacts, type EmergencyContact } from 'rides-native/safety.js'
+import { OPEN_POOL_COPY, PREFERRED_CANCELED_COPY, PREFERRED_MATCH_COPY } from 'rides-native/drivers'
 import { ORANGE, PURPLE } from 'rides-native/places.js'
 import { CounterpartCard, partyColorsFromPalette } from 'rides-native/PartyScreens'
 import { loadCounterpart, type CounterpartView } from 'rides-native/partyProfile.js'
@@ -105,6 +106,14 @@ export default function Requested() {
         rider_id: user?.id || null,
       }
     : null)
+  const namedDriver = driver !== 'Your driver'
+  const matchCopy = shown?.status === 'requested' || (!shown?.status && namedDriver)
+    ? PREFERRED_MATCH_COPY
+    : shown?.status === 'canceled' && namedDriver
+      ? PREFERRED_CANCELED_COPY
+      : shown?.status === 'searching' || shown?.status === 'offered'
+        ? OPEN_POOL_COPY
+        : null
 
   useEffect(() => {
     if (!user?.id || !supabase) return undefined
@@ -183,6 +192,7 @@ export default function Requested() {
               <PrimaryButton label="Rate your driver" onPress={() => router.push({ pathname: '/rate', params: { trip: tripId } })} />
             ) : null}
             <Text style={styles.summaryTitle}>{driverName} has the request</Text>
+            {matchCopy ? <Text style={styles.match}>{matchCopy}</Text> : null}
             <Text style={styles.body}>
               {shown?.pickup_label || 'Pickup'} → {shown?.dropoff_label || dest || 'your destination'}
               {shown?.status ? ` · ${shown.status}` : loading ? ' · loading' : ''}
@@ -259,6 +269,7 @@ function makeStyles(colors: Palette) {
     map: { height: 240, borderRadius: 20, overflow: 'hidden' as const },
     summary: { backgroundColor: colors.card, borderRadius: 20, padding: 16 },
     summaryTitle: { color: colors.ink, fontSize: 18, fontWeight: '800' as const, marginBottom: 6 },
+    match: { color: colors.link, fontSize: 13, lineHeight: 18, fontWeight: '700' as const, marginBottom: 8 },
     body: { color: colors.inkSecondary, fontSize: 14, lineHeight: 20 },
     meta: { color: colors.link, fontWeight: '700' as const, fontSize: 12, marginTop: 8 },
     empty: { backgroundColor: colors.card, borderRadius: 20, padding: 16, gap: 8 },

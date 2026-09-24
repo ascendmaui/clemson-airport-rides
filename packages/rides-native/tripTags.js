@@ -117,7 +117,7 @@ export const TAG_LABELS = {
   weekend_party: 'Weekend / party',
   carpool: 'Carpool · split fare',
   tesla: 'Tesla Model 3 · stub',
-  direct: 'Chosen you',
+  direct: 'Preferred by rider',
   scheduled: 'Scheduled',
 }
 
@@ -127,6 +127,19 @@ export const APPLE_PAY_DRIVER_COPY =
 
 export function tagLabel(id) {
   return TAG_LABELS[id] || String(id)
+}
+
+export function tagTone(label) {
+  if (/Game|Weekend|Tesla|Student|Preferred/.test(String(label || ''))) return 'orange'
+  return 'purple'
+}
+
+export const PREFERRED_REQUEST_NOTE =
+  'A rider preferred you. Declining cancels their request. It does not return to the open pool.'
+
+export function preferredRequestNote(card) {
+  if (!card?.tags?.includes('direct')) return null
+  return PREFERRED_REQUEST_NOTE
 }
 
 export function tripTags(row, { gameDayLive = false } = {}) {
@@ -205,7 +218,7 @@ export function statusActionLabel(status) {
 export function statusHeadline(status) {
   switch (status) {
     case 'requested':
-      return 'Rider chose you'
+      return 'A rider preferred you'
     case 'searching':
     case 'offered':
       return 'New ride request'

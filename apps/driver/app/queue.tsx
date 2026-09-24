@@ -17,10 +17,12 @@ import {
   formatCents,
   formatPickupAt,
   matchesQueueFilter,
+  preferredRequestNote,
   queueEmptyCopy,
   queueFilters,
   scheduledQueueTitle,
   statusHeadline,
+  tagTone,
   TESLA_FLEET_NOTICE,
   type DriverCard,
   type QueueFilter,
@@ -44,6 +46,7 @@ function QueueCard({
   onOpen: () => void
 }) {
   const active = card.status === 'accepted' || card.status === 'arriving'
+  const preferredNote = preferredRequestNote(card)
   const styles = useQueueStyles()
   return (
     <Card>
@@ -54,9 +57,10 @@ function QueueCard({
       {card.passengers > 1 ? <Text style={styles.copy}>{card.passengers} riders · capacity check is your seat count</Text> : null}
       <View style={styles.tags}>
         {card.tagLabels.map((label) => (
-          <Tag key={label} label={label} tone={/Game|Weekend|Tesla|Student/.test(label) ? 'orange' : 'purple'} />
+          <Tag key={label} label={label} tone={tagTone(label)} />
         ))}
       </View>
+      {preferredNote ? <Text style={styles.note}>{preferredNote}</Text> : null}
       <FarePanel card={card} />
       {card.teslaStub ? <Text style={styles.copy}>{TESLA_FLEET_NOTICE}</Text> : null}
       {active ? (
@@ -236,6 +240,7 @@ function queueStyles(colors: Palette) {
     kicker: { color: colors.orange, fontWeight: '800', letterSpacing: 1.1, fontSize: 12, marginTop: 8 },
     title: { fontSize: 28, fontWeight: '800', color: colors.title },
     copy: { color: colors.inkSecondary, fontSize: 14, lineHeight: 20 },
+    note: { color: colors.orange, fontSize: 13, lineHeight: 18, fontWeight: '700' },
     filters: { gap: 8 },
     filter: { backgroundColor: colors.card, borderRadius: 999, paddingHorizontal: 14, paddingVertical: 8 },
     filterOn: { backgroundColor: colors.fill },

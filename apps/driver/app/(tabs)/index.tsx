@@ -34,7 +34,9 @@ import {
 import { CUPD_PHONE_DISPLAY, CUPD_PHONE_E164 } from 'rides-native/safety.js'
 import {
   formatPickupAt,
+  preferredRequestNote,
   statusHeadline,
+  tagTone,
   TESLA_FLEET_NOTICE,
   weekNetCents,
   type DriverCard,
@@ -523,6 +525,7 @@ function RideCard({
   onDecline: () => void
 }) {
   const { colors } = useTheme()
+  const preferredNote = preferredRequestNote(card)
   const opacity = useState(() => new Animated.Value(0))[0]
   useEffect(() => {
     Animated.timing(opacity, { toValue: 1, duration: 280, useNativeDriver: true }).start()
@@ -534,9 +537,10 @@ function RideCard({
         <Text style={{ color: colors.inkSecondary }}>{statusHeadline(card.status)} · you net 80%</Text>
         <View style={styles.tags}>
           {card.tagLabels.map((label) => (
-            <Tag key={label} label={label} tone={/Tesla|Game|Weekend|Student/.test(label) ? 'orange' : 'purple'} />
+            <Tag key={label} label={label} tone={tagTone(label)} />
           ))}
         </View>
+        {preferredNote ? <Text style={{ color: colors.orange, fontWeight: '700' }}>{preferredNote}</Text> : null}
         <Text style={{ color: colors.ink, fontWeight: '700' }}>
           {card.firstName}{card.riderRating ? ` · ${card.riderRating.toFixed(1)}` : ''}
           {card.rideType ? ` · ${card.rideType}` : ''}
