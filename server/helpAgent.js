@@ -1,4 +1,5 @@
 import { PRODUCT_BRIEF, action, bestTopic, sanitizeActions } from './productKnowledge.js'
+import { STUDENT_CONFIRM_EMAIL_COPY, STUDENT_EMAIL_REQUIRED_COPY } from '../src/lib/studentDomain.js'
 import { contextForPrompt } from './userContext.js'
 import { HELP_CHIPS } from './agentChips.js'
 import { redactPeerText, scrubMessages } from './privacyName.js'
@@ -147,8 +148,10 @@ export function buildHelpTurn({ messages, context, roleVariant }) {
 
   if (context?.signedIn && context.student && topic?.id !== 'student' && /student|discount|clemson\.edu/.test(question.toLowerCase())) {
     paragraphs.push(context.student.verified
-      ? 'Your account is flagged for the student discount (10% off Standard).'
-      : 'This account is not showing student verification. Use an email ending in @clemson.edu, then check Account → Student.')
+      ? 'Your confirmed Clemson email applies 10% off Standard. Comfort, XL, Pet, and Tesla stay full price.'
+      : context.student.emailEligible
+        ? STUDENT_CONFIRM_EMAIL_COPY
+        : STUDENT_EMAIL_REQUIRED_COPY)
     actions.push(action('Open Student', 'account', { tab: 'student' }))
   }
 

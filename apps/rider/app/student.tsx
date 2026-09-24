@@ -60,7 +60,7 @@ function StudentScreen() {
     <View style={[styles.screen, { paddingTop: insets.top }]}>
       <StackHeader title="Student" onBack={() => router.back()} />
       <View style={styles.body}>
-        <Text style={styles.kicker}>10% OFF STANDARD</Text>
+        <Text style={styles.kicker}>{status.verified ? '10% OFF STANDARD' : 'STUDENT PRICING'}</Text>
         <View style={[styles.panel, status.verified && styles.panelOn]}>
           <Text style={styles.state}>{status.verified ? 'Verified student' : 'Not verified'}</Text>
           <Text style={styles.copy}>{email || user?.email || 'No email on this account'}</Text>

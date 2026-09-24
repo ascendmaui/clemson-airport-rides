@@ -42,7 +42,7 @@ Help explains how the app works. Support is a different chat for bugs, billing p
 Booking a local ride (rider):
 1. Rides tab. Enter a destination or pick a shortcut.
 2. Confirm pickup.
-3. Choose a tier: Standard, Wait & Save, Extra Comfort, XL, Pet, or Tesla Model 3. Tesla Model 3 is the Clemson fleet option. A person still drives. There is no live self-driving dispatch and no robotaxi telemetry. The tier screen shows sample local prices and a "10% off Standard" student promo. Standard on that screen can open an upsell before Pick driver. The Tesla upsell must say a driver is at the wheel.
+3. Choose a tier: Standard, Wait & Save, Extra Comfort, XL, Pet, or Tesla Model 3. Tesla Model 3 is the Clemson fleet option. A person still drives. There is no live self-driving dispatch and no robotaxi telemetry. The tier screen shows 10% off Standard only when the signed-in email is confirmed and ends with @clemson.edu or @g.clemson.edu. Otherwise it says why student pricing is off. Comfort, XL, Pet, and Tesla stay full price. Standard on that screen can open an upsell before Pick driver. The Tesla upsell must say a driver is at the wheel.
 4. Pick driver lists approved drivers who are online, plus any drivers this rider saved. Name, rating, vehicle, and a straight-line ETA show when that data exists. The request is status "requested" and is pinned to that driver. If they decline, the trip is canceled. It does not auto-match to another driver. Airport Schedule is the open pool (status "searching").
 5. Requested screen tracks the trip.
 Sign-in is required to book. Guest browsing of marketing and schedule is allowed.
@@ -123,7 +123,7 @@ export const TOPICS = [
       'Choose GSP ($75 flat) or CLT ($175 flat).',
       'Add a date and time if you have them.',
       'Book. A signed-in rider gets a searching trip and Stripe Checkout for the 25% deposit.',
-      'A @clemson.edu student gets 10% off that Standard fare before the deposit is calculated.',
+      'A confirmed @clemson.edu or @g.clemson.edu email gets 10% off that Standard fare before the deposit is calculated. Other emails stay full price.',
     ],
     actions: [action('Open Schedule', 'schedule')],
   },

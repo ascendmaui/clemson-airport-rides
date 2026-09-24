@@ -94,6 +94,11 @@ export function studentStatus(input?: {
   gateCopy: string | null
 }
 
+export function studentSurfaceCopy(
+  status: { verified?: boolean; gateCopy?: string | null } | null | undefined,
+  surface: 'home' | 'tiers' | 'confirm',
+): { title: string; detail: string | null; granted: boolean }
+
 export function loadStudentProfile(
   supabase: unknown,
   userId: string,

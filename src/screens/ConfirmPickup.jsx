@@ -7,9 +7,9 @@ import { useStudentStatus } from '../lib/useStudentStatus'
 import { applyStudentDiscount } from '../lib/pricing'
 import { AIRPORT_RATES, depositCents } from '../lib/stripeCheckout'
 import {
-  STUDENT_DISCOUNT_LABEL,
   airportCodeFromLabel,
   depositSurfaceCopy,
+  studentSurfaceCopy,
 } from '../../packages/rides-native/riderMoney.js'
 
 export function ConfirmPickup({ dest = 'GSP Airport' }) {
@@ -19,6 +19,7 @@ export function ConfirmPickup({ dest = 'GSP Airport' }) {
   const [promptOpen, setPromptOpen] = useState(false)
   const { runOrPrompt } = useRequireAuthForAction()
   const student = useStudentStatus()
+  const studentOffer = studentSurfaceCopy(student, 'confirm')
   const airport = airportCodeFromLabel(dest)
   const rate = airport ? AIRPORT_RATES[airport] : null
   const studentFare = rate
@@ -114,12 +115,13 @@ export function ConfirmPickup({ dest = 'GSP Airport' }) {
             marginBottom: 14,
             fontSize: 13,
             fontWeight: 800,
-            color: student.verified ? '#F56600' : '#522D80',
+            color: studentOffer.granted ? '#F56600' : '#522D80',
+            lineHeight: 1.45,
+            whiteSpace: 'normal',
+            overflowWrap: 'anywhere',
           }}
         >
-          {student.verified
-            ? `${STUDENT_DISCOUNT_LABEL} applies on the Standard quote.`
-            : 'Claim Clemson student pricing · 10% off Standard'}
+          {studentOffer.title}
         </button>
         <PrimaryButton className="primary-cta" onClick={onConfirm}>
           Confirm and request

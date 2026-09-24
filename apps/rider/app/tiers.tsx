@@ -8,7 +8,7 @@ import { setAuthNext } from '@/lib/authNext'
 import { useAuth } from '@/lib/auth'
 import { oneParam } from '@/lib/oneParam'
 import { formatUsd, RIDE_TIERS } from 'rides-native/places.js'
-import { STUDENT_DISCOUNT_LABEL, displayTierPrice } from 'rides-native/riderMoney.js'
+import { displayTierPrice, studentSurfaceCopy } from 'rides-native/riderMoney.js'
 import { useStudentStatus } from '@/lib/useStudentStatus'
 import { lift } from '@/lib/elevation'
 import type { Palette } from '@/lib/palette'
@@ -25,6 +25,7 @@ export default function RideTiers() {
   const note = oneParam(params.note)
   const { user } = useAuth()
   const student = useStudentStatus()
+  const studentOffer = studentSurfaceCopy(student, 'tiers')
   const [selected, setSelected] = useState(RIDE_TIERS[0].id)
   const [promptOpen, setPromptOpen] = useState(false)
   const { colors } = useTheme()
@@ -55,10 +56,9 @@ export default function RideTiers() {
           <Text style={styles.sub}>Pickup {pickup}</Text>
         </View>
       </View>
-      <Pressable onPress={() => router.push(user ? '/student' : '/sign-in')} style={styles.promo} accessibilityRole="button">
-        <Text style={styles.promoText}>
-          {student.verified ? `🐯 ${STUDENT_DISCOUNT_LABEL}` : '🐯 Claim Clemson student pricing · 10% off Standard'}
-        </Text>
+      <Pressable onPress={() => router.push(user ? '/student' : '/sign-in')} style={[styles.promo, !studentOffer.granted && styles.promoGated]} accessibilityRole="button">
+        <Text style={styles.promoText}>{studentOffer.title}</Text>
+        {studentOffer.detail ? <Text style={styles.promoDetail}>{studentOffer.detail}</Text> : null}
       </Pressable>
       <ScrollView contentContainerStyle={styles.list}>
         {RIDE_TIERS.map((tier) => {
@@ -123,6 +123,8 @@ function makeStyles(colors: Palette) {
       paddingVertical: 8,
     },
     promoText: { color: colors.link, fontWeight: '600' as const, fontSize: 12 },
+    promoGated: { alignSelf: 'stretch' as const, borderRadius: 16 },
+    promoDetail: { color: colors.inkSecondary, fontSize: 12, lineHeight: 16, marginTop: 4 },
     list: { padding: 16, paddingBottom: 24 },
     row: {
       flexDirection: 'row' as const,
