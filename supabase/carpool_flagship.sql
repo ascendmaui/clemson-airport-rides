@@ -63,6 +63,10 @@ create table if not exists public.ambassador_payout_ledger (
 create index if not exists ambassador_payout_ledger_code_idx
   on public.ambassador_payout_ledger (code, created_at desc);
 
+-- One ledger row per trip and ambassador code. code is the ambassador identity.
+create unique index if not exists ambassador_payout_ledger_trip_code_uniq
+  on public.ambassador_payout_ledger (trip_id, code);
+
 alter table public.ambassador_payout_ledger enable row level security;
 
 -- Rider who opened /a/:code. Service role only. Not a payout row.
