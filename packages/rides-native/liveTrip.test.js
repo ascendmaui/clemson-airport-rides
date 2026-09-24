@@ -14,6 +14,7 @@ import {
   etaLineFor,
   riderLiveStepIndex,
   riderLiveSteps,
+  orderedLiveStops,
   riderLiveView,
   showSearchTheater,
   straightLineEta,
@@ -88,4 +89,76 @@ test('searching stays honest and an accept opens track without a Maps key', () =
   assert.equal(acceptNeedsDriverOnline('searching'), true)
   assert.equal(acceptNeedsDriverOnline('requested'), true)
   assert.equal(acceptNeedsDriverOnline('scheduled'), false)
+})
+
+test('ordered live stops follow stop order and fall back to empty', () => {
+  assert.deepEqual(orderedLiveStops(null), [])
+  assert.deepEqual(orderedLiveStops({}), [])
+  assert.deepEqual(orderedLiveStops({ stops: [], pickup_lat: 34.68, pickup_lng: -82.84 }), [])
+  const friend = orderedLiveStops({
+    kind: 'friend_ride',
+    status: 'booked',
+    stops: [
+      { lat: 34.69, lng: -82.85, label: 'Library', order: 2, kind: 'dropoff' },
+      { lat: 34.67881, lng: -82.84319, label: 'Stadium', order: 0, kind: 'pickup' },
+      { label: 'missing coords', order: 1 },
+      { lat: 34.6834, lng: -82.8374, label: 'Downtown', order: 1, kind: 'pickup' },
+    ],
+  })
+  assert.deepEqual(friend.map((stop) => stop.title), ['1 · Stadium', '2 · Downtown', '3 · Library'])
+  assert.equal(friend[0].lat, 34.67881)
+  assert.equal(friend[0].approximate, false)
+  assert.equal(friend[0].kind, 'pickup')
+  assert.equal(friend[2].kind, 'dropoff')
+  const fromMeta = orderedLiveStops({
+    stops: [],
+    metadata: { stops: [{ lat: 34.67, lng: -82.83, label: 'A' }, { lat: 34.7, lng: -82.9, name: 'B' }] },
+  })
+  assert.deepEqual(fromMeta.map((stop) => stop.label), ['A', 'B'])
+  const fromRide = orderedLiveStops({
+    friend_ride: { stops: [{ latitude: 34.1, longitude: -82.1, address: 'Tillman' }] },
+  })
+  assert.equal(fromRide[0].title, '1 · Tillman')
+  assert.equal(orderedLiveStops({
+    stops: [{ lat: 1, lng: 2, label: 'Trip' }],
+    metadata: { stops: [{ lat: 9, lng: 9, label: 'Meta' }] },
+  })[0].label, 'Trip')
+})
+
+test('booked carpool public pins round to 3 decimals and still return without a polyline', () => {
+  const booked = orderedLiveStops({
+    status: 'booked',
+    kind: 'carpool',
+    route_polyline: null,
+    stops: [
+      { lat: 34.67881, lng: -82.84319, label: 'Home', order: 0 },
+      { lat: 34.89574, lng: -82.21891, label: 'GSP', order: 1 },
+    ],
+  })
+  assert.equal(booked[0].lat, 34.679)
+  assert.equal(booked[0].lng, -82.843)
+  assert.equal(booked[1].lat, 34.896)
+  assert.equal(booked[1].lng, -82.219)
+  assert.equal(booked[0].approximate, true)
+  const trip = orderedLiveStops({
+    status: 'accepted',
+    metadata: { kind: 'carpool', friend_ride_id: 'ride-1', route_polyline: null },
+    stops: [{ lat: 34.67881, lng: -82.84319, label: 'A' }, { lat: 34.89574, lng: -82.21891, label: 'B' }],
+  })
+  assert.equal(trip[0].approximate, true)
+  assert.equal(trip[0].lat, 34.679)
+  const exact = orderedLiveStops({
+    status: 'accepted',
+    metadata: { kind: 'carpool', friend_ride_id: 'ride-1' },
+    stops: [{ lat: 34.67881, lng: -82.84319, label: 'A' }],
+  }, { approximate: false })
+  assert.equal(exact[0].lat, 34.67881)
+  assert.equal(exact[0].approximate, false)
+  const lobby = orderedLiveStops({
+    kind: 'carpool',
+    status: 'collecting',
+    stops: [{ lat: 34.67881, lng: -82.84319, label: 'Lobby' }],
+  })
+  assert.equal(lobby[0].lat, 34.67881)
+  assert.equal(lobby[0].approximate, false)
 })

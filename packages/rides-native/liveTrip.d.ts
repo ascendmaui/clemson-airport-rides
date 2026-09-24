@@ -61,3 +61,23 @@ export function etaLineFor(
   from: LatLng | null | undefined,
   places: Parameters<typeof etaTargetForStatus>[1],
 ): string | null
+
+export type LiveStopKind = 'pickup' | 'dropoff' | 'stop'
+
+export type LiveStopPin = {
+  id: string
+  order: number
+  lat: number
+  lng: number
+  label: string
+  title: string
+  kind: LiveStopKind
+  approximate: boolean
+}
+
+export function approxPublicCoord(value: unknown): number | null
+export function carpoolPublicPinsApproximate(source: unknown): boolean
+export function orderedLiveStops(
+  source: unknown,
+  options?: { approximate?: boolean },
+): LiveStopPin[]

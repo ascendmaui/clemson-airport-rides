@@ -12,7 +12,7 @@ import { currentWeekLabel, tipCentsFromPayments, type TipPayment } from '@/lib/e
 import { shownCents } from '@/lib/shown'
 import { supabase } from '@/lib/supabase'
 import { useTheme } from '@/lib/theme'
-import { driverNetCents, weekNetCents } from 'rides-native/tripTags'
+import { carpoolPayFromTrip, tripEarnedCents, weekNetCents } from 'rides-native/tripTags'
 import { loadEarnings } from 'rides-native/driverDesk'
 
 type EarningsState = Awaited<ReturnType<typeof loadEarnings>> | null
@@ -56,10 +56,12 @@ export default function EarningsHub() {
   let you = 0
   let platform = 0
   let other = 0
+  let carpoolBonus = false
   for (const trip of data?.trips || []) {
     if (trip.status !== 'completed') continue
     const fare = Math.max(0, Math.round(Number(trip.fare_cents) || 0))
-    const net = driverNetCents(fare)
+    const net = tripEarnedCents(trip)
+    if (carpoolPayFromTrip(trip)?.showBonus) carpoolBonus = true
     you += net
     platform += Math.max(0, fare - net)
     const payments = (data?.paymentsByTrip?.[trip.id] || []) as TipPayment[]
@@ -105,9 +107,13 @@ export default function EarningsHub() {
                 onDetails={() => router.push('/earnings-details')}
               />
               {week <= 0 ? (
-                <SoftNote>No completed trips this week. You keep 80% of each fare once a ride finishes.</SoftNote>
+                <SoftNote>No completed trips this week. You keep 80% of each fare once a ride finishes. Carpool trips add driver_carpool_bonus on the stored payout.</SoftNote>
               ) : (
-                <SoftNote>This week’s total is the 80% you keep. Open details for day, week, month, and year.</SoftNote>
+                <SoftNote>
+                  {carpoolBonus
+                    ? 'This week includes carpool payouts. Totals use metadata.driver_payout_cents, including driver_carpool_bonus.'
+                    : 'This week’s total is the 80% you keep. Open details for day, week, month, and year.'}
+                </SoftNote>
               )}
               <SectionLabel>Wallet</SectionLabel>
               <Card>
@@ -129,7 +135,9 @@ export default function EarningsHub() {
                 <Text style={{ color: colors.inkSecondary, lineHeight: 20 }}>
                   {standard
                     ? 'No completed trips yet. The chart shows the standard split until one is on file. You keep 80%.'
-                    : 'Completed trips on this account. You keep 80% of the fare. Tips, when present, sit in Other.'}
+                    : carpoolBonus
+                      ? 'Completed trips on this account. Carpool totals are metadata.driver_payout_cents (base net plus driver_carpool_bonus). Tips, when present, sit in Other.'
+                      : 'Completed trips on this account. You keep 80% of the fare. Tips, when present, sit in Other.'}
                 </Text>
                 {earningsPrivate ? (
                   <SoftNote>Amounts are hidden on this phone. Turn off Make earnings private in Settings to see the split.</SoftNote>

@@ -247,7 +247,7 @@ async function saveDriverInfoDirect(userId, payload, email) {
     plate: payload.plate,
     seats: payload.seats || 4,
     is_tesla: Boolean(payload.isTesla),
-    autonomous_capable: Boolean(payload.isTesla),
+    autonomous_capable: false,
     tier: payload.isTesla ? 'tesla_self_driving' : 'standard',
   }
   let vehicle = existingVeh?.[0] || null

@@ -9,6 +9,7 @@ import {
   isUnpaidAirportDepositTrip,
   queueEmptyCopy,
   scheduledQueueTitle,
+  carpoolPayFromTrip,
   driverNetCents,
   fareCollection,
   isDueNow,
@@ -21,7 +22,10 @@ import {
   summarizeDepositAwareness,
   tagLabel,
   tagTone,
+  TESLA_FLEET_NOTICE,
+  teslaFleetNotice,
   toDriverCard,
+  tripEarnedCents,
   tripTags,
   weekNetCents,
 } from './tripTags.js'
@@ -83,6 +87,20 @@ test('weekend queue copy names scheduled airport and campus pickups', () => {
   assert.equal(scheduledQueueTitle('all'), 'Scheduled')
   assert.equal(scheduledQueueTitle('student'), 'Scheduled')
   assert.throws(() => queueEmptyCopy('nope'), /Unknown queue filter/)
+})
+
+test('Tesla fleet notice is profile-only and appears only when Tesla is selected', () => {
+  assert.equal(teslaFleetNotice(false), null)
+  assert.equal(teslaFleetNotice(true), TESLA_FLEET_NOTICE)
+  assert.match(TESLA_FLEET_NOTICE, /profile option only/)
+  assert.match(TESLA_FLEET_NOTICE, /person still drives/)
+  assert.match(TESLA_FLEET_NOTICE, /no self-driving dispatch/)
+  const tesla = toDriverCard({ id: 't1', status: 'accepted', tier: 'tesla_self_driving', fare_cents: 3600 })
+  const standard = toDriverCard({ id: 't2', status: 'accepted', tier: 'standard', fare_cents: 1800 })
+  assert.equal(tesla.teslaStub, true)
+  assert.equal(teslaFleetNotice(tesla.teslaStub), TESLA_FLEET_NOTICE)
+  assert.equal(standard.teslaStub, false)
+  assert.equal(teslaFleetNotice(standard.teslaStub), null)
 })
 
 test('an explicit party weekend purpose tags the weekend filter and a Tesla tier stays a stub tag', () => {
@@ -161,6 +179,50 @@ test('carpool shares replace the listed fare and keep the 25 percent deposit', (
   assert.equal(fare.driverNetCents, 1920)
   assert.equal(fare.platformFeeCents, 480)
   assert.equal(fare.shares[1].label, 'Blair')
+})
+
+test('carpool earnings use driver_payout_cents and show driver_carpool_bonus', () => {
+  const row = {
+    id: 'pool',
+    status: 'completed',
+    fare_cents: 4200,
+    completed_at: '2026-10-05T14:00:00.000Z',
+    metadata: {
+      kind: 'carpool',
+      driver_payout_cents: 3600,
+      incentive_id: 'driver_carpool_bonus',
+      carpool: {
+        driver: {
+          payoutCents: 3600,
+          soloPayoutCents: 2400,
+          carpoolBonusCents: 1200,
+          incentiveId: 'driver_carpool_bonus',
+        },
+      },
+    },
+  }
+  const pay = carpoolPayFromTrip(row)
+  assert.equal(pay.baseNetCents, 2400)
+  assert.equal(pay.bonusCents, 1200)
+  assert.equal(pay.payoutCents, 3600)
+  assert.equal(pay.incentiveId, 'driver_carpool_bonus')
+  assert.equal(tripEarnedCents(row), 3600)
+  assert.equal(tripEarnedCents({ fare_cents: 1000 }), 800)
+  const card = toDriverCard(row)
+  assert.equal(card.driverNetCents, 3600)
+  assert.equal(card.baseNetCents, 2400)
+  assert.equal(card.carpoolBonusCents, 1200)
+  assert.equal(card.carpoolIncentiveId, 'driver_carpool_bonus')
+  assert.equal(card.driverPayoutCents, 3600)
+  const fare = fareCollection(card)
+  assert.equal(fare.baseNetCents, 2400)
+  assert.equal(fare.carpoolBonusCents, 1200)
+  assert.equal(fare.carpoolIncentiveId, 'driver_carpool_bonus')
+  assert.equal(fare.driverNetCents, 3600)
+  assert.equal(weekNetCents([
+    row,
+    { status: 'completed', fare_cents: 1000, completed_at: '2026-10-05T16:00:00.000Z' },
+  ], new Date('2026-10-07T15:00:00.000Z')), 4400)
 })
 
 test('week net uses Monday through Sunday in America/New_York', () => {
