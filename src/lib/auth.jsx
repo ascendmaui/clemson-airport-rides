@@ -3,6 +3,7 @@ import { supabase, supabaseConfigured } from './supabase'
 import { isClemsonEmail } from './studentDomain'
 import { maybeClaimStoredPromo } from './riderReferral'
 import { normalizePromoCode } from './riderPromo'
+import { buildEnsureProfilePatch, signupProfileMetadata } from '../../packages/rides-native/partyProfile.js'
 
 const AuthContext = createContext(null)
 
@@ -91,22 +92,32 @@ async function ensureStudentVerification(user, now) {
 
 async function ensureProfile(user, { promoCode } = {}) {
   if (!supabase || !user?.id) return null
-  const fullName =
-    user.user_metadata?.full_name ||
-    user.user_metadata?.name ||
-    (user.email ? user.email.split('@')[0] : 'Rider')
   const now = new Date().toISOString()
   const clemson = isClemsonEmail(user.email)
-  const row = {
-    id: user.id,
-    email: user.email || null,
-    full_name: fullName,
-    updated_at: now,
+  let existing = null
+  const existingRes = await supabase
+    .from('profiles')
+    .select('id, full_name, phone, bio, ride_style, student_verified_at')
+    .eq('id', user.id)
+    .maybeSingle()
+  if (existingRes.error && /column|schema cache/i.test(existingRes.error.message || '')) {
+    const basic = await supabase.from('profiles').select('id, full_name').eq('id', user.id).maybeSingle()
+    existing = basic.data
+  } else if (!existingRes.error) {
+    existing = existingRes.data
   }
-  if (clemson) {
-    row.student_verified_at = now
+  const patch = buildEnsureProfilePatch(existing, user, now, clemson)
+  let { error } = await supabase.from('profiles').upsert(patch, { onConflict: 'id' })
+  if (error && /column|schema cache/i.test(error.message || '')) {
+    const minimal = {
+      id: user.id,
+      email: user.email || null,
+      full_name: patch.full_name || existing?.full_name || (user.email ? user.email.split('@')[0] : 'Rider'),
+      updated_at: now,
+    }
+    const retry = await supabase.from('profiles').upsert(minimal, { onConflict: 'id' })
+    error = retry.error
   }
-  const { error } = await supabase.from('profiles').upsert(row, { onConflict: 'id' })
   if (error) console.warn('[auth] profile upsert', error.message)
 
   if (clemson) await ensureStudentVerification(user, now)
@@ -159,7 +170,7 @@ export function AuthProvider({ children }) {
       if (error) throw mapAuthError(error)
       return data
     },
-    async signUp(email, password, fullName, promoCode) {
+    async signUp(email, password, fullName, promoCode, profile) {
       if (!supabase) throw new Error('Supabase is not configured')
       const remaining = getSignupRateLimitRemainingSec()
       if (remaining > 0) {
@@ -168,8 +179,13 @@ export function AuthProvider({ children }) {
         throw err
       }
       const code = normalizePromoCode(promoCode)
-      const meta = { full_name: fullName || '' }
-      if (code) meta.promo_code = code
+      const meta = signupProfileMetadata({
+        fullName,
+        phone: profile?.phone,
+        bio: profile?.bio,
+        rideStyle: profile?.rideStyle,
+        promoCode: code,
+      })
       const { data, error } = await supabase.auth.signUp({
         email,
         password,

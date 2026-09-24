@@ -8,11 +8,17 @@ import { FeedbackProvider } from '@/lib/feedback'
 import { registerDriverPush } from '@/lib/push'
 import { supabase } from '@/lib/supabase'
 import { ThemeProvider, useTheme } from '@/lib/theme'
+import { ProfileRequiredGate } from 'rides-native/PartyScreens'
 
 function Gate({ children }: { children: ReactNode }) {
-  const { loading } = useAuth()
+  const { loading, user } = useAuth()
   if (loading) return <BootScreen />
-  return children
+  return (
+    <>
+      <ProfileRequiredGate user={user} supabase={supabase} />
+      {children}
+    </>
+  )
 }
 
 function PushBridge() {

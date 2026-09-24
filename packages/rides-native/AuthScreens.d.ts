@@ -41,7 +41,13 @@ export function SetNewPasswordScreen(props: {
 }): ReactNode
 
 export function SignUpScreen(props: {
-  signUp: (email: string, password: string, fullName?: string, promoCode?: string) => Promise<{
+  signUp: (
+    email: string,
+    password: string,
+    fullName?: string,
+    promoCode?: string,
+    profile?: { phone?: string; bio?: string; rideStyle?: string },
+  ) => Promise<{
     session?: unknown
     promoClaim?: { error?: string } | null
   }>
@@ -52,6 +58,7 @@ export function SignUpScreen(props: {
   initialPromo?: string
   subtitle?: string
   mark?: string
+  showPromo?: boolean
   socialProviders?: SocialProvider[]
   onSocial?: (
     providerId: SocialProvider['id'],

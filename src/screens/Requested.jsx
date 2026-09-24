@@ -13,6 +13,8 @@ import { SosControl } from '../components/SosControl'
 import { isActiveRideStatus } from '../lib/sosAlert'
 import { MidrideCancelSheet } from '../components/MidrideCancelSheet'
 import { isMidrideStatus } from '../lib/tripPhase'
+import { CounterpartChip } from '../components/CounterpartChip'
+import { PARTY_VISIBLE_STATUSES } from '../../packages/rides-native/partyProfile.js'
 
 export function Requested({ dest = 'GSP Airport', trip = '', driver = 'your driver', driverId = '' }) {
   const { user } = useAuth()
@@ -164,10 +166,12 @@ export function Requested({ dest = 'GSP Airport', trip = '', driver = 'your driv
           {showMessages && (
             <RideMessageButton readOnly={chatMode !== 'compose'} onClick={() => setChatOpen(true)} />
           )}
-          {resolvedDriverId && (
-            <button type="button" className="pressable" onClick={() => navigate('profile', { id: resolvedDriverId, matched: '1' })} style={{ fontWeight: 600, color: 'var(--purple)' }}>
-              View driver profile
-            </button>
+          {resolvedDriverId && PARTY_VISIBLE_STATUSES.includes(status) && (
+            <CounterpartChip
+              profileId={resolvedDriverId}
+              noun="driver"
+              onOpen={() => navigate('profile', { id: resolvedDriverId, matched: '1' })}
+            />
           )}
           {status === 'completed' && trip && (
             <button

@@ -10,6 +10,8 @@ import { clerkPublishableKey } from '@/lib/clerkEnv'
 import { PasswordRecoveryListener } from '@/lib/passwordRecovery'
 import { useApproachingTrip } from '@/lib/useRiderTrip'
 import { BootScreen } from '@/components/BootScreen'
+import { supabase } from '@/lib/supabase'
+import { ProfileRequiredGate } from 'rides-native/PartyScreens'
 import { setCarpoolApiBase } from 'rides-native/shared/carpoolApi.js'
 
 setCarpoolApiBase(process.env.EXPO_PUBLIC_API_BASE || 'https://clemson-airport-rides.vercel.app')
@@ -21,9 +23,14 @@ function ApproachHost() {
 }
 
 function Gate({ children }: { children: ReactNode }) {
-  const { loading } = useAuth()
+  const { loading, user } = useAuth()
   if (loading) return <BootScreen />
-  return <View style={{ flex: 1 }}>{children}</View>
+  return (
+    <View style={{ flex: 1 }}>
+      <ProfileRequiredGate user={user} supabase={supabase} />
+      {children}
+    </View>
+  )
 }
 
 function ClerkSignOutSync() {
