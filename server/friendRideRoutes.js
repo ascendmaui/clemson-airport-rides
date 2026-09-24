@@ -26,6 +26,7 @@ import {
 import { driverApprovalStatus } from './driverApproval.js'
 import { carpoolSeatCap } from '../src/lib/carpoolEngine.js'
 import { recomputeRideFares } from './friendRideRecompute.js'
+import { resolveAmbassadorCode, stampAmbassadorCode } from './ambassadorAttribution.js'
 
 export async function handleFriendRideCreate(req, res) {
   if (cors(req, res)) return
@@ -50,7 +51,9 @@ export async function handleFriendRideCreate(req, res) {
   const splitMode = body.splitMode === 'by_distance' ? 'by_distance' : 'even'
   const kind = body.kind === 'carpool' ? 'carpool' : 'friends'
   const partyType = body.partyType === 'tailgate' ? 'tailgate' : 'carpool'
-  const ambassadorCode = typeof body.ambassadorCode === 'string' ? body.ambassadorCode.slice(0, 40) : null
+  const ambassadorCode = kind === 'carpool'
+    ? await resolveAmbassadorCode(sb, user, body.ambassadorCode)
+    : null
 
   if (kind === 'carpool') {
     const gate = await driverApprovalStatus(sb, user.id)
@@ -254,6 +257,11 @@ export async function handleFriendRideJoin(req, res) {
     }
     if (['awaiting_payment', 'ready'].includes(ride.status) && !participantId) {
       return json(res, 409, { error: 'Stops are locked while payment is in progress' })
+    }
+
+    if (ride.kind === 'carpool') {
+      const resolvedCode = await resolveAmbassadorCode(sb, user, body.ambassadorCode)
+      if (resolvedCode) await stampAmbassadorCode(sb, ride, resolvedCode)
     }
 
     const driverId = ride.driver_profile_id || ride.organizer_id

@@ -73,6 +73,7 @@ export function matchCarpool(supabase, body) {
       displayName: body.displayName,
       partyType: body.partyType === 'tailgate' ? 'tailgate' : 'carpool',
       departAt: body.departAt || undefined,
+      ambassadorCode: body.ambassadorCode || undefined,
     },
   })
 }
@@ -86,7 +87,15 @@ export function createCarpoolGroup(supabase, body) {
       displayName: body.displayName,
       partyType: body.partyType === 'tailgate' ? 'tailgate' : 'carpool',
       driving: false,
+      ambassadorCode: body.ambassadorCode || undefined,
     },
+  })
+}
+
+export function claimAmbassadorAttribution(supabase, code) {
+  return authedJson(supabase, '/api/carpool?action=attribute', {
+    method: 'POST',
+    body: { code },
   })
 }
 
@@ -107,6 +116,7 @@ export function createCarpoolOffer(supabase, body) {
       splitMode: body.splitMode === 'by_distance' ? 'by_distance' : 'even',
       kind: 'carpool',
       partyType: body.partyType === 'tailgate' ? 'tailgate' : 'carpool',
+      ambassadorCode: body.ambassadorCode || undefined,
     },
   })
 }
@@ -118,7 +128,10 @@ export function getFriendRide(supabase, token) {
 export function joinFriendRide(supabase, body) {
   return authedJson(supabase, '/api/friend-rides?action=join', {
     method: 'POST',
-    body,
+    body: {
+      ...body,
+      ambassadorCode: body.ambassadorCode || undefined,
+    },
   })
 }
 

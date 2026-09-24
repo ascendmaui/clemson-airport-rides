@@ -66,6 +66,7 @@ export type RideSummary = {
     carpool?: CarpoolQuote
     match_mode?: string
     party_type?: string
+    ambassador_code?: string | null
   } | null
   trip_id?: string | null
   driver_profile_id?: string | null
@@ -100,21 +101,25 @@ export function inviteUrl(token: string, kind?: 'carpool' | 'friends'): string
 export function apiErrorMessage(err: unknown): string
 export function matchCarpool(
   supabase: SupabaseAuth,
-  body: { pickup: Place; dropoff: Place; displayName?: string; partyType?: string; departAt?: string },
+  body: { pickup: Place; dropoff: Place; displayName?: string; partyType?: string; departAt?: string; ambassadorCode?: string },
 ): Promise<MatchResult>
 export function createCarpoolGroup(
   supabase: SupabaseAuth,
-  body: { pickup: Place; dropoff: Place; displayName?: string; partyType?: string },
+  body: { pickup: Place; dropoff: Place; displayName?: string; partyType?: string; ambassadorCode?: string },
 ): Promise<GroupResult>
+export function claimAmbassadorAttribution(
+  supabase: SupabaseAuth,
+  code: string,
+): Promise<{ ok?: boolean; code?: string; code_type?: string; stored?: boolean; error?: string }>
 export function carpoolProgram(supabase: SupabaseAuth, action: 'first_ride' | 'ambassador'): Promise<FirstRideStatus>
 export function createCarpoolOffer(
   supabase: SupabaseAuth,
-  body: { displayName?: string; pickup: Place; dropoff: Place; splitMode?: string; partyType?: string },
+  body: { displayName?: string; pickup: Place; dropoff: Place; splitMode?: string; partyType?: string; ambassadorCode?: string },
 ): Promise<OfferResult>
 export function getFriendRide(supabase: SupabaseAuth, token: string): Promise<RideSummary>
 export function joinFriendRide(
   supabase: SupabaseAuth,
-  body: { token: string; displayName?: string; email?: string; pickup: Place; dropoff: Place },
+  body: { token: string; displayName?: string; email?: string; pickup: Place; dropoff: Place; ambassadorCode?: string },
 ): Promise<{ ride?: RideSummary }>
 export function recomputeFriendRide(supabase: SupabaseAuth, token: string, splitMode?: string): Promise<RideSummary>
 export function confirmFriendCharges(supabase: SupabaseAuth, token: string): Promise<ConfirmResult>

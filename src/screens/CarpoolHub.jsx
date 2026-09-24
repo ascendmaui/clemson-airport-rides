@@ -12,6 +12,7 @@ import {
   isGameWeek,
   pitchQuote,
 } from '../lib/carpoolEngine'
+import { ambassadorSavedCopy } from '../../packages/rides-native/shared/ambassadorAttribution.js'
 import {
   carpoolProgram,
   createCarpoolGroup,
@@ -79,6 +80,7 @@ export function CarpoolHub() {
         dropoff,
         displayName: user.user_metadata?.full_name || user.email?.split('@')[0],
         partyType: tailgate ? 'tailgate' : 'carpool',
+        userId: user.id,
       })
       setResult(data)
       if (data.token) {
@@ -103,6 +105,7 @@ export function CarpoolHub() {
         displayName: user.user_metadata?.full_name || user.email?.split('@')[0],
         partyType: tailgate ? 'tailgate' : 'carpool',
         driving: false,
+        userId: user.id,
       })
       const url = inviteUrl(data.token, 'carpool')
       setLink(url)
@@ -226,9 +229,9 @@ export function CarpoolHub() {
             >
               I have the car — offer seats
             </button>
-            {rememberedAmbassador() && (
-              <p style={{ fontSize: 11, color: 'var(--ink-tertiary)', marginTop: 8 }}>
-                Ambassador {rememberedAmbassador()} will be credited if this ride completes.
+            {rememberedAmbassador(user?.id) && (
+              <p style={{ fontSize: 13, color: 'var(--ink-secondary)', marginTop: 8 }}>
+                <strong>{ambassadorSavedCopy().title}.</strong> {ambassadorSavedCopy().body}
               </p>
             )}
             {error && <p style={{ color: 'var(--danger)', fontSize: 13, marginTop: 10 }}>{error}</p>}

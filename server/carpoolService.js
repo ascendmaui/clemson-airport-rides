@@ -15,6 +15,7 @@ import {
   pitchQuote,
 } from '../src/lib/carpoolEngine.js'
 import { gameDayActive } from './carpoolSettle.js'
+import { resolveAmbassadorCode, stampAmbassadorCode } from './ambassadorAttribution.js'
 
 function missingTable(error) {
   return /relation|does not exist|schema cache/i.test(error?.message || '')
@@ -65,6 +66,7 @@ export async function createGroupRide(sb, {
   driving = false,
   ambassadorCode = null,
 }) {
+  ambassadorCode = await resolveAmbassadorCode(sb, user, ambassadorCode)
   const token = randomToken(18)
   const matchMode = driving ? 'student_driver' : 'marketplace'
   const ride = await insertFriendRide(sb, {
@@ -135,6 +137,7 @@ export async function matchRider(sb, {
   partyType = 'carpool',
   ambassadorCode = null,
 }) {
+  ambassadorCode = await resolveAmbassadorCode(sb, user, ambassadorCode)
   const now = new Date()
   const gameDay = await gameDayActive(sb, now)
   const depart = departAt ? new Date(departAt) : now
@@ -238,12 +241,15 @@ export async function matchRider(sb, {
     if (linked?.friend_ride_id) {
       const { data: existing } = await sb
         .from('friend_rides')
-        .select('id, token, status')
+        .select('id, token, status, kind, fare_breakdown')
         .eq('id', linked.friend_ride_id)
         .maybeSingle()
       if (existing && existing.status === 'collecting') {
         rideId = existing.id
         token = existing.token
+        if (ambassadorCode) {
+          await stampAmbassadorCode(sb, { ...existing, kind: existing.kind || 'carpool' }, ambassadorCode)
+        }
       }
     }
     const seated = new Set()

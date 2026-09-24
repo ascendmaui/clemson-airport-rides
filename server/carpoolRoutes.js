@@ -4,6 +4,7 @@
  */
 import { admin, cors, json, parseBody, userFromAuth } from './friendRideLib.js'
 import { ambassadorFrom, ambassadorStats, createGroupRide, matchRider } from './carpoolService.js'
+import { saveAmbassadorAttribution } from './ambassadorAttribution.js'
 import { firstRideWindowOpen } from '../src/lib/carpoolEngine.js'
 import { gameDayActive } from './carpoolSettle.js'
 
@@ -62,6 +63,33 @@ export async function handleCarpoolGroup(req, res) {
   } catch (err) {
     console.error('[carpool-group]', err)
     return json(res, 500, { error: err.message || 'Could not create group link' })
+  }
+}
+
+export async function handleCarpoolAttribute(req, res) {
+  if (cors(req, res)) return
+  if (req.method !== 'POST') return json(res, 405, { error: 'Method not allowed' })
+  const sb = admin()
+  if (!sb) return json(res, 503, { error: 'SUPABASE_SERVICE_ROLE_KEY not configured' })
+  const user = await userFromAuth(req)
+  if (!user) return json(res, 401, { error: 'Sign in required' })
+  const { body, error: pe } = parseBody(req)
+  if (pe) return json(res, 400, { error: pe })
+  try {
+    const result = await saveAmbassadorAttribution(sb, user, body.code || body.ambassadorCode)
+    const status = result.ok
+      ? 200
+      : result.code === 'own_link'
+        ? 409
+        : result.code === 'schema_missing'
+          ? 503
+          : result.error === 'That ambassador link is not active.'
+            ? 404
+            : 400
+    return json(res, status, result)
+  } catch (err) {
+    console.error('[carpool-attribute]', err)
+    return json(res, 500, { error: err.message || 'Could not save ambassador attribution' })
   }
 }
 
