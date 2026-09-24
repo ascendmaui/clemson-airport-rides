@@ -41,9 +41,21 @@ import {
   PREFERRED_REQUEST_NOTE,
   driverStatusDetail,
   statusHeadline,
+  teslaFleetNotice,
+  tripTags,
 } from '../../packages/rides-native/tripTags.js'
 import { DRIVER_TRACK_STEPS, etaHoldLine, etaLineFor } from '../../packages/rides-native/liveTrip.js'
 import { LivePhase } from '../components/LivePhase'
+
+function TeslaNotice({ row }) {
+  const notice = teslaFleetNotice(tripTags(row).includes('tesla'))
+  if (!notice) return null
+  return (
+    <p style={{ color: '#522D80', fontWeight: 650, fontSize: 13, lineHeight: 1.4, marginTop: 10 }}>
+      {notice}
+    </p>
+  )
+}
 
 function centsToDollars(cents) {
   if (cents == null) return '—'
@@ -955,6 +967,7 @@ function DriverShell({ driverId }) {
               {PREFERRED_REQUEST_NOTE}
             </p>
           )}
+          <TeslaNotice row={offer} />
           <PurpleAcceptButton onClick={acceptOffer}>{acceptActionLabel(offer.status)}</PurpleAcceptButton>
           <button
             type="button"
@@ -1000,6 +1013,7 @@ function DriverShell({ driverId }) {
               activeIndex={activeStep}
             />
           </div>
+          <TeslaNotice row={activeTrip} />
           <div style={{ marginTop: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
             <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
               <span style={{ color: 'var(--orange)', fontWeight: 700 }}>●</span>
