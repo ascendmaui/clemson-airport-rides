@@ -22,7 +22,7 @@ import {
   TESLA_FLEET_NOTICE,
   type DriverCard,
 } from 'rides-native/tripTags'
-import { DRIVER_TRACK_STEPS, etaLineFor } from 'rides-native/liveTrip'
+import { DRIVER_TRACK_STEPS, etaHoldLine, etaLineFor } from 'rides-native/liveTrip'
 import { LivePhase } from 'rides-native/LivePhase'
 import { ORANGE, PURPLE } from 'rides-native/places.js'
 import { CounterpartCard, RateTripPanel, partyColorsFromPalette } from 'rides-native/PartyScreens'
@@ -160,10 +160,13 @@ export default function TripScreen() {
   const action = trip ? statusActionLabel(trip.status) : null
   const stepIndex = DRIVER_TRACK_STEPS.findIndex((step) => step.id === trip?.status)
   const etaLine = trip
-    ? etaLineFor(
+    ? etaHoldLine(
       trip.status,
-      self ? { lat: self.latitude, lng: self.longitude } : null,
-      trip,
+      etaLineFor(
+        trip.status,
+        self ? { lat: self.latitude, lng: self.longitude } : null,
+        trip,
+      ),
     )
     : null
 

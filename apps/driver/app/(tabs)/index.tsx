@@ -44,7 +44,7 @@ import {
   weekNetCents,
   type DriverCard,
 } from 'rides-native/tripTags'
-import { etaLineFor } from 'rides-native/liveTrip'
+import { etaHoldLine, etaLineFor } from 'rides-native/liveTrip'
 import { ORANGE, PURPLE } from 'rides-native/places.js'
 import { gameDayNotice, type GameDayNotice } from 'rides-native/gameDayNotice.js'
 import { approvalGateMessage, isSyntheticOffer, syntheticOffers } from 'rides-native/syntheticOffers'
@@ -286,11 +286,11 @@ export default function DriverHome() {
       setHiddenOffers((current) => (current.includes(card.id) ? current : [...current, card.id]))
       return
     }
-    if (!supabase) return
+    if (!supabase || !user) return
     setBusy(true)
     setError(null)
     try {
-      await declineTrip(supabase, card)
+      await declineTrip(supabase, card, user.id)
       pulse('decline')
       await refresh()
     } catch (err) {
@@ -320,7 +320,9 @@ export default function DriverHome() {
     : desk?.lat != null && desk?.lng != null
       ? { lat: Number(desk.lat), lng: Number(desk.lng) }
       : null
-  const liveEta = desk?.active ? etaLineFor(desk.active.status, liveFrom, desk.active) : null
+  const liveEta = desk?.active
+    ? etaHoldLine(desk.active.status, etaLineFor(desk.active.status, liveFrom, desk.active))
+    : null
   const hotspots = spots.slice().sort((a, b) => b.intensity - a.intensity).slice(0, 4)
   const pins: MapPin[] = []
   if (self) pins.push({ id: 'me', ...self, title: 'You', pinColor: ORANGE })

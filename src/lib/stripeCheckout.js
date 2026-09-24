@@ -113,6 +113,13 @@ export async function createCheckoutSession({
     throw new Error(`Checkout failed (HTTP ${res.status})`)
   }
 
+  const coveredWithoutCard = res.ok
+    && !data?.stub
+    && data?.tripId
+    && !data?.url
+    && (data.paidWithCredits || Number(data.depositCents) === 0)
+  if (coveredWithoutCard) return data
+
   if (!res.ok || data?.stub || !data?.url) {
     const combined = `${data?.message || ''} ${data?.error || ''}`
     const msg = /not configured|payments unavailable/i.test(combined)

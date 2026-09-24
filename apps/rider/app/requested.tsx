@@ -11,10 +11,10 @@ import { SosButton, SosIncomingBanner, SosSheet } from '@/components/SosSheet'
 import { useAuth } from '@/lib/auth'
 import { oneParam } from '@/lib/oneParam'
 import { supabase } from '@/lib/supabase'
-import { isLiveStatus, loadLiveTrip, subscribeLiveTrip, type LiveTrip } from '@/lib/tripWatch'
+import { loadLiveTrip, subscribeLiveTrip, type LiveTrip } from '@/lib/tripWatch'
 import { useTripById } from '@/lib/useRiderTrip'
 import { isActiveRideStatus, listEmergencyContacts, type EmergencyContact } from 'rides-native/safety.js'
-import { etaLineFor, riderLiveView } from 'rides-native/liveTrip'
+import { etaHoldLine, etaLineFor, riderLiveView, SEARCH_PREVIEW_COPY, showSearchTheater } from 'rides-native/liveTrip'
 import { LivePhase } from 'rides-native/LivePhase'
 import { isApproachStatus } from '@/lib/approachAlert'
 import { ORANGE, PURPLE } from 'rides-native/places.js'
@@ -76,7 +76,6 @@ export default function Requested() {
   const { colors } = useTheme()
   const styles = useThemedStyles(makeStyles)
   const rideLive = isActiveRideStatus(trip?.status)
-  const tracking = isLiveStatus(trip?.status || live?.status || null)
   const located = live?.driverLat != null && live?.driverLng != null
   const driverName = live?.driverName || driver
   const error = tripError || mapError
@@ -116,12 +115,18 @@ export default function Requested() {
     : null)
   const namedDriver = driver !== 'Your driver'
   const preferred = shown?.status === 'requested' || (!shown?.status && namedDriver) || (shown?.status === 'canceled' && namedDriver)
-  const phase = riderLiveView(shown?.status || null, { preferred })
-  const etaLine = etaLineFor(
+  const requestedAt = live?.requested_at ? new Date(live.requested_at).getTime() : null
+  const waitingMs = requestedAt && Number.isFinite(requestedAt) ? Date.now() - requestedAt : 0
+  const phase = riderLiveView(shown?.status || null, { preferred, waitingMs })
+  const etaLine = etaHoldLine(
     shown?.status || null,
-    live?.driverLat != null && live.driverLng != null ? { lat: live.driverLat, lng: live.driverLng } : null,
-    live,
+    etaLineFor(
+      shown?.status || null,
+      live?.driverLat != null && live.driverLng != null ? { lat: live.driverLat, lng: live.driverLng } : null,
+      live,
+    ),
   )
+  const preview = showSearchTheater(shown?.status || null)
   const approachLive = isApproachStatus(shown?.status || null)
 
   useEffect(() => {
@@ -183,7 +188,7 @@ export default function Requested() {
           <CampusMap
             spots={[]}
             showHeat={false}
-            theater={tracking && !located}
+            theater={preview && !located}
             pins={pinsFor(live)}
             gameDay={false}
             surge={false}
@@ -231,9 +236,11 @@ export default function Requested() {
             ) : null}
             {user ? <RideMessages tripId={tripId} userId={user.id} /> : null}
             <Text style={styles.body}>
-              {located
-                ? 'The orange pin is the driver location from driver_status. While they are on the way, a live distance in feet stays on screen and the screen pulses orange as they get closer.'
-                : 'Driver coordinates show up here after someone accepts and shares a location. Until then the map stays on campus.'}
+              {preview
+                ? SEARCH_PREVIEW_COPY
+                : located
+                  ? 'The orange pin is the driver location from driver_status. While they are on the way, a live distance in feet stays on screen and the screen pulses orange as they get closer.'
+                  : 'Driver coordinates show up here after someone accepts and shares a location. Until then the straight-line ETA stays on this card. Road tiles need a billed Maps key.'}
             </Text>
           </View>
         )}

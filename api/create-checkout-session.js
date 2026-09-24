@@ -18,6 +18,7 @@ import {
   parseRideAt,
   priceCheckoutBody,
 } from '../server/authoritativeFare.js'
+import { checkoutSuccessHash } from '../packages/rides-native/liveTrip.js'
 
 function checkoutOrigin(body) {
   for (const raw of [body.origin, body.successUrl]) {
@@ -134,7 +135,7 @@ export default async function handler(req, res) {
     const fareSplit = splitPlatformFee(priced.fareCents)
     const session = await stripe.checkout.sessions.create({
       mode: 'payment',
-      success_url: `${origin}/#/schedule?paid=1&trip=${tripId}`,
+      success_url: `${origin}/${checkoutSuccessHash({ tripId, scheduled: Boolean(scheduledFor) })}`,
       cancel_url: `${origin}/#/schedule?canceled=1&trip=${tripId}`,
       line_items: [{
         quantity: 1,

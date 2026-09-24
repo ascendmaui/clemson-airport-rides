@@ -173,11 +173,11 @@ export default function QueueScreen() {
       pulse('decline')
       return
     }
-    if (!supabase) return
+    if (!supabase || !user) return
     setBusyId(card.id)
     setError(null)
     try {
-      await declineTrip(supabase, card)
+      await declineTrip(supabase, card, user.id)
       pulse('decline')
       await refresh()
     } catch (err) {

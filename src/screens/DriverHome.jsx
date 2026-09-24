@@ -34,7 +34,7 @@ import {
   takeReminder,
 } from '../lib/scheduledRides'
 import { pushToast } from '../lib/toasts'
-import { declineTrip } from '../../packages/rides-native/driverDesk.js'
+import { acceptTrip, declineTrip, listPassedTripIds } from '../../packages/rides-native/driverDesk.js'
 import {
   acceptActionLabel,
   declineActionLabel,
@@ -42,7 +42,7 @@ import {
   driverStatusDetail,
   statusHeadline,
 } from '../../packages/rides-native/tripTags.js'
-import { DRIVER_TRACK_STEPS, etaLineFor } from '../../packages/rides-native/liveTrip.js'
+import { DRIVER_TRACK_STEPS, etaHoldLine, etaLineFor } from '../../packages/rides-native/liveTrip.js'
 import { LivePhase } from '../components/LivePhase'
 
 function centsToDollars(cents) {
@@ -103,6 +103,7 @@ function DriverShell({ driverId }) {
   const [scheduledMine, setScheduledMine] = useState([])
   const [acceptingScheduledId, setAcceptingScheduledId] = useState(null)
   const dismissedOffers = useRef(new Set())
+  const passedOffers = useRef(new Set())
   const knownOpen = useRef(new Set())
   const scheduledPrimed = useRef(false)
 
@@ -262,6 +263,8 @@ function DriverShell({ driverId }) {
   }, [loadScheduled])
 
   // Load open offers and preferred requests — Realtime alone misses rows already open.
+  // Do not flip searching → offered here. That update fails RLS unless driver_id is
+  // claimed, and a failed claim left riders looking at a review that never started.
   useEffect(() => {
     if (!supabase || !approved) return undefined
     let alive = true
@@ -272,7 +275,7 @@ function DriverShell({ driverId }) {
           .select('*')
           .in('status', ['searching', 'offered'])
           .order('requested_at', { ascending: false })
-          .limit(1),
+          .limit(8),
         driverId
           ? supabase
             .from('trips')
@@ -284,18 +287,21 @@ function DriverShell({ driverId }) {
           : Promise.resolve({ data: [], error: null }),
       ])
       if (!alive || open.error) return
-      const row = preferred.data?.[0] || open.data?.[0]
-      if (!row || dismissedOffers.current.has(row.id)) return
-      setOffer(row)
-      if (row.status === 'searching') {
-        await supabase
-          .from('trips')
-          .update({ status: 'offered' })
-          .eq('id', row.id)
-          .eq('status', 'searching')
-        await writeTripEvent(row.id, 'offered', { source: 'driver_home_poll' })
-        if (alive && !dismissedOffers.current.has(row.id)) setOffer({ ...row, status: 'offered' })
+      if (driverId) {
+        const passed = await listPassedTripIds(supabase, driverId)
+        if (!alive) return
+        passedOffers.current = new Set(passed)
       }
+      const preferredRow = preferred.data?.[0] || null
+      const openRow = (open.data || []).find((row) => (
+        isDueNow(row)
+        && !passedOffers.current.has(row.id)
+        && !dismissedOffers.current.has(row.id)
+      ))
+      const row = preferredRow && !dismissedOffers.current.has(preferredRow.id) ? preferredRow : openRow
+      if (!row || dismissedOffers.current.has(row.id)) return
+      if ((row.status === 'searching' || row.status === 'offered') && !isDueNow(row)) return
+      setOffer(row)
     }
     loadOffers()
     return () => {
@@ -346,12 +352,10 @@ function DriverShell({ driverId }) {
         setOffer(row)
       }
       if (row.status === 'searching' || row.status === 'offered') {
+        if (passedOffers.current.has(row.id)) return
+        if (!isDueNow(row)) return
         if (!activeTrip && !dismissedOffers.current.has(row.id)) {
           setOffer((current) => (current?.status === 'requested' ? current : row))
-          if (row.status === 'searching' && supabase) {
-            writeTripEvent(row.id, 'offered', { source: 'realtime' })
-            supabase.from('trips').update({ status: 'offered' }).eq('id', row.id).eq('status', 'searching')
-          }
         }
       }
       if (row.status === 'accepted' && row.driver_id === driverId) {
@@ -381,27 +385,31 @@ function DriverShell({ driverId }) {
   async function acceptOffer() {
     if (!approved) return
     if (!offer?.id || !supabase || !driverId) return
-    const acceptedAt = new Date().toISOString()
-    const { error } = await supabase
-      .from('trips')
-      .update({
-        status: 'accepted',
-        driver_id: driverId,
-        accepted_at: acceptedAt,
+    try {
+      const saved = await acceptTrip(supabase, offer, driverId)
+      if (!saved?.id) {
+        throw new Error('That ride is no longer available')
+      }
+      const kept = {
+        ...offer,
+        status: saved.status || 'accepted',
+        driver_id: saved.driver_id || driverId,
+        accepted_at: saved.accepted_at,
+      }
+      setActiveTrip(kept)
+      setOffer(null)
+      pushToast({
+        kind: 'driver_accepted',
+        title: 'Ride accepted',
+        body: 'Head to pickup. The rider’s live trip updates from this accept.',
       })
-      .eq('id', offer.id)
-    if (error) {
-      console.error(error)
-      return
+    } catch (err) {
+      pushToast({
+        kind: 'system',
+        title: 'Could not accept',
+        body: err.message || 'That ride is no longer available.',
+      })
     }
-    await writeTripEvent(offer.id, 'accepted', {
-      driver_id: driverId,
-      accepted_at: acceptedAt,
-      fare_cents: offer.fare_cents,
-    })
-    const kept = { ...offer, status: 'accepted', driver_id: driverId, accepted_at: acceptedAt }
-    setActiveTrip(kept)
-    setOffer(null)
   }
 
   async function acceptScheduled(tripId) {
@@ -463,13 +471,29 @@ function DriverShell({ driverId }) {
       setOffer(null)
       return
     }
-    dismissedOffers.current.add(offer.id)
+    const current = offer
+    dismissedOffers.current.add(current.id)
     try {
-      await declineTrip(supabase, { id: offer.id, status: offer.status })
+      await declineTrip(supabase, { id: current.id, status: current.status }, driverId)
+      if (current.status !== 'requested') passedOffers.current.add(current.id)
       setOffer(null)
     } catch (err) {
-      dismissedOffers.current.delete(offer.id)
-      console.error(err)
+      if (current.status === 'requested') {
+        dismissedOffers.current.delete(current.id)
+        pushToast({
+          kind: 'system',
+          title: 'Could not decline',
+          body: err.message || 'This preferred request is still yours.',
+        })
+        return
+      }
+      passedOffers.current.add(current.id)
+      setOffer(null)
+      pushToast({
+        kind: 'system',
+        title: 'Passed for now',
+        body: err.message || 'This ride stays in the open pool for another driver.',
+      })
     }
   }
 
@@ -555,7 +579,9 @@ function DriverShell({ driverId }) {
   const showIdle = !offer && !activeTrip
   const scheduledNotDone = Boolean(activeTrip?.pickup_at) && activeTrip.status !== 'completed'
   const driverFix = selfPos ? { lat: selfPos[0], lng: selfPos[1] } : null
-  const activeEta = activeTrip ? etaLineFor(activeTrip.status, driverFix, activeTrip) : null
+  const activeEta = activeTrip
+    ? etaHoldLine(activeTrip.status, etaLineFor(activeTrip.status, driverFix, activeTrip))
+    : null
   const activeStep = activeTrip ? DRIVER_TRACK_STEPS.findIndex((step) => step.id === activeTrip.status) : -1
 
   return (

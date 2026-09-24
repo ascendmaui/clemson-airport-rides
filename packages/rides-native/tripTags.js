@@ -283,6 +283,18 @@ export function acceptActionLabel(status) {
   }
 }
 
+/** Open-pool and preferred accepts require driver_status.online. Scheduled rides do not. */
+export function acceptNeedsDriverOnline(status) {
+  switch (status) {
+    case 'searching':
+    case 'offered':
+    case 'requested':
+      return true
+    default:
+      return false
+  }
+}
+
 export function toDriverCard(row, options) {
   if (!row?.id) return null
   const meta = metaOf(row)

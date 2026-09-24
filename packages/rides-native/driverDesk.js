@@ -4,6 +4,7 @@
  */
 import { authedJson } from './apiClient.js'
 import {
+  acceptNeedsDriverOnline,
   declineDisposition,
   formatCents,
   isActiveStatus,
@@ -195,8 +196,11 @@ export async function loadDriverDesk(supabase, driverId) {
   ])
   if (statusRes.error) throw new Error(statusRes.error.message)
 
+  const passedIds = new Set(await listPassedTripIds(supabase, driverId))
   const offers = cards(openRows, gameDayLive).filter((card) => {
+    if (card.status !== 'requested' && passedIds.has(card.id)) return false
     if (card.status === 'requested') return card.driverId === driverId
+    if ((card.status === 'searching' || card.status === 'offered') && !isDueNow(card)) return false
     return !card.driverId || card.driverId === driverId
   })
   const active = cards(activeRows, gameDayLive).find((card) => isDueNow(card)) || null
@@ -229,6 +233,31 @@ export function subscribeTrips(supabase, onChange) {
   }
 }
 
+export async function listPassedTripIds(supabase, driverId) {
+  if (!supabase || !driverId) return []
+  const { data, error } = await supabase
+    .from('driver_offer_passes')
+    .select('trip_id')
+    .eq('driver_id', driverId)
+  if (error) return []
+  return (data || []).map((row) => row.trip_id).filter(Boolean)
+}
+
+async function rememberPass(supabase, tripId, driverId) {
+  let id = driverId
+  if (!id) {
+    const auth = await supabase.auth.getUser()
+    id = auth.data?.user?.id || null
+  }
+  if (!id || !tripId) return false
+  const { error } = await supabase.from('driver_offer_passes').upsert({ driver_id: id, trip_id: tripId })
+  if (error) {
+    console.warn('[pass]', error.message)
+    return false
+  }
+  return true
+}
+
 export async function acceptTrip(supabase, trip, driverId) {
   if (!trip?.id) throw new Error('Missing ride')
   if (trip.isSynthetic === true || String(trip.id).startsWith('synthetic-')) {
@@ -242,6 +271,11 @@ export async function acceptTrip(supabase, trip, driverId) {
   if (gate.error) throw new Error(gate.error.message)
   if (gate.data?.onboarding_status !== 'approved') {
     throw new Error('Finish approval to go online. Your account is still under review.')
+  }
+  if (acceptNeedsDriverOnline(trip.status)) {
+    const presence = await supabase.from('driver_status').select('online').eq('driver_id', driverId).maybeSingle()
+    if (presence.error) throw new Error(presence.error.message)
+    if (!presence.data?.online) throw new Error('Go online before accepting a ride.')
   }
   if (trip.status === 'scheduled') {
     const { data, error } = await supabase.rpc('accept_scheduled_trip', { p_trip_id: trip.id })
@@ -273,20 +307,39 @@ export async function publishDriverCapacity(supabase, driverId, seats) {
   throw new Error(first.error.message)
 }
 
-export async function declineTrip(supabase, tripOrId) {
+export async function declineTrip(supabase, tripOrId, driverId = null) {
   const trip = typeof tripOrId === 'string' ? { id: tripOrId, status: 'requested' } : tripOrId
   if (!trip?.id) return { disposition: 'leave' }
   const disposition = declineDisposition(trip.status)
   if (disposition === 'leave') return { disposition }
   if (disposition === 'release') {
-    const { error } = await supabase
-      .from('trips')
-      .update({ status: 'searching', driver_id: null })
-      .eq('id', trip.id)
-      .in('status', ['searching', 'offered'])
-    if (error) throw new Error(error.message)
-    await writeTripEvent(supabase, trip.id, 'released', { reason: 'driver_decline', source: 'driver_app' })
-    return { disposition }
+    // Open-pool rows stay driver_id null. RLS only lets an online driver claim
+    // them (accepted or offered with their own id), so a decline cannot rewrite
+    // the trip back to searching. Record a pass and leave it in the pool.
+    const passed = await rememberPass(supabase, trip.id, driverId)
+    let released = false
+    if (trip.status === 'offered') {
+      const { data, error } = await supabase
+        .from('trips')
+        .update({ status: 'searching', driver_id: null })
+        .eq('id', trip.id)
+        .eq('status', 'offered')
+        .is('driver_id', null)
+        .select('id')
+        .maybeSingle()
+      if (error && !passed) throw new Error(error.message)
+      released = Boolean(data)
+    }
+    if (!passed && !released) {
+      throw new Error('Could not pass on this ride. It is still in the open pool.')
+    }
+    await writeTripEvent(supabase, trip.id, 'released', {
+      reason: 'driver_decline',
+      source: 'driver_app',
+      passed,
+      released,
+    })
+    return { disposition, passed, released }
   }
   const canceledAt = new Date().toISOString()
   const { error } = await supabase

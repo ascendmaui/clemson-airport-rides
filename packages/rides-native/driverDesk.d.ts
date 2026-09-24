@@ -64,11 +64,13 @@ export function publishDriverCapacity(
   driverId: string,
   seats: number | null | undefined,
 ): Promise<{ seats: number | null; stored: boolean }>
+export function listPassedTripIds(supabase: unknown, driverId: string): Promise<string[]>
 export function acceptTrip(supabase: unknown, trip: { id: string; status: string }, driverId: string): Promise<unknown>
 export function declineTrip(
   supabase: unknown,
   tripOrId: string | { id: string; status?: string },
-): Promise<{ disposition: 'release' | 'leave' | 'cancel' }>
+  driverId?: string | null,
+): Promise<{ disposition: 'release' | 'leave' | 'cancel'; passed?: boolean; released?: boolean }>
 export function loadRiderFix(
   supabase: unknown,
   tripId: string,
