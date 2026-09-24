@@ -1,12 +1,12 @@
 import { useMemo, useState } from 'react'
 import { Pressable, ScrollView, Text, TextInput, View } from 'react-native'
 import {
+  catalogStops,
   clusterOf,
-  hotNeighborhoods,
+  hotCatalogPlaces,
   neighborhoodsInGroup,
   placeOf,
-  searchNeighborhoods,
-  type Neighborhood,
+  searchCatalogPlaces,
   type NeighborhoodGroup,
   type Place,
 } from 'rides-native/shared/carpool.js'
@@ -15,14 +15,32 @@ import type { Palette } from '@/lib/palette'
 import { useTheme } from '@/lib/theme'
 import { useThemedStyles } from '@/lib/useThemedStyles'
 
-type GroupFilter = NeighborhoodGroup['id'] | 'all'
+type GroupFilter = NeighborhoodGroup['id'] | 'airports' | 'all'
 
 const FILTERS: { id: GroupFilter; label: string }[] = [
   { id: 'housing', label: 'Housing' },
   { id: 'bars', label: 'Bars' },
   { id: 'campus', label: 'Campus' },
+  { id: 'airports', label: 'Airports' },
   { id: 'all', label: 'All' },
 ]
+
+function stopsForGroup(group: GroupFilter): { id: string; label: string; lat: number; lng: number }[] {
+  switch (group) {
+    case 'airports':
+      return catalogStops().filter((stop) => stop.kind === 'airport')
+    case 'all':
+      return catalogStops()
+    case 'housing':
+    case 'bars':
+    case 'campus':
+      return neighborhoodsInGroup(group)
+    default: {
+      const exhaustive: never = group
+      return exhaustive
+    }
+  }
+}
 
 export function NeighborhoodPicker({
   label,
@@ -35,9 +53,9 @@ export function NeighborhoodPicker({
 }) {
   const [query, setQuery] = useState('')
   const [group, setGroup] = useState<GroupFilter>('housing')
-  const hot = useMemo(() => hotNeighborhoods(), [])
-  const results = useMemo(() => searchNeighborhoods(query), [query])
-  const listed = query.trim() ? results : neighborhoodsInGroup(group)
+  const hot = useMemo(() => hotCatalogPlaces(), [])
+  const results = useMemo(() => searchCatalogPlaces(query), [query])
+  const listed = query.trim() ? results : stopsForGroup(group)
   const cluster = clusterOf(value)
   const { colors } = useTheme()
   const styles = useThemedStyles(makeStyles)
@@ -48,7 +66,7 @@ export function NeighborhoodPicker({
       <TextInput
         value={query}
         onChangeText={setQuery}
-        placeholder="Grand Marc, stadium, bars…"
+        placeholder="Grand Marc, stadium, GSP…"
         placeholderTextColor={colors.placeholder}
         autoCorrect={false}
         autoCapitalize="words"
@@ -79,7 +97,7 @@ export function NeighborhoodPicker({
         })}
       </View>
       {query.trim() && results.length === 0 ? (
-        <EmptyState title="No neighborhood match" body="Try Grand Marc, College Ave, the stadium, a downtown bar, or a housing name." />
+        <EmptyState title="No campus or airport match" body="Try Grand Marc, College Ave, the stadium, a downtown bar, or GSP." />
       ) : (
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
           {listed.map((spot) => (
@@ -94,7 +112,7 @@ export function NeighborhoodPicker({
   )
 }
 
-function Chip({ spot, selected, onPress }: { spot: Neighborhood; selected: boolean; onPress: () => void }) {
+function Chip({ spot, selected, onPress }: { spot: { id: string; label: string }; selected: boolean; onPress: () => void }) {
   const styles = useThemedStyles(makeStyles)
   return (
     <Pressable

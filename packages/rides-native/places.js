@@ -1,4 +1,5 @@
 /** Campus geography shared with src/components/CampusMap.jsx and RiderHome shortcuts. */
+import { lookupCatalogPlace } from '../../src/lib/placeCatalog.js'
 
 export const ORANGE = '#F56600'
 export const ORANGE_BRIGHT = '#F66733'
@@ -44,12 +45,22 @@ const DEST_POINTS = [
   { test: /stadium|death valley/, point: STADIUM },
 ]
 
-export function destPoint(label) {
+function pointForLabel(label, fallback) {
+  const found = lookupCatalogPlace(label)
+  if (found) return { latitude: found.lat, longitude: found.lng }
   const key = String(label || '').trim().toLowerCase()
   for (const row of DEST_POINTS) {
     if (row.test.test(key)) return row.point
   }
-  return GSP
+  return fallback
+}
+
+export function destPoint(label) {
+  return pointForLabel(label, GSP)
+}
+
+export function pickupPoint(label) {
+  return pointForLabel(label, STADIUM)
 }
 
 export function formatUsd(amount) {

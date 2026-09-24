@@ -41,6 +41,8 @@ export async function recomputeRideFares(sb, token, { splitMode } = {}) {
   const route = await computeRoutes(wp.origin, wp.destination, wp.intermediates)
   const isCarpool = ride.kind === 'carpool'
   if (route.error && !isCarpool) {
+    // TODO: friend-ride recompute calls Google Routes and needs a billed GOOGLE_MAPS_API_KEY.
+    // Do not invent a key. Carpool quotes in this function still use campus distance when Routes is missing.
     return {
       ok: false,
       error: route.error,

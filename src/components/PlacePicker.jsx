@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useJsApiLoader } from '@react-google-maps/api'
 import { FRIEND_PLACES } from '../lib/friendRides'
+import { hotCatalogPlaces, lookupCatalogPlace, placeFromStop, searchCatalogPlaces } from '../lib/placeCatalog'
 import { MAPS_LOADER_ID, MAP_LIBRARIES, mapsLoaderOptions } from '../lib/googleMapsLoader'
 
 const CURRENT = { label: 'Current location', lat: null, lng: null, _current: true }
@@ -55,10 +56,33 @@ export function PlacePicker({
   const [locBusy, setLocBusy] = useState(false)
   const [locError, setLocError] = useState(null)
   const [confirmOpen, setConfirmOpen] = useState(false)
+  const [query, setQuery] = useState('')
+  const [searchOpen, setSearchOpen] = useState(false)
   const inputRef = useRef(null)
   const acRef = useRef(null)
+  const suggestions = useMemo(() => {
+    if (!searchOpen) return []
+    const found = searchCatalogPlaces(query)
+    return (found.length ? found : query.trim().length < 2 ? hotCatalogPlaces() : []).slice(0, 6)
+  }, [query, searchOpen])
 
   useEffect(() => {
+    if (!inputRef.current || document.activeElement === inputRef.current) return
+    inputRef.current.value = value?.label || ''
+  }, [value?.label])
+
+  function chooseCatalog(stop) {
+    const place = placeFromStop(stop)
+    if (!place) return
+    onChange?.(place)
+    setQuery('')
+    setSearchOpen(false)
+    if (inputRef.current) inputRef.current.value = place.label
+  }
+
+  useEffect(() => {
+    // TODO: free-form street addresses need a billed VITE_GOOGLE_MAPS_API_KEY (Places).
+    // Campus and airport stops use the local catalog and do not need that key.
     if (mode !== 'dropoff' || !isLoaded || !apiKey || !inputRef.current) return undefined
     if (!window.google?.maps?.places?.Autocomplete) return undefined
     if (acRef.current) return undefined
@@ -75,6 +99,7 @@ export function PlacePicker({
       const lng = loc.lng()
       const placeLabel = place.formatted_address || place.name || `${lat.toFixed(4)}, ${lng.toFixed(4)}`
       onChange?.({ label: placeLabel, lat, lng })
+      setSearchOpen(false)
     })
     return () => {
       if (listener) listener.remove()
@@ -127,24 +152,72 @@ export function PlacePicker({
               return
             }
             const preset = presets.find((x) => x.label === v)
-            onChange?.(preset || null)
+            const catalog = lookupCatalogPlace(v)
+            onChange?.(preset || (catalog ? { label: catalog.label, lat: catalog.lat, lng: catalog.lng } : null))
           }}
           style={{ width: '100%', padding: 12, borderRadius: 12, border: '1px solid var(--border)', background: '#fff' }}
         >
           <option value="">Select place…</option>
           <option value="__current__">{CURRENT.label}</option>
+          {selectedLabel && selectedLabel !== 'Current location' && !presets.some((p) => p.label === selectedLabel) ? (
+            <option value={selectedLabel}>{selectedLabel}</option>
+          ) : null}
           {presets.map((p) => (
             <option key={p.label} value={p.label}>{p.label}</option>
           ))}
         </select>
-      ) : (
-        <input
-          ref={inputRef}
-          defaultValue={selectedLabel}
-          placeholder={apiKey ? 'Search any address…' : 'Address search needs Maps API key'}
-          style={{ width: '100%', padding: 12, borderRadius: 12, border: '1px solid var(--border)', background: '#fff' }}
-        />
-      )}
+      ) : null}
+
+      <input
+        ref={inputRef}
+        defaultValue={selectedLabel}
+        placeholder={apiKey && !isPickup ? 'Search campus, airport, or an address…' : 'Search Grand Marc, stadium, GSP…'}
+        onFocus={() => setSearchOpen(true)}
+        onInput={(e) => {
+          setQuery(e.target.value)
+          setSearchOpen(true)
+        }}
+        style={{ width: '100%', padding: 12, borderRadius: 12, border: '1px solid var(--border)', background: '#fff', marginTop: isPickup ? 8 : 0 }}
+      />
+      {searchOpen && suggestions.length > 0 ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 6 }}>
+          {suggestions.map((stop) => (
+            <button
+              key={stop.id}
+              type="button"
+              className="pressable"
+              onClick={() => chooseCatalog(stop)}
+              style={{
+                textAlign: 'left',
+                padding: '8px 12px',
+                borderRadius: 12,
+                border: '1px solid rgba(82,45,128,0.25)',
+                background: selectedLabel === stop.label ? 'rgba(82,45,128,0.12)' : '#fff',
+                color: 'var(--purple)',
+                fontWeight: 700,
+                fontSize: 13,
+              }}
+            >
+              {stop.label}
+              <span style={{ fontWeight: 600, color: 'var(--ink-tertiary)', marginLeft: 8 }}>
+                {stop.kind === 'airport' ? 'Airport' : 'Campus'}
+              </span>
+            </button>
+          ))}
+        </div>
+      ) : null}
+      {searchOpen && query.trim().length >= 2 && suggestions.length === 0 ? (
+        <p style={{ fontSize: 12, color: 'var(--ink-secondary)', marginTop: 6 }}>
+          {apiKey && !isPickup
+            ? 'No campus or airport match. Use a Google address suggestion, or pick a chip.'
+            : 'No campus or airport match. Try Grand Marc, College Ave, the stadium, or GSP.'}
+        </p>
+      ) : null}
+      {!apiKey && !isPickup ? (
+        <p style={{ fontSize: 12, color: 'var(--ink-tertiary)', marginTop: 6 }}>
+          Street addresses need a Maps key. Campus and airport stops work from the list.
+        </p>
+      ) : null}
 
       {selectedLabel ? (
         <div style={{ fontSize: 12, color: 'var(--ink-tertiary)', marginTop: 6 }}>

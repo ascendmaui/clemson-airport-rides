@@ -105,10 +105,27 @@ export function neighborhoodById(id: string): Neighborhood | null
 export function hotNeighborhoods(): Neighborhood[]
 export function neighborhoodsInGroup(groupId: NeighborhoodGroup['id'] | 'all'): Neighborhood[]
 export function searchNeighborhoods(query: string): Neighborhood[]
-export function placeOf(neighborhood: Neighborhood): Place
+export function placeOf(neighborhood: { label: string; lat: number; lng: number }): Place
 export function defaultCarpoolEnds(): { pickup: Place; dropoff: Place }
 export function clusterOf(point: { label?: string; lat?: number; lng?: number } | null): { id: string; label: string } | null
 export function parseCarpoolToken(raw: string): string
 export function formatEta(seconds: number): string
 export function formatMiles(meters: number): string
+export type CatalogStop = {
+  id: string
+  label: string
+  lat: number
+  lng: number
+  kind: 'campus' | 'airport'
+  aliases: string[]
+}
+
+export function catalogStops(): CatalogStop[]
+export function searchCatalogPlaces(query: string): CatalogStop[]
+export function lookupCatalogPlace(label: string | null | undefined): CatalogStop | null
+export function placeFromStop(stop: CatalogStop | null | undefined): Place | null
+export function hotCatalogPlaces(): CatalogStop[]
+export const OFFER_CARPOOL_STEPS: string[]
+export const OFFER_CARPOOL_MAPS_NOTE: string
+
 export function riderDisplayName(user: { email?: string | null; user_metadata?: { full_name?: string } } | null | undefined): string

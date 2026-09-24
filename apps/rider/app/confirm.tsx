@@ -1,6 +1,6 @@
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useState } from 'react'
-import { Pressable, Text, TextInput, View } from 'react-native'
+import { Pressable, ScrollView, Text, TextInput, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { PrimaryButton, SheetHandle } from '@/components/Button'
 import { CampusMap } from '@/components/CampusMap'
@@ -8,6 +8,8 @@ import { SignInToBookSheet } from '@/components/SignInToBookSheet'
 import { setAuthNext } from '@/lib/authNext'
 import { useAuth } from '@/lib/auth'
 import { oneParam } from '@/lib/oneParam'
+import { lookupCatalogPlace, placeFromStop, type Place } from 'rides-native/shared/carpool.js'
+import { NeighborhoodPicker } from '@/components/carpool/NeighborhoodPicker'
 import { lift } from '@/lib/elevation'
 import type { Palette } from '@/lib/palette'
 import { useTheme } from '@/lib/theme'
@@ -19,7 +21,9 @@ export default function ConfirmPickup() {
   const params = useLocalSearchParams<{ dest?: string }>()
   const dest = oneParam(params.dest, 'GSP Airport')
   const { user } = useAuth()
-  const [address, setAddress] = useState('Memorial Stadium · Lot 5')
+  const initialPickup = placeFromStop(lookupCatalogPlace('Memorial Stadium')) || { label: 'Memorial Stadium', lat: 34.6788, lng: -82.843 }
+  const [pickup, setPickup] = useState<Place>(initialPickup)
+  const [address, setAddress] = useState(initialPickup.label)
   const [note, setNote] = useState('')
   const [promptOpen, setPromptOpen] = useState(false)
   const { colors } = useTheme()
@@ -46,14 +50,31 @@ export default function ConfirmPickup() {
         </Pressable>
         <Text style={styles.title}>Confirm pickup spot</Text>
       </View>
+      <ScrollView contentContainerStyle={{ paddingBottom: insets.bottom + 24 }} keyboardShouldPersistTaps="handled">
       <View style={styles.map}>
-        <CampusMap spots={[]} showHeat={false} />
+        <CampusMap
+          spots={[]}
+          showHeat={false}
+          pins={[{
+            id: 'pickup',
+            latitude: pickup.lat,
+            longitude: pickup.lng,
+            title: pickup.label,
+            color: colors.orange,
+          }]}
+        />
       </View>
-      <Text style={styles.hint}>Pin stays on Memorial Stadium. Drag-to-adjust ships with live tracking.</Text>
+      <Text style={styles.hint}>Pickup is a campus or airport stop. Dragging the pin still needs a live Maps session.</Text>
       <View style={[styles.sheet, lift(colors, 'float')]}>
         <SheetHandle />
-        <Text style={styles.fieldLabel}>Pickup address</Text>
-        <TextInput value={address} onChangeText={setAddress} style={styles.input} />
+        <NeighborhoodPicker
+          label="Pickup"
+          value={pickup}
+          onChange={(next) => {
+            setPickup(next)
+            setAddress(next.label)
+          }}
+        />
         <Text style={styles.fieldLabel}>Add note for driver</Text>
         <TextInput
           value={note}
@@ -68,6 +89,7 @@ export default function ConfirmPickup() {
         </Text>
         <PrimaryButton label="Confirm pickup" onPress={onConfirm} />
       </View>
+      </ScrollView>
       <SignInToBookSheet
         open={promptOpen}
         onClose={() => setPromptOpen(false)}
@@ -94,7 +116,7 @@ function makeStyles(colors: Palette) {
     map: { height: 260, marginHorizontal: 16, borderRadius: 18, overflow: 'hidden' as const },
     hint: { textAlign: 'center' as const, color: colors.placeholder, fontSize: 12, marginTop: 8 },
     sheet: {
-      marginTop: 'auto' as const,
+      marginTop: 12,
       backgroundColor: colors.card,
       borderTopLeftRadius: 24,
       borderTopRightRadius: 24,

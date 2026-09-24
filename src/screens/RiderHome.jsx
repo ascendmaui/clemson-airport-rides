@@ -4,6 +4,7 @@ import { Pill } from '../components/Pill'
 import { BottomTabs } from '../components/BottomTabs'
 import { CampusMap, STADIUM } from '../components/CampusMap'
 import { navigate } from '../lib/navigation'
+import { hotCatalogPlaces, lookupCatalogPlace, searchCatalogPlaces } from '../lib/placeCatalog'
 import { DOWNTOWN_CENTER } from '../lib/downtownHeat'
 import { HEAT_WINDOWS } from '../lib/rideDemand'
 import { RiderWaitBanner } from '../components/WaitFeeCard'
@@ -20,8 +21,10 @@ export function RiderHome({ riderName = 'John' }) {
   const [showBusy, setShowBusy] = useState(true)
   const [heatWindow, setHeatWindow] = useState('now')
   const [heatMeta, setHeatMeta] = useState(null)
+  const suggestions = query.trim().length >= 2 ? searchCatalogPlaces(query).slice(0, 6) : hotCatalogPlaces()
   const goSearch = (dest) => {
-    navigate('confirm', { dest: dest || query || 'GSP Airport' })
+    const known = lookupCatalogPlace(dest || query)
+    navigate('confirm', { dest: known?.label || dest || query || 'GSP Airport' })
   }
 
   return (
@@ -87,6 +90,31 @@ export function RiderHome({ riderName = 'John' }) {
             onFocus={() => {}}
             orangeOutline
           />
+          <div style={{ display: 'flex', gap: 8, overflowX: 'auto', marginTop: 8, paddingBottom: 4 }}>
+            {suggestions.map((stop) => (
+              <button
+                key={stop.id}
+                type="button"
+                className="pressable"
+                onClick={() => {
+                  setQuery(stop.label)
+                  goSearch(stop.label)
+                }}
+                style={{
+                  flex: '0 0 auto',
+                  borderRadius: 999,
+                  padding: '7px 12px',
+                  fontSize: 12,
+                  fontWeight: 700,
+                  border: query === stop.label ? 'none' : '1px solid var(--border)',
+                  background: query === stop.label ? 'var(--purple)' : 'var(--surface)',
+                  color: query === stop.label ? '#fff' : 'var(--purple)',
+                }}
+              >
+                {stop.label}
+              </button>
+            ))}
+          </div>
           <div style={{ height: 8 }} />
           <button
             type="button"

@@ -39,8 +39,10 @@ import {
   formatUsd,
   illustrativePeakAt,
   isGameWeek,
+  lookupCatalogPlace,
   parseCarpoolToken,
   pitchQuote,
+  placeFromStop,
   riderDisplayName,
   type Place,
 } from 'rides-native/shared/carpool.js'
@@ -48,9 +50,9 @@ import { offerCapacity } from 'rides-native/shared/vehicle.js'
 import type { Palette } from '@/lib/palette'
 import { useTheme } from '@/lib/theme'
 import { useThemedStyles } from '@/lib/useThemedStyles'
-import { RIDE_PLACES } from 'rides-native/riderShell.js'
-
 const START = defaultCarpoolEnds()
+const FRIEND_START = placeFromStop(lookupCatalogPlace('White C')) || START.pickup
+const FRIEND_END = placeFromStop(lookupCatalogPlace('College Avenue')) || START.dropoff
 
 export default function CarpoolHubScreen() {
   const router = useRouter()
@@ -86,16 +88,14 @@ export default function CarpoolHubScreen() {
   const [friendEmail, setFriendEmail] = useState('')
   const [friends, setFriends] = useState<SavedFriend[]>([])
   const [activity, setActivity] = useState<FriendActivity[]>([])
-  const [friendPickup, setFriendPickup] = useState('White C')
-  const [friendDropoff, setFriendDropoff] = useState('Downtown Clemson')
+  const [friendPickup, setFriendPickup] = useState<Place>(FRIEND_START)
+  const [friendDropoff, setFriendDropoff] = useState<Place>(FRIEND_END)
   const [splitMode, setSplitMode] = useState<'even' | 'by_distance'>('even')
   const [friendBusy, setFriendBusy] = useState(false)
   const [friendError, setFriendError] = useState<string | null>(null)
   const [friendNote, setFriendNote] = useState<string | null>(null)
   const [promptOpen, setPromptOpen] = useState(false)
-  const friendFrom = RIDE_PLACES.find((place) => place.label === friendPickup) || RIDE_PLACES[0]
-  const friendTo = RIDE_PLACES.find((place) => place.label === friendDropoff) || RIDE_PLACES[2]
-  const friendQuote = quoteRide(friendFrom, friendTo, false)
+  const friendQuote = quoteRide(friendPickup, friendDropoff, false)
   const shareCents = splitMode === 'even' ? Math.round(friendQuote.fareCents / 2) : friendQuote.fareCents
 
   useFocusEffect(useCallback(() => {
@@ -246,7 +246,7 @@ export default function CarpoolHubScreen() {
       setPromptOpen(true)
       return
     }
-    if (friendFrom.label === friendTo.label) {
+    if (friendPickup.label === friendDropoff.label) {
       setFriendError('Pickup and drop-off need to be different places.')
       return
     }
@@ -256,14 +256,18 @@ export default function CarpoolHubScreen() {
     try {
       const created = await startRideTogether({
         displayName: riderDisplayName(user),
-        pickup: friendFrom,
-        dropoff: friendTo,
+        pickup: friendPickup,
+        dropoff: friendDropoff,
         splitMode,
         partyType: tailgate ? 'tailgate' : 'carpool',
       })
       const token = typeof created.token === 'string' ? created.token : ''
-      setFriendNote(token ? `Ride together started · ${token.slice(0, 8)}` : 'Ride together request sent.')
       await successHaptic()
+      if (token) {
+        router.push(`/carpool/${token}`)
+        return
+      }
+      setFriendNote('Ride together request sent.')
       setActivity(await listFriendActivity(user.id))
     } catch (err) {
       setFriendError(err instanceof Error ? err.message : 'Could not start the group ride')
@@ -421,19 +425,12 @@ export default function CarpoolHubScreen() {
 
           <Card>
             <Text style={styles.cardTitle}>Ride together</Text>
-            <Text style={styles.note}>Split evenly or by distance. Party weekend follows the tailgate switch above.</Text>
-            <Text style={styles.tailgateLabel}>Pickup</Text>
-            <View style={styles.friendPills}>
-              {RIDE_PLACES.map((place) => (
-                <Pill key={`fpu-${place.label}`} label={place.label} active={friendPickup === place.label} onPress={() => setFriendPickup(place.label)} />
-              ))}
-            </View>
-            <Text style={styles.tailgateLabel}>Drop-off</Text>
-            <View style={styles.friendPills}>
-              {RIDE_PLACES.map((place) => (
-                <Pill key={`fdo-${place.label}`} label={place.label} active={friendDropoff === place.label} onPress={() => setFriendDropoff(place.label)} />
-              ))}
-            </View>
+            <Text style={styles.note}>
+              Split evenly or by distance. Party weekend follows the tailgate switch above.
+              Stops save from the campus and airport list. Friend-ride route miles still need the server Maps key.
+            </Text>
+            <NeighborhoodPicker label="Pickup" value={friendPickup} onChange={setFriendPickup} />
+            <NeighborhoodPicker label="Drop-off" value={friendDropoff} onChange={setFriendDropoff} />
             <View style={styles.friendPills}>
               <Pill label="Split evenly" active={splitMode === 'even'} onPress={() => { void tapHaptic(); setSplitMode('even') }} />
               <Pill label="Split by distance" active={splitMode === 'by_distance'} onPress={() => { void tapHaptic(); setSplitMode('by_distance') }} />
