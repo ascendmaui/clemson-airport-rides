@@ -14,6 +14,7 @@ import {
 } from '../shared/paymentFailure.js'
 import { isAdminIdentity } from '../shared/adminAccess.js'
 import { ensureAuthoritativeFare, storedFareCents } from './authoritativeFare.js'
+import { farePaidCents, tripChargeKey } from './chargeIdempotency.js'
 
 const ACTIVE_KEEP = new Set(['accepted', 'arriving', 'in_progress', 'payment_required', 'searching', 'offered'])
 
@@ -111,6 +112,7 @@ export async function settleTrip({
   }
 
   const chargeKind = action === 'complete' ? (due.kind || 'balance') : kind
+  const paidCents = farePaidCents(trip)
   let payment = null
   if (due.amountCents > 0 && !override) {
     payment = await collectPayment({
@@ -122,7 +124,7 @@ export async function settleTrip({
       amountCents: due.amountCents,
       methods,
       kind: chargeKind,
-      idempotencyKey: `${trip.id}:${chargeKind}:${due.amountCents}`,
+      idempotencyKey: tripChargeKey(trip.id, trip.rider_id, chargeKind, paidCents),
       hold: true,
       midRide: action !== 'complete' || ['accepted', 'arriving', 'in_progress'].includes(trip.status),
       paymentMethodId,
@@ -138,7 +140,7 @@ export async function settleTrip({
       amountCents: due.amountCents,
       kind: chargeKind,
       adminOverride: true,
-      idempotencyKey: `${trip.id}:${chargeKind}:${due.amountCents}:admin`,
+      idempotencyKey: tripChargeKey(trip.id, trip.rider_id, `${chargeKind}:admin`, paidCents),
       hold: true,
     })
   }

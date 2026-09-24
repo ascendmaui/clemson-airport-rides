@@ -9,6 +9,7 @@ import {
 } from '../friendRideLib.js'
 import { collectPayment } from '../collectPayment.js'
 import { ensureAuthoritativeFare, serverCollectCents, storedFareCents } from '../authoritativeFare.js'
+import { farePaidCents, tripChargeKey } from '../chargeIdempotency.js'
 
 const KINDS = new Set(['balance', 'tip', 'wait_fee', 'cancel_fee', 'mid_ride', 'friend_ride_share', 'deposit', 'credits_purchase'])
 
@@ -80,7 +81,7 @@ export default async function handler(req, res) {
       kind,
       methods: body.methods,
       paymentMethodId: body.paymentMethodId || null,
-      idempotencyKey: body.idempotencyKey || (trip ? `${trip.id}:${kind}:${amountCents}` : null),
+      idempotencyKey: body.idempotencyKey || (trip ? tripChargeKey(trip.id, riderId, kind, farePaidCents(trip)) : null),
       midRide: Boolean(body.midRide) || ['accepted', 'arriving', 'in_progress'].includes(trip?.status),
       hold: Boolean(trip?.id),
       metadata: { source: 'collect-payment' },

@@ -3,6 +3,7 @@
  * Element secret. Signed-in riders go through collectPayment (credits, then card).
  */
 import { collectPayment } from './collectPayment.js'
+import { elementIntentKey, friendShareChargeKey, reuseStoredIntent } from './chargeIdempotency.js'
 import { ensureStripeCustomer, markParticipantPaid } from './friendRideLib.js'
 
 export async function chargeFriendShare({
@@ -62,7 +63,8 @@ export async function chargeFriendShare({
     amountCents: p.fare_cents,
     methods,
     kind: 'friend_ride_share',
-    idempotencyKey: `friend:${ride.id}:${p.id}:${p.fare_cents}`,
+    idempotencyKey: friendShareChargeKey(ride.id, p.user_id || p.id),
+    existingPaymentIntentId: p.stripe_payment_intent_id || null,
     hold: Boolean(ride.trip_id),
     paymentMethodId,
     metadata: {
@@ -93,24 +95,27 @@ export async function chargeFriendShare({
     }
   }
 
+  p.stripe_payment_intent_id = collected.paymentIntentId || p.stripe_payment_intent_id || null
   await sb.from('friend_ride_participants').update({
     charge_error: collected.message || collected.code,
     charge_attempts: (p.charge_attempts || 0) + 1,
     updated_at: new Date().toISOString(),
-    stripe_payment_intent_id: collected.paymentIntentId || p.stripe_payment_intent_id || null,
+    stripe_payment_intent_id: p.stripe_payment_intent_id,
   }).eq('id', p.id)
 
-  if (collected.code === 'authentication_required' && collected.clientSecret) {
+  if (collected.clientSecret && collected.paymentIntentId) {
+    const needsCard = collected.code === 'no_payment_method'
     return {
       result: {
         participantId: p.id,
-        status: 'requires_action',
+        status: needsCard ? 'needs_card' : 'requires_action',
         ...publicFailure(collected),
       },
       paymentElement: {
         participantId: p.id,
         clientSecret: collected.clientSecret,
-        reason: 'requires_action',
+        displayName: p.display_name,
+        reason: needsCard ? 'needs_card' : 'requires_action',
         fareCents: p.fare_cents,
       },
     }
@@ -144,7 +149,50 @@ function publicFailure(collected) {
   }
 }
 
+function elementFromIntent(participant, pi, fareCents) {
+  const needsAction = pi.status === 'requires_action' || pi.status === 'requires_confirmation'
+  return {
+    result: {
+      participantId: participant.id,
+      status: needsAction ? 'requires_action' : 'needs_card',
+      paymentIntentId: pi.id,
+      code: needsAction ? 'authentication_required' : 'no_payment_method',
+      message: needsAction
+        ? 'Your bank needs you to confirm this charge.'
+        : 'Add a card to pay this share.',
+      alternatives: needsAction ? ['retry', 'add_card'] : ['add_card', 'use_credits', 'retry'],
+      amountDueCents: fareCents,
+      paymentRequired: true,
+    },
+    paymentElement: {
+      participantId: participant.id,
+      clientSecret: pi.client_secret,
+      displayName: participant.display_name,
+      fareCents,
+      reason: needsAction ? 'requires_action' : 'needs_card',
+    },
+  }
+}
+
 async function openPaymentElement({ stripe, sb, ride, participant, profile }) {
+  const chargeKey = friendShareChargeKey(ride.id, participant.user_id || participant.id)
+  const reused = await reuseStoredIntent(stripe, participant.stripe_payment_intent_id, participant.fare_cents)
+  if (reused.action === 'already_paid') {
+    const book = await markParticipantPaid(sb, participant, reused.paymentIntent, { paymentId: participant.payment_id })
+    return {
+      result: {
+        participantId: participant.id,
+        status: 'paid',
+        paymentIntentId: reused.paymentIntent.id,
+        booked: book.booked,
+        trip: book.trip || null,
+      },
+    }
+  }
+  if (reused.action === 'return') {
+    return elementFromIntent(participant, reused.paymentIntent, participant.fare_cents)
+  }
+  const attempt = reused.action === 'create_attempt' ? reused.attempt : null
   let customerId = null
   if (profile) customerId = await ensureStripeCustomer(stripe, sb, profile)
   else if (participant.email) {
@@ -166,6 +214,8 @@ async function openPaymentElement({ stripe, sb, ride, participant, profile }) {
       participant_id: participant.id,
       token: ride.token,
     },
+  }, {
+    idempotencyKey: elementIntentKey(chargeKey, attempt),
   })
   await sb.from('friend_ride_participants').update({
     stripe_payment_intent_id: pi.id,

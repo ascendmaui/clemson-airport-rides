@@ -2,6 +2,13 @@
 
 Persistent knowledge base for recurring failures. When a matching issue appears, apply the saved fix first.
 
+## 2026-09-24 — Fare in the idempotency key opened a second PaymentIntent
+
+- **Track / machine:** Clemson RIDES · Pro (Grok Build, worktree fix/idem-key)
+- **Problem:** A friend-share charge that stopped in `requires_action` (3DS) was not deduped when the fare moved before retry. A second PaymentIntent could be created. A first fix that dropped the amount from the trip key also made every later charge of that same kind look already paid.
+- **Root cause:** The idempotency key was `friend:<ride>:<participant>:<fare_cents>`. Stripe also rejects reuse of a key when the amount parameter changes, so dropping the fare from the key is not enough: the retry has to retrieve the existing PaymentIntent instead of calling `paymentIntents.create` again. The same amount-in-key shape was on trip settle (`trip:kind:amount`), the collect-payment fallback, and wait charges (`clemson-wait-<trip>-<waitFee>-<cancelFee>`). A key with no generation at all collides with the next legitimate balance charge after `fare_paid_cents` moves.
+- **Fix:** Friend-share keys are `friend_share:<rideId>:<userId>:charge`. Trip keys are `trip:<tripId>:<userId>:<kind>:paid<N>:charge`, where N is `trips.metadata.fare_paid_cents` before the attempt (admin uses `<kind>:admin` in that same shape). N does not move while a PaymentIntent is open, and it does move after a successful charge, so the next balance due is a new key. No charge amount is in the key. A stored PaymentIntent is retrieved: `requires_action` / `requires_payment_method` / `requires_confirmation` are returned, and the amount is updated only when the intent is still updatable and the server fare changed; `succeeded` / `processing` / `requires_capture` count as paid; a canceled intent is replaced under a new attempt suffix, including when an older payments row still says succeeded. Wait uses `wait:<tripId>:<userId>:charge`. Card and credits keys stay suffixes (`:card`, `:credits`). `midride_cancel_<tripId>` already had no amount; a stored intent on that path is reused through `collectPayment`.
+
 ## 2026-09-24 — Friend confirm charged a few cents off the reviewed share
 
 - **Track / machine:** Clemson RIDES · Pro (Grok Build, worktree fix/quote-ttl)
@@ -38,7 +45,7 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
 - **Problem:** PR #63 re-priced the friend ride on every Confirm tap and held the charge whenever the refreshed shares differed from the screen. Friend fares use `computeRoutes` with `routingPreference: 'TRAFFIC_AWARE'` and bill 18¢/min, so each re-price can drift by a cent. A legitimate payment could be held with "Review each share" on every tap.
 - **Root cause:** The gate compared against a fresh re-price each time instead of remembering which server quote the organizer had already been shown.
 - **Fix:** `markFriendQuoteReviewed` stores the id:fare signature of the quote put on screen for review. On the next Confirm, `reviewedFriendQuoteFresh` (same signature, within 10 min) skips the client re-price and goes straight to confirm-charges. At most one review round. Web `FriendRide.jsx` and native `carpool/[token].tsx`. Tests in `src/lib/friendSplitPreview.test.js`.
-- **Still open:** Re-price drift is fixed: a fresh server quote is charged exactly, and an expired or mismatched quote is re-quoted for review without a charge. The Stripe idempotency key `friend:<ride>:<participant>:<fare_cents>` still includes the fare, so a retry after a later fare change is not deduplicated for an unpaid (e.g. requires_action) participant. That key format is not changed here.
+- **Still open:** Both the re-price drift and the fare-in-key idempotency bug are fixed. A fresh server quote is charged exactly, and an expired or mismatched quote is re-quoted for review without a charge. The friend-share key no longer includes the fare, and a retry reuses the open PaymentIntent instead of creating a second one.
 
 ## 2026-09-24 — Friend lobby preview disagreed with the charged share
 

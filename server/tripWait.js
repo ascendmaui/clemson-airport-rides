@@ -15,6 +15,7 @@
  */
 import { ensureStripeCustomer, stripeClient, stripeOk } from './friendRideLib.js'
 import { quoteWait } from '../src/lib/waitFee.js'
+import { reuseStoredIntent, waitChargeKey } from './chargeIdempotency.js'
 
 const ACTIONS = new Set(['arrive', 'tick', 'cancel', 'start', 'complete'])
 
@@ -148,6 +149,46 @@ export async function chargeWaitFees(sb, trip) {
   }
 
   const reason = trip.wait_cancel_reason || (trip.status === 'completed' ? 'complete' : 'wait')
+  const inflightId = [...prior].reverse().find((row) => (
+    row.status !== 'succeeded'
+    && row.stripe_payment_intent_id
+    && String(row.stripe_payment_intent_id).startsWith('pi_')
+  ))?.stripe_payment_intent_id || null
+  const chargeKey = waitChargeKey(trip.id, trip.rider_id)
+  const reused = await reuseStoredIntent(stripe, inflightId, amount)
+  if (reused.action === 'already_paid' || reused.action === 'return') {
+    const pi = reused.paymentIntent
+    const status = reused.action === 'already_paid' ? 'succeeded' : 'pending'
+    if (waitFee > 0) {
+      await upsertPayment(sb, {
+        trip_id: trip.id,
+        rider_id: trip.rider_id,
+        kind: 'wait_fee',
+        amount_cents: waitFee,
+        status,
+        stripe_payment_intent_id: pi.id,
+      })
+    }
+    if (cancelFee > 0) {
+      await upsertPayment(sb, {
+        trip_id: trip.id,
+        rider_id: trip.rider_id,
+        kind: 'cancel_fee',
+        amount_cents: cancelFee,
+        status,
+        stripe_payment_intent_id: pi.id,
+      })
+    }
+    return {
+      status,
+      paymentIntentId: pi.id,
+      amountCents: amount,
+      waitFeeCents: waitFee,
+      cancelFeeCents: cancelFee,
+      platformFeeCents: Number(trip.platform_fee_cents) || 0,
+    }
+  }
+  const attempt = reused.action === 'create_attempt' ? reused.attempt : null
   try {
     const pi = await stripe.paymentIntents.create(
       {
@@ -170,7 +211,7 @@ export async function chargeWaitFees(sb, trip) {
           reason: String(reason),
         },
       },
-      { idempotencyKey: `clemson-wait-${trip.id}-${waitFee}-${cancelFee}` },
+      { idempotencyKey: attempt ? `${chargeKey}:${attempt}` : chargeKey },
     )
     const status = pi.status === 'succeeded' ? 'succeeded' : 'pending'
     if (waitFee > 0) {
