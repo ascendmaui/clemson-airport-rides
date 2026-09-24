@@ -11,6 +11,7 @@ import { supabase } from '@/lib/supabase'
 import { useTheme } from '@/lib/theme'
 import { loadVehicle, type VehicleRow } from 'rides-native/driverDesk'
 import { saveRegisteredVehicle } from 'rides-native/shared/vehicle.js'
+import { TESLA_FLEET_NOTICE, teslaFleetNotice } from 'rides-native/tripTags'
 
 const PAINT: Record<string, string> = {
   black: '#1C1C1E',
@@ -131,6 +132,7 @@ export default function VehiclesScreen() {
 
   const title = [vehicle?.color, vehicle?.make, vehicle?.model].filter(Boolean).join(' ')
   const paint = paintColor(vehicle?.color, colors.purple)
+  const listedNotice = teslaFleetNotice(Boolean(vehicle?.is_tesla))
 
   return (
     <StackPage title="Vehicles" onBack={() => router.back()}>
@@ -159,6 +161,9 @@ export default function VehiclesScreen() {
               <Text style={[styles.name, { color: colors.ink }]}>{title || 'Your vehicle'}</Text>
               {vehicle.is_tesla ? <Tag label="Tesla" tone="orange" /> : null}
             </View>
+            {listedNotice ? (
+              <Text style={{ color: colors.inkSecondary, lineHeight: 20 }}>{listedNotice}</Text>
+            ) : null}
             <View style={styles.specs}>
               <Spec label="Plate" value={vehicle.plate || 'Add plate'} />
               <Spec label="Seats" value={String(vehicle.seats || 4)} />
@@ -199,7 +204,7 @@ export default function VehiclesScreen() {
           <Text style={{ color: colors.orange, fontWeight: '800', letterSpacing: 1.1, fontSize: 12 }}>FLEET</Text>
           <Text style={{ color: colors.title, fontWeight: '800', fontSize: 18 }}>Tesla Model 3</Text>
           <Text style={{ color: colors.inkSecondary, lineHeight: 20 }}>
-            The badge riders see is the existing fleet toggle. It does not dispatch a car.
+            {TESLA_FLEET_NOTICE}
           </Text>
           <Primary label="Open Tesla listing" onPress={() => router.push('/fleet')} tone="purple" />
         </Card>

@@ -6,6 +6,11 @@
 export const TESLA_FLEET_NOTICE =
   'Coming soon. Tesla Model 3 is a profile option only. A person still drives the car. There is no self-driving dispatch.'
 
+/** Notice for a selected Tesla Model 3 option. Null when Tesla is not the choice. */
+export function teslaFleetNotice(selected) {
+  return selected ? TESLA_FLEET_NOTICE : null
+}
+
 export const ACTIONABLE_LEAD_MS = 45 * 60 * 1000
 
 /** Same sentence the database raises when an accept of an unpaid airport deposit is rejected. */

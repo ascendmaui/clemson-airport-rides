@@ -38,6 +38,7 @@ import {
 } from 'rides-native/riderMoney.js'
 import { localDateInput, localTimeInput, nextPickupDate, RIDE_PLACES } from 'rides-native/riderShell.js'
 import { formatCents, formatPickupAt, TESLA_FLEET_NOTICE } from 'rides-native/tripTags.js'
+import { dueScheduleReminders } from '../../../src/lib/scheduledRideModel.js'
 import { RequireAuth } from '@/components/RequireAuth'
 
 const CAMPUS_PURPOSES: SchedulePurpose[] = ['early_class', 'planned', 'recurring']
@@ -146,6 +147,12 @@ function ScheduleScreen() {
   const [mine, setMine] = useState<ScheduledRow[]>([])
   const [loadingList, setLoadingList] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
+  const [clock, setClock] = useState(() => new Date())
+  const reminders = useMemo(() => dueScheduleReminders(mine, clock), [mine, clock])
+  const reminderByTrip = useMemo(() => {
+    const byTrip = new Map(reminders.map((item) => [item.tripId, item]))
+    return byTrip
+  }, [reminders])
   const generation = useRef(0)
   const quote = useMemo(() => quoteRide(pickup, dropoff, studentOn), [pickup, dropoff, studentOn])
   const weekendDestination = weekendSpot === 'airport' ? airportPlace(weekendAirport) : weekendDropoff
@@ -190,12 +197,18 @@ function ScheduleScreen() {
     setLoadingList(true)
     try {
       setMine(await listScheduledTrips(user.id))
+      setClock(new Date())
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not load scheduled rides')
     } finally {
       setLoadingList(false)
     }
   }
+
+  useEffect(() => {
+    const timer = setInterval(() => setClock(new Date()), 60_000)
+    return () => clearInterval(timer)
+  }, [])
 
   useEffect(() => {
     void reload()
@@ -417,6 +430,13 @@ function ScheduleScreen() {
         <Text style={styles.copy}>
           Weekend and party nights to the airport or around campus. Pick a date and time, confirm, then find it under Upcoming.
         </Text>
+        {reminders.map((item) => (
+          <View key={item.tripId} style={styles.remindCard} accessibilityRole="text" accessibilityLabel={`${item.label}. ${item.body}`}>
+            <Text style={styles.remindKicker}>PICKUP REMINDER</Text>
+            <Text style={styles.remindTitle}>{item.label}</Text>
+            <Text style={styles.fine}>{item.body}</Text>
+          </View>
+        ))}
 
         <Text style={styles.section}>Weekend / party</Text>
         <Text style={styles.copy}>
@@ -667,8 +687,11 @@ function ScheduleScreen() {
             <Text style={styles.copy}>Confirm a weekend airport or campus trip and it will show up here.</Text>
           </View>
         ) : null}
-        {mine.filter((row) => row.status !== 'canceled').map((row) => (
-          <View key={row.id} style={styles.panel}>
+        {mine.filter((row) => row.status !== 'canceled').map((row) => {
+          const reminder = reminderByTrip.get(row.id)
+          return (
+            <View key={row.id} style={styles.panel}>
+            {reminder ? <Text style={styles.remindKicker}>{reminder.label}</Text> : null}
             <Text style={styles.cardLine}>{row.pickup_label} → {row.dropoff_label}</Text>
             <Text style={styles.fine}>
               {rowPurpose(row)} · {row.status} · {formatPickupAt(row.pickup_at || row.scheduled_for)}
@@ -695,7 +718,8 @@ function ScheduleScreen() {
               </Pressable>
             ) : null}
           </View>
-        ))}
+          )
+        })}
       </ScrollView>
       <MainTabs active="schedule" />
       <SignInToBookSheet
@@ -796,6 +820,16 @@ function makeStyles(colors: Palette) {
     },
     fleetKicker: { color: colors.orange, fontWeight: '800' as const, letterSpacing: 1, fontSize: 11, marginBottom: 4 },
     fleetText: { color: colors.link, fontSize: 13, lineHeight: 18, fontWeight: '600' as const },
+    remindCard: {
+      backgroundColor: colors.orangeSoft,
+      borderRadius: 16,
+      padding: 14,
+      borderWidth: 1,
+      borderColor: colors.orange,
+      gap: 2,
+    },
+    remindKicker: { color: colors.orange, fontSize: 11, fontWeight: '800' as const, letterSpacing: 1.1 },
+    remindTitle: { color: colors.purple, fontSize: 16, fontWeight: '800' as const, marginTop: 4 },
   }
 }
 

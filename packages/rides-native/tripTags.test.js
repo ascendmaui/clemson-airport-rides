@@ -22,6 +22,8 @@ import {
   summarizeDepositAwareness,
   tagLabel,
   tagTone,
+  TESLA_FLEET_NOTICE,
+  teslaFleetNotice,
   toDriverCard,
   tripEarnedCents,
   tripTags,
@@ -85,6 +87,20 @@ test('weekend queue copy names scheduled airport and campus pickups', () => {
   assert.equal(scheduledQueueTitle('all'), 'Scheduled')
   assert.equal(scheduledQueueTitle('student'), 'Scheduled')
   assert.throws(() => queueEmptyCopy('nope'), /Unknown queue filter/)
+})
+
+test('Tesla fleet notice is profile-only and appears only when Tesla is selected', () => {
+  assert.equal(teslaFleetNotice(false), null)
+  assert.equal(teslaFleetNotice(true), TESLA_FLEET_NOTICE)
+  assert.match(TESLA_FLEET_NOTICE, /profile option only/)
+  assert.match(TESLA_FLEET_NOTICE, /person still drives/)
+  assert.match(TESLA_FLEET_NOTICE, /no self-driving dispatch/)
+  const tesla = toDriverCard({ id: 't1', status: 'accepted', tier: 'tesla_self_driving', fare_cents: 3600 })
+  const standard = toDriverCard({ id: 't2', status: 'accepted', tier: 'standard', fare_cents: 1800 })
+  assert.equal(tesla.teslaStub, true)
+  assert.equal(teslaFleetNotice(tesla.teslaStub), TESLA_FLEET_NOTICE)
+  assert.equal(standard.teslaStub, false)
+  assert.equal(teslaFleetNotice(standard.teslaStub), null)
 })
 
 test('an explicit party weekend purpose tags the weekend filter and a Tesla tier stays a stub tag', () => {
