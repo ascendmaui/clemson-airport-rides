@@ -2,6 +2,12 @@
 
 Persistent knowledge base for recurring failures. When a matching issue appears, apply the saved fix first.
 
+## 2026-09-24 — Rider tsc fails on dueScheduleReminders(ScheduledRow[]) (PR #59)
+- **Problem:** `tsc --noEmit` in apps/rider failed with 2 × TS2345 in app/index.tsx and app/schedule.tsx: `ScheduledRow[]` not assignable to the `dueScheduleReminders` parameter (`status: string | null` vs `string | undefined`).
+- **Root cause:** The JSDoc `@param` on `dueScheduleReminders` in src/lib/scheduledRideModel.js typed trip fields as `string | undefined`, but Supabase rows (`ScheduledRow`) use `string | null`. With `allowJs` + `strict`, tsc enforces the JSDoc type.
+- **Fix:** Widened the JSDoc field types to `string | null` (runtime already handles null). No behavior change. Rider and driver `tsc --noEmit` are clean.
+- **Machine/track:** Max (/tmp worktree) / PR review
+
 ## 2026-09-24 — Rider home misses live game day; scheduled reminders never surface
 - **Problem:** Rider home folded `game_day_events` into the map caption, which stays hidden while busy spots load and does not reload on pull-to-refresh. Scheduled rides stored reminder windows (`m15` / `h1` / `h24`) but the rider app never showed a due reminder.
 - **Root cause:** `loadGameDay` ran once on mount and only fed a pill. `nextReminder` was used by the web toast watcher, not by rider home or Schedule.

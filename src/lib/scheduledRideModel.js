@@ -177,7 +177,7 @@ export function nextReminder(trip, now = new Date(), already = {}) {
  * In-app cards for scheduled rides inside a REMINDER_WINDOWS window.
  * Stamps in metadata.reminders are ignored so the card stays up for the whole window.
  * Soonest pickup first. Trips outside the windows, or not scheduled/accepted/arriving, are omitted.
- * @param {Array<{ id?: string, status?: string, pickup_at?: string, scheduled_for?: string, pickup_label?: string, dropoff_label?: string, pickupLabel?: string, dropoffLabel?: string }> | null | undefined} trips
+ * @param {Array<{ id?: string | null, status?: string | null, pickup_at?: string | null, scheduled_for?: string | null, pickup_label?: string | null, dropoff_label?: string | null, pickupLabel?: string | null, dropoffLabel?: string | null }> | null | undefined} trips
  * @param {Date} [now]
  * @returns {Array<{ tripId: string, windowId: string, label: string, pickupLabel: string, dropoffLabel: string, pickupAt: string | null, whenLabel: string, body: string }>}
  */
