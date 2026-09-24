@@ -1,5 +1,5 @@
 import { useRouter } from 'expo-router'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { BackButton, Card, ErrorText, Primary } from '@/components/chrome'
@@ -8,13 +8,16 @@ import { useFeedback } from '@/lib/feedback'
 import { supabase } from '@/lib/supabase'
 import { loadDriverProfile, loadVehicle, riderFacingCard, setTeslaListing, type FacingCard, type VehicleRow } from 'rides-native/driverDesk'
 import { TESLA_FLEET_NOTICE } from 'rides-native/tripTags'
-import { INK, INK_SECONDARY, ORANGE, PURPLE, SURFACE } from 'rides-native/places.js'
+import { useTheme } from '@/lib/theme'
+import type { Palette } from '@/lib/palette'
 
 export default function FleetScreen() {
   const router = useRouter()
   const insets = useSafeAreaInsets()
   const { user } = useAuth()
   const { pulse } = useFeedback()
+  const { colors } = useTheme()
+  const styles = useMemo(() => fleetStyles(colors), [colors])
   const [vehicle, setVehicle] = useState<VehicleRow | null>(null)
   const [facing, setFacing] = useState<FacingCard | null>(null)
   const [stubNote, setStubNote] = useState<string | null>(null)
@@ -109,15 +112,17 @@ export default function FleetScreen() {
   )
 }
 
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: SURFACE },
-  list: { padding: 16, gap: 12, paddingBottom: 40 },
-  kicker: { color: ORANGE, fontWeight: '800', letterSpacing: 1.1, fontSize: 12, marginTop: 8 },
-  title: { fontSize: 28, fontWeight: '800', color: PURPLE },
-  cardTitle: { color: PURPLE, fontWeight: '800', fontSize: 18 },
-  name: { color: INK, fontWeight: '800', fontSize: 20 },
-  copy: { color: INK_SECONDARY, fontSize: 14, lineHeight: 20 },
-  stub: { color: PURPLE, fontWeight: '700', lineHeight: 20 },
-  stubButton: { alignItems: 'center', paddingVertical: 12 },
-  stubButtonText: { color: ORANGE, fontWeight: '800' },
-})
+function fleetStyles(colors: Palette) {
+  return StyleSheet.create({
+    screen: { flex: 1, backgroundColor: colors.background },
+    list: { padding: 16, gap: 12, paddingBottom: 40 },
+    kicker: { color: colors.orange, fontWeight: '800', letterSpacing: 1.1, fontSize: 12, marginTop: 8 },
+    title: { fontSize: 28, fontWeight: '800', color: colors.title },
+    cardTitle: { color: colors.title, fontWeight: '800', fontSize: 18 },
+    name: { color: colors.ink, fontWeight: '800', fontSize: 20 },
+    copy: { color: colors.inkSecondary, fontSize: 14, lineHeight: 20 },
+    stub: { color: colors.title, fontWeight: '700', lineHeight: 20 },
+    stubButton: { alignItems: 'center', paddingVertical: 12 },
+    stubButtonText: { color: colors.orange, fontWeight: '800' },
+  })
+}

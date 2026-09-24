@@ -7,6 +7,7 @@ import { AuthProvider, useAuth } from '@/lib/auth'
 import { FeedbackProvider } from '@/lib/feedback'
 import { registerDriverPush } from '@/lib/push'
 import { supabase } from '@/lib/supabase'
+import { ThemeProvider, useTheme } from '@/lib/theme'
 
 function Gate({ children }: { children: ReactNode }) {
   const { loading } = useAuth()
@@ -33,16 +34,27 @@ function PushBridge() {
   return null
 }
 
+function ThemedStack() {
+  const { colors } = useTheme()
+  return (
+    <>
+      <StatusBar style={colors.statusBar} />
+      <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.background } }} />
+    </>
+  )
+}
+
 export default function RootLayout() {
   return (
-    <AuthProvider>
-      <FeedbackProvider>
-        <Gate>
-          <PushBridge />
-          <StatusBar style="dark" />
-          <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: '#F7F4F0' } }} />
-        </Gate>
-      </FeedbackProvider>
-    </AuthProvider>
+    <ThemeProvider>
+      <AuthProvider>
+        <FeedbackProvider>
+          <Gate>
+            <PushBridge />
+            <ThemedStack />
+          </Gate>
+        </FeedbackProvider>
+      </AuthProvider>
+    </ThemeProvider>
   )
 }

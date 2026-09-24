@@ -1,12 +1,15 @@
-import { useRouter } from 'expo-router'
-import { useCallback, useEffect, useState } from 'react'
+import { useLocalSearchParams, useRouter } from 'expo-router'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { FarePanel } from '@/components/FarePanel'
 import { BackButton, Card, ErrorText, Primary, Tag } from '@/components/chrome'
 import { useAuth } from '@/lib/auth'
 import { useFeedback } from '@/lib/feedback'
+import { oneParam } from '@/lib/oneParam'
 import { supabase } from '@/lib/supabase'
+import { useTheme } from '@/lib/theme'
+import type { Palette } from '@/lib/palette'
 import { acceptTrip, declineTrip, loadDriverDesk, subscribeTrips } from 'rides-native/driverDesk'
 import {
   formatCents,
@@ -18,7 +21,10 @@ import {
   type DriverCard,
   type QueueFilter,
 } from 'rides-native/tripTags'
-import { INK, INK_SECONDARY, ORANGE, PURPLE, SURFACE } from 'rides-native/places.js'
+function useQueueStyles() {
+  const { colors } = useTheme()
+  return useMemo(() => queueStyles(colors), [colors])
+}
 
 function QueueCard({
   card,
@@ -34,6 +40,7 @@ function QueueCard({
   onOpen: () => void
 }) {
   const active = card.status === 'accepted' || card.status === 'arriving'
+  const styles = useQueueStyles()
   return (
     <Card>
       <Text style={styles.cardTitle}>{statusHeadline(card.status)}</Text>
@@ -81,7 +88,9 @@ function filterLabel(filter: QueueFilter): string {
 
 export default function QueueScreen() {
   const router = useRouter()
+  const params = useLocalSearchParams<{ filter?: string }>()
   const insets = useSafeAreaInsets()
+  const styles = useQueueStyles()
   const { user } = useAuth()
   const { pulse } = useFeedback()
   const [passed, setPassed] = useState<string[]>([])
@@ -107,6 +116,11 @@ export default function QueueScreen() {
   useEffect(() => {
     refresh().catch((err) => setError(err instanceof Error ? err.message : 'Could not load the queue'))
   }, [refresh])
+
+  useEffect(() => {
+    const requested = oneParam(params.filter)
+    if (queueFilters().includes(requested as QueueFilter)) setFilter(requested as QueueFilter)
+  }, [params.filter])
 
   useEffect(() => {
     if (!supabase || !user) return undefined
@@ -193,21 +207,23 @@ export default function QueueScreen() {
   )
 }
 
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: SURFACE },
-  list: { padding: 16, gap: 12, paddingBottom: 40 },
-  kicker: { color: ORANGE, fontWeight: '800', letterSpacing: 1.1, fontSize: 12, marginTop: 8 },
-  title: { fontSize: 28, fontWeight: '800', color: PURPLE },
-  copy: { color: INK_SECONDARY, fontSize: 14, lineHeight: 20 },
-  filters: { gap: 8 },
-  filter: { backgroundColor: '#fff', borderRadius: 999, paddingHorizontal: 14, paddingVertical: 8 },
-  filterOn: { backgroundColor: PURPLE },
-  filterText: { color: PURPLE, fontWeight: '800' },
-  filterTextOn: { color: '#fff' },
-  section: { color: PURPLE, fontWeight: '800', marginTop: 4 },
-  cardTitle: { color: PURPLE, fontWeight: '800', fontSize: 18 },
-  decline: { alignItems: 'center', paddingVertical: 4 },
-  declineText: { color: INK_SECONDARY, fontWeight: '700' },
-  fare: { color: INK, fontWeight: '800', fontSize: 22 },
-  tags: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-})
+function queueStyles(colors: Palette) {
+  return StyleSheet.create({
+    screen: { flex: 1, backgroundColor: colors.background },
+    list: { padding: 16, gap: 12, paddingBottom: 40 },
+    kicker: { color: colors.orange, fontWeight: '800', letterSpacing: 1.1, fontSize: 12, marginTop: 8 },
+    title: { fontSize: 28, fontWeight: '800', color: colors.title },
+    copy: { color: colors.inkSecondary, fontSize: 14, lineHeight: 20 },
+    filters: { gap: 8 },
+    filter: { backgroundColor: colors.card, borderRadius: 999, paddingHorizontal: 14, paddingVertical: 8 },
+    filterOn: { backgroundColor: colors.fill },
+    filterText: { color: colors.title, fontWeight: '800' },
+    filterTextOn: { color: colors.onAccent },
+    section: { color: colors.title, fontWeight: '800', marginTop: 4 },
+    cardTitle: { color: colors.title, fontWeight: '800', fontSize: 18 },
+    decline: { alignItems: 'center', paddingVertical: 4 },
+    declineText: { color: colors.inkSecondary, fontWeight: '700' },
+    fare: { color: colors.ink, fontWeight: '800', fontSize: 22 },
+    tags: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  })
+}
