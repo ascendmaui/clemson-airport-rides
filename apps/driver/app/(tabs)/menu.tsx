@@ -60,6 +60,7 @@ export default function MenuScreen() {
         ) : null}
         <ListRow icon="gift" title="Refer friends" subtitle="Share Clemson RIDES" onPress={() => router.push('/refer')} />
         <SectionLabel>Manage</SectionLabel>
+        <ListRow icon="person" title="Profile photo" subtitle="Submit a photo of yourself for review" onPress={() => router.push('/profile-photo')} />
         <ListRow icon="car" title="Vehicles" subtitle={vehicleSubtitle(vehicle)} onPress={() => router.push('/vehicles')} />
         <ListRow icon="document-text" title="Documents" subtitle="License, insurance, registration" onPress={() => router.push('/documents')} />
         <ListRow icon="shield-checkmark" title="Insurance" subtitle="Coverage notes" onPress={() => router.push('/insurance')} />

@@ -29,12 +29,46 @@ export function isRateLimitError(error) {
   )
 }
 
+export function normalizeAuthEmail(email) {
+  return String(email || '').trim().toLowerCase()
+}
+
+export function isAccountExistsError(error) {
+  const msg = String(error?.message || '')
+  const code = String(error?.code || '')
+  return code === 'user_already_exists' || code === 'account_exists' || /user already registered|already been registered|already exists/i.test(msg)
+}
+
+export function isInvalidCredentialsError(error) {
+  const msg = String(error?.message || '')
+  const code = String(error?.code || '')
+  return code === 'invalid_credentials' || /invalid login credentials|invalid_credentials/i.test(msg)
+}
+
+const ACCOUNT_EXISTS_MSG =
+  'You already have an account with this email. Sign in, or reset your password if you do not remember it.'
+
+const INVALID_CREDENTIALS_MSG =
+  'That email and password do not match. Reset your password, or continue with Google.'
+
 export function mapAuthError(error) {
   if (isRateLimitError(error)) {
     const err = new Error(RATE_LIMIT_MSG)
     err.code = 'over_email_send_rate_limit'
     err.status = 429
     err.retryAfterSec = SIGNUP_RATE_LIMIT_COOLDOWN_SEC
+    return err
+  }
+  if (isAccountExistsError(error)) {
+    const err = new Error(ACCOUNT_EXISTS_MSG)
+    err.code = 'account_exists'
+    err.status = error?.status || 422
+    return err
+  }
+  if (isInvalidCredentialsError(error)) {
+    const err = new Error(INVALID_CREDENTIALS_MSG)
+    err.code = 'invalid_credentials'
+    err.status = error?.status || 400
     return err
   }
   return error instanceof Error ? error : new Error(error?.message || 'Auth failed')

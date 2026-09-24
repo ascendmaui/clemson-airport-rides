@@ -15,6 +15,7 @@ import { displayFirstName, isClemsonEmail } from 'rides-native/authErrors'
 import { FAVORITE_SPOTS } from 'rides-native/riderShell.js'
 import { loadRatingSummary } from 'rides-native/PartyScreens'
 import { supabase } from '@/lib/supabase'
+import { RequireAuth } from '@/components/RequireAuth'
 
 const DISPLAY: { id: DisplayMode; label: string }[] = [
   { id: 'auto', label: 'Auto' },
@@ -31,7 +32,7 @@ const LINKS: { href: '/billing' | '/student' | '/promo' | '/notifications' | '/h
   { href: '/schedule', label: 'Airport deposit', hint: '25% Stripe checkout for GSP and CLT' },
 ]
 
-export default function AccountScreen() {
+function AccountScreen() {
   const router = useRouter()
   const insets = useSafeAreaInsets()
   const { user, configured, signOut } = useAuth()
@@ -237,4 +238,13 @@ function makeStyles(colors: Palette) {
     note: { color: colors.link, fontWeight: '700' as const, fontSize: 13 },
     error: { color: colors.danger, fontSize: 13 },
   }
+}
+
+
+export default function AccountScreenRoute() {
+  return (
+    <RequireAuth>
+      <AccountScreen />
+    </RequireAuth>
+  )
 }

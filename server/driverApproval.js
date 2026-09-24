@@ -15,8 +15,11 @@ export { canReceiveRides }
 
 /** Loads review context. Never selects driver_tax_secrets.tin. */
 export async function loadSubmissionContext(sb, profileId) {
-  const [docsRes, appRes, taxRes, agreementRes] = await Promise.all([
-    sb.from('driver_documents').select('doc_type').eq('profile_id', profileId),
+  let docsRes = await sb.from('driver_documents').select('doc_type, match_status, review_status').eq('profile_id', profileId)
+  if (docsRes.error && /match_status|review_status|schema cache/i.test(docsRes.error.message || '')) {
+    docsRes = await sb.from('driver_documents').select('doc_type').eq('profile_id', profileId)
+  }
+  const [appRes, taxRes, agreementRes] = await Promise.all([
     sb.from('driver_applications')
       .select('background_authorized_at, work_eligibility_attested_at, work_eligibility_category, onboarding_status')
       .eq('profile_id', profileId)
@@ -44,6 +47,7 @@ export async function loadSubmissionContext(sb, profileId) {
     taxSaved: Boolean(tax?.legal_name && /^[0-9]{4}$/.test(String(tax.tin_last4 || ''))),
     agreementSigned: Boolean(agreement?.signed_at && agreement?.signature_name),
     agreementVersion: agreement?.agreement_version || null,
+    registrationMatch: (docsRes.data || []).find((row) => row.doc_type === 'registration')?.match_status || null,
   }
 
   return {

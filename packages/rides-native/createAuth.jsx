@@ -4,6 +4,7 @@ import {
   isClemsonEmail,
   mapAuthError,
   markSignupRateLimited,
+  normalizeAuthEmail,
   normalizePromoCode,
   PROMO_CLAIM_STATE_KEY,
 } from './authErrors.js'
@@ -203,7 +204,7 @@ export function createAuth({
           promoCode: code,
         })
         const { data, error } = await supabase.auth.signUp({
-          email: String(email || '').trim(),
+          email: normalizeAuthEmail(email),
           password,
           options: { data: meta },
         })

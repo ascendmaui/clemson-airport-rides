@@ -11,6 +11,7 @@ import { lift } from '@/lib/elevation'
 import type { Palette } from '@/lib/palette'
 import { useTheme } from '@/lib/theme'
 import { useThemedStyles } from '@/lib/useThemedStyles'
+import { RequireAuth } from '@/components/RequireAuth'
 
 type RideRow = {
   id: string
@@ -23,7 +24,7 @@ type RideRow = {
   driver_id: string | null
 }
 
-export default function HistoryScreen() {
+function HistoryScreen() {
   const router = useRouter()
   const insets = useSafeAreaInsets()
   const { user } = useAuth()
@@ -116,4 +117,13 @@ function makeStyles(colors: Palette) {
     cardTitle: { fontWeight: '700' as const, fontSize: 16, color: colors.ink, marginBottom: 4 },
     safety: { color: colors.orange, fontWeight: '800' as const, marginTop: 8 },
   }
+}
+
+
+export default function HistoryScreenRoute() {
+  return (
+    <RequireAuth>
+      <HistoryScreen />
+    </RequireAuth>
+  )
 }

@@ -150,10 +150,17 @@ async function queue(sb, res, status) {
 }
 
 async function detail(sb, res, profileId) {
-  const { data: docs, error } = await sb
+  let docsQuery = await sb
     .from('driver_documents')
-    .select('id, doc_type, storage_path, created_at')
+    .select('id, doc_type, storage_path, created_at, review_status, match_status, review_note')
     .eq('profile_id', profileId)
+  if (docsQuery.error && /review_status|match_status|review_note|schema cache/i.test(docsQuery.error.message || '')) {
+    docsQuery = await sb
+      .from('driver_documents')
+      .select('id, doc_type, storage_path, created_at')
+      .eq('profile_id', profileId)
+  }
+  const { data: docs, error } = docsQuery
   if (error) return json(res, 500, { error: error.message })
 
   const documents = []
@@ -164,6 +171,9 @@ async function detail(sb, res, profileId) {
       doc_type: doc.doc_type,
       storage_path: doc.storage_path,
       created_at: doc.created_at,
+      review_status: doc.review_status || null,
+      match_status: doc.match_status || null,
+      review_note: doc.review_note || null,
       url: signed.data?.signedUrl || null,
       error: signed.error?.message || null,
     })

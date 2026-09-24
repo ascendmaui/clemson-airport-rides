@@ -1,6 +1,8 @@
 import { useRouter } from 'expo-router'
 import { SignUpScreen } from 'rides-native/AuthScreens'
+import { DRIVER_GOOGLE_PROVIDER } from 'rides-native/googleAuth'
 import { useAuth } from '@/lib/auth'
+import { signInWithGoogle } from '@/lib/googleSignIn'
 import { authStorage } from '@/lib/storage'
 
 export default function SignUpRoute() {
@@ -12,7 +14,9 @@ export default function SignUpRoute() {
       storage={authStorage}
       mark="CD"
       showPromo={false}
-      subtitle="Create the driver account and ride profile. Admin approval is still required before you can go online."
+      subtitle="Create a driver account. You can set up billing and your profile while an admin reviews the application."
+      socialProviders={DRIVER_GOOGLE_PROVIDER}
+      onSocial={() => signInWithGoogle()}
       onSuccess={() => router.replace('/')}
       onSignIn={() => router.replace('/sign-in')}
       onBack={() => {

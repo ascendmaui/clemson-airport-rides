@@ -1,11 +1,11 @@
-import { mapAuthError } from './authErrors.js'
+import { mapAuthError, normalizeAuthEmail } from './authErrors.js'
 
 const NOT_CONFIGURED = 'Supabase is not configured. Set EXPO_PUBLIC_SUPABASE_ANON_KEY for this EAS build.'
 
 export async function signInWithEmail(supabase, email, password) {
   if (!supabase) throw new Error(NOT_CONFIGURED)
   const { data, error } = await supabase.auth.signInWithPassword({
-    email: String(email || '').trim(),
+    email: normalizeAuthEmail(email),
     password,
   })
   if (error) throw mapAuthError(error)
@@ -14,7 +14,7 @@ export async function signInWithEmail(supabase, email, password) {
 
 export async function requestPasswordReset(supabase, email, redirectTo) {
   if (!supabase) throw new Error(NOT_CONFIGURED)
-  const trimmed = String(email || '').trim()
+  const trimmed = normalizeAuthEmail(email)
   if (!trimmed) throw new Error('Enter the email on your account.')
   const options = redirectTo ? { redirectTo } : undefined
   const { data, error } = await supabase.auth.resetPasswordForEmail(trimmed, options)

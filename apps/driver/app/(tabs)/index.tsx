@@ -37,6 +37,7 @@ import {
   type DriverCard,
 } from 'rides-native/tripTags'
 import { ORANGE, PURPLE } from 'rides-native/places.js'
+import { approvalGateMessage, isSyntheticOffer, syntheticOffers } from 'rides-native/syntheticOffers'
 import { loadCounterpart } from 'rides-native/partyProfile.js'
 
 const GATE: Record<string, { title: string; body: string }> = {
@@ -45,12 +46,12 @@ const GATE: Record<string, { title: string; body: string }> = {
     body: 'Add your info, vehicle, documents, W-9, and contractor agreement. New drivers are not approved automatically.',
   },
   pending_docs: {
-    title: 'Upload your documents',
-    body: 'License, insurance, registration, car photos, background check, and W-9 come before an admin can review you.',
+    title: 'Finish your application',
+    body: 'License, insurance, registration, and car photos come before you submit. You can keep setting up the account after that.',
   },
   pending_review: {
-    title: 'Application in review',
-    body: 'You cannot go online or accept rides until the application is approved.',
+    title: 'Application under review',
+    body: 'Application under review — you can set up your account, but you can’t accept rides yet.',
   },
   rejected: {
     title: 'Application needs changes',
@@ -58,7 +59,7 @@ const GATE: Record<string, { title: string; body: string }> = {
   },
   none: {
     title: 'Become a driver',
-    body: 'Finish the same onboarding as the web app. An admin approves every new driver.',
+    body: 'For Clemson University students — and for drivers already on Uber or Lyft.',
   },
 }
 
@@ -92,7 +93,9 @@ export default function DriverHome() {
   const [safetyOpen, setSafetyOpen] = useState(false)
   const [focusToken, setFocusToken] = useState(0)
   const [riderLine, setRiderLine] = useState<string | null>(null)
+  const [hiddenOffers, setHiddenOffers] = useState<string[]>([])
   const approved = status === 'approved'
+  const pendingReview = status === 'pending_review'
   const online = Boolean(desk?.online)
   const name = user ? displayFirstName(user.user_metadata?.full_name || user.email?.split('@')[0], 'Driver') : 'Driver'
   const tabClearance = insets.bottom + 72
@@ -104,7 +107,7 @@ export default function DriverHome() {
     setStatus(nextStatus)
     setReason(application.application?.rejection_reason || null)
     if (application.error) setError(application.error)
-    if (nextStatus === 'approved') {
+    if (nextStatus === 'approved' || nextStatus === 'pending_review') {
       const loaded = await loadDriverDesk(supabase, user.id)
       setDesk(loaded)
       if (loaded.lat != null && loaded.lng != null) {
@@ -146,11 +149,11 @@ export default function DriverHome() {
   }, [refresh])
 
   useEffect(() => {
-    if (!supabase || !approved) return undefined
+    if (!supabase || (!approved && !pendingReview)) return undefined
     return subscribeTrips(supabase, () => {
       refresh().catch(() => {})
     })
-  }, [approved, refresh])
+  }, [approved, pendingReview, refresh])
 
   useEffect(() => {
     const offers = desk?.offers || []
@@ -159,7 +162,7 @@ export default function DriverHome() {
       offersPrimed.current = true
       return
     }
-    const fresh = offers.filter((card) => !seenOffers.current.has(card.id))
+    const fresh = offers.filter((card) => !seenOffers.current.has(card.id) && !isSyntheticOffer(card))
     fresh.forEach((card) => seenOffers.current.add(card.id))
     const next = fresh[0]
     if (!next) return
@@ -176,6 +179,10 @@ export default function DriverHome() {
   async function toggle() {
     if (!user) {
       router.push('/sign-in')
+      return
+    }
+    if (pendingReview) {
+      setError(approvalGateMessage())
       return
     }
     if (!approved) {
@@ -199,6 +206,10 @@ export default function DriverHome() {
 
   async function onAccept(card: DriverCard) {
     if (!user || !supabase) return
+    if (!approved || isSyntheticOffer(card)) {
+      setError(approvalGateMessage())
+      return
+    }
     setBusy(true)
     setError(null)
     try {
@@ -214,6 +225,10 @@ export default function DriverHome() {
   }
 
   async function onDecline(card: DriverCard) {
+    if (isSyntheticOffer(card)) {
+      setHiddenOffers((current) => (current.includes(card.id) ? current : [...current, card.id]))
+      return
+    }
     if (!supabase) return
     setBusy(true)
     setError(null)
@@ -239,7 +254,10 @@ export default function DriverHome() {
   }
 
   const gate = GATE[status] || GATE.none
-  const offer = desk?.offers[0] || null
+  const synthetic = pendingReview
+    ? syntheticOffers().filter((card) => !hiddenOffers.includes(card.id))
+    : []
+  const offer = (approved ? desk?.offers[0] : null) || synthetic[0] || null
   const hotspots = typicalSpots().slice().sort((a, b) => b.intensity - a.intensity).slice(0, 4)
   const pins: MapPin[] = []
   if (self) pins.push({ id: 'me', ...self, title: 'You', pinColor: ORANGE })
@@ -256,7 +274,15 @@ export default function DriverHome() {
     })
   })
 
-  const statusLine = !user ? 'Sign in to drive' : !approved ? 'Finish signup' : online ? `You're online, ${name}` : 'You\'re offline'
+  const statusLine = !user
+    ? 'Sign in to drive'
+    : pendingReview
+      ? 'Under review'
+      : !approved
+        ? 'Finish signup'
+        : online
+          ? `You're online, ${name}`
+          : 'You\'re offline'
 
   return (
     <View style={[styles.screen, { backgroundColor: colors.background }]}>
@@ -321,12 +347,18 @@ export default function DriverHome() {
         <View pointerEvents="box-none" style={[styles.dock, { bottom: tabClearance }]}>
           {!configured ? <ErrorText>Add EXPO_PUBLIC_SUPABASE_ANON_KEY as an EAS environment variable, then rebuild.</ErrorText> : null}
           {error ? <ErrorText>{error}</ErrorText> : null}
-          {user && !approved ? (
+          {user && pendingReview ? (
+            <Card>
+              <Text style={[styles.cardTitle, { color: colors.title }]}>{gate.title}</Text>
+              <Text style={{ color: colors.inkSecondary }}>{gate.body}</Text>
+            </Card>
+          ) : null}
+          {user && !approved && !pendingReview ? (
             <Card>
               <Text style={[styles.cardTitle, { color: colors.title }]}>{gate.title}</Text>
               <Text style={{ color: colors.inkSecondary }}>{gate.body}</Text>
               {reason ? <ErrorText>{reason}</ErrorText> : null}
-              <Primary label="Continue application" onPress={() => router.push('/onboarding')} />
+              <Primary label={status === 'none' ? 'Become a driver' : 'Continue application'} onPress={() => router.push(user ? '/onboarding' : '/sign-in')} />
             </Card>
           ) : null}
           {desk?.active ? (
@@ -337,7 +369,7 @@ export default function DriverHome() {
               {riderLine ? <Text style={{ color: colors.onAccent, fontWeight: '700' }}>{riderLine}</Text> : null}
             </Pressable>
           ) : null}
-          {offer && !desk?.active && approved ? (
+          {offer && !desk?.active ? (
             <RideCard card={offer} busy={busy} onAccept={() => onAccept(offer)} onDecline={() => onDecline(offer)} />
           ) : null}
           <View style={styles.sideTools} pointerEvents="box-none">
@@ -401,8 +433,17 @@ function RideCard({
             <Tag key={label} label={label} tone={/Tesla|Game|Weekend|Student/.test(label) ? 'orange' : 'purple'} />
           ))}
         </View>
+        <Text style={{ color: colors.ink, fontWeight: '700' }}>
+          {card.firstName}{card.riderRating ? ` · ${card.riderRating.toFixed(1)}` : ''}
+          {card.rideType ? ` · ${card.rideType}` : ''}
+        </Text>
         <Text style={{ color: colors.ink, fontWeight: '700' }}>Pickup · {card.pickupLabel}</Text>
         <Text style={{ color: colors.ink, fontWeight: '700' }}>Drop-off · {card.dropoffLabel}</Text>
+        {card.etaMin || card.distanceMi ? (
+          <Text style={{ color: colors.inkSecondary }}>
+            {[card.etaMin ? `${card.etaMin} min away` : null, card.distanceMi ? `${card.distanceMi} mi` : null].filter(Boolean).join(' · ')}
+          </Text>
+        ) : null}
         {card.pickupAt ? <Text style={{ color: colors.inkSecondary }}>{formatPickupAt(card.pickupAt)}</Text> : null}
         {card.depositCents > 0 ? <Text style={{ color: colors.inkSecondary }}>25% deposit · {formatCents(card.depositCents)}</Text> : null}
         {card.teslaStub ? <Text style={{ color: colors.inkSecondary }}>{TESLA_FLEET_NOTICE}</Text> : null}

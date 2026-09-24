@@ -32,9 +32,6 @@ export const REQUIRED_DOCUMENTS = [
   { id: 'car_back', label: 'Car — back', hint: 'Rear photo so the plate and body match', stepId: 'car' },
   { id: 'car_left', label: 'Car — left side', hint: 'Driver side, full side-to-side', stepId: 'car' },
   { id: 'car_right', label: 'Car — right side', hint: 'Passenger side, full side-to-side', stepId: 'car' },
-  { id: 'background_authorization', label: 'Background-check authorization', hint: 'Signed authorization form, photo or PDF', stepId: 'employment' },
-  { id: 'work_eligibility', label: 'Eligibility to work', hint: 'Document that supports the category you attest to', stepId: 'employment' },
-  { id: 'w9', label: 'Form W-9', hint: 'Completed W-9 or equivalent, photo or PDF', stepId: 'w9' },
 ]
 
 export const REQUIRED_DOC_IDS = REQUIRED_DOCUMENTS.map((doc) => doc.id)
@@ -253,6 +250,9 @@ export function displayTinLast4(value) {
 
 export function submissionBlockers(ctx = {}) {
   const blockers = missingDocuments(ctx.uploaded).map((id) => `doc:${id}`)
+  if (ctx.registrationMatch === 'mismatch' || ctx.registrationMatch === 'unreadable') {
+    blockers.push('registration_match')
+  }
   if (!ctx.backgroundAuthorized) blockers.push('background_authorization_attestation')
   if (!ctx.workEligibilityAttested || !ctx.workEligibilityCategory) blockers.push('work_eligibility_attestation')
   if (!ctx.taxSaved) blockers.push('w9_tax_info')
@@ -266,8 +266,10 @@ export function blockerLabel(code) {
     return REQUIRED_DOCUMENTS.find((doc) => doc.id === id)?.label || id
   }
   switch (code) {
+    case 'registration_match':
+      return 'Registration that matches the vehicle you entered'
     case 'background_authorization_attestation':
-      return 'Background-check authorization'
+      return 'Signed background-check authorization'
     case 'work_eligibility_attestation':
       return 'Work-eligibility attestation'
     case 'w9_tax_info':

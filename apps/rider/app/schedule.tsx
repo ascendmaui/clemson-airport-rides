@@ -34,6 +34,7 @@ import {
 } from 'rides-native/riderMoney.js'
 import { localDateInput, localTimeInput, nextPickupDate, RIDE_PLACES } from 'rides-native/riderShell.js'
 import { formatCents } from 'rides-native/tripTags.js'
+import { RequireAuth } from '@/components/RequireAuth'
 
 const CAMPUS_PURPOSES: SchedulePurpose[] = ['early_class', 'planned', 'party_weekend', 'recurring']
 const WEEKDAYS = [
@@ -85,7 +86,7 @@ function placeByLabel(label: string): RidePlace {
   return found || RIDE_PLACES[0]
 }
 
-export default function ScheduleScreen() {
+function ScheduleScreen() {
   const router = useRouter()
   const insets = useSafeAreaInsets()
   const { user } = useAuth()
@@ -557,4 +558,13 @@ function makeStyles(colors: Palette) {
     student: { color: colors.orange, fontWeight: '700' as const, fontSize: 12 },
     cancel: { color: colors.danger, fontWeight: '700' as const, marginTop: 6 },
   }
+}
+
+
+export default function ScheduleScreenRoute() {
+  return (
+    <RequireAuth>
+      <ScheduleScreen />
+    </RequireAuth>
+  )
 }

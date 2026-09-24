@@ -244,6 +244,11 @@ export function AdminDrivers({ embedded = false }) {
                       return (
                         <div key={doc.id} style={{ borderRadius: 12, overflow: 'hidden', background: 'rgba(82,45,128,0.05)', minHeight: 92 }}>
                           <div style={{ fontSize: 11, fontWeight: 700, padding: '6px 8px', color: 'var(--purple)' }}>{doc.label}</div>
+                          {file?.review_status || file?.match_status ? (
+                            <div style={{ fontSize: 11, padding: '0 8px 6px', color: 'var(--ink-secondary)' }}>
+                              {[file.review_status, file.match_status].filter(Boolean).join(' · ')}
+                            </div>
+                          ) : null}
                           {file?.url && isPdf ? (
                             <a href={file.url} target="_blank" rel="noreferrer" style={{ display: 'block', padding: 8, fontSize: 12 }}>Open PDF</a>
                           ) : file?.url ? (
