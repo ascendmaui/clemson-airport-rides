@@ -8,7 +8,7 @@
  * Client: VITE_STRIPE_PUBLISHABLE_KEY
  * Server: STRIPE_SECRET_KEY (never ship in Vite)
  */
-import { quoteFare, AIRPORT_ROUTE_FALLBACK } from './fareRates'
+import { quoteFare, AIRPORT_ROUTE_FALLBACK, cardDepositCents, STRIPE_NOT_CONFIGURED_COPY } from './fareRates'
 
 function fallbackFareCents(code) {
   const route = AIRPORT_ROUTE_FALLBACK[code]
@@ -31,7 +31,7 @@ export const AIRPORT_RATES = {
 }
 
 export function depositCents(fareCents) {
-  return Math.round(Number(fareCents) * 0.25)
+  return cardDepositCents(fareCents)
 }
 
 /** @deprecated prefer depositCents — kept for dollar UI display */
@@ -108,12 +108,16 @@ export async function createCheckoutSession({
   }
 
   if (!res.ok || data?.stub || !data?.url) {
-    const msg =
-      data?.error ||
-      data?.message ||
-      (res.status === 503
-        ? 'Payments are temporarily unavailable (Stripe not configured).'
-        : `Checkout failed (HTTP ${res.status})`)
+    const combined = `${data?.message || ''} ${data?.error || ''}`
+    const msg = /not configured|payments unavailable/i.test(combined)
+      ? STRIPE_NOT_CONFIGURED_COPY
+      : (
+        data?.message ||
+        data?.error ||
+        (res.status === 503
+          ? STRIPE_NOT_CONFIGURED_COPY
+          : `Checkout failed (HTTP ${res.status})`)
+      )
     const err = new Error(msg)
     err.status = res.status
     err.payload = data

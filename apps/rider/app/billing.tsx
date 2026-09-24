@@ -6,7 +6,7 @@ import { PrimaryButton } from '@/components/Button'
 import { StackHeader } from '@/components/StackHeader'
 import { useAuth } from '@/lib/auth'
 import { supabase } from '@/lib/supabase'
-import { loadRiderBilling } from 'rides-native/riderMoney.js'
+import { depositSurfaceCopy, loadRiderBilling } from 'rides-native/riderMoney.js'
 import { formatCents } from 'rides-native/tripTags.js'
 import { lift } from '@/lib/elevation'
 import type { Palette } from '@/lib/palette'
@@ -103,7 +103,10 @@ function BillingScreen() {
               {row.pickup_label || 'Pickup'} · {row.status || 'requested'}
             </Text>
             <Text style={styles.copy}>
-              Fare {formatCents(row.fare_cents || 0)} · deposit {formatCents(row.deposit_cents || 0)}
+              Fare {formatCents(row.fare_cents || 0)}
+              {row.deposit_cents
+                ? ` · ${depositSurfaceCopy({ fareCents: row.fare_cents || 0, depositCents: row.deposit_cents }, 'upcoming') || ''}`
+                : ''}
             </Text>
           </View>
         ))}

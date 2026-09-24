@@ -21,6 +21,8 @@ import {
   feeMetadata,
   AIRPORT_ROUTE_FALLBACK,
   cardDepositCents,
+  depositSplit,
+  depositSplitLabel,
 } from '../../src/lib/fareRates.js'
 
 const CAMPUS = { label: 'Memorial Stadium', lat: 34.6788, lng: -82.843 }
@@ -95,6 +97,17 @@ export default async function handler(req, res) {
   })
   const fareSplit = splitPlatformFee(settlement.riderPaysCents)
   const depositCents = cardDepositCents(settlement.cashCents)
+  const split = depositSplit(settlement.riderPaysCents, depositCents)
+
+  if (depositCents > 0 && !stripeOk()) {
+    return json(res, 503, {
+      error: 'Payments unavailable',
+      message: 'STRIPE_SECRET_KEY is not configured. Checkout cannot start.',
+      fareCents: settlement.riderPaysCents,
+      depositCents,
+      remainingCents: split.remainingCents,
+    })
+  }
 
   const { data: trip, error: tripErr } = await sb
     .from('trips')
@@ -170,16 +183,6 @@ export default async function handler(req, res) {
     })
   }
 
-  if (!stripeOk()) {
-    return json(res, 503, {
-      error: 'Payments unavailable',
-      message: 'STRIPE_SECRET_KEY is not configured. Checkout cannot start.',
-      tripId: trip.id,
-      fareCents: settlement.riderPaysCents,
-      depositCents,
-    })
-  }
-
   try {
     const stripe = stripeClient()
     let customerId = null
@@ -187,7 +190,7 @@ export default async function handler(req, res) {
       try { customerId = await ensureStripeCustomer(stripe, sb, profile) } catch { /* guest checkout */ }
     }
     const origin = body.origin || process.env.VITE_APP_URL || 'https://clemson-airport-rides.vercel.app'
-    const depositSplit = splitPlatformFee(depositCents)
+    const depositFee = splitPlatformFee(depositCents)
     const session = await stripe.checkout.sessions.create({
       mode: 'payment',
       customer: customerId || undefined,
@@ -200,7 +203,7 @@ export default async function handler(req, res) {
           unit_amount: depositCents,
           product_data: {
             name: `Clemson RIDES ${airport} deposit (25%)`,
-            description: `Fare $${(settlement.riderPaysCents / 100).toFixed(2)} · deposit $${(depositCents / 100).toFixed(2)}`,
+            description: depositSplitLabel(split),
           },
         },
       }],
@@ -224,8 +227,8 @@ export default async function handler(req, res) {
       airport,
       fareCents: settlement.riderPaysCents,
       depositCents,
-      platformFeeCents: depositSplit.platformFeeCents,
-      driverEarningsCents: depositSplit.driverEarningsCents,
+      platformFeeCents: depositFee.platformFeeCents,
+      driverEarningsCents: depositFee.driverEarningsCents,
       surge,
       routeSource,
       currency: 'usd',

@@ -2,17 +2,23 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { cardDepositCents as fareCardDeposit } from '../../src/lib/fareRates.js'
 import { normalizePrefs } from './notificationPrefs.js'
+import { buildReceiptText } from '../../src/lib/receiptText.js'
 import {
   cardDepositCents,
-  describeRiderSocialRewards,
+  checkoutFailureCopy,
+  depositBalance,
+  depositReceiptLines,
   depositSettled,
+  depositSurfaceCopy,
+  describeRiderSocialRewards,
+  displayTierPrice,
   parseQuoteResponse,
-  promoClaimMessage,
   paymentRouteMissing,
   previewAirportFare,
+  promoClaimMessage,
   quoteInputKey,
   recomputeDeposit,
-  displayTierPrice,
+  STRIPE_NOT_CONFIGURED_COPY,
   studentDiscountCents,
   studentStatus,
   studentTripMeta,
@@ -113,6 +119,42 @@ test('promo claim copy and referral reward text', () => {
   const rewards = describeRiderSocialRewards(null)
   assert.equal(rewards.referrer, '$5.00 ride credit')
   assert.match(rewards.referred, /20%/)
+})
+
+test('deposit copy shows full fare, 25% deposit, and remaining balance', () => {
+  const student = studentDiscountCents(10000, { isStudent: true, tier: 'standard' })
+  const balance = depositBalance({ fareCents: student.fareCents })
+  assert.equal(student.fareCents, 9000)
+  assert.equal(balance.depositCents, 2250)
+  assert.equal(balance.remainingCents, 6750)
+  assert.ok(balance.depositCents < depositBalance({ fareCents: 10000 }).depositCents)
+  const quote = depositSurfaceCopy(balance, 'quote', { studentDiscountCents: student.discountCents })
+  assert.match(quote, /Full fare \$90\.00/)
+  assert.match(quote, /25% deposit of \$22\.50/)
+  assert.match(quote, /Remaining balance \$67\.50/)
+  assert.match(quote, /10% Standard student discount/)
+  assert.match(depositSurfaceCopy(balance, 'confirm'), /due when the trip is complete/)
+  assert.equal(
+    depositSurfaceCopy(balance, 'upcoming'),
+    'Deposit $22.50 · remaining balance $67.50',
+  )
+  assert.equal(depositSurfaceCopy({ fareCents: 8000, depositCents: 0 }, 'upcoming'), null)
+  const lines = depositReceiptLines({ fare_cents: 9000, deposit_cents: 2250 })
+  assert.deepEqual(lines, ['25% deposit: $22.50', 'Remaining balance: $67.50'])
+  const receipt = buildReceiptText({
+    id: 'trip_1',
+    fare_cents: 9000,
+    deposit_cents: 2250,
+    tip_cents: 0,
+    pickup_label: 'Memorial Stadium',
+    dropoff_label: 'GSP',
+  })
+  assert.match(receipt, /Fare:/)
+  assert.match(receipt, /25% deposit: \$22\.50/)
+  assert.match(receipt, /Remaining balance: \$67\.50/)
+  assert.equal(checkoutFailureCopy({ message: 'Payments unavailable', payload: { message: 'STRIPE_SECRET_KEY is not configured. Checkout cannot start.' } }), STRIPE_NOT_CONFIGURED_COPY)
+  assert.equal(paymentRouteMissing({ status: 503, message: 'Payments unavailable', payload: { message: 'STRIPE_SECRET_KEY is not configured. Checkout cannot start.' } }), false)
+  assert.match(checkoutFailureCopy({ message: 'Card was declined' }), /declined/)
 })
 
 test('a succeeded deposit row is the only paid signal', () => {

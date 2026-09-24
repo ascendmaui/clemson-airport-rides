@@ -77,6 +77,40 @@ export function markStudentVerified(
   user: { id: string; email?: string | null },
 ): Promise<{ verified: boolean; verifiedAt?: string; error: string | null }>
 
+export function depositBalance(input?: {
+  fareCents?: number
+  depositCents?: number | null
+}): { fareCents: number; depositCents: number; remainingCents: number }
+
+export type DepositSurface = 'quote' | 'confirm' | 'receipt' | 'upcoming'
+
+export function depositSurfaceCopy(
+  input: { fareCents?: number; depositCents?: number | null; remainingCents?: number },
+  surface: DepositSurface,
+  extra?: { studentDiscountCents?: number },
+): string | null
+
+export function depositReceiptLines(trip: {
+  fare_cents?: number | null
+  deposit_cents?: number | null
+}): string[]
+
+export function formatUsdCents(cents: number): string
+
+export function airportCodeFromLabel(label?: string | null): 'GSP' | 'CLT' | null
+
+export function previewAirportFare(input?: {
+  airport?: string
+  date?: string
+  time?: string
+  isStudent?: boolean
+  at?: Date
+}): AirportQuote
+
+export const STRIPE_NOT_CONFIGURED_COPY: string
+
+export function checkoutFailureCopy(err: unknown): string
+
 export function loadTripDeposit(
   supabase: unknown,
   tripId: string,

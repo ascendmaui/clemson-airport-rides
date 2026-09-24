@@ -5,6 +5,7 @@ import stripeHandler from './api/stripe-payment-methods.js'
 import adminHandler from './api/admin-drivers.js'
 import friendHandler from './api/friend-rides.js'
 import carpoolHandler from './api/carpool.js'
+import checkoutSessionHandler from './api/create-checkout-session.js'
 
 const legacy = {
   '/api/help-chat': ['/api/admin-drivers?action=help-chat', adminHandler],
@@ -32,6 +33,7 @@ const direct = {
   '/api/stripe-payment-methods': stripeHandler,
   '/api/friend-rides': friendHandler,
   '/api/carpool': carpoolHandler,
+  '/api/create-checkout-session': checkoutSessionHandler,
 }
 
 function readBody(req) {

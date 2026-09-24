@@ -25,6 +25,8 @@ import type { Palette } from '@/lib/palette'
 import { useTheme } from '@/lib/theme'
 import { useThemedStyles } from '@/lib/useThemedStyles'
 import {
+  checkoutFailureCopy,
+  depositSurfaceCopy,
   loadStudentProfile,
   loadTripDeposit,
   quoteAirportFare,
@@ -259,20 +261,22 @@ function ScheduleScreen() {
         riderId: user.id,
         riderName: user.user_metadata?.full_name || user.email?.split('@')[0] || 'Rider',
       })
-      const depositCents = Number(session.depositCents) || 0
+      const depositPaid = Number(session.depositCents) || airportQuote.depositCents
+      const farePaid = Number(session.fareCents) || airportQuote.fareCents
+      const remaining = Math.max(0, farePaid - depositPaid)
       const tripId = typeof session.tripId === 'string' ? session.tripId : ''
       if (session.paidWithCredits) {
-        setBanner(`Ride covered by credits. No card deposit.${tripId ? ` Trip ${tripId}.` : ''}`)
+        setBanner(`Ride covered by credits. No card deposit, so there is no remaining card balance.${tripId ? ` Trip ${tripId}.` : ''}`)
         await successHaptic()
         await reload()
         return
       }
       const url = typeof session.url === 'string' ? session.url : ''
       if (!url) {
-        setError('Checkout did not return a payment URL. No charge was made.')
+        setError(checkoutFailureCopy(session) || 'Checkout did not return a payment URL. No charge was made.')
         return
       }
-      setBanner(`Opening Stripe for the ${formatCents(depositCents)} deposit (25% of the recomputed fare).`)
+      setBanner(`Opening Stripe for the ${formatCents(depositPaid)} deposit. Remaining balance ${formatCents(remaining)} is collected when the trip is complete.`)
       await openStripeCheckout(url)
       if (!tripId || !supabase) {
         setBanner('Checkout closed. Deposit received only after Stripe records the payment.')
@@ -280,7 +284,7 @@ function ScheduleScreen() {
       }
       const settled = await loadTripDeposit(supabase, tripId)
       if (settled.settled) {
-        setBanner(`Deposit received · ${formatCents(depositCents)}. We’ll match a driver for this pickup.`)
+        setBanner(`Deposit received · ${formatCents(depositPaid)}. Remaining balance ${formatCents(remaining)} is collected when the trip is complete.`)
         await successHaptic()
       } else if (settled.error) {
         setBanner(`Checkout closed. Could not confirm the deposit yet (${settled.error}). Nothing is marked paid.`)
@@ -289,8 +293,7 @@ function ScheduleScreen() {
       }
       await reload()
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Checkout failed. No charge was made.'
-      setError(message)
+      setError(checkoutFailureCopy(err))
     } finally {
       setBusy(false)
     }
@@ -496,8 +499,8 @@ function ScheduleScreen() {
           {weekendQuote.label ? <Text style={styles.student}>{weekendQuote.label}</Text> : null}
           <Text style={styles.fine}>
             {fleet === 'tesla' ? 'Tesla Model 3 · a driver is at the wheel.' : 'Standard vehicle.'}
-            {weekendQuote.airport
-              ? ` ${weekendQuote.airport} quote. Pay the 25% deposit below if you want to hold it now.`
+            {weekendQuote.depositCents > 0
+              ? ` ${depositSurfaceCopy(weekendQuote, 'confirm', { studentDiscountCents: weekendQuote.discountCents }) || ''}`
               : ' Final fare can change when a driver accepts.'}
           </Text>
         </View>
@@ -565,11 +568,16 @@ function ScheduleScreen() {
             value={airportQuote ? formatCents(airportQuote.depositCents) : quoting ? 'Updating…' : '—'}
             strong
           />
-          <Text style={styles.fine}>
+          <Row
+            label="Remaining balance"
+            value={airportQuote ? formatCents(Math.max(0, airportQuote.fareCents - airportQuote.depositCents)) : quoting ? 'Updating…' : '—'}
+            tone="purple"
+          />
+          <Text style={styles.balance}>
             {airportQuote
-              ? `${airport} · ${formatCents(airportQuote.fareCents)} fare → ${formatCents(airportQuote.depositCents)} deposit`
-              : 'Pay stays off until this quote matches the airport and time on screen.'}
-            {airportQuote?.routeSource === 'fallback' ? ' · fare card estimate' : airportQuote?.routeSource ? ` · ${airportQuote.routeSource}` : ''}
+              ? depositSurfaceCopy(airportQuote, 'quote', { studentDiscountCents: airportQuote.studentDiscountCents })
+              : 'Pay deposit stays off until this quote matches the airport and time on screen.'}
+            {airportQuote?.routeSource === 'fallback' ? ' Fare card estimate until the quote route answers.' : ''}
           </Text>
         </View>
 
@@ -584,6 +592,9 @@ function ScheduleScreen() {
           onPress={pay}
           disabled={busy || !airportQuote || quoting}
         />
+        <Text style={styles.fine}>
+          Pay deposit opens Stripe Checkout. If Stripe is not configured on this machine, checkout stops and nothing is charged. Live mode stays off.
+        </Text>
         {!user ? (
           <Text style={styles.copy}>Browse the quote. Sign in when you pay the deposit.</Text>
         ) : null}
@@ -633,8 +644,8 @@ function ScheduleScreen() {
           <Text style={styles.cardLine}>{quote.estimate ? 'Fare estimate' : 'Fare'} · {formatUsd(quote.fareCents / 100)}</Text>
           {quote.label ? <Text style={styles.student}>{quote.label}</Text> : null}
           <Text style={styles.fine}>
-            {quote.airport
-              ? `${quote.airport} quote. The 25% deposit is collected with Pay deposit above.`
+            {quote.depositCents > 0
+              ? depositSurfaceCopy(quote, 'confirm', { studentDiscountCents: quote.discountCents })
               : `About ${quote.miles ?? '—'} mi. Final fare can change when a driver accepts.`}
           </Text>
         </View>
@@ -657,6 +668,14 @@ function ScheduleScreen() {
               {row.metadata?.recurrence?.weekdays?.length ? ` · weekly ${row.metadata.recurrence.weekdays.join(', ')}` : ''}
             </Text>
             {row.tier === 'tesla' ? <Text style={styles.student}>Tesla Model 3 · driver at the wheel</Text> : null}
+            {row.deposit_cents ? (
+              <Text style={styles.balance}>
+                {depositSurfaceCopy(
+                  { fareCents: row.fare_cents || 0, depositCents: row.deposit_cents },
+                  'upcoming',
+                )}
+              </Text>
+            ) : null}
             {row.status === 'scheduled' || row.status === 'accepted' ? (
               <Pressable
                 onPress={() => {
@@ -688,12 +707,12 @@ function ScheduleScreen() {
   )
 }
 
-function Row({ label, value, strong }: { label: string; value: string; strong?: boolean }) {
+function Row({ label, value, strong, tone }: { label: string; value: string; strong?: boolean; tone?: 'purple' }) {
   const styles = useThemedStyles(makeStyles)
   return (
     <View style={styles.row}>
-      <Text style={styles.rowLabel}>{label}</Text>
-      <Text style={[styles.rowValue, strong && styles.rowStrong]}>{value}</Text>
+      <Text style={[styles.rowLabel, tone === 'purple' && styles.rowPurple]}>{label}</Text>
+      <Text style={[styles.rowValue, strong && styles.rowStrong, tone === 'purple' && styles.rowPurple]}>{value}</Text>
     </View>
   )
 }
@@ -742,7 +761,9 @@ function makeStyles(colors: Palette) {
     rowLabel: { color: colors.inkSecondary, fontSize: 14 },
     rowValue: { color: colors.ink, fontWeight: '700' as const, fontSize: 16 },
     rowStrong: { color: colors.orange, fontSize: 18 },
+    rowPurple: { color: colors.purple, fontWeight: '700' as const },
     fine: { color: colors.placeholder, fontSize: 12, lineHeight: 18 },
+    balance: { color: colors.purple, fontSize: 13, lineHeight: 18, fontWeight: '700' as const },
     error: { color: colors.danger, fontSize: 13, lineHeight: 18, marginVertical: 6 },
     banner: {
       backgroundColor: colors.purpleSoft,

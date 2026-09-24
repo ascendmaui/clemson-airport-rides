@@ -12,6 +12,9 @@ import {
   STUDENT_DISCOUNT_BPS,
   CARPOOL_DISCOUNT_BPS,
   PLATFORM_FEE_BPS,
+  cardDepositCents,
+  depositSplit,
+  depositSplitLabel,
 } from './fareRates.js'
 
 test('credit pack anchor is $100 → 10%, with $50/5% and $200/15%', () => {
@@ -76,6 +79,24 @@ test('weekday airport rush and quiet midday', () => {
   const friday = resolveSurge({ at: new Date('2026-09-25T22:00:00Z'), airport: false })
   assert.equal(friday.multiplier, 1.2)
   assert.equal(friday.rule.id, 'weekend')
+})
+
+test('25% deposit is taken after the 10% Standard student discount', () => {
+  const full = quoteFare({ miles: 48, minutes: 55, isStudent: false, tier: 'standard' })
+  const student = quoteFare({ miles: 48, minutes: 55, isStudent: true, tier: 'standard' })
+  assert.ok(student.breakdown.student_discount_cents > 0)
+  assert.equal(
+    student.fareBeforeCreditsCents,
+    full.fareBeforeCreditsCents - student.breakdown.student_discount_cents,
+  )
+  const split = depositSplit(student.fareBeforeCreditsCents)
+  assert.equal(split.depositCents, cardDepositCents(student.fareBeforeCreditsCents))
+  assert.ok(split.depositCents < cardDepositCents(full.fareBeforeCreditsCents))
+  assert.equal(split.remainingCents, student.fareBeforeCreditsCents - split.depositCents)
+  assert.equal(depositSplit(9000, 0).depositCents, 0)
+  assert.equal(depositSplit(9000, 2000).remainingCents, 7000)
+  assert.match(depositSplitLabel(split), /25% deposit/)
+  assert.match(depositSplitLabel(split), /remaining balance/)
 })
 
 test('stacking is carpool then student then prepaid on credits only', () => {
