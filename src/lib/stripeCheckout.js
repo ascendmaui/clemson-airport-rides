@@ -140,6 +140,40 @@ export async function createCheckoutSession({
   return data
 }
 
+/** Tell the server a Checkout was canceled so an unpaid searching trip leaves the pool. */
+export async function abandonCheckoutSession({ tripId, sessionId } = {}) {
+  if (!tripId) throw new Error('Missing trip')
+  const headers = { 'Content-Type': 'application/json' }
+  if (supabase) {
+    const { data } = await supabase.auth.getSession()
+    const token = data?.session?.access_token
+    if (token) headers.Authorization = `Bearer ${token}`
+  }
+  let res
+  try {
+    res = await fetch('/api/stripe-payment-methods?action=abandon-checkout', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ tripId, sessionId: sessionId || undefined }),
+    })
+  } catch (err) {
+    throw new Error(err?.message || 'Could not close checkout')
+  }
+  let data = null
+  try {
+    data = await res.json()
+  } catch {
+    throw new Error(`Could not close checkout (HTTP ${res.status})`)
+  }
+  if (!res.ok) {
+    const error = new Error(data?.error || data?.message || `Could not close checkout (HTTP ${res.status})`)
+    error.status = res.status
+    error.payload = data
+    throw error
+  }
+  return data
+}
+
 /** @deprecated use createCheckoutSession */
 export async function createDepositIntent({ airport, riderName }) {
   const rate = AIRPORT_RATES[airport]

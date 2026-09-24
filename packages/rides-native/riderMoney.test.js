@@ -8,6 +8,7 @@ import {
   checkoutFailureCopy,
   depositBalance,
   depositReceiptLines,
+  checkoutCloseOutcome,
   depositSettled,
   depositSurfaceCopy,
   describeRiderSocialRewards,
@@ -178,6 +179,14 @@ test('a succeeded deposit row is the only paid signal', () => {
   assert.equal(depositSettled([{ kind: 'deposit', status: 'requires_payment' }]), false)
   assert.equal(depositSettled([{ kind: 'tip', status: 'succeeded' }]), false)
   assert.equal(depositSettled([]), false)
+})
+
+test('checkout close keeps a paid trip and releases an unpaid one', () => {
+  assert.equal(checkoutCloseOutcome({ reason: 'paid', released: false, status: 'searching' }), 'paid')
+  assert.equal(checkoutCloseOutcome({ restored: true, status: 'scheduled' }), 'paid')
+  assert.equal(checkoutCloseOutcome({ released: true, status: 'canceled' }), 'released')
+  assert.equal(checkoutCloseOutcome({ released: false, reason: 'still_open' }), 'unchanged')
+  assert.equal(checkoutCloseOutcome(null), 'unknown')
 })
 
 test('notification prefs keep web defaults', () => {

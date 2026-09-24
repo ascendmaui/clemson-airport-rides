@@ -148,6 +148,13 @@ test('consolidated handlers reject unknown actions and wrong methods', async () 
     url: '/api/stripe-payment-methods?action=request-driver',
   })
   assert.notEqual(requestDriver.status, 400)
+
+  const abandon = await call(stripePaymentHandler, {
+    method: 'POST',
+    url: '/api/stripe-payment-methods?action=abandon-checkout',
+    body: {},
+  })
+  assert.notEqual(abandon.status, 400)
 })
 
 test('held routes fold into existing routers and ignore body sub-actions', () => {

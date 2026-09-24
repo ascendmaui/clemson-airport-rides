@@ -26,7 +26,10 @@ import { useTheme } from '@/lib/theme'
 import { useStudentStatus } from '@/lib/useStudentStatus'
 import { useThemedStyles } from '@/lib/useThemedStyles'
 import {
+  abandonAirportCheckout,
+  checkoutCloseOutcome,
   checkoutFailureCopy,
+  type CheckoutCloseResult,
   depositSurfaceCopy,
   loadTripDeposit,
   quoteAirportFare,
@@ -270,7 +273,17 @@ function ScheduleScreen() {
         return
       }
       const settled = await loadTripDeposit(supabase, tripId)
-      if (settled.settled) {
+      const sessionId = typeof session.id === 'string' ? session.id : ''
+      let close: CheckoutCloseResult | null = null
+      if (!settled.settled) {
+        try {
+          close = await abandonAirportCheckout(supabase, { tripId, sessionId })
+        } catch {
+          close = null
+        }
+      }
+      const outcome = settled.settled ? 'paid' : checkoutCloseOutcome(close)
+      if (outcome === 'paid') {
         setBanner(`Deposit received · ${formatCents(depositPaid)}. Remaining balance ${formatCents(remaining)} is collected when the trip is complete.`)
         await successHaptic()
         if (!date) {
@@ -280,6 +293,8 @@ function ScheduleScreen() {
           })
           return
         }
+      } else if (outcome === 'released') {
+        setBanner('Checkout closed. Nothing was charged. That unpaid ride is no longer searching for a driver.')
       } else if (settled.error) {
         setBanner(`Checkout closed. Could not confirm the deposit yet (${settled.error}). Nothing is marked paid.`)
       } else {

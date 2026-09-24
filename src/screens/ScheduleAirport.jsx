@@ -3,12 +3,13 @@ import { PrimaryButton } from '../components/PrimaryButton'
 import { BottomTabs } from '../components/BottomTabs'
 import {
   AIRPORT_RATES,
+  abandonCheckoutSession,
   depositCents,
   createCheckoutSession,
   getStripeConfig,
 } from '../lib/stripeCheckout'
 import { formatUsdFromCents, applyStudentDiscount } from '../lib/pricing'
-import { depositSurfaceCopy, STRIPE_NOT_CONFIGURED_COPY } from '../../packages/rides-native/riderMoney.js'
+import { checkoutCloseOutcome, depositSurfaceCopy, STRIPE_NOT_CONFIGURED_COPY } from '../../packages/rides-native/riderMoney.js'
 import { useAuth } from '../lib/auth'
 import { getHashRoute, navigate } from '../lib/navigation'
 import { supabase } from '../lib/supabase'
@@ -50,6 +51,25 @@ export function ScheduleAirport() {
       alive = false
     }
   }, [returnFlags.paid, returnFlags.trip])
+
+  useEffect(() => {
+    const tripId = returnFlags.trip
+    if (!tripId || returnFlags.canceled !== '1') return undefined
+    let alive = true
+    abandonCheckoutSession({ tripId })
+      .then((result) => {
+        if (!alive || checkoutCloseOutcome(result) !== 'paid') return
+        if (result.status === 'scheduled') {
+          setBookedNote('Deposit received. This pickup stays scheduled.')
+          return
+        }
+        navigate('requested', { trip: tripId, paid: '1' })
+      })
+      .catch(() => {})
+    return () => {
+      alive = false
+    }
+  }, [returnFlags.canceled, returnFlags.trip])
 
   const rate = AIRPORT_RATES[airport]
   const student = applyStudentDiscount(rate.fareCents, {
