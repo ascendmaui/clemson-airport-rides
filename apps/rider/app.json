@@ -12,11 +12,16 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.ascendmaui.clemsonrides.rider",
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSLocationWhenInUseUsageDescription": "Clemson RIDES shares your location on a trip link you send, and attaches GPS when you confirm an SOS."
       }
     },
     "android": {
       "package": "com.ascendmaui.clemsonrides.rider",
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION"
+      ],
       "adaptiveIcon": {
         "backgroundColor": "#F56600",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -33,6 +38,12 @@
     "plugins": [
       "expo-router",
       "expo-secure-store",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Clemson RIDES shares your location on a trip link you send, and attaches GPS when you confirm an SOS."
+        }
+      ],
       [
         "expo-splash-screen",
         {

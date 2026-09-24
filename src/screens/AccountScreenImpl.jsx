@@ -27,6 +27,7 @@ import { SupportChatPanel } from '../components/SupportChatPanel'
 import { CreditPacksPanel } from '../components/CreditPacksPanel'
 import { PrepaidCreditsPanel } from '../components/PrepaidCreditsPanel'
 import { QuietHoursCard } from '../components/QuietHoursCard'
+import { EmergencyContactsPanel } from '../components/EmergencyContactsPanel'
 
 const chip = (on) => ({
   padding: '8px 12px', borderRadius: 999, fontSize: 13, fontWeight: 600,
@@ -634,6 +635,7 @@ export function AccountScreen() {
               </PrimaryButton>
             </div>
             {msg && <div style={{ fontSize: 13, marginTop: 10, color: 'var(--ink-secondary)', textAlign: 'center' }}>{msg}</div>}
+            <EmergencyContactsPanel />
           </Section>
         )}
 
