@@ -60,7 +60,7 @@ export const CampusMap = forwardRef<CampusMapHandle, CampusMapProps>(function Ca
           <Text style={styles.pinText}>GSP</Text>
         </View>
       </View>
-      {pins.slice(0, 3).map((pin) => (
+      {pins.map((pin) => (
         <Text key={pin.id} style={styles.pinLabel}>{pin.title}</Text>
       ))}
       <Text style={styles.caption}>

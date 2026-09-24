@@ -7,6 +7,7 @@ import { CarpoolCompare } from '@/components/carpool/CarpoolCompare'
 import { NeighborhoodPicker } from '@/components/carpool/NeighborhoodPicker'
 import { BackButton, Card, ErrorText, Field, SkeletonBlock, SplitModePicker } from '@/components/carpool/ui'
 import { MainTabs } from '@/components/MainTabs'
+import { loadAmbassadorCode } from '@/lib/ambassadorCode'
 import { setAuthNext } from '@/lib/authNext'
 import { useAuth } from '@/lib/auth'
 import { supabase } from '@/lib/supabase'
@@ -71,6 +72,7 @@ export default function OfferCarpoolScreen() {
         dropoff,
         splitMode,
         partyType: tailgate ? 'tailgate' : 'carpool',
+        ambassadorCode: (await loadAmbassadorCode(user.id)) || undefined,
       })
       try {
         await recomputeFriendRide(supabase, created.token, splitMode)

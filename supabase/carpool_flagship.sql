@@ -64,3 +64,15 @@ create index if not exists ambassador_payout_ledger_code_idx
   on public.ambassador_payout_ledger (code, created_at desc);
 
 alter table public.ambassador_payout_ledger enable row level security;
+
+-- Rider who opened /a/:code. Service role only. Not a payout row.
+create table if not exists public.ambassador_attributions (
+  user_id uuid primary key,
+  code text not null,
+  code_type text not null default 'ambassador',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint ambassador_attributions_code_type_check check (code_type = 'ambassador')
+);
+
+alter table public.ambassador_attributions enable row level security;

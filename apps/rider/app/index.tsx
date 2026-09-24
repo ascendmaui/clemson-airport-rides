@@ -22,12 +22,14 @@ import { Skeleton } from '@/components/Skeleton'
 import { loadBusySpots, type BusySpot } from '@/lib/busySpots'
 import { useAuth } from '@/lib/auth'
 import { setAuthNext } from '@/lib/authNext'
+import { listScheduledTrips, type ScheduledRow } from '@/lib/scheduleApi'
 import { playTigerCue, tapHaptic } from '@/lib/feedback'
 import { displayFirstName } from 'rides-native/authErrors'
 import { campusOverlays } from 'rides-native/riderShell.js'
 import { loadGameDay } from 'rides-native/driverDesk'
 import { gameDayNotice, type GameDayNotice } from 'rides-native/gameDayNotice.js'
 import { studentSurfaceCopy } from 'rides-native/riderMoney.js'
+import { dueScheduleReminders } from '../../../src/lib/scheduledRideModel.js'
 import { supabase } from '@/lib/supabase'
 import { useStudentStatus } from '@/lib/useStudentStatus'
 import { RIDER_TRACK_STATUSES, riderLiveView } from 'rides-native/liveTrip'
@@ -70,9 +72,12 @@ export default function RiderHome() {
   const overlays = useMemo(() => campusOverlays(), [])
   const [surge, setSurge] = useState(overlays.surge)
   const [gameNotice, setGameNotice] = useState<GameDayNotice | null>(null)
+  const [scheduledRows, setScheduledRows] = useState<ScheduledRow[]>([])
+  const [clock, setClock] = useState(() => new Date())
   const student = useStudentStatus()
   const studentOffer = studentSurfaceCopy(student, 'home')
   const gameDay = Boolean(gameNotice?.live)
+  const reminders = useMemo(() => dueScheduleReminders(scheduledRows, clock), [scheduledRows, clock])
 
   const name = user
     ? displayFirstName(user.user_metadata?.full_name || user.email?.split('@')[0], 'Tiger')
@@ -120,6 +125,32 @@ export default function RiderHome() {
     setSpotsLoading(false)
   }
 
+  async function loadGameNotice() {
+    if (!supabase) {
+      setGameNotice(gameDayNotice(null))
+      return
+    }
+    try {
+      const row = await loadGameDay(supabase)
+      setGameNotice(gameDayNotice(row))
+    } catch {
+      setGameNotice(gameDayNotice(null))
+    }
+  }
+
+  async function loadScheduledReminders() {
+    if (!user?.id) {
+      setScheduledRows([])
+      return
+    }
+    try {
+      setScheduledRows(await listScheduledTrips(user.id))
+      setClock(new Date())
+    } catch {
+      setScheduledRows([])
+    }
+  }
+
   useEffect(() => {
     if (!user?.id || !supabase) {
       setLiveTrip(null)
@@ -147,20 +178,46 @@ export default function RiderHome() {
   }, [user?.id])
 
   useEffect(() => {
-    if (!supabase) {
-      setGameNotice(gameDayNotice(null))
-      return undefined
-    }
     let alive = true
-    loadGameDay(supabase).then((row) => {
-      if (alive) setGameNotice(gameDayNotice(row))
-    }).catch(() => {
-      if (alive) setGameNotice(gameDayNotice(null))
-    })
+    void (async () => {
+      if (!supabase) {
+        if (alive) setGameNotice(gameDayNotice(null))
+        return
+      }
+      try {
+        const row = await loadGameDay(supabase)
+        if (alive) setGameNotice(gameDayNotice(row))
+      } catch {
+        if (alive) setGameNotice(gameDayNotice(null))
+      }
+    })()
     return () => {
       alive = false
     }
   }, [])
+
+  useEffect(() => {
+    const timer = setInterval(() => setClock(new Date()), 60_000)
+    return () => clearInterval(timer)
+  }, [])
+
+  useEffect(() => {
+    let alive = true
+    if (!user?.id) {
+      setScheduledRows([])
+      return undefined
+    }
+    listScheduledTrips(user.id).then((rows) => {
+      if (!alive) return
+      setScheduledRows(rows)
+      setClock(new Date())
+    }).catch(() => {
+      if (alive) setScheduledRows([])
+    })
+    return () => {
+      alive = false
+    }
+  }, [user?.id])
 
   useEffect(() => {
     let alive = true
@@ -337,7 +394,11 @@ export default function RiderHome() {
               tintColor={colors.orange}
               onRefresh={() => {
                 setRefreshing(true)
-                reloadSpots(heatWindow).finally(() => setRefreshing(false))
+                Promise.all([
+                  reloadSpots(heatWindow),
+                  loadGameNotice(),
+                  loadScheduledReminders(),
+                ]).finally(() => setRefreshing(false))
               }}
             />
           )}
@@ -365,6 +426,34 @@ export default function RiderHome() {
               ) : null}
             </>
           )}
+          {gameNotice?.live ? (
+            <View
+              accessibilityRole="text"
+              accessibilityLabel={`${gameNotice.headline}. ${gameNotice.detail || ''}. ${gameNotice.body}`}
+              style={[styles.liveCard, styles.gameCard, lift(colors, 'rest')]}
+            >
+              <Text style={styles.liveKicker}>GAME DAY</Text>
+              <Text style={styles.liveTitle}>{gameNotice.headline}</Text>
+              {gameNotice.detail ? <Text style={styles.gameDetail}>{gameNotice.detail}</Text> : null}
+              <Text style={styles.liveBody}>{gameNotice.body}</Text>
+            </View>
+          ) : null}
+          {reminders.map((item) => (
+            <Pressable
+              key={item.tripId}
+              accessibilityRole="button"
+              accessibilityLabel={`${item.label}. ${item.body}`}
+              onPress={() => {
+                void tapHaptic()
+                router.push('/schedule')
+              }}
+              style={[styles.liveCard, lift(colors, 'rest')]}
+            >
+              <Text style={styles.liveKicker}>PICKUP REMINDER</Text>
+              <Text style={styles.liveTitle}>{item.label}</Text>
+              <Text style={styles.liveBody}>{item.body}</Text>
+            </Pressable>
+          ))}
           <TextInput
             value={query}
             onChangeText={setQuery}
@@ -581,6 +670,8 @@ function makeStyles(colors: Palette) {
     liveKicker: { color: colors.orange, fontSize: 11, fontWeight: '800' as const, letterSpacing: 1.1 },
     liveTitle: { color: colors.purple, fontSize: 16, fontWeight: '800' as const, marginTop: 4 },
     liveBody: { color: colors.inkSecondary, fontSize: 13, marginTop: 4 },
+    gameCard: { backgroundColor: colors.orangeSoft },
+    gameDetail: { color: colors.orange, fontSize: 13, fontWeight: '800' as const, marginTop: 4 },
     search: {
       borderWidth: 1.5,
       borderColor: colors.orange,

@@ -6,6 +6,11 @@
 export const TESLA_FLEET_NOTICE =
   'Coming soon. Tesla Model 3 is a profile option only. A person still drives the car. There is no self-driving dispatch.'
 
+/** Notice for a selected Tesla Model 3 option. Null when Tesla is not the choice. */
+export function teslaFleetNotice(selected) {
+  return selected ? TESLA_FLEET_NOTICE : null
+}
+
 export const ACTIONABLE_LEAD_MS = 45 * 60 * 1000
 
 /** Same sentence the database raises when an accept of an unpaid airport deposit is rejected. */
@@ -21,11 +26,60 @@ export function formatCents(cents) {
   return `${sign}$${(abs / 100).toFixed(2)}`
 }
 
+/** Named carpool incentive. Recent earnings use metadata.driver_payout_cents. */
+export const DRIVER_CARPOOL_BONUS_ID = 'driver_carpool_bonus'
+
 /** Driver keeps 80%. Platform fee is 20% of the fare, rounded once. */
 export function driverNetCents(fareCents) {
   const fare = Math.max(0, Math.round(Number(fareCents) || 0))
   const fee = Math.round(fare * 0.2)
   return fare - fee
+}
+
+function finiteCents(value) {
+  if (value == null || value === '') return null
+  const n = Number(value)
+  if (!Number.isFinite(n)) return null
+  return Math.max(0, Math.round(n))
+}
+
+/**
+ * Carpool take stored on the trip. Null when the row has no driver payout.
+ * baseNetCents + bonusCents equals payoutCents when the quote recorded a solo net.
+ */
+export function carpoolPayFromTrip(row) {
+  const meta = metaOf(row)
+  const quote = meta.carpool && typeof meta.carpool === 'object' ? meta.carpool : null
+  const driver = quote?.driver && typeof quote.driver === 'object' ? quote.driver : {}
+  const payoutCents = finiteCents(meta.driver_payout_cents ?? driver.payoutCents ?? row?.driverPayoutCents)
+  if (payoutCents == null) return null
+  const rawId = String(meta.incentive_id || driver.incentiveId || row?.carpoolIncentiveId || '')
+  const solo = finiteCents(driver.soloPayoutCents ?? row?.baseNetCents)
+  const storedBonus = finiteCents(driver.carpoolBonusCents ?? row?.carpoolBonusCents)
+  const isCarpool = rawId === DRIVER_CARPOOL_BONUS_ID
+    || storedBonus != null
+    || meta.kind === 'carpool'
+    || quote != null
+    || Boolean(meta.fare_breakdown?.carpool)
+  const bonusCents = isCarpool
+    ? (storedBonus != null ? storedBonus : (solo != null ? Math.max(0, payoutCents - solo) : 0))
+    : 0
+  const baseNetCents = solo != null ? solo : Math.max(0, payoutCents - bonusCents)
+  const showBonus = isCarpool
+  return {
+    baseNetCents,
+    bonusCents,
+    payoutCents,
+    incentiveId: showBonus ? (rawId || DRIVER_CARPOOL_BONUS_ID) : '',
+    showBonus,
+  }
+}
+
+/** Recent earnings: carpool uses metadata.driver_payout_cents, otherwise 80% of the fare. */
+export function tripEarnedCents(trip) {
+  const pay = carpoolPayFromTrip(trip)
+  if (pay) return pay.payoutCents
+  return driverNetCents(trip?.fare_cents ?? trip?.fareCents)
 }
 
 /** 25% airport deposit. A stored deposit_cents wins over the formula. */
@@ -369,7 +423,8 @@ export function toDriverCard(row, options) {
     fareCents,
     depositCents: depositSliceCents(fareCents, storedDeposit),
     depositExplicit: row.deposit_cents != null && row.deposit_cents !== '',
-    driverNetCents: driverNetCents(fareCents),
+    driverNetCents: tripEarnedCents(row),
+    ...carpoolCardFields(row),
     firstName: first,
     purpose: meta.purpose || row.rider_note || '',
     tier: row.tier || null,
@@ -407,6 +462,19 @@ export function carpoolShareLines(metadata) {
   }))
 }
 
+function carpoolCardFields(row) {
+  const pay = carpoolPayFromTrip(row)
+  if (!pay?.showBonus) {
+    return { baseNetCents: null, carpoolBonusCents: null, carpoolIncentiveId: null, driverPayoutCents: pay?.payoutCents ?? null }
+  }
+  return {
+    baseNetCents: pay.baseNetCents,
+    carpoolBonusCents: pay.bonusCents,
+    carpoolIncentiveId: pay.incentiveId || DRIVER_CARPOOL_BONUS_ID,
+    driverPayoutCents: pay.payoutCents,
+  }
+}
+
 /** Fare, 25% deposit, remainder still collected on complete, and the 80/20 split. */
 export function fareCollection(card) {
   const shares = Array.isArray(card?.shares) ? card.shares : carpoolShareLines(card?.metadata)
@@ -416,7 +484,8 @@ export function fareCollection(card) {
   const depositCents = card?.depositExplicit
     ? Math.max(0, Math.round(Number(card.depositCents ?? card.deposit_cents) || 0))
     : depositSliceCents(fareCents, shareSum > 0 ? card?.deposit_cents : (card?.depositCents ?? card?.deposit_cents))
-  const net = driverNetCents(fareCents)
+  const pay = carpoolPayFromTrip(card)
+  const net = pay ? pay.payoutCents : driverNetCents(fareCents)
   return {
     fareCents,
     depositCents,
@@ -424,6 +493,10 @@ export function fareCollection(card) {
     driverNetCents: net,
     platformFeeCents: Math.max(0, fareCents - net),
     shares,
+    baseNetCents: pay?.showBonus ? pay.baseNetCents : null,
+    carpoolBonusCents: pay?.showBonus ? pay.bonusCents : null,
+    carpoolIncentiveId: pay?.showBonus ? (pay.incentiveId || DRIVER_CARPOOL_BONUS_ID) : null,
+    usesStoredPayout: Boolean(pay),
   }
 }
 
@@ -456,7 +529,7 @@ export function weekNetCents(trips, now = new Date()) {
   for (const trip of trips || []) {
     if (trip?.status && trip.status !== 'completed') continue
     if (!isSameZonedWeek(trip?.completed_at, now)) continue
-    total += driverNetCents(trip.fare_cents)
+    total += tripEarnedCents(trip)
   }
   return total
 }
@@ -580,7 +653,7 @@ export function summarizeDepositAwareness(trips, paymentsByTrip, now = new Date(
       else depositOpenCents += cents
     }
     if (trip.status === 'completed') {
-      const net = driverNetCents(trip.fare_cents)
+      const net = tripEarnedCents(trip)
       driverNetCentsTotal += net
       if (isSameZonedDay(trip.completed_at, now)) todayNetCents += net
     }

@@ -1,6 +1,13 @@
 import { useEffect, useState } from 'react'
 import { getHashRoute, redirectShareHashToPath } from './lib/navigation'
 import { capturePromoFromLocation } from './lib/riderPromo'
+import { useAuth } from './lib/auth'
+import {
+  claimAmbassadorAttribution,
+  clearAmbassadorAttribution,
+  rememberAmbassador,
+  rememberedAmbassador,
+} from './lib/friendRides'
 import { RequireAuth } from './components/RequireAuth'
 import { Marketing } from './screens/Marketing'
 import { RiderHome } from './screens/RiderHome'
@@ -32,6 +39,28 @@ import { IncentivesAdmin } from './screens/IncentivesAdmin'
 import { LostFoundWatcher } from './components/LostFoundWatcher'
 import { LostFound } from './screens/LostFound'
 import { RidesHistory } from './screens/RidesHistory'
+
+function AmbassadorAttributionSync() {
+  const { user } = useAuth()
+  useEffect(() => {
+    if (!user?.id) return undefined
+    const code = rememberedAmbassador(user.id)
+    if (!code) return undefined
+    let alive = true
+    claimAmbassadorAttribution(code)
+      .then((data) => {
+        if (alive && data?.code) rememberAmbassador(data.code, user.id)
+      })
+      .catch((err) => {
+        if (!alive) return
+        if (err?.status === 404 || err?.status === 409 || err?.payload?.code === 'own_link') {
+          clearAmbassadorAttribution()
+        }
+      })
+    return () => { alive = false }
+  }, [user?.id])
+  return null
+}
 
 const PROTECTED = new Set(['driver', 'driver-onboarding', 'account', 'driver-signup', 'admin', 'incentives', 'lost-found', 'history', 'earnings'])
 const SITE_ROUTES = new Set(['landing', '', 'privacy', 'terms'])
@@ -178,6 +207,7 @@ export default function App() {
     <ToastProvider>
       <div className={site ? 'desktop-frame desktop-frame--site' : 'desktop-frame'}>
         <div className={site ? 'app-shell app-shell--site' : 'app-shell'} style={{ position: 'relative', height: '100%' }}>
+          <AmbassadorAttributionSync />
           <RideToastWatcher />
           <LostFoundWatcher />
           <ToastStack />

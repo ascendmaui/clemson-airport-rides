@@ -2,6 +2,49 @@
 
 Persistent knowledge base for recurring failures. When a matching issue appears, apply the saved fix first.
 
+## 2026-09-24 — Rider tsc fails on ambassador attribution (PR #65)
+
+- **Track / machine:** Clemson RIDES · Max (/tmp worktree) / PR review
+- **Problem:** `tsc --noEmit` in apps/rider failed with 3 errors: TS18047 `'user' is possibly 'null'` twice in app/friends.tsx (`loadAmbassadorCode(user.id)`), and TS2345 in lib/ambassadorCode.ts (`string | null` not assignable to `null | undefined`).
+- **Root cause:** `packAttribution(code, userId = null)` and `attributionForUser(raw, userId)` in packages/rides-native/shared/ambassadorAttribution.js had no JSDoc, so tsc inferred the `userId` parameter as the literal `null` from the default. friends.tsx dereferenced `user` after `requireUser`, which TypeScript cannot narrow.
+- **Fix:** JSDoc `string | null | undefined` on `packAttribution`, `unpackAttribution`, `attributionForUser`; `user?.id` in friends.tsx (loadAmbassadorCode already treats a missing id as signed out). No behavior change.
+
+## 2026-09-24 — Friend confirm could ask for review forever (PR #63)
+
+- **Track / machine:** Clemson RIDES · Max (/tmp worktree) / PR review
+- **Problem:** PR #63 re-priced the friend ride on every Confirm tap and held the charge whenever the refreshed shares differed from the screen. Friend fares use `computeRoutes` with `routingPreference: 'TRAFFIC_AWARE'` and bill 18¢/min, so each re-price can drift by a cent. A legitimate payment could be held with "Review each share" on every tap.
+- **Root cause:** The gate compared against a fresh re-price each time instead of remembering which server quote the organizer had already been shown.
+- **Fix:** `markFriendQuoteReviewed` stores the id:fare signature of the quote put on screen for review. On the next Confirm, `reviewedFriendQuoteFresh` (same signature, within 10 min) skips the client re-price and goes straight to confirm-charges. At most one review round. Web `FriendRide.jsx` and native `carpool/[token].tsx`. Tests in `src/lib/friendSplitPreview.test.js`.
+- **Still open:** `confirm-charges` runs its own `recomputeRideFares` on the server, so the charged share can still differ by a few cents from the reviewed one. The Stripe idempotency key `friend:<ride>:<participant>:<fare_cents>` includes the fare, so a retry after drift is not deduplicated for an unpaid (e.g. requires_action) participant. Not changed here.
+
+## 2026-09-24 — Friend lobby preview disagreed with the charged share
+
+- **Track / machine:** Clemson RIDES · Pro
+- **Symptom:** Friends lobby showed a two-rider haversine guess (cents passed through `formatUsd` after dividing by 100) and the native lobby priced friend rides with the carpool engine. Confirm charges `participant.fare_cents`.
+- **Root cause:** Preview math was client-side and separate from `recomputeRideFares` / confirm-charges. `formatUsd` already expects cents.
+- **Fix:** Recompute stores `fare_breakdown.friend_split`. The lobby renders those shares, strikes this-route-alone only when the stored share still matches `fare_cents`, and holds the charge until that quote is on screen. Payment stays saved-card off-session or Payment Element.
+- **Reuse:** Do not invent a friend-ride dollar amount from `quoteRide` or `quoteCarpool`. If `friend_split.share_cents` does not match `fare_cents`, show the share and omit the struck solo.
+
+## 2026-09-24 — Driver earnings showed 80% of fare on carpool trips
+
+- **Track / machine:** Clemson RIDES · Pro
+- **Symptom:** Driver app earnings, recent activity, and trip details showed 80% of fare_cents and hid driver_carpool_bonus.
+- **Root cause:** Period totals, the earnings list, and trip cards used driverNetCents(fare). loadEarnings did not select trips.metadata.
+- **Fix:** Recent earnings and trip net use metadata.driver_payout_cents when set. Screens show base net, carpool bonus id driver_carpool_bonus, and that total.
+- **Reuse:** Carpool driver take is trips.metadata.driver_payout_cents. Do not recompute 80% of the rider gross for those rows.
+
+## 2026-09-24 — Rider tsc fails on dueScheduleReminders(ScheduledRow[]) (PR #59)
+- **Problem:** `tsc --noEmit` in apps/rider failed with 2 × TS2345 in app/index.tsx and app/schedule.tsx: `ScheduledRow[]` not assignable to the `dueScheduleReminders` parameter (`status: string | null` vs `string | undefined`).
+- **Root cause:** The JSDoc `@param` on `dueScheduleReminders` in src/lib/scheduledRideModel.js typed trip fields as `string | undefined`, but Supabase rows (`ScheduledRow`) use `string | null`. With `allowJs` + `strict`, tsc enforces the JSDoc type.
+- **Fix:** Widened the JSDoc field types to `string | null` (runtime already handles null). No behavior change. Rider and driver `tsc --noEmit` are clean.
+- **Machine/track:** Max (/tmp worktree) / PR review
+
+## 2026-09-24 — Rider home misses live game day; scheduled reminders never surface
+- **Problem:** Rider home folded `game_day_events` into the map caption, which stays hidden while busy spots load and does not reload on pull-to-refresh. Scheduled rides stored reminder windows (`m15` / `h1` / `h24`) but the rider app never showed a due reminder.
+- **Root cause:** `loadGameDay` ran once on mount and only fed a pill. `nextReminder` was used by the web toast watcher, not by rider home or Schedule.
+- **Fix:** Home shows a live card from `gameDayNotice` (pickup zone + rider fare multiplier) and reloads it with the map. `dueScheduleReminders` turns `REMINDER_WINDOWS` into an in-app card on home and Schedule. No push infra.
+- **Machine/track:** Max / Clemson rider
+
 ## 2026-09-24 — Driver EAS Bundle JS: Unable to resolve `expo-router` from `rides-native`
 
 - **Track / machine:** Clemson RIDES Track 1 · Max; EAS iOS driver

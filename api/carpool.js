@@ -1,11 +1,13 @@
 /**
- * POST /api/carpool?action=match|group|program
+ * POST /api/carpool?action=match|group|program|attribute
  * Also /api/carpool/:action and legacy /api/carpool-match|group|program (rewritten).
  * body.action on the program route stays ambassador | first_ride.
+ * attribute stores /a/:code on the signed-in rider and does not write a payout.
  */
 import { cors, json } from '../server/friendRideLib.js'
 import { resolveRouteAction } from '../server/routeAction.js'
 import {
+  handleCarpoolAttribute,
   handleCarpoolGroup,
   handleCarpoolMatch,
   handleCarpoolProgram,
@@ -15,6 +17,7 @@ const HANDLERS = {
   match: handleCarpoolMatch,
   group: handleCarpoolGroup,
   program: handleCarpoolProgram,
+  attribute: handleCarpoolAttribute,
 }
 
 const LEGACY = {
@@ -29,7 +32,7 @@ export default async function handler(req, res) {
   const handle = HANDLERS[action]
   if (!handle) {
     return json(res, 400, {
-      error: 'Unknown carpool action. Use action=match, action=group, or action=program.',
+      error: 'Unknown carpool action. Use action=match, action=group, action=program, or action=attribute.',
     })
   }
   return handle(req, res)

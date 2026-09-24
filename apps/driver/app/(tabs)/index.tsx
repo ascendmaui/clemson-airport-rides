@@ -547,7 +547,11 @@ function RideCard({
     <Animated.View style={{ opacity }}>
       <Card>
         <Text style={[styles.offerFare, { color: colors.ink }]}>{formatCents(card.driverNetCents)}</Text>
-        <Text style={{ color: colors.inkSecondary }}>{statusHeadline(card.status)} · you net 80%</Text>
+        <Text style={{ color: colors.inkSecondary }}>
+          {card.carpoolIncentiveId
+            ? `${statusHeadline(card.status)} · base ${formatCents(card.baseNetCents || 0)} · ${card.carpoolIncentiveId} ${formatCents(card.carpoolBonusCents || 0)} · total ${formatCents(card.driverPayoutCents || card.driverNetCents)}`
+            : `${statusHeadline(card.status)} · you net 80%`}
+        </Text>
         <View style={styles.tags}>
           {card.tagLabels.map((label) => (
             <Tag key={label} label={label} tone={tagTone(label)} />

@@ -14,7 +14,7 @@ import { supabase } from '@/lib/supabase'
 import { loadLiveTrip, subscribeLiveTrip, type LiveTrip } from '@/lib/tripWatch'
 import { useTripById } from '@/lib/useRiderTrip'
 import { isActiveRideStatus, listEmergencyContacts, type EmergencyContact } from 'rides-native/safety.js'
-import { etaHoldLine, etaLineFor, riderLiveView, SEARCH_PREVIEW_COPY, showSearchTheater } from 'rides-native/liveTrip'
+import { etaHoldLine, etaLineFor, orderedLiveStops, riderLiveView, SEARCH_PREVIEW_COPY, showSearchTheater, type LiveStopPin } from 'rides-native/liveTrip'
 import { LivePhase } from 'rides-native/LivePhase'
 import { isApproachStatus } from '@/lib/approachAlert'
 import { ORANGE, PURPLE } from 'rides-native/places.js'
@@ -25,26 +25,46 @@ import type { Palette } from '@/lib/palette'
 import { useTheme } from '@/lib/theme'
 import { useThemedStyles } from '@/lib/useThemedStyles'
 
+function stopColor(stop: LiveStopPin, total: number) {
+  if (stop.order === 1) return PURPLE
+  if (stop.order === total || stop.kind === 'dropoff') return ORANGE
+  return PURPLE
+}
+
 function pinsFor(trip: LiveTrip | null): MapPin[] {
   if (!trip) return []
   const pins: MapPin[] = []
-  if (trip.pickup_lat != null && trip.pickup_lng != null) {
-    pins.push({
-      id: 'pickup',
-      latitude: trip.pickup_lat,
-      longitude: trip.pickup_lng,
-      title: trip.pickup_label || 'Pickup',
-      color: PURPLE,
-    })
-  }
-  if (trip.dropoff_lat != null && trip.dropoff_lng != null) {
-    pins.push({
-      id: 'dropoff',
-      latitude: trip.dropoff_lat,
-      longitude: trip.dropoff_lng,
-      title: trip.dropoff_label || 'Drop-off',
-      color: ORANGE,
-    })
+  const stops = orderedLiveStops(trip)
+  if (stops.length) {
+    for (const stop of stops) {
+      pins.push({
+        id: stop.id,
+        latitude: stop.lat,
+        longitude: stop.lng,
+        title: stop.title,
+        color: stopColor(stop, stops.length),
+        badge: String(stop.order),
+      })
+    }
+  } else {
+    if (trip.pickup_lat != null && trip.pickup_lng != null) {
+      pins.push({
+        id: 'pickup',
+        latitude: trip.pickup_lat,
+        longitude: trip.pickup_lng,
+        title: trip.pickup_label || 'Pickup',
+        color: PURPLE,
+      })
+    }
+    if (trip.dropoff_lat != null && trip.dropoff_lng != null) {
+      pins.push({
+        id: 'dropoff',
+        latitude: trip.dropoff_lat,
+        longitude: trip.dropoff_lng,
+        title: trip.dropoff_label || 'Drop-off',
+        color: ORANGE,
+      })
+    }
   }
   if (trip.driverLat != null && trip.driverLng != null) {
     pins.push({
@@ -190,6 +210,7 @@ export default function Requested() {
             showHeat={false}
             theater={preview && !located}
             pins={pinsFor(live)}
+            fitPins
             gameDay={false}
             surge={false}
           />
@@ -225,6 +246,11 @@ export default function Requested() {
               {shown?.pickup_label || 'Pickup'} → {shown?.dropoff_label || dest || 'your destination'}
               {loading && !shown?.status ? ' · loading' : ''}
             </Text>
+            {orderedLiveStops(live).map((stop) => (
+              <Text key={stop.id} style={styles.stopLine}>
+                {stop.order} · {stop.label}
+              </Text>
+            ))}
             <Text style={styles.meta}>Trip {tripId.slice(0, 8)}</Text>
             <Text style={styles.body}>Airport holds use the 25% Stripe deposit on Schedule.</Text>
             {shown?.status === 'completed' ? (
@@ -301,6 +327,7 @@ function makeStyles(colors: Palette) {
     summaryTitle: { color: colors.ink, fontSize: 18, fontWeight: '800' as const, marginBottom: 6 },
     approach: { color: colors.purple, fontSize: 13, lineHeight: 18, fontWeight: '700' as const, marginTop: 8 },
     body: { color: colors.inkSecondary, fontSize: 14, lineHeight: 20 },
+    stopLine: { color: colors.ink, fontSize: 14, lineHeight: 20, fontWeight: '700' as const },
     meta: { color: colors.link, fontWeight: '700' as const, fontSize: 12, marginTop: 8 },
     empty: { backgroundColor: colors.card, borderRadius: 20, padding: 16, gap: 8 },
     emptyTitle: { color: colors.title, fontWeight: '800' as const, fontSize: 16 },

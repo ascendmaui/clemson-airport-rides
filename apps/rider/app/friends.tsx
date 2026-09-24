@@ -9,6 +9,7 @@ import { CarpoolCompare } from '@/components/carpool/CarpoolCompare'
 import { NeighborhoodPicker } from '@/components/carpool/NeighborhoodPicker'
 import { Card, EmptyState, ErrorText, Field, SkeletonBlock } from '@/components/carpool/ui'
 import { MainTabs } from '@/components/MainTabs'
+import { loadAmbassadorCode } from '@/lib/ambassadorCode'
 import { setAuthNext } from '@/lib/authNext'
 import { useAuth } from '@/lib/auth'
 import { successHaptic, tapHaptic } from '@/lib/feedback'
@@ -20,9 +21,9 @@ import {
   type FriendActivity,
   type SavedFriend,
 } from '@/lib/friendsApi'
-import { quoteRide } from '@/lib/scheduleApi'
 import { supabase } from '@/lib/supabase'
 import { useRegisteredVehicle } from '@/lib/useRegisteredVehicle'
+import { ambassadorSavedCopy } from 'rides-native/shared/ambassadorAttribution.js'
 import {
   apiErrorMessage,
   carpoolProgram,
@@ -36,6 +37,8 @@ import {
   clusterOf,
   defaultCarpoolEnds,
   demandWindow,
+  firstRideOfferCopy,
+  firstRideWindowOpen,
   formatUsd,
   illustrativePeakAt,
   isGameWeek,
@@ -69,12 +72,24 @@ export default function CarpoolHubScreen() {
   const [result, setResult] = useState<MatchResult | null>(null)
   const [code, setCode] = useState('')
   const [firstRide, setFirstRide] = useState<FirstRideStatus | null>(null)
+  const [ambassadorCode, setAmbassadorCode] = useState('')
   const [firstRideLoaded, setFirstRideLoaded] = useState(false)
   const now = useMemo(() => new Date(), [])
   const peakAt = useMemo(() => illustrativePeakAt(now), [now])
   const windowNow = demandWindow(now)
   const peakOn = windowNow === 'game_day' || windowNow === 'peak_night'
   const gameWeek = isGameWeek(now)
+  const firstRideOffer = !user
+    ? firstRideOfferCopy({ windowOpen: firstRideWindowOpen(now), signedIn: false })
+    : firstRideLoaded
+      ? firstRideOfferCopy({
+        windowOpen: Boolean(firstRide?.windowOpen),
+        signedIn: true,
+        alreadyUsed: Boolean(firstRide?.alreadyUsed),
+        completedTrips: firstRide?.completedTrips || 0,
+        schemaMissing: Boolean(firstRide?.schemaMissing),
+      })
+      : null
   const pitch = useMemo(
     () => pitchQuote({ pickup, dropoff, at: peakAt, displayName: 'You' }),
     [pickup, dropoff, peakAt],
@@ -95,12 +110,21 @@ export default function CarpoolHubScreen() {
   const [friendError, setFriendError] = useState<string | null>(null)
   const [friendNote, setFriendNote] = useState<string | null>(null)
   const [promptOpen, setPromptOpen] = useState(false)
-  const friendQuote = quoteRide(friendPickup, friendDropoff, false)
-  const shareCents = splitMode === 'even' ? Math.round(friendQuote.fareCents / 2) : friendQuote.fareCents
-
   useFocusEffect(useCallback(() => {
     void vehicleState.reload()
   }, [vehicleState.reload]))
+
+  useEffect(() => {
+    let alive = true
+    loadAmbassadorCode(user?.id)
+      .then((code) => {
+        if (alive) setAmbassadorCode(code)
+      })
+      .catch(() => {})
+    return () => {
+      alive = false
+    }
+  }, [user?.id])
 
   useEffect(() => {
     if (!user) {
@@ -170,6 +194,7 @@ export default function CarpoolHubScreen() {
         dropoff,
         displayName: riderDisplayName(user),
         partyType: tailgate ? 'tailgate' : 'carpool',
+        ambassadorCode: (await loadAmbassadorCode(user?.id)) || undefined,
       })
       setResult(data)
       if (data.token) router.push(`/carpool/${data.token}`)
@@ -194,6 +219,7 @@ export default function CarpoolHubScreen() {
         dropoff,
         displayName: riderDisplayName(user),
         partyType: tailgate ? 'tailgate' : 'carpool',
+        ambassadorCode: (await loadAmbassadorCode(user?.id)) || undefined,
       })
       const url = inviteUrl(data.token, 'carpool')
       try {
@@ -312,7 +338,7 @@ export default function CarpoolHubScreen() {
             </Text>
           ) : null}
 
-          {gameWeek && !firstRideLoaded ? (
+          {user && !firstRideLoaded && firstRideWindowOpen(now) ? (
             <Card>
               <SkeletonBlock height={16} width="70%" />
               <View style={{ height: 8 }} />
@@ -321,14 +347,10 @@ export default function CarpoolHubScreen() {
               <SkeletonBlock height={12} width="80%" />
             </Card>
           ) : null}
-          {gameWeek && firstRideLoaded ? (
+          {firstRideOffer ? (
             <Card>
-              <Text style={styles.cardTitle}>First ride free during game-week peaks</Text>
-              <Text style={styles.note}>
-                One comp per account, only Thu–Sat nights, class change, and game day. Not a rider promo code.
-                {firstRide?.eligible ? ' You are eligible on the next peak ride.' : ''}
-                {firstRide?.alreadyUsed ? ' This account already used it.' : ''}
-              </Text>
+              <Text style={styles.cardTitle}>{firstRideOffer.title}</Text>
+              <Text style={styles.note}>{firstRideOffer.body}</Text>
             </Card>
           ) : null}
 
@@ -349,6 +371,11 @@ export default function CarpoolHubScreen() {
                 thumbColor={colors.onAccent}
               />
             </View>
+            {ambassadorCode ? (
+              <Text style={styles.note}>
+                {ambassadorSavedCopy().title}. {ambassadorSavedCopy().body}
+              </Text>
+            ) : null}
             <PrimaryButton label={busy ? 'Looking…' : 'Find my carpool'} onPress={onMatch} disabled={busy} />
             <View style={{ height: 10 }} />
             <PrimaryButton label="Share a link with my group" onPress={onShare} disabled={busy} tone="outline" />
@@ -437,8 +464,8 @@ export default function CarpoolHubScreen() {
             </View>
             <Text style={styles.note}>
               {splitMode === 'even'
-                ? `About ${formatUsd(shareCents / 100)} each on a two-rider share of ${formatUsd(friendQuote.fareCents / 100)}.`
-                : 'The server weights each stop when friends add their own pickups. This preview is the full leg until then.'}
+                ? 'Even split divides the server route fare. The lobby shows each person’s share, with this route alone struck, before anyone is charged.'
+                : 'By distance uses each stop’s weight from the server route. The lobby shows each person’s share before anyone is charged.'}
             </Text>
             <PrimaryButton label={friendBusy ? 'Starting…' : 'Start group ride'} onPress={onRideTogether} disabled={friendBusy} tone="purple" />
           </Card>
@@ -451,7 +478,7 @@ export default function CarpoolHubScreen() {
               <Text key={row.id} style={styles.note}>
                 {row.kind || 'friends'} · {row.status || 'open'}
                 {row.split_mode === 'by_distance' ? ' · by distance' : ' · even split'}
-                {row.total_fare_cents ? ` · ${formatUsd(row.total_fare_cents / 100)}` : ''}
+                {row.total_fare_cents != null ? ` · ${formatUsd(row.total_fare_cents)}` : ''}
               </Text>
             ))}
             {friendError ? <ErrorText>{friendError}</ErrorText> : null}

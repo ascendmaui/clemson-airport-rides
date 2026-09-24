@@ -1,6 +1,13 @@
 /**
  * Client helpers for Ride with friends MVP.
  */
+import {
+  AMBASSADOR_STORAGE_KEY,
+  LEGACY_AMBASSADOR_KEY,
+  attributionForUser,
+  normalizeAmbassadorCode,
+  packAttribution,
+} from '../../packages/rides-native/shared/ambassadorAttribution.js'
 import { supabase } from './supabase'
 
 const PLACES = [
@@ -70,48 +77,91 @@ async function api(path, { method = 'GET', body } = {}) {
   return data
 }
 
-export function rememberAmbassador(code) {
+function readAmbassadorRaw() {
+  if (typeof window === 'undefined') return ''
   try {
-    if (code) window.sessionStorage.setItem('clemson_ambassador_code', code)
+    const local = window.localStorage.getItem(AMBASSADOR_STORAGE_KEY)
+    if (local) return local
   } catch {
     /* ignore */
   }
-}
-
-export function rememberedAmbassador() {
   try {
-    return window.sessionStorage.getItem('clemson_ambassador_code') || null
+    return window.sessionStorage.getItem(LEGACY_AMBASSADOR_KEY) || ''
   } catch {
-    return null
+    return ''
   }
 }
 
-export async function createFriendRide({ displayName, pickup, dropoff, splitMode, kind, partyType, ambassadorCode } = {}) {
+export function rememberAmbassador(code, userId = null) {
+  const packed = packAttribution(code, userId)
+  if (typeof window === 'undefined') return normalizeAmbassadorCode(code)
+  try {
+    if (!packed) {
+      window.localStorage.removeItem(AMBASSADOR_STORAGE_KEY)
+      window.sessionStorage.removeItem(LEGACY_AMBASSADOR_KEY)
+      return ''
+    }
+    const normalized = JSON.parse(packed).code
+    window.localStorage.setItem(AMBASSADOR_STORAGE_KEY, packed)
+    window.sessionStorage.setItem(LEGACY_AMBASSADOR_KEY, normalized)
+    return normalized
+  } catch {
+    return normalizeAmbassadorCode(code)
+  }
+}
+
+export function rememberedAmbassador(userId) {
+  return attributionForUser(readAmbassadorRaw(), userId)?.code || ''
+}
+
+export function clearAmbassadorAttribution() {
+  if (typeof window === 'undefined') return
+  try { window.localStorage.removeItem(AMBASSADOR_STORAGE_KEY) } catch { /* ignore */ }
+  try { window.sessionStorage.removeItem(LEGACY_AMBASSADOR_KEY) } catch { /* ignore */ }
+}
+
+function withAmbassador(body = {}) {
+  const code = body.ambassadorCode || rememberedAmbassador(body.userId)
+  const next = { ...body }
+  delete next.userId
+  if (code) next.ambassadorCode = code
+  return next
+}
+
+export async function claimAmbassadorAttribution(code) {
+  return api('/api/carpool?action=attribute', {
+    method: 'POST',
+    body: { code },
+  })
+}
+
+export async function createFriendRide({ displayName, pickup, dropoff, splitMode, kind, partyType, ambassadorCode, userId } = {}) {
   return api('/api/friend-rides?action=create', {
     method: 'POST',
-    body: {
+    body: withAmbassador({
       displayName,
       pickup,
       dropoff,
       splitMode,
       kind: kind === 'carpool' ? 'carpool' : 'friends',
       partyType: partyType === 'tailgate' ? 'tailgate' : 'carpool',
-      ambassadorCode: ambassadorCode || rememberedAmbassador(),
-    },
+      ambassadorCode,
+      userId,
+    }),
   })
 }
 
 export async function matchCarpool(body) {
   return api('/api/carpool?action=match', {
     method: 'POST',
-    body: { ...body, ambassadorCode: body.ambassadorCode || rememberedAmbassador() },
+    body: withAmbassador(body),
   })
 }
 
 export async function createCarpoolGroup(body) {
   return api('/api/carpool?action=group', {
     method: 'POST',
-    body: { ...body, ambassadorCode: body.ambassadorCode || rememberedAmbassador() },
+    body: withAmbassador(body),
   })
 }
 
@@ -127,7 +177,7 @@ export async function getFriendRide(token) {
 }
 
 export async function joinFriendRide(payload) {
-  return api('/api/friend-rides?action=join', { method: 'POST', body: payload })
+  return api('/api/friend-rides?action=join', { method: 'POST', body: withAmbassador(payload) })
 }
 
 export async function recomputeFriendRide(token, splitMode) {

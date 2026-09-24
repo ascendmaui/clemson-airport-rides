@@ -40,7 +40,7 @@ const TRIP_COLUMNS = [
   'completed_at',
 ].join(', ')
 
-const EARNINGS_COLUMNS = 'id, status, fare_cents, deposit_cents, dropoff_label, completed_at, pickup_label'
+const EARNINGS_COLUMNS = 'id, status, fare_cents, deposit_cents, dropoff_label, completed_at, pickup_label, metadata'
 
 async function listTrips(supabase, finish) {
   const run = async (columns) => finish(supabase.from('trips').select(columns))
@@ -466,7 +466,7 @@ export async function loadEarnings(supabase, driverId) {
   if (tripRes.error && /deposit_cents|column|schema cache/i.test(tripRes.error.message || '')) {
     tripRes = await supabase
       .from('trips')
-      .select('id, status, fare_cents, dropoff_label, completed_at, pickup_label')
+      .select('id, status, fare_cents, dropoff_label, completed_at, pickup_label, metadata')
       .eq('driver_id', driverId)
       .in('status', ['completed', 'canceled'])
       .order('completed_at', { ascending: false })
