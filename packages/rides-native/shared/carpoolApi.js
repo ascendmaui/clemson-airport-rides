@@ -142,9 +142,12 @@ export function recomputeFriendRide(supabase, token, splitMode) {
   })
 }
 
-export function confirmFriendCharges(supabase, token) {
+export function confirmFriendCharges(supabase, token, quote) {
+  const body = { token, useCredits: true, origin: apiBase() }
+  if (quote?.quoteId) body.quoteId = String(quote.quoteId)
+  if (quote?.quoteSignature) body.quoteSignature = String(quote.quoteSignature)
   return authedJson(supabase, '/api/friend-rides?action=confirm-charges', {
     method: 'POST',
-    body: { token, useCredits: true, origin: apiBase() },
+    body,
   })
 }

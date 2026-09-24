@@ -5,7 +5,9 @@ import { PrimaryButton } from '../components/PrimaryButton'
 import { CarpoolCompare } from '../components/CarpoolCompare'
 import { confirmChargeLabel, firstRideOfferCopy, firstRideWindowOpen, formatUsd, NEIGHBORHOODS, quoteCarpool, surgeDelta } from '../lib/carpoolEngine'
 import {
+  applyFriendChargeReview,
   friendChargeNeedsReview,
+  friendQuoteRef,
   friendSplitPreview,
   markFriendQuoteReviewed,
   mergeFriendQuote,
@@ -287,7 +289,18 @@ export function FriendRideScreen({ token: tokenProp, kind: kindProp = 'friends' 
         return
       }
       setBusyLabel('Charging…')
-      const data = await confirmFriendCharges(token)
+      const quoteRef = friendsLobby ? friendQuoteRef(priced) : null
+      const data = await confirmFriendCharges(token, {
+        quoteId: quoteRef?.quoteId,
+        quoteSignature: quoteRef?.quoteSignature,
+      })
+      if (friendsLobby && data?.status === 'review_required') {
+        const next = applyFriendChargeReview(priced, data)
+        setRide(next)
+        reviewRef.current = markFriendQuoteReviewed(next)
+        setMapsHint('Review each share, then confirm to charge.')
+        return
+      }
       setRide(data.ride)
       if (data.booked) {
         const assigned = data.trip?.driver_id || ride?.driver_profile_id

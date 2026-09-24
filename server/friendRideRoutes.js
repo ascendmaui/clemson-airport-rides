@@ -26,6 +26,7 @@ import {
 import { driverApprovalStatus } from './driverApproval.js'
 import { carpoolSeatCap } from '../src/lib/carpoolEngine.js'
 import { recomputeRideFares } from './friendRideRecompute.js'
+import { settleFriendQuote } from './friendQuote.js'
 import { resolveAmbassadorCode, stampAmbassadorCode } from './ambassadorAttribution.js'
 
 export async function handleFriendRideCreate(req, res) {
@@ -400,6 +401,103 @@ export async function handleFriendRideRecompute(req, res) {
   }
 }
 
+async function persistQuotedShares(sb, ride, participants) {
+  const nowIso = new Date().toISOString()
+  const { error } = await sb.from('friend_rides').update({
+    total_fare_cents: ride.total_fare_cents,
+    updated_at: nowIso,
+  }).eq('id', ride.id)
+  if (error) throw new Error(error.message)
+  for (const person of participants) {
+    if (person.status === 'paid') continue
+    const { error: fareError } = await sb.from('friend_ride_participants').update({
+      fare_cents: person.fare_cents,
+      updated_at: nowIso,
+    }).eq('id', person.id)
+    if (fareError) throw new Error(fareError.message)
+  }
+}
+
+async function collectConfirmedCharges({ sb, stripe, user, body, origin, token, ride, participants }) {
+  await sb
+    .from('friend_rides')
+    .update({ status: 'awaiting_payment', updated_at: new Date().toISOString() })
+    .eq('id', ride.id)
+
+  const results = []
+  const paymentElementSecrets = []
+
+  for (const p of participants) {
+    if (p.status === 'paid') {
+      results.push({ participantId: p.id, status: 'already_paid' })
+      continue
+    }
+    const comp = (ride.fare_breakdown?.carpool?.shares || []).find(
+      (share) => share.id === p.id && share.firstRideFree,
+    )
+    if (comp) {
+      await markParticipantComped(sb, p, 'first_ride_free')
+      results.push({ participantId: p.id, status: 'comped', reason: 'first_ride_free' })
+      continue
+    }
+    if (!p.fare_cents || p.fare_cents <= 0) {
+      results.push({ participantId: p.id, status: 'skipped', error: 'No fare' })
+      continue
+    }
+
+    const useFailurePath = Array.isArray(body.methods) && body.methods.length
+    const charged = useFailurePath
+      ? await chargeHeldShare({
+        sb,
+        stripe,
+        ride,
+        participant: p,
+        methods: body.methods,
+        paymentMethodId: body.paymentMethodId || null,
+      })
+      : await chargeMeteredShare(sb, stripe, {
+        ride,
+        participant: p,
+        actingUserId: user.id,
+        useCredits: body.useCredits !== false,
+      })
+    results.push(charged.result)
+    const secret = charged.secret || charged.paymentElement
+    if (secret) paymentElementSecrets.push(secret)
+  }
+
+  const book = await maybeBookFriendRide(sb, ride.id)
+  const reloaded = await loadRideByToken(sb, token)
+
+  return {
+    results,
+    paymentElementSecrets,
+    booked: book.booked,
+    trip: book.trip || null,
+    bookReason: book.reason || null,
+    ride: publicRideSummary(reloaded.ride, reloaded.participants),
+    returnUrl: `${origin}/${(reloaded.ride.kind === 'carpool' ? 'carpool' : 'friends')}/${token}?charged=1`,
+    note: 'Apple Pay requires the domain to be registered in Stripe Dashboard -> Payment method domains.',
+  }
+}
+
+function reviewRequiredBody(outcome) {
+  const summary = outcome.ride
+    ? publicRideSummary(outcome.ride, outcome.participants || [])
+    : null
+  return {
+    status: 'review_required',
+    reason: outcome.reason,
+    quoteId: outcome.quote?.id || null,
+    quoteSignature: outcome.quote?.signature || null,
+    shares: outcome.quote?.shares || [],
+    ride: summary,
+    results: [],
+    paymentElementSecrets: [],
+    booked: false,
+  }
+}
+
 export async function handleFriendRideConfirmCharges(req, res) {
   if (cors(req, res)) return
   if (req.method !== 'POST') return json(res, 405, { error: 'Method not allowed' })
@@ -435,85 +533,70 @@ export async function handleFriendRideConfirmCharges(req, res) {
     if (ride.organizer_id !== user.id) return json(res, 403, { error: 'Organizer only' })
     if (ride.trip_id) return json(res, 409, { error: 'Already booked', trip_id: ride.trip_id })
 
-    const recomputed = await recomputeRideFares(sb, token, { splitMode: ride.split_mode })
-    if (!recomputed.ok) {
+    if (ride.kind === 'carpool') {
+      const recomputed = await recomputeRideFares(sb, token, { splitMode: ride.split_mode })
+      if (!recomputed.ok) {
+        return json(res, 400, {
+          error: recomputed.message || recomputed.error || 'Could not calculate fares',
+          code: recomputed.code || 'recompute_failed',
+          message: recomputed.message || recomputed.error,
+        })
+      }
+      ride = recomputed.ride
+      participants = recomputed.participants
+      if (!ride.total_fare_cents || !participants.every((p) => p.fare_cents != null)) {
+        return json(res, 400, {
+          error: 'Could not calculate fares for this ride. Check pickups/dropoffs and try again.',
+          code: 'fares_missing',
+        })
+      }
+      const payload = await collectConfirmedCharges({
+        sb, stripe, user, body, origin, token, ride, participants,
+      })
+      return json(res, 200, payload)
+    }
+
+    // Friend rides charge the stored quote. recomputeRideFares runs only when that quote
+    // is missing, expired, mismatched, or the participant set changed — and then no charge.
+    const outcome = await settleFriendQuote({
+      ride,
+      participants,
+      body,
+      now: Date.now(),
+      recompute: () => recomputeRideFares(sb, token, { splitMode: ride.split_mode }),
+      charge: async ({ ride: quotedRide, participants: quotedParticipants }) => {
+        await persistQuotedShares(sb, quotedRide, quotedParticipants)
+        return collectConfirmedCharges({
+          sb,
+          stripe,
+          user,
+          body,
+          origin,
+          token,
+          ride: quotedRide,
+          participants: quotedParticipants,
+        })
+      },
+    })
+
+    if (outcome.status === 'reprice_failed') {
+      const recomputed = outcome.recompute
       return json(res, 400, {
-        error: recomputed.message || recomputed.error || 'Could not calculate fares',
-        code: recomputed.code || 'recompute_failed',
-        message: recomputed.message || recomputed.error,
+        error: recomputed?.message || recomputed?.error || 'Could not calculate fares',
+        code: recomputed?.code || 'recompute_failed',
+        message: recomputed?.message || recomputed?.error,
       })
     }
-    ride = recomputed.ride
-    participants = recomputed.participants
-    if (!ride.total_fare_cents || !participants.every((p) => p.fare_cents != null)) {
+    if (outcome.status === 'fares_missing') {
       return json(res, 400, {
         error: 'Could not calculate fares for this ride. Check pickups/dropoffs and try again.',
         code: 'fares_missing',
       })
     }
-
-    await sb
-      .from('friend_rides')
-      .update({ status: 'awaiting_payment', updated_at: new Date().toISOString() })
-      .eq('id', ride.id)
-
-    const results = []
-    const paymentElementSecrets = []
-
-    for (const p of participants) {
-      if (p.status === 'paid') {
-        results.push({ participantId: p.id, status: 'already_paid' })
-        continue
-      }
-      const comp = (ride.fare_breakdown?.carpool?.shares || []).find(
-        (share) => share.id === p.id && share.firstRideFree,
-      )
-      if (comp) {
-        await markParticipantComped(sb, p, 'first_ride_free')
-        results.push({ participantId: p.id, status: 'comped', reason: 'first_ride_free' })
-        continue
-      }
-      if (!p.fare_cents || p.fare_cents <= 0) {
-        results.push({ participantId: p.id, status: 'skipped', error: 'No fare' })
-        continue
-      }
-
-      const useFailurePath = Array.isArray(body.methods) && body.methods.length
-      const charged = useFailurePath
-        ? await chargeHeldShare({
-          sb,
-          stripe,
-          ride,
-          participant: p,
-          methods: body.methods,
-          paymentMethodId: body.paymentMethodId || null,
-        })
-        : await chargeMeteredShare(sb, stripe, {
-          ride,
-          participant: p,
-          actingUserId: user.id,
-          useCredits: body.useCredits !== false,
-        })
-      results.push(charged.result)
-      const secret = charged.secret || charged.paymentElement
-      if (secret) paymentElementSecrets.push(secret)
-      continue
-
+    if (outcome.status === 'review_required') {
+      return json(res, 200, reviewRequiredBody(outcome))
     }
-
-    const book = await maybeBookFriendRide(sb, ride.id)
-    const reloaded = await loadRideByToken(sb, token)
-
-    return json(res, 200, {
-      results,
-      paymentElementSecrets,
-      booked: book.booked,
-      trip: book.trip || null,
-      bookReason: book.reason || null,
-      ride: publicRideSummary(reloaded.ride, reloaded.participants),
-      returnUrl: `${origin}/${(reloaded.ride.kind === 'carpool' ? 'carpool' : 'friends')}/${token}?charged=1`,
-      note: 'Apple Pay requires the domain to be registered in Stripe Dashboard -> Payment method domains.',
-    })
+    return json(res, 200, outcome.charged)
   } catch (e) {
     console.error('[confirm-charges]', e)
     return json(res, 500, { error: e.message || 'Server error' })

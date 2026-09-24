@@ -2,7 +2,9 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import {
   FRIEND_REVIEW_TTL_MS,
+  applyFriendChargeReview,
   friendChargeNeedsReview,
+  friendQuoteRef,
   friendQuoteSignature,
   friendSplitPreview,
   markFriendQuoteReviewed,
@@ -117,6 +119,35 @@ test('a reviewed quote lets the next confirm charge, so traffic drift cannot hol
   assert.equal(reviewedFriendQuoteFresh(review, quoteAt(852), 1_000 + 60_000), false)
   assert.equal(reviewedFriendQuoteFresh(review, priced, 1_000 + FRIEND_REVIEW_TTL_MS + 1), false)
   assert.equal(reviewedFriendQuoteFresh(null, priced, 1_000), false)
+})
+
+test('review_required keeps the server quote id and shares', () => {
+  const shown = {
+    kind: 'friends',
+    is_organizer: true,
+    participants: [{ id: 'a', fare_cents: 850, is_self: true }],
+    fare_breakdown: { friend_quote: { id: 'old', signature: 'a:850', shares: [{ id: 'a', share_cents: 850 }] } },
+  }
+  const next = applyFriendChargeReview(shown, {
+    status: 'review_required',
+    quoteId: 'quote-2',
+    quoteSignature: 'a:860',
+    fare_cents: 1,
+    amountCents: 1,
+    shares: [{ id: 'a', share_cents: 860 }],
+    ride: {
+      kind: 'friends',
+      total_fare_cents: 860,
+      participants: [{ id: 'a', fare_cents: 1 }],
+      fare_breakdown: { friend_quote: { id: 'quote-2', signature: 'a:860' } },
+    },
+  })
+  assert.equal(next.is_organizer, true)
+  assert.equal(next.participants[0].is_self, true)
+  assert.equal(next.participants[0].fare_cents, 860)
+  assert.equal(next.total_fare_cents, 860)
+  assert.deepEqual(friendQuoteRef(next), { quoteId: 'quote-2', quoteSignature: 'a:860' })
+  assert.equal(friendQuoteRef({ fare_breakdown: {} }), null)
 })
 
 test('quote signature needs a server fare for every participant', () => {

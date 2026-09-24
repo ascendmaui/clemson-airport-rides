@@ -3,7 +3,9 @@ import { friendSplitPreview } from '../../../src/lib/friendSplitPreview.js'
 
 export {
   FRIEND_REVIEW_TTL_MS,
+  applyFriendChargeReview,
   friendChargeNeedsReview,
+  friendQuoteRef,
   friendQuoteSignature,
   friendSplitPreview,
   markFriendQuoteReviewed,

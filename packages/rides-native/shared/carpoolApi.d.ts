@@ -67,6 +67,15 @@ export type RideSummary = {
     match_mode?: string
     party_type?: string
     ambassador_code?: string | null
+    friend_quote?: {
+      id?: string
+      ride_id?: string
+      signature?: string | null
+      participant_set?: string
+      created_at?: string
+      expires_at?: string
+      shares?: { id: string; share_cents: number }[]
+    } | null
   } | null
   trip_id?: string | null
   driver_profile_id?: string | null
@@ -84,6 +93,11 @@ export type FirstRideStatus = {
 }
 
 export type ConfirmResult = {
+  status?: string
+  reason?: string | null
+  quoteId?: string | null
+  quoteSignature?: string | null
+  shares?: { id: string; share_cents: number }[]
   booked?: boolean
   trip?: { id?: string; driver_id?: string | null; status?: string } | null
   paymentElementSecrets?: unknown[]
@@ -124,4 +138,8 @@ export function joinFriendRide(
   body: { token: string; displayName?: string; email?: string; pickup: Place; dropoff: Place; ambassadorCode?: string },
 ): Promise<{ ride?: RideSummary }>
 export function recomputeFriendRide(supabase: SupabaseAuth, token: string, splitMode?: string): Promise<RideSummary>
-export function confirmFriendCharges(supabase: SupabaseAuth, token: string): Promise<ConfirmResult>
+export function confirmFriendCharges(
+  supabase: SupabaseAuth,
+  token: string,
+  quote?: { quoteId?: string | null; quoteSignature?: string | null } | null,
+): Promise<ConfirmResult>

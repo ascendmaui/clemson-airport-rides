@@ -1,6 +1,8 @@
 /**
  * Shared route + fare recompute for friend rides.
- * Used by /api/friend-rides?action=recompute and auto-run before confirm-charges.
+ * Used by /api/friend-rides?action=recompute.
+ * Friend confirm-charges reuses fare_breakdown.friend_quote while it is fresh
+ * and calls this only when that quote must be reviewed again.
  */
 import {
   loadRideByToken, buildWaypointList, computeRoutes, splitFares,
@@ -13,6 +15,7 @@ import { eligibleFirstRideIds, gameDayActive } from './carpoolSettle.js'
 import { loadGameDayMultiplier } from './creditLots.js'
 import { quoteFare, resolveSurge, percentOffCents, STUDENT_DISCOUNT_BPS } from '../src/lib/fareRates.js'
 import { studentFlagsFor } from './studentEligibility.js'
+import { buildFriendQuote } from './friendQuote.js'
 
 function preserveRideMeta(ride, breakdown) {
   const prev = ride?.fare_breakdown || {}
@@ -154,6 +157,11 @@ export async function recomputeRideFares(sb, token, { splitMode } = {}) {
             savings_cents: Math.max(0, soloCents[i] - fares[i]),
           })),
         },
+        friend_quote: buildFriendQuote({
+          rideId: ride.id,
+          participants: participants.map((p, i) => ({ id: p.id, fare_cents: fares[i] })),
+          now: when.getTime(),
+        }),
       }),
     }
   }
