@@ -24,6 +24,8 @@ export function BackButton({ onPress }: { onPress: () => void }) {
       style={[styles.back, shadow, { backgroundColor: colors.card }]}
       accessibilityRole="button"
       accessibilityLabel="Back"
+      accessibilityHint="Navigates to previous screen"
+      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
     >
       <Text style={[styles.backLabel, { color: colors.title }]}>←</Text>
     </Pressable>
@@ -55,6 +57,9 @@ export function Primary({
       disabled={disabled}
       accessibilityRole={accessibilityRole}
       accessibilityLabel={accessibilityLabel || label}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityState={{ disabled: Boolean(disabled) }}
       style={[styles.primary, shadow, { backgroundColor: background, opacity: disabled ? 0.5 : 1 }]}
     >
       <Text style={[styles.primaryLabel, { color }]}>{label}</Text>

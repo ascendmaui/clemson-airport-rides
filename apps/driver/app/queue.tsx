@@ -74,7 +74,15 @@ function QueueCard({
         <Primary label={busy ? 'Saving…' : acceptActionLabel(card.status)} onPress={onAccept} disabled={busy} />
       )}
       {!active ? (
-        <Pressable onPress={onDecline} disabled={busy} style={styles.decline}>
+        <Pressable
+          onPress={onDecline}
+          disabled={busy}
+          style={styles.decline}
+          accessibilityRole="button"
+          accessibilityLabel={declineActionLabel(card.status)}
+          accessibilityState={{ disabled: busy }}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        >
           <Text style={[styles.declineText, declineDisposition(card.status) === 'cancel' && styles.declineCancel]}>
             {declineActionLabel(card.status)}
           </Text>
@@ -246,6 +254,22 @@ export default function QueueScreen() {
             ? 'Chosen-driver requests, open matches, student discounts, game-day rides, and scheduled weekend or party pickups.'
             : 'Ride requests and scheduled pickups will appear here once your driver application is approved.'}
         </Text>
+
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filters}>
+          {queueFilters().map((item) => (
+            <Pressable
+              key={item}
+              onPress={() => setFilter(item)}
+              style={[styles.filter, filter === item && styles.filterOn]}
+              accessibilityRole="tab"
+              accessibilityLabel={`${filterLabel(item)} filter`}
+              accessibilityState={{ selected: filter === item }}
+              hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+            >
+              <Text style={[styles.filterText, filter === item && styles.filterTextOn]}>{filterLabel(item)}</Text>
+            </Pressable>
+          ))}
+        </ScrollView>
         {error ? <ErrorText>{error}</ErrorText> : null}
         {warning ? <ErrorText>{warning}</ErrorText> : null}
         {!user ? <Primary label="Sign in" onPress={() => router.push('/sign-in')} /> : null}

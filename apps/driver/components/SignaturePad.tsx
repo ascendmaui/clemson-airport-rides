@@ -44,6 +44,9 @@ export function SignaturePad({
           onChange([])
         }}
         accessibilityRole="button"
+        accessibilityLabel="Clear signature"
+        accessibilityHint="Clears the signature pad"
+        hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
       >
         <Text style={styles.clear}>Clear signature</Text>
       </Pressable>

@@ -72,7 +72,14 @@ export default function EarningsDetails() {
       footer={user && ready ? (
         <>
           <Text style={{ color: colors.ink, fontWeight: '800' }}>{shownCents(balance, earningsPrivate)} balance</Text>
-          <Pressable onPress={() => router.push('/payouts')} style={[styles.cash, { backgroundColor: colors.fill }]} accessibilityRole="button">
+          <Pressable
+            onPress={() => router.push('/payouts')}
+            style={[styles.cash, { backgroundColor: colors.fill }]}
+            accessibilityRole="button"
+            accessibilityLabel="Cash out"
+            accessibilityHint="Navigates to payouts to transfer balance"
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
             <Text style={{ color: colors.onAccent, fontWeight: '800' }}>Cash out</Text>
           </Pressable>
         </>
@@ -102,6 +109,7 @@ export default function EarningsDetails() {
                 style={[styles.navBtn, shadow, { backgroundColor: colors.card, borderColor: colors.border }]}
                 accessibilityRole="button"
                 accessibilityLabel={report.previousLabel}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               >
                 <Text style={{ color: colors.title, fontWeight: '800' }} numberOfLines={1}>{report.previousLabel}</Text>
               </Pressable>
@@ -111,6 +119,7 @@ export default function EarningsDetails() {
                 style={[styles.navBtn, shadow, { backgroundColor: colors.card, borderColor: colors.border }]}
                 accessibilityRole="button"
                 accessibilityLabel={report.nextLabel}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               >
                 <Text style={{ color: colors.title, fontWeight: '800' }} numberOfLines={1}>{report.nextLabel}</Text>
               </Pressable>
@@ -169,7 +178,12 @@ export default function EarningsDetails() {
                 Hides dollar amounts on this phone. Payouts still run on the account.
               </Text>
             </Card>
-            <Pressable onPress={() => router.push('/driving-time')} accessibilityRole="button">
+            <Pressable
+              onPress={() => router.push('/driving-time')}
+              accessibilityRole="button"
+              accessibilityLabel="Driving time limits"
+              accessibilityHint="Navigates to driving time limits and break information"
+            >
               <Card>
                 <Text style={{ color: colors.title, fontWeight: '800' }}>Driving time limits</Text>
                 <Text style={{ color: colors.inkSecondary, lineHeight: 20 }}>

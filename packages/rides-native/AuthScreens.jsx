@@ -26,7 +26,14 @@ function AuthShell({ title, subtitle, mark, onBack, children }) {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-        <Pressable onPress={onBack} style={styles.back} accessibilityRole="button">
+        <Pressable
+          onPress={onBack}
+          style={styles.back}
+          accessibilityRole="button"
+          accessibilityLabel="Back"
+          accessibilityHint="Goes back to previous screen"
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
           <Text style={styles.backLabel}>←</Text>
         </Pressable>
         <View style={styles.card}>
@@ -56,6 +63,7 @@ function SocialButtons({ providers, busyId, disabled, onPress }) {
             style={[styles.social, (disabled || busyId) && styles.disabled]}
             accessibilityRole="button"
             accessibilityLabel={`Continue with ${provider.label}`}
+            accessibilityState={{ disabled: Boolean(disabled || busyId) }}
           >
             <Text style={styles.socialLabel}>{pending ? 'Opening…' : `Continue with ${provider.label}`}</Text>
           </Pressable>
@@ -173,11 +181,25 @@ export function SignInScreen({
         onChangeText={setPassword}
       />
       {onForgotPassword ? (
-        <Pressable onPress={onForgotPassword} accessibilityRole="button">
+        <Pressable
+          onPress={onForgotPassword}
+          accessibilityRole="button"
+          accessibilityLabel="Forgot password?"
+          accessibilityHint="Navigates to password reset"
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
           <Text style={styles.forgot}>Forgot password?</Text>
         </Pressable>
       ) : resetPassword ? (
-        <Pressable onPress={onForgot} disabled={resetBusy} accessibilityRole="button">
+        <Pressable
+          onPress={onForgot}
+          disabled={resetBusy}
+          accessibilityRole="button"
+          accessibilityLabel="Forgot password?"
+          accessibilityHint="Sends password reset instructions to your email"
+          accessibilityState={{ disabled: resetBusy }}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
           <Text style={styles.forgot}>{resetBusy ? 'Sending reset email…' : 'Forgot password?'}</Text>
         </Pressable>
       ) : null}
@@ -188,6 +210,8 @@ export function SignInScreen({
         disabled={busy || !email.trim() || !password}
         style={[styles.primary, (busy || !email.trim() || !password) && styles.disabled]}
         accessibilityRole="button"
+        accessibilityLabel={busy ? 'Signing in…' : 'Sign in'}
+        accessibilityState={{ disabled: Boolean(busy || !email.trim() || !password) }}
       >
         <Text style={styles.primaryLabel}>{busy ? 'Signing in…' : 'Sign in'}</Text>
       </Pressable>
@@ -430,7 +454,13 @@ export function SignUpScreen({
       {!created && profileHint ? <Text style={styles.cooldown}>{profileHint}</Text> : null}
       {error ? <Text style={styles.error}>{error}</Text> : null}
       {accountExists ? (
-        <Pressable onPress={onSignIn} style={styles.primary} accessibilityRole="button">
+        <Pressable
+          onPress={onSignIn}
+          style={styles.primary}
+          accessibilityRole="button"
+          accessibilityLabel="Sign in"
+          accessibilityHint="Navigates to sign in screen"
+        >
           <Text style={styles.primaryLabel}>Sign in</Text>
         </Pressable>
       ) : null}
@@ -439,7 +469,13 @@ export function SignUpScreen({
         <Text style={styles.cooldown}>Email send limit cooling down — retry in {cooldownSec}s.</Text>
       ) : null}
       {created ? (
-        <Pressable onPress={onSuccess} style={styles.primary} accessibilityRole="button">
+        <Pressable
+          onPress={onSuccess}
+          style={styles.primary}
+          accessibilityRole="button"
+          accessibilityLabel="Continue"
+          accessibilityHint="Proceeds to next step"
+        >
           <Text style={styles.primaryLabel}>Continue</Text>
         </Pressable>
       ) : (
@@ -448,6 +484,8 @@ export function SignUpScreen({
           disabled={!canSubmit}
           style={[styles.primary, !canSubmit && styles.disabled]}
           accessibilityRole="button"
+          accessibilityLabel={cta}
+          accessibilityState={{ disabled: !canSubmit }}
         >
           <Text style={styles.primaryLabel}>{cta}</Text>
         </Pressable>
@@ -510,7 +548,13 @@ export function ForgotPasswordScreen({
       ) : null}
       {error ? <Text style={styles.error}>{error}</Text> : null}
       {sent ? (
-        <Pressable onPress={onSignIn} style={styles.primary} accessibilityRole="button">
+        <Pressable
+          onPress={onSignIn}
+          style={styles.primary}
+          accessibilityRole="button"
+          accessibilityLabel="Back to sign in"
+          accessibilityHint="Navigates back to sign in"
+        >
           <Text style={styles.primaryLabel}>Back to sign in</Text>
         </Pressable>
       ) : (
@@ -519,6 +563,8 @@ export function ForgotPasswordScreen({
           disabled={busy || !email.trim()}
           style={[styles.primary, (busy || !email.trim()) && styles.disabled]}
           accessibilityRole="button"
+          accessibilityLabel={busy ? 'Sending…' : 'Email reset link'}
+          accessibilityState={{ disabled: Boolean(busy || !email.trim()) }}
         >
           <Text style={styles.primaryLabel}>{busy ? 'Sending…' : 'Email reset link'}</Text>
         </Pressable>
@@ -593,6 +639,8 @@ export function SetNewPasswordScreen({
         disabled={!canSubmit}
         style={[styles.primary, !canSubmit && styles.disabled]}
         accessibilityRole="button"
+        accessibilityLabel={busy ? 'Saving…' : 'Update password'}
+        accessibilityState={{ disabled: !canSubmit }}
       >
         <Text style={styles.primaryLabel}>{busy ? 'Saving…' : 'Update password'}</Text>
       </Pressable>
@@ -642,6 +690,8 @@ export function ResetPasswordScreen({
         disabled={!canSubmit}
         style={[styles.primary, !canSubmit && styles.disabled]}
         accessibilityRole="button"
+        accessibilityLabel={busy ? 'Saving…' : 'Save password'}
+        accessibilityState={{ disabled: !canSubmit }}
       >
         <Text style={styles.primaryLabel}>{busy ? 'Saving…' : 'Save password'}</Text>
       </Pressable>

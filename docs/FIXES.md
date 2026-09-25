@@ -130,6 +130,54 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
 - **Verified:** `node --experimental-strip-types --test packages/rides-native/driverGateView.test.js` (10/10 passing) and `npm run typecheck` (passing).
 
 
+## 2026-09-25 — Wire driver a11y scan into test script and record offender counts [t3]
+
+- **Track / machine:** Clemson RIDES DRIVER · deputy/driver-a11y · pkg-driver-a11y t3
+- **What was wrong:** `tests/a11yDriver.test.js` was created and verified against driver screens and components, but was not wired into the root `package.json` `"test"` script, meaning `npm test` would not automatically execute the driver accessibility scanner during standard CI/test runs.
+- **What changed:**
+  - Appended `tests/a11yDriver.test.js` to the `"test"` script in `package.json`.
+  - Recorded driver a11y offender counts:
+    - **Before remediation (t1 baseline):** 51 touchable / image accessibility offenders detected across `apps/driver/app` and `apps/driver/components`.
+    - **After remediation (t2 fixes):** 9 remaining offenders (42 touchables fixed across core driver flows including sign-in/account, onboarding, home online toggle/controls, queue, live trip navigation, and earnings).
+    - **Remaining offenders allowlist (9):** `apps/driver/app/(tabs)/discover.tsx:83`, `apps/driver/app/(tabs)/inbox.tsx:200`, `apps/driver/app/(tabs)/index.tsx:664` (home offer card decline button preserved for concurrent package `pkg-driver-offer-card-polish`), `apps/driver/app/bug-report.tsx:81`, `apps/driver/app/bug-report.tsx:90`, `apps/driver/app/fleet.tsx:98`, `apps/driver/app/fleet.tsx:102`, `apps/driver/app/learning.tsx:166`, `apps/driver/app/settings/[section].tsx:163`.
+- **Files touched:**
+  - `package.json`
+  - `docs/FIXES.md`
+
+## 2026-09-25 — Fix core driver flow accessibility offenders [t2]
+
+- **Track / machine:** Clemson RIDES DRIVER · deputy/driver-a11y · pkg-driver-a11y t2
+- **What was wrong:** Core driver flow screens (sign-in/account, onboarding, home online toggle & controls, queue, live trip navigation, earnings) contained 42 touchable elements missing accessibilityRole, accessibilityLabel, accessibilityHint, accessibilityState (for disabled, checked, selected), adequate hit target sizes (<44pt), or dynamic announcements for status changes (online/offline, incoming ride offers).
+- **What changed:**
+  - Added accessibilityRole, accessibilityLabel, accessibilityHint, accessibilityState, and 44pt hitSlop across core driver flow components and screens (`apps/driver/components/chrome.tsx`, `apps/driver/components/shell.tsx`, `apps/driver/components/SignaturePad.tsx`, `apps/driver/app/(tabs)/index.tsx`, `apps/driver/app/onboarding.tsx`, `apps/driver/app/queue.tsx`, `apps/driver/app/trip.tsx`, `apps/driver/app/(tabs)/earnings.tsx`, `apps/driver/app/earnings-activity.tsx`, `apps/driver/app/earnings-details.tsx`, `apps/driver/app/account.tsx`, `packages/rides-native/AuthScreens.jsx`).
+  - Added accessibility announcements for new offer arrival and online/offline status toggling (`AccessibilityInfo.announceForAccessibility`) and polite live regions on home status indicators (`accessibilityLiveRegion="polite"`).
+  - Preserved home offer card (`RideCard` decline button) untouched as owned by `pkg-driver-offer-card-polish`.
+  - Shrunk the driver a11y static scanner allowlist in `tests/a11yDriver.test.js` from 51 down to 9 remaining offenders.
+- **Files touched:**
+  - `apps/driver/components/chrome.tsx`
+  - `apps/driver/components/shell.tsx`
+  - `apps/driver/components/SignaturePad.tsx`
+  - `apps/driver/app/(tabs)/index.tsx`
+  - `apps/driver/app/onboarding.tsx`
+  - `apps/driver/app/queue.tsx`
+  - `apps/driver/app/trip.tsx`
+  - `apps/driver/app/(tabs)/earnings.tsx`
+  - `apps/driver/app/earnings-activity.tsx`
+  - `apps/driver/app/earnings-details.tsx`
+  - `apps/driver/app/account.tsx`
+  - `packages/rides-native/AuthScreens.jsx`
+  - `tests/a11yDriver.test.js`
+  - `docs/FIXES.md`
+
+## 2026-09-25 — Add driver a11y static scan test [t1]
+
+- **Track / machine:** Clemson RIDES DRIVER · deputy/driver-a11y · pkg-driver-a11y t1
+- **What was wrong:** The driver app lacked automated static accessibility scanning, allowing Pressable, TouchableOpacity, and Button elements lacking accessibilityLabel or accessibilityRole, as well as Image elements without accessibilityLabel or accessible={false}, to slip into production.
+- **What changed:** Added `tests/a11yDriver.test.js`, a static AST scanner (using Babel parser with TypeScript/JSX, reading .tsx files under `apps/driver/app` and `apps/driver/components` with fs, no RN runtime). Initialized an allowlist of 51 current driver offenders so the suite passes while printing the offender count and blocking any new unallowlisted accessibility regressions.
+- **Files touched:**
+  - `tests/a11yDriver.test.js`
+  - `docs/FIXES.md`
+
 ## 2026-09-25 — merge_trip_metadata trip_status enum cast applied (#100)
 
 - **Problem:** `public.merge_trip_metadata` (#80) failed on every call with `operator does not exist: trip_status = text`, which broke the airport-checkout session bind, abandon-checkout release and the unpaid-hold expiry cancel.

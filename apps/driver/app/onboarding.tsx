@@ -516,7 +516,17 @@ export default function OnboardingScreen() {
             const done = bundle ? stepIsComplete(item.id, bundle.ctx) : false
             const open = !bundle || canOpenStep(item.id, bundle.ctx)
             return (
-              <Pressable key={item.id} disabled={!open} onPress={() => go(item.id)} style={[styles.stepChip, item.id === stepId && styles.stepChipOn]}>
+              <Pressable
+                key={item.id}
+                disabled={!open}
+                onPress={() => go(item.id)}
+                accessibilityRole="button"
+                accessibilityLabel={`${item.label}${done ? ', completed' : ''}`}
+                accessibilityState={{ selected: item.id === stepId, disabled: !open }}
+                accessibilityHint={open ? 'Switches to step' : 'Complete earlier steps first'}
+                hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+                style={[styles.stepChip, item.id === stepId && styles.stepChipOn]}
+              >
                 <Text style={[styles.stepChipText, item.id === stepId && styles.stepChipTextOn]}>
                   {done ? '✓ ' : ''}{item.label}
                 </Text>
@@ -545,7 +555,15 @@ export default function OnboardingScreen() {
                   {[true, false].map((value) => {
                     const on = answers[question.key] === value
                     return (
-                      <Pressable key={String(value)} onPress={() => setAnswers((prev) => ({ ...prev, [question.key]: value }))} style={[styles.choice, on && styles.choiceOn]}>
+                      <Pressable
+                        key={String(value)}
+                        onPress={() => setAnswers((prev) => ({ ...prev, [question.key]: value }))}
+                        accessibilityRole="radio"
+                        accessibilityLabel={`${question.label}: ${value ? 'Yes' : 'No'}`}
+                        accessibilityState={{ selected: on }}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        style={[styles.choice, on && styles.choiceOn]}
+                      >
                         <Text style={[styles.choiceText, on && styles.choiceTextOn]}>{value ? 'Yes' : 'No'}</Text>
                       </Pressable>
                     )
@@ -553,7 +571,14 @@ export default function OnboardingScreen() {
                 </View>
               </View>
             ))}
-            <Pressable onPress={() => setAttestation((value) => !value)} style={styles.checkRow}>
+            <Pressable
+              onPress={() => setAttestation((value) => !value)}
+              accessibilityRole="checkbox"
+              accessibilityLabel="I attest I carry valid auto insurance for the vehicle I will drive."
+              accessibilityState={{ checked: attestation }}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              style={styles.checkRow}
+            >
               <View style={[styles.box, attestation && styles.boxOn]} />
               <Text style={styles.checkCopy}>I attest I carry valid auto insurance for the vehicle I will drive.</Text>
             </Pressable>
@@ -564,7 +589,14 @@ export default function OnboardingScreen() {
             <PickerField label="Color" value={color || 'Select color'} onPress={() => setPicker('color')} />
             <Field label="Plate" value={plate} onChangeText={setPlate} />
             <Field label="Seats" value={seats} onChangeText={setSeats} keyboard="number-pad" />
-            <Pressable onPress={() => setIsTesla((value) => !value)} style={styles.checkRow}>
+            <Pressable
+              onPress={() => setIsTesla((value) => !value)}
+              accessibilityRole="checkbox"
+              accessibilityLabel="List a Tesla Model 3 on my profile"
+              accessibilityState={{ checked: Boolean(isTesla || isTeslaMakeModel(make, model)) }}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              style={styles.checkRow}
+            >
               <View style={[styles.box, (isTesla || isTeslaMakeModel(make, model)) && styles.boxOn]} />
               <View style={{ flex: 1 }}>
                 <Text style={styles.checkCopy}>List a Tesla Model 3 on my profile</Text>
@@ -618,7 +650,15 @@ export default function OnboardingScreen() {
               {WORK_ELIGIBILITY_CATEGORIES.map((item) => {
                 const on = eligibility === item.id
                 return (
-                  <Pressable key={item.id} onPress={() => setEligibility(item.id)} style={[styles.choice, on && styles.choiceOn]}>
+                  <Pressable
+                    key={item.id}
+                    onPress={() => setEligibility(item.id)}
+                    accessibilityRole="radio"
+                    accessibilityLabel={item.label}
+                    accessibilityState={{ selected: on }}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    style={[styles.choice, on && styles.choiceOn]}
+                  >
                     <Text style={[styles.choiceText, on && styles.choiceTextOn]}>{item.label}</Text>
                   </Pressable>
                 )
@@ -643,7 +683,15 @@ export default function OnboardingScreen() {
                 {TAX_CLASSIFICATIONS.map((item) => {
                   const on = taxClass === item.id
                   return (
-                    <Pressable key={item.id} onPress={() => setTaxClass(item.id)} style={[styles.choice, on && styles.choiceOn]}>
+                    <Pressable
+                      key={item.id}
+                      onPress={() => setTaxClass(item.id)}
+                      accessibilityRole="radio"
+                      accessibilityLabel={item.label}
+                      accessibilityState={{ selected: on }}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      style={[styles.choice, on && styles.choiceOn]}
+                    >
                       <Text style={[styles.choiceText, on && styles.choiceTextOn]}>{item.label}</Text>
                     </Pressable>
                   )
@@ -685,7 +733,14 @@ export default function OnboardingScreen() {
             <ScrollView style={styles.agreementTall} nestedScrollEnabled>
               <Text style={styles.agreementText}>{agreementPlainText()}</Text>
             </ScrollView>
-            <Pressable onPress={() => setReadAgreement((value) => !value)} style={styles.checkRow}>
+            <Pressable
+              onPress={() => setReadAgreement((value) => !value)}
+              accessibilityRole="checkbox"
+              accessibilityLabel="I have reviewed the independent contractor agreement."
+              accessibilityState={{ checked: readAgreement }}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              style={styles.checkRow}
+            >
               <View style={[styles.box, readAgreement && styles.boxOn]} />
               <Text style={styles.checkCopy}>I have reviewed the independent contractor agreement.</Text>
             </Pressable>
@@ -732,14 +787,28 @@ export default function OnboardingScreen() {
         ) : null}
       </ScrollView>
       <Modal visible={picker != null} transparent animationType="slide" onRequestClose={() => setPicker(null)}>
-        <Pressable style={styles.scrim} onPress={() => setPicker(null)}>
-          <Pressable style={styles.sheet} onPress={() => {}}>
+        <Pressable
+          style={styles.scrim}
+          onPress={() => setPicker(null)}
+          accessibilityRole="button"
+          accessibilityLabel="Close picker"
+          accessibilityHint="Dismisses the selection dialog"
+        >
+          <Pressable
+            style={styles.sheet}
+            onPress={(e) => e.stopPropagation()}
+            accessibilityRole="none"
+            accessibilityLabel="Selection list"
+          >
             <Text style={styles.cardTitle}>{picker === 'make' ? 'Make' : picker === 'model' ? 'Model' : 'Color'}</Text>
             <ScrollView style={{ maxHeight: 360 }}>
               {pickerOptions.map((option) => (
                 <Pressable
                   key={option}
                   style={styles.sheetRow}
+                  accessibilityRole="button"
+                  accessibilityLabel={option}
+                  hitSlop={{ top: 6, bottom: 6, left: 8, right: 8 }}
                   onPress={() => {
                     if (picker === 'make') {
                       setMake(option)
@@ -782,7 +851,13 @@ function KnowledgeQuizHook({ label, onPress }: { label: string; onPress: () => v
 function PickerField({ label, value, onPress }: { label: string; value: string; onPress: () => void }) {
   const styles = useOnboardingStyles()
   return (
-    <Pressable onPress={onPress} style={styles.question} accessibilityRole="button">
+    <Pressable
+      onPress={onPress}
+      style={styles.question}
+      accessibilityRole="button"
+      accessibilityLabel={`${label}: ${value}`}
+      accessibilityHint="Opens selection dialog"
+    >
       <Text style={styles.questionLabel}>{label}</Text>
       <View style={styles.choice}>
         <Text style={styles.choiceText}>{value}</Text>
@@ -827,16 +902,40 @@ function DocRow({
       <Text style={styles.hint}>{hint}</Text>
       <Text style={styles.saved}>{notice || (saved ? 'Uploaded' : 'Not uploaded yet')}</Text>
       <View style={styles.yesNo}>
-        <Pressable disabled={busy} onPress={() => run(takePhoto, 'Camera failed')} style={styles.choice}>
+        <Pressable
+          disabled={busy}
+          onPress={() => run(takePhoto, 'Camera failed')}
+          accessibilityRole="button"
+          accessibilityLabel={`Take photo with camera for ${label}`}
+          accessibilityState={{ disabled: busy }}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          style={styles.choice}
+        >
           <Text style={styles.choiceText}>{busy ? 'Uploading…' : 'Camera'}</Text>
         </Pressable>
         {allowLibrary ? (
-          <Pressable disabled={busy} onPress={() => run(pickLibrary, 'Could not open the photo library')} style={styles.choice}>
+          <Pressable
+            disabled={busy}
+            onPress={() => run(pickLibrary, 'Could not open the photo library')}
+            accessibilityRole="button"
+            accessibilityLabel={`Choose photo from library for ${label}`}
+            accessibilityState={{ disabled: busy }}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            style={styles.choice}
+          >
             <Text style={styles.choiceText}>Photo library</Text>
           </Pressable>
         ) : null}
         {allowFile ? (
-          <Pressable disabled={busy} onPress={() => run(pickDocument, 'Could not open files')} style={styles.choice}>
+          <Pressable
+            disabled={busy}
+            onPress={() => run(pickDocument, 'Could not open files')}
+            accessibilityRole="button"
+            accessibilityLabel={`Choose file for ${label}`}
+            accessibilityState={{ disabled: busy }}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            style={styles.choice}
+          >
             <Text style={styles.choiceText}>Files</Text>
           </Pressable>
         ) : null}
