@@ -2,6 +2,24 @@
 
 Persistent knowledge base for recurring failures. When a matching issue appears, apply the saved fix first.
 
+## 2026-09-24 — Ensure minimal profile row for new Supabase auth users
+
+- **Track / machine:** Clemson RIDES · worktree deputy-pkg-profile-ensure / branch deputy/profile-ensure
+- **Symptom:** Brand-new user signing in via Apple or Google on Supabase Auth (#71) has an `auth.users` row but no `public.profiles` row. `trips.rider_id` foreign key references `profiles(id)` (`trips_rider_id_fkey`), causing initial trip creation to fail with 500.
+- **Root cause:** Native social auth flows sign into Supabase Auth but may not populate `public.profiles` prior to the user's first trip request.
+- **Fix:** Created `server/ensureProfile.js` (`ensureProfile(sb, user)`):
+  - Validates `sb` and `user?.id`, safely returning `{ ok: false, reason: 'no_user' }` without throwing if missing.
+  - Queries `profiles` with `.select('id').eq('id', user.id).maybeSingle()`; if profile exists, returns `{ ok: true, created: false }` with zero writes.
+  - Upserts minimal profile row `{ id: user.id, email: user.email ?? null, full_name: user.user_metadata?.full_name || user.user_metadata?.name || null, role: 'rider' }` with options `{ onConflict: 'id', ignoreDuplicates: true }` so existing profiles and roles are never overwritten.
+  - Catches Postgres 23505 unique violations on race conditions and returns `{ ok: true, created: false }`.
+  - Retries once with `{ id: user.id, email: user.email ?? null }` if schema or column errors occur.
+  - Returns `{ ok: false, reason: 'profile_upsert_failed', message }` on other errors.
+- **Files touched:**
+  - `server/ensureProfile.js`
+  - `server/ensureProfile.test.js`
+  - `docs/FIXES.md`
+- **Verified:** 10/10 tests in `server/ensureProfile.test.js` passing via `node --experimental-strip-types --test server/ensureProfile.test.js`.
+
 ## 2026-09-24 — Remove Clerk: Apple + Google social sign-in directly on Supabase Auth
 
 - **Track / machine:** Clemson RIDES · worktree feat/supabase-auth-remove-clerk
