@@ -1,6 +1,27 @@
 # Build & blocker fixes log
 
 Persistent knowledge base for recurring failures. When a matching issue appears, apply the saved fix first.
+
+## 2026-09-25 — googleAuthConfig unit tests and BUG? documentation [t1]
+
+- **Date:** 2026-09-25
+- **Track / machine:** Clemson RIDES · worktree `deputy-pkg-google-auth-config-tests-20260925041913` · `deputy/google-auth-config-tests-20260925041913` t1
+- **What was wrong:** `packages/rides-native/googleAuthConfig.js` lacked complete unit test coverage across all exported symbols, edge cases, error mappings, and platform configurations, and several subtle implementation bugs/quirks were undocumented:
+  - If an options bag contains only `mode: 'any'` or `requireAll: false` without `scheme`, `redirectUri`, `required`, or `platform`, `googleAuthConfig` misinterprets the options bag as an `env` object and ignores the options.
+  - If an options bag combines option properties (like `platform: 'web'`) with `EXPO_PUBLIC_*` keys, the `!Object.keys(envOrOptions).some(...)` check fails, causing the options to be dropped and treated strictly as env.
+  - Non-enumerable properties on the config result include `iosClientId` and `webClientId`, but `androidClientId` is omitted even when `platform: 'android'` is configured.
+  - `googleAuthButtonState` checks `Array.isArray(configOrEnv.missing)` to determine if input is pre-resolved config; passing `{ enabled: true }` without `missing` causes it to be treated as env and results in `enabled: false`.
+  - `resolveSocialProviders` only checks `optionsOrScheme?.hideDisabled` (3rd argument); passing `{ hideDisabled: true }` as the 2nd argument fails to hide disabled providers.
+  - `resolveSocialProviders` interpolates `'undefined'` into `disabledLabel` ('Continue with undefined (coming soon)') when `provider.label` is missing.
+  - `mapGoogleAuthError` checks `raw` (error message) for `/syntaxerror|typeerror|referenceerror|rangeerror/` rather than checking `error.name`, so native error instances like `new SyntaxError('...')` bypass technical error masking.
+  - `mapGoogleAuthError` masks any error message exceeding 100 characters into generic `'Google sign-in failed. Please try again.'` with code `'google_auth_failed'`.
+  - `mapGoogleAuthError` drops custom error codes on unmatched plain object errors, replacing them with `'google_auth_error'`.
+- **What changed:** Expanded `packages/rides-native/googleAuthConfig.test.js` to 50 comprehensive tests covering all exported constants, readiness resolution, client ID aliases (`EXPO_PUBLIC_GOOGLE_CLIENT_ID` and `EXPO_PUBLIC_WEB_CLIENT_ID`), platforms (`web`, `ios`, `android`), redirect helpers (`googleOAuthRedirect`, scheme stripping, path normalization), button state, social provider resolution, error mappings, non-enumerable descriptor checks, and null/primitive inputs. Kept production source code untouched and annotated all quirks and bugs with `// BUG?:`.
+- **Files touched:**
+  - `packages/rides-native/googleAuthConfig.test.js`
+  - `docs/FIXES.md`
+- **Verified:** `node --experimental-strip-types --test packages/rides-native/googleAuthConfig.test.js` passes 50/50 tests cleanly in < 120ms.
+
 ## 2026-09-25 — parseRideAt date+time as America/New_York wall time
 
 - **Date:** 2026-09-25
