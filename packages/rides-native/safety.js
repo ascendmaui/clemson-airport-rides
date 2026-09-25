@@ -148,10 +148,13 @@ export function normalizeContactPhone(raw) {
 }
 
 export function contactTel(phone) {
-  const digits = String(phone || '').replace(/\D/g, '')
+  const text = String(phone || '').trim()
+  const digits = text.replace(/\D/g, '')
   if (!digits) return null
-  if (String(phone).trim().startsWith('+')) return `tel:+${digits}`
+  if (text.startsWith('+')) return `tel:+${digits}`
   if (digits.length === 10) return `tel:+1${digits}`
+  // Seven digits is a local number (656-2222). tel:+6562222 is not a valid call.
+  if (digits.length === 7) return `tel:${digits}`
   return `tel:+${digits}`
 }
 

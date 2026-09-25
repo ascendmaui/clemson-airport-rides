@@ -1177,6 +1177,29 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
 - **What changed:** Deep-freeze each section, its paragraph and bullet lists, and both arrays in place before re-exporting. References stay identical to the shared module. `LEGAL_UPDATED` is unchanged.
 - **Files touched:** `packages/rides-native/legalCopy.js`, `packages/rides-native/legalCopy.test.js`
 
+## 2026-09-25 — safety.test.js was not last in the npm test script
+
+- **Track / machine:** deputy pkg-safety-tests · t3
+- **What was wrong:** `packages/rides-native/safety.test.js` sat in the middle of the `npm test` file list (after `mapsLink.test.js`, before `shared/carpool.test.js`). The safety suite is supposed to run last.
+- **What changed:** Moved `packages/rides-native/safety.test.js` to the end of the `test` script. No other script fields changed.
+- **Files touched:** `package.json`, `docs/FIXES.md`
+
+## 2026-09-25 — Seven-digit emergency numbers were dialed as bogus E.164
+
+- **Track / machine:** deputy pkg-safety-tests · t2
+- **What was wrong:** `contactTel` turned a 7-digit local number into `tel:+` plus those digits. Clemson campus `656-2222` became `tel:+6562222`, which is not a callable number. Ten-digit numbers and numbers the rider marked with `+` were already fine.
+- **What changed:** A 7-digit number with no leading `+` now dials as a local `tel:6562222`. Stored contact text is unchanged. An explicit `+` still dials `tel:+…`.
+- **Files touched:** `packages/rides-native/safety.js`, `packages/rides-native/safety.test.js`, `docs/FIXES.md`
+
+## 2026-09-24 — Safety helpers: tests cover every export; arrived-status hole left in source
+
+- **Track / machine:** deputy pkg-safety-tests · t1
+- **What was wrong:** `packages/rides-native/safety.test.js` did not exercise every export (share tokens, SOS button and phrase copy, police `tel:` links, phone normalization, active-share lookup, recent SOS reads, emergency-contact listing, and the client error paths). Two source gaps showed up and were marked `// BUG?:` in the tests, not fixed:
+  - `arrived` (driver at pickup, between `arriving` and `in_progress`) is missing from `SHAREABLE_TRIP_STATUSES` and `ACTIVE_RIDE_STATUSES`. The safety screen loads the active trip with the shareable list and only logs SOS when the status is active, so the in-app alert and live share drop out while the rider is getting in the car. Preferred status `requested` is also missing from the shareable list, unlike `searching` and `offered`.
+  - A 7-digit local number is accepted, then `contactTel` dials it as `tel:+` plus those digits (`656-2222` becomes `tel:+6562222`).
+- **What changed:** Extended the unit tests only. `safety.js` was not modified.
+- **Files touched:** `packages/rides-native/safety.test.js`, `docs/FIXES.md`
+
 ## 2026-09-24 — Remove Clerk: Apple + Google social sign-in directly on Supabase Auth
 
 - **Track / machine:** Clemson RIDES · worktree feat/supabase-auth-remove-clerk
