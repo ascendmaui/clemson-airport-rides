@@ -230,27 +230,27 @@ test('requireClient paths throw when supabase is missing', async () => {
     /Supabase is not configured/,
   )
 
-  // BUG?: updateReport (and thus confirmFound, confirmNotFound, markReturned, closeLostFoundReport, saveSupportNote)
-  // does not call requireClient(supabase), throwing TypeError instead of 'Supabase is not configured'
+  // updateReport (and thus confirmFound, confirmNotFound, markReturned, closeLostFoundReport, saveSupportNote)
+  // validates supabase client via requireClient, rejecting with 'Supabase is not configured'
   await assert.rejects(
     () => confirmFound(null, 'rep-1'),
-    TypeError,
+    /Supabase is not configured/,
   )
   await assert.rejects(
     () => confirmNotFound(null, 'rep-1'),
-    TypeError,
+    /Supabase is not configured/,
   )
   await assert.rejects(
     () => markReturned(null, 'rep-1'),
-    TypeError,
+    /Supabase is not configured/,
   )
   await assert.rejects(
     () => closeLostFoundReport(null, 'rep-1'),
-    TypeError,
+    /Supabase is not configured/,
   )
   await assert.rejects(
     () => saveSupportNote(null, 'rep-1', 'Note'),
-    TypeError,
+    /Supabase is not configured/,
   )
 })
 

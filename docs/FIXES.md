@@ -2,6 +2,17 @@
 
 Persistent knowledge base for recurring failures. When a matching issue appears, apply the saved fix first.
 
+## 2026-09-24 — lostFoundClient updateReport missing requireClient validation
+
+- **Track / machine:** Clemson RIDES · worktree deputy-pkg-lostfound-tests
+- **Problem:** When `supabase` was null or undefined, `updateReport` (used by `confirmFound`, `confirmNotFound`, `markReturned`, `closeLostFoundReport`, and `saveSupportNote`) threw an unhandled `TypeError: Cannot read properties of ...` instead of the standard `'Supabase is not configured'` error thrown by all other client functions.
+- **Root cause:** `updateReport(supabase, id, patch)` directly accessed `supabase.from(...)` without calling `requireClient(supabase)`.
+- **Fix:** Added `requireClient(supabase)` check at the top of `updateReport(supabase, id, patch)` in `packages/rides-native/lostFoundClient.js`. Updated corresponding unit tests in `packages/rides-native/lostFoundClient.test.js` to assert `Supabase is not configured`.
+- **Files touched:**
+  - `packages/rides-native/lostFoundClient.js`
+  - `packages/rides-native/lostFoundClient.test.js`
+  - `docs/FIXES.md`
+
 ## 2026-09-24 — Remove Clerk: Apple + Google social sign-in directly on Supabase Auth
 
 - **Track / machine:** Clemson RIDES · worktree feat/supabase-auth-remove-clerk
