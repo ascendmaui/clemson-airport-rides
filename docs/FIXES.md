@@ -130,6 +130,20 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
 - **Verified:** `node --experimental-strip-types --test packages/rides-native/driverGateView.test.js` (10/10 passing) and `npm run typecheck` (passing).
 
 
+## 2026-09-25 — Wire driver a11y scan into test script and record offender counts [t3]
+
+- **Track / machine:** Clemson RIDES DRIVER · deputy/driver-a11y · pkg-driver-a11y t3
+- **What was wrong:** `tests/a11yDriver.test.js` was created and verified against driver screens and components, but was not wired into the root `package.json` `"test"` script, meaning `npm test` would not automatically execute the driver accessibility scanner during standard CI/test runs.
+- **What changed:**
+  - Appended `tests/a11yDriver.test.js` to the `"test"` script in `package.json`.
+  - Recorded driver a11y offender counts:
+    - **Before remediation (t1 baseline):** 51 touchable / image accessibility offenders detected across `apps/driver/app` and `apps/driver/components`.
+    - **After remediation (t2 fixes):** 9 remaining offenders (42 touchables fixed across core driver flows including sign-in/account, onboarding, home online toggle/controls, queue, live trip navigation, and earnings).
+    - **Remaining offenders allowlist (9):** `apps/driver/app/(tabs)/discover.tsx:83`, `apps/driver/app/(tabs)/inbox.tsx:200`, `apps/driver/app/(tabs)/index.tsx:664` (home offer card decline button preserved for concurrent package `pkg-driver-offer-card-polish`), `apps/driver/app/bug-report.tsx:81`, `apps/driver/app/bug-report.tsx:90`, `apps/driver/app/fleet.tsx:98`, `apps/driver/app/fleet.tsx:102`, `apps/driver/app/learning.tsx:166`, `apps/driver/app/settings/[section].tsx:163`.
+- **Files touched:**
+  - `package.json`
+  - `docs/FIXES.md`
+
 ## 2026-09-25 — Fix core driver flow accessibility offenders [t2]
 
 - **Track / machine:** Clemson RIDES DRIVER · deputy/driver-a11y · pkg-driver-a11y t2
