@@ -714,6 +714,12 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
 - **Files touched:** `docs/driver-approval-gate.md`, `server/driverApproval.test.js`, `docs/FIXES.md`
 - **Verified:** `node --experimental-strip-types --test server/driverApproval.test.js` (6/6 passing)
 
+## 2026-09-25 — Notification prefs unit tests extended (no source edit)
+
+- **What was wrong:** `packages/rides-native/notificationPrefs.test.js` already called every export, but several branches were unpinned. Suspected bugs were left in `notificationPrefs.js` and marked `// BUG?:` in the tests: an array can be a quiet record when fields are assigned on it; a top-level `dnd` is copied through while `quiet.dnd` stays off; legacy `"false"` strings do not opt out of ride or friends; nested extras are shared with the caller; a storage adapter that returns an already-parsed object is discarded; `writeLocalPrefs` stores impossible clocks such as `99:99`; user id `0` uses the anon key and skips the profile write; an empty profile array replaces the device mirror with defaults.
+- **What changed:** Extended `packages/rides-native/notificationPrefs.test.js` for those branches (per-clock bounds, empty records, padded JSON, rejected queries, non-object profile values, and a save error with no message). Did not change `notificationPrefs.js`.
+- **Files touched:** `packages/rides-native/notificationPrefs.test.js`, `docs/FIXES.md`
+
 ## 2026-09-25 — merge_trip_metadata trip_status enum cast applied (#100)
 
 - **Problem:** `public.merge_trip_metadata` (#80) failed on every call with `operator does not exist: trip_status = text`, which broke the airport-checkout session bind, abandon-checkout release and the unpaid-hold expiry cancel.

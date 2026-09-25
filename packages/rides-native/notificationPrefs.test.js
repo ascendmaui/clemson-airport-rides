@@ -700,3 +700,237 @@ test('saveNotificationPrefs keeps the local mirror when the profile write fails'
   assert.equal(saved.prefs.ride, false)
   assert.equal(saved.softFail, null)
 })
+
+test('quietFromPrefs checks each clock on its own', () => {
+  const badStart = quietFromPrefs({ quiet: { start: '00:60', end: '09:05', scheduleEnabled: true } })
+  assert.equal(badStart.start, '22:00')
+  assert.equal(badStart.end, '09:05')
+  assert.equal(badStart.scheduleEnabled, true)
+
+  const badEnd = quietFromPrefs({ quiet: { start: '08:00', end: '24:01' } })
+  assert.equal(badEnd.start, '08:00')
+  assert.equal(badEnd.end, '07:00')
+
+  const edges = quietFromPrefs({ quiet: { start: '23:59', end: '00:00' } })
+  assert.equal(edges.start, '23:59')
+  assert.equal(edges.end, '00:00')
+  assert.equal(quietFromPrefs({ quiet: { start: '00:01', end: '23:00' } }).start, '00:01')
+})
+
+test('quietFromPrefs reads fields from an array because arrays are objects', () => {
+  const quiet = ['22:00']
+  quiet.dnd = 'false'
+  quiet.scheduleEnabled = 1
+  quiet.start = '01:15'
+  quiet.end = '99:99'
+  const raw = { quiet }
+  // BUG?: an array passes the typeof === "object" check, so named fields on it are honored.
+  const parsed = quietFromPrefs(raw)
+  assert.equal(parsed.dnd, true)
+  assert.equal(parsed.scheduleEnabled, true)
+  assert.equal(parsed.start, '01:15')
+  assert.equal(parsed.end, '07:00')
+  assert.equal(raw.quiet, quiet)
+  assert.equal(quiet[0], '22:00')
+})
+
+test('normalizePrefs fills an empty object without sharing the quiet record', () => {
+  const empty = normalizePrefs({})
+  assert.deepEqual(empty, defaults())
+  assert.notEqual(empty, DEFAULT_NOTIFICATION_PREFS)
+  assert.notEqual(empty.quiet, DEFAULT_QUIET)
+
+  const quiet = { dnd: true, start: '21:05', end: '06:40', extra: true }
+  const raw = { quiet, promotions: false, billing: false }
+  const prefs = normalizePrefs(raw)
+  assert.equal(prefs.billing, false)
+  assert.equal(prefs.promotions, false)
+  assert.equal(prefs.ride, true)
+  assert.equal(prefs.quiet.extra, undefined)
+  assert.deepEqual(prefs.quiet, {
+    dnd: true,
+    scheduleEnabled: false,
+    start: '21:05',
+    end: '06:40',
+  })
+  assert.equal(raw.quiet.extra, true)
+  assert.notEqual(prefs.quiet, raw.quiet)
+
+  const bare = Object.create(null)
+  bare.system = false
+  assert.equal(normalizePrefs(bare).system, false)
+  assert.equal(normalizePrefs(bare).ride, true)
+})
+
+test('normalizePrefs keeps a top-level dnd and shares nested extras with the input', () => {
+  // BUG?: dnd beside the categories is not the quiet-hours switch. It is copied through, and quiet.dnd stays off.
+  const top = normalizePrefs({ dnd: true, scheduleEnabled: true })
+  assert.equal(top.dnd, true)
+  assert.equal(top.scheduleEnabled, true)
+  assert.equal(top.quiet.dnd, false)
+  assert.equal(top.quiet.scheduleEnabled, false)
+
+  // BUG?: legacy opt-out aliases only treat boolean false as off, so the string "false" leaves the category on.
+  const legacy = normalizePrefs({ ride_updates: 'false', friends_carpool: 'false' })
+  assert.equal(legacy.ride, true)
+  assert.equal(legacy.friends, true)
+  assert.equal(legacy.ride_updates, 'false')
+  assert.equal(legacy.friends_carpool, 'false')
+
+  assert.equal(normalizePrefs({ promotions: '0' }).promotions, true)
+  assert.equal(normalizePrefs({ promotions: {} }).promotions, true)
+  assert.equal(normalizePrefs({ promotions: '' }).promotions, false)
+  assert.equal(normalizePrefs({ dndNewRequestTones: 0 }).dndNewRequestTones, false)
+  assert.equal(normalizePrefs({ dndNewRequestTones: '0' }).dndNewRequestTones, true)
+
+  const raw = { meta: { source: 'profile' } }
+  const prefs = normalizePrefs(raw)
+  // BUG?: nested values other than quiet stay shared with the caller.
+  prefs.meta.source = 'edited'
+  assert.equal(raw.meta.source, 'edited')
+})
+
+test('readLocalPrefs accepts padded JSON and drops values that are not objects', async () => {
+  const padded = memoryStorage({
+    [PREFS_KEY('rider-1')]: '  { "billing": false, "quiet": { "end": "08:05" } } ',
+  })
+  const prefs = await readLocalPrefs(padded, 'rider-1')
+  assert.equal(prefs.billing, false)
+  assert.equal(prefs.quiet.end, '08:05')
+  assert.equal(prefs.quiet.start, '22:00')
+  assert.equal(prefs.ride, true)
+
+  for (const raw of ['1', 'true', 'false']) {
+    const storage = memoryStorage({ [PREFS_KEY('rider-1')]: raw })
+    assert.deepEqual(await readLocalPrefs(storage, 'rider-1'), defaults())
+  }
+
+  // BUG?: a storage adapter that already returns an object is parsed as text and discarded.
+  const objectStore = {
+    async getItem() {
+      return { ride: false, promotions: true }
+    },
+  }
+  const discarded = await readLocalPrefs(objectStore, 'rider-1')
+  assert.equal(discarded.ride, true)
+  assert.equal(discarded.promotions, false)
+})
+
+test('writeLocalPrefs stores impossible clocks and swallows a missing setter', async () => {
+  const storage = memoryStorage()
+  await writeLocalPrefs(storage, 'rider-1', { quiet: { start: '99:99', end: '08:15' } })
+  // BUG?: the mirror stores the argument verbatim, including clocks normalizePrefs would reject.
+  assert.equal(storage.data[PREFS_KEY('rider-1')], JSON.stringify({ quiet: { start: '99:99', end: '08:15' } }))
+  const reread = await readLocalPrefs(storage, 'rider-1')
+  assert.equal(reread.quiet.start, '22:00')
+  assert.equal(reread.quiet.end, '08:15')
+
+  await assert.doesNotReject(() => writeLocalPrefs({}, 'rider-1', { ride: false }))
+
+  await writeLocalPrefs(storage, 'rider-2', undefined)
+  assert.equal(storage.data[PREFS_KEY('rider-2')], undefined)
+  assert.deepEqual(await readLocalPrefs(storage, 'rider-2'), defaults())
+  assert.equal(storage.data[PREFS_KEY('rider-1')], JSON.stringify({ quiet: { start: '99:99', end: '08:15' } }))
+})
+
+test('a numeric user id of 0 shares the anon mirror and skips the profile', async () => {
+  const storage = memoryStorage()
+  let queried = false
+  const client = {
+    from() {
+      queried = true
+      throw new Error('should not query')
+    },
+  }
+  // BUG?: userId 0 is falsy, so it is stored under the anon key and never sent to profiles.
+  const saved = await saveNotificationPrefs(client, storage, 0, { system: false })
+  assert.equal(queried, false)
+  assert.equal(saved.persisted, false)
+  assert.equal(saved.prefs.system, false)
+  assert.equal(storage.data[PREFS_KEY('anon')], JSON.stringify(saved.prefs))
+  assert.equal((await readLocalPrefs(storage, 0)).system, false)
+  assert.equal((await readLocalPrefs(storage, 'anon')).system, false)
+
+  const fetched = await fetchNotificationPrefs(client, storage, 0)
+  assert.equal(queried, false)
+  assert.equal(fetched.persisted, false)
+  assert.equal(fetched.softFail, null)
+  assert.equal(fetched.prefs.system, false)
+})
+
+test('fetchNotificationPrefs ignores non-object profile values and a rejected query', async () => {
+  const storage = memoryStorage({
+    [PREFS_KEY('rider-1')]: JSON.stringify({ friends: false }),
+  })
+  for (const notificationPrefs of [false, 0, '', 22]) {
+    const { client } = fakeSupabase({
+      read: () => ({ data: { notification_prefs: notificationPrefs }, error: null }),
+    })
+    const result = await fetchNotificationPrefs(client, storage, 'rider-1')
+    assert.equal(result.persisted, false)
+    assert.equal(result.softFail, null)
+    assert.equal(result.prefs.friends, false)
+    assert.equal(result.prefs.ride, true)
+  }
+  assert.equal(storage.data[PREFS_KEY('rider-1')], JSON.stringify({ friends: false }))
+
+  const rejected = {
+    from() {
+      return {
+        select() {
+          return {
+            eq() {
+              return {
+                maybeSingle() {
+                  return Promise.reject(new Error('boom'))
+                },
+              }
+            },
+          }
+        },
+      }
+    },
+  }
+  const failed = await fetchNotificationPrefs(rejected, storage, 'rider-1')
+  assert.equal(failed.softFail, 'boom')
+  assert.equal(failed.persisted, false)
+  assert.equal(failed.prefs.friends, false)
+})
+
+test('fetchNotificationPrefs treats an empty array as a saved profile and replaces the mirror', async () => {
+  const storage = memoryStorage({
+    [PREFS_KEY('rider-1')]: JSON.stringify({ ride: false, promotions: true }),
+  })
+  const { client } = fakeSupabase({
+    read: () => ({ data: { notification_prefs: [] }, error: null }),
+  })
+  // BUG?: [] is an object, so an empty list replaces a richer device mirror with defaults.
+  const wiped = await fetchNotificationPrefs(client, storage, 'rider-1')
+  assert.equal(wiped.persisted, true)
+  assert.equal(wiped.softFail, null)
+  assert.deepEqual(wiped.prefs, defaults())
+  assert.deepEqual(JSON.parse(storage.data[PREFS_KEY('rider-1')]), defaults())
+})
+
+test('saveNotificationPrefs does not mutate the caller and names a missing write error', async () => {
+  const next = { ride: false, quiet: { dnd: true, start: '21:00' }, meta: { n: 1 } }
+  const snapshot = structuredClone(next)
+  const storage = memoryStorage()
+  const { client, calls } = fakeSupabase({
+    write: () => ({ error: { code: '42501' } }),
+  })
+  const result = await saveNotificationPrefs(client, storage, 'rider-1', next)
+  assert.deepEqual(next, snapshot)
+  assert.notEqual(result.prefs, next)
+  assert.notEqual(result.prefs.quiet, next.quiet)
+  assert.equal(result.ok, true)
+  assert.equal(result.persisted, false)
+  // Fetch sets softFail to undefined when the error has no message. Save substitutes a fallback string.
+  assert.equal(result.softFail, 'notification_prefs write failed')
+  assert.equal(result.prefs.ride, false)
+  assert.equal(result.prefs.quiet.dnd, true)
+  assert.equal(result.prefs.quiet.start, '21:00')
+  assert.equal(result.prefs.meta.n, 1)
+  assert.deepEqual(calls.map((call) => call.op), ['from', 'update', 'eq'])
+  assert.deepEqual(JSON.parse(storage.data[PREFS_KEY('rider-1')]), result.prefs)
+})
