@@ -178,6 +178,19 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
   - `tests/a11yDriver.test.js`
   - `docs/FIXES.md`
 
+## 2026-09-25 — Google sign-in setup documentation and test wiring [t3]
+
+- **Track / machine:** Clemson RIDES · deputy/google-signin-prep · pkg-google-signin-prep t3
+- **Problem:** `packages/rides-native/googleAuthConfig.test.js` was created in t1 and extended in t2 to validate Google OAuth readiness gating and error mapping, but was not wired into root `package.json`'s `test` script. Furthermore, enabling Google Sign-In requires external setup in Google Cloud Console and Supabase Auth that cannot be automated in code and was previously undocumented.
+- **Fix:**
+  - Created `docs/google-signin-setup.md` detailing the complete manual setup steps for John: Google Cloud Console OAuth consent screen and client IDs (Web client with Supabase callback URL `https://awktabuhijrshmsmagpq.supabase.co/auth/v1/callback` and production web origin `https://clemson-rides.vercel.app`, iOS clients for `com.ascendmaui.clemsonrides.rider` and `com.ascendmaui.clemsonrides.driver`, and Android clients), Supabase Auth provider toggle and redirect allowlist (`clemsonrides://**`, `clemsonrides-driver://**`, `https://clemson-rides.vercel.app/**`), and environment variable placement table for EAS build profiles (`EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID`, `EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID`), local `.env` files, and the Supabase Dashboard secret.
+  - Appended `packages/rides-native/googleAuthConfig.test.js` to the `test` script in root `package.json`.
+- **Files touched:**
+  - `docs/google-signin-setup.md`
+  - `package.json`
+  - `docs/FIXES.md`
+- **Verified:** `npm test` (822/822 passing, including all 29 tests in `googleAuthConfig.test.js`), `node --test tests/no*.test.js` (clean), `npm run typecheck` (clean).
+
 ## 2026-09-25 — Gate Google button on config readiness in sign-in screens [t2]
 
 - **Track / machine:** Clemson RIDES · deputy/google-signin-prep · pkg-google-signin-prep t2
