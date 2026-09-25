@@ -1,6 +1,18 @@
 # Build & blocker fixes log
 
 Persistent knowledge base for recurring failures. When a matching issue appears, apply the saved fix first.
+## 2026-09-25 — scheduleTrip passengers not hardcoded 1 (money bug 3)
+
+- **Date:** 2026-09-25
+- **Track / machine:** Clemson RIDES · Pro Mac · worktree `deputy-schedule-trip-passengers`
+- **What was wrong:** `scheduleTrip` always wrote `passengers: 1` on the trip row, ignoring `body.passengers` / `partySize`. Party / capacity checks (e.g. `trips_party_capacity_check`) never saw the real party size on that path, so oversized weekend/party bookings could slip past.
+- **What changed:** Parse an integer passenger count from the request (`passengers`, else `partySize` / `party_size`), defaulting to 1 when missing or invalid. Store that on the trip row. Fare formula / `priceScheduledRequest` inputs unchanged — only the persisted count used for capacity/party.
+- **Files touched:**
+  - `server/endpoints/scheduleTrip.js`
+  - `server/scheduleTrip.test.js`
+  - `docs/FIXES.md`
+- **Verified:** focused `server/scheduleTrip.test.js`; full `TZ=UTC npm test` before opening draft PR.
+
 ## 2026-09-25 — parseRideAt date+time as America/New_York wall time
 
 - **Date:** 2026-09-25

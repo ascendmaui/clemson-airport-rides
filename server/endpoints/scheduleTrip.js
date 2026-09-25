@@ -18,6 +18,16 @@ import {
   priceScheduledRequest,
 } from '../authoritativeFare.js'
 
+
+/** Integer passenger count from the request; default 1. Prefer passengers over partySize. */
+function passengerCount(body) {
+  const raw = body?.passengers ?? body?.partySize ?? body?.party_size
+  if (raw == null || raw === '') return 1
+  const n = Math.round(Number(raw))
+  if (!Number.isFinite(n) || n < 1) return 1
+  return n
+}
+
 const PURPOSES = new Set(['early_class', 'airport', 'planned', 'party_weekend', 'recurring'])
 
 function place(value) {
@@ -138,7 +148,7 @@ export default async function handler(req, res, deps = {}) {
       fare_source: 'server',
       rider_pays_cents: priced.fareCents,
     },
-    passengers: 1,
+    passengers: passengerCount(body),
     pickup_at: scheduledFor,
     scheduled_for: scheduledFor,
     rider_note: purpose,
