@@ -74,13 +74,27 @@ export default function EarningsActivity() {
         {FILTERS.map((item) => {
           const on = item.id === filter
           return (
-            <Pressable key={item.id} onPress={() => setFilter(item.id)} style={[styles.chip, { backgroundColor: on ? colors.fill : colors.card }]}>
+            <Pressable
+              key={item.id}
+              onPress={() => setFilter(item.id)}
+              style={[styles.chip, { backgroundColor: on ? colors.fill : colors.card }]}
+              accessibilityRole="tab"
+              accessibilityLabel={`${filterLabel(item.id)} filter`}
+              accessibilityState={{ selected: on }}
+              hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+            >
               <Text style={{ color: on ? colors.onAccent : colors.title, fontWeight: '800' }}>{filterLabel(item.id)}</Text>
             </Pressable>
           )
         })}
         {filter !== 'all' ? (
-          <Pressable onPress={() => setFilter('all')}>
+          <Pressable
+            onPress={() => setFilter('all')}
+            accessibilityRole="button"
+            accessibilityLabel="Clear filter"
+            accessibilityHint="Resets filter to show all trips"
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          >
             <Text style={{ color: colors.orange, fontWeight: '800' }}>Clear</Text>
           </Pressable>
         ) : null}
@@ -99,7 +113,13 @@ export default function EarningsActivity() {
           {rows.map((trip) => {
             const pay = carpoolPayFromTrip(trip)
             return (
-              <Pressable key={trip.id} onPress={() => router.push({ pathname: '/trip-details', params: { id: trip.id } })}>
+              <Pressable
+                key={trip.id}
+                onPress={() => router.push({ pathname: '/trip-details', params: { id: trip.id } })}
+                accessibilityRole="button"
+                accessibilityLabel={`${trip.status === 'canceled' ? 'Canceled trip' : 'Completed trip'}, ${trip.pickup_label || 'Pickup'} to ${trip.dropoff_label || 'Drop-off'}, ${trip.status === 'canceled' ? 'No payout' : shownCents(tripEarnedCents(trip), earningsPrivate)}`}
+                accessibilityHint="Opens trip details and breakdown"
+              >
                 <Card>
                   <Text style={{ color: colors.title, fontWeight: '800' }}>{trip.status === 'canceled' ? 'Canceled' : 'Clemson RIDES'}</Text>
                   <Text style={{ color: colors.ink }}>{trip.pickup_label || 'Pickup'}</Text>

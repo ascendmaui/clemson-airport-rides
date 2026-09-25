@@ -130,6 +130,31 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
 - **Verified:** `node --experimental-strip-types --test packages/rides-native/driverGateView.test.js` (10/10 passing) and `npm run typecheck` (passing).
 
 
+## 2026-09-25 — Fix core driver flow accessibility offenders [t2]
+
+- **Track / machine:** Clemson RIDES DRIVER · deputy/driver-a11y · pkg-driver-a11y t2
+- **What was wrong:** Core driver flow screens (sign-in/account, onboarding, home online toggle & controls, queue, live trip navigation, earnings) contained 42 touchable elements missing accessibilityRole, accessibilityLabel, accessibilityHint, accessibilityState (for disabled, checked, selected), adequate hit target sizes (<44pt), or dynamic announcements for status changes (online/offline, incoming ride offers).
+- **What changed:**
+  - Added accessibilityRole, accessibilityLabel, accessibilityHint, accessibilityState, and 44pt hitSlop across core driver flow components and screens (`apps/driver/components/chrome.tsx`, `apps/driver/components/shell.tsx`, `apps/driver/components/SignaturePad.tsx`, `apps/driver/app/(tabs)/index.tsx`, `apps/driver/app/onboarding.tsx`, `apps/driver/app/queue.tsx`, `apps/driver/app/trip.tsx`, `apps/driver/app/(tabs)/earnings.tsx`, `apps/driver/app/earnings-activity.tsx`, `apps/driver/app/earnings-details.tsx`, `apps/driver/app/account.tsx`, `packages/rides-native/AuthScreens.jsx`).
+  - Added accessibility announcements for new offer arrival and online/offline status toggling (`AccessibilityInfo.announceForAccessibility`) and polite live regions on home status indicators (`accessibilityLiveRegion="polite"`).
+  - Preserved home offer card (`RideCard` decline button) untouched as owned by `pkg-driver-offer-card-polish`.
+  - Shrunk the driver a11y static scanner allowlist in `tests/a11yDriver.test.js` from 51 down to 9 remaining offenders.
+- **Files touched:**
+  - `apps/driver/components/chrome.tsx`
+  - `apps/driver/components/shell.tsx`
+  - `apps/driver/components/SignaturePad.tsx`
+  - `apps/driver/app/(tabs)/index.tsx`
+  - `apps/driver/app/onboarding.tsx`
+  - `apps/driver/app/queue.tsx`
+  - `apps/driver/app/trip.tsx`
+  - `apps/driver/app/(tabs)/earnings.tsx`
+  - `apps/driver/app/earnings-activity.tsx`
+  - `apps/driver/app/earnings-details.tsx`
+  - `apps/driver/app/account.tsx`
+  - `packages/rides-native/AuthScreens.jsx`
+  - `tests/a11yDriver.test.js`
+  - `docs/FIXES.md`
+
 ## 2026-09-25 — Add driver a11y static scan test [t1]
 
 - **Track / machine:** Clemson RIDES DRIVER · deputy/driver-a11y · pkg-driver-a11y t1

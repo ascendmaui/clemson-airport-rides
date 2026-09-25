@@ -1,6 +1,8 @@
 import { useRouter } from 'expo-router'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Animated, Linking, Modal, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { AccessibilityInfo, Animated, Linking, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { CampusMap, type MapPin } from '@/components/CampusMap'
 import { FarePanel } from '@/components/FarePanel'
@@ -210,6 +212,7 @@ export default function DriverHome() {
     const next = fresh[0]
     if (!next) return
     pulse('request')
+    AccessibilityInfo.announceForAccessibility(`New ride offer: ${formatCents(next.driverNetCents)}, pickup at ${next.pickupLabel}`)
     notifyNewRequest(next).catch(() => {})
   }, [desk?.offers, pulse])
 
@@ -259,6 +262,7 @@ export default function DriverHome() {
       await setDriverOnline(supabase, user.id, nextOnline)
       if (nextOnline) await publishDriverCapacity(supabase, user.id, desk?.vehicle?.seats)
       pulse('online')
+      AccessibilityInfo.announceForAccessibility(nextOnline ? 'You are now online' : 'You are now offline')
       await refresh()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not update online status')
@@ -374,6 +378,9 @@ export default function DriverHome() {
             style={[styles.pill, shadow, { backgroundColor: colors.card }]}
             accessibilityRole="button"
             accessibilityLabel="Earnings"
+            accessibilityHint="Expands today's and this week's earnings preview"
+            accessibilityState={{ expanded: peek }}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
             <Text style={[styles.pillText, { color: colors.title }]}>{shownCents(todayCents, earningsPrivate)}</Text>
             <Text style={{ color: colors.inkSecondary, fontWeight: '800' }}>{peek ? '▴' : '▾'}</Text>
@@ -384,10 +391,22 @@ export default function DriverHome() {
         {peek ? (
           <View style={[styles.peek, shadow, { backgroundColor: colors.card }]}>
             <View style={styles.peekHead}>
-              <Pressable onPress={() => setEarningsPrivate(!earningsPrivate)} accessibilityLabel="Hide earnings">
+              <Pressable
+                onPress={() => setEarningsPrivate(!earningsPrivate)}
+                accessibilityRole="button"
+                accessibilityLabel={earningsPrivate ? 'Show earnings' : 'Hide earnings'}
+                accessibilityHint="Toggles visibility of earnings amounts"
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              >
                 <Text style={{ color: colors.title, fontWeight: '800' }}>{earningsPrivate ? 'Show' : 'Hide'}</Text>
               </Pressable>
-              <Pressable onPress={() => router.push('/learning')} accessibilityLabel="Help">
+              <Pressable
+                onPress={() => router.push('/learning')}
+                accessibilityRole="button"
+                accessibilityLabel="Help"
+                accessibilityHint="Opens driver learning center"
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              >
                 <Text style={{ color: colors.orange, fontWeight: '800' }}>Help</Text>
               </Pressable>
             </View>
@@ -401,7 +420,15 @@ export default function DriverHome() {
             <Primary label="See earnings activity" onPress={() => router.push('/earnings-activity')} tone="purple" />
             <View style={styles.dots}>
               {[0, 1].map((page) => (
-                <Pressable key={page} onPress={() => setPeekPage(page)} style={[styles.dot, { backgroundColor: page === peekPage ? colors.orange : colors.track }]} />
+                <Pressable
+                  key={page}
+                  onPress={() => setPeekPage(page)}
+                  accessibilityRole="button"
+                  accessibilityLabel={page === 0 ? "Today's earnings" : "This week's earnings"}
+                  accessibilityState={{ selected: page === peekPage }}
+                  hitSlop={{ top: 16, bottom: 16, left: 16, right: 16 }}
+                  style={[styles.dot, { backgroundColor: page === peekPage ? colors.orange : colors.track }]}
+                />
               ))}
             </View>
           </View>
@@ -413,8 +440,10 @@ export default function DriverHome() {
             <Pressable
               onPress={() => setShowHeat((value) => !value)}
               style={[styles.heatToggle, { backgroundColor: showHeat ? colors.orange : colors.card }]}
-              accessibilityRole="button"
+              accessibilityRole="switch"
               accessibilityLabel={showHeat ? 'Hide busy areas' : 'Show busy areas'}
+              accessibilityState={{ checked: showHeat }}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             >
               <Text style={{ color: showHeat ? '#fff' : colors.title, fontWeight: '800', fontSize: 12 }}>
                 {showHeat ? 'On' : 'Off'}
@@ -429,6 +458,10 @@ export default function DriverHome() {
                   <Pressable
                     key={item.id}
                     onPress={() => setHeatWindow(item.id)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${item.label} demand`}
+                    accessibilityState={{ selected: on }}
+                    hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
                     style={[styles.heatChip, { backgroundColor: on ? colors.orange : colors.card }]}
                   >
                     <Text style={{ color: on ? '#fff' : colors.title, fontWeight: '800', fontSize: 12 }}>{item.label}</Text>
@@ -492,7 +525,13 @@ export default function DriverHome() {
             </ScrollView>
           ) : null}
           {desk?.active ? (
-            <Pressable onPress={() => router.push({ pathname: '/trip', params: { id: desk.active!.id } })} style={[styles.live, { backgroundColor: colors.fill }]}>
+            <Pressable
+              onPress={() => router.push({ pathname: '/trip', params: { id: desk.active!.id } })}
+              accessibilityRole="button"
+              accessibilityLabel={`Active trip: ${statusHeadline(desk.active.status)}, pickup ${desk.active.pickupLabel}, drop-off ${desk.active.dropoffLabel}`}
+              accessibilityHint="Opens active trip navigation"
+              style={[styles.live, { backgroundColor: colors.fill }]}
+            >
               <Text style={[styles.liveKicker, { color: colors.orange }]}>LIVE TRIP</Text>
               <Text style={[styles.liveTitle, { color: colors.onAccent }]}>{statusHeadline(desk.active.status)}</Text>
               <Text style={{ color: colors.onAccent }}>{desk.active.pickupLabel} → {desk.active.dropoffLabel}</Text>
@@ -526,16 +565,27 @@ export default function DriverHome() {
               <CircleButton icon="locate" label="Recenter map" onPress={() => setFocusToken((value) => value + 1)} />
             </View>
           </View>
-          <View style={[styles.bar, shadow, { backgroundColor: colors.card }]}>
+          <View style={[styles.bar, shadow, { backgroundColor: colors.card }]} accessibilityLiveRegion="polite">
             <CircleButton icon="options" label="Ride queue" onPress={() => router.push('/queue')} />
-            <Text style={[styles.barText, { color: colors.title }]}>{statusLine}</Text>
+            <Text style={[styles.barText, { color: colors.title }]} accessibilityLiveRegion="polite">{statusLine}</Text>
             <CircleButton icon="list" label="Open queue" onPress={() => router.push('/queue')} />
           </View>
         </View>
       </View>
       <Modal visible={safetyOpen} transparent animationType="slide" onRequestClose={() => setSafetyOpen(false)}>
-        <Pressable style={styles.modalScrim} onPress={() => setSafetyOpen(false)}>
-          <Pressable style={[styles.modalCard, { backgroundColor: colors.card }]} onPress={() => {}}>
+        <Pressable
+          style={styles.modalScrim}
+          onPress={() => setSafetyOpen(false)}
+          accessibilityRole="button"
+          accessibilityLabel="Close safety modal"
+          accessibilityHint="Dismisses the safety information"
+        >
+          <Pressable
+            style={[styles.modalCard, { backgroundColor: colors.card }]}
+            onPress={(e) => e.stopPropagation()}
+            accessibilityRole="none"
+            accessibilityLabel="Safety options"
+          >
             <Text style={[styles.cardTitle, { color: colors.title }]}>Safety</Text>
             <Text style={{ color: colors.inkSecondary }}>
               Clemson University Police are {CUPD_PHONE_DISPLAY}. If you are in danger, call 911.

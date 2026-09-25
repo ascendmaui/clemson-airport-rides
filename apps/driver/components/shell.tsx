@@ -24,6 +24,7 @@ export function CircleButton({
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={label}
+      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
       style={[styles.circle, shadow, { backgroundColor: colors.card }]}
     >
       <Ionicons name={icon} size={22} color={colors.title} />
@@ -59,6 +60,10 @@ export function GoButton({
       accessibilityHint={disabled && disabledReason ? disabledReason : undefined}
       accessibilityState={{ disabled: isDisabled }}
       style={{ opacity: isDisabled ? 0.45 : 1 }}
+      accessibilityLabel={online ? 'Go offline' : 'Go online'}
+      accessibilityState={{ disabled: busy }}
+      accessibilityHint={online ? 'Takes you offline' : 'Goes online to receive ride requests'}
+      style={{ opacity: busy ? 0.7 : 1 }}
     >
       <LinearGradient
         colors={disabled ? [colors.card, colors.track] : [colors.goStart, colors.orange]}
@@ -90,6 +95,7 @@ export function Toggle({
       accessibilityRole="switch"
       accessibilityLabel={label}
       accessibilityState={{ checked: on }}
+      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
       style={[styles.switch, { backgroundColor: on ? colors.fill : colors.track }]}
     >
       <View style={[styles.knob, { backgroundColor: colors.onAccent, marginLeft: on ? 22 : 0 }]} />
@@ -115,6 +121,10 @@ export function Segmented<T extends string>({
           <Pressable
             key={option.id}
             onPress={() => onChange(option.id)}
+            accessibilityRole="button"
+            accessibilityLabel={option.label}
+            accessibilityState={{ selected: active }}
+            hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
             style={[styles.segment, active && { backgroundColor: colors.segmentOn }]}
           >
             <Text style={{ color: active ? colors.segmentTextOn : colors.segmentText, fontWeight: '800' }}>
@@ -145,6 +155,7 @@ export function ListRow({
     <Pressable
       onPress={onPress}
       accessibilityRole="button"
+      accessibilityLabel={subtitle ? `${title}, ${subtitle}` : title}
       style={({ pressed }) => [
         styles.row,
         {

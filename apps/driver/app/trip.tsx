@@ -217,12 +217,22 @@ export default function TripScreen() {
                   key={provider}
                   onPress={() => openNavigation(provider, target).catch((err) => setError(err instanceof Error ? err.message : 'Could not open maps'))}
                   style={styles.nav}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Open directions in ${provider === 'apple' ? 'Apple Maps' : 'Google Maps'}`}
+                  accessibilityHint={`Opens navigation to ${headingToDropoff ? 'drop-off' : 'pickup'}`}
+                  hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
                 >
                   <Text style={styles.navText}>{provider === 'apple' ? 'Apple Maps' : 'Google Maps'}</Text>
                 </Pressable>
               ))}
             </View>
-            <Pressable onPress={() => router.push({ pathname: '/trip-details', params: { id: trip.id } })}>
+            <Pressable
+              onPress={() => router.push({ pathname: '/trip-details', params: { id: trip.id } })}
+              accessibilityRole="button"
+              accessibilityLabel="Trip details"
+              accessibilityHint="Navigates to detailed trip breakdown and receipt"
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
               <Text style={styles.settle}>Trip details</Text>
             </Pressable>
             <Text style={styles.copy}>Directions to {headingToDropoff ? 'drop-off' : 'pickup'} · {target.label}</Text>

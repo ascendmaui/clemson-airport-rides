@@ -126,7 +126,14 @@ export default function EarningsHub() {
                       ? 'This balance pays out when a Stripe transfer is due.'
                       : 'Nothing is waiting to pay out. Completed trips land here after Stripe records them.'}
                 </Text>
-                <Pressable onPress={() => router.push('/payouts')} style={[styles.cash, { backgroundColor: colors.track }]} accessibilityRole="button">
+                <Pressable
+                  onPress={() => router.push('/payouts')}
+                  style={[styles.cash, { backgroundColor: colors.track }]}
+                  accessibilityRole="button"
+                  accessibilityLabel="Cash out and more"
+                  accessibilityHint="Navigates to payouts and cash out options"
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
                   <Text style={{ color: colors.title, fontWeight: '800' }}>Cash out and more</Text>
                 </Pressable>
               </Card>
@@ -179,7 +186,14 @@ function WeekHero({
       <Text style={styles.heroKicker}>THIS WEEK</Text>
       <Text style={styles.heroAmount}>{amount}</Text>
       <Text style={styles.heroLabel}>{label}</Text>
-      <Pressable onPress={onDetails} style={styles.heroBtn} accessibilityRole="button" accessibilityLabel="See earnings details">
+      <Pressable
+        onPress={onDetails}
+        style={styles.heroBtn}
+        accessibilityRole="button"
+        accessibilityLabel="See earnings details"
+        accessibilityHint="Navigates to detailed earnings by day, week, month, and year"
+        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+      >
         <Text style={styles.heroBtnText}>See details</Text>
       </Pressable>
     </LinearGradient>

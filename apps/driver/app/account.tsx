@@ -47,7 +47,14 @@ export default function AccountScreen() {
 
   return (
     <View style={[styles.screen, { paddingTop: insets.top + 12 }]}>
-      <Pressable onPress={() => router.back()} style={styles.back}>
+      <Pressable
+        onPress={() => router.back()}
+        style={styles.back}
+        accessibilityRole="button"
+        accessibilityLabel="Back"
+        accessibilityHint="Navigates to previous screen"
+        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+      >
         <Text style={styles.backText}>←</Text>
       </Pressable>
       <Text style={styles.title}>{name || 'Guest'}</Text>
@@ -59,26 +66,63 @@ export default function AccountScreen() {
       {error ? <Text style={styles.error}>{error}</Text> : null}
       {user ? (
         <>
-          <Pressable onPress={() => router.push('/onboarding')} style={styles.linkRow}>
+          <Pressable
+            onPress={() => router.push('/onboarding')}
+            style={styles.linkRow}
+            accessibilityRole="button"
+            accessibilityLabel="Driver application"
+            accessibilityHint="Navigates to driver application and onboarding flow"
+          >
             <Text style={styles.linkText}>Driver application</Text>
           </Pressable>
-          <Pressable onPress={() => router.push('/queue')} style={styles.linkRow}>
+          <Pressable
+            onPress={() => router.push('/queue')}
+            style={styles.linkRow}
+            accessibilityRole="button"
+            accessibilityLabel="Ride queue"
+            accessibilityHint="Navigates to driver ride queue"
+          >
             <Text style={styles.linkText}>Ride queue</Text>
           </Pressable>
-          <Pressable onPress={() => router.push('/earnings')} style={styles.linkRow}>
+          <Pressable
+            onPress={() => router.push('/earnings')}
+            style={styles.linkRow}
+            accessibilityRole="button"
+            accessibilityLabel="Earnings and deposits"
+            accessibilityHint="Navigates to earnings and deposit breakdown"
+          >
             <Text style={styles.linkText}>Earnings and deposits</Text>
           </Pressable>
-          <Pressable onPress={() => router.push('/fleet')} style={styles.linkRow}>
+          <Pressable
+            onPress={() => router.push('/fleet')}
+            style={styles.linkRow}
+            accessibilityRole="button"
+            accessibilityLabel="Tesla Model 3 fleet"
+            accessibilityHint="Navigates to Tesla Model 3 fleet options"
+          >
             <Text style={styles.linkText}>Tesla Model 3 fleet</Text>
           </Pressable>
         </>
       ) : null}
       {user ? (
-        <Pressable onPress={onSignOut} disabled={busy} style={styles.primary}>
+        <Pressable
+          onPress={onSignOut}
+          disabled={busy}
+          style={styles.primary}
+          accessibilityRole="button"
+          accessibilityLabel="Sign out"
+          accessibilityState={{ disabled: busy }}
+        >
           <Text style={styles.primaryText}>{busy ? 'Signing out…' : 'Sign out'}</Text>
         </Pressable>
       ) : (
-        <Pressable onPress={() => router.push('/sign-in')} style={styles.primary}>
+        <Pressable
+          onPress={() => router.push('/sign-in')}
+          style={styles.primary}
+          accessibilityRole="button"
+          accessibilityLabel="Sign in"
+          accessibilityHint="Navigates to sign in screen"
+        >
           <Text style={styles.primaryText}>Sign in</Text>
         </Pressable>
       )}
