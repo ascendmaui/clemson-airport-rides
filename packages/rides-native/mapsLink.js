@@ -4,8 +4,16 @@
  */
 
 function coord(value) {
-  const n = Number(value)
-  return Number.isFinite(n) ? n : null
+  // Number(null), Number(''), and Number(false) are 0. A missing coordinate
+  // must stay missing so directions do not open at (0, 0).
+  if (typeof value === 'number') return Number.isFinite(value) ? value : null
+  if (typeof value === 'string') {
+    const trimmed = value.trim()
+    if (trimmed === '') return null
+    const n = Number(trimmed)
+    return Number.isFinite(n) ? n : null
+  }
+  return null
 }
 
 export function navigationLinks({ latitude, longitude, label } = {}) {

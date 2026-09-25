@@ -98,30 +98,40 @@ test('non-finite coordinates fall back to label-only query', () => {
   assert.equal(navigationLinks({ latitude: 34.6788, longitude: 'invalid_lng', label: 'Spot' }).hasPoint, false)
 })
 
+test('null, blank, and boolean coordinates are missing, not (0, 0)', () => {
+  const nullCoords = navigationLinks({ latitude: null, longitude: null, label: 'Null Island' })
+  assert.equal(nullCoords.hasPoint, false)
+  assert.equal(nullCoords.apple, 'http://maps.apple.com/?q=Null%20Island')
+  assert.equal(nullCoords.google, 'https://www.google.com/maps/dir/?api=1&destination=Null%20Island&travelmode=driving')
+
+  const oneNull = navigationLinks({ latitude: 34.6788, longitude: null, label: 'Tillman Hall' })
+  assert.equal(oneNull.hasPoint, false)
+  assert.equal(oneNull.apple, 'http://maps.apple.com/?q=Tillman%20Hall')
+
+  const emptyStrCoords = navigationLinks({ latitude: '', longitude: '', label: 'Empty Strings' })
+  assert.equal(emptyStrCoords.hasPoint, false)
+  assert.equal(emptyStrCoords.apple, 'http://maps.apple.com/?q=Empty%20Strings')
+
+  const blankCoords = navigationLinks({ latitude: '   ', longitude: '\t', label: 'Blank Coords' })
+  assert.equal(blankCoords.hasPoint, false)
+  assert.equal(blankCoords.apple, 'http://maps.apple.com/?q=Blank%20Coords')
+
+  const boolCoords = navigationLinks({ latitude: false, longitude: false, label: 'Booleans' })
+  assert.equal(boolCoords.hasPoint, false)
+  assert.equal(boolCoords.apple, 'http://maps.apple.com/?q=Booleans')
+
+  const zeroString = navigationLinks({ latitude: '0', longitude: '0', label: 'Origin' })
+  assert.equal(zeroString.hasPoint, true)
+  assert.match(zeroString.apple, /daddr=0,0/)
+  assert.match(zeroString.google, /destination=0,0/)
+})
+
 test('documented quirks and potential bugs in current implementation', () => {
   // BUG?: navigationLinks(null) throws TypeError because default parameter only covers undefined
   assert.throws(
     () => navigationLinks(null),
     TypeError,
   )
-
-  // BUG?: coord(null) returns 0 instead of null because Number(null) === 0, so null coordinates produce hasPoint: true at (0, 0)
-  const nullCoords = navigationLinks({ latitude: null, longitude: null, label: 'Null Island' })
-  assert.equal(nullCoords.hasPoint, true)
-  assert.match(nullCoords.apple, /daddr=0,0/)
-  assert.match(nullCoords.google, /destination=0,0/)
-
-  // BUG?: coord('') returns 0 instead of null because Number('') === 0
-  const emptyStrCoords = navigationLinks({ latitude: '', longitude: '', label: 'Empty Strings' })
-  assert.equal(emptyStrCoords.hasPoint, true)
-  assert.match(emptyStrCoords.apple, /daddr=0,0/)
-  assert.match(emptyStrCoords.google, /destination=0,0/)
-
-  // BUG?: coord(false) returns 0 instead of null because Number(false) === 0
-  const boolCoords = navigationLinks({ latitude: false, longitude: false, label: 'Booleans' })
-  assert.equal(boolCoords.hasPoint, true)
-  assert.match(boolCoords.apple, /daddr=0,0/)
-  assert.match(boolCoords.google, /destination=0,0/)
 
   // BUG?: coord does not validate geographic latitude (-90..90) or longitude (-180..180) bounds
   const outOfBounds = navigationLinks({ latitude: 999, longitude: 999, label: 'Out of bounds' })

@@ -1200,6 +1200,12 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
 - **What changed:** Extended the unit tests only. `safety.js` was not modified.
 - **Files touched:** `packages/rides-native/safety.test.js`, `docs/FIXES.md`
 
+## 2026-09-24 — mapsLink treated missing coordinates as (0, 0)
+
+- **Problem:** `coord()` in `packages/rides-native/mapsLink.js` used `Number(value)`. `Number(null)`, `Number('')`, `Number('   ')`, and `Number(false)` are all `0`, so a stop with missing coordinates (`latitude` / `longitude` are `number | null` on the driver maps opener) opened Apple and Google directions at Null Island instead of a label search.
+- **Fix:** `coord()` accepts only finite numbers and numeric strings. Null, blank, boolean, and other non-numeric values stay missing, and `navigationLinks` falls back to the label. A real `0` or `"0"` is still a point.
+- **Files:** `packages/rides-native/mapsLink.js`, `packages/rides-native/mapsLink.test.js`
+
 ## 2026-09-24 — Remove Clerk: Apple + Google social sign-in directly on Supabase Auth
 
 - **Track / machine:** Clemson RIDES · worktree feat/supabase-auth-remove-clerk
