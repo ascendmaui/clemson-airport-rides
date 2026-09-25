@@ -10,9 +10,14 @@ export type RiderTrip = {
   dropoff_label: string | null
   rider_id?: string | null
   driver_id?: string | null
+  created_at?: string | null
+  deposit_cents?: number | null
+  fare_cents?: number | null
+  rider_note?: string | null
+  metadata?: Record<string, unknown> | null
 }
 
-const TRIP_COLUMNS = 'id, status, pickup_label, dropoff_label, rider_id, driver_id'
+const TRIP_COLUMNS = 'id, status, pickup_label, dropoff_label, rider_id, driver_id, created_at, deposit_cents, fare_cents, rider_note, metadata'
 
 export function useTripById(tripId: string | null) {
   const [trip, setTrip] = useState<RiderTrip | null>(null)

@@ -4,6 +4,7 @@ import { reconcileCheckout } from 'rides-native/riderMoney.js'
 import { Pressable, RefreshControl, ScrollView, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { PrimaryButton } from '@/components/Button'
+import { HoldExpiryNotice } from '@/components/HoldExpiryNotice'
 import { CampusMap } from '@/components/CampusMap'
 import type { MapPin } from '@/components/mapTypes'
 import { LiveShareCard } from '@/components/LiveShareCard'
@@ -16,6 +17,7 @@ import { loadLiveTrip, subscribeLiveTrip, type LiveTrip } from '@/lib/tripWatch'
 import { useTripById } from '@/lib/useRiderTrip'
 import { isActiveRideStatus, listEmergencyContacts, type EmergencyContact } from 'rides-native/safety.js'
 import { etaHoldLine, etaLineFor, orderedLiveStops, riderLiveView, SEARCH_PREVIEW_COPY, showSearchTheater, type LiveStopPin } from 'rides-native/liveTrip'
+import { holdAirportCode, isOpenUnpaidAirportHold, isUnpaidHoldTtlCancel } from 'rides-native/holdExpiryNotice.js'
 import { LivePhase } from 'rides-native/LivePhase'
 import { isApproachStatus } from '@/lib/approachAlert'
 import { ORANGE, PURPLE } from 'rides-native/places.js'
@@ -149,10 +151,22 @@ export default function Requested() {
       }
     : null)
   const namedDriver = driver !== 'Your driver'
+  const holdTrip = {
+    status: trip?.status ?? live?.status ?? null,
+    created_at: trip?.created_at ?? live?.created_at ?? null,
+    deposit_cents: trip?.deposit_cents ?? live?.deposit_cents ?? null,
+    fare_cents: trip?.fare_cents ?? live?.fare_cents ?? null,
+    rider_note: trip?.rider_note ?? live?.rider_note ?? null,
+    metadata: trip?.metadata ?? live?.metadata ?? null,
+  }
+  const ttlCanceled = Boolean(tripId) && isUnpaidHoldTtlCancel(holdTrip)
   const preferred = shown?.status === 'requested' || (!shown?.status && namedDriver) || (shown?.status === 'canceled' && namedDriver)
   const requestedAt = live?.requested_at ? new Date(live.requested_at).getTime() : null
   const waitingMs = requestedAt && Number.isFinite(requestedAt) ? Date.now() - requestedAt : 0
-  const phase = riderLiveView(shown?.status || null, { preferred, waitingMs })
+  const basePhase = riderLiveView(shown?.status || null, { preferred, waitingMs })
+  const phase = ttlCanceled
+    ? { ...basePhase, kicker: 'HOLD EXPIRED', title: 'Deposit hold expired', body: '', steps: [], stepIndex: -1 }
+    : basePhase
   const etaLine = etaHoldLine(
     shown?.status || null,
     etaLineFor(
@@ -200,7 +214,7 @@ export default function Requested() {
           <Text style={styles.backLabel}>←</Text>
         </Pressable>
         <View style={styles.headerCopy}>
-          <Text style={styles.kicker}>LIVE RIDE</Text>
+          <Text style={styles.kicker}>{ttlCanceled ? 'HOLD EXPIRED' : 'LIVE RIDE'}</Text>
           <Text style={styles.title}>{phase.title}</Text>
         </View>
         <SosButton onPress={() => setSosOpen(true)} />
@@ -218,6 +232,15 @@ export default function Requested() {
           />
         )}
       >
+        {tripId && (ttlCanceled || isOpenUnpaidAirportHold(holdTrip)) ? (
+          <HoldExpiryNotice
+            trip={holdTrip}
+            onRequestAgain={() => {
+              const code = holdAirportCode(holdTrip)
+              router.push(code ? { pathname: '/schedule', params: { airport: code } } : '/schedule')
+            }}
+          />
+        ) : null}
         <View style={styles.map}>
           {/* TODO: road-following tiles need a billed Maps key. Pins, status, and straight-line ETA use coordinates already on the trip. */}
           <CampusMap
@@ -239,15 +262,17 @@ export default function Requested() {
         ) : (
           <View style={styles.summary}>
             <CounterpartCard person={person} colors={partyColorsFromPalette(colors)} />
-            <LivePhase
-              kicker={phase.kicker}
-              title=""
-              body={phase.body}
-              eta={etaLine}
-              steps={phase.steps}
-              activeIndex={phase.stepIndex}
-              colors={colors}
-            />
+            {ttlCanceled ? null : (
+              <LivePhase
+                kicker={phase.kicker}
+                title=""
+                body={phase.body}
+                eta={etaLine}
+                steps={phase.steps}
+                activeIndex={phase.stepIndex}
+                colors={colors}
+              />
+            )}
             {approachLive ? (
               <Text style={styles.approach}>
                 An orange card tracks how close they are, in feet, from the location they already share.

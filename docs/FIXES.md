@@ -233,6 +233,13 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
   - `docs/FIXES.md`
 - **Verified:** `node --experimental-strip-types --test packages/rides-native/googleAuthConfig.test.js` (22/22 passing).
 
+## 2026-09-25 — Rider unpaid airport-hold countdown and expired state [t2]
+
+- **What was wrong:** An unpaid airport deposit can be canceled with reason `unpaid_hold_ttl` about 20 minutes after the hold starts. The rider app showed the 25% deposit and Checkout return with no remaining-time warning, and a TTL cancel looked like a generic canceled ride ("This trip is closed.").
+- **What changed:** The Schedule deposit screen and the live ride screen (`requested`) show the shared countdown (`Pay within N min to keep your ride`, then `Less than a minute left`). The sentence refreshes every 30 seconds and is exposed with `accessibilityLiveRegion="polite"` and `accessibilityLabel`. When the trip comes back `canceled` with `metadata.checkout_abandoned.reason === 'unpaid_hold_ttl'`, those screens show "This hold expired — request again" and a Request again action instead of the generic cancel copy. Request again opens Schedule (and scrolls to the airport deposit on that screen). The TTL value, cron, and expiry route were not changed.
+- **Files touched:** `packages/rides-native/holdExpiryNotice.js`, `packages/rides-native/holdExpiryNotice.d.ts`, `packages/rides-native/holdExpiry.test.js`, `apps/rider/components/HoldExpiryNotice.tsx`, `apps/rider/lib/holdTrip.ts`, `apps/rider/lib/tripWatch.ts`, `apps/rider/lib/useRiderTrip.ts`, `apps/rider/lib/scheduleApi.ts`, `apps/rider/app/requested.tsx`, `apps/rider/app/schedule.tsx`, `docs/FIXES.md`
+- **Verified:** `node --experimental-strip-types --test packages/rides-native/holdExpiry.test.js` (17/17). Rider screens were not opened in a simulator; `apps/rider/node_modules` is empty in this worktree.
+
 ## 2026-09-25 — Shared unpaid airport-hold TTL and rider countdown [t1]
 
 - **What was wrong:** `UNPAID_AIRPORT_HOLD_TTL_MS` lived only in `server/abandonedCheckout.js`. The rider client had no pure helper for the same 20-minute deadline, so an unpaid airport hold could be canceled (`unpaid_hold_ttl`) with no shared remaining-time label.

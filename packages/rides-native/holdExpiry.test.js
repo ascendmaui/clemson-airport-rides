@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import test from 'node:test'
 import { airportHoldAnchorMs, UNPAID_AIRPORT_HOLD_TTL_MS as serverTtl } from '../../server/abandonedCheckout.js'
 import { UNPAID_AIRPORT_HOLD_TTL_MS as sharedTtl } from '../../shared/airportHold.js'
@@ -9,6 +10,16 @@ import {
   holdDeadline,
   holdRemaining,
 } from './holdExpiry.js'
+import {
+  HOLD_COUNTDOWN_TICK_MS,
+  REQUEST_AGAIN_LABEL,
+  SURFACE_TTL_CANCEL_MS,
+  holdAirportCode,
+  holdExpiryPresentation,
+  isOpenUnpaidAirportHold,
+  isUnpaidHoldTtlCancel,
+  shouldSurfaceHold,
+} from './holdExpiryNotice.js'
 
 const START = '2026-09-25T12:00:00.000Z'
 const START_MS = Date.parse(START)
@@ -182,4 +193,95 @@ test('a missing or unreadable clock does not throw', () => {
   assert.equal(rem.expired, false)
   assert.ok(rem.msLeft > 0)
   assert.equal(holdRemaining(tripAt(created), null).expired, false)
+})
+
+function unpaidAirport(status, extra = {}) {
+  const { metadata, ...rest } = extra
+  return {
+    status,
+    created_at: START,
+    deposit_cents: 2500,
+    rider_note: null,
+    ...rest,
+    metadata: { kind: 'airport', airport: 'GSP', ...(metadata || {}) },
+  }
+}
+
+test('open unpaid airport holds count down; other trips stay hidden', () => {
+  assert.equal(HOLD_COUNTDOWN_TICK_MS, 30_000)
+  assert.equal(REQUEST_AGAIN_LABEL, 'Request again')
+  const trip = unpaidAirport('searching')
+  const now = START_MS + UNPAID_AIRPORT_HOLD_TTL_MS - 12 * 60 * 1000
+  const view = holdExpiryPresentation(trip, now)
+  assert.equal(isOpenUnpaidAirportHold(trip), true)
+  assert.equal(view.mode, 'countdown')
+  assert.equal(view.requestAgain, false)
+  assert.equal(view.label, 'Pay within 12 min to keep your ride')
+  assert.equal(holdAirportCode(trip), 'GSP')
+
+  const scheduled = unpaidAirport('scheduled', {
+    metadata: { kind: 'scheduled', airport: 'CLT', stripe_checkout_created_at: '2026-09-25T12:10:00.000Z' },
+  })
+  const later = holdExpiryPresentation(scheduled, Date.parse('2026-09-25T12:10:00.000Z') + UNPAID_AIRPORT_HOLD_TTL_MS - 10 * 60 * 1000)
+  assert.equal(later.label, 'Pay within 10 min to keep your ride')
+  assert.equal(holdAirportCode(scheduled), 'CLT')
+
+  assert.equal(holdExpiryPresentation(unpaidAirport('accepted'), now).mode, 'hidden')
+  assert.equal(holdExpiryPresentation({ status: 'searching', created_at: START, metadata: { purpose: 'campus' } }, now).mode, 'hidden')
+  const paid = unpaidAirport('searching', { metadata: { kind: 'airport', airport: 'GSP', checkout_deposit: { session_id: 'cs_1' } } })
+  assert.equal(isOpenUnpaidAirportHold(paid), false)
+  assert.equal(holdExpiryPresentation(paid, now).mode, 'hidden')
+  assert.equal(holdExpiryPresentation(unpaidAirport('searching', { created_at: undefined, metadata: { airport: 'GSP', kind: 'airport' } }), now).mode, 'hidden')
+})
+
+test('a clock that has run out asks the rider to request again', () => {
+  const trip = unpaidAirport('offered')
+  const view = holdExpiryPresentation(trip, START_MS + UNPAID_AIRPORT_HOLD_TTL_MS)
+  assert.equal(view.mode, 'expired')
+  assert.equal(view.requestAgain, true)
+  assert.equal(view.label, HOLD_EXPIRED_LABEL)
+  const kept = holdExpiryPresentation(trip, START_MS + UNPAID_AIRPORT_HOLD_TTL_MS - 1)
+  assert.equal(kept.mode, 'countdown')
+  assert.equal(kept.label, HOLD_LAST_MINUTE_LABEL)
+})
+
+test('unpaid_hold_ttl replaces a generic cancel with request again', () => {
+  const canceled = unpaidAirport('canceled', {
+    metadata: {
+      kind: 'airport',
+      airport: 'GSP',
+      checkout_abandoned: { reason: 'unpaid_hold_ttl', at: START },
+    },
+  })
+  assert.equal(isUnpaidHoldTtlCancel(canceled), true)
+  assert.equal(isOpenUnpaidAirportHold(canceled), false)
+  const view = holdExpiryPresentation(canceled, START_MS + 60_000)
+  assert.equal(view.mode, 'expired')
+  assert.equal(view.label, 'This hold expired — request again')
+  assert.equal(view.requestAgain, true)
+  assert.equal(shouldSurfaceHold(canceled, START_MS + 60_000), true)
+  assert.equal(shouldSurfaceHold(canceled, START_MS + SURFACE_TTL_CANCEL_MS), false)
+
+  const other = unpaidAirport('canceled', {
+    metadata: { kind: 'airport', airport: 'GSP', checkout_abandoned: { reason: 'unpaid_checkout', at: START } },
+  })
+  assert.equal(isUnpaidHoldTtlCancel(other), false)
+  assert.equal(holdExpiryPresentation(other, START_MS).mode, 'hidden')
+  assert.equal(shouldSurfaceHold(other, START_MS), false)
+  assert.deepEqual(holdExpiryPresentation(null, START_MS), { mode: 'hidden', label: '', requestAgain: false })
+})
+
+test('rider checkout screens announce the countdown and offer request again', () => {
+  const notice = readFileSync(new URL('../../apps/rider/components/HoldExpiryNotice.tsx', import.meta.url), 'utf8')
+  const requested = readFileSync(new URL('../../apps/rider/app/requested.tsx', import.meta.url), 'utf8')
+  const schedule = readFileSync(new URL('../../apps/rider/app/schedule.tsx', import.meta.url), 'utf8')
+  assert.match(notice, /accessibilityLiveRegion="polite"/)
+  assert.match(notice, /accessibilityLabel=\{view\.label\}/)
+  assert.match(notice, /setInterval\(\(\) => setNow\(Date\.now\(\)\), HOLD_COUNTDOWN_TICK_MS\)/)
+  assert.match(notice, /REQUEST_AGAIN_LABEL/)
+  assert.match(requested, /HoldExpiryNotice/)
+  assert.match(requested, /isUnpaidHoldTtlCancel/)
+  assert.match(schedule, /HoldExpiryNotice/)
+  assert.match(schedule, /isUnpaidHoldTtlCancel/)
+  assert.match(schedule, /HOLD_COUNTDOWN_TICK_MS/)
 })

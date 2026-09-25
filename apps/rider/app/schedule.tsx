@@ -1,12 +1,15 @@
-import { useFocusEffect, useRouter } from 'expo-router'
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Pressable, RefreshControl, ScrollView, Text, TextInput, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Pill, PrimaryButton } from '@/components/Button'
+import { HoldExpiryNotice } from '@/components/HoldExpiryNotice'
 import { MainTabs } from '@/components/MainTabs'
 import { SignInToBookSheet } from '@/components/SignInToBookSheet'
 import { Skeleton } from '@/components/Skeleton'
 import { setAuthNext } from '@/lib/authNext'
+import { loadRiderHoldTrip, loadSurfaceHold, type RiderHoldTrip } from '@/lib/holdTrip'
+import { oneParam } from '@/lib/oneParam'
 import { useAuth } from '@/lib/auth'
 import { successHaptic, tapHaptic } from '@/lib/feedback'
 import { openStripeCheckout } from '@/lib/openCheckout'
@@ -38,6 +41,12 @@ import {
   startAirportDeposit,
 } from 'rides-native/riderMoney.js'
 import { parseCheckoutSessionId } from 'rides-native/checkoutReturn.js'
+import {
+  HOLD_COUNTDOWN_TICK_MS,
+  holdAirportCode,
+  isOpenUnpaidAirportHold,
+  isUnpaidHoldTtlCancel,
+} from 'rides-native/holdExpiryNotice.js'
 import { localDateInput, localTimeInput, nextPickupDate, RIDE_PLACES } from 'rides-native/riderShell.js'
 import { formatCents, formatPickupAt, TESLA_FLEET_NOTICE } from 'rides-native/tripTags.js'
 import { dueScheduleReminders } from '../../../src/lib/scheduledRideModel.js'
@@ -118,6 +127,9 @@ function spotLabel(spot: WeekendSpot) {
 
 function ScheduleScreen() {
   const router = useRouter()
+  const params = useLocalSearchParams<{ trip?: string | string[]; airport?: string | string[] }>()
+  const linkedTripId = oneParam(params.trip, '')
+  const linkedAirport = oneParam(params.airport, '')
   const insets = useSafeAreaInsets()
   const { user } = useAuth()
   const studentOn = useStudentStatus().verified
@@ -150,6 +162,9 @@ function ScheduleScreen() {
   const [loadingList, setLoadingList] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
   const [clock, setClock] = useState(() => new Date())
+  const [checkoutTrip, setCheckoutTrip] = useState<RiderHoldTrip | null>(null)
+  const scrollRef = useRef<ScrollView>(null)
+  const depositSectionY = useRef(0)
   const reminders = useMemo(() => dueScheduleReminders(mine, clock), [mine, clock])
   const reminderByTrip = useMemo(() => {
     const byTrip = new Map(reminders.map((item) => [item.tripId, item]))
@@ -191,26 +206,96 @@ function ScheduleScreen() {
   const airportQuote = phase.status === 'ready' && phase.key === key ? phase.quote : null
   const quoting = phase.status === 'loading' || phase.key !== key
 
-  async function reload() {
+  async function reload(opts?: { quiet?: boolean }) {
     if (!user?.id) {
       setMine([])
       return
     }
-    setLoadingList(true)
+    if (!opts?.quiet) setLoadingList(true)
     try {
       setMine(await listScheduledTrips(user.id))
       setClock(new Date())
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not load scheduled rides')
+      if (!opts?.quiet) setError(err instanceof Error ? err.message : 'Could not load scheduled rides')
     } finally {
-      setLoadingList(false)
+      if (!opts?.quiet) setLoadingList(false)
     }
+  }
+
+  function requestAgain(trip?: object | null) {
+    const code = holdAirportCode(trip)
+    if (code) setAirport(code)
+    void tapHaptic()
+    scrollRef.current?.scrollTo({ y: Math.max(depositSectionY.current - 12, 0), animated: true })
   }
 
   useEffect(() => {
     const timer = setInterval(() => setClock(new Date()), 60_000)
     return () => clearInterval(timer)
   }, [])
+
+  useEffect(() => {
+    if (linkedAirport === 'GSP' || linkedAirport === 'CLT') setAirport(linkedAirport)
+  }, [linkedAirport])
+
+  useEffect(() => {
+    if (!linkedTripId) return undefined
+    let alive = true
+    loadRiderHoldTrip(linkedTripId)
+      .then((row) => {
+        if (alive && row) setCheckoutTrip(row)
+      })
+      .catch(() => {})
+    return () => {
+      alive = false
+    }
+  }, [linkedTripId])
+
+  useEffect(() => {
+    if (!user?.id) return undefined
+    let alive = true
+    loadSurfaceHold(user.id)
+      .then((row) => {
+        if (!alive || !row) return
+        setCheckoutTrip((current) => (current && current.id !== row.id ? current : row))
+      })
+      .catch(() => {})
+    return () => {
+      alive = false
+    }
+  }, [user?.id, focusTick])
+
+  const checkoutTripId = checkoutTrip?.id || ''
+  const riderId = user?.id || ''
+  const watchHold = isOpenUnpaidAirportHold(checkoutTrip) || mine.some((row) => isOpenUnpaidAirportHold(row))
+
+  useEffect(() => {
+    if (!riderId || !watchHold) return undefined
+    let alive = true
+    const timer = setInterval(() => {
+      void (async () => {
+        try {
+          const rows = await listScheduledTrips(riderId)
+          if (alive) setMine(rows)
+        } catch {
+          /* Leave the list in place. The countdown text still ticks. */
+        }
+        if (!checkoutTripId) return
+        try {
+          const row = await loadRiderHoldTrip(checkoutTripId)
+          if (!alive || !row) return
+          setCheckoutTrip(row)
+          if (isUnpaidHoldTtlCancel(row)) setBanner(null)
+        } catch {
+          /* Leave the checkout hold in place until the next tick. */
+        }
+      })()
+    }, HOLD_COUNTDOWN_TICK_MS)
+    return () => {
+      alive = false
+      clearInterval(timer)
+    }
+  }, [riderId, watchHold, checkoutTripId])
 
   useEffect(() => {
     void reload()
@@ -281,8 +366,19 @@ function ScheduleScreen() {
         setError(checkoutFailureCopy(session) || 'Checkout did not return a payment URL. No charge was made.')
         return
       }
+      let ignoreEarlyHold = false
+      if (tripId) {
+        void loadRiderHoldTrip(tripId)
+          .then((held) => {
+            if (!ignoreEarlyHold && held) setCheckoutTrip(held)
+          })
+          .catch(() => {
+            /* The countdown appears once the trip row can be read. */
+          })
+      }
       setBanner(`Opening Stripe for the ${formatCents(depositPaid)} deposit. Remaining balance ${formatCents(remaining)} is collected when the trip is complete.`)
       const browserResult = await openStripeCheckout(url)
+      ignoreEarlyHold = true
       if (!tripId || !supabase) {
         setBanner('Checkout closed. Deposit received only after Stripe records the payment.')
         return
@@ -311,7 +407,21 @@ function ScheduleScreen() {
         }
       }
       const outcome = (settled.settled || reconciledPaid) ? 'paid' : checkoutCloseOutcome(close)
+      let held: RiderHoldTrip | null = null
+      try {
+        held = await loadRiderHoldTrip(tripId)
+      } catch {
+        held = null
+      }
+      if (outcome !== 'paid' && isUnpaidHoldTtlCancel(held)) {
+        setCheckoutTrip(held)
+        setBanner(null)
+        setError(null)
+        await reload({ quiet: true })
+        return
+      }
       if (outcome === 'paid') {
+        setCheckoutTrip(null)
         setBanner(`Deposit received · ${formatCents(depositPaid)}. Remaining balance ${formatCents(remaining)} is collected when the trip is complete.`)
         await successHaptic()
         if (!date) {
@@ -322,10 +432,16 @@ function ScheduleScreen() {
           return
         }
       } else if (outcome === 'released') {
+        setCheckoutTrip(null)
         setBanner('Checkout closed. Nothing was charged. That unpaid ride is no longer searching for a driver.')
       } else if (settled.error) {
+        if (held && isOpenUnpaidAirportHold(held)) setCheckoutTrip(held)
         setBanner(`Checkout closed. Could not confirm the deposit yet (${settled.error}). Nothing is marked paid.`)
+      } else if (held && isOpenUnpaidAirportHold(held)) {
+        setCheckoutTrip(held)
+        setBanner('Checkout closed. Nothing was charged unless Stripe already confirmed it.')
       } else {
+        if (held) setCheckoutTrip(null)
         setBanner('Checkout closed. Nothing was charged unless Stripe already confirmed it.')
       }
       await reload()
@@ -426,6 +542,7 @@ function ScheduleScreen() {
   return (
     <View style={[styles.screen, { paddingTop: insets.top + 12 }]}>
       <ScrollView
+        ref={scrollRef}
         contentContainerStyle={styles.body}
         keyboardShouldPersistTaps="handled"
         refreshControl={(
@@ -555,7 +672,12 @@ function ScheduleScreen() {
         {error ? <Text style={styles.error}>{error}</Text> : null}
         {banner ? <Text style={styles.banner}>{banner}</Text> : null}
 
-        <Text style={styles.section}>Airport deposit</Text>
+        <Text
+          style={styles.section}
+          onLayout={(event) => { depositSectionY.current = event.nativeEvent.layout.y }}
+        >
+          Airport deposit
+        </Text>
         <Text style={styles.copy}>
           Hold GSP or CLT with a 25% deposit. The amount updates when the airport, time, surge, or student discount changes. Leave the date empty to request a driver now.
         </Text>
@@ -622,6 +744,13 @@ function ScheduleScreen() {
             {airportQuote?.routeSource === 'fallback' ? ' Fare card estimate until the quote route answers.' : ''}
           </Text>
         </View>
+
+        {checkoutTrip ? (
+          <HoldExpiryNotice trip={checkoutTrip} onRequestAgain={() => requestAgain(checkoutTrip)} />
+        ) : null}
+        {mine.filter((row) => isUnpaidHoldTtlCancel(row) && row.id !== checkoutTrip?.id).map((row) => (
+          <HoldExpiryNotice key={row.id} trip={row} onRequestAgain={() => requestAgain(row)} />
+        ))}
 
         {phase.status === 'error' && phase.key === key ? (
           <Text style={styles.error}>{phase.message}</Text>
@@ -720,6 +849,9 @@ function ScheduleScreen() {
                   'upcoming',
                 )}
               </Text>
+            ) : null}
+            {row.id !== checkoutTrip?.id && isOpenUnpaidAirportHold(row) ? (
+              <HoldExpiryNotice trip={row} onRequestAgain={() => requestAgain(row)} />
             ) : null}
             {row.status === 'scheduled' || row.status === 'accepted' ? (
               <Pressable

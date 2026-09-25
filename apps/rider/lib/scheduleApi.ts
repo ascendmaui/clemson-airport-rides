@@ -35,7 +35,18 @@ export type ScheduledRow = {
   scheduled_for: string | null
   rider_note: string | null
   tier: string | null
-  metadata: { purpose?: string; recurrence?: { weekdays?: string[] }; fare_is_estimate?: boolean } | null
+  created_at: string | null
+  metadata: {
+    purpose?: string
+    kind?: string
+    airport?: string
+    fare_paid_cents?: number
+    stripe_checkout_created_at?: string | null
+    checkout_deposit?: { session_id?: string | null } | null
+    checkout_abandoned?: { reason?: string | null } | null
+    recurrence?: { weekdays?: string[] }
+    fare_is_estimate?: boolean
+  } | null
 }
 
 function airportCode(label: string): 'GSP' | 'CLT' | null {
@@ -111,7 +122,7 @@ export async function listScheduledTrips(riderId: string) {
   if (!supabase) return []
   const { data, error } = await supabase
     .from('trips')
-    .select('id, status, pickup_label, dropoff_label, fare_cents, deposit_cents, pickup_at, scheduled_for, rider_note, tier, metadata')
+    .select('id, status, pickup_label, dropoff_label, fare_cents, deposit_cents, pickup_at, scheduled_for, rider_note, tier, created_at, metadata')
     .eq('rider_id', riderId)
     .not('pickup_at', 'is', null)
     .order('pickup_at', { ascending: true })
