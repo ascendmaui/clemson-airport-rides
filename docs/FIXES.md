@@ -2,6 +2,16 @@
 
 Persistent knowledge base for recurring failures. When a matching issue appears, apply the saved fix first.
 
+## 2026-09-24 — Wire accountDeletion tests into npm test
+
+- **Track / machine:** Clemson RIDES · worktree deputy-pkg-account-deletion-tests
+- **Problem:** `packages/rides-native/accountDeletion.test.js` existed but was not listed in the root `package.json` `test` script, so `npm test` never ran the account-deletion suite.
+- **Fix:** Appended `packages/rides-native/accountDeletion.test.js` as the last entry of the `test` script. No other `package.json` fields changed.
+- **Files touched:**
+  - `package.json`
+  - `docs/FIXES.md`
+- **Verified:** `npm test` (377/377 passing, including `packages/rides-native/accountDeletion.test.js`).
+
 ## 2026-09-24 — Export safe buildAccountDeletionTicket helper in accountDeletion.js
 
 - **Track / machine:** Clemson RIDES · worktree deputy-pkg-account-deletion-tests
