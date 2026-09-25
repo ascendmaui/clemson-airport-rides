@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import * as accountDeletion from './accountDeletion.js'
-import { ACCOUNT_DELETION_TICKET } from './accountDeletion.js'
+import { ACCOUNT_DELETION_TICKET, buildAccountDeletionTicket } from './accountDeletion.js'
 import { ACCOUNT_DELETION_TICKET as SHARED_ACCOUNT_DELETION_TICKET } from '../../shared/accountDeletion.js'
 import { validateTicket } from '../../server/supportAgent.js'
 import { supportTicketRequest } from './assistClient.js'
@@ -128,14 +128,80 @@ test('accountDeletion exports ACCOUNT_DELETION_TICKET identical to shared defini
   )
 })
 
-test('accountDeletion exports only ACCOUNT_DELETION_TICKET with no unexpected exports', () => {
-  const exportKeys = Object.keys(accountDeletion)
-  assert.deepEqual(exportKeys, ['ACCOUNT_DELETION_TICKET'])
+test('accountDeletion exports expected public API (ACCOUNT_DELETION_TICKET and buildAccountDeletionTicket)', () => {
+  const exportKeys = Object.keys(accountDeletion).sort()
+  assert.deepEqual(exportKeys, ['ACCOUNT_DELETION_TICKET', 'buildAccountDeletionTicket'].sort())
 
-  // BUG?: accountDeletion.js does not export any helper function (e.g. fileAccountDeletionRequest
-  // or buildAccountDeletionTicket), leaving callers to manually append account emails to body
   assert.equal(typeof accountDeletion.ACCOUNT_DELETION_TICKET, 'object')
+  assert.equal(typeof accountDeletion.buildAccountDeletionTicket, 'function')
 })
+
+test('buildAccountDeletionTicket creates valid ticket with default parameters', () => {
+  const ticket = buildAccountDeletionTicket()
+  assert.equal(ticket.confirmed, true)
+  assert.equal(ticket.category, 'account')
+  assert.equal(ticket.roleVariant, 'rider')
+  assert.equal(ticket.subject, 'Delete my Clemson RIDES account')
+  assert.equal(
+    ticket.body,
+    `${ACCOUNT_DELETION_TICKET.body} Account email: on file.`,
+  )
+
+  const validated = validateTicket(ticket)
+  assert.equal(validated.ok, true)
+  assert.equal(validated.ticket.roleVariant, 'rider')
+})
+
+test('buildAccountDeletionTicket formats body with provided email string', () => {
+  const ticket = buildAccountDeletionTicket({ email: 'student@clemson.edu' })
+  assert.equal(
+    ticket.body,
+    `${ACCOUNT_DELETION_TICKET.body} Account email: student@clemson.edu.`,
+  )
+
+  const validated = validateTicket(ticket)
+  assert.equal(validated.ok, true)
+  assert.equal(validated.ticket.body, ticket.body)
+})
+
+test('buildAccountDeletionTicket normalizes empty, whitespace, null, or undefined email to on file', () => {
+  for (const emptyVal of ['', '   ', null, undefined]) {
+    const ticket = buildAccountDeletionTicket({ email: emptyVal })
+    assert.equal(
+      ticket.body,
+      `${ACCOUNT_DELETION_TICKET.body} Account email: on file.`,
+    )
+    const validated = validateTicket(ticket)
+    assert.equal(validated.ok, true)
+  }
+})
+
+test('buildAccountDeletionTicket sets roleVariant to driver or rider safely', () => {
+  const driverTicket = buildAccountDeletionTicket({
+    email: 'driver@clemson.edu',
+    roleVariant: 'driver',
+    subject: 'Delete my Clemson RIDES driver account',
+  })
+  assert.equal(driverTicket.roleVariant, 'driver')
+  assert.equal(driverTicket.subject, 'Delete my Clemson RIDES driver account')
+  const driverValidated = validateTicket(driverTicket)
+  assert.equal(driverValidated.ok, true)
+  assert.equal(driverValidated.ticket.roleVariant, 'driver')
+
+  // Non-driver role variants normalize to rider
+  const otherTicket = buildAccountDeletionTicket({ roleVariant: 'other' })
+  assert.equal(otherTicket.roleVariant, 'rider')
+})
+
+test('buildAccountDeletionTicket returns frozen immutable object', () => {
+  const ticket = buildAccountDeletionTicket({ email: 'test@clemson.edu' })
+  assert.equal(Object.isFrozen(ticket), true)
+  assert.throws(() => {
+    // @ts-expect-error Mutation attempt in strict mode
+    ticket.confirmed = false
+  }, TypeError)
+})
+
 
 // ---------------------------------------------------------------------------
 // 2. Structure & Immutability of ACCOUNT_DELETION_TICKET
