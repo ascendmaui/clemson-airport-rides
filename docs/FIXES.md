@@ -280,6 +280,17 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
   - `package.json`
   - `docs/FIXES.md`
 
+## 2026-09-25 — wire deposit/refund tests; keep a $0 mid-ride remainder at $0
+
+- **Track / machine:** Clemson RIDES · deputy/deposit-refund-tests · pkg-deposit-refund-tests t3
+- **What was wrong:** `server/creditLots.test.js` and `server/depositRefund.test.js` were not on the root `npm test` script. `paymentRequiredMessage` used `toCollectCents || obligationCents`, so a real `toCollectCents` of 0 (deposit already covers the cancel) was treated as missing and the message quoted the full obligation.
+- **What changed:** Appended both test files to the `test` script. `paymentRequiredMessage` now uses `??`, so only `null` and `undefined` fall through to `obligationCents`. A positive remainder still renders the same dollar string. No fare, deposit, credit, or Stripe amount changed.
+- **Left in place (not a small safe money fix):**
+  - Airport checkout still ignores `Idempotency-Key`. The trip row is inserted before `stripe.checkout.sessions.create`, and that call gets no idempotency key. Passing the header through would not stop the second insert; the fake client would then reuse one session id on two trips. A real dedupe is a larger checkout change. Still flagged `// BUG?:` in `server/depositRefund.test.js`.
+  - `restoreLots` still adds the debit again on a second call and writes a second refund ledger row. A `load_cents` ceiling would also drop a later real restore of a lot that is already above its load (that state looks the same as a replay if you only have remaining, load, and the debit). Skipping when a refund row with the same note exists would skip `debitLots`'s second rollback on retry, because that path reuses `revert:${note}`. Still flagged `// BUG?:` in `server/creditLots.test.js`.
+- **Files touched:** `package.json`, `src/lib/midrideCancel.js`, `server/depositRefund.test.js`, `docs/FIXES.md`
+- **Verified:** `npm test` (835/835 passing, including `server/creditLots.test.js` and `server/depositRefund.test.js`).
+
 ## 2026-09-25 — 25% deposit + airport checkout handler tests (no prod edits)
 
 - **Track / machine:** Clemson RIDES · deputy/deposit-refund-tests · pkg-deposit-refund-tests t2

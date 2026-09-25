@@ -24,7 +24,8 @@ export function isPaymentRequired(quote) {
 
 export function paymentRequiredMessage(quote) {
   if (!isPaymentRequired(quote)) return null
-  const amount = formatMidrideMoney(quote.toCollectCents || quote.obligationCents)
+  // 0 means nothing is left to charge. `||` treated that as missing and quoted the full obligation.
+  const amount = formatMidrideMoney(quote.toCollectCents ?? quote.obligationCents)
   return `Payment required. The ride has ended, but ${amount} still needs a card.`
 }
 

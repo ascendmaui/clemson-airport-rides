@@ -620,10 +620,14 @@ describe('midrideCancel helpers', () => {
       paymentRequiredMessage({ paymentStatus: 'failed', obligationCents: 2500 }),
       'Payment required. The ride has ended, but $25.00 still needs a card.',
     )
-    // toCollectCents of 0 is falsy, so the message falls through to the obligation.
+    assert.equal(
+      paymentRequiredMessage({ paymentStatus: 'failed', toCollectCents: null, obligationCents: 2500 }),
+      'Payment required. The ride has ended, but $25.00 still needs a card.',
+    )
+    // 0 is a real remainder (the deposit covered it), not a missing amount.
     assert.equal(
       paymentRequiredMessage({ paymentStatus: 'requires_payment_method', toCollectCents: 0, obligationCents: 1500 }),
-      'Payment required. The ride has ended, but $15.00 still needs a card.',
+      'Payment required. The ride has ended, but $0.00 still needs a card.',
     )
   })
 
