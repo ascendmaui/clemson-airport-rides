@@ -449,6 +449,14 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
   - `docs/FIXES.md`
 - **Verified:** `node --experimental-strip-types --test api/stripeWebhookValidation.test.js` (29/29 passing).
 
+## 2026-09-25 — adminAccess and adminDesk handler tests
+
+- **Track / machine:** Clemson RIDES · deputy/admin-support-tests · pkg-admin-support-tests t1
+- **What was wrong:** `shared/adminAccess.js` and `server/endpoints/adminDesk.js` had no direct unit tests. The desk handler imports helpers that construct a real Supabase client and can send applicant email, so the route could not be exercised under `npm test`.
+- **What changed:** Added `shared/adminAccess.test.js` and `server/adminDesk.test.js`. The desk suite registers a `module.register` resolve hook that loads fakes from `tests/fixtures/admin-support/` for `friendRideLib.js`, `staffAccess.js`, and `applicantMail.js`. Notices are recorded and never sent. No production source change. Appended both test files to the root `test` script.
+- **Observed, not changed:** `tickets()` skips its reduced-column retry when a missing-column error contains "does not exist" or "schema cache", because that overlaps the missing-table check. Marked `// BUG?:` in `server/adminDesk.test.js`.
+- **Files touched:** `shared/adminAccess.test.js`, `server/adminDesk.test.js`, `tests/fixtures/admin-support/adminDeskHook.js`, `tests/fixtures/admin-support/adminDeskFriendRideLib.js`, `tests/fixtures/admin-support/adminDeskStaffAccess.js`, `tests/fixtures/admin-support/adminDeskApplicantMail.js`, `tests/fixtures/admin-support/adminDeskSb.js`, `package.json`, `docs/FIXES.md`
+
 ## 2026-09-25 — Expiry cron wired: CRON_SECRET + Supabase pg_cron/pg_net; prod redeployed at 111c607
 
 - **Track / machine:** Clemson RIDES · I9 (61b11c89) Vercel CLI + Supabase awktabuhijrshmsmagpq · approved by John 1:05 AM ET 9/25.
