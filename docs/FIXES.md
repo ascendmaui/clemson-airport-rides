@@ -2,6 +2,16 @@
 
 Persistent knowledge base for recurring failures. When a matching issue appears, apply the saved fix first.
 
+## 2026-09-24 — Wire driverOnboardingClient unit tests into package.json test script (task t3)
+
+- **Track / machine:** Clemson RIDES · worktree deputy-pkg-driver-onboarding-tests
+- **Problem:** `packages/rides-native/driverOnboardingClient.test.js` needed to be wired into the repository-wide test runner as the final test entry in `package.json` so full test runs and CI validate driver onboarding client workflows on every run.
+- **Fix:** Confirmed and verified `packages/rides-native/driverOnboardingClient.test.js` is appended as the last entry of the `"test"` script in `package.json`.
+- **Files touched:**
+  - `package.json`
+  - `docs/FIXES.md`
+- **Verified:** Full `npm test` passes all 372/372 tests (including 21/21 tests in `packages/rides-native/driverOnboardingClient.test.js`).
+
 ## 2026-09-24 — Guard agreementPlainText against null inputs (task t2)
 
 - **Track / machine:** Clemson RIDES · worktree deputy-pkg-driver-onboarding-tests
