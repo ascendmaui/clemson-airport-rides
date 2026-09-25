@@ -1,12 +1,13 @@
 /**
- * Driver Google sign-in through Supabase Auth (not Clerk).
+ * Google sign-in through Supabase Auth for rider and driver apps.
  * The Google client id and secret live in the Supabase dashboard.
  * The app only opens the provider URL and finishes the redirect.
  */
 import { mapAuthError } from './authErrors.js'
 import { parseSupabaseAuthUrl } from './authUrl.js'
 
-export const DRIVER_GOOGLE_PROVIDER = [{ id: 'google', label: 'Google' }]
+export const GOOGLE_PROVIDER = [{ id: 'google', label: 'Google' }]
+export const DRIVER_GOOGLE_PROVIDER = GOOGLE_PROVIDER
 
 export function googleOAuthRedirect(scheme = 'clemsonrides-driver', path = 'auth/callback') {
   const clean = String(scheme || 'clemsonrides-driver').replace(/:\/\//, '')

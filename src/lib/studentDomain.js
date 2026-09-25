@@ -21,7 +21,7 @@ export function isClemsonEmail(email) {
   return CLEMSON_STUDENT_DOMAINS.includes(domain)
 }
 
-/** 'confirmed' | 'unconfirmed' | 'unknown' from a Supabase or Clerk-bridged auth user. */
+/** 'confirmed' | 'unconfirmed' | 'unknown' from a Supabase auth user. */
 export function emailConfirmationState(user) {
   if (!user || typeof user !== 'object') return 'unknown'
   if (user.email_confirmed_at || user.confirmed_at) return 'confirmed'

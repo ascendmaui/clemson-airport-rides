@@ -78,7 +78,14 @@ Two native apps, version **1.1.0**. They do not replace TestFlight **1.0.0 (1)**
 | Rider | `apps/rider` | `com.ascendmaui.clemsonrides.rider` |
 | Driver | `apps/driver` | `com.ascendmaui.clemsonrides.driver` |
 
-Email and password still use Supabase `signInWithPassword` / `signUp`, including forgot-password. The session is stored in the iOS keychain / Android keystore through `expo-secure-store` (chunked, because a Supabase session is larger than one SecureStore item). Confirm-email is off on the project. The driver app stays email and password only. The rider app adds Clerk sign-in for Apple, Google, and Facebook, then `POST /api/clerk-supabase-session` opens a normal Supabase session so RLS `auth.uid()` stays the `auth.users` UUID. Do not send the Clerk JWT as the Supabase access token.
+Email and password use Supabase `signInWithPassword` / `signUp`, including forgot-password. Social sign-in uses Supabase-native Apple (`signInWithIdToken` + nonce) and Google (`signInWithOAuth` + redirect) auth in both apps. The session is stored in the iOS keychain / Android keystore through `expo-secure-store` (chunked, because a Supabase session is larger than one SecureStore item).
+
+### Authentication Configuration (Supabase)
+- **Apple Provider**: Enable Apple in Supabase Auth. Client IDs / Services IDs: `com.ascendmaui.clemsonrides.rider` and `com.ascendmaui.clemsonrides.driver` (Team ID: `L85AF3V872`). Native iOS sign-in uses `expo-apple-authentication` with SHA-256 hashed nonce exchanged via `supabase.auth.signInWithIdToken`.
+- **Google Provider**: Enable Google in Supabase Auth using the Google OAuth web client under `ascendmaui` (iOS client ID optional). Uses `startGoogleOAuth` with `WebBrowser.openAuthSessionAsync` and `completeGoogleSession`.
+- **Redirect Allowlist**: Add `clemsonrides://**` and `clemsonrides-driver://**` to Supabase URL Configuration -> Redirect URLs.
+- **Transactional Email**: Configure Resend SMTP in Supabase Auth settings for signup confirmation and password resets.
+- **Vercel**: Remove legacy social bridge secrets from Vercel environment variables after deploy.
 
 EAS builds do not read a gitignored `.env`. Set these as EAS environment variables on **each** new project (production, preview, and development) before a cloud build:
 

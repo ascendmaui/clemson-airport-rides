@@ -55,8 +55,8 @@
         }
       ],
       "expo-audio",
-      "@clerk/expo",
-      "@clerk/expo-google-signin"
+      "expo-apple-authentication",
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": false

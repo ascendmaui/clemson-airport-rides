@@ -64,8 +64,8 @@
           "backgroundColor": "#522D80"
         }
       ],
-      "@clerk/expo",
-      "@clerk/expo-google-signin"
+      "expo-apple-authentication",
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": false

@@ -2,6 +2,40 @@
 
 Persistent knowledge base for recurring failures. When a matching issue appears, apply the saved fix first.
 
+## 2026-09-24 — Remove Clerk: Apple + Google social sign-in directly on Supabase Auth
+
+- **Track / machine:** Clemson RIDES · worktree feat/supabase-auth-remove-clerk
+- **Symptom:** "Clerk session token was rejected" on social sign-in.
+- **Root cause:** iOS build 17 shipped a `pk_test` publishable key for the Clerk dev instance `choice-gibbon-3653` while the production server only had the `sk_live` `CLERK_SECRET_KEY`, so the `/api/clerk-supabase-session` bridge rejected every token.
+- **Fix:** Removed Clerk entirely. Apple and Google now go directly through Supabase Auth, eliminating the bridge and secret mismatch:
+  - Apple sign-in uses native `expo-apple-authentication` with a SHA-256 hashed nonce exchanged via `supabase.auth.signInWithIdToken`, saving name and email to `profiles` on first sign-in without overwriting existing data.
+  - Google sign-in uses Supabase `signInWithOAuth` + `WebBrowser.openAuthSessionAsync` and `completeGoogleSession` with deep-link redirects `clemsonrides://auth/callback` and `clemsonrides-driver://auth/callback`.
+  - Dropped Facebook provider entirely.
+  - `createAuth` `ensureProfile` runs on `SIGNED_IN` and may write the email local-part (or `Rider`) as a placeholder `full_name` before the Apple name arrives; the Apple path treats those placeholders as empty so the real first-sign-in name still lands.
+  - Profile gate open routes: `sso-callback` replaced by `auth` (the `auth/callback` Google/Apple web redirect; `useSegments()[0]` is `auth`).
+  - Removed all Clerk dependencies (`@clerk/backend`, `@clerk/expo`, `@clerk/expo-google-signin`, `expo-auth-session`).
+- **Deleted files:**
+  - `api/clerk-supabase-session.js`
+  - `server/clerkSupabaseBridge.js`
+  - `server/clerkSupabaseBridge.test.js`
+  - `apps/rider/lib/clerkBridge.ts`
+  - `apps/rider/lib/clerkEnv.ts`
+  - `apps/rider/lib/clerkSocial.tsx`
+  - `apps/rider/lib/freshAuth.ts`
+  - `apps/rider/components/StaleSessionGuard.tsx`
+  - `apps/rider/app/sso-callback.tsx`
+  - `apps/driver/lib/clerkBridge.ts`
+  - `apps/driver/lib/clerkEnv.ts`
+  - `apps/driver/lib/clerkSocial.tsx`
+  - `apps/driver/lib/freshAuth.ts`
+  - `apps/driver/components/StaleSessionGuard.tsx`
+  - `apps/driver/app/sso-callback.tsx`
+  - `packages/rides-native/staleSession.js`
+  - `packages/rides-native/staleSession.d.ts`
+  - `packages/rides-native/staleSession.test.js`
+- **Verified:** no Clerk references outside this log; rider + driver `tsc --noEmit` clean; `npm test` 351/351; `vite build`; `expo config` + `expo prebuild --no-install` for both apps (Apple entitlement present).
+- **External config still required (dashboards, not code):** Supabase Apple provider (client IDs `com.ascendmaui.clemsonrides.rider`, `com.ascendmaui.clemsonrides.driver`, team `L85AF3V872`); Supabase Google provider (ascendmaui Google OAuth web client); redirect allow list `clemsonrides://**`, `clemsonrides-driver://**`; Resend SMTP in Supabase; remove `CLERK_SECRET_KEY` from Vercel after deploy.
+
 ## 2026-09-24 — Fare in the idempotency key opened a second PaymentIntent
 
 - **Track / machine:** Clemson RIDES · Pro (Grok Build, worktree fix/idem-key)

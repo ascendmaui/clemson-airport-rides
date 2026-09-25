@@ -2,23 +2,21 @@ import { useRouter } from 'expo-router'
 import { SignInScreen } from 'rides-native/AuthScreens'
 import { DRIVER_SOCIAL_PROVIDERS } from 'rides-native/socialAuth'
 import { useAuth } from '@/lib/auth'
-import { clerkPublishableKey, missingClerkPublishableMessage } from '@/lib/clerkEnv'
-import { useClerkSocialSignIn } from '@/lib/clerkSocial'
+import { useSocialSignIn } from '@/lib/socialSignIn'
 
-function SignInForm({
-  onSocial,
-}: {
-  onSocial: (providerId: 'apple' | 'google' | 'facebook') => Promise<{ cancelled?: boolean } | void>
-}) {
+export default function SignInRoute() {
   const router = useRouter()
-  const { signIn } = useAuth()
+  const { signIn, resetPassword } = useAuth()
+  const onSocial = useSocialSignIn()
+
   return (
     <SignInScreen
       signIn={signIn}
       mark="CD"
-      subtitle="Sign in with Apple, Google, Facebook, or the email and password on your driver account."
+      subtitle="Sign in with Apple, Google, or the email and password on your driver account."
       socialProviders={DRIVER_SOCIAL_PROVIDERS}
       onSocial={onSocial}
+      resetPassword={resetPassword}
       onForgotPassword={() => router.push('/forgot-password')}
       onSuccess={() => router.replace('/')}
       onCreateAccount={() => router.push('/sign-up')}
@@ -28,23 +26,4 @@ function SignInForm({
       }}
     />
   )
-}
-
-function ClerkSignInForm() {
-  // Same Clerk social path + stale-session guard + Clerk -> Supabase bridge as the rider app.
-  const onSocial = useClerkSocialSignIn()
-  return <SignInForm onSocial={onSocial} />
-}
-
-export default function SignInRoute() {
-  if (!clerkPublishableKey()) {
-    return (
-      <SignInForm
-        onSocial={async () => {
-          throw new Error(missingClerkPublishableMessage())
-        }}
-      />
-    )
-  }
-  return <ClerkSignInForm />
 }
