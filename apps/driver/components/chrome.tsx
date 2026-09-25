@@ -35,11 +35,15 @@ export function Primary({
   onPress,
   disabled,
   tone = 'orange',
+  accessibilityLabel,
+  accessibilityRole = 'button',
 }: {
   label: string
   onPress: () => void
   disabled?: boolean
   tone?: 'orange' | 'purple' | 'ghost'
+  accessibilityLabel?: string
+  accessibilityRole?: 'button' | 'link'
 }) {
   const { colors } = useTheme()
   const shadow = useCardShadow()
@@ -49,7 +53,8 @@ export function Primary({
     <Pressable
       onPress={onPress}
       disabled={disabled}
-      accessibilityRole="button"
+      accessibilityRole={accessibilityRole}
+      accessibilityLabel={accessibilityLabel || label}
       style={[styles.primary, shadow, { backgroundColor: background, opacity: disabled ? 0.5 : 1 }]}
     >
       <Text style={[styles.primaryLabel, { color }]}>{label}</Text>
@@ -156,7 +161,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   backLabel: { fontSize: 18, fontWeight: '700' },
-  primary: { borderRadius: 16, paddingVertical: 16, alignItems: 'center', paddingHorizontal: 16 },
+  primary: {
+    borderRadius: 16,
+    minHeight: 48,
+    paddingVertical: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 16,
+  },
   primaryLabel: { fontWeight: '700', fontSize: 16 },
   tag: { borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5 },
   tagLabel: { fontSize: 11, fontWeight: '800' },

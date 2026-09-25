@@ -49,6 +49,7 @@ import { ORANGE, PURPLE } from 'rides-native/places.js'
 import { gameDayNotice, type GameDayNotice } from 'rides-native/gameDayNotice.js'
 import { approvalGateMessage, isSyntheticOffer, syntheticOffers } from 'rides-native/syntheticOffers'
 import { loadCounterpart } from 'rides-native/partyProfile.js'
+import { offerCardViewModel } from 'rides-native/offerCard'
 
 const GATE: Record<string, { title: string; body: string }> = {
   pending_info: {
@@ -554,6 +555,7 @@ function RideCard({
   onDecline: () => void
 }) {
   const { colors } = useTheme()
+  const vm = offerCardViewModel(card)
   const preferredNote = preferredRequestNote(card)
   const opacity = useState(() => new Animated.Value(0))[0]
   const scrollRef = useRef<ScrollView>(null)
@@ -571,7 +573,11 @@ function RideCard({
     // flexShrink lets the dock squeeze the card to the room left above the controls;
     // only the details scroll — Accept / Decline stay pinned and visible.
     <Animated.View style={[styles.offerWrap, { opacity }]}>
-      <Card style={styles.offerCard}>
+      <Card
+        style={styles.offerCard}
+        accessibilityRole="summary"
+        accessibilityLabel={vm.accessibilityLabel}
+      >
         <ScrollView
           ref={scrollRef}
           style={styles.offerScroll}
@@ -583,38 +589,64 @@ function RideCard({
           onContentSizeChange={(_, height) => setContent(height)}
         >
           {notice ? <Text style={[styles.offerNotice, { color: colors.orange }]}>{notice}</Text> : null}
-          <Text style={[styles.offerFare, { color: colors.ink }]}>{formatCents(card.driverNetCents)}</Text>
-          <Text style={{ color: colors.inkSecondary }}>
-            {card.carpoolIncentiveId
-              ? `${statusHeadline(card.status)} · base ${formatCents(card.baseNetCents || 0)} · ${card.carpoolIncentiveId} ${formatCents(card.carpoolBonusCents || 0)} · total ${formatCents(card.driverPayoutCents || card.driverNetCents)}`
-              : `${statusHeadline(card.status)} · you net 80%`}
-          </Text>
-          <View style={styles.tags}>
-            {card.tagLabels.map((label) => (
-              <Tag key={label} label={label} tone={tagTone(label)} />
-            ))}
+          <View style={styles.offerFareRow}>
+            <Text style={[styles.offerFare, { color: colors.ink }]} accessibilityLabel={`Driver net pay ${vm.pay.formattedNet}`}>
+              {vm.pay.formattedNet}
+            </Text>
+            <Text style={[styles.offerFareTag, { color: colors.inkSecondary }]}>net</Text>
           </View>
+          <Text style={{ color: colors.inkSecondary }}>
+            {vm.pay.subtext}
+          </Text>
+          {vm.badges.length > 0 ? (
+            <View style={styles.tags}>
+              {vm.badges.map((b) => (
+                <Tag key={b.id} label={b.label} tone={b.tone} />
+              ))}
+            </View>
+          ) : null}
           {preferredNote ? <Text style={{ color: colors.orange, fontWeight: '700' }}>{preferredNote}</Text> : null}
           <Text style={{ color: colors.ink, fontWeight: '700' }}>
-            {card.firstName}{card.riderRating ? ` · ${card.riderRating.toFixed(1)}` : ''}
-            {card.rideType ? ` · ${card.rideType}` : ''}
+            {vm.rider.firstName}
+            {vm.rider.ratingText ? ` · ${vm.rider.ratingText}` : ''}
+            {vm.rider.rideType ? ` · ${vm.rider.rideType}` : ''}
+            {vm.seats.seatsLabel ? ` · ${vm.seats.seatsLabel}` : ''}
           </Text>
           <Text style={{ color: colors.ink, fontWeight: '700' }}>Pickup · {card.pickupLabel}</Text>
           <Text style={{ color: colors.ink, fontWeight: '700' }}>Drop-off · {card.dropoffLabel}</Text>
-          {card.etaMin || card.distanceMi ? (
+          {vm.distanceEta ? (
             <Text style={{ color: colors.inkSecondary }}>
-              {[card.etaMin ? `${card.etaMin} min away` : null, card.distanceMi ? `${card.distanceMi} mi` : null].filter(Boolean).join(' · ')}
+              {vm.distanceEta}
             </Text>
           ) : null}
-          {card.pickupAt ? <Text style={{ color: colors.inkSecondary }}>{formatPickupAt(card.pickupAt)}</Text> : null}
-          {card.depositCents > 0 ? <Text style={{ color: colors.inkSecondary }}>25% deposit · {formatCents(card.depositCents)}</Text> : null}
+          {vm.pickupAtText ? <Text style={{ color: colors.inkSecondary }}>{vm.pickupAtText}</Text> : null}
+          {vm.deposit ? (
+            <Text style={{ color: colors.inkSecondary }}>{vm.deposit.label}</Text>
+          ) : null}
+          {vm.timeLeft?.label ? (
+            <Text style={{ color: vm.timeLeft.isUrgent ? colors.orange : colors.inkSecondary, fontWeight: '700' }}>
+              {vm.timeLeft.label}
+            </Text>
+          ) : null}
           {card.teslaStub ? <Text style={{ color: colors.inkSecondary }}>{TESLA_FLEET_NOTICE}</Text> : null}
           <FarePanel card={card} />
         </ScrollView>
         <View style={[styles.offerActions, overflows && { borderTopColor: colors.border, borderTopWidth: StyleSheet.hairlineWidth }]}>
-          <Primary label={busy ? 'Saving…' : acceptActionLabel(card.status)} onPress={onAccept} disabled={busy} />
-          <Pressable onPress={onDecline} disabled={busy} style={styles.decline}>
-            <Text style={{ color: declineDisposition(card.status) === 'cancel' ? colors.orange : colors.inkSecondary, fontWeight: '700' }}>
+          <Primary
+            label={busy ? 'Saving…' : acceptActionLabel(card.status)}
+            accessibilityRole="button"
+            accessibilityLabel={busy ? 'Saving…' : `${acceptActionLabel(card.status)} offer for ${vm.pay.formattedNet}`}
+            onPress={onAccept}
+            disabled={busy}
+          />
+          <Pressable
+            onPress={onDecline}
+            disabled={busy}
+            accessibilityRole="button"
+            accessibilityLabel={declineActionLabel(card.status)}
+            style={styles.decline}
+          >
+            <Text style={[styles.declineText, { color: declineDisposition(card.status) === 'cancel' ? colors.orange : colors.inkSecondary }]}>
               {declineActionLabel(card.status)}
             </Text>
           </Pressable>
@@ -671,15 +703,24 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   barText: { fontWeight: '800', fontSize: 16, flex: 1, textAlign: 'center' },
-  offerFare: { fontSize: 32, fontWeight: '800', letterSpacing: -0.6 },
+  offerFareRow: { flexDirection: 'row', alignItems: 'baseline', gap: 6 },
+  offerFare: { fontSize: 34, fontWeight: '800', letterSpacing: -0.6 },
+  offerFareTag: { fontSize: 16, fontWeight: '700' },
   tags: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-  decline: { alignItems: 'center', paddingVertical: 4 },
+  decline: {
+    minHeight: 44,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+  },
+  declineText: { fontWeight: '700', fontSize: 15 },
   offerWrap: { flexShrink: 1 },
   offerCard: { flexShrink: 1, gap: 0, paddingBottom: 12 },
   offerScroll: { flexGrow: 0, flexShrink: 1 },
   offerBody: { gap: 10, paddingBottom: 2 },
   offerNotice: { fontWeight: '700', fontSize: 13, lineHeight: 18 },
-  offerActions: { gap: 6, paddingTop: 10 },
+  offerActions: { gap: 8, paddingTop: 10 },
   modalScrim: { flex: 1, backgroundColor: 'rgba(11,18,32,0.45)', justifyContent: 'flex-end' },
   modalCard: { borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 20, gap: 12 },
 })

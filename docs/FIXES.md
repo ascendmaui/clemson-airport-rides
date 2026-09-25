@@ -1,6 +1,48 @@
 # Build & blocker fixes log
 
 Persistent knowledge base for recurring failures. When a matching issue appears, apply the saved fix first.
+## 2026-09-25 — Wire offerCard unit tests into npm test [t3]
+
+- **Date:** 2026-09-25
+- **Track / machine:** Clemson RIDES DRIVER · worktree `deputy-pkg-driver-offer-card-polish`
+- **What was wrong:** `packages/rides-native/offerCard.test.js` was not listed in the `package.json` `test` script, so `npm test` did not execute the driver offer card view-model and accessibility test suite.
+- **What changed:** Appended `packages/rides-native/offerCard.test.js` as the last entry of the `test` script in `package.json`. No existing entries were altered.
+- **Files touched:**
+  - `package.json`
+  - `docs/FIXES.md`
+- **Verified:** `npm test` runs 803 tests across all suites (including 10/10 in `packages/rides-native/offerCard.test.js`) with 0 failures.
+
+## 2026-09-25 — Refactor driver offer card UI with safe area insets and accessibility polish [t2]
+
+- **Track / machine:** Clemson RIDES DRIVER · worktree `deputy-pkg-driver-offer-card-polish`
+- **What was wrong:** Driver offer card UI in `apps/driver/app/(tabs)/index.tsx` was directly formatting raw card fields, lacked structured accessibility descriptions for assistive technologies, had a cramped Decline touch target (< 44pt), lacked explicit button accessibility roles and labels, and did not take advantage of the unified `offerCardViewModel`.
+- **What changed:**
+  - Integrated `offerCardViewModel` into `RideCard` in `apps/driver/app/(tabs)/index.tsx`, making net pay the primary prominent number with net label and subtext.
+  - Added `offerAccessibilityLabel` in `packages/rides-native/offerCard.js` (and exported in `offerCard.d.ts` and tested in `offerCard.test.js`) providing a combined offer summary for assistive tech.
+  - Applied `accessibilityRole="summary"` and `accessibilityLabel={vm.accessibilityLabel}` to the offer card.
+  - Upgraded Accept (`Primary`) and Decline buttons with `accessibilityRole="button"`, descriptive `accessibilityLabel`s, and guaranteed minimum 44pt touch targets (`minHeight: 48` on `Primary`, `minHeight: 44` on `decline`).
+  - Preserved safe area insets via `useSafeAreaInsets` (`dockTop = insets.top + 8` and `bottom: insets.bottom + 72`) ensuring the card never overlaps the status bar or the tab bar.
+  - Left accept and decline logic unchanged.
+- **Files touched:**
+  - `apps/driver/app/(tabs)/index.tsx`
+  - `apps/driver/components/chrome.tsx`
+  - `packages/rides-native/offerCard.js`
+  - `packages/rides-native/offerCard.d.ts`
+  - `packages/rides-native/offerCard.test.js`
+  - `docs/FIXES.md`
+- **Verified:** `node --experimental-strip-types --test packages/rides-native/offerCard.test.js` (10/10 pass, 0 fail); full suite `npm test` (793/793 pass, 0 fail).
+
+## 2026-09-25 — Extract offerCard view-model helpers and tests
+
+- **Track / machine:** Clemson RIDES DRIVER · worktree `deputy-pkg-driver-offer-card-polish`
+- **What was wrong:** Driver offer card formatting logic was inline in `apps/driver/app/(tabs)/index.tsx`, making presentation logic hard to unit test and inconsistent across Home, Queue, and other driver views.
+- **What changed:** Extracted pure formatting and view-model helpers into `packages/rides-native/offerCard.js` (with TypeScript definitions in `packages/rides-native/offerCard.d.ts` and test suite in `packages/rides-native/offerCard.test.js`). Includes pickup/dropoff short label normalization (airports, street addresses, bullets, fallbacks), driver net earnings (reusing `fareCollection`, `driverNetCents`, `formatCents` without inventing numbers), distance/ETA text, seats, airport/deposit badges, time-left-to-accept countdowns, and a unified `offerCardViewModel`.
+- **Files touched:**
+  - `packages/rides-native/offerCard.js`
+  - `packages/rides-native/offerCard.d.ts`
+  - `packages/rides-native/offerCard.test.js`
+  - `docs/FIXES.md`
+- **Verified:** `node --experimental-strip-types --test packages/rides-native/offerCard.test.js` (9/9 pass, 0 fail).
 
 ## 2026-09-25 — Expiry cron wired: CRON_SECRET + Supabase pg_cron/pg_net; prod redeployed at 111c607
 
