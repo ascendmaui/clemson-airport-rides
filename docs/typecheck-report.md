@@ -81,6 +81,7 @@ Both apps specify `strict: true` and `allowJs: true`, with `@/*` path aliases po
 | :--- | :--- | :---: | :---: | :---: |
 | **`apps/rider`** | `tsc --noEmit -p .` | 85 app files (+ 44 shared/server files) | **0** | Pass (0) |
 | **`apps/driver`** | `tsc --noEmit -p .` | 63 app files (+ 26 shared files) | **0** | Pass (0) |
+| **`apps/mobile`** | `tsc --noEmit -p .` | 16 app files | **0** | Pass (0) |
 | **`api/` & `server/`** | `node --check <file>` | 18 JS sources | **0** | Pass (0) |
 | **Root Suite** | `npm run typecheck` | Full monorepo | **0** | Pass (0) |
 
@@ -284,10 +285,13 @@ Both apps import shared components and definitions via `rides-native/*`. All typ
 | `packages/rides-native/AuthScreens.d.ts` | Typed Declarations | Rider, Driver | 0 | Clean |
 | `packages/rides-native/LivePhase.d.ts` | Typed Declarations | Rider, Driver | 0 | Clean |
 | `packages/rides-native/PartyScreens.d.ts` | Typed Declarations | Rider, Driver | 0 | Clean |
+| `packages/rides-native/accountDeletion.d.ts` | Typed Declarations | Rider | 0 | Clean |
 | `packages/rides-native/accountDeletion.js` | Implementation | Rider | 0 | Clean |
+| `packages/rides-native/agentChips.d.ts` | Typed Declarations | Rider | 0 | Clean |
 | `packages/rides-native/agentChips.js` | Implementation | Rider | 0 | Clean |
 | `packages/rides-native/apiClient.d.ts` | Typed Declarations | Driver | 0 | Clean |
 | `packages/rides-native/apiOrigin.d.ts` | Typed Declarations | Rider | 0 | Clean |
+| `packages/rides-native/assistClient.d.ts` | Typed Declarations | Rider | 0 | Clean |
 | `packages/rides-native/assistClient.js` | Implementation | Rider | 0 | Clean |
 | `packages/rides-native/authErrors.d.ts` | Typed Declarations | Driver | 0 | Clean |
 | `packages/rides-native/authUrl.d.ts` | Typed Declarations | Rider, Driver | 0 | Clean |
@@ -301,10 +305,13 @@ Both apps import shared components and definitions via `rides-native/*`. All typ
 | `packages/rides-native/gameDayNotice.d.ts` | Typed Declarations | Rider, Driver | 0 | Clean |
 | `packages/rides-native/googleAuth.d.ts` | Typed Declarations | Driver | 0 | Clean |
 | `packages/rides-native/heat.d.ts` | Typed Declarations | Driver | 0 | Clean |
+| `packages/rides-native/legalCopy.d.ts` | Typed Declarations | Rider | 0 | Clean |
 | `packages/rides-native/legalCopy.js` | Implementation | Rider | 0 | Clean |
 | `packages/rides-native/liveTrip.d.ts` | Typed Declarations | Rider, Driver | 0 | Clean |
+| `packages/rides-native/lostFoundClient.d.ts` | Typed Declarations | Rider | 0 | Clean |
 | `packages/rides-native/lostFoundClient.js` | Implementation | Rider | 0 | Clean |
 | `packages/rides-native/mapsLink.d.ts` | Typed Declarations | Driver | 0 | Clean |
+| `packages/rides-native/notificationPrefs.d.ts` | Typed Declarations | Rider | 0 | Clean |
 | `packages/rides-native/notificationPrefs.js` | Implementation | Rider | 0 | Clean |
 | `packages/rides-native/partyProfile.d.ts` | Typed Declarations | Rider, Driver | 0 | Clean |
 | `packages/rides-native/places.d.ts` | Typed Declarations | Driver | 0 | Clean |
@@ -312,6 +319,7 @@ Both apps import shared components and definitions via `rides-native/*`. All typ
 | `packages/rides-native/riderShell.d.ts` | Typed Declarations | Rider | 0 | Clean |
 | `packages/rides-native/safety.d.ts` | Typed Declarations | Rider, Driver | 0 | Clean |
 | `packages/rides-native/secureStore.d.ts` | Typed Declarations | Driver | 0 | Clean |
+| `packages/rides-native/shared/ambassadorAttribution.d.ts` | Typed Declarations | Rider | 0 | Clean |
 | `packages/rides-native/shared/ambassadorAttribution.js` | Implementation | Rider | 0 | Clean |
 | `packages/rides-native/shared/carpool.d.ts` | Typed Declarations | Rider | 0 | Clean |
 | `packages/rides-native/shared/carpoolApi.d.ts` | Typed Declarations | Rider | 0 | Clean |
@@ -319,21 +327,38 @@ Both apps import shared components and definitions via `rides-native/*`. All typ
 | `packages/rides-native/shared/vehicle.d.ts` | Typed Declarations | Rider, Driver | 0 | Clean |
 | `packages/rides-native/socialAuth.d.ts` | Typed Declarations | Driver | 0 | Clean |
 | `packages/rides-native/syntheticOffers.d.ts` | Typed Declarations | Driver | 0 | Clean |
+| `packages/rides-native/tripMessagesClient.d.ts` | Typed Declarations | Rider | 0 | Clean |
 | `packages/rides-native/tripMessagesClient.js` | Implementation | Rider | 0 | Clean |
 | `packages/rides-native/tripTags.d.ts` | Typed Declarations | Rider, Driver | 0 | Clean |
 | `packages/rides-native/vehicleCatalog.d.ts` | Typed Declarations | Driver | 0 | Clean |
 
 ---
 
-## 4. Observations & Notes
+## 4. t2 before / after counts
+
+t1 measured official `tsc --noEmit` (no `--checkJs`) plus a separate mobile check. t2 is type-only: missing null narrowing, missing `.d.ts` modules, and declaration/implementation gaps.
+
+| Surface | Before (t1) | After (t2) |
+| :--- | :---: | :---: |
+| `apps/rider` `tsc --noEmit` | 0 | 0 |
+| `apps/driver` `tsc --noEmit` | 0 | 0 |
+| `apps/mobile` `tsc --noEmit` | **4** (`TS18047` in `app/(tabs)/driver.tsx`) | **0** |
+| `api/` + `server/` `node --check` | 0 | 0 |
+| `npm run typecheck` | 0 (rider + driver only) | 0 (rider + driver + mobile) |
+| Rider `--checkJs` (imported JS, not official) | 177 (mostly implicit `any` in untyped `rides-native` JS) | 30 (remaining `src/lib/scheduledRideModel.js` + `src/lib/studentDomain.js`) |
+
+`apps/mobile` `app/(tabs)/driver.tsx` before: four `TS18047: 'supabase' is possibly 'null'` (lines 34, 37, 43, 73). After: 0. Nested callbacks now use a `const client = supabase` captured after the null check.
+
+## 5. Observations & Notes
 
 1. **`allowJs` vs. `--checkJs` Behavior:**
    - Both `apps/rider` and `apps/driver` enable `allowJs: true` and `strict: true`.
-   - In `apps/driver`, all imported modules have `.d.ts` typing definitions or are written in TypeScript, resulting in 0 errors even if `--checkJs` is passed.
-   - In `apps/rider`, some legacy or untyped JS files from `packages/rides-native` and `src/lib` are imported without `.d.ts` files (e.g., `tripMessagesClient.js`, `scheduledRideModel.js`). Under default `tsconfig.json` (`allowJs: true`, no `checkJs`), these pass typechecking cleanly with 0 errors. If `--checkJs` is explicitly forced, untyped JS files report implicit `any` parameter errors. Adding `.d.ts` declarations or converting these files to TypeScript would allow full strict JS checking in the future.
+   - Official typecheck does not pass `--checkJs`. Rider and driver stay at 0 errors.
+   - t2 added `.d.ts` files for the `rides-native` JS modules the apps import (`accountDeletion`, `agentChips`, `assistClient`, `legalCopy`, `lostFoundClient`, `notificationPrefs`, `tripMessagesClient`, `shared/ambassadorAttribution`). Those modules no longer contribute implicit-`any` `--checkJs` errors.
+   - Remaining `--checkJs` errors are in `src/lib/scheduledRideModel.js` (26) and `src/lib/studentDomain.js` (4), outside `packages/rides-native`.
 2. **`apps/mobile` Status:**
-   - `apps/mobile` is not included in `scripts/typecheck.mjs` (which only checks `rider` and `driver`).
-   - If `apps/mobile` is checked separately (`cd apps/mobile && npm exec -- tsc --noEmit -p .`), it currently reports 4 `TS18047: 'supabase' is possibly 'null'` errors in `app/(tabs)/driver.tsx`.
+   - `scripts/typecheck.mjs` now typechecks `rider`, `driver`, and `mobile`.
+   - The four `TS18047` null-check errors in `app/(tabs)/driver.tsx` are fixed.
 3. **Reproducibility:**
    - To re-run the full typecheck suite from repo root:
      ```bash
@@ -343,4 +368,5 @@ Both apps import shared components and definitions via `rides-native/*`. All typ
      ```bash
      npm --prefix apps/rider run typecheck
      npm --prefix apps/driver run typecheck
+     npm --prefix apps/mobile exec -- tsc --noEmit -p .
      ```

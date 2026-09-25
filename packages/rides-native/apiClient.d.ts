@@ -1,12 +1,7 @@
 export function apiBase(): string
 
-export function authedJson(
-  supabase: {
-    auth: {
-      getSession: () => Promise<{ data: { session: { access_token?: string } | null } }>
-      refreshSession?: () => Promise<{ data: { session: { access_token?: string } | null } | null; error?: unknown }>
-    }
-  } | unknown,
+export function authedJson<T = Record<string, unknown>>(
+  supabase: unknown,
   path: string,
   options?: {
     method?: string
@@ -14,5 +9,5 @@ export function authedJson(
     headers?: Record<string, string>
     fetch?: typeof fetch
   },
-): Promise<any>
+): Promise<T>
 

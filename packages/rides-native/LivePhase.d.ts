@@ -11,7 +11,7 @@ export type LivePhaseColors = {
 
 export function LivePhase(props: {
   kicker?: string | null
-  title: string
+  title?: string | null
   body?: string | null
   eta?: string | null
   steps?: LiveStep[] | null

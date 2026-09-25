@@ -1,5 +1,8 @@
 export const IC_AGREEMENT_TITLE: string
 export const IC_AGREEMENT_VERSION: string
+export const BACKGROUND_CONSENT_VERSION: string
+export const WORK_ELIGIBILITY_VERSION: string
+export const W9_FORM_VERSION: string
 export const ONBOARDING_FLOW: { id: string; label: string; kind: string; docIds: string[] }[]
 export const REQUIRED_DOCUMENTS: { id: string; label: string; hint: string; stepId: string }[]
 export const TAX_CLASSIFICATIONS: { id: string; label: string }[]
@@ -34,6 +37,15 @@ export type OnboardingBundle = {
   progress: { percent: number; label: string; stepNumber: number; total: number; submitted: boolean }
 }
 
+export function fetchMyDriverApplication(supabase: unknown, userId: string): Promise<Record<string, unknown> | null>
+export function fetchMyDriverDocuments(supabase: unknown, userId: string): Promise<{ id?: string; doc_type: string; storage_path?: string; review_status?: string | null; match_status?: string | null; review_note?: string | null }[]>
+export function fetchMyTaxProfile(supabase: unknown, userId: string): Promise<{ legal_name?: string; tin_last4?: string; tax_classification?: string } | null>
+export function fetchMyAgreement(supabase: unknown, userId: string): Promise<{ signature_name?: string; signed_at?: string; agreement_version?: string } | null>
+export function recordFormSignature(
+  supabase: unknown,
+  userId: string,
+  row: { formId?: string; formVersion?: string; signatureName?: string; signedOn?: string; signatureMark?: unknown },
+): Promise<unknown>
 export function loadOnboarding(supabase: unknown, userId: string): Promise<OnboardingBundle>
 export function uploadDriverDocument(
   supabase: unknown,
