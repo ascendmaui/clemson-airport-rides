@@ -130,6 +130,15 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
 - **Verified:** `node --experimental-strip-types --test packages/rides-native/driverGateView.test.js` (10/10 passing) and `npm run typecheck` (passing).
 
 
+## 2026-09-25 — Add driver a11y static scan test [t1]
+
+- **Track / machine:** Clemson RIDES DRIVER · deputy/driver-a11y · pkg-driver-a11y t1
+- **What was wrong:** The driver app lacked automated static accessibility scanning, allowing Pressable, TouchableOpacity, and Button elements lacking accessibilityLabel or accessibilityRole, as well as Image elements without accessibilityLabel or accessible={false}, to slip into production.
+- **What changed:** Added `tests/a11yDriver.test.js`, a static AST scanner (using Babel parser with TypeScript/JSX, reading .tsx files under `apps/driver/app` and `apps/driver/components` with fs, no RN runtime). Initialized an allowlist of 51 current driver offenders so the suite passes while printing the offender count and blocking any new unallowlisted accessibility regressions.
+- **Files touched:**
+  - `tests/a11yDriver.test.js`
+  - `docs/FIXES.md`
+
 ## 2026-09-25 — merge_trip_metadata trip_status enum cast applied (#100)
 
 - **Problem:** `public.merge_trip_metadata` (#80) failed on every call with `operator does not exist: trip_status = text`, which broke the airport-checkout session bind, abandon-checkout release and the unpaid-hold expiry cancel.
