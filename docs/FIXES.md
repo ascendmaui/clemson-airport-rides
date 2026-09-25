@@ -1251,6 +1251,14 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
 - **Fix:** `coord()` accepts only finite numbers and numeric strings. Null, blank, boolean, and other non-numeric values stay missing, and `navigationLinks` falls back to the label. A real `0` or `"0"` is still a point.
 - **Files:** `packages/rides-native/mapsLink.js`, `packages/rides-native/mapsLink.test.js`
 
+## 2026-09-24 — riderMoney unit tests did not match the module
+
+- **Track / machine:** Clemson RIDES · deputy/rider-money-tests (pkg-rider-money-tests t1)
+- **What was wrong:** A partial `packages/rides-native/riderMoney.test.js` failed 3 of 29 cases. `describeRiderSocialRewards` keeps a fixed referred amount of 0 as `$0.00` (only the referrer credit and the percent use `||` fallbacks). `markStudentVerified` writes the profile before the verification-table fallback, so a global update failure never reached that fallback. `STRIPE_NOT_CONFIGURED_COPY` is the fare-card sentence about checkout not being configured on this machine.
+- **What changed:** Corrected those assertions, scoped the fake update failure to `student_verifications`, and extended coverage to every export. Production `riderMoney.js` was not edited. Suspected bugs are marked `// BUG?:` in the test file (empty tier still discounted, zero referrer/percent rewards fall back, payload-only checkout errors dropped, local-time quote timestamps, time dropped without a valid date, verification writes reported verified when the fallback write fails, unauthenticated billing omits `charges`).
+- **Files touched:** `packages/rides-native/riderMoney.test.js`, `docs/FIXES.md`
+- **Verified:** `node --experimental-strip-types --test packages/rides-native/riderMoney.test.js` — 29 pass.
+
 ## 2026-09-24 — Remove Clerk: Apple + Google social sign-in directly on Supabase Auth
 
 - **Track / machine:** Clemson RIDES · worktree feat/supabase-auth-remove-clerk
