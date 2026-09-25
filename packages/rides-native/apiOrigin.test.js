@@ -199,15 +199,26 @@ test('resolveApiBase returns non-URL strings directly without validation', () =>
   assert.equal(resolveApiBase(), 'custom-host/api')
 })
 
-test('resolveApiBase with bare scheme strips slashes leaving malformed scheme prefix', () => {
-  // BUG?: When EXPO_PUBLIC_API_BASE is set to a bare scheme like 'http://' or 'https://',
-  // replace(/\/+$/, '') strips the trailing slashes leaving 'http:' or 'https:', which results
-  // in invalid concatenated paths like 'https:/api/ping'.
+test('resolveApiBase falls back to DEFAULT_API_BASE on bare scheme without host', () => {
+  // When EXPO_PUBLIC_API_BASE is set to a bare scheme like 'http://', 'https://', 'http:', or 'https:',
+  // it safely falls back to DEFAULT_API_BASE instead of leaving a malformed scheme prefix ('http:' or 'https:').
   process.env.EXPO_PUBLIC_API_BASE = 'https://'
-  assert.equal(resolveApiBase(), 'https:')
+  assert.equal(resolveApiBase(), DEFAULT_API_BASE)
 
   process.env.EXPO_PUBLIC_API_BASE = 'http://'
-  assert.equal(resolveApiBase(), 'http:')
+  assert.equal(resolveApiBase(), DEFAULT_API_BASE)
+
+  process.env.EXPO_PUBLIC_API_BASE = 'https:'
+  assert.equal(resolveApiBase(), DEFAULT_API_BASE)
+
+  process.env.EXPO_PUBLIC_API_BASE = 'http:'
+  assert.equal(resolveApiBase(), DEFAULT_API_BASE)
+
+  process.env.EXPO_PUBLIC_API_BASE = 'https'
+  assert.equal(resolveApiBase(), DEFAULT_API_BASE)
+
+  process.env.EXPO_PUBLIC_API_BASE = 'http'
+  assert.equal(resolveApiBase(), DEFAULT_API_BASE)
 })
 
 test('resolveApiBase preserves protocol-relative URLs without normalization', () => {
@@ -272,6 +283,13 @@ test('URL concatenation produces clean endpoint URLs across default and overridd
   assert.equal(
     `${resolveApiBase()}${endpoint}`,
     'https://custom-api.example.com/api/create-checkout-session',
+  )
+
+  // Bare scheme falls back to default origin, preventing malformed URL composition
+  process.env.EXPO_PUBLIC_API_BASE = 'https://'
+  assert.equal(
+    `${resolveApiBase()}${endpoint}`,
+    'https://clemson-rides.vercel.app/api/create-checkout-session',
   )
 })
 

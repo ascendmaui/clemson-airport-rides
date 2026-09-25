@@ -1,6 +1,19 @@
 # Build & blocker fixes log
 
 Persistent knowledge base for recurring failures. When a matching issue appears, apply the saved fix first.
+
+## 2026-09-25 — Fall back to DEFAULT_API_BASE on bare scheme without host in resolveApiBase [t2]
+
+- **Date:** 2026-09-25
+- **Track / machine:** Clemson RIDES · worktree deputy-pkg-api-origin-tests-20260925041913 · pkg-api-origin-tests-20260925041913 t2
+- **What was wrong:** When `EXPO_PUBLIC_API_BASE` was set to a bare scheme without a host (such as `'https://'`, `'http://'`, `'https:'`, or `'http:'`), `resolveApiBase()` stripped trailing slashes leaving `'https:'` or `'http:'`. Callers constructing API endpoints via `${resolveApiBase()}/endpoint` produced malformed URLs like `'https:/api/ping'`, causing network requests to fail.
+- **What changed:** In `packages/rides-native/apiOrigin.js`, guarded against bare scheme strings (`/^https?:?$/i`), safely falling back to `DEFAULT_API_BASE` (matching the fallback behavior of blank, slash, or unset values). Updated `packages/rides-native/apiOrigin.test.js` to assert fallback to `DEFAULT_API_BASE` for bare scheme inputs and clean URL endpoint concatenation.
+- **Files touched:**
+  - `packages/rides-native/apiOrigin.js`
+  - `packages/rides-native/apiOrigin.test.js`
+  - `docs/FIXES.md`
+- **Verified:** `node --experimental-strip-types --test packages/rides-native/apiOrigin.test.js` (19/19 pass, 0 fail); `node --experimental-strip-types --test packages/rides-native/apiClient.test.js` (30/30 pass, 0 fail).
+
 ## 2026-09-25 — parseRideAt date+time as America/New_York wall time
 
 - **Date:** 2026-09-25

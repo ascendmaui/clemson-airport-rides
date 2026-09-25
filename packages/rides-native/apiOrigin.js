@@ -13,6 +13,9 @@ export function resolveApiBase() {
       ? process.env.EXPO_PUBLIC_API_BASE
       : undefined
   const raw = typeof envVal === 'string' ? envVal.trim().replace(/\/+$/, '') : ''
-  return raw || String(DEFAULT_API_BASE).replace(/\/+$/, '')
+  if (!raw || /^https?:?$/i.test(raw)) {
+    return String(DEFAULT_API_BASE).replace(/\/+$/, '')
+  }
+  return raw
 }
 
