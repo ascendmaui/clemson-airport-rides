@@ -1,15 +1,20 @@
 import { supabase } from './supabase'
 
-/** Haversine distance in meters */
+/** Haversine distance in meters, or null when a coordinate is not finite. */
 export function distanceMeters(lat1, lng1, lat2, lng2) {
+  const aLat = Number(lat1)
+  const aLng = Number(lng1)
+  const bLat = Number(lat2)
+  const bLng = Number(lng2)
+  if (![aLat, aLng, bLat, bLng].every(Number.isFinite)) return null
   const R = 6371000
-  const toRad = (d) => (d * Math.PI) / 180
-  const dLat = toRad(lat2 - lat1)
-  const dLng = toRad(lng2 - lng1)
-  const a =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2
-  return 2 * R * Math.asin(Math.sqrt(a))
+  const p1 = (aLat * Math.PI) / 180
+  const p2 = (bLat * Math.PI) / 180
+  const dp = ((bLat - aLat) * Math.PI) / 180
+  const dl = ((bLng - aLng) * Math.PI) / 180
+  const h = Math.sin(dp / 2) ** 2 + Math.cos(p1) * Math.cos(p2) * Math.sin(dl / 2) ** 2
+  // asin() is NaN above 1; antipodal rounding can exceed 1 by an ulp.
+  return 2 * R * Math.asin(Math.min(1, Math.sqrt(h)))
 }
 
 /**
@@ -17,7 +22,7 @@ export function distanceMeters(lat1, lng1, lat2, lng2) {
  * Returns { inside, matches: [{ id, name, distanceM, radiusM }] }
  */
 export async function checkGeofence(lat, lng) {
-  if (lat == null || lng == null) {
+  if (lat == null || lng == null || !Number.isFinite(Number(lat)) || !Number.isFinite(Number(lng))) {
     return { inside: false, matches: [], error: 'missing coordinates' }
   }
   if (!supabase) {
@@ -35,7 +40,9 @@ export async function checkGeofence(lat, lng) {
 
   const matches = (data || [])
     .map((g) => {
-      const distanceM = distanceMeters(lat, lng, g.center_lat, g.center_lng)
+      const distanceM = distanceMeters(lat, lng, g?.center_lat, g?.center_lng)
+      // null <= radius is true, so a non-finite center must not count as inside.
+      if (distanceM == null) return null
       return {
         id: g.id,
         name: g.name,
@@ -44,7 +51,7 @@ export async function checkGeofence(lat, lng) {
         inside: distanceM <= g.radius_m,
       }
     })
-    .filter((g) => g.inside)
+    .filter((g) => g?.inside)
 
   return { inside: matches.length > 0, matches, error: null }
 }

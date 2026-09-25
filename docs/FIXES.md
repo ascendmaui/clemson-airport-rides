@@ -308,6 +308,30 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
 - **Files touched:** `server/creditLots.test.js`, `docs/FIXES.md`
 - **Verified:** `node --experimental-strip-types --test server/creditLots.test.js` (28/28 passing)
 
+## 2026-09-25 — Wire live-tracking tests into npm test
+
+- **Track / machine:** Deputy · pkg-live-tracking-tests · t3
+- **What was wrong:** `src/lib/tripPhase.test.js`, `src/lib/rideGeometry.test.js`, `src/lib/rideDemand.test.js`, and `src/lib/geofence.test.js` existed but were not listed in the root `package.json` `test` script, so `npm test` never ran the live trip phase, geometry, demand, or geofence suites.
+- **What changed:** Appended those four files as the last entries of the `test` script. No other `package.json` fields changed. The demand and geofence suites still install their own extensionless-import hook; the script does not need an extra `--import`.
+- **Files touched:**
+  - `package.json`
+  - `docs/FIXES.md`
+- **Verified:** `npm test` (830/830 passing, including the four live-tracking suites).
+
+## 2026-09-25 — geofence distanceMeters returns null for non-finite coordinates
+
+- **Track / machine:** Deputy · pkg-live-tracking-tests · t2
+- **What was wrong:** `src/lib/geofence.js` `distanceMeters` returned `NaN` for `NaN`, `undefined`, `Infinity`, and non-numeric strings. `haversineMeters` already returns `null` for those inputs. `checkGeofence` only treated `null`/`undefined` as missing, so `NaN` fell through. Returning `null` from `distanceMeters` without a caller guard would mark every fence inside, because `null <= radius` is true.
+- **What changed:** Non-finite coordinates now return `null`, and the haversine ratio is clamped before `asin` so antipodal rounding stays finite. `checkGeofence` treats non-finite caller coordinates as missing and skips a fence whose center distance is `null`.
+- **Files touched:**
+  - `src/lib/geofence.js`
+  - `src/lib/geofence.test.js`
+  - `src/lib/rideDemand.test.js`
+  - `tests/fixtures/register-lib-imports.js`
+  - `tests/fixtures/resolve-lib-imports.js`
+  - `tests/fixtures/supabase-stub.js`
+  - `docs/FIXES.md`
+
 ## 2026-09-25 — Expiry cron wired: CRON_SECRET + Supabase pg_cron/pg_net; prod redeployed at 111c607
 
 - **Track / machine:** Clemson RIDES · I9 (61b11c89) Vercel CLI + Supabase awktabuhijrshmsmagpq · approved by John 1:05 AM ET 9/25.
