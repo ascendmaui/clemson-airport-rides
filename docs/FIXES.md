@@ -2,6 +2,17 @@
 
 Persistent knowledge base for recurring failures. When a matching issue appears, apply the saved fix first.
 
+## 2026-09-24 — Wire ensureProfile tests into test script (t3)
+
+- **Track / machine:** Clemson RIDES · worktree deputy-pkg-profile-ensure / branch deputy/profile-ensure
+- **Symptom:** `server/ensureProfile.test.js` was not executed during standard `npm test`, risking test regression in CI.
+- **Root cause:** The `"test"` script in `package.json` had not yet appended the new `server/ensureProfile.test.js` test suite.
+- **Fix:** Appended `server/ensureProfile.test.js` as the last entry of the `"test"` script in `package.json`.
+- **Files touched:**
+  - `package.json`
+  - `docs/FIXES.md`
+- **Verified:** Ran full `npm test` with 371/371 tests passing (including all 20 tests in `server/ensureProfile.test.js`).
+
 ## 2026-09-24 — Ensure profile before trip inserts across server endpoints (t2)
 
 - **Track / machine:** Clemson RIDES · worktree deputy-pkg-profile-ensure / branch deputy/profile-ensure
