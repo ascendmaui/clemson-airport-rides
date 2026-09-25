@@ -399,6 +399,19 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
   - `docs/FIXES.md`
 - **Verified:** `node --experimental-strip-types --test apps/rider/lib/friendsApi.test.mjs apps/rider/lib/accountApi.test.mjs apps/driver/lib/push.test.mjs` (79 passing).
 
+## 2026-09-25 — stripe webhook method, signature, and malformed-body tests
+
+- **Track / machine:** Clemson RIDES · deputy/webhook-validation-tests · pkg-webhook-validation-tests t1
+- **What was wrong:** `api/stripe-webhook.js` had no direct tests for the method check, stub mode, signature verification, or unsigned malformed bodies. `server/checkoutReconcile.test.js` only drives `checkout.session.completed` through the shared apply function.
+- **Suspected bug (left in place):** Unsigned mode (`webhookSecret` `''` or any secret containing `placeholder`) does not check that the JSON value is an event object. `null` throws on `event.type` and the catch returns 400. A JSON array, including one that wraps `checkout.session.completed`, does not throw, matches no type branch, and is acknowledged `200 {received:true}` without applying the wrapped event. Marked `// BUG?:` in the test. `api/stripe-webhook.js` was not edited.
+- **What changed:** Added `api/stripeWebhookValidation.test.js` and appended it to the root `test` script.
+- **Observed responses:** non-POST → 405; missing / non-`sk_` / `placeholder` stripe secret → 200 `{stub:true}` and the body is not read; a header from `stripe.webhooks.generateTestHeaderString` with `whsec_fake_not_real` → 200 `{received:true}`; missing header, tampered body, wrong secret, and a timestamp an hour old → 400 and `applyPaidCheckoutSession` / `serviceClient` are not called; unsigned malformed JSON and an empty body → 400; unsigned JSON `null` → 400; unsigned JSON array, an object with no `type`, and an unhandled event with no `data.object` → 200 unhandled. None of those paths reject the handler promise.
+- **Files touched:**
+  - `api/stripeWebhookValidation.test.js`
+  - `package.json`
+  - `docs/FIXES.md`
+- **Verified:** `node --experimental-strip-types --test api/stripeWebhookValidation.test.js` (29/29 passing).
+
 ## 2026-09-25 — Expiry cron wired: CRON_SECRET + Supabase pg_cron/pg_net; prod redeployed at 111c607
 
 - **Track / machine:** Clemson RIDES · I9 (61b11c89) Vercel CLI + Supabase awktabuhijrshmsmagpq · approved by John 1:05 AM ET 9/25.
