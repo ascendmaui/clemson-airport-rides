@@ -64,6 +64,11 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
 - **Track / machine:** Clemson RIDES · deputy/vehicle-places-tests
 - **What was wrong:** `packages/rides-native/shared/vehicle.js` and `packages/rides-native/places.js` lacked test coverage and test suite registration in root `package.json`.
 - **What changed:** Confirmed both test suites (`packages/rides-native/shared/vehicle.test.js` and `packages/rides-native/places.test.js`, with vehicle first) are wired as the last entries in the `package.json` `test` script. Verified full offline isolation (no real network or API keys) and confirmed full `npm test` suite passes cleanly (416 tests passing).
+## 2026-09-24 — Wire lostFoundClient tests into root test script
+
+- **Track / machine:** Clemson RIDES · worktree deputy-pkg-lostfound-tests
+- **Problem:** `packages/rides-native/lostFoundClient.js` had unit tests (`packages/rides-native/lostFoundClient.test.js`) created in t1 and robustness fixes applied in t2, but the test suite was not wired into the root `package.json` `npm test` script, leaving it out of standard CI and regression test runs.
+- **Fix:** Appended `packages/rides-native/lostFoundClient.test.js` as the last entry in the `test` script in `package.json`. Verified all tests in the full test suite pass cleanly.
 - **Files touched:**
   - `package.json`
   - `docs/FIXES.md`
@@ -269,6 +274,15 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
   - `server/checkoutReconcile.js`
   - `server/checkoutReconcile.test.js`
   - `api/stripe-webhook.js`
+## 2026-09-24 — lostFoundClient updateReport missing requireClient validation
+
+- **Track / machine:** Clemson RIDES · worktree deputy-pkg-lostfound-tests
+- **Problem:** When `supabase` was null or undefined, `updateReport` (used by `confirmFound`, `confirmNotFound`, `markReturned`, `closeLostFoundReport`, and `saveSupportNote`) threw an unhandled `TypeError: Cannot read properties of ...` instead of the standard `'Supabase is not configured'` error thrown by all other client functions.
+- **Root cause:** `updateReport(supabase, id, patch)` directly accessed `supabase.from(...)` without calling `requireClient(supabase)`.
+- **Fix:** Added `requireClient(supabase)` check at the top of `updateReport(supabase, id, patch)` in `packages/rides-native/lostFoundClient.js`. Updated corresponding unit tests in `packages/rides-native/lostFoundClient.test.js` to assert `Supabase is not configured`.
+- **Files touched:**
+  - `packages/rides-native/lostFoundClient.js`
+  - `packages/rides-native/lostFoundClient.test.js`
   - `docs/FIXES.md`
 
 ## 2026-09-24 — Remove Clerk: Apple + Google social sign-in directly on Supabase Auth
