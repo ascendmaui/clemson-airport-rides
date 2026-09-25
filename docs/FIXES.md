@@ -1709,3 +1709,11 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
 - **What was wrong:** `startGoogleOAuth` treated any truthy `data.url` as the Google sign-in link. A whitespace-only string is truthy, so the rider and driver apps would hand `WebBrowser.openAuthSessionAsync` a blank URL instead of the "Google sign-in is not configured" error.
 - **What changed:** Trim a string `data.url` and reject it when nothing remains. A URL with only surrounding whitespace is returned trimmed. A provider error is still preferred over a URL. Other pinned behaviors are unchanged.
 - **Files touched:** `packages/rides-native/googleAuth.js`, `packages/rides-native/googleAuth.test.js`, `docs/FIXES.md`
+
+## 2026-09-25 — googleAuth tests already run from npm test
+
+- **Date:** 2026-09-25
+- **Track / machine:** Clemson RIDES · deputy/google-auth-tests · pkg-google-auth-tests t3
+- **What was wrong:** Nothing to wire. `packages/rides-native/googleAuth.test.js` is already a single entry in the root `package.json` `test` script (present on `origin/main`, between `syntheticOffers.test.js` and `tests/apiRoutes.test.js`). A second copy would run the suite twice.
+- **What changed:** Left `package.json` as it is. Confirmed `npm test` runs that file with the rest of the suite: 811 pass, 0 fail. The 20 googleAuth tests use `node:test` and an in-memory Supabase auth fake. No network.
+- **Files touched:** `docs/FIXES.md`
