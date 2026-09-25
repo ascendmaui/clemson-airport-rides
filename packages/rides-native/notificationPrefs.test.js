@@ -146,7 +146,7 @@ test('quietFromPrefs treats missing and non-object quiet as the default window',
   assert.deepEqual(quietFromPrefs({ quiet: ['22:00'] }), fallback)
 })
 
-test('quietFromPrefs clock check is a digit shape, and switches are Boolean()', () => {
+test('quietFromPrefs keeps real HH:MM clocks and drops impossible ones', () => {
   assert.deepEqual(quietFromPrefs({
     quiet: { start: '9:00', end: '07:00:00', dnd: 0, scheduleEnabled: 1 },
   }), {
@@ -157,10 +157,14 @@ test('quietFromPrefs clock check is a digit shape, and switches are Boolean()', 
   })
   assert.equal(quietFromPrefs({ quiet: { start: ' 22:00', end: '07:0' } }).start, '22:00')
   assert.equal(quietFromPrefs({ quiet: { end: '07:0' } }).end, '07:00')
+  assert.equal(quietFromPrefs({ quiet: { start: '00:00', end: '23:59' } }).start, '00:00')
+  assert.equal(quietFromPrefs({ quiet: { start: '00:00', end: '23:59' } }).end, '23:59')
 
-  // BUG?: "99:99" matches /^\d{2}:\d{2}$/, so impossible clocks are stored as-is.
-  assert.equal(quietFromPrefs({ quiet: { start: '99:99', end: '24:61' } }).start, '99:99')
-  assert.equal(quietFromPrefs({ quiet: { start: '99:99', end: '24:61' } }).end, '24:61')
+  const impossible = quietFromPrefs({ quiet: { start: '99:99', end: '24:61' } })
+  assert.equal(impossible.start, '22:00')
+  assert.equal(impossible.end, '07:00')
+  assert.equal(quietFromPrefs({ quiet: { start: '24:00', end: '23:60' } }).start, '22:00')
+  assert.equal(quietFromPrefs({ quiet: { start: '24:00', end: '23:60' } }).end, '07:00')
 
   // BUG?: Boolean("false") is true, so a string switch turns the quiet flag on.
   const coerced = quietFromPrefs({ quiet: { dnd: 'false', scheduleEnabled: 'no' } })
@@ -260,7 +264,7 @@ test('normalizePrefs coerces wrong types and keeps unknown categories', () => {
   // BUG?: unknown keys are copied through and would be written back to the profile.
   assert.equal(prefs.marketing, true)
   assert.equal(prefs.quiet.extra, undefined)
-  assert.equal(prefs.quiet.start, '99:99')
+  assert.equal(prefs.quiet.start, '22:00')
   assert.equal(prefs.quiet.dnd, true)
   assert.equal(raw.quiet.extra, true)
 })
@@ -580,11 +584,11 @@ test('saveNotificationPrefs normalizes, mirrors locally, and skips the profile w
   assert.equal(skipped.ok, true)
   assert.equal(skipped.persisted, false)
   assert.equal(skipped.softFail, null)
-  // BUG?: these strings and the impossible clock survive normalization as enabled / literal times.
+  // BUG?: these strings survive normalization as enabled.
   assert.equal(skipped.prefs.promotions, true)
   assert.equal(skipped.prefs.ride, true)
   assert.equal(skipped.prefs.quiet.dnd, true)
-  assert.equal(skipped.prefs.quiet.start, '99:99')
+  assert.equal(skipped.prefs.quiet.start, '22:00')
   assert.equal(skipped.prefs.mystery, true)
   assert.equal(calls.length, 0)
   assert.deepEqual(JSON.parse(storage.data[PREFS_KEY('anon')]), skipped.prefs)
