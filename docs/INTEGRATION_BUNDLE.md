@@ -70,3 +70,15 @@ The following database migrations are included in this bundle repository but **M
   - All 536 tests passing across 19 suites, 0 failures.
 - **Root typecheck (`npm run typecheck`):**
   - Both `apps/rider` and `apps/driver` pass TypeScript checking (`tsc --noEmit`), and all API/server scripts pass syntax checks (`node --check`).
+
+## Test results
+
+- **Date / Time:** Thu Sep 24 22:44:43 EDT 2026 (America/New_York)
+- **Node version:** v22.22.3
+- **npm test totals (node:test summary):**
+  - tests: 536
+  - pass: 536
+  - fail: 0
+  - skipped: 0
+- **Typecheck result (`npm run typecheck`):** Passed (exit code 0; apps/rider tsc --noEmit, apps/driver tsc --noEmit, and node --check on all api/ and server/ JS sources)
+
