@@ -20,6 +20,25 @@ CREATE INDEX IF NOT EXISTS trips_open_scheduled_pickup_idx
   ON public.trips (pickup_at)
   WHERE status = 'scheduled'::public.trip_status AND driver_id IS NULL;
 
+CREATE OR REPLACE FUNCTION public.is_driver_or_admin_role()
+RETURNS boolean
+LANGUAGE plpgsql
+STABLE SECURITY DEFINER
+SET search_path TO 'public'
+SET row_security TO 'off'
+AS $$
+BEGIN
+  RETURN EXISTS (
+    SELECT 1 FROM public.profiles p
+    WHERE p.id = auth.uid()
+      AND p.role = ANY (ARRAY['driver'::public.user_role, 'admin'::public.user_role])
+  );
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.is_driver_or_admin_role() FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.is_driver_or_admin_role() TO authenticated;
+
 DROP POLICY IF EXISTS trips_driver_scheduled_select ON public.trips;
 CREATE POLICY trips_driver_scheduled_select
 ON public.trips
@@ -28,12 +47,7 @@ TO authenticated
 USING (
   status = 'scheduled'::public.trip_status
   AND driver_id IS NULL
-  AND EXISTS (
-    SELECT 1
-    FROM public.profiles p
-    WHERE p.id = auth.uid()
-      AND p.role IN ('driver'::public.user_role, 'admin'::public.user_role)
-  )
+  AND public.is_driver_or_admin_role()
 );
 
 -- Unpaid airport-deposit accepts are rejected by

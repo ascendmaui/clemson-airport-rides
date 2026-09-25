@@ -2,6 +2,14 @@
 
 Persistent knowledge base for recurring failures. When a matching issue appears, apply the saved fix first.
 
+## 2026-09-24 ~9:52 PM ET — Apple sign-in hit profiles/trips RLS recursion
+
+- **Symptom:** Apple sign-in on TestFlight build 18 errored with `infinite recursion detected in policy for relation profiles`.
+- **Root cause:** A cycle existed between the profiles SELECT policy `profiles_trip_counterpart_select`, which queries trips, and the trips SELECT policy `trips_driver_scheduled_select`, which queried profiles directly.
+- **Fix:** Replaced that profiles subquery with the SECURITY DEFINER function `is_driver_or_admin_role()`, which sets `row_security` off.
+- **Applied:** Already applied to the live Supabase project `awktabuhijrshmsmagpq` via migration.
+- **Verified:** As user `jmat2019@icloud.com`, profiles and trips selects plus the profile insert work in a rolled-back transaction. An audit of all public policies found no other cycles.
+
 ## 2026-09-24 — Unpaid airport hold expiry is safe for an external cron
 
 - **Track / machine:** I9 · Deputy · deputy/hold-expiry-hardening
