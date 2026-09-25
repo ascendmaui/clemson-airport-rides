@@ -73,6 +73,11 @@ const GATE: Record<string, { title: string; body: string }> = {
   },
 }
 
+/** Home map overlay grid: screen-edge gutter, spacing between floating pieces, clearance under the status bar. */
+const EDGE = 16
+const GAP = 12
+const TOP_MARGIN = 8
+
 function demandWord(intensity: number): string {
   if (intensity >= 0.75) return 'Busy'
   if (intensity >= 0.45) return 'Picking up'
@@ -116,6 +121,9 @@ export default function DriverHome() {
   const online = Boolean(desk?.online)
   const name = user ? displayFirstName(user.user_metadata?.full_name || user.email?.split('@')[0], 'Driver') : 'Driver'
   const tabClearance = insets.bottom + 72
+  // The dock is pinned between the status bar / Dynamic Island and the tab bar.
+  // Its content stacks from the bottom; an offer card shrinks (and scrolls) to fit.
+  const dockTop = insets.top + TOP_MARGIN
 
   useEffect(() => {
     if (!supabase) {
@@ -367,7 +375,7 @@ export default function DriverHome() {
         gameDayLabel={gameNotice?.live ? gameNotice.headline : null}
       />
       <View pointerEvents="box-none" style={styles.overlay}>
-        <View style={[styles.top, { paddingTop: insets.top + 8 }]} pointerEvents="box-none">
+        <View style={[styles.top, { paddingTop: dockTop }]} pointerEvents="box-none">
           <CircleButton icon="home" label="Menu" onPress={() => router.push('/menu')} />
           <Pressable
             onPress={() => setPeek((open) => !open)}
@@ -462,10 +470,10 @@ export default function DriverHome() {
 
         <View style={styles.flex} pointerEvents="box-none" />
 
-        <View pointerEvents="box-none" style={[styles.dock, { bottom: tabClearance }]}>
+        <View pointerEvents="box-none" style={[styles.dock, { top: dockTop, bottom: tabClearance }]}>
           {!configured ? <ErrorText>Add EXPO_PUBLIC_SUPABASE_ANON_KEY as an EAS environment variable, then rebuild.</ErrorText> : null}
           {error ? <ErrorText>{error}</ErrorText> : null}
-          {user && pendingReview ? (
+          {user && pendingReview && !offer ? (
             <Card>
               <Text style={[styles.cardTitle, { color: colors.title }]}>{gate.title}</Text>
               <Text style={{ color: colors.inkSecondary }}>{gate.body}</Text>
@@ -489,19 +497,25 @@ export default function DriverHome() {
             </Pressable>
           ) : null}
           {offer && !desk?.active ? (
-            <RideCard card={offer} busy={busy} onAccept={() => onAccept(offer)} onDecline={() => onDecline(offer)} />
+            <RideCard
+              card={offer}
+              busy={busy}
+              notice={user && pendingReview ? gate.body : null}
+              onAccept={() => onAccept(offer)}
+              onDecline={() => onDecline(offer)}
+            />
           ) : null}
-          <View style={styles.sideTools} pointerEvents="box-none">
+          <View style={styles.controls} pointerEvents="box-none">
             <View style={styles.toolCol}>
               <CircleButton icon="shield" label="Safety" onPress={() => setSafetyOpen(true)} />
               <CircleButton icon="sparkles" label="Priority mode" onPress={onPriority} />
             </View>
+            <GoButton online={online} busy={busy} onPress={toggle} />
             <View style={styles.toolCol}>
               <CircleButton icon="stats-chart" label="Earnings" onPress={() => router.push('/earnings')} />
               <CircleButton icon="locate" label="Recenter map" onPress={() => setFocusToken((value) => value + 1)} />
             </View>
           </View>
-          <GoButton online={online} busy={busy} onPress={toggle} />
           <View style={[styles.bar, shadow, { backgroundColor: colors.card }]}>
             <CircleButton icon="options" label="Ride queue" onPress={() => router.push('/queue')} />
             <Text style={[styles.barText, { color: colors.title }]}>{statusLine}</Text>
@@ -529,56 +543,82 @@ export default function DriverHome() {
 function RideCard({
   card,
   busy,
+  notice,
   onAccept,
   onDecline,
 }: {
   card: DriverCard
   busy: boolean
+  notice?: string | null
   onAccept: () => void
   onDecline: () => void
 }) {
   const { colors } = useTheme()
   const preferredNote = preferredRequestNote(card)
   const opacity = useState(() => new Animated.Value(0))[0]
+  const scrollRef = useRef<ScrollView>(null)
+  const [viewport, setViewport] = useState(0)
+  const [content, setContent] = useState(0)
+  const overflows = viewport > 0 && content > viewport + 1
   useEffect(() => {
     Animated.timing(opacity, { toValue: 1, duration: 280, useNativeDriver: true }).start()
   }, [opacity])
+  useEffect(() => {
+    // Hint that the breakdown scrolls when the card had to shrink to fit.
+    if (overflows) scrollRef.current?.flashScrollIndicators()
+  }, [overflows, card.id])
   return (
-    <Animated.View style={{ opacity }}>
-      <Card>
-        <Text style={[styles.offerFare, { color: colors.ink }]}>{formatCents(card.driverNetCents)}</Text>
-        <Text style={{ color: colors.inkSecondary }}>
-          {card.carpoolIncentiveId
-            ? `${statusHeadline(card.status)} · base ${formatCents(card.baseNetCents || 0)} · ${card.carpoolIncentiveId} ${formatCents(card.carpoolBonusCents || 0)} · total ${formatCents(card.driverPayoutCents || card.driverNetCents)}`
-            : `${statusHeadline(card.status)} · you net 80%`}
-        </Text>
-        <View style={styles.tags}>
-          {card.tagLabels.map((label) => (
-            <Tag key={label} label={label} tone={tagTone(label)} />
-          ))}
-        </View>
-        {preferredNote ? <Text style={{ color: colors.orange, fontWeight: '700' }}>{preferredNote}</Text> : null}
-        <Text style={{ color: colors.ink, fontWeight: '700' }}>
-          {card.firstName}{card.riderRating ? ` · ${card.riderRating.toFixed(1)}` : ''}
-          {card.rideType ? ` · ${card.rideType}` : ''}
-        </Text>
-        <Text style={{ color: colors.ink, fontWeight: '700' }}>Pickup · {card.pickupLabel}</Text>
-        <Text style={{ color: colors.ink, fontWeight: '700' }}>Drop-off · {card.dropoffLabel}</Text>
-        {card.etaMin || card.distanceMi ? (
+    // flexShrink lets the dock squeeze the card to the room left above the controls;
+    // only the details scroll — Accept / Decline stay pinned and visible.
+    <Animated.View style={[styles.offerWrap, { opacity }]}>
+      <Card style={styles.offerCard}>
+        <ScrollView
+          ref={scrollRef}
+          style={styles.offerScroll}
+          contentContainerStyle={styles.offerBody}
+          showsVerticalScrollIndicator={overflows}
+          bounces={overflows}
+          scrollEnabled={overflows}
+          onLayout={(event) => setViewport(event.nativeEvent.layout.height)}
+          onContentSizeChange={(_, height) => setContent(height)}
+        >
+          {notice ? <Text style={[styles.offerNotice, { color: colors.orange }]}>{notice}</Text> : null}
+          <Text style={[styles.offerFare, { color: colors.ink }]}>{formatCents(card.driverNetCents)}</Text>
           <Text style={{ color: colors.inkSecondary }}>
-            {[card.etaMin ? `${card.etaMin} min away` : null, card.distanceMi ? `${card.distanceMi} mi` : null].filter(Boolean).join(' · ')}
+            {card.carpoolIncentiveId
+              ? `${statusHeadline(card.status)} · base ${formatCents(card.baseNetCents || 0)} · ${card.carpoolIncentiveId} ${formatCents(card.carpoolBonusCents || 0)} · total ${formatCents(card.driverPayoutCents || card.driverNetCents)}`
+              : `${statusHeadline(card.status)} · you net 80%`}
           </Text>
-        ) : null}
-        {card.pickupAt ? <Text style={{ color: colors.inkSecondary }}>{formatPickupAt(card.pickupAt)}</Text> : null}
-        {card.depositCents > 0 ? <Text style={{ color: colors.inkSecondary }}>25% deposit · {formatCents(card.depositCents)}</Text> : null}
-        {card.teslaStub ? <Text style={{ color: colors.inkSecondary }}>{TESLA_FLEET_NOTICE}</Text> : null}
-        <FarePanel card={card} />
-        <Primary label={busy ? 'Saving…' : acceptActionLabel(card.status)} onPress={onAccept} disabled={busy} />
-        <Pressable onPress={onDecline} disabled={busy} style={styles.decline}>
-          <Text style={{ color: declineDisposition(card.status) === 'cancel' ? colors.orange : colors.inkSecondary, fontWeight: '700' }}>
-            {declineActionLabel(card.status)}
+          <View style={styles.tags}>
+            {card.tagLabels.map((label) => (
+              <Tag key={label} label={label} tone={tagTone(label)} />
+            ))}
+          </View>
+          {preferredNote ? <Text style={{ color: colors.orange, fontWeight: '700' }}>{preferredNote}</Text> : null}
+          <Text style={{ color: colors.ink, fontWeight: '700' }}>
+            {card.firstName}{card.riderRating ? ` · ${card.riderRating.toFixed(1)}` : ''}
+            {card.rideType ? ` · ${card.rideType}` : ''}
           </Text>
-        </Pressable>
+          <Text style={{ color: colors.ink, fontWeight: '700' }}>Pickup · {card.pickupLabel}</Text>
+          <Text style={{ color: colors.ink, fontWeight: '700' }}>Drop-off · {card.dropoffLabel}</Text>
+          {card.etaMin || card.distanceMi ? (
+            <Text style={{ color: colors.inkSecondary }}>
+              {[card.etaMin ? `${card.etaMin} min away` : null, card.distanceMi ? `${card.distanceMi} mi` : null].filter(Boolean).join(' · ')}
+            </Text>
+          ) : null}
+          {card.pickupAt ? <Text style={{ color: colors.inkSecondary }}>{formatPickupAt(card.pickupAt)}</Text> : null}
+          {card.depositCents > 0 ? <Text style={{ color: colors.inkSecondary }}>25% deposit · {formatCents(card.depositCents)}</Text> : null}
+          {card.teslaStub ? <Text style={{ color: colors.inkSecondary }}>{TESLA_FLEET_NOTICE}</Text> : null}
+          <FarePanel card={card} />
+        </ScrollView>
+        <View style={[styles.offerActions, overflows && { borderTopColor: colors.border, borderTopWidth: StyleSheet.hairlineWidth }]}>
+          <Primary label={busy ? 'Saving…' : acceptActionLabel(card.status)} onPress={onAccept} disabled={busy} />
+          <Pressable onPress={onDecline} disabled={busy} style={styles.decline}>
+            <Text style={{ color: declineDisposition(card.status) === 'cancel' ? colors.orange : colors.inkSecondary, fontWeight: '700' }}>
+              {declineActionLabel(card.status)}
+            </Text>
+          </Pressable>
+        </View>
       </Card>
     </Animated.View>
   )
@@ -587,7 +627,7 @@ function RideCard({
 const styles = StyleSheet.create({
   screen: { flex: 1 },
   overlay: { ...StyleSheet.absoluteFill },
-  top: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16 },
+  top: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: EDGE },
   pill: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -614,13 +654,13 @@ const styles = StyleSheet.create({
   hotspotOn: { color: '#fff', fontWeight: '800' as const },
   hotspotOff: { fontWeight: '800' as const },
   flex: { flex: 1 },
-  dock: { position: 'absolute', left: 12, right: 12, gap: 10, alignItems: 'center' },
+  dock: { position: 'absolute', left: EDGE, right: EDGE, gap: GAP, justifyContent: 'flex-end' },
   cardTitle: { fontWeight: '800', fontSize: 18 },
   live: { alignSelf: 'stretch', borderRadius: 18, padding: 14, gap: 4 },
   liveKicker: { fontWeight: '800', fontSize: 11, letterSpacing: 1 },
   liveTitle: { fontWeight: '800', fontSize: 18 },
-  sideTools: { alignSelf: 'stretch', flexDirection: 'row', justifyContent: 'space-between' },
-  toolCol: { gap: 10 },
+  controls: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  toolCol: { gap: GAP },
   bar: {
     alignSelf: 'stretch',
     borderRadius: 28,
@@ -634,6 +674,12 @@ const styles = StyleSheet.create({
   offerFare: { fontSize: 32, fontWeight: '800', letterSpacing: -0.6 },
   tags: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   decline: { alignItems: 'center', paddingVertical: 4 },
+  offerWrap: { flexShrink: 1 },
+  offerCard: { flexShrink: 1, gap: 0, paddingBottom: 12 },
+  offerScroll: { flexGrow: 0, flexShrink: 1 },
+  offerBody: { gap: 10, paddingBottom: 2 },
+  offerNotice: { fontWeight: '700', fontSize: 13, lineHeight: 18 },
+  offerActions: { gap: 6, paddingTop: 10 },
   modalScrim: { flex: 1, backgroundColor: 'rgba(11,18,32,0.45)', justifyContent: 'flex-end' },
   modalCard: { borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 20, gap: 12 },
 })
