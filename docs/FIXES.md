@@ -90,6 +90,16 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
   - `docs/FIXES.md`
 - **Verified:** `node --experimental-strip-types --test packages/rides-native/apiClient.test.js` (30/30 passing).
 
+## 2026-09-25 — wire driverGateView tests into npm test (pkg-driver-pending-ux t3)
+
+- **Track / machine:** Clemson RIDES · worktree deputy-pkg-driver-pending-ux · pkg-driver-pending-ux t3
+- **Problem:** `packages/rides-native/driverGateView.test.js` was created to validate driver approval gate capabilities and status view copy across onboarding states, but was not wired into root `package.json`'s `test` script, so `npm test` omitted the suite during standard runs.
+- **Fix:** Appended `packages/rides-native/driverGateView.test.js` as the last entry of the `test` script in `package.json`.
+- **Files touched:**
+  - `package.json`
+  - `docs/FIXES.md`
+- **Verified:** `npm test` (803/803 passing, including all 10 tests in `packages/rides-native/driverGateView.test.js`).
+
 ## 2026-09-25 — driver home/queue respect approval status (pkg-driver-pending-ux t2)
 
 - **Track / machine:** Clemson RIDES · worktree deputy-pkg-driver-pending-ux · pkg-driver-pending-ux t2
