@@ -4,6 +4,21 @@
  */
 
 /**
+ * First non-empty string. Blank strings are skipped, and a truthy number or
+ * boolean must not hide a later string field (`sessionId: 123` in front of
+ * `session_id`, or `url: 1` in front of `href`).
+ *
+ * @param {...unknown} values
+ * @returns {string | null}
+ */
+function firstPresentString(...values) {
+  for (const value of values) {
+    if (typeof value === 'string' && value) return value
+  }
+  return null
+}
+
+/**
  * Extracts a Stripe checkout session ID (`cs_...`) from a URL, hash, query string, or object.
  * Returns the session ID string if found and valid, or null.
  *
@@ -15,12 +30,17 @@ export function parseCheckoutSessionId(input) {
 
   // If object, check direct property or params property or url/href
   if (typeof input === 'object') {
-    const candidate = input.sessionId || input.session_id || input.params?.sessionId || input.params?.session_id
+    const candidate = firstPresentString(
+      input.sessionId,
+      input.session_id,
+      input.params?.sessionId,
+      input.params?.session_id,
+    )
     if (typeof candidate === 'string' && candidate.trim().startsWith('cs_')) {
       return candidate.trim()
     }
-    const url = input.url || input.href || input.hash
-    if (typeof url === 'string') {
+    const url = firstPresentString(input.url, input.href, input.hash)
+    if (url) {
       return parseCheckoutSessionId(url)
     }
     return null
