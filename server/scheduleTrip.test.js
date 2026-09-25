@@ -817,7 +817,7 @@ describe('scheduleTrip endpoint handler', () => {
   })
 
   describe('Party size and vehicle capacity edge cases', () => {
-    test('scheduleTrip records single passenger (passengers: 1) regardless of client partySize', async () => {
+    test('scheduleTrip stores request passengers so capacity checks can run', async () => {
       const { sb, tripsInserted } = createFakeSb()
       const validFuture = new Date(Date.now() + 60 * 60 * 1000).toISOString()
       const res = await callHandler(
@@ -841,10 +841,87 @@ describe('scheduleTrip endpoint handler', () => {
 
       assert.equal(res.status, 200)
       assert.equal(tripsInserted.length, 1)
-      // scheduleTrip enforces 1 passenger for personal/airport scheduled trips
-      assert.equal(tripsInserted[0].passengers, 1)
+      // Prefer body.passengers over partySize; do not hardcode 1
+      assert.equal(tripsInserted[0].passengers, 6)
       assert.equal(tripsInserted[0].metadata.party, 'weekend')
       assert.equal(tripsInserted[0].metadata.purpose, 'party_weekend')
+    })
+
+    test('scheduleTrip falls back to partySize when passengers is omitted', async () => {
+      const { sb, tripsInserted } = createFakeSb()
+      const validFuture = new Date(Date.now() + 60 * 60 * 1000).toISOString()
+      const res = await callHandler(
+        scheduleTripHandler,
+        {
+          method: 'POST',
+          body: {
+            ...defaultPlaces,
+            pickupAt: validFuture,
+            purpose: 'party_weekend',
+            partySize: 4,
+          },
+        },
+        {
+          user: mockStandardUser,
+          sb,
+          ensureProfile: async () => ({ ok: true }),
+        },
+      )
+
+      assert.equal(res.status, 200)
+      assert.equal(tripsInserted[0].passengers, 4)
+    })
+
+    test('scheduleTrip defaults passengers to 1 when omitted or invalid', async () => {
+      const validFuture = new Date(Date.now() + 60 * 60 * 1000).toISOString()
+      for (const passengers of [undefined, null, '', 0, -3, 'nope', NaN]) {
+        const { sb, tripsInserted } = createFakeSb()
+        const body = {
+          ...defaultPlaces,
+          pickupAt: validFuture,
+          purpose: 'planned',
+        }
+        if (passengers !== undefined) body.passengers = passengers
+        const res = await callHandler(
+          scheduleTripHandler,
+          { method: 'POST', body },
+          {
+            user: mockStandardUser,
+            sb,
+            ensureProfile: async () => ({ ok: true }),
+          },
+        )
+        assert.equal(res.status, 200, `status for passengers=${String(passengers)}`)
+        assert.equal(tripsInserted[0].passengers, 1, `passengers for ${String(passengers)}`)
+      }
+    })
+
+    test('oversized party count is stored so a DB capacity check can reject the insert', async () => {
+      const { sb, tripsInserted } = createFakeSb({
+        tripInsertError: { message: 'check constraint "trips_party_capacity_check" failed' },
+      })
+      const validFuture = new Date(Date.now() + 60 * 60 * 1000).toISOString()
+      const res = await callHandler(
+        scheduleTripHandler,
+        {
+          method: 'POST',
+          body: {
+            ...defaultPlaces,
+            pickupAt: validFuture,
+            purpose: 'party_weekend',
+            passengers: 8,
+          },
+        },
+        {
+          user: mockStandardUser,
+          sb,
+          ensureProfile: async () => ({ ok: true }),
+        },
+      )
+
+      assert.equal(tripsInserted[0].passengers, 8)
+      assert.equal(res.status, 500)
+      assert.equal(res.json.error, 'check constraint "trips_party_capacity_check" failed')
     })
 
     test('returns 500 when database rejects trip insert (e.g. table capacity check constraint)', async () => {
