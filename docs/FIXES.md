@@ -143,6 +143,14 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
 - **What changed:** Bounded `query` and `hash` slicing symmetrically: `query` ends at `hashIndex` only when `hashIndex > queryIndex`, and `hash` ends at `queryIndex` only when `queryIndex > hashIndex`. This cleanly partitions URL query and fragment parameters regardless of whether `?` precedes `#` or `#` precedes `?`. Updated unit tests in `packages/rides-native/authUrl.test.js` to assert proper extraction of session and code parameters from hash-routed URLs.
 - **Files touched:** `packages/rides-native/authUrl.js`, `packages/rides-native/authUrl.test.js`, `docs/FIXES.md`
 
+## 2026-09-25 — secureStore tests wired into npm test
+
+- **Track / machine:** Clemson RIDES · deputy/secure-store-r2 · pkg-secure-store-r2 t3
+- **What was wrong:** `packages/rides-native/secureStore.test.js` existed (t1/t2) but the root `package.json` `test` script never listed it, so `npm test` did not run the secure-store suite.
+- **What changed:** Appended `packages/rides-native/secureStore.test.js` to the root `test` script. `secureStore.js` and the test file were not edited. `packages/rides-native/package.json` has no `test` script; the runner's acceptance command is the root `npm test`.
+- **Files touched:** `package.json`, `docs/FIXES.md`
+- **Verified:** `npm test` (809 pass, 0 fail), including all 16 tests in `packages/rides-native/secureStore.test.js`.
+
 ## 2026-09-25 — native secureStore removeItem only ignores a missing key
 
 - **Track / machine:** Clemson RIDES · deputy/secure-store-r2 · pkg-secure-store-r2 t2
