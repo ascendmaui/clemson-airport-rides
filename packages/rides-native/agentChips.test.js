@@ -1,6 +1,15 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
+import * as agentChips from './agentChips.js'
 import { HELP_CHIPS, SUPPORT_CHIPS, categoryLabel } from './agentChips.js'
+
+function assertChipShape(chip) {
+  assert.deepEqual(Object.keys(chip).sort(), ['label', 'text'])
+  assert.equal(typeof chip.label, 'string')
+  assert.ok(chip.label.trim().length > 0)
+  assert.equal(typeof chip.text, 'string')
+  assert.ok(chip.text.trim().length > 0)
+}
 
 test('categoryLabel formats canonical support ticket categories', () => {
   assert.equal(categoryLabel('bug'), 'Bug')
@@ -26,6 +35,30 @@ test('categoryLabel handles unknown, empty, and non-string inputs', () => {
 
   // BUG?: categoryLabel does not normalize space-separated category strings such as 'ride dispute'
   assert.equal(categoryLabel('ride dispute'), 'ride dispute')
+
+  // BUG?: canonical keys are case-sensitive and are not trimmed, so near-misses echo back raw
+  assert.equal(categoryLabel('BUG'), 'BUG')
+  assert.equal(categoryLabel(' bug'), ' bug')
+  assert.equal(categoryLabel('safety '), 'safety ')
+
+  // BUG?: a whitespace-only category is truthy, so it is returned unchanged instead of 'Other'
+  assert.equal(categoryLabel('   '), '   ')
+
+  // BUG?: NaN is falsy and collapses to 'Other'; an empty array is truthy and String([]) is ''
+  assert.equal(categoryLabel(Number.NaN), 'Other')
+  assert.equal(categoryLabel([]), '')
+})
+
+test('rides-native agentChips re-exports only the chip maps and categoryLabel', () => {
+  assert.deepEqual(Object.keys(agentChips).sort(), ['HELP_CHIPS', 'SUPPORT_CHIPS', 'categoryLabel'])
+  assert.equal(agentChips.HELP_CHIPS, HELP_CHIPS)
+  assert.equal(agentChips.SUPPORT_CHIPS, SUPPORT_CHIPS)
+  assert.equal(agentChips.categoryLabel, categoryLabel)
+  assert.equal(typeof categoryLabel, 'function')
+  assert.deepEqual(Object.keys(HELP_CHIPS).sort(), ['driver', 'rider'])
+  assert.deepEqual(Object.keys(SUPPORT_CHIPS).sort(), ['driver', 'rider'])
+  assert.equal(HELP_CHIPS.admin, undefined)
+  assert.equal(SUPPORT_CHIPS.admin, undefined)
 })
 
 test('HELP_CHIPS contains rider and driver guide questions with label and text', () => {
@@ -35,10 +68,7 @@ test('HELP_CHIPS contains rider and driver guide questions with label and text',
   assert.equal(HELP_CHIPS.driver.length, 5)
 
   for (const chip of [...HELP_CHIPS.rider, ...HELP_CHIPS.driver]) {
-    assert.equal(typeof chip.label, 'string')
-    assert.ok(chip.label.trim().length > 0)
-    assert.equal(typeof chip.text, 'string')
-    assert.ok(chip.text.trim().length > 0)
+    assertChipShape(chip)
   }
 
   const riderLabels = HELP_CHIPS.rider.map((chip) => chip.label)
@@ -67,10 +97,7 @@ test('SUPPORT_CHIPS contains rider and driver issue prompts with label and text'
   assert.equal(SUPPORT_CHIPS.driver.length, 5)
 
   for (const chip of [...SUPPORT_CHIPS.rider, ...SUPPORT_CHIPS.driver]) {
-    assert.equal(typeof chip.label, 'string')
-    assert.ok(chip.label.trim().length > 0)
-    assert.equal(typeof chip.text, 'string')
-    assert.ok(chip.text.trim().length > 0)
+    assertChipShape(chip)
   }
 
   const riderLabels = SUPPORT_CHIPS.rider.map((chip) => chip.label)
@@ -90,6 +117,23 @@ test('SUPPORT_CHIPS contains rider and driver issue prompts with label and text'
     'Rider dispute',
     'App bug',
     'Safety',
+  ])
+})
+
+test('HELP_CHIPS prompt texts are the guide questions shown for each label', () => {
+  assert.deepEqual(HELP_CHIPS.rider.map((chip) => chip.text), [
+    'How do I schedule a GSP or CLT ride?',
+    'Where do I add a card for rides?',
+    'How does the Clemson student discount work?',
+    'How do friend rides and fare splits work?',
+    'How do I share my live location?',
+  ])
+  assert.deepEqual(HELP_CHIPS.driver.map((chip) => chip.text), [
+    'How do I go online and accept a ride?',
+    'How do I finish driver signup and get approved?',
+    'How do the heat map and map types work?',
+    'How do I offer a carpool?',
+    'Where do I see earnings?',
   ])
 })
 

@@ -2,6 +2,13 @@
 
 Persistent knowledge base for recurring failures. When a matching issue appears, apply the saved fix first.
 
+## 2026-09-24 — agentChips unit tests leave production source unchanged
+
+- **Track / machine:** Clemson RIDES · deputy/agent-chips-tests · pkg-agent-chips-tests t1
+- **What was wrong:** `packages/rides-native/agentChips.js` only re-exports `HELP_CHIPS`, `SUPPORT_CHIPS`, and `categoryLabel`. The first test pass checked labels and support prompts, but a help-copy change could still pass, and `categoryLabel` trim/case/falsy behavior was only partly pinned.
+- **What changed:** Extended `packages/rides-native/agentChips.test.js` only. Did not edit `packages/rides-native/agentChips.js` or `server/agentChips.js`. Tests now lock help prompt text, the re-export list, and chip `{label, text}` shape. Quirks stay asserted with `// BUG?:`: `0` and `false` become `Other`; canonical keys are not trimmed or lowercased; a whitespace-only category is returned unchanged; `NaN` becomes `Other`; an empty array becomes `''`.
+- **Files touched:** `packages/rides-native/agentChips.test.js`, `docs/FIXES.md`
+
 ## 2026-09-24 — Remove Clerk: Apple + Google social sign-in directly on Supabase Auth
 
 - **Track / machine:** Clemson RIDES · worktree feat/supabase-auth-remove-clerk
