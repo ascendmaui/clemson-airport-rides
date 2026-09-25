@@ -87,6 +87,19 @@ function canonicalMake(value) {
   return MAKE_ALIASES[folded] || MAKE_ALIASES[String(value || '').toLowerCase().trim()] || folded
 }
 
+function makeAliases(make) {
+  const key = fold(make)
+  if (!key) return []
+  const canonical = canonicalMake(make)
+  const list = new Set([canonical, key])
+  for (const [alias, target] of Object.entries(MAKE_ALIASES)) {
+    if (target === canonical) {
+      list.add(fold(alias))
+    }
+  }
+  return [...list].filter(Boolean)
+}
+
 function bytesToLatin1(input) {
   if (typeof input === 'string') return input
   const bytes = input instanceof Uint8Array ? input : new Uint8Array(input)
@@ -119,7 +132,8 @@ export function matchRegistration({ text, make, model, color, plate } = {}) {
   const hay = fold(readable)
   const misses = []
   const makeKey = canonicalMake(make)
-  if (make && makeKey !== 'other' && !hay.includes(makeKey) && !hay.includes(fold(make))) {
+  const makeKeys = makeAliases(make)
+  if (make && makeKey !== 'other' && !makeKeys.some((k) => hay.includes(k))) {
     misses.push('make')
   }
   const modelKey = fold(model)
