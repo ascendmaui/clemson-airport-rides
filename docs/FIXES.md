@@ -128,6 +128,56 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
 - **Verified:** Throwaway Supabase user on `clemson-rides.vercel.app`: `action=setup-intent` 200 (client_secret), `action=airport-checkout` 200 (Stripe Checkout session), `create-checkout-session` 200. User and its trips deleted afterwards.
 - **Next time:** When a new Vercel project/domain is created, diff env var NAMES against the old project before pointing apps at it. Consider making `userFromAuth` return a 503 (not 401) when the service key is missing so the error is not mistaken for an auth problem.
 - **Still open:** `profiles.stripe_card_brand` / `stripe_card_last4` and `trips.created_at` missing (migration `20260925020500_card_brand_and_trip_created_at.sql`, not applied); Stripe webhook endpoint for `clemson-rides.vercel.app/api/stripe-webhook` not registered; Stripe is in test mode (`cs_test_`); `SUPABASE_URL` is Production-only on `clemson-rides` (code falls back to the project URL).
+## 2026-09-24 — Wire ensureProfile tests into test script (t3)
+
+- **Track / machine:** Clemson RIDES · worktree deputy-pkg-profile-ensure / branch deputy/profile-ensure
+- **Symptom:** `server/ensureProfile.test.js` was not executed during standard `npm test`, risking test regression in CI.
+- **Root cause:** The `"test"` script in `package.json` had not yet appended the new `server/ensureProfile.test.js` test suite.
+- **Fix:** Appended `server/ensureProfile.test.js` as the last entry of the `"test"` script in `package.json`.
+- **Files touched:**
+  - `package.json`
+  - `docs/FIXES.md`
+- **Verified:** Ran full `npm test` with 371/371 tests passing (including all 20 tests in `server/ensureProfile.test.js`).
+
+## 2026-09-24 — Ensure profile before trip inserts across server endpoints (t2)
+
+- **Track / machine:** Clemson RIDES · worktree deputy-pkg-profile-ensure / branch deputy/profile-ensure
+- **Symptom:** Brand-new users without a `public.profiles` row encountered foreign key violation errors (`trips_rider_id_fkey`) when attempting to create trips.
+- **Root cause:** Endpoints created `trips` rows referencing `user.id` as `rider_id` before verifying that a corresponding `public.profiles` row existed.
+- **Fix:** Called `ensureProfile(sb, user)` immediately prior to `trips.insert(...)` across all trip-inserting endpoints:
+  - `api/create-checkout-session.js`
+  - `server/endpoints/airportCheckout.js`
+  - `server/endpoints/scheduleTrip.js`
+  - `server/endpoints/requestDriverTrip.js`
+  If `ensureProfile` returns `ok: false`, immediately respond 500 with `{ error: 'Could not create your rider profile', code: 'profile_missing' }` and halt execution before inserting into `trips`.
+  Supported dependency injection (`deps`) for `sb`, `user`, `ensureProfile`, `stripeOk`, and `stripe` across all four endpoints.
+  Added unit and end-to-end integration tests in `server/ensureProfile.test.js` proving `ensureProfile` executes before `trips.insert` and that upsert failures abort the insert and return 500.
+- **Files touched:**
+  - `api/create-checkout-session.js`
+  - `server/endpoints/airportCheckout.js`
+  - `server/endpoints/scheduleTrip.js`
+  - `server/endpoints/requestDriverTrip.js`
+  - `server/ensureProfile.test.js`
+  - `docs/FIXES.md`
+- **Verified:** All tests in `server/ensureProfile.test.js`, `server/abandonedCheckout.test.js`, `tests/apiRoutes.test.js`, and full `npm test` suite passing (351/351 tests).
+
+## 2026-09-24 — Ensure minimal profile row for new Supabase auth users (t1)
+
+- **Track / machine:** Clemson RIDES · worktree deputy-pkg-profile-ensure / branch deputy/profile-ensure
+- **Symptom:** Brand-new user signing in via Apple or Google on Supabase Auth (#71) has an `auth.users` row but no `public.profiles` row. `trips.rider_id` foreign key references `profiles(id)` (`trips_rider_id_fkey`), causing initial trip creation to fail with 500.
+- **Root cause:** Native social auth flows sign into Supabase Auth but may not populate `public.profiles` prior to the user's first trip request.
+- **Fix:** Created `server/ensureProfile.js` (`ensureProfile(sb, user)`):
+  - Validates `sb` and `user?.id`, safely returning `{ ok: false, reason: 'no_user' }` without throwing if missing.
+  - Queries `profiles` with `.select('id').eq('id', user.id).maybeSingle()`; if profile exists, returns `{ ok: true, created: false }` with zero writes.
+  - Upserts minimal profile row `{ id: user.id, email: user.email ?? null, full_name: user.user_metadata?.full_name || user.user_metadata?.name || null, role: 'rider' }` with options `{ onConflict: 'id', ignoreDuplicates: true }` so existing profiles and roles are never overwritten.
+  - Catches Postgres 23505 unique violations on race conditions and returns `{ ok: true, created: false }`.
+  - Retries once with `{ id: user.id, email: user.email ?? null }` if schema or column errors occur.
+  - Returns `{ ok: false, reason: 'profile_upsert_failed', message }` on other errors.
+- **Files touched:**
+  - `server/ensureProfile.js`
+  - `server/ensureProfile.test.js`
+  - `docs/FIXES.md`
+- **Verified:** 10/10 tests in `server/ensureProfile.test.js` passing via `node --experimental-strip-types --test server/ensureProfile.test.js`.
 
 ## 2026-09-24 — Remove Clerk: Apple + Google social sign-in directly on Supabase Auth
 
