@@ -2,6 +2,18 @@
 
 Persistent knowledge base for recurring failures. When a matching issue appears, apply the saved fix first.
 
+## 2026-09-25 — Extract offerCard view-model helpers and tests
+
+- **Track / machine:** Clemson RIDES DRIVER · worktree `deputy-pkg-driver-offer-card-polish`
+- **What was wrong:** Driver offer card formatting logic was inline in `apps/driver/app/(tabs)/index.tsx`, making presentation logic hard to unit test and inconsistent across Home, Queue, and other driver views.
+- **What changed:** Extracted pure formatting and view-model helpers into `packages/rides-native/offerCard.js` (with TypeScript definitions in `packages/rides-native/offerCard.d.ts` and test suite in `packages/rides-native/offerCard.test.js`). Includes pickup/dropoff short label normalization (airports, street addresses, bullets, fallbacks), driver net earnings (reusing `fareCollection`, `driverNetCents`, `formatCents` without inventing numbers), distance/ETA text, seats, airport/deposit badges, time-left-to-accept countdowns, and a unified `offerCardViewModel`.
+- **Files touched:**
+  - `packages/rides-native/offerCard.js`
+  - `packages/rides-native/offerCard.d.ts`
+  - `packages/rides-native/offerCard.test.js`
+  - `docs/FIXES.md`
+- **Verified:** `node --experimental-strip-types --test packages/rides-native/offerCard.test.js` (9/9 pass, 0 fail).
+
 ## 2026-09-25 — merge_trip_metadata trip_status enum cast applied (#100)
 
 - **Problem:** `public.merge_trip_metadata` (#80) failed on every call with `operator does not exist: trip_status = text`, which broke the airport-checkout session bind, abandon-checkout release and the unpaid-hold expiry cancel.
