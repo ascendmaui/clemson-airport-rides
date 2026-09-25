@@ -44,6 +44,24 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
   - `docs/FIXES.md`
 - **Verified:** `node --experimental-strip-types --test packages/rides-native/offerCard.test.js` (9/9 pass, 0 fail).
 
+## 2026-09-25 — documentReview.js unit test coverage leaves production source unchanged [t1]
+
+- **Track / machine:** Clemson RIDES · deputy/document-review-r2 · pkg-document-review-r2 t1
+- **What was wrong:** `packages/rides-native/documentReview.js` had incomplete test coverage: `LICENSE_REVIEW_STATUS` and `extractReadableText` were not tested; `reviewLicenseImage` lacked tests for size/dimension/aspect ratio boundaries, null handling, and OCR keyword filtering rules; `licensePendingCopy` lacked non-standard docType handling; and `matchRegistration` lacked tests for aliases, multi-field misses, and plate quirks.
+- **What changed:** Extended `packages/rides-native/documentReview.test.js` to cover every exported helper (`LICENSE_REVIEW_STATUS`, `reviewLicenseImage`, `licensePendingCopy`, `extractReadableText`, and `matchRegistration`) across happy paths, null/empty inputs, boundaries, and error branches. Kept production source code untouched. Documented quirks and bugs with `// BUG?:` comments:
+  - `reviewLicenseImage(null)` and `matchRegistration(null)` throw `TypeError` on destructuring.
+  - `reviewLicenseImage` with only `mimeType` skips size, dimension, and keyword checks.
+  - Partial dimensions (e.g. width provided without height) skip dimension and aspect ratio checks.
+  - `LICENSE_KEYWORDS` uses substring `includes` without word boundaries (e.g. 'idle expensive' matches 'dl' and 'exp').
+  - `licensePendingCopy` falls back to front copy for null, undefined, or unknown docTypes.
+  - `extractReadableText` treats binary as Latin-1, matches only ASCII characters, allows spaces inside character runs, and splits on underscores `_`.
+  - `canonicalMake` maps aliases in one direction only (driver entering 'Chevrolet' against doc containing 'Chevy' mismatches).
+  - `plate` lacks an 'other' exemption unlike make, model, and color.
+  - `matchRegistration` with valid text but all vehicle fields omitted passes as matched with 0 misses.
+- **Files touched:**
+  - `packages/rides-native/documentReview.test.js`
+  - `docs/FIXES.md`
+
 ## 2026-09-25 — Expiry cron wired: CRON_SECRET + Supabase pg_cron/pg_net; prod redeployed at 111c607
 
 - **Track / machine:** Clemson RIDES · I9 (61b11c89) Vercel CLI + Supabase awktabuhijrshmsmagpq · approved by John 1:05 AM ET 9/25.
