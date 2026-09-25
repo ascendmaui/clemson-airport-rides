@@ -344,8 +344,8 @@ test('agreementPlainText converts HTML headings and paragraphs into clean plain 
   // Empty string
   assert.equal(agreementPlainText(''), '')
 
-  // BUG?: String(null) yields "null", so agreementPlainText(null) evaluates to "null" instead of ""
-  assert.equal(agreementPlainText(null), 'null')
+  // Null returns empty string
+  assert.equal(agreementPlainText(null), '')
 })
 
 test('requireClient-style failures: save paths throw clear errors when supabase is missing', async () => {

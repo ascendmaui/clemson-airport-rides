@@ -2,6 +2,17 @@
 
 Persistent knowledge base for recurring failures. When a matching issue appears, apply the saved fix first.
 
+## 2026-09-24 — Guard agreementPlainText against null inputs (task t2)
+
+- **Track / machine:** Clemson RIDES · worktree deputy-pkg-driver-onboarding-tests
+- **Problem:** `agreementPlainText` in `packages/rides-native/driverOnboardingClient.js` coerced falsy input directly with `String(html)`, causing `agreementPlainText(null)` to evaluate to `"null"` instead of returning an empty string.
+- **Fix:** Added a null/undefined guard (`if (html == null) return ''`) before processing string replacements in `agreementPlainText`. Updated test in `packages/rides-native/driverOnboardingClient.test.js` to assert `agreementPlainText(null) === ''`.
+- **Files touched:**
+  - `packages/rides-native/driverOnboardingClient.js`
+  - `packages/rides-native/driverOnboardingClient.test.js`
+  - `docs/FIXES.md`
+- **Verified:** `node --experimental-strip-types --test packages/rides-native/driverOnboardingClient.test.js` passes 21/21 tests; `npm test` passes 372/372.
+
 ## 2026-09-24 — Add unit test coverage for driverOnboardingClient (task t1)
 
 - **Track / machine:** Clemson RIDES · worktree deputy-pkg-driver-onboarding-tests
