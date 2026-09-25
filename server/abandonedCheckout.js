@@ -150,7 +150,7 @@ export function liveStatusAfterPaidDeposit(trip, session, { depositPaid = false 
 async function loadTrip(sb, tripId) {
   const { data, error } = await sb
     .from('trips')
-    .select('id, status, rider_id, driver_id, scheduled_for, metadata, canceled_at, created_at, deposit_cents, rider_note')
+    .select('id, status, rider_id, driver_id, scheduled_for, metadata, canceled_at, created_at, deposit_cents, rider_note, hold_expire_claimed_at')
     .eq('id', tripId)
     .maybeSingle()
   if (error) return { error }
@@ -173,27 +173,29 @@ function metaObject(trip) {
 
 async function writeCanceled(sb, trip, session, { reason, source }) {
   const canceledAt = new Date().toISOString()
-  const nextMeta = { ...metaObject(trip) }
-  delete nextMeta.hold_expire_claim
-  nextMeta.checkout_abandoned = {
-    session_id: session?.id || null,
-    reason,
-    source,
-    at: canceledAt,
+  const patch = {
+    checkout_abandoned: {
+      session_id: session?.id || null,
+      reason,
+      source,
+      at: canceledAt,
+    },
   }
   // Conditional update: only the sweep that still sees a live hold writes
   // the cancel and, below, the trip_events row.
-  const { data, error } = await sb
-    .from('trips')
-    .update({ status: 'canceled', canceled_at: canceledAt, metadata: nextMeta })
-    .eq('id', trip.id)
-    .in('status', UNPAID_CHECKOUT_STATUSES)
-    .is('driver_id', null)
-    .is('metadata->>checkout_abandoned', null)
-    .select('id, status')
-    .maybeSingle()
+  const { data, error } = await sb.rpc('merge_trip_metadata', {
+    p_trip_id: trip.id,
+    p_patch: patch,
+    p_expected_statuses: UNPAID_CHECKOUT_STATUSES,
+    p_new_status: 'canceled',
+    p_canceled_at: canceledAt,
+    p_clear_claim: true,
+    p_require_unassigned: true,
+    p_require_unabandoned: true,
+  })
   if (error) return { released: false, reason: 'update_failed', error: error.message }
-  if (!data) return { released: false, reason: 'not_in_pool', status: trip.status }
+  const row = Array.isArray(data) ? data[0] : data
+  if (!row || !row.id) return { released: false, reason: 'not_in_pool', status: trip.status }
   const { error: eventErr } = await sb.from('trip_events').insert({
     trip_id: trip.id,
     kind: 'canceled',
@@ -229,11 +231,13 @@ export async function restoreLiveTripAfterDeposit(sb, session, { depositPaid = f
     if (trip && decision?.reason === 'already_live') {
       const meta = { ...metaObject(trip) }
       if (!meta.checkout_deposit || typeof meta.checkout_deposit !== 'object') {
-        meta.checkout_deposit = { session_id: session?.id || null, at: new Date().toISOString() }
-        const { error: stampErr } = await sb
-          .from('trips')
-          .update({ metadata: meta })
-          .eq('id', tripId)
+        const patch = {
+          checkout_deposit: { session_id: session?.id || null, at: new Date().toISOString() },
+        }
+        const { error: stampErr } = await sb.rpc('merge_trip_metadata', {
+          p_trip_id: tripId,
+          p_patch: patch,
+        })
         if (stampErr) {
           return {
             restored: false,
@@ -422,16 +426,18 @@ export async function cancelUnopenedCheckoutTrip(sb, tripId, { reason = 'checkou
 
 export async function rememberCheckoutSession(sb, tripId, sessionId, { createdAt } = {}) {
   if (!tripId || !sessionId) return { ok: false, error: 'missing_session' }
-  const loaded = await loadTrip(sb, tripId)
-  if (loaded.error || !loaded.trip) return { ok: false, error: loaded.error?.message || 'missing_trip' }
   const stamped = typeof createdAt === 'string' && createdAt ? createdAt : new Date().toISOString()
-  const metadata = {
-    ...metaObject(loaded.trip),
+  const patch = {
     stripe_checkout_session_id: sessionId,
     stripe_checkout_created_at: stamped,
   }
-  const { error } = await sb.from('trips').update({ metadata }).eq('id', tripId)
+  const { data, error } = await sb.rpc('merge_trip_metadata', {
+    p_trip_id: tripId,
+    p_patch: patch,
+  })
   if (error) return { ok: false, error: error.message }
+  const row = Array.isArray(data) ? data[0] : data
+  if (!row || !row.id) return { ok: false, error: 'missing_trip' }
   return { ok: true }
 }
 
@@ -449,8 +455,8 @@ const STRIPE_TERMINAL_REASONS = new Set([
 const HOLD_EXPIRE_CLAIM_MS = 2 * 60 * 1000
 
 function claimIsFresh(claim, now) {
-  if (!claim || typeof claim !== 'object') return false
-  const at = parsedMs(claim.at)
+  if (!claim) return false
+  const at = typeof claim === 'object' ? parsedMs(claim.at) : parsedMs(claim)
   if (at == null) return false
   return now - at < HOLD_EXPIRE_CLAIM_MS
 }
@@ -471,25 +477,22 @@ async function claimStripeExpire(sb, trip, now = Date.now()) {
   if (fresh.driver_id || !UNPAID_CHECKOUT_STATUSES.includes(fresh.status)) {
     return { won: false, reason: 'not_in_pool', status: fresh.status }
   }
-  const existing = meta.hold_expire_claim
-  if (claimIsFresh(existing, now)) {
+  const existingClaim = fresh.hold_expire_claimed_at || meta.hold_expire_claim
+  if (claimIsFresh(existingClaim, now)) {
     return { won: false, reason: 'expire_in_progress', status: fresh.status }
   }
-  const claim = { at: new Date(now).toISOString() }
-  const nextMeta = { ...meta, hold_expire_claim: claim }
-  let update = sb
+  const claimIso = new Date(now).toISOString()
+  const staleCutoff = new Date(now - HOLD_EXPIRE_CLAIM_MS).toISOString()
+  const { data, error } = await sb
     .from('trips')
-    .update({ metadata: nextMeta })
+    .update({ hold_expire_claimed_at: claimIso })
     .eq('id', fresh.id)
     .in('status', UNPAID_CHECKOUT_STATUSES)
     .is('driver_id', null)
     .is('metadata->>checkout_abandoned', null)
-  if (existing && typeof existing === 'object' && existing.at) {
-    update = update.eq('metadata->hold_expire_claim->>at', existing.at)
-  } else {
-    update = update.is('metadata->>hold_expire_claim', null)
-  }
-  const { data, error } = await update.select('id').maybeSingle()
+    .or(`hold_expire_claimed_at.is.null,hold_expire_claimed_at.lt.${staleCutoff}`)
+    .select('id')
+    .maybeSingle()
   if (error) return { won: false, reason: 'claim_failed', error: error.message }
   if (!data) return { won: false, reason: 'expire_in_progress', status: fresh.status }
   return { won: true, status: fresh.status }
@@ -497,19 +500,10 @@ async function claimStripeExpire(sb, trip, now = Date.now()) {
 
 async function releaseExpireClaim(sb, tripId) {
   if (!tripId) return
-  const loaded = await loadTrip(sb, tripId)
-  if (loaded.error || !loaded.trip) return
-  if (loaded.trip.driver_id || !UNPAID_CHECKOUT_STATUSES.includes(loaded.trip.status)) return
-  const meta = { ...metaObject(loaded.trip) }
-  if (!meta.hold_expire_claim) return
-  delete meta.hold_expire_claim
   await sb
     .from('trips')
-    .update({ metadata: meta })
+    .update({ hold_expire_claimed_at: null })
     .eq('id', tripId)
-    .in('status', UNPAID_CHECKOUT_STATUSES)
-    .is('driver_id', null)
-    .is('metadata->>checkout_abandoned', null)
 }
 
 async function cancelExpiredHold(sb, trip, sessionId, { now, ttlMs }) {
@@ -526,6 +520,7 @@ async function cancelExpiredHold(sb, trip, sessionId, { now, ttlMs }) {
     deposit_cents: loaded.trip.deposit_cents ?? trip.deposit_cents,
     rider_note: loaded.trip.rider_note ?? trip.rider_note,
     created_at: loaded.trip.created_at || trip.created_at,
+    hold_expire_claimed_at: loaded.trip.hold_expire_claimed_at ?? trip.hold_expire_claimed_at,
   }
   const decision = decideUnpaidAirportHoldTtl({
     trip: fresh,
@@ -702,7 +697,7 @@ export async function releaseExpiredUnpaidAirportHolds(sb, {
   const cutoff = new Date(now - ttlMs).toISOString()
   const listed = await sb
     .from('trips')
-    .select('id, status, rider_id, driver_id, scheduled_for, metadata, canceled_at, created_at, deposit_cents, rider_note')
+    .select('id, status, rider_id, driver_id, scheduled_for, metadata, canceled_at, created_at, deposit_cents, rider_note, hold_expire_claimed_at')
     .in('status', UNPAID_CHECKOUT_STATUSES)
     .is('driver_id', null)
     .gt('deposit_cents', 0)

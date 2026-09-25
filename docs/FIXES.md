@@ -2,6 +2,40 @@
 
 Persistent knowledge base for recurring failures. When a matching issue appears, apply the saved fix first.
 
+## 2026-09-24 — Atomic hold claim & metadata merge design and migration requirement documented [t3]
+
+- **Track / machine:** Deputy · pkg-pro-hold-claim-atomic · deputy/hold-claim-atomic
+- **Context & Design Decision:** Addressed reviewer note on PR #74 regarding race conditions in `/api/expire-unpaid-airport-holds` where reading `trips.metadata`, modifying in JS, and updating the entire object clobbered concurrent writes (e.g. Stripe webhooks adding `receipt_url` or rider updates).
+  - Selected hybrid Design A + Design B:
+    - **Design A (Claim column):** Added `trips.hold_expire_claimed_at timestamptz` (nullable) with partial index `trips_hold_expire_claimed_at_idx`. Claiming and releasing operate directly on this dedicated column via conditional UPDATEs without touching `trips.metadata`.
+    - **Design B (Atomic metadata merge):** Added Postgres RPC `public.merge_trip_metadata(p_trip_id uuid, p_patch jsonb, ...)` (SECURITY DEFINER, `search_path = public`, granted to `service_role` only) which merges patches via `metadata = coalesce(metadata, '{}'::jsonb) || p_patch` alongside conditional status updates and claim clearing in a single atomic statement.
+- **Migration File:** `supabase/migrations/20260925140000_hold_claim_atomic.sql`
+- **Pre-Ship Requirement:** Migration `supabase/migrations/20260925140000_hold_claim_atomic.sql` **MUST** be applied to the database before this code ships. If the application code is deployed before the migration is run, `/api/expire-unpaid-airport-holds` will fail with 500 errors because the column `hold_expire_claimed_at` and the RPC function `public.merge_trip_metadata` will not exist.
+- **Files:** `docs/FIXES.md`, `SHIP_NOTES.md`
+
+## 2026-09-24 — Hold claim and cancel race conditions verified with concurrency tests [t2]
+
+- **Track / machine:** Deputy · pkg-pro-hold-claim-atomic · deputy/hold-claim-atomic
+- **Problem:** Needed test coverage verifying that concurrent metadata writes (such as Stripe webhooks adding `receipt_url` between the sweep's read and write) survive claim, release, and cancel steps without being clobbered; that overlapping sweeps produce exactly one cancel, one trip_event, and one Stripe expire; and that stale claims (>2 min) can be taken over.
+- **Fix:** Added targeted test suite in `server/abandonedCheckout.test.js`:
+  1. Verified concurrent webhook metadata writes (`metadata.receipt_url`) between the sweep's initial read and the claim update survive both claim and cancel.
+  2. Verified concurrent metadata writes during an active claim survive claim release when Stripe session expiration fails.
+  3. Verified concurrent metadata writes between Stripe expire and cancel write survive the atomic merge.
+  4. Verified two overlapping sweeps concurrently processing an open hold result in exactly one Stripe session expiration, one trip cancel, and one `trip_events` insert.
+  5. Verified fresh claims (<2 min) block subsequent sweeps, and stale claims (>2 min) are successfully taken over and processed to completion.
+- **Files:** `server/abandonedCheckout.test.js`, `docs/FIXES.md`
+
+## 2026-09-24 — Unpaid airport hold claim and cancel metadata writes made atomic
+
+- **Track / machine:** Deputy · pkg-pro-hold-claim-atomic · deputy/hold-claim-atomic
+- **Problem:** In `/api/expire-unpaid-airport-holds` and `server/abandonedCheckout.js`, sweep claim/release and cancel steps read `trips.metadata`, modified the in-memory JavaScript object, and wrote the entire object back (`.update({ metadata: nextMeta })`). If a concurrent writer (such as a Stripe webhook or rider status change) updated `trips.metadata` during that window, its keys were lost/overwritten.
+- **Fix:** Implemented atomic claim and metadata merge:
+  1. Added migration `supabase/migrations/20260925140000_hold_claim_atomic.sql` adding nullable `trips.hold_expire_claimed_at timestamptz` with a partial index, and security definer SQL function `public.merge_trip_metadata(p_trip_id uuid, p_patch jsonb, ...)`. Execution is granted to `service_role` only.
+  2. In `server/abandonedCheckout.js`, `claimStripeExpire` now performs a conditional update directly setting `hold_expire_claimed_at = now` where `id = ?` and `(hold_expire_claimed_at IS NULL OR hold_expire_claimed_at < now - 2min)` and in-pool, unassigned, and unabandoned. `releaseExpireClaim` sets `hold_expire_claimed_at = NULL`. Neither touches `trips.metadata`.
+  3. `writeCanceled` and metadata stamp writes use `sb.rpc('merge_trip_metadata', ...)` to concatenate `checkout_abandoned` / `checkout_deposit` into `trips.metadata` via Postgres `metadata = coalesce(metadata, '{}'::jsonb) || p_patch`, updating status to `canceled` and clearing `hold_expire_claimed_at` in a single atomic statement without clobbering other metadata keys.
+  4. Updated fake Supabase client in `server/abandonedCheckout.test.js` to support `.or()` filter clauses and `rpc('merge_trip_metadata')`. Added tests verifying concurrent metadata writes during claim, cancel, and error release are preserved.
+- **Files:** `supabase/migrations/20260925140000_hold_claim_atomic.sql`, `server/abandonedCheckout.js`, `server/abandonedCheckout.test.js`, `SHIP_NOTES.md`, `docs/FIXES.md`
+
 ## 2026-09-24 — Wire vehicle.js and places.js unit test suites into package.json test runner
 
 - **Track / machine:** Clemson RIDES · deputy/vehicle-places-tests
