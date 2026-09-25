@@ -2,6 +2,13 @@
 
 Persistent knowledge base for recurring failures. When a matching issue appears, apply the saved fix first.
 
+## 2026-09-24 — native categoryLabel trims string categories
+
+- **Track / machine:** Clemson RIDES · deputy/agent-chips-tests · pkg-agent-chips-tests t2
+- **What was wrong:** `packages/rides-native/agentChips.js` re-exported `categoryLabel` unchanged. A whitespace-only category is truthy, so the label came back as blank spaces. Padded canonical keys such as `' bug'` and `'safety '` missed the switch and echoed the raw string, including the spaces.
+- **What changed:** The native module trims string categories before the server lookup. `'   '` and other blank strings become `Other`. `' bug'` becomes `Bug` and `'safety '` becomes `Safety`. Unknown text keeps its inner characters (`'  lost_and_found  '` → `lost_and_found`). Non-strings are unchanged (`0` and `false` still become `Other`; an empty array still becomes `''`). `server/agentChips.js` is untouched, so web support and help still use the untrimmed function.
+- **Files touched:** `packages/rides-native/agentChips.js`, `packages/rides-native/agentChips.test.js`, `docs/FIXES.md`
+
 ## 2026-09-24 — agentChips unit tests leave production source unchanged
 
 - **Track / machine:** Clemson RIDES · deputy/agent-chips-tests · pkg-agent-chips-tests t1

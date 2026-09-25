@@ -36,13 +36,17 @@ test('categoryLabel handles unknown, empty, and non-string inputs', () => {
   // BUG?: categoryLabel does not normalize space-separated category strings such as 'ride dispute'
   assert.equal(categoryLabel('ride dispute'), 'ride dispute')
 
-  // BUG?: canonical keys are case-sensitive and are not trimmed, so near-misses echo back raw
+  // BUG?: canonical keys are case-sensitive, so a different case echoes back raw
   assert.equal(categoryLabel('BUG'), 'BUG')
-  assert.equal(categoryLabel(' bug'), ' bug')
-  assert.equal(categoryLabel('safety '), 'safety ')
 
-  // BUG?: a whitespace-only category is truthy, so it is returned unchanged instead of 'Other'
-  assert.equal(categoryLabel('   '), '   ')
+  // Surrounding whitespace is trimmed before lookup.
+  assert.equal(categoryLabel(' bug'), 'Bug')
+  assert.equal(categoryLabel('safety '), 'Safety')
+  assert.equal(categoryLabel('  lost_and_found  '), 'lost_and_found')
+  assert.equal(categoryLabel(' ride dispute '), 'ride dispute')
+
+  assert.equal(categoryLabel('   '), 'Other')
+  assert.equal(categoryLabel('\n\t'), 'Other')
 
   // BUG?: NaN is falsy and collapses to 'Other'; an empty array is truthy and String([]) is ''
   assert.equal(categoryLabel(Number.NaN), 'Other')
