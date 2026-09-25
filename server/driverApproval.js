@@ -10,6 +10,7 @@ import {
   canReceiveRides,
   submissionBlockers,
 } from '../shared/driverOnboarding.js'
+import { WEB_ORIGIN } from '../shared/productLinks.js'
 
 export { canReceiveRides }
 
@@ -96,7 +97,7 @@ export async function notifyAdminOfApplication({ profile, vehicle }) {
     : SEEDED_ADMIN_EMAILS
   const to = recipients[0] || ADMIN_EMAIL
   const key = (process.env.RESEND_API_KEY || '').trim()
-  const appUrl = (process.env.VITE_APP_URL || process.env.APP_URL || 'https://clemson-airport-rides.vercel.app').replace(/\/$/, '')
+  const appUrl = (process.env.VITE_APP_URL || process.env.APP_URL || WEB_ORIGIN).replace(/\/$/, '')
   const name = profile?.full_name || profile?.email || 'New driver'
   const vehicleLabel = [vehicle?.color, vehicle?.make, vehicle?.model, vehicle?.plate].filter(Boolean).join(' ')
   const queueUrl = `${appUrl}/#/admin`

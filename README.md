@@ -3,7 +3,7 @@
 Vite + React rider/driver shell · Clemson orange `#F56600` · purple `#522D80`.
 
 **Production SoT:** https://github.com/ascendmaui/clemson-airport-rides  
-**Live:** https://clemson-airport-rides.vercel.app  
+**Live:** https://clemson-rides.vercel.app  
 **Deploy rule:** production ships only via `git push` to `main` (SHA-tracked Vercel). Do not CLI-deploy over SoT.  
 **Supabase:** `awktabuhijrshmsmagpq` (do not migrate/drop schema)
 
@@ -78,11 +78,11 @@ Two native apps, version **1.1.0**. They do not replace TestFlight **1.0.0 (1)**
 | Rider | `apps/rider` | `com.ascendmaui.clemsonrides.rider` |
 | Driver | `apps/driver` | `com.ascendmaui.clemsonrides.driver` |
 
-Email and password use Supabase `signInWithPassword` / `signUp`, including forgot-password. Social sign-in uses Supabase-native Apple (`signInWithIdToken` + nonce) and Google (`signInWithOAuth` + redirect) auth in both apps. The session is stored in the iOS keychain / Android keystore through `expo-secure-store` (chunked, because a Supabase session is larger than one SecureStore item).
+Email and password use Supabase `signInWithPassword` / `signUp`, including forgot-password. Social sign-in uses Supabase-native Apple (`signInWithIdToken` + nonce) and Google (`signInWithOAuth` + the `auth/callback` deep link) in both apps. The session is stored in the iOS keychain / Android keystore through `expo-secure-store` (chunked, because a Supabase session is larger than one SecureStore item).
 
 ### Authentication Configuration (Supabase)
 - **Apple Provider**: Enable Apple in Supabase Auth. Client IDs / Services IDs: `com.ascendmaui.clemsonrides.rider` and `com.ascendmaui.clemsonrides.driver` (Team ID: `L85AF3V872`). Native iOS sign-in uses `expo-apple-authentication` with SHA-256 hashed nonce exchanged via `supabase.auth.signInWithIdToken`.
-- **Google Provider**: Enable Google in Supabase Auth using the Google OAuth web client under `ascendmaui` (iOS client ID optional). Uses `startGoogleOAuth` with `WebBrowser.openAuthSessionAsync` and `completeGoogleSession`.
+- **Google Provider**: Enable Google in Supabase Auth using the Google OAuth web client under `ascendmaui` (iOS client ID optional). Uses `startGoogleOAuth` (`signInWithOAuth`) with `WebBrowser.openAuthSessionAsync` and `completeGoogleSession` on `clemsonrides://auth/callback` (rider) and `clemsonrides-driver://auth/callback` (driver).
 - **Redirect Allowlist**: Add `clemsonrides://**` and `clemsonrides-driver://**` to Supabase URL Configuration -> Redirect URLs.
 - **Transactional Email**: Configure Resend SMTP in Supabase Auth settings for signup confirmation and password resets.
 - **Vercel**: Remove legacy social bridge secrets from Vercel environment variables after deploy.

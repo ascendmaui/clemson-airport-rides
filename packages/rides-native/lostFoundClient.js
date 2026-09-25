@@ -150,6 +150,7 @@ export async function createLostFoundReport(supabase, { tripId, reporterId, coun
 }
 
 async function updateReport(supabase, id, patch) {
+  requireClient(supabase)
   const { error } = await supabase.from('lost_found_reports').update(patch).eq('id', id)
   if (error) throw new Error(friendlyLostFoundError(error.message))
 }

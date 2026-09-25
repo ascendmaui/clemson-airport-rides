@@ -4,6 +4,7 @@
  * Deposit is always 25% of the current cash remainder (Stripe minimum included).
  */
 import { normalizePromoCode } from './authErrors.js'
+import { WEB_ORIGIN } from '../../shared/productLinks.js'
 import {
   STUDENT_CONFIRM_EMAIL_COPY,
   STUDENT_EMAIL_REQUIRED_COPY,
@@ -11,6 +12,7 @@ import {
   isClemsonEmail,
 } from '../../src/lib/studentDomain.js'
 import { authedJson } from './apiClient.js'
+export { authedJson }
 import {
   AIRPORT_ROUTE_FALLBACK,
   cardDepositCents,
@@ -30,7 +32,8 @@ export const STUDENT_EMAIL_HINT = 'Needs a confirmed @clemson.edu or @g.clemson.
 export const STUDENT_CLAIM_COPY =
   '10% off Standard applies when the signed-in email ends with @clemson.edu or @g.clemson.edu and that address is already confirmed. Confirm and Schedule use that price. There is no separate student ID check.'
 export { STUDENT_EMAIL_REQUIRED_COPY, STUDENT_CONFIRM_EMAIL_COPY }
-export const NATIVE_CHECKOUT_ORIGIN = 'https://clemson-airport-rides.vercel.app'
+/** Stripe Checkout success/cancel pages live on the production web app. */
+export const NATIVE_CHECKOUT_ORIGIN = WEB_ORIGIN
 
 export const AIRPORT_CHOICES = [
   { code: 'GSP', name: 'Greenville-Spartanburg' },
@@ -370,6 +373,16 @@ export async function abandonAirportCheckout(supabase, { tripId, sessionId } = {
   })
 }
 
+export async function reconcileCheckout(supabase, sessionId) {
+  const id = typeof sessionId === 'object' ? (sessionId?.sessionId || sessionId?.session_id) : sessionId
+  const clean = typeof id === 'string' ? id.trim() : ''
+  if (!clean) throw new Error('Missing sessionId')
+  return authedJson(supabase, '/api/stripe-payment-methods?action=reconcile-checkout', {
+    method: 'POST',
+    body: { sessionId: clean },
+  })
+}
+
 export function promoClaimMessage(result) {
   if (!result || typeof result !== 'object') return 'Promo claim did not return a result.'
   if (result.error) return String(result.error)
@@ -393,7 +406,7 @@ export function describeRiderSocialRewards(cfg) {
 
 export function riderPromoShareUrl(code) {
   const norm = normalizePromoCode(code)
-  return `https://clemson-airport-rides.vercel.app/#/sign-up?ref=${encodeURIComponent(norm)}`
+  return `${WEB_ORIGIN}/#/sign-up?ref=${encodeURIComponent(norm)}`
 }
 
 export function riderPromoShareText(code) {
