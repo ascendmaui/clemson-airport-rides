@@ -143,6 +143,14 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
 - **What changed:** Bounded `query` and `hash` slicing symmetrically: `query` ends at `hashIndex` only when `hashIndex > queryIndex`, and `hash` ends at `queryIndex` only when `queryIndex > hashIndex`. This cleanly partitions URL query and fragment parameters regardless of whether `?` precedes `#` or `#` precedes `?`. Updated unit tests in `packages/rides-native/authUrl.test.js` to assert proper extraction of session and code parameters from hash-routed URLs.
 - **Files touched:** `packages/rides-native/authUrl.js`, `packages/rides-native/authUrl.test.js`, `docs/FIXES.md`
 
+## 2026-09-25 — native secureStore removeItem only ignores a missing key
+
+- **Track / machine:** Clemson RIDES · deputy/secure-store-r2 · pkg-secure-store-r2 t2
+- **What was wrong:** `packages/rides-native/secureStore.js` wrapped `SecureStore.deleteItemAsync` in a catch that ignored every error. A locked keychain or a failed Android commit made `removeItem` resolve while the session was still stored. An invalid key (`''`, `null`, `undefined`) was swallowed the same way, because `expo-secure-store` rejects those in JS before the native delete. SDK 57 does not throw when the item is already absent; the catch existed for that case and was wider than the case.
+- **What changed:** Native `removeItem` still returns successfully when the error is a missing item (`Could not find key …`, `could not be found in the keychain`, `errSecItemNotFound`). Any other delete error is rethrown. Web memory storage is unchanged.
+- **Files touched:** `packages/rides-native/secureStore.js`, `packages/rides-native/secureStore.test.js`, `docs/FIXES.md`
+- **Verified:** `node --experimental-strip-types --test packages/rides-native/secureStore.test.js` (16/16 passing).
+
 ## 2026-09-25 — secureStore.js unit tests, source unchanged
 
 - **Track / machine:** Clemson RIDES · deputy/secure-store-r2 · pkg-secure-store-r2 t1
@@ -151,7 +159,7 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
   - `String()` stores `null`, `undefined`, `false`, `0`, and symbols as text.
   - `setItem` deletes the previous value before writing, so a failed write or a throwing `toString` leaves the key empty.
   - A mid-chunk write failure leaves orphan `key.0` data and `getItem` returns null.
-  - Native `removeItem` swallows every `deleteItemAsync` error, so a keychain failure still resolves and the session remains.
+  - Native `removeItem` swallowed every `deleteItemAsync` error (fixed in the t2 entry above: only a missing key is ignored).
   - A non-finite `.n` count skips chunk deletes. `removeItem` also issues one delete per stored count with no upper bound.
   - Chunking uses UTF-16 code units, so 683 CJK characters stay one item at 2049 UTF-8 bytes.
   - `null`, `undefined`, and empty keys are stored on the web memory backend and rejected by the native fake.

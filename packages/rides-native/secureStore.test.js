@@ -336,17 +336,25 @@ describe('secureStoreAdapter', { concurrency: 1 }, () => {
     assert.equal(fakes.ios.data.get('sb-session.0'), 'b'.repeat(SECURE_CHUNK))
   })
 
-  test('delete errors are swallowed and a read error aborts removal', async () => {
+  test('a missing key deletes quietly and a real delete error rejects', async () => {
     await ios.removeItem('already-gone')
+    assert.equal(fakes.ios.data.size, 0)
+
+    fakes.ios.deleteError = new Error('The specified item could not be found in the keychain.')
+    await ios.removeItem('also-gone')
+    fakes.ios.deleteError = null
     assert.equal(fakes.ios.data.size, 0)
 
     const session = supabaseSession()
     await ios.setItem('sb-session', session)
     fakes.ios.deleteError = new Error('keychain locked')
-    await ios.removeItem('sb-session')
+    await assert.rejects(() => ios.removeItem('sb-session'), /keychain locked/)
     fakes.ios.deleteError = null
-    // BUG?: native removeItem swallows every deleteItemAsync error, not only a
-    // missing key. The promise resolves and the chunked session is still readable.
+    assert.equal(await ios.getItem('sb-session'), session)
+
+    fakes.ios.deleteError = new Error('Could not delete the item from SecureStore')
+    await assert.rejects(() => ios.removeItem('sb-session'), /Could not delete the item from SecureStore/)
+    fakes.ios.deleteError = null
     assert.equal(await ios.getItem('sb-session'), session)
 
     fakes.ios.getError = new Error('keychain unavailable')
@@ -367,13 +375,14 @@ describe('secureStoreAdapter', { concurrency: 1 }, () => {
     await assert.rejects(() => ios.removeItem('bad key'), INVALID_KEY)
     await assert.rejects(() => ios.setItem('', 'x'), INVALID_KEY)
     await assert.rejects(() => ios.getItem(''), INVALID_KEY)
-    // delete('') throws inside the catch, and `.n` is a legal key, so removal resolves.
-    await ios.removeItem('')
+    // `.n` is a legal key, so the chunk probe succeeds and delete('') itself rejects.
+    await assert.rejects(() => ios.removeItem(''), INVALID_KEY)
     await assert.rejects(() => ios.setItem(null, 'x'), INVALID_KEY)
     await assert.rejects(() => ios.getItem(null), INVALID_KEY)
-    await ios.removeItem(null)
+    await assert.rejects(() => ios.removeItem(null), INVALID_KEY)
     await assert.rejects(() => ios.setItem(undefined, 'x'), INVALID_KEY)
     await assert.rejects(() => ios.getItem(undefined), INVALID_KEY)
+    await assert.rejects(() => ios.removeItem(undefined), INVALID_KEY)
     assert.equal(fakes.ios.data.size, 0)
   })
 
