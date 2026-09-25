@@ -751,6 +751,13 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
   - `docs/FIXES.md`
 - **Verified:** `node --experimental-strip-types --test packages/rides-native/partyProfile.test.js` (31/31 passing).
 
+## 2026-09-25 — emailAuth tests run last in npm test
+
+- **Track / machine:** Clemson RIDES · deputy/email-auth-tests · pkg-email-auth-tests t3
+- **What was wrong:** `packages/rides-native/emailAuth.test.js` sat in the middle of the root `package.json` `test` script, after `authErrors.test.js` and ahead of later suites. `npm test` did not finish on the email-auth suite.
+- **What changed:** Moved `packages/rides-native/emailAuth.test.js` to the final argument of the `test` script. The file still runs once.
+- **Files touched:** `package.json`, `docs/FIXES.md`
+
 ## 2026-09-25 — emailAuth trims padded password-reset redirects
 
 - **Track / machine:** Clemson RIDES · deputy/email-auth-tests · pkg-email-auth-tests t2
