@@ -178,6 +178,18 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
   - `tests/a11yDriver.test.js`
   - `docs/FIXES.md`
 
+## 2026-09-25 — Add googleAuthConfig readiness helper and tests [t1]
+
+- **Track / machine:** Clemson RIDES · deputy/google-signin-prep · pkg-google-signin-prep t1
+- **Problem:** Native rider and driver apps lacked a readiness helper to detect whether public Google OAuth client IDs (`EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID` and `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID`) are configured before initiating OAuth. Without this, the UI cannot distinguish unconfigured Google Sign-In from a runtime error, risking tap-time failures instead of honestly informing users with "Google sign-in is coming soon".
+- **Fix:** Added `packages/rides-native/googleAuthConfig.js` (and `.d.ts`), exporting `googleAuthConfig` / `getGoogleAuthConfig` returning `{ enabled, missing: [...], redirectUri }`, along with `isGoogleAuthEnabled`, `googleAuthStatusMessage`, `googleAuthButtonState`, and constants. Trims env values, handles aliases, and generates app-specific redirect URIs based on app schemes. Added comprehensive unit tests in `packages/rides-native/googleAuthConfig.test.js` using isolated fake env objects.
+- **Files touched:**
+  - `packages/rides-native/googleAuthConfig.js`
+  - `packages/rides-native/googleAuthConfig.d.ts`
+  - `packages/rides-native/googleAuthConfig.test.js`
+  - `docs/FIXES.md`
+- **Verified:** `node --experimental-strip-types --test packages/rides-native/googleAuthConfig.test.js` (22/22 passing).
+
 ## 2026-09-25 — merge_trip_metadata trip_status enum cast applied (#100)
 
 - **Problem:** `public.merge_trip_metadata` (#80) failed on every call with `operator does not exist: trip_status = text`, which broke the airport-checkout session bind, abandon-checkout release and the unpaid-hold expiry cancel.
