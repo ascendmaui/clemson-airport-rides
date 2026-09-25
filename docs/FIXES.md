@@ -233,6 +233,13 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
   - `docs/FIXES.md`
 - **Verified:** `node --experimental-strip-types --test packages/rides-native/googleAuthConfig.test.js` (22/22 passing).
 
+## 2026-09-25 — Wire holdExpiry tests into npm test [t3]
+
+- **What was wrong:** `packages/rides-native/holdExpiry.test.js` covers the shared unpaid-airport-hold countdown and the rider notice, but the root `package.json` `test` script did not list that file, so `npm test` skipped the suite.
+- **What changed:** Appended `packages/rides-native/holdExpiry.test.js` as the last entry of the `test` script. The TTL value, cron, and expiry route are unchanged.
+- **Files touched:** `package.json`, `docs/FIXES.md`
+- **Verified:** `npm test` (810/810, including all 17 tests in `packages/rides-native/holdExpiry.test.js`). `apps/rider` has `"typecheck": "tsc --noEmit"`. Running it exited 127 (`sh: tsc: command not found`) because `apps/rider/node_modules` is an empty symlink and TypeScript is not installed there. This task did not install app dependencies; that install would write through the symlink into the main checkout. The files changed here are the test script and this log, so no rider TypeScript errors were introduced.
+
 ## 2026-09-25 — Rider unpaid airport-hold countdown and expired state [t2]
 
 - **What was wrong:** An unpaid airport deposit can be canceled with reason `unpaid_hold_ttl` about 20 minutes after the hold starts. The rider app showed the 25% deposit and Checkout return with no remaining-time warning, and a TTL cancel looked like a generic canceled ride ("This trip is closed.").
