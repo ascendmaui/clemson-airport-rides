@@ -12,7 +12,7 @@ export const UNAVAILABLE_PATTERN =
   /not configured|STRIPE_|SUPABASE_|service role|Payments unavailable|\b[A-Z0-9_]{2,}_(?:KEY|SECRET|TOKEN|URL|ID|ROLE|PASSWORD|ENV|API)\b/i
 
 export const ENV_VAR_PATTERN =
-  /\b(?:[A-Z0-9_]{2,}_(?:KEY|SECRET|TOKEN|URL|ID|ROLE|PASSWORD|ENV|API|BASE)|STRIPE_[A-Z0-9_]+|SUPABASE_[A-Z0-9_]+|CLERK_[A-Z0-9_]+)\b/i
+  /\b(?:[A-Z0-9_]{2,}_(?:KEY|SECRET|TOKEN|URL|ID|ROLE|PASSWORD|ENV|API|BASE)|STRIPE_[A-Z0-9_]+|SUPABASE_[A-Z0-9_]+)\b/i
 
 /**
  * Checks whether a server error string is clean and rider-facing,

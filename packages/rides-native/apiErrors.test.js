@@ -53,13 +53,13 @@ test('raw environment variable names never leak in error messages', () => {
     'STRIPE_SECRET_KEY is not configured.',
     'Missing SUPABASE_SERVICE_ROLE_KEY in environment',
     { error: 'STRIPE_WEBHOOK_SECRET is not configured' },
-    { message: 'CLERK_SECRET_KEY is missing' },
+    { message: 'AUTH_SECRET_KEY is missing' },
     { error: 'SUPABASE_ANON_KEY not set' },
     { failure: { message: 'DATABASE_URL invalid' } },
     { message: 'Failed due to EXPO_PUBLIC_API_BASE' },
   ]
 
-  const forbidden = /STRIPE|SUPABASE|CLERK|DATABASE_URL|EXPO_PUBLIC|_KEY|_SECRET/i
+  const forbidden = /STRIPE|SUPABASE|AUTH_SECRET|DATABASE_URL|EXPO_PUBLIC|_KEY|_SECRET/i
 
   for (const body of envBodies) {
     for (const status of [503, 500, 400, 402, 0, undefined]) {

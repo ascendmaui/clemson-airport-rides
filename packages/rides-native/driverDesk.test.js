@@ -1482,8 +1482,9 @@ test('loadEarnings captures API errors while still returning trip history', asyn
     async () => {
       const earnings = await loadEarnings(supabase, 'driver-1')
       assert.equal(earnings.trips.length, 1)
-      assert.equal(earnings.apiError, 'Earnings service down')
-      assert.equal(earnings.payoutError, 'Payouts service unavailable')
+      // #90 friendlyApiError: a 500 body no longer reaches the UI verbatim
+      assert.equal(earnings.apiError, 'Something went wrong. Please try again.')
+      assert.equal(earnings.payoutError, 'Payments are temporarily unavailable, please try again shortly')
     },
   )
 })
