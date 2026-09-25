@@ -252,6 +252,14 @@ test('driverApproach calculates distance and campus-pace ETA or returns empty fo
   const sameSpot = driverApproach({ lat: 34.6788, lng: -82.843 }, { lat: 34.6788, lng: -82.843 })
   assert.equal(sameSpot.distanceMi, 0)
   assert.equal(sameSpot.etaMin, 1)
+
+  // Supports { latitude, longitude } coordinate format as well
+  const fullNamedSpot = driverApproach(
+    { latitude: 34.6788, longitude: -82.843 },
+    { latitude: 34.6933, longitude: -82.843 },
+  )
+  assert.equal(fullNamedSpot.distanceMi, near.distanceMi)
+  assert.equal(fullNamedSpot.etaMin, near.etaMin)
 })
 
 test('formatDriverDistance formats miles with one decimal, floors under 0.1 mi, and rejects non-finites', () => {
@@ -1051,6 +1059,18 @@ test('requestDriverTrip applies default destination and stadium pickup points', 
     assert.equal(captured.body.pickupLat, STADIUM.latitude)
     assert.equal(captured.body.pickupLng, STADIUM.longitude)
     assert.equal(captured.body.tier, 'standard')
+
+    // Also supports { lat, lng } on destPoint and pickupPoint
+    await requestDriverTrip(supabase, {
+      riderId: 'rider-1',
+      driverId: A,
+      destPoint: { lat: 34.8957, lng: -82.2189 },
+      pickupPoint: { lat: 34.6788, lng: -82.843 },
+    })
+    assert.equal(captured.body.destLat, 34.8957)
+    assert.equal(captured.body.destLng, -82.2189)
+    assert.equal(captured.body.pickupLat, 34.6788)
+    assert.equal(captured.body.pickupLng, -82.843)
   } finally {
     globalThis.fetch = originalFetch
   }
