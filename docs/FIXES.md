@@ -223,3 +223,49 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
 - **Fix (worktree, uncommitted, not deployed):** `server/clerkSupabaseBridge.js` `clerkSecrets()` + `verifyWithAnySecret()`; `api/clerk-supabase-session.js` tries `CLERK_SECRET_KEY` then `CLERK_SECRET_KEY_DEV` and loads the user with whichever secret verified; tests added. README documents `CLERK_SECRET_KEY_DEV`.
 - **To ship:** add Vercel env `CLERK_SECRET_KEY_DEV` = dev instance (choice-gibbon-3653) `sk_test_…` from Clerk dashboard -> API keys (Development), then deploy. No app rebuild needed for rider Google/Facebook. Enable Apple on the dev instance (dashboard) for Apple.
 - **Machine/track:** Max / Clemson rider + bridge
+
+## 2026-09-24 — Demand heat helper had no unit tests
+
+- **What was wrong:** `packages/rides-native/heat.js` exported the demand heat helpers with no tests. Two behaviours look wrong and are pinned for the current code, not changed in this task:
+  - `barCurve` checks `hour < 16` before `hour < 2`, so midnight and 1am use the daytime-quiet intensity (Fri/Sat 0.08, otherwise 0.04) instead of the late-night branch (Fri/Sat 0.78, Thursday 0.45, otherwise 0.16). Friday midnight downtown stays "Picking up" instead of "Packed".
+  - `previewDate('weekday_am')` on Saturday uses delta -5 and lands on Monday 08:30. Every other day anchors on Wednesday 08:30.
+- **What changed:** Added `packages/rides-native/heat.test.js` for every export (normal cases, intensity and clock boundaries, unknown window ids, returned shapes). Suspected bugs are asserted as current behaviour with `// BUG?:` comments. Registered the file on the root `npm test` script.
+- **Files touched:** `packages/rides-native/heat.test.js`, `package.json`, `docs/FIXES.md`.
+
+## 2026-09-24 — Saturday weekday-morning preview landed on Monday
+
+- **What was wrong:** `previewDate('weekday_am')` special-cased Saturday (`getDay() === 6`) with delta -5, so 2026-09-26 previewed Monday 2026-09-21 08:30. Every other day anchors on Wednesday 08:30 (`day === 0 ? -4 : 3 - day`). Rider and driver busy-spot maps only use that date for `downtownNow` / `typicalSpots`. Hour 8 on Monday and Wednesday already share the same curve outputs, so the map colors do not change; the calendar date does.
+- **What changed:** Saturday now uses `3 - day` (delta -3) and lands on Wednesday 08:30, same as Thursday and Friday. Sunday still goes back four days to the previous Wednesday. The midnight `barCurve` branch (`hour < 16` before `hour < 2`) is unchanged: those curves are shared with `src/lib/downtownHeat.js`, and fixing them would change live "now" intensities at midnight.
+- **Files touched:** `packages/rides-native/heat.js`, `packages/rides-native/heat.test.js`, `docs/FIXES.md`.
+
+## 2026-09-24 — Heat helper tests listed with the vehicle catalog
+
+- **What t2 fixed:** `previewDate('weekday_am')` special-cased Saturday (`getDay() === 6`) with delta -5, so 2026-09-26 previewed Monday 2026-09-21 08:30. Every other non-Sunday day already anchored on Wednesday 08:30 (`3 - day`). Saturday now uses that same delta (-3) and lands on Wednesday 2026-09-23 08:30. Sunday still goes back four days to the previous Wednesday. The midnight `barCurve` branch (`hour < 16` before `hour < 2`) was left unchanged because those curves are shared with `src/lib/downtownHeat.js`.
+- **Tests:** `packages/rides-native/heat.test.js` covers `heatColor`, `downtownNow`, `previewDate`, `typicalSpots`, `resolveDemandRange`, `DOWNTOWN_VENUES`, and `CAMPUS_ANCHORS` with injected `Date` objects (no `Date.now()`). The Saturday case expects Wednesday 08:30 and the same `typicalSpots` intensities as that Wednesday morning. Color thresholds, curve hour and weekday boundaries, unknown window ids, and returned shapes are covered. The midnight bar intensity is still asserted as the current daytime floor.
+- **What changed here:** The root `npm test` script lists `packages/rides-native/heat.test.js` immediately after `packages/rides-native/vehicleCatalog.test.js` (it had been inserted later, after `mapsLink.test.js`).
+- **Files touched:** `package.json`, `docs/FIXES.md`.
+
+## 2026-09-24 — Notification prefs had no unit tests
+
+- **What was wrong:** `packages/rides-native/notificationPrefs.js` (categories, defaults, `quietFromPrefs`, `normalizePrefs`, local read/write, profile fetch/save) had no tests. A few current behaviors look wrong and are locked by the new tests with `// BUG?:` comments instead of being changed: `HH:MM` only checks two digits (`99:99` is kept); `Boolean("false")` turns promotions, DND, and new-request tones on; ride/billing/friends/system stay on for every value except boolean `false`; arrays and other non-plain objects pass the `typeof === "object"` check; unknown keys are copied through and would be written back to `profiles`; a stored `{}` replaces a richer device mirror with defaults; a Supabase error with no `message` sets fetch `softFail` to `undefined` (save uses a fallback string); `writeLocalPrefs` stores its argument without normalizing.
+- **What changed:** Added `packages/rides-native/notificationPrefs.test.js` with in-memory storage and a fake Supabase client, including error paths. Did not change `notificationPrefs.js`.
+- **Files:** `packages/rides-native/notificationPrefs.test.js`, `package.json` (test script), `docs/FIXES.md`
+
+## 2026-09-24 — Quiet-hour clocks accepted impossible times
+
+- **What was wrong:** `hhmm` in `packages/rides-native/notificationPrefs.js` kept any `\d{2}:\d{2}` string. `99:99` and `24:61` were stored on the quiet window and written back to the profile. A time input cannot display those values, and a later quiet-window check would treat them as real minutes.
+- **What changed:** Hours must be `00`–`23` and minutes `00`–`59`. Valid clocks such as `00:00`, `21:30`, and `23:59` are unchanged. Anything else, including `24:00` and `23:60`, falls back to the default start (`22:00`) or end (`07:00`). Other flagged behaviors (string `"false"` switches, array records, unknown keys, empty profile objects, missing error messages) are unchanged.
+- **Files:** `packages/rides-native/notificationPrefs.js`, `packages/rides-native/notificationPrefs.test.js`, `docs/FIXES.md`
+
+## 2026-09-24 — Notification prefs tests run with the vehicle catalog suite
+
+- **What was wrong:** `hhmm` in `packages/rides-native/notificationPrefs.js` kept any `\d{2}:\d{2}` string, so `99:99` and `24:61` were stored on the quiet window and written back to `profiles.notification_prefs`. The module also had no unit tests. The new `notificationPrefs.test.js` was on the `npm test` list after `mapsLink.test.js` instead of immediately after `vehicleCatalog.test.js`.
+- **What changed:** Quiet-hour hours must be `00`–`23` and minutes `00`–`59`. Valid clocks (`00:00`, `21:30`, `23:59`) stay as entered. Impossible times, including `24:00` and `23:60`, fall back to the default start `22:00` or end `07:00`. `packages/rides-native/notificationPrefs.test.js` covers `NOTIFICATION_CATEGORIES`, `DEFAULT_QUIET`, `DEFAULT_NOTIFICATION_PREFS`, `quietFromPrefs`, `normalizePrefs`, `readLocalPrefs`, `writeLocalPrefs`, `fetchNotificationPrefs`, and `saveNotificationPrefs` with in-memory storage and a fake Supabase client, including malformed input and error paths. The root `test` script now lists that file once, immediately after `packages/rides-native/vehicleCatalog.test.js`. String `"false"` switches, array records, unknown keys, empty profile objects, missing fetch error messages, and un-normalized `writeLocalPrefs` stay as they were.
+- **Files:** `package.json` (test script only), `docs/FIXES.md`
+
+## 2026-09-24 — Combine heat and notification-prefs test lists
+
+- **What was wrong:** PRs #75 and #76 both inserted their test file immediately after `packages/rides-native/vehicleCatalog.test.js` in `package.json`, causing a merge conflict.
+- **What changed:** This branch combines #75 and #76 and resolves their package.json test-list conflict (supersedes merging them separately).
+- **Files:** `package.json`, `docs/FIXES.md`
+
