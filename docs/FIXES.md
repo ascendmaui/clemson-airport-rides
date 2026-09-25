@@ -332,6 +332,14 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
   - `tests/fixtures/supabase-stub.js`
   - `docs/FIXES.md`
 
+## 2026-09-25 — wire web requestDriverTrip tests into npm test
+
+- **Track / machine:** Clemson RIDES · deputy/choose-driver-tests · pkg-choose-driver-tests t3
+- **What was wrong:** `src/lib/trips.test.js` covers the web `requestDriverTrip` path, but the root `package.json` `test` script never listed it, so `npm test` skipped the suite.
+- **What changed:** Appended `src/lib/trips.test.js` as the last entry of the `test` script. The file's loader hook only rewrites `./payments` when the importer is `src/lib/trips.js`, and Node 22 runs each test file in its own process by default, so the fake payments module does not reach the other suites (including `src/lib/webPayments.test.js`). No production source change.
+- **Files touched:** `package.json`, `docs/FIXES.md`
+- **Verified:** `npm test` — 804 pass, 0 fail, including the 11 `src/lib/trips.test.js` cases.
+
 ## 2026-09-25 — web requestDriverTrip treated blank pins as 0,0
 
 - **Track / machine:** Clemson RIDES · deputy/choose-driver-tests · pkg-choose-driver-tests t2
