@@ -288,3 +288,49 @@ describe('loadDriverVehicle', () => {
     assert.equal(result, null)
   })
 })
+
+describe('party size capacity limits (party of 1, 4, 5, 6, 8)', () => {
+  const sedan = { model: 'Civic' } // max 4
+  const van = { model: 'Odyssey' } // max 5
+  const suv = { model: 'Suburban' } // max 7
+
+  test('party of 1 fits within all vehicle categories', () => {
+    assert.equal(1 <= vehicleMaxSeats(sedan), true)
+    assert.equal(1 <= vehicleMaxSeats(van), true)
+    assert.equal(1 <= vehicleMaxSeats(suv), true)
+    assert.equal(1 <= vehicleMaxSeats(null), true)
+  })
+
+  test('party of 4 fits within sedan, van, and SUV capacity', () => {
+    assert.equal(4 <= vehicleMaxSeats(sedan), true)
+    assert.equal(4 <= vehicleMaxSeats(van), true)
+    assert.equal(4 <= vehicleMaxSeats(suv), true)
+    assert.equal(4 <= vehicleMaxSeats(null), true)
+  })
+
+  test('party of 5 exceeds standard sedan (4) but fits van (5) and SUV (7)', () => {
+    assert.equal(5 <= vehicleMaxSeats(sedan), false)
+    assert.equal(5 <= vehicleMaxSeats(van), true)
+    assert.equal(5 <= vehicleMaxSeats(suv), true)
+    assert.equal(5 <= vehicleMaxSeats(null), true) // DEFAULT_MAX_PARTICIPANTS = 5
+  })
+
+  test('party of 6 exceeds sedan (4) and van (5) but fits SUV (7)', () => {
+    assert.equal(6 <= vehicleMaxSeats(sedan), false)
+    assert.equal(6 <= vehicleMaxSeats(van), false)
+    assert.equal(6 <= vehicleMaxSeats(suv), true)
+    assert.equal(6 <= vehicleMaxSeats(null), false)
+  })
+
+  test('party of 8 exceeds standard category capacities (sedan 4, van 5, SUV 7, default 5)', () => {
+    assert.equal(8 <= vehicleMaxSeats(sedan), false)
+    assert.equal(8 <= vehicleMaxSeats(van), false)
+    assert.equal(8 <= vehicleMaxSeats(suv), false)
+    assert.equal(8 <= vehicleMaxSeats(null), false)
+  })
+
+  test('party of 8 fits only when vehicle has explicit 8 seats configured', () => {
+    const eightSeatVan = { model: 'Odyssey', seats: 8 }
+    assert.equal(8 <= vehicleMaxSeats(eightSeatVan), true)
+  })
+})
