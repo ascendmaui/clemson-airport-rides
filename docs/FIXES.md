@@ -1183,3 +1183,20 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
   Vite's build target (es2020 / safari14) has no top-level await, so `vite build` failed ("Top-level await is not available").
 - What changed: restored the original static import. `npm test` (385/385) and `vite build` both pass.
 - Files: src/lib/supabase.js
+
+## 2026-09-25 — assistClient unit test suite (pkg-assist-client-r2 t1)
+- **Problem:** `packages/rides-native/assistClient.js` had incomplete test coverage across its exported helpers (`parseAgentHttpResponse`, `postAgent`, `supportTicketRequest`), specifically missing coverage for empty/null inputs, error branches, and network error handling.
+- **What was changed:** Extended `packages/rides-native/assistClient.test.js` to cover all three exported helpers (`parseAgentHttpResponse`, `postAgent`, `supportTicketRequest`) across happy paths, empty/null inputs, and error/network failure branches using fake fetch (no live network). Source code in `assistClient.js` was left untouched.
+- **Suspicious behaviors documented (`// BUG?:`):**
+  - `parseAgentHttpResponse`: if `!ok` and `contentType` includes `text/plain` (e.g. 500 error with text/plain body), it bypasses error throwing and returns `{ reply: errorText, source: 'llm', ... }` as a successful response.
+  - `parseAgentHttpResponse`: `shapeJson` does not validate `ticketDraft.ready === true`, whereas `pickDraft` (for text/plain) enforces `draft.ready === true`.
+  - `parseAgentHttpResponse`: `roleVariant` in `shapeJson` defaults to `undefined` while other nullable fields default to `null`.
+  - `parseAgentHttpResponse`: if `!ok` and `status` is undefined (e.g. empty input `{}`), error message is `'Request failed (undefined)'`.
+  - `parseAgentHttpResponse`: `decodeMeta` uses `atob(header)` when available; `atob` treats input as Latin-1 binary string rather than UTF-8, which can garble multi-byte UTF-8 characters.
+  - `postAgent`: stringifies `body` with `JSON.stringify(body)` but does not provide a default `'Content-Type': 'application/json'` header if omitted by caller.
+  - `supportTicketRequest`: checks only `data.error` when `!res.ok`, ignoring `data.message` (unlike `parseAgentHttpResponse` which checks `data.error || data.message`).
+  - `supportTicketRequest`: passing a falsy body value like `0`, `false`, or `''` results in `undefined` body rather than stringified `'0'`, `'false'`, `'""'`.
+- **Files touched:**
+  - `packages/rides-native/assistClient.test.js`
+  - `docs/FIXES.md`
+
