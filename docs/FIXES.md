@@ -44,6 +44,14 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
   - `docs/FIXES.md`
 - **Verified:** `node --experimental-strip-types --test packages/rides-native/offerCard.test.js` (9/9 pass, 0 fail).
 
+## 2026-09-25 — Wire documentReview.js tests + verify full test suite [t3]
+
+- **Track / machine:** Clemson RIDES · deputy/document-review-r2 · pkg-document-review-r2 t3
+- **What was wrong:** Needed to ensure `packages/rides-native/documentReview.test.js` was wired into the root `package.json` `test` script and that all unit tests run and pass cleanly under `npm test`.
+- **What changed:** Confirmed `packages/rides-native/documentReview.test.js` is wired in the root `package.json` test script. Ran `npm test` and verified all 18 document review tests and all 808 total repository tests pass cleanly with zero failures and zero network/database dependencies.
+- **Files touched:**
+  - `docs/FIXES.md`
+
 ## 2026-09-25 — Reverse vehicle make aliases supported in registration matching [t2]
 
 - **Track / machine:** Clemson RIDES · deputy/document-review-r2 · pkg-document-review-r2 t2
