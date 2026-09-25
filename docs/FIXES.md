@@ -143,6 +143,37 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
 - **What changed:** Bounded `query` and `hash` slicing symmetrically: `query` ends at `hashIndex` only when `hashIndex > queryIndex`, and `hash` ends at `queryIndex` only when `queryIndex > hashIndex`. This cleanly partitions URL query and fragment parameters regardless of whether `?` precedes `#` or `#` precedes `?`. Updated unit tests in `packages/rides-native/authUrl.test.js` to assert proper extraction of session and code parameters from hash-routed URLs.
 - **Files touched:** `packages/rides-native/authUrl.js`, `packages/rides-native/authUrl.test.js`, `docs/FIXES.md`
 
+## 2026-09-25 — secureStore tests wired into npm test
+
+- **Track / machine:** Clemson RIDES · deputy/secure-store-r2 · pkg-secure-store-r2 t3
+- **What was wrong:** `packages/rides-native/secureStore.test.js` existed (t1/t2) but the root `package.json` `test` script never listed it, so `npm test` did not run the secure-store suite.
+- **What changed:** Appended `packages/rides-native/secureStore.test.js` to the root `test` script. `secureStore.js` and the test file were not edited. `packages/rides-native/package.json` has no `test` script; the runner's acceptance command is the root `npm test`.
+- **Files touched:** `package.json`, `docs/FIXES.md`
+- **Verified:** `npm test` (809 pass, 0 fail), including all 16 tests in `packages/rides-native/secureStore.test.js`.
+
+## 2026-09-25 — native secureStore removeItem only ignores a missing key
+
+- **Track / machine:** Clemson RIDES · deputy/secure-store-r2 · pkg-secure-store-r2 t2
+- **What was wrong:** `packages/rides-native/secureStore.js` wrapped `SecureStore.deleteItemAsync` in a catch that ignored every error. A locked keychain or a failed Android commit made `removeItem` resolve while the session was still stored. An invalid key (`''`, `null`, `undefined`) was swallowed the same way, because `expo-secure-store` rejects those in JS before the native delete. SDK 57 does not throw when the item is already absent; the catch existed for that case and was wider than the case.
+- **What changed:** Native `removeItem` still returns successfully when the error is a missing item (`Could not find key …`, `could not be found in the keychain`, `errSecItemNotFound`). Any other delete error is rethrown. Web memory storage is unchanged.
+- **Files touched:** `packages/rides-native/secureStore.js`, `packages/rides-native/secureStore.test.js`, `docs/FIXES.md`
+- **Verified:** `node --experimental-strip-types --test packages/rides-native/secureStore.test.js` (16/16 passing).
+
+## 2026-09-25 — secureStore.js unit tests, source unchanged
+
+- **Track / machine:** Clemson RIDES · deputy/secure-store-r2 · pkg-secure-store-r2 t1
+- **What was wrong:** `packages/rides-native/secureStore.js` had no unit test. `origin/main` has `secureStore.js` and `secureStore.d.ts` only, so there was no test file to extend. Importing the module under Node fails on `react-native` and `expo-secure-store`, which this package does not install.
+- **What changed:** Added `packages/rides-native/secureStore.test.js`. It loads the module separately for ios, android, and web behind fake `react-native` and `expo-secure-store` modules (in-memory keychain, 2048-byte cap, numeric `AFTER_FIRST_UNLOCK`). `secureStore.js` was not edited. Suspected bugs are marked `// BUG?:` and asserted as the current behavior:
+  - `String()` stores `null`, `undefined`, `false`, `0`, and symbols as text.
+  - `setItem` deletes the previous value before writing, so a failed write or a throwing `toString` leaves the key empty.
+  - A mid-chunk write failure leaves orphan `key.0` data and `getItem` returns null.
+  - Native `removeItem` swallowed every `deleteItemAsync` error (fixed in the t2 entry above: only a missing key is ignored).
+  - A non-finite `.n` count skips chunk deletes. `removeItem` also issues one delete per stored count with no upper bound.
+  - Chunking uses UTF-16 code units, so 683 CJK characters stay one item at 2049 UTF-8 bytes.
+  - `null`, `undefined`, and empty keys are stored on the web memory backend and rejected by the native fake.
+- **Files touched:** `packages/rides-native/secureStore.test.js`, `docs/FIXES.md`
+- **Verified:** `node --experimental-strip-types --test packages/rides-native/secureStore.test.js` (16/16 passing).
+
 ## 2026-09-25 — Expiry cron wired: CRON_SECRET + Supabase pg_cron/pg_net; prod redeployed at 111c607
 
 - **Track / machine:** Clemson RIDES · I9 (61b11c89) Vercel CLI + Supabase awktabuhijrshmsmagpq · approved by John 1:05 AM ET 9/25.
