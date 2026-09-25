@@ -2,6 +2,17 @@
 
 Persistent knowledge base for recurring failures. When a matching issue appears, apply the saved fix first.
 
+## 2026-09-24 — Atomic hold claim & metadata merge design and migration requirement documented [t3]
+
+- **Track / machine:** Deputy · pkg-pro-hold-claim-atomic · deputy/hold-claim-atomic
+- **Context & Design Decision:** Addressed reviewer note on PR #74 regarding race conditions in `/api/expire-unpaid-airport-holds` where reading `trips.metadata`, modifying in JS, and updating the entire object clobbered concurrent writes (e.g. Stripe webhooks adding `receipt_url` or rider updates).
+  - Selected hybrid Design A + Design B:
+    - **Design A (Claim column):** Added `trips.hold_expire_claimed_at timestamptz` (nullable) with partial index `trips_hold_expire_claimed_at_idx`. Claiming and releasing operate directly on this dedicated column via conditional UPDATEs without touching `trips.metadata`.
+    - **Design B (Atomic metadata merge):** Added Postgres RPC `public.merge_trip_metadata(p_trip_id uuid, p_patch jsonb, ...)` (SECURITY DEFINER, `search_path = public`, granted to `service_role` only) which merges patches via `metadata = coalesce(metadata, '{}'::jsonb) || p_patch` alongside conditional status updates and claim clearing in a single atomic statement.
+- **Migration File:** `supabase/migrations/20260925140000_hold_claim_atomic.sql`
+- **Pre-Ship Requirement:** Migration `supabase/migrations/20260925140000_hold_claim_atomic.sql` **MUST** be applied to the database before this code ships. If the application code is deployed before the migration is run, `/api/expire-unpaid-airport-holds` will fail with 500 errors because the column `hold_expire_claimed_at` and the RPC function `public.merge_trip_metadata` will not exist.
+- **Files:** `docs/FIXES.md`, `SHIP_NOTES.md`
+
 ## 2026-09-24 — Hold claim and cancel race conditions verified with concurrency tests [t2]
 
 - **Track / machine:** Deputy · pkg-pro-hold-claim-atomic · deputy/hold-claim-atomic
