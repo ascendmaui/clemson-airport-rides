@@ -6,6 +6,7 @@ import { cardDepositCents, STUDENT_DISCOUNT_BPS } from '../src/lib/fareRates.js'
 import { ATL_FLOOR_CENTS } from '../src/lib/scheduledRideModel.js'
 import {
   amountDueIgnoringClient,
+  parseRideAt,
   priceCheckoutBody,
   priceDriverRequest,
   priceRecordedTrip,
@@ -294,4 +295,78 @@ test('a short ATL pin on a driver request still meets the Atlanta floor', () => 
   assert.ok(Math.abs(places.dropoff.lat - 34.6788) > 0.5)
   const priced = priceDriverRequest(places, { isStudent: false, at: QUIET, tier: 'standard' })
   assert.ok(priced.fareCents >= ATL_FLOOR_CENTS)
+})
+
+
+test('parseRideAt date+time is America/New_York wall time, independent of process TZ', () => {
+  const prev = process.env.TZ
+  try {
+    for (const tz of ['UTC', 'America/New_York', 'America/Los_Angeles']) {
+      process.env.TZ = tz
+      const parsed = parseRideAt({ date: '2026-10-02', time: '14:00' })
+      assert.equal(
+        parsed.toISOString(),
+        '2026-10-02T18:00:00.000Z',
+        `TZ=${tz}: 14:00 EDT must be 18:00Z`,
+      )
+    }
+    process.env.TZ = 'UTC'
+    assert.equal(
+      parseRideAt({ date: '2026-12-15', time: '14:00' }).toISOString(),
+      '2026-12-15T19:00:00.000Z',
+      '14:00 EST → 19:00Z',
+    )
+  } finally {
+    if (prev === undefined) delete process.env.TZ
+    else process.env.TZ = prev
+  }
+})
+
+test('parseRideAt keeps ISO at / pickupAt with Z or offset unchanged', () => {
+  assert.equal(
+    parseRideAt({ at: '2026-10-02T18:00:00.000Z' }).toISOString(),
+    '2026-10-02T18:00:00.000Z',
+  )
+  assert.equal(
+    parseRideAt({ pickupAt: '2026-10-02T14:00:00-04:00' }).toISOString(),
+    '2026-10-02T18:00:00.000Z',
+  )
+  // at wins over date+time
+  assert.equal(
+    parseRideAt({
+      at: '2026-10-02T18:00:00.000Z',
+      date: '2026-10-02',
+      time: '10:00',
+    }).toISOString(),
+    '2026-10-02T18:00:00.000Z',
+  )
+})
+
+test('parseRideAt DST: reject spring gap; first occurrence on fall-back', () => {
+  // 2026-03-08: clocks spring forward 02:00 → 03:00 EDT; 02:30 does not exist.
+  const gap = parseRideAt({ date: '2026-03-08', time: '02:30' })
+  assert.equal(Number.isNaN(gap.getTime()), true)
+
+  // 2026-11-01: fall back 02:00 EDT → 01:00 EST; 01:30 occurs twice — prefer first (EDT).
+  assert.equal(
+    parseRideAt({ date: '2026-11-01', time: '01:30' }).toISOString(),
+    '2026-11-01T05:30:00.000Z',
+  )
+  assert.equal(
+    parseRideAt({ date: '2026-03-08', time: '01:30' }).toISOString(),
+    '2026-03-08T06:30:00.000Z',
+  )
+  assert.equal(
+    parseRideAt({ date: '2026-03-08', time: '03:30' }).toISOString(),
+    '2026-03-08T07:30:00.000Z',
+  )
+})
+
+test('parseRideAt defaults missing time to noon ET and falls back when date absent', () => {
+  assert.equal(
+    parseRideAt({ date: '2026-10-02' }).toISOString(),
+    '2026-10-02T16:00:00.000Z', // 12:00 EDT
+  )
+  const now = new Date('2026-09-23T15:00:00.000Z')
+  assert.equal(parseRideAt({}, now).toISOString(), now.toISOString())
 })
