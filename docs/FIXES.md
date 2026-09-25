@@ -1183,3 +1183,33 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
   Vite's build target (es2020 / safari14) has no top-level await, so `vite build` failed ("Top-level await is not available").
 - What changed: restored the original static import. `npm test` (385/385) and `vite build` both pass.
 - Files: src/lib/supabase.js
+
+## 2026-09-25 — assistClient unit test suite (pkg-assist-client-r2 t1)
+- **Problem:** `packages/rides-native/assistClient.js` had incomplete test coverage across its exported helpers (`parseAgentHttpResponse`, `postAgent`, `supportTicketRequest`), specifically missing coverage for empty/null inputs, error branches, and network error handling.
+- **What was changed:** Extended `packages/rides-native/assistClient.test.js` to cover all three exported helpers (`parseAgentHttpResponse`, `postAgent`, `supportTicketRequest`) across happy paths, empty/null inputs, and error/network failure branches using fake fetch (no live network). Source code in `assistClient.js` was left untouched.
+- **Suspicious behaviors documented (`// BUG?:`):**
+  - `parseAgentHttpResponse`: if `!ok` and `contentType` includes `text/plain` (e.g. 500 error with text/plain body), it bypasses error throwing and returns `{ reply: errorText, source: 'llm', ... }` as a successful response.
+  - `parseAgentHttpResponse`: `shapeJson` does not validate `ticketDraft.ready === true`, whereas `pickDraft` (for text/plain) enforces `draft.ready === true`.
+  - `parseAgentHttpResponse`: `roleVariant` in `shapeJson` defaults to `undefined` while other nullable fields default to `null`.
+  - `parseAgentHttpResponse`: if `!ok` and `status` is undefined (e.g. empty input `{}`), error message is `'Request failed (undefined)'`.
+  - `parseAgentHttpResponse`: `decodeMeta` uses `atob(header)` when available; `atob` treats input as Latin-1 binary string rather than UTF-8, which can garble multi-byte UTF-8 characters.
+  - `postAgent`: stringifies `body` with `JSON.stringify(body)` but does not provide a default `'Content-Type': 'application/json'` header if omitted by caller.
+  - `supportTicketRequest`: checks only `data.error` when `!res.ok`, ignoring `data.message` (unlike `parseAgentHttpResponse` which checks `data.error || data.message`).
+  - `supportTicketRequest`: passing a falsy body value like `0`, `false`, or `''` results in `undefined` body rather than stringified `'0'`, `'false'`, `'""'`.
+- **Files touched:**
+  - `packages/rides-native/assistClient.test.js`
+  - `docs/FIXES.md`
+
+## 2026-09-25 — one small safe robustness fix in assistClient.js (pkg-assist-client-r2 t2)
+- **Problem:** In `packages/rides-native/assistClient.js`, `supportTicketRequest` only inspected `data.error` when throwing on non-ok HTTP responses, ignoring `data.message` (unlike `parseAgentHttpResponse` in the same module which checks `data.error || data.message`). When an API or authentication error response contained `{ message: '...' }` (such as standard Supabase/PostgREST or HTTP gateway errors), `supportTicketRequest` dropped the specific error message and fell back to the generic `Request failed (${res.status})`.
+- **What was changed:** Updated `supportTicketRequest` in `packages/rides-native/assistClient.js` to check `data.error || data.message || `Request failed (${res.status})``, ensuring consistency with `parseAgentHttpResponse` and preserving descriptive error messages. Updated unit tests in `packages/rides-native/assistClient.test.js` to verify that `data.message` is used and that `data.error` takes precedence when both are present.
+- **Files touched:**
+  - `packages/rides-native/assistClient.js`
+  - `packages/rides-native/assistClient.test.js`
+  - `docs/FIXES.md`
+
+## 2026-09-25 — wire assistClient.js tests into npm test + verify suite (pkg-assist-client-r2 t3)
+- **Problem:** `packages/rides-native/assistClient.test.js` needed verification of wiring in the root `package.json` `test` script and end-to-end confirmation that the complete test suite runs and passes cleanly.
+- **What was changed:** Verified that `packages/rides-native/assistClient.test.js` is present in the `package.json` `test` runner argument list. Executed full test runner via `npm test`, confirming 832/832 tests pass (including all 45 assistClient unit tests covering `parseAgentHttpResponse`, `postAgent`, and `supportTicketRequest`).
+- **Files touched:**
+  - `docs/FIXES.md`

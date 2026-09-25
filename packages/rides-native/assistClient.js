@@ -93,7 +93,7 @@ export async function supportTicketRequest({ url, headers, method = 'GET', body 
   })
   const data = await res.json().catch(() => ({}))
   if (!res.ok) {
-    const error = new Error(data.error || `Request failed (${res.status})`)
+    const error = new Error(data.error || data.message || `Request failed (${res.status})`)
     error.payload = data
     throw error
   }
