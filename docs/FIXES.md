@@ -65,6 +65,36 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
 - **Verified in prod (test mode):** airport-checkout 200, and the session is now bound (`stripe_checkout_session_id` / `stripe_checkout_created_at` stamped); reconcile-checkout on the unpaid session 200 `paid:false`; abandon-checkout 200 `released:true, status:canceled`; no `trip_status = text` in the runtime logs. Throwaway user and trip deleted.
 - **Lesson:** fake Supabase clients in the unit tests cannot catch Postgres type errors. Call any new RPC once against the real DB (a no-op id works) before shipping.
 
+## 2026-09-25 — partyProfile tests run from the root npm test script
+
+- **Track / machine:** Clemson RIDES · deputy/party-profile-tests · pkg-party-profile-tests t3
+- **What was wrong:** `packages/rides-native/partyProfile.test.js` was added on this branch in t1/t2. The root `npm test` script is an explicit file list, so a missing entry would skip the signup, draft-merge, and rating checks.
+- **What changed:** The `test` script in `package.json` already lists `packages/rides-native/partyProfile.test.js` once, immediately after `packages/rides-native/riderMoney.test.js`. Left that entry in place. No other `package.json` field changed.
+- **Files touched:**
+  - `docs/FIXES.md`
+- **Verified:** `npm test` (816/816 passing). The partyProfile file is tests 295–325 (31/31).
+
+## 2026-09-25 — signup draft fills whitespace-only profile metadata
+
+- **Track / machine:** Clemson RIDES · deputy/party-profile-tests · pkg-party-profile-tests t2
+- **What was wrong:** `userWithDraft` used `||`, so a whitespace-only `user_metadata` field (a space in `full_name`, `phone`, `bio`, `ride_style`, or `promo_code`) counted as present. A stored signup draft could not fill that field. `ensureProfile` then built the profile from the blank metadata and dropped the draft name, phone, bio, and ride style.
+- **What changed:** `userWithDraft` skips whitespace-only strings and uses the next candidate (metadata `name`, then the draft). Non-blank values are unchanged, and the input user is not mutated.
+- **Files touched:**
+  - `packages/rides-native/partyProfile.js`
+  - `packages/rides-native/partyProfile.test.js`
+  - `docs/FIXES.md`
+- **Verified:** `node --experimental-strip-types --test packages/rides-native/partyProfile.test.js` (31/31 passing).
+
+## 2026-09-25 — partyProfile unit tests cover every export
+
+- **Track / machine:** Clemson RIDES · deputy/party-profile-tests · pkg-party-profile-tests t1
+- **What was wrong:** `packages/rides-native/partyProfile.test.js` checked signup, ensure, draft merge, route gates, counterpart ids, and the rating happy path, but never called the async loaders or several pure helpers (`digits`, `formatPhone`, `hasRideStyle`, `asSpotList`, `vehicleLabelFromRow`, and the profile constants).
+- **What changed:** Extended `packages/rides-native/partyProfile.test.js` only. Did not edit `packages/rides-native/partyProfile.js`. The suite now locks the export list and each helper. Suspicious current behavior stays asserted with `// BUG?:`: `validateStars(true)` and scientific notation count as stars; `formatRatingLine` prints negative, fractional, and out-of-range values and rounds 4.85 to 4.8; `asSpotList` keeps untrimmed spots; whitespace-only metadata blocks `userWithDraft`; `readSignupDraft` accepts JSON arrays and stringifies non-strings; a one-character name and a too-short phone are stored and then not repaired by `buildEnsureProfilePatch`; `ratingBlockReason` tells non-parties the trip is unfinished and reports a missing rider as "Cannot rate yourself"; `findPendingRating` interpolates `userId` into `.or()`, swallows query errors, and only requests five trips; `loadPublicProfile` treats an RPC error that mentions "function" as a missing RPC; `loadOwnProfile` retries the narrow select for any error that mentions "column"; an empty-string `rating_avg` becomes 0 and any truthy `student_verified_at` marks a student.
+- **Files touched:**
+  - `packages/rides-native/partyProfile.test.js`
+  - `docs/FIXES.md`
+- **Verified:** `node --experimental-strip-types --test packages/rides-native/partyProfile.test.js` (31/31 passing).
+
 ## 2026-09-25 — Build 19 shipped to production (#91); merge_trip_metadata enum bug found in smoke test
 
 - **Track / machine:** Clemson RIDES · Max (merges, tests) + MacBookPro-1096 (Vercel CLI, team john-matveyev-macbooki9, project clemson-rides) · approved by John 12:19 AM ET 9/25.

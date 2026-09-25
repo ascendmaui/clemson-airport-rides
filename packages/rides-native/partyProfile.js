@@ -114,6 +114,18 @@ export function readSignupDraft(raw) {
   }
 }
 
+// A whitespace-only string is blank. Other falsy values stay falsy so `||` behavior holds.
+function firstFilled(...values) {
+  for (const value of values) {
+    if (typeof value === 'string') {
+      if (value.trim()) return value
+      continue
+    }
+    if (value) return value
+  }
+  return ''
+}
+
 export function userWithDraft(user, draft) {
   if (!user || !draft) return user
   const meta = user.user_metadata || {}
@@ -121,11 +133,11 @@ export function userWithDraft(user, draft) {
     ...user,
     user_metadata: {
       ...meta,
-      full_name: meta.full_name || meta.name || draft.fullName || '',
-      phone: meta.phone || draft.phone || '',
-      bio: meta.bio || draft.bio || '',
-      ride_style: meta.ride_style || draft.rideStyle || '',
-      promo_code: meta.promo_code || draft.promo || '',
+      full_name: firstFilled(meta.full_name, meta.name, draft.fullName),
+      phone: firstFilled(meta.phone, draft.phone),
+      bio: firstFilled(meta.bio, draft.bio),
+      ride_style: firstFilled(meta.ride_style, draft.rideStyle),
+      promo_code: firstFilled(meta.promo_code, draft.promo),
     },
   }
 }
