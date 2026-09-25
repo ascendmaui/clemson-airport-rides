@@ -189,3 +189,19 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
 - **Fix (worktree, uncommitted, not deployed):** `server/clerkSupabaseBridge.js` `clerkSecrets()` + `verifyWithAnySecret()`; `api/clerk-supabase-session.js` tries `CLERK_SECRET_KEY` then `CLERK_SECRET_KEY_DEV` and loads the user with whichever secret verified; tests added. README documents `CLERK_SECRET_KEY_DEV`.
 - **To ship:** add Vercel env `CLERK_SECRET_KEY_DEV` = dev instance (choice-gibbon-3653) `sk_test_…` from Clerk dashboard -> API keys (Development), then deploy. No app rebuild needed for rider Google/Facebook. Enable Apple on the dev instance (dashboard) for Apple.
 - **Machine/track:** Max / Clemson rider + bridge
+
+## 2026-09-24 — Friendly API error mapper (packages/rides-native/apiErrors)
+- **Problem:** When server payment configuration was missing or failed, riders were exposed to raw technical messages such as 'STRIPE_SECRET_KEY is not configured.' or 'SUPABASE_SERVICE_ROLE_KEY not configured', or confusing 'Sign in required' auth messages.
+- **What was wrong:** API response errors from server routes (503 for missing payment keys, 401 for auth, 402 for card failures) lacked a shared client-side mapper to sanitize technical config/env details and present safe, user-friendly error messages.
+- **What was changed:** Created `packages/rides-native/apiErrors.js` and `packages/rides-native/apiErrors.d.ts` exporting `friendlyApiError(status, body)`.
+  - 503 or body matching `/not configured|STRIPE_|SUPABASE_|service role|Payments unavailable/i` returns kind `'unavailable'` with message `'Payments are temporarily unavailable, please try again shortly'`, ensuring no raw environment variable names leak to users.
+  - 401 returns kind `'auth'` with message `'Please sign in again to continue.'`.
+  - 402 and card errors retain the server message if user-facing, or fall back to `'Something went wrong. Please try again.'`.
+  - 5xx other returns kind `'server'` with generic message `'Something went wrong. Please try again.'`.
+  - Network errors (status 0/undefined) return kind `'network'` with message `'Check your connection and try again.'`.
+  - Added comprehensive test suite in `packages/rides-native/apiErrors.test.js`.
+- **Files touched:**
+  - `packages/rides-native/apiErrors.js`
+  - `packages/rides-native/apiErrors.d.ts`
+  - `packages/rides-native/apiErrors.test.js`
+  - `docs/FIXES.md`
