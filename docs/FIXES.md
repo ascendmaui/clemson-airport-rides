@@ -2,6 +2,46 @@
 
 Persistent knowledge base for recurring failures. When a matching issue appears, apply the saved fix first.
 
+## 2026-09-24 — Wire carpoolApi tests into package.json test suite (pkg-carpool-api-tests t3)
+
+- **Track / machine:** Clemson RIDES · deputy/carpool-api-tests
+- **Problem:** `packages/rides-native/shared/carpoolApi.test.js` needed to be wired as the last entry of the root `package.json` "test" script so that CI and local runners execute the carpool API test suite as part of standard test runs.
+- **What was changed:** Appended `packages/rides-native/shared/carpoolApi.test.js` as the last test entry in `package.json` "test" script and ensured no duplicate mid-script entry remains. Verified all 364 tests in the suite pass cleanly.
+- **Files touched:**
+  - `package.json`
+  - `docs/FIXES.md`
+
+## 2026-09-24 — Strip multiple trailing slashes in carpoolApi base override (pkg-carpool-api-tests t2)
+
+- **Track / machine:** Clemson RIDES · deputy/carpool-api-tests
+- **Problem:** `setCarpoolApiBase` in `packages/rides-native/shared/carpoolApi.js` used `.replace(/\/$/, '')`, which only stripped a single trailing slash. Passing a base URL with multiple trailing slashes (e.g. from environment configuration) left residual slashes and caused malformed concatenated endpoint URLs like `${apiBase()}${path}`.
+- **What was changed:** Updated regex in `setCarpoolApiBase` to `.replace(/\/+$/, '')` to strip all trailing slashes while preserving valid-input behavior. Updated unit tests in `packages/rides-native/shared/carpoolApi.test.js` to assert multiple trailing slashes are cleanly removed.
+- **Files touched:**
+  - `packages/rides-native/shared/carpoolApi.js`
+  - `packages/rides-native/shared/carpoolApi.test.js`
+  - `docs/FIXES.md`
+
+## 2026-09-24 — Carpool API client unit test suite (pkg-carpool-api-tests t1)
+
+- **Track / machine:** Clemson RIDES · deputy/carpool-api-tests
+- **Problem:** `packages/rides-native/shared/carpoolApi.js` lacked dedicated unit test coverage for its HTTP client wrapper methods, API base URL configuration, invite URL generator, bearer token injection, and error handling.
+- **What was changed:** Created `packages/rides-native/shared/carpoolApi.test.js` covering `setCarpoolApiBase`, `apiBase`, `inviteUrl`, `apiErrorMessage`, `matchCarpool`, `createCarpoolGroup`, `claimAmbassadorAttribution`, `carpoolProgram`, `createCarpoolOffer`, `getFriendRide`, `joinFriendRide`, `recomputeFriendRide`, and `confirmFriendCharges`.
+  - Stubbed `globalThis.fetch` with clean restoration in `afterEach`.
+  - Faked Supabase auth session to verify bearer token header injection and omitted headers when unauthenticated.
+  - Verified non-OK JSON error payloads, HTTP status fallbacks, malformed HTML responses, and fetch network throws via `apiErrorMessage`.
+  - Registered `packages/rides-native/shared/carpoolApi.test.js` in root `package.json` test script.
+  - Did not modify production `carpoolApi.js`.
+- **Suspicious behaviors documented (`// BUG?:`):**
+  - `setCarpoolApiBase`: uses `replace(/\/$/, '')` which only removes a single trailing slash instead of all trailing slashes.
+  - `inviteUrl`: only checks `kind === 'friends'`, so any other kind (e.g. `'tailgate'`) silently falls back to `'carpool'`.
+  - `apiErrorMessage`: primitive string errors (e.g. `apiErrorMessage('custom string')`) return `'Something went wrong'` instead of the string message because it checks `instanceof Error` but not `typeof err === 'string'`.
+  - `apiErrorMessage`: plain objects `{ message: '...' }` not wrapped in `payload` return `'Something went wrong'` because `instanceof Error` is false.
+  - `createCarpoolGroup`: hardcodes `driving: false`, ignoring `driving: true` on the input body.
+- **Files touched:**
+  - `packages/rides-native/shared/carpoolApi.test.js`
+  - `package.json`
+  - `docs/FIXES.md`
+
 ## 2026-09-24 — Remove Clerk: Apple + Google social sign-in directly on Supabase Auth
 
 - **Track / machine:** Clemson RIDES · worktree feat/supabase-auth-remove-clerk
