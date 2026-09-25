@@ -64,6 +64,26 @@ function memoryDb() {
       if (filter.type === 'gt' || filter.type === 'lt' || filter.type === 'lte') {
         return compareFilter(row[filter.col], filter.val, filter.type)
       }
+      if (filter.type === 'or') {
+        const clauses = String(filter.clause || '').split(',')
+        return clauses.some((clause) => {
+          const trimmed = clause.trim()
+          if (!trimmed) return false
+          const isNullMatch = /^([^.]+)\.is\.null$/i.exec(trimmed)
+          if (isNullMatch) {
+            return readColumn(row, isNullMatch[1]) == null
+          }
+          const ltMatch = /^([^.]+)\.lt\.(.+)$/i.exec(trimmed)
+          if (ltMatch) {
+            return compareFilter(readColumn(row, ltMatch[1]), ltMatch[2], 'lt')
+          }
+          const eqMatch = /^([^.]+)\.eq\.(.+)$/i.exec(trimmed)
+          if (eqMatch) {
+            return String(readColumn(row, eqMatch[1])) === eqMatch[2]
+          }
+          return false
+        })
+      }
       return false
     })
   }
@@ -108,6 +128,7 @@ function memoryDb() {
       eq(col, val) { state.filters.push({ type: 'eq', col, val }); return api },
       in(col, vals) { state.filters.push({ type: 'in', col, vals }); return api },
       is(col, val) { state.filters.push({ type: 'is', col, val }); return api },
+      or(clause) { state.filters.push({ type: 'or', clause }); return api },
       gt(col, val) { state.filters.push({ type: 'gt', col, val }); return api },
       lt(col, val) { state.filters.push({ type: 'lt', col, val }); return api },
       lte(col, val) { state.filters.push({ type: 'lte', col, val }); return api },
@@ -132,6 +153,42 @@ function memoryDb() {
     payments,
     events,
     from(table) { return query(table) },
+    async rpc(fnName, params = {}) {
+      if (fnName === 'merge_trip_metadata') {
+        const trip = trips.get(params.p_trip_id)
+        if (!trip) return { data: null, error: null }
+        if (params.p_expected_statuses && !params.p_expected_statuses.includes(trip.status)) {
+          return { data: null, error: null }
+        }
+        if (params.p_require_unassigned && trip.driver_id != null) {
+          return { data: null, error: null }
+        }
+        if (params.p_require_unabandoned && readColumn(trip, 'metadata->>checkout_abandoned') != null) {
+          return { data: null, error: null }
+        }
+        const currentMeta = typeof trip.metadata === 'object' && trip.metadata !== null ? { ...trip.metadata } : {}
+        delete currentMeta.hold_expire_claim
+        const nextMeta = { ...currentMeta, ...(params.p_patch || {}) }
+        const next = {
+          ...trip,
+          metadata: nextMeta,
+          ...(params.p_new_status ? { status: params.p_new_status } : {}),
+          ...(params.p_canceled_at ? { canceled_at: params.p_canceled_at } : (params.p_new_status === 'canceled' ? { canceled_at: new Date().toISOString() } : {})),
+          ...(params.p_clear_claim ? { hold_expire_claimed_at: null } : {}),
+        }
+        trips.set(next.id, next)
+        return {
+          data: {
+            id: next.id,
+            status: next.status,
+            canceled_at: next.canceled_at,
+            metadata: next.metadata,
+          },
+          error: null,
+        }
+      }
+      return { data: null, error: { message: `unknown rpc ${fnName}` } }
+    },
     seedTrip(row) {
       trips.set(row.id, {
         driver_id: null,
@@ -139,6 +196,7 @@ function memoryDb() {
         scheduled_for: null,
         canceled_at: null,
         rider_id: 'rider_1',
+        hold_expire_claimed_at: null,
         ...row,
       })
     },
@@ -1044,10 +1102,7 @@ test('overlapping ttl sweeps do not write two trip_events when Stripe is not cal
 test('a fresh expire claim blocks a second sweep and a stale claim can be taken over', async () => {
   const db = memoryDb()
   seedAirportHold(db, { created_at: holdIso(40 * 60 * 1000) })
-  db.trips.get('trip_1').metadata = {
-    ...db.trips.get('trip_1').metadata,
-    hold_expire_claim: { at: new Date().toISOString() },
-  }
+  db.trips.get('trip_1').hold_expire_claimed_at = new Date().toISOString()
   let expires = 0
   const blocked = await releaseExpiredUnpaidAirportHolds(db, {
     now: HOLD_NOW,
@@ -1063,10 +1118,7 @@ test('a fresh expire claim blocks a second sweep and a stale claim can be taken 
   assert.equal(db.trips.get('trip_1').status, 'searching')
   assert.equal(db.events.length, 0)
 
-  db.trips.get('trip_1').metadata = {
-    ...db.trips.get('trip_1').metadata,
-    hold_expire_claim: { at: new Date(Date.now() - 5 * 60 * 1000).toISOString() },
-  }
+  db.trips.get('trip_1').hold_expire_claimed_at = new Date(Date.now() - 5 * 60 * 1000).toISOString()
   const taken = await releaseExpiredUnpaidAirportHolds(db, {
     now: HOLD_NOW,
     retrieveSession: async () => airportSession({ status: 'open' }),
@@ -1079,6 +1131,7 @@ test('a fresh expire claim blocks a second sweep and a stale claim can be taken 
   assert.equal(taken.released, 1)
   assert.equal(db.events.length, 1)
   assert.equal(db.trips.get('trip_1').status, 'canceled')
+  assert.equal(db.trips.get('trip_1').hold_expire_claimed_at, null)
 })
 
 test('ttl sweep does not touch paid deposits, zero deposits, non-airport trips, or paid Checkout sessions', async () => {
@@ -1260,4 +1313,72 @@ test('dry_run reports the hold it would expire and does not write', async () => 
   assert.equal(db.events.length, 0)
   assert.equal(db.trips.get('trip_due').metadata.checkout_abandoned, undefined)
   assert.equal(db.trips.get('trip_due').metadata.hold_expire_claim, undefined)
+  assert.equal(db.trips.get('trip_due').hold_expire_claimed_at, null)
 })
+
+test('concurrent metadata writes during claim and cancel are not clobbered', async () => {
+  const db = memoryDb()
+  seedAirportHold(db, {
+    created_at: holdIso(40 * 60 * 1000),
+    metadata: {
+      purpose: 'airport',
+      airport: 'GSP',
+      stripe_checkout_session_id: 'cs_1',
+      rider_note: 'fragile luggage',
+    },
+  })
+  let expires = 0
+  const sweep = await releaseExpiredUnpaidAirportHolds(db, {
+    now: HOLD_NOW,
+    retrieveSession: async () => airportSession({ status: 'open' }),
+    expireSession: async () => {
+      expires += 1
+      // While Stripe expire is pending, a concurrent webhook or background writer updates metadata:
+      db.trips.get('trip_1').metadata = {
+        ...db.trips.get('trip_1').metadata,
+        concurrent_writer_key: 'preserved_value',
+      }
+      return { id: 'cs_1', status: 'expired', payment_status: 'unpaid' }
+    },
+  })
+  assert.equal(expires, 1)
+  assert.equal(sweep.released, 1)
+  const trip = db.trips.get('trip_1')
+  assert.equal(trip.status, 'canceled')
+  assert.equal(trip.metadata.purpose, 'airport')
+  assert.equal(trip.metadata.rider_note, 'fragile luggage')
+  assert.equal(trip.metadata.concurrent_writer_key, 'preserved_value')
+  assert.equal(trip.metadata.checkout_abandoned.reason, 'unpaid_hold_ttl')
+  assert.equal(trip.hold_expire_claimed_at, null)
+})
+
+test('concurrent metadata write during Stripe expire failure preserves metadata keys', async () => {
+  const db = memoryDb()
+  seedAirportHold(db, {
+    id: 'trip_fail',
+    created_at: holdIso(40 * 60 * 1000),
+    metadata: {
+      purpose: 'airport',
+      stripe_checkout_session_id: 'cs_fail',
+      custom_flag: 'keep_me',
+    },
+  })
+  const sweep = await releaseExpiredUnpaidAirportHolds(db, {
+    now: HOLD_NOW,
+    retrieveSession: async () => airportSession({ id: 'cs_fail', status: 'open', metadata: { tripId: 'trip_fail' } }),
+    expireSession: async () => {
+      db.trips.get('trip_fail').metadata = {
+        ...db.trips.get('trip_fail').metadata,
+        webhook_key: 'also_keep_me',
+      }
+      throw new Error('stripe timeout')
+    },
+  })
+  assert.equal(sweep.errors, 1)
+  const trip = db.trips.get('trip_fail')
+  assert.equal(trip.status, 'searching')
+  assert.equal(trip.metadata.custom_flag, 'keep_me')
+  assert.equal(trip.metadata.webhook_key, 'also_keep_me')
+  assert.equal(trip.hold_expire_claimed_at, null)
+})
+
