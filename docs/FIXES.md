@@ -714,6 +714,12 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
 - **Files touched:** `docs/driver-approval-gate.md`, `server/driverApproval.test.js`, `docs/FIXES.md`
 - **Verified:** `node --experimental-strip-types --test server/driverApproval.test.js` (6/6 passing)
 
+## 2026-09-25 — notificationPrefs tests run last in npm test
+
+- **What was wrong:** `packages/rides-native/notificationPrefs.test.js` was listed once in the root `test` script, after `packages/rides-native/heat.test.js` and before `packages/rides-native/shared/vehicle.test.js`. Later suites still ran after it, so `npm test` did not finish on the notification-prefs suite.
+- **What changed:** Moved `packages/rides-native/notificationPrefs.test.js` to the final argument of the `test` script. The file still runs once. No other `package.json` fields changed.
+- **Files touched:** `package.json`, `docs/FIXES.md`
+
 ## 2026-09-25 — fetchNotificationPrefs names a missing query error
 
 - **What was wrong:** `fetchNotificationPrefs` copied `error.message` straight into `softFail`. A truthy Supabase error with no `message`, or with `message: ''`, came back as `undefined` or `''`. The thrown-client path already uses `'fetch failed'`, and the save path already substitutes a string. The rider notifications screen interpolates `softFail` into the profile-sync note.
