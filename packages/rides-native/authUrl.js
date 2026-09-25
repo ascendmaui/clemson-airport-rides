@@ -5,9 +5,11 @@ export function parseSupabaseAuthUrl(url) {
   const hashIndex = url.indexOf('#')
   const queryIndex = url.indexOf('?')
   const query = queryIndex >= 0
-    ? url.slice(queryIndex + 1, hashIndex >= 0 ? hashIndex : undefined)
+    ? url.slice(queryIndex + 1, hashIndex > queryIndex ? hashIndex : undefined)
     : ''
-  const hash = hashIndex >= 0 ? url.slice(hashIndex + 1) : ''
+  const hash = hashIndex >= 0
+    ? url.slice(hashIndex + 1, queryIndex > hashIndex ? queryIndex : undefined)
+    : ''
   const hashParams = new URLSearchParams(hash)
   const queryParams = new URLSearchParams(query)
   const pick = (key) => hashParams.get(key) || queryParams.get(key)
