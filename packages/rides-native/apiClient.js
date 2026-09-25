@@ -1,10 +1,9 @@
 /** Calls the existing Vercel /api routers. No new functions and no secret keys. */
 
-const DEFAULT_API = 'https://clemson-airport-rides.vercel.app'
+import { resolveApiBase } from './apiOrigin.js'
 
 export function apiBase() {
-  const raw = process.env.EXPO_PUBLIC_API_BASE || DEFAULT_API
-  return String(raw).replace(/\/$/, '')
+  return resolveApiBase()
 }
 
 export async function authedJson(supabase, path, { method = 'GET', body } = {}) {

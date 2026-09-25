@@ -14,6 +14,22 @@ import {
 } from './abandonedCheckout.js'
 import expireUnpaidAirportHolds, { holdTtlCronAuthorized } from './endpoints/expireUnpaidAirportHolds.js'
 
+function readColumn(row, col) {
+  const spec = String(col || '')
+  if (!spec.includes('->')) return row?.[spec]
+  let cur = row
+  for (const part of spec.split('->')) {
+    if (cur == null || typeof cur !== 'object') return null
+    const text = part.startsWith('>')
+    const key = text ? part.slice(1) : part
+    if (!key) return null
+    cur = cur[key]
+    if (cur === undefined || cur === null) return null
+    if (text && typeof cur !== 'string') cur = String(cur)
+  }
+  return cur
+}
+
 function memoryDb() {
   const trips = new Map()
   const payments = []
@@ -39,11 +55,34 @@ function memoryDb() {
 
   function match(row, filters) {
     return filters.every((filter) => {
-      if (filter.type === 'eq') return row[filter.col] === filter.val
+      if (filter.type === 'eq') return readColumn(row, filter.col) === filter.val
       if (filter.type === 'in') return filter.vals.includes(row[filter.col])
-      if (filter.type === 'is') return filter.val == null ? row[filter.col] == null : row[filter.col] === filter.val
+      if (filter.type === 'is') {
+        const current = readColumn(row, filter.col)
+        return filter.val == null ? current == null : current === filter.val
+      }
       if (filter.type === 'gt' || filter.type === 'lt' || filter.type === 'lte') {
         return compareFilter(row[filter.col], filter.val, filter.type)
+      }
+      if (filter.type === 'or') {
+        const clauses = String(filter.clause || '').split(',')
+        return clauses.some((clause) => {
+          const trimmed = clause.trim()
+          if (!trimmed) return false
+          const isNullMatch = /^([^.]+)\.is\.null$/i.exec(trimmed)
+          if (isNullMatch) {
+            return readColumn(row, isNullMatch[1]) == null
+          }
+          const ltMatch = /^([^.]+)\.lt\.(.+)$/i.exec(trimmed)
+          if (ltMatch) {
+            return compareFilter(readColumn(row, ltMatch[1]), ltMatch[2], 'lt')
+          }
+          const eqMatch = /^([^.]+)\.eq\.(.+)$/i.exec(trimmed)
+          if (eqMatch) {
+            return String(readColumn(row, eqMatch[1])) === eqMatch[2]
+          }
+          return false
+        })
       }
       return false
     })
@@ -89,6 +128,7 @@ function memoryDb() {
       eq(col, val) { state.filters.push({ type: 'eq', col, val }); return api },
       in(col, vals) { state.filters.push({ type: 'in', col, vals }); return api },
       is(col, val) { state.filters.push({ type: 'is', col, val }); return api },
+      or(clause) { state.filters.push({ type: 'or', clause }); return api },
       gt(col, val) { state.filters.push({ type: 'gt', col, val }); return api },
       lt(col, val) { state.filters.push({ type: 'lt', col, val }); return api },
       lte(col, val) { state.filters.push({ type: 'lte', col, val }); return api },
@@ -113,6 +153,42 @@ function memoryDb() {
     payments,
     events,
     from(table) { return query(table) },
+    async rpc(fnName, params = {}) {
+      if (fnName === 'merge_trip_metadata') {
+        const trip = trips.get(params.p_trip_id)
+        if (!trip) return { data: null, error: null }
+        if (params.p_expected_statuses && !params.p_expected_statuses.includes(trip.status)) {
+          return { data: null, error: null }
+        }
+        if (params.p_require_unassigned && trip.driver_id != null) {
+          return { data: null, error: null }
+        }
+        if (params.p_require_unabandoned && readColumn(trip, 'metadata->>checkout_abandoned') != null) {
+          return { data: null, error: null }
+        }
+        const currentMeta = typeof trip.metadata === 'object' && trip.metadata !== null ? { ...trip.metadata } : {}
+        delete currentMeta.hold_expire_claim
+        const nextMeta = { ...currentMeta, ...(params.p_patch || {}) }
+        const next = {
+          ...trip,
+          metadata: nextMeta,
+          ...(params.p_new_status ? { status: params.p_new_status } : {}),
+          ...(params.p_canceled_at ? { canceled_at: params.p_canceled_at } : (params.p_new_status === 'canceled' ? { canceled_at: new Date().toISOString() } : {})),
+          ...(params.p_clear_claim ? { hold_expire_claimed_at: null } : {}),
+        }
+        trips.set(next.id, next)
+        return {
+          data: {
+            id: next.id,
+            status: next.status,
+            canceled_at: next.canceled_at,
+            metadata: next.metadata,
+          },
+          error: null,
+        }
+      }
+      return { data: null, error: { message: `unknown rpc ${fnName}` } }
+    },
     seedTrip(row) {
       trips.set(row.id, {
         driver_id: null,
@@ -120,6 +196,7 @@ function memoryDb() {
         scheduled_for: null,
         canceled_at: null,
         rider_id: 'rider_1',
+        hold_expire_claimed_at: null,
         ...row,
       })
     },
@@ -797,50 +874,758 @@ test('remembering a checkout session records the bind time used as the ttl ancho
 test('hold ttl cron auth reuses CRON_SECRET and does not require a new secret', () => {
   const req = (headers) => ({ headers })
   assert.equal(holdTtlCronAuthorized(req({}), { CRON_SECRET: '' }), false)
-  assert.equal(holdTtlCronAuthorized(req({ 'x-vercel-cron': '1' }), { CRON_SECRET: '' }), true)
-  assert.equal(holdTtlCronAuthorized(req({ 'x-vercel-cron': '1' }), { CRON_SECRET: 'placeholder' }), true)
+  assert.equal(holdTtlCronAuthorized(req({ 'x-vercel-cron': '1' }), { CRON_SECRET: '' }), false)
+  assert.equal(holdTtlCronAuthorized(req({ 'X-Vercel-Cron': '1' }), { CRON_SECRET: 'placeholder' }), false)
+  assert.equal(
+    holdTtlCronAuthorized(req({ 'x-vercel-cron': '1' }), { CRON_SECRET: '', VERCEL: '1' }),
+    true,
+  )
+  assert.equal(
+    holdTtlCronAuthorized(req({ 'X-Vercel-Cron': ' 1 ' }), { CRON_SECRET: 'placeholder', VERCEL: '1' }),
+    true,
+  )
+  assert.equal(
+    holdTtlCronAuthorized(req({ 'x-vercel-cron': '1' }), { CRON_SECRET: 'real-secret', VERCEL: '1' }),
+    false,
+  )
   assert.equal(holdTtlCronAuthorized(req({ 'x-vercel-cron': '1' }), { CRON_SECRET: 'real-secret' }), false)
   assert.equal(
     holdTtlCronAuthorized(req({ authorization: 'Bearer real-secret' }), { CRON_SECRET: 'real-secret' }),
     true,
   )
   assert.equal(
-    holdTtlCronAuthorized(req({ authorization: 'Bearer other', 'x-vercel-cron': '1' }), { CRON_SECRET: 'real-secret' }),
+    holdTtlCronAuthorized(req({ Authorization: 'bearer real-secret' }), { CRON_SECRET: '  real-secret\n' }),
+    true,
+  )
+  assert.equal(
+    holdTtlCronAuthorized(req({ AUTHORIZATION: 'Bearer real-secreT' }), { CRON_SECRET: 'real-secret' }),
     false,
   )
+  assert.equal(
+    holdTtlCronAuthorized(req({ authorization: 'Bearer real-secret-extra' }), { CRON_SECRET: 'real-secret' }),
+    false,
+  )
+  assert.equal(
+    holdTtlCronAuthorized(req({ authorization: 'Bearer other', 'x-vercel-cron': '1' }), { CRON_SECRET: 'real-secret', VERCEL: '1' }),
+    false,
+  )
+  assert.equal(holdTtlCronAuthorized(req({ authorization: 'Bearer placeholder' }), { CRON_SECRET: 'placeholder', VERCEL: '1' }), false)
 })
 
 test('the expire endpoint rejects non-cron callers and documents the cron path', async () => {
+  const cronEnv = { CRON_SECRET: 'cron-secret' }
   const denied = mockRes()
   await expireUnpaidAirportHolds({
     method: 'POST',
     headers: {},
     url: '/api/expire-unpaid-airport-holds',
-  }, denied)
+  }, denied, { env: { CRON_SECRET: '', VERCEL: '1' } })
   assert.equal(denied.statusCode, 401)
+  assert.equal(JSON.parse(denied.body).error, 'Cron authorization required')
+
+  const spoofed = mockRes()
+  await expireUnpaidAirportHolds({
+    method: 'POST',
+    headers: { 'x-vercel-cron': '1' },
+    url: '/api/expire-unpaid-airport-holds',
+  }, spoofed, { env: { CRON_SECRET: '' } })
+  assert.equal(spoofed.statusCode, 401)
 
   const wrongMethod = mockRes()
   await expireUnpaidAirportHolds({
     method: 'PUT',
     headers: { 'x-vercel-cron': '1' },
     url: '/api/expire-unpaid-airport-holds',
-  }, wrongMethod)
+  }, wrongMethod, { env: { CRON_SECRET: '', VERCEL: '1' } })
   assert.equal(wrongMethod.statusCode, 405)
 
   const preflight = mockRes()
   await expireUnpaidAirportHolds({
     method: 'OPTIONS',
-    headers: {},
+    headers: { origin: 'https://example.com' },
     url: '/api/expire-unpaid-airport-holds',
-  }, preflight)
-  assert.equal(preflight.statusCode, 204)
+  }, preflight, { env: cronEnv })
+  assert.equal(preflight.statusCode, 405)
+  assert.equal(preflight.headers['access-control-allow-origin'], undefined)
+
+  const logged = []
+  const originalError = console.error
+  console.error = (...args) => { logged.push(args.map(String).join(' ')) }
+  try {
+    const unavailable = mockRes()
+    await expireUnpaidAirportHolds({
+      method: 'GET',
+      headers: { Authorization: 'Bearer cron-secret' },
+      url: '/api/expire-unpaid-airport-holds',
+    }, unavailable, { env: cronEnv, sb: null })
+    assert.equal(unavailable.statusCode, 503)
+    assert.equal(JSON.parse(unavailable.body).error, 'Service unavailable')
+    assert.doesNotMatch(unavailable.body, /SERVICE_ROLE|stack/)
+    assert.equal(logged.some((line) => line.includes('service role client unavailable')), true)
+    const broken = mockRes()
+    await expireUnpaidAirportHolds({
+      method: 'POST',
+      headers: { authorization: 'Bearer cron-secret' },
+      url: '/api/expire-unpaid-airport-holds',
+    }, broken, {
+      env: cronEnv,
+      sb: { marker: true },
+      release: async () => {
+        throw new Error('relation trips does not exist password=secret')
+      },
+    })
+    assert.equal(broken.statusCode, 500)
+    assert.deepEqual(JSON.parse(broken.body), { error: 'Could not expire unpaid holds' })
+    assert.doesNotMatch(broken.body, /relation|password|secret/)
+    assert.equal(logged.some((line) => line.includes('relation trips')), true)
+
+    const listed = mockRes()
+    await expireUnpaidAirportHolds({
+      method: 'GET',
+      headers: { authorization: 'Bearer cron-secret' },
+      url: '/api/expire-unpaid-airport-holds',
+    }, listed, {
+      env: cronEnv,
+      sb: {},
+      release: async () => ({ ok: false, error: 'permission denied for table trips', reason: 'list_failed' }),
+    })
+    assert.equal(listed.statusCode, 500)
+    assert.deepEqual(JSON.parse(listed.body), { error: 'Could not expire unpaid holds' })
+  } finally {
+    console.error = originalError
+  }
+
+  const counted = mockRes()
+  await expireUnpaidAirportHolds({
+    method: 'POST',
+    headers: { authorization: 'Bearer cron-secret' },
+    url: '/api/expire-unpaid-airport-holds?dry_run=1',
+  }, counted, {
+    env: cronEnv,
+    sb: { marker: true },
+    release: async (sb, opts) => {
+      assert.equal(sb.marker, true)
+      assert.equal(opts.dryRun, true)
+      assert.equal(opts.expireSession, undefined)
+      return {
+        ok: true,
+        scanned: 4,
+        expired: 0,
+        released: 0,
+        skipped: 3,
+        errors: 0,
+        wouldExpire: 1,
+        dryRun: true,
+        results: [{ tripId: 'trip_1', wouldExpire: true }],
+      }
+    },
+  })
+  assert.equal(counted.statusCode, 200)
+  assert.deepEqual(JSON.parse(counted.body), {
+    ok: true,
+    scanned: 4,
+    expired: 0,
+    released: 0,
+    skipped: 3,
+    errors: 0,
+    wouldExpire: 1,
+    dryRun: true,
+    results: [{ tripId: 'trip_1', wouldExpire: true }],
+  })
+  assert.equal(counted.headers['access-control-allow-origin'], undefined)
 
   const endpoint = readFileSync(new URL('./endpoints/expireUnpaidAirportHolds.js', import.meta.url), 'utf8')
   const route = readFileSync(new URL('../api/expire-unpaid-airport-holds.js', import.meta.url), 'utf8')
+  const notes = readFileSync(new URL('../SHIP_NOTES.md', import.meta.url), 'utf8')
   assert.match(endpoint, /\/api\/expire-unpaid-airport-holds/)
   assert.match(endpoint, /every 15 minutes/)
   assert.match(endpoint, /CRON_SECRET/)
   assert.match(endpoint, /x-vercel-cron/)
+  assert.match(endpoint, /timingSafeEqual/)
+  assert.match(endpoint, /VERCEL/)
+  assert.match(endpoint, /dry_run/)
   assert.doesNotMatch(endpoint, /HOLD_TTL_SECRET|EXPIRE_HOLDS_SECRET/)
+  assert.doesNotMatch(endpoint, /cors\(/)
   assert.match(route, /expireUnpaidAirportHolds/)
+  assert.match(notes, /Authorization: Bearer \$CRON_SECRET/)
+  assert.match(notes, /external cron/i)
+  assert.match(notes, /safe to call repeatedly/)
+  assert.doesNotMatch(notes, /"schedule": "\*\/15 \* \* \* \*"/)
 })
+
+function pause(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+test('overlapping ttl sweeps cancel once and expire an open Checkout session once', async () => {
+  const db = memoryDb()
+  seedAirportHold(db, { created_at: holdIso(40 * 60 * 1000) })
+  let expires = 0
+  const opts = {
+    now: HOLD_NOW,
+    retrieveSession: async () => {
+      await pause(15)
+      return airportSession({ status: 'open' })
+    },
+    expireSession: async () => {
+      expires += 1
+      await pause(40)
+      return { id: 'cs_1', status: 'expired', payment_status: 'unpaid' }
+    },
+  }
+  const [first, second] = await Promise.all([
+    releaseExpiredUnpaidAirportHolds(db, opts),
+    releaseExpiredUnpaidAirportHolds(db, opts),
+  ])
+  assert.equal(expires, 1)
+  assert.equal(db.events.length, 1)
+  assert.equal(db.events.filter((event) => event.kind === 'canceled').length, 1)
+  assert.equal(db.trips.get('trip_1').status, 'canceled')
+  assert.equal(db.trips.get('trip_1').metadata.checkout_abandoned.reason, 'unpaid_hold_ttl')
+  assert.equal(db.trips.get('trip_1').metadata.hold_expire_claim, undefined)
+  assert.equal(first.released + second.released, 1)
+  assert.equal(first.expired + second.expired, 1)
+  assert.equal(first.errors + second.errors, 0)
+})
+
+test('overlapping ttl sweeps do not write two trip_events when Stripe is not called', async () => {
+  const db = memoryDb()
+  seedAirportHold(db, { created_at: holdIso(40 * 60 * 1000) })
+  const [first, second] = await Promise.all([
+    releaseExpiredUnpaidAirportHolds(db, { now: HOLD_NOW }),
+    releaseExpiredUnpaidAirportHolds(db, { now: HOLD_NOW }),
+  ])
+  assert.equal(db.events.length, 1)
+  assert.equal(db.trips.get('trip_1').status, 'canceled')
+  assert.equal(first.released + second.released, 1)
+})
+
+test('a fresh expire claim blocks a second sweep and a stale claim can be taken over', async () => {
+  const db = memoryDb()
+  seedAirportHold(db, { created_at: holdIso(40 * 60 * 1000) })
+  db.trips.get('trip_1').hold_expire_claimed_at = new Date().toISOString()
+  let expires = 0
+  const blocked = await releaseExpiredUnpaidAirportHolds(db, {
+    now: HOLD_NOW,
+    retrieveSession: async () => airportSession({ status: 'open' }),
+    expireSession: async () => {
+      expires += 1
+      return { id: 'cs_1', status: 'expired', payment_status: 'unpaid' }
+    },
+  })
+  assert.equal(expires, 0)
+  assert.equal(blocked.released, 0)
+  assert.equal(blocked.results[0].reason, 'expire_in_progress')
+  assert.equal(db.trips.get('trip_1').status, 'searching')
+  assert.equal(db.events.length, 0)
+
+  db.trips.get('trip_1').hold_expire_claimed_at = new Date(Date.now() - 5 * 60 * 1000).toISOString()
+  const taken = await releaseExpiredUnpaidAirportHolds(db, {
+    now: HOLD_NOW,
+    retrieveSession: async () => airportSession({ status: 'open' }),
+    expireSession: async () => {
+      expires += 1
+      return { id: 'cs_1', status: 'expired', payment_status: 'unpaid' }
+    },
+  })
+  assert.equal(expires, 1)
+  assert.equal(taken.released, 1)
+  assert.equal(db.events.length, 1)
+  assert.equal(db.trips.get('trip_1').status, 'canceled')
+  assert.equal(db.trips.get('trip_1').hold_expire_claimed_at, null)
+})
+
+test('ttl sweep does not touch paid deposits, zero deposits, non-airport trips, or paid Checkout sessions', async () => {
+  const db = memoryDb()
+  let expires = 0
+  const expireSession = async () => {
+    expires += 1
+    return { status: 'expired', payment_status: 'unpaid' }
+  }
+  const paidSession = (id, tripId) => airportSession({
+    id,
+    status: 'complete',
+    payment_status: 'paid',
+    metadata: { tripId },
+  })
+
+  seedAirportHold(db, {
+    id: 'trip_paid_deposit',
+    created_at: holdIso(40 * 60 * 1000),
+    metadata: { stripe_checkout_session_id: 'cs_dep' },
+  })
+  db.payments.push({ trip_id: 'trip_paid_deposit', kind: 'deposit', status: 'succeeded', amount_cents: 2500 })
+  db.seedTrip({
+    id: 'trip_zero',
+    status: 'searching',
+    deposit_cents: 0,
+    created_at: holdIso(40 * 60 * 1000),
+    metadata: { purpose: 'airport', airport: 'GSP', stripe_checkout_session_id: 'cs_zero' },
+  })
+  db.seedTrip({
+    id: 'trip_campus',
+    status: 'searching',
+    deposit_cents: 2500,
+    created_at: holdIso(40 * 60 * 1000),
+    metadata: { purpose: 'campus', stripe_checkout_session_id: 'cs_campus' },
+  })
+  seedAirportHold(db, {
+    id: 'trip_paid_session',
+    created_at: holdIso(40 * 60 * 1000),
+    metadata: { stripe_checkout_session_id: 'cs_paid_session' },
+  })
+
+  const paidDeposit = await releaseExpiredUnpaidAirportHold(db, db.trips.get('trip_paid_deposit'), {
+    now: HOLD_NOW,
+    expireSession,
+    retrieveSession: async () => paidSession('cs_dep', 'trip_paid_deposit'),
+  })
+  assert.equal(paidDeposit.reason, 'paid')
+  const zero = await releaseExpiredUnpaidAirportHold(db, db.trips.get('trip_zero'), {
+    now: HOLD_NOW,
+    expireSession,
+    retrieveSession: async () => paidSession('cs_zero', 'trip_zero'),
+  })
+  assert.equal(zero.reason, 'not_airport_deposit')
+  const campus = await releaseExpiredUnpaidAirportHold(db, db.trips.get('trip_campus'), {
+    now: HOLD_NOW,
+    expireSession,
+    retrieveSession: async () => paidSession('cs_campus', 'trip_campus'),
+  })
+  assert.equal(campus.reason, 'not_airport_deposit')
+  const paidCheckout = await releaseExpiredUnpaidAirportHold(db, db.trips.get('trip_paid_session'), {
+    now: HOLD_NOW,
+    expireSession,
+    retrieveSession: async () => paidSession('cs_paid_session', 'trip_paid_session'),
+  })
+  assert.equal(paidCheckout.reason, 'paid')
+  assert.equal(expires, 0)
+  assert.equal(db.events.length, 0)
+  assert.equal(db.trips.get('trip_paid_deposit').status, 'searching')
+  assert.equal(db.trips.get('trip_zero').status, 'searching')
+  assert.equal(db.trips.get('trip_campus').status, 'searching')
+  assert.equal(db.trips.get('trip_paid_session').status, 'searching')
+
+  const sweep = await releaseExpiredUnpaidAirportHolds(db, {
+    now: HOLD_NOW,
+    expireSession,
+    retrieveSession: async (id) => paidSession(id, id === 'cs_paid_session' ? 'trip_paid_session' : 'trip_paid_deposit'),
+  })
+  assert.equal(sweep.expired, 0)
+  assert.equal(sweep.errors, 0)
+  assert.equal(expires, 0)
+  assert.equal(db.events.filter((event) => event.kind === 'canceled').length, 0)
+  assert.equal(db.trips.get('trip_zero').status, 'searching')
+  assert.equal(db.trips.get('trip_campus').status, 'searching')
+})
+
+test('a Stripe expire error is reported and the rest of the batch still runs', async () => {
+  const db = memoryDb()
+  seedAirportHold(db, {
+    id: 'trip_bad',
+    created_at: holdIso(50 * 60 * 1000),
+    metadata: { stripe_checkout_session_id: 'cs_bad' },
+  })
+  seedAirportHold(db, {
+    id: 'trip_ok',
+    created_at: holdIso(30 * 60 * 1000),
+    metadata: { stripe_checkout_session_id: 'cs_ok' },
+  })
+  let expires = 0
+  const sweep = await releaseExpiredUnpaidAirportHolds(db, {
+    now: HOLD_NOW,
+    retrieveSession: async (id) => airportSession({
+      id,
+      status: 'open',
+      metadata: { tripId: id === 'cs_bad' ? 'trip_bad' : 'trip_ok' },
+    }),
+    expireSession: async (id) => {
+      expires += 1
+      if (id === 'cs_bad') throw new Error('stripe boom sk_live_should_not_abort')
+      return { id, status: 'expired', payment_status: 'unpaid' }
+    },
+  })
+  assert.equal(sweep.ok, true)
+  assert.equal(sweep.scanned, 2)
+  assert.equal(sweep.expired, 1)
+  assert.equal(sweep.errors, 1)
+  assert.equal(sweep.skipped, 0)
+  assert.equal(db.trips.get('trip_ok').status, 'canceled')
+  assert.equal(db.trips.get('trip_bad').status, 'searching')
+  assert.equal(db.events.length, 1)
+  assert.equal(db.events[0].trip_id, 'trip_ok')
+  const failed = sweep.results.find((row) => row.tripId === 'trip_bad')
+  assert.match(failed.error, /stripe boom/)
+  assert.equal(db.trips.get('trip_bad').metadata.hold_expire_claim, undefined)
+
+  const retry = await releaseExpiredUnpaidAirportHolds(db, {
+    now: HOLD_NOW,
+    retrieveSession: async (id) => airportSession({
+      id,
+      status: 'open',
+      metadata: { tripId: 'trip_bad' },
+    }),
+    expireSession: async (id) => {
+      expires += 1
+      return { id, status: 'expired', payment_status: 'unpaid' }
+    },
+  })
+  assert.equal(retry.expired, 1)
+  assert.equal(db.trips.get('trip_bad').status, 'canceled')
+  assert.equal(db.events.length, 2)
+  assert.equal(expires, 3)
+})
+
+test('dry_run reports the hold it would expire and does not write', async () => {
+  const db = memoryDb()
+  seedAirportHold(db, {
+    id: 'trip_due',
+    created_at: holdIso(40 * 60 * 1000),
+    metadata: { stripe_checkout_session_id: 'cs_due' },
+  })
+  seedAirportHold(db, {
+    id: 'trip_paid',
+    created_at: holdIso(40 * 60 * 1000),
+    metadata: { stripe_checkout_session_id: 'cs_paid' },
+  })
+  let expires = 0
+  const sweep = await releaseExpiredUnpaidAirportHolds(db, {
+    now: HOLD_NOW,
+    dryRun: true,
+    retrieveSession: async (id) => airportSession({
+      id,
+      status: id === 'cs_paid' ? 'complete' : 'open',
+      payment_status: id === 'cs_paid' ? 'paid' : 'unpaid',
+      metadata: { tripId: id === 'cs_paid' ? 'trip_paid' : 'trip_due' },
+    }),
+    expireSession: async () => {
+      expires += 1
+      throw new Error('dry run must not expire')
+    },
+  })
+  assert.equal(expires, 0)
+  assert.equal(sweep.dryRun, true)
+  assert.equal(sweep.wouldExpire, 1)
+  assert.equal(sweep.expired, 0)
+  assert.equal(sweep.released, 0)
+  assert.equal(sweep.errors, 0)
+  assert.equal(db.trips.get('trip_due').status, 'searching')
+  assert.equal(db.trips.get('trip_paid').status, 'searching')
+  assert.equal(db.events.length, 0)
+  assert.equal(db.trips.get('trip_due').metadata.checkout_abandoned, undefined)
+  assert.equal(db.trips.get('trip_due').metadata.hold_expire_claim, undefined)
+  assert.equal(db.trips.get('trip_due').hold_expire_claimed_at, null)
+})
+
+test('concurrent metadata writes during claim and cancel are not clobbered', async () => {
+  const db = memoryDb()
+  seedAirportHold(db, {
+    created_at: holdIso(40 * 60 * 1000),
+    metadata: {
+      purpose: 'airport',
+      airport: 'GSP',
+      stripe_checkout_session_id: 'cs_1',
+      rider_note: 'fragile luggage',
+    },
+  })
+  let expires = 0
+  const sweep = await releaseExpiredUnpaidAirportHolds(db, {
+    now: HOLD_NOW,
+    retrieveSession: async () => airportSession({ status: 'open' }),
+    expireSession: async () => {
+      expires += 1
+      // While Stripe expire is pending, a concurrent webhook or background writer updates metadata:
+      db.trips.get('trip_1').metadata = {
+        ...db.trips.get('trip_1').metadata,
+        concurrent_writer_key: 'preserved_value',
+      }
+      return { id: 'cs_1', status: 'expired', payment_status: 'unpaid' }
+    },
+  })
+  assert.equal(expires, 1)
+  assert.equal(sweep.released, 1)
+  const trip = db.trips.get('trip_1')
+  assert.equal(trip.status, 'canceled')
+  assert.equal(trip.metadata.purpose, 'airport')
+  assert.equal(trip.metadata.rider_note, 'fragile luggage')
+  assert.equal(trip.metadata.concurrent_writer_key, 'preserved_value')
+  assert.equal(trip.metadata.checkout_abandoned.reason, 'unpaid_hold_ttl')
+  assert.equal(trip.hold_expire_claimed_at, null)
+})
+
+test('concurrent metadata write during Stripe expire failure preserves metadata keys', async () => {
+  const db = memoryDb()
+  seedAirportHold(db, {
+    id: 'trip_fail',
+    created_at: holdIso(40 * 60 * 1000),
+    metadata: {
+      purpose: 'airport',
+      stripe_checkout_session_id: 'cs_fail',
+      custom_flag: 'keep_me',
+    },
+  })
+  const sweep = await releaseExpiredUnpaidAirportHolds(db, {
+    now: HOLD_NOW,
+    retrieveSession: async () => airportSession({ id: 'cs_fail', status: 'open', metadata: { tripId: 'trip_fail' } }),
+    expireSession: async () => {
+      db.trips.get('trip_fail').metadata = {
+        ...db.trips.get('trip_fail').metadata,
+        webhook_key: 'also_keep_me',
+      }
+      throw new Error('stripe timeout')
+    },
+  })
+  assert.equal(sweep.errors, 1)
+  const trip = db.trips.get('trip_fail')
+  assert.equal(trip.status, 'searching')
+  assert.equal(trip.metadata.custom_flag, 'keep_me')
+  assert.equal(trip.metadata.webhook_key, 'also_keep_me')
+  assert.equal(trip.hold_expire_claimed_at, null)
+})
+
+test('concurrent metadata write (metadata.receipt_url) between sweep read and claim write survives the claim and cancel', async () => {
+  const db = memoryDb()
+  seedAirportHold(db, {
+    id: 'trip_rcpt_claim',
+    created_at: holdIso(40 * 60 * 1000),
+    metadata: {
+      purpose: 'airport',
+      airport: 'GSP',
+      stripe_checkout_session_id: 'cs_rcpt_claim',
+      rider_note: 'fragile luggage',
+    },
+  })
+  let expires = 0
+  const sweep = await releaseExpiredUnpaidAirportHolds(db, {
+    now: HOLD_NOW,
+    retrieveSession: async () => {
+      // The sweep has completed its initial DB read of candidate trips.
+      // Before claimStripeExpire performs its claim update, a concurrent Stripe
+      // webhook writes metadata.receipt_url to the database row:
+      db.trips.get('trip_rcpt_claim').metadata = {
+        ...db.trips.get('trip_rcpt_claim').metadata,
+        receipt_url: 'https://pay.stripe.com/receipts/acct_test/ch_1/rcpt_claim_test',
+      }
+      return airportSession({ id: 'cs_rcpt_claim', status: 'open', metadata: { tripId: 'trip_rcpt_claim' } })
+    },
+    expireSession: async () => {
+      expires += 1
+      // Verify claim write happened and did NOT overwrite metadata.receipt_url:
+      const inFlight = db.trips.get('trip_rcpt_claim')
+      assert.ok(inFlight.hold_expire_claimed_at != null, 'claim should be active')
+      assert.equal(inFlight.metadata.receipt_url, 'https://pay.stripe.com/receipts/acct_test/ch_1/rcpt_claim_test')
+      return { id: 'cs_rcpt_claim', status: 'expired', payment_status: 'unpaid' }
+    },
+  })
+  assert.equal(expires, 1)
+  assert.equal(sweep.released, 1)
+  const trip = db.trips.get('trip_rcpt_claim')
+  assert.equal(trip.status, 'canceled')
+  assert.equal(trip.metadata.purpose, 'airport')
+  assert.equal(trip.metadata.rider_note, 'fragile luggage')
+  // receipt_url written between read and claim survived both claim and cancel writes:
+  assert.equal(trip.metadata.receipt_url, 'https://pay.stripe.com/receipts/acct_test/ch_1/rcpt_claim_test')
+  assert.equal(trip.metadata.checkout_abandoned.reason, 'unpaid_hold_ttl')
+  assert.equal(trip.hold_expire_claimed_at, null)
+})
+
+test('concurrent metadata write (metadata.receipt_url) survives claim and release when Stripe expire fails', async () => {
+  const db = memoryDb()
+  seedAirportHold(db, {
+    id: 'trip_rcpt_rel',
+    created_at: holdIso(40 * 60 * 1000),
+    metadata: {
+      purpose: 'airport',
+      stripe_checkout_session_id: 'cs_rcpt_rel',
+      rider_note: 'keep this note',
+    },
+  })
+  const sweep = await releaseExpiredUnpaidAirportHolds(db, {
+    now: HOLD_NOW,
+    retrieveSession: async () => airportSession({ id: 'cs_rcpt_rel', status: 'open', metadata: { tripId: 'trip_rcpt_rel' } }),
+    expireSession: async () => {
+      // Simulate webhook adding metadata.receipt_url while claim is active,
+      // right before Stripe expire fails:
+      db.trips.get('trip_rcpt_rel').metadata = {
+        ...db.trips.get('trip_rcpt_rel').metadata,
+        receipt_url: 'https://pay.stripe.com/receipts/acct_test/ch_2/rcpt_rel_test',
+      }
+      throw new Error('Stripe API 500 error')
+    },
+  })
+  assert.equal(sweep.errors, 1)
+  const trip = db.trips.get('trip_rcpt_rel')
+  // Trip stays in searching pool:
+  assert.equal(trip.status, 'searching')
+  // Claim was released:
+  assert.equal(trip.hold_expire_claimed_at, null)
+  // metadata.receipt_url and existing keys were NOT clobbered by the release write:
+  assert.equal(trip.metadata.rider_note, 'keep this note')
+  assert.equal(trip.metadata.receipt_url, 'https://pay.stripe.com/receipts/acct_test/ch_2/rcpt_rel_test')
+  assert.equal(trip.metadata.checkout_abandoned, undefined)
+})
+
+test('concurrent metadata write (metadata.receipt_url) between expire and cancel write survives the cancel', async () => {
+  const db = memoryDb()
+  seedAirportHold(db, {
+    id: 'trip_rcpt_cancel',
+    created_at: holdIso(40 * 60 * 1000),
+    metadata: {
+      purpose: 'airport',
+      stripe_checkout_session_id: 'cs_rcpt_cancel',
+      rider_note: 'preserve note',
+    },
+  })
+  let expires = 0
+  const sweep = await releaseExpiredUnpaidAirportHolds(db, {
+    now: HOLD_NOW,
+    retrieveSession: async () => airportSession({ id: 'cs_rcpt_cancel', status: 'open', metadata: { tripId: 'trip_rcpt_cancel' } }),
+    expireSession: async () => {
+      expires += 1
+      // Concurrent webhook writes receipt_url right between Stripe expire and cancel write:
+      db.trips.get('trip_rcpt_cancel').metadata = {
+        ...db.trips.get('trip_rcpt_cancel').metadata,
+        receipt_url: 'https://pay.stripe.com/receipts/acct_test/ch_3/rcpt_cancel_test',
+      }
+      return { id: 'cs_rcpt_cancel', status: 'expired', payment_status: 'unpaid' }
+    },
+  })
+  assert.equal(expires, 1)
+  assert.equal(sweep.released, 1)
+  const trip = db.trips.get('trip_rcpt_cancel')
+  assert.equal(trip.status, 'canceled')
+  assert.equal(trip.metadata.rider_note, 'preserve note')
+  assert.equal(trip.metadata.receipt_url, 'https://pay.stripe.com/receipts/acct_test/ch_3/rcpt_cancel_test')
+  assert.equal(trip.metadata.checkout_abandoned.reason, 'unpaid_hold_ttl')
+  assert.equal(trip.hold_expire_claimed_at, null)
+})
+
+test('two overlapping sweeps still produce exactly one cancel, one trip_event and one Stripe expire', async () => {
+  const db = memoryDb()
+  seedAirportHold(db, {
+    id: 'trip_concurrent',
+    created_at: holdIso(40 * 60 * 1000),
+    metadata: {
+      purpose: 'airport',
+      stripe_checkout_session_id: 'cs_concurrent',
+    },
+  })
+  let expires = 0
+  const sweepOptions = {
+    now: HOLD_NOW,
+    retrieveSession: async () => {
+      await pause(10)
+      return airportSession({ id: 'cs_concurrent', status: 'open', metadata: { tripId: 'trip_concurrent' } })
+    },
+    expireSession: async () => {
+      expires += 1
+      await pause(30)
+      return { id: 'cs_concurrent', status: 'expired', payment_status: 'unpaid' }
+    },
+  }
+  const [sweepA, sweepB] = await Promise.all([
+    releaseExpiredUnpaidAirportHolds(db, sweepOptions),
+    releaseExpiredUnpaidAirportHolds(db, sweepOptions),
+  ])
+  // Exactly one Stripe expire:
+  assert.equal(expires, 1)
+  // Exactly one cancel:
+  assert.equal(db.trips.get('trip_concurrent').status, 'canceled')
+  // Exactly one trip_event:
+  assert.equal(db.events.length, 1)
+  assert.equal(db.events[0].trip_id, 'trip_concurrent')
+  assert.equal(db.events[0].kind, 'canceled')
+  assert.equal(db.events[0].payload.reason, 'unpaid_hold_ttl')
+  assert.equal(db.events[0].payload.source, 'hold_ttl')
+  // Exactly one sweep reports released, one reports skipped due to active claim:
+  assert.equal(sweepA.released + sweepB.released, 1)
+  assert.equal(sweepA.expired + sweepB.expired, 1)
+  assert.equal(sweepA.errors + sweepB.errors, 0)
+  assert.equal(sweepA.skipped + sweepB.skipped, 1)
+})
+
+test('a stale claim (>2 min) can be taken over by a new sweep', async () => {
+  const db = memoryDb()
+  seedAirportHold(db, {
+    id: 'trip_stale_claim',
+    created_at: holdIso(40 * 60 * 1000),
+    metadata: {
+      purpose: 'airport',
+      stripe_checkout_session_id: 'cs_stale',
+    },
+  })
+  // A prior sweep or worker crashed 2 minutes 30 seconds ago, leaving a stale claim:
+  const staleClaimAgeMs = 2 * 60 * 1000 + 30 * 1000 // 2.5 minutes (> 2 min)
+  db.trips.get('trip_stale_claim').hold_expire_claimed_at = new Date(Date.now() - staleClaimAgeMs).toISOString()
+
+  let expires = 0
+  const sweep = await releaseExpiredUnpaidAirportHolds(db, {
+    now: HOLD_NOW,
+    retrieveSession: async () => airportSession({ id: 'cs_stale', status: 'open', metadata: { tripId: 'trip_stale_claim' } }),
+    expireSession: async () => {
+      expires += 1
+      return { id: 'cs_stale', status: 'expired', payment_status: 'unpaid' }
+    },
+  })
+
+  // The new sweep must take over the stale claim:
+  assert.equal(expires, 1)
+  assert.equal(sweep.released, 1)
+  assert.equal(sweep.expired, 1)
+  assert.equal(sweep.errors, 0)
+  const trip = db.trips.get('trip_stale_claim')
+  assert.equal(trip.status, 'canceled')
+  assert.equal(trip.metadata.checkout_abandoned.reason, 'unpaid_hold_ttl')
+  assert.equal(trip.hold_expire_claimed_at, null)
+  assert.equal(db.events.length, 1)
+  assert.equal(db.events[0].kind, 'canceled')
+})
+
+test('a fresh claim (<2 min) blocks a sweep while a stale claim (>2 min) is taken over', async () => {
+  const db = memoryDb()
+  seedAirportHold(db, {
+    id: 'trip_fresh_then_stale',
+    created_at: holdIso(40 * 60 * 1000),
+    metadata: {
+      purpose: 'airport',
+      stripe_checkout_session_id: 'cs_fts',
+    },
+  })
+
+  // Case A: Fresh claim (<2 min old, e.g. 45 seconds old)
+  db.trips.get('trip_fresh_then_stale').hold_expire_claimed_at = new Date(Date.now() - 45 * 1000).toISOString()
+  let expires = 0
+  const blockedSweep = await releaseExpiredUnpaidAirportHolds(db, {
+    now: HOLD_NOW,
+    retrieveSession: async () => airportSession({ id: 'cs_fts', status: 'open', metadata: { tripId: 'trip_fresh_then_stale' } }),
+    expireSession: async () => {
+      expires += 1
+      return { id: 'cs_fts', status: 'expired', payment_status: 'unpaid' }
+    },
+  })
+  assert.equal(expires, 0, 'fresh claim must not expire session')
+  assert.equal(blockedSweep.released, 0)
+  assert.equal(blockedSweep.results[0].reason, 'expire_in_progress')
+  assert.equal(db.trips.get('trip_fresh_then_stale').status, 'searching')
+  assert.equal(db.events.length, 0)
+
+  // Case B: Stale claim (>2 min old, e.g. 3 minutes old)
+  db.trips.get('trip_fresh_then_stale').hold_expire_claimed_at = new Date(Date.now() - 3 * 60 * 1000).toISOString()
+  const takenSweep = await releaseExpiredUnpaidAirportHolds(db, {
+    now: HOLD_NOW,
+    retrieveSession: async () => airportSession({ id: 'cs_fts', status: 'open', metadata: { tripId: 'trip_fresh_then_stale' } }),
+    expireSession: async () => {
+      expires += 1
+      return { id: 'cs_fts', status: 'expired', payment_status: 'unpaid' }
+    },
+  })
+  assert.equal(expires, 1, 'stale claim must be taken over and expire session')
+  assert.equal(takenSweep.released, 1)
+  assert.equal(takenSweep.expired, 1)
+  assert.equal(db.trips.get('trip_fresh_then_stale').status, 'canceled')
+  assert.equal(db.trips.get('trip_fresh_then_stale').hold_expire_claimed_at, null)
+  assert.equal(db.events.length, 1)
+  assert.equal(db.events[0].kind, 'canceled')
+})
+
+

@@ -20,6 +20,7 @@ import {
 } from '../server/authoritativeFare.js'
 import { checkoutSuccessHash } from '../packages/rides-native/liveTrip.js'
 import { cancelUnopenedCheckoutTrip, rememberCheckoutSession } from '../server/abandonedCheckout.js'
+import { WEB_ORIGIN } from '../shared/productLinks.js'
 
 function checkoutOrigin(body) {
   for (const raw of [body.origin, body.successUrl]) {
@@ -31,7 +32,7 @@ function checkoutOrigin(body) {
       /* try the next candidate */
     }
   }
-  return process.env.VITE_APP_URL || 'https://clemson-airport-rides.vercel.app'
+  return process.env.VITE_APP_URL || WEB_ORIGIN
 }
 
 async function routeDistance(origin, dest) {

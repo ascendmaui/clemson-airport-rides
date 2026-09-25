@@ -6,9 +6,6 @@
 import { mapAuthError } from './authErrors.js'
 import { parseSupabaseAuthUrl } from './authUrl.js'
 
-export const GOOGLE_PROVIDER = [{ id: 'google', label: 'Google' }]
-export const DRIVER_GOOGLE_PROVIDER = GOOGLE_PROVIDER
-
 export function googleOAuthRedirect(scheme = 'clemsonrides-driver', path = 'auth/callback') {
   const clean = String(scheme || 'clemsonrides-driver').replace(/:\/\//, '')
   return `${clean}://${String(path || 'auth/callback').replace(/^\//, '')}`

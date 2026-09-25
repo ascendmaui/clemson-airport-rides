@@ -8,6 +8,7 @@ import {
   admin, cors, json, parseBody, userFromAuth, stripeClient, stripeOk, ensureStripeCustomer,
 } from '../friendRideLib.js'
 import { findCreditPack } from '../../src/lib/fareRates.js'
+import { WEB_ORIGIN } from '../../shared/productLinks.js'
 
 export default async function handler(req, res) {
   if (cors(req, res)) return
@@ -37,7 +38,7 @@ export default async function handler(req, res) {
     if (profile) {
       try { customerId = await ensureStripeCustomer(stripe, sb, profile) } catch { /* optional */ }
     }
-    const origin = body.origin || process.env.VITE_APP_URL || 'https://clemson-airport-rides.vercel.app'
+    const origin = body.origin || process.env.VITE_APP_URL || WEB_ORIGIN
     const session = await stripe.checkout.sessions.create({
       mode: 'payment',
       customer: customerId || undefined,

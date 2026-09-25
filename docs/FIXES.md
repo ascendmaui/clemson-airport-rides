@@ -2,6 +2,133 @@
 
 Persistent knowledge base for recurring failures. When a matching issue appears, apply the saved fix first.
 
+## 2026-09-24 — Sanitize removed auth vendor name in INTEGRATION_BUNDLE.md [t2]
+
+- **Track / machine:** Deputy · pkg-integration-72-82 t2 · integration/approval-bundle
+- **What was wrong:** `tests/noClerk.test.js` failed because `docs/INTEGRATION_BUNDLE.md` contained the removed auth vendor token in the PR #73 summary.
+- **What changed:** Replaced the removed auth vendor token with `removed-auth` in `docs/INTEGRATION_BUNDLE.md` so the guard in `tests/noClerk.test.js` passes cleanly.
+- **Files touched:**
+  - `docs/INTEGRATION_BUNDLE.md`
+  - `docs/FIXES.md`
+
+## 2026-09-24 — Integration bundle for PRs #72–#82
+
+- **Track / machine:** Deputy · pkg-integration-72-82 t1 · integration/approval-bundle
+- **What was wrong:** PRs #72, #73, #74, #77, #78, #79, #80, #81, and #82 needed to be merged into a single integration branch for review and approval. Several PRs conflicted on `docs/FIXES.md` and `package.json`.
+- **What changed:**
+  - Merged PR heads in exact sequence via `git merge --no-ff`: #72, #73, #74, #77, #78, #79, #80, #81, #82 (PRs #75 and #76 excluded as superseded by #77).
+  - Reconciled `package.json` test script to the union of main's test file list plus each PR's added test entries in merge order without duplicates, keeping all other scripts (such as `"typecheck"` from #73).
+  - Reconciled `docs/FIXES.md` preserving all entries across all PRs with zero dropped notes.
+  - Created `docs/INTEGRATION_BUNDLE.md` detailing merge order, head SHAs, conflict resolutions, and unapplied migrations (#78, #80, #82).
+- **Files touched:**
+  - `docs/INTEGRATION_BUNDLE.md`
+  - `docs/FIXES.md`
+  - `package.json`
+
+## 2026-09-24 — Atomic hold claim & metadata merge design and migration requirement documented [t3]
+
+- **Track / machine:** Deputy · pkg-pro-hold-claim-atomic · deputy/hold-claim-atomic
+- **Context & Design Decision:** Addressed reviewer note on PR #74 regarding race conditions in `/api/expire-unpaid-airport-holds` where reading `trips.metadata`, modifying in JS, and updating the entire object clobbered concurrent writes (e.g. Stripe webhooks adding `receipt_url` or rider updates).
+  - Selected hybrid Design A + Design B:
+    - **Design A (Claim column):** Added `trips.hold_expire_claimed_at timestamptz` (nullable) with partial index `trips_hold_expire_claimed_at_idx`. Claiming and releasing operate directly on this dedicated column via conditional UPDATEs without touching `trips.metadata`.
+    - **Design B (Atomic metadata merge):** Added Postgres RPC `public.merge_trip_metadata(p_trip_id uuid, p_patch jsonb, ...)` (SECURITY DEFINER, `search_path = public`, granted to `service_role` only) which merges patches via `metadata = coalesce(metadata, '{}'::jsonb) || p_patch` alongside conditional status updates and claim clearing in a single atomic statement.
+- **Migration File:** `supabase/migrations/20260925140000_hold_claim_atomic.sql`
+- **Pre-Ship Requirement:** Migration `supabase/migrations/20260925140000_hold_claim_atomic.sql` **MUST** be applied to the database before this code ships. If the application code is deployed before the migration is run, `/api/expire-unpaid-airport-holds` will fail with 500 errors because the column `hold_expire_claimed_at` and the RPC function `public.merge_trip_metadata` will not exist.
+- **Files:** `docs/FIXES.md`, `SHIP_NOTES.md`
+
+## 2026-09-24 — Hold claim and cancel race conditions verified with concurrency tests [t2]
+
+- **Track / machine:** Deputy · pkg-pro-hold-claim-atomic · deputy/hold-claim-atomic
+- **Problem:** Needed test coverage verifying that concurrent metadata writes (such as Stripe webhooks adding `receipt_url` between the sweep's read and write) survive claim, release, and cancel steps without being clobbered; that overlapping sweeps produce exactly one cancel, one trip_event, and one Stripe expire; and that stale claims (>2 min) can be taken over.
+- **Fix:** Added targeted test suite in `server/abandonedCheckout.test.js`:
+  1. Verified concurrent webhook metadata writes (`metadata.receipt_url`) between the sweep's initial read and the claim update survive both claim and cancel.
+  2. Verified concurrent metadata writes during an active claim survive claim release when Stripe session expiration fails.
+  3. Verified concurrent metadata writes between Stripe expire and cancel write survive the atomic merge.
+  4. Verified two overlapping sweeps concurrently processing an open hold result in exactly one Stripe session expiration, one trip cancel, and one `trip_events` insert.
+  5. Verified fresh claims (<2 min) block subsequent sweeps, and stale claims (>2 min) are successfully taken over and processed to completion.
+- **Files:** `server/abandonedCheckout.test.js`, `docs/FIXES.md`
+
+## 2026-09-24 — Unpaid airport hold claim and cancel metadata writes made atomic
+
+- **Track / machine:** Deputy · pkg-pro-hold-claim-atomic · deputy/hold-claim-atomic
+- **Problem:** In `/api/expire-unpaid-airport-holds` and `server/abandonedCheckout.js`, sweep claim/release and cancel steps read `trips.metadata`, modified the in-memory JavaScript object, and wrote the entire object back (`.update({ metadata: nextMeta })`). If a concurrent writer (such as a Stripe webhook or rider status change) updated `trips.metadata` during that window, its keys were lost/overwritten.
+- **Fix:** Implemented atomic claim and metadata merge:
+  1. Added migration `supabase/migrations/20260925140000_hold_claim_atomic.sql` adding nullable `trips.hold_expire_claimed_at timestamptz` with a partial index, and security definer SQL function `public.merge_trip_metadata(p_trip_id uuid, p_patch jsonb, ...)`. Execution is granted to `service_role` only.
+  2. In `server/abandonedCheckout.js`, `claimStripeExpire` now performs a conditional update directly setting `hold_expire_claimed_at = now` where `id = ?` and `(hold_expire_claimed_at IS NULL OR hold_expire_claimed_at < now - 2min)` and in-pool, unassigned, and unabandoned. `releaseExpireClaim` sets `hold_expire_claimed_at = NULL`. Neither touches `trips.metadata`.
+  3. `writeCanceled` and metadata stamp writes use `sb.rpc('merge_trip_metadata', ...)` to concatenate `checkout_abandoned` / `checkout_deposit` into `trips.metadata` via Postgres `metadata = coalesce(metadata, '{}'::jsonb) || p_patch`, updating status to `canceled` and clearing `hold_expire_claimed_at` in a single atomic statement without clobbering other metadata keys.
+  4. Updated fake Supabase client in `server/abandonedCheckout.test.js` to support `.or()` filter clauses and `rpc('merge_trip_metadata')`. Added tests verifying concurrent metadata writes during claim, cancel, and error release are preserved.
+- **Files:** `supabase/migrations/20260925140000_hold_claim_atomic.sql`, `server/abandonedCheckout.js`, `server/abandonedCheckout.test.js`, `SHIP_NOTES.md`, `docs/FIXES.md`
+
+## 2026-09-24 — Wire vehicle.js and places.js unit test suites into package.json test runner
+
+- **Track / machine:** Clemson RIDES · deputy/vehicle-places-tests
+- **What was wrong:** `packages/rides-native/shared/vehicle.js` and `packages/rides-native/places.js` lacked test coverage and test suite registration in root `package.json`.
+- **What changed:** Confirmed both test suites (`packages/rides-native/shared/vehicle.test.js` and `packages/rides-native/places.test.js`, with vehicle first) are wired as the last entries in the `package.json` `test` script. Verified full offline isolation (no real network or API keys) and confirmed full `npm test` suite passes cleanly (416 tests passing).
+- **Files touched:**
+  - `package.json`
+  - `docs/FIXES.md`
+
+## 2026-09-24 — saveRegisteredVehicle threw unhandled TypeError on missing payload
+
+- **Track / machine:** Clemson RIDES · deputy/vehicle-places-tests
+- **What was wrong:** `saveRegisteredVehicle` in `packages/rides-native/shared/vehicle.js` accessed `payload.make` without checking if `payload` was null, undefined, or malformed, causing an unhandled `TypeError` instead of a user-facing validation error.
+- **What changed:** Safely defaulted `payload` to an empty object when null, undefined, or non-object so the existing required field checks cleanly throw `Error('Make, model, and plate are required.')`. Updated unit tests in `packages/rides-native/shared/vehicle.test.js` to assert the validation error.
+- **Files touched:**
+  - `packages/rides-native/shared/vehicle.js`
+  - `packages/rides-native/shared/vehicle.test.js`
+  - `docs/FIXES.md`
+
+## 2026-09-24 ~9:52 PM ET — Apple sign-in hit profiles/trips RLS recursion
+
+- **Symptom:** Apple sign-in on TestFlight build 18 errored with `infinite recursion detected in policy for relation profiles`.
+- **Root cause:** A cycle existed between the profiles SELECT policy `profiles_trip_counterpart_select`, which queries trips, and the trips SELECT policy `trips_driver_scheduled_select`, which queried profiles directly.
+- **Fix:** Replaced that profiles subquery with the SECURITY DEFINER function `is_driver_or_admin_role()`, which sets `row_security` off.
+- **Applied:** Already applied to the live Supabase project `awktabuhijrshmsmagpq` via migration.
+- **Verified:** As user `jmat2019@icloud.com`, profiles and trips selects plus the profile insert work in a rolled-back transaction. An audit of all public policies found no other cycles.
+
+## 2026-09-24 — Unpaid airport hold expiry is safe for an external cron
+
+- **Track / machine:** I9 · Deputy · deputy/hold-expiry-hardening
+- **Problem:** `GET`/`POST /api/expire-unpaid-airport-holds` treated a spoofable `x-vercel-cron: 1` header as authorization whenever `CRON_SECRET` was unset, compared the bearer token with `===`, and could expire the same Stripe Checkout session twice when an external cron and another sweep overlapped. A Stripe expire failure was not reported as a per-trip error, and a 500 response could echo the internal error message. The route also answered browser CORS preflight.
+- **Fix:** The bearer secret is trimmed and compared with `crypto.timingSafeEqual` on equal-length buffers. `x-vercel-cron` is accepted only when `CRON_SECRET` is unset or a placeholder and `VERCEL` is set. An open-session expire is claimed with a conditional metadata update. The cancel updates a row only while its status is still searching/offered/scheduled, `driver_id` is null, and `checkout_abandoned` is unset; only that winner inserts `trip_events`. A Stripe expire error is stored on that trip's result, the claim is released, and the batch continues. The handler returns 405, 401, 503, and a generic 500 (detail logged server-side), with counts `scanned` / `expired` / `skipped` / `errors`. `?dry_run=1` reports `wouldExpire` and does not write. Browser CORS is not set. The batch stays capped at 40. `vercel.json` was not changed.
+- **Files:** `server/endpoints/expireUnpaidAirportHolds.js`, `server/abandonedCheckout.js`, `server/abandonedCheckout.test.js`, `api/expire-unpaid-airport-holds.js`, `SHIP_NOTES.md`, `docs/FIXES.md`
+
+## 2026-09-24 — Post-auth cleanup: residue guard and a root typecheck
+
+- **Track / machine:** I9 · Deputy · deputy/post71-auth-typecheck
+- **Problem:** After social sign-in moved to Supabase Auth, the driver README still described email/password or Google only. `GOOGLE_PROVIDER` / `DRIVER_GOOGLE_PROVIDER` were unused exports (both apps use `RIDER_SOCIAL_PROVIDERS` / `DRIVER_SOCIAL_PROVIDERS`). There was no root typecheck, and nothing stopped the removed auth vendor name from coming back in tracked files.
+- **Fix:**
+  - Driver README now matches the apps: Apple via `signInWithIdToken`, Google via `signInWithOAuth` and `clemsonrides-driver://auth/callback`. Root README and both app `.env.example` files name the same `auth/callback` deep links.
+  - Dropped the unused Google provider constants from `packages/rides-native/googleAuth.js` and `googleAuth.d.ts`.
+  - Root `npm run typecheck` runs `scripts/typecheck.mjs`: each app's own `tsc --noEmit` (installs that app with `npm ci` only when `apps/*/node_modules` is missing) plus `node --check` on `api/**/*.js` and `server/**/*.js` (test files skipped).
+  - `tests/noClerk.test.js` (`node:test`, wired as `tests/no*.test.js` so the script does not reintroduce the token) fails if that name appears, case-insensitively, in any `git ls-files` path other than `docs/FIXES.md` and package-lock files.
+- **Audit:** no other code, test, script, README, auth contract, ship notes, env example, `app.json` / `eas.json`, `vite.config.js`, or `vercel.json` rewrite still pointed at the removed provider, bridge, or `sso-callback` route. `apps/*/patches` left untouched (React Native `facebook.jsi`, not a login provider). Historical entries below are unchanged.
+- **Files:** `apps/driver/README.md`, `README.md`, `apps/rider/.env.example`, `apps/driver/.env.example`, `packages/rides-native/googleAuth.js`, `packages/rides-native/googleAuth.d.ts`, `package.json`, `scripts/typecheck.mjs`, `tests/noClerk.test.js`, `docs/FIXES.md`.
+- **Verified:** `npm ci --no-audit --no-fund --loglevel=error && npm test && npm run typecheck` — 352/352 tests. With both app `node_modules` folders absent, typecheck installed them, then `tsc --noEmit` and `node --check` exited 0. No type errors to fix.
+
+## 2026-09-24 — Apps still pointed at the old clemson-airport-rides.vercel.app domain
+
+- **Track / machine:** Clemson RIDES · Johns-iMac (worktree fix/clemson-rides-domain) · edits by Google Anti-Gravity CLI (`agy -p`), reviewed and finished by hand
+- **Problem:** Production web/API moved to the new Vercel project `https://clemson-rides.vercel.app`, but native API calls, Stripe Checkout return origins, share/carpool/promo links, server email links and docs still used `https://clemson-airport-rides.vercel.app`.
+- **Root cause:** The origin was hardcoded in ~20 places (native `apiClient`, `carpoolApi`, `safety`, `riderMoney`, rider `_layout`/`apiAuth`, mobile `schedule`, server checkout/friend/carpool/driver-approval fallbacks, web link helpers) instead of one constant.
+- **Fix:**
+  - `shared/productLinks.js` `WEB_ORIGIN` is the single source: `https://clemson-rides.vercel.app`.
+  - New `packages/rides-native/apiOrigin.js` (+ `.d.ts`): `DEFAULT_API_BASE = WEB_ORIGIN`, `resolveApiBase()` = `EXPO_PUBLIC_API_BASE` or the default, trailing slash stripped. Used by `apiClient.js`, `shared/carpoolApi.js`, rider `app/_layout.tsx` and `lib/apiAuth.ts`.
+  - `safety.js` `SHARE_ORIGIN`, `riderMoney.js` `NATIVE_CHECKOUT_ORIGIN` and promo share URL use `WEB_ORIGIN`.
+  - Server/web fallbacks (`buyCredits`, `airportCheckout`, `create-checkout-session`, `friendRideRoutes`, `carpoolRoutes`, `driverApproval`, `src/lib/{navigation,friendRides,riderPromo}.js`) import `WEB_ORIGIN`; env overrides (`VITE_APP_URL`, `APP_URL`, `body.origin`) still win.
+  - `apps/mobile` (frozen TestFlight app) keeps its inline fallback, now the new domain.
+  - Tests, READMEs and `.env.example` files updated. Older entries in this log are history and keep the old domain.
+- **External config still on the old domain (dashboards, not code):** Vercel `VITE_APP_URL` / `APP_URL` if set (they override the fallback), EAS `EXPO_PUBLIC_API_BASE` for rider/driver, Stripe webhook endpoint (`/api/stripe-webhook`), Supabase Auth Site URL / redirect URLs, Google OAuth authorized origins.
+## 2026-09-24 — "Sign in required" on deposit / add card: SUPABASE_SERVICE_ROLE_KEY missing on the new Vercel project
+
+- **Track / machine:** Clemson RIDES · iOS TestFlight build 18 (1.1.0) · Vercel project `clemson-rides` (team `john-matveyev-macbooki9`, domain `clemson-rides.vercel.app`)
+- **Symptom:** Signed in with Supabase auth, tapping Pay on the airport deposit showed "Sign in required"; Billing could not add a card ("Supabase service role key on Vercel is not configured").
+- **Root cause:** The new `clemson-rides` Vercel project had no `SUPABASE_SERVICE_ROLE_KEY`. `userFromAuth()` (`server/friendRideLib.js`) needs `admin()` to call `auth.getUser(token)`; with no key it returns null, so `api/create-checkout-session.js` answers **401 "Sign in required"** (masking the real problem) and the setup-intent route in `server/stripePaymentRoutes.js` answers **503 "SUPABASE_SERVICE_ROLE_KEY not configured"**. Not the old domain: `clemson-airport-rides.vercel.app` (still on `af87b60`) already verified Supabase tokens and had the key.
+- **Fix (no app build):** Added `SUPABASE_SERVICE_ROLE_KEY` (Production + Preview sensitive, Development encrypted) to `clemson-rides`, then redeployed the current production deployment (`dpl_udfb4nTmj4z5npSHETddSW9tV32F` → `clemson-rides-9atbwgh0y`, same source) with John's approval, ~10:00 PM ET.
+- **Verified:** Throwaway Supabase user on `clemson-rides.vercel.app`: `action=setup-intent` 200 (client_secret), `action=airport-checkout` 200 (Stripe Checkout session), `create-checkout-session` 200. User and its trips deleted afterwards.
+- **Next time:** When a new Vercel project/domain is created, diff env var NAMES against the old project before pointing apps at it. Consider making `userFromAuth` return a 503 (not 401) when the service key is missing so the error is not mistaken for an auth problem.
+- **Still open:** `profiles.stripe_card_brand` / `stripe_card_last4` and `trips.created_at` missing (migration `20260925020500_card_brand_and_trip_created_at.sql`, not applied); Stripe webhook endpoint for `clemson-rides.vercel.app/api/stripe-webhook` not registered; Stripe is in test mode (`cs_test_`); `SUPABASE_URL` is Production-only on `clemson-rides` (code falls back to the project URL).
+
 ## 2026-09-24 — Remove Clerk: Apple + Google social sign-in directly on Supabase Auth
 
 - **Track / machine:** Clemson RIDES · worktree feat/supabase-auth-remove-clerk
@@ -189,3 +316,79 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
 - **Fix (worktree, uncommitted, not deployed):** `server/clerkSupabaseBridge.js` `clerkSecrets()` + `verifyWithAnySecret()`; `api/clerk-supabase-session.js` tries `CLERK_SECRET_KEY` then `CLERK_SECRET_KEY_DEV` and loads the user with whichever secret verified; tests added. README documents `CLERK_SECRET_KEY_DEV`.
 - **To ship:** add Vercel env `CLERK_SECRET_KEY_DEV` = dev instance (choice-gibbon-3653) `sk_test_…` from Clerk dashboard -> API keys (Development), then deploy. No app rebuild needed for rider Google/Facebook. Enable Apple on the dev instance (dashboard) for Apple.
 - **Machine/track:** Max / Clemson rider + bridge
+
+## 2026-09-24 — Demand heat helper had no unit tests
+
+- **What was wrong:** `packages/rides-native/heat.js` exported the demand heat helpers with no tests. Two behaviours look wrong and are pinned for the current code, not changed in this task:
+  - `barCurve` checks `hour < 16` before `hour < 2`, so midnight and 1am use the daytime-quiet intensity (Fri/Sat 0.08, otherwise 0.04) instead of the late-night branch (Fri/Sat 0.78, Thursday 0.45, otherwise 0.16). Friday midnight downtown stays "Picking up" instead of "Packed".
+  - `previewDate('weekday_am')` on Saturday uses delta -5 and lands on Monday 08:30. Every other day anchors on Wednesday 08:30.
+- **What changed:** Added `packages/rides-native/heat.test.js` for every export (normal cases, intensity and clock boundaries, unknown window ids, returned shapes). Suspected bugs are asserted as current behaviour with `// BUG?:` comments. Registered the file on the root `npm test` script.
+- **Files touched:** `packages/rides-native/heat.test.js`, `package.json`, `docs/FIXES.md`.
+
+## 2026-09-24 — Saturday weekday-morning preview landed on Monday
+
+- **What was wrong:** `previewDate('weekday_am')` special-cased Saturday (`getDay() === 6`) with delta -5, so 2026-09-26 previewed Monday 2026-09-21 08:30. Every other day anchors on Wednesday 08:30 (`day === 0 ? -4 : 3 - day`). Rider and driver busy-spot maps only use that date for `downtownNow` / `typicalSpots`. Hour 8 on Monday and Wednesday already share the same curve outputs, so the map colors do not change; the calendar date does.
+- **What changed:** Saturday now uses `3 - day` (delta -3) and lands on Wednesday 08:30, same as Thursday and Friday. Sunday still goes back four days to the previous Wednesday. The midnight `barCurve` branch (`hour < 16` before `hour < 2`) is unchanged: those curves are shared with `src/lib/downtownHeat.js`, and fixing them would change live "now" intensities at midnight.
+- **Files touched:** `packages/rides-native/heat.js`, `packages/rides-native/heat.test.js`, `docs/FIXES.md`.
+
+## 2026-09-24 — Heat helper tests listed with the vehicle catalog
+
+- **What t2 fixed:** `previewDate('weekday_am')` special-cased Saturday (`getDay() === 6`) with delta -5, so 2026-09-26 previewed Monday 2026-09-21 08:30. Every other non-Sunday day already anchored on Wednesday 08:30 (`3 - day`). Saturday now uses that same delta (-3) and lands on Wednesday 2026-09-23 08:30. Sunday still goes back four days to the previous Wednesday. The midnight `barCurve` branch (`hour < 16` before `hour < 2`) was left unchanged because those curves are shared with `src/lib/downtownHeat.js`.
+- **Tests:** `packages/rides-native/heat.test.js` covers `heatColor`, `downtownNow`, `previewDate`, `typicalSpots`, `resolveDemandRange`, `DOWNTOWN_VENUES`, and `CAMPUS_ANCHORS` with injected `Date` objects (no `Date.now()`). The Saturday case expects Wednesday 08:30 and the same `typicalSpots` intensities as that Wednesday morning. Color thresholds, curve hour and weekday boundaries, unknown window ids, and returned shapes are covered. The midnight bar intensity is still asserted as the current daytime floor.
+- **What changed here:** The root `npm test` script lists `packages/rides-native/heat.test.js` immediately after `packages/rides-native/vehicleCatalog.test.js` (it had been inserted later, after `mapsLink.test.js`).
+- **Files touched:** `package.json`, `docs/FIXES.md`.
+
+## 2026-09-24 — Notification prefs had no unit tests
+
+- **What was wrong:** `packages/rides-native/notificationPrefs.js` (categories, defaults, `quietFromPrefs`, `normalizePrefs`, local read/write, profile fetch/save) had no tests. A few current behaviors look wrong and are locked by the new tests with `// BUG?:` comments instead of being changed: `HH:MM` only checks two digits (`99:99` is kept); `Boolean("false")` turns promotions, DND, and new-request tones on; ride/billing/friends/system stay on for every value except boolean `false`; arrays and other non-plain objects pass the `typeof === "object"` check; unknown keys are copied through and would be written back to `profiles`; a stored `{}` replaces a richer device mirror with defaults; a Supabase error with no `message` sets fetch `softFail` to `undefined` (save uses a fallback string); `writeLocalPrefs` stores its argument without normalizing.
+- **What changed:** Added `packages/rides-native/notificationPrefs.test.js` with in-memory storage and a fake Supabase client, including error paths. Did not change `notificationPrefs.js`.
+- **Files:** `packages/rides-native/notificationPrefs.test.js`, `package.json` (test script), `docs/FIXES.md`
+
+## 2026-09-24 — Quiet-hour clocks accepted impossible times
+
+- **What was wrong:** `hhmm` in `packages/rides-native/notificationPrefs.js` kept any `\d{2}:\d{2}` string. `99:99` and `24:61` were stored on the quiet window and written back to the profile. A time input cannot display those values, and a later quiet-window check would treat them as real minutes.
+- **What changed:** Hours must be `00`–`23` and minutes `00`–`59`. Valid clocks such as `00:00`, `21:30`, and `23:59` are unchanged. Anything else, including `24:00` and `23:60`, falls back to the default start (`22:00`) or end (`07:00`). Other flagged behaviors (string `"false"` switches, array records, unknown keys, empty profile objects, missing error messages) are unchanged.
+- **Files:** `packages/rides-native/notificationPrefs.js`, `packages/rides-native/notificationPrefs.test.js`, `docs/FIXES.md`
+
+## 2026-09-24 — Notification prefs tests run with the vehicle catalog suite
+
+- **What was wrong:** `hhmm` in `packages/rides-native/notificationPrefs.js` kept any `\d{2}:\d{2}` string, so `99:99` and `24:61` were stored on the quiet window and written back to `profiles.notification_prefs`. The module also had no unit tests. The new `notificationPrefs.test.js` was on the `npm test` list after `mapsLink.test.js` instead of immediately after `vehicleCatalog.test.js`.
+- **What changed:** Quiet-hour hours must be `00`–`23` and minutes `00`–`59`. Valid clocks (`00:00`, `21:30`, `23:59`) stay as entered. Impossible times, including `24:00` and `23:60`, fall back to the default start `22:00` or end `07:00`. `packages/rides-native/notificationPrefs.test.js` covers `NOTIFICATION_CATEGORIES`, `DEFAULT_QUIET`, `DEFAULT_NOTIFICATION_PREFS`, `quietFromPrefs`, `normalizePrefs`, `readLocalPrefs`, `writeLocalPrefs`, `fetchNotificationPrefs`, and `saveNotificationPrefs` with in-memory storage and a fake Supabase client, including malformed input and error paths. The root `test` script now lists that file once, immediately after `packages/rides-native/vehicleCatalog.test.js`. String `"false"` switches, array records, unknown keys, empty profile objects, missing fetch error messages, and un-normalized `writeLocalPrefs` stay as they were.
+- **Files:** `package.json` (test script only), `docs/FIXES.md`
+
+## 2026-09-24 — Combine heat and notification-prefs test lists
+
+- **What was wrong:** PRs #75 and #76 both inserted their test file immediately after `packages/rides-native/vehicleCatalog.test.js` in `package.json`, causing a merge conflict.
+- **What changed:** This branch combines #75 and #76 and resolves their package.json test-list conflict (supersedes merging them separately).
+- **Files:** `package.json`, `docs/FIXES.md`
+
+## 2026-09-24 — Driver desk test suite (pkg-i9-driverdesk-tests t1)
+- **Problem:** `packages/rides-native/driverDesk.js` had zero unit tests covering its driver desk helpers (availability, PickDriver requests, queue management, status advances, and earnings).
+- **What was changed:** Created `packages/rides-native/driverDesk.test.js` covering all 18 exported functions (`formatCents`, `riderFacingCard`, `loadGameDay`, `loadVehicle`, `loadDriverProfile`, `setPriorityMode`, `publishDriverLocation`, `setTeslaListing`, `subscribeTrips`, `listPassedTripIds`, `publishDriverCapacity`, `acceptTrip`, `declineTrip`, `loadRiderFix`, `advanceTrip`, `loadTrip`, `loadDriverDesk`, `loadEarnings`) using an in-memory fake Supabase query builder. Covered happy paths, empty results, Supabase error results, missing/invalid arguments, and returned object shapes without network calls or non-deterministic date dependencies. Updated `package.json` test script to include the new test file.
+- **Suspicious behaviors documented (`// BUG?:`):**
+  - `riderFacingCard`: if `vehicle` is `{}` or lacks color/make/model, `vehicleLabel` evaluates to `""` instead of `'Vehicle TBD'`.
+  - `publishDriverCapacity`: `Math.max(1, ...)` ensures `count` is always >= 1, so `if (!count)` is unreachable dead code; passing 0 or null seats sets seats to 1 rather than clearing them.
+  - `loadDriverDesk`: missing `facing`, `lat`, `lng`, and `warning` keys when `driverId` or `supabase` is null/missing compared to full return object.
+  - `acceptTrip`: checks `trip.status` rather than `fresh.status` from DB for online check and scheduled routing.
+  - `loadTrip`: condition checking `driverId !== row.driver_id` returns `toDriverCard(row)` in both branches, making it a no-op.
+  - `declineTrip`: passing a string `tripId` defaults status to `'requested'`, canceling the trip rather than releasing it to the open pool.
+- **Files touched:**
+  - `packages/rides-native/driverDesk.test.js`
+  - `package.json`
+  - `docs/FIXES.md`
+
+## 2026-09-24 — Guard empty or sparse vehicle row in riderFacingCard (pkg-i9-driverdesk-tests t2)
+- **Problem:** In `packages/rides-native/driverDesk.js`, `riderFacingCard` checked `vehicle ? [vehicle.color, vehicle.make, vehicle.model].filter(Boolean).join(' ') : 'Vehicle TBD'`. When `vehicle` was an empty or sparse object (e.g. `{}` or missing `color`, `make`, and `model` from a newly initiated onboarding row), the joined string evaluated to `""` instead of falling back to `'Vehicle TBD'`, causing rider- and fleet-facing cards to display an empty vehicle string or broken plate-only text.
+- **What was changed:** Updated `vehicleLabel` computation to `[vehicle?.color, vehicle?.make, vehicle?.model].filter(Boolean).join(' ') || 'Vehicle TBD'`, properly guarding empty and sparse vehicle rows while preserving full vehicle descriptions for valid inputs. Updated `packages/rides-native/driverDesk.test.js` to assert the `'Vehicle TBD'` fallback for empty and sparse vehicle objects.
+- **Files touched:**
+  - `packages/rides-native/driverDesk.js`
+  - `packages/rides-native/driverDesk.test.js`
+  - `docs/FIXES.md`
+
+## 2026-09-24 — Register driverDesk.test.js in package.json test script (pkg-i9-driverdesk-tests t3)
+- **Problem:** `packages/rides-native/driverDesk.test.js` needed to be registered as the last entry of the "test" script list in `package.json` and verified so that the entire test suite runs and passes cleanly.
+- **What was changed:** Confirmed `packages/rides-native/driverDesk.test.js` is the last entry in `package.json`'s "test" script list. Resolved local environment test dependencies (`@electric-sql/pglite`, `qrcode`) and verified the entire test suite passes (`npm test` passes all 415 tests with 0 failures).
+- **Files touched:**
+  - `package.json`
+  - `docs/FIXES.md`
+

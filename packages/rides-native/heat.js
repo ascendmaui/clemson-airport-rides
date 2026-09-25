@@ -91,7 +91,9 @@ export function previewDate(windowId, now = new Date()) {
   if (windowId === 'weekday_am') {
     const d = new Date(now)
     const day = d.getDay()
-    const delta = day === 0 ? -4 : day === 6 ? -5 : 3 - day
+    // Sunday goes back to the previous Wednesday. Every other day, including
+    // Saturday, uses 3 - day so the preview lands on Wednesday.
+    const delta = day === 0 ? -4 : 3 - day
     d.setDate(d.getDate() + delta)
     d.setHours(8, 30, 0, 0)
     return d
