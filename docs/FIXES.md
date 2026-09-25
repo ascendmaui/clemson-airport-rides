@@ -2,6 +2,13 @@
 
 Persistent knowledge base for recurring failures. When a matching issue appears, apply the saved fix first.
 
+## 2026-09-24 — wire agentChips tests into npm test
+
+- **Track / machine:** Clemson RIDES · deputy/agent-chips-tests · pkg-agent-chips-tests t3
+- **What was wrong:** `packages/rides-native/agentChips.test.js` covered native help chips, support chips, and `categoryLabel`, but the root `npm test` script never listed that file, so the suite could pass while those checks were skipped.
+- **What changed:** Appended `packages/rides-native/agentChips.test.js` as the last entry of the `test` script in `package.json`. No production source change.
+- **Files touched:** `package.json`, `docs/FIXES.md`
+
 ## 2026-09-24 — native categoryLabel trims string categories
 
 - **Track / machine:** Clemson RIDES · deputy/agent-chips-tests · pkg-agent-chips-tests t2
