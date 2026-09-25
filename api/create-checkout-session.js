@@ -7,6 +7,7 @@
 import {
   admin, cors, json, parseBody, userFromAuth, stripeClient, stripeOk, computeRoutes,
 } from '../server/friendRideLib.js'
+import { ensureProfile } from '../server/ensureProfile.js'
 import { loadGameDayMultiplier } from '../server/creditLots.js'
 import { studentDiscountGranted } from '../src/lib/studentDomain.js'
 import { feeMetadata, splitPlatformFee, depositSplit, depositSplitLabel } from '../src/lib/fareRates.js'
@@ -20,6 +21,7 @@ import {
 } from '../server/authoritativeFare.js'
 import { checkoutSuccessHash } from '../packages/rides-native/liveTrip.js'
 import { cancelUnopenedCheckoutTrip, rememberCheckoutSession } from '../server/abandonedCheckout.js'
+import { WEB_ORIGIN } from '../shared/productLinks.js'
 
 function checkoutOrigin(body) {
   for (const raw of [body.origin, body.successUrl]) {
@@ -31,7 +33,7 @@ function checkoutOrigin(body) {
       /* try the next candidate */
     }
   }
-  return process.env.VITE_APP_URL || 'https://clemson-airport-rides.vercel.app'
+  return process.env.VITE_APP_URL || WEB_ORIGIN
 }
 
 async function routeDistance(origin, dest) {
@@ -40,17 +42,18 @@ async function routeDistance(origin, dest) {
   return { distanceM: route.distanceM, durationS: route.durationS }
 }
 
-export default async function handler(req, res) {
+export default async function handler(req, res, deps = {}) {
   if (cors(req, res)) return
   if (req.method !== 'POST') return json(res, 405, { error: 'Method not allowed' })
 
   const { body, error: pe } = parseBody(req)
   if (pe) return json(res, 400, { error: pe })
 
-  const user = await userFromAuth(req)
+  const user = deps.user !== undefined ? deps.user : await userFromAuth(req)
   if (!user) return json(res, 401, { error: 'Sign in required' })
-  const sb = admin()
+  const sb = deps.sb || admin()
   if (!sb) return json(res, 503, { error: 'SUPABASE_SERVICE_ROLE_KEY not configured' })
+  const runEnsureProfile = deps.ensureProfile || ensureProfile
 
   const when = parseRideAt(body, new Date())
   const airport = String(body.airport || 'GSP').toUpperCase() === 'CLT' ? 'CLT' : 'GSP'
@@ -85,7 +88,8 @@ export default async function handler(req, res) {
     clientFareIgnored: priced.clientUnderpaid || priced.spoofedStudent,
   }
 
-  if (priced.depositCents > 0 && !stripeOk()) {
+  const isStripeConfigured = deps.stripeOk ? deps.stripeOk() : stripeOk()
+  if (priced.depositCents > 0 && !isStripeConfigured) {
     return json(res, 503, {
       error: 'Payments unavailable',
       message: 'STRIPE_SECRET_KEY is not configured. Checkout cannot start.',
@@ -117,6 +121,10 @@ export default async function handler(req, res) {
     }).eq('id', tripId).eq('rider_id', user.id)
     if (upErr) return json(res, 500, { error: upErr.message || 'Could not record fare' })
   } else {
+    const profileRes = await runEnsureProfile(sb, user)
+    if (!profileRes?.ok) {
+      return json(res, 500, { error: 'Could not create your rider profile', code: 'profile_missing' })
+    }
     const row = airportTripRow({ user, priced, scheduledFor, riderFirst })
     const inserted = await sb.from('trips').insert(row).select('id').single()
     if (inserted.error || !inserted.data) {
@@ -130,13 +138,13 @@ export default async function handler(req, res) {
   }
 
   try {
-    const stripe = stripeClient()
+    const stripe = deps.stripe || (deps.stripeClient ? deps.stripeClient() : stripeClient())
     const origin = checkoutOrigin(body)
     const split = depositSplit(priced.fareCents, priced.depositCents)
     const fareSplit = splitPlatformFee(priced.fareCents)
     const session = await stripe.checkout.sessions.create({
       mode: 'payment',
-      success_url: `${origin}/${checkoutSuccessHash({ tripId, scheduled: Boolean(scheduledFor) })}`,
+      success_url: `${origin}/${checkoutSuccessHash({ tripId, scheduled: Boolean(scheduledFor) })}&session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${origin}/#/schedule?canceled=1&trip=${tripId}`,
       line_items: [{
         quantity: 1,

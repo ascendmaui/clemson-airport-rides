@@ -155,6 +155,13 @@ test('consolidated handlers reject unknown actions and wrong methods', async () 
     body: {},
   })
   assert.notEqual(abandon.status, 400)
+
+  const reconcile = await call(stripePaymentHandler, {
+    method: 'POST',
+    url: '/api/stripe-payment-methods?action=reconcile-checkout',
+    body: {},
+  })
+  assert.notEqual(reconcile.status, 400)
 })
 
 test('held routes fold into existing routers and ignore body sub-actions', () => {
@@ -172,13 +179,17 @@ test('held routes fold into existing routers and ignore body sub-actions', () =>
   assert.equal(resolveRouteAction({ url: '/api/driver-earnings' }, driver), 'earnings')
 
   const pay = {
-    allowed: ['setup-intent', 'save', 'quote', 'airport-checkout', 'schedule-trip', 'buy-credits', 'credits-confirm', 'credit-lots', 'credits', 'collect', 'settle'],
+    allowed: ['setup-intent', 'save', 'quote', 'airport-checkout', 'schedule-trip', 'buy-credits', 'credits-confirm', 'credit-lots', 'credits', 'collect', 'settle', 'reconcile-checkout'],
     legacy: {
       'quote-fare': 'quote',
       'collect-payment': 'collect',
       'trip-settle': 'settle',
     },
   }
+  assert.equal(
+    resolveRouteAction({ url: '/api/stripe-payment-methods?action=reconcile-checkout' }, pay),
+    'reconcile-checkout',
+  )
   assert.equal(
     resolveRouteAction({ url: '/api/stripe-payment-methods?action=credits', body: { action: 'buy', tierId: 'pack' } }, pay),
     'credits',

@@ -1,6 +1,6 @@
 /** Canonical public surfaces for the one Clemson RIDES product. */
 
-export const WEB_ORIGIN = 'https://clemson-airport-rides.vercel.app'
+export const WEB_ORIGIN = 'https://clemson-rides.vercel.app'
 
 export const RIDER_EXPO_PROJECT = 'https://expo.dev/accounts/johnmatveyev/projects/clemson-rides-rider'
 

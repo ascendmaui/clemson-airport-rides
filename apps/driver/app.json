@@ -10,7 +10,7 @@
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "buildNumber": "17",
+      "buildNumber": "19",
       "bundleIdentifier": "com.ascendmaui.clemsonrides.driver",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false

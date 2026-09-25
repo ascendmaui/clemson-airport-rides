@@ -49,7 +49,7 @@ test('peak hop stays in the $30–$40 solo and $10–$15 full-car band', () => {
 })
 
 test('parses a carpool link or bare token', () => {
-  assert.equal(parseCarpoolToken('https://clemson-airport-rides.vercel.app/carpool/abc123xyz'), 'abc123xyz')
+  assert.equal(parseCarpoolToken('https://clemson-rides.vercel.app/carpool/abc123xyz'), 'abc123xyz')
   assert.equal(parseCarpoolToken('abc123xyz'), 'abc123xyz')
   assert.equal(parseCarpoolToken('not a code'), '')
 })

@@ -3,6 +3,8 @@
  * immediately replace with the path form. Path form is what production serves
  * reliably for Google CampusMap / public invite links.
  */
+import { WEB_ORIGIN } from '../../shared/productLinks.js'
+
 export function redirectShareHashToPath() {
   if (typeof window === 'undefined') return false
   const hash = window.location.hash || ''
@@ -130,16 +132,16 @@ export function navigate(path, params = {}) {
 
 /** Public share link — path form (not hash) so chat/email clients keep the token. */
 export function shareUrl(token) {
-  const origin = typeof window !== 'undefined' ? window.location.origin : 'https://clemson-airport-rides.vercel.app'
+  const origin = typeof window !== 'undefined' ? window.location.origin : WEB_ORIGIN
   return `${origin}/share/${encodeURIComponent(token)}`
 }
 
 export function friendsInviteUrl(token) {
-  const origin = typeof window !== 'undefined' ? window.location.origin : 'https://clemson-airport-rides.vercel.app'
+  const origin = typeof window !== 'undefined' ? window.location.origin : WEB_ORIGIN
   return `${origin}/friends/${encodeURIComponent(token)}`
 }
 
 export function carpoolInviteUrl(token) {
-  const origin = typeof window !== 'undefined' ? window.location.origin : 'https://clemson-airport-rides.vercel.app'
+  const origin = typeof window !== 'undefined' ? window.location.origin : WEB_ORIGIN
   return `${origin}/carpool/${encodeURIComponent(token)}`
 }

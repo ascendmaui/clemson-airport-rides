@@ -227,9 +227,21 @@ export const TAG_LABELS = {
   scheduled: 'Scheduled',
 }
 
-/** Rider Apple Pay is authorized on the rider's phone. Settle charges it off-session. */
+/**
+ * Driver-facing payment note under the fare breakdown.
+ * (Implementation detail, not for drivers: the rider authorizes card / Apple Pay on
+ * their own phone and the server settles the remainder off-session on complete.)
+ */
 export const APPLE_PAY_DRIVER_COPY =
-  'The 25% deposit and the rest of the fare are collected by Stripe from the rider’s saved card or Apple Pay. Completing the trip calls settle on the server. This phone does not show an Apple Pay sheet — the rider is not here to authorize one.'
+  'The rider already paid a 25% deposit. The rest is charged to their card automatically when you complete the trip.'
+
+export const NO_DEPOSIT_DRIVER_COPY =
+  'The fare is charged to the rider’s card automatically when you complete the trip.'
+
+/** Short payment note for the driver. Only mentions a deposit when one was taken. */
+export function driverFareNote(depositCents) {
+  return Number(depositCents) > 0 ? APPLE_PAY_DRIVER_COPY : NO_DEPOSIT_DRIVER_COPY
+}
 
 export function tagLabel(id) {
   return TAG_LABELS[id] || String(id)
