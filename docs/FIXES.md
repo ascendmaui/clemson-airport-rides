@@ -129,6 +129,13 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
   - `packages/rides-native/apiOrigin.test.js`
   - `docs/FIXES.md`
 
+## 2026-09-25 — Wire authUrl.js unit tests into root test script
+
+- **Track / machine:** Clemson RIDES · deputy/auth-url-r2 · pkg-auth-url-r2 t3
+- **What was wrong:** `packages/rides-native/authUrl.js` needed test suite verification under the root `package.json` `test` script to ensure all auth URL parsing (app-scheme deep links, clemson-rides.vercel.app web callbacks, PKCE codes, and hash-routed session recovery) is continuously verified on `npm test`.
+- **What changed:** Confirmed `packages/rides-native/authUrl.test.js` is wired into the root `package.json` `test` script and passes cleanly with 16/16 unit tests. Ran full `npm test` suite (807/807 tests passing) ensuring offline test isolation and zero regressions.
+- **Files touched:** `docs/FIXES.md`
+
 ## 2026-09-25 — parseSupabaseAuthUrl safely handles hash routing when fragment precedes query params
 
 - **Track / machine:** Clemson RIDES · deputy/auth-url-r2 · pkg-auth-url-r2 t2
