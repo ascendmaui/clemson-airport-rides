@@ -2,6 +2,26 @@
 
 Persistent knowledge base for recurring failures. When a matching issue appears, apply the saved fix first.
 
+## 2026-09-25 — Refactor driver offer card UI with safe area insets and accessibility polish [t2]
+
+- **Track / machine:** Clemson RIDES DRIVER · worktree `deputy-pkg-driver-offer-card-polish`
+- **What was wrong:** Driver offer card UI in `apps/driver/app/(tabs)/index.tsx` was directly formatting raw card fields, lacked structured accessibility descriptions for assistive technologies, had a cramped Decline touch target (< 44pt), lacked explicit button accessibility roles and labels, and did not take advantage of the unified `offerCardViewModel`.
+- **What changed:**
+  - Integrated `offerCardViewModel` into `RideCard` in `apps/driver/app/(tabs)/index.tsx`, making net pay the primary prominent number with net label and subtext.
+  - Added `offerAccessibilityLabel` in `packages/rides-native/offerCard.js` (and exported in `offerCard.d.ts` and tested in `offerCard.test.js`) providing a combined offer summary for assistive tech.
+  - Applied `accessibilityRole="summary"` and `accessibilityLabel={vm.accessibilityLabel}` to the offer card.
+  - Upgraded Accept (`Primary`) and Decline buttons with `accessibilityRole="button"`, descriptive `accessibilityLabel`s, and guaranteed minimum 44pt touch targets (`minHeight: 48` on `Primary`, `minHeight: 44` on `decline`).
+  - Preserved safe area insets via `useSafeAreaInsets` (`dockTop = insets.top + 8` and `bottom: insets.bottom + 72`) ensuring the card never overlaps the status bar or the tab bar.
+  - Left accept and decline logic unchanged.
+- **Files touched:**
+  - `apps/driver/app/(tabs)/index.tsx`
+  - `apps/driver/components/chrome.tsx`
+  - `packages/rides-native/offerCard.js`
+  - `packages/rides-native/offerCard.d.ts`
+  - `packages/rides-native/offerCard.test.js`
+  - `docs/FIXES.md`
+- **Verified:** `node --experimental-strip-types --test packages/rides-native/offerCard.test.js` (10/10 pass, 0 fail); full suite `npm test` (793/793 pass, 0 fail).
+
 ## 2026-09-25 — Extract offerCard view-model helpers and tests
 
 - **Track / machine:** Clemson RIDES DRIVER · worktree `deputy-pkg-driver-offer-card-polish`

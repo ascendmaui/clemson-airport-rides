@@ -114,7 +114,13 @@ export type OfferCardViewModel = {
   timeLeft: TimeLeftModel | null
   timeLeftLabel: string | null
   pickupAtText: string | null
+  accessibilityLabel: string
 }
+
+export function offerAccessibilityLabel(
+  cardOrVm?: DriverCard | OfferCardViewModel | Record<string, unknown> | null,
+  options?: TimeLeftOptions,
+): string
 
 export function offerCardViewModel(
   card?: DriverCard | Record<string, unknown> | null,

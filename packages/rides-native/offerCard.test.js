@@ -14,6 +14,7 @@ import {
   formatSeats,
   isAirportTrip,
   isOfferExpired,
+  offerAccessibilityLabel,
   offerBadges,
   offerCardViewModel,
   pickupShortLabel,
@@ -447,3 +448,43 @@ test('offerCardViewModel safely handles empty, null, or sparse card', () => {
   assert.equal(vmEmpty.distanceEta, null)
   assert.equal(vmEmpty.isAirport, false)
 })
+
+test('offerAccessibilityLabel provides a combined concise summary for screen readers', () => {
+  const [ava, mason] = syntheticOffers(new Date('2026-09-25T12:00:00.000Z'))
+
+  // Ava: Tillman Hall -> GSP Airport
+  const avaVm = offerCardViewModel(ava, { now: '2026-09-25T12:00:00.000Z' })
+  assert.ok(avaVm.accessibilityLabel)
+  assert.equal(
+    avaVm.accessibilityLabel,
+    'Ride offer: $54.40 net pay. From Tillman Hall to GSP Airport. Rider Ava, 4.9 rating. 4 min away · 32 mi. 1 seat. 25% deposit · $17.00. Fri, Sep 25, 8:12 AM',
+  )
+  assert.equal(offerAccessibilityLabel(ava, { now: '2026-09-25T12:00:00.000Z' }), avaVm.accessibilityLabel)
+
+  // Mason: Downtown Clemson -> The Pier
+  const masonVm = offerCardViewModel(mason, { now: '2026-09-25T12:00:00.000Z' })
+  assert.ok(masonVm.accessibilityLabel)
+  assert.equal(
+    masonVm.accessibilityLabel,
+    'Ride offer: $11.20 net pay. From Downtown Clemson to The Pier. Rider Mason, 4.8 rating. 6 min away · 2.4 mi. 2 seats. 25% deposit · $3.50. Fri, Sep 25, 8:45 AM',
+  )
+
+  // Direct card object with countdown passed to offerAccessibilityLabel
+  const liveOffer = {
+    pickupLabel: 'Sikes Hall',
+    dropoffLabel: 'GSP Airport',
+    driverNetCents: 4500,
+    firstName: 'Chloe',
+    riderRating: 5.0,
+    secondsLeft: 18,
+  }
+  assert.equal(
+    offerAccessibilityLabel(liveOffer),
+    'Ride offer: $45.00 net pay. From Sikes Hall to GSP Airport. Rider Chloe, 5.0 rating. 18s to accept',
+  )
+
+  // Empty and null cards
+  assert.equal(offerAccessibilityLabel(null), 'Ride offer: $0.00 net pay. From Pickup to Drop-off')
+  assert.equal(offerAccessibilityLabel({}), 'Ride offer: $0.00 net pay. From Pickup to Drop-off')
+})
+

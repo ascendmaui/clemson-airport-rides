@@ -382,6 +382,60 @@ export function isOfferExpired(cardOrSeconds, options = {}) {
 }
 
 /**
+ * Combined accessibility summary describing the offer for assistive technologies.
+ * e.g. "Ride offer: $54.40 net pay. From Tillman Hall to GSP Airport. Rider Ava, 4.9 rating. 4 min away · 32 mi. 1 seat. 25% deposit · $17.00."
+ */
+export function offerAccessibilityLabel(cardOrVm, options = {}) {
+  if (!cardOrVm) return 'Ride offer: $0.00 net pay. From Pickup to Drop-off'
+  const vm = (cardOrVm.pay && cardOrVm.pickup && cardOrVm.dropoff && cardOrVm.rider)
+    ? cardOrVm
+    : offerCardViewModel(cardOrVm, options)
+
+  const parts = []
+
+  const net = vm.pay?.formattedNet || '$0.00'
+  parts.push(`Ride offer: ${net} net pay`)
+
+  const pickup = vm.pickup?.shortLabel || vm.pickup?.label || 'Pickup'
+  const dropoff = vm.dropoff?.shortLabel || vm.dropoff?.label || 'Drop-off'
+  parts.push(`From ${pickup} to ${dropoff}`)
+
+  const rider = vm.rider?.firstName
+  const rating = vm.rider?.ratingText ?? (vm.rider?.rating != null ? String(vm.rider.rating) : null)
+  if (rider && rider !== 'Rider') {
+    parts.push(rating ? `Rider ${rider}, ${rating} rating` : `Rider ${rider}`)
+  } else if (rating) {
+    parts.push(`Rider rating ${rating}`)
+  }
+
+  if (vm.distanceEta) {
+    parts.push(vm.distanceEta)
+  }
+
+  if (vm.seats?.seatsLabel) {
+    parts.push(vm.seats.seatsLabel)
+  }
+
+  if (vm.airport?.label && !pickup.includes(vm.airport.label) && !dropoff.includes(vm.airport.label)) {
+    parts.push(vm.airport.label)
+  }
+
+  if (vm.deposit?.label) {
+    parts.push(vm.deposit.label)
+  }
+
+  if (vm.pickupAtText) {
+    parts.push(vm.pickupAtText)
+  }
+
+  if (vm.timeLeft?.label) {
+    parts.push(vm.timeLeft.label)
+  }
+
+  return parts.join('. ')
+}
+
+/**
  * Unified pure view-model helper for the driver offer card.
  * Gathers and formats all fields into a single presentation-ready structure.
  */
@@ -418,7 +472,7 @@ export function offerCardViewModel(card, options = {}) {
     isUrgent: secondsLeft != null && secondsLeft > 0 && secondsLeft <= 10,
   } : null
 
-  return {
+  const vmWithoutLabel = {
     id: card?.id ?? null,
     status: card?.status ?? 'offered',
     rider: {
@@ -442,6 +496,11 @@ export function offerCardViewModel(card, options = {}) {
     timeLeft,
     timeLeftLabel: timeLabel,
     pickupAtText: card?.pickupAt ? formatPickupAt(card.pickupAt) : null,
+  }
+
+  return {
+    ...vmWithoutLabel,
+    accessibilityLabel: offerAccessibilityLabel(vmWithoutLabel, options),
   }
 }
 
