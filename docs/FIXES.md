@@ -1,7 +1,6 @@
 # Build & blocker fixes log
 
 Persistent knowledge base for recurring failures. When a matching issue appears, apply the saved fix first.
-
 ## 2026-09-24 — Atomic hold claim & metadata merge design and migration requirement documented [t3]
 
 - **Track / machine:** Deputy · pkg-pro-hold-claim-atomic · deputy/hold-claim-atomic
@@ -96,6 +95,15 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
   - `apps/mobile` (frozen TestFlight app) keeps its inline fallback, now the new domain.
   - Tests, READMEs and `.env.example` files updated. Older entries in this log are history and keep the old domain.
 - **External config still on the old domain (dashboards, not code):** Vercel `VITE_APP_URL` / `APP_URL` if set (they override the fallback), EAS `EXPO_PUBLIC_API_BASE` for rider/driver, Stripe webhook endpoint (`/api/stripe-webhook`), Supabase Auth Site URL / redirect URLs, Google OAuth authorized origins.
+## 2026-09-24 — "Sign in required" on deposit / add card: SUPABASE_SERVICE_ROLE_KEY missing on the new Vercel project
+
+- **Track / machine:** Clemson RIDES · iOS TestFlight build 18 (1.1.0) · Vercel project `clemson-rides` (team `john-matveyev-macbooki9`, domain `clemson-rides.vercel.app`)
+- **Symptom:** Signed in with Supabase auth, tapping Pay on the airport deposit showed "Sign in required"; Billing could not add a card ("Supabase service role key on Vercel is not configured").
+- **Root cause:** The new `clemson-rides` Vercel project had no `SUPABASE_SERVICE_ROLE_KEY`. `userFromAuth()` (`server/friendRideLib.js`) needs `admin()` to call `auth.getUser(token)`; with no key it returns null, so `api/create-checkout-session.js` answers **401 "Sign in required"** (masking the real problem) and the setup-intent route in `server/stripePaymentRoutes.js` answers **503 "SUPABASE_SERVICE_ROLE_KEY not configured"**. Not the old domain: `clemson-airport-rides.vercel.app` (still on `af87b60`) already verified Supabase tokens and had the key.
+- **Fix (no app build):** Added `SUPABASE_SERVICE_ROLE_KEY` (Production + Preview sensitive, Development encrypted) to `clemson-rides`, then redeployed the current production deployment (`dpl_udfb4nTmj4z5npSHETddSW9tV32F` → `clemson-rides-9atbwgh0y`, same source) with John's approval, ~10:00 PM ET.
+- **Verified:** Throwaway Supabase user on `clemson-rides.vercel.app`: `action=setup-intent` 200 (client_secret), `action=airport-checkout` 200 (Stripe Checkout session), `create-checkout-session` 200. User and its trips deleted afterwards.
+- **Next time:** When a new Vercel project/domain is created, diff env var NAMES against the old project before pointing apps at it. Consider making `userFromAuth` return a 503 (not 401) when the service key is missing so the error is not mistaken for an auth problem.
+- **Still open:** `profiles.stripe_card_brand` / `stripe_card_last4` and `trips.created_at` missing (migration `20260925020500_card_brand_and_trip_created_at.sql`, not applied); Stripe webhook endpoint for `clemson-rides.vercel.app/api/stripe-webhook` not registered; Stripe is in test mode (`cs_test_`); `SUPABASE_URL` is Production-only on `clemson-rides` (code falls back to the project URL).
 
 ## 2026-09-24 — Remove Clerk: Apple + Google social sign-in directly on Supabase Auth
 
