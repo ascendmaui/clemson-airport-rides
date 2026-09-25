@@ -90,6 +90,46 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
   - `docs/FIXES.md`
 - **Verified:** `node --experimental-strip-types --test packages/rides-native/apiClient.test.js` (30/30 passing).
 
+## 2026-09-25 — wire driverGateView tests into npm test (pkg-driver-pending-ux t3)
+
+- **Track / machine:** Clemson RIDES · worktree deputy-pkg-driver-pending-ux · pkg-driver-pending-ux t3
+- **Problem:** `packages/rides-native/driverGateView.test.js` was created to validate driver approval gate capabilities and status view copy across onboarding states, but was not wired into root `package.json`'s `test` script, so `npm test` omitted the suite during standard runs.
+- **Fix:** Appended `packages/rides-native/driverGateView.test.js` as the last entry of the `test` script in `package.json`.
+- **Files touched:**
+  - `package.json`
+  - `docs/FIXES.md`
+- **Verified:** `npm test` (803/803 passing, including all 10 tests in `packages/rides-native/driverGateView.test.js`).
+
+## 2026-09-25 — driver home/queue respect approval status (pkg-driver-pending-ux t2)
+
+- **Track / machine:** Clemson RIDES · worktree deputy-pkg-driver-pending-ux · pkg-driver-pending-ux t2
+- **Problem:** Drivers whose onboarding status is pending_review, pending_info, pending_docs, or rejected saw confusing offer cards or queue lists on driver home and queue screens, and the Go online toggle was not disabled with the reason. Screens also lacked next steps guidance and pull-to-refresh re-reading of the application status.
+- **Fix:**
+  - Created `apps/driver/components/DriverStatusCard.tsx` rendering application status copy from `driverGateView`, an accessible "Next steps" section covering finish info, upload documents, wait for review, and contact support, along with primary action and refresh capability.
+  - Enhanced `GoButton` in `apps/driver/components/shell.tsx` with `disabled` and `disabledReason` props, supplying accessible labels (`accessibilityRole="button"`, `accessibilityState={{ disabled }}`, `accessibilityLabel="Go online disabled: ..."`) and disabled visual styling.
+  - Updated `apps/driver/app/(tabs)/index.tsx` to derive status with `driverGateView`, hide offer cards when `!canSeeOffers`, disable `GoButton` with reason, show `DriverStatusCard` in the dock inside a pull-to-refresh `ScrollView`, and update `statusLine`.
+  - Updated `apps/driver/app/queue.tsx` to hide queue list and filters when `!canSeeOffers`, render `DriverStatusCard`, and provide `RefreshControl` on the queue scroll view to re-read the driver application status.
+- **Files touched:**
+  - `apps/driver/components/DriverStatusCard.tsx`
+  - `apps/driver/components/shell.tsx`
+  - `apps/driver/app/(tabs)/index.tsx`
+  - `apps/driver/app/queue.tsx`
+  - `docs/FIXES.md`
+- **Verified:** `node --experimental-strip-types --test packages/rides-native/driverGateView.test.js` (10/10 pass), `npm run --prefix apps/driver typecheck` (clean pass), and `npm test` (793/793 pass).
+
+## 2026-09-25 — driverGateView helper + tests (pkg-driver-pending-ux t1)
+
+- **Track / machine:** Clemson RIDES · worktree deputy-pkg-driver-pending-ux · pkg-driver-pending-ux t1
+- **Problem:** Drivers whose `driver_applications.onboarding_status` is pending_review, pending_info, or rejected saw a confusing home screen and queue states where offer/queue UI rendered despite not being approved. A shared client-side helper was missing to compute driver gate capabilities (`canGoOnline`, `canSeeOffers`), card titles, bodies, and primary actions for all onboarding statuses.
+- **Fix:** Added `packages/rides-native/driverGateView.js` implementing `driverGateView(onboardingStatus, { rejectionReason, missingItems })` returning `{ canGoOnline, canSeeOffers, title, body, primaryAction }` for all `ONBOARDING_STATUSES` (+ null), strictly restricting `canGoOnline` and `canSeeOffers` to `approved` status, and reusing `APPROVAL_GATE` copy from `syntheticOffers.js` / `driverDesk.js`. Added unit tests covering all statuses and options in `packages/rides-native/driverGateView.test.js` and TypeScript types in `packages/rides-native/driverGateView.d.ts`.
+- **Files touched:**
+  - `packages/rides-native/driverGateView.js`
+  - `packages/rides-native/driverGateView.d.ts`
+  - `packages/rides-native/driverGateView.test.js`
+  - `docs/FIXES.md`
+- **Verified:** `node --experimental-strip-types --test packages/rides-native/driverGateView.test.js` (10/10 passing) and `npm run typecheck` (passing).
+
+
 ## 2026-09-25 — merge_trip_metadata trip_status enum cast applied (#100)
 
 - **Problem:** `public.merge_trip_metadata` (#80) failed on every call with `operator does not exist: trip_status = text`, which broke the airport-checkout session bind, abandon-checkout release and the unpaid-hold expiry cancel.

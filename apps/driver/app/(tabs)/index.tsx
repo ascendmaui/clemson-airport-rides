@@ -1,11 +1,12 @@
 import { useRouter } from 'expo-router'
-import { useCallback, useEffect, useRef, useState } from 'react'
-import { Animated, Linking, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Animated, Linking, Modal, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { CampusMap, type MapPin } from '@/components/CampusMap'
 import { FarePanel } from '@/components/FarePanel'
 import { Card, ErrorText, Primary, Tag, useCardShadow } from '@/components/chrome'
 import { CircleButton, GoButton } from '@/components/shell'
+import { DriverStatusCard } from '@/components/DriverStatusCard'
 import { useAuth } from '@/lib/auth'
 import { useFeedback } from '@/lib/feedback'
 import { notifyNewRequest } from '@/lib/push'
@@ -48,31 +49,9 @@ import { etaHoldLine, etaLineFor } from 'rides-native/liveTrip'
 import { ORANGE, PURPLE } from 'rides-native/places.js'
 import { gameDayNotice, type GameDayNotice } from 'rides-native/gameDayNotice.js'
 import { approvalGateMessage, isSyntheticOffer, syntheticOffers } from 'rides-native/syntheticOffers'
+import { driverGateView } from 'rides-native/driverGateView'
 import { loadCounterpart } from 'rides-native/partyProfile.js'
 import { offerCardViewModel } from 'rides-native/offerCard'
-
-const GATE: Record<string, { title: string; body: string }> = {
-  pending_info: {
-    title: 'Finish driver signup',
-    body: 'Add your info, vehicle, documents, W-9, and contractor agreement. New drivers are not approved automatically.',
-  },
-  pending_docs: {
-    title: 'Finish your application',
-    body: 'License, insurance, registration, and car photos come before you submit. You can keep setting up the account after that.',
-  },
-  pending_review: {
-    title: 'Application under review',
-    body: 'Application under review — you can set up your account, but you can’t accept rides yet.',
-  },
-  rejected: {
-    title: 'Application needs changes',
-    body: 'Update the flagged steps and submit again. You still cannot receive rides.',
-  },
-  none: {
-    title: 'Become a driver',
-    body: 'For Clemson University students — and for drivers already on Uber or Lyft.',
-  },
-}
 
 /** Home map overlay grid: screen-edge gutter, spacing between floating pieces, clearance under the status bar. */
 const EDGE = 16
@@ -117,8 +96,14 @@ export default function DriverHome() {
   const [riderLine, setRiderLine] = useState<string | null>(null)
   const [hiddenOffers, setHiddenOffers] = useState<string[]>([])
   const [gameNotice, setGameNotice] = useState<GameDayNotice | null>(null)
+  const [refreshing, setRefreshing] = useState(false)
+  const gate = useMemo(
+    () => driverGateView(status, { rejectionReason: reason }),
+    [status, reason]
+  )
+  const canSeeOffers = gate.canSeeOffers
+  const canGoOnline = gate.canGoOnline
   const approved = status === 'approved'
-  const pendingReview = status === 'pending_review'
   const online = Boolean(desk?.online)
   const name = user ? displayFirstName(user.user_metadata?.full_name || user.email?.split('@')[0], 'Driver') : 'Driver'
   const tabClearance = insets.bottom + 72
@@ -149,7 +134,10 @@ export default function DriverHome() {
     setStatus(nextStatus)
     setReason(application.application?.rejection_reason || null)
     if (application.error) setError(application.error)
-    if (nextStatus === 'approved' || nextStatus === 'pending_review') {
+    const currentGate = driverGateView(nextStatus, {
+      rejectionReason: application.application?.rejection_reason || null,
+    })
+    if (currentGate.canSeeOffers) {
       const loaded = await loadDriverDesk(supabase, user.id)
       setDesk(loaded)
       if (loaded.lat != null && loaded.lng != null) {
@@ -162,8 +150,21 @@ export default function DriverHome() {
         const latest = earnings.trips?.[0]
         setLastTrip(latest?.dropoff_label || latest?.pickup_label || null)
       }
+    } else {
+      setDesk(null)
     }
   }, [user])
+
+  const onPullRefresh = useCallback(async () => {
+    setRefreshing(true)
+    try {
+      await refresh()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not refresh application status')
+    } finally {
+      setRefreshing(false)
+    }
+  }, [refresh])
 
   useEffect(() => {
     const active = desk?.active
@@ -191,11 +192,11 @@ export default function DriverHome() {
   }, [refresh])
 
   useEffect(() => {
-    if (!supabase || (!approved && !pendingReview)) return undefined
+    if (!supabase || !canSeeOffers) return undefined
     return subscribeTrips(supabase, () => {
       refresh().catch(() => {})
     })
-  }, [approved, pendingReview, refresh])
+  }, [canSeeOffers, refresh])
 
   useEffect(() => {
     const offers = desk?.offers || []
@@ -247,12 +248,8 @@ export default function DriverHome() {
       router.push('/sign-in')
       return
     }
-    if (pendingReview) {
-      setError(approvalGateMessage())
-      return
-    }
-    if (!approved) {
-      router.push('/onboarding')
+    if (!canGoOnline) {
+      setError(gate.body)
       return
     }
     setBusy(true)
@@ -272,7 +269,7 @@ export default function DriverHome() {
 
   async function onAccept(card: DriverCard) {
     if (!user || !supabase) return
-    if (!approved || isSyntheticOffer(card)) {
+    if (!canSeeOffers || !approved || isSyntheticOffer(card)) {
       setError(approvalGateMessage())
       return
     }
@@ -319,11 +316,7 @@ export default function DriverHome() {
     }
   }
 
-  const gate = GATE[status] || GATE.none
-  const synthetic = pendingReview
-    ? syntheticOffers().filter((card) => !hiddenOffers.includes(card.id))
-    : []
-  const offer = (approved ? desk?.offers[0] : null) || synthetic[0] || null
+  const offer = canSeeOffers ? desk?.offers[0] || null : null
   const liveFrom = self
     ? { lat: self.latitude, lng: self.longitude }
     : desk?.lat != null && desk?.lng != null
@@ -355,13 +348,11 @@ export default function DriverHome() {
 
   const statusLine = !user
     ? 'Sign in to drive'
-    : pendingReview
-      ? 'Under review'
-      : !approved
-        ? 'Finish signup'
-        : online
-          ? `You're online, ${name}`
-          : 'You\'re offline'
+    : !canGoOnline
+      ? gate.title
+      : online
+        ? `You're online, ${name}`
+        : 'You\'re offline'
 
   return (
     <View style={[styles.screen, { backgroundColor: colors.background }]}>
@@ -474,19 +465,31 @@ export default function DriverHome() {
         <View pointerEvents="box-none" style={[styles.dock, { top: dockTop, bottom: tabClearance }]}>
           {!configured ? <ErrorText>Add EXPO_PUBLIC_SUPABASE_ANON_KEY as an EAS environment variable, then rebuild.</ErrorText> : null}
           {error ? <ErrorText>{error}</ErrorText> : null}
-          {user && pendingReview && !offer ? (
-            <Card>
-              <Text style={[styles.cardTitle, { color: colors.title }]}>{gate.title}</Text>
-              <Text style={{ color: colors.inkSecondary }}>{gate.body}</Text>
-            </Card>
-          ) : null}
-          {user && !approved && !pendingReview ? (
-            <Card>
-              <Text style={[styles.cardTitle, { color: colors.title }]}>{gate.title}</Text>
-              <Text style={{ color: colors.inkSecondary }}>{gate.body}</Text>
-              {reason ? <ErrorText>{reason}</ErrorText> : null}
-              <Primary label={status === 'none' ? 'Become a driver' : 'Continue application'} onPress={() => router.push(user ? '/onboarding' : '/sign-in')} />
-            </Card>
+          {!canSeeOffers ? (
+            <ScrollView
+              style={styles.statusWrap}
+              contentContainerStyle={styles.statusScrollBody}
+              showsVerticalScrollIndicator={false}
+              alwaysBounceVertical={true}
+              refreshControl={
+                <RefreshControl
+                  refreshing={refreshing}
+                  onRefresh={onPullRefresh}
+                  tintColor={colors.orange}
+                  title="Checking application status…"
+                  titleColor={colors.inkSecondary}
+                  accessibilityLabel="Pull to refresh application status"
+                />
+              }
+            >
+              <DriverStatusCard
+                status={status}
+                gate={gate}
+                reason={reason}
+                onRefresh={onPullRefresh}
+                refreshing={refreshing}
+              />
+            </ScrollView>
           ) : null}
           {desk?.active ? (
             <Pressable onPress={() => router.push({ pathname: '/trip', params: { id: desk.active!.id } })} style={[styles.live, { backgroundColor: colors.fill }]}>
@@ -501,7 +504,7 @@ export default function DriverHome() {
             <RideCard
               card={offer}
               busy={busy}
-              notice={user && pendingReview ? gate.body : null}
+              notice={null}
               onAccept={() => onAccept(offer)}
               onDecline={() => onDecline(offer)}
             />
@@ -511,7 +514,13 @@ export default function DriverHome() {
               <CircleButton icon="shield" label="Safety" onPress={() => setSafetyOpen(true)} />
               <CircleButton icon="sparkles" label="Priority mode" onPress={onPriority} />
             </View>
-            <GoButton online={online} busy={busy} onPress={toggle} />
+            <GoButton
+              online={online}
+              busy={busy}
+              disabled={!canGoOnline}
+              disabledReason={gate.body}
+              onPress={toggle}
+            />
             <View style={styles.toolCol}>
               <CircleButton icon="stats-chart" label="Earnings" onPress={() => router.push('/earnings')} />
               <CircleButton icon="locate" label="Recenter map" onPress={() => setFocusToken((value) => value + 1)} />
@@ -723,4 +732,6 @@ const styles = StyleSheet.create({
   offerActions: { gap: 8, paddingTop: 10 },
   modalScrim: { flex: 1, backgroundColor: 'rgba(11,18,32,0.45)', justifyContent: 'flex-end' },
   modalCard: { borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 20, gap: 12 },
+  statusWrap: { flexShrink: 1, maxHeight: 400 },
+  statusScrollBody: { flexGrow: 1 },
 })
