@@ -2,6 +2,24 @@
 
 Persistent knowledge base for recurring failures. When a matching issue appears, apply the saved fix first.
 
+## 2026-09-24 — Extract checkout deposit reconciliation and add fallback on-demand reconcile
+
+- **Track / machine:** Clemson RIDES · worktree deputy-pkg-checkout-reconcile / branch deputy/checkout-reconcile
+- **Problem:** A paid airport deposit was only marked paid by `api/stripe-webhook.js` (`checkout.session.completed` / `async_payment_succeeded`). If the webhook endpoint or secret was misconfigured, delayed, or missed, the rider paid but the trip never showed the deposit.
+- **Root cause:** The deposit marking logic was embedded directly in `api/stripe-webhook.js` without an idempotent standalone module or an on-demand reconciliation endpoint function. Furthermore, `recordDeposit` did not guard against duplicate payments rows or repeated `fare_paid_cents` increments on repeated calls.
+- **Fix:**
+  - Created `server/checkoutReconcile.js`:
+    - `recordDeposit(supabase, session, deps)`: Idempotently inserts deposit into `public.payments` keyed on `stripe_payment_intent_id` / session ID / trip deposit, prevents duplicate payment rows, stamps `checkout_deposit` on `trips.metadata`, and only increments `fare_paid_cents` once.
+    - `applyPaidCheckoutSession(serviceClient, session, deps)`: Applies the exact deposit side effects as the webhook (payments deposit insert, restoring canceled live trip, and referral social grant).
+    - `reconcileCheckoutSession({ stripe, sb, sessionId, userId })`: Validates `cs_` session ID, retrieves Stripe Checkout session, enforces rider ownership on `trip.rider_id` (403 if mismatched), skips `credit_purchase` sessions, returns `{ ok: true, paid: false }` with no writes if unpaid, and applies deposit reconciliation if paid.
+  - Refactored `api/stripe-webhook.js` to delegate checkout deposit marking to `applyPaidCheckoutSession` while preserving existing webhook responses, logging, and regex compatibility with test suites.
+  - Added comprehensive tests in `server/checkoutReconcile.test.js` covering first-time paid, second-time paid idempotency, unpaid session, unauthorized rider session, invalid session IDs, Stripe API errors, and webhook integration.
+- **Files touched:**
+  - `server/checkoutReconcile.js`
+  - `server/checkoutReconcile.test.js`
+  - `api/stripe-webhook.js`
+  - `docs/FIXES.md`
+
 ## 2026-09-24 — Remove Clerk: Apple + Google social sign-in directly on Supabase Auth
 
 - **Track / machine:** Clemson RIDES · worktree feat/supabase-auth-remove-clerk
