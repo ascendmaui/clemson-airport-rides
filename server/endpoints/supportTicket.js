@@ -13,6 +13,14 @@ import { applySupportBot } from '../applySupportBot.js'
 
 const MISSING_TABLE = /support_tickets|schema cache|does not exist/i
 
+// Checked before MISSING_TABLE. A missing bot_intent / escalation_reason column
+// is reported with "does not exist" or "schema cache" and names support_tickets,
+// which is also how a missing table is reported.
+function isMissingColumnError(message) {
+  const text = String(message || '')
+  return /\bcolumn\b/i.test(text) && !/could not find the table/i.test(text)
+}
+
 export default async function handler(req, res) {
   if (cors(req, res)) return
   if (req.method !== 'POST' && req.method !== 'GET') {
@@ -36,17 +44,25 @@ export default async function handler(req, res) {
     if (!access.support) query = query.eq('user_id', user.id)
     const { data, error } = await query
     if (error) {
-      if (MISSING_TABLE.test(error.message || '')) {
+      const message = error.message || ''
+      if (isMissingColumnError(message)) {
+        const fallback = sb.from('support_tickets').select('id, user_id, role_variant, category, subject, body, status, created_at').order('created_at', { ascending: false }).limit(30)
+        const retry = await (access.support ? fallback : fallback.eq('user_id', user.id))
+        if (retry.error) return json(res, 500, { error: 'Could not load tickets.' })
+        let viewer = { signedIn: true }
+        try { viewer = await loadUserContext(sb, user) } catch { /* list without extra redaction context */ }
+        const tickets = (retry.data || []).map((ticket) => ({
+          ...ticket,
+          subject: redactPeerText(ticket.subject, viewer),
+          body: redactPeerText(ticket.body, viewer),
+        }))
+        return json(res, 200, { tickets, isAdmin: access.admin, isStaff: access.support })
+      }
+      if (MISSING_TABLE.test(message)) {
         return json(res, 503, {
           error: 'Support tickets are not in the database yet. Apply supabase/migrations/20260923120000_support_tickets.sql and supabase/migrations/20260924190000_admin_support.sql.',
           tickets: [],
         })
-      }
-      if (/column|schema cache/i.test(error.message || '')) {
-        const fallback = sb.from('support_tickets').select('id, user_id, role_variant, category, subject, body, status, created_at').order('created_at', { ascending: false }).limit(30)
-        const retry = await (access.support ? fallback : fallback.eq('user_id', user.id))
-        if (retry.error) return json(res, 500, { error: 'Could not load tickets.' })
-        return json(res, 200, { tickets: retry.data || [], isAdmin: access.admin, isStaff: access.support })
       }
       return json(res, 500, { error: 'Could not load tickets.' })
     }

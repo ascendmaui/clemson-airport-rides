@@ -300,20 +300,64 @@ test('GET missing support_tickets table is 503 with the migration message', asyn
   }
 })
 
-test('GET treats a missing-column error that says does not exist as a missing table', async () => {
+test('GET retries a reduced column list when Postgres or PostgREST reports a missing column', async () => {
+  const messages = [
+    'column support_tickets.bot_intent does not exist',
+    'column "bot_intent" of relation "support_tickets" does not exist',
+    "Could not find the 'bot_intent' column of 'support_tickets' in the schema cache",
+  ]
+  for (const message of messages) {
+    for (const support of [false, true]) {
+      const sb = createFakeSb()
+      let tries = 0
+      sb.when((ctx) => ctx.table === 'support_tickets' && ctx.terminal === 'list', () => {
+        tries += 1
+        if (tries === 1) return { data: null, error: { message } }
+        return {
+          data: [{
+            id: TICKET_ID,
+            user_id: USER_ID,
+            subject: 'Sam Rivera was late',
+            body: 'Sam Rivera never arrived at the pickup spot',
+            status: 'open',
+          }],
+          error: null,
+        }
+      })
+      const res = await invoke({
+        client: sb,
+        access: { admin: support, support, profile: null },
+        context: { ...CONTEXT, _peerFullNames: ['Sam Rivera'] },
+      })
+      assert.equal(res.status, 200, `${message} support=${support}`)
+      assert.equal(res.json.tickets.length, 1)
+      assert.equal(res.json.tickets[0].subject, 'Sam was late', message)
+      assert.equal(res.json.tickets[0].body, 'Sam never arrived at the pickup spot', message)
+      assert.equal(res.json.isStaff, support)
+      assert.equal(res.json.isAdmin, support)
+      const queries = sb.calls.filter((ctx) => ctx.table === 'support_tickets')
+      assert.equal(queries.length, 2, `${message} support=${support}`)
+      assert.equal(queries[0].columns, LIST_COLUMNS)
+      assert.equal(queries[1].columns, FALLBACK_COLUMNS)
+      assert.equal(hasFilter(queries[0], 'eq', 'user_id', USER_ID), !support)
+      assert.equal(hasFilter(queries[1], 'eq', 'user_id', USER_ID), !support)
+      assert.equal(queries[1].limitN, 30)
+    }
+  }
+})
+
+test('GET missing-column retry that still fails is 500, not a missing-table 503', async () => {
   const sb = createFakeSb()
   sb.when((ctx) => ctx.table === 'support_tickets', () => ({
     data: null,
-    error: { message: 'column support_tickets.bot_intent does not exist' },
+    error: { message: 'column "escalation_reason" of relation "support_tickets" does not exist' },
   }))
   const res = await invoke({ client: sb })
-  // BUG?: the reduced-column retry never runs when the column error also
-  // matches /support_tickets|schema cache|does not exist/i. Postgres and
-  // PostgREST use those phrases for a missing column.
-  assert.equal(res.status, 503)
-  assert.equal(res.json.error, MISSING_GET)
-  assert.deepEqual(res.json.tickets, [])
-  assert.equal(calls('support_tickets').length, 1)
+  assert.equal(res.status, 500)
+  assert.equal(res.json.error, 'Could not load tickets.')
+  assert.equal(res.json.tickets, undefined)
+  assert.equal(sb.calls.filter((ctx) => ctx.table === 'support_tickets').length, 2)
+  assert.equal(users.state.calls.length, 0)
 })
 
 test('GET retries a reduced column list when the error names a column only', async () => {

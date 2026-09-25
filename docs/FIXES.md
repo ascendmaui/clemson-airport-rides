@@ -449,6 +449,14 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
   - `docs/FIXES.md`
 - **Verified:** `node --experimental-strip-types --test api/stripeWebhookValidation.test.js` (29/29 passing).
 
+## 2026-09-25 — support ticket list retries when a column is missing
+
+- **Track / machine:** Clemson RIDES · deputy/admin-support-tests · pkg-admin-support-tests t3
+- **What was wrong:** `GET /api/support-ticket` selects `bot_intent` and `escalation_reason`. Those columns are not on the first support-ticket table. The handler already had a reduced-column retry, but it never ran for a real Postgres or PostgREST error: those messages include `does not exist`, `schema cache`, or `support_tickets`, and that pattern was checked first. A missing column was returned as 503 ("not in the database yet") and the fallback select was skipped. The old-schema list is the case the retry was written for.
+- **What changed:** If the error names a column and is not "could not find the table", the handler runs the existing reduced-column select, still filtered to the caller unless they are support staff, and redacts peer surnames the same way as a normal list. A missing relation still returns 503. A retry that still fails stays 500. Who counts as admin or staff is unchanged. `shared/adminAccess.test.js`, `server/adminDesk.test.js`, and `server/supportTicket.test.js` were already on the root `test` script.
+- **Left as-is:** `server/endpoints/adminDesk.js` `tickets()` still skips its reduced-column retry when the error text contains "does not exist" or "schema cache". Same class of check, admin list only.
+- **Files touched:** `server/endpoints/supportTicket.js`, `server/supportTicket.test.js`, `docs/FIXES.md`
+
 ## 2026-09-25 — supportTicket handler tests
 
 - **Track / machine:** Clemson RIDES · deputy/admin-support-tests · pkg-admin-support-tests t2
