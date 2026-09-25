@@ -80,6 +80,21 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
   - `packages/rides-native/documentReview.test.js`
   - `docs/FIXES.md`
 
+## 2026-09-25 — Wire rider a11y scan into test script and record offender counts [t3]
+
+- **Track / machine:** Clemson RIDES · deputy/rider-a11y · pkg-rider-a11y t3
+- **What was wrong:** `tests/a11yRider.test.js` scanned `apps/rider/app` and `apps/rider/components` for Pressable, TouchableOpacity, Button, and Image tags missing an accessible name or role, but the root `package.json` `"test"` script did not list that file, so `npm test` skipped the rider accessibility scanner.
+- **What changed:**
+  - Appended `tests/a11yRider.test.js` to the `"test"` script in `package.json`.
+  - Recorded rider a11y offender counts from the static scan (no React Native runtime):
+    - **Before remediation (t1 baseline):** 20 Pressable accessibility offenders across `apps/rider/app` and `apps/rider/components`.
+    - **After remediation (t2 fixes):** 4 remaining offenders. The scan removed 16 Pressables on sign-in, home request, fare confirm, tiers, pick-driver, and the live trip once those tags had `accessibilityLabel` or `accessibilityRole`.
+    - **Remaining offenders allowlist (4):** `apps/rider/app/history.tsx:61` (history back), `apps/rider/app/schedule.tsx:752` (upcoming-ride Cancel; the same tag was `schedule.tsx:725` on the t1 baseline before the t2 edits shifted the line), `apps/rider/components/EmergencyContactsCard.tsx:192`, `apps/rider/components/EmergencyContactsCard.tsx:196` (emergency-contact editor buttons).
+- **Files touched:**
+  - `package.json`
+  - `docs/FIXES.md`
+- **Verified:** `node --experimental-strip-types --test tests/a11yRider.test.js` logs `rider a11y offenders: 4` and passes 5/5. `npm test` passes 798/798, including that file.
+
 ## 2026-09-25 — Rider core-flow accessibility
 
 - **Track / machine:** Clemson RIDES · deputy/rider-a11y · pkg-rider-a11y t2
