@@ -18,6 +18,7 @@ import {
   resolveDriverRequestPlaces,
 } from '../authoritativeFare.js'
 import { receivableDriverIds } from '../driverApproval.js'
+import { insertTripEvent } from '../tripEvents.js'
 
 async function serverDistance(origin, dest) {
   if (origin?.lat == null || dest?.lat == null) return { distanceM: null, durationS: null }
@@ -140,7 +141,7 @@ export default async function handler(req, res, deps = {}) {
   if (inserted.error || !inserted.data) {
     return json(res, 500, { error: inserted.error?.message || 'Could not request trip' })
   }
-  await sb.from('trip_events').insert({
+  const { error: eventError } = await insertTripEvent(sb, {
     trip_id: inserted.data.id,
     kind: 'requested',
     payload: {
@@ -151,6 +152,13 @@ export default async function handler(req, res, deps = {}) {
       fare_source: 'server',
     },
   })
+  if (eventError) {
+    return json(res, 500, {
+      error: eventError.message || 'Could not record trip event',
+      code: 'trip_event_failed',
+      trip: inserted.data,
+    })
+  }
 
   return json(res, 200, {
     trip: inserted.data,

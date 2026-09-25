@@ -19,6 +19,7 @@ import {
   quoteMidrideCancel,
   readFareRates,
 } from '../midrideFare.js'
+import { insertTripEvent } from '../tripEvents.js'
 
 function num(v) {
   const n = Number(v)
@@ -375,7 +376,7 @@ export default async function handler(req, res) {
     })
     if (billErr) console.error('[trip-cancel-midride] ride_bills', billErr.message)
 
-    await sb.from('trip_events').insert({
+    const { error: midrideEventError } = await insertTripEvent(sb, {
       trip_id: trip.id,
       kind: MIDRIDE_STATUS,
       payload: {
@@ -392,8 +393,9 @@ export default async function handler(req, res) {
       },
     })
 
+    let paymentRequiredEventError = null
     if (paymentStatus === 'payment_required') {
-      await sb.from('trip_events').insert({
+      const { error: payEventError } = await insertTripEvent(sb, {
         trip_id: trip.id,
         kind: 'payment_required',
         payload: {
@@ -405,7 +407,12 @@ export default async function handler(req, res) {
           trip_status: MIDRIDE_STATUS,
         },
       })
+      paymentRequiredEventError = payEventError
     }
+
+    // Cancel + charge already committed — do not 500 the rider, but surface
+    // audit-log failures on the response and in server logs.
+    const eventError = midrideEventError || paymentRequiredEventError || null
 
     return json(res, 200, {
       ok: true,
@@ -413,6 +420,7 @@ export default async function handler(req, res) {
       status: MIDRIDE_STATUS,
       code: paymentStatus === 'payment_required' ? 'payment_required' : null,
       quote: { ...finalQuote, clientSecret },
+      eventError: eventError ? (eventError.message || String(eventError)) : null,
     })
   } catch (err) {
     console.error('[trip-cancel-midride]', err)

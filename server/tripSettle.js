@@ -15,6 +15,7 @@ import {
 import { isAdminIdentity } from '../shared/adminAccess.js'
 import { ensureAuthoritativeFare, storedFareCents } from './authoritativeFare.js'
 import { farePaidCents, tripChargeKey } from './chargeIdempotency.js'
+import { insertTripEvent } from './tripEvents.js'
 
 const ACTIVE_KEEP = new Set(['accepted', 'arriving', 'in_progress', 'payment_required', 'searching', 'offered'])
 
@@ -189,11 +190,23 @@ export async function settleTrip({
   if (sb) {
     const { error } = await sb.from('trips').update(patch).eq('id', trip.id)
     if (error) return { http: 500, body: { error: error.message, payment, progressed: false } }
-    await sb.from('trip_events').insert({
+    const { error: eventError } = await insertTripEvent(sb, {
       trip_id: trip.id,
       kind: patch.status,
       payload: { source: 'trip_settle', reason: gate.reason, amount_cents: due.amountCents },
     })
+    if (eventError) {
+      return {
+        http: 500,
+        body: {
+          error: eventError.message || 'Could not record trip event',
+          code: 'trip_event_failed',
+          payment,
+          progressed: true,
+          status: patch.status,
+        },
+      }
+    }
   }
 
   let payout = null

@@ -69,7 +69,10 @@ async function writeTripEvent(tripId, kind, payload = {}) {
     kind,
     payload,
   })
-  if (error) console.error('[trip_events]', kind, error.message)
+  if (error) {
+    console.error('[trip_events]', kind, error.message)
+    throw new Error(error.message || `Could not record trip event (${kind})`)
+  }
 }
 
 const ACTIVE_STATUSES = ['accepted', 'arriving', 'arrived', 'in_progress']

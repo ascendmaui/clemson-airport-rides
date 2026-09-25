@@ -84,11 +84,15 @@ export async function claimTrip(driverId, tripId) {
     .select('id')
   if (error) throw new Error(error.message)
   if (!data?.length) throw new Error('That ride was just taken')
-  await supabase.from('trip_events').insert({
+  const { error: eventError } = await supabase.from('trip_events').insert({
     trip_id: tripId,
     kind: 'accepted',
     payload: { driver_id: driverId, accepted_at: acceptedAt },
   })
+  if (eventError) {
+    console.error('[trip_events]', 'accepted', eventError.message)
+    throw new Error(eventError.message || 'Could not record trip event')
+  }
   return { acceptedAt }
 }
 

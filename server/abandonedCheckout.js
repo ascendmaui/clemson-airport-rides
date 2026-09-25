@@ -13,6 +13,7 @@
  */
 import { isAirportDepositPaid, isAirportDepositTrip } from '../packages/rides-native/tripTags.js'
 import { UNPAID_AIRPORT_HOLD_TTL_MS } from '../shared/airportHold.js'
+import { insertTripEvent } from './tripEvents.js'
 
 export const UNPAID_CHECKOUT_STATUSES = ['searching', 'offered', 'scheduled']
 
@@ -197,7 +198,7 @@ async function writeCanceled(sb, trip, session, { reason, source }) {
   if (error) return { released: false, reason: 'update_failed', error: error.message }
   const row = Array.isArray(data) ? data[0] : data
   if (!row || !row.id) return { released: false, reason: 'not_in_pool', status: trip.status }
-  const { error: eventErr } = await sb.from('trip_events').insert({
+  const { error: eventErr } = await insertTripEvent(sb, {
     trip_id: trip.id,
     kind: 'canceled',
     payload: {
@@ -264,7 +265,7 @@ export async function restoreLiveTripAfterDeposit(sb, session, { depositPaid = f
     .maybeSingle()
   if (error) return { restored: false, reason: 'update_failed', error: error.message }
   if (!data) return { restored: false, reason: 'not_canceled', status: trip.status }
-  const { error: eventErr } = await sb.from('trip_events').insert({
+  const { error: eventErr } = await insertTripEvent(sb, {
     trip_id: tripId,
     kind: decision.status,
     payload: {

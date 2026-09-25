@@ -1483,3 +1483,16 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
 - **What was changed:** Verified that `packages/rides-native/assistClient.test.js` is present in the `package.json` `test` runner argument list. Executed full test runner via `npm test`, confirming 832/832 tests pass (including all 45 assistClient unit tests covering `parseAgentHttpResponse`, `postAgent`, and `supportTicketRequest`).
 - **Files touched:**
   - `docs/FIXES.md`
+
+## 2026-09-25 — surface trip_events write failures
+
+- **Problem:** Failed `trip_events` audit-log inserts were ignored at several call sites (`scheduleTrip`, `requestDriverTrip`, `tripSettle`, mid-ride cancel, driver accept / desk). Trips could succeed while the event ledger silently drifted, with no server log and no client-visible error.
+- **What changed:**
+  - Added `server/tripEvents.js` `insertTripEvent` — always `console.error`s on failure and returns `{ error }` for callers.
+  - `scheduleTrip` / `requestDriverTrip`: on event failure return HTTP 500 with `code: 'trip_event_failed'` and the already-created `trip` so the client is not blind.
+  - `tripSettle`: return HTTP 500 with `trip_event_failed` after status update (payment already collected).
+  - Mid-ride cancel: keep HTTP 200 after charge/cancel commits, but set `eventError` on the response (do not fail money path).
+  - `abandonedCheckout`: route inserts through `insertTripEvent` so failures are logged (still returned as `eventError`).
+  - Native `writeTripEvent` (driver desk) and web `DriverHome` / `driverOffers`: log with `console.error` and throw so UI surfaces the failure.
+  - Flipped the former `BUG?` scheduleTrip test; added `server/tripEvents.test.js`.
+- **Files touched:** `server/tripEvents.js`, `server/tripEvents.test.js`, `server/endpoints/scheduleTrip.js`, `server/endpoints/requestDriverTrip.js`, `server/tripSettle.js`, `server/endpoints/tripCancelMidride.js`, `server/abandonedCheckout.js`, `packages/rides-native/driverDesk.js`, `src/screens/DriverHome.jsx`, `src/lib/driverOffers.js`, `server/scheduleTrip.test.js`, `package.json`, `docs/FIXES.md`
