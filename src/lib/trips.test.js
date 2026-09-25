@@ -189,15 +189,10 @@ test('requestDriverTrip posts custom pins and returns the server trip', async ()
   assert.equal(stadium.longitude, -82.843)
 })
 
-test('requestDriverTrip default call pins the drop-off at 0,0', async () => {
-  // BUG?: omitted, undefined, and null destLat/destLng default to null, and
-  // Number(null) === 0 is finite, so destPoint(dest) never runs. Blank strings
-  // do the same (Number('') === 0, Number('   ') === 0). A one-sided null
-  // becomes 0 and the other coordinate is kept. PickDriver.jsx calls this
-  // without coordinates. The server canonicalizes GSP/CLT/ATL labels, but any
-  // other dest is stored at 0,0 (or a one-sided 0) instead of destPoint(dest).
-  // The server treats null and '' as missing; the client has already turned
-  // them into 0, which finiteCoord() accepts.
+test('requestDriverTrip uses destPoint when coordinates are omitted or only half provided', async () => {
+  // Blank pins (omitted, null, undefined, '', whitespace) are missing, not 0.
+  // One finite side with the other blank also falls through to destPoint.
+  // PickDriver.jsx calls this without coordinates. Explicit 0,0 stays 0,0.
   reset()
   const trip = await requestDriverTrip(priced({
     riderId: 'rider-1',
@@ -212,74 +207,54 @@ test('requestDriverTrip default call pins the drop-off at 0,0', async () => {
   assertPayload(slot.calls[0].body, {
     driverId: 'driver-9',
     dest: 'Sikes Hall',
-    destLat: 0,
-    destLng: 0,
+    destLat: sikes.latitude,
+    destLng: sikes.longitude,
     pickupLabel: 'Memorial Stadium',
     pickupLat: stadium.latitude,
     pickupLng: stadium.longitude,
     tier: 'xl',
   })
 
-  const zeroPins = [
+  const gsp = destPoint('GSP Airport')
+  const missingPins = [
     { dest: 'GSP Airport' },
     { dest: 'GSP Airport', destLat: null, destLng: null },
     { dest: 'GSP Airport', destLat: undefined, destLng: undefined },
     { dest: 'GSP Airport', destLat: '', destLng: '' },
     { dest: 'GSP Airport', destLat: '   ', destLng: '   ' },
   ]
-  for (const extra of zeroPins) {
+  for (const extra of missingPins) {
     reset()
     await requestDriverTrip(priced({ riderId: 'rider-1', driverId: 'driver-9', ...extra }))
     assert.equal(slot.calls[0].body.dest, 'GSP Airport')
-    assert.equal(slot.calls[0].body.destLat, 0)
-    assert.equal(slot.calls[0].body.destLng, 0)
+    assert.equal(slot.calls[0].body.destLat, gsp.latitude)
+    assert.equal(slot.calls[0].body.destLng, gsp.longitude)
     assert.equal('listCents' in slot.calls[0].body, false)
     assert.equal('isStudent' in slot.calls[0].body, false)
   }
 
-  reset()
-  await requestDriverTrip(priced({
-    riderId: 'rider-1',
-    driverId: 'driver-9',
-    dest: 'Sikes Hall',
-    destLat: 34.2,
-    destLng: null,
-  }))
-  assert.equal(slot.calls[0].body.destLat, 34.2)
-  assert.equal(slot.calls[0].body.destLng, 0)
-
-  reset()
-  await requestDriverTrip(priced({
-    riderId: 'rider-1',
-    driverId: 'driver-9',
-    dest: 'Sikes Hall',
-    destLat: null,
-    destLng: -82.22,
-  }))
-  assert.equal(slot.calls[0].body.destLat, 0)
-  assert.equal(slot.calls[0].body.destLng, -82.22)
-
-  reset()
-  await requestDriverTrip(priced({
-    riderId: 'rider-1',
-    driverId: 'driver-9',
-    dest: 'Sikes Hall',
-    destLat: '',
-    destLng: -82.22,
-  }))
-  assert.equal(slot.calls[0].body.destLat, 0)
-  assert.equal(slot.calls[0].body.destLng, -82.22)
-
-  reset()
-  await requestDriverTrip(priced({
-    riderId: 'rider-1',
-    driverId: 'driver-9',
-    dest: 'Sikes Hall',
-    destLat: ' 34.2 ',
-    destLng: null,
-  }))
-  assert.equal(slot.calls[0].body.destLat, 34.2)
-  assert.equal(slot.calls[0].body.destLng, 0)
+  const halfPins = [
+    { destLat: 34.2, destLng: null },
+    { destLat: null, destLng: -82.22 },
+    { destLat: '', destLng: -82.22 },
+    { destLat: '   ', destLng: -82.22 },
+    { destLat: ' 34.2 ', destLng: null },
+    { destLat: ' 34.2 ', destLng: '   ' },
+  ]
+  for (const extra of halfPins) {
+    reset()
+    await requestDriverTrip(priced({
+      riderId: 'rider-1',
+      driverId: 'driver-9',
+      dest: 'Sikes Hall',
+      ...extra,
+    }))
+    assert.equal(slot.calls[0].body.dest, 'Sikes Hall')
+    assert.equal(slot.calls[0].body.destLat, sikes.latitude)
+    assert.equal(slot.calls[0].body.destLng, sikes.longitude)
+    assert.equal('listCents' in slot.calls[0].body, false)
+    assert.equal('isStudent' in slot.calls[0].body, false)
+  }
 })
 
 test('requestDriverTrip uses destPoint when a coordinate is not finite', async () => {

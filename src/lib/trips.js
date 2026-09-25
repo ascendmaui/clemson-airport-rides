@@ -7,6 +7,15 @@ import { createServerDriverTrip } from './payments'
  * Pins only tell the server where the ride is. Airport labels are canonicalized
  * there, so these coordinates cannot set the amount.
  */
+
+// Number(null), Number(''), and Number('   ') are 0, which is finite. A blank
+// pin is missing, not the origin. An explicit 0 is still a coordinate.
+function finitePin(value) {
+  if (value == null || (typeof value === 'string' && value.trim() === '')) return null
+  const n = Number(value)
+  return Number.isFinite(n) ? n : null
+}
+
 export async function requestDriverTrip({
   riderId,
   driverId,
@@ -22,8 +31,10 @@ export async function requestDriverTrip({
   if (!riderId) throw new Error('Sign in required to request a driver')
   if (!driverId) throw new Error('Select a driver first')
 
-  const drop = Number.isFinite(Number(destLat)) && Number.isFinite(Number(destLng))
-    ? { latitude: Number(destLat), longitude: Number(destLng) }
+  const lat = finitePin(destLat)
+  const lng = finitePin(destLng)
+  const drop = lat != null && lng != null
+    ? { latitude: lat, longitude: lng }
     : destPoint(dest)
   const pickup = pickupPoint('Memorial Stadium')
   const data = await createServerDriverTrip({
