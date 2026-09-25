@@ -2,6 +2,15 @@
 
 Persistent knowledge base for recurring failures. When a matching issue appears, apply the saved fix first.
 
+## 2026-09-24 — Wire carpoolApi tests into package.json test suite (pkg-carpool-api-tests t3)
+
+- **Track / machine:** Clemson RIDES · deputy/carpool-api-tests
+- **Problem:** `packages/rides-native/shared/carpoolApi.test.js` needed to be wired as the last entry of the root `package.json` "test" script so that CI and local runners execute the carpool API test suite as part of standard test runs.
+- **What was changed:** Appended `packages/rides-native/shared/carpoolApi.test.js` as the last test entry in `package.json` "test" script and ensured no duplicate mid-script entry remains. Verified all 364 tests in the suite pass cleanly.
+- **Files touched:**
+  - `package.json`
+  - `docs/FIXES.md`
+
 ## 2026-09-24 — Strip multiple trailing slashes in carpoolApi base override (pkg-carpool-api-tests t2)
 
 - **Track / machine:** Clemson RIDES · deputy/carpool-api-tests
