@@ -69,6 +69,11 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
 - **Track / machine:** Clemson RIDES · worktree deputy-pkg-lostfound-tests
 - **Problem:** `packages/rides-native/lostFoundClient.js` had unit tests (`packages/rides-native/lostFoundClient.test.js`) created in t1 and robustness fixes applied in t2, but the test suite was not wired into the root `package.json` `npm test` script, leaving it out of standard CI and regression test runs.
 - **Fix:** Appended `packages/rides-native/lostFoundClient.test.js` as the last entry in the `test` script in `package.json`. Verified all tests in the full test suite pass cleanly.
+## 2026-09-24 — Wire tripMessagesClient unit tests to package.json test script
+
+- **Track / machine:** Clemson RIDES · pkg-trip-messages-tests
+- **Problem:** `packages/rides-native/tripMessagesClient.js` unit tests in `packages/rides-native/tripMessagesClient.test.js` needed to be wired as the last entry of the `test` script in `package.json` so the entire test suite runs them on `npm test`.
+- **Fix:** Appended `packages/rides-native/tripMessagesClient.test.js` as the last test file in the `package.json` `test` command. Verified all 377 tests pass cleanly via `npm test`.
 - **Files touched:**
   - `package.json`
   - `docs/FIXES.md`
@@ -325,6 +330,16 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
   - `package.json`
   - `docs/FIXES.md`
 - **Verified:** 21/21 tests pass via `node --experimental-strip-types --test packages/rides-native/driverOnboardingClient.test.js`; full test suite passes 372/372.
+
+## 2026-09-24 — sendTripQuickReply validates phrase before checking supabase client
+
+- **Track / machine:** Clemson RIDES · pkg-trip-messages-tests
+- **Problem:** `sendTripQuickReply(supabase, { tripId, phrase })` checked `canonicalQuickReply(phrase)` before validating that the Supabase client was provided, unlike `fetchTripChat`, `listTripMessages`, and `sendTripMessage` which all call `requireClient(supabase)` first. Calling `sendTripQuickReply` with an unconfigured client and an unknown phrase threw "Unknown quick reply" instead of "Supabase is not configured", while calling it with a known phrase threw "Supabase is not configured".
+- **Fix:** Added `requireClient(supabase)` at the start of `sendTripQuickReply` in `packages/rides-native/tripMessagesClient.js`, matching the behavior of the other exported client functions. Updated test in `packages/rides-native/tripMessagesClient.test.js`.
+- **Files touched:**
+  - `packages/rides-native/tripMessagesClient.js`
+  - `packages/rides-native/tripMessagesClient.test.js`
+  - `docs/FIXES.md`
 
 ## 2026-09-24 — Remove Clerk: Apple + Google social sign-in directly on Supabase Auth
 
