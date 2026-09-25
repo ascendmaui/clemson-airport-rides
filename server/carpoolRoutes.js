@@ -7,6 +7,7 @@ import { ambassadorFrom, ambassadorStats, createGroupRide, matchRider } from './
 import { saveAmbassadorAttribution } from './ambassadorAttribution.js'
 import { firstRideEligible, firstRideWindowOpen } from '../src/lib/carpoolEngine.js'
 import { gameDayActive } from './carpoolSettle.js'
+import { WEB_ORIGIN } from '../shared/productLinks.js'
 
 function missingTable(error) {
   return /relation|does not exist|schema cache/i.test(error?.message || '')
@@ -111,7 +112,7 @@ export async function handleCarpoolProgram(req, res) {
   try {
     if (action === 'ambassador') {
       const stats = await ambassadorStats(sb, user)
-      const origin = body.origin || 'https://clemson-airport-rides.vercel.app'
+      const origin = body.origin || WEB_ORIGIN
       return json(res, stats.ok === false ? 503 : 200, {
         ...stats,
         link: stats.code ? `${origin}/a/${stats.code}` : null,

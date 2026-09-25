@@ -5,7 +5,9 @@
  * Emergency contacts use public.emergency_contacts.
  */
 
-export const SHARE_ORIGIN = 'https://clemson-airport-rides.vercel.app'
+import { WEB_ORIGIN } from '../../shared/productLinks.js'
+
+export const SHARE_ORIGIN = WEB_ORIGIN
 
 export const CUPD_PHONE_E164 = '+18646562222'
 export const CUPD_PHONE_DISPLAY = '(864) 656-2222'

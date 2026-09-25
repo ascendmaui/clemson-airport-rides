@@ -27,7 +27,7 @@ npx expo start
 Optional API base (defaults to production):
 
 ```bash
-npx eas-cli env:create --name EXPO_PUBLIC_API_BASE --value https://clemson-airport-rides.vercel.app --environment production --visibility plaintext
+npx eas-cli env:create --name EXPO_PUBLIC_API_BASE --value https://clemson-rides.vercel.app --environment production --visibility plaintext
 ```
 
 ## Driver shell

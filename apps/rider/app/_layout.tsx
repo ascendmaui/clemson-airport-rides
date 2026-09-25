@@ -14,9 +14,10 @@ import { supabase } from '@/lib/supabase'
 import { ambassadorCodeFromLocation } from 'rides-native/shared/ambassadorAttribution.js'
 import { claimAmbassadorAttribution } from 'rides-native/shared/carpoolApi.js'
 import { ProfileRequiredGate } from 'rides-native/PartyScreens'
+import { resolveApiBase } from 'rides-native/apiOrigin.js'
 import { setCarpoolApiBase } from 'rides-native/shared/carpoolApi.js'
 
-setCarpoolApiBase(process.env.EXPO_PUBLIC_API_BASE || 'https://clemson-airport-rides.vercel.app')
+setCarpoolApiBase(resolveApiBase())
 
 function ApproachHost() {
   const { user } = useAuth()

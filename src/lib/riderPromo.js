@@ -1,5 +1,7 @@
 /** Pure helpers for rider-to-rider promo codes. No network. */
 
+import { WEB_ORIGIN } from '../../shared/productLinks.js'
+
 export const RIDER_SOCIAL_TYPE = 'rider_social'
 
 /** Defaults match rider_referral_config seed. Ops can change the table. */
@@ -83,7 +85,7 @@ export function capturePromoFromLocation() {
 export function riderPromoShareUrl(code) {
   const origin = typeof window !== 'undefined'
     ? window.location.origin
-    : 'https://clemson-airport-rides.vercel.app'
+    : WEB_ORIGIN
   return `${origin}/#/sign-up?ref=${encodeURIComponent(normalizePromoCode(code))}`
 }
 
