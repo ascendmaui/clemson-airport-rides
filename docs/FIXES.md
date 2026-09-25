@@ -200,6 +200,35 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
   - `docs/FIXES.md`
 - **Verified:** `tsc --noEmit` in `apps/rider`, `apps/driver`, and `apps/mobile` (0 errors). `node scripts/typecheck.mjs` exit 0.
 
+## 2026-09-25 — pricing.js student-discount tests + pricing suites wired into npm test [t2/t3, finished by Grok Bot]
+
+- **Track / machine:** Clemson RIDES · deputy/pricing-discount-tests (PR #125) · MacBookPro-1097 worktree `~/Projects/wt/exec-pr125`
+- **What was wrong:** `src/lib/pricing.js` (`applyStudentDiscount`, `getGameDayMultiplier`, `quoteWithSurge`, `priceAirportRide`, `formatUsdFromCents`) had no tests. The three suites from t1 were not in the root `npm test` script, so they never ran. `tests/fixtures/pricingLoader.mjs` only stubbed `./supabase` for `pricing.js`, but `pricing.js` → `stripeCheckout.js` → `./supabase.js` still pulled in `@supabase/supabase-js` and Vite's `import.meta.env`.
+- **What changed (tests only; no production code, no money math changed):**
+  - New `src/lib/pricing.test.js` (33 tests). It registers the loader and swaps in a fake Supabase client through `tests/fixtures/supabaseStub.js`. Covered: the 10% Standard student discount with rounding and the fare+discount invariant; non-student / non-Standard tiers; bad input; `applyStudentDiscount` agreeing with `quoteFare` student math; the exact `game_day_events` query filters; error / empty / non-numeric rows; game-day surge applied **before** the student discount; the Saturday 1.8 fallback vs DB events; the 2.5 cap; weekend and airport-rush windows in ET; carpool-then-student stacking; `priceAirportRide` GSP/CLT fallbacks, deposit, 20/80 split, the unknown-airport guard, and live distance/duration overrides.
+  - `tests/fixtures/pricingLoader.mjs`: also stubs `./supabase.js` when it is imported from `src/lib/stripeCheckout.js`.
+  - `package.json` `test`: appended `server/gameDayPricing.test.js server/studentEligibility.test.js src/lib/riderPromo.test.js src/lib/pricing.test.js`.
+- **Suspected quirks (`// BUG?:` in the tests, not fixed because they are on the money path):**
+  - `applyStudentDiscount` treats `tier: ''` as Standard (it discounts), but `quoteFare` does not discount `tier: ''`.
+  - The non-student branch of `applyStudentDiscount` returns negative or fractional cents unchanged, while the student branch clamps them to >= 0 and rounds.
+  - `getGameDayMultiplier` returns `multiplier: 0` for a NULL `surge_multiplier` because `Number(null)` is 0. Rider price is unaffected: `resolveSurge` ignores values <= 1.
+- **Verified:** `node --experimental-strip-types --test src/lib/pricing.test.js` → 33/33. Full `npm test` → 849/849 pass, 0 fail, 0 skipped. A mutation check (dropping the tier guard and flipping the surge sort order in a scratch copy of `pricing.js`) made 2 tests fail; the change was reverted.
+- **Files touched:** `src/lib/pricing.test.js`, `tests/fixtures/pricingLoader.mjs`, `package.json`, `docs/FIXES.md`
+
+## 2026-09-25 — Game-day multiplier, student eligibility, and rider promo test suites [t1]
+
+- **Track / machine:** Clemson RIDES · deputy/pricing-discount-tests · pkg-pricing-discount-tests t1
+- **What was wrong:** Lack of isolated unit tests covering `loadGameDayMultiplier` in `server/creditLots.js`, `studentFlagsFor` in `server/studentEligibility.js`, and pure promo helpers in `src/lib/riderPromo.js`.
+- **What changed:** Added test suites in `server/gameDayPricing.test.js`, `server/studentEligibility.test.js`, and `src/lib/riderPromo.test.js`. Left production code untouched. Documented quirks with `// BUG?:`:
+  - `loadGameDayMultiplier`: `Number(null)` coerces to `0` which is finite, returning `{ multiplier: 0, event }` instead of `null`; unhandled query errors bubble because `sb` queries are not wrapped in `try/catch`; unparseable date strings reject with `RangeError`.
+  - `studentFlagsFor`: throws `TypeError` if `participants` argument is null or undefined; queries participants sequentially rather than concurrently.
+  - `riderPromo`: `normalizePromoCode(0)` and `normalizePromoCode(false)` evaluate to `''` via `raw || ''` before `String()`, whereas `true` becomes `'TRUE'`; `formatCents(-500)` formats negative values as `'$-5.00'`; `riderPromoShareText('')` leaves double space `'Use code  when you sign up.'`.
+- **Files touched:**
+  - `server/gameDayPricing.test.js`
+  - `server/studentEligibility.test.js`
+  - `src/lib/riderPromo.test.js`
+  - `docs/FIXES.md`
+
 ## 2026-09-25 — Expiry cron wired: CRON_SECRET + Supabase pg_cron/pg_net; prod redeployed at 111c607
 
 - **Track / machine:** Clemson RIDES · I9 (61b11c89) Vercel CLI + Supabase awktabuhijrshmsmagpq · approved by John 1:05 AM ET 9/25.
