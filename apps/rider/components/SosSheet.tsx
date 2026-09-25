@@ -1,6 +1,6 @@
 import { LinearGradient } from 'expo-linear-gradient'
 import { StatusBar } from 'expo-status-bar'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Animated, Linking, Modal, Pressable, ScrollView, Share, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { warningHaptic } from '@/lib/feedback'
@@ -111,6 +111,7 @@ export function SosSheet({
   const insets = useSafeAreaInsets()
   const breathe = useRef(new Animated.Value(0.12)).current
   const [armed, setArmed] = useState(false)
+  const [arming, setArming] = useState<'tel_911' | 'tel_cupd' | null>(null)
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null)
   const [locating, setLocating] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -118,11 +119,17 @@ export function SosSheet({
   const [shareNote, setShareNote] = useState<string | null>(null)
   const canLog = Boolean(tripId && userId && isActiveRideStatus(tripStatus))
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     setSosEngaged(open)
-    if (!open) return () => setSosEngaged(false)
+    if (!open) setArming(null)
+    return () => setSosEngaged(false)
+  }, [open])
+
+  useEffect(() => {
+    if (!open) return undefined
     void warningHaptic()
     setArmed(false)
+    setArming(null)
     setLogError(null)
     setShareNote(null)
     setBusy(false)
@@ -143,7 +150,6 @@ export function SosSheet({
     return () => {
       alive = false
       loop.stop()
-      setSosEngaged(false)
     }
   }, [breathe, open])
 
@@ -169,7 +175,12 @@ export function SosSheet({
   async function onPolice(channel: 'tel_911' | 'tel_cupd') {
     if (busy) return
     if (!armed) {
-      await armSos()
+      setArming(channel)
+      try {
+        await armSos()
+      } finally {
+        setArming(null)
+      }
       return
     }
     await onChannel(channel)
@@ -225,6 +236,8 @@ export function SosSheet({
   const callHint = armed
     ? 'Dials now and logs the call on this trip.'
     : 'Confirms the alert. Does not dial until you press again.'
+  const call911 = sosChannelButton('tel_911')
+  const callPolice = sosChannelButton('tel_cupd')
 
   return (
     <Modal
@@ -250,7 +263,7 @@ export function SosSheet({
               <Text style={styles.close}>Close</Text>
             </Pressable>
           </View>
-          <Text style={styles.emergencyTitle}>Press the button to call police</Text>
+          <Text style={styles.emergencyTitle}>Call 911 or Clemson Police</Text>
           <Text style={styles.emergencyCopy}>
             {armed
               ? canLog
@@ -270,10 +283,9 @@ export function SosSheet({
             onPress={() => { void onPolice('tel_911') }}
             style={[styles.call911, busy && styles.disabled]}
           >
-            <Text style={styles.call911Label}>{busy && !armed ? 'Confirming…' : 'Call 911'}</Text>
-            <Text style={styles.call911Detail}>
-              {armed ? 'Emergency voice call' : 'Tap to confirm · does not dial yet'}
-            </Text>
+            <Text style={styles.call911Label}>{arming === 'tel_911' ? 'Confirming…' : call911.title}</Text>
+            <Text style={styles.call911Detail}>{call911.detail}</Text>
+            {armed ? null : <Text style={styles.call911Detail}>Tap to confirm · does not dial yet</Text>}
           </Pressable>
           <Pressable
             accessibilityRole="button"
@@ -284,10 +296,9 @@ export function SosSheet({
             onPress={() => { void onPolice('tel_cupd') }}
             style={[styles.callPolice, busy && styles.disabled]}
           >
-            <Text style={styles.callPoliceLabel}>Call Clemson Police</Text>
-            <Text style={styles.callPoliceDetail}>
-              {armed ? 'Campus safety' : 'Tap to confirm · does not dial yet'}
-            </Text>
+            <Text style={styles.callPoliceLabel}>{arming === 'tel_cupd' ? 'Confirming…' : callPolice.title}</Text>
+            <Text style={styles.callPoliceDetail}>{callPolice.detail}</Text>
+            {armed ? null : <Text style={styles.callPoliceDetail}>Tap to confirm · does not dial yet</Text>}
           </Pressable>
           {armed ? (
             <>
@@ -384,6 +395,8 @@ const styles = StyleSheet.create({
   call911: {
     backgroundColor: '#fff',
     borderRadius: 28,
+    width: '100%',
+    alignSelf: 'stretch',
     minHeight: 96,
     alignItems: 'center',
     justifyContent: 'center',
@@ -396,10 +409,12 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 10 },
     elevation: 8,
   },
-  call911Label: { color: '#9B1B1B', fontSize: 28, fontWeight: '800', letterSpacing: -0.4 },
-  call911Detail: { color: '#9B1B1B', fontSize: 14, fontWeight: '600', marginTop: 4 },
+  call911Label: { color: '#9B1B1B', fontSize: 28, fontWeight: '800', letterSpacing: -0.4, textAlign: 'center' },
+  call911Detail: { color: '#9B1B1B', fontSize: 14, fontWeight: '600', marginTop: 4, textAlign: 'center' },
   callPolice: {
     borderRadius: 24,
+    width: '100%',
+    alignSelf: 'stretch',
     minHeight: 76,
     alignItems: 'center',
     justifyContent: 'center',
@@ -409,8 +424,8 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.85)',
     backgroundColor: 'rgba(255,255,255,0.08)',
   },
-  callPoliceLabel: { color: '#fff', fontSize: 20, fontWeight: '800' },
-  callPoliceDetail: { color: 'rgba(255,255,255,0.84)', fontSize: 13, fontWeight: '600', marginTop: 2 },
+  callPoliceLabel: { color: '#fff', fontSize: 20, fontWeight: '800', textAlign: 'center' },
+  callPoliceDetail: { color: 'rgba(255,255,255,0.84)', fontSize: 13, fontWeight: '600', marginTop: 2, textAlign: 'center' },
   more: {
     borderRadius: 18,
     padding: 14,
