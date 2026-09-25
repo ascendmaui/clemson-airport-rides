@@ -751,11 +751,18 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
   - `docs/FIXES.md`
 - **Verified:** `node --experimental-strip-types --test packages/rides-native/partyProfile.test.js` (31/31 passing).
 
+## 2026-09-25 — emailAuth trims padded password-reset redirects
+
+- **Track / machine:** Clemson RIDES · deputy/email-auth-tests · pkg-email-auth-tests t2
+- **What was wrong:** `requestPasswordReset` forwarded `redirectTo` unchanged. A padded value such as `'  clemsonrides://reset-password  '` was sent to Supabase, and a whitespace-only redirect was treated as present because it is truthy.
+- **What changed:** String redirects are trimmed before the call. A padded URL is sent without surrounding spaces. A whitespace-only redirect is omitted, the same as an empty string. Non-string redirects are unchanged.
+- **Files touched:** `packages/rides-native/emailAuth.js`, `packages/rides-native/emailAuth.test.js`, `docs/FIXES.md`
+
 ## 2026-09-25 — emailAuth unit tests cover every helper without source edits
 
 - **Track / machine:** Clemson RIDES · deputy/email-auth-tests · pkg-email-auth-tests t1
 - **What was wrong:** `packages/rides-native/emailAuth.test.js` only checked a successful sign-in, one reset redirect, a blank reset email, and the 6-character password floor. Missing-client failures, error mapping, blank sign-in emails, redirect omission, and password coercion were untested.
-- **What changed:** Extended the test file only. Did not edit `packages/rides-native/emailAuth.js`. Quirks stay asserted with `// BUG?:`: blank sign-in emails and empty passwords are sent to Supabase; sign-in does not stringify passwords; six spaces and non-string values pass `updatePassword`; empty or padded `redirectTo` is not normalized; rate-limit, invalid-credentials, and account-exists copy is shared across sign-in, reset, and password update; string errors collapse to "Auth failed"; a truthy client without `.auth` throws TypeError; thrown client failures skip `mapAuthError`.
+- **What changed:** Extended the test file only. Did not edit `packages/rides-native/emailAuth.js`. Quirks stay asserted with `// BUG?:`: blank sign-in emails and empty passwords are sent to Supabase; sign-in does not stringify passwords; six spaces and non-string values pass `updatePassword`; an empty `redirectTo` is omitted; rate-limit, invalid-credentials, and account-exists copy is shared across sign-in, reset, and password update; string errors collapse to "Auth failed"; a truthy client without `.auth` throws TypeError; thrown client failures skip `mapAuthError`. Padded string redirects were trimmed in the t2 entry above.
 - **Files touched:** `packages/rides-native/emailAuth.test.js`, `docs/FIXES.md`
 
 ## 2026-09-25 — Build 19 shipped to production (#91); merge_trip_metadata enum bug found in smoke test

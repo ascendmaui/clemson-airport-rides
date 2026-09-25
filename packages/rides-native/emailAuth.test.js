@@ -225,21 +225,25 @@ test('requestPasswordReset omits options when redirectTo is missing or empty', a
   await requestPasswordReset(supabase, 'rider@clemson.edu', '')
   // BUG?: an empty-string redirectTo is dropped, the same as omitting the argument.
   assert.deepEqual(calls[1].args, ['rider@clemson.edu', undefined])
+
+  await requestPasswordReset(supabase, 'rider@clemson.edu', '   ')
+  assert.deepEqual(calls[2].args, ['rider@clemson.edu', undefined])
 })
 
-test('requestPasswordReset forwards an untrimmed redirect and a coerced email', async () => {
+test('requestPasswordReset trims a padded redirect and still forwards a coerced email', async () => {
   const { calls, supabase } = authClient({
     resetPasswordForEmail: async () => ({ data: {}, error: null }),
   })
-  // BUG?: redirectTo is not trimmed, so surrounding spaces are sent to Supabase.
   await requestPasswordReset(supabase, 'rider@clemson.edu', '  clemsonrides://reset-password  ')
   // BUG?: a non-string email is coerced. 12345 is treated as the address "12345".
   await requestPasswordReset(supabase, 12345, 'clemsonrides://reset-password')
+  await requestPasswordReset(supabase, 'rider@clemson.edu', 123)
   assert.deepEqual(calls[0].args, [
     'rider@clemson.edu',
-    { redirectTo: '  clemsonrides://reset-password  ' },
+    { redirectTo: 'clemsonrides://reset-password' },
   ])
   assert.deepEqual(calls[1].args, ['12345', { redirectTo: 'clemsonrides://reset-password' }])
+  assert.deepEqual(calls[2].args, ['rider@clemson.edu', { redirectTo: 123 }])
 })
 
 test('requestPasswordReset maps invalid-credentials and rate-limit errors with shared copy', async () => {
