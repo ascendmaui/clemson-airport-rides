@@ -284,6 +284,47 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
   - `packages/rides-native/lostFoundClient.js`
   - `packages/rides-native/lostFoundClient.test.js`
   - `docs/FIXES.md`
+## 2026-09-24 — Wire driverOnboardingClient unit tests into package.json test script (task t3)
+
+- **Track / machine:** Clemson RIDES · worktree deputy-pkg-driver-onboarding-tests
+- **Problem:** `packages/rides-native/driverOnboardingClient.test.js` needed to be wired into the repository-wide test runner as the final test entry in `package.json` so full test runs and CI validate driver onboarding client workflows on every run.
+- **Fix:** Confirmed and verified `packages/rides-native/driverOnboardingClient.test.js` is appended as the last entry of the `"test"` script in `package.json`.
+- **Files touched:**
+  - `package.json`
+  - `docs/FIXES.md`
+- **Verified:** Full `npm test` passes all 372/372 tests (including 21/21 tests in `packages/rides-native/driverOnboardingClient.test.js`).
+
+## 2026-09-24 — Guard agreementPlainText against null inputs (task t2)
+
+- **Track / machine:** Clemson RIDES · worktree deputy-pkg-driver-onboarding-tests
+- **Problem:** `agreementPlainText` in `packages/rides-native/driverOnboardingClient.js` coerced falsy input directly with `String(html)`, causing `agreementPlainText(null)` to evaluate to `"null"` instead of returning an empty string.
+- **Fix:** Added a null/undefined guard (`if (html == null) return ''`) before processing string replacements in `agreementPlainText`. Updated test in `packages/rides-native/driverOnboardingClient.test.js` to assert `agreementPlainText(null) === ''`.
+- **Files touched:**
+  - `packages/rides-native/driverOnboardingClient.js`
+  - `packages/rides-native/driverOnboardingClient.test.js`
+  - `docs/FIXES.md`
+- **Verified:** `node --experimental-strip-types --test packages/rides-native/driverOnboardingClient.test.js` passes 21/21 tests; `npm test` passes 372/372.
+
+## 2026-09-24 — Add unit test coverage for driverOnboardingClient (task t1)
+
+- **Track / machine:** Clemson RIDES · worktree deputy-pkg-driver-onboarding-tests
+- **Problem:** `packages/rides-native/driverOnboardingClient.js` lacked dedicated unit test coverage for its exports, Supabase query chains, RPC handling, API fallbacks, schema-error degradation, and TIN confidentiality guarantee.
+- **Fix:** Created `packages/rides-native/driverOnboardingClient.test.js` covering every export without requiring a real device, Supabase instance, or network:
+  - Validated version constants and shared re-exports.
+  - Formatted agreement plain text from HTML, preserving headings/paragraphs and marking edge cases.
+  - Verified requireClient-style error checks on save paths and documented `fetch*` null-return behavior with `// BUG?:` annotations.
+  - Tested chained Supabase queries for applications, documents, tax profile, and contractor agreement, including schema cache error fallback paths.
+  - Validated `loadOnboarding` aggregation for empty vs fully-completed states.
+  - Verified `saveDriverTaxInfo` and `saveDriverW9` payload shapes to RPC/database, strictly asserting that raw TIN digits are never printed to console logs.
+  - Tested `signDriverAgreement` and `submitDriverReview` happy paths and auth-missing/API-unavailable direct fallback paths.
+  - Tested `uploadDriverDocument` validations, storage upload, document upsert, old file cleanup, and schema fallback.
+  - Tested `saveDriverInfo` quiz validations and API signup with direct save fallback.
+  - Added test suite to root `package.json` test script.
+- **Files touched:**
+  - `packages/rides-native/driverOnboardingClient.test.js`
+  - `package.json`
+  - `docs/FIXES.md`
+- **Verified:** 21/21 tests pass via `node --experimental-strip-types --test packages/rides-native/driverOnboardingClient.test.js`; full test suite passes 372/372.
 
 ## 2026-09-24 — Remove Clerk: Apple + Google social sign-in directly on Supabase Auth
 
