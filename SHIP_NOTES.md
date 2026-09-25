@@ -6,6 +6,7 @@
 - Trip complete/cancel that costs money goes through `POST /api/trip-settle`. `$0` proceeds. Otherwise status stays put and `metadata.payment_hold.status` is `payment_required`.
 - Driver payout failures stay `metadata.payout.status = pending` and retry with backoff (`POST /api/driver-payouts`, cron when `CRON_SECRET` is set).
 - Unpaid airport-deposit searching/offered/scheduled holds leave the pool 20 minutes after `created_at` or Checkout session bind (`metadata.stripe_checkout_created_at`, whichever is later). `GET /api/expire-unpaid-airport-holds` writes the same `trip_events` cancel and `checkout_abandoned` stamp as Checkout abandon, so a later paid deposit still restores the trip. Paid deposits, `deposit_cents = 0`, and non-airport trips are skipped. No new secret: reuse `CRON_SECRET` when it is set, otherwise Vercel’s `x-vercel-cron: 1` header. Hobby cron is daily, so add this on a plan that allows a 15-minute schedule: `{ "path": "/api/expire-unpaid-airport-holds", "schedule": "*/15 * * * *" }`.
+- Airport deposit reconciliation: Stripe webhook (`POST /api/stripe-webhook` handling `checkout.session.completed` / `async_payment_succeeded`) remains the primary path for recording paid deposits and restoring trips. On-demand reconciliation (`POST /api/stripe-payment-methods?action=reconcile-checkout` via `server/checkoutReconcile.js`) runs as a fallback when riders return from Stripe Checkout with a `session_id`, or if webhook delivery is delayed or misconfigured.
 
 ## Payments (FINAL LOCK)
 - SetupIntent save card (off_session)

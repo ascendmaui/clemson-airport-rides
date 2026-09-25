@@ -2,6 +2,20 @@
 
 Persistent knowledge base for recurring failures. When a matching issue appears, apply the saved fix first.
 
+## 2026-09-24 — Append checkout reconcile test files to test script and note fallback architecture
+
+- **Track / machine:** Clemson RIDES · worktree deputy-pkg-checkout-reconcile / branch deputy/checkout-reconcile
+- **Problem:** New checkout reconciliation test suites (`server/checkoutReconcile.test.js` and `packages/rides-native/checkoutReturn.test.js`) were not wired into `package.json`'s `test` script, and documentation needed to specify that the webhook is the primary path while reconciliation is an on-demand fallback.
+- **Root cause:** Test files added in t1 and t3 were not yet appended to the `test` script, and `SHIP_NOTES.md` had not recorded the webhook vs reconcile relationship.
+- **Fix:**
+  - Appended `server/checkoutReconcile.test.js` and `packages/rides-native/checkoutReturn.test.js` as the last entries of the `"test"` script in `package.json` (leaving all other script entries untouched).
+  - Added a note in `SHIP_NOTES.md` under Payments (failure handling) explaining that the Stripe webhook remains the primary path for recording deposits and restoring trips, and `action=reconcile-checkout` serves as the idempotent fallback.
+  - Verified full test suite passes with `npm test`.
+- **Files touched:**
+  - `package.json`
+  - `SHIP_NOTES.md`
+  - `docs/FIXES.md`
+
 ## 2026-09-24 — Trigger checkout reconciliation on return from Stripe Checkout (web & rider app)
 
 - **Track / machine:** Clemson RIDES · worktree deputy-pkg-checkout-reconcile / branch deputy/checkout-reconcile
