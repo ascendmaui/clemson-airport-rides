@@ -1,6 +1,21 @@
 # Build & blocker fixes log
 
 Persistent knowledge base for recurring failures. When a matching issue appears, apply the saved fix first.
+
+## 2026-09-24 — Integration bundle for PRs #72–#82
+
+- **Track / machine:** Deputy · pkg-integration-72-82 t1 · integration/approval-bundle
+- **What was wrong:** PRs #72, #73, #74, #77, #78, #79, #80, #81, and #82 needed to be merged into a single integration branch for review and approval. Several PRs conflicted on `docs/FIXES.md` and `package.json`.
+- **What changed:**
+  - Merged PR heads in exact sequence via `git merge --no-ff`: #72, #73, #74, #77, #78, #79, #80, #81, #82 (PRs #75 and #76 excluded as superseded by #77).
+  - Reconciled `package.json` test script to the union of main's test file list plus each PR's added test entries in merge order without duplicates, keeping all other scripts (such as `"typecheck"` from #73).
+  - Reconciled `docs/FIXES.md` preserving all entries across all PRs with zero dropped notes.
+  - Created `docs/INTEGRATION_BUNDLE.md` detailing merge order, head SHAs, conflict resolutions, and unapplied migrations (#78, #80, #82).
+- **Files touched:**
+  - `docs/INTEGRATION_BUNDLE.md`
+  - `docs/FIXES.md`
+  - `package.json`
+
 ## 2026-09-24 — Atomic hold claim & metadata merge design and migration requirement documented [t3]
 
 - **Track / machine:** Deputy · pkg-pro-hold-claim-atomic · deputy/hold-claim-atomic
