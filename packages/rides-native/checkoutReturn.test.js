@@ -217,7 +217,7 @@ test('parseCheckoutSessionId: returns null for non-strings without throwing', ()
 
 test('parseCheckoutReturn: production success, cancel, and no-trip hashes', () => {
   assert.deepEqual(
-    parseCheckoutReturn('https://clemson-airport-rides.vercel.app/#/requested?trip=trip_live_200&paid=1&session_id=cs_test_live_ret'),
+    parseCheckoutReturn('https://clemson-rides.vercel.app/#/requested?trip=trip_live_200&paid=1&session_id=cs_test_live_ret'),
     { sessionId: 'cs_test_live_ret', tripId: 'trip_live_200', paid: true, canceled: false, scheduled: false },
   )
   assert.deepEqual(
@@ -225,7 +225,7 @@ test('parseCheckoutReturn: production success, cancel, and no-trip hashes', () =
     { sessionId: 'cs_test_native456', tripId: 'trip_native_2', paid: true, canceled: false, scheduled: true },
   )
   assert.deepEqual(
-    parseCheckoutReturn('https://clemson-airport-rides.vercel.app/#/schedule?canceled=1&trip=trip_42'),
+    parseCheckoutReturn('https://clemson-rides.vercel.app/#/schedule?canceled=1&trip=trip_42'),
     { sessionId: null, tripId: 'trip_42', paid: false, canceled: true, scheduled: true },
   )
   assert.deepEqual(parseCheckoutReturn('#/schedule?paid=1'), {
