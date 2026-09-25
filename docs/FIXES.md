@@ -1200,3 +1200,12 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
   - `packages/rides-native/assistClient.test.js`
   - `docs/FIXES.md`
 
+## 2026-09-25 — one small safe robustness fix in assistClient.js (pkg-assist-client-r2 t2)
+- **Problem:** In `packages/rides-native/assistClient.js`, `supportTicketRequest` only inspected `data.error` when throwing on non-ok HTTP responses, ignoring `data.message` (unlike `parseAgentHttpResponse` in the same module which checks `data.error || data.message`). When an API or authentication error response contained `{ message: '...' }` (such as standard Supabase/PostgREST or HTTP gateway errors), `supportTicketRequest` dropped the specific error message and fell back to the generic `Request failed (${res.status})`.
+- **What was changed:** Updated `supportTicketRequest` in `packages/rides-native/assistClient.js` to check `data.error || data.message || `Request failed (${res.status})``, ensuring consistency with `parseAgentHttpResponse` and preserving descriptive error messages. Updated unit tests in `packages/rides-native/assistClient.test.js` to verify that `data.message` is used and that `data.error` takes precedence when both are present.
+- **Files touched:**
+  - `packages/rides-native/assistClient.js`
+  - `packages/rides-native/assistClient.test.js`
+  - `docs/FIXES.md`
+
+

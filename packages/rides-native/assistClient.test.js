@@ -755,8 +755,7 @@ test('supportTicketRequest: error response without data.error throws status code
   })
 })
 
-test('supportTicketRequest: error response with data.message ignores message and uses status fallback', async () => {
-  // BUG?: supportTicketRequest checks only data.error when !res.ok, ignoring data.message (unlike parseAgentHttpResponse which checks data.error || data.message).
+test('supportTicketRequest: error response with data.message uses message', async () => {
   await withFakeFetch(async () => {
     return fakeResponse({
       status: 401,
@@ -767,8 +766,27 @@ test('supportTicketRequest: error response with data.message ignores message and
     await assert.rejects(
       () => supportTicketRequest({ url: '/api/tickets/unauthorized' }),
       (err) => {
-        assert.equal(err.message, 'Request failed (401)')
+        assert.equal(err.message, 'Token has expired')
         assert.deepEqual(err.payload, { message: 'Token has expired' })
+        return true
+      },
+    )
+  })
+})
+
+test('supportTicketRequest: error response with both data.error and data.message prefers data.error', async () => {
+  await withFakeFetch(async () => {
+    return fakeResponse({
+      status: 400,
+      headers: { 'content-type': 'application/json' },
+      body: { error: 'Primary error description', message: 'Secondary message' },
+    })
+  }, async () => {
+    await assert.rejects(
+      () => supportTicketRequest({ url: '/api/tickets/bad-request' }),
+      (err) => {
+        assert.equal(err.message, 'Primary error description')
+        assert.deepEqual(err.payload, { error: 'Primary error description', message: 'Secondary message' })
         return true
       },
     )
