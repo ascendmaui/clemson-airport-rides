@@ -1,6 +1,16 @@
 # Build & blocker fixes log
 
 Persistent knowledge base for recurring failures. When a matching issue appears, apply the saved fix first.
+## 2026-09-25 — Wire offerCard unit tests into npm test [t3]
+
+- **Date:** 2026-09-25
+- **Track / machine:** Clemson RIDES DRIVER · worktree `deputy-pkg-driver-offer-card-polish`
+- **What was wrong:** `packages/rides-native/offerCard.test.js` was not listed in the `package.json` `test` script, so `npm test` did not execute the driver offer card view-model and accessibility test suite.
+- **What changed:** Appended `packages/rides-native/offerCard.test.js` as the last entry of the `test` script in `package.json`. No existing entries were altered.
+- **Files touched:**
+  - `package.json`
+  - `docs/FIXES.md`
+- **Verified:** `npm test` runs 803 tests across all suites (including 10/10 in `packages/rides-native/offerCard.test.js`) with 0 failures.
 
 ## 2026-09-25 — Refactor driver offer card UI with safe area insets and accessibility polish [t2]
 
