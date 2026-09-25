@@ -51,10 +51,14 @@ export function normalizeFavoriteDriverIds(raw) {
 
 export function driverApproach(driver, pickup) {
   const empty = { etaMin: null, distanceMi: null }
-  if (driver?.lat == null || driver?.lng == null || pickup?.lat == null || pickup?.lng == null) return empty
+  const driverLat = driver?.lat ?? driver?.latitude
+  const driverLng = driver?.lng ?? driver?.longitude
+  const pickupLat = pickup?.lat ?? pickup?.latitude
+  const pickupLng = pickup?.lng ?? pickup?.longitude
+  if (driverLat == null || driverLng == null || pickupLat == null || pickupLng == null) return empty
   const meters = haversineMeters(
-    { lat: Number(driver.lat), lng: Number(driver.lng) },
-    { lat: Number(pickup.lat), lng: Number(pickup.lng) },
+    { lat: Number(driverLat), lng: Number(driverLng) },
+    { lat: Number(pickupLat), lng: Number(pickupLng) },
   )
   if (meters == null || !Number.isFinite(meters)) return empty
   const miles = meters / 1609.344
@@ -345,16 +349,21 @@ export async function requestDriverTrip(supabase, {
   if (!riderId) throw new Error('Sign in required to request a driver')
   if (!driverId) throw new Error('Select a driver first')
 
+  const destLat = destPoint?.latitude ?? destPoint?.lat
+  const destLng = destPoint?.longitude ?? destPoint?.lng
+  const pickupLat = pickupPoint?.latitude ?? pickupPoint?.lat
+  const pickupLng = pickupPoint?.longitude ?? pickupPoint?.lng
+
   const data = await authedJson(supabase, '/api/stripe-payment-methods?action=request-driver', {
     method: 'POST',
     body: {
       driverId,
       dest,
-      destLat: destPoint?.latitude,
-      destLng: destPoint?.longitude,
+      destLat,
+      destLng,
       pickupLabel,
-      pickupLat: pickupPoint?.latitude,
-      pickupLng: pickupPoint?.longitude,
+      pickupLat,
+      pickupLng,
       tier: tier || 'standard',
     },
   })

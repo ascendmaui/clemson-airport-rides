@@ -2,6 +2,12 @@
 
 Persistent knowledge base for recurring failures. When a matching issue appears, apply the saved fix first.
 
+## 2026-09-24 — Run the drivers unit tests as the last npm test entry
+
+- **Track / machine:** Clemson RIDES · worktree deputy-pkg-drivers-tests
+- **Problem:** `packages/rides-native/drivers.test.js` sat in the middle of the root `test` script, ahead of later suites (live trip, marketing, ambassador, carpool settle). The drivers file has to be the last entry so `npm test` finishes on that suite.
+- **Fix:** Moved `packages/rides-native/drivers.test.js` to the final argument of the `test` script in `package.json`. The file still runs once.
+
 ## 2026-09-24 — Wire accountDeletion tests into npm test
 
 - **Track / machine:** Clemson RIDES · worktree deputy-pkg-account-deletion-tests
@@ -124,6 +130,16 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
 - **Files touched:**
   - `package.json`
   - `docs/FIXES.md`
+
+## 2026-09-24 — Support both { lat, lng } and { latitude, longitude } in driverApproach and requestDriverTrip
+
+- **Track / machine:** Clemson RIDES · worktree deputy-pkg-drivers-tests
+- **Problem:** `requestDriverTrip` expected `{ latitude, longitude }` on `destPoint` and `pickupPoint`, while `driverApproach` expected `{ lat, lng }`. Passing standard geolocation objects with `{ lat, lng }` into `requestDriverTrip` omitted coordinates from the backend payload (`destLat: undefined`, `pickupLat: undefined`), while passing place constants like `STADIUM` or `GSP` into `driverApproach` returned `{ etaMin: null, distanceMi: null }`.
+- **Root cause:** Coordinate format mismatch between `places.js` (`{ latitude, longitude }`) and coordinate math utilities (`{ lat, lng }`).
+- **Fix:** In `packages/rides-native/drivers.js`, normalized coordinates in both `driverApproach` and `requestDriverTrip` to fall back between `lat` / `latitude` and `lng` / `longitude`. Added unit tests in `packages/rides-native/drivers.test.js` validating both formats.
+- **Files touched:**
+  - `packages/rides-native/drivers.js`
+  - `packages/rides-native/drivers.test.js`
 
 ## 2026-09-24 — saveRegisteredVehicle threw unhandled TypeError on missing payload
 
