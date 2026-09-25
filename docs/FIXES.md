@@ -2,6 +2,15 @@
 
 Persistent knowledge base for recurring failures. When a matching issue appears, apply the saved fix first.
 
+## 2026-09-24 — Wire tripMessagesClient unit tests to package.json test script
+
+- **Track / machine:** Clemson RIDES · pkg-trip-messages-tests
+- **Problem:** `packages/rides-native/tripMessagesClient.js` unit tests in `packages/rides-native/tripMessagesClient.test.js` needed to be wired as the last entry of the `test` script in `package.json` so the entire test suite runs them on `npm test`.
+- **Fix:** Appended `packages/rides-native/tripMessagesClient.test.js` as the last test file in the `package.json` `test` command. Verified all 377 tests pass cleanly via `npm test`.
+- **Files touched:**
+  - `package.json`
+  - `docs/FIXES.md`
+
 ## 2026-09-24 — sendTripQuickReply validates phrase before checking supabase client
 
 - **Track / machine:** Clemson RIDES · pkg-trip-messages-tests
