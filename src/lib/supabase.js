@@ -1,4 +1,10 @@
-import { createClient } from '@supabase/supabase-js'
+let createClient = null
+try {
+  const mod = await import('@supabase/supabase-js')
+  createClient = mod.createClient
+} catch {
+  // Gracefully handle environments without @supabase/supabase-js
+}
 import { fetchOnlineDrivers as fetchSharedOnlineDrivers } from '../../packages/rides-native/drivers.js'
 
 const env = import.meta.env || {}

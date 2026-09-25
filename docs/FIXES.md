@@ -228,3 +228,36 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
   - `apps/rider/lib/apiAuth.ts`
   - `docs/FIXES.md`
 
+## 2026-09-24 — Web authed fetch session refresh & friendly payment error handling (t3)
+- **Problem:** On web (src/), when the server's payment config was broken (e.g. STRIPE_SECRET_KEY / SUPABASE_SERVICE_ROLE_KEY missing, returning 503 or 500), riders could see raw config text ('STRIPE_SECRET_KEY is not configured.' / 'SUPABASE_SERVICE_ROLE_KEY not configured') or a hardcoded 'sign in required'. Stale/expired auth tokens on 401 caused failures without attempting to refresh the session first.
+- **What was wrong:** Fetch helpers in `src/lib/payments.js`, `src/lib/stripeCheckout.js`, `src/lib/billingApi.js`, `src/lib/friendRides.js`, `src/lib/tripWaitApi.js`, and `src/lib/midrideCancel.js` threw raw server response errors or hardcoded strings without sanitizing via `friendlyApiError`, and on 401 responses they did not call `supabase.auth.refreshSession()` before failing.
+- **What was changed:**
+  - Added `src/lib/apiErrors.js` (re-exporting `friendlyApiError` and constants from `packages/rides-native/apiErrors.js`) and unit tests in `src/lib/apiErrors.test.js`.
+  - Added `src/lib/apiClient.js` exporting `authedJson` (with `authedFetch` alias):
+    - Automatically attaches Supabase session Bearer token from `supabase.auth.getSession()`.
+    - On 401 status, calls `supabase.auth.refreshSession()` once and retries the request once if a refreshed token is returned.
+    - On 503 / config errors, formats error messages using `friendlyApiError` so riders see "Payments are temporarily unavailable, please try again shortly" without leaking secrets/env vars.
+    - Sets `.unavailable = true` on 503/unavailable and `.auth = true` on 401/auth errors.
+  - Updated `src/lib/payments.js` `api()` to delegate to `authedJson`.
+  - Updated `src/lib/billingApi.js` `api()` to delegate to `authedJson`.
+  - Updated `src/lib/stripeCheckout.js` `createCheckoutSession` and `abandonCheckoutSession` to delegate to `authedJson` and sanitize 503 stubs/failures.
+  - Updated `src/lib/friendRides.js`, `src/lib/tripWaitApi.js`, and `src/lib/midrideCancel.js` to route requests through `authedJson`.
+  - Updated `src/screens/ScheduleAirport.jsx` to fall back to `UNAVAILABLE_COPY` and ensure error.message is shown.
+  - Added unit test suites `src/lib/apiClient.test.js` and `src/lib/webPayments.test.js` verifying 401 refresh retries and 503 friendly error copy.
+- **Files touched:**
+  - `src/lib/apiErrors.js`
+  - `src/lib/apiErrors.test.js`
+  - `src/lib/apiClient.js`
+  - `src/lib/apiClient.test.js`
+  - `src/lib/payments.js`
+  - `src/lib/billingApi.js`
+  - `src/lib/stripeCheckout.js`
+  - `src/lib/friendRides.js`
+  - `src/lib/tripWaitApi.js`
+  - `src/lib/midrideCancel.js`
+  - `src/lib/supabase.js`
+  - `src/screens/ScheduleAirport.jsx`
+  - `src/lib/webPayments.test.js`
+  - `docs/FIXES.md`
+
+

@@ -1,40 +1,14 @@
-import { supabase } from './supabase'
-import { formatUsdFromCents } from './pricing'
+import { supabase } from './supabase.js'
+import { authedJson } from './apiClient.js'
+import { formatUsdFromCents } from './pricing.js'
 
-async function authHeaders() {
-  const headers = { 'Content-Type': 'application/json' }
-  if (!supabase) return headers
-  const { data } = await supabase.auth.getSession()
-  const token = data?.session?.access_token
-  if (token) headers.Authorization = `Bearer ${token}`
-  return headers
-}
-
-export async function requestMidrideCancel({ tripId, confirm = false }) {
-  const headers = await authHeaders()
-  let res
-  try {
-    res = await fetch('/api/driver?action=cancel-midride', {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({ tripId, confirm }),
-    })
-  } catch (err) {
-    throw new Error(err?.message || 'Network error')
-  }
-  let data = null
-  try {
-    data = await res.json()
-  } catch {
-    throw new Error(`Mid-ride cancel failed (HTTP ${res.status})`)
-  }
-  if (!res.ok) {
-    const err = new Error(data?.error || data?.message || `HTTP ${res.status}`)
-    err.status = res.status
-    err.payload = data
-    throw err
-  }
-  return data
+export async function requestMidrideCancel({ tripId, confirm = false }, options = {}) {
+  return authedJson(supabase, '/api/driver?action=cancel-midride', {
+    method: 'POST',
+    body: { tripId, confirm },
+    fetch: options?.fetch,
+    headers: options?.headers,
+  })
 }
 
 export function formatMidrideMoney(cents) {

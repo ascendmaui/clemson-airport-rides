@@ -9,7 +9,8 @@ import {
   getStripeConfig,
 } from '../lib/stripeCheckout'
 import { formatUsdFromCents, applyStudentDiscount } from '../lib/pricing'
-import { checkoutCloseOutcome, depositSurfaceCopy, STRIPE_NOT_CONFIGURED_COPY } from '../../packages/rides-native/riderMoney.js'
+import { checkoutCloseOutcome, depositSurfaceCopy } from '../../packages/rides-native/riderMoney.js'
+import { UNAVAILABLE_COPY } from '../lib/apiErrors.js'
 import { useAuth } from '../lib/auth'
 import { getHashRoute, navigate } from '../lib/navigation'
 import { supabase } from '../lib/supabase'
@@ -114,7 +115,7 @@ export function ScheduleAirport() {
       }
       setError('Checkout did not return a payment URL. No charge was made.')
     } catch (err) {
-      setError(err.message || STRIPE_NOT_CONFIGURED_COPY)
+      setError(err.message || UNAVAILABLE_COPY)
     } finally {
       setBusy(false)
     }
