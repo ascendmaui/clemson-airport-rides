@@ -15,6 +15,11 @@ import {
   markSignupRateLimited,
   normalizePromoCode,
 } from './authErrors.js'
+import {
+  GOOGLE_SIGN_IN_COMING_SOON,
+  googleAuthButtonState,
+  mapGoogleAuthError,
+} from './googleAuthConfig.js'
 import { DANGER, INK, INK_SECONDARY, ORANGE, PURPLE, SURFACE } from './places.js'
 import { SIGNUP_PROFILE_DRAFT_KEY, isProfileComplete, profileFieldError } from './partyProfile.js'
 import { RideStyleChips } from './PartyScreens.jsx'
@@ -51,10 +56,21 @@ function AuthShell({ title, subtitle, mark, onBack, children }) {
 
 function SocialButtons({ providers, busyId, disabled, onPress }) {
   if (!providers?.length) return null
+  const visible = providers.filter((p) => !p.hidden)
+  if (!visible.length) return null
+
   return (
     <View style={styles.socialBlock}>
-      {providers.map((provider) => {
+      {visible.map((provider) => {
+        const isProviderDisabled = Boolean(disabled || busyId || provider.disabled)
         const pending = busyId === provider.id
+        const honestCopy = provider.message || (provider.disabled ? GOOGLE_SIGN_IN_COMING_SOON : null)
+        const labelText = pending
+          ? 'Opening…'
+          : provider.disabled
+          ? (provider.disabledLabel || `Continue with ${provider.label} (coming soon)`)
+          : `Continue with ${provider.label}`
+
         return (
           <Pressable
             key={provider.id}
@@ -67,6 +83,32 @@ function SocialButtons({ providers, busyId, disabled, onPress }) {
           >
             <Text style={styles.socialLabel}>{pending ? 'Opening…' : `Continue with ${provider.label}`}</Text>
           </Pressable>
+          <View key={provider.id} style={styles.socialItem}>
+            <Pressable
+              onPress={() => onPress(provider)}
+              disabled={isProviderDisabled}
+              style={[
+                styles.social,
+                isProviderDisabled && styles.disabled,
+                provider.disabled && styles.socialDisabled,
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel={provider.disabled && honestCopy ? `${provider.label}: ${honestCopy}` : `Continue with ${provider.label}`}
+              accessibilityState={{ disabled: isProviderDisabled }}
+            >
+              <Text
+                style={[
+                  styles.socialLabel,
+                  provider.disabled && styles.socialLabelDisabled,
+                ]}
+              >
+                {labelText}
+              </Text>
+            </Pressable>
+            {provider.disabled && honestCopy ? (
+              <Text style={styles.socialHint}>{honestCopy}</Text>
+            ) : null}
+          </View>
         )
       })}
       <Text style={styles.or}>or use email</Text>
@@ -124,8 +166,22 @@ export function SignInScreen({
     }
   }
 
+  const effectiveProviders = (socialProviders || []).map((provider) => {
+    if (provider.id === 'google' && provider.disabled === undefined) {
+      const gState = googleAuthButtonState()
+      return {
+        ...provider,
+        disabled: gState.disabled,
+        hidden: gState.hidden,
+        message: gState.message,
+        disabledLabel: `Continue with ${provider.label} (coming soon)`,
+      }
+    }
+    return provider
+  })
+
   async function onSocialPress(provider) {
-    if (!onSocial || busy || socialId) return
+    if (!onSocial || busy || socialId || provider?.disabled) return
     setError(null)
     setInfo(null)
     setSocialId(provider.id)
@@ -134,7 +190,8 @@ export function SignInScreen({
       if (result?.cancelled) return
       onSuccess?.()
     } catch (err) {
-      setError(err?.message || 'Social sign-in failed')
+      const mapped = provider.id === 'google' ? mapGoogleAuthError(err) : err
+      setError(mapped?.message || 'Social sign-in failed')
     } finally {
       setSocialId(null)
     }
@@ -158,7 +215,7 @@ export function SignInScreen({
   return (
     <AuthShell title="Welcome back" subtitle={subtitle} mark={mark} onBack={onBack}>
       <SocialButtons
-        providers={socialProviders}
+        providers={effectiveProviders}
         busyId={socialId}
         disabled={busy || resetBusy}
         onPress={onSocialPress}
@@ -344,10 +401,22 @@ export function SignUpScreen({
     }
   }
 
-  const blocked = busy || cooldownSec > 0
+  const effectiveProviders = (socialProviders || []).map((provider) => {
+    if (provider.id === 'google' && provider.disabled === undefined) {
+      const gState = googleAuthButtonState()
+      return {
+        ...provider,
+        disabled: gState.disabled,
+        hidden: gState.hidden,
+        message: gState.message,
+        disabledLabel: `Continue with ${provider.label} (coming soon)`,
+      }
+    }
+    return provider
+  })
 
   async function onSocialPress(provider) {
-    if (!onSocial || blocked || socialId || created) return
+    if (!onSocial || blocked || socialId || created || provider?.disabled) return
     setError(null)
     setInfo(null)
     setSocialId(provider.id)
@@ -369,7 +438,8 @@ export function SignUpScreen({
       if (result?.cancelled) return
       onSuccess?.()
     } catch (err) {
-      setError(err?.message || 'Social sign-in failed')
+      const mapped = provider.id === 'google' ? mapGoogleAuthError(err) : err
+      setError(mapped?.message || 'Social sign-in failed')
     } finally {
       setSocialId(null)
     }
@@ -383,7 +453,7 @@ export function SignUpScreen({
   return (
     <AuthShell title="Join Clemson RIDES" subtitle={subtitle} mark={mark} onBack={onBack}>
       <SocialButtons
-        providers={socialProviders}
+        providers={effectiveProviders}
         busyId={socialId}
         disabled={blocked || created}
         onPress={onSocialPress}
@@ -751,6 +821,7 @@ const styles = StyleSheet.create({
     color: INK,
   },
   socialBlock: { marginBottom: 8 },
+  socialItem: { marginBottom: 10 },
   social: {
     borderWidth: 1,
     borderColor: 'rgba(82,45,128,0.22)',
@@ -758,9 +829,23 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     paddingVertical: 14,
     alignItems: 'center',
-    marginBottom: 10,
+  },
+  socialDisabled: {
+    backgroundColor: 'rgba(255,255,255,0.7)',
+    borderColor: 'rgba(139,147,158,0.25)',
   },
   socialLabel: { color: PURPLE, fontWeight: '700', fontSize: 15 },
+  socialLabelDisabled: {
+    color: '#8B939E',
+    fontWeight: '600',
+  },
+  socialHint: {
+    color: INK_SECONDARY,
+    fontSize: 12,
+    textAlign: 'center',
+    marginTop: 4,
+    lineHeight: 16,
+  },
   or: { textAlign: 'center', color: INK_SECONDARY, fontSize: 13, marginTop: 4, marginBottom: 16 },
   forgot: { color: PURPLE, fontWeight: '700', fontSize: 13, marginBottom: 14 },
   promoNote: { color: PURPLE, fontSize: 12, lineHeight: 17, marginBottom: 14 },

@@ -178,6 +178,61 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
   - `tests/a11yDriver.test.js`
   - `docs/FIXES.md`
 
+## 2026-09-25 — Google sign-in setup documentation and test wiring [t3]
+
+- **Track / machine:** Clemson RIDES · deputy/google-signin-prep · pkg-google-signin-prep t3
+- **Problem:** `packages/rides-native/googleAuthConfig.test.js` was created in t1 and extended in t2 to validate Google OAuth readiness gating and error mapping, but was not wired into root `package.json`'s `test` script. Furthermore, enabling Google Sign-In requires external setup in Google Cloud Console and Supabase Auth that cannot be automated in code and was previously undocumented.
+- **Fix:**
+  - Created `docs/google-signin-setup.md` detailing the complete manual setup steps for John: Google Cloud Console OAuth consent screen and client IDs (Web client with Supabase callback URL `https://awktabuhijrshmsmagpq.supabase.co/auth/v1/callback` and production web origin `https://clemson-rides.vercel.app`, iOS clients for `com.ascendmaui.clemsonrides.rider` and `com.ascendmaui.clemsonrides.driver`, and Android clients), Supabase Auth provider toggle and redirect allowlist (`clemsonrides://**`, `clemsonrides-driver://**`, `https://clemson-rides.vercel.app/**`), and environment variable placement table for EAS build profiles (`EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID`, `EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID`), local `.env` files, and the Supabase Dashboard secret.
+  - Appended `packages/rides-native/googleAuthConfig.test.js` to the `test` script in root `package.json`.
+- **Files touched:**
+  - `docs/google-signin-setup.md`
+  - `package.json`
+  - `docs/FIXES.md`
+- **Verified:** `npm test` (822/822 passing, including all 29 tests in `googleAuthConfig.test.js`), `node --test tests/no*.test.js` (clean), `npm run typecheck` (clean).
+
+## 2026-09-25 — Gate Google button on config readiness in sign-in screens [t2]
+
+- **Track / machine:** Clemson RIDES · deputy/google-signin-prep · pkg-google-signin-prep t2
+- **Problem:** Native rider and driver sign-in screens showed an active Google button even when Google OAuth client IDs (`EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID` and `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID`) were unconfigured, leading to runtime failures upon tapping. Additionally, raw errors from `googleAuth` could leak internal developer details (such as EAS build flags or Supabase redirect allowlists) to users instead of friendly messages, and `.env.example` templates were missing placeholder names for the client IDs.
+- **Fix:**
+  - Gated the Google button in `apps/rider/app/sign-in.tsx`, `apps/rider/app/sign-up.tsx`, `apps/driver/app/sign-in.tsx`, and `apps/driver/app/sign-up.tsx` using `googleAuthButtonState` / `googleAuthConfig`: active only when configured, otherwise disabled with honest copy ("Google sign-in is coming soon").
+  - Updated `packages/rides-native/AuthScreens.jsx` `SocialButtons` and `SignInScreen` / `SignUpScreen` to support disabled social providers with the honest copy and hint styling, blocking tap actions and mapping errors.
+  - Implemented `mapGoogleAuthError`, `googleAuthErrorMessage`, and `resolveSocialProviders` in `packages/rides-native/googleAuthConfig.js` (and `.d.ts`) to map unconfigured provider, missing Supabase config, session/redirect issues, rate limits, existing accounts, and user cancellations to friendly user-facing messages without leaking internal traces or env names.
+  - Caught and mapped Google errors in `apps/rider/lib/socialSignIn.ts` and `apps/driver/lib/socialSignIn.ts`.
+  - Added empty placeholder keys `EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID=` and `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID=` with comments in `.env.example`, `apps/rider/.env.example`, and `apps/driver/.env.example`.
+  - Added unit tests in `packages/rides-native/googleAuthConfig.test.js`.
+- **Files touched:**
+  - `packages/rides-native/googleAuthConfig.js`
+  - `packages/rides-native/googleAuthConfig.d.ts`
+  - `packages/rides-native/googleAuthConfig.test.js`
+  - `packages/rides-native/AuthScreens.jsx`
+  - `packages/rides-native/AuthScreens.d.ts`
+  - `packages/rides-native/socialAuth.d.ts`
+  - `apps/rider/app/sign-in.tsx`
+  - `apps/rider/app/sign-up.tsx`
+  - `apps/rider/lib/socialSignIn.ts`
+  - `apps/driver/app/sign-in.tsx`
+  - `apps/driver/app/sign-up.tsx`
+  - `apps/driver/lib/socialSignIn.ts`
+  - `.env.example`
+  - `apps/rider/.env.example`
+  - `apps/driver/.env.example`
+  - `docs/FIXES.md`
+- **Verified:** `node --experimental-strip-types --test packages/rides-native/googleAuthConfig.test.js` (29/29 passing), `npm run typecheck` (clean), `npm test` (793/793 passing).
+
+## 2026-09-25 — Add googleAuthConfig readiness helper and tests [t1]
+
+- **Track / machine:** Clemson RIDES · deputy/google-signin-prep · pkg-google-signin-prep t1
+- **Problem:** Native rider and driver apps lacked a readiness helper to detect whether public Google OAuth client IDs (`EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID` and `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID`) are configured before initiating OAuth. Without this, the UI cannot distinguish unconfigured Google Sign-In from a runtime error, risking tap-time failures instead of honestly informing users with "Google sign-in is coming soon".
+- **Fix:** Added `packages/rides-native/googleAuthConfig.js` (and `.d.ts`), exporting `googleAuthConfig` / `getGoogleAuthConfig` returning `{ enabled, missing: [...], redirectUri }`, along with `isGoogleAuthEnabled`, `googleAuthStatusMessage`, `googleAuthButtonState`, and constants. Trims env values, handles aliases, and generates app-specific redirect URIs based on app schemes. Added comprehensive unit tests in `packages/rides-native/googleAuthConfig.test.js` using isolated fake env objects.
+- **Files touched:**
+  - `packages/rides-native/googleAuthConfig.js`
+  - `packages/rides-native/googleAuthConfig.d.ts`
+  - `packages/rides-native/googleAuthConfig.test.js`
+  - `docs/FIXES.md`
+- **Verified:** `node --experimental-strip-types --test packages/rides-native/googleAuthConfig.test.js` (22/22 passing).
+
 ## 2026-09-25 — merge_trip_metadata trip_status enum cast applied (#100)
 
 - **Problem:** `public.merge_trip_metadata` (#80) failed on every call with `operator does not exist: trip_status = text`, which broke the airport-checkout session bind, abandon-checkout release and the unpaid-hold expiry cancel.

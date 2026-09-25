@@ -9,6 +9,11 @@ type Storage = {
 export type SocialProvider = {
   id: 'apple' | 'google'
   label: string
+  enabled?: boolean
+  disabled?: boolean
+  hidden?: boolean
+  message?: string | null
+  disabledLabel?: string
 }
 
 export function SignInScreen(props: {
