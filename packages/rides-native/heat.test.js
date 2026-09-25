@@ -430,12 +430,9 @@ test('weekday morning preview anchors on Wednesday at 08:30', () => {
   assert.notEqual(sameMorning, already)
 })
 
-test('saturday weekday morning preview lands on Monday', () => {
-  // BUG?: Saturday (getDay() === 6) uses delta -5, so 2026-09-26 previews
-  // Monday 2026-09-21 08:30 (getDay() === 1). Every other day anchors on
-  // Wednesday (`day === 0 ? -4 : 3 - day`). Expected: Wednesday 2026-09-23 08:30,
-  // delta -3. Hour 8 on Monday and Wednesday currently share the same curve
-  // outputs, so the map intensity matches; the calendar date does not.
+test('saturday weekday morning preview lands on Wednesday', () => {
+  // Saturday uses the same Wednesday 08:30 anchor as the other non-Sunday days
+  // (delta 3 - 6 = -3). 2026-09-26 previews Wednesday 2026-09-23 08:30.
   const now = at(2026, 9, 26, 19, 40, 1, 2)
   const stamp = now.getTime()
   const preview = previewDate('weekday_am', now)
@@ -443,17 +440,22 @@ test('saturday weekday morning preview lands on Monday', () => {
   assert.equal(now.getTime(), stamp)
   assert.equal(preview.getFullYear(), 2026)
   assert.equal(preview.getMonth() + 1, 9)
-  assert.equal(preview.getDate(), 21)
-  assert.equal(preview.getDay(), 1)
+  assert.equal(preview.getDate(), 23)
+  assert.equal(preview.getDay(), 3)
   assert.equal(preview.getHours(), 8)
   assert.equal(preview.getMinutes(), 30)
   assert.equal(preview.getSeconds(), 0)
   assert.equal(preview.getMilliseconds(), 0)
 
   const snap = downtownNow(preview)
-  assert.equal(snap.day, 1)
+  assert.equal(snap.day, 3)
   assert.equal(snap.hour, 8)
   assert.equal(snap.label, 'Quiet')
+  const wednesdayMorning = typicalSpots(at(2026, 9, 23, 8, 30))
+  assert.deepEqual(
+    typicalSpots(preview).map((spot) => spot.intensity),
+    wednesdayMorning.map((spot) => spot.intensity),
+  )
 })
 
 test('friday night preview is Friday at 22:00, including across the new year', () => {
