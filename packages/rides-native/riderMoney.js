@@ -370,6 +370,16 @@ export async function abandonAirportCheckout(supabase, { tripId, sessionId } = {
   })
 }
 
+export async function reconcileCheckout(supabase, sessionId) {
+  const id = typeof sessionId === 'object' ? (sessionId?.sessionId || sessionId?.session_id) : sessionId
+  const clean = typeof id === 'string' ? id.trim() : ''
+  if (!clean) throw new Error('Missing sessionId')
+  return authedJson(supabase, '/api/stripe-payment-methods?action=reconcile-checkout', {
+    method: 'POST',
+    body: { sessionId: clean },
+  })
+}
+
 export function promoClaimMessage(result) {
   if (!result || typeof result !== 'object') return 'Promo claim did not return a result.'
   if (result.error) return String(result.error)

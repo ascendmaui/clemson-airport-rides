@@ -13,6 +13,8 @@ import { clearAmbassadorCode, loadAmbassadorCode, saveAmbassadorCode } from '@/l
 import { supabase } from '@/lib/supabase'
 import { ambassadorCodeFromLocation } from 'rides-native/shared/ambassadorAttribution.js'
 import { claimAmbassadorAttribution } from 'rides-native/shared/carpoolApi.js'
+import { parseCheckoutReturn } from 'rides-native/checkoutReturn.js'
+import { reconcileCheckout } from 'rides-native/riderMoney.js'
 import { ProfileRequiredGate } from 'rides-native/PartyScreens'
 import { setCarpoolApiBase } from 'rides-native/shared/carpoolApi.js'
 
@@ -86,6 +88,35 @@ function AmbassadorClaim() {
   return null
 }
 
+function CheckoutDeepLink() {
+  const router = useRouter()
+  useEffect(() => {
+    const handled = new Set<string>()
+    function handleUrl(url: string | null) {
+      if (!url) return
+      const ret = parseCheckoutReturn(url)
+      if (!ret.sessionId || handled.has(ret.sessionId)) return
+      handled.add(ret.sessionId)
+      if (supabase) {
+        reconcileCheckout(supabase, ret.sessionId).catch((err) => {
+          console.warn('[checkout-reconcile] deep link reconcile error:', err)
+        })
+      }
+      if (ret.tripId && ret.paid) {
+        if (ret.scheduled) {
+          router.push({ pathname: '/schedule', params: { trip: ret.tripId, paid: '1' } })
+        } else {
+          router.push({ pathname: '/requested', params: { trip: ret.tripId, paid: '1' } })
+        }
+      }
+    }
+    Linking.getInitialURL().then(handleUrl).catch(() => {})
+    const sub = Linking.addEventListener('url', (event) => handleUrl(event.url))
+    return () => sub.remove()
+  }, [router])
+  return null
+}
+
 export default function RootLayout() {
   return (
     <ThemeProvider>
@@ -93,6 +124,7 @@ export default function RootLayout() {
         <PasswordRecoveryListener />
         <AmbassadorDeepLink />
         <AmbassadorClaim />
+        <CheckoutDeepLink />
         <Gate>
           <ThemedStack />
           <ApproachHost />

@@ -2,6 +2,35 @@
 
 Persistent knowledge base for recurring failures. When a matching issue appears, apply the saved fix first.
 
+## 2026-09-24 — Trigger checkout reconciliation on return from Stripe Checkout (web & rider app)
+
+- **Track / machine:** Clemson RIDES · worktree deputy-pkg-checkout-reconcile / branch deputy/checkout-reconcile
+- **Problem:** When a rider completed payment on Stripe Checkout and returned to either the web application or rider app, the airport deposit would not be recognized if the webhook was delayed or misconfigured, and the rider app could prematurely abandon/cancel the ride as unpaid.
+- **Root cause:** Neither client called `/api/stripe-payment-methods?action=reconcile-checkout` upon returning from Checkout; the web app only polled Supabase for trip status updates, and the rider app assumed the deposit was unsettled if webhook had not written to the DB by the time WebBrowser closed.
+- **Fix:**
+  - Implemented `packages/rides-native/checkoutReturn.js` (`parseCheckoutSessionId`, `parseCheckoutReturn`) and `packages/rides-native/checkoutReturn.d.ts` to parse `session_id` from web hashes, full URLs, and native deep links.
+  - Added unit test suite in `packages/rides-native/checkoutReturn.test.js` verifying URL, hash, and deep link parsing along with session ID validation.
+  - Added `reconcileCheckout(supabase, sessionId)` to `packages/rides-native/riderMoney.js` using `authedJson`, calling `/api/stripe-payment-methods?action=reconcile-checkout`.
+  - Added `reconcileCheckoutSession({ sessionId })` to `src/lib/stripeCheckout.js`.
+  - In `src/screens/ScheduleAirport.jsx` and `src/screens/Requested.jsx`, read `session_id` on return from checkout and trigger fire-and-forget reconciliation once (errors logged, never blocking the UI), refreshing trip data upon completion. Updated `src/App.jsx` to pass `sessionId` to `Requested`.
+  - In `apps/rider/app/schedule.tsx`, invoke `reconcileCheckout(supabase, sessionId)` upon WebBrowser closing before checking deposit status, preventing premature cancellation if the webhook hasn't arrived.
+  - In `apps/rider/app/_layout.tsx`, added `CheckoutDeepLink` listener to capture incoming deep links with `session_id` and reconcile checkout once fire-and-forget.
+  - In `apps/rider/app/requested.tsx`, trigger `reconcileCheckout` if navigated to with `session_id`.
+- **Files touched:**
+  - `packages/rides-native/checkoutReturn.js`
+  - `packages/rides-native/checkoutReturn.d.ts`
+  - `packages/rides-native/checkoutReturn.test.js`
+  - `packages/rides-native/riderMoney.js`
+  - `packages/rides-native/riderMoney.d.ts`
+  - `src/lib/stripeCheckout.js`
+  - `src/screens/ScheduleAirport.jsx`
+  - `src/screens/Requested.jsx`
+  - `src/App.jsx`
+  - `apps/rider/app/schedule.tsx`
+  - `apps/rider/app/_layout.tsx`
+  - `apps/rider/app/requested.tsx`
+  - `docs/FIXES.md`
+
 ## 2026-09-24 — Add action=reconcile-checkout endpoint and carry session_id on success_url
 
 - **Track / machine:** Clemson RIDES · worktree deputy-pkg-checkout-reconcile / branch deputy/checkout-reconcile

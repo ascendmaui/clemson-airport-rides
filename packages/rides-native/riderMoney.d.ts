@@ -37,6 +37,11 @@ export function abandonAirportCheckout(
   input?: { tripId?: string; sessionId?: string },
 ): Promise<CheckoutCloseResult>
 
+export function reconcileCheckout(
+  supabase: unknown,
+  sessionId: string | { sessionId?: string; session_id?: string },
+): Promise<{ ok: boolean; paid?: boolean; alreadyRecorded?: boolean; tripId?: string; error?: string }>
+
 export function quoteInputKey(input?: { airport?: string; date?: string; time?: string }): string
 
 export function quoteAirportFare(

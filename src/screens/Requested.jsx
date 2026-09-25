@@ -18,8 +18,10 @@ import { PARTY_VISIBLE_STATUSES } from '../../packages/rides-native/partyProfile
 import { etaHoldLine, etaLineFor, orderedLiveStops, riderLiveView, SEARCH_PREVIEW_COPY, showSearchTheater } from '../../packages/rides-native/liveTrip.js'
 import { decodePolyline } from '../lib/friendRides.js'
 import { LivePhase } from '../components/LivePhase'
+import { reconcileCheckoutSession } from '../lib/stripeCheckout'
+import { parseCheckoutSessionId } from '../../packages/rides-native/checkoutReturn.js'
 
-export function Requested({ dest = 'GSP Airport', trip = '', driver = 'your driver', driverId = '', paid = '' }) {
+export function Requested({ dest = 'GSP Airport', trip = '', driver = 'your driver', driverId = '', paid = '', sessionId = '' }) {
   const { user } = useAuth()
   const [share, setShare] = useState(null)
   const [busy, setBusy] = useState(false)
@@ -33,6 +35,7 @@ export function Requested({ dest = 'GSP Airport', trip = '', driver = 'your driv
   const [cancelOpen, setCancelOpen] = useState(false)
   const stopRef = useRef(null)
   const ratedCheck = useRef(false)
+  const reconciledSessions = useRef(new Set())
 
   useEffect(() => () => { stopRef.current?.() }, [])
 
@@ -92,6 +95,19 @@ export function Requested({ dest = 'GSP Airport', trip = '', driver = 'your driv
       }
     }
     load()
+
+    const sid = sessionId || (typeof window !== 'undefined' ? parseCheckoutSessionId(window.location.hash || window.location.href) : '')
+    if (sid && (paid === '1' || paid === 'true') && !reconciledSessions.current.has(sid)) {
+      reconciledSessions.current.add(sid)
+      reconcileCheckoutSession({ sessionId: sid })
+        .then(() => {
+          if (alive) void load()
+        })
+        .catch((err) => {
+          console.error('[checkout-reconcile] failed to reconcile checkout:', err)
+        })
+    }
+
     const channel = supabase
       .channel(`requested-trip-${trip}`)
       .on(
@@ -106,7 +122,7 @@ export function Requested({ dest = 'GSP Airport', trip = '', driver = 'your driv
       clearInterval(timer)
       supabase.removeChannel(channel)
     }
-  }, [trip, user?.id])
+  }, [trip, user?.id, paid, sessionId])
 
   useEffect(() => {
     if (!resolvedDriverId) return undefined

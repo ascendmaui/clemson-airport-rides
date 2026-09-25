@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { PrimaryButton } from '../components/PrimaryButton'
 import { BottomTabs } from '../components/BottomTabs'
 import {
@@ -7,7 +7,9 @@ import {
   depositCents,
   createCheckoutSession,
   getStripeConfig,
+  reconcileCheckoutSession,
 } from '../lib/stripeCheckout'
+import { parseCheckoutSessionId } from '../../packages/rides-native/checkoutReturn.js'
 import { formatUsdFromCents, applyStudentDiscount } from '../lib/pricing'
 import { checkoutCloseOutcome, depositSurfaceCopy, STRIPE_NOT_CONFIGURED_COPY } from '../../packages/rides-native/riderMoney.js'
 import { useAuth } from '../lib/auth'
@@ -29,28 +31,45 @@ export function ScheduleAirport() {
   const [error, setError] = useState(null)
   const [bookedNote, setBookedNote] = useState(null)
   const returnFlags = useMemo(() => getHashRoute().params, [])
+  const reconciledSessions = useRef(new Set())
 
   useEffect(() => {
     const tripId = returnFlags.trip
     if (!tripId || !supabase) return undefined
     if (returnFlags.paid !== '1') return undefined
     let alive = true
-    supabase
-      .from('trips')
-      .select('id, status, dropoff_label')
-      .eq('id', tripId)
-      .maybeSingle()
-      .then(({ data }) => {
-        if (!alive || !data) return
-        if (data.status === 'scheduled') return
-        if (['searching', 'offered', 'accepted', 'arriving', 'arrived', 'in_progress'].includes(data.status)) {
-          navigate('requested', { trip: data.id, dest: data.dropoff_label || '', paid: '1' })
-        }
-      })
+
+    async function checkTrip() {
+      const { data } = await supabase
+        .from('trips')
+        .select('id, status, dropoff_label')
+        .eq('id', tripId)
+        .maybeSingle()
+      if (!alive || !data) return
+      if (data.status === 'scheduled') return
+      if (['searching', 'offered', 'accepted', 'arriving', 'arrived', 'in_progress'].includes(data.status)) {
+        navigate('requested', { trip: data.id, dest: data.dropoff_label || '', paid: '1' })
+      }
+    }
+
+    void checkTrip()
+
+    const sessionId = returnFlags.session_id || returnFlags.sessionId || parseCheckoutSessionId(typeof window !== 'undefined' ? (window.location.hash || window.location.href) : '')
+    if (sessionId && !reconciledSessions.current.has(sessionId)) {
+      reconciledSessions.current.add(sessionId)
+      reconcileCheckoutSession({ sessionId })
+        .then(() => {
+          if (alive) void checkTrip()
+        })
+        .catch((err) => {
+          console.error('[checkout-reconcile] failed to reconcile checkout:', err)
+        })
+    }
+
     return () => {
       alive = false
     }
-  }, [returnFlags.paid, returnFlags.trip])
+  }, [returnFlags.paid, returnFlags.trip, returnFlags.session_id, returnFlags.sessionId])
 
   useEffect(() => {
     const tripId = returnFlags.trip
