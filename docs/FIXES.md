@@ -44,6 +44,16 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
   - `docs/FIXES.md`
 - **Verified:** `node --experimental-strip-types --test packages/rides-native/offerCard.test.js` (9/9 pass, 0 fail).
 
+## 2026-09-25 — Reverse vehicle make aliases supported in registration matching [t2]
+
+- **Track / machine:** Clemson RIDES · deputy/document-review-r2 · pkg-document-review-r2 t2
+- **What was wrong:** `matchRegistration` in `packages/rides-native/documentReview.js` checked make aliases in only one direction (`alias -> canonical`). If a driver selected their canonical make from `VEHICLE_MAKES` (e.g. 'Chevrolet', 'Volkswagen', or 'Mercedes-Benz') but their registration document text contained common aliases or abbreviations (e.g. 'Chevy', 'VW', 'Benz', or 'Mercedes'), the registration upload was rejected as a make mismatch.
+- **What changed:** Added internal `makeAliases(make)` helper in `packages/rides-native/documentReview.js` to collect all known alias forms corresponding to the canonical make (mirroring `colorAliases`). `matchRegistration` now checks if any alias matches the folded registration text. Updated `packages/rides-native/documentReview.test.js` to assert that canonical make selections match registration documents containing abbreviations and aliases.
+- **Files touched:**
+  - `packages/rides-native/documentReview.js`
+  - `packages/rides-native/documentReview.test.js`
+  - `docs/FIXES.md`
+
 ## 2026-09-25 — documentReview.js unit test coverage leaves production source unchanged [t1]
 
 - **Track / machine:** Clemson RIDES · deputy/document-review-r2 · pkg-document-review-r2 t1

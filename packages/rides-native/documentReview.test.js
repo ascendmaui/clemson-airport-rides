@@ -319,16 +319,21 @@ test('matchRegistration make matching, canonical aliases, and quirks', () => {
   })
   assert.equal(chevroletMatched.status, 'matched')
 
-  // BUG?: canonicalMake maps alias -> canonical name, but does not search reverse aliases in registration text (e.g. make 'Chevrolet' does not match text containing 'Chevy')
-  const chevyInDocMismatch = matchRegistration({
+  // Reverse aliases: driver entering 'Chevrolet' against document containing 'Chevy' matches
+  const chevyInDocMatched = matchRegistration({
     text: 'State of South Carolina Chevy Camaro gray plate ABC1234',
     make: 'Chevrolet',
     model: 'Camaro',
     color: 'Gray',
     plate: 'ABC1234',
   })
-  assert.equal(chevyInDocMismatch.status, 'mismatch')
-  assert.deepEqual(chevyInDocMismatch.misses, ['make'])
+  assert.equal(chevyInDocMatched.status, 'matched')
+  assert.equal(chevyInDocMatched.matched, true)
+
+  // Driver entering canonical make matches document containing abbreviations
+  assert.equal(matchRegistration({ text: 'Registration card VW Jetta', make: 'Volkswagen' }).status, 'matched')
+  assert.equal(matchRegistration({ text: 'Registration card Mercedes C300', make: 'Mercedes-Benz' }).status, 'matched')
+  assert.equal(matchRegistration({ text: 'Registration card Benz C300', make: 'Mercedes-Benz' }).status, 'matched')
 
   // Volkswagen aliases: vw, volkswagon, volkswagen
   assert.equal(matchRegistration({ text: 'Registration card Volkswagen Jetta', make: 'vw' }).status, 'matched')
