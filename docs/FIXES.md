@@ -205,3 +205,12 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
   - `package.json`
   - `docs/FIXES.md`
 
+## 2026-09-24 — Guard empty or sparse vehicle row in riderFacingCard (pkg-i9-driverdesk-tests t2)
+- **Problem:** In `packages/rides-native/driverDesk.js`, `riderFacingCard` checked `vehicle ? [vehicle.color, vehicle.make, vehicle.model].filter(Boolean).join(' ') : 'Vehicle TBD'`. When `vehicle` was an empty or sparse object (e.g. `{}` or missing `color`, `make`, and `model` from a newly initiated onboarding row), the joined string evaluated to `""` instead of falling back to `'Vehicle TBD'`, causing rider- and fleet-facing cards to display an empty vehicle string or broken plate-only text.
+- **What was changed:** Updated `vehicleLabel` computation to `[vehicle?.color, vehicle?.make, vehicle?.model].filter(Boolean).join(' ') || 'Vehicle TBD'`, properly guarding empty and sparse vehicle rows while preserving full vehicle descriptions for valid inputs. Updated `packages/rides-native/driverDesk.test.js` to assert the `'Vehicle TBD'` fallback for empty and sparse vehicle objects.
+- **Files touched:**
+  - `packages/rides-native/driverDesk.js`
+  - `packages/rides-native/driverDesk.test.js`
+  - `docs/FIXES.md`
+
+

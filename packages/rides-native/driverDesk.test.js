@@ -431,9 +431,12 @@ test('riderFacingCard provides safe defaults when input is missing or empty', ()
     seats: null,
   })
 
-  // BUG?: if vehicle is an empty object or has no color/make/model, vehicleLabel is "" rather than 'Vehicle TBD'
+  // Fixed [t2]: if vehicle is an empty object or has no color/make/model, vehicleLabel falls back to 'Vehicle TBD'
   const emptyVehicleCard = riderFacingCard({ profile: null, vehicle: {}, online: false })
-  assert.equal(emptyVehicleCard.vehicleLabel, '')
+  assert.equal(emptyVehicleCard.vehicleLabel, 'Vehicle TBD')
+
+  const sparseVehicleCard = riderFacingCard({ profile: null, vehicle: { id: 'v-1' }, online: false })
+  assert.equal(sparseVehicleCard.vehicleLabel, 'Vehicle TBD')
 })
 
 // ---------------------------------------------------------------------------
