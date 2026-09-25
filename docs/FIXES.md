@@ -197,3 +197,9 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
   - `previewDate('weekday_am')` on Saturday uses delta -5 and lands on Monday 08:30. Every other day anchors on Wednesday 08:30.
 - **What changed:** Added `packages/rides-native/heat.test.js` for every export (normal cases, intensity and clock boundaries, unknown window ids, returned shapes). Suspected bugs are asserted as current behaviour with `// BUG?:` comments. Registered the file on the root `npm test` script.
 - **Files touched:** `packages/rides-native/heat.test.js`, `package.json`, `docs/FIXES.md`.
+
+## 2026-09-24 — Saturday weekday-morning preview landed on Monday
+
+- **What was wrong:** `previewDate('weekday_am')` special-cased Saturday (`getDay() === 6`) with delta -5, so 2026-09-26 previewed Monday 2026-09-21 08:30. Every other day anchors on Wednesday 08:30 (`day === 0 ? -4 : 3 - day`). Rider and driver busy-spot maps only use that date for `downtownNow` / `typicalSpots`. Hour 8 on Monday and Wednesday already share the same curve outputs, so the map colors do not change; the calendar date does.
+- **What changed:** Saturday now uses `3 - day` (delta -3) and lands on Wednesday 08:30, same as Thursday and Friday. Sunday still goes back four days to the previous Wednesday. The midnight `barCurve` branch (`hour < 16` before `hour < 2`) is unchanged: those curves are shared with `src/lib/downtownHeat.js`, and fixing them would change live "now" intensities at midnight.
+- **Files touched:** `packages/rides-native/heat.js`, `packages/rides-native/heat.test.js`, `docs/FIXES.md`.
