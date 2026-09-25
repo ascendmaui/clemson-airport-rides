@@ -449,6 +449,30 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
   - `docs/FIXES.md`
 - **Verified:** `node --experimental-strip-types --test api/stripeWebhookValidation.test.js` (29/29 passing).
 
+## 2026-09-25 — support ticket list retries when a column is missing
+
+- **Track / machine:** Clemson RIDES · deputy/admin-support-tests · pkg-admin-support-tests t3
+- **What was wrong:** `GET /api/support-ticket` selects `bot_intent` and `escalation_reason`. Those columns are not on the first support-ticket table. The handler already had a reduced-column retry, but it never ran for a real Postgres or PostgREST error: those messages include `does not exist`, `schema cache`, or `support_tickets`, and that pattern was checked first. A missing column was returned as 503 ("not in the database yet") and the fallback select was skipped. The old-schema list is the case the retry was written for.
+- **What changed:** If the error names a column and is not "could not find the table", the handler runs the existing reduced-column select, still filtered to the caller unless they are support staff, and redacts peer surnames the same way as a normal list. A missing relation still returns 503. A retry that still fails stays 500. Who counts as admin or staff is unchanged. `shared/adminAccess.test.js`, `server/adminDesk.test.js`, and `server/supportTicket.test.js` were already on the root `test` script.
+- **Left as-is:** `server/endpoints/adminDesk.js` `tickets()` still skips its reduced-column retry when the error text contains "does not exist" or "schema cache". Same class of check, admin list only.
+- **Files touched:** `server/endpoints/supportTicket.js`, `server/supportTicket.test.js`, `docs/FIXES.md`
+
+## 2026-09-25 — supportTicket handler tests
+
+- **Track / machine:** Clemson RIDES · deputy/admin-support-tests · pkg-admin-support-tests t2
+- **What was wrong:** `server/endpoints/supportTicket.js` had no direct handler tests. The route imports helpers that build a Supabase client and run the support bot, so it could not be exercised under `npm test` without network.
+- **What changed:** Added `server/supportTicket.test.js` and a `module.register` resolve hook that loads fakes from `tests/fixtures/admin-support/` for `supabaseAdmin.js`, `agentHttp.js` (real json/cors/parseBody/rateLimit), `staffAccess.js`, `userContext.js`, and `applySupportBot.js`. The bot fake records calls and does not send mail or call a model. No production source change. Appended the test file to the root `test` script.
+- **Observed, not changed:** GET and insert treat any error whose message matches `/support_tickets|schema cache|does not exist/i` as a missing table. A missing-column error that says "does not exist" or "schema cache" therefore skips the reduced-column retry and returns 503. A permission error that names `support_tickets` is reported the same way. Marked in `server/supportTicket.test.js`.
+- **Files touched:** `server/supportTicket.test.js`, `tests/fixtures/admin-support/supportTicketHook.js`, `tests/fixtures/admin-support/supportTicketSupabaseAdmin.js`, `tests/fixtures/admin-support/supportTicketAgentHttp.js`, `tests/fixtures/admin-support/supportTicketStaffAccess.js`, `tests/fixtures/admin-support/supportTicketUserContext.js`, `tests/fixtures/admin-support/supportTicketApplySupportBot.js`, `package.json`, `docs/FIXES.md`
+
+## 2026-09-25 — adminAccess and adminDesk handler tests
+
+- **Track / machine:** Clemson RIDES · deputy/admin-support-tests · pkg-admin-support-tests t1
+- **What was wrong:** `shared/adminAccess.js` and `server/endpoints/adminDesk.js` had no direct unit tests. The desk handler imports helpers that construct a real Supabase client and can send applicant email, so the route could not be exercised under `npm test`.
+- **What changed:** Added `shared/adminAccess.test.js` and `server/adminDesk.test.js`. The desk suite registers a `module.register` resolve hook that loads fakes from `tests/fixtures/admin-support/` for `friendRideLib.js`, `staffAccess.js`, and `applicantMail.js`. Notices are recorded and never sent. No production source change. Appended both test files to the root `test` script.
+- **Observed, not changed:** `tickets()` skips its reduced-column retry when a missing-column error contains "does not exist" or "schema cache", because that overlaps the missing-table check. Marked `// BUG?:` in `server/adminDesk.test.js`.
+- **Files touched:** `shared/adminAccess.test.js`, `server/adminDesk.test.js`, `tests/fixtures/admin-support/adminDeskHook.js`, `tests/fixtures/admin-support/adminDeskFriendRideLib.js`, `tests/fixtures/admin-support/adminDeskStaffAccess.js`, `tests/fixtures/admin-support/adminDeskApplicantMail.js`, `tests/fixtures/admin-support/adminDeskSb.js`, `package.json`, `docs/FIXES.md`
+
 ## 2026-09-25 — Expiry cron wired: CRON_SECRET + Supabase pg_cron/pg_net; prod redeployed at 111c607
 
 - **Track / machine:** Clemson RIDES · I9 (61b11c89) Vercel CLI + Supabase awktabuhijrshmsmagpq · approved by John 1:05 AM ET 9/25.
