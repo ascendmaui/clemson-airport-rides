@@ -1165,6 +1165,18 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
   - `packages/rides-native/tripMessagesClient.test.js`
   - `docs/FIXES.md`
 
+## 2026-09-24 — legalCopy tests were not in the npm test script
+
+- **What was wrong:** `packages/rides-native/legalCopy.test.js` existed (re-export identity, freeze, and policy-text checks) but was not listed in the root `package.json` `test` script, so `npm test` never ran it.
+- **What changed:** Appended `packages/rides-native/legalCopy.test.js` as the last entry of the `test` script. No production code changed.
+- **Files touched:** `package.json`, `docs/FIXES.md`
+
+## 2026-09-24 — Native legal copy was mutable shared policy text
+
+- **What was wrong:** `packages/rides-native/legalCopy.js` re-exported `PRIVACY_SECTIONS` and `TERMS_SECTIONS` as the same mutable objects as `shared/legalCopy.js`. A rider screen could push a section or rewrite a heading and change that policy text for every later reader in the process, including the website when both load in one process.
+- **What changed:** Deep-freeze each section, its paragraph and bullet lists, and both arrays in place before re-exporting. References stay identical to the shared module. `LEGAL_UPDATED` is unchanged.
+- **Files touched:** `packages/rides-native/legalCopy.js`, `packages/rides-native/legalCopy.test.js`
+
 ## 2026-09-24 — Remove Clerk: Apple + Google social sign-in directly on Supabase Auth
 
 - **Track / machine:** Clemson RIDES · worktree feat/supabase-auth-remove-clerk
