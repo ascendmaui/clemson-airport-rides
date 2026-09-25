@@ -80,6 +80,13 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
   - `packages/rides-native/documentReview.test.js`
   - `docs/FIXES.md`
 
+## 2026-09-25 — Rider accessibility static scan
+
+- **Track / machine:** Clemson RIDES · deputy/rider-a11y · pkg-rider-a11y t1
+- **What was wrong:** Nothing checked `apps/rider/app` or `apps/rider/components` for Pressable, TouchableOpacity, or Button tags missing `accessibilityLabel` or `accessibilityRole`, or for Image tags missing `accessibilityLabel` and `accessible={false}`.
+- **What changed:** Added `tests/a11yRider.test.js`. It reads those `.tsx` files with `fs` (no React Native runtime) and compares offenders to an allowlist of the 20 tags that already fail. A new offender fails the test. No rider UI code was changed.
+- **Files touched:** `tests/a11yRider.test.js`, `docs/FIXES.md`
+
 ## 2026-09-25 — Expiry cron wired: CRON_SECRET + Supabase pg_cron/pg_net; prod redeployed at 111c607
 
 - **Track / machine:** Clemson RIDES · I9 (61b11c89) Vercel CLI + Supabase awktabuhijrshmsmagpq · approved by John 1:05 AM ET 9/25.
