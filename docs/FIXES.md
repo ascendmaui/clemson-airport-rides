@@ -109,6 +109,16 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
 - **What changed:** Added `tests/a11yRider.test.js`. It reads those `.tsx` files with `fs` (no React Native runtime) and compares offenders to an allowlist of the 20 tags that already fail. A new offender fails the test. No rider UI code was changed.
 - **Files touched:** `tests/a11yRider.test.js`, `docs/FIXES.md`
 
+## 2026-09-25 — Wire apiOrigin.js unit tests into npm test script
+
+- **Track / machine:** Clemson RIDES · deputy/api-origin-tests · pkg-api-origin-tests t3
+- **What was wrong:** `packages/rides-native/apiOrigin.test.js` had unit tests for `DEFAULT_API_BASE` and `resolveApiBase()` (origin fallbacks, trailing slash removal, whitespace trimming), but the root `package.json` `"test"` script did not list `packages/rides-native/apiOrigin.test.js`, so the suite was omitted from standard `npm test` runs.
+- **What changed:** Appended `packages/rides-native/apiOrigin.test.js` as the last entry of the `"test"` script in `package.json`. No production source changes.
+- **Files touched:**
+  - `package.json`
+  - `docs/FIXES.md`
+- **Verified:** Ran `npm test` (806/806 tests passing, including all 13 tests from `packages/rides-native/apiOrigin.test.js`).
+
 ## 2026-09-25 — Sanitize EXPO_PUBLIC_API_BASE in resolveApiBase (trim whitespace, strip all trailing slashes, fallback on blank)
 
 - **Track / machine:** Clemson RIDES · worktree deputy-pkg-api-origin-tests
