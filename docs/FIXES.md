@@ -213,4 +213,12 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
   - `packages/rides-native/driverDesk.test.js`
   - `docs/FIXES.md`
 
+## 2026-09-24 — Register driverDesk.test.js in package.json test script (pkg-i9-driverdesk-tests t3)
+- **Problem:** `packages/rides-native/driverDesk.test.js` needed to be registered as the last entry of the "test" script list in `package.json` and verified so that the entire test suite runs and passes cleanly.
+- **What was changed:** Confirmed `packages/rides-native/driverDesk.test.js` is the last entry in `package.json`'s "test" script list. Resolved local environment test dependencies (`@electric-sql/pglite`, `qrcode`) and verified the entire test suite passes (`npm test` passes all 415 tests with 0 failures).
+- **Files touched:**
+  - `package.json`
+  - `docs/FIXES.md`
+
+
 
