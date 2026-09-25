@@ -6,15 +6,23 @@
 import { admin, cors, json, parseBody, userFromAuth } from '../friendRideLib.js'
 import { displayFirstName } from '../../src/lib/privacyDisplay.js'
 import { standingFromRatings } from '../../src/lib/standing.js'
+import { approvalGateMessage } from '../../packages/rides-native/syntheticOffers.js'
+import { receivableDriverIds } from '../driverApproval.js'
 
-export default async function handler(req, res) {
+const ACCEPTED_LIVE = new Set(['accepted', 'arriving', 'arrived', 'in_progress', 'completed'])
+
+function alreadyAcceptedLive(trip, userId) {
+  return Boolean(trip?.driver_id) && trip.driver_id === userId && ACCEPTED_LIVE.has(trip.status)
+}
+
+export default async function handler(req, res, deps = {}) {
   if (cors(req, res)) return
   if (req.method !== 'POST') return json(res, 405, { error: 'Method not allowed' })
 
-  const sb = admin()
+  const sb = deps.sb || admin()
   if (!sb) return json(res, 503, { error: 'SUPABASE_SERVICE_ROLE_KEY not configured' })
 
-  const user = await userFromAuth(req)
+  const user = deps.user !== undefined ? deps.user : await userFromAuth(req)
   if (!user) return json(res, 401, { error: 'Sign in required' })
 
   const { body, error: pe } = parseBody(req)
@@ -39,6 +47,17 @@ export default async function handler(req, res) {
   const open = ['searching', 'offered'].includes(trip.status) && !trip.driver_id
   const mine = trip.driver_id === user.id
   if (!open && !mine) return json(res, 404, { error: 'Trip not available' })
+
+  if (!alreadyAcceptedLive(trip, user.id)) {
+    const gate = await receivableDriverIds(sb, [user.id])
+    if (gate.error) return json(res, 500, { error: gate.error, code: 'driver_approval_unavailable' })
+    if (!gate.allowed.has(user.id)) {
+      return json(res, 403, {
+        error: approvalGateMessage(),
+        code: 'driver_not_approved',
+      })
+    }
+  }
 
   let riderRes = await sb
     .from('profiles')

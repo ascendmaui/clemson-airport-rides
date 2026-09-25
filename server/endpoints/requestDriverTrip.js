@@ -17,6 +17,7 @@ import {
   priceDriverRequest,
   resolveDriverRequestPlaces,
 } from '../authoritativeFare.js'
+import { receivableDriverIds } from '../driverApproval.js'
 
 async function serverDistance(origin, dest) {
   if (origin?.lat == null || dest?.lat == null) return { distanceM: null, durationS: null }
@@ -51,6 +52,15 @@ export default async function handler(req, res, deps = {}) {
     dropoffLng: body.destLng ?? body.dest_lng ?? body.dropoffLng,
   })
   if (places.error) return json(res, 400, { error: places.error })
+
+  const gate = await receivableDriverIds(sb, [driverId])
+  if (gate.error) return json(res, 500, { error: gate.error, code: 'driver_approval_unavailable' })
+  if (!gate.allowed.has(driverId)) {
+    return json(res, 403, {
+      error: 'That driver is not approved to receive rides yet.',
+      code: 'driver_not_approved',
+    })
+  }
 
   const when = new Date()
   let gameDayMultiplier = null

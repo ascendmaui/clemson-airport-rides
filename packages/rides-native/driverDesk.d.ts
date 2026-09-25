@@ -40,6 +40,7 @@ export type DriverDesk = {
   profile: Record<string, unknown> | null
   facing?: FacingCard
   warning?: string | null
+  approvalGate?: string | null
 }
 
 export function loadGameDay(supabase: unknown): Promise<{ title?: string; surge_multiplier?: number; pickup_zone_label?: string | null } | null>

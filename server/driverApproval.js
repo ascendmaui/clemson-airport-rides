@@ -11,6 +11,7 @@ import {
   submissionBlockers,
 } from '../shared/driverOnboarding.js'
 import { WEB_ORIGIN } from '../shared/productLinks.js'
+import { loadStaffAccess } from './staffAccess.js'
 
 export { canReceiveRides }
 
@@ -80,6 +81,20 @@ export async function loadSubmissionContext(sb, profileId) {
   }
 }
 
+/** Staff and admins may receive rides without onboarding_status = approved. */
+async function staffMayReceiveRides(sb, profileId) {
+  try {
+    const first = await loadStaffAccess(sb, { id: profileId })
+    if (first?.admin || first?.support) return true
+    const email = first?.profile?.email
+    if (!email) return false
+    const second = await loadStaffAccess(sb, { id: profileId, email })
+    return Boolean(second?.admin || second?.support)
+  } catch {
+    return false
+  }
+}
+
 export async function driverApprovalStatus(sb, profileId) {
   const { data, error } = await sb
     .from('driver_applications')
@@ -87,7 +102,53 @@ export async function driverApprovalStatus(sb, profileId) {
     .eq('profile_id', profileId)
     .maybeSingle()
   if (error) return { approved: false, status: null, error: error.message }
-  return { approved: canReceiveRides(data?.onboarding_status), status: data?.onboarding_status || null, error: null }
+  const status = data?.onboarding_status || null
+  if (canReceiveRides(status)) return { approved: true, status, error: null }
+  if (await staffMayReceiveRides(sb, profileId)) return { approved: true, status, error: null }
+  return { approved: false, status, error: null }
+}
+
+/**
+ * Which candidate profile ids may be offered, matched, notified, or assigned a ride.
+ * One driver_applications read for the whole list. Anyone not approved still passes
+ * when loadStaffAccess says they are staff or admin.
+ */
+export async function receivableDriverIds(sb, profileIds) {
+  const ids = []
+  const seen = new Set()
+  for (const raw of profileIds || []) {
+    const id = String(raw || '').trim()
+    if (!id || seen.has(id)) continue
+    seen.add(id)
+    ids.push(id)
+  }
+  if (!ids.length) return { allowed: new Set(), error: null }
+
+  const { data, error } = await sb
+    .from('driver_applications')
+    .select('profile_id, onboarding_status')
+    .in('profile_id', ids)
+  if (error) {
+    return { allowed: new Set(), error: error.message || 'Could not read driver approval' }
+  }
+
+  const statusById = new Map()
+  for (const row of data || []) {
+    if (row?.profile_id) statusById.set(row.profile_id, row.onboarding_status ?? null)
+  }
+
+  const allowed = new Set()
+  const unchecked = []
+  for (const id of ids) {
+    if (canReceiveRides(statusById.get(id))) allowed.add(id)
+    else unchecked.push(id)
+  }
+  if (!unchecked.length) return { allowed, error: null }
+
+  await Promise.all(unchecked.map(async (id) => {
+    if (await staffMayReceiveRides(sb, id)) allowed.add(id)
+  }))
+  return { allowed, error: null }
 }
 
 export async function notifyAdminOfApplication({ profile, vehicle }) {

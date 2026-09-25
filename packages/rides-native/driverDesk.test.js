@@ -20,6 +20,7 @@ import {
   setTeslaListing,
   subscribeTrips,
 } from './driverDesk.js'
+import { approvalGateMessage } from './syntheticOffers.js'
 import { UNPAID_AIRPORT_DEPOSIT_ACCEPT_ERROR } from './tripTags.js'
 
 /**
@@ -1344,6 +1345,9 @@ test('loadDriverDesk aggregates offers, scheduled, upcoming, active, and driver 
     profiles: [
       { id: 'driver-1', full_name: 'Driver One', phone: '864-555-1111' },
     ],
+    driver_applications: [
+      { profile_id: 'driver-1', onboarding_status: 'approved' },
+    ],
     driver_offer_passes: [
       { driver_id: 'driver-1', trip_id: 'trip-passed' },
     ],
@@ -1372,6 +1376,7 @@ test('loadDriverDesk aggregates offers, scheduled, upcoming, active, and driver 
   assert.ok(desk.profile)
   assert.ok(desk.facing)
   assert.equal(desk.warning, null)
+  assert.equal(desk.approvalGate, null)
 
   // Offers should include trip-open and exclude passed / unpaid
   assert.equal(desk.offers.length, 1)
@@ -1388,6 +1393,28 @@ test('loadDriverDesk aggregates offers, scheduled, upcoming, active, and driver 
   // Upcoming (future)
   assert.equal(desk.upcoming.length, 1)
   assert.equal(desk.upcoming[0].id, 'trip-upcoming')
+})
+
+test('loadDriverDesk hides open-pool offers for pending_review and keeps the live trip', async () => {
+  const supabase = createFakeSupabase({
+    driver_applications: [
+      { profile_id: 'driver-1', onboarding_status: 'pending_review' },
+    ],
+    driver_status: [
+      { driver_id: 'driver-1', online: true },
+    ],
+    trips: [
+      { id: 'trip-open', status: 'searching', pickup_label: 'Tillman Hall' },
+      { id: 'trip-sched', status: 'scheduled', driver_id: null, pickup_at: '2099-01-01T00:00:00.000Z' },
+      { id: 'trip-live', driver_id: 'driver-1', status: 'in_progress', pickup_label: 'Bowman Field' },
+    ],
+  })
+
+  const desk = await loadDriverDesk(supabase, 'driver-1')
+  assert.deepEqual(desk.offers, [])
+  assert.deepEqual(desk.scheduledOpen, [])
+  assert.equal(desk.approvalGate, approvalGateMessage())
+  assert.equal(desk.active?.id, 'trip-live')
 })
 
 test('loadDriverDesk surfaces warning when trip query encounters error', async () => {
