@@ -58,6 +58,17 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
 - **Rotate:** `vercel env rm CRON_SECRET production` + `vercel env add CRON_SECRET production --sensitive` (value from stdin), then `select vault.update_secret((select id from vault.secrets where name='clemson_cron_secret'), '<new>')`, then redeploy.
 - **Inspect runs:** `select * from cron.job_run_details order by start_time desc limit 5;` and `select id, status_code, left(content, 300) from net._http_response order by created desc limit 5;`
 
+## 2026-09-25 — carpoolApi tests on clemson-rides.vercel.app [t2]
+
+- **Track / machine:** Deputy · pkg-domain-tests-92-93 t2 · deputy/domain-tests-92-93
+- **What was wrong:** `packages/rides-native/shared/carpoolApi.test.js` from draft PR #93 (`origin/deputy/carpool-api-tests`) still expected `https://clemson-airport-rides.vercel.app`, and its non-OK cases expected the old inline client (`HTTP 500`, `HTTP 503`, `API unavailable` on an HTML 502). `setCarpoolApiBase` on main still used `.replace(/\/$/, '')`, so an override with two or more trailing slashes kept a leftover slash and joined a bad URL. That one-line `/\/+$/` fix from the draft branch was not on main.
+- **What changed:** Brought the test file onto this branch. The default host now comes from `DEFAULT_API_BASE` in `packages/rides-native/apiOrigin.js` (`https://clemson-rides.vercel.app`). 500/502 assertions follow `friendlyApiError` generic copy; 503 follows the unavailable copy. `apiErrorMessage` on a non-JSON 502 still returns the raw HTML stored on `payload.message` when the friendly kind is not auth or unavailable. `setCarpoolApiBase` now strips every trailing slash.
+- **Files touched:**
+  - `packages/rides-native/shared/carpoolApi.js`
+  - `packages/rides-native/shared/carpoolApi.test.js`
+  - `docs/FIXES.md`
+- **Verified:** `node --experimental-strip-types --test packages/rides-native/shared/carpoolApi.test.js` (13/13 passing).
+
 ## 2026-09-25 — apiClient tests expect clemson-rides.vercel.app [t1]
 
 - **Track / machine:** Deputy · pkg-domain-tests-92-93 t1 · deputy/domain-tests-92-93
