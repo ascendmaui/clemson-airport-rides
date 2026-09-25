@@ -2,6 +2,18 @@
 
 Persistent knowledge base for recurring failures. When a matching issue appears, apply the saved fix first.
 
+## 2026-09-24 — Hold claim and cancel race conditions verified with concurrency tests [t2]
+
+- **Track / machine:** Deputy · pkg-pro-hold-claim-atomic · deputy/hold-claim-atomic
+- **Problem:** Needed test coverage verifying that concurrent metadata writes (such as Stripe webhooks adding `receipt_url` between the sweep's read and write) survive claim, release, and cancel steps without being clobbered; that overlapping sweeps produce exactly one cancel, one trip_event, and one Stripe expire; and that stale claims (>2 min) can be taken over.
+- **Fix:** Added targeted test suite in `server/abandonedCheckout.test.js`:
+  1. Verified concurrent webhook metadata writes (`metadata.receipt_url`) between the sweep's initial read and the claim update survive both claim and cancel.
+  2. Verified concurrent metadata writes during an active claim survive claim release when Stripe session expiration fails.
+  3. Verified concurrent metadata writes between Stripe expire and cancel write survive the atomic merge.
+  4. Verified two overlapping sweeps concurrently processing an open hold result in exactly one Stripe session expiration, one trip cancel, and one `trip_events` insert.
+  5. Verified fresh claims (<2 min) block subsequent sweeps, and stale claims (>2 min) are successfully taken over and processed to completion.
+- **Files:** `server/abandonedCheckout.test.js`, `docs/FIXES.md`
+
 ## 2026-09-24 — Unpaid airport hold claim and cancel metadata writes made atomic
 
 - **Track / machine:** Deputy · pkg-pro-hold-claim-atomic · deputy/hold-claim-atomic
