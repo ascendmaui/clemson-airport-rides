@@ -2,6 +2,16 @@
 
 Persistent knowledge base for recurring failures. When a matching issue appears, apply the saved fix first.
 
+## 2026-09-24 — sendTripQuickReply validates phrase before checking supabase client
+
+- **Track / machine:** Clemson RIDES · pkg-trip-messages-tests
+- **Problem:** `sendTripQuickReply(supabase, { tripId, phrase })` checked `canonicalQuickReply(phrase)` before validating that the Supabase client was provided, unlike `fetchTripChat`, `listTripMessages`, and `sendTripMessage` which all call `requireClient(supabase)` first. Calling `sendTripQuickReply` with an unconfigured client and an unknown phrase threw "Unknown quick reply" instead of "Supabase is not configured", while calling it with a known phrase threw "Supabase is not configured".
+- **Fix:** Added `requireClient(supabase)` at the start of `sendTripQuickReply` in `packages/rides-native/tripMessagesClient.js`, matching the behavior of the other exported client functions. Updated test in `packages/rides-native/tripMessagesClient.test.js`.
+- **Files touched:**
+  - `packages/rides-native/tripMessagesClient.js`
+  - `packages/rides-native/tripMessagesClient.test.js`
+  - `docs/FIXES.md`
+
 ## 2026-09-24 — Remove Clerk: Apple + Google social sign-in directly on Supabase Auth
 
 - **Track / machine:** Clemson RIDES · worktree feat/supabase-auth-remove-clerk

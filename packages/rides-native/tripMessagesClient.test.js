@@ -475,10 +475,10 @@ test('sendTripQuickReply throws "Unknown quick reply" for unrecognized phrases',
     )
   }
 
-  // BUG?: sendTripQuickReply validates phrase before checking supabase client
+  // sendTripQuickReply validates supabase client before checking phrase
   await assert.rejects(
     () => sendTripQuickReply(null, { tripId: 't-1', phrase: 'unknown phrase' }),
-    /Unknown quick reply/,
+    /Supabase is not configured/,
   )
 })
 
