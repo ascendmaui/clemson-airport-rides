@@ -2,6 +2,20 @@
 
 Persistent knowledge base for recurring failures. When a matching issue appears, apply the saved fix first.
 
+## 2026-09-25 — Expiry cron wired: CRON_SECRET + Supabase pg_cron/pg_net; prod redeployed at 111c607
+
+- **Track / machine:** Clemson RIDES · I9 (61b11c89) Vercel CLI + Supabase awktabuhijrshmsmagpq · approved by John 1:05 AM ET 9/25.
+- **Problem:** Nothing called `/api/expire-unpaid-airport-holds`, and `CRON_SECRET` was unset in production, so the handler fell back to accepting `x-vercel-cron: 1`.
+- **Fix:**
+  - A random 64-hex `CRON_SECRET` is set on clemson-rides **Production** as a Sensitive value. It is not set on Preview because only prod is called.
+  - The same value is in Supabase Vault as `clemson_cron_secret`, added with `vault.create_secret`. It is not in any migration, not in `cron.job`, and not in the repo.
+  - Migration `20260925160000_expire_holds_pg_cron.sql` enables pg_cron + pg_net and adds `private.trigger_expire_unpaid_airport_holds()` (SECURITY DEFINER, not executable by anon/authenticated). The function reads the Vault secret and `net.http_get`s the route with `Authorization: Bearer …`. The migration also schedules cron job `expire-unpaid-airport-holds` at `7,22,37,52 * * * *` (UTC, so the same minutes in ET).
+  - Production redeployed from 111c607 (`clemson-rides-fw2ho37ak`, READY 1:06:50 AM ET), which puts #94–#97 live.
+- **Verified:** `x-vercel-cron: 1` without a bearer → 401; a wrong bearer → 401; the real bearer with `?dry_run=1` → 200 `wouldExpire: 2, skipped: 1`.
+- **Side effect:** with `CRON_SECRET` set, the daily Vercel cron `/api/driver-payouts` (12:00 UTC) now runs payout retries instead of returning `skipped`. There were 0 pending payouts when it was switched on.
+- **Rotate:** `vercel env rm CRON_SECRET production` + `vercel env add CRON_SECRET production --sensitive` (value from stdin), then `select vault.update_secret((select id from vault.secrets where name='clemson_cron_secret'), '<new>')`, then redeploy.
+- **Inspect runs:** `select * from cron.job_run_details order by start_time desc limit 5;` and `select id, status_code, left(content, 300) from net._http_response order by created desc limit 5;`
+
 ## 2026-09-25 — merge_trip_metadata trip_status enum cast applied (#100)
 
 - **Problem:** `public.merge_trip_metadata` (#80) failed on every call with `operator does not exist: trip_status = text`, which broke the airport-checkout session bind, abandon-checkout release and the unpaid-hold expiry cancel.
