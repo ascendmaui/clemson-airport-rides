@@ -317,9 +317,32 @@ test('deposit copy shows full fare, 25% deposit, and remaining balance', () => {
   assert.match(checkoutFailureCopy({ message: 'Card was declined' }), /declined/)
   assert.equal(checkoutFailureCopy({}), 'Checkout failed. No charge was made.')
   assert.equal(checkoutFailureCopy(null), 'Checkout failed. No charge was made.')
-  // BUG?: a payload-only failure is dropped unless it matches the not-configured regex.
   assert.equal(
     checkoutFailureCopy({ payload: { message: 'Card was declined' } }),
+    'Card was declined',
+  )
+  assert.equal(
+    checkoutFailureCopy({ payload: { error: 'Insufficient funds' } }),
+    'Insufficient funds',
+  )
+  assert.equal(
+    checkoutFailureCopy({ error: 'Bank declined the card' }),
+    'Bank declined the card',
+  )
+  assert.equal(
+    checkoutFailureCopy({ message: 'Card was declined', payload: { message: 'Try another card' } }),
+    'Card was declined',
+  )
+  assert.equal(
+    checkoutFailureCopy({ payload: { message: '  Card was declined  ' } }),
+    'Card was declined',
+  )
+  assert.equal(
+    checkoutFailureCopy({ payload: { message: 'STRIPE_SECRET_KEY is not configured' } }),
+    STRIPE_NOT_CONFIGURED_COPY,
+  )
+  assert.equal(
+    checkoutFailureCopy({ payload: { message: '  ' }, error: { code: 'card_declined' } }),
     'Checkout failed. No charge was made.',
   )
 })

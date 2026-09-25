@@ -1251,6 +1251,14 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
 - **Fix:** `coord()` accepts only finite numbers and numeric strings. Null, blank, boolean, and other non-numeric values stay missing, and `navigationLinks` falls back to the label. A real `0` or `"0"` is still a point.
 - **Files:** `packages/rides-native/mapsLink.js`, `packages/rides-native/mapsLink.test.js`
 
+## 2026-09-24 — checkout failure copy dropped a payload-only reason
+
+- **Track / machine:** Clemson RIDES · deputy/rider-money-tests (pkg-rider-money-tests t2)
+- **What was wrong:** `checkoutFailureCopy` read `payload.message` only to detect "not configured" / "payments unavailable", then returned `err.message` or "Checkout failed. No charge was made." A failure whose reason lived only on `payload.message`, `payload.error`, or a top-level `error` string never reached the rider.
+- **What changed:** A blank `message` falls through to the first non-empty string among `payload.message`, `payload.error`, and top-level `error`. The not-configured sentence still wins when that phrase is in either text. Non-strings are ignored so an object `error` cannot render as `[object Object]`.
+- **Files touched:** `packages/rides-native/riderMoney.js`, `packages/rides-native/riderMoney.test.js`, `docs/FIXES.md`
+- **Verified:** `node --experimental-strip-types --test packages/rides-native/riderMoney.test.js` — 29 pass.
+
 ## 2026-09-24 — riderMoney unit tests did not match the module
 
 - **Track / machine:** Clemson RIDES · deputy/rider-money-tests (pkg-rider-money-tests t1)
