@@ -252,6 +252,16 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
 - **Verified:** `node --experimental-strip-types --test server/scheduleTrip.test.js` → 48/48 (0 skipped). Full `npm test` → 890/890 pass, 0 fail, 0 skipped.
 - **Files touched:** `server/scheduleTrip.test.js`, `tests/fixtures/srcLibLoader.mjs`, `tests/fixtures/supabaseStub.js`, `tests/fixtures/scheduledRidesStub.js` (deleted), `package.json`, `docs/FIXES.md`
 
+## 2026-09-25 — qrMatrix keeps numeric 0 (nullish coalesce)
+
+- **Track / machine:** Clemson RIDES · deputy/qr-matrix-tests · pkg-qr-matrix-tests t2
+- **What was wrong:** `qrMatrix` encoded `String(text || '')`. Numeric `0` (also `false` and `NaN`) is falsy, so it became `''` and `QRCode.create` threw `No input text`. `qrMatrix(42)` and `qrMatrix('0')` already encoded. Non-empty strings were unaffected.
+- **What changed:** Coalesce with `text ?? ''` before `String()`, so only `null` and `undefined` become empty. `0` encodes as `"0"`, `false` as `"false"`, and `NaN` as `"NaN"`. Matrices for valid non-empty strings are unchanged. Object and array stringification (`"[object Object]"`, `String([]) === ''`, join on non-empty arrays) is unchanged.
+- **Files touched:**
+  - `src/lib/qrMatrix.js`
+  - `src/lib/qrMatrix.test.js`
+  - `docs/FIXES.md`
+
 ## 2026-09-25 — qrMatrix unit tests (source unchanged)
 
 - **Track / machine:** Clemson RIDES · deputy/qr-matrix-tests · pkg-qr-matrix-tests t1

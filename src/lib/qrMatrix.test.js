@@ -190,16 +190,17 @@ test('finder patterns sit in three corners with light separators and an alternat
   assert.equal(dark.has(cellKey(6, 8)), true)
 })
 
-test('edge inputs coerce through String(text || "") before encoding', () => {
+test('edge inputs coerce through String(text ?? "") before encoding', () => {
   for (const value of ['', null, undefined]) {
     assert.throws(() => qrMatrix(value), /No input text/)
   }
 
-  // BUG?: `text || ''` drops numeric 0 (and false / NaN). qrMatrix(0) throws
-  // "No input text" instead of encoding "0". qrMatrix(42) and qrMatrix('0') encode.
-  for (const value of [0, false, NaN]) {
-    assert.throws(() => qrMatrix(value), /No input text/)
-  }
+  // Numeric 0, false, and NaN stringify. They must not collapse to ''.
+  assert.deepEqual(qrMatrix(0), matrixAt('0'))
+  assert.deepEqual(qrMatrix(0), qrMatrix('0'))
+  assert.deepEqual(qrMatrix(false), matrixAt('false'))
+  assert.deepEqual(qrMatrix(NaN), matrixAt('NaN'))
+  assertRowMajorUniqueInBounds(qrMatrix(0))
   assert.deepEqual(qrMatrix('0'), matrixAt('0'))
   assert.deepEqual(qrMatrix(42), matrixAt('42'))
   assert.deepEqual(qrMatrix(1234567890), matrixAt('1234567890'))
