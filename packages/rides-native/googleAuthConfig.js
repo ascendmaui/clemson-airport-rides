@@ -209,6 +209,7 @@ export function mapGoogleAuthError(error) {
 
   const raw = String(error?.message || error || '').trim()
   const code = String(error?.code || '').trim().toLowerCase()
+  const name = String(error?.name || '').trim()
   const status = error?.status
 
   if (raw === GOOGLE_SIGN_IN_COMING_SOON) {
@@ -297,6 +298,7 @@ export function mapGoogleAuthError(error) {
   if (
     /\[object\s+object\]/i.test(raw) ||
     /syntaxerror|typeerror|referenceerror|rangeerror/i.test(raw) ||
+    /syntaxerror|typeerror|referenceerror|rangeerror/i.test(name) ||
     raw.includes('\n') ||
     raw.length > 100
   ) {

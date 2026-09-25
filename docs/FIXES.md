@@ -2,6 +2,18 @@
 
 Persistent knowledge base for recurring failures. When a matching issue appears, apply the saved fix first.
 
+## 2026-09-25 — mapGoogleAuthError checks error.name to mask native JS errors [t2]
+
+- **Date:** 2026-09-25
+- **Track / machine:** Clemson RIDES · worktree `deputy-pkg-google-auth-config-tests-20260925041913` · `deputy/google-auth-config-tests-20260925041913` t2
+- **What was wrong:** `mapGoogleAuthError` in `packages/rides-native/googleAuthConfig.js` extracted `raw = String(error?.message || error || '').trim()` and tested `raw` against `/syntaxerror|typeerror|referenceerror|rangeerror/i`. For standard JavaScript runtime errors (such as `new SyntaxError('Unexpected token < in JSON')` or `new TypeError(...)`), `error.message` does not include the error class name. Because `error.name` was never checked, native exceptions were not recognized as technical errors and bypassed the mask, exposing internal JavaScript parser/runtime messages to the user under code `'google_auth_error'`.
+- **What changed:** Extracted `name = String(error?.name || '').trim()` in `mapGoogleAuthError` and added `/syntaxerror|typeerror|referenceerror|rangeerror/i.test(name)` to the technical error check. Native JavaScript errors (SyntaxError, TypeError, ReferenceError, RangeError) are now safely mapped to user-friendly `'Google sign-in failed. Please try again.'` with code `'google_auth_failed'`. Updated `packages/rides-native/googleAuthConfig.test.js` to assert that native errors with diverse messages are masked.
+- **Files touched:**
+  - `packages/rides-native/googleAuthConfig.js`
+  - `packages/rides-native/googleAuthConfig.test.js`
+  - `docs/FIXES.md`
+- **Verified:** `node --experimental-strip-types --test packages/rides-native/googleAuthConfig.test.js` passes all 50/50 tests.
+
 ## 2026-09-25 — googleAuthConfig unit tests and BUG? documentation [t1]
 
 - **Date:** 2026-09-25

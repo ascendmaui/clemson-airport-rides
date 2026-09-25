@@ -569,13 +569,22 @@ test('mapGoogleAuthError maps network and technical errors', () => {
   assert.equal(googleAuthErrorMessage(null), 'Google sign-in failed. Please try again.')
 })
 
-test('// BUG?: mapGoogleAuthError checks error.message instead of error.name for SyntaxError/TypeError', () => {
-  // BUG?: mapGoogleAuthError checks `raw` (error.message) for /syntaxerror|typeerror|referenceerror|rangeerror/
-  // rather than checking error.name. As a result, native errors like `new SyntaxError('Unexpected token < in JSON')`
-  // bypass the technical error filter and expose raw error text with code 'google_auth_error'.
+test('mapGoogleAuthError checks error.name to mask native SyntaxError, TypeError, and runtime exceptions', () => {
   const syntaxErr = mapGoogleAuthError(new SyntaxError('Unexpected token < in JSON'))
-  assert.equal(syntaxErr.code, 'google_auth_error')
-  assert.equal(syntaxErr.message, 'Unexpected token < in JSON')
+  assert.equal(syntaxErr.code, 'google_auth_failed')
+  assert.equal(syntaxErr.message, 'Google sign-in failed. Please try again.')
+
+  const typeErr = mapGoogleAuthError(new TypeError('Cannot read property of null'))
+  assert.equal(typeErr.code, 'google_auth_failed')
+  assert.equal(typeErr.message, 'Google sign-in failed. Please try again.')
+
+  const refErr = mapGoogleAuthError(new ReferenceError('variable is not defined'))
+  assert.equal(refErr.code, 'google_auth_failed')
+  assert.equal(refErr.message, 'Google sign-in failed. Please try again.')
+
+  const rangeErr = mapGoogleAuthError(new RangeError('Invalid array length'))
+  assert.equal(rangeErr.code, 'google_auth_failed')
+  assert.equal(rangeErr.message, 'Google sign-in failed. Please try again.')
 })
 
 test('mapGoogleAuthError handles null, undefined, and empty string', () => {
