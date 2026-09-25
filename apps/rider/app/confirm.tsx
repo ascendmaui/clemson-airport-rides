@@ -59,7 +59,14 @@ export default function ConfirmPickup() {
   return (
     <View style={[styles.screen, { paddingTop: insets.top }]}>
       <View style={styles.header}>
-        <Pressable onPress={() => router.back()} style={[styles.back, lift(colors, 'rest')]}>
+        <Pressable
+          onPress={() => router.back()}
+          style={[styles.back, lift(colors, 'rest')]}
+          accessibilityRole="button"
+          accessibilityLabel="Back"
+          accessibilityHint="Returns to the previous screen"
+          hitSlop={8}
+        >
           <Text style={styles.backLabel}>←</Text>
         </Pressable>
         <Text style={styles.title}>Confirm pickup spot</Text>
@@ -97,12 +104,19 @@ export default function ConfirmPickup() {
           placeholderTextColor={colors.placeholder}
           style={[styles.input, styles.note]}
           multiline
+          accessibilityLabel="Note for driver"
         />
         <Text style={styles.going}>
           Going to <Text style={styles.goingStrong}>{dest}</Text>
         </Text>
         {depositCopy ? <Text style={styles.deposit}>{depositCopy}</Text> : null}
-        <Pressable onPress={() => router.push(user ? '/student' : '/sign-in')} accessibilityRole="button">
+        <Pressable
+          onPress={() => router.push(user ? '/student' : '/sign-in')}
+          accessibilityRole="button"
+          accessibilityLabel={studentOffer.title}
+          accessibilityHint={user ? 'Opens student pricing' : 'Sign in to check student pricing'}
+          hitSlop={14}
+        >
           <Text style={studentOffer.granted ? styles.studentOn : styles.studentOff}>
             {studentOffer.title}
           </Text>

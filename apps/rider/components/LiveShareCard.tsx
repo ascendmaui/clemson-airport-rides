@@ -176,7 +176,15 @@ export function LiveShareCard({
           ) : null}
           {copiedNote ? <Text style={styles.live}>{copiedNote}</Text> : null}
           {share ? (
-            <Pressable onPress={onStop} disabled={busy} accessibilityRole="button">
+            <Pressable
+              onPress={onStop}
+              disabled={busy}
+              accessibilityRole="button"
+              accessibilityLabel="Stop sharing"
+              accessibilityHint="Stops live location sharing"
+              accessibilityState={{ disabled: busy }}
+              hitSlop={16}
+            >
               <Text style={styles.stop}>Stop sharing</Text>
             </Pressable>
           ) : null}

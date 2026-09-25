@@ -38,6 +38,7 @@ function AuthShell({ title, subtitle, mark, onBack, children }) {
           accessibilityLabel="Back"
           accessibilityHint="Goes back to previous screen"
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          accessibilityHint="Returns to the previous screen"
         >
           <Text style={styles.backLabel}>←</Text>
         </Pressable>
@@ -80,6 +81,8 @@ function SocialButtons({ providers, busyId, disabled, onPress }) {
             accessibilityRole="button"
             accessibilityLabel={`Continue with ${provider.label}`}
             accessibilityState={{ disabled: Boolean(disabled || busyId) }}
+            accessibilityHint={`Signs in with ${provider.label}`}
+            accessibilityState={{ disabled: disabled || Boolean(busyId), busy: pending }}
           >
             <Text style={styles.socialLabel}>{pending ? 'Opening…' : `Continue with ${provider.label}`}</Text>
           </Pressable>
@@ -126,6 +129,7 @@ function Field({ label, hint, ...inputProps }) {
       <TextInput
         placeholderTextColor="#8B939E"
         style={styles.input}
+        accessibilityLabel={label}
         {...inputProps}
       />
     </View>
@@ -244,6 +248,8 @@ export function SignInScreen({
           accessibilityLabel="Forgot password?"
           accessibilityHint="Navigates to password reset"
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          accessibilityHint="Opens password reset"
+          hitSlop={14}
         >
           <Text style={styles.forgot}>Forgot password?</Text>
         </Pressable>
@@ -256,12 +262,15 @@ export function SignInScreen({
           accessibilityHint="Sends password reset instructions to your email"
           accessibilityState={{ disabled: resetBusy }}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          accessibilityHint="Emails a link to choose a new password"
+          accessibilityState={{ disabled: resetBusy, busy: resetBusy }}
+          hitSlop={14}
         >
           <Text style={styles.forgot}>{resetBusy ? 'Sending reset email…' : 'Forgot password?'}</Text>
         </Pressable>
       ) : null}
-      {error ? <Text style={styles.error}>{error}</Text> : null}
-      {info ? <Text style={styles.info}>{info}</Text> : null}
+      {error ? <Text style={styles.error} accessibilityLiveRegion="assertive" accessibilityRole="alert">{error}</Text> : null}
+      {info ? <Text style={styles.info} accessibilityLiveRegion="polite">{info}</Text> : null}
       <Pressable
         onPress={onSubmit}
         disabled={busy || !email.trim() || !password}
@@ -269,12 +278,23 @@ export function SignInScreen({
         accessibilityRole="button"
         accessibilityLabel={busy ? 'Signing in…' : 'Sign in'}
         accessibilityState={{ disabled: Boolean(busy || !email.trim() || !password) }}
+        accessibilityLabel={busy ? 'Signing in' : 'Sign in'}
+        accessibilityState={{ disabled: busy || !email.trim() || !password, busy }}
       >
         <Text style={styles.primaryLabel}>{busy ? 'Signing in…' : 'Sign in'}</Text>
       </Pressable>
       <Text style={styles.switchRow}>
         New here?{' '}
-        <Text onPress={onCreateAccount} style={styles.switch}>Create an account</Text>
+        <Text
+          onPress={onCreateAccount}
+          style={styles.switch}
+          accessibilityRole="link"
+          accessibilityLabel="Create an account"
+          accessibilityHint="Opens sign up"
+          hitSlop={12}
+        >
+          Create an account
+        </Text>
       </Text>
       <LegalLinks onOpenLegal={onOpenLegal} />
     </AuthShell>
@@ -285,9 +305,9 @@ function LegalLinks({ onOpenLegal }) {
   if (!onOpenLegal) return null
   return (
     <Text style={styles.switchRow}>
-      <Text onPress={() => onOpenLegal('privacy')} style={styles.switch}>Privacy</Text>
+      <Text onPress={() => onOpenLegal('privacy')} style={styles.switch} accessibilityRole="link" accessibilityLabel="Privacy" hitSlop={12}>Privacy</Text>
       {' · '}
-      <Text onPress={() => onOpenLegal('terms')} style={styles.switch}>Terms</Text>
+      <Text onPress={() => onOpenLegal('terms')} style={styles.switch} accessibilityRole="link" accessibilityLabel="Terms" hitSlop={12}>Terms</Text>
     </Text>
   )
 }

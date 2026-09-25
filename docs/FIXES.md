@@ -80,6 +80,35 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
   - `packages/rides-native/documentReview.test.js`
   - `docs/FIXES.md`
 
+## 2026-09-25 — Wire rider a11y scan into test script and record offender counts [t3]
+
+- **Track / machine:** Clemson RIDES · deputy/rider-a11y · pkg-rider-a11y t3
+- **What was wrong:** `tests/a11yRider.test.js` scanned `apps/rider/app` and `apps/rider/components` for Pressable, TouchableOpacity, Button, and Image tags missing an accessible name or role, but the root `package.json` `"test"` script did not list that file, so `npm test` skipped the rider accessibility scanner.
+- **What changed:**
+  - Appended `tests/a11yRider.test.js` to the `"test"` script in `package.json`.
+  - Recorded rider a11y offender counts from the static scan (no React Native runtime):
+    - **Before remediation (t1 baseline):** 20 Pressable accessibility offenders across `apps/rider/app` and `apps/rider/components`.
+    - **After remediation (t2 fixes):** 4 remaining offenders. The scan removed 16 Pressables on sign-in, home request, fare confirm, tiers, pick-driver, and the live trip once those tags had `accessibilityLabel` or `accessibilityRole`.
+    - **Remaining offenders allowlist (4):** `apps/rider/app/history.tsx:61` (history back), `apps/rider/app/schedule.tsx:752` (upcoming-ride Cancel; the same tag was `schedule.tsx:725` on the t1 baseline before the t2 edits shifted the line), `apps/rider/components/EmergencyContactsCard.tsx:192`, `apps/rider/components/EmergencyContactsCard.tsx:196` (emergency-contact editor buttons).
+- **Files touched:**
+  - `package.json`
+  - `docs/FIXES.md`
+- **Verified:** `node --experimental-strip-types --test tests/a11yRider.test.js` logs `rider a11y offenders: 4` and passes 5/5. `npm test` passes 798/798, including that file.
+
+## 2026-09-25 — Rider core-flow accessibility
+
+- **Track / machine:** Clemson RIDES · deputy/rider-a11y · pkg-rider-a11y t2
+- **What was wrong:** Sign-in, home request, fare confirm, checkout return, the live trip, and trip rating exposed Pressables with no role or name. Map, fare, and driver choices did not expose selected state. Disabled actions did not expose disabled state. Several controls were under a 44pt hit target. Driver assigned and arriving did not announce, and a Stripe return did not announce that checkout had sent the rider back.
+- **What changed:** Added accessibilityRole, accessibilityLabel, and accessibilityHint on those controls, accessibilityState for selected and disabled, and hitSlop so small controls reach 44pt. Live trip status uses AccessibilityInfo.announceForAccessibility for assigned (`accepted`) and arriving, plus accessibilityLiveRegion on the status title. Checkout return announces on the live trip and on Schedule. The static allowlist dropped the fixed tags. History’s back button, Schedule’s upcoming-ride Cancel, and the two emergency-contact editor buttons stay allowlisted.
+- **Files touched:** `apps/rider/app/index.tsx`, `apps/rider/app/confirm.tsx`, `apps/rider/app/tiers.tsx`, `apps/rider/app/pick-driver.tsx`, `apps/rider/app/requested.tsx`, `apps/rider/app/rate.tsx`, `apps/rider/app/history.tsx`, `apps/rider/app/schedule.tsx`, `apps/rider/components/Button.tsx`, `apps/rider/components/SignInToBookSheet.tsx`, `apps/rider/components/MainTabs.tsx`, `apps/rider/components/RideMessages.tsx`, `apps/rider/components/LiveShareCard.tsx`, `apps/rider/components/SosSheet.tsx`, `apps/rider/components/carpool/NeighborhoodPicker.tsx`, `packages/rides-native/AuthScreens.jsx`, `packages/rides-native/PartyScreens.jsx`, `tests/a11yRider.test.js`, `docs/FIXES.md`
+
+## 2026-09-25 — Rider accessibility static scan
+
+- **Track / machine:** Clemson RIDES · deputy/rider-a11y · pkg-rider-a11y t1
+- **What was wrong:** Nothing checked `apps/rider/app` or `apps/rider/components` for Pressable, TouchableOpacity, or Button tags missing `accessibilityLabel` or `accessibilityRole`, or for Image tags missing `accessibilityLabel` and `accessible={false}`.
+- **What changed:** Added `tests/a11yRider.test.js`. It reads those `.tsx` files with `fs` (no React Native runtime) and compares offenders to an allowlist of the 20 tags that already fail. A new offender fails the test. No rider UI code was changed.
+- **Files touched:** `tests/a11yRider.test.js`, `docs/FIXES.md`
+
 ## 2026-09-25 — Expiry cron wired: CRON_SECRET + Supabase pg_cron/pg_net; prod redeployed at 111c607
 
 - **Track / machine:** Clemson RIDES · I9 (61b11c89) Vercel CLI + Supabase awktabuhijrshmsmagpq · approved by John 1:05 AM ET 9/25.

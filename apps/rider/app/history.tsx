@@ -83,6 +83,9 @@ function HistoryScreen() {
             {row.status === 'completed' && row.driver_id ? (
               <Pressable
                 accessibilityRole="button"
+                accessibilityLabel="Rate this ride"
+                accessibilityHint="Opens the rating screen"
+                hitSlop={14}
                 onPress={() => router.push({ pathname: '/rate', params: { trip: row.id } })}
               >
                 <Text style={styles.safety}>Rate this ride</Text>
@@ -91,6 +94,9 @@ function HistoryScreen() {
             {row.status === 'completed' && row.driver_id ? (
               <Pressable
                 accessibilityRole="button"
+                accessibilityLabel="Lost and found"
+                accessibilityHint="Reports an item left in the vehicle"
+                hitSlop={14}
                 onPress={() => router.push({ pathname: '/lost-found', params: { trip: row.id } })}
               >
                 <Text style={styles.safety}>Lost & found</Text>
@@ -99,6 +105,9 @@ function HistoryScreen() {
             {isShareableTripStatus(row.status) ? (
               <Pressable
                 accessibilityRole="button"
+                accessibilityLabel="Share location and SOS"
+                accessibilityHint="Opens live trip sharing"
+                hitSlop={14}
                 onPress={() => router.push({ pathname: '/requested', params: { trip: row.id, dest: row.dropoff_label || '' } })}
               >
                 <Text style={styles.safety}>Share location & SOS</Text>

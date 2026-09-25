@@ -32,6 +32,8 @@ export function MainTabs({ active }: { active: 'schedule' | 'friends' | 'account
           <Pressable
             key={tab.id}
             accessibilityRole="button"
+            accessibilityLabel={tab.label}
+            accessibilityHint={on ? undefined : `Opens ${tab.label}`}
             accessibilityState={{ selected: on }}
             onPress={() => {
               if (on) return

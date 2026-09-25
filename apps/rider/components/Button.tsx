@@ -47,6 +47,8 @@ export function PrimaryButton({
       onPress={onPress}
       disabled={disabled}
       accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityState={{ disabled: Boolean(disabled) }}
       style={[
         styles.btn,
         raised ? lift(colors, 'rest') : null,
@@ -76,7 +78,14 @@ export function Pill({
   const body = <Text style={[styles.pillLabel, active && styles.pillLabelOn]}>{label}</Text>
   if (!onPress) return <View style={[styles.pill, active && styles.pillOn]}>{body}</View>
   return (
-    <Pressable onPress={onPress} style={[styles.pill, active && styles.pillOn]} accessibilityRole="button">
+    <Pressable
+      onPress={onPress}
+      style={[styles.pill, active && styles.pillOn]}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityState={{ selected: Boolean(active) }}
+      hitSlop={8}
+    >
       {body}
     </Pressable>
   )

@@ -359,7 +359,7 @@ export function RateTripPanel({
   return (
     <View style={styles.card}>
       <Text style={styles.kicker}>RATE THIS RIDE</Text>
-      <Text style={styles.title}>{done ? 'Rating saved' : `Rate your ${noun}`}</Text>
+      <Text style={styles.title} accessibilityLiveRegion="polite">{done ? 'Rating saved' : `Rate your ${noun}`}</Text>
       {person ? <CounterpartCard person={person} colors={colors} /> : null}
       {done ? (
         <>
@@ -368,7 +368,13 @@ export function RateTripPanel({
               ? 'Their profile average updates from every 1–5 star rating on completed trips.'
               : `Profile average was ${line}. It refreshes from both sides of every completed trip.`}
           </Text>
-          <Pressable onPress={onDone} style={styles.primary} accessibilityRole="button">
+          <Pressable
+            onPress={onDone}
+            style={styles.primary}
+            accessibilityRole="button"
+            accessibilityLabel="Done"
+            accessibilityHint="Closes this rating"
+          >
             <Text style={styles.primaryText}>Done</Text>
           </Pressable>
         </>
@@ -376,7 +382,15 @@ export function RateTripPanel({
         <>
           <View style={{ flexDirection: 'row', gap: 6 }}>
             {[1, 2, 3, 4, 5].map((value) => (
-              <Pressable key={value} onPress={() => setStars(value)} accessibilityRole="button" accessibilityLabel={`${value} star`}>
+              <Pressable
+                key={value}
+                onPress={() => setStars(value)}
+                accessibilityRole="button"
+                accessibilityLabel={`${value} star${value === 1 ? '' : 's'}`}
+                accessibilityHint="Sets the rating"
+                accessibilityState={{ selected: stars === value }}
+                hitSlop={8}
+              >
                 <Text style={[styles.star, { color: value <= stars ? colors.orange : colors.inkSecondary }]}>★</Text>
               </Pressable>
             ))}
@@ -387,13 +401,27 @@ export function RateTripPanel({
             style={styles.input}
             placeholder="Optional note"
             placeholderTextColor="#8B939E"
+            accessibilityLabel="Optional note"
           />
-          {error ? <Text style={styles.error}>{error}</Text> : null}
-          <Pressable onPress={onSubmit} disabled={busy || !trip} style={styles.primary} accessibilityRole="button">
+          {error ? <Text style={styles.error} accessibilityLiveRegion="assertive" accessibilityRole="alert">{error}</Text> : null}
+          <Pressable
+            onPress={onSubmit}
+            disabled={busy || !trip}
+            style={styles.primary}
+            accessibilityRole="button"
+            accessibilityLabel={busy ? 'Saving rating' : `Submit ${stars} star${stars === 1 ? '' : 's'}`}
+            accessibilityState={{ disabled: busy || !trip, busy }}
+          >
             <Text style={styles.primaryText}>{busy ? 'Saving…' : `Submit ${stars} star${stars === 1 ? '' : 's'}`}</Text>
           </Pressable>
           {onLater ? (
-            <Pressable onPress={onLater} style={styles.ghost} accessibilityRole="button">
+            <Pressable
+              onPress={onLater}
+              style={styles.ghost}
+              accessibilityRole="button"
+              accessibilityLabel="Later"
+              accessibilityHint="Rates this ride another time"
+            >
               <Text style={styles.ghostText}>Later</Text>
             </Pressable>
           ) : null}

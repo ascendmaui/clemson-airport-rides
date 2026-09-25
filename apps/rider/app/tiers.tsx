@@ -48,7 +48,14 @@ export default function RideTiers() {
   return (
     <View style={[styles.screen, { paddingTop: insets.top }]}>
       <View style={styles.header}>
-        <Pressable onPress={() => router.back()} style={[styles.back, lift(colors, 'rest')]}>
+        <Pressable
+          onPress={() => router.back()}
+          style={[styles.back, lift(colors, 'rest')]}
+          accessibilityRole="button"
+          accessibilityLabel="Back"
+          accessibilityHint="Returns to confirm pickup"
+          hitSlop={8}
+        >
           <Text style={styles.backLabel}>←</Text>
         </Pressable>
         <View style={{ flex: 1 }}>
@@ -56,7 +63,14 @@ export default function RideTiers() {
           <Text style={styles.sub}>Pickup {pickup}</Text>
         </View>
       </View>
-      <Pressable onPress={() => router.push(user ? '/student' : '/sign-in')} style={[styles.promo, !studentOffer.granted && styles.promoGated]} accessibilityRole="button">
+      <Pressable
+        onPress={() => router.push(user ? '/student' : '/sign-in')}
+        style={[styles.promo, !studentOffer.granted && styles.promoGated]}
+        accessibilityRole="button"
+        accessibilityLabel={studentOffer.detail ? `${studentOffer.title}. ${studentOffer.detail}` : studentOffer.title}
+        accessibilityHint={user ? 'Opens student pricing' : 'Sign in to check student pricing'}
+        hitSlop={8}
+      >
         <Text style={styles.promoText}>{studentOffer.title}</Text>
         {studentOffer.detail ? <Text style={styles.promoDetail}>{studentOffer.detail}</Text> : null}
       </Pressable>
@@ -65,7 +79,15 @@ export default function RideTiers() {
           const on = tier.id === selected
           const quoted = displayTierPrice(tier.price, { isStudent: student.verified, tier: tier.id })
           return (
-            <Pressable key={tier.id} onPress={() => setSelected(tier.id)} style={[styles.row, tier.id === 'tesla' && styles.rowFleet, on && styles.rowOn]}>
+            <Pressable
+              key={tier.id}
+              onPress={() => setSelected(tier.id)}
+              style={[styles.row, tier.id === 'tesla' && styles.rowFleet, on && styles.rowOn]}
+              accessibilityRole="button"
+              accessibilityLabel={`${tier.name}, ${formatUsd(quoted.price)}, ${tier.eta}, ${tier.meta}`}
+              accessibilityHint="Selects this fare"
+              accessibilityState={{ selected: on }}
+            >
               <Text style={styles.icon}>{tier.icon}</Text>
               <View style={{ flex: 1 }}>
                 <Text style={styles.name}>{tier.name}</Text>

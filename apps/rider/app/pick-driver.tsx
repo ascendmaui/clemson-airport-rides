@@ -127,7 +127,15 @@ export default function PickDriver() {
       ? [lines.etaLabel, lines.distanceLabel ? `${lines.distanceLabel} from pickup` : null].filter(Boolean).join(' · ') || 'ETA unavailable'
       : 'Not available now'
     return (
-      <Pressable key={driver.id} onPress={() => { void tapHaptic(); setSelected(driver.id) }} style={[styles.card, lift(colors, 'rest'), on && styles.cardOn, !driver.online && styles.cardOff]}>
+      <Pressable
+        key={driver.id}
+        onPress={() => { void tapHaptic(); setSelected(driver.id) }}
+        style={[styles.card, lift(colors, 'rest'), on && styles.cardOn, !driver.online && styles.cardOff]}
+        accessibilityRole="button"
+        accessibilityLabel={`${driver.name}, ${driver.vehicleLabel}${driver.plate ? `, ${driver.plate}` : ''}. ${eta}`}
+        accessibilityHint={driver.online ? 'Selects this driver' : 'This driver is offline'}
+        accessibilityState={{ selected: on }}
+      >
         <View style={styles.cardTop}>
           <View style={{ flex: 1 }}>
             <Text style={styles.name}>{driver.name}</Text>
@@ -147,7 +155,13 @@ export default function PickDriver() {
           {saved ? <Text style={styles.badgePurple}>Preferred</Text> : null}
           {driver.isTesla ? <Text style={styles.badgeOrange}>Tesla</Text> : null}
           {driver.priorityMode && driver.online ? <Text style={styles.badgePurple}>Priority</Text> : null}
-          <Pressable onPress={() => { void toggleFavorite(driver.id) }} hitSlop={8} accessibilityRole="button" accessibilityLabel={saved ? 'Remove preferred driver' : 'Save preferred driver'}>
+          <Pressable
+            onPress={() => { void toggleFavorite(driver.id) }}
+            hitSlop={16}
+            accessibilityRole="button"
+            accessibilityLabel={saved ? 'Remove preferred driver' : 'Save preferred driver'}
+            accessibilityHint={saved ? 'Removes this driver from your preferred list' : 'Saves this driver as preferred'}
+          >
             <Text style={saved ? styles.saveOn : styles.saveOff}>{saved ? 'Saved' : 'Save'}</Text>
           </Pressable>
         </View>
@@ -222,7 +236,14 @@ export default function PickDriver() {
   return (
     <View style={[styles.screen, { paddingTop: insets.top }]}>
       <View style={styles.header}>
-        <Pressable onPress={() => router.back()} style={[styles.back, lift(colors, 'rest')]}>
+        <Pressable
+          onPress={() => router.back()}
+          style={[styles.back, lift(colors, 'rest')]}
+          accessibilityRole="button"
+          accessibilityLabel="Back"
+          accessibilityHint="Returns to fare choices"
+          hitSlop={8}
+        >
           <Text style={styles.backLabel}>←</Text>
         </Pressable>
         <View style={{ flex: 1 }}>
@@ -241,7 +262,16 @@ export default function PickDriver() {
           {MAP_KINDS.map((kind) => {
             const on = mapType === kind
             return (
-              <Pressable key={kind} onPress={() => setMapType(kind)} style={[styles.kind, on && styles.kindOn]}>
+              <Pressable
+                key={kind}
+                onPress={() => setMapType(kind)}
+                style={[styles.kind, on && styles.kindOn]}
+                accessibilityRole="button"
+                accessibilityLabel={`${mapKindLabel(kind)} map`}
+                accessibilityHint="Changes the map style"
+                accessibilityState={{ selected: on }}
+                hitSlop={12}
+              >
                 <Text style={[styles.kindText, on && styles.kindTextOn]}>{mapKindLabel(kind)}</Text>
               </Pressable>
             )

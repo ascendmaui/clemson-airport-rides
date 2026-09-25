@@ -1,7 +1,7 @@
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useEffect, useRef, useState } from 'react'
 import { reconcileCheckout } from 'rides-native/riderMoney.js'
-import { Pressable, RefreshControl, ScrollView, Text, View } from 'react-native'
+import { AccessibilityInfo, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { PrimaryButton } from '@/components/Button'
 import { HoldExpiryNotice } from '@/components/HoldExpiryNotice'
@@ -88,6 +88,8 @@ export default function Requested() {
   const tripId = oneParam(params.trip, '')
   const dest = oneParam(params.dest, '')
   const driver = oneParam(params.driver, 'Your driver')
+  const paid = oneParam(params.paid, '')
+  const checkoutReturn = paid === '1' || paid === 'true'
   const { user } = useAuth()
   const { trip, error: tripError, loading } = useTripById(tripId || null)
   const [live, setLive] = useState<LiveTrip | null>(null)
@@ -177,6 +179,36 @@ export default function Requested() {
   )
   const preview = showSearchTheater(shown?.status || null)
   const approachLive = isApproachStatus(shown?.status || null)
+  const showCheckoutReturn = checkoutReturn
+    && Boolean(tripId)
+    && !loading
+    && (!shown?.status || shown.status === 'searching' || shown.status === 'offered')
+  const announcedRideStatus = useRef<string | null>(null)
+  const announcedCheckout = useRef(false)
+
+  useEffect(() => {
+    const status = shown?.status || null
+    if (status !== 'accepted' && status !== 'arriving') {
+      announcedRideStatus.current = status
+      return
+    }
+    if (announcedRideStatus.current === status) return
+    announcedRideStatus.current = status
+    const who = driverName && driverName !== 'Your driver' ? driverName : 'Your driver'
+    AccessibilityInfo.announceForAccessibility(
+      status === 'accepted'
+        ? `${who} is assigned and on the way to pickup.`
+        : `${who} is arriving.`,
+    )
+  }, [shown?.status, driverName])
+
+  useEffect(() => {
+    if (!showCheckoutReturn || announcedCheckout.current) return
+    announcedCheckout.current = true
+    AccessibilityInfo.announceForAccessibility(
+      'Stripe Checkout sent you back. This ride is in the open pool. The deposit shows up when Stripe confirms it.',
+    )
+  }, [showCheckoutReturn])
 
   useEffect(() => {
     if (!user?.id || !supabase) return undefined
@@ -210,12 +242,21 @@ export default function Requested() {
   return (
     <View style={[styles.screen, { paddingTop: insets.top }]}>
       <View style={styles.header}>
-        <Pressable accessibilityRole="button" accessibilityLabel="Back" onPress={() => router.back()} style={[styles.back, lift(colors, 'rest')]}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Back"
+          accessibilityHint="Returns to the previous screen"
+          hitSlop={8}
+          onPress={() => router.back()}
+          style={[styles.back, lift(colors, 'rest')]}
+        >
           <Text style={styles.backLabel}>←</Text>
         </Pressable>
         <View style={styles.headerCopy}>
           <Text style={styles.kicker}>{ttlCanceled ? 'HOLD EXPIRED' : 'LIVE RIDE'}</Text>
           <Text style={styles.title}>{phase.title}</Text>
+          <Text style={styles.kicker}>LIVE RIDE</Text>
+          <Text style={styles.title} accessibilityRole="header" accessibilityLiveRegion="polite">{phase.title}</Text>
         </View>
         <SosButton onPress={() => setSosOpen(true)} />
       </View>
@@ -240,6 +281,10 @@ export default function Requested() {
               router.push(code ? { pathname: '/schedule', params: { airport: code } } : '/schedule')
             }}
           />
+        {showCheckoutReturn ? (
+          <Text style={styles.body} accessibilityLiveRegion="polite">
+            Stripe Checkout sent you back. This ride is in the open pool. The deposit shows up when Stripe confirms it.
+          </Text>
         ) : null}
         <View style={styles.map}>
           {/* TODO: road-following tiles need a billed Maps key. Pins, status, and straight-line ETA use coordinates already on the trip. */}
@@ -335,7 +380,13 @@ export default function Requested() {
           )}
           <PrimaryButton label="Open SOS" onPress={() => setSosOpen(true)} tone="purple" />
         </View>
-        <Pressable onPress={() => router.push('/safety')}>
+        <Pressable
+          onPress={() => router.push('/safety')}
+          accessibilityRole="button"
+          accessibilityLabel="Emergency contacts"
+          accessibilityHint="Opens the safety screen"
+          hitSlop={16}
+        >
           <Text style={styles.link}>Emergency contacts →</Text>
         </Pressable>
         <PrimaryButton label="Back to rides" onPress={() => router.replace('/')} tone="ghost" />
