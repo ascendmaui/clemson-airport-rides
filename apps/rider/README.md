@@ -76,6 +76,6 @@ On a device or simulator (`npx expo start` from `apps/rider`):
 
 1. Sign in, then open Safety from Account or the home pill.
 2. With no contacts, the list says "No emergency contacts yet". Add a name and phone, edit it, and confirm it is listed.
-3. Request a ride so a trips row exists. On Ride requested, tap Share my location. The link looks like `https://clemson-airport-rides.vercel.app/share/<token>` and a location_shares row is active.
+3. Request a ride so a trips row exists. On Ride requested, tap Share my location. The link looks like `https://clemson-rides.vercel.app/share/<token>` and a location_shares row is active.
 4. Tap Share trip link and send that same URL from the share sheet.
 5. While the trip is accepted, arriving, or in progress, tap SOS. The screen is full-bleed red and says to press the button to call police. The first press on Call 911 or Call Clemson Police does not dial. A sos_events row is stored with channel banner. Press Call 911 again to dial.

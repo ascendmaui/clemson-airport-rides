@@ -1,7 +1,8 @@
+import { resolveApiBase } from 'rides-native/apiOrigin.js'
 import { supabase } from '@/lib/supabase'
 
 export function apiBase() {
-  return (process.env.EXPO_PUBLIC_API_BASE || 'https://clemson-airport-rides.vercel.app').replace(/\/$/, '')
+  return resolveApiBase()
 }
 
 export function apiUrl(path: string) {
@@ -16,3 +17,6 @@ export async function authHeaders(): Promise<Record<string, string>> {
   if (token) headers.Authorization = `Bearer ${token}`
   return headers
 }
+
+export { authedJson } from 'rides-native/apiClient.js'
+

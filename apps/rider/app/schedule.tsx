@@ -34,8 +34,10 @@ import {
   loadTripDeposit,
   quoteAirportFare,
   quoteInputKey,
+  reconcileCheckout,
   startAirportDeposit,
 } from 'rides-native/riderMoney.js'
+import { parseCheckoutSessionId } from 'rides-native/checkoutReturn.js'
 import { localDateInput, localTimeInput, nextPickupDate, RIDE_PLACES } from 'rides-native/riderShell.js'
 import { formatCents, formatPickupAt, TESLA_FLEET_NOTICE } from 'rides-native/tripTags.js'
 import { dueScheduleReminders } from '../../../src/lib/scheduledRideModel.js'
@@ -280,22 +282,35 @@ function ScheduleScreen() {
         return
       }
       setBanner(`Opening Stripe for the ${formatCents(depositPaid)} deposit. Remaining balance ${formatCents(remaining)} is collected when the trip is complete.`)
-      await openStripeCheckout(url)
+      const browserResult = await openStripeCheckout(url)
       if (!tripId || !supabase) {
         setBanner('Checkout closed. Deposit received only after Stripe records the payment.')
         return
       }
+      let effectiveSessionId = typeof session.id === 'string' ? session.id : ''
+      if (!effectiveSessionId && browserResult && typeof browserResult === 'object' && 'url' in browserResult && typeof browserResult.url === 'string') {
+        effectiveSessionId = parseCheckoutSessionId(browserResult.url) || ''
+      }
+      let reconciledPaid = false
+      if (effectiveSessionId && supabase) {
+        try {
+          const rec = await reconcileCheckout(supabase, effectiveSessionId)
+          if (rec?.paid) reconciledPaid = true
+        } catch (reconcileErr) {
+          console.warn('[reconcile-checkout] error:', reconcileErr)
+        }
+      }
       const settled = await loadTripDeposit(supabase, tripId)
-      const sessionId = typeof session.id === 'string' ? session.id : ''
+      const sessionId = effectiveSessionId
       let close: CheckoutCloseResult | null = null
-      if (!settled.settled) {
+      if (!settled.settled && !reconciledPaid) {
         try {
           close = await abandonAirportCheckout(supabase, { tripId, sessionId })
         } catch {
           close = null
         }
       }
-      const outcome = settled.settled ? 'paid' : checkoutCloseOutcome(close)
+      const outcome = (settled.settled || reconciledPaid) ? 'paid' : checkoutCloseOutcome(close)
       if (outcome === 'paid') {
         setBanner(`Deposit received · ${formatCents(depositPaid)}. Remaining balance ${formatCents(remaining)} is collected when the trip is complete.`)
         await successHaptic()

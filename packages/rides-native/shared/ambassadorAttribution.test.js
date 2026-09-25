@@ -22,13 +22,13 @@ test('reads /a/:code from path, hash, and the app scheme', () => {
   assert.equal(ambassadorCodeFromLocation({ hash: '#/a/amb_tiger1' }), 'amb_tiger1')
   assert.equal(ambassadorCodeFromLocation({ hash: '#/ambassador/Amb_Tiger2' }), 'amb_tiger2')
   assert.equal(
-    ambassadorCodeFromLocation({ href: 'https://clemson-airport-rides.vercel.app/a/amb_tiger1' }),
+    ambassadorCodeFromLocation({ href: 'https://clemson-rides.vercel.app/a/amb_tiger1' }),
     'amb_tiger1',
   )
   assert.equal(ambassadorCodeFromLocation({ href: 'clemsonrides://a/amb_tiger1' }), 'amb_tiger1')
   assert.equal(
     ambassadorCodeFromLocation({
-      href: 'https://clemson-airport-rides.vercel.app/carpool/tok#/a/amb_hash',
+      href: 'https://clemson-rides.vercel.app/carpool/tok#/a/amb_hash',
     }),
     'amb_hash',
   )

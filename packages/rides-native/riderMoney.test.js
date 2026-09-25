@@ -4,7 +4,9 @@ import { readFileSync } from 'node:fs'
 import { cardDepositCents as fareCardDeposit } from '../../src/lib/fareRates.js'
 import { normalizePrefs } from './notificationPrefs.js'
 import { buildReceiptText } from '../../src/lib/receiptText.js'
+import { AUTH_REQUIRED_COPY, UNAVAILABLE_COPY } from './apiErrors.js'
 import {
+  authedJson,
   cardDepositCents,
   checkoutFailureCopy,
   depositBalance,
@@ -250,3 +252,269 @@ test('notification prefs keep web defaults', () => {
   assert.equal(custom.quiet.dnd, true)
   assert.equal(custom.quiet.start, '22:00')
 })
+
+test('authedJson on 401: refresh succeeds -> retried once with new access token', async () => {
+  let fetchCount = 0
+  const authHeaders = []
+  const fakeFetch = async (url, options) => {
+    fetchCount++
+    authHeaders.push(options?.headers?.Authorization)
+    if (fetchCount === 1) {
+      return {
+        status: 401,
+        ok: false,
+        text: async () => JSON.stringify({ error: 'jwt expired' }),
+      }
+    }
+    return {
+      status: 200,
+      ok: true,
+      text: async () => JSON.stringify({ ok: true, tripId: 'trip_123' }),
+    }
+  }
+
+  let refreshCount = 0
+  const fakeSupabase = {
+    auth: {
+      getSession: async () => ({
+        data: { session: { access_token: 'stale-token' } },
+      }),
+      refreshSession: async () => {
+        refreshCount++
+        return {
+          data: { session: { access_token: 'fresh-token' } },
+        }
+      },
+    },
+  }
+
+  const result = await authedJson(fakeSupabase, '/api/stripe-payment-methods?action=quote', {
+    method: 'POST',
+    body: { airport: 'GSP' },
+    fetch: fakeFetch,
+  })
+
+  assert.deepEqual(result, { ok: true, tripId: 'trip_123' })
+  assert.equal(fetchCount, 2)
+  assert.equal(refreshCount, 1)
+  assert.equal(authHeaders[0], 'Bearer stale-token')
+  assert.equal(authHeaders[1], 'Bearer fresh-token')
+})
+
+test('authedJson on 401: refresh fails -> auth error without retry', async () => {
+  let fetchCount = 0
+  const fakeFetch = async () => {
+    fetchCount++
+    return {
+      status: 401,
+      ok: false,
+      text: async () => JSON.stringify({ error: 'Sign in required' }),
+    }
+  }
+
+  let refreshCount = 0
+  const fakeSupabase = {
+    auth: {
+      getSession: async () => ({
+        data: { session: { access_token: 'stale-token' } },
+      }),
+      refreshSession: async () => {
+        refreshCount++
+        return {
+          data: { session: null },
+          error: new Error('Invalid refresh token'),
+        }
+      },
+    },
+  }
+
+  await assert.rejects(
+    async () => {
+      await authedJson(fakeSupabase, '/api/stripe-payment-methods?action=quote', {
+        method: 'POST',
+        fetch: fakeFetch,
+      })
+    },
+    (err) => {
+      assert.equal(err.status, 401)
+      assert.equal(err.kind, 'auth')
+      assert.equal(err.auth, true)
+      assert.equal(err.message, AUTH_REQUIRED_COPY)
+      assert.equal(err.message, 'Please sign in again to continue.')
+      return true
+    }
+  )
+
+  assert.equal(fetchCount, 1)
+  assert.equal(refreshCount, 1)
+})
+
+test('authedJson on 503 / config error: friendly message, no refresh', async () => {
+  let fetchCount = 0
+  const fakeFetch = async () => {
+    fetchCount++
+    return {
+      status: 503,
+      ok: false,
+      text: async () => JSON.stringify({
+        error: 'Payments unavailable',
+        message: 'STRIPE_SECRET_KEY is not configured.',
+      }),
+    }
+  }
+
+  let refreshCount = 0
+  const fakeSupabase = {
+    auth: {
+      getSession: async () => ({
+        data: { session: { access_token: 'valid-token' } },
+      }),
+      refreshSession: async () => {
+        refreshCount++
+        return { data: { session: { access_token: 'new-token' } } }
+      },
+    },
+  }
+
+  await assert.rejects(
+    async () => {
+      await authedJson(fakeSupabase, '/api/stripe-payment-methods?action=quote', {
+        method: 'POST',
+        fetch: fakeFetch,
+      })
+    },
+    (err) => {
+      assert.equal(err.status, 503)
+      assert.equal(err.kind, 'unavailable')
+      assert.equal(err.unavailable, true)
+      assert.equal(err.message, UNAVAILABLE_COPY)
+      assert.equal(err.message, 'Payments are temporarily unavailable, please try again shortly')
+      assert.equal(err.code, 'Payments unavailable')
+      return true
+    }
+  )
+
+  assert.equal(fetchCount, 1)
+  assert.equal(refreshCount, 0)
+})
+
+test('authedJson on 401: retry also returns 401 -> surfaces auth error, no second refresh', async () => {
+  let fetchCount = 0
+  const fakeFetch = async () => {
+    fetchCount++
+    return {
+      status: 401,
+      ok: false,
+      text: async () => JSON.stringify({ error: 'Unauthorized' }),
+    }
+  }
+
+  let refreshCount = 0
+  const fakeSupabase = {
+    auth: {
+      getSession: async () => ({
+        data: { session: { access_token: 'tok-1' } },
+      }),
+      refreshSession: async () => {
+        refreshCount++
+        return { data: { session: { access_token: 'tok-2' } } }
+      },
+    },
+  }
+
+  await assert.rejects(
+    async () => {
+      await authedJson(fakeSupabase, '/api/stripe-payment-methods?action=quote', {
+        fetch: fakeFetch,
+      })
+    },
+    (err) => {
+      assert.equal(err.status, 401)
+      assert.equal(err.kind, 'auth')
+      assert.equal(err.message, AUTH_REQUIRED_COPY)
+      return true
+    }
+  )
+
+  assert.equal(fetchCount, 2)
+  assert.equal(refreshCount, 1)
+})
+
+test('authedJson: server 500 config error returns friendly message without refresh', async () => {
+  let fetchCount = 0
+  const fakeFetch = async () => {
+    fetchCount++
+    return {
+      status: 500,
+      ok: false,
+      text: async () => JSON.stringify({ error: 'SUPABASE_SERVICE_ROLE_KEY not configured' }),
+    }
+  }
+
+  let refreshCount = 0
+  const fakeSupabase = {
+    auth: {
+      getSession: async () => ({ data: { session: { access_token: 'tok' } } }),
+      refreshSession: async () => {
+        refreshCount++
+        return { data: { session: { access_token: 'new-tok' } } }
+      },
+    },
+  }
+
+  await assert.rejects(
+    async () => {
+      await authedJson(fakeSupabase, '/api/trip', { fetch: fakeFetch })
+    },
+    (err) => {
+      assert.equal(err.status, 500)
+      assert.equal(err.kind, 'unavailable')
+      assert.equal(err.message, UNAVAILABLE_COPY)
+      assert.equal(err.code, 'SUPABASE_SERVICE_ROLE_KEY not configured')
+      return true
+    }
+  )
+
+  assert.equal(fetchCount, 1)
+  assert.equal(refreshCount, 0)
+})
+
+test('authedJson: works when mocking globalThis.fetch directly', async () => {
+  const originalFetch = globalThis.fetch
+  let fetchCount = 0
+  globalThis.fetch = async () => {
+    fetchCount++
+    if (fetchCount === 1) {
+      return {
+        status: 401,
+        ok: false,
+        text: async () => JSON.stringify({ error: 'jwt expired' }),
+      }
+    }
+    return {
+      status: 200,
+      ok: true,
+      text: async () => JSON.stringify({ ok: true }),
+    }
+  }
+
+  try {
+    let refreshed = 0
+    const fakeSupabase = {
+      auth: {
+        getSession: async () => ({ data: { session: { access_token: 'old' } } }),
+        refreshSession: async () => {
+          refreshed++
+          return { data: { session: { access_token: 'new' } } }
+        },
+      },
+    }
+    const res = await authedJson(fakeSupabase, '/api/test')
+    assert.deepEqual(res, { ok: true })
+    assert.equal(fetchCount, 2)
+    assert.equal(refreshed, 1)
+  } finally {
+    globalThis.fetch = originalFetch
+  }
+})
+

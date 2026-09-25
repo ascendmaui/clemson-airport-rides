@@ -58,6 +58,7 @@ function registrationMatchFrom(documents) {
 }
 
 export function agreementPlainText(html = IC_AGREEMENT_HTML) {
+  if (html == null) return ''
   return String(html)
     .replace(/<h1>/gi, '')
     .replace(/<h2>/gi, '\n')

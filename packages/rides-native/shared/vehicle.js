@@ -57,20 +57,21 @@ export async function loadRegisteredVehicle(supabase, userId) {
 export async function saveRegisteredVehicle(supabase, userId, payload) {
   if (!supabase) throw new Error('Supabase is not configured')
   if (!userId) throw new Error('Sign in required')
-  const make = String(payload.make || '').trim()
-  const model = String(payload.model || '').trim()
-  const plate = String(payload.plate || '').trim()
+  const p = payload && typeof payload === 'object' ? payload : {}
+  const make = String(p.make || '').trim()
+  const model = String(p.model || '').trim()
+  const plate = String(p.plate || '').trim()
   if (!make || !model || !plate) throw new Error('Make, model, and plate are required.')
-  const seats = Math.max(1, Math.min(8, Math.floor(Number(payload.seats) || 4)))
+  const seats = Math.max(1, Math.min(8, Math.floor(Number(p.seats) || 4)))
   const fields = {
     make,
     model,
-    color: String(payload.color || '').trim() || null,
+    color: String(p.color || '').trim() || null,
     plate,
     seats,
-    is_tesla: Boolean(payload.isTesla),
+    is_tesla: Boolean(p.isTesla),
     autonomous_capable: false,
-    tier: payload.isTesla ? 'tesla_self_driving' : 'standard',
+    tier: p.isTesla ? 'tesla_self_driving' : 'standard',
   }
   const { data: existing, error: readErr } = await supabase.from('vehicles').select('id').eq('driver_id', userId).limit(1)
   if (readErr) throw new Error(readErr.message)
