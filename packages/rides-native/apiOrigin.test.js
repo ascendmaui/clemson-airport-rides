@@ -178,6 +178,18 @@ test('resolveApiBase trims whitespace and falls back to DEFAULT_API_BASE when bl
   assert.equal(resolveApiBase(), 'https://clemson-rides.vercel.app')
 })
 
+test('resolveApiBase handles whitespace combined with multiple trailing slashes', () => {
+  process.env.EXPO_PUBLIC_API_BASE = '   https://api.example.com///   '
+  assert.equal(resolveApiBase(), 'https://api.example.com')
+
+  // When only slashes and whitespace are provided, it strips to empty and falls back to DEFAULT_API_BASE
+  process.env.EXPO_PUBLIC_API_BASE = '   ///   '
+  assert.equal(resolveApiBase(), DEFAULT_API_BASE)
+
+  process.env.EXPO_PUBLIC_API_BASE = '\t\n//\n\t'
+  assert.equal(resolveApiBase(), DEFAULT_API_BASE)
+})
+
 test('resolveApiBase returns non-URL strings directly without validation', () => {
   // BUG?: Non-URL strings like 'invalid-origin' or 'not_a_url' are returned as-is without protocol or host validation.
   process.env.EXPO_PUBLIC_API_BASE = 'not-a-valid-origin'
@@ -185,6 +197,53 @@ test('resolveApiBase returns non-URL strings directly without validation', () =>
 
   process.env.EXPO_PUBLIC_API_BASE = 'custom-host/api/'
   assert.equal(resolveApiBase(), 'custom-host/api')
+})
+
+test('resolveApiBase with bare scheme strips slashes leaving malformed scheme prefix', () => {
+  // BUG?: When EXPO_PUBLIC_API_BASE is set to a bare scheme like 'http://' or 'https://',
+  // replace(/\/+$/, '') strips the trailing slashes leaving 'http:' or 'https:', which results
+  // in invalid concatenated paths like 'https:/api/ping'.
+  process.env.EXPO_PUBLIC_API_BASE = 'https://'
+  assert.equal(resolveApiBase(), 'https:')
+
+  process.env.EXPO_PUBLIC_API_BASE = 'http://'
+  assert.equal(resolveApiBase(), 'http:')
+})
+
+test('resolveApiBase preserves protocol-relative URLs without normalization', () => {
+  // BUG?: Protocol-relative URLs (e.g. '//api.example.com') are returned without scheme,
+  // which will fail in React Native fetch environments that require an explicit scheme.
+  process.env.EXPO_PUBLIC_API_BASE = '//api.example.com'
+  assert.equal(resolveApiBase(), '//api.example.com')
+
+  process.env.EXPO_PUBLIC_API_BASE = '//api.example.com/'
+  assert.equal(resolveApiBase(), '//api.example.com')
+})
+
+test('resolveApiBase preserves query parameters and fragments in base URL', () => {
+  // BUG?: If EXPO_PUBLIC_API_BASE contains query params or hash fragments,
+  // string concatenation `${resolveApiBase()}/endpoint` appends path after query/fragment
+  // (e.g. 'https://api.example.com?env=dev/endpoint').
+  process.env.EXPO_PUBLIC_API_BASE = 'https://api.example.com?env=dev'
+  assert.equal(resolveApiBase(), 'https://api.example.com?env=dev')
+
+  process.env.EXPO_PUBLIC_API_BASE = 'https://api.example.com#debug'
+  assert.equal(resolveApiBase(), 'https://api.example.com#debug')
+})
+
+test('resolveApiBase does not restrict scheme to http or https', () => {
+  // BUG?: Arbitrary non-http schemes (e.g. 'ftp://', 'javascript:void(0)')
+  // are accepted without error or protocol verification.
+  process.env.EXPO_PUBLIC_API_BASE = 'ftp://ftp.clemsonrides.com'
+  assert.equal(resolveApiBase(), 'ftp://ftp.clemsonrides.com')
+})
+
+test('resolveApiBase handles custom ports and IPv6 addresses', () => {
+  process.env.EXPO_PUBLIC_API_BASE = 'http://localhost:8080/'
+  assert.equal(resolveApiBase(), 'http://localhost:8080')
+
+  process.env.EXPO_PUBLIC_API_BASE = 'http://[::1]:3000/'
+  assert.equal(resolveApiBase(), 'http://[::1]:3000')
 })
 
 // ---------------------------------------------------------------------------
