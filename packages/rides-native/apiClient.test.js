@@ -62,10 +62,10 @@ test('apiBase returns configured base URL without trailing slash', () => {
   assert.equal(apiBase(), 'https://custom-api.example.com')
 })
 
-test('apiBase trailing slash regex strips only a single trailing slash', () => {
-  // BUG?: String(raw).replace(/\/$/, '') only strips a single trailing slash, leaving extra slashes intact
+test('apiBase strips every trailing slash from EXPO_PUBLIC_API_BASE', () => {
+  // resolveApiBase uses /\/+$/; multiple trailing slashes collapse to none.
   process.env.EXPO_PUBLIC_API_BASE = 'https://custom-api.example.com//'
-  assert.equal(apiBase(), 'https://custom-api.example.com/')
+  assert.equal(apiBase(), 'https://custom-api.example.com')
 })
 
 // ---------------------------------------------------------------------------

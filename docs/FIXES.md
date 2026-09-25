@@ -1,6 +1,23 @@
 # Build & blocker fixes log
 
 Persistent knowledge base for recurring failures. When a matching issue appears, apply the saved fix first.
+## 2026-09-25 — parseRideAt date+time as America/New_York wall time
+
+- **Date:** 2026-09-25
+- **Track / machine:** Clemson RIDES · Pro Mac · `deputy/parse-ride-at-et` (money Bug 1)
+- **What was wrong:** `parseRideAt` built `new Date(`${date}T${time}:00`)`, which uses the **host** local zone. On Vercel (`TZ=UTC`) a rider’s Clemson “14:00” was stored as 14:00Z (= 10:00 AM EDT), shifting which surge window (`resolveSurge` in America/New_York) applied and mis-pricing airport rush / weekend / game-day.
+- **What changed:** Interpret civil `date`+`time` as **America/New_York** wall clock via an Intl `formatToParts` / offset-probe helper (`zonedCivilToUtc`). ISO `at` / `pickupAt` with Z or numeric offset unchanged. DST: reject non-existent spring-gap hours (Invalid Date); ambiguous fall-back → first occurrence. Fare formula multipliers untouched — only which Instant is priced.
+- **Files touched:**
+  - `server/authoritativeFare.js`
+  - `server/authoritativeFare.test.js`
+  - `server/scheduleTrip.test.js` (flipped former BUG? assertion)
+  - `docs/FIXES.md`
+  - `packages/rides-native/apiClient.test.js` (stale BUG? assertion; pre-existing on main — `resolveApiBase` already strips all trailing slashes)
+  - `apps/driver/app/(tabs)/index.tsx` (pre-existing duplicate react/RN imports on main; a11y scanner could not parse)
+  - `apps/driver/app/queue.tsx` (filter chip Pressable missing accessibilityLabel/Role)
+  - `tests/a11yRider.test.js` (allowlist line for schedule.tsx Pressable 752→884; pre-existing drift on main)
+- **Verified:** focused parseRideAt tests under `TZ=UTC`; full `npm test` green before merge.
+
 ## 2026-09-25 — Wire offerCard unit tests into npm test [t3]
 
 - **Date:** 2026-09-25

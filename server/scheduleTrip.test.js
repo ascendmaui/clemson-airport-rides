@@ -456,13 +456,12 @@ describe('scheduleTrip endpoint handler', () => {
       )
       assert.equal(res.status, 200)
       assert.equal(tripsInserted.length, 1)
-      assert.equal(tripsInserted[0].pickup_at, new Date('2027-05-20T14:00:00').toISOString())
+      // 14:00 America/New_York on 2027-05-20 is EDT (UTC-4) → 18:00Z
+      assert.equal(tripsInserted[0].pickup_at, '2027-05-20T18:00:00.000Z')
     })
 
-    // BUG?: parseRideAt builds `new Date(`${date}T${time}:00`)`, which uses the SERVER's
-    // local zone. On Vercel (TZ=UTC) a rider's "14:00" is stored as 14:00Z = 10:00 AM EDT,
-    // which also moves which surge window applies. Documented only; not fixed (fare path).
-    test('BUG?: date + time is read in the server time zone, not America/New_York', async () => {
+    // Fixed: date+time is America/New_York wall clock, not host TZ (Vercel UTC used to shift surge).
+    test('date + time is America/New_York wall time even when process TZ is UTC', async () => {
       const prevTz = process.env.TZ
       process.env.TZ = 'UTC'
       try {
@@ -473,7 +472,7 @@ describe('scheduleTrip endpoint handler', () => {
           { user: mockStandardUser, sb, ensureProfile: async () => ({ ok: true }) },
         )
         assert.equal(res.status, 200)
-        assert.equal(tripsInserted[0].pickup_at, '2027-05-20T14:00:00.000Z') // not 18:00Z (2 PM EDT)
+        assert.equal(tripsInserted[0].pickup_at, '2027-05-20T18:00:00.000Z') // 2 PM EDT
       } finally {
         if (prevTz === undefined) delete process.env.TZ
         else process.env.TZ = prevTz

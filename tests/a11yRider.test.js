@@ -19,7 +19,7 @@ const INTERACTIVE = new Set(['Pressable', 'TouchableOpacity', 'Button'])
 
 const ALLOWLIST = [
   'apps/rider/app/history.tsx:61:9 <Pressable>',
-  'apps/rider/app/schedule.tsx:752:15 <Pressable>',
+  'apps/rider/app/schedule.tsx:884:15 <Pressable>',
   'apps/rider/components/EmergencyContactsCard.tsx:192:15 <Pressable>',
   'apps/rider/components/EmergencyContactsCard.tsx:196:13 <Pressable>',
 ]
