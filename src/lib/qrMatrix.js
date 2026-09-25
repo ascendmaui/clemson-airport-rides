@@ -2,7 +2,8 @@ import QRCode from 'qrcode'
 
 /** Square QR modules for an SVG. Used by the marketing download codes. */
 export function qrMatrix(text) {
-  const qr = QRCode.create(String(text || ''), { errorCorrectionLevel: 'M' })
+  // Nullish only. `||` would turn numeric 0 (and false / NaN) into ''.
+  const qr = QRCode.create(String(text ?? ''), { errorCorrectionLevel: 'M' })
   const size = qr.modules.size
   const cells = []
   for (let y = 0; y < size; y += 1) {
