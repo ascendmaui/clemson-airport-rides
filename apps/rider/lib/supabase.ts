@@ -6,9 +6,6 @@ const key = (process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || '').trim()
 
 export const supabaseConfigured = Boolean(url && key)
 
-// Email/password and the Clerk bridge both persist a Supabase Auth session.
-// Do not set `accessToken` from a Clerk JWT: Clerk user ids are not UUIDs,
-// so auth.uid() would be null and existing RLS policies would stop matching.
 export const supabase = supabaseConfigured
   ? createClient(url, key, {
       auth: {

@@ -7,7 +7,7 @@ type Storage = {
 }
 
 export type SocialProvider = {
-  id: 'apple' | 'google' | 'facebook'
+  id: 'apple' | 'google'
   label: string
 }
 

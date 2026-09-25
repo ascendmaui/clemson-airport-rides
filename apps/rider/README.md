@@ -2,11 +2,13 @@
 
 Version **1.1.0**. Bundle id `com.ascendmaui.clemsonrides.rider`.
 
-This is a separate binary from TestFlight 1.0.0 (1) `com.ascendmaui.clemsonairportrides` in `apps/mobile`. Do not point EAS at that project. Do not add these Clerk settings to `apps/driver`.
+This is a separate binary from TestFlight 1.0.0 (1) `com.ascendmaui.clemsonairportrides` in `apps/mobile`. Do not point EAS at that project.
 
 Map-first home uses Clemson orange `#F56600` / `#F66733` and purple `#522D80`, with the same campus anchors as the web Campus map. Email, password, and forgot-password call Supabase Auth (`signInWithPassword`, `signUp`, `resetPasswordForEmail`). The session is persisted with `expo-secure-store` (chunked so the full session fits the keychain limit). There is no `Alert` stub on the booking path.
 
-Apple, Google, and Facebook use Clerk (`@clerk/expo`). After Clerk creates a session, the app calls `POST /api/clerk-supabase-session`. That route checks the Clerk session and returns a one-time Supabase magic-link hash. The app exchanges it with `verifyOtp`, so the stored session is a Supabase JWT and `auth.uid()` stays the `auth.users` UUID that RLS already uses. The Clerk user id is not a UUID, so the app does not send the Clerk JWT as the Supabase `accessToken`.
+Social sign-in uses Supabase-native Apple and Google auth:
+- **Apple sign-in**: Uses native `expo-apple-authentication` on iOS with a SHA-256 hashed nonce, exchanged directly with `supabase.auth.signInWithIdToken({ provider: 'apple', token, nonce })`. When Apple returns the user's name on first sign-in, the app saves it to the profile row and user metadata without overwriting existing data.
+- **Google sign-in**: Uses Supabase OAuth via `startGoogleOAuth` and `WebBrowser.openAuthSessionAsync`, completing the session with `completeGoogleSession` on redirect to `clemsonrides://auth/callback`.
 
 ## EAS environment variables
 
@@ -16,42 +18,21 @@ Cloud builds do not see a local `.env`. Create these on the **rider** Expo proje
 npx eas-cli init
 npx eas-cli env:create --name EXPO_PUBLIC_SUPABASE_URL --value https://awktabuhijrshmsmagpq.supabase.co --environment production --visibility plaintext
 npx eas-cli env:create --name EXPO_PUBLIC_SUPABASE_ANON_KEY --value <anon key> --environment production --visibility sensitive
-npx eas-cli env:create --name EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY --value <pk_test_ or pk_live_> --environment production --visibility plaintext
-npx eas-cli env:create --name EXPO_PUBLIC_CLERK_GOOGLE_IOS_URL_SCHEME --value <reversed iOS client id> --environment production --visibility plaintext
 ```
 
 | Name | Where | Notes |
 | --- | --- | --- |
-| `EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY` | Rider EAS | `pk_test_` or `pk_live_`. Required before the social buttons call Clerk. Email still works when it is missing; the buttons explain this checklist. |
-| `EXPO_PUBLIC_CLERK_GOOGLE_IOS_URL_SCHEME` | Rider EAS | Reversed iOS OAuth client id (`com.googleusercontent.apps.…`). Native Google Sign-In reads it at build time. Without it, Google falls back to the browser SSO flow. |
-| `EXPO_PUBLIC_SUPABASE_URL` | Rider EAS | Already used for email auth. |
+| `EXPO_PUBLIC_SUPABASE_URL` | Rider EAS | Supabase project URL. |
 | `EXPO_PUBLIC_SUPABASE_ANON_KEY` | Rider EAS | Public in the binary. Stays out of git. |
-| `CLERK_SECRET_KEY` | Vercel only | `sk_test_` or `sk_live_`. Never `EXPO_PUBLIC_` and never in EAS. The bridge rejects the Clerk session without it. |
-| `CLERK_SECRET_KEY_DEV` | Vercel only | Secret of the Clerk instance the apps' `pk_` key belongs to, when that differs from `CLERK_SECRET_KEY` (today: apps ship `pk_test_` for choice-gibbon-3653 while `CLERK_SECRET_KEY` is the production `sk_live_`). Without it every social sign-in fails at the bridge with 401 "Clerk session token was rejected". |
-| `SUPABASE_SERVICE_ROLE_KEY` | Vercel only | Already required by other `/api` routes. The bridge uses it to mint the Supabase session. |
+| `EXPO_PUBLIC_API_BASE` | Rider EAS | Optional. Defaults to production web app URL. |
 
-The anon key and the Clerk publishable key are public in the app binary by design. Secret keys stay on Vercel.
+### Supabase Configuration
 
-### Clerk dashboard
-
-1. Turn on the Native API.
-2. Enable Apple, Google, and Facebook social connections. Production needs each provider's own credentials. Add the iOS bundle `com.ascendmaui.clemsonrides.rider` and the Android package `com.ascendmaui.clemsonrides.rider`.
-3. Allow redirect URL `clemsonrides://sso-callback` (the value `AuthSession.makeRedirectUri` builds for scheme `clemsonrides`).
-4. Native Google also needs the iOS URL scheme above. Native Apple uses Sign in with Apple (`ios.usesAppleSignIn` and the `@clerk/expo` config plugin). Facebook uses browser SSO (`oauth_facebook`).
-
-### Supabase
-
-Allow redirect URLs `clemsonrides://set-password` and `clemsonrides://reset-password` under Authentication URL configuration. Forgot password emails use `clemsonrides://set-password`. Linking an Apple, Google, or Facebook account uses the verified email. The same email keeps the existing Supabase user, so `auth.uid()` and profile rows stay put. A new email gets a new `auth.users` UUID.
-
-### Vercel
-
-```bash
-# set in the Vercel project, not in git
-CLERK_SECRET_KEY=<sk_test_ or sk_live_>
-SUPABASE_SERVICE_ROLE_KEY=<service role>
-```
-
-If either secret is missing, social sign-in shows the missing names and email/password still works.
+1. **Apple Provider**: Enable Apple in Supabase Auth. Set client ID to `com.ascendmaui.clemsonrides.rider` and Team ID to `L85AF3V872`.
+2. **Google Provider**: Enable Google in Supabase Auth using the Google OAuth web client under `ascendmaui` (iOS client ID optional).
+3. **Redirect allowlist**: In Authentication → URL Configuration, add `clemsonrides://**`, `clemsonrides://set-password`, and `clemsonrides://auth/callback`.
+4. **Email SMTP**: Configure Resend SMTP in Supabase Auth for transactional confirmation and password reset emails.
+5. **Vercel**: Remove legacy social bridge secrets from Vercel environment variables after deploy.
 
 Local:
 
@@ -61,7 +42,7 @@ npm install
 npx expo start
 ```
 
-Native Apple and Google buttons need a development build (`npx expo run:ios` / `npx expo run:android`), not Expo Go. Browser SSO for Facebook, and the Apple/Google fallback, run through `useSSO`.
+Native Apple and Google buttons work in a development build (`npx expo run:ios` / `npx expo run:android`) and simulators.
 
 ## Rider shell
 
@@ -98,7 +79,3 @@ On a device or simulator (`npx expo start` from `apps/rider`):
 3. Request a ride so a trips row exists. On Ride requested, tap Share my location. The link looks like `https://clemson-airport-rides.vercel.app/share/<token>` and a location_shares row is active.
 4. Tap Share trip link and send that same URL from the share sheet.
 5. While the trip is accepted, arriving, or in progress, tap SOS. The screen is full-bleed red and says to press the button to call police. The first press on Call 911 or Call Clemson Police does not dial. A sos_events row is stored with channel banner. Press Call 911 again to dial.
-6. On a trip that is accepted, arriving, or arrived, with a driver_status lat/lng and location permission on, the rider sees "Driver N ft away" (meters underneath). Inside about 500, 200, and 100 feet the screen pulses Clemson orange and the phone haptics. Getting closer from farther out pulses once, then rests. in_progress does not alert.
-7. On a finished trip, live share shows "This ride is finished" instead of a new token. Share my location still creates the same link as before.
-
-The ride-requested screen keeps SOS and live share, and shows the driver pin when a location is available. Campus ride requests already insert a `trips` row the same way the web app does.

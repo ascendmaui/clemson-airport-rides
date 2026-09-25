@@ -24,7 +24,7 @@ const OPEN_ROUTES = new Set([
   'forgot-password',
   'reset-password',
   'set-password',
-  'sso-callback',
+  'auth',
   'profile-setup',
 ])
 

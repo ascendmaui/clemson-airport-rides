@@ -3,49 +3,54 @@ import test from 'node:test'
 import {
   DRIVER_SOCIAL_PROVIDERS,
   RIDER_SOCIAL_PROVIDERS,
-  clerkErrorMessage,
-  clerkSessionOutcome,
+  appleFullName,
   isNativeProviderUnavailable,
-  socialStrategy,
+  socialErrorMessage,
   splitPersonName,
 } from './socialAuth.js'
 
-test('rider social paths are Apple, Google, and Facebook', () => {
+test('rider and driver social providers are Apple and Google', () => {
   assert.deepEqual(
-    RIDER_SOCIAL_PROVIDERS.map((provider) => provider.strategy),
-    ['oauth_apple', 'oauth_google', 'oauth_facebook'],
+    RIDER_SOCIAL_PROVIDERS.map((provider) => provider.id),
+    ['apple', 'google'],
   )
-  assert.equal(socialStrategy('facebook'), 'oauth_facebook')
+  assert.deepEqual(
+    DRIVER_SOCIAL_PROVIDERS.map((provider) => provider.id),
+    ['apple', 'google'],
+  )
 })
 
-test('cancelled browser and native social attempts are not errors', () => {
-  assert.equal(clerkSessionOutcome({
-    createdSessionId: null,
-    authSessionResult: { type: 'cancel' },
-  }).kind, 'cancelled')
-  assert.equal(clerkSessionOutcome({ createdSessionId: null }).kind, 'cancelled')
-  assert.equal(clerkSessionOutcome({
-    createdSessionId: 'sess_1',
-    authSessionResult: { type: 'success' },
-  }).kind, 'session')
-})
-
-test('native hook stubs fall back to browser SSO', () => {
+test('native provider availability detection', () => {
   assert.equal(
-    isNativeProviderUnavailable(new Error('Native Google Authentication is only available on iOS and Android. For web and other platforms, please use the OAuth-based flow with useSSO and strategy: "oauth_google".')),
+    isNativeProviderUnavailable(new Error('Apple sign-in is not available on this device')),
+    true,
+  )
+  assert.equal(
+    isNativeProviderUnavailable(new Error('expo-apple-authentication is required')),
     true,
   )
   assert.equal(isNativeProviderUnavailable(new Error('form_password_incorrect')), false)
 })
 
-test('clerk API errors prefer the long message', () => {
-  assert.equal(clerkErrorMessage({ errors: [{ message: 'short', longMessage: 'Use a verified email' }] }), 'Use a verified email')
-  assert.deepEqual(splitPersonName('Ada Lovelace'), { firstName: 'Ada', lastName: 'Lovelace' })
+test('social error message extraction', () => {
+  assert.equal(socialErrorMessage(new Error('Popup blocked')), 'Popup blocked')
+  assert.equal(socialErrorMessage({ message: 'User cancelled' }), 'User cancelled')
+  assert.equal(socialErrorMessage(null), 'Social sign-in failed')
 })
 
-test('driver uses the same Clerk social providers as the rider', () => {
-  assert.deepEqual(
-    DRIVER_SOCIAL_PROVIDERS.map((provider) => provider.strategy),
-    ['oauth_apple', 'oauth_google', 'oauth_facebook'],
+test('name splitting and apple full name formatting', () => {
+  assert.deepEqual(splitPersonName('Ada Lovelace'), { firstName: 'Ada', lastName: 'Lovelace' })
+  assert.deepEqual(splitPersonName('SingleName'), { firstName: 'SingleName', lastName: 'SingleName' })
+  assert.equal(splitPersonName(''), null)
+
+  assert.equal(
+    appleFullName({ givenName: 'Grace', middleName: 'Brewster', familyName: 'Hopper' }),
+    'Grace Brewster Hopper',
   )
+  assert.equal(
+    appleFullName({ givenName: 'Alan', familyName: 'Turing' }),
+    'Alan Turing',
+  )
+  assert.equal(appleFullName('Katherine Johnson'), 'Katherine Johnson')
+  assert.equal(appleFullName(null), null)
 })

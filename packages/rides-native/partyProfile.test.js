@@ -97,6 +97,7 @@ test('a stored signup draft fills social metadata once', () => {
 test('profile setup stays in front of the app until the profile is complete', () => {
   assert.equal(shouldRedirectToProfileSetup({ signedIn: true, complete: false, segment: '(tabs)' }), true)
   assert.equal(shouldRedirectToProfileSetup({ signedIn: true, complete: false, segment: 'sign-in' }), false)
+  assert.equal(shouldRedirectToProfileSetup({ signedIn: true, complete: false, segment: 'auth' }), false)
   assert.equal(shouldRedirectToProfileSetup({ signedIn: true, complete: false, segment: 'profile-setup' }), false)
   assert.equal(shouldRedirectToProfileSetup({ signedIn: false, complete: false, segment: '(tabs)' }), false)
   assert.equal(shouldRedirectToProfileSetup({ signedIn: true, complete: true, segment: 'trip' }), false)

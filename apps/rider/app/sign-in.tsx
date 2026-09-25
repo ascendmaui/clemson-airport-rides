@@ -3,8 +3,7 @@ import { SignInScreen } from 'rides-native/AuthScreens'
 import { RIDER_SOCIAL_PROVIDERS } from 'rides-native/socialAuth'
 import { takeAuthNext } from '@/lib/authNext'
 import { useAuth } from '@/lib/auth'
-import { clerkPublishableKey, missingClerkPublishableMessage } from '@/lib/clerkEnv'
-import { useClerkSocialSignIn } from '@/lib/clerkSocial'
+import { useSocialSignIn } from '@/lib/socialSignIn'
 
 function finish(router: ReturnType<typeof useRouter>) {
   const next = takeAuthNext()
@@ -12,13 +11,11 @@ function finish(router: ReturnType<typeof useRouter>) {
   else router.replace('/')
 }
 
-function SignInForm({
-  onSocial,
-}: {
-  onSocial: (providerId: 'apple' | 'google' | 'facebook') => Promise<{ cancelled?: boolean } | void>
-}) {
+export default function SignInRoute() {
   const router = useRouter()
   const { signIn, resetPassword } = useAuth()
+  const onSocial = useSocialSignIn()
+
   return (
     <SignInScreen
       signIn={signIn}
@@ -37,22 +34,4 @@ function SignInForm({
       }}
     />
   )
-}
-
-function ClerkSignInForm() {
-  const onSocial = useClerkSocialSignIn()
-  return <SignInForm onSocial={onSocial} />
-}
-
-export default function SignInRoute() {
-  if (!clerkPublishableKey()) {
-    return (
-      <SignInForm
-        onSocial={async () => {
-          throw new Error(missingClerkPublishableMessage())
-        }}
-      />
-    )
-  }
-  return <ClerkSignInForm />
 }

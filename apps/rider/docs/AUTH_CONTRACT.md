@@ -1,6 +1,6 @@
 # Rider auth contract
 
-Client auth for `apps/rider` is **Supabase Auth** (email/password + session) plus **Clerk** for social providers. Do not replace either with a from-scratch custom backend.
+Client auth for `apps/rider` is built entirely on **Supabase Auth**: email/password, session storage, and Supabase-native Apple and Google social sign-in.
 
 ## Client API (`createAuth` → `useAuth`)
 
@@ -12,27 +12,31 @@ Wired in `apps/rider/lib/auth.tsx` via `rides-native/createAuth`:
 | `signUp(email, password, …)` | Supabase `auth.signUp` + profile ensure / promo claim |
 | `resetPassword(email)` | Supabase `auth.resetPasswordForEmail` with redirect |
 | `updatePassword(password)` | Supabase `auth.updateUser({ password })` |
-| `signOut()` | Supabase `auth.signOut`, then optional Clerk sign-out |
+| `signOut()` | Supabase `auth.signOut` |
 
-Session persistence uses the app storage adapter + `supabase.auth.getSession` / `onAuthStateChange` inside `createAuth`.
+Session persistence uses the app storage adapter (`rides-native/secureStore`) + `supabase.auth.getSession` / `onAuthStateChange` inside `createAuth`.
 
-## Social (Clerk)
+## Social Authentication (Supabase Native)
 
-- Publishable key: `EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY`
-- `ClerkProvider` + `tokenCache` in `app/_layout.tsx`
-- Social buttons on sign-in / sign-up via `useClerkSocialSignIn` (`lib/clerkSocial.tsx`)
+- **Apple sign-in**: Uses `expo-apple-authentication` with a SHA-256 hashed nonce on iOS. The resulting identity token is passed to `supabase.auth.signInWithIdToken({ provider: 'apple', token, nonce })`. On first sign-in, any returned full name or email is saved to user metadata and the user's `profiles` row without overwriting existing data.
+- **Google sign-in**: Uses Supabase OAuth flow via `startGoogleOAuth` (`supabase.auth.signInWithOAuth({ provider: 'google', ... })`) and `WebBrowser.openAuthSessionAsync`, completing the session with `completeGoogleSession` on redirect back to `clemsonrides://auth/callback`.
+- Social hook: `useSocialSignIn` in `apps/rider/lib/socialSignIn.ts`.
 
-## Required env
+## Required Configuration
+
+### App Environment Variables
 
 | Variable | Role |
 | --- | --- |
 | `EXPO_PUBLIC_SUPABASE_URL` | Supabase project URL |
 | `EXPO_PUBLIC_SUPABASE_ANON_KEY` | Supabase anon (public) key |
-| `EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY` | Clerk social (`pk_test_` / `pk_live_`) |
 
-Optional build-time for native Google: `EXPO_PUBLIC_CLERK_GOOGLE_IOS_URL_SCHEME`.
+### Supabase Dashboard Configuration
 
-See `apps/rider/.env.example`. Never commit secrets or Clerk secret keys.
+- **Apple Provider**: Client ID `com.ascendmaui.clemsonrides.rider`, Team ID `L85AF3V872`.
+- **Google Provider**: Google OAuth web client credentials under `ascendmaui` (iOS client ID optional).
+- **Redirect URLs**: Add `clemsonrides://**`, `clemsonrides://set-password`, and `clemsonrides://auth/callback`.
+- **Transactional Email**: Configure Resend SMTP in Supabase Auth.
 
 ## Password reset
 
