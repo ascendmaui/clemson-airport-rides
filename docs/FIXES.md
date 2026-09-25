@@ -109,6 +109,16 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
 - **What changed:** Added `tests/a11yRider.test.js`. It reads those `.tsx` files with `fs` (no React Native runtime) and compares offenders to an allowlist of the 20 tags that already fail. A new offender fails the test. No rider UI code was changed.
 - **Files touched:** `tests/a11yRider.test.js`, `docs/FIXES.md`
 
+## 2026-09-25 — Sanitize EXPO_PUBLIC_API_BASE in resolveApiBase (trim whitespace, strip all trailing slashes, fallback on blank)
+
+- **Track / machine:** Clemson RIDES · worktree deputy-pkg-api-origin-tests
+- **What was wrong:** `resolveApiBase()` in `packages/rides-native/apiOrigin.js` accessed `process.env.EXPO_PUBLIC_API_BASE` directly without whitespace trimming or multi-slash removal (`replace(/\/$/, '')`). If the environment variable had leading/trailing whitespace, multiple trailing slashes, or collapsed to empty (`'/'` or whitespace-only), it returned invalid URLs or empty strings instead of falling back to `DEFAULT_API_BASE`, causing subsequent fetch calls in native and web runtimes to fail.
+- **What changed:** Guarded `process.env` access against undefined process, trimmed surrounding whitespace, stripped all trailing slashes (`replace(/\/+$/, '')`), and fell back to `DEFAULT_API_BASE` when the cleaned value is empty. Updated `packages/rides-native/apiOrigin.test.js` to assert whitespace trimming, multi-slash stripping, and fallback for blank/slash values.
+- **Files touched:**
+  - `packages/rides-native/apiOrigin.js`
+  - `packages/rides-native/apiOrigin.test.js`
+  - `docs/FIXES.md`
+
 ## 2026-09-25 — Expiry cron wired: CRON_SECRET + Supabase pg_cron/pg_net; prod redeployed at 111c607
 
 - **Track / machine:** Clemson RIDES · I9 (61b11c89) Vercel CLI + Supabase awktabuhijrshmsmagpq · approved by John 1:05 AM ET 9/25.

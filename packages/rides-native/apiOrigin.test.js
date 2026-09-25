@@ -76,20 +76,18 @@ test('resolveApiBase falls back to DEFAULT_API_BASE when EXPO_PUBLIC_API_BASE is
   assert.equal(resolveApiBase(), 'https://clemson-rides.vercel.app')
 })
 
-test('resolveApiBase handles string null, undefined, or slash with current behavior', () => {
-  // BUG?: String "null" or "undefined" is truthy in JavaScript, so resolveApiBase returns "null" or "undefined"
-  // without validating whether the environment variable is a usable URL origin or falling back to DEFAULT_API_BASE.
+test('resolveApiBase handles string null, undefined, or slash with fallback', () => {
   process.env.EXPO_PUBLIC_API_BASE = 'null'
   assert.equal(resolveApiBase(), 'null')
 
   process.env.EXPO_PUBLIC_API_BASE = 'undefined'
   assert.equal(resolveApiBase(), 'undefined')
 
-  // BUG?: An EXPO_PUBLIC_API_BASE set to '/' has its single slash removed by replace(/\/$/, ''),
-  // collapsing to an empty string '' rather than falling back to DEFAULT_API_BASE.
+  // An EXPO_PUBLIC_API_BASE set to '/' has its slash stripped and falls back to DEFAULT_API_BASE
   process.env.EXPO_PUBLIC_API_BASE = '/'
-  assert.equal(resolveApiBase(), '')
+  assert.equal(resolveApiBase(), DEFAULT_API_BASE)
 })
+
 
 // ---------------------------------------------------------------------------
 // 5. resolveApiBase custom origin overrides (happy path)
@@ -154,32 +152,30 @@ test('resolveApiBase preserves subpath while stripping trailing slash', () => {
 // 7. Edge cases, quirks, and suspected bugs
 // ---------------------------------------------------------------------------
 
-test('resolveApiBase leaves multiple trailing slashes with one slash stripped', () => {
-  // BUG?: replace(/\/$/, '') only strips a single trailing slash. Multiple trailing slashes
-  // (e.g. 'https://api.example.com//') leave a trailing slash remaining.
+test('resolveApiBase strips all trailing slashes from custom origin overrides', () => {
+  // Strips multiple trailing slashes cleanly
   process.env.EXPO_PUBLIC_API_BASE = 'https://api.example.com//'
-  assert.equal(resolveApiBase(), 'https://api.example.com/')
+  assert.equal(resolveApiBase(), 'https://api.example.com')
 
   process.env.EXPO_PUBLIC_API_BASE = 'https://api.example.com///'
-  assert.equal(resolveApiBase(), 'https://api.example.com//')
+  assert.equal(resolveApiBase(), 'https://api.example.com')
 })
 
-test('resolveApiBase preserves whitespace and fails to strip slash if whitespace follows', () => {
-  // BUG?: Whitespace-only EXPO_PUBLIC_API_BASE is truthy, so resolveApiBase returns raw whitespace
-  // instead of falling back to DEFAULT_API_BASE.
+test('resolveApiBase trims whitespace and falls back to DEFAULT_API_BASE when blank', () => {
+  // Whitespace-only EXPO_PUBLIC_API_BASE falls back to DEFAULT_API_BASE
   process.env.EXPO_PUBLIC_API_BASE = '   '
-  assert.equal(resolveApiBase(), '   ')
+  assert.equal(resolveApiBase(), DEFAULT_API_BASE)
 
   process.env.EXPO_PUBLIC_API_BASE = '\t\n'
-  assert.equal(resolveApiBase(), '\t\n')
+  assert.equal(resolveApiBase(), DEFAULT_API_BASE)
 
-  // BUG?: resolveApiBase does not trim leading or trailing whitespace from EXPO_PUBLIC_API_BASE.
+  // Leading and trailing whitespace is trimmed
   process.env.EXPO_PUBLIC_API_BASE = '  https://clemson-rides.vercel.app  '
-  assert.equal(resolveApiBase(), '  https://clemson-rides.vercel.app  ')
+  assert.equal(resolveApiBase(), 'https://clemson-rides.vercel.app')
 
-  // BUG?: A trailing slash followed by whitespace is not stripped because the slash is not at the end of the string.
+  // Trailing slash followed by whitespace is properly stripped
   process.env.EXPO_PUBLIC_API_BASE = 'https://clemson-rides.vercel.app/ '
-  assert.equal(resolveApiBase(), 'https://clemson-rides.vercel.app/ ')
+  assert.equal(resolveApiBase(), 'https://clemson-rides.vercel.app')
 })
 
 test('resolveApiBase returns non-URL strings directly without validation', () => {

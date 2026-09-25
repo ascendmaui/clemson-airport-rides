@@ -8,6 +8,11 @@ import { WEB_ORIGIN } from '../../shared/productLinks.js'
 export const DEFAULT_API_BASE = WEB_ORIGIN
 
 export function resolveApiBase() {
-  const raw = process.env.EXPO_PUBLIC_API_BASE || DEFAULT_API_BASE
-  return String(raw).replace(/\/$/, '')
+  const envVal =
+    typeof process !== 'undefined' && process?.env
+      ? process.env.EXPO_PUBLIC_API_BASE
+      : undefined
+  const raw = typeof envVal === 'string' ? envVal.trim().replace(/\/+$/, '') : ''
+  return raw || String(DEFAULT_API_BASE).replace(/\/+$/, '')
 }
+
