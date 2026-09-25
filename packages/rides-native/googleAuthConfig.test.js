@@ -10,8 +10,11 @@ import googleAuthConfigDefault, {
   getGoogleAuthConfig,
   googleAuthButtonState,
   googleAuthConfig,
+  googleAuthErrorMessage,
   googleAuthStatusMessage,
   isGoogleAuthEnabled,
+  mapGoogleAuthError,
+  resolveSocialProviders,
 } from './googleAuthConfig.js'
 
 test('exports expected constants and env keys', () => {
@@ -269,4 +272,120 @@ test('enumerable keys are strictly { enabled, missing, redirectUri }', () => {
     ],
     redirectUri: 'clemsonrides-driver://auth/callback',
   })
+})
+
+test('mapGoogleAuthError maps unconfigured error to coming soon message', () => {
+  const err1 = new Error(
+    'Google sign-in is not configured. Enable the Google provider in Supabase Auth and allow this app redirect.',
+  )
+  const mapped1 = mapGoogleAuthError(err1)
+  assert.equal(mapped1.message, 'Google sign-in is coming soon')
+  assert.equal(mapped1.code, 'google_auth_not_configured')
+
+  const err2 = new Error('Missing EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID')
+  const mapped2 = mapGoogleAuthError(err2)
+  assert.equal(mapped2.message, 'Google sign-in is coming soon')
+
+  const mapped3 = mapGoogleAuthError('Google sign-in is coming soon')
+  assert.equal(mapped3.message, 'Google sign-in is coming soon')
+})
+
+test('mapGoogleAuthError maps Supabase unconfigured error without leaking env names', () => {
+  const err = new Error(
+    'Supabase is not configured. Set EXPO_PUBLIC_SUPABASE_ANON_KEY for this EAS build.',
+  )
+  const mapped = mapGoogleAuthError(err)
+  assert.equal(
+    mapped.message,
+    'Authentication is temporarily unavailable. Please try again shortly.',
+  )
+  assert.equal(mapped.code, 'supabase_not_configured')
+  assert.doesNotMatch(mapped.message, /EXPO_PUBLIC_SUPABASE/)
+})
+
+test('mapGoogleAuthError maps user cancelled and access denied errors', () => {
+  const err1 = new Error('Google sign-in was rejected')
+  const mapped1 = mapGoogleAuthError(err1)
+  assert.equal(mapped1.message, 'Google sign-in was canceled.')
+  assert.equal(mapped1.cancelled, true)
+
+  const err2 = new Error('The user denied access')
+  const mapped2 = mapGoogleAuthError(err2)
+  assert.equal(mapped2.message, 'Google sign-in was canceled.')
+  assert.equal(mapped2.cancelled, true)
+})
+
+test('mapGoogleAuthError maps redirect and missing session errors', () => {
+  const err = new Error(
+    'Google sign-in did not return a session. Check the Supabase redirect allow list.',
+  )
+  const mapped = mapGoogleAuthError(err)
+  assert.equal(mapped.message, 'Could not complete Google sign-in. Please try again.')
+  assert.doesNotMatch(mapped.message, /redirect allow list/i)
+})
+
+test('mapGoogleAuthError maps rate limits, existing accounts, and expired sessions', () => {
+  const rateLimitErr = mapGoogleAuthError({ message: 'rate limit exceeded', status: 429 })
+  assert.equal(rateLimitErr.message, 'Too many sign-in attempts. Please wait a moment and try again.')
+
+  const accountErr = mapGoogleAuthError({ message: 'User already registered', code: 'account_exists' })
+  assert.equal(
+    accountErr.message,
+    'You already have an account with this email. Please sign in with your email and password.',
+  )
+
+  const expiredErr = mapGoogleAuthError(new Error('invalid_grant: code expired'))
+  assert.equal(expiredErr.message, 'Google sign-in session expired. Please try again.')
+})
+
+test('mapGoogleAuthError maps network and technical errors', () => {
+  const netErr = mapGoogleAuthError(new Error('Network request failed'))
+  assert.equal(netErr.message, 'Check your internet connection and try again.')
+
+  const techErr = mapGoogleAuthError(new TypeError('Cannot read property foo of undefined\n at line 10'))
+  assert.equal(techErr.message, 'Google sign-in failed. Please try again.')
+
+  assert.equal(googleAuthErrorMessage(netErr), 'Check your internet connection and try again.')
+  assert.equal(googleAuthErrorMessage(null), 'Google sign-in failed. Please try again.')
+})
+
+test('resolveSocialProviders marks Google provider disabled with honest copy when unconfigured', () => {
+  const rawProviders = [
+    { id: 'apple', label: 'Apple' },
+    { id: 'google', label: 'Google' },
+  ]
+
+  const disabledProviders = resolveSocialProviders(rawProviders, {})
+  assert.deepEqual(disabledProviders, [
+    { id: 'apple', label: 'Apple' },
+    {
+      id: 'google',
+      label: 'Google',
+      enabled: false,
+      disabled: true,
+      hidden: true,
+      message: 'Google sign-in is coming soon',
+      disabledLabel: 'Continue with Google (coming soon)',
+    },
+  ])
+
+  const enabledProviders = resolveSocialProviders(rawProviders, {
+    EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID: 'ios-123',
+    EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID: 'web-123',
+  })
+  assert.deepEqual(enabledProviders, [
+    { id: 'apple', label: 'Apple' },
+    {
+      id: 'google',
+      label: 'Google',
+      enabled: true,
+      disabled: false,
+      hidden: false,
+      message: null,
+      disabledLabel: 'Continue with Google (coming soon)',
+    },
+  ])
+
+  const hiddenProviders = resolveSocialProviders(rawProviders, {}, { hideDisabled: true })
+  assert.deepEqual(hiddenProviders, [{ id: 'apple', label: 'Apple' }])
 })

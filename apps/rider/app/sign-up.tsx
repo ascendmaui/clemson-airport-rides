@@ -1,5 +1,6 @@
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { SignUpScreen } from 'rides-native/AuthScreens'
+import { googleAuthButtonState } from 'rides-native/googleAuthConfig'
 import { RIDER_SOCIAL_PROVIDERS } from 'rides-native/socialAuth'
 import { takeAuthNext } from '@/lib/authNext'
 import { useAuth } from '@/lib/auth'
@@ -18,12 +19,26 @@ export default function SignUpRoute() {
   const params = useLocalSearchParams<{ ref?: string }>()
   const { signUp } = useAuth()
   const onSocial = useSocialSignIn()
+  const googleState = googleAuthButtonState(process.env, { scheme: 'clemsonrides' })
+
+  const socialProviders = RIDER_SOCIAL_PROVIDERS.map((provider) => {
+    if (provider.id === 'google') {
+      return {
+        ...provider,
+        enabled: googleState.enabled,
+        disabled: googleState.disabled,
+        message: googleState.message,
+        disabledLabel: 'Continue with Google (coming soon)',
+      }
+    }
+    return provider
+  })
 
   return (
     <SignUpScreen
       signUp={signUp}
       storage={authStorage}
-      socialProviders={RIDER_SOCIAL_PROVIDERS}
+      socialProviders={socialProviders}
       onSocial={onSocial}
       mark="CR"
       initialPromo={oneParam(params.ref)}

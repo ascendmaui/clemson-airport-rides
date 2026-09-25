@@ -1,9 +1,16 @@
 export type SocialProviderId = 'apple' | 'google'
 
-export const RIDER_SOCIAL_PROVIDERS: Array<{
+export interface SocialProvider {
   id: SocialProviderId
   label: string
-}>
+  enabled?: boolean
+  disabled?: boolean
+  hidden?: boolean
+  message?: string | null
+  disabledLabel?: string
+}
+
+export const RIDER_SOCIAL_PROVIDERS: Array<SocialProvider>
 
 export const DRIVER_SOCIAL_PROVIDERS: typeof RIDER_SOCIAL_PROVIDERS
 

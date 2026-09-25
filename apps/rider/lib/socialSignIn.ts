@@ -5,6 +5,7 @@ import { useCallback } from 'react'
 import { Platform } from 'react-native'
 import { mapAuthError, normalizePromoCode } from 'rides-native/authErrors.js'
 import { completeGoogleSession, googleOAuthRedirect, startGoogleOAuth } from 'rides-native/googleAuth.js'
+import { googleAuthConfig, mapGoogleAuthError } from 'rides-native/googleAuthConfig'
 import { appleFullName, splitPersonName, type SocialProviderId } from 'rides-native/socialAuth.js'
 import { supabase } from '@/lib/supabase'
 
@@ -15,20 +16,32 @@ export function useSocialSignIn(scheme = 'clemsonrides') {
       extra?: { promo?: string; fullName?: string },
     ): Promise<{ cancelled?: boolean } | void> => {
       if (!supabase) {
-        throw new Error('Supabase is not configured. Set EXPO_PUBLIC_SUPABASE_ANON_KEY for this EAS build.')
+        throw mapGoogleAuthError(new Error('Supabase is not configured. Set EXPO_PUBLIC_SUPABASE_ANON_KEY for this EAS build.'))
       }
 
       if (providerId === 'google') {
-        const redirect = googleOAuthRedirect(scheme)
-        const url = await startGoogleOAuth(supabase, redirect)
-        const result = await WebBrowser.openAuthSessionAsync(url, redirect)
-        if (result.type !== 'success') {
-          return { cancelled: true }
+        const config = googleAuthConfig(process.env, { scheme })
+        if (!config.enabled) {
+          throw mapGoogleAuthError(new Error('Google sign-in is coming soon'))
         }
-        if (result.url) {
-          await completeGoogleSession(supabase, result.url)
+        try {
+          const redirect = config.redirectUri || googleOAuthRedirect(scheme)
+          const url = await startGoogleOAuth(supabase, redirect)
+          const result = await WebBrowser.openAuthSessionAsync(url, redirect)
+          if (result.type !== 'success') {
+            return { cancelled: true }
+          }
+          if (result.url) {
+            await completeGoogleSession(supabase, result.url)
+          }
+          return
+        } catch (err: unknown) {
+          const mapped = mapGoogleAuthError(err)
+          if (mapped.cancelled) {
+            return { cancelled: true }
+          }
+          throw mapped
         }
-        return
       }
 
       if (providerId === 'apple') {

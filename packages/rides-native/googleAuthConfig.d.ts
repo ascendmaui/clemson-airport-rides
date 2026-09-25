@@ -58,4 +58,26 @@ export function googleAuthButtonState(
   redirectUri: string
 }
 
+export function mapGoogleAuthError(error: unknown): Error & {
+  code?: string
+  status?: number
+  cancelled?: boolean
+}
+
+export function googleAuthErrorMessage(error: unknown): string
+
+export function resolveSocialProviders<T extends { id: string; label: string }>(
+  providers?: T[],
+  envOrOptions?: Record<string, string | undefined> | GoogleAuthConfigOptions,
+  options?: GoogleAuthConfigOptions
+): Array<
+  T & {
+    enabled?: boolean
+    disabled?: boolean
+    hidden?: boolean
+    message?: string | null
+    disabledLabel?: string
+  }
+>
+
 export default googleAuthConfig
