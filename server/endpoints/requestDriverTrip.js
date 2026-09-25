@@ -7,6 +7,7 @@
 import {
   admin, cors, json, parseBody, userFromAuth, computeRoutes,
 } from '../friendRideLib.js'
+import { ensureProfile } from '../ensureProfile.js'
 import { loadGameDayMultiplier } from '../creditLots.js'
 import { studentDiscountGranted } from '../../src/lib/studentDomain.js'
 import { firstName } from '../../src/lib/scheduledRideModel.js'
@@ -24,14 +25,15 @@ async function serverDistance(origin, dest) {
   return { distanceM: route.distanceM, durationS: route.durationS }
 }
 
-export default async function handler(req, res) {
+export default async function handler(req, res, deps = {}) {
   if (cors(req, res)) return
   if (req.method !== 'POST') return json(res, 405, { error: 'Method not allowed' })
 
-  const sb = admin()
+  const sb = deps.sb || admin()
   if (!sb) return json(res, 503, { error: 'SUPABASE_SERVICE_ROLE_KEY not configured' })
-  const user = await userFromAuth(req)
+  const user = deps.user !== undefined ? deps.user : await userFromAuth(req)
   if (!user) return json(res, 401, { error: 'Sign in required' })
+  const runEnsureProfile = deps.ensureProfile || ensureProfile
 
   const { body, error: pe } = parseBody(req)
   if (pe) return json(res, 400, { error: pe })
@@ -117,6 +119,11 @@ export default async function handler(req, res) {
       fare_source: 'server',
       airport: priced.airport,
     },
+  }
+
+  const profileRes = await runEnsureProfile(sb, user)
+  if (!profileRes?.ok) {
+    return json(res, 500, { error: 'Could not create your rider profile', code: 'profile_missing' })
   }
 
   const inserted = await sb.from('trips').insert(row).select('id, status, driver_id, dropoff_label, fare_cents, deposit_cents').single()

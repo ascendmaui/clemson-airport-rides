@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { ensureProfile } from './ensureProfile.js'
+import createCheckoutSessionHandler from '../api/create-checkout-session.js'
+import airportCheckoutHandler from './endpoints/airportCheckout.js'
+import scheduleTripHandler from './endpoints/scheduleTrip.js'
+import requestDriverTripHandler from './endpoints/requestDriverTrip.js'
 
 function createFakeSb({
   existing = null,
@@ -290,3 +294,491 @@ test('missing user: returns ok:false, reason:no_user without throwing', async ()
 
   assert.equal(calls.length, 0, 'No queries should be made when user/sb is invalid')
 })
+
+function mockRes() {
+  return {
+    statusCode: 200,
+    headers: {},
+    body: '',
+    setHeader(name, value) {
+      this.headers[name.toLowerCase()] = value
+    },
+    end(payload) {
+      this.body = payload == null ? '' : String(payload)
+    },
+  }
+}
+
+async function callHandler(handler, req, deps) {
+  const res = mockRes()
+  await handler({ headers: {}, ...req }, res, deps)
+  let json = null
+  try {
+    json = res.body ? JSON.parse(res.body) : null
+  } catch {
+    json = null
+  }
+  return { status: res.statusCode, json }
+}
+
+function createMockEndpointSb({
+  profileExisting = null,
+  profileUpsertError = null,
+  onTripInsert = null,
+} = {}) {
+  const operations = []
+  const tripsInserted = []
+
+  const sb = {
+    operations,
+    tripsInserted,
+    from(table) {
+      operations.push({ op: 'from', table })
+
+      const chain = {
+        select(cols) {
+          operations.push({ op: 'select', table, cols })
+          return chain
+        },
+        eq(col, val) {
+          operations.push({ op: 'eq', table, col, val })
+          return chain
+        },
+        lte(col, val) {
+          operations.push({ op: 'lte', table, col, val })
+          return chain
+        },
+        gte(col, val) {
+          operations.push({ op: 'gte', table, col, val })
+          return chain
+        },
+        gt(col, val) {
+          operations.push({ op: 'gt', table, col, val })
+          return chain
+        },
+        order(col, opts) {
+          operations.push({ op: 'order', table, col, opts })
+          return chain
+        },
+        limit(num) {
+          operations.push({ op: 'limit', table, num })
+          return chain
+        },
+        async maybeSingle() {
+          operations.push({ op: 'maybeSingle', table })
+          if (table === 'profiles') {
+            return { data: profileExisting, error: null }
+          }
+          return { data: null, error: null }
+        },
+        async single() {
+          operations.push({ op: 'single', table })
+          if (table === 'trips') {
+            const trip = tripsInserted[tripsInserted.length - 1] || { id: 'trip_mock_default' }
+            return {
+              data: {
+                id: trip.id || 'trip_mock_123',
+                status: trip.status || 'searching',
+                driver_id: trip.driver_id || null,
+                pickup_at: trip.pickup_at || null,
+                pickup_label: trip.pickup_label || 'Mock Pickup',
+                dropoff_label: trip.dropoff_label || 'Mock Dropoff',
+                fare_cents: trip.fare_cents || 2500,
+                deposit_cents: trip.deposit_cents || 625,
+              },
+              error: null,
+            }
+          }
+          return { data: null, error: null }
+        },
+        async upsert(payload, options) {
+          operations.push({ op: 'upsert', table, payload, options })
+          if (table === 'profiles' && profileUpsertError) {
+            return { data: null, error: profileUpsertError }
+          }
+          return { data: null, error: null }
+        },
+        insert(payload) {
+          operations.push({ op: 'insert', table, payload })
+          if (table === 'trips') {
+            const trip = { id: 'trip_' + Math.random().toString(36).slice(2, 9), ...payload }
+            tripsInserted.push(trip)
+            if (typeof onTripInsert === 'function') {
+              onTripInsert(trip)
+            }
+          }
+          return chain
+        },
+        async update(payload) {
+          operations.push({ op: 'update', table, payload })
+          return { data: null, error: null }
+        },
+        then(resolve) {
+          resolve({ data: null, error: null })
+        },
+      }
+      return chain
+    },
+  }
+
+  return { sb, operations, tripsInserted }
+}
+
+const mockAuthedUser = {
+  id: '77777777-7777-4777-8777-777777777777',
+  email: 'rider@clemson.edu',
+  user_metadata: { full_name: 'Test Rider' },
+}
+
+test('scheduleTrip: returns 500 profile_missing and skips trip insert if ensureProfile fails', async () => {
+  const { sb, tripsInserted } = createMockEndpointSb()
+  let ensureProfileCalled = false
+
+  const res = await callHandler(
+    scheduleTripHandler,
+    {
+      method: 'POST',
+      body: {
+        purpose: 'planned',
+        pickup: { label: 'Clemson Campus', lat: 34.6788, lng: -82.843 },
+        dropoff: { label: 'Downtown', lat: 34.68, lng: -82.83 },
+        scheduled: false,
+      },
+    },
+    {
+      user: mockAuthedUser,
+      sb,
+      ensureProfile: async () => {
+        ensureProfileCalled = true
+        return { ok: false, reason: 'profile_upsert_failed' }
+      },
+    },
+  )
+
+  assert.equal(ensureProfileCalled, true)
+  assert.equal(res.status, 500)
+  assert.deepEqual(res.json, {
+    error: 'Could not create your rider profile',
+    code: 'profile_missing',
+  })
+  assert.equal(tripsInserted.length, 0, 'No trip should be inserted when ensureProfile fails')
+})
+
+test('scheduleTrip: runs ensureProfile before inserting trip', async () => {
+  const sequence = []
+  const { sb, tripsInserted } = createMockEndpointSb({
+    onTripInsert: () => sequence.push('insertTrip'),
+  })
+
+  const res = await callHandler(
+    scheduleTripHandler,
+    {
+      method: 'POST',
+      body: {
+        purpose: 'planned',
+        pickup: { label: 'Clemson Campus', lat: 34.6788, lng: -82.843 },
+        dropoff: { label: 'Downtown', lat: 34.68, lng: -82.83 },
+        scheduled: false,
+      },
+    },
+    {
+      user: mockAuthedUser,
+      sb,
+      ensureProfile: async (passedSb, passedUser) => {
+        assert.equal(passedSb, sb)
+        assert.equal(passedUser.id, mockAuthedUser.id)
+        sequence.push('ensureProfile')
+        return { ok: true, created: true }
+      },
+    },
+  )
+
+  assert.equal(res.status, 200)
+  assert.deepEqual(sequence, ['ensureProfile', 'insertTrip'])
+  assert.equal(tripsInserted.length, 1)
+  assert.equal(tripsInserted[0].rider_id, mockAuthedUser.id)
+})
+
+test('requestDriverTrip: returns 500 profile_missing and skips trip insert if ensureProfile fails', async () => {
+  const { sb, tripsInserted } = createMockEndpointSb()
+  let ensureProfileCalled = false
+
+  const res = await callHandler(
+    requestDriverTripHandler,
+    {
+      method: 'POST',
+      body: {
+        driverId: 'drv_test_123',
+        pickupLabel: 'Clemson Campus',
+        pickupLat: 34.6788,
+        pickupLng: -82.843,
+        dropoffLabel: 'Downtown',
+        destLat: 34.68,
+        destLng: -82.83,
+      },
+    },
+    {
+      user: mockAuthedUser,
+      sb,
+      ensureProfile: async () => {
+        ensureProfileCalled = true
+        return { ok: false, reason: 'profile_upsert_failed' }
+      },
+    },
+  )
+
+  assert.equal(ensureProfileCalled, true)
+  assert.equal(res.status, 500)
+  assert.deepEqual(res.json, {
+    error: 'Could not create your rider profile',
+    code: 'profile_missing',
+  })
+  assert.equal(tripsInserted.length, 0, 'No trip should be inserted when ensureProfile fails')
+})
+
+test('requestDriverTrip: runs ensureProfile before inserting trip', async () => {
+  const sequence = []
+  const { sb, tripsInserted } = createMockEndpointSb({
+    onTripInsert: () => sequence.push('insertTrip'),
+  })
+
+  const res = await callHandler(
+    requestDriverTripHandler,
+    {
+      method: 'POST',
+      body: {
+        driverId: 'drv_test_123',
+        pickupLabel: 'Clemson Campus',
+        pickupLat: 34.6788,
+        pickupLng: -82.843,
+        dropoffLabel: 'Downtown',
+        destLat: 34.68,
+        destLng: -82.83,
+      },
+    },
+    {
+      user: mockAuthedUser,
+      sb,
+      ensureProfile: async (passedSb, passedUser) => {
+        assert.equal(passedSb, sb)
+        assert.equal(passedUser.id, mockAuthedUser.id)
+        sequence.push('ensureProfile')
+        return { ok: true, created: true }
+      },
+    },
+  )
+
+  assert.equal(res.status, 200)
+  assert.deepEqual(sequence, ['ensureProfile', 'insertTrip'])
+  assert.equal(tripsInserted.length, 1)
+  assert.equal(tripsInserted[0].rider_id, mockAuthedUser.id)
+})
+
+test('airportCheckout: returns 500 profile_missing and skips trip insert if ensureProfile fails', async () => {
+  const { sb, tripsInserted } = createMockEndpointSb()
+  let ensureProfileCalled = false
+
+  const res = await callHandler(
+    airportCheckoutHandler,
+    {
+      method: 'POST',
+      body: {
+        airport: 'GSP',
+        useCredits: false,
+      },
+    },
+    {
+      user: mockAuthedUser,
+      sb,
+      stripeOk: () => true,
+      ensureProfile: async () => {
+        ensureProfileCalled = true
+        return { ok: false, reason: 'profile_upsert_failed' }
+      },
+    },
+  )
+
+  assert.equal(ensureProfileCalled, true)
+  assert.equal(res.status, 500)
+  assert.deepEqual(res.json, {
+    error: 'Could not create your rider profile',
+    code: 'profile_missing',
+  })
+  assert.equal(tripsInserted.length, 0, 'No trip should be inserted when ensureProfile fails')
+})
+
+test('airportCheckout: runs ensureProfile before inserting trip', async () => {
+  const sequence = []
+  const { sb, tripsInserted } = createMockEndpointSb({
+    onTripInsert: () => sequence.push('insertTrip'),
+  })
+
+  const res = await callHandler(
+    airportCheckoutHandler,
+    {
+      method: 'POST',
+      body: {
+        airport: 'GSP',
+        useCredits: false,
+      },
+    },
+    {
+      user: mockAuthedUser,
+      sb,
+      stripeOk: () => true,
+      stripe: {
+        checkout: {
+          sessions: {
+            create: async () => ({ id: 'cs_test_airport', url: 'https://checkout.stripe.com/test' }),
+          },
+        },
+      },
+      ensureProfile: async (passedSb, passedUser) => {
+        assert.equal(passedSb, sb)
+        assert.equal(passedUser.id, mockAuthedUser.id)
+        sequence.push('ensureProfile')
+        return { ok: true, created: true }
+      },
+    },
+  )
+
+  assert.equal(res.status, 200)
+  assert.deepEqual(sequence, ['ensureProfile', 'insertTrip'])
+  assert.equal(tripsInserted.length, 1)
+  assert.equal(tripsInserted[0].rider_id, mockAuthedUser.id)
+})
+
+test('createCheckoutSession: returns 500 profile_missing and skips trip insert if ensureProfile fails', async () => {
+  const { sb, tripsInserted } = createMockEndpointSb()
+  let ensureProfileCalled = false
+
+  const res = await callHandler(
+    createCheckoutSessionHandler,
+    {
+      method: 'POST',
+      body: {
+        airport: 'GSP',
+      },
+    },
+    {
+      user: mockAuthedUser,
+      sb,
+      stripeOk: () => true,
+      ensureProfile: async () => {
+        ensureProfileCalled = true
+        return { ok: false, reason: 'profile_upsert_failed' }
+      },
+    },
+  )
+
+  assert.equal(ensureProfileCalled, true)
+  assert.equal(res.status, 500)
+  assert.deepEqual(res.json, {
+    error: 'Could not create your rider profile',
+    code: 'profile_missing',
+  })
+  assert.equal(tripsInserted.length, 0, 'No trip should be inserted when ensureProfile fails')
+})
+
+test('createCheckoutSession: runs ensureProfile before inserting trip', async () => {
+  const sequence = []
+  const { sb, tripsInserted } = createMockEndpointSb({
+    onTripInsert: () => sequence.push('insertTrip'),
+  })
+
+  const res = await callHandler(
+    createCheckoutSessionHandler,
+    {
+      method: 'POST',
+      body: {
+        airport: 'GSP',
+      },
+    },
+    {
+      user: mockAuthedUser,
+      sb,
+      stripeOk: () => true,
+      stripe: {
+        checkout: {
+          sessions: {
+            create: async () => ({ id: 'cs_test_session', url: 'https://checkout.stripe.com/test' }),
+          },
+        },
+      },
+      ensureProfile: async (passedSb, passedUser) => {
+        assert.equal(passedSb, sb)
+        assert.equal(passedUser.id, mockAuthedUser.id)
+        sequence.push('ensureProfile')
+        return { ok: true, created: true }
+      },
+    },
+  )
+
+  assert.equal(res.status, 200)
+  assert.deepEqual(sequence, ['ensureProfile', 'insertTrip'])
+  assert.equal(tripsInserted.length, 1)
+  assert.equal(tripsInserted[0].rider_id, mockAuthedUser.id)
+})
+
+test('integration: default ensureProfile executes profile upsert before trips insert', async () => {
+  const { sb, operations, tripsInserted } = createMockEndpointSb({ profileExisting: null })
+
+  const res = await callHandler(
+    scheduleTripHandler,
+    {
+      method: 'POST',
+      body: {
+        purpose: 'planned',
+        pickup: { label: 'Clemson Campus', lat: 34.6788, lng: -82.843 },
+        dropoff: { label: 'Downtown', lat: 34.68, lng: -82.83 },
+        scheduled: false,
+      },
+    },
+    {
+      user: mockAuthedUser,
+      sb,
+    },
+  )
+
+  assert.equal(res.status, 200)
+  assert.equal(tripsInserted.length, 1)
+
+  const profileUpsertIdx = operations.findIndex((op) => op.op === 'upsert' && op.table === 'profiles')
+  const tripInsertIdx = operations.findIndex((op) => op.op === 'insert' && op.table === 'trips')
+  assert.ok(profileUpsertIdx !== -1, 'Profile upsert must be called')
+  assert.ok(tripInsertIdx !== -1, 'Trip insert must be called')
+  assert.ok(profileUpsertIdx < tripInsertIdx, 'Profile upsert must happen BEFORE trip insert')
+})
+
+test('integration: default ensureProfile failure returns 500 profile_missing and skips trip insert', async () => {
+  const { sb, tripsInserted } = createMockEndpointSb({
+    profileExisting: null,
+    profileUpsertError: { code: '08006', message: 'connection failure during upsert' },
+  })
+
+  const res = await callHandler(
+    scheduleTripHandler,
+    {
+      method: 'POST',
+      body: {
+        purpose: 'planned',
+        pickup: { label: 'Clemson Campus', lat: 34.6788, lng: -82.843 },
+        dropoff: { label: 'Downtown', lat: 34.68, lng: -82.83 },
+        scheduled: false,
+      },
+    },
+    {
+      user: mockAuthedUser,
+      sb,
+    },
+  )
+
+  assert.equal(res.status, 500)
+  assert.deepEqual(res.json, {
+    error: 'Could not create your rider profile',
+    code: 'profile_missing',
+  })
+  assert.equal(tripsInserted.length, 0, 'Must not insert trip if real ensureProfile fails')
+})
+
+

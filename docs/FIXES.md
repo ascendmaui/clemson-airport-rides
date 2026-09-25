@@ -2,7 +2,29 @@
 
 Persistent knowledge base for recurring failures. When a matching issue appears, apply the saved fix first.
 
-## 2026-09-24 — Ensure minimal profile row for new Supabase auth users
+## 2026-09-24 — Ensure profile before trip inserts across server endpoints (t2)
+
+- **Track / machine:** Clemson RIDES · worktree deputy-pkg-profile-ensure / branch deputy/profile-ensure
+- **Symptom:** Brand-new users without a `public.profiles` row encountered foreign key violation errors (`trips_rider_id_fkey`) when attempting to create trips.
+- **Root cause:** Endpoints created `trips` rows referencing `user.id` as `rider_id` before verifying that a corresponding `public.profiles` row existed.
+- **Fix:** Called `ensureProfile(sb, user)` immediately prior to `trips.insert(...)` across all trip-inserting endpoints:
+  - `api/create-checkout-session.js`
+  - `server/endpoints/airportCheckout.js`
+  - `server/endpoints/scheduleTrip.js`
+  - `server/endpoints/requestDriverTrip.js`
+  If `ensureProfile` returns `ok: false`, immediately respond 500 with `{ error: 'Could not create your rider profile', code: 'profile_missing' }` and halt execution before inserting into `trips`.
+  Supported dependency injection (`deps`) for `sb`, `user`, `ensureProfile`, `stripeOk`, and `stripe` across all four endpoints.
+  Added unit and end-to-end integration tests in `server/ensureProfile.test.js` proving `ensureProfile` executes before `trips.insert` and that upsert failures abort the insert and return 500.
+- **Files touched:**
+  - `api/create-checkout-session.js`
+  - `server/endpoints/airportCheckout.js`
+  - `server/endpoints/scheduleTrip.js`
+  - `server/endpoints/requestDriverTrip.js`
+  - `server/ensureProfile.test.js`
+  - `docs/FIXES.md`
+- **Verified:** All tests in `server/ensureProfile.test.js`, `server/abandonedCheckout.test.js`, `tests/apiRoutes.test.js`, and full `npm test` suite passing (351/351 tests).
+
+## 2026-09-24 — Ensure minimal profile row for new Supabase auth users (t1)
 
 - **Track / machine:** Clemson RIDES · worktree deputy-pkg-profile-ensure / branch deputy/profile-ensure
 - **Symptom:** Brand-new user signing in via Apple or Google on Supabase Auth (#71) has an `auth.users` row but no `public.profiles` row. `trips.rider_id` foreign key references `profiles(id)` (`trips_rider_id_fkey`), causing initial trip creation to fail with 500.
