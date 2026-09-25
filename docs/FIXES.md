@@ -129,6 +129,13 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
   - `packages/rides-native/apiOrigin.test.js`
   - `docs/FIXES.md`
 
+## 2026-09-25 — parseSupabaseAuthUrl safely handles hash routing when fragment precedes query params
+
+- **Track / machine:** Clemson RIDES · deputy/auth-url-r2 · pkg-auth-url-r2 t2
+- **What was wrong:** When `#` preceded `?` in an authentication URL (such as SPA hash routing `/#/auth/callback?code=...` or `/#/set-password?access_token=...`), `url.slice(queryIndex + 1, hashIndex >= 0 ? hashIndex : undefined)` inverted the slice bounds (`queryIndex > hashIndex`), producing an empty string for `query`. In addition, `hash` captured the trailing query string, causing `URLSearchParams` on `hash` to fail to match parameter keys (e.g. searching for `access_token` when the key was `/set-password?access_token`). As a result, `parseSupabaseAuthUrl` returned `null` for valid hash-routed auth URLs.
+- **What changed:** Bounded `query` and `hash` slicing symmetrically: `query` ends at `hashIndex` only when `hashIndex > queryIndex`, and `hash` ends at `queryIndex` only when `queryIndex > hashIndex`. This cleanly partitions URL query and fragment parameters regardless of whether `?` precedes `#` or `#` precedes `?`. Updated unit tests in `packages/rides-native/authUrl.test.js` to assert proper extraction of session and code parameters from hash-routed URLs.
+- **Files touched:** `packages/rides-native/authUrl.js`, `packages/rides-native/authUrl.test.js`, `docs/FIXES.md`
+
 ## 2026-09-25 — Expiry cron wired: CRON_SECRET + Supabase pg_cron/pg_net; prod redeployed at 111c607
 
 - **Track / machine:** Clemson RIDES · I9 (61b11c89) Vercel CLI + Supabase awktabuhijrshmsmagpq · approved by John 1:05 AM ET 9/25.

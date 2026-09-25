@@ -379,14 +379,32 @@ test('error branches and error redirect parameters', () => {
 })
 
 test('URL structural quirks and encoding behaviors', () => {
-  // BUG?: When '#' appears before '?' in the URL (such as hash routing '#/route?code=xyz'), url.slice(queryIndex + 1, hashIndex) produces an empty string because queryIndex > hashIndex, and URLSearchParams fails to extract parameters from the hash path, causing parseSupabaseAuthUrl to return null
-  assert.equal(
+  // When '#' appears before '?' in the URL (such as hash routing '#/route?code=xyz'), query parameters are properly extracted
+  assert.deepEqual(
     parseSupabaseAuthUrl('https://clemson-rides.vercel.app/#/auth/callback?code=pkce_spa'),
-    null,
+    {
+      kind: 'code',
+      code: 'pkce_spa',
+      type: null,
+    },
   )
-  assert.equal(
+  assert.deepEqual(
     parseSupabaseAuthUrl('https://clemson-rides.vercel.app/#/set-password?access_token=spa_at&refresh_token=spa_rt'),
-    null,
+    {
+      kind: 'session',
+      accessToken: 'spa_at',
+      refreshToken: 'spa_rt',
+      type: null,
+    },
+  )
+  assert.deepEqual(
+    parseSupabaseAuthUrl('https://clemson-rides.vercel.app/#/set-password?access_token=spa_at&refresh_token=spa_rt&type=recovery'),
+    {
+      kind: 'session',
+      accessToken: 'spa_at',
+      refreshToken: 'spa_rt',
+      type: 'recovery',
+    },
   )
 
   // Percent-encoded characters in tokens are properly decoded by URLSearchParams
