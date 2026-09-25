@@ -348,6 +348,16 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
 - **Files touched:** `src/lib/trips.js`, `src/lib/trips.test.js`, `docs/FIXES.md`
 - **Verified:** `node --experimental-strip-types --test src/lib/trips.test.js` — 11 pass.
 
+## 2026-09-25 — wire offline/error-state tests into npm test
+
+- **Track / machine:** Clemson RIDES · deputy/offline-error-states · pkg-offline-error-states t3
+- **What was wrong:** `apps/rider/lib/friendsApi.test.mjs`, `apps/rider/lib/accountApi.test.mjs`, and `apps/driver/lib/push.test.mjs` call `registerHooks` from `node:module` and replace `globalThis.fetch`. The root test script did not pin process isolation, so a shared-process run would let that fetch tripwire and those resolvers affect later suites.
+- **What changed:** The three files were already listed once, at the end of the root `test` script (t1). They were not added a second time. The script now passes `--experimental-test-isolation=process`, so each file runs in its own process. Each resolver still short-circuits only when the importer is the module under test (`friendsApi.ts`, `accountApi.ts`, or `push.ts`) and the specifier is `@/lib/storage`, `@/lib/supabase`, `rides-native/apiClient` / `rides-native/apiClient.js`, `expo-constants`, `expo-notifications`, or `react-native`. Every other specifier goes to `nextResolve`.
+- **Files touched:**
+  - `package.json` (test script only)
+  - `docs/FIXES.md`
+- **Verified:** `npm test` (872 passing, 0 failing), including the three offline/error-state files.
+
 ## 2026-09-25 — loadAccount keeps on-device prefs when the profile fetch throws
 
 - **Track / machine:** Clemson RIDES · deputy/offline-error-states · pkg-offline-error-states t2
