@@ -1177,6 +1177,13 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
 - **What changed:** Deep-freeze each section, its paragraph and bullet lists, and both arrays in place before re-exporting. References stay identical to the shared module. `LEGAL_UPDATED` is unchanged.
 - **Files touched:** `packages/rides-native/legalCopy.js`, `packages/rides-native/legalCopy.test.js`
 
+## 2026-09-25 — Seven-digit emergency numbers were dialed as bogus E.164
+
+- **Track / machine:** deputy pkg-safety-tests · t2
+- **What was wrong:** `contactTel` turned a 7-digit local number into `tel:+` plus those digits. Clemson campus `656-2222` became `tel:+6562222`, which is not a callable number. Ten-digit numbers and numbers the rider marked with `+` were already fine.
+- **What changed:** A 7-digit number with no leading `+` now dials as a local `tel:6562222`. Stored contact text is unchanged. An explicit `+` still dials `tel:+…`.
+- **Files touched:** `packages/rides-native/safety.js`, `packages/rides-native/safety.test.js`, `docs/FIXES.md`
+
 ## 2026-09-24 — Safety helpers: tests cover every export; arrived-status hole left in source
 
 - **Track / machine:** deputy pkg-safety-tests · t1

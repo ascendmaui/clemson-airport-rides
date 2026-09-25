@@ -447,10 +447,10 @@ test('contact phones keep a leading plus and dial 10-digit numbers as +1', () =>
   assert.equal(contactTel('8646562222'), 'tel:+18646562222')
   assert.equal(contactTel('+44 20 7946 0958'), 'tel:+442079460958')
   assert.equal(contactTel('442079460958'), 'tel:+442079460958')
-  // BUG?: a 7-digit local number is accepted, then dialed as tel:+<digits>
-  // rather than a local or +1 number. 656-2222 becomes tel:+6562222.
   assert.equal(normalizeContactPhone('656-2222').phone, '6562222')
-  assert.equal(contactTel('656-2222'), 'tel:+6562222')
+  assert.equal(contactTel('656-2222'), 'tel:6562222')
+  assert.equal(contactTel('6562222'), 'tel:6562222')
+  assert.equal(contactTel('+6562222'), 'tel:+6562222')
 })
 
 test('emergency contact validation enforces name and relationship length', () => {
