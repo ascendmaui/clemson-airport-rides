@@ -399,6 +399,56 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
   - `docs/FIXES.md`
 - **Verified:** `node --experimental-strip-types --test apps/rider/lib/friendsApi.test.mjs apps/rider/lib/accountApi.test.mjs apps/driver/lib/push.test.mjs` (79 passing).
 
+## 2026-09-25 — Wire stripe-webhook validation tests into npm test
+
+- **Track / machine:** Clemson RIDES · deputy/webhook-validation-tests · pkg-webhook-validation-tests t3
+- **What was wrong:** `api/stripe-webhook.js` input validation and event routing needed to run under the root `npm test` command, and the suspected bugs needed one log entry. No production source is fixed here.
+- **What changed:** `api/stripeWebhookValidation.test.js` is the last argument of the root `package.json` `test` script. It was appended in t1 and already appeared once, so this task did not add a second copy and did not change any other `package.json` field.
+- **What was covered:** Non-POST → 405. A missing, non-`sk_`, or `placeholder` stripe secret → 200 `{stub:true}` with the body unread. A header from `stripe.webhooks.generateTestHeaderString` with `whsec_fake_not_real` is accepted. A missing header, tampered body, wrong secret, or stale timestamp → 400, and `applyPaidCheckoutSession` / `serviceClient` are not called. Unsigned (`webhookSecret` `''` or `placeholder`): malformed JSON and an empty body → 400; JSON `null` → 400; a JSON array, an object with no `type`, and an unhandled event with no `data.object` → 200 unhandled. None of those paths reject the handler promise. `payment_intent.payment_failed` with no trip id or `serviceKey: ''` → `held:false` and `serviceClient` is not called; with a trip id and a fake client, `setPaymentHold` stores the classified code (`metadata.trip_id` is accepted). `checkout.session.expired` and `checkout.session.async_payment_failed` with `serviceKey: ''` → `released.reason` `no_service_role` and 200; retryable fake reasons → 500. `checkout.session.completed` and `async_payment_succeeded` pass the session and `isAsyncPaymentSucceeded` into `deps.applyPaidCheckoutSession`; a throwing or rejecting fake → 400 and the handler settles. Tip and `credit_purchase` events return `{skipped:true, reason:'no_service_role'}` on the env-cleared import, and `{skipped:true, reason:'missing_metadata'}` on the keyed instance when metadata is incomplete. They do not reach the real `serviceClient()`. Unknown event types → 200 `{received:true}`.
+- **BUG? (left in place, source not edited):**
+  1. Unsigned mode (`webhookSecret` `''` or any secret containing `placeholder`) does not require the JSON value to be an event object. `null` throws on `event.type` and the catch returns 400. A JSON array, including one that wraps `checkout.session.completed`, matches no type branch and is acknowledged `200 {received:true}`. The wrapped event is not applied, and the caller is not told to retry. Marked `// BUG?:` in `api/stripeWebhookValidation.test.js`.
+  2. `payment_intent.payment_failed` sets `held: true` after `setPaymentHold` returns. `readTrip` turns a select error into null, and a missing trip row is also null, so no `payment_hold` is written. The handler still responds `200 {held:true}`, so Stripe will not retry. A trips update that fails inside `setPaymentHold` is only logged and takes the same `held: true` path. Marked `// BUG?:` in the test. `api/stripe-webhook.js` and `server/collectPayment.js` were not edited.
+- **Files touched:**
+  - `docs/FIXES.md`
+  - `package.json` (test script already ends with `api/stripeWebhookValidation.test.js`; no edit in this commit)
+  - `api/stripeWebhookValidation.test.js` (coverage from t1 and t2; not edited here)
+  - `tests/fixtures/webhook-validation/hooks.js` (t2; not edited here)
+  - `tests/fixtures/webhook-validation/fakeSupabase.js` (t2; not edited here)
+- **Verified:** `npm test` (876/876 passing, 0 failed, including `api/stripeWebhookValidation.test.js`).
+
+## 2026-09-25 — stripe webhook event routing tests
+
+- **Track / machine:** Clemson RIDES · deputy/webhook-validation-tests · pkg-webhook-validation-tests t2
+- **What was wrong:** `api/stripe-webhook.js` had no direct tests for event routing after a body is accepted. `server/checkoutReconcile.test.js` drives one paid `checkout.session.completed` through the real apply function. `server/abandonedCheckout.test.js` only checks that the expired and async-failed names appear in the source.
+- **Suspected bug (left in place):** `payment_intent.payment_failed` sets `held: true` after `setPaymentHold` returns. A trip select error (`readTrip` logs and returns null) or a missing trip row writes no `payment_hold`, and the handler still responds `200 {held:true}`, so Stripe will not retry. Marked `// BUG?:` in the test. `api/stripe-webhook.js` was not edited.
+- **What changed:** Extended `api/stripeWebhookValidation.test.js` with routing cases. A second module instance, evaluated with the fake service-role string `service_role_fake_not_real`, covers the `missing_metadata` branch. Its `@supabase/supabase-js` import is redirected by `tests/fixtures/webhook-validation/hooks.js` to a `createClient` that throws. No production source was edited.
+- **Observed responses:**
+  - `payment_intent.payment_failed` with no usable `tripId` / `trip_id`, or with `serviceKey: ''`, returns `200 {held:false}` and does not call `serviceClient`. The response `code` is still the classified code.
+  - With a trip id and a fake service client, the trips update stores `metadata.payment_hold.code` for `insufficient_funds`, `expired_card`, `card_declined`, `authentication_required`, `card_removed`, and `charge_failed`. `metadata.trip_id` is accepted when `tripId` is absent. Amount fields are not asserted.
+  - `checkout.session.expired` and `checkout.session.async_payment_failed` with `serviceKey: ''` return `200` and `released.reason === 'no_service_role'` without calling `serviceClient`. A fake client that surfaces `trip_unreadable`, `payments_unreadable`, or `update_failed` makes the handler return `500`. A session with no trip id returns `200` `missing_trip`.
+  - `checkout.session.completed` passes the session and `isAsyncPaymentSucceeded: false` into `deps.applyPaidCheckoutSession`. `checkout.session.async_payment_succeeded` passes `true`. A throwing or rejecting fake returns `400` and the handler promise settles.
+  - On the import used by the suite (env cleared, module-level service key `''`), tip and `credit_purchase` events return `{skipped:true, reason:'no_service_role'}` even when metadata is complete and even when `deps.serviceKey` is set. They do not call `serviceClient` or `applyPaidCheckoutSession`. On the keyed instance, missing trip/rider or profile/pack metadata returns `{skipped:true, reason:'missing_metadata'}` and does not construct a client.
+  - Unknown types, including `payment_intent.succeeded` that is not a tip, return `200 {received:true, type}`.
+- **Files touched:**
+  - `api/stripeWebhookValidation.test.js`
+  - `tests/fixtures/webhook-validation/hooks.js`
+  - `tests/fixtures/webhook-validation/fakeSupabase.js`
+  - `docs/FIXES.md`
+- **Verified:** `node --experimental-strip-types --test api/stripeWebhookValidation.test.js server/checkoutReconcile.test.js` (103/103 passing).
+
+## 2026-09-25 — stripe webhook method, signature, and malformed-body tests
+
+- **Track / machine:** Clemson RIDES · deputy/webhook-validation-tests · pkg-webhook-validation-tests t1
+- **What was wrong:** `api/stripe-webhook.js` had no direct tests for the method check, stub mode, signature verification, or unsigned malformed bodies. `server/checkoutReconcile.test.js` only drives `checkout.session.completed` through the shared apply function.
+- **Suspected bug (left in place):** Unsigned mode (`webhookSecret` `''` or any secret containing `placeholder`) does not check that the JSON value is an event object. `null` throws on `event.type` and the catch returns 400. A JSON array, including one that wraps `checkout.session.completed`, does not throw, matches no type branch, and is acknowledged `200 {received:true}` without applying the wrapped event. Marked `// BUG?:` in the test. `api/stripe-webhook.js` was not edited.
+- **What changed:** Added `api/stripeWebhookValidation.test.js` and appended it to the root `test` script.
+- **Observed responses:** non-POST → 405; missing / non-`sk_` / `placeholder` stripe secret → 200 `{stub:true}` and the body is not read; a header from `stripe.webhooks.generateTestHeaderString` with `whsec_fake_not_real` → 200 `{received:true}`; missing header, tampered body, wrong secret, and a timestamp an hour old → 400 and `applyPaidCheckoutSession` / `serviceClient` are not called; unsigned malformed JSON and an empty body → 400; unsigned JSON `null` → 400; unsigned JSON array, an object with no `type`, and an unhandled event with no `data.object` → 200 unhandled. None of those paths reject the handler promise.
+- **Files touched:**
+  - `api/stripeWebhookValidation.test.js`
+  - `package.json`
+  - `docs/FIXES.md`
+- **Verified:** `node --experimental-strip-types --test api/stripeWebhookValidation.test.js` (29/29 passing).
+
 ## 2026-09-25 — Expiry cron wired: CRON_SECRET + Supabase pg_cron/pg_net; prod redeployed at 111c607
 
 - **Track / machine:** Clemson RIDES · I9 (61b11c89) Vercel CLI + Supabase awktabuhijrshmsmagpq · approved by John 1:05 AM ET 9/25.
