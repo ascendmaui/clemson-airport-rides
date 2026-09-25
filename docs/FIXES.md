@@ -348,6 +348,19 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
 - **Files touched:** `src/lib/trips.js`, `src/lib/trips.test.js`, `docs/FIXES.md`
 - **Verified:** `node --experimental-strip-types --test src/lib/trips.test.js` — 11 pass.
 
+## 2026-09-25 — offline/error-state tests for rider friends, account, and driver push
+
+- **Track / machine:** Clemson RIDES · deputy/offline-error-states · pkg-offline-error-states t1
+- **What was wrong:** `apps/rider/lib/friendsApi.ts`, `apps/rider/lib/accountApi.ts`, and `apps/driver/lib/push.ts` had no unit coverage for offline, storage, supabase, and push-permission failures.
+- **What changed:** Added node:test files beside those modules. They stub `@/lib/storage`, `@/lib/supabase`, `rides-native/apiClient.js`, `expo-constants`, `expo-notifications`, and `react-native` and do not call the network. Production source was not edited. Suspected bugs are marked in the tests with `// BUG?:` and are still open — do not treat those notes as a fix that already landed.
+- **Files touched:**
+  - `apps/rider/lib/friendsApi.test.mjs`
+  - `apps/rider/lib/accountApi.test.mjs`
+  - `apps/driver/lib/push.test.mjs`
+  - `package.json` (test script only)
+  - `docs/FIXES.md`
+- **Verified:** `node --experimental-strip-types --test apps/rider/lib/friendsApi.test.mjs apps/rider/lib/accountApi.test.mjs apps/driver/lib/push.test.mjs` (79 passing).
+
 ## 2026-09-25 — Expiry cron wired: CRON_SECRET + Supabase pg_cron/pg_net; prod redeployed at 111c607
 
 - **Track / machine:** Clemson RIDES · I9 (61b11c89) Vercel CLI + Supabase awktabuhijrshmsmagpq · approved by John 1:05 AM ET 9/25.
