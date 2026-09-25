@@ -2,6 +2,17 @@
 
 Persistent knowledge base for recurring failures. When a matching issue appears, apply the saved fix first.
 
+## 2026-09-24 — Add native apiClient tests to test script
+
+- **Track / machine:** Clemson RIDES · worktree deputy-pkg-api-client-tests
+- **Problem:** Shared native `apiClient` helper (`packages/rides-native/apiClient.js`) test suite (`packages/rides-native/apiClient.test.js`) was not wired into the root `npm test` script.
+- **Root cause:** Missing entry in `"test"` script in `package.json`.
+- **Fix:** Appended `packages/rides-native/apiClient.test.js` as the last test entry in `package.json`'s `test` script.
+- **Files touched:**
+  - `package.json`
+  - `docs/FIXES.md`
+- **Verified:** `npm test` executes all 381 tests (including 30 `apiClient` tests) passing cleanly.
+
 ## 2026-09-24 — Remove Clerk: Apple + Google social sign-in directly on Supabase Auth
 
 - **Track / machine:** Clemson RIDES · worktree feat/supabase-auth-remove-clerk
