@@ -332,6 +332,22 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
   - `tests/fixtures/supabase-stub.js`
   - `docs/FIXES.md`
 
+## 2026-09-25 — wire web requestDriverTrip tests into npm test
+
+- **Track / machine:** Clemson RIDES · deputy/choose-driver-tests · pkg-choose-driver-tests t3
+- **What was wrong:** `src/lib/trips.test.js` covers the web `requestDriverTrip` path, but the root `package.json` `test` script never listed it, so `npm test` skipped the suite.
+- **What changed:** Appended `src/lib/trips.test.js` as the last entry of the `test` script. The file's loader hook only rewrites `./payments` when the importer is `src/lib/trips.js`, and Node 22 runs each test file in its own process by default, so the fake payments module does not reach the other suites (including `src/lib/webPayments.test.js`). No production source change.
+- **Files touched:** `package.json`, `docs/FIXES.md`
+- **Verified:** `npm test` — 804 pass, 0 fail, including the 11 `src/lib/trips.test.js` cases.
+
+## 2026-09-25 — web requestDriverTrip treated blank pins as 0,0
+
+- **Track / machine:** Clemson RIDES · deputy/choose-driver-tests · pkg-choose-driver-tests t2
+- **What was wrong:** `src/lib/trips.js` `requestDriverTrip` used `Number(destLat)` / `Number(destLng)` to decide whether a custom pin was present. `Number(null)`, `Number('')`, and `Number('   ')` are `0`, and `0` is finite, so omitted, blank, or half-provided coordinates never fell through to `destPoint(dest)`. `PickDriver.jsx` calls this without coordinates. The server accepts `0` as a real pin (`finiteCoord`), so a non-airport label was stored at 0,0 or with one side stuck at 0. Explicit numeric pins, including `0`, were already correct.
+- **What changed:** A blank value (`null`, `undefined`, `''`, whitespace-only) is treated as missing. Both sides must be finite or the drop-off is `destPoint(dest)`. An explicit `0` or numeric string such as `'0'` / `' 34.5 '` is still sent as that number. `listCents` and `isStudent` still never reach the payload. Whitespace-only ids, a whitespace tier, and a whitespace trip id are unchanged.
+- **Files touched:** `src/lib/trips.js`, `src/lib/trips.test.js`, `docs/FIXES.md`
+- **Verified:** `node --experimental-strip-types --test src/lib/trips.test.js` — 11 pass.
+
 ## 2026-09-25 — Expiry cron wired: CRON_SECRET + Supabase pg_cron/pg_net; prod redeployed at 111c607
 
 - **Track / machine:** Clemson RIDES · I9 (61b11c89) Vercel CLI + Supabase awktabuhijrshmsmagpq · approved by John 1:05 AM ET 9/25.
