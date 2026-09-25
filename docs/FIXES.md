@@ -290,6 +290,13 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
 - **Files touched:** `shared/airportHold.js`, `server/abandonedCheckout.js`, `packages/rides-native/holdExpiry.js`, `packages/rides-native/holdExpiry.d.ts`, `packages/rides-native/holdExpiry.test.js`, `docs/FIXES.md`
 - **Verified:** `node --experimental-strip-types --test packages/rides-native/holdExpiry.test.js` (13/13) and the server boundary test `an unpaid airport hold is canceled at 20 minutes and kept one millisecond earlier`.
 
+## 2026-09-25 — skip non-approved drivers in offer and match paths (pkg-driver-approval-gate-r2 t2)
+
+- **What was wrong:** A driver whose `driver_applications.onboarding_status` is not `approved` (for example `pending_review`) could still be assigned a preferred trip, preview an open-pool offer, be pinned as the driver on a driving carpool, and see open-pool cards on the driver desk. The rider online list trusted only `list_approved_driver_ids`, so a stale RPC result could still surface an unapproved driver. Admins and staff were not excepted.
+- **What changed:** `receivableDriverIds` reads `driver_applications` once for a candidate list and allows anyone `loadStaffAccess` marks as admin or support. Preferred-driver requests, offer preview (open trips only; an already-accepted live trip still previews), and driving carpool creates use that check. `fetchOnlineDrivers` / `fetchDriversByIds` drop ids whose application row is not `approved`. `loadDriverDesk` returns no open-pool or open-scheduled offers for an unapproved driver, with `approvalGate` set to the existing approval-gate copy, and still returns the driver's already-accepted trip. `scheduleTrip` does not pick a driver. There is no server push fan-out.
+- **Files touched:** `server/driverApproval.js`, `server/driverApproval.test.js`, `server/endpoints/requestDriverTrip.js`, `server/endpoints/tripOfferPreview.js`, `server/carpoolService.js`, `server/carpoolRoutes.js`, `server/ensureProfile.test.js`, `packages/rides-native/drivers.js`, `packages/rides-native/drivers.test.js`, `packages/rides-native/driverDesk.js`, `packages/rides-native/driverDesk.d.ts`, `packages/rides-native/driverDesk.test.js`, `docs/driver-approval-gate.md`, `docs/FIXES.md`
+- **Verified:** `node --experimental-strip-types --test server/driverApproval.test.js packages/rides-native/drivers.test.js`
+
 ## 2026-09-25 — driver approval gate map + unit tests (pkg-driver-approval-gate-r2 t1)
 
 - **Track / machine:** Clemson RIDES · worktree deputy-pkg-driver-approval-gate-r2 · branch deputy/driver-approval-gate-r2

@@ -3,6 +3,7 @@
  * Payments go through the existing /api/driver and /api/stripe-payment-methods routers.
  */
 import { authedJson } from './apiClient.js'
+import { approvalGateMessage } from './syntheticOffers.js'
 import {
   acceptNeedsDriverOnline,
   declineDisposition,
@@ -185,7 +186,7 @@ export async function loadDriverDesk(supabase, driverId) {
       return []
     }
   }
-  const [openRows, scheduledRows, mineRows, activeRows, statusRes, vehicle, profile] = await Promise.all([
+  const [openRows, scheduledRows, mineRows, activeRows, statusRes, vehicle, profile, appRes] = await Promise.all([
     safeRows('offers', (query) => query.in('status', ['searching', 'offered', 'requested']).order('requested_at', { ascending: false }).limit(20)),
     safeRows('scheduled', (query) => query.eq('status', 'scheduled').is('driver_id', null).order('pickup_at', { ascending: true }).limit(25)),
     safeRows('upcoming', (query) => query.eq('driver_id', driverId).in('status', ['accepted', 'arriving']).not('pickup_at', 'is', null).order('pickup_at', { ascending: true }).limit(20)),
@@ -193,12 +194,23 @@ export async function loadDriverDesk(supabase, driverId) {
     supabase.from('driver_status').select('online, priority_mode, lat, lng').eq('driver_id', driverId).maybeSingle(),
     loadVehicle(supabase, driverId).catch(() => null),
     loadDriverProfile(supabase, driverId).catch(() => null),
+    supabase.from('driver_applications').select('onboarding_status').eq('profile_id', driverId).maybeSingle(),
   ])
   if (statusRes.error) throw new Error(statusRes.error.message)
 
-  const passedIds = new Set(await listPassedTripIds(supabase, driverId))
-  const claimableOpen = openRows.filter((row) => !isUnpaidAirportDepositTrip(row))
-  const claimableScheduled = scheduledRows.filter((row) => !isUnpaidAirportDepositTrip(row))
+  const approvedForOffers = !appRes.error && appRes.data?.onboarding_status === 'approved'
+  if (appRes.error) warnings.push(`approval: ${appRes.error.message}`)
+  const approvalGate = approvedForOffers ? null : approvalGateMessage()
+
+  const passedIds = approvedForOffers
+    ? new Set(await listPassedTripIds(supabase, driverId))
+    : new Set()
+  const claimableOpen = approvedForOffers
+    ? openRows.filter((row) => !isUnpaidAirportDepositTrip(row))
+    : []
+  const claimableScheduled = approvedForOffers
+    ? scheduledRows.filter((row) => !isUnpaidAirportDepositTrip(row))
+    : []
   const offers = cards(claimableOpen, gameDayLive).filter((card) => {
     if (card.status !== 'requested' && passedIds.has(card.id)) return false
     if (card.status === 'requested') return card.driverId === driverId
@@ -221,6 +233,7 @@ export async function loadDriverDesk(supabase, driverId) {
     profile,
     facing: riderFacingCard({ profile, vehicle, online: statusRes.data?.online }),
     warning: warnings[0] || null,
+    approvalGate,
   }
 }
 

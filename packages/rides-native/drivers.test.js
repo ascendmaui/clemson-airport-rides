@@ -21,7 +21,9 @@ import {
   setDriverOnline,
   sortPreferredDrivers,
 } from './drivers.js'
+import { loadDriverDesk } from './driverDesk.js'
 import { GSP, STADIUM } from './places.js'
+import { approvalGateMessage } from './syntheticOffers.js'
 
 const A = '11111111-1111-4111-8111-111111111111'
 const B = '22222222-2222-4222-8222-222222222222'
@@ -176,6 +178,13 @@ function makeFakeSupabase({
                     return { data: found || null, error: null }
                   },
                 }
+              },
+              in(col, vals) {
+                if (applicationError) return Promise.resolve({ data: null, error: applicationError })
+                return Promise.resolve({
+                  data: driverApplications.filter((row) => vals.includes(row[col])),
+                  error: null,
+                })
               },
             }
           },
@@ -596,6 +605,33 @@ test('fetchOnlineDrivers requires supabase configuration and reports query error
   const resProfileErr = await fetchOnlineDrivers(supabaseProfileErr)
   assert.deepEqual(resProfileErr.drivers, [])
   assert.equal(resProfileErr.error, 'Database connection failed')
+})
+
+test('fetchOnlineDrivers drops pending_review drivers and keeps approved drivers', async () => {
+  const supabase = makeFakeSupabase({
+    driverStatus: [
+      { driver_id: A, online: true },
+      { driver_id: B, online: true },
+    ],
+    profiles: [
+      { id: A, full_name: 'Pending Pat' },
+      { id: B, full_name: 'Approved Amy' },
+    ],
+    // Stale approval RPC would include both. The application rows are the gate.
+    approvedIds: [A, B],
+    driverApplications: [
+      { profile_id: A, onboarding_status: 'pending_review' },
+      { profile_id: B, onboarding_status: 'approved' },
+    ],
+  })
+
+  const res = await fetchOnlineDrivers(supabase)
+  assert.equal(res.error, null)
+  assert.deepEqual(res.drivers.map((driver) => driver.id), [B])
+
+  const saved = await fetchDriversByIds(supabase, [A, B])
+  assert.equal(saved.error, null)
+  assert.deepEqual(saved.drivers.map((driver) => driver.id), [B])
 })
 
 test('fetchOnlineDrivers returns empty list when no drivers are online or approved', async () => {
@@ -1114,4 +1150,76 @@ test('requestDriverTrip propagates HTTP errors, missing trip responses, and netw
   } finally {
     globalThis.fetch = originalFetch
   }
+})
+
+function deskSupabase({ onboardingStatus, trips }) {
+  const tables = {
+    trips,
+    driver_applications: [{ profile_id: 'driver-1', onboarding_status: onboardingStatus }],
+    driver_status: [{ driver_id: 'driver-1', online: true, priority_mode: false }],
+    vehicles: [],
+    profiles: [],
+    driver_offer_passes: [],
+    game_day_events: [],
+  }
+  function from(table) {
+    const state = { filters: [] }
+    const builder = {
+      select() { return builder },
+      eq(col, val) {
+        state.filters.push((row) => row[col] === val)
+        return builder
+      },
+      in(col, vals) {
+        state.filters.push((row) => vals.includes(row[col]))
+        return builder
+      },
+      is(col, val) {
+        state.filters.push((row) => (val == null ? row[col] == null : row[col] === val))
+        return builder
+      },
+      not() { return builder },
+      lte() { return builder },
+      gte() { return builder },
+      order() { return builder },
+      limit() { return builder },
+      matched() {
+        return (tables[table] || []).filter((row) => state.filters.every((fn) => fn(row)))
+      },
+      async maybeSingle() {
+        return { data: builder.matched()[0] || null, error: null }
+      },
+      then(resolve) {
+        resolve({ data: builder.matched(), error: null })
+      },
+    }
+    return builder
+  }
+  return { from }
+}
+
+const OPEN_POOL_TRIPS = [
+  { id: 'trip-open', status: 'searching', pickup_label: 'Tillman Hall', driver_id: null },
+  { id: 'trip-sched', status: 'scheduled', driver_id: null, pickup_label: 'Core Campus', pickup_at: '2099-01-01T00:00:00.000Z' },
+  { id: 'trip-live', driver_id: 'driver-1', status: 'accepted', pickup_label: 'Bowman Field', pickup_at: '2020-01-01T00:00:00.000Z' },
+]
+
+test('open-pool offers are empty for pending_review and still present for approved drivers', async () => {
+  const pending = await loadDriverDesk(
+    deskSupabase({ onboardingStatus: 'pending_review', trips: OPEN_POOL_TRIPS }),
+    'driver-1',
+  )
+  assert.deepEqual(pending.offers, [])
+  assert.deepEqual(pending.scheduledOpen, [])
+  assert.equal(pending.approvalGate, approvalGateMessage())
+  assert.equal(pending.active?.id, 'trip-live')
+
+  const approved = await loadDriverDesk(
+    deskSupabase({ onboardingStatus: 'approved', trips: OPEN_POOL_TRIPS }),
+    'driver-1',
+  )
+  assert.equal(approved.approvalGate, null)
+  assert.deepEqual(approved.offers.map((card) => card.id), ['trip-open'])
+  assert.deepEqual(approved.scheduledOpen.map((card) => card.id), ['trip-sched'])
+  assert.equal(approved.active?.id, 'trip-live')
 })

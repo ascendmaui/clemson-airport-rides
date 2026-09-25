@@ -1,3 +1,4 @@
+import { canReceiveRides } from '../../shared/driverOnboarding.js'
 import { authedJson } from './apiClient.js'
 import { displayFirstName, standingFromRatings } from './authErrors.js'
 import { GSP, STADIUM } from './places.js'
@@ -235,6 +236,36 @@ async function approvedIdSet(supabase, ids) {
   return { approved: new Set((data || []).map((row) => row.profile_id)), error: null }
 }
 
+/** Drop ids whose application row is positively not approved. One query for the list. */
+async function positivelyUnapprovedIds(supabase, ids) {
+  if (!ids.length) return new Set()
+  try {
+    const pending = supabase
+      .from('driver_applications')
+      .select('profile_id, onboarding_status')
+      .in('profile_id', ids)
+    if (!pending || typeof pending.then !== 'function') return new Set()
+    const { data, error } = await pending
+    if (error || !Array.isArray(data)) return new Set()
+    const blocked = new Set()
+    for (const row of data) {
+      if (row?.profile_id && !canReceiveRides(row.onboarding_status)) blocked.add(row.profile_id)
+    }
+    return blocked
+  } catch {
+    return new Set()
+  }
+}
+
+async function visibleApprovedIds(supabase, ids) {
+  const { approved, error } = await approvedIdSet(supabase, ids)
+  if (error || !approved) return { approved, error }
+  const blocked = await positivelyUnapprovedIds(supabase, ids)
+  if (!blocked.size) return { approved, error: null }
+  const next = new Set([...approved].filter((id) => !blocked.has(id)))
+  return { approved: next, error: null }
+}
+
 export async function fetchOnlineDrivers(supabase) {
   if (!supabase) return { drivers: [], error: 'Supabase not configured' }
 
@@ -247,7 +278,7 @@ export async function fetchOnlineDrivers(supabase) {
   if (!statuses?.length) return { drivers: [], error: null }
 
   const ids = statuses.map((row) => row.driver_id)
-  const { approved, error: approvedErr } = await approvedIdSet(supabase, ids)
+  const { approved, error: approvedErr } = await visibleApprovedIds(supabase, ids)
   if (approvedErr) return { drivers: [], error: approvedErr }
   const visible = statuses.filter((row) => approved.has(row.driver_id))
   if (!visible.length) return { drivers: [], error: null }
@@ -266,7 +297,7 @@ export async function fetchDriversByIds(supabase, ids) {
   if (!supabase) return { drivers: [], error: 'Supabase not configured' }
   if (!wanted.length) return { drivers: [], error: null }
 
-  const { approved, error: approvedErr } = await approvedIdSet(supabase, wanted)
+  const { approved, error: approvedErr } = await visibleApprovedIds(supabase, wanted)
   if (approvedErr) return { drivers: [], error: approvedErr }
   const visibleIds = wanted.filter((id) => approved.has(id))
   if (!visibleIds.length) return { drivers: [], error: null }

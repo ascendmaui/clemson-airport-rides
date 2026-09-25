@@ -16,6 +16,7 @@ import {
 } from '../src/lib/carpoolEngine.js'
 import { gameDayActive } from './carpoolSettle.js'
 import { resolveAmbassadorCode, stampAmbassadorCode } from './ambassadorAttribution.js'
+import { receivableDriverIds } from './driverApproval.js'
 
 function missingTable(error) {
   return /relation|does not exist|schema cache/i.test(error?.message || '')
@@ -66,6 +67,17 @@ export async function createGroupRide(sb, {
   driving = false,
   ambassadorCode = null,
 }) {
+  if (driving) {
+    const gate = await receivableDriverIds(sb, [user?.id])
+    if (gate.error) throw new Error(gate.error)
+    if (!gate.allowed.has(user?.id)) {
+      return {
+        ok: false,
+        code: 'driver_not_approved',
+        error: 'Admin must approve your driver application before you can offer a carpool.',
+      }
+    }
+  }
   ambassadorCode = await resolveAmbassadorCode(sb, user, ambassadorCode)
   const token = randomToken(18)
   const matchMode = driving ? 'student_driver' : 'marketplace'

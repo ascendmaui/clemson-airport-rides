@@ -64,6 +64,9 @@ export async function handleCarpoolGroup(req, res) {
       driving: Boolean(body.driving),
       ambassadorCode: ambassadorFrom(body),
     })
+    if (result?.ok === false && result.code === 'driver_not_approved') {
+      return json(res, 403, { error: result.error, code: result.code })
+    }
     return json(res, 200, result)
   } catch (err) {
     console.error('[carpool-group]', err)

@@ -4,7 +4,7 @@ Inventory of every path that offers a trip to a driver, matches or assigns a dri
 
 **Rule intended by product:** only a driver with `driver_applications.onboarding_status = 'approved'` may receive or accept rides. Admins (`public.is_admin()` in SQL; `loadStaffAccess` in `server/staffAccess.js`) are the only planned exception.
 
-**Shared predicate today:** `canReceiveRides(status)` in `shared/driverOnboarding.js` is `status === 'approved'`. It does not treat admin/staff as approved. `server/driverApproval.js` re-exports it and wraps the DB lookup as `driverApprovalStatus(sb, profileId)`.
+**Shared predicate today:** `canReceiveRides(status)` in `shared/driverOnboarding.js` is `status === 'approved'`. It does not treat admin/staff as approved. `server/driverApproval.js` re-exports it and wraps the DB lookup as `driverApprovalStatus(sb, profileId)`. As of t2, `driverApprovalStatus` and `receivableDriverIds` also allow a profile when `loadStaffAccess` says they are admin or support. `receivableDriverIds` reads `driver_applications` once for the whole candidate list.
 
 **Statuses** (`shared/driverOnboarding.js` `ONBOARDING_STATUSES`): `pending_info`, `pending_docs`, `pending_review` (UI: under review), `approved`, `rejected`. Missing application row is treated as not approved.
 
@@ -17,7 +17,7 @@ Inventory of every path that offers a trip to a driver, matches or assigns a dri
 | sql-only | JavaScript does not check. A Postgres trigger/function in `supabase/driver_onboarding_approval.sql` would, **if that file is applied**. It is not a dated file under `supabase/migrations/`. |
 | n/a | Does not assign or offer to a driver. |
 
-Admin exception: **not implemented** on `canReceiveRides`, `driverApprovalStatus`, or `public.driver_is_approved(uid)`. An admin without `onboarding_status = 'approved'` is not approved by those helpers.
+Admin exception: **not implemented** on `canReceiveRides` or `public.driver_is_approved(uid)`. As of t2, `driverApprovalStatus` and `receivableDriverIds` do allow admin/staff via `loadStaffAccess`. An admin without `onboarding_status = 'approved'` is still not approved by the SQL helper.
 
 ---
 
@@ -25,8 +25,8 @@ Admin exception: **not implemented** on `canReceiveRides`, `driverApprovalStatus
 
 | # | Path | Kind | Checks approval today? | Notes |
 | --- | --- | --- | --- | --- |
-| 1 | `packages/rides-native/drivers.js` `fetchOnlineDrivers` | offer (rider picker) | yes | Filters `driver_status.online = true` through RPC `list_approved_driver_ids`. Unapproved ids never become `visibleIds`. |
-| 2 | `packages/rides-native/drivers.js` `fetchDriversByIds` | offer (saved drivers) | yes | Same RPC. Unapproved favorites are omitted. |
+| 1 | `packages/rides-native/drivers.js` `fetchOnlineDrivers` | offer (rider picker) | yes | Filters `driver_status.online = true` through RPC `list_approved_driver_ids`, then one `driver_applications` read drops any id whose `onboarding_status` is not `approved`. Unapproved ids never become `visibleIds`. |
+| 2 | `packages/rides-native/drivers.js` `fetchDriversByIds` | offer (saved drivers) | yes | Same RPC plus the same application-row drop. Unapproved favorites are omitted. |
 | 3 | `src/lib/supabase.js` `fetchOnlineDrivers` | offer | yes | Delegates to (1). |
 | 4 | `packages/rides-native/drivers.js` `setDriverOnline` | presence (enables claims) | yes | Going online requires `onboarding_status === 'approved'`. Going offline skips the gate. |
 | 5 | `src/lib/supabase.js` `setDriverOnline` | presence | yes | Same check; web copy differs (`Admin approval is required…`). |
@@ -39,7 +39,7 @@ Admin exception: **not implemented** on `canReceiveRides`, `driverApprovalStatus
 | 12 | SQL `public.list_approved_driver_ids(ids)` | helper | yes | Same file. Used by (1)(2). |
 | 13 | SQL `enforce_driver_online_approval` / trigger `driver_status_require_approval` | presence | sql-only | Blocks `driver_status.online = true` unless `driver_is_approved`. Does not flip an existing `online = true` row when onboarding later changes. |
 | 14 | SQL `enforce_trip_approved_driver` / trigger `trips_require_approved_driver` | accept / assign | sql-only | On insert (non-canceled with `driver_id`) or on assign / searching\|offered → accepted. No admin bypass. Not in `supabase/migrations/`. |
-| 15 | `packages/rides-native/driverDesk.js` `loadDriverDesk` | offer | no | Selects `searching` / `offered` / `requested` and unassigned `scheduled` with no application lookup. A leftover `online = true` is enough for RLS claim later. |
+| 15 | `packages/rides-native/driverDesk.js` `loadDriverDesk` | offer | yes | Open-pool and unassigned scheduled rows are omitted unless `onboarding_status` is `approved`. The result includes `approvalGate` (the existing approval-gate copy). Already-accepted live trips still load. No admin bypass on this client query. |
 | 16 | `apps/driver/app/queue.tsx` | offer UI + notify-adjacent | no (list) / yes (accept) | Always calls `loadDriverDesk`. Pending review **merges real desk offers with synthetic cards**. Accept goes through `acceptTrip` (6). |
 | 17 | `apps/driver/app/(tabs)/index.tsx` `notifyNewRequest` effect | notify | no | Fires on `desk.offers` for approved **and** `pending_review` (desk is loaded for both). Filters out synthetic ids, so a pending-review driver can get a local Expo ping for a real open-pool row. |
 | 18 | `src/screens/DriverHome.jsx` `loadScheduled` / toasts | offer + notify | no | Runs whenever `driverId` is set, including before / behind the approval gate. New scheduled rows toast `New scheduled ride`. Accept UI is behind the gate unless an `activeTrip` already exists. |
@@ -50,12 +50,12 @@ Admin exception: **not implemented** on `canReceiveRides`, `driverApprovalStatus
 | 23 | SQL `trips_online_driver_claim` | accept (RLS) | no | UPDATE of `searching`/`offered` with null `driver_id` allowed when `driver_status.online = true`. No `onboarding_status` clause. `supabase/driver_alerts_queue_tips.sql`. |
 | 24 | SQL `trip_update_is_accept` / `block_unpaid_airport_deposit_accept` | accept (trigger) | no | Unpaid airport deposit only. Does not check approval. |
 | 25 | `src/lib/driverOffers.js` `claimTrip` | accept | no | Direct `trips.update` to accepted. No application lookup. Not referenced by current screens (dead client helper). |
-| 26 | `server/endpoints/requestDriverTrip.js` | match / assign | no | Inserts `trips.driver_id` for a preferred request with no `driverApprovalStatus` call. Picker UI is filtered by (1), but a stale favorite id or a crafted POST still reaches here. |
+| 26 | `server/endpoints/requestDriverTrip.js` | match / assign | yes | `receivableDriverIds` before insert. Unapproved preferred drivers return `driver_not_approved`. Staff/admin still assign. |
 | 27 | `server/endpoints/scheduleTrip.js` | match | n/a | Inserts `scheduled` or `searching` with `driver_id` null. Later claimed via open pool / scheduled RPC. |
-| 28 | `server/endpoints/tripOfferPreview.js` | offer preview | no | Auth is “a `driver_status` row exists” (online not required). No application lookup. Open `searching`/`offered` or already-assigned-to-me. |
+| 28 | `server/endpoints/tripOfferPreview.js` | offer preview | yes | Open `searching`/`offered` (and any not-yet-accepted assignment) requires `receivableDriverIds`. Response is the approval-gate copy with `driver_not_approved`. A trip already `accepted` / `arriving` / `arrived` / `in_progress` / `completed` for this driver still previews. |
 | 29 | `src/lib/driverOffers.js` `fetchOfferPreview` | offer preview | no | Calls `/api/driver?action=offer-preview` (28). |
 | 30 | `server/carpoolService.js` `matchRider` / `handleCarpoolMatch` | match (riders) | n/a | Rider-to-rider marketplace. No driver assigned. Booked trip is `searching` for the open pool. |
-| 31 | `server/carpoolService.js` `createGroupRide` (`driving: true`) | match | no | Sets `friend_rides.driver_profile_id` without `driverApprovalStatus`. Approval is only later at (10) if booking assigns that driver. |
+| 31 | `server/carpoolService.js` `createGroupRide` (`driving: true`) | match | yes | `receivableDriverIds` before insert. Unapproved drivers get `driver_not_approved` and no `driver_profile_id`. Marketplace creates (`driving: false`) still assign no driver. |
 | 32 | `packages/rides-native/driverDesk.js` `publishDriverLocation` | presence | no | Upserts `driver_status.online` (default true). No application lookup. SQL (13) would reject unapproved online if applied. |
 | 33 | `src/lib/driverTrack.js` `publishDriverLocation` | presence | no | Same as (32) for web. |
 | 34 | `apps/driver/app/trip.tsx` location watch | presence | no | Calls (32) with `online: true` while a live trip is open, even if onboarding later flipped. |
@@ -75,10 +75,10 @@ Going online is gated in the native/web helpers (4)(5) and, if applied, in SQL (
 1. A `driver_status` row with `online = true` can be written **before** the application exists, or survive a later `pending_review` / `rejected` change. Reject handling (40) turns online off; other status writes do not.
 2. `publishDriverLocation` (32)(33)(34) upserts `online: true` with no JS approval check.
 3. Open-pool claim RLS (23) keys off `driver_status.online`, not `onboarding_status`.
-4. Offer lists (15)(16)(18)(22) do not re-check approval. Native queue (16) shows real open-pool cards during `pending_review`.
-5. Preferred-driver assign (26) does not re-check approval on the server.
+4. Native open-pool load (15) now drops those rows for an unapproved driver, so the queue (16) no longer merges real open-pool cards during `pending_review`. Web scheduled list (18) and scheduled-select RLS (22) still do not re-check approval.
+5. Preferred-driver assign (26) now re-checks approval on the server, including staff.
 
-`loadDriverDesk` and the native home still subscribe to `trips` Realtime for `pending_review` so the desk can refresh; that is how (17) can ping a driver who cannot legally go online.
+`loadDriverDesk` still returns an already-accepted trip. The native home still subscribes to `trips` Realtime for `pending_review`, but `desk.offers` is empty unless the driver is approved, so (17) no longer pings a real open-pool row.
 
 ---
 
@@ -101,10 +101,10 @@ Client `fetchOnlineDrivers` already depends on `list_approved_driver_ids`. If th
 - SQL: `public.is_admin()` (`supabase/driver_onboarding_approval.sql`, replaced in `supabase/migrations/20260924190000_admin_support.sql`).
 - Server staff: `loadStaffAccess` in `server/staffAccess.js` (`isAdminIdentity` + `admin_users.access_role`).
 - `accept_scheduled_trip` allows `profiles.role = 'admin'` without onboarding, which is a role check, not `is_admin()`.
-- `canReceiveRides` / `driverApprovalStatus` / `driver_is_approved` do **not** or-in admin.
+- `canReceiveRides` / `driver_is_approved` do **not** or-in admin. `driverApprovalStatus` and `receivableDriverIds` do, via `loadStaffAccess`.
 
 ---
 
 ## Tests for this map
 
-`server/driverApproval.test.js` pins `canReceiveRides` for every `ONBOARDING_STATUSES` value plus `null` / `undefined` / garbage, and `driverApprovalStatus` against a fake `sb` (approved, `pending_review`, missing row, DB error). No production behavior change.
+`server/driverApproval.test.js` pins `canReceiveRides` for every `ONBOARDING_STATUSES` value plus `null` / `undefined` / garbage, and `driverApprovalStatus` against a fake `sb` (approved, `pending_review`, missing row, DB error, admin exception). t2 adds fake-sb coverage that a `pending_review` driver is skipped on preferred assign, offer preview, and driving carpool create, while an approved driver is not. `packages/rides-native/drivers.test.js` covers the online list and open-pool desk the same way.
