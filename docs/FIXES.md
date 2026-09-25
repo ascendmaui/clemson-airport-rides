@@ -1208,4 +1208,8 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
   - `packages/rides-native/assistClient.test.js`
   - `docs/FIXES.md`
 
-
+## 2026-09-25 — wire assistClient.js tests into npm test + verify suite (pkg-assist-client-r2 t3)
+- **Problem:** `packages/rides-native/assistClient.test.js` needed verification of wiring in the root `package.json` `test` script and end-to-end confirmation that the complete test suite runs and passes cleanly.
+- **What was changed:** Verified that `packages/rides-native/assistClient.test.js` is present in the `package.json` `test` runner argument list. Executed full test runner via `npm test`, confirming 832/832 tests pass (including all 45 assistClient unit tests covering `parseAgentHttpResponse`, `postAgent`, and `supportTicketRequest`).
+- **Files touched:**
+  - `docs/FIXES.md`
