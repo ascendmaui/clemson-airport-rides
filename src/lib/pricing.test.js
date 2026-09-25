@@ -135,12 +135,44 @@ test('applyStudentDiscount: matches quoteFare student math for the same fare (UI
   }
 })
 
-// BUG?: the two student-eligibility checks disagree on some inputs. Documented, not fixed
-// (money path). applyStudentDiscount uses `tier && tier !== 'standard'`, so tier '' counts
-// as Standard; quoteFare uses `tier == null || tier === 'standard'`, so tier '' gets no discount.
-test("BUG?: tier '' is discounted by applyStudentDiscount but not by quoteFare", () => {
-  assert.equal(applyStudentDiscount(2000, { isStudent: true, tier: '' }).discountCents, 200)
-  assert.equal(quoteFare({ miles: 3, minutes: 10, isStudent: true, tier: '' }).breakdown.student_discount_cents, 0)
+// Blank/empty rider tier must NOT get the Standard-only student discount.
+// quoteFare (checkout) and applyStudentDiscount (UI) must agree — prefer the
+// safer less-discount interpretation: only explicit Standard (or null/omitted
+// defaulting to standard) is eligible; '' is not Standard.
+test("blank tier '' gets no student discount in applyStudentDiscount", () => {
+  assert.deepEqual(applyStudentDiscount(2000, { isStudent: true, tier: '' }), {
+    fareCents: 2000,
+    discountCents: 0,
+    label: null,
+  })
+})
+
+test("blank tier '' gets no student discount in quoteFare", () => {
+  const q = quoteFare({ miles: 3, minutes: 10, isStudent: true, tier: '' })
+  assert.equal(q.breakdown.student_discount_cents, 0)
+  assert.equal(q.breakdown.student_discount_bps, 0)
+})
+
+test("blank tier: applyStudentDiscount and quoteFare agree (UI == checkout)", () => {
+  for (const [miles, minutes] of [[0, 0], [3, 10], [48, 55], [130, 130]]) {
+    const plain = quoteFare({ miles, minutes, tier: '' })
+    const student = quoteFare({ miles, minutes, isStudent: true, tier: '' })
+    const shown = applyStudentDiscount(plain.fareBeforeCreditsCents, { isStudent: true, tier: '' })
+    assert.equal(student.breakdown.student_discount_cents, 0, `${miles}/${minutes} quoteFare`)
+    assert.equal(shown.discountCents, 0, `${miles}/${minutes} applyStudentDiscount`)
+    assert.equal(shown.fareCents, student.fareBeforeCreditsCents, `${miles}/${minutes} fare match`)
+    assert.equal(shown.discountCents, student.breakdown.student_discount_cents)
+  }
+})
+
+test('null tier still gets student discount (both paths treat null as Standard-eligible)', () => {
+  assert.equal(applyStudentDiscount(2000, { isStudent: true, tier: null }).discountCents, 200)
+  const q = quoteFare({ miles: 3, minutes: 10, isStudent: true, tier: null })
+  assert.ok(q.breakdown.student_discount_cents > 0)
+  const plain = quoteFare({ miles: 3, minutes: 10, tier: null })
+  const shown = applyStudentDiscount(plain.fareBeforeCreditsCents, { isStudent: true, tier: null })
+  assert.equal(shown.discountCents, q.breakdown.student_discount_cents)
+  assert.equal(shown.fareCents, q.fareBeforeCreditsCents)
 })
 
 // BUG?: the non-student branch returns Number(fareCents) as-is (negative / fractional kept),

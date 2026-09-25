@@ -1,6 +1,19 @@
 # Build & blocker fixes log
 
 Persistent knowledge base for recurring failures. When a matching issue appears, apply the saved fix first.
+## 2026-09-25 — Blank rider tier student discount consistency (money bug 2)
+
+- **Date:** 2026-09-25
+- **Track / machine:** Clemson RIDES · Pro Mac · worktree `deputy-blank-tier-student-discount`
+- **What was wrong:** `applyStudentDiscount` (UI) and `quoteFare` (checkout) disagreed on blank/empty rider tier `''`. `applyStudentDiscount` used `tier && tier !== 'standard'`, so falsy `''` counted as Standard and got 10% off. `quoteFare` used `tier == null || tier === 'standard'`, so `''` got no discount. UI could show a student price that checkout did not charge.
+- **Decision:** Prefer the safer / less-discount interpretation. Product copy is "10% off Standard"; blank is not an explicit Standard selection. Align `applyStudentDiscount` with `quoteFare` so blank gets **no** student discount. Null/omitted still qualify (omitted defaults to `'standard'`; null is treated as Standard-eligible in both paths).
+- **What changed:** Replaced the eligibility check in `applyStudentDiscount` with the same `studentOk = Boolean(isStudent) && (tier == null || tier === 'standard')` used by `quoteFare`. Replaced the documented `BUG?` mismatch test with assertions that both paths deny blank-tier discount and stay in sync; added null-tier agreement coverage.
+- **Files touched:**
+  - `src/lib/pricing.js`
+  - `src/lib/pricing.test.js`
+  - `docs/FIXES.md`
+- **Verified:** `TZ=UTC npm test` (full suite) after fix.
+
 ## 2026-09-25 — parseRideAt date+time as America/New_York wall time
 
 - **Date:** 2026-09-25
