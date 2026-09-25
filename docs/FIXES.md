@@ -272,3 +272,9 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
 
 
 
+
+## 2026-09-24 — keep src/lib/supabase.js a static import (Chief of Staff review)
+- What was wrong: the error-messages change turned `import { createClient } from '@supabase/supabase-js'` into a top-level `await import(...)`.
+  Vite's build target (es2020 / safari14) has no top-level await, so `vite build` failed ("Top-level await is not available").
+- What changed: restored the original static import. `npm test` (385/385) and `vite build` both pass.
+- Files: src/lib/supabase.js
