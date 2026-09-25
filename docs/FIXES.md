@@ -90,6 +90,23 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
   - `docs/FIXES.md`
 - **Verified:** `node --experimental-strip-types --test packages/rides-native/apiClient.test.js` (30/30 passing).
 
+## 2026-09-25 — driver home/queue respect approval status (pkg-driver-pending-ux t2)
+
+- **Track / machine:** Clemson RIDES · worktree deputy-pkg-driver-pending-ux · pkg-driver-pending-ux t2
+- **Problem:** Drivers whose onboarding status is pending_review, pending_info, pending_docs, or rejected saw confusing offer cards or queue lists on driver home and queue screens, and the Go online toggle was not disabled with the reason. Screens also lacked next steps guidance and pull-to-refresh re-reading of the application status.
+- **Fix:**
+  - Created `apps/driver/components/DriverStatusCard.tsx` rendering application status copy from `driverGateView`, an accessible "Next steps" section covering finish info, upload documents, wait for review, and contact support, along with primary action and refresh capability.
+  - Enhanced `GoButton` in `apps/driver/components/shell.tsx` with `disabled` and `disabledReason` props, supplying accessible labels (`accessibilityRole="button"`, `accessibilityState={{ disabled }}`, `accessibilityLabel="Go online disabled: ..."`) and disabled visual styling.
+  - Updated `apps/driver/app/(tabs)/index.tsx` to derive status with `driverGateView`, hide offer cards when `!canSeeOffers`, disable `GoButton` with reason, show `DriverStatusCard` in the dock inside a pull-to-refresh `ScrollView`, and update `statusLine`.
+  - Updated `apps/driver/app/queue.tsx` to hide queue list and filters when `!canSeeOffers`, render `DriverStatusCard`, and provide `RefreshControl` on the queue scroll view to re-read the driver application status.
+- **Files touched:**
+  - `apps/driver/components/DriverStatusCard.tsx`
+  - `apps/driver/components/shell.tsx`
+  - `apps/driver/app/(tabs)/index.tsx`
+  - `apps/driver/app/queue.tsx`
+  - `docs/FIXES.md`
+- **Verified:** `node --experimental-strip-types --test packages/rides-native/driverGateView.test.js` (10/10 pass), `npm run --prefix apps/driver typecheck` (clean pass), and `npm test` (793/793 pass).
+
 ## 2026-09-25 — driverGateView helper + tests (pkg-driver-pending-ux t1)
 
 - **Track / machine:** Clemson RIDES · worktree deputy-pkg-driver-pending-ux · pkg-driver-pending-ux t1

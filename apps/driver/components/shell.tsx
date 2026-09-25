@@ -34,28 +34,41 @@ export function CircleButton({
 export function GoButton({
   online,
   busy,
+  disabled = false,
+  disabledReason,
   onPress,
 }: {
   online: boolean
   busy: boolean
+  disabled?: boolean
+  disabledReason?: string | null
   onPress: () => void
 }) {
   const { colors } = useTheme()
+  const isDisabled = Boolean(busy || disabled)
+  const label = disabled
+    ? (disabledReason ? `Go online disabled: ${disabledReason}` : 'Go online disabled')
+    : (online ? 'Go offline' : 'Go online')
+
   return (
     <Pressable
       onPress={onPress}
-      disabled={busy}
+      disabled={isDisabled}
       accessibilityRole="button"
-      accessibilityLabel={online ? 'Go offline' : 'Go online'}
-      style={{ opacity: busy ? 0.7 : 1 }}
+      accessibilityLabel={label}
+      accessibilityHint={disabled && disabledReason ? disabledReason : undefined}
+      accessibilityState={{ disabled: isDisabled }}
+      style={{ opacity: isDisabled ? 0.45 : 1 }}
     >
       <LinearGradient
-        colors={[colors.goStart, colors.orange]}
+        colors={disabled ? [colors.card, colors.track] : [colors.goStart, colors.orange]}
         start={{ x: 0.72, y: 0 }}
         end={{ x: 0.28, y: 1 }}
         style={styles.go}
       >
-        <Text style={[styles.goText, { color: colors.onAccent }]}>{online ? 'END' : 'GO'}</Text>
+        <Text style={[styles.goText, { color: disabled ? colors.inkSecondary : colors.onAccent }]}>
+          {online ? 'END' : 'GO'}
+        </Text>
       </LinearGradient>
     </Pressable>
   )

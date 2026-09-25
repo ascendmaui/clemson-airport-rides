@@ -1,9 +1,10 @@
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { FarePanel } from '@/components/FarePanel'
 import { BackButton, Card, ErrorText, Primary, Tag } from '@/components/chrome'
+import { DriverStatusCard } from '@/components/DriverStatusCard'
 import { useAuth } from '@/lib/auth'
 import { useFeedback } from '@/lib/feedback'
 import { oneParam } from '@/lib/oneParam'
@@ -12,7 +13,8 @@ import { useTheme } from '@/lib/theme'
 import type { Palette } from '@/lib/palette'
 import { acceptTrip, declineTrip, loadDriverDesk, subscribeTrips } from 'rides-native/driverDesk'
 import { fetchDriverApplication } from 'rides-native/drivers'
-import { isSyntheticOffer, syntheticOffers } from 'rides-native/syntheticOffers'
+import { isSyntheticOffer } from 'rides-native/syntheticOffers'
+import { driverGateView } from 'rides-native/driverGateView'
 import {
   formatCents,
   formatPickupAt,
@@ -104,6 +106,7 @@ export default function QueueScreen() {
   const params = useLocalSearchParams<{ filter?: string }>()
   const insets = useSafeAreaInsets()
   const styles = useQueueStyles()
+  const { colors } = useTheme()
   const { user } = useAuth()
   const { pulse } = useFeedback()
   const [passed, setPassed] = useState<string[]>([])
@@ -112,24 +115,52 @@ export default function QueueScreen() {
   const [busyId, setBusyId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [warning, setWarning] = useState<string | null>(null)
-  const [pendingReview, setPendingReview] = useState(false)
+  const [status, setStatus] = useState('none')
+  const [reason, setReason] = useState<string | null>(null)
+  const [refreshing, setRefreshing] = useState(false)
+
+  const gate = useMemo(
+    () => driverGateView(status, { rejectionReason: reason }),
+    [status, reason]
+  )
+  const canSeeOffers = gate.canSeeOffers
 
   const refresh = useCallback(async () => {
     if (!user || !supabase) return
     const application = await fetchDriverApplication(supabase, user.id)
-    const pending = application.application?.onboarding_status === 'pending_review'
-    setPendingReview(pending)
-    const desk = await loadDriverDesk(supabase, user.id)
-    const extras = pending ? syntheticOffers() : []
-    const merged = [...extras, ...desk.offers, ...desk.scheduledOpen, ...desk.upcoming]
-    const seen = new Set<string>()
-    setWarning(desk.warning || null)
-    setRows(merged.filter((card) => {
-      if (seen.has(card.id)) return false
-      seen.add(card.id)
-      return true
-    }))
+    const nextStatus = application.application?.onboarding_status || 'none'
+    const nextReason = application.application?.rejection_reason || null
+    setStatus(nextStatus)
+    setReason(nextReason)
+    if (application.error) setError(application.error)
+
+    const currentGate = driverGateView(nextStatus, { rejectionReason: nextReason })
+    if (currentGate.canSeeOffers) {
+      const desk = await loadDriverDesk(supabase, user.id)
+      const merged = [...desk.offers, ...desk.scheduledOpen, ...desk.upcoming]
+      const seen = new Set<string>()
+      setWarning(desk.warning || null)
+      setRows(merged.filter((card) => {
+        if (seen.has(card.id)) return false
+        seen.add(card.id)
+        return true
+      }))
+    } else {
+      setRows([])
+      setWarning(null)
+    }
   }, [user])
+
+  const onPullRefresh = useCallback(async () => {
+    setRefreshing(true)
+    try {
+      await refresh()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not refresh the queue')
+    } finally {
+      setRefreshing(false)
+    }
+  }, [refresh])
 
   useEffect(() => {
     refresh().catch((err) => setError(err instanceof Error ? err.message : 'Could not load the queue'))
@@ -141,11 +172,11 @@ export default function QueueScreen() {
   }, [params.filter])
 
   useEffect(() => {
-    if (!supabase || !user) return undefined
+    if (!supabase || !user || !canSeeOffers) return undefined
     return subscribeTrips(supabase, () => {
       refresh().catch(() => {})
     })
-  }, [refresh, user])
+  }, [canSeeOffers, refresh, user])
 
   async function onAccept(card: DriverCard) {
     if (!user || !supabase) return
@@ -194,45 +225,70 @@ export default function QueueScreen() {
 
   return (
     <View style={[styles.screen, { paddingTop: insets.top + 8 }]}>
-      <ScrollView contentContainerStyle={styles.list}>
+      <ScrollView
+        contentContainerStyle={styles.list}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onPullRefresh}
+            tintColor={colors.orange}
+            title="Checking application status…"
+            titleColor={colors.inkSecondary}
+            accessibilityLabel="Pull to refresh application status"
+          />
+        }
+      >
         <BackButton onPress={() => router.back()} />
         <Text style={styles.kicker}>QUEUE</Text>
-        <Text style={styles.title}>{pendingReview ? 'Rides' : 'Accept rides'}</Text>
+        <Text style={styles.title}>{canSeeOffers ? 'Accept rides' : 'Ride queue'}</Text>
         <Text style={styles.copy}>
-          {pendingReview
-            ? 'You can look through rides and scheduled pickups. Accept stays locked until your application is approved.'
-            : 'Chosen-driver requests, open matches, student discounts, game-day rides, and scheduled weekend or party pickups.'}
+          {canSeeOffers
+            ? 'Chosen-driver requests, open matches, student discounts, game-day rides, and scheduled weekend or party pickups.'
+            : 'Ride requests and scheduled pickups will appear here once your driver application is approved.'}
         </Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filters}>
-          {queueFilters().map((item) => (
-            <Pressable key={item} onPress={() => setFilter(item)} style={[styles.filter, filter === item && styles.filterOn]}>
-              <Text style={[styles.filterText, filter === item && styles.filterTextOn]}>{filterLabel(item)}</Text>
-            </Pressable>
-          ))}
-        </ScrollView>
         {error ? <ErrorText>{error}</ErrorText> : null}
         {warning ? <ErrorText>{warning}</ErrorText> : null}
         {!user ? <Primary label="Sign in" onPress={() => router.push('/sign-in')} /> : null}
-        {user && visible.length === 0 ? (
-          <Card>
-            <Text style={styles.cardTitle}>{empty.title}</Text>
-            <Text style={styles.copy}>{empty.body}</Text>
-          </Card>
-        ) : null}
-        {live.length > 0 ? <Text style={styles.section}>Open now</Text> : null}
-        {live.map((card) => (
-          <QueueCard key={card.id} card={card} busy={busyId === card.id} onAccept={() => onAccept(card)} onDecline={() => onDecline(card)} onOpen={() => { if (!isSyntheticOffer(card)) router.push({ pathname: '/trip', params: { id: card.id } }) }} />
-        ))}
-        {filter === 'weekend_party' && scheduled.length === 0 && live.length > 0 ? (
-          <Card>
-            <Text style={styles.cardTitle}>No scheduled weekend pickups</Text>
-            <Text style={styles.copy}>Airport and campus rides booked ahead for Friday night through Sunday show up in this list.</Text>
-          </Card>
-        ) : null}
-        {scheduled.length > 0 ? <Text style={styles.section}>{scheduledQueueTitle(filter)}</Text> : null}
-        {scheduled.map((card) => (
-          <QueueCard key={card.id} card={card} busy={busyId === card.id} onAccept={() => onAccept(card)} onDecline={() => onDecline(card)} onOpen={() => { if (!isSyntheticOffer(card)) router.push({ pathname: '/trip', params: { id: card.id } }) }} />
-        ))}
+
+        {!canSeeOffers ? (
+          <DriverStatusCard
+            status={status}
+            gate={gate}
+            reason={reason}
+            onRefresh={onPullRefresh}
+            refreshing={refreshing}
+          />
+        ) : (
+          <>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filters}>
+              {queueFilters().map((item) => (
+                <Pressable key={item} onPress={() => setFilter(item)} style={[styles.filter, filter === item && styles.filterOn]}>
+                  <Text style={[styles.filterText, filter === item && styles.filterTextOn]}>{filterLabel(item)}</Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+            {visible.length === 0 ? (
+              <Card>
+                <Text style={styles.cardTitle}>{empty.title}</Text>
+                <Text style={styles.copy}>{empty.body}</Text>
+              </Card>
+            ) : null}
+            {live.length > 0 ? <Text style={styles.section}>Open now</Text> : null}
+            {live.map((card) => (
+              <QueueCard key={card.id} card={card} busy={busyId === card.id} onAccept={() => onAccept(card)} onDecline={() => onDecline(card)} onOpen={() => { if (!isSyntheticOffer(card)) router.push({ pathname: '/trip', params: { id: card.id } }) }} />
+            ))}
+            {filter === 'weekend_party' && scheduled.length === 0 && live.length > 0 ? (
+              <Card>
+                <Text style={styles.cardTitle}>No scheduled weekend pickups</Text>
+                <Text style={styles.copy}>Airport and campus rides booked ahead for Friday night through Sunday show up in this list.</Text>
+              </Card>
+            ) : null}
+            {scheduled.length > 0 ? <Text style={styles.section}>{scheduledQueueTitle(filter)}</Text> : null}
+            {scheduled.map((card) => (
+              <QueueCard key={card.id} card={card} busy={busyId === card.id} onAccept={() => onAccept(card)} onDecline={() => onDecline(card)} onOpen={() => { if (!isSyntheticOffer(card)) router.push({ pathname: '/trip', params: { id: card.id } }) }} />
+            ))}
+          </>
+        )}
       </ScrollView>
     </View>
   )
