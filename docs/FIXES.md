@@ -1656,3 +1656,19 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
   - Native `writeTripEvent` (driver desk) and web `DriverHome` / `driverOffers`: log with `console.error` and throw so UI surfaces the failure.
   - Flipped the former `BUG?` scheduleTrip test; added `server/tripEvents.test.js`.
 - **Files touched:** `server/tripEvents.js`, `server/tripEvents.test.js`, `server/endpoints/scheduleTrip.js`, `server/endpoints/requestDriverTrip.js`, `server/tripSettle.js`, `server/endpoints/tripCancelMidride.js`, `server/abandonedCheckout.js`, `packages/rides-native/driverDesk.js`, `src/screens/DriverHome.jsx`, `src/lib/driverOffers.js`, `server/scheduleTrip.test.js`, `package.json`, `docs/FIXES.md`
+
+## 2026-09-25 — checkoutReturn unit tests cover both parsers (t1)
+
+- **Date:** 2026-09-25
+- **What was wrong:** `packages/rides-native/checkoutReturn.test.js` checked the happy-path hashes, deep links, and a few nulls for `parseCheckoutSessionId` / `parseCheckoutReturn`. It did not exercise object field order, bare ids, flag spellings, trip-key fallback, decode failures, or the branches that disagree between the two helpers. `checkoutReturn.js` was left unchanged.
+- **What changed:** Extended the unit tests so both exports are covered (100% line / branch / function on `checkoutReturn.js` under `node --experimental-strip-types --test`). Suspected bugs are locked as current behavior with `// BUG?:` comments:
+  - Query strings and object fields accept any trimmed value that starts with `cs_` (`cs_`, spaces, hyphens, `+`, `%`, markup). Bare strings must match `/^cs_[a-zA-Z0-9_]+$/`. A broken percent-escape returns the raw capture.
+  - `session_id=cs_...` and `#session_id=cs_...` return null unless a `?` or `&` precedes the key.
+  - A truthy non-string `sessionId`, `url`, or `href` blocks the next fallback. `parseCheckoutReturn` can still read `href` for trip/paid while `sessionId` stays null.
+  - A whitespace-only trip becomes `""` and blocks `tripId` / `trip_id`, including when an object field clobbers a trip parsed from the URL.
+  - Numeric `1` is not treated as paid, canceled, or scheduled.
+  - `scheduled` is true when the raw text contains `/schedule` or `schedule?`, so live returns (`dest=/schedule`, `next=schedule?`, `/reschedule?`, `/unschedule?`, `/schedule-demo`) are marked scheduled. `scheduled=0`, `scheduled=false`, and `scheduled: false` cannot clear a path match.
+  - Duplicate `session_id` keeps the first value; duplicate `trip` keeps the last.
+- **Files touched:**
+  - `packages/rides-native/checkoutReturn.test.js`
+  - `docs/FIXES.md`
