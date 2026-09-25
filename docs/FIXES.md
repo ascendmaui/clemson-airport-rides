@@ -2,6 +2,25 @@
 
 Persistent knowledge base for recurring failures. When a matching issue appears, apply the saved fix first.
 
+## 2026-09-24 — Wire vehicle.js and places.js unit test suites into package.json test runner
+
+- **Track / machine:** Clemson RIDES · deputy/vehicle-places-tests
+- **What was wrong:** `packages/rides-native/shared/vehicle.js` and `packages/rides-native/places.js` lacked test coverage and test suite registration in root `package.json`.
+- **What changed:** Confirmed both test suites (`packages/rides-native/shared/vehicle.test.js` and `packages/rides-native/places.test.js`, with vehicle first) are wired as the last entries in the `package.json` `test` script. Verified full offline isolation (no real network or API keys) and confirmed full `npm test` suite passes cleanly (416 tests passing).
+- **Files touched:**
+  - `package.json`
+  - `docs/FIXES.md`
+
+## 2026-09-24 — saveRegisteredVehicle threw unhandled TypeError on missing payload
+
+- **Track / machine:** Clemson RIDES · deputy/vehicle-places-tests
+- **What was wrong:** `saveRegisteredVehicle` in `packages/rides-native/shared/vehicle.js` accessed `payload.make` without checking if `payload` was null, undefined, or malformed, causing an unhandled `TypeError` instead of a user-facing validation error.
+- **What changed:** Safely defaulted `payload` to an empty object when null, undefined, or non-object so the existing required field checks cleanly throw `Error('Make, model, and plate are required.')`. Updated unit tests in `packages/rides-native/shared/vehicle.test.js` to assert the validation error.
+- **Files touched:**
+  - `packages/rides-native/shared/vehicle.js`
+  - `packages/rides-native/shared/vehicle.test.js`
+  - `docs/FIXES.md`
+
 ## 2026-09-24 ~9:52 PM ET — Apple sign-in hit profiles/trips RLS recursion
 
 - **Symptom:** Apple sign-in on TestFlight build 18 errored with `infinite recursion detected in policy for relation profiles`.
