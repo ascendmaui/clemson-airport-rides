@@ -2,6 +2,18 @@
 
 Persistent knowledge base for recurring failures. When a matching issue appears, apply the saved fix first.
 
+## 2026-09-25 — Normalize status casing in isOpenUnpaidAirportHold [t2]
+
+- **Date:** 2026-09-25
+- **Track / machine:** Clemson RIDES · deputy/hold-expiry-notice-tests-20260925041913 · pkg-hold-expiry-notice-tests-20260925041913 t2
+- **What was wrong:** `isOpenUnpaidAirportHold` in `packages/rides-native/holdExpiryNotice.js` checked `trip.status` against `OPEN_HOLD_STATUSES` without case normalization (`OPEN_HOLD_STATUSES.has(String(trip.status || ''))`). If a trip status had capitalized or uppercase casing (e.g. `'Searching'`, `'Offered'`, `'Scheduled'`), it was rejected as not an open hold, causing `isOpenUnpaidAirportHold`, `shouldSurfaceHold`, and `holdExpiryPresentation` to hide the hold countdown and deposit notice on rider screens. Meanwhile, `isUnpaidHoldTtlCancel` in the same file already performed case-insensitive comparison via `String(trip.status || '').toLowerCase()`.
+- **What changed:** Normalized `trip.status` with `const status = String(trip.status || '').toLowerCase()` in `isOpenUnpaidAirportHold`, matching `isUnpaidHoldTtlCancel`. Updated `packages/rides-native/holdExpiryNotice.test.js` to assert that capitalized and uppercase open statuses (`'Searching'`, `'SEARCHING'`, `'Scheduled'`, `'Offered'`) are recognized as open holds.
+- **Files touched:**
+  - `packages/rides-native/holdExpiryNotice.js`
+  - `packages/rides-native/holdExpiryNotice.test.js`
+  - `docs/FIXES.md`
+- **Verified:** `node --experimental-strip-types --test packages/rides-native/holdExpiryNotice.test.js` passes all 31 tests cleanly (0 failures, duration < 100ms); `node --experimental-strip-types --test packages/rides-native/holdExpiry.test.js` passes all 17 tests.
+
 ## 2026-09-25 — holdExpiryNotice.js unit test coverage leaves production source unchanged [t1]
 
 - **Date:** 2026-09-25

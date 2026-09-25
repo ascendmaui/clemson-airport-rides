@@ -37,7 +37,8 @@ export function isUnpaidHoldTtlCancel(trip) {
 /** Still in the pool and waiting on the 25% card deposit. */
 export function isOpenUnpaidAirportHold(trip) {
   if (!trip || typeof trip !== 'object') return false
-  if (!OPEN_HOLD_STATUSES.has(String(trip.status || ''))) return false
+  const status = String(trip.status || '').toLowerCase()
+  if (!OPEN_HOLD_STATUSES.has(status)) return false
   return isUnpaidAirportDepositTrip(trip)
 }
 

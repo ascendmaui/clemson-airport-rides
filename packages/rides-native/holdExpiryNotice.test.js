@@ -324,10 +324,11 @@ test('isOpenUnpaidAirportHold: rejects non-open statuses', () => {
     assert.equal(isOpenUnpaidAirportHold(trip), false, `expected false for status: ${status}`)
   }
 
-  // BUG?: isOpenUnpaidAirportHold checks Set without case normalization, so uppercase statuses return false
-  assert.equal(isOpenUnpaidAirportHold(createAirportTrip({ status: 'Searching' })), false)
-  assert.equal(isOpenUnpaidAirportHold(createAirportTrip({ status: 'SEARCHING' })), false)
-  assert.equal(isOpenUnpaidAirportHold(createAirportTrip({ status: 'Scheduled' })), false)
+  // Case-insensitivity on status (matching isUnpaidHoldTtlCancel)
+  assert.equal(isOpenUnpaidAirportHold(createAirportTrip({ status: 'Searching' })), true)
+  assert.equal(isOpenUnpaidAirportHold(createAirportTrip({ status: 'SEARCHING' })), true)
+  assert.equal(isOpenUnpaidAirportHold(createAirportTrip({ status: 'Scheduled' })), true)
+  assert.equal(isOpenUnpaidAirportHold(createAirportTrip({ status: 'Offered' })), true)
   assert.equal(isOpenUnpaidAirportHold(createAirportTrip({ status: ' searching ' })), false)
 })
 
