@@ -277,7 +277,7 @@ test('SOS log rejects an unknown channel and stores a banner', async () => {
 })
 
 test('published police contacts and share origin stay on the public host', () => {
-  assert.equal(SHARE_ORIGIN, 'https://clemson-airport-rides.vercel.app')
+  assert.equal(SHARE_ORIGIN, 'https://clemson-rides.vercel.app')
   assert.equal(CUPD_PHONE_E164, '+18646562222')
   assert.equal(CUPD_PHONE_DISPLAY, '(864) 656-2222')
   assert.equal(CUPD_EMAIL, 'police@clemson.edu')
