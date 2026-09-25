@@ -332,6 +332,10 @@ function createMockEndpointSb({
   const sb = {
     operations,
     tripsInserted,
+    async rpc(fn, args) {
+      operations.push({ op: 'rpc', fn, args })
+      return { data: [{ id: args?.p_trip_id || 'trip_mock_123' }], error: null }
+    },
     from(table) {
       operations.push({ op: 'from', table })
 
@@ -342,6 +346,10 @@ function createMockEndpointSb({
         },
         eq(col, val) {
           operations.push({ op: 'eq', table, col, val })
+          return chain
+        },
+        in(col, vals) {
+          operations.push({ op: 'in', table, col, vals })
           return chain
         },
         lte(col, val) {
