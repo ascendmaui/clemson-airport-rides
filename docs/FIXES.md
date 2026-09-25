@@ -280,6 +280,14 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
   - `package.json`
   - `docs/FIXES.md`
 
+## 2026-09-25 — creditLots settlement / debit / restore tests (no prod edits)
+
+- **Track / machine:** Clemson RIDES · deputy/deposit-refund-tests · pkg-deposit-refund-tests t1
+- **What was wrong:** `planSettlement`, `debitLots`, `restoreLots`, and `insertChargePayment` in `server/creditLots.js` had no unit tests against a fake `sb`.
+- **What changed:** Added `server/creditLots.test.js` with an in-memory Supabase fake. Covers credits covering all / part / none of the fare, `useCredits=false`, debit then restore after cancel (exact refund of what was debited), `insertChargePayment` 20/80 vs `credit_purchase` liability, and FIFO multi-lot settlement. Double-restore is not idempotent (it credits the lot twice and writes a second refund ledger row); that is asserted as current behaviour with `// BUG?:`. Production source was not edited. `loadGameDayMultiplier` is not covered here.
+- **Files touched:** `server/creditLots.test.js`, `docs/FIXES.md`
+- **Verified:** `node --experimental-strip-types --test server/creditLots.test.js` (28/28 passing)
+
 ## 2026-09-25 — Expiry cron wired: CRON_SECRET + Supabase pg_cron/pg_net; prod redeployed at 111c607
 
 - **Track / machine:** Clemson RIDES · I9 (61b11c89) Vercel CLI + Supabase awktabuhijrshmsmagpq · approved by John 1:05 AM ET 9/25.
