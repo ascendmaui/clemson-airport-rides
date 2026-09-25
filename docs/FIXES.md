@@ -2,6 +2,15 @@
 
 Persistent knowledge base for recurring failures. When a matching issue appears, apply the saved fix first.
 
+## 2026-09-24 — Wire lostFoundClient tests into root test script
+
+- **Track / machine:** Clemson RIDES · worktree deputy-pkg-lostfound-tests
+- **Problem:** `packages/rides-native/lostFoundClient.js` had unit tests (`packages/rides-native/lostFoundClient.test.js`) created in t1 and robustness fixes applied in t2, but the test suite was not wired into the root `package.json` `npm test` script, leaving it out of standard CI and regression test runs.
+- **Fix:** Appended `packages/rides-native/lostFoundClient.test.js` as the last entry in the `test` script in `package.json`. Verified all tests in the full test suite pass cleanly.
+- **Files touched:**
+  - `package.json`
+  - `docs/FIXES.md`
+
 ## 2026-09-24 — lostFoundClient updateReport missing requireClient validation
 
 - **Track / machine:** Clemson RIDES · worktree deputy-pkg-lostfound-tests
