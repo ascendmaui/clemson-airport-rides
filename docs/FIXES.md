@@ -2,6 +2,17 @@
 
 Persistent knowledge base for recurring failures. When a matching issue appears, apply the saved fix first.
 
+## 2026-09-25 — Wire googleAuthConfig unit tests into npm test [t3]
+
+- **Date:** 2026-09-25
+- **Track / machine:** Clemson RIDES · worktree `deputy-pkg-google-auth-config-tests-20260925041913` · `deputy/google-auth-config-tests-20260925041913` t3
+- **What was wrong:** The latest test suite invocation in root `package.json`'s `test` script did not include `packages/rides-native/googleAuthConfig.test.js` as its last entry.
+- **What changed:** Appended `packages/rides-native/googleAuthConfig.test.js` as the last entry of the root `package.json` `test` script.
+- **Files touched:**
+  - `package.json`
+  - `docs/FIXES.md`
+- **Verified:** `TZ=UTC npm test` passes all tests cleanly with zero failures.
+
 ## 2026-09-25 — mapGoogleAuthError checks error.name to mask native JS errors [t2]
 
 - **Date:** 2026-09-25
