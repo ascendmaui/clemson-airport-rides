@@ -90,6 +90,19 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
   - `docs/FIXES.md`
 - **Verified:** `node --experimental-strip-types --test packages/rides-native/apiClient.test.js` (30/30 passing).
 
+## 2026-09-25 — driverGateView helper + tests (pkg-driver-pending-ux t1)
+
+- **Track / machine:** Clemson RIDES · worktree deputy-pkg-driver-pending-ux · pkg-driver-pending-ux t1
+- **Problem:** Drivers whose `driver_applications.onboarding_status` is pending_review, pending_info, or rejected saw a confusing home screen and queue states where offer/queue UI rendered despite not being approved. A shared client-side helper was missing to compute driver gate capabilities (`canGoOnline`, `canSeeOffers`), card titles, bodies, and primary actions for all onboarding statuses.
+- **Fix:** Added `packages/rides-native/driverGateView.js` implementing `driverGateView(onboardingStatus, { rejectionReason, missingItems })` returning `{ canGoOnline, canSeeOffers, title, body, primaryAction }` for all `ONBOARDING_STATUSES` (+ null), strictly restricting `canGoOnline` and `canSeeOffers` to `approved` status, and reusing `APPROVAL_GATE` copy from `syntheticOffers.js` / `driverDesk.js`. Added unit tests covering all statuses and options in `packages/rides-native/driverGateView.test.js` and TypeScript types in `packages/rides-native/driverGateView.d.ts`.
+- **Files touched:**
+  - `packages/rides-native/driverGateView.js`
+  - `packages/rides-native/driverGateView.d.ts`
+  - `packages/rides-native/driverGateView.test.js`
+  - `docs/FIXES.md`
+- **Verified:** `node --experimental-strip-types --test packages/rides-native/driverGateView.test.js` (10/10 passing) and `npm run typecheck` (passing).
+
+
 ## 2026-09-25 — merge_trip_metadata trip_status enum cast applied (#100)
 
 - **Problem:** `public.merge_trip_metadata` (#80) failed on every call with `operator does not exist: trip_status = text`, which broke the airport-checkout session bind, abandon-checkout release and the unpaid-hold expiry cancel.
