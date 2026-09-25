@@ -2,6 +2,17 @@
 
 Persistent knowledge base for recurring failures. When a matching issue appears, apply the saved fix first.
 
+## 2026-09-25 — signup draft fills whitespace-only profile metadata
+
+- **Track / machine:** Clemson RIDES · deputy/party-profile-tests · pkg-party-profile-tests t2
+- **What was wrong:** `userWithDraft` used `||`, so a whitespace-only `user_metadata` field (a space in `full_name`, `phone`, `bio`, `ride_style`, or `promo_code`) counted as present. A stored signup draft could not fill that field. `ensureProfile` then built the profile from the blank metadata and dropped the draft name, phone, bio, and ride style.
+- **What changed:** `userWithDraft` skips whitespace-only strings and uses the next candidate (metadata `name`, then the draft). Non-blank values are unchanged, and the input user is not mutated.
+- **Files touched:**
+  - `packages/rides-native/partyProfile.js`
+  - `packages/rides-native/partyProfile.test.js`
+  - `docs/FIXES.md`
+- **Verified:** `node --experimental-strip-types --test packages/rides-native/partyProfile.test.js` (31/31 passing).
+
 ## 2026-09-25 — partyProfile unit tests cover every export
 
 - **Track / machine:** Clemson RIDES · deputy/party-profile-tests · pkg-party-profile-tests t1

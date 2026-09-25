@@ -348,7 +348,7 @@ test('signup metadata drops invalid contact fields but can still store a one-cha
   assert.equal(isProfileComplete(tiger), true)
 })
 
-test('signup drafts coerce odd JSON and whitespace metadata blocks the merge', () => {
+test('signup drafts coerce odd JSON and whitespace-only metadata yields to the draft', () => {
   assert.equal(readSignupDraft(''), null)
   assert.equal(readSignupDraft('  '), null)
   assert.equal(readSignupDraft(null), null)
@@ -405,10 +405,20 @@ test('signup drafts coerce odd JSON and whitespace metadata blocks the merge', (
     user_metadata: { full_name: ' ', phone: ' ', bio: ' ', ride_style: ' ', promo_code: ' ' },
   }
   const merged = userWithDraft(blocked, draft)
-  assert.equal(merged.user_metadata.bio, ' ')
-  assert.equal(merged.user_metadata.phone, ' ')
-  // BUG?: whitespace-only metadata is truthy, so a stored signup draft does not fill those fields.
+  assert.equal(merged.user_metadata.full_name, 'Avery Chen')
+  assert.equal(merged.user_metadata.phone, '8645550100')
+  assert.equal(merged.user_metadata.bio, 'Music on the way.')
+  assert.equal(merged.user_metadata.ride_style, 'Music on')
+  assert.equal(merged.user_metadata.promo_code, 'pal')
   assert.equal(blocked.user_metadata.bio, ' ')
+
+  const named = userWithDraft(
+    { id: 'u', user_metadata: { full_name: '   ', name: 'From Name', phone: '8645550100' } },
+    draft,
+  )
+  assert.equal(named.user_metadata.full_name, 'From Name')
+  assert.equal(named.user_metadata.phone, '8645550100')
+  assert.equal(named.user_metadata.bio, 'Music on the way.')
 
   const shortBio = userWithDraft({ id: 'u', user_metadata: { bio: 'short' } }, draft)
   assert.equal(shortBio.user_metadata.bio, 'short')
