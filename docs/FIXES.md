@@ -280,6 +280,15 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
   - `package.json`
   - `docs/FIXES.md`
 
+## 2026-09-25 — 25% deposit + airport checkout handler tests (no prod edits)
+
+- **Track / machine:** Clemson RIDES · deputy/deposit-refund-tests · pkg-deposit-refund-tests t2
+- **What was wrong:** `depositCents` (25% of fare, with the 50¢ Stripe minimum), `POST /api/airport-checkout`, and the pure `midrideCancel` helpers had no edge-case tests. The checkout handler only injects `sb`, `user`, `ensureProfile`, `stripeOk`, and `stripe`; fare, routes, credits, and cancel-on-failure go through real modules.
+- **What changed:** Added `server/depositRefund.test.js`. Covers odd-cent rounding, 0 / negative / NaN, huge fares, student-discounted fares, and the minimum-charge bump. The handler is driven with an in-memory `sb` and a fake Stripe client: method guard, missing auth, client fare mismatch (Stripe `unit_amount` is 25% of the authoritative fare), confirmed `@g.clemson.edu` deposit on the discounted fare, Stripe-not-configured (no trip row), and a thrown Stripe create (HTTP 500, trip canceled, no session id left on the row). `midrideCancel` helpers load via a test-only resolver because `pricing.js` uses extensionless imports. Production source was not edited.
+- **Observed, not patched:** `stripe.checkout.sessions.create` is called with no idempotency key. A repeated POST, including one that sends `Idempotency-Key`, inserts a second trip and a second Checkout Session. Flagged in the test with `// BUG?:`. `paymentRequiredMessage` treats `toCollectCents === 0` as missing and quotes `obligationCents`.
+- **Files touched:** `server/depositRefund.test.js`, `docs/FIXES.md`
+- **Verified:** `node --experimental-strip-types --test server/creditLots.test.js server/depositRefund.test.js` (42/42 passing)
+
 ## 2026-09-25 — creditLots settlement / debit / restore tests (no prod edits)
 
 - **Track / machine:** Clemson RIDES · deputy/deposit-refund-tests · pkg-deposit-refund-tests t1
