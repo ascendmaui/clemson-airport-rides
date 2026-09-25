@@ -2,6 +2,17 @@
 
 Persistent knowledge base for recurring failures. When a matching issue appears, apply the saved fix first.
 
+## 2026-09-25 — Wire holdExpiryNotice unit tests into npm test [t3]
+
+- **Date:** 2026-09-25
+- **Track / machine:** Clemson RIDES · deputy/hold-expiry-notice-tests-20260925041913 · pkg-hold-expiry-notice-tests-20260925041913 t3
+- **What was wrong:** `packages/rides-native/holdExpiryNotice.test.js` was created and verified in t1/t2, but was not listed in the root `package.json` `test` script, so `npm test` did not execute the hold-expiry notice presentation and helper test suite.
+- **What changed:** Appended `packages/rides-native/holdExpiryNotice.test.js` as the last entry of the `test` script in `package.json`. No existing entries or test commands were altered.
+- **Files touched:**
+  - `package.json`
+  - `docs/FIXES.md`
+- **Verified:** `TZ=UTC npm test` runs cleanly with all test suites passing (including all 31 tests in `packages/rides-native/holdExpiryNotice.test.js` and all 17 tests in `packages/rides-native/holdExpiry.test.js`) with 0 failures.
+
 ## 2026-09-25 — Normalize status casing in isOpenUnpaidAirportHold [t2]
 
 - **Date:** 2026-09-25
