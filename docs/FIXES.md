@@ -260,4 +260,15 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
   - `src/lib/webPayments.test.js`
   - `docs/FIXES.md`
 
+## 2026-09-24 — Wire new error-messages test suites into package.json test script (t4)
+- **Problem:** Newly created unit test suites for friendly API errors and authedJson 401 retry / 503 friendly error handling (`packages/rides-native/apiErrors.test.js`, `src/lib/apiErrors.test.js`, `src/lib/apiClient.test.js`, and `src/lib/webPayments.test.js`) were not executed as part of `npm test`.
+- **What was wrong:** The `"test"` script in `package.json` did not include the new error handling and auth retry test suites added in tasks t1 and t3.
+- **What was changed:**
+  - Appended `packages/rides-native/apiErrors.test.js`, `src/lib/apiErrors.test.js`, `src/lib/apiClient.test.js`, and `src/lib/webPayments.test.js` as the last entries of the `"test"` script in `package.json`.
+  - Verified that all 385 tests pass under `npm test`.
+- **Files touched:**
+  - `package.json`
+  - `docs/FIXES.md`
+
+
 
