@@ -38,7 +38,7 @@ function jsSources(dir, out = []) {
   return out
 }
 
-for (const app of ['rider', 'driver']) {
+for (const app of ['rider', 'driver', 'mobile']) {
   const appDir = path.join(root, 'apps', app)
   ensureAppDeps(appDir)
   run('npm', ['exec', '--', 'tsc', '--noEmit', '-p', '.'], appDir)

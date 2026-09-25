@@ -1,6 +1,7 @@
 export const SIGNUP_PROFILE_DRAFT_KEY: string
 export const RIDE_STYLES: readonly string[]
 export const PARTY_VISIBLE_STATUSES: readonly string[]
+export const PROFILE_FIELD_LABELS: Record<string, string>
 
 export type ProfileDraft = {
   full_name?: string | null

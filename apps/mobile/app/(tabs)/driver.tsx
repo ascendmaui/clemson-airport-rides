@@ -28,19 +28,20 @@ export default function DriverScreen() {
 
   useEffect(() => {
     if (!authed || !supabase) return undefined;
+    const client = supabase;
     let alive = true;
 
     async function look() {
-      const { data: session } = await supabase.auth.getSession();
+      const { data: session } = await client.auth.getSession();
       const uid = session.session?.user?.id;
       if (!uid || !alive) return;
-      const { data: profile } = await supabase
+      const { data: profile } = await client
         .from('profiles')
         .select('notification_prefs')
         .eq('id', uid)
         .maybeSingle();
       const quiet = isQuietPrefs(profile?.notification_prefs || null);
-      const { data: trips } = await supabase
+      const { data: trips } = await client
         .from('trips')
         .select('id, status')
         .in('status', ['searching', 'offered'])
@@ -60,7 +61,7 @@ export default function DriverScreen() {
 
     look();
     const timer = setInterval(look, 8000);
-    const channel = supabase
+    const channel = client
       .channel('mobile-ride-offers')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'trips' }, () => {
         look();
@@ -70,7 +71,7 @@ export default function DriverScreen() {
     return () => {
       alive = false;
       clearInterval(timer);
-      supabase.removeChannel(channel);
+      client.removeChannel(channel);
     };
   }, [authed]);
 

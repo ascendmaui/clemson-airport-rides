@@ -174,6 +174,32 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
 - **Files touched:** `packages/rides-native/secureStore.test.js`, `docs/FIXES.md`
 - **Verified:** `node --experimental-strip-types --test packages/rides-native/secureStore.test.js` (16/16 passing).
 
+## 2026-09-25 — App / rides-native type errors (type-only)
+
+- **Track / machine:** Clemson RIDES · worktree deputy-pkg-apps-typecheck · pkg-apps-typecheck t2
+- **What was wrong:** Official rider/driver `tsc` was already 0, but `apps/mobile/app/(tabs)/driver.tsx` had 4 `TS18047` errors (`supabase` used inside nested callbacks after a null check, so the narrowing did not stick). Several `packages/rides-native` JS modules imported by the apps had no `.d.ts`, so `--checkJs` reported implicit `any` and a few wrong-property / possibly-null issues. `authErrors.d.ts` and `driverOnboardingClient.d.ts` omitted public JS exports. `apiClient.d.ts` typed `authedJson` as `Promise<any>`. `LivePhase` required `title` even though the component treats it as optional.
+- **What changed:** Capture `const client = supabase` after the null check in the mobile driver screen. Add `.d.ts` files for `accountDeletion`, `agentChips`, `assistClient`, `legalCopy`, `lostFoundClient`, `notificationPrefs`, `tripMessagesClient`, and `shared/ambassadorAttribution`. Fill missing exports on `authErrors.d.ts`, `driverOnboardingClient.d.ts`, `partyProfile.d.ts`, and `heat.d.ts`. Type `authedJson` as a generic defaulting to `Record<string, unknown>`. Make `LivePhase` `title` optional. Include `apps/mobile` in `scripts/typecheck.mjs`.
+- **Files touched:**
+  - `apps/mobile/app/(tabs)/driver.tsx`
+  - `scripts/typecheck.mjs`
+  - `packages/rides-native/apiClient.d.ts`
+  - `packages/rides-native/authErrors.d.ts`
+  - `packages/rides-native/LivePhase.d.ts`
+  - `packages/rides-native/driverOnboardingClient.d.ts`
+  - `packages/rides-native/heat.d.ts`
+  - `packages/rides-native/partyProfile.d.ts`
+  - `packages/rides-native/accountDeletion.d.ts`
+  - `packages/rides-native/agentChips.d.ts`
+  - `packages/rides-native/assistClient.d.ts`
+  - `packages/rides-native/legalCopy.d.ts`
+  - `packages/rides-native/lostFoundClient.d.ts`
+  - `packages/rides-native/notificationPrefs.d.ts`
+  - `packages/rides-native/tripMessagesClient.d.ts`
+  - `packages/rides-native/shared/ambassadorAttribution.d.ts`
+  - `docs/typecheck-report.md`
+  - `docs/FIXES.md`
+- **Verified:** `tsc --noEmit` in `apps/rider`, `apps/driver`, and `apps/mobile` (0 errors). `node scripts/typecheck.mjs` exit 0.
+
 ## 2026-09-25 — Expiry cron wired: CRON_SECRET + Supabase pg_cron/pg_net; prod redeployed at 111c607
 
 - **Track / machine:** Clemson RIDES · I9 (61b11c89) Vercel CLI + Supabase awktabuhijrshmsmagpq · approved by John 1:05 AM ET 9/25.

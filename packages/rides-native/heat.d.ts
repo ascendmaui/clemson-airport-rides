@@ -1,3 +1,6 @@
+export const DOWNTOWN_VENUES: { id: string; name: string; lat: number; lng: number; radius: number; curve: string }[]
+export const CAMPUS_ANCHORS: { id: string; name: string; lat: number; lng: number; radius: number; curve: string }[]
+
 export function heatColor(intensity: number): string
 export function downtownNow(date?: Date): {
   day: number
