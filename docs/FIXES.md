@@ -252,6 +252,14 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
 - **Verified:** `node --experimental-strip-types --test server/scheduleTrip.test.js` → 48/48 (0 skipped). Full `npm test` → 890/890 pass, 0 fail, 0 skipped.
 - **Files touched:** `server/scheduleTrip.test.js`, `tests/fixtures/srcLibLoader.mjs`, `tests/fixtures/supabaseStub.js`, `tests/fixtures/scheduledRidesStub.js` (deleted), `package.json`, `docs/FIXES.md`
 
+## 2026-09-25 — qrMatrix tests already listed on npm test
+
+- **Track / machine:** Clemson RIDES · deputy/qr-matrix-tests · pkg-qr-matrix-tests t3
+- **What was wrong:** Nothing to append. `src/lib/qrMatrix.test.js` was already the last argument of the root `package.json` `test` script (added in t1). A second copy would run the suite twice.
+- **What changed:** Left the `test` script unchanged. Confirmed the path appears once, after `server/tripWait.test.js`. `npm test` runs that file with the rest of the suite (797/797, including the four qrMatrix tests).
+- **Files touched:**
+  - `docs/FIXES.md`
+
 ## 2026-09-25 — qrMatrix keeps numeric 0 (nullish coalesce)
 
 - **Track / machine:** Clemson RIDES · deputy/qr-matrix-tests · pkg-qr-matrix-tests t2
