@@ -6,6 +6,7 @@ import {
   formatApproachDistance,
   haversineMeters,
   isApproachStatus,
+  type ApproachStage,
 } from '@/lib/approachAlert'
 import { supabase } from '@/lib/supabase'
 
@@ -17,9 +18,11 @@ export function useDriverApproach(status: string | null, driverId: string | null
   const [driver, setDriver] = useState<Coord | null>(null)
   const [denied, setDenied] = useState(false)
   const prevFeet = useRef<number | null>(null)
+  const prevStage = useRef<ApproachStage | null>(null)
 
   useEffect(() => {
     prevFeet.current = null
+    prevStage.current = null
     setDriver(null)
   }, [driverId])
 
@@ -107,12 +110,19 @@ export function useDriverApproach(status: string | null, driverId: string | null
   const reading = formatApproachDistance(meters)
   const feet = reading?.feet ?? null
   const previousFeet = feet == null ? null : prevFeet.current
+  const previousStage = feet == null ? null : prevStage.current
+
+  const attention = feet == null ? null : approachAttention({ previousFeet, feet, previousStage })
 
   useEffect(() => {
+    if (!active || feet == null) {
+      prevFeet.current = null
+      prevStage.current = null
+      return
+    }
     prevFeet.current = feet
-  }, [feet])
-
-  const attention = feet == null ? null : approachAttention({ previousFeet, feet })
+    prevStage.current = attention?.stage ?? null
+  }, [active, attention?.stage, feet])
 
   let waiting: string | null = null
   if (!driverId) waiting = 'Waiting for your driver'
@@ -125,7 +135,7 @@ export function useDriverApproach(status: string | null, driverId: string | null
     active,
     reading,
     attention,
-    statusLine: approachStatusLine(attention?.stage ?? null, Boolean(attention?.decreasing)),
+    statusLine: approachStatusLine(attention?.stage ?? null, Boolean(attention?.decreasing), feet),
     waiting,
   }
 }
