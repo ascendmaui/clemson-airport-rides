@@ -2,6 +2,18 @@
 
 Persistent knowledge base for recurring failures. When a matching issue appears, apply the saved fix first.
 
+## 2026-09-25 — Build 19 shipped to production (#91); merge_trip_metadata enum bug found in smoke test
+
+- **Track / machine:** Clemson RIDES · Max (merges, tests) + MacBookPro-1096 (Vercel CLI, team john-matveyev-macbooki9, project clemson-rides) · approved by John 12:19 AM ET 9/25.
+- **What shipped:**
+  - Migrations applied to awktabuhijrshmsmagpq: `hold_claim_atomic` (#80: `trips.hold_expire_claimed_at`, `public.merge_trip_metadata`, EXECUTE revoked from anon/authenticated, granted to service_role) then `card_brand_and_trip_created_at` (#82: `profiles.stripe_card_brand`, `profiles.stripe_card_last4`, `trips.created_at` backfilled from requested_at, NOT NULL default now()). #78 RLS fix was already live (`20260925015128 fix_profiles_trips_rls_recursion`) and was not reapplied. Pre-apply count: 2 unpaid airport holds past the 20-minute TTL that the expiry job would cancel.
+  - #91 squash-merged as 327a304; #72–#90 closed as shipped in #91 (#75/#76 superseded by #77).
+  - Production deploy `clemson-rides-1wy0w9c4y` from 327a304 via `vercel deploy --prod --scope john-matveyev-macbooki9` (no git-integration deploy fired).
+  - Test PRs #94, #95, #96, #97 merged after syncing with main (package.json test list union, FIXES.md keep-both). #92 and #93 skipped: their assertions expect the old `clemson-airport-rides.vercel.app` default and pre-#90 apiClient error shapes (13 and 12 failures after syncing with main).
+- **Smoke test (prod):** `/` 200; setup-intent 200 (also via `/api/stripe-setup-intent`); quote 200; airport-checkout 200 (cs_test session); reconcile-checkout on the unpaid session 200 `{ok:true, paid:false}`; reconcile-checkout unauthenticated 401; expire-unpaid-airport-holds without cron auth 401; unsigned webhook 400. Throwaway user and trip deleted.
+- **Bug found:** `public.merge_trip_metadata` fails on every call with `operator does not exist: trip_status = text`. `trips.status` is the `trip_status` enum but the function compares it to `p_expected_statuses text[]` and assigns `COALESCE(p_new_status text, status)`. The unit tests use a fake Supabase client, so they could not catch it. Affected: airport-checkout session bind (logs `[airport-checkout] session bind operator does not exist: trip_status = text`, response still 200), abandon-checkout release (200 with `released:false, reason:update_failed`), and the unpaid-hold expiry sweep's cancel. Paid deposits are unaffected because `recordDeposit` stamps `fare_paid_cents`/`checkout_deposit` with a plain update.
+- **Fix (pending John's approval, not applied):** compare `status::text = ANY(p_expected_statuses)` and set `status = COALESCE(p_new_status::public.trip_status, status)`. See the follow-up migration PR.
+
 ## 2026-09-24 — Run the drivers unit tests as the last npm test entry
 
 - **Track / machine:** Clemson RIDES · worktree deputy-pkg-drivers-tests
