@@ -1690,3 +1690,30 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
 - **What changed:** Confirmed `packages/rides-native/checkoutReturn.test.js` is already one argument of the `test` script in `package.json` (added with the checkout-reconcile suite and still present). Kept that single entry. `npm test` exits 0: 811 passed, 0 failed, including this file.
 - **Files touched:**
   - `docs/FIXES.md`
+
+## 2026-09-25 — googleAuth unit tests leave production source unchanged
+
+- **Date:** 2026-09-25
+- **Track / machine:** Clemson RIDES · deputy/google-auth-tests · pkg-google-auth-tests t1
+- **What was wrong:** `packages/rides-native/googleAuth.test.js` only checked `googleOAuthRedirect` for the rider and driver schemes. `startGoogleOAuth` and `completeGoogleSession` had no fake-Supabase coverage. Several current behaviors build a bad redirect or hide the provider error. They are pinned, not changed:
+  - `googleOAuthRedirect` strips only the first `://` and one leading slash, and it does not trim. A finished redirect passed back in becomes `clemsonridesauth/callback://auth/callback`. `//auth/callback` becomes a triple-slash URL. A path of `/` becomes `scheme://`. A trailing colon becomes `:://`.
+  - `startGoogleOAuth` forwards a missing or blank `redirectTo`, returns a whitespace provider URL, and throws `TypeError` when `auth` or the auth result is missing. Email/password `mapAuthError` copy (signup rate limit, invalid credentials, existing account) is used for Google failures. A string error becomes `Auth failed`.
+  - `completeGoogleSession` reads OAuth errors from the hash only, so a query error next to any fragment becomes `Google sign-in was rejected`. The `error=` scan is unanchored (`my_error=` matches). A whitespace-only `error_description` is thrown as the message. Tokens or a PKCE code win over `error` / `error_description`. A null session or null exchange payload is returned as success. A PKCE code containing `+` is turned into a space. A client with no `auth` object throws `TypeError`.
+- **What changed:** Extended `packages/rides-native/googleAuth.test.js` so every export (`googleOAuthRedirect`, `startGoogleOAuth`, `completeGoogleSession`) is covered with `node:test` and an in-memory Supabase auth fake. No network. `googleAuth.js` was not modified. Suspected bugs are asserted as current behavior with `// BUG?:` comments. The root `test` script already lists this file.
+- **Files touched:** `packages/rides-native/googleAuth.test.js`, `docs/FIXES.md`
+
+## 2026-09-25 — googleAuth rejects a whitespace provider URL
+
+- **Date:** 2026-09-25
+- **Track / machine:** Clemson RIDES · deputy/google-auth-tests · pkg-google-auth-tests t2
+- **What was wrong:** `startGoogleOAuth` treated any truthy `data.url` as the Google sign-in link. A whitespace-only string is truthy, so the rider and driver apps would hand `WebBrowser.openAuthSessionAsync` a blank URL instead of the "Google sign-in is not configured" error.
+- **What changed:** Trim a string `data.url` and reject it when nothing remains. A URL with only surrounding whitespace is returned trimmed. A provider error is still preferred over a URL. Other pinned behaviors are unchanged.
+- **Files touched:** `packages/rides-native/googleAuth.js`, `packages/rides-native/googleAuth.test.js`, `docs/FIXES.md`
+
+## 2026-09-25 — googleAuth tests already run from npm test
+
+- **Date:** 2026-09-25
+- **Track / machine:** Clemson RIDES · deputy/google-auth-tests · pkg-google-auth-tests t3
+- **What was wrong:** Nothing to wire. `packages/rides-native/googleAuth.test.js` is already a single entry in the root `package.json` `test` script (present on `origin/main`, between `syntheticOffers.test.js` and `tests/apiRoutes.test.js`). A second copy would run the suite twice.
+- **What changed:** Left `package.json` as it is. Confirmed `npm test` runs that file with the rest of the suite: 811 pass, 0 fail. The 20 googleAuth tests use `node:test` and an in-memory Supabase auth fake. No network.
+- **Files touched:** `docs/FIXES.md`
