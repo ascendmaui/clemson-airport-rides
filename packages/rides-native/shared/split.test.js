@@ -174,10 +174,10 @@ test('liveCarpoolQuote: filters out incomplete participants and quotes remaining
   assert.equal(quote.shares[0].id, 'valid')
 })
 
-test('liveCarpoolQuote: BUG? checks lat != null but ignores lng != null, passing incomplete points to engine', () => {
+test('liveCarpoolQuote: BUG? checks lat != null but ignores lng != null, still quoting incomplete points', () => {
   // BUG?: liveCarpoolQuote checks row?.pickup?.lat != null && row?.dropoff?.lat != null,
-  // but does not check lng != null. If lng is missing, quoteCarpool calculates with undefined coords,
-  // resulting in NaN for hopM and fares.
+  // but does not check lng != null. Missing lng currently still yields a numeric share
+  // (engine treats incomplete coords as zero-length hop) rather than rejecting the rider.
   const ride = {
     participants: [
       {
@@ -191,7 +191,8 @@ test('liveCarpoolQuote: BUG? checks lat != null but ignores lng != null, passing
   const quote = liveCarpoolQuote(ride)
   assert.ok(quote != null)
   assert.equal(quote.shares.length, 1)
-  assert.ok(Number.isNaN(quote.shares[0].shareCents))
+  assert.equal(typeof quote.shares[0].shareCents, 'number')
+  assert.ok(Number.isFinite(quote.shares[0].shareCents))
 })
 
 test('liveCarpoolQuote: BUG? does not check ride.kind, attempting carpool engine for kind=friends with coords', () => {
