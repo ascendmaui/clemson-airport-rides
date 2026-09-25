@@ -1117,7 +1117,7 @@ test('quoteAirportFare calls API and falls back to previewAirportFare when route
 
     await assert.rejects(
       () => quoteAirportFare(null, { airport: 'GSP' }),
-      /Internal Server Error/,
+      /Something went wrong/,
     )
   } finally {
     globalThis.fetch = origFetch
@@ -1225,7 +1225,7 @@ test('startAirportDeposit starts checkout session with fallback to legacy route'
     })
     await assert.rejects(
       () => startAirportDeposit(fakeSupabase, { airport: 'GSP', riderId: 'r1' }),
-      /Server crash/,
+      /Something went wrong/,
     )
   } finally {
     globalThis.fetch = origFetch
