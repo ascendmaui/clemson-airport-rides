@@ -252,6 +252,16 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
 - **Verified:** `node --experimental-strip-types --test server/scheduleTrip.test.js` → 48/48 (0 skipped). Full `npm test` → 890/890 pass, 0 fail, 0 skipped.
 - **Files touched:** `server/scheduleTrip.test.js`, `tests/fixtures/srcLibLoader.mjs`, `tests/fixtures/supabaseStub.js`, `tests/fixtures/scheduledRidesStub.js` (deleted), `package.json`, `docs/FIXES.md`
 
+## 2026-09-25 — qrMatrix unit tests (source unchanged)
+
+- **Track / machine:** Clemson RIDES · deputy/qr-matrix-tests · pkg-qr-matrix-tests t1
+- **What was wrong:** `src/lib/qrMatrix.js` had no direct unit test on origin/main. `tests/marketingSite.test.js` only checks that download-link matrices are square and in range, so a wrong module, version, or error-correction level could still pass.
+- **What changed:** Added `src/lib/qrMatrix.test.js` and appended it to the root `test` script. Did not edit `src/lib/qrMatrix.js`. Suspected bugs stay asserted with `// BUG?:` and are not fixed here: `qrMatrix(0)` (also `false` and `NaN`) throws `No input text` because `text || ''` drops the value, while `qrMatrix(42)` encodes `"42"` and `qrMatrix('0')` encodes `"0"`; a plain object encodes the literal `"[object Object]"`; `qrMatrix([])` throws because `String([])` is `''`, and `qrMatrix([1, 2])` encodes the joined text `"1,2"`.
+- **Files touched:**
+  - `src/lib/qrMatrix.test.js`
+  - `package.json`
+  - `docs/FIXES.md`
+
 ## 2026-09-25 — Expiry cron wired: CRON_SECRET + Supabase pg_cron/pg_net; prod redeployed at 111c607
 
 - **Track / machine:** Clemson RIDES · I9 (61b11c89) Vercel CLI + Supabase awktabuhijrshmsmagpq · approved by John 1:05 AM ET 9/25.
