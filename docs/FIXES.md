@@ -2,6 +2,19 @@
 
 Persistent knowledge base for recurring failures. When a matching issue appears, apply the saved fix first.
 
+## 2026-09-24 — Post-auth cleanup: residue guard and a root typecheck
+
+- **Track / machine:** I9 · Deputy · deputy/post71-auth-typecheck
+- **Problem:** After social sign-in moved to Supabase Auth, the driver README still described email/password or Google only. `GOOGLE_PROVIDER` / `DRIVER_GOOGLE_PROVIDER` were unused exports (both apps use `RIDER_SOCIAL_PROVIDERS` / `DRIVER_SOCIAL_PROVIDERS`). There was no root typecheck, and nothing stopped the removed auth vendor name from coming back in tracked files.
+- **Fix:**
+  - Driver README now matches the apps: Apple via `signInWithIdToken`, Google via `signInWithOAuth` and `clemsonrides-driver://auth/callback`. Root README and both app `.env.example` files name the same `auth/callback` deep links.
+  - Dropped the unused Google provider constants from `packages/rides-native/googleAuth.js` and `googleAuth.d.ts`.
+  - Root `npm run typecheck` runs `scripts/typecheck.mjs`: each app's own `tsc --noEmit` (installs that app with `npm ci` only when `apps/*/node_modules` is missing) plus `node --check` on `api/**/*.js` and `server/**/*.js` (test files skipped).
+  - `tests/noClerk.test.js` (`node:test`, wired as `tests/no*.test.js` so the script does not reintroduce the token) fails if that name appears, case-insensitively, in any `git ls-files` path other than `docs/FIXES.md` and package-lock files.
+- **Audit:** no other code, test, script, README, auth contract, ship notes, env example, `app.json` / `eas.json`, `vite.config.js`, or `vercel.json` rewrite still pointed at the removed provider, bridge, or `sso-callback` route. `apps/*/patches` left untouched (React Native `facebook.jsi`, not a login provider). Historical entries below are unchanged.
+- **Files:** `apps/driver/README.md`, `README.md`, `apps/rider/.env.example`, `apps/driver/.env.example`, `packages/rides-native/googleAuth.js`, `packages/rides-native/googleAuth.d.ts`, `package.json`, `scripts/typecheck.mjs`, `tests/noClerk.test.js`, `docs/FIXES.md`.
+- **Verified:** `npm ci --no-audit --no-fund --loglevel=error && npm test && npm run typecheck` — 352/352 tests. With both app `node_modules` folders absent, typecheck installed them, then `tsc --noEmit` and `node --check` exited 0. No type errors to fix.
+
 ## 2026-09-24 — Apps still pointed at the old clemson-airport-rides.vercel.app domain
 
 - **Track / machine:** Clemson RIDES · Johns-iMac (worktree fix/clemson-rides-domain) · edits by Google Anti-Gravity CLI (`agy -p`), reviewed and finished by hand

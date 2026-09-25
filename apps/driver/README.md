@@ -4,7 +4,7 @@ Version **1.1.0**. Bundle id `com.ascendmaui.clemsonrides.driver`.
 
 Separate binary, icon, `eas.json`, and Expo project from the rider app and from TestFlight 1.0.0 (1) `com.ascendmaui.clemsonairportrides`.
 
-Going online requires `driver_applications.onboarding_status = approved`. Sign in with email and password or Google (Supabase Auth). The session stays in SecureStore. While an application is `pending_review`, the driver can use the app except going online or accepting rides.
+Going online requires `driver_applications.onboarding_status = approved`. Email and password use Supabase Auth (`signInWithPassword`, `signUp`). Apple sign-in uses native `expo-apple-authentication` with a SHA-256 hashed nonce exchanged via `supabase.auth.signInWithIdToken`. Google sign-in uses `signInWithOAuth` and `WebBrowser.openAuthSessionAsync`, then `completeGoogleSession` on the deep link `clemsonrides-driver://auth/callback`. The session stays in SecureStore. While an application is `pending_review`, the driver can use the app except going online or accepting rides.
 
 ## EAS environment variables
 

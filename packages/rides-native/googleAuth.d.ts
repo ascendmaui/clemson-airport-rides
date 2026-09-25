@@ -1,6 +1,3 @@
-export const GOOGLE_PROVIDER: { id: 'google'; label: string }[]
-export const DRIVER_GOOGLE_PROVIDER: { id: 'google'; label: string }[]
-
 export function googleOAuthRedirect(scheme?: string, path?: string): string
 
 export function startGoogleOAuth(supabase: {
