@@ -58,6 +58,16 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
 - **Rotate:** `vercel env rm CRON_SECRET production` + `vercel env add CRON_SECRET production --sensitive` (value from stdin), then `select vault.update_secret((select id from vault.secrets where name='clemson_cron_secret'), '<new>')`, then redeploy.
 - **Inspect runs:** `select * from cron.job_run_details order by start_time desc limit 5;` and `select id, status_code, left(content, 300) from net._http_response order by created desc limit 5;`
 
+## 2026-09-25 — apiClient tests expect clemson-rides.vercel.app [t1]
+
+- **Track / machine:** Deputy · pkg-domain-tests-92-93 t1 · deputy/domain-tests-92-93
+- **What was wrong:** The apiClient tests brought over from draft PR #92 still expected `https://clemson-airport-rides.vercel.app`. One case hardcoded the joined URL as `vercel.appapi/trips` against that old host. Other assertions described the pre-#90 client: raw server messages, `getSession` errors thrown out of `authedJson`, a missing `getSession` throwing `TypeError`, and `JSON.stringify` failures wrapped as network errors. The `getSession` cases called live `fetch` because nothing was mocked.
+- **What changed:** Expected bases now come from `DEFAULT_API_BASE` in `packages/rides-native/apiOrigin.js` (`https://clemson-rides.vercel.app`, the `WEB_ORIGIN` `apiClient.js` uses when `EXPO_PUBLIC_API_BASE` is unset). A path with no leading slash is asserted as `` `${apiBase()}${path}` ``, which is the real join. Error assertions follow `friendlyApiError` (auth copy on 401, unavailable copy on 503, generic copy on 422/500/502). `getSession` failures and a supabase object with no `getSession` continue without a token, against a fake fetch. A circular body throws `TypeError` before fetch. Production source was not changed.
+- **Files touched:**
+  - `packages/rides-native/apiClient.test.js`
+  - `docs/FIXES.md`
+- **Verified:** `node --experimental-strip-types --test packages/rides-native/apiClient.test.js` (30/30 passing).
+
 ## 2026-09-25 — merge_trip_metadata trip_status enum cast applied (#100)
 
 - **Problem:** `public.merge_trip_metadata` (#80) failed on every call with `operator does not exist: trip_status = text`, which broke the airport-checkout session bind, abandon-checkout release and the unpaid-hold expiry cancel.
