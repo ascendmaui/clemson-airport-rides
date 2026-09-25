@@ -1,26 +1,40 @@
 import { friendlyApiError } from './apiErrors.js'
 
-import { resolveApiBase } from './apiOrigin.js'
+/**
+ * Authed JSON client for web.
+ * Supports:
+ * - authedJson(supabaseClient, path, options)
+ * - authedJson(path, options)
+ *
+ * Automatically attaches Supabase session Bearer token if client has auth.getSession.
+ * On HTTP 401, calls client.auth.refreshSession() ONCE and retries the request once.
+ * On 503 or config errors, sanitizes error message via friendlyApiError.
+ */
+export async function authedJson(supabaseOrPath, pathOrOptions, maybeOptions) {
+  let client
+  let path
+  let options
 
-export function apiBase() {
-  return resolveApiBase()
-}
+  if (typeof supabaseOrPath === 'string') {
+    path = supabaseOrPath
+    options = pathOrOptions || {}
+    client = options.supabase || null
+  } else {
+    options = maybeOptions || {}
+    client = options.supabase || supabaseOrPath || null
+    path = pathOrOptions
+  }
 
-export async function authedJson(
-  supabase,
-  path,
-  { method = 'GET', body, headers: customHeaders, fetch: customFetch } = {},
-) {
-  const fetcher = customFetch || globalThis.fetch
+  const fetcher = options.fetch || globalThis.fetch
   const headers = {
     'Content-Type': 'application/json',
     Accept: 'application/json',
-    ...(customHeaders || {}),
+    ...(options.headers || {}),
   }
 
-  if (typeof supabase?.auth?.getSession === 'function') {
+  if (typeof client?.auth?.getSession === 'function') {
     try {
-      const sessionResult = await supabase.auth.getSession()
+      const sessionResult = await client.auth.getSession()
       const token =
         sessionResult?.data?.session?.access_token ??
         sessionResult?.session?.access_token
@@ -32,14 +46,20 @@ export async function authedJson(
     }
   }
 
-  const url = path.startsWith('http') ? path : `${apiBase()}${path}`
-  const reqBody = body == null ? undefined : JSON.stringify(body)
+  const url = path
+  const method = options.method || 'GET'
+  const reqBody =
+    options.body == null
+      ? undefined
+      : typeof options.body === 'string'
+        ? options.body
+        : JSON.stringify(options.body)
 
   let res
   try {
     res = await fetcher(url, {
       method,
-      headers,
+      headers: { ...headers },
       body: reqBody,
     })
   } catch (err) {
@@ -50,10 +70,10 @@ export async function authedJson(
 
   // On 401, call supabase.auth.refreshSession() ONCE.
   // If it yields a session, retry the request once with the new access token.
-  if (res.status === 401 && typeof supabase?.auth?.refreshSession === 'function') {
+  if (res.status === 401 && typeof client?.auth?.refreshSession === 'function') {
     let refreshedSession = null
     try {
-      const refreshResult = await supabase.auth.refreshSession()
+      const refreshResult = await client.auth.refreshSession()
       refreshedSession =
         refreshResult?.data?.session ?? refreshResult?.session ?? null
     } catch {
@@ -66,7 +86,7 @@ export async function authedJson(
       try {
         res = await fetcher(url, {
           method,
-          headers,
+          headers: { ...headers },
           body: reqBody,
         })
       } catch (err) {
@@ -136,3 +156,4 @@ export async function authedJson(
   return data
 }
 
+export const authedFetch = authedJson

@@ -600,7 +600,92 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
 ## 2026-09-24 — Register driverDesk.test.js in package.json test script (pkg-i9-driverdesk-tests t3)
 - **Problem:** `packages/rides-native/driverDesk.test.js` needed to be registered as the last entry of the "test" script list in `package.json` and verified so that the entire test suite runs and passes cleanly.
 - **What was changed:** Confirmed `packages/rides-native/driverDesk.test.js` is the last entry in `package.json`'s "test" script list. Resolved local environment test dependencies (`@electric-sql/pglite`, `qrcode`) and verified the entire test suite passes (`npm test` passes all 415 tests with 0 failures).
+## 2026-09-24 — Friendly API error mapper (packages/rides-native/apiErrors)
+- **Problem:** When server payment configuration was missing or failed, riders were exposed to raw technical messages such as 'STRIPE_SECRET_KEY is not configured.' or 'SUPABASE_SERVICE_ROLE_KEY not configured', or confusing 'Sign in required' auth messages.
+- **What was wrong:** API response errors from server routes (503 for missing payment keys, 401 for auth, 402 for card failures) lacked a shared client-side mapper to sanitize technical config/env details and present safe, user-friendly error messages.
+- **What was changed:** Created `packages/rides-native/apiErrors.js` and `packages/rides-native/apiErrors.d.ts` exporting `friendlyApiError(status, body)`.
+  - 503 or body matching `/not configured|STRIPE_|SUPABASE_|service role|Payments unavailable/i` returns kind `'unavailable'` with message `'Payments are temporarily unavailable, please try again shortly'`, ensuring no raw environment variable names leak to users.
+  - 401 returns kind `'auth'` with message `'Please sign in again to continue.'`.
+  - 402 and card errors retain the server message if user-facing, or fall back to `'Something went wrong. Please try again.'`.
+  - 5xx other returns kind `'server'` with generic message `'Something went wrong. Please try again.'`.
+  - Network errors (status 0/undefined) return kind `'network'` with message `'Check your connection and try again.'`.
+  - Added comprehensive test suite in `packages/rides-native/apiErrors.test.js`.
+- **Files touched:**
+  - `packages/rides-native/apiErrors.js`
+  - `packages/rides-native/apiErrors.d.ts`
+  - `packages/rides-native/apiErrors.test.js`
+  - `docs/FIXES.md`
+
+## 2026-09-24 — Authed fetch session refresh & friendly config error handling (t2)
+- **Problem:** When server payment configuration was broken or missing (503/config errors), riders saw raw server configuration text (e.g. 'STRIPE_SECRET_KEY is not configured.' / 'SUPABASE_SERVICE_ROLE_KEY not configured') or 'Sign in required'. Expired or missing auth tokens immediately surfaced auth errors without attempting to refresh the session first.
+- **What was wrong:** The authed fetch client (`authedJson` in `packages/rides-native/apiClient.js`) threw raw server error strings from response bodies without sanitizing them via `friendlyApiError`, and on 401 HTTP responses it did not attempt to refresh the Supabase session before failing.
+- **What was changed:**
+  - Updated `packages/rides-native/apiClient.js` `authedJson`:
+    - On 401 status, calls `supabase.auth.refreshSession()` once; if a refreshed session with an access token is yielded, retries the request once with the new access token.
+    - If refresh fails or yields no session (or retry fails), surfaces safe auth error (`Please sign in again to continue.`).
+    - On 503 and server configuration errors (or bodies matching missing config patterns), throws an Error with friendly copy (`Payments are temporarily unavailable, please try again shortly`), keeping `status` and `code` on the error object without refreshing.
+  - Re-exported `authedJson` from `packages/rides-native/riderMoney.js` and updated type definitions in `packages/rides-native/riderMoney.d.ts` and `packages/rides-native/apiClient.d.ts`.
+  - Exported `authedJson` from `apps/rider/lib/apiAuth.ts`.
+  - Updated `packages/rides-native/shared/carpoolApi.js` to delegate `authedJson` to `apiClient.js` and sanitize error messages using `friendlyApiError`.
+  - Added unit test suite in `packages/rides-native/riderMoney.test.js` covering fake fetch + fake supabase.auth: 401 refresh succeeds and retries once, 401 refresh fails and surfaces auth error, 503 config error throws friendly message without refresh, 401 retry failure does not refresh a second time, and 500 config error returns friendly copy.
+- **Files touched:**
+  - `packages/rides-native/apiClient.js`
+  - `packages/rides-native/apiClient.d.ts`
+  - `packages/rides-native/riderMoney.js`
+  - `packages/rides-native/riderMoney.d.ts`
+  - `packages/rides-native/riderMoney.test.js`
+  - `packages/rides-native/shared/carpoolApi.js`
+  - `apps/rider/lib/apiAuth.ts`
+  - `docs/FIXES.md`
+
+## 2026-09-24 — Web authed fetch session refresh & friendly payment error handling (t3)
+- **Problem:** On web (src/), when the server's payment config was broken (e.g. STRIPE_SECRET_KEY / SUPABASE_SERVICE_ROLE_KEY missing, returning 503 or 500), riders could see raw config text ('STRIPE_SECRET_KEY is not configured.' / 'SUPABASE_SERVICE_ROLE_KEY not configured') or a hardcoded 'sign in required'. Stale/expired auth tokens on 401 caused failures without attempting to refresh the session first.
+- **What was wrong:** Fetch helpers in `src/lib/payments.js`, `src/lib/stripeCheckout.js`, `src/lib/billingApi.js`, `src/lib/friendRides.js`, `src/lib/tripWaitApi.js`, and `src/lib/midrideCancel.js` threw raw server response errors or hardcoded strings without sanitizing via `friendlyApiError`, and on 401 responses they did not call `supabase.auth.refreshSession()` before failing.
+- **What was changed:**
+  - Added `src/lib/apiErrors.js` (re-exporting `friendlyApiError` and constants from `packages/rides-native/apiErrors.js`) and unit tests in `src/lib/apiErrors.test.js`.
+  - Added `src/lib/apiClient.js` exporting `authedJson` (with `authedFetch` alias):
+    - Automatically attaches Supabase session Bearer token from `supabase.auth.getSession()`.
+    - On 401 status, calls `supabase.auth.refreshSession()` once and retries the request once if a refreshed token is returned.
+    - On 503 / config errors, formats error messages using `friendlyApiError` so riders see "Payments are temporarily unavailable, please try again shortly" without leaking secrets/env vars.
+    - Sets `.unavailable = true` on 503/unavailable and `.auth = true` on 401/auth errors.
+  - Updated `src/lib/payments.js` `api()` to delegate to `authedJson`.
+  - Updated `src/lib/billingApi.js` `api()` to delegate to `authedJson`.
+  - Updated `src/lib/stripeCheckout.js` `createCheckoutSession` and `abandonCheckoutSession` to delegate to `authedJson` and sanitize 503 stubs/failures.
+  - Updated `src/lib/friendRides.js`, `src/lib/tripWaitApi.js`, and `src/lib/midrideCancel.js` to route requests through `authedJson`.
+  - Updated `src/screens/ScheduleAirport.jsx` to fall back to `UNAVAILABLE_COPY` and ensure error.message is shown.
+  - Added unit test suites `src/lib/apiClient.test.js` and `src/lib/webPayments.test.js` verifying 401 refresh retries and 503 friendly error copy.
+- **Files touched:**
+  - `src/lib/apiErrors.js`
+  - `src/lib/apiErrors.test.js`
+  - `src/lib/apiClient.js`
+  - `src/lib/apiClient.test.js`
+  - `src/lib/payments.js`
+  - `src/lib/billingApi.js`
+  - `src/lib/stripeCheckout.js`
+  - `src/lib/friendRides.js`
+  - `src/lib/tripWaitApi.js`
+  - `src/lib/midrideCancel.js`
+  - `src/lib/supabase.js`
+  - `src/screens/ScheduleAirport.jsx`
+  - `src/lib/webPayments.test.js`
+  - `docs/FIXES.md`
+
+## 2026-09-24 — Wire new error-messages test suites into package.json test script (t4)
+- **Problem:** Newly created unit test suites for friendly API errors and authedJson 401 retry / 503 friendly error handling (`packages/rides-native/apiErrors.test.js`, `src/lib/apiErrors.test.js`, `src/lib/apiClient.test.js`, and `src/lib/webPayments.test.js`) were not executed as part of `npm test`.
+- **What was wrong:** The `"test"` script in `package.json` did not include the new error handling and auth retry test suites added in tasks t1 and t3.
+- **What was changed:**
+  - Appended `packages/rides-native/apiErrors.test.js`, `src/lib/apiErrors.test.js`, `src/lib/apiClient.test.js`, and `src/lib/webPayments.test.js` as the last entries of the `"test"` script in `package.json`.
+  - Verified that all 385 tests pass under `npm test`.
 - **Files touched:**
   - `package.json`
   - `docs/FIXES.md`
 
+
+
+
+
+## 2026-09-24 — keep src/lib/supabase.js a static import (Chief of Staff review)
+- What was wrong: the error-messages change turned `import { createClient } from '@supabase/supabase-js'` into a top-level `await import(...)`.
+  Vite's build target (es2020 / safari14) has no top-level await, so `vite build` failed ("Top-level await is not available").
+- What changed: restored the original static import. `npm test` (385/385) and `vite build` both pass.
+- Files: src/lib/supabase.js

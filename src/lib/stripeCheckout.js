@@ -8,8 +8,10 @@
  * Client: VITE_STRIPE_PUBLISHABLE_KEY
  * Server: STRIPE_SECRET_KEY (never ship in Vite)
  */
-import { quoteFare, AIRPORT_ROUTE_FALLBACK, cardDepositCents, STRIPE_NOT_CONFIGURED_COPY } from './fareRates'
-import { supabase } from './supabase'
+import { quoteFare, AIRPORT_ROUTE_FALLBACK, cardDepositCents, STRIPE_NOT_CONFIGURED_COPY } from './fareRates.js'
+import { supabase } from './supabase.js'
+import { authedJson } from './apiClient.js'
+import { friendlyApiError } from './apiErrors.js'
 
 function fallbackFareCents(code) {
   const route = AIRPORT_ROUTE_FALLBACK[code]
@@ -65,16 +67,12 @@ export async function createCheckoutSession({
   riderId,
   date,
   time,
-}) {
+}, options = {}) {
   const rate = AIRPORT_RATES[airport]
   if (!rate) throw new Error('Unknown airport')
 
-  const headers = { 'Content-Type': 'application/json' }
-  if (supabase) {
-    const { data } = await supabase.auth.getSession()
-    const token = data?.session?.access_token
-    if (token) headers.Authorization = `Bearer ${token}`
-  }
+  const origin = typeof window !== 'undefined' ? window.location?.origin : undefined
+  const pathname = typeof window !== 'undefined' ? (window.location?.pathname || '') : ''
   const body = {
     airport: rate.code,
     riderName: riderName || 'Rider',
@@ -82,57 +80,37 @@ export async function createCheckoutSession({
     riderId: riderId || '',
     date: date || undefined,
     time: time || undefined,
-    origin: window.location.origin,
+    origin,
     successUrl:
       successUrl ||
-      `${window.location.origin}${window.location.pathname}#/schedule?paid=1`,
+      (origin ? `${origin}${pathname}#/schedule?paid=1` : undefined),
     cancelUrl:
       cancelUrl ||
-      `${window.location.origin}${window.location.pathname}#/schedule?canceled=1`,
+      (origin ? `${origin}${pathname}#/schedule?canceled=1` : undefined),
   }
 
-  let res
-  try {
-    res = await fetch('/api/create-checkout-session', {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(body),
-    })
-  } catch (err) {
-    throw new Error(
-      err?.message
-        ? `Checkout unreachable: ${err.message}`
-        : 'Checkout API unreachable — try again shortly.',
-    )
-  }
+  const client = options?.supabase || supabase
+  const data = await authedJson(client, '/api/create-checkout-session', {
+    method: 'POST',
+    body,
+    fetch: options.fetch,
+    headers: options.headers,
+    supabase: client,
+  })
 
-  let data = null
-  try {
-    data = await res.json()
-  } catch {
-    throw new Error(`Checkout failed (HTTP ${res.status})`)
-  }
-
-  const coveredWithoutCard = res.ok
-    && !data?.stub
-    && data?.tripId
-    && !data?.url
-    && (data.paidWithCredits || Number(data.depositCents) === 0)
+  const coveredWithoutCard =
+    !data?.stub &&
+    data?.tripId &&
+    !data?.url &&
+    (data.paidWithCredits || Number(data.depositCents) === 0)
   if (coveredWithoutCard) return data
 
-  if (!res.ok || data?.stub || !data?.url) {
-    const combined = `${data?.message || ''} ${data?.error || ''}`
-    const msg = /not configured|payments unavailable/i.test(combined)
-      ? STRIPE_NOT_CONFIGURED_COPY
-      : (
-        data?.message ||
-        data?.error ||
-        (res.status === 503
-          ? STRIPE_NOT_CONFIGURED_COPY
-          : `Checkout failed (HTTP ${res.status})`)
-      )
-    const err = new Error(msg)
-    err.status = res.status
+  if (data?.stub || !data?.url) {
+    const friendly = friendlyApiError(503, data)
+    const err = new Error(friendly.message)
+    err.status = 503
+    err.kind = friendly.kind
+    err.unavailable = true
     err.payload = data
     throw err
   }
@@ -141,37 +119,16 @@ export async function createCheckoutSession({
 }
 
 /** Tell the server a Checkout was canceled so an unpaid searching trip leaves the pool. */
-export async function abandonCheckoutSession({ tripId, sessionId } = {}) {
+export async function abandonCheckoutSession({ tripId, sessionId } = {}, options = {}) {
   if (!tripId) throw new Error('Missing trip')
-  const headers = { 'Content-Type': 'application/json' }
-  if (supabase) {
-    const { data } = await supabase.auth.getSession()
-    const token = data?.session?.access_token
-    if (token) headers.Authorization = `Bearer ${token}`
-  }
-  let res
-  try {
-    res = await fetch('/api/stripe-payment-methods?action=abandon-checkout', {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({ tripId, sessionId: sessionId || undefined }),
-    })
-  } catch (err) {
-    throw new Error(err?.message || 'Could not close checkout')
-  }
-  let data = null
-  try {
-    data = await res.json()
-  } catch {
-    throw new Error(`Could not close checkout (HTTP ${res.status})`)
-  }
-  if (!res.ok) {
-    const error = new Error(data?.error || data?.message || `Could not close checkout (HTTP ${res.status})`)
-    error.status = res.status
-    error.payload = data
-    throw error
-  }
-  return data
+  const client = options?.supabase || supabase
+  return authedJson(client, '/api/stripe-payment-methods?action=abandon-checkout', {
+    method: 'POST',
+    body: { tripId, sessionId: sessionId || undefined },
+    fetch: options?.fetch,
+    headers: options?.headers,
+    supabase: client,
+  })
 }
 
 /**

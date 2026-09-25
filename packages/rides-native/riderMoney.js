@@ -12,6 +12,7 @@ import {
   isClemsonEmail,
 } from '../../src/lib/studentDomain.js'
 import { authedJson } from './apiClient.js'
+export { authedJson }
 import {
   AIRPORT_ROUTE_FALLBACK,
   cardDepositCents,

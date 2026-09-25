@@ -5,6 +5,8 @@
  */
 
 import { DEFAULT_API_BASE as DEFAULT_API } from '../apiOrigin.js'
+import { authedJson as clientAuthedJson } from '../apiClient.js'
+import { friendlyApiError } from '../apiErrors.js'
 
 let baseOverride = ''
 
@@ -16,40 +18,9 @@ export function apiBase() {
   return baseOverride || DEFAULT_API
 }
 
-async function authedJson(supabase, path, { method = 'GET', body } = {}) {
-  const headers = { 'Content-Type': 'application/json', Accept: 'application/json' }
-  if (supabase) {
-    const { data } = await supabase.auth.getSession()
-    const token = data?.session?.access_token
-    if (token) headers.Authorization = `Bearer ${token}`
-  }
+function authedJson(supabase, path, options) {
   const url = path.startsWith('http') ? path : `${apiBase()}${path}`
-  let res
-  try {
-    res = await fetch(url, {
-      method,
-      headers,
-      body: body == null ? undefined : JSON.stringify(body),
-    })
-  } catch (err) {
-    throw new Error(err?.message || 'Network error')
-  }
-  const text = await res.text()
-  let data = {}
-  try {
-    data = text ? JSON.parse(text) : {}
-  } catch {
-    const error = new Error('API unavailable')
-    error.status = res.status
-    throw error
-  }
-  if (!res.ok) {
-    const error = new Error(data.error || data.message || `HTTP ${res.status}`)
-    error.status = res.status
-    error.payload = data
-    throw error
-  }
-  return data
+  return clientAuthedJson(supabase, url, options)
 }
 
 export function inviteUrl(token, kind = 'carpool') {
@@ -58,6 +29,10 @@ export function inviteUrl(token, kind = 'carpool') {
 }
 
 export function apiErrorMessage(err) {
+  const friendly = friendlyApiError(err)
+  if (friendly?.kind === 'unavailable' || friendly?.kind === 'auth') {
+    return friendly.message
+  }
   const payload = err?.payload
   if (payload && typeof payload.message === 'string' && payload.message) return payload.message
   if (payload && typeof payload.error === 'string' && payload.error) return payload.error
