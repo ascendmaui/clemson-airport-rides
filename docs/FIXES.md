@@ -399,6 +399,23 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
   - `docs/FIXES.md`
 - **Verified:** `node --experimental-strip-types --test apps/rider/lib/friendsApi.test.mjs apps/rider/lib/accountApi.test.mjs apps/driver/lib/push.test.mjs` (79 passing).
 
+## 2026-09-25 — Wire stripe-webhook validation tests into npm test
+
+- **Track / machine:** Clemson RIDES · deputy/webhook-validation-tests · pkg-webhook-validation-tests t3
+- **What was wrong:** `api/stripe-webhook.js` input validation and event routing needed to run under the root `npm test` command, and the suspected bugs needed one log entry. No production source is fixed here.
+- **What changed:** `api/stripeWebhookValidation.test.js` is the last argument of the root `package.json` `test` script. It was appended in t1 and already appeared once, so this task did not add a second copy and did not change any other `package.json` field.
+- **What was covered:** Non-POST → 405. A missing, non-`sk_`, or `placeholder` stripe secret → 200 `{stub:true}` with the body unread. A header from `stripe.webhooks.generateTestHeaderString` with `whsec_fake_not_real` is accepted. A missing header, tampered body, wrong secret, or stale timestamp → 400, and `applyPaidCheckoutSession` / `serviceClient` are not called. Unsigned (`webhookSecret` `''` or `placeholder`): malformed JSON and an empty body → 400; JSON `null` → 400; a JSON array, an object with no `type`, and an unhandled event with no `data.object` → 200 unhandled. None of those paths reject the handler promise. `payment_intent.payment_failed` with no trip id or `serviceKey: ''` → `held:false` and `serviceClient` is not called; with a trip id and a fake client, `setPaymentHold` stores the classified code (`metadata.trip_id` is accepted). `checkout.session.expired` and `checkout.session.async_payment_failed` with `serviceKey: ''` → `released.reason` `no_service_role` and 200; retryable fake reasons → 500. `checkout.session.completed` and `async_payment_succeeded` pass the session and `isAsyncPaymentSucceeded` into `deps.applyPaidCheckoutSession`; a throwing or rejecting fake → 400 and the handler settles. Tip and `credit_purchase` events return `{skipped:true, reason:'no_service_role'}` on the env-cleared import, and `{skipped:true, reason:'missing_metadata'}` on the keyed instance when metadata is incomplete. They do not reach the real `serviceClient()`. Unknown event types → 200 `{received:true}`.
+- **BUG? (left in place, source not edited):**
+  1. Unsigned mode (`webhookSecret` `''` or any secret containing `placeholder`) does not require the JSON value to be an event object. `null` throws on `event.type` and the catch returns 400. A JSON array, including one that wraps `checkout.session.completed`, matches no type branch and is acknowledged `200 {received:true}`. The wrapped event is not applied, and the caller is not told to retry. Marked `// BUG?:` in `api/stripeWebhookValidation.test.js`.
+  2. `payment_intent.payment_failed` sets `held: true` after `setPaymentHold` returns. `readTrip` turns a select error into null, and a missing trip row is also null, so no `payment_hold` is written. The handler still responds `200 {held:true}`, so Stripe will not retry. A trips update that fails inside `setPaymentHold` is only logged and takes the same `held: true` path. Marked `// BUG?:` in the test. `api/stripe-webhook.js` and `server/collectPayment.js` were not edited.
+- **Files touched:**
+  - `docs/FIXES.md`
+  - `package.json` (test script already ends with `api/stripeWebhookValidation.test.js`; no edit in this commit)
+  - `api/stripeWebhookValidation.test.js` (coverage from t1 and t2; not edited here)
+  - `tests/fixtures/webhook-validation/hooks.js` (t2; not edited here)
+  - `tests/fixtures/webhook-validation/fakeSupabase.js` (t2; not edited here)
+- **Verified:** `npm test` (876/876 passing, 0 failed, including `api/stripeWebhookValidation.test.js`).
+
 ## 2026-09-25 — stripe webhook event routing tests
 
 - **Track / machine:** Clemson RIDES · deputy/webhook-validation-tests · pkg-webhook-validation-tests t2
