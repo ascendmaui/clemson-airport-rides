@@ -10,6 +10,7 @@ import {
   admin, cors, json, parseBody, userFromAuth, stripeClient, stripeOk,
   ensureStripeCustomer, computeRoutes,
 } from '../friendRideLib.js'
+import { ensureProfile } from '../ensureProfile.js'
 import {
   loadGameDayMultiplier, planSettlement, debitLots, insertChargePayment,
 } from '../creditLots.js'
@@ -24,6 +25,7 @@ import {
 } from '../../src/lib/fareRates.js'
 import { checkoutSuccessHash } from '../../packages/rides-native/liveTrip.js'
 import { cancelUnopenedCheckoutTrip, rememberCheckoutSession } from '../abandonedCheckout.js'
+import { WEB_ORIGIN } from '../../shared/productLinks.js'
 
 const CAMPUS = { label: 'Memorial Stadium', lat: 34.6788, lng: -82.843 }
 const AIRPORTS = {
@@ -31,14 +33,15 @@ const AIRPORTS = {
   CLT: { label: 'Charlotte Douglas International (CLT)', lat: 35.2144, lng: -80.9473 },
 }
 
-export default async function handler(req, res) {
+export default async function handler(req, res, deps = {}) {
   if (cors(req, res)) return
   if (req.method !== 'POST') return json(res, 405, { error: 'Method not allowed' })
 
-  const sb = admin()
+  const sb = deps.sb || admin()
   if (!sb) return json(res, 503, { error: 'SUPABASE_SERVICE_ROLE_KEY not configured' })
-  const user = await userFromAuth(req)
+  const user = deps.user !== undefined ? deps.user : await userFromAuth(req)
   if (!user) return json(res, 401, { error: 'Sign in required' })
+  const runEnsureProfile = deps.ensureProfile || ensureProfile
 
   const { body, error: pe } = parseBody(req)
   if (pe) return json(res, 400, { error: pe })
@@ -96,7 +99,8 @@ export default async function handler(req, res) {
   const depositCents = cardDepositCents(settlement.cashCents)
   const split = depositSplit(settlement.riderPaysCents, depositCents)
 
-  if (depositCents > 0 && !stripeOk()) {
+  const isStripeConfigured = deps.stripeOk ? deps.stripeOk() : stripeOk()
+  if (depositCents > 0 && !isStripeConfigured) {
     return json(res, 503, {
       error: 'Payments unavailable',
       message: 'STRIPE_SECRET_KEY is not configured. Checkout cannot start.',
@@ -104,6 +108,11 @@ export default async function handler(req, res) {
       depositCents,
       remainingCents: split.remainingCents,
     })
+  }
+
+  const profileRes = await runEnsureProfile(sb, user)
+  if (!profileRes?.ok) {
+    return json(res, 500, { error: 'Could not create your rider profile', code: 'profile_missing' })
   }
 
   const { data: trip, error: tripErr } = await sb
@@ -188,17 +197,17 @@ export default async function handler(req, res) {
   }
 
   try {
-    const stripe = stripeClient()
+    const stripe = deps.stripe || (deps.stripeClient ? deps.stripeClient() : stripeClient())
     let customerId = null
     if (profile) {
       try { customerId = await ensureStripeCustomer(stripe, sb, profile) } catch { /* guest checkout */ }
     }
-    const origin = body.origin || process.env.VITE_APP_URL || 'https://clemson-airport-rides.vercel.app'
+    const origin = body.origin || process.env.VITE_APP_URL || WEB_ORIGIN
     const depositFee = splitPlatformFee(depositCents)
     const session = await stripe.checkout.sessions.create({
       mode: 'payment',
       customer: customerId || undefined,
-      success_url: `${origin}/${checkoutSuccessHash({ tripId: trip.id, scheduled: Boolean(scheduledFor) })}`,
+      success_url: `${origin}/${checkoutSuccessHash({ tripId: trip.id, scheduled: Boolean(scheduledFor) })}&session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${origin}/#/schedule?canceled=1&trip=${trip.id}`,
       line_items: [{
         quantity: 1,

@@ -85,8 +85,8 @@ function memorySupabase(seed = {}) {
 }
 
 test('share links use the public /share/:token path', () => {
-  assert.equal(shareUrl('abc123'), 'https://clemson-airport-rides.vercel.app/share/abc123')
-  assert.equal(shareUrl('a b'), 'https://clemson-airport-rides.vercel.app/share/a%20b')
+  assert.equal(shareUrl('abc123'), 'https://clemson-rides.vercel.app/share/abc123')
+  assert.equal(shareUrl('a b'), 'https://clemson-rides.vercel.app/share/a%20b')
   assert.throws(() => shareUrl('  '), /Share token required/)
 })
 

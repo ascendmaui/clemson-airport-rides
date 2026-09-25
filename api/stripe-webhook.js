@@ -10,6 +10,9 @@ import { debitLots, grantCreditPack, insertChargePayment } from '../server/credi
 import { setPaymentHold } from '../server/collectPayment.js'
 import { classifyStripeError, failureResult } from '../shared/paymentFailure.js'
 import { releaseFromCheckoutEvent, restoreLiveTripAfterDeposit } from '../server/abandonedCheckout.js'
+import { applyPaidCheckoutSession, recordDeposit } from '../server/checkoutReconcile.js'
+
+export { recordDeposit, applyPaidCheckoutSession }
 
 export const config = { api: { bodyParser: false } }
 
@@ -86,84 +89,21 @@ async function recordCreditPurchase(session) {
   })
 }
 
-async function recordDeposit(session) {
-  if (!serviceKey) {
-    console.warn('[stripe-webhook] SUPABASE_SERVICE_ROLE_KEY missing — skip payments insert')
-    return { skipped: true, reason: 'no_service_role' }
-  }
-  const tripId = session?.metadata?.tripId
-  const riderId = session?.metadata?.riderId
-  if (!tripId || !riderId) {
-    console.warn('[stripe-webhook] missing metadata.tripId/riderId — skip insert', session?.metadata)
-    return { skipped: true, reason: 'missing_metadata' }
-  }
-  const supabase = serviceClient()
-  const amount = Number(session.amount_total) || Number(session.metadata?.depositCents) || 0
-  const piId = typeof session.payment_intent === 'string'
-    ? session.payment_intent
-    : session.payment_intent?.id || session.id
-  const split = splitPlatformFee(amount)
-  const { error } = await supabase.from('payments').insert({
-    trip_id: tripId,
-    rider_id: riderId,
-    stripe_payment_intent_id: piId,
-    kind: 'deposit',
-    amount_cents: split.amountCents,
-    platform_fee_cents: split.platformFeeCents,
-    driver_earnings_cents: split.driverEarningsCents,
-    status: 'succeeded',
-    metadata: { kind: session.metadata?.kind || 'deposit', airport: session.metadata?.airport || null },
-  })
-  if (error && !/duplicate|unique/i.test(error.message || '')) {
-    console.error('[stripe-webhook] payments insert', error)
-    return { ok: false, error: error.message }
-  }
+// Deposit paid-marking (payments insert, restoreLiveTripAfterDeposit, checkout_deposit stamp, referral)
+// is handled idempotently via applyPaidCheckoutSession in server/checkoutReconcile.js.
 
-  const { data: trip } = await supabase.from('trips').select('id, metadata').eq('id', tripId).maybeSingle()
-  const meta = trip?.metadata && typeof trip.metadata === 'object' ? trip.metadata : {}
-  const debits = Array.isArray(meta.pending_credit_debits) ? meta.pending_credit_debits : []
-  const nextMeta = { ...meta }
-  if (amount > 0) {
-    nextMeta.fare_paid_cents = Math.max(0, Math.round(Number(meta.fare_paid_cents) || 0) + amount)
-  }
-  // Happy-path paid marker for the driver match gate (restore path also stamps this).
-  if (!nextMeta.checkout_deposit || typeof nextMeta.checkout_deposit !== 'object') {
-    nextMeta.checkout_deposit = { session_id: session?.id || null, at: new Date().toISOString() }
-  }
-  if (debits.length && !meta.credits_applied) {
-    const credits = debits.reduce((sum, d) => sum + (Number(d.debitCents) || 0), 0)
-    await debitLots(supabase, {
-      profileId: riderId,
-      debits,
-      note: `airport-deposit:${session.id}`,
-      tripId,
-    })
-    if (credits > 0) {
-      await insertChargePayment(supabase, {
-        riderId,
-        tripId,
-        kind: 'ride_fare',
-        amountCents: credits,
-        metadata: { method: 'credits', checkout_session: session.id },
-      })
-    }
-    nextMeta.credits_applied = true
-    nextMeta.pending_credit_debits = []
-  }
-  if (trip) {
-    await supabase.from('trips').update({ metadata: nextMeta }).eq('id', tripId)
-  }
-  return { ok: true }
-}
-
-export default async function handler(req, res) {
+export default async function handler(req, res, deps = {}) {
   res.setHeader('Content-Type', 'application/json')
   if (req.method !== 'POST') {
     res.statusCode = 405
     return res.end(JSON.stringify({ error: 'Method not allowed' }))
   }
 
-  if (!stripeSecret || !stripeSecret.startsWith('sk_') || stripeSecret.includes('placeholder')) {
+  const stripeKey = deps.stripeSecret || process.env.STRIPE_SECRET_KEY || stripeSecret
+  const whSecret = deps.webhookSecret !== undefined ? deps.webhookSecret : (process.env.STRIPE_WEBHOOK_SECRET || webhookSecret)
+  const activeServiceKey = deps.serviceKey !== undefined ? deps.serviceKey : (process.env.SUPABASE_SERVICE_ROLE_KEY || serviceKey)
+
+  if (!stripeKey || !stripeKey.startsWith('sk_') || stripeKey.includes('placeholder')) {
     res.statusCode = 200
     return res.end(JSON.stringify({
       stub: true,
@@ -172,12 +112,12 @@ export default async function handler(req, res) {
   }
 
   try {
-    const stripe = new Stripe(stripeSecret)
+    const stripe = new Stripe(stripeKey)
     const rawBody = await readRawBody(req)
     let event
-    if (webhookSecret && !webhookSecret.includes('placeholder')) {
+    if (whSecret && !whSecret.includes('placeholder')) {
       const sig = req.headers['stripe-signature']
-      event = stripe.webhooks.constructEvent(rawBody, sig, webhookSecret)
+      event = stripe.webhooks.constructEvent(rawBody, sig, whSecret)
     } else {
       event = JSON.parse(rawBody.toString('utf8'))
     }
@@ -197,13 +137,14 @@ export default async function handler(req, res) {
         message: pi?.last_payment_error?.message,
       })
       let held = false
-      if (tripId && serviceKey) {
+      if (tripId && activeServiceKey) {
         const failure = failureResult(code, {
           amountCents: pi?.amount || 0,
           tripId,
           kind: pi?.metadata?.kind || 'balance',
         })
-        await setPaymentHold(serviceClient(), tripId, failure)
+        const client = deps.serviceClient ? deps.serviceClient() : serviceClient()
+        await setPaymentHold(client, tripId, failure)
         held = true
         console.error('[stripe-webhook] payment_failed', { tripId, code, pi: pi?.id })
       }
@@ -213,7 +154,10 @@ export default async function handler(req, res) {
 
     if (event.type === 'checkout.session.expired' || event.type === 'checkout.session.async_payment_failed') {
       let released = { released: false, reason: 'no_service_role' }
-      if (serviceKey) released = await releaseFromCheckoutEvent(serviceClient(), event)
+      if (activeServiceKey) {
+        const client = deps.serviceClient ? deps.serviceClient() : serviceClient()
+        released = await releaseFromCheckoutEvent(client, event)
+      }
       console.log('[stripe-webhook] checkout abandoned', { type: event.type, id: event.data?.object?.id, released })
       const retryable = released?.reason === 'update_failed'
         || released?.reason === 'trip_unreadable'
@@ -230,24 +174,14 @@ export default async function handler(req, res) {
         res.statusCode = 200
         return res.end(JSON.stringify({ received: true, type: event.type, granted }))
       }
-      const recorded = await recordDeposit(session)
-      const paid = session?.payment_status === 'paid'
-        || session?.payment_status === 'no_payment_required'
-        || event.type === 'checkout.session.async_payment_succeeded'
-      // A canceled Checkout can mark the trip canceled before a late success
-      // lands. Put that paid trip back in searching (or scheduled) once.
-      let live = null
-      if (serviceKey && paid) live = await restoreLiveTripAfterDeposit(serviceClient(), session)
-      // Payment success hook. Grant is idempotent and does nothing until the
-      // trip itself is completed (deposits alone do not reward signups).
-      let referral = null
-      const tripId = session?.metadata?.tripId
-      if (serviceKey && tripId) {
-        const supabase = createClient(supabaseUrl, serviceKey, {
-          auth: { persistSession: false, autoRefreshToken: false },
-        })
-        referral = await grantRiderSocialForTrip(supabase, tripId)
-      }
+      const client = deps.serviceClient ? deps.serviceClient() : (serviceKey ? serviceClient() : null)
+      const applyFn = deps.applyPaidCheckoutSession || applyPaidCheckoutSession
+      const applied = await applyFn(client, session, {
+        restoreLiveTripAfterDeposit: deps.restoreLiveTripAfterDeposit || restoreLiveTripAfterDeposit,
+        grantRiderSocialForTrip: deps.grantRiderSocialForTrip || grantRiderSocialForTrip,
+        isAsyncPaymentSucceeded: event.type === 'checkout.session.async_payment_succeeded',
+      })
+      const { recorded, live, referral } = applied
       console.log('[stripe-webhook] checkout.session.completed', {
         id: session?.id,
         metadata: session?.metadata,

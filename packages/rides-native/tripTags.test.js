@@ -1,7 +1,10 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import {
+  APPLE_PAY_DRIVER_COPY,
   declineDisposition,
+  driverFareNote,
+  NO_DEPOSIT_DRIVER_COPY,
   depositSliceCents,
   isAirportDepositPaid,
   isAirportDepositTrip,
@@ -315,4 +318,18 @@ test('unpaid airport deposit trips are gated out of the open pool until paid', (
     }),
     false,
   )
+})
+
+test('driver fare note is short, driver-friendly, and only mentions a deposit when one was taken', () => {
+  assert.equal(
+    driverFareNote(1850),
+    'The rider already paid a 25% deposit. The rest is charged to their card automatically when you complete the trip.',
+  )
+  assert.equal(driverFareNote(1850), APPLE_PAY_DRIVER_COPY)
+  assert.equal(driverFareNote(0), NO_DEPOSIT_DRIVER_COPY)
+  assert.doesNotMatch(driverFareNote(0), /deposit/i)
+  for (const copy of [APPLE_PAY_DRIVER_COPY, NO_DEPOSIT_DRIVER_COPY]) {
+    assert.doesNotMatch(copy, /Stripe|settle|server|Apple Pay sheet/i)
+    assert.ok(copy.length <= 120, copy)
+  }
 })

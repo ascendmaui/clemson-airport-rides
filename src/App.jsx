@@ -103,7 +103,7 @@ function Screen({ path, params }) {
         />
       )
     case 'requested':
-      return <Requested dest={params.dest} trip={params.trip} driver={params.driver} paid={params.paid || ''} payfail={params.payfail || ''} />
+      return <Requested dest={params.dest} trip={params.trip} driver={params.driver} paid={params.paid || ''} payfail={params.payfail || ''} sessionId={params.session_id || params.sessionId || ''} />
     case 'schedule':
       return <ScheduleAirport />
     case 'driver':

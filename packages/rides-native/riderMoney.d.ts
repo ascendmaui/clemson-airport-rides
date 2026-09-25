@@ -1,3 +1,5 @@
+export { authedJson } from './apiClient.js'
+
 export const AIRPORT_CHOICES: { code: 'GSP' | 'CLT'; name: string }[]
 
 export type AirportQuote = {
@@ -36,6 +38,11 @@ export function abandonAirportCheckout(
   supabase: unknown,
   input?: { tripId?: string; sessionId?: string },
 ): Promise<CheckoutCloseResult>
+
+export function reconcileCheckout(
+  supabase: unknown,
+  sessionId: string | { sessionId?: string; session_id?: string },
+): Promise<{ ok: boolean; paid?: boolean; alreadyRecorded?: boolean; tripId?: string; error?: string }>
 
 export function quoteInputKey(input?: { airport?: string; date?: string; time?: string }): string
 
