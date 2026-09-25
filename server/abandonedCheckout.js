@@ -8,6 +8,8 @@
  * releaseExpiredUnpaidAirportHolds cancels the unpaid airport hold after
  * UNPAID_AIRPORT_HOLD_TTL_MS. The cancel uses the same trip update and trip_event
  * as the webhook, including checkout_abandoned, so a later paid deposit still restores.
+ * Overlapping sweeps expire an open Checkout session only after a conditional
+ * claim, and write trip_events only when the status update still matches.
  */
 import { isAirportDepositPaid, isAirportDepositTrip } from '../packages/rides-native/tripTags.js'
 
@@ -171,21 +173,23 @@ function metaObject(trip) {
 
 async function writeCanceled(sb, trip, session, { reason, source }) {
   const canceledAt = new Date().toISOString()
-  const nextMeta = {
-    ...metaObject(trip),
-    checkout_abandoned: {
-      session_id: session?.id || null,
-      reason,
-      source,
-      at: canceledAt,
-    },
+  const nextMeta = { ...metaObject(trip) }
+  delete nextMeta.hold_expire_claim
+  nextMeta.checkout_abandoned = {
+    session_id: session?.id || null,
+    reason,
+    source,
+    at: canceledAt,
   }
+  // Conditional update: only the sweep that still sees a live hold writes
+  // the cancel and, below, the trip_events row.
   const { data, error } = await sb
     .from('trips')
     .update({ status: 'canceled', canceled_at: canceledAt, metadata: nextMeta })
     .eq('id', trip.id)
     .in('status', UNPAID_CHECKOUT_STATUSES)
     .is('driver_id', null)
+    .is('metadata->>checkout_abandoned', null)
     .select('id, status')
     .maybeSingle()
   if (error) return { released: false, reason: 'update_failed', error: error.message }
@@ -318,6 +322,15 @@ export async function releaseUnpaidCheckoutTrip(sb, session, {
     if (typeof expireSession !== 'function') {
       return { released: false, reason: 'still_open', status: trip?.status || null }
     }
+    const claim = await claimStripeExpire(sb, trip)
+    if (!claim.won) {
+      return {
+        released: false,
+        reason: claim.reason,
+        status: claim.status || trip?.status || null,
+        ...(claim.error ? { error: claim.error } : {}),
+      }
+    }
     try {
       const expired = await expireSession(active.id)
       active = {
@@ -336,9 +349,17 @@ export async function releaseUnpaidCheckoutTrip(sb, session, {
         }
       }
       const readErr = await refresh()
-      if (readErr) return { released: false, reason: 'trip_unreadable', error: readErr.message }
+      if (readErr) {
+        await releaseExpireClaim(sb, tripId)
+        return { released: false, reason: 'trip_unreadable', error: readErr.message }
+      }
       decision = decideAbandonedCheckout({ trip, session: active, payments: deposits.payments, failed })
-      if (decision.action === 'keep' && decision.reason === 'paid') return keepPaid(sb, active, trip)
+      if (decision.action === 'keep' && decision.reason === 'paid') {
+        const kept = await keepPaid(sb, active, trip)
+        await releaseExpireClaim(sb, tripId)
+        return kept
+      }
+      await releaseExpireClaim(sb, tripId)
       return {
         released: false,
         reason: 'still_open',
@@ -347,15 +368,24 @@ export async function releaseUnpaidCheckoutTrip(sb, session, {
       }
     }
     const readErr = await refresh()
-    if (readErr) return { released: false, reason: 'trip_unreadable', error: readErr.message }
+    if (readErr) {
+      await releaseExpireClaim(sb, tripId)
+      return { released: false, reason: 'trip_unreadable', error: readErr.message }
+    }
     decision = decideAbandonedCheckout({ trip, session: active, payments: deposits.payments, failed })
-    if (decision.action === 'keep' && decision.reason === 'paid') return keepPaid(sb, active, trip)
+    if (decision.action === 'keep' && decision.reason === 'paid') {
+      const kept = await keepPaid(sb, active, trip)
+      await releaseExpireClaim(sb, tripId)
+      return kept
+    }
   }
 
   if (decision.action !== 'cancel') {
     return { released: false, reason: decision.reason, status: decision.status || trip?.status || null }
   }
-  return writeCanceled(sb, trip, active, { reason, source })
+  const written = await writeCanceled(sb, trip, active, { reason, source })
+  if (!written.released) await releaseExpireClaim(sb, tripId)
+  return written
 }
 
 export async function releaseFromCheckoutEvent(sb, event, extras = {}) {
@@ -415,6 +445,73 @@ const STRIPE_TERMINAL_REASONS = new Set([
   'missing_trip',
 ])
 
+/** A crashed claim can be taken over on a later cron tick. */
+const HOLD_EXPIRE_CLAIM_MS = 2 * 60 * 1000
+
+function claimIsFresh(claim, now) {
+  if (!claim || typeof claim !== 'object') return false
+  const at = parsedMs(claim.at)
+  if (at == null) return false
+  return now - at < HOLD_EXPIRE_CLAIM_MS
+}
+
+/**
+ * One overlapping sweep expires an open Checkout session. The update matches
+ * only while checkout_abandoned is unset and no fresh claim is stored.
+ */
+async function claimStripeExpire(sb, trip, now = Date.now()) {
+  const loaded = await loadTrip(sb, trip?.id)
+  if (loaded.error) return { won: false, reason: 'trip_unreadable', error: loaded.error.message }
+  if (!loaded.trip) return { won: false, reason: 'missing_trip' }
+  const fresh = loaded.trip
+  const meta = metaObject(fresh)
+  if (meta.checkout_abandoned && typeof meta.checkout_abandoned === 'object') {
+    return { won: false, reason: 'already_abandoned', status: fresh.status }
+  }
+  if (fresh.driver_id || !UNPAID_CHECKOUT_STATUSES.includes(fresh.status)) {
+    return { won: false, reason: 'not_in_pool', status: fresh.status }
+  }
+  const existing = meta.hold_expire_claim
+  if (claimIsFresh(existing, now)) {
+    return { won: false, reason: 'expire_in_progress', status: fresh.status }
+  }
+  const claim = { at: new Date(now).toISOString() }
+  const nextMeta = { ...meta, hold_expire_claim: claim }
+  let update = sb
+    .from('trips')
+    .update({ metadata: nextMeta })
+    .eq('id', fresh.id)
+    .in('status', UNPAID_CHECKOUT_STATUSES)
+    .is('driver_id', null)
+    .is('metadata->>checkout_abandoned', null)
+  if (existing && typeof existing === 'object' && existing.at) {
+    update = update.eq('metadata->hold_expire_claim->>at', existing.at)
+  } else {
+    update = update.is('metadata->>hold_expire_claim', null)
+  }
+  const { data, error } = await update.select('id').maybeSingle()
+  if (error) return { won: false, reason: 'claim_failed', error: error.message }
+  if (!data) return { won: false, reason: 'expire_in_progress', status: fresh.status }
+  return { won: true, status: fresh.status }
+}
+
+async function releaseExpireClaim(sb, tripId) {
+  if (!tripId) return
+  const loaded = await loadTrip(sb, tripId)
+  if (loaded.error || !loaded.trip) return
+  if (loaded.trip.driver_id || !UNPAID_CHECKOUT_STATUSES.includes(loaded.trip.status)) return
+  const meta = { ...metaObject(loaded.trip) }
+  if (!meta.hold_expire_claim) return
+  delete meta.hold_expire_claim
+  await sb
+    .from('trips')
+    .update({ metadata: meta })
+    .eq('id', tripId)
+    .in('status', UNPAID_CHECKOUT_STATUSES)
+    .is('driver_id', null)
+    .is('metadata->>checkout_abandoned', null)
+}
+
 async function cancelExpiredHold(sb, trip, sessionId, { now, ttlMs }) {
   const deposits = await loadDeposits(sb, trip.id)
   if (deposits.error) {
@@ -446,6 +543,45 @@ async function cancelExpiredHold(sb, trip, sessionId, { now, ttlMs }) {
   return { ...written, tripId: trip.id }
 }
 
+function holdSweepError(row) {
+  if (!row || row.released || row.wouldExpire) return false
+  if (row.error) return true
+  return row.reason === 'error'
+    || row.reason === 'payments_unreadable'
+    || row.reason === 'trip_unreadable'
+    || row.reason === 'update_failed'
+    || row.reason === 'claim_failed'
+    || row.reason === 'list_failed'
+}
+
+function summarizeHoldSweep(results, { dryRun = false } = {}) {
+  const expired = results.filter((row) => row.released).length
+  const errors = results.filter((row) => holdSweepError(row)).length
+  const wouldExpire = results.filter((row) => row.wouldExpire).length
+  const skipped = Math.max(0, results.length - expired - errors - wouldExpire)
+  return {
+    ok: true,
+    dryRun: Boolean(dryRun),
+    scanned: results.length,
+    expired,
+    released: expired,
+    skipped,
+    errors,
+    wouldExpire,
+    results,
+  }
+}
+
+function stripeStopsHoldSweep(released) {
+  return Boolean(
+    released?.released
+    || released?.error
+    || released?.reason === 'expire_in_progress'
+    || released?.reason === 'already_abandoned'
+    || STRIPE_TERMINAL_REASONS.has(released?.reason),
+  )
+}
+
 /** Cancel one unpaid airport hold that has aged past the TTL. Safe to retry. */
 export async function releaseExpiredUnpaidAirportHold(sb, trip, {
   now = Date.now(),
@@ -453,6 +589,7 @@ export async function releaseExpiredUnpaidAirportHold(sb, trip, {
   payments,
   expireSession,
   retrieveSession,
+  dryRun = false,
 } = {}) {
   if (!trip?.id) return { released: false, reason: 'missing_trip' }
 
@@ -480,6 +617,41 @@ export async function releaseExpiredUnpaidAirportHold(sb, trip, {
   }
 
   const sessionId = boundSessionId(trip)
+  if (dryRun) {
+    if (sessionId && typeof retrieveSession === 'function') {
+      try {
+        const session = await retrieveSession(sessionId)
+        if (session && typeof session === 'object') {
+          const kind = session.metadata?.kind
+          const sessionTripId = session.metadata?.tripId
+          const sameDeposit = (!kind || kind === 'airport_deposit') && (!sessionTripId || sessionTripId === trip.id)
+          if (sameDeposit) {
+            const state = sessionPaymentState(session)
+            if (state === 'paid' || state === 'async_pending') {
+              return {
+                released: false,
+                reason: state === 'paid' ? 'paid' : 'async_pending',
+                status: trip.status,
+                tripId: trip.id,
+                dryRun: true,
+              }
+            }
+          }
+        }
+      } catch {
+        /* Dry run reports the database decision and does not write. */
+      }
+    }
+    return {
+      released: false,
+      wouldExpire: true,
+      dryRun: true,
+      reason: 'unpaid_hold_ttl',
+      status: trip.status,
+      tripId: trip.id,
+    }
+  }
+
   if (sessionId && typeof retrieveSession === 'function') {
     try {
       const session = await retrieveSession(sessionId)
@@ -501,9 +673,7 @@ export async function releaseExpiredUnpaidAirportHold(sb, trip, {
             expireSession,
             retrieveSession,
           })
-          if (released.released || STRIPE_TERMINAL_REASONS.has(released.reason)) {
-            return { ...released, tripId: trip.id }
-          }
+          if (stripeStopsHoldSweep(released)) return { ...released, tripId: trip.id }
         }
       }
     } catch {
@@ -517,7 +687,8 @@ export async function releaseExpiredUnpaidAirportHold(sb, trip, {
 /**
  * Cancel unpaid airport-deposit searching, offered, and scheduled holds whose
  * created_at is at least ttlMs ago. A newer stripe_checkout_created_at keeps
- * the row. Paid deposits and non-airport trips are not updated.
+ * the row. Paid deposits and non-airport trips are not updated. limit is
+ * capped at 40. dryRun reports wouldExpire and does not write.
  */
 export async function releaseExpiredUnpaidAirportHolds(sb, {
   now = Date.now(),
@@ -525,7 +696,9 @@ export async function releaseExpiredUnpaidAirportHolds(sb, {
   limit = 40,
   expireSession,
   retrieveSession,
+  dryRun = false,
 } = {}) {
+  const batchSize = Math.min(40, Math.max(1, Number(limit) || 40))
   const cutoff = new Date(now - ttlMs).toISOString()
   const listed = await sb
     .from('trips')
@@ -535,23 +708,40 @@ export async function releaseExpiredUnpaidAirportHolds(sb, {
     .gt('deposit_cents', 0)
     .lte('created_at', cutoff)
     .order('created_at', { ascending: true })
-    .limit(limit)
+    .limit(batchSize)
   if (listed.error) {
-    return { ok: false, reason: 'list_failed', error: listed.error.message, scanned: 0, released: 0, results: [] }
+    return {
+      ok: false,
+      reason: 'list_failed',
+      error: listed.error.message,
+      dryRun: Boolean(dryRun),
+      scanned: 0,
+      expired: 0,
+      released: 0,
+      skipped: 0,
+      errors: 1,
+      wouldExpire: 0,
+      results: [],
+    }
   }
   const results = []
   for (const trip of listed.data || []) {
-    results.push(await releaseExpiredUnpaidAirportHold(sb, trip, {
-      now,
-      ttlMs,
-      expireSession,
-      retrieveSession,
-    }))
+    try {
+      results.push(await releaseExpiredUnpaidAirportHold(sb, trip, {
+        now,
+        ttlMs,
+        expireSession: dryRun ? undefined : expireSession,
+        retrieveSession,
+        dryRun,
+      }))
+    } catch (err) {
+      results.push({
+        released: false,
+        reason: 'error',
+        error: err?.message || 'hold_failed',
+        tripId: trip?.id || null,
+      })
+    }
   }
-  return {
-    ok: true,
-    scanned: results.length,
-    released: results.filter((row) => row.released).length,
-    results,
-  }
+  return summarizeHoldSweep(results, { dryRun })
 }
