@@ -2,6 +2,16 @@
 
 Persistent knowledge base for recurring failures. When a matching issue appears, apply the saved fix first.
 
+## 2026-09-24 — Strip multiple trailing slashes in carpoolApi base override (pkg-carpool-api-tests t2)
+
+- **Track / machine:** Clemson RIDES · deputy/carpool-api-tests
+- **Problem:** `setCarpoolApiBase` in `packages/rides-native/shared/carpoolApi.js` used `.replace(/\/$/, '')`, which only stripped a single trailing slash. Passing a base URL with multiple trailing slashes (e.g. from environment configuration) left residual slashes and caused malformed concatenated endpoint URLs like `${apiBase()}${path}`.
+- **What was changed:** Updated regex in `setCarpoolApiBase` to `.replace(/\/+$/, '')` to strip all trailing slashes while preserving valid-input behavior. Updated unit tests in `packages/rides-native/shared/carpoolApi.test.js` to assert multiple trailing slashes are cleanly removed.
+- **Files touched:**
+  - `packages/rides-native/shared/carpoolApi.js`
+  - `packages/rides-native/shared/carpoolApi.test.js`
+  - `docs/FIXES.md`
+
 ## 2026-09-24 — Carpool API client unit test suite (pkg-carpool-api-tests t1)
 
 - **Track / machine:** Clemson RIDES · deputy/carpool-api-tests

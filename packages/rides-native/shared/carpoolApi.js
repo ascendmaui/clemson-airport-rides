@@ -8,7 +8,7 @@ const DEFAULT_API = 'https://clemson-airport-rides.vercel.app'
 let baseOverride = ''
 
 export function setCarpoolApiBase(base) {
-  baseOverride = String(base || '').replace(/\/$/, '')
+  baseOverride = String(base || '').replace(/\/+$/, '')
 }
 
 export function apiBase() {

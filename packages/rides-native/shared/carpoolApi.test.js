@@ -70,9 +70,11 @@ test('setCarpoolApiBase / apiBase: defaults, strips trailing slash, and resets o
   setCarpoolApiBase('http://localhost:3000')
   assert.equal(apiBase(), 'http://localhost:3000')
 
-  // BUG?: setCarpoolApiBase only strips a single trailing slash because it uses replace(/\/$/, '') instead of replace(/\/+$/, '')
+  // Robustness fix: strips multiple trailing slashes cleanly
   setCarpoolApiBase('https://custom-host.com//')
-  assert.equal(apiBase(), 'https://custom-host.com/')
+  assert.equal(apiBase(), 'https://custom-host.com')
+  setCarpoolApiBase('https://custom-host.com///')
+  assert.equal(apiBase(), 'https://custom-host.com')
 
   // Override reset via empty string, null, and undefined
   setCarpoolApiBase('')
