@@ -2,6 +2,13 @@
 
 Persistent knowledge base for recurring failures. When a matching issue appears, apply the saved fix first.
 
+## 2026-09-24 — Unpaid airport hold expiry is safe for an external cron
+
+- **Track / machine:** I9 · Deputy · deputy/hold-expiry-hardening
+- **Problem:** `GET`/`POST /api/expire-unpaid-airport-holds` treated a spoofable `x-vercel-cron: 1` header as authorization whenever `CRON_SECRET` was unset, compared the bearer token with `===`, and could expire the same Stripe Checkout session twice when an external cron and another sweep overlapped. A Stripe expire failure was not reported as a per-trip error, and a 500 response could echo the internal error message. The route also answered browser CORS preflight.
+- **Fix:** The bearer secret is trimmed and compared with `crypto.timingSafeEqual` on equal-length buffers. `x-vercel-cron` is accepted only when `CRON_SECRET` is unset or a placeholder and `VERCEL` is set. An open-session expire is claimed with a conditional metadata update. The cancel updates a row only while its status is still searching/offered/scheduled, `driver_id` is null, and `checkout_abandoned` is unset; only that winner inserts `trip_events`. A Stripe expire error is stored on that trip's result, the claim is released, and the batch continues. The handler returns 405, 401, 503, and a generic 500 (detail logged server-side), with counts `scanned` / `expired` / `skipped` / `errors`. `?dry_run=1` reports `wouldExpire` and does not write. Browser CORS is not set. The batch stays capped at 40. `vercel.json` was not changed.
+- **Files:** `server/endpoints/expireUnpaidAirportHolds.js`, `server/abandonedCheckout.js`, `server/abandonedCheckout.test.js`, `api/expire-unpaid-airport-holds.js`, `SHIP_NOTES.md`, `docs/FIXES.md`
+
 ## 2026-09-24 — Remove Clerk: Apple + Google social sign-in directly on Supabase Auth
 
 - **Track / machine:** Clemson RIDES · worktree feat/supabase-auth-remove-clerk
