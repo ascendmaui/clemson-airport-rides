@@ -2,6 +2,17 @@
 
 Persistent knowledge base for recurring failures. When a matching issue appears, apply the saved fix first.
 
+## 2026-09-25 — Wire apiOrigin unit tests into npm test [t3]
+
+- **Date:** 2026-09-25
+- **Track / machine:** Clemson RIDES · worktree deputy-pkg-api-origin-tests-20260925041913 · pkg-api-origin-tests-20260925041913 t3
+- **What was wrong:** `packages/rides-native/apiOrigin.test.js` was not the last entry of the `package.json` `test` script following upstream branch updates and merges.
+- **What changed:** Appended `packages/rides-native/apiOrigin.test.js` as the final test suite in the `test` script in `package.json`.
+- **Files touched:**
+  - `package.json`
+  - `docs/FIXES.md`
+- **Verified:** `TZ=UTC npm test` runs cleanly and passes all test suites.
+
 ## 2026-09-25 — Fall back to DEFAULT_API_BASE on bare scheme without host in resolveApiBase [t2]
 
 - **Date:** 2026-09-25
