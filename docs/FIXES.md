@@ -2,6 +2,27 @@
 
 Persistent knowledge base for recurring failures. When a matching issue appears, apply the saved fix first.
 
+## 2026-09-24 — Add unit test coverage for driverOnboardingClient (task t1)
+
+- **Track / machine:** Clemson RIDES · worktree deputy-pkg-driver-onboarding-tests
+- **Problem:** `packages/rides-native/driverOnboardingClient.js` lacked dedicated unit test coverage for its exports, Supabase query chains, RPC handling, API fallbacks, schema-error degradation, and TIN confidentiality guarantee.
+- **Fix:** Created `packages/rides-native/driverOnboardingClient.test.js` covering every export without requiring a real device, Supabase instance, or network:
+  - Validated version constants and shared re-exports.
+  - Formatted agreement plain text from HTML, preserving headings/paragraphs and marking edge cases.
+  - Verified requireClient-style error checks on save paths and documented `fetch*` null-return behavior with `// BUG?:` annotations.
+  - Tested chained Supabase queries for applications, documents, tax profile, and contractor agreement, including schema cache error fallback paths.
+  - Validated `loadOnboarding` aggregation for empty vs fully-completed states.
+  - Verified `saveDriverTaxInfo` and `saveDriverW9` payload shapes to RPC/database, strictly asserting that raw TIN digits are never printed to console logs.
+  - Tested `signDriverAgreement` and `submitDriverReview` happy paths and auth-missing/API-unavailable direct fallback paths.
+  - Tested `uploadDriverDocument` validations, storage upload, document upsert, old file cleanup, and schema fallback.
+  - Tested `saveDriverInfo` quiz validations and API signup with direct save fallback.
+  - Added test suite to root `package.json` test script.
+- **Files touched:**
+  - `packages/rides-native/driverOnboardingClient.test.js`
+  - `package.json`
+  - `docs/FIXES.md`
+- **Verified:** 21/21 tests pass via `node --experimental-strip-types --test packages/rides-native/driverOnboardingClient.test.js`; full test suite passes 372/372.
+
 ## 2026-09-24 — Remove Clerk: Apple + Google social sign-in directly on Supabase Auth
 
 - **Track / machine:** Clemson RIDES · worktree feat/supabase-auth-remove-clerk
