@@ -2,6 +2,15 @@
 
 Persistent knowledge base for recurring failures. When a matching issue appears, apply the saved fix first.
 
+## 2026-09-25 — partyProfile tests run from the root npm test script
+
+- **Track / machine:** Clemson RIDES · deputy/party-profile-tests · pkg-party-profile-tests t3
+- **What was wrong:** `packages/rides-native/partyProfile.test.js` was added on this branch in t1/t2. The root `npm test` script is an explicit file list, so a missing entry would skip the signup, draft-merge, and rating checks.
+- **What changed:** The `test` script in `package.json` already lists `packages/rides-native/partyProfile.test.js` once, immediately after `packages/rides-native/riderMoney.test.js`. Left that entry in place. No other `package.json` field changed.
+- **Files touched:**
+  - `docs/FIXES.md`
+- **Verified:** `npm test` (816/816 passing). The partyProfile file is tests 295–325 (31/31).
+
 ## 2026-09-25 — signup draft fills whitespace-only profile metadata
 
 - **Track / machine:** Clemson RIDES · deputy/party-profile-tests · pkg-party-profile-tests t2
