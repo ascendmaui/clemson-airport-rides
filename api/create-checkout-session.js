@@ -136,7 +136,7 @@ export default async function handler(req, res) {
     const fareSplit = splitPlatformFee(priced.fareCents)
     const session = await stripe.checkout.sessions.create({
       mode: 'payment',
-      success_url: `${origin}/${checkoutSuccessHash({ tripId, scheduled: Boolean(scheduledFor) })}`,
+      success_url: `${origin}/${checkoutSuccessHash({ tripId, scheduled: Boolean(scheduledFor) })}&session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${origin}/#/schedule?canceled=1&trip=${tripId}`,
       line_items: [{
         quantity: 1,

@@ -1,12 +1,15 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { Readable } from 'node:stream'
+import { readFileSync } from 'node:fs'
 import {
   applyPaidCheckoutSession,
   reconcileCheckoutSession,
   recordDeposit,
 } from './checkoutReconcile.js'
 import webhookHandler from '../api/stripe-webhook.js'
+import reconcileCheckoutHandler from './endpoints/reconcileCheckout.js'
+import stripePaymentHandler from '../api/stripe-payment-methods.js'
 
 function createMockDb() {
   const trips = new Map()
@@ -539,4 +542,257 @@ test('webhook still works through the shared function', async () => {
   } finally {
     process.env.STRIPE_SECRET_KEY = origKey
   }
+})
+
+test('reconcileCheckout endpoint: 405 on non-POST method', async () => {
+  const req = { method: 'GET', url: '/api/stripe-payment-methods?action=reconcile-checkout' }
+  const res = mockRes()
+  await reconcileCheckoutHandler(req, res)
+  assert.equal(res.statusCode, 405)
+  const body = JSON.parse(res.body)
+  assert.match(body.error, /Method not allowed/)
+})
+
+test('reconcileCheckout endpoint: 503 when Stripe is not configured', async () => {
+  const req = { method: 'POST', url: '/api/stripe-payment-methods?action=reconcile-checkout', body: { sessionId: 'cs_123' } }
+  const res = mockRes()
+  await reconcileCheckoutHandler(req, res, {
+    stripeOk: () => false,
+    stripe: null,
+  })
+  assert.equal(res.statusCode, 503)
+  const body = JSON.parse(res.body)
+  assert.match(body.error, /Payments unavailable/)
+})
+
+test('reconcileCheckout endpoint: 503 when service role is not configured', async () => {
+  const req = { method: 'POST', url: '/api/stripe-payment-methods?action=reconcile-checkout', body: { sessionId: 'cs_123' } }
+  const res = mockRes()
+  await reconcileCheckoutHandler(req, res, {
+    stripeOk: () => true,
+    stripe: {},
+    sb: null,
+  })
+  assert.equal(res.statusCode, 503)
+  const body = JSON.parse(res.body)
+  assert.match(body.error, /SUPABASE_SERVICE_ROLE_KEY not configured/)
+})
+
+test('reconcileCheckout endpoint: 401 when not signed in', async () => {
+  const req = { method: 'POST', url: '/api/stripe-payment-methods?action=reconcile-checkout', headers: {}, body: { sessionId: 'cs_123' } }
+  const res = mockRes()
+  await reconcileCheckoutHandler(req, res, {
+    stripeOk: () => true,
+    stripe: {},
+    sb: {},
+    userFromAuth: async () => null,
+  })
+  assert.equal(res.statusCode, 401)
+  const body = JSON.parse(res.body)
+  assert.match(body.error, /Sign in required/)
+})
+
+test('reconcileCheckout endpoint: 400 when sessionId is missing', async () => {
+  const req = { method: 'POST', url: '/api/stripe-payment-methods?action=reconcile-checkout', body: {} }
+  const res = mockRes()
+  await reconcileCheckoutHandler(req, res, {
+    stripeOk: () => true,
+    stripe: {},
+    sb: {},
+    user: { id: 'rider_ada' },
+  })
+  assert.equal(res.statusCode, 400)
+  const body = JSON.parse(res.body)
+  assert.match(body.error, /sessionId required/)
+})
+
+test('reconcileCheckout endpoint: 400 when sessionId is invalid format', async () => {
+  const req = { method: 'POST', url: '/api/stripe-payment-methods?action=reconcile-checkout', body: { sessionId: 'not_a_checkout_session' } }
+  const res = mockRes()
+  await reconcileCheckoutHandler(req, res, {
+    stripeOk: () => true,
+    stripe: {},
+    sb: {},
+    user: { id: 'rider_ada' },
+  })
+  assert.equal(res.statusCode, 400)
+  const body = JSON.parse(res.body)
+  assert.equal(body.error, 'invalid_session_id')
+})
+
+test('reconcileCheckout endpoint: 403 when session belongs to a different rider', async () => {
+  const db = createMockDb()
+  db.seedTrip({
+    id: 'trip_other',
+    rider_id: 'rider_bob',
+    status: 'searching',
+    metadata: { purpose: 'airport' },
+  })
+
+  const session = {
+    id: 'cs_other_1',
+    status: 'complete',
+    payment_status: 'paid',
+    amount_total: 2500,
+    payment_intent: 'pi_other_1',
+    metadata: {
+      tripId: 'trip_other',
+      riderId: 'rider_bob',
+    },
+  }
+  const stripe = createMockStripe(new Map([[session.id, session]]))
+
+  const req = { method: 'POST', url: '/api/stripe-payment-methods?action=reconcile-checkout', body: { sessionId: 'cs_other_1' } }
+  const res = mockRes()
+  await reconcileCheckoutHandler(req, res, {
+    stripe,
+    sb: db,
+    user: { id: 'rider_ada' },
+  })
+  assert.equal(res.statusCode, 403)
+  const body = JSON.parse(res.body)
+  assert.equal(body.error, 'forbidden')
+})
+
+test('reconcileCheckout endpoint: 200 when unpaid session', async () => {
+  const db = createMockDb()
+  db.seedTrip({
+    id: 'trip_unpaid_ep',
+    rider_id: 'rider_ada',
+    status: 'searching',
+    metadata: { purpose: 'airport' },
+  })
+
+  const session = {
+    id: 'cs_unpaid_ep',
+    status: 'open',
+    payment_status: 'unpaid',
+    metadata: {
+      tripId: 'trip_unpaid_ep',
+      riderId: 'rider_ada',
+    },
+  }
+  const stripe = createMockStripe(new Map([[session.id, session]]))
+
+  const req = { method: 'POST', url: '/api/stripe-payment-methods?action=reconcile-checkout', body: { sessionId: 'cs_unpaid_ep' } }
+  const res = mockRes()
+  await reconcileCheckoutHandler(req, res, {
+    stripe,
+    sb: db,
+    user: { id: 'rider_ada' },
+  })
+  assert.equal(res.statusCode, 200)
+  const body = JSON.parse(res.body)
+  assert.equal(body.ok, true)
+  assert.equal(body.paid, false)
+  assert.equal(body.tripId, 'trip_unpaid_ep')
+})
+
+test('reconcileCheckout endpoint: 200 when paid session and marks paid idempotently', async () => {
+  const db = createMockDb()
+  db.seedTrip({
+    id: 'trip_paid_ep',
+    rider_id: 'rider_ada',
+    status: 'searching',
+    metadata: { purpose: 'airport', deposit_cents: 2500 },
+  })
+
+  const session = {
+    id: 'cs_paid_ep',
+    status: 'complete',
+    payment_status: 'paid',
+    amount_total: 2500,
+    payment_intent: 'pi_paid_ep',
+    metadata: {
+      tripId: 'trip_paid_ep',
+      riderId: 'rider_ada',
+      airport: 'GSP',
+      kind: 'airport_deposit',
+    },
+  }
+  const stripe = createMockStripe(new Map([[session.id, session]]))
+
+  const req = { method: 'POST', url: '/api/stripe-payment-methods?action=reconcile-checkout', body: { sessionId: 'cs_paid_ep' } }
+  const res = mockRes()
+  await reconcileCheckoutHandler(req, res, {
+    stripe,
+    sb: db,
+    user: { id: 'rider_ada' },
+  })
+  assert.equal(res.statusCode, 200)
+  const body = JSON.parse(res.body)
+  assert.equal(body.ok, true)
+  assert.equal(body.paid, true)
+  assert.equal(body.alreadyRecorded, false)
+  assert.equal(body.tripId, 'trip_paid_ep')
+
+  // Calling a second time is idempotent
+  const res2 = mockRes()
+  await reconcileCheckoutHandler(req, res2, {
+    stripe,
+    sb: db,
+    user: { id: 'rider_ada' },
+  })
+  assert.equal(res2.statusCode, 200)
+  const body2 = JSON.parse(res2.body)
+  assert.equal(body2.ok, true)
+  assert.equal(body2.paid, true)
+  assert.equal(body2.alreadyRecorded, true)
+})
+
+test('reconcileCheckout routed through api/stripe-payment-methods?action=reconcile-checkout', async () => {
+  const db = createMockDb()
+  db.seedTrip({
+    id: 'trip_route_ep',
+    rider_id: 'rider_ada',
+    status: 'searching',
+    metadata: { purpose: 'airport', deposit_cents: 2500 },
+  })
+
+  const session = {
+    id: 'cs_route_ep',
+    status: 'complete',
+    payment_status: 'paid',
+    amount_total: 2500,
+    payment_intent: 'pi_route_ep',
+    metadata: {
+      tripId: 'trip_route_ep',
+      riderId: 'rider_ada',
+      airport: 'GSP',
+      kind: 'airport_deposit',
+    },
+  }
+  const stripe = createMockStripe(new Map([[session.id, session]]))
+
+  const req = {
+    method: 'POST',
+    url: '/api/stripe-payment-methods?action=reconcile-checkout',
+    body: { sessionId: 'cs_route_ep' },
+    headers: {},
+  }
+  const res = mockRes()
+  await stripePaymentHandler(req, res, {
+    stripe,
+    sb: db,
+    user: { id: 'rider_ada' },
+  })
+  assert.equal(res.statusCode, 200)
+  const body = JSON.parse(res.body)
+  assert.equal(body.ok, true)
+  assert.equal(body.paid, true)
+  assert.equal(body.tripId, 'trip_route_ep')
+})
+
+test('create-checkout-session and airport-checkout success_url carry session_id={CHECKOUT_SESSION_ID}', () => {
+  const createCheckoutSrc = readFileSync(new URL('../api/create-checkout-session.js', import.meta.url), 'utf8')
+  const airportCheckoutSrc = readFileSync(new URL('./endpoints/airportCheckout.js', import.meta.url), 'utf8')
+
+  assert.match(
+    createCheckoutSrc,
+    /success_url:\s*`\${origin}\/\${checkoutSuccessHash\([\s\S]*?\)}&session_id=\{CHECKOUT_SESSION_ID\}`/
+  )
+  assert.match(
+    airportCheckoutSrc,
+    /success_url:\s*`\${origin}\/\${checkoutSuccessHash\([\s\S]*?\)}&session_id=\{CHECKOUT_SESSION_ID\}`/
+  )
 })

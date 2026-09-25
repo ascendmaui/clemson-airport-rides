@@ -2,6 +2,26 @@
 
 Persistent knowledge base for recurring failures. When a matching issue appears, apply the saved fix first.
 
+## 2026-09-24 — Add action=reconcile-checkout endpoint and carry session_id on success_url
+
+- **Track / machine:** Clemson RIDES · worktree deputy-pkg-checkout-reconcile / branch deputy/checkout-reconcile
+- **Problem:** If Stripe webhook delivery failed or was delayed, riders returning from Checkout to the app after paying an airport deposit had no fallback mechanism to trigger reconciliation and mark the deposit paid.
+- **Root cause:** There was no API route/action to request checkout reconciliation on demand, and checkout success URLs did not include the Stripe `{CHECKOUT_SESSION_ID}` placeholder needed by the client to request reconciliation.
+- **Fix:**
+  - Implemented `server/endpoints/reconcileCheckout.js`: POST endpoint accepting `{ sessionId }` (or `session_id`), authenticating via `userFromAuth` (401 if unauthenticated, 503 if Stripe/Supabase service role is unconfigured), and delegating to `reconcileCheckoutSession` for idempotent reconciliation.
+  - Added `action=reconcile-checkout` to `api/stripe-payment-methods.js` routing table and handler dispatch without increasing Vercel function count.
+  - Appended `&session_id={CHECKOUT_SESSION_ID}` to `success_url` in `api/create-checkout-session.js` and `server/endpoints/airportCheckout.js`.
+  - Updated `tests/apiRoutes.test.js` to include `reconcile-checkout` in `pay.allowed` and verify route resolution and non-400 dispatch.
+  - Added automated test cases in `server/checkoutReconcile.test.js` verifying 405 on non-POST, 503 on unconfigured Stripe/service role, 401 on unauthenticated, 400 on missing/malformed sessionId, 403 on mismatched rider ownership, 200 on unpaid/paid idempotent execution, and `session_id={CHECKOUT_SESSION_ID}` carry on success_urls.
+- **Files touched:**
+  - `server/endpoints/reconcileCheckout.js`
+  - `api/stripe-payment-methods.js`
+  - `api/create-checkout-session.js`
+  - `server/endpoints/airportCheckout.js`
+  - `tests/apiRoutes.test.js`
+  - `server/checkoutReconcile.test.js`
+  - `docs/FIXES.md`
+
 ## 2026-09-24 — Extract checkout deposit reconciliation and add fallback on-demand reconcile
 
 - **Track / machine:** Clemson RIDES · worktree deputy-pkg-checkout-reconcile / branch deputy/checkout-reconcile

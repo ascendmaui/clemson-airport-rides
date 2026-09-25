@@ -198,7 +198,7 @@ export default async function handler(req, res) {
     const session = await stripe.checkout.sessions.create({
       mode: 'payment',
       customer: customerId || undefined,
-      success_url: `${origin}/${checkoutSuccessHash({ tripId: trip.id, scheduled: Boolean(scheduledFor) })}`,
+      success_url: `${origin}/${checkoutSuccessHash({ tripId: trip.id, scheduled: Boolean(scheduledFor) })}&session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${origin}/#/schedule?canceled=1&trip=${trip.id}`,
       line_items: [{
         quantity: 1,
