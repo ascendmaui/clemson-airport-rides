@@ -9,6 +9,7 @@ import {
   packAttribution,
 } from '../../packages/rides-native/shared/ambassadorAttribution.js'
 import { supabase } from './supabase'
+import { WEB_ORIGIN } from '../../shared/productLinks.js'
 
 const PLACES = [
   { label: 'Memorial Stadium', lat: 34.6788, lng: -82.843 },
@@ -25,7 +26,7 @@ export function friendsUrl(token) {
   const origin =
     typeof window !== 'undefined'
       ? window.location.origin
-      : 'https://clemson-airport-rides.vercel.app'
+      : WEB_ORIGIN
   return `${origin}/friends/${encodeURIComponent(token)}`
 }
 
@@ -33,7 +34,7 @@ export function carpoolUrl(token) {
   const origin =
     typeof window !== 'undefined'
       ? window.location.origin
-      : 'https://clemson-airport-rides.vercel.app'
+      : WEB_ORIGIN
   return `${origin}/carpool/${encodeURIComponent(token)}`
 }
 

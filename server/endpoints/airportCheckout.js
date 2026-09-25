@@ -24,6 +24,7 @@ import {
 } from '../../src/lib/fareRates.js'
 import { checkoutSuccessHash } from '../../packages/rides-native/liveTrip.js'
 import { cancelUnopenedCheckoutTrip, rememberCheckoutSession } from '../abandonedCheckout.js'
+import { WEB_ORIGIN } from '../../shared/productLinks.js'
 
 const CAMPUS = { label: 'Memorial Stadium', lat: 34.6788, lng: -82.843 }
 const AIRPORTS = {
@@ -193,7 +194,7 @@ export default async function handler(req, res) {
     if (profile) {
       try { customerId = await ensureStripeCustomer(stripe, sb, profile) } catch { /* guest checkout */ }
     }
-    const origin = body.origin || process.env.VITE_APP_URL || 'https://clemson-airport-rides.vercel.app'
+    const origin = body.origin || process.env.VITE_APP_URL || WEB_ORIGIN
     const depositFee = splitPlatformFee(depositCents)
     const session = await stripe.checkout.sessions.create({
       mode: 'payment',

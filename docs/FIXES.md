@@ -2,6 +2,20 @@
 
 Persistent knowledge base for recurring failures. When a matching issue appears, apply the saved fix first.
 
+## 2026-09-24 — Apps still pointed at the old clemson-airport-rides.vercel.app domain
+
+- **Track / machine:** Clemson RIDES · Johns-iMac (worktree fix/clemson-rides-domain) · edits by Google Anti-Gravity CLI (`agy -p`), reviewed and finished by hand
+- **Problem:** Production web/API moved to the new Vercel project `https://clemson-rides.vercel.app`, but native API calls, Stripe Checkout return origins, share/carpool/promo links, server email links and docs still used `https://clemson-airport-rides.vercel.app`.
+- **Root cause:** The origin was hardcoded in ~20 places (native `apiClient`, `carpoolApi`, `safety`, `riderMoney`, rider `_layout`/`apiAuth`, mobile `schedule`, server checkout/friend/carpool/driver-approval fallbacks, web link helpers) instead of one constant.
+- **Fix:**
+  - `shared/productLinks.js` `WEB_ORIGIN` is the single source: `https://clemson-rides.vercel.app`.
+  - New `packages/rides-native/apiOrigin.js` (+ `.d.ts`): `DEFAULT_API_BASE = WEB_ORIGIN`, `resolveApiBase()` = `EXPO_PUBLIC_API_BASE` or the default, trailing slash stripped. Used by `apiClient.js`, `shared/carpoolApi.js`, rider `app/_layout.tsx` and `lib/apiAuth.ts`.
+  - `safety.js` `SHARE_ORIGIN`, `riderMoney.js` `NATIVE_CHECKOUT_ORIGIN` and promo share URL use `WEB_ORIGIN`.
+  - Server/web fallbacks (`buyCredits`, `airportCheckout`, `create-checkout-session`, `friendRideRoutes`, `carpoolRoutes`, `driverApproval`, `src/lib/{navigation,friendRides,riderPromo}.js`) import `WEB_ORIGIN`; env overrides (`VITE_APP_URL`, `APP_URL`, `body.origin`) still win.
+  - `apps/mobile` (frozen TestFlight app) keeps its inline fallback, now the new domain.
+  - Tests, READMEs and `.env.example` files updated. Older entries in this log are history and keep the old domain.
+- **External config still on the old domain (dashboards, not code):** Vercel `VITE_APP_URL` / `APP_URL` if set (they override the fallback), EAS `EXPO_PUBLIC_API_BASE` for rider/driver, Stripe webhook endpoint (`/api/stripe-webhook`), Supabase Auth Site URL / redirect URLs, Google OAuth authorized origins.
+
 ## 2026-09-24 — Remove Clerk: Apple + Google social sign-in directly on Supabase Auth
 
 - **Track / machine:** Clemson RIDES · worktree feat/supabase-auth-remove-clerk

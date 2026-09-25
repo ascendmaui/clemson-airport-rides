@@ -4,7 +4,8 @@
  * The rider app may override it with setCarpoolApiBase.
  */
 
-const DEFAULT_API = 'https://clemson-airport-rides.vercel.app'
+import { DEFAULT_API_BASE as DEFAULT_API } from '../apiOrigin.js'
+
 let baseOverride = ''
 
 export function setCarpoolApiBase(base) {
