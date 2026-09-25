@@ -43,13 +43,13 @@ Admin exception: **not implemented** on `canReceiveRides` or `public.driver_is_a
 | 16 | `apps/driver/app/queue.tsx` | offer UI + notify-adjacent | no (list) / yes (accept) | Always calls `loadDriverDesk`. Pending review **merges real desk offers with synthetic cards**. Accept goes through `acceptTrip` (6). |
 | 17 | `apps/driver/app/(tabs)/index.tsx` `notifyNewRequest` effect | notify | no | Fires on `desk.offers` for approved **and** `pending_review` (desk is loaded for both). Filters out synthetic ids, so a pending-review driver can get a local Expo ping for a real open-pool row. |
 | 18 | `src/screens/DriverHome.jsx` `loadScheduled` / toasts | offer + notify | no | Runs whenever `driverId` is set, including before / behind the approval gate. New scheduled rows toast `New scheduled ride`. Accept UI is behind the gate unless an `activeTrip` already exists. |
-| 19 | `src/screens/DriverHome.jsx` `acceptScheduled` | accept | no | Calls `acceptScheduledTrip` RPC with no `onboarding_status` check. Relies on (8) hiding the queue, or on (14) if that trigger is live. |
-| 20 | `src/lib/scheduledRides.js` `listOpenScheduledTrips` / `acceptScheduledTrip` | offer + accept | no | List uses RLS (22). Accept is `rpc('accept_scheduled_trip')` only. |
-| 21 | SQL `accept_scheduled_trip(p_trip_id)` | accept | no | Requires `profiles.role IN ('driver', 'admin')`. Does **not** read `onboarding_status`. Update then hits (14) only if that trigger exists. Latest body: `supabase/migrations/20260924233000_block_unpaid_airport_deposit_accept.sql`. |
+| 19 | `src/screens/DriverHome.jsx` `acceptScheduled` | accept | no | Calls `acceptScheduledTrip` RPC with no `onboarding_status` check. Relies on (8) hiding the queue, or on (21) once that migration is applied. |
+| 20 | `src/lib/scheduledRides.js` `listOpenScheduledTrips` / `acceptScheduledTrip` | offer + accept | no | List uses RLS (22). Accept is `rpc('accept_scheduled_trip')` only. The RPC body in (21) is the approval gate after John applies it. |
+| 21 | SQL `accept_scheduled_trip(p_trip_id)` | accept | no (file written, not applied) | Live body is still `supabase/migrations/20260924233000_block_unpaid_airport_deposit_accept.sql`: role `driver` or `admin`, plus the unpaid-deposit check. `supabase/migrations/20260925120000_driver_approval_accept_gate.sql` replaces the function and calls `assert_driver_may_accept` after that deposit check. NOT APPLIED. |
 | 22 | SQL `trips_driver_scheduled_select` | offer (RLS) | no | Open scheduled rows are visible to `is_driver_or_admin_role()` (`profiles.role` driver or admin). Approval is not in the policy. Latest: `supabase/migrations/20260925015500_fix_profiles_trips_rls_recursion.sql`. |
 | 23 | SQL `trips_online_driver_claim` | accept (RLS) | no | UPDATE of `searching`/`offered` with null `driver_id` allowed when `driver_status.online = true`. No `onboarding_status` clause. `supabase/driver_alerts_queue_tips.sql`. |
-| 24 | SQL `trip_update_is_accept` / `block_unpaid_airport_deposit_accept` | accept (trigger) | no | Unpaid airport deposit only. Does not check approval. |
-| 25 | `src/lib/driverOffers.js` `claimTrip` | accept | no | Direct `trips.update` to accepted. No application lookup. Not referenced by current screens (dead client helper). |
+| 24 | SQL `trip_update_is_accept` / `block_unpaid_airport_deposit_accept` | accept (trigger) | no (approval file written, not applied) | Deposit trigger is unchanged and still applied. `trips_block_unapproved_driver_accept` in `supabase/migrations/20260925120000_driver_approval_accept_gate.sql` calls `assert_driver_may_accept` on the same accept predicate. NOT APPLIED. Until then a direct UPDATE can still claim. |
+| 25 | `src/lib/driverOffers.js` `claimTrip` | accept | no | Direct `trips.update` to accepted. No application lookup. Not referenced by current screens (dead client helper). Would hit (24) after that migration is applied. |
 | 26 | `server/endpoints/requestDriverTrip.js` | match / assign | yes | `receivableDriverIds` before insert. Unapproved preferred drivers return `driver_not_approved`. Staff/admin still assign. |
 | 27 | `server/endpoints/scheduleTrip.js` | match | n/a | Inserts `scheduled` or `searching` with `driver_id` null. Later claimed via open pool / scheduled RPC. |
 | 28 | `server/endpoints/tripOfferPreview.js` | offer preview | yes | Open `searching`/`offered` (and any not-yet-accepted assignment) requires `receivableDriverIds`. Response is the approval-gate copy with `driver_not_approved`. A trip already `accepted` / `arriving` / `arrived` / `in_progress` / `completed` for this driver still previews. |
@@ -77,6 +77,7 @@ Going online is gated in the native/web helpers (4)(5) and, if applied, in SQL (
 3. Open-pool claim RLS (23) keys off `driver_status.online`, not `onboarding_status`.
 4. Native open-pool load (15) now drops those rows for an unapproved driver, so the queue (16) no longer merges real open-pool cards during `pending_review`. Web scheduled list (18) and scheduled-select RLS (22) still do not re-check approval.
 5. Preferred-driver assign (26) now re-checks approval on the server, including staff.
+6. Accept UPDATE and `accept_scheduled_trip` stay open until John applies `supabase/migrations/20260925120000_driver_approval_accept_gate.sql`. That file is in the repo and is not applied.
 
 `loadDriverDesk` still returns an already-accepted trip. The native home still subscribes to `trips` Realtime for `pending_review`, but `desk.offers` is empty unless the driver is approved, so (17) no longer pings a real open-pool row.
 
@@ -89,6 +90,7 @@ Going online is gated in the native/web helpers (4)(5) and, if applied, in SQL (
 | `driver_is_approved`, `list_approved_driver_ids`, `enforce_driver_online_approval`, `enforce_trip_approved_driver`, `review_driver_application` | `supabase/driver_onboarding_approval.sql` | no |
 | Function bodies only (no `CREATE TRIGGER`) | `supabase/driver_pending_approval.sql` | no |
 | `accept_scheduled_trip` + unpaid-deposit accept trigger | `supabase/migrations/20260924233000_block_unpaid_airport_deposit_accept.sql` | yes |
+| `assert_driver_may_accept`, `trips_block_unapproved_driver_accept`, replaced `accept_scheduled_trip` (deposit check kept) | `supabase/migrations/20260925120000_driver_approval_accept_gate.sql` | no — written, NOT APPLIED. Version prefix clashes with `20260925120000_ambassador_payout_unique.sql`. |
 | `trips_driver_scheduled_select` | `supabase/migrations/20260925015500_fix_profiles_trips_rls_recursion.sql` | yes |
 | `trips_online_driver_claim` | `supabase/driver_alerts_queue_tips.sql` | no dated migration in this tree |
 
@@ -100,7 +102,7 @@ Client `fetchOnlineDrivers` already depends on `list_approved_driver_ids`. If th
 
 - SQL: `public.is_admin()` (`supabase/driver_onboarding_approval.sql`, replaced in `supabase/migrations/20260924190000_admin_support.sql`).
 - Server staff: `loadStaffAccess` in `server/staffAccess.js` (`isAdminIdentity` + `admin_users.access_role`).
-- `accept_scheduled_trip` allows `profiles.role = 'admin'` without onboarding, which is a role check, not `is_admin()`.
+- `accept_scheduled_trip` on the live database allows `profiles.role = 'admin'` without onboarding, which is a role check, not `is_admin()`. The unapplied t3 migration adds `public.is_admin()` as the accept exception (`assert_driver_may_accept`).
 - `canReceiveRides` / `driver_is_approved` do **not** or-in admin. `driverApprovalStatus` and `receivableDriverIds` do, via `loadStaffAccess`.
 
 ---
