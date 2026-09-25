@@ -58,6 +58,17 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
 - **Rotate:** `vercel env rm CRON_SECRET production` + `vercel env add CRON_SECRET production --sensitive` (value from stdin), then `select vault.update_secret((select id from vault.secrets where name='clemson_cron_secret'), '<new>')`, then redeploy.
 - **Inspect runs:** `select * from cron.job_run_details order by start_time desc limit 5;` and `select id, status_code, left(content, 300) from net._http_response order by created desc limit 5;`
 
+## 2026-09-25 — wire apiClient + carpoolApi tests; sweep stale checkout domain [t3]
+
+- **Track / machine:** Deputy · pkg-domain-tests-92-93 t3 · deputy/domain-tests-92-93
+- **What was wrong:** Draft PRs #92 (`origin/deputy/api-client-tests`) and #93 (`origin/deputy/carpool-api-tests`) were skipped because they still expected `https://clemson-airport-rides.vercel.app`. The replacement suites landed on this branch (`packages/rides-native/apiClient.test.js`, `packages/rides-native/shared/carpoolApi.test.js`) but were not listed in the root `npm test` script. `packages/rides-native/checkoutReturn.test.js` was already listed and still built fixture URLs on the old host. Production checkout returns use `NATIVE_CHECKOUT_ORIGIN` (`WEB_ORIGIN` in `shared/productLinks.js`, `https://clemson-rides.vercel.app`).
+- **What changed:** This package supersedes #92 and #93. Both replacement test files are appended to the `test` script. Checkout-return fixtures now use `NATIVE_CHECKOUT_ORIGIN` and assert that origin is `https://clemson-rides.vercel.app`. No production source file still hardcodes `clemson-airport-rides.vercel.app`, so `shared/productLinks.js` was not changed. `apps/mobile/app/(tabs)/schedule.tsx` still inlines the current `https://clemson-rides.vercel.app` fallback; that is the live origin, not the old host.
+- **Files touched:**
+  - `package.json`
+  - `packages/rides-native/checkoutReturn.test.js`
+  - `docs/FIXES.md`
+- **Verified:** `npm test` (836 pass, 0 fail), including `packages/rides-native/checkoutReturn.test.js`, `packages/rides-native/apiClient.test.js`, and `packages/rides-native/shared/carpoolApi.test.js`.
+
 ## 2026-09-25 — carpoolApi tests on clemson-rides.vercel.app [t2]
 
 - **Track / machine:** Deputy · pkg-domain-tests-92-93 t2 · deputy/domain-tests-92-93
