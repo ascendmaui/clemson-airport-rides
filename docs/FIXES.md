@@ -143,6 +143,21 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
 - **What changed:** Bounded `query` and `hash` slicing symmetrically: `query` ends at `hashIndex` only when `hashIndex > queryIndex`, and `hash` ends at `queryIndex` only when `queryIndex > hashIndex`. This cleanly partitions URL query and fragment parameters regardless of whether `?` precedes `#` or `#` precedes `?`. Updated unit tests in `packages/rides-native/authUrl.test.js` to assert proper extraction of session and code parameters from hash-routed URLs.
 - **Files touched:** `packages/rides-native/authUrl.js`, `packages/rides-native/authUrl.test.js`, `docs/FIXES.md`
 
+## 2026-09-25 — secureStore.js unit tests, source unchanged
+
+- **Track / machine:** Clemson RIDES · deputy/secure-store-r2 · pkg-secure-store-r2 t1
+- **What was wrong:** `packages/rides-native/secureStore.js` had no unit test. `origin/main` has `secureStore.js` and `secureStore.d.ts` only, so there was no test file to extend. Importing the module under Node fails on `react-native` and `expo-secure-store`, which this package does not install.
+- **What changed:** Added `packages/rides-native/secureStore.test.js`. It loads the module separately for ios, android, and web behind fake `react-native` and `expo-secure-store` modules (in-memory keychain, 2048-byte cap, numeric `AFTER_FIRST_UNLOCK`). `secureStore.js` was not edited. Suspected bugs are marked `// BUG?:` and asserted as the current behavior:
+  - `String()` stores `null`, `undefined`, `false`, `0`, and symbols as text.
+  - `setItem` deletes the previous value before writing, so a failed write or a throwing `toString` leaves the key empty.
+  - A mid-chunk write failure leaves orphan `key.0` data and `getItem` returns null.
+  - Native `removeItem` swallows every `deleteItemAsync` error, so a keychain failure still resolves and the session remains.
+  - A non-finite `.n` count skips chunk deletes. `removeItem` also issues one delete per stored count with no upper bound.
+  - Chunking uses UTF-16 code units, so 683 CJK characters stay one item at 2049 UTF-8 bytes.
+  - `null`, `undefined`, and empty keys are stored on the web memory backend and rejected by the native fake.
+- **Files touched:** `packages/rides-native/secureStore.test.js`, `docs/FIXES.md`
+- **Verified:** `node --experimental-strip-types --test packages/rides-native/secureStore.test.js` (16/16 passing).
+
 ## 2026-09-25 — Expiry cron wired: CRON_SECRET + Supabase pg_cron/pg_net; prod redeployed at 111c607
 
 - **Track / machine:** Clemson RIDES · I9 (61b11c89) Vercel CLI + Supabase awktabuhijrshmsmagpq · approved by John 1:05 AM ET 9/25.
