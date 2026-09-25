@@ -189,3 +189,10 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
 - **Fix (worktree, uncommitted, not deployed):** `server/clerkSupabaseBridge.js` `clerkSecrets()` + `verifyWithAnySecret()`; `api/clerk-supabase-session.js` tries `CLERK_SECRET_KEY` then `CLERK_SECRET_KEY_DEV` and loads the user with whichever secret verified; tests added. README documents `CLERK_SECRET_KEY_DEV`.
 - **To ship:** add Vercel env `CLERK_SECRET_KEY_DEV` = dev instance (choice-gibbon-3653) `sk_test_…` from Clerk dashboard -> API keys (Development), then deploy. No app rebuild needed for rider Google/Facebook. Enable Apple on the dev instance (dashboard) for Apple.
 - **Machine/track:** Max / Clemson rider + bridge
+
+## 2026-09-24 — tripWait rejects blank ids and bad fee / clock inputs
+
+- **Date:** 2026-09-24
+- **What was wrong:** `assertAction` accepted a whitespace-only `tripId`. `applyTripWait` accepted a whitespace-only or non-string `actorId`. `chargeWaitFees` threw or charged on a missing trip, and it forwarded negative or fractional fee cents. An unparseable `server_now` was passed into `quoteWait`, so elapsed time and the clock could become NaN.
+- **What changed:** Blank `tripId` and `actorId` now fail with the existing 400 / 401 errors. `chargeWaitFees` skips a null, non-object, or id-less trip (`nothing_to_charge`) and clamps each fee to a non-negative integer cent amount. Quote math uses `Date.now()` when `server_now` is not a finite timestamp; the raw `serverNow` string is still returned.
+- **Files touched:** `server/tripWait.js`, `server/tripWait.test.js`, `docs/FIXES.md`

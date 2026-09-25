@@ -189,7 +189,7 @@ test('assertAction rejects unknown actions with 400', () => {
 })
 
 test('assertAction rejects invalid tripId with 400', () => {
-  const invalidTripIds = ['', null, undefined, 12345, {}, [], true]
+  const invalidTripIds = ['', '   ', null, undefined, 12345, {}, [], true]
   for (const tripId of invalidTripIds) {
     assert.throws(
       () => assertAction('arrive', tripId),
@@ -258,6 +258,24 @@ test('chargeWaitFees handles non-numeric fee values safely', async () => {
     id: 'trip_1',
     status: 'completed',
     wait_fee_cents: 'not-a-number',
+  })
+  assert.deepEqual(res, { status: 'skipped', reason: 'nothing_to_charge', amountCents: 0 })
+})
+
+test('chargeWaitFees safely skips when trip is null, non-object, or missing trip id', async () => {
+  const sb = createMockSb()
+  for (const badTrip of [null, undefined, 'trip_1', 123, {}, { status: 'completed', wait_fee_cents: 200 }]) {
+    const res = await chargeWaitFees(sb, badTrip)
+    assert.deepEqual(res, { status: 'skipped', reason: 'nothing_to_charge', amountCents: 0 })
+  }
+})
+
+test('chargeWaitFees clamps negative fee cents to 0', async () => {
+  const sb = createMockSb()
+  const res = await chargeWaitFees(sb, {
+    id: 'trip_1',
+    status: 'completed',
+    wait_fee_cents: -200,
   })
   assert.deepEqual(res, { status: 'skipped', reason: 'nothing_to_charge', amountCents: 0 })
 })
@@ -903,7 +921,7 @@ test('applyTripWait validates action and tripId (delegates to assertAction)', as
 
 test('applyTripWait throws 401 when actorId is missing', async () => {
   const sb = createMockSb()
-  for (const emptyActor of ['', null, undefined]) {
+  for (const emptyActor of ['', '   ', null, undefined]) {
     await assert.rejects(
       async () => applyTripWait(sb, { action: 'arrive', tripId: 'trip_1', actorId: emptyActor }),
       (err) => {
@@ -1106,6 +1124,31 @@ test('applyTripWait falls back to current ISO time when server_now is not return
   assert.ok(res.serverNow)
   assert.equal(typeof res.serverNow, 'string')
   assert.equal(res.quote.waitFeeCents, 0)
+  assert.equal(res.charge, null)
+})
+
+test('applyTripWait safely falls back when server_now is an invalid date string', async () => {
+  const sb = createMockSb({
+    rpc: async () => ({
+      data: {
+        trip: { id: 'trip_invalid_date', arrived_at: new Date().toISOString() },
+        should_charge: false,
+        server_now: 'not-a-valid-iso-date',
+      },
+      error: null,
+    }),
+  })
+
+  const res = await applyTripWait(sb, {
+    action: 'tick',
+    tripId: 'trip_invalid_date',
+    actorId: 'driver_1',
+  })
+
+  assert.equal(res.serverNow, 'not-a-valid-iso-date')
+  assert.equal(typeof res.quote.clock, 'string')
+  assert.notEqual(res.quote.clock, 'NaN:NaN')
+  assert.ok(Number.isFinite(res.quote.elapsedMs))
   assert.equal(res.charge, null)
 })
 

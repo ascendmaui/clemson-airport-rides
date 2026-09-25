@@ -39,7 +39,7 @@ function mapRpcError(error) {
 
 export function assertAction(action, tripId) {
   if (!ACTIONS.has(action)) throw httpError('Unknown wait action', 400)
-  if (!tripId || typeof tripId !== 'string') throw httpError('tripId required', 400)
+  if (!tripId || typeof tripId !== 'string' || !tripId.trim()) throw httpError('tripId required', 400)
 }
 
 async function loadPayments(sb, tripId) {
@@ -86,8 +86,12 @@ async function upsertPayment(sb, row) {
  * so the $1 platform fee is visible as kind=cancel_fee.
  */
 export async function chargeWaitFees(sb, trip) {
-  const waitFee = Number(trip.wait_fee_cents) || 0
-  const cancelFee = trip.status === 'cancelled_wait' ? Number(trip.cancel_fee_cents) || 0 : 0
+  if (!trip || typeof trip !== 'object' || !trip.id) {
+    return { status: 'skipped', reason: 'nothing_to_charge', amountCents: 0 }
+  }
+
+  const waitFee = Math.max(0, Math.round(Number(trip.wait_fee_cents) || 0))
+  const cancelFee = trip.status === 'cancelled_wait' ? Math.max(0, Math.round(Number(trip.cancel_fee_cents) || 0)) : 0
   const amount = waitFee + cancelFee
   const billable = trip.status === 'cancelled_wait' || (trip.status === 'completed' && waitFee > 0)
   if (!billable || amount <= 0) {
@@ -276,7 +280,7 @@ export async function chargeWaitFees(sb, trip) {
 
 export async function applyTripWait(sb, { action, tripId, actorId }) {
   assertAction(action, tripId)
-  if (!actorId) throw httpError('Sign in required', 401)
+  if (!actorId || typeof actorId !== 'string' || !actorId.trim()) throw httpError('Sign in required', 401)
 
   const { data, error } = await sb.rpc('trip_wait_apply', {
     p_trip_id: tripId,
@@ -292,7 +296,9 @@ export async function applyTripWait(sb, { action, tripId, actorId }) {
     charge = await chargeWaitFees(sb, trip)
   }
 
-  const serverNow = data.server_now || new Date().toISOString()
-  const quote = quoteWait(trip.arrived_at, new Date(serverNow).getTime())
+  const serverNow = data?.server_now || new Date().toISOString()
+  const parsedServerMs = new Date(serverNow).getTime()
+  const serverMs = Number.isFinite(parsedServerMs) ? parsedServerMs : Date.now()
+  const quote = quoteWait(trip.arrived_at, serverMs)
   return { trip, serverNow, quote, charge }
 }
