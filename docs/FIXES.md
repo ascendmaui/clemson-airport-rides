@@ -58,6 +58,38 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
 - **Rotate:** `vercel env rm CRON_SECRET production` + `vercel env add CRON_SECRET production --sensitive` (value from stdin), then `select vault.update_secret((select id from vault.secrets where name='clemson_cron_secret'), '<new>')`, then redeploy.
 - **Inspect runs:** `select * from cron.job_run_details order by start_time desc limit 5;` and `select id, status_code, left(content, 300) from net._http_response order by created desc limit 5;`
 
+## 2026-09-25 — wire apiClient + carpoolApi tests; sweep stale checkout domain [t3]
+
+- **Track / machine:** Deputy · pkg-domain-tests-92-93 t3 · deputy/domain-tests-92-93
+- **What was wrong:** Draft PRs #92 (`origin/deputy/api-client-tests`) and #93 (`origin/deputy/carpool-api-tests`) were skipped because they still expected `https://clemson-airport-rides.vercel.app`. The replacement suites landed on this branch (`packages/rides-native/apiClient.test.js`, `packages/rides-native/shared/carpoolApi.test.js`) but were not listed in the root `npm test` script. `packages/rides-native/checkoutReturn.test.js` was already listed and still built fixture URLs on the old host. Production checkout returns use `NATIVE_CHECKOUT_ORIGIN` (`WEB_ORIGIN` in `shared/productLinks.js`, `https://clemson-rides.vercel.app`).
+- **What changed:** This package supersedes #92 and #93. Both replacement test files are appended to the `test` script. Checkout-return fixtures now use `NATIVE_CHECKOUT_ORIGIN` and assert that origin is `https://clemson-rides.vercel.app`. No production source file still hardcodes `clemson-airport-rides.vercel.app`, so `shared/productLinks.js` was not changed. `apps/mobile/app/(tabs)/schedule.tsx` still inlines the current `https://clemson-rides.vercel.app` fallback; that is the live origin, not the old host.
+- **Files touched:**
+  - `package.json`
+  - `packages/rides-native/checkoutReturn.test.js`
+  - `docs/FIXES.md`
+- **Verified:** `npm test` (836 pass, 0 fail), including `packages/rides-native/checkoutReturn.test.js`, `packages/rides-native/apiClient.test.js`, and `packages/rides-native/shared/carpoolApi.test.js`.
+
+## 2026-09-25 — carpoolApi tests on clemson-rides.vercel.app [t2]
+
+- **Track / machine:** Deputy · pkg-domain-tests-92-93 t2 · deputy/domain-tests-92-93
+- **What was wrong:** `packages/rides-native/shared/carpoolApi.test.js` from draft PR #93 (`origin/deputy/carpool-api-tests`) still expected `https://clemson-airport-rides.vercel.app`, and its non-OK cases expected the old inline client (`HTTP 500`, `HTTP 503`, `API unavailable` on an HTML 502). `setCarpoolApiBase` on main still used `.replace(/\/$/, '')`, so an override with two or more trailing slashes kept a leftover slash and joined a bad URL. That one-line `/\/+$/` fix from the draft branch was not on main.
+- **What changed:** Brought the test file onto this branch. The default host now comes from `DEFAULT_API_BASE` in `packages/rides-native/apiOrigin.js` (`https://clemson-rides.vercel.app`). 500/502 assertions follow `friendlyApiError` generic copy; 503 follows the unavailable copy. `apiErrorMessage` on a non-JSON 502 still returns the raw HTML stored on `payload.message` when the friendly kind is not auth or unavailable. `setCarpoolApiBase` now strips every trailing slash.
+- **Files touched:**
+  - `packages/rides-native/shared/carpoolApi.js`
+  - `packages/rides-native/shared/carpoolApi.test.js`
+  - `docs/FIXES.md`
+- **Verified:** `node --experimental-strip-types --test packages/rides-native/shared/carpoolApi.test.js` (13/13 passing).
+
+## 2026-09-25 — apiClient tests expect clemson-rides.vercel.app [t1]
+
+- **Track / machine:** Deputy · pkg-domain-tests-92-93 t1 · deputy/domain-tests-92-93
+- **What was wrong:** The apiClient tests brought over from draft PR #92 still expected `https://clemson-airport-rides.vercel.app`. One case hardcoded the joined URL as `vercel.appapi/trips` against that old host. Other assertions described the pre-#90 client: raw server messages, `getSession` errors thrown out of `authedJson`, a missing `getSession` throwing `TypeError`, and `JSON.stringify` failures wrapped as network errors. The `getSession` cases called live `fetch` because nothing was mocked.
+- **What changed:** Expected bases now come from `DEFAULT_API_BASE` in `packages/rides-native/apiOrigin.js` (`https://clemson-rides.vercel.app`, the `WEB_ORIGIN` `apiClient.js` uses when `EXPO_PUBLIC_API_BASE` is unset). A path with no leading slash is asserted as `` `${apiBase()}${path}` ``, which is the real join. Error assertions follow `friendlyApiError` (auth copy on 401, unavailable copy on 503, generic copy on 422/500/502). `getSession` failures and a supabase object with no `getSession` continue without a token, against a fake fetch. A circular body throws `TypeError` before fetch. Production source was not changed.
+- **Files touched:**
+  - `packages/rides-native/apiClient.test.js`
+  - `docs/FIXES.md`
+- **Verified:** `node --experimental-strip-types --test packages/rides-native/apiClient.test.js` (30/30 passing).
+
 ## 2026-09-25 — merge_trip_metadata trip_status enum cast applied (#100)
 
 - **Problem:** `public.merge_trip_metadata` (#80) failed on every call with `operator does not exist: trip_status = text`, which broke the airport-checkout session bind, abandon-checkout release and the unpaid-hold expiry cancel.

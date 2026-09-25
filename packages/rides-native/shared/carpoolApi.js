@@ -11,7 +11,7 @@ import { friendlyApiError } from '../apiErrors.js'
 let baseOverride = ''
 
 export function setCarpoolApiBase(base) {
-  baseOverride = String(base || '').replace(/\/$/, '')
+  baseOverride = String(base || '').replace(/\/+$/, '')
 }
 
 export function apiBase() {
