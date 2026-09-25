@@ -56,7 +56,10 @@ async function listTrips(supabase, finish) {
 async function writeTripEvent(supabase, tripId, kind, payload) {
   if (!supabase || !tripId) return
   const { error } = await supabase.from('trip_events').insert({ trip_id: tripId, kind, payload })
-  if (error) console.warn('[trip_events]', kind, error.message)
+  if (error) {
+    console.error('[trip_events]', kind, error.message)
+    throw new Error(error.message || `Could not record trip event (${kind})`)
+  }
 }
 
 export async function loadGameDay(supabase) {

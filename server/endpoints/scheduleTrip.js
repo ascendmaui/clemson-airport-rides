@@ -17,6 +17,7 @@ import {
   parseRideAt,
   priceScheduledRequest,
 } from '../authoritativeFare.js'
+import { insertTripEvent } from '../tripEvents.js'
 
 const PURPOSES = new Set(['early_class', 'airport', 'planned', 'party_weekend', 'recurring'])
 
@@ -154,7 +155,7 @@ export default async function handler(req, res, deps = {}) {
   if (inserted.error || !inserted.data) {
     return json(res, 500, { error: inserted.error?.message || 'Could not schedule ride' })
   }
-  await sb.from('trip_events').insert({
+  const { error: eventError } = await insertTripEvent(sb, {
     trip_id: inserted.data.id,
     kind: 'scheduled',
     payload: {
@@ -166,6 +167,13 @@ export default async function handler(req, res, deps = {}) {
       fare_source: 'server',
     },
   })
+  if (eventError) {
+    return json(res, 500, {
+      error: eventError.message || 'Could not record trip event',
+      code: 'trip_event_failed',
+      trip: inserted.data,
+    })
+  }
 
   return json(res, 200, {
     trip: inserted.data,

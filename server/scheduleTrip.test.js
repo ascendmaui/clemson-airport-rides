@@ -998,20 +998,33 @@ describe('scheduleTrip endpoint handler', () => {
       assert.equal(tripEventsInserted[0].payload.fare_source, 'server')
     })
 
-    // BUG?: the trip_events insert result is never checked, so a failed audit-event write
-    // is silent and the rider still gets 200. Documented, not changed.
-    test('BUG?: a failed trip_events insert is ignored and the request still succeeds', async () => {
+    // Failed trip_events writes are logged and surfaced (HTTP 500 + code), while the
+    // already-inserted trip id is returned so the client is not left blind.
+    test('a failed trip_events insert returns 500 with trip_event_failed and the trip', async () => {
       const { sb, tripsInserted, tripEventsInserted } = createFakeSb({
         tripEventInsertError: { message: 'insert or update on table "trip_events" violates foreign key' },
       })
-      const res = await callHandler(
-        scheduleTripHandler,
-        { method: 'POST', body: { ...defaultPlaces, pickupAt: new Date(Date.now() + 2 * 3600 * 1000).toISOString() } },
-        { user: mockStandardUser, sb, ensureProfile: async () => ({ ok: true }) },
-      )
-      assert.equal(res.status, 200)
+      const logged = []
+      const originalError = console.error
+      console.error = (...args) => { logged.push(args.map(String).join(' ')) }
+      let res
+      try {
+        res = await callHandler(
+          scheduleTripHandler,
+          { method: 'POST', body: { ...defaultPlaces, pickupAt: new Date(Date.now() + 2 * 3600 * 1000).toISOString() } },
+          { user: mockStandardUser, sb, ensureProfile: async () => ({ ok: true }) },
+        )
+      } finally {
+        console.error = originalError
+      }
+      assert.equal(res.status, 500)
+      assert.equal(res.json.code, 'trip_event_failed')
+      assert.match(res.json.error, /foreign key/)
       assert.equal(tripsInserted.length, 1)
+      assert.ok(res.json.trip?.id)
+      assert.equal(res.json.trip.id, tripsInserted[0].id)
       assert.equal(tripEventsInserted.length, 0)
+      assert.equal(logged.some((line) => line.includes('[trip_events]') && line.includes('scheduled')), true)
     })
 
     test('no trip row is written when the rider profile cannot be created', async () => {

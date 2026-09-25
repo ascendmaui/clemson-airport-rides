@@ -1003,6 +1003,40 @@ test('acceptTrip accepts on-demand trip and logs trip_events', async () => {
   assert.equal(event.payload?.driver_id, 'driver-1')
 })
 
+test('acceptTrip surfaces trip_events insert failures instead of swallowing them', async () => {
+  const supabase = createFakeSupabase(
+    {
+      trips: [{ id: 'trip-od-ev', status: 'offered' }],
+      driver_applications: [{ profile_id: 'driver-1', onboarding_status: 'approved' }],
+      driver_status: [{ driver_id: 'driver-1', online: true }],
+    },
+    {
+      onError(table, state) {
+        if (table === 'trip_events' && state.mode === 'insert') {
+          return { message: 'trip_events insert denied' }
+        }
+        return null
+      },
+    },
+  )
+
+  const logged = []
+  const originalError = console.error
+  console.error = (...args) => { logged.push(args.map(String).join(' ')) }
+  try {
+    await assert.rejects(
+      () => acceptTrip(supabase, { id: 'trip-od-ev', status: 'offered' }, 'driver-1'),
+      /trip_events insert denied/,
+    )
+  } finally {
+    console.error = originalError
+  }
+  assert.equal(logged.some((line) => line.includes('[trip_events]') && line.includes('accepted')), true)
+  // Trip row was already accepted before the event write — failure is visible, not silent.
+  const trip = supabase._tables.trips.find((t) => t.id === 'trip-od-ev')
+  assert.equal(trip.status, 'accepted')
+})
+
 test('acceptTrip throws when on-demand ride is no longer available', async () => {
   const supabase = createFakeSupabase({
     trips: [{ id: 'trip-od', status: 'in_progress', driver_id: 'other-driver' }],
