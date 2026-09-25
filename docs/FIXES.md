@@ -2,6 +2,16 @@
 
 Persistent knowledge base for recurring failures. When a matching issue appears, apply the saved fix first.
 
+## 2026-09-24 — saveRegisteredVehicle threw unhandled TypeError on missing payload
+
+- **Track / machine:** Clemson RIDES · deputy/vehicle-places-tests
+- **What was wrong:** `saveRegisteredVehicle` in `packages/rides-native/shared/vehicle.js` accessed `payload.make` without checking if `payload` was null, undefined, or malformed, causing an unhandled `TypeError` instead of a user-facing validation error.
+- **What changed:** Safely defaulted `payload` to an empty object when null, undefined, or non-object so the existing required field checks cleanly throw `Error('Make, model, and plate are required.')`. Updated unit tests in `packages/rides-native/shared/vehicle.test.js` to assert the validation error.
+- **Files touched:**
+  - `packages/rides-native/shared/vehicle.js`
+  - `packages/rides-native/shared/vehicle.test.js`
+  - `docs/FIXES.md`
+
 ## 2026-09-24 — Remove Clerk: Apple + Google social sign-in directly on Supabase Auth
 
 - **Track / machine:** Clemson RIDES · worktree feat/supabase-auth-remove-clerk

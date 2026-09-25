@@ -519,11 +519,20 @@ describe('saveRegisteredVehicle', () => {
     )
   })
 
-  test('handles null or undefined payload by throwing TypeError', async () => {
+  test('handles null, undefined, or malformed payload by throwing validation error', async () => {
     const sb = { from() {} }
-    // BUG?: saveRegisteredVehicle throws TypeError if payload is null or undefined rather than throwing a validation error
-    await assert.rejects(() => saveRegisteredVehicle(sb, 'u-1', null), TypeError)
-    await assert.rejects(() => saveRegisteredVehicle(sb, 'u-1', undefined), TypeError)
+    await assert.rejects(
+      () => saveRegisteredVehicle(sb, 'u-1', null),
+      /Make, model, and plate are required\./,
+    )
+    await assert.rejects(
+      () => saveRegisteredVehicle(sb, 'u-1', undefined),
+      /Make, model, and plate are required\./,
+    )
+    await assert.rejects(
+      () => saveRegisteredVehicle(sb, 'u-1', 'invalid'),
+      /Make, model, and plate are required\./,
+    )
   })
 
   test('inserts new vehicle when driver does not have an existing vehicle', async () => {
