@@ -1251,6 +1251,30 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
 - **Fix:** `coord()` accepts only finite numbers and numeric strings. Null, blank, boolean, and other non-numeric values stay missing, and `navigationLinks` falls back to the label. A real `0` or `"0"` is still a point.
 - **Files:** `packages/rides-native/mapsLink.js`, `packages/rides-native/mapsLink.test.js`
 
+## 2026-09-25 — riderMoney tests were not the last npm test entry
+
+- **Track / machine:** Clemson RIDES · deputy/rider-money-tests (pkg-rider-money-tests t3)
+- **What was wrong:** `packages/rides-native/riderMoney.test.js` was already in the `npm test` script, but in the middle (before `partyProfile.test.js`). The suite is supposed to run that file last so a full `npm test` always includes the rider money cases at the end of the list.
+- **What changed:** Removed the mid-list copy and appended `packages/rides-native/riderMoney.test.js` as the last argument of the `package.json` `test` script. The file is listed once.
+- **Files touched:** `package.json`, `docs/FIXES.md`
+- **Verified:** `npm test` — 369 pass, 0 fail. `packages/rides-native/riderMoney.test.js` is the last file in the script and ran with the suite.
+
+## 2026-09-24 — checkout failure copy dropped a payload-only reason
+
+- **Track / machine:** Clemson RIDES · deputy/rider-money-tests (pkg-rider-money-tests t2)
+- **What was wrong:** `checkoutFailureCopy` read `payload.message` only to detect "not configured" / "payments unavailable", then returned `err.message` or "Checkout failed. No charge was made." A failure whose reason lived only on `payload.message`, `payload.error`, or a top-level `error` string never reached the rider.
+- **What changed:** A blank `message` falls through to the first non-empty string among `payload.message`, `payload.error`, and top-level `error`. The not-configured sentence still wins when that phrase is in either text. Non-strings are ignored so an object `error` cannot render as `[object Object]`.
+- **Files touched:** `packages/rides-native/riderMoney.js`, `packages/rides-native/riderMoney.test.js`, `docs/FIXES.md`
+- **Verified:** `node --experimental-strip-types --test packages/rides-native/riderMoney.test.js` — 29 pass.
+
+## 2026-09-24 — riderMoney unit tests did not match the module
+
+- **Track / machine:** Clemson RIDES · deputy/rider-money-tests (pkg-rider-money-tests t1)
+- **What was wrong:** A partial `packages/rides-native/riderMoney.test.js` failed 3 of 29 cases. `describeRiderSocialRewards` keeps a fixed referred amount of 0 as `$0.00` (only the referrer credit and the percent use `||` fallbacks). `markStudentVerified` writes the profile before the verification-table fallback, so a global update failure never reached that fallback. `STRIPE_NOT_CONFIGURED_COPY` is the fare-card sentence about checkout not being configured on this machine.
+- **What changed:** Corrected those assertions, scoped the fake update failure to `student_verifications`, and extended coverage to every export. Production `riderMoney.js` was not edited. Suspected bugs are marked `// BUG?:` in the test file (empty tier still discounted, zero referrer/percent rewards fall back, payload-only checkout errors dropped, local-time quote timestamps, time dropped without a valid date, verification writes reported verified when the fallback write fails, unauthenticated billing omits `charges`).
+- **Files touched:** `packages/rides-native/riderMoney.test.js`, `docs/FIXES.md`
+- **Verified:** `node --experimental-strip-types --test packages/rides-native/riderMoney.test.js` — 29 pass.
+
 ## 2026-09-24 — Remove Clerk: Apple + Google social sign-in directly on Supabase Auth
 
 - **Track / machine:** Clemson RIDES · worktree feat/supabase-auth-remove-clerk

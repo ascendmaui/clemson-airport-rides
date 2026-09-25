@@ -111,12 +111,16 @@ export function depositReceiptLines(trip) {
   ]
 }
 
+function failureText(value) {
+  return typeof value === 'string' ? value.trim() : ''
+}
+
 export function checkoutFailureCopy(err) {
-  const payloadMessage = String(err?.payload?.message || '')
-  const message = String(err?.message || '')
+  const payloadMessage = failureText(err?.payload?.message) || failureText(err?.payload?.error)
+  const message = failureText(err?.message) || failureText(err?.error)
   const combined = `${payloadMessage} ${message}`
   if (/not configured|payments unavailable/i.test(combined)) return STRIPE_NOT_CONFIGURED_COPY
-  return message || 'Checkout failed. No charge was made.'
+  return message || payloadMessage || 'Checkout failed. No charge was made.'
 }
 
 export function studentDiscountCents(fareCents, { isStudent = false, tier = 'standard' } = {}) {
