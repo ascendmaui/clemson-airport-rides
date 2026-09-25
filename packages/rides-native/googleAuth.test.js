@@ -115,7 +115,7 @@ test('startGoogleOAuth rejects a missing client or a missing provider URL', asyn
   for (const supabase of [null, undefined, false, '']) {
     await assert.rejects(() => startGoogleOAuth(supabase, RIDER_CALLBACK), { message: MISSING_SUPABASE })
   }
-  for (const data of [null, {}, { url: '' }, { url: null }]) {
+  for (const data of [null, {}, { url: '' }, { url: null }, { url: '   ' }, { url: '\n\t' }]) {
     const { client } = fakeSupabase({
       signInWithOAuth() {
         return { data, error: null }
@@ -196,7 +196,7 @@ test('startGoogleOAuth rewrites Google failures with email and password copy', a
   await assert.rejects(() => startGoogleOAuth(stringError, RIDER_CALLBACK), { message: 'Auth failed' })
 })
 
-test('startGoogleOAuth forwards a blank redirect and a blank provider URL', async () => {
+test('startGoogleOAuth forwards a blank redirect and trims a padded provider URL', async () => {
   const { client, calls } = fakeSupabase()
   // BUG?: a missing redirectTo is forwarded as undefined instead of googleOAuthRedirect().
   await startGoogleOAuth(client)
@@ -205,13 +205,12 @@ test('startGoogleOAuth forwards a blank redirect and a blank provider URL', asyn
   await startGoogleOAuth(client, '   ')
   assert.equal(calls[1].args.options.redirectTo, '   ')
 
-  const { client: blankUrl } = fakeSupabase({
+  const { client: paddedUrl } = fakeSupabase({
     signInWithOAuth() {
-      return { data: { url: '   ' }, error: null }
+      return { data: { url: `  ${PROVIDER_URL}\n` }, error: null }
     },
   })
-  // BUG?: a whitespace provider URL is truthy, so it is returned to the browser opener.
-  assert.equal(await startGoogleOAuth(blankUrl, RIDER_CALLBACK), '   ')
+  assert.equal(await startGoogleOAuth(paddedUrl, RIDER_CALLBACK), PROVIDER_URL)
 })
 
 test('startGoogleOAuth throws TypeError when the auth client cannot be read', async () => {

@@ -1701,3 +1701,11 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
   - `completeGoogleSession` reads OAuth errors from the hash only, so a query error next to any fragment becomes `Google sign-in was rejected`. The `error=` scan is unanchored (`my_error=` matches). A whitespace-only `error_description` is thrown as the message. Tokens or a PKCE code win over `error` / `error_description`. A null session or null exchange payload is returned as success. A PKCE code containing `+` is turned into a space. A client with no `auth` object throws `TypeError`.
 - **What changed:** Extended `packages/rides-native/googleAuth.test.js` so every export (`googleOAuthRedirect`, `startGoogleOAuth`, `completeGoogleSession`) is covered with `node:test` and an in-memory Supabase auth fake. No network. `googleAuth.js` was not modified. Suspected bugs are asserted as current behavior with `// BUG?:` comments. The root `test` script already lists this file.
 - **Files touched:** `packages/rides-native/googleAuth.test.js`, `docs/FIXES.md`
+
+## 2026-09-25 — googleAuth rejects a whitespace provider URL
+
+- **Date:** 2026-09-25
+- **Track / machine:** Clemson RIDES · deputy/google-auth-tests · pkg-google-auth-tests t2
+- **What was wrong:** `startGoogleOAuth` treated any truthy `data.url` as the Google sign-in link. A whitespace-only string is truthy, so the rider and driver apps would hand `WebBrowser.openAuthSessionAsync` a blank URL instead of the "Google sign-in is not configured" error.
+- **What changed:** Trim a string `data.url` and reject it when nothing remains. A URL with only surrounding whitespace is returned trimmed. A provider error is still preferred over a URL. Other pinned behaviors are unchanged.
+- **Files touched:** `packages/rides-native/googleAuth.js`, `packages/rides-native/googleAuth.test.js`, `docs/FIXES.md`
