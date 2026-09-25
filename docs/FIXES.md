@@ -348,6 +348,40 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
 - **Files touched:** `src/lib/trips.js`, `src/lib/trips.test.js`, `docs/FIXES.md`
 - **Verified:** `node --experimental-strip-types --test src/lib/trips.test.js` — 11 pass.
 
+## 2026-09-25 — wire offline/error-state tests into npm test
+
+- **Track / machine:** Clemson RIDES · deputy/offline-error-states · pkg-offline-error-states t3
+- **What was wrong:** `apps/rider/lib/friendsApi.test.mjs`, `apps/rider/lib/accountApi.test.mjs`, and `apps/driver/lib/push.test.mjs` call `registerHooks` from `node:module` and replace `globalThis.fetch`. The root test script did not pin process isolation, so a shared-process run would let that fetch tripwire and those resolvers affect later suites.
+- **What changed:** The three files were already listed once, at the end of the root `test` script (t1). They were not added a second time. The script now passes `--experimental-test-isolation=process`, so each file runs in its own process. Each resolver still short-circuits only when the importer is the module under test (`friendsApi.ts`, `accountApi.ts`, or `push.ts`) and the specifier is `@/lib/storage`, `@/lib/supabase`, `rides-native/apiClient` / `rides-native/apiClient.js`, `expo-constants`, `expo-notifications`, or `react-native`. Every other specifier goes to `nextResolve`.
+- **Files touched:**
+  - `package.json` (test script only)
+  - `docs/FIXES.md`
+- **Verified:** `npm test` (872 passing, 0 failing), including the three offline/error-state files.
+
+## 2026-09-25 — loadAccount keeps on-device prefs when the profile fetch throws
+
+- **Track / machine:** Clemson RIDES · deputy/offline-error-states · pkg-offline-error-states t2
+- **What was wrong:** `loadAccount` returned cached notification prefs when Supabase responded with `{ error }` or was not configured, but a thrown fetch (`TypeError: Network request failed`, timeout, or any other rejection) rejected the promise. `apps/rider/app/account.tsx` calls `loadAccount` with no `.catch`, so an offline load was an unhandled rejection and the prefs already read from the phone were dropped.
+- **What changed:** The profile query is caught. On throw, `loadAccount` returns `{ profile: null, prefs: localPrefs, error: 'Could not load your account. Check your connection and try again.' }`. Successful reads and `{ error }` responses are unchanged. The message is a fixed sentence so a stack or `[object Object]` is not shown on the account screen.
+- **Files touched:**
+  - `apps/rider/lib/accountApi.ts`
+  - `apps/rider/lib/accountApi.test.mjs`
+  - `docs/FIXES.md`
+- **Verified:** `node --experimental-strip-types --test apps/rider/lib/friendsApi.test.mjs apps/rider/lib/accountApi.test.mjs apps/driver/lib/push.test.mjs`
+
+## 2026-09-25 — offline/error-state tests for rider friends, account, and driver push
+
+- **Track / machine:** Clemson RIDES · deputy/offline-error-states · pkg-offline-error-states t1
+- **What was wrong:** `apps/rider/lib/friendsApi.ts`, `apps/rider/lib/accountApi.ts`, and `apps/driver/lib/push.ts` had no unit coverage for offline, storage, supabase, and push-permission failures.
+- **What changed:** Added node:test files beside those modules. They stub `@/lib/storage`, `@/lib/supabase`, `rides-native/apiClient.js`, `expo-constants`, `expo-notifications`, and `react-native` and do not call the network. Production source was not edited. Suspected bugs are marked in the tests with `// BUG?:` and are still open — do not treat those notes as a fix that already landed.
+- **Files touched:**
+  - `apps/rider/lib/friendsApi.test.mjs`
+  - `apps/rider/lib/accountApi.test.mjs`
+  - `apps/driver/lib/push.test.mjs`
+  - `package.json` (test script only)
+  - `docs/FIXES.md`
+- **Verified:** `node --experimental-strip-types --test apps/rider/lib/friendsApi.test.mjs apps/rider/lib/accountApi.test.mjs apps/driver/lib/push.test.mjs` (79 passing).
+
 ## 2026-09-25 — Expiry cron wired: CRON_SECRET + Supabase pg_cron/pg_net; prod redeployed at 111c607
 
 - **Track / machine:** Clemson RIDES · I9 (61b11c89) Vercel CLI + Supabase awktabuhijrshmsmagpq · approved by John 1:05 AM ET 9/25.
