@@ -343,18 +343,18 @@ test('accountApi offline and error states', { concurrency: false }, async (t) =>
     }
   })
 
-  await t.test('loadAccount rejects network and timeout failures instead of returning local prefs', async () => {
-    // BUG?: the { error } branch returns the on-device prefs plus a message. A thrown
-    // network or timeout error rejects after those prefs were read, and the account
-    // screen has no .catch, so the cached prefs never render.
+  await t.test('loadAccount returns on-device prefs when the profile fetch throws', async () => {
     state().items.set(prefsKey('user-1'), JSON.stringify({ ride: false, promotions: true }))
-    for (const error of [networkError(), timeoutError()]) {
+    const offlineCopy = 'Could not load your account. Check your connection and try again.'
+    for (const error of [networkError(), timeoutError(), new Error('[object Object]'), new Error(RAW_STACK)]) {
       useClient(() => {
         throw error
       })
-      const caught = await rejectionOf(api.loadAccount('user-1'))
-      assert.equal(caught, error)
-      assertHuman(caught.message)
+      const result = await api.loadAccount('user-1')
+      assert.equal(result.profile, null)
+      assert.equal(result.error, offlineCopy)
+      assertHuman(result.error)
+      assert.deepEqual(result.prefs, LOCAL_PREFS)
       assert.equal(state().items.get(prefsKey('user-1')), JSON.stringify({ ride: false, promotions: true }))
     }
   })

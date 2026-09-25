@@ -348,6 +348,17 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
 - **Files touched:** `src/lib/trips.js`, `src/lib/trips.test.js`, `docs/FIXES.md`
 - **Verified:** `node --experimental-strip-types --test src/lib/trips.test.js` — 11 pass.
 
+## 2026-09-25 — loadAccount keeps on-device prefs when the profile fetch throws
+
+- **Track / machine:** Clemson RIDES · deputy/offline-error-states · pkg-offline-error-states t2
+- **What was wrong:** `loadAccount` returned cached notification prefs when Supabase responded with `{ error }` or was not configured, but a thrown fetch (`TypeError: Network request failed`, timeout, or any other rejection) rejected the promise. `apps/rider/app/account.tsx` calls `loadAccount` with no `.catch`, so an offline load was an unhandled rejection and the prefs already read from the phone were dropped.
+- **What changed:** The profile query is caught. On throw, `loadAccount` returns `{ profile: null, prefs: localPrefs, error: 'Could not load your account. Check your connection and try again.' }`. Successful reads and `{ error }` responses are unchanged. The message is a fixed sentence so a stack or `[object Object]` is not shown on the account screen.
+- **Files touched:**
+  - `apps/rider/lib/accountApi.ts`
+  - `apps/rider/lib/accountApi.test.mjs`
+  - `docs/FIXES.md`
+- **Verified:** `node --experimental-strip-types --test apps/rider/lib/friendsApi.test.mjs apps/rider/lib/accountApi.test.mjs apps/driver/lib/push.test.mjs`
+
 ## 2026-09-25 — offline/error-state tests for rider friends, account, and driver push
 
 - **Track / machine:** Clemson RIDES · deputy/offline-error-states · pkg-offline-error-states t1

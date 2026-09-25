@@ -71,11 +71,21 @@ export async function loadAccount(userId: string) {
     }
   }
   if (!supabase) return { profile: null as RiderProfile | null, prefs: localPrefs, error: 'Supabase is not configured' }
-  const { data, error } = await supabase
+  const queried = await supabase
     .from('profiles')
     .select('full_name, bio, email, student_verified_at, favorite_spots, notification_prefs, stripe_card_brand, stripe_card_last4, rating_avg, rating_count')
     .eq('id', userId)
     .maybeSingle()
+    // A rejected fetch must not throw: the account screen has no .catch.
+    .then((row) => row, () => null)
+  if (!queried) {
+    return {
+      profile: null as RiderProfile | null,
+      prefs: localPrefs,
+      error: 'Could not load your account. Check your connection and try again.',
+    }
+  }
+  const { data, error } = queried
   if (error) return { profile: null as RiderProfile | null, prefs: localPrefs, error: error.message }
   const profile = data
     ? {
