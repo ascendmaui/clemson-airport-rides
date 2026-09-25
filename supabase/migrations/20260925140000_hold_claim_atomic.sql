@@ -68,6 +68,18 @@ END;
 $$;
 
 REVOKE ALL ON FUNCTION public.merge_trip_metadata(uuid, jsonb, text[], text, timestamptz, boolean, boolean, boolean) FROM PUBLIC;
+-- Supabase grants EXECUTE on new public functions to anon and authenticated by
+-- default privileges, so REVOKE FROM PUBLIC alone does not remove them. This
+-- SECURITY DEFINER function must only be callable by the server (service_role).
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN
+    REVOKE EXECUTE ON FUNCTION public.merge_trip_metadata(uuid, jsonb, text[], text, timestamptz, boolean, boolean, boolean) FROM anon;
+  END IF;
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN
+    REVOKE EXECUTE ON FUNCTION public.merge_trip_metadata(uuid, jsonb, text[], text, timestamptz, boolean, boolean, boolean) FROM authenticated;
+  END IF;
+END $$;
 DO $$
 BEGIN
   IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'service_role') THEN
