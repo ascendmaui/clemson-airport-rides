@@ -2,6 +2,13 @@
 
 Persistent knowledge base for recurring failures. When a matching issue appears, apply the saved fix first.
 
+## 2026-09-25 — merge_trip_metadata trip_status enum cast applied (#100)
+
+- **Problem:** `public.merge_trip_metadata` (#80) failed on every call with `operator does not exist: trip_status = text`, which broke the airport-checkout session bind, abandon-checkout release and the unpaid-hold expiry cancel.
+- **Fix:** migration `20260925150000_merge_trip_metadata_enum_cast.sql` (`status::text = ANY(p_expected_statuses)`, `COALESCE(p_new_status::public.trip_status, status)`). Applied to awktabuhijrshmsmagpq at 12:51 AM ET 9/25 with John's approval. anon/authenticated still cannot execute it; service_role can. No redeploy was needed.
+- **Verified in prod (test mode):** airport-checkout 200, and the session is now bound (`stripe_checkout_session_id` / `stripe_checkout_created_at` stamped); reconcile-checkout on the unpaid session 200 `paid:false`; abandon-checkout 200 `released:true, status:canceled`; no `trip_status = text` in the runtime logs. Throwaway user and trip deleted.
+- **Lesson:** fake Supabase clients in the unit tests cannot catch Postgres type errors. Call any new RPC once against the real DB (a no-op id works) before shipping.
+
 ## 2026-09-25 — Build 19 shipped to production (#91); merge_trip_metadata enum bug found in smoke test
 
 - **Track / machine:** Clemson RIDES · Max (merges, tests) + MacBookPro-1096 (Vercel CLI, team john-matveyev-macbooki9, project clemson-rides) · approved by John 12:19 AM ET 9/25.
