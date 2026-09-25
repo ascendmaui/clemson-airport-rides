@@ -2,6 +2,16 @@
 
 Persistent knowledge base for recurring failures. When a matching issue appears, apply the saved fix first.
 
+## 2026-09-25 — partyProfile unit tests cover every export
+
+- **Track / machine:** Clemson RIDES · deputy/party-profile-tests · pkg-party-profile-tests t1
+- **What was wrong:** `packages/rides-native/partyProfile.test.js` checked signup, ensure, draft merge, route gates, counterpart ids, and the rating happy path, but never called the async loaders or several pure helpers (`digits`, `formatPhone`, `hasRideStyle`, `asSpotList`, `vehicleLabelFromRow`, and the profile constants).
+- **What changed:** Extended `packages/rides-native/partyProfile.test.js` only. Did not edit `packages/rides-native/partyProfile.js`. The suite now locks the export list and each helper. Suspicious current behavior stays asserted with `// BUG?:`: `validateStars(true)` and scientific notation count as stars; `formatRatingLine` prints negative, fractional, and out-of-range values and rounds 4.85 to 4.8; `asSpotList` keeps untrimmed spots; whitespace-only metadata blocks `userWithDraft`; `readSignupDraft` accepts JSON arrays and stringifies non-strings; a one-character name and a too-short phone are stored and then not repaired by `buildEnsureProfilePatch`; `ratingBlockReason` tells non-parties the trip is unfinished and reports a missing rider as "Cannot rate yourself"; `findPendingRating` interpolates `userId` into `.or()`, swallows query errors, and only requests five trips; `loadPublicProfile` treats an RPC error that mentions "function" as a missing RPC; `loadOwnProfile` retries the narrow select for any error that mentions "column"; an empty-string `rating_avg` becomes 0 and any truthy `student_verified_at` marks a student.
+- **Files touched:**
+  - `packages/rides-native/partyProfile.test.js`
+  - `docs/FIXES.md`
+- **Verified:** `node --experimental-strip-types --test packages/rides-native/partyProfile.test.js` (31/31 passing).
+
 ## 2026-09-25 — Build 19 shipped to production (#91); merge_trip_metadata enum bug found in smoke test
 
 - **Track / machine:** Clemson RIDES · Max (merges, tests) + MacBookPro-1096 (Vercel CLI, team john-matveyev-macbooki9, project clemson-rides) · approved by John 12:19 AM ET 9/25.
