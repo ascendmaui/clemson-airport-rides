@@ -233,6 +233,13 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
   - `docs/FIXES.md`
 - **Verified:** `node --experimental-strip-types --test packages/rides-native/googleAuthConfig.test.js` (22/22 passing).
 
+## 2026-09-25 — Shared unpaid airport-hold TTL and rider countdown [t1]
+
+- **What was wrong:** `UNPAID_AIRPORT_HOLD_TTL_MS` lived only in `server/abandonedCheckout.js`. The rider client had no pure helper for the same 20-minute deadline, so an unpaid airport hold could be canceled (`unpaid_hold_ttl`) with no shared remaining-time label.
+- **What changed:** The 20-minute value now lives in `shared/airportHold.js`. `server/abandonedCheckout.js` re-exports it; the number is unchanged (`20 * 60 * 1000`). `packages/rides-native/holdExpiry.js` counts down from the later of `created_at` and `metadata.stripe_checkout_created_at`. `msLeft <= 0` is expired, matching the server cutoff. Labels: `Pay within 12 min to keep your ride` (whole minutes floored), `Less than a minute left`, `This hold expired — request again`. A missing start time returns `{ msLeft: null, expired: false, label: '' }` because the server skips a hold with no anchor.
+- **Files touched:** `shared/airportHold.js`, `server/abandonedCheckout.js`, `packages/rides-native/holdExpiry.js`, `packages/rides-native/holdExpiry.d.ts`, `packages/rides-native/holdExpiry.test.js`, `docs/FIXES.md`
+- **Verified:** `node --experimental-strip-types --test packages/rides-native/holdExpiry.test.js` (13/13) and the server boundary test `an unpaid airport hold is canceled at 20 minutes and kept one millisecond earlier`.
+
 ## 2026-09-25 — merge_trip_metadata trip_status enum cast applied (#100)
 
 - **Problem:** `public.merge_trip_metadata` (#80) failed on every call with `operator does not exist: trip_status = text`, which broke the airport-checkout session bind, abandon-checkout release and the unpaid-hold expiry cancel.
