@@ -2,6 +2,10 @@
 
 Persistent knowledge base for recurring failures. When a matching issue appears, apply the saved fix first.
 
+## 2026-09-24 — iOS build 19 (rider + driver) integration: contents
+
+- **Track / machine:** Clemson RIDES · Max / 1.1.0(19), branch integration/b19 (worktree ~/Projects/wt/clemson-b19) from main d3a3fe1 (#71). Build 19 = main + #83 (approval bundle of #72, #73, #74, #77, #78, #79, #80, #81, #82) + #84 profile-ensure + #85 driver offer-card safe area + #86 checkout-reconcile + #87 lostfound-tests + #88 driver-onboarding-tests + #89 trip-messages-tests + #90 error-messages (incl. 60e6111 vite-build import fix). #75/#76 not merged separately (bundled via #77 in #83). buildNumber/CFBundleVersion/CURRENT_PROJECT_VERSION = 19. Integration fixes: ensureProfile test mock gained `.in()`/`rpc()`; apiErrors dropped the removed-auth vendor token (noClerk guard); driverDesk test expects #90 friendly copy. Migrations from #78/#80/#82 are NOT applied by this build; the app build does not depend on them, but the server side of #80 does.
+
 ## 2026-09-24 — Sanitize removed auth vendor name in INTEGRATION_BUNDLE.md [t2]
 
 - **Track / machine:** Deputy · pkg-integration-72-82 t2 · integration/approval-bundle
