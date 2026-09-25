@@ -205,3 +205,26 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
   - `packages/rides-native/apiErrors.d.ts`
   - `packages/rides-native/apiErrors.test.js`
   - `docs/FIXES.md`
+
+## 2026-09-24 — Authed fetch session refresh & friendly config error handling (t2)
+- **Problem:** When server payment configuration was broken or missing (503/config errors), riders saw raw server configuration text (e.g. 'STRIPE_SECRET_KEY is not configured.' / 'SUPABASE_SERVICE_ROLE_KEY not configured') or 'Sign in required'. Expired or missing auth tokens immediately surfaced auth errors without attempting to refresh the session first.
+- **What was wrong:** The authed fetch client (`authedJson` in `packages/rides-native/apiClient.js`) threw raw server error strings from response bodies without sanitizing them via `friendlyApiError`, and on 401 HTTP responses it did not attempt to refresh the Supabase session before failing.
+- **What was changed:**
+  - Updated `packages/rides-native/apiClient.js` `authedJson`:
+    - On 401 status, calls `supabase.auth.refreshSession()` once; if a refreshed session with an access token is yielded, retries the request once with the new access token.
+    - If refresh fails or yields no session (or retry fails), surfaces safe auth error (`Please sign in again to continue.`).
+    - On 503 and server configuration errors (or bodies matching missing config patterns), throws an Error with friendly copy (`Payments are temporarily unavailable, please try again shortly`), keeping `status` and `code` on the error object without refreshing.
+  - Re-exported `authedJson` from `packages/rides-native/riderMoney.js` and updated type definitions in `packages/rides-native/riderMoney.d.ts` and `packages/rides-native/apiClient.d.ts`.
+  - Exported `authedJson` from `apps/rider/lib/apiAuth.ts`.
+  - Updated `packages/rides-native/shared/carpoolApi.js` to delegate `authedJson` to `apiClient.js` and sanitize error messages using `friendlyApiError`.
+  - Added unit test suite in `packages/rides-native/riderMoney.test.js` covering fake fetch + fake supabase.auth: 401 refresh succeeds and retries once, 401 refresh fails and surfaces auth error, 503 config error throws friendly message without refresh, 401 retry failure does not refresh a second time, and 500 config error returns friendly copy.
+- **Files touched:**
+  - `packages/rides-native/apiClient.js`
+  - `packages/rides-native/apiClient.d.ts`
+  - `packages/rides-native/riderMoney.js`
+  - `packages/rides-native/riderMoney.d.ts`
+  - `packages/rides-native/riderMoney.test.js`
+  - `packages/rides-native/shared/carpoolApi.js`
+  - `apps/rider/lib/apiAuth.ts`
+  - `docs/FIXES.md`
+

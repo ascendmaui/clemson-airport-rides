@@ -1,3 +1,5 @@
+export { authedJson } from './apiClient.js'
+
 export const AIRPORT_CHOICES: { code: 'GSP' | 'CLT'; name: string }[]
 
 export type AirportQuote = {

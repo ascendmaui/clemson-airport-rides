@@ -16,3 +16,6 @@ export async function authHeaders(): Promise<Record<string, string>> {
   if (token) headers.Authorization = `Bearer ${token}`
   return headers
 }
+
+export { authedJson } from 'rides-native/apiClient.js'
+
