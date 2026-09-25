@@ -22,6 +22,7 @@ import handleTripSettle from '../server/endpoints/tripSettle.js'
 import handleScheduleTrip from '../server/endpoints/scheduleTrip.js'
 import handleRequestDriverTrip from '../server/endpoints/requestDriverTrip.js'
 import handleAbandonCheckout from '../server/endpoints/abandonCheckout.js'
+import handleReconcileCheckout from '../server/endpoints/reconcileCheckout.js'
 
 const HANDLERS = {
   'setup-intent': handleStripeSetupIntent,
@@ -37,6 +38,7 @@ const HANDLERS = {
   credits: handlePrepaidCredits,
   collect: handleCollectPayment,
   settle: handleTripSettle,
+  'reconcile-checkout': handleReconcileCheckout,
 }
 
 const LEGACY = {
@@ -50,14 +52,14 @@ const LEGACY = {
   'trip-settle': 'settle',
 }
 
-export default async function handler(req, res) {
+export default async function handler(req, res, ...rest) {
   if (cors(req, res)) return
   const action = resolveRouteAction(req, { allowed: Object.keys(HANDLERS), legacy: LEGACY })
   const handle = HANDLERS[action]
   if (!handle) {
     return json(res, 400, {
-      error: 'Unknown payment action. Use action=setup-intent, save, quote, airport-checkout, schedule-trip, request-driver, buy-credits, credits-confirm, abandon-checkout, credit-lots, credits, collect, or settle.',
+      error: 'Unknown payment action. Use action=setup-intent, save, quote, airport-checkout, schedule-trip, request-driver, buy-credits, credits-confirm, abandon-checkout, credit-lots, credits, collect, settle, or reconcile-checkout.',
     })
   }
-  return handle(req, res)
+  return handle(req, res, ...rest)
 }

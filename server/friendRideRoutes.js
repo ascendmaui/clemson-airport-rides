@@ -28,6 +28,7 @@ import { carpoolSeatCap } from '../src/lib/carpoolEngine.js'
 import { recomputeRideFares } from './friendRideRecompute.js'
 import { settleFriendQuote } from './friendQuote.js'
 import { resolveAmbassadorCode, stampAmbassadorCode } from './ambassadorAttribution.js'
+import { WEB_ORIGIN } from '../shared/productLinks.js'
 
 export async function handleFriendRideCreate(req, res) {
   if (cors(req, res)) return
@@ -524,7 +525,7 @@ export async function handleFriendRideConfirmCharges(req, res) {
   const origin =
     body.origin ||
     process.env.VITE_APP_URL ||
-    'https://clemson-airport-rides.vercel.app'
+    WEB_ORIGIN
 
   try {
     const loaded = await loadRideByToken(sb, token)

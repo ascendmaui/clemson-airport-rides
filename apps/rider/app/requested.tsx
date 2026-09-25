@@ -1,5 +1,6 @@
 import { useLocalSearchParams, useRouter } from 'expo-router'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { reconcileCheckout } from 'rides-native/riderMoney.js'
 import { Pressable, RefreshControl, ScrollView, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { PrimaryButton } from '@/components/Button'
@@ -81,7 +82,7 @@ function pinsFor(trip: LiveTrip | null): MapPin[] {
 export default function Requested() {
   const router = useRouter()
   const insets = useSafeAreaInsets()
-  const params = useLocalSearchParams<{ dest?: string; trip?: string; driver?: string }>()
+  const params = useLocalSearchParams<{ dest?: string; trip?: string; driver?: string; session_id?: string; sessionId?: string; paid?: string }>()
   const tripId = oneParam(params.trip, '')
   const dest = oneParam(params.dest, '')
   const driver = oneParam(params.driver, 'Your driver')
@@ -99,6 +100,7 @@ export default function Requested() {
   const located = live?.driverLat != null && live?.driverLng != null
   const driverName = live?.driverName || driver
   const error = tripError || mapError
+  const reconciledSessions = useRef(new Set<string>())
 
   async function reloadMap() {
     if (!tripId) return
@@ -109,6 +111,19 @@ export default function Requested() {
       setMapError(err instanceof Error ? err.message : 'Could not load this trip')
     }
   }
+
+  useEffect(() => {
+    const sid = params.session_id || params.sessionId
+    if (!sid || !supabase || reconciledSessions.current.has(sid)) return
+    reconciledSessions.current.add(sid)
+    reconcileCheckout(supabase, sid)
+      .then(() => {
+        void reloadMap()
+      })
+      .catch((err) => {
+        console.warn('[checkout-reconcile] requested reconcile error:', err)
+      })
+  }, [params.session_id, params.sessionId])
 
   useEffect(() => {
     if (!tripId) return undefined

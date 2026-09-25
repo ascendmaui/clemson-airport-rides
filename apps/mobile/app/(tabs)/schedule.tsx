@@ -75,7 +75,7 @@ export default function ScheduleScreen() {
     setBusy(true);
     try {
       const iso = when.toISOString();
-      const base = (process.env.EXPO_PUBLIC_API_BASE || 'https://clemson-airport-rides.vercel.app').replace(/\/$/, '');
+      const base = (process.env.EXPO_PUBLIC_API_BASE || 'https://clemson-rides.vercel.app').replace(/\/$/, '');
       const token = data.session?.access_token;
       const res = await fetch(`${base}/api/stripe-payment-methods?action=schedule-trip`, {
         method: 'POST',

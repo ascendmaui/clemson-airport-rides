@@ -8,7 +8,9 @@ import {
   normalizeAmbassadorCode,
   packAttribution,
 } from '../../packages/rides-native/shared/ambassadorAttribution.js'
-import { supabase } from './supabase'
+import { supabase } from './supabase.js'
+import { WEB_ORIGIN } from '../../shared/productLinks.js'
+import { authedJson } from './apiClient.js'
 
 const PLACES = [
   { label: 'Memorial Stadium', lat: 34.6788, lng: -82.843 },
@@ -25,7 +27,7 @@ export function friendsUrl(token) {
   const origin =
     typeof window !== 'undefined'
       ? window.location.origin
-      : 'https://clemson-airport-rides.vercel.app'
+      : WEB_ORIGIN
   return `${origin}/friends/${encodeURIComponent(token)}`
 }
 
@@ -33,7 +35,7 @@ export function carpoolUrl(token) {
   const origin =
     typeof window !== 'undefined'
       ? window.location.origin
-      : 'https://clemson-airport-rides.vercel.app'
+      : WEB_ORIGIN
   return `${origin}/carpool/${encodeURIComponent(token)}`
 }
 
@@ -41,40 +43,8 @@ export function inviteUrl(token, kind = 'friends') {
   return kind === 'carpool' ? carpoolUrl(token) : friendsUrl(token)
 }
 
-async function authHeaders() {
-  const headers = { 'Content-Type': 'application/json' }
-  if (!supabase) return headers
-  const { data } = await supabase.auth.getSession()
-  const token = data?.session?.access_token
-  if (token) headers.Authorization = `Bearer ${token}`
-  return headers
-}
-
-async function api(path, { method = 'GET', body } = {}) {
-  const headers = await authHeaders()
-  let res
-  try {
-    res = await fetch(path, {
-      method,
-      headers,
-      body: body != null ? JSON.stringify(body) : undefined,
-    })
-  } catch (e) {
-    throw new Error(e?.message || 'Network error')
-  }
-  let data = null
-  try {
-    data = await res.json()
-  } catch {
-    throw new Error(`API failed (HTTP ${res.status})`)
-  }
-  if (!res.ok) {
-    const err = new Error(data?.error || data?.message || `HTTP ${res.status}`)
-    err.status = res.status
-    err.payload = data
-    throw err
-  }
-  return data
+export async function api(path, options = {}) {
+  return authedJson(supabase, path, options)
 }
 
 function readAmbassadorRaw() {

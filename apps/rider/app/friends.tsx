@@ -424,7 +424,7 @@ export default function CarpoolHubScreen() {
               label="Link or code"
               value={code}
               onChangeText={setCode}
-              placeholder="clemson-airport-rides.vercel.app/carpool/…"
+              placeholder="clemson-rides.vercel.app/carpool/…"
               autoCapitalize="none"
             />
             <PrimaryButton label="Open lobby" onPress={onJoinCode} tone="purple" />

@@ -61,6 +61,7 @@ export async function sendTripMessage(supabase, { tripId, body }) {
 }
 
 export async function sendTripQuickReply(supabase, { tripId, phrase }) {
+  requireClient(supabase)
   const exact = canonicalQuickReply(phrase)
   if (!exact) throw new Error('Unknown quick reply')
   return sendTripMessage(supabase, { tripId, body: exact })

@@ -99,9 +99,7 @@ export async function loadDriverProfile(supabase, driverId) {
 }
 
 export function riderFacingCard({ profile, vehicle, online }) {
-  const vehicleLabel = vehicle
-    ? [vehicle.color, vehicle.make, vehicle.model].filter(Boolean).join(' ')
-    : 'Vehicle TBD'
+  const vehicleLabel = [vehicle?.color, vehicle?.make, vehicle?.model].filter(Boolean).join(' ') || 'Vehicle TBD'
   return {
     name: profile?.full_name || 'Driver',
     phone: profile?.phone || null,
