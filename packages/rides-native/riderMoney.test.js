@@ -615,7 +615,7 @@ test('quoteAtIso constructs ISO timestamps with fallback to now', () => {
 test('riderPromoShareUrl and riderPromoShareText construct normalized share links', () => {
   assert.equal(
     riderPromoShareUrl('tiger-ride-10'),
-    'https://clemson-airport-rides.vercel.app/#/sign-up?ref=TIGERRIDE10',
+    'https://clemson-rides.vercel.app/#/sign-up?ref=TIGERRIDE10',
   )
   assert.equal(
     riderPromoShareText('tiger-ride-10'),
@@ -623,7 +623,7 @@ test('riderPromoShareUrl and riderPromoShareText construct normalized share link
   )
   assert.equal(
     riderPromoShareUrl(null),
-    'https://clemson-airport-rides.vercel.app/#/sign-up?ref=',
+    'https://clemson-rides.vercel.app/#/sign-up?ref=',
   )
   assert.equal(
     riderPromoShareText(null),
@@ -631,7 +631,7 @@ test('riderPromoShareUrl and riderPromoShareText construct normalized share link
   )
   assert.equal(
     riderPromoShareUrl('abc-def-ghij-klmnop-extra'),
-    'https://clemson-airport-rides.vercel.app/#/sign-up?ref=ABCDEFGHIJKLMNOP',
+    'https://clemson-rides.vercel.app/#/sign-up?ref=ABCDEFGHIJKLMNOP',
   )
 })
 
@@ -1294,7 +1294,7 @@ test('exported constants match configuration specifications', () => {
   assert.match(STUDENT_CLAIM_COPY, /10% off Standard/)
   assert.match(STUDENT_EMAIL_REQUIRED_COPY, /Clemson student email/)
   assert.match(STUDENT_CONFIRM_EMAIL_COPY, /Confirm the Clemson email/)
-  assert.equal(NATIVE_CHECKOUT_ORIGIN, 'https://clemson-airport-rides.vercel.app')
+  assert.equal(NATIVE_CHECKOUT_ORIGIN, 'https://clemson-rides.vercel.app')
   assert.equal(
     STRIPE_NOT_CONFIGURED_COPY,
     'Stripe checkout is not configured on this machine. No charge was made. Live mode stays off.',
