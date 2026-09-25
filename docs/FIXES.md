@@ -290,6 +290,14 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
 - **Files touched:** `shared/airportHold.js`, `server/abandonedCheckout.js`, `packages/rides-native/holdExpiry.js`, `packages/rides-native/holdExpiry.d.ts`, `packages/rides-native/holdExpiry.test.js`, `docs/FIXES.md`
 - **Verified:** `node --experimental-strip-types --test packages/rides-native/holdExpiry.test.js` (13/13) and the server boundary test `an unpaid airport hold is canceled at 20 minutes and kept one millisecond earlier`.
 
+## 2026-09-25 — driver approval gate map + unit tests (pkg-driver-approval-gate-r2 t1)
+
+- **Track / machine:** Clemson RIDES · worktree deputy-pkg-driver-approval-gate-r2 · branch deputy/driver-approval-gate-r2
+- **What was wrong:** Unapproved drivers (`onboarding_status` not `approved`) can still see or claim rides on some surfaces. There was no inventory of offer / match / notify / accept paths, and `server/driverApproval.js` had no unit tests.
+- **What changed:** Mapped every path in `docs/driver-approval-gate.md` (whether it checks approval today). Added `server/driverApproval.test.js` for `canReceiveRides` (every `ONBOARDING_STATUSES` value plus null/undefined/garbage) and `driverApprovalStatus` with a fake `sb` (approved, pending_review, missing row, db error). Production behavior unchanged.
+- **Files touched:** `docs/driver-approval-gate.md`, `server/driverApproval.test.js`, `docs/FIXES.md`
+- **Verified:** `node --experimental-strip-types --test server/driverApproval.test.js` (6/6 passing)
+
 ## 2026-09-25 — merge_trip_metadata trip_status enum cast applied (#100)
 
 - **Problem:** `public.merge_trip_metadata` (#80) failed on every call with `operator does not exist: trip_status = text`, which broke the airport-checkout session bind, abandon-checkout release and the unpaid-hold expiry cancel.
