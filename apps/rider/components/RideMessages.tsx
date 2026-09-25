@@ -80,7 +80,13 @@ export function RideMessages({ tripId, userId }: { tripId: string; userId: strin
 
   return (
     <View style={[styles.card, lift(colors, 'rest')]}>
-      <Pressable accessibilityRole="button" onPress={() => setOpen((value) => !value)}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={open ? 'Hide ride messages' : 'Message your driver'}
+        accessibilityHint={open ? 'Hides the thread' : 'Opens the trip message thread'}
+        accessibilityState={{ expanded: open }}
+        onPress={() => setOpen((value) => !value)}
+      >
         <Text style={styles.kicker}>RIDE CHAT</Text>
         <Text style={styles.title}>{mode === 'readonly' ? 'Ride messages' : 'Message'}</Text>
         <Text style={styles.copy}>{open ? 'Hide the thread' : 'Same trip_messages thread as the website.'}</Text>
@@ -98,7 +104,15 @@ export function RideMessages({ tripId, userId }: { tripId: string; userId: strin
             <>
               <View style={styles.chips}>
                 {RIDE_CHAT_QUICK_REPLIES.map((phrase) => (
-                  <Pressable key={phrase} accessibilityRole="button" onPress={() => void send(phrase, true)} style={styles.chip}>
+                  <Pressable
+                    key={phrase}
+                    accessibilityRole="button"
+                    accessibilityLabel={phrase}
+                    accessibilityHint="Sends this message"
+                    hitSlop={8}
+                    onPress={() => void send(phrase, true)}
+                    style={styles.chip}
+                  >
                     <Text style={styles.chipLabel}>{phrase}</Text>
                   </Pressable>
                 ))}
@@ -110,8 +124,17 @@ export function RideMessages({ tripId, userId }: { tripId: string; userId: strin
                 placeholderTextColor={colors.placeholder}
                 style={styles.input}
                 editable={!busy}
+                accessibilityLabel="Message your driver"
               />
-              <Pressable accessibilityRole="button" disabled={busy || !draft.trim()} onPress={() => void send(draft)} style={styles.send}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Send message"
+                accessibilityState={{ disabled: busy || !draft.trim() }}
+                disabled={busy || !draft.trim()}
+                hitSlop={16}
+                onPress={() => void send(draft)}
+                style={styles.send}
+              >
                 <Text style={styles.sendLabel}>{busy ? 'Sending…' : 'Send'}</Text>
               </Pressable>
             </>

@@ -30,6 +30,7 @@ export function SosButton({ onPress }: { onPress: () => void }) {
     <Pressable
       accessibilityRole="button"
       accessibilityLabel="SOS"
+      accessibilityHint="Opens emergency help"
       onPress={onPress}
       style={[styles.fab, { backgroundColor: colors.danger, shadowColor: colors.danger }]}
     >
@@ -79,7 +80,13 @@ export function SosIncomingBanner({
         <Text style={styles.bannerTitle}>Your driver {sosChannelPhrase(event.channel)}</Text>
         <Text style={styles.bannerMeta}>Trip {String(event.trip_id).slice(0, 8)}</Text>
       </View>
-      <Pressable accessibilityLabel="Dismiss SOS banner" onPress={() => setDismissedId(event.id)}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Dismiss SOS banner"
+        accessibilityHint="Hides this SOS notice"
+        hitSlop={12}
+        onPress={() => setDismissedId(event.id)}
+      >
         <Text style={styles.bannerDismiss}>×</Text>
       </Pressable>
     </View>
@@ -258,6 +265,7 @@ export function SosSheet({
             accessibilityRole="button"
             accessibilityLabel="Call 911"
             accessibilityHint={callHint}
+            accessibilityState={{ disabled: busy }}
             disabled={busy}
             onPress={() => { void onPolice('tel_911') }}
             style={[styles.call911, busy && styles.disabled]}
@@ -271,6 +279,7 @@ export function SosSheet({
             accessibilityRole="button"
             accessibilityLabel="Call Clemson Police"
             accessibilityHint={callHint}
+            accessibilityState={{ disabled: busy }}
             disabled={busy}
             onPress={() => { void onPolice('tel_cupd') }}
             style={[styles.callPolice, busy && styles.disabled]}

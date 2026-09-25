@@ -80,6 +80,13 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
   - `packages/rides-native/documentReview.test.js`
   - `docs/FIXES.md`
 
+## 2026-09-25 — Rider core-flow accessibility
+
+- **Track / machine:** Clemson RIDES · deputy/rider-a11y · pkg-rider-a11y t2
+- **What was wrong:** Sign-in, home request, fare confirm, checkout return, the live trip, and trip rating exposed Pressables with no role or name. Map, fare, and driver choices did not expose selected state. Disabled actions did not expose disabled state. Several controls were under a 44pt hit target. Driver assigned and arriving did not announce, and a Stripe return did not announce that checkout had sent the rider back.
+- **What changed:** Added accessibilityRole, accessibilityLabel, and accessibilityHint on those controls, accessibilityState for selected and disabled, and hitSlop so small controls reach 44pt. Live trip status uses AccessibilityInfo.announceForAccessibility for assigned (`accepted`) and arriving, plus accessibilityLiveRegion on the status title. Checkout return announces on the live trip and on Schedule. The static allowlist dropped the fixed tags. History’s back button, Schedule’s upcoming-ride Cancel, and the two emergency-contact editor buttons stay allowlisted.
+- **Files touched:** `apps/rider/app/index.tsx`, `apps/rider/app/confirm.tsx`, `apps/rider/app/tiers.tsx`, `apps/rider/app/pick-driver.tsx`, `apps/rider/app/requested.tsx`, `apps/rider/app/rate.tsx`, `apps/rider/app/history.tsx`, `apps/rider/app/schedule.tsx`, `apps/rider/components/Button.tsx`, `apps/rider/components/SignInToBookSheet.tsx`, `apps/rider/components/MainTabs.tsx`, `apps/rider/components/RideMessages.tsx`, `apps/rider/components/LiveShareCard.tsx`, `apps/rider/components/SosSheet.tsx`, `apps/rider/components/carpool/NeighborhoodPicker.tsx`, `packages/rides-native/AuthScreens.jsx`, `packages/rides-native/PartyScreens.jsx`, `tests/a11yRider.test.js`, `docs/FIXES.md`
+
 ## 2026-09-25 — Rider accessibility static scan
 
 - **Track / machine:** Clemson RIDES · deputy/rider-a11y · pkg-rider-a11y t1

@@ -17,7 +17,13 @@ export default function RateRoute() {
 
   return (
     <ScrollView style={{ flex: 1, backgroundColor: colors.background }} contentContainerStyle={{ padding: 16, paddingTop: insets.top + 12, paddingBottom: insets.bottom + 24, gap: 12 }}>
-      <Pressable accessibilityRole="button" accessibilityLabel="Back" onPress={() => router.back()}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Back"
+        accessibilityHint="Returns to the previous screen"
+        hitSlop={16}
+        onPress={() => router.back()}
+      >
         <Text style={{ color: colors.link, fontSize: 13, fontWeight: '800' }}>← Back</Text>
       </Pressable>
       {user && tripId ? (

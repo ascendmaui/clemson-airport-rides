@@ -71,6 +71,7 @@ export function NeighborhoodPicker({
         autoCorrect={false}
         autoCapitalize="words"
         style={styles.search}
+        accessibilityLabel={`Search ${label.toLowerCase()}`}
       />
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
         {hot.map((spot) => (
@@ -84,7 +85,10 @@ export function NeighborhoodPicker({
             <Pressable
               key={item.id}
               accessibilityRole="button"
+              accessibilityLabel={item.label}
+              accessibilityHint={`Shows ${item.label.toLowerCase()} stops`}
               accessibilityState={{ selected: on }}
+              hitSlop={10}
               onPress={() => {
                 setQuery('')
                 setGroup(item.id)
@@ -117,7 +121,10 @@ function Chip({ spot, selected, onPress }: { spot: { id: string; label: string }
   return (
     <Pressable
       accessibilityRole="button"
+      accessibilityLabel={spot.label}
+      accessibilityHint="Selects this stop"
       accessibilityState={{ selected }}
+      hitSlop={8}
       onPress={onPress}
       style={[styles.chip, selected && styles.chipOn]}
     >

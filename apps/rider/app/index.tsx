@@ -299,6 +299,7 @@ export default function RiderHome() {
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Account"
+              accessibilityHint={user ? 'Opens your account' : 'Sign in to open your account'}
               onPress={() => {
                 void tapHaptic()
                 // No loaded account: go to login instead of a gated screen.
@@ -319,13 +320,29 @@ export default function RiderHome() {
               {MAP_KINDS.map((kind) => {
                 const on = mapType === kind
                 return (
-                  <Pressable key={kind} onPress={() => setMapType(kind)} style={[styles.kindChip, on && styles.kindOn]}>
+                  <Pressable
+                    key={kind}
+                    onPress={() => setMapType(kind)}
+                    style={[styles.kindChip, on && styles.kindOn]}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${mapKindLabel(kind)} map`}
+                    accessibilityHint="Changes the campus map style"
+                    accessibilityState={{ selected: on }}
+                    hitSlop={10}
+                  >
                     <Text style={[styles.kindText, on && styles.kindTextOn]}>{mapKindLabel(kind)}</Text>
                   </Pressable>
                 )
               })}
             </View>
-            <Pressable onPress={onLocate} style={[styles.locate, lift(colors, 'rest')]} accessibilityRole="button" accessibilityLabel="Center on me">
+            <Pressable
+              onPress={onLocate}
+              style={[styles.locate, lift(colors, 'rest')]}
+              accessibilityRole="button"
+              accessibilityLabel="Center on me"
+              accessibilityHint="Moves the map to your location"
+              accessibilityState={{ busy: locating }}
+            >
               <Text style={styles.locateText}>{locating ? '…' : '◎'}</Text>
             </Pressable>
           </View>
@@ -344,6 +361,11 @@ export default function RiderHome() {
               setShowBusy((value) => !value)
             }}
             style={[styles.busy, showBusy && styles.busyOn]}
+            accessibilityRole="button"
+            accessibilityLabel={showBusy ? 'Busy areas on' : 'Busy areas off'}
+            accessibilityHint="Shows or hides busy areas on the campus map"
+            accessibilityState={{ selected: showBusy }}
+            hitSlop={8}
           >
             <Text style={[styles.busyText, showBusy && styles.busyTextOn]}>
               {showBusy ? 'Busy Areas · On' : 'Busy Areas · Off'}
@@ -380,7 +402,7 @@ export default function RiderHome() {
       </View>
 
       <View style={styles.sheet}>
-        <View {...pan.panHandlers} accessibilityLabel="Drag down to expand the map" accessibilityRole="adjustable">
+        <View {...pan.panHandlers} accessibilityLabel="Drag down to expand the map" accessibilityHint="Drag down to make the map taller" accessibilityRole="adjustable">
           <SheetHandle />
           <Text style={styles.dragHint}>Drag down to expand the map</Text>
         </View>
@@ -416,6 +438,8 @@ export default function RiderHome() {
               {liveTrip ? (
                 <Pressable
                   accessibilityRole="button"
+                  accessibilityLabel={`Live ride. ${riderLiveView(liveTrip.status).title}. Open tracking for ${liveTrip.dropoff_label || 'this trip'}.`}
+                  accessibilityHint="Opens live trip tracking"
                   onPress={() => router.push({ pathname: '/requested', params: { trip: liveTrip.id, dest: liveTrip.dropoff_label || '' } })}
                   style={[styles.liveCard, lift(colors, 'rest')]}
                 >
@@ -443,6 +467,7 @@ export default function RiderHome() {
               key={item.tripId}
               accessibilityRole="button"
               accessibilityLabel={`${item.label}. ${item.body}`}
+              accessibilityHint="Opens your scheduled rides"
               onPress={() => {
                 void tapHaptic()
                 router.push('/schedule')
@@ -461,12 +486,18 @@ export default function RiderHome() {
             placeholderTextColor={colors.placeholder}
             style={[styles.search, lift(colors, 'rest')]}
             autoCorrect={false}
+            accessibilityLabel="Destination"
+            accessibilityHint="Search a campus stop or airport"
           />
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
             {suggestions.map((stop) => (
               <Pressable
                 key={stop.id}
                 accessibilityRole="button"
+                accessibilityLabel={stop.label}
+                accessibilityHint="Requests a ride to this place"
+                accessibilityState={{ selected: query === stop.label }}
+                hitSlop={8}
                 onPress={() => {
                   setQuery(stop.label)
                   setDestError(null)
@@ -481,7 +512,14 @@ export default function RiderHome() {
           {query.trim().length >= 2 && suggestions.length === 0 ? (
             <Text style={styles.locateNote}>No campus or airport match. Try Grand Marc, the stadium, or GSP.</Text>
           ) : null}
-          <Pressable accessibilityRole="button" onPress={() => goSearch()} style={styles.searchLink}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Search destination"
+            accessibilityHint="Continues to confirm pickup"
+            hitSlop={8}
+            onPress={() => goSearch()}
+            style={styles.searchLink}
+          >
             <Text style={styles.searchLinkText}>Search destination →</Text>
           </Pressable>
           {destError ? <Text style={styles.locateNote}>{destError}</Text> : null}
@@ -495,7 +533,14 @@ export default function RiderHome() {
 
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.shortcuts}>
             {SHORTCUTS.map((shortcut) => (
-              <Pressable key={shortcut.id} onPress={() => goSearch(shortcut.sub)} style={[styles.shortcut, lift(colors, 'rest')]}>
+              <Pressable
+                key={shortcut.id}
+                onPress={() => goSearch(shortcut.sub)}
+                style={[styles.shortcut, lift(colors, 'rest')]}
+                accessibilityRole="button"
+                accessibilityLabel={`${shortcut.label}. ${shortcut.sub}`}
+                accessibilityHint="Requests a ride to this place"
+              >
                 <Text style={styles.shortcutIcon}>{shortcut.icon}</Text>
                 <Text style={styles.shortcutLabel}>{shortcut.label}</Text>
                 <Text style={styles.shortcutSub}>{shortcut.sub}</Text>
@@ -515,6 +560,9 @@ export default function RiderHome() {
               router.push(user ? '/student' : '/sign-in')
             }}
             style={[styles.studentCard, studentOffer.granted && styles.studentOn, lift(colors, 'rest')]}
+            accessibilityRole="button"
+            accessibilityLabel={studentOffer.detail ? `${studentOffer.title}. ${studentOffer.detail}` : studentOffer.title}
+            accessibilityHint={user ? 'Opens student pricing' : 'Sign in to check student pricing'}
           >
             <Text style={styles.gamedayIcon}>🎓</Text>
             <View style={styles.gamedayCopy}>
@@ -529,6 +577,9 @@ export default function RiderHome() {
               router.push('/friends')
             }}
             style={[styles.gameday, lift(colors, 'rest')]}
+            accessibilityRole="button"
+            accessibilityLabel="Game day carpool. About 10 to 15 dollars each instead of 30 to 40."
+            accessibilityHint="Opens carpools"
           >
             <Text style={styles.gamedayIcon}>🏈</Text>
             <View style={styles.gamedayCopy}>

@@ -1,6 +1,6 @@
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Pressable, RefreshControl, ScrollView, Text, TextInput, View } from 'react-native'
+import { AccessibilityInfo, Pressable, RefreshControl, ScrollView, Text, TextInput, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Pill, PrimaryButton } from '@/components/Button'
 import { HoldExpiryNotice } from '@/components/HoldExpiryNotice'
@@ -12,6 +12,7 @@ import { loadRiderHoldTrip, loadSurfaceHold, type RiderHoldTrip } from '@/lib/ho
 import { oneParam } from '@/lib/oneParam'
 import { useAuth } from '@/lib/auth'
 import { successHaptic, tapHaptic } from '@/lib/feedback'
+import { oneParam } from '@/lib/oneParam'
 import { openStripeCheckout } from '@/lib/openCheckout'
 import {
   cancelScheduledTrip,
@@ -130,6 +131,8 @@ function ScheduleScreen() {
   const params = useLocalSearchParams<{ trip?: string | string[]; airport?: string | string[] }>()
   const linkedTripId = oneParam(params.trip, '')
   const linkedAirport = oneParam(params.airport, '')
+  const returnParams = useLocalSearchParams<{ paid?: string | string[] }>()
+  const returnPaid = oneParam(returnParams.paid)
   const insets = useSafeAreaInsets()
   const { user } = useAuth()
   const studentOn = useStudentStatus().verified
@@ -182,6 +185,16 @@ function ScheduleScreen() {
   useFocusEffect(useCallback(() => {
     setFocusTick((n) => n + 1)
   }, []))
+
+  useEffect(() => {
+    if (returnPaid !== '1' && returnPaid !== 'true') return
+    setBanner('Stripe Checkout sent you back. The deposit shows up when Stripe confirms it.')
+  }, [returnPaid])
+
+  useEffect(() => {
+    if (!banner) return
+    AccessibilityInfo.announceForAccessibility(banner)
+  }, [banner])
 
   const key = `${quoteInputKey({ airport, date, time })}|${studentOn ? 'student' : 'standard'}`
 
@@ -589,6 +602,8 @@ function ScheduleScreen() {
                   onPress={() => setWeekendAirport(code)}
                   style={[styles.choice, on && styles.choiceOn]}
                   accessibilityRole="button"
+                  accessibilityLabel={code === 'GSP' ? 'Greenville-Spartanburg' : 'Charlotte Douglas'}
+                  accessibilityHint="Sets the weekend airport"
                   accessibilityState={{ selected: on }}
                 >
                   <Text style={styles.choiceCode}>{code}</Text>
@@ -606,6 +621,7 @@ function ScheduleScreen() {
           placeholderTextColor={colors.placeholder}
           autoCapitalize="none"
           style={styles.input}
+          accessibilityLabel="Weekend date"
         />
         <Text style={styles.label}>Pickup time</Text>
         <TextInput
@@ -615,6 +631,7 @@ function ScheduleScreen() {
           placeholderTextColor={colors.placeholder}
           autoCapitalize="none"
           style={styles.input}
+          accessibilityLabel="Weekend pickup time"
         />
         <Text style={styles.fine}>Friday 9:00 PM is filled in. Change it for another slot, at least 30 minutes ahead.</Text>
         <Text style={styles.label}>Pickup</Text>
@@ -670,7 +687,7 @@ function ScheduleScreen() {
           tone="purple"
         />
         {error ? <Text style={styles.error}>{error}</Text> : null}
-        {banner ? <Text style={styles.banner}>{banner}</Text> : null}
+        {banner ? <Text style={styles.banner} accessibilityLiveRegion="polite">{banner}</Text> : null}
 
         <Text
           style={styles.section}
@@ -691,6 +708,8 @@ function ScheduleScreen() {
                 onPress={() => setAirport(code)}
                 style={[styles.choice, on && styles.choiceOn]}
                 accessibilityRole="button"
+                accessibilityLabel={code === 'GSP' ? 'Greenville-Spartanburg' : 'Charlotte Douglas'}
+                accessibilityHint="Sets the airport for this deposit"
                 accessibilityState={{ selected: on }}
               >
                 <Text style={styles.choiceCode}>{code}</Text>
@@ -708,6 +727,7 @@ function ScheduleScreen() {
           placeholderTextColor={colors.placeholder}
           autoCapitalize="none"
           style={styles.input}
+          accessibilityLabel="Airport date"
         />
         <Text style={styles.label}>Pickup time</Text>
         <TextInput
@@ -717,6 +737,7 @@ function ScheduleScreen() {
           placeholderTextColor={colors.placeholder}
           autoCapitalize="none"
           style={styles.input}
+          accessibilityLabel="Pickup time"
         />
 
         <View style={styles.panel}>
@@ -756,7 +777,7 @@ function ScheduleScreen() {
           <Text style={styles.error}>{phase.message}</Text>
         ) : null}
         {error ? <Text style={styles.error}>{error}</Text> : null}
-        {banner ? <Text style={styles.banner}>{banner}</Text> : null}
+        {banner ? <Text style={styles.banner} accessibilityLiveRegion="polite">{banner}</Text> : null}
 
         <PrimaryButton
           label={busy ? 'Starting checkout…' : airportQuote ? `Pay ${formatCents(airportQuote.depositCents)} deposit` : 'Waiting for fare'}
@@ -769,7 +790,13 @@ function ScheduleScreen() {
         {!user ? (
           <Text style={styles.copy}>Browse the quote. Sign in when you pay the deposit.</Text>
         ) : null}
-        <Pressable onPress={() => router.push('/student')} accessibilityRole="button">
+        <Pressable
+          onPress={() => router.push('/student')}
+          accessibilityRole="button"
+          accessibilityLabel="Clemson students save 10% on Standard"
+          accessibilityHint="Opens student pricing"
+          hitSlop={14}
+        >
           <Text style={styles.link}>Clemson students save 10% on Standard</Text>
         </Pressable>
 
@@ -796,9 +823,9 @@ function ScheduleScreen() {
           </View>
         ) : null}
         <Text style={styles.label}>{purpose === 'recurring' ? 'First date (optional)' : 'Date'}</Text>
-        <TextInput value={campusDate} onChangeText={setCampusDate} placeholder="YYYY-MM-DD" placeholderTextColor={colors.placeholder} style={styles.input} autoCapitalize="none" />
+        <TextInput value={campusDate} onChangeText={setCampusDate} placeholder="YYYY-MM-DD" placeholderTextColor={colors.placeholder} style={styles.input} autoCapitalize="none" accessibilityLabel="Ride date" />
         <Text style={styles.label}>Pickup time</Text>
-        <TextInput value={campusTime} onChangeText={setCampusTime} placeholder="HH:MM" placeholderTextColor={colors.placeholder} style={styles.input} autoCapitalize="none" />
+        <TextInput value={campusTime} onChangeText={setCampusTime} placeholder="HH:MM" placeholderTextColor={colors.placeholder} style={styles.input} autoCapitalize="none" accessibilityLabel="Ride pickup time" />
         <Text style={styles.label}>Pickup</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.pills}>
           {RIDE_PLACES.map((place) => (

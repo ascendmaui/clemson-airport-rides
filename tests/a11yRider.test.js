@@ -18,26 +18,10 @@ const SCAN_DIRS = ['apps/rider/app', 'apps/rider/components']
 const INTERACTIVE = new Set(['Pressable', 'TouchableOpacity', 'Button'])
 
 const ALLOWLIST = [
-  'apps/rider/app/confirm.tsx:62:9 <Pressable>',
   'apps/rider/app/history.tsx:61:9 <Pressable>',
-  'apps/rider/app/index.tsx:322:19 <Pressable>',
-  'apps/rider/app/index.tsx:341:11 <Pressable>',
-  'apps/rider/app/index.tsx:498:15 <Pressable>',
-  'apps/rider/app/index.tsx:512:11 <Pressable>',
-  'apps/rider/app/index.tsx:526:11 <Pressable>',
-  'apps/rider/app/pick-driver.tsx:130:7 <Pressable>',
-  'apps/rider/app/pick-driver.tsx:225:9 <Pressable>',
-  'apps/rider/app/pick-driver.tsx:244:15 <Pressable>',
-  'apps/rider/app/requested.tsx:313:9 <Pressable>',
-  'apps/rider/app/schedule.tsx:725:15 <Pressable>',
-  'apps/rider/app/tiers.tsx:51:9 <Pressable>',
-  'apps/rider/app/tiers.tsx:68:13 <Pressable>',
+  'apps/rider/app/schedule.tsx:752:15 <Pressable>',
   'apps/rider/components/EmergencyContactsCard.tsx:192:15 <Pressable>',
   'apps/rider/components/EmergencyContactsCard.tsx:196:13 <Pressable>',
-  'apps/rider/components/SignInToBookSheet.tsx:23:7 <Pressable>',
-  'apps/rider/components/SignInToBookSheet.tsx:24:9 <Pressable>',
-  'apps/rider/components/SignInToBookSheet.tsx:34:11 <Pressable>',
-  'apps/rider/components/SignInToBookSheet.tsx:37:11 <Pressable>',
 ]
 
 function isIdentStart(ch) {

@@ -19,9 +19,16 @@ export function SignInToBookSheet({
   const { colors } = useTheme()
   const styles = useThemedStyles(makeStyles)
   return (
-    <Modal visible={open} animationType="slide" transparent onRequestClose={onClose}>
-      <Pressable style={styles.backdrop} onPress={onClose}>
-        <Pressable style={[styles.sheet, lift(colors, 'float')]} onPress={() => undefined}>
+    <Modal visible={open} animationType="slide" transparent onRequestClose={onClose} accessibilityViewIsModal>
+      <View style={styles.backdrop}>
+        <Pressable
+          style={styles.dismiss}
+          onPress={onClose}
+          accessibilityRole="button"
+          accessibilityLabel="Dismiss sign in"
+          accessibilityHint="Closes this sheet and keeps browsing"
+        />
+        <View style={[styles.sheet, lift(colors, 'float')]}>
           <SheetHandle />
           <View style={styles.badge}>
             <Text style={styles.badgeText}>🐯</Text>
@@ -31,14 +38,28 @@ export function SignInToBookSheet({
             Browse freely — login is only needed when you request a ride or pay the 25% deposit.
           </Text>
           <PrimaryButton label="Sign in" onPress={onSignIn} />
-          <Pressable onPress={onSignUp} style={styles.link}>
+          <Pressable
+            onPress={onSignUp}
+            style={styles.link}
+            accessibilityRole="button"
+            accessibilityLabel="Create account"
+            accessibilityHint="Opens sign up"
+            hitSlop={8}
+          >
             <Text style={styles.linkText}>Create account</Text>
           </Pressable>
-          <Pressable onPress={onClose} style={styles.quiet}>
+          <Pressable
+            onPress={onClose}
+            style={styles.quiet}
+            accessibilityRole="button"
+            accessibilityLabel="Keep browsing"
+            accessibilityHint="Closes this sheet without signing in"
+            hitSlop={8}
+          >
             <Text style={styles.quietText}>Keep browsing</Text>
           </Pressable>
-        </Pressable>
-      </Pressable>
+        </View>
+      </View>
     </Modal>
   )
 }
@@ -46,6 +67,7 @@ export function SignInToBookSheet({
 function makeStyles(colors: Palette) {
   return {
     backdrop: { flex: 1, justifyContent: 'flex-end' as const, backgroundColor: colors.scrim },
+    dismiss: { position: 'absolute' as const, top: 0, right: 0, bottom: 0, left: 0 },
     sheet: {
       margin: 12,
       marginBottom: 24,
