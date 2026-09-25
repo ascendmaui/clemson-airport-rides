@@ -286,7 +286,14 @@ export default function QueueScreen() {
           <>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filters}>
               {queueFilters().map((item) => (
-                <Pressable key={item} onPress={() => setFilter(item)} style={[styles.filter, filter === item && styles.filterOn]}>
+                <Pressable
+                  key={item}
+                  onPress={() => setFilter(item)}
+                  style={[styles.filter, filter === item && styles.filterOn]}
+                  accessibilityRole="button"
+                  accessibilityLabel={filterLabel(item)}
+                  accessibilityState={{ selected: filter === item }}
+                >
                   <Text style={[styles.filterText, filter === item && styles.filterTextOn]}>{filterLabel(item)}</Text>
                 </Pressable>
               ))}

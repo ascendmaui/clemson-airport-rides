@@ -13,6 +13,9 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
   - `server/scheduleTrip.test.js` (flipped former BUG? assertion)
   - `docs/FIXES.md`
   - `packages/rides-native/apiClient.test.js` (stale BUG? assertion; pre-existing on main — `resolveApiBase` already strips all trailing slashes)
+  - `apps/driver/app/(tabs)/index.tsx` (pre-existing duplicate react/RN imports on main; a11y scanner could not parse)
+  - `apps/driver/app/queue.tsx` (filter chip Pressable missing accessibilityLabel/Role)
+  - `tests/a11yRider.test.js` (allowlist line for schedule.tsx Pressable 752→884; pre-existing drift on main)
 - **Verified:** focused parseRideAt tests under `TZ=UTC`; full `npm test` green before merge.
 
 ## 2026-09-25 — Wire offerCard unit tests into npm test [t3]
