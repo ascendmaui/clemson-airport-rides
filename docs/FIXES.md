@@ -714,6 +714,12 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
 - **Files touched:** `docs/driver-approval-gate.md`, `server/driverApproval.test.js`, `docs/FIXES.md`
 - **Verified:** `node --experimental-strip-types --test server/driverApproval.test.js` (6/6 passing)
 
+## 2026-09-25 — fetchNotificationPrefs names a missing query error
+
+- **What was wrong:** `fetchNotificationPrefs` copied `error.message` straight into `softFail`. A truthy Supabase error with no `message`, or with `message: ''`, came back as `undefined` or `''`. The thrown-client path already uses `'fetch failed'`, and the save path already substitutes a string. The rider notifications screen interpolates `softFail` into the profile-sync note.
+- **What changed:** A query error now uses `error.message || 'fetch failed'`. A real message is unchanged. Missing and empty messages both become `'fetch failed'`.
+- **Files touched:** `packages/rides-native/notificationPrefs.js`, `packages/rides-native/notificationPrefs.test.js`, `docs/FIXES.md`
+
 ## 2026-09-25 — Notification prefs unit tests extended (no source edit)
 
 - **What was wrong:** `packages/rides-native/notificationPrefs.test.js` already called every export, but several branches were unpinned. Suspected bugs were left in `notificationPrefs.js` and marked `// BUG?:` in the tests: an array can be a quiet record when fields are assigned on it; a top-level `dnd` is copied through while `quiet.dnd` stays off; legacy `"false"` strings do not opt out of ride or friends; nested extras are shared with the caller; a storage adapter that returns an already-parsed object is discarded; `writeLocalPrefs` stores impossible clocks such as `99:99`; user id `0` uses the anon key and skips the profile write; an empty profile array replaces the device mirror with defaults.

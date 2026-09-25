@@ -515,19 +515,18 @@ test('fetchNotificationPrefs soft-fails on a query error and on a thrown client'
   })
   assert.equal(storage.data[PREFS_KEY('rider-1')], JSON.stringify({ system: false }))
 
-  // BUG?: a truthy error with no message sets softFail to undefined. A thrown failure uses a fallback string.
   const blank = fakeSupabase({
     read: () => ({ data: null, error: { code: '42501' } }),
   })
   const nameless = await fetchNotificationPrefs(blank.client, storage, 'rider-1')
   assert.equal(nameless.persisted, false)
-  assert.equal(nameless.softFail, undefined)
+  assert.equal(nameless.softFail, 'fetch failed')
   assert.equal(nameless.prefs.system, false)
 
   const emptyMessage = fakeSupabase({
     read: () => ({ data: null, error: { message: '' } }),
   })
-  assert.equal((await fetchNotificationPrefs(emptyMessage.client, storage, 'rider-1')).softFail, '')
+  assert.equal((await fetchNotificationPrefs(emptyMessage.client, storage, 'rider-1')).softFail, 'fetch failed')
 
   const thrown = fakeSupabase({
     read() {
@@ -925,7 +924,7 @@ test('saveNotificationPrefs does not mutate the caller and names a missing write
   assert.notEqual(result.prefs.quiet, next.quiet)
   assert.equal(result.ok, true)
   assert.equal(result.persisted, false)
-  // Fetch sets softFail to undefined when the error has no message. Save substitutes a fallback string.
+  // A missing write message uses the save fallback. Fetch uses 'fetch failed' the same way.
   assert.equal(result.softFail, 'notification_prefs write failed')
   assert.equal(result.prefs.ride, false)
   assert.equal(result.prefs.quiet.dnd, true)

@@ -94,7 +94,7 @@ export async function fetchNotificationPrefs(supabase, storage, userId) {
       .select('notification_prefs')
       .eq('id', userId)
       .maybeSingle()
-    if (error) return { prefs: local, persisted: false, softFail: error.message }
+    if (error) return { prefs: local, persisted: false, softFail: error.message || 'fetch failed' }
     if (data?.notification_prefs && typeof data.notification_prefs === 'object') {
       const prefs = normalizePrefs(data.notification_prefs)
       await writeLocalPrefs(storage, userId, prefs)
