@@ -38,22 +38,27 @@ test('LEGAL_UPDATED date string is well-formed and parseable', () => {
   assert.equal(dateObj.getDate(), 22)
 })
 
-test('PRIVACY_SECTIONS and TERMS_SECTIONS arrays and objects are mutable (unfrozen)', () => {
-  // BUG?: PRIVACY_SECTIONS and TERMS_SECTIONS are not frozen with Object.freeze(), allowing callers to inadvertently mutate shared legal copy
-  assert.equal(Object.isFrozen(PRIVACY_SECTIONS), false)
-  assert.equal(Object.isFrozen(TERMS_SECTIONS), false)
+test('PRIVACY_SECTIONS and TERMS_SECTIONS are frozen against accidental edits', () => {
+  assert.equal(Object.isFrozen(PRIVACY_SECTIONS), true)
+  assert.equal(Object.isFrozen(TERMS_SECTIONS), true)
+  assert.equal(Object.isFrozen(sharedLegal.PRIVACY_SECTIONS), true)
+  assert.equal(Object.isFrozen(sharedLegal.TERMS_SECTIONS), true)
 
-  // BUG?: Individual section objects and arrays within PRIVACY_SECTIONS and TERMS_SECTIONS are also unfrozen
-  for (const section of PRIVACY_SECTIONS) {
-    assert.equal(Object.isFrozen(section), false)
-    if (section.paragraphs) assert.equal(Object.isFrozen(section.paragraphs), false)
-    if (section.bullets) assert.equal(Object.isFrozen(section.bullets), false)
+  for (const section of [...PRIVACY_SECTIONS, ...TERMS_SECTIONS]) {
+    assert.equal(Object.isFrozen(section), true)
+    if (section.paragraphs) assert.equal(Object.isFrozen(section.paragraphs), true)
+    if (section.bullets) assert.equal(Object.isFrozen(section.bullets), true)
   }
-  for (const section of TERMS_SECTIONS) {
-    assert.equal(Object.isFrozen(section), false)
-    if (section.paragraphs) assert.equal(Object.isFrozen(section.paragraphs), false)
-    if (section.bullets) assert.equal(Object.isFrozen(section.bullets), false)
-  }
+
+  const privacyHeading = PRIVACY_SECTIONS[0].heading
+  assert.throws(() => {
+    PRIVACY_SECTIONS.push({ heading: 'Extra' })
+  }, TypeError)
+  assert.throws(() => {
+    PRIVACY_SECTIONS[0].heading = 'Changed'
+  }, TypeError)
+  assert.equal(PRIVACY_SECTIONS[0].heading, privacyHeading)
+  assert.equal(PRIVACY_SECTIONS.length, 7)
 })
 
 test('PRIVACY_SECTIONS conforms to required structure and unique headings', () => {
