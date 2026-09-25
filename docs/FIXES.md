@@ -1672,3 +1672,13 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
 - **Files touched:**
   - `packages/rides-native/checkoutReturn.test.js`
   - `docs/FIXES.md`
+
+## 2026-09-25 — checkoutReturn skips non-string fields (t2)
+
+- **Date:** 2026-09-25
+- **What was wrong:** `parseCheckoutSessionId` picked object fields with `||`. A truthy non-string (`sessionId: 123`, `url: 1`, `href: true`, `params.sessionId: true`) hid the next string field, so a real `cs_…` id on `session_id`, `href`, or `hash` was dropped. `parseCheckoutReturn` already skipped a non-string `url` when reading trip and paid, so the same object could return a null session id next to a trip parsed from `href`.
+- **What changed:** Both field chains now take the first non-empty string and skip numbers, booleans, and other non-strings. Blank strings still fall through. A whitespace or non-`cs_` string still stops that chain, matching the previous string behavior. Happy-path hashes, deep links, and string fields are unchanged.
+- **Files touched:**
+  - `packages/rides-native/checkoutReturn.js`
+  - `packages/rides-native/checkoutReturn.test.js`
+  - `docs/FIXES.md`

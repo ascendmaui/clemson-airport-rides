@@ -182,26 +182,28 @@ test('parseCheckoutSessionId: object fields prefer sessionId, then session_id, t
   assert.equal(parseCheckoutSessionId({ url: '' }), null)
 })
 
-test('parseCheckoutSessionId: a truthy non-string field blocks the next fallback', () => {
-  // BUG?: `sessionId || session_id` and `url || href || hash` keep the first truthy value.
-  // A numeric sessionId hides a string session_id. A numeric url or href hides a usable href or hash.
-  // parseCheckoutReturn still reads the string href on the same object, so the two helpers disagree.
+test('parseCheckoutSessionId: skips a truthy non-string field and reads the next string', () => {
   assert.equal(
     parseCheckoutSessionId({
       sessionId: 123,
       session_id: 'cs_test_snake',
       url: 'https://x.test/?session_id=cs_test_url',
     }),
-    'cs_test_url',
+    'cs_test_snake',
   )
   assert.equal(
     parseCheckoutSessionId({ url: 1, href: 'https://x.test/?session_id=cs_test_href' }),
-    null,
+    'cs_test_href',
   )
   assert.equal(
     parseCheckoutSessionId({ href: 1, hash: '#/schedule?session_id=cs_test_hash' }),
-    null,
+    'cs_test_hash',
   )
+  assert.equal(
+    parseCheckoutSessionId({ params: { sessionId: true, session_id: 'cs_test_params' } }),
+    'cs_test_params',
+  )
+  assert.equal(parseCheckoutSessionId({ sessionId: 123, url: 1, href: false }), null)
 })
 
 test('parseCheckoutSessionId: returns null for non-strings without throwing', () => {
@@ -477,13 +479,11 @@ test('parseCheckoutReturn: objects read url, then href, then hash, and params ov
   assert.equal(parseCheckoutSessionId(urlObject), 'cs_test_urlobj')
 })
 
-test('parseCheckoutReturn: a non-string url drops the session id but still reads href', () => {
-  // BUG?: same object, two results. parseCheckoutSessionId stops on numeric `url` and returns null.
-  // parseCheckoutReturn skips that url, parses trip/paid from href, and stores the null session id.
+test('parseCheckoutReturn: a non-string url falls through to href for the session id', () => {
   const mixed = { url: 1, href: 'https://x.test/#/requested?trip=fromhref&paid=1&session_id=cs_test_href' }
-  assert.equal(parseCheckoutSessionId(mixed), null)
+  assert.equal(parseCheckoutSessionId(mixed), 'cs_test_href')
   assert.deepEqual(parseCheckoutReturn(mixed), {
-    sessionId: null,
+    sessionId: 'cs_test_href',
     tripId: 'fromhref',
     paid: true,
     canceled: false,
