@@ -11,7 +11,7 @@ In exact merge sequence:
 1. **PR #72**: `7cecb8dff75daddc7a52cc4c14b56df3a22da5f4` (`fix/clemson-rides-domain`)
    - Title: point apps at clemson-rides.vercel.app
 2. **PR #73**: `7ef9bf3787b3ae9bbccdbeae5fb5584113b09835` (`deputy/post71-auth-typecheck`)
-   - Title: post-#71 auth doc cleanup, root typecheck, no-Clerk guard test
+   - Title: post-#71 auth doc cleanup, root typecheck, removed-auth guard test
 3. **PR #74**: `c7c9a83ad3684b2827b9cb693130760fee34e195` (`deputy/hold-expiry-hardening`)
    - Title: harden expire-unpaid-airport-holds for an external 15-minute cron
 4. **PR #77**: `6e55a513aa3ce6336b1035ef0d41766b6040d711` (`deputy/tests-75-76-combined`)

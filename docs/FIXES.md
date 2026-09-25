@@ -2,6 +2,15 @@
 
 Persistent knowledge base for recurring failures. When a matching issue appears, apply the saved fix first.
 
+## 2026-09-24 — Sanitize removed auth vendor name in INTEGRATION_BUNDLE.md [t2]
+
+- **Track / machine:** Deputy · pkg-integration-72-82 t2 · integration/approval-bundle
+- **What was wrong:** `tests/noClerk.test.js` failed because `docs/INTEGRATION_BUNDLE.md` contained the removed auth vendor token in the PR #73 summary.
+- **What changed:** Replaced the removed auth vendor token with `removed-auth` in `docs/INTEGRATION_BUNDLE.md` so the guard in `tests/noClerk.test.js` passes cleanly.
+- **Files touched:**
+  - `docs/INTEGRATION_BUNDLE.md`
+  - `docs/FIXES.md`
+
 ## 2026-09-24 — Integration bundle for PRs #72–#82
 
 - **Track / machine:** Deputy · pkg-integration-72-82 t1 · integration/approval-bundle
