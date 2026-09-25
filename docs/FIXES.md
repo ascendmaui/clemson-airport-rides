@@ -308,6 +308,16 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
 - **Files touched:** `server/creditLots.test.js`, `docs/FIXES.md`
 - **Verified:** `node --experimental-strip-types --test server/creditLots.test.js` (28/28 passing)
 
+## 2026-09-25 — Wire live-tracking tests into npm test
+
+- **Track / machine:** Deputy · pkg-live-tracking-tests · t3
+- **What was wrong:** `src/lib/tripPhase.test.js`, `src/lib/rideGeometry.test.js`, `src/lib/rideDemand.test.js`, and `src/lib/geofence.test.js` existed but were not listed in the root `package.json` `test` script, so `npm test` never ran the live trip phase, geometry, demand, or geofence suites.
+- **What changed:** Appended those four files as the last entries of the `test` script. No other `package.json` fields changed. The demand and geofence suites still install their own extensionless-import hook; the script does not need an extra `--import`.
+- **Files touched:**
+  - `package.json`
+  - `docs/FIXES.md`
+- **Verified:** `npm test` (830/830 passing, including the four live-tracking suites).
+
 ## 2026-09-25 — geofence distanceMeters returns null for non-finite coordinates
 
 - **Track / machine:** Deputy · pkg-live-tracking-tests · t2
