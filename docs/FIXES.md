@@ -1682,3 +1682,11 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
   - `packages/rides-native/checkoutReturn.js`
   - `packages/rides-native/checkoutReturn.test.js`
   - `docs/FIXES.md`
+
+## 2026-09-25 — checkoutReturn tests stay on the npm test script (t3)
+
+- **Date:** 2026-09-25
+- **What was wrong:** `packages/rides-native/checkoutReturn.test.js` (the t1/t2 parser suite, 25 tests) has to run under the root `npm test` script. A missing path would leave that suite out of the package test run.
+- **What changed:** Confirmed `packages/rides-native/checkoutReturn.test.js` is already one argument of the `test` script in `package.json` (added with the checkout-reconcile suite and still present). Kept that single entry. `npm test` exits 0: 811 passed, 0 failed, including this file.
+- **Files touched:**
+  - `docs/FIXES.md`
