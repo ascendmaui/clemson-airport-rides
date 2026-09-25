@@ -1177,6 +1177,13 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
 - **What changed:** Deep-freeze each section, its paragraph and bullet lists, and both arrays in place before re-exporting. References stay identical to the shared module. `LEGAL_UPDATED` is unchanged.
 - **Files touched:** `packages/rides-native/legalCopy.js`, `packages/rides-native/legalCopy.test.js`
 
+## 2026-09-25 — safety.test.js was not last in the npm test script
+
+- **Track / machine:** deputy pkg-safety-tests · t3
+- **What was wrong:** `packages/rides-native/safety.test.js` sat in the middle of the `npm test` file list (after `mapsLink.test.js`, before `shared/carpool.test.js`). The safety suite is supposed to run last.
+- **What changed:** Moved `packages/rides-native/safety.test.js` to the end of the `test` script. No other script fields changed.
+- **Files touched:** `package.json`, `docs/FIXES.md`
+
 ## 2026-09-25 — Seven-digit emergency numbers were dialed as bogus E.164
 
 - **Track / machine:** deputy pkg-safety-tests · t2
