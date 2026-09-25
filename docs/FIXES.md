@@ -330,3 +330,33 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
 - **What changed:** This branch combines #75 and #76 and resolves their package.json test-list conflict (supersedes merging them separately).
 - **Files:** `package.json`, `docs/FIXES.md`
 
+## 2026-09-24 — Driver desk test suite (pkg-i9-driverdesk-tests t1)
+- **Problem:** `packages/rides-native/driverDesk.js` had zero unit tests covering its driver desk helpers (availability, PickDriver requests, queue management, status advances, and earnings).
+- **What was changed:** Created `packages/rides-native/driverDesk.test.js` covering all 18 exported functions (`formatCents`, `riderFacingCard`, `loadGameDay`, `loadVehicle`, `loadDriverProfile`, `setPriorityMode`, `publishDriverLocation`, `setTeslaListing`, `subscribeTrips`, `listPassedTripIds`, `publishDriverCapacity`, `acceptTrip`, `declineTrip`, `loadRiderFix`, `advanceTrip`, `loadTrip`, `loadDriverDesk`, `loadEarnings`) using an in-memory fake Supabase query builder. Covered happy paths, empty results, Supabase error results, missing/invalid arguments, and returned object shapes without network calls or non-deterministic date dependencies. Updated `package.json` test script to include the new test file.
+- **Suspicious behaviors documented (`// BUG?:`):**
+  - `riderFacingCard`: if `vehicle` is `{}` or lacks color/make/model, `vehicleLabel` evaluates to `""` instead of `'Vehicle TBD'`.
+  - `publishDriverCapacity`: `Math.max(1, ...)` ensures `count` is always >= 1, so `if (!count)` is unreachable dead code; passing 0 or null seats sets seats to 1 rather than clearing them.
+  - `loadDriverDesk`: missing `facing`, `lat`, `lng`, and `warning` keys when `driverId` or `supabase` is null/missing compared to full return object.
+  - `acceptTrip`: checks `trip.status` rather than `fresh.status` from DB for online check and scheduled routing.
+  - `loadTrip`: condition checking `driverId !== row.driver_id` returns `toDriverCard(row)` in both branches, making it a no-op.
+  - `declineTrip`: passing a string `tripId` defaults status to `'requested'`, canceling the trip rather than releasing it to the open pool.
+- **Files touched:**
+  - `packages/rides-native/driverDesk.test.js`
+  - `package.json`
+  - `docs/FIXES.md`
+
+## 2026-09-24 — Guard empty or sparse vehicle row in riderFacingCard (pkg-i9-driverdesk-tests t2)
+- **Problem:** In `packages/rides-native/driverDesk.js`, `riderFacingCard` checked `vehicle ? [vehicle.color, vehicle.make, vehicle.model].filter(Boolean).join(' ') : 'Vehicle TBD'`. When `vehicle` was an empty or sparse object (e.g. `{}` or missing `color`, `make`, and `model` from a newly initiated onboarding row), the joined string evaluated to `""` instead of falling back to `'Vehicle TBD'`, causing rider- and fleet-facing cards to display an empty vehicle string or broken plate-only text.
+- **What was changed:** Updated `vehicleLabel` computation to `[vehicle?.color, vehicle?.make, vehicle?.model].filter(Boolean).join(' ') || 'Vehicle TBD'`, properly guarding empty and sparse vehicle rows while preserving full vehicle descriptions for valid inputs. Updated `packages/rides-native/driverDesk.test.js` to assert the `'Vehicle TBD'` fallback for empty and sparse vehicle objects.
+- **Files touched:**
+  - `packages/rides-native/driverDesk.js`
+  - `packages/rides-native/driverDesk.test.js`
+  - `docs/FIXES.md`
+
+## 2026-09-24 — Register driverDesk.test.js in package.json test script (pkg-i9-driverdesk-tests t3)
+- **Problem:** `packages/rides-native/driverDesk.test.js` needed to be registered as the last entry of the "test" script list in `package.json` and verified so that the entire test suite runs and passes cleanly.
+- **What was changed:** Confirmed `packages/rides-native/driverDesk.test.js` is the last entry in `package.json`'s "test" script list. Resolved local environment test dependencies (`@electric-sql/pglite`, `qrcode`) and verified the entire test suite passes (`npm test` passes all 415 tests with 0 failures).
+- **Files touched:**
+  - `package.json`
+  - `docs/FIXES.md`
+
