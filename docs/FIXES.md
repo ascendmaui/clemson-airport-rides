@@ -233,6 +233,27 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
   - `docs/FIXES.md`
 - **Verified:** `node --experimental-strip-types --test packages/rides-native/googleAuthConfig.test.js` (22/22 passing).
 
+## 2026-09-25 — Wire holdExpiry tests into npm test [t3]
+
+- **What was wrong:** `packages/rides-native/holdExpiry.test.js` covers the shared unpaid-airport-hold countdown and the rider notice, but the root `package.json` `test` script did not list that file, so `npm test` skipped the suite.
+- **What changed:** Appended `packages/rides-native/holdExpiry.test.js` as the last entry of the `test` script. The TTL value, cron, and expiry route are unchanged.
+- **Files touched:** `package.json`, `docs/FIXES.md`
+- **Verified:** `npm test` (810/810, including all 17 tests in `packages/rides-native/holdExpiry.test.js`). `apps/rider` has `"typecheck": "tsc --noEmit"`. Running it exited 127 (`sh: tsc: command not found`) because `apps/rider/node_modules` is an empty symlink and TypeScript is not installed there. This task did not install app dependencies; that install would write through the symlink into the main checkout. The files changed here are the test script and this log, so no rider TypeScript errors were introduced.
+
+## 2026-09-25 — Rider unpaid airport-hold countdown and expired state [t2]
+
+- **What was wrong:** An unpaid airport deposit can be canceled with reason `unpaid_hold_ttl` about 20 minutes after the hold starts. The rider app showed the 25% deposit and Checkout return with no remaining-time warning, and a TTL cancel looked like a generic canceled ride ("This trip is closed.").
+- **What changed:** The Schedule deposit screen and the live ride screen (`requested`) show the shared countdown (`Pay within N min to keep your ride`, then `Less than a minute left`). The sentence refreshes every 30 seconds and is exposed with `accessibilityLiveRegion="polite"` and `accessibilityLabel`. When the trip comes back `canceled` with `metadata.checkout_abandoned.reason === 'unpaid_hold_ttl'`, those screens show "This hold expired — request again" and a Request again action instead of the generic cancel copy. Request again opens Schedule (and scrolls to the airport deposit on that screen). The TTL value, cron, and expiry route were not changed.
+- **Files touched:** `packages/rides-native/holdExpiryNotice.js`, `packages/rides-native/holdExpiryNotice.d.ts`, `packages/rides-native/holdExpiry.test.js`, `apps/rider/components/HoldExpiryNotice.tsx`, `apps/rider/lib/holdTrip.ts`, `apps/rider/lib/tripWatch.ts`, `apps/rider/lib/useRiderTrip.ts`, `apps/rider/lib/scheduleApi.ts`, `apps/rider/app/requested.tsx`, `apps/rider/app/schedule.tsx`, `docs/FIXES.md`
+- **Verified:** `node --experimental-strip-types --test packages/rides-native/holdExpiry.test.js` (17/17). Rider screens were not opened in a simulator; `apps/rider/node_modules` is empty in this worktree.
+
+## 2026-09-25 — Shared unpaid airport-hold TTL and rider countdown [t1]
+
+- **What was wrong:** `UNPAID_AIRPORT_HOLD_TTL_MS` lived only in `server/abandonedCheckout.js`. The rider client had no pure helper for the same 20-minute deadline, so an unpaid airport hold could be canceled (`unpaid_hold_ttl`) with no shared remaining-time label.
+- **What changed:** The 20-minute value now lives in `shared/airportHold.js`. `server/abandonedCheckout.js` re-exports it; the number is unchanged (`20 * 60 * 1000`). `packages/rides-native/holdExpiry.js` counts down from the later of `created_at` and `metadata.stripe_checkout_created_at`. `msLeft <= 0` is expired, matching the server cutoff. Labels: `Pay within 12 min to keep your ride` (whole minutes floored), `Less than a minute left`, `This hold expired — request again`. A missing start time returns `{ msLeft: null, expired: false, label: '' }` because the server skips a hold with no anchor.
+- **Files touched:** `shared/airportHold.js`, `server/abandonedCheckout.js`, `packages/rides-native/holdExpiry.js`, `packages/rides-native/holdExpiry.d.ts`, `packages/rides-native/holdExpiry.test.js`, `docs/FIXES.md`
+- **Verified:** `node --experimental-strip-types --test packages/rides-native/holdExpiry.test.js` (13/13) and the server boundary test `an unpaid airport hold is canceled at 20 minutes and kept one millisecond earlier`.
+
 ## 2026-09-25 — merge_trip_metadata trip_status enum cast applied (#100)
 
 - **Problem:** `public.merge_trip_metadata` (#80) failed on every call with `operator does not exist: trip_status = text`, which broke the airport-checkout session bind, abandon-checkout release and the unpaid-hold expiry cancel.

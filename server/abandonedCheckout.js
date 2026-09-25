@@ -12,11 +12,12 @@
  * claim, and write trip_events only when the status update still matches.
  */
 import { isAirportDepositPaid, isAirportDepositTrip } from '../packages/rides-native/tripTags.js'
+import { UNPAID_AIRPORT_HOLD_TTL_MS } from '../shared/airportHold.js'
 
 export const UNPAID_CHECKOUT_STATUSES = ['searching', 'offered', 'scheduled']
 
 /** Pool TTL for an unpaid airport-deposit hold. Inside the 15–30 minute window. */
-export const UNPAID_AIRPORT_HOLD_TTL_MS = 20 * 60 * 1000
+export { UNPAID_AIRPORT_HOLD_TTL_MS }
 
 const LIVE_MATCH_STATUSES = [
   'searching',
