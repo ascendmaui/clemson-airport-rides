@@ -174,6 +174,44 @@ export async function abandonCheckoutSession({ tripId, sessionId } = {}) {
   return data
 }
 
+/**
+ * Reconcile a Stripe Checkout Session when returning to the web app.
+ * Fallback in case webhook has not landed or was misconfigured.
+ */
+export async function reconcileCheckoutSession({ sessionId } = {}) {
+  const id = typeof sessionId === 'string' ? sessionId.trim() : ''
+  if (!id) throw new Error('Missing sessionId')
+  const headers = { 'Content-Type': 'application/json' }
+  if (supabase) {
+    const { data } = await supabase.auth.getSession()
+    const token = data?.session?.access_token
+    if (token) headers.Authorization = `Bearer ${token}`
+  }
+  let res
+  try {
+    res = await fetch('/api/stripe-payment-methods?action=reconcile-checkout', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ sessionId: id }),
+    })
+  } catch (err) {
+    throw new Error(err?.message || 'Could not reconcile checkout')
+  }
+  let data = null
+  try {
+    data = await res.json()
+  } catch {
+    throw new Error(`Could not reconcile checkout (HTTP ${res.status})`)
+  }
+  if (!res.ok) {
+    const error = new Error(data?.error || data?.message || `Could not reconcile checkout (HTTP ${res.status})`)
+    error.status = res.status
+    error.payload = data
+    throw error
+  }
+  return data
+}
+
 /** @deprecated use createCheckoutSession */
 export async function createDepositIntent({ airport, riderName }) {
   const rate = AIRPORT_RATES[airport]

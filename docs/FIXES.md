@@ -190,6 +190,86 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
   - Floating controls on one grid: `[shield / sparkle] · GO · [stats / locate]` in a single row, `EDGE = 16` gutter (matches the top row) and `GAP = 12` between every floating piece. GO no longer takes its own row, which gives the card ~100 pt more room.
   - Driver copy: `APPLE_PAY_DRIVER_COPY` → "The rider already paid a 25% deposit. The rest is charged to their card automatically when you complete the trip." New `driverFareNote(depositCents)` drops the deposit sentence when no deposit was taken (`NO_DEPOSIT_DRIVER_COPY`). Used by `FarePanel` (Home, Queue, Trip, Trip details).
 - **Verified:** driver `tsc --noEmit` clean; `npm test` 352/352 (351 on main + new `driverFareNote` test); iOS Simulator (Expo Go, mocked pending-review driver + synthetic offer, screenshot-only mock not committed) on iPhone 17 Pro Max and iPhone SE (3rd gen), light + dark: card starts below the status bar / Dynamic Island, breakdown scrolls, Accept/Decline and all four side buttons visible.
+## 2026-09-24 — Append checkout reconcile test files to test script and note fallback architecture
+
+- **Track / machine:** Clemson RIDES · worktree deputy-pkg-checkout-reconcile / branch deputy/checkout-reconcile
+- **Problem:** New checkout reconciliation test suites (`server/checkoutReconcile.test.js` and `packages/rides-native/checkoutReturn.test.js`) were not wired into `package.json`'s `test` script, and documentation needed to specify that the webhook is the primary path while reconciliation is an on-demand fallback.
+- **Root cause:** Test files added in t1 and t3 were not yet appended to the `test` script, and `SHIP_NOTES.md` had not recorded the webhook vs reconcile relationship.
+- **Fix:**
+  - Appended `server/checkoutReconcile.test.js` and `packages/rides-native/checkoutReturn.test.js` as the last entries of the `"test"` script in `package.json` (leaving all other script entries untouched).
+  - Added a note in `SHIP_NOTES.md` under Payments (failure handling) explaining that the Stripe webhook remains the primary path for recording deposits and restoring trips, and `action=reconcile-checkout` serves as the idempotent fallback.
+  - Verified full test suite passes with `npm test`.
+- **Files touched:**
+  - `package.json`
+  - `SHIP_NOTES.md`
+  - `docs/FIXES.md`
+
+## 2026-09-24 — Trigger checkout reconciliation on return from Stripe Checkout (web & rider app)
+
+- **Track / machine:** Clemson RIDES · worktree deputy-pkg-checkout-reconcile / branch deputy/checkout-reconcile
+- **Problem:** When a rider completed payment on Stripe Checkout and returned to either the web application or rider app, the airport deposit would not be recognized if the webhook was delayed or misconfigured, and the rider app could prematurely abandon/cancel the ride as unpaid.
+- **Root cause:** Neither client called `/api/stripe-payment-methods?action=reconcile-checkout` upon returning from Checkout; the web app only polled Supabase for trip status updates, and the rider app assumed the deposit was unsettled if webhook had not written to the DB by the time WebBrowser closed.
+- **Fix:**
+  - Implemented `packages/rides-native/checkoutReturn.js` (`parseCheckoutSessionId`, `parseCheckoutReturn`) and `packages/rides-native/checkoutReturn.d.ts` to parse `session_id` from web hashes, full URLs, and native deep links.
+  - Added unit test suite in `packages/rides-native/checkoutReturn.test.js` verifying URL, hash, and deep link parsing along with session ID validation.
+  - Added `reconcileCheckout(supabase, sessionId)` to `packages/rides-native/riderMoney.js` using `authedJson`, calling `/api/stripe-payment-methods?action=reconcile-checkout`.
+  - Added `reconcileCheckoutSession({ sessionId })` to `src/lib/stripeCheckout.js`.
+  - In `src/screens/ScheduleAirport.jsx` and `src/screens/Requested.jsx`, read `session_id` on return from checkout and trigger fire-and-forget reconciliation once (errors logged, never blocking the UI), refreshing trip data upon completion. Updated `src/App.jsx` to pass `sessionId` to `Requested`.
+  - In `apps/rider/app/schedule.tsx`, invoke `reconcileCheckout(supabase, sessionId)` upon WebBrowser closing before checking deposit status, preventing premature cancellation if the webhook hasn't arrived.
+  - In `apps/rider/app/_layout.tsx`, added `CheckoutDeepLink` listener to capture incoming deep links with `session_id` and reconcile checkout once fire-and-forget.
+  - In `apps/rider/app/requested.tsx`, trigger `reconcileCheckout` if navigated to with `session_id`.
+- **Files touched:**
+  - `packages/rides-native/checkoutReturn.js`
+  - `packages/rides-native/checkoutReturn.d.ts`
+  - `packages/rides-native/checkoutReturn.test.js`
+  - `packages/rides-native/riderMoney.js`
+  - `packages/rides-native/riderMoney.d.ts`
+  - `src/lib/stripeCheckout.js`
+  - `src/screens/ScheduleAirport.jsx`
+  - `src/screens/Requested.jsx`
+  - `src/App.jsx`
+  - `apps/rider/app/schedule.tsx`
+  - `apps/rider/app/_layout.tsx`
+  - `apps/rider/app/requested.tsx`
+  - `docs/FIXES.md`
+
+## 2026-09-24 — Add action=reconcile-checkout endpoint and carry session_id on success_url
+
+- **Track / machine:** Clemson RIDES · worktree deputy-pkg-checkout-reconcile / branch deputy/checkout-reconcile
+- **Problem:** If Stripe webhook delivery failed or was delayed, riders returning from Checkout to the app after paying an airport deposit had no fallback mechanism to trigger reconciliation and mark the deposit paid.
+- **Root cause:** There was no API route/action to request checkout reconciliation on demand, and checkout success URLs did not include the Stripe `{CHECKOUT_SESSION_ID}` placeholder needed by the client to request reconciliation.
+- **Fix:**
+  - Implemented `server/endpoints/reconcileCheckout.js`: POST endpoint accepting `{ sessionId }` (or `session_id`), authenticating via `userFromAuth` (401 if unauthenticated, 503 if Stripe/Supabase service role is unconfigured), and delegating to `reconcileCheckoutSession` for idempotent reconciliation.
+  - Added `action=reconcile-checkout` to `api/stripe-payment-methods.js` routing table and handler dispatch without increasing Vercel function count.
+  - Appended `&session_id={CHECKOUT_SESSION_ID}` to `success_url` in `api/create-checkout-session.js` and `server/endpoints/airportCheckout.js`.
+  - Updated `tests/apiRoutes.test.js` to include `reconcile-checkout` in `pay.allowed` and verify route resolution and non-400 dispatch.
+  - Added automated test cases in `server/checkoutReconcile.test.js` verifying 405 on non-POST, 503 on unconfigured Stripe/service role, 401 on unauthenticated, 400 on missing/malformed sessionId, 403 on mismatched rider ownership, 200 on unpaid/paid idempotent execution, and `session_id={CHECKOUT_SESSION_ID}` carry on success_urls.
+- **Files touched:**
+  - `server/endpoints/reconcileCheckout.js`
+  - `api/stripe-payment-methods.js`
+  - `api/create-checkout-session.js`
+  - `server/endpoints/airportCheckout.js`
+  - `tests/apiRoutes.test.js`
+  - `server/checkoutReconcile.test.js`
+  - `docs/FIXES.md`
+
+## 2026-09-24 — Extract checkout deposit reconciliation and add fallback on-demand reconcile
+
+- **Track / machine:** Clemson RIDES · worktree deputy-pkg-checkout-reconcile / branch deputy/checkout-reconcile
+- **Problem:** A paid airport deposit was only marked paid by `api/stripe-webhook.js` (`checkout.session.completed` / `async_payment_succeeded`). If the webhook endpoint or secret was misconfigured, delayed, or missed, the rider paid but the trip never showed the deposit.
+- **Root cause:** The deposit marking logic was embedded directly in `api/stripe-webhook.js` without an idempotent standalone module or an on-demand reconciliation endpoint function. Furthermore, `recordDeposit` did not guard against duplicate payments rows or repeated `fare_paid_cents` increments on repeated calls.
+- **Fix:**
+  - Created `server/checkoutReconcile.js`:
+    - `recordDeposit(supabase, session, deps)`: Idempotently inserts deposit into `public.payments` keyed on `stripe_payment_intent_id` / session ID / trip deposit, prevents duplicate payment rows, stamps `checkout_deposit` on `trips.metadata`, and only increments `fare_paid_cents` once.
+    - `applyPaidCheckoutSession(serviceClient, session, deps)`: Applies the exact deposit side effects as the webhook (payments deposit insert, restoring canceled live trip, and referral social grant).
+    - `reconcileCheckoutSession({ stripe, sb, sessionId, userId })`: Validates `cs_` session ID, retrieves Stripe Checkout session, enforces rider ownership on `trip.rider_id` (403 if mismatched), skips `credit_purchase` sessions, returns `{ ok: true, paid: false }` with no writes if unpaid, and applies deposit reconciliation if paid.
+  - Refactored `api/stripe-webhook.js` to delegate checkout deposit marking to `applyPaidCheckoutSession` while preserving existing webhook responses, logging, and regex compatibility with test suites.
+  - Added comprehensive tests in `server/checkoutReconcile.test.js` covering first-time paid, second-time paid idempotency, unpaid session, unauthorized rider session, invalid session IDs, Stripe API errors, and webhook integration.
+- **Files touched:**
+  - `server/checkoutReconcile.js`
+  - `server/checkoutReconcile.test.js`
+  - `api/stripe-webhook.js`
+  - `docs/FIXES.md`
 
 ## 2026-09-24 — Remove Clerk: Apple + Google social sign-in directly on Supabase Auth
 
