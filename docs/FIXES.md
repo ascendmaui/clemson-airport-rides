@@ -196,3 +196,10 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
 - **What was wrong:** `assertAction` accepted a whitespace-only `tripId`. `applyTripWait` accepted a whitespace-only or non-string `actorId`. `chargeWaitFees` threw or charged on a missing trip, and it forwarded negative or fractional fee cents. An unparseable `server_now` was passed into `quoteWait`, so elapsed time and the clock could become NaN.
 - **What changed:** Blank `tripId` and `actorId` now fail with the existing 400 / 401 errors. `chargeWaitFees` skips a null, non-object, or id-less trip (`nothing_to_charge`) and clamps each fee to a non-negative integer cent amount. Quote math uses `Date.now()` when `server_now` is not a finite timestamp; the raw `serverNow` string is still returned.
 - **Files touched:** `server/tripWait.js`, `server/tripWait.test.js`, `docs/FIXES.md`
+
+## 2026-09-25 — wire tripWait tests into npm test
+
+- **Date:** 2026-09-25
+- **What was wrong:** `server/tripWait.test.js` was not listed in the `package.json` `test` script, so `npm test` never ran the trip-wait unit tests.
+- **What changed:** Appended `server/tripWait.test.js` as the last entry of the `test` script. The script still uses `node --experimental-strip-types --test` and does not change any other file list entry.
+- **Files touched:** `package.json`, `docs/FIXES.md`
