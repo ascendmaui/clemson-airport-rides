@@ -1200,6 +1200,12 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
 - **What changed:** Extended the unit tests only. `safety.js` was not modified.
 - **Files touched:** `packages/rides-native/safety.test.js`, `docs/FIXES.md`
 
+## 2026-09-24 — mapsLink tests are the last npm test entry
+
+- **What was wrong:** `packages/rides-native/mapsLink.test.js` was already in the root `package.json` `test` script, but it sat after `packages/rides-native/riderShell.test.js` instead of as the last entry.
+- **What changed:** Moved that single path to the end of the `test` script. It is listed once, so `npm test` runs the mapsLink suite one time. No production code changed in this step.
+- **Files touched:** `package.json`, `docs/FIXES.md`
+
 ## 2026-09-24 — mapsLink treated missing coordinates as (0, 0)
 
 - **Problem:** `coord()` in `packages/rides-native/mapsLink.js` used `Number(value)`. `Number(null)`, `Number('')`, `Number('   ')`, and `Number(false)` are all `0`, so a stop with missing coordinates (`latitude` / `longitude` are `number | null` on the driver maps opener) opened Apple and Google directions at Null Island instead of a label search.
