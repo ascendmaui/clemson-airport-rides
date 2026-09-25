@@ -2,6 +2,15 @@
 
 Persistent knowledge base for recurring failures. When a matching issue appears, apply the saved fix first.
 
+## 2026-09-24 — Run the drivers unit tests as the last npm test entry
+
+- **Track / machine:** Clemson RIDES · worktree deputy-pkg-drivers-tests
+- **Problem:** `packages/rides-native/drivers.test.js` sat in the middle of the root `test` script, ahead of later suites (live trip, marketing, ambassador, carpool settle). The drivers file has to be the last entry so `npm test` finishes on that suite.
+- **Fix:** Moved `packages/rides-native/drivers.test.js` to the final argument of the `test` script in `package.json`. The file still runs once.
+- **Files touched:**
+  - `package.json`
+  - `docs/FIXES.md`
+
 ## 2026-09-24 — Support both { lat, lng } and { latitude, longitude } in driverApproach and requestDriverTrip
 
 - **Track / machine:** Clemson RIDES · worktree deputy-pkg-drivers-tests
