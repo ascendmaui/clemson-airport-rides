@@ -229,6 +229,29 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
   - `src/lib/riderPromo.test.js`
   - `docs/FIXES.md`
 
+## 2026-09-25 — Scheduled / party ride tests finished: scheduleTrip review, real takeReminder, wired into npm test [t2/t3, finished by Grok Bot]
+
+- **Track / machine:** Clemson RIDES · deputy/scheduled-party-tests (PR #126) · MacBookPro-1097 worktree `~/Projects/wt/exec-pr126`
+- **What was wrong:**
+  - `server/friendRideCapacity.test.js`, `src/lib/quietHours.test.js`, and `server/scheduleTrip.test.js` were not in the root `npm test` script, so they never ran.
+  - `server/scheduleTrip.test.js` was committed without review, and it had problems:
+    - **It was a time bomb.** 14 tests used fixed pickup dates (Fri 2026-10-02, Oct 7, Oct 14, DST 2026-11-01), but the handler rejects pickups less than 30 minutes ahead of the real `Date.now()`. Those tests would start failing on their own from 2026-10-03, and all 14 fail once the date passes 2026-11-01 (confirmed by running the suite with the clock moved to 2026-11-15).
+    - **The `takeReminder` tests checked a copy, not the real code.** They ran against `tests/fixtures/scheduledRidesStub.js`, a hand-copied duplicate of the production function, so any change to the real `src/lib/scheduledRides.js` would never be caught.
+    - **The "intentional skip" was not really a skip.** It asserted that importing `scheduledRides.js` must *fail*, then called `t.skip()`. It locked in a Node/Vite resolution gap as expected behavior, and it would turn red if the import were ever fixed.
+- **What changed (tests only; no production code, no money math changed):**
+  - `server/scheduleTrip.test.js`:
+    - Handler tests now freeze `Date` at Mon 2026-09-21 12:00 EDT with `mock.timers`, so the fixed dates stay valid.
+    - The stub-based `takeReminder` block and the fake skip are replaced by 10 tests against the **real** `takeReminder`: window boundaries m15/h1/h24/24h+, `scheduled_for` fallback, the 20-minute "now" grace, status filtering, per-session and per-trip stamps, persisted stamps not mutated, the windows filter not consuming a reminder, and invalid times.
+    - New handler tests: the game-day lookup is queried at the pickup time; a throwing game-day lookup falls back to the rule surge (1.8); student fare + discount = non-student fare, and the row / response / 20-80 split agree; client `isStudent` / fare fields are ignored; no trip row is written when the profile cannot be created; a failed `trip_events` insert still returns 200 (`BUG?`); date+time is read in the server time zone (`BUG?`).
+  - New `tests/fixtures/srcLibLoader.mjs` (resolves extensionless `src/lib` imports and stubs `./supabase`) and `tests/fixtures/supabaseStub.js` (byte-identical to the one on PR #125). Deleted `tests/fixtures/scheduledRidesStub.js`.
+  - `package.json` `test`: appended `server/friendRideCapacity.test.js src/lib/quietHours.test.js server/scheduleTrip.test.js`.
+- **Suspected quirks (`// BUG?:`, not fixed):**
+  - `parseRideAt` turns `{date, time}` into `new Date(`${date}T${time}:00`)` in the server's local zone. On Vercel (UTC), a rider's "14:00" is stored as 10:00 AM EDT, and the surge window moves with it.
+  - `scheduleTrip` ignores the result of the `trip_events` insert.
+  - `scheduleTrip` always stores `passengers: 1`, even for `party_weekend` with a client party of 8, so no party-capacity check happens on this path.
+- **Verified:** `node --experimental-strip-types --test server/scheduleTrip.test.js` → 48/48 (0 skipped). Full `npm test` → 890/890 pass, 0 fail, 0 skipped.
+- **Files touched:** `server/scheduleTrip.test.js`, `tests/fixtures/srcLibLoader.mjs`, `tests/fixtures/supabaseStub.js`, `tests/fixtures/scheduledRidesStub.js` (deleted), `package.json`, `docs/FIXES.md`
+
 ## 2026-09-25 — Expiry cron wired: CRON_SECRET + Supabase pg_cron/pg_net; prod redeployed at 111c607
 
 - **Track / machine:** Clemson RIDES · I9 (61b11c89) Vercel CLI + Supabase awktabuhijrshmsmagpq · approved by John 1:05 AM ET 9/25.

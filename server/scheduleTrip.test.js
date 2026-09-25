@@ -1,7 +1,19 @@
 import assert from 'node:assert/strict'
-import test, { describe, beforeEach, afterEach } from 'node:test'
+import test, { describe, beforeEach, afterEach, mock } from 'node:test'
+import { register } from 'node:module'
 import scheduleTripHandler from './endpoints/scheduleTrip.js'
-import { takeReminder as stubbedTakeReminder, clearSessionStamps } from '../tests/fixtures/scheduledRidesStub.js'
+
+// src/lib/scheduledRides.js is a Vite module (extensionless imports, browser
+// Supabase client). The loader resolves it under Node and swaps in the mock
+// client, so the tests below exercise the REAL takeReminder, not a copy.
+register('../tests/fixtures/srcLibLoader.mjs', import.meta.url)
+const { takeReminder } = await import('../src/lib/scheduledRides.js')
+
+// The handler rejects pickups less than 30 minutes ahead of Date.now(), and many
+// tests use fixed calendar dates (Fri 2026-10-02, DST 2026-11-01, ...). Freeze the
+// clock at Mon 2026-09-21 12:00 EDT so those dates stay in the future forever
+// instead of the suite starting to fail once they pass.
+const FROZEN_NOW = new Date('2026-09-21T16:00:00.000Z')
 
 function mockRes() {
   return {
@@ -151,6 +163,7 @@ describe('scheduleTrip endpoint handler', () => {
   let originalFetch
 
   beforeEach(() => {
+    mock.timers.enable({ apis: ['Date'], now: FROZEN_NOW })
     originalFetch = globalThis.fetch
     // Disallow external network; return deterministic offline route fallback error
     globalThis.fetch = async () => ({
@@ -162,6 +175,7 @@ describe('scheduleTrip endpoint handler', () => {
 
   afterEach(() => {
     globalThis.fetch = originalFetch
+    mock.timers.reset()
   })
 
   describe('HTTP method and CORS', () => {
@@ -444,6 +458,27 @@ describe('scheduleTrip endpoint handler', () => {
       assert.equal(tripsInserted.length, 1)
       assert.equal(tripsInserted[0].pickup_at, new Date('2027-05-20T14:00:00').toISOString())
     })
+
+    // BUG?: parseRideAt builds `new Date(`${date}T${time}:00`)`, which uses the SERVER's
+    // local zone. On Vercel (TZ=UTC) a rider's "14:00" is stored as 14:00Z = 10:00 AM EDT,
+    // which also moves which surge window applies. Documented only; not fixed (fare path).
+    test('BUG?: date + time is read in the server time zone, not America/New_York', async () => {
+      const prevTz = process.env.TZ
+      process.env.TZ = 'UTC'
+      try {
+        const { sb, tripsInserted } = createFakeSb()
+        const res = await callHandler(
+          scheduleTripHandler,
+          { method: 'POST', body: { ...defaultPlaces, date: '2027-05-20', time: '14:00' } },
+          { user: mockStandardUser, sb, ensureProfile: async () => ({ ok: true }) },
+        )
+        assert.equal(res.status, 200)
+        assert.equal(tripsInserted[0].pickup_at, '2027-05-20T14:00:00.000Z') // not 18:00Z (2 PM EDT)
+      } finally {
+        if (prevTz === undefined) delete process.env.TZ
+        else process.env.TZ = prevTz
+      }
+    })
   })
 
   describe('Friday 23:59 -> Saturday rollover and weekend surge', () => {
@@ -540,6 +575,43 @@ describe('scheduleTrip endpoint handler', () => {
       assert.ok(tripsInserted[0].fare_cents > 0)
     })
 
+    test('looks up game_day_events at the PICKUP time, not at request time', async () => {
+      const { sb, operations } = createFakeSb({ gameDayEvents: [] })
+      const gameTimeIso = '2026-10-03T18:00:00.000Z'
+      const res = await callHandler(
+        scheduleTripHandler,
+        { method: 'POST', body: { ...defaultPlaces, pickupAt: gameTimeIso } },
+        { user: mockStandardUser, sb, ensureProfile: async () => ({ ok: true }) },
+      )
+      assert.equal(res.status, 200)
+      const gd = operations.filter((o) => o.table === 'game_day_events')
+      assert.deepEqual(
+        gd.filter((o) => ['eq', 'lte', 'gte'].includes(o.op)).map((o) => [o.op, o.col, o.val]),
+        [
+          ['eq', 'active', true],
+          ['lte', 'starts_at', gameTimeIso],
+          ['gte', 'ends_at', gameTimeIso],
+        ],
+      )
+    })
+
+    test('a game_day_events lookup that throws does not block scheduling (falls back to rules)', async () => {
+      const { sb, tripsInserted } = createFakeSb()
+      const realFrom = sb.from.bind(sb)
+      sb.from = (table) => {
+        if (table === 'game_day_events') throw new Error('relation does not exist')
+        return realFrom(table)
+      }
+      // Saturday 2 PM EDT in October: the built-in game-day fallback window (1.8) applies.
+      const res = await callHandler(
+        scheduleTripHandler,
+        { method: 'POST', body: { ...defaultPlaces, pickupAt: '2026-10-03T18:00:00.000Z' } },
+        { user: mockStandardUser, sb, ensureProfile: async () => ({ ok: true }) },
+      )
+      assert.equal(res.status, 200)
+      assert.equal(tripsInserted[0].surge_multiplier, 1.8)
+    })
+
     test('falls back to standard or weekend surge when no game-day event is active', async () => {
       const { sb, tripsInserted } = createFakeSb({
         gameDayEvents: [], // no active events
@@ -598,6 +670,45 @@ describe('scheduleTrip endpoint handler', () => {
       assert.equal(tripsInserted[0].metadata.isStudent, true)
       assert.equal(tripsInserted[0].metadata.studentLabel, 'Clemson student · 10% off Standard')
       assert.equal(tripsInserted[0].metadata.student_discount_cents, res.json.discountCents)
+    })
+
+    test('student fare + discount equals the non-student fare for the same trip (10%, rounded)', async () => {
+      const run = async (user) => {
+        const { sb, tripsInserted } = createFakeSb()
+        const res = await callHandler(
+          scheduleTripHandler,
+          { method: 'POST', body: { ...defaultPlaces, pickupAt: testPickupTime } },
+          { user, sb, ensureProfile: async () => ({ ok: true }) },
+        )
+        assert.equal(res.status, 200)
+        return { res: res.json, row: tripsInserted[0] }
+      }
+      const regular = await run(mockStandardUser)
+      const student = await run(mockStudentUser)
+      assert.equal(regular.res.discountCents, 0)
+      assert.equal(student.res.fareCents + student.res.discountCents, regular.res.fareCents)
+      assert.equal(student.res.discountCents, Math.round(regular.res.fareCents * 0.1))
+      // Stored row, response, and the 20/80 split all agree.
+      assert.equal(student.row.fare_cents, student.res.fareCents)
+      assert.equal(student.row.platform_fee_cents + student.row.driver_earnings_cents, student.row.fare_cents)
+      assert.equal(student.row.fare_breakdown.rider_pays_cents, student.res.fareCents)
+    })
+
+    test('client-sent isStudent / fare fields are ignored', async () => {
+      const { sb, tripsInserted } = createFakeSb()
+      const res = await callHandler(
+        scheduleTripHandler,
+        {
+          method: 'POST',
+          body: { ...defaultPlaces, pickupAt: testPickupTime, isStudent: true, fare_cents: 1, amount: 1, total: 1 },
+        },
+        { user: mockStandardUser, sb, ensureProfile: async () => ({ ok: true }) },
+      )
+      assert.equal(res.status, 200)
+      assert.equal(res.json.studentDiscountApplied, false)
+      assert.equal(res.json.discountCents, 0)
+      assert.ok(tripsInserted[0].fare_cents > 1)
+      assert.equal(tripsInserted[0].metadata.fare_source, 'server')
     })
 
     test('grants 10% student discount for confirmed @g.clemson.edu email', async () => {
@@ -887,78 +998,108 @@ describe('scheduleTrip endpoint handler', () => {
       assert.equal(tripEventsInserted[0].payload.purpose, 'early_class')
       assert.equal(tripEventsInserted[0].payload.fare_source, 'server')
     })
+
+    // BUG?: the trip_events insert result is never checked, so a failed audit-event write
+    // is silent and the rider still gets 200. Documented, not changed.
+    test('BUG?: a failed trip_events insert is ignored and the request still succeeds', async () => {
+      const { sb, tripsInserted, tripEventsInserted } = createFakeSb({
+        tripEventInsertError: { message: 'insert or update on table "trip_events" violates foreign key' },
+      })
+      const res = await callHandler(
+        scheduleTripHandler,
+        { method: 'POST', body: { ...defaultPlaces, pickupAt: new Date(Date.now() + 2 * 3600 * 1000).toISOString() } },
+        { user: mockStandardUser, sb, ensureProfile: async () => ({ ok: true }) },
+      )
+      assert.equal(res.status, 200)
+      assert.equal(tripsInserted.length, 1)
+      assert.equal(tripEventsInserted.length, 0)
+    })
+
+    test('no trip row is written when the rider profile cannot be created', async () => {
+      const { sb, tripsInserted, tripEventsInserted } = createFakeSb()
+      const res = await callHandler(
+        scheduleTripHandler,
+        { method: 'POST', body: { ...defaultPlaces, pickupAt: new Date(Date.now() + 2 * 3600 * 1000).toISOString() } },
+        { user: mockStandardUser, sb, ensureProfile: async () => ({ ok: false }) },
+      )
+      assert.equal(res.status, 500)
+      assert.equal(tripsInserted.length, 0)
+      assert.equal(tripEventsInserted.length, 0)
+    })
   })
 })
 
-describe('takeReminder (src/lib/scheduledRides.js & stub fixture)', () => {
-  beforeEach(() => {
-    clearSessionStamps()
+describe('takeReminder (real src/lib/scheduledRides.js)', () => {
+  // takeReminder keeps a module-level Set of session stamps keyed by trip id, so every
+  // test uses its own trip id instead of resetting module state.
+  const now = new Date('2026-10-03T16:00:00.000Z')
+  const at = (minutes) => new Date(now.getTime() + minutes * 60 * 1000).toISOString()
+
+  test('returns null when the trip has no id', () => {
+    assert.equal(takeReminder(null, now), null)
+    assert.equal(takeReminder({}, now), null)
+    assert.equal(takeReminder({ id: '', pickup_at: at(10) }, now), null)
   })
 
-  test('verifies direct import of src/lib/scheduledRides.js fails under Node ESM due to extensionless ./supabase', async (t) => {
-    // Note: src/lib/scheduledRides.js contains `import { supabase } from './supabase'` (missing .js extension).
-    // Pure Node ESM resolution rejects extensionless imports with ERR_MODULE_NOT_FOUND.
-    // Per instructions: "if import fails, stub it via a test-only fixture/loader under tests/fixtures, else skip and note it."
-    let failed = false
-    try {
-      await import('../src/lib/scheduledRides.js')
-    } catch (err) {
-      failed = true
-      assert.equal(err.code, 'ERR_MODULE_NOT_FOUND')
+  test('picks the tightest window: m15, h1, h24; nothing more than 24h out', () => {
+    assert.equal(takeReminder({ id: 'rem-w-1', pickup_at: at(10) }, now).id, 'm15')
+    assert.equal(takeReminder({ id: 'rem-w-2', pickup_at: at(15) }, now).id, 'm15') // boundary is inclusive
+    assert.equal(takeReminder({ id: 'rem-w-3', pickup_at: at(16) }, now).id, 'h1')
+    assert.equal(takeReminder({ id: 'rem-w-4', pickup_at: at(60) }, now).id, 'h1')
+    assert.equal(takeReminder({ id: 'rem-w-5', pickup_at: at(61) }, now).id, 'h24')
+    assert.equal(takeReminder({ id: 'rem-w-6', pickup_at: at(24 * 60) }, now).id, 'h24')
+    assert.equal(takeReminder({ id: 'rem-w-7', pickup_at: at(24 * 60 + 1) }, now), null)
+  })
+
+  test('falls back to scheduled_for when pickup_at is missing', () => {
+    assert.equal(takeReminder({ id: 'rem-sf-1', scheduled_for: at(30) }, now).id, 'h1')
+  })
+
+  test('fires "now" at pickup and for 20 minutes after, then goes quiet', () => {
+    assert.equal(takeReminder({ id: 'rem-now-1', pickup_at: at(0) }, now).id, 'now')
+    assert.equal(takeReminder({ id: 'rem-now-2', pickup_at: at(-20) }, now).id, 'now')
+    assert.equal(takeReminder({ id: 'rem-now-3', pickup_at: at(-21) }, now), null)
+  })
+
+  test('only scheduled / accepted / arriving trips get reminders', () => {
+    for (const status of ['scheduled', 'accepted', 'arriving']) {
+      assert.equal(takeReminder({ id: `rem-st-${status}`, status, pickup_at: at(10) }, now).id, 'm15', status)
     }
-    assert.equal(failed, true, 'direct import of scheduledRides.js should fail under Node ESM')
-    t.skip('Skipped direct scheduledRides.js import test due to extensionless ./supabase import; tested via tests/fixtures stub below')
-  })
-
-  test('takeReminder returns null when trip has no id', () => {
-    assert.equal(stubbedTakeReminder(null), null)
-    assert.equal(stubbedTakeReminder({}), null)
-    assert.equal(stubbedTakeReminder({ id: '' }), null)
-  })
-
-  test('takeReminder returns decision for due pickup window and avoids duplicate in same session', () => {
-    // Trip pickup in 15 minutes
-    const now = new Date('2026-10-03T16:00:00.000Z')
-    const pickupAt = new Date('2026-10-03T16:15:00.000Z')
-    const trip = {
-      id: 'trip-rem-1',
-      pickup_at: pickupAt.toISOString(),
-      metadata: { reminders: {} },
+    for (const status of ['canceled', 'completed', 'searching', 'in_progress']) {
+      assert.equal(takeReminder({ id: `rem-st-${status}`, status, pickup_at: at(10) }, now), null, status)
     }
-
-    const firstDecision = stubbedTakeReminder(trip, now)
-    assert.ok(firstDecision)
-    assert.equal(firstDecision.id, 'm15')
-
-    // Second call in same session should return null (already session-stamped)
-    const secondDecision = stubbedTakeReminder(trip, now)
-    assert.equal(secondDecision, null)
   })
 
-  test('takeReminder filters by allowed windows option', () => {
-    const now = new Date('2026-10-03T16:00:00.000Z')
-    const pickupAt = new Date('2026-10-03T16:15:00.000Z')
-    const trip = {
-      id: 'trip-rem-2',
-      pickup_at: pickupAt.toISOString(),
-      metadata: { reminders: {} },
-    }
-
-    // Only allow 'h24' window; 'm15' decision should be suppressed
-    const decision = stubbedTakeReminder(trip, now, { windows: ['h24'] })
-    assert.equal(decision, null)
+  test('fires once per window per session; the next window still fires later', () => {
+    const trip = { id: 'rem-sess-1', pickup_at: at(45) }
+    assert.equal(takeReminder(trip, now).id, 'h1')
+    assert.equal(takeReminder(trip, now), null) // same window, same session
+    const later = new Date(now.getTime() + 35 * 60 * 1000) // 10 minutes before pickup
+    assert.equal(takeReminder(trip, later).id, 'm15')
+    assert.equal(takeReminder(trip, later), null)
   })
 
-  test('takeReminder respects existing persistent stamps in trip metadata', () => {
-    const now = new Date('2026-10-03T16:00:00.000Z')
-    const pickupAt = new Date('2026-10-03T16:15:00.000Z')
-    const trip = {
-      id: 'trip-rem-3',
-      pickup_at: pickupAt.toISOString(),
-      metadata: { reminders: { m15: true } },
-    }
+  test('session stamps are per trip: another trip in the same window still fires', () => {
+    assert.equal(takeReminder({ id: 'rem-iso-a', pickup_at: at(10) }, now).id, 'm15')
+    assert.equal(takeReminder({ id: 'rem-iso-b', pickup_at: at(10) }, now).id, 'm15')
+  })
 
-    const decision = stubbedTakeReminder(trip, now)
-    assert.equal(decision, null)
+  test('respects persisted metadata.reminders stamps and does not mutate the trip', () => {
+    const trip = { id: 'rem-meta-1', pickup_at: at(10), metadata: { reminders: { m15: true } } }
+    assert.equal(takeReminder(trip, now), null)
+    assert.deepEqual(trip.metadata.reminders, { m15: true })
+  })
+
+  test('windows filter suppresses other windows WITHOUT consuming them', () => {
+    const trip = { id: 'rem-filter-1', pickup_at: at(10) }
+    assert.equal(takeReminder(trip, now, { windows: ['h24'] }), null)
+    // Suppressed decision was not stamped, so an unfiltered caller still gets it.
+    assert.equal(takeReminder(trip, now).id, 'm15')
+    assert.equal(takeReminder({ id: 'rem-filter-2', pickup_at: at(10) }, now, { windows: ['m15', 'now'] }).id, 'm15')
+  })
+
+  test('invalid or missing pickup times never produce a reminder', () => {
+    assert.equal(takeReminder({ id: 'rem-bad-1' }, now), null)
+    assert.equal(takeReminder({ id: 'rem-bad-2', pickup_at: 'not a date' }, now), null)
   })
 })
