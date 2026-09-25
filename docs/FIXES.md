@@ -2,6 +2,27 @@
 
 Persistent knowledge base for recurring failures. When a matching issue appears, apply the saved fix first.
 
+## 2026-09-24 — wire agentChips tests into npm test
+
+- **Track / machine:** Clemson RIDES · deputy/agent-chips-tests · pkg-agent-chips-tests t3
+- **What was wrong:** `packages/rides-native/agentChips.test.js` covered native help chips, support chips, and `categoryLabel`, but the root `npm test` script never listed that file, so the suite could pass while those checks were skipped.
+- **What changed:** Appended `packages/rides-native/agentChips.test.js` as the last entry of the `test` script in `package.json`. No production source change.
+- **Files touched:** `package.json`, `docs/FIXES.md`
+
+## 2026-09-24 — native categoryLabel trims string categories
+
+- **Track / machine:** Clemson RIDES · deputy/agent-chips-tests · pkg-agent-chips-tests t2
+- **What was wrong:** `packages/rides-native/agentChips.js` re-exported `categoryLabel` unchanged. A whitespace-only category is truthy, so the label came back as blank spaces. Padded canonical keys such as `' bug'` and `'safety '` missed the switch and echoed the raw string, including the spaces.
+- **What changed:** The native module trims string categories before the server lookup. `'   '` and other blank strings become `Other`. `' bug'` becomes `Bug` and `'safety '` becomes `Safety`. Unknown text keeps its inner characters (`'  lost_and_found  '` → `lost_and_found`). Non-strings are unchanged (`0` and `false` still become `Other`; an empty array still becomes `''`). `server/agentChips.js` is untouched, so web support and help still use the untrimmed function.
+- **Files touched:** `packages/rides-native/agentChips.js`, `packages/rides-native/agentChips.test.js`, `docs/FIXES.md`
+
+## 2026-09-24 — agentChips unit tests leave production source unchanged
+
+- **Track / machine:** Clemson RIDES · deputy/agent-chips-tests · pkg-agent-chips-tests t1
+- **What was wrong:** `packages/rides-native/agentChips.js` only re-exports `HELP_CHIPS`, `SUPPORT_CHIPS`, and `categoryLabel`. The first test pass checked labels and support prompts, but a help-copy change could still pass, and `categoryLabel` trim/case/falsy behavior was only partly pinned.
+- **What changed:** Extended `packages/rides-native/agentChips.test.js` only. Did not edit `packages/rides-native/agentChips.js` or `server/agentChips.js`. Tests now lock help prompt text, the re-export list, and chip `{label, text}` shape. Quirks stay asserted with `// BUG?:`: `0` and `false` become `Other`; canonical keys are not trimmed or lowercased; a whitespace-only category is returned unchanged; `NaN` becomes `Other`; an empty array becomes `''`.
+- **Files touched:** `packages/rides-native/agentChips.test.js`, `docs/FIXES.md`
+
 ## 2026-09-24 — iOS build 19 (rider + driver) integration: contents
 
 - **Track / machine:** Clemson RIDES · Max / 1.1.0(19), branch integration/b19 (worktree ~/Projects/wt/clemson-b19) from main d3a3fe1 (#71). Build 19 = main + #83 (approval bundle of #72, #73, #74, #77, #78, #79, #80, #81, #82) + #84 profile-ensure + #85 driver offer-card safe area + #86 checkout-reconcile + #87 lostfound-tests + #88 driver-onboarding-tests + #89 trip-messages-tests + #90 error-messages (incl. 60e6111 vite-build import fix). #75/#76 not merged separately (bundled via #77 in #83). buildNumber/CFBundleVersion/CURRENT_PROJECT_VERSION = 19. Integration fixes: ensureProfile test mock gained `.in()`/`rpc()`; apiErrors dropped the removed-auth vendor token (noClerk guard); driverDesk test expects #90 friendly copy. Migrations from #78/#80/#82 are NOT applied by this build; the app build does not depend on them, but the server side of #80 does.
