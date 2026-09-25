@@ -1,5 +1,5 @@
 import { StyleSheet, Text, View } from 'react-native'
-import { APPLE_PAY_DRIVER_COPY, fareCollection, formatCents, type DriverCard } from 'rides-native/tripTags'
+import { driverFareNote, fareCollection, formatCents, type DriverCard } from 'rides-native/tripTags'
 import { useTheme } from '@/lib/theme'
 
 export function FarePanel({ card }: { card: DriverCard }) {
@@ -33,7 +33,7 @@ export function FarePanel({ card }: { card: DriverCard }) {
           ))}
         </View>
       ) : null}
-      <Text style={[styles.note, { color: colors.inkSecondary }]}>{APPLE_PAY_DRIVER_COPY}</Text>
+      <Text style={[styles.note, { color: colors.inkSecondary }]}>{driverFareNote(fare.depositCents)}</Text>
     </View>
   )
 }

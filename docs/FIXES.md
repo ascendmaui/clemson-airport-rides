@@ -2,6 +2,19 @@
 
 Persistent knowledge base for recurring failures. When a matching issue appears, apply the saved fix first.
 
+## 2026-09-24 — Driver Home offer card ran under the status bar / Dynamic Island
+
+- **Track / machine:** Clemson RIDES DRIVER · worktree `fix/driver-offer-card-safe-area` (MacBookPro-1097)
+- **Symptom:** TestFlight build 18, driver Home map: the incoming ride offer card (fare, pickup/drop-off, Fare breakdown, Accept / Decline) extended up under the clock, Dynamic Island and battery; its top lines (net fare, tags, rider, pickup) were clipped off-screen. Worse on iPhone SE / mini. The copy under the fare read like developer notes (Stripe, "calls settle on the server", "Apple Pay sheet").
+- **Root cause:** `apps/driver/app/(tabs)/index.tsx` — the floating `dock` (`styles.dock`, `position: 'absolute'`) was anchored only with `bottom: tabClearance`, with no `top`. It grew upward to fit its children (pending-review gate card + `RideCard` + side tools + GO + status bar), and nothing capped its height or respected `insets.top`, so a tall offer pushed the card past the top safe area. `RideCard` rendered everything in a plain `Card` with no scroll container, so there was no way for it to shrink.
+- **Fix:**
+  - Dock is now pinned between `insets.top + 8` (`useSafeAreaInsets`) and the tab bar (`top: dockTop, bottom: tabClearance`, `justifyContent: 'flex-end'`), so content still stacks from the bottom but can never cross the safe area.
+  - `RideCard` is `flexShrink: 1`; the offer details + Fare breakdown live in an inner `ScrollView` (`flexGrow: 0, flexShrink: 1`) that only scrolls when it overflows (flashes the indicator, hairline divider above the actions). Accept and Decline sit outside the scroll and are always visible.
+  - While an offer is showing for a pending-review driver, the gate text moves into the card as one orange line instead of a separate card stacked above it.
+  - Floating controls on one grid: `[shield / sparkle] · GO · [stats / locate]` in a single row, `EDGE = 16` gutter (matches the top row) and `GAP = 12` between every floating piece. GO no longer takes its own row, which gives the card ~100 pt more room.
+  - Driver copy: `APPLE_PAY_DRIVER_COPY` → "The rider already paid a 25% deposit. The rest is charged to their card automatically when you complete the trip." New `driverFareNote(depositCents)` drops the deposit sentence when no deposit was taken (`NO_DEPOSIT_DRIVER_COPY`). Used by `FarePanel` (Home, Queue, Trip, Trip details).
+- **Verified:** driver `tsc --noEmit` clean; `npm test` 352/352 (351 on main + new `driverFareNote` test); iOS Simulator (Expo Go, mocked pending-review driver + synthetic offer, screenshot-only mock not committed) on iPhone 17 Pro Max and iPhone SE (3rd gen), light + dark: card starts below the status bar / Dynamic Island, breakdown scrolls, Accept/Decline and all four side buttons visible.
+
 ## 2026-09-24 — Remove Clerk: Apple + Google social sign-in directly on Supabase Auth
 
 - **Track / machine:** Clemson RIDES · worktree feat/supabase-auth-remove-clerk

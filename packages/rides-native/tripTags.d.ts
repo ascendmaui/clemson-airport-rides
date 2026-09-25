@@ -8,6 +8,8 @@ export type TripTag = 'student' | 'game_day' | 'weekend_party' | 'carpool' | 'te
 export type FareShare = { id: string; label: string; shareCents: number }
 
 export const APPLE_PAY_DRIVER_COPY: string
+export const NO_DEPOSIT_DRIVER_COPY: string
+export function driverFareNote(depositCents: number): string
 export type QueueFilter = 'all' | 'student' | 'game_day' | 'weekend_party'
 
 export type DriverCard = {
