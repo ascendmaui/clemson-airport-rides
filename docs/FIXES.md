@@ -1,6 +1,23 @@
 # Build & blocker fixes log
 
 Persistent knowledge base for recurring failures. When a matching issue appears, apply the saved fix first.
+
+## 2026-09-25 — holdExpiryNotice.js unit test coverage leaves production source unchanged [t1]
+
+- **Date:** 2026-09-25
+- **Track / machine:** Clemson RIDES · deputy/hold-expiry-notice-tests-20260925041913 · pkg-hold-expiry-notice-tests-20260925041913 t1
+- **What was wrong:** `packages/rides-native/holdExpiryNotice.js` lacked dedicated unit test coverage for its exported constants and functions (`HOLD_COUNTDOWN_TICK_MS`, `REQUEST_AGAIN_LABEL`, `SURFACE_TTL_CANCEL_MS`, `unpaidHoldCancelReason`, `isUnpaidHoldTtlCancel`, `isOpenUnpaidAirportHold`, `shouldSurfaceHold`, `holdAirportCode`, `holdExpiryPresentation`). Edge strings, case-sensitivity quirks, and null/empty handling were only partially exercised via consumer tests in `holdExpiry.test.js`.
+- **What changed:** Created `packages/rides-native/holdExpiryNotice.test.js` covering every export across happy paths, empty/null/undefined inputs, primitives, boundary conditions, edge strings, and timestamp fallback chains. Left production source code untouched. Documented quirks and potential bugs with `// BUG?:` comments:
+  - `isUnpaidHoldTtlCancel` checks reason against `'unpaid_hold_ttl'` with strict equality, rejecting uppercase (`'UNPAID_HOLD_TTL'`) or whitespace-padded reasons.
+  - `isOpenUnpaidAirportHold` checks status against `OPEN_HOLD_STATUSES` without case normalization, rejecting uppercase status strings (e.g. `'Searching'`) unlike `isUnpaidHoldTtlCancel` which lowercases status.
+  - `shouldSurfaceHold` requires `at` to be a string; numeric epoch timestamps are treated as NaN and default to returning true.
+  - `shouldSurfaceHold` only accepts numeric timestamps for `now`, falling back to `Date.now()` when passed `Date` objects or ISO strings.
+  - `holdAirportCode` is case-sensitive and does not normalize lowercase codes (e.g. `'gsp'` returns null).
+- **Files touched:**
+  - `packages/rides-native/holdExpiryNotice.test.js`
+  - `docs/FIXES.md`
+- **Verified:** `node --experimental-strip-types --test packages/rides-native/holdExpiryNotice.test.js` passes all 31 tests cleanly (0 failures, duration < 100ms).
+
 ## 2026-09-25 — parseRideAt date+time as America/New_York wall time
 
 - **Date:** 2026-09-25
