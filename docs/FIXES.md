@@ -449,6 +449,14 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
   - `docs/FIXES.md`
 - **Verified:** `node --experimental-strip-types --test api/stripeWebhookValidation.test.js` (29/29 passing).
 
+## 2026-09-25 — supportTicket handler tests
+
+- **Track / machine:** Clemson RIDES · deputy/admin-support-tests · pkg-admin-support-tests t2
+- **What was wrong:** `server/endpoints/supportTicket.js` had no direct handler tests. The route imports helpers that build a Supabase client and run the support bot, so it could not be exercised under `npm test` without network.
+- **What changed:** Added `server/supportTicket.test.js` and a `module.register` resolve hook that loads fakes from `tests/fixtures/admin-support/` for `supabaseAdmin.js`, `agentHttp.js` (real json/cors/parseBody/rateLimit), `staffAccess.js`, `userContext.js`, and `applySupportBot.js`. The bot fake records calls and does not send mail or call a model. No production source change. Appended the test file to the root `test` script.
+- **Observed, not changed:** GET and insert treat any error whose message matches `/support_tickets|schema cache|does not exist/i` as a missing table. A missing-column error that says "does not exist" or "schema cache" therefore skips the reduced-column retry and returns 503. A permission error that names `support_tickets` is reported the same way. Marked in `server/supportTicket.test.js`.
+- **Files touched:** `server/supportTicket.test.js`, `tests/fixtures/admin-support/supportTicketHook.js`, `tests/fixtures/admin-support/supportTicketSupabaseAdmin.js`, `tests/fixtures/admin-support/supportTicketAgentHttp.js`, `tests/fixtures/admin-support/supportTicketStaffAccess.js`, `tests/fixtures/admin-support/supportTicketUserContext.js`, `tests/fixtures/admin-support/supportTicketApplySupportBot.js`, `package.json`, `docs/FIXES.md`
+
 ## 2026-09-25 — adminAccess and adminDesk handler tests
 
 - **Track / machine:** Clemson RIDES · deputy/admin-support-tests · pkg-admin-support-tests t1
