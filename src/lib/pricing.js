@@ -13,10 +13,13 @@ export { STUDENT_DISCOUNT_BPS }
 /**
  * Student pricing — 10% off Standard after surge and carpool.
  * Kept for callers that already have a fare in cents.
+ * Eligibility must match quoteFare: only null/omitted (default standard) or
+ * explicit 'standard' qualify. Blank '' is not Standard — no discount (safer).
  */
 export function applyStudentDiscount(fareCents, { isStudent = false, tier = 'standard' } = {}) {
   const base = Number(fareCents) || 0
-  if (!isStudent || (tier && tier !== 'standard')) {
+  const studentOk = Boolean(isStudent) && (tier == null || tier === 'standard')
+  if (!studentOk) {
     return { fareCents: base, discountCents: 0, label: null }
   }
   const off = percentOffCents(base, STUDENT_DISCOUNT_BPS)
