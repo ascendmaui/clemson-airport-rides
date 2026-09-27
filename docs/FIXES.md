@@ -1,45 +1,29 @@
 # Build & blocker fixes log
 
 Persistent knowledge base for recurring failures. When a matching issue appears, apply the saved fix first.
-
-## 2026-09-25 — Wire holdExpiryNotice unit tests into npm test [t3]
-
-- **Date:** 2026-09-25
-- **Track / machine:** Clemson RIDES · deputy/hold-expiry-notice-tests-20260925041913 · pkg-hold-expiry-notice-tests-20260925041913 t3
-- **What was wrong:** `packages/rides-native/holdExpiryNotice.test.js` was created and verified in t1/t2, but was not listed in the root `package.json` `test` script, so `npm test` did not execute the hold-expiry notice presentation and helper test suite.
-- **What changed:** Appended `packages/rides-native/holdExpiryNotice.test.js` as the last entry of the `test` script in `package.json`. No existing entries or test commands were altered.
-- **Files touched:**
-  - `package.json`
-  - `docs/FIXES.md`
-- **Verified:** `TZ=UTC npm test` runs cleanly with all test suites passing (including all 31 tests in `packages/rides-native/holdExpiryNotice.test.js` and all 17 tests in `packages/rides-native/holdExpiry.test.js`) with 0 failures.
-
-## 2026-09-25 — Normalize status casing in isOpenUnpaidAirportHold [t2]
+## 2026-09-25 — Blank rider tier student discount consistency (money bug 2)
 
 - **Date:** 2026-09-25
-- **Track / machine:** Clemson RIDES · deputy/hold-expiry-notice-tests-20260925041913 · pkg-hold-expiry-notice-tests-20260925041913 t2
-- **What was wrong:** `isOpenUnpaidAirportHold` in `packages/rides-native/holdExpiryNotice.js` checked `trip.status` against `OPEN_HOLD_STATUSES` without case normalization (`OPEN_HOLD_STATUSES.has(String(trip.status || ''))`). If a trip status had capitalized or uppercase casing (e.g. `'Searching'`, `'Offered'`, `'Scheduled'`), it was rejected as not an open hold, causing `isOpenUnpaidAirportHold`, `shouldSurfaceHold`, and `holdExpiryPresentation` to hide the hold countdown and deposit notice on rider screens. Meanwhile, `isUnpaidHoldTtlCancel` in the same file already performed case-insensitive comparison via `String(trip.status || '').toLowerCase()`.
-- **What changed:** Normalized `trip.status` with `const status = String(trip.status || '').toLowerCase()` in `isOpenUnpaidAirportHold`, matching `isUnpaidHoldTtlCancel`. Updated `packages/rides-native/holdExpiryNotice.test.js` to assert that capitalized and uppercase open statuses (`'Searching'`, `'SEARCHING'`, `'Scheduled'`, `'Offered'`) are recognized as open holds.
+- **Track / machine:** Clemson RIDES · Pro Mac · worktree `deputy-blank-tier-student-discount`
+- **What was wrong:** `applyStudentDiscount` (UI) and `quoteFare` (checkout) disagreed on blank/empty rider tier `''`. `applyStudentDiscount` used `tier && tier !== 'standard'`, so falsy `''` counted as Standard and got 10% off. `quoteFare` used `tier == null || tier === 'standard'`, so `''` got no discount. UI could show a student price that checkout did not charge.
+- **Decision:** Prefer the safer / less-discount interpretation. Product copy is "10% off Standard"; blank is not an explicit Standard selection. Align `applyStudentDiscount` with `quoteFare` so blank gets **no** student discount. Null/omitted still qualify (omitted defaults to `'standard'`; null is treated as Standard-eligible in both paths).
+- **What changed:** Replaced the eligibility check in `applyStudentDiscount` with the same `studentOk = Boolean(isStudent) && (tier == null || tier === 'standard')` used by `quoteFare`. Replaced the documented `BUG?` mismatch test with assertions that both paths deny blank-tier discount and stay in sync; added null-tier agreement coverage.
 - **Files touched:**
-  - `packages/rides-native/holdExpiryNotice.js`
-  - `packages/rides-native/holdExpiryNotice.test.js`
+  - `src/lib/pricing.js`
+  - `src/lib/pricing.test.js`
   - `docs/FIXES.md`
-- **Verified:** `node --experimental-strip-types --test packages/rides-native/holdExpiryNotice.test.js` passes all 31 tests cleanly (0 failures, duration < 100ms); `node --experimental-strip-types --test packages/rides-native/holdExpiry.test.js` passes all 17 tests.
-
-## 2026-09-25 — holdExpiryNotice.js unit test coverage leaves production source unchanged [t1]
+- **Verified:** `TZ=UTC npm test` (full suite) after fix.
+## 2026-09-25 — scheduleTrip passengers not hardcoded 1 (money bug 3)
 
 - **Date:** 2026-09-25
-- **Track / machine:** Clemson RIDES · deputy/hold-expiry-notice-tests-20260925041913 · pkg-hold-expiry-notice-tests-20260925041913 t1
-- **What was wrong:** `packages/rides-native/holdExpiryNotice.js` lacked dedicated unit test coverage for its exported constants and functions (`HOLD_COUNTDOWN_TICK_MS`, `REQUEST_AGAIN_LABEL`, `SURFACE_TTL_CANCEL_MS`, `unpaidHoldCancelReason`, `isUnpaidHoldTtlCancel`, `isOpenUnpaidAirportHold`, `shouldSurfaceHold`, `holdAirportCode`, `holdExpiryPresentation`). Edge strings, case-sensitivity quirks, and null/empty handling were only partially exercised via consumer tests in `holdExpiry.test.js`.
-- **What changed:** Created `packages/rides-native/holdExpiryNotice.test.js` covering every export across happy paths, empty/null/undefined inputs, primitives, boundary conditions, edge strings, and timestamp fallback chains. Left production source code untouched. Documented quirks and potential bugs with `// BUG?:` comments:
-  - `isUnpaidHoldTtlCancel` checks reason against `'unpaid_hold_ttl'` with strict equality, rejecting uppercase (`'UNPAID_HOLD_TTL'`) or whitespace-padded reasons.
-  - `isOpenUnpaidAirportHold` checks status against `OPEN_HOLD_STATUSES` without case normalization, rejecting uppercase status strings (e.g. `'Searching'`) unlike `isUnpaidHoldTtlCancel` which lowercases status.
-  - `shouldSurfaceHold` requires `at` to be a string; numeric epoch timestamps are treated as NaN and default to returning true.
-  - `shouldSurfaceHold` only accepts numeric timestamps for `now`, falling back to `Date.now()` when passed `Date` objects or ISO strings.
-  - `holdAirportCode` is case-sensitive and does not normalize lowercase codes (e.g. `'gsp'` returns null).
+- **Track / machine:** Clemson RIDES · Pro Mac · worktree `deputy-schedule-trip-passengers`
+- **What was wrong:** `scheduleTrip` always wrote `passengers: 1` on the trip row, ignoring `body.passengers` / `partySize`. Party / capacity checks (e.g. `trips_party_capacity_check`) never saw the real party size on that path, so oversized weekend/party bookings could slip past.
+- **What changed:** Parse an integer passenger count from the request (`passengers`, else `partySize` / `party_size`), defaulting to 1 when missing or invalid. Store that on the trip row. Fare formula / `priceScheduledRequest` inputs unchanged — only the persisted count used for capacity/party.
 - **Files touched:**
-  - `packages/rides-native/holdExpiryNotice.test.js`
+  - `server/endpoints/scheduleTrip.js`
+  - `server/scheduleTrip.test.js`
   - `docs/FIXES.md`
-- **Verified:** `node --experimental-strip-types --test packages/rides-native/holdExpiryNotice.test.js` passes all 31 tests cleanly (0 failures, duration < 100ms).
+- **Verified:** focused `server/scheduleTrip.test.js`; full `TZ=UTC npm test` before opening draft PR.
 
 ## 2026-09-25 — parseRideAt date+time as America/New_York wall time
 
@@ -754,6 +738,24 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
 - **Files touched:** `docs/driver-approval-gate.md`, `server/driverApproval.test.js`, `docs/FIXES.md`
 - **Verified:** `node --experimental-strip-types --test server/driverApproval.test.js` (6/6 passing)
 
+## 2026-09-25 — notificationPrefs tests run last in npm test
+
+- **What was wrong:** `packages/rides-native/notificationPrefs.test.js` was listed once in the root `test` script, after `packages/rides-native/heat.test.js` and before `packages/rides-native/shared/vehicle.test.js`. Later suites still ran after it, so `npm test` did not finish on the notification-prefs suite.
+- **What changed:** Moved `packages/rides-native/notificationPrefs.test.js` to the final argument of the `test` script. The file still runs once. No other `package.json` fields changed.
+- **Files touched:** `package.json`, `docs/FIXES.md`
+
+## 2026-09-25 — fetchNotificationPrefs names a missing query error
+
+- **What was wrong:** `fetchNotificationPrefs` copied `error.message` straight into `softFail`. A truthy Supabase error with no `message`, or with `message: ''`, came back as `undefined` or `''`. The thrown-client path already uses `'fetch failed'`, and the save path already substitutes a string. The rider notifications screen interpolates `softFail` into the profile-sync note.
+- **What changed:** A query error now uses `error.message || 'fetch failed'`. A real message is unchanged. Missing and empty messages both become `'fetch failed'`.
+- **Files touched:** `packages/rides-native/notificationPrefs.js`, `packages/rides-native/notificationPrefs.test.js`, `docs/FIXES.md`
+
+## 2026-09-25 — Notification prefs unit tests extended (no source edit)
+
+- **What was wrong:** `packages/rides-native/notificationPrefs.test.js` already called every export, but several branches were unpinned. Suspected bugs were left in `notificationPrefs.js` and marked `// BUG?:` in the tests: an array can be a quiet record when fields are assigned on it; a top-level `dnd` is copied through while `quiet.dnd` stays off; legacy `"false"` strings do not opt out of ride or friends; nested extras are shared with the caller; a storage adapter that returns an already-parsed object is discarded; `writeLocalPrefs` stores impossible clocks such as `99:99`; user id `0` uses the anon key and skips the profile write; an empty profile array replaces the device mirror with defaults.
+- **What changed:** Extended `packages/rides-native/notificationPrefs.test.js` for those branches (per-clock bounds, empty records, padded JSON, rejected queries, non-object profile values, and a save error with no message). Did not change `notificationPrefs.js`.
+- **Files touched:** `packages/rides-native/notificationPrefs.test.js`, `docs/FIXES.md`
+
 ## 2026-09-25 — merge_trip_metadata trip_status enum cast applied (#100)
 
 - **Problem:** `public.merge_trip_metadata` (#80) failed on every call with `operator does not exist: trip_status = text`, which broke the airport-checkout session bind, abandon-checkout release and the unpaid-hold expiry cancel.
@@ -790,6 +792,27 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
   - `packages/rides-native/partyProfile.test.js`
   - `docs/FIXES.md`
 - **Verified:** `node --experimental-strip-types --test packages/rides-native/partyProfile.test.js` (31/31 passing).
+
+## 2026-09-25 — emailAuth tests run last in npm test
+
+- **Track / machine:** Clemson RIDES · deputy/email-auth-tests · pkg-email-auth-tests t3
+- **What was wrong:** `packages/rides-native/emailAuth.test.js` sat in the middle of the root `package.json` `test` script, after `authErrors.test.js` and ahead of later suites. `npm test` did not finish on the email-auth suite.
+- **What changed:** Moved `packages/rides-native/emailAuth.test.js` to the final argument of the `test` script. The file still runs once.
+- **Files touched:** `package.json`, `docs/FIXES.md`
+
+## 2026-09-25 — emailAuth trims padded password-reset redirects
+
+- **Track / machine:** Clemson RIDES · deputy/email-auth-tests · pkg-email-auth-tests t2
+- **What was wrong:** `requestPasswordReset` forwarded `redirectTo` unchanged. A padded value such as `'  clemsonrides://reset-password  '` was sent to Supabase, and a whitespace-only redirect was treated as present because it is truthy.
+- **What changed:** String redirects are trimmed before the call. A padded URL is sent without surrounding spaces. A whitespace-only redirect is omitted, the same as an empty string. Non-string redirects are unchanged.
+- **Files touched:** `packages/rides-native/emailAuth.js`, `packages/rides-native/emailAuth.test.js`, `docs/FIXES.md`
+
+## 2026-09-25 — emailAuth unit tests cover every helper without source edits
+
+- **Track / machine:** Clemson RIDES · deputy/email-auth-tests · pkg-email-auth-tests t1
+- **What was wrong:** `packages/rides-native/emailAuth.test.js` only checked a successful sign-in, one reset redirect, a blank reset email, and the 6-character password floor. Missing-client failures, error mapping, blank sign-in emails, redirect omission, and password coercion were untested.
+- **What changed:** Extended the test file only. Did not edit `packages/rides-native/emailAuth.js`. Quirks stay asserted with `// BUG?:`: blank sign-in emails and empty passwords are sent to Supabase; sign-in does not stringify passwords; six spaces and non-string values pass `updatePassword`; an empty `redirectTo` is omitted; rate-limit, invalid-credentials, and account-exists copy is shared across sign-in, reset, and password update; string errors collapse to "Auth failed"; a truthy client without `.auth` throws TypeError; thrown client failures skip `mapAuthError`. Padded string redirects were trimmed in the t2 entry above.
+- **Files touched:** `packages/rides-native/emailAuth.test.js`, `docs/FIXES.md`
 
 ## 2026-09-25 — Build 19 shipped to production (#91); merge_trip_metadata enum bug found in smoke test
 
@@ -1205,6 +1228,77 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
   - `packages/rides-native/tripMessagesClient.test.js`
   - `docs/FIXES.md`
 
+## 2026-09-24 — legalCopy tests were not in the npm test script
+
+- **What was wrong:** `packages/rides-native/legalCopy.test.js` existed (re-export identity, freeze, and policy-text checks) but was not listed in the root `package.json` `test` script, so `npm test` never ran it.
+- **What changed:** Appended `packages/rides-native/legalCopy.test.js` as the last entry of the `test` script. No production code changed.
+- **Files touched:** `package.json`, `docs/FIXES.md`
+
+## 2026-09-24 — Native legal copy was mutable shared policy text
+
+- **What was wrong:** `packages/rides-native/legalCopy.js` re-exported `PRIVACY_SECTIONS` and `TERMS_SECTIONS` as the same mutable objects as `shared/legalCopy.js`. A rider screen could push a section or rewrite a heading and change that policy text for every later reader in the process, including the website when both load in one process.
+- **What changed:** Deep-freeze each section, its paragraph and bullet lists, and both arrays in place before re-exporting. References stay identical to the shared module. `LEGAL_UPDATED` is unchanged.
+- **Files touched:** `packages/rides-native/legalCopy.js`, `packages/rides-native/legalCopy.test.js`
+
+## 2026-09-25 — safety.test.js was not last in the npm test script
+
+- **Track / machine:** deputy pkg-safety-tests · t3
+- **What was wrong:** `packages/rides-native/safety.test.js` sat in the middle of the `npm test` file list (after `mapsLink.test.js`, before `shared/carpool.test.js`). The safety suite is supposed to run last.
+- **What changed:** Moved `packages/rides-native/safety.test.js` to the end of the `test` script. No other script fields changed.
+- **Files touched:** `package.json`, `docs/FIXES.md`
+
+## 2026-09-25 — Seven-digit emergency numbers were dialed as bogus E.164
+
+- **Track / machine:** deputy pkg-safety-tests · t2
+- **What was wrong:** `contactTel` turned a 7-digit local number into `tel:+` plus those digits. Clemson campus `656-2222` became `tel:+6562222`, which is not a callable number. Ten-digit numbers and numbers the rider marked with `+` were already fine.
+- **What changed:** A 7-digit number with no leading `+` now dials as a local `tel:6562222`. Stored contact text is unchanged. An explicit `+` still dials `tel:+…`.
+- **Files touched:** `packages/rides-native/safety.js`, `packages/rides-native/safety.test.js`, `docs/FIXES.md`
+
+## 2026-09-24 — Safety helpers: tests cover every export; arrived-status hole left in source
+
+- **Track / machine:** deputy pkg-safety-tests · t1
+- **What was wrong:** `packages/rides-native/safety.test.js` did not exercise every export (share tokens, SOS button and phrase copy, police `tel:` links, phone normalization, active-share lookup, recent SOS reads, emergency-contact listing, and the client error paths). Two source gaps showed up and were marked `// BUG?:` in the tests, not fixed:
+  - `arrived` (driver at pickup, between `arriving` and `in_progress`) is missing from `SHAREABLE_TRIP_STATUSES` and `ACTIVE_RIDE_STATUSES`. The safety screen loads the active trip with the shareable list and only logs SOS when the status is active, so the in-app alert and live share drop out while the rider is getting in the car. Preferred status `requested` is also missing from the shareable list, unlike `searching` and `offered`.
+  - A 7-digit local number is accepted, then `contactTel` dials it as `tel:+` plus those digits (`656-2222` becomes `tel:+6562222`).
+- **What changed:** Extended the unit tests only. `safety.js` was not modified.
+- **Files touched:** `packages/rides-native/safety.test.js`, `docs/FIXES.md`
+
+## 2026-09-24 — mapsLink tests are the last npm test entry
+
+- **What was wrong:** `packages/rides-native/mapsLink.test.js` was already in the root `package.json` `test` script, but it sat after `packages/rides-native/riderShell.test.js` instead of as the last entry.
+- **What changed:** Moved that single path to the end of the `test` script. It is listed once, so `npm test` runs the mapsLink suite one time. No production code changed in this step.
+- **Files touched:** `package.json`, `docs/FIXES.md`
+
+## 2026-09-24 — mapsLink treated missing coordinates as (0, 0)
+
+- **Problem:** `coord()` in `packages/rides-native/mapsLink.js` used `Number(value)`. `Number(null)`, `Number('')`, `Number('   ')`, and `Number(false)` are all `0`, so a stop with missing coordinates (`latitude` / `longitude` are `number | null` on the driver maps opener) opened Apple and Google directions at Null Island instead of a label search.
+- **Fix:** `coord()` accepts only finite numbers and numeric strings. Null, blank, boolean, and other non-numeric values stay missing, and `navigationLinks` falls back to the label. A real `0` or `"0"` is still a point.
+- **Files:** `packages/rides-native/mapsLink.js`, `packages/rides-native/mapsLink.test.js`
+
+## 2026-09-25 — riderMoney tests were not the last npm test entry
+
+- **Track / machine:** Clemson RIDES · deputy/rider-money-tests (pkg-rider-money-tests t3)
+- **What was wrong:** `packages/rides-native/riderMoney.test.js` was already in the `npm test` script, but in the middle (before `partyProfile.test.js`). The suite is supposed to run that file last so a full `npm test` always includes the rider money cases at the end of the list.
+- **What changed:** Removed the mid-list copy and appended `packages/rides-native/riderMoney.test.js` as the last argument of the `package.json` `test` script. The file is listed once.
+- **Files touched:** `package.json`, `docs/FIXES.md`
+- **Verified:** `npm test` — 369 pass, 0 fail. `packages/rides-native/riderMoney.test.js` is the last file in the script and ran with the suite.
+
+## 2026-09-24 — checkout failure copy dropped a payload-only reason
+
+- **Track / machine:** Clemson RIDES · deputy/rider-money-tests (pkg-rider-money-tests t2)
+- **What was wrong:** `checkoutFailureCopy` read `payload.message` only to detect "not configured" / "payments unavailable", then returned `err.message` or "Checkout failed. No charge was made." A failure whose reason lived only on `payload.message`, `payload.error`, or a top-level `error` string never reached the rider.
+- **What changed:** A blank `message` falls through to the first non-empty string among `payload.message`, `payload.error`, and top-level `error`. The not-configured sentence still wins when that phrase is in either text. Non-strings are ignored so an object `error` cannot render as `[object Object]`.
+- **Files touched:** `packages/rides-native/riderMoney.js`, `packages/rides-native/riderMoney.test.js`, `docs/FIXES.md`
+- **Verified:** `node --experimental-strip-types --test packages/rides-native/riderMoney.test.js` — 29 pass.
+
+## 2026-09-24 — riderMoney unit tests did not match the module
+
+- **Track / machine:** Clemson RIDES · deputy/rider-money-tests (pkg-rider-money-tests t1)
+- **What was wrong:** A partial `packages/rides-native/riderMoney.test.js` failed 3 of 29 cases. `describeRiderSocialRewards` keeps a fixed referred amount of 0 as `$0.00` (only the referrer credit and the percent use `||` fallbacks). `markStudentVerified` writes the profile before the verification-table fallback, so a global update failure never reached that fallback. `STRIPE_NOT_CONFIGURED_COPY` is the fare-card sentence about checkout not being configured on this machine.
+- **What changed:** Corrected those assertions, scoped the fake update failure to `student_verifications`, and extended coverage to every export. Production `riderMoney.js` was not edited. Suspected bugs are marked `// BUG?:` in the test file (empty tier still discounted, zero referrer/percent rewards fall back, payload-only checkout errors dropped, local-time quote timestamps, time dropped without a valid date, verification writes reported verified when the fallback write fails, unauthenticated billing omits `charges`).
+- **Files touched:** `packages/rides-native/riderMoney.test.js`, `docs/FIXES.md`
+- **Verified:** `node --experimental-strip-types --test packages/rides-native/riderMoney.test.js` — 29 pass.
+
 ## 2026-09-24 — Remove Clerk: Apple + Google social sign-in directly on Supabase Auth
 
 - **Track / machine:** Clemson RIDES · worktree feat/supabase-auth-remove-clerk
@@ -1610,3 +1704,86 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
   - Native `writeTripEvent` (driver desk) and web `DriverHome` / `driverOffers`: log with `console.error` and throw so UI surfaces the failure.
   - Flipped the former `BUG?` scheduleTrip test; added `server/tripEvents.test.js`.
 - **Files touched:** `server/tripEvents.js`, `server/tripEvents.test.js`, `server/endpoints/scheduleTrip.js`, `server/endpoints/requestDriverTrip.js`, `server/tripSettle.js`, `server/endpoints/tripCancelMidride.js`, `server/abandonedCheckout.js`, `packages/rides-native/driverDesk.js`, `src/screens/DriverHome.jsx`, `src/lib/driverOffers.js`, `server/scheduleTrip.test.js`, `package.json`, `docs/FIXES.md`
+
+## 2026-09-25 — checkoutReturn unit tests cover both parsers (t1)
+
+- **Date:** 2026-09-25
+- **What was wrong:** `packages/rides-native/checkoutReturn.test.js` checked the happy-path hashes, deep links, and a few nulls for `parseCheckoutSessionId` / `parseCheckoutReturn`. It did not exercise object field order, bare ids, flag spellings, trip-key fallback, decode failures, or the branches that disagree between the two helpers. `checkoutReturn.js` was left unchanged.
+- **What changed:** Extended the unit tests so both exports are covered (100% line / branch / function on `checkoutReturn.js` under `node --experimental-strip-types --test`). Suspected bugs are locked as current behavior with `// BUG?:` comments:
+  - Query strings and object fields accept any trimmed value that starts with `cs_` (`cs_`, spaces, hyphens, `+`, `%`, markup). Bare strings must match `/^cs_[a-zA-Z0-9_]+$/`. A broken percent-escape returns the raw capture.
+  - `session_id=cs_...` and `#session_id=cs_...` return null unless a `?` or `&` precedes the key.
+  - A truthy non-string `sessionId`, `url`, or `href` blocks the next fallback. `parseCheckoutReturn` can still read `href` for trip/paid while `sessionId` stays null.
+  - A whitespace-only trip becomes `""` and blocks `tripId` / `trip_id`, including when an object field clobbers a trip parsed from the URL.
+  - Numeric `1` is not treated as paid, canceled, or scheduled.
+  - `scheduled` is true when the raw text contains `/schedule` or `schedule?`, so live returns (`dest=/schedule`, `next=schedule?`, `/reschedule?`, `/unschedule?`, `/schedule-demo`) are marked scheduled. `scheduled=0`, `scheduled=false`, and `scheduled: false` cannot clear a path match.
+  - Duplicate `session_id` keeps the first value; duplicate `trip` keeps the last.
+- **Files touched:**
+  - `packages/rides-native/checkoutReturn.test.js`
+  - `docs/FIXES.md`
+
+## 2026-09-25 — checkoutReturn skips non-string fields (t2)
+
+- **Date:** 2026-09-25
+- **What was wrong:** `parseCheckoutSessionId` picked object fields with `||`. A truthy non-string (`sessionId: 123`, `url: 1`, `href: true`, `params.sessionId: true`) hid the next string field, so a real `cs_…` id on `session_id`, `href`, or `hash` was dropped. `parseCheckoutReturn` already skipped a non-string `url` when reading trip and paid, so the same object could return a null session id next to a trip parsed from `href`.
+- **What changed:** Both field chains now take the first non-empty string and skip numbers, booleans, and other non-strings. Blank strings still fall through. A whitespace or non-`cs_` string still stops that chain, matching the previous string behavior. Happy-path hashes, deep links, and string fields are unchanged.
+- **Files touched:**
+  - `packages/rides-native/checkoutReturn.js`
+  - `packages/rides-native/checkoutReturn.test.js`
+  - `docs/FIXES.md`
+
+## 2026-09-25 — checkoutReturn tests stay on the npm test script (t3)
+
+- **Date:** 2026-09-25
+- **What was wrong:** `packages/rides-native/checkoutReturn.test.js` (the t1/t2 parser suite, 25 tests) has to run under the root `npm test` script. A missing path would leave that suite out of the package test run.
+- **What changed:** Confirmed `packages/rides-native/checkoutReturn.test.js` is already one argument of the `test` script in `package.json` (added with the checkout-reconcile suite and still present). Kept that single entry. `npm test` exits 0: 811 passed, 0 failed, including this file.
+- **Files touched:**
+  - `docs/FIXES.md`
+
+## 2026-09-25 — googleAuth unit tests leave production source unchanged
+
+- **Date:** 2026-09-25
+- **Track / machine:** Clemson RIDES · deputy/google-auth-tests · pkg-google-auth-tests t1
+- **What was wrong:** `packages/rides-native/googleAuth.test.js` only checked `googleOAuthRedirect` for the rider and driver schemes. `startGoogleOAuth` and `completeGoogleSession` had no fake-Supabase coverage. Several current behaviors build a bad redirect or hide the provider error. They are pinned, not changed:
+  - `googleOAuthRedirect` strips only the first `://` and one leading slash, and it does not trim. A finished redirect passed back in becomes `clemsonridesauth/callback://auth/callback`. `//auth/callback` becomes a triple-slash URL. A path of `/` becomes `scheme://`. A trailing colon becomes `:://`.
+  - `startGoogleOAuth` forwards a missing or blank `redirectTo`, returns a whitespace provider URL, and throws `TypeError` when `auth` or the auth result is missing. Email/password `mapAuthError` copy (signup rate limit, invalid credentials, existing account) is used for Google failures. A string error becomes `Auth failed`.
+  - `completeGoogleSession` reads OAuth errors from the hash only, so a query error next to any fragment becomes `Google sign-in was rejected`. The `error=` scan is unanchored (`my_error=` matches). A whitespace-only `error_description` is thrown as the message. Tokens or a PKCE code win over `error` / `error_description`. A null session or null exchange payload is returned as success. A PKCE code containing `+` is turned into a space. A client with no `auth` object throws `TypeError`.
+- **What changed:** Extended `packages/rides-native/googleAuth.test.js` so every export (`googleOAuthRedirect`, `startGoogleOAuth`, `completeGoogleSession`) is covered with `node:test` and an in-memory Supabase auth fake. No network. `googleAuth.js` was not modified. Suspected bugs are asserted as current behavior with `// BUG?:` comments. The root `test` script already lists this file.
+- **Files touched:** `packages/rides-native/googleAuth.test.js`, `docs/FIXES.md`
+
+## 2026-09-25 — googleAuth rejects a whitespace provider URL
+
+- **Date:** 2026-09-25
+- **Track / machine:** Clemson RIDES · deputy/google-auth-tests · pkg-google-auth-tests t2
+- **What was wrong:** `startGoogleOAuth` treated any truthy `data.url` as the Google sign-in link. A whitespace-only string is truthy, so the rider and driver apps would hand `WebBrowser.openAuthSessionAsync` a blank URL instead of the "Google sign-in is not configured" error.
+- **What changed:** Trim a string `data.url` and reject it when nothing remains. A URL with only surrounding whitespace is returned trimmed. A provider error is still preferred over a URL. Other pinned behaviors are unchanged.
+- **Files touched:** `packages/rides-native/googleAuth.js`, `packages/rides-native/googleAuth.test.js`, `docs/FIXES.md`
+
+## 2026-09-25 — googleAuth tests already run from npm test
+
+- **Date:** 2026-09-25
+- **Track / machine:** Clemson RIDES · deputy/google-auth-tests · pkg-google-auth-tests t3
+- **What was wrong:** Nothing to wire. `packages/rides-native/googleAuth.test.js` is already a single entry in the root `package.json` `test` script (present on `origin/main`, between `syntheticOffers.test.js` and `tests/apiRoutes.test.js`). A second copy would run the suite twice.
+- **What changed:** Left `package.json` as it is. Confirmed `npm test` runs that file with the rest of the suite: 811 pass, 0 fail. The 20 googleAuth tests use `node:test` and an in-memory Supabase auth fake. No network.
+- **Files touched:** `docs/FIXES.md`
+
+## 2026-09-25 — Approach status line names the distance (pkg-rider-proximity-sos-polish t1)
+
+- **What was wrong:** `approachStatusLine` was only a mood word (`Getting closer`, `On the way`, `Right here`), so the rider kicker never said how far the driver was. A null stage with `decreasing: true` still said `Getting closer`. Stage cuts used raw fractional feet, so 100.4 ft (shown as 100) was `close` and 500.4 ft (shown as 500) was `far`. A 1 ft GPS wobble across 100 ft left `here` and the next inward step fired another heavy haptic.
+- **What changed:** `formatApproachFeet` turns a usable distance into a whole-foot label (`240 ft`, `5,280 ft`) and turns null, NaN, Infinity, and negatives into `nearby`. `approachStatusLine` always includes that label (`Getting closer · 240 ft`, `Locating · nearby`). `Nearby` stays as-is when there is no foot count. A missing stage stays `Locating`. `approachStage` and the closing check round to the displayed foot first. Cuts stay inclusive and do not move when the distance is rising or falling: here ≤ 100, close ≤ 200, near ≤ 500, otherwise far. `approachAttention` accepts `previousStage` and holds the closer stage until the driver is more than 25 ft past that boundary. Inward crossings still update immediately. `useDriverApproach` passes the latched stage and the current feet, and clears the latch when the approach is inactive or the distance drops out.
+- **Left unchanged (`// BUG?:`):** Callers that omit `previousStage` still re-haptic on a 1 ft recross of 100 ft. Feet and meters are still rounded separately, so `formatApproachDistance(1.4)` is `5 ft` and `1 m`.
+- **Files touched:** `apps/rider/lib/approachAlert.ts`, `apps/rider/lib/approachAlert.test.mjs`, `apps/rider/lib/useDriverApproach.ts`, `docs/FIXES.md`
+- **Verified:** `node --experimental-strip-types --test apps/rider/lib/approachAlert.test.mjs` (10/10)
+
+## 2026-09-25 — Approach card feet and SOS call labels (pkg-rider-proximity-sos-polish t2)
+
+- **What was wrong:** The approach card's large line was a waiting sentence when distance was missing, so it never said Nearby. SOS engagement was set in a passive effect, so the orange wash could still be on screen for a frame, and the haptic effect kept rewriting its stage memory while the sheet was open. Call Clemson Police showed "Campus safety" with no campus number, and the first tap on that button relabeled the Call 911 button as "Confirming…".
+- **What changed:** The large line is the whole-foot distance (`240 ft`, `1,900 ft`) or `Nearby`. The kicker keeps the approach phrase (`Getting closer`, `Locating`). Meters stay on the following line. While SOS is open, the approach overlay unmounts, the orange wash snaps off, and approach haptics do not fire. `SosSheet` sets the engaged flag in a layout effect so that pause happens before paint. Call 911 and Call Clemson Police stay the two full-width actions, with accessibility labels `Call 911` and `Call Clemson Police`. Titles and the campus line come from `sosChannelButton` (Clemson detail is `CUPD_PHONE_DISPLAY` plus campus safety). Dialing still goes through `sosChannelHref` (`tel:911`, `tel:` plus `CUPD_PHONE_E164`). The first press still only confirms and logs the in-app banner. "Confirming…" shows on the button that was pressed.
+- **Files touched:** `apps/rider/components/ApproachAlert.tsx`, `apps/rider/components/SosSheet.tsx`, `docs/FIXES.md`
+- **Verified:** `node --experimental-strip-types --test apps/rider/lib/approachAlert.test.mjs packages/rides-native/safety.test.js` (17/17)
+
+## 2026-09-25 — Proximity and SOS polish already run under npm test (pkg-rider-proximity-sos-polish t3)
+
+- **What was wrong:** t1 extended `apps/rider/lib/approachAlert.test.mjs` (whole-foot labels, stage cuts on the displayed foot, status line, 25 ft hysteresis). t2 left SOS call targets on `sosChannelButton` / `sosChannelHref`, covered by `packages/rides-native/safety.test.js`. If either file were missing from the root `"test"` script, `npm test` would not run the polish.
+- **What changed:** Both paths are already arguments of the root `package.json` `"test"` script. `apps/rider/lib/approachAlert.test.mjs` has been listed since the approaching-driver alert. `packages/rides-native/safety.test.js` has been listed with the native safety suite. t1 and t2 did not add a new test file, so the script did not need another path.
+- **Files touched:** `docs/FIXES.md`
+- **Verified:** `npm test` — 798 pass, 0 fail, including the approachAlert cases (haversine, feet readout, 100/200/500 ft stages, status line with feet or nearby, previousStage hold).
