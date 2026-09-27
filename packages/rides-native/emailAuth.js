@@ -16,7 +16,8 @@ export async function requestPasswordReset(supabase, email, redirectTo) {
   if (!supabase) throw new Error(NOT_CONFIGURED)
   const trimmed = normalizeAuthEmail(email)
   if (!trimmed) throw new Error('Enter the email on your account.')
-  const options = redirectTo ? { redirectTo } : undefined
+  const redirect = typeof redirectTo === 'string' ? redirectTo.trim() : redirectTo
+  const options = redirect ? { redirectTo: redirect } : undefined
   const { data, error } = await supabase.auth.resetPasswordForEmail(trimmed, options)
   if (error) throw mapAuthError(error)
   return data

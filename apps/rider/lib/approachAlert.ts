@@ -41,6 +41,18 @@ export function metersToFeet(meters: number) {
   return meters * FEET_PER_METER
 }
 
+function wholeApproachFeet(feet: number | null | undefined): number | null {
+  if (typeof feet !== 'number' || !Number.isFinite(feet) || feet < 0) return null
+  return Math.round(feet)
+}
+
+/** Human foot label. Null, NaN, Infinity, and negative distances say "nearby". */
+export function formatApproachFeet(feet: number | null | undefined): string {
+  const whole = wholeApproachFeet(feet)
+  if (whole == null) return 'nearby'
+  return `${whole.toLocaleString('en-US')} ft`
+}
+
 export function haversineMeters(lat1: number, lng1: number, lat2: number, lng2: number): number | null {
   if (![lat1, lng1, lat2, lng2].every((value) => Number.isFinite(value))) return null
   const earth = 6371000
@@ -59,16 +71,22 @@ export function formatApproachDistance(meters: number | null): ApproachReading |
   return {
     feet,
     meters: wholeMeters,
-    primary: `Driver ${feet.toLocaleString('en-US')} ft away`,
+    primary: `Driver ${formatApproachFeet(feet)} away`,
     secondary: `${wholeMeters.toLocaleString('en-US')} m`,
   }
 }
 
-export function approachStage(feet: number): ApproachStage | null {
-  if (!Number.isFinite(feet) || feet < 0) return null
-  if (feet <= APPROACH_HERE_FT) return 'here'
-  if (feet <= APPROACH_CLOSE_FT) return 'close'
-  if (feet <= APPROACH_NEAR_FT) return 'near'
+/**
+ * Inclusive whole-foot cuts, same result for the same displayed foot every time:
+ * here <= 100, close <= 200, near <= 500, otherwise far.
+ * Fractional feet round first so 100.4 (shown as 100) stays here and 500.4 stays near.
+ */
+export function approachStage(feet: number | null | undefined): ApproachStage | null {
+  const whole = wholeApproachFeet(feet)
+  if (whole == null) return null
+  if (whole <= APPROACH_HERE_FT) return 'here'
+  if (whole <= APPROACH_CLOSE_FT) return 'close'
+  if (whole <= APPROACH_NEAR_FT) return 'near'
   return 'far'
 }
 
@@ -123,23 +141,58 @@ function stageHaptic(stage: ApproachStage): ApproachHapticLevel {
   }
 }
 
+function outwardHoldFeet(stage: ApproachStage): number {
+  switch (stage) {
+    case 'here':
+      return APPROACH_HERE_FT
+    case 'close':
+      return APPROACH_CLOSE_FT
+    case 'near':
+      return APPROACH_NEAR_FT
+    case 'far':
+      return Number.POSITIVE_INFINITY
+    default: {
+      const neverStage: never = stage
+      return neverStage
+    }
+  }
+}
+
 /**
  * Pulse while the driver is inside 500 / 200 / 100 ft.
  * Outside that, a short burst only when the distance drops by APPROACH_DECREASE_FT.
  * Peaks stay under half opacity and the UI pulses slower than 1 Hz.
+ * Pass previousStage to keep a closer stage until the driver is more than
+ * APPROACH_DECREASE_FT past that boundary. Inward crossings still update immediately.
  */
 export function approachAttention(input: {
   previousFeet: number | null
-  feet: number
+  feet: number | null
+  previousStage?: ApproachStage | null
 }): ApproachAttention | null {
-  const stage = approachStage(input.feet)
-  if (!stage) return null
-  const previousFeet = input.previousFeet != null && Number.isFinite(input.previousFeet)
-    ? input.previousFeet
+  const feet = wholeApproachFeet(input.feet)
+  if (feet == null) return null
+  const raw = approachStage(feet)
+  if (!raw) return null
+  const previousFeet = input.previousFeet != null
+    && Number.isFinite(input.previousFeet)
+    && input.previousFeet >= 0
+    ? Math.round(input.previousFeet)
     : null
-  const previousStage = previousFeet == null ? null : approachStage(previousFeet)
-  const decreasing = previousFeet != null && previousFeet - input.feet >= APPROACH_DECREASE_FT
-  const entered = previousStage == null ? stage !== 'far' : stageRank(stage) > stageRank(previousStage)
+  const derivedPrevious = previousFeet == null ? null : approachStage(previousFeet)
+  const hasLatch = input.previousStage !== undefined
+  const latched = hasLatch ? input.previousStage ?? null : derivedPrevious
+  let stage = raw
+  if (
+    hasLatch
+    && latched
+    && stageRank(raw) < stageRank(latched)
+    && feet <= outwardHoldFeet(latched) + APPROACH_DECREASE_FT
+  ) {
+    stage = latched
+  }
+  const decreasing = previousFeet != null && previousFeet - feet >= APPROACH_DECREASE_FT
+  const entered = latched == null ? stage !== 'far' : stageRank(stage) > stageRank(latched)
   const pulseMode: ApproachPulseMode = stage === 'far' ? (decreasing ? 'burst' : 'off') : 'steady'
   const { washPeak, brightPeak } = peaks(stage, pulseMode === 'burst' ? 'burst' : 'steady')
   let haptic: ApproachHapticLevel | null = null
@@ -154,7 +207,8 @@ export function approachAttention(input: {
   return { stage, decreasing, pulseMode, washPeak, brightPeak, haptic, hapticReason }
 }
 
-export function approachStatusLine(stage: ApproachStage | null, decreasing: boolean) {
+function approachPhrase(stage: ApproachStage | null, decreasing: boolean): string {
+  if (stage == null) return 'Locating'
   if (decreasing && stage !== 'here') return 'Getting closer'
   switch (stage) {
     case 'here':
@@ -165,11 +219,20 @@ export function approachStatusLine(stage: ApproachStage | null, decreasing: bool
       return 'Nearby'
     case 'far':
       return 'On the way'
-    case null:
-      return 'Locating'
     default: {
       const neverStage: never = stage
       return neverStage
     }
   }
+}
+
+export function approachStatusLine(
+  stage: ApproachStage | null,
+  decreasing: boolean,
+  feet?: number | null,
+) {
+  const phrase = approachPhrase(stage, decreasing)
+  const distance = formatApproachFeet(feet)
+  if (distance === 'nearby' && phrase.toLowerCase().includes('nearby')) return phrase
+  return `${phrase} · ${distance}`
 }
