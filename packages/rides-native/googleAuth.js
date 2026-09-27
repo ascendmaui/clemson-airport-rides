@@ -22,10 +22,11 @@ export async function startGoogleOAuth(supabase, redirectTo) {
     },
   })
   if (error) throw mapAuthError(error)
-  if (!data?.url) {
+  const providerUrl = typeof data?.url === 'string' ? data.url.trim() : data?.url
+  if (!providerUrl) {
     throw new Error('Google sign-in is not configured. Enable the Google provider in Supabase Auth and allow this app redirect.')
   }
-  return data.url
+  return providerUrl
 }
 
 export async function completeGoogleSession(supabase, callbackUrl) {

@@ -3,6 +3,7 @@ import { Animated, Platform, StyleSheet, Text, View } from 'react-native'
 import { FullWindowOverlay } from 'react-native-screens'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { approachHaptic } from '@/lib/feedback'
+import { formatApproachFeet } from '@/lib/approachAlert'
 import { useSosEngaged } from '@/lib/sosEngaged'
 import { useDriverApproach } from '@/lib/useDriverApproach'
 import { lift } from '@/lib/elevation'
@@ -36,10 +37,10 @@ export function ApproachAlert({
   const hapticReason = attention?.hapticReason ?? null
 
   useEffect(() => {
-    if (!active) return
+    if (!active || paused) return
     if (stage === 'far' || stage == null) lastStageHaptic.current = null
     else if (hapticReason !== 'stage') lastStageHaptic.current = null
-    if (paused || !haptic) return
+    if (!haptic) return
     if (hapticReason === 'stage') {
       if (lastStageHaptic.current === stage) return
       lastStageHaptic.current = stage
@@ -63,7 +64,14 @@ export function ApproachAlert({
       Animated.timing(bright, { toValue: 0, duration: 480, useNativeDriver: true }).start()
     }
     if (!active || paused || pulseMode === 'off') {
-      fade()
+      if (paused) {
+        wash.stopAnimation()
+        bright.stopAnimation()
+        wash.setValue(0)
+        bright.setValue(0)
+      } else {
+        fade()
+      }
       return () => {
         loop?.stop()
       }
@@ -93,8 +101,9 @@ export function ApproachAlert({
 
   if (!active || paused) return null
 
-  const primary = reading?.primary ?? waiting ?? 'Updating distance…'
-  const secondary = reading?.secondary ?? statusLine
+  const primary = approachPrimaryLine(reading?.feet)
+  const kicker = statusLine.split(' · ')[0]
+  const secondary = reading?.secondary ?? waiting ?? statusLine
 
   const body = (
     <View pointerEvents="box-none" style={styles.host}>
@@ -105,12 +114,12 @@ export function ApproachAlert({
           accessible
           accessibilityRole="text"
           accessibilityLiveRegion="polite"
-          accessibilityLabel={reading ? `${reading.primary}, ${reading.secondary}. ${statusLine}` : primary}
+          accessibilityLabel={reading ? `${primary}, ${reading.secondary}. ${statusLine}` : `${primary}. ${waiting ?? statusLine}`}
           style={[styles.card, lift(colors, 'float')]}
         >
           <View style={styles.dot} />
           <View style={styles.copy}>
-            <Text style={styles.kicker}>{statusLine.toUpperCase()}</Text>
+            <Text style={styles.kicker}>{kicker.toUpperCase()}</Text>
             <Text style={styles.primary}>{primary}</Text>
             <Text style={styles.secondary}>{secondary}</Text>
           </View>
@@ -127,6 +136,11 @@ export function ApproachAlert({
     )
   }
   return body
+}
+
+function approachPrimaryLine(feet: number | null | undefined): string {
+  const label = formatApproachFeet(feet)
+  return label === 'nearby' ? 'Nearby' : label
 }
 
 function makeStyles(colors: Palette) {
