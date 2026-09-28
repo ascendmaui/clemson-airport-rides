@@ -12,3 +12,9 @@ MCP_*.json
 clemson-rides-prod/
 clemson-rides-mobile/
 clemson-rides-*.tgz
+
+# tooling / coverage
+.expo/
+coverage/
+*.tsbuildinfo
+apps/*/.expo/
