@@ -35,7 +35,7 @@ export default function FleetScreen() {
   }, [user])
 
   useEffect(() => {
-    refresh().catch((err) => setError(err instanceof Error ? err.message : 'Could not load your vehicle'))
+    refresh().catch((err: unknown) => setError(err instanceof Error ? err.message : 'Could not load your vehicle'))
   }, [refresh])
 
   async function toggle(enabled: boolean, claimModel3 = false) {

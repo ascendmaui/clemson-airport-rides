@@ -45,11 +45,11 @@ export default function SetPasswordRoute() {
         setNote(err instanceof Error ? err.message : 'Could not open that reset link.')
       }
     }
-    Linking.getInitialURL().then((url) => {
+    Linking.getInitialURL().then((url: string | null) => {
       if (!alive) return
       void consume(url)
     })
-    const sub = Linking.addEventListener('url', ({ url }) => {
+    const sub = Linking.addEventListener('url', ({ url }: { url: string }) => {
       void consume(url)
     })
     return () => {
