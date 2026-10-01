@@ -88,3 +88,32 @@ test('shifting the month anchor moves the label', () => {
   const report = reportPeriod([], 'month', next)
   assert.equal(report.label, 'August')
 })
+
+test('zero, negative, and non-finite fares do not create negative earnings', () => {
+  const report = reportPeriod(
+    [
+      { id: 'zero', status: 'completed', fare_cents: 0, completed_at: '2026-09-24T15:00:00Z' },
+      { id: 'negative', status: 'completed', fare_cents: -500, completed_at: '2026-09-24T16:00:00Z' },
+      { id: 'nan', status: 'completed', fare_cents: 'not-a-number', completed_at: '2026-09-24T17:00:00Z' },
+    ],
+    'day',
+    new Date('2026-09-24T16:00:00Z'),
+  )
+  assert.equal(report.completed, 3)
+  assert.equal(report.totalCents, 0)
+  assert.equal(report.youCents, 0)
+  assert.equal(report.platformCents, 0)
+  assert.equal(report.bars.reduce((sum, bar) => sum + bar.cents, 0), 0)
+})
+
+test('fractional fares round once before the existing 80/20 earnings split', () => {
+  const report = reportPeriod(
+    [{ id: 'fraction', status: 'completed', fare_cents: 1000.6, completed_at: '2026-09-24T15:00:00Z' }],
+    'day',
+    new Date('2026-09-24T16:00:00Z'),
+  )
+  assert.equal(report.totalCents, 801)
+  assert.equal(report.youCents, 801)
+  assert.equal(report.platformCents, 200)
+  assert.equal(report.totalCents + report.platformCents, 1001)
+})
