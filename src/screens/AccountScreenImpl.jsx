@@ -689,7 +689,7 @@ export function AccountScreen() {
               </div>
             )}
             {studentNote && (
-              <p style={{ fontSize: 13, marginTop: 10, color: '#522D80', fontWeight: 700 }}>{studentNote}</p>
+              <p id="student-verification-note" role="status" aria-live="polite" style={{ fontSize: 13, marginTop: 10, color: '#522D80', fontWeight: 700 }}>{studentNote}</p>
             )}
           </Section>
         )}

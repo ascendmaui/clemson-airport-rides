@@ -219,10 +219,28 @@ export function ScheduleAirport() {
           })}
         </div>
 
-        <label style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink-secondary)' }}>Date</label>
-        <input type="date" className="glass-input" value={date} onChange={(e) => setDate(e.target.value)} style={{ width: '100%', marginTop: 6, marginBottom: 14, padding: '12px 14px', borderRadius: 12 }} />
-        <label style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink-secondary)' }}>Pickup time</label>
-        <input type="time" className="glass-input" value={time} onChange={(e) => setTime(e.target.value)} style={{ width: '100%', marginTop: 6, marginBottom: 20, padding: '12px 14px', borderRadius: 12 }} />
+        <label htmlFor="schedule-flight-date" style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink-secondary)' }}>Date</label>
+        <input
+          id="schedule-flight-date"
+          type="date"
+          className="glass-input"
+          value={date}
+          onChange={(e) => setDate(e.target.value)}
+          aria-invalid={Boolean(error && /date/i.test(error)) ? 'true' : undefined}
+          aria-describedby={error ? 'schedule-airport-error' : undefined}
+          style={{ width: '100%', marginTop: 6, marginBottom: 14, padding: '12px 14px', borderRadius: 12 }}
+        />
+        <label htmlFor="schedule-flight-time" style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink-secondary)' }}>Pickup time</label>
+        <input
+          id="schedule-flight-time"
+          type="time"
+          className="glass-input"
+          value={time}
+          onChange={(e) => setTime(e.target.value)}
+          aria-invalid={Boolean(error && /time/i.test(error)) ? 'true' : undefined}
+          aria-describedby={error ? 'schedule-airport-error' : undefined}
+          style={{ width: '100%', marginTop: 6, marginBottom: 20, padding: '12px 14px', borderRadius: 12 }}
+        />
 
         <div className="glass-panel glass-panel--orange" style={{ padding: 16, borderRadius: 16, marginBottom: 16 }}>
           <div style={{ fontSize: 11, letterSpacing: 1.1, fontWeight: 800, color: '#F56600', marginBottom: 8 }}>AIRPORT DEPOSIT</div>
@@ -259,7 +277,7 @@ export function ScheduleAirport() {
         </PrimaryButton>
 
         {error && (
-          <p role="alert" className="glass-panel" style={{ marginTop: 14, padding: 12, borderRadius: 12, background: 'rgba(217,45,32,0.10)', color: 'var(--danger)', fontSize: 13, fontWeight: 600, lineHeight: 1.4 }}>
+          <p id="schedule-airport-error" role="alert" aria-live="polite" className="glass-panel form-summary-alert" style={{ marginTop: 14, padding: 12, borderRadius: 12, background: 'rgba(217,45,32,0.10)', color: 'var(--danger)', fontSize: 13, fontWeight: 600, lineHeight: 1.4 }}>
             {error}
           </p>
         )}
