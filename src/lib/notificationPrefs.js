@@ -7,11 +7,22 @@ import { supabase } from './supabase'
 import { DEFAULT_QUIET } from './quietHours.js'
 
 export { DEFAULT_QUIET, isQuietNow, quietFromPrefs } from './quietHours.js'
+export {
+  ALERT_LEVELS,
+  DND_COPY,
+  QUIET_HOURS_COPY,
+  SYNC_STATUS_COPY,
+  SYSTEM_ALERT_KINDS,
+  formatSyncFeedback,
+  formatSystemAlert,
+  isCriticalAlert,
+  toneForAlertKind,
+} from '../../packages/rides-native/systemAlertsCopy.js'
 
 export const NOTIFICATION_CATEGORIES = [
-  { id: 'ride', label: 'Ride updates', hint: 'Requested, accepted, en route, arrived, trip started/completed' },
+  { id: 'ride', label: 'Ride updates', hint: 'Requested, accepted, en route, arrived, trip started or completed' },
   { id: 'billing', label: 'Billing & receipts', hint: 'Fare charged, payment failed, receipts' },
-  { id: 'friends', label: 'Friends / carpool', hint: 'Friend joined/left, carpool booked, location shared' },
+  { id: 'friends', label: 'Friends / carpool', hint: 'Friend joined or left, carpool booked, location shared' },
   { id: 'promotions', label: 'Promotions', hint: 'Deals, surge alerts, campus campaigns' },
   { id: 'system', label: 'System', hint: 'Account, verification, security notices' },
 ]
