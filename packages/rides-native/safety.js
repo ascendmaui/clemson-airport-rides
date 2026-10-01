@@ -341,3 +341,6 @@ export async function deleteEmergencyContact(supabase, userId, contactId) {
   if (error) return { ok: false, error: error.message }
   return { ok: true }
 }
+
+export * from './safetyCopy.js'
+

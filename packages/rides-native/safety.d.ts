@@ -102,3 +102,6 @@ export function deleteEmergencyContact(
   userId: string,
   contactId: string,
 ): Promise<{ ok: boolean; error?: string }>
+
+export * from './safetyCopy.js'
+
