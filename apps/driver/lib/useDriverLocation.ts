@@ -16,7 +16,7 @@ export function useDriverLocation(enabled: boolean, onFix: (fix: DriverFix) => v
       if (!alive || perm.status !== 'granted') return
       sub = await Location.watchPositionAsync(
         { accuracy: Location.Accuracy.Balanced, distanceInterval: 20, timeInterval: 5000 },
-        (pos: Location.LocationObject) => {
+        (pos: { coords: { latitude: number; longitude: number; heading: number | null } }) => {
           onFixRef.current({
             lat: pos.coords.latitude,
             lng: pos.coords.longitude,

@@ -15,13 +15,13 @@ export function SignaturePad({
   const responder = useRef(PanResponder.create({
     onStartShouldSetPanResponder: () => true,
     onMoveShouldSetPanResponder: () => true,
-    onPanResponderGrant: (event) => {
+    onPanResponderGrant: (event: { nativeEvent: { locationX: number; locationY: number } }) => {
       const { locationX, locationY } = event.nativeEvent
       draft.current = [...draft.current, { x: locationX, y: locationY }]
       setPoints(draft.current)
       onChange(draft.current)
     },
-    onPanResponderMove: (event) => {
+    onPanResponderMove: (event: { nativeEvent: { locationX: number; locationY: number } }) => {
       const { locationX, locationY } = event.nativeEvent
       draft.current = [...draft.current, { x: locationX, y: locationY }]
       setPoints(draft.current.slice())
@@ -33,7 +33,7 @@ export function SignaturePad({
     <View style={styles.wrap}>
       <View {...responder.panHandlers} style={styles.pad}>
         {points.length === 0 ? <Text style={styles.hint}>Sign here</Text> : null}
-        {points.map((point, index) => (
+        {points.map((point: Point, index: number) => (
           <View key={`${index}-${point.x}`} style={[styles.dot, { left: point.x, top: point.y, backgroundColor: ink }]} />
         ))}
       </View>

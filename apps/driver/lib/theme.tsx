@@ -94,7 +94,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let alive = true
-    Location.getLastKnownPositionAsync().then((pos: Location.LocationObject | null) => {
+    Location.getLastKnownPositionAsync().then((pos: { coords: { latitude: number; longitude: number } } | null) => {
       if (!alive || !pos) return
       setCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude })
     }).catch(() => {})
@@ -119,13 +119,13 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     colors,
     scheme,
     displayMode: prefs.displayMode,
-    setDisplayMode: (displayMode) => update({ displayMode }),
+    setDisplayMode: (displayMode: Prefs['displayMode']) => update({ displayMode }),
     earningsPrivate: prefs.earningsPrivate,
-    setEarningsPrivate: (earningsPrivate) => update({ earningsPrivate }),
+    setEarningsPrivate: (earningsPrivate: boolean) => update({ earningsPrivate }),
     sounds: prefs.sounds,
-    setSounds: (sounds) => update({ sounds }),
+    setSounds: (sounds: boolean) => update({ sounds }),
     navApp: prefs.navApp,
-    setNavApp: (navApp) => update({ navApp }),
+    setNavApp: (navApp: Prefs['navApp']) => update({ navApp }),
     solarPlace: coords ? 'Last known location' : 'Clemson, SC',
   }
 

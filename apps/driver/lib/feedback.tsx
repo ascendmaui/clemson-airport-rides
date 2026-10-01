@@ -50,7 +50,7 @@ export function FeedbackProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const api = useMemo<FeedbackApi>(() => ({
-    pulse(kind: FeedbackKind) {
+    pulse(kind: Pulse) {
       Haptics.notificationAsync(hapticFor(kind)).catch(() => {})
       if (!soundsRef.current) return
       if (kind !== 'request' && kind !== 'accept' && kind !== 'complete') return
