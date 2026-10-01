@@ -9,6 +9,7 @@ import { supabase } from '@/lib/supabase'
 import { useTheme } from '@/lib/theme'
 import { loadEarnings } from 'rides-native/driverDesk'
 import { carpoolPayFromTrip, tripEarnedCents } from 'rides-native/tripTags'
+import { formatIncentiveName } from 'rides-native/earningsCopy'
 
 type Trip = Awaited<ReturnType<typeof loadEarnings>>['trips'][number]
 type Filter = 'all' | 'completed' | 'canceled'
@@ -129,7 +130,7 @@ export default function EarningsActivity() {
                   </Text>
                   {trip.status !== 'canceled' && pay?.showBonus ? (
                     <Text style={{ color: colors.inkSecondary }}>
-                      Base net {shownCents(pay.baseNetCents, earningsPrivate)} · {pay.incentiveId} {shownCents(pay.bonusCents, earningsPrivate)} · total {shownCents(pay.payoutCents, earningsPrivate)}
+                      Base net {shownCents(pay.baseNetCents, earningsPrivate)} · {formatIncentiveName(pay.incentiveId)} {shownCents(pay.bonusCents, earningsPrivate)} · total {shownCents(pay.payoutCents, earningsPrivate)}
                     </Text>
                   ) : null}
                 </Card>

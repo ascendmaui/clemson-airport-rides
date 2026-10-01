@@ -14,6 +14,11 @@ import { supabase } from '@/lib/supabase'
 import { useTheme } from '@/lib/theme'
 import { carpoolPayFromTrip, tripEarnedCents, weekNetCents } from 'rides-native/tripTags'
 import { loadEarnings } from 'rides-native/driverDesk'
+import {
+  formatWeeklyEarningsNote,
+  formatFareBreakdownExplanation,
+  formatWalletBalanceNote,
+} from 'rides-native/earningsCopy'
 
 type EarningsState = Awaited<ReturnType<typeof loadEarnings>> | null
 
@@ -106,25 +111,15 @@ export default function EarningsHub() {
                 amount={shownCents(week, earningsPrivate)}
                 onDetails={() => router.push('/earnings-details')}
               />
-              {week <= 0 ? (
-                <SoftNote>No completed trips this week. You keep 80% of each fare once a ride finishes. Carpool trips add driver_carpool_bonus on the stored payout.</SoftNote>
-              ) : (
-                <SoftNote>
-                  {carpoolBonus
-                    ? 'This week includes carpool payouts. Totals use metadata.driver_payout_cents, including driver_carpool_bonus.'
-                    : 'This week’s total is the 80% you keep. Open details for day, week, month, and year.'}
-                </SoftNote>
-              )}
+              <SoftNote>
+                {formatWeeklyEarningsNote({ weekNetCents: week, hasCarpoolBonus: carpoolBonus })}
+              </SoftNote>
               <SectionLabel>Wallet</SectionLabel>
               <Card>
                 <Text style={[styles.kicker, { color: colors.orange }]}>BALANCE</Text>
                 <Text style={[styles.amount, { color: colors.ink }]}>{shownCents(pending, earningsPrivate)}</Text>
                 <Text style={{ color: colors.inkSecondary, lineHeight: 20 }}>
-                  {nextRetry?.nextRetryAt
-                    ? `Next payout retry ${new Date(nextRetry.nextRetryAt).toLocaleString()}`
-                    : pending > 0
-                      ? 'This balance pays out when a Stripe transfer is due.'
-                      : 'Nothing is waiting to pay out. Completed trips land here after Stripe records them.'}
+                  {formatWalletBalanceNote({ pendingCents: pending, nextRetryAt: nextRetry?.nextRetryAt || null })}
                 </Text>
                 <Pressable
                   onPress={() => router.push('/payouts')}
@@ -140,11 +135,7 @@ export default function EarningsHub() {
               <SectionLabel>Customer fare breakdown</SectionLabel>
               <Card>
                 <Text style={{ color: colors.inkSecondary, lineHeight: 20 }}>
-                  {standard
-                    ? 'No completed trips yet. The chart shows the standard split until one is on file. You keep 80%.'
-                    : carpoolBonus
-                      ? 'Completed trips on this account. Carpool totals are metadata.driver_payout_cents (base net plus driver_carpool_bonus). Tips, when present, sit in Other.'
-                      : 'Completed trips on this account. You keep 80% of the fare. Tips, when present, sit in Other.'}
+                  {formatFareBreakdownExplanation({ standard, hasCarpoolBonus: carpoolBonus })}
                 </Text>
                 {earningsPrivate ? (
                   <SoftNote>Amounts are hidden on this phone. Turn off Make earnings private in Settings to see the split.</SoftNote>
