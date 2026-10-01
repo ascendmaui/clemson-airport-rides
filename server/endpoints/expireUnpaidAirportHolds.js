@@ -50,13 +50,14 @@ function headerValue(headers, name) {
 
 function bearerToken(header) {
   const match = /^Bearer\s+(\S+)\s*$/i.exec(String(header || '').trim())
-  return match ? match[1] : ''
+  if (!match) return ''
+  return match[1].replace(/^["']|["']$/g, '')
 }
 
 /** Constant-time compare. Different lengths return false without throwing. */
 function secretsEqual(presented, expected) {
-  const left = Buffer.from(String(presented))
-  const right = Buffer.from(String(expected))
+  const left = Buffer.from(String(presented || '').trim())
+  const right = Buffer.from(String(expected || '').trim())
   if (left.length === 0 || left.length !== right.length) return false
   return timingSafeEqual(left, right)
 }
@@ -88,7 +89,8 @@ function dryRunRequested(req) {
   const url = String(req?.url || '')
   const qIndex = url.indexOf('?')
   if (qIndex === -1) return false
-  return flagOn(new URLSearchParams(url.slice(qIndex + 1)).get('dry_run'))
+  const params = new URLSearchParams(url.slice(qIndex + 1))
+  return flagOn(params.get('dry_run') ?? params.get('dryRun'))
 }
 
 function sendJson(res, status, body) {
@@ -98,7 +100,10 @@ function sendJson(res, status, body) {
 }
 
 export default async function handler(req, res, overrides = {}) {
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private')
+  res.setHeader('Pragma', 'no-cache')
   if (req.method !== 'GET' && req.method !== 'POST') {
+    res.setHeader('Allow', 'GET, POST')
     return sendJson(res, 405, { error: 'Method not allowed' })
   }
   const env = overrides.env || process.env

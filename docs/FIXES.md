@@ -1,6 +1,30 @@
 # Build & blocker fixes log
 
 Persistent knowledge base for recurring failures. When a matching issue appears, apply the saved fix first.
+
+## 2026-10-01 — Expire unpaid airport holds & Stripe webhook endpoint hardening
+
+- **Track / machine:** Clemson RIDES · MacBook Max · `feat/max-agy-burn-ttl-webhooks`
+- **What was wrong:**
+  1. `api/stripe-webhook.js` lacked bounded payload size checking (risk of unconstrained memory usage/DoS from oversized raw payloads), missing explicit cache control and allow headers on method rejections, did not support case-insensitive or array-valued `stripe-signature` headers, and referenced module-level `serviceKey` rather than injectable `activeServiceKey` when obtaining a Supabase client.
+  2. `server/endpoints/expireUnpaidAirportHolds.js` lacked no-cache and Allow headers on method rejections, did not strip surrounding quotes on bearer tokens (e.g. `Bearer "..."`), and did not inspect camelCase `dryRun` in URL search parameters.
+- **What changed:**
+  - Added `MAX_WEBHOOK_PAYLOAD_BYTES` (1MB) safety cap in `readRawBody`, destroying request stream and rejecting with 400 when exceeded.
+  - Added strict `Cache-Control: no-store, no-cache, must-revalidate, private` and `Pragma: no-cache` headers to both `stripe-webhook.js` and `expireUnpaidAirportHolds.js`.
+  - Added `Allow: POST` (webhook) and `Allow: GET, POST` (expire holds) headers on 405 Method Not Allowed responses.
+  - Hardened signature header extraction in `stripe-webhook.js` to handle both `stripe-signature` and capitalized `Stripe-Signature`, as well as array header forms.
+  - Ensured `activeServiceKey` is used when deciding whether to construct default service role client in `checkout.session.completed` handler.
+  - Handled single- and double-quoted bearer tokens in `bearerToken()` for `expireUnpaidAirportHolds.js`.
+  - Allowed both `dry_run` and `dryRun` in URLSearchParams for dry run verification.
+  - Added test coverage in `api/stripeWebhookValidation.test.js` and `server/abandonedCheckout.test.js`.
+- **Files touched:**
+  - `api/stripe-webhook.js`
+  - `api/stripeWebhookValidation.test.js`
+  - `server/abandonedCheckout.test.js`
+  - `server/endpoints/expireUnpaidAirportHolds.js`
+  - `docs/FIXES.md`
+- **Verified:** `npm test` passing 1761/1761 tests across 53 test suites with 0 failures.
+
 ## 2026-09-25 — Blank rider tier student discount consistency (money bug 2)
 
 - **Date:** 2026-09-25
