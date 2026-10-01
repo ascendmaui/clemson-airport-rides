@@ -24,8 +24,13 @@ import {
   FRIEND_PLACES, carpoolProgram, confirmFriendCharges, createFriendRide, decodePolyline,
   formatEta, formatMiles, inviteUrl, getFriendRide, joinFriendRide, recomputeFriendRide,
   vehicleMaxSeats, capacityMessage, DEFAULT_MAX_PARTICIPANTS,
-} from '../lib/friendRides'
 import { OFFER_CARPOOL_MAPS_NOTE, OFFER_CARPOOL_STEPS } from '../lib/placeCatalog'
+import {
+  LOBBY_ACTIONS,
+  LOBBY_BANNER_COPY,
+  formatSplitMode,
+} from '../../packages/rides-native/carpoolCopy.js'
+
 
 const card = {
   marginTop: 16, padding: 16, borderRadius: 16, background: 'var(--surface)',
@@ -499,12 +504,12 @@ export function FriendRideScreen({ token: tokenProp, kind: kindProp = 'friends' 
         </div>
 
         {friendsLobby && friendPreview?.rows?.length > 0 && (
-          <div style={card} aria-label="Fare split preview">
-            <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: 0.8, color: '#F56600' }}>BEFORE YOU CONFIRM</div>
-            <div style={{ fontWeight: 700, marginTop: 6 }}>Fare split preview</div>
+          <div style={card} aria-label={LOBBY_BANNER_COPY.SPLIT_PREVIEW_TITLE}>
+            <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: 0.8, color: '#F56600' }}>{LOBBY_BANNER_COPY.BEFORE_CONFIRM}</div>
+            <div style={{ fontWeight: 700, marginTop: 6 }}>{LOBBY_BANNER_COPY.SPLIT_PREVIEW_TITLE}</div>
             <div style={{ fontSize: 12, color: 'var(--ink-tertiary)', margin: '6px 0 10px', lineHeight: 1.45 }}>
-              Server quote · {friendPreview.splitMode === 'by_distance' ? 'by distance' : 'even'}.
-              Struck prices are this route alone. Confirm charges these shares with a saved card off-session, or Apple Pay / Payment Element.
+              Server quote · {formatSplitMode(friendPreview.splitMode).toLowerCase()}.
+              {' '}{LOBBY_BANNER_COPY.SHARE_SAVINGS_EXPLAINER}
             </div>
             {friendPreview.headline && (
               <>
@@ -563,13 +568,13 @@ export function FriendRideScreen({ token: tokenProp, kind: kindProp = 'friends' 
                 <strong>{p.display_name}</strong>
                 <span style={{ color: 'var(--ink-tertiary)' }}>· {p.status}</span>
                 {(carpoolQuote?.shares || []).some((share) => share.id === p.id && share.firstRideFree) && (
-                  <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: 0.3, color: '#F56600' }}>First ride free</span>
+                  <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: 0.3, color: '#F56600' }}>{LOBBY_BANNER_COPY.FIRST_RIDE_FREE_BADGE}</span>
                 )}
                 {p.student_verified_at && (
                   <span style={{
                     fontSize: 10, fontWeight: 700, letterSpacing: 0.4, padding: '2px 8px', borderRadius: 999,
                     background: 'rgba(82,45,128,0.12)', color: 'var(--purple)',
-                  }}>Clemson student</span>
+                  }}>{LOBBY_BANNER_COPY.CLEMSON_STUDENT_BADGE}</span>
                 )}
                 {p.rating_avg != null && (
                   <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--ink-secondary)' }}>
@@ -586,7 +591,7 @@ export function FriendRideScreen({ token: tokenProp, kind: kindProp = 'friends' 
         </div>
 
         <div style={card}>
-          <div style={{ fontWeight: 700, marginBottom: 8 }}>{isOrganizer ? 'Update stops' : 'Add your stops'}</div>
+          <div style={{ fontWeight: 700, marginBottom: 8 }}>{isOrganizer ? LOBBY_ACTIONS.UPDATE_STOPS : LOBBY_ACTIONS.ADD_STOPS}</div>
           <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Name"
             style={{ width: '100%', padding: 12, borderRadius: 12, border: '1px solid var(--border)', marginBottom: 10 }} />
           {!user && (
@@ -617,21 +622,21 @@ export function FriendRideScreen({ token: tokenProp, kind: kindProp = 'friends' 
               mode="confirm"
             />
           )}
-          <PrimaryButton onClick={onJoin} disabled={busy}>{busy ? (busyLabel || 'Saving…') : 'Save stops'}</PrimaryButton>
+          <PrimaryButton onClick={onJoin} disabled={busy}>{busy ? (busyLabel || 'Saving…') : LOBBY_ACTIONS.SAVE_STOPS}</PrimaryButton>
         </div>
 
         {isOrganizer && (
           <div style={card}>
             <div style={{ fontWeight: 700, marginBottom: 8 }}>Organizer</div>
             <label style={{ marginRight: 16 }}>
-              <input type="radio" checked={splitMode === 'even'} onChange={() => setSplitMode('even')} /> Even
+              <input type="radio" checked={splitMode === 'even'} onChange={() => setSplitMode('even')} /> {formatSplitMode('even')}
             </label>
             <label>
-              <input type="radio" checked={splitMode === 'by_distance'} onChange={() => setSplitMode('by_distance')} /> By distance
+              <input type="radio" checked={splitMode === 'by_distance'} onChange={() => setSplitMode('by_distance')} /> {formatSplitMode('by_distance')}
             </label>
             <div style={{ height: 10 }} />
             <PrimaryButton onClick={onRecompute} disabled={busy}>
-              {busy && busyLabel === 'Calculating fares…' ? 'Calculating fares…' : 'Optimize route & fares'}
+              {busy && busyLabel === LOBBY_ACTIONS.CALCULATING_FARES ? LOBBY_ACTIONS.CALCULATING_FARES : LOBBY_ACTIONS.OPTIMIZE_ROUTE}
             </PrimaryButton>
             <div style={{ height: 10 }} />
             {isCarpool && (

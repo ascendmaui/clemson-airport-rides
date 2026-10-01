@@ -186,3 +186,6 @@ export function riderDisplayName(user) {
   const email = user?.email ? String(user.email).split('@')[0] : ''
   return email || 'Tiger'
 }
+
+export * from '../carpoolCopy.js'
+
