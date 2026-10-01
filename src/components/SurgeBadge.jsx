@@ -6,16 +6,19 @@ export function SurgeBadge({ surge, earningsCents }) {
   const shown = multiplier.toFixed(2).replace(/0$/, '').replace(/\.$/, '')
   return (
     <span
+      role="status"
+      aria-label={`Surge pricing active: ${label} at ${shown} times standard fare`}
+      className="a11y-surge-badge"
       style={{
         display: 'inline-flex',
         alignItems: 'center',
         gap: 6,
         padding: '4px 10px',
-        borderRadius: 999,
+        borderRadius: 'var(--radius-pill)',
         fontSize: 12,
         fontWeight: 800,
-        color: '#fff',
-        background: 'linear-gradient(135deg, #F56600 0%, #522D80 100%)',
+        color: '#ffffff',
+        background: 'linear-gradient(135deg, #BA4700 0%, #522D80 100%)',
         letterSpacing: 0.2,
       }}
     >

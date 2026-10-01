@@ -80,40 +80,56 @@ textarea:focus-visible,
   box-shadow: 0 0 0 3px var(--orange-glow), 0 4px 16px rgba(245, 102, 0, 0.12) !important;
 }
 
-/* Accessible form field validation and error styling */
-input[aria-invalid="true"],
-textarea[aria-invalid="true"],
-select[aria-invalid="true"] {
-  border-color: var(--danger) !important;
-  box-shadow: 0 0 0 1px var(--danger);
-}
-
-input[aria-invalid="true"]:focus-visible,
-textarea[aria-invalid="true"]:focus-visible,
-select[aria-invalid="true"]:focus-visible {
-  outline: 2px solid var(--danger);
-  outline-offset: 2px;
-}
-
-.field-error-text {
-  display: block;
-  margin-top: 4px;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--danger);
+/* Accessible Badge Components & Readability Tokens */
+.a11y-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+  font-size: 11px;
+  font-weight: 700;
   line-height: 1.35;
+  letter-spacing: 0.3px;
+  border: 1px solid transparent;
+  vertical-align: middle;
+  white-space: nowrap;
 }
 
-.form-summary-alert {
-  background: rgba(217, 45, 32, 0.10);
-  color: var(--danger);
-  border: 1px solid rgba(217, 45, 32, 0.25);
-  border-radius: 12px;
-  padding: 12px 14px;
-  font-size: 13px;
-  font-weight: 600;
-  line-height: 1.4;
-  margin-bottom: 14px;
+.a11y-badge--purple {
+  background: var(--badge-purple-bg);
+  border-color: var(--badge-purple-border);
+  color: var(--badge-purple-text);
+}
+
+.a11y-badge--orange {
+  background: var(--badge-orange-bg);
+  border-color: var(--badge-orange-border);
+  color: var(--badge-orange-text);
+}
+
+.a11y-badge--success {
+  background: var(--badge-success-bg);
+  border-color: var(--badge-success-border);
+  color: var(--badge-success-text);
+}
+
+.a11y-badge--danger {
+  background: var(--badge-danger-bg);
+  border-color: var(--badge-danger-border);
+  color: var(--badge-danger-text);
+}
+
+.a11y-badge--neutral {
+  background: var(--badge-neutral-bg);
+  border-color: var(--badge-neutral-border);
+  color: var(--badge-neutral-text);
+}
+
+.a11y-badge--fleet {
+  background: var(--badge-fleet-bg);
+  border-color: var(--badge-fleet-border);
+  color: var(--badge-fleet-text);
 }
 
 @keyframes spin {
@@ -1090,94 +1106,3 @@ select[aria-invalid="true"]:focus-visible {
     transform: none;
   }
 }
-
-/* —— Accessible Alert & Error Boundary (GA64) —— */
-.accessible-alert {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  padding: 12px 14px;
-  border-radius: 14px;
-  font-size: 13px;
-  line-height: 1.45;
-  transition: opacity 200ms var(--ease-soft), transform 200ms var(--ease-spring);
-}
-.accessible-alert--danger {
-  background: rgba(217, 45, 32, 0.08);
-  border: 1px solid rgba(217, 45, 32, 0.28);
-  color: var(--danger);
-}
-.accessible-alert--warning {
-  background: rgba(245, 102, 0, 0.08);
-  border: 1px solid rgba(245, 102, 0, 0.28);
-  color: #c24a00;
-}
-.accessible-alert--info {
-  background: rgba(82, 45, 128, 0.08);
-  border: 1px solid rgba(82, 45, 128, 0.24);
-  color: var(--purple);
-}
-.accessible-alert__icon {
-  flex-shrink: 0;
-  margin-top: 1px;
-}
-.accessible-alert__body {
-  flex: 1;
-  min-width: 0;
-}
-.accessible-alert__title {
-  font-weight: 750;
-  margin-bottom: 2px;
-}
-.accessible-alert__message {
-  font-weight: 550;
-}
-.accessible-alert__actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 8px;
-}
-.accessible-alert__btn {
-  padding: 4px 10px;
-  border-radius: 8px;
-  font-size: 12px;
-  font-weight: 700;
-  cursor: pointer;
-}
-.accessible-alert__btn--retry {
-  background: var(--danger);
-  color: #fff;
-  border: none;
-}
-.accessible-alert__btn--dismiss {
-  background: transparent;
-  color: inherit;
-  border: 1px solid currentColor;
-  opacity: 0.8;
-}
-.accessible-alert__close {
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  padding: 2px 4px;
-  font-size: 16px;
-  line-height: 1;
-  color: inherit;
-  opacity: 0.7;
-}
-.accessible-alert__close:hover,
-.accessible-alert__close:focus-visible {
-  opacity: 1;
-}
-
-.accessible-error-boundary {
-  padding: 24px 20px;
-  border-radius: 18px;
-  background: rgba(255, 255, 255, 0.85);
-  backdrop-filter: blur(16px);
-  border: 1px solid rgba(217, 45, 32, 0.2);
-  box-shadow: var(--shadow-modal);
-  text-align: center;
-}
-
