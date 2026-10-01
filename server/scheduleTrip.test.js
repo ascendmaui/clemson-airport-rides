@@ -1116,6 +1116,125 @@ describe('scheduleTrip endpoint handler', () => {
       assert.equal(tripEventsInserted.length, 0)
     })
   })
+
+  describe('Passenger aliases, exact lead time, and non-schedule at', () => {
+    const depsFor = (sb) => ({
+      user: mockStandardUser,
+      sb,
+      ensureProfile: async () => ({ ok: true }),
+    })
+
+    test('falls back to party_size when passengers and partySize are omitted', async () => {
+      const { sb, tripsInserted } = createFakeSb()
+      const validFuture = new Date(Date.now() + 60 * 60 * 1000).toISOString()
+      const res = await callHandler(
+        scheduleTripHandler,
+        {
+          method: 'POST',
+          body: { ...defaultPlaces, pickupAt: validFuture, party_size: 5 },
+        },
+        depsFor(sb),
+      )
+      assert.equal(res.status, 200)
+      assert.equal(tripsInserted[0].passengers, 5)
+    })
+
+    test('empty passengers does not fall through to partySize or party_size', async () => {
+      const { sb, tripsInserted } = createFakeSb()
+      const validFuture = new Date(Date.now() + 60 * 60 * 1000).toISOString()
+      const res = await callHandler(
+        scheduleTripHandler,
+        {
+          method: 'POST',
+          body: {
+            ...defaultPlaces,
+            pickupAt: validFuture,
+            passengers: '',
+            partySize: 4,
+            party_size: 5,
+          },
+        },
+        depsFor(sb),
+      )
+      assert.equal(res.status, 200)
+      assert.equal(tripsInserted[0].passengers, 1)
+    })
+
+    test('empty partySize does not fall through to party_size', async () => {
+      const { sb, tripsInserted } = createFakeSb()
+      const validFuture = new Date(Date.now() + 60 * 60 * 1000).toISOString()
+      const res = await callHandler(
+        scheduleTripHandler,
+        {
+          method: 'POST',
+          body: {
+            ...defaultPlaces,
+            pickupAt: validFuture,
+            partySize: '',
+            party_size: 5,
+          },
+        },
+        depsFor(sb),
+      )
+      assert.equal(res.status, 200)
+      assert.equal(tripsInserted[0].passengers, 1)
+    })
+
+    test('accepts a pickup exactly 30 minutes ahead and rejects 1ms inside', async () => {
+      const exact = new Date(Date.now() + 30 * 60 * 1000).toISOString()
+      const { sb, tripsInserted } = createFakeSb()
+      const accepted = await callHandler(
+        scheduleTripHandler,
+        { method: 'POST', body: { ...defaultPlaces, pickupAt: exact } },
+        depsFor(sb),
+      )
+      assert.equal(accepted.status, 200)
+      assert.equal(tripsInserted[0].status, 'scheduled')
+      assert.equal(tripsInserted[0].pickup_at, exact)
+
+      const inside = new Date(Date.now() + 30 * 60 * 1000 - 1).toISOString()
+      const { sb: sbEarly } = createFakeSb()
+      const rejected = await callHandler(
+        scheduleTripHandler,
+        { method: 'POST', body: { ...defaultPlaces, pickupAt: inside } },
+        depsFor(sbEarly),
+      )
+      assert.equal(rejected.status, 400)
+      assert.deepEqual(rejected.json, { error: 'Schedule at least 30 minutes ahead.' })
+    })
+
+    test('an at timestamp alone is not treated as a scheduled trip', async () => {
+      const { sb, tripsInserted } = createFakeSb()
+      const res = await callHandler(
+        scheduleTripHandler,
+        {
+          method: 'POST',
+          body: { ...defaultPlaces, at: '2026-12-01T18:00:00.000Z' },
+        },
+        depsFor(sb),
+      )
+      assert.equal(res.status, 200)
+      assert.equal(tripsInserted[0].status, 'searching')
+      assert.equal(tripsInserted[0].pickup_at, null)
+      assert.equal(tripsInserted[0].scheduled_for, null)
+    })
+
+    test('spring-gap date+time throws when the scheduled instant is formatted', async () => {
+      const { sb, tripsInserted } = createFakeSb()
+      await assert.rejects(
+        () => callHandler(
+          scheduleTripHandler,
+          {
+            method: 'POST',
+            body: { ...defaultPlaces, date: '2026-03-08', time: '02:30' },
+          },
+          depsFor(sb),
+        ),
+        /Invalid time value/,
+      )
+      assert.equal(tripsInserted.length, 0)
+    })
+  })
 })
 
 describe('takeReminder (real src/lib/scheduledRides.js)', () => {
