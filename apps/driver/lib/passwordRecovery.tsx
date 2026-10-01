@@ -34,10 +34,10 @@ export function PasswordRecoveryListener() {
         console.warn('[auth] recovery link', err instanceof Error ? err.message : err)
       }
     }
-    Linking.getInitialURL().then((url) => {
+    Linking.getInitialURL().then((url: string | null) => {
       if (alive) open(url)
     })
-    const sub = Linking.addEventListener('url', ({ url }) => {
+    const sub = Linking.addEventListener('url', ({ url }: { url: string }) => {
       open(url)
     })
     return () => {

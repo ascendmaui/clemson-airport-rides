@@ -94,7 +94,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let alive = true
-    Location.getLastKnownPositionAsync().then((pos) => {
+    Location.getLastKnownPositionAsync().then((pos: Location.LocationObject | null) => {
       if (!alive || !pos) return
       setCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude })
     }).catch(() => {})
@@ -104,7 +104,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   }, [])
 
   function update(patch: Partial<Prefs>) {
-    setPrefs((current) => {
+    setPrefs((current: Prefs) => {
       const next = { ...current, ...patch }
       authStorage.setItem(PREFS_KEY, JSON.stringify(next)).catch(() => {})
       return next
