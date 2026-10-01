@@ -77,7 +77,7 @@ export default function DiscoverScreen() {
           {loading ? 'Loading campus demand…' : `${caption}${blended ? ' Live requests are blended in when available.' : ' Typical patterns when live demand is quiet.'}`}
         </Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
-          {HEAT_WINDOWS.map((item) => {
+          {HEAT_WINDOWS.map((item: { id: string; label: string }) => {
             const on = item.id === windowId
             return (
               <Pressable key={item.id} onPress={() => setWindowId(item.id)} style={[styles.chip, { backgroundColor: on ? colors.fill : colors.card }]}>
@@ -99,7 +99,7 @@ export default function DiscoverScreen() {
         {!loading && spots.length === 0 ? (
           <Text style={{ color: colors.inkSecondary }}>Campus demand is quiet in this window.</Text>
         ) : null}
-        {spots.map((spot) => (
+        {spots.map((spot: BusySpot) => (
           <Card key={spot.id}>
             <View style={styles.spotHead}>
               <Text style={[styles.cardTitle, { color: colors.title }]}>{spot.name}</Text>

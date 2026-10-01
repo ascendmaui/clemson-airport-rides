@@ -188,7 +188,7 @@ export default function DriverHome() {
   }, [desk?.active?.id, desk?.active?.status, desk?.active?.riderId, user])
 
   useEffect(() => {
-    refresh().catch((err) => setError(err instanceof Error ? err.message : 'Could not load driver home'))
+    refresh().catch((err: unknown) => setError(err instanceof Error ? err.message : 'Could not load driver home'))
   }, [refresh])
 
   useEffect(() => {
@@ -201,12 +201,12 @@ export default function DriverHome() {
   useEffect(() => {
     const offers = desk?.offers || []
     if (!offersPrimed.current) {
-      offers.forEach((card) => seenOffers.current.add(card.id))
+      offers.forEach((card: DriverCard) => seenOffers.current.add(card.id))
       offersPrimed.current = true
       return
     }
-    const fresh = offers.filter((card) => !seenOffers.current.has(card.id) && !isSyntheticOffer(card))
-    fresh.forEach((card) => seenOffers.current.add(card.id))
+    const fresh = offers.filter((card: DriverCard) => !seenOffers.current.has(card.id) && !isSyntheticOffer(card))
+    fresh.forEach((card: DriverCard) => seenOffers.current.add(card.id))
     const next = fresh[0]
     if (!next) return
     pulse('request')
@@ -291,7 +291,7 @@ export default function DriverHome() {
 
   async function onDecline(card: DriverCard) {
     if (isSyntheticOffer(card)) {
-      setHiddenOffers((current) => (current.includes(card.id) ? current : [...current, card.id]))
+      setHiddenOffers((current: string[]) => (current.includes(card.id) ? current : [...current, card.id]))
       return
     }
     if (!supabase || !user) return
@@ -327,7 +327,7 @@ export default function DriverHome() {
   const liveEta = desk?.active
     ? etaHoldLine(desk.active.status, etaLineFor(desk.active.status, liveFrom, desk.active))
     : null
-  const hotspots = spots.slice().sort((a, b) => b.intensity - a.intensity).slice(0, 4)
+  const hotspots = spots.slice().sort((a: BusySpot, b: BusySpot) => b.intensity - a.intensity).slice(0, 4)
   const pins: MapPin[] = []
   if (self) pins.push({ id: 'me', ...self, title: 'You', pinColor: ORANGE })
   if (offer?.pickupLat != null && offer.pickupLng != null) {
@@ -335,7 +335,7 @@ export default function DriverHome() {
   }
   // When heat is on, circles carry demand — keep pins to you + pickup only.
   if (!showHeat) {
-    hotspots.forEach((spot) => {
+    hotspots.forEach((spot: BusySpot) => {
       pins.push({
         id: spot.id,
         latitude: spot.lat,
@@ -372,7 +372,7 @@ export default function DriverHome() {
         <View style={[styles.top, { paddingTop: dockTop }]} pointerEvents="box-none">
           <CircleButton icon="home" label="Menu" onPress={() => router.push('/menu')} />
           <Pressable
-            onPress={() => setPeek((open) => !open)}
+            onPress={() => setPeek((open: boolean) => !open)}
             style={[styles.pill, shadow, { backgroundColor: colors.card }]}
             accessibilityRole="button"
             accessibilityLabel="Earnings"
@@ -436,7 +436,7 @@ export default function DriverHome() {
           <View style={styles.heatRow}>
             <Text style={[styles.heatLabel, { color: colors.inkSecondary }]}>Busy areas</Text>
             <Pressable
-              onPress={() => setShowHeat((value) => !value)}
+              onPress={() => setShowHeat((value: boolean) => !value)}
               style={[styles.heatToggle, { backgroundColor: showHeat ? colors.orange : colors.card }]}
               accessibilityRole="switch"
               accessibilityLabel={showHeat ? 'Hide busy areas' : 'Show busy areas'}
@@ -450,7 +450,7 @@ export default function DriverHome() {
           </View>
           {showHeat ? (
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.heatWindows}>
-              {HEAT_WINDOWS.map((item) => {
+              {HEAT_WINDOWS.map((item: { id: string; label: string }) => {
                 const on = item.id === heatWindow
                 return (
                   <Pressable
@@ -477,7 +477,7 @@ export default function DriverHome() {
                 {gameNotice == null ? 'Game day…' : gameNotice.headline}
               </Text>
             </View>
-            {hotspots.map((spot) => (
+            {hotspots.map((spot: BusySpot) => (
               <View key={spot.id} style={[styles.hotspot, { backgroundColor: colors.card }, shadow]}>
                 <Text style={{ color: colors.title, fontWeight: '800' }}>{spot.name}</Text>
                 <Text style={{ color: colors.orange, fontWeight: '700', fontSize: 12 }}>{demandWord(spot.intensity)}</Text>
@@ -560,7 +560,7 @@ export default function DriverHome() {
             />
             <View style={styles.toolCol}>
               <CircleButton icon="stats-chart" label="Earnings" onPress={() => router.push('/earnings')} />
-              <CircleButton icon="locate" label="Recenter map" onPress={() => setFocusToken((value) => value + 1)} />
+              <CircleButton icon="locate" label="Recenter map" onPress={() => setFocusToken((value: number) => value + 1)} />
             </View>
           </View>
           <View style={[styles.bar, shadow, { backgroundColor: colors.card }]} accessibilityLiveRegion="polite">
@@ -580,7 +580,7 @@ export default function DriverHome() {
         >
           <Pressable
             style={[styles.modalCard, { backgroundColor: colors.card }]}
-            onPress={(e) => e.stopPropagation()}
+            onPress={(e: { stopPropagation: () => void }) => e.stopPropagation()}
             accessibilityRole="none"
             accessibilityLabel="Safety options"
           >
@@ -642,8 +642,8 @@ function RideCard({
           showsVerticalScrollIndicator={overflows}
           bounces={overflows}
           scrollEnabled={overflows}
-          onLayout={(event) => setViewport(event.nativeEvent.layout.height)}
-          onContentSizeChange={(_, height) => setContent(height)}
+          onLayout={(event: { nativeEvent: { layout: { height: number } } }) => setViewport(event.nativeEvent.layout.height)}
+          onContentSizeChange={(_: number, height: number) => setContent(height)}
         >
           {notice ? <Text style={[styles.offerNotice, { color: colors.orange }]}>{notice}</Text> : null}
           <View style={styles.offerFareRow}>
@@ -657,7 +657,7 @@ function RideCard({
           </Text>
           {vm.badges.length > 0 ? (
             <View style={styles.tags}>
-              {vm.badges.map((b) => (
+              {vm.badges.map((b: { id: string; label: string; tone?: 'orange' | 'purple' }) => (
                 <Tag key={b.id} label={b.label} tone={b.tone} />
               ))}
             </View>

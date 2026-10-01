@@ -21,35 +21,35 @@ export default function DriverTabs() {
         name="index"
         options={{
           title: 'Home',
-          tabBarIcon: ({ color, size }) => <Ionicons name="home" color={color} size={size} />,
+          tabBarIcon: ({ color, size }: { color: string; size: number }) => <Ionicons name="home" color={color} size={size} />,
         }}
       />
       <Tabs.Screen
         name="discover"
         options={{
           title: 'Discover',
-          tabBarIcon: ({ color, size }) => <Ionicons name="compass" color={color} size={size} />,
+          tabBarIcon: ({ color, size }: { color: string; size: number }) => <Ionicons name="compass" color={color} size={size} />,
         }}
       />
       <Tabs.Screen
         name="earnings"
         options={{
           title: 'Earnings',
-          tabBarIcon: ({ color, size }) => <Ionicons name="cash" color={color} size={size} />,
+          tabBarIcon: ({ color, size }: { color: string; size: number }) => <Ionicons name="cash" color={color} size={size} />,
         }}
       />
       <Tabs.Screen
         name="inbox"
         options={{
           title: 'Inbox',
-          tabBarIcon: ({ color, size }) => <Ionicons name="mail" color={color} size={size} />,
+          tabBarIcon: ({ color, size }: { color: string; size: number }) => <Ionicons name="mail" color={color} size={size} />,
         }}
       />
       <Tabs.Screen
         name="menu"
         options={{
           title: 'Menu',
-          tabBarIcon: ({ color, size }) => <Ionicons name="menu" color={color} size={size} />,
+          tabBarIcon: ({ color, size }: { color: string; size: number }) => <Ionicons name="menu" color={color} size={size} />,
         }}
       />
     </Tabs>
