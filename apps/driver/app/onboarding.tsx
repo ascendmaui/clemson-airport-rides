@@ -187,8 +187,8 @@ export default function OnboardingScreen() {
     const profileName = String(profile?.full_name || user.user_metadata?.full_name || user.email?.split('@')[0] || '')
     if (profileName) {
       setFullName(profileName)
-      setLegalName((current) => current || String(tax?.legal_name || profileName))
-      setSignature((current) => current || profileName)
+      setLegalName((current: string) => current || String(tax?.legal_name || profileName))
+      setSignature((current: string) => current || profileName)
     }
     if (profile?.phone) setPhone(String(profile.phone))
     const app = next.application
@@ -222,7 +222,7 @@ export default function OnboardingScreen() {
   }, [user])
 
   useEffect(() => {
-    refresh().catch((err) => setError(err instanceof Error ? err.message : 'Could not load your application'))
+    refresh().catch((err: unknown) => setError(err instanceof Error ? err.message : 'Could not load your application'))
   }, [refresh])
 
   useFocusEffect(useCallback(() => {
@@ -263,10 +263,10 @@ export default function OnboardingScreen() {
   const ctx = bundle?.ctx || {}
   const progress = progressSnapshot({ ...ctx, viewing: stepId })
   const docs = bundle?.documents || []
-  const uploaded = new Set(docs.map((doc) => doc.doc_type))
+  const uploaded = new Set(docs.map((doc: { doc_type: string }) => doc.doc_type))
   const stepDocs = REQUIRED_DOCUMENTS.filter((doc) => doc.stepId === step?.id)
   const status = String(bundle?.application?.onboarding_status || '')
-  const registrationDoc = docs.find((doc) => doc.doc_type === 'registration')
+  const registrationDoc = docs.find((doc: { doc_type: string; match_status?: string }) => doc.doc_type === 'registration')
   const registrationMatched = registrationDoc?.match_status === 'matched' || notices.registrationMatched === 'yes'
   const models = modelsForMake(make)
 
@@ -301,7 +301,7 @@ export default function OnboardingScreen() {
         if (!review.ok || !review.reviewStatus) throw new Error(review.message)
         meta.reviewStatus = review.reviewStatus
         meta.reviewNote = review.message
-        setNotices((prev) => ({ ...prev, [docType]: licensePendingCopy(docType) }))
+        setNotices((prev: Record<string, string>) => ({ ...prev, [docType]: licensePendingCopy(docType) }))
       }
       if (docType === 'registration') {
         const response = await fetch(file.uri)
@@ -310,7 +310,7 @@ export default function OnboardingScreen() {
         meta.reviewStatus = match.reviewStatus
         meta.matchStatus = match.status
         meta.reviewNote = match.message
-        setNotices((prev) => ({
+        setNotices((prev: Record<string, string>) => ({
           ...prev,
           registration: match.message,
           registrationMatched: match.matched ? 'yes' : 'no',
@@ -552,12 +552,12 @@ export default function OnboardingScreen() {
                   {question.label}{question.optional ? ' (optional)' : ''}
                 </Text>
                 <View style={styles.yesNo}>
-                  {[true, false].map((value) => {
+                  {[true, false].map((value: boolean) => {
                     const on = answers[question.key] === value
                     return (
                       <Pressable
                         key={String(value)}
-                        onPress={() => setAnswers((prev) => ({ ...prev, [question.key]: value }))}
+                        onPress={() => setAnswers((prev: Answers) => ({ ...prev, [question.key]: value }))}
                         accessibilityRole="radio"
                         accessibilityLabel={`${question.label}: ${value ? 'Yes' : 'No'}`}
                         accessibilityState={{ selected: on }}
@@ -572,7 +572,7 @@ export default function OnboardingScreen() {
               </View>
             ))}
             <Pressable
-              onPress={() => setAttestation((value) => !value)}
+              onPress={() => setAttestation((value: boolean) => !value)}
               accessibilityRole="checkbox"
               accessibilityLabel="I attest I carry valid auto insurance for the vehicle I will drive."
               accessibilityState={{ checked: attestation }}
@@ -590,7 +590,7 @@ export default function OnboardingScreen() {
             <Field label="Plate" value={plate} onChangeText={setPlate} />
             <Field label="Seats" value={seats} onChangeText={setSeats} keyboard="number-pad" />
             <Pressable
-              onPress={() => setIsTesla((value) => !value)}
+              onPress={() => setIsTesla((value: boolean) => !value)}
               accessibilityRole="checkbox"
               accessibilityLabel="List a Tesla Model 3 on my profile"
               accessibilityState={{ checked: Boolean(isTesla || isTeslaMakeModel(make, model)) }}
@@ -620,7 +620,7 @@ export default function OnboardingScreen() {
               <Text style={styles.hint}>Use the camera, your photo library, or a file. 8MB or smaller.</Text>
             ) : null}
             {notices.registration ? <Text style={styles.saved}>{notices.registration}</Text> : null}
-            {stepDocs.map((doc) => (
+            {stepDocs.map((doc: { id: string; label: string; hint: string }) => (
               <DocRow
                 key={doc.id}
                 label={doc.label}
@@ -629,8 +629,8 @@ export default function OnboardingScreen() {
                 busy={uploading === doc.id}
                 allowLibrary
                 allowFile={doc.id !== 'license_front' && doc.id !== 'license_back'}
-                notice={notices[doc.id] || docs.find((row) => row.doc_type === doc.id)?.review_note || undefined}
-                onFile={(file) => onUpload(doc.id, file)}
+                notice={notices[doc.id] || docs.find((row: { doc_type: string; review_note?: string | null }) => row.doc_type === doc.id)?.review_note || undefined}
+                onFile={(file: PickedFile | null) => onUpload(doc.id, file)}
                 onError={setError}
               />
             ))}
@@ -719,7 +719,7 @@ export default function OnboardingScreen() {
             {bundle?.tax?.tin_last4 ? <Text style={styles.saved}>On file: {displayTinLast4(bundle.tax.tin_last4)}</Text> : null}
             <Text style={styles.hint}>Step {w9Step + 1} of 6</Text>
             {w9Step < 5 ? (
-              <Primary label="Next" onPress={() => setW9Step((stepIndex) => stepIndex + 1)} />
+              <Primary label="Next" onPress={() => setW9Step((stepIndex: number) => stepIndex + 1)} />
             ) : (
               <Primary label={busy ? 'Saving…' : 'Sign W-9 and continue'} onPress={onSaveTax} disabled={busy} />
             )}
@@ -734,7 +734,7 @@ export default function OnboardingScreen() {
               <Text style={styles.agreementText}>{agreementPlainText()}</Text>
             </ScrollView>
             <Pressable
-              onPress={() => setReadAgreement((value) => !value)}
+              onPress={() => setReadAgreement((value: boolean) => !value)}
               accessibilityRole="checkbox"
               accessibilityLabel="I have reviewed the independent contractor agreement."
               accessibilityState={{ checked: readAgreement }}
@@ -760,19 +760,19 @@ export default function OnboardingScreen() {
             ) : (
               <Text style={styles.copy}>After you submit, the app opens. You can set up billing, your profile, and photos. Accepting rides stays locked until an admin approves you.</Text>
             )}
-            {(bundle?.blockers || []).map((code) => (
+            {(bundle?.blockers || []).map((code: string) => (
               <Text key={code} style={styles.blocker}>Still needed · {blockerLabel(code)}</Text>
             ))}
             {status === 'pending_review' ? <Tag label="Waiting for admin review" /> : null}
-            {inboxRequests.filter((row) => row.status === 'open').map((row) => (
+            {inboxRequests.filter((row: { status: string }) => row.status === 'open').map((row: { id: string; prompt: string }) => (
               <Text key={row.id} style={styles.copy}>More information needed. {row.prompt}</Text>
             ))}
-            {inboxMessages.map((row) => (
+            {inboxMessages.map((row: { id: string; author_role: string; body: string }) => (
               <Text key={row.id} style={styles.copy}>
                 {row.author_role === 'admin' ? 'Admin' : 'You'}: {row.body}
               </Text>
             ))}
-            {(inboxMessages.length > 0 || inboxRequests.some((row) => row.status === 'open')) ? (
+            {(inboxMessages.length > 0 || inboxRequests.some((row: { status: string }) => row.status === 'open')) ? (
               <>
                 <Field label="Reply to admin" value={inboxDraft} onChangeText={setInboxDraft} multiline />
                 <Primary label={busy ? 'Sending…' : 'Send reply'} onPress={sendInbox} disabled={busy || !inboxDraft.trim()} />
@@ -796,13 +796,13 @@ export default function OnboardingScreen() {
         >
           <Pressable
             style={styles.sheet}
-            onPress={(e) => e.stopPropagation()}
+            onPress={(e: { stopPropagation: () => void }) => e.stopPropagation()}
             accessibilityRole="none"
             accessibilityLabel="Selection list"
           >
             <Text style={styles.cardTitle}>{picker === 'make' ? 'Make' : picker === 'model' ? 'Model' : 'Color'}</Text>
             <ScrollView style={{ maxHeight: 360 }}>
-              {pickerOptions.map((option) => (
+              {pickerOptions.map((option: string) => (
                 <Pressable
                   key={option}
                   style={styles.sheetRow}
@@ -877,6 +877,7 @@ function DocRow({
   onFile,
   onError,
 }: {
+  key?: string | number
   label: string
   hint: string
   saved: boolean
@@ -884,13 +885,13 @@ function DocRow({
   allowLibrary: boolean
   allowFile: boolean
   notice?: string
-  onFile: (file: PickedFile | null) => void
+  onFile: (file: PickedFile | null) => void | Promise<void>
   onError: (message: string) => void
 }) {
   const styles = useOnboardingStyles()
   async function run(action: () => Promise<PickedFile | null>, fallback: string) {
     try {
-      onFile(await action())
+      await onFile(await action())
     } catch (err) {
       onError(err instanceof Error ? err.message : fallback)
     }

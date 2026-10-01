@@ -67,7 +67,7 @@ export function Primary({
   )
 }
 
-export function Tag({ label, tone = 'purple' }: { label: string; tone?: 'purple' | 'orange' }) {
+export function Tag({ label, tone = 'purple' }: { label: string; tone?: 'purple' | 'orange'; key?: string | number }) {
   const { colors } = useTheme()
   const on = tone === 'orange'
   return (
@@ -122,11 +122,24 @@ export function Field({
   )
 }
 
-export function Card({ children, style }: { children: ReactNode; style?: StyleProp<ViewStyle> }) {
+export function Card({
+  children,
+  style,
+  accessibilityRole,
+  accessibilityLabel,
+}: {
+  children: ReactNode
+  style?: StyleProp<ViewStyle>
+  accessibilityRole?: string
+  accessibilityLabel?: string
+  key?: string | number
+}) {
   const { colors } = useTheme()
   const shadow = useCardShadow()
   return (
     <View
+      accessibilityRole={accessibilityRole as any}
+      accessibilityLabel={accessibilityLabel}
       style={[
         styles.card,
         shadow,
