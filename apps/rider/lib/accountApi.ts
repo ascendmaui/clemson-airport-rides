@@ -78,18 +78,10 @@ export async function loadAccount(userId: string) {
     .eq('id', userId)
     .maybeSingle()
     // A rejected fetch must not throw: the account screen has no .catch.
-    .then((row) => row, (err) => ({ error: { message: err?.message || 'Network request failed' } }))
-  if (!queried || queried.error) {
-    const raw = queried?.error?.message
-    const msg = friendlyApiError(undefined, raw).message
-    return {
-      profile: null as RiderProfile | null,
-      prefs: localPrefs,
-      error: raw ? msg : 'Could not load your account. Check your connection and try again.',
-    }
-  }
+    .then((row) => row, (err) => ({ error: { code: 0, message: err?.message } }))
+  if (!queried) return { profile: null as RiderProfile | null, prefs: localPrefs, error: 'Could not load your account. Check your connection and try again.' }
   const { data, error } = queried
-  if (error) return { profile: null as RiderProfile | null, prefs: localPrefs, error: friendlyApiError(undefined, error.message).message }
+  if (error) return { profile: null as RiderProfile | null, prefs: localPrefs, error: friendlyApiError(error.code ?? (error.name === 'TypeError' || error.message === 'Request timed out' ? 0 : 400), error.message).message }
   const profile = data
     ? {
         full_name: data.full_name ?? null,
@@ -119,21 +111,21 @@ export async function saveProfile(userId: string, patch: { full_name: string; bi
       updated_at: new Date().toISOString(),
     })
     .eq('id', userId)
-  if (error) throw new Error(friendlyApiError(undefined, error.message).message)
+  if (error) throw new Error(friendlyApiError(error.code ?? 400, error.message).message)
 }
 
 export async function saveNotificationPrefs(userId: string, prefs: NotificationPrefs) {
   try {
     await authStorage.setItem(PREFS_KEY(userId), JSON.stringify(prefs))
   } catch (err) {
-    return { persisted: false, note: friendlyApiError(undefined, err instanceof Error ? err.message : 'Storage write failed').message }
+    return { persisted: false, note: friendlyApiError(err instanceof Error ? err.message : 'Storage write failed').message }
   }
   if (!supabase) return { persisted: false, note: 'Saved on this phone.' }
   const { error } = await supabase
     .from('profiles')
     .update({ notification_prefs: prefs, updated_at: new Date().toISOString() })
     .eq('id', userId)
-  if (error) return { persisted: false, note: `Saved on this phone. ${friendlyApiError(undefined, error.message).message}` }
+  if (error) return { persisted: false, note: `Saved on this phone. ${friendlyApiError(error.code ?? 400, error.message).message}` }
   return { persisted: true, note: 'Saved to your profile.' }
 }
 
@@ -145,6 +137,6 @@ export async function listHistory(userId: string) {
     .eq('rider_id', userId)
     .order('created_at', { ascending: false })
     .limit(12)
-  if (error) throw new Error(friendlyApiError(undefined, error.message).message)
+  if (error) throw new Error(friendlyApiError(error.code ?? 400, error.message).message)
   return (data || []) as HistoryRow[]
 }

@@ -50,7 +50,8 @@ export async function addFriendByEmail(email: string) {
     .select('id, full_name, email')
     .ilike('email', normalized)
     .maybeSingle()
-  if (error) throw new Error(friendlyApiError(undefined, error.message).message)
+    .then((row) => row, (err) => ({ error: { code: 0, message: err?.message } }))
+  if (error) throw new Error(friendlyApiError(error.code ?? 400, error.message).message)
   if (!data?.id) throw new Error('No rider with that email yet.')
   const friend: SavedFriend = {
     id: String(data.id),
@@ -71,7 +72,8 @@ export async function listFriendActivity(userId: string) {
     .eq('organizer_id', userId)
     .order('created_at', { ascending: false })
     .limit(8)
-  if (error) throw new Error(friendlyApiError(undefined, error.message).message)
+    .then((row) => row, (err) => ({ error: { code: 0, message: err?.message } }))
+  if (error) throw new Error(friendlyApiError(error.code ?? 400, error.message).message)
   return (data || []) as FriendActivity[]
 }
 
@@ -100,6 +102,6 @@ export async function startRideTogether({
       partyType,
     },
   }).catch((err) => {
-    throw new Error(friendlyApiError(undefined, err.message).message)
+    throw new Error(friendlyApiError(err.code ?? (err.name === 'TypeError' || err.message === 'Request timed out' ? 0 : 400), err.message).message)
   })
 }

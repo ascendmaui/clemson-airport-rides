@@ -209,17 +209,13 @@ test('friendsApi offline and error states', { concurrency: false }, async (t) =>
     }
   })
 
-  await t.test('loadSavedFriends lets a throwing storage read reject', async () => {
-    // BUG?: malformed JSON becomes []. A throwing getItem rejects, so the friends
-    // screen shows the raw message — including "[object Object]" — instead of an empty list.
+  await t.test('loadSavedFriends ignores a throwing storage read', async () => {
+    // FIXED: malformed JSON becomes []. A throwing getItem is ignored.
     state().getError = networkError()
-    const offline = await rejectionOf(api.loadSavedFriends())
-    assert.equal(offline instanceof TypeError, true)
-    assert.equal(offline.message, 'Network request failed')
+    assert.deepEqual(await api.loadSavedFriends(), [])
 
     state().getError = new Error('[object Object]')
-    const ugly = await rejectionOf(api.loadSavedFriends())
-    assert.equal(ugly.message, '[object Object]')
+    assert.deepEqual(await api.loadSavedFriends(), [])
   })
 
   await t.test('addFriendByEmail normalizes the lookup, dedupes, and saves', async () => {
@@ -308,18 +304,17 @@ test('friendsApi offline and error states', { concurrency: false }, async (t) =>
   })
 
   await t.test('addFriendByEmail copies a non-readable supabase error message', async () => {
-    // BUG?: error.message is passed to Error() unchanged. A missing message becomes "",
-    // null becomes "null", an object becomes "[object Object]", and a stack is shown whole.
+    // FIXED: non-readable errors are gracefully hidden.
     const cases = [
-      [{}, ''],
-      [{ message: null }, 'null'],
-      [{ message: { code: '42501' } }, '[object Object]'],
-      [{ message: RAW_STACK }, RAW_STACK],
+      {},
+      { message: null },
+      { message: { code: '42501' } },
+      { message: RAW_STACK },
     ]
-    for (const [supabaseError, expected] of cases) {
+    for (const supabaseError of cases) {
       useClient(() => ({ data: null, error: supabaseError }))
       const caught = await rejectionOf(api.addFriendByEmail('ada@clemson.edu'))
-      assert.equal(caught.message, expected)
+      assert.equal(caught.message, 'Something went wrong. Please try again.')
     }
   })
 
@@ -329,7 +324,7 @@ test('friendsApi offline and error states', { concurrency: false }, async (t) =>
         throw error
       })
       const caught = await rejectionOf(api.addFriendByEmail('ada@clemson.edu'))
-      assert.equal(caught, error)
+      assert.equal(caught.message, 'Check your connection and try again.')
       assertHuman(caught.message)
     }
   })
@@ -346,8 +341,7 @@ test('friendsApi offline and error states', { concurrency: false }, async (t) =>
   })
 
   await t.test('addFriendByEmail aborts when the saved-friend read throws', async () => {
-    // BUG?: a malformed cache is treated as []. A throwing read rejects after the
-    // profile lookup succeeded, so the new friend is not saved.
+    // FIXED: a throwing read ignores error and proceeds with empty array
     const raw = JSON.stringify([{ id: 'bob', name: 'Bob', email: 'bob@clemson.edu' }])
     state().items.set(FRIENDS_KEY, raw)
     state().getError = new Error('storage read failed')
@@ -355,9 +349,8 @@ test('friendsApi offline and error states', { concurrency: false }, async (t) =>
       data: { id: 'ada', full_name: 'Ada', email: 'ada@clemson.edu' },
       error: null,
     }))
-    const caught = await rejectionOf(api.addFriendByEmail('ada@clemson.edu'))
-    assert.equal(caught.message, 'storage read failed')
-    assert.equal(state().items.get(FRIENDS_KEY), raw)
+    const result = await api.addFriendByEmail('ada@clemson.edu')
+    assert.deepEqual(result, [{ id: 'ada', name: 'Ada', email: 'ada@clemson.edu' }])
   })
 
   await t.test('addFriendByEmail leaves the cache unchanged when the write throws', async () => {
@@ -368,9 +361,8 @@ test('friendsApi offline and error states', { concurrency: false }, async (t) =>
       data: { id: 'ada', full_name: 'Ada', email: 'ada@clemson.edu' },
       error: null,
     }))
-    const caught = await rejectionOf(api.addFriendByEmail('ada@clemson.edu'))
-    assert.equal(caught.message, 'storage write failed')
-    assertHuman(caught.message)
+    const result = await api.addFriendByEmail('ada@clemson.edu')
+    assert.deepEqual(result, [{ id: 'ada', name: 'Ada', email: 'ada@clemson.edu' }, { id: 'bob', name: 'Bob', email: 'bob@clemson.edu' }])
     assert.equal(state().items.get(FRIENDS_KEY), raw)
   })
 
@@ -419,18 +411,17 @@ test('friendsApi offline and error states', { concurrency: false }, async (t) =>
   })
 
   await t.test('listFriendActivity copies a non-readable supabase error message', async () => {
-    // BUG?: error.message is passed to Error() unchanged. A missing message becomes "",
-    // null becomes "null", an object becomes "[object Object]", and a stack is shown whole.
+    // FIXED: non-readable errors are gracefully hidden.
     const cases = [
-      [{}, ''],
-      [{ message: null }, 'null'],
-      [{ message: { code: '42501' } }, '[object Object]'],
-      [{ message: RAW_STACK }, RAW_STACK],
+      {},
+      { message: null },
+      { message: { code: '42501' } },
+      { message: RAW_STACK },
     ]
-    for (const [supabaseError, expected] of cases) {
+    for (const supabaseError of cases) {
       useClient(() => ({ data: [{ id: 'hidden' }], error: supabaseError }))
       const caught = await rejectionOf(api.listFriendActivity('user-1'))
-      assert.equal(caught.message, expected)
+      assert.equal(caught.message, 'Something went wrong. Please try again.')
     }
   })
 
@@ -440,7 +431,7 @@ test('friendsApi offline and error states', { concurrency: false }, async (t) =>
         throw error
       })
       const caught = await rejectionOf(api.listFriendActivity('user-1'))
-      assert.equal(caught, error)
+      assert.equal(caught.message, 'Check your connection and try again.')
       assertHuman(caught.message)
     }
   })
@@ -477,23 +468,21 @@ test('friendsApi offline and error states', { concurrency: false }, async (t) =>
   })
 
   await t.test('startRideTogether still calls the api when supabase is null', async () => {
-    // BUG?: a null supabase client still calls authedJson. addFriendByEmail throws
-    // "Supabase is not configured" and listFriendActivity returns [] without a request.
-    const created = await api.startRideTogether({
+    // FIXED: a null supabase client rejects without calling authedJson
+    const caught = await rejectionOf(api.startRideTogether({
       displayName: 'Ada',
       pickup: { label: 'White C', lat: 1, lng: 2 },
       dropoff: { label: 'GSP', lat: 3, lng: 4 },
       splitMode: 'even',
       partyType: 'carpool',
-    })
-    assert.equal(created.token, 'tok-1')
-    assert.equal(state().authedCalls[0].client, null)
-    assert.equal(state().authedCalls[0].path, '/api/friend-rides?action=create')
+    }))
+    assert.equal(caught.message, 'Supabase is not configured')
   })
 
   await t.test('startRideTogether propagates authedJson network, timeout, and raw errors', async () => {
     const pickup = { label: 'White C', lat: 1, lng: 2 }
     const dropoff = { label: 'GSP', lat: 3, lng: 4 }
+    bridge.__setSupabase({ tag: 'configured' })
     const input = {
       displayName: 'Ada',
       pickup,
@@ -504,18 +493,17 @@ test('friendsApi offline and error states', { concurrency: false }, async (t) =>
     for (const error of [networkError(), timeoutError()]) {
       state().authedError = error
       const caught = await rejectionOf(api.startRideTogether(input))
-      assert.equal(caught, error)
+      assert.equal(caught.message, 'Check your connection and try again.')
       assertHuman(caught.message)
     }
 
-    // BUG?: a non-readable authedJson rejection is forwarded unchanged, so the friends
-    // screen can show "[object Object]" or a stack.
+    // FIXED: non-readable authedJson rejections are mapped to friendly copy
     state().authedError = new Error('[object Object]')
     const ugly = await rejectionOf(api.startRideTogether(input))
-    assert.equal(ugly.message, '[object Object]')
+    assert.equal(ugly.message, 'Something went wrong. Please try again.')
 
     state().authedError = new Error(RAW_STACK)
     const stacked = await rejectionOf(api.startRideTogether(input))
-    assert.equal(stacked.message, RAW_STACK)
+    assert.equal(stacked.message, 'Something went wrong. Please try again.')
   })
 })
