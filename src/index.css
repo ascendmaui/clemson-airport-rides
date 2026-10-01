@@ -26,6 +26,65 @@ input, textarea {
   font-size: 16px;
 }
 
+/* Accessible screen-reader-only utility */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
+/* Global accessible focus rings */
+:focus-visible {
+  outline: 2px solid var(--orange);
+  outline-offset: 2px;
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid var(--orange);
+  outline-offset: 2px;
+}
+
+.primary-cta:focus-visible {
+  outline: 3px solid var(--orange);
+  outline-offset: 3px;
+  box-shadow: 0 0 0 4px var(--orange-glow), var(--shadow-cta);
+}
+
+.primary-cta.variant-purple:focus-visible {
+  outline: 3px solid var(--purple);
+  outline-offset: 3px;
+  box-shadow: 0 0 0 4px var(--purple-glow), var(--shadow-modal);
+}
+
+.pill-btn:focus-visible {
+  outline: 2px solid var(--orange);
+  outline-offset: 2px;
+}
+
+.search-field-input:focus {
+  outline: none;
+}
+
+.search-field-container:focus-within {
+  border-color: var(--orange) !important;
+  box-shadow: 0 0 0 3px var(--orange-glow), 0 4px 16px rgba(245, 102, 0, 0.12) !important;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
 .app-shell {
   height: 100%;
   min-height: 100dvh;

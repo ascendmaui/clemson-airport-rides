@@ -4,8 +4,10 @@ export function PrimaryButton({
   variant = 'orange',
   fullWidth = true,
   disabled,
+  loading = false,
   className = '',
   type = 'button',
+  ariaLabel,
   ...rest
 }) {
   const bg = variant === 'purple'
@@ -13,12 +15,18 @@ export function PrimaryButton({
     : variant === 'gradient'
       ? 'linear-gradient(135deg, #522D80 0%, #F56600 100%)'
       : 'linear-gradient(135deg, #F56600 0%, #ff7a1a 100%)'
+
+  const isDisabled = Boolean(disabled || loading)
+
   return (
     <button
       type={type}
-      className={`pressable primary-cta ${className}`}
-      disabled={disabled}
-      onClick={onClick}
+      className={`pressable primary-cta variant-${variant} ${className}`}
+      disabled={isDisabled}
+      aria-disabled={isDisabled ? 'true' : undefined}
+      aria-busy={loading ? 'true' : undefined}
+      aria-label={ariaLabel || (typeof children === 'string' ? children : undefined)}
+      onClick={isDisabled ? undefined : onClick}
       {...rest}
       style={{
         width: fullWidth ? '100%' : undefined,
@@ -29,15 +37,36 @@ export function PrimaryButton({
         fontWeight: 600,
         fontSize: 17,
         letterSpacing: -0.2,
-        opacity: disabled ? 0.5 : 1,
+        opacity: isDisabled ? 0.5 : 1,
+        cursor: isDisabled ? 'not-allowed' : 'pointer',
         border: '1px solid rgba(255,255,255,0.22)',
         boxShadow: variant === 'purple'
           ? '0 4px 14px var(--purple-glow), var(--shadow-pill)'
           : '0 4px 14px var(--orange-glow), var(--shadow-pill)',
         transition: 'transform 200ms var(--ease-spring), opacity 180ms var(--ease-soft), box-shadow 240ms var(--ease-soft)',
+        ...rest.style,
       }}
     >
-      {children}
+      {loading ? (
+        <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+          <span
+            className="button-spinner"
+            aria-hidden="true"
+            style={{
+              width: 16,
+              height: 16,
+              border: '2px solid rgba(255,255,255,0.4)',
+              borderTopColor: '#fff',
+              borderRadius: '50%',
+              animation: 'spin 0.8s linear infinite',
+              display: 'inline-block',
+            }}
+          />
+          <span>{children}</span>
+        </span>
+      ) : (
+        children
+      )}
     </button>
   )
 }

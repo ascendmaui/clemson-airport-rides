@@ -1,10 +1,22 @@
-export function Pill({ children, icon, tone = 'orange', onClick, active }) {
+export function Pill({
+  children,
+  icon,
+  tone = 'orange',
+  onClick,
+  active,
+  ariaLabel,
+  className = '',
+  ...rest
+}) {
   const isOrange = tone === 'orange'
   return (
     <button
       type="button"
-      className="pressable"
+      className={`pressable pill-btn ${className}`}
       onClick={onClick}
+      aria-pressed={active !== undefined ? Boolean(active) : undefined}
+      aria-label={ariaLabel || (typeof children === 'string' ? children : undefined)}
+      {...rest}
       style={{
         display: 'inline-flex',
         alignItems: 'center',
@@ -20,9 +32,14 @@ export function Pill({ children, icon, tone = 'orange', onClick, active }) {
         fontSize: 14,
         boxShadow: 'var(--shadow-pill)',
         whiteSpace: 'nowrap',
+        ...rest.style,
       }}
     >
-      {icon && <span style={{ fontSize: 16 }}>{icon}</span>}
+      {icon && (
+        <span style={{ fontSize: 16 }} aria-hidden="true">
+          {icon}
+        </span>
+      )}
       {children}
     </button>
   )
