@@ -1,5 +1,8 @@
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+import { dirname, join } from 'node:path'
 import test from 'node:test'
+import { fileURLToPath } from 'node:url'
 import {
   HOLD_EXPIRED_LABEL,
   HOLD_LAST_MINUTE_LABEL,
@@ -776,6 +779,25 @@ test('holdExpiryPresentation: open unpaid hold in last minute (< 60 seconds)', (
     label: HOLD_LAST_MINUTE_LABEL,
     requestAgain: false,
   })
+})
+
+test('hold notice wiring: schedule skips the 12h window; surface loader omits canceled_at', () => {
+  const root = join(dirname(fileURLToPath(import.meta.url)), '../..')
+  const schedule = readFileSync(join(root, 'apps/rider/app/schedule.tsx'), 'utf8')
+  const requested = readFileSync(join(root, 'apps/rider/app/requested.tsx'), 'utf8')
+  const holdTrip = readFileSync(join(root, 'apps/rider/lib/holdTrip.ts'), 'utf8')
+
+  assert.match(schedule, /isUnpaidHoldTtlCancel\(row\)/)
+  assert.equal(schedule.includes('shouldSurfaceHold'), false)
+
+  assert.match(requested, /ttlCanceled \|\| isOpenUnpaidAirportHold\(holdTrip\)/)
+  assert.match(requested, /<HoldExpiryNotice[\s\S]*?\/>\s*\) : null\}/)
+  assert.equal(requested.includes('shouldSurfaceHold'), false)
+
+  assert.match(holdTrip, /shouldSurfaceHold/)
+  assert.match(holdTrip, /\.eq\('status', 'canceled'\)/)
+  assert.equal(holdTrip.includes('canceled_at'), false)
+  assert.equal(holdTrip.includes("'cancelled'"), false)
 })
 
 test('holdExpiryPresentation: open unpaid hold expired by clock (msLeft <= 0)', () => {
