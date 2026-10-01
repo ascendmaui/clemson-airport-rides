@@ -252,12 +252,52 @@ export function quoteInputKey({ airport, date, time } = {}) {
   return `${code}|${day}|${clock}`
 }
 
-export function quoteAtIso({ date, time } = {}, now = new Date()) {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(date || '')) return now.toISOString()
+export function quoteAtIso(input = {}, now = new Date()) {
+  const fallback = now instanceof Date && !Number.isNaN(now.getTime()) ? now : new Date()
+  const date = input?.date
+  const time = input?.time
+  const timeZone = input?.timeZone || 'America/New_York'
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date || '')) return fallback.toISOString()
   const clock = /^\d{2}:\d{2}$/.test(time || '') ? time : '12:00'
-  const parsed = new Date(`${date}T${clock}:00`)
-  if (Number.isNaN(parsed.getTime())) return now.toISOString()
-  return parsed.toISOString()
+  const [year, month, day] = date.split('-').map(Number)
+  const [hour, minute] = clock.split(':').map(Number)
+  if (month < 1 || month > 12 || day < 1 || day > 31 || hour < 0 || hour > 23 || minute < 0 || minute > 59) {
+    return fallback.toISOString()
+  }
+
+  let utc = new Date(Date.UTC(year, month - 1, day, hour, minute, 0))
+  try {
+    const fmt = new Intl.DateTimeFormat('en-US', {
+      timeZone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hourCycle: 'h23',
+    })
+    for (let i = 0; i < 3; i++) {
+      const parts = Object.fromEntries(fmt.formatToParts(utc).map((p) => [p.type, p.value]))
+      const shown = Date.UTC(
+        Number(parts.year),
+        Number(parts.month) - 1,
+        Number(parts.day),
+        Number(parts.hour),
+        Number(parts.minute),
+        Number(parts.second),
+      )
+      const intended = Date.UTC(year, month - 1, day, hour, minute, 0)
+      const diff = shown - intended
+      if (diff === 0) break
+      utc = new Date(utc.getTime() - diff)
+    }
+    return utc.toISOString()
+  } catch {
+    const parsed = new Date(`${date}T${clock}:00`)
+    if (Number.isNaN(parsed.getTime())) return fallback.toISOString()
+    return parsed.toISOString()
+  }
 }
 
 export function paymentRouteMissing(err) {

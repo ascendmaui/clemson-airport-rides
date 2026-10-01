@@ -138,6 +138,13 @@ export function formatUsdCents(cents: number): string
 
 export function airportCodeFromLabel(label?: string | null): 'GSP' | 'CLT' | null
 
+export function quoteInputKey(input?: { airport?: string; date?: string; time?: string }): string
+
+export function quoteAtIso(
+  input?: { date?: string; time?: string; timeZone?: string },
+  now?: Date,
+): string
+
 export function previewAirportFare(input?: {
   airport?: string
   date?: string
