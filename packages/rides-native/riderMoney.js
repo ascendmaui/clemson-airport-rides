@@ -563,3 +563,23 @@ export async function loadTripDeposit(supabase, tripId) {
   const payments = data || []
   return { settled: depositSettled(payments), payments, error: null }
 }
+
+export {
+  RECEIPT_HEADINGS,
+  RECEIPT_LINE_LABELS,
+  DEPOSIT_STATUS_COPY,
+  REFUND_STATUS_COPY,
+  REFUND_REASONS,
+  DEPOSIT_POLICY_NOTICE,
+  REFUND_TIMELINE_NOTICE,
+  PAYMENT_FAILURE_RECOVERY_NOTICE,
+  formatReceiptMoney,
+  formatDepositStatus,
+  formatRefundStatus,
+  formatRefundReason,
+  formatPaymentFailureNotice,
+  formatDepositBreakdown,
+  buildReceiptBreakdown,
+  formatReceiptPlainSummary,
+  formatRefundSummaryText,
+} from './receiptCopy.js'

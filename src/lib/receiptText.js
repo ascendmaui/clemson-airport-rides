@@ -48,3 +48,23 @@ export async function shareReceipt(trip, { forDriver = false, url } = {}) {
   }
   return 'unavailable'
 }
+
+export {
+  RECEIPT_HEADINGS,
+  RECEIPT_LINE_LABELS,
+  DEPOSIT_STATUS_COPY,
+  REFUND_STATUS_COPY,
+  REFUND_REASONS,
+  DEPOSIT_POLICY_NOTICE,
+  REFUND_TIMELINE_NOTICE,
+  PAYMENT_FAILURE_RECOVERY_NOTICE,
+  formatReceiptMoney,
+  formatDepositStatus,
+  formatRefundStatus,
+  formatRefundReason,
+  formatPaymentFailureNotice,
+  formatDepositBreakdown,
+  buildReceiptBreakdown,
+  formatReceiptPlainSummary,
+  formatRefundSummaryText,
+} from '../../packages/rides-native/receiptCopy.js'
