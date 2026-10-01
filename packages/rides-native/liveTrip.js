@@ -157,6 +157,12 @@ export function riderLiveCopy(status, { preferred = false } = {}) {
         title: 'This ride was canceled',
         body: preferred ? PREFERRED_CANCELED_COPY : 'This trip is closed.',
       }
+    case 'canceled_midride':
+      return {
+        kicker: 'CANCELED',
+        title: 'Ride canceled mid-trip',
+        body: 'This ride was ended early. Drop-off coordinates and partial fare have been settled.',
+      }
     case 'scheduled':
       return {
         kicker: 'SCHEDULED',
