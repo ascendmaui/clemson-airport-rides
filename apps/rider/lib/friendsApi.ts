@@ -1,6 +1,7 @@
 import { authedJson } from 'rides-native/apiClient.js'
 import { authStorage } from '@/lib/storage'
 import { supabase } from '@/lib/supabase'
+import { friendlyApiError } from 'rides-native/apiErrors.js'
 
 const FRIENDS_KEY = 'rider.friends'
 
@@ -17,9 +18,9 @@ export type FriendActivity = {
 }
 
 export async function loadSavedFriends(): Promise<SavedFriend[]> {
-  const raw = await authStorage.getItem(FRIENDS_KEY)
-  if (!raw) return []
   try {
+    const raw = await authStorage.getItem(FRIENDS_KEY)
+    if (!raw) return []
     const parsed = JSON.parse(raw) as unknown
     if (!Array.isArray(parsed)) return []
     return parsed.filter((row): row is SavedFriend => {
@@ -33,7 +34,11 @@ export async function loadSavedFriends(): Promise<SavedFriend[]> {
 }
 
 async function persistFriends(friends: SavedFriend[]) {
-  await authStorage.setItem(FRIENDS_KEY, JSON.stringify(friends))
+  try {
+    await authStorage.setItem(FRIENDS_KEY, JSON.stringify(friends))
+  } catch {
+    // Ignore storage errors for offline cache
+  }
 }
 
 export async function addFriendByEmail(email: string) {
@@ -45,7 +50,8 @@ export async function addFriendByEmail(email: string) {
     .select('id, full_name, email')
     .ilike('email', normalized)
     .maybeSingle()
-  if (error) throw new Error(error.message)
+    .then((row) => row, (err) => ({ error: { code: 0, message: err?.message } }))
+  if (error) throw new Error(friendlyApiError(error.code ?? 400, error.message).message)
   if (!data?.id) throw new Error('No rider with that email yet.')
   const friend: SavedFriend = {
     id: String(data.id),
@@ -66,7 +72,8 @@ export async function listFriendActivity(userId: string) {
     .eq('organizer_id', userId)
     .order('created_at', { ascending: false })
     .limit(8)
-  if (error) throw new Error(error.message)
+    .then((row) => row, (err) => ({ error: { code: 0, message: err?.message } }))
+  if (error) throw new Error(friendlyApiError(error.code ?? 400, error.message).message)
   return (data || []) as FriendActivity[]
 }
 
@@ -83,6 +90,7 @@ export async function startRideTogether({
   splitMode: 'even' | 'by_distance'
   partyType: 'carpool' | 'tailgate'
 }) {
+  if (!supabase) throw new Error('Supabase is not configured')
   return authedJson(supabase, '/api/friend-rides?action=create', {
     method: 'POST',
     body: {
@@ -93,5 +101,7 @@ export async function startRideTogether({
       kind: 'friends',
       partyType,
     },
+  }).catch((err) => {
+    throw new Error(friendlyApiError(err.code ?? (err.name === 'TypeError' || err.message === 'Request timed out' ? 0 : 400), err.message).message)
   })
 }
