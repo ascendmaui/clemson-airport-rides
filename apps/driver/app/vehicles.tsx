@@ -86,7 +86,7 @@ export default function VehiclesScreen() {
     }
     let alive = true
     refresh()
-      .catch((err) => {
+      .catch((err: unknown) => {
         if (alive) setError(err instanceof Error ? err.message : 'Could not load your vehicle')
       })
       .finally(() => {

@@ -62,7 +62,7 @@ export default function LearningScreen() {
   }, [user])
 
   useFocusEffect(useCallback(() => {
-    refresh().catch((err) => setLoadError(err instanceof Error ? err.message : 'Could not load quiz status'))
+    refresh().catch((err: unknown) => setLoadError(err instanceof Error ? err.message : 'Could not load quiz status'))
   }, [refresh]))
 
   const savedStatus = knowledgeQuizStatus(row)
@@ -160,12 +160,12 @@ export default function LearningScreen() {
           </Text>
           <Card>
             <Text style={[styles.prompt, { color: colors.title }]}>{question.prompt}</Text>
-            {question.choices.map((choice) => {
+            {question.choices.map((choice: { id: string; label: string }) => {
               const on = selected === choice.id
               return (
                 <Pressable
                   key={choice.id}
-                  onPress={() => setPicks((current) => ({ ...current, [question.id]: choice.id }))}
+                  onPress={() => setPicks((current: Record<string, string>) => ({ ...current, [question.id]: choice.id }))}
                   accessibilityRole="button"
                   accessibilityState={{ selected: on }}
                   style={[

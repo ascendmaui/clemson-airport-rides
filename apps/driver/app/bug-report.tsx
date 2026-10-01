@@ -87,7 +87,7 @@ export default function BugReportScreen() {
       <Card>
         <Field label="Subject" value={subject} onChangeText={setSubject} placeholder="What broke" />
         <Field label="What happened" value={body} onChangeText={setBody} placeholder="Steps and what you expected" multiline />
-        <Pressable onPress={() => setConfirmed((value) => !value)} style={styles.confirm}>
+        <Pressable onPress={() => setConfirmed((value: boolean) => !value)} style={styles.confirm}>
           <View style={[styles.box, { borderColor: scheme === 'dark' ? colors.ink : colors.purple, backgroundColor: confirmed ? colors.orange : 'transparent' }]} />
           <Text style={{ color: colors.ink, flex: 1 }}>I confirm this ticket should be filed.</Text>
         </Pressable>
