@@ -84,7 +84,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   }, [])
 
   function update(patch: Partial<Prefs>) {
-    setPrefs((current) => {
+    setPrefs((current: Prefs) => {
       const next = { ...current, ...patch }
       authStorage.setItem(PREFS_KEY, JSON.stringify(next)).catch(() => {})
       return next
