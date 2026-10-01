@@ -39,3 +39,6 @@ export function saveNotificationPrefs(
   userId: string | null | undefined,
   next: unknown,
 ): Promise<{ ok: boolean; persisted: boolean; softFail: string | null; prefs: NotificationPrefs }>
+
+export * from './systemAlertsCopy.js'
+

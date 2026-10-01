@@ -126,3 +126,6 @@ export async function saveNotificationPrefs(supabase, storage, userId, next) {
     return { ok: true, persisted: false, softFail: err?.message || 'write failed', prefs }
   }
 }
+
+export * from './systemAlertsCopy.js'
+
