@@ -30,14 +30,14 @@ import { settleFriendQuote } from './friendQuote.js'
 import { resolveAmbassadorCode, stampAmbassadorCode } from './ambassadorAttribution.js'
 import { WEB_ORIGIN } from '../shared/productLinks.js'
 
-export async function handleFriendRideCreate(req, res) {
+export async function handleFriendRideCreate(req, res, deps = {}) {
   if (cors(req, res)) return
   if (req.method !== 'POST') return json(res, 405, { error: 'Method not allowed' })
 
-  const sb = admin()
+  const sb = deps.sb || admin()
   if (!sb) return json(res, 503, { error: 'SUPABASE_SERVICE_ROLE_KEY not configured' })
 
-  const user = await userFromAuth(req)
+  const user = ('user' in deps ? deps.user : await userFromAuth(req))
   if (!user) return json(res, 401, { error: 'Sign in required' })
 
   const { body, error: pe } = parseBody(req)
@@ -140,13 +140,13 @@ export async function handleFriendRideCreate(req, res) {
   })
 }
 
-export async function handleFriendRideGet(req, res) {
+export async function handleFriendRideGet(req, res, deps = {}) {
   if (cors(req, res)) return
   if (req.method !== 'GET' && req.method !== 'POST') {
     return json(res, 405, { error: 'Method not allowed' })
   }
 
-  const sb = admin()
+  const sb = deps.sb || admin()
   if (!sb) return json(res, 503, { error: 'SUPABASE_SERVICE_ROLE_KEY not configured' })
 
   let token = ''
@@ -197,7 +197,7 @@ export async function handleFriendRideGet(req, res) {
       })
     }
 
-    const user = await userFromAuth(req)
+    const user = ('user' in deps ? deps.user : await userFromAuth(req))
     if (user) {
       if (ids.length) {
         summary.participants = summary.participants.map((p) => {
@@ -226,11 +226,11 @@ export async function handleFriendRideGet(req, res) {
   }
 }
 
-export async function handleFriendRideJoin(req, res) {
+export async function handleFriendRideJoin(req, res, deps = {}) {
   if (cors(req, res)) return
   if (req.method !== 'POST') return json(res, 405, { error: 'Method not allowed' })
 
-  const sb = admin()
+  const sb = deps.sb || admin()
   if (!sb) return json(res, 503, { error: 'SUPABASE_SERVICE_ROLE_KEY not configured' })
 
   const { body, error: pe } = parseBody(req)
@@ -239,7 +239,7 @@ export async function handleFriendRideJoin(req, res) {
   const token = body.token
   if (!token) return json(res, 400, { error: 'token required' })
 
-  const user = await userFromAuth(req)
+  const user = ('user' in deps ? deps.user : await userFromAuth(req))
   const displayName = (body.displayName || user?.user_metadata?.full_name || '').trim()
   const email = (body.email || user?.email || '').trim().toLowerCase() || null
   const pickup = body.pickup || null
@@ -357,11 +357,11 @@ export async function handleFriendRideJoin(req, res) {
   }
 }
 
-export async function handleFriendRideRecompute(req, res) {
+export async function handleFriendRideRecompute(req, res, deps = {}) {
   if (cors(req, res)) return
   if (req.method !== 'POST') return json(res, 405, { error: 'Method not allowed' })
 
-  const sb = admin()
+  const sb = deps.sb || admin()
   if (!sb) return json(res, 503, { error: 'SUPABASE_SERVICE_ROLE_KEY not configured' })
 
   const { body, error: pe } = parseBody(req)
@@ -372,7 +372,7 @@ export async function handleFriendRideRecompute(req, res) {
   try {
     let splitMode = undefined
     if (body.splitMode === 'even' || body.splitMode === 'by_distance') {
-      const user = await userFromAuth(req)
+      const user = ('user' in deps ? deps.user : await userFromAuth(req))
       const loaded = await loadRideByToken(sb, token)
       if (loaded && user && user.id === loaded.ride.organizer_id) {
         splitMode = body.splitMode
@@ -499,7 +499,7 @@ function reviewRequiredBody(outcome) {
   }
 }
 
-export async function handleFriendRideConfirmCharges(req, res) {
+export async function handleFriendRideConfirmCharges(req, res, deps = {}) {
   if (cors(req, res)) return
   if (req.method !== 'POST') return json(res, 405, { error: 'Method not allowed' })
 
@@ -510,10 +510,10 @@ export async function handleFriendRideConfirmCharges(req, res) {
     })
   }
 
-  const sb = admin()
+  const sb = deps.sb || admin()
   if (!sb) return json(res, 503, { error: 'SUPABASE_SERVICE_ROLE_KEY not configured' })
 
-  const user = await userFromAuth(req)
+  const user = ('user' in deps ? deps.user : await userFromAuth(req))
   if (!user) return json(res, 401, { error: 'Sign in required' })
 
   const { body, error: pe } = parseBody(req)
@@ -604,17 +604,17 @@ export async function handleFriendRideConfirmCharges(req, res) {
   }
 }
 
-export async function handleFriendRideRetryCharge(req, res) {
+export async function handleFriendRideRetryCharge(req, res, deps = {}) {
   if (cors(req, res)) return
   if (req.method !== 'POST') return json(res, 405, { error: 'Method not allowed' })
   if (!stripeOk()) {
     return json(res, 503, { error: 'Payments unavailable', message: 'STRIPE_SECRET_KEY not configured' })
   }
 
-  const sb = admin()
+  const sb = deps.sb || admin()
   if (!sb) return json(res, 503, { error: 'SUPABASE_SERVICE_ROLE_KEY not configured' })
 
-  const user = await userFromAuth(req)
+  const user = ('user' in deps ? deps.user : await userFromAuth(req))
   const { body, error: pe } = parseBody(req)
   if (pe) return json(res, 400, { error: pe })
 
