@@ -27,7 +27,7 @@ export function useLiveShare(shareId: string | null) {
       setError(null)
       sub = await Location.watchPositionAsync(
         { accuracy: Location.Accuracy.High, timeInterval: 5000, distanceInterval: 15 },
-        (pos: Location.LocationObject) => {
+        (pos: { coords: { latitude: number; longitude: number; accuracy: number | null } }) => {
           postLocationPoint(client, {
             shareId: shareId as string,
             lat: pos.coords.latitude,

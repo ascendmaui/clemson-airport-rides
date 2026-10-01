@@ -42,7 +42,7 @@ export function useDriverApproach(status: string | null, driverId: string | null
         setDenied(false)
         sub = await Location.watchPositionAsync(
           { accuracy: Location.Accuracy.High, timeInterval: 2000, distanceInterval: 5 },
-          (pos: Location.LocationObject) => {
+          (pos: { coords: { latitude: number; longitude: number } }) => {
             if (!alive) return
             const lat = pos.coords.latitude
             const lng = pos.coords.longitude

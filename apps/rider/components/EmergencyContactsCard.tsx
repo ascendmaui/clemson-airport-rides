@@ -75,7 +75,7 @@ export function EmergencyContactsCard({
       return
     }
     const next = draft.id
-      ? contacts.map((row) => (row.id === result.contact.id ? result.contact : row))
+      ? contacts.map((row: EmergencyContact) => (row.id === result.contact.id ? result.contact : row))
       : [...contacts, result.contact]
     publish(next)
     setDraft(null)
@@ -94,7 +94,7 @@ export function EmergencyContactsCard({
             setError(result.error || 'Could not remove contact')
             return
           }
-          publish(contacts.filter((row) => row.id !== contact.id))
+          publish(contacts.filter((row: EmergencyContact) => row.id !== contact.id))
           setDraft(null)
         },
       },
@@ -123,7 +123,7 @@ export function EmergencyContactsCard({
           <Text style={styles.body}>Add a roommate, parent, or friend. You can call them from SOS during a ride.</Text>
         </View>
       ) : null}
-      {contacts.map((contact) => (
+      {contacts.map((contact: EmergencyContact) => (
         <View key={contact.id} style={styles.row}>
           <View style={styles.rowCopy}>
             <Text style={styles.name}>{contact.name}</Text>
@@ -164,7 +164,7 @@ export function EmergencyContactsCard({
             <Text style={styles.label}>Name</Text>
             <TextInput
               value={draft?.name || ''}
-              onChangeText={(name) => setDraft((prev) => (prev ? { ...prev, name } : prev))}
+              onChangeText={(name: string) => setDraft((prev: typeof draft) => (prev ? { ...prev, name } : prev))}
               placeholder="Name"
               placeholderTextColor={colors.placeholder}
               style={styles.input}
@@ -172,7 +172,7 @@ export function EmergencyContactsCard({
             <Text style={styles.label}>Phone</Text>
             <TextInput
               value={draft?.phone || ''}
-              onChangeText={(phone) => setDraft((prev) => (prev ? { ...prev, phone } : prev))}
+              onChangeText={(phone: string) => setDraft((prev: typeof draft) => (prev ? { ...prev, phone } : prev))}
               placeholder="(864) 555-0100"
               placeholderTextColor={colors.placeholder}
               keyboardType="phone-pad"
@@ -181,7 +181,7 @@ export function EmergencyContactsCard({
             <Text style={styles.label}>Relationship</Text>
             <TextInput
               value={draft?.relationship || ''}
-              onChangeText={(relationship) => setDraft((prev) => (prev ? { ...prev, relationship } : prev))}
+              onChangeText={(relationship: string) => setDraft((prev: typeof draft) => (prev ? { ...prev, relationship } : prev))}
               placeholder="Roommate, parent…"
               placeholderTextColor={colors.placeholder}
               style={styles.input}

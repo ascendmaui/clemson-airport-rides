@@ -74,12 +74,12 @@ export function NeighborhoodPicker({
         accessibilityLabel={`Search ${label.toLowerCase()}`}
       />
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
-        {hot.map((spot) => (
+        {hot.map((spot: { id: string; label: string; lat: number; lng: number }) => (
           <Chip key={spot.id} spot={spot} selected={value.label === spot.label} onPress={() => onChange(placeOf(spot))} />
         ))}
       </ScrollView>
       <View style={styles.filters}>
-        {FILTERS.map((item) => {
+        {FILTERS.map((item: { id: string; label: string }) => {
           const on = !query.trim() && group === item.id
           return (
             <Pressable
@@ -104,7 +104,7 @@ export function NeighborhoodPicker({
         <EmptyState title="No campus or airport match" body="Try Grand Marc, College Ave, the stadium, a downtown bar, or GSP." />
       ) : (
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
-          {listed.map((spot) => (
+          {listed.map((spot: { id: string; label: string; lat: number; lng: number }) => (
             <Chip key={`list-${spot.id}`} spot={spot} selected={value.label === spot.label} onPress={() => onChange(placeOf(spot))} />
           ))}
         </ScrollView>
@@ -116,7 +116,7 @@ export function NeighborhoodPicker({
   )
 }
 
-function Chip({ spot, selected, onPress }: { spot: { id: string; label: string }; selected: boolean; onPress: () => void }) {
+function Chip({ spot, selected, onPress }: { key?: string | number; spot: { id: string; label: string; lat?: number; lng?: number }; selected: boolean; onPress: () => void }) {
   const styles = useThemedStyles(makeStyles)
   return (
     <Pressable

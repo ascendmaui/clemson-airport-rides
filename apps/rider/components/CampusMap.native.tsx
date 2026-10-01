@@ -37,7 +37,7 @@ export const CampusMap = forwardRef<CampusMapHandle, CampusMapProps>(function Ca
     pins = [],
     fitPins = false,
   },
-  ref,
+  ref: any,
 ) {
   const { colors, scheme } = useTheme()
   const mapRef = useRef<MapView>(null)
@@ -46,7 +46,7 @@ export const CampusMap = forwardRef<CampusMapHandle, CampusMapProps>(function Ca
   const center = showHeat ? DOWNTOWN : STADIUM
 
   useImperativeHandle(ref, () => ({
-    animateTo(coord, delta = 0.018) {
+    animateTo(coord: LatLng, delta = 0.018) {
       mapRef.current?.animateToRegion(
         {
           latitude: coord.latitude,
@@ -85,8 +85,8 @@ export const CampusMap = forwardRef<CampusMapHandle, CampusMapProps>(function Ca
   useEffect(() => {
     if (!theater) return undefined
     const id = setInterval(() => {
-      setTick((value) => value + 1)
-      setRadar((value) => (value > 320 ? 80 : value + 36))
+      setTick((value: number) => value + 1)
+      setRadar((value: number) => (value > 320 ? 80 : value + 36))
     }, 700)
     return () => clearInterval(id)
   }, [theater])
@@ -113,7 +113,7 @@ export const CampusMap = forwardRef<CampusMapHandle, CampusMapProps>(function Ca
         <Marker coordinate={STADIUM} pinColor={colors.orange} title="Memorial Stadium" />
         <Marker coordinate={DOWNTOWN} pinColor={colors.purple} title="Downtown Clemson" />
         {showHeat
-          ? spots.map((spot) => (
+          ? spots.map((spot: BusySpot) => (
               <Circle
                 key={spot.id}
                 center={{ latitude: spot.lat, longitude: spot.lng }}
@@ -169,7 +169,7 @@ export const CampusMap = forwardRef<CampusMapHandle, CampusMapProps>(function Ca
               )
             })
           : null}
-        {pins.map((pin) => (
+        {pins.map((pin: MapPin) => (
           <Marker
             key={pin.id}
             coordinate={{ latitude: pin.latitude, longitude: pin.longitude }}

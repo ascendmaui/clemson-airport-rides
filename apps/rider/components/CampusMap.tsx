@@ -2,14 +2,15 @@ import { forwardRef, useImperativeHandle } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
 import { heatColor } from 'rides-native/heat.js'
 import { DOWNTOWN, STADIUM } from 'rides-native/places.js'
-import { mapKindLabel, type CampusMapHandle, type CampusMapProps } from '@/components/mapTypes'
+import { mapKindLabel, type CampusMapHandle, type CampusMapProps, type MapPin } from '@/components/mapTypes'
+import type { BusySpot } from '@/lib/busySpots'
 import type { Palette } from '@/lib/palette'
 import { useTheme } from '@/lib/theme'
 import { useThemedStyles } from '@/lib/useThemedStyles'
 
 export const CampusMap = forwardRef<CampusMapHandle, CampusMapProps>(function CampusMap(
   { spots, showHeat, mapType = 'standard', theater = false, gameDay = false, gameDayLabel = null, surge = false, userCoordinate = null, pins = [] },
-  ref,
+  ref: any,
 ) {
   const { colors } = useTheme()
   const styles = useThemedStyles(makeStyles)
@@ -22,7 +23,7 @@ export const CampusMap = forwardRef<CampusMapHandle, CampusMapProps>(function Ca
       <View style={styles.wash} />
       <Text style={styles.kind}>{mapKindLabel(mapType)}</Text>
       {showHeat
-        ? spots.slice(0, 8).map((spot, index) => (
+        ? spots.slice(0, 8).map((spot: BusySpot, index: number) => (
             <View
               key={spot.id}
               style={[
@@ -60,7 +61,7 @@ export const CampusMap = forwardRef<CampusMapHandle, CampusMapProps>(function Ca
           <Text style={styles.pinText}>GSP</Text>
         </View>
       </View>
-      {pins.map((pin) => (
+      {pins.map((pin: MapPin) => (
         <Text key={pin.id} style={styles.pinLabel}>{pin.title}</Text>
       ))}
       <Text style={styles.caption}>

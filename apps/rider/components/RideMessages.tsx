@@ -85,7 +85,7 @@ export function RideMessages({ tripId, userId }: { tripId: string; userId: strin
         accessibilityLabel={open ? 'Hide ride messages' : 'Message your driver'}
         accessibilityHint={open ? 'Hides the thread' : 'Opens the trip message thread'}
         accessibilityState={{ expanded: open }}
-        onPress={() => setOpen((value) => !value)}
+        onPress={() => setOpen((value: boolean) => !value)}
       >
         <Text style={styles.kicker}>RIDE CHAT</Text>
         <Text style={styles.title}>{mode === 'readonly' ? 'Ride messages' : 'Message'}</Text>
@@ -95,7 +95,7 @@ export function RideMessages({ tripId, userId }: { tripId: string; userId: strin
         <View style={styles.thread}>
           {banner ? <Text style={styles.copy}>{banner}</Text> : null}
           {rows.length === 0 ? <Text style={styles.copy}>No messages yet.</Text> : null}
-          {rows.map((row) => (
+          {rows.map((row: { id: string; sender_id: string; body: string }) => (
             <View key={row.id} style={row.sender_id === userId ? styles.mine : styles.theirs}>
               <Text style={row.sender_id === userId ? styles.mineText : styles.theirsText}>{row.body}</Text>
             </View>
@@ -103,7 +103,7 @@ export function RideMessages({ tripId, userId }: { tripId: string; userId: strin
           {mode === 'compose' ? (
             <>
               <View style={styles.chips}>
-                {RIDE_CHAT_QUICK_REPLIES.map((phrase) => (
+                {RIDE_CHAT_QUICK_REPLIES.map((phrase: string) => (
                   <Pressable
                     key={phrase}
                     accessibilityRole="button"
