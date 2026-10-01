@@ -5,6 +5,7 @@ import {
   hotCatalogPlaces,
   lookupCatalogPlace,
   searchCatalogPlaces,
+  placeFromStop,
 } from './placeCatalog.js'
 
 function campusSpotLabels() {
@@ -40,4 +41,33 @@ test('search finds campus neighborhoods and airports without a Maps key', () => 
   assert.equal(lookupCatalogPlace('not a real stop'), null)
   assert.equal(hotCatalogPlaces().some((row) => row.id === 'gsp'), true)
   assert.equal(hotCatalogPlaces().some((row) => row.id === 'grand-marc'), true)
+})
+
+test('catalog edges: missing inputs, short strings, and alias ranking', () => {
+  // Empty or short queries
+  assert.equal(searchCatalogPlaces(null).length, 0)
+  assert.equal(searchCatalogPlaces(undefined).length, 0)
+  assert.equal(searchCatalogPlaces('a').length, 0) // < 2 chars
+  
+  // lookupCatalogPlace null/empty
+  assert.equal(lookupCatalogPlace(null), null)
+  assert.equal(lookupCatalogPlace(''), null)
+  
+  // Rank: exact match should come before prefix match
+  // e.g. "Sikes" matches "Sikes Hall" alias "sikes" exact.
+  const sikesRes = searchCatalogPlaces('sikes')
+  assert.equal(sikesRes[0].id, 'sikes')
+  
+  // lookupCatalogPlace alias matching with suffixes
+  // "GSP Airport · Terminal 2" works because "gsp airport" length >= 4
+  assert.equal(lookupCatalogPlace('GSP Airport · Terminal 2')?.id, 'gsp')
+  
+  // But "GSP · Term" fails because "gsp" length < 4
+  assert.equal(lookupCatalogPlace('GSP · Terminal 2'), null)
+})
+
+test('placeFromStop converts catalog row to simple coordinate object', () => {
+  assert.equal(placeFromStop(null), null)
+  const stop = { id: 'test', label: 'L', lat: 1, lng: 2, kind: 'campus', aliases: [] }
+  assert.deepEqual(placeFromStop(stop), { label: 'L', lat: 1, lng: 2 })
 })
