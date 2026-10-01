@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
-import test from 'node:test'
+import { after, test } from 'node:test'
 import Stripe from 'stripe'
 
 // Set STRIPE_SECRET_KEY before importing tripWait.js so friendRideLib initializes stripeOk() as true.
@@ -1247,4 +1247,12 @@ test('// BUG?: quoteWait in applyTripWait calculates elapsed from trip.arrived_a
   assert.equal(res.quote.clock, '7:00')
   assert.equal(res.quote.waitFeeCents, 400) // quote reports $4 even though trip.wait_fee_cents is 0
   assert.equal(res.trip.wait_fee_cents, 0)
+})
+
+after(() => {
+  if (origStripeKey === undefined) {
+    delete process.env.STRIPE_SECRET_KEY
+  } else {
+    process.env.STRIPE_SECRET_KEY = origStripeKey
+  }
 })

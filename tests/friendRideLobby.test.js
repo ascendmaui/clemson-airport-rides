@@ -4,6 +4,9 @@ if (!process.env.GOOGLE_MAPS_API_KEY) {
 }
 
 import test, { describe, after } from 'node:test'
+const origGoogleMapsKey = process.env.GOOGLE_MAPS_API_KEY
+process.env.GOOGLE_MAPS_API_KEY = process.env.GOOGLE_MAPS_API_KEY || 'mock_key_for_tests'
+import test, { after, describe } from 'node:test'
 import assert from 'node:assert/strict'
 
 const {
@@ -242,6 +245,8 @@ describe('FriendRide Lobby', () => {
       delete process.env.GOOGLE_MAPS_API_KEY
     } else {
       process.env.GOOGLE_MAPS_API_KEY = origMapsKey
+    if (origGoogleMapsKey === undefined) {
+      process.env.GOOGLE_MAPS_API_KEY = origGoogleMapsKey
     }
   })
 })

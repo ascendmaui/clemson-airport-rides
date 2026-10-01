@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { before, test } from 'node:test'
+import { after, before, test } from 'node:test'
 import { PGlite } from '@electric-sql/pglite'
 import { UNPAID_AIRPORT_DEPOSIT_ACCEPT_ERROR } from '../packages/rides-native/tripTags.js'
 
@@ -330,4 +330,10 @@ test('webhook metadata stamp is not an accept, and later progress of an already 
   const legacy = await seed({ status: 'accepted', driver_id: DRIVER })
   await db.query(`UPDATE public.trips SET status = 'arriving' WHERE id = $1::uuid`, [legacy])
   assert.equal((await tripOf(legacy)).status, 'arriving')
+})
+
+after(async () => {
+  if (db) {
+    await db.close()
+  }
 })
