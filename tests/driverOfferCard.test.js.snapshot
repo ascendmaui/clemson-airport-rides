@@ -1,0 +1,153 @@
+exports[`Driver Offer Card snapshot 1`] = `
+{
+  "name": "View",
+  "children": [
+    {
+      "name": "Card",
+      "children": [
+        {
+          "name": "ScrollView",
+          "children": [
+            {
+              "type": "Conditional",
+              "branches": [
+                {
+                  "name": "Text",
+                  "children": []
+                }
+              ]
+            },
+            {
+              "name": "View",
+              "children": [
+                {
+                  "name": "Text",
+                  "children": []
+                },
+                {
+                  "name": "Text",
+                  "children": []
+                }
+              ]
+            },
+            {
+              "name": "Text",
+              "children": []
+            },
+            {
+              "type": "Conditional",
+              "branches": [
+                {
+                  "name": "View",
+                  "children": []
+                }
+              ]
+            },
+            {
+              "type": "Conditional",
+              "branches": [
+                {
+                  "name": "Text",
+                  "children": []
+                }
+              ]
+            },
+            {
+              "name": "Text",
+              "children": [
+                {
+                  "type": "Conditional",
+                  "branches": []
+                },
+                {
+                  "type": "Conditional",
+                  "branches": []
+                },
+                {
+                  "type": "Conditional",
+                  "branches": []
+                }
+              ]
+            },
+            {
+              "name": "Text",
+              "children": []
+            },
+            {
+              "name": "Text",
+              "children": []
+            },
+            {
+              "type": "Conditional",
+              "branches": [
+                {
+                  "name": "Text",
+                  "children": []
+                }
+              ]
+            },
+            {
+              "type": "Conditional",
+              "branches": [
+                {
+                  "name": "Text",
+                  "children": []
+                }
+              ]
+            },
+            {
+              "type": "Conditional",
+              "branches": [
+                {
+                  "name": "Text",
+                  "children": []
+                }
+              ]
+            },
+            {
+              "type": "Conditional",
+              "branches": [
+                {
+                  "name": "Text",
+                  "children": []
+                }
+              ]
+            },
+            {
+              "type": "Conditional",
+              "branches": [
+                {
+                  "name": "Text",
+                  "children": []
+                }
+              ]
+            },
+            {
+              "name": "FarePanel",
+              "children": []
+            }
+          ]
+        },
+        {
+          "name": "View",
+          "children": [
+            {
+              "name": "Primary",
+              "children": []
+            },
+            {
+              "name": "Pressable",
+              "children": [
+                {
+                  "name": "Text",
+                  "children": []
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
+`;

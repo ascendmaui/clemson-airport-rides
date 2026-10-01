@@ -598,7 +598,7 @@ export default function DriverHome() {
   )
 }
 
-function RideCard({
+export function RideCard({
   card,
   busy,
   notice,
