@@ -12,12 +12,21 @@ test('clemson student domains are exact and case-insensitive', () => {
   assert.equal(isClemsonEmail(' Tiger@Clemson.edu '), true)
   assert.equal(isClemsonEmail('tiger@g.clemson.edu'), true)
   assert.equal(isClemsonEmail('tiger@G.CLEMSON.EDU'), true)
+  assert.equal(isClemsonEmail('tiger+tag@clemson.edu'), true) // +tag allowed
+  assert.equal(isClemsonEmail('tiger.name@clemson.edu'), true) // . in local part
+  
+  // Spoofing attempts and invalid formats
   assert.equal(isClemsonEmail('tiger@gmail.com'), false)
-  assert.equal(isClemsonEmail('tiger@notclemson.edu'), false)
-  assert.equal(isClemsonEmail('tiger@clemson.edu.evil.com'), false)
-  assert.equal(isClemsonEmail('tiger@mail.clemson.edu'), false)
-  assert.equal(isClemsonEmail('tiger@gclemson.edu'), false)
-  assert.equal(isClemsonEmail('@clemson.edu'), false)
+  assert.equal(isClemsonEmail('clemson.edu@gmail.com'), false) // domain in local part
+  assert.equal(isClemsonEmail('tiger@clemson.edu.evil.com'), false) // suffix spoof
+  assert.equal(isClemsonEmail('tiger@mail.clemson.edu'), false) // prefix on domain
+  assert.equal(isClemsonEmail('tiger@gclemson.edu'), false) // missing dot
+  assert.equal(isClemsonEmail('tiger@clemson.edu.org'), false)
+  assert.equal(isClemsonEmail('tiger@clemson.edu.com'), false)
+  assert.equal(isClemsonEmail('tiger@clemson.ed'), false)
+  assert.equal(isClemsonEmail('tiger@myclemson.edu'), false)
+  assert.equal(isClemsonEmail('tiger@clemson.edu@gmail.com'), false) // multi-at spoof
+  assert.equal(isClemsonEmail('@clemson.edu'), false) // missing local part
   assert.equal(isClemsonEmail(''), false)
   assert.equal(isClemsonEmail(null), false)
 })
