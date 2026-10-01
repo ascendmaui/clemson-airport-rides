@@ -27,3 +27,14 @@ test('paletteFor covers both schemes', () => {
   assert.equal(paletteFor('light'), lightPalette)
   assert.equal(paletteFor('dark'), darkPalette)
 })
+
+test('no secret-brand bleed (use literal colors, not primary/secondary/accent)', () => {
+  for (const palette of [lightPalette, darkPalette]) {
+    const keys = Object.keys(palette)
+    assert.equal(keys.includes('primary'), false, 'Do not use primary, use orange or purple')
+    assert.equal(keys.includes('secondary'), false, 'Do not use secondary')
+    assert.equal(keys.includes('accent'), false, 'Do not use accent')
+    assert.equal(keys.includes('brand'), false, 'Do not use brand')
+    assert.equal(keys.includes('brandPrimary'), false)
+  }
+})
