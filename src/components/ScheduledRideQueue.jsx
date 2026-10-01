@@ -5,14 +5,34 @@ import { formatPickupAt, toDriverQueueCard } from '../lib/scheduledRideModel'
  * Driver list of scheduled rides.
  * Cards are first-name + labels only — no map pins.
  */
-export function ScheduledRideQueue({ rides, acceptingId, onAccept, title = 'Scheduled rides', emptyHint }) {
+export function ScheduledRideQueue({
+  rides,
+  acceptingId,
+  onAccept,
+  title = 'Scheduled rides',
+  emptyHint,
+  emptyAction,
+}) {
   const cards = (rides || []).map(toDriverQueueCard).filter(Boolean)
   if (!cards.length) {
-    if (!emptyHint) return null
     return (
-      <div style={{ marginBottom: 14 }}>
-        <div style={{ fontWeight: 800, color: '#522D80', marginBottom: 4 }}>{title}</div>
-        <p style={{ fontSize: 12, color: 'var(--ink-secondary)', margin: 0 }}>{emptyHint}</p>
+      <div style={{ marginBottom: 14 }} role="status" aria-label={`${title} empty`}>
+        <div style={{ fontWeight: 800, color: '#522D80', marginBottom: 6 }}>{title}</div>
+        <div
+          style={{
+            padding: '16px 14px',
+            borderRadius: 14,
+            background: 'rgba(255,255,255,0.7)',
+            border: '1px dashed rgba(82,45,128,0.22)',
+            textAlign: 'center',
+          }}
+        >
+          <div style={{ fontSize: 22, marginBottom: 4 }} aria-hidden="true">📅</div>
+          <p style={{ fontSize: 13, color: 'var(--ink-secondary)', margin: 0, lineHeight: 1.45 }}>
+            {emptyHint || 'No scheduled rides available right now. Upcoming airport and game-day reservations will appear here.'}
+          </p>
+          {emptyAction && <div style={{ marginTop: 10 }}>{emptyAction}</div>}
+        </div>
       </div>
     )
   }
