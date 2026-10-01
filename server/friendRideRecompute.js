@@ -52,7 +52,7 @@ export async function recomputeRideFares(sb, token, { splitMode } = {}) {
       code: route.code || 'routes_failed',
       message:
         route.code === 'maps_key_missing'
-          ? 'Set GOOGLE_MAPS_API_KEY on Vercel (server Routes key — not the Vite browser key alone).'
+          ? 'Route calculation failed. The server is missing Google Maps API configuration.'
           : route.error,
     }
   }

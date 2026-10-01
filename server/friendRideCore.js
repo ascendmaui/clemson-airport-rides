@@ -166,7 +166,7 @@ export function buildWaypointList(participants) {
 export async function computeRoutes(origin, destination, intermediates) {
   if (!googleMapsKey || googleMapsKey.includes('placeholder')) {
     return {
-      error: 'GOOGLE_MAPS_API_KEY not configured on server',
+      error: 'Route calculation failed. The server is missing Google Maps API configuration.',
       code: 'maps_key_missing',
     }
   }
