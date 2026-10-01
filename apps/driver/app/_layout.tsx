@@ -28,7 +28,7 @@ function PushBridge() {
   useEffect(() => {
     if (!user) return undefined
     registerDriverPush(supabase, user.id).catch(() => {})
-    const sub = Notifications.addNotificationResponseReceivedListener((response) => {
+    const sub = Notifications.addNotificationResponseReceivedListener((response: Notifications.NotificationResponse) => {
       const tripId = response.notification.request.content.data?.tripId
       if (typeof tripId === 'string' && tripId) {
         router.push({ pathname: '/trip', params: { id: tripId } })
