@@ -9,6 +9,7 @@ import { supabase } from '@/lib/supabase'
 import { useTheme } from '@/lib/theme'
 import { authedJson } from 'rides-native/apiClient'
 import { loadEarnings } from 'rides-native/driverDesk'
+import { getPayoutStatusLabel } from 'rides-native/earningsCopy'
 
 type Pending = {
   tripId?: string
@@ -66,7 +67,7 @@ export default function PayoutsScreen() {
       <Card>
         <Text style={{ color: colors.inkSecondary, fontWeight: '700' }}>Balance</Text>
         <Text style={{ color: colors.ink, fontSize: 36, fontWeight: '800' }}>{shownCents(pendingCents, earningsPrivate)}</Text>
-        <Text style={{ color: colors.inkSecondary }}>Paid out {shownCents(paid, earningsPrivate)}. Cash out retries Stripe transfers that are already due. It does not move money early.</Text>
+        <Text style={{ color: colors.inkSecondary }}>Paid out {shownCents(paid, earningsPrivate)}. Cash out retries transfers that are already due to your Stripe account. Completed trips process automatically.</Text>
         <Primary label={busy ? 'Working…' : 'Cash out'} onPress={cashOut} disabled={busy || !user} />
       </Card>
       {note ? <Text style={{ color: colors.title, fontWeight: '700' }}>{note}</Text> : null}
@@ -74,7 +75,7 @@ export default function PayoutsScreen() {
       {pending.map((row: Pending, index: number) => (
         <Card key={row.tripId || row.dropoffLabel || index}>
           <Text style={{ color: colors.title, fontWeight: '800' }}>{row.dropoffLabel || 'Trip'}</Text>
-          <Text style={{ color: colors.ink }}>{shownCents(row.amountCents || 0, earningsPrivate)} · {row.status || 'pending'}</Text>
+          <Text style={{ color: colors.ink }}>{shownCents(row.amountCents || 0, earningsPrivate)} · {getPayoutStatusLabel(row.status)}</Text>
           {row.nextRetryAt ? <Text style={{ color: colors.inkSecondary }}>Retry {new Date(row.nextRetryAt).toLocaleString()}</Text> : null}
           {row.lastError ? <Text style={{ color: colors.danger }}>{row.lastError}</Text> : null}
         </Card>
