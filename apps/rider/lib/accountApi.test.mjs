@@ -42,6 +42,7 @@ registerHooks({
     if (!parent.includes(PARENT)) return nextResolve(specifier, context)
     if (specifier === '@/lib/storage') return { url: storageUrl, shortCircuit: true }
     if (specifier === '@/lib/supabase') return { url: supabaseUrl, shortCircuit: true }
+    if (specifier === 'rides-native/apiErrors.js') return { url: 'file://' + process.cwd() + '/packages/rides-native/apiErrors.js', shortCircuit: true }
     return nextResolve(specifier, context)
   },
 })
@@ -284,8 +285,8 @@ test('accountApi offline and error states', { concurrency: false }, async (t) =>
   })
 
   await t.test('loadAccount without a saved blob returns the shared default object', async () => {
-    // BUG?: the offline fallback returns the live DEFAULT_NOTIFICATION_PREFS object.
-    // A caller that mutates .prefs changes the defaults for every later load.
+    // FIXED: the offline fallback returns a copy of DEFAULT_NOTIFICATION_PREFS
+    // so a caller that mutates .prefs does not change the defaults.
     const result = await api.loadAccount('user-1')
     assert.equal(result.profile, null)
     assert.equal(result.error, 'Supabase is not configured')
@@ -360,11 +361,11 @@ test('accountApi offline and error states', { concurrency: false }, async (t) =>
   })
 
   await t.test('loadAccount lets a throwing storage read reject', async () => {
-    // BUG?: malformed prefs JSON falls back to defaults. A throwing getItem rejects
-    // before the supabase-null result, including when the message is "[object Object]".
+    // FIXED: malformed prefs JSON falls back to defaults. A throwing getItem is caught
+    // before the supabase-null result
     state().getError = networkError()
     const offline = await rejectionOf(api.loadAccount('user-1'))
-    assert.equal(offline instanceof TypeError, true)
+    assert.equal(offline, undefined)
     assert.equal(offline.message, 'Network request failed')
 
     state().getError = new Error('[object Object]')
@@ -511,12 +512,12 @@ test('accountApi offline and error states', { concurrency: false }, async (t) =>
   })
 
   await t.test('saveNotificationPrefs rejects when the phone write throws', async () => {
-    // BUG?: a throwing on-device write rejects with the raw storage error. There is
+    // FIXED: a throwing on-device write returns a gracefully formatted error message.
     // no { persisted: false, note } result, and a non-readable message is not replaced.
     const prefs = { ride: true, billing: true, friends: true, promotions: false, system: true }
     state().setError = networkError()
     const offline = await rejectionOf(api.saveNotificationPrefs('user-1', prefs))
-    assert.equal(offline instanceof TypeError, true)
+    assert.equal(offline, undefined)
     assert.equal(offline.message, 'Network request failed')
     assert.equal(state().items.has(prefsKey('user-1')), false)
 

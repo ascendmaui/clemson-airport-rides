@@ -53,6 +53,7 @@ registerHooks({
     if (!parent.includes(PARENT)) return nextResolve(specifier, context)
     if (specifier === '@/lib/storage') return { url: storageUrl, shortCircuit: true }
     if (specifier === '@/lib/supabase') return { url: supabaseUrl, shortCircuit: true }
+    if (specifier === 'rides-native/apiErrors.js') return { url: 'file://' + process.cwd() + '/packages/rides-native/apiErrors.js', shortCircuit: true }
     if (specifier === 'rides-native/apiClient.js' || specifier === 'rides-native/apiClient') {
       return { url: apiClientUrl, shortCircuit: true }
     }
