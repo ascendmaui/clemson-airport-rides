@@ -13,6 +13,7 @@ export function HoldExpiryNotice({
   trip,
   onRequestAgain,
 }: {
+  key?: string | number
   trip: object | null
   onRequestAgain: () => void
 }) {

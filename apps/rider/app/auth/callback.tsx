@@ -8,7 +8,7 @@ export default function AuthCallback() {
   const router = useRouter()
   useEffect(() => {
     let alive = true
-    Linking.getInitialURL().then(async (url) => {
+    Linking.getInitialURL().then(async (url: string | null) => {
       try {
         if (url && supabase) await completeGoogleSession(supabase, url)
       } catch (err) {

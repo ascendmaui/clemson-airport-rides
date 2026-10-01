@@ -281,6 +281,7 @@ export default function Requested() {
               router.push(code ? { pathname: '/schedule', params: { airport: code } } : '/schedule')
             }}
           />
+        ) : null}
         {showCheckoutReturn ? (
           <Text style={styles.body} accessibilityLiveRegion="polite">
             Stripe Checkout sent you back. This ride is in the open pool. The deposit shows up when Stripe confirms it.

@@ -99,7 +99,7 @@ export default function PickDriver() {
 
   const pickupAt = pickupPoint(pickup)
   const approachPickup = { lat: pickupAt.latitude, lng: pickupAt.longitude }
-  const selectedDriver = drivers.find((row) => row.id === selected) || null
+  const selectedDriver = drivers.find((row: OnlineDriver) => row.id === selected) || null
   const teslaNotice = teslaFleetNotice(tier === 'tesla' || tier === 'tesla_self_driving' || Boolean(selectedDriver?.isTesla))
   const groups = groupDriversForPicker(sortPreferredDrivers(drivers, favoriteIds, approachPickup), favoriteIds)
 
@@ -110,7 +110,7 @@ export default function PickDriver() {
       return
     }
     const next = favoriteIds.includes(driverId)
-      ? favoriteIds.filter((id) => id !== driverId)
+      ? favoriteIds.filter((id: string) => id !== driverId)
       : [...favoriteIds, driverId]
     setFavoriteIds(next)
     const saved = await saveFavoriteDriverIds(supabase, authStorage, user.id, next)
@@ -177,14 +177,14 @@ export default function PickDriver() {
     return blocks.map((block) => (
       <View key={block.title} style={styles.section}>
         {blocks.length > 1 ? <Text style={styles.sectionTitle}>{block.title}</Text> : null}
-        {block.rows.map((driver) => renderDriver(driver))}
+        {block.rows.map((driver: OnlineDriver) => renderDriver(driver))}
       </View>
     ))
   }
 
   const pins = drivers
-    .filter((driver) => driver.lat != null && driver.lng != null)
-    .map((driver) => ({
+    .filter((driver: OnlineDriver) => driver.lat != null && driver.lng != null)
+    .map((driver: OnlineDriver) => ({
       id: driver.id,
       latitude: Number(driver.lat),
       longitude: Number(driver.lng),
@@ -193,7 +193,7 @@ export default function PickDriver() {
     }))
 
   const onRequest = async () => {
-    const chosen = drivers.find((row) => row.id === selected)
+    const chosen = drivers.find((row: OnlineDriver) => row.id === selected)
     if (!chosen) {
       setError('Select a driver first')
       return
@@ -280,7 +280,7 @@ export default function PickDriver() {
       </View>
       <ScrollView contentContainerStyle={styles.list}>
         {phase === 'loading' ? <Skeleton height={72} /> : null}
-        {phase === 'results' && !drivers.some((driver) => driver.online) ? (
+        {phase === 'results' && !drivers.some((driver: OnlineDriver) => driver.online) ? (
           <View style={styles.empty}>
             <Text style={styles.emptyTitle}>{drivers.length ? 'Preferred drivers are offline' : 'Still searching'}</Text>
             <Text style={styles.sub}>
@@ -297,7 +297,7 @@ export default function PickDriver() {
                 await tapHaptic()
               }}
             />
-            <PrimaryButton label="Retry" tone="ghost" onPress={() => setAttempt((value) => value + 1)} />
+            <PrimaryButton label="Retry" tone="ghost" onPress={() => setAttempt((value: number) => value + 1)} />
           </View>
         ) : null}
         {favNote ? <Text style={styles.meta}>{favNote}</Text> : null}
@@ -311,7 +311,7 @@ export default function PickDriver() {
         {student.verified && tier !== 'standard' ? (
           <Text style={styles.student}>Student pricing is 10% off Standard. This tier stays full price.</Text>
         ) : null}
-        {error && drivers.some((driver) => driver.online) ? <Text style={styles.error}>{error}</Text> : null}
+        {error && drivers.some((driver: OnlineDriver) => driver.online) ? <Text style={styles.error}>{error}</Text> : null}
         <PrimaryButton
           label={busy ? 'Requesting…' : selectedDriver ? `Request ${selectedDriver.name}` : 'Select a driver'}
           onPress={onRequest}

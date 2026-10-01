@@ -94,7 +94,7 @@ function NotificationsScreen() {
           </View>
           <Switch
             value={prefs.dndNewRequestTones}
-            onValueChange={(value) => void update({ ...prefs, dndNewRequestTones: value })}
+            onValueChange={(value: boolean) => void update({ ...prefs, dndNewRequestTones: value })}
             disabled={!user || saving}
             trackColor={{ false: colors.track, true: colors.orange }}
             thumbColor={colors.onAccent}
@@ -107,7 +107,7 @@ function NotificationsScreen() {
           </View>
           <Switch
             value={prefs.quiet.dnd}
-            onValueChange={(value) => void update({ ...prefs, quiet: { ...prefs.quiet, dnd: value } })}
+            onValueChange={(value: boolean) => void update({ ...prefs, quiet: { ...prefs.quiet, dnd: value } })}
             disabled={!user || saving}
             trackColor={{ false: colors.track, true: colors.orange }}
             thumbColor={colors.onAccent}

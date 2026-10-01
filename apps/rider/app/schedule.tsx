@@ -12,7 +12,7 @@ import { loadRiderHoldTrip, loadSurfaceHold, type RiderHoldTrip } from '@/lib/ho
 import { oneParam } from '@/lib/oneParam'
 import { useAuth } from '@/lib/auth'
 import { successHaptic, tapHaptic } from '@/lib/feedback'
-import { oneParam } from '@/lib/oneParam'
+// duplicate oneParam import removed to fix TS2300
 import { openStripeCheckout } from '@/lib/openCheckout'
 import {
   cancelScheduledTrip,
@@ -170,7 +170,7 @@ function ScheduleScreen() {
   const depositSectionY = useRef(0)
   const reminders = useMemo(() => dueScheduleReminders(mine, clock), [mine, clock])
   const reminderByTrip = useMemo(() => {
-    const byTrip = new Map(reminders.map((item) => [item.tripId, item]))
+    const byTrip = new Map(reminders.map((item: { tripId?: string }) => [item.tripId, item]))
     return byTrip
   }, [reminders])
   const generation = useRef(0)
@@ -183,7 +183,7 @@ function ScheduleScreen() {
   const weekendWhen = nextPickupDate({ date: weekendDate, time: weekendTime })
 
   useFocusEffect(useCallback(() => {
-    setFocusTick((n) => n + 1)
+    setFocusTick((n: number) => n + 1)
   }, []))
 
   useEffect(() => {
@@ -270,7 +270,7 @@ function ScheduleScreen() {
     loadSurfaceHold(user.id)
       .then((row) => {
         if (!alive || !row) return
-        setCheckoutTrip((current) => (current && current.id !== row.id ? current : row))
+        setCheckoutTrip((current: RiderHoldTrip | null) => (current && current.id !== row.id ? current : row))
       })
       .catch(() => {})
     return () => {
@@ -280,7 +280,7 @@ function ScheduleScreen() {
 
   const checkoutTripId = checkoutTrip?.id || ''
   const riderId = user?.id || ''
-  const watchHold = isOpenUnpaidAirportHold(checkoutTrip) || mine.some((row) => isOpenUnpaidAirportHold(row))
+  const watchHold = isOpenUnpaidAirportHold(checkoutTrip) || mine.some((row: ScheduledRow) => isOpenUnpaidAirportHold(row))
 
   useEffect(() => {
     if (!riderId || !watchHold) return undefined
@@ -317,7 +317,7 @@ function ScheduleScreen() {
   function choosePurpose(next: SchedulePurpose) {
     void tapHaptic()
     setPurpose(next)
-    if (next === 'recurring') setWeekdays((days) => (days.length ? days : ['fri']))
+    if (next === 'recurring') setWeekdays((days: string[]) => (days.length ? days : ['fri']))
   }
 
   function chooseWeekendSpot(next: WeekendSpot) {
@@ -564,7 +564,7 @@ function ScheduleScreen() {
             tintColor={colors.orange}
             onRefresh={() => {
               setRefreshing(true)
-              setFocusTick((n) => n + 1)
+              setFocusTick((n: number) => n + 1)
               reload().finally(() => setRefreshing(false))
             }}
           />
@@ -575,7 +575,7 @@ function ScheduleScreen() {
         <Text style={styles.copy}>
           Weekend and party nights to the airport or around campus. Pick a date and time, confirm, then find it under Upcoming.
         </Text>
-        {reminders.map((item) => (
+        {reminders.map((item: { tripId?: string; label?: string; body?: string }) => (
           <View key={item.tripId} style={styles.remindCard} accessibilityRole="text" accessibilityLabel={`${item.label}. ${item.body}`}>
             <Text style={styles.remindKicker}>PICKUP REMINDER</Text>
             <Text style={styles.remindTitle}>{item.label}</Text>
@@ -691,7 +691,7 @@ function ScheduleScreen() {
 
         <Text
           style={styles.section}
-          onLayout={(event) => { depositSectionY.current = event.nativeEvent.layout.y }}
+          onLayout={(event: any) => { depositSectionY.current = event.nativeEvent.layout.y }}
         >
           Airport deposit
         </Text>
@@ -769,7 +769,7 @@ function ScheduleScreen() {
         {checkoutTrip ? (
           <HoldExpiryNotice trip={checkoutTrip} onRequestAgain={() => requestAgain(checkoutTrip)} />
         ) : null}
-        {mine.filter((row) => isUnpaidHoldTtlCancel(row) && row.id !== checkoutTrip?.id).map((row) => (
+        {mine.filter((row: ScheduledRow) => isUnpaidHoldTtlCancel(row) && row.id !== checkoutTrip?.id).map((row: ScheduledRow) => (
           <HoldExpiryNotice key={row.id} trip={row} onRequestAgain={() => requestAgain(row)} />
         ))}
 
@@ -816,7 +816,7 @@ function ScheduleScreen() {
                   key={day.id}
                   label={day.label}
                   active={on}
-                  onPress={() => setWeekdays((prev) => (on ? prev.filter((item) => item !== day.id) : [...prev, day.id]))}
+                  onPress={() => setWeekdays((prev: string[]) => (on ? prev.filter((item: string) => item !== day.id) : [...prev, day.id]))}
                 />
               )
             })}
@@ -852,13 +852,13 @@ function ScheduleScreen() {
         <Text style={styles.section}>Upcoming</Text>
         {loadingList ? <Skeleton height={64} /> : null}
         {!user ? <Text style={styles.copy}>Sign in to see rides saved on this account.</Text> : null}
-        {user && !loadingList && mine.filter((row) => row.status !== 'canceled').length === 0 ? (
+        {user && !loadingList && mine.filter((row: ScheduledRow) => row.status !== 'canceled').length === 0 ? (
           <View style={styles.panel}>
             <Text style={styles.cardLine}>No upcoming rides</Text>
             <Text style={styles.copy}>Confirm a weekend airport or campus trip and it will show up here.</Text>
           </View>
         ) : null}
-        {mine.filter((row) => row.status !== 'canceled').map((row) => {
+        {mine.filter((row: ScheduledRow) => row.status !== 'canceled').map((row: ScheduledRow) => {
           const reminder = reminderByTrip.get(row.id)
           return (
             <View key={row.id} style={styles.panel}>
@@ -883,7 +883,7 @@ function ScheduleScreen() {
             {row.status === 'scheduled' || row.status === 'accepted' ? (
               <Pressable
                 onPress={() => {
-                  cancelScheduledTrip(row.id).then(reload).catch((err) => {
+                  cancelScheduledTrip(row.id).then(() => reload()).catch((err: unknown) => {
                     setError(err instanceof Error ? err.message : 'Could not cancel')
                   })
                 }}

@@ -76,7 +76,7 @@ export default function AddVehicleScreen() {
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel="Fewer seats"
-                onPress={() => setSeats((value) => Math.max(1, value - 1))}
+                onPress={() => setSeats((value: number) => Math.max(1, value - 1))}
                 style={styles.stepBtn}
               >
                 <Text style={styles.stepBtnText}>−</Text>
@@ -85,7 +85,7 @@ export default function AddVehicleScreen() {
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel="More seats"
-                onPress={() => setSeats((value) => Math.min(8, value + 1))}
+                onPress={() => setSeats((value: number) => Math.min(8, value + 1))}
                 style={styles.stepBtn}
               >
                 <Text style={styles.stepBtnText}>+</Text>

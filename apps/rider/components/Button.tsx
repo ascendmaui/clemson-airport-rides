@@ -34,6 +34,7 @@ export function PrimaryButton({
   disabled,
   tone = 'orange',
 }: {
+  key?: string | number
   label: string
   onPress: () => void
   disabled?: boolean
@@ -70,6 +71,7 @@ export function Pill({
   active,
   onPress,
 }: {
+  key?: string | number
   label: string
   active?: boolean
   onPress?: () => void
