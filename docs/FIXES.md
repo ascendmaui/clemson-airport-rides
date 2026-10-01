@@ -2,6 +2,25 @@
 
 Persistent knowledge base for recurring failures. When a matching issue appears, apply the saved fix first.
 
+## 2026-10-01 — Stripe webhook signature resilience, secret trimming, and checkout endpoints security headers
+
+- **Track / machine:** Clemson RIDES · MacBook Max · `agy/webhook-signature-env-hardening`
+- **What was wrong:**
+  1. `api/stripe-webhook.js`: signature header lookup only checked `'stripe-signature'` and `'Stripe-Signature'`. Mixed-case variants or values with surrounding whitespace (common when passed via proxies or manual curl testing) were not trimmed. Secrets in environment variables (`STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`) could contain trailing newlines/spaces from dashboard copy-pasting, causing cryptographic verification failure.
+  2. `api/create-checkout-session.js` and `server/endpoints/airportCheckout.js`: lacked explicit HTTP security headers (`Cache-Control: no-store, no-cache, must-revalidate, private`, `Pragma: no-cache`), and did not supply `Allow: POST` header on 405 Method Not Allowed responses.
+- **What changed:**
+  - Added `findSignature(headers)` in `api/stripe-webhook.js` scanning all header keys case-insensitively, supporting array headers, and trimming surrounding whitespace.
+  - Added whitespace trimming to `stripeKey` and `whSecret` to eliminate verification failures from stray newlines or spaces.
+  - Added defensive `res.setHeader?.(...)` with `Cache-Control: no-store, no-cache, must-revalidate, private`, `Pragma: no-cache`, and `Allow: POST` on 405 responses in `api/create-checkout-session.js` and `server/endpoints/airportCheckout.js`.
+  - Added test coverage in `api/stripeWebhookValidation.test.js` verifying case-insensitive signature parsing with whitespace, trimmed secrets, and 405 / security headers on both checkout creation endpoints.
+- **Files touched:**
+  - `api/stripe-webhook.js`
+  - `api/create-checkout-session.js`
+  - `server/endpoints/airportCheckout.js`
+  - `api/stripeWebhookValidation.test.js`
+  - `docs/FIXES.md`
+- **Verified:** `npm test` passing with 0 failures across the test suite.
+
 ## 2026-10-01 — Expire unpaid airport holds & Stripe webhook endpoint hardening
 
 - **Track / machine:** Clemson RIDES · MacBook Max · `feat/max-agy-burn-ttl-webhooks`

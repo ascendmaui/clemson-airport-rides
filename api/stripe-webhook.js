@@ -103,18 +103,31 @@ async function recordCreditPurchase(session) {
 // Deposit paid-marking (payments insert, restoreLiveTripAfterDeposit, checkout_deposit stamp, referral)
 // is handled idempotently via applyPaidCheckoutSession in server/checkoutReconcile.js.
 
+function findSignature(headers) {
+  if (!headers || typeof headers !== 'object') return ''
+  for (const [key, val] of Object.entries(headers)) {
+    if (String(key).toLowerCase() === 'stripe-signature') {
+      const raw = Array.isArray(val) ? val[0] : val
+      return raw == null ? '' : String(raw).trim()
+    }
+  }
+  return ''
+}
+
 export default async function handler(req, res, deps = {}) {
-  res.setHeader('Content-Type', 'application/json')
-  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private')
-  res.setHeader('Pragma', 'no-cache')
+  res.setHeader?.('Content-Type', 'application/json')
+  res.setHeader?.('Cache-Control', 'no-store, no-cache, must-revalidate, private')
+  res.setHeader?.('Pragma', 'no-cache')
   if (req.method !== 'POST') {
-    res.setHeader('Allow', 'POST')
+    res.setHeader?.('Allow', 'POST')
     res.statusCode = 405
     return res.end(JSON.stringify({ error: 'Method not allowed' }))
   }
 
-  const stripeKey = deps.stripeSecret || process.env.STRIPE_SECRET_KEY || stripeSecret
-  const whSecret = deps.webhookSecret !== undefined ? deps.webhookSecret : (process.env.STRIPE_WEBHOOK_SECRET || webhookSecret)
+  const rawStripeKey = deps.stripeSecret !== undefined ? deps.stripeSecret : (process.env.STRIPE_SECRET_KEY || stripeSecret)
+  const stripeKey = typeof rawStripeKey === 'string' ? rawStripeKey.trim() : ''
+  const rawWhSecret = deps.webhookSecret !== undefined ? deps.webhookSecret : (process.env.STRIPE_WEBHOOK_SECRET || webhookSecret)
+  const whSecret = typeof rawWhSecret === 'string' ? rawWhSecret.trim() : ''
   const activeServiceKey = deps.serviceKey !== undefined ? deps.serviceKey : (process.env.SUPABASE_SERVICE_ROLE_KEY || serviceKey)
 
   if (!stripeKey || !stripeKey.startsWith('sk_') || stripeKey.includes('placeholder')) {
@@ -130,8 +143,7 @@ export default async function handler(req, res, deps = {}) {
     const rawBody = await readRawBody(req)
     let event
     if (whSecret && !whSecret.includes('placeholder')) {
-      const rawSig = req.headers ? (req.headers['stripe-signature'] ?? req.headers['Stripe-Signature']) : null
-      const sig = Array.isArray(rawSig) ? rawSig[0] : (rawSig || '')
+      const sig = findSignature(req.headers)
       event = stripe.webhooks.constructEvent(rawBody, sig, whSecret)
     } else {
       event = JSON.parse(rawBody.toString('utf8'))

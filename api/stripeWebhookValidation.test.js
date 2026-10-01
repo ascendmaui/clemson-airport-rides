@@ -980,3 +980,48 @@ test('Stripe-Signature header with uppercase casing or array is accepted', async
   assert.equal(res2.statusCode, 200)
 })
 
+test('STRIPE-SIGNATURE header with extra whitespace and custom casing is accepted', async () => {
+  const payload = JSON.stringify({ id: 'evt_sig_trim', object: 'event', type: 'customer.subscription.deleted' })
+  const sig = stripe.webhooks.generateTestHeaderString({
+    payload,
+    secret: WEBHOOK_SECRET,
+  })
+  const { deps } = trackingDeps({ serviceKey: '' })
+  const res = await callHandler(mockReq({ headers: { 'STRIPE-SIGNATURE': `  ${sig}  \n` }, body: payload }), deps)
+  assert.equal(res.statusCode, 200)
+})
+
+test('STRIPE_WEBHOOK_SECRET and STRIPE_SECRET_KEY with leading or trailing whitespace are trimmed', async () => {
+  const payload = JSON.stringify({ id: 'evt_sig_ws', object: 'event', type: 'customer.subscription.deleted' })
+  const sig = stripe.webhooks.generateTestHeaderString({
+    payload,
+    secret: WEBHOOK_SECRET,
+  })
+  const { deps } = trackingDeps({
+    serviceKey: '',
+    webhookSecret: `  ${WEBHOOK_SECRET}  \n`,
+    stripeSecret: `  ${process.env.STRIPE_SECRET_KEY || 'sk_test_123'}  `,
+  })
+  const res = await callHandler(mockReq({ headers: { 'stripe-signature': sig }, body: payload }), deps)
+  assert.equal(res.statusCode, 200)
+})
+
+test('create-checkout-session and airportCheckout endpoints reject non-POST with 405, Allow: POST, and security headers', async () => {
+  const { default: createCheckoutHandler } = await import('./create-checkout-session.js')
+  const { default: airportCheckoutHandler } = await import('../server/endpoints/airportCheckout.js')
+
+  const res1 = { statusCode: 0, headers: {}, setHeader(k, v) { this.headers[k.toLowerCase()] = v }, end(p) { this.body = p } }
+  await createCheckoutHandler({ method: 'GET' }, res1)
+  assert.equal(res1.statusCode, 405)
+  assert.equal(res1.headers['allow'], 'POST')
+  assert.match(res1.headers['cache-control'], /no-store/)
+  assert.equal(res1.headers['pragma'], 'no-cache')
+
+  const res2 = { statusCode: 0, headers: {}, setHeader(k, v) { this.headers[k.toLowerCase()] = v }, end(p) { this.body = p } }
+  await airportCheckoutHandler({ method: 'GET' }, res2)
+  assert.equal(res2.statusCode, 405)
+  assert.equal(res2.headers['allow'], 'POST')
+  assert.match(res2.headers['cache-control'], /no-store/)
+  assert.equal(res2.headers['pragma'], 'no-cache')
+})
+
