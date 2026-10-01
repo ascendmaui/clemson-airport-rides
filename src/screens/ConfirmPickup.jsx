@@ -85,7 +85,7 @@ export function ConfirmPickup({ dest = 'GSP Airport' }) {
           className="glass-input"
           value={note}
           onChange={(e) => setNote(e.target.value)}
-          placeholder="e.g. Near the orange gates, wearing purple hoodie"
+          placeholder={airport ? "e.g. Flight DL 1234, Terminal B, near orange gates" : "e.g. Near the orange gates, wearing purple hoodie"}
           rows={2}
           style={{
             width: '100%',

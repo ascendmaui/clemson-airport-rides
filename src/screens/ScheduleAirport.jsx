@@ -12,6 +12,7 @@ import {
 import { parseCheckoutSessionId } from '../../packages/rides-native/checkoutReturn.js'
 import { formatUsdFromCents, applyStudentDiscount } from '../lib/pricing'
 import { checkoutCloseOutcome, depositSurfaceCopy } from '../../packages/rides-native/riderMoney.js'
+import { AIRPORT_DEPOSIT_LABEL, AIRPORT_REMAINING_LABEL } from '../../packages/rides-native/airportCopy.js'
 import { UNAVAILABLE_COPY } from '../lib/apiErrors.js'
 import { useAuth } from '../lib/auth'
 import { getHashRoute, navigate } from '../lib/navigation'
@@ -225,7 +226,7 @@ export function ScheduleAirport() {
         <input type="time" className="glass-input" value={time} onChange={(e) => setTime(e.target.value)} style={{ width: '100%', marginTop: 6, marginBottom: 20, padding: '12px 14px', borderRadius: 12 }} />
 
         <div className="glass-panel glass-panel--orange" style={{ padding: 16, borderRadius: 16, marginBottom: 16 }}>
-          <div style={{ fontSize: 11, letterSpacing: 1.1, fontWeight: 800, color: '#F56600', marginBottom: 8 }}>AIRPORT DEPOSIT</div>
+          <div style={{ fontSize: 11, letterSpacing: 1.1, fontWeight: 800, color: '#F56600', marginBottom: 8 }}>{AIRPORT_DEPOSIT_LABEL.toUpperCase()}</div>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
             <span style={{ color: 'var(--ink-secondary)' }}>Full fare</span>
             <strong style={{ color: '#522D80' }}>{formatUsdFromCents(fareCents)}</strong>
@@ -237,11 +238,11 @@ export function ScheduleAirport() {
             </div>
           )}
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-            <span style={{ color: 'var(--ink-secondary)' }}>25% deposit</span>
+            <span style={{ color: 'var(--ink-secondary)' }}>{AIRPORT_DEPOSIT_LABEL}</span>
             <strong style={{ color: '#F56600' }}>{formatUsdFromCents(deposit)}</strong>
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-            <span style={{ color: '#522D80', fontWeight: 700 }}>Remaining balance</span>
+            <span style={{ color: '#522D80', fontWeight: 700 }}>{AIRPORT_REMAINING_LABEL.split('(')[0].trim()}</span>
             <strong style={{ color: '#522D80' }}>{formatUsdFromCents(remaining)}</strong>
           </div>
           <p style={{ fontSize: 12, color: '#522D80', marginTop: 10, lineHeight: 1.45 }}>
