@@ -12,6 +12,7 @@ import {
   formatApproachFeet,
   haversineMeters,
   isApproachStatus,
+  metersToFeet,
 } from './approachAlert.ts'
 
 test('haversine is zero at one point and about 111m per 0.001 degree', () => {
@@ -273,4 +274,12 @@ test('a 1 ft boundary wobble re-fires the stage haptic without previousStage', (
   assert.equal(inward?.decreasing, false)
   assert.equal(inward?.haptic, 'heavy')
   assert.equal(inward?.hapticReason, 'stage')
+})
+
+test('metersToFeet converts without clamping negatives', () => {
+  assert.equal(metersToFeet(0), 0)
+  assert.equal(metersToFeet(1), 3.280839895013123)
+  assert.equal(Math.round(metersToFeet(1609.344)), 5280)
+  assert.ok(metersToFeet(-2) < 0)
+  assert.equal(Number.isFinite(metersToFeet(Number.NaN)), false)
 })

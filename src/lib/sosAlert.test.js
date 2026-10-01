@@ -4,6 +4,7 @@ import {
   CUPD_PHONE_E164,
   buildSosText,
   isActiveRideStatus,
+  shareSosText,
   sosChannelHref,
 } from './sosAlert.js'
 
@@ -28,5 +29,75 @@ assert.throws(() => sosChannelHref('fat-finger', text))
 assert.equal(isActiveRideStatus('in_progress'), true)
 assert.equal(isActiveRideStatus('searching'), false)
 assert.equal(isActiveRideStatus('completed'), false)
+
+const hadNavigator = Object.prototype.hasOwnProperty.call(globalThis, 'navigator')
+const originalNavigator = globalThis.navigator
+
+function setNavigator(value) {
+  Object.defineProperty(globalThis, 'navigator', {
+    configurable: true,
+    writable: true,
+    value,
+  })
+}
+
+function restoreNavigator() {
+  if (hadNavigator) setNavigator(originalNavigator)
+  else delete globalThis.navigator
+}
+
+try {
+  setNavigator({ share: async () => {} })
+  assert.equal(await shareSosText('hello'), 'shared')
+
+  setNavigator({
+    share: async () => {
+      const err = new Error('cancelled')
+      err.name = 'AbortError'
+      throw err
+    },
+  })
+  assert.equal(await shareSosText('hello'), 'dismissed')
+
+  let copied = null
+  setNavigator({
+    share: async () => {
+      throw new Error('share unavailable')
+    },
+    clipboard: {
+      writeText: async (value) => {
+        copied = value
+      },
+    },
+  })
+  assert.equal(await shareSosText('hello'), 'copied')
+  assert.equal(copied, 'hello')
+
+  copied = null
+  setNavigator({
+    clipboard: {
+      writeText: async (value) => {
+        copied = value
+      },
+    },
+  })
+  assert.equal(await shareSosText('pin'), 'copied')
+  assert.equal(copied, 'pin')
+
+  setNavigator({
+    share: async () => {
+      throw new Error('share unavailable')
+    },
+  })
+  assert.equal(await shareSosText('hello'), 'unavailable')
+
+  setNavigator({})
+  assert.equal(await shareSosText('hello'), 'unavailable')
+
+  setNavigator(undefined)
+  assert.equal(await shareSosText('hello'), 'unavailable')
+} finally {
+  restoreNavigator()
+}
 
 console.log('sosAlert checks passed')
