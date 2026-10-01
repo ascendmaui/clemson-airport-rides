@@ -1,6 +1,24 @@
-export function LivePhase({ kicker, title, body, eta, steps, activeIndex }) {
+import { getLivePhaseRegionProps, getProgressStepA11yProps } from '../lib/liveDispatchA11y'
+
+export function LivePhase({
+  kicker,
+  title,
+  body,
+  eta,
+  steps,
+  activeIndex,
+  role = 'status',
+  ariaLive = 'polite',
+  ariaAtomic = true,
+  className = '',
+}) {
+  const liveRegionProps = getLivePhaseRegionProps({ role, ariaLive, ariaAtomic })
+  const progressProps = activeIndex >= 0 && steps?.length
+    ? getProgressStepA11yProps({ activeIndex, steps })
+    : null
+
   return (
-    <div>
+    <div {...liveRegionProps} className={className || undefined}>
       {kicker ? (
         <div style={{ fontSize: 12, letterSpacing: 1.2, fontWeight: 800, color: 'var(--orange)' }}>{kicker}</div>
       ) : null}
@@ -9,13 +27,18 @@ export function LivePhase({ kicker, title, body, eta, steps, activeIndex }) {
       ) : null}
       {body ? <p style={{ color: 'var(--ink-secondary)', fontSize: 14, lineHeight: 1.45 }}>{body}</p> : null}
       {eta ? <p style={{ color: 'var(--purple)', fontWeight: 800, fontSize: 14, marginTop: 8 }}>{eta}</p> : null}
-      {activeIndex >= 0 && steps?.length ? (
-        <div style={{ display: 'flex', gap: 6, marginTop: 12 }} aria-label="Trip progress">
+      {progressProps ? (
+        <div style={{ display: 'flex', gap: 6, marginTop: 12 }} {...progressProps}>
           {steps.map((step, index) => {
             const on = index <= activeIndex
             const current = index === activeIndex
             return (
-              <div key={step.id} style={{ flex: 1, minWidth: 0 }}>
+              <div
+                key={step.id}
+                style={{ flex: 1, minWidth: 0 }}
+                aria-current={current ? 'step' : undefined}
+                aria-hidden="true"
+              >
                 <div
                   style={{
                     height: 6,
@@ -44,3 +67,4 @@ export function LivePhase({ kicker, title, body, eta, steps, activeIndex }) {
     </div>
   )
 }
+
