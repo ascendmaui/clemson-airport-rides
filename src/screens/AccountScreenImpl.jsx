@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { BottomTabs } from '../components/BottomTabs'
 import { PrimaryButton } from '../components/PrimaryButton'
+import { handleTabListKeyDown } from '../lib/tabA11y'
 import { BillingPanel } from '../components/BillingPanel'
 import {
   IconBell, IconCard, IconCar, IconHelp, IconPrivacy, IconProfile,
@@ -301,26 +302,41 @@ export function AccountScreen() {
           </div>
         )}
 
-        <div className="account-nav" role="tablist" aria-label="Account sections">
+        <div
+          className="account-nav"
+          role="tablist"
+          aria-label="Account sections"
+          onKeyDown={(e) => handleTabListKeyDown(e, NAV, tab, selectTab)}
+        >
           {NAV.map((n) => {
             const on = tab === n.id
             const Icon = n.Icon
             return (
               <button
                 key={n.id}
+                id={`tab-${n.id}`}
                 type="button"
                 role="tab"
                 aria-selected={on}
+                aria-controls={`tabpanel-${n.id}`}
+                tabIndex={on ? 0 : -1}
                 className={`account-nav-item pressable${on ? ' active' : ''}`}
                 onClick={() => selectTab(n.id)}
               >
-                <Icon size={18} color={on ? '#F56600' : '#522D80'} />
+                <Icon size={18} color={on ? '#F56600' : '#522D80'} aria-hidden="true" />
                 <span>{n.label}</span>
               </button>
             )
           })}
         </div>
 
+        <div
+          role="tabpanel"
+          id={`tabpanel-${tab}`}
+          aria-labelledby={`tab-${tab}`}
+          tabIndex={0}
+          style={{ outline: 'none' }}
+        >
         {tab === 'profile' && (
           <>
             <div className="glass-panel glass-panel--elevated" style={{ padding: 18, borderRadius: 22, marginTop: 14,
@@ -757,6 +773,7 @@ export function AccountScreen() {
             </div>
           </Section>
         )}
+        </div>
 
         <div className="glass-panel" style={{ marginTop: 18, padding: 16, borderRadius: 18 }}>
           <div style={{ fontWeight: 600, marginBottom: 6 }}>Session</div>
