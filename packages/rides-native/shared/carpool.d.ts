@@ -162,3 +162,6 @@ export const OFFER_CARPOOL_STEPS: string[]
 export const OFFER_CARPOOL_MAPS_NOTE: string
 
 export function riderDisplayName(user: { email?: string | null; user_metadata?: { full_name?: string } } | null | undefined): string
+
+export * from '../carpoolCopy.js'
+
