@@ -942,3 +942,41 @@ for (const event of UNKNOWN_EVENTS) {
     assert.deepEqual(calls, [])
   })
 }
+
+test('non-POST returns 405 with Allow: POST and Cache-Control headers', async () => {
+  for (const method of ['GET', 'PUT', 'DELETE', 'PATCH']) {
+    const res = await callHandler(mockReq({ method }), trackingDeps().deps)
+    assert.equal(res.statusCode, 405)
+    assert.equal(res.headers['allow'], 'POST')
+    assert.equal(res.headers['cache-control'], 'no-store, no-cache, must-revalidate, private')
+    assert.equal(res.headers['pragma'], 'no-cache')
+  }
+})
+
+test('payload exceeding MAX_WEBHOOK_PAYLOAD_BYTES (1MB) is rejected with 400', async () => {
+  const hugeBuf = Buffer.alloc(1024 * 1024 + 10, 'a')
+  const stream = Readable.from([hugeBuf])
+  stream.method = 'POST'
+  stream.headers = { 'stripe-signature': 'sig' }
+  const res = await callHandler(stream, trackingDeps().deps)
+  assert.equal(res.statusCode, 400)
+  const body = JSON.parse(res.body)
+  assert.match(body.error, /Payload too large/)
+})
+
+test('Stripe-Signature header with uppercase casing or array is accepted', async () => {
+  const payload = JSON.stringify({ id: 'evt_sig_case', object: 'event', type: 'customer.subscription.deleted' })
+  const sig = stripe.webhooks.generateTestHeaderString({
+    payload,
+    secret: WEBHOOK_SECRET,
+  })
+  const { calls: calls1, deps: deps1 } = trackingDeps({ serviceKey: '' })
+  const res1 = await callHandler(mockReq({ headers: { 'Stripe-Signature': sig }, body: payload }), deps1)
+  assert.equal(res1.statusCode, 200)
+  assert.equal(res1.headers['cache-control'], 'no-store, no-cache, must-revalidate, private')
+
+  const { calls: calls2, deps: deps2 } = trackingDeps({ serviceKey: '' })
+  const res2 = await callHandler(mockReq({ headers: { 'stripe-signature': [sig] }, body: payload }), deps2)
+  assert.equal(res2.statusCode, 200)
+})
+

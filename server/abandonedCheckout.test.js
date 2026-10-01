@@ -1053,6 +1053,51 @@ test('the expire endpoint rejects non-cron callers and documents the cron path',
   assert.doesNotMatch(notes, /"schedule": "\*\/15 \* \* \* \*"/)
 })
 
+test('expireUnpaidAirportHolds endpoint hardened headers and token parsing', async () => {
+  const cronEnv = { CRON_SECRET: 'cron-secret' }
+  const wrongMethod = mockRes()
+  await expireUnpaidAirportHolds({
+    method: 'DELETE',
+    headers: { authorization: 'Bearer cron-secret' },
+    url: '/api/expire-unpaid-airport-holds',
+  }, wrongMethod, { env: cronEnv })
+  assert.equal(wrongMethod.statusCode, 405)
+  assert.equal(wrongMethod.headers['allow'], 'GET, POST')
+  assert.equal(wrongMethod.headers['cache-control'], 'no-store, no-cache, must-revalidate, private')
+  assert.equal(wrongMethod.headers['pragma'], 'no-cache')
+
+  for (const token of ['"cron-secret"', "'cron-secret'"]) {
+    const quoted = mockRes()
+    await expireUnpaidAirportHolds({
+      method: 'GET',
+      headers: { authorization: `Bearer ${token}` },
+      url: '/api/expire-unpaid-airport-holds?dryRun=true',
+    }, quoted, {
+      env: cronEnv,
+      sb: {
+        from() {
+          return {
+            select() { return this },
+            in() { return this },
+            is() { return this },
+            gt() { return this },
+            lte() { return this },
+            order() { return this },
+            limit() { return Promise.resolve({ data: [], error: null }) },
+          }
+        },
+      },
+    })
+    assert.equal(quoted.statusCode, 200)
+    const body = JSON.parse(quoted.body)
+    assert.equal(body.ok, true)
+    assert.equal(body.dryRun, true)
+    assert.equal(quoted.headers['cache-control'], 'no-store, no-cache, must-revalidate, private')
+    assert.equal(quoted.headers['pragma'], 'no-cache')
+  }
+})
+
+
 function pause(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }

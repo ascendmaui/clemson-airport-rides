@@ -25,10 +25,21 @@ const supabaseUrl =
   'https://awktabuhijrshmsmagpq.supabase.co'
 const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || ''
 
-function readRawBody(req) {
+const MAX_WEBHOOK_PAYLOAD_BYTES = 1024 * 1024
+
+function readRawBody(req, maxBytes = MAX_WEBHOOK_PAYLOAD_BYTES) {
   return new Promise((resolve, reject) => {
     const chunks = []
-    req.on('data', (c) => chunks.push(c))
+    let totalLength = 0
+    req.on('data', (c) => {
+      totalLength += c.length
+      if (totalLength > maxBytes) {
+        if (typeof req.destroy === 'function') req.destroy(new Error('Payload too large'))
+        reject(new Error('Payload too large'))
+        return
+      }
+      chunks.push(c)
+    })
     req.on('end', () => resolve(Buffer.concat(chunks)))
     req.on('error', reject)
   })
@@ -94,7 +105,10 @@ async function recordCreditPurchase(session) {
 
 export default async function handler(req, res, deps = {}) {
   res.setHeader('Content-Type', 'application/json')
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private')
+  res.setHeader('Pragma', 'no-cache')
   if (req.method !== 'POST') {
+    res.setHeader('Allow', 'POST')
     res.statusCode = 405
     return res.end(JSON.stringify({ error: 'Method not allowed' }))
   }
@@ -116,7 +130,8 @@ export default async function handler(req, res, deps = {}) {
     const rawBody = await readRawBody(req)
     let event
     if (whSecret && !whSecret.includes('placeholder')) {
-      const sig = req.headers['stripe-signature']
+      const rawSig = req.headers ? (req.headers['stripe-signature'] ?? req.headers['Stripe-Signature']) : null
+      const sig = Array.isArray(rawSig) ? rawSig[0] : (rawSig || '')
       event = stripe.webhooks.constructEvent(rawBody, sig, whSecret)
     } else {
       event = JSON.parse(rawBody.toString('utf8'))
@@ -174,7 +189,7 @@ export default async function handler(req, res, deps = {}) {
         res.statusCode = 200
         return res.end(JSON.stringify({ received: true, type: event.type, granted }))
       }
-      const client = deps.serviceClient ? deps.serviceClient() : (serviceKey ? serviceClient() : null)
+      const client = deps.serviceClient ? deps.serviceClient() : (activeServiceKey ? serviceClient() : null)
       const applyFn = deps.applyPaidCheckoutSession || applyPaidCheckoutSession
       const applied = await applyFn(client, session, {
         restoreLiveTripAfterDeposit: deps.restoreLiveTripAfterDeposit || restoreLiveTripAfterDeposit,
