@@ -46,9 +46,10 @@ function QueueCard({
 }: {
   card: DriverCard
   busy: boolean
-  onAccept: () => void
-  onDecline: () => void
+  onAccept: () => void | Promise<void>
+  onDecline: () => void | Promise<void>
   onOpen: () => void
+  key?: string
 }) {
   const active = card.status === 'accepted' || card.status === 'arriving'
   const preferredNote = preferredRequestNote(card)
@@ -61,7 +62,7 @@ function QueueCard({
       {card.pickupAt ? <Text style={styles.copy}>{formatPickupAt(card.pickupAt)}</Text> : null}
       {card.passengers > 1 ? <Text style={styles.copy}>{card.passengers} riders · capacity check is your seat count</Text> : null}
       <View style={styles.tags}>
-        {card.tagLabels.map((label) => (
+        {card.tagLabels.map((label: string) => (
           <Tag key={label} label={label} tone={tagTone(label)} />
         ))}
       </View>
@@ -148,7 +149,7 @@ export default function QueueScreen() {
       const merged = [...desk.offers, ...desk.scheduledOpen, ...desk.upcoming]
       const seen = new Set<string>()
       setWarning(desk.warning || null)
-      setRows(merged.filter((card) => {
+      setRows(merged.filter((card: DriverCard) => {
         if (seen.has(card.id)) return false
         seen.add(card.id)
         return true
@@ -171,7 +172,7 @@ export default function QueueScreen() {
   }, [refresh])
 
   useEffect(() => {
-    refresh().catch((err) => setError(err instanceof Error ? err.message : 'Could not load the queue'))
+    refresh().catch((err: unknown) => setError(err instanceof Error ? err.message : 'Could not load the queue'))
   }, [refresh])
 
   useEffect(() => {
@@ -204,11 +205,11 @@ export default function QueueScreen() {
 
   async function onDecline(card: DriverCard) {
     if (isSyntheticOffer(card)) {
-      setPassed((current) => (current.includes(card.id) ? current : [...current, card.id]))
+      setPassed((current: string[]) => (current.includes(card.id) ? current : [...current, card.id]))
       return
     }
     if (card.status === 'scheduled') {
-      setPassed((current) => (current.includes(card.id) ? current : [...current, card.id]))
+      setPassed((current: string[]) => (current.includes(card.id) ? current : [...current, card.id]))
       pulse('decline')
       return
     }
@@ -226,9 +227,9 @@ export default function QueueScreen() {
     }
   }
 
-  const visible = rows.filter((card) => matchesQueueFilter(card, filter) && !passed.includes(card.id))
-  const scheduled = visible.filter((card) => card.status === 'scheduled')
-  const live = visible.filter((card) => card.status !== 'scheduled')
+  const visible = rows.filter((card: DriverCard) => matchesQueueFilter(card, filter) && !passed.includes(card.id))
+  const scheduled = visible.filter((card: DriverCard) => card.status === 'scheduled')
+  const live = visible.filter((card: DriverCard) => card.status !== 'scheduled')
   const empty = queueEmptyCopy(filter)
 
   return (
@@ -305,7 +306,7 @@ export default function QueueScreen() {
               </Card>
             ) : null}
             {live.length > 0 ? <Text style={styles.section}>Open now</Text> : null}
-            {live.map((card) => (
+            {live.map((card: DriverCard) => (
               <QueueCard key={card.id} card={card} busy={busyId === card.id} onAccept={() => onAccept(card)} onDecline={() => onDecline(card)} onOpen={() => { if (!isSyntheticOffer(card)) router.push({ pathname: '/trip', params: { id: card.id } }) }} />
             ))}
             {filter === 'weekend_party' && scheduled.length === 0 && live.length > 0 ? (
@@ -315,7 +316,7 @@ export default function QueueScreen() {
               </Card>
             ) : null}
             {scheduled.length > 0 ? <Text style={styles.section}>{scheduledQueueTitle(filter)}</Text> : null}
-            {scheduled.map((card) => (
+            {scheduled.map((card: DriverCard) => (
               <QueueCard key={card.id} card={card} busy={busyId === card.id} onAccept={() => onAccept(card)} onDecline={() => onDecline(card)} onOpen={() => { if (!isSyntheticOffer(card)) router.push({ pathname: '/trip', params: { id: card.id } }) }} />
             ))}
           </>

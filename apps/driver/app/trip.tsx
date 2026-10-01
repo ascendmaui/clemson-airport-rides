@@ -61,7 +61,7 @@ export default function TripScreen() {
   }, [id, user?.id])
 
   useEffect(() => {
-    refresh().catch((err) => setError(err instanceof Error ? err.message : 'Could not load this trip'))
+    refresh().catch((err: unknown) => setError(err instanceof Error ? err.message : 'Could not load this trip'))
   }, [refresh])
 
   useEffect(() => {
@@ -205,7 +205,7 @@ export default function TripScreen() {
               {rider ? `${trip.firstName} is sharing a live pin.` : 'Rider pin shows when they share location on this trip. Pickup and drop-off stay on the map.'}
             </Text>
             <View style={styles.tags}>
-              {trip.tagLabels.map((label) => (
+              {trip.tagLabels.map((label: string) => (
                 <Tag key={label} label={label} tone={tagTone(label)} />
               ))}
             </View>
@@ -215,7 +215,7 @@ export default function TripScreen() {
               {(navApp === 'google' ? ['google', 'apple'] as const : ['apple', 'google'] as const).map((provider) => (
                 <Pressable
                   key={provider}
-                  onPress={() => openNavigation(provider, target).catch((err) => setError(err instanceof Error ? err.message : 'Could not open maps'))}
+                  onPress={() => openNavigation(provider, target).catch((err: unknown) => setError(err instanceof Error ? err.message : 'Could not open maps'))}
                   style={styles.nav}
                   accessibilityRole="button"
                   accessibilityLabel={`Open directions in ${provider === 'apple' ? 'Apple Maps' : 'Google Maps'}`}

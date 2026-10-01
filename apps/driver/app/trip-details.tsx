@@ -33,11 +33,11 @@ export default function TripDetailsScreen() {
     const earnings = await loadEarnings(supabase, user.id).catch(() => null)
     const payments = (earnings?.paymentsByTrip?.[id] || []) as TipPayment[]
     const cents = tipCentsFromPayments(payments)
-    setTip(payments.some((payment) => payment.kind === 'tip') ? cents : null)
+    setTip(payments.some((payment: TipPayment) => payment.kind === 'tip') ? cents : null)
   }, [id, user])
 
   useEffect(() => {
-    refresh().catch((err) => setError(err instanceof Error ? err.message : 'Could not load this trip'))
+    refresh().catch((err: unknown) => setError(err instanceof Error ? err.message : 'Could not load this trip'))
   }, [refresh])
 
   const pins: MapPin[] = []
@@ -47,7 +47,7 @@ export default function TripDetailsScreen() {
   if (trip?.dropoffLat != null && trip.dropoffLng != null) {
     pins.push({ id: 'drop', latitude: trip.dropoffLat, longitude: trip.dropoffLng, title: trip.dropoffLabel, pinColor: ORANGE })
   }
-  const route = pins.map((pin) => ({ latitude: pin.latitude, longitude: pin.longitude }))
+  const route = pins.map((pin: MapPin) => ({ latitude: pin.latitude, longitude: pin.longitude }))
   const miles = straightLineMiles(
     trip?.pickupLat != null && trip.pickupLng != null ? { latitude: trip.pickupLat, longitude: trip.pickupLng } : null,
     trip?.dropoffLat != null && trip.dropoffLng != null ? { latitude: trip.dropoffLat, longitude: trip.dropoffLng } : null,
