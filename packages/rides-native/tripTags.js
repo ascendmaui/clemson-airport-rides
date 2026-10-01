@@ -355,6 +355,8 @@ export function statusHeadline(status) {
     case 'canceled':
     case 'cancelled_wait':
       return 'Canceled'
+    case 'canceled_midride':
+      return 'Canceled mid-trip'
     default:
       return status ? String(status) : 'Ride'
   }
@@ -382,6 +384,8 @@ export function driverStatusDetail(status) {
     case 'canceled':
     case 'cancelled_wait':
       return 'This trip is canceled.'
+    case 'canceled_midride':
+      return 'This trip was canceled mid-ride. Fares and fees are settled.'
     default:
       return 'Trip status updates as you move through the ride.'
   }
