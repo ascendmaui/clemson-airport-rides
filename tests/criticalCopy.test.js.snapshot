@@ -1,0 +1,21 @@
+exports[`Critical student and game-day copy snapshot 1`] = `
+{
+  "STUDENT_DISCOUNT_LABEL": "Clemson student · 10% off Standard",
+  "STUDENT_CLAIM_COPY": "10% off Standard applies when the signed-in email ends with @clemson.edu or @g.clemson.edu and that address is already confirmed. Confirm and Schedule use that price. There is no separate student ID check.",
+  "STUDENT_EMAIL_HINT": "Needs a confirmed @clemson.edu or @g.clemson.edu email.",
+  "STUDENT_EMAIL_REQUIRED_COPY": "Student pricing needs a Clemson student email (@clemson.edu or @g.clemson.edu) on this account. Sign in with that address. Other emails stay at full price.",
+  "STUDENT_CONFIRM_EMAIL_COPY": "Confirm the Clemson email on this account. Student pricing starts after that address is confirmed. The sign-in email we already send is the check — there is no separate student ID step.",
+  "GAME_DAY_LIVE_COPY": "Discover and the home map show the pickup zone and the rider fare multiplier from the server.",
+  "GAME_DAY_OFF_COPY": "No game day is live. Discover and the home map show the pickup zone and the rider fare multiplier when the server turns one on.",
+  "MARKETING_STUDENT": {
+    "id": "student",
+    "title": "Student discount",
+    "body": "10% off Standard when the signed-in email is confirmed and ends with @clemson.edu or @g.clemson.edu. Comfort, XL, Pet, and Tesla are not included."
+  },
+  "MARKETING_GAMEDAY": {
+    "id": "gameday",
+    "title": "Game day",
+    "body": "When a game day is live, the rider home shows the pickup zone and the fare multiplier from the server."
+  }
+}
+`;
