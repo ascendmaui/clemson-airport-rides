@@ -1050,15 +1050,14 @@ test('acceptTrip throws when on-demand ride is no longer available', async () =>
   )
 })
 
-test('acceptTrip checks trip.status instead of fresh.status for scheduled routing', async () => {
-  // BUG?: acceptTrip checks trip.status instead of fresh.status for acceptNeedsDriverOnline and scheduled branch routing
+test('acceptTrip uses the fresh row, not a stale scheduled card, for routing and online gate', async () => {
   const supabase = createFakeSupabase({
     trips: [{ id: 'trip-conflict', status: 'searching' }], // DB has searching
     driver_applications: [{ profile_id: 'driver-1', onboarding_status: 'approved' }],
     driver_status: [{ driver_id: 'driver-1', online: false }],
   })
 
-  // Passing trip.status = 'scheduled' bypasses online check and routes to RPC
+  // A stale scheduled card must not bypass the online check or route to RPC.
   let rpcCalled = false
   supabase.rpc = async (fn, args) => {
     if (fn === 'accept_scheduled_trip') {
@@ -1068,9 +1067,61 @@ test('acceptTrip checks trip.status instead of fresh.status for scheduled routin
     return { data: null, error: null }
   }
 
-  const res = await acceptTrip(supabase, { id: 'trip-conflict', status: 'scheduled' }, 'driver-1')
-  assert.equal(rpcCalled, true)
-  assert.equal(res.status, 'accepted')
+  await assert.rejects(
+    () => acceptTrip(supabase, { id: 'trip-conflict', status: 'scheduled' }, 'driver-1'),
+    /Go online before accepting a ride\./,
+  )
+  assert.equal(rpcCalled, false)
+})
+
+test('matching regression: a rider-canceled or expired offer cannot be accepted from a stale card', async () => {
+  for (const terminal of ['canceled', 'expired']) {
+    const supabase = createFakeSupabase({
+      trips: [{ id: `trip-${terminal}`, status: terminal }],
+      driver_applications: [{ profile_id: 'driver-1', onboarding_status: 'approved' }],
+      driver_status: [{ driver_id: 'driver-1', online: true }],
+    })
+
+    await assert.rejects(
+      () => acceptTrip(supabase, { id: `trip-${terminal}`, status: 'searching' }, 'driver-1'),
+      /That ride is no longer available/,
+    )
+    assert.equal(supabase._tables.trips[0].status, terminal)
+    assert.equal(supabase._tables.trip_events?.length || 0, 0)
+  }
+})
+
+test('matching regression: an offline driver cannot accept a visible offer', async () => {
+  const supabase = createFakeSupabase({
+    trips: [{ id: 'trip-offline-offer', status: 'offered' }],
+    driver_applications: [{ profile_id: 'driver-1', onboarding_status: 'approved' }],
+    // The driver may have received the card while online, then gone offline.
+    driver_status: [{ driver_id: 'driver-1', online: false }],
+  })
+
+  await assert.rejects(
+    () => acceptTrip(supabase, { id: 'trip-offline-offer', status: 'offered' }, 'driver-1'),
+    /Go online before accepting a ride\./,
+  )
+  assert.equal(supabase._tables.trips[0].status, 'offered')
+})
+
+test('matching regression: concurrent accepts produce one accepted row and one event', async () => {
+  const supabase = createFakeSupabase({
+    trips: [{ id: 'trip-race', status: 'searching' }],
+    driver_applications: [{ profile_id: 'driver-1', onboarding_status: 'approved' }],
+    driver_status: [{ driver_id: 'driver-1', online: true }],
+  })
+
+  const attempts = await Promise.allSettled([
+    acceptTrip(supabase, { id: 'trip-race', status: 'searching' }, 'driver-1'),
+    acceptTrip(supabase, { id: 'trip-race', status: 'searching' }, 'driver-1'),
+  ])
+
+  assert.equal(attempts.filter((attempt) => attempt.status === 'fulfilled').length, 1)
+  assert.equal(attempts.filter((attempt) => attempt.status === 'rejected').length, 1)
+  assert.equal(supabase._tables.trips[0].status, 'accepted')
+  assert.equal(supabase._tables.trip_events.filter((event) => event.kind === 'accepted').length, 1)
 })
 
 // ---------------------------------------------------------------------------
