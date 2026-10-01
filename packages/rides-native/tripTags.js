@@ -3,6 +3,8 @@
  * No network, no Stripe, no self-driving calls.
  */
 
+import { getCancellationCopy } from './cancellationCopy.js'
+
 export const TESLA_FLEET_NOTICE =
   'Coming soon. Tesla Model 3 is a profile option only. A person still drives the car. There is no self-driving dispatch.'
 
@@ -360,7 +362,7 @@ export function statusHeadline(status) {
   }
 }
 
-export function driverStatusDetail(status) {
+export function driverStatusDetail(status, tripOrReason) {
   switch (status) {
     case 'requested':
       return 'Accept to head to pickup. Declining cancels this request. It does not return to the open pool.'
@@ -381,6 +383,10 @@ export function driverStatusDetail(status) {
       return 'This trip is complete.'
     case 'canceled':
     case 'cancelled_wait':
+      if (tripOrReason) {
+        const copy = getCancellationCopy(tripOrReason, { role: 'driver' })
+        if (copy && copy.code !== 'other') return copy.explanation
+      }
       return 'This trip is canceled.'
     default:
       return 'Trip status updates as you move through the ride.'
