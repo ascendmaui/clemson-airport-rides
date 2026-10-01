@@ -49,10 +49,10 @@ export default function EarningsActivity() {
   }, [user])
 
   useFocusEffect(useCallback(() => {
-    refresh().catch((err) => setError(err instanceof Error ? err.message : 'Could not load activity'))
+    refresh().catch((err: unknown) => setError(err instanceof Error ? err.message : 'Could not load activity'))
   }, [refresh]))
 
-  const visible = useMemo(() => trips.filter((trip) => {
+  const visible = useMemo(() => trips.filter((trip: Trip) => {
     if (filter === 'all') return true
     return trip.status === filter
   }), [filter, trips])
@@ -107,10 +107,10 @@ export default function EarningsActivity() {
           <Text style={{ color: colors.inkSecondary }}>Completed and canceled trips from your driver account show up here.</Text>
         </Card>
       ) : null}
-      {groups.map(([day, rows]) => (
+      {groups.map(([day, rows]: [string, Trip[]]) => (
         <View key={day} style={styles.group}>
           <Text style={{ color: colors.inkSecondary, fontWeight: '800' }}>{day}</Text>
-          {rows.map((trip) => {
+          {rows.map((trip: Trip) => {
             const pay = carpoolPayFromTrip(trip)
             return (
               <Pressable
