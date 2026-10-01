@@ -23,7 +23,7 @@ export default function TaxScreen() {
   }, [user])
 
   useFocusEffect(useCallback(() => {
-    refresh().catch((err) => setError(err instanceof Error ? err.message : 'Could not load tax info'))
+    refresh().catch((err: unknown) => setError(err instanceof Error ? err.message : 'Could not load tax info'))
   }, [refresh]))
 
   return (

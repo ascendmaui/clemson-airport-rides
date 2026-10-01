@@ -50,7 +50,7 @@ export default function EarningsDetails() {
     }
     let alive = true
     refresh()
-      .catch((err) => {
+      .catch((err: unknown) => {
         if (alive) setError(err instanceof Error ? err.message : 'Could not load earnings')
       })
       .finally(() => {
@@ -105,7 +105,7 @@ export default function EarningsDetails() {
           <>
             <View style={styles.nav}>
               <Pressable
-                onPress={() => setAnchor((current) => shiftAnchor(period, current, -1))}
+                onPress={() => setAnchor((current: Date) => shiftAnchor(period, current, -1))}
                 style={[styles.navBtn, shadow, { backgroundColor: colors.card, borderColor: colors.border }]}
                 accessibilityRole="button"
                 accessibilityLabel={report.previousLabel}
@@ -115,7 +115,7 @@ export default function EarningsDetails() {
               </Pressable>
               <Text style={[styles.period, { color: colors.ink }]}>{report.label}</Text>
               <Pressable
-                onPress={() => setAnchor((current) => shiftAnchor(period, current, 1))}
+                onPress={() => setAnchor((current: Date) => shiftAnchor(period, current, 1))}
                 style={[styles.navBtn, shadow, { backgroundColor: colors.card, borderColor: colors.border }]}
                 accessibilityRole="button"
                 accessibilityLabel={report.nextLabel}
