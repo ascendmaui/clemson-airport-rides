@@ -248,18 +248,20 @@ export function CarpoolHub() {
           </div>
 
           {result?.pool?.waiting && (
-            <div style={card}>
-              <div style={{ fontWeight: 800 }}>You are in the queue</div>
-              <p style={{ fontSize: 13, color: 'var(--ink-secondary)', lineHeight: 1.45 }}>
+            <div style={{ ...card, textAlign: 'center' }} role="status" aria-live="polite">
+              <div style={{ fontSize: 24, marginBottom: 6 }} aria-hidden="true">⏳</div>
+              <div style={{ fontWeight: 800, fontSize: 16, color: 'var(--purple)' }}>You are in the queue</div>
+              <p style={{ fontSize: 13, color: 'var(--ink-secondary)', lineHeight: 1.45, marginTop: 4 }}>
                 No one else is heading to {result.pool.neighborhoodLabel || 'that neighborhood'} inside the time window yet.
                 Share the group link to fill the car yourself — matching still caps strangers at 4.
               </p>
             </div>
           )}
           {result?.code === 'queue_unavailable' && (
-            <div style={card}>
-              <div style={{ fontWeight: 800 }}>Prices are ready. The live queue is not.</div>
-              <p style={{ fontSize: 13, color: 'var(--ink-secondary)', lineHeight: 1.45 }}>{result.message}</p>
+            <div style={{ ...card, textAlign: 'center' }} role="status" aria-live="polite">
+              <div style={{ fontSize: 24, marginBottom: 6 }} aria-hidden="true">ℹ️</div>
+              <div style={{ fontWeight: 800, fontSize: 16, color: 'var(--purple)' }}>Prices are ready. The live queue is not.</div>
+              <p style={{ fontSize: 13, color: 'var(--ink-secondary)', lineHeight: 1.45, marginTop: 4 }}>{result.message}</p>
             </div>
           )}
 

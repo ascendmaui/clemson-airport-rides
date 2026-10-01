@@ -50,11 +50,40 @@ function HistoryInner() {
         {loading && <p style={{ marginTop: 16, color: 'var(--ink-tertiary)' }}>Loading rides…</p>}
         {error && <p style={{ marginTop: 16, color: 'var(--danger)', fontSize: 13 }}>{error}</p>}
         {!loading && !error && trips.length === 0 && (
-          <div className="glass-panel" style={{ marginTop: 16, padding: 16, borderRadius: 18 }}>
-            <div style={{ fontWeight: 700 }}>No completed rides yet</div>
-            <p style={{ fontSize: 13, color: 'var(--ink-secondary)', marginTop: 6 }}>
-              After a trip finishes, you can report a lost item from here.
+          <div
+            className="glass-panel"
+            role="status"
+            aria-live="polite"
+            style={{
+              marginTop: 16,
+              padding: 20,
+              borderRadius: 18,
+              textAlign: 'center',
+            }}
+          >
+            <div style={{ fontSize: 28, marginBottom: 8 }} aria-hidden="true">🚗</div>
+            <div style={{ fontWeight: 700, fontSize: 16, color: 'var(--ink)' }}>No completed rides yet</div>
+            <p style={{ fontSize: 13, color: 'var(--ink-secondary)', marginTop: 6, lineHeight: 1.45 }}>
+              After a trip finishes, your route summary, receipt, and lost & found reporting will appear here.
             </p>
+            <button
+              type="button"
+              className="pressable primary-cta"
+              onClick={() => navigate('home')}
+              style={{
+                marginTop: 14,
+                padding: '10px 18px',
+                borderRadius: 14,
+                background: 'linear-gradient(135deg, #F56600 0%, #ff7a1a 100%)',
+                color: '#fff',
+                fontWeight: 700,
+                fontSize: 14,
+                border: 'none',
+                boxShadow: 'var(--shadow-pill)',
+              }}
+            >
+              Book your first ride
+            </button>
           </div>
         )}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 16 }}>
