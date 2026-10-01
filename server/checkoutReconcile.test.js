@@ -9,6 +9,7 @@ import {
 } from './checkoutReconcile.js'
 import webhookHandler from '../api/stripe-webhook.js'
 import reconcileCheckoutHandler from './endpoints/reconcileCheckout.js'
+import abandonCheckoutHandler from './endpoints/abandonCheckout.js'
 import stripePaymentHandler from '../api/stripe-payment-methods.js'
 
 function createMockDb() {
@@ -17,10 +18,25 @@ function createMockDb() {
   const events = []
   const rpcCalls = []
 
+  function readCol(row, col) {
+    if (!col || typeof col !== 'string') return undefined
+    if (!col.includes('->')) return row?.[col]
+    const parts = col.split('->')
+    let cur = row
+    for (const p of parts) {
+      if (cur == null || typeof cur !== 'object') return null
+      cur = cur[p]
+    }
+    return cur
+  }
+
   function match(row, filters) {
     return filters.every((f) => {
-      if (f.type === 'eq') return row[f.col] === f.val
-      if (f.type === 'is') return f.val == null ? row[f.col] == null : row[f.col] === f.val
+      if (f.type === 'or') return true
+      const val = readCol(row, f.col)
+      if (f.type === 'eq') return val === f.val
+      if (f.type === 'is') return f.val == null ? val == null : val === f.val
+      if (f.type === 'in') return Array.isArray(f.vals) && f.vals.includes(val)
       return false
     })
   }
@@ -31,6 +47,8 @@ function createMockDb() {
       select() { return api },
       eq(col, val) { state.filters.push({ type: 'eq', col, val }); return api },
       is(col, val) { state.filters.push({ type: 'is', col, val }); return api },
+      in(col, vals) { state.filters.push({ type: 'in', col, vals }); return api },
+      or(clause) { state.filters.push({ type: 'or', clause }); return api },
       update(patch) { state.op = 'update'; state.patch = patch; return api },
       insert(row) { state.op = 'insert'; state.patch = row; return api },
       maybeSingle() {
@@ -86,6 +104,15 @@ function createMockDb() {
     rpcCalls.push({ fn, args })
     if (fn === 'grant_rider_social_for_trip') {
       return Promise.resolve({ data: { ok: true, granted: false }, error: null })
+    }
+    if (fn === 'merge_trip_metadata') {
+      const trip = trips.get(args?.p_trip_id)
+      if (trip) {
+        trip.metadata = { ...(trip.metadata || {}), ...(args?.p_patch || {}) }
+        if (args?.p_new_status) trip.status = args.p_new_status
+        return Promise.resolve({ data: { id: trip.id, status: trip.status, metadata: trip.metadata }, error: null })
+      }
+      return Promise.resolve({ data: null, error: null })
     }
     return Promise.resolve({ data: null, error: null })
   }
@@ -210,9 +237,16 @@ test('paid first time: marks deposit paid, creates payment row, and updates trip
   assert.equal(trip.metadata.checkout_deposit.session_id, 'cs_paid_100')
 
   // Verify social referral was called
-  assert.equal(db.rpcCalls.length, 1)
-  assert.equal(db.rpcCalls[0].fn, 'grant_rider_social_for_trip')
-  assert.deepEqual(db.rpcCalls[0].args, { p_trip_id: 'trip_100' })
+  const socialCall = db.rpcCalls.find((c) => c.fn === 'grant_rider_social_for_trip')
+  assert.ok(socialCall, 'grant_rider_social_for_trip was called')
+  assert.deepEqual(socialCall.args, { p_trip_id: 'trip_100' })
+
+  // Verify atomic metadata merge RPC was used
+  const mergeCall = db.rpcCalls.find((c) => c.fn === 'merge_trip_metadata')
+  assert.ok(mergeCall, 'merge_trip_metadata was called')
+  assert.equal(mergeCall.args.p_trip_id, 'trip_100')
+  assert.equal(mergeCall.args.p_patch.fare_paid_cents, 2500)
+  assert.equal(mergeCall.args.p_patch.checkout_deposit.session_id, 'cs_paid_100')
 })
 
 test('paid second time: idempotent, returns alreadyRecorded true with no duplicate payment rows', async () => {
@@ -795,4 +829,239 @@ test('create-checkout-session and airport-checkout success_url carry session_id=
     airportCheckoutSrc,
     /success_url:\s*`\${origin}\/\${checkoutSuccessHash\([\s\S]*?\)}&session_id=\{CHECKOUT_SESSION_ID\}`/
   )
+})
+
+test('recordDeposit falls back to direct update when merge_trip_metadata RPC fails', async () => {
+  const db = createMockDb()
+  db.seedTrip({
+    id: 'trip_fallback',
+    rider_id: 'rider_fb',
+    status: 'searching',
+    metadata: { purpose: 'airport', deposit_cents: 2500 },
+  })
+
+  // Override rpc to return an error for merge_trip_metadata
+  const origRpc = db.rpc
+  db.rpc = (fn, args) => {
+    if (fn === 'merge_trip_metadata') {
+      return Promise.resolve({ data: null, error: { message: 'function does not exist' } })
+    }
+    return origRpc(fn, args)
+  }
+
+  const session = {
+    id: 'cs_paid_fb',
+    status: 'complete',
+    payment_status: 'paid',
+    amount_total: 2500,
+    payment_intent: 'pi_paid_fb',
+    metadata: {
+      tripId: 'trip_fallback',
+      riderId: 'rider_fb',
+      airport: 'GSP',
+      kind: 'airport_deposit',
+    },
+  }
+  const stripe = createMockStripe(new Map([[session.id, session]]))
+
+  const result = await reconcileCheckoutSession({
+    stripe,
+    sb: db,
+    sessionId: 'cs_paid_fb',
+    userId: 'rider_fb',
+  })
+
+  assert.equal(result.ok, true)
+  assert.equal(result.paid, true)
+  const trip = db.trips.get('trip_fallback')
+  assert.equal(trip.metadata.fare_paid_cents, 2500)
+  assert.equal(trip.metadata.checkout_deposit.session_id, 'cs_paid_fb')
+})
+
+test('reconcileCheckout endpoint: sets security headers and rejects non-POST', async () => {
+  const req = { method: 'GET', url: '/api/stripe-payment-methods?action=reconcile-checkout' }
+  const res = mockRes()
+  await reconcileCheckoutHandler(req, res)
+  assert.equal(res.statusCode, 405)
+  assert.equal(res.headers['allow'], 'POST')
+  assert.match(res.headers['cache-control'], /no-store/)
+  assert.equal(res.headers['pragma'], 'no-cache')
+})
+
+test('abandonCheckout endpoint: 405 on non-POST method and sets security headers', async () => {
+  const req = { method: 'GET', url: '/api/stripe-payment-methods?action=abandon-checkout' }
+  const res = mockRes()
+  await abandonCheckoutHandler(req, res)
+  assert.equal(res.statusCode, 405)
+  assert.equal(res.headers['allow'], 'POST')
+  assert.match(res.headers['cache-control'], /no-store/)
+  assert.equal(res.headers['pragma'], 'no-cache')
+})
+
+test('abandonCheckout endpoint: 503 when service role key not configured', async () => {
+  const req = { method: 'POST', url: '/api/stripe-payment-methods?action=abandon-checkout', body: { tripId: 'trip_1' } }
+  const res = mockRes()
+  await abandonCheckoutHandler(req, res, { sb: null })
+  assert.equal(res.statusCode, 503)
+})
+
+test('abandonCheckout endpoint: 401 when not signed in', async () => {
+  const db = createMockDb()
+  const req = { method: 'POST', url: '/api/stripe-payment-methods?action=abandon-checkout', body: { tripId: 'trip_1' } }
+  const res = mockRes()
+  await abandonCheckoutHandler(req, res, { sb: db, user: null })
+  assert.equal(res.statusCode, 401)
+})
+
+test('abandonCheckout endpoint: 400 when tripId missing', async () => {
+  const db = createMockDb()
+  const req = { method: 'POST', url: '/api/stripe-payment-methods?action=abandon-checkout', body: {} }
+  const res = mockRes()
+  await abandonCheckoutHandler(req, res, { sb: db, user: { id: 'rider_1' } })
+  assert.equal(res.statusCode, 400)
+})
+
+test('abandonCheckout endpoint: 404 when trip not found or belongs to another rider', async () => {
+  const db = createMockDb()
+  db.seedTrip({ id: 'trip_other', rider_id: 'rider_someone_else', status: 'searching' })
+  const req = { method: 'POST', url: '/api/stripe-payment-methods?action=abandon-checkout', body: { tripId: 'trip_other' } }
+  const res = mockRes()
+  await abandonCheckoutHandler(req, res, { sb: db, user: { id: 'rider_1' } })
+  assert.equal(res.statusCode, 404)
+})
+
+test('abandonCheckout endpoint: 409 when session id is missing', async () => {
+  const db = createMockDb()
+  db.seedTrip({ id: 'trip_nosess', rider_id: 'rider_1', status: 'searching', metadata: {} })
+  const req = { method: 'POST', url: '/api/stripe-payment-methods?action=abandon-checkout', body: { tripId: 'trip_nosess' } }
+  const res = mockRes()
+  await abandonCheckoutHandler(req, res, { sb: db, user: { id: 'rider_1' } })
+  assert.equal(res.statusCode, 409)
+})
+
+test('abandonCheckout endpoint: 503 when payments unavailable', async () => {
+  const db = createMockDb()
+  db.seedTrip({ id: 'trip_nostripe', rider_id: 'rider_1', status: 'searching', metadata: { stripe_checkout_session_id: 'cs_1' } })
+  const req = { method: 'POST', url: '/api/stripe-payment-methods?action=abandon-checkout', body: { tripId: 'trip_nostripe' } }
+  const res = mockRes()
+  await abandonCheckoutHandler(req, res, { sb: db, user: { id: 'rider_1' }, stripeOk: () => false })
+  assert.equal(res.statusCode, 503)
+})
+
+test('abandonCheckout endpoint: 403 when session does not match tripId', async () => {
+  const db = createMockDb()
+  db.seedTrip({ id: 'trip_mismatch', rider_id: 'rider_1', status: 'searching', metadata: { stripe_checkout_session_id: 'cs_mismatch' } })
+  const stripe = {
+    checkout: {
+      sessions: {
+        retrieve: async () => ({ id: 'cs_mismatch', metadata: { tripId: 'different_trip', riderId: 'rider_1' } }),
+      },
+    },
+  }
+  const req = { method: 'POST', url: '/api/stripe-payment-methods?action=abandon-checkout', body: { tripId: 'trip_mismatch' } }
+  const res = mockRes()
+  await abandonCheckoutHandler(req, res, { sb: db, user: { id: 'rider_1' }, stripe })
+  assert.equal(res.statusCode, 403)
+})
+
+test('abandonCheckout endpoint: 403 when session riderId does not match caller', async () => {
+  const db = createMockDb()
+  db.seedTrip({ id: 'trip_rider_diff', rider_id: 'rider_1', status: 'searching', metadata: { stripe_checkout_session_id: 'cs_diff' } })
+  const stripe = {
+    checkout: {
+      sessions: {
+        retrieve: async () => ({ id: 'cs_diff', metadata: { tripId: 'trip_rider_diff', riderId: 'someone_else' } }),
+      },
+    },
+  }
+  const req = { method: 'POST', url: '/api/stripe-payment-methods?action=abandon-checkout', body: { tripId: 'trip_rider_diff' } }
+  const res = mockRes()
+  await abandonCheckoutHandler(req, res, { sb: db, user: { id: 'rider_1' }, stripe })
+  assert.equal(res.statusCode, 403)
+})
+
+test('abandonCheckout endpoint: 200 releases unpaid checkout trip and expires open session', async () => {
+  const db = createMockDb()
+  db.seedTrip({
+    id: 'trip_abandon_ok',
+    rider_id: 'rider_1',
+    status: 'searching',
+    metadata: { stripe_checkout_session_id: 'cs_abandon_ok', purpose: 'airport', deposit_cents: 2500 },
+  })
+  let expiredSessionId = null
+  const session = {
+    id: 'cs_abandon_ok',
+    status: 'open',
+    payment_status: 'unpaid',
+    metadata: { tripId: 'trip_abandon_ok', riderId: 'rider_1', kind: 'airport_deposit' },
+  }
+  const stripe = {
+    checkout: {
+      sessions: {
+        retrieve: async () => session,
+        expire: async (id) => {
+          expiredSessionId = id
+          return { ...session, status: 'expired' }
+        },
+      },
+    },
+  }
+  const req = { method: 'POST', url: '/api/stripe-payment-methods?action=abandon-checkout', body: { tripId: 'trip_abandon_ok' } }
+  const res = mockRes()
+  await abandonCheckoutHandler(req, res, {
+    sb: db,
+    user: { id: 'rider_1' },
+    stripe,
+    releaseUnpaidCheckoutTrip: async (sb, sess, opts) => {
+      if (opts.expireSession) await opts.expireSession(sess.id)
+      const trip = db.trips.get('trip_abandon_ok')
+      trip.status = 'canceled'
+      trip.metadata.checkout_abandoned = { at: new Date().toISOString(), reason: opts.reason }
+      return { released: true, status: 'canceled', tripId: 'trip_abandon_ok' }
+    },
+  })
+  assert.equal(res.statusCode, 200)
+  const body = JSON.parse(res.body)
+  assert.equal(body.ok, true)
+  assert.equal(body.released, true)
+  assert.equal(body.tripId, 'trip_abandon_ok')
+  assert.equal(expiredSessionId, 'cs_abandon_ok')
+})
+
+test('abandonCheckout routed through api/stripe-payment-methods?action=abandon-checkout', async () => {
+  const db = createMockDb()
+  db.seedTrip({
+    id: 'trip_abandon_route',
+    rider_id: 'rider_1',
+    status: 'searching',
+    metadata: { stripe_checkout_session_id: 'cs_abandon_route', purpose: 'airport' },
+  })
+  const stripe = {
+    checkout: {
+      sessions: {
+        retrieve: async () => ({
+          id: 'cs_abandon_route',
+          status: 'open',
+          payment_status: 'unpaid',
+          metadata: { tripId: 'trip_abandon_route', riderId: 'rider_1' },
+        }),
+        expire: async () => ({ status: 'expired' }),
+      },
+    },
+  }
+  const req = {
+    method: 'POST',
+    url: '/api/stripe-payment-methods?action=abandon-checkout',
+    body: { tripId: 'trip_abandon_route' },
+    headers: {},
+  }
+  const res = mockRes()
+  await stripePaymentHandler(req, res, {
+    stripe,
+    sb: db,
+    user: { id: 'rider_1' },
+  })
+  assert.equal(res.statusCode, 200)
+  const body = JSON.parse(res.body)
+  assert.equal(body.ok, true)
 })

@@ -1097,6 +1097,43 @@ test('expireUnpaidAirportHolds endpoint hardened headers and token parsing', asy
   }
 })
 
+test('expireUnpaidAirportHolds endpoint forwards limit query parameter capped at 40', async () => {
+  const cronEnv = { CRON_SECRET: 'cron-secret' }
+  let receivedOpts = null
+  const res = mockRes()
+  await expireUnpaidAirportHolds({
+    method: 'GET',
+    headers: { authorization: 'Bearer cron-secret' },
+    url: '/api/expire-unpaid-airport-holds?limit=15',
+  }, res, {
+    env: cronEnv,
+    sb: {},
+    release: async (sb, opts) => {
+      receivedOpts = opts
+      return { ok: true, scanned: 0, expired: 0, released: 0, skipped: 0, errors: 0, wouldExpire: 0, results: [] }
+    },
+  })
+  assert.equal(res.statusCode, 200)
+  assert.equal(receivedOpts?.limit, 15)
+
+  // Cap at 40
+  const resCapped = mockRes()
+  await expireUnpaidAirportHolds({
+    method: 'POST',
+    headers: { authorization: 'Bearer cron-secret' },
+    url: '/api/expire-unpaid-airport-holds?limit=999',
+  }, resCapped, {
+    env: cronEnv,
+    sb: {},
+    release: async (sb, opts) => {
+      receivedOpts = opts
+      return { ok: true, scanned: 0, expired: 0, released: 0, skipped: 0, errors: 0, wouldExpire: 0, results: [] }
+    },
+  })
+  assert.equal(resCapped.statusCode, 200)
+  assert.equal(receivedOpts?.limit, 40)
+})
+
 
 function pause(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms))

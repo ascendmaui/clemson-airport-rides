@@ -2,6 +2,31 @@
 
 Persistent knowledge base for recurring failures. When a matching issue appears, apply the saved fix first.
 
+## 2026-10-01 — Atomic metadata reconciliation & abandoned checkout webhook hardening
+
+- **Track / machine:** Clemson RIDES · MacBook Max · `agy/reconcile-checkout-atomic-hardening`
+- **What was wrong:**
+  1. `server/checkoutReconcile.js` (`recordDeposit`): was performing whole-object `trips.update({ metadata: nextMeta })` which could clobber concurrent metadata writes (such as hold expiry timestamps or webhook status updates). Did not leverage the PostgreSQL RPC `public.merge_trip_metadata` to merge metadata atomically.
+  2. `server/endpoints/reconcileCheckout.js` and `server/endpoints/abandonCheckout.js`: lacked explicit HTTP security headers (`Cache-Control: no-store, no-cache, must-revalidate, private`, `Pragma: no-cache`), lacked `Allow: POST` header on 405 Method Not Allowed responses, and lacked dependency injection support for unit testing.
+  3. `server/endpoints/expireUnpaidAirportHolds.js`: did not support forwarding the `limit` query parameter (capped at 40) to `releaseExpiredUnpaidAirportHolds`, and lacked defensive optional chaining on `res.setHeader`.
+  4. Missing test coverage for `abandonCheckout.js` endpoint routing, parameter validation, security headers, and `recordDeposit` RPC fallback behavior.
+- **What changed:**
+  - In `server/checkoutReconcile.js`: switched `recordDeposit` to construct an atomic `patch` (`fare_paid_cents`, `checkout_deposit`, `credits_applied`, `pending_credit_debits`) and attempt `supabase.rpc('merge_trip_metadata', { p_trip_id, p_patch })`. Falls back to `trips.update` if the RPC is unavailable or returns an error.
+  - In `server/endpoints/reconcileCheckout.js`: added strict `Cache-Control`, `Pragma`, and `Allow: POST` on method rejections.
+  - In `server/endpoints/abandonCheckout.js`: added strict `Cache-Control`, `Pragma`, and `Allow: POST` on method rejections. Supported dependency injection (`deps.sb`, `deps.user`, `deps.stripe`, `deps.stripeOk`, `deps.releaseUnpaidCheckoutTrip`).
+  - In `server/endpoints/expireUnpaidAirportHolds.js`: added `limitRequested(req)` helper to parse and cap `limit` query parameter (1..40), forwarding to `releaseExpiredUnpaidAirportHolds`.
+  - In `server/checkoutReconcile.test.js`: updated `createMockDb` to support `merge_trip_metadata` RPC with status updates, nested column matching, and `.or()` filters. Added unit tests for RPC fallback to `trips.update`, `reconcileCheckout` security headers, and full test matrix for `abandonCheckout` (method rejection, 503 missing service role, 401 unauthenticated, 400 missing tripId, 404 trip not found, 409 missing session, 503 stripe unavailable, 403 trip/rider mismatch, 200 happy path, and `stripe-payment-methods?action=abandon-checkout` action routing).
+  - In `server/abandonedCheckout.test.js`: added test verifying `expireUnpaidAirportHolds` parses and forwards `limit` parameter capped at 40.
+- **Files touched:**
+  - `server/checkoutReconcile.js`
+  - `server/checkoutReconcile.test.js`
+  - `server/endpoints/reconcileCheckout.js`
+  - `server/endpoints/abandonCheckout.js`
+  - `server/endpoints/expireUnpaidAirportHolds.js`
+  - `server/abandonedCheckout.test.js`
+  - `docs/FIXES.md`
+- **Verified:** `npm test` passing 1937/1937 tests across 58 test suites with 0 failures.
+
 ## 2026-10-01 — Expire unpaid airport holds & Stripe webhook endpoint hardening
 
 - **Track / machine:** Clemson RIDES · MacBook Max · `feat/max-agy-burn-ttl-webhooks`

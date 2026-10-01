@@ -93,17 +93,34 @@ function dryRunRequested(req) {
   return flagOn(params.get('dry_run') ?? params.get('dryRun'))
 }
 
+function limitRequested(req) {
+  const query = req?.query
+  if (query && typeof query === 'object') {
+    const raw = query.limit
+    const val = Number(Array.isArray(raw) ? raw[0] : raw)
+    if (Number.isFinite(val) && val > 0) return Math.min(40, Math.floor(val))
+  }
+  const url = String(req?.url || '')
+  const qIndex = url.indexOf('?')
+  if (qIndex === -1) return undefined
+  const params = new URLSearchParams(url.slice(qIndex + 1))
+  const raw = params.get('limit')
+  const val = Number(raw)
+  if (Number.isFinite(val) && val > 0) return Math.min(40, Math.floor(val))
+  return undefined
+}
+
 function sendJson(res, status, body) {
   res.statusCode = status
-  res.setHeader('Content-Type', 'application/json')
+  res.setHeader?.('Content-Type', 'application/json')
   res.end(JSON.stringify(body))
 }
 
 export default async function handler(req, res, overrides = {}) {
-  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private')
-  res.setHeader('Pragma', 'no-cache')
+  res.setHeader?.('Cache-Control', 'no-store, no-cache, must-revalidate, private')
+  res.setHeader?.('Pragma', 'no-cache')
   if (req.method !== 'GET' && req.method !== 'POST') {
-    res.setHeader('Allow', 'GET, POST')
+    res.setHeader?.('Allow', 'GET, POST')
     return sendJson(res, 405, { error: 'Method not allowed' })
   }
   const env = overrides.env || process.env
@@ -117,6 +134,9 @@ export default async function handler(req, res, overrides = {}) {
   }
 
   const dryRun = dryRunRequested(req)
+  const limit = Object.prototype.hasOwnProperty.call(overrides, 'limit')
+    ? overrides.limit
+    : limitRequested(req)
   const stripe = Object.prototype.hasOwnProperty.call(overrides, 'stripe')
     ? overrides.stripe
     : (stripeOk() ? stripeClient() : null)
@@ -124,6 +144,7 @@ export default async function handler(req, res, overrides = {}) {
   try {
     const result = await release(sb, {
       dryRun,
+      ...(limit !== undefined ? { limit } : {}),
       expireSession: !dryRun && stripe ? (id) => stripe.checkout.sessions.expire(id) : undefined,
       retrieveSession: stripe ? (id) => stripe.checkout.sessions.retrieve(id) : undefined,
     })

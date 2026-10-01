@@ -96,17 +96,18 @@ export async function recordDeposit(supabase, session, deps = {}) {
   const { data: trip } = await supabase.from('trips').select('id, metadata').eq('id', tripId).maybeSingle()
   const meta = trip?.metadata && typeof trip.metadata === 'object' ? trip.metadata : {}
   const debits = Array.isArray(meta.pending_credit_debits) ? meta.pending_credit_debits : []
-  const nextMeta = { ...meta }
   let tripNeedsUpdate = false
 
+  const patch = {}
+
   if (!alreadyRecorded && amount > 0) {
-    nextMeta.fare_paid_cents = Math.max(0, Math.round(Number(meta.fare_paid_cents) || 0) + amount)
+    patch.fare_paid_cents = Math.max(0, Math.round(Number(meta.fare_paid_cents) || 0) + amount)
     tripNeedsUpdate = true
   }
 
   // Happy-path paid marker for the driver match gate (restore path also stamps this).
-  if (!nextMeta.checkout_deposit || typeof nextMeta.checkout_deposit !== 'object') {
-    nextMeta.checkout_deposit = { session_id: session?.id || null, at: new Date().toISOString() }
+  if (!meta.checkout_deposit || typeof meta.checkout_deposit !== 'object') {
+    patch.checkout_deposit = { session_id: session?.id || null, at: new Date().toISOString() }
     tripNeedsUpdate = true
   }
 
@@ -129,13 +130,23 @@ export async function recordDeposit(supabase, session, deps = {}) {
         metadata: { method: 'credits', checkout_session: session.id },
       })
     }
-    nextMeta.credits_applied = true
-    nextMeta.pending_credit_debits = []
+    patch.credits_applied = true
+    patch.pending_credit_debits = []
     tripNeedsUpdate = true
   }
 
   if (trip && tripNeedsUpdate) {
-    await supabase.from('trips').update({ metadata: nextMeta }).eq('id', tripId)
+    let merged = false
+    if (typeof supabase.rpc === 'function') {
+      const { data: rpcData, error: rpcErr } = await supabase.rpc('merge_trip_metadata', {
+        p_trip_id: tripId,
+        p_patch: patch,
+      })
+      if (!rpcErr && rpcData) merged = true
+    }
+    if (!merged) {
+      await supabase.from('trips').update({ metadata: { ...meta, ...patch } }).eq('id', tripId)
+    }
   }
 
   return { ok: true, alreadyRecorded }
