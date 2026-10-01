@@ -297,12 +297,15 @@ export async function acceptTrip(supabase, trip, driverId) {
   if (gate.data?.onboarding_status !== 'approved') {
     throw new Error('Finish approval to go online. Your account is still under review.')
   }
-  if (acceptNeedsDriverOnline(trip.status)) {
+  // The card can be stale by the time a driver taps Accept. Use the row we
+  // just re-read so a changed status cannot select the scheduled-RPC path or
+  // bypass the on-demand online-presence gate.
+  if (acceptNeedsDriverOnline(fresh.status)) {
     const presence = await supabase.from('driver_status').select('online').eq('driver_id', driverId).maybeSingle()
     if (presence.error) throw new Error(presence.error.message)
     if (!presence.data?.online) throw new Error('Go online before accepting a ride.')
   }
-  if (trip.status === 'scheduled') {
+  if (fresh.status === 'scheduled') {
     const { data, error } = await supabase.rpc('accept_scheduled_trip', { p_trip_id: trip.id })
     if (error) throw new Error(error.message || 'Could not accept scheduled ride')
     return data
