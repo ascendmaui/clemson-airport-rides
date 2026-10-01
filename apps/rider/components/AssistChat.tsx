@@ -49,11 +49,11 @@ export function AssistChat({
   async function send(text: string) {
     const content = text.trim()
     if (!content || busy) return
-    const history = [...messages.filter((message) => message.id !== 'welcome'), { role: 'user' as const, content }]
+    const history = [...messages.filter((message: ChatMessage) => message.id !== 'welcome'), { role: 'user' as const, content }]
       .map(({ role, content: value }) => ({ role, content: value }))
     const userId = nextId()
     const pendingId = nextId()
-    setMessages((current) => [
+    setMessages((current: ChatMessage[]) => [
       ...current,
       { id: userId, role: 'user', content },
       { id: pendingId, role: 'assistant', content: 'Looking at your account…' },
@@ -69,14 +69,14 @@ export function AssistChat({
         headers,
         body: { messages: history, roleVariant: 'rider' },
       })
-      setMessages((current) => current.map((message) => (
+      setMessages((current: ChatMessage[]) => current.map((message: ChatMessage) => (
         message.id === pendingId ? { ...message, content: result.reply || 'No reply.' } : message
       )))
       setNotice(result.notice || result.contextSummary || null)
       setTicket(result.ticketDraft?.ready ? result.ticketDraft : null)
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Help could not answer'
-      setMessages((current) => current.map((item) => (
+      setMessages((current: ChatMessage[]) => current.map((item: ChatMessage) => (
         item.id === pendingId ? { ...item, content: message } : item
       )))
     } finally {
@@ -103,7 +103,7 @@ export function AssistChat({
       })
       const id = data.ticket?.id
       setTicket(null)
-      setMessages((current) => [...current, {
+      setMessages((current: ChatMessage[]) => [...current, {
         id: nextId(),
         role: 'assistant',
         content: id
@@ -111,7 +111,7 @@ export function AssistChat({
           : 'The ticket was filed.',
       }])
     } catch (err) {
-      setMessages((current) => [...current, {
+      setMessages((current: ChatMessage[]) => [...current, {
         id: nextId(),
         role: 'assistant',
         content: err instanceof Error ? err.message : 'Could not file the ticket. Email rides@clemson.edu.',
@@ -126,7 +126,7 @@ export function AssistChat({
       {notice ? <Text style={styles.notice}>{notice}</Text> : null}
       {messages.length < 3 ? (
         <View style={styles.chips}>
-          {chips.map((chip) => (
+          {chips.map((chip: { label: string; text: string }) => (
             <Pressable
               key={chip.label}
               accessibilityRole="button"
@@ -140,7 +140,7 @@ export function AssistChat({
         </View>
       ) : null}
       <ScrollView style={styles.thread} contentContainerStyle={styles.threadBody}>
-        {messages.map((message) => (
+        {messages.map((message: ChatMessage) => (
           <View key={message.id} style={[styles.bubble, message.role === 'user' ? styles.mine : styles.theirs]}>
             <Text style={message.role === 'user' ? styles.mineText : styles.theirsText}>{message.content}</Text>
           </View>
