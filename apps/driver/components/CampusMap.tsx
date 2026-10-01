@@ -35,7 +35,7 @@ export function CampusMap({
   return (
     <View style={[styles.map, { backgroundColor: mode === 'dark' ? colors.mapFallback : '#E4D7F2' }]}>
       {showHeat
-        ? spots.slice(0, 8).map((spot, index) => (
+        ? spots.slice(0, 8).map((spot: BusySpot, index: number) => (
             <View
               key={spot.id}
               style={[
@@ -65,7 +65,7 @@ export function CampusMap({
             ? `${center.latitude.toFixed(3)}, ${center.longitude.toFixed(3)}`
             : 'Driver map'}
       </Text>
-      {(pins || []).slice(0, 3).map((pin) => (
+      {(pins || []).slice(0, 3).map((pin: MapPin) => (
         <Text key={pin.id} style={[styles.pin, { color: colors.title }]}>
           {pin.title}
         </Text>

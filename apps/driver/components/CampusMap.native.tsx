@@ -48,23 +48,23 @@ export function CampusMap({
       ]
   const focus = center || markers[0]
 
-  const pinKey = (pins || []).map((pin) => `${pin.id}:${pin.latitude.toFixed(4)},${pin.longitude.toFixed(4)}`).join('|')
+  const pinKey = (pins || []).map((pin: MapPin) => `${pin.id}:${pin.latitude.toFixed(4)},${pin.longitude.toFixed(4)}`).join('|')
   const centerKey = center ? `${center.latitude.toFixed(4)},${center.longitude.toFixed(4)}` : ''
-  const heatKey = showHeat ? spots.map((spot) => spot.id).join('|') : ''
+  const heatKey = showHeat ? spots.map((spot: BusySpot) => spot.id).join('|') : ''
 
   useEffect(() => {
     if (!mapRef.current) return
     if (showHeat && spots.length > 1) {
       mapRef.current.fitToCoordinates(
-        spots.map((spot) => ({ latitude: spot.lat, longitude: spot.lng })),
+        spots.map((spot: BusySpot) => ({ latitude: spot.lat, longitude: spot.lng })),
         { edgePadding: { top: 80, right: 40, bottom: 220, left: 40 }, animated: true },
       )
       return
     }
-    const list = (pinsRef.current || []).filter((pin) => Number.isFinite(pin.latitude) && Number.isFinite(pin.longitude))
+    const list = (pinsRef.current || []).filter((pin: MapPin) => Number.isFinite(pin.latitude) && Number.isFinite(pin.longitude))
     if (list.length > 1) {
       mapRef.current.fitToCoordinates(
-        list.map((pin) => ({ latitude: pin.latitude, longitude: pin.longitude })),
+        list.map((pin: MapPin) => ({ latitude: pin.latitude, longitude: pin.longitude })),
         { edgePadding: { top: 80, right: 40, bottom: 220, left: 40 }, animated: true },
       )
       return
@@ -113,7 +113,7 @@ export function CampusMap({
         showsUserLocation={false}
       >
         {showHeat
-          ? spots.map((spot) => (
+          ? spots.map((spot: BusySpot) => (
               <Circle
                 key={spot.id}
                 center={{ latitude: spot.lat, longitude: spot.lng }}
@@ -136,7 +136,7 @@ export function CampusMap({
             strokeWidth={2}
           />
         ) : null}
-        {markers.map((pin) => (
+        {markers.map((pin: MapPin) => (
           <Marker
             key={pin.id}
             coordinate={{ latitude: pin.latitude, longitude: pin.longitude }}
