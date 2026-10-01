@@ -121,7 +121,7 @@ export function isActiveStatus(status: string): boolean
 export function nextTripStatus(status: string): string | null
 export function statusActionLabel(status: string): string | null
 export function statusHeadline(status: string): string
-export function driverStatusDetail(status: string | null | undefined): string
+export function driverStatusDetail(status: string | null | undefined, tripOrReason?: unknown): string
 export function acceptActionLabel(status: string | null | undefined): string
 export function acceptNeedsDriverOnline(status: string | null | undefined): boolean
 export function toDriverCard(row: Record<string, unknown> | null | undefined, options?: { gameDayLive?: boolean }): DriverCard | null
