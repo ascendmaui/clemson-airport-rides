@@ -3,6 +3,7 @@ import { BottomTabs } from '../components/BottomTabs'
 import { RequireAuth } from '../components/RequireAuth'
 import { useAuth } from '../lib/auth'
 import { fetchRecentLostFoundTrips } from '../lib/lostFound'
+import { SkeletonRideCard } from '../components/LoadingSkeleton'
 import { navigate } from '../lib/navigation'
 
 function formatWhen(iso) {
@@ -47,7 +48,11 @@ function HistoryInner() {
         <p style={{ color: 'var(--ink-secondary)', marginTop: 6, fontSize: 14, lineHeight: 1.45 }}>
           Recent completed trips. Places are shown as areas, and the other person by first name.
         </p>
-        {loading && <p style={{ marginTop: 16, color: 'var(--ink-tertiary)' }}>Loading rides…</p>}
+        {loading && (
+          <div style={{ marginTop: 16 }}>
+            <SkeletonRideCard count={2} />
+          </div>
+        )}
         {error && <p style={{ marginTop: 16, color: 'var(--danger)', fontSize: 13 }}>{error}</p>}
         {!loading && !error && trips.length === 0 && (
           <div

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { PrimaryButton } from '../components/PrimaryButton'
+import { SkeletonDriverCard } from '../components/LoadingSkeleton'
 import { navigate } from '../lib/navigation'
 import { subscribeTrips, supabase, supabaseConfigured } from '../lib/supabase'
 import { requestDriverTrip } from '../lib/trips'
@@ -155,7 +156,7 @@ export function PickDriver({ dest = 'GSP Airport', tier = 'standard', listCents 
             Configure VITE_SUPABASE_ANON_KEY — no demo fleet.
           </p>
         )}
-        {loading && <p style={{ color: 'var(--ink-secondary)', padding: 12 }}>Loading online drivers…</p>}
+        {loading && <SkeletonDriverCard count={3} />}
         {error && <p style={{ color: '#b00020', padding: 12 }}>{error}</p>}
         {!loading && !anyOnline && (
           <div className="sheet" style={{ padding: 24, borderRadius: 20, textAlign: 'center', boxShadow: 'var(--shadow-pill)', marginBottom: 12 }}>
