@@ -73,3 +73,6 @@ export function sendLostFoundMessage(
   supabase: unknown,
   input: { reportId: string; senderId: string; body: string },
 ): Promise<void>
+
+export * from './lostFoundCopy.js'
+
