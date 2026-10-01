@@ -38,7 +38,7 @@ export default function EarningsHub() {
     }
     let alive = true
     refresh()
-      .catch((err) => {
+      .catch((err: unknown) => {
         if (alive) setError(err instanceof Error ? err.message : 'Could not load earnings')
       })
       .finally(() => {
@@ -52,7 +52,7 @@ export default function EarningsHub() {
   const payouts = data?.payouts
   const week = weekNetCents(data?.trips || [])
   const pending = Number(payouts?.pendingCents) || 0
-  const nextRetry = payouts?.pending?.find((row) => row && typeof row === 'object' && 'nextRetryAt' in row) as { nextRetryAt?: string } | undefined
+  const nextRetry = payouts?.pending?.find((row: unknown) => row && typeof row === 'object' && 'nextRetryAt' in row) as { nextRetryAt?: string } | undefined
   let you = 0
   let platform = 0
   let other = 0

@@ -128,7 +128,7 @@ export default function InboxScreen() {
                   <Text style={{ color: colors.ink, fontWeight: '800', fontSize: 16 }}>{notice.title}</Text>
                   <Text style={{ color: colors.inkSecondary, lineHeight: 20 }}>{notice.body}</Text>
                   <Pressable
-                    onPress={() => setHidden((current) => current.includes(notice.id) ? current : [...current, notice.id])}
+                    onPress={() => setHidden((current: string[]) => current.includes(notice.id) ? current : [...current, notice.id])}
                     accessibilityRole="button"
                     accessibilityLabel={`Hide ${notice.title}`}
                   >
@@ -167,7 +167,7 @@ export default function InboxScreen() {
               ) : null}
               {user && supportReady && tickets.length > 0 ? (
                 <>
-                  {tickets.map((ticket) => (
+                  {tickets.map((ticket: Ticket) => (
                     <Card key={ticket.id || ticket.subject}>
                       <Text style={{ color: colors.ink, fontWeight: '800', fontSize: 16 }}>{ticket.subject || 'Ticket'}</Text>
                       <Text style={{ color: colors.inkSecondary }}>
