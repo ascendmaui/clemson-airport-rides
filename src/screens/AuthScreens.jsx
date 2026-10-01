@@ -8,6 +8,7 @@ import {
 import { getHashRoute, navigate } from '../lib/navigation'
 import { resumeAfterAuth } from '../components/SignInToBookModal'
 import { capturePromoFromLocation } from '../lib/riderPromo'
+import { AccessibleAlert } from '../components/AccessibleAlert'
 import { RIDE_STYLES, isProfileComplete, profileFieldError } from '../../packages/rides-native/partyProfile.js'
 
 const fieldStyle = {
@@ -133,7 +134,7 @@ export function SignInScreen() {
           <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink-secondary)' }}>Password</span>
           <input required type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} style={fieldStyle} />
         </label>
-        {error && <p style={{ color: 'var(--danger)', fontSize: 13, marginBottom: 12 }}>{error}</p>}
+        {error && <AccessibleAlert error={error} onDismiss={() => setError(null)} style={{ marginBottom: 12 }} />}
         <button type="submit" className="pressable primary-cta" disabled={busy} style={{ width: '100%', padding: 16, borderRadius: 16, background: 'linear-gradient(135deg, var(--orange) 0%, #ff7a1a 100%)', color: '#fff', fontWeight: 700, fontSize: 16, boxShadow: 'var(--shadow-cta)', opacity: busy ? 0.7 : 1 }}>
           {busy ? 'Signing in…' : 'Sign in'}
         </button>
@@ -313,7 +314,7 @@ export function SignUpScreen() {
             Applied when you create the account. You and your friend are rewarded only after you complete your first ride.
           </span>
         </label>
-        {error && <p style={{ color: 'var(--danger)', fontSize: 13, marginBottom: 12 }}>{error}</p>}
+        {error && <AccessibleAlert error={error} onDismiss={() => setError(null)} style={{ marginBottom: 12 }} />}
         {info && <p style={{ color: '#522D80', fontSize: 13, marginBottom: 12, lineHeight: 1.45 }}>{info}</p>}
         {cooldownSec > 0 && !error && (
           <p style={{ color: 'var(--ink-secondary)', fontSize: 13, marginBottom: 12 }}>

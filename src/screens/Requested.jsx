@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { PrimaryButton } from '../components/PrimaryButton'
+import { AccessibleAlert } from '../components/AccessibleAlert'
 import { CampusMap, CLEMSON, STADIUM } from '../components/CampusMap'
 import { navigate, shareUrl } from '../lib/navigation'
 import { useAuth } from '../lib/auth'
@@ -332,7 +333,7 @@ export function Requested({ dest = 'GSP Airport', trip = '', driver = 'your driv
           )}
           <PrimaryButton onClick={() => navigate('home')}>Back home</PrimaryButton>
         </div>
-        {error && !tripMissing && <p style={{ color: 'var(--danger)', fontSize: 13, marginTop: 12 }}>{error}</p>}
+        {error && !tripMissing && <AccessibleAlert error={error} onDismiss={() => setError(null)} style={{ marginTop: 12 }} />}
       </div>
       {chatOpen && user?.id && tripRow && (
         <RideChat
