@@ -488,3 +488,25 @@ test('offerAccessibilityLabel provides a combined concise summary for screen rea
   assert.equal(offerAccessibilityLabel({}), 'Ride offer: $0.00 net pay. From Pickup to Drop-off')
 })
 
+test('offerCardViewModel isUrgent only while 1 to 10 seconds remain', () => {
+  const card = { pickupLabel: 'Tillman Hall', dropoffLabel: 'The Pier' }
+  const at = (secondsLeft) => offerCardViewModel({ ...card, secondsLeft }).timeLeft
+
+  assert.equal(at(10).isUrgent, true)
+  assert.equal(at(10).isExpired, false)
+  assert.equal(at(1).isUrgent, true)
+  assert.equal(at(11).isUrgent, false)
+  assert.equal(at(11).label, '11s to accept')
+
+  const expired = at(0)
+  assert.equal(expired.isUrgent, false)
+  assert.equal(expired.isExpired, true)
+  assert.equal(expired.label, 'Offer expired')
+
+  const negative = at(-3)
+  assert.equal(negative.isUrgent, false)
+  assert.equal(negative.isExpired, true)
+
+  assert.equal(offerCardViewModel(card).timeLeft, null)
+})
+
