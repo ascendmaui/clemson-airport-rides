@@ -12,6 +12,7 @@ import { PrimaryButton } from '../components/PrimaryButton'
 import { RequireAuth } from '../components/RequireAuth'
 import { RideChat, RideMessageButton } from '../components/RideChat'
 import { rideChatMode } from '../lib/tripChatRules'
+import { getStarDescriptor, getFeedbackTagsForRating } from '../../packages/rides-native/ratingCopy.js'
 
 function RideMessagesEntry({ trip, userId }) {
   const [open, setOpen] = useState(false)
@@ -40,6 +41,7 @@ function RateForm() {
   const [trip, setTrip] = useState(null)
   const [counterpart, setCounterpart] = useState(null)
   const [stars, setStars] = useState(5)
+  const [selectedTags, setSelectedTags] = useState([])
   const [comment, setComment] = useState('')
   const [error, setError] = useState(null)
   const [done, setDone] = useState(false)
@@ -89,6 +91,13 @@ function RateForm() {
   const sideHint = isRider ? 'Drivers see this on their profile' : 'Riders see this on their profile'
   const blockReason = ratingBlockReason(trip, user?.id)
 
+  function handleStarClick(n) {
+    if ((n >= 4 && stars < 4) || (n < 4 && stars >= 4)) {
+      setSelectedTags([])
+    }
+    setStars(n)
+  }
+
   async function onSubmit(e) {
     e.preventDefault()
     if (blockReason) {
@@ -102,7 +111,12 @@ function RateForm() {
     setBusy(true)
     setError(null)
     try {
-      await submitRating({ tripId, raterId: user.id, rateeId, stars, comment })
+      const tagsList = getFeedbackTagsForRating(isRider ? 'rider' : 'driver', stars)
+      const selectedLabels = selectedTags
+        .map((id) => tagsList.find((t) => t.id === id)?.label)
+        .filter(Boolean)
+      const finalComment = [selectedLabels.join(', '), comment.trim()].filter(Boolean).join(' — ') || null
+      await submitRating({ tripId, raterId: user.id, rateeId, stars, comment: finalComment })
       setDone(true)
     } catch (err) {
       setError(err.message || 'Could not submit rating')
@@ -264,13 +278,13 @@ function RateForm() {
         )}
 
         <form onSubmit={onSubmit}>
-          <div style={{ display: 'flex', gap: 8, marginBottom: 16, justifyContent: 'center' }}>
+          <div style={{ display: 'flex', gap: 8, marginBottom: 10, justifyContent: 'center' }}>
             {[1, 2, 3, 4, 5].map((n) => (
               <button
                 key={n}
                 type="button"
                 className="pressable"
-                onClick={() => setStars(n)}
+                onClick={() => handleStarClick(n)}
                 style={{
                   width: 48,
                   height: 48,
@@ -285,6 +299,40 @@ function RateForm() {
               </button>
             ))}
           </div>
+
+          <div style={{ textAlign: 'center', fontWeight: 700, fontSize: 15, color: 'var(--purple)', marginBottom: 12 }}>
+            {getStarDescriptor(stars)}
+          </div>
+
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 14, justifyContent: 'center' }}>
+            {getFeedbackTagsForRating(isRider ? 'rider' : 'driver', stars).map((tag) => {
+              const active = selectedTags.includes(tag.id)
+              return (
+                <button
+                  key={tag.id}
+                  type="button"
+                  className="pressable"
+                  onClick={() => {
+                    setSelectedTags((prev) =>
+                      prev.includes(tag.id) ? prev.filter((id) => id !== tag.id) : [...prev, tag.id]
+                    )
+                  }}
+                  style={{
+                    fontSize: 12,
+                    padding: '6px 12px',
+                    borderRadius: 999,
+                    border: active ? '1.5px solid var(--orange)' : '1px solid rgba(82,45,128,0.18)',
+                    background: active ? 'var(--orange)' : 'rgba(255,255,255,0.7)',
+                    color: active ? '#fff' : 'var(--ink-secondary)',
+                    fontWeight: active ? 700 : 500,
+                  }}
+                >
+                  {tag.label}
+                </button>
+              )
+            })}
+          </div>
+
           <textarea
             value={comment}
             onChange={(e) => setComment(e.target.value)}
