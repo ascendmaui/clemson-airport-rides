@@ -1,4 +1,5 @@
 import { PurpleAcceptButton } from './PrimaryButton'
+import { SkeletonOfferStream } from './LoadingSkeleton'
 import { formatMiles, formatMinutes, clockTime, hourlyRateCents } from '../lib/rideGeometry'
 import { money } from '../lib/receiptText'
 
@@ -143,4 +144,8 @@ function Place({ color, mark, title, label }) {
       </div>
     </div>
   )
+}
+
+export function DriverOfferSkeleton(props) {
+  return <SkeletonOfferStream {...props} />
 }
