@@ -86,7 +86,7 @@ function AccountScreen() {
 
   function toggleSpot(spot: string) {
     void tapHaptic()
-    setSpots((prev) => (prev.includes(spot) ? prev.filter((item) => item !== spot) : [...prev, spot].slice(0, 6)))
+    setSpots((prev: string[]) => (prev.includes(spot) ? prev.filter((item: string) => item !== spot) : [...prev, spot].slice(0, 6)))
   }
 
   async function onSaveSpots() {

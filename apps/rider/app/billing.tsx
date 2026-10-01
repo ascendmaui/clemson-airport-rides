@@ -87,7 +87,7 @@ function BillingScreen() {
 
         <Text style={styles.kicker}>DEPOSITS</Text>
         {deposits.length === 0 ? <Text style={styles.copy}>{loading ? 'Loading deposits…' : 'No deposit payments on this account.'}</Text> : null}
-        {deposits.map((row) => (
+        {deposits.map((row: Deposit) => (
           <View key={row.id} style={[styles.card, lift(colors, 'rest')]}>
             <Text style={styles.rowTitle}>{formatCents(row.amount_cents || 0)}</Text>
             <Text style={styles.copy}>{row.status || 'recorded'} · {row.created_at ? new Date(row.created_at).toLocaleString() : 'deposit'}</Text>
@@ -96,7 +96,7 @@ function BillingScreen() {
 
         <Text style={styles.kicker}>HISTORY</Text>
         {rides.length === 0 ? <Text style={styles.copy}>{loading ? 'Loading rides…' : 'No rides yet.'}</Text> : null}
-        {rides.map((row) => (
+        {rides.map((row: Ride) => (
           <View key={row.id} style={[styles.card, lift(colors, 'rest')]}>
             <Text style={styles.rowTitle}>{row.dropoff_label || 'Ride'}</Text>
             <Text style={styles.copy}>

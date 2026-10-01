@@ -92,18 +92,18 @@ export default function RiderHome() {
   const dragStart = useRef(minMap)
   const pan = useRef(
     PanResponder.create({
-      onMoveShouldSetPanResponder: (_, gesture) => Math.abs(gesture.dy) > 8 && Math.abs(gesture.dy) > Math.abs(gesture.dx),
+      onMoveShouldSetPanResponder: (_: any, gesture: { dx: number; dy: number; vy: number }) => Math.abs(gesture.dy) > 8 && Math.abs(gesture.dy) > Math.abs(gesture.dx),
       onPanResponderGrant: () => {
-        mapH.stopAnimation((value) => {
+        mapH.stopAnimation((value: number) => {
           dragStart.current = value
         })
       },
-      onPanResponderMove: (_, gesture) => {
+      onPanResponderMove: (_: any, gesture: { dx: number; dy: number; vy: number }) => {
         const { min, max } = limits.current
         const next = Math.min(max, Math.max(min, dragStart.current + gesture.dy))
         mapH.setValue(next)
       },
-      onPanResponderRelease: (_, gesture) => {
+      onPanResponderRelease: (_: any, gesture: { dx: number; dy: number; vy: number }) => {
         const { min, max } = limits.current
         const current = Math.min(max, Math.max(min, dragStart.current + gesture.dy))
         const expand = gesture.vy > 0.35 || (gesture.vy >= -0.35 && current > (min + max) / 2)
@@ -358,7 +358,7 @@ export default function RiderHome() {
           <Pressable
             onPress={() => {
               void tapHaptic()
-              setShowBusy((value) => !value)
+              setShowBusy((value: boolean) => !value)
             }}
             style={[styles.busy, showBusy && styles.busyOn]}
             accessibilityRole="button"
@@ -388,7 +388,7 @@ export default function RiderHome() {
                   ))
                 : null}
               <Pill label={gameNotice == null ? 'Game day…' : gameNotice.headline} active={gameDay} />
-              <Pill label={surge ? 'Surge · On' : 'Surge'} active={surge} onPress={() => setSurge((value) => !value)} />
+              <Pill label={surge ? 'Surge · On' : 'Surge'} active={surge} onPress={() => setSurge((value: boolean) => !value)} />
             </ScrollView>
             <Text style={styles.caption}>
               {showBusy ? caption : 'Busy areas are hidden.'}
@@ -462,7 +462,7 @@ export default function RiderHome() {
               <Text style={styles.liveBody}>{gameNotice.body}</Text>
             </View>
           ) : null}
-          {reminders.map((item) => (
+          {reminders.map((item: { tripId?: string; label?: string; body?: string }) => (
             <Pressable
               key={item.tripId}
               accessibilityRole="button"
@@ -490,7 +490,7 @@ export default function RiderHome() {
             accessibilityHint="Search a campus stop or airport"
           />
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
-            {suggestions.map((stop) => (
+            {suggestions.map((stop: { id: string; label: string }) => (
               <Pressable
                 key={stop.id}
                 accessibilityRole="button"

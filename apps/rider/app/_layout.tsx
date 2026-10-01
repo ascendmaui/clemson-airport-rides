@@ -57,7 +57,7 @@ function AmbassadorDeepLink() {
       if (code) router.push(`/a/${code}`)
     }
     Linking.getInitialURL().then(open).catch(() => {})
-    const sub = Linking.addEventListener('url', (event) => open(event.url))
+    const sub = Linking.addEventListener('url', (event: { url: string }) => open(event.url))
     return () => sub.remove()
   }, [router])
   return null
@@ -112,7 +112,7 @@ function CheckoutDeepLink() {
       }
     }
     Linking.getInitialURL().then(handleUrl).catch(() => {})
-    const sub = Linking.addEventListener('url', (event) => handleUrl(event.url))
+    const sub = Linking.addEventListener('url', (event: { url: string }) => handleUrl(event.url))
     return () => sub.remove()
   }, [router])
   return null

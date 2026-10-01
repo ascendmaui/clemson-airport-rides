@@ -112,7 +112,7 @@ export default function CarpoolLobbyScreen() {
 
   useEffect(() => {
     if (!ride || seeded.current) return
-    const self = ride.participants?.find((row) => row.is_self) || ride.participants?.[0]
+    const self = ride.participants?.find((row: { is_self?: boolean; pickup?: any; dropoff?: any }) => row.is_self) || ride.participants?.[0]
     setPickup(asPlace(self?.pickup, START.pickup))
     setDropoff(asPlace(self?.dropoff, START.dropoff))
     setSplitMode(asSplit(ride.split_mode))
@@ -123,7 +123,7 @@ export default function CarpoolLobbyScreen() {
   const friendPreview = useMemo(() => (ride?.kind === 'friends' ? friendSplitPreview(ride) : null), [ride])
   const rows = useMemo(() => (ride ? splitRows(ride) : []), [ride])
   const selfId = selfParticipantId(ride)
-  const self = ride?.participants?.find((row) => row.is_self)
+  const self = ride?.participants?.find((row: { is_self?: boolean; pickup?: any; dropoff?: any }) => row.is_self)
   const hopPickup = asPlace(self?.pickup, pickup)
   const hopDropoff = asPlace(self?.dropoff, dropoff)
   const delta = useMemo(
@@ -179,7 +179,7 @@ export default function CarpoolLobbyScreen() {
   }
 
   async function onJoin() {
-    const alreadyIn = (ride?.participants || []).some((row) => row.is_self || (user?.id && row.user_id === user.id))
+    const alreadyIn = (ride?.participants || []).some((row: { is_self?: boolean; user_id?: string | null }) => row.is_self || (user?.id && row.user_id === user.id))
     if (!alreadyIn && count >= cap) {
       setError(`This ride is full (${cap} max for this vehicle).`)
       return
@@ -409,7 +409,7 @@ export default function CarpoolLobbyScreen() {
                     ? 'Stops are saved. Friend-ride miles come from Google Routes, which needs the server Maps key before the split can lock.'
                     : 'The split shows up once every rider has a pickup and dropoff. Optimize the route to lock the shares. Campus distance still prices the card if Google Routes is unavailable.'}
                 />
-              ) : rows.map((row) => (
+              ) : rows.map((row: { id: string; name: string; soloCents?: number | null; shareCents?: number; firstRideFree?: boolean; savingsCents?: number | null }) => (
                 <View key={row.id} style={styles.splitLine}>
                   <View style={{ flex: 1 }}>
                     <Text style={styles.person}>{row.name}</Text>
@@ -420,7 +420,7 @@ export default function CarpoolLobbyScreen() {
                     ) : null}
                   </View>
                   <View style={styles.splitMoney}>
-                    <Text style={styles.share}>{row.firstRideFree ? 'First ride free' : formatUsd(row.shareCents)}</Text>
+                    <Text style={styles.share}>{row.firstRideFree ? 'First ride free' : formatUsd(row.shareCents || 0)}</Text>
                     {row.savingsCents != null && row.savingsCents > 0 && !(isFriends && friendPreview?.headline) ? (
                       <Text style={styles.save}>Save {formatUsd(row.savingsCents)}</Text>
                     ) : null}
@@ -440,7 +440,7 @@ export default function CarpoolLobbyScreen() {
               {count === 1 ? (
                 <Text style={styles.meta}>You’re the only rider so far. Share the link to fill the other seats. Stranger matching still stops at 4.</Text>
               ) : null}
-              {(ride.participants || []).map((person) => (
+              {(ride.participants || []).map((person: { id: string; display_name?: string; status?: string; student_verified_at?: string | null; rating_avg?: number | null; rating_count?: number | null; pickup?: { label?: string } | null; dropoff?: { label?: string } | null }) => (
                 <View key={person.id} style={styles.personBlock}>
                   <View style={styles.personRow}>
                     <Text style={styles.person}>{person.display_name}</Text>

@@ -75,7 +75,7 @@ function HistoryScreen() {
         {user && !loading && !error && rows.length === 0 ? (
           <Text style={styles.copy}>No rides yet. Campus → GSP starts from the map.</Text>
         ) : null}
-        {rows.map((row) => (
+        {rows.map((row: RideRow) => (
           <View key={row.id} style={[styles.card, lift(colors, 'rest')]}>
             <Text style={styles.cardTitle}>{row.dropoff_label || 'Ride'}</Text>
             <Text style={styles.copy}>{row.pickup_label || 'Pickup'} · {row.status || 'requested'}</Text>

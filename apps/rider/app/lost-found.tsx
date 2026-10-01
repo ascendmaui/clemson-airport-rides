@@ -95,7 +95,7 @@ function LostFoundScreen() {
 
   async function onCreate() {
     if (!supabase || !user?.id) return
-    const trip = trips.find((item) => item.id === tripId)
+    const trip = trips.find((item: TripChoice) => item.id === tripId)
     if (!trip) {
       setError('Pick a completed ride that has a driver.')
       return
@@ -177,7 +177,7 @@ function LostFoundScreen() {
           <>
             <Text style={styles.heading}>New report</Text>
             {trips.length === 0 ? <Text style={styles.copy}>No completed rides with a driver yet.</Text> : null}
-            {trips.map((trip) => (
+            {trips.map((trip: TripChoice) => (
               <Pressable key={trip.id} accessibilityRole="button" onPress={() => setTripId(trip.id)} style={[styles.card, tripId === trip.id && styles.cardOn, lift(colors, 'rest')]}>
                 <Text style={styles.cardTitle}>{trip.otherFirstName}</Text>
                 <Text style={styles.copy}>{trip.pickup} → {trip.dropoff}</Text>
@@ -193,7 +193,7 @@ function LostFoundScreen() {
             <PrimaryButton label={busy ? 'Filing…' : 'File report'} onPress={() => void onCreate()} disabled={busy} />
             <Text style={styles.heading}>Your reports</Text>
             {reports.length === 0 ? <Text style={styles.copy}>No reports yet.</Text> : null}
-            {reports.map((report) => (
+            {reports.map((report: ReportRow) => (
               <Pressable key={report.id} accessibilityRole="button" onPress={() => void openReport(report.id)} style={[styles.card, lift(colors, 'rest')]}>
                 <Text style={styles.cardTitle}>{report.itemDescription}</Text>
                 <Text style={styles.copy}>{statusLabel(report.status)} · {report.mine ? report.counterpartFirstName : report.reporterFirstName}</Text>

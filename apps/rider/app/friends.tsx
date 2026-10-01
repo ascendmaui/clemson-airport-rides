@@ -445,7 +445,7 @@ export default function CarpoolHubScreen() {
             />
             <PrimaryButton label={friendBusy ? 'Working…' : 'Add friend'} onPress={onAddFriend} disabled={friendBusy || !friendEmail.trim()} />
             {friends.length === 0 ? <Text style={styles.note}>No saved friends on this phone yet.</Text> : null}
-            {friends.map((friend) => (
+            {friends.map((friend: SavedFriend) => (
               <Text key={friend.id} style={styles.note}>{friend.name} · {friend.email}</Text>
             ))}
           </Card>
@@ -474,7 +474,7 @@ export default function CarpoolHubScreen() {
             <Text style={styles.cardTitle}>Activity</Text>
             {!user ? <Text style={styles.note}>Sign in to see group rides you organized.</Text> : null}
             {user && activity.length === 0 ? <Text style={styles.note}>No group rides yet.</Text> : null}
-            {activity.map((row) => (
+            {activity.map((row: FriendActivity) => (
               <Text key={row.id} style={styles.note}>
                 {row.kind || 'friends'} · {row.status || 'open'}
                 {row.split_mode === 'by_distance' ? ' · by distance' : ' · even split'}
