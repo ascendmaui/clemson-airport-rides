@@ -1,0 +1,122 @@
+exports[`Driver Menu snapshot 1`] = `
+{
+  "spotlight": [],
+  "manage": [
+    {
+      "icon": "person",
+      "title": "Profile photo",
+      "subtitle": "Submit a photo of yourself for review"
+    },
+    {
+      "icon": "car",
+      "title": "Vehicles",
+      "subtitle": "[Function: vehicleSubtitle]"
+    },
+    {
+      "icon": "document-text",
+      "title": "Documents",
+      "subtitle": "License, insurance, registration"
+    },
+    {
+      "icon": "shield-checkmark",
+      "title": "Insurance",
+      "subtitle": "Your policy and trip coverage notes"
+    }
+  ],
+  "money": [
+    {
+      "icon": "calculator",
+      "title": "Tax info",
+      "subtitle": "W-9 on your application"
+    },
+    {
+      "icon": "card",
+      "title": "Payout methods",
+      "subtitle": "Stripe balance and cash out"
+    }
+  ],
+  "resources": [
+    {
+      "icon": "school",
+      "title": "Learning Center",
+      "subtitle": "[Variable: quizLabel]"
+    },
+    {
+      "icon": "bug",
+      "title": "Bug Reporter",
+      "subtitle": "File a ticket for the driver app"
+    },
+    {
+      "icon": "information-circle",
+      "title": "About",
+      "subtitle": "Version and what this app is"
+    }
+  ],
+  "account": [
+    {
+      "icon": "settings",
+      "title": "Settings",
+      "subtitle": "Display, navigation, and sounds"
+    },
+    {
+      "icon": "swap-horizontal",
+      "title": "Switch account",
+      "subtitle": "One driver session on this phone"
+    },
+    {
+      "icon": "car-sport",
+      "title": "Tesla Model 3 listing",
+      "subtitle": "Existing fleet toggle"
+    }
+  ]
+}
+`;
+
+exports[`Driver Settings snapshot 1`] = `
+{
+  "account": [
+    {
+      "icon": "person",
+      "title": "Manage Clemson RIDES account",
+      "subtitle": "Name, email, and sign out"
+    },
+    {
+      "icon": "lock-closed",
+      "title": "Privacy",
+      "subtitle": "Hide earnings on this phone"
+    },
+    {
+      "icon": "pencil",
+      "title": "Edit address",
+      "subtitle": "Home address is not saved yet"
+    }
+  ],
+  "general": [
+    {
+      "icon": "accessibility",
+      "title": "Accessibility",
+      "subtitle": "Text size follows the phone"
+    },
+    {
+      "icon": "sunny",
+      "title": "Display",
+      "subtitle": "Auto, light, or dark"
+    },
+    {
+      "icon": "chatbubbles",
+      "title": "Communication",
+      "subtitle": "Trip alerts on this phone"
+    },
+    {
+      "icon": "navigate",
+      "title": "Navigation",
+      "subtitle": "Apple Maps or Google Maps"
+    },
+    {
+      "icon": "volume-high",
+      "title": "Sounds and voice",
+      "subtitle": "Request chime"
+    }
+  ]
+}
+`;
