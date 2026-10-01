@@ -1,4 +1,4 @@
-import { formatCents } from 'rides-native/tripTags'
+import { formatCents } from '../../../packages/rides-native/tripTags.js'
 
 export function shownCents(cents: number, hidden: boolean): string {
   if (hidden) return '••••'
