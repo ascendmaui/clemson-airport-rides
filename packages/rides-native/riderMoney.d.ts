@@ -202,3 +202,28 @@ export function describeRiderSocialRewards(cfg?: object | null): { referrer: str
 
 export function riderPromoShareUrl(code: string): string
 export function riderPromoShareText(code: string): string
+
+export {
+  DepositStatusInfo,
+  RefundStatusInfo,
+  ReceiptLineItem,
+  ReceiptBreakdown,
+  DepositBreakdown,
+  RECEIPT_HEADINGS,
+  RECEIPT_LINE_LABELS,
+  DEPOSIT_STATUS_COPY,
+  REFUND_STATUS_COPY,
+  REFUND_REASONS,
+  DEPOSIT_POLICY_NOTICE,
+  REFUND_TIMELINE_NOTICE,
+  PAYMENT_FAILURE_RECOVERY_NOTICE,
+  formatReceiptMoney,
+  formatDepositStatus,
+  formatRefundStatus,
+  formatRefundReason,
+  formatPaymentFailureNotice,
+  formatDepositBreakdown,
+  buildReceiptBreakdown,
+  formatReceiptPlainSummary,
+  formatRefundSummaryText,
+} from './receiptCopy'
