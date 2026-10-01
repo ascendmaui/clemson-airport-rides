@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { spawnSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
 import { studentDiscountGranted } from '../src/lib/studentDomain.js'
@@ -369,4 +370,98 @@ test('parseRideAt defaults missing time to noon ET and falls back when date abse
   )
   const now = new Date('2026-09-23T15:00:00.000Z')
   assert.equal(parseRideAt({}, now).toISOString(), now.toISOString())
+})
+
+test('parseRideAt DST edges: spring 02:00 and 03:00, fall 01:00 and 02:00', () => {
+  assert.equal(Number.isNaN(parseRideAt({ date: '2026-03-08', time: '02:00' }).getTime()), true)
+  assert.equal(
+    parseRideAt({ date: '2026-03-08', time: '03:00' }).toISOString(),
+    '2026-03-08T07:00:00.000Z',
+  )
+  assert.equal(
+    parseRideAt({ date: '2026-11-01', time: '01:00' }).toISOString(),
+    '2026-11-01T05:00:00.000Z',
+  )
+  assert.equal(
+    parseRideAt({ date: '2026-11-01', time: '02:00' }).toISOString(),
+    '2026-11-01T07:00:00.000Z',
+  )
+})
+
+test('parseRideAt uses noon ET when time is not HH:MM, and rejects impossible HH:MM', () => {
+  const noon = '2026-10-02T16:00:00.000Z'
+  for (const time of ['2:00', '14:00:00', 'noon', '']) {
+    assert.equal(
+      parseRideAt({ date: '2026-10-02', time }).toISOString(),
+      noon,
+      `time ${JSON.stringify(time)} should be noon ET`,
+    )
+  }
+  for (const time of ['24:00', '25:00', '14:60']) {
+    assert.equal(
+      Number.isNaN(parseRideAt({ date: '2026-10-02', time }).getTime()),
+      true,
+      `time ${time} matches HH:MM but is not a civil time`,
+    )
+  }
+})
+
+test('parseRideAt invalid at falls through, and pickupAt beats date+time', () => {
+  const now = new Date('2026-09-23T15:00:00.000Z')
+  assert.equal(
+    parseRideAt({
+      at: 'not-a-date',
+      pickupAt: '2026-10-02T18:00:00.000Z',
+      date: '2026-10-02',
+      time: '10:00',
+    }, now).toISOString(),
+    '2026-10-02T18:00:00.000Z',
+  )
+  assert.equal(
+    parseRideAt({
+      pickupAt: '2026-10-02T18:00:00.000Z',
+      date: '2026-12-15',
+      time: '14:00',
+    }, now).toISOString(),
+    '2026-10-02T18:00:00.000Z',
+  )
+  assert.equal(
+    parseRideAt({
+      at: 'nope',
+      pickupAt: 'also-nope',
+      date: '2026-10-02',
+      time: '14:00',
+    }, now).toISOString(),
+    '2026-10-02T18:00:00.000Z',
+  )
+  assert.equal(
+    parseRideAt({ at: '', pickupAt: '2026-10-02T18:00:00.000Z' }, now).toISOString(),
+    '2026-10-02T18:00:00.000Z',
+  )
+})
+
+test('parseRideAt zoneless ISO follows process TZ; Z does not', () => {
+  const root = new URL('..', import.meta.url)
+  const script = `
+    import { parseRideAt } from './server/authoritativeFare.js'
+    const zoned = parseRideAt({ at: '2026-10-02T14:00:00' })
+    const utc = parseRideAt({ at: '2026-10-02T14:00:00Z' })
+    console.log(JSON.stringify({ zoned: zoned.toISOString(), utc: utc.toISOString() }))
+  `
+  function run(tz) {
+    const result = spawnSync(
+      process.execPath,
+      ['--experimental-strip-types', '--input-type=module', '-e', script],
+      { cwd: root, env: { ...process.env, TZ: tz }, encoding: 'utf8' },
+    )
+    assert.equal(result.status, 0, result.stderr)
+    const line = result.stdout.trim().split('\n').pop()
+    return JSON.parse(line)
+  }
+  const utc = run('UTC')
+  assert.equal(utc.zoned, '2026-10-02T14:00:00.000Z')
+  assert.equal(utc.utc, '2026-10-02T14:00:00.000Z')
+  const et = run('America/New_York')
+  assert.equal(et.zoned, '2026-10-02T18:00:00.000Z')
+  assert.equal(et.utc, '2026-10-02T14:00:00.000Z')
 })
