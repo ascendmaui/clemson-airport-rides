@@ -78,6 +78,21 @@ test('mixed .edu domains: only clemson.edu and g.clemson.edu qualify', async () 
       email: 'fake@notclemson.edu',
       email_confirmed_at: '2026-09-01T00:00:00Z',
     },
+    u_tag: {
+      id: 'u_tag',
+      email: 'tiger+tag@clemson.edu',
+      email_confirmed_at: '2026-09-01T00:00:00Z',
+    },
+    u_localspoof: {
+      id: 'u_localspoof',
+      email: 'clemson.edu@gmail.com',
+      email_confirmed_at: '2026-09-01T00:00:00Z',
+    },
+    u_multispoof: {
+      id: 'u_multispoof',
+      email: 'tiger@clemson.edu@gmail.com',
+      email_confirmed_at: '2026-09-01T00:00:00Z',
+    },
   }
 
   const sb = createFakeSb(users)
@@ -91,6 +106,9 @@ test('mixed .edu domains: only clemson.edu and g.clemson.edu qualify', async () 
     { user_id: 'u_evil' },
     { user_id: 'u_subdomain' },
     { user_id: 'u_notclemson' },
+    { user_id: 'u_tag' },
+    { user_id: 'u_localspoof' },
+    { user_id: 'u_multispoof' },
   ]
 
   const flags = await studentFlagsFor(sb, participants)
@@ -104,6 +122,9 @@ test('mixed .edu domains: only clemson.edu and g.clemson.edu qualify', async () 
     false, // clemson.edu.evil.com
     false, // mail.clemson.edu
     false, // notclemson.edu
+    true,  // tiger+tag@clemson.edu
+    false, // clemson.edu@gmail.com
+    false, // tiger@clemson.edu@gmail.com
   ])
 })
 
