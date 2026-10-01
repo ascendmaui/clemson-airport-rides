@@ -253,8 +253,8 @@ export function AccountScreen() {
   return (
     <div className="route-fade" style={{ display: 'flex', flexDirection: 'column', minHeight: '100%' }}>
       <div style={{ flex: 1, padding: '20px 18px 28px', overflowY: 'auto' }}>
-        <button type="button" className="pressable glass-pill" onClick={() => navigate('home')}
-          style={{ width: 40, height: 40, borderRadius: 12, marginBottom: 10, display: 'grid', placeItems: 'center' }}>
+        <button type="button" className="pressable glass-pill nav-back-btn" aria-label="Back to home" onClick={() => navigate('home')}
+          style={{ marginBottom: 10 }}>
           <IconSettings size={18} color="#522D80" />
         </button>
 
