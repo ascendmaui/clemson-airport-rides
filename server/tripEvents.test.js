@@ -80,3 +80,51 @@ test('insertTripEvent logs when trip_id is missing', async () => {
     console.error = original
   }
 })
+
+test('insertTripEvent labels a missing kind as unknown', async () => {
+  const logged = []
+  const original = console.error
+  console.error = (...args) => { logged.push(args.map(String).join(' ')) }
+  try {
+    const { error } = await insertTripEvent(null, { trip_id: 't1' })
+    assert.match(error.message, /supabase client required/)
+    assert.equal(logged.some((line) => line.includes('[trip_events]') && line.includes('unknown')), true)
+  } finally {
+    console.error = original
+  }
+})
+
+test('insertTripEvent stringifies an insert error that has no message', async () => {
+  const logged = []
+  const original = console.error
+  console.error = (...args) => { logged.push(args.map(String).join(' ')) }
+  try {
+    const { data, error } = await insertTripEvent(fakeSb({ insertError: { code: 'XX000' } }), {
+      trip_id: 'trip-1',
+      kind: 'accepted',
+      payload: {},
+    })
+    assert.equal(data, null)
+    assert.equal(error.code, 'XX000')
+    assert.equal(logged.some((line) => line.includes('[trip_events]') && line.includes('accepted') && line.includes('[object Object]')), true)
+  } finally {
+    console.error = original
+  }
+})
+
+test('insertTripEvent propagates when insert rejects', async () => {
+  const sb = {
+    from(table) {
+      assert.equal(table, 'trip_events')
+      return {
+        insert() {
+          return Promise.reject(new Error('network down'))
+        },
+      }
+    },
+  }
+  await assert.rejects(
+    () => insertTripEvent(sb, { trip_id: 'trip-1', kind: 'accepted', payload: {} }),
+    /network down/,
+  )
+})
