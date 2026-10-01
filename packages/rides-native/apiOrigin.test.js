@@ -205,6 +205,12 @@ test('resolveApiBase falls back to DEFAULT_API_BASE on bare scheme without host'
   process.env.EXPO_PUBLIC_API_BASE = 'https://'
   assert.equal(resolveApiBase(), DEFAULT_API_BASE)
 
+  process.env.EXPO_PUBLIC_API_BASE = 'https:///'
+  assert.equal(resolveApiBase(), DEFAULT_API_BASE)
+
+  process.env.EXPO_PUBLIC_API_BASE = 'HTTPS://'
+  assert.equal(resolveApiBase(), DEFAULT_API_BASE)
+
   process.env.EXPO_PUBLIC_API_BASE = 'http://'
   assert.equal(resolveApiBase(), DEFAULT_API_BASE)
 
