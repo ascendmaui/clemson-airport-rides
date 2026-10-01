@@ -180,7 +180,7 @@ export function buildWaypointList(participants) {
 }
 
 export async function computeRoutes(origin, destination, intermediates) {
-  if (!googleMapsKey || googleMapsKey.includes('placeholder')) {
+  if (!(process.env.GOOGLE_MAPS_API_KEY || process.env.GOOGLE_ROUTES_API_KEY || googleMapsKey) || (process.env.GOOGLE_MAPS_API_KEY || process.env.GOOGLE_ROUTES_API_KEY || googleMapsKey).includes('placeholder')) {
     return {
       error: 'Route calculation failed. The server is missing Google Maps API configuration.',
       code: 'maps_key_missing',
@@ -205,7 +205,7 @@ export async function computeRoutes(origin, destination, intermediates) {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'X-Goog-Api-Key': googleMapsKey,
+      'X-Goog-Api-Key': process.env.GOOGLE_MAPS_API_KEY || process.env.GOOGLE_ROUTES_API_KEY || googleMapsKey,
       'X-Goog-FieldMask':
         'routes.duration,routes.distanceMeters,routes.polyline.encodedPolyline,routes.optimizedIntermediateWaypointIndex,routes.legs.distanceMeters,routes.legs.duration',
     },

@@ -1,12 +1,14 @@
-process.env.GOOGLE_MAPS_API_KEY = "mock_key";
+process.env.GOOGLE_MAPS_API_KEY = process.env.GOOGLE_MAPS_API_KEY || 'mock_key_for_tests'
 
-import test, { describe, beforeEach, afterEach, mock } from 'node:test'
+import test, { describe } from 'node:test'
 import assert from 'node:assert/strict'
-import {
+
+const {
   handleFriendRideCreate,
   handleFriendRideGet,
   handleFriendRideJoin,
-} from '../server/friendRideRoutes.js'
+  handleFriendRideRecompute,
+} = await import('../server/friendRideRoutes.js')
 
 function mockRes() {
   const res = {
@@ -190,14 +192,15 @@ describe('FriendRide Lobby', () => {
       return origFetch(url, init)
     }
 
-    try { process.env.GOOGLE_MAPS_API_KEY = "mock"
-      const { handleFriendRideRecompute } = await import('../server/friendRideRoutes.js')
+    try {
+      process.env.GOOGLE_MAPS_API_KEY = 'mock_key_for_tests'
       const reqRecompute = mockReq('POST', { token: 'tok-xyz', splitMode: 'even' })
       const resRecompute = mockRes()
       await handleFriendRideRecompute(reqRecompute, resRecompute, { sb, user })
       assert.equal(resRecompute.statusCode, 200, resRecompute.body)
       const data = JSON.parse(resRecompute.body)
-      assert.equal(data.token, "tok-xyz"); assert.ok(data.total_fare_cents > 0)
+      assert.equal(data.token, 'tok-xyz')
+      assert.ok(data.total_fare_cents > 0)
     } finally {
       global.fetch = origFetch
     }
