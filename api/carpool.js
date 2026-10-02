@@ -26,7 +26,7 @@ const LEGACY = {
   'carpool-program': 'program',
 }
 
-export default async function handler(req, res) {
+export default async function handler(req, res, ...rest) {
   if (cors(req, res)) return
   const action = resolveRouteAction(req, { allowed: Object.keys(HANDLERS), legacy: LEGACY })
   const handle = HANDLERS[action]
@@ -35,5 +35,5 @@ export default async function handler(req, res) {
       error: 'Unknown carpool action. Use action=match, action=group, action=program, or action=attribute.',
     })
   }
-  return handle(req, res)
+  return handle(req, res, ...rest)
 }
