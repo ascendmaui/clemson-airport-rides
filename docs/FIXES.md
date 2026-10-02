@@ -1896,3 +1896,20 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
 - **What changed:** Both paths are already arguments of the root `package.json` `"test"` script. `apps/rider/lib/approachAlert.test.mjs` has been listed since the approaching-driver alert. `packages/rides-native/safety.test.js` has been listed with the native safety suite. t1 and t2 did not add a new test file, so the script did not need another path.
 - **Files touched:** `docs/FIXES.md`
 - **Verified:** `npm test` — 798 pass, 0 fail, including the approachAlert cases (haversine, feet readout, 100/200/500 ft stages, status line with feet or nearby, previousStage hold).
+
+## 2026-10-02 — [agy] GA93: Expire unpaid airport holds query bounds, TTL safety clamping, and error sanitization
+
+- **Date:** 2026-10-02
+- **Track / machine:** Clemson RIDES · MacBook Max (agy) · GA93
+- **What was wrong:** `server/endpoints/expireUnpaidAirportHolds.js` did not parse `limit` or `ttl_ms`/`ttl_seconds` query parameters, meaning custom batch limits or TTLs could not be configured safely. In addition, raw database errors in the `results` array could leak internal database constraint details to external cron callers, and bearer tokens with surrounding quotes (from shell or config quotes) failed constant-time authentication.
+- **What changed:**
+  - Implemented `parseHoldSweepLimit(req)` strictly clamping sweep batch limits between 1 and 40 (defaulting to 40).
+  - Implemented `parseHoldSweepTtlMs(req)` supporting `ttl_ms` and `ttl_seconds` with strict safety floor (`MIN_UNPAID_HOLD_TTL_MS = 15 minutes`) and safety ceiling (`MAX_UNPAID_HOLD_TTL_MS = 7 days`) to prevent misconfigured cron jobs from prematurely purging active holds.
+  - Implemented `sanitizeHoldResults(results)` to truncate and sanitize internal database constraint details before returning JSON responses.
+  - Enhanced `bearerToken(header)` to strip surrounding quotes and trim whitespace.
+  - Added defensive stream guards `if (!res.headersSent)` and `if (res.writableEnded) return`.
+  - Added dedicated unit test suite `tests/gaAuditExpireHoldsSanitization.test.js`.
+  - Wired `tests/gaAuditExpireHoldsSanitization.test.js` into root `package.json` test script.
+- **Files touched:** `server/endpoints/expireUnpaidAirportHolds.js`, `tests/gaAuditExpireHoldsSanitization.test.js`, `package.json`, `docs/FIXES.md`
+- **Verified:** `npm test` passing with 0 failures.
+
