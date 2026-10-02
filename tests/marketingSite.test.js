@@ -8,6 +8,9 @@ import {
   DRIVER_EXPO_PROJECT,
   IOS_STORE_URL,
   RIDER_EXPO_PROJECT,
+  WEB_BOOK_URL,
+  WEB_ORIGIN,
+  WEB_SCHEDULE_URL,
 } from '../shared/productLinks.js'
 import { qrMatrix } from '../src/lib/qrMatrix.js'
 
@@ -78,4 +81,18 @@ test('download QR codes are square modules for the public install links', () => 
 
 test('marketing features exact copy snapshot', (t) => {
   t.assert.snapshot(MARKETING_FEATURES)
+})
+
+test('soft-launch web QR targets stable production book URL', () => {
+  assert.equal(WEB_ORIGIN, 'https://clemson-airport-rides.vercel.app')
+  assert.equal(WEB_BOOK_URL, 'https://clemson-airport-rides.vercel.app/#/home')
+  assert.equal(WEB_SCHEDULE_URL, 'https://clemson-airport-rides.vercel.app/#/schedule')
+  assert.doesNotMatch(WEB_ORIGIN, /clemson-rides\.vercel\.app$/)
+})
+
+test('marketing hero surfaces web book QR for soft launch', () => {
+  const source = readFileSync(new URL('../src/screens/Marketing.jsx', import.meta.url), 'utf8')
+  assert.match(source, /WEB_BOOK_URL/)
+  assert.match(source, /Soft launch · web/)
+  assert.match(source, /navigate\('schedule'\)/)
 })

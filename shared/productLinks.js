@@ -1,6 +1,19 @@
 /** Canonical public surfaces for the one Clemson RIDES product. */
 
-export const WEB_ORIGIN = 'https://clemson-rides.vercel.app'
+/** Stable production web host (johnmatveyev-lab / clemson-airport-rides). Prefer this over the older clemson-rides.vercel.app alias. */
+export const WEB_ORIGIN = 'https://clemson-airport-rides.vercel.app'
+
+/** Passenger soft-launch QR target — hash router book home (campus / airport / game-day entry). */
+export const WEB_BOOK_URL = `${WEB_ORIGIN}/#/home`
+
+/** Airport schedule + 25% deposit hold. */
+export const WEB_SCHEDULE_URL = `${WEB_ORIGIN}/#/schedule`
+
+/** Driver desk (accept rides). */
+export const WEB_DRIVER_URL = `${WEB_ORIGIN}/#/driver`
+
+/** Driver onboarding / signup. */
+export const WEB_DRIVER_SIGNUP_URL = `${WEB_ORIGIN}/#/driver-signup`
 
 export const RIDER_EXPO_PROJECT = 'https://expo.dev/accounts/johnmatveyev/projects/clemson-rides-rider'
 

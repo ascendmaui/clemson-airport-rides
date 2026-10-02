@@ -9,6 +9,7 @@ import {
   IOS_STORE_URL,
   RIDER_EXPO_PROJECT,
   SUPPORT_EMAIL,
+  WEB_BOOK_URL,
 } from '../../shared/productLinks.js'
 
 const DOWNLOADS = APP_DOWNLOADS.map((app) => {
@@ -84,14 +85,27 @@ export function Marketing() {
             <span className="mkt-orange-word">Clemson</span> RIDES
           </h1>
           <p className="mkt-lede">
-            Airport, campus, and game day rides for Tigers. Book in the browser, or download the rider and driver apps.
+            Airport, campus, and game day rides for Tigers. Book in the browser tonight — scan the web QR, or open Book a ride.
           </p>
           <div className="mkt-pill">Tigers get you there</div>
           <div className="mkt-actions">
             <PrimaryButton fullWidth={false} onClick={() => navigate('home')}>Book a ride</PrimaryButton>
-            <PrimaryButton fullWidth={false} variant="purple" onClick={scrollToDownloads}>Get the app</PrimaryButton>
+            <PrimaryButton fullWidth={false} variant="purple" onClick={() => navigate('schedule')}>Airport schedule</PrimaryButton>
             <button type="button" className="mkt-ghost pressable" onClick={() => navigate('driver-signup')}>
               Sign up as a driver
+            </button>
+          </div>
+          <div className="mkt-card" style={{ marginTop: 28, maxWidth: 360, textAlign: 'center' }} aria-label="Web booking QR">
+            <p className="mkt-kicker">Soft launch · web</p>
+            <div style={{ display: 'flex', justifyContent: 'center', margin: '12px 0' }}>
+              <QrMark value={WEB_BOOK_URL} label="Book on web" />
+            </div>
+            <p style={{ fontSize: 14, margin: 0 }}>
+              Scan to book in the browser. Airport holds use a 25% deposit.
+            </p>
+            <p className="mkt-fine" style={{ marginTop: 8, wordBreak: 'break-all' }}>{WEB_BOOK_URL}</p>
+            <button type="button" className="mkt-text pressable" style={{ marginTop: 8 }} onClick={() => navigate('schedule')}>
+              Prefer airport schedule? Open Schedule
             </button>
           </div>
         </div>
