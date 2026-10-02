@@ -243,7 +243,12 @@ export function ScheduleAirport() {
         />
 
         <div className="glass-panel glass-panel--orange" style={{ padding: 16, borderRadius: 16, marginBottom: 16 }}>
-          <div style={{ fontSize: 11, letterSpacing: 1.1, fontWeight: 800, color: '#F56600', marginBottom: 8 }}>AIRPORT DEPOSIT</div>
+          <div style={{ fontSize: 11, letterSpacing: 1.1, fontWeight: 800, color: '#F56600', marginBottom: 8 }}>AIRPORT DEPOSIT · 25%</div>
+          <ol style={{ margin: '0 0 12px', paddingLeft: 18, color: '#522D80', fontSize: 13, lineHeight: 1.5, fontWeight: 650 }}>
+            <li>Pay the 25% deposit now in Stripe Checkout (holds the ride).</li>
+            <li>Drivers see your request once the deposit is confirmed.</li>
+            <li>Remaining balance is charged when the trip is complete.</li>
+          </ol>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
             <span style={{ color: 'var(--ink-secondary)' }}>Full fare</span>
             <strong style={{ color: '#522D80' }}>{formatUsdFromCents(fareCents)}</strong>
@@ -255,11 +260,11 @@ export function ScheduleAirport() {
             </div>
           )}
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-            <span style={{ color: 'var(--ink-secondary)' }}>25% deposit</span>
+            <span style={{ color: 'var(--ink-secondary)' }}>Pay now · 25% deposit</span>
             <strong style={{ color: '#F56600' }}>{formatUsdFromCents(deposit)}</strong>
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-            <span style={{ color: '#522D80', fontWeight: 700 }}>Remaining balance</span>
+            <span style={{ color: '#522D80', fontWeight: 700 }}>Due after trip</span>
             <strong style={{ color: '#522D80' }}>{formatUsdFromCents(remaining)}</strong>
           </div>
           <p style={{ fontSize: 12, color: '#522D80', marginTop: 10, lineHeight: 1.45 }}>
@@ -273,7 +278,7 @@ export function ScheduleAirport() {
         </div>
 
         <PrimaryButton className="primary-cta" onClick={onPayClick} disabled={busy || deposit <= 0}>
-          {busy ? 'Starting checkout…' : `Pay ${formatUsdFromCents(deposit)} deposit`}
+          {busy ? 'Opening Stripe Checkout…' : `Pay ${formatUsdFromCents(deposit)} deposit · hold ride`}
         </PrimaryButton>
 
         {error && (

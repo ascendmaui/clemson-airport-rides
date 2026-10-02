@@ -1274,3 +1274,17 @@ select[aria-invalid="true"]:focus-visible {
   box-shadow: var(--shadow-modal);
   text-align: center;
 }
+
+
+/* Live matching / tracking polish */
+@keyframes live-phase-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(245, 102, 0, 0.35); }
+  50% { box-shadow: 0 0 0 6px rgba(245, 102, 0, 0); }
+}
+.live-phase-step--current {
+  animation: live-phase-pulse 1.6s ease-in-out infinite;
+}
+.live-match-banner {
+  border: 1.5px solid rgba(245, 102, 0, 0.35);
+  box-shadow: var(--shadow-pill);
+}
