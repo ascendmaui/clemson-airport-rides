@@ -195,3 +195,27 @@ test('rider can cancel and re-request as an independent matching attempt', async
     ],
   )
 })
+
+test('same driver double-submit accepts once and writes one accepted event', async () => {
+  const { supabase, trip, drivers } = seedMatchingScenario()
+  const driverId = drivers[0].id
+
+  const results = await Promise.allSettled([
+    acceptTrip(supabase, trip, driverId),
+    acceptTrip(supabase, trip, driverId),
+  ])
+  const fulfilled = results.filter((result) => result.status === 'fulfilled')
+  const rejected = results.filter((result) => result.status === 'rejected')
+  assert.equal(fulfilled.length, 1)
+  assert.equal(rejected.length, 1)
+  assert.match(rejected[0].reason.message, /no longer available/)
+
+  const stored = supabase._tables.trips.find((row) => row.id === trip.id)
+  assert.equal(stored.status, 'accepted')
+  assert.equal(stored.driver_id, driverId)
+  const acceptedEvents = supabase._tables.trip_events.filter(
+    (event) => event.trip_id === trip.id && event.kind === 'accepted',
+  )
+  assert.equal(acceptedEvents.length, 1)
+  assert.equal(acceptedEvents[0].payload.driver_id, driverId)
+})
