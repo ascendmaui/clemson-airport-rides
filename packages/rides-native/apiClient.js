@@ -9,7 +9,7 @@ export function apiBase() {
 export async function authedJson(
   supabase,
   path,
-  { method = 'GET', body, headers: customHeaders, fetch: customFetch } = {},
+  { method = 'GET', body, headers: customHeaders, fetch: customFetch, signal } = {},
 ) {
   const fetcher = customFetch || globalThis.fetch
   const headers = {
@@ -41,8 +41,14 @@ export async function authedJson(
       method,
       headers,
       body: reqBody,
+      signal,
     })
   } catch (err) {
+    if (err?.name === 'AbortError' || err?.name === 'TimeoutError' || signal?.aborted) {
+      const abortErr = new Error(err?.message || 'The operation was aborted')
+      abortErr.name = err?.name || 'AbortError'
+      throw abortErr
+    }
     const error = new Error(err?.message || 'Network error')
     error.network = true
     throw error
@@ -68,8 +74,14 @@ export async function authedJson(
           method,
           headers,
           body: reqBody,
+          signal,
         })
       } catch (err) {
+        if (err?.name === 'AbortError' || err?.name === 'TimeoutError' || signal?.aborted) {
+          const abortErr = new Error(err?.message || 'The operation was aborted')
+          abortErr.name = err?.name || 'AbortError'
+          throw abortErr
+        }
         const error = new Error(err?.message || 'Network error')
         error.network = true
         throw error
