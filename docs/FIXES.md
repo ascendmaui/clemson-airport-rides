@@ -22,6 +22,21 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
   - `package.json`
   - `docs/FIXES.md`
 - **Verified:** `node --test tests/gaAuditAbandonedCheckoutResilience.test.js` (5/5 passing), `node --test server/abandonedCheckout.test.js` (41/41 passing), and full `npm test` passing.
+## 2026-10-02 — GA96: Credit purchase checkout, confirmation, and balance lots endpoints audit and hardening
+- **Track / machine:** Clemson RIDES · MacBook Max · `agy/ga-audit-credit-purchases-confirm-ga96`
+  1. `server/endpoints/buyCredits.js` lacked dependency injection for unit testing (`deps.sb`, `deps.stripe`, `deps.user`, `deps.findCreditPack`), did not trim `body.packId`, and did not set `Cache-Control: no-store` and `Allow: POST, OPTIONS` headers.
+  2. `server/endpoints/creditsConfirm.js` lacked dependency injection (`deps.sb`, `deps.stripe`, `deps.user`, `deps.grantCreditPack`), did not trim or validate string `sessionId`, and lacked security headers.
+  3. `server/endpoints/creditLots.js` lacked dependency injection (`deps.sb`, `deps.user`, `deps.loadCreditLots`, `deps.creditBalanceCents`) and security `Cache-Control: no-store` and `Allow: GET, OPTIONS` headers on 405 Method Not Allowed responses.
+  4. Endpoints lacked comprehensive isolated unit tests.
+  - Hardened `server/endpoints/buyCredits.js` with dependency injection, input trimming, and strict `Cache-Control: no-store, no-cache, must-revalidate, private` and `Allow: POST, OPTIONS` headers.
+  - Hardened `server/endpoints/creditsConfirm.js` with dependency injection, `sessionId` whitespace trimming and validation, and security headers.
+  - Hardened `server/endpoints/creditLots.js` with dependency injection and cache-control/allow headers.
+  - Added comprehensive unit test suite in `tests/gaAuditCreditPurchasesConfirm.test.js` (9/9 passing) and registered it in root `package.json` test runner.
+  - `server/endpoints/buyCredits.js`
+  - `server/endpoints/creditsConfirm.js`
+  - `server/endpoints/creditLots.js`
+  - `tests/gaAuditCreditPurchasesConfirm.test.js`
+- **Verified:** `node --test tests/gaAuditCreditPurchasesConfirm.test.js` (9/9) and full `npm test` suite.
 
 ## 2026-10-01 — Expire unpaid airport holds & Stripe webhook endpoint hardening
 
