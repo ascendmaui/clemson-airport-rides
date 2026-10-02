@@ -318,7 +318,7 @@ export function AuthProvider({ children }) {
       if (error) throw mapAuthError(error)
     },
     async signInWithGoogle({ nextParams, promoCode } = {}) {
-      if (!supabase) throw new Error('Supabase is not configured')
+      if (!supabase) throw new Error('Google sign-in is unavailable right now. Try email instead.')
       const storage = authStorage()
       stashAuthNext(storage, nextParams)
       if (promoCode != null) stashGooglePromo(storage, promoCode)
@@ -331,7 +331,7 @@ export function AuthProvider({ children }) {
         takeAuthNext(storage)
         if (promoCode != null) takeGooglePromo(storage)
         if (error) throw mapAuthError(error)
-        throw new Error('Google sign-in is not configured. Enable the Google provider in Supabase Auth and allow this site redirect.')
+        throw new Error('Google sign-in is unavailable right now. Try email instead.')
       }
       return data
     },

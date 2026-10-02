@@ -185,6 +185,7 @@ export function SignInScreen() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState(null)
+  const [formInvalid, setFormInvalid] = useState(false)
   const [busy, setBusy] = useState(false)
   const [googleBusy, setGoogleBusy] = useState(false)
   useStoredAuthError(setError)
@@ -192,11 +193,13 @@ export function SignInScreen() {
   async function onSubmit(e) {
     e.preventDefault()
     setError(null)
+    setFormInvalid(false)
     setBusy(true)
     try {
       await signIn(email.trim(), password)
       afterAuthSuccess()
     } catch (err) {
+      setFormInvalid(true)
       setError(err.message || 'Sign in failed')
     } finally {
       setBusy(false)
@@ -206,6 +209,7 @@ export function SignInScreen() {
   async function onGoogle() {
     if (busy || googleBusy) return
     setError(null)
+    setFormInvalid(false)
     setGoogleBusy(true)
     try {
       const { params } = getHashRoute()
@@ -234,8 +238,8 @@ export function SignInScreen() {
             autoComplete="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            aria-invalid={Boolean(error) ? 'true' : undefined}
-            aria-describedby={error ? 'signin-form-alert' : undefined}
+            aria-invalid={formInvalid ? 'true' : undefined}
+            aria-describedby={formInvalid ? 'signin-form-alert' : undefined}
             style={fieldStyle}
           />
         </label>
@@ -248,8 +252,8 @@ export function SignInScreen() {
             autoComplete="current-password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            aria-invalid={Boolean(error) ? 'true' : undefined}
-            aria-describedby={error ? 'signin-form-alert' : undefined}
+            aria-invalid={formInvalid ? 'true' : undefined}
+            aria-describedby={formInvalid ? 'signin-form-alert' : undefined}
             style={fieldStyle}
           />
         </label>
@@ -380,7 +384,7 @@ export function SignUpScreen() {
   }
   const profileReady = isProfileComplete({ full_name: fullName, phone, bio, ride_style: rideStyle })
   const missingFields = missingProfileFields({ full_name: fullName, phone, bio, ride_style: rideStyle })
-  const showValidation = Boolean(touchedSubmit || error)
+  const showValidation = touchedSubmit
   const cta =
     busy ? 'Creating…' : cooldownSec > 0 ? `Wait ${cooldownSec}s…` : 'Create account'
 
