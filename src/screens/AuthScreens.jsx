@@ -8,8 +8,8 @@ import {
 import { getHashRoute, navigate } from '../lib/navigation'
 import { resumeAfterAuth } from '../components/SignInToBookModal'
 import { capturePromoFromLocation } from '../lib/riderPromo'
-import { AccessibleAlert } from '../components/AccessibleAlert'
-import { RIDE_STYLES, isProfileComplete, profileFieldError } from '../../packages/rides-native/partyProfile.js'
+import { RIDE_STYLES, isProfileComplete, profileFieldError, missingProfileFields } from '../../packages/rides-native/partyProfile.js'
+import { buildFieldA11yProps, getFieldErrorProps } from '../lib/formA11y.js'
 
 const fieldStyle = {
   width: '100%',
@@ -126,15 +126,39 @@ export function SignInScreen() {
   return (
     <AuthShell title="Welcome back" subtitle="Sign in to book airport rides. Surge applies on busy hours and game days.">
       <form onSubmit={onSubmit}>
-        <label style={{ display: 'block', marginBottom: 14 }}>
+        <label htmlFor="signin-email" style={{ display: 'block', marginBottom: 14 }}>
           <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink-secondary)' }}>Email</span>
-          <input required type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} style={fieldStyle} />
+          <input
+            id="signin-email"
+            required
+            type="email"
+            autoComplete="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            aria-invalid={Boolean(error) ? 'true' : undefined}
+            aria-describedby={error ? 'signin-form-alert' : undefined}
+            style={fieldStyle}
+          />
         </label>
-        <label style={{ display: 'block', marginBottom: 18 }}>
+        <label htmlFor="signin-password" style={{ display: 'block', marginBottom: 18 }}>
           <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink-secondary)' }}>Password</span>
-          <input required type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} style={fieldStyle} />
+          <input
+            id="signin-password"
+            required
+            type="password"
+            autoComplete="current-password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            aria-invalid={Boolean(error) ? 'true' : undefined}
+            aria-describedby={error ? 'signin-form-alert' : undefined}
+            style={fieldStyle}
+          />
         </label>
-        {error && <AccessibleAlert error={error} onDismiss={() => setError(null)} style={{ marginBottom: 12 }} />}
+        {error && (
+          <p id="signin-form-alert" role="alert" aria-live="polite" className="form-summary-alert">
+            {error}
+          </p>
+        )}
         <button type="submit" className="pressable primary-cta" disabled={busy} style={{ width: '100%', padding: 16, borderRadius: 16, background: 'linear-gradient(135deg, var(--orange) 0%, #ff7a1a 100%)', color: '#fff', fontWeight: 700, fontSize: 16, boxShadow: 'var(--shadow-cta)', opacity: busy ? 0.7 : 1 }}>
           {busy ? 'Signing in…' : 'Sign in'}
         </button>
@@ -178,6 +202,7 @@ export function SignUpScreen() {
   const [created, setCreated] = useState(false)
   const [busy, setBusy] = useState(false)
   const [cooldownSec, setCooldownSec] = useState(() => getSignupRateLimitRemainingSec())
+  const [touchedSubmit, setTouchedSubmit] = useState(false)
   const submitLock = useRef(false)
 
   useEffect(() => {
@@ -192,6 +217,7 @@ export function SignUpScreen() {
 
   async function onSubmit(e) {
     e.preventDefault()
+    setTouchedSubmit(true)
     if (created || submitLock.current || busy) return
     const left = getSignupRateLimitRemainingSec()
     if (left > 0) {
@@ -243,6 +269,8 @@ export function SignUpScreen() {
 
   const blocked = busy || cooldownSec > 0
   const profileReady = isProfileComplete({ full_name: fullName, phone, bio, ride_style: rideStyle })
+  const missingFields = missingProfileFields({ full_name: fullName, phone, bio, ride_style: rideStyle })
+  const showValidation = Boolean(touchedSubmit || error)
   const cta =
     busy ? 'Creating…' : cooldownSec > 0 ? `Wait ${cooldownSec}s…` : 'Create account'
 
@@ -252,20 +280,69 @@ export function SignUpScreen() {
         <p style={{ fontSize: 12, color: '#522D80', lineHeight: 1.4, marginBottom: 14 }}>
           A profile is required. The other person sees your name, bio, and ride style after a ride is accepted.
         </p>
-        <label style={{ display: 'block', marginBottom: 14 }}>
+        <label htmlFor="signup-fullname" style={{ display: 'block', marginBottom: 14 }}>
           <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink-secondary)' }}>Full name</span>
-          <input required type="text" autoComplete="name" value={fullName} onChange={(e) => setFullName(e.target.value)} style={fieldStyle} disabled={blocked} />
+          <input
+            id="signup-fullname"
+            required
+            type="text"
+            autoComplete="name"
+            value={fullName}
+            onChange={(e) => setFullName(e.target.value)}
+            aria-invalid={showValidation && missingFields.includes('full_name') ? 'true' : undefined}
+            aria-describedby={showValidation && missingFields.includes('full_name') ? 'signup-fullname-error' : undefined}
+            style={fieldStyle}
+            disabled={blocked}
+          />
+          {showValidation && missingFields.includes('full_name') && (
+            <span id="signup-fullname-error" role="alert" className="field-error-text">
+              Full name is required (minimum 2 characters).
+            </span>
+          )}
         </label>
-        <label style={{ display: 'block', marginBottom: 14 }}>
+        <label htmlFor="signup-phone" style={{ display: 'block', marginBottom: 14 }}>
           <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink-secondary)' }}>Mobile number</span>
-          <input required type="tel" autoComplete="tel" placeholder="864-555-0100" value={phone} onChange={(e) => setPhone(e.target.value)} style={fieldStyle} disabled={blocked} />
+          <input
+            id="signup-phone"
+            required
+            type="tel"
+            autoComplete="tel"
+            placeholder="864-555-0100"
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            aria-invalid={showValidation && missingFields.includes('phone') ? 'true' : undefined}
+            aria-describedby={showValidation && missingFields.includes('phone') ? 'signup-phone-error' : undefined}
+            style={fieldStyle}
+            disabled={blocked}
+          />
+          {showValidation && missingFields.includes('phone') && (
+            <span id="signup-phone-error" role="alert" className="field-error-text">
+              Valid 10-digit mobile number is required.
+            </span>
+          )}
         </label>
-        <label style={{ display: 'block', marginBottom: 14 }}>
+        <label htmlFor="signup-bio" style={{ display: 'block', marginBottom: 14 }}>
           <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink-secondary)' }}>Short bio</span>
-          <input required type="text" placeholder="How you like to ride" value={bio} onChange={(e) => setBio(e.target.value)} style={fieldStyle} disabled={blocked} />
+          <input
+            id="signup-bio"
+            required
+            type="text"
+            placeholder="How you like to ride"
+            value={bio}
+            onChange={(e) => setBio(e.target.value)}
+            aria-invalid={showValidation && missingFields.includes('bio') ? 'true' : undefined}
+            aria-describedby={showValidation && missingFields.includes('bio') ? 'signup-bio-error' : undefined}
+            style={fieldStyle}
+            disabled={blocked}
+          />
+          {showValidation && missingFields.includes('bio') && (
+            <span id="signup-bio-error" role="alert" className="field-error-text">
+              Bio must be at least 8 characters.
+            </span>
+          )}
         </label>
-        <div style={{ marginBottom: 14 }}>
-          <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink-secondary)' }}>Ride style</span>
+        <div role="group" aria-labelledby="signup-ridestyle-label" style={{ marginBottom: 14 }}>
+          <span id="signup-ridestyle-label" style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink-secondary)' }}>Ride style</span>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 8 }}>
             {RIDE_STYLES.map((style) => {
               const on = rideStyle === style
@@ -273,6 +350,7 @@ export function SignUpScreen() {
                 <button
                   key={style}
                   type="button"
+                  aria-pressed={on}
                   onClick={() => setRideStyle(style)}
                   disabled={blocked}
                   style={{
@@ -289,33 +367,73 @@ export function SignUpScreen() {
               )
             })}
           </div>
+          {showValidation && missingFields.includes('ride_style') && (
+            <span id="signup-ridestyle-error" role="alert" className="field-error-text">
+              Please choose a ride style.
+            </span>
+          )}
         </div>
-        <label style={{ display: 'block', marginBottom: 14 }}>
-          <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink-secondary)' }}>Email <span style={{ fontWeight: 500, color: 'var(--ink-tertiary)' }}>(Clemson email gets student pricing)</span></span>
-          <input required type="email" autoComplete="email" placeholder="you@gmail.com" value={email} onChange={(e) => setEmail(e.target.value)} style={fieldStyle} disabled={blocked} />
-        </label>
-        <label style={{ display: 'block', marginBottom: 14 }}>
-          <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink-secondary)' }}>Password</span>
-          <input required type="password" autoComplete="new-password" minLength={6} value={password} onChange={(e) => setPassword(e.target.value)} style={fieldStyle} disabled={blocked || created} />
-        </label>
-        <label style={{ display: 'block', marginBottom: 18 }}>
-          <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink-secondary)' }}>Promo code <span style={{ fontWeight: 500, color: 'var(--ink-tertiary)' }}>(optional)</span></span>
+        <label htmlFor="signup-email" style={{ display: 'block', marginBottom: 14 }}>
+          <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink-secondary)' }}>
+            Email <span id="signup-email-hint" style={{ fontWeight: 500, color: 'var(--ink-tertiary)' }}>(Clemson email gets student pricing)</span>
+          </span>
           <input
+            id="signup-email"
+            required
+            type="email"
+            autoComplete="email"
+            placeholder="you@gmail.com"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            aria-describedby="signup-email-hint"
+            style={fieldStyle}
+            disabled={blocked}
+          />
+        </label>
+        <label htmlFor="signup-password" style={{ display: 'block', marginBottom: 14 }}>
+          <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink-secondary)' }}>Password</span>
+          <input
+            id="signup-password"
+            required
+            type="password"
+            autoComplete="new-password"
+            minLength={6}
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            style={fieldStyle}
+            disabled={blocked || created}
+          />
+        </label>
+        <label htmlFor="signup-promo" style={{ display: 'block', marginBottom: 18 }}>
+          <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink-secondary)' }}>
+            Promo code <span style={{ fontWeight: 500, color: 'var(--ink-tertiary)' }}>(optional)</span>
+          </span>
+          <input
+            id="signup-promo"
             type="text"
             autoComplete="off"
             autoCapitalize="characters"
             placeholder="Friend's code"
             value={promo}
             onChange={(e) => setPromo(e.target.value.toUpperCase())}
+            aria-describedby="signup-promo-hint"
             style={fieldStyle}
             disabled={blocked || created}
           />
-          <span style={{ display: 'block', marginTop: 6, fontSize: 12, color: '#522D80', lineHeight: 1.4 }}>
+          <span id="signup-promo-hint" style={{ display: 'block', marginTop: 6, fontSize: 12, color: '#522D80', lineHeight: 1.4 }}>
             Applied when you create the account. You and your friend are rewarded only after you complete your first ride.
           </span>
         </label>
-        {error && <AccessibleAlert error={error} onDismiss={() => setError(null)} style={{ marginBottom: 12 }} />}
-        {info && <p style={{ color: '#522D80', fontSize: 13, marginBottom: 12, lineHeight: 1.45 }}>{info}</p>}
+        {error && (
+          <p id="signup-form-alert" role="alert" aria-live="polite" className="form-summary-alert">
+            {error}
+          </p>
+        )}
+        {info && (
+          <p role="status" aria-live="polite" style={{ color: '#522D80', fontSize: 13, marginBottom: 12, lineHeight: 1.45 }}>
+            {info}
+          </p>
+        )}
         {cooldownSec > 0 && !error && (
           <p style={{ color: 'var(--ink-secondary)', fontSize: 13, marginBottom: 12 }}>
             Email send limit cooling down — retry in {cooldownSec}s.

@@ -80,6 +80,42 @@ textarea:focus-visible,
   box-shadow: 0 0 0 3px var(--orange-glow), 0 4px 16px rgba(245, 102, 0, 0.12) !important;
 }
 
+/* Accessible form field validation and error styling */
+input[aria-invalid="true"],
+textarea[aria-invalid="true"],
+select[aria-invalid="true"] {
+  border-color: var(--danger) !important;
+  box-shadow: 0 0 0 1px var(--danger);
+}
+
+input[aria-invalid="true"]:focus-visible,
+textarea[aria-invalid="true"]:focus-visible,
+select[aria-invalid="true"]:focus-visible {
+  outline: 2px solid var(--danger);
+  outline-offset: 2px;
+}
+
+.field-error-text {
+  display: block;
+  margin-top: 4px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--danger);
+  line-height: 1.35;
+}
+
+.form-summary-alert {
+  background: rgba(217, 45, 32, 0.10);
+  color: var(--danger);
+  border: 1px solid rgba(217, 45, 32, 0.25);
+  border-radius: 12px;
+  padding: 12px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.4;
+  margin-bottom: 14px;
+}
+
 @keyframes spin {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
