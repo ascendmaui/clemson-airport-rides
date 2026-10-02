@@ -4,6 +4,7 @@ import test from 'node:test'
 import Stripe from 'stripe'
 
 // Set STRIPE_SECRET_KEY before importing tripWait.js so friendRideLib initializes stripeOk() as true.
+const origStripeKey = process.env.STRIPE_SECRET_KEY
 process.env.STRIPE_SECRET_KEY = 'sk_test_mock_trip_wait_key'
 
 const { assertAction, chargeWaitFees, applyTripWait } = await import('./tripWait.js')
@@ -42,6 +43,11 @@ test.after(() => {
   piProto.create = origCreate
   piProto.retrieve = origRetrieve
   piProto.update = origUpdate
+  if (origStripeKey !== undefined) {
+    process.env.STRIPE_SECRET_KEY = origStripeKey
+  } else {
+    delete process.env.STRIPE_SECRET_KEY
+  }
 })
 
 // ---------------------------------------------------------------------------
@@ -432,8 +438,9 @@ test('chargeWaitFees marks payments as pending with stripe_unconfigured when Str
     const res = await chargeWaitFees(mockSb, trip);
     console.log(JSON.stringify({ res, payments }));
   `
+  const repoRoot = new URL('..', import.meta.url)
   const out = execFileSync(process.execPath, ['--input-type=module', '-e', script], {
-    cwd: process.cwd(),
+    cwd: repoRoot,
   })
   const { res, payments } = JSON.parse(out.toString())
 

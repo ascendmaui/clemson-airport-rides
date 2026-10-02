@@ -11,7 +11,9 @@ function wantsStub(specifier, parentURL) {
   if (specifier !== './supabase' && specifier !== './supabase.js') return false
   return (
     typeof parentURL === 'string' &&
-    (parentURL.endsWith('/src/lib/geofence.js') || parentURL.endsWith('/src/lib/rideDemand.js'))
+    (parentURL.includes('/src/lib/') ||
+      parentURL.includes('/src/screens/') ||
+      parentURL.includes('/src/components/'))
   )
 }
 

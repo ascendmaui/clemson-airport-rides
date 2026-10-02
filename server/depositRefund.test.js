@@ -9,7 +9,7 @@
  * injected — the fake sb has to answer those queries.
  */
 import assert from 'node:assert/strict'
-import test, { describe } from 'node:test'
+import test, { before, after, describe } from 'node:test'
 import { register } from 'node:module'
 import { depositCents } from '../src/lib/stripeCheckout.js'
 import {
@@ -21,8 +21,20 @@ import {
 import { quoteAirportCheckout } from './authoritativeFare.js'
 import { studentDiscountGranted } from '../src/lib/studentDomain.js'
 
-delete process.env.GOOGLE_MAPS_API_KEY
-delete process.env.GOOGLE_ROUTES_API_KEY
+const origMapsKey = process.env.GOOGLE_MAPS_API_KEY
+const origRoutesKey = process.env.GOOGLE_ROUTES_API_KEY
+
+before(() => {
+  delete process.env.GOOGLE_MAPS_API_KEY
+  delete process.env.GOOGLE_ROUTES_API_KEY
+})
+
+after(() => {
+  if (origMapsKey !== undefined) process.env.GOOGLE_MAPS_API_KEY = origMapsKey
+  else delete process.env.GOOGLE_MAPS_API_KEY
+  if (origRoutesKey !== undefined) process.env.GOOGLE_ROUTES_API_KEY = origRoutesKey
+  else delete process.env.GOOGLE_ROUTES_API_KEY
+})
 
 // pricing.js (pulled in by midrideCancel.js) uses Vite-style extensionless
 // specifiers. Node ESM will not load that graph unless a resolver adds .js.
