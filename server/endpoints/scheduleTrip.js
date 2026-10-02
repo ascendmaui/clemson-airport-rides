@@ -63,9 +63,11 @@ export default async function handler(req, res, deps = {}) {
   const purpose = PURPOSES.has(body.purpose) ? body.purpose : 'planned'
   const tier = body.tier === 'tesla' ? 'tesla' : 'standard'
   const airport = body.airport ? String(body.airport).toUpperCase() : null
-  const when = parseRideAt(body, new Date())
+  const clockNow =
+    typeof deps.now === 'function' ? deps.now() : deps.now != null ? Number(deps.now) : Date.now()
+  const when = parseRideAt(body, new Date(clockNow))
   const scheduled = Boolean(body.date || body.pickupAt)
-  if (scheduled && when.getTime() < Date.now() + 30 * 60 * 1000) {
+  if (scheduled && when.getTime() < clockNow + 30 * 60 * 1000) {
     return json(res, 400, { error: 'Schedule at least 30 minutes ahead.' })
   }
 
