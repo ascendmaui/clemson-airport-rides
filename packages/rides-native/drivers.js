@@ -28,6 +28,39 @@ export const PREFERRED_CANCELED_COPY =
 export const OPEN_POOL_COPY =
   'No driver is pinned to this ride. The first available driver can accept it.'
 
+/** True when the vehicle row is listed as the Tesla Model 3 fleet option. */
+export function isTeslaVehicle(vehicle) {
+  if (!vehicle || typeof vehicle !== 'object') return false
+  if (vehicle.is_tesla === true || vehicle.isTesla === true) return true
+  const tier = String(vehicle.tier || '').trim().toLowerCase()
+  if (tier === 'tesla' || tier === 'tesla_self_driving') return true
+  const make = String(vehicle.make || '').trim().toLowerCase()
+  const model = String(vehicle.model || '').trim().toLowerCase()
+  return make === 'tesla' && /\bmodel\s*3\b/.test(model)
+}
+
+/** True when a mapped driver card is a Tesla fleet listing. */
+export function isTeslaDriver(driver) {
+  if (!driver) return false
+  if (driver.isTesla === true) return true
+  return isTeslaVehicle(driver.vehicle)
+}
+
+export const TESLA_FLEET_EMPTY_COPY =
+  'No Tesla Model 3 drivers are online right now. Listings come from drivers who toggled Tesla fleet. Self-driving dispatch is not available.'
+
+export const TESLA_FLEET_PICK_COPY =
+  'Tesla Model 3 fleet only. Pick a listed Tesla driver. A person still drives — there is no robotaxi match.'
+
+/** When the rider chose Tesla, keep only listed Tesla drivers (preferred offline included). */
+export function filterDriversForFleet(drivers, tier) {
+  const list = Array.isArray(drivers) ? drivers : []
+  const wantTesla = tier === 'tesla' || tier === 'tesla_self_driving'
+  if (!wantTesla) return list
+  return list.filter((driver) => isTeslaDriver(driver))
+}
+
+
 const favoriteKey = (userId) => `rider.preferredDrivers.${userId || 'anon'}`
 
 export function preferredTripFields(driverId) {
@@ -224,7 +257,7 @@ function mapDrivers(statuses, profiles, vehicles) {
         ? [vehicle.color, vehicle.make, vehicle.model].filter(Boolean).join(' ')
         : 'Vehicle TBD',
       plate: vehicle?.plate || null,
-      isTesla: Boolean(vehicle?.is_tesla),
+      isTesla: isTeslaVehicle(vehicle),
       tier: vehicle?.tier || 'standard',
     }
   }).filter(Boolean)

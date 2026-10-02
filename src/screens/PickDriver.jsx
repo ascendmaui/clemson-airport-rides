@@ -13,12 +13,15 @@ import {
   describeDriver,
   fetchDriversByIds,
   fetchOnlineDrivers,
+  filterDriversForFleet,
   groupDriversForPicker,
   loadFavoriteDriverIds,
   PREFERRED_MATCH_COPY,
   PREFERRED_OFFLINE_COPY,
   saveFavoriteDriverIds,
   sortPreferredDrivers,
+  TESLA_FLEET_EMPTY_COPY,
+  TESLA_FLEET_PICK_COPY,
 } from '../../packages/rides-native/drivers.js'
 import { SignInToBookModal, useRequireAuthForAction } from '../components/SignInToBookModal'
 import { teslaFleetNotice } from '../../packages/rides-native/tripTags.js'
@@ -68,7 +71,11 @@ export function PickDriver({ dest = 'GSP Airport', tier = 'standard', listCents 
     const extra = extraIds.length
       ? await fetchDriversByIds(supabase, extraIds)
       : { drivers: [], error: null }
-    const merged = sortPreferredDrivers([...online, ...extra.drivers], fav.ids, approachPickup)
+    const merged = sortPreferredDrivers(
+      filterDriversForFleet([...online, ...extra.drivers], tier),
+      fav.ids,
+      approachPickup,
+    )
     setDrivers(merged)
     setSelected((current) => merged.find((driver) => driver.id === current?.id) || null)
     setFavoriteIds(fav.ids)
@@ -84,7 +91,7 @@ export function PickDriver({ dest = 'GSP Airport', tier = 'standard', listCents 
       load()
     })
     return unsub
-  }, [user?.id])
+  }, [user?.id, tier])
 
   const toggleFavorite = async (driverId) => {
     if (!user?.id) {
@@ -104,6 +111,10 @@ export function PickDriver({ dest = 'GSP Airport', tier = 'standard', listCents 
     if (!selected) return
     if (!selected.online) {
       setError('That driver is offline. This request does not auto-match.')
+      return
+    }
+    if ((tier === 'tesla' || tier === 'tesla_self_driving') && !selected.isTesla) {
+      setError('Tesla Model 3 fleet only. That driver is not listed as Tesla.')
       return
     }
     setBusy(true)
@@ -137,9 +148,11 @@ export function PickDriver({ dest = 'GSP Airport', tier = 'standard', listCents 
     <div className="fade-in" style={{ minHeight: '100%', background: 'var(--surface-muted)', display: 'flex', flexDirection: 'column' }}>
       <div style={{ padding: '20px 20px 8px' }}>
         <button type="button" className="pressable" onClick={() => navigate('tiers', { dest })} style={{ fontSize: 20 }}>←</button>
-        <h1 style={{ fontSize: 24, fontWeight: 700, marginTop: 12 }}>Pick a driver</h1>
+        <h1 style={{ fontSize: 24, fontWeight: 700, marginTop: 12 }}>
+          {tier === 'tesla' || tier === 'tesla_self_driving' ? 'Pick a Tesla driver' : 'Pick a driver'}
+        </h1>
         <p style={{ color: 'var(--ink-secondary)', fontSize: 14, marginTop: 6, lineHeight: 1.45 }}>
-          {PREFERRED_MATCH_COPY}
+          {tier === 'tesla' || tier === 'tesla_self_driving' ? TESLA_FLEET_PICK_COPY : PREFERRED_MATCH_COPY}
         </p>
         {tripFlash && (
           <div style={{ marginTop: 10, padding: '8px 12px', borderRadius: 12, background: 'var(--purple-soft)', color: 'var(--purple)', fontSize: 12, fontWeight: 600 }}>
@@ -161,11 +174,17 @@ export function PickDriver({ dest = 'GSP Airport', tier = 'standard', listCents 
         {error && <AccessibleAlert error={error} onDismiss={() => setError(null)} style={{ margin: '8px 0' }} />}
         {!loading && !anyOnline && (
           <div className="sheet" style={{ padding: 24, borderRadius: 20, textAlign: 'center', boxShadow: 'var(--shadow-pill)', marginBottom: 12 }}>
-            <p style={{ fontWeight: 700, marginBottom: 8 }}>{drivers.length ? 'Preferred drivers are offline' : 'No drivers available'}</p>
+            <p style={{ fontWeight: 700, marginBottom: 8 }}>
+              {tier === 'tesla' || tier === 'tesla_self_driving'
+                ? (drivers.length ? 'Tesla drivers are offline' : 'No Tesla Model 3 drivers online')
+                : (drivers.length ? 'Preferred drivers are offline' : 'No drivers available')}
+            </p>
             <p style={{ fontSize: 13, color: 'var(--ink-secondary)', lineHeight: 1.45 }}>
-              {drivers.length
-                ? PREFERRED_OFFLINE_COPY
-                : 'When a driver goes online in Driver mode, they show up here. This screen does not auto-match.'}
+              {tier === 'tesla' || tier === 'tesla_self_driving'
+                ? (drivers.length ? PREFERRED_OFFLINE_COPY : TESLA_FLEET_EMPTY_COPY)
+                : (drivers.length
+                  ? PREFERRED_OFFLINE_COPY
+                  : 'When a driver goes online in Driver mode, they show up here. This screen does not auto-match.')}
             </p>
           </div>
         )}
