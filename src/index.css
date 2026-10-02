@@ -1054,3 +1054,94 @@ textarea:focus-visible,
     transform: none;
   }
 }
+
+/* —— Accessible Alert & Error Boundary (GA64) —— */
+.accessible-alert {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  font-size: 13px;
+  line-height: 1.45;
+  transition: opacity 200ms var(--ease-soft), transform 200ms var(--ease-spring);
+}
+.accessible-alert--danger {
+  background: rgba(217, 45, 32, 0.08);
+  border: 1px solid rgba(217, 45, 32, 0.28);
+  color: var(--danger);
+}
+.accessible-alert--warning {
+  background: rgba(245, 102, 0, 0.08);
+  border: 1px solid rgba(245, 102, 0, 0.28);
+  color: #c24a00;
+}
+.accessible-alert--info {
+  background: rgba(82, 45, 128, 0.08);
+  border: 1px solid rgba(82, 45, 128, 0.24);
+  color: var(--purple);
+}
+.accessible-alert__icon {
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+.accessible-alert__body {
+  flex: 1;
+  min-width: 0;
+}
+.accessible-alert__title {
+  font-weight: 750;
+  margin-bottom: 2px;
+}
+.accessible-alert__message {
+  font-weight: 550;
+}
+.accessible-alert__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+.accessible-alert__btn {
+  padding: 4px 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.accessible-alert__btn--retry {
+  background: var(--danger);
+  color: #fff;
+  border: none;
+}
+.accessible-alert__btn--dismiss {
+  background: transparent;
+  color: inherit;
+  border: 1px solid currentColor;
+  opacity: 0.8;
+}
+.accessible-alert__close {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 2px 4px;
+  font-size: 16px;
+  line-height: 1;
+  color: inherit;
+  opacity: 0.7;
+}
+.accessible-alert__close:hover,
+.accessible-alert__close:focus-visible {
+  opacity: 1;
+}
+
+.accessible-error-boundary {
+  padding: 24px 20px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(16px);
+  border: 1px solid rgba(217, 45, 32, 0.2);
+  box-shadow: var(--shadow-modal);
+  text-align: center;
+}
+

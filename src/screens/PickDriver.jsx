@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { PrimaryButton } from '../components/PrimaryButton'
 import { SkeletonDriverCard } from '../components/LoadingSkeleton'
+import { AccessibleAlert } from '../components/AccessibleAlert'
 import { navigate } from '../lib/navigation'
 import { subscribeTrips, supabase, supabaseConfigured } from '../lib/supabase'
 import { requestDriverTrip } from '../lib/trips'
@@ -157,7 +158,7 @@ export function PickDriver({ dest = 'GSP Airport', tier = 'standard', listCents 
           </p>
         )}
         {loading && <SkeletonDriverCard count={3} />}
-        {error && <p style={{ color: '#b00020', padding: 12 }}>{error}</p>}
+        {error && <AccessibleAlert error={error} onDismiss={() => setError(null)} style={{ margin: '8px 0' }} />}
         {!loading && !anyOnline && (
           <div className="sheet" style={{ padding: 24, borderRadius: 20, textAlign: 'center', boxShadow: 'var(--shadow-pill)', marginBottom: 12 }}>
             <p style={{ fontWeight: 700, marginBottom: 8 }}>{drivers.length ? 'Preferred drivers are offline' : 'No drivers available'}</p>
