@@ -198,3 +198,24 @@ export function riderTrackingSnapshot(supabase, tripId) {
     driverLng: status?.lng ?? null,
   }
 }
+
+export async function cancelSearchingTrip(supabase, tripId, riderId, at = '2026-10-01T08:05:00.000Z') {
+  const { data, error } = await supabase
+    .from('trips')
+    .update({ status: 'canceled', canceled_at: at })
+    .eq('id', tripId)
+    .eq('rider_id', riderId)
+    .in('status', ['searching', 'offered'])
+    .select('id, status, rider_id, driver_id, canceled_at')
+    .maybeSingle()
+  if (error) throw error
+  if (!data) throw new Error('That ride is no longer searching')
+
+  const event = await supabase.from('trip_events').insert({
+    trip_id: tripId,
+    kind: 'canceled',
+    payload: { reason: 'rider_cancel', source: 'rider_app', canceled_at: at },
+  })
+  if (event.error) throw event.error
+  return data
+}
