@@ -62,7 +62,7 @@ function AmbassadorAttributionSync() {
   return null
 }
 
-const PROTECTED = new Set(['driver', 'driver-onboarding', 'account', 'driver-signup', 'admin', 'incentives', 'lost-found', 'history', 'earnings'])
+const PROTECTED = new Set(['driver', 'driver-onboarding', 'account', 'driver-signup', 'admin', 'admin-dashboard', 'incentives', 'lost-found', 'history', 'earnings'])
 const SITE_ROUTES = new Set(['landing', '', 'privacy', 'terms'])
 
 function Screen({ path, params }) {
@@ -134,6 +134,12 @@ function Screen({ path, params }) {
       return (
         <RequireAuth>
           <AdminDesk />
+        </RequireAuth>
+      )
+    case 'admin-dashboard':
+      return (
+        <RequireAuth>
+          <AdminDesk restrictedToEmail="johnmatveyev@gmail.com" />
         </RequireAuth>
       )
     case 'friends':
