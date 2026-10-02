@@ -1,6 +1,6 @@
 /** Canonical public surfaces for the one Clemson RIDES product. */
 
-/** Stable production web host (johnmatveyev-lab / clemson-airport-rides). Sole public domain. The vercel.app alias redirects here. */
+/** Sole public production web host. vercel.app deploy aliases redirect here. */
 export const WEB_ORIGIN = 'https://clemsonrides.com'
 
 /** Passenger soft-launch QR target — hash router book home (campus / airport / game-day entry). */
