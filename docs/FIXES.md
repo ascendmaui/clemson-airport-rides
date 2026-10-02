@@ -1811,3 +1811,19 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
 - **What changed:** Both paths are already arguments of the root `package.json` `"test"` script. `apps/rider/lib/approachAlert.test.mjs` has been listed since the approaching-driver alert. `packages/rides-native/safety.test.js` has been listed with the native safety suite. t1 and t2 did not add a new test file, so the script did not need another path.
 - **Files touched:** `docs/FIXES.md`
 - **Verified:** `npm test` — 798 pass, 0 fail, including the approachAlert cases (haversine, feet readout, 100/200/500 ft stages, status line with feet or nearby, previousStage hold).
+
+## 2026-10-02 — [agy] GA92: Stripe webhook retryable 500 status classification and stream write defenses
+
+- **Date:** 2026-10-02
+- **Track / machine:** Clemson RIDES · MacBook Max (agy) · GA92
+- **What was wrong:** When `checkout.session.completed` or `async_payment_succeeded` experienced a database write failure (`applied.ok === false` or `applied.recorded?.ok === false`), the webhook returned HTTP 200, signaling to Stripe that event delivery succeeded and dropping the event permanently without retries. Additionally, credit purchases and tip failures returned 200, and handlers lacked `res.headersSent` and `res.writableEnded` guards to prevent stream write errors on aborted requests.
+- **What changed:**
+  - In `api/stripe-webhook.js`, return retryable HTTP 500 when `applied.ok === false` or `applied.recorded?.ok === false` for completed/async-succeeded checkout sessions.
+  - Return retryable HTTP 500 when `grantCreditPack` (`granted.ok === false`) or tip recording (`recorded.ok === false`) fails.
+  - Added dependency injection support for `deps.recordTip` and `deps.recordCreditPurchase`.
+  - Added defensive guards `if (!res.headersSent)` and `if (res.writableEnded) return` before writing response headers or payload chunks.
+  - Added dedicated unit test suite `tests/gaAuditWebhookRetryable.test.js` validating 500 status codes on deposit recording failures, async payment apply failures, credit grant failures, and aborted stream handling.
+  - Wired `tests/gaAuditWebhookRetryable.test.js` into root `package.json` test script.
+- **Files touched:** `api/stripe-webhook.js`, `tests/gaAuditWebhookRetryable.test.js`, `package.json`, `docs/FIXES.md`
+- **Verified:** `npm test` passing with 0 failures.
+

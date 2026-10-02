@@ -104,12 +104,15 @@ async function recordCreditPurchase(session) {
 // is handled idempotently via applyPaidCheckoutSession in server/checkoutReconcile.js.
 
 export default async function handler(req, res, deps = {}) {
-  res.setHeader('Content-Type', 'application/json')
-  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private')
-  res.setHeader('Pragma', 'no-cache')
+  if (!res.headersSent) {
+    res.setHeader('Content-Type', 'application/json')
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private')
+    res.setHeader('Pragma', 'no-cache')
+  }
   if (req.method !== 'POST') {
-    res.setHeader('Allow', 'POST')
+    if (!res.headersSent) res.setHeader('Allow', 'POST')
     res.statusCode = 405
+    if (res.writableEnded) return
     return res.end(JSON.stringify({ error: 'Method not allowed' }))
   }
 
@@ -119,6 +122,7 @@ export default async function handler(req, res, deps = {}) {
 
   if (!stripeKey || !stripeKey.startsWith('sk_') || stripeKey.includes('placeholder')) {
     res.statusCode = 200
+    if (res.writableEnded) return
     return res.end(JSON.stringify({
       stub: true,
       message: 'STRIPE_SECRET_KEY not set — webhook stub acknowledged',
@@ -138,8 +142,11 @@ export default async function handler(req, res, deps = {}) {
     }
 
     if (event.type === 'payment_intent.succeeded' && event.data?.object?.metadata?.kind === 'tip') {
-      const recorded = await recordTip(event.data.object)
-      res.statusCode = 200
+      const recordTipFn = deps.recordTip || recordTip
+      const recorded = await recordTipFn(event.data.object)
+      const retryable = recorded && recorded.ok === false
+      res.statusCode = retryable ? 500 : 200
+      if (res.writableEnded) return
       return res.end(JSON.stringify({ received: true, type: event.type, recorded }))
     }
 
@@ -164,6 +171,7 @@ export default async function handler(req, res, deps = {}) {
         console.error('[stripe-webhook] payment_failed', { tripId, code, pi: pi?.id })
       }
       res.statusCode = 200
+      if (res.writableEnded) return
       return res.end(JSON.stringify({ received: true, type: event.type, held, code }))
     }
 
@@ -178,15 +186,19 @@ export default async function handler(req, res, deps = {}) {
         || released?.reason === 'trip_unreadable'
         || released?.reason === 'payments_unreadable'
       res.statusCode = retryable ? 500 : 200
+      if (res.writableEnded) return
       return res.end(JSON.stringify({ received: true, type: event.type, released }))
     }
 
     if (event.type === 'checkout.session.completed' || event.type === 'checkout.session.async_payment_succeeded') {
       const session = event.data?.object
       if (session?.metadata?.kind === 'credit_purchase') {
-        const granted = await recordCreditPurchase(session)
+        const grantFn = deps.recordCreditPurchase || recordCreditPurchase
+        const granted = await grantFn(session)
         console.log('[stripe-webhook] credit_purchase', { id: session?.id, granted })
-        res.statusCode = 200
+        const retryable = granted && granted.ok === false
+        res.statusCode = retryable ? 500 : 200
+        if (res.writableEnded) return
         return res.end(JSON.stringify({ received: true, type: event.type, granted }))
       }
       const client = deps.serviceClient ? deps.serviceClient() : (activeServiceKey ? serviceClient() : null)
@@ -205,16 +217,20 @@ export default async function handler(req, res, deps = {}) {
         live,
         referral,
       })
-      res.statusCode = 200
+      const retryable = applied?.ok === false || applied?.recorded?.ok === false
+      res.statusCode = retryable ? 500 : 200
+      if (res.writableEnded) return
       return res.end(JSON.stringify({ received: true, type: event.type, recorded, live, referral }))
     }
 
     console.log('[stripe-webhook] unhandled', event.type)
     res.statusCode = 200
+    if (res.writableEnded) return
     return res.end(JSON.stringify({ received: true, type: event.type }))
   } catch (err) {
     console.error('[stripe-webhook]', err)
     res.statusCode = 400
+    if (res.writableEnded) return
     return res.end(JSON.stringify({ error: err.message || 'Webhook error' }))
   }
 }
