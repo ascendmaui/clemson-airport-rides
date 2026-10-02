@@ -1,6 +1,9 @@
-process.env.GOOGLE_MAPS_API_KEY = process.env.GOOGLE_MAPS_API_KEY || 'mock_key_for_tests'
+const origMapsKey = process.env.GOOGLE_MAPS_API_KEY
+if (!process.env.GOOGLE_MAPS_API_KEY) {
+  process.env.GOOGLE_MAPS_API_KEY = 'mock_key_for_tests'
+}
 
-import test, { describe } from 'node:test'
+import test, { describe, after } from 'node:test'
 import assert from 'node:assert/strict'
 
 const {
@@ -217,6 +220,7 @@ describe('FriendRide Lobby', () => {
       return origFetch(url, init)
     }
 
+    const prevKey = process.env.GOOGLE_MAPS_API_KEY
     try {
       process.env.GOOGLE_MAPS_API_KEY = 'mock_key_for_tests'
       const reqRecompute = mockReq('POST', { token: 'tok-xyz', splitMode: 'even' })
@@ -227,7 +231,17 @@ describe('FriendRide Lobby', () => {
       assert.equal(data.token, 'tok-xyz')
       assert.ok(data.total_fare_cents > 0)
     } finally {
+      if (prevKey === undefined) delete process.env.GOOGLE_MAPS_API_KEY
+      else process.env.GOOGLE_MAPS_API_KEY = prevKey
       global.fetch = origFetch
+    }
+  })
+
+  after(() => {
+    if (origMapsKey === undefined) {
+      delete process.env.GOOGLE_MAPS_API_KEY
+    } else {
+      process.env.GOOGLE_MAPS_API_KEY = origMapsKey
     }
   })
 })

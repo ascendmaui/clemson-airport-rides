@@ -144,7 +144,11 @@ test('isAdminUser identifies admins across env var, roles, and flags', () => {
     assert.equal(isAdminUser(null, null), false)
     assert.equal(isAdminUser({}, {}), false)
   } finally {
-    process.env.ADMIN_EMAILS = prevEnv
+    if (prevEnv === undefined) {
+      delete process.env.ADMIN_EMAILS
+    } else {
+      process.env.ADMIN_EMAILS = prevEnv
+    }
   }
 })
 
