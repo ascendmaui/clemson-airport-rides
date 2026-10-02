@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { before, test } from 'node:test'
+import { after, before, test } from 'node:test'
 import { PGlite } from '@electric-sql/pglite'
 
 const MIGRATION_PATH = new URL(
@@ -88,4 +88,10 @@ test('a second INSERT ... ON CONFLICT DO NOTHING leaves one row', async () => {
     [TRIP, CODE],
   )
   assert.equal(after[0].n, 1)
+})
+
+after(async () => {
+  if (db) {
+    await db.close()
+  }
 })
