@@ -61,8 +61,14 @@ export async function authedJson(supabaseOrPath, pathOrOptions, maybeOptions) {
       method,
       headers: { ...headers },
       body: reqBody,
+      signal: options.signal,
     })
   } catch (err) {
+    if (err?.name === 'AbortError' || err?.name === 'TimeoutError' || options.signal?.aborted) {
+      const abortErr = new Error(err?.message || 'The operation was aborted')
+      abortErr.name = err?.name || 'AbortError'
+      throw abortErr
+    }
     const error = new Error(err?.message || 'Network error')
     error.network = true
     throw error
@@ -88,8 +94,14 @@ export async function authedJson(supabaseOrPath, pathOrOptions, maybeOptions) {
           method,
           headers: { ...headers },
           body: reqBody,
+          signal: options.signal,
         })
       } catch (err) {
+        if (err?.name === 'AbortError' || err?.name === 'TimeoutError' || options.signal?.aborted) {
+          const abortErr = new Error(err?.message || 'The operation was aborted')
+          abortErr.name = err?.name || 'AbortError'
+          throw abortErr
+        }
         const error = new Error(err?.message || 'Network error')
         error.network = true
         throw error
