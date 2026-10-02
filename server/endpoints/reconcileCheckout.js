@@ -12,8 +12,15 @@ import {
 import { reconcileCheckoutSession } from '../checkoutReconcile.js'
 
 export default async function handler(req, res, deps = {}) {
+  if (!res.headersSent) {
+    res.setHeader?.('Cache-Control', 'no-store, no-cache, must-revalidate, private')
+    res.setHeader?.('Pragma', 'no-cache')
+  }
   if (cors(req, res)) return
-  if (req.method !== 'POST') return json(res, 405, { error: 'Method not allowed' })
+  if (req.method !== 'POST') {
+    if (!res.headersSent) res.setHeader?.('Allow', 'POST, OPTIONS')
+    return json(res, 405, { error: 'Method not allowed' })
+  }
 
   const stripeOkFn = deps.stripeOk || stripeOk
   if (!deps.stripe && !stripeOkFn()) {
@@ -33,8 +40,9 @@ export default async function handler(req, res, deps = {}) {
   const { body, error: pe } = parseBody(req)
   if (pe) return json(res, 400, { error: pe })
 
-  const sessionId = body?.sessionId || body?.session_id
-  if (!sessionId || typeof sessionId !== 'string') {
+  const rawSessionId = body?.sessionId || body?.session_id
+  const sessionId = typeof rawSessionId === 'string' ? rawSessionId.trim() : ''
+  if (!sessionId) {
     return json(res, 400, { error: 'sessionId required' })
   }
 

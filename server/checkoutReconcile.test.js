@@ -87,6 +87,13 @@ function createMockDb() {
     if (fn === 'grant_rider_social_for_trip') {
       return Promise.resolve({ data: { ok: true, granted: false }, error: null })
     }
+    if (fn === 'merge_trip_metadata') {
+      const trip = trips.get(args?.p_trip_id)
+      if (trip) {
+        trip.metadata = { ...(trip.metadata || {}), ...(args?.p_patch || {}) }
+        return Promise.resolve({ data: { id: trip.id, metadata: trip.metadata }, error: null })
+      }
+    }
     return Promise.resolve({ data: null, error: null })
   }
 
@@ -209,10 +216,15 @@ test('paid first time: marks deposit paid, creates payment row, and updates trip
   assert.equal(typeof trip.metadata.checkout_deposit, 'object')
   assert.equal(trip.metadata.checkout_deposit.session_id, 'cs_paid_100')
 
-  // Verify social referral was called
-  assert.equal(db.rpcCalls.length, 1)
-  assert.equal(db.rpcCalls[0].fn, 'grant_rider_social_for_trip')
-  assert.deepEqual(db.rpcCalls[0].args, { p_trip_id: 'trip_100' })
+  // Verify social referral and metadata merge were called
+  const rpcMerge = db.rpcCalls.find((c) => c.fn === 'merge_trip_metadata')
+  assert.ok(rpcMerge, 'expected merge_trip_metadata RPC call')
+  assert.equal(rpcMerge.args.p_trip_id, 'trip_100')
+  assert.equal(rpcMerge.args.p_patch.fare_paid_cents, 2500)
+
+  const rpcReferral = db.rpcCalls.find((c) => c.fn === 'grant_rider_social_for_trip')
+  assert.ok(rpcReferral, 'expected grant_rider_social_for_trip RPC call')
+  assert.deepEqual(rpcReferral.args, { p_trip_id: 'trip_100' })
 })
 
 test('paid second time: idempotent, returns alreadyRecorded true with no duplicate payment rows', async () => {
