@@ -40,16 +40,16 @@ test('exports DEFAULT_API_BASE constant and resolveApiBase function', () => {
 
 test('DEFAULT_API_BASE matches WEB_ORIGIN and canonical production origin', () => {
   assert.equal(DEFAULT_API_BASE, WEB_ORIGIN)
-  assert.equal(DEFAULT_API_BASE, 'https://clemson-rides.vercel.app')
+  assert.equal(DEFAULT_API_BASE, 'https://clemson-airport-rides.vercel.app')
   assert.equal(DEFAULT_API_BASE.startsWith('https://'), true)
   assert.equal(DEFAULT_API_BASE.endsWith('/'), false)
-  assert.equal(DEFAULT_API_BASE.includes('clemson-airport-rides.vercel.app'), false)
+  assert.equal(DEFAULT_API_BASE.includes('clemson-airport-rides.vercel.app'), true)
 
   const parsed = new URL(DEFAULT_API_BASE)
   assert.equal(parsed.protocol, 'https:')
-  assert.equal(parsed.hostname, 'clemson-rides.vercel.app')
+  assert.equal(parsed.hostname, 'clemson-airport-rides.vercel.app')
   assert.equal(parsed.pathname, '/')
-  assert.equal(parsed.origin, 'https://clemson-rides.vercel.app')
+  assert.equal(parsed.origin, 'https://clemson-airport-rides.vercel.app')
 })
 
 // ---------------------------------------------------------------------------
@@ -59,7 +59,7 @@ test('DEFAULT_API_BASE matches WEB_ORIGIN and canonical production origin', () =
 test('resolveApiBase returns DEFAULT_API_BASE when EXPO_PUBLIC_API_BASE is unset', () => {
   delete process.env.EXPO_PUBLIC_API_BASE
   assert.equal(resolveApiBase(), DEFAULT_API_BASE)
-  assert.equal(resolveApiBase(), 'https://clemson-rides.vercel.app')
+  assert.equal(resolveApiBase(), 'https://clemson-airport-rides.vercel.app')
   assert.equal(resolveApiBase().endsWith('/'), false)
 
   // Multiple consecutive calls return identical idempotent result
@@ -73,7 +73,7 @@ test('resolveApiBase returns DEFAULT_API_BASE when EXPO_PUBLIC_API_BASE is unset
 test('resolveApiBase falls back to DEFAULT_API_BASE when EXPO_PUBLIC_API_BASE is empty string', () => {
   process.env.EXPO_PUBLIC_API_BASE = ''
   assert.equal(resolveApiBase(), DEFAULT_API_BASE)
-  assert.equal(resolveApiBase(), 'https://clemson-rides.vercel.app')
+  assert.equal(resolveApiBase(), 'https://clemson-airport-rides.vercel.app')
 })
 
 test('resolveApiBase handles string null, undefined, or slash with fallback', () => {
@@ -138,11 +138,11 @@ test('resolveApiBase strips single trailing slash from custom origin overrides',
 // ---------------------------------------------------------------------------
 
 test('resolveApiBase preserves subpath while stripping trailing slash', () => {
-  process.env.EXPO_PUBLIC_API_BASE = 'https://clemson-rides.vercel.app/api'
-  assert.equal(resolveApiBase(), 'https://clemson-rides.vercel.app/api')
+  process.env.EXPO_PUBLIC_API_BASE = 'https://clemson-airport-rides.vercel.app/api'
+  assert.equal(resolveApiBase(), 'https://clemson-airport-rides.vercel.app/api')
 
-  process.env.EXPO_PUBLIC_API_BASE = 'https://clemson-rides.vercel.app/api/'
-  assert.equal(resolveApiBase(), 'https://clemson-rides.vercel.app/api')
+  process.env.EXPO_PUBLIC_API_BASE = 'https://clemson-airport-rides.vercel.app/api/'
+  assert.equal(resolveApiBase(), 'https://clemson-airport-rides.vercel.app/api')
 
   process.env.EXPO_PUBLIC_API_BASE = 'https://example.com/v1/subpath/'
   assert.equal(resolveApiBase(), 'https://example.com/v1/subpath')
@@ -170,12 +170,12 @@ test('resolveApiBase trims whitespace and falls back to DEFAULT_API_BASE when bl
   assert.equal(resolveApiBase(), DEFAULT_API_BASE)
 
   // Leading and trailing whitespace is trimmed
-  process.env.EXPO_PUBLIC_API_BASE = '  https://clemson-rides.vercel.app  '
-  assert.equal(resolveApiBase(), 'https://clemson-rides.vercel.app')
+  process.env.EXPO_PUBLIC_API_BASE = '  https://clemson-airport-rides.vercel.app  '
+  assert.equal(resolveApiBase(), 'https://clemson-airport-rides.vercel.app')
 
   // Trailing slash followed by whitespace is properly stripped
-  process.env.EXPO_PUBLIC_API_BASE = 'https://clemson-rides.vercel.app/ '
-  assert.equal(resolveApiBase(), 'https://clemson-rides.vercel.app')
+  process.env.EXPO_PUBLIC_API_BASE = 'https://clemson-airport-rides.vercel.app/ '
+  assert.equal(resolveApiBase(), 'https://clemson-airport-rides.vercel.app')
 })
 
 test('resolveApiBase handles whitespace combined with multiple trailing slashes', () => {
@@ -274,7 +274,7 @@ test('URL concatenation produces clean endpoint URLs across default and overridd
   delete process.env.EXPO_PUBLIC_API_BASE
   assert.equal(
     `${resolveApiBase()}${endpoint}`,
-    'https://clemson-rides.vercel.app/api/create-checkout-session',
+    'https://clemson-airport-rides.vercel.app/api/create-checkout-session',
   )
 
   // Custom origin without slash
@@ -295,7 +295,7 @@ test('URL concatenation produces clean endpoint URLs across default and overridd
   process.env.EXPO_PUBLIC_API_BASE = 'https://'
   assert.equal(
     `${resolveApiBase()}${endpoint}`,
-    'https://clemson-rides.vercel.app/api/create-checkout-session',
+    'https://clemson-airport-rides.vercel.app/api/create-checkout-session',
   )
 })
 
