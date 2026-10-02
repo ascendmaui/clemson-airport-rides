@@ -8,6 +8,7 @@ import {
 import { etaLineFor, riderLiveView, showSearchTheater } from '../packages/rides-native/liveTrip.js'
 import {
   cancelSearchingTrip,
+  expireSearchingTrip,
   riderTrackingSnapshot,
   seedMatchingScenario,
 } from './fixtures/matchingE2E.js'
@@ -133,4 +134,28 @@ test('driver going offline during an offer window cannot accept the stale offer'
   assert.equal(supabase._tables.trips[0].status, 'searching')
   assert.equal(supabase._tables.trips[0].driver_id, null)
   assert.equal(supabase._tables.trip_events.length, 0)
+})
+
+test('search TTL expiry closes the trip and rejects a late accept', async () => {
+  const { supabase, trip, drivers } = seedMatchingScenario()
+  const driverId = drivers[0].id
+  const offered = (await loadDriverDesk(supabase, driverId)).offers[0]
+  assert.equal(offered.id, trip.id)
+
+  const expired = await expireSearchingTrip(supabase, trip.id, {
+    expiredBefore: '2026-10-01T08:10:00.000Z',
+  })
+  assert.equal(expired.status, 'canceled')
+  assert.equal(expired.driver_id, null)
+  assert.equal(expired.canceled_at, '2026-10-01T08:15:00.000Z')
+  assert.deepEqual((await loadDriverDesk(supabase, driverId)).offers, [])
+
+  await assert.rejects(
+    () => acceptTrip(supabase, offered, driverId),
+    /no longer available/,
+  )
+  const events = supabase._tables.trip_events.filter((event) => event.trip_id === trip.id)
+  assert.equal(events.length, 1)
+  assert.equal(events[0].kind, 'canceled')
+  assert.equal(events[0].payload.reason, 'search_ttl_expired')
 })

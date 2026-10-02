@@ -219,3 +219,28 @@ export async function cancelSearchingTrip(supabase, tripId, riderId, at = '2026-
   if (event.error) throw event.error
   return data
 }
+
+export async function expireSearchingTrip(supabase, tripId, {
+  expiredBefore,
+  at = '2026-10-01T08:15:00.000Z',
+} = {}) {
+  if (!expiredBefore) throw new Error('An expiry cutoff is required')
+  const { data, error } = await supabase
+    .from('trips')
+    .update({ status: 'canceled', canceled_at: at })
+    .eq('id', tripId)
+    .in('status', ['searching', 'offered'])
+    .lte('requested_at', expiredBefore)
+    .select('id, status, rider_id, driver_id, requested_at, canceled_at')
+    .maybeSingle()
+  if (error) throw error
+  if (!data) throw new Error('That ride is not eligible for search expiry')
+
+  const event = await supabase.from('trip_events').insert({
+    trip_id: tripId,
+    kind: 'canceled',
+    payload: { reason: 'search_ttl_expired', source: 'matching_ttl', canceled_at: at },
+  })
+  if (event.error) throw event.error
+  return data
+}
