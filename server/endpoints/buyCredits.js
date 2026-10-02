@@ -10,21 +10,45 @@ import {
 import { findCreditPack } from '../../src/lib/fareRates.js'
 import { WEB_ORIGIN } from '../../shared/productLinks.js'
 
-export default async function handler(req, res) {
+export default async function handler(req, res, deps = {}) {
   if (cors(req, res)) return
-  if (req.method !== 'POST') return json(res, 405, { error: 'Method not allowed' })
-  if (!stripeOk()) {
+  if (req.method !== 'POST') {
+    res.setHeader?.('Allow', 'POST, OPTIONS')
+    res.setHeader?.('Cache-Control', 'no-store, no-cache, must-revalidate, private')
+    return json(res, 405, { error: 'Method not allowed' })
+  }
+
+  const stripeOkFn = deps.stripeOk || stripeOk
+  if (!deps.stripe && !stripeOkFn()) {
+    res.setHeader?.('Cache-Control', 'no-store, no-cache, must-revalidate, private')
     return json(res, 503, { error: 'Payments unavailable', message: 'STRIPE_SECRET_KEY is not configured.' })
   }
-  const sb = admin()
-  if (!sb) return json(res, 503, { error: 'SUPABASE_SERVICE_ROLE_KEY not configured' })
-  const user = await userFromAuth(req)
-  if (!user) return json(res, 401, { error: 'Sign in required' })
+
+  const sb = deps.sb !== undefined ? deps.sb : (deps.admin ? deps.admin() : admin())
+  if (!sb) {
+    res.setHeader?.('Cache-Control', 'no-store, no-cache, must-revalidate, private')
+    return json(res, 503, { error: 'SUPABASE_SERVICE_ROLE_KEY not configured' })
+  }
+
+  const user = deps.user !== undefined ? deps.user : await (deps.userFromAuth || userFromAuth)(req, sb)
+  if (!user) {
+    res.setHeader?.('Cache-Control', 'no-store, no-cache, must-revalidate, private')
+    return json(res, 401, { error: 'Sign in required' })
+  }
 
   const { body, error: pe } = parseBody(req)
-  if (pe) return json(res, 400, { error: pe })
-  const pack = findCreditPack(body.packId)
-  if (!pack) return json(res, 400, { error: 'Unknown credit pack' })
+  if (pe) {
+    res.setHeader?.('Cache-Control', 'no-store, no-cache, must-revalidate, private')
+    return json(res, 400, { error: pe })
+  }
+
+  const packId = typeof body.packId === 'string' ? body.packId.trim() : body.packId
+  const findPackFn = deps.findCreditPack || findCreditPack
+  const pack = findPackFn(packId)
+  if (!pack) {
+    res.setHeader?.('Cache-Control', 'no-store, no-cache, must-revalidate, private')
+    return json(res, 400, { error: 'Unknown credit pack' })
+  }
 
   const { data: profile } = await sb
     .from('profiles')
@@ -33,10 +57,11 @@ export default async function handler(req, res) {
     .maybeSingle()
 
   try {
-    const stripe = stripeClient()
+    const stripe = deps.stripe || (deps.stripeClient ? deps.stripeClient() : stripeClient())
+    const ensureCustomerFn = deps.ensureStripeCustomer || ensureStripeCustomer
     let customerId = null
     if (profile) {
-      try { customerId = await ensureStripeCustomer(stripe, sb, profile) } catch { /* optional */ }
+      try { customerId = await ensureCustomerFn(stripe, sb, profile) } catch { /* optional */ }
     }
     const origin = body.origin || process.env.VITE_APP_URL || WEB_ORIGIN
     const session = await stripe.checkout.sessions.create({
@@ -64,9 +89,11 @@ export default async function handler(req, res) {
         discount_bps: String(pack.discountBps),
       },
     })
+    res.setHeader?.('Cache-Control', 'no-store, no-cache, must-revalidate, private')
     return json(res, 200, { id: session.id, url: session.url, pack })
   } catch (err) {
     console.error('[buy-credits]', err)
+    res.setHeader?.('Cache-Control', 'no-store, no-cache, must-revalidate, private')
     return json(res, 500, { error: err.message || 'Stripe error' })
   }
 }
