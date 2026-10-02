@@ -1,3 +1,5 @@
+import { A11yBadge } from './A11yBadge.jsx'
+
 export function TierRow({ tier, selected, onSelect }) {
   return (
     <button
@@ -42,20 +44,9 @@ export function TierRow({ tier, selected, onSelect }) {
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <span style={{ fontWeight: 600, fontSize: 16 }}>{tier.name}</span>
           {tier.badge && (
-            <span
-              style={{
-                fontSize: 10,
-                fontWeight: 700,
-                letterSpacing: 0.4,
-                color: 'var(--purple)',
-                background: 'rgba(82,45,128,0.12)',
-                border: '1px solid rgba(82,45,128,0.18)',
-                padding: '2px 7px',
-                borderRadius: 999,
-              }}
-            >
+            <A11yBadge variant={tier.id === 'tesla' ? 'fleet' : 'purple'}>
               {tier.badge}
-            </span>
+            </A11yBadge>
           )}
         </div>
         <div style={{ color: 'var(--ink-secondary)', fontSize: 13, marginTop: 2 }}>
