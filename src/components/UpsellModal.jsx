@@ -1,10 +1,16 @@
 import { PrimaryButton } from './PrimaryButton'
+import { useModalA11y } from './A11yModal'
 
 export function UpsellModal({ open, onClose, onUpgrade, variant = 'comfort', upgradePrice = 4.5 }) {
+  const dialogRef = useModalA11y({ isOpen: open, onClose })
+
   if (!open) return null
   const isTesla = variant === 'tesla'
   return (
     <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="upsell-modal-title"
       className="route-fade"
       style={{
         position: 'fixed',
@@ -20,6 +26,7 @@ export function UpsellModal({ open, onClose, onUpgrade, variant = 'comfort', upg
       onClick={onClose}
     >
       <div
+        ref={dialogRef}
         className="modal-card"
         onClick={(e) => e.stopPropagation()}
         style={{
@@ -30,6 +37,7 @@ export function UpsellModal({ open, onClose, onUpgrade, variant = 'comfort', upg
         }}
       >
         <div
+          aria-hidden="true"
           style={{
             height: 140,
             borderRadius: 16,
@@ -45,7 +53,7 @@ export function UpsellModal({ open, onClose, onUpgrade, variant = 'comfort', upg
         >
           {isTesla ? '🚗' : '✨'}
         </div>
-        <h2 style={{ fontSize: 22, fontWeight: 600, letterSpacing: -0.3, marginBottom: 8 }}>
+        <h2 id="upsell-modal-title" style={{ fontSize: 22, fontWeight: 600, letterSpacing: -0.3, marginBottom: 8 }}>
           {isTesla
             ? 'Clemson Tesla Model 3'
             : 'Ride in a roomy, clean new car'}
