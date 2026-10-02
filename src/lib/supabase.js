@@ -17,6 +17,15 @@ export const supabaseConfigured = Boolean(url && key)
 export const supabase = supabaseConfigured
   ? createClient(url, key, {
       realtime: { params: { eventsPerSecond: 8 } },
+      auth: {
+        // PKCE returns ?code= on redirectTo. detectSessionInUrl exchanges it
+        // and also reads #access_token&refresh_token when the provider uses
+        // the implicit hash. Hash-router variants are finished in auth.jsx.
+        detectSessionInUrl: true,
+        persistSession: true,
+        autoRefreshToken: true,
+        flowType: 'pkce',
+      },
     })
   : null
 

@@ -3,6 +3,20 @@ import { supabase, supabaseConfigured } from './supabase'
 import { isClemsonEmail } from './studentDomain'
 import { maybeClaimStoredPromo } from './riderReferral'
 import { normalizePromoCode } from './riderPromo'
+import { getHashRoute, navigate } from './navigation'
+import {
+  googleOAuthRedirectTo,
+  locationAfterAuthCallback,
+  needsManualCodeExchange,
+  needsManualTokenSession,
+  parseWebAuthCallback,
+  publishAuthCallbackError,
+  rememberAuthCallbackError,
+  stashAuthNext,
+  stashGooglePromo,
+  takeAuthNext,
+  takeGooglePromo,
+} from './googleWebAuth'
 import { buildEnsureProfilePatch, signupProfileMetadata } from '../../packages/rides-native/partyProfile.js'
 
 const AuthContext = createContext(null)
@@ -129,6 +143,84 @@ async function ensureProfile(user, { promoCode } = {}) {
   return maybeClaimStoredPromo(user, code)
 }
 
+let webAuthCallbackTask = null
+let googleReturnLanded = false
+
+if (typeof window !== 'undefined') {
+  try {
+    const earlyCallback = parseWebAuthCallback(window.location.href)
+    if (earlyCallback?.error) rememberAuthCallbackError(window.sessionStorage, earlyCallback.error)
+  } catch {
+    /* sessionStorage can be blocked; the sign-in screen still renders */
+  }
+}
+
+function authStorage() {
+  if (typeof window === 'undefined') return null
+  return window.sessionStorage
+}
+
+function applyAuthReturnUrl(targetPath, { forceHash = false } = {}) {
+  if (typeof window === 'undefined') return
+  const next = locationAfterAuthCallback(window.location.href, targetPath, { forceHash })
+  if (!next) return
+  const current = `${window.location.pathname}${window.location.search}${window.location.hash}`
+  if (next === current) return
+  window.history.replaceState(window.history.state, '', next)
+  window.dispatchEvent(new HashChangeEvent('hashchange'))
+}
+
+function landAfterGoogleSession(session) {
+  if (!session || typeof window === 'undefined' || googleReturnLanded) return
+  googleReturnLanded = true
+  const stashed = takeAuthNext(authStorage())
+  if (stashed?.next) {
+    const { next, ...rest } = stashed
+    navigate(next, rest)
+    return
+  }
+  const { path } = getHashRoute()
+  if (!path || path === 'landing' || path === 'sign-in' || path === 'sign-up') {
+    navigate('home')
+  }
+}
+
+function consumeWebAuthCallback(client) {
+  if (webAuthCallbackTask) return webAuthCallbackTask
+  webAuthCallbackTask = (async () => {
+    if (typeof window === 'undefined' || !client) return { callback: null, failed: false, promo: '' }
+    const callback = parseWebAuthCallback(window.location.href)
+    if (!callback) return { callback: null, failed: false, promo: '' }
+    const storage = authStorage()
+    if (callback.error) {
+      takeGooglePromo(storage)
+      takeAuthNext(storage)
+      applyAuthReturnUrl('sign-in', { forceHash: true })
+      return { callback, failed: true, promo: '' }
+    }
+    try {
+      if (needsManualCodeExchange(callback)) {
+        const { error } = await client.auth.exchangeCodeForSession(callback.code)
+        if (error) throw error
+      } else if (needsManualTokenSession(callback)) {
+        const { error } = await client.auth.setSession({
+          access_token: callback.accessToken,
+          refresh_token: callback.refreshToken,
+        })
+        if (error) throw error
+      }
+    } catch (err) {
+      publishAuthCallbackError(storage, err?.message || 'Google sign-in failed')
+      takeGooglePromo(storage)
+      takeAuthNext(storage)
+      applyAuthReturnUrl('sign-in', { forceHash: true })
+      return { callback, failed: true, promo: '' }
+    }
+    return { callback, failed: false, promo: takeGooglePromo(storage) }
+  })()
+  return webAuthCallbackTask
+}
+
 export function AuthProvider({ children }) {
   const [session, setSession] = useState(null)
   const [user, setUser] = useState(null)
@@ -140,13 +232,31 @@ export function AuthProvider({ children }) {
       return undefined
     }
     let alive = true
-    supabase.auth.getSession().then(({ data }) => {
-      if (!alive) return
-      setSession(data.session)
-      setUser(data.session?.user ?? null)
-      setLoading(false)
-      if (data.session?.user) ensureProfile(data.session.user)
-    })
+    consumeWebAuthCallback(supabase)
+      .then(async (result) => {
+        const { data, error } = await supabase.auth.getSession()
+        if (!alive) return
+        if (error && !data?.session && result?.callback && !result.failed) {
+          publishAuthCallbackError(authStorage(), error.message || 'Google sign-in failed')
+          applyAuthReturnUrl('sign-in', { forceHash: true })
+        }
+        setSession(data.session)
+        setUser(data.session?.user ?? null)
+        setLoading(false)
+        if (data.session?.user) {
+          ensureProfile(data.session.user, result?.promo ? { promoCode: result.promo } : undefined)
+        }
+        if (result?.callback && !result.failed && !error && data.session) {
+          applyAuthReturnUrl('home')
+          landAfterGoogleSession(data.session)
+        }
+      })
+      .catch((err) => {
+        if (!alive) return
+        publishAuthCallbackError(authStorage(), err?.message || 'Google sign-in failed')
+        applyAuthReturnUrl('sign-in', { forceHash: true })
+        setLoading(false)
+      })
     const { data: sub } = supabase.auth.onAuthStateChange((_event, next) => {
       setSession(next)
       setUser(next?.user ?? null)
@@ -206,6 +316,24 @@ export function AuthProvider({ children }) {
       if (!supabase) return
       const { error } = await supabase.auth.signOut()
       if (error) throw mapAuthError(error)
+    },
+    async signInWithGoogle({ nextParams, promoCode } = {}) {
+      if (!supabase) throw new Error('Supabase is not configured')
+      const storage = authStorage()
+      stashAuthNext(storage, nextParams)
+      if (promoCode != null) stashGooglePromo(storage, promoCode)
+      const redirectTo = googleOAuthRedirectTo(typeof window !== 'undefined' ? window.location.origin : '')
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: { redirectTo },
+      })
+      if (error || !data?.url) {
+        takeAuthNext(storage)
+        if (promoCode != null) takeGooglePromo(storage)
+        if (error) throw mapAuthError(error)
+        throw new Error('Google sign-in is not configured. Enable the Google provider in Supabase Auth and allow this site redirect.')
+      }
+      return data
     },
   }), [session, user, loading])
 
