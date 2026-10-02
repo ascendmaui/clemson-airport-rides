@@ -80,56 +80,24 @@ textarea:focus-visible,
   box-shadow: 0 0 0 3px var(--orange-glow), 0 4px 16px rgba(245, 102, 0, 0.12) !important;
 }
 
-/* Accessible Badge Components & Readability Tokens */
-.a11y-badge {
+/* Accessible touch target sizing (WCAG 2.2 / Apple HIG 44px minimum) */
+.touch-target-min {
+  min-width: var(--touch-target-min, 44px);
+  min-height: var(--touch-target-min, 44px);
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 2px 8px;
-  border-radius: var(--radius-pill);
-  font-size: 11px;
-  font-weight: 700;
-  line-height: 1.35;
-  letter-spacing: 0.3px;
-  border: 1px solid transparent;
-  vertical-align: middle;
-  white-space: nowrap;
+  justify-content: center;
 }
 
-.a11y-badge--purple {
-  background: var(--badge-purple-bg);
-  border-color: var(--badge-purple-border);
-  color: var(--badge-purple-text);
-}
-
-.a11y-badge--orange {
-  background: var(--badge-orange-bg);
-  border-color: var(--badge-orange-border);
-  color: var(--badge-orange-text);
-}
-
-.a11y-badge--success {
-  background: var(--badge-success-bg);
-  border-color: var(--badge-success-border);
-  color: var(--badge-success-text);
-}
-
-.a11y-badge--danger {
-  background: var(--badge-danger-bg);
-  border-color: var(--badge-danger-border);
-  color: var(--badge-danger-text);
-}
-
-.a11y-badge--neutral {
-  background: var(--badge-neutral-bg);
-  border-color: var(--badge-neutral-border);
-  color: var(--badge-neutral-text);
-}
-
-.a11y-badge--fleet {
-  background: var(--badge-fleet-bg);
-  border-color: var(--badge-fleet-border);
-  color: var(--badge-fleet-text);
+.nav-back-btn {
+  width: 44px;
+  height: 44px;
+  min-width: var(--touch-target-min, 44px);
+  min-height: var(--touch-target-min, 44px);
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  font-size: 20px;
 }
 
 @keyframes spin {
@@ -441,6 +409,16 @@ textarea:focus-visible,
   place-items: center;
   color: var(--ink-tertiary);
   flex-shrink: 0;
+  position: relative;
+}
+.toast-dismiss::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  min-width: var(--touch-target-min, 44px);
+  min-height: var(--touch-target-min, 44px);
 }
 @keyframes toastIn {
   from { opacity: 0; transform: translateY(-12px) translateX(8px); }
@@ -706,6 +684,16 @@ textarea:focus-visible,
   line-height: 1;
   width: 28px;
   height: 28px;
+  position: relative;
+}
+.sos-banner-dismiss::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  min-width: var(--touch-target-min, 44px);
+  min-height: var(--touch-target-min, 44px);
 }
 @media (prefers-reduced-motion: reduce) {
   .sos-fab { animation: none; }

@@ -46,7 +46,7 @@ export function ConfirmPickup({ dest = 'GSP Airport' }) {
   return (
     <div className="fade-in" style={{ display: 'flex', flexDirection: 'column', height: '100%', background: 'transparent' }}>
       <div style={{ padding: '16px 20px 8px', display: 'flex', alignItems: 'center', gap: 12 }}>
-        <button type="button" className="pressable glass-pill" onClick={() => navigate('home')} style={{ fontSize: 20, width: 40, height: 40, borderRadius: 12 }}>←</button>
+        <button type="button" className="pressable glass-pill nav-back-btn" aria-label="Back to home" onClick={() => navigate('home')}>←</button>
         <h1 style={{ fontSize: 20, fontWeight: 600, letterSpacing: -0.3 }}>Confirm pickup spot</h1>
       </div>
 

@@ -83,7 +83,7 @@ export function RideTiers({ dest = '1900 GSP Dr' }) {
   return (
     <div className="fade-in" style={{ display: 'flex', flexDirection: 'column', height: '100%', background: 'transparent' }}>
       <div style={{ padding: '12px 16px 0' }}>
-        <button type="button" className="pressable glass-pill" onClick={() => navigate('confirm', { dest })} style={{ fontSize: 20, marginBottom: 8, width: 40, height: 40, borderRadius: 12 }}>←</button>
+        <button type="button" className="pressable glass-pill nav-back-btn" aria-label="Back to pickup confirmation" onClick={() => navigate('confirm', { dest })} style={{ marginBottom: 8 }}>←</button>
         <div className="glass-panel" style={{ borderRadius: 16, overflow: 'hidden', padding: 4 }}>
           <CampusMap
             height={140}

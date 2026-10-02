@@ -7,9 +7,10 @@ function LegalShell({ title, children }) {
       <div className="mkt-legal-card">
         <button
           type="button"
-          className="pressable glass-pill"
+          className="pressable glass-pill nav-back-btn"
+          aria-label="Back to landing"
           onClick={() => navigate('landing')}
-          style={{ fontSize: 18, marginBottom: 16, width: 40, height: 40, borderRadius: 12 }}
+          style={{ marginBottom: 16 }}
         >
           ←
         </button>
