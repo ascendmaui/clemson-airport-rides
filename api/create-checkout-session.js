@@ -44,7 +44,14 @@ async function routeDistance(origin, dest) {
 
 export default async function handler(req, res, deps = {}) {
   if (cors(req, res)) return
-  if (req.method !== 'POST') return json(res, 405, { error: 'Method not allowed' })
+  if (!res.headersSent) {
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private')
+    res.setHeader('Pragma', 'no-cache')
+  }
+  if (req.method !== 'POST') {
+    if (!res.headersSent) res.setHeader('Allow', 'POST, OPTIONS')
+    return json(res, 405, { error: 'Method not allowed' })
+  }
 
   const { body, error: pe } = parseBody(req)
   if (pe) return json(res, 400, { error: pe })
