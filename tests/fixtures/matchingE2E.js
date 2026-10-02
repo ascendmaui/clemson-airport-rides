@@ -198,3 +198,87 @@ export function riderTrackingSnapshot(supabase, tripId) {
     driverLng: status?.lng ?? null,
   }
 }
+
+export async function cancelSearchingTrip(supabase, tripId, riderId, at = '2026-10-01T08:05:00.000Z') {
+  const { data, error } = await supabase
+    .from('trips')
+    .update({ status: 'canceled', canceled_at: at })
+    .eq('id', tripId)
+    .eq('rider_id', riderId)
+    .in('status', ['searching', 'offered'])
+    .select('id, status, rider_id, driver_id, canceled_at')
+    .maybeSingle()
+  if (error) throw error
+  if (!data) throw new Error('That ride is no longer searching')
+
+  const event = await supabase.from('trip_events').insert({
+    trip_id: tripId,
+    kind: 'canceled',
+    payload: { reason: 'rider_cancel', source: 'rider_app', canceled_at: at },
+  })
+  if (event.error) throw event.error
+  return data
+}
+
+export async function expireSearchingTrip(supabase, tripId, {
+  expiredBefore,
+  at = '2026-10-01T08:15:00.000Z',
+} = {}) {
+  if (!expiredBefore) throw new Error('An expiry cutoff is required')
+  const { data, error } = await supabase
+    .from('trips')
+    .update({ status: 'canceled', canceled_at: at })
+    .eq('id', tripId)
+    .in('status', ['searching', 'offered'])
+    .lte('requested_at', expiredBefore)
+    .select('id, status, rider_id, driver_id, requested_at, canceled_at')
+    .maybeSingle()
+  if (error) throw error
+  if (!data) throw new Error('That ride is not eligible for search expiry')
+
+  const event = await supabase.from('trip_events').insert({
+    trip_id: tripId,
+    kind: 'canceled',
+    payload: { reason: 'search_ttl_expired', source: 'matching_ttl', canceled_at: at },
+  })
+  if (event.error) throw event.error
+  return data
+}
+
+export async function requestDriverTrip(supabase, {
+  id,
+  riderId,
+  pickupLabel = 'Memorial Stadium',
+  dropoffLabel = 'Downtown Clemson',
+  requestedAt = '2026-10-01T08:06:00.000Z',
+} = {}) {
+  if (!id || !riderId) throw new Error('Trip and rider are required')
+  const row = {
+    id,
+    rider_id: riderId,
+    driver_id: null,
+    status: 'searching',
+    tier: 'standard',
+    pickup_label: pickupLabel,
+    dropoff_label: dropoffLabel,
+    pickup_lat: DEFAULT_PICKUP.lat,
+    pickup_lng: DEFAULT_PICKUP.lng,
+    dropoff_lat: 34.6857,
+    dropoff_lng: -82.8147,
+    requested_at: requestedAt,
+    metadata: {},
+  }
+  const { data, error } = await supabase
+    .from('trips')
+    .insert(row)
+    .select('*')
+    .single()
+  if (error) throw error
+  const event = await supabase.from('trip_events').insert({
+    trip_id: id,
+    kind: 'searching',
+    payload: { source: 'rider_app' },
+  })
+  if (event.error) throw event.error
+  return data
+}
