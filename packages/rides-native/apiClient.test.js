@@ -45,7 +45,7 @@ function mockResponse({ ok = true, status = 200, text = '', json = null }) {
 test('apiBase returns default vercel production URL when EXPO_PUBLIC_API_BASE is unset', () => {
   delete process.env.EXPO_PUBLIC_API_BASE
   // DEFAULT_API_BASE is WEB_ORIGIN from shared/productLinks.js, via apiOrigin.js.
-  assert.equal(DEFAULT_API_BASE, 'https://clemson-airport-rides.vercel.app')
+  assert.equal(DEFAULT_API_BASE, 'https://clemsonrides.com')
   assert.equal(apiBase(), DEFAULT_API_BASE)
 })
 

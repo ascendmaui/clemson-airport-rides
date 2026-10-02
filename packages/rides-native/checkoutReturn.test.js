@@ -6,7 +6,7 @@ import { NATIVE_CHECKOUT_ORIGIN, reconcileCheckout } from './riderMoney.js'
 
 test('parseCheckoutSessionId: extracts session_id from web hash return URLs', () => {
   // Stripe return pages use NATIVE_CHECKOUT_ORIGIN (WEB_ORIGIN in shared/productLinks.js).
-  assert.equal(NATIVE_CHECKOUT_ORIGIN, 'https://clemson-airport-rides.vercel.app')
+  assert.equal(NATIVE_CHECKOUT_ORIGIN, 'https://clemsonrides.com')
 
   const liveHash = `${checkoutSuccessHash({ tripId: 'trip_live_1', scheduled: false })}&session_id=cs_test_live123`
   assert.equal(parseCheckoutSessionId(liveHash), 'cs_test_live123')
@@ -217,7 +217,7 @@ test('parseCheckoutSessionId: returns null for non-strings without throwing', ()
 
 test('parseCheckoutReturn: production success, cancel, and no-trip hashes', () => {
   assert.deepEqual(
-    parseCheckoutReturn('https://clemson-airport-rides.vercel.app/#/requested?trip=trip_live_200&paid=1&session_id=cs_test_live_ret'),
+    parseCheckoutReturn('https://clemsonrides.com/#/requested?trip=trip_live_200&paid=1&session_id=cs_test_live_ret'),
     { sessionId: 'cs_test_live_ret', tripId: 'trip_live_200', paid: true, canceled: false, scheduled: false },
   )
   assert.deepEqual(
@@ -225,7 +225,7 @@ test('parseCheckoutReturn: production success, cancel, and no-trip hashes', () =
     { sessionId: 'cs_test_native456', tripId: 'trip_native_2', paid: true, canceled: false, scheduled: true },
   )
   assert.deepEqual(
-    parseCheckoutReturn('https://clemson-airport-rides.vercel.app/#/schedule?canceled=1&trip=trip_42'),
+    parseCheckoutReturn('https://clemsonrides.com/#/schedule?canceled=1&trip=trip_42'),
     { sessionId: null, tripId: 'trip_42', paid: false, canceled: true, scheduled: true },
   )
   assert.deepEqual(parseCheckoutReturn('#/schedule?paid=1'), {
