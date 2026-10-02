@@ -16,7 +16,8 @@ import { MidrideCancelSheet } from '../components/MidrideCancelSheet'
 import { isMidrideStatus } from '../lib/tripPhase'
 import { CounterpartChip } from '../components/CounterpartChip'
 import { PARTY_VISIBLE_STATUSES } from '../../packages/rides-native/partyProfile.js'
-import { etaHoldLine, etaLineFor, orderedLiveStops, riderLiveView, SEARCH_PREVIEW_COPY, showSearchTheater } from '../../packages/rides-native/liveTrip.js'
+import { etaHoldLine, etaLineFor, orderedLiveStops, riderLiveView, SEARCH_PREVIEW_COPY, showSearchTheater, STILL_SEARCHING_COPY, STILL_SEARCHING_MS } from '../../packages/rides-native/liveTrip.js'
+import { TESLA_FLEET_NOTICE, tripTags } from '../../packages/rides-native/tripTags.js'
 import { decodePolyline } from '../lib/friendRides.js'
 import { LivePhase } from '../components/LivePhase'
 import { reconcileCheckoutSession } from '../lib/stripeCheckout'
@@ -34,6 +35,8 @@ export function Requested({ dest = 'GSP Airport', trip = '', driver = 'your driv
   const [rateNudge, setRateNudge] = useState(false)
   const [chatOpen, setChatOpen] = useState(false)
   const [cancelOpen, setCancelOpen] = useState(false)
+  const [stillSearching, setStillSearching] = useState(false)
+  const searchStartedAt = useRef(null)
   const stopRef = useRef(null)
   const ratedCheck = useRef(false)
   const reconciledSessions = useRef(new Set())
@@ -219,6 +222,25 @@ export function Requested({ dest = 'GSP Airport', trip = '', driver = 'your driv
   }
   const mapCenter = driverPos || (liveStops[0] ? [liveStops[0].lat, liveStops[0].lng] : pickup) || CLEMSON
 
+  useEffect(() => {
+    if (!showSearchTheater(status) || driverPos) {
+      setStillSearching(false)
+      searchStartedAt.current = null
+      return undefined
+    }
+    if (!searchStartedAt.current) searchStartedAt.current = Date.now()
+    const tick = () => {
+      const started = searchStartedAt.current || Date.now()
+      setStillSearching(Date.now() - started >= STILL_SEARCHING_MS)
+    }
+    tick()
+    const id = setInterval(tick, 5000)
+    return () => clearInterval(id)
+  }, [status, driverPos])
+
+  const fleetTags = tripRow ? tripTags(tripRow) : []
+  const isTeslaTrip = fleetTags.includes('tesla')
+
   return (
     <div className="fade-in" style={{ minHeight: '100%', padding: 24, display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 16 }}>
       {(rideLive || devSosPreview) && (
@@ -267,6 +289,24 @@ export function Requested({ dest = 'GSP Airport', trip = '', driver = 'your driv
         {preview && (
           <p style={{ color: 'var(--ink-secondary)', fontSize: 13, lineHeight: 1.45, marginTop: 10 }}>
             {SEARCH_PREVIEW_COPY}
+          </p>
+        )}
+        {stillSearching && preview && (
+          <div
+            role="status"
+            aria-live="polite"
+            className="glass-panel glass-panel--orange"
+            style={{ marginTop: 12, padding: 12, borderRadius: 14 }}
+          >
+            <div style={{ fontSize: 11, letterSpacing: 1.1, fontWeight: 800, color: '#F56600' }}>STILL MATCHING</div>
+            <p style={{ margin: '6px 0 0', fontSize: 13, lineHeight: 1.45, color: '#522D80', fontWeight: 650 }}>
+              {STILL_SEARCHING_COPY}
+            </p>
+          </div>
+        )}
+        {isTeslaTrip && !tripMissing && (
+          <p style={{ color: '#522D80', fontWeight: 650, fontSize: 13, lineHeight: 1.4, marginTop: 10 }}>
+            {TESLA_FLEET_NOTICE}
           </p>
         )}
         <p style={{ color: 'var(--ink-secondary)', fontSize: 15, lineHeight: 1.45, marginTop: 12 }}>

@@ -40,6 +40,7 @@ export function LivePhase({
                 aria-hidden="true"
               >
                 <div
+                  className={current ? 'live-phase-step--current' : undefined}
                   style={{
                     height: 6,
                     borderRadius: 999,
