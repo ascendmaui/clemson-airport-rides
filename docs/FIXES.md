@@ -1805,9 +1805,17 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
 - **Files touched:** `apps/rider/components/ApproachAlert.tsx`, `apps/rider/components/SosSheet.tsx`, `docs/FIXES.md`
 - **Verified:** `node --experimental-strip-types --test apps/rider/lib/approachAlert.test.mjs packages/rides-native/safety.test.js` (17/17)
 
-## 2026-09-25 — Proximity and SOS polish already run under npm test (pkg-rider-proximity-sos-polish t3)
+## 2026-10-02 — [agy] GA91: Unpaid airport hold TTL boundary determinism and clock drift resilience
 
-- **What was wrong:** t1 extended `apps/rider/lib/approachAlert.test.mjs` (whole-foot labels, stage cuts on the displayed foot, status line, 25 ft hysteresis). t2 left SOS call targets on `sosChannelButton` / `sosChannelHref`, covered by `packages/rides-native/safety.test.js`. If either file were missing from the root `"test"` script, `npm test` would not run the polish.
-- **What changed:** Both paths are already arguments of the root `package.json` `"test"` script. `apps/rider/lib/approachAlert.test.mjs` has been listed since the approaching-driver alert. `packages/rides-native/safety.test.js` has been listed with the native safety suite. t1 and t2 did not add a new test file, so the script did not need another path.
-- **Files touched:** `docs/FIXES.md`
-- **Verified:** `npm test` — 798 pass, 0 fail, including the approachAlert cases (haversine, feet readout, 100/200/500 ft stages, status line with feet or nearby, previousStage hold).
+- **Date:** 2026-10-02
+- **Track / machine:** Clemson RIDES · MacBook Max (agy) · GA91
+- **What was wrong:** `decideUnpaidAirportHoldTtl` evaluated `now - anchor < ttlMs` without sanitizing `ttlMs`. If a caller passed `NaN`, a negative number, or 0, `now - anchor < ttlMs` evaluated to false, which would trigger premature cancellation of active airport holds within their 20-minute window. Furthermore, `airportHoldAnchorMs` was vulnerable to array inputs in `trip.metadata` and did not accept `Date` object instances in `created_at`.
+- **What changed:**
+  - Added effective TTL fallback in `decideUnpaidAirportHoldTtl`: `Number.isFinite(Number(ttlMs)) && Number(ttlMs) > 0 ? Number(ttlMs) : UNPAID_AIRPORT_HOLD_TTL_MS`.
+  - Added array type guard `!Array.isArray(trip.metadata)` in `metaObject`.
+  - Added support for `Date` object instances in `parsedMs`.
+  - Added dedicated test suite `tests/gaAuditHoldTtlBounds.test.js` validating TTL sanitization, negative TTL protection, clock drift tolerance (future anchor), driver assignment protection, and sweep limit clamping.
+  - Wired `tests/gaAuditHoldTtlBounds.test.js` into root `package.json` test script.
+- **Files touched:** `server/abandonedCheckout.js`, `tests/gaAuditHoldTtlBounds.test.js`, `package.json`, `docs/FIXES.md`
+- **Verified:** `npm test` passing with 0 failures.
+

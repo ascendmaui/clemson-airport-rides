@@ -55,6 +55,7 @@ function boundSessionId(trip) {
 }
 
 function parsedMs(value) {
+  if (value instanceof Date) return Number.isFinite(value.getTime()) ? value.getTime() : null
   if (typeof value !== 'string' || !value) return null
   const ms = Date.parse(value)
   return Number.isFinite(ms) ? ms : null
@@ -94,7 +95,10 @@ export function decideUnpaidAirportHoldTtl({
   }
   const anchor = airportHoldAnchorMs(trip)
   if (anchor == null) return { action: 'skip', reason: 'missing_anchor', status: trip.status }
-  if (now - anchor < ttlMs) return { action: 'skip', reason: 'within_ttl', status: trip.status }
+  const effectiveTtl = Number.isFinite(Number(ttlMs)) && Number(ttlMs) > 0
+    ? Number(ttlMs)
+    : UNPAID_AIRPORT_HOLD_TTL_MS
+  if (now - anchor < effectiveTtl) return { action: 'skip', reason: 'within_ttl', status: trip.status }
   return { action: 'cancel', reason: 'unpaid_hold_ttl', status: 'canceled' }
 }
 
@@ -170,7 +174,9 @@ async function loadDeposits(sb, tripId) {
 }
 
 function metaObject(trip) {
-  return trip?.metadata && typeof trip.metadata === 'object' ? trip.metadata : {}
+  return trip?.metadata && typeof trip.metadata === 'object' && !Array.isArray(trip.metadata)
+    ? trip.metadata
+    : {}
 }
 
 async function writeCanceled(sb, trip, session, { reason, source }) {
