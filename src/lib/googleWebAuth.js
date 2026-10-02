@@ -1,7 +1,7 @@
 /**
  * Web Google sign-in return URL and Supabase OAuth callback parsing.
  * redirectTo is the site root (`origin + '/'`), which is the URL Supabase
- * allow-lists for https://clemson-airport-rides.vercel.app/. PKCE appends
+ * allow-lists for https://clemsonrides.com/. PKCE appends
  * ?code= there, and the Supabase client restores the session. This module
  * also reads implicit hash tokens and a code hidden inside the hash router,
  * then the app continues at #/home.
@@ -36,7 +36,7 @@ const OAUTH_HASH_ROUTES = new Set([
   'code',
 ])
 
-/** Site root on the current origin, e.g. https://clemson-airport-rides.vercel.app/ */
+/** Site root on the current origin, e.g. https://clemsonrides.com/ */
 export function googleOAuthRedirectTo(origin) {
   const base = String(origin || '').trim().replace(/\/+$/, '')
   if (!base) return '/'
@@ -52,7 +52,7 @@ function hashParamString(rawHash) {
 }
 
 function readParams(href) {
-  const url = new URL(href, 'https://clemson-airport-rides.vercel.app')
+  const url = new URL(href, 'https://clemsonrides.com')
   const rawHash = url.hash.startsWith('#') ? url.hash.slice(1) : url.hash
   const search = url.searchParams
   const hashParams = new URLSearchParams(hashParamString(rawHash))
@@ -124,7 +124,7 @@ function cleanAppHash(rawHash, targetPath, forceHash) {
 
 export function locationAfterAuthCallback(href, targetPath = 'home', { forceHash = false } = {}) {
   if (!parseWebAuthCallback(href)) return null
-  const url = new URL(href, 'https://clemson-airport-rides.vercel.app')
+  const url = new URL(href, 'https://clemsonrides.com')
   for (const key of AUTH_QUERY_KEYS) url.searchParams.delete(key)
   const rawHash = url.hash.startsWith('#') ? url.hash.slice(1) : url.hash
   url.hash = cleanAppHash(rawHash, targetPath, forceHash)

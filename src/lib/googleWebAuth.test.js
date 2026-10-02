@@ -12,7 +12,7 @@ import {
   rememberAuthCallbackError,
 } from './googleWebAuth.js'
 
-const ORIGIN = 'https://clemson-airport-rides.vercel.app'
+const ORIGIN = 'https://clemsonrides.com'
 
 test('googleOAuthRedirectTo uses the site root on the current origin', () => {
   assert.equal(googleOAuthRedirectTo(ORIGIN), `${ORIGIN}/`)
