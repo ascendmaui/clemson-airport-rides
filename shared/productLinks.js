@@ -1,7 +1,7 @@
 /** Canonical public surfaces for the one Clemson RIDES product. */
 
-/** Stable production web host (johnmatveyev-lab / clemson-airport-rides). Prefer this over the older clemson-rides.vercel.app alias. */
-export const WEB_ORIGIN = 'https://clemson-airport-rides.vercel.app'
+/** Stable production web host (johnmatveyev-lab / clemson-airport-rides). Canonical Hostinger domain; vercel.app remains a deploy alias. */
+export const WEB_ORIGIN = 'https://clemsonrides.com'
 
 /** Passenger soft-launch QR target — hash router book home (campus / airport / game-day entry). */
 export const WEB_BOOK_URL = `${WEB_ORIGIN}/#/home`
