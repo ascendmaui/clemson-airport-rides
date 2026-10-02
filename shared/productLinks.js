@@ -1,5 +1,6 @@
 /** Canonical public surfaces for the one Clemson RIDES product. */
 
+<<<<<<< Updated upstream
 /** Stable production web host (johnmatveyev-lab / clemson-airport-rides). Prefer this over the older clemson-rides.vercel.app alias. */
 export const WEB_ORIGIN = 'https://clemson-airport-rides.vercel.app'
 
@@ -14,6 +15,9 @@ export const WEB_DRIVER_URL = `${WEB_ORIGIN}/#/driver`
 
 /** Driver onboarding / signup. */
 export const WEB_DRIVER_SIGNUP_URL = `${WEB_ORIGIN}/#/driver-signup`
+=======
+export const WEB_ORIGIN = 'https://clemsonrides.com'
+>>>>>>> Stashed changes
 
 export const RIDER_EXPO_PROJECT = 'https://expo.dev/accounts/johnmatveyev/projects/clemson-rides-rider'
 
