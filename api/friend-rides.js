@@ -42,7 +42,7 @@ function tokenPresent(req) {
   return false
 }
 
-export default async function handler(req, res) {
+export default async function handler(req, res, ...rest) {
   if (cors(req, res)) return
   let action = resolveRouteAction(req, { allowed: Object.keys(HANDLERS), legacy: LEGACY })
   if (!action && req.method === 'GET' && tokenPresent(req)) action = 'get'
@@ -52,5 +52,5 @@ export default async function handler(req, res) {
       error: 'Unknown friend ride action. Use action=create, get, join, recompute, confirm-charges, or retry-charge.',
     })
   }
-  return handle(req, res)
+  return handle(req, res, ...rest)
 }
