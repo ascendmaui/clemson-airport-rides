@@ -4,6 +4,7 @@ if (!process.env.GOOGLE_MAPS_API_KEY) {
 }
 
 import test, { describe, after } from 'node:test'
+import test, { after, before, describe } from 'node:test'
 import assert from 'node:assert/strict'
 
 const {
@@ -37,7 +38,20 @@ function mockReq(method, body = {}, query = {}) {
 
 describe('FriendRide Lobby', () => {
   let db = {}
-  
+  const originalMapsKey = process.env.GOOGLE_MAPS_API_KEY
+
+  before(() => {
+    process.env.GOOGLE_MAPS_API_KEY = originalMapsKey || 'mock_key_for_tests'
+  })
+
+  after(() => {
+    if (originalMapsKey === undefined) {
+      delete process.env.GOOGLE_MAPS_API_KEY
+    } else {
+      process.env.GOOGLE_MAPS_API_KEY = originalMapsKey
+    }
+  })
+
   function createFakeSb() {
     const rides = []
     const participants = []
@@ -234,6 +248,8 @@ describe('FriendRide Lobby', () => {
       if (prevKey === undefined) delete process.env.GOOGLE_MAPS_API_KEY
       else process.env.GOOGLE_MAPS_API_KEY = prevKey
       global.fetch = origFetch
+      if (prevKey === undefined) delete process.env.GOOGLE_MAPS_API_KEY
+      else process.env.GOOGLE_MAPS_API_KEY = prevKey
     }
   })
 
