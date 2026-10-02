@@ -10,6 +10,7 @@ import { resumeAfterAuth } from '../components/SignInToBookModal'
 import { capturePromoFromLocation } from '../lib/riderPromo'
 import { RIDE_STYLES, isProfileComplete, profileFieldError, missingProfileFields } from '../../packages/rides-native/partyProfile.js'
 import { buildFieldA11yProps, getFieldErrorProps } from '../lib/formA11y.js'
+import { AccessibleAlert } from '../components/AccessibleAlert'
 
 const fieldStyle = {
   width: '100%',
@@ -155,9 +156,9 @@ export function SignInScreen() {
           />
         </label>
         {error && (
-          <p id="signin-form-alert" role="alert" aria-live="polite" className="form-summary-alert">
-            {error}
-          </p>
+          <div id="signin-form-alert">
+            <AccessibleAlert error={error} onDismiss={() => setError(null)} style={{ marginBottom: 12 }} />
+          </div>
         )}
         <button type="submit" className="pressable primary-cta" disabled={busy} style={{ width: '100%', padding: 16, borderRadius: 16, background: 'linear-gradient(135deg, var(--orange) 0%, #ff7a1a 100%)', color: '#fff', fontWeight: 700, fontSize: 16, boxShadow: 'var(--shadow-cta)', opacity: busy ? 0.7 : 1 }}>
           {busy ? 'Signing in…' : 'Sign in'}
@@ -425,9 +426,9 @@ export function SignUpScreen() {
           </span>
         </label>
         {error && (
-          <p id="signup-form-alert" role="alert" aria-live="polite" className="form-summary-alert">
-            {error}
-          </p>
+          <div id="signup-form-alert">
+            <AccessibleAlert error={error} onDismiss={() => setError(null)} style={{ marginBottom: 12 }} />
+          </div>
         )}
         {info && (
           <p role="status" aria-live="polite" style={{ color: '#522D80', fontSize: 13, marginBottom: 12, lineHeight: 1.45 }}>
