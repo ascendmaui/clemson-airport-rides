@@ -32,7 +32,7 @@ begin
   end if;
 
   select net.http_get(
-    url := 'https://clemson-rides.vercel.app/api/expire-unpaid-airport-holds',
+    url := 'https://clemsonrides.com/api/expire-unpaid-airport-holds',
     headers := jsonb_build_object('Authorization', 'Bearer ' || trim(v_secret)),
     timeout_milliseconds := 60000
   ) into v_request_id;

@@ -84,9 +84,9 @@ test('marketing features exact copy snapshot', (t) => {
 })
 
 test('soft-launch web QR targets stable production book URL', () => {
-  assert.equal(WEB_ORIGIN, 'https://clemson-airport-rides.vercel.app')
-  assert.equal(WEB_BOOK_URL, 'https://clemson-airport-rides.vercel.app/#/home')
-  assert.equal(WEB_SCHEDULE_URL, 'https://clemson-airport-rides.vercel.app/#/schedule')
+  assert.equal(WEB_ORIGIN, 'https://clemsonrides.com')
+  assert.equal(WEB_BOOK_URL, 'https://clemsonrides.com/#/home')
+  assert.equal(WEB_SCHEDULE_URL, 'https://clemsonrides.com/#/schedule')
   assert.doesNotMatch(WEB_ORIGIN, /clemson-rides\.vercel\.app$/)
 })
 
