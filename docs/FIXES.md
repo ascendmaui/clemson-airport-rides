@@ -52,6 +52,23 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
   - `api/driver.js`
   - `tests/gaAuditDriverPayoutsEarnings.test.js`
 - **Verified:** `node --test tests/gaAuditDriverPayoutsEarnings.test.js` (15/15) and full `npm test` suite.
+## 2026-10-02 — GA95: Atomic merge_trip_metadata RPC reconcile, abandon checkout hardening, and security headers
+- **Track / machine:** Clemson RIDES · MacBook Max · `agy/ga-audit-checkout-reconcile-rpc-ga95`
+  1. `server/checkoutReconcile.js` `recordDeposit`: overwrote entire `trips.metadata` via `supabase.from('trips').update({ metadata: nextMeta })`, risking clobbering concurrent writes (e.g. concurrent webhook stamps or hold-sweep updates) instead of using the atomic Postgres RPC `merge_trip_metadata`.
+  2. `server/checkoutReconcile.js` `reconcileCheckoutSession`: did not trim `sessionId` with surrounding whitespace before format check and Stripe retrieval.
+  3. `server/endpoints/reconcileCheckout.js`: lacked `Cache-Control` / `Pragma` headers, did not set `Allow: POST, OPTIONS` on 405 Method Not Allowed, and did not trim whitespace on `sessionId`.
+  4. `server/endpoints/abandonCheckout.js`: lacked `Cache-Control` / `Pragma` headers, did not set `Allow: POST, OPTIONS` on 405 Method Not Allowed, lacked dependency injection (`deps`) for testing, and did not trim `tripId` or `sessionId` inputs.
+  - Updated `recordDeposit` in `server/checkoutReconcile.js` to build a clean metadata `patch` and invoke Postgres RPC `merge_trip_metadata(p_trip_id, p_patch)` atomically, falling back safely to `.update()` if RPC is missing or fails.
+  - Trimmed `sessionId` in `reconcileCheckoutSession`.
+  - Added `Cache-Control: no-store, no-cache, must-revalidate, private`, `Pragma: no-cache`, `Allow: POST, OPTIONS` on 405, and `sessionId` trimming to `server/endpoints/reconcileCheckout.js`.
+  - Added `Cache-Control: no-store, no-cache, must-revalidate, private`, `Pragma: no-cache`, `Allow: POST, OPTIONS` on 405, dependency injection (`deps = {}`), and input trimming to `server/endpoints/abandonCheckout.js`.
+  - Added unit test suite in `tests/gaAuditCheckoutReconcileRpc.test.js` (5/5 passing) and updated `server/checkoutReconcile.test.js` (20/20 passing).
+  - `server/checkoutReconcile.js`
+  - `server/checkoutReconcile.test.js`
+  - `server/endpoints/reconcileCheckout.js`
+  - `server/endpoints/abandonCheckout.js`
+  - `tests/gaAuditCheckoutReconcileRpc.test.js`
+- **Verified:** `node --test tests/gaAuditCheckoutReconcileRpc.test.js` (5/5 passing) and full `npm test` passing.
 
 ## 2026-10-01 — Expire unpaid airport holds & Stripe webhook endpoint hardening
 

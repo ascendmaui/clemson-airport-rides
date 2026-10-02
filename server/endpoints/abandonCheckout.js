@@ -9,17 +9,25 @@ import {
 } from '../friendRideLib.js'
 import { releaseUnpaidCheckoutTrip } from '../abandonedCheckout.js'
 
-export default async function handler(req, res) {
+export default async function handler(req, res, deps = {}) {
+  if (!res.headersSent) {
+    res.setHeader?.('Cache-Control', 'no-store, no-cache, must-revalidate, private')
+    res.setHeader?.('Pragma', 'no-cache')
+  }
   if (cors(req, res)) return
-  if (req.method !== 'POST') return json(res, 405, { error: 'Method not allowed' })
-  const sb = admin()
+  if (req.method !== 'POST') {
+    if (!res.headersSent) res.setHeader?.('Allow', 'POST, OPTIONS')
+    return json(res, 405, { error: 'Method not allowed' })
+  }
+  const sb = deps.sb !== undefined ? deps.sb : admin()
   if (!sb) return json(res, 503, { error: 'SUPABASE_SERVICE_ROLE_KEY not configured' })
-  const user = await userFromAuth(req)
+  const user = deps.user !== undefined ? deps.user : await (deps.userFromAuth || userFromAuth)(req)
   if (!user) return json(res, 401, { error: 'Sign in required' })
   const { body, error: pe } = parseBody(req)
   if (pe) return json(res, 400, { error: pe })
-  const tripId = body.tripId || body.trip_id
-  if (!tripId || typeof tripId !== 'string') return json(res, 400, { error: 'tripId required' })
+  const rawTripId = body?.tripId || body?.trip_id
+  const tripId = typeof rawTripId === 'string' ? rawTripId.trim() : ''
+  if (!tripId) return json(res, 400, { error: 'tripId required' })
 
   const { data: trip, error } = await sb
     .from('trips')
@@ -28,22 +36,25 @@ export default async function handler(req, res) {
     .maybeSingle()
   if (error || !trip || trip.rider_id !== user.id) return json(res, 404, { error: 'Trip not found' })
 
-  const sessionId = body.sessionId || body.session_id || trip.metadata?.stripe_checkout_session_id
-  if (!sessionId || typeof sessionId !== 'string') {
+  const rawSessionId = body?.sessionId || body?.session_id || trip.metadata?.stripe_checkout_session_id
+  const sessionId = typeof rawSessionId === 'string' ? rawSessionId.trim() : ''
+  if (!sessionId) {
     return json(res, 409, { error: 'Checkout session not found', reason: 'missing_session' })
   }
-  if (!stripeOk()) return json(res, 503, { error: 'Payments unavailable' })
+  const stripeOkFn = deps.stripeOk || stripeOk
+  if (!deps.stripe && !stripeOkFn()) return json(res, 503, { error: 'Payments unavailable' })
 
   try {
-    const stripe = stripeClient()
+    const stripe = deps.stripe || stripeClient()
     const session = await stripe.checkout.sessions.retrieve(sessionId)
-    if (String(session?.metadata?.tripId || '') !== tripId) {
+    if (String(session?.metadata?.tripId || '').trim() !== tripId) {
       return json(res, 403, { error: 'Session does not match this trip' })
     }
-    if (session?.metadata?.riderId && String(session.metadata.riderId) !== user.id) {
+    if (session?.metadata?.riderId && String(session.metadata.riderId).trim() !== user.id) {
       return json(res, 403, { error: 'Not your checkout' })
     }
-    const result = await releaseUnpaidCheckoutTrip(sb, session, {
+    const releaseFn = deps.releaseUnpaidCheckoutTrip || releaseUnpaidCheckoutTrip
+    const result = await releaseFn(sb, session, {
       reason: 'checkout_canceled',
       source: 'checkout_return',
       expireSession: (id) => stripe.checkout.sessions.expire(id),
