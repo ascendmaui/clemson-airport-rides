@@ -219,3 +219,103 @@ test('same driver double-submit accepts once and writes one accepted event', asy
   assert.equal(acceptedEvents.length, 1)
   assert.equal(acceptedEvents[0].payload.driver_id, driverId)
 })
+
+test('concurrent driver accept vs rider cancel produces exactly one winner and consistent event stream', async () => {
+  const { supabase, trip, riderId, drivers } = seedMatchingScenario()
+  const driverId = drivers[0].id
+
+  const results = await Promise.allSettled([
+    acceptTrip(supabase, trip, driverId),
+    cancelSearchingTrip(supabase, trip.id, riderId),
+  ])
+  const fulfilled = results.filter((result) => result.status === 'fulfilled')
+  const rejected = results.filter((result) => result.status === 'rejected')
+  assert.equal(fulfilled.length, 1)
+  assert.equal(rejected.length, 1)
+
+  const stored = supabase._tables.trips.find((row) => row.id === trip.id)
+  const acceptedEvents = supabase._tables.trip_events.filter(
+    (event) => event.trip_id === trip.id && event.kind === 'accepted',
+  )
+  const canceledEvents = supabase._tables.trip_events.filter(
+    (event) => event.trip_id === trip.id && event.kind === 'canceled',
+  )
+
+  if (fulfilled[0].value.status === 'accepted') {
+    assert.equal(stored.status, 'accepted')
+    assert.equal(stored.driver_id, driverId)
+    assert.equal(acceptedEvents.length, 1)
+    assert.equal(canceledEvents.length, 0)
+    assert.match(rejected[0].reason.message, /no longer searching/)
+  } else {
+    assert.equal(stored.status, 'canceled')
+    assert.equal(stored.driver_id, null)
+    assert.equal(acceptedEvents.length, 0)
+    assert.equal(canceledEvents.length, 1)
+    assert.match(rejected[0].reason.message, /no longer available/)
+  }
+})
+
+test('concurrent driver accept vs search TTL expiry produces exactly one winner without split state', async () => {
+  const { supabase, trip, drivers } = seedMatchingScenario()
+  const driverId = drivers[0].id
+
+  const results = await Promise.allSettled([
+    acceptTrip(supabase, trip, driverId),
+    expireSearchingTrip(supabase, trip.id, { expiredBefore: '2026-10-01T08:10:00.000Z' }),
+  ])
+  const fulfilled = results.filter((result) => result.status === 'fulfilled')
+  const rejected = results.filter((result) => result.status === 'rejected')
+  assert.equal(fulfilled.length, 1)
+  assert.equal(rejected.length, 1)
+
+  const stored = supabase._tables.trips.find((row) => row.id === trip.id)
+  const acceptedEvents = supabase._tables.trip_events.filter((e) => e.kind === 'accepted')
+  const canceledEvents = supabase._tables.trip_events.filter((e) => e.kind === 'canceled')
+
+  if (fulfilled[0].value.status === 'accepted') {
+    assert.equal(stored.status, 'accepted')
+    assert.equal(stored.driver_id, driverId)
+    assert.equal(acceptedEvents.length, 1)
+    assert.equal(canceledEvents.length, 0)
+  } else {
+    assert.equal(stored.status, 'canceled')
+    assert.equal(stored.driver_id, null)
+    assert.equal(acceptedEvents.length, 0)
+    assert.equal(canceledEvents.length, 1)
+  }
+})
+
+test('targeted ride request cannot be hijacked by an unassigned driver', async () => {
+  const { supabase } = seedMatchingScenario({
+    trip: {
+      status: 'requested',
+      driver_id: 'driver-1',
+    },
+  })
+
+  // Driver 2 tries to accept a trip targeted at driver 1
+  await assert.rejects(
+    () => acceptTrip(supabase, { id: 'trip-searching-1', status: 'requested' }, 'driver-2'),
+    /That ride is no longer available/,
+  )
+
+  const stored = supabase._tables.trips.find((row) => row.id === 'trip-searching-1')
+  assert.equal(stored.status, 'requested')
+  assert.equal(stored.driver_id, 'driver-1')
+  assert.equal(supabase._tables.trip_events.length, 0)
+})
+
+test('terminal trip statuses reject late accept without inserting events', async () => {
+  for (const status of ['in_progress', 'arrived', 'completed', 'canceled']) {
+    const { supabase } = seedMatchingScenario({
+      trip: { status, driver_id: 'driver-1' },
+    })
+
+    await assert.rejects(
+      () => acceptTrip(supabase, { id: 'trip-searching-1', status }, 'driver-2'),
+      /That ride is no longer available/,
+    )
+    assert.equal(supabase._tables.trip_events.length, 0)
+  }
+})

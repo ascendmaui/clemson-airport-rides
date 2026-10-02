@@ -283,6 +283,12 @@ export async function acceptTrip(supabase, trip, driverId) {
   }
   const freshRows = await listTrips(supabase, (query) => query.eq('id', trip.id).limit(1))
   const fresh = freshRows[0] || trip
+  if (fresh.driver_id && fresh.driver_id !== driverId) {
+    throw new Error('That ride is no longer available')
+  }
+  if (fresh.status && !['requested', 'searching', 'offered', 'scheduled'].includes(fresh.status)) {
+    throw new Error('That ride is no longer available')
+  }
   // trips.update and accept_scheduled_trip both hit
   // trips_block_unpaid_airport_deposit_accept. This is the desk copy of that error.
   if (isUnpaidAirportDepositTrip(fresh)) {
