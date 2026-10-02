@@ -5,49 +5,41 @@
  * Service role is used only after the JWT is verified, and only for that driver's trip ids.
  * Response has amounts and routed distance/duration — no addresses, names, emails, or Stripe ids.
  */
-import { createClient } from '@supabase/supabase-js'
+import {
+  admin, cors, json, userFromAuth,
+} from '../friendRideLib.js'
 
-const supabaseUrl =
-  process.env.SUPABASE_URL ||
-  process.env.NEXT_PUBLIC_SUPABASE_URL ||
-  process.env.VITE_SUPABASE_URL ||
-  'https://awktabuhijrshmsmagpq.supabase.co'
-const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || ''
-
-function json(res, status, body) {
-  res.statusCode = status
-  res.setHeader('Content-Type', 'application/json')
-  res.setHeader('Access-Control-Allow-Origin', '*')
-  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS')
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization')
-  res.end(JSON.stringify(body))
-}
-
-function admin() {
-  if (!serviceKey) return null
-  return createClient(supabaseUrl, serviceKey, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  })
-}
-
-async function userFromAuth(req, sb) {
-  const header = req.headers.authorization || req.headers.Authorization || ''
-  const match = String(header).match(/^Bearer\s+(.+)$/i)
+export async function resolveUser(req, sb, deps = {}) {
+  if (deps.user !== undefined) return deps.user
+  if (deps.userFromAuth) return await deps.userFromAuth(req, sb)
+  const header = req.headers?.authorization || req.headers?.Authorization || req.headers?.['AUTHORIZATION'] || ''
+  const match = String(header).trim().match(/^Bearer\s+(.+)$/i)
   if (!match) return null
+  if (!sb?.auth?.getUser) return null
   const { data, error } = await sb.auth.getUser(match[1])
   if (error || !data?.user) return null
   return data.user
 }
 
-export default async function handler(req, res) {
-  if (req.method === 'OPTIONS') return json(res, 204, {})
-  if (req.method !== 'GET') return json(res, 405, { error: 'Method not allowed' })
+export default async function handler(req, res, deps = {}) {
+  if (cors(req, res)) return
+  if (req.method !== 'GET') {
+    res.setHeader?.('Allow', 'GET, OPTIONS')
+    res.setHeader?.('Cache-Control', 'no-store, no-cache, must-revalidate, private')
+    return json(res, 405, { error: 'Method not allowed' })
+  }
 
-  const sb = admin()
-  if (!sb) return json(res, 503, { error: 'SUPABASE_SERVICE_ROLE_KEY not configured' })
+  const sb = deps.sb !== undefined ? deps.sb : (deps.admin ? deps.admin() : admin())
+  if (!sb) {
+    res.setHeader?.('Cache-Control', 'no-store, no-cache, must-revalidate, private')
+    return json(res, 503, { error: 'SUPABASE_SERVICE_ROLE_KEY not configured' })
+  }
 
-  const user = await userFromAuth(req, sb)
-  if (!user) return json(res, 401, { error: 'Sign in required' })
+  const user = await resolveUser(req, sb, deps)
+  if (!user) {
+    res.setHeader?.('Cache-Control', 'no-store, no-cache, must-revalidate, private')
+    return json(res, 401, { error: 'Sign in required' })
+  }
 
   const { data: trips, error: tripErr } = await sb
     .from('trips')
@@ -57,18 +49,30 @@ export default async function handler(req, res) {
     .order('completed_at', { ascending: false })
     .limit(1000)
 
-  if (tripErr) return json(res, 500, { error: tripErr.message || 'Could not load trips' })
+  if (tripErr) {
+    res.setHeader?.('Cache-Control', 'no-store, no-cache, must-revalidate, private')
+    return json(res, 500, { error: tripErr.message || 'Could not load trips' })
+  }
 
   const ids = (trips || []).map((trip) => trip.id).filter(Boolean)
-  if (!ids.length) return json(res, 200, { paymentsByTrip: {}, billsByTrip: {} })
+  if (!ids.length) {
+    res.setHeader?.('Cache-Control', 'no-store, no-cache, must-revalidate, private')
+    return json(res, 200, { paymentsByTrip: {}, billsByTrip: {} })
+  }
 
   const [{ data: payments, error: payErr }, { data: bills, error: billErr }] = await Promise.all([
     sb.from('payments').select('trip_id, kind, amount_cents, status').in('trip_id', ids),
     sb.from('ride_bills').select('trip_id, base_cents, distance_cents, time_cents, surge_cents, distance_m, duration_s').in('trip_id', ids),
   ])
 
-  if (payErr) return json(res, 500, { error: payErr.message || 'Could not load payments' })
-  if (billErr) return json(res, 500, { error: billErr.message || 'Could not load fare detail' })
+  if (payErr) {
+    res.setHeader?.('Cache-Control', 'no-store, no-cache, must-revalidate, private')
+    return json(res, 500, { error: payErr.message || 'Could not load payments' })
+  }
+  if (billErr) {
+    res.setHeader?.('Cache-Control', 'no-store, no-cache, must-revalidate, private')
+    return json(res, 500, { error: billErr.message || 'Could not load fare detail' })
+  }
 
   /** @type {Record<string, { kind: string, amountCents: number, status: string }[]>} */
   const paymentsByTrip = {}
@@ -104,5 +108,6 @@ export default async function handler(req, res) {
     billsByTrip[row.trip_id] = cur
   }
 
+  res.setHeader?.('Cache-Control', 'no-store, no-cache, must-revalidate, private')
   return json(res, 200, { paymentsByTrip, billsByTrip })
 }
