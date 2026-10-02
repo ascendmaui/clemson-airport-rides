@@ -579,6 +579,21 @@ test('images need accessibilityLabel or accessible={false}', () => {
   assert.deepEqual(idsIn('<ImageBackground source={src} />'), [])
 })
 
+test('book-to-track critical rider controls retain meaningful accessibility labels', () => {
+  const home = readFileSync(path.join(ROOT, 'apps/rider/app/index.tsx'), 'utf8')
+  const confirm = readFileSync(path.join(ROOT, 'apps/rider/app/confirm.tsx'), 'utf8')
+  const driverPicker = readFileSync(path.join(ROOT, 'apps/rider/app/pick-driver.tsx'), 'utf8')
+  const tracking = readFileSync(path.join(ROOT, 'apps/rider/app/requested.tsx'), 'utf8')
+
+  assert.match(home, /accessibilityLabel="Destination"/)
+  assert.match(home, /accessibilityLabel="Search destination"/)
+  assert.match(home, /accessibilityHint="Continues to confirm pickup"/)
+  assert.match(confirm, /accessibilityLabel="Note for driver"/)
+  assert.match(confirm, /label="Confirm pickup"/)
+  assert.match(driverPicker, /selectedDriver \? `Request \$\{selectedDriver\.name\}` : 'Select a driver'/)
+  assert.match(tracking, /accessibilityLabel="Emergency contacts"/)
+})
+
 test('strings and comments are not elements', () => {
   const source = [
     'const example = "<Pressable onPress={go} />"',
