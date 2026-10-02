@@ -1098,8 +1098,8 @@ test('expireUnpaidAirportHolds endpoint hardened headers and token parsing', asy
 })
 
 
-function pause(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms))
+function pause() {
+  return new Promise((resolve) => setImmediate(resolve))
 }
 
 test('overlapping ttl sweeps cancel once and expire an open Checkout session once', async () => {
