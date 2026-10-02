@@ -126,7 +126,7 @@ test('app-scheme deep links: Expo development URLs', () => {
   )
 })
 
-test('clemson-rides.vercel.app and web URLs: session tokens in hash fragment', () => {
+test('clemsonrides.com and web URLs: session tokens in hash fragment', () => {
   assert.deepEqual(
     parseSupabaseAuthUrl('https://clemsonrides.com/auth/callback#access_token=w_at1&refresh_token=w_rt1&type=magiclink'),
     {
@@ -159,7 +159,7 @@ test('clemson-rides.vercel.app and web URLs: session tokens in hash fragment', (
   )
 })
 
-test('clemson-rides.vercel.app and web URLs: session tokens in query string', () => {
+test('clemsonrides.com and web URLs: session tokens in query string', () => {
   assert.deepEqual(
     parseSupabaseAuthUrl('https://clemsonrides.com/auth/callback?access_token=wq_at&refresh_token=wq_rt&type=invite'),
     {
@@ -181,7 +181,7 @@ test('clemson-rides.vercel.app and web URLs: session tokens in query string', ()
   )
 })
 
-test('clemson-rides.vercel.app and web URLs: PKCE code in query or hash', () => {
+test('clemsonrides.com and web URLs: PKCE code in query or hash', () => {
   assert.deepEqual(
     parseSupabaseAuthUrl('https://clemsonrides.com/auth/callback?code=web_pkce_q&type=signup'),
     {
