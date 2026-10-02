@@ -7,6 +7,10 @@ import {
   fetchDriverApplication,
   fetchDriversByIds,
   fetchOnlineDrivers,
+  filterDriversForFleet,
+  isTeslaDriver,
+  isTeslaVehicle,
+  TESLA_FLEET_EMPTY_COPY,
   formatDriverDistance,
   groupDriversForPicker,
   loadFavoriteDriverIds,
@@ -1222,4 +1226,23 @@ test('open-pool offers are empty for pending_review and still present for approv
   assert.deepEqual(approved.offers.map((card) => card.id), ['trip-open'])
   assert.deepEqual(approved.scheduledOpen.map((card) => card.id), ['trip-sched'])
   assert.equal(approved.active?.id, 'trip-live')
+})
+
+
+test('isTeslaVehicle and filterDriversForFleet keep only listed Tesla drivers', () => {
+  assert.equal(isTeslaVehicle({ is_tesla: true }), true)
+  assert.equal(isTeslaVehicle({ tier: 'tesla_self_driving' }), true)
+  assert.equal(isTeslaVehicle({ make: 'Tesla', model: 'Model 3' }), true)
+  assert.equal(isTeslaVehicle({ make: 'Toyota', model: 'Camry' }), false)
+  const drivers = [
+    { id: 'a', isTesla: true, online: true, name: 'Ava' },
+    { id: 'b', isTesla: false, online: true, name: 'Ben', vehicle: { make: 'Honda', model: 'Civic' } },
+    { id: 'c', isTesla: false, online: true, name: 'Cara', vehicle: { make: 'Tesla', model: 'Model 3' } },
+  ]
+  assert.equal(isTeslaDriver(drivers[0]), true)
+  assert.equal(isTeslaDriver(drivers[1]), false)
+  assert.equal(isTeslaDriver(drivers[2]), true)
+  assert.deepEqual(filterDriversForFleet(drivers, 'standard').map((d) => d.id), ['a', 'b', 'c'])
+  assert.deepEqual(filterDriversForFleet(drivers, 'tesla').map((d) => d.id), ['a', 'c'])
+  assert.match(TESLA_FLEET_EMPTY_COPY, /No Tesla Model 3 drivers/)
 })

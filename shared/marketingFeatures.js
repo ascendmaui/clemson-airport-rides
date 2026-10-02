@@ -24,7 +24,7 @@ export const MARKETING_FEATURES = [
   {
     id: 'tesla',
     title: 'Tesla Model 3',
-    body: 'Tesla Model 3 is a Clemson fleet option on the tier list and on weekend scheduling. A driver is at the wheel. There is no self-driving dispatch.',
+    body: 'Tesla Model 3 fleet is live on the tier list and weekend scheduling. Pick a listed Tesla driver — a driver is at the wheel. There is no self-driving or robotaxi dispatch.',
   },
   {
     id: 'preferred',

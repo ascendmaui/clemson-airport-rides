@@ -4,7 +4,7 @@
  */
 
 export const TESLA_FLEET_NOTICE =
-  'Coming soon. Tesla Model 3 is a profile option only. A person still drives the car. There is no self-driving dispatch.'
+  'Tesla Model 3 fleet is live. A Clemson RIDES driver is at the wheel. There is no self-driving or robotaxi dispatch.'
 
 /** Notice for a selected Tesla Model 3 option. Null when Tesla is not the choice. */
 export function teslaFleetNotice(selected) {
@@ -222,7 +222,7 @@ export const TAG_LABELS = {
   game_day: 'Game day',
   weekend_party: 'Weekend / party',
   carpool: 'Carpool · split fare',
-  tesla: 'Tesla Model 3 · stub',
+  tesla: 'Tesla Model 3',
   direct: 'Preferred by rider',
   scheduled: 'Scheduled',
 }
@@ -443,6 +443,7 @@ export function toDriverCard(row, options) {
     tags,
     tagLabels: tags.map(tagLabel),
     teslaStub: tags.includes('tesla'),
+    isTeslaFleet: tags.includes('tesla'),
     arrivedAt: row.arrived_at || null,
     passengers: Math.max(1, Math.round(Number(row.passengers) || 1)),
     shares: carpoolShareLines(meta),

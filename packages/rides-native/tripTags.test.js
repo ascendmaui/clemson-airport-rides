@@ -92,21 +92,24 @@ test('weekend queue copy names scheduled airport and campus pickups', () => {
   assert.throws(() => queueEmptyCopy('nope'), /Unknown queue filter/)
 })
 
-test('Tesla fleet notice is profile-only and appears only when Tesla is selected', () => {
+test('Tesla fleet notice is live and appears only when Tesla is selected', () => {
   assert.equal(teslaFleetNotice(false), null)
   assert.equal(teslaFleetNotice(true), TESLA_FLEET_NOTICE)
-  assert.match(TESLA_FLEET_NOTICE, /profile option only/)
-  assert.match(TESLA_FLEET_NOTICE, /person still drives/)
-  assert.match(TESLA_FLEET_NOTICE, /no self-driving dispatch/)
+  assert.match(TESLA_FLEET_NOTICE, /fleet is live/i)
+  assert.match(TESLA_FLEET_NOTICE, /driver is at the wheel/i)
+  assert.match(TESLA_FLEET_NOTICE, /no self-driving/i)
+  assert.equal(tagLabel('tesla'), 'Tesla Model 3')
   const tesla = toDriverCard({ id: 't1', status: 'accepted', tier: 'tesla_self_driving', fare_cents: 3600 })
   const standard = toDriverCard({ id: 't2', status: 'accepted', tier: 'standard', fare_cents: 1800 })
   assert.equal(tesla.teslaStub, true)
+  assert.equal(tesla.isTeslaFleet, true)
   assert.equal(teslaFleetNotice(tesla.teslaStub), TESLA_FLEET_NOTICE)
   assert.equal(standard.teslaStub, false)
+  assert.equal(standard.isTeslaFleet, false)
   assert.equal(teslaFleetNotice(standard.teslaStub), null)
 })
 
-test('an explicit party weekend purpose tags the weekend filter and a Tesla tier stays a stub tag', () => {
+test('an explicit party weekend purpose tags the weekend filter and a Tesla tier', () => {
   const tags = tripTags({
     status: 'scheduled',
     tier: 'tesla',

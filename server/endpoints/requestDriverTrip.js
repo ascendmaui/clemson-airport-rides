@@ -63,6 +63,29 @@ export default async function handler(req, res, deps = {}) {
     })
   }
 
+  if (tier === 'tesla') {
+    const vehicleRes = await sb
+      .from('vehicles')
+      .select('is_tesla, tier, make, model')
+      .eq('driver_id', driverId)
+      .limit(1)
+      .maybeSingle()
+    if (vehicleRes.error) {
+      return json(res, 500, { error: vehicleRes.error.message || 'Could not verify Tesla listing', code: 'tesla_vehicle_lookup_failed' })
+    }
+    const vehicle = vehicleRes.data
+    const listed = Boolean(vehicle?.is_tesla)
+      || vehicle?.tier === 'tesla'
+      || vehicle?.tier === 'tesla_self_driving'
+      || (String(vehicle?.make || '').toLowerCase() === 'tesla' && /model\s*3/i.test(String(vehicle?.model || '')))
+    if (!listed) {
+      return json(res, 409, {
+        error: 'That driver is not listed for the Tesla Model 3 fleet. Pick a Tesla-listed driver.',
+        code: 'tesla_driver_required',
+      })
+    }
+  }
+
   const when = new Date()
   let gameDayMultiplier = null
   try {
