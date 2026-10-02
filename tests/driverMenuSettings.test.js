@@ -2,10 +2,15 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { parse } from '@babel/parser'
 
-function extractMenuRows(filePath) {
-  const code = fs.readFileSync(filePath, 'utf8')
+const __filename = fileURLToPath(import.meta.url)
+export const REPO_ROOT = path.resolve(path.dirname(__filename), '..')
+
+export function extractMenuRows(filePath) {
+  const resolvedPath = path.isAbsolute(filePath) ? filePath : path.resolve(REPO_ROOT, filePath)
+  const code = fs.readFileSync(resolvedPath, 'utf8')
   const ast = parse(code, {
     sourceType: 'module',
     plugins: ['typescript', 'jsx'],
