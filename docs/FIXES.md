@@ -2,6 +2,27 @@
 
 Persistent knowledge base for recurring failures. When a matching issue appears, apply the saved fix first.
 
+## 2026-10-01 — Expire unpaid airport holds query bounds, bearer token whitespace, and error sanitization
+
+- **Track / machine:** Clemson RIDES · MacBook Max · `agy/expire-holds-query-sanitization-bounds`
+- **What was wrong:**
+  1. `server/endpoints/expireUnpaidAirportHolds.js` lacked query parameter extraction for `limit` and `ttl_ms`, leaving sweeps fixed to the default batch size of 40 and 20-minute TTL. Moreover, if a custom TTL was provided via an external caller or query string, lack of lower-bound clamping created a risk of premature cancellation of fresh unpaid holds.
+  2. `bearerToken()` used `replace(/^["']|["']$/g, '')` on tokens matched with `\S+`, which failed to parse quoted tokens with surrounding whitespace inside the quotes (e.g. `Bearer " secret "`).
+  3. Error strings returned in the `results` array could expose un-sanitized internal database constraint or schema strings in the external cron HTTP response.
+  4. Response headers and status writes lacked defensive checks for `res.headersSent` and `res.writableEnded`.
+- **What changed:**
+  - Implemented `parseHoldSweepLimit(req)` with clamping to `[1, 40]`.
+  - Implemented `parseHoldSweepTtlMs(req)` with safety floor clamping (`MIN_UNPAID_HOLD_TTL_MS = 15 minutes`) and ceiling clamping (`MAX_UNPAID_HOLD_TTL_MS = 7 days`) supporting both milliseconds (`ttl_ms`) and seconds (`ttl_seconds`).
+  - Hardened `bearerToken()` regex to match quoted tokens and trim internal whitespace (`^Bearer\s+(["']?)(.*?)\1\s*$`).
+  - Added `sanitizeHoldResults()` to truncate and mask verbose database error messages in response objects.
+  - Added `res.headersSent` and `res.writableEnded` guards across all response write paths.
+  - Added comprehensive test coverage in `server/abandonedCheckout.test.js`.
+- **Files touched:**
+  - `server/endpoints/expireUnpaidAirportHolds.js`
+  - `server/abandonedCheckout.test.js`
+  - `docs/FIXES.md`
+- **Verified:** `node --experimental-strip-types --test server/abandonedCheckout.test.js` (42/42 passing).
+
 ## 2026-10-01 — Expire unpaid airport holds & Stripe webhook endpoint hardening
 
 - **Track / machine:** Clemson RIDES · MacBook Max · `feat/max-agy-burn-ttl-webhooks`

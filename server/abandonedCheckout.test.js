@@ -1066,7 +1066,7 @@ test('expireUnpaidAirportHolds endpoint hardened headers and token parsing', asy
   assert.equal(wrongMethod.headers['cache-control'], 'no-store, no-cache, must-revalidate, private')
   assert.equal(wrongMethod.headers['pragma'], 'no-cache')
 
-  for (const token of ['"cron-secret"', "'cron-secret'"]) {
+  for (const token of ['"cron-secret"', "'cron-secret'", '"  cron-secret  "', "'  cron-secret  '"]) {
     const quoted = mockRes()
     await expireUnpaidAirportHolds({
       method: 'GET',
@@ -1095,6 +1095,74 @@ test('expireUnpaidAirportHolds endpoint hardened headers and token parsing', asy
     assert.equal(quoted.headers['cache-control'], 'no-store, no-cache, must-revalidate, private')
     assert.equal(quoted.headers['pragma'], 'no-cache')
   }
+})
+
+test('expireUnpaidAirportHolds parses and bounds limit and ttl query parameters', async () => {
+  const cronEnv = { CRON_SECRET: 'cron-secret' }
+  let capturedOpts = null
+  const dummyRelease = async (_sb, opts) => {
+    capturedOpts = opts
+    return {
+      ok: true,
+      scanned: 1,
+      expired: 0,
+      released: 0,
+      skipped: 1,
+      errors: 0,
+      wouldExpire: 0,
+      dryRun: false,
+      results: [
+        { released: false, reason: 'error', error: 'Database constraint violation at pg_catalog.some_internal_table_schema_xyz_detail' },
+      ],
+    }
+  }
+
+  // 1. Clamp under-floor TTL (< 15 min -> 15 min = 900,000 ms) and over-ceiling limit (> 40 -> 40)
+  const res1 = mockRes()
+  await expireUnpaidAirportHolds({
+    method: 'POST',
+    headers: { authorization: 'Bearer cron-secret' },
+    url: '/api/expire-unpaid-airport-holds?ttl_ms=60000&limit=999',
+  }, res1, {
+    env: cronEnv,
+    sb: {},
+    release: dummyRelease,
+  })
+  assert.equal(res1.statusCode, 200)
+  assert.equal(capturedOpts.limit, 40)
+  assert.equal(capturedOpts.ttlMs, 900000)
+  const body1 = JSON.parse(res1.body)
+  assert.ok(body1.results[0].error.length <= 83)
+  assert.ok(body1.results[0].error.endsWith('...'))
+
+  // 2. Clamp zero or negative limit to 1
+  const res2 = mockRes()
+  await expireUnpaidAirportHolds({
+    method: 'GET',
+    headers: { authorization: 'Bearer cron-secret' },
+    url: '/api/expire-unpaid-airport-holds?limit=-5&ttl_seconds=1800',
+  }, res2, {
+    env: cronEnv,
+    sb: {},
+    release: dummyRelease,
+  })
+  assert.equal(res2.statusCode, 200)
+  assert.equal(capturedOpts.limit, 1)
+  assert.equal(capturedOpts.ttlMs, 1800000)
+
+  // 3. Defensive check: already ended writable stream does not throw
+  const endedRes = mockRes()
+  endedRes.writableEnded = true
+  await expireUnpaidAirportHolds({
+    method: 'POST',
+    headers: { authorization: 'Bearer cron-secret' },
+    url: '/api/expire-unpaid-airport-holds',
+  }, endedRes, {
+    env: cronEnv,
+    sb: {},
+    release: dummyRelease,
+  })
+  assert.equal(endedRes.statusCode, 0)
 })
 
 

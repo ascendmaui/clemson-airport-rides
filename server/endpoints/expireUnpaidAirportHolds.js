@@ -35,6 +35,9 @@ import { timingSafeEqual } from 'node:crypto'
 import { admin, stripeClient, stripeOk } from '../friendRideLib.js'
 import { releaseExpiredUnpaidAirportHolds } from '../abandonedCheckout.js'
 
+const MIN_UNPAID_HOLD_TTL_MS = 15 * 60 * 1000 // 15 minutes safety floor
+const MAX_UNPAID_HOLD_TTL_MS = 7 * 24 * 60 * 60 * 1000 // 7 days safety ceiling
+
 function headerValue(headers, name) {
   if (!headers || typeof headers !== 'object') return ''
   const want = name.toLowerCase()
@@ -49,9 +52,9 @@ function headerValue(headers, name) {
 }
 
 function bearerToken(header) {
-  const match = /^Bearer\s+(\S+)\s*$/i.exec(String(header || '').trim())
+  const match = /^Bearer\s+(["']?)(.*?)\1\s*$/i.exec(String(header || '').trim())
   if (!match) return ''
-  return match[1].replace(/^["']|["']$/g, '')
+  return (match[2] || '').trim()
 }
 
 /** Constant-time compare. Different lengths return false without throwing. */
@@ -93,17 +96,82 @@ function dryRunRequested(req) {
   return flagOn(params.get('dry_run') ?? params.get('dryRun'))
 }
 
+export function parseHoldSweepLimit(req) {
+  const query = req?.query
+  let raw = query && typeof query === 'object' ? (query.limit ?? query.batch_size ?? query.batchSize) : null
+  if (raw == null) {
+    const url = String(req?.url || '')
+    const qIndex = url.indexOf('?')
+    if (qIndex !== -1) {
+      const params = new URLSearchParams(url.slice(qIndex + 1))
+      raw = params.get('limit') ?? params.get('batch_size') ?? params.get('batchSize')
+    }
+  }
+  if (raw == null || raw === '') return undefined
+  const num = Number(raw)
+  if (!Number.isFinite(num)) return undefined
+  return Math.min(40, Math.max(1, Math.floor(num)))
+}
+
+export function parseHoldSweepTtlMs(req) {
+  const query = req?.query
+  let raw = query && typeof query === 'object'
+    ? (query.ttl_ms ?? query.ttlMs ?? query.ttl_seconds ?? query.ttlSeconds)
+    : null
+  let isSeconds = false
+  if (raw == null) {
+    const url = String(req?.url || '')
+    const qIndex = url.indexOf('?')
+    if (qIndex !== -1) {
+      const params = new URLSearchParams(url.slice(qIndex + 1))
+      raw = params.get('ttl_ms') ?? params.get('ttlMs')
+      if (raw == null) {
+        raw = params.get('ttl_seconds') ?? params.get('ttlSeconds')
+        if (raw != null) isSeconds = true
+      }
+    }
+  } else if (query?.ttl_seconds != null || query?.ttlSeconds != null) {
+    isSeconds = true
+  }
+  if (raw == null || raw === '') return undefined
+  const parsed = Number(raw)
+  if (!Number.isFinite(parsed) || parsed <= 0) return undefined
+  const ms = isSeconds ? parsed * 1000 : parsed
+  return Math.min(MAX_UNPAID_HOLD_TTL_MS, Math.max(MIN_UNPAID_HOLD_TTL_MS, Math.round(ms)))
+}
+
+function sanitizeHoldResults(results) {
+  if (!Array.isArray(results)) return []
+  return results.map((item) => {
+    if (!item || typeof item !== 'object') return item
+    const sanitized = { ...item }
+    if (sanitized.error) {
+      sanitized.error = typeof sanitized.error === 'string'
+        ? (sanitized.error.length > 80 ? sanitized.error.slice(0, 80) + '...' : sanitized.error)
+        : 'internal_error'
+    }
+    return sanitized
+  })
+}
+
 function sendJson(res, status, body) {
+  if (res.writableEnded) return
   res.statusCode = status
-  res.setHeader('Content-Type', 'application/json')
+  if (!res.headersSent && typeof res.setHeader === 'function') {
+    res.setHeader('Content-Type', 'application/json')
+  }
   res.end(JSON.stringify(body))
 }
 
 export default async function handler(req, res, overrides = {}) {
-  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private')
-  res.setHeader('Pragma', 'no-cache')
+  if (!res.headersSent && typeof res.setHeader === 'function') {
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private')
+    res.setHeader('Pragma', 'no-cache')
+  }
   if (req.method !== 'GET' && req.method !== 'POST') {
-    res.setHeader('Allow', 'GET, POST')
+    if (!res.headersSent && typeof res.setHeader === 'function') {
+      res.setHeader('Allow', 'GET, POST')
+    }
     return sendJson(res, 405, { error: 'Method not allowed' })
   }
   const env = overrides.env || process.env
@@ -117,6 +185,8 @@ export default async function handler(req, res, overrides = {}) {
   }
 
   const dryRun = dryRunRequested(req)
+  const limit = parseHoldSweepLimit(req)
+  const ttlMs = parseHoldSweepTtlMs(req)
   const stripe = Object.prototype.hasOwnProperty.call(overrides, 'stripe')
     ? overrides.stripe
     : (stripeOk() ? stripeClient() : null)
@@ -124,6 +194,8 @@ export default async function handler(req, res, overrides = {}) {
   try {
     const result = await release(sb, {
       dryRun,
+      ...(limit !== undefined ? { limit } : {}),
+      ...(ttlMs !== undefined ? { ttlMs } : {}),
       expireSession: !dryRun && stripe ? (id) => stripe.checkout.sessions.expire(id) : undefined,
       retrieveSession: stripe ? (id) => stripe.checkout.sessions.retrieve(id) : undefined,
     })
@@ -140,7 +212,7 @@ export default async function handler(req, res, overrides = {}) {
       errors: Number(result.errors) || 0,
       wouldExpire: Number(result.wouldExpire) || 0,
       dryRun: Boolean(result.dryRun),
-      results: Array.isArray(result.results) ? result.results : [],
+      results: sanitizeHoldResults(result.results),
     })
   } catch (err) {
     console.error('[expire-unpaid-airport-holds]', err)
