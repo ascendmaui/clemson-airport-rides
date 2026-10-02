@@ -2,6 +2,24 @@
 
 Persistent knowledge base for recurring failures. When a matching issue appears, apply the saved fix first.
 
+## 2026-10-01 — Stripe webhook retryable error status codes (500) on database write failures
+
+- **Track / machine:** Clemson RIDES · MacBook Max · `agy/webhook-retryable-failures-resilience`
+- **What was wrong:**
+  1. In `api/stripe-webhook.js`, `checkout.session.completed` and `checkout.session.async_payment_succeeded` always returned HTTP 200 even when `applied.ok === false` or `applied.recorded?.ok === false` (e.g. database connection dropped or deadlock during deposit insertion). This caused Stripe to treat the webhook as delivered and permanently stop retrying, resulting in paid airport trips remaining canceled or un-deposited in Supabase.
+  2. Similarly, `recordCreditPurchase` and tip events returned HTTP 200 on internal write failures.
+  3. Response streaming lacked guards for `res.headersSent` and `res.writableEnded`, risking `ERR_HTTP_HEADERS_SENT` exceptions when client sockets aborted early.
+- **What changed:**
+  - Added retryable HTTP 500 responses when `applied.ok === false` or `applied.recorded?.ok === false`, instructing Stripe to retry per its exponential backoff schedule.
+  - Added retryable HTTP 500 responses for failed credit purchases (`granted.ok === false`) and tip recordings (`recorded.ok === false`).
+  - Added `res.headersSent` and `res.writableEnded` guards to prevent runtime crashes on closed or aborted client connections.
+  - Added unit test coverage in `api/stripeWebhookValidation.test.js`.
+- **Files touched:**
+  - `api/stripe-webhook.js`
+  - `api/stripeWebhookValidation.test.js`
+  - `docs/FIXES.md`
+- **Verified:** `node --experimental-strip-types --test api/stripeWebhookValidation.test.js` (89/89 passing).
+
 ## 2026-10-01 — Expire unpaid airport holds & Stripe webhook endpoint hardening
 
 - **Track / machine:** Clemson RIDES · MacBook Max · `feat/max-agy-burn-ttl-webhooks`

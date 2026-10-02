@@ -104,11 +104,15 @@ async function recordCreditPurchase(session) {
 // is handled idempotently via applyPaidCheckoutSession in server/checkoutReconcile.js.
 
 export default async function handler(req, res, deps = {}) {
-  res.setHeader('Content-Type', 'application/json')
-  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private')
-  res.setHeader('Pragma', 'no-cache')
+  if (!res.headersSent && typeof res.setHeader === 'function') {
+    res.setHeader('Content-Type', 'application/json')
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private')
+    res.setHeader('Pragma', 'no-cache')
+  }
   if (req.method !== 'POST') {
-    res.setHeader('Allow', 'POST')
+    if (!res.headersSent && typeof res.setHeader === 'function') {
+      res.setHeader('Allow', 'POST')
+    }
     res.statusCode = 405
     return res.end(JSON.stringify({ error: 'Method not allowed' }))
   }
@@ -118,6 +122,7 @@ export default async function handler(req, res, deps = {}) {
   const activeServiceKey = deps.serviceKey !== undefined ? deps.serviceKey : (process.env.SUPABASE_SERVICE_ROLE_KEY || serviceKey)
 
   if (!stripeKey || !stripeKey.startsWith('sk_') || stripeKey.includes('placeholder')) {
+    if (res.writableEnded) return
     res.statusCode = 200
     return res.end(JSON.stringify({
       stub: true,
@@ -139,6 +144,12 @@ export default async function handler(req, res, deps = {}) {
 
     if (event.type === 'payment_intent.succeeded' && event.data?.object?.metadata?.kind === 'tip') {
       const recorded = await recordTip(event.data.object)
+      if (res.writableEnded) return
+      if (recorded && recorded.ok === false) {
+        console.error('[stripe-webhook] tip recording failed', recorded.error)
+        res.statusCode = 500
+        return res.end(JSON.stringify({ error: recorded.error || 'Failed to record tip', received: false, type: event.type }))
+      }
       res.statusCode = 200
       return res.end(JSON.stringify({ received: true, type: event.type, recorded }))
     }
@@ -163,6 +174,7 @@ export default async function handler(req, res, deps = {}) {
         held = true
         console.error('[stripe-webhook] payment_failed', { tripId, code, pi: pi?.id })
       }
+      if (res.writableEnded) return
       res.statusCode = 200
       return res.end(JSON.stringify({ received: true, type: event.type, held, code }))
     }
@@ -177,6 +189,7 @@ export default async function handler(req, res, deps = {}) {
       const retryable = released?.reason === 'update_failed'
         || released?.reason === 'trip_unreadable'
         || released?.reason === 'payments_unreadable'
+      if (res.writableEnded) return
       res.statusCode = retryable ? 500 : 200
       return res.end(JSON.stringify({ received: true, type: event.type, released }))
     }
@@ -186,6 +199,12 @@ export default async function handler(req, res, deps = {}) {
       if (session?.metadata?.kind === 'credit_purchase') {
         const granted = await recordCreditPurchase(session)
         console.log('[stripe-webhook] credit_purchase', { id: session?.id, granted })
+        if (res.writableEnded) return
+        if (granted && granted.ok === false) {
+          console.error('[stripe-webhook] credit_purchase failed', granted.error)
+          res.statusCode = 500
+          return res.end(JSON.stringify({ error: granted.error || 'Failed to grant credit pack', received: false, type: event.type }))
+        }
         res.statusCode = 200
         return res.end(JSON.stringify({ received: true, type: event.type, granted }))
       }
@@ -205,15 +224,29 @@ export default async function handler(req, res, deps = {}) {
         live,
         referral,
       })
+      if (res.writableEnded) return
+      if (applied && (applied.ok === false || (applied.recorded && applied.recorded.ok === false))) {
+        res.statusCode = 500
+        return res.end(JSON.stringify({
+          error: applied.error || applied.recorded?.error || 'Failed to record deposit',
+          received: false,
+          type: event.type,
+          recorded,
+          live,
+          referral,
+        }))
+      }
       res.statusCode = 200
       return res.end(JSON.stringify({ received: true, type: event.type, recorded, live, referral }))
     }
 
     console.log('[stripe-webhook] unhandled', event.type)
+    if (res.writableEnded) return
     res.statusCode = 200
     return res.end(JSON.stringify({ received: true, type: event.type }))
   } catch (err) {
     console.error('[stripe-webhook]', err)
+    if (res.writableEnded) return
     res.statusCode = 400
     return res.end(JSON.stringify({ error: err.message || 'Webhook error' }))
   }

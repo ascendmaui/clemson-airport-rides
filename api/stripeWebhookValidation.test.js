@@ -980,3 +980,46 @@ test('Stripe-Signature header with uppercase casing or array is accepted', async
   assert.equal(res2.statusCode, 200)
 })
 
+test('checkout.session.completed returns 500 when applied.ok is false so Stripe retries', async () => {
+  const { deps } = routingDeps({
+    serviceKey: SERVICE_ROLE,
+    onApply() {
+      return { ok: false, error: 'Database connection dropped during deposit recording' }
+    },
+  })
+  const res = await postEvent(handler, completedEvent('checkout.session.completed', paidSession()), deps)
+  const body = assertJson(res, 500)
+  assert.equal(body.received, false)
+  assert.equal(body.type, 'checkout.session.completed')
+  assert.match(body.error, /Database connection dropped/)
+})
+
+test('checkout.session.completed returns 500 when applied.recorded.ok is false', async () => {
+  const { deps } = routingDeps({
+    serviceKey: SERVICE_ROLE,
+    onApply() {
+      return {
+        ok: true,
+        recorded: { ok: false, error: 'duplicate deposit write deadlock' },
+        live: null,
+        referral: null,
+      }
+    },
+  })
+  const res = await postEvent(handler, completedEvent('checkout.session.completed', paidSession()), deps)
+  const body = assertJson(res, 500)
+  assert.equal(body.received, false)
+  assert.equal(body.type, 'checkout.session.completed')
+  assert.match(body.error, /deadlock/)
+})
+
+test('defensive stream check: already ended writable response does not throw', async () => {
+  const endedRes = mockRes()
+  endedRes.writableEnded = true
+  const event = { id: 'evt_ended', object: 'event', type: 'customer.subscription.deleted' }
+  const { deps } = trackingDeps({ serviceKey: '' })
+  await handler(mockReq({ body: JSON.stringify(event) }), endedRes, deps)
+  assert.equal(endedRes.statusCode, 0)
+})
+
+
