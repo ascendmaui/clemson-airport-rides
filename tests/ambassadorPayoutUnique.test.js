@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { before, test } from 'node:test'
+import { after, before, test } from 'node:test'
 import { PGlite } from '@electric-sql/pglite'
 
 const MIGRATION_PATH = new URL(
@@ -83,9 +83,16 @@ test('a second INSERT ... ON CONFLICT DO NOTHING leaves one row', async () => {
       return true
     },
   )
-  const { rows: after } = await db.query(
+  const { rows: afterRows } = await db.query(
     'select count(*)::int as n from public.ambassador_payout_ledger where trip_id = $1::uuid and code = $2',
     [TRIP, CODE],
   )
-  assert.equal(after[0].n, 1)
+  assert.equal(afterRows[0].n, 1)
 })
+
+after(async () => {
+  if (db && typeof db.close === 'function') {
+    await db.close()
+  }
+})
+
