@@ -66,8 +66,8 @@ test('setCarpoolApiBase / apiBase: defaults, strips trailing slash, and resets o
   assert.equal(DEFAULT_API_BASE, 'https://clemson-airport-rides.vercel.app')
   assert.equal(apiBase(), DEFAULT_API_BASE)
 
-  setCarpoolApiBase('https://preview.clemson-rides.vercel.app/')
-  assert.equal(apiBase(), 'https://preview.clemson-rides.vercel.app')
+  setCarpoolApiBase('https://preview.clemson-airport-rides.vercel.app/')
+  assert.equal(apiBase(), 'https://preview.clemson-airport-rides.vercel.app')
 
   setCarpoolApiBase('http://localhost:3000')
   assert.equal(apiBase(), 'http://localhost:3000')
