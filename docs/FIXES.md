@@ -2,6 +2,27 @@
 
 Persistent knowledge base for recurring failures. When a matching issue appears, apply the saved fix first.
 
+## 2026-10-02 — GA96: GA audit & tests - abandoned checkout resilience, hold TTL NaN safety, and RPC direct update fallbacks
+
+- **Track / machine:** Clemson RIDES · MacBook Max · `agy/ga-audit-abandoned-checkout-resilience-ga96`
+- **What was wrong:**
+  1. `decideUnpaidAirportHoldTtl` in `server/abandonedCheckout.js` performed `now - anchor < ttlMs` without sanitizing `now` or `ttlMs`. If `now` was passed as `NaN`, `null`, or an invalid Date, `now - anchor` evaluated to `NaN`, making `< ttlMs` false and prematurely canceling active holds.
+  2. `writeCanceled` in `server/abandonedCheckout.js` relied solely on `merge_trip_metadata` Postgres RPC without fallback. If the RPC function was missing, encountered schema/permission errors, or threw an unhandled exception, the hold cancelation failed with an error, leaving stale unpaid holds in the match pool.
+  3. `rememberCheckoutSession` in `server/abandonedCheckout.js` lacked a fallback to direct table update if `merge_trip_metadata` failed, which historically caused checkout session bind failures during database migration transitions.
+  4. `restoreLiveTripAfterDeposit` in `server/abandonedCheckout.js` accessed `session.id` directly in metadata assignment without safe navigation, and lacked direct update fallback if the RPC call failed when stamping already-live trips.
+- **What changed:**
+  - Hardened `decideUnpaidAirportHoldTtl` to ensure `safeNow` and `safeTtlMs` are finite positive numbers, falling back to `Date.now()` and `UNPAID_AIRPORT_HOLD_TTL_MS`.
+  - Added conditional direct table update fallback (`.update({ status: 'canceled', ... }).in('status', UNPAID_CHECKOUT_STATUSES).is('driver_id', null)`) in `writeCanceled` when `merge_trip_metadata` RPC is unavailable or fails.
+  - Added direct table update fallback in `rememberCheckoutSession` to guarantee session IDs are bound to trip metadata even if RPC encounters an issue.
+  - Added direct update fallback in `restoreLiveTripAfterDeposit` for already-live trip metadata stamps and guarded `session?.id`.
+  - Added unit test suite in `tests/gaAuditAbandonedCheckoutResilience.test.js` (5/5 passing) and registered script in `package.json`.
+- **Files touched:**
+  - `server/abandonedCheckout.js`
+  - `tests/gaAuditAbandonedCheckoutResilience.test.js`
+  - `package.json`
+  - `docs/FIXES.md`
+- **Verified:** `node --test tests/gaAuditAbandonedCheckoutResilience.test.js` (5/5 passing), `node --test server/abandonedCheckout.test.js` (41/41 passing), and full `npm test` passing.
+
 ## 2026-10-01 — Expire unpaid airport holds & Stripe webhook endpoint hardening
 
 - **Track / machine:** Clemson RIDES · MacBook Max · `feat/max-agy-burn-ttl-webhooks`

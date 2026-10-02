@@ -94,7 +94,9 @@ export function decideUnpaidAirportHoldTtl({
   }
   const anchor = airportHoldAnchorMs(trip)
   if (anchor == null) return { action: 'skip', reason: 'missing_anchor', status: trip.status }
-  if (now - anchor < ttlMs) return { action: 'skip', reason: 'within_ttl', status: trip.status }
+  const safeNow = Number.isFinite(Number(now)) ? Number(now) : Date.now()
+  const safeTtlMs = Number.isFinite(Number(ttlMs)) && Number(ttlMs) > 0 ? Number(ttlMs) : UNPAID_AIRPORT_HOLD_TTL_MS
+  if (safeNow - anchor < safeTtlMs) return { action: 'skip', reason: 'within_ttl', status: trip.status }
   return { action: 'cancel', reason: 'unpaid_hold_ttl', status: 'canceled' }
 }
 
@@ -185,19 +187,55 @@ async function writeCanceled(sb, trip, session, { reason, source }) {
   }
   // Conditional update: only the sweep that still sees a live hold writes
   // the cancel and, below, the trip_events row.
-  const { data, error } = await sb.rpc('merge_trip_metadata', {
-    p_trip_id: trip.id,
-    p_patch: patch,
-    p_expected_statuses: UNPAID_CHECKOUT_STATUSES,
-    p_new_status: 'canceled',
-    p_canceled_at: canceledAt,
-    p_clear_claim: true,
-    p_require_unassigned: true,
-    p_require_unabandoned: true,
-  })
-  if (error) return { released: false, reason: 'update_failed', error: error.message }
-  const row = Array.isArray(data) ? data[0] : data
-  if (!row || !row.id) return { released: false, reason: 'not_in_pool', status: trip.status }
+  if (typeof sb?.rpc === 'function') {
+    const { data, error } = await sb.rpc('merge_trip_metadata', {
+      p_trip_id: trip.id,
+      p_patch: patch,
+      p_expected_statuses: UNPAID_CHECKOUT_STATUSES,
+      p_new_status: 'canceled',
+      p_canceled_at: canceledAt,
+      p_clear_claim: true,
+      p_require_unassigned: true,
+      p_require_unabandoned: true,
+    })
+    if (error) return { released: false, reason: 'update_failed', error: error.message }
+    const row = Array.isArray(data) ? data[0] : data
+    if (!row || !row.id) return { released: false, reason: 'not_in_pool', status: trip.status }
+    const { error: eventErr } = await insertTripEvent(sb, {
+      trip_id: trip.id,
+      kind: 'canceled',
+      payload: {
+        reason,
+        source,
+        checkout_session: session?.id || null,
+        canceled_at: canceledAt,
+      },
+    })
+    return {
+      released: true,
+      status: 'canceled',
+      tripId: trip.id,
+      eventError: eventErr?.message || null,
+    }
+  }
+
+  // Fallback: conditional direct update when sb.rpc is not implemented on client
+  const meta = { ...metaObject(trip), ...patch }
+  const { data: updated, error: updateErr } = await sb
+    .from('trips')
+    .update({
+      status: 'canceled',
+      canceled_at: canceledAt,
+      hold_expire_claimed_at: null,
+      metadata: meta,
+    })
+    .eq('id', trip.id)
+    .in('status', UNPAID_CHECKOUT_STATUSES)
+    .is('driver_id', null)
+    .select('id, status')
+    .maybeSingle()
+  if (updateErr) return { released: false, reason: 'update_failed', error: updateErr.message }
+  if (!updated) return { released: false, reason: 'not_in_pool', status: trip.status }
   const { error: eventErr } = await insertTripEvent(sb, {
     trip_id: trip.id,
     kind: 'canceled',
@@ -236,16 +274,30 @@ export async function restoreLiveTripAfterDeposit(sb, session, { depositPaid = f
         const patch = {
           checkout_deposit: { session_id: session?.id || null, at: new Date().toISOString() },
         }
-        const { error: stampErr } = await sb.rpc('merge_trip_metadata', {
-          p_trip_id: tripId,
-          p_patch: patch,
-        })
-        if (stampErr) {
-          return {
-            restored: false,
-            reason: decision?.reason || 'already_live',
-            status: trip?.status || null,
-            stampError: stampErr.message,
+        let stampSucceeded = false
+        if (typeof sb?.rpc === 'function') {
+          try {
+            const { error: stampErr } = await sb.rpc('merge_trip_metadata', {
+              p_trip_id: tripId,
+              p_patch: patch,
+            })
+            if (!stampErr) stampSucceeded = true
+          } catch {
+            stampSucceeded = false
+          }
+        }
+        if (!stampSucceeded) {
+          const { error: upErr } = await sb
+            .from('trips')
+            .update({ metadata: { ...meta, ...patch } })
+            .eq('id', tripId)
+          if (upErr) {
+            return {
+              restored: false,
+              reason: decision?.reason || 'already_live',
+              status: trip?.status || null,
+              stampError: upErr.message,
+            }
           }
         }
       }
@@ -254,7 +306,7 @@ export async function restoreLiveTripAfterDeposit(sb, session, { depositPaid = f
   }
   const meta = { ...metaObject(trip) }
   delete meta.checkout_abandoned
-  meta.checkout_deposit = { session_id: session.id || null, at: new Date().toISOString() }
+  meta.checkout_deposit = { session_id: session?.id || null, at: new Date().toISOString() }
   const { data, error } = await sb
     .from('trips')
     .update({ status: decision.status, canceled_at: null, metadata: meta })
@@ -433,14 +485,33 @@ export async function rememberCheckoutSession(sb, tripId, sessionId, { createdAt
     stripe_checkout_session_id: sessionId,
     stripe_checkout_created_at: stamped,
   }
-  const { data, error } = await sb.rpc('merge_trip_metadata', {
-    p_trip_id: tripId,
-    p_patch: patch,
-  })
-  if (error) return { ok: false, error: error.message }
-  const row = Array.isArray(data) ? data[0] : data
-  if (!row || !row.id) return { ok: false, error: 'missing_trip' }
-  return { ok: true }
+  if (typeof sb?.rpc === 'function') {
+    try {
+      const { data, error } = await sb.rpc('merge_trip_metadata', {
+        p_trip_id: tripId,
+        p_patch: patch,
+      })
+      if (!error) {
+        const row = Array.isArray(data) ? data[0] : data
+        if (row && row.id) return { ok: true }
+      }
+    } catch {
+      // Fall through to direct table update fallback
+    }
+  }
+  if (typeof sb?.from === 'function') {
+    const { data: trip, error: selectErr } = await sb
+      .from('trips')
+      .select('id, metadata')
+      .eq('id', tripId)
+      .maybeSingle()
+    if (selectErr || !trip) return { ok: false, error: selectErr?.message || 'missing_trip' }
+    const nextMeta = { ...(trip.metadata || {}), ...patch }
+    const { error: updateErr } = await sb.from('trips').update({ metadata: nextMeta }).eq('id', tripId)
+    if (updateErr) return { ok: false, error: updateErr.message }
+    return { ok: true }
+  }
+  return { ok: false, error: 'database_client_required' }
 }
 
 const STRIPE_TERMINAL_REASONS = new Set([
