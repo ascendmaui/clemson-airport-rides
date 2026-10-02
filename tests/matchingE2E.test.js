@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { acceptTrip, loadDriverDesk } from '../packages/rides-native/driverDesk.js'
+import {
+  acceptTrip,
+  loadDriverDesk,
+  publishDriverLocation,
+} from '../packages/rides-native/driverDesk.js'
 import { etaLineFor, riderLiveView, showSearchTheater } from '../packages/rides-native/liveTrip.js'
 import {
   cancelSearchingTrip,
@@ -104,4 +108,29 @@ test('rider cancel removes a searching offer and rejects a stale driver accept',
   assert.equal(acceptedEvents.length, 0)
   assert.equal(canceledEvents.length, 1)
   assert.equal(canceledEvents[0].payload.reason, 'rider_cancel')
+})
+
+test('driver going offline during an offer window cannot accept the stale offer', async () => {
+  const { supabase, trip, drivers } = seedMatchingScenario()
+  const driverId = drivers[0].id
+  const firstDesk = await loadDriverDesk(supabase, driverId)
+  const offered = firstDesk.offers[0]
+  assert.equal(firstDesk.online, true)
+  assert.equal(offered.id, trip.id)
+
+  await publishDriverLocation(supabase, driverId, {
+    lat: drivers[0].lat,
+    lng: drivers[0].lng,
+    online: false,
+  })
+  const offlineDesk = await loadDriverDesk(supabase, driverId)
+  assert.equal(offlineDesk.online, false)
+
+  await assert.rejects(
+    () => acceptTrip(supabase, offered, driverId),
+    /Go online before accepting a ride/,
+  )
+  assert.equal(supabase._tables.trips[0].status, 'searching')
+  assert.equal(supabase._tables.trips[0].driver_id, null)
+  assert.equal(supabase._tables.trip_events.length, 0)
 })
