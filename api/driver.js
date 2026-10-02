@@ -38,7 +38,7 @@ const LEGACY = {
   'driver-payouts': 'payouts',
 }
 
-export default async function handler(req, res) {
+export default async function handler(req, res, ...rest) {
   if (cors(req, res)) return
   const action = resolveRouteAction(req, { allowed: Object.keys(HANDLERS), legacy: LEGACY })
   const handle = HANDLERS[action]
@@ -47,5 +47,5 @@ export default async function handler(req, res) {
       error: 'Unknown driver action. Use action=signup, submit-review, earnings, offer-preview, tip, wait, cancel-midride, payouts, or inbox.',
     })
   }
-  return handle(req, res)
+  return handle(req, res, ...rest)
 }

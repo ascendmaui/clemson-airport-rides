@@ -8,24 +8,40 @@ import {
 import { attemptDriverPayout, loadConnectAccount, writePayout } from '../payouts.js'
 import { payoutIsDue, summarizeDriverEarnings } from '../../shared/paymentFailure.js'
 
-function cronAuthorized(req) {
-  const secret = process.env.CRON_SECRET || ''
+export function cronAuthorized(req, secretOverride) {
+  const secret = (secretOverride !== undefined ? secretOverride : (process.env.CRON_SECRET || '')).trim()
   if (!secret || secret.includes('placeholder')) return false
-  const header = req.headers.authorization || req.headers.Authorization || ''
-  return header === `Bearer ${secret}`
+  const header = req.headers?.authorization || req.headers?.Authorization || req.headers?.['AUTHORIZATION'] || ''
+  const trimmed = String(header).trim()
+  const match = trimmed.match(/^Bearer\s+(.+)$/i)
+  if (!match) return false
+  return match[1].trim() === secret
 }
 
-async function runDuePayouts(sb, trips, connectAccountId) {
-  const stripe = stripeClient()
-  const now = Date.now()
+export function isVercelCron(req) {
+  return Boolean(
+    req.headers?.['x-vercel-cron'] ||
+    req.headers?.['X-Vercel-Cron'] ||
+    req.headers?.['X-VERCEL-CRON'] ||
+    req.headers?.['x-vercel-cron'] === '' ||
+    req.headers?.['x-vercel-cron'] === '1'
+  )
+}
+
+export async function runDuePayouts(sb, trips, connectAccountId, deps = {}) {
+  const stripe = deps.stripe !== undefined ? deps.stripe : (deps.stripeClient ? deps.stripeClient() : stripeClient())
+  const now = deps.now !== undefined ? deps.now : Date.now()
+  const attemptFn = deps.attemptDriverPayout || attemptDriverPayout
+  const writeFn = deps.writePayout || writePayout
+  const loadAccountFn = deps.loadConnectAccount || loadConnectAccount
   const results = []
   for (const trip of trips) {
     const payout = trip.metadata?.payout
     if (!payout || payout.status === 'paid') continue
     if (!payoutIsDue(payout, now)) continue
-    const account = connectAccountId || await loadConnectAccount(sb, trip.driver_id)
-    const attempt = await attemptDriverPayout({ trip, stripe, connectAccountId: account, now })
-    await writePayout(sb, trip, attempt.payout)
+    const account = connectAccountId || await loadAccountFn(sb, trip.driver_id)
+    const attempt = await attemptFn({ trip, stripe, connectAccountId: account, now })
+    await writeFn(sb, trip, attempt.payout)
     results.push({
       tripId: trip.id,
       ok: attempt.ok,
@@ -38,47 +54,72 @@ async function runDuePayouts(sb, trips, connectAccountId) {
   return results
 }
 
-export default async function handler(req, res) {
+export default async function handler(req, res, deps = {}) {
   if (cors(req, res)) return
-  if (req.method !== 'GET' && req.method !== 'POST') return json(res, 405, { error: 'Method not allowed' })
+  if (req.method !== 'GET' && req.method !== 'POST') {
+    res.setHeader?.('Allow', 'GET, POST, OPTIONS')
+    res.setHeader?.('Cache-Control', 'no-store, no-cache, must-revalidate, private')
+    return json(res, 405, { error: 'Method not allowed' })
+  }
 
-  const sb = admin()
-  if (!sb) return json(res, 503, { error: 'SUPABASE_SERVICE_ROLE_KEY not configured' })
+  const sb = deps.sb !== undefined ? deps.sb : (deps.admin ? deps.admin() : admin())
+  if (!sb) {
+    res.setHeader?.('Cache-Control', 'no-store, no-cache, must-revalidate, private')
+    return json(res, 503, { error: 'SUPABASE_SERVICE_ROLE_KEY not configured' })
+  }
 
-  if (req.headers['x-vercel-cron']) {
-    if (!cronAuthorized(req)) {
+  if (isVercelCron(req)) {
+    const isAuth = deps.cronAuthorized ? deps.cronAuthorized(req) : cronAuthorized(req, deps.cronSecret)
+    if (!isAuth) {
+      res.setHeader?.('Cache-Control', 'no-store, no-cache, must-revalidate, private')
       return json(res, 200, { skipped: true, reason: 'Set CRON_SECRET to run scheduled payout retries' })
     }
+    const limit = Math.min(Math.max(Number(deps.limit) || 80, 1), 200)
     const listed = await sb
       .from('trips')
       .select('id, driver_id, fare_cents, status, metadata, dropoff_label')
       .eq('status', 'completed')
       .order('completed_at', { ascending: false })
-      .limit(80)
-    if (listed.error) return json(res, 500, { error: listed.error.message })
-    const results = await runDuePayouts(sb, listed.data || [], null)
+      .limit(limit)
+    if (listed.error) {
+      res.setHeader?.('Cache-Control', 'no-store, no-cache, must-revalidate, private')
+      return json(res, 500, { error: listed.error.message })
+    }
+    const results = await runDuePayouts(sb, listed.data || [], null, deps)
+    res.setHeader?.('Cache-Control', 'no-store, no-cache, must-revalidate, private')
     return json(res, 200, { ok: true, results })
   }
 
-  const user = await userFromAuth(req)
-  if (!user) return json(res, 401, { error: 'Sign in required' })
+  const user = deps.user !== undefined ? deps.user : await (deps.userFromAuth || userFromAuth)(req, sb)
+  if (!user) {
+    res.setHeader?.('Cache-Control', 'no-store, no-cache, must-revalidate, private')
+    return json(res, 401, { error: 'Sign in required' })
+  }
 
+  const limit = Math.min(Math.max(Number(deps.limit) || 40, 1), 100)
   const listed = await sb
     .from('trips')
     .select('id, driver_id, rider_id, fare_cents, status, metadata, dropoff_label, completed_at')
     .eq('driver_id', user.id)
     .eq('status', 'completed')
     .order('completed_at', { ascending: false })
-    .limit(40)
+    .limit(limit)
 
-  if (listed.error) return json(res, 500, { error: listed.error.message })
+  if (listed.error) {
+    res.setHeader?.('Cache-Control', 'no-store, no-cache, must-revalidate, private')
+    return json(res, 500, { error: listed.error.message })
+  }
   const trips = listed.data || []
+  const summarize = deps.summarizeDriverEarnings || summarizeDriverEarnings
 
   if (req.method === 'POST') {
-    const connectAccountId = await loadConnectAccount(sb, user.id)
-    const results = await runDuePayouts(sb, trips, connectAccountId)
-    return json(res, 200, { results, summary: summarizeDriverEarnings(trips) })
+    const loadAccountFn = deps.loadConnectAccount || loadConnectAccount
+    const connectAccountId = await loadAccountFn(sb, user.id)
+    const results = await runDuePayouts(sb, trips, connectAccountId, deps)
+    res.setHeader?.('Cache-Control', 'no-store, no-cache, must-revalidate, private')
+    return json(res, 200, { results, summary: summarize(trips) })
   }
 
-  return json(res, 200, summarizeDriverEarnings(trips))
+  res.setHeader?.('Cache-Control', 'no-store, no-cache, must-revalidate, private')
+  return json(res, 200, summarize(trips))
 }

@@ -37,6 +37,21 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
   - `server/endpoints/creditLots.js`
   - `tests/gaAuditCreditPurchasesConfirm.test.js`
 - **Verified:** `node --test tests/gaAuditCreditPurchasesConfirm.test.js` (9/9) and full `npm test` suite.
+## 2026-10-02 — GA95: Driver payouts & earnings endpoints audit, cron auth hardening, and test coverage
+- **Track / machine:** Clemson RIDES · MacBook Max · `agy/ga-audit-driver-payouts-earnings-ga95`
+  1. `server/endpoints/driverEarnings.js` defined its own `json()` writer without stream write protection, recreated Supabase client on every invocation with module-level constants instead of using `friendRideLib.js`, lacked dependency injection for unit testing, and omitted `Cache-Control: no-store` and `Allow: GET, OPTIONS` headers on 405 Method Not Allowed responses.
+  2. `server/endpoints/driverPayouts.js` lacked dependency injection for unit testing (`deps.sb`, `deps.stripe`, `deps.userFromAuth`, `deps.attemptDriverPayout`, `deps.writePayout`, `deps.loadConnectAccount`), had sensitive Vercel cron matching susceptible to header case differences (`x-vercel-cron` vs `X-Vercel-Cron`), did not trim whitespace on `CRON_SECRET`, and omitted security `Cache-Control` and `Allow: GET, POST, OPTIONS` headers.
+  3. `api/driver.js` router did not forward additional dependency injection arguments (`...rest`) to underlying endpoints, breaking testability through the router.
+  4. Neither `driverEarnings.js` nor `driverPayouts.js` had dedicated unit tests.
+  - Hardened `server/endpoints/driverEarnings.js` with `friendRideLib` imports, `resolveUser` helper supporting token extraction and dependency injection, `Allow: GET, OPTIONS`, and `Cache-Control: no-store, no-cache, must-revalidate, private` headers.
+  - Hardened `server/endpoints/driverPayouts.js` with case-insensitive `isVercelCron`, whitespace-trimmed `cronAuthorized`, full dependency injection across `runDuePayouts` and `handler`, and standard security/allow headers.
+  - Updated `api/driver.js` to forward `...rest` to all driver handlers.
+  - Implemented comprehensive unit test suite in `tests/gaAuditDriverPayoutsEarnings.test.js` (15/15 passing) and registered it in root `package.json` test runner.
+  - `server/endpoints/driverEarnings.js`
+  - `server/endpoints/driverPayouts.js`
+  - `api/driver.js`
+  - `tests/gaAuditDriverPayoutsEarnings.test.js`
+- **Verified:** `node --test tests/gaAuditDriverPayoutsEarnings.test.js` (15/15) and full `npm test` suite.
 
 ## 2026-10-01 — Expire unpaid airport holds & Stripe webhook endpoint hardening
 
