@@ -9,6 +9,7 @@ import { etaLineFor, riderLiveView, showSearchTheater } from '../packages/rides-
 import {
   cancelSearchingTrip,
   expireSearchingTrip,
+  requestDriverTrip,
   riderTrackingSnapshot,
   seedMatchingScenario,
 } from './fixtures/matchingE2E.js'
@@ -158,4 +159,39 @@ test('search TTL expiry closes the trip and rejects a late accept', async () => 
   assert.equal(events.length, 1)
   assert.equal(events[0].kind, 'canceled')
   assert.equal(events[0].payload.reason, 'search_ttl_expired')
+})
+
+test('rider can cancel and re-request as an independent matching attempt', async () => {
+  const { supabase, trip, riderId, drivers } = seedMatchingScenario()
+  const driverId = drivers[0].id
+
+  await cancelSearchingTrip(supabase, trip.id, riderId)
+  const nextTrip = await requestDriverTrip(supabase, {
+    id: 'trip-searching-2',
+    riderId,
+    dropoffLabel: 'Downtown Clemson',
+  })
+  assert.notEqual(nextTrip.id, trip.id)
+  assert.equal(nextTrip.status, 'searching')
+
+  const desk = await loadDriverDesk(supabase, driverId)
+  assert.deepEqual(desk.offers.map((offer) => offer.id), [nextTrip.id])
+  const accepted = await acceptTrip(supabase, desk.offers[0], driverId)
+  assert.equal(accepted.id, nextTrip.id)
+  assert.equal(accepted.status, 'accepted')
+
+  const firstAttempt = supabase._tables.trips.find((row) => row.id === trip.id)
+  const secondAttempt = supabase._tables.trips.find((row) => row.id === nextTrip.id)
+  assert.equal(firstAttempt.status, 'canceled')
+  assert.equal(firstAttempt.driver_id, null)
+  assert.equal(secondAttempt.status, 'accepted')
+  assert.equal(secondAttempt.driver_id, driverId)
+  assert.deepEqual(
+    supabase._tables.trip_events.map((event) => [event.trip_id, event.kind]),
+    [
+      [trip.id, 'canceled'],
+      [nextTrip.id, 'searching'],
+      [nextTrip.id, 'accepted'],
+    ],
+  )
 })

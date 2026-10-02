@@ -244,3 +244,41 @@ export async function expireSearchingTrip(supabase, tripId, {
   if (event.error) throw event.error
   return data
 }
+
+export async function requestDriverTrip(supabase, {
+  id,
+  riderId,
+  pickupLabel = 'Memorial Stadium',
+  dropoffLabel = 'Downtown Clemson',
+  requestedAt = '2026-10-01T08:06:00.000Z',
+} = {}) {
+  if (!id || !riderId) throw new Error('Trip and rider are required')
+  const row = {
+    id,
+    rider_id: riderId,
+    driver_id: null,
+    status: 'searching',
+    tier: 'standard',
+    pickup_label: pickupLabel,
+    dropoff_label: dropoffLabel,
+    pickup_lat: DEFAULT_PICKUP.lat,
+    pickup_lng: DEFAULT_PICKUP.lng,
+    dropoff_lat: 34.6857,
+    dropoff_lng: -82.8147,
+    requested_at: requestedAt,
+    metadata: {},
+  }
+  const { data, error } = await supabase
+    .from('trips')
+    .insert(row)
+    .select('*')
+    .single()
+  if (error) throw error
+  const event = await supabase.from('trip_events').insert({
+    trip_id: id,
+    kind: 'searching',
+    payload: { source: 'rider_app' },
+  })
+  if (event.error) throw event.error
+  return data
+}
