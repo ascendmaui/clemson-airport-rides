@@ -69,6 +69,23 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
   - `server/endpoints/abandonCheckout.js`
   - `tests/gaAuditCheckoutReconcileRpc.test.js`
 - **Verified:** `node --test tests/gaAuditCheckoutReconcileRpc.test.js` (5/5 passing) and full `npm test` passing.
+## 2026-10-02 — GA94: Webhook signature case-insensitivity, secret hygiene, and checkout headers
+- **Track / machine:** Clemson RIDES · MacBook Max · `agy/ga-audit-webhook-signature-headers-ga94`
+  1. `api/stripe-webhook.js` checked signatures using hardcoded `stripe-signature` and `Stripe-Signature` keys, failing if upstream proxies or test harnesses passed other case variations like `STRIPE-SIGNATURE` or signatures with untrimmed whitespace.
+  2. Secret environment variables (`STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `SUPABASE_SERVICE_ROLE_KEY`) were not trimmed, creating risks of signature verification failure or key recognition issues if copy-pasted with trailing newlines or whitespace.
+  3. `api/create-checkout-session.js` and `server/endpoints/airportCheckout.js` did not set `Cache-Control: no-store` or `Allow: POST, OPTIONS` headers on 405 Method Not Allowed responses.
+  4. Response helpers lacked safeguards against `ERR_STREAM_WRITE_AFTER_END` and `ERR_HTTP_HEADERS_SENT` when responses were already closed or headers were already sent.
+  - Exported `extractStripeSignature` performing case-insensitive header lookup and whitespace trimming across string or array values.
+  - Trimmed all injected and environment secrets safely with fallback defaults.
+  - Implemented `sendWebhookJson` and hardened `json()` in `server/friendRideLib.js` to guard against `res.writableEnded` and `res.headersSent`.
+  - Added `Cache-Control: no-store, no-cache, must-revalidate, private` and `Allow: POST, OPTIONS` headers to checkout session and airport checkout endpoints.
+  - Added unit test suite `tests/gaAuditWebhookSignatureHeaders.test.js` (4/4 passing) and registered it in `package.json`.
+  - `api/stripe-webhook.js`
+  - `api/create-checkout-session.js`
+  - `server/endpoints/airportCheckout.js`
+  - `server/friendRideLib.js`
+  - `tests/gaAuditWebhookSignatureHeaders.test.js`
+- **Verified:** `npm test` passing 100% across all suites.
 
 ## 2026-10-01 — Expire unpaid airport holds & Stripe webhook endpoint hardening
 

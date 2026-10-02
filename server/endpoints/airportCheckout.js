@@ -35,7 +35,14 @@ const AIRPORTS = {
 
 export default async function handler(req, res, deps = {}) {
   if (cors(req, res)) return
-  if (req.method !== 'POST') return json(res, 405, { error: 'Method not allowed' })
+  if (!res.headersSent) {
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private')
+    res.setHeader('Pragma', 'no-cache')
+  }
+  if (req.method !== 'POST') {
+    if (!res.headersSent) res.setHeader('Allow', 'POST, OPTIONS')
+    return json(res, 405, { error: 'Method not allowed' })
+  }
 
   const sb = deps.sb || admin()
   if (!sb) return json(res, 503, { error: 'SUPABASE_SERVICE_ROLE_KEY not configured' })
