@@ -1181,23 +1181,24 @@ describe('scheduleTrip endpoint handler', () => {
     })
 
     test('accepts a pickup exactly 30 minutes ahead and rejects 1ms inside', async () => {
-      const exact = new Date(Date.now() + 30 * 60 * 1000).toISOString()
+      const fixedNow = 1770000000000
+      const exact = new Date(fixedNow + 30 * 60 * 1000).toISOString()
       const { sb, tripsInserted } = createFakeSb()
       const accepted = await callHandler(
         scheduleTripHandler,
         { method: 'POST', body: { ...defaultPlaces, pickupAt: exact } },
-        depsFor(sb),
+        { ...depsFor(sb), now: fixedNow },
       )
       assert.equal(accepted.status, 200)
       assert.equal(tripsInserted[0].status, 'scheduled')
       assert.equal(tripsInserted[0].pickup_at, exact)
 
-      const inside = new Date(Date.now() + 30 * 60 * 1000 - 1).toISOString()
+      const inside = new Date(fixedNow + 30 * 60 * 1000 - 1).toISOString()
       const { sb: sbEarly } = createFakeSb()
       const rejected = await callHandler(
         scheduleTripHandler,
         { method: 'POST', body: { ...defaultPlaces, pickupAt: inside } },
-        depsFor(sbEarly),
+        { ...depsFor(sbEarly), now: fixedNow },
       )
       assert.equal(rejected.status, 400)
       assert.deepEqual(rejected.json, { error: 'Schedule at least 30 minutes ahead.' })
