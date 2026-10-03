@@ -32,6 +32,7 @@ import { ACCOUNT_DELETION_TICKET } from '../../shared/accountDeletion.js'
 import { TESLA_FLEET_NOTICE } from '../../packages/rides-native/tripTags.js'
 import { CreditPacksPanel } from '../components/CreditPacksPanel'
 import { PrepaidCreditsPanel } from '../components/PrepaidCreditsPanel'
+import { CreditsBalance } from '../components/CreditsBalance'
 import { QuietHoursCard } from '../components/QuietHoursCard'
 import { EmergencyContactsPanel } from '../components/EmergencyContactsPanel'
 
@@ -83,6 +84,7 @@ export function AccountScreen() {
   const fileRef = useRef(null)
   const galleryRef = useRef(null)
   const [tab, setTab] = useState(tabFromHash)
+  const [creditsRefresh, setCreditsRefresh] = useState(0)
   const [profile, setProfile] = useState(null)
   const [fullName, setFullName] = useState('')
   const [bio, setBio] = useState('')
@@ -549,9 +551,10 @@ export function AccountScreen() {
 
         {tab === 'billing' && (
           <div style={{ marginTop: 14 }}>
+            <CreditsBalance refreshToken={creditsRefresh} />
             <BillingPanel profile={profile} onProfileRefresh={() => reload().catch(() => {})} />
             <CreditPacksPanel />
-            <PrepaidCreditsPanel />
+            <PrepaidCreditsPanel onPurchased={() => setCreditsRefresh((n) => n + 1)} />
           </div>
         )}
 

@@ -162,6 +162,70 @@ export function loadTripDeposit(
   tripId: string,
 ): Promise<{ settled: boolean; error: string | null }>
 
+export const ADD_ANOTHER_PAYMENT_METHOD_ID: string
+export const ADD_ANOTHER_PAYMENT_METHOD_LABEL: string
+
+export type RidePaymentMethod = {
+  id: string
+  label: string
+  stripeType: string
+  wallets: { applePay: 'auto' | 'never'; googlePay: 'auto' | 'never' }
+}
+
+export const RIDE_PAYMENT_METHODS: RidePaymentMethod[]
+
+export function prepaidPurchaseSummary(tier: {
+  priceCents: number
+  creditCents: number
+} | null): {
+  creditCents: number
+  bonusCents: number
+  chargedCents: number
+  grantedCents: number
+  credit: string
+  bonus: string
+  charged: string
+  granted: string
+  title: string
+  body: string
+  confirmLabel: string
+  cancelLabel: string
+} | null
+
+export function prepaidCreditsFromPayload(data: {
+  balanceCents?: number
+  unavailable?: boolean
+  tiers?: unknown[]
+} | null): {
+  balanceCents: number | null
+  unavailable: boolean
+  tiers: unknown[]
+}
+
+export function loadPrepaidCredits(supabase: unknown): Promise<{
+  balanceCents: number | null
+  unavailable: boolean
+  tiers: { id: string; label?: string; priceCents: number; creditCents: number }[]
+  error: string | null
+}>
+
+export function buyPrepaidCredits(supabase: unknown, tierId: string): Promise<{
+  ok?: boolean
+  balanceCents?: number
+  grantedCents?: number
+  error?: string
+}>
+
+export function startPaymentMethodSetup(
+  supabase: unknown,
+  input?: { paymentMethod?: string; returnUrl?: string },
+): Promise<{ url?: string; sessionId?: string; error?: string; note?: string }>
+
+export function saveCheckoutPaymentMethod(
+  supabase: unknown,
+  checkoutSessionId: string,
+): Promise<{ ok?: boolean; brand?: string; last4?: string }>
+
 export function loadRiderBilling(
   supabase: unknown,
   userId: string,
