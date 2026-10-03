@@ -136,7 +136,7 @@ describe('HEAT_WINDOWS', () => {
 })
 
 describe('RIDE_TIERS', () => {
-  test('exports array of 6 ride tiers', () => {
+  test('exports array of 5 ride tiers', () => {
     assert.ok(Array.isArray(RIDE_TIERS))
     assert.equal(RIDE_TIERS.length, 5)
   })
