@@ -10,6 +10,7 @@ import { cors, json, parseBody, userFromAuth, admin } from '../friendRideLib.js'
 import { resolveRouteAction } from '../routeAction.js'
 import { loadStaffAccess } from '../staffAccess.js'
 import { sendApplicantNotice } from '../applicantMail.js'
+import { loadApplicantRecipient } from '../../shared/applicantEmail.js'
 
 const ACTIONS = [
   'overview',
@@ -327,12 +328,11 @@ async function infoRequest(sb, res, user, body) {
   if (!isUuid(profileId)) return json(res, 400, { error: 'profileId must be a uuid' })
   if (text.length < 4 || text.length > 2000) return json(res, 400, { error: 'Describe the details you need (4–2000 characters)' })
 
-  const profile = await sb.from('profiles').select('id, email, full_name').eq('id', profileId).maybeSingle()
-  if (profile.error) return json(res, 500, { error: profile.error.message })
-  if (!profile.data) return json(res, 404, { error: 'Applicant not found' })
+  const recipient = await loadApplicantRecipient(sb, profileId)
+  if (recipient.error) return json(res, recipient.status, { error: recipient.error })
 
   const notice = await sendApplicantNotice({
-    to: profile.data.email,
+    to: recipient.email,
     subject: 'Clemson RIDES needs more information',
     text: `An admin asked for more information on your driver application:\n\n${text}\n\nOpen the driver application to reply.`,
   })
@@ -370,12 +370,11 @@ async function infoRequest(sb, res, user, body) {
 }
 
 async function storeApplicantNote(sb, res, user, { profileId, text, kind, subject }) {
-  const profile = await sb.from('profiles').select('id, email').eq('id', profileId).maybeSingle()
-  if (profile.error) return json(res, 500, { error: profile.error.message })
-  if (!profile.data) return json(res, 404, { error: 'Applicant not found' })
+  const recipient = await loadApplicantRecipient(sb, profileId)
+  if (recipient.error) return json(res, recipient.status, { error: recipient.error })
 
   const notice = await sendApplicantNotice({
-    to: profile.data.email,
+    to: recipient.email,
     subject,
     text,
   })

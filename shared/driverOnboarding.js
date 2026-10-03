@@ -228,7 +228,7 @@ export function progressSnapshot(ctx = {}) {
 }
 
 export const EMAIL_TODO =
-  'TODO: set RESEND_API_KEY and RESEND_FROM (verified domain) to email seeded admins when a driver applies. The in-app admin dashboard at #/admin lists the application without email.'
+  'Applicant email is stored on the application and shown in this review list. Resend sends from applications@clemsonrides.com after clemsonrides.com finishes DNS verification. Set RESEND_API_KEY to send. Until then the message stays in the driver application.'
 
 const DOC_ID_SET = new Set(REQUIRED_DOC_IDS)
 

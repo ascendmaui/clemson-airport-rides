@@ -30,8 +30,18 @@ import {
   submissionBlockers,
   blockerLabel,
 } from '../../shared/driverOnboarding.js'
+import {
+  APPLICANT_FROM_ADDRESS,
+  selectDriverApplicationQueue,
+  submittedApplicantEmail,
+  updateDriverApplication,
+  upsertDriverApplication,
+  withSubmittedApplicantEmail,
+} from '../../shared/applicantEmail.js'
 
 export {
+  APPLICANT_FROM_ADDRESS,
+  submittedApplicantEmail,
   EMAIL_TODO,
   REQUIRED_DOCUMENTS,
   REQUIRED_DOC_IDS,
@@ -216,24 +226,18 @@ async function saveDriverInfoDirect(userId, payload, email) {
   const { error: profileErr } = await supabase.from('profiles').upsert(profilePatch)
   if (profileErr) throw new Error(profileErr.message)
 
-  const { data: app, error: appErr } = await supabase
-    .from('driver_applications')
-    .upsert(
-      {
-        profile_id: userId,
-        is_student: true,
-        has_car: true,
-        has_insurance: true,
-        wants_extra_money: true,
-        attestation_accepted_at: now,
-        onboarding_status: nextStatus,
-        status: legacyStatusFor(nextStatus),
-      },
-      { onConflict: 'profile_id' },
-    )
-    .select('*')
-    .single()
-  if (appErr) throw new Error(appErr.message)
+  const savedApp = await upsertDriverApplication(supabase, {
+    profile_id: userId,
+    is_student: true,
+    has_car: true,
+    has_insurance: true,
+    wants_extra_money: true,
+    attestation_accepted_at: now,
+    onboarding_status: nextStatus,
+    status: legacyStatusFor(nextStatus),
+  }, email)
+  if (savedApp.error) throw new Error(savedApp.error.message)
+  const app = savedApp.data
 
   const { data: existingVeh } = await supabase
     .from('vehicles')
@@ -411,7 +415,7 @@ function complianceContext({ application, documents, tax, agreement }) {
   }
 }
 
-async function submitDriverReviewDirect(userId) {
+async function submitDriverReviewDirect(userId, email) {
   const [docs, tax, agreement, application] = await Promise.all([
     fetchMyDriverDocuments(userId),
     fetchMyTaxProfile(userId),
@@ -425,18 +429,14 @@ async function submitDriverReviewDirect(userId) {
     throw error
   }
   const now = new Date().toISOString()
-  const { data, error } = await supabase
-    .from('driver_applications')
-    .update({
-      onboarding_status: 'pending_review',
-      status: legacyStatusFor('pending_review'),
-      submitted_at: now,
-      notify_error: EMAIL_TODO,
-    })
-    .eq('profile_id', userId)
-    .select('*')
-    .single()
-  if (error) throw new Error(error.message)
+  const saved = await updateDriverApplication(supabase, userId, {
+    onboarding_status: 'pending_review',
+    status: legacyStatusFor('pending_review'),
+    submitted_at: now,
+    notify_error: EMAIL_TODO,
+  }, email)
+  if (saved.error) throw new Error(saved.error.message)
+  const data = saved.data
   return {
     ok: true,
     onboarding_status: 'pending_review',
@@ -456,7 +456,7 @@ export async function submitDriverReview() {
     const { data } = await supabase.auth.getUser()
     const userId = data?.user?.id
     if (!userId) throw err
-    return submitDriverReviewDirect(userId)
+    return submitDriverReviewDirect(userId, data.user.email)
   }
 }
 
@@ -464,9 +464,7 @@ const APP_QUEUE_COLS = 'id, profile_id, onboarding_status, status, background_au
 
 async function fetchDriverQueueDirect(status) {
   if (!supabase) throw new Error('Supabase is not configured')
-  let query = supabase.from('driver_applications').select(APP_QUEUE_COLS).order('submitted_at', { ascending: false })
-  if (status) query = query.eq('onboarding_status', status)
-  const { data: apps, error } = await query
+  const { data: apps, error } = await selectDriverApplicationQueue(supabase, APP_QUEUE_COLS, status)
   if (error) throw new Error(error.message)
   const ids = (apps || []).map((app) => app.profile_id)
   if (!ids.length) return { applications: [], email_todo_present: false, direct: true }
@@ -510,10 +508,10 @@ async function fetchDriverQueueDirect(status) {
       agreementSigned: Boolean(agreement?.signed_at && agreement?.signature_name),
       agreementVersion: agreement?.agreement_version || null,
     })
+    const presented = withSubmittedApplicantEmail(app, profileById[app.profile_id] || null)
     return {
-      ...app,
+      ...presented,
       label: onboardingLabel(app.onboarding_status),
-      profile: profileById[app.profile_id] || null,
       vehicle: vehicleById[app.profile_id] || null,
       tax,
       agreement,

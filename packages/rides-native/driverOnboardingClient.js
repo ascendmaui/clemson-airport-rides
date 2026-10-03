@@ -26,6 +26,7 @@ import {
   stepIsComplete,
   submissionBlockers,
 } from '../../shared/driverOnboarding.js'
+import { updateDriverApplication, upsertDriverApplication } from '../../shared/applicantEmail.js'
 
 export { driverQuizError } from '../../shared/driverQuiz.js'
 
@@ -268,24 +269,18 @@ async function saveDriverInfoDirect(supabase, user, payload) {
   const { error: profileErr } = await supabase.from('profiles').upsert(profilePatch)
   if (profileErr) throw new Error(profileErr.message)
 
-  const { data: app, error: appErr } = await supabase
-    .from('driver_applications')
-    .upsert(
-      {
-        profile_id: userId,
-        is_student: payload.isStudent === true,
-        has_car: true,
-        has_insurance: true,
-        wants_extra_money: payload.wantsExtraMoney === true,
-        attestation_accepted_at: now,
-        onboarding_status: nextStatus,
-        status: legacyStatusFor(nextStatus),
-      },
-      { onConflict: 'profile_id' },
-    )
-    .select('*')
-    .single()
-  if (appErr) throw new Error(appErr.message)
+  const savedApp = await upsertDriverApplication(supabase, {
+    profile_id: userId,
+    is_student: payload.isStudent === true,
+    has_car: true,
+    has_insurance: true,
+    wants_extra_money: payload.wantsExtraMoney === true,
+    attestation_accepted_at: now,
+    onboarding_status: nextStatus,
+    status: legacyStatusFor(nextStatus),
+  }, email)
+  if (savedApp.error) throw new Error(savedApp.error.message)
+  const app = savedApp.data
 
   const vehicle = await saveVehicle(supabase, userId, payload)
   await supabase.from('driver_status').upsert({
@@ -526,6 +521,16 @@ export async function signDriverAgreement(supabase, signatureName, extras = {}) 
   return data
 }
 
+async function currentAuthEmail(supabase) {
+  if (!supabase?.auth?.getUser) return ''
+  try {
+    const { data } = await supabase.auth.getUser()
+    return data?.user?.email || ''
+  } catch {
+    return ''
+  }
+}
+
 async function submitDriverReviewDirect(supabase, userId) {
   const bundle = await loadOnboarding(supabase, userId)
   if (bundle.blockers.length) {
@@ -534,17 +539,13 @@ async function submitDriverReviewDirect(supabase, userId) {
     throw error
   }
   const now = new Date().toISOString()
-  const { data, error } = await supabase
-    .from('driver_applications')
-    .update({
-      onboarding_status: 'pending_review',
-      status: legacyStatusFor('pending_review'),
-      submitted_at: now,
-    })
-    .eq('profile_id', userId)
-    .select('*')
-    .single()
-  if (error) throw new Error(error.message)
+  const saved = await updateDriverApplication(supabase, userId, {
+    onboarding_status: 'pending_review',
+    status: legacyStatusFor('pending_review'),
+    submitted_at: now,
+  }, await currentAuthEmail(supabase))
+  if (saved.error) throw new Error(saved.error.message)
+  const data = saved.data
   return {
     ok: true,
     onboarding_status: 'pending_review',

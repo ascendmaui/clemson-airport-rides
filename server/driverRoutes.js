@@ -11,6 +11,7 @@ import {
 import { driverQuizError } from '../shared/driverQuiz.js'
 import { admin, cors, json, parseBody, userFromAuth } from './friendRideLib.js'
 import { loadSubmissionContext, notifyAdminOfApplication } from './driverApproval.js'
+import { submittedApplicantEmail, updateDriverApplication, upsertDriverApplication } from '../shared/applicantEmail.js'
 
 export async function handleDriverSignup(req, res) {
   if (cors(req, res)) return
@@ -88,24 +89,18 @@ export async function handleDriverSignup(req, res) {
     const { error: profileErr } = await sb.from('profiles').upsert(profilePatch)
     if (profileErr) return json(res, 500, { error: profileErr.message })
 
-    const { data: app, error: appErr } = await sb
-      .from('driver_applications')
-      .upsert(
-        {
-          profile_id: user.id,
-          is_student: isStudent,
-          has_car: true,
-          has_insurance: true,
-          wants_extra_money: wantsExtraMoney,
-          attestation_accepted_at: now,
-          onboarding_status: nextStatus,
-          status: legacyStatusFor(nextStatus),
-        },
-        { onConflict: 'profile_id' },
-      )
-      .select('*')
-      .single()
-    if (appErr) return json(res, 500, { error: appErr.message })
+    const savedApp = await upsertDriverApplication(sb, {
+      profile_id: user.id,
+      is_student: isStudent,
+      has_car: true,
+      has_insurance: true,
+      wants_extra_money: wantsExtraMoney,
+      attestation_accepted_at: now,
+      onboarding_status: nextStatus,
+      status: legacyStatusFor(nextStatus),
+    }, user.email)
+    if (savedApp.error) return json(res, 500, { error: savedApp.error.message })
+    const app = savedApp.data
 
     const { data: existingVeh } = await sb
       .from('vehicles')
@@ -223,24 +218,28 @@ export async function handleDriverSubmitReview(req, res) {
     .maybeSingle()
 
   const now = new Date().toISOString()
+  const submittedEmail = submittedApplicantEmail(
+    { applicant_email: app.applicant_email },
+    { email: profile?.email || user.email },
+  )
   const notice = await notifyAdminOfApplication({
-    profile: profile || { email: user.email, full_name: user.user_metadata?.full_name },
+    profile: {
+      ...(profile || {}),
+      email: submittedEmail || null,
+      full_name: profile?.full_name || user.user_metadata?.full_name,
+    },
     vehicle,
   })
 
-  const { data: updated, error: upErr } = await sb
-    .from('driver_applications')
-    .update({
-      onboarding_status: 'pending_review',
-      status: legacyStatusFor('pending_review'),
-      submitted_at: now,
-      admin_notified_at: notice.emailed ? now : null,
-      notify_error: notice.emailed ? null : notice.todo,
-    })
-    .eq('profile_id', user.id)
-    .select('*')
-    .single()
-  if (upErr) return json(res, 500, { error: upErr.message })
+  const saved = await updateDriverApplication(sb, user.id, {
+    onboarding_status: 'pending_review',
+    status: legacyStatusFor('pending_review'),
+    submitted_at: now,
+    admin_notified_at: notice.emailed ? now : null,
+    notify_error: notice.emailed ? null : notice.todo,
+  }, submittedEmail || user.email)
+  if (saved.error) return json(res, 500, { error: saved.error.message })
+  const updated = saved.data
 
   return json(res, 200, {
     ok: true,
