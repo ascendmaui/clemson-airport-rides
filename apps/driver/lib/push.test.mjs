@@ -186,6 +186,7 @@ test('driver push offline and error states', { concurrency: false }, async (t) =
   await t.test('exports registration and the local request alert', () => {
     assert.equal(typeof push.registerDriverPush, 'function')
     assert.equal(typeof push.notifyNewRequest, 'function')
+    assert.equal(typeof push.notifyAcceptedRide, 'function')
   })
 
   await t.test('the notification handler shows a banner and plays a sound', async () => {
@@ -520,6 +521,21 @@ test('driver push offline and error states', { concurrency: false }, async (t) =
     })
     const ugly = await rejectionOf(push.registerDriverPush(fallback, 'driver-1'))
     assert.equal(ugly.message, '[object Object]')
+  })
+
+  await t.test('notifyAcceptedRide tells the driver the pin was accepted', async () => {
+    await push.notifyAcceptedRide(CARD)
+    assert.deepEqual(state().scheduled, [
+      {
+        content: {
+          title: 'Ride accepted',
+          body: 'White C → GSP',
+          data: { tripId: 'trip-1' },
+          sound: 'request.wav',
+        },
+        trigger: null,
+      },
+    ])
   })
 
   await t.test('notifyNewRequest copies the trip into a local notification', async () => {

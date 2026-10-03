@@ -8,10 +8,10 @@ export function useCardShadow() {
   const { colors, scheme } = useTheme()
   return useMemo(() => ({
     shadowColor: colors.shadow,
-    shadowOpacity: scheme === 'dark' ? 0.45 : 0.12,
-    shadowRadius: 18,
-    shadowOffset: { width: 0, height: 10 },
-    elevation: 8,
+    shadowOpacity: scheme === 'dark' ? 0.28 : 0.08,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 3,
   }), [colors.shadow, scheme])
 }
 
@@ -57,10 +57,16 @@ export function Primary({
       disabled={disabled}
       accessibilityRole={accessibilityRole}
       accessibilityLabel={accessibilityLabel || label}
-      accessibilityRole="button"
-      accessibilityLabel={label}
       accessibilityState={{ disabled: Boolean(disabled) }}
-      style={[styles.primary, shadow, { backgroundColor: background, opacity: disabled ? 0.5 : 1 }]}
+      style={({ pressed }) => [
+        styles.primary,
+        tone === 'ghost' ? null : shadow,
+        {
+          backgroundColor: background,
+          opacity: disabled ? 0.55 : pressed ? 0.92 : 1,
+          transform: [{ scale: pressed && !disabled ? 0.985 : 1 }],
+        },
+      ]}
     >
       <Text style={[styles.primaryLabel, { color }]}>{label}</Text>
     </Pressable>

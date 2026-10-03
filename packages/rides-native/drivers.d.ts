@@ -92,6 +92,7 @@ export function setDriverOnline(
   supabase: unknown,
   driverId: string,
   online: boolean,
+  fix?: { lat: number; lng: number; heading?: number | null } | null,
 ): Promise<{ ok: boolean }>
 
 export function fetchDriverApplication(

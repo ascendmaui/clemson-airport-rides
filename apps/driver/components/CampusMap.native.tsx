@@ -24,6 +24,8 @@ export function CampusMap({
   showHeat = false,
   gameDay = false,
   gameDayLabel = null,
+  lockOnCenter = false,
+  onPinPress,
 }: {
   pins?: MapPin[]
   center?: { latitude: number; longitude: number } | null
@@ -34,6 +36,8 @@ export function CampusMap({
   showHeat?: boolean
   gameDay?: boolean
   gameDayLabel?: string | null
+  lockOnCenter?: boolean
+  onPinPress?: (id: string) => void
 }) {
   const mapRef = useRef<MapView>(null)
   const pinsRef = useRef(pins)
@@ -54,6 +58,19 @@ export function CampusMap({
 
   useEffect(() => {
     if (!mapRef.current) return
+    if (lockOnCenter && centerRef.current) {
+      const next = centerRef.current
+      mapRef.current.animateToRegion(
+        {
+          latitude: next.latitude,
+          longitude: next.longitude,
+          latitudeDelta: 0.045,
+          longitudeDelta: 0.045,
+        },
+        450,
+      )
+      return
+    }
     if (showHeat && spots.length > 1) {
       mapRef.current.fitToCoordinates(
         spots.map((spot: BusySpot) => ({ latitude: spot.lat, longitude: spot.lng })),
@@ -80,7 +97,7 @@ export function CampusMap({
       },
       450,
     )
-  }, [centerKey, pinKey, focusToken, heatKey, showHeat])
+  }, [centerKey, pinKey, focusToken, heatKey, showHeat, lockOnCenter])
 
   return (
     <View style={styles.fill}>
@@ -136,12 +153,24 @@ export function CampusMap({
             strokeWidth={2}
           />
         ) : null}
-        {markers.map((pin: MapPin) => (
+        {markers.map((pin: MapPin) => pin.kind === 'request' ? (
+          <Marker
+            key={pin.id}
+            coordinate={{ latitude: pin.latitude, longitude: pin.longitude }}
+            title={pin.title}
+            description="Tap to accept"
+            anchor={{ x: 0.5, y: 0.5 }}
+            onPress={() => onPinPress?.(pin.id)}
+          >
+            <View style={[styles.requestDot, { backgroundColor: pin.pinColor || PURPLE }]} />
+          </Marker>
+        ) : (
           <Marker
             key={pin.id}
             coordinate={{ latitude: pin.latitude, longitude: pin.longitude }}
             title={pin.title}
             pinColor={pin.pinColor || ORANGE}
+            onPress={() => onPinPress?.(pin.id)}
           />
         ))}
       </MapView>
@@ -157,6 +186,13 @@ export function CampusMap({
 const styles = StyleSheet.create({
   fill: { flex: 1 },
   zone: { position: 'absolute', left: 16, top: 88, right: 16, alignItems: 'flex-start' },
+  requestDot: {
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+  },
   zoneText: {
     backgroundColor: ORANGE,
     color: '#fff',

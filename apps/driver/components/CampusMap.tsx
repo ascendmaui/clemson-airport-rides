@@ -1,4 +1,4 @@
-import { StyleSheet, Text, View } from 'react-native'
+import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { heatColor } from 'rides-native/heat.js'
 import { useTheme } from '@/lib/theme'
 import type { BusySpot } from '@/lib/busySpots'
@@ -9,6 +9,7 @@ export type MapPin = {
   longitude: number
   title: string
   pinColor?: string
+  kind?: 'self' | 'request' | 'place'
 }
 
 export function CampusMap({
@@ -19,6 +20,8 @@ export function CampusMap({
   showHeat = false,
   gameDay = false,
   gameDayLabel = null,
+  lockOnCenter = false,
+  onPinPress,
 }: {
   pins?: MapPin[]
   center?: { latitude: number; longitude: number } | null
@@ -29,6 +32,8 @@ export function CampusMap({
   showHeat?: boolean
   gameDay?: boolean
   gameDayLabel?: string | null
+  lockOnCenter?: boolean
+  onPinPress?: (id: string) => void
 }) {
   const { colors, scheme } = useTheme()
   const mode = colorScheme || scheme
@@ -59,16 +64,25 @@ export function CampusMap({
       ) : null}
       <Text style={[styles.label, { color: colors.title }]}>Clemson campus</Text>
       <Text style={[styles.sub, { color: colors.title }]}>
-        {showHeat
-          ? `Busy areas · ${spots.length} spots`
-          : center
-            ? `${center.latitude.toFixed(3)}, ${center.longitude.toFixed(3)}`
-            : 'Driver map'}
+        {lockOnCenter && center
+          ? `Centered on you · ${center.latitude.toFixed(3)}, ${center.longitude.toFixed(3)}`
+          : showHeat
+            ? `Busy areas · ${spots.length} spots`
+            : center
+              ? `${center.latitude.toFixed(3)}, ${center.longitude.toFixed(3)}`
+              : 'Driver map'}
       </Text>
-      {(pins || []).slice(0, 3).map((pin: MapPin) => (
-        <Text key={pin.id} style={[styles.pin, { color: colors.title }]}>
-          {pin.title}
-        </Text>
+      {(pins || []).map((pin: MapPin) => (
+        <Pressable
+          key={pin.id}
+          onPress={() => onPinPress?.(pin.id)}
+          accessibilityRole="button"
+          accessibilityLabel={pin.kind === 'request' ? `Ride request at ${pin.title}` : pin.title}
+        >
+          <Text style={[styles.pin, pin.kind === 'request' ? styles.requestPin : null, { color: pin.pinColor || colors.title }]}>
+            {pin.kind === 'request' ? '● ' : ''}{pin.title}
+          </Text>
+        </Pressable>
       ))}
     </View>
   )
@@ -79,6 +93,7 @@ const styles = StyleSheet.create({
   label: { fontWeight: '800', fontSize: 18, zIndex: 1 },
   sub: { marginTop: 6, fontSize: 12, zIndex: 1 },
   pin: { marginTop: 4, fontSize: 11, fontWeight: '700', zIndex: 1 },
+  requestPin: { fontSize: 13 },
   zone: {
     position: 'absolute',
     top: 16,

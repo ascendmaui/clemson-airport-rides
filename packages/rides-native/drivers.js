@@ -358,7 +358,11 @@ export async function fetchDriversByIds(supabase, ids) {
   return { drivers: mapDrivers(statuses, profileRes.data, vehicleRes.data), error: null }
 }
 
-export async function setDriverOnline(supabase, driverId, online) {
+/**
+ * Writes online (and an optional GPS fix) for this driver id only.
+ * Does not create a trip, charge a card, or mark any other driver — including demo bots — online.
+ */
+export async function setDriverOnline(supabase, driverId, online, fix = null) {
   if (!supabase) throw new Error('Supabase is not configured')
   if (!driverId) throw new Error('Sign in required')
   if (online) {
@@ -374,11 +378,17 @@ export async function setDriverOnline(supabase, driverId, online) {
       throw err
     }
   }
-  const { error } = await supabase.from('driver_status').upsert({
+  const row = {
     driver_id: driverId,
     online: Boolean(online),
     updated_at: new Date().toISOString(),
-  })
+  }
+  if (fix && Number.isFinite(Number(fix.lat)) && Number.isFinite(Number(fix.lng))) {
+    row.lat = Number(fix.lat)
+    row.lng = Number(fix.lng)
+    if (fix.heading != null && Number.isFinite(Number(fix.heading))) row.heading = Number(fix.heading)
+  }
+  const { error } = await supabase.from('driver_status').upsert(row)
   if (error) throw new Error(error.message)
   return { ok: true }
 }

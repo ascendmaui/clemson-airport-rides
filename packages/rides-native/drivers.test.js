@@ -952,6 +952,21 @@ test('setDriverOnline checks missing config, sign in, application approval, and 
   assert.equal(driverStatus[0].driver_id, A)
   assert.equal(driverStatus[0].online, true)
 
+  const located = await setDriverOnline(supabaseApproved, A, true, { lat: 34.683, lng: -82.837, heading: 20 })
+  assert.deepEqual(located, { ok: true })
+  assert.equal(driverStatus.length, 1)
+  assert.equal(driverStatus[0].driver_id, A)
+  assert.equal(driverStatus[0].online, true)
+  assert.equal(driverStatus[0].lat, 34.683)
+  assert.equal(driverStatus[0].lng, -82.837)
+  assert.equal(driverStatus[0].heading, 20)
+  assert.equal(driverStatus.some((row) => row.driver_id !== A), false)
+
+  await setDriverOnline(supabaseApproved, A, true, { lat: 34.684, lng: -82.838, heading: null })
+  assert.equal(driverStatus.length, 1)
+  assert.equal(driverStatus[0].lat, 34.684)
+  assert.equal(driverStatus[0].heading, 20)
+
   // Going offline (online = false) does NOT check application gate
   const offlineRes = await setDriverOnline(supabasePending, A, false)
   assert.deepEqual(offlineRes, { ok: true })

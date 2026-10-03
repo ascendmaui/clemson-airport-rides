@@ -102,10 +102,14 @@ export function googleAuthConfig(envOrOptions = process.env, optionsOrScheme = {
     }
   }
 
-  const enabled =
-    options.mode === 'any' || options.requireAll === false
+  // Supabase Auth holds the Google client. Native signInWithOAuth does not
+  // send EXPO_PUBLIC_GOOGLE_* client ids, so a Supabase-backed button stays on
+  // when those build vars are empty.
+  const usesSupabaseGoogle = options.provider === 'supabase'
+  const enabled = usesSupabaseGoogle
+    || (options.mode === 'any' || options.requireAll === false
       ? missing.length < expected.length
-      : missing.length === 0
+      : missing.length === 0)
 
   // Resolve redirectUri
   const defaultScheme =

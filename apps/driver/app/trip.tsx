@@ -174,7 +174,8 @@ export default function TripScreen() {
     <View style={styles.screen}>
       {/* TODO: road-following tiles need a billed Maps key. Progress and straight-line ETA use coordinates already on this trip. */}
       <CampusMap pins={pins} center={focus} route={route.length > 1 ? route : undefined} />
-      <View pointerEvents="box-none" style={[styles.sheet, shadow, { paddingBottom: insets.bottom + 12 }]}>
+      <View pointerEvents="box-none" style={[styles.sheet, shadow, { paddingBottom: insets.bottom + 12, borderColor: colors.border }]}>
+        <View style={[styles.handle, { backgroundColor: colors.track }]} />
         <ScrollView style={styles.sheetScroll} contentContainerStyle={styles.sheetContent} showsVerticalScrollIndicator={false}>
         <Text style={styles.kicker} onPress={() => router.back()}>← LIVE TRIP</Text>
         <LivePhase
@@ -257,10 +258,12 @@ function tripStyles(colors: Palette) {
       backgroundColor: colors.card,
       borderTopLeftRadius: 28,
       borderTopRightRadius: 28,
+      borderTopWidth: StyleSheet.hairlineWidth,
       padding: 18,
       gap: 8,
       maxHeight: '78%',
     },
+    handle: { alignSelf: 'center', width: 36, height: 4, borderRadius: 2, marginBottom: 4 },
     sheetScroll: { flexGrow: 0 },
     sheetContent: { gap: 8, paddingBottom: 8 },
     kicker: { color: colors.orange, fontWeight: '800', letterSpacing: 1 },

@@ -50,6 +50,11 @@ export function GoButton({
   const label = disabled
     ? (disabledReason ? `Go online disabled: ${disabledReason}` : 'Go online disabled')
     : (online ? 'Go offline' : 'Go online')
+  const gradient = disabled
+    ? [colors.card, colors.track] as const
+    : online
+      ? [colors.purple, '#3C1E66'] as const
+      : [colors.goStart, colors.orange] as const
 
   return (
     <Pressable
@@ -57,19 +62,24 @@ export function GoButton({
       disabled={isDisabled}
       accessibilityRole="button"
       accessibilityLabel={label}
-      accessibilityHint={disabled && disabledReason ? disabledReason : undefined}
-      accessibilityState={{ disabled: isDisabled }}
-      style={{ opacity: isDisabled ? 0.45 : 1 }}
-      accessibilityLabel={online ? 'Go offline' : 'Go online'}
-      accessibilityState={{ disabled: busy }}
-      accessibilityHint={online ? 'Takes you offline' : 'Goes online to receive ride requests'}
-      style={{ opacity: busy ? 0.7 : 1 }}
+      accessibilityHint={disabled && disabledReason ? disabledReason : online ? 'Takes you offline' : 'Goes online to receive ride requests'}
+      accessibilityState={{ disabled: isDisabled, busy }}
+      style={({ pressed }) => ({
+        opacity: isDisabled ? 0.45 : pressed ? 0.92 : 1,
+        transform: [{ scale: pressed && !isDisabled ? 0.98 : 1 }],
+      })}
     >
       <LinearGradient
-        colors={disabled ? [colors.card, colors.track] : [colors.goStart, colors.orange]}
+        colors={gradient}
         start={{ x: 0.72, y: 0 }}
         end={{ x: 0.28, y: 1 }}
-        style={styles.go}
+        style={[styles.go, {
+          shadowColor: colors.shadow,
+          shadowOpacity: 0.16,
+          shadowRadius: 12,
+          shadowOffset: { width: 0, height: 8 },
+          elevation: 6,
+        }]}
       >
         <Text style={[styles.goText, { color: disabled ? colors.inkSecondary : colors.onAccent }]}>
           {online ? 'END' : 'GO'}

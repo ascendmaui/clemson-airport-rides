@@ -28,6 +28,7 @@ export function SignInScreen(props: {
   onSocial?: (providerId: SocialProvider['id']) => Promise<{ cancelled?: boolean } | void>
   resetPassword?: (email: string) => Promise<unknown>
   onOpenLegal?: (doc: 'privacy' | 'terms') => void
+  ownerRequest?: boolean
 }): ReactNode
 
 export function ForgotPasswordScreen(props: {
