@@ -9,12 +9,20 @@ export function ClemsonLoader({ label = 'Finding a Tiger driver' }: { label?: st
 
   useEffect(() => {
     const loop = Animated.loop(
-      Animated.timing(spin, {
-        toValue: 1,
-        duration: 1400,
-        easing: Easing.linear,
-        useNativeDriver: true,
-      }),
+      Animated.sequence([
+        Animated.timing(spin, {
+          toValue: 1,
+          duration: 2600,
+          easing: Easing.inOut(Easing.cubic),
+          useNativeDriver: true,
+        }),
+        Animated.delay(420),
+        Animated.timing(spin, {
+          toValue: 0,
+          duration: 0,
+          useNativeDriver: true,
+        }),
+      ]),
     )
     loop.start()
     return () => loop.stop()
@@ -24,10 +32,10 @@ export function ClemsonLoader({ label = 'Finding a Tiger driver' }: { label?: st
 
   return (
     <View style={styles.wrap} pointerEvents="none" accessibilityRole="progressbar">
-      <Animated.View style={[styles.ring, { transform: [{ rotate }] }]} />
-      <View style={styles.core}>
+      <View style={styles.ring} />
+      <Animated.View style={[styles.core, { transform: [{ rotate }] }]}>
         <Text style={styles.paw}>🐾</Text>
-      </View>
+      </Animated.View>
       <Text style={styles.label}>{label}</Text>
     </View>
   )

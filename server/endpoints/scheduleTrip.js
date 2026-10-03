@@ -18,6 +18,8 @@ import {
   priceScheduledRequest,
 } from '../authoritativeFare.js'
 import { insertTripEvent } from '../tripEvents.js'
+import { prepareDefaultDriverRow } from '../defaultDrivers.js'
+import { notifyPreparedAssignment } from '../driverAssignmentNotice.js'
 
 
 /** Integer passenger count from the request; default 1. Prefer passengers over partySize. */
@@ -163,7 +165,8 @@ export default async function handler(req, res, deps = {}) {
     return json(res, 500, { error: 'Could not create your rider profile', code: 'profile_missing' })
   }
 
-  const inserted = await sb.from('trips').insert(row).select('id, status, pickup_at, pickup_label, dropoff_label, fare_cents, deposit_cents').single()
+  const prepared = await prepareDefaultDriverRow(sb, row)
+  const inserted = await sb.from('trips').insert(prepared.row).select('id, status, pickup_at, pickup_label, dropoff_label, fare_cents, deposit_cents').single()
   if (inserted.error || !inserted.data) {
     return json(res, 500, { error: inserted.error?.message || 'Could not schedule ride' })
   }
@@ -186,6 +189,7 @@ export default async function handler(req, res, deps = {}) {
       trip: inserted.data,
     })
   }
+  await notifyPreparedAssignment(sb, prepared, inserted.data)
 
   return json(res, 200, {
     trip: inserted.data,

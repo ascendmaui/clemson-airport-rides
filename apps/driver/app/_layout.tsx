@@ -5,6 +5,7 @@ import { useEffect, type ReactNode } from 'react'
 import { BootScreen } from '@/components/BootScreen'
 import { AuthProvider, useAuth } from '@/lib/auth'
 import { FeedbackProvider } from '@/lib/feedback'
+import { AssignmentAlerts } from '@/components/AssignmentAlerts'
 import { registerDriverPush } from '@/lib/push'
 import { supabase } from '@/lib/supabase'
 import { ThemeProvider, useTheme } from '@/lib/theme'
@@ -65,6 +66,7 @@ export default function RootLayout() {
           <Gate>
             <PasswordRecoveryListener />
             <PushBridge />
+            <AssignmentAlerts />
             <ThemedStack />
           </Gate>
         </FeedbackProvider>

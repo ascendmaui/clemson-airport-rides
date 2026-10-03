@@ -100,3 +100,20 @@ export async function notifyNewRequest(card: {
     trigger: null,
   })
 }
+
+/** Assignment banner. Separate from the ride-offer chime (request.wav). */
+export async function notifyDriverAssigned(card: {
+  id?: string
+  title?: string
+  body?: string
+}) {
+  await Notifications.scheduleNotificationAsync({
+    content: {
+      title: card.title || 'You were assigned to a ride',
+      body: card.body || 'This ride is assigned to you.',
+      data: { tripId: card.id || '', kind: 'ride_assigned' },
+      sound: true,
+    },
+    trigger: null,
+  })
+}

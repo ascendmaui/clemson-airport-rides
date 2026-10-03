@@ -22,6 +22,8 @@ import {
 import { checkoutSuccessHash } from '../packages/rides-native/liveTrip.js'
 import { cancelUnopenedCheckoutTrip, rememberCheckoutSession } from '../server/abandonedCheckout.js'
 import { WEB_ORIGIN } from '../shared/productLinks.js'
+import { prepareDefaultDriverRow } from '../server/defaultDrivers.js'
+import { notifyPreparedAssignment } from '../server/driverAssignmentNotice.js'
 
 function checkoutOrigin(body) {
   for (const raw of [body.origin, body.successUrl]) {
@@ -133,11 +135,13 @@ export default async function handler(req, res, deps = {}) {
       return json(res, 500, { error: 'Could not create your rider profile', code: 'profile_missing' })
     }
     const row = airportTripRow({ user, priced, scheduledFor, riderFirst })
-    const inserted = await sb.from('trips').insert(row).select('id').single()
+    const prepared = await prepareDefaultDriverRow(sb, row)
+    const inserted = await sb.from('trips').insert(prepared.row).select('id').single()
     if (inserted.error || !inserted.data) {
       return json(res, 500, { error: inserted.error?.message || 'Could not create trip' })
     }
     tripId = inserted.data.id
+    await notifyPreparedAssignment(sb, prepared, { ...prepared.row, id: tripId })
   }
 
   if (priced.depositCents <= 0) {
