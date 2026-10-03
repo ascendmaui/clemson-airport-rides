@@ -18,7 +18,7 @@ const mail = await import('../tests/fixtures/admin-support/adminDeskApplicantMai
 const { createFakeSb, hasFilter } = await import('../tests/fixtures/admin-support/adminDeskSb.js')
 
 const GET_ACTIONS = ['overview', 'notifications', 'people', 'trips', 'tickets', 'applicant-thread']
-const POST_ACTIONS = ['mark-notification', 'ticket-reply', 'applicant-message', 'info-request']
+const POST_ACTIONS = ['mark-notification', 'ticket-reply', 'applicant-message', 'info-request', 'refund', 'credit', 'incentive']
 
 const ADMIN_USER = { id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', email: 'john@gmail.com' }
 const PROFILE_ID = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
@@ -708,5 +708,78 @@ test('info-request 404s when the applicant is missing and does not email', async
   assert.equal(res.json.error, 'Applicant not found')
   assert.equal(calls('driver_info_requests', 'insert').length, 0)
   assert.equal(mail.state.calls.length, 0)
+  assert.equal(networkHits, 0)
+})
+
+const MONEY_ADMIN = { id: ADMIN_USER.id, email: 'johnmatveyev@gmail.com' }
+const MONEY_ACCESS = {
+  admin: true,
+  support: true,
+  profile: { id: ADMIN_USER.id, email: 'johnmatveyev@gmail.com', role: 'admin', is_admin: true },
+}
+
+test('money actions reject admins who are not the dashboard account', async () => {
+  const res = await invoke({
+    method: 'POST',
+    url: '/api/admin?action=refund',
+    body: { profileId: RIDER_ID, amountCents: 500, confirmed: false },
+    user: { id: ADMIN_USER.id, email: 'ada@clemson.edu' },
+    access: { admin: true, support: true, profile: { id: ADMIN_USER.id, email: 'ada@clemson.edu', role: 'admin', is_admin: true } },
+  })
+  assert.equal(res.status, 403)
+  assert.equal(res.json.error, 'Admin only')
+  assert.equal(http.state.client.calls.filter((ctx) => ctx.op === 'insert').length, 0)
+  assert.equal(networkHits, 0)
+})
+
+test('refund preview names the rider and amount and does not record anything', async () => {
+  const sb = createFakeSb()
+  sb.when((ctx) => ctx.table === 'profiles', () => ({
+    data: { id: RIDER_ID, full_name: 'Ada Lovelace', email: 'ada@clemson.edu', role: 'rider' },
+    error: null,
+  }))
+  const res = await invoke({
+    method: 'POST',
+    url: '/api/admin?action=refund',
+    body: { profileId: RIDER_ID, amountCents: 1250, confirmed: false },
+    client: sb,
+    user: MONEY_ADMIN,
+    access: MONEY_ACCESS,
+  })
+  assert.equal(res.status, 200)
+  assert.equal(res.json.preview, true)
+  assert.equal(res.json.executed, false)
+  assert.match(res.json.confirmation, /Ada Lovelace/)
+  assert.match(res.json.confirmation, /ada@clemson.edu/)
+  assert.match(res.json.confirmation, /\$12\.50/)
+  assert.match(res.json.confirmation, /not a Stripe refund/)
+  assert.equal(sb.calls.filter((ctx) => ctx.op === 'insert').length, 0)
+  assert.equal(networkHits, 0)
+})
+
+test('confirmed refund records ride credit and does not call the network', async () => {
+  const sb = createFakeSb()
+  sb.when((ctx) => ctx.table === 'profiles', () => ({
+    data: { id: RIDER_ID, full_name: 'Ada Lovelace', email: 'ada@clemson.edu', role: 'rider' },
+    error: null,
+  }))
+  const res = await invoke({
+    method: 'POST',
+    url: '/api/admin?action=refund',
+    body: {
+      profileId: RIDER_ID,
+      amountCents: 1250,
+      confirmed: true,
+      requestId: '12121212-1212-4121-8121-121212121212',
+    },
+    client: sb,
+    user: MONEY_ADMIN,
+    access: MONEY_ACCESS,
+  })
+  assert.equal(res.status, 200, res.json?.error)
+  assert.equal(res.json.executed, true)
+  assert.equal(res.json.settlement, 'recorded_credit')
+  assert.match(res.json.result, /not a Stripe refund/)
+  assert.equal(sb.calls.some((ctx) => ctx.table === 'rider_credit_lots' && ctx.op === 'insert'), true)
   assert.equal(networkHits, 0)
 })
