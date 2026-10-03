@@ -19,7 +19,6 @@ export function QuietHoursCard({ prefs, saving = false, onChange }) {
         label="Off the clock"
         hint="Do not disturb until you turn this off"
         on={quiet.dnd}
-        disabled={saving}
         onClick={() => patch({ dnd: !quiet.dnd })}
       />
       <ToggleRow

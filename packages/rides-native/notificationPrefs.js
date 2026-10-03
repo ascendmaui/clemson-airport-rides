@@ -2,6 +2,7 @@
  * Account notification prefs for the rider app.
  * Writes profiles.notification_prefs and mirrors the same JSON on device storage.
  */
+import { quietSwitchOn } from './driverShift.js'
 
 export const NOTIFICATION_CATEGORIES = [
   { id: 'ride', label: 'Ride updates', hint: 'Requested, accepted, en route, arrived, trip started or completed' },
@@ -42,8 +43,8 @@ function hhmm(value, fallback) {
 export function quietFromPrefs(raw) {
   const q = raw?.quiet && typeof raw.quiet === 'object' ? raw.quiet : {}
   return {
-    dnd: Boolean(q.dnd),
-    scheduleEnabled: Boolean(q.scheduleEnabled),
+    dnd: quietSwitchOn(q.dnd),
+    scheduleEnabled: quietSwitchOn(q.scheduleEnabled),
     start: hhmm(q.start, DEFAULT_QUIET.start),
     end: hhmm(q.end, DEFAULT_QUIET.end),
   }

@@ -10,6 +10,7 @@ import { useFeedback } from '@/lib/feedback'
 import { oneParam } from '@/lib/oneParam'
 import { openNavigation } from '@/lib/openMaps'
 import { supabase } from '@/lib/supabase'
+import { useDriverShift } from '@/lib/driverShiftSession'
 import { useDriverLocation } from '@/lib/useDriverLocation'
 import { advanceTrip, loadRiderFix, loadTrip, publishDriverLocation, subscribeTrips } from 'rides-native/driverDesk'
 import {
@@ -38,6 +39,7 @@ export default function TripScreen() {
   const params = useLocalSearchParams<{ id?: string }>()
   const id = oneParam(params.id)
   const { user } = useAuth()
+  const shift = useDriverShift()
   const { pulse } = useFeedback()
   const { colors, navApp } = useTheme()
   const shadow = useCardShadow()
@@ -107,10 +109,10 @@ export default function TripScreen() {
     }
   }, [id, trip?.status])
 
-  useDriverLocation(Boolean(user && trip && trip.status !== 'completed' && trip.status !== 'canceled'), (fix) => {
+  useDriverLocation(Boolean(user && shift.ready && trip && trip.status !== 'completed' && trip.status !== 'canceled'), (fix) => {
     setSelf({ latitude: fix.lat, longitude: fix.lng })
     if (!supabase || !user) return
-    publishDriverLocation(supabase, user.id, { ...fix, online: true }).catch(() => {})
+    publishDriverLocation(supabase, user.id, { ...fix, online: shift.online }).catch(() => {})
   })
 
   async function onAdvance() {

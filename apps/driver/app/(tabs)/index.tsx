@@ -1,20 +1,21 @@
 import { useRouter } from 'expo-router'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { AccessibilityInfo, Animated, Linking, Modal, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { Animated, Linking, Modal, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { CampusMap, type MapPin } from '@/components/CampusMap'
 import { FarePanel } from '@/components/FarePanel'
 import { Card, ErrorText, Primary, Tag, useCardShadow } from '@/components/chrome'
-import { CircleButton, GoButton } from '@/components/shell'
+import { CircleButton } from '@/components/shell'
+import { LookingRadar } from '@/components/LookingRadar'
+import { StartStopRides } from '@/components/StartStopRides'
 import { DriverStatusCard } from '@/components/DriverStatusCard'
 import { useAuth } from '@/lib/auth'
 import { useFeedback } from '@/lib/feedback'
-import { notifyNewRequest } from '@/lib/push'
+import { useDriverShift } from '@/lib/driverShiftSession'
 import { shownCents } from '@/lib/shown'
 import { supabase } from '@/lib/supabase'
 import { useTheme } from '@/lib/theme'
-import { useDriverLocation } from '@/lib/useDriverLocation'
-import { fetchDriverApplication, setDriverOnline } from 'rides-native/drivers'
+import { fetchDriverApplication } from 'rides-native/drivers'
 import { displayFirstName } from 'rides-native/authErrors'
 import { heatColor } from 'rides-native/heat.js'
 import { HEAT_WINDOWS } from 'rides-native/places.js'
@@ -26,8 +27,6 @@ import {
   loadDriverDesk,
   loadGameDay,
   loadEarnings,
-  publishDriverCapacity,
-  publishDriverLocation,
   setPriorityMode,
   subscribeTrips,
   type DriverDesk,
@@ -52,6 +51,7 @@ import { approvalGateMessage, isSyntheticOffer, syntheticOffers } from 'rides-na
 import { driverGateView } from 'rides-native/driverGateView'
 import { loadCounterpart } from 'rides-native/partyProfile.js'
 import { offerCardViewModel } from 'rides-native/offerCard'
+import { lookingForRides } from 'rides-native/driverShift.js'
 
 /** Home map overlay grid: screen-edge gutter, spacing between floating pieces, clearance under the status bar. */
 const EDGE = 16
@@ -72,8 +72,7 @@ export default function DriverHome() {
   const shadow = useCardShadow()
   const { user, configured } = useAuth()
   const { pulse } = useFeedback()
-  const seenOffers = useRef(new Set<string>())
-  const offersPrimed = useRef(false)
+  const shift = useDriverShift()
   const [desk, setDesk] = useState<DriverDesk | null>(null)
   const [todayCents, setTodayCents] = useState(0)
   const [weekCents, setWeekCents] = useState(0)
@@ -82,7 +81,7 @@ export default function DriverHome() {
   const [reason, setReason] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
-  const [self, setSelf] = useState<{ latitude: number; longitude: number } | null>(null)
+  const [shiftOpen, setShiftOpen] = useState(false)
   const [peek, setPeek] = useState(false)
   const [peekPage, setPeekPage] = useState(0)
   const [safetyOpen, setSafetyOpen] = useState(false)
@@ -104,12 +103,13 @@ export default function DriverHome() {
   const canSeeOffers = gate.canSeeOffers
   const canGoOnline = gate.canGoOnline
   const approved = status === 'approved'
-  const online = Boolean(desk?.online)
+  const online = shift.online
+  const self = shift.self
   const name = user ? displayFirstName(user.user_metadata?.full_name || user.email?.split('@')[0], 'Driver') : 'Driver'
   const tabClearance = insets.bottom + 72
   // The dock is pinned between the status bar / Dynamic Island and the tab bar.
   // Its content stacks from the bottom; an offer card shrinks (and scrolls) to fit.
-  const dockTop = insets.top + TOP_MARGIN
+  const dockTop = insets.top + (online ? 56 : TOP_MARGIN)
 
   useEffect(() => {
     if (!supabase) {
@@ -140,9 +140,6 @@ export default function DriverHome() {
     if (currentGate.canSeeOffers) {
       const loaded = await loadDriverDesk(supabase, user.id)
       setDesk(loaded)
-      if (loaded.lat != null && loaded.lng != null) {
-        setSelf({ latitude: Number(loaded.lat), longitude: Number(loaded.lng) })
-      }
       const earnings = await loadEarnings(supabase, user.id).catch(() => null)
       if (earnings) {
         setTodayCents(earnings.summary?.todayNetCents || 0)
@@ -199,22 +196,6 @@ export default function DriverHome() {
   }, [canSeeOffers, refresh])
 
   useEffect(() => {
-    const offers = desk?.offers || []
-    if (!offersPrimed.current) {
-      offers.forEach((card: DriverCard) => seenOffers.current.add(card.id))
-      offersPrimed.current = true
-      return
-    }
-    const fresh = offers.filter((card: DriverCard) => !seenOffers.current.has(card.id) && !isSyntheticOffer(card))
-    fresh.forEach((card: DriverCard) => seenOffers.current.add(card.id))
-    const next = fresh[0]
-    if (!next) return
-    pulse('request')
-    AccessibilityInfo.announceForAccessibility(`New ride offer: ${formatCents(next.driverNetCents)}, pickup at ${next.pickupLabel}`)
-    notifyNewRequest(next).catch(() => {})
-  }, [desk?.offers, pulse])
-
-  useEffect(() => {
     let alive = true
     setHeatLoading(true)
     loadBusySpots(heatWindow)
@@ -238,35 +219,13 @@ export default function DriverHome() {
     }
   }, [heatWindow])
 
-  useDriverLocation(Boolean(user && approved && online), (fix) => {
-    setSelf({ latitude: fix.lat, longitude: fix.lng })
-    if (!supabase || !user) return
-    publishDriverLocation(supabase, user.id, { ...fix, online: true }).catch(() => {})
-  })
-
-  async function toggle() {
+  function applyShift(nextAvailable: boolean) {
     if (!user) {
       router.push('/sign-in')
       return
     }
-    if (!canGoOnline) {
-      setError(gate.body)
-      return
-    }
-    setBusy(true)
-    setError(null)
-    try {
-      const nextOnline = !online
-      await setDriverOnline(supabase, user.id, nextOnline)
-      if (nextOnline) await publishDriverCapacity(supabase, user.id, desk?.vehicle?.seats)
-      pulse('online')
-      AccessibilityInfo.announceForAccessibility(nextOnline ? 'You are now online' : 'You are now offline')
-      await refresh()
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not update online status')
-    } finally {
-      setBusy(false)
-    }
+    if (nextAvailable) setShiftOpen(false)
+    shift.applyShift(nextAvailable)
   }
 
   async function onAccept(card: DriverCard) {
@@ -368,6 +327,7 @@ export default function DriverHome() {
         gameDay={Boolean(gameNotice?.live)}
         gameDayLabel={gameNotice?.live ? gameNotice.headline : null}
       />
+      {lookingForRides({ available: online, onTrip: Boolean(desk?.active) }) ? <LookingRadar /> : null}
       <View pointerEvents="box-none" style={styles.overlay}>
         <View style={[styles.top, { paddingTop: dockTop }]} pointerEvents="box-none">
           <CircleButton icon="home" label="Menu" onPress={() => router.push('/menu')} />
@@ -551,22 +511,33 @@ export default function DriverHome() {
               <CircleButton icon="shield" label="Safety" onPress={() => setSafetyOpen(true)} />
               <CircleButton icon="sparkles" label="Priority mode" onPress={onPriority} />
             </View>
-            <GoButton
-              online={online}
-              busy={busy}
-              disabled={!canGoOnline}
-              disabledReason={gate.body}
-              onPress={toggle}
-            />
             <View style={styles.toolCol}>
               <CircleButton icon="stats-chart" label="Earnings" onPress={() => router.push('/earnings')} />
               <CircleButton icon="locate" label="Recenter map" onPress={() => setFocusToken((value: number) => value + 1)} />
             </View>
           </View>
           <View style={[styles.bar, shadow, { backgroundColor: colors.card }]} accessibilityLiveRegion="polite">
-            <CircleButton icon="options" label="Ride queue" onPress={() => router.push('/queue')} />
-            <Text style={[styles.barText, { color: colors.title }]} accessibilityLiveRegion="polite">{statusLine}</Text>
-            <CircleButton icon="list" label="Open queue" onPress={() => router.push('/queue')} />
+            <View style={styles.barSide}>
+              <CircleButton icon="options" label="Ride queue" onPress={() => router.push('/queue')} />
+            </View>
+            <View style={styles.barMain}>
+              {online && !shiftOpen ? null : (
+                <Text style={[styles.barText, { color: colors.title }]} accessibilityLiveRegion="polite">{statusLine}</Text>
+              )}
+              {shift.error ? <ErrorText>{shift.error}</ErrorText> : null}
+              <StartStopRides
+                available={online}
+                dnd={shift.dnd}
+                canStart={canGoOnline}
+                minimized={online && !shiftOpen}
+                onChange={applyShift}
+                onExpand={() => setShiftOpen(true)}
+                onMinimize={() => setShiftOpen(false)}
+              />
+            </View>
+            <View style={styles.barSide}>
+              <CircleButton icon="list" label="Open queue" onPress={() => router.push('/queue')} />
+            </View>
           </View>
         </View>
       </View>
@@ -757,9 +728,11 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    gap: 8,
   },
-  barText: { fontWeight: '800', fontSize: 16, flex: 1, textAlign: 'center' },
+  barSide: { justifyContent: 'center' },
+  barMain: { flex: 1, gap: 6 },
+  barText: { fontWeight: '800', fontSize: 13, textAlign: 'center' },
   offerFareRow: { flexDirection: 'row', alignItems: 'baseline', gap: 6 },
   offerFare: { fontSize: 34, fontWeight: '800', letterSpacing: -0.6 },
   offerFareTag: { fontSize: 16, fontWeight: '700' },

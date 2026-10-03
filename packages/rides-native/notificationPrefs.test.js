@@ -166,10 +166,11 @@ test('quietFromPrefs keeps real HH:MM clocks and drops impossible ones', () => {
   assert.equal(quietFromPrefs({ quiet: { start: '24:00', end: '23:60' } }).start, '22:00')
   assert.equal(quietFromPrefs({ quiet: { start: '24:00', end: '23:60' } }).end, '07:00')
 
-  // BUG?: Boolean("false") is true, so a string switch turns the quiet flag on.
   const coerced = quietFromPrefs({ quiet: { dnd: 'false', scheduleEnabled: 'no' } })
-  assert.equal(coerced.dnd, true)
-  assert.equal(coerced.scheduleEnabled, true)
+  assert.equal(coerced.dnd, false)
+  assert.equal(coerced.scheduleEnabled, false)
+  assert.equal(quietFromPrefs({ quiet: { dnd: 'off' } }).dnd, false)
+  assert.equal(quietFromPrefs({ quiet: { dnd: 'on' } }).dnd, true)
   assert.equal(quietFromPrefs({ quiet: { dnd: '' } }).dnd, false)
 })
 
@@ -265,7 +266,7 @@ test('normalizePrefs coerces wrong types and keeps unknown categories', () => {
   assert.equal(prefs.marketing, true)
   assert.equal(prefs.quiet.extra, undefined)
   assert.equal(prefs.quiet.start, '22:00')
-  assert.equal(prefs.quiet.dnd, true)
+  assert.equal(prefs.quiet.dnd, false)
   assert.equal(raw.quiet.extra, true)
 })
 
@@ -583,10 +584,10 @@ test('saveNotificationPrefs normalizes, mirrors locally, and skips the profile w
   assert.equal(skipped.ok, true)
   assert.equal(skipped.persisted, false)
   assert.equal(skipped.softFail, null)
-  // BUG?: these strings survive normalization as enabled.
+  // BUG?: promotions and ride stay on for string values other than boolean false.
   assert.equal(skipped.prefs.promotions, true)
   assert.equal(skipped.prefs.ride, true)
-  assert.equal(skipped.prefs.quiet.dnd, true)
+  assert.equal(skipped.prefs.quiet.dnd, false)
   assert.equal(skipped.prefs.quiet.start, '22:00')
   assert.equal(skipped.prefs.mystery, true)
   assert.equal(calls.length, 0)
@@ -725,7 +726,7 @@ test('quietFromPrefs reads fields from an array because arrays are objects', () 
   const raw = { quiet }
   // BUG?: an array passes the typeof === "object" check, so named fields on it are honored.
   const parsed = quietFromPrefs(raw)
-  assert.equal(parsed.dnd, true)
+  assert.equal(parsed.dnd, false)
   assert.equal(parsed.scheduleEnabled, true)
   assert.equal(parsed.start, '01:15')
   assert.equal(parsed.end, '07:00')

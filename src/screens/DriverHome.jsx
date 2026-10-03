@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useAuth } from '../lib/auth'
 import { CampusMap, CLEMSON } from '../components/CampusMap'
+import { LookingRadar } from '../components/LookingRadar'
+import { StartStopRides } from '../components/StartStopRides'
 import { GameDayStatus } from '../components/GameDayStatus'
 import { useGameDayNotice } from '../lib/useGameDayNotice'
 import { DriverIncentiveBanner, useDriverIncentiveWatch } from '../components/DriverIncentiveBanner'
@@ -9,6 +11,9 @@ import { PurpleAcceptButton } from '../components/PrimaryButton'
 import { ScheduledRideQueue } from '../components/ScheduledRideQueue'
 import { navigate } from '../lib/navigation'
 import { setDriverOnline, subscribeTrips, supabase } from '../lib/supabase'
+import { fetchNotificationPrefs, saveNotificationPrefs } from '../lib/notificationPrefs'
+import { playShiftSound } from '../lib/shiftSounds'
+import { desiredShift, lookingForRides, quietSwitchOn, readShift } from '../../packages/rides-native/driverShift.js'
 import { grantRiderSocialForTrip } from '../lib/riderReferral'
 import { publishDriverLocation } from '../lib/driverTrack'
 import { DriverApprovalGate } from './DriverApprovalGate'
@@ -76,6 +81,7 @@ async function writeTripEvent(tripId, kind, payload = {}) {
 }
 
 const ACTIVE_STATUSES = ['accepted', 'arriving', 'arrived', 'in_progress']
+const SHIFT_BAR = 148
 
 export function DriverHome() {
   const { user, loading } = useAuth()
@@ -98,6 +104,14 @@ function DriverShell({ driverId }) {
     setActiveTrip((prev) => (prev && next && prev.id === next.id ? { ...prev, ...next } : prev))
   })
   const [online, setOnline] = useState(false)
+  const [dnd, setDnd] = useState(false)
+  const [shiftOpen, setShiftOpen] = useState(false)
+  const availableRef = useRef(false)
+  const shiftReady = useRef(false)
+  const shiftTicket = useRef(0)
+  const shiftChain = useRef(Promise.resolve())
+  const shiftWriting = useRef(false)
+  const quietRef = useRef(null)
   const [earningsCents, setEarningsCents] = useState(0)
   const [incentiveExtraCents, setIncentiveExtraCents] = useState(0)
   const [extraByTrip, setExtraByTrip] = useState({})
@@ -193,11 +207,28 @@ function DriverShell({ driverId }) {
   }, [driverId])
 
   useEffect(() => {
-    if (!driverId || !approved) return undefined
-    setDriverOnline(driverId, true).catch(() => {})
-    setOnline(true)
+    if (!driverId || !approved || !supabase) return undefined
+    let alive = true
+    const mine = shiftTicket.current
+    Promise.all([
+      supabase.from('driver_status').select('online').eq('driver_id', driverId).maybeSingle(),
+      fetchNotificationPrefs(driverId),
+    ]).then(([statusRes, prefsRes]) => {
+      if (!alive || mine !== shiftTicket.current) return
+      const shift = readShift({ online: statusRes.data?.online, dnd: prefsRes.prefs?.quiet?.dnd })
+      shiftReady.current = true
+      if (!shiftWriting.current) {
+        quietRef.current = prefsRes.prefs?.quiet || null
+        availableRef.current = shift.available
+        setOnline(shift.available)
+        setDnd(shift.dnd)
+        if (shift.reconcile) setDriverOnline(driverId, false).catch(() => {})
+      }
+    }).catch(() => {
+      if (alive) shiftReady.current = true
+    })
     return () => {
-      setDriverOnline(driverId, false).catch(() => {})
+      alive = false
     }
   }, [driverId, approved])
 
@@ -207,11 +238,12 @@ function DriverShell({ driverId }) {
       (pos) => {
         const next = [pos.coords.latitude, pos.coords.longitude]
         setSelfPos(next)
+        if (!shiftReady.current) return
         publishDriverLocation(driverId, {
           lat: next[0],
           lng: next[1],
           heading: pos.coords.heading,
-          online: true,
+          online: availableRef.current,
         }).catch(() => {})
       },
       () => {},
@@ -219,6 +251,56 @@ function DriverShell({ driverId }) {
     )
     return () => navigator.geolocation.clearWatch(watchId)
   }, [driverId, approved])
+
+  async function persistDnd(dndOn, mine) {
+    if (mine !== shiftTicket.current) return
+    const loaded = await fetchNotificationPrefs(driverId)
+    if (mine !== shiftTicket.current) return
+    const quiet = { ...(loaded.prefs?.quiet || {}), dnd: dndOn }
+    const saved = await saveNotificationPrefs(driverId, { ...loaded.prefs, quiet })
+    if (mine !== shiftTicket.current) return
+    quietRef.current = saved.prefs?.quiet || quiet
+  }
+
+  function applyShift(nextAvailable) {
+    if (!driverId) return
+    if (nextAvailable && !approved) return
+    const next = desiredShift(nextAvailable)
+    const sameAvailability = next.available === availableRef.current
+    const sameDnd = next.dnd === quietSwitchOn(quietRef.current?.dnd)
+    if (sameAvailability && sameDnd) return
+    const mine = ++shiftTicket.current
+    const prevOnline = availableRef.current
+    const prevDnd = quietSwitchOn(quietRef.current?.dnd)
+    availableRef.current = next.available
+    setOnline(next.available)
+    setDnd(next.dnd)
+    if (next.available) setShiftOpen(false)
+    if (!sameAvailability) playShiftSound(next.available ? 'start' : 'stop')
+    shiftChain.current = shiftChain.current.then(async () => {
+      if (mine !== shiftTicket.current) return
+      shiftWriting.current = true
+      try {
+        if (next.available) {
+          await setDriverOnline(driverId, true)
+          if (mine !== shiftTicket.current) return
+          await persistDnd(false, mine)
+        } else {
+          await persistDnd(true, mine)
+          if (mine !== shiftTicket.current) return
+          await setDriverOnline(driverId, false)
+        }
+      } catch (err) {
+        if (mine !== shiftTicket.current) return
+        availableRef.current = prevOnline
+        setOnline(prevOnline)
+        setDnd(prevDnd)
+        console.error('[shift]', err?.message || err)
+      } finally {
+        if (mine === shiftTicket.current) shiftWriting.current = false
+      }
+    }).catch(() => {})
+  }
 
   useEffect(() => {
     loadEarnings()
@@ -592,6 +674,8 @@ function DriverShell({ driverId }) {
   }
 
   const showIdle = !offer && !activeTrip
+  const shiftMinimized = online && !shiftOpen
+  const shiftClearance = shiftMinimized ? 76 : SHIFT_BAR
   const scheduledNotDone = Boolean(activeTrip?.pickup_at) && activeTrip.status !== 'completed'
   const driverFix = selfPos ? { lat: selfPos[0], lng: selfPos[1] } : null
   const activeEta = activeTrip
@@ -634,11 +718,12 @@ function DriverShell({ driverId }) {
         selfPosition={selfPos}
         driverPosition={selfPos}
       />
+      {lookingForRides({ available: online, onTrip: Boolean(activeTrip) }) ? <LookingRadar /> : null}
 
       <div
         style={{
           position: 'absolute',
-          top: 16,
+          top: online ? 56 : 16,
           left: 16,
           right: 16,
           display: 'flex',
@@ -707,13 +792,13 @@ function DriverShell({ driverId }) {
 
       
       {incentiveBanner && (
-        <div style={{ position: 'absolute', top: 68, left: 16, right: 16, zIndex: 22 }}>
+        <div style={{ position: 'absolute', top: online ? 108 : 68, left: 16, right: 16, zIndex: 22 }}>
           <DriverIncentiveBanner text={incentiveBanner} />
         </div>
       )}
 
       {!activeTrip && (
-        <div style={{ position: 'absolute', top: incentiveBanner ? 128 : 72, left: 16, right: 16, zIndex: 20, display: 'flex', flexDirection: 'column', gap: 8, pointerEvents: 'none' }}>
+        <div style={{ position: 'absolute', top: (incentiveBanner ? 128 : 72) + (online ? 40 : 0), left: 16, right: 16, zIndex: 20, display: 'flex', flexDirection: 'column', gap: 8, pointerEvents: 'none' }}>
           <div style={{ pointerEvents: 'auto' }}>
             <GameDayStatus notice={game.notice} ready={game.ready} compact />
           </div>
@@ -753,9 +838,9 @@ function DriverShell({ driverId }) {
             position: 'absolute',
             left: 0,
             right: 0,
-            bottom: 0,
+            bottom: shiftClearance,
             zIndex: 20,
-            padding: '12px 20px calc(20px + var(--safe-bottom))',
+            padding: '12px 20px 20px',
             borderTop: '1px solid rgba(255,255,255,0.65)',
             maxHeight: '55%',
             overflowY: 'auto',
@@ -765,19 +850,21 @@ function DriverShell({ driverId }) {
           {scheduledLists(true)}
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
             <span
-              className="driver-online-dot"
+              className={online ? 'driver-online-dot' : undefined}
               style={{
                 width: 10,
                 height: 10,
                 borderRadius: '50%',
-                background: 'var(--success)',
-                boxShadow: '0 0 0 3px rgba(31,138,76,0.2)',
+                background: online ? 'var(--success)' : 'var(--ink-tertiary)',
+                boxShadow: online ? '0 0 0 3px rgba(31,138,76,0.2)' : 'none',
               }}
             />
-            <span style={{ fontWeight: 600, fontSize: 18 }}>You're online</span>
+            <span style={{ fontWeight: 600, fontSize: 18 }}>{online ? "You're online" : 'Off the clock'}</span>
           </div>
           <p style={{ fontSize: 13, color: 'var(--ink-secondary)', marginBottom: 12 }}>
-            Looking for rides in Clemson. Carpool offers pay more than a solo trip — take those first.
+            {online
+              ? 'Looking for rides in Clemson. Carpool offers pay more than a solo trip — take those first.'
+              : 'Start rides when you want offers. Carpool offers pay more than a solo trip.'}
           </p>
           <div style={{
             marginBottom: 12,
@@ -928,9 +1015,9 @@ function DriverShell({ driverId }) {
             position: 'absolute',
             left: 0,
             right: 0,
-            bottom: 0,
+            bottom: shiftClearance,
             zIndex: 30,
-            padding: '12px 20px calc(24px + var(--safe-bottom))',
+            padding: '12px 20px 16px',
             borderTop: '1px solid rgba(255,255,255,0.65)',
           }}
         >
@@ -990,9 +1077,9 @@ function DriverShell({ driverId }) {
             position: 'absolute',
             left: 0,
             right: 0,
-            bottom: 0,
+            bottom: shiftClearance,
             zIndex: 30,
-            padding: '12px 20px calc(24px + var(--safe-bottom))',
+            padding: '12px 20px 16px',
             borderTop: '1px solid rgba(255,255,255,0.65)',
           }}
         >
@@ -1109,6 +1196,17 @@ function DriverShell({ driverId }) {
           onClose={() => setChatTrip(null)}
         />
       )}
+      <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, zIndex: 40 }}>
+        <StartStopRides
+          available={online}
+          dnd={dnd}
+          canStart={approved}
+          minimized={shiftMinimized}
+          onChange={applyShift}
+          onExpand={() => setShiftOpen(true)}
+          onMinimize={() => setShiftOpen(false)}
+        />
+      </div>
     </div>
   )
 }
