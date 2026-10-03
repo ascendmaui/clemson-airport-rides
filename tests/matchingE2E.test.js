@@ -87,6 +87,7 @@ test('offline and unapproved drivers cannot accept an open-pool trip', async () 
   assert.equal(supabase._tables.trip_events.length, 0)
 })
 
+/* R001: Matching E2E: cancel-while-searching */
 test('rider cancel removes a searching offer and rejects a stale driver accept', async () => {
   const { supabase, trip, riderId, drivers } = seedMatchingScenario()
   const driverId = drivers[0].id
