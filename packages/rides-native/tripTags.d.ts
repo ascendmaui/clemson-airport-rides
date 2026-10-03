@@ -48,6 +48,7 @@ export type DriverCard = {
   distanceMi?: number
   rideType?: string
   isSynthetic?: boolean
+  promoRide?: boolean
 }
 
 export type FareCollection = {
