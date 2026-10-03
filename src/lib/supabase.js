@@ -45,6 +45,7 @@ export async function pingSupabase() {
 /**
  * Online drivers from driver_status + profiles + vehicles.
  * Shared with the rider app. No demo / simulated fleet arrays.
+ * Rush-hour cars are client markers from simulatedDrivers.js, not rows here.
  */
 export async function fetchOnlineDrivers() {
   return fetchSharedOnlineDrivers(supabase)
