@@ -1,9 +1,10 @@
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useEffect, useRef, useState } from 'react'
 import { reconcileCheckout } from 'rides-native/riderMoney.js'
-import { AccessibilityInfo, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native'
+import { AccessibilityInfo, Animated, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { PrimaryButton } from '@/components/Button'
+import { useEnterMotion } from '@/components/enter'
 import { HoldExpiryNotice } from '@/components/HoldExpiryNotice'
 import { CampusMap } from '@/components/CampusMap'
 import type { MapPin } from '@/components/mapTypes'
@@ -100,6 +101,7 @@ export default function Requested() {
   const [person, setPerson] = useState<CounterpartView | null>(null)
   const { colors } = useTheme()
   const styles = useThemedStyles(makeStyles)
+  const sheetMotion = useEnterMotion(12)
   const rideLive = isActiveRideStatus(trip?.status)
   const located = live?.driverLat != null && live?.driverLng != null
   const driverName = live?.driverName || driver
@@ -240,7 +242,7 @@ export default function Requested() {
   }, [shown?.id, shown?.status, shown?.rider_id, live?.driver_id, trip?.driver_id, user])
 
   return (
-    <View style={[styles.screen, { paddingTop: insets.top }]}>
+    <View style={[styles.screen, { paddingTop: insets.top + 8 }]}>
       <View style={styles.header}>
         <Pressable
           accessibilityRole="button"
@@ -254,14 +256,14 @@ export default function Requested() {
         </Pressable>
         <View style={styles.headerCopy}>
           <Text style={styles.kicker}>{ttlCanceled ? 'HOLD EXPIRED' : 'LIVE RIDE'}</Text>
-          <Text style={styles.title}>{phase.title}</Text>
-          <Text style={styles.kicker}>LIVE RIDE</Text>
           <Text style={styles.title} accessibilityRole="header" accessibilityLiveRegion="polite">{phase.title}</Text>
         </View>
         <SosButton onPress={() => setSosOpen(true)} />
       </View>
+      <Animated.View style={[styles.sheet, sheetMotion]}>
       <ScrollView
-        contentContainerStyle={styles.list}
+        style={styles.sheetScroll}
+        contentContainerStyle={[styles.list, { paddingBottom: insets.bottom + 28 }]}
         refreshControl={(
           <RefreshControl
             refreshing={refreshing}
@@ -287,7 +289,7 @@ export default function Requested() {
             Stripe Checkout sent you back. This ride is in the open pool. The deposit shows up when Stripe confirms it.
           </Text>
         ) : null}
-        <View style={styles.map}>
+        <View style={[styles.map, lift(colors, 'rest')]}>
           {/* TODO: road-following tiles need a billed Maps key. Pins, status, and straight-line ETA use coordinates already on the trip. */}
           <CampusMap
             spots={[]}
@@ -306,7 +308,7 @@ export default function Requested() {
             <Text style={styles.body}>Request a ride from the map. This screen shares your location and SOS once that trip exists.</Text>
           </View>
         ) : (
-          <View style={styles.summary}>
+          <View style={[styles.summary, lift(colors, 'rest')]}>
             <CounterpartCard person={person} colors={partyColorsFromPalette(colors)} />
             {ttlCanceled ? null : (
               <LivePhase
@@ -366,7 +368,7 @@ export default function Requested() {
         ) : (
           <LiveShareCard trip={shown} userId={user.id} loading={loading && Boolean(tripId)} />
         )}
-        <View style={styles.sosCard}>
+        <View style={[styles.sosCard, lift(colors, 'rest')]}>
           <Text style={styles.kicker}>SOS</Text>
           <Text style={styles.cardTitle}>Need help on this ride?</Text>
           {rideLive ? (
@@ -392,6 +394,7 @@ export default function Requested() {
         </Pressable>
         <PrimaryButton label="Back to rides" onPress={() => router.replace('/')} tone="ghost" />
       </ScrollView>
+      </Animated.View>
       <SosSheet
         open={sosOpen}
         onClose={() => setSosOpen(false)}
@@ -407,26 +410,28 @@ export default function Requested() {
 function makeStyles(colors: Palette) {
   return {
     screen: { flex: 1, backgroundColor: colors.background },
-    header: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 12, paddingHorizontal: 16, paddingBottom: 8 },
-    back: { width: 40, height: 40, borderRadius: 14, backgroundColor: colors.card, alignItems: 'center' as const, justifyContent: 'center' as const },
+    header: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 12, paddingHorizontal: 20, paddingBottom: 12 },
+    back: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.card, alignItems: 'center' as const, justifyContent: 'center' as const },
     backLabel: { fontSize: 18, color: colors.title, fontWeight: '700' as const },
     headerCopy: { flex: 1 },
     kicker: { color: colors.orange, fontWeight: '800' as const, letterSpacing: 1.1, fontSize: 11 },
-    title: { color: colors.title, fontSize: 22, fontWeight: '800' as const },
-    list: { padding: 16, gap: 14, paddingBottom: 140 },
-    map: { height: 240, borderRadius: 20, overflow: 'hidden' as const },
-    summary: { backgroundColor: colors.card, borderRadius: 20, padding: 16 },
-    summaryTitle: { color: colors.ink, fontSize: 18, fontWeight: '800' as const, marginBottom: 6 },
-    approach: { color: colors.purple, fontSize: 13, lineHeight: 18, fontWeight: '700' as const, marginTop: 8 },
+    title: { color: colors.title, fontSize: 22, fontWeight: '700' as const, letterSpacing: -0.4, marginTop: 2 },
+    sheet: { flex: 1 },
+    sheetScroll: { flex: 1 },
+    list: { paddingHorizontal: 20, gap: 14 },
+    map: { height: 280, borderRadius: 22, overflow: 'hidden' as const },
+    summary: { backgroundColor: colors.card, borderRadius: 20, padding: 16, gap: 8, borderWidth: 1, borderColor: colors.border },
+    summaryTitle: { color: colors.ink, fontSize: 18, fontWeight: '700' as const, letterSpacing: -0.3, marginTop: 4 },
+    approach: { color: colors.purple, fontSize: 13, lineHeight: 18, fontWeight: '700' as const },
     body: { color: colors.inkSecondary, fontSize: 14, lineHeight: 20 },
     stopLine: { color: colors.ink, fontSize: 14, lineHeight: 20, fontWeight: '700' as const },
-    meta: { color: colors.link, fontWeight: '700' as const, fontSize: 12, marginTop: 8 },
-    empty: { backgroundColor: colors.card, borderRadius: 20, padding: 16, gap: 8 },
-    emptyTitle: { color: colors.title, fontWeight: '800' as const, fontSize: 16 },
+    meta: { color: colors.link, fontWeight: '700' as const, fontSize: 12, marginTop: 4 },
+    empty: { backgroundColor: colors.card, borderRadius: 20, padding: 16, gap: 8, borderWidth: 1, borderColor: colors.border },
+    emptyTitle: { color: colors.title, fontWeight: '700' as const, fontSize: 16, letterSpacing: -0.2 },
     inlineEmpty: { backgroundColor: colors.purpleSoft, borderRadius: 16, padding: 12, marginBottom: 12 },
-    error: { color: colors.danger, fontSize: 13 },
-    sosCard: { backgroundColor: colors.card, borderRadius: 20, padding: 16 },
-    cardTitle: { color: colors.title, fontSize: 20, fontWeight: '800' as const, marginTop: 4, marginBottom: 8 },
-    link: { color: colors.link, fontWeight: '800' as const, fontSize: 15 },
+    error: { color: colors.danger, fontSize: 13, lineHeight: 18 },
+    sosCard: { backgroundColor: colors.card, borderRadius: 20, padding: 16, borderWidth: 1, borderColor: colors.border, gap: 4 },
+    cardTitle: { color: colors.title, fontSize: 20, fontWeight: '700' as const, letterSpacing: -0.3, marginTop: 2, marginBottom: 6 },
+    link: { color: colors.link, fontWeight: '700' as const, fontSize: 15 },
   }
 }

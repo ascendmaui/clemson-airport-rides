@@ -1,4 +1,5 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { pressStyle } from '@/components/enter'
 import { lift } from '@/lib/elevation'
 import type { Palette } from '@/lib/palette'
 import { useTheme } from '@/lib/theme'
@@ -50,15 +51,15 @@ export function PrimaryButton({
       accessibilityRole="button"
       accessibilityLabel={label}
       accessibilityState={{ disabled: Boolean(disabled) }}
-      style={[
+      style={({ pressed }) => [
         styles.btn,
         raised ? lift(colors, 'rest') : null,
         {
           backgroundColor: look.backgroundColor,
           borderColor: look.borderColor,
           borderWidth: look.borderWidth,
-          opacity: disabled ? 0.55 : 1,
         },
+        pressStyle(pressed, Boolean(disabled)),
       ]}
     >
       <Text style={[styles.label, { color: look.color }]}>{label}</Text>
@@ -102,27 +103,28 @@ function makeStyles(colors: Palette) {
   return {
     pill: {
       borderRadius: 999,
-      paddingHorizontal: 12,
+      paddingHorizontal: 14,
       paddingVertical: 8,
       borderWidth: 1,
       borderColor: colors.border,
       backgroundColor: colors.chip,
     },
     pillOn: { borderColor: colors.orange, backgroundColor: colors.orangeSoft },
-    pillLabel: { color: colors.link, fontWeight: '700' as const, fontSize: 12 },
+    pillLabel: { color: colors.link, fontWeight: '700' as const, fontSize: 13, letterSpacing: -0.1 },
     pillLabelOn: { color: colors.orange },
     handle: {
       alignSelf: 'center' as const,
-      width: 42,
-      height: 5,
+      width: 36,
+      height: 4,
       borderRadius: 999,
       backgroundColor: colors.track,
-      marginBottom: 12,
+      marginTop: 4,
+      marginBottom: 10,
     },
   }
 }
 
 const styles = StyleSheet.create({
-  btn: { borderRadius: 16, paddingVertical: 16, alignItems: 'center', paddingHorizontal: 16 },
-  label: { fontWeight: '700', fontSize: 16 },
+  btn: { borderRadius: 18, paddingVertical: 16, alignItems: 'center', paddingHorizontal: 16 },
+  label: { fontWeight: '700', fontSize: 16, letterSpacing: -0.2 },
 })

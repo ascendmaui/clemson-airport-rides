@@ -11,7 +11,7 @@ export function LivePhase({
 }) {
   const track = colors?.track || 'rgba(82,45,128,0.14)'
   return (
-    <View style={{ gap: 6 }}>
+    <View style={{ gap: 8 }}>
       {kicker ? (
         <Text style={{ color: colors.orange, fontWeight: '800', letterSpacing: 1.1, fontSize: 11 }}>{kicker}</Text>
       ) : null}
@@ -25,7 +25,7 @@ export function LivePhase({
         <Text style={{ color: colors.purple, fontWeight: '800', fontSize: 14 }}>{eta}</Text>
       ) : null}
       {activeIndex >= 0 && steps?.length ? (
-        <View accessibilityLabel="Trip progress" style={{ flexDirection: 'row', gap: 6, marginTop: 4 }}>
+        <View accessibilityLabel="Trip progress" style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 8, marginTop: 6 }}>
           {steps.map((step, index) => {
             const on = index <= activeIndex
             const current = index === activeIndex
@@ -33,7 +33,7 @@ export function LivePhase({
               <View key={step.id} style={{ flex: 1, gap: 4 }}>
                 <View
                   style={{
-                    height: 6,
+                    height: 4,
                     borderRadius: 999,
                     backgroundColor: current ? colors.orange : on ? colors.purple : track,
                   }}
@@ -41,8 +41,9 @@ export function LivePhase({
                 <Text
                   numberOfLines={1}
                   style={{
-                    fontSize: 10,
+                    fontSize: 11,
                     fontWeight: '700',
+                    textAlign: 'center',
                     color: current ? colors.orange : on ? colors.purple : colors.inkSecondary,
                   }}
                 >

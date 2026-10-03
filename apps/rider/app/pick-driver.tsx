@@ -1,8 +1,9 @@
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useEffect, useState } from 'react'
-import { Pressable, ScrollView, Text, View } from 'react-native'
+import { Animated, Pressable, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { PrimaryButton } from '@/components/Button'
+import { pressStyle, useEnterMotion } from '@/components/enter'
 import { CampusMap } from '@/components/CampusMap'
 import { ClemsonLoader } from '@/components/ClemsonLoader'
 import type { MapKind } from '@/components/mapTypes'
@@ -63,6 +64,7 @@ export default function PickDriver() {
   const [favNote, setFavNote] = useState<string | null>(null)
   const { colors } = useTheme()
   const styles = useThemedStyles(makeStyles)
+  const listMotion = useEnterMotion(14)
 
   useEffect(() => {
     let alive = true
@@ -130,7 +132,7 @@ export default function PickDriver() {
       <Pressable
         key={driver.id}
         onPress={() => { void tapHaptic(); setSelected(driver.id) }}
-        style={[styles.card, lift(colors, 'rest'), on && styles.cardOn, !driver.online && styles.cardOff]}
+        style={({ pressed }) => [styles.card, lift(colors, 'rest'), on && styles.cardOn, !driver.online && styles.cardOff, pressStyle(pressed)]}
         accessibilityRole="button"
         accessibilityLabel={`${driver.name}, ${driver.vehicleLabel}${driver.plate ? `, ${driver.plate}` : ''}. ${eta}`}
         accessibilityHint={driver.online ? 'Selects this driver' : 'This driver is offline'}
@@ -234,7 +236,7 @@ export default function PickDriver() {
   }
 
   return (
-    <View style={[styles.screen, { paddingTop: insets.top }]}>
+    <View style={[styles.screen, { paddingTop: insets.top + 8 }]}>
       <View style={styles.header}>
         <Pressable
           onPress={() => router.back()}
@@ -246,7 +248,7 @@ export default function PickDriver() {
         >
           <Text style={styles.backLabel}>←</Text>
         </Pressable>
-        <View style={{ flex: 1 }}>
+        <View style={styles.headerCopy}>
           <Text style={styles.title}>Pick a driver</Text>
           <Text style={styles.sub}>{PREFERRED_MATCH_COPY}</Text>
         </View>
@@ -278,7 +280,7 @@ export default function PickDriver() {
           })}
         </View>
       </View>
-      <ScrollView contentContainerStyle={styles.list}>
+      <Animated.ScrollView style={[styles.listScroll, listMotion]} contentContainerStyle={styles.list} showsVerticalScrollIndicator={false}>
         {phase === 'loading' ? <Skeleton height={72} /> : null}
         {phase === 'results' && !drivers.some((driver: OnlineDriver) => driver.online) ? (
           <View style={styles.empty}>
@@ -302,8 +304,8 @@ export default function PickDriver() {
         ) : null}
         {favNote ? <Text style={styles.meta}>{favNote}</Text> : null}
         {phase === 'results' ? renderGroups() : null}
-      </ScrollView>
-      <View style={styles.footer}>
+      </Animated.ScrollView>
+      <View style={[styles.footer, lift(colors, 'bar'), { paddingBottom: Math.max(insets.bottom, 16) }]}>
         {teslaNotice ? <Text style={styles.teslaNotice}>{teslaNotice}</Text> : null}
         {student.verified && tier === 'standard' ? (
           <Text style={styles.student}>{STUDENT_DISCOUNT_LABEL} is on this request.</Text>
@@ -337,12 +339,13 @@ export default function PickDriver() {
 function makeStyles(colors: Palette) {
   return {
     screen: { flex: 1, backgroundColor: colors.background },
-    header: { flexDirection: 'row' as const, gap: 12, paddingHorizontal: 16, paddingBottom: 8 },
-    back: { width: 40, height: 40, borderRadius: 14, backgroundColor: colors.card, alignItems: 'center' as const, justifyContent: 'center' as const },
+    header: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 12, paddingHorizontal: 20, paddingBottom: 12 },
+    headerCopy: { flex: 1 },
+    back: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.card, alignItems: 'center' as const, justifyContent: 'center' as const },
     backLabel: { fontSize: 18, color: colors.title, fontWeight: '700' as const },
-    title: { fontSize: 24, fontWeight: '700' as const, color: colors.title },
-    sub: { color: colors.inkSecondary, fontSize: 13, marginTop: 4, lineHeight: 18 },
-    mapWrap: { height: 280, marginHorizontal: 16, borderRadius: 20, overflow: 'hidden' as const },
+    title: { fontSize: 22, fontWeight: '700' as const, letterSpacing: -0.4, color: colors.title },
+    sub: { color: colors.inkSecondary, fontSize: 13, marginTop: 3, lineHeight: 18 },
+    mapWrap: { height: 248, marginHorizontal: 20, borderRadius: 22, overflow: 'hidden' as const },
     loader: {
       position: 'absolute' as const,
       top: 64,
@@ -360,27 +363,28 @@ function makeStyles(colors: Palette) {
     kindOn: { backgroundColor: colors.purple },
     kindText: { color: colors.link, fontSize: 11, fontWeight: '800' as const },
     kindTextOn: { color: colors.onAccent },
-    list: { padding: 16, gap: 10 },
+    listScroll: { flex: 1, marginTop: 12 },
+    list: { paddingHorizontal: 20, paddingBottom: 16, gap: 10 },
     error: { color: colors.danger, fontSize: 13, lineHeight: 18 },
-    empty: { backgroundColor: colors.card, borderRadius: 20, padding: 20, gap: 10 },
-    emptyTitle: { fontWeight: '800' as const, fontSize: 18, color: colors.ink },
+    empty: { backgroundColor: colors.card, borderRadius: 20, padding: 18, gap: 10, borderWidth: 1, borderColor: colors.border },
+    emptyTitle: { fontWeight: '700' as const, fontSize: 18, letterSpacing: -0.3, color: colors.ink },
     section: { gap: 10 },
-    sectionTitle: { color: colors.link, fontSize: 12, fontWeight: '800' as const, letterSpacing: 0.6, textTransform: 'uppercase' as const },
-    card: { backgroundColor: colors.card, borderRadius: 16, padding: 16, borderWidth: 1.5, borderColor: 'transparent', gap: 6 },
+    sectionTitle: { color: colors.link, fontSize: 13, fontWeight: '700' as const, letterSpacing: 0.2 },
+    card: { backgroundColor: colors.card, borderRadius: 18, padding: 16, borderWidth: 1.5, borderColor: colors.border, gap: 6 },
     cardOn: { borderColor: colors.orange, backgroundColor: colors.orangeSoft },
     cardOff: { opacity: 0.72 },
     cardTop: { flexDirection: 'row' as const, gap: 12, alignItems: 'flex-start' as const },
     etaCol: { alignItems: 'flex-end' as const, maxWidth: 120 },
     eta: { color: colors.orange, fontWeight: '800' as const, fontSize: 16 },
     etaOff: { color: colors.inkSecondary },
-    name: { fontSize: 18, fontWeight: '800' as const, color: colors.ink },
+    name: { fontSize: 17, fontWeight: '700' as const, letterSpacing: -0.2, color: colors.ink },
     meta: { color: colors.link, fontSize: 12, fontWeight: '600' as const },
     badges: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: 8, alignItems: 'center' as const, marginTop: 4 },
     badgeOrange: { color: colors.orange, backgroundColor: colors.orangeSoft, overflow: 'hidden' as const, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 4, fontSize: 11, fontWeight: '800' as const },
     badgePurple: { color: colors.link, backgroundColor: colors.purpleSoft, overflow: 'hidden' as const, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 4, fontSize: 11, fontWeight: '800' as const },
     saveOn: { color: colors.onAccent, backgroundColor: colors.purple, overflow: 'hidden' as const, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4, fontSize: 12, fontWeight: '800' as const },
     saveOff: { color: colors.orange, fontSize: 12, fontWeight: '800' as const },
-    footer: { padding: 16, paddingBottom: 28, backgroundColor: colors.card, borderTopWidth: 1, borderTopColor: colors.border, gap: 8 },
+    footer: { paddingHorizontal: 20, paddingTop: 12, backgroundColor: colors.card, borderTopWidth: 1, borderTopColor: colors.border, gap: 8 },
     student: { color: colors.orange, fontWeight: '800' as const, fontSize: 13 },
     teslaNotice: { color: colors.link, fontSize: 13, lineHeight: 18, fontWeight: '600' as const },
   }
