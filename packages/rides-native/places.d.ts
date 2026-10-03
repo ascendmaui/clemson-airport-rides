@@ -20,6 +20,18 @@ export const RIDE_TIERS: {
   meta: string
   price: number
   premium?: boolean
+  badge?: string
+}[]
+export const SELECTABLE_RIDE_TIER_IDS: string[]
+export const SELECTABLE_RIDE_TIERS: {
+  id: string
+  name: string
+  icon: string
+  eta: string
+  meta: string
+  price: number
+  premium?: boolean
+  badge?: string
 }[]
 export function destPoint(label: string): { latitude: number; longitude: number }
 export function pickupPoint(label: string): { latitude: number; longitude: number }

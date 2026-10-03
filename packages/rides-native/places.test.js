@@ -13,6 +13,8 @@ import {
   ORANGE_BRIGHT,
   PURPLE,
   RIDE_TIERS,
+  SELECTABLE_RIDE_TIER_IDS,
+  SELECTABLE_RIDE_TIERS,
   SHORTCUTS,
   STADIUM,
   SURFACE,
@@ -158,6 +160,16 @@ describe('RIDE_TIERS', () => {
     const tesla = RIDE_TIERS.find((t) => t.id === 'tesla')
     assert.equal(tesla.premium, true)
     assert.equal(tesla.price, 36)
+    assert.equal(tesla.badge, 'FLEET')
+  })
+
+  test('offers Standard, Wait & Save, and Extra Comfort only', () => {
+    assert.deepEqual(SELECTABLE_RIDE_TIER_IDS, ['standard', 'wait', 'comfort'])
+    assert.deepEqual(SELECTABLE_RIDE_TIERS.map((tier) => tier.id), ['standard', 'wait', 'comfort'])
+    for (const id of ['xl', 'pet', 'tesla']) {
+      assert.equal(RIDE_TIERS.some((tier) => tier.id === id), true)
+      assert.equal(SELECTABLE_RIDE_TIERS.some((tier) => tier.id === id), false)
+    }
   })
 })
 

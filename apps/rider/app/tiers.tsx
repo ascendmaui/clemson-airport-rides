@@ -7,7 +7,7 @@ import { SignInToBookSheet } from '@/components/SignInToBookSheet'
 import { setAuthNext } from '@/lib/authNext'
 import { useAuth } from '@/lib/auth'
 import { oneParam } from '@/lib/oneParam'
-import { formatUsd, RIDE_TIERS } from 'rides-native/places.js'
+import { formatUsd, SELECTABLE_RIDE_TIERS } from 'rides-native/places.js'
 import { displayTierPrice, studentSurfaceCopy } from 'rides-native/riderMoney.js'
 import { useStudentStatus } from '@/lib/useStudentStatus'
 import { lift } from '@/lib/elevation'
@@ -26,7 +26,7 @@ export default function RideTiers() {
   const { user } = useAuth()
   const student = useStudentStatus()
   const studentOffer = studentSurfaceCopy(student, 'tiers')
-  const [selected, setSelected] = useState(RIDE_TIERS[0].id)
+  const [selected, setSelected] = useState(SELECTABLE_RIDE_TIERS[0].id)
   const [promptOpen, setPromptOpen] = useState(false)
   const { colors } = useTheme()
   const styles = useThemedStyles(makeStyles)
@@ -75,7 +75,7 @@ export default function RideTiers() {
         {studentOffer.detail ? <Text style={styles.promoDetail}>{studentOffer.detail}</Text> : null}
       </Pressable>
       <ScrollView contentContainerStyle={styles.list}>
-        {RIDE_TIERS.map((tier) => {
+        {SELECTABLE_RIDE_TIERS.map((tier) => {
           const on = tier.id === selected
           const quoted = displayTierPrice(tier.price, { isStudent: student.verified, tier: tier.id })
           return (

@@ -11,16 +11,10 @@ import { quoteWithSurge } from '../lib/pricing'
 import { useGameDayNotice } from '../lib/useGameDayNotice'
 import { useStudentStatus } from '../lib/useStudentStatus'
 import { displayTierPrice, studentSurfaceCopy } from '../../packages/rides-native/riderMoney.js'
+import { SELECTABLE_RIDE_TIERS } from '../../packages/rides-native/places.js'
 import { TESLA_FLEET_NOTICE } from '../../packages/rides-native/tripTags.js'
 
-const TIERS = [
-  { id: 'standard', name: 'Standard', icon: '🚗', eta: '4 min', meta: '4 seats', price: 18.5 },
-  { id: 'wait', name: 'Wait & Save', icon: '⏱️', eta: '12 min', meta: 'Save ~20%', price: 14.2 },
-  { id: 'comfort', name: 'Extra Comfort', icon: '✨', eta: '6 min', meta: 'Newer cars', price: 23.0 },
-  { id: 'xl', name: 'XL', icon: '🚐', eta: '8 min', meta: '6 seats', price: 28.75 },
-  { id: 'pet', name: 'Pet', icon: '🐶', eta: '9 min', meta: 'Pet-friendly', price: 21.0 },
-  { id: 'tesla', name: 'Tesla Model 3', icon: '⚡', eta: '7 min', meta: 'Clemson fleet · a driver is at the wheel', price: 36.0, premium: true, badge: 'FLEET' },
-]
+const TIERS = SELECTABLE_RIDE_TIERS
 
 export function RideTiers({ dest = '1900 GSP Dr' }) {
   const [selected, setSelected] = useState(TIERS[0])
@@ -65,7 +59,7 @@ export function RideTiers({ dest = '1900 GSP Dr' }) {
       setUpsell('comfort')
       return
     }
-    if (selected.id === 'comfort') {
+    if (selected.id === 'comfort' && TIERS.some((tier) => tier.id === 'tesla')) {
       setUpsell('tesla')
       return
     }
@@ -197,7 +191,8 @@ export function RideTiers({ dest = '1900 GSP Dr' }) {
           openDrivers(selected.id)
         }}
         onUpgrade={() => {
-          setSelected(TIERS.find((t) => t.id === 'tesla'))
+          const tesla = TIERS.find((t) => t.id === 'tesla')
+          if (tesla) setSelected(tesla)
           setUpsell(null)
         }}
       />
