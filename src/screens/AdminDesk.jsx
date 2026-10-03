@@ -4,6 +4,8 @@ import { navigate, getHashRoute } from '../lib/navigation'
 import { useAuth } from '../lib/auth'
 import { supabase } from '../lib/supabase'
 import { SEEDED_ADMIN_EMAILS, isAdminIdentity } from '../lib/driverOnboarding'
+import { canUseAdminMoney } from '../../shared/adminAccess.js'
+import { AdminMoneyPanel } from './AdminMoneyPanel'
 import {
   fetchAdminNotifications,
   fetchAdminOverview,
@@ -21,6 +23,7 @@ const TABS = [
   ['people', 'People'],
   ['trips', 'Trips'],
   ['support', 'Support'],
+  ['money', 'Money'],
 ]
 
 const TICKET_FILTERS = [
@@ -40,6 +43,8 @@ function readTab() {
 export function AdminDesk({ restrictedToEmail = null } = {}) {
   const { user, loading } = useAuth()
   const [allowed, setAllowed] = useState(null)
+  const [viewerEmail, setViewerEmail] = useState('')
+  const [profileEmail, setProfileEmail] = useState('')
   const [tab, setTab] = useState(readTab)
   const [overview, setOverview] = useState(null)
 
@@ -60,6 +65,8 @@ export function AdminDesk({ restrictedToEmail = null } = {}) {
       .then(({ data }) => {
         if (!alive) return
         const email = String(user.email || data?.email || '').trim().toLowerCase()
+        setViewerEmail(String(user.email || '').trim().toLowerCase())
+        setProfileEmail(String(data?.email || '').trim().toLowerCase())
         const restricted = restrictedToEmail ? email === String(restrictedToEmail).trim().toLowerCase() : true
         const adminOk = isAdminIdentity({
           jwtEmail: user.email || data?.email,
@@ -80,6 +87,14 @@ export function AdminDesk({ restrictedToEmail = null } = {}) {
   if (loading || allowed == null) {
     return <div style={{ padding: 40, color: 'var(--ink-secondary)' }}>Loading admin dashboard…</div>
   }
+
+  const moneyAllowed = canUseAdminMoney({
+    jwtEmail: viewerEmail || user?.email,
+    profileEmail,
+    isAdmin: allowed === true,
+  })
+  const tabs = TABS.filter(([id]) => id !== 'money' || moneyAllowed)
+  const visibleTab = tab === 'money' && !moneyAllowed ? 'notifications' : tab
 
   if (!allowed) {
     return (
@@ -102,10 +117,11 @@ export function AdminDesk({ restrictedToEmail = null } = {}) {
       <h1 style={{ fontSize: 28, fontWeight: 800, color: '#522D80', margin: '4px 0 0', letterSpacing: -0.4 }}>{restrictedToEmail ? 'Admin dashboard' : 'Admin'}</h1>
       <p style={{ color: 'var(--ink-secondary)', fontSize: 14, lineHeight: 1.45 }}>
         Riders, drivers, applications, trips, and support. Approving a driver unlocks ride accept.
+        {moneyAllowed ? ' Money refunds a rider, adds credit, or issues an incentive only after you confirm who it affects and the amount.' : ''}
         {overview?.migrationRequired ? ' Apply supabase/migrations/20260924190000_admin_support.sql to turn on notifications and the support inbox.' : ''}
       </p>
       <div style={{ display: 'flex', gap: 8, marginTop: 14, overflowX: 'auto' }}>
-        {TABS.map(([id, label]) => {
+        {tabs.map(([id, label]) => {
           const badge = id === 'notifications' ? overview?.unreadNotifications
             : id === 'applications' ? overview?.pendingApplications
               : id === 'support' ? overview?.escalatedTickets
@@ -122,8 +138,8 @@ export function AdminDesk({ restrictedToEmail = null } = {}) {
                 borderRadius: 999,
                 fontWeight: 700,
                 fontSize: 12,
-                color: tab === id ? '#fff' : '#522D80',
-                background: tab === id ? '#F56600' : 'white',
+                color: visibleTab === id ? '#fff' : '#522D80',
+                background: visibleTab === id ? '#F56600' : 'white',
                 border: '1px solid rgba(82,45,128,0.15)',
               }}
             >
@@ -132,11 +148,12 @@ export function AdminDesk({ restrictedToEmail = null } = {}) {
           )
         })}
       </div>
-      {tab === 'notifications' && <NotificationsPanel onChanged={() => fetchAdminOverview().then(setOverview).catch(() => {})} />}
-      {tab === 'applications' && <AdminDrivers embedded />}
-      {tab === 'people' && <PeoplePanel />}
-      {tab === 'trips' && <TripsPanel />}
-      {tab === 'support' && <SupportPanel />}
+      {visibleTab === 'notifications' && <NotificationsPanel onChanged={() => fetchAdminOverview().then(setOverview).catch(() => {})} />}
+      {visibleTab === 'applications' && <AdminDrivers embedded />}
+      {visibleTab === 'people' && <PeoplePanel />}
+      {visibleTab === 'trips' && <TripsPanel />}
+      {visibleTab === 'support' && <SupportPanel />}
+      {visibleTab === 'money' && moneyAllowed && <AdminMoneyPanel />}
     </div>
   )
 }

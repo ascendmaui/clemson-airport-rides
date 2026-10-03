@@ -70,3 +70,11 @@ export function messageApplicant({ profileId, body }) {
 export function requestApplicantInfo({ profileId, prompt }) {
   return adminRequest('info-request', { method: 'POST', body: { profileId, prompt } })
 }
+
+export function previewAdminMoney(action, body) {
+  return adminRequest(action, { method: 'POST', body: { ...body, confirmed: false } })
+}
+
+export function confirmAdminMoney(action, body) {
+  return adminRequest(action, { method: 'POST', body: { ...body, confirmed: true } })
+}

@@ -27,6 +27,7 @@ import { SignInScreen, SignUpScreen } from './screens/AuthScreens'
 import { DriverOnboarding } from './screens/DriverOnboarding'
 import { DriverSignup } from './screens/DriverSignup'
 import { AdminDesk } from './screens/AdminDesk'
+import { DASHBOARD_ADMIN_EMAIL } from '../shared/adminAccess.js'
 import { PickDriver } from './screens/PickDriver'
 import { Requested } from './screens/Requested'
 import { LegalPrivacy, LegalTerms } from './screens/LegalPages'
@@ -172,7 +173,7 @@ function Screen({ path, params }) {
     case 'admin-dashboard':
       return (
         <RequireAuth>
-          <AdminDesk restrictedToEmail="johnmatveyev@gmail.com" />
+          <AdminDesk restrictedToEmail={DASHBOARD_ADMIN_EMAIL} />
         </RequireAuth>
       )
     case 'friends':

@@ -9,8 +9,10 @@ for (const key of Object.keys(process.env)) {
 
 const {
   BOT_CONFIDENCE_FLOOR,
+  DASHBOARD_ADMIN_EMAIL,
   SEEDED_ADMIN_EMAILS,
   TICKET_STATUSES,
+  canUseAdminMoney,
   isAdminIdentity,
   isSeedAdminEmail,
   isTicketStatus,
@@ -106,4 +108,30 @@ test('TICKET_STATUSES and isTicketStatus accept only the exact status strings', 
 test('BOT_CONFIDENCE_FLOOR is 0.75', () => {
   assert.equal(BOT_CONFIDENCE_FLOOR, 0.75)
   assert.equal(typeof BOT_CONFIDENCE_FLOOR, 'number')
+})
+
+test('canUseAdminMoney is the dashboard admin only', () => {
+  assert.equal(DASHBOARD_ADMIN_EMAIL, 'johnmatveyev@gmail.com')
+  assert.equal(canUseAdminMoney({
+    jwtEmail: 'JohnMatveyev@gmail.com',
+    isAdmin: true,
+  }), true)
+  assert.equal(canUseAdminMoney({
+    jwtEmail: 'john@gmail.com',
+    profileEmail: 'johnmatveyev@gmail.com',
+    isAdmin: true,
+  }), true)
+  assert.equal(canUseAdminMoney({
+    jwtEmail: 'ada@clemson.edu',
+    isAdmin: false,
+  }), false)
+  assert.equal(canUseAdminMoney({
+    jwtEmail: 'kim@clemson.edu',
+    profileEmail: 'kim@clemson.edu',
+    isAdmin: true,
+  }), false)
+  assert.equal(canUseAdminMoney({
+    jwtEmail: 'johnmatveyev@gmail.com',
+    isAdmin: false,
+  }), false)
 })
