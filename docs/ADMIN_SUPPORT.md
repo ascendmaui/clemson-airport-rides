@@ -16,7 +16,7 @@ The first sign-in upserts `profiles`. After `supabase/migrations/20260924190000_
 
 Support-only rows in `admin_users.access_role = 'support'` can read the ticket inbox. They cannot approve drivers or open the PII admin views. Seeded addresses are admins, not support-only.
 
-No production secrets are in the repo. Server routes need `SUPABASE_SERVICE_ROLE_KEY` on Vercel. Optional email uses `RESEND_API_KEY` and `RESEND_FROM`. Leave them empty until a verified domain exists. The in-app queue still works.
+No production secrets are in the repo. Server routes need `SUPABASE_SERVICE_ROLE_KEY` on Vercel. Applicant notices use Resend (`RESEND_API_KEY` on the host, never in the repo). The from address is `applications@clemsonrides.com` unless `RESEND_FROM` is already an address on `clemsonrides.com`. A `vercel.app` or placeholder from address is ignored. Delivery waits until `clemsonrides.com` finishes DNS verification in Resend. The in-app queue still shows the submitted email without that key.
 
 ## Dashboard
 
@@ -25,14 +25,14 @@ No production secrets are in the repo. Server routes need `SUPABASE_SERVICE_ROLE
 | Tab | What an admin sees |
 | --- | --- |
 | Notifications | New driver applications and escalated tickets |
-| Applicants | Documents, answers, status. Approve or reject. Message. Request more information |
+| Applicants | Submitted email, documents, answers, status. Approve or reject. Message. Request more information |
 | People | Rider and driver profiles |
 | Trips | Recent trips |
 | Support | Ticket inbox |
 
 Approve sets `driver_applications.onboarding_status = approved` and `profiles.role = driver` (admins stay admin). That is the gate for accepting rides. Reject takes the driver offline.
 
-Applicant messages and info requests show on the web driver application and in the driver app review step (`/onboarding`). If Resend is unset, the API stores an email stub and the applicant still sees the request in the app.
+Applicant messages and info requests show on the web driver application and in the driver app review step (`/onboarding`). Send and resend use Resend from `applications@clemsonrides.com`. If the API key is unset, or the domain is not verified yet, the API stores an email stub and the applicant still sees the request in the app.
 
 A new `pending_review` application inserts `admin_notifications` (kind `driver_application`).
 

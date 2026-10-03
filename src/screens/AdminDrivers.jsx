@@ -15,6 +15,8 @@ import {
   fetchDriverQueue,
   fetchDriverReviewDetail,
   reviewDriverApplication,
+  APPLICANT_FROM_ADDRESS,
+  submittedApplicantEmail,
 } from '../lib/driverOnboarding'
 import { fetchApplicantThread, messageApplicant, requestApplicantInfo } from '../lib/adminDesk'
 
@@ -211,6 +213,7 @@ export function AdminDrivers({ embedded = false }) {
         )}
         {rows.map((row) => {
           const name = row.profile?.full_name || 'Driver'
+          const email = submittedApplicantEmail(row, row.profile)
           const vehicle = row.vehicle
           const vehicleLabel = vehicle
             ? [vehicle.color, vehicle.make, vehicle.model, vehicle.plate].filter(Boolean).join(' ')
@@ -223,7 +226,11 @@ export function AdminDrivers({ embedded = false }) {
                   <div style={{ fontWeight: 800, color: 'var(--purple)' }}>{name}</div>
                   <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--orange)' }}>{onboardingLabel(row.onboarding_status)}</div>
                 </div>
-                <div style={{ fontSize: 13, color: 'var(--ink-secondary)', marginTop: 4 }}>{row.profile?.email}</div>
+                <div data-applicant-email={email} style={{ fontSize: 13, marginTop: 4, wordBreak: 'break-all' }}>
+                  <span style={{ fontWeight: 700, color: 'var(--purple)' }}>Email</span>
+                  {' '}
+                  <span style={{ color: 'var(--ink)' }}>{email || 'Not submitted'}</span>
+                </div>
                 <div style={{ fontSize: 13, marginTop: 4 }}>{vehicleLabel}</div>
                 {row.review_note && (
                   <div style={{ fontSize: 12, color: 'var(--ink-tertiary)', marginTop: 6 }}>{row.review_note}</div>
@@ -279,6 +286,9 @@ export function AdminDrivers({ embedded = false }) {
                     />
                   </label>
                   <ThreadList thread={thread} />
+                  <p style={{ fontSize: 12, color: 'var(--ink-secondary)', marginTop: 12, lineHeight: 1.4 }}>
+                    Send and resend use the Resend API. The from address is {APPLICANT_FROM_ADDRESS}. Mail goes out after the clemsonrides.com domain is verified in Resend.
+                  </p>
                   <label style={{ display: 'block', marginTop: 12, fontSize: 13, fontWeight: 650 }}>
                     Message applicant
                     <textarea value={messageBody} onChange={(e) => setMessageBody(e.target.value)} rows={2} style={fieldStyle} />

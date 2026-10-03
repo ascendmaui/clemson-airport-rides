@@ -1013,6 +1013,8 @@ test('saveDriverInfo validates quiz, calls API signup, and falls back to direct 
   const profileUpsert = directSb.calls.from.find((c) => c.table === 'profiles' && c.operation === 'upsert')
   assert.ok(profileUpsert)
   assert.ok(profileUpsert.payload.student_verified_at)
+  const applicationUpsert = directSb.calls.from.find((c) => c.table === 'driver_applications' && c.operation === 'upsert')
+  assert.equal(applicationUpsert.payload.applicant_email, 'tiger@clemson.edu')
 
   // 5. Non-network 400 error rethrows without direct fallback
   stubFetch({

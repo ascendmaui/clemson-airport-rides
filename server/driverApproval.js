@@ -12,6 +12,7 @@ import {
 } from '../shared/driverOnboarding.js'
 import { WEB_ORIGIN } from '../shared/productLinks.js'
 import { loadStaffAccess } from './staffAccess.js'
+import { resolveApplicantFromAddress } from './resendFrom.js'
 
 export { canReceiveRides }
 
@@ -168,12 +169,7 @@ export async function notifyAdminOfApplication({ profile, vehicle }) {
     return { emailed: false, todo: EMAIL_TODO, to }
   }
 
-  const from = (process.env.RESEND_FROM || '').trim()
-  if (!from) {
-    const todo = `${EMAIL_TODO} RESEND_API_KEY is set but RESEND_FROM is empty.`
-    console.warn(`[driver-onboarding] ${todo}`)
-    return { emailed: false, todo, to }
-  }
+  const from = resolveApplicantFromAddress()
 
   const text = [
     `${name} submitted a Clemson RIDES driver application and is waiting for review.`,

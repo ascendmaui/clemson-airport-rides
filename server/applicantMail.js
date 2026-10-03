@@ -1,15 +1,17 @@
+import { resolveApplicantFromAddress } from './resendFrom.js'
+
 /** Best-effort applicant email. Without Resend, the driver app still shows the message. */
 
 export async function sendApplicantNotice({ to, subject, text }) {
   const key = (process.env.RESEND_API_KEY || '').trim()
-  const from = (process.env.RESEND_FROM || '').trim()
+  const from = resolveApplicantFromAddress()
   const stub = String(text || '')
-  if (!to) return { emailed: false, stub, todo: 'Applicant has no email on the profile.' }
-  if (!key || key.includes('placeholder') || !from) {
+  if (!to) return { emailed: false, stub, todo: 'Applicant has no email on the application.' }
+  if (!key || key.includes('placeholder')) {
     return {
       emailed: false,
       stub,
-      todo: 'Set RESEND_API_KEY and RESEND_FROM to email applicants. The message is in the driver application.',
+      todo: `Set RESEND_API_KEY to email applicants from ${from}. The message is in the driver application. Delivery also waits until clemsonrides.com is verified in Resend.`,
     }
   }
 
