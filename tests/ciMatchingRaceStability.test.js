@@ -111,3 +111,30 @@ test('CI flake hunters: atomic resolution when rider cancels while driver is adv
   assert.equal(stored.status, 'accepted')
   assert.equal(stored.driver_id, 'driver-1')
 })
+
+test('CI flake hunters: rider cancels searching trip prevents driver accept', async () => {
+  const { supabase, trip, drivers } = seedMatchingScenario({
+    drivers: [
+      { id: 'driver-1', approved: true, online: true, lat: 34.68, lng: -82.84 },
+    ],
+  })
+
+  // Rider cancels the searching trip
+  await cancelSearchingTrip(supabase, trip.id, 'rider-1')
+
+  // Driver attempts to accept the canceled trip
+  await assert.rejects(
+    () => acceptTrip(supabase, trip, 'driver-1'),
+    /That ride is no longer available/
+  )
+
+  const stored = supabase._tables.trips.find((t) => t.id === trip.id)
+  assert.equal(stored.status, 'canceled')
+  assert.equal(stored.driver_id, null)
+
+  const events = supabase._tables.trip_events.filter(
+    (e) => e.trip_id === trip.id && e.kind === 'canceled',
+  )
+  assert.equal(events.length, 1, 'Exactly one canceled event must be logged')
+  assert.equal(events[0].payload.source, 'rider_app')
+})
