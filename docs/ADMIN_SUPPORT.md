@@ -29,6 +29,21 @@ No production secrets are in the repo. Server routes need `SUPABASE_SERVICE_ROLE
 | People | Rider and driver profiles |
 | Trips | Recent trips |
 | Support | Ticket inbox |
+| Money | Refund a rider, add credit, or issue an incentive. Only `johnmatveyev@gmail.com` sees this tab |
+
+## Money actions
+
+The Money tab is on the admin dashboard after the same sign-in gate. Riders and drivers do not see it. Other admin inboxes do not see it either.
+
+Each action asks for a review first. The confirmation names the person, the email, the role, and the amount. Nothing runs until Confirm.
+
+| Action | Who | What confirm does |
+| --- | --- | --- |
+| Refund | Riders | Stripe refund of an existing card charge when one covers the amount. Otherwise the amount is recorded as ride credit and the screen says it was not a Stripe refund. |
+| Credit | Riders and drivers | Riders get a ride-credit lot for a future trip. Drivers get a credit-balance entry. No card is charged and no payout is sent. |
+| Incentive | Riders and drivers | Riders get ride credit. Drivers are recorded as owed. Driver incentives are not transferred to Stripe. |
+
+Confirm does not charge a card, change a Stripe customer, or change a subscription.
 
 Approve sets `driver_applications.onboarding_status = approved` and `profiles.role = driver` (admins stay admin). That is the gate for accepting rides. Reject takes the driver offline.
 

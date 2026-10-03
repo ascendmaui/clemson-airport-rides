@@ -3,13 +3,15 @@
  * Support staff cannot call this — driver documents and rider PII stay admin-only.
  *
  * GET  /api/admin?action=overview|notifications|people|trips|tickets|applicant-thread
- * POST /api/admin?action=mark-notification|ticket-reply|applicant-message|info-request
+ * POST /api/admin?action=mark-notification|ticket-reply|applicant-message|info-request|refund|credit|incentive
  */
 import { isTicketStatus } from '../../shared/adminAccess.js'
 import { cors, json, parseBody, userFromAuth, admin } from '../friendRideLib.js'
 import { resolveRouteAction } from '../routeAction.js'
 import { loadStaffAccess } from '../staffAccess.js'
 import { sendApplicantNotice } from '../applicantMail.js'
+import { supabaseCreditStore } from '../credits.js'
+import { ADMIN_MONEY_ACTIONS, runAdminMoneyAction, stripeRefundCaller } from '../adminMoney.js'
 
 const ACTIONS = [
   'overview',
@@ -22,6 +24,7 @@ const ACTIONS = [
   'ticket-reply',
   'applicant-message',
   'info-request',
+  ...ADMIN_MONEY_ACTIONS,
 ]
 
 const GET_ACTIONS = new Set([
@@ -45,7 +48,7 @@ export default async function handler(req, res) {
   const action = resolveRouteAction(req, { allowed: ACTIONS })
   if (!action) {
     return json(res, 400, {
-      error: 'Unknown admin action. Use overview, notifications, people, trips, tickets, applicant-thread, mark-notification, ticket-reply, applicant-message, or info-request.',
+      error: `Unknown admin action. Use ${ACTIONS.join(', ')}.`,
     })
   }
   const expectsGet = GET_ACTIONS.has(action)
@@ -99,11 +102,54 @@ async function write(sb, res, action, user, body) {
       return applicantMessage(sb, res, user, body)
     case 'info-request':
       return infoRequest(sb, res, user, body)
+    case 'refund':
+    case 'credit':
+    case 'incentive':
+      return adminMoney(sb, res, user, action, body)
     default: {
       const unknown = action
       return json(res, 400, { error: `Unknown admin write: ${unknown}` })
     }
   }
+}
+
+async function stripeRefundsConfigured() {
+  try {
+    const mod = await import('../friendRideLib.js')
+    return typeof mod.stripeOk === 'function' && mod.stripeOk() === true && typeof mod.stripeClient === 'function'
+  } catch {
+    return false
+  }
+}
+
+async function stripeRefundClient() {
+  try {
+    const mod = await import('../friendRideLib.js')
+    if (typeof mod.stripeOk !== 'function' || mod.stripeOk() !== true) return null
+    if (typeof mod.stripeClient !== 'function') return null
+    return stripeRefundCaller(mod.stripeClient())
+  } catch (err) {
+    console.error('[admin-money] stripe', err?.message || err)
+    return null
+  }
+}
+
+async function adminMoney(sb, res, user, action, body) {
+  const access = await loadStaffAccess(sb, user)
+  const confirmedRefund = action === 'refund' && body?.confirmed === true
+  const stripeAvailable = action === 'refund' ? await stripeRefundsConfigured() : false
+  const stripe = confirmedRefund && stripeAvailable ? await stripeRefundClient() : null
+  const result = await runAdminMoneyAction({
+    sb,
+    action,
+    body,
+    adminUser: user,
+    access,
+    stripe,
+    stripeAvailable,
+    credits: supabaseCreditStore(sb),
+  })
+  return json(res, result.status, result.body)
 }
 
 async function safeCount(sb, table, column, value) {
