@@ -1,12 +1,17 @@
 /**
- * POST /api/driver?action=signup|submit-review|offer-preview|tip|wait|cancel-midride|payouts
+ * POST /api/driver?action=signup|submit-review|sign-agreement|stage-notice|offer-preview|tip|wait|cancel-midride|payouts
  * GET  /api/driver?action=earnings|payouts
  * Legacy paths are rewritten in vercel.json.
  * trip-wait body.action (arrive|tick|cancel|start|complete) is a sub-action, not the route.
  */
 import { cors, json } from '../server/friendRideLib.js'
 import { resolveRouteAction } from '../server/routeAction.js'
-import { handleDriverSignup, handleDriverSubmitReview } from '../server/driverRoutes.js'
+import {
+  handleDriverSignup,
+  handleDriverSubmitReview,
+  handleDriverSignAgreement,
+  handleDriverStageNotice,
+} from '../server/driverRoutes.js'
 import handleDriverEarnings from '../server/endpoints/driverEarnings.js'
 import handleOfferPreview from '../server/endpoints/tripOfferPreview.js'
 import handleTripTip from '../server/endpoints/tripTip.js'
@@ -18,6 +23,8 @@ import handleApplicantInbox from '../server/endpoints/applicantInbox.js'
 const HANDLERS = {
   signup: handleDriverSignup,
   'submit-review': handleDriverSubmitReview,
+  'sign-agreement': handleDriverSignAgreement,
+  'stage-notice': handleDriverStageNotice,
   earnings: handleDriverEarnings,
   'offer-preview': handleOfferPreview,
   tip: handleTripTip,
@@ -44,7 +51,7 @@ export default async function handler(req, res, ...rest) {
   const handle = HANDLERS[action]
   if (!handle) {
     return json(res, 400, {
-      error: 'Unknown driver action. Use action=signup, submit-review, earnings, offer-preview, tip, wait, cancel-midride, payouts, or inbox.',
+      error: 'Unknown driver action. Use action=signup, submit-review, sign-agreement, stage-notice, earnings, offer-preview, tip, wait, cancel-midride, payouts, or inbox.',
     })
   }
   return handle(req, res, ...rest)

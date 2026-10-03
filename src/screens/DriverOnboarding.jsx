@@ -20,6 +20,8 @@ import {
   displayTinLast4,
   submissionBlockers,
   blockerLabel,
+  agreementOnFile,
+  notifyOnboardingStage,
   fetchMyDriverApplication,
   fetchMyDriverDocuments,
   uploadDriverDocument,
@@ -155,7 +157,6 @@ export function DriverOnboarding() {
   const [taxClass, setTaxClass] = useState('individual')
   const [taxProfile, setTaxProfile] = useState(null)
   const [agreement, setAgreement] = useState(null)
-  const [agreementReady, setAgreementReady] = useState(false)
   const [agreementHash, setAgreementHash] = useState('')
   const [signatureName, setSignatureName] = useState('')
 
@@ -210,7 +211,6 @@ export function DriverOnboarding() {
         setDocs(documents)
         setTaxProfile(tax)
         setAgreement(signed)
-        setAgreementReady(version?.body_html === IC_AGREEMENT_HTML && version?.version === IC_AGREEMENT_VERSION)
         setAgreementHash(version?.sha256 || '')
         const profile = profileRes.data
         const vehicle = vehicleRes.data
@@ -339,6 +339,7 @@ export function DriverOnboarding() {
         category: eligibilityCategory,
       })
       setApplication((prev) => ({ ...(prev || {}), ...saved }))
+      await notifyOnboardingStage('employment')
       openStep(adjacentStep('employment', 1)?.id || 'w9')
     } catch (err) {
       setError(err.message || String(err))
@@ -369,6 +370,7 @@ export function DriverOnboarding() {
         })
         setTin('')
       }
+      await notifyOnboardingStage('w9')
       openStep(adjacentStep('w9', 1)?.id || 'agreement')
     } catch (err) {
       setError(err.message || String(err))
@@ -378,19 +380,19 @@ export function DriverOnboarding() {
   }
 
   async function onSignAgreement() {
-    if (!agreementReady) {
-      setError('The agreement on file does not match this version. Refresh before you sign.')
-      return
-    }
     if (signatureName.trim().length < 2) {
       setError('Type your legal name to sign.')
       return
     }
     setError(null)
+    setNote(null)
     setBusy(true)
     try {
       const saved = await signDriverAgreement(signatureName.trim())
       setAgreement(saved)
+      setNote(saved.emailed
+        ? 'Signed. A copy of the agreement and your application information was emailed to you.'
+        : (saved.email_todo || 'Signed. The agreement is stored on this application.'))
       openStep('review')
     } catch (err) {
       setError(err.message || String(err))
@@ -431,10 +433,10 @@ export function DriverOnboarding() {
   const previous = adjacentStep(current.id, -1)
   const next = adjacentStep(current.id, 1)
   const employmentDocsReady = (flowStep('employment')?.docIds || []).every((id) => uploaded.includes(id))
-  const w9DocReady = uploaded.includes('w9')
   const employmentFormOk = backgroundAuthorized && eligibilityAttested && Boolean(eligibilityCategory) && employmentDocsReady
   const tinDigits = tin.replace(/\D/g, '')
-  const taxFormOk = legalName.trim().length >= 2 && Boolean(taxClass) && w9DocReady && (Boolean(taxProfile) || tinDigits.length === 9)
+  const taxFormOk = legalName.trim().length >= 2 && Boolean(taxClass) && (Boolean(taxProfile) || tinDigits.length === 9)
+  const signedForReview = agreementOnFile(gate)
 
   return (
     <div className="fade-in" style={{ minHeight: '100%', background: 'var(--surface-muted)', padding: '20px 20px 48px' }}>
@@ -534,7 +536,10 @@ export function DriverOnboarding() {
             <PrimaryButton
               type="button"
               disabled={!stepDone || Boolean(uploading)}
-              onClick={() => go(next?.id || 'review')}
+              onClick={() => {
+                notifyOnboardingStage(current.id)
+                go(next?.id || 'review')
+              }}
             >
               {stepDone ? `Continue to ${next?.label || 'the next step'}` : 'Add the photos on this step'}
             </PrimaryButton>
@@ -592,7 +597,7 @@ export function DriverOnboarding() {
         <div className="sheet" style={{ marginTop: 16, padding: 20, borderRadius: 22, boxShadow: 'var(--shadow-pill)' }}>
           <h2 style={{ fontSize: 18, color: 'var(--purple)', marginBottom: 6 }}>W-9</h2>
           <p style={{ fontSize: 14, color: 'var(--ink-secondary)', lineHeight: 1.45, marginBottom: 14 }}>
-            Independent contractors provide a W-9. Upload the form and enter your legal name and taxpayer identification number. The app stores the full number in a restricted record and shows only the last four digits.
+            Independent contractors provide a W-9. Enter your legal name and taxpayer identification number. The app stores the full number in a restricted record and shows only the last four digits.
           </p>
           <Field label="Legal name" value={legalName} onChange={setLegalName} />
           <label style={{ display: 'block', marginBottom: 12, fontSize: 13, fontWeight: 650 }}>
@@ -662,11 +667,6 @@ export function DriverOnboarding() {
             }}
             dangerouslySetInnerHTML={{ __html: IC_AGREEMENT_HTML }}
           />
-          {!agreementReady && (
-            <p style={{ color: 'var(--danger)', fontSize: 13 }}>
-              The stored agreement does not match this version yet. Refresh after the latest update is applied.
-            </p>
-          )}
           {agreement?.signed_at && (
             <p style={{ fontSize: 13, color: 'var(--purple)' }}>
               Signed by {agreement.signature_name} on {new Date(agreement.signed_at).toLocaleString()}.
@@ -674,16 +674,21 @@ export function DriverOnboarding() {
             </p>
           )}
           <Field label="Type your legal name to sign" value={signatureName} onChange={setSignatureName} />
-          <PrimaryButton type="button" disabled={busy || !agreementReady || signatureName.trim().length < 2} onClick={onSignAgreement}>
+          <PrimaryButton type="button" disabled={busy || signatureName.trim().length < 2} onClick={onSignAgreement}>
             {busy ? 'Signing…' : agreement?.signed_at ? 'Sign again and continue' : 'Sign and continue'}
           </PrimaryButton>
+          <ApplicantThread />
         </div>
       )}
 
       {step === 'review' && (
         <div className="sheet" style={{ marginTop: 16, padding: 22, borderRadius: 22, boxShadow: 'var(--shadow-pill)' }}>
           <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--orange)' }}>
-            {status === 'pending_review' ? 'Pending review' : onboardingLabel(status)}
+            {status === 'pending_review' && !signedForReview
+              ? 'Agreement required'
+              : status === 'pending_review'
+                ? 'Pending review'
+                : onboardingLabel(status)}
           </div>
           {status === 'approved' && (
             <>
@@ -694,7 +699,16 @@ export function DriverOnboarding() {
               <PrimaryButton variant="purple" onClick={() => navigate('driver')}>Open driver mode</PrimaryButton>
             </>
           )}
-          {status === 'pending_review' && (
+          {status === 'pending_review' && !signedForReview && (
+            <>
+              <h2 style={{ fontSize: 22, color: 'var(--purple)', marginTop: 8 }}>Sign the agreement first</h2>
+              <p style={{ color: 'var(--ink-secondary)', fontSize: 14, lineHeight: 1.45 }}>
+                This application is not ready for admin approval until you sign the independent contractor agreement. That signature happens in this application, before an admin reviews you.
+              </p>
+              <PrimaryButton type="button" onClick={() => go('agreement')}>Read and sign the agreement</PrimaryButton>
+            </>
+          )}
+          {status === 'pending_review' && signedForReview && (
             <>
               <h2 style={{ fontSize: 22, color: 'var(--purple)', marginTop: 8 }}>Waiting on admin</h2>
               <p style={{ color: 'var(--ink-secondary)', fontSize: 14, lineHeight: 1.45 }}>

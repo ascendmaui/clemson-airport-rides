@@ -18,6 +18,9 @@ import {
   statusAfterInfoSave,
   blockerLabel,
   submissionBlockers,
+  agreementDocumentHtml,
+  agreementOnFile,
+  signedAgreementOnFile,
 } from '../shared/driverOnboarding.js'
 
 test('new drivers are not approved by an info save', () => {
@@ -84,7 +87,13 @@ test('progress bar includes every required step and does not skip unfinished wor
     resolveResumeStep({ status: 'pending_docs', uploaded: licenseOnly, preferred: 'account' }),
     'account',
   )
-  assert.equal(resolveResumeStep({ status: 'pending_review', uploaded: REQUIRED_DOC_IDS }), 'review')
+  assert.equal(resolveResumeStep({ status: 'pending_review', uploaded: REQUIRED_DOC_IDS }), 'agreement')
+  assert.equal(resolveResumeStep({
+    status: 'pending_review',
+    uploaded: REQUIRED_DOC_IDS,
+    agreementSigned: true,
+    agreementVersion: IC_AGREEMENT_VERSION,
+  }), 'review')
 })
 
 test('progress percent fills as documents land and hits 100 at review', () => {
@@ -108,6 +117,8 @@ test('progress percent fills as documents land and hits 100 at review', () => {
   const submitted = progressSnapshot({
     status: 'pending_review',
     uploaded: REQUIRED_DOC_IDS,
+    agreementSigned: true,
+    agreementVersion: IC_AGREEMENT_VERSION,
     viewing: 'review',
   })
   assert.equal(submitted.percent, 100)
@@ -149,6 +160,26 @@ test('submit stays blocked until employment, W-9, and the signed agreement exist
   assert.deepEqual(submissionBlockers(missingSignature), ['ic_agreement'])
   assert.equal(firstIncompleteStepId(missingSignature), 'agreement')
   assert.equal(resolveResumeStep({ ...missingSignature, preferred: 'review' }), 'agreement')
+  assert.equal(firstIncompleteStepId({ ...missingSignature, status: 'pending_review' }), 'agreement')
+  assert.equal(agreementOnFile(missingSignature), false)
+  assert.equal(signedAgreementOnFile(null), false)
+  assert.equal(agreementDocumentHtml({ signature_name: 'Ada', signed_at: '2026-09-24T00:00:00Z' }), null)
+  const signedRow = {
+    signature_name: 'Ada Lovelace',
+    signed_at: '2026-09-24T00:00:00Z',
+    agreement_version: IC_AGREEMENT_VERSION,
+    html_snapshot: '<p>Signed copy</p>',
+  }
+  assert.equal(signedAgreementOnFile(signedRow), true)
+  assert.equal(agreementDocumentHtml(signedRow), '<p>Signed copy</p>')
+  assert.equal(agreementDocumentHtml({ ...signedRow, html_snapshot: '' }), IC_AGREEMENT_HTML)
+  const waiting = progressSnapshot({
+    status: 'pending_review',
+    uploaded: REQUIRED_DOC_IDS,
+    viewing: 'agreement',
+  })
+  assert.notEqual(waiting.percent, 100)
+  assert.equal(waiting.label, 'Agreement')
 
   const missingTax = { ...readyDocs, taxSaved: false }
   assert.ok(submissionBlockers(missingTax).includes('w9_tax_info'))

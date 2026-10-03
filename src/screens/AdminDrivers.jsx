@@ -12,6 +12,9 @@ import {
   displayTinLast4,
   isAdminIdentity,
   onboardingLabel,
+  agreementDocumentHtml,
+  signedAgreementOnFile,
+  IC_AGREEMENT_VERSION,
   fetchDriverQueue,
   fetchDriverReviewDetail,
   reviewDriverApplication,
@@ -105,11 +108,11 @@ export function AdminDrivers({ embedded = false }) {
     try {
       if (kind === 'info') {
         const data = await requestApplicantInfo({ profileId, prompt: requestPrompt })
-        setNote(data.emailed ? 'Asked for more information and emailed the applicant.' : (data.email_todo || 'Asked for more information in the driver app.'))
+        setNote(deliveryNote(data, 'Asked for more information'))
         setRequestPrompt('')
       } else {
         const data = await messageApplicant({ profileId, body: messageBody })
-        setNote(data.emailed ? 'Message sent.' : (data.email_todo || 'Message is in the driver application.'))
+        setNote(deliveryNote(data, 'Message sent'))
         setMessageBody('')
       }
       const conversation = await fetchApplicantThread(profileId)
@@ -221,7 +224,11 @@ export function AdminDrivers({ embedded = false }) {
               <button type="button" className="pressable" onClick={() => openRow(row.profile_id)} style={{ width: '100%', textAlign: 'left' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
                   <div style={{ fontWeight: 800, color: 'var(--purple)' }}>{name}</div>
-                  <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--orange)' }}>{onboardingLabel(row.onboarding_status)}</div>
+                  <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--orange)' }}>
+                    {row.onboarding_status === 'pending_review' && !signedAgreementOnFile(row.agreement)
+                      ? 'Agreement not signed'
+                      : onboardingLabel(row.onboarding_status)}
+                  </div>
                 </div>
                 <div style={{ fontSize: 13, color: 'var(--ink-secondary)', marginTop: 4 }}>{row.profile?.email}</div>
                 <div style={{ fontSize: 13, marginTop: 4 }}>{vehicleLabel}</div>
@@ -237,6 +244,7 @@ export function AdminDrivers({ embedded = false }) {
                   )}
                   {docsError && <p style={{ color: 'var(--danger)', fontSize: 13 }}>{docsError}</p>}
                   <ComplianceSummary row={row} detail={detail} />
+                  <SignedAgreement agreement={detail?.agreement || row.agreement} />
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
                     {REQUIRED_DOCUMENTS.map((doc) => {
                       const file = docs.find((d) => d.doc_type === doc.id)
@@ -294,13 +302,13 @@ export function AdminDrivers({ embedded = false }) {
                     Send request
                   </button>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 12 }}>
-                    <PrimaryButton
-                      variant="purple"
-                      disabled={busy || (row.onboarding_status !== 'approved' && (row.blockers || detail?.blockers || []).length > 0)}
-                      onClick={() => decide(row.profile_id, 'approve')}
-                    >
-                      {busy ? 'Saving…' : 'Approve driver'}
-                    </PrimaryButton>
+                    <ApproveDriverButton
+                      busy={busy}
+                      status={row.onboarding_status}
+                      agreement={detail?.agreement || row.agreement}
+                      blockers={detail?.blocker_labels || row.blocker_labels || []}
+                      onApprove={() => decide(row.profile_id, 'approve')}
+                    />
                     <button
                       type="button"
                       className="pressable"
@@ -366,6 +374,80 @@ function ThreadList({ thread }) {
   )
 }
 
+function deliveryNote(data, sentLabel) {
+  if (data?.emailed && data?.in_app !== false) return `${sentLabel}. Emailed and saved in the driver application.`
+  if (data?.emailed) return `${sentLabel}. Emailed to the driver.`
+  if (data?.delivered || data?.in_app || data?.message || data?.request) {
+    return `${sentLabel}. Saved in the driver application. ${data.email_todo || ''}`.trim()
+  }
+  return data?.email_todo || 'Could not deliver that to the driver.'
+}
+
+function ApproveDriverButton({ busy, status, agreement, blockers, onApprove }) {
+  const onFile = signedAgreementOnFile(agreement)
+  const otherBlockers = (blockers || []).filter((label) => label !== 'Signed independent contractor agreement')
+  const locked = status !== 'approved' && (!onFile || otherBlockers.length > 0)
+  const reasons = []
+  if (status !== 'approved' && !onFile) {
+    reasons.push('Approve stays off until the driver signs the independent contractor agreement during onboarding.')
+  }
+  if (status !== 'approved' && otherBlockers.length) {
+    reasons.push(`Approve stays off until: ${otherBlockers.join(', ')}`)
+  }
+  return (
+    <>
+      {reasons.map((reason) => (
+        <p key={reason} style={{ color: 'var(--danger)', fontSize: 13, lineHeight: 1.45, margin: 0 }}>{reason}</p>
+      ))}
+      <PrimaryButton variant="purple" disabled={busy || locked} onClick={onApprove}>
+        {busy ? 'Saving…' : 'Approve driver'}
+      </PrimaryButton>
+    </>
+  )
+}
+
+function SignedAgreement({ agreement }) {
+  const onFile = signedAgreementOnFile(agreement)
+  const html = agreementDocumentHtml(agreement)
+  return (
+    <div style={{ margin: '12px 0', padding: 12, borderRadius: 12, background: 'rgba(82,45,128,0.05)' }}>
+      <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--purple)' }}>
+        {onFile ? 'Signed independent contractor agreement' : 'Independent contractor agreement'}
+      </div>
+      {!onFile && (
+        <p style={{ fontSize: 13, lineHeight: 1.45, marginBottom: 0 }}>
+          Not signed. The driver signs this during the application, before admin review. Approve stays off until that signed agreement is on file.
+        </p>
+      )}
+      {onFile && html && (
+        <>
+          <div
+            style={{
+              maxHeight: 280,
+              overflow: 'auto',
+              marginTop: 8,
+              padding: 12,
+              borderRadius: 12,
+              border: '1px solid var(--border)',
+              background: 'white',
+              fontSize: 13,
+              lineHeight: 1.45,
+            }}
+            dangerouslySetInnerHTML={{ __html: html }}
+          />
+          <p style={{ fontSize: 13, lineHeight: 1.45, marginBottom: 0 }}>
+            Signed by {agreement.signature_name}
+            {agreement.signed_at ? ` on ${new Date(agreement.signed_at).toLocaleString()}` : ''}.
+            {' '}Version {agreement.agreement_version || IC_AGREEMENT_VERSION}.
+            {agreement.signer_user_id ? ` Signer ${agreement.signer_user_id}.` : ''}
+            {agreement.agreement_sha256 ? ` SHA-256 ${agreement.agreement_sha256}.` : ''}
+          </p>
+        </>
+      )}
+    </div>
+  )
+}
+
 function ComplianceSummary({ row, detail }) {
   const employment = detail?.employment || {
     background_authorized_at: row.background_authorized_at,
@@ -373,8 +455,6 @@ function ComplianceSummary({ row, detail }) {
     work_eligibility_category: row.work_eligibility_category,
   }
   const tax = detail?.tax || row.tax || null
-  const agreement = detail?.agreement || row.agreement || null
-  const blockers = detail?.blocker_labels || row.blocker_labels || []
   const category = WORK_ELIGIBILITY_CATEGORIES.find((item) => item.id === employment.work_eligibility_category)
   const taxClass = TAX_CLASSIFICATIONS.find((item) => item.id === tax?.tax_classification)
   return (
@@ -386,16 +466,6 @@ function ComplianceSummary({ row, detail }) {
         {tax?.tin_last4 ? ` · TIN ${displayTinLast4(tax.tin_last4)}` : ''}
         {taxClass ? ` · ${taxClass.label}` : ''}
       </div>
-      <div>
-        Agreement: {agreement?.signature_name
-          ? `${agreement.signature_name} · ${agreement.agreement_version} · ${String(agreement.agreement_sha256 || '').slice(0, 12)}`
-          : 'Not signed'}
-      </div>
-      {blockers.length > 0 && row.onboarding_status !== 'approved' && (
-        <div style={{ color: 'var(--danger)', marginTop: 6 }}>
-          Approve stays off until: {blockers.join(', ')}
-        </div>
-      )}
     </div>
   )
 }

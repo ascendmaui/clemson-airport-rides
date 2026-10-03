@@ -16,7 +16,7 @@ The first sign-in upserts `profiles`. After `supabase/migrations/20260924190000_
 
 Support-only rows in `admin_users.access_role = 'support'` can read the ticket inbox. They cannot approve drivers or open the PII admin views. Seeded addresses are admins, not support-only.
 
-No production secrets are in the repo. Server routes need `SUPABASE_SERVICE_ROLE_KEY` on Vercel. Optional email uses `RESEND_API_KEY` and `RESEND_FROM`. Leave them empty until a verified domain exists. The in-app queue still works.
+No production secrets are in the repo. Server routes need `SUPABASE_SERVICE_ROLE_KEY` on Vercel. Applicant and admin email uses `RESEND_API_KEY` and optional `RESEND_FROM`. The default from-address is `Clemson RIDES <applications@clemsonrides.com>`. DNS for that domain may still be pending; a configured key still attempts the send. The in-app queue and the driver application thread still work when email does not.
 
 ## Dashboard
 
@@ -25,7 +25,7 @@ No production secrets are in the repo. Server routes need `SUPABASE_SERVICE_ROLE
 | Tab | What an admin sees |
 | --- | --- |
 | Notifications | New driver applications and escalated tickets |
-| Applicants | Documents, answers, status. Approve or reject. Message. Request more information |
+| Applicants | Documents, answers, the signed contractor agreement, status. Approve or reject. Message. Request more information |
 | People | Rider and driver profiles |
 | Trips | Recent trips |
 | Support | Ticket inbox |

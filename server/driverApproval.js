@@ -12,6 +12,7 @@ import {
 } from '../shared/driverOnboarding.js'
 import { WEB_ORIGIN } from '../shared/productLinks.js'
 import { loadStaffAccess } from './staffAccess.js'
+import { sendApplicantNotice } from './applicantMail.js'
 
 export { canReceiveRides }
 
@@ -157,24 +158,10 @@ export async function notifyAdminOfApplication({ profile, vehicle }) {
     ? configured.split(',').map((email) => email.trim()).filter(Boolean)
     : SEEDED_ADMIN_EMAILS
   const to = recipients[0] || ADMIN_EMAIL
-  const key = (process.env.RESEND_API_KEY || '').trim()
   const appUrl = (process.env.VITE_APP_URL || process.env.APP_URL || WEB_ORIGIN).replace(/\/$/, '')
   const name = profile?.full_name || profile?.email || 'New driver'
   const vehicleLabel = [vehicle?.color, vehicle?.make, vehicle?.model, vehicle?.plate].filter(Boolean).join(' ')
   const queueUrl = `${appUrl}/#/admin`
-
-  if (!key || key.includes('placeholder')) {
-    console.warn(`[driver-onboarding] ${EMAIL_TODO}`)
-    return { emailed: false, todo: EMAIL_TODO, to }
-  }
-
-  const from = (process.env.RESEND_FROM || '').trim()
-  if (!from) {
-    const todo = `${EMAIL_TODO} RESEND_API_KEY is set but RESEND_FROM is empty.`
-    console.warn(`[driver-onboarding] ${todo}`)
-    return { emailed: false, todo, to }
-  }
-
   const text = [
     `${name} submitted a Clemson RIDES driver application and is waiting for review.`,
     profile?.email ? `Email: ${profile.email}` : null,
@@ -185,30 +172,14 @@ export async function notifyAdminOfApplication({ profile, vehicle }) {
     'Drivers cannot receive rides until you approve them.',
   ].filter((line) => line != null).join('\n')
 
-  try {
-    const res = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${key}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        from,
-        to: recipients,
-        subject: `Driver application ready for review — ${name}`,
-        text,
-      }),
-    })
-    const body = await res.json().catch(() => ({}))
-    if (!res.ok) {
-      const todo = `Resend failed (${res.status}): ${body.message || body.error || 'email not sent'}. ${EMAIL_TODO}`
-      console.warn('[driver-onboarding]', todo)
-      return { emailed: false, todo, to }
-    }
-    return { emailed: true, id: body.id || null, to }
-  } catch (err) {
-    const todo = `Resend request failed: ${err.message || err}. ${EMAIL_TODO}`
-    console.warn('[driver-onboarding]', todo)
-    return { emailed: false, todo, to }
+  const notice = await sendApplicantNotice({
+    to: recipients,
+    subject: `Driver application ready for review — ${name}`,
+    text,
+  })
+  if (!notice.emailed && notice.todo) console.warn(`[driver-onboarding] ${notice.todo}`)
+  if (!notice.emailed && !process.env.RESEND_API_KEY) {
+    return { emailed: false, todo: EMAIL_TODO, to }
   }
+  return { emailed: notice.emailed, id: notice.id || null, todo: notice.emailed ? null : (notice.todo || EMAIL_TODO), to }
 }

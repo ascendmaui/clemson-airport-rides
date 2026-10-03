@@ -1,6 +1,6 @@
 /** Driver approval gate — shared by the Vite client, Vercel API, and tests. */
 
-import { IC_AGREEMENT_VERSION } from './icAgreement.js'
+import { IC_AGREEMENT_HTML, IC_AGREEMENT_VERSION } from './icAgreement.js'
 import { isAdminIdentity, isSeedAdminEmail, SEEDED_ADMIN_EMAILS } from './adminAccess.js'
 
 export { IC_AGREEMENT_HTML, IC_AGREEMENT_TITLE, IC_AGREEMENT_VERSION } from './icAgreement.js'
@@ -126,8 +126,35 @@ export function stepIsComplete(stepId, ctx = {}) {
   }
 }
 
+/** Current agreement version, signed with a name. Older versions do not count. */
+export function agreementOnFile(ctx = {}) {
+  return Boolean(ctx.agreementSigned) && ctx.agreementVersion === IC_AGREEMENT_VERSION
+}
+
+/**
+ * Admin queue / detail row. Accepts the database column names.
+ * A signature on a different agreement version is not on file.
+ */
+export function signedAgreementOnFile(agreement) {
+  if (!agreement || typeof agreement !== 'object') return false
+  const version = agreement.agreement_version || agreement.agreementVersion || null
+  const signedAt = agreement.signed_at || agreement.signedAt || null
+  const name = String(agreement.signature_name || agreement.signatureName || '').trim()
+  return Boolean(signedAt) && name.length >= 2 && version === IC_AGREEMENT_VERSION
+}
+
+/** The signed document. Snapshot wins; the canonical text fills a signature that has no snapshot. */
+export function agreementDocumentHtml(agreement) {
+  if (!signedAgreementOnFile(agreement)) return null
+  const snapshot = String(agreement.html_snapshot || agreement.htmlSnapshot || '').trim()
+  return snapshot || IC_AGREEMENT_HTML
+}
+
 export function firstIncompleteStepId(ctx = {}) {
-  if (ctx.status === 'pending_review' || ctx.status === 'approved') return 'review'
+  if (ctx.status === 'approved') return 'review'
+  if (ctx.status === 'pending_review') {
+    return agreementOnFile(ctx) ? 'review' : 'agreement'
+  }
   for (const step of ONBOARDING_FLOW) {
     if (!stepIsComplete(step.id, ctx)) return step.id
   }
@@ -136,7 +163,8 @@ export function firstIncompleteStepId(ctx = {}) {
 
 /**
  * Resume a saved screen without skipping unfinished work.
- * Pending review / approved always land on the last step.
+ * Approved applications land on the last step. A pending review without
+ * the current signed agreement goes back to the agreement step.
  */
 export function canOpenStep(stepId, ctx = {}) {
   if (ctx.status === 'pending_review' || ctx.status === 'approved' || ctx.status === 'rejected') return true
@@ -147,7 +175,10 @@ export function canOpenStep(stepId, ctx = {}) {
 }
 
 export function resolveResumeStep(ctx = {}) {
-  if (ctx.status === 'pending_review' || ctx.status === 'approved') return 'review'
+  if (ctx.status === 'approved') return 'review'
+  if (ctx.status === 'pending_review') {
+    return agreementOnFile(ctx) ? 'review' : 'agreement'
+  }
   const first = firstIncompleteStepId(ctx)
   if (!ctx.preferred) return first
   const prefIdx = ONBOARDING_FLOW.findIndex((step) => step.id === ctx.preferred)
@@ -199,7 +230,7 @@ export function progressSnapshot(ctx = {}) {
   const { status, viewing } = ctx
   const total = ONBOARDING_FLOW.length
   const viewIndex = Math.max(0, ONBOARDING_FLOW.findIndex((step) => step.id === viewing))
-  if (status === 'pending_review' || status === 'approved') {
+  if (status === 'approved' || (status === 'pending_review' && agreementOnFile(ctx))) {
     const current = ONBOARDING_FLOW[viewIndex]
     const onReview = !viewing || viewing === 'review'
     return {
@@ -228,7 +259,7 @@ export function progressSnapshot(ctx = {}) {
 }
 
 export const EMAIL_TODO =
-  'TODO: set RESEND_API_KEY and RESEND_FROM (verified domain) to email seeded admins when a driver applies. The in-app admin dashboard at #/admin lists the application without email.'
+  'TODO: set RESEND_API_KEY to email from applications@clemsonrides.com (RESEND_FROM overrides that default). Domain DNS may still be pending; the send is still attempted when the key is set. The in-app admin dashboard at #/admin lists the application either way.'
 
 const DOC_ID_SET = new Set(REQUIRED_DOC_IDS)
 
