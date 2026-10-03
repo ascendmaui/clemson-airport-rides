@@ -34,6 +34,7 @@ import { CreditPacksPanel } from '../components/CreditPacksPanel'
 import { PrepaidCreditsPanel } from '../components/PrepaidCreditsPanel'
 import { QuietHoursCard } from '../components/QuietHoursCard'
 import { EmergencyContactsPanel } from '../components/EmergencyContactsPanel'
+import { VehiclePhotoGallery } from '../components/VehiclePhotoGallery'
 
 const chip = (on) => ({
   padding: '8px 12px', borderRadius: 999, fontSize: 13, fontWeight: 600,
@@ -446,6 +447,7 @@ export function AccountScreen() {
               </div>
             </Section>
 
+            {user?.id ? <VehiclePhotoGallery userId={user.id} includeAngles readOnly hideWhenEmpty /> : null}
             <PrimaryButton onClick={onSave} disabled={saving}>{saving ? 'Saving…' : 'Save profile'}</PrimaryButton>
             {msg && <div style={{ fontSize: 13, marginTop: 10, color: 'var(--ink-secondary)', textAlign: 'center' }}>{msg}</div>}
             {user?.id && (
@@ -657,6 +659,7 @@ export function AccountScreen() {
                 No registered vehicle yet. Sign up as a driver to add make, model, color, plate, and capacity.
               </div>
             )}
+            {user?.id ? <VehiclePhotoGallery userId={user.id} includeAngles /> : null}
             <button type="button" className="pressable" onClick={() => selectTab('billing')}
               style={{ display: 'block', width: '100%', marginTop: 12, padding: 12, borderRadius: 14, fontWeight: 700,
                 color: 'var(--purple)', border: '1.5px solid rgba(82,45,128,0.3)', background: 'rgba(255,255,255,0.55)' }}>

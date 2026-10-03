@@ -35,6 +35,7 @@ import {
   writeOnboardingStep,
 } from '../lib/driverOnboarding'
 import { TESLA_FLEET_NOTICE } from '../../packages/rides-native/tripTags.js'
+import { VehiclePhotoGallery } from '../components/VehiclePhotoGallery'
 
 const QUESTIONS = [
   { key: 'isStudent', label: 'Are you a student?' },
@@ -530,6 +531,9 @@ export function DriverOnboarding() {
               />
             ))}
           </div>
+          {current.id === 'car' && user?.id ? (
+            <VehiclePhotoGallery userId={user.id} />
+          ) : null}
           <div style={{ marginTop: 16 }}>
             <PrimaryButton
               type="button"

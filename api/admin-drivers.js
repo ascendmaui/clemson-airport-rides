@@ -7,6 +7,7 @@
  * Legacy /api/help-chat, /api/support-chat, /api/support-ticket are rewritten here.
  */
 import { blockerLabel, isAdminIdentity, onboardingLabel, submissionBlockers } from '../shared/driverOnboarding.js'
+import { listVehiclePhotos } from '../packages/rides-native/vehiclePhotos.js'
 import { loadSubmissionContext } from '../server/driverApproval.js'
 import {
   admin, cors, json, parseBody, userFromAuth,
@@ -180,9 +181,16 @@ async function detail(sb, res, profileId) {
   }
   const compliance = await loadSubmissionContext(sb, profileId)
   if (compliance.error) return json(res, 500, { error: compliance.error })
+  let vehiclePhotos = []
+  try {
+    vehiclePhotos = await listVehiclePhotos(sb, profileId)
+  } catch (err) {
+    return json(res, 500, { error: err.message || 'Could not load vehicle photos' })
+  }
   return json(res, 200, {
     profile_id: profileId,
     documents,
+    vehicle_photos: vehiclePhotos,
     employment: compliance.employment,
     tax: compliance.tax,
     agreement: compliance.agreement,

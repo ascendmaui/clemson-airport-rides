@@ -12,6 +12,7 @@ import { useTheme } from '@/lib/theme'
 import { loadVehicle, type VehicleRow } from 'rides-native/driverDesk'
 import { saveRegisteredVehicle } from 'rides-native/shared/vehicle.js'
 import { TESLA_FLEET_NOTICE, teslaFleetNotice } from 'rides-native/tripTags'
+import { VehiclePhotoGallery } from '@/components/VehiclePhotoGallery'
 
 const PAINT: Record<string, string> = {
   black: '#1C1C1E',
@@ -198,6 +199,11 @@ export default function VehiclesScreen() {
             <Field label="Seats" value={seats} onChangeText={setSeats} keyboard="number-pad" />
             <Primary label={busy ? 'Saving…' : 'Save vehicle'} onPress={save} disabled={busy} />
             <Primary label="Cancel" onPress={cancel} tone="ghost" />
+          </Card>
+        ) : null}
+        {user && ready ? (
+          <Card>
+            <VehiclePhotoGallery userId={user.id} includeAngles />
           </Card>
         ) : null}
         <Card>

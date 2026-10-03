@@ -30,6 +30,7 @@ import {
   submissionBlockers,
   blockerLabel,
 } from '../../shared/driverOnboarding.js'
+import { listVehiclePhotos } from '../../packages/rides-native/vehiclePhotos.js'
 
 export {
   EMAIL_TODO,
@@ -596,9 +597,11 @@ async function fetchDriverReviewDetailDirect(profileId) {
   ])
   const ctx = complianceContext({ application, documents, tax, agreement })
   const blockers = submissionBlockers(ctx)
+  const vehiclePhotos = await listVehiclePhotos(supabase, profileId)
   return {
     profile_id: profileId,
     documents,
+    vehicle_photos: vehiclePhotos,
     employment: {
       background_authorized_at: application?.background_authorized_at || null,
       work_eligibility_attested_at: application?.work_eligibility_attested_at || null,

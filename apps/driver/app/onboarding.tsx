@@ -38,6 +38,7 @@ import { TESLA_FLEET_NOTICE } from 'rides-native/tripTags'
 import { isTeslaMakeModel, modelsForMake, VEHICLE_COLORS, VEHICLE_MAKES } from 'rides-native/vehicleCatalog'
 import { useTheme } from '@/lib/theme'
 import { knowledgeQuizStatus, knowledgeQuizStatusLabel, loadKnowledgeQuiz } from 'rides-native/driverKnowledgeQuiz'
+import { VehiclePhotoGallery } from '@/components/VehiclePhotoGallery'
 
 const HEADLINE = 'Become a driver'
 const TAGLINE = 'For Clemson University students — and for drivers already on Uber or Lyft.'
@@ -634,6 +635,7 @@ export default function OnboardingScreen() {
                 onError={setError}
               />
             ))}
+            {step?.id === 'car' && user?.id ? <VehiclePhotoGallery userId={user.id} /> : null}
             <Primary label="Continue" disabled={docsContinueDisabled} onPress={advance} />
           </Card>
         ) : null}
