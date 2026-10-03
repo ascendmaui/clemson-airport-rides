@@ -1,9 +1,9 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
-import MapView, { Circle, Marker, PROVIDER_DEFAULT } from 'react-native-maps'
+import MapView, { Circle, Marker, Polyline, PROVIDER_DEFAULT } from 'react-native-maps'
 import { heatColor } from 'rides-native/heat.js'
 import { DOWNTOWN, STADIUM } from 'rides-native/places.js'
-import type { CampusMapHandle, CampusMapProps } from '@/components/mapTypes'
+import type { CampusMapHandle, CampusMapProps, LatLng } from '@/components/mapTypes'
 import { useTheme } from '@/lib/theme'
 
 function rgba(hex: string, alpha: number) {
@@ -36,6 +36,7 @@ export const CampusMap = forwardRef<CampusMapHandle, CampusMapProps>(function Ca
     userCoordinate = null,
     pins = [],
     fitPins = false,
+    route = [],
   },
   ref: any,
 ) {
@@ -59,13 +60,20 @@ export const CampusMap = forwardRef<CampusMapHandle, CampusMapProps>(function Ca
     },
   }))
 
-  const fitKey = pins
-    .map((pin) => `${pin.id}:${pin.badge || ''}:${pin.id === 'driver' ? 'd' : pin.latitude.toFixed(5)}:${pin.id === 'driver' ? '' : pin.longitude.toFixed(5)}`)
-    .join('|')
+  const fitKey = [
+    pins
+      .map((pin) => `${pin.id}:${pin.badge || ''}:${pin.id === 'driver' ? 'd' : pin.latitude.toFixed(5)}:${pin.id === 'driver' ? '' : pin.longitude.toFixed(5)}`)
+      .join('|'),
+    route.map((point) => `${point.latitude.toFixed(4)},${point.longitude.toFixed(4)}`).join(';'),
+  ].join('~')
 
   useEffect(() => {
-    if (!fitPins || !pins.length || !mapRef.current) return undefined
-    const coords = pins.map((pin) => ({ latitude: pin.latitude, longitude: pin.longitude }))
+    if (!fitPins || !mapRef.current) return undefined
+    const coords = [
+      ...pins.map((pin) => ({ latitude: pin.latitude, longitude: pin.longitude })),
+      ...route.map((point) => ({ latitude: point.latitude, longitude: point.longitude })),
+    ]
+    if (!coords.length) return undefined
     if (coords.length === 1) {
       mapRef.current.animateToRegion({
         latitude: coords[0].latitude,
@@ -169,6 +177,13 @@ export const CampusMap = forwardRef<CampusMapHandle, CampusMapProps>(function Ca
               )
             })
           : null}
+        {route.length > 1 ? (
+          <Polyline
+            coordinates={route}
+            strokeColor={colors.purple}
+            strokeWidth={5}
+          />
+        ) : null}
         {pins.map((pin: MapPin) => (
           <Marker
             key={pin.id}

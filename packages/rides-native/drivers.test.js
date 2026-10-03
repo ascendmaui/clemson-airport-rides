@@ -1,8 +1,10 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import {
+  approximateDriverWait,
   describeDriver,
   driverApproach,
+  driverWaitLabel,
   driverAvailabilityLine,
   fetchDriverApplication,
   fetchDriversByIds,
@@ -1245,4 +1247,21 @@ test('isTeslaVehicle and filterDriversForFleet keep only listed Tesla drivers', 
   assert.deepEqual(filterDriversForFleet(drivers, 'standard').map((d) => d.id), ['a', 'b', 'c'])
   assert.deepEqual(filterDriversForFleet(drivers, 'tesla').map((d) => d.id), ['a', 'c'])
   assert.match(TESLA_FLEET_EMPTY_COPY, /No Tesla Model 3 drivers/)
+})
+
+test('approximateDriverWait uses the nearest online driver and stays empty while searching', () => {
+  const pickup = { lat: 34.6836, lng: -82.8364 }
+  const drivers = [
+    { id: 'far', online: true, lat: 34.75, lng: -82.9 },
+    { id: 'near', online: true, lat: 34.685, lng: -82.837 },
+    { id: 'off', online: false, lat: 34.6836, lng: -82.8364 },
+  ]
+  const wait = approximateDriverWait(drivers, pickup)
+  assert.equal(wait.label, `About ${wait.minutes} min`)
+  assert.ok(wait.minutes >= 1)
+  assert.equal(wait.minutes, driverApproach(drivers[1], pickup).etaMin)
+  assert.equal(approximateDriverWait([], pickup), null)
+  assert.equal(driverWaitLabel([], pickup, true), 'Estimating…')
+  assert.equal(driverWaitLabel([], pickup, false), null)
+  assert.equal(driverWaitLabel(drivers, pickup, true), wait.label)
 })

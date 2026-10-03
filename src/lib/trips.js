@@ -1,4 +1,4 @@
-import { destPoint, pickupPoint } from '../../packages/rides-native/places.js'
+import { CURRENT_LOCATION_LABEL, destPoint, isCurrentLocationLabel, pickupPoint } from '../../packages/rides-native/places.js'
 import { createServerDriverTrip } from './payments'
 
 /**
@@ -22,6 +22,9 @@ export async function requestDriverTrip({
   dest = 'GSP Airport',
   destLat = null,
   destLng = null,
+  pickupLabel: pickupLabelIn = '',
+  pickupLat = null,
+  pickupLng = null,
   tier = 'standard',
   isStudent = false,
   listCents = 0,
@@ -36,13 +39,25 @@ export async function requestDriverTrip({
   const drop = lat != null && lng != null
     ? { latitude: lat, longitude: lng }
     : destPoint(dest)
-  const pickup = pickupPoint('Memorial Stadium')
+  const pickupLatN = finitePin(pickupLat)
+  const pickupLngN = finitePin(pickupLng)
+  let pickup
+  let pickupLabel
+  if (pickupLatN != null && pickupLngN != null) {
+    pickup = { latitude: pickupLatN, longitude: pickupLngN }
+    pickupLabel = String(pickupLabelIn || '').trim() || CURRENT_LOCATION_LABEL
+  } else if (isCurrentLocationLabel(pickupLabelIn)) {
+    throw new Error('Current location is not available. Pick a campus or airport stop.')
+  } else {
+    pickup = pickupPoint(pickupLabelIn || 'Memorial Stadium')
+    pickupLabel = String(pickupLabelIn || '').trim() || 'Memorial Stadium'
+  }
   const data = await createServerDriverTrip({
     driverId,
     dest,
     destLat: drop.latitude,
     destLng: drop.longitude,
-    pickupLabel: 'Memorial Stadium',
+    pickupLabel,
     pickupLat: pickup.latitude,
     pickupLng: pickup.longitude,
     tier: tier || 'standard',

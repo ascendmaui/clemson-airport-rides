@@ -1,5 +1,8 @@
 import { useState } from 'react'
 import { CampusMap, STADIUM } from '../components/CampusMap'
+import { CURRENT_LOCATION_LABEL, destPoint, resolvePickupPoint } from '../../packages/rides-native/places.js'
+import { currentLocationDeniedCopy, readBrowserCurrentLocation } from '../lib/currentLocation'
+import { useDrivingPreview } from '../lib/useDrivingPreview'
 import { PrimaryButton } from '../components/PrimaryButton'
 import { navigate } from '../lib/navigation'
 import { SignInToBookModal, useRequireAuthForAction } from '../components/SignInToBookModal'
@@ -12,11 +15,15 @@ import {
   studentSurfaceCopy,
 } from '../../packages/rides-native/riderMoney.js'
 
-export function ConfirmPickup({ dest = 'GSP Airport' }) {
-  const [address, setAddress] = useState('Memorial Stadium · Lot 5')
+export function ConfirmPickup({ dest = 'GSP Airport', pickup: pickupParam = '', pickupLat = '', pickupLng = '' }) {
+  const seeded = (pickupParam || pickupLat) ? resolvePickupPoint(pickupParam, pickupLat, pickupLng) : null
+  const [address, setAddress] = useState(seeded?.fromDevice ? seeded.label : (pickupParam || 'Memorial Stadium · Lot 5'))
   const [note, setNote] = useState('')
-  const [pin, setPin] = useState(STADIUM)
+  const [pin, setPin] = useState(seeded?.fromDevice ? [seeded.latitude, seeded.longitude] : STADIUM)
+  const [fromDevice, setFromDevice] = useState(Boolean(seeded?.fromDevice))
   const [promptOpen, setPromptOpen] = useState(false)
+  const [locating, setLocating] = useState(false)
+  const [pickupNote, setPickupNote] = useState(null)
   const { runOrPrompt } = useRequireAuthForAction()
   const student = useStudentStatus()
   const studentOffer = studentSurfaceCopy(student, 'confirm')
@@ -33,14 +40,37 @@ export function ConfirmPickup({ dest = 'GSP Airport' }) {
     )
     : null
 
-  const goTiers = () => navigate('tiers', { dest, pickup: address })
+  const drop = destPoint(dest)
+  const preview = useDrivingPreview(
+    fromDevice ? [pin[0], pin[1]] : null,
+    fromDevice ? [drop.latitude, drop.longitude] : null,
+  )
+  const tierParams = fromDevice
+    ? { dest, pickup: address, note, pickupLat: String(pin[0]), pickupLng: String(pin[1]) }
+    : { dest, pickup: address, note }
+
+  const goTiers = () => navigate('tiers', tierParams)
 
   const onConfirm = () => {
     runOrPrompt(goTiers, {
       setPromptOpen,
       nextPath: 'tiers',
-      nextParams: { dest, pickup: address },
+      nextParams: tierParams,
     })
+  }
+
+  const onCurrentLocation = async () => {
+    setLocating(true)
+    setPickupNote(null)
+    const result = await readBrowserCurrentLocation()
+    setLocating(false)
+    if (!result.ok) {
+      setPickupNote(currentLocationDeniedCopy(result.reason))
+      return
+    }
+    setAddress(result.place.label)
+    setPin([result.place.lat, result.place.lng])
+    setFromDevice(true)
   }
 
   return (
@@ -52,10 +82,27 @@ export function ConfirmPickup({ dest = 'GSP Airport' }) {
 
       <div style={{ padding: '0 16px' }}>
         <div className="glass-panel" style={{ borderRadius: 18, overflow: 'hidden', padding: 4 }}>
-          <CampusMap height={260} interactive dragPin marker={pin} onPinMove={setPin} />
+          <CampusMap
+            height={260}
+            interactive
+            dragPin={!fromDevice}
+            marker={fromDevice ? null : pin}
+            onPinMove={fromDevice ? undefined : setPin}
+            route={fromDevice ? (preview?.path || [pin, [drop.latitude, drop.longitude]]) : null}
+            stops={fromDevice ? [
+              { id: 'pickup', lat: pin[0], lng: pin[1], label: 'Pickup', color: '#522D80' },
+              { id: 'dropoff', lat: drop.latitude, lng: drop.longitude, label: dest, color: '#F56600' },
+            ] : null}
+            center={fromDevice ? pin : undefined}
+          />
         </div>
+        {fromDevice ? (
+          <p style={{ fontSize: 14, fontWeight: 800, color: '#522D80', marginTop: 8, textAlign: 'center' }}>
+            To destination · {preview?.etaLabel || 'Estimating…'}
+          </p>
+        ) : null}
         <p style={{ fontSize: 12, color: 'var(--ink-tertiary)', marginTop: 8, textAlign: 'center' }}>
-          Drag the map to adjust your pin
+          {fromDevice ? 'Pickup is your current location. The line follows the road when Directions is available.' : 'Drag the map to adjust your pin'}
         </p>
       </div>
 
@@ -67,11 +114,39 @@ export function ConfirmPickup({ dest = 'GSP Airport' }) {
         }}
       >
         <div className="sheet-handle" />
-        <label style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink-secondary)' }}>Pickup address</label>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+          <label style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink-secondary)' }}>Pickup address</label>
+          <button
+            type="button"
+            className="pressable"
+            onClick={onCurrentLocation}
+            disabled={locating}
+            aria-pressed={fromDevice}
+            aria-label="Current location"
+            style={{
+              border: 'none',
+              borderRadius: 999,
+              background: fromDevice ? '#522D80' : '#F56600',
+              color: '#fff',
+              fontWeight: 800,
+              fontSize: 13,
+              padding: '8px 12px',
+              minHeight: 36,
+            }}
+          >
+            {locating ? 'Finding location…' : CURRENT_LOCATION_LABEL}
+          </button>
+        </div>
+        {pickupNote ? (
+          <p style={{ color: '#B42318', fontSize: 13, fontWeight: 600, marginTop: 8 }}>{pickupNote}</p>
+        ) : null}
         <input
           className="glass-input"
           value={address}
-          onChange={(e) => setAddress(e.target.value)}
+          onChange={(e) => {
+            setAddress(e.target.value)
+            setFromDevice(false)
+          }}
           style={{
             width: '100%',
             marginTop: 6,
@@ -131,7 +206,7 @@ export function ConfirmPickup({ dest = 'GSP Airport' }) {
         open={promptOpen}
         onClose={() => setPromptOpen(false)}
         nextPath="tiers"
-        nextParams={{ dest, pickup: address }}
+        nextParams={tierParams}
       />
     </div>
   )

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { currentLocationDeniedCopy, readBrowserCurrentLocation } from '../lib/currentLocation'
 import { GameDayStatus } from '../components/GameDayStatus'
 import { useGameDayNotice } from '../lib/useGameDayNotice'
 import { useStudentStatus } from '../lib/useStudentStatus'
@@ -29,6 +30,10 @@ export function RiderHome({ riderName = 'John' }) {
   const { user } = useAuth()
   const [liveTrip, setLiveTrip] = useState(null)
   const [query, setQuery] = useState('')
+  const [gpsPickup, setGpsPickup] = useState(null)
+  const [pickupNote, setPickupNote] = useState(null)
+  const [pickupNoteBad, setPickupNoteBad] = useState(false)
+  const [locatingPickup, setLocatingPickup] = useState(false)
   const [tab, setTab] = useState('home')
   const [showBusy, setShowBusy] = useState(true)
   const [heatWindow, setHeatWindow] = useState('now')
@@ -61,7 +66,38 @@ export function RiderHome({ riderName = 'John' }) {
 
   const goSearch = (dest) => {
     const known = lookupCatalogPlace(dest || query)
-    navigate('confirm', { dest: known?.label || dest || query || 'GSP Airport' })
+    const params = { dest: known?.label || dest || query || 'GSP Airport' }
+    if (gpsPickup) {
+      params.pickup = gpsPickup.label
+      params.pickupLat = String(gpsPickup.lat)
+      params.pickupLng = String(gpsPickup.lng)
+    }
+    navigate('confirm', params)
+  }
+
+  const onCurrentLocation = async () => {
+    setLocatingPickup(true)
+    setPickupNote(null)
+    const result = await readBrowserCurrentLocation()
+    setLocatingPickup(false)
+    if (!result.ok) {
+      setPickupNoteBad(true)
+      setPickupNote(currentLocationDeniedCopy(result.reason))
+      return
+    }
+    setGpsPickup(result.place)
+    const known = lookupCatalogPlace(query)
+    if (known) {
+      navigate('confirm', {
+        dest: known.label,
+        pickup: result.place.label,
+        pickupLat: String(result.place.lat),
+        pickupLng: String(result.place.lng),
+      })
+      return
+    }
+    setPickupNoteBad(false)
+    setPickupNote('Pickup set to your current location. Search a destination to continue.')
   }
 
   return (
@@ -149,6 +185,33 @@ export function RiderHome({ riderName = 'John' }) {
             onFocus={() => {}}
             orangeOutline
           />
+          <button
+            type="button"
+            className="pressable"
+            onClick={onCurrentLocation}
+            disabled={locatingPickup}
+            aria-label="Use current location as pickup"
+            style={{
+              width: '100%',
+              marginTop: 12,
+              minHeight: 56,
+              border: 'none',
+              borderRadius: 16,
+              background: '#F56600',
+              color: '#fff',
+              fontWeight: 800,
+              fontSize: 17,
+              padding: '14px 18px',
+            }}
+          >
+            <div>{locatingPickup ? 'Finding current location…' : 'Use current location'}</div>
+            <div style={{ fontSize: 12, fontWeight: 600, marginTop: 2 }}>Set pickup to where you are</div>
+          </button>
+          {pickupNote ? (
+            <p style={{ marginTop: 8, fontSize: 13, fontWeight: 600, color: pickupNoteBad ? '#B42318' : 'var(--ink-secondary)' }}>
+              {pickupNote}
+            </p>
+          ) : null}
           <div style={{ display: 'flex', gap: 8, overflowX: 'auto', marginTop: 8, paddingBottom: 4 }}>
             {suggestions.map((stop) => (
               <button
@@ -244,8 +307,10 @@ export function RiderHome({ riderName = 'John' }) {
             <CampusMap height={240} showHeat={showBusy} heatMode="busy" heatWindow={heatWindow}
               onHeatMeta={setHeatMeta} showMapTypeControl interactive={showBusy}
               gameDayLabel={notice.live ? notice.headline : null}
-              center={showBusy ? DOWNTOWN_CENTER : STADIUM} zoom={showBusy ? 15 : 14}
-              marker={showBusy ? DOWNTOWN_CENTER : STADIUM} />
+              center={gpsPickup ? [gpsPickup.lat, gpsPickup.lng] : (showBusy ? DOWNTOWN_CENTER : STADIUM)}
+              zoom={showBusy ? 15 : 14}
+              marker={showBusy ? DOWNTOWN_CENTER : STADIUM}
+              pickupPosition={gpsPickup ? [gpsPickup.lat, gpsPickup.lng] : null} />
           </div>
 
           <div style={{ marginTop: 12 }}>

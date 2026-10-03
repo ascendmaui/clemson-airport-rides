@@ -1,5 +1,5 @@
 import { useLocalSearchParams, useRouter } from 'expo-router'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Pressable, ScrollView, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { PrimaryButton } from '@/components/Button'
@@ -25,12 +25,14 @@ import {
   loadFavoriteDriverIds,
   PREFERRED_MATCH_COPY,
   PREFERRED_OFFLINE_COPY,
+  driverWaitLabel,
   requestDriverTrip,
   saveFavoriteDriverIds,
   sortPreferredDrivers,
   type OnlineDriver,
 } from 'rides-native/drivers'
-import { destPoint, pickupPoint } from 'rides-native/places.js'
+import { destPoint, resolvePickupPoint } from 'rides-native/places.js'
+import { useDrivingPreview } from '@/lib/useDrivingPreview'
 import { lift } from '@/lib/elevation'
 import type { Palette } from '@/lib/palette'
 import { useTheme } from '@/lib/theme'
@@ -44,10 +46,23 @@ const NOTIFY_KEY = 'rider.notify.driver'
 export default function PickDriver() {
   const router = useRouter()
   const insets = useSafeAreaInsets()
-  const params = useLocalSearchParams<{ dest?: string; pickup?: string; tier?: string }>()
+  const params = useLocalSearchParams<{ dest?: string; pickup?: string; tier?: string; pickupLat?: string; pickupLng?: string }>()
   const dest = oneParam(params.dest, 'GSP Airport')
   const pickup = oneParam(params.pickup, 'Memorial Stadium')
+  const pickupLat = oneParam(params.pickupLat)
+  const pickupLng = oneParam(params.pickupLng)
   const tier = oneParam(params.tier, 'standard')
+  const resolved = resolvePickupPoint(pickup, pickupLat, pickupLng)
+  const device = resolved?.fromDevice ? resolved : null
+  const drop = destPoint(dest)
+  const preview = useDrivingPreview(
+    device ? [device.latitude, device.longitude] : null,
+    device ? [drop.latitude, drop.longitude] : null,
+  )
+  const route = useMemo(
+    () => (preview?.path || []).map(([latitude, longitude]) => ({ latitude, longitude })),
+    [preview],
+  )
   const { user } = useAuth()
   const student = useStudentStatus()
   const [drivers, setDrivers] = useState<OnlineDriver[]>([])
@@ -68,13 +83,18 @@ export default function PickDriver() {
     let alive = true
     setPhase('loading')
     setSelected(null)
+    if (!resolved) {
+      setDrivers([])
+      setError('Current location is not available. Go back and choose a campus or airport pickup.')
+      setPhase('results')
+      return undefined
+    }
     const wait = new Promise((resolve) => setTimeout(resolve, searchDelayMs()))
-    const here = pickupPoint(pickup)
-    const pickupAt = { lat: here.latitude, lng: here.longitude }
+    const pickupAt = { lat: resolved.latitude, lng: resolved.longitude }
     const favorites = user?.id
       ? loadFavoriteDriverIds(supabase, authStorage, user.id)
       : Promise.resolve({ ids: [] as string[], note: null })
-    Promise.all([fetchOnlineDrivers(supabase), favorites, wait]).then(async ([result, fav]) => {
+    const driversReady = Promise.all([fetchOnlineDrivers(supabase), favorites]).then(async ([result, fav]) => {
       if (!alive) return
       const extraIds = fav.ids.filter((id) => !result.drivers.some((driver) => driver.id === id))
       const extra = extraIds.length
@@ -86,26 +106,31 @@ export default function PickDriver() {
       setFavoriteIds(fav.ids)
       setFavNote(fav.note)
       setError(extra.error || result.error)
-      setPhase('results')
       if (merged.some((driver) => driver.online)) {
         await successHaptic()
         await playTigerCue()
       }
     })
+    Promise.all([driversReady, wait]).then(() => {
+      if (!alive) return
+      setPhase('results')
+    })
     return () => {
       alive = false
     }
-  }, [attempt, pickup, user?.id])
+  }, [attempt, pickup, pickupLat, pickupLng, user?.id])
 
-  const pickupAt = pickupPoint(pickup)
-  const approachPickup = { lat: pickupAt.latitude, lng: pickupAt.longitude }
+  const approachPickup = resolved
+    ? { lat: resolved.latitude, lng: resolved.longitude }
+    : null
+  const waitLabel = driverWaitLabel(drivers, approachPickup, phase === 'loading')
   const selectedDriver = drivers.find((row: OnlineDriver) => row.id === selected) || null
   const teslaNotice = teslaFleetNotice(tier === 'tesla' || tier === 'tesla_self_driving' || Boolean(selectedDriver?.isTesla))
-  const groups = groupDriversForPicker(sortPreferredDrivers(drivers, favoriteIds, approachPickup), favoriteIds)
+  const groups = groupDriversForPicker(sortPreferredDrivers(drivers, favoriteIds, approachPickup || undefined), favoriteIds)
 
   async function toggleFavorite(driverId: string) {
     if (!user) {
-      setAuthNext({ pathname: '/pick-driver', params: { dest, pickup, tier } })
+      setAuthNext({ pathname: '/pick-driver', params: { dest, pickup, tier, ...(device ? { pickupLat: String(device.latitude), pickupLng: String(device.longitude) } : {}) } })
       setPromptOpen(true)
       return
     }
@@ -122,7 +147,7 @@ export default function PickDriver() {
   function renderDriver(driver: OnlineDriver) {
     const on = selected === driver.id
     const saved = favoriteIds.includes(driver.id)
-    const lines = describeDriver(driver, approachPickup)
+    const lines = describeDriver(driver, approachPickup || undefined)
     const eta = driver.online
       ? [lines.etaLabel, lines.distanceLabel ? `${lines.distanceLabel} from pickup` : null].filter(Boolean).join(' · ') || 'ETA unavailable'
       : 'Not available now'
@@ -194,6 +219,10 @@ export default function PickDriver() {
 
   const onRequest = async () => {
     const chosen = drivers.find((row: OnlineDriver) => row.id === selected)
+    if (!resolved || !approachPickup) {
+      setError('Current location is not available. Go back and choose a campus or airport pickup.')
+      return
+    }
     if (!chosen) {
       setError('Select a driver first')
       return
@@ -203,7 +232,7 @@ export default function PickDriver() {
       return
     }
     if (!user) {
-      setAuthNext({ pathname: '/pick-driver', params: { dest, pickup, tier } })
+      setAuthNext({ pathname: '/pick-driver', params: { dest, pickup, tier, ...(device ? { pickupLat: String(device.latitude), pickupLng: String(device.longitude) } : {}) } })
       setPromptOpen(true)
       return
     }
@@ -215,8 +244,8 @@ export default function PickDriver() {
         driverId: chosen.id,
         dest,
         destPoint: destPoint(dest),
-        pickupLabel: pickup,
-        pickupPoint: pickupPoint(pickup),
+        pickupLabel: resolved.label,
+        pickupPoint: { latitude: resolved.latitude, longitude: resolved.longitude },
         tier,
         isStudent: student.verified,
       })
@@ -252,7 +281,21 @@ export default function PickDriver() {
         </View>
       </View>
       <View style={styles.mapWrap}>
-        <CampusMap spots={[]} showHeat={false} mapType={mapType} theater gameDay={false} surge={false} pins={pins} />
+        <CampusMap
+          spots={[]}
+          showHeat={false}
+          mapType={mapType}
+          theater={!device}
+          gameDay={false}
+          surge={false}
+          fitPins={Boolean(device)}
+          route={route}
+          pins={device ? [
+            { id: 'pickup', latitude: device.latitude, longitude: device.longitude, title: 'Pickup', color: colors.purple },
+            { id: 'dropoff', latitude: drop.latitude, longitude: drop.longitude, title: dest, color: colors.orange },
+            ...pins,
+          ] : pins}
+        />
         {phase === 'loading' ? (
           <View style={styles.loader}>
             <ClemsonLoader />
@@ -278,6 +321,14 @@ export default function PickDriver() {
           })}
         </View>
       </View>
+      {device ? (
+        <View style={styles.routeReadout}>
+          <Text style={styles.tripEta}>To destination · {preview?.etaLabel || 'Estimating…'}</Text>
+          {phase === 'loading' || waitLabel ? (
+            <Text style={styles.wait}>Driver wait · {phase === 'loading' ? (waitLabel || 'Estimating…') : waitLabel}</Text>
+          ) : null}
+        </View>
+      ) : null}
       <ScrollView contentContainerStyle={styles.list}>
         {phase === 'loading' ? <Skeleton height={72} /> : null}
         {phase === 'results' && !drivers.some((driver: OnlineDriver) => driver.online) ? (
@@ -343,6 +394,9 @@ function makeStyles(colors: Palette) {
     title: { fontSize: 24, fontWeight: '700' as const, color: colors.title },
     sub: { color: colors.inkSecondary, fontSize: 13, marginTop: 4, lineHeight: 18 },
     mapWrap: { height: 280, marginHorizontal: 16, borderRadius: 20, overflow: 'hidden' as const },
+    routeReadout: { marginHorizontal: 16, marginTop: 8, gap: 2 },
+    tripEta: { color: colors.purple, fontSize: 15, fontWeight: '800' as const },
+    wait: { color: colors.orange, fontSize: 15, fontWeight: '800' as const },
     loader: {
       position: 'absolute' as const,
       top: 64,

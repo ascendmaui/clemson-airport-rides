@@ -16,9 +16,12 @@ import {
   SHORTCUTS,
   STADIUM,
   SURFACE,
+  CURRENT_LOCATION_LABEL,
   destPoint,
   formatUsd,
+  isCurrentLocationLabel,
   pickupPoint,
+  resolvePickupPoint,
 } from './places.js'
 
 describe('network isolation', () => {
@@ -248,6 +251,31 @@ describe('pickupPoint', () => {
     const res = pickupPoint('Death Valley')
     assert.equal(typeof res.latitude, 'number')
     assert.equal(typeof res.longitude, 'number')
+  })
+})
+
+describe('resolvePickupPoint', () => {
+  test('keeps a catalog pickup when no device fix is present', () => {
+    const point = resolvePickupPoint('Sikes Hall')
+    assert.equal(point.fromDevice, false)
+    assert.equal(point.label, 'Sikes Hall')
+    assert.deepEqual({ latitude: point.latitude, longitude: point.longitude }, pickupPoint('Sikes Hall'))
+  })
+
+  test('uses a fresh GPS fix instead of the stadium default', () => {
+    const point = resolvePickupPoint(CURRENT_LOCATION_LABEL, '34.6836', '-82.8364')
+    assert.equal(point.fromDevice, true)
+    assert.equal(point.label, CURRENT_LOCATION_LABEL)
+    assert.equal(point.latitude, 34.6836)
+    assert.equal(point.longitude, -82.8364)
+    assert.notEqual(point.latitude, STADIUM.latitude)
+  })
+
+  test('does not invent a stadium pin when current location has no fix', () => {
+    assert.equal(isCurrentLocationLabel(' current location '), true)
+    assert.equal(resolvePickupPoint(CURRENT_LOCATION_LABEL), null)
+    assert.equal(resolvePickupPoint(CURRENT_LOCATION_LABEL, '', '34.1'), null)
+    assert.equal(resolvePickupPoint(CURRENT_LOCATION_LABEL, 'nope', '-82'), null)
   })
 })
 

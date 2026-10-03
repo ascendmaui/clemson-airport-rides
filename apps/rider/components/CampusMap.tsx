@@ -9,7 +9,7 @@ import { useTheme } from '@/lib/theme'
 import { useThemedStyles } from '@/lib/useThemedStyles'
 
 export const CampusMap = forwardRef<CampusMapHandle, CampusMapProps>(function CampusMap(
-  { spots, showHeat, mapType = 'standard', theater = false, gameDay = false, gameDayLabel = null, surge = false, userCoordinate = null, pins = [] },
+  { spots, showHeat, mapType = 'standard', theater = false, gameDay = false, gameDayLabel = null, surge = false, userCoordinate = null, pins = [], route = [] },
   ref: any,
 ) {
   const { colors } = useTheme()
@@ -64,6 +64,7 @@ export const CampusMap = forwardRef<CampusMapHandle, CampusMapProps>(function Ca
       {pins.map((pin: MapPin) => (
         <Text key={pin.id} style={styles.pinLabel}>{pin.title}</Text>
       ))}
+      {route.length > 1 ? <Text style={styles.pinLabel}>Route to destination</Text> : null}
       <Text style={styles.caption}>
         {DOWNTOWN.latitude.toFixed(3)}, {STADIUM.longitude.toFixed(3)}
       </Text>

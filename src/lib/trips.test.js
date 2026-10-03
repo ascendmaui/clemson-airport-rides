@@ -76,9 +76,6 @@ function assertPayload(body, expected) {
   assert.equal('isStudent' in body, false)
   assert.equal('listCents' in body, false)
   assert.equal('riderId' in body, false)
-  assert.equal(body.pickupLabel, 'Memorial Stadium')
-  assert.equal(body.pickupLat, stadium.latitude)
-  assert.equal(body.pickupLng, stadium.longitude)
   assert.deepEqual(body, expected)
 }
 
@@ -180,13 +177,41 @@ test('requestDriverTrip posts custom pins and returns the server trip', async ()
     dest: 'Sikes Hall',
     destLat: 34.8526,
     destLng: -82.394,
-    pickupLabel: 'Memorial Stadium',
-    pickupLat: stadium.latitude,
-    pickupLng: stadium.longitude,
+    pickupLabel: 'Sikes Hall',
+    pickupLat: 1,
+    pickupLng: 2,
     tier: 'comfort',
   })
   assert.equal(stadium.latitude, 34.6788)
   assert.equal(stadium.longitude, -82.843)
+})
+
+test('requestDriverTrip keeps a current-location fix and refuses a missing one', async () => {
+  reset()
+  await requestDriverTrip(priced({
+    riderId: 'rider-1',
+    driverId: 'driver-9',
+    dest: 'GSP Airport',
+    pickupLabel: 'Current location',
+    pickupLat: 34.6836,
+    pickupLng: -82.8364,
+  }))
+  assert.equal(slot.calls[0].body.pickupLabel, 'Current location')
+  assert.equal(slot.calls[0].body.pickupLat, 34.6836)
+  assert.equal(slot.calls[0].body.pickupLng, -82.8364)
+  assert.notEqual(slot.calls[0].body.pickupLat, stadium.latitude)
+
+  reset()
+  await assert.rejects(
+    () => requestDriverTrip(priced({
+      riderId: 'rider-1',
+      driverId: 'driver-9',
+      dest: 'GSP Airport',
+      pickupLabel: 'Current location',
+    })),
+    /Current location is not available/,
+  )
+  assert.equal(slot.calls.length, 0)
 })
 
 test('requestDriverTrip uses destPoint when coordinates are omitted or only half provided', async () => {

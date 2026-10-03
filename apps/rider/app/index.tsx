@@ -34,6 +34,7 @@ import { supabase } from '@/lib/supabase'
 import { useStudentStatus } from '@/lib/useStudentStatus'
 import { RIDER_TRACK_STATUSES, riderLiveView } from 'rides-native/liveTrip'
 import { HEAT_WINDOWS, SHORTCUTS } from 'rides-native/places.js'
+import { currentLocationDeniedCopy, readCurrentLocationPickup } from '@/lib/readCurrentLocation'
 import { hotCatalogPlaces, lookupCatalogPlace, searchCatalogPlaces } from 'rides-native/shared/carpool.js'
 import { lift } from '@/lib/elevation'
 import type { Palette } from '@/lib/palette'
@@ -69,6 +70,10 @@ export default function RiderHome() {
   const [userCoord, setUserCoord] = useState<LatLng | null>(null)
   const [locateNote, setLocateNote] = useState<string | null>(null)
   const [locating, setLocating] = useState(false)
+  const [gpsPickup, setGpsPickup] = useState<{ label: string; lat: number; lng: number } | null>(null)
+  const [pickupNote, setPickupNote] = useState<string | null>(null)
+  const [pickupNoteBad, setPickupNoteBad] = useState(false)
+  const [locatingPickup, setLocatingPickup] = useState(false)
   const overlays = useMemo(() => campusOverlays(), [])
   const [surge, setSurge] = useState(overlays.surge)
   const [gameNotice, setGameNotice] = useState<GameDayNotice | null>(null)
@@ -237,10 +242,17 @@ export default function RiderHome() {
   }, [heatWindow])
 
   const goSearch = (dest?: string) => {
+    const gpsParams = gpsPickup
+      ? {
+          pickup: gpsPickup.label,
+          pickupLat: String(gpsPickup.lat),
+          pickupLng: String(gpsPickup.lng),
+        }
+      : {}
     if (dest) {
       const known = lookupCatalogPlace(dest)
       void tapHaptic()
-      router.push({ pathname: '/confirm', params: { dest: known?.label || dest } })
+      router.push({ pathname: '/confirm', params: { dest: known?.label || dest, ...gpsParams } })
       return
     }
     const typed = lookupCatalogPlace(query)
@@ -250,7 +262,43 @@ export default function RiderHome() {
     }
     setDestError(null)
     void tapHaptic()
-    router.push({ pathname: '/confirm', params: { dest: typed.label } })
+    router.push({ pathname: '/confirm', params: { dest: typed.label, ...gpsParams } })
+  }
+
+  async function onUseCurrentLocation() {
+    void tapHaptic()
+    setLocatingPickup(true)
+    setPickupNote(null)
+    try {
+      const result = await readCurrentLocationPickup()
+      if (!result.ok) {
+        setPickupNoteBad(true)
+        setPickupNote(currentLocationDeniedCopy(result.reason))
+        return
+      }
+      setGpsPickup(result.place)
+      const coord = { latitude: result.place.lat, longitude: result.place.lng }
+      setUserCoord(coord)
+      mapRef.current?.animateTo(coord)
+      const known = lookupCatalogPlace(query)
+      if (known) {
+        setPickupNote(null)
+        router.push({
+          pathname: '/confirm',
+          params: {
+            dest: known.label,
+            pickup: result.place.label,
+            pickupLat: String(result.place.lat),
+            pickupLng: String(result.place.lng),
+          },
+        })
+        return
+      }
+      setPickupNoteBad(false)
+      setPickupNote('Pickup set to your current location. Search a destination to continue.')
+    } finally {
+      setLocatingPickup(false)
+    }
   }
 
   async function onLocate() {
@@ -489,6 +537,23 @@ export default function RiderHome() {
             accessibilityLabel="Destination"
             accessibilityHint="Search a campus stop or airport"
           />
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Use current location as pickup"
+            accessibilityHint="Asks to allow location, then sets pickup from GPS"
+            accessibilityState={{ busy: locatingPickup, disabled: locatingPickup }}
+            disabled={locatingPickup}
+            onPress={() => { void onUseCurrentLocation() }}
+            style={styles.currentLocation}
+          >
+            <Text style={styles.currentLocationText}>
+              {locatingPickup ? 'Finding current location…' : 'Use current location'}
+            </Text>
+            <Text style={styles.currentLocationSub}>Set pickup to where you are</Text>
+          </Pressable>
+          {pickupNote ? (
+            <Text style={[styles.pickupNote, pickupNoteBad && styles.locateNote]}>{pickupNote}</Text>
+          ) : null}
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
             {suggestions.map((stop: { id: string; label: string }) => (
               <Pressable
@@ -733,6 +798,19 @@ function makeStyles(colors: Palette) {
       color: colors.ink,
       backgroundColor: colors.input,
     },
+    currentLocation: {
+      marginTop: 12,
+      backgroundColor: colors.orange,
+      borderRadius: 16,
+      minHeight: 56,
+      paddingVertical: 14,
+      paddingHorizontal: 18,
+      alignItems: 'center' as const,
+      justifyContent: 'center' as const,
+    },
+    currentLocationText: { color: colors.onAccent, fontWeight: '800' as const, fontSize: 17 },
+    currentLocationSub: { color: colors.onAccent, fontWeight: '600' as const, fontSize: 12, marginTop: 2 },
+    pickupNote: { color: colors.inkSecondary, fontSize: 13, fontWeight: '600' as const, marginTop: 8 },
     searchLink: { paddingVertical: 10 },
     searchLinkText: { color: colors.orange, fontWeight: '700' as const, fontSize: 13 },
     shortcuts: { gap: 10, paddingTop: 10 },

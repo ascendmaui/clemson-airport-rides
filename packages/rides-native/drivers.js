@@ -119,6 +119,27 @@ export function driverAvailabilityLine(driver, now = new Date()) {
   return bits.join(' · ')
 }
 
+/** Nearest online driver, using the same campus pace as driver cards. */
+export function approximateDriverWait(drivers, pickup) {
+  const list = Array.isArray(drivers) ? drivers : []
+  let best = null
+  for (const driver of list) {
+    if (!driver?.online) continue
+    const eta = driverApproach(driver, pickup).etaMin
+    if (eta == null) continue
+    if (best == null || eta < best) best = eta
+  }
+  if (best == null) return null
+  return { minutes: best, label: `About ${best} min` }
+}
+
+export function driverWaitLabel(drivers, pickup, searching = false) {
+  const wait = approximateDriverWait(drivers, pickup)
+  if (wait) return wait.label
+  if (searching) return 'Estimating…'
+  return null
+}
+
 export function describeDriver(driver, pickup, now = new Date()) {
   const approach = driverApproach(driver, pickup)
   const online = Boolean(driver?.online)

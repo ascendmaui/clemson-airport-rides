@@ -56,6 +56,15 @@ export function driverAvailabilityLine(
   driver: { online?: boolean; priorityMode?: boolean; updatedAt?: string | null } | null | undefined,
   now?: Date,
 ): string
+export function approximateDriverWait(
+  drivers: Array<{ online?: boolean; lat?: number | null; lng?: number | null; latitude?: number | null; longitude?: number | null }> | null | undefined,
+  pickup: { lat?: number | null; lng?: number | null; latitude?: number | null; longitude?: number | null } | null | undefined,
+): { minutes: number; label: string } | null
+export function driverWaitLabel(
+  drivers: Array<{ online?: boolean; lat?: number | null; lng?: number | null }> | null | undefined,
+  pickup: { lat?: number | null; lng?: number | null } | null | undefined,
+  searching?: boolean,
+): string | null
 export function describeDriver(
   driver: OnlineDriver | { lat?: number | null; lng?: number | null; online?: boolean; priorityMode?: boolean; updatedAt?: string | null; ratingAvg?: number | null; ratingCount?: number } | null | undefined,
   pickup: { lat?: number | null; lng?: number | null } | null | undefined,

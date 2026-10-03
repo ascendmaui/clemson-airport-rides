@@ -1,5 +1,5 @@
 import { useLocalSearchParams, useRouter } from 'expo-router'
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Pressable, ScrollView, Text, TextInput, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { PrimaryButton, SheetHandle } from '@/components/Button'
@@ -9,6 +9,9 @@ import { setAuthNext } from '@/lib/authNext'
 import { useAuth } from '@/lib/auth'
 import { oneParam } from '@/lib/oneParam'
 import { lookupCatalogPlace, placeFromStop, type Place } from 'rides-native/shared/carpool.js'
+import { CURRENT_LOCATION_LABEL, destPoint, resolvePickupPoint } from 'rides-native/places.js'
+import { currentLocationDeniedCopy, readCurrentLocationPickup } from '@/lib/readCurrentLocation'
+import { useDrivingPreview } from '@/lib/useDrivingPreview'
 import {
   airportCodeFromLabel,
   depositSurfaceCopy,
@@ -25,8 +28,11 @@ import { useThemedStyles } from '@/lib/useThemedStyles'
 export default function ConfirmPickup() {
   const router = useRouter()
   const insets = useSafeAreaInsets()
-  const params = useLocalSearchParams<{ dest?: string }>()
+  const params = useLocalSearchParams<{ dest?: string; pickup?: string; pickupLat?: string; pickupLng?: string }>()
   const dest = oneParam(params.dest, 'GSP Airport')
+  const incomingLabel = oneParam(params.pickup)
+  const incomingLat = oneParam(params.pickupLat)
+  const incomingLng = oneParam(params.pickupLng)
   const { user } = useAuth()
   const student = useStudentStatus()
   const studentOffer = studentSurfaceCopy(student, 'confirm')
@@ -35,16 +41,37 @@ export default function ConfirmPickup() {
   const depositCopy = airportQuote
     ? depositSurfaceCopy(airportQuote, 'confirm', { studentDiscountCents: airportQuote.studentDiscountCents })
     : null
-  const initialPickup = placeFromStop(lookupCatalogPlace('Memorial Stadium')) || { label: 'Memorial Stadium', lat: 34.6788, lng: -82.843 }
+  const seeded = (incomingLabel || incomingLat)
+    ? resolvePickupPoint(incomingLabel, incomingLat, incomingLng)
+    : null
+  const initialPickup = seeded
+    ? { label: seeded.label, lat: seeded.latitude, lng: seeded.longitude }
+    : (placeFromStop(lookupCatalogPlace('Memorial Stadium')) || { label: 'Memorial Stadium', lat: 34.6788, lng: -82.843 })
   const [pickup, setPickup] = useState<Place>(initialPickup)
   const [address, setAddress] = useState(initialPickup.label)
+  const [fromDevice, setFromDevice] = useState(Boolean(seeded?.fromDevice))
   const [note, setNote] = useState('')
   const [promptOpen, setPromptOpen] = useState(false)
+  const [locatingPickup, setLocatingPickup] = useState(false)
+  const [pickupNote, setPickupNote] = useState<string | null>(null)
+  const drop = destPoint(dest)
+  const preview = useDrivingPreview(
+    fromDevice ? [pickup.lat, pickup.lng] : null,
+    fromDevice ? [drop.latitude, drop.longitude] : null,
+  )
+  const route = useMemo(
+    () => (preview?.path || []).map(([latitude, longitude]) => ({ latitude, longitude })),
+    [preview],
+  )
   const { colors } = useTheme()
   const styles = useThemedStyles(makeStyles)
 
+  const tierParams = fromDevice
+    ? { dest, pickup: address, note, pickupLat: String(pickup.lat), pickupLng: String(pickup.lng) }
+    : { dest, pickup: address, note }
+
   const goTiers = () => {
-    router.push({ pathname: '/tiers', params: { dest, pickup: address, note } })
+    router.push({ pathname: '/tiers', params: tierParams })
   }
 
   const onConfirm = () => {
@@ -52,8 +79,25 @@ export default function ConfirmPickup() {
       goTiers()
       return
     }
-    setAuthNext({ pathname: '/tiers', params: { dest, pickup: address, note } })
+    setAuthNext({ pathname: '/tiers', params: tierParams })
     setPromptOpen(true)
+  }
+
+  async function onCurrentLocation() {
+    setLocatingPickup(true)
+    setPickupNote(null)
+    try {
+      const result = await readCurrentLocationPickup()
+      if (!result.ok) {
+        setPickupNote(currentLocationDeniedCopy(result.reason))
+        return
+      }
+      setPickup(result.place)
+      setAddress(result.place.label)
+      setFromDevice(true)
+    } finally {
+      setLocatingPickup(false)
+    }
   }
 
   return (
@@ -76,26 +120,46 @@ export default function ConfirmPickup() {
         <CampusMap
           spots={[]}
           showHeat={false}
-          pins={[{
-            id: 'pickup',
-            latitude: pickup.lat,
-            longitude: pickup.lng,
-            title: pickup.label,
-            color: colors.orange,
-          }]}
+          fitPins={fromDevice}
+          route={route}
+          pins={[
+            {
+              id: 'pickup',
+              latitude: pickup.lat,
+              longitude: pickup.lng,
+              title: pickup.label,
+              color: colors.purple,
+            },
+            ...(fromDevice ? [{
+              id: 'dropoff',
+              latitude: drop.latitude,
+              longitude: drop.longitude,
+              title: dest,
+              color: colors.orange,
+            }] : []),
+          ]}
         />
       </View>
-      <Text style={styles.hint}>Pickup is a campus or airport stop. Dragging the pin still needs a live Maps session.</Text>
+      {fromDevice ? (
+        <Text style={styles.eta}>To destination · {preview?.etaLabel || 'Estimating…'}</Text>
+      ) : null}
+      <Text style={styles.hint}>Pickup is a campus or airport stop, or your current location.</Text>
       <View style={[styles.sheet, lift(colors, 'float')]}>
         <SheetHandle />
         <NeighborhoodPicker
           label="Pickup"
           value={pickup}
+          currentLocationBusy={locatingPickup}
+          onCurrentLocation={() => { void onCurrentLocation() }}
           onChange={(next) => {
             setPickup(next)
             setAddress(next.label)
+            setFromDevice(false)
+            setPickupNote(null)
           }}
         />
+        {pickupNote ? <Text style={styles.pickupNote}>{pickupNote}</Text> : null}
+        {fromDevice ? <Text style={styles.eta}>Pickup · {CURRENT_LOCATION_LABEL}</Text> : null}
         <Text style={styles.fieldLabel}>Add note for driver</Text>
         <TextInput
           value={note}
@@ -149,6 +213,8 @@ function makeStyles(colors: Palette) {
     title: { fontSize: 20, fontWeight: '600' as const, color: colors.ink },
     map: { height: 260, marginHorizontal: 16, borderRadius: 18, overflow: 'hidden' as const },
     hint: { textAlign: 'center' as const, color: colors.placeholder, fontSize: 12, marginTop: 8 },
+    eta: { textAlign: 'center' as const, color: colors.purple, fontSize: 14, fontWeight: '800' as const, marginTop: 8 },
+    pickupNote: { color: colors.danger, fontSize: 13, fontWeight: '600' as const, marginBottom: 8 },
     sheet: {
       marginTop: 12,
       backgroundColor: colors.card,

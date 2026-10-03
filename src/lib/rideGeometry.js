@@ -61,6 +61,81 @@ export function formatMinutes(seconds) {
   return `${h}h ${m % 60}m`
 }
 
+/** Google encoded polyline → [[lat, lng], ...] for an existing CampusMap route. */
+export function decodePolyline(encoded) {
+  if (!encoded || typeof encoded !== 'string') return null
+  let index = 0
+  const len = encoded.length
+  let lat = 0
+  let lng = 0
+  const path = []
+  while (index < len) {
+    let b
+    let shift = 0
+    let result = 0
+    do {
+      if (index >= len) return null
+      b = encoded.charCodeAt(index++) - 63
+      result |= (b & 0x1f) << shift
+      shift += 5
+    } while (b >= 0x20)
+    const dlat = result & 1 ? ~(result >> 1) : result >> 1
+    lat += dlat
+    shift = 0
+    result = 0
+    do {
+      if (index >= len) return null
+      b = encoded.charCodeAt(index++) - 63
+      result |= (b & 0x1f) << shift
+      shift += 5
+    } while (b >= 0x20)
+    const dlng = result & 1 ? ~(result >> 1) : result >> 1
+    lng += dlng
+    path.push([lat / 1e5, lng / 1e5])
+  }
+  return path.length ? path : null
+}
+
+/**
+ * Straight line until Directions returns. A road path replaces the estimate
+ * without changing the pickup or dropoff the rider already chose.
+ */
+export function routePreview(origin, dest, driving = null) {
+  const straight = estimateLeg(origin, dest)
+  const road = driving?.path?.length ? driving.path : null
+  const path = road || straight?.path || null
+  if (!path) return null
+  const meters = road && driving?.meters != null ? driving.meters : straight?.meters
+  const seconds = road && driving?.seconds != null ? driving.seconds : straight?.seconds
+  return {
+    path,
+    meters: meters ?? null,
+    seconds: seconds ?? null,
+    etaLabel: seconds != null ? `About ${formatMinutes(seconds)}` : null,
+    source: road ? 'directions' : 'estimate',
+  }
+}
+
+export function quoteRouteBody(origin, dest) {
+  return {
+    origin: { lat: origin[0], lng: origin[1] },
+    destination: { lat: dest[0], lng: dest[1] },
+    tier: 'standard',
+  }
+}
+
+export function drivingLegFromQuote(data) {
+  const path = decodePolyline(data?.polyline)
+  const seconds = Number(data?.durationS)
+  const meters = Number(data?.distanceM)
+  if (!path || path.length < 2 || !Number.isFinite(seconds)) return null
+  return {
+    path,
+    seconds,
+    meters: Number.isFinite(meters) ? meters : null,
+  }
+}
+
 export function formatMiles(meters) {
   const mi = (Number(meters) || 0) / 1609.344
   if (mi < 0.1) return '< 0.1 mi'
