@@ -307,8 +307,10 @@ export function RiderHome({ riderName = 'John' }) {
             <CampusMap height={240} showHeat={showBusy} heatMode="busy" heatWindow={heatWindow}
               onHeatMeta={setHeatMeta} showMapTypeControl interactive={showBusy}
               gameDayLabel={notice.live ? notice.headline : null}
-              center={showBusy ? DOWNTOWN_CENTER : STADIUM} zoom={showBusy ? 15 : 14}
-              marker={showBusy ? DOWNTOWN_CENTER : STADIUM} />
+              center={gpsPickup ? [gpsPickup.lat, gpsPickup.lng] : (showBusy ? DOWNTOWN_CENTER : STADIUM)}
+              zoom={showBusy ? 15 : 14}
+              marker={showBusy ? DOWNTOWN_CENTER : STADIUM}
+              pickupPosition={gpsPickup ? [gpsPickup.lat, gpsPickup.lng] : null} />
           </div>
 
           <div style={{ marginTop: 12 }}>

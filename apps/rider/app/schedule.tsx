@@ -910,6 +910,8 @@ function ScheduleScreen() {
             ) : null}
             {row.status === 'scheduled' || row.status === 'accepted' ? (
               <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`Cancel ride from ${row.pickup_label} to ${row.dropoff_label}`}
                 onPress={() => {
                   cancelScheduledTrip(row.id).then(() => reload()).catch((err: unknown) => {
                     setError(err instanceof Error ? err.message : 'Could not cancel')
