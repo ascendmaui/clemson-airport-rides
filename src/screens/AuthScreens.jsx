@@ -109,24 +109,27 @@ function GoogleMark() {
   )
 }
 
-function GoogleContinue({ busy, disabled, onClick }) {
+function GoogleContinue({ busy, disabled, onClick, showEmailDivider = true, variant = 'glass' }) {
   const label = busy ? 'Opening Google…' : 'Continue with Google'
+  const primary = variant === 'primary'
   return (
-    <div style={{ marginBottom: 8 }}>
+    <div style={{ marginBottom: showEmailDivider ? 8 : 0 }}>
       <button
         type="button"
-        className="pressable glass-pill"
+        className={primary ? 'pressable primary-cta' : 'pressable glass-pill'}
         onClick={onClick}
         disabled={disabled || busy}
         aria-busy={busy ? 'true' : undefined}
         aria-label={label}
         style={{
           width: '100%',
-          padding: '14px 16px',
+          padding: primary ? 16 : '14px 16px',
           borderRadius: 16,
-          color: 'var(--purple)',
+          background: primary ? 'linear-gradient(135deg, var(--orange) 0%, #ff7a1a 100%)' : undefined,
+          color: primary ? '#fff' : 'var(--purple)',
           fontWeight: 700,
-          fontSize: 15,
+          fontSize: primary ? 16 : 15,
+          boxShadow: primary ? 'var(--shadow-cta)' : undefined,
           opacity: disabled || busy ? 0.7 : 1,
           display: 'flex',
           alignItems: 'center',
@@ -137,23 +140,25 @@ function GoogleContinue({ busy, disabled, onClick }) {
         <GoogleMark />
         {label}
       </button>
-      <div
-        aria-hidden="true"
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 12,
-          margin: '16px 0 8px',
-          color: 'var(--ink-tertiary)',
-          fontSize: 12,
-          fontWeight: 700,
-          letterSpacing: 0.3,
-        }}
-      >
-        <span style={{ flex: 1, height: 1, background: 'rgba(82,45,128,0.18)' }} />
-        or use email
-        <span style={{ flex: 1, height: 1, background: 'rgba(82,45,128,0.18)' }} />
-      </div>
+      {showEmailDivider ? (
+        <div
+          aria-hidden="true"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 12,
+            margin: '16px 0 8px',
+            color: 'var(--ink-tertiary)',
+            fontSize: 12,
+            fontWeight: 700,
+            letterSpacing: 0.3,
+          }}
+        >
+          <span style={{ flex: 1, height: 1, background: 'rgba(82,45,128,0.18)' }} />
+          or use email
+          <span style={{ flex: 1, height: 1, background: 'rgba(82,45,128,0.18)' }} />
+        </div>
+      ) : null}
     </div>
   )
 }
@@ -216,36 +221,15 @@ async function afterAuthSuccess() {
 }
 
 export function SignInScreen() {
-  const { signIn, signInWithGoogle } = useAuth()
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
+  const { signInWithGoogle } = useAuth()
   const [error, setError] = useState(null)
-  const [formInvalid, setFormInvalid] = useState(false)
-  const [busy, setBusy] = useState(false)
   const [googleBusy, setGoogleBusy] = useState(false)
   useStoredAuthError(setError)
   useClemsonMiamiNotice(setError)
 
-  async function onSubmit(e) {
-    e.preventDefault()
-    setError(null)
-    setFormInvalid(false)
-    setBusy(true)
-    try {
-      await signIn(email.trim(), password)
-      await afterAuthSuccess()
-    } catch (err) {
-      setFormInvalid(true)
-      setError(err.message || 'Sign in failed')
-    } finally {
-      setBusy(false)
-    }
-  }
-
   async function onGoogle() {
-    if (busy || googleBusy) return
+    if (googleBusy) return
     setError(null)
-    setFormInvalid(false)
     setGoogleBusy(true)
     try {
       rememberClemsonMiamiFromLocation()
@@ -258,47 +242,14 @@ export function SignInScreen() {
   }
 
   return (
-    <AuthShell title="Welcome back" subtitle="Sign in to book airport rides. Surge applies on busy hours and game days.">
-      <GoogleContinue busy={googleBusy} disabled={busy} onClick={onGoogle} />
+    <AuthShell title="Welcome back" subtitle="Sign in with Google to book airport rides. Surge applies on busy hours and game days.">
+      <GoogleContinue busy={googleBusy} onClick={onGoogle} showEmailDivider={false} variant="primary" />
       <GameRideNote />
       {error && (
         <div id="signin-form-alert">
           <AccessibleAlert error={error} onDismiss={() => setError(null)} style={{ marginBottom: 12 }} />
         </div>
       )}
-      <form onSubmit={onSubmit}>
-        <label htmlFor="signin-email" style={{ display: 'block', marginBottom: 14 }}>
-          <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink-secondary)' }}>Email</span>
-          <input
-            id="signin-email"
-            required
-            type="email"
-            autoComplete="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            aria-invalid={formInvalid ? 'true' : undefined}
-            aria-describedby={formInvalid ? 'signin-form-alert' : undefined}
-            style={fieldStyle}
-          />
-        </label>
-        <label htmlFor="signin-password" style={{ display: 'block', marginBottom: 18 }}>
-          <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink-secondary)' }}>Password</span>
-          <input
-            id="signin-password"
-            required
-            type="password"
-            autoComplete="current-password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            aria-invalid={formInvalid ? 'true' : undefined}
-            aria-describedby={formInvalid ? 'signin-form-alert' : undefined}
-            style={fieldStyle}
-          />
-        </label>
-        <button type="submit" className="pressable primary-cta" disabled={busy || googleBusy} style={{ width: '100%', padding: 16, borderRadius: 16, background: 'linear-gradient(135deg, var(--orange) 0%, #ff7a1a 100%)', color: '#fff', fontWeight: 700, fontSize: 16, boxShadow: 'var(--shadow-cta)', opacity: busy || googleBusy ? 0.7 : 1 }}>
-          {busy ? 'Signing in…' : 'Sign in'}
-        </button>
-      </form>
       <p style={{ marginTop: 18, fontSize: 14, color: 'var(--ink-secondary)', textAlign: 'center' }}>
         New here?{' '}
         <button type="button" className="pressable" onClick={() => {
