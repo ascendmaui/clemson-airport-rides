@@ -12,7 +12,8 @@ import {
   isClemsonEmail,
 } from '../../src/lib/studentDomain.js'
 import { authedJson } from './apiClient.js'
-export { authedJson }
+import { prepaidCreditsFromPayload } from '../../shared/prepaidTiers.js'
+import { ADD_ANOTHER_PAYMENT_METHOD_ID } from '../../shared/ridePaymentMethods.js'
 import {
   AIRPORT_ROUTE_FALLBACK,
   cardDepositCents,
@@ -21,6 +22,13 @@ import {
   resolveSurge,
   STRIPE_NOT_CONFIGURED_COPY,
 } from '../../src/lib/fareRates.js'
+export { authedJson }
+export {
+  ADD_ANOTHER_PAYMENT_METHOD_ID,
+  ADD_ANOTHER_PAYMENT_METHOD_LABEL,
+  RIDE_PAYMENT_METHODS,
+} from '../../shared/ridePaymentMethods.js'
+export { prepaidPurchaseSummary, prepaidCreditsFromPayload } from '../../shared/prepaidTiers.js'
 
 export { STRIPE_NOT_CONFIGURED_COPY }
 
@@ -548,6 +556,45 @@ export async function loadStudentProfile(supabase, userId) {
     email: data?.email || null,
     error: null,
   }
+}
+
+export async function loadPrepaidCredits(supabase) {
+  try {
+    const data = await authedJson(supabase, '/api/stripe-payment-methods?action=credits')
+    return { ...prepaidCreditsFromPayload(data), error: null }
+  } catch (err) {
+    return {
+      balanceCents: null,
+      unavailable: true,
+      tiers: [],
+      error: err?.message || 'Could not load credits',
+    }
+  }
+}
+
+export async function buyPrepaidCredits(supabase, tierId) {
+  return authedJson(supabase, '/api/stripe-payment-methods?action=credits', {
+    method: 'POST',
+    body: { action: 'buy', tierId, nonce: `${tierId}:${Date.now()}` },
+  })
+}
+
+export async function startPaymentMethodSetup(supabase, { paymentMethod, returnUrl } = {}) {
+  return authedJson(supabase, '/api/stripe-payment-methods?action=setup-intent', {
+    method: 'POST',
+    body: {
+      paymentMethod: paymentMethod || ADD_ANOTHER_PAYMENT_METHOD_ID,
+      checkout: true,
+      returnUrl: returnUrl || 'clemsonrides://billing',
+    },
+  })
+}
+
+export async function saveCheckoutPaymentMethod(supabase, checkoutSessionId) {
+  return authedJson(supabase, '/api/stripe-payment-methods?action=save', {
+    method: 'POST',
+    body: { checkoutSessionId },
+  })
 }
 
 export async function loadRiderBilling(supabase, userId) {

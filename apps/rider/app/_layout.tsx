@@ -95,6 +95,7 @@ function CheckoutDeepLink() {
     const handled = new Set<string>()
     function handleUrl(url: string | null) {
       if (!url) return
+      if (/[?&]setup=1(?:&|$)/.test(url)) return
       const ret = parseCheckoutReturn(url)
       if (!ret.sessionId || handled.has(ret.sessionId)) return
       handled.add(ret.sessionId)
