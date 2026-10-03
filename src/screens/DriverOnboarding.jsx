@@ -34,7 +34,6 @@ import {
   readOnboardingStep,
   writeOnboardingStep,
 } from '../lib/driverOnboarding'
-import { TESLA_FLEET_NOTICE } from '../../packages/rides-native/tripTags.js'
 
 const QUESTIONS = [
   { key: 'isStudent', label: 'Are you a student?' },
@@ -140,7 +139,6 @@ export function DriverOnboarding() {
   const [color, setColor] = useState('')
   const [plate, setPlate] = useState('')
   const [seats, setSeats] = useState('4')
-  const [isTesla, setIsTesla] = useState(false)
   const [application, setApplication] = useState(null)
   const [docs, setDocs] = useState([])
   const [uploading, setUploading] = useState(null)
@@ -199,7 +197,7 @@ export function DriverOnboarding() {
             ? supabase.from('profiles').select('full_name, phone').eq('id', user.id).maybeSingle()
             : Promise.resolve({ data: null }),
           supabase
-            ? supabase.from('vehicles').select('make, model, color, plate, seats, is_tesla').eq('driver_id', user.id).order('created_at', { ascending: false }).limit(1).maybeSingle()
+            ? supabase.from('vehicles').select('make, model, color, plate, seats').eq('driver_id', user.id).order('created_at', { ascending: false }).limit(1).maybeSingle()
             : Promise.resolve({ data: null }),
           fetchMyTaxProfile(user.id).catch(() => null),
           fetchMyAgreement(user.id).catch(() => null),
@@ -233,7 +231,6 @@ export function DriverOnboarding() {
           setColor(vehicle.color || '')
           setPlate(vehicle.plate || '')
           setSeats(String(vehicle.seats || 4))
-          setIsTesla(Boolean(vehicle.is_tesla))
         }
         const resume = resolveResumeStep({
           status: app?.onboarding_status,
@@ -289,7 +286,6 @@ export function DriverOnboarding() {
         color,
         plate,
         seats: Number(seats) || 4,
-        isTesla,
       })
       const nextStatus = data.onboarding_status
       setApplication((prev) => ({ ...(prev || {}), ...(data.application || {}), onboarding_status: nextStatus }))
@@ -496,15 +492,6 @@ export function DriverOnboarding() {
           <Field label="Color" value={color} onChange={setColor} required={false} />
           <Field label="Plate" value={plate} onChange={setPlate} />
           <Field label="Seats" value={seats} onChange={setSeats} type="number" />
-          <label style={{ display: 'flex', gap: 10, alignItems: 'center', fontWeight: 650, marginBottom: isTesla ? 8 : 16 }}>
-            <input type="checkbox" checked={isTesla} onChange={(e) => setIsTesla(e.target.checked)} />
-            Tesla Model 3 · a driver still drives
-          </label>
-          {isTesla ? (
-            <p style={{ margin: '0 0 16px', fontSize: 13, lineHeight: 1.4, color: '#522D80', fontWeight: 650 }}>
-              {TESLA_FLEET_NOTICE}
-            </p>
-          ) : null}
           <PrimaryButton type="submit" disabled={busy || !allYes || !attestation}>
             {busy ? 'Saving…' : `Continue to ${adjacentStep('account', 1)?.label || 'the next step'}`}
           </PrimaryButton>

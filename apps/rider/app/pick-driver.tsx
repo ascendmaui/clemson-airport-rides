@@ -37,7 +37,6 @@ import type { Palette } from '@/lib/palette'
 import { useTheme } from '@/lib/theme'
 import { useThemedStyles } from '@/lib/useThemedStyles'
 import { searchDelayMs } from 'rides-native/riderShell.js'
-import { teslaFleetNotice } from 'rides-native/tripTags'
 
 const MAP_KINDS: MapKind[] = ['standard', 'satellite', 'hybrid']
 const NOTIFY_KEY = 'rider.notify.driver'
@@ -102,7 +101,6 @@ export default function PickDriver() {
   const pickupAt = pickupPoint(pickup)
   const approachPickup = { lat: pickupAt.latitude, lng: pickupAt.longitude }
   const selectedDriver = drivers.find((row: OnlineDriver) => row.id === selected) || null
-  const teslaNotice = teslaFleetNotice(tier === 'tesla' || tier === 'tesla_self_driving' || Boolean(selectedDriver?.isTesla))
   const groups = groupDriversForPicker(sortPreferredDrivers(drivers, favoriteIds, approachPickup), favoriteIds)
 
   async function toggleFavorite(driverId: string) {
@@ -155,7 +153,6 @@ export default function PickDriver() {
         </Text>
         <View style={styles.badges}>
           {saved ? <Text style={styles.badgePurple}>Preferred</Text> : null}
-          {driver.isTesla ? <Text style={styles.badgeOrange}>Tesla</Text> : null}
           {driver.priorityMode && driver.online ? <Text style={styles.badgePurple}>Priority</Text> : null}
           <Pressable
             onPress={() => { void toggleFavorite(driver.id) }}
@@ -306,7 +303,6 @@ export default function PickDriver() {
         {phase === 'results' ? renderGroups() : null}
       </Animated.ScrollView>
       <View style={[styles.footer, lift(colors, 'bar'), { paddingBottom: Math.max(insets.bottom, 16) }]}>
-        {teslaNotice ? <Text style={styles.teslaNotice}>{teslaNotice}</Text> : null}
         {student.verified && tier === 'standard' ? (
           <Text style={styles.student}>{STUDENT_DISCOUNT_LABEL} is on this request.</Text>
         ) : null}
@@ -386,6 +382,5 @@ function makeStyles(colors: Palette) {
     saveOff: { color: colors.orange, fontSize: 12, fontWeight: '800' as const },
     footer: { paddingHorizontal: 20, paddingTop: 12, backgroundColor: colors.card, borderTopWidth: 1, borderTopColor: colors.border, gap: 8 },
     student: { color: colors.orange, fontWeight: '800' as const, fontSize: 13 },
-    teslaNotice: { color: colors.link, fontSize: 13, lineHeight: 18, fontWeight: '600' as const },
   }
 }

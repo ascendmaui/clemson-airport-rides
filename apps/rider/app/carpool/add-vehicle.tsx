@@ -1,6 +1,6 @@
 import { useRouter } from 'expo-router'
 import { useState } from 'react'
-import { Pressable, ScrollView, Switch, Text, View } from 'react-native'
+import { Pressable, ScrollView, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { PrimaryButton } from '@/components/Button'
 import { BackButton, Card, EmptyState, ErrorText, Field } from '@/components/carpool/ui'
@@ -24,7 +24,6 @@ export default function AddVehicleScreen() {
   const [color, setColor] = useState('')
   const [plate, setPlate] = useState('')
   const [seats, setSeats] = useState(4)
-  const [isTesla, setIsTesla] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -42,7 +41,7 @@ export default function AddVehicleScreen() {
     setBusy(true)
     setError(null)
     try {
-      await saveRegisteredVehicle(supabase, user.id, { make, model, color, plate, seats, isTesla })
+      await saveRegisteredVehicle(supabase, user.id, { make, model, color, plate, seats })
       leave()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not save the vehicle')
@@ -91,15 +90,6 @@ export default function AddVehicleScreen() {
                 <Text style={styles.stepBtnText}>+</Text>
               </Pressable>
             </View>
-            <View style={styles.tesla}>
-              <Text style={styles.teslaLabel}>Tesla</Text>
-              <Switch
-                value={isTesla}
-                onValueChange={setIsTesla}
-                trackColor={{ false: colors.track, true: colors.orange }}
-                thumbColor={colors.onAccent}
-              />
-            </View>
             <PrimaryButton label={busy ? 'Saving…' : 'Save vehicle'} onPress={onSave} disabled={busy} />
             {error ? <ErrorText>{error}</ErrorText> : null}
           </Card>
@@ -139,7 +129,5 @@ function makeStyles(colors: Palette) {
     },
     stepBtnText: { fontSize: 22, fontWeight: '700' as const, color: colors.link },
     seatCount: { fontSize: 22, fontWeight: '800' as const, color: colors.ink, minWidth: 24, textAlign: 'center' as const },
-    tesla: { flexDirection: 'row' as const, justifyContent: 'space-between' as const, alignItems: 'center' as const, marginBottom: 12 },
-    teslaLabel: { fontWeight: '700' as const, color: colors.ink, fontSize: 15 },
   }
 }

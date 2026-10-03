@@ -9,7 +9,7 @@ export const MARKETING_FEATURES = [
   {
     id: 'student',
     title: 'Student discount',
-    body: '10% off Standard when the signed-in email is confirmed and ends with @clemson.edu or @g.clemson.edu. Comfort, XL, Pet, and Tesla are not included.',
+    body: '10% off Standard when the signed-in email is confirmed and ends with @clemson.edu or @g.clemson.edu. Comfort, XL, and Pet are not included.',
   },
   {
     id: 'gameday',
@@ -20,11 +20,6 @@ export const MARKETING_FEATURES = [
     id: 'weekend',
     title: 'Weekend and party',
     body: 'From Schedule, pick airport or campus and a time at least 30 minutes ahead. The trip is saved for drivers in the Weekend filter.',
-  },
-  {
-    id: 'tesla',
-    title: 'Tesla Model 3',
-    body: 'Tesla Model 3 fleet is live on the tier list and weekend scheduling. Pick a listed Tesla driver — a driver is at the wheel.',
   },
   {
     id: 'preferred',

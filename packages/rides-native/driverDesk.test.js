@@ -748,7 +748,7 @@ test('setTeslaListing throws when driver has no vehicle in onboarding', async ()
   const supabase = createFakeSupabase()
   await assert.rejects(
     () => setTeslaListing(supabase, 'driver-no-car', { enabled: true }),
-    /Add your vehicle in driver onboarding before listing a Tesla/,
+    /Add your vehicle in driver onboarding before updating this listing/,
   )
 })
 
@@ -770,14 +770,14 @@ test('setTeslaListing updates vehicle tier and attributes when enabled', async (
   assert.equal(updated.is_tesla, true)
   assert.equal(updated.tier, 'tesla_self_driving')
   assert.equal(updated.autonomous_capable, false)
-  assert.equal(updated.make, 'Tesla')
-  assert.equal(updated.model, 'Model 3')
+  assert.equal(updated.make, 'Honda')
+  assert.equal(updated.model, 'Civic')
 
   // Turning off resets tier and is_tesla without modifying make/model
   const reverted = await setTeslaListing(supabase, 'driver-1', { enabled: false })
   assert.equal(reverted.is_tesla, false)
   assert.equal(reverted.tier, 'standard')
-  assert.equal(reverted.make, 'Tesla')
+  assert.equal(reverted.make, 'Honda')
 })
 
 test('setTeslaListing throws on update query error', async () => {

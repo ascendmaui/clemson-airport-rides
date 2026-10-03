@@ -49,13 +49,13 @@ import {
   isUnpaidHoldTtlCancel,
 } from 'rides-native/holdExpiryNotice.js'
 import { localDateInput, localTimeInput, nextPickupDate, RIDE_PLACES } from 'rides-native/riderShell.js'
-import { formatCents, formatPickupAt, TESLA_FLEET_NOTICE } from 'rides-native/tripTags.js'
+import { formatCents, formatPickupAt } from 'rides-native/tripTags.js'
 import { dueScheduleReminders } from '../../../src/lib/scheduledRideModel.js'
 import { RequireAuth } from '@/components/RequireAuth'
 
 const CAMPUS_PURPOSES: SchedulePurpose[] = ['early_class', 'planned', 'recurring']
 type WeekendSpot = 'airport' | 'campus'
-type FleetChoice = 'standard' | 'tesla'
+type FleetChoice = 'standard'
 const WEEKDAYS = [
   { id: 'mon', label: 'Mon' },
   { id: 'tue', label: 'Tue' },
@@ -177,7 +177,7 @@ function ScheduleScreen() {
   const quote = useMemo(() => quoteRide(pickup, dropoff, studentOn), [pickup, dropoff, studentOn])
   const weekendDestination = weekendSpot === 'airport' ? airportPlace(weekendAirport) : weekendDropoff
   const weekendQuote = useMemo(
-    () => quoteRide(weekendPickup, weekendDestination, studentOn && fleet !== 'tesla'),
+    () => quoteRide(weekendPickup, weekendDestination, studentOn),
     [weekendPickup, weekendDestination, studentOn, fleet],
   )
   const weekendWhen = nextPickupDate({ date: weekendDate, time: weekendTime })
@@ -496,8 +496,7 @@ function ScheduleScreen() {
         weekdays: [],
         tier: fleet,
       })
-      const fleetLine = fleet === 'tesla' ? ' Tesla Model 3 stays driver-operated.' : ''
-      setBanner(`Weekend / party confirmed for ${formatPickupAt(weekendWhen.toISOString())}. It is under Upcoming, and drivers can accept it from Weekend.${fleetLine}`)
+      setBanner(`Weekend / party confirmed for ${formatPickupAt(weekendWhen.toISOString())}. It is under Upcoming, and drivers can accept it from Weekend.`)
       await successHaptic()
       await reload()
     } catch (err) {
@@ -655,14 +654,7 @@ function ScheduleScreen() {
         <Text style={styles.label}>Vehicle</Text>
         <View style={styles.pills}>
           <Pill label="Standard" active={fleet === 'standard'} onPress={() => chooseFleet('standard')} />
-          <Pill label="Tesla Model 3" active={fleet === 'tesla'} onPress={() => chooseFleet('tesla')} />
         </View>
-        {fleet === 'tesla' ? (
-          <View style={styles.fleetNote}>
-            <Text style={styles.fleetKicker}>CLEMSON FLEET</Text>
-            <Text style={styles.fleetText}>{TESLA_FLEET_NOTICE}</Text>
-          </View>
-        ) : null}
         <View style={styles.panel}>
           <Text style={styles.cardLine}>Confirm weekend / party</Text>
           <Text style={styles.fine}>
@@ -674,7 +666,7 @@ function ScheduleScreen() {
           </Text>
           {weekendQuote.label ? <Text style={styles.student}>{weekendQuote.label}</Text> : null}
           <Text style={styles.fine}>
-            {fleet === 'tesla' ? 'Tesla Model 3 · a driver is at the wheel.' : 'Standard vehicle.'}
+            Standard vehicle.
             {weekendQuote.depositCents > 0
               ? ` ${depositSurfaceCopy(weekendQuote, 'confirm', { studentDiscountCents: weekendQuote.discountCents }) || ''}`
               : ' Final fare can change when a driver accepts.'}
@@ -868,7 +860,6 @@ function ScheduleScreen() {
               {rowPurpose(row)} · {row.status} · {formatPickupAt(row.pickup_at || row.scheduled_for)}
               {row.metadata?.recurrence?.weekdays?.length ? ` · weekly ${row.metadata.recurrence.weekdays.join(', ')}` : ''}
             </Text>
-            {row.tier === 'tesla' ? <Text style={styles.student}>Tesla Model 3 · driver at the wheel</Text> : null}
             {row.deposit_cents ? (
               <Text style={styles.balance}>
                 {depositSurfaceCopy(

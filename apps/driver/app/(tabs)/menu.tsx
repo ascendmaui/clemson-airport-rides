@@ -95,7 +95,6 @@ export default function MenuScreen() {
   const account: MenuRow[] = [
     { icon: 'settings', title: 'Settings', subtitle: 'Display, navigation, and sounds', onPress: () => router.push('/settings') },
     { icon: 'swap-horizontal', title: 'Switch account', subtitle: 'One driver session on this phone', onPress: () => router.push('/switch-account') },
-    { icon: 'car-sport', title: 'Tesla Model 3 listing', subtitle: 'Existing fleet toggle', onPress: () => router.push('/fleet') },
   ]
 
   return (

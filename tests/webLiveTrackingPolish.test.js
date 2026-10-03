@@ -6,7 +6,7 @@ import {
   SEARCH_PREVIEW_COPY,
   showSearchTheater,
 } from '../packages/rides-native/liveTrip.js'
-import { TESLA_FLEET_NOTICE } from '../packages/rides-native/tripTags.js'
+import { TESLA_FLEET_NOTICE, teslaFleetNotice } from '../packages/rides-native/tripTags.js'
 import { depositSurfaceCopy } from '../packages/rides-native/riderMoney.js'
 
 test('live tracking polish exports still-searching copy and search theater', () => {
@@ -24,7 +24,8 @@ test('deposit surface confirm copy still names 25 percent', () => {
   assert.match(copy, /\$20\.00/)
 })
 
-test('Tesla fleet notice stays honest about human driver', () => {
-  assert.match(TESLA_FLEET_NOTICE, /driver|person|wheel|drives/i)
-  assert.match(TESLA_FLEET_NOTICE, /no self-driving|not a live self-driving|robotaxi|Coming soon/i)
+test('retired fleet notice is not rendered', () => {
+  assert.equal(TESLA_FLEET_NOTICE, '')
+  assert.equal(teslaFleetNotice(true), null)
+  assert.doesNotMatch(TESLA_FLEET_NOTICE, /self-driving|robotaxi|Tesla/i)
 })

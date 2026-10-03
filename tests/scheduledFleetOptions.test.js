@@ -12,7 +12,6 @@ import {
 } from '../src/lib/scheduledRideModel.js'
 import { priceScheduledRequest } from '../server/authoritativeFare.js'
 import {
-  TESLA_FLEET_NOTICE,
   teslaFleetNotice,
   tripTags,
   toDriverCard,
@@ -340,7 +339,8 @@ describe('Trip tags and driver card stub notices for Tesla fleet', () => {
     const card = toDriverCard(row)
     assert.equal(card.teslaStub, true)
     assert.equal(card.tags.includes('tesla'), true)
-    assert.equal(teslaFleetNotice(card.teslaStub), TESLA_FLEET_NOTICE)
+    assert.equal(teslaFleetNotice(card.teslaStub), null)
+    assert.equal(card.tagLabels.some((label) => /tesla|self-driving|robotaxi/i.test(label)), false)
   })
 
   test('scheduled ride decline disposition is leave, not cancel', () => {

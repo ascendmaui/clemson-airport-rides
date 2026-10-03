@@ -44,7 +44,7 @@ export function TierRow({ tier, selected, onSelect }) {
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <span style={{ fontWeight: 600, fontSize: 16 }}>{tier.name}</span>
           {tier.badge && (
-            <A11yBadge variant={tier.id === 'tesla' ? 'fleet' : 'purple'}>
+            <A11yBadge variant="purple">
               {tier.badge}
             </A11yBadge>
           )}

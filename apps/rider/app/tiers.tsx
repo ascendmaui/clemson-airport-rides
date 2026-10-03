@@ -15,7 +15,6 @@ import { lift } from '@/lib/elevation'
 import type { Palette } from '@/lib/palette'
 import { useTheme } from '@/lib/theme'
 import { useThemedStyles } from '@/lib/useThemedStyles'
-import { TESLA_FLEET_NOTICE } from 'rides-native/tripTags'
 
 export default function RideTiers() {
   const router = useRouter()
@@ -87,7 +86,6 @@ export default function RideTiers() {
               style={({ pressed }) => [
                 styles.row,
                 lift(colors, 'rest'),
-                tier.id === 'tesla' && styles.rowFleet,
                 on && styles.rowOn,
                 pressStyle(pressed),
               ]}
@@ -101,7 +99,6 @@ export default function RideTiers() {
               </View>
               <View style={styles.tierCopy}>
                 <Text style={styles.name}>{tier.name}</Text>
-                {tier.id === 'tesla' ? <Text style={styles.fleetBadge}>Clemson fleet</Text> : null}
                 <Text style={styles.meta}>{tier.eta} · {tier.meta}</Text>
                 {quoted.label ? <Text style={styles.discount}>{quoted.label}</Text> : null}
               </View>
@@ -113,13 +110,8 @@ export default function RideTiers() {
           )
         })}
       </Animated.ScrollView>
-      {selected === 'tesla' ? (
-        <View style={styles.stub}>
-          <Text style={styles.stubText}>{TESLA_FLEET_NOTICE}</Text>
-        </View>
-      ) : null}
       <View style={[styles.footer, lift(colors, 'bar'), { paddingBottom: Math.max(insets.bottom, 16) }]}>
-        <PrimaryButton label={selected === 'tesla' ? 'Request Tesla Model 3' : 'Choose a driver'} onPress={onConfirm} tone={selected === 'tesla' ? 'purple' : 'orange'} />
+        <PrimaryButton label="Choose a driver" onPress={onConfirm} tone="orange" />
       </View>
       <SignInToBookSheet
         open={promptOpen}
@@ -170,7 +162,6 @@ function makeStyles(colors: Palette) {
       borderColor: 'transparent',
     },
     rowOn: { borderColor: colors.orange, backgroundColor: colors.orangeSoft },
-    rowFleet: { borderColor: colors.purple, backgroundColor: colors.purpleSoft },
     iconWell: {
       width: 44,
       height: 44,
@@ -182,19 +173,6 @@ function makeStyles(colors: Palette) {
     iconWellOn: { backgroundColor: colors.card },
     tierCopy: { flex: 1 },
     priceCol: { alignItems: 'flex-end' as const },
-    fleetBadge: {
-      alignSelf: 'flex-start' as const,
-      marginTop: 4,
-      color: colors.orange,
-      backgroundColor: colors.card,
-      fontSize: 10,
-      fontWeight: '800' as const,
-      letterSpacing: 0.4,
-      paddingHorizontal: 8,
-      paddingVertical: 2,
-      borderRadius: 999,
-      overflow: 'hidden' as const,
-    },
     icon: { fontSize: 22 },
     name: { fontWeight: '700' as const, fontSize: 16, color: colors.ink },
     meta: { color: colors.inkSecondary, fontSize: 12, marginTop: 2 },
@@ -202,7 +180,5 @@ function makeStyles(colors: Palette) {
     was: { color: colors.inkSecondary, fontSize: 11, textDecorationLine: 'line-through' as const },
     discount: { color: colors.orange, fontSize: 11, fontWeight: '700' as const, marginTop: 2 },
     footer: { paddingHorizontal: 20, paddingTop: 12, backgroundColor: colors.card, borderTopWidth: 1, borderTopColor: colors.border },
-    stub: { marginHorizontal: 20, marginBottom: 10, backgroundColor: colors.orangeSoft, borderRadius: 16, padding: 14 },
-    stubText: { color: colors.link, fontSize: 13, lineHeight: 18, fontWeight: '600' as const },
   }
 }

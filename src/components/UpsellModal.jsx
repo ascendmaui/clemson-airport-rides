@@ -1,11 +1,10 @@
 import { PrimaryButton } from './PrimaryButton'
 import { useModalA11y } from './A11yModal'
 
-export function UpsellModal({ open, onClose, onUpgrade, variant = 'comfort', upgradePrice = 4.5 }) {
+export function UpsellModal({ open, onClose, onUpgrade, upgradePrice = 4.5 }) {
   const dialogRef = useModalA11y({ isOpen: open, onClose })
 
   if (!open) return null
-  const isTesla = variant === 'tesla'
   return (
     <div
       role="dialog"
@@ -41,9 +40,7 @@ export function UpsellModal({ open, onClose, onUpgrade, variant = 'comfort', upg
           style={{
             height: 140,
             borderRadius: 16,
-            background: isTesla
-              ? 'linear-gradient(135deg, #F3EEF8, #E8E0F0)'
-              : 'linear-gradient(135deg, #FFF4EC, #F3EEF8)',
+            background: 'linear-gradient(135deg, #FFF4EC, #F3EEF8)',
             display: 'grid',
             placeItems: 'center',
             fontSize: 56,
@@ -51,19 +48,15 @@ export function UpsellModal({ open, onClose, onUpgrade, variant = 'comfort', upg
             boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.6)',
           }}
         >
-          {isTesla ? '🚗' : '✨'}
+          ✨
         </div>
         <h2 id="upsell-modal-title" style={{ fontSize: 22, fontWeight: 600, letterSpacing: -0.3, marginBottom: 8 }}>
-          {isTesla
-            ? 'Clemson Tesla Model 3'
-            : 'Ride in a roomy, clean new car'}
+          Ride in a roomy, clean new car
         </h2>
         <p style={{ color: 'var(--ink-secondary)', fontSize: 15, lineHeight: 1.45, marginBottom: 22 }}>
-          {isTesla
-            ? 'Live Clemson Tesla Model 3 fleet. A driver still takes the wheel. This is not a robotaxi.'
-            : 'Upgrade and treat yourself to Extra Comfort.'}
+          Upgrade and treat yourself to Extra Comfort.
         </p>
-        <PrimaryButton variant={isTesla ? 'purple' : 'orange'} onClick={onUpgrade}>
+        <PrimaryButton variant="orange" onClick={onUpgrade}>
           Upgrade for ${upgradePrice.toFixed(2)} more
         </PrimaryButton>
         <button

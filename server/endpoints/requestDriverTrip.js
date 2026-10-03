@@ -71,7 +71,7 @@ export default async function handler(req, res, deps = {}) {
       .limit(1)
       .maybeSingle()
     if (vehicleRes.error) {
-      return json(res, 500, { error: vehicleRes.error.message || 'Could not verify Tesla listing', code: 'tesla_vehicle_lookup_failed' })
+      return json(res, 500, { error: vehicleRes.error.message || 'Could not verify the vehicle', code: 'tesla_vehicle_lookup_failed' })
     }
     const vehicle = vehicleRes.data
     const listed = Boolean(vehicle?.is_tesla)
@@ -80,7 +80,7 @@ export default async function handler(req, res, deps = {}) {
       || (String(vehicle?.make || '').toLowerCase() === 'tesla' && /model\s*3/i.test(String(vehicle?.model || '')))
     if (!listed) {
       return json(res, 409, {
-        error: 'That driver is not listed for the Tesla Model 3 fleet. Pick a Tesla-listed driver.',
+        error: 'That driver is not available for this request.',
         code: 'tesla_driver_required',
       })
     }
