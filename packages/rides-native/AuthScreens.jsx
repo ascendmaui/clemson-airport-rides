@@ -73,19 +73,6 @@ function SocialButtons({ providers, busyId, disabled, onPress }) {
           : `Continue with ${provider.label}`
 
         return (
-          <Pressable
-            key={provider.id}
-            onPress={() => onPress(provider)}
-            disabled={disabled || Boolean(busyId)}
-            style={[styles.social, (disabled || busyId) && styles.disabled]}
-            accessibilityRole="button"
-            accessibilityLabel={`Continue with ${provider.label}`}
-            accessibilityState={{ disabled: Boolean(disabled || busyId) }}
-            accessibilityHint={`Signs in with ${provider.label}`}
-            accessibilityState={{ disabled: disabled || Boolean(busyId), busy: pending }}
-          >
-            <Text style={styles.socialLabel}>{pending ? 'Opening…' : `Continue with ${provider.label}`}</Text>
-          </Pressable>
           <View key={provider.id} style={styles.socialItem}>
             <Pressable
               onPress={() => onPress(provider)}
@@ -97,7 +84,8 @@ function SocialButtons({ providers, busyId, disabled, onPress }) {
               ]}
               accessibilityRole="button"
               accessibilityLabel={provider.disabled && honestCopy ? `${provider.label}: ${honestCopy}` : `Continue with ${provider.label}`}
-              accessibilityState={{ disabled: isProviderDisabled }}
+              accessibilityHint={`Signs in with ${provider.label}`}
+              accessibilityState={{ disabled: isProviderDisabled, busy: pending }}
             >
               <Text
                 style={[
@@ -434,6 +422,8 @@ export function SignUpScreen({
     }
     return provider
   })
+
+  const blocked = busy || cooldownSec > 0
 
   async function onSocialPress(provider) {
     if (!onSocial || blocked || socialId || created || provider?.disabled) return
