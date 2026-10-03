@@ -11,6 +11,7 @@ import { useTheme } from '@/lib/theme'
 import { displayFirstName } from 'rides-native/authErrors'
 import { loadVehicle, type VehicleRow } from 'rides-native/driverDesk'
 import { knowledgeQuizStatus, knowledgeQuizStatusLabel, loadKnowledgeQuiz } from 'rides-native/driverKnowledgeQuiz'
+import { VehiclePhotoGallery } from '@/components/VehiclePhotoGallery'
 import { loadRatingSummary } from 'rides-native/PartyScreens'
 
 function vehicleSubtitle(vehicle: VehicleRow | null): string {
@@ -79,7 +80,7 @@ export default function MenuScreen() {
 
   const manage: MenuRow[] = [
     { icon: 'person', title: 'Profile photo', subtitle: 'Submit a photo of yourself for review', onPress: () => router.push('/profile-photo') },
-    { icon: 'car', title: 'Vehicles', subtitle: vehicleSubtitle(vehicle), onPress: () => router.push('/vehicles') },
+    { icon: 'car', title: 'Vehicles', subtitle: vehicle ? `${vehicleSubtitle(vehicle)} · photos` : 'Add the car and vehicle photos', onPress: () => router.push('/vehicles') },
     { icon: 'document-text', title: 'Documents', subtitle: 'License, insurance, registration', onPress: () => router.push('/documents') },
     { icon: 'shield-checkmark', title: 'Insurance', subtitle: 'Your policy and trip coverage notes', onPress: () => router.push('/insurance') },
   ]
@@ -117,6 +118,9 @@ export default function MenuScreen() {
           <Text style={{ color: colors.inkSecondary }}>
             {user?.email || 'Campus and airport rides for Clemson'}
           </Text>
+          {user ? (
+            <VehiclePhotoGallery userId={user.id} includeAngles readOnly onManage={() => router.push('/vehicles')} />
+          ) : null}
           {!user ? (
             <EmptyState
               icon="log-in"

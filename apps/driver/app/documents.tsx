@@ -11,7 +11,7 @@ export default function DocumentsScreen() {
   return (
     <StackPage title="Documents" onBack={() => router.back()}>
       <Text style={{ color: colors.inkSecondary, lineHeight: 20 }}>
-        Uploads still go through the driver application. An admin reviews them on the web queue. Photo review is not in this app.
+        Uploads still go through the driver application. An admin reviews them on the web queue. Photo review is not in this app. Extra exterior, interior, and other vehicle photos are on the car step and under Vehicles.
       </Text>
       {REQUIRED_DOCUMENTS.map((doc) => (
         <Card key={doc.id}>

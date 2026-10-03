@@ -17,6 +17,7 @@ import {
   reviewDriverApplication,
 } from '../lib/driverOnboarding'
 import { fetchApplicantThread, messageApplicant, requestApplicantInfo } from '../lib/adminDesk'
+import { VehiclePhotoGrid } from '../components/VehiclePhotoGallery'
 
 const FILTERS = [
   ['pending_review', 'Needs review'],
@@ -262,6 +263,7 @@ export function AdminDrivers({ embedded = false }) {
                       )
                     })}
                   </div>
+                  <VehiclePhotoReview photos={detail?.vehicle_photos} loaded={Boolean(detail)} />
                   <label style={{ display: 'block', marginTop: 12, fontSize: 13, fontWeight: 650 }}>
                     Rejection reason
                     <textarea
@@ -363,6 +365,24 @@ function ThreadList({ thread }) {
         </div>
       ))}
     </div>
+  )
+}
+
+function VehiclePhotoReview({ photos, loaded }) {
+  const rows = photos || []
+  return (
+    <section aria-label="Additional vehicle photos" style={{ marginTop: 12 }}>
+      <h3 style={{ margin: '0 0 6px', fontSize: 14, color: 'var(--purple)' }}>Additional vehicle photos</h3>
+      <p style={{ margin: '0 0 8px', fontSize: 12, lineHeight: 1.45, color: 'var(--ink-secondary)' }}>
+        Exterior, interior, and other photos the driver added. Review them here before you approve.
+        The iOS and Android driver apps do not include an admin queue, so this web applicant review is where those photos show up.
+      </p>
+      {!loaded ? (
+        <p style={{ fontSize: 12, color: 'var(--ink-secondary)' }}>Loading vehicle photos…</p>
+      ) : (
+        <VehiclePhotoGrid photos={rows} emptyLabel="No additional exterior, interior, or other photos yet." />
+      )}
+    </section>
   )
 }
 
