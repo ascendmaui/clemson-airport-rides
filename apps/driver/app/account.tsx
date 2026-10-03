@@ -93,15 +93,6 @@ export default function AccountScreen() {
           >
             <Text style={styles.linkText}>Earnings and deposits</Text>
           </Pressable>
-          <Pressable
-            onPress={() => router.push('/fleet')}
-            style={styles.linkRow}
-            accessibilityRole="button"
-            accessibilityLabel="Tesla Model 3 fleet"
-            accessibilityHint="Navigates to Tesla Model 3 fleet options"
-          >
-            <Text style={styles.linkText}>Tesla Model 3 fleet</Text>
-          </Pressable>
         </>
       ) : null}
       {user ? (

@@ -11,6 +11,7 @@ import {
   isTeslaDriver,
   isTeslaVehicle,
   TESLA_FLEET_EMPTY_COPY,
+  TESLA_FLEET_PICK_COPY,
   formatDriverDistance,
   groupDriversForPicker,
   loadFavoriteDriverIds,
@@ -1244,5 +1245,6 @@ test('isTeslaVehicle and filterDriversForFleet keep only listed Tesla drivers', 
   assert.equal(isTeslaDriver(drivers[2]), true)
   assert.deepEqual(filterDriversForFleet(drivers, 'standard').map((d) => d.id), ['a', 'b', 'c'])
   assert.deepEqual(filterDriversForFleet(drivers, 'tesla').map((d) => d.id), ['a', 'c'])
-  assert.match(TESLA_FLEET_EMPTY_COPY, /No Tesla Model 3 drivers/)
+  assert.match(TESLA_FLEET_EMPTY_COPY, /No drivers are online/)
+  assert.doesNotMatch(`${TESLA_FLEET_EMPTY_COPY} ${TESLA_FLEET_PICK_COPY}`, /Tesla|self-driving|robotaxi/i)
 })

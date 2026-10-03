@@ -28,7 +28,6 @@ import {
   scheduledQueueTitle,
   statusHeadline,
   tagTone,
-  TESLA_FLEET_NOTICE,
   type DriverCard,
   type QueueFilter,
 } from 'rides-native/tripTags'
@@ -68,7 +67,6 @@ function QueueCard({
       </View>
       {preferredNote ? <Text style={styles.note}>{preferredNote}</Text> : null}
       <FarePanel card={card} />
-      {card.teslaStub ? <Text style={styles.copy}>{TESLA_FLEET_NOTICE}</Text> : null}
       {active ? (
         <Primary label="Open live trip" onPress={onOpen} tone="purple" />
       ) : (

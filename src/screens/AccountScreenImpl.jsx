@@ -28,8 +28,6 @@ import { HelpChatPanel } from '../components/HelpChatPanel'
 import { SupportChatPanel } from '../components/SupportChatPanel'
 import { supportTicketRequest } from '../lib/agentChatClient'
 import { ACCOUNT_DELETION_TICKET } from '../../shared/accountDeletion.js'
-import { TESLA_FLEET_NOTICE } from '../../packages/rides-native/tripTags.js'
-import { setTeslaListing } from '../../packages/rides-native/driverDesk.js'
 import { CreditPacksPanel } from '../components/CreditPacksPanel'
 import { PrepaidCreditsPanel } from '../components/PrepaidCreditsPanel'
 import { QuietHoursCard } from '../components/QuietHoursCard'
@@ -83,9 +81,6 @@ export function AccountScreen() {
   const fileRef = useRef(null)
   const galleryRef = useRef(null)
   const [tab, setTab] = useState(tabFromHash)
-  const [teslaListingBusy, setTeslaListingBusy] = useState(false)
-  const [teslaListingNote, setTeslaListingNote] = useState(null)
-  const [teslaListingError, setTeslaListingError] = useState(null)
   const [profile, setProfile] = useState(null)
   const [fullName, setFullName] = useState('')
   const [bio, setBio] = useState('')
@@ -579,77 +574,6 @@ export function AccountScreen() {
                 <div style={{ color: 'var(--ink-secondary)', fontSize: 13 }}>
                   Plate {profile.vehicle.plate || '—'}
                   {profile.vehicle.seats ? ` · ${profile.vehicle.seats} seats` : ''}
-                  {profile.vehicle.tier ? ` · ${profile.vehicle.tier}` : ''}
-                </div>
-                <p style={{ fontSize: 13, lineHeight: 1.4, color: '#522D80', fontWeight: 650, marginTop: 8 }}>
-                  {TESLA_FLEET_NOTICE}
-                </p>
-                <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  <button
-                    type="button"
-                    className="pressable"
-                    disabled={teslaListingBusy || !user?.id || !supabase}
-                    onClick={async () => {
-                      if (!user?.id || !supabase) return
-                      const listed = Boolean(profile.vehicle.is_tesla) || profile.vehicle.tier === 'tesla' || profile.vehicle.tier === 'tesla_self_driving'
-                      setTeslaListingBusy(true)
-                      setTeslaListingError(null)
-                      setTeslaListingNote(null)
-                      try {
-                        await setTeslaListing(supabase, user.id, { enabled: !listed, claimModel3: false })
-                        setTeslaListingNote(listed ? 'Tesla listing removed. Riders will not see the Tesla badge.' : 'Tesla Model 3 badge is on. Riders who pick Tesla can request you.')
-                        await reload().catch(() => {})
-                      } catch (err) {
-                        setTeslaListingError(err?.message || 'Could not update Tesla listing')
-                      } finally {
-                        setTeslaListingBusy(false)
-                      }
-                    }}
-                    style={{
-                      display: 'block', width: '100%', padding: 12, borderRadius: 14, fontWeight: 700,
-                      color: '#fff',
-                      background: (Boolean(profile.vehicle.is_tesla) || profile.vehicle.tier === 'tesla' || profile.vehicle.tier === 'tesla_self_driving')
-                        ? 'linear-gradient(135deg, #522D80, #6b3fa0)'
-                        : 'linear-gradient(135deg, var(--orange), #ff7a1a)',
-                    }}
-                  >
-                    {teslaListingBusy
-                      ? 'Saving…'
-                      : (Boolean(profile.vehicle.is_tesla) || profile.vehicle.tier === 'tesla' || profile.vehicle.tier === 'tesla_self_driving')
-                        ? 'Remove Tesla listing'
-                        : 'Show Tesla badge to riders'}
-                  </button>
-                  {!(Boolean(profile.vehicle.is_tesla) || profile.vehicle.tier === 'tesla' || profile.vehicle.tier === 'tesla_self_driving') ? (
-                    <button
-                      type="button"
-                      className="pressable"
-                      disabled={teslaListingBusy || !user?.id || !supabase}
-                      onClick={async () => {
-                        if (!user?.id || !supabase) return
-                        setTeslaListingBusy(true)
-                        setTeslaListingError(null)
-                        setTeslaListingNote(null)
-                        try {
-                          await setTeslaListing(supabase, user.id, { enabled: true, claimModel3: true })
-                          setTeslaListingNote('Listed as Tesla Model 3. A person still drives — there is no robotaxi dispatch.')
-                          await reload().catch(() => {})
-                        } catch (err) {
-                          setTeslaListingError(err?.message || 'Could not update Tesla listing')
-                        } finally {
-                          setTeslaListingBusy(false)
-                        }
-                      }}
-                      style={{ fontWeight: 800, color: 'var(--orange)', padding: '8px 0' }}
-                    >
-                      My car is a Tesla Model 3
-                    </button>
-                  ) : null}
-                  {teslaListingNote ? (
-                    <p style={{ fontSize: 13, fontWeight: 650, color: '#522D80', margin: 0 }}>{teslaListingNote}</p>
-                  ) : null}
-                  {teslaListingError ? (
-                    <p role="alert" style={{ fontSize: 13, fontWeight: 650, color: 'var(--danger)', margin: 0 }}>{teslaListingError}</p>
-                  ) : null}
                 </div>
               </div>
             ) : (

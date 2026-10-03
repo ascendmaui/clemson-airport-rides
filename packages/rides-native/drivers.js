@@ -28,7 +28,7 @@ export const PREFERRED_CANCELED_COPY =
 export const OPEN_POOL_COPY =
   'No driver is pinned to this ride. The first available driver can accept it.'
 
-/** True when the vehicle row is listed as the Tesla Model 3 fleet option. */
+/** True when a stored vehicle row still carries the retired fleet flag. */
 export function isTeslaVehicle(vehicle) {
   if (!vehicle || typeof vehicle !== 'object') return false
   if (vehicle.is_tesla === true || vehicle.isTesla === true) return true
@@ -39,7 +39,7 @@ export function isTeslaVehicle(vehicle) {
   return make === 'tesla' && /\bmodel\s*3\b/.test(model)
 }
 
-/** True when a mapped driver card is a Tesla fleet listing. */
+/** True when a mapped driver card still carries the retired fleet flag. */
 export function isTeslaDriver(driver) {
   if (!driver) return false
   if (driver.isTesla === true) return true
@@ -47,12 +47,12 @@ export function isTeslaDriver(driver) {
 }
 
 export const TESLA_FLEET_EMPTY_COPY =
-  'No Tesla Model 3 drivers are online right now. Listings come from drivers who toggled Tesla fleet. Self-driving dispatch is not available.'
+  'No drivers are online right now.'
 
 export const TESLA_FLEET_PICK_COPY =
-  'Tesla Model 3 fleet only. Pick a listed Tesla driver. A person still drives — there is no robotaxi match.'
+  'Pick a listed driver. The request stays with that driver.'
 
-/** When the rider chose Tesla, keep only listed Tesla drivers (preferred offline included). */
+/** When a stored fleet tier is requested, keep only rows that still carry that flag. */
 export function filterDriversForFleet(drivers, tier) {
   const list = Array.isArray(drivers) ? drivers : []
   const wantTesla = tier === 'tesla' || tier === 'tesla_self_driving'

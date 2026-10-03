@@ -42,7 +42,6 @@ import {
   preferredRequestNote,
   statusHeadline,
   tagTone,
-  TESLA_FLEET_NOTICE,
   weekNetCents,
   type DriverCard,
 } from 'rides-native/tripTags'
@@ -691,7 +690,6 @@ export function RideCard({
               {vm.timeLeft.label}
             </Text>
           ) : null}
-          {card.teslaStub ? <Text style={{ color: colors.inkSecondary }}>{TESLA_FLEET_NOTICE}</Text> : null}
           <FarePanel card={card} />
         </ScrollView>
         <View style={[styles.offerActions, overflows && { borderTopColor: colors.border, borderTopWidth: StyleSheet.hairlineWidth }]}>

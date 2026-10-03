@@ -145,15 +145,12 @@ export async function publishDriverLocation(supabase, driverId, { lat, lng, head
 
 export async function setTeslaListing(supabase, driverId, { enabled, claimModel3 = false }) {
   const vehicle = await loadVehicle(supabase, driverId)
-  if (!vehicle?.id) throw new Error('Add your vehicle in driver onboarding before listing a Tesla.')
+  if (!vehicle?.id) throw new Error('Add your vehicle in driver onboarding before updating this listing.')
+  void claimModel3
   const patch = {
     is_tesla: Boolean(enabled),
     autonomous_capable: false,
     tier: enabled ? 'tesla_self_driving' : 'standard',
-  }
-  if (enabled && claimModel3) {
-    patch.make = 'Tesla'
-    patch.model = 'Model 3'
   }
   const { data, error } = await supabase.from('vehicles').update(patch).eq('id', vehicle.id).select('*').single()
   if (error) throw new Error(error.message)

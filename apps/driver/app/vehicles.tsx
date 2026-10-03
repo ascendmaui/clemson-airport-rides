@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons'
 import { useRouter, useFocusEffect } from 'expo-router'
 import { useCallback, useState } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
-import { Card, ErrorText, Field, Primary, Tag } from '@/components/chrome'
+import { Card, ErrorText, Field, Primary } from '@/components/chrome'
 import { EmptyState, FadeIn } from '@/components/day'
 import { StackPage } from '@/components/shell'
 import { useAuth } from '@/lib/auth'
@@ -11,7 +11,6 @@ import { supabase } from '@/lib/supabase'
 import { useTheme } from '@/lib/theme'
 import { loadVehicle, type VehicleRow } from 'rides-native/driverDesk'
 import { saveRegisteredVehicle } from 'rides-native/shared/vehicle.js'
-import { TESLA_FLEET_NOTICE, teslaFleetNotice } from 'rides-native/tripTags'
 
 const PAINT: Record<string, string> = {
   black: '#1C1C1E',
@@ -108,7 +107,6 @@ export default function VehiclesScreen() {
         color,
         plate,
         seats: Number(seats) || 4,
-        isTesla: Boolean(vehicle?.is_tesla),
       })
       setEditing(false)
       pulse('online')
@@ -132,7 +130,6 @@ export default function VehiclesScreen() {
 
   const title = [vehicle?.color, vehicle?.make, vehicle?.model].filter(Boolean).join(' ')
   const paint = paintColor(vehicle?.color, colors.purple)
-  const listedNotice = teslaFleetNotice(Boolean(vehicle?.is_tesla))
 
   return (
     <StackPage title="Vehicles" onBack={() => router.back()}>
@@ -159,11 +156,7 @@ export default function VehiclesScreen() {
             </View>
             <View style={styles.titleRow}>
               <Text style={[styles.name, { color: colors.ink }]}>{title || 'Your vehicle'}</Text>
-              {vehicle.is_tesla ? <Tag label="Tesla" tone="orange" /> : null}
             </View>
-            {listedNotice ? (
-              <Text style={{ color: colors.inkSecondary, lineHeight: 20 }}>{listedNotice}</Text>
-            ) : null}
             <View style={styles.specs}>
               <Spec label="Plate" value={vehicle.plate || 'Add plate'} />
               <Spec label="Seats" value={String(vehicle.seats || 4)} />
@@ -200,14 +193,6 @@ export default function VehiclesScreen() {
             <Primary label="Cancel" onPress={cancel} tone="ghost" />
           </Card>
         ) : null}
-        <Card>
-          <Text style={{ color: colors.orange, fontWeight: '800', letterSpacing: 1.1, fontSize: 12 }}>FLEET</Text>
-          <Text style={{ color: colors.title, fontWeight: '800', fontSize: 18 }}>Tesla Model 3</Text>
-          <Text style={{ color: colors.inkSecondary, lineHeight: 20 }}>
-            {TESLA_FLEET_NOTICE}
-          </Text>
-          <Primary label="Open Tesla listing" onPress={() => router.push('/fleet')} tone="purple" />
-        </Card>
         {error ? <ErrorText>{error}</ErrorText> : null}
       </FadeIn>
     </StackPage>

@@ -35,13 +35,9 @@ test('marketing features match the shipped product', () => {
     'Student discount',
     'Game day',
     'Weekend and party',
-    'Tesla Model 3',
     'Preferred drivers',
     'Schedule',
   ])
-  const tesla = MARKETING_FEATURES.find((feature) => feature.id === 'tesla')
-  assert.match(tesla.body, /driver is at the wheel/i)
-  assert.match(tesla.body, /no self-driving/i)
   const student = MARKETING_FEATURES.find((feature) => feature.id === 'student')
   assert.match(student.body, /10% off Standard/)
   assert.match(student.body, /confirmed/)
@@ -50,8 +46,8 @@ test('marketing features match the shipped product', () => {
   assert.match(student.body, /Comfort/)
   assert.match(student.body, /\bXL\b/)
   assert.match(student.body, /Pet/)
-  assert.match(student.body, /Tesla/)
   assert.match(student.body, /not included/)
+  assert.doesNotMatch(student.body, /Tesla|self-driving|robotaxi/i)
   assert.doesNotMatch(student.body, /student flag/i)
   const preferred = MARKETING_FEATURES.find((feature) => feature.id === 'preferred')
   assert.match(preferred.body, /decline/i)

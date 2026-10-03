@@ -20,7 +20,6 @@ import {
   estimateScheduledFare,
   listMyScheduledTrips,
 } from '../lib/scheduledRides'
-import { TESLA_FLEET_NOTICE } from '../../packages/rides-native/tripTags.js'
 
 const PLACES = [
   ...FRIEND_PLACES,
@@ -101,7 +100,7 @@ export function ScheduledRidePlanner() {
       setQuoteError(null)
       return undefined
     }
-    estimateScheduledFare({ pickup, dropoff, isStudent: isStudent && fleet !== 'tesla' })
+    estimateScheduledFare({ pickup, dropoff, isStudent })
       .then((next) => {
         if (!alive) return
         setQuote(next)
@@ -260,7 +259,6 @@ export function ScheduledRidePlanner() {
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
         {[
           { id: 'standard', label: 'Standard' },
-          { id: 'tesla', label: 'Tesla Model 3' },
         ].map((option) => {
           const on = fleet === option.id
           return (
@@ -275,7 +273,7 @@ export function ScheduledRidePlanner() {
                 fontWeight: 700,
                 fontSize: 13,
                 color: on ? '#fff' : '#522D80',
-                background: on ? (option.id === 'tesla' ? '#522D80' : '#F56600') : 'rgba(82,45,128,0.08)',
+                background: on ? '#F56600' : 'rgba(82,45,128,0.08)',
                 border: on ? '1px solid transparent' : '1px solid rgba(82,45,128,0.25)',
               }}
             >
@@ -284,11 +282,6 @@ export function ScheduledRidePlanner() {
           )
         })}
       </div>
-      {fleet === 'tesla' && (
-        <p style={{ fontSize: 13, lineHeight: 1.45, color: '#522D80', fontWeight: 650, marginTop: 0 }}>
-          {TESLA_FLEET_NOTICE}
-        </p>
-      )}
 
       <div className="glass-panel glass-panel--elevated" style={{ padding: 16, borderRadius: 16, marginBottom: 16 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
@@ -317,14 +310,13 @@ export function ScheduledRidePlanner() {
         <div style={{ fontSize: 13, color: 'var(--ink-secondary)' }}>
           {date && time ? `${date} · ${time}` : 'Choose a date and time.'}
           {pickup?.label && dropoff?.label ? ` · ${pickup.label} → ${dropoff.label}` : ''}
-          {fleet === 'tesla' ? ' · Tesla Model 3, driver at the wheel' : ''}
         </div>
       </div>
 
       <PrimaryButton
         onClick={() => runOrPrompt(onSchedule, { setPromptOpen, nextPath: 'schedule' })}
         disabled={busy}
-        variant={purpose === 'party_weekend' || fleet === 'tesla' ? 'purple' : 'orange'}
+        variant={purpose === 'party_weekend' ? 'purple' : 'orange'}
       >
         {busy ? 'Confirming…' : purpose === 'party_weekend' ? 'Confirm weekend ride' : 'Confirm scheduled ride'}
       </PrimaryButton>

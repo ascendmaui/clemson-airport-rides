@@ -1,15 +1,15 @@
 /**
  * Driver-facing labels for trips the web app already stores.
- * No network, no Stripe, no self-driving calls.
+ * No network and no Stripe calls.
  */
 import { CLEMSON_MIAMI_PROMO_ID } from './clemsonMiamiPromo.js'
 
-export const TESLA_FLEET_NOTICE =
-  'Tesla Model 3 fleet is live. A Clemson RIDES driver is at the wheel. There is no self-driving or robotaxi dispatch.'
+/** Retired fleet notice. Always empty so old trip rows do not surface that copy. */
+export const TESLA_FLEET_NOTICE = ''
 
-/** Notice for a selected Tesla Model 3 option. Null when Tesla is not the choice. */
-export function teslaFleetNotice(selected) {
-  return selected ? TESLA_FLEET_NOTICE : null
+/** Retired fleet notice. Always null so screens do not render it. */
+export function teslaFleetNotice(_selected) {
+  return null
 }
 
 export const ACTIONABLE_LEAD_MS = 45 * 60 * 1000
@@ -223,7 +223,6 @@ export const TAG_LABELS = {
   game_day: 'Game day',
   weekend_party: 'Weekend / party',
   carpool: 'Carpool · split fare',
-  tesla: 'Tesla Model 3',
   direct: 'Preferred by rider',
   scheduled: 'Scheduled',
 }
@@ -249,7 +248,7 @@ export function tagLabel(id) {
 }
 
 export function tagTone(label) {
-  if (/Game|Weekend|Tesla|Student|Preferred/.test(String(label || ''))) return 'orange'
+  if (/Game|Weekend|Student|Preferred/.test(String(label || ''))) return 'orange'
   return 'purple'
 }
 
@@ -442,7 +441,7 @@ export function toDriverCard(row, options) {
     purpose: meta.purpose || row.rider_note || '',
     tier: row.tier || null,
     tags,
-    tagLabels: tags.map(tagLabel),
+    tagLabels: tags.filter((id) => id !== 'tesla').map(tagLabel),
     teslaStub: tags.includes('tesla'),
     isTeslaFleet: tags.includes('tesla'),
     arrivedAt: row.arrived_at || null,

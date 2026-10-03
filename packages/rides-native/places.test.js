@@ -136,14 +136,14 @@ describe('HEAT_WINDOWS', () => {
 })
 
 describe('RIDE_TIERS', () => {
-  test('exports array of 6 ride tiers', () => {
+  test('exports array of 5 ride tiers', () => {
     assert.ok(Array.isArray(RIDE_TIERS))
-    assert.equal(RIDE_TIERS.length, 6)
+    assert.equal(RIDE_TIERS.length, 5)
   })
 
   test('validates tier shapes, pricing, and metadata', () => {
     const tierIds = RIDE_TIERS.map((t) => t.id)
-    assert.deepEqual(tierIds, ['standard', 'wait', 'comfort', 'xl', 'pet', 'tesla'])
+    assert.deepEqual(tierIds, ['standard', 'wait', 'comfort', 'xl', 'pet'])
 
     for (const tier of RIDE_TIERS) {
       assert.equal(typeof tier.id, 'string')
@@ -154,10 +154,6 @@ describe('RIDE_TIERS', () => {
       assert.equal(typeof tier.price, 'number')
       assert.ok(tier.price > 0, `Price for tier ${tier.id} should be positive`)
     }
-
-    const tesla = RIDE_TIERS.find((t) => t.id === 'tesla')
-    assert.equal(tesla.premium, true)
-    assert.equal(tesla.price, 36)
   })
 })
 

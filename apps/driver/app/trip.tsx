@@ -19,7 +19,6 @@ import {
   statusActionLabel,
   statusHeadline,
   tagTone,
-  TESLA_FLEET_NOTICE,
   type DriverCard,
 } from 'rides-native/tripTags'
 import { DRIVER_TRACK_STEPS, etaHoldLine, etaLineFor } from 'rides-native/liveTrip'
@@ -236,7 +235,6 @@ export default function TripScreen() {
               <Text style={styles.settle}>Trip details</Text>
             </Pressable>
             <Text style={styles.copy}>Directions to {headingToDropoff ? 'drop-off' : 'pickup'} · {target.label}</Text>
-            {trip.teslaStub ? <Text style={styles.copy}>{TESLA_FLEET_NOTICE}</Text> : null}
             {settleNote ? <Text style={styles.settle}>{settleNote}</Text> : null}
           </>
         ) : (

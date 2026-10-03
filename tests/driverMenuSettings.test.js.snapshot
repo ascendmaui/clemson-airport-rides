@@ -62,11 +62,6 @@ exports[`Driver Menu snapshot 1`] = `
       "icon": "swap-horizontal",
       "title": "Switch account",
       "subtitle": "One driver session on this phone"
-    },
-    {
-      "icon": "car-sport",
-      "title": "Tesla Model 3 listing",
-      "subtitle": "Existing fleet toggle"
     }
   ]
 }

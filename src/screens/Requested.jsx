@@ -17,7 +17,6 @@ import { isMidrideStatus } from '../lib/tripPhase'
 import { CounterpartChip } from '../components/CounterpartChip'
 import { PARTY_VISIBLE_STATUSES } from '../../packages/rides-native/partyProfile.js'
 import { etaHoldLine, etaLineFor, orderedLiveStops, riderLiveView, SEARCH_PREVIEW_COPY, showSearchTheater, STILL_SEARCHING_COPY, STILL_SEARCHING_MS } from '../../packages/rides-native/liveTrip.js'
-import { TESLA_FLEET_NOTICE, tripTags } from '../../packages/rides-native/tripTags.js'
 import { decodePolyline } from '../lib/friendRides.js'
 import { LivePhase } from '../components/LivePhase'
 import { reconcileCheckoutSession } from '../lib/stripeCheckout'
@@ -238,9 +237,6 @@ export function Requested({ dest = 'GSP Airport', trip = '', driver = 'your driv
     return () => clearInterval(id)
   }, [status, driverPos])
 
-  const fleetTags = tripRow ? tripTags(tripRow) : []
-  const isTeslaTrip = fleetTags.includes('tesla')
-
   return (
     <div className="fade-in" style={{ minHeight: '100%', padding: 24, display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 16 }}>
       {(rideLive || devSosPreview) && (
@@ -303,11 +299,6 @@ export function Requested({ dest = 'GSP Airport', trip = '', driver = 'your driv
               {STILL_SEARCHING_COPY}
             </p>
           </div>
-        )}
-        {isTeslaTrip && !tripMissing && (
-          <p style={{ color: '#522D80', fontWeight: 650, fontSize: 13, lineHeight: 1.4, marginTop: 10 }}>
-            {TESLA_FLEET_NOTICE}
-          </p>
         )}
         <p style={{ color: 'var(--ink-secondary)', fontSize: 15, lineHeight: 1.45, marginTop: 12 }}>
           {driver} · {tripRow?.pickup_label || 'Pickup'} → {dest || tripRow?.dropoff_label || 'Drop-off'}.
