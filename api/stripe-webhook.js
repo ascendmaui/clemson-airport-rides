@@ -5,7 +5,7 @@
 import Stripe from 'stripe'
 import { createClient } from '@supabase/supabase-js'
 import { grantRiderSocialForTrip } from '../server/riderReferral.js'
-import { splitPlatformFee } from '../src/lib/fareRates.js'
+import { tipCreditRecord } from '../server/tipCredit.js'
 import { debitLots, grantCreditPack, insertChargePayment } from '../server/creditLots.js'
 import { setPaymentHold } from '../server/collectPayment.js'
 import { classifyStripeError, failureResult } from '../shared/paymentFailure.js'
@@ -58,7 +58,13 @@ async function recordTip(pi) {
   if (!tripId || !riderId) return { skipped: true, reason: 'missing_metadata' }
   const supabase = serviceClient()
   const amount = Number(pi.amount) || Number(pi.metadata?.tipCents) || 0
-  const split = splitPlatformFee(amount)
+  const credit = tipCreditRecord({
+    driverId: pi.metadata?.driverId || '',
+    amountCents: amount,
+    paymentIntentId: pi.id,
+    tipPercent: pi.metadata?.tipPercent || null,
+  })
+  const split = credit.split
   const { data: existing } = await supabase
     .from('payments')
     .select('id')
@@ -74,14 +80,29 @@ async function recordTip(pi) {
       platform_fee_cents: split.platformFeeCents,
       driver_earnings_cents: split.driverEarningsCents,
       status: 'succeeded',
+      metadata: {
+        logical_kind: 'tip',
+        driver_id: credit.owed.driverId,
+        tip_owed: credit.owed,
+      },
     })
     if (error) return { ok: false, error: error.message }
   }
-  const { error: upErr } = await supabase.from('trips').update({ tip_cents: amount }).eq('id', tripId)
+  let patch = { tip_cents: amount }
+  const current = await supabase.from('trips').select('metadata').eq('id', tripId).maybeSingle()
+  if (!current.error) {
+    const meta = current.data?.metadata && typeof current.data.metadata === 'object' ? current.data.metadata : {}
+    patch = { tip_cents: amount, metadata: { ...meta, tip_cents: amount, tip_owed: credit.owed } }
+  }
+  let { error: upErr } = await supabase.from('trips').update(patch).eq('id', tripId)
+  if (upErr && patch.metadata && /metadata|column|schema cache/i.test(upErr.message || '')) {
+    const retry = await supabase.from('trips').update({ tip_cents: amount }).eq('id', tripId)
+    upErr = retry.error
+  }
   if (upErr && !/tip_cents|column|schema cache/i.test(upErr.message || '')) {
     return { ok: false, error: upErr.message }
   }
-  return { ok: true }
+  return { ok: true, credit: 'owed', driverEarningsCents: split.driverEarningsCents }
 }
 
 async function recordCreditPurchase(session) {

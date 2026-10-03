@@ -345,6 +345,17 @@ export function Requested({ dest = 'GSP Airport', trip = '', driver = 'your driv
             <button
               type="button"
               className="pressable"
+              data-testid="post-ride-tip"
+              onClick={() => navigate('tip', { trip })}
+              style={{ fontWeight: 700, color: 'var(--purple)', padding: '4px 0' }}
+            >
+              Add a tip
+            </button>
+          )}
+          {status === 'completed' && trip && (
+            <button
+              type="button"
+              className="pressable"
               data-testid="post-ride-lost-found"
               onClick={() => navigate('lost-found', { trip })}
               style={{ fontWeight: 700, color: 'var(--orange)', padding: '4px 0' }}

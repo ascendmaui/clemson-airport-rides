@@ -27,6 +27,7 @@ import { LegalPrivacy, LegalTerms } from './screens/LegalPages'
 import { LiveShare } from './screens/LiveShare'
 import { ProfileView } from './screens/ProfileView'
 import { RateRide } from './screens/RateRide'
+import { TipRide } from './screens/TipRide'
 import { ReceiptScreen } from './screens/ReceiptScreen'
 import { FriendRideScreen } from './screens/FriendRide'
 import { CarpoolScreen } from './screens/CarpoolScreen'
@@ -62,7 +63,7 @@ function AmbassadorAttributionSync() {
   return null
 }
 
-const PROTECTED = new Set(['driver', 'driver-onboarding', 'account', 'driver-signup', 'admin', 'admin-dashboard', 'incentives', 'lost-found', 'history', 'earnings'])
+const PROTECTED = new Set(['driver', 'driver-onboarding', 'account', 'driver-signup', 'admin', 'admin-dashboard', 'incentives', 'lost-found', 'history', 'earnings', 'tip'])
 const SITE_ROUTES = new Set(['landing', '', 'privacy', 'terms'])
 
 function Screen({ path, params }) {
@@ -85,6 +86,8 @@ function Screen({ path, params }) {
       return <ProfileView />
     case 'rate':
       return <RateRide />
+    case 'tip':
+      return <TipRide />
     case 'receipt':
       return <ReceiptScreen />
     case 'home':

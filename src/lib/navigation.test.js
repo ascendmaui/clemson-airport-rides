@@ -76,6 +76,11 @@ test('getHashRoute parses routing paths and segment parameters under simulated b
     assert.equal(rateRoute.path, 'rate')
     assert.equal(rateRoute.params.trip, 'trip_200')
 
+    setLocation('#/tip/trip_210')
+    const tipRoute = getHashRoute()
+    assert.equal(tipRoute.path, 'tip')
+    assert.equal(tipRoute.params.trip, 'trip_210')
+
     // 6. Account tab route
     setLocation('#/account/billing')
     const accountRoute = getHashRoute()
