@@ -28,14 +28,23 @@ export const HEAT_WINDOWS = [
   { id: 'last_7d', label: 'Last 7 days' },
 ]
 
+/** Product catalog. Hidden ids stay so stored rides can still resolve a name and price. */
 export const RIDE_TIERS = [
   { id: 'standard', name: 'Standard', icon: '🚗', eta: '4 min', meta: '4 seats', price: 18.5 },
   { id: 'wait', name: 'Wait & Save', icon: '⏱️', eta: '12 min', meta: 'Save ~20%', price: 14.2 },
   { id: 'comfort', name: 'Extra Comfort', icon: '✨', eta: '6 min', meta: 'Newer cars', price: 23 },
   { id: 'xl', name: 'XL', icon: '🚐', eta: '8 min', meta: '6 seats', price: 28.75 },
   { id: 'pet', name: 'Pet', icon: '🐶', eta: '9 min', meta: 'Pet-friendly', price: 21 },
-  { id: 'tesla', name: 'Tesla Model 3', icon: '⚡', eta: '7 min', meta: 'Clemson fleet · a driver is at the wheel', price: 36, premium: true },
+  { id: 'tesla', name: 'Tesla Model 3', icon: '⚡', eta: '7 min', meta: 'Clemson fleet · a driver is at the wheel', price: 36, premium: true, badge: 'FLEET' },
 ]
+
+/**
+ * Rider selector. XL, Pet, and Tesla Model 3 stay on RIDE_TIERS until more drivers cover them.
+ * Add an id here to offer that product again.
+ */
+export const SELECTABLE_RIDE_TIER_IDS = ['standard', 'wait', 'comfort']
+
+export const SELECTABLE_RIDE_TIERS = RIDE_TIERS.filter((tier) => SELECTABLE_RIDE_TIER_IDS.includes(tier.id))
 
 const DEST_POINTS = [
   { test: /gsp|greenville/, point: GSP },
