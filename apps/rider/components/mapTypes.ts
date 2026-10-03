@@ -24,6 +24,7 @@ export type CampusMapProps = {
   userCoordinate?: LatLng | null
   pins?: MapPin[]
   fitPins?: boolean
+  route?: LatLng[]
 }
 
 export type CampusMapHandle = {

@@ -15,7 +15,7 @@
       "bundleIdentifier": "com.ascendmaui.clemsonrides.rider",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
-        "NSLocationWhenInUseUsageDescription": "Clemson RIDES uses your location to center the campus map, shares it on a trip link you send, and attaches GPS when you confirm an SOS."
+        "NSLocationWhenInUseUsageDescription": "Clemson RIDES uses your location to set a current-location pickup, center the campus map, share a trip link you send, and attach GPS when you confirm an SOS."
       },
       "associatedDomains": [
         "applinks:clemsonrides.com",
@@ -69,7 +69,7 @@
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "Clemson RIDES uses your location to center the campus map, shares it on a trip link you send, and attaches GPS when you confirm an SOS."
+          "locationWhenInUsePermission": "Clemson RIDES uses your location to set a current-location pickup, center the campus map, share a trip link you send, and attach GPS when you confirm an SOS."
         }
       ],
       [

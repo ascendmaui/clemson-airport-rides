@@ -1,13 +1,15 @@
 import { useLocalSearchParams, useRouter } from 'expo-router'
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Pressable, ScrollView, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { PrimaryButton } from '@/components/Button'
+import { CampusMap } from '@/components/CampusMap'
 import { SignInToBookSheet } from '@/components/SignInToBookSheet'
 import { setAuthNext } from '@/lib/authNext'
 import { useAuth } from '@/lib/auth'
 import { oneParam } from '@/lib/oneParam'
-import { formatUsd, RIDE_TIERS } from 'rides-native/places.js'
+import { destPoint, formatUsd, resolvePickupPoint, RIDE_TIERS } from 'rides-native/places.js'
+import { useDrivingPreview } from '@/lib/useDrivingPreview'
 import { displayTierPrice, studentSurfaceCopy } from 'rides-native/riderMoney.js'
 import { useStudentStatus } from '@/lib/useStudentStatus'
 import { lift } from '@/lib/elevation'
@@ -19,10 +21,23 @@ import { TESLA_FLEET_NOTICE } from 'rides-native/tripTags'
 export default function RideTiers() {
   const router = useRouter()
   const insets = useSafeAreaInsets()
-  const params = useLocalSearchParams<{ dest?: string; pickup?: string; note?: string }>()
+  const params = useLocalSearchParams<{ dest?: string; pickup?: string; note?: string; pickupLat?: string; pickupLng?: string }>()
   const dest = oneParam(params.dest, 'GSP Airport')
   const pickup = oneParam(params.pickup, 'Memorial Stadium · Lot 5')
   const note = oneParam(params.note)
+  const pickupLat = oneParam(params.pickupLat)
+  const pickupLng = oneParam(params.pickupLng)
+  const resolved = resolvePickupPoint(pickup, pickupLat, pickupLng)
+  const device = resolved?.fromDevice ? resolved : null
+  const drop = destPoint(dest)
+  const preview = useDrivingPreview(
+    device ? [device.latitude, device.longitude] : null,
+    device ? [drop.latitude, drop.longitude] : null,
+  )
+  const route = useMemo(
+    () => (preview?.path || []).map(([latitude, longitude]) => ({ latitude, longitude })),
+    [preview],
+  )
   const { user } = useAuth()
   const student = useStudentStatus()
   const studentOffer = studentSurfaceCopy(student, 'tiers')
@@ -33,7 +48,13 @@ export default function RideTiers() {
 
   const next = {
     pathname: '/pick-driver' as const,
-    params: { dest, pickup, note, tier: selected },
+    params: {
+      dest,
+      pickup,
+      note,
+      tier: selected,
+      ...(device ? { pickupLat: String(device.latitude), pickupLng: String(device.longitude) } : {}),
+    },
   }
 
   const onConfirm = () => {
@@ -63,6 +84,23 @@ export default function RideTiers() {
           <Text style={styles.sub}>Pickup {pickup}</Text>
         </View>
       </View>
+      {device ? (
+        <View style={styles.routeBlock}>
+          <View style={styles.routeMap}>
+            <CampusMap
+              spots={[]}
+              showHeat={false}
+              fitPins
+              route={route}
+              pins={[
+                { id: 'pickup', latitude: device.latitude, longitude: device.longitude, title: 'Pickup', color: colors.purple },
+                { id: 'dropoff', latitude: drop.latitude, longitude: drop.longitude, title: dest, color: colors.orange },
+              ]}
+            />
+          </View>
+          <Text style={styles.eta}>To destination · {preview?.etaLabel || 'Estimating…'}</Text>
+        </View>
+      ) : null}
       <Pressable
         onPress={() => router.push(user ? '/student' : '/sign-in')}
         style={[styles.promo, !studentOffer.granted && styles.promoGated]}
@@ -135,6 +173,9 @@ function makeStyles(colors: Palette) {
     backLabel: { fontSize: 18, color: colors.title, fontWeight: '700' as const },
     kicker: { fontSize: 18, fontWeight: '700' as const, color: colors.ink },
     sub: { color: colors.inkSecondary, fontSize: 13, marginTop: 2 },
+    routeBlock: { marginHorizontal: 16, marginBottom: 8 },
+    routeMap: { height: 180, borderRadius: 16, overflow: 'hidden' as const },
+    eta: { color: colors.purple, fontSize: 14, fontWeight: '800' as const, marginTop: 8 },
     promo: {
       marginHorizontal: 16,
       marginBottom: 8,

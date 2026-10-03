@@ -8,7 +8,10 @@ import { requestDriverTrip } from '../lib/trips'
 import { useAuth } from '../lib/auth'
 import { useStudentStatus } from '../lib/useStudentStatus'
 import { STUDENT_DISCOUNT_LABEL } from '../../packages/rides-native/riderMoney.js'
-import { pickupPoint } from '../../packages/rides-native/places.js'
+import { destPoint, resolvePickupPoint } from '../../packages/rides-native/places.js'
+import { driverWaitLabel } from '../../packages/rides-native/drivers.js'
+import { useDrivingPreview } from '../lib/useDrivingPreview'
+import { CampusMap } from '../components/CampusMap'
 import {
   describeDriver,
   fetchDriversByIds,
@@ -43,7 +46,7 @@ const browserStorage = {
   },
 }
 
-export function PickDriver({ dest = 'GSP Airport', tier = 'standard', listCents = '' }) {
+export function PickDriver({ dest = 'GSP Airport', tier = 'standard', listCents = '', pickup = '', pickupLat = '', pickupLng = '' }) {
   const { user } = useAuth()
   const student = useStudentStatus()
   const { runOrPrompt } = useRequireAuthForAction()
@@ -56,8 +59,27 @@ export function PickDriver({ dest = 'GSP Airport', tier = 'standard', listCents 
   const [tripFlash, setTripFlash] = useState(null)
   const [busy, setBusy] = useState(false)
   const [promptOpen, setPromptOpen] = useState(false)
-  const pickup = pickupPoint('Memorial Stadium')
-  const approachPickup = { lat: pickup.latitude, lng: pickup.longitude }
+  const resolved = resolvePickupPoint(pickup || 'Memorial Stadium', pickupLat, pickupLng)
+  const device = resolved?.fromDevice ? resolved : null
+  const drop = destPoint(dest)
+  const preview = useDrivingPreview(
+    device && resolved ? [resolved.latitude, resolved.longitude] : null,
+    device ? [drop.latitude, drop.longitude] : null,
+  )
+  const approachPoint = resolved
+    ? { latitude: resolved.latitude, longitude: resolved.longitude }
+    : null
+  const approachPickup = approachPoint
+    ? { lat: approachPoint.latitude, lng: approachPoint.longitude }
+    : { lat: null, lng: null }
+  const waitText = driverWaitLabel(drivers, approachPickup, loading)
+  const resumeParams = {
+    dest,
+    tier,
+    ...(listCents ? { listCents } : {}),
+    ...(pickup ? { pickup } : {}),
+    ...(device ? { pickupLat: String(device.latitude), pickupLng: String(device.longitude) } : {}),
+  }
 
   const load = async () => {
     setLoading(true)
@@ -120,10 +142,20 @@ export function PickDriver({ dest = 'GSP Airport', tier = 'standard', listCents 
     setBusy(true)
     setError(null)
     try {
+      if (!resolved) {
+        setError('Current location is not available. Go back and choose a campus or airport pickup.')
+        setBusy(false)
+        return
+      }
       const trip = await requestDriverTrip({
         riderId: user.id,
         driverId: selected.id,
         dest,
+        destLat: drop.latitude,
+        destLng: drop.longitude,
+        pickupLabel: resolved.label,
+        pickupLat: resolved.latitude,
+        pickupLng: resolved.longitude,
         tier,
         isStudent: student.verified,
         listCents,
@@ -147,7 +179,7 @@ export function PickDriver({ dest = 'GSP Airport', tier = 'standard', listCents 
   return (
     <div className="fade-in" style={{ minHeight: '100%', background: 'var(--surface-muted)', display: 'flex', flexDirection: 'column' }}>
       <div style={{ padding: '20px 20px 8px' }}>
-        <button type="button" className="pressable" onClick={() => navigate('tiers', { dest })} style={{ fontSize: 20 }}>←</button>
+        <button type="button" className="pressable" onClick={() => navigate('tiers', resumeParams)} style={{ fontSize: 20 }}>←</button>
         <h1 style={{ fontSize: 24, fontWeight: 700, marginTop: 12 }}>
           {tier === 'tesla' || tier === 'tesla_self_driving' ? 'Pick a Tesla driver' : 'Pick a driver'}
         </h1>
@@ -163,6 +195,30 @@ export function PickDriver({ dest = 'GSP Airport', tier = 'standard', listCents 
           <p style={{ marginTop: 8, fontSize: 12, fontWeight: 700, color: 'var(--purple)' }}>{favNote}</p>
         )}
       </div>
+
+      {device && resolved ? (
+        <div style={{ padding: '0 16px 8px' }}>
+          <div className="glass-panel" style={{ borderRadius: 16, overflow: 'hidden', padding: 4 }}>
+            <CampusMap
+              height={200}
+              route={preview?.path || [[resolved.latitude, resolved.longitude], [drop.latitude, drop.longitude]]}
+              stops={[
+                { id: 'pickup', lat: resolved.latitude, lng: resolved.longitude, label: 'Pickup', color: '#522D80' },
+                { id: 'dropoff', lat: drop.latitude, lng: drop.longitude, label: dest, color: '#F56600' },
+              ]}
+              center={[resolved.latitude, resolved.longitude]}
+            />
+          </div>
+          <p style={{ marginTop: 8, fontSize: 15, fontWeight: 800, color: '#522D80' }}>
+            To destination · {preview?.etaLabel || 'Estimating…'}
+          </p>
+          {loading || waitText ? (
+            <p style={{ marginTop: 2, fontSize: 15, fontWeight: 800, color: '#F56600' }}>
+              Driver wait · {loading ? (waitText || 'Estimating…') : waitText}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
 
       <div style={{ flex: 1, padding: '8px 16px 24px', overflowY: 'auto' }}>
         {!supabaseConfigured && (
@@ -295,12 +351,12 @@ export function PickDriver({ dest = 'GSP Airport', tier = 'standard', listCents 
         ) : null}
         <PrimaryButton
           disabled={!selected?.online || busy}
-          onClick={() => runOrPrompt(onRequest, { setPromptOpen, nextPath: 'pick-driver', nextParams: { dest } })}
+          onClick={() => runOrPrompt(onRequest, { setPromptOpen, nextPath: 'pick-driver', nextParams: resumeParams })}
         >
           {busy ? 'Requesting…' : selected ? `Request ${selected.name}` : 'Select a driver'}
         </PrimaryButton>
       </div>
-      <SignInToBookModal open={promptOpen} onClose={() => setPromptOpen(false)} nextPath="pick-driver" nextParams={{ dest }} />
+      <SignInToBookModal open={promptOpen} onClose={() => setPromptOpen(false)} nextPath="pick-driver" nextParams={resumeParams} />
     </div>
   )
 }

@@ -35,12 +35,14 @@ export default async function handler(req, res) {
   let distanceM = body.distanceM != null ? Number(body.distanceM) : null
   let durationS = body.durationS != null ? Number(body.durationS) : null
   let routeSource = miles != null || distanceM != null ? 'caller' : 'fallback'
+  let routePolyline = null
 
   if (body.origin && body.destination) {
     const route = await computeRoutes(body.origin, body.destination, body.intermediates || [])
     if (!route.error) {
       distanceM = route.distanceM
       durationS = route.durationS
+      routePolyline = route.polyline || null
       miles = null
       minutes = null
       routeSource = 'google'
@@ -50,6 +52,7 @@ export default async function handler(req, res) {
     if (!route.error) {
       distanceM = route.distanceM
       durationS = route.durationS
+      routePolyline = route.polyline || null
       routeSource = 'google'
     } else {
       const fb = AIRPORT_ROUTE_FALLBACK[airport]
@@ -90,6 +93,9 @@ export default async function handler(req, res) {
   return json(res, 200, {
     version: FARE_RATES_VERSION,
     routeSource,
+    distanceM: Number.isFinite(distanceM) ? distanceM : null,
+    durationS: Number.isFinite(durationS) ? durationS : null,
+    polyline: routePolyline,
     surge,
     studentDiscountApplied: isStudent,
     quote,

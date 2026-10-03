@@ -63,6 +63,45 @@ export function pickupPoint(label) {
   return pointForLabel(label, STADIUM)
 }
 
+export const CURRENT_LOCATION_LABEL = 'Current location'
+
+export function isCurrentLocationLabel(label) {
+  return String(label || '').trim().toLowerCase() === CURRENT_LOCATION_LABEL.toLowerCase()
+}
+
+function finiteCoord(value) {
+  if (value == null) return null
+  if (typeof value === 'string' && value.trim() === '') return null
+  const n = typeof value === 'number' ? value : Number(String(value).trim())
+  return Number.isFinite(n) ? n : null
+}
+
+/**
+ * Catalog pickups still resolve through pickupPoint.
+ * A current-location choice only resolves when the device supplied a fresh fix.
+ * Missing GPS must not fall through to the stadium default.
+ */
+export function resolvePickupPoint(label, lat, lng) {
+  const latitude = finiteCoord(lat)
+  const longitude = finiteCoord(lng)
+  const inRange = latitude != null && longitude != null
+    && latitude >= -90 && latitude <= 90
+    && longitude >= -180 && longitude <= 180
+  if (inRange) {
+    const name = String(label || '').trim() || CURRENT_LOCATION_LABEL
+    return { label: name, latitude, longitude, fromDevice: true }
+  }
+  if (isCurrentLocationLabel(label)) return null
+  const name = String(label || '').trim()
+  const point = pickupPoint(name)
+  return {
+    label: name || 'Memorial Stadium',
+    latitude: point.latitude,
+    longitude: point.longitude,
+    fromDevice: false,
+  }
+}
+
 export function formatUsd(amount) {
   const n = Number(amount)
   if (!Number.isFinite(n)) return '$0.00'

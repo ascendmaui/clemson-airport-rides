@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Pressable, ScrollView, Text, TextInput, View } from 'react-native'
+import { CURRENT_LOCATION_LABEL } from 'rides-native/places.js'
 import {
   catalogStops,
   clusterOf,
@@ -46,10 +47,14 @@ export function NeighborhoodPicker({
   label,
   value,
   onChange,
+  onCurrentLocation,
+  currentLocationBusy = false,
 }: {
   label: string
   value: Place
   onChange: (next: Place) => void
+  onCurrentLocation?: () => void
+  currentLocationBusy?: boolean
 }) {
   const [query, setQuery] = useState('')
   const [group, setGroup] = useState<GroupFilter>('housing')
@@ -74,6 +79,22 @@ export function NeighborhoodPicker({
         accessibilityLabel={`Search ${label.toLowerCase()}`}
       />
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
+        {onCurrentLocation ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Current location"
+            accessibilityHint="Asks to allow your current location before using it as this stop"
+            accessibilityState={{ selected: value.label === CURRENT_LOCATION_LABEL, busy: currentLocationBusy, disabled: currentLocationBusy }}
+            disabled={currentLocationBusy}
+            hitSlop={8}
+            onPress={onCurrentLocation}
+            style={[styles.chip, value.label === CURRENT_LOCATION_LABEL && styles.chipOn]}
+          >
+            <Text style={[styles.chipText, value.label === CURRENT_LOCATION_LABEL && styles.chipTextOn]}>
+              {currentLocationBusy ? 'Finding location…' : 'Current location'}
+            </Text>
+          </Pressable>
+        ) : null}
         {hot.map((spot: { id: string; label: string; lat: number; lng: number }) => (
           <Chip key={spot.id} spot={spot} selected={value.label === spot.label} onPress={() => onChange(placeOf(spot))} />
         ))}

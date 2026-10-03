@@ -24,7 +24,8 @@ import {
   type ScheduledRow,
 } from '@/lib/scheduleApi'
 import { supabase } from '@/lib/supabase'
-import { formatUsd } from 'rides-native/places.js'
+import { CURRENT_LOCATION_LABEL, formatUsd } from 'rides-native/places.js'
+import { currentLocationDeniedCopy, readCurrentLocationPickup } from '@/lib/readCurrentLocation'
 import type { Palette } from '@/lib/palette'
 import { useTheme } from '@/lib/theme'
 import { useStudentStatus } from '@/lib/useStudentStatus'
@@ -150,6 +151,7 @@ function ScheduleScreen() {
   const [purpose, setPurpose] = useState<SchedulePurpose>('early_class')
   const [weekdays, setWeekdays] = useState<string[]>(['fri'])
   const [pickup, setPickup] = useState<RidePlace>(placeByLabel('Memorial Stadium'))
+  const [locatingPickup, setLocatingPickup] = useState(false)
   const [dropoff, setDropoff] = useState<RidePlace>(placeByLabel('Sikes Hall'))
   const [campusDate, setCampusDate] = useState('')
   const [campusTime, setCampusTime] = useState('')
@@ -335,6 +337,22 @@ function ScheduleScreen() {
   function chooseFleet(next: FleetChoice) {
     void tapHaptic()
     setFleet(next)
+  }
+
+  async function chooseDevicePickup(apply: (place: RidePlace) => void) {
+    if (locatingPickup) return
+    setLocatingPickup(true)
+    setError(null)
+    try {
+      const result = await readCurrentLocationPickup()
+      if (!result.ok) {
+        setError(currentLocationDeniedCopy(result.reason))
+        return
+      }
+      apply({ label: result.place.label, lat: result.place.lat, lng: result.place.lng })
+    } finally {
+      setLocatingPickup(false)
+    }
   }
 
   async function pay() {
@@ -636,6 +654,11 @@ function ScheduleScreen() {
         <Text style={styles.fine}>Friday 9:00 PM is filled in. Change it for another slot, at least 30 minutes ahead.</Text>
         <Text style={styles.label}>Pickup</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.pills}>
+          <Pill
+            label={locatingPickup ? 'Finding location…' : CURRENT_LOCATION_LABEL}
+            active={weekendPickup.label === CURRENT_LOCATION_LABEL}
+            onPress={() => { void chooseDevicePickup(setWeekendPickup) }}
+          />
           {RIDE_PLACES.map((place) => (
             <Pill key={`wpu-${place.label}`} label={place.label} active={weekendPickup.label === place.label} onPress={() => setWeekendPickup(place)} />
           ))}
@@ -828,6 +851,11 @@ function ScheduleScreen() {
         <TextInput value={campusTime} onChangeText={setCampusTime} placeholder="HH:MM" placeholderTextColor={colors.placeholder} style={styles.input} autoCapitalize="none" accessibilityLabel="Ride pickup time" />
         <Text style={styles.label}>Pickup</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.pills}>
+          <Pill
+            label={locatingPickup ? 'Finding location…' : CURRENT_LOCATION_LABEL}
+            active={pickup.label === CURRENT_LOCATION_LABEL}
+            onPress={() => { void chooseDevicePickup(setPickup) }}
+          />
           {RIDE_PLACES.map((place) => (
             <Pill key={`pu-${place.label}`} label={place.label} active={pickup.label === place.label} onPress={() => setPickup(place)} />
           ))}

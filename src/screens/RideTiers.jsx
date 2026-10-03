@@ -12,6 +12,8 @@ import { useGameDayNotice } from '../lib/useGameDayNotice'
 import { useStudentStatus } from '../lib/useStudentStatus'
 import { displayTierPrice, studentSurfaceCopy } from '../../packages/rides-native/riderMoney.js'
 import { TESLA_FLEET_NOTICE } from '../../packages/rides-native/tripTags.js'
+import { destPoint, resolvePickupPoint } from '../../packages/rides-native/places.js'
+import { useDrivingPreview } from '../lib/useDrivingPreview'
 
 const TIERS = [
   { id: 'standard', name: 'Standard', icon: '🚗', eta: '4 min', meta: '4 seats', price: 18.5 },
@@ -22,7 +24,7 @@ const TIERS = [
   { id: 'tesla', name: 'Tesla Model 3', icon: '⚡', eta: '7 min', meta: 'Clemson fleet · a driver is at the wheel', price: 36.0, premium: true, badge: 'FLEET' },
 ]
 
-export function RideTiers({ dest = '1900 GSP Dr' }) {
+export function RideTiers({ dest = '1900 GSP Dr', pickup = '', pickupLat = '', pickupLng = '', note = '' }) {
   const [selected, setSelected] = useState(TIERS[0])
   const [upsell, setUpsell] = useState(null)
   const [promptOpen, setPromptOpen] = useState(false)
@@ -41,6 +43,16 @@ export function RideTiers({ dest = '1900 GSP Dr' }) {
   }, [student.verified])
 
   const surgeMul = surge?.multiplier > 1 ? surge.multiplier : 1
+  const resolved = (pickup || pickupLat) ? resolvePickupPoint(pickup, pickupLat, pickupLng) : null
+  const device = resolved?.fromDevice ? resolved : null
+  const drop = destPoint(dest)
+  const preview = useDrivingPreview(
+    device ? [device.latitude, device.longitude] : null,
+    device ? [drop.latitude, drop.longitude] : null,
+  )
+  const gpsParams = device
+    ? { pickup: device.label, pickupLat: String(device.latitude), pickupLng: String(device.longitude), note }
+    : (pickup ? { pickup, note } : {})
 
   const onSelectTier = (tier) => {
     setSelected(tier)
@@ -57,6 +69,7 @@ export function RideTiers({ dest = '1900 GSP Dr' }) {
       dest,
       tier: row.id,
       listCents: String(quoted.fareCents + quoted.discountCents),
+      ...gpsParams,
     })
   }
 
@@ -76,21 +89,33 @@ export function RideTiers({ dest = '1900 GSP Dr' }) {
     runOrPrompt(proceedRequest, {
       setPromptOpen,
       nextPath: 'tiers',
-      nextParams: { dest },
+      nextParams: { dest, ...gpsParams },
     })
   }
 
   return (
     <div className="fade-in" style={{ display: 'flex', flexDirection: 'column', height: '100%', background: 'transparent' }}>
       <div style={{ padding: '12px 16px 0' }}>
-        <button type="button" className="pressable glass-pill nav-back-btn" aria-label="Back to pickup confirmation" onClick={() => navigate('confirm', { dest })} style={{ marginBottom: 8 }}>←</button>
+        <button type="button" className="pressable glass-pill nav-back-btn" aria-label="Back to pickup confirmation" onClick={() => navigate('confirm', { dest, ...gpsParams })} style={{ marginBottom: 8 }}>←</button>
         <div className="glass-panel" style={{ borderRadius: 16, overflow: 'hidden', padding: 4 }}>
           <CampusMap
-            height={140}
+            height={device ? 200 : 140}
             marker={STADIUM}
-            route={[STADIUM, [34.8957, -82.2189]]}
+            route={device
+              ? (preview?.path || [[device.latitude, device.longitude], [drop.latitude, drop.longitude]])
+              : [STADIUM, [34.8957, -82.2189]]}
+            stops={device ? [
+              { id: 'pickup', lat: device.latitude, lng: device.longitude, label: 'Pickup', color: '#522D80' },
+              { id: 'dropoff', lat: drop.latitude, lng: drop.longitude, label: dest, color: '#F56600' },
+            ] : null}
+            center={device ? [device.latitude, device.longitude] : undefined}
           />
         </div>
+        {device ? (
+          <p style={{ marginTop: 8, fontSize: 14, fontWeight: 800, color: '#522D80' }}>
+            To destination · {preview?.etaLabel || 'Estimating…'}
+          </p>
+        ) : null}
         <div
           className="glass-panel glass-panel--purple"
           style={{
@@ -205,7 +230,7 @@ export function RideTiers({ dest = '1900 GSP Dr' }) {
         open={promptOpen}
         onClose={() => setPromptOpen(false)}
         nextPath="tiers"
-        nextParams={{ dest }}
+        nextParams={{ dest, ...gpsParams }}
       />
     </div>
   )

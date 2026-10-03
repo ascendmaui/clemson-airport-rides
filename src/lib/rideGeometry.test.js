@@ -3,10 +3,14 @@ import test from 'node:test'
 import {
   CITY_MPS,
   clockTime,
+  decodePolyline,
+  drivingLegFromQuote,
   estimateLeg,
   fetchDrivingLeg,
   formatMiles,
   formatMinutes,
+  quoteRouteBody,
+  routePreview,
   haversineMeters,
   hourlyRateCents,
   minutesUntilDropoff,
@@ -348,4 +352,34 @@ test('fetchDrivingLeg: safely returns null when window/Google Maps is not presen
   const result = await fetchDrivingLeg([34.6788, -82.8432], [34.8957, -82.2189])
   assert.equal(result, null)
   assert.equal(await fetchDrivingLeg(null, null), null)
+})
+
+test('routePreview draws a line and an ETA, then prefers a Directions path', () => {
+  const origin = [34.6836, -82.8364]
+  const dest = [34.8957, -82.2189]
+  const estimate = routePreview(origin, dest)
+  assert.equal(estimate.source, 'estimate')
+  assert.equal(estimate.path.length, 2)
+  assert.match(estimate.etaLabel, /^About \d+ min$|^About \d+h /)
+  const road = [[34.68, -82.84], [34.7, -82.7], [34.89, -82.22]]
+  const directed = routePreview(origin, dest, { path: road, meters: 50000, seconds: 2400 })
+  assert.equal(directed.source, 'directions')
+  assert.deepEqual(directed.path, road)
+  assert.equal(directed.seconds, 2400)
+  assert.equal(directed.etaLabel, 'About 40 min')
+})
+
+test('drivingLegFromQuote decodes a Google polyline and ignores a fare-only payload', () => {
+  const encoded = '_p~iF~ps|U_ulLnnqC_mqNvxq`@'
+  const leg = drivingLegFromQuote({ polyline: encoded, durationS: 600, distanceM: 12000 })
+  assert.ok(leg.path.length >= 3)
+  assert.ok(Math.abs(leg.path[0][0] - 38.5) < 0.001)
+  assert.equal(leg.seconds, 600)
+  assert.equal(drivingLegFromQuote({ fareCents: 1800 }), null)
+  assert.deepEqual(quoteRouteBody([34.68, -82.84], [34.89, -82.22]), {
+    origin: { lat: 34.68, lng: -82.84 },
+    destination: { lat: 34.89, lng: -82.22 },
+    tier: 'standard',
+  })
+  assert.equal(decodePolyline(''), null)
 })

@@ -23,4 +23,11 @@ export const RIDE_TIERS: {
 }[]
 export function destPoint(label: string): { latitude: number; longitude: number }
 export function pickupPoint(label: string): { latitude: number; longitude: number }
+export const CURRENT_LOCATION_LABEL: string
+export function isCurrentLocationLabel(label: unknown): boolean
+export function resolvePickupPoint(
+  label: unknown,
+  lat?: unknown,
+  lng?: unknown,
+): { label: string; latitude: number; longitude: number; fromDevice: boolean } | null
 export function formatUsd(amount: number): string
