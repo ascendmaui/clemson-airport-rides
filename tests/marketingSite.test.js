@@ -41,7 +41,7 @@ test('marketing features match the shipped product', () => {
   ])
   const tesla = MARKETING_FEATURES.find((feature) => feature.id === 'tesla')
   assert.match(tesla.body, /driver is at the wheel/i)
-  assert.match(tesla.body, /no self-driving/i)
+  assert.doesNotMatch(tesla.body, /self-driving|robotaxi/i)
   const student = MARKETING_FEATURES.find((feature) => feature.id === 'student')
   assert.match(student.body, /10% off Standard/)
   assert.match(student.body, /confirmed/)

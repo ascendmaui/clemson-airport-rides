@@ -24,7 +24,7 @@ export const MARKETING_FEATURES = [
   {
     id: 'tesla',
     title: 'Tesla Model 3',
-    body: 'Tesla Model 3 fleet is live on the tier list and weekend scheduling. Pick a listed Tesla driver — a driver is at the wheel. There is no self-driving or robotaxi dispatch.',
+    body: 'Tesla Model 3 fleet is live on the tier list and weekend scheduling. Pick a listed Tesla driver — a driver is at the wheel.',
   },
   {
     id: 'preferred',
