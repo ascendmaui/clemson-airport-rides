@@ -8,6 +8,13 @@ import {
 import { getHashRoute, navigate } from '../lib/navigation'
 import { resumeAfterAuth } from '../components/SignInToBookModal'
 import { capturePromoFromLocation } from '../lib/riderPromo'
+import { CLEMSON_MIAMI_RIDE } from '../../packages/rides-native/clemsonMiamiPromo.js'
+import {
+  hasClemsonMiamiLink,
+  openClemsonMiamiCheckout,
+  rememberClemsonMiamiFromLocation,
+  takeClemsonMiamiNotice,
+} from '../lib/clemsonMiamiRide'
 import { RIDE_STYLES, isProfileComplete, profileFieldError, missingProfileFields } from '../../packages/rides-native/partyProfile.js'
 import { buildFieldA11yProps, getFieldErrorProps } from '../lib/formA11y.js'
 import { takeAuthCallbackError } from '../lib/googleWebAuth'
@@ -167,7 +174,35 @@ function useStoredAuthError(setError) {
   }, [setError])
 }
 
-function afterAuthSuccess() {
+function useClemsonMiamiNotice(setMessage) {
+  useEffect(() => {
+    const stored = takeClemsonMiamiNotice()
+    if (stored) setMessage(stored)
+    const onNotice = () => {
+      const message = takeClemsonMiamiNotice()
+      if (message) setMessage(message)
+    }
+    window.addEventListener('clemson-miami-notice', onNotice)
+    return () => window.removeEventListener('clemson-miami-notice', onNotice)
+  }, [setMessage])
+}
+
+function GameRideNote() {
+  const gameLink = getHashRoute().params.ride === CLEMSON_MIAMI_RIDE
+  if (!gameLink) return null
+  return (
+    <p style={{ fontSize: 13, color: '#522D80', lineHeight: 1.45, marginBottom: 14 }}>
+      This link is a $1 ride inside Clemson to the Clemson Miami game. It applies when you sign up or sign in. There is no code to enter.
+    </p>
+  )
+}
+
+async function afterAuthSuccess() {
+  rememberClemsonMiamiFromLocation()
+  if (hasClemsonMiamiLink()) {
+    const started = await openClemsonMiamiCheckout()
+    if (started) return
+  }
   const { params } = getHashRoute()
   const stash = typeof window !== 'undefined' ? window.__clemsonAuthNext : null
   const merged = { ...(stash?.params || {}), ...params }
@@ -189,6 +224,7 @@ export function SignInScreen() {
   const [busy, setBusy] = useState(false)
   const [googleBusy, setGoogleBusy] = useState(false)
   useStoredAuthError(setError)
+  useClemsonMiamiNotice(setError)
 
   async function onSubmit(e) {
     e.preventDefault()
@@ -197,7 +233,7 @@ export function SignInScreen() {
     setBusy(true)
     try {
       await signIn(email.trim(), password)
-      afterAuthSuccess()
+      await afterAuthSuccess()
     } catch (err) {
       setFormInvalid(true)
       setError(err.message || 'Sign in failed')
@@ -212,6 +248,7 @@ export function SignInScreen() {
     setFormInvalid(false)
     setGoogleBusy(true)
     try {
+      rememberClemsonMiamiFromLocation()
       const { params } = getHashRoute()
       await signInWithGoogle({ nextParams: params })
     } catch (err) {
@@ -223,6 +260,7 @@ export function SignInScreen() {
   return (
     <AuthShell title="Welcome back" subtitle="Sign in to book airport rides. Surge applies on busy hours and game days.">
       <GoogleContinue busy={googleBusy} disabled={busy} onClick={onGoogle} />
+      <GameRideNote />
       {error && (
         <div id="signin-form-alert">
           <AccessibleAlert error={error} onDismiss={() => setError(null)} style={{ marginBottom: 12 }} />
@@ -297,12 +335,14 @@ export function SignUpScreen() {
   const [promo, setPromo] = useState(() => capturePromoFromLocation())
   const [error, setError] = useState(null)
   const [info, setInfo] = useState(null)
+  useClemsonMiamiNotice(setInfo)
   const [created, setCreated] = useState(false)
   const [busy, setBusy] = useState(false)
   const [cooldownSec, setCooldownSec] = useState(() => getSignupRateLimitRemainingSec())
   const [touchedSubmit, setTouchedSubmit] = useState(false)
   const [googleBusy, setGoogleBusy] = useState(false)
   const submitLock = useRef(false)
+  const gameLink = getHashRoute().params.ride === CLEMSON_MIAMI_RIDE
   useStoredAuthError(setError)
 
   useEffect(() => {
@@ -337,10 +377,15 @@ export function SignUpScreen() {
         setError(problem)
         return
       }
-      const result = await signUp(trimmed, password, fullName.trim(), promo, { phone, bio, rideStyle })
+      const result = await signUp(trimmed, password, fullName.trim(), gameLink ? '' : promo, { phone, bio, rideStyle })
       const claim = result?.promoClaim
       if (claim?.error) {
         setError(`Account created. ${claim.error}`)
+        setCreated(true)
+        return
+      }
+      if (!result?.session && hasClemsonMiamiLink()) {
+        setInfo('Account created. Confirm your email and sign in. The $1 Clemson Miami ride starts automatically on this browser. There is no code to enter.')
         setCreated(true)
         return
       }
@@ -349,7 +394,7 @@ export function SignUpScreen() {
         setCreated(true)
         return
       }
-      afterAuthSuccess()
+      await afterAuthSuccess()
     } catch (err) {
       if (isRateLimitError(err)) {
         const retry = err.retryAfterSec || left || 60
@@ -375,6 +420,7 @@ export function SignUpScreen() {
     setInfo(null)
     setGoogleBusy(true)
     try {
+      rememberClemsonMiamiFromLocation()
       const { params } = getHashRoute()
       await signInWithGoogle({ nextParams: params, promoCode: promo })
     } catch (err) {
@@ -391,6 +437,7 @@ export function SignUpScreen() {
   return (
     <AuthShell title="Join Clemson RIDES" subtitle="Metered fares to GSP and CLT. Students save 10% on Standard.">
       <GoogleContinue busy={googleBusy} disabled={busy} onClick={onGoogle} />
+      <GameRideNote />
       {error && (
         <div id="signup-form-alert">
           <AccessibleAlert error={error} onDismiss={() => setError(null)} style={{ marginBottom: 12 }} />
@@ -524,6 +571,7 @@ export function SignUpScreen() {
             disabled={blocked || created}
           />
         </label>
+        {!gameLink && (
         <label htmlFor="signup-promo" style={{ display: 'block', marginBottom: 18 }}>
           <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink-secondary)' }}>
             Promo code <span style={{ fontWeight: 500, color: 'var(--ink-tertiary)' }}>(optional)</span>
@@ -544,6 +592,7 @@ export function SignUpScreen() {
             Applied when you create the account. You and your friend are rewarded only after you complete your first ride.
           </span>
         </label>
+        )}
         {info && (
           <p role="status" aria-live="polite" style={{ color: '#522D80', fontSize: 13, marginBottom: 12, lineHeight: 1.45 }}>
             {info}
@@ -555,7 +604,7 @@ export function SignUpScreen() {
           </p>
         )}
         {created ? (
-          <button type="button" className="pressable primary-cta" onClick={afterAuthSuccess} style={{ width: '100%', padding: 16, borderRadius: 16, background: 'linear-gradient(135deg, #F56600 0%, #ff7a1a 100%)', color: '#fff', fontWeight: 700, fontSize: 16, boxShadow: 'var(--shadow-cta)' }}>
+          <button type="button" className="pressable primary-cta" onClick={() => { afterAuthSuccess().catch((err) => setError(err.message || 'Could not continue')) }} style={{ width: '100%', padding: 16, borderRadius: 16, background: 'linear-gradient(135deg, #F56600 0%, #ff7a1a 100%)', color: '#fff', fontWeight: 700, fontSize: 16, boxShadow: 'var(--shadow-cta)' }}>
             Continue
           </button>
         ) : (

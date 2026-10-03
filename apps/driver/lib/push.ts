@@ -2,6 +2,7 @@ import Constants from 'expo-constants'
 import * as Notifications from 'expo-notifications'
 import { Platform } from 'react-native'
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { clemsonMiamiDriverNotification } from '../../../packages/rides-native/clemsonMiamiPromo.js'
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -85,15 +86,20 @@ export async function notifyNewRequest(card: {
   pickupLabel: string
   dropoffLabel: string
   tagLabels?: string[]
+  promoRide?: boolean
+  now?: string | number | Date
 }) {
   const flags = (card.tagLabels || []).slice(0, 3).join(' · ')
-  const body = flags
+  const routeBody = flags
     ? `${card.pickupLabel} → ${card.dropoffLabel} · ${flags}`
     : `${card.pickupLabel} → ${card.dropoffLabel}`
+  const promo = card.promoRide
+    ? clemsonMiamiDriverNotification(card.now ? new Date(card.now) : new Date())
+    : null
   await Notifications.scheduleNotificationAsync({
     content: {
-      title: 'New ride request',
-      body,
+      title: promo?.title || 'New ride request',
+      body: promo?.body || routeBody,
       data: { tripId: card.id },
       sound: 'request.wav',
     },

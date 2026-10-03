@@ -570,6 +570,24 @@ test('driver push offline and error states', { concurrency: false }, async (t) =
     assert.equal(state().reads, 0)
   })
 
+  await t.test('notifyNewRequest uses promo ride copy for the Clemson Miami $1 trip', async () => {
+    await push.notifyNewRequest({
+      id: 'promo-1',
+      pickupLabel: 'Somewhere else',
+      dropoffLabel: 'GSP',
+      promoRide: true,
+      now: '2026-10-03T19:00:00.000Z',
+    })
+    const note = state().scheduled[0]
+    assert.equal(note.content.title, 'Promo ride')
+    assert.match(note.content.body, /promo ride/i)
+    assert.match(note.content.body, /fare \$1/)
+    assert.match(note.content.body, /within Clemson/)
+    assert.match(note.content.body, /Clemson Miami game/)
+    assert.match(note.content.body, /until 7:30 PM/)
+    assert.equal(note.content.data.tripId, 'promo-1')
+  })
+
   await t.test('notifyNewRequest propagates scheduler network, timeout, and raw errors', async () => {
     state().scheduleError = networkError()
     const offline = await rejectionOf(push.notifyNewRequest(CARD))

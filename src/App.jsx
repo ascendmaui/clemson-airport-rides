@@ -1,6 +1,11 @@
 import { useEffect, useState } from 'react'
 import { getHashRoute, redirectShareHashToPath } from './lib/navigation'
 import { capturePromoFromLocation } from './lib/riderPromo'
+import {
+  hasClemsonMiamiLink,
+  openClemsonMiamiCheckout,
+  rememberClemsonMiamiFromLocation,
+} from './lib/clemsonMiamiRide'
 import { useAuth } from './lib/auth'
 import {
   claimAmbassadorAttribution,
@@ -188,11 +193,13 @@ function Screen({ path, params }) {
 
 export default function App() {
   const [{ path, params }, setRoute] = useState(() => getHashRoute())
+  const { user, loading } = useAuth()
 
   useEffect(() => {
     if (redirectShareHashToPath()) return undefined
     const onRoute = () => {
       capturePromoFromLocation()
+      rememberClemsonMiamiFromLocation()
       if (redirectShareHashToPath()) return
       setRoute(getHashRoute())
     }
@@ -205,6 +212,18 @@ export default function App() {
       window.clearTimeout(t)
     }
   }, [])
+
+  useEffect(() => {
+    rememberClemsonMiamiFromLocation()
+    if (loading || !user || !hasClemsonMiamiLink()) return undefined
+    let alive = true
+    openClemsonMiamiCheckout().catch((err) => {
+      if (alive) console.error('[clemson-miami]', err?.message || err)
+    })
+    return () => {
+      alive = false
+    }
+  }, [user, loading, path])
 
   const overflow = path === 'driver' ? 'hidden' : 'auto'
   const site = SITE_ROUTES.has(path)

@@ -1,6 +1,6 @@
 /**
  * Payment method, quote, checkout, credit, and trip-settlement actions.
- * POST /api/stripe-payment-methods?action=setup-intent|save|quote|airport-checkout|schedule-trip|request-driver|buy-credits|credits-confirm|abandon-checkout|collect|settle|credits|credit-lots
+ * POST /api/stripe-payment-methods?action=setup-intent|save|quote|airport-checkout|schedule-trip|request-driver|buy-credits|credits-confirm|abandon-checkout|collect|settle|credits|credit-lots|clemson-miami
  * GET  /api/stripe-payment-methods?action=credit-lots|credits
  * Legacy paths are rewritten in vercel.json.
  * Body sub-actions such as buy (prepaid credits) are not route names.
@@ -23,6 +23,7 @@ import handleScheduleTrip from '../server/endpoints/scheduleTrip.js'
 import handleRequestDriverTrip from '../server/endpoints/requestDriverTrip.js'
 import handleAbandonCheckout from '../server/endpoints/abandonCheckout.js'
 import handleReconcileCheckout from '../server/endpoints/reconcileCheckout.js'
+import handleClemsonMiamiCheckout from '../server/endpoints/clemsonMiamiCheckout.js'
 
 const HANDLERS = {
   'setup-intent': handleStripeSetupIntent,
@@ -39,6 +40,7 @@ const HANDLERS = {
   collect: handleCollectPayment,
   settle: handleTripSettle,
   'reconcile-checkout': handleReconcileCheckout,
+  'clemson-miami': handleClemsonMiamiCheckout,
 }
 
 const LEGACY = {
@@ -58,7 +60,7 @@ export default async function handler(req, res, ...rest) {
   const handle = HANDLERS[action]
   if (!handle) {
     return json(res, 400, {
-      error: 'Unknown payment action. Use action=setup-intent, save, quote, airport-checkout, schedule-trip, request-driver, buy-credits, credits-confirm, abandon-checkout, credit-lots, credits, collect, settle, or reconcile-checkout.',
+      error: 'Unknown payment action. Use action=setup-intent, save, quote, airport-checkout, schedule-trip, request-driver, buy-credits, credits-confirm, abandon-checkout, credit-lots, credits, collect, settle, reconcile-checkout, or clemson-miami.',
     })
   }
   return handle(req, res, ...rest)

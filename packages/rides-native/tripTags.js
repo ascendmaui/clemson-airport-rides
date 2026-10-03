@@ -2,6 +2,7 @@
  * Driver-facing labels for trips the web app already stores.
  * No network, no Stripe, no self-driving calls.
  */
+import { CLEMSON_MIAMI_PROMO_ID } from './clemsonMiamiPromo.js'
 
 export const TESLA_FLEET_NOTICE =
   'Tesla Model 3 fleet is live. A Clemson RIDES driver is at the wheel. There is no self-driving or robotaxi dispatch.'
@@ -449,6 +450,7 @@ export function toDriverCard(row, options) {
     shares: carpoolShareLines(meta),
     riderLat: readLiveLat(meta),
     riderLng: readLiveLng(meta),
+    promoRide: meta.promo === CLEMSON_MIAMI_PROMO_ID || meta.promo_ride === true,
   }
 }
 

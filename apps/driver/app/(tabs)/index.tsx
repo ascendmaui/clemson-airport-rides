@@ -10,6 +10,7 @@ import { DriverStatusCard } from '@/components/DriverStatusCard'
 import { useAuth } from '@/lib/auth'
 import { useFeedback } from '@/lib/feedback'
 import { notifyNewRequest } from '@/lib/push'
+import { clemsonMiamiDriverNotification } from 'rides-native/clemsonMiamiPromo.js'
 import { shownCents } from '@/lib/shown'
 import { supabase } from '@/lib/supabase'
 import { useTheme } from '@/lib/theme'
@@ -210,7 +211,12 @@ export default function DriverHome() {
     const next = fresh[0]
     if (!next) return
     pulse('request')
-    AccessibilityInfo.announceForAccessibility(`New ride offer: ${formatCents(next.driverNetCents)}, pickup at ${next.pickupLabel}`)
+    if (next.promoRide) {
+      const note = clemsonMiamiDriverNotification()
+      AccessibilityInfo.announceForAccessibility(`${note.title}. ${note.body}`)
+    } else {
+      AccessibilityInfo.announceForAccessibility(`New ride offer: ${formatCents(next.driverNetCents)}, pickup at ${next.pickupLabel}`)
+    }
     notifyNewRequest(next).catch(() => {})
   }, [desk?.offers, pulse])
 
