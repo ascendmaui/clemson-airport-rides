@@ -10,6 +10,7 @@ import { tapHaptic } from '@/lib/feedback'
 import { useAuth } from '@/lib/auth'
 import { setAuthNext } from '@/lib/authNext'
 
+/** Left to right: Rides, Schedule, Friends, Account. */
 const TABS = [
   { id: 'home', href: '/', label: 'Rides', icon: 'car-outline' as const },
   { id: 'schedule', href: '/schedule', label: 'Schedule', icon: 'calendar-outline' as const },

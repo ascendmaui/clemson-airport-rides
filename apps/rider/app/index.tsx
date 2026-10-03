@@ -18,6 +18,7 @@ import { CampusMap } from '@/components/CampusMap'
 import type { CampusMapHandle, LatLng, MapKind } from '@/components/mapTypes'
 import { mapKindLabel } from '@/components/mapTypes'
 import { MainTabs } from '@/components/MainTabs'
+import { goTabBack, TabBackBar } from '@/components/TabBackBar'
 import { Skeleton } from '@/components/Skeleton'
 import { loadBusySpots, type BusySpot } from '@/lib/busySpots'
 import { useAuth } from '@/lib/auth'
@@ -288,32 +289,35 @@ export default function RiderHome() {
           userCoordinate={userCoord}
         />
         <View pointerEvents="box-none" style={[styles.mapChrome, { paddingTop: insets.top + 8 }]}>
-          <View style={styles.topBar}>
-            <View style={[styles.brand, lift(colors, 'float')]}>
-              <Text style={styles.brandKicker}>RIDE • GAME • REPEAT</Text>
-              <Text style={styles.brandTitle}>Clemson <Text style={styles.brandSoft}>RIDES</Text></Text>
-              <View style={styles.brandPill}>
-                <Text style={styles.brandPillText}>TIGERS GET YOU THERE</Text>
+          <View pointerEvents="box-none">
+            <TabBackBar onBack={() => goTabBack(router)} hint="Returns to the previous screen" />
+            <View style={styles.topBar}>
+              <View style={[styles.brand, lift(colors, 'float')]}>
+                <Text style={styles.brandKicker}>RIDE • GAME • REPEAT</Text>
+                <Text style={styles.brandTitle}>Clemson <Text style={styles.brandSoft}>RIDES</Text></Text>
+                <View style={styles.brandPill}>
+                  <Text style={styles.brandPillText}>TIGERS GET YOU THERE</Text>
+                </View>
               </View>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Account"
+                accessibilityHint={user ? 'Opens your account' : 'Sign in to open your account'}
+                onPress={() => {
+                  void tapHaptic()
+                  // No loaded account: go to login instead of a gated screen.
+                  if (!user) {
+                    setAuthNext('/account')
+                    router.push('/sign-in')
+                    return
+                  }
+                  router.push('/account')
+                }}
+                style={[styles.avatar, lift(colors, 'rest')]}
+              >
+                <Text style={styles.avatarText}>{initial}</Text>
+              </Pressable>
             </View>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Account"
-              accessibilityHint={user ? 'Opens your account' : 'Sign in to open your account'}
-              onPress={() => {
-                void tapHaptic()
-                // No loaded account: go to login instead of a gated screen.
-                if (!user) {
-                  setAuthNext('/account')
-                  router.push('/sign-in')
-                  return
-                }
-                router.push('/account')
-              }}
-              style={[styles.avatar, lift(colors, 'rest')]}
-            >
-              <Text style={styles.avatarText}>{initial}</Text>
-            </Pressable>
           </View>
           <View style={styles.mapControls}>
             <View style={styles.kindRow}>

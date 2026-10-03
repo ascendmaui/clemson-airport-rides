@@ -65,8 +65,11 @@ export function RiderHome({ riderName = 'John' }) {
   }
 
   return (
-    <div className="fade-in" style={{ display: 'flex', flexDirection: 'column', minHeight: '100%', background: 'transparent' }}>
-      <div style={{ flex: 1, overflowY: 'auto', paddingBottom: 8 }}>
+    <div className="fade-in" style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0, overflow: 'hidden', background: 'transparent' }}>
+      <div className="tab-top-bar">
+        <button type="button" className="pressable glass-pill nav-back-btn" aria-label="Back" onClick={() => navigate('landing')}>←</button>
+      </div>
+      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', paddingBottom: 8 }}>
         <div style={{ padding: '14px 20px 0' }}>
           <header
             style={{

@@ -5,7 +5,7 @@ import { handleTabListKeyDown } from '../lib/tabA11y'
 import { BillingPanel } from '../components/BillingPanel'
 import {
   IconBell, IconCard, IconCar, IconHelp, IconPrivacy, IconProfile,
-  IconSettings, IconSignOut, IconStudent, IconShare,
+  IconSignOut, IconStudent, IconShare,
 } from '../components/icons'
 import { useAuth } from '../lib/auth'
 import { getHashRoute, navigate } from '../lib/navigation'
@@ -255,13 +255,11 @@ export function AccountScreen() {
   const studentOk = studentNow.verified
 
   return (
-    <div className="route-fade" style={{ display: 'flex', flexDirection: 'column', minHeight: '100%' }}>
-      <div style={{ flex: 1, padding: '20px 18px 28px', overflowY: 'auto' }}>
-        <button type="button" className="pressable glass-pill nav-back-btn" aria-label="Back to home" onClick={() => navigate('home')}
-          style={{ marginBottom: 10 }}>
-          <IconSettings size={18} color="#522D80" />
-        </button>
-
+    <div className="route-fade" style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0, overflow: 'hidden' }}>
+      <div className="tab-top-bar">
+        <button type="button" className="pressable glass-pill nav-back-btn" aria-label="Back to home" onClick={() => navigate('home')}>←</button>
+      </div>
+      <div style={{ flex: 1, minHeight: 0, padding: '12px 18px 28px', overflowY: 'auto' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
           <IconProfile size={26} />
           <h1 style={{ fontSize: 24, fontWeight: 800, color: 'var(--purple)', letterSpacing: -0.3 }}>Account</h1>

@@ -1,12 +1,12 @@
 import { IconCar, IconCarpool, IconProfile, IconSchedule } from './icons'
 import { navigate } from '../lib/navigation'
 
-/** Exact four-tab bar: Schedule · Friends · Account · Rides */
+/** Four-tab bar, left to right: Rides · Schedule · Friends · Account */
 const TABS = [
+  { id: 'home', label: 'Rides', Icon: IconCar },
   { id: 'schedule', label: 'Schedule', Icon: IconSchedule },
   { id: 'friends', label: 'Friends', Icon: IconCarpool },
   { id: 'account', label: 'Account', Icon: IconProfile },
-  { id: 'home', label: 'Rides', Icon: IconCar },
 ]
 
 function goTab(id) {

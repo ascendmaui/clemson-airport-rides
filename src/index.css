@@ -371,6 +371,17 @@ select[aria-invalid="true"]:focus-visible {
   box-shadow: var(--shadow-modal);
 }
 
+.tab-top-bar {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  padding: 12px 20px 8px;
+  background: var(--surface-muted);
+}
+
 .tab-bar {
   position: sticky;
   bottom: 0;

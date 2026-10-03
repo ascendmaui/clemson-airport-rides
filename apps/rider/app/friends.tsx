@@ -9,6 +9,7 @@ import { CarpoolCompare } from '@/components/carpool/CarpoolCompare'
 import { NeighborhoodPicker } from '@/components/carpool/NeighborhoodPicker'
 import { Card, EmptyState, ErrorText, Field, SkeletonBlock } from '@/components/carpool/ui'
 import { MainTabs } from '@/components/MainTabs'
+import { goTabBack, TabBackBar } from '@/components/TabBackBar'
 import { loadAmbassadorCode } from '@/lib/ambassadorCode'
 import { setAuthNext } from '@/lib/authNext'
 import { useAuth } from '@/lib/auth'
@@ -312,7 +313,7 @@ export default function CarpoolHubScreen() {
           colors={[colors.orange, colors.purple]}
           start={{ x: 0, y: 0 }}
           end={{ x: 0.85, y: 1 }}
-          style={[styles.hero, { paddingTop: insets.top + 28 }]}
+          style={[styles.hero, { paddingTop: insets.top + 64 }]}
         >
           <Text style={styles.brand}>CLEMSON RIDES</Text>
           <Text style={styles.heroTitle}>Split the surge.</Text>
@@ -486,6 +487,9 @@ export default function CarpoolHubScreen() {
           </Card>
         </View>
       </ScrollView>
+      <View pointerEvents="box-none" style={[styles.backOverlay, { top: insets.top + 8 }]}>
+        <TabBackBar onBack={() => goTabBack(router, '/')} padded={false} hint="Returns to rides" />
+      </View>
       <MainTabs active="friends" />
       <SignInToBookSheet
         open={promptOpen}
@@ -515,6 +519,7 @@ function PressOffer({ onPress }: { onPress: () => void }) {
 function makeStyles(colors: Palette) {
   return {
     screen: { flex: 1, backgroundColor: colors.background },
+    backOverlay: { position: 'absolute' as const, left: 22, right: 22 },
     scroll: { flex: 1 },
     hero: { paddingHorizontal: 22, paddingBottom: 22 },
     brand: { color: colors.onAccent, fontSize: 12, fontWeight: '800' as const, letterSpacing: 1.4 },
