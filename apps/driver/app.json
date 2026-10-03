@@ -79,10 +79,12 @@
         {
           "color": "#F56600",
           "sounds": [
-            "./assets/sounds/request.wav"
+            "./assets/sounds/request.wav",
+            "./assets/sounds/ride_offer_chime.wav"
           ]
         }
       ],
+      "./plugins/withIosRideOfferChime.js",
       "expo-audio",
       [
         "expo-splash-screen",
