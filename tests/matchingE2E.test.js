@@ -319,3 +319,21 @@ test('terminal trip statuses reject late accept without inserting events', async
     assert.equal(supabase._tables.trip_events.length, 0)
   }
 })
+
+test('rider cancels searching trip; driver accept fails afterward', async () => {
+  const { supabase, trip } = seedMatchingScenario()
+  // Cancel the searching trip
+  await cancelSearchingTrip(supabase, trip.id, trip.rider_id)
+  // Verify trip is canceled
+  const canceledTrip = supabase._tables.trips.find((t) => t.id === trip.id)
+  assert.equal(canceledTrip.status, 'canceled')
+  // Attempt to accept the trip should fail
+  await assert.rejects(
+    () => acceptTrip(supabase, { id: trip.id, status: canceledTrip.status }, 'driver-1'),
+    /That ride is no longer available/,
+  )
+  // Ensure no accepted event was added
+  const acceptedEvents = supabase._tables.trip_events.filter((e) => e.kind === 'accepted' && e.trip_id === trip.id)
+  assert.equal(acceptedEvents.length, 0)
+})
+
