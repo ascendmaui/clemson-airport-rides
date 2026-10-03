@@ -68,7 +68,7 @@ async function storeToken(supabase: SupabaseClient | null, driverId: string, tok
     driver_id: driverId,
     expo_push_token: token,
     updated_at: updatedAt,
-  })
+  }, { defaultToNull: false })
   if (!status.error) return true
   if (!/expo_push_token|column|schema cache/i.test(status.error.message || '')) return false
   const table = await supabase.from('driver_push_tokens').upsert({

@@ -1,10 +1,13 @@
 import { Stack, useRouter } from 'expo-router'
 import * as Notifications from 'expo-notifications'
 import { StatusBar } from 'expo-status-bar'
-import { useEffect, type ReactNode } from 'react'
+import { useEffect, useRef, type ReactNode } from 'react'
+import { View } from 'react-native'
 import { BootScreen } from '@/components/BootScreen'
 import { AuthProvider, useAuth } from '@/lib/auth'
 import { FeedbackProvider } from '@/lib/feedback'
+import { DriverShiftProvider } from '@/lib/driverShiftSession'
+import { OnlineTopBar } from '@/components/OnlineTopBar'
 import { registerDriverPush } from '@/lib/push'
 import { supabase } from '@/lib/supabase'
 import { ThemeProvider, useTheme } from '@/lib/theme'
@@ -25,26 +28,28 @@ function Gate({ children }: { children: ReactNode }) {
 function PushBridge() {
   const { user } = useAuth()
   const router = useRouter()
+  const routerRef = useRef(router)
+  routerRef.current = router
   useEffect(() => {
     if (!user) return undefined
     registerDriverPush(supabase, user.id).catch(() => {})
     const sub = Notifications.addNotificationResponseReceivedListener((response: Notifications.NotificationResponse) => {
       const tripId = response.notification.request.content.data?.tripId
       if (typeof tripId === 'string' && tripId) {
-        router.push({ pathname: '/trip', params: { id: tripId } })
+        routerRef.current.push({ pathname: '/trip', params: { id: tripId } })
         return
       }
-      router.push('/queue')
+      routerRef.current.push('/queue')
     })
     return () => sub.remove()
-  }, [router, user])
+  }, [user])
   return null
 }
 
 function ThemedStack() {
   const { colors } = useTheme()
   return (
-    <>
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
       <StatusBar style={colors.statusBar} />
       <Stack
         screenOptions={{
@@ -53,7 +58,8 @@ function ThemedStack() {
           animation: 'slide_from_right',
         }}
       />
-    </>
+      <OnlineTopBar />
+    </View>
   )
 }
 
@@ -62,11 +68,13 @@ export default function RootLayout() {
     <ThemeProvider>
       <AuthProvider>
         <FeedbackProvider>
-          <Gate>
-            <PasswordRecoveryListener />
-            <PushBridge />
-            <ThemedStack />
-          </Gate>
+          <DriverShiftProvider>
+            <Gate>
+              <PasswordRecoveryListener />
+              <PushBridge />
+              <ThemedStack />
+            </Gate>
+          </DriverShiftProvider>
         </FeedbackProvider>
       </AuthProvider>
     </ThemeProvider>

@@ -35,6 +35,7 @@ import { AmbassadorScreen } from './screens/AmbassadorScreen'
 import { ToastProvider, ToastStack } from './lib/toasts'
 import { RideToastWatcher } from './components/RideToastWatcher'
 import { DriverBillingEntry } from './components/DriverBillingEntry'
+import { DriverOnlineChrome } from './components/DriverOnlineChrome'
 import { IncentivesAdmin } from './screens/IncentivesAdmin'
 import { LostFoundWatcher } from './components/LostFoundWatcher'
 import { LostFound } from './screens/LostFound'
@@ -228,6 +229,7 @@ export default function App() {
             <Screen path={path} params={params} />
           </div>
           {path === 'driver' && <DriverBillingEntry />}
+          <DriverOnlineChrome path={path} />
         </div>
       </div>
     </ToastProvider>

@@ -19,7 +19,9 @@ import {
   fetchNotificationPrefs, saveNotificationPrefs,
 } from '../lib/notificationPrefs'
 import { useToasts, pushToast } from '../lib/toasts'
-import { supabase } from '../lib/supabase'
+import { setDriverOnline, supabase } from '../lib/supabase'
+import { quietSwitchOn } from '../../packages/rides-native/driverShift.js'
+import { playShiftSound } from '../lib/shiftSounds'
 import { STUDENT_CLAIM_COPY, STUDENT_DISCOUNT_LABEL, markStudentVerified, studentStatus } from '../../packages/rides-native/riderMoney.js'
 import { fetchMyDriverApplication, isAdminIdentity, onboardingLabel } from '../lib/driverOnboarding'
 import { ReferFriendsPanel } from './ReferFriends'
@@ -103,6 +105,7 @@ export function AccountScreen() {
   const [prefs, setPrefs] = useState({ ...DEFAULT_NOTIFICATION_PREFS })
   const [prefsNote, setPrefsNote] = useState(null)
   const [prefsSaving, setPrefsSaving] = useState(false)
+  const prefsWrite = useRef(0)
   const [application, setApplication] = useState(null)
   const [deleteBusy, setDeleteBusy] = useState(false)
   const [deleteNote, setDeleteNote] = useState(null)
@@ -147,7 +150,9 @@ export function AccountScreen() {
     if (!user?.id) return
     reload().catch(() => {})
     findPendingRatingTrip(user.id).then(setPendingRate).catch(() => {})
+    const mine = prefsWrite.current
     fetchNotificationPrefs(user.id).then(({ prefs: p, softFail, persisted }) => {
+      if (mine !== prefsWrite.current) return
       setPrefs(p)
       setPrefsCache(p)
       if (softFail) {
@@ -213,10 +218,12 @@ export function AccountScreen() {
 
   async function savePrefs(next) {
     if (!user?.id) return
+    const mine = ++prefsWrite.current
     setPrefs(next)
     setPrefsCache(next)
     setPrefsSaving(true)
     const res = await saveNotificationPrefs(user.id, next)
+    if (mine !== prefsWrite.current) return
     setPrefsSaving(false)
     setPrefs(res.prefs)
     setPrefsCache(res.prefs)
@@ -236,7 +243,28 @@ export function AccountScreen() {
 
   async function onQuietChange(quiet) {
     if (!user?.id) return
-    await savePrefs({ ...prefs, quiet })
+    if (!isDriver) {
+      await savePrefs({ ...prefs, quiet })
+      return
+    }
+    const turningOn = !quietSwitchOn(quiet.dnd)
+    playShiftSound(turningOn ? 'start' : 'stop')
+    if (turningOn) {
+      try {
+        await setDriverOnline(user.id, true)
+      } catch (err) {
+        setPrefsNote(err?.message || 'Could not start rides')
+        return
+      }
+      await savePrefs({ ...prefs, quiet: { ...quiet, dnd: false } })
+      return
+    }
+    await savePrefs({ ...prefs, quiet: { ...quiet, dnd: true } })
+    try {
+      await setDriverOnline(user.id, false)
+    } catch (err) {
+      setPrefsNote(err?.message || 'Could not stop rides')
+    }
   }
 
   async function onSignOut() {
