@@ -297,6 +297,7 @@ export default function RiderHome() {
           gameDayLabel={gameNotice?.live ? gameNotice.headline : null}
           surge={surge}
           userCoordinate={userCoord}
+          showSimulatedFleet
         />
         <Animated.View pointerEvents="box-none" style={[styles.mapChrome, { paddingTop: insets.top + 10 }, chromeMotion]}>
           <View style={styles.topBar}>

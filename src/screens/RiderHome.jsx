@@ -245,7 +245,8 @@ export function RiderHome({ riderName = 'John' }) {
               onHeatMeta={setHeatMeta} showMapTypeControl interactive={showBusy}
               gameDayLabel={notice.live ? notice.headline : null}
               center={showBusy ? DOWNTOWN_CENTER : STADIUM} zoom={showBusy ? 15 : 14}
-              marker={showBusy ? DOWNTOWN_CENTER : STADIUM} />
+              marker={showBusy ? DOWNTOWN_CENTER : STADIUM}
+              showSimulatedFleet />
           </div>
 
           <div style={{ marginTop: 12 }}>

@@ -3,6 +3,7 @@ import { authedJson } from './apiClient.js'
 import { displayFirstName, standingFromRatings } from './authErrors.js'
 import { GSP, STADIUM } from './places.js'
 import { haversineMeters } from './riderShell.js'
+import { isSimulatedDriverId } from './simulatedDrivers.js'
 import { approvalGateMessage } from './syntheticOffers.js'
 
 /** Straight-line campus pace. TODO: a traffic ETA needs a billed GOOGLE_MAPS_API_KEY (Routes). */
@@ -308,12 +309,14 @@ export async function fetchOnlineDrivers(supabase) {
     .eq('online', true)
 
   if (statusErr) return { drivers: [], error: statusErr.message }
-  if (!statuses?.length) return { drivers: [], error: null }
+  // Map-only rush cars are not selectable, even if a stray status row uses their id.
+  const liveStatuses = (statuses || []).filter((row) => row?.driver_id && !isSimulatedDriverId(row.driver_id))
+  if (!liveStatuses.length) return { drivers: [], error: null }
 
-  const ids = statuses.map((row) => row.driver_id)
+  const ids = liveStatuses.map((row) => row.driver_id)
   const { approved, error: approvedErr } = await visibleApprovedIds(supabase, ids)
   if (approvedErr) return { drivers: [], error: approvedErr }
-  const visible = statuses.filter((row) => approved.has(row.driver_id))
+  const visible = liveStatuses.filter((row) => approved.has(row.driver_id))
   if (!visible.length) return { drivers: [], error: null }
 
   const visibleIds = visible.map((row) => row.driver_id)
@@ -332,7 +335,7 @@ export async function fetchDriversByIds(supabase, ids) {
 
   const { approved, error: approvedErr } = await visibleApprovedIds(supabase, wanted)
   if (approvedErr) return { drivers: [], error: approvedErr }
-  const visibleIds = wanted.filter((id) => approved.has(id))
+  const visibleIds = wanted.filter((id) => approved.has(id) && !isSimulatedDriverId(id))
   if (!visibleIds.length) return { drivers: [], error: null }
 
   const [statusRes, profileRes, vehicleRes] = await Promise.all([
@@ -422,6 +425,9 @@ export async function requestDriverTrip(supabase, {
   if (!supabase) throw new Error('Supabase is not configured')
   if (!riderId) throw new Error('Sign in required to request a driver')
   if (!driverId) throw new Error('Select a driver first')
+  if (isSimulatedDriverId(driverId)) {
+    throw new Error('That driver is busy and cannot be requested.')
+  }
 
   const destLat = destPoint?.latitude ?? destPoint?.lat
   const destLng = destPoint?.longitude ?? destPoint?.lng
