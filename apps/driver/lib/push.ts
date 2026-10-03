@@ -3,6 +3,17 @@ import * as Notifications from 'expo-notifications'
 import { Platform } from 'react-native'
 import type { SupabaseClient } from '@supabase/supabase-js'
 
+/** Android res/raw file. Sound key on Android ride-offer notifications. */
+export const RIDE_OFFER_SOUND_ANDROID = 'ride_offer_chime.wav'
+/** iOS bundle file. UNNotificationSound name for ride-offer notifications. */
+export const RIDE_OFFER_SOUND_IOS = 'ride_offer_chime.caf'
+/** High-importance channel used only by new ride-offer alerts. */
+export const RIDE_OFFER_CHANNEL_ID = 'ride-offers'
+
+export type DriverAlertKind = 'ride_offer' | 'chat' | 'trip_status' | 'marketing'
+
+const RIDE_OFFER_CHANNEL_NAME = 'New ride offers'
+
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
     shouldShowBanner: true,
@@ -11,6 +22,52 @@ Notifications.setNotificationHandler({
     shouldSetBadge: false,
   }),
 })
+
+export function soundForDriverAlert(kind: DriverAlertKind, os: typeof Platform.OS = Platform.OS): string | null {
+  switch (kind) {
+    case 'ride_offer':
+      return os === 'ios' ? RIDE_OFFER_SOUND_IOS : RIDE_OFFER_SOUND_ANDROID
+    case 'chat':
+    case 'trip_status':
+    case 'marketing':
+      return null
+    default: {
+      const unknown: never = kind
+      return unknown
+    }
+  }
+}
+
+export function driverNotificationRequest(
+  kind: DriverAlertKind,
+  content: { title: string; body: string; data?: Record<string, unknown> },
+) {
+  const sound = soundForDriverAlert(kind)
+  const requestContent: {
+    title: string
+    body: string
+    data?: Record<string, unknown>
+    sound?: string
+  } = {
+    title: content.title,
+    body: content.body,
+  }
+  if (content.data) requestContent.data = content.data
+  if (sound) requestContent.sound = sound
+  const trigger = kind === 'ride_offer' && Platform.OS === 'android'
+    ? { channelId: RIDE_OFFER_CHANNEL_ID }
+    : null
+  return { content: requestContent, trigger }
+}
+
+export async function ensureRideOfferChannel() {
+  if (Platform.OS !== 'android') return null
+  return Notifications.setNotificationChannelAsync(RIDE_OFFER_CHANNEL_ID, {
+    name: RIDE_OFFER_CHANNEL_NAME,
+    importance: Notifications.AndroidImportance.HIGH,
+    sound: RIDE_OFFER_SOUND_ANDROID,
+  })
+}
 
 export type PushState = {
   granted: boolean
@@ -37,6 +94,7 @@ export async function registerDriverPush(supabase: SupabaseClient | null, driver
       detail: 'Notifications are off. New requests still show in the queue while this app is open.',
     }
   }
+  await ensureRideOfferChannel().catch(() => {})
   const projectId = Constants.expoConfig?.extra?.eas?.projectId || Constants.easConfig?.projectId
   let token: string | null = null
   try {
@@ -90,13 +148,10 @@ export async function notifyNewRequest(card: {
   const body = flags
     ? `${card.pickupLabel} → ${card.dropoffLabel} · ${flags}`
     : `${card.pickupLabel} → ${card.dropoffLabel}`
-  await Notifications.scheduleNotificationAsync({
-    content: {
-      title: 'New ride request',
-      body,
-      data: { tripId: card.id },
-      sound: 'request.wav',
-    },
-    trigger: null,
-  })
+  await ensureRideOfferChannel().catch(() => {})
+  await Notifications.scheduleNotificationAsync(driverNotificationRequest('ride_offer', {
+    title: 'New ride request',
+    body,
+    data: { tripId: card.id },
+  }))
 }

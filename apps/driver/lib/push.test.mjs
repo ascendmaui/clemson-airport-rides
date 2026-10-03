@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import { registerHooks } from 'node:module'
+import { dirname, resolve } from 'node:path'
 import test from 'node:test'
+import { fileURLToPath } from 'node:url'
 
 // Stub Expo and React Native so this file never loads native modules or the network.
 globalThis.fetch = async function forbiddenFetch() {
@@ -55,6 +58,22 @@ const notificationsUrl = dataUrl(`
     const state = globalThis[key]
     state.scheduled.push(request)
     if (state.scheduleError) throw state.scheduleError
+  }
+  export const AndroidImportance = {
+    UNKNOWN: 0,
+    UNSPECIFIED: 1,
+    NONE: 2,
+    MIN: 3,
+    LOW: 4,
+    DEFAULT: 5,
+    HIGH: 6,
+    MAX: 7,
+  }
+  export async function setNotificationChannelAsync(id, channel) {
+    const state = globalThis[key]
+    state.channels.push({ id, channel })
+    if (state.channelError) throw state.channelError
+    return { id, ...channel }
   }
 `)
 
@@ -130,6 +149,8 @@ function freshPushState() {
     tokenOpts: [],
     scheduleError: null,
     scheduled: [],
+    channelError: null,
+    channels: [],
     handler,
   }
 }
@@ -544,7 +565,7 @@ test('driver push offline and error states', { concurrency: false }, async (t) =
           title: 'New ride request',
           body: 'White C → GSP · Airport · XL · Quiet',
           data: { tripId: 'trip-1' },
-          sound: 'request.wav',
+          sound: 'ride_offer_chime.caf',
         },
         trigger: null,
       },
@@ -553,7 +574,7 @@ test('driver push offline and error states', { concurrency: false }, async (t) =
           title: 'New ride request',
           body: 'ASC → Downtown',
           data: { tripId: 'trip-2' },
-          sound: 'request.wav',
+          sound: 'ride_offer_chime.caf',
         },
         trigger: null,
       },
@@ -562,12 +583,102 @@ test('driver push offline and error states', { concurrency: false }, async (t) =
           title: 'New ride request',
           body: 'Library → Tillman',
           data: { tripId: 'trip-3' },
-          sound: 'request.wav',
+          sound: 'ride_offer_chime.caf',
         },
         trigger: null,
       },
     ])
     assert.equal(state().reads, 0)
+    assert.equal(state().channels.length, 0)
+  })
+
+  await t.test('ride-offer payloads name the bundled chime and other alerts do not', () => {
+    state().os = 'ios'
+    const offer = push.driverNotificationRequest('ride_offer', {
+      title: 'New ride request',
+      body: 'White C → GSP',
+      data: { tripId: 'trip-1' },
+    })
+    assert.equal(offer.content.sound, 'ride_offer_chime.caf')
+    assert.equal(offer.trigger, null)
+    assert.equal(JSON.stringify(offer).includes('ride_offer_chime.wav'), false)
+
+    state().os = 'android'
+    const androidOffer = push.driverNotificationRequest('ride_offer', {
+      title: 'New ride request',
+      body: 'White C → GSP',
+      data: { tripId: 'trip-1' },
+    })
+    assert.equal(androidOffer.content.sound, 'ride_offer_chime.wav')
+    assert.deepEqual(androidOffer.trigger, { channelId: 'ride-offers' })
+    assert.equal(JSON.stringify(androidOffer).includes('ride_offer_chime.caf'), false)
+
+    for (const kind of ['chat', 'trip_status', 'marketing']) {
+      for (const os of ['ios', 'android']) {
+        state().os = os
+        const other = push.driverNotificationRequest(kind, {
+          title: 'Update',
+          body: 'Something else',
+          data: { tripId: 'trip-9' },
+        })
+        const encoded = JSON.stringify(other)
+        assert.equal(other.content.sound, undefined, kind)
+        assert.equal(other.trigger, null, kind)
+        assert.equal(encoded.includes('ride_offer_chime'), false, kind)
+        assert.equal(encoded.includes('ride-offers'), false, kind)
+        assert.equal(encoded.includes('request.wav'), false, kind)
+      }
+    }
+  })
+
+  await t.test('android ride offers use a high-importance channel with the custom sound', async () => {
+    state().os = 'android'
+    await push.notifyNewRequest(CARD)
+    assert.deepEqual(state().channels, [
+      {
+        id: 'ride-offers',
+        channel: {
+          name: 'New ride offers',
+          // Expo AndroidImportance.HIGH is 6 and maps to NotificationManager.IMPORTANCE_HIGH.
+          importance: 6,
+          sound: 'ride_offer_chime.wav',
+        },
+      },
+    ])
+    assert.deepEqual(state().scheduled, [
+      {
+        content: {
+          title: 'New ride request',
+          body: 'White C → GSP',
+          data: { tripId: 'trip-1' },
+          sound: 'ride_offer_chime.wav',
+        },
+        trigger: { channelId: 'ride-offers' },
+      },
+    ])
+  })
+
+  await t.test('registerDriverPush creates the ride-offer channel on android before the token request', async () => {
+    state().os = 'android'
+    const client = supabaseClient(() => ({ error: null }))
+    const result = await push.registerDriverPush(client, 'driver-1')
+    assert.equal(result.stored, true)
+    assert.equal(state().channels.length, 1)
+    assert.equal(state().channels[0].id, 'ride-offers')
+    assert.equal(state().channels[0].channel.importance, 6)
+    assert.equal(state().channels[0].channel.sound, 'ride_offer_chime.wav')
+    assert.equal(state().tokenOpts.length, 1)
+  })
+
+  await t.test('a channel setup failure does not block push token registration', async () => {
+    state().os = 'android'
+    state().channelError = new Error('channel denied')
+    const client = supabaseClient(() => ({ error: null }))
+    const result = await push.registerDriverPush(client, 'driver-1')
+    assert.equal(result.stored, true)
+    assert.equal(result.detail, REGISTERED)
+    assert.equal(state().channels.length, 1)
+    assert.equal(state().tokenOpts.length, 1)
   })
 
   await t.test('notifyNewRequest propagates scheduler network, timeout, and raw errors', async () => {
@@ -591,4 +702,56 @@ test('driver push offline and error states', { concurrency: false }, async (t) =
     const stacked = await rejectionOf(push.notifyNewRequest(CARD))
     assert.equal(stacked.message, RAW_STACK)
   })
+
+  await t.test('the chime is bundled for the driver app and not shared as an Android caf resource', () => {
+    const driverRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
+    const wav = readFileSync(resolve(driverRoot, 'assets/sounds/ride_offer_chime.wav'))
+    const caf = readFileSync(resolve(driverRoot, 'assets/sounds/ride_offer_chime.caf'))
+    assert.equal(wav.toString('ascii', 0, 4), 'RIFF')
+    assert.equal(wav.toString('ascii', 8, 12), 'WAVE')
+    const fmt = wavInfo(wav)
+    assert.equal(fmt.audioFormat, 1)
+    assert.equal(fmt.channels, 1)
+    assert.equal(fmt.sampleRate, 44100)
+    assert.equal(fmt.bits, 16)
+    assert.ok(fmt.frames / fmt.sampleRate < 30)
+    assert.ok(fmt.frames / fmt.sampleRate > 1)
+    assert.equal(caf.toString('ascii', 0, 4), 'caff')
+
+    const appConfig = JSON.parse(readFileSync(resolve(driverRoot, 'app.json'), 'utf8'))
+    const notificationsPlugin = appConfig.expo.plugins.find((entry) => Array.isArray(entry) && entry[0] === 'expo-notifications')
+    assert.ok(notificationsPlugin)
+    assert.deepEqual(notificationsPlugin[1].sounds, [
+      './assets/sounds/request.wav',
+      './assets/sounds/ride_offer_chime.wav',
+    ])
+    assert.equal(appConfig.expo.plugins.includes('./plugins/withIosRideOfferChime.js'), true)
+    const plugin = readFileSync(resolve(driverRoot, 'plugins/withIosRideOfferChime.js'), 'utf8')
+    assert.equal(plugin.includes('assets/sounds/ride_offer_chime.caf'), true)
+    assert.equal(plugin.includes('res/raw'), false)
+  })
 })
+
+function wavInfo(wav) {
+  let offset = 12
+  let audioFormat = 0
+  let channels = 0
+  let sampleRate = 0
+  let bits = 0
+  let frames = 0
+  while (offset + 8 <= wav.length) {
+    const id = wav.toString('ascii', offset, offset + 4)
+    const size = wav.readUInt32LE(offset + 4)
+    if (id === 'fmt ') {
+      audioFormat = wav.readUInt16LE(offset + 8)
+      channels = wav.readUInt16LE(offset + 10)
+      sampleRate = wav.readUInt32LE(offset + 12)
+      bits = wav.readUInt16LE(offset + 22)
+    }
+    if (id === 'data' && bits && channels && sampleRate) {
+      frames = size / (channels * (bits / 8))
+    }
+    offset += 8 + size + (size % 2)
+  }
+  return { audioFormat, channels, sampleRate, bits, frames }
+}
