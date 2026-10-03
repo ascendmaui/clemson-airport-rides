@@ -345,14 +345,14 @@ async function infoRequest(sb, res, user, body) {
     email_stub: notice.emailed ? null : notice.stub,
     emailed_at: notice.emailed ? new Date().toISOString() : null,
   }).select('id, status, email_stub, emailed_at').single()
-  if (request.error) {
+  if (request.error && !notice.emailed) {
     if (MISSING.test(request.error.message || '')) {
       return json(res, 503, { error: 'Apply supabase/migrations/20260924190000_admin_support.sql' })
     }
     return json(res, 500, { error: request.error.message })
   }
 
-  await sb.from('driver_application_messages').insert({
+  const threadNote = request.error ? { error: request.error } : await sb.from('driver_application_messages').insert({
     profile_id: profileId,
     author_id: user.id,
     author_role: 'admin',
@@ -360,12 +360,18 @@ async function infoRequest(sb, res, user, body) {
     body: text,
     email_stub: notice.emailed ? null : notice.todo,
   })
+  const inApp = Boolean(request.data) || !threadNote.error
+  if (!notice.emailed && !inApp) {
+    return json(res, 502, { error: 'The request was not emailed and was not saved in the driver application.' })
+  }
 
   return json(res, 200, {
     ok: true,
-    request: request.data,
+    request: request.data || null,
     emailed: notice.emailed,
     email_todo: notice.todo,
+    in_app: inApp,
+    delivered: Boolean(notice.emailed || inApp),
   })
 }
 
@@ -388,7 +394,7 @@ async function storeApplicantNote(sb, res, user, { profileId, text, kind, subjec
     body: text,
     email_stub: notice.emailed ? null : notice.todo,
   }).select('id, author_role, kind, body, created_at').single()
-  if (inserted.error) {
+  if (inserted.error && !notice.emailed) {
     if (MISSING.test(inserted.error.message || '')) {
       return json(res, 503, { error: 'Apply supabase/migrations/20260924190000_admin_support.sql' })
     }
@@ -396,8 +402,10 @@ async function storeApplicantNote(sb, res, user, { profileId, text, kind, subjec
   }
   return json(res, 200, {
     ok: true,
-    message: inserted.data,
+    message: inserted.data || null,
     emailed: notice.emailed,
     email_todo: notice.todo,
+    in_app: !inserted.error,
+    delivered: Boolean(notice.emailed || !inserted.error),
   })
 }

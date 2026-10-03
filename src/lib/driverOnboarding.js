@@ -29,6 +29,9 @@ import {
   displayTinLast4,
   submissionBlockers,
   blockerLabel,
+  agreementOnFile,
+  signedAgreementOnFile,
+  agreementDocumentHtml,
 } from '../../shared/driverOnboarding.js'
 
 export {
@@ -58,6 +61,9 @@ export {
   displayTinLast4,
   submissionBlockers,
   blockerLabel,
+  agreementOnFile,
+  signedAgreementOnFile,
+  agreementDocumentHtml,
 }
 
 const STEP_KEY = (userId) => `clemson_driver_onboarding_step:${userId}`
@@ -375,7 +381,7 @@ export async function fetchMyAgreement(userId) {
   if (!supabase || !userId) return null
   const { data, error } = await supabase
     .from('driver_agreements')
-    .select('agreement_version, agreement_sha256, signature_name, signed_at, signer_user_id')
+    .select('agreement_version, agreement_sha256, signature_name, signed_at, signer_user_id, html_snapshot')
     .eq('profile_id', userId)
     .eq('agreement_version', IC_AGREEMENT_VERSION)
     .maybeSingle()
@@ -383,7 +389,7 @@ export async function fetchMyAgreement(userId) {
   return data
 }
 
-export async function signDriverAgreement(signatureName) {
+async function signDriverAgreementDirect(signatureName) {
   if (!supabase) throw new Error('Supabase is not configured')
   const { data, error } = await supabase.rpc('sign_driver_agreement', {
     signature_name: signatureName,
@@ -396,6 +402,24 @@ export async function signDriverAgreement(signatureName) {
     signature_name: row.signature_name,
     signed_at: row.signed_at,
     signer_user_id: row.signer_user_id,
+    emailed: false,
+  }
+}
+
+export async function signDriverAgreement(signatureName) {
+  try {
+    return await postJson('/api/driver?action=sign-agreement', { signatureName })
+  } catch (err) {
+    if (!err.unavailable && !err.network) throw err
+    return signDriverAgreementDirect(signatureName)
+  }
+}
+
+export async function notifyOnboardingStage(stage) {
+  try {
+    return await postJson('/api/driver?action=stage-notice', { stage })
+  } catch {
+    return { emailed: false, delivered: false }
   }
 }
 
@@ -476,7 +500,7 @@ async function fetchDriverQueueDirect(status) {
     supabase.from('vehicles').select('driver_id, make, model, color, plate, seats, is_tesla').in('driver_id', ids),
     supabase.from('driver_documents').select('profile_id, doc_type').in('profile_id', ids),
     supabase.from('driver_tax_info').select('profile_id, legal_name, tin_last4, tax_classification').in('profile_id', ids),
-    supabase.from('driver_agreements').select('profile_id, agreement_version, signature_name, signed_at, agreement_sha256').in('profile_id', ids),
+    supabase.from('driver_agreements').select('profile_id, agreement_version, signature_name, signed_at, agreement_sha256, signer_user_id, html_snapshot').in('profile_id', ids),
   ])
   const profileById = Object.fromEntries((profiles || []).map((row) => [row.id, row]))
   const vehicleById = {}

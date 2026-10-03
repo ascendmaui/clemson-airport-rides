@@ -6,8 +6,9 @@
  *   /api/admin-drivers?action=help-chat|support-chat|ticket
  * Legacy /api/help-chat, /api/support-chat, /api/support-ticket are rewritten here.
  */
-import { blockerLabel, isAdminIdentity, onboardingLabel, submissionBlockers } from '../shared/driverOnboarding.js'
+import { IC_AGREEMENT_VERSION, blockerLabel, isAdminIdentity, onboardingLabel, submissionBlockers } from '../shared/driverOnboarding.js'
 import { loadSubmissionContext } from '../server/driverApproval.js'
+import { decisionNotice, deliverDriverMail } from '../server/driverApplicantMail.js'
 import {
   admin, cors, json, parseBody, userFromAuth,
 } from '../server/friendRideLib.js'
@@ -92,7 +93,7 @@ async function queue(sb, res, status) {
     sb.from('vehicles').select('driver_id, make, model, color, plate, seats, is_tesla').in('driver_id', ids),
     sb.from('driver_documents').select('profile_id, doc_type').in('profile_id', ids),
     sb.from('driver_tax_info').select('profile_id, legal_name, tin_last4, tax_classification').in('profile_id', ids),
-    sb.from('driver_agreements').select('profile_id, agreement_version, signature_name, signed_at, agreement_sha256').in('profile_id', ids),
+    sb.from('driver_agreements').select('profile_id, agreement_version, signature_name, signed_at, agreement_sha256, signer_user_id, html_snapshot').in('profile_id', ids),
   ])
   const profileById = Object.fromEntries((profiles || []).map((p) => [p.id, p]))
   const vehicleById = {}
@@ -111,11 +112,14 @@ async function queue(sb, res, status) {
   }]))
   const agreementByProfile = {}
   for (const row of agreements || []) {
+    if (row.agreement_version !== IC_AGREEMENT_VERSION) continue
     agreementByProfile[row.profile_id] = {
       agreement_version: row.agreement_version,
       agreement_sha256: row.agreement_sha256,
       signature_name: row.signature_name,
       signed_at: row.signed_at,
+      signer_user_id: row.signer_user_id,
+      html_snapshot: row.html_snapshot,
     }
   }
 
@@ -203,7 +207,7 @@ async function review(sb, res, adminUser, body) {
 
   const { data: target, error: targetErr } = await sb
     .from('profiles')
-    .select('id, role')
+    .select('id, role, email, full_name')
     .eq('id', profileId)
     .maybeSingle()
   if (targetErr) return json(res, 500, { error: targetErr.message })
@@ -257,10 +261,19 @@ async function review(sb, res, adminUser, body) {
     if (error) return json(res, 500, { error: error.message })
   }
 
+  const driverMail = await deliverDriverMail(
+    sb,
+    profileId,
+    target.email,
+    decisionNotice({ name: target.full_name, decision, reason }),
+  )
+
   return json(res, 200, {
     ok: true,
     onboarding_status: next,
     application: app,
+    driver_emailed: driverMail.emailed,
+    driver_email_todo: driverMail.email_todo,
     message: decision === 'approve'
       ? 'Driver approved. They can go online and receive rides.'
       : 'Driver rejected. They cannot receive rides until they resubmit and you approve.',

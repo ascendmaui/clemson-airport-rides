@@ -2,6 +2,7 @@
  * Driver onboarding handlers served by /api/driver.
  * Response bodies match the previous standalone routes.
  */
+import { createHash } from 'node:crypto'
 import {
   isAdminIdentity,
   blockerLabel,
@@ -9,8 +10,18 @@ import {
   statusAfterInfoSave,
 } from '../shared/driverOnboarding.js'
 import { driverQuizError } from '../shared/driverQuiz.js'
+import { IC_AGREEMENT_HTML, IC_AGREEMENT_TITLE, IC_AGREEMENT_VERSION } from '../shared/icAgreement.js'
 import { admin, cors, json, parseBody, userFromAuth } from './friendRideLib.js'
 import { loadSubmissionContext, notifyAdminOfApplication } from './driverApproval.js'
+import {
+  ONBOARDING_MAIL_STAGES,
+  accountSavedNotice,
+  deliverDriverMail,
+  signedAgreementNotice,
+  stageNotice,
+  stageReady,
+  submittedNotice,
+} from './driverApplicantMail.js'
 
 export async function handleDriverSignup(req, res) {
   if (cors(req, res)) return
@@ -149,6 +160,19 @@ export async function handleDriverSignup(req, res) {
     })
     if (statusErr) return json(res, 500, { error: statusErr.message })
 
+    let driverMail = { emailed: false, email_todo: null }
+    if (nextStatus === 'pending_docs') {
+      driverMail = await deliverDriverMail(
+        sb,
+        user.id,
+        user.email,
+        accountSavedNotice({
+          name: fullName,
+          ctx: { status: nextStatus, uploaded: [], agreementSigned: false },
+        }),
+      )
+    }
+
     if (isClemson) {
       const { error: svErr } = await sb.from('student_verifications').upsert(
         { profile_id: user.id, email, verified_at: now },
@@ -168,6 +192,8 @@ export async function handleDriverSignup(req, res) {
       message: approved
         ? 'Your driver profile is already approved.'
         : 'Info saved. Upload license, insurance, registration, and car photos next. An admin must approve you before you can receive rides.',
+      emailed: driverMail.emailed,
+      email_todo: driverMail.email_todo,
     })
   } catch (e) {
     return json(res, 500, { error: e.message || 'Server error' })
@@ -242,14 +268,144 @@ export async function handleDriverSubmitReview(req, res) {
     .single()
   if (upErr) return json(res, 500, { error: upErr.message })
 
+  const driverMail = await deliverDriverMail(
+    sb,
+    user.id,
+    profile?.email || user.email,
+    submittedNotice({ name: profile?.full_name || user.user_metadata?.full_name }),
+  )
+
   return json(res, 200, {
     ok: true,
     onboarding_status: 'pending_review',
     application: updated,
     emailed: notice.emailed,
     email_todo: notice.emailed ? null : notice.todo,
+    driver_emailed: driverMail.emailed,
+    driver_email_todo: driverMail.email_todo,
     message: notice.emailed
       ? 'Submitted. An admin was emailed and will review your documents before you can receive rides.'
       : 'Submitted for admin review. You cannot receive rides until you are approved.',
   })
+}
+
+export async function handleDriverSignAgreement(req, res) {
+  if (cors(req, res)) return
+  if (req.method !== 'POST') return json(res, 405, { error: 'Method not allowed' })
+
+  const sb = admin()
+  if (!sb) return json(res, 503, { error: 'SUPABASE_SERVICE_ROLE_KEY not configured' })
+
+  const user = await userFromAuth(req)
+  if (!user) return json(res, 401, { error: 'Sign in required' })
+
+  const { body, error: pe } = parseBody(req)
+  if (pe) return json(res, 400, { error: pe })
+  const signatureName = String(body.signatureName || body.signature_name || '').trim()
+  if (signatureName.length < 2) return json(res, 400, { error: 'Type your legal name to sign.' })
+
+  const sha = createHash('sha256').update(IC_AGREEMENT_HTML, 'utf8').digest('hex')
+  const versionWrite = await sb.from('driver_agreement_versions').upsert({
+    version: IC_AGREEMENT_VERSION,
+    title: IC_AGREEMENT_TITLE,
+    body_html: IC_AGREEMENT_HTML,
+    sha256: sha,
+  }, { onConflict: 'version' })
+  if (versionWrite.error) return json(res, 500, { error: versionWrite.error.message })
+
+  const signedAt = new Date().toISOString()
+  const agreementWrite = await sb.from('driver_agreements').upsert({
+    profile_id: user.id,
+    agreement_version: IC_AGREEMENT_VERSION,
+    agreement_sha256: sha,
+    signature_name: signatureName,
+    signed_at: signedAt,
+    signer_user_id: user.id,
+    html_snapshot: IC_AGREEMENT_HTML,
+  }, { onConflict: 'profile_id,agreement_version' })
+    .select('agreement_version, agreement_sha256, signature_name, signed_at, signer_user_id')
+    .single()
+  if (agreementWrite.error) return json(res, 500, { error: agreementWrite.error.message })
+
+  const packet = await loadApplicationPacket(sb, user)
+  const agreement = {
+    ...agreementWrite.data,
+    html_snapshot: IC_AGREEMENT_HTML,
+  }
+  const mail = await deliverDriverMail(
+    sb,
+    user.id,
+    packet.profile?.email || user.email,
+    signedAgreementNotice({
+      name: packet.profile?.full_name || signatureName,
+      profile: packet.profile,
+      vehicle: packet.vehicle,
+      tax: packet.tax,
+      documents: packet.documents,
+      employment: packet.application,
+      agreement,
+    }),
+  )
+
+  return json(res, 200, {
+    ok: true,
+    agreement_version: agreement.agreement_version,
+    agreement_sha256: agreement.agreement_sha256,
+    signature_name: agreement.signature_name,
+    signed_at: agreement.signed_at,
+    signer_user_id: agreement.signer_user_id,
+    emailed: mail.emailed,
+    email_todo: mail.email_todo,
+    delivered: mail.delivered,
+  })
+}
+
+export async function handleDriverStageNotice(req, res) {
+  if (cors(req, res)) return
+  if (req.method !== 'POST') return json(res, 405, { error: 'Method not allowed' })
+
+  const sb = admin()
+  if (!sb) return json(res, 503, { error: 'SUPABASE_SERVICE_ROLE_KEY not configured' })
+
+  const user = await userFromAuth(req)
+  if (!user) return json(res, 401, { error: 'Sign in required' })
+
+  const { body, error: pe } = parseBody(req)
+  if (pe) return json(res, 400, { error: pe })
+  const stage = String(body.stage || '')
+  if (!ONBOARDING_MAIL_STAGES.includes(stage)) {
+    return json(res, 400, { error: 'Unknown application stage.' })
+  }
+
+  const compliance = await loadSubmissionContext(sb, user.id)
+  if (compliance.error) return json(res, 500, { error: compliance.error })
+  if (!stageReady(stage, compliance.ctx)) {
+    return json(res, 400, { error: 'Finish this step before the confirmation email is sent.' })
+  }
+
+  const { data: profile } = await sb.from('profiles').select('full_name, email').eq('id', user.id).maybeSingle()
+  const mail = await deliverDriverMail(
+    sb,
+    user.id,
+    profile?.email || user.email,
+    stageNotice({ stage, name: profile?.full_name, ctx: compliance.ctx }),
+  )
+  return json(res, 200, { ok: true, stage, ...mail })
+}
+
+async function loadApplicationPacket(sb, user) {
+  const [profileRes, vehicleRes, appRes, taxRes, docsRes] = await Promise.all([
+    sb.from('profiles').select('id, full_name, email, phone').eq('id', user.id).maybeSingle(),
+    sb.from('vehicles').select('make, model, color, plate, seats').eq('driver_id', user.id).order('created_at', { ascending: false }).limit(1).maybeSingle(),
+    sb.from('driver_applications').select('background_authorized_at, work_eligibility_attested_at, work_eligibility_category, onboarding_status').eq('profile_id', user.id).maybeSingle(),
+    sb.from('driver_tax_info').select('legal_name, tin_last4, tax_classification').eq('profile_id', user.id).maybeSingle(),
+    sb.from('driver_documents').select('doc_type').eq('profile_id', user.id),
+  ])
+  return {
+    profile: profileRes.data || { email: user.email || null, full_name: user.user_metadata?.full_name || null },
+    vehicle: vehicleRes.data || null,
+    tax: taxRes.data || null,
+    documents: (docsRes.data || []).map((row) => row.doc_type),
+    application: appRes.data || null,
+  }
 }
