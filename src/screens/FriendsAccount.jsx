@@ -101,19 +101,17 @@ export function FriendsScreen() {
   }
 
   const link = share?.token ? shareUrl(share.token) : null
-  const backBtn = {
-    fontSize: 20, marginBottom: 12, width: 44, height: 44, borderRadius: 14,
-    background: 'var(--surface)', boxShadow: 'var(--shadow-pill)',
-  }
   const card = {
     marginTop: 16, padding: 16, borderRadius: 16, background: 'var(--surface)',
     border: '1px solid var(--border)', boxShadow: 'var(--shadow-soft)',
   }
 
   return (
-    <div className="route-fade" style={{ display: 'flex', flexDirection: 'column', minHeight: '100%' }}>
-      <div style={{ flex: 1, padding: 24, overflow: 'auto', paddingBottom: 96 }}>
-        <button type="button" className="pressable" onClick={() => navigate('home')} style={backBtn}>←</button>
+    <div className="route-fade" style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0, overflow: 'hidden' }}>
+      <div className="tab-top-bar">
+        <button type="button" className="pressable glass-pill nav-back-btn" aria-label="Back to home" onClick={() => navigate('home')}>←</button>
+      </div>
+      <div style={{ flex: 1, minHeight: 0, padding: '12px 24px 24px', overflow: 'auto' }}>
         <h1 style={{ fontSize: 24, fontWeight: 700, color: 'var(--purple)' }}>Friends</h1>
         <p style={{ color: 'var(--ink-secondary)', marginTop: 8, lineHeight: 1.45 }}>
           Ride together or share live location on an active trip.

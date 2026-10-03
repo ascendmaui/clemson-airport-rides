@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Pill, PrimaryButton } from '@/components/Button'
 import { HoldExpiryNotice } from '@/components/HoldExpiryNotice'
 import { MainTabs } from '@/components/MainTabs'
+import { goTabBack, TabBackBar } from '@/components/TabBackBar'
 import { SignInToBookSheet } from '@/components/SignInToBookSheet'
 import { Skeleton } from '@/components/Skeleton'
 import { setAuthNext } from '@/lib/authNext'
@@ -554,6 +555,7 @@ function ScheduleScreen() {
 
   return (
     <View style={[styles.screen, { paddingTop: insets.top + 12 }]}>
+      <TabBackBar onBack={() => goTabBack(router, '/')} hint="Returns to rides" />
       <ScrollView
         ref={scrollRef}
         contentContainerStyle={styles.body}

@@ -4,6 +4,7 @@ import { Pressable, ScrollView, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Pill, PrimaryButton } from '@/components/Button'
 import { MainTabs } from '@/components/MainTabs'
+import { goTabBack, TabBackBar } from '@/components/TabBackBar'
 import { loadAccount, saveProfile } from '@/lib/accountApi'
 import { useAuth } from '@/lib/auth'
 import { playTigerCue, setSoundsEnabled, soundsEnabled, tapHaptic } from '@/lib/feedback'
@@ -124,7 +125,8 @@ function AccountScreen() {
   }
 
   return (
-    <View style={[styles.screen, { paddingTop: insets.top + 16 }]}>
+    <View style={[styles.screen, { paddingTop: insets.top + 12 }]}>
+      <TabBackBar onBack={() => goTabBack(router, '/')} hint="Returns to rides" />
       <ScrollView contentContainerStyle={styles.body}>
         <Text style={styles.kicker}>ACCOUNT</Text>
         <Text style={styles.title}>{name || 'Guest'}</Text>
