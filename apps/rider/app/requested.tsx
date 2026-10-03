@@ -325,6 +325,9 @@ export default function Requested() {
               </Text>
             ) : null}
             {shown?.status === 'completed' ? (
+              <PrimaryButton label="Add a tip" tone="purple" onPress={() => router.push({ pathname: '/tip', params: { trip: tripId } })} />
+            ) : null}
+            {shown?.status === 'completed' ? (
               <PrimaryButton label="Rate your driver" onPress={() => router.push({ pathname: '/rate', params: { trip: tripId } })} />
             ) : null}
             <Text style={styles.summaryTitle}>{driverName}</Text>
