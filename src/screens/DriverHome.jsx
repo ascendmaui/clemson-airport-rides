@@ -34,6 +34,7 @@ import {
   takeReminder,
 } from '../lib/scheduledRides'
 import { pushToast } from '../lib/toasts'
+import { DriverAssignmentAlerts } from '../components/DriverAssignmentAlerts'
 import { acceptTrip, declineTrip, listPassedTripIds } from '../../packages/rides-native/driverDesk.js'
 import {
   acceptActionLabel,
@@ -612,6 +613,7 @@ function DriverShell({ driverId }) {
         overflow: 'hidden',
       }}
     >
+      <DriverAssignmentAlerts />
       <CampusMap
         height="100%"
         interactive

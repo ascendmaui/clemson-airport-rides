@@ -1288,3 +1288,36 @@ select[aria-invalid="true"]:focus-visible {
   border: 1.5px solid rgba(245, 102, 0, 0.35);
   box-shadow: var(--shadow-pill);
 }
+
+@keyframes clemson-logo-turn {
+  0% { transform: rotate(0deg); }
+  72% { transform: rotate(360deg); }
+  100% { transform: rotate(360deg); }
+}
+.clemson-search-logo {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 28px 16px 8px;
+}
+.clemson-search-logo__mark {
+  width: 84px;
+  height: 84px;
+  border-radius: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #F56600;
+  box-shadow: 0 0 0 6px rgba(82, 45, 128, 0.12), 0 12px 28px rgba(245, 102, 0, 0.28);
+  animation: clemson-logo-turn 2.8s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite;
+}
+.clemson-search-logo__paw { font-size: 32px; line-height: 1; }
+.clemson-search-logo__label {
+  color: #522D80;
+  font-weight: 800;
+  font-size: 15px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .clemson-search-logo__mark { animation: none; }
+}

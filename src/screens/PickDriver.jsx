@@ -25,6 +25,8 @@ import {
 } from '../../packages/rides-native/drivers.js'
 import { SignInToBookModal, useRequireAuthForAction } from '../components/SignInToBookModal'
 import { teslaFleetNotice } from '../../packages/rides-native/tripTags.js'
+import { searchDelayMs } from '../../packages/rides-native/riderShell.js'
+import { SearchingLogo } from '../components/SearchingLogo'
 
 const browserStorage = {
   async getItem(key) {
@@ -61,11 +63,13 @@ export function PickDriver({ dest = 'GSP Airport', tier = 'standard', listCents 
 
   const load = async () => {
     setLoading(true)
+    const wait = new Promise((resolve) => setTimeout(resolve, searchDelayMs()))
     const [{ drivers: online, error: err }, fav] = await Promise.all([
       fetchOnlineDrivers(supabase),
       user?.id
         ? loadFavoriteDriverIds(supabase, browserStorage, user.id)
         : Promise.resolve({ ids: [], note: null }),
+      wait,
     ])
     const extraIds = fav.ids.filter((id) => !online.some((driver) => driver.id === id))
     const extra = extraIds.length
@@ -170,6 +174,7 @@ export function PickDriver({ dest = 'GSP Airport', tier = 'standard', listCents 
             Configure VITE_SUPABASE_ANON_KEY — no demo fleet.
           </p>
         )}
+        {loading && <SearchingLogo />}
         {loading && <SkeletonDriverCard count={3} />}
         {error && <AccessibleAlert error={error} onDismiss={() => setError(null)} style={{ margin: '8px 0' }} />}
         {!loading && !anyOnline && (

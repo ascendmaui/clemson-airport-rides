@@ -26,6 +26,8 @@ import {
 import { checkoutSuccessHash } from '../../packages/rides-native/liveTrip.js'
 import { cancelUnopenedCheckoutTrip, rememberCheckoutSession } from '../abandonedCheckout.js'
 import { WEB_ORIGIN } from '../../shared/productLinks.js'
+import { prepareDefaultDriverRow } from '../defaultDrivers.js'
+import { notifyPreparedAssignment } from '../driverAssignmentNotice.js'
 
 const CAMPUS = { label: 'Memorial Stadium', lat: 34.6788, lng: -82.843 }
 const AIRPORTS = {
@@ -122,46 +124,48 @@ export default async function handler(req, res, deps = {}) {
     return json(res, 500, { error: 'Could not create your rider profile', code: 'profile_missing' })
   }
 
+  const prepared = await prepareDefaultDriverRow(sb, {
+    rider_id: user.id,
+    status: scheduledFor ? 'scheduled' : 'searching',
+    tier: 'standard',
+    pickup_label: CAMPUS.label,
+    dropoff_label: dest.label,
+    pickup_lat: CAMPUS.lat,
+    pickup_lng: CAMPUS.lng,
+    dropoff_lat: dest.lat,
+    dropoff_lng: dest.lng,
+    fare_cents: settlement.riderPaysCents,
+    deposit_cents: depositCents,
+    platform_fee_cents: fareSplit.platformFeeCents,
+    driver_earnings_cents: fareSplit.driverEarningsCents,
+    surge_multiplier: surge.multiplier,
+    fare_breakdown: {
+      ...quoted.breakdown,
+      route_source: routeSource,
+      surge_rule: surge.rule?.id || null,
+      surge_label: surge.rule?.label || null,
+      credits_debited_cents: settlement.creditsDebitedCents,
+      credit_discount_cents: settlement.creditDiscountCents,
+      cash_cents: settlement.cashCents,
+      rider_pays_cents: settlement.riderPaysCents,
+    },
+    passengers: 1,
+    pickup_at: scheduledFor,
+    scheduled_for: scheduledFor,
+    metadata: {
+      kind: scheduledFor ? 'scheduled' : 'airport',
+      airport,
+      pending_credit_debits: depositCents > 0 ? settlement.debits : [],
+      credits_applied: false,
+    },
+  })
   const { data: trip, error: tripErr } = await sb
     .from('trips')
-    .insert({
-      rider_id: user.id,
-      status: scheduledFor ? 'scheduled' : 'searching',
-      tier: 'standard',
-      pickup_label: CAMPUS.label,
-      dropoff_label: dest.label,
-      pickup_lat: CAMPUS.lat,
-      pickup_lng: CAMPUS.lng,
-      dropoff_lat: dest.lat,
-      dropoff_lng: dest.lng,
-      fare_cents: settlement.riderPaysCents,
-      deposit_cents: depositCents,
-      platform_fee_cents: fareSplit.platformFeeCents,
-      driver_earnings_cents: fareSplit.driverEarningsCents,
-      surge_multiplier: surge.multiplier,
-      fare_breakdown: {
-        ...quoted.breakdown,
-        route_source: routeSource,
-        surge_rule: surge.rule?.id || null,
-        surge_label: surge.rule?.label || null,
-        credits_debited_cents: settlement.creditsDebitedCents,
-        credit_discount_cents: settlement.creditDiscountCents,
-        cash_cents: settlement.cashCents,
-        rider_pays_cents: settlement.riderPaysCents,
-      },
-      passengers: 1,
-      pickup_at: scheduledFor,
-      scheduled_for: scheduledFor,
-      metadata: {
-        kind: scheduledFor ? 'scheduled' : 'airport',
-        airport,
-        pending_credit_debits: depositCents > 0 ? settlement.debits : [],
-        credits_applied: false,
-      },
-    })
+    .insert(prepared.row)
     .select('id')
     .single()
   if (tripErr) return json(res, 500, { error: tripErr.message || 'Could not create trip' })
+  await notifyPreparedAssignment(sb, prepared, { ...prepared.row, id: trip.id })
 
   if (depositCents <= 0) {
     if (settlement.creditsDebitedCents > 0) {
