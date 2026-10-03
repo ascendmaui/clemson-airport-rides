@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
-import { readFileSync } from 'node:fs'
+import { readFileSync, statSync } from 'node:fs'
 import path from 'node:path'
 import test from 'node:test'
 import { fileURLToPath } from 'node:url'
@@ -44,7 +44,11 @@ test('tracked files omit the removed auth vendor name', () => {
   const hits = []
   for (const file of files) {
     if (allowed(file)) continue
-    if (hasNeedle(readFileSync(path.resolve(REPO_ROOT, file)))) hits.push(file)
+    const full = path.resolve(REPO_ROOT, file)
+    // git ls-files includes gitlinks such as the ridelock submodule. Those
+    // paths are directories, not file contents this scan can read.
+    if (!statSync(full).isFile()) continue
+    if (hasNeedle(readFileSync(full))) hits.push(file)
   }
   assert.deepEqual(hits, [])
 })

@@ -3,7 +3,6 @@ if (!process.env.GOOGLE_MAPS_API_KEY) {
   process.env.GOOGLE_MAPS_API_KEY = 'mock_key_for_tests'
 }
 
-import test, { describe, after } from 'node:test'
 import test, { after, before, describe } from 'node:test'
 import assert from 'node:assert/strict'
 
