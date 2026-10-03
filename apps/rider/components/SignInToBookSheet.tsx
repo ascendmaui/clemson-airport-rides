@@ -70,10 +70,13 @@ function makeStyles(colors: Palette) {
     dismiss: { position: 'absolute' as const, top: 0, right: 0, bottom: 0, left: 0 },
     sheet: {
       margin: 12,
-      marginBottom: 24,
+      marginBottom: 16,
       backgroundColor: colors.card,
-      borderRadius: 24,
-      padding: 22,
+      borderRadius: 28,
+      paddingHorizontal: 22,
+      paddingTop: 8,
+      paddingBottom: 22,
+      gap: 2,
     },
     badge: {
       width: 48,

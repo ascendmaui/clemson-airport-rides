@@ -1,3 +1,4 @@
+import { Ionicons } from '@expo/vector-icons'
 import { useRouter } from 'expo-router'
 import * as Location from 'expo-location'
 import { useEffect, useMemo, useRef, useState } from 'react'
@@ -14,6 +15,7 @@ import {
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Pill, SheetHandle } from '@/components/Button'
+import { pressStyle, useEnterMotion } from '@/components/enter'
 import { CampusMap } from '@/components/CampusMap'
 import type { CampusMapHandle, LatLng, MapKind } from '@/components/mapTypes'
 import { mapKindLabel } from '@/components/mapTypes'
@@ -41,6 +43,13 @@ import { useTheme } from '@/lib/theme'
 import { useThemedStyles } from '@/lib/useThemedStyles'
 
 const MAP_KINDS: MapKind[] = ['standard', 'satellite', 'hybrid']
+
+const QUICK_ACTIONS = [
+  { id: 'schedule', label: 'Schedule a ride', detail: 'Choose a time', icon: 'calendar-outline' as const, href: '/schedule' as const },
+  { id: 'carpool', label: 'Carpool', detail: 'Split the surge', icon: 'people-outline' as const, href: '/friends' as const },
+  { id: 'history', label: 'Your rides', detail: 'Trip history', icon: 'time-outline' as const, href: '/history' as const },
+  { id: 'safety', label: 'Safety', detail: 'Share and SOS', icon: 'shield-checkmark-outline' as const, href: '/safety' as const },
+]
 
 export default function RiderHome() {
   const router = useRouter()
@@ -78,14 +87,16 @@ export default function RiderHome() {
   const studentOffer = studentSurfaceCopy(student, 'home')
   const gameDay = Boolean(gameNotice?.live)
   const reminders = useMemo(() => dueScheduleReminders(scheduledRows, clock), [scheduledRows, clock])
+  const chromeMotion = useEnterMotion(8)
+  const sheetMotion = useEnterMotion(16)
 
   const name = user
     ? displayFirstName(user.user_metadata?.full_name || user.email?.split('@')[0], 'Tiger')
     : 'Tiger'
   const initial = name.slice(0, 1).toUpperCase()
 
-  const minMap = Math.round(windowH * 0.28)
-  const maxMap = Math.round(windowH * 0.58)
+  const minMap = Math.round(windowH * 0.38)
+  const maxMap = Math.round(windowH * 0.64)
   const mapH = useRef(new Animated.Value(minMap)).current
   const limits = useRef({ min: minMap, max: maxMap })
   limits.current = { min: minMap, max: maxMap }
@@ -287,12 +298,15 @@ export default function RiderHome() {
           surge={surge}
           userCoordinate={userCoord}
         />
-        <View pointerEvents="box-none" style={[styles.mapChrome, { paddingTop: insets.top + 8 }]}>
+        <Animated.View pointerEvents="box-none" style={[styles.mapChrome, { paddingTop: insets.top + 10 }, chromeMotion]}>
           <View style={styles.topBar}>
             <View style={[styles.brand, lift(colors, 'float')]}>
-              <Text style={styles.brandKicker}>RIDE • GAME • REPEAT</Text>
-              <Text style={styles.brandTitle}>Clemson <Text style={styles.brandSoft}>RIDES</Text></Text>
-              <View style={styles.brandPill}>
+              <View style={styles.brandMark}>
+                <Text style={styles.brandMarkText}>CR</Text>
+              </View>
+              <View style={styles.brandCopy}>
+                <Text style={styles.brandKicker}>RIDE • GAME • REPEAT</Text>
+                <Text style={styles.brandTitle}>Clemson <Text style={styles.brandSoft}>RIDES</Text></Text>
                 <Text style={styles.brandPillText}>TIGERS GET YOU THERE</Text>
               </View>
             </View>
@@ -310,13 +324,13 @@ export default function RiderHome() {
                 }
                 router.push('/account')
               }}
-              style={[styles.avatar, lift(colors, 'rest')]}
+              style={({ pressed }) => [styles.avatar, lift(colors, 'rest'), pressStyle(pressed)]}
             >
               <Text style={styles.avatarText}>{initial}</Text>
             </Pressable>
           </View>
           <View style={styles.mapControls}>
-            <View style={styles.kindRow}>
+            <View style={[styles.kindRow, lift(colors, 'rest')]}>
               {MAP_KINDS.map((kind) => {
                 const on = mapType === kind
                 return (
@@ -337,7 +351,7 @@ export default function RiderHome() {
             </View>
             <Pressable
               onPress={onLocate}
-              style={[styles.locate, lift(colors, 'rest')]}
+              style={({ pressed }) => [styles.locate, lift(colors, 'rest'), pressStyle(pressed)]}
               accessibilityRole="button"
               accessibilityLabel="Center on me"
               accessibilityHint="Moves the map to your location"
@@ -346,61 +360,10 @@ export default function RiderHome() {
               <Text style={styles.locateText}>{locating ? '…' : '◎'}</Text>
             </Pressable>
           </View>
-        </View>
+        </Animated.View>
       </Animated.View>
 
-      <View style={styles.busyStrip}>
-        <View style={styles.mapHead}>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.mapTitle}>Campus map</Text>
-            <Text style={styles.busyDays}>Busy days</Text>
-          </View>
-          <Pressable
-            onPress={() => {
-              void tapHaptic()
-              setShowBusy((value: boolean) => !value)
-            }}
-            style={[styles.busy, showBusy && styles.busyOn]}
-            accessibilityRole="button"
-            accessibilityLabel={showBusy ? 'Busy areas on' : 'Busy areas off'}
-            accessibilityHint="Shows or hides busy areas on the campus map"
-            accessibilityState={{ selected: showBusy }}
-            hitSlop={8}
-          >
-            <Text style={[styles.busyText, showBusy && styles.busyTextOn]}>
-              {showBusy ? 'Busy Areas · On' : 'Busy Areas · Off'}
-            </Text>
-          </Pressable>
-        </View>
-        {spotsLoading ? (
-          <Skeleton height={32} width="70%" />
-        ) : (
-          <>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
-              {showBusy
-                ? HEAT_WINDOWS.map((window) => (
-                    <Pill
-                      key={window.id}
-                      label={window.label}
-                      active={heatWindow === window.id}
-                      onPress={() => setHeatWindow(window.id)}
-                    />
-                  ))
-                : null}
-              <Pill label={gameNotice == null ? 'Game day…' : gameNotice.headline} active={gameDay} />
-              <Pill label={surge ? 'Surge · On' : 'Surge'} active={surge} onPress={() => setSurge((value: boolean) => !value)} />
-            </ScrollView>
-            <Text style={styles.caption}>
-              {showBusy ? caption : 'Busy areas are hidden.'}
-              {showBusy && blended ? <Text style={styles.live}>  Live + typical</Text> : null}
-              {gameNotice ? `  ${gameNotice.live ? gameNotice.detail : gameNotice.body}` : '  Checking game day…'}
-              {surge ? `  ${overlays.surgeLabel || 'Surge overlay'}` : ''}
-            </Text>
-          </>
-        )}
-        {locateNote ? <Text style={styles.locateNote}>{locateNote}</Text> : null}
-      </View>
-
+      <Animated.View style={[styles.sheetWrap, lift(colors, 'float'), sheetMotion]}>
       <View style={styles.sheet}>
         <View {...pan.panHandlers} accessibilityLabel="Drag down to expand the map" accessibilityHint="Drag down to make the map taller" accessibilityRole="adjustable">
           <SheetHandle />
@@ -408,6 +371,7 @@ export default function RiderHome() {
         </View>
         <ScrollView
           style={styles.sheetScroll}
+          contentContainerStyle={styles.sheetContent}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
           refreshControl={(
@@ -427,9 +391,9 @@ export default function RiderHome() {
         >
           {spotsLoading ? (
             <View style={styles.skeletonBlock}>
-              <Skeleton height={26} width="55%" />
-              <Skeleton height={16} width="72%" />
-              <Skeleton height={48} />
+              <Skeleton height={18} width="36%" />
+              <Skeleton height={28} width="78%" />
+              <Skeleton height={56} />
             </View>
           ) : (
             <>
@@ -441,7 +405,7 @@ export default function RiderHome() {
                   accessibilityLabel={`Live ride. ${riderLiveView(liveTrip.status).title}. Open tracking for ${liveTrip.dropoff_label || 'this trip'}.`}
                   accessibilityHint="Opens live trip tracking"
                   onPress={() => router.push({ pathname: '/requested', params: { trip: liveTrip.id, dest: liveTrip.dropoff_label || '' } })}
-                  style={[styles.liveCard, lift(colors, 'rest')]}
+                  style={({ pressed }) => [styles.liveCard, lift(colors, 'rest'), pressStyle(pressed)]}
                 >
                   <Text style={styles.liveKicker}>LIVE RIDE</Text>
                   <Text style={styles.liveTitle}>{riderLiveView(liveTrip.status).title}</Text>
@@ -472,23 +436,26 @@ export default function RiderHome() {
                 void tapHaptic()
                 router.push('/schedule')
               }}
-              style={[styles.liveCard, lift(colors, 'rest')]}
+              style={({ pressed }) => [styles.liveCard, lift(colors, 'rest'), pressStyle(pressed)]}
             >
               <Text style={styles.liveKicker}>PICKUP REMINDER</Text>
               <Text style={styles.liveTitle}>{item.label}</Text>
               <Text style={styles.liveBody}>{item.body}</Text>
             </Pressable>
           ))}
-          <TextInput
-            value={query}
-            onChangeText={setQuery}
-            placeholder="Campus, GSP, CLT…"
-            placeholderTextColor={colors.placeholder}
-            style={[styles.search, lift(colors, 'rest')]}
-            autoCorrect={false}
-            accessibilityLabel="Destination"
-            accessibilityHint="Search a campus stop or airport"
-          />
+          <View style={[styles.search, lift(colors, 'rest')]}>
+            <View style={styles.searchMark} />
+            <TextInput
+              value={query}
+              onChangeText={setQuery}
+              placeholder="Campus, GSP, CLT…"
+              placeholderTextColor={colors.placeholder}
+              style={styles.searchInput}
+              autoCorrect={false}
+              accessibilityLabel="Destination"
+              accessibilityHint="Search a campus stop or airport"
+            />
+          </View>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
             {suggestions.map((stop: { id: string; label: string }) => (
               <Pressable
@@ -503,7 +470,7 @@ export default function RiderHome() {
                   setDestError(null)
                   goSearch(stop.label)
                 }}
-                style={[styles.destChip, query === stop.label && styles.destChipOn]}
+                style={({ pressed }) => [styles.destChip, query === stop.label && styles.destChipOn, pressStyle(pressed)]}
               >
                 <Text style={[styles.destChipText, query === stop.label && styles.destChipTextOn]}>{stop.label}</Text>
               </Pressable>
@@ -518,25 +485,46 @@ export default function RiderHome() {
             accessibilityHint="Continues to confirm pickup"
             hitSlop={8}
             onPress={() => goSearch()}
-            style={styles.searchLink}
+            style={({ pressed }) => [styles.searchLink, pressStyle(pressed)]}
           >
             <Text style={styles.searchLinkText}>Search destination →</Text>
           </Pressable>
           {destError ? <Text style={styles.locateNote}>{destError}</Text> : null}
 
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
-            <Pill label="🕐  Schedule a ride" onPress={() => router.push('/schedule')} />
-            <Pill label="👥  Carpool · split the surge" onPress={() => router.push('/friends')} />
-            <Pill label="🧾  Your rides" onPress={() => router.push('/history')} />
-            <Pill label="🛡  Safety" onPress={() => router.push('/safety')} />
-          </ScrollView>
+          <Text style={styles.sectionLabel}>Get around</Text>
+          <View style={styles.actions}>
+            {[0, 1].map((column) => (
+              <View key={column} style={styles.actionCol}>
+                {QUICK_ACTIONS.filter((_, index) => index % 2 === column).map((action) => (
+                  <Pressable
+                    key={action.id}
+                    accessibilityRole="button"
+                    accessibilityLabel={action.detail ? `${action.label}. ${action.detail}` : action.label}
+                    accessibilityHint={`Opens ${action.label}`}
+                    onPress={() => {
+                      void tapHaptic()
+                      router.push(action.href)
+                    }}
+                    style={({ pressed }) => [styles.action, lift(colors, 'rest'), pressStyle(pressed)]}
+                  >
+                    <View style={styles.actionIcon}>
+                      <Ionicons name={action.icon} size={18} color={colors.orange} />
+                    </View>
+                    <Text style={styles.actionLabel}>{action.label}</Text>
+                    <Text style={styles.actionDetail}>{action.detail}</Text>
+                  </Pressable>
+                ))}
+              </View>
+            ))}
+          </View>
 
+          <Text style={styles.sectionLabel}>Places</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.shortcuts}>
             {SHORTCUTS.map((shortcut) => (
               <Pressable
                 key={shortcut.id}
                 onPress={() => goSearch(shortcut.sub)}
-                style={[styles.shortcut, lift(colors, 'rest')]}
+                style={({ pressed }) => [styles.shortcut, lift(colors, 'rest'), pressStyle(pressed)]}
                 accessibilityRole="button"
                 accessibilityLabel={`${shortcut.label}. ${shortcut.sub}`}
                 accessibilityHint="Requests a ride to this place"
@@ -547,6 +535,58 @@ export default function RiderHome() {
               </Pressable>
             ))}
           </ScrollView>
+
+          <View style={[styles.campusCard, lift(colors, 'rest')]}>
+            <View style={styles.mapHead}>
+              <View style={styles.campusCopy}>
+                <Text style={styles.mapTitle}>Campus map</Text>
+                <Text style={styles.busyDays}>Busy days</Text>
+              </View>
+              <Pressable
+                onPress={() => {
+                  void tapHaptic()
+                  setShowBusy((value: boolean) => !value)
+                }}
+                style={[styles.busy, showBusy && styles.busyOn]}
+                accessibilityRole="button"
+                accessibilityLabel={showBusy ? 'Busy areas on' : 'Busy areas off'}
+                accessibilityHint="Shows or hides busy areas on the campus map"
+                accessibilityState={{ selected: showBusy }}
+                hitSlop={8}
+              >
+                <Text style={[styles.busyText, showBusy && styles.busyTextOn]}>
+                  {showBusy ? 'Busy Areas · On' : 'Busy Areas · Off'}
+                </Text>
+              </Pressable>
+            </View>
+            {spotsLoading ? (
+              <Skeleton height={32} width="70%" />
+            ) : (
+              <>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
+                  {showBusy
+                    ? HEAT_WINDOWS.map((window) => (
+                        <Pill
+                          key={window.id}
+                          label={window.label}
+                          active={heatWindow === window.id}
+                          onPress={() => setHeatWindow(window.id)}
+                        />
+                      ))
+                    : null}
+                  <Pill label={gameNotice == null ? 'Game day…' : gameNotice.headline} active={gameDay} />
+                  <Pill label={surge ? 'Surge · On' : 'Surge'} active={surge} onPress={() => setSurge((value: boolean) => !value)} />
+                </ScrollView>
+                <Text style={styles.caption}>
+                  {showBusy ? caption : 'Busy areas are hidden.'}
+                  {showBusy && blended ? <Text style={styles.live}>  Live + typical</Text> : null}
+                  {gameNotice ? `  ${gameNotice.live ? gameNotice.detail : gameNotice.body}` : '  Checking game day…'}
+                  {surge ? `  ${overlays.surgeLabel || 'Surge overlay'}` : ''}
+                </Text>
+              </>
+            )}
+            {locateNote ? <Text style={styles.locateNote}>{locateNote}</Text> : null}
+          </View>
 
           {!configured ? (
             <Text style={styles.keys}>
@@ -559,12 +599,14 @@ export default function RiderHome() {
               void tapHaptic()
               router.push(user ? '/student' : '/sign-in')
             }}
-            style={[styles.studentCard, studentOffer.granted && styles.studentOn, lift(colors, 'rest')]}
+            style={({ pressed }) => [styles.studentCard, studentOffer.granted && styles.studentOn, lift(colors, 'rest'), pressStyle(pressed)]}
             accessibilityRole="button"
             accessibilityLabel={studentOffer.detail ? `${studentOffer.title}. ${studentOffer.detail}` : studentOffer.title}
             accessibilityHint={user ? 'Opens student pricing' : 'Sign in to check student pricing'}
           >
-            <Text style={styles.gamedayIcon}>🎓</Text>
+            <View style={styles.offerIcon}>
+              <Text style={styles.gamedayIcon}>🎓</Text>
+            </View>
             <View style={styles.gamedayCopy}>
               <Text style={styles.gamedayTitle}>{studentOffer.title}</Text>
               <Text style={styles.gamedayBody}>{studentOffer.detail}</Text>
@@ -576,12 +618,14 @@ export default function RiderHome() {
               void playTigerCue()
               router.push('/friends')
             }}
-            style={[styles.gameday, lift(colors, 'rest')]}
+            style={({ pressed }) => [styles.gameday, lift(colors, 'rest'), pressStyle(pressed)]}
             accessibilityRole="button"
             accessibilityLabel="Game day carpool. About 10 to 15 dollars each instead of 30 to 40."
             accessibilityHint="Opens carpools"
           >
-            <Text style={styles.gamedayIcon}>🏈</Text>
+            <View style={styles.offerIcon}>
+              <Text style={styles.gamedayIcon}>🏈</Text>
+            </View>
             <View style={styles.gamedayCopy}>
               <Text style={styles.gamedayTitle}>Game day carpool</Text>
               <Text style={styles.gamedayBody}>About $10–$15 each instead of $30–$40.</Text>
@@ -592,6 +636,7 @@ export default function RiderHome() {
           </Pressable>
         </ScrollView>
       </View>
+      </Animated.View>
       <MainTabs active="home" />
     </View>
   )
@@ -601,63 +646,74 @@ function makeStyles(colors: Palette) {
   return {
     screen: { flex: 1, backgroundColor: colors.background },
     mapSlot: { backgroundColor: colors.mapFallback, overflow: 'hidden' as const },
-    mapChrome: { position: 'absolute' as const, top: 0, right: 0, bottom: 0, left: 0, justifyContent: 'space-between' as const },
+    mapChrome: {
+      position: 'absolute' as const,
+      top: 0,
+      right: 0,
+      bottom: 0,
+      left: 0,
+      justifyContent: 'space-between' as const,
+      paddingBottom: 28,
+    },
     topBar: {
       paddingHorizontal: 16,
       flexDirection: 'row' as const,
       justifyContent: 'space-between' as const,
       alignItems: 'flex-start' as const,
+      gap: 12,
     },
     brand: {
-      width: '52%' as const,
-      maxWidth: 220,
-      minHeight: 96,
+      flex: 1,
+      maxWidth: 280,
+      flexDirection: 'row' as const,
+      alignItems: 'center' as const,
+      gap: 10,
       borderRadius: 18,
+      backgroundColor: colors.card,
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+    },
+    brandMark: {
+      width: 36,
+      height: 36,
+      borderRadius: 12,
       backgroundColor: colors.orange,
-      paddingHorizontal: 16,
-      paddingTop: 14,
-      paddingBottom: 12,
-      justifyContent: 'flex-end' as const,
+      alignItems: 'center' as const,
+      justifyContent: 'center' as const,
     },
-    brandKicker: { color: colors.onAccent, fontSize: 9, fontWeight: '700' as const, letterSpacing: 1.4, marginBottom: 4 },
-    brandTitle: { color: colors.onAccent, fontSize: 18, fontWeight: '800' as const },
-    brandSoft: { fontWeight: '700' as const },
-    brandPill: {
-      marginTop: 8,
-      alignSelf: 'flex-start' as const,
-      paddingHorizontal: 8,
-      paddingVertical: 3,
-      borderRadius: 999,
-      backgroundColor: 'rgba(255,255,255,0.2)',
-    },
-    brandPillText: { color: colors.onAccent, fontSize: 9, fontWeight: '700' as const, letterSpacing: 0.4 },
+    brandMarkText: { color: colors.onAccent, fontSize: 12, fontWeight: '800' as const, letterSpacing: 0.4 },
+    brandCopy: { flex: 1 },
+    brandKicker: { color: colors.orange, fontSize: 9, fontWeight: '700' as const, letterSpacing: 1.1 },
+    brandTitle: { color: colors.title, fontSize: 16, fontWeight: '800' as const, letterSpacing: -0.3, marginTop: 1 },
+    brandSoft: { fontWeight: '600' as const, color: colors.ink },
+    brandPillText: { color: colors.inkSecondary, fontSize: 9, fontWeight: '700' as const, letterSpacing: 0.6, marginTop: 2 },
     avatar: {
-      width: 46,
-      height: 46,
-      borderRadius: 23,
+      width: 44,
+      height: 44,
+      borderRadius: 22,
       backgroundColor: colors.purple,
       alignItems: 'center' as const,
       justifyContent: 'center' as const,
       borderWidth: 2,
       borderColor: colors.onAccent,
     },
-    avatarText: { color: colors.onAccent, fontWeight: '800' as const, fontSize: 18 },
+    avatarText: { color: colors.onAccent, fontWeight: '800' as const, fontSize: 17 },
     mapControls: {
       flexDirection: 'row' as const,
       justifyContent: 'space-between' as const,
       alignItems: 'flex-end' as const,
-      paddingHorizontal: 12,
-      paddingBottom: 10,
+      paddingHorizontal: 16,
     },
-    kindRow: { flexDirection: 'row' as const, gap: 6 },
-    kindChip: {
+    kindRow: {
+      flexDirection: 'row' as const,
+      gap: 2,
       backgroundColor: colors.card,
       borderRadius: 999,
-      paddingHorizontal: 10,
-      paddingVertical: 6,
+      padding: 3,
     },
+    kindChip: { borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6 },
     kindOn: { backgroundColor: colors.purple },
-    kindText: { color: colors.link, fontSize: 11, fontWeight: '800' as const },
+    kindText: { color: colors.link, fontSize: 11, fontWeight: '700' as const },
     kindTextOn: { color: colors.onAccent },
     locate: {
       width: 44,
@@ -667,113 +723,186 @@ function makeStyles(colors: Palette) {
       alignItems: 'center' as const,
       justifyContent: 'center' as const,
     },
-    locateText: { color: colors.orange, fontSize: 22, fontWeight: '800' as const },
-    busyStrip: {
+    locateText: { color: colors.orange, fontSize: 20, fontWeight: '700' as const },
+    campusCard: {
+      marginTop: 18,
       backgroundColor: colors.card,
-      paddingHorizontal: 16,
-      paddingTop: 10,
-      paddingBottom: 8,
-      borderBottomWidth: 1,
-      borderBottomColor: colors.border,
-      gap: 6,
+      borderRadius: 18,
+      padding: 14,
+      borderWidth: 1,
+      borderColor: colors.border,
+      gap: 8,
     },
-    mapHead: { flexDirection: 'row' as const, justifyContent: 'space-between' as const, alignItems: 'center' as const, gap: 8 },
-    mapTitle: { fontWeight: '800' as const, fontSize: 15, color: colors.ink },
-    busyDays: { color: colors.inkSecondary, fontSize: 12, fontWeight: '700' as const },
-    busy: { borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6, backgroundColor: colors.purpleSoft },
+    mapHead: { flexDirection: 'row' as const, justifyContent: 'space-between' as const, alignItems: 'center' as const, gap: 10 },
+    campusCopy: { flex: 1 },
+    mapTitle: { fontWeight: '700' as const, fontSize: 15, letterSpacing: -0.2, color: colors.ink },
+    busyDays: { color: colors.inkSecondary, fontSize: 12, fontWeight: '600' as const, marginTop: 2 },
+    busy: { borderRadius: 999, paddingHorizontal: 12, paddingVertical: 7, backgroundColor: colors.purpleSoft },
     busyOn: { backgroundColor: colors.orange },
     busyText: { color: colors.link, fontSize: 12, fontWeight: '700' as const },
     busyTextOn: { color: colors.onAccent },
-    row: { gap: 8, paddingVertical: 4 },
-    caption: { color: colors.inkSecondary, fontSize: 12, lineHeight: 17 },
+    row: { gap: 8, paddingVertical: 2 },
+    caption: { color: colors.inkSecondary, fontSize: 12, lineHeight: 18 },
     live: { color: colors.link, fontWeight: '700' as const },
     destChip: {
       borderRadius: 999,
-      paddingHorizontal: 12,
-      paddingVertical: 7,
+      paddingHorizontal: 14,
+      paddingVertical: 8,
       borderWidth: 1,
       borderColor: colors.border,
       backgroundColor: colors.chip,
     },
     destChipOn: { backgroundColor: colors.purple, borderColor: colors.purple },
-    destChipText: { color: colors.link, fontWeight: '700' as const, fontSize: 12 },
+    destChipText: { color: colors.link, fontWeight: '700' as const, fontSize: 13 },
     destChipTextOn: { color: colors.onAccent },
-    locateNote: { color: colors.danger, fontSize: 12 },
+    locateNote: { color: colors.danger, fontSize: 12, lineHeight: 17, marginTop: 6 },
+    sheetWrap: {
+      flex: 1,
+      marginTop: -22,
+      borderTopLeftRadius: 28,
+      borderTopRightRadius: 28,
+    },
     sheet: {
       flex: 1,
+      overflow: 'hidden' as const,
       backgroundColor: colors.elevated,
+      borderTopLeftRadius: 28,
+      borderTopRightRadius: 28,
       paddingHorizontal: 20,
       paddingTop: 8,
     },
-    dragHint: { textAlign: 'center' as const, color: colors.placeholder, fontSize: 11, fontWeight: '700' as const, marginBottom: 6 },
+    dragHint: {
+      textAlign: 'center' as const,
+      color: colors.placeholder,
+      fontSize: 11,
+      fontWeight: '600' as const,
+      letterSpacing: 0.2,
+      marginBottom: 8,
+    },
     sheetScroll: { flex: 1 },
-    skeletonBlock: { gap: 10, marginBottom: 12 },
-    welcome: { fontSize: 24, fontWeight: '600' as const, letterSpacing: -0.4, color: colors.title },
-    prompt: { color: colors.inkSecondary, fontSize: 15, marginTop: 4, marginBottom: 12 },
+    sheetContent: { paddingBottom: 28 },
+    skeletonBlock: { gap: 10, marginBottom: 14 },
+    welcome: {
+      fontSize: 13,
+      fontWeight: '700' as const,
+      letterSpacing: 0.4,
+      color: colors.orange,
+    },
+    prompt: {
+      color: colors.title,
+      fontSize: 26,
+      fontWeight: '700' as const,
+      letterSpacing: -0.6,
+      marginTop: 4,
+      marginBottom: 14,
+      lineHeight: 32,
+    },
     liveCard: {
       backgroundColor: colors.card,
-      borderRadius: 16,
-      padding: 14,
+      borderRadius: 18,
+      padding: 16,
       marginBottom: 12,
       borderWidth: 1,
-      borderColor: colors.orange,
+      borderColor: colors.border,
+      borderLeftWidth: 3,
+      borderLeftColor: colors.orange,
     },
     liveKicker: { color: colors.orange, fontSize: 11, fontWeight: '800' as const, letterSpacing: 1.1 },
-    liveTitle: { color: colors.purple, fontSize: 16, fontWeight: '800' as const, marginTop: 4 },
-    liveBody: { color: colors.inkSecondary, fontSize: 13, marginTop: 4 },
-    gameCard: { backgroundColor: colors.orangeSoft },
-    gameDetail: { color: colors.orange, fontSize: 13, fontWeight: '800' as const, marginTop: 4 },
+    liveTitle: { color: colors.title, fontSize: 17, fontWeight: '700' as const, letterSpacing: -0.2, marginTop: 4 },
+    liveBody: { color: colors.inkSecondary, fontSize: 13, lineHeight: 18, marginTop: 4 },
+    gameCard: { backgroundColor: colors.orangeSoft, borderLeftColor: colors.purple },
+    gameDetail: { color: colors.orange, fontSize: 13, fontWeight: '700' as const, marginTop: 4 },
     search: {
-      borderWidth: 1.5,
-      borderColor: colors.orange,
-      borderRadius: 16,
+      flexDirection: 'row' as const,
+      alignItems: 'center' as const,
+      gap: 12,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 18,
       paddingHorizontal: 16,
-      paddingVertical: 14,
-      fontSize: 16,
-      color: colors.ink,
+      minHeight: 56,
       backgroundColor: colors.input,
     },
-    searchLink: { paddingVertical: 10 },
-    searchLinkText: { color: colors.orange, fontWeight: '700' as const, fontSize: 13 },
-    shortcuts: { gap: 10, paddingTop: 10 },
+    searchMark: { width: 10, height: 10, borderRadius: 3, backgroundColor: colors.orange },
+    searchInput: { flex: 1, minWidth: 0, fontSize: 17, fontWeight: '600' as const, color: colors.ink, paddingVertical: 14 },
+    searchLink: { alignSelf: 'flex-start' as const, paddingVertical: 10, marginTop: 2 },
+    searchLinkText: { color: colors.orange, fontWeight: '700' as const, fontSize: 14, letterSpacing: -0.1 },
+    sectionLabel: {
+      marginTop: 18,
+      marginBottom: 10,
+      fontSize: 13,
+      fontWeight: '700' as const,
+      letterSpacing: 0.2,
+      color: colors.title,
+    },
+    actions: { flexDirection: 'row' as const, gap: 10 },
+    actionCol: { flex: 1, gap: 10 },
+    action: {
+      backgroundColor: colors.card,
+      borderRadius: 18,
+      paddingHorizontal: 14,
+      paddingVertical: 14,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    actionIcon: {
+      width: 32,
+      height: 32,
+      borderRadius: 10,
+      backgroundColor: colors.orangeSoft,
+      alignItems: 'center' as const,
+      justifyContent: 'center' as const,
+      marginBottom: 10,
+    },
+    actionLabel: { fontSize: 14, fontWeight: '700' as const, letterSpacing: -0.2, color: colors.ink },
+    actionDetail: { fontSize: 12, color: colors.inkSecondary, marginTop: 2 },
+    shortcuts: { gap: 10, paddingRight: 4 },
     shortcut: {
-      minWidth: 118,
+      width: 132,
       padding: 14,
-      borderRadius: 16,
+      borderRadius: 18,
       backgroundColor: colors.card,
       borderWidth: 1,
       borderColor: colors.border,
     },
-    shortcutIcon: { fontSize: 22, marginBottom: 8 },
-    shortcutLabel: { fontWeight: '600' as const, fontSize: 13, color: colors.ink },
-    shortcutSub: { fontSize: 11, color: colors.placeholder, marginTop: 2 },
-    keys: { color: colors.danger, fontSize: 12, marginTop: 8, lineHeight: 17 },
+    shortcutIcon: { fontSize: 20, marginBottom: 10 },
+    shortcutLabel: { fontWeight: '700' as const, fontSize: 14, letterSpacing: -0.2, color: colors.ink },
+    shortcutSub: { fontSize: 12, color: colors.inkSecondary, marginTop: 3 },
+    keys: { color: colors.danger, fontSize: 12, marginTop: 12, lineHeight: 17 },
     studentCard: {
-      marginTop: 14,
+      marginTop: 18,
       borderRadius: 18,
       padding: 14,
       backgroundColor: colors.purpleSoft,
       flexDirection: 'row' as const,
       alignItems: 'center' as const,
-      gap: 10,
+      gap: 12,
       borderWidth: 1,
-      borderColor: colors.purple,
+      borderColor: colors.border,
     },
     studentOn: { backgroundColor: colors.orangeSoft, borderColor: colors.orange },
     gameday: {
-      marginTop: 14,
-      marginBottom: 16,
+      marginTop: 12,
+      marginBottom: 8,
       borderRadius: 18,
       padding: 14,
       backgroundColor: colors.orangeSoft,
       flexDirection: 'row' as const,
       alignItems: 'center' as const,
-      gap: 10,
+      gap: 12,
     },
-    gamedayIcon: { fontSize: 24 },
+    offerIcon: {
+      width: 42,
+      height: 42,
+      borderRadius: 14,
+      backgroundColor: colors.card,
+      alignItems: 'center' as const,
+      justifyContent: 'center' as const,
+    },
+    gamedayIcon: { fontSize: 20 },
     gamedayCopy: { flex: 1 },
-    gamedayTitle: { fontWeight: '700' as const, fontSize: 15, color: colors.ink },
-    gamedayBody: { fontSize: 13, color: colors.inkSecondary, marginTop: 2 },
+    gamedayTitle: { fontWeight: '700' as const, fontSize: 15, letterSpacing: -0.2, color: colors.ink },
+    gamedayBody: { fontSize: 13, lineHeight: 18, color: colors.inkSecondary, marginTop: 2 },
     gamedayBtn: { backgroundColor: colors.purple, borderRadius: 12, paddingHorizontal: 10, paddingVertical: 8 },
     gamedayBtnText: { color: colors.onAccent, fontWeight: '700' as const, fontSize: 12 },
   }

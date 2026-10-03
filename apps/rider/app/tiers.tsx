@@ -1,8 +1,9 @@
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useState } from 'react'
-import { Pressable, ScrollView, Text, View } from 'react-native'
+import { Animated, Pressable, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { PrimaryButton } from '@/components/Button'
+import { pressStyle, useEnterMotion } from '@/components/enter'
 import { SignInToBookSheet } from '@/components/SignInToBookSheet'
 import { setAuthNext } from '@/lib/authNext'
 import { useAuth } from '@/lib/auth'
@@ -30,6 +31,7 @@ export default function RideTiers() {
   const [promptOpen, setPromptOpen] = useState(false)
   const { colors } = useTheme()
   const styles = useThemedStyles(makeStyles)
+  const listMotion = useEnterMotion(14)
 
   const next = {
     pathname: '/pick-driver' as const,
@@ -46,7 +48,7 @@ export default function RideTiers() {
   }
 
   return (
-    <View style={[styles.screen, { paddingTop: insets.top }]}>
+    <View style={[styles.screen, { paddingTop: insets.top + 8 }]}>
       <View style={styles.header}>
         <Pressable
           onPress={() => router.back()}
@@ -58,14 +60,14 @@ export default function RideTiers() {
         >
           <Text style={styles.backLabel}>←</Text>
         </Pressable>
-        <View style={{ flex: 1 }}>
+        <View style={styles.headerCopy}>
           <Text style={styles.kicker}>To {dest}</Text>
           <Text style={styles.sub}>Pickup {pickup}</Text>
         </View>
       </View>
       <Pressable
         onPress={() => router.push(user ? '/student' : '/sign-in')}
-        style={[styles.promo, !studentOffer.granted && styles.promoGated]}
+        style={[styles.promo, !studentOffer.granted && styles.promoGated, lift(colors, 'rest')]}
         accessibilityRole="button"
         accessibilityLabel={studentOffer.detail ? `${studentOffer.title}. ${studentOffer.detail}` : studentOffer.title}
         accessibilityHint={user ? 'Opens student pricing' : 'Sign in to check student pricing'}
@@ -74,7 +76,7 @@ export default function RideTiers() {
         <Text style={styles.promoText}>{studentOffer.title}</Text>
         {studentOffer.detail ? <Text style={styles.promoDetail}>{studentOffer.detail}</Text> : null}
       </Pressable>
-      <ScrollView contentContainerStyle={styles.list}>
+      <Animated.ScrollView style={[{ flex: 1 }, listMotion]} contentContainerStyle={styles.list} showsVerticalScrollIndicator={false}>
         {RIDE_TIERS.map((tier) => {
           const on = tier.id === selected
           const quoted = displayTierPrice(tier.price, { isStudent: student.verified, tier: tier.id })
@@ -82,33 +84,41 @@ export default function RideTiers() {
             <Pressable
               key={tier.id}
               onPress={() => setSelected(tier.id)}
-              style={[styles.row, tier.id === 'tesla' && styles.rowFleet, on && styles.rowOn]}
+              style={({ pressed }) => [
+                styles.row,
+                lift(colors, 'rest'),
+                tier.id === 'tesla' && styles.rowFleet,
+                on && styles.rowOn,
+                pressStyle(pressed),
+              ]}
               accessibilityRole="button"
               accessibilityLabel={`${tier.name}, ${formatUsd(quoted.price)}, ${tier.eta}, ${tier.meta}`}
               accessibilityHint="Selects this fare"
               accessibilityState={{ selected: on }}
             >
-              <Text style={styles.icon}>{tier.icon}</Text>
-              <View style={{ flex: 1 }}>
+              <View style={[styles.iconWell, on && styles.iconWellOn]}>
+                <Text style={styles.icon}>{tier.icon}</Text>
+              </View>
+              <View style={styles.tierCopy}>
                 <Text style={styles.name}>{tier.name}</Text>
                 {tier.id === 'tesla' ? <Text style={styles.fleetBadge}>Clemson fleet</Text> : null}
                 <Text style={styles.meta}>{tier.eta} · {tier.meta}</Text>
                 {quoted.label ? <Text style={styles.discount}>{quoted.label}</Text> : null}
               </View>
-              <View style={{ alignItems: 'flex-end' }}>
+              <View style={styles.priceCol}>
                 <Text style={styles.price}>{formatUsd(quoted.price)}</Text>
                 {quoted.discount > 0 ? <Text style={styles.was}>{formatUsd(tier.price)}</Text> : null}
               </View>
             </Pressable>
           )
         })}
-      </ScrollView>
+      </Animated.ScrollView>
       {selected === 'tesla' ? (
         <View style={styles.stub}>
           <Text style={styles.stubText}>{TESLA_FLEET_NOTICE}</Text>
         </View>
       ) : null}
-      <View style={styles.footer}>
+      <View style={[styles.footer, lift(colors, 'bar'), { paddingBottom: Math.max(insets.bottom, 16) }]}>
         <PrimaryButton label={selected === 'tesla' ? 'Request Tesla Model 3' : 'Choose a driver'} onPress={onConfirm} tone={selected === 'tesla' ? 'purple' : 'orange'} />
       </View>
       <SignInToBookSheet
@@ -130,37 +140,48 @@ export default function RideTiers() {
 function makeStyles(colors: Palette) {
   return {
     screen: { flex: 1, backgroundColor: colors.background },
-    header: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 12, paddingHorizontal: 16, paddingBottom: 8 },
-    back: { width: 40, height: 40, borderRadius: 14, backgroundColor: colors.card, alignItems: 'center' as const, justifyContent: 'center' as const },
+    header: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 12, paddingHorizontal: 20, paddingBottom: 12 },
+    headerCopy: { flex: 1 },
+    back: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.card, alignItems: 'center' as const, justifyContent: 'center' as const },
     backLabel: { fontSize: 18, color: colors.title, fontWeight: '700' as const },
-    kicker: { fontSize: 18, fontWeight: '700' as const, color: colors.ink },
-    sub: { color: colors.inkSecondary, fontSize: 13, marginTop: 2 },
+    kicker: { fontSize: 22, fontWeight: '700' as const, letterSpacing: -0.4, color: colors.title },
+    sub: { color: colors.inkSecondary, fontSize: 13, lineHeight: 18, marginTop: 2 },
     promo: {
-      marginHorizontal: 16,
+      marginHorizontal: 20,
       marginBottom: 8,
       alignSelf: 'flex-start' as const,
       backgroundColor: colors.purpleSoft,
       borderRadius: 999,
-      paddingHorizontal: 12,
+      paddingHorizontal: 14,
       paddingVertical: 8,
     },
-    promoText: { color: colors.link, fontWeight: '600' as const, fontSize: 12 },
-    promoGated: { alignSelf: 'stretch' as const, borderRadius: 16 },
-    promoDetail: { color: colors.inkSecondary, fontSize: 12, lineHeight: 16, marginTop: 4 },
-    list: { padding: 16, paddingBottom: 24 },
+    promoText: { color: colors.link, fontWeight: '700' as const, fontSize: 13 },
+    promoGated: { alignSelf: 'stretch' as const, borderRadius: 16, paddingVertical: 12 },
+    promoDetail: { color: colors.inkSecondary, fontSize: 13, lineHeight: 18, marginTop: 4 },
+    list: { paddingHorizontal: 20, paddingTop: 8, paddingBottom: 20, gap: 10 },
     row: {
       flexDirection: 'row' as const,
       alignItems: 'center' as const,
       gap: 12,
       backgroundColor: colors.card,
-      borderRadius: 16,
+      borderRadius: 18,
       padding: 14,
-      marginBottom: 10,
-      borderWidth: 1,
+      borderWidth: 1.5,
       borderColor: 'transparent',
     },
     rowOn: { borderColor: colors.orange, backgroundColor: colors.orangeSoft },
     rowFleet: { borderColor: colors.purple, backgroundColor: colors.purpleSoft },
+    iconWell: {
+      width: 44,
+      height: 44,
+      borderRadius: 14,
+      backgroundColor: colors.purpleSoft,
+      alignItems: 'center' as const,
+      justifyContent: 'center' as const,
+    },
+    iconWellOn: { backgroundColor: colors.card },
+    tierCopy: { flex: 1 },
+    priceCol: { alignItems: 'flex-end' as const },
     fleetBadge: {
       alignSelf: 'flex-start' as const,
       marginTop: 4,
@@ -180,8 +201,8 @@ function makeStyles(colors: Palette) {
     price: { fontWeight: '800' as const, color: colors.ink, fontSize: 16 },
     was: { color: colors.inkSecondary, fontSize: 11, textDecorationLine: 'line-through' as const },
     discount: { color: colors.orange, fontSize: 11, fontWeight: '700' as const, marginTop: 2 },
-    footer: { padding: 16, paddingBottom: 28, backgroundColor: colors.card, borderTopWidth: 1, borderTopColor: colors.border },
-    stub: { marginHorizontal: 16, marginBottom: 8, backgroundColor: colors.orangeSoft, borderRadius: 16, padding: 12 },
+    footer: { paddingHorizontal: 20, paddingTop: 12, backgroundColor: colors.card, borderTopWidth: 1, borderTopColor: colors.border },
+    stub: { marginHorizontal: 20, marginBottom: 10, backgroundColor: colors.orangeSoft, borderRadius: 16, padding: 14 },
     stubText: { color: colors.link, fontSize: 13, lineHeight: 18, fontWeight: '600' as const },
   }
 }

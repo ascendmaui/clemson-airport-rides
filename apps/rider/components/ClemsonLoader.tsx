@@ -56,6 +56,6 @@ function makeStyles(colors: Palette) {
       justifyContent: 'center' as const,
     },
     paw: { fontSize: 28 },
-    label: { marginTop: 78, color: colors.link, fontWeight: '800' as const, fontSize: 15 },
+    label: { marginTop: 86, color: colors.link, fontWeight: '700' as const, fontSize: 15, letterSpacing: -0.2 },
   }
 }

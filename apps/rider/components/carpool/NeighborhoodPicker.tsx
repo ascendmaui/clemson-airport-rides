@@ -136,17 +136,17 @@ function Chip({ spot, selected, onPress }: { key?: string | number; spot: { id: 
 function makeStyles(colors: Palette) {
   return {
     wrap: { marginBottom: 8 },
-    label: { fontSize: 12, fontWeight: '800' as const, color: colors.ink, marginBottom: 8 },
+    label: { fontSize: 13, fontWeight: '700' as const, letterSpacing: 0.1, color: colors.title, marginBottom: 8 },
     search: {
       backgroundColor: colors.input,
       borderWidth: 1,
       borderColor: colors.border,
-      borderRadius: 12,
-      paddingHorizontal: 12,
-      paddingVertical: 10,
-      fontSize: 15,
+      borderRadius: 16,
+      paddingHorizontal: 14,
+      paddingVertical: 12,
+      fontSize: 16,
       color: colors.ink,
-      marginBottom: 10,
+      marginBottom: 12,
     },
     row: { gap: 8, paddingBottom: 8 },
     chip: {
