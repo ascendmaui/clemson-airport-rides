@@ -5,6 +5,7 @@ import {
   getSignupRateLimitRemainingSec,
   isAccountExistsError,
   isClemsonEmail,
+  isGenericAuthFailure,
   isInvalidCredentialsError,
   isRateLimitError,
   mapAuthError,
@@ -92,6 +93,15 @@ test('standing thresholds match the web helper', () => {
   assert.equal(standingFromRatings(2.9, 3), 'watch')
   assert.equal(standingFromRatings(2.4, 2), 'good')
   assert.equal(standingFromRatings(null, 0), 'good')
+})
+
+test('generic login failure matches the driver-facing sentence only', () => {
+  assert.equal(isGenericAuthFailure('Something went wrong. Please try again.'), true)
+  assert.equal(isGenericAuthFailure('something went wrong, please try again'), true)
+  assert.equal(isGenericAuthFailure('Something went wrong. Please try again'), true)
+  assert.equal(isGenericAuthFailure('Google sign-in failed. Please try again.'), false)
+  assert.equal(isGenericAuthFailure('That email and password do not match. Reset your password, or continue with Google.'), false)
+  assert.equal(isGenericAuthFailure(''), false)
 })
 
 test('displayFirstName keeps the given name only', () => {

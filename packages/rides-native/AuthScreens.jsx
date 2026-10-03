@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import {
+  ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -11,6 +12,7 @@ import {
 } from 'react-native'
 import {
   getSignupRateLimitRemainingSec,
+  isGenericAuthFailure,
   isRateLimitError,
   markSignupRateLimited,
   normalizePromoCode,
@@ -136,6 +138,7 @@ export function SignInScreen({
   onSocial,
   resetPassword,
   onOpenLegal,
+  ownerRequest = false,
 }) {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -144,15 +147,56 @@ export function SignInScreen({
   const [busy, setBusy] = useState(false)
   const [socialId, setSocialId] = useState(null)
   const [resetBusy, setResetBusy] = useState(false)
+  const [holdingRequest, setHoldingRequest] = useState(false)
+
+  function keepOwnerRequest(message) {
+    if (!ownerRequest || !isGenericAuthFailure(message)) return false
+    setError(null)
+    setHoldingRequest(true)
+    return true
+  }
 
   async function onSubmit() {
     setError(null)
+    setInfo(null)
+    if (ownerRequest) setHoldingRequest(true)
     setBusy(true)
     try {
       await signIn(email.trim(), password)
       onSuccess?.()
     } catch (err) {
-      setError(err?.message || 'Sign in failed')
+      const message = err?.message || 'Sign in failed'
+      if (ownerRequest && isGenericAuthFailure(message) && onSocial) {
+        setError(null)
+        setHoldingRequest(true)
+        setSocialId('google')
+        try {
+          const result = await onSocial('google')
+          if (result?.cancelled) {
+            setHoldingRequest(false)
+            return
+          }
+          onSuccess?.()
+        } catch (socialErr) {
+          const mapped = mapGoogleAuthError(socialErr)
+          if (mapped?.cancelled) {
+            setHoldingRequest(false)
+            return
+          }
+          const socialMessage = mapped?.message || 'Social sign-in failed'
+          if (!keepOwnerRequest(socialMessage)) {
+            setHoldingRequest(false)
+            setError(socialMessage)
+          }
+        } finally {
+          setSocialId(null)
+        }
+        return
+      }
+      if (!keepOwnerRequest(message)) {
+        setHoldingRequest(false)
+        setError(message)
+      }
     } finally {
       setBusy(false)
     }
@@ -176,14 +220,26 @@ export function SignInScreen({
     if (!onSocial || busy || socialId || provider?.disabled) return
     setError(null)
     setInfo(null)
+    if (ownerRequest) setHoldingRequest(true)
     setSocialId(provider.id)
     try {
       const result = await onSocial(provider.id)
-      if (result?.cancelled) return
+      if (result?.cancelled) {
+        setHoldingRequest(false)
+        return
+      }
       onSuccess?.()
     } catch (err) {
       const mapped = provider.id === 'google' ? mapGoogleAuthError(err) : err
-      setError(mapped?.message || 'Social sign-in failed')
+      if (mapped?.cancelled) {
+        setHoldingRequest(false)
+        return
+      }
+      const message = mapped?.message || 'Social sign-in failed'
+      if (!keepOwnerRequest(message)) {
+        setHoldingRequest(false)
+        setError(message)
+      }
     } finally {
       setSocialId(null)
     }
@@ -203,6 +259,9 @@ export function SignInScreen({
       setResetBusy(false)
     }
   }
+
+  const genericHidden = ownerRequest && isGenericAuthFailure(error)
+  const showRequesting = ownerRequest && (busy || socialId || holdingRequest || genericHidden)
 
   return (
     <AuthShell title="Welcome back" subtitle={subtitle} mark={mark} onBack={onBack}>
@@ -257,7 +316,18 @@ export function SignInScreen({
           <Text style={styles.forgot}>{resetBusy ? 'Sending reset email…' : 'Forgot password?'}</Text>
         </Pressable>
       ) : null}
-      {error ? <Text style={styles.error} accessibilityLiveRegion="assertive" accessibilityRole="alert">{error}</Text> : null}
+      {showRequesting ? (
+        <View
+          style={styles.requesting}
+          accessibilityLiveRegion="polite"
+          accessibilityRole="progressbar"
+          accessibilityLabel="Requesting"
+        >
+          <ActivityIndicator color={ORANGE} />
+          <Text style={styles.requestingLabel}>Requesting</Text>
+        </View>
+      ) : null}
+      {error && !genericHidden ? <Text style={styles.error} accessibilityLiveRegion="assertive" accessibilityRole="alert">{error}</Text> : null}
       {info ? <Text style={styles.info} accessibilityLiveRegion="polite">{info}</Text> : null}
       <Pressable
         onPress={onSubmit}
@@ -860,6 +930,8 @@ const styles = StyleSheet.create({
   forgot: { color: PURPLE, fontWeight: '700', fontSize: 13, marginBottom: 14 },
   promoNote: { color: PURPLE, fontSize: 12, lineHeight: 17, marginBottom: 14 },
   error: { color: DANGER, fontSize: 13, marginBottom: 12, lineHeight: 18 },
+  requesting: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12 },
+  requestingLabel: { color: PURPLE, fontWeight: '800', fontSize: 16 },
   info: { color: PURPLE, fontSize: 13, marginBottom: 12, lineHeight: 18 },
   cooldown: { color: INK_SECONDARY, fontSize: 13, marginBottom: 12 },
   primary: {

@@ -6,6 +6,7 @@ import { FarePanel } from '@/components/FarePanel'
 import { BackButton, Card, ErrorText, Primary, Tag } from '@/components/chrome'
 import { DriverStatusCard } from '@/components/DriverStatusCard'
 import { useAuth } from '@/lib/auth'
+import { notifyAcceptedRide } from '@/lib/push'
 import { useFeedback } from '@/lib/feedback'
 import { oneParam } from '@/lib/oneParam'
 import { supabase } from '@/lib/supabase'
@@ -193,6 +194,7 @@ export default function QueueScreen() {
     setError(null)
     try {
       await acceptTrip(supabase, card, user.id)
+      notifyAcceptedRide(card).catch(() => {})
       pulse('accept')
       await refresh()
       if (card.status !== 'scheduled') router.push({ pathname: '/trip', params: { id: card.id } })

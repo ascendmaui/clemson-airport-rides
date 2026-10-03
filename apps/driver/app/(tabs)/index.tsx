@@ -1,4 +1,5 @@
 import { useRouter } from 'expo-router'
+import * as Location from 'expo-location'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AccessibilityInfo, Animated, Linking, Modal, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -9,7 +10,7 @@ import { CircleButton, GoButton } from '@/components/shell'
 import { DriverStatusCard } from '@/components/DriverStatusCard'
 import { useAuth } from '@/lib/auth'
 import { useFeedback } from '@/lib/feedback'
-import { notifyNewRequest } from '@/lib/push'
+import { notifyAcceptedRide, notifyNewRequest } from '@/lib/push'
 import { clemsonMiamiDriverNotification } from 'rides-native/clemsonMiamiPromo.js'
 import { shownCents } from '@/lib/shown'
 import { supabase } from '@/lib/supabase'
@@ -49,7 +50,7 @@ import {
 import { etaHoldLine, etaLineFor } from 'rides-native/liveTrip'
 import { ORANGE, PURPLE } from 'rides-native/places.js'
 import { gameDayNotice, type GameDayNotice } from 'rides-native/gameDayNotice.js'
-import { approvalGateMessage, isSyntheticOffer, syntheticOffers } from 'rides-native/syntheticOffers'
+import { approvalGateMessage, isSyntheticOffer } from 'rides-native/syntheticOffers'
 import { driverGateView } from 'rides-native/driverGateView'
 import { loadCounterpart } from 'rides-native/partyProfile.js'
 import { offerCardViewModel } from 'rides-native/offerCard'
@@ -58,6 +59,23 @@ import { offerCardViewModel } from 'rides-native/offerCard'
 const EDGE = 16
 const GAP = 12
 const TOP_MARGIN = 8
+
+async function currentFix() {
+  try {
+    const perm = await Location.requestForegroundPermissionsAsync()
+    if (perm.status !== 'granted') return null
+    const last = await Location.getLastKnownPositionAsync()
+    const pos = last || await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced })
+    const heading = pos.coords.heading
+    return {
+      lat: pos.coords.latitude,
+      lng: pos.coords.longitude,
+      heading: heading != null && heading >= 0 ? heading : null,
+    }
+  } catch {
+    return null
+  }
+}
 
 function demandWord(intensity: number): string {
   if (intensity >= 0.75) return 'Busy'
@@ -96,6 +114,7 @@ export default function DriverHome() {
   const [heatLoading, setHeatLoading] = useState(true)
   const [riderLine, setRiderLine] = useState<string | null>(null)
   const [hiddenOffers, setHiddenOffers] = useState<string[]>([])
+  const [selectedOfferId, setSelectedOfferId] = useState<string | null>(null)
   const [gameNotice, setGameNotice] = useState<GameDayNotice | null>(null)
   const [refreshing, setRefreshing] = useState(false)
   const gate = useMemo(
@@ -263,8 +282,13 @@ export default function DriverHome() {
     setError(null)
     try {
       const nextOnline = !online
-      await setDriverOnline(supabase, user.id, nextOnline)
-      if (nextOnline) await publishDriverCapacity(supabase, user.id, desk?.vehicle?.seats)
+      const fix = nextOnline ? await currentFix() : null
+      await setDriverOnline(supabase, user.id, nextOnline, fix)
+      if (fix) setSelf({ latitude: fix.lat, longitude: fix.lng })
+      if (nextOnline) {
+        await publishDriverCapacity(supabase, user.id, desk?.vehicle?.seats)
+        setFocusToken((value: number) => value + 1)
+      }
       pulse('online')
       AccessibilityInfo.announceForAccessibility(nextOnline ? 'You are now online' : 'You are now offline')
       await refresh()
@@ -276,7 +300,7 @@ export default function DriverHome() {
   }
 
   async function onAccept(card: DriverCard) {
-    if (!user || !supabase) return
+    if (busy || !user || !supabase) return
     if (!canSeeOffers || !approved || isSyntheticOffer(card)) {
       setError(approvalGateMessage())
       return
@@ -285,6 +309,7 @@ export default function DriverHome() {
     setError(null)
     try {
       await acceptTrip(supabase, card, user.id)
+      notifyAcceptedRide(card).catch(() => {})
       pulse('accept')
       await refresh()
       router.push({ pathname: '/trip', params: { id: card.id } })
@@ -324,7 +349,10 @@ export default function DriverHome() {
     }
   }
 
-  const offer = canSeeOffers ? desk?.offers[0] || null : null
+  const liveOffers = (canSeeOffers ? desk?.offers || [] : []).filter(
+    (card: DriverCard) => !isSyntheticOffer(card) && !hiddenOffers.includes(card.id),
+  )
+  const offer = liveOffers.find((card: DriverCard) => card.id === selectedOfferId) || liveOffers[0] || null
   const liveFrom = self
     ? { lat: self.latitude, lng: self.longitude }
     : desk?.lat != null && desk?.lng != null
@@ -335,12 +363,20 @@ export default function DriverHome() {
     : null
   const hotspots = spots.slice().sort((a: BusySpot, b: BusySpot) => b.intensity - a.intensity).slice(0, 4)
   const pins: MapPin[] = []
-  if (self) pins.push({ id: 'me', ...self, title: 'You', pinColor: ORANGE })
-  if (offer?.pickupLat != null && offer.pickupLng != null) {
-    pins.push({ id: 'pickup', latitude: offer.pickupLat, longitude: offer.pickupLng, title: 'Pickup', pinColor: PURPLE })
-  }
-  // When heat is on, circles carry demand — keep pins to you + pickup only.
-  if (!showHeat) {
+  if (self) pins.push({ id: 'me', ...self, title: 'You', pinColor: ORANGE, kind: 'self' })
+  liveOffers.forEach((card: DriverCard) => {
+    if (card.pickupLat == null || card.pickupLng == null) return
+    pins.push({
+      id: card.id,
+      latitude: card.pickupLat,
+      longitude: card.pickupLng,
+      title: card.pickupLabel,
+      pinColor: PURPLE,
+      kind: 'request',
+    })
+  })
+  // When heat is on, circles carry demand — keep pins to you + requests only.
+  if (!online && !showHeat) {
     hotspots.forEach((spot: BusySpot) => {
       pins.push({
         id: spot.id,
@@ -353,6 +389,17 @@ export default function DriverHome() {
   }
 
 
+
+  function onPinPress(id: string) {
+    if (id === 'me') {
+      setFocusToken((value: number) => value + 1)
+      return
+    }
+    const card = liveOffers.find((row: DriverCard) => row.id === id)
+    if (!card) return
+    setSelectedOfferId(card.id)
+    void onAccept(card)
+  }
 
   const statusLine = !user
     ? 'Sign in to drive'
@@ -373,6 +420,8 @@ export default function DriverHome() {
         showHeat={showHeat}
         gameDay={Boolean(gameNotice?.live)}
         gameDayLabel={gameNotice?.live ? gameNotice.headline : null}
+        lockOnCenter={Boolean(online && self)}
+        onPinPress={onPinPress}
       />
       <View pointerEvents="box-none" style={styles.overlay}>
         <View style={[styles.top, { paddingTop: dockTop }]} pointerEvents="box-none">

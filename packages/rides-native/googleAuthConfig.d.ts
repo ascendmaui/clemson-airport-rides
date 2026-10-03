@@ -18,6 +18,7 @@ export interface GoogleAuthConfigOptions {
   platform?: 'ios' | 'android' | 'web' | string
   mode?: 'all' | 'any'
   requireAll?: boolean
+  provider?: 'supabase' | string
 }
 
 export const GOOGLE_SIGN_IN_COMING_SOON: string

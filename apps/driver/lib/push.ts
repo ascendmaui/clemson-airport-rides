@@ -81,6 +81,22 @@ async function storeToken(supabase: SupabaseClient | null, driverId: string, tok
   return !table.error
 }
 
+export async function notifyAcceptedRide(card: {
+  id: string
+  pickupLabel: string
+  dropoffLabel: string
+}) {
+  await Notifications.scheduleNotificationAsync({
+    content: {
+      title: 'Ride accepted',
+      body: `${card.pickupLabel} → ${card.dropoffLabel}`,
+      data: { tripId: card.id },
+      sound: 'request.wav',
+    },
+    trigger: null,
+  })
+}
+
 export async function notifyNewRequest(card: {
   id: string
   pickupLabel: string
