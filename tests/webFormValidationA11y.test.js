@@ -122,14 +122,20 @@ test('AuthScreens.jsx wires accessible labels, field errors, and ARIA alerts', (
   })
   assert.ok(ast, 'AuthScreens parses cleanly')
 
-  // SignInScreen accessibility checks
-  assert.match(code, /htmlFor="signin-email"/, 'SignIn connects email label')
-  assert.match(code, /id="signin-email"/, 'SignIn email input has matching ID')
-  assert.match(code, /htmlFor="signin-password"/, 'SignIn connects password label')
-  assert.match(code, /id="signin-password"/, 'SignIn password input has matching ID')
-  assert.match(code, /id="signin-form-alert"/, 'SignIn exposes alert container ID')
-  assert.match(code, /role="alert"/, 'SignIn specifies alert role')
-  assert.match(code, /aria-live="polite"/, 'SignIn marks error with polite live region')
+  const signIn = code.slice(
+    code.indexOf('export function SignInScreen'),
+    code.indexOf('export function SignUpScreen'),
+  )
+  assert.ok(signIn.includes('export function SignInScreen'), 'SignInScreen is present')
+  assert.doesNotMatch(signIn, /<form[\s>]/, 'SignIn has no typed-credential form')
+  assert.doesNotMatch(signIn, /type="password"/, 'SignIn has no password field')
+  assert.doesNotMatch(signIn, /type="email"/, 'SignIn has no email field')
+  assert.doesNotMatch(signIn, /signin-email|signin-password/, 'SignIn has no credential field ids')
+  assert.match(signIn, /signInWithGoogle/, 'SignIn starts the existing Google OAuth flow')
+  assert.match(signIn, /showEmailDivider=\{false\}/, 'SignIn does not offer an email divider')
+  assert.match(signIn, /id="signin-form-alert"/, 'SignIn exposes alert container ID')
+  assert.match(code, /role="alert"/, 'Auth screens specify alert role')
+  assert.match(code, /aria-live="polite"/, 'Auth screens mark status with polite live region')
 
   // SignUpScreen accessibility checks
   assert.match(code, /htmlFor="signup-fullname"/, 'SignUp connects fullname label')
