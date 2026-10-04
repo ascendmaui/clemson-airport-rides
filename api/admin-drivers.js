@@ -7,6 +7,7 @@
  * Legacy /api/help-chat, /api/support-chat, /api/support-ticket are rewritten here.
  */
 import { blockerLabel, isAdminIdentity, onboardingLabel, submissionBlockers } from '../shared/driverOnboarding.js'
+import { selectDriverApplicationQueue, withSubmittedApplicantEmail } from '../shared/applicantEmail.js'
 import { loadSubmissionContext } from '../server/driverApproval.js'
 import {
   admin, cors, json, parseBody, userFromAuth,
@@ -89,9 +90,7 @@ export default async function handler(req, res) {
 }
 
 async function queue(sb, res, status) {
-  let q = sb.from('driver_applications').select(APP_COLS).order('submitted_at', { ascending: false })
-  if (status) q = q.eq('onboarding_status', status)
-  const { data: apps, error } = await q
+  const { data: apps, error } = await selectDriverApplicationQueue(sb, APP_COLS, status)
   if (error) return json(res, 500, { error: error.message })
   const ids = (apps || []).map((a) => a.profile_id)
   if (!ids.length) {
@@ -142,10 +141,10 @@ async function queue(sb, res, status) {
       agreementSigned: Boolean(agreement?.signed_at && agreement?.signature_name),
       agreementVersion: agreement?.agreement_version || null,
     })
+    const presented = withSubmittedApplicantEmail(app, profileById[app.profile_id] || null)
     return {
-      ...app,
+      ...presented,
       label: onboardingLabel(app.onboarding_status),
-      profile: profileById[app.profile_id] || null,
       vehicle: vehicleById[app.profile_id] || null,
       tax,
       agreement,
