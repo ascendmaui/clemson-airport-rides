@@ -45,7 +45,11 @@ function createFakeSupabase(initialTables = {}, options = {}) {
   function matchFilter(row, filter) {
     const { type, col, val, op } = filter
     const rowVal = row[col]
-    if (type === 'eq') return rowVal === val
+    if (type === 'eq') return col === 'metadata' ? JSON.stringify(rowVal) === val : rowVal === val
+    if (type === 'or') {
+      const target = row.metadata?.offer_driver_id
+      return target == null || target === '' || target === JSON.parse(val.split('metadata->>offer_driver_id.eq.').at(-1))
+    }
     if (type === 'neq') return rowVal !== val
     if (type === 'in') return Array.isArray(val) && val.includes(rowVal)
     if (type === 'is') {
@@ -205,6 +209,7 @@ function createFakeSupabase(initialTables = {}, options = {}) {
         state.filters.push({ type: 'in', col, val })
         return builder
       },
+      or(val) { state.filters.push({ type: 'or', val }); return builder },
       is(col, val) {
         state.filters.push({ type: 'is', col, val })
         return builder
@@ -1004,7 +1009,7 @@ test('acceptTrip accepts on-demand trip and logs trip_events', async () => {
   assert.equal(event.payload?.driver_id, 'driver-1')
 })
 
-test('acceptTrip surfaces trip_events insert failures instead of swallowing them', async () => {
+test('acceptTrip returns the committed claim with a warning when the event write fails', async () => {
   const supabase = createFakeSupabase(
     {
       trips: [{ id: 'trip-od-ev', status: 'offered' }],
@@ -1025,10 +1030,9 @@ test('acceptTrip surfaces trip_events insert failures instead of swallowing them
   const originalError = console.error
   console.error = (...args) => { logged.push(args.map(String).join(' ')) }
   try {
-    await assert.rejects(
-      () => acceptTrip(supabase, { id: 'trip-od-ev', status: 'offered' }, 'driver-1'),
-      /trip_events insert denied/,
-    )
+    const accepted = await acceptTrip(supabase, { id: 'trip-od-ev', status: 'offered' }, 'driver-1')
+    assert.equal(accepted.status, 'accepted')
+    assert.match(accepted.eventWarning, /trip_events insert denied/)
   } finally {
     console.error = originalError
   }

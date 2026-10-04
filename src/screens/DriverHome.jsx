@@ -36,7 +36,7 @@ import {
 import { pushToast } from '../lib/toasts'
 import { playRideRequestAlert, shouldAlertForRide } from '../lib/rideAlert'
 import { loadLocalPrefs } from '../lib/notificationPrefs'
-import { offerVisibleToDriver } from '../../shared/driverOrder.js'
+import { offerVisibleToDriver, visibleOfferQuery } from '../../shared/driverOrder.js'
 import { acceptTrip, declineTrip, listPassedTripIds } from '../../packages/rides-native/driverDesk.js'
 import {
   acceptActionLabel,
@@ -123,6 +123,7 @@ function DriverShell({ driverId }) {
   const [chatTrip, setChatTrip] = useState(null)
   const [scheduledOpen, setScheduledOpen] = useState([])
   const [scheduledMine, setScheduledMine] = useState([])
+  const offerRevision = useRef(0)
   const [acceptingScheduledId, setAcceptingScheduledId] = useState(null)
   const dismissedOffers = useRef(new Set())
   const passedOffers = useRef(new Set())
@@ -346,16 +347,18 @@ function DriverShell({ driverId }) {
       })
     }
     async function loadOffers() {
-      const open = await supabase
+      const revision = ++offerRevision.current
+      const open = await visibleOfferQuery(supabase
         .from('trips')
         .select('*')
-        .in('status', ['searching', 'offered'])
+        .in('status', ['searching', 'offered']), driverId)
         .order('requested_at', { ascending: false })
         .limit(8)
-      if (!alive || open.error) return
+      if (!alive || revision !== offerRevision.current || open.error) return
       if (driverId) {
         const passed = await listPassedTripIds(supabase, driverId)
         if (!alive) return
+        if (revision !== offerRevision.current) return
         passedOffers.current = new Set(passed)
       }
       const rows = (open.data || []).filter((candidate) => (
@@ -402,6 +405,7 @@ function DriverShell({ driverId }) {
       if (!alive || error) return
       const row = (data || []).find((trip) => isDueNow(trip))
       if (row) {
+        offerRevision.current += 1
         setActiveTrip(row)
         setOffer((prev) => (prev?.id === row.id ? null : prev))
       }
@@ -420,6 +424,10 @@ function DriverShell({ driverId }) {
     return subscribeTrips((payload) => {
       const row = payload?.new || payload?.record
       if (!row) return
+      offerRevision.current += 1
+      if (!['searching', 'offered'].includes(row.status) || !offerVisibleToDriver(row, driverId)) {
+        setOffer((current) => current?.id === row.id ? null : current)
+      }
       if (row.status === 'scheduled') {
         loadScheduled()
       }
@@ -499,6 +507,7 @@ function DriverShell({ driverId }) {
         driver_id: saved.driver_id || driverId,
         accepted_at: saved.accepted_at,
       }
+      offerRevision.current += 1
       setActiveTrip(kept)
       setOffer(null)
       pushToast({

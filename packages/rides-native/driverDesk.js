@@ -2,6 +2,7 @@
  * Driver desk: availability, PickDriver requests, scheduled queue, live status.
  * Payments go through the existing /api/driver and /api/stripe-payment-methods routers.
  */
+import { offerVisibleToDriver, visibleOfferQuery, unchangedOfferQuery } from '../../shared/driverOrder.js'
 import { authedJson } from './apiClient.js'
 import { approvalGateMessage } from './syntheticOffers.js'
 import {
@@ -196,7 +197,7 @@ export async function loadDriverDesk(supabase, driverId) {
     }
   }
   const [openRows, scheduledRows, mineRows, activeRows, statusRes, vehicle, profile, appRes] = await Promise.all([
-    safeRows('offers', (query) => query.in('status', OPEN_OFFER_STATUSES).order('requested_at', { ascending: false }).limit(20)),
+    safeRows('offers', (query) => visibleOfferQuery(query.in('status', OPEN_OFFER_STATUSES), driverId).order('requested_at', { ascending: false }).limit(20)),
     safeRows('scheduled', (query) => query.eq('status', 'scheduled').is('driver_id', null).order('pickup_at', { ascending: true }).limit(25)),
     safeRows('upcoming', (query) => query.eq('driver_id', driverId).in('status', ['accepted', 'arriving']).not('pickup_at', 'is', null).order('pickup_at', { ascending: true }).limit(20)),
     safeRows('active', (query) => query.eq('driver_id', driverId).in('status', ['accepted', 'arriving', 'arrived', 'in_progress']).order('accepted_at', { ascending: false }).limit(8)),
@@ -215,7 +216,7 @@ export async function loadDriverDesk(supabase, driverId) {
     ? new Set(await listPassedTripIds(supabase, driverId))
     : new Set()
   const claimableOpen = approvedForOffers
-    ? openRows.filter((row) => !isUnpaidAirportDepositTrip(row))
+    ? openRows.filter((row) => offerVisibleToDriver(row, driverId) && !isUnpaidAirportDepositTrip(row))
     : []
   const claimableScheduled = approvedForOffers
     ? scheduledRows.filter((row) => !isUnpaidAirportDepositTrip(row))
@@ -288,10 +289,8 @@ export async function acceptTrip(supabase, trip, driverId) {
     throw new Error('Finish approval to go online. Your account is still under review.')
   }
   const freshRows = await listTrips(supabase, (query) => query.eq('id', trip.id).limit(1))
-  const fresh = freshRows[0] || trip
-  if (fresh.driver_id && fresh.driver_id !== driverId) {
-    throw new Error('That ride is no longer available')
-  }
+  const fresh = freshRows[0]
+  if (!fresh || !offerVisibleToDriver(fresh, driverId)) throw new Error('That ride is no longer available')
   if (fresh.status && !['requested', 'searching', 'offered', 'scheduled'].includes(fresh.status)) {
     throw new Error('That ride is no longer available')
   }
@@ -323,16 +322,22 @@ export async function acceptTrip(supabase, trip, driverId) {
     return data
   }
   const acceptedAt = new Date().toISOString()
-  const { data, error } = await supabase
+  const { data, error } = await unchangedOfferQuery(supabase
     .from('trips')
-    .update({ status: 'accepted', driver_id: driverId, accepted_at: acceptedAt })
+    .update({ status: 'accepted', driver_id: driverId, accepted_at: acceptedAt }), fresh)
+    .is('driver_id', null)
     .eq('id', trip.id)
     .in('status', OPEN_OFFER_STATUSES)
     .select('id, status, driver_id, accepted_at')
     .maybeSingle()
   if (error) throw new Error(error.message)
   if (!data) throw new Error('That ride is no longer available')
-  await writeTripEvent(supabase, trip.id, 'accepted', { driver_id: driverId, source: 'driver_app', accepted_at: acceptedAt })
+  try {
+    await writeTripEvent(supabase, trip.id, 'accepted', { driver_id: driverId, source: 'driver_app', accepted_at: acceptedAt })
+  } catch (error) {
+    // The conditional claim already committed. Keep both screens on the accepted trip.
+    return { ...data, eventWarning: error.message }
+  }
   return data
 }
 

@@ -1241,6 +1241,11 @@ function deskSupabase({ onboardingStatus, trips }) {
     const state = { filters: [] }
     const builder = {
       select() { return builder },
+      or(value) {
+        const driverId = JSON.parse(value.split('metadata->>offer_driver_id.eq.').at(-1))
+        state.filters.push((row) => !row.metadata?.offer_driver_id || row.metadata.offer_driver_id === driverId)
+        return builder
+      },
       eq(col, val) {
         state.filters.push((row) => row[col] === val)
         return builder

@@ -5,7 +5,7 @@ import { handleMarkOffered, handlePassOffer } from './endpoints/driverOfferDesk.
 const john = 'john-driver'
 const kim = 'kim-driver'
 
-function deskSb(seed) {
+function deskSb(seed, beforeUpdate) {
   const tables = {}
   for (const [name, rows] of Object.entries(seed)) {
     tables[name] = rows.map((row) => ({ ...row, metadata: row.metadata ? { ...row.metadata } : row.metadata }))
@@ -19,6 +19,7 @@ function deskSb(seed) {
         state.filters.push({ kind: 'eq', col, val })
         return api
       },
+      is(col, val) { state.filters.push({ kind: 'is', col, val }); return api },
       in(col, val) {
         state.filters.push({ kind: 'in', col, val })
         return api
@@ -30,10 +31,12 @@ function deskSb(seed) {
       match(row) {
         return state.filters.every((filter) => {
           if (filter.kind === 'in') return filter.val.includes(row[filter.col])
-          return row[filter.col] === filter.val
+          if (filter.kind === 'is') return row[filter.col] == null
+          return filter.col === 'metadata' ? JSON.stringify(row.metadata) === filter.val : row[filter.col] === filter.val
         })
       },
       async maybeSingle() {
+        if (state.op === 'update') beforeUpdate?.(tables)
         const found = tables[table].filter((row) => api.match(row))
         if (state.op === 'update') {
           if (!found[0]) return { data: null, error: null }
@@ -73,7 +76,7 @@ async function call(handler, deps, body) {
   return { status: res.statusCode, json: res.body ? JSON.parse(res.body) : null }
 }
 
-function seed() {
+function seed(beforeUpdate) {
   return deskSb({
     driver_applications: [
       { profile_id: john, onboarding_status: 'approved' },
@@ -99,7 +102,7 @@ function seed() {
         auto_assign_queue: [john, kim],
       },
     }],
-  })
+  }, beforeUpdate)
 }
 
 test('mark-offered moves a visible searching trip to offered without claiming it', async () => {
@@ -127,3 +130,27 @@ test('pass-offer advances auto-assign to the next online driver', async () => {
   assert.equal(desk.tables.trips[0].driver_id, null)
   assert.equal(desk.tables.trips[0].metadata.offer_driver_id, kim)
 })
+
+for (const handler of [handleMarkOffered, handlePassOffer]) {
+  test(`${handler.name} does not report stale success after another driver accepts`, async () => {
+    const desk = seed((tables) => {
+      tables.trips[0].status = 'accepted'
+      tables.trips[0].driver_id = kim
+    })
+    const response = await call(handler, { sb: desk.sb, user: { id: john } }, { tripId: 'trip-1' })
+    assert.equal(response.status, 409)
+    assert.equal(response.json.code, 'offer_changed')
+    assert.equal(desk.tables.trips[0].status, 'accepted')
+    assert.equal(desk.tables.trips[0].driver_id, kim)
+  })
+
+  test(`${handler.name} cannot overwrite a newer dispatch target`, async () => {
+    const desk = seed((tables) => {
+      tables.trips[0].metadata = { ...tables.trips[0].metadata, offer_driver_id: kim }
+    })
+    const response = await call(handler, { sb: desk.sb, user: { id: john } }, { tripId: 'trip-1' })
+    assert.equal(response.status, 409)
+    assert.equal(desk.tables.trips[0].metadata.offer_driver_id, kim)
+    assert.equal(desk.tables.trips[0].status, 'searching')
+  })
+}

@@ -9,7 +9,7 @@
 import { admin, cors, json, parseBody, userFromAuth } from '../friendRideLib.js'
 import { driverApprovalStatus } from '../driverApproval.js'
 import { listAssignableDrivers, nextQueuedDriver } from '../autoAssign.js'
-import { offerVisibleToDriver } from '../../shared/driverOrder.js'
+import { offerVisibleToDriver, unchangedOfferQuery } from '../../shared/driverOrder.js'
 
 function metaOf(trip) {
   return trip?.metadata && typeof trip.metadata === 'object' && !Array.isArray(trip.metadata)
@@ -74,15 +74,17 @@ export async function handleMarkOffered(req, res, deps = {}) {
     return json(res, 200, { tripId, status: trip.status, unchanged: true })
   }
 
-  const updated = await ctx.sb
+  const updated = await unchangedOfferQuery(ctx.sb
     .from('trips')
-    .update({ status: 'offered' })
+    .update({ status: 'offered' }), trip)
+    .is('driver_id', null)
     .eq('id', tripId)
     .eq('status', 'searching')
     .select('id, status')
     .maybeSingle()
   if (updated.error) return json(res, 500, { error: 'Could not update this ride offer', code: 'offer_update_failed' })
-  return json(res, 200, { tripId, status: updated.data?.status || 'offered' })
+  if (!updated.data) return json(res, 409, { error: 'This ride offer changed. Refresh and try again.', code: 'offer_changed' })
+  return json(res, 200, { tripId, status: updated.data.status })
 }
 
 export async function handlePassOffer(req, res, deps = {}) {
@@ -100,12 +102,11 @@ export async function handlePassOffer(req, res, deps = {}) {
   const loaded = await loadTrip(ctx.sb, tripId)
   if (!loaded.trip) return json(res, loaded.status, { error: loaded.error })
   const trip = loaded.trip
-  if (!['searching', 'offered'].includes(trip.status)) {
+  if (!['searching', 'offered'].includes(trip.status) || trip.driver_id) {
     return json(res, 200, { tripId, status: trip.status, unchanged: true })
   }
   const meta = metaOf(trip)
-  const target = typeof meta.offer_driver_id === 'string' ? meta.offer_driver_id : ''
-  if (target && target !== ctx.user.id) {
+  if (!offerVisibleToDriver(trip, ctx.user.id)) {
     return json(res, 403, { error: 'This ride offer is for another driver.', code: 'offer_not_yours' })
   }
 
@@ -125,18 +126,20 @@ export async function handlePassOffer(req, res, deps = {}) {
     offer_driver_id: offerDriverId,
     match: offerDriverId ? meta.match || 'auto' : 'open',
   }
-  const updated = await ctx.sb
+  const updated = await unchangedOfferQuery(ctx.sb
     .from('trips')
     .update({
       status: 'searching',
       driver_id: null,
       metadata: nextMeta,
-    })
+    }), trip)
+    .is('driver_id', null)
     .eq('id', tripId)
     .in('status', ['searching', 'offered'])
     .select('id, status, metadata')
     .maybeSingle()
   if (updated.error) return json(res, 500, { error: 'Could not pass this ride offer', code: 'offer_update_failed' })
+  if (!updated.data) return json(res, 409, { error: 'This ride offer changed. Refresh and try again.', code: 'offer_changed' })
   return json(res, 200, {
     tripId,
     status: updated.data?.status || 'searching',

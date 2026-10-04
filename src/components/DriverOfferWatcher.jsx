@@ -7,7 +7,7 @@ import { useAuth } from '../lib/auth'
 import { supabase } from '../lib/supabase'
 import { pushToast } from '../lib/toasts'
 import { isDueNow, isUnpaidAirportDepositTrip } from '../../packages/rides-native/tripTags.js'
-import { offerVisibleToDriver } from '../../shared/driverOrder.js'
+import { offerVisibleToDriver, visibleOfferQuery } from '../../shared/driverOrder.js'
 
 export function DriverOfferWatcher() {
   const { user } = useAuth()
@@ -34,10 +34,10 @@ export function DriverOfferWatcher() {
         .eq('driver_id', user.id)
         .maybeSingle()
       if (!alive || presence.error || !presence.data?.online) return
-      const { data, error } = await supabase
+      const { data, error } = await visibleOfferQuery(supabase
         .from('trips')
         .select('id, status, rider_id, driver_id, pickup_label, dropoff_label, pickup_at, scheduled_for, deposit_cents, metadata, rider_note')
-        .in('status', ['searching', 'offered'])
+        .in('status', ['searching', 'offered']), user.id)
         .order('requested_at', { ascending: false })
         .limit(8)
       if (!alive || error) return
