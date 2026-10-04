@@ -12,7 +12,9 @@ import {
   ORANGE,
   ORANGE_BRIGHT,
   PURPLE,
+  BOOKABLE_RIDE_TIER_IDS,
   RIDE_TIERS,
+  bookableRideTiers,
   SHORTCUTS,
   STADIUM,
   SURFACE,
@@ -158,6 +160,15 @@ describe('RIDE_TIERS', () => {
     const tesla = RIDE_TIERS.find((t) => t.id === 'tesla')
     assert.equal(tesla.premium, true)
     assert.equal(tesla.price, 36)
+  })
+
+  test('web booking offers only Standard, Wait and Save, and Extra Comfort', () => {
+    assert.deepEqual(BOOKABLE_RIDE_TIER_IDS, ['standard', 'wait', 'comfort'])
+    const offered = bookableRideTiers()
+    assert.deepEqual(offered.map((tier) => tier.id), ['standard', 'wait', 'comfort'])
+    assert.deepEqual(offered.map((tier) => tier.name), ['Standard', 'Wait & Save', 'Extra Comfort'])
+    assert.equal(offered.some((tier) => tier.id === 'xl' || tier.id === 'pet' || tier.id === 'tesla'), false)
+    assert.deepEqual(bookableRideTiers([{ id: 'xl' }, { id: 'standard', name: 'Standard' }]).map((tier) => tier.id), ['standard'])
   })
 })
 

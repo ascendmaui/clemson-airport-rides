@@ -188,7 +188,43 @@ function PreviewFleet({ fleet }) {
   })
 }
 
-function FallbackMap({ wrapStyle, message, badge, fleet = [] }) {
+function previewRoutePoints(route) {
+  const spots = (route || [])
+    .map((spot) => toLatLng(spot))
+    .filter((spot) => Number.isFinite(spot.lat) && Number.isFinite(spot.lng))
+  if (spots.length < 2) return []
+  const lats = spots.map((spot) => spot.lat)
+  const lngs = spots.map((spot) => spot.lng)
+  const minLat = Math.min(...lats)
+  const maxLat = Math.max(...lats)
+  const minLng = Math.min(...lngs)
+  const maxLng = Math.max(...lngs)
+  const latSpan = maxLat - minLat || 0.01
+  const lngSpan = maxLng - minLng || 0.01
+  return spots.map((spot) => ({
+    x: 14 + ((spot.lng - minLng) / lngSpan) * 72,
+    y: 86 - ((spot.lat - minLat) / latSpan) * 72,
+  }))
+}
+
+function FallbackRoute({ route }) {
+  const points = previewRoutePoints(route)
+  if (points.length < 2) return null
+  const d = points.map((spot, index) => `${index === 0 ? 'M' : 'L'} ${spot.x.toFixed(1)} ${spot.y.toFixed(1)}`).join(' ')
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 100 100"
+      preserveAspectRatio="none"
+      style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none' }}
+    >
+      <path d={d} fill="none" stroke="#F56600" strokeWidth="5" strokeLinecap="round" strokeLinejoin="round" opacity="0.35" />
+      <path d={d} fill="none" stroke="#522D80" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+function FallbackMap({ wrapStyle, message, badge, fleet = [], route = null }) {
   return (
     <div
       style={{
@@ -202,6 +238,7 @@ function FallbackMap({ wrapStyle, message, badge, fleet = [] }) {
         fontSize: 13,
       }}
     >
+      <FallbackRoute route={route} />
       <PreviewFleet fleet={fleet} />
       {badge ? (
         <div style={{
@@ -436,6 +473,7 @@ export function CampusMap({
           wrapStyle={wrapStyle}
           badge={gameDayLabel}
           fleet={previewFleet}
+          route={route}
           message="Map preview needs VITE_GOOGLE_MAPS_API_KEY (Maps JavaScript API)."
         />
         {showSimulatedFleet ? <FleetBadge /> : null}
@@ -445,7 +483,7 @@ export function CampusMap({
   if (loadError) {
     return (
       <div style={{ position: 'relative' }}>
-        <FallbackMap wrapStyle={wrapStyle} badge={gameDayLabel} fleet={previewFleet} message="Google Maps failed to load. Check the API key / referrer." />
+        <FallbackMap wrapStyle={wrapStyle} badge={gameDayLabel} fleet={previewFleet} route={route} message="Google Maps failed to load. Check the API key / referrer." />
         {showSimulatedFleet ? <FleetBadge /> : null}
       </div>
     )
@@ -453,7 +491,7 @@ export function CampusMap({
   if (!isLoaded) {
     return (
       <div style={{ position: 'relative' }}>
-        <FallbackMap wrapStyle={wrapStyle} badge={gameDayLabel} fleet={previewFleet} message="Loading map…" />
+        <FallbackMap wrapStyle={wrapStyle} badge={gameDayLabel} fleet={previewFleet} route={route} message="Loading map…" />
         {showSimulatedFleet ? <FleetBadge /> : null}
       </div>
     )

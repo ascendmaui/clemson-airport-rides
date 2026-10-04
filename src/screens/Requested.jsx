@@ -17,9 +17,8 @@ import { MidrideCancelSheet } from '../components/MidrideCancelSheet'
 import { isMidrideStatus } from '../lib/tripPhase'
 import { CounterpartChip } from '../components/CounterpartChip'
 import { PARTY_VISIBLE_STATUSES } from '../../packages/rides-native/partyProfile.js'
-import { etaHoldLine, etaLineFor, orderedLiveStops, riderLiveView, SEARCH_PREVIEW_COPY, showSearchTheater, STILL_SEARCHING_COPY, STILL_SEARCHING_MS } from '../../packages/rides-native/liveTrip.js'
+import { activeTripRouteLine, etaHoldLine, etaLineFor, orderedLiveStops, riderLiveView, SEARCH_PREVIEW_COPY, showSearchTheater, STILL_SEARCHING_COPY, STILL_SEARCHING_MS } from '../../packages/rides-native/liveTrip.js'
 import { TESLA_FLEET_NOTICE, tripTags } from '../../packages/rides-native/tripTags.js'
-import { decodePolyline } from '../lib/friendRides.js'
 import { LivePhase } from '../components/LivePhase'
 import { reconcileCheckoutSession } from '../lib/stripeCheckout'
 import { parseCheckoutSessionId } from '../../packages/rides-native/checkoutReturn.js'
@@ -234,16 +233,11 @@ export function Requested({ dest = 'GSP Airport', trip = '', driver = 'your driv
     badge: String(stop.order),
     color: stop.order === 1 ? '#522D80' : (stop.order === liveStops.length || stop.kind === 'dropoff' ? '#F56600' : '#522D80'),
   }))
-  const encodedRoute = tripRow?.metadata?.route_polyline
-  let routePath = null
-  if (typeof encodedRoute === 'string' && encodedRoute) {
-    try {
-      const decoded = decodePolyline(encodedRoute)
-      routePath = Array.isArray(decoded) && decoded.length ? decoded : null
-    } catch {
-      routePath = null
-    }
-  }
+  const routePath = activeTripRouteLine(tripRow, driverFix)
+  const dropoff =
+    tripRow?.dropoff_lat != null && tripRow?.dropoff_lng != null
+      ? [Number(tripRow.dropoff_lat), Number(tripRow.dropoff_lng)]
+      : null
   const mapCenter = driverPos || (liveStops[0] ? [liveStops[0].lat, liveStops[0].lng] : pickup) || CLEMSON
 
   useEffect(() => {
@@ -284,10 +278,11 @@ export function Requested({ dest = 'GSP Airport', trip = '', driver = 'your driv
             zoom={liveStops.length > 1 ? 12 : 14}
             marker={pickup}
             pickupPosition={pickup}
+            dropoffPosition={dropoff}
             driverPosition={driverPos}
             animateDriver={Boolean(driverPos) && liveStops.length === 0}
             stops={stopPins}
-            route={routePath}
+            route={routePath.length > 1 ? routePath : null}
           />
         </div>
       )}

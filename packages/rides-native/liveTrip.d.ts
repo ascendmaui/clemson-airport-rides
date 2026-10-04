@@ -64,6 +64,10 @@ export function etaLineFor(
   from: LatLng | null | undefined,
   places: Parameters<typeof etaTargetForStatus>[1],
 ): string | null
+export function activeTripRouteLine(
+  trip: unknown,
+  driver?: { lat?: number | null; lng?: number | null; latitude?: number | null; longitude?: number | null } | null,
+): number[][]
 
 export type LiveStopKind = 'pickup' | 'dropoff' | 'stop'
 
