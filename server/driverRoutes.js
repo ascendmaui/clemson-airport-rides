@@ -142,12 +142,14 @@ export async function handleDriverSignup(req, res) {
       vehicle = updated
     }
 
-    const { error: statusErr } = await sb.from('driver_status').upsert({
-      driver_id: user.id,
-      online: false,
-      updated_at: now,
-    })
-    if (statusErr) return json(res, 500, { error: statusErr.message })
+    if (nextStatus !== 'approved') {
+      const { error: statusErr } = await sb.from('driver_status').upsert({
+        driver_id: user.id,
+        online: false,
+        updated_at: now,
+      })
+      if (statusErr) return json(res, 500, { error: statusErr.message })
+    }
 
     if (isClemson) {
       const { error: svErr } = await sb.from('student_verifications').upsert(
