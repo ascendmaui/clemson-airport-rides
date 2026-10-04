@@ -32,6 +32,7 @@ import { LegalPrivacy, LegalTerms } from './screens/LegalPages'
 import { LiveShare } from './screens/LiveShare'
 import { ProfileView } from './screens/ProfileView'
 import { RateRide } from './screens/RateRide'
+import { TipRide } from './screens/TipRide'
 import { ReceiptScreen } from './screens/ReceiptScreen'
 import { FriendRideScreen } from './screens/FriendRide'
 import { CarpoolScreen } from './screens/CarpoolScreen'
@@ -91,6 +92,8 @@ function Screen({ path, params }) {
       return <ProfileView />
     case 'rate':
       return <RateRide />
+    case 'tip':
+      return <TipRide />
     case 'receipt':
       return <ReceiptScreen />
     case 'home':

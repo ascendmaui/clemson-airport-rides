@@ -4,6 +4,7 @@ import { PrimaryButton } from '../components/PrimaryButton'
 import { AccessibleAlert } from '../components/AccessibleAlert'
 import { CampusMap, CLEMSON, STADIUM } from '../components/CampusMap'
 import { navigate, shareUrl } from '../lib/navigation'
+import { shouldPromptRiderTip } from '../lib/riderTip'
 import { useAuth } from '../lib/auth'
 import { createLocationShare, startSharingLocation } from '../lib/locationShare'
 import { subscribeDriverStatus } from '../lib/driverTrack'
@@ -44,6 +45,7 @@ export function Requested({ dest = 'GSP Airport', trip = '', driver = 'your driv
   const searchStartedAt = useRef(null)
   const stopRef = useRef(null)
   const ratedCheck = useRef(false)
+  const tipPrompted = useRef(false)
   const reconciledSessions = useRef(new Set())
 
   useEffect(() => onTrackingResume(() => {
@@ -109,7 +111,12 @@ export function Requested({ dest = 'GSP Airport', trip = '', driver = 'your driv
       if (!alive) return
       setTripRow(row)
       setResolvedDriverId(data.driver_id || '')
-      if (data.status === 'completed' && user?.id && !ratedCheck.current) {
+      const needsTip = shouldPromptRiderTip(row, user?.id)
+      if (needsTip && !tipPrompted.current) {
+        tipPrompted.current = true
+        navigate('tip', { trip: data.id })
+      }
+      if (data.status === 'completed' && user?.id && !ratedCheck.current && !needsTip) {
         ratedCheck.current = true
         const rated = await hasRatedTrip(data.id, user.id)
         if (alive && !rated) setRateNudge(true)
