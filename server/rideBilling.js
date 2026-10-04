@@ -7,10 +7,6 @@
 
 const CHOICES = ['credits', 'no_card', 'deposit']
 
-function missingRelation(error) {
-  return /relation|does not exist|schema cache|could not find/i.test(error?.message || '')
-}
-
 function finiteCents(value) {
   const n = Number(value)
   if (!Number.isFinite(n)) return null
@@ -19,26 +15,15 @@ function finiteCents(value) {
 
 /**
  * Server balance for this rider.
- * A missing account row is zero. A missing ledger table is zero.
+ * Reads credit_accounts.balance_cents only. A missing account row is zero.
  * A failed read is unknown — never a made-up positive balance.
  */
 export async function readRideCreditBalance(sb, userId) {
   if (!sb || !userId) return { balanceCents: 0, known: false }
   const acct = await sb.from('credit_accounts').select('balance_cents').eq('user_id', userId).maybeSingle()
-  if (!acct.error) {
-    if (!acct.data || acct.data.balance_cents == null) return { balanceCents: 0, known: true }
-    const cents = finiteCents(acct.data.balance_cents)
-    return { balanceCents: cents == null ? 0 : cents, known: true }
-  }
-  if (!missingRelation(acct.error)) return { balanceCents: 0, known: false }
-
-  const prof = await sb.from('profiles').select('credit_balance_cents').eq('id', userId).maybeSingle()
-  if (prof.error) {
-    if (missingRelation(prof.error)) return { balanceCents: 0, known: true }
-    return { balanceCents: 0, known: false }
-  }
-  if (!prof.data || prof.data.credit_balance_cents == null) return { balanceCents: 0, known: true }
-  const cents = finiteCents(prof.data.credit_balance_cents)
+  if (acct.error) return { balanceCents: 0, known: false }
+  if (!acct.data || acct.data.balance_cents == null) return { balanceCents: 0, known: true }
+  const cents = finiteCents(acct.data.balance_cents)
   return { balanceCents: cents == null ? 0 : cents, known: true }
 }
 

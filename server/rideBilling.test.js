@@ -163,7 +163,7 @@ test('a missing credit account starts at zero and does not grant a balance', asy
 
   const missing = createSb({ balanceMode: 'missing-table' })
   const absent = await readRideCreditBalance(missing, 'rider-1')
-  assert.equal(absent.known, true)
+  assert.equal(absent.known, false)
   assert.equal(absent.balanceCents, 0)
 
   const failed = createSb({ balanceMode: 'error' })
@@ -397,6 +397,10 @@ test('the billing handler does not call Stripe or write a credit debit', () => {
   assert.doesNotMatch(lib, /paymentIntents|debitLots\(|applyCredits\(|stripeClient|stripe\.checkout/)
   assert.doesNotMatch(src, /body\.fareCents|body\.depositCents|body\.amount|body\.total|body\.isStudent/)
   assert.match(src, /CLIENT_MONEY_KEYS/)
-  assert.match(sql, /DEFAULT 0/)
-  assert.doesNotMatch(sql, /INSERT INTO/i)
+  assert.doesNotMatch(src, /credit_ledger/)
+  assert.doesNotMatch(lib, /credit_ledger/)
+  assert.doesNotMatch(lib, /credit_balance_cents/)
+  assert.match(lib, /from\('credit_accounts'\)\.select\('balance_cents'\)/)
+  assert.match(sql, /credit_ledger already exists/)
+  assert.doesNotMatch(sql, /CREATE\s+(TABLE|INDEX|POLICY)|ALTER\s+TABLE|ADD\s+COLUMN|INSERT\s+INTO/i)
 })
