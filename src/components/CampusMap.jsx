@@ -307,6 +307,7 @@ export function CampusMap({
   gameDayLabel = null,
   stops = null,
   showSimulatedFleet = false,
+  fitRoute = false,
 }) {
   const apiKey = (import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '').trim()
   const { isLoaded, loadError } = useJsApiLoader(mapsLoaderOptions(apiKey))
@@ -427,18 +428,28 @@ export function CampusMap({
   const fittedKey = useRef('')
   const stopRef = useRef(stopMarkers)
   const driverRef = useRef(driverTarget)
+  const pathRef = useRef(path)
+  const fitRouteRef = useRef(fitRoute)
   stopRef.current = stopMarkers
   driverRef.current = driverTarget
+  pathRef.current = path
+  fitRouteRef.current = fitRoute
   const fitStopBounds = useCallback((map) => {
     const list = stopRef.current
-    if (!map || !list.length || typeof window === 'undefined' || !window.google?.maps) return
+    const routePoints = fitRouteRef.current && Array.isArray(pathRef.current) ? pathRef.current : []
+    if (!map || typeof window === 'undefined' || !window.google?.maps) return
+    if (!list.length && routePoints.length < 2) return
     const driver = driverRef.current
-    const key = `${driver ? 'd' : 'x'}|${list.map((stop) => `${stop.lat.toFixed(5)},${stop.lng.toFixed(5)}`).join(';')}`
+    const routeKey = routePoints.length
+      ? `${routePoints.length}:${routePoints[0].lat.toFixed(4)},${routePoints[0].lng.toFixed(4)}:${routePoints[routePoints.length - 1].lat.toFixed(4)},${routePoints[routePoints.length - 1].lng.toFixed(4)}`
+      : 'noroute'
+    const key = `${driver ? 'd' : 'x'}|${list.map((stop) => `${stop.lat.toFixed(5)},${stop.lng.toFixed(5)}`).join(';')}|${routeKey}`
     if (fittedKey.current === key) return
     const bounds = new window.google.maps.LatLngBounds()
     for (const stop of list) bounds.extend({ lat: stop.lat, lng: stop.lng })
+    for (const spot of routePoints) bounds.extend({ lat: spot.lat, lng: spot.lng })
     if (driver) bounds.extend(driver)
-    map.fitBounds(bounds, 40)
+    map.fitBounds(bounds, routePoints.length > 1 ? 48 : 40)
     fittedKey.current = key
   }, [])
   const onLoad = useCallback((map) => {
@@ -448,7 +459,7 @@ export function CampusMap({
 
   useEffect(() => {
     fitStopBounds(mapRef.current)
-  }, [fitStopBounds, stopMarkers, driverTarget, isLoaded])
+  }, [fitStopBounds, stopMarkers, driverTarget, isLoaded, path, fitRoute])
 
   useEffect(() => {
     if (!mapRef.current || !driverTarget || !animateDriver) return
@@ -566,7 +577,7 @@ export function CampusMap({
           />
         ))}
         {secondaryPath && (
-          <Polyline path={secondaryPath} options={{ strokeColor: ORANGE, strokeWeight: 4, strokeOpacity: 0.8 }} />
+          <Polyline path={secondaryPath} options={{ strokeColor: ORANGE, strokeWeight: 9, strokeOpacity: 0.35 }} />
         )}
         {path && (
           <Polyline path={path} options={{ strokeColor: PURPLE, strokeWeight: 5, strokeOpacity: 0.9 }} />

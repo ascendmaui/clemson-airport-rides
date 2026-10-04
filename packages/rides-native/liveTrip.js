@@ -31,6 +31,9 @@ export const STILL_SEARCHING_COPY =
 export const SEARCH_PREVIEW_COPY =
   'Orange and purple motion is a preview. Only a real driver accept moves this ride.'
 
+export const SEARCH_APPROX_WAIT_NOTE =
+  'Approximate. No driver has accepted, so this is not a live arrival.'
+
 export const STRAIGHT_LINE_WAIT =
   'Straight-line ETA shows when the driver shares a location. Road time needs a billed Maps key.'
 
@@ -314,6 +317,78 @@ export function activeTripRouteLine(trip, driver) {
     return [pickup, dropoff]
   }
   return []
+}
+
+function storedPolyline(trip) {
+  const encoded = trip?.metadata?.route_polyline || trip?.route_polyline || trip?.routePolyline || null
+  return typeof encoded === 'string' ? encoded : null
+}
+
+function storedRouteDurationS(trip) {
+  const meta = trip?.metadata && typeof trip.metadata === 'object' ? trip.metadata : {}
+  const raw = meta.route_duration_s ?? trip?.route_duration_s ?? trip?.routeDurationS ?? null
+  const seconds = Number(raw)
+  if (!Number.isFinite(seconds) || seconds <= 0) return null
+  return seconds
+}
+
+function chosenEnds(trip) {
+  return {
+    pickup: point(trip?.pickup_lat ?? trip?.pickupLat, trip?.pickup_lng ?? trip?.pickupLng),
+    dropoff: point(trip?.dropoff_lat ?? trip?.dropoffLat, trip?.dropoff_lng ?? trip?.dropoffLng),
+  }
+}
+
+/**
+ * Route while a driver is still unassigned.
+ * A stored road polyline wins. Otherwise a straight line between the pickup
+ * and drop-off the rider already chose. A driver coordinate is never added.
+ */
+export function searchingRouteLine(trip) {
+  if (!trip || typeof trip !== 'object') return []
+  const road = decodeRoutePolyline(storedPolyline(trip))
+  if (road.length > 1) return road.map((spot) => [spot.lat, spot.lng])
+  const { pickup, dropoff } = chosenEnds(trip)
+  if (!pickup || !dropoff) return []
+  if (pickup.lat === dropoff.lat && pickup.lng === dropoff.lng) return []
+  return [[pickup.lat, pickup.lng], [dropoff.lat, dropoff.lng]]
+}
+
+function searchingEstimateMinutes(trip) {
+  const duration = storedRouteDurationS(trip)
+  if (duration) return Math.max(1, Math.round(duration / 60))
+  const { pickup, dropoff } = chosenEnds(trip)
+  return straightLineEta(pickup, dropoff).etaMin
+}
+
+/** Ride ETA from the stored road duration, or the existing straight-line pace. */
+export function searchingEtaLine(trip) {
+  if (!trip || typeof trip !== 'object') return null
+  const road = roadEtaLine(storedRouteDurationS(trip), 'drop-off')
+  if (road) return road
+  const { pickup, dropoff } = chosenEnds(trip)
+  const eta = straightLineEta(pickup, dropoff)
+  return eta.label ? `${eta.label} to drop-off` : null
+}
+
+/**
+ * Wait during search. Minutes come from the stored road duration when the
+ * server saved one, otherwise the same straight-line pace. The label stays
+ * approximate and does not claim a driver is arriving.
+ */
+export function searchingApproxWaitLine(trip) {
+  if (!trip || typeof trip !== 'object') return null
+  const minutes = searchingEstimateMinutes(trip)
+  if (minutes == null) return 'Approximate wait'
+  return `Approximate wait · about ${minutes} min`
+}
+
+export function searchingRidePreview(trip) {
+  return {
+    route: searchingRouteLine(trip),
+    eta: searchingEtaLine(trip),
+    wait: searchingApproxWaitLine(trip),
+  }
 }
 
 /** ~111m. Same 3-decimal grid as docs/CARPOOL_MATCHING.md Privacy. */

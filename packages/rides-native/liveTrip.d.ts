@@ -26,6 +26,7 @@ export const RIDER_TRACK_STATUSES: string[]
 export const STILL_SEARCHING_MS: number
 export const STILL_SEARCHING_COPY: string
 export const SEARCH_PREVIEW_COPY: string
+export const SEARCH_APPROX_WAIT_NOTE: string
 export const STRAIGHT_LINE_WAIT: string
 
 export function showSearchTheater(status: string | null | undefined): boolean
@@ -68,6 +69,14 @@ export function activeTripRouteLine(
   trip: unknown,
   driver?: { lat?: number | null; lng?: number | null; latitude?: number | null; longitude?: number | null } | null,
 ): number[][]
+export function searchingRouteLine(trip: unknown): number[][]
+export function searchingEtaLine(trip: unknown): string | null
+export function searchingApproxWaitLine(trip: unknown): string | null
+export function searchingRidePreview(trip: unknown): {
+  route: number[][]
+  eta: string | null
+  wait: string | null
+}
 
 export type LiveStopKind = 'pickup' | 'dropoff' | 'stop'
 
