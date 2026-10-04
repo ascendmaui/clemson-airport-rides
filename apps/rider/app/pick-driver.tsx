@@ -43,13 +43,47 @@ import { teslaFleetNotice } from 'rides-native/tripTags'
 const MAP_KINDS: MapKind[] = ['standard', 'satellite', 'hybrid']
 const NOTIFY_KEY = 'rider.notify.driver'
 
+function finiteParam(value: string | string[] | undefined) {
+  const raw = oneParam(value).trim()
+  if (!raw) return null
+  const n = Number(raw)
+  return Number.isFinite(n) ? n : null
+}
+
 export default function PickDriver() {
   const router = useRouter()
   const insets = useSafeAreaInsets()
-  const params = useLocalSearchParams<{ dest?: string; pickup?: string; tier?: string }>()
+  const params = useLocalSearchParams<{
+    dest?: string
+    pickup?: string
+    tier?: string
+    pickupLat?: string
+    pickupLng?: string
+    destLat?: string
+    destLng?: string
+  }>()
   const dest = oneParam(params.dest, 'GSP Airport')
   const pickup = oneParam(params.pickup, 'Memorial Stadium')
   const tier = oneParam(params.tier, 'standard')
+  const pickupLat = finiteParam(params.pickupLat)
+  const pickupLng = finiteParam(params.pickupLng)
+  const destLat = finiteParam(params.destLat)
+  const destLng = finiteParam(params.destLng)
+  const approachPickup = pickupLat != null && pickupLng != null
+    ? { lat: pickupLat, lng: pickupLng }
+    : { lat: pickupPoint(pickup).latitude, lng: pickupPoint(pickup).longitude }
+  const dropPoint = destLat != null && destLng != null
+    ? { latitude: destLat, longitude: destLng }
+    : destPoint(dest)
+  const resumeParams = {
+    dest,
+    pickup,
+    tier,
+    pickupLat: oneParam(params.pickupLat),
+    pickupLng: oneParam(params.pickupLng),
+    destLat: oneParam(params.destLat),
+    destLng: oneParam(params.destLng),
+  }
   const { user } = useAuth()
   const student = useStudentStatus()
   const [drivers, setDrivers] = useState<OnlineDriver[]>([])
@@ -72,8 +106,6 @@ export default function PickDriver() {
     setPhase('loading')
     setSelected(null)
     const wait = new Promise((resolve) => setTimeout(resolve, searchDelayMs()))
-    const here = pickupPoint(pickup)
-    const pickupAt = { lat: here.latitude, lng: here.longitude }
     const favorites = user?.id
       ? loadFavoriteDriverIds(supabase, authStorage, user.id)
       : Promise.resolve({ ids: [] as string[], note: null })
@@ -84,7 +116,7 @@ export default function PickDriver() {
         ? await fetchDriversByIds(supabase, extraIds)
         : { drivers: [] as OnlineDriver[], error: null }
       if (!alive) return
-      const merged = sortPreferredDrivers([...result.drivers, ...extra.drivers], fav.ids, pickupAt)
+      const merged = sortPreferredDrivers([...result.drivers, ...extra.drivers], fav.ids, approachPickup)
       setDrivers(merged)
       setFavoriteIds(fav.ids)
       setFavNote(fav.note)
@@ -98,17 +130,15 @@ export default function PickDriver() {
     return () => {
       alive = false
     }
-  }, [attempt, pickup, user?.id])
+  }, [attempt, pickup, approachPickup.lat, approachPickup.lng, user?.id])
 
-  const pickupAt = pickupPoint(pickup)
-  const approachPickup = { lat: pickupAt.latitude, lng: pickupAt.longitude }
   const selectedDriver = drivers.find((row: OnlineDriver) => row.id === selected) || null
   const teslaNotice = teslaFleetNotice(tier === 'tesla' || tier === 'tesla_self_driving' || Boolean(selectedDriver?.isTesla))
   const groups = groupDriversForPicker(sortPreferredDrivers(drivers, favoriteIds, approachPickup), favoriteIds)
 
   async function toggleFavorite(driverId: string) {
     if (!user) {
-      setAuthNext({ pathname: '/pick-driver', params: { dest, pickup, tier } })
+      setAuthNext({ pathname: '/pick-driver', params: resumeParams })
       setPromptOpen(true)
       return
     }
@@ -206,7 +236,7 @@ export default function PickDriver() {
       return
     }
     if (!user) {
-      setAuthNext({ pathname: '/pick-driver', params: { dest, pickup, tier } })
+      setAuthNext({ pathname: '/pick-driver', params: resumeParams })
       setPromptOpen(true)
       return
     }
@@ -217,9 +247,9 @@ export default function PickDriver() {
         riderId: user.id,
         driverId: chosen.id,
         dest,
-        destPoint: destPoint(dest),
+        destPoint: dropPoint,
         pickupLabel: pickup,
-        pickupPoint: pickupPoint(pickup),
+        pickupPoint: { latitude: approachPickup.lat, longitude: approachPickup.lng },
         tier,
         isStudent: student.verified,
       })

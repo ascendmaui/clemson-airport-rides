@@ -179,7 +179,12 @@ export default function TripScreen() {
   return (
     <View style={styles.screen}>
       {/* Road line is the stored Routes polyline when the server had a Maps key. Otherwise the coordinate line stays. */}
-      <CampusMap pins={pins} center={focus} route={route.length > 1 ? route : undefined} />
+      <CampusMap
+        pins={pins}
+        center={self && !headingToDropoff ? self : focus}
+        route={route.length > 1 ? route : undefined}
+        showsUserLocation={!headingToDropoff}
+      />
       <View pointerEvents="box-none" style={[styles.sheet, shadow, { paddingBottom: insets.bottom + 12, borderColor: colors.border }]}>
         <View style={[styles.handle, { backgroundColor: colors.track }]} />
         <ScrollView style={styles.sheetScroll} contentContainerStyle={styles.sheetContent} showsVerticalScrollIndicator={false}>

@@ -22,6 +22,7 @@ export function CampusMap({
   gameDayLabel = null,
   lockOnCenter = false,
   onPinPress,
+  showsUserLocation = false,
 }: {
   pins?: MapPin[]
   center?: { latitude: number; longitude: number } | null
@@ -34,6 +35,7 @@ export function CampusMap({
   gameDayLabel?: string | null
   lockOnCenter?: boolean
   onPinPress?: (id: string) => void
+  showsUserLocation?: boolean
 }) {
   const { colors, scheme } = useTheme()
   const mode = colorScheme || scheme
@@ -68,9 +70,11 @@ export function CampusMap({
           ? `Centered on you · ${center.latitude.toFixed(3)}, ${center.longitude.toFixed(3)}`
           : showHeat
             ? `Busy areas · ${spots.length} spots`
-            : center
-              ? `${center.latitude.toFixed(3)}, ${center.longitude.toFixed(3)}`
-              : 'Driver map'}
+            : showsUserLocation
+              ? 'Detecting your location'
+              : center
+                ? `${center.latitude.toFixed(3)}, ${center.longitude.toFixed(3)}`
+                : 'Driver map'}
       </Text>
       {(pins || []).map((pin: MapPin) => (
         <Pressable

@@ -71,3 +71,30 @@ test('placeFromStop converts catalog row to simple coordinate object', () => {
   const stop = { id: 'test', label: 'L', lat: 1, lng: 2, kind: 'campus', aliases: [] }
   assert.deepEqual(placeFromStop(stop), { label: 'L', lat: 1, lng: 2 })
 })
+
+test('placeFromCoordinates keeps a GPS fix as the pickup place', async () => {
+  const { placeFromCoordinates } = await import('./currentPlace.js')
+  assert.deepEqual(placeFromCoordinates(34.68, -82.84, '  Bowman '), {
+    label: 'Bowman',
+    lat: 34.68,
+    lng: -82.84,
+  })
+  assert.deepEqual(placeFromCoordinates('34.1', '-82.2', ''), {
+    label: 'Current location',
+    lat: 34.1,
+    lng: -82.2,
+  })
+  assert.equal(placeFromCoordinates('north', -82, 'Here'), null)
+  assert.equal(placeFromCoordinates(null, -82, 'Here'), null)
+  assert.equal(placeFromCoordinates('', '0', 'Here'), null)
+})
+
+test('finiteCoordinate treats a blank pin as missing', async () => {
+  const { finiteCoordinate } = await import('./currentPlace.js')
+  assert.equal(finiteCoordinate(''), null)
+  assert.equal(finiteCoordinate('   '), null)
+  assert.equal(finiteCoordinate(null), null)
+  assert.equal(finiteCoordinate('north'), null)
+  assert.equal(finiteCoordinate('0'), 0)
+  assert.equal(finiteCoordinate(' 34.68 '), 34.68)
+})

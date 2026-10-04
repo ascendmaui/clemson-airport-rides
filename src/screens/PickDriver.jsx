@@ -5,6 +5,7 @@ import { AccessibleAlert } from '../components/AccessibleAlert'
 import { navigate } from '../lib/navigation'
 import { subscribeTrips, supabase, supabaseConfigured } from '../lib/supabase'
 import { requestDriverTrip } from '../lib/trips'
+import { finiteCoordinate } from '../lib/currentPlace'
 import { useAuth } from '../lib/auth'
 import { useStudentStatus } from '../lib/useStudentStatus'
 import { STUDENT_DISCOUNT_LABEL } from '../../packages/rides-native/riderMoney.js'
@@ -44,7 +45,16 @@ const browserStorage = {
   },
 }
 
-export function PickDriver({ dest = 'GSP Airport', tier = 'standard', listCents = '' }) {
+export function PickDriver({
+  dest = 'GSP Airport',
+  tier = 'standard',
+  listCents = '',
+  pickup = '',
+  pickupLat = '',
+  pickupLng = '',
+  destLat = '',
+  destLng = '',
+}) {
   const { user } = useAuth()
   const student = useStudentStatus()
   const { runOrPrompt } = useRequireAuthForAction()
@@ -57,8 +67,13 @@ export function PickDriver({ dest = 'GSP Airport', tier = 'standard', listCents 
   const [tripFlash, setTripFlash] = useState(null)
   const [busy, setBusy] = useState(false)
   const [promptOpen, setPromptOpen] = useState(false)
-  const pickup = pickupPoint('Memorial Stadium')
-  const approachPickup = { lat: pickup.latitude, lng: pickup.longitude }
+  const stadium = pickupPoint(pickup || 'Memorial Stadium')
+  const pinLat = finiteCoordinate(pickupLat)
+  const pinLng = finiteCoordinate(pickupLng)
+  const approachPickup = pinLat != null && pinLng != null
+    ? { lat: pinLat, lng: pinLng }
+    : { lat: stadium.latitude, lng: stadium.longitude }
+  const placeParams = { dest, destLat, destLng, pickup, pickupLat, pickupLng, tier, listCents }
 
   const load = async () => {
     setLoading(true)
@@ -125,6 +140,11 @@ export function PickDriver({ dest = 'GSP Airport', tier = 'standard', listCents 
         riderId: user.id,
         driverId: selected.id,
         dest,
+        destLat,
+        destLng,
+        pickupLabel: pickup,
+        pickupLat,
+        pickupLng,
         tier,
         isStudent: student.verified,
         listCents,
@@ -301,12 +321,12 @@ export function PickDriver({ dest = 'GSP Airport', tier = 'standard', listCents 
         ) : null}
         <PrimaryButton
           disabled={!selected?.online || busy}
-          onClick={() => runOrPrompt(onRequest, { setPromptOpen, nextPath: 'pick-driver', nextParams: { dest } })}
+          onClick={() => runOrPrompt(onRequest, { setPromptOpen, nextPath: 'pick-driver', nextParams: placeParams })}
         >
           {busy ? 'Requesting…' : selected ? `Request ${selected.name}` : 'Select a driver'}
         </PrimaryButton>
       </div>
-      <SignInToBookModal open={promptOpen} onClose={() => setPromptOpen(false)} nextPath="pick-driver" nextParams={{ dest }} />
+      <SignInToBookModal open={promptOpen} onClose={() => setPromptOpen(false)} nextPath="pick-driver" nextParams={placeParams} />
     </div>
   )
 }

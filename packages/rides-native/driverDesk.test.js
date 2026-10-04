@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import test from 'node:test'
 import {
   acceptTrip,
@@ -1165,7 +1166,7 @@ test('declineTrip releases searching ride by recording pass without rewriting tr
   assert.ok(pass)
 })
 
-test('declineTrip cancels requested ride and records canceled trip_event', async () => {
+test('declineTrip does not write the illegal requested status into the trip update', async () => {
   const supabase = createFakeSupabase({
     trips: [{ id: 'trip-req', status: 'requested' }],
   })
@@ -1174,8 +1175,9 @@ test('declineTrip cancels requested ride and records canceled trip_event', async
   assert.deepEqual(res, { disposition: 'cancel' })
 
   const trip = supabase._tables.trips.find((t) => t.id === 'trip-req')
-  assert.equal(trip.status, 'canceled')
-  assert.ok(typeof trip.canceled_at === 'string')
+  // "requested" is not a trip_status value, so the update filter cannot include it.
+  assert.equal(trip.status, 'requested')
+  assert.equal(trip.canceled_at, undefined)
 
   const event = supabase._tables.trip_events.find((e) => e.trip_id === 'trip-req')
   assert.ok(event)
@@ -1628,4 +1630,16 @@ test('loadEarnings retries without deposit_cents on schema cache error', async (
     assert.equal(earnings.trips.length, 1)
     assert.equal(earnings.trips[0].id, 'trip-earn-3')
   })
+})
+
+test('driver offer queries do not send the illegal trip_status requested', () => {
+  const desk = readFileSync(new URL('./driverDesk.js', import.meta.url), 'utf8')
+  const live = readFileSync(new URL('./liveTrip.js', import.meta.url), 'utf8')
+  const home = readFileSync(new URL('../../src/screens/DriverHome.jsx', import.meta.url), 'utf8')
+  assert.doesNotMatch(desk, /\.in\('status', \[[^\]]*requested/)
+  assert.doesNotMatch(home, /\.eq\('status', 'requested'\)/)
+  assert.doesNotMatch(home, /\.in\('status', \[[^\]]*requested/)
+  const track = live.match(/export const RIDER_TRACK_STATUSES = \[([\s\S]*?)\]/)
+  assert.ok(track)
+  assert.doesNotMatch(track[1], /requested/)
 })

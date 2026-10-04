@@ -139,6 +139,7 @@ export default async function handler(req, res, deps = {}) {
   const row = {
     rider_id: user.id,
     driver_id: null,
+    // trip_status has searching, not "requested". That value aborts the insert.
     status: 'searching',
     tier,
     pickup_label: places.pickup.label,

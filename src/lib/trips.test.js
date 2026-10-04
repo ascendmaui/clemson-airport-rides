@@ -76,9 +76,9 @@ function assertPayload(body, expected) {
   assert.equal('isStudent' in body, false)
   assert.equal('listCents' in body, false)
   assert.equal('riderId' in body, false)
-  assert.equal(body.pickupLabel, 'Memorial Stadium')
-  assert.equal(body.pickupLat, stadium.latitude)
-  assert.equal(body.pickupLng, stadium.longitude)
+  assert.equal(body.pickupLabel, expected.pickupLabel)
+  assert.equal(body.pickupLat, expected.pickupLat)
+  assert.equal(body.pickupLng, expected.pickupLng)
   assert.deepEqual(body, expected)
 }
 
@@ -180,9 +180,9 @@ test('requestDriverTrip posts custom pins and returns the server trip', async ()
     dest: 'Sikes Hall',
     destLat: 34.8526,
     destLng: -82.394,
-    pickupLabel: 'Memorial Stadium',
-    pickupLat: stadium.latitude,
-    pickupLng: stadium.longitude,
+    pickupLabel: 'Sikes Hall',
+    pickupLat: 1,
+    pickupLng: 2,
     tier: 'comfort',
   })
   assert.equal(stadium.latitude, 34.6788)

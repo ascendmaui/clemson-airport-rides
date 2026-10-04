@@ -22,7 +22,14 @@ const TIERS = [
   { id: 'tesla', name: 'Tesla Model 3', icon: '⚡', eta: '7 min', meta: 'Clemson fleet · a driver is at the wheel', price: 36.0, premium: true, badge: 'FLEET' },
 ]
 
-export function RideTiers({ dest = '1900 GSP Dr' }) {
+export function RideTiers({
+  dest = '1900 GSP Dr',
+  pickup = '',
+  pickupLat = '',
+  pickupLng = '',
+  destLat = '',
+  destLng = '',
+}) {
   const [selected, setSelected] = useState(TIERS[0])
   const [upsell, setUpsell] = useState(null)
   const [promptOpen, setPromptOpen] = useState(false)
@@ -55,6 +62,11 @@ export function RideTiers({ dest = '1900 GSP Dr' }) {
     })
     navigate('pick-driver', {
       dest,
+      destLat,
+      destLng,
+      pickup,
+      pickupLat,
+      pickupLng,
       tier: row.id,
       listCents: String(quoted.fareCents + quoted.discountCents),
     })
@@ -76,14 +88,14 @@ export function RideTiers({ dest = '1900 GSP Dr' }) {
     runOrPrompt(proceedRequest, {
       setPromptOpen,
       nextPath: 'tiers',
-      nextParams: { dest },
+      nextParams: { dest, destLat, destLng, pickup, pickupLat, pickupLng },
     })
   }
 
   return (
     <div className="fade-in" style={{ display: 'flex', flexDirection: 'column', height: '100%', background: 'transparent' }}>
       <div style={{ padding: '12px 16px 0' }}>
-        <button type="button" className="pressable glass-pill nav-back-btn" aria-label="Back to pickup confirmation" onClick={() => navigate('confirm', { dest })} style={{ marginBottom: 8 }}>←</button>
+        <button type="button" className="pressable glass-pill nav-back-btn" aria-label="Back to pickup confirmation" onClick={() => navigate('confirm', { dest, destLat, destLng, pickup, pickupLat, pickupLng })} style={{ marginBottom: 8 }}>←</button>
         <div className="glass-panel" style={{ borderRadius: 16, overflow: 'hidden', padding: 4 }}>
           <CampusMap
             height={140}
