@@ -29,35 +29,39 @@ export const IOS_STORE_URL = null
 
 export const ANDROID_STORE_URL = null
 
-/** Install targets for the marketing download section. iOS and Android share the Expo project until a store URL exists. */
+/**
+ * Install targets for the marketing download section.
+ * Until a real store listing exists, rider opens the public booking page and
+ * driver opens the driver desk. Both stay on https://clemsonrides.com.
+ */
 export const APP_DOWNLOADS = [
   {
     id: 'rider',
     label: 'Rider',
     product: 'Clemson RIDES',
-    href: RIDER_EXPO_PROJECT,
-    iosHref: IOS_STORE_URL || RIDER_EXPO_PROJECT,
-    androidHref: ANDROID_STORE_URL || RIDER_EXPO_PROJECT,
+    href: WEB_BOOK_URL,
+    iosHref: IOS_STORE_URL || WEB_BOOK_URL,
+    androidHref: ANDROID_STORE_URL || WEB_BOOK_URL,
     iosNote: IOS_STORE_URL
       ? 'App Store or TestFlight'
-      : 'No public TestFlight or App Store link yet. This opens the rider Expo project.',
+      : 'Book a ride at clemsonrides.com.',
     androidNote: ANDROID_STORE_URL
       ? 'Google Play'
-      : 'No Google Play link yet. This opens the rider Expo project.',
+      : 'Book a ride at clemsonrides.com.',
   },
   {
     id: 'driver',
     label: 'Driver',
     product: 'Clemson RIDES Driver',
-    href: DRIVER_EXPO_PROJECT,
-    iosHref: IOS_STORE_URL || DRIVER_EXPO_PROJECT,
-    androidHref: ANDROID_STORE_URL || DRIVER_EXPO_PROJECT,
+    href: WEB_DRIVER_URL,
+    iosHref: IOS_STORE_URL || WEB_DRIVER_URL,
+    androidHref: ANDROID_STORE_URL || WEB_DRIVER_URL,
     iosNote: IOS_STORE_URL
       ? 'App Store or TestFlight'
-      : 'No public TestFlight or App Store link yet. This opens the driver Expo project.',
+      : 'Open the driver desk at clemsonrides.com.',
     androidNote: ANDROID_STORE_URL
       ? 'Google Play'
-      : 'No Google Play link yet. This opens the driver Expo project.',
+      : 'Open the driver desk at clemsonrides.com.',
   },
 ]
 

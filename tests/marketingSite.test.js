@@ -5,10 +5,9 @@ import { MARKETING_FEATURES } from '../shared/marketingFeatures.js'
 import {
   ANDROID_STORE_URL,
   APP_DOWNLOADS,
-  DRIVER_EXPO_PROJECT,
   IOS_STORE_URL,
-  RIDER_EXPO_PROJECT,
   WEB_BOOK_URL,
+  WEB_DRIVER_URL,
   WEB_ORIGIN,
   WEB_SCHEDULE_URL,
 } from '../shared/productLinks.js'
@@ -18,13 +17,18 @@ test('store listings stay unpublished until real URLs exist', () => {
   assert.equal(IOS_STORE_URL, null)
   assert.equal(ANDROID_STORE_URL, null)
   assert.equal(APP_DOWNLOADS.length, 2)
-  assert.equal(APP_DOWNLOADS[0].href, RIDER_EXPO_PROJECT)
-  assert.equal(APP_DOWNLOADS[1].href, DRIVER_EXPO_PROJECT)
+  assert.equal(APP_DOWNLOADS[0].id, 'rider')
+  assert.equal(APP_DOWNLOADS[0].href, WEB_BOOK_URL)
+  assert.equal(APP_DOWNLOADS[1].id, 'driver')
+  assert.equal(APP_DOWNLOADS[1].href, WEB_DRIVER_URL)
   for (const app of APP_DOWNLOADS) {
     assert.equal(app.iosHref, app.href)
     assert.equal(app.androidHref, app.href)
-    assert.match(app.iosNote, /Expo project/)
-    assert.match(app.androidNote, /Expo project/)
+    assert.match(app.href, /^https:\/\/clemsonrides\.com\//)
+    assert.doesNotMatch(
+      `${app.href} ${app.iosHref} ${app.androidHref} ${app.iosNote} ${app.androidNote}`,
+      /expo\.dev|expo\.go|exp:\/\/|Expo Go|Expo project/i,
+    )
     assert.doesNotMatch(`${app.href} ${app.iosHref} ${app.androidHref}`, /apps\.apple\.com|play\.google\.com/)
   }
 })
@@ -61,16 +65,17 @@ test('the marketing page wires downloads and does not invent store ids', () => {
   const source = readFileSync(new URL('../src/screens/Marketing.jsx', import.meta.url), 'utf8')
   assert.match(source, /Get the app/)
   assert.match(source, /Book a ride/)
-  assert.match(source, /RIDER_EXPO_PROJECT/)
-  assert.match(source, /DRIVER_EXPO_PROJECT/)
+  assert.match(source, /APP_DOWNLOADS/)
+  assert.match(source, /WEB_BOOK_URL/)
   assert.match(source, /MARKETING_FEATURES/)
   assert.doesNotMatch(source, /apps\.apple\.com|play\.google\.com/)
   assert.doesNotMatch(source, /ae9bb5b6|a9cfec15/)
   assert.doesNotMatch(source, /projects\/clemson-airport-rides\/builds/)
+  assert.doesNotMatch(source, /expo\.dev|expo\.go|exp:\/\/|Expo Go|RIDER_EXPO_PROJECT|DRIVER_EXPO_PROJECT/)
 })
 
 test('download QR codes are square modules for the public install links', () => {
-  for (const href of [RIDER_EXPO_PROJECT, DRIVER_EXPO_PROJECT]) {
+  for (const href of [WEB_BOOK_URL, WEB_DRIVER_URL]) {
     const matrix = qrMatrix(href)
     assert.ok(matrix.size >= 21)
     assert.equal(matrix.size % 1, 0)

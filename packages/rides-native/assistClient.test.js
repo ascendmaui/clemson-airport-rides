@@ -62,8 +62,8 @@ test('the marketing page does not install the frozen 1.0.0 binary', () => {
   assert.doesNotMatch(source, /ae9bb5b6|a9cfec15/)
   assert.doesNotMatch(source, /projects\/clemson-airport-rides\/builds/)
   assert.match(source, /Book a ride/)
-  assert.match(source, /RIDER_EXPO_PROJECT/)
-  assert.match(source, /DRIVER_EXPO_PROJECT/)
+  assert.match(source, /APP_DOWNLOADS/)
+  assert.doesNotMatch(source, /expo\.dev|expo\.go|exp:\/\/|Expo Go|RIDER_EXPO_PROJECT|DRIVER_EXPO_PROJECT/)
 })
 
 test('lost-and-found and ride chat reject empty text before any network call', async () => {

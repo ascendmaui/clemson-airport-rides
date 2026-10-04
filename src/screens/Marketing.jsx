@@ -3,24 +3,10 @@ import { PrimaryButton } from '../components/PrimaryButton'
 import { QrMark } from '../components/QrMark'
 import { MARKETING_FEATURES } from '../../shared/marketingFeatures.js'
 import {
-  ANDROID_STORE_URL,
   APP_DOWNLOADS,
-  DRIVER_EXPO_PROJECT,
-  IOS_STORE_URL,
-  RIDER_EXPO_PROJECT,
   SUPPORT_EMAIL,
   WEB_BOOK_URL,
 } from '../../shared/productLinks.js'
-
-const DOWNLOADS = APP_DOWNLOADS.map((app) => {
-  const expo = app.id === 'driver' ? DRIVER_EXPO_PROJECT : RIDER_EXPO_PROJECT
-  return {
-    ...app,
-    href: expo,
-    iosHref: IOS_STORE_URL || expo,
-    androidHref: ANDROID_STORE_URL || expo,
-  }
-})
 
 function scrollToDownloads() {
   document.getElementById('get-the-app')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
@@ -42,7 +28,7 @@ function DownloadCard({ app }) {
           <h3>{app.product}</h3>
           <p>
             {sharedCode
-              ? 'One code for this app. iOS and Android both open the current Expo project.'
+              ? 'One code for this app. iOS and Android both open clemsonrides.com.'
               : 'Separate codes for the iOS and Android listings.'}
           </p>
         </div>
@@ -146,13 +132,14 @@ export function Marketing() {
             <p className="mkt-kicker">Download</p>
             <h2 id="download-heading">Get the app</h2>
             <p>
-              App Store, public TestFlight, and Google Play links are not published in this project yet.
-              Each code opens the current Expo project. Use that same link on iPhone and Android until a store listing exists.
+              App Store and Google Play listings are not published in this project yet.
+              The rider code opens booking on clemsonrides.com. The driver code opens the driver desk.
+              Use the same link on iPhone and Android until a store listing exists.
               The older Airport Rides 1.0.0 install is a different app.
             </p>
           </div>
           <div className="mkt-downloads">
-            {DOWNLOADS.map((app) => <DownloadCard key={app.id} app={app} />)}
+            {APP_DOWNLOADS.map((app) => <DownloadCard key={app.id} app={app} />)}
           </div>
           <p className="mkt-fine">
             One account on the web, the rider app, and the driver app. Questions: {SUPPORT_EMAIL}
