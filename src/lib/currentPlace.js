@@ -38,13 +38,15 @@ export function readBrowserPosition() {
   })
 }
 
+const GEOCODE_WAIT_MS = 1500
+
 export function reverseGeocodeLabel(lat, lng) {
   const latitude = Number(lat)
   const longitude = Number(lng)
   const fallback = Number.isFinite(latitude) && Number.isFinite(longitude)
     ? `Current location (${latitude.toFixed(4)}, ${longitude.toFixed(4)})`
     : 'Current location'
-  return new Promise((resolve) => {
+  const lookup = new Promise((resolve) => {
     try {
       if (typeof window === 'undefined' || !window.google?.maps?.Geocoder) {
         resolve(fallback)
@@ -59,4 +61,10 @@ export function reverseGeocodeLabel(lat, lng) {
       resolve(fallback)
     }
   })
+  // An invalid or stalled Maps key never calls the geocoder callback. The
+  // pickup still has to update from the GPS fix.
+  const giveUp = new Promise((resolve) => {
+    setTimeout(() => resolve(fallback), GEOCODE_WAIT_MS)
+  })
+  return Promise.race([lookup, giveUp])
 }

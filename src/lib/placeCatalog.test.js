@@ -89,6 +89,27 @@ test('placeFromCoordinates keeps a GPS fix as the pickup place', async () => {
   assert.equal(placeFromCoordinates('', '0', 'Here'), null)
 })
 
+test('reverseGeocodeLabel uses the GPS label when the geocoder never answers', async () => {
+  const { reverseGeocodeLabel } = await import('./currentPlace.js')
+  const previous = globalThis.window
+  globalThis.window = {
+    google: {
+      maps: {
+        Geocoder: class {
+          geocode() {}
+        },
+      },
+    },
+  }
+  try {
+    const label = await reverseGeocodeLabel(34.6834, -82.8371)
+    assert.equal(label, 'Current location (34.6834, -82.8371)')
+  } finally {
+    if (previous === undefined) delete globalThis.window
+    else globalThis.window = previous
+  }
+})
+
 test('finiteCoordinate treats a blank pin as missing', async () => {
   const { finiteCoordinate } = await import('./currentPlace.js')
   assert.equal(finiteCoordinate(''), null)
