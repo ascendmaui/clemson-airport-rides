@@ -215,24 +215,29 @@ function DriverShell({ driverId }) {
   }, [driverId, approved])
 
   useEffect(() => {
-    if (!driverId || !approved || !navigator.geolocation) return undefined
-    const watchId = navigator.geolocation.watchPosition(
-      (pos) => {
-        const next = [pos.coords.latitude, pos.coords.longitude]
-        setSelfPos(next)
-        publishDriverLocation(driverId, {
-          lat: next[0],
-          lng: next[1],
-          heading: pos.coords.heading,
-          online: true,
-        }).catch(() => {})
-        setOnline(true)
-      },
-      () => {},
-      { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 },
-    )
-    return () => navigator.geolocation.clearWatch(watchId)
-  }, [driverId, approved])
+    const tracking = approved || Boolean(activeTrip)
+    if (!driverId || !tracking || !navigator.geolocation) return undefined
+    let alive = true
+    const apply = (pos) => {
+      if (!alive) return
+      const next = [pos.coords.latitude, pos.coords.longitude]
+      setSelfPos(next)
+      publishDriverLocation(driverId, {
+        lat: next[0],
+        lng: next[1],
+        heading: pos.coords.heading,
+        online: true,
+      }).catch(() => {})
+      setOnline(true)
+    }
+    const options = { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 }
+    navigator.geolocation.getCurrentPosition(apply, () => {}, options)
+    const watchId = navigator.geolocation.watchPosition(apply, () => {}, options)
+    return () => {
+      alive = false
+      navigator.geolocation.clearWatch(watchId)
+    }
+  }, [driverId, approved, activeTrip?.id])
 
   useEffect(() => {
     loadEarnings()
@@ -298,36 +303,23 @@ function DriverShell({ driverId }) {
     if (!supabase || !approved) return undefined
     let alive = true
     async function loadOffers() {
-      const [open, preferred] = await Promise.all([
-        supabase
-          .from('trips')
-          .select('*')
-          .in('status', ['searching', 'offered'])
-          .order('requested_at', { ascending: false })
-          .limit(8),
-        driverId
-          ? supabase
-            .from('trips')
-            .select('*')
-            .eq('status', 'requested')
-            .eq('driver_id', driverId)
-            .order('requested_at', { ascending: false })
-            .limit(1)
-          : Promise.resolve({ data: [], error: null }),
-      ])
+      const open = await supabase
+        .from('trips')
+        .select('*')
+        .in('status', ['searching', 'offered'])
+        .order('requested_at', { ascending: false })
+        .limit(8)
       if (!alive || open.error) return
       if (driverId) {
         const passed = await listPassedTripIds(supabase, driverId)
         if (!alive) return
         passedOffers.current = new Set(passed)
       }
-      const preferredRow = preferred.data?.[0] || null
-      const openRow = (open.data || []).find((row) => (
-        isDueNow(row)
-        && !passedOffers.current.has(row.id)
-        && !dismissedOffers.current.has(row.id)
+      const row = (open.data || []).find((candidate) => (
+        isDueNow(candidate)
+        && !passedOffers.current.has(candidate.id)
+        && !dismissedOffers.current.has(candidate.id)
       ))
-      const row = preferredRow && !dismissedOffers.current.has(preferredRow.id) ? preferredRow : openRow
       if (!row || dismissedOffers.current.has(row.id)) return
       if ((row.status === 'searching' || row.status === 'offered') && !isDueNow(row)) return
       setOffer(row)
@@ -606,6 +598,7 @@ function DriverShell({ driverId }) {
   }
 
   const showIdle = !offer && !activeTrip
+  const headingToPickup = Boolean(activeTrip) && ['accepted', 'arriving', 'arrived'].includes(activeTrip.status)
   const scheduledNotDone = Boolean(activeTrip?.pickup_at) && activeTrip.status !== 'completed'
   const driverFix = selfPos ? { lat: selfPos[0], lng: selfPos[1] } : null
   const activeEta = activeTrip
@@ -637,6 +630,7 @@ function DriverShell({ driverId }) {
         center={selfPos || (!scheduledNotDone && activeTrip?.pickup_lat != null ? [activeTrip.pickup_lat, activeTrip.pickup_lng] : CLEMSON)}
         zoom={13}
         marker={selfPos || CLEMSON}
+        animateDriver={headingToPickup && Boolean(selfPos)}
         gameDayLabel={game.notice.live ? game.notice.headline : null}
         pickupPosition={
           scheduledNotDone
@@ -697,6 +691,46 @@ function DriverShell({ driverId }) {
             {centsToDollars(earningsCents)}
           </button>
         </div>
+        {headingToPickup && (
+          <button
+            type="button"
+            className="pressable"
+            aria-label="Use current location"
+            onClick={() => {
+              if (!navigator.geolocation) return
+              navigator.geolocation.getCurrentPosition(
+                (pos) => {
+                  const next = [pos.coords.latitude, pos.coords.longitude]
+                  setSelfPos(next)
+                  if (driverId) {
+                    publishDriverLocation(driverId, {
+                      lat: next[0],
+                      lng: next[1],
+                      heading: pos.coords.heading,
+                      online: true,
+                    }).catch(() => {})
+                  }
+                },
+                () => {},
+                { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 },
+              )
+            }}
+            style={{
+              position: 'absolute',
+              top: 64,
+              right: 0,
+              width: 44,
+              height: 44,
+              borderRadius: 22,
+              background: 'rgba(255,255,255,0.92)',
+              boxShadow: 'var(--shadow-pill)',
+              fontWeight: 800,
+              color: 'var(--orange)',
+            }}
+          >
+            ◎
+          </button>
+        )}
         <div
           style={{
             width: 44,

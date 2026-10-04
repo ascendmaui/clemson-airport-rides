@@ -20,10 +20,22 @@ import { TESLA_FLEET_NOTICE } from 'rides-native/tripTags'
 export default function RideTiers() {
   const router = useRouter()
   const insets = useSafeAreaInsets()
-  const params = useLocalSearchParams<{ dest?: string; pickup?: string; note?: string }>()
+  const params = useLocalSearchParams<{
+    dest?: string
+    pickup?: string
+    note?: string
+    pickupLat?: string
+    pickupLng?: string
+    destLat?: string
+    destLng?: string
+  }>()
   const dest = oneParam(params.dest, 'GSP Airport')
   const pickup = oneParam(params.pickup, 'Memorial Stadium · Lot 5')
   const note = oneParam(params.note)
+  const pickupLat = oneParam(params.pickupLat)
+  const pickupLng = oneParam(params.pickupLng)
+  const destLat = oneParam(params.destLat)
+  const destLng = oneParam(params.destLng)
   const { user } = useAuth()
   const student = useStudentStatus()
   const studentOffer = studentSurfaceCopy(student, 'tiers')
@@ -35,7 +47,7 @@ export default function RideTiers() {
 
   const next = {
     pathname: '/pick-driver' as const,
-    params: { dest, pickup, note, tier: selected },
+    params: { dest, destLat, destLng, pickup, pickupLat, pickupLng, note, tier: selected },
   }
 
   const onConfirm = () => {

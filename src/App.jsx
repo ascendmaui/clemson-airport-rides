@@ -97,15 +97,36 @@ function Screen({ path, params }) {
     case 'rides':
       return <RiderHome />
     case 'confirm':
-      return <ConfirmPickup dest={params.dest || 'GSP Airport'} />
+      return (
+        <ConfirmPickup
+          dest={params.dest || 'GSP Airport'}
+          pickup={params.pickup || ''}
+          pickupLat={params.pickupLat || ''}
+          pickupLng={params.pickupLng || ''}
+        />
+      )
     case 'tiers':
-      return <RideTiers dest={params.dest || '1900 GSP Dr'} />
+      return (
+        <RideTiers
+          dest={params.dest || '1900 GSP Dr'}
+          pickup={params.pickup || ''}
+          pickupLat={params.pickupLat || ''}
+          pickupLng={params.pickupLng || ''}
+          destLat={params.destLat || ''}
+          destLng={params.destLng || ''}
+        />
+      )
     case 'pick-driver':
       return (
         <PickDriver
           dest={params.dest || 'GSP Airport'}
           tier={params.tier || 'standard'}
           listCents={params.listCents || ''}
+          pickup={params.pickup || ''}
+          pickupLat={params.pickupLat || ''}
+          pickupLng={params.pickupLng || ''}
+          destLat={params.destLat || ''}
+          destLng={params.destLng || ''}
         />
       )
     case 'requested':

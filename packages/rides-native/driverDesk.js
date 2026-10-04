@@ -160,6 +160,12 @@ export async function setTeslaListing(supabase, driverId, { enabled, claimModel3
   return data
 }
 
+/**
+ * Open-offer values the trip_status enum accepts.
+ * "requested" is not in the enum. A filter that includes it fails the whole query.
+ */
+const OPEN_OFFER_STATUSES = ['searching', 'offered']
+
 function cards(rows, gameDayLive) {
   return rows.map((row) => toDriverCard(row, { gameDayLive })).filter(Boolean)
 }
@@ -190,7 +196,7 @@ export async function loadDriverDesk(supabase, driverId) {
     }
   }
   const [openRows, scheduledRows, mineRows, activeRows, statusRes, vehicle, profile, appRes] = await Promise.all([
-    safeRows('offers', (query) => query.in('status', ['searching', 'offered', 'requested']).order('requested_at', { ascending: false }).limit(20)),
+    safeRows('offers', (query) => query.in('status', OPEN_OFFER_STATUSES).order('requested_at', { ascending: false }).limit(20)),
     safeRows('scheduled', (query) => query.eq('status', 'scheduled').is('driver_id', null).order('pickup_at', { ascending: true }).limit(25)),
     safeRows('upcoming', (query) => query.eq('driver_id', driverId).in('status', ['accepted', 'arriving']).not('pickup_at', 'is', null).order('pickup_at', { ascending: true }).limit(20)),
     safeRows('active', (query) => query.eq('driver_id', driverId).in('status', ['accepted', 'arriving', 'arrived', 'in_progress']).order('accepted_at', { ascending: false }).limit(8)),
@@ -321,7 +327,7 @@ export async function acceptTrip(supabase, trip, driverId) {
     .from('trips')
     .update({ status: 'accepted', driver_id: driverId, accepted_at: acceptedAt })
     .eq('id', trip.id)
-    .in('status', ['requested', 'searching', 'offered'])
+    .in('status', OPEN_OFFER_STATUSES)
     .select('id, status, driver_id, accepted_at')
     .maybeSingle()
   if (error) throw new Error(error.message)
@@ -380,7 +386,7 @@ export async function declineTrip(supabase, tripOrId, driverId = null) {
     .from('trips')
     .update({ status: 'canceled', canceled_at: canceledAt })
     .eq('id', trip.id)
-    .in('status', ['requested', 'searching', 'offered'])
+    .in('status', OPEN_OFFER_STATUSES)
   if (error) throw new Error(error.message)
   await writeTripEvent(supabase, trip.id, 'canceled', { reason: 'driver_decline', source: 'driver_app', canceled_at: canceledAt })
   return { disposition: 'cancel' }

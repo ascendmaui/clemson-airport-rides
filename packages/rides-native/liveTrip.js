@@ -13,11 +13,10 @@ export const DRIVER_TRACK_STEPS = [
   { id: 'completed', label: 'Done' },
 ]
 
-/** Statuses a rider can open from home into the live track screen. */
+/** Statuses the rider home query may send. `requested` is not a trip_status value. */
 export const RIDER_TRACK_STATUSES = [
   'searching',
   'offered',
-  'requested',
   'accepted',
   'arriving',
   'arrived',

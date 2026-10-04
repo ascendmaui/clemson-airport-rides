@@ -22,6 +22,9 @@ export async function requestDriverTrip({
   dest = 'GSP Airport',
   destLat = null,
   destLng = null,
+  pickupLabel = null,
+  pickupLat = null,
+  pickupLng = null,
   tier = 'standard',
   isStudent = false,
   listCents = 0,
@@ -36,13 +39,22 @@ export async function requestDriverTrip({
   const drop = lat != null && lng != null
     ? { latitude: lat, longitude: lng }
     : destPoint(dest)
-  const pickup = pickupPoint('Memorial Stadium')
+  const plat = finitePin(pickupLat)
+  const plng = finitePin(pickupLng)
+  const stadium = pickupPoint('Memorial Stadium')
+  const pickup = plat != null && plng != null
+    ? {
+      latitude: plat,
+      longitude: plng,
+      label: String(pickupLabel || '').trim() || 'Current location',
+    }
+    : { latitude: stadium.latitude, longitude: stadium.longitude, label: 'Memorial Stadium' }
   const data = await createServerDriverTrip({
     driverId,
     dest,
     destLat: drop.latitude,
     destLng: drop.longitude,
-    pickupLabel: 'Memorial Stadium',
+    pickupLabel: pickup.label,
     pickupLat: pickup.latitude,
     pickupLng: pickup.longitude,
     tier: tier || 'standard',

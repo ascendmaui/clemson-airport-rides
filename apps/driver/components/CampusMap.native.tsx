@@ -26,6 +26,7 @@ export function CampusMap({
   gameDayLabel = null,
   lockOnCenter = false,
   onPinPress,
+  showsUserLocation = false,
 }: {
   pins?: MapPin[]
   center?: { latitude: number; longitude: number } | null
@@ -38,6 +39,7 @@ export function CampusMap({
   gameDayLabel?: string | null
   lockOnCenter?: boolean
   onPinPress?: (id: string) => void
+  showsUserLocation?: boolean
 }) {
   const mapRef = useRef<MapView>(null)
   const pinsRef = useRef(pins)
@@ -127,7 +129,7 @@ export function CampusMap({
         }
         rotateEnabled={false}
         pitchEnabled={false}
-        showsUserLocation={false}
+        showsUserLocation={showsUserLocation}
       >
         {showHeat
           ? spots.map((spot: BusySpot) => (
