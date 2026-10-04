@@ -15,6 +15,7 @@ export type QueueFilter = 'all' | 'student' | 'game_day' | 'weekend_party'
 export type DriverCard = {
   id: string
   status: string
+  matchingOffer?: boolean
   driverId: string | null
   riderId: string | null
   pickupLabel: string

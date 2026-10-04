@@ -425,6 +425,7 @@ export function toDriverCard(row, options) {
     id: row.id,
     status: row.status,
     driverId: row.driver_id || null,
+    matchingOffer: meta.kind === 'driver_request' && !row.pickup_at && !row.scheduled_for && !Number(row.deposit_cents || 0),
     riderId: row.rider_id || null,
     pickupLabel: row.pickup_label || 'Pickup',
     dropoffLabel: row.dropoff_label || 'Drop-off',

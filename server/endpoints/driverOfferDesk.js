@@ -2,8 +2,8 @@
  * Driver-screen offer desk.
  * mark-offered: an approved online driver who can see the trip moves it
  * from searching to offered. driver_id stays empty so accept still races fairly.
- * pass-offer: the current target declines. Auto-assign moves to the next
- * online driver in the stored order. A picked driver returns the trip to the pool.
+ * pass-offer: immediate driver requests persist a pass whose database trigger
+ * retargets atomically. Other ride types retain their existing queue behavior.
  * No email.
  */
 import { admin, cors, json, parseBody, userFromAuth } from '../friendRideLib.js'
@@ -47,7 +47,7 @@ async function approvedOnline(sb, userId) {
 }
 
 async function loadTrip(sb, tripId) {
-  const tripRes = await sb.from('trips').select('id, status, rider_id, driver_id, tier, metadata').eq('id', tripId).maybeSingle()
+  const tripRes = await sb.from('trips').select('id, status, rider_id, driver_id, tier, pickup_at, scheduled_for, deposit_cents, metadata').eq('id', tripId).maybeSingle()
   if (tripRes.error) return { error: tripRes.error.message || 'Could not load trip', status: 500 }
   if (!tripRes.data) return { error: 'Trip not found', status: 404 }
   return { trip: tripRes.data }
@@ -108,6 +108,17 @@ export async function handlePassOffer(req, res, deps = {}) {
   const meta = metaOf(trip)
   if (!offerVisibleToDriver(trip, ctx.user.id)) {
     return json(res, 403, { error: 'This ride offer is for another driver.', code: 'offer_not_yours' })
+  }
+
+  if (meta.kind === 'driver_request' && !trip.pickup_at && !trip.scheduled_for && !Number(trip.deposit_cents || 0)) {
+    // The pass and retarget commit together in the database, also for native clients.
+    const passed = await ctx.sb.from('driver_offer_passes').upsert({ trip_id: tripId, driver_id: ctx.user.id })
+    if (passed.error) return json(res, 500, { error: 'Could not pass this ride offer', code: 'offer_update_failed' })
+    const fresh = await loadTrip(ctx.sb, tripId)
+    if (!fresh.trip) return json(res, fresh.status, { error: fresh.error })
+    return json(res, 200, { tripId, status: fresh.trip.status,
+      offerDriverId: fresh.trip.metadata?.offer_driver_id || null,
+      released: !fresh.trip.metadata?.offer_driver_id })
   }
 
   let offerDriverId = null

@@ -155,3 +155,32 @@ for (const handler of [handleMarkOffered, handlePassOffer]) {
     assert.equal(desk.tables.trips[0].status, 'searching')
   })
 }
+
+test('immediate matching API records a pass and returns the committed database state', async () => {
+  const desk = seed()
+  desk.tables.trips[0].metadata.kind = 'driver_request'
+  const from = desk.sb.from
+  desk.sb.from = (table) => table === 'driver_offer_passes' ? {
+    async upsert(row) {
+      assert.deepEqual(row, { trip_id: 'trip-1', driver_id: john })
+      // Database trigger behavior is exercised in matchingDeclineOfflineSql.test.js.
+      desk.tables.trips[0].metadata.offer_driver_id = kim
+      return { error: null }
+    },
+  } : from(table)
+  const response = await call(handlePassOffer, { sb: desk.sb, user: { id: john } }, { tripId: 'trip-1' })
+  assert.equal(response.status, 200)
+  assert.equal(response.json.offerDriverId, kim)
+})
+
+test('immediate matching API surfaces pass persistence failure', async () => {
+  const desk = seed()
+  desk.tables.trips[0].metadata.kind = 'driver_request'
+  const from = desk.sb.from
+  desk.sb.from = (table) => table === 'driver_offer_passes' ? {
+    async upsert() { return { error: { message: 'transaction failed' } } },
+  } : from(table)
+  const response = await call(handlePassOffer, { sb: desk.sb, user: { id: john } }, { tripId: 'trip-1' })
+  assert.equal(response.status, 500)
+  assert.equal(desk.tables.trips[0].metadata.offer_driver_id, john)
+})

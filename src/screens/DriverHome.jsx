@@ -578,27 +578,16 @@ function DriverShell({ driverId }) {
     const current = offer
     dismissedOffers.current.add(current.id)
     try {
-      await api('/api/driver?action=pass-offer', { tripId: current.id }).catch(() => {})
-      await declineTrip(supabase, { id: current.id, status: current.status }, driverId)
+      await api('/api/driver?action=pass-offer', { tripId: current.id })
+      const matching = current.metadata?.kind === 'driver_request' && !current.pickup_at
+        && !current.scheduled_for && !Number(current.deposit_cents || 0)
+      if (!matching) await declineTrip(supabase, current, driverId)
       if (current.status !== 'requested') passedOffers.current.add(current.id)
       setOffer(null)
     } catch (err) {
-      if (current.status === 'requested') {
-        dismissedOffers.current.delete(current.id)
-        pushToast({
-          kind: 'system',
-          title: 'Could not decline',
-          body: err.message || 'This preferred request is still yours.',
-        })
-        return
-      }
-      passedOffers.current.add(current.id)
-      setOffer(null)
-      pushToast({
-        kind: 'system',
-        title: 'Passed for now',
-        body: err.message || 'This ride stays in the open pool for another driver.',
-      })
+      dismissedOffers.current.delete(current.id)
+      pushToast({ kind: 'system', title: 'Could not decline',
+        body: err.message || 'Please refresh and try again.' })
     }
   }
 

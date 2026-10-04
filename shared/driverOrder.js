@@ -38,6 +38,7 @@ export function offerVisibleToDriver(trip, driverId) {
   const meta = trip.metadata && typeof trip.metadata === 'object' && !Array.isArray(trip.metadata)
     ? trip.metadata
     : {}
+  if (Array.isArray(meta.offer_passed_driver_ids) && meta.offer_passed_driver_ids.includes(driverId)) return false
   const target = typeof meta.offer_driver_id === 'string' ? meta.offer_driver_id : ''
   if (trip.driver_id && trip.driver_id !== driverId) return false
   if (target) return target === driverId
