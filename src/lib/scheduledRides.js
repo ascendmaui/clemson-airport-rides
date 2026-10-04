@@ -83,11 +83,12 @@ export async function listMyScheduledTrips(riderId) {
     .from('trips')
     .select('id, status, pickup_label, dropoff_label, pickup_lat, pickup_lng, dropoff_lat, dropoff_lng, fare_cents, deposit_cents, pickup_at, scheduled_for, rider_note, metadata, driver_id')
     .eq('rider_id', riderId)
-    .not('pickup_at', 'is', null)
+    .in('status', ['scheduled', 'searching', 'offered', 'accepted', 'arriving', 'arrived', 'in_progress'])
+    .or('pickup_at.not.is.null,metadata->>scheduled_pickup_at.not.is.null')
     .order('pickup_at', { ascending: true })
-    .limit(30)
+    .limit(100)
   if (error) throw new Error(error.message)
-  return data || []
+  return (data || []).sort((a, b) => new Date(a.pickup_at || a.metadata?.scheduled_pickup_at) - new Date(b.pickup_at || b.metadata?.scheduled_pickup_at))
 }
 
 export async function listOpenScheduledTrips() {
@@ -127,12 +128,14 @@ export async function acceptScheduledTrip(tripId) {
 
 export async function cancelScheduledTrip(tripId) {
   if (!supabase) throw new Error('Supabase is not configured')
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from('trips')
     .update({ status: 'canceled', canceled_at: new Date().toISOString() })
     .eq('id', tripId)
-    .in('status', ['scheduled', 'accepted'])
+    .in('status', ['scheduled', 'searching', 'offered', 'accepted'])
+    .select('id')
   if (error) throw new Error(error.message || 'Could not cancel scheduled ride')
+  if (!data?.length) throw new Error('This ride has changed. Refresh your upcoming rides.')
 }
 
 /**

@@ -1,0 +1,11 @@
+# Scheduled campus rides
+
+The website scheduler uses the existing authenticated schedule-trip endpoint, which inserts a `scheduled` trip at the server fare without calling Stripe. Game day, Friday night and Saturday night presets are editable suggestions in America/New_York, not a football calendar. Spring DST gaps are rejected; the first occurrence is used during the fall overlap.
+
+Unassigned rides with zero deposit enter matching 45 minutes before pickup through the existing authenticated rebroadcast cron endpoint. The release uses the existing driver eligibility and default ordering. It atomically changes `scheduled` to `searching`, moves the original pickup timestamp to `metadata.scheduled_pickup_at`, and clears the live dispatch timestamp fields. This deliberately makes the existing deadline trigger, acceptance guard, decline/offline handling and rebroadcast code applicable without changing those mechanisms. The web Upcoming list reads both timestamp locations and permits cancellation before or during matching. The driver scheduled queue shows future trips before release.
+
+Concurrent cancellation, acceptance or another sweep cannot overwrite the release snapshot. Reservations more than 20 minutes past pickup are canceled without sending offers. With no eligible online drivers, release uses the existing open pool. Airport deposit trips and already-assigned reservations retain their existing behavior. Scheduling itself never charges a card; unpaid airport deposits are not bypassed.
+
+Deployment uses the existing `matching-rebroadcast` minute job and deadline/decline migrations from main. Its Vault secret must match Vercel `CRON_SECRET`. This PR does not deploy, configure secrets, send messages or run live scheduling/dispatch actions.
+
+Local verification: `npm test` and `npm run build` on Node 22. In a test environment, confirm a future campus ride, reload Upcoming, inspect the driver scheduled queue, then advance the test clock to 45 minutes before pickup. Verify the reservation becomes a targeted offer, missed offers advance in the existing order, and cancellation wins either side of release. Use mocks for alert delivery; no live charges or outbound messages are needed.

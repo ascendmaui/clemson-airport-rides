@@ -1,3 +1,4 @@
+import { zonedCivilToUtc } from '../../shared/rideTime.js'
 /** Pure helpers for scheduled rides. No Supabase imports. */
 
 export const MIN_LEAD_MS = 30 * 60 * 1000
@@ -5,6 +6,7 @@ export const ACTIONABLE_LEAD_MS = 45 * 60 * 1000
 export const APPROX_PIN_DECIMALS = 3
 
 export const SCHEDULE_PURPOSES = [
+  { id: 'game_day', label: 'Game day' },
   { id: 'party_weekend', label: 'Weekend / party' },
   { id: 'airport', label: 'Airport' },
   { id: 'early_class', label: 'Early class' },
@@ -103,8 +105,10 @@ export function distanceFareCents(meters, airportCode) {
 }
 
 export function pickupAtFromLocal(date, time) {
-  if (!date || !time) return null
-  const d = new Date(`${date}T${time}:00`)
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date || '') || !/^\d{2}:\d{2}$/.test(time || '')) return null
+  const [y, m, day] = date.split('-').map(Number)
+  const [h, min] = time.split(':').map(Number)
+  const d = zonedCivilToUtc(y, m, day, h, min)
   if (Number.isNaN(d.getTime())) return null
   return d
 }
@@ -220,6 +224,7 @@ const OPEN_QUEUE_FIELDS = [
   'pickup_label',
   'dropoff_label',
   'fare_cents',
+  'deposit_cents',
   'pickup_at',
   'scheduled_for',
   'rider_note',
@@ -236,11 +241,12 @@ export function toDriverQueueCard(row) {
     status: row.status,
     pickupLabel: row.pickup_label,
     dropoffLabel: row.dropoff_label,
-    pickupAt: row.pickup_at || row.scheduled_for,
+    pickupAt: row.pickup_at || row.scheduled_for || row.metadata?.scheduled_pickup_at,
     fareCents: row.fare_cents,
     firstName: firstName(row.metadata?.rider_first_name, 'Rider'),
     purpose: purposeLabel(purpose) || row.rider_note || '',
     passengers: row.passengers || 1,
+    automaticMatching: !Number(row.deposit_cents || 0),
   }
 }
 
@@ -251,14 +257,35 @@ export function toRiderScheduleCard(row) {
     status: row.status,
     pickupLabel: row.pickup_label,
     dropoffLabel: row.dropoff_label,
-    pickupAt: row.pickup_at || row.scheduled_for,
+    pickupAt: row.pickup_at || row.scheduled_for || row.metadata?.scheduled_pickup_at,
     fareCents: row.fare_cents,
     depositCents: Math.max(0, Math.round(Number(row.deposit_cents) || 0)),
     purpose: purposeLabel(row.metadata?.purpose) || row.rider_note || '',
     estimate: Boolean(row.metadata?.fare_is_estimate),
     approxPin: pinForDisplay(row),
-    canCancel: row.status === 'scheduled' || row.status === 'accepted',
+    canCancel: ['scheduled', 'searching', 'offered', 'accepted'].includes(row.status),
   }
 }
 
 export const DRIVER_QUEUE_SELECT = OPEN_QUEUE_FIELDS.join(', ')
+
+/** Suggested Clemson wall-clock times, not a claim about the football calendar. */
+export const SCHEDULE_PRESETS = [
+  { id: 'friday', label: 'Friday night · 9 PM', weekday: 5, time: '21:00', purpose: 'party_weekend' },
+  { id: 'saturday', label: 'Saturday night · 9 PM', weekday: 6, time: '21:00', purpose: 'party_weekend' },
+  { id: 'game', label: 'Game day · Saturday noon', weekday: 6, time: '12:00', purpose: 'game_day' },
+]
+
+export function schedulePreset(preset, now = new Date()) {
+  const parts = Object.fromEntries(new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit',
+  }).formatToParts(now).map(p => [p.type, p.value]))
+  const day = new Date(`${parts.year}-${parts.month}-${parts.day}T12:00:00Z`)
+  day.setUTCDate(day.getUTCDate() + (preset.weekday - day.getUTCDay() + 7) % 7)
+  let date = day.toISOString().slice(0, 10)
+  if (pickupAtFromLocal(date, preset.time).getTime() < now.getTime() + MIN_LEAD_MS) {
+    day.setUTCDate(day.getUTCDate() + 7)
+    date = day.toISOString().slice(0, 10)
+  }
+  return { date, time: preset.time, purpose: preset.purpose }
+}

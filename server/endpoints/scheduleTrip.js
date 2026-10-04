@@ -29,7 +29,7 @@ function passengerCount(body) {
   return n
 }
 
-const PURPOSES = new Set(['early_class', 'airport', 'planned', 'party_weekend', 'recurring'])
+const PURPOSES = new Set(['game_day', 'early_class', 'airport', 'planned', 'party_weekend', 'recurring'])
 
 function place(value) {
   if (!value || typeof value !== 'object') return null
@@ -67,6 +67,7 @@ export default async function handler(req, res, deps = {}) {
     typeof deps.now === 'function' ? deps.now() : deps.now != null ? Number(deps.now) : Date.now()
   const when = parseRideAt(body, new Date(clockNow))
   const scheduled = Boolean(body.date || body.pickupAt)
+  if (!Number.isFinite(when.getTime())) return json(res, 400, { error: 'Choose a valid pickup time.' })
   if (scheduled && when.getTime() < clockNow + 30 * 60 * 1000) {
     return json(res, 400, { error: 'Schedule at least 30 minutes ahead.' })
   }
