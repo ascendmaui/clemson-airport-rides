@@ -1,5 +1,5 @@
 /**
- * POST /api/driver?action=signup|submit-review|offer-preview|tip|wait|cancel-midride|payouts|cards
+ * POST /api/driver?action=signup|submit-review|offer-preview|tip|tip-choice|wait|cancel-midride|payouts|cards
  * GET  /api/driver?action=earnings|payouts
  * Legacy paths are rewritten in vercel.json.
  * trip-wait body.action (arrive|tick|cancel|start|complete) is a sub-action, not the route.
@@ -10,6 +10,7 @@ import { handleDriverSignup, handleDriverSubmitReview } from '../server/driverRo
 import handleDriverEarnings from '../server/endpoints/driverEarnings.js'
 import handleOfferPreview from '../server/endpoints/tripOfferPreview.js'
 import handleTripTip from '../server/endpoints/tripTip.js'
+import handleRiderTipChoice from '../server/endpoints/riderTipChoice.js'
 import handleTripWait from '../server/endpoints/tripWait.js'
 import handleCancelMidride from '../server/endpoints/tripCancelMidride.js'
 import handleDriverPayouts from '../server/endpoints/driverPayouts.js'
@@ -24,6 +25,7 @@ const HANDLERS = {
   earnings: handleDriverEarnings,
   'offer-preview': handleOfferPreview,
   tip: handleTripTip,
+  'tip-choice': handleRiderTipChoice,
   wait: handleTripWait,
   'cancel-midride': handleCancelMidride,
   payouts: handleDriverPayouts,
@@ -51,7 +53,7 @@ export default async function handler(req, res, ...rest) {
   const handle = HANDLERS[action]
   if (!handle) {
     return json(res, 400, {
-      error: 'Unknown driver action. Use action=signup, submit-review, earnings, offer-preview, tip, wait, cancel-midride, payouts, inbox, cards, mark-offered, or pass-offer.',
+      error: 'Unknown driver action. Use action=signup, submit-review, earnings, offer-preview, tip, tip-choice, wait, cancel-midride, payouts, inbox, cards, mark-offered, or pass-offer.',
     })
   }
   return handle(req, res, ...rest)

@@ -1288,3 +1288,102 @@ select[aria-invalid="true"]:focus-visible {
   border: 1.5px solid rgba(245, 102, 0, 0.35);
   box-shadow: var(--shadow-pill);
 }
+
+/* Post-trip tip step */
+.tip-screen {
+  padding: 24px 20px 32px;
+  max-width: 440px;
+  margin: 0 auto;
+}
+.tip-card {
+  padding: 22px 18px 18px;
+  border-radius: 24px;
+  background: linear-gradient(165deg, rgba(255,255,255,0.92), rgba(82,45,128,0.07) 58%, rgba(245,102,0,0.10));
+}
+.tip-kicker {
+  font-size: 12px;
+  letter-spacing: 1.2px;
+  font-weight: 800;
+  text-transform: uppercase;
+  color: var(--orange);
+}
+.tip-title {
+  font-size: 26px;
+  font-weight: 800;
+  letter-spacing: -0.4px;
+  color: var(--purple);
+  margin-top: 6px;
+  line-height: 1.15;
+}
+.tip-copy {
+  color: var(--ink-secondary);
+  font-size: 14px;
+  line-height: 1.45;
+  margin-top: 8px;
+}
+.tip-options {
+  display: flex;
+  gap: 8px;
+  margin: 18px 0 16px;
+}
+.tip-option {
+  flex: 1;
+  min-width: 0;
+  min-height: 92px;
+  padding: 12px 6px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.82);
+  border: 1.5px solid rgba(82, 45, 128, 0.16);
+  box-shadow: var(--shadow-soft);
+  color: var(--purple);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  transition: transform 200ms var(--ease-spring), box-shadow 220ms var(--ease-soft), border-color 180ms var(--ease-soft), background 180ms var(--ease-soft);
+}
+.tip-option--selected {
+  border-color: var(--orange);
+  background: linear-gradient(180deg, #fff, rgba(245, 102, 0, 0.14));
+  box-shadow: 0 8px 22px rgba(245, 102, 0, 0.18), var(--shadow-soft);
+  transform: translateY(-2px);
+}
+.tip-amount {
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: -0.3px;
+}
+.tip-percent {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ink-tertiary);
+}
+.tip-option--selected .tip-percent {
+  color: var(--orange);
+}
+.tip-popular {
+  min-height: 14px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  color: var(--orange);
+}
+.tip-popular--spacer {
+  visibility: hidden;
+}
+.tip-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+}
+.tip-skip {
+  display: block;
+  width: 100%;
+  min-height: 44px;
+  padding: 12px;
+  font-weight: 650;
+  color: var(--ink-secondary);
+}
