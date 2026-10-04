@@ -1647,3 +1647,11 @@ test('driver offer queries do not send the illegal trip_status requested', () =>
   assert.ok(track)
   assert.doesNotMatch(track[1], /requested/)
 })
+
+test('native matching pass never rewrites a newly retargeted trip', async () => {
+  const supabase = createFakeSupabase({ trips: [{ id: 'matching', status: 'offered', driver_id: null }] })
+  const result = await declineTrip(supabase, { id: 'matching', status: 'offered', matchingOffer: true }, 'driver-1')
+  assert.equal(result.passed, true)
+  assert.equal(supabase._tables.trips[0].status, 'offered')
+  assert.equal(supabase._tables.driver_offer_passes[0].trip_id, 'matching')
+})

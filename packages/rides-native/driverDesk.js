@@ -359,12 +359,15 @@ export async function declineTrip(supabase, tripOrId, driverId = null) {
   const disposition = declineDisposition(trip.status)
   if (disposition === 'leave') return { disposition }
   if (disposition === 'release') {
+    // Immediate matching passes retarget atomically through the pass-table trigger.
     // Open-pool rows stay driver_id null. RLS only lets an online driver claim
     // them (accepted or offered with their own id), so a decline cannot rewrite
     // the trip back to searching. Record a pass and leave it in the pool.
+    const matching = trip.matchingOffer || (trip.metadata?.kind === 'driver_request'
+      && !trip.pickup_at && !trip.scheduled_for && !Number(trip.deposit_cents || 0))
     const passed = await rememberPass(supabase, trip.id, driverId)
     let released = false
-    if (trip.status === 'offered') {
+    if (trip.status === 'offered' && !matching) {
       const { data, error } = await supabase
         .from('trips')
         .update({ status: 'searching', driver_id: null })
@@ -378,6 +381,9 @@ export async function declineTrip(supabase, tripOrId, driverId = null) {
     }
     if (!passed && !released) {
       throw new Error('Could not pass on this ride. It is still in the open pool.')
+    }
+    if (passed && matching) {
+      return { disposition, passed, released }
     }
     await writeTripEvent(supabase, trip.id, 'released', {
       reason: 'driver_decline',
