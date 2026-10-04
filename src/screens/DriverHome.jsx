@@ -10,6 +10,8 @@ import { PurpleAcceptButton } from '../components/PrimaryButton'
 import { ScheduledRideQueue } from '../components/ScheduledRideQueue'
 import { navigate } from '../lib/navigation'
 import { setDriverOnline, subscribeTrips, supabase } from '../lib/supabase'
+import { canReceiveOffers, isOnShift, startShift, stopShift, visibleOffer } from '../lib/driverShift'
+import { DriverShiftControl } from '../components/DriverShiftControl'
 import { grantRiderSocialForTrip } from '../lib/riderReferral'
 import { publishDriverLocation } from '../lib/driverTrack'
 import { DriverApprovalGate } from './DriverApprovalGate'
@@ -103,7 +105,10 @@ function DriverShell({ driverId }) {
     setActiveTrip((prev) => (prev && next && prev.id === next.id ? { ...prev, ...next } : prev))
   })
   const [online, setOnline] = useState(false)
+  const [shiftBusy, setShiftBusy] = useState(false)
   const [presenceReady, setPresenceReady] = useState(false)
+  const onShiftRef = useRef(false)
+  onShiftRef.current = online
   const [earningsCents, setEarningsCents] = useState(0)
   const [incentiveExtraCents, setIncentiveExtraCents] = useState(0)
   const [extraByTrip, setExtraByTrip] = useState({})
@@ -218,17 +223,12 @@ function DriverShell({ driverId }) {
       .maybeSingle()
       .then(({ data, error }) => {
         if (!alive) return
-        if (!error && data && data.online === false) {
-          setOnline(false)
-          setPresenceReady(true)
-          return
-        }
-        setDriverOnline(driverId, true).catch(() => {})
-        setOnline(true)
+        setOnline(!error && isOnShift(data))
         setPresenceReady(true)
       })
       .catch(() => {
         if (!alive) return
+        setOnline(false)
         setPresenceReady(true)
       })
     return () => {
@@ -239,14 +239,14 @@ function DriverShell({ driverId }) {
   const [locationError, setLocationError] = useState(null)
   const [locationAttempt, setLocationAttempt] = useState(0)
   useEffect(() => {
-    const tracking = approved || Boolean(activeTrip)
+    const tracking = (approved && online) || Boolean(activeTrip)
     if (!driverId || !tracking || (!presenceReady && !activeTrip)) return undefined
     if (!navigator.geolocation) { setLocationError('Location is unavailable in this browser.'); return undefined }
     const stop = startLocationPublisher({
       locate: () => new Promise((resolve, reject) => navigator.geolocation.getCurrentPosition(resolve, reject,
         { enableHighAccuracy: true, maximumAge: 0, timeout: 15000 })),
       publish: (pos) => publishDriverLocation(driverId, {
-        lat: pos.coords.latitude, lng: pos.coords.longitude, heading: pos.coords.heading, online,
+        lat: pos.coords.latitude, lng: pos.coords.longitude, heading: pos.coords.heading,
       }),
       onFix: (pos) => setSelfPos([pos.coords.latitude, pos.coords.longitude]),
       onError: setLocationError,
@@ -279,9 +279,10 @@ function DriverShell({ driverId }) {
         listOpenScheduledTrips(),
         listDriverScheduledTrips(driverId),
       ])
-      setScheduledOpen(open)
+      const receiving = onShiftRef.current
+      setScheduledOpen(receiving ? open : [])
       setScheduledMine(mine)
-      if (!scheduledPrimed.current) {
+      if (!scheduledPrimed.current || !receiving) {
         open.forEach((row) => knownOpen.current.add(row.id))
         scheduledPrimed.current = true
       } else {
@@ -295,12 +296,14 @@ function DriverShell({ driverId }) {
           })
         })
       }
-      open.forEach((row) => {
-        const decision = takeReminder(row, new Date(), { windows: ['h1', 'm15', 'now'] })
-        if (!decision) return
-        const copy = reminderCopy(row, decision)
-        pushToast({ ...copy, kind: 'ride_scheduled', title: 'Scheduled ride still open' })
-      })
+      if (receiving) {
+        open.forEach((row) => {
+          const decision = takeReminder(row, new Date(), { windows: ['h1', 'm15', 'now'] })
+          if (!decision) return
+          const copy = reminderCopy(row, decision)
+          pushToast({ ...copy, kind: 'ride_scheduled', title: 'Scheduled ride still open' })
+        })
+      }
     } catch (err) {
       console.error('[scheduled]', err.message)
     }
@@ -316,7 +319,10 @@ function DriverShell({ driverId }) {
   // mark-offered uses the service role so searching can become offered
   // without claiming driver_id. The client update fails RLS.
   useEffect(() => {
-    if (!supabase || !approved || !online) return undefined
+    if (!supabase || !canReceiveOffers({ onShift: online, approved })) {
+      setOffer(null)
+      return undefined
+    }
     let alive = true
     chimePrimed.current = false
     function noteChime(rows) {
@@ -343,6 +349,7 @@ function DriverShell({ driverId }) {
       })
     }
     async function loadOffers() {
+      if (!onShiftRef.current) return
       const revision = ++offerRevision.current
       const open = await visibleOfferQuery(supabase
         .from('trips')
@@ -350,10 +357,10 @@ function DriverShell({ driverId }) {
         .in('status', ['searching', 'offered']), driverId)
         .order('requested_at', { ascending: false })
         .limit(8)
-      if (!alive || revision !== offerRevision.current || open.error) return
+      if (!alive || !onShiftRef.current || revision !== offerRevision.current || open.error) return
       if (driverId) {
         const passed = await listPassedTripIds(supabase, driverId)
-        if (!alive) return
+        if (!alive || !onShiftRef.current) return
         if (revision !== offerRevision.current) return
         passedOffers.current = new Set(passed)
       }
@@ -423,11 +430,11 @@ function DriverShell({ driverId }) {
       if (row.status === 'scheduled') {
         loadScheduled()
       }
-      if (row.status === 'requested' && row.driver_id === driverId && online && !activeTrip && !dismissedOffers.current.has(row.id)) {
+      if (row.status === 'requested' && row.driver_id === driverId && onShiftRef.current && !activeTrip && !dismissedOffers.current.has(row.id)) {
         setOffer(row)
       }
       if (row.status === 'searching' || row.status === 'offered') {
-        if (!online) return
+        if (!onShiftRef.current) return
         if (!offerVisibleToDriver(row, driverId)) return
         if (isUnpaidAirportDepositTrip(row)) return
         if (passedOffers.current.has(row.id)) return
@@ -479,11 +486,11 @@ function DriverShell({ driverId }) {
 
   async function acceptOffer() {
     if (!approved) return
-    if (!online) {
+    if (!canReceiveOffers({ onShift: online, approved })) {
       pushToast({
         kind: 'system',
-        title: 'Go online first',
-        body: 'Turn the ON switch on before accepting a ride.',
+        title: 'Start a shift first',
+        body: 'Start your shift before accepting a ride.',
       })
       return
     }
@@ -554,14 +561,44 @@ function DriverShell({ driverId }) {
   }
 
   const futureMine = scheduledMine.filter((trip) => !isDueNow(trip))
+  async function setShift(next) {
+    if (!driverId || shiftBusy) return
+    const change = next ? startShift() : stopShift({ trip: activeTrip })
+    const previous = onShiftRef.current
+    const nextOnline = Boolean(change.presence.online)
+    onShiftRef.current = nextOnline
+    setShiftBusy(true)
+    try {
+      await setDriverOnline(driverId, change.presence.online)
+      setOnline(nextOnline)
+      if (!nextOnline) {
+        setOffer(null)
+        setScheduledOpen([])
+      } else {
+        loadScheduled()
+      }
+    } catch (err) {
+      onShiftRef.current = previous
+      pushToast({
+        kind: 'system',
+        title: 'Could not change your shift',
+        body: err.message || 'Try again.',
+      })
+    } finally {
+      setShiftBusy(false)
+    }
+  }
+
   const scheduledLists = (withEmpty) => (
     <>
+      {online && (
       <ScheduledRideQueue
         rides={scheduledOpen}
         acceptingId={acceptingScheduledId}
         onAccept={acceptScheduled}
         emptyHint={withEmpty ? 'No scheduled rides waiting. Weekend and party airport or campus pickups show up here after a rider confirms a time.' : undefined}
       />
+      )}
       <ScheduledRideQueue
         rides={futureMine}
         title="Your upcoming"
@@ -687,7 +724,8 @@ function DriverShell({ driverId }) {
     return <DriverApprovalGate application={application} />
   }
 
-  const showIdle = !offer && !activeTrip
+  const shownOffer = visibleOffer({ onShift: online, offer, activeTrip })
+  const showIdle = !shownOffer && !activeTrip
   const headingToPickup = Boolean(activeTrip) && ['accepted', 'arriving', 'arrived'].includes(activeTrip.status)
   const scheduledNotDone = Boolean(activeTrip?.pickup_at) && activeTrip.status !== 'completed'
   const driverFix = selfPos ? { lat: selfPos[0], lng: selfPos[1] } : null
@@ -797,7 +835,6 @@ function DriverShell({ driverId }) {
                       lat: next[0],
                       lng: next[1],
                       heading: pos.coords.heading,
-                      online,
                     }).catch(() => {})
                   }
                 },
@@ -821,42 +858,15 @@ function DriverShell({ driverId }) {
             ◎
           </button>
         )}
-        <button
-          type="button"
-          className="pressable"
-          onClick={() => {
-            if (!driverId || !approved) return
-            const next = !online
-            setDriverOnline(driverId, next)
-              .then(() => setOnline(next))
-              .catch((err) => {
-                pushToast({
-                  kind: 'system',
-                  title: 'Could not change online status',
-                  body: err.message || 'Try again.',
-                })
-              })
-          }}
-          style={{
-            width: 44,
-            height: 44,
-            borderRadius: '50%',
-            background: 'rgba(255,255,255,0.72)',
-            boxShadow: 'var(--shadow-pill)',
-            display: 'grid',
-            placeItems: 'center',
-            fontSize: 12,
-            fontWeight: 700,
-            backdropFilter: 'blur(18px) saturate(1.4)',
-            WebkitBackdropFilter: 'blur(18px) saturate(1.4)',
-            border: '1px solid rgba(255,255,255,0.55)',
-            color: online ? 'var(--success)' : 'var(--ink-tertiary)',
-          }}
-          title={online ? 'Go offline' : 'Go online'}
-          aria-pressed={online}
-        >
-          {online ? 'ON' : 'OFF'}
-        </button>
+        {(shownOffer || activeTrip) && (
+          <DriverShiftControl
+            compact
+            onShift={online}
+            busy={shiftBusy}
+            onStart={() => setShift(true)}
+            onStop={() => setShift(false)}
+          />
+        )}
       </div>
 
       
@@ -917,24 +927,17 @@ function DriverShell({ driverId }) {
         >
           <div className="sheet-handle" />
           {scheduledLists(true)}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
-            <span
-              className="driver-online-dot"
-              style={{
-                width: 10,
-                height: 10,
-                borderRadius: '50%',
-                background: online ? 'var(--success)' : 'var(--ink-tertiary)',
-                boxShadow: online ? '0 0 0 3px rgba(31,138,76,0.2)' : 'none',
-              }}
-            />
-            <span style={{ fontWeight: 600, fontSize: 18 }}>{online ? "You're online" : "You're offline"}</span>
-          </div>
+          <DriverShiftControl
+            onShift={online}
+            busy={shiftBusy}
+            onStart={() => setShift(true)}
+            onStop={() => setShift(false)}
+          />
+          {online && (
           <p style={{ fontSize: 13, color: 'var(--ink-secondary)', marginBottom: 12 }}>
-            {online
-              ? 'Looking for rides in Clemson. Carpool offers pay more than a solo trip — take those first.'
-              : 'Tap ON to receive ride offers. An approved driver only sees requests while this screen is online.'}
+            Carpool offers pay more than a solo trip — take those first.
           </p>
+          )}
           <div style={{
             marginBottom: 12,
             padding: 12,
@@ -1077,7 +1080,7 @@ function DriverShell({ driverId }) {
         </div>
       )}
 
-      {offer && !activeTrip && (
+      {shownOffer && (
         <div
           className="sheet glass-panel--elevated"
           style={{
@@ -1162,6 +1165,11 @@ function DriverShell({ driverId }) {
               LIVE TRIP
             </div>
           </div>
+          <p className="driver-shift__copy" style={{ marginTop: 8 }}>
+            {online
+              ? 'Stop shift ends new offers. This trip keeps going.'
+              : 'You are off the clock. This trip is still active.'}
+          </p>
           <div style={{ marginTop: 10 }}>
             {/* TODO: road tiles and a traffic ETA need a billed Maps key. This card uses coordinates already on the trip. */}
             {locationError && <div role="status">{locationError} <button type="button" onClick={() => setLocationAttempt((n) => n + 1)}>Retry location</button></div>}

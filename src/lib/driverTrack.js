@@ -1,4 +1,5 @@
 import { createTrackingRefresh, onTrackingResume } from '../../packages/rides-native/tracking.js'
+import { locationFields } from './driverShift.js'
 import { supabase } from './supabase'
 
 /** Subscribe to a driver's live lat/lng from driver_status. Returns unsubscribe. */
@@ -60,17 +61,19 @@ export function subscribeDriverStatus(driverId, onUpdate, onError) {
 }
 
 /** Push the driver's own GPS into driver_status (throws when the write fails). */
-export async function publishDriverLocation(driverId, { lat, lng, heading = null, online = true }) {
+export async function publishDriverLocation(driverId, fix) {
   if (!supabase || !driverId) return
+  const { lat, lng, heading, online } = locationFields(fix)
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) return
-  const { error } = await supabase.from('driver_status').upsert({
+  const row = {
     driver_id: driverId,
     lat,
     lng,
     heading,
-    online: Boolean(online),
     updated_at: new Date().toISOString(),
     location_updated_at: new Date().toISOString(),
-  })
+  }
+  if (typeof online === 'boolean') row.online = online
+  const { error } = await supabase.from('driver_status').upsert(row)
   if (error) throw new Error(error.message)
 }
