@@ -7,3 +7,9 @@ export function startLocationPublisher<T>(options: {
 }): () => void
 
 export function withTrackingTimeout<T>(promise: PromiseLike<T>, timeoutMs?: number): Promise<T>
+
+export function createTrackingRefresh<T>(options: {
+  load: () => PromiseLike<T>; onData: (data: T) => void;
+  onError: (error: unknown | null) => void; timeoutMs?: number;
+}): { refresh: (recover?: boolean) => Promise<void>; stop: () => void }
+export function onTrackingResume(resume: () => void): () => void

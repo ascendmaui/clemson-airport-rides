@@ -75,3 +75,64 @@ test('hung upload reports failure and never acknowledges a late write', async (t
   assert.deepEqual(fixes, [])
   stop()
 })
+
+import { createTrackingRefresh } from './tracking.js'
+test('resume supersedes a hung read and ignores its late result', async () => {
+  const reads = [], data = [], errors = []
+  const reader = createTrackingRefresh({
+    load: () => new Promise((resolve) => reads.push(resolve)),
+    onData: (value) => data.push(value), onError: (error) => errors.push(error),
+  })
+  const first = reader.refresh(); await flush()
+  await reader.refresh(); assert.equal(reads.length, 1)
+  const recovery = reader.refresh(true); await flush()
+  reads[1]({ status: 'completed', route: 'new' }); await recovery
+  reads[0]({ status: 'in_progress', route: 'old' }); await first
+  assert.deepEqual(data, [{ status: 'completed', route: 'new' }])
+  assert.deepEqual(errors, [null])
+  reader.stop()
+})
+test('read timeout retries and cleanup rejects late results', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] })
+  const reads = [], data = [], errors = []
+  const reader = createTrackingRefresh({
+    load: () => new Promise((resolve) => reads.push(resolve)),
+    onData: (value) => data.push(value), onError: (error) => errors.push(error),
+  })
+  const first = reader.refresh(); await flush()
+  t.mock.timers.tick(15000); await first
+  assert.match(errors[0].message, /timed out/)
+  const second = reader.refresh(); await flush()
+  reads[1]('fresh'); await second
+  assert.deepEqual(data, ['fresh']); assert.equal(errors.at(-1), null)
+  const third = reader.refresh(); await flush()
+  reader.stop(); reads[2]('unmounted'); await third
+  reads[0]('obsolete'); await flush()
+  assert.deepEqual(data, ['fresh'])
+  await reader.refresh(true); assert.equal(reads.length, 3)
+})
+
+import { onTrackingResume } from './tracking.js'
+test('browser recovery responds to foreground and online, and removes listeners', (t) => {
+  const windowTarget = new EventTarget(), documentTarget = new EventTarget()
+  documentTarget.hidden = true
+  const originalWindow = Object.getOwnPropertyDescriptor(globalThis, 'window')
+  const originalDocument = Object.getOwnPropertyDescriptor(globalThis, 'document')
+  Object.defineProperty(globalThis, 'window', { configurable: true, value: windowTarget })
+  Object.defineProperty(globalThis, 'document', { configurable: true, value: documentTarget })
+  t.after(() => {
+    if (originalWindow) Object.defineProperty(globalThis, 'window', originalWindow)
+    else delete globalThis.window
+    if (originalDocument) Object.defineProperty(globalThis, 'document', originalDocument)
+    else delete globalThis.document
+  })
+  let calls = 0
+  const stop = onTrackingResume(() => calls++)
+  windowTarget.dispatchEvent(new Event('online')); assert.equal(calls, 0)
+  documentTarget.hidden = false
+  documentTarget.dispatchEvent(new Event('visibilitychange'))
+  windowTarget.dispatchEvent(new Event('online')); assert.equal(calls, 2)
+  stop()
+  documentTarget.dispatchEvent(new Event('visibilitychange'))
+  windowTarget.dispatchEvent(new Event('online')); assert.equal(calls, 2)
+})
