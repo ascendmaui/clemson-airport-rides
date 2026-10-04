@@ -1,0 +1,209 @@
+/**
+ * Four-channel driver offer alerts.
+ * Channels, and no others: in_app, push, sms, email.
+ *
+ * in_app is the existing driver-screen chime. It plays only while that screen
+ * is open, so this module records the channel and does not play audio.
+ * push has a stored Expo token path and no server sender.
+ * sms has no sender in this repo.
+ * email uses the existing Resend helper only when DRIVER_OFFER_ALERT_EMAIL=send.
+ * Any other value, including unset, records a no-send result and does not call Resend.
+ */
+import { sendApplicantNotice } from './applicantMail.js'
+import { quietFromPrefs } from '../src/lib/quietHours.js'
+
+export const DRIVER_OFFER_ALERT_CHANNELS = Object.freeze(['in_app', 'push', 'sms', 'email'])
+
+function assertChannel(channel) {
+  switch (channel) {
+    case 'in_app':
+    case 'push':
+    case 'sms':
+    case 'email':
+      return channel
+    default: {
+      const unknown = channel
+      throw new Error(`Unknown offer alert channel: ${String(unknown)}`)
+    }
+  }
+}
+
+function minutesInNewYork(now) {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/New_York',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(now)
+  const hour = Number(parts.find((part) => part.type === 'hour')?.value)
+  const minute = Number(parts.find((part) => part.type === 'minute')?.value)
+  const normalizedHour = hour === 24 ? 0 : hour
+  if (!Number.isFinite(normalizedHour) || !Number.isFinite(minute)) return 0
+  return normalizedHour * 60 + minute
+}
+
+function toMinutes(hhmmValue) {
+  const [h, m] = String(hhmmValue).split(':').map((n) => Number(n))
+  if (!Number.isFinite(h) || !Number.isFinite(m)) return 0
+  return h * 60 + m
+}
+
+/** Quiet hours follow Clemson local time, not the server's UTC clock. */
+export function isQuietForDriverOffer(prefs, now = new Date()) {
+  const quiet = quietFromPrefs(prefs)
+  if (quiet.dnd) return true
+  if (!quiet.scheduleEnabled) return false
+  const mins = minutesInNewYork(now)
+  const start = toMinutes(quiet.start)
+  const end = toMinutes(quiet.end)
+  if (start === end) return true
+  if (start < end) return mins >= start && mins < end
+  return mins >= start || mins < end
+}
+
+export function offerAlertCopy(trip) {
+  const pickup = String(trip?.pickup_label || '').trim() || 'Pickup'
+  const dropoff = String(trip?.dropoff_label || '').trim() || 'Drop-off'
+  return {
+    title: 'New ride request',
+    body: `${pickup} → ${dropoff}`,
+  }
+}
+
+function suppressedPlan(reason) {
+  const channels = {}
+  for (const channel of DRIVER_OFFER_ALERT_CHANNELS) {
+    channels[assertChannel(channel)] = { sent: false, reason }
+  }
+  return channels
+}
+
+export function buildOfferAlertPlan({
+  suppressed = null,
+  pushTokenPresent = false,
+  phoneOnFile = false,
+  emailOnFile = false,
+} = {}) {
+  if (suppressed) return suppressedPlan(suppressed)
+  const channels = {
+    in_app: { sent: false, reason: 'open_driver_screen_only' },
+    push: {
+      sent: false,
+      reason: pushTokenPresent ? 'push_sender_missing' : 'push_token_missing',
+      tokenPresent: Boolean(pushTokenPresent),
+    },
+    sms: { sent: false, reason: 'sms_provider_missing', phoneOnFile: Boolean(phoneOnFile) },
+    email: { sent: false, reason: emailOnFile ? 'live_send_disabled' : 'driver_email_missing' },
+  }
+  for (const channel of DRIVER_OFFER_ALERT_CHANNELS) assertChannel(channel)
+  return channels
+}
+
+function liveEmailEnabled() {
+  return (process.env.DRIVER_OFFER_ALERT_EMAIL || '').trim() === 'send'
+}
+
+async function deliverEmail({ to, subject, text }, deps) {
+  if (!liveEmailEnabled()) return { sent: false, reason: 'live_send_disabled' }
+  if (!to) return { sent: false, reason: 'driver_email_missing' }
+  const send = deps.sendEmail || sendApplicantNotice
+  const result = await send({ to, subject, text })
+  if (result?.emailed) return { sent: true, reason: null }
+  return { sent: false, reason: 'email_provider_skipped' }
+}
+
+function tokenPresent(statusRow, tokenRow) {
+  const statusToken = String(statusRow?.expo_push_token || '').trim()
+  const tableToken = String(tokenRow?.token || '').trim()
+  return Boolean(statusToken || tableToken)
+}
+
+async function loadDriverContact(sb, driverId) {
+  const profile = await sb.from('profiles').select('email, phone, notification_prefs').eq('id', driverId).maybeSingle()
+  const status = await sb.from('driver_status').select('expo_push_token').eq('driver_id', driverId).maybeSingle()
+  const token = await sb.from('driver_push_tokens').select('token, platform').eq('driver_id', driverId).maybeSingle()
+  return {
+    email: String(profile.data?.email || '').trim(),
+    phoneOnFile: Boolean(String(profile.data?.phone || '').trim()),
+    prefs: profile.data?.notification_prefs || null,
+    pushTokenPresent: tokenPresent(status.data, token.data),
+    error: profile.error || status.error || token.error || null,
+  }
+}
+
+async function existingAlert(sb, tripId, driverId, offerMarker) {
+  const prior = await sb.from('driver_offer_alerts')
+    .select('channels')
+    .eq('trip_id', tripId)
+    .eq('driver_id', driverId)
+    .eq('offer_marker', offerMarker)
+    .maybeSingle()
+  if (prior.error || !prior.data?.channels) return null
+  return prior.data.channels
+}
+
+export async function dispatchDriverOfferAlert(sb, {
+  trip,
+  driverId,
+  offerMarker,
+  now = new Date(),
+} = {}, deps = {}) {
+  const tripId = trip?.id
+  if (!sb || !tripId || !driverId || !offerMarker) {
+    return { ok: false, reason: 'alert_target_missing', channels: null }
+  }
+
+  const stored = await existingAlert(sb, tripId, driverId, offerMarker)
+  if (stored) {
+    return { ok: true, tripId, driverId, offerMarker, channels: stored, recorded: true, duplicate: true }
+  }
+
+  const contact = await loadDriverContact(sb, driverId)
+  let suppressed = null
+  if (contact.prefs && contact.prefs.ride === false) suppressed = 'ride_alerts_off'
+  else if (isQuietForDriverOffer(contact.prefs, now)) suppressed = 'quiet_hours'
+
+  const channels = buildOfferAlertPlan({
+    suppressed,
+    pushTokenPresent: contact.pushTokenPresent,
+    phoneOnFile: contact.phoneOnFile,
+    emailOnFile: Boolean(contact.email),
+  })
+
+  if (!suppressed && contact.email) {
+    const copy = offerAlertCopy(trip)
+    channels.email = await deliverEmail({
+      to: contact.email,
+      subject: copy.title,
+      text: `${copy.body}\nOpen the driver screen to accept or pass.`,
+    }, deps)
+  }
+
+  const alerts = sb.from('driver_offer_alerts')
+  const inserted = typeof alerts.insert === 'function'
+    ? await alerts.insert({
+      trip_id: tripId,
+      driver_id: driverId,
+      offer_marker: offerMarker,
+      channels,
+    })
+    : { error: { message: 'driver_offer_alerts insert is unavailable' } }
+  return {
+    ok: true,
+    tripId,
+    driverId,
+    offerMarker,
+    channels,
+    recorded: !inserted?.error,
+    duplicate: false,
+  }
+}
+
+export async function notifyDriverOffer(sb, input, deps) {
+  try {
+    return await dispatchDriverOfferAlert(sb, input, deps)
+  } catch (err) {
+    console.error('[driver-offer-alert]', err?.message || err)
+    return { ok: false, reason: 'alert_failed', channels: null }
+  }
+}

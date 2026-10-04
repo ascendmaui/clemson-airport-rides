@@ -22,6 +22,7 @@ import {
 import { receivableDriverIds } from '../driverApproval.js'
 import { listAssignableDrivers } from '../autoAssign.js'
 import { insertTripEvent } from '../tripEvents.js'
+import { notifyDriverOffer } from '../driverOfferAlerts.js'
 
 async function serverDistance(origin, dest) {
   if (origin?.lat == null || dest?.lat == null) return { distanceM: null, durationS: null, polyline: null }
@@ -211,6 +212,17 @@ export default async function handler(req, res, deps = {}) {
   const inserted = await sb.from('trips').insert(row).select('id, status, driver_id, dropoff_label, fare_cents, deposit_cents').single()
   if (inserted.error || !inserted.data) {
     return json(res, 500, { error: inserted.error?.message || 'Could not request trip' })
+  }
+  if (offerDriverId) {
+    await notifyDriverOffer(sb, {
+      trip: {
+        id: inserted.data.id,
+        pickup_label: row.pickup_label,
+        dropoff_label: row.dropoff_label,
+      },
+      driverId: offerDriverId,
+      offerMarker: 'initial',
+    }, deps)
   }
   const { error: eventError } = await insertTripEvent(sb, {
     trip_id: inserted.data.id,
