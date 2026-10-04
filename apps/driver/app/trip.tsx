@@ -1,6 +1,7 @@
+import { createTrackingRefresh } from 'rides-native/tracking'
 import { useLocalSearchParams, useRouter } from 'expo-router'
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { AppState, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { CampusMap, type MapPin } from '@/components/CampusMap'
 import { FarePanel } from '@/components/FarePanel'
@@ -51,18 +52,8 @@ export default function TripScreen() {
   const [person, setPerson] = useState<CounterpartView | null>(null)
   const partyColors = partyColorsFromPalette(colors)
 
-  const refresh = useCallback(async () => {
-    if (!supabase || !id) return
-    const row = await loadTrip(supabase, id, user?.id)
-    setTrip(row)
-    if (row?.riderLat != null && row.riderLng != null) {
-      setRider({ latitude: row.riderLat, longitude: row.riderLng })
-    }
-  }, [id, user?.id])
-
-  useEffect(() => {
-    refresh().catch((err: unknown) => setError(err instanceof Error ? err.message : 'Could not load this trip'))
-  }, [refresh])
+  const readerRef = useRef<ReturnType<typeof createTrackingRefresh> | null>(null)
+  const refresh = useCallback(() => readerRef.current?.refresh(true) ?? Promise.resolve(), [])
 
   useEffect(() => {
     if (!supabase || !user || !trip?.riderId) {
@@ -85,27 +76,40 @@ export default function TripScreen() {
   }, [trip?.id, trip?.status, trip?.riderId, user?.id])
 
   useEffect(() => {
-    if (!supabase) return undefined
-    const pull = () => refresh().catch((err: unknown) => setError(err instanceof Error ? err.message : 'Could not refresh trip. Retrying automatically.'))
+    if (!supabase || !id) return undefined
+    const reader = createTrackingRefresh({
+      load: () => loadTrip(supabase, id, user?.id),
+      onData: (row) => {
+        setTrip(row)
+        setRider(row?.riderLat != null && row.riderLng != null
+          ? { latitude: row.riderLat, longitude: row.riderLng } : null)
+      },
+      onError: (err) => setError(err ? (err instanceof Error ? err.message : 'Could not refresh trip. Retrying automatically.') : null),
+    })
+    readerRef.current = reader
+    const pull = () => reader.refresh()
+    void pull()
+    const listener = AppState.addEventListener('change', (state) => {
+      if (state === 'active') void reader.refresh(true)
+    })
     const unsubscribe = subscribeTrips(supabase, pull)
     const timer = setInterval(pull, 5000)
-    return () => { unsubscribe(); clearInterval(timer) }
-  }, [refresh])
+    return () => { reader.stop(); readerRef.current = null; listener.remove(); unsubscribe(); clearInterval(timer) }
+  }, [refresh, id, user?.id])
 
   useEffect(() => {
-    if (!supabase || !id || !trip || trip.status === 'completed' || trip.status === 'canceled') return undefined
-    let alive = true
-    const pull = () => {
-      loadRiderFix(supabase, id).then((fix) => {
-        if (alive && fix) setRider({ latitude: fix.latitude, longitude: fix.longitude })
-      }).catch(() => {})
-    }
-    pull()
-    const timer = setInterval(pull, 5000)
-    return () => {
-      alive = false
-      clearInterval(timer)
-    }
+    if (!supabase || !id || !trip || trip.status === 'completed' || trip.status === 'canceled' || trip.status === 'cancelled_wait') return undefined
+    const reader = createTrackingRefresh({
+      load: () => loadRiderFix(supabase, id),
+      onData: (fix) => setRider(fix ? { latitude: fix.latitude, longitude: fix.longitude } : null),
+      onError: () => {},
+    })
+    void reader.refresh()
+    const listener = AppState.addEventListener('change', (state) => {
+      if (state === 'active') void reader.refresh(true)
+    })
+    const timer = setInterval(() => void reader.refresh(), 5000)
+    return () => { reader.stop(); listener.remove(); clearInterval(timer) }
   }, [id, trip?.status])
 
   const locationTracking = useDriverLocation(Boolean(user && trip && trip.status !== 'completed' && trip.status !== 'canceled' && trip.status !== 'cancelled_wait'), async (fix) => {

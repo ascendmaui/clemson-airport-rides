@@ -45,7 +45,7 @@ export function subscribeLiveTrip(tripId: string, driverId: string | null, onCha
       () => onChange(),
     )
   }
-  channel.subscribe()
+  channel.subscribe((status) => { if (status === 'SUBSCRIBED') onChange() })
   return () => {
     void client.removeChannel(channel)
   }

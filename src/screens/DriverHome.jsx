@@ -1,4 +1,4 @@
-import { startLocationPublisher } from '../../packages/rides-native/tracking.js'
+import { startLocationPublisher, onTrackingResume, createTrackingRefresh } from '../../packages/rides-native/tracking.js'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useAuth } from '../lib/auth'
 import { CampusMap, CLEMSON } from '../components/CampusMap'
@@ -251,9 +251,8 @@ function DriverShell({ driverId }) {
       onFix: (pos) => setSelfPos([pos.coords.latitude, pos.coords.longitude]),
       onError: setLocationError,
     })
-    const resume = () => { if (!document.hidden) setLocationAttempt((n) => n + 1) }
-    document.addEventListener('visibilitychange', resume)
-    return () => { stop(); document.removeEventListener('visibilitychange', resume) }
+    const offResume = onTrackingResume(() => setLocationAttempt((n) => n + 1))
+    return () => { stop(); offResume() }
   }, [driverId, approved, activeTrip?.id, online, presenceReady, locationAttempt])
 
   useEffect(() => {
@@ -390,30 +389,26 @@ function DriverShell({ driverId }) {
       setActiveChecked(true)
       return undefined
     }
-    let alive = true
-    async function loadActive() {
-      const { data, error } = await supabase
-        .from('trips')
-        .select('*')
-        .eq('driver_id', driverId)
-        .in('status', ACTIVE_STATUSES)
-        .order('accepted_at', { ascending: false })
-        .limit(8)
-      if (!alive || error) return
-      const row = (data || []).find((trip) => isDueNow(trip))
-      if (row) {
+    const reader = createTrackingRefresh({
+      load: async () => {
+        const { data, error } = await supabase.from('trips').select('*')
+          .eq('driver_id', driverId).in('status', ACTIVE_STATUSES)
+          .order('accepted_at', { ascending: false }).limit(8)
+        if (error) throw error
+        return (data || []).find((trip) => isDueNow(trip)) || null
+      },
+      onData: (row) => {
         offerRevision.current += 1
         setActiveTrip(row)
-        setOffer((prev) => (prev?.id === row.id ? null : prev))
-      }
-      setActiveChecked(true)
-    }
-    loadActive()
-    const timer = setInterval(loadActive, 8000)
-    return () => {
-      alive = false
-      clearInterval(timer)
-    }
+        if (row) setOffer((prev) => (prev?.id === row.id ? null : prev))
+        setActiveChecked(true)
+      },
+      onError: () => {},
+    })
+    void reader.refresh()
+    const timer = setInterval(() => void reader.refresh(), 8000)
+    const offResume = onTrackingResume(() => void reader.refresh(true))
+    return () => { reader.stop(); offResume(); clearInterval(timer) }
   }, [driverId])
 
   useEffect(() => {

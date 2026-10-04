@@ -1,4 +1,4 @@
-import { trackingIssue, withTrackingTimeout } from '../../packages/rides-native/tracking.js'
+import { trackingIssue, withTrackingTimeout, onTrackingResume } from '../../packages/rides-native/tracking.js'
 import { useEffect, useRef, useState } from 'react'
 import { PrimaryButton } from '../components/PrimaryButton'
 import { AccessibleAlert } from '../components/AccessibleAlert'
@@ -47,6 +47,11 @@ export function Requested({ dest = 'GSP Airport', trip = '', driver = 'your driv
   const ratedCheck = useRef(false)
   const reconciledSessions = useRef(new Set())
 
+  useEffect(() => onTrackingResume(() => {
+    setTrackingNow(Date.now())
+    setTrackingAttempt((n) => n + 1)
+  }), [])
+
   useEffect(() => () => { stopRef.current?.() }, [])
 
   useEffect(() => {
@@ -80,16 +85,17 @@ export function Requested({ dest = 'GSP Airport', trip = '', driver = 'your driv
         return
       }
       setTripMissing(false)
+      setError((previous) => previous === 'Could not refresh trip status. Retrying automatically.' ? null : previous)
       let row = data
       const meta = data.metadata && typeof data.metadata === 'object' ? data.metadata : {}
       const hasStops = Array.isArray(data.stops) && data.stops.length > 0
       if (!hasStops && meta.friend_ride_id) {
         try {
-          const { data: ride, error: rideError } = await supabase
+          const { data: ride, error: rideError } = await withTrackingTimeout(supabase
             .from('friend_rides')
             .select('stops, kind, status')
             .eq('id', meta.friend_ride_id)
-            .maybeSingle()
+            .maybeSingle())
           if (!rideError && ride && Array.isArray(ride.stops) && ride.stops.length) {
             row = {
               ...data,
@@ -140,7 +146,7 @@ export function Requested({ dest = 'GSP Airport', trip = '', driver = 'your driv
       clearInterval(timer)
       supabase.removeChannel(channel)
     }
-  }, [trip, user?.id, paid, sessionId])
+  }, [trip, user?.id, paid, sessionId, trackingAttempt])
 
   useEffect(() => {
     if (!resolvedDriverId || ['completed', 'canceled', 'cancelled_wait'].includes(tripRow?.status)) return undefined

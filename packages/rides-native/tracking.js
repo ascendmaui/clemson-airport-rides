@@ -54,3 +54,37 @@ export async function withTrackingTimeout(promise, timeoutMs = 15000) {
     ])
   } finally { clearTimeout(timer) }
 }
+
+/** Latest recovery wins; routine polls coalesce, resume supersedes a hung read. */
+export function createTrackingRefresh({ load, onData, onError, timeoutMs = 15000 }) {
+  let generation = 0
+  let pending = false
+  let stopped = false
+  return {
+    async refresh(recover = false) {
+      if (stopped || (pending && !recover)) return
+      const request = ++generation
+      pending = true
+      try {
+        const data = await withTrackingTimeout(Promise.resolve().then(load), timeoutMs)
+        if (!stopped && request === generation) { onData(data); onError(null) }
+      } catch (error) {
+        if (!stopped && request === generation) onError(error)
+      } finally {
+        if (request === generation) pending = false
+      }
+    },
+    stop() { stopped = true; generation++; pending = false },
+  }
+}
+
+/** Browser foreground and network recovery; callers own the refresh lifetime. */
+export function onTrackingResume(resume) {
+  const visible = () => { if (!document.hidden) resume() }
+  window.addEventListener('online', visible)
+  document.addEventListener('visibilitychange', visible)
+  return () => {
+    window.removeEventListener('online', visible)
+    document.removeEventListener('visibilitychange', visible)
+  }
+}

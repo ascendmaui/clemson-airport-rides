@@ -2,7 +2,7 @@ import { trackingIssue, withTrackingTimeout } from 'rides-native/tracking'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useEffect, useRef, useState } from 'react'
 import { reconcileCheckout } from 'rides-native/riderMoney.js'
-import { AccessibilityInfo, Animated, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native'
+import { AppState, AccessibilityInfo, Animated, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { PrimaryButton } from '@/components/Button'
 import { useEnterMotion } from '@/components/enter'
@@ -114,8 +114,8 @@ export default function Requested() {
   const mapRequest = useRef(0)
   const mapPending = useRef(false)
   useEffect(() => () => { mapRequest.current++; mapPending.current = false }, [tripId])
-  async function reloadMap() {
-    if (!tripId || mapPending.current) return
+  async function reloadMap(recover = false) {
+    if (!tripId || (mapPending.current && !recover)) return
     mapPending.current = true
     const request = ++mapRequest.current
     try {
@@ -148,10 +148,14 @@ export default function Requested() {
     const unsub = subscribeLiveTrip(tripId, live?.driver_id || null, () => {
       void reloadMap()
     })
+    const listener = AppState.addEventListener('change', (state) => {
+      if (state === 'active') { setTrackingNow(Date.now()); void reloadMap(true) }
+    })
     const id = setInterval(() => {
       void reloadMap()
     }, 5000)
     return () => {
+      listener.remove()
       unsub()
       clearInterval(id)
     }
@@ -325,7 +329,7 @@ export default function Requested() {
             <CounterpartCard person={person} colors={partyColorsFromPalette(colors)} />
             {ttlCanceled ? null : (
               <>
-              {locationIssue ? <View accessibilityLiveRegion="polite"><Text style={{ color: colors.title }}>{locationIssue}</Text><Pressable accessibilityRole="button" onPress={() => void reloadMap()}><Text style={{ color: colors.title }}>Retry tracking</Text></Pressable></View> : null}
+              {locationIssue ? <View accessibilityLiveRegion="polite"><Text style={{ color: colors.title }}>{locationIssue}</Text><Pressable accessibilityRole="button" onPress={() => void reloadMap(true)}><Text style={{ color: colors.title }}>Retry tracking</Text></Pressable></View> : null}
               <LivePhase
                 kicker={phase.kicker}
                 title=""

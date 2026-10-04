@@ -1,4 +1,4 @@
-import { withTrackingTimeout } from '../../packages/rides-native/tracking.js'
+import { createTrackingRefresh, onTrackingResume } from '../../packages/rides-native/tracking.js'
 import { supabase } from './supabase'
 
 /** Subscribe to a driver's live lat/lng from driver_status. Returns unsubscribe. */
@@ -20,28 +20,21 @@ export function subscribeDriverStatus(driverId, onUpdate, onError) {
     })
   }
 
-  let pulling = false
-  async function pull() {
-    if (pulling || !alive) return
-    pulling = true
-    try {
-      const { data, error } = await withTrackingTimeout(supabase
-        .from('driver_status')
+  const reader = createTrackingRefresh({
+    load: async () => {
+      const { data, error } = await supabase.from('driver_status')
         .select('driver_id, lat, lng, heading, online, updated_at, location_updated_at')
-        .eq('driver_id', driverId)
-        .maybeSingle())
+        .eq('driver_id', driverId).maybeSingle()
       if (error) throw error
-      if (alive) onError?.(null)
-      emit(data)
-    } catch {
-      if (alive) onError?.('Could not refresh driver location. Retrying automatically.')
-    } finally {
-      pulling = false
-    }
-  }
-
-  pull()
+      return data
+    },
+    onData: emit,
+    onError: (error) => onError?.(error ? 'Could not refresh driver location. Retrying automatically.' : null),
+  })
+  const pull = () => reader.refresh()
+  void pull()
   const poll = setInterval(pull, 4000)
+  const offResume = onTrackingResume(() => void reader.refresh(true))
 
   const channel = supabase
     .channel(`driver-status-${driverId}`)
@@ -53,12 +46,14 @@ export function subscribeDriverStatus(driverId, onUpdate, onError) {
         table: 'driver_status',
         filter: `driver_id=eq.${driverId}`,
       },
-      (payload) => emit(payload.new || payload.record),
+      () => void pull(),
     )
-    .subscribe()
+    .subscribe((status) => { if (status === 'SUBSCRIBED') void reader.refresh(true) })
 
   return () => {
     alive = false
+    reader.stop()
+    offResume()
     clearInterval(poll)
     supabase.removeChannel(channel)
   }
