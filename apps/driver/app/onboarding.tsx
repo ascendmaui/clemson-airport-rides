@@ -1,4 +1,4 @@
-import { useFocusEffect, useRouter } from 'expo-router'
+import { Redirect, useFocusEffect, useRouter } from 'expo-router'
 import * as DocumentPicker from 'expo-document-picker'
 import * as ImagePicker from 'expo-image-picker'
 import { useCallback, useEffect, useMemo, useState } from 'react'
@@ -176,8 +176,10 @@ export default function OnboardingScreen() {
 
   const refresh = useCallback(async () => {
     if (!user || !supabase) return
-    const [next, profile, vehicle] = await Promise.all([
-      loadOnboarding(supabase, user.id),
+    const next = await loadOnboarding(supabase, user.id)
+    setBundle(next)
+    if (next.application?.onboarding_status === 'approved') return
+    const [profile, vehicle] = await Promise.all([
       loadDriverProfile(supabase, user.id).catch(() => null),
       loadVehicle(supabase, user.id).catch(() => null),
     ])
@@ -497,6 +499,18 @@ export default function OnboardingScreen() {
       </View>
     )
   }
+
+  if (!bundle) {
+    return (
+      <View style={[styles.screen, { paddingTop: insets.top + 12 }]}>
+        <BackButton onPress={() => router.back()} />
+        <Text style={styles.title}>{error ? 'Could not load your application' : 'Loading your application…'}</Text>
+        {error ? <ErrorText>{error}</ErrorText> : null}
+      </View>
+    )
+  }
+
+  if (status === 'approved') return <Redirect href="/(tabs)" />
 
   return (
     <View style={[styles.screen, { paddingTop: insets.top + 8 }]}>

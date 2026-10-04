@@ -147,10 +147,13 @@ export default function DriverHome() {
   const refresh = useCallback(async () => {
     if (!user || !supabase) return
     const application = await fetchDriverApplication(supabase, user.id)
+    if (application.error) {
+      setError(application.error)
+      return
+    }
     const nextStatus = application.application?.onboarding_status || 'none'
     setStatus(nextStatus)
     setReason(application.application?.rejection_reason || null)
-    if (application.error) setError(application.error)
     const currentGate = driverGateView(nextStatus, {
       rejectionReason: application.application?.rejection_reason || null,
     })

@@ -192,8 +192,11 @@ export function DriverOnboarding() {
     let alive = true
     ;(async () => {
       try {
-        const [app, documents, profileRes, vehicleRes, tax, signed, version] = await Promise.all([
-          fetchMyDriverApplication(user.id),
+        const app = await fetchMyDriverApplication(user.id)
+        if (!alive) return
+        setApplication(app)
+        if (app?.onboarding_status === 'approved') return
+        const [documents, profileRes, vehicleRes, tax, signed, version] = await Promise.all([
           fetchMyDriverDocuments(user.id).catch(() => []),
           supabase
             ? supabase.from('profiles').select('full_name, phone').eq('id', user.id).maybeSingle()

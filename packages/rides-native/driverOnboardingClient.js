@@ -145,8 +145,13 @@ export async function replyApplicantInbox(supabase, body) {
 }
 
 export async function loadOnboarding(supabase, userId) {
-  const [application, documents, tax, agreement] = await Promise.all([
-    fetchMyDriverApplication(supabase, userId),
+  const application = await fetchMyDriverApplication(supabase, userId)
+  if (application?.onboarding_status === 'approved') {
+    const ctx = { status: 'approved' }
+    return { application, documents: [], tax: null, agreement: null, ctx,
+      stepId: 'review', blockers: [], progress: progressSnapshot(ctx) }
+  }
+  const [documents, tax, agreement] = await Promise.all([
     fetchMyDriverDocuments(supabase, userId),
     fetchMyTaxProfile(supabase, userId),
     fetchMyAgreement(supabase, userId),
@@ -528,6 +533,9 @@ export async function signDriverAgreement(supabase, signatureName, extras = {}) 
 
 async function submitDriverReviewDirect(supabase, userId) {
   const bundle = await loadOnboarding(supabase, userId)
+  if (bundle.application?.onboarding_status === 'approved') {
+    return { ok: true, onboarding_status: 'approved', application: bundle.application, direct: true, message: 'Already approved.' }
+  }
   if (bundle.blockers.length) {
     const error = new Error('Finish every required step before submitting for review.')
     error.payload = { missing: bundle.blockers }
@@ -542,9 +550,17 @@ async function submitDriverReviewDirect(supabase, userId) {
       submitted_at: now,
     })
     .eq('profile_id', userId)
+    .neq('onboarding_status', 'approved')
     .select('*')
-    .single()
+    .maybeSingle()
   if (error) throw new Error(error.message)
+  if (!data) {
+    const current = await fetchMyDriverApplication(supabase, userId)
+    if (current?.onboarding_status === 'approved') {
+      return { ok: true, onboarding_status: 'approved', application: current, direct: true, message: 'Already approved.' }
+    }
+    throw new Error('Application changed. Refresh and try again.')
+  }
   return {
     ok: true,
     onboarding_status: 'pending_review',

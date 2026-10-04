@@ -199,6 +199,10 @@ function createFakeSupabase(config = {}) {
         state.filters.push({ col, val })
         return builder
       },
+      neq(col, val) {
+        state.filters.push({ col, val, op: 'neq' })
+        return builder
+      },
       limit(n) {
         state.limit = n
         return builder
@@ -898,13 +902,20 @@ test('submitDriverReview: auth-missing and API unavailable direct fallback paths
     signer_user_id: 'user-ready',
   }
 
+  let approvalWinsRace = false
+  let approvedDuringSubmit = false
   const readySb = createFakeSupabase({
     tables: {
       driver_applications: (state) => {
         if (state.operation === 'update') {
+          assert.ok(state.filters.some((f) => f.col === 'onboarding_status' && f.op === 'neq' && f.val === 'approved'))
+          if (approvalWinsRace) {
+            approvedDuringSubmit = true
+            return { data: null, error: null }
+          }
           return { data: { ...fullApp, onboarding_status: 'pending_review' }, error: null }
         }
-        return { data: fullApp, error: null }
+        return { data: approvedDuringSubmit ? { ...fullApp, onboarding_status: 'approved' } : fullApp, error: null }
       },
       driver_documents: { data: fullDocs },
       driver_tax_info: { data: fullTax },
@@ -916,6 +927,11 @@ test('submitDriverReview: auth-missing and API unavailable direct fallback paths
   assert.equal(directRes.ok, true)
   assert.equal(directRes.direct, true)
   assert.equal(directRes.onboarding_status, 'pending_review')
+
+  approvalWinsRace = true
+  const raced = await submitDriverReview(readySb, 'user-ready')
+  assert.equal(raced.onboarding_status, 'approved')
+  assert.equal(raced.ok, true)
 
   // 4. API returns 400 Bad Request (non-network, non-unavailable) -> rethrows without falling back
   stubFetch({
@@ -1230,4 +1246,29 @@ test('loadApplicantInbox and replyApplicantInbox call /api/driver?action=inbox w
   assert.equal(fetchCalls[1].options.headers.Authorization, 'Bearer valid-test-token')
   assert.equal(fetchCalls[1].options.method, 'POST')
   assert.deepEqual(JSON.parse(fetchCalls[1].options.body), { body: 'I have uploaded my documents.' })
+})
+
+
+test('approved onboarding skips all compliance reads, even when those tables fail', async () => {
+  const sb = createFakeSupabase({ fromHandler(state) {
+    assert.equal(state.table, 'driver_applications')
+    assert.equal(state.operation, 'select')
+    return { data: { onboarding_status: 'approved' }, error: null }
+  } })
+  const bundle = await loadOnboarding(sb, 'approved-driver')
+  assert.equal(bundle.application.onboarding_status, 'approved')
+  assert.deepEqual(bundle.blockers, [])
+  assert.equal(bundle.progress.percent, 100)
+})
+
+test('approved review fallback is idempotent without documents, tax, or agreement', async () => {
+  stubFetch({ '/api/driver': { status: 503, body: { error: 'unavailable' } } })
+  const sb = createFakeSupabase({ fromHandler(state) {
+    assert.equal(state.table, 'driver_applications')
+    assert.equal(state.operation, 'select')
+    return { data: { onboarding_status: 'approved' }, error: null }
+  } })
+  const result = await submitDriverReview(sb, 'approved-driver')
+  assert.equal(result.onboarding_status, 'approved')
+  assert.equal(result.ok, true)
 })

@@ -238,9 +238,19 @@ export async function handleDriverSubmitReview(req, res) {
       notify_error: notice.emailed ? null : notice.todo,
     })
     .eq('profile_id', user.id)
+    .neq('onboarding_status', 'approved')
     .select('*')
-    .single()
+    .maybeSingle()
   if (upErr) return json(res, 500, { error: upErr.message })
+  if (!updated) {
+    const { data: current, error } = await sb.from('driver_applications')
+      .select('onboarding_status').eq('profile_id', user.id).maybeSingle()
+    if (error) return json(res, 500, { error: error.message })
+    if (current?.onboarding_status === 'approved') {
+      return json(res, 200, { ok: true, onboarding_status: 'approved', message: 'Already approved.' })
+    }
+    return json(res, 409, { error: 'Application changed. Refresh and try again.' })
+  }
 
   return json(res, 200, {
     ok: true,

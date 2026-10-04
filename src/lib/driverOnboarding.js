@@ -412,11 +412,14 @@ function complianceContext({ application, documents, tax, agreement }) {
 }
 
 async function submitDriverReviewDirect(userId) {
-  const [docs, tax, agreement, application] = await Promise.all([
+  const application = await fetchMyDriverApplication(userId)
+  if (application?.onboarding_status === 'approved') {
+    return { ok: true, onboarding_status: 'approved', application, direct: true, message: 'Already approved.' }
+  }
+  const [docs, tax, agreement] = await Promise.all([
     fetchMyDriverDocuments(userId),
     fetchMyTaxProfile(userId),
     fetchMyAgreement(userId),
-    fetchMyDriverApplication(userId),
   ])
   const blockers = submissionBlockers(complianceContext({ application, documents: docs, tax, agreement }))
   if (blockers.length) {
@@ -434,9 +437,17 @@ async function submitDriverReviewDirect(userId) {
       notify_error: EMAIL_TODO,
     })
     .eq('profile_id', userId)
+    .neq('onboarding_status', 'approved')
     .select('*')
-    .single()
+    .maybeSingle()
   if (error) throw new Error(error.message)
+  if (!data) {
+    const current = await fetchMyDriverApplication(userId)
+    if (current?.onboarding_status === 'approved') {
+      return { ok: true, onboarding_status: 'approved', application: current, direct: true, message: 'Already approved.' }
+    }
+    throw new Error('Application changed. Refresh and try again.')
+  }
   return {
     ok: true,
     onboarding_status: 'pending_review',

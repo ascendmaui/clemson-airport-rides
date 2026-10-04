@@ -138,11 +138,14 @@ export default function QueueScreen() {
   const refresh = useCallback(async () => {
     if (!user || !supabase) return
     const application = await fetchDriverApplication(supabase, user.id)
+    if (application.error) {
+      setError(application.error)
+      return
+    }
     const nextStatus = application.application?.onboarding_status || 'none'
     const nextReason = application.application?.rejection_reason || null
     setStatus(nextStatus)
     setReason(nextReason)
-    if (application.error) setError(application.error)
 
     const currentGate = driverGateView(nextStatus, { rejectionReason: nextReason })
     if (currentGate.canSeeOffers) {
