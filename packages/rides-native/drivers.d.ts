@@ -82,6 +82,11 @@ export function saveFavoriteDriverIds(
   ids: string[],
 ): Promise<{ ids: string[]; persisted: boolean; note: string }>
 
+export function scheduleRedirectForRequestError(
+  err: { code?: string } | null | undefined,
+  destLabel?: string | null,
+): { screen: 'schedule'; airport: 'GSP' | 'CLT' | null } | null
+
 export function fetchOnlineDrivers(supabase: unknown): Promise<{ drivers: OnlineDriver[]; error: string | null }>
 export function fetchDriversByIds(
   supabase: unknown,

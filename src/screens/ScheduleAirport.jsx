@@ -25,7 +25,10 @@ export function ScheduleAirport() {
   const studentStatusNow = useStudentStatus()
   const { runOrPrompt } = useRequireAuthForAction()
   const [promptOpen, setPromptOpen] = useState(false)
-  const [airport, setAirport] = useState('GSP')
+  const [airport, setAirport] = useState(() => {
+    const code = String(getHashRoute().params?.airport || '').toUpperCase()
+    return code === 'CLT' ? 'CLT' : 'GSP'
+  })
   const [date, setDate] = useState('')
   const [time, setTime] = useState('')
   const [busy, setBusy] = useState(false)

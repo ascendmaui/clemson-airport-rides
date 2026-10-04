@@ -28,6 +28,7 @@ import {
   PREFERRED_OFFLINE_COPY,
   requestDriverTrip,
   saveFavoriteDriverIds,
+  scheduleRedirectForRequestError,
   sortPreferredDrivers,
   type OnlineDriver,
 } from 'rides-native/drivers'
@@ -229,6 +230,13 @@ export default function PickDriver() {
         params: { dest, trip: trip.id, driver: chosen.name },
       })
     } catch (err) {
+      const redirect = scheduleRedirectForRequestError(err, dest)
+      if (redirect) {
+        router.push(redirect.airport
+          ? { pathname: '/schedule', params: { airport: redirect.airport } }
+          : '/schedule')
+        return
+      }
       setError(err instanceof Error ? err.message : 'Could not request that driver')
     } finally {
       setBusy(false)

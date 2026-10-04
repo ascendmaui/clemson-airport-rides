@@ -19,6 +19,7 @@ import {
   OPEN_POOL_COPY,
   PREFERRED_OFFLINE_COPY,
   saveFavoriteDriverIds,
+  scheduleRedirectForRequestError,
   sortPreferredDrivers,
   TESLA_FLEET_EMPTY_COPY,
   TESLA_FLEET_PICK_COPY,
@@ -130,6 +131,11 @@ export function PickDriver({ dest = 'GSP Airport', tier = 'standard', listCents 
       })
       navigate('requested', { dest, trip: trip.id, driver: selected.name })
     } catch (err) {
+      const redirect = scheduleRedirectForRequestError(err, dest)
+      if (redirect) {
+        navigate('schedule', redirect.airport ? { airport: redirect.airport } : {})
+        return
+      }
       setError(err.message || 'Could not request that driver')
     } finally {
       setBusy(false)

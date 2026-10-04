@@ -259,7 +259,9 @@ export async function settleTrip({
   }
 
   let payout = null
-  if (action === 'complete' && trip.driver_id) {
+  // This complete did not collect the fare. A Connect transfer would pay the
+  // driver for money that was never charged, and the trip is already completed.
+  if (action === 'complete' && trip.driver_id && !campusUncollected) {
     const connectAccountId = sb ? await loadConnectAccount(sb, trip.driver_id) : null
     payout = await enqueueAndAttemptPayout({
       sb,
