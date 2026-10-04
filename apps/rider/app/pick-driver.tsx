@@ -29,6 +29,7 @@ import {
   requestDriverTrip,
   saveFavoriteDriverIds,
   scheduleRedirectForRequestError,
+  selectDriverForRequest,
   sortPreferredDrivers,
   type OnlineDriver,
 } from 'rides-native/drivers'
@@ -118,6 +119,7 @@ export default function PickDriver() {
       if (!alive) return
       const merged = sortPreferredDrivers([...result.drivers, ...extra.drivers], fav.ids, approachPickup)
       setDrivers(merged)
+      setSelected((current) => selectDriverForRequest(merged, current)?.id || null)
       setFavoriteIds(fav.ids)
       setFavNote(fav.note)
       setError(extra.error || result.error)
@@ -255,9 +257,10 @@ export default function PickDriver() {
       })
       await successHaptic()
       await playTigerCue()
+      const assigned = drivers.find((row: OnlineDriver) => row.id === trip.driver_id) || chosen
       router.replace({
         pathname: '/requested',
-        params: { dest, trip: trip.id, driver: chosen.name },
+        params: { dest, trip: trip.id, driver: assigned.name },
       })
     } catch (err) {
       const redirect = scheduleRedirectForRequestError(err, dest)
@@ -356,6 +359,7 @@ export default function PickDriver() {
           label={busy ? 'Requesting…' : selectedDriver ? `Request ${selectedDriver.name}` : 'Select a driver'}
           onPress={onRequest}
           disabled={busy || !selectedDriver?.online}
+          loading={busy}
         />
       </View>
       <SignInToBookSheet

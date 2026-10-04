@@ -5,6 +5,8 @@ export type OnlineDriver = {
   ratingCount: number
   standing: string
   phone: string | null
+  email?: string | null
+  dispatchRank?: number | null
   avatarUrl: string | null
   online: boolean
   priorityMode: boolean
@@ -61,11 +63,15 @@ export function describeDriver(
   pickup: { lat?: number | null; lng?: number | null } | null | undefined,
   now?: Date,
 ): DriverCardCopy
-export function sortPreferredDrivers<T extends { id: string; online?: boolean; lat?: number | null; lng?: number | null; name?: string }>(
+export function sortPreferredDrivers<T extends { id: string; online?: boolean; lat?: number | null; lng?: number | null; name?: string; email?: string | null; dispatchRank?: number | null }>(
   drivers: T[] | null | undefined,
   favoriteIds: string[] | null | undefined,
   pickup: { lat?: number | null; lng?: number | null } | null | undefined,
 ): T[]
+export function selectDriverForRequest<T extends { id: string; online?: boolean; email?: string | null; dispatchRank?: number | null }>(
+  drivers: T[] | null | undefined,
+  currentId?: string | null,
+): T | null
 export function groupDriversForPicker<T extends { id: string; online?: boolean }>(
   drivers: T[] | null | undefined,
   favoriteIds: string[] | null | undefined,

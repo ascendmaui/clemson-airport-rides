@@ -74,7 +74,7 @@ export function ToastProvider({ children }) {
     if (!critical && prefs[cat] === false) return null
 
     const id = toast.id || `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
-    if (shouldPlayAlertTone(kind, prefs)) playAlertTone()
+    if (!toast?.silent && shouldPlayAlertTone(kind, prefs)) playAlertTone()
     const meta = KIND_META[kind] || KIND_META.system
     const entry = {
       id,

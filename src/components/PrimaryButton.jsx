@@ -8,9 +8,13 @@ export function PrimaryButton({
   className = '',
   type = 'button',
   ariaLabel,
+  spinnerColor = '#fff',
   ...rest
 }) {
-  const bg = variant === 'purple'
+  const orangeSpinner = Boolean(loading && spinnerColor && spinnerColor !== '#fff')
+  const bg = orangeSpinner
+    ? '#fff'
+    : variant === 'purple'
     ? 'linear-gradient(135deg, #522D80 0%, #6b3fa0 100%)'
     : variant === 'gradient'
       ? 'linear-gradient(135deg, #522D80 0%, #F56600 100%)'
@@ -33,13 +37,13 @@ export function PrimaryButton({
         padding: '15px 20px',
         borderRadius: 16,
         background: bg,
-        color: '#fff',
+        color: orangeSpinner ? '#F56600' : '#fff',
         fontWeight: 600,
         fontSize: 17,
         letterSpacing: -0.2,
-        opacity: isDisabled ? 0.5 : 1,
+        opacity: orangeSpinner ? 1 : (isDisabled ? 0.5 : 1),
         cursor: isDisabled ? 'not-allowed' : 'pointer',
-        border: '1px solid rgba(255,255,255,0.22)',
+        border: orangeSpinner ? '1.5px solid #F56600' : '1px solid rgba(255,255,255,0.22)',
         boxShadow: variant === 'purple'
           ? '0 4px 14px var(--purple-glow), var(--shadow-pill)'
           : '0 4px 14px var(--orange-glow), var(--shadow-pill)',
@@ -55,8 +59,8 @@ export function PrimaryButton({
             style={{
               width: 16,
               height: 16,
-              border: '2px solid rgba(255,255,255,0.4)',
-              borderTopColor: '#fff',
+              border: orangeSpinner ? '2px solid rgba(245,102,0,0.25)' : '2px solid rgba(255,255,255,0.4)',
+              borderTopColor: spinnerColor,
               borderRadius: '50%',
               animation: 'spin 0.8s linear infinite',
               display: 'inline-block',

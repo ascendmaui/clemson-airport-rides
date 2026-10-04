@@ -1,4 +1,4 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native'
 import { pressStyle } from '@/components/enter'
 import { lift } from '@/lib/elevation'
 import type { Palette } from '@/lib/palette'
@@ -33,36 +33,43 @@ export function PrimaryButton({
   label,
   onPress,
   disabled,
+  loading = false,
   tone = 'orange',
 }: {
   key?: string | number
   label: string
   onPress: () => void
   disabled?: boolean
+  loading?: boolean
   tone?: ButtonTone
 }) {
   const { colors } = useTheme()
   const look = toneStyle(colors, tone)
   const raised = tone === 'orange' || tone === 'purple'
+  const orangeSpinner = Boolean(loading && tone === 'orange')
+  const busy = Boolean(disabled || loading)
   return (
     <Pressable
       onPress={onPress}
-      disabled={disabled}
+      disabled={busy}
       accessibilityRole="button"
       accessibilityLabel={label}
-      accessibilityState={{ disabled: Boolean(disabled) }}
+      accessibilityState={{ disabled: busy, busy: Boolean(loading) }}
       style={({ pressed }) => [
         styles.btn,
-        raised ? lift(colors, 'rest') : null,
+        raised && !orangeSpinner ? lift(colors, 'rest') : null,
         {
-          backgroundColor: look.backgroundColor,
-          borderColor: look.borderColor,
-          borderWidth: look.borderWidth,
+          backgroundColor: orangeSpinner ? '#fff' : look.backgroundColor,
+          borderColor: orangeSpinner ? colors.orange : look.borderColor,
+          borderWidth: orangeSpinner ? 1.5 : look.borderWidth,
         },
-        pressStyle(pressed, Boolean(disabled)),
+        pressStyle(pressed, busy),
       ]}
     >
-      <Text style={[styles.label, { color: look.color }]}>{label}</Text>
+      <View style={styles.row}>
+        {orangeSpinner ? <ActivityIndicator color={colors.orange} accessibilityElementsHidden /> : null}
+        <Text style={[styles.label, { color: orangeSpinner ? colors.orange : look.color }]}>{label}</Text>
+      </View>
     </Pressable>
   )
 }
@@ -126,5 +133,6 @@ function makeStyles(colors: Palette) {
 
 const styles = StyleSheet.create({
   btn: { borderRadius: 18, paddingVertical: 16, alignItems: 'center', paddingHorizontal: 16 },
+  row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
   label: { fontWeight: '700', fontSize: 16, letterSpacing: -0.2 },
 })

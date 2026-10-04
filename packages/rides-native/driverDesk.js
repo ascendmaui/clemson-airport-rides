@@ -356,9 +356,22 @@ export async function declineTrip(supabase, tripOrId, driverId = null) {
     // Open-pool rows stay driver_id null. RLS only lets an online driver claim
     // them (accepted or offered with their own id), so a decline cannot rewrite
     // the trip back to searching. Record a pass and leave it in the pool.
+    // An auto-assigned offer is already on this driver. Releasing it clears
+    // that id so the next online driver can take it.
     const passed = await rememberPass(supabase, trip.id, driverId)
     let released = false
-    if (trip.status === 'offered') {
+    if (trip.driver_id && driverId && trip.driver_id === driverId && (trip.status === 'offered' || trip.status === 'searching')) {
+      const { data, error } = await supabase
+        .from('trips')
+        .update({ status: 'searching', driver_id: null })
+        .eq('id', trip.id)
+        .eq('driver_id', driverId)
+        .in('status', ['searching', 'offered'])
+        .select('id')
+        .maybeSingle()
+      if (error && !passed) throw new Error(error.message)
+      released = Boolean(data)
+    } else if (trip.status === 'offered') {
       const { data, error } = await supabase
         .from('trips')
         .update({ status: 'searching', driver_id: null })

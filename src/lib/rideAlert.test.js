@@ -5,6 +5,7 @@ import {
   playRideRequestAlert,
   pulseRideHaptic,
   shouldAlertForRide,
+  shouldPlayDriverOfferChime,
 } from './rideAlert.js'
 
 test('shouldAlertForRide respects explicit notification toggle', () => {
@@ -26,6 +27,13 @@ test('shouldAlertForRide respects quiet hours and DND settings', () => {
     quiet: { dnd: false, scheduleEnabled: false },
   }
   assert.equal(shouldAlertForRide(normalPrefs), true, 'Active when schedule is off')
+})
+
+test('shouldPlayDriverOfferChime stays in-app and respects quiet and DND', () => {
+  assert.equal(shouldPlayDriverOfferChime({ ride: true }), true)
+  assert.equal(shouldPlayDriverOfferChime({ ride: false }), false)
+  assert.equal(shouldPlayDriverOfferChime({ ride: true, dndNewRequestTones: true }), false)
+  assert.equal(shouldPlayDriverOfferChime({ ride: true, quiet: { dnd: true } }), false)
 })
 
 test('pulseRideHaptic gracefully handles headless / node environments', () => {

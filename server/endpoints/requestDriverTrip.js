@@ -1,10 +1,11 @@
 /**
  * POST /api/stripe-payment-methods?action=request-driver
  * Records a campus trip at the server fare. Client fare, list price, amount,
- * and student flags are ignored. Campus rows have no deposit: status searching,
- * driver_id null, so any approved driver can accept and a decline stays in the
- * pool. GSP/CLT already collect a 25% deposit in Schedule checkout. This screen
- * does not open Checkout and does not insert an unpaid airport hold.
+ * and student flags are ignored. Campus rows have no deposit. The first online
+ * approved driver in house order is assigned (offered). If nobody is online the
+ * row stays searching with driver_id null. GSP/CLT already collect a 25% deposit
+ * in Schedule checkout. This screen does not open Checkout and does not insert
+ * an unpaid airport hold.
  */
 import {
   admin, cors, json, parseBody, userFromAuth, computeRoutes,
@@ -21,6 +22,63 @@ import {
 } from '../authoritativeFare.js'
 import { receivableDriverIds } from '../driverApproval.js'
 import { insertTripEvent } from '../tripEvents.js'
+import { pickAutoAssignDriver } from '../../shared/driverOrder.js'
+
+function teslaListed(vehicle) {
+  return Boolean(vehicle?.is_tesla)
+    || vehicle?.tier === 'tesla'
+    || vehicle?.tier === 'tesla_self_driving'
+    || (String(vehicle?.make || '').toLowerCase() === 'tesla' && /model\s*3/i.test(String(vehicle?.model || '')))
+}
+
+/** First online approved driver in house order. Null keeps the open pool. */
+async function onlineAutoAssignee(sb, { tier }) {
+  let statusRes
+  try {
+    statusRes = await sb.from('driver_status').select('driver_id, online').eq('online', true)
+  } catch {
+    return null
+  }
+  if (!statusRes || statusRes.error) return null
+  const onlineIds = []
+  for (const row of statusRes.data || []) {
+    if (row?.driver_id && row.online !== false && !onlineIds.includes(row.driver_id)) onlineIds.push(row.driver_id)
+  }
+  if (!onlineIds.length) return null
+
+  let profilesRes
+  try {
+    profilesRes = await sb.from('profiles').select('id, email').in('id', onlineIds)
+  } catch {
+    return null
+  }
+  if (!profilesRes || profilesRes.error) return null
+
+  const gate = await receivableDriverIds(sb, onlineIds)
+  if (gate.error) return null
+
+  let teslaIds = null
+  if (tier === 'tesla') {
+    let vehicleRes
+    try {
+      vehicleRes = await sb.from('vehicles').select('driver_id, is_tesla, tier, make, model').in('driver_id', onlineIds)
+    } catch {
+      return null
+    }
+    if (!vehicleRes || vehicleRes.error) return null
+    teslaIds = new Set()
+    for (const vehicle of vehicleRes.data || []) {
+      if (teslaListed(vehicle)) teslaIds.add(vehicle.driver_id)
+    }
+  }
+
+  const emailById = new Map((profilesRes.data || []).map((row) => [row.id, row.email]))
+  const candidates = onlineIds
+    .filter((id) => gate.allowed.has(id))
+    .filter((id) => !teslaIds || teslaIds.has(id))
+    .map((id) => ({ id, email: emailById.get(id) || '', online: true }))
+  return pickAutoAssignDriver(candidates)
+}
 
 async function serverDistance(origin, dest) {
   if (origin?.lat == null || dest?.lat == null) return { distanceM: null, durationS: null, polyline: null }
@@ -80,10 +138,7 @@ export default async function handler(req, res, deps = {}) {
       return json(res, 500, { error: vehicleRes.error.message || 'Could not verify Tesla listing', code: 'tesla_vehicle_lookup_failed' })
     }
     const vehicle = vehicleRes.data
-    const listed = Boolean(vehicle?.is_tesla)
-      || vehicle?.tier === 'tesla'
-      || vehicle?.tier === 'tesla_self_driving'
-      || (String(vehicle?.make || '').toLowerCase() === 'tesla' && /model\s*3/i.test(String(vehicle?.model || '')))
+    const listed = teslaListed(vehicle)
     if (!listed) {
       return json(res, 409, {
         error: 'That driver is not listed for the Tesla Model 3 fleet. Pick a Tesla-listed driver.',
@@ -124,6 +179,8 @@ export default async function handler(req, res, deps = {}) {
     })
   }
 
+  const assignee = await onlineAutoAssignee(sb, { tier })
+  const assignedId = assignee?.id || null
   const split = splitPlatformFee(priced.fareCents)
   const riderFirst = firstName(
     user.user_metadata?.full_name || user.user_metadata?.name || user.email?.split('@')[0],
@@ -138,9 +195,9 @@ export default async function handler(req, res, deps = {}) {
     : {}
   const row = {
     rider_id: user.id,
-    driver_id: null,
+    driver_id: assignedId,
     // trip_status has searching, not "requested". That value aborts the insert.
-    status: 'searching',
+    status: assignedId ? 'offered' : 'searching',
     tier,
     pickup_label: places.pickup.label,
     dropoff_label: places.dropoff.label,
@@ -164,7 +221,8 @@ export default async function handler(req, res, deps = {}) {
       kind: 'driver_request',
       purpose: 'planned',
       preferred_driver_id: driverId,
-      match: 'open',
+      match: assignedId ? 'auto' : 'open',
+      assigned_driver_id: assignedId,
       ...routeMeta,
       rider_first_name: riderFirst,
       fare_is_estimate: Boolean(priced.estimate),

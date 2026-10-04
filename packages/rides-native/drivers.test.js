@@ -24,6 +24,7 @@ import {
   requestDriverTrip,
   saveFavoriteDriverIds,
   setDriverOnline,
+  selectDriverForRequest,
   sortPreferredDrivers,
 } from './drivers.js'
 import { loadDriverDesk } from './driverDesk.js'
@@ -416,6 +417,24 @@ test('sortPreferredDrivers prioritizes favorites, online status, ETA, and alphab
   assert.equal(sortedNoCoords[0].name, null) // String(null || '') is '' which sorts before 'Aaron'
   assert.equal(sortedNoCoords[1].name, 'Aaron')
   assert.equal(sortedNoCoords[2].name, 'Zack')
+})
+
+test('sortPreferredDrivers puts the house emails ahead of everyone else', () => {
+  const john = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+  const kim = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
+  const drivers = [
+    { id: C, name: 'Cam', online: true, email: 'cam@example.com', lat: 34.679, lng: -82.843 },
+    { id: kim, name: 'Kim', online: true, email: 'KimUberMaui@gmail.com', lat: 34.75, lng: -82.84 },
+    { id: john, name: 'John', online: false, email: 'johnmatveyev@gmail.com', lat: 34.9, lng: -82.9 },
+    { id: B, name: 'Bea', online: true, email: 'bea@example.com', lat: 34.679, lng: -82.843 },
+  ]
+  const pickup = { lat: 34.6788, lng: -82.843 }
+  const sorted = sortPreferredDrivers(drivers, [C], pickup)
+  assert.deepEqual(sorted.map((driver) => driver.id), [john, kim, C, B])
+  assert.equal(selectDriverForRequest(drivers, null)?.id, kim)
+  assert.equal(selectDriverForRequest(drivers, B)?.id, B)
+  assert.equal(selectDriverForRequest(drivers, john)?.id, kim)
+  assert.equal(selectDriverForRequest([], null), null)
 })
 
 test('groupDriversForPicker separates favorites from non-favorite online drivers', () => {

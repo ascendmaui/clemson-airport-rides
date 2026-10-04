@@ -15,6 +15,13 @@ export function shouldAlertForRide(prefs) {
   return true
 }
 
+/** In-app driver offer chime. Quiet hours, the ride toggle, and DND mute it. */
+export function shouldPlayDriverOfferChime(prefs) {
+  if (!shouldAlertForRide(prefs)) return false
+  if (prefs && prefs.dndNewRequestTones) return false
+  return true
+}
+
 /** 70ms on, 40ms off, 120ms on. No-op when the device has no vibrate API. */
 export function pulseRideHaptic() {
   try {

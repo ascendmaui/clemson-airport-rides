@@ -21,6 +21,7 @@ import {
   PREFERRED_OFFLINE_COPY,
   saveFavoriteDriverIds,
   scheduleRedirectForRequestError,
+  selectDriverForRequest,
   sortPreferredDrivers,
   TESLA_FLEET_EMPTY_COPY,
   TESLA_FLEET_PICK_COPY,
@@ -93,7 +94,7 @@ export function PickDriver({
       approachPickup,
     )
     setDrivers(merged)
-    setSelected((current) => merged.find((driver) => driver.id === current?.id) || null)
+    setSelected((current) => selectDriverForRequest(merged, current?.id))
     setFavoriteIds(fav.ids)
     setFavNote(fav.note)
     setError(extra.error || err)
@@ -149,7 +150,8 @@ export function PickDriver({
         isStudent: student.verified,
         listCents,
       })
-      navigate('requested', { dest, trip: trip.id, driver: selected.name })
+      const assigned = drivers.find((driver) => driver.id === trip.driver_id) || selected
+      navigate('requested', { dest, trip: trip.id, driver: assigned?.name || selected.name })
     } catch (err) {
       const redirect = scheduleRedirectForRequestError(err, dest)
       if (redirect) {
@@ -320,6 +322,8 @@ export function PickDriver({
           </p>
         ) : null}
         <PrimaryButton
+          loading={busy}
+          spinnerColor="#F56600"
           disabled={!selected?.online || busy}
           onClick={() => runOrPrompt(onRequest, { setPromptOpen, nextPath: 'pick-driver', nextParams: placeParams })}
         >

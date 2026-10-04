@@ -1,11 +1,13 @@
 /**
  * On-screen offer alerts for an approved driver, including after they leave Driver Home.
- * Uses the existing toast sender. Does not send email or a closed-app push.
+ * Plays the in-app ride chime. Does not send email, SMS, Slack, or a closed-app push.
  */
 import { useEffect, useRef } from 'react'
 import { useAuth } from '../lib/auth'
 import { supabase } from '../lib/supabase'
 import { pushToast } from '../lib/toasts'
+import { loadLocalPrefs } from '../lib/notificationPrefs'
+import { playRideRequestAlert, shouldPlayDriverOfferChime } from '../lib/rideAlert'
 import { isDueNow, isUnpaidAirportDepositTrip } from '../../packages/rides-native/tripTags.js'
 
 export function DriverOfferWatcher() {
@@ -45,15 +47,21 @@ export function DriverOfferWatcher() {
         primed.current = true
         return
       }
+      let fresh = 0
       rows.forEach((row) => {
         if (seen.current.has(row.id)) return
         seen.current.add(row.id)
+        fresh += 1
         pushToast({
           kind: 'ride_requested',
           title: 'New ride offer',
           body: `${row.pickup_label || 'Pickup'} → ${row.dropoff_label || 'Drop-off'}`,
+          silent: true,
         })
       })
+      if (fresh && shouldPlayDriverOfferChime(loadLocalPrefs(user.id))) {
+        playRideRequestAlert().catch(() => {})
+      }
     }
 
     look()

@@ -1,4 +1,5 @@
 import { canReceiveRides } from '../../shared/driverOnboarding.js'
+import { driverDispatchRank, pickAutoAssignDriver } from '../../shared/driverOrder.js'
 import { authedJson } from './apiClient.js'
 import { displayFirstName, standingFromRatings } from './authErrors.js'
 import { GSP, STADIUM } from './places.js'
@@ -140,6 +141,8 @@ export function describeDriver(driver, pickup, now = new Date()) {
 export function sortPreferredDrivers(drivers, favoriteIds, pickup) {
   const fav = new Set(normalizeFavoriteDriverIds(favoriteIds))
   return [...(drivers || [])].sort((a, b) => {
+    const rank = driverDispatchRank(a) - driverDispatchRank(b)
+    if (rank !== 0) return rank
     const aFav = fav.has(a.id) ? 0 : 1
     const bFav = fav.has(b.id) ? 0 : 1
     if (aFav !== bFav) return aFav - bFav
@@ -151,6 +154,18 @@ export function sortPreferredDrivers(drivers, favoriteIds, pickup) {
     if (aEta !== bEta) return aEta - bEta
     return String(a.name || '').localeCompare(String(b.name || ''))
   })
+}
+
+/** Online driver the request should assign: house order, then everyone else. */
+export function selectDriverForRequest(drivers, currentId = null) {
+  const list = Array.isArray(drivers) ? drivers : []
+  if (currentId) {
+    const current = list.find((driver) => driver?.id === currentId && driver.online)
+    if (current) return current
+  }
+  const picked = pickAutoAssignDriver(list)
+  if (!picked) return null
+  return list.find((driver) => driver?.id === picked.id) || null
 }
 
 export function groupDriversForPicker(drivers, favoriteIds) {
@@ -235,6 +250,8 @@ function partsFromCardRows(rows) {
       rating_avg: row.rating_avg,
       rating_count: row.rating_count,
       standing: row.standing || null,
+      email: row.email || null,
+      dispatch_rank: row.dispatch_rank == null || row.dispatch_rank === '' ? null : Number(row.dispatch_rank),
     })
     if (row.make || row.model || row.color || row.plate) {
       vehicles.push({
@@ -315,6 +332,10 @@ function mapDrivers(statuses, profiles, vehicles) {
       ratingCount: Number(profile.rating_count) || 0,
       standing,
       phone: profile.phone || null,
+      email: profile.email || null,
+      dispatchRank: profile.dispatch_rank == null || !Number.isFinite(Number(profile.dispatch_rank))
+        ? null
+        : Number(profile.dispatch_rank),
       avatarUrl: profile.avatar_url || null,
       online: Boolean(status.online),
       priorityMode: Boolean(status.priority_mode),
@@ -485,8 +506,9 @@ export async function fetchDriverApplication(supabase, driverId) {
 }
 
 /**
- * Campus driver request. The server writes fare_cents and an open-pool row.
- * Client list price and isStudent are not pricing inputs.
+ * Campus driver request. The server writes fare_cents and auto-assigns the
+ * first online approved driver in house order. Client list price and
+ * isStudent are not pricing inputs.
  */
 export async function requestDriverTrip(supabase, {
   riderId,

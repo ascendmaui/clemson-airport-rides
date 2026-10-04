@@ -320,6 +320,61 @@ test('requestDriverTrip skips a pending_review driver and opens a campus offer f
   assert.equal(approvedSb.tables.trips[0].metadata.purpose, 'planned')
 })
 
+test('requestDriverTrip auto-assigns the first online driver in house order', async () => {
+  const john = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1'
+  const kim = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb2'
+  const other = 'cccccccc-cccc-4ccc-8ccc-ccccccccccc3'
+  const seed = {
+    driver_applications: [
+      { profile_id: john, onboarding_status: 'approved' },
+      { profile_id: kim, onboarding_status: 'approved' },
+      { profile_id: other, onboarding_status: 'approved' },
+    ],
+    profiles: [
+      { id: john, email: 'JohnMatveyev@gmail.com' },
+      { id: kim, email: 'kimubermaui@gmail.com' },
+      { id: other, email: 'other@example.com' },
+    ],
+    driver_status: [
+      { driver_id: john, online: true },
+      { driver_id: kim, online: true },
+      { driver_id: other, online: true },
+    ],
+  }
+  const approvedSb = memorySb(seed)
+  const assigned = await callHandler(requestDriverTrip, {
+    body: { ...REQUEST_BODY, driverId: other },
+  }, {
+    sb: approvedSb.sb,
+    user: { id: 'rider-1', email: 'rider@clemson.edu', user_metadata: { full_name: 'Test Rider' } },
+    ensureProfile: async () => ({ ok: true }),
+  })
+  assert.equal(assigned.status, 200)
+  assert.equal(approvedSb.tables.trips[0].driver_id, john)
+  assert.equal(approvedSb.tables.trips[0].status, 'offered')
+  assert.equal(approvedSb.tables.trips[0].metadata.match, 'auto')
+  assert.equal(approvedSb.tables.trips[0].deposit_cents, 0)
+
+  const kimNext = memorySb({
+    ...seed,
+    driver_status: [
+      { driver_id: john, online: false },
+      { driver_id: kim, online: true },
+      { driver_id: other, online: true },
+    ],
+  })
+  const second = await callHandler(requestDriverTrip, {
+    body: { ...REQUEST_BODY, driverId: other },
+  }, {
+    sb: kimNext.sb,
+    user: { id: 'rider-1', email: 'rider@clemson.edu', user_metadata: { full_name: 'Test Rider' } },
+    ensureProfile: async () => ({ ok: true }),
+  })
+  assert.equal(second.status, 200)
+  assert.equal(kimNext.tables.trips[0].driver_id, kim)
+  assert.equal(kimNext.tables.trips[0].status, 'offered')
+})
+
 test('requestDriverTrip does not insert an unpaid airport deposit from pick-a-driver', async () => {
   const approvedSb = memorySb({
     driver_applications: [{ profile_id: 'driver-approved', onboarding_status: 'approved' }],

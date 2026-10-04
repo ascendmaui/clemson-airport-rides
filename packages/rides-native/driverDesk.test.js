@@ -1154,6 +1154,21 @@ test('declineTrip releases offered ride back to open pool and records pass', asy
   assert.equal(event.kind, 'released')
 })
 
+test('declineTrip releases an auto-assigned offer back to the pool', async () => {
+  const supabase = createFakeSupabase({
+    trips: [{ id: 'trip-auto', status: 'offered', driver_id: 'driver-1' }],
+  })
+
+  const res = await declineTrip(supabase, { id: 'trip-auto', status: 'offered', driver_id: 'driver-1' }, 'driver-1')
+  assert.equal(res.disposition, 'release')
+  assert.equal(res.passed, true)
+  assert.equal(res.released, true)
+
+  const trip = supabase._tables.trips.find((row) => row.id === 'trip-auto')
+  assert.equal(trip.status, 'searching')
+  assert.equal(trip.driver_id, null)
+})
+
 test('declineTrip releases searching ride by recording pass without rewriting trip', async () => {
   const supabase = createFakeSupabase({
     trips: [{ id: 'trip-searching', status: 'searching' }],

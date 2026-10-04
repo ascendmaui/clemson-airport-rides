@@ -1,12 +1,14 @@
 /**
  * Rider-facing driver cards. Service role reads past profile and vehicle RLS.
- * The response is an allowlist: name, rating, and vehicle. No email, phone, or Stripe ids.
+ * The response is an allowlist: name, rating, vehicle, and dispatch rank.
+ * No email, phone, or Stripe ids. Email is read only to compute the rank.
  */
+import { defaultDriverRank } from '../shared/driverOrder.js'
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 const CARD_CAP = 40
 
-const PROFILE_CARD_COLUMNS = 'id, full_name, rating_avg, rating_count, standing'
+const PROFILE_CARD_COLUMNS = 'id, full_name, rating_avg, rating_count, standing, email'
 const VEHICLE_CARD_COLUMNS = 'driver_id, color, make, model, plate, tier, is_tesla'
 
 export function normalizeDriverCardIds(ids) {
@@ -35,6 +37,7 @@ function cardFrom(profile, vehicle) {
     plate: vehicle?.plate || null,
     tier: vehicle?.tier || null,
     is_tesla: vehicle?.is_tesla === true,
+    dispatch_rank: defaultDriverRank(profile.email),
   }
 }
 
