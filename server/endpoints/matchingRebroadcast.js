@@ -1,3 +1,4 @@
+import { releaseScheduledRides } from '../releaseScheduledRides.js'
 import { timingSafeEqual } from 'node:crypto'
 import { admin, json } from '../friendRideLib.js'
 import { rebroadcastMissedOffers } from '../matchingRebroadcast.js'
@@ -48,8 +49,9 @@ export default async function handler(req, res, deps = {}) {
   const params = new URL(req.url || '/', 'http://localhost').searchParams
   const dryRun = String(req.query?.dry_run ?? params.get('dry_run')) === '1'
   try {
+    const scheduled = await releaseScheduledRides(sb, { dryRun, ...(deps.now ? { now: deps.now } : {}) })
     const result = await rebroadcastMissedOffers(sb, { dryRun, ...(deps.now ? { now: deps.now } : {}) })
-    return json(res, result.errors ? 500 : 200, { ok: result.errors === 0, ...result })
+    return json(res, result.errors || scheduled.errors ? 500 : 200, { ok: result.errors + scheduled.errors === 0, ...result, scheduled })
   } catch (error) {
     console.error('[matching-rebroadcast]', error.message)
     return json(res, 500, { error: 'Could not rebroadcast ride offers' })

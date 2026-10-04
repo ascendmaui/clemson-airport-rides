@@ -1220,19 +1220,12 @@ describe('scheduleTrip endpoint handler', () => {
       assert.equal(tripsInserted[0].scheduled_for, null)
     })
 
-    test('spring-gap date+time throws when the scheduled instant is formatted', async () => {
+    test('spring-gap date+time returns a validation error', async () => {
       const { sb, tripsInserted } = createFakeSb()
-      await assert.rejects(
-        () => callHandler(
-          scheduleTripHandler,
-          {
-            method: 'POST',
-            body: { ...defaultPlaces, date: '2026-03-08', time: '02:30' },
-          },
-          depsFor(sb),
-        ),
-        /Invalid time value/,
-      )
+      const res = await callHandler(scheduleTripHandler, {
+        method: 'POST', body: { ...defaultPlaces, date: '2026-03-08', time: '02:30' },
+      }, depsFor(sb))
+      assert.equal(res.status, 400)
       assert.equal(tripsInserted.length, 0)
     })
   })

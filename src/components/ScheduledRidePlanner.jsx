@@ -11,7 +11,10 @@ import { SignInToBookModal, useRequireAuthForAction } from './SignInToBookModal'
 import {
   AIRPORT_PLACES,
   formatPickupAt,
+  pickupAtFromLocal,
   SCHEDULE_PURPOSES,
+  SCHEDULE_PRESETS,
+  schedulePreset,
   toRiderScheduleCard,
   validateSchedule,
 } from '../lib/scheduledRideModel'
@@ -30,9 +33,9 @@ const PLACES = [
 ]
 
 function todayInputValue() {
-  const now = new Date()
-  const local = new Date(now.getTime() - now.getTimezoneOffset() * 60000)
-  return local.toISOString().slice(0, 10)
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit',
+  }).format(new Date())
 }
 
 export function ScheduledRidePlanner() {
@@ -79,7 +82,7 @@ export function ScheduledRidePlanner() {
       setMine([])
       return undefined
     }
-    listMyScheduledTrips(user.id)
+    const load = () => listMyScheduledTrips(user.id)
       .then((rows) => {
         if (!alive) return
         setMine(rows)
@@ -89,8 +92,11 @@ export function ScheduledRidePlanner() {
         if (!alive) return
         setListError(err.message || 'Could not load scheduled rides')
       })
+    load()
+    const timer = setInterval(load, 30_000)
     return () => {
       alive = false
+      clearInterval(timer)
     }
   }, [user?.id, saved])
 
@@ -106,7 +112,7 @@ export function ScheduledRidePlanner() {
       setQuoteError(null)
       return undefined
     }
-    estimateScheduledFare({ pickup, dropoff, isStudent: isStudent && fleet !== 'tesla' })
+    estimateScheduledFare({ pickup, dropoff, isStudent: isStudent && fleet !== 'tesla', at: pickupAtFromLocal(date, time) || new Date() })
       .then((next) => {
         if (!alive) return
         setQuote(next)
@@ -120,7 +126,7 @@ export function ScheduledRidePlanner() {
     return () => {
       alive = false
     }
-  }, [pickup, dropoff, isStudent, fleet])
+  }, [pickup, dropoff, isStudent, fleet, date, time])
 
   useEffect(() => {
     if (!user?.id || pickup?.lat == null || dropoff?.lat == null) {
@@ -179,14 +185,7 @@ export function ScheduledRidePlanner() {
         tier: fleet,
         billingChoice: billingOffer ? billingChoice : null,
       })
-      setSaved({
-        ...row,
-        depositCopy: depositSurfaceCopy(
-          { fareCents: row.fare_cents, depositCents: row.deposit_cents },
-          'confirm',
-          { studentDiscountCents: row.discountCents },
-        ),
-      })
+      setSaved(row)
       setDate('')
       setTime('')
       await refreshMine()
@@ -279,8 +278,22 @@ export function ScheduledRidePlanner() {
         </div>
       )}
 
-      <label style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink-secondary)' }}>Date</label>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
+        {SCHEDULE_PRESETS.map(preset => (
+          <button key={preset.id} type="button" className="pressable"
+            style={{ padding: '10px 14px', borderRadius: 12, color: '#522D80', background: 'rgba(82,45,128,0.08)' }}
+            onClick={() => {
+            const next = schedulePreset(preset)
+            setDate(next.date)
+            setTime(next.time)
+            setPurpose(next.purpose)
+          }}>{preset.label}</button>
+        ))}
+      </div>
+      <p>All pickup times are Eastern. Game-day times are suggestions; choose your actual event date and pickup time.</p>
+      <label htmlFor="scheduled-date" style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink-secondary)' }}>Date</label>
       <input
+        id="scheduled-date"
         type="date"
         className="glass-input"
         min={minDate}
@@ -288,8 +301,9 @@ export function ScheduledRidePlanner() {
         onChange={(e) => setDate(e.target.value)}
         style={{ width: '100%', marginTop: 6, marginBottom: 14, padding: '12px 14px', borderRadius: 12 }}
       />
-      <label style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink-secondary)' }}>Pickup time</label>
+      <label htmlFor="scheduled-time" style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink-secondary)' }}>Pickup time (Eastern)</label>
       <input
+        id="scheduled-time"
         type="time"
         className="glass-input"
         value={time}
@@ -344,7 +358,7 @@ export function ScheduledRidePlanner() {
         )}
         <p style={{ fontSize: 12, color: '#522D80', marginTop: 8, lineHeight: 1.45 }}>
           {quote?.depositCents > 0
-            ? `${depositSurfaceCopy(quote, 'confirm', { studentDiscountCents: quote.discountCents })} Pay that deposit below to hold the ride.`
+            ? `${depositSurfaceCopy(quote, 'confirm', { studentDiscountCents: quote.discountCents })} Scheduling does not charge your card. Airport deposit requirements still apply before driver acceptance.`
             : 'Estimate from distance. Final fare can change when a driver accepts.'}
           {quote?.source === 'airport_flat' && !(quote?.depositCents > 0)
             ? ` ${quote.airport} flat rate. Pay the deposit in Airport deposit below if you want to hold it now.`
@@ -375,6 +389,8 @@ export function ScheduledRidePlanner() {
         />
       )}
 
+      <p>No card charge when you confirm. Campus rides enter matching about 45 minutes before pickup.</p>
+
       <PrimaryButton
         onClick={() => runOrPrompt(onSchedule, { setPromptOpen, nextPath: 'schedule' })}
         disabled={busy}
@@ -389,7 +405,7 @@ export function ScheduledRidePlanner() {
       {saved && (
         <p style={{ marginTop: 12, color: '#522D80', fontSize: 13, fontWeight: 700, lineHeight: 1.45 }}>
           Confirmed for {formatPickupAt(saved.pickup_at)}.
-          {saved.depositCopy ? ` ${saved.depositCopy}` : ' Drivers can accept it from their queue.'}
+           No card was charged. {saved.deposit_cents > 0 ? 'Airport deposit requirements still apply before driver acceptance.' : 'Matching starts about 45 minutes before pickup; a driver is not guaranteed.'}
         </p>
       )}
 

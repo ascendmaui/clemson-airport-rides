@@ -1103,6 +1103,7 @@ function DriverShell({ driverId }) {
               {offer.metadata?.carpool ? 'You net · carpool' : 'Live offer'}
             </div>
           </div>
+          {offer.metadata?.scheduled_pickup_at && <p>Scheduled pickup: {formatPickupAt(offer.metadata.scheduled_pickup_at)}</p>}
           {offer.metadata?.carpool && (
             <p style={{ fontSize: 13, color: 'var(--purple)', margin: '8px 0 0', lineHeight: 1.4, fontWeight: 700 }}>
               {driverOfferCopy(offer.metadata.carpool)?.sub}. Riders already agreed to {formatUsd(offer.metadata.carpool.grossCents)} total.
@@ -1188,6 +1189,7 @@ function DriverShell({ driverId }) {
               <div>
                 <div style={{ fontWeight: 600 }}>Pickup</div>
                 <div style={{ fontSize: 13, color: 'var(--ink-secondary)' }}>{activeTrip.pickup_label}</div>
+                {activeTrip.metadata?.scheduled_pickup_at && <div>Scheduled pickup: {formatPickupAt(activeTrip.metadata.scheduled_pickup_at)}</div>}
               </div>
             </div>
             <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
