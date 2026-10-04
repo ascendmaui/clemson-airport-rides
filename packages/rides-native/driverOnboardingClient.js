@@ -293,7 +293,7 @@ async function saveDriverInfoDirect(supabase, user, payload) {
   if (appErr) throw new Error(appErr.message)
 
   const vehicle = await saveVehicle(supabase, userId, payload)
-  await supabase.from('driver_status').upsert({
+  if (nextStatus !== 'approved') await supabase.from('driver_status').upsert({
     driver_id: userId,
     online: false,
     updated_at: now,

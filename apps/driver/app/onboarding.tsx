@@ -268,8 +268,6 @@ export default function OnboardingScreen() {
   const uploaded = new Set(docs.map((doc: { doc_type: string }) => doc.doc_type))
   const stepDocs = REQUIRED_DOCUMENTS.filter((doc) => doc.stepId === step?.id)
   const status = String(bundle?.application?.onboarding_status || '')
-  const registrationDoc = docs.find((doc: { doc_type: string; match_status?: string }) => doc.doc_type === 'registration')
-  const registrationMatched = registrationDoc?.match_status === 'matched' || notices.registrationMatched === 'yes'
   const models = modelsForMake(make)
 
   function go(nextId: string) {
@@ -487,7 +485,7 @@ export default function OnboardingScreen() {
 
   const pickerOptions = picker === 'make' ? VEHICLE_MAKES : picker === 'color' ? VEHICLE_COLORS : models
   const docsContinueDisabled = step?.id === 'registration'
-    ? !registrationMatched
+    ? !stepIsComplete('registration', bundle?.ctx || {})
     : stepDocs.some((doc) => !uploaded.has(doc.id))
 
   if (!user) {
@@ -548,7 +546,7 @@ export default function OnboardingScreen() {
             )
           })}
         </ScrollView>
-        {status ? <Tag label={onboardingLabel(status)} tone={status === 'approved' ? 'orange' : 'purple'} /> : null}
+        {status ? <Tag label={status === 'approved' ? 'Approved' : (bundle?.blockers.length || 0) > 0 ? 'Waiting on applicant — continue application' : onboardingLabel(status)} tone={status === 'approved' ? 'orange' : 'purple'} /> : null}
         {bundle?.application?.rejection_reason ? <ErrorText>{String(bundle.application.rejection_reason)}</ErrorText> : null}
         {error ? <ErrorText>{error}</ErrorText> : null}
 
@@ -774,10 +772,11 @@ export default function OnboardingScreen() {
             ) : (
               <Text style={styles.copy}>After you submit, the app opens. You can set up billing, your profile, and photos. Accepting rides stays locked until an admin approves you.</Text>
             )}
-            {(bundle?.blockers || []).map((code: string) => (
+            {(status === 'approved' ? [] : bundle?.blockers || []).map((code: string) => (
               <Text key={code} style={styles.blocker}>Still needed · {blockerLabel(code)}</Text>
             ))}
-            {status === 'pending_review' ? <Tag label="Waiting for admin review" /> : null}
+            {status === 'pending_review' && bundle?.blockers.length === 0 ? <Tag label="Waiting on admin" /> : null}
+            {status !== 'approved' && (bundle?.blockers.length || 0) > 0 ? <Primary label="Continue required steps" onPress={() => go(bundle!.stepId)} /> : null}
             {inboxRequests.filter((row: { status: string }) => row.status === 'open').map((row: { id: string; prompt: string }) => (
               <Text key={row.id} style={styles.copy}>More information needed. {row.prompt}</Text>
             ))}

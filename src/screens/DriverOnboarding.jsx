@@ -165,7 +165,7 @@ export function DriverOnboarding() {
   const gate = {
     status,
     uploaded,
-    backgroundAuthorized: Boolean(application?.background_authorized_at),
+    registrationMatch: docs.find((doc) => doc.doc_type === 'registration')?.match_status || null,    backgroundAuthorized: Boolean(application?.background_authorized_at),
     workEligibilityAttested: Boolean(application?.work_eligibility_attested_at),
     workEligibilityCategory: application?.work_eligibility_category || null,
     taxSaved: Boolean(taxProfile?.legal_name && /^[0-9]{4}$/.test(String(taxProfile?.tin_last4 || ''))),
@@ -175,6 +175,7 @@ export function DriverOnboarding() {
   const blockers = useMemo(() => submissionBlockers(gate), [
     gate.status,
     gate.uploaded,
+    gate.registrationMatch,
     gate.backgroundAuthorized,
     gate.workEligibilityAttested,
     gate.workEligibilityCategory,
@@ -241,6 +242,7 @@ export function DriverOnboarding() {
         const resume = resolveResumeStep({
           status: app?.onboarding_status,
           uploaded: documents.map((d) => d.doc_type),
+          registrationMatch: documents.find((doc) => doc.doc_type === 'registration')?.match_status || null,
           backgroundAuthorized: Boolean(app?.background_authorized_at),
           workEligibilityAttested: Boolean(app?.work_eligibility_attested_at),
           workEligibilityCategory: app?.work_eligibility_category || null,
@@ -565,7 +567,7 @@ export function DriverOnboarding() {
         <div className="sheet" style={{ marginTop: 16, padding: 20, borderRadius: 22, boxShadow: 'var(--shadow-pill)' }}>
           <h2 style={{ fontSize: 18, color: 'var(--purple)', marginBottom: 6 }}>Employment verification</h2>
           <p style={{ fontSize: 14, color: 'var(--ink-secondary)', lineHeight: 1.45, marginBottom: 14 }}>
-            Authorize a background check and attest that you are eligible to work. Upload both documents. An admin reviews them before you can receive rides.
+            Authorize a background check and attest that you are eligible to work. Complete the attestations below. An admin reviews them before you can receive rides.
           </p>
           <label style={{ display: 'flex', gap: 10, alignItems: 'flex-start', marginBottom: 14, fontSize: 13, lineHeight: 1.45 }}>
             <input type="checkbox" checked={backgroundAuthorized} onChange={(e) => setBackgroundAuthorized(e.target.checked)} style={{ marginTop: 3 }} />
@@ -699,10 +701,14 @@ export function DriverOnboarding() {
         </div>
       )}
 
+      {step === 'registration' && ['mismatch', 'unreadable'].includes(gate.registrationMatch) && (
+        <p role="alert">Replace the registration with a clear copy matching your vehicle before continuing.</p>
+      )}
+
       {step === 'review' && (
         <div className="sheet" style={{ marginTop: 16, padding: 22, borderRadius: 22, boxShadow: 'var(--shadow-pill)' }}>
           <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--orange)' }}>
-            {status === 'pending_review' ? 'Pending review' : onboardingLabel(status)}
+            {status === 'approved' ? 'Approved' : blockers.length ? 'Waiting on applicant' : status === 'pending_review' ? 'Waiting on admin' : 'Ready to submit'}
           </div>
           {status === 'approved' && (
             <>
@@ -713,11 +719,11 @@ export function DriverOnboarding() {
               <PrimaryButton variant="purple" onClick={() => navigate('driver')}>Open driver mode</PrimaryButton>
             </>
           )}
-          {status === 'pending_review' && (
+          {status === 'pending_review' && blockers.length === 0 && (
             <>
               <h2 style={{ fontSize: 22, color: 'var(--purple)', marginTop: 8 }}>Waiting on admin</h2>
               <p style={{ color: 'var(--ink-secondary)', fontSize: 14, lineHeight: 1.45 }}>
-                License, insurance, registration, car photos, employment documents, W-9, and your signed contractor agreement are in the queue. You will not receive rides until an admin approves them.
+                License, insurance, registration, car photos, employment attestations, W-9 information, and your signed contractor agreement are in the queue. You will not receive rides until an admin approves them.
               </p>
               {application?.notify_error && (
                 <p style={{ fontSize: 12, color: 'var(--ink-tertiary)', lineHeight: 1.4 }}>{application.notify_error}</p>
@@ -733,7 +739,7 @@ export function DriverOnboarding() {
               <PrimaryButton onClick={() => go('license')}>Review documents</PrimaryButton>
             </>
           )}
-          {status !== 'approved' && status !== 'pending_review' && (
+          {status !== 'approved' && (status !== 'pending_review' || blockers.length > 0) && (
             <>
               {status !== 'rejected' && (
                 <h2 style={{ fontSize: 22, color: 'var(--purple)', marginTop: 8 }}>Submit for review</h2>
@@ -743,6 +749,7 @@ export function DriverOnboarding() {
                   ? `${blockers.length} item${blockers.length === 1 ? '' : 's'} still needed: ${blockers.map(blockerLabel).join(', ')}.`
                   : 'Everything is in. Submitting does not approve you — an admin still has to verify you.'}
               </p>
+              {blockers.length > 0 && <PrimaryButton onClick={() => go(resolveResumeStep(gate))}>Continue required steps</PrimaryButton>}
               <PrimaryButton type="button" onClick={onSubmitReview} disabled={busy || blockers.length > 0}>
                 {busy ? 'Submitting…' : 'Submit for admin review'}
               </PrimaryButton>

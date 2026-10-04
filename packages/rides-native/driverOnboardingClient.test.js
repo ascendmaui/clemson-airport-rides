@@ -1248,7 +1248,6 @@ test('loadApplicantInbox and replyApplicantInbox call /api/driver?action=inbox w
   assert.deepEqual(JSON.parse(fetchCalls[1].options.body), { body: 'I have uploaded my documents.' })
 })
 
-
 test('approved onboarding skips all compliance reads, even when those tables fail', async () => {
   const sb = createFakeSupabase({ fromHandler(state) {
     assert.equal(state.table, 'driver_applications')
@@ -1271,4 +1270,33 @@ test('approved review fallback is idempotent without documents, tax, or agreemen
   const result = await submitDriverReview(sb, 'approved-driver')
   assert.equal(result.onboarding_status, 'approved')
   assert.equal(result.ok, true)
+})
+
+test('pending review resumes missing electronic forms, while approved resume remains open', async () => {
+  for (const status of ['pending_review', 'approved']) {
+    const sb = createFakeSupabase({ tables: {
+      driver_applications: { data: { onboarding_status: status } },
+      driver_documents: { data: REQUIRED_DOCUMENTS.map((doc) => ({ doc_type: doc.id })) },
+    } })
+    const bundle = await loadOnboarding(sb, 'existing-driver')
+    assert.equal(bundle.stepId, status === 'approved' ? 'review' : 'employment')
+    assert.ok(!bundle.blockers.includes('doc:w9'))
+  }
+})
+
+test('approved fallback profile save preserves online status and submit never downgrades approval', async () => {
+  stubFetch({}) // API unavailable; all requests are mocked.
+  const sb = createFakeSupabase({ tables: {
+    driver_applications: { data: { onboarding_status: 'approved' } },
+    vehicles: { data: [] },
+  } })
+  const saved = await saveDriverInfo(sb, { id: 'approved-driver' }, {
+    hasCar: true, hasInsurance: true, attestationAccepted: true,
+    fullName: 'Approved Driver', phone: '8645550100', make: 'Honda', model: 'Civic', plate: 'TEST',
+  })
+  assert.equal(saved.onboarding_status, 'approved')
+  assert.equal(sb.calls.from.some((call) => call.table === 'driver_status'), false)
+  const submitted = await submitDriverReview(sb, 'approved-driver')
+  assert.equal(submitted.onboarding_status, 'approved')
+  assert.equal(sb.calls.from.some((call) => call.table === 'driver_applications' && call.operation === 'update'), false)
 })

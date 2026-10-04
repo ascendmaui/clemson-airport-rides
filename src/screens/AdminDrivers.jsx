@@ -221,7 +221,7 @@ export function AdminDrivers({ embedded = false }) {
               <button type="button" className="pressable" onClick={() => openRow(row.profile_id)} style={{ width: '100%', textAlign: 'left' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
                   <div style={{ fontWeight: 800, color: 'var(--purple)' }}>{name}</div>
-                  <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--orange)' }}>{onboardingLabel(row.onboarding_status)}</div>
+                  <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--orange)' }}>{row.onboarding_status !== 'approved' && (row.blockers || []).length > 0 ? 'Waiting on applicant' : onboardingLabel(row.onboarding_status)}</div>
                 </div>
                 <div style={{ fontSize: 13, color: 'var(--ink-secondary)', marginTop: 4 }}>{row.profile?.email}</div>
                 <div style={{ fontSize: 13, marginTop: 4 }}>{vehicleLabel}</div>

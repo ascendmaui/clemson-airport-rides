@@ -106,7 +106,7 @@ export function stepIsComplete(stepId, ctx = {}) {
     case 'account':
       return accountInfoSaved(ctx.status)
     case 'documents':
-      return docsDone
+      return docsDone && (stepId !== 'registration' || !['mismatch', 'unreadable'].includes(ctx.registrationMatch))
     case 'employment':
       return docsDone
         && Boolean(ctx.backgroundAuthorized)
@@ -127,7 +127,7 @@ export function stepIsComplete(stepId, ctx = {}) {
 }
 
 export function firstIncompleteStepId(ctx = {}) {
-  if (ctx.status === 'pending_review' || ctx.status === 'approved') return 'review'
+  if (ctx.status === 'approved') return 'review'
   for (const step of ONBOARDING_FLOW) {
     if (!stepIsComplete(step.id, ctx)) return step.id
   }
@@ -136,7 +136,7 @@ export function firstIncompleteStepId(ctx = {}) {
 
 /**
  * Resume a saved screen without skipping unfinished work.
- * Pending review / approved always land on the last step.
+ * Approved drivers always land on the last step; incomplete applicants resume work.
  */
 export function canOpenStep(stepId, ctx = {}) {
   if (ctx.status === 'pending_review' || ctx.status === 'approved' || ctx.status === 'rejected') return true
@@ -147,7 +147,7 @@ export function canOpenStep(stepId, ctx = {}) {
 }
 
 export function resolveResumeStep(ctx = {}) {
-  if (ctx.status === 'pending_review' || ctx.status === 'approved') return 'review'
+  if (ctx.status === 'approved') return 'review'
   const first = firstIncompleteStepId(ctx)
   if (!ctx.preferred) return first
   const prefIdx = ONBOARDING_FLOW.findIndex((step) => step.id === ctx.preferred)
@@ -199,7 +199,7 @@ export function progressSnapshot(ctx = {}) {
   const { status, viewing } = ctx
   const total = ONBOARDING_FLOW.length
   const viewIndex = Math.max(0, ONBOARDING_FLOW.findIndex((step) => step.id === viewing))
-  if (status === 'pending_review' || status === 'approved') {
+  if (status === 'approved' || (status === 'pending_review' && submissionBlockers(ctx).length === 0)) {
     const current = ONBOARDING_FLOW[viewIndex]
     const onReview = !viewing || viewing === 'review'
     return {
@@ -329,7 +329,7 @@ export function onboardingLabel(status) {
     case 'pending_info':
       return 'Finish your info'
     case 'pending_docs':
-      return 'Upload documents'
+      return 'Waiting on applicant — continue application'
     case 'pending_review':
       return 'Waiting for admin review'
     case 'approved':

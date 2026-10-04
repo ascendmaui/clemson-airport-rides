@@ -84,7 +84,7 @@ test('progress bar includes every required step and does not skip unfinished wor
     resolveResumeStep({ status: 'pending_docs', uploaded: licenseOnly, preferred: 'account' }),
     'account',
   )
-  assert.equal(resolveResumeStep({ status: 'pending_review', uploaded: REQUIRED_DOC_IDS }), 'review')
+  assert.equal(resolveResumeStep({ status: 'pending_review', uploaded: REQUIRED_DOC_IDS }), 'employment')
 })
 
 test('progress percent fills as documents land and hits 100 at review', () => {
@@ -107,6 +107,12 @@ test('progress percent fills as documents land and hits 100 at review', () => {
 
   const submitted = progressSnapshot({
     status: 'pending_review',
+    backgroundAuthorized: true,
+    workEligibilityAttested: true,
+    workEligibilityCategory: 'citizen',
+    taxSaved: true,
+    agreementSigned: true,
+    agreementVersion: IC_AGREEMENT_VERSION,
     uploaded: REQUIRED_DOC_IDS,
     viewing: 'review',
   })
@@ -194,4 +200,38 @@ test('admin is a seeded email, is_admin, or admin/ops role — not a copied prof
   assert.equal(isAdminIdentity({ jwtEmail: 'student@clemson.edu', role: 'driver' }), false)
   assert.equal(isAdminIdentity({ jwtEmail: 'student@clemson.edu' }), false)
   assert.equal(isAdminIdentity({ jwtEmail: 'student@clemson.edu', role: 'support' }), false)
+})
+
+const completeApplicant = {
+  status: 'pending_review', uploaded: REQUIRED_DOC_IDS,
+  backgroundAuthorized: true, workEligibilityAttested: true,
+  workEligibilityCategory: 'citizen', taxSaved: true,
+  agreementSigned: true, agreementVersion: IC_AGREEMENT_VERSION,
+}
+
+test('pending review applicants resume each unfinished electronic step without phantom uploads', () => {
+  for (const [patch, step] of [
+    [{ uploaded: [] }, 'license'],
+    [{ registrationMatch: 'mismatch' }, 'registration'],
+    [{ registrationMatch: 'unreadable' }, 'registration'],
+    [{ backgroundAuthorized: false }, 'employment'],
+    [{ taxSaved: false }, 'w9'],
+    [{ agreementSigned: false }, 'agreement'],
+    [{ agreementVersion: 'old' }, 'agreement'],
+  ]) {
+    const ctx = { ...completeApplicant, ...patch }
+    assert.equal(resolveResumeStep({ ...ctx, preferred: 'review' }), step)
+    assert.ok(progressSnapshot(ctx).percent < 100)
+  }
+  assert.deepEqual(submissionBlockers(completeApplicant), [])
+  assert.equal(resolveResumeStep(completeApplicant), 'review')
+  assert.equal(progressSnapshot(completeApplicant).percent, 100)
+  assert.equal(resolveResumeStep({ status: 'pending_info' }), 'account')
+})
+
+test('approved drivers skip resume requirements even with no compliance records', () => {
+  const ctx = { status: 'approved', uploaded: [], registrationMatch: 'mismatch' }
+  assert.equal(resolveResumeStep(ctx), 'review')
+  assert.equal(progressSnapshot(ctx).percent, 100)
+  assert.equal(canReceiveRides(ctx.status), true)
 })

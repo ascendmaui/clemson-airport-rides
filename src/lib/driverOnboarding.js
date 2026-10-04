@@ -134,12 +134,15 @@ export async function fetchMyDriverApplication(userId) {
 
 export async function fetchMyDriverDocuments(userId) {
   if (!supabase || !userId) return []
-  const { data, error } = await supabase
+  let result = await supabase
     .from('driver_documents')
-    .select('id, doc_type, storage_path, created_at')
+    .select('id, doc_type, storage_path, created_at, match_status, review_status, review_note')
     .eq('profile_id', userId)
-  if (error) throw new Error(error.message)
-  const rows = data || []
+  if (result.error && /match_status|review_status|review_note|schema cache/i.test(result.error.message || '')) {
+    result = await supabase.from('driver_documents').select('id, doc_type, storage_path, created_at').eq('profile_id', userId)
+  }
+  if (result.error) throw new Error(result.error.message)
+  const rows = result.data || []
   const withUrls = []
   for (const row of rows) {
     const signed = await supabase.storage.from('driver-documents').createSignedUrl(row.storage_path, 60 * 20)
@@ -173,16 +176,20 @@ export async function uploadDriverDocument(userId, docType, file) {
     .eq('doc_type', docType)
     .maybeSingle()
 
-  const { error: rowErr } = await supabase.from('driver_documents').upsert(
-    {
-      profile_id: userId,
-      doc_type: docType,
-      storage_path: path,
-      created_at: new Date().toISOString(),
-    },
+  const row = {
+    profile_id: userId,
+    doc_type: docType,
+    storage_path: path,
+    created_at: new Date().toISOString(),
+  }
+  let saved = await supabase.from('driver_documents').upsert(
+    { ...row, match_status: null, review_status: null, review_note: null },
     { onConflict: 'profile_id,doc_type' },
   )
-  if (rowErr) throw new Error(rowErr.message)
+  if (saved.error && /match_status|review_status|review_note|schema cache/i.test(saved.error.message || '')) {
+    saved = await supabase.from('driver_documents').upsert(row, { onConflict: 'profile_id,doc_type' })
+  }
+  if (saved.error) throw new Error(saved.error.message)
 
   if (previous?.storage_path && previous.storage_path !== path) {
     await supabase.storage.from('driver-documents').remove([previous.storage_path])
@@ -270,7 +277,7 @@ async function saveDriverInfoDirect(userId, payload, email) {
     vehicle = updated
   }
 
-  await supabase.from('driver_status').upsert({
+  if (nextStatus !== 'approved') await supabase.from('driver_status').upsert({
     driver_id: userId,
     online: false,
     updated_at: now,
@@ -402,6 +409,7 @@ export async function signDriverAgreement(signatureName) {
 function complianceContext({ application, documents, tax, agreement }) {
   return {
     uploaded: (documents || []).map((doc) => doc.doc_type),
+    registrationMatch: (documents || []).find((doc) => doc.doc_type === 'registration')?.match_status || null,
     backgroundAuthorized: Boolean(application?.background_authorized_at),
     workEligibilityAttested: Boolean(application?.work_eligibility_attested_at),
     workEligibilityCategory: application?.work_eligibility_category || null,

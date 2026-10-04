@@ -158,3 +158,11 @@ test('canGoOnline and canSeeOffers are strictly true ONLY for approved status', 
   assert.equal(nullView.canGoOnline, false)
   assert.equal(nullView.canSeeOffers, false)
 })
+
+test('missing steps distinguish applicant action from admin review without gating approved drivers', () => {
+  const pending = driverGateView('pending_review', { missingItems: ['ic_agreement'] })
+  assert.equal(pending.title, 'Waiting on applicant')
+  assert.equal(pending.primaryAction, 'Continue application')
+  assert.equal(driverGateView('approved', { missingItems: ['ic_agreement'] }).canGoOnline, true)
+  assert.equal(driverGateView('approved', { missingItems: ['ic_agreement'] }).canSeeOffers, true)
+})

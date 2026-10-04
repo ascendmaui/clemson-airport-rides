@@ -42,6 +42,13 @@ export function driverGateView(onboardingStatus, { rejectionReason, missingItems
       }
 
     case 'pending_review':
+      if (missingStr) return {
+        canGoOnline: false,
+        canSeeOffers: false,
+        title: 'Waiting on applicant',
+        body: `Finish the required steps: ${missingStr}.`,
+        primaryAction: 'Continue application',
+      }
       return {
         canGoOnline: false,
         canSeeOffers: false,
