@@ -1,3 +1,4 @@
+import { isTeslaModel3 } from '../../shared/teslaFleet.js'
 import { canReceiveRides } from '../../shared/driverOnboarding.js'
 import { defaultDriverRank, dispatchRankOf } from '../../shared/driverOrder.js'
 import { authedJson } from './apiClient.js'
@@ -33,13 +34,7 @@ export const OPEN_POOL_COPY =
 
 /** True when the vehicle row is listed as the Tesla Model 3 fleet option. */
 export function isTeslaVehicle(vehicle) {
-  if (!vehicle || typeof vehicle !== 'object') return false
-  if (vehicle.is_tesla === true || vehicle.isTesla === true) return true
-  const tier = String(vehicle.tier || '').trim().toLowerCase()
-  if (tier === 'tesla' || tier === 'tesla_self_driving') return true
-  const make = String(vehicle.make || '').trim().toLowerCase()
-  const model = String(vehicle.model || '').trim().toLowerCase()
-  return make === 'tesla' && /\bmodel\s*3\b/.test(model)
+  return isTeslaModel3(vehicle)
 }
 
 /** True when a mapped driver card is a Tesla fleet listing. */
@@ -50,7 +45,7 @@ export function isTeslaDriver(driver) {
 }
 
 export const TESLA_FLEET_EMPTY_COPY =
-  'No Tesla Model 3 drivers are online right now. Listings come from drivers who toggled Tesla fleet. Self-driving dispatch is not available.'
+  'No Tesla Model 3 drivers are online right now. Self-driving dispatch is not available.'
 
 export const TESLA_FLEET_PICK_COPY =
   'Tesla Model 3 fleet only. Pick a listed Tesla driver. A person still drives — there is no robotaxi match.'

@@ -1,15 +1,6 @@
+import { isTeslaModel3 as listedTesla } from '../shared/teslaFleet.js'
 import { receivableDriverIds } from './driverApproval.js'
 import { defaultDriverRank, sortByDefaultDriverOrder } from '../shared/driverOrder.js'
-
-function listedTesla(vehicle) {
-  if (!vehicle) return false
-  if (vehicle.is_tesla === true) return true
-  const tier = String(vehicle.tier || '').trim().toLowerCase()
-  if (tier === 'tesla' || tier === 'tesla_self_driving') return true
-  const make = String(vehicle.make || '').trim().toLowerCase()
-  const model = String(vehicle.model || '').trim().toLowerCase()
-  return make === 'tesla' && /\bmodel\s*3\b/.test(model)
-}
 
 /**
  * Approved drivers who are online, John then Kim then everyone else.
@@ -34,7 +25,11 @@ export async function listAssignableDrivers(sb, { tier = 'standard' } = {}) {
   if (profiles.error) return { drivers: [], error: profiles.error.message || 'Could not read drivers' }
 
   let vehiclesByDriver = null
+  let teslaApproved = new Set()
   if (tier === 'tesla') {
+    const apps = await sb.from('driver_applications').select('profile_id').in('profile_id', allowed).eq('onboarding_status', 'approved')
+    if (apps.error) return { drivers: [], error: apps.error.message }
+    teslaApproved = new Set((apps.data || []).map(row => row.profile_id))
     const vehicles = await sb.from('vehicles').select('driver_id, is_tesla, tier, make, model').in('driver_id', allowed)
     if (vehicles.error) return { drivers: [], error: vehicles.error.message || 'Could not verify Tesla listing' }
     vehiclesByDriver = {}
@@ -48,7 +43,7 @@ export async function listAssignableDrivers(sb, { tier = 'standard' } = {}) {
   const drivers = []
   for (const profile of profiles.data || []) {
     if (!profile?.id || !gate.allowed.has(profile.id)) continue
-    if (tier === 'tesla' && !listedTesla(vehiclesByDriver?.[profile.id])) continue
+    if (tier === 'tesla' && (!teslaApproved.has(profile.id) || !listedTesla(vehiclesByDriver?.[profile.id]))) continue
     drivers.push({
       id: profile.id,
       dispatchRank: defaultDriverRank(profile.email),

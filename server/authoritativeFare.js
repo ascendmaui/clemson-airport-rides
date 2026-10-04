@@ -1,3 +1,4 @@
+import { TESLA_FARE_MULTIPLIER } from '../shared/teslaFleet.js'
 /**
  * Server fare for checkout, trip rows, and collect/settle.
  * Student eligibility is studentDiscountGranted (confirmed @clemson.edu / @g.clemson.edu).
@@ -141,6 +142,14 @@ export function priceScheduledRequest({
       distanceM,
       durationS,
     })
+    if (tierId === 'tesla') {
+      const fareCents = Math.round(priced.fareCents * TESLA_FARE_MULTIPLIER)
+      const split = splitPlatformFee(fareCents)
+      return { ...priced, tier: tierId, fareCents, depositCents: cardDepositCents(fareCents),
+        breakdown: { ...priced.quote.breakdown, vehicle_multiplier: TESLA_FARE_MULTIPLIER,
+          fare_before_credits_cents: fareCents, rider_pays_cents: fareCents,
+          platform_fee_cents: split.platformFeeCents, driver_earnings_cents: split.driverEarningsCents } }
+    }
     return { ...priced, tier: tierId }
   }
 
@@ -161,10 +170,12 @@ export function priceScheduledRequest({
     surgeMultiplier: surge.multiplier,
     isStudent: false,
     tier: tierId,
+    vehicleMultiplier: tierId === 'tesla' ? TESLA_FARE_MULTIPLIER : 1,
   })
   let fareCents = quote.fareBeforeCreditsCents
-  const floorApplied = code === 'ATL' && fareCents < ATL_FLOOR_CENTS
-  if (floorApplied) fareCents = ATL_FLOOR_CENTS
+  const floorCents = ATL_FLOOR_CENTS * (tierId === 'tesla' ? TESLA_FARE_MULTIPLIER : 1)
+  const floorApplied = code === 'ATL' && fareCents < floorCents
+  if (floorApplied) fareCents = floorCents
   const studentOff = student
     ? percentOffCents(fareCents, STUDENT_DISCOUNT_BPS)
     : { amountCents: fareCents, discountCents: 0, bps: 0 }

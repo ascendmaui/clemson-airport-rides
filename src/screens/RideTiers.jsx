@@ -22,6 +22,7 @@ export function RideTiers({
   pickupLng = '',
   destLat = '',
   destLng = '',
+  billing = '',
 }) {
   const [selected, setSelected] = useState(TIERS[0])
   const [upsell, setUpsell] = useState(null)
@@ -62,6 +63,7 @@ export function RideTiers({
       pickupLng,
       tier: row.id,
       listCents: String(quoted.fareCents + quoted.discountCents),
+      ...(billing ? { billing } : {}),
     })
   }
 
@@ -77,14 +79,14 @@ export function RideTiers({
     runOrPrompt(proceedRequest, {
       setPromptOpen,
       nextPath: 'tiers',
-      nextParams: { dest, destLat, destLng, pickup, pickupLat, pickupLng },
+      nextParams: { dest, destLat, destLng, pickup, pickupLat, pickupLng, ...(billing ? { billing } : {}) },
     })
   }
 
   return (
     <div className="fade-in" style={{ display: 'flex', flexDirection: 'column', height: '100%', background: 'transparent' }}>
       <div style={{ padding: '12px 16px 0' }}>
-        <button type="button" className="pressable glass-pill nav-back-btn" aria-label="Back to pickup confirmation" onClick={() => navigate('confirm', { dest, destLat, destLng, pickup, pickupLat, pickupLng })} style={{ marginBottom: 8 }}>←</button>
+        <button type="button" className="pressable glass-pill nav-back-btn" aria-label="Back to pickup confirmation" onClick={() => navigate('confirm', { dest, destLat, destLng, pickup, pickupLat, pickupLng, ...(billing ? { billing } : {}) })} style={{ marginBottom: 8 }}>←</button>
         <div className="glass-panel" style={{ borderRadius: 16, overflow: 'hidden', padding: 4 }}>
           <CampusMap
             height={140}

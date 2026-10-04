@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { PlacePicker } from './PlacePicker'
+import { BillingPicker } from './BillingPicker'
 import { PrimaryButton } from './PrimaryButton'
 import { FRIEND_PLACES } from '../lib/friendRides'
 import { useAuth } from '../lib/auth'
@@ -23,6 +24,7 @@ import {
   estimateScheduledFare,
   listMyScheduledTrips,
 } from '../lib/scheduledRides'
+import { fetchBillingQuote } from '../lib/rideBilling'
 import { TESLA_FLEET_NOTICE } from '../../packages/rides-native/tripTags.js'
 
 const PLACES = [
@@ -53,6 +55,9 @@ export function ScheduledRidePlanner() {
   const [saved, setSaved] = useState(null)
   const [mine, setMine] = useState([])
   const [listError, setListError] = useState(null)
+  const [billingOffer, setBillingOffer] = useState(null)
+  const [billingLoading, setBillingLoading] = useState(false)
+  const [billingChoice, setBillingChoice] = useState('no_card')
 
   const isStudent = useStudentStatus().verified
   const minDate = useMemo(() => todayInputValue(), [])
@@ -123,6 +128,44 @@ export function ScheduledRidePlanner() {
     }
   }, [pickup, dropoff, isStudent, fleet, date, time])
 
+  useEffect(() => {
+    if (!user?.id || pickup?.lat == null || dropoff?.lat == null) {
+      setBillingOffer(null)
+      setBillingLoading(false)
+      return undefined
+    }
+    let alive = true
+    setBillingLoading(true)
+    fetchBillingQuote({
+      pickupLabel: pickup.label,
+      pickupLat: pickup.lat,
+      pickupLng: pickup.lng,
+      dest: dropoff.label,
+      destLat: dropoff.lat,
+      destLng: dropoff.lng,
+      tier: fleet,
+      date: date || undefined,
+      time: time || undefined,
+    })
+      .then((next) => {
+        if (!alive) return
+        setBillingOffer(next)
+        setBillingChoice((current) => {
+          if (current === 'credits' && next?.creditsSelectable) return 'credits'
+          return next?.campus ? 'no_card' : 'deposit'
+        })
+      })
+      .catch(() => {
+        if (alive) setBillingOffer(null)
+      })
+      .finally(() => {
+        if (alive) setBillingLoading(false)
+      })
+    return () => {
+      alive = false
+    }
+  }, [user?.id, pickup, dropoff, fleet, date, time])
+
   async function onSchedule() {
     setError(null)
     setSaved(null)
@@ -140,6 +183,7 @@ export function ScheduledRidePlanner() {
         pickupAt: check.pickupAt,
         purpose,
         tier: fleet,
+        billingChoice: billingOffer ? billingChoice : null,
       })
       setSaved(row)
       setDate('')
@@ -335,7 +379,18 @@ export function ScheduledRidePlanner() {
         </div>
       </div>
 
+      {pickup?.lat != null && dropoff?.lat != null && (
+        <BillingPicker
+          offer={user?.id ? billingOffer : null}
+          selected={billingChoice}
+          onSelect={setBillingChoice}
+          loading={Boolean(user?.id) && billingLoading}
+          signedIn={Boolean(user?.id)}
+        />
+      )}
+
       <p>No card charge when you confirm. Campus rides enter matching about 45 minutes before pickup.</p>
+
       <PrimaryButton
         onClick={() => runOrPrompt(onSchedule, { setPromptOpen, nextPath: 'schedule' })}
         disabled={busy}

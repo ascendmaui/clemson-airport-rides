@@ -1,10 +1,19 @@
+import { useEffect } from 'react'
+import { RIDE_TIERS } from '../../packages/rides-native/places.js'
+import { useTeslaAvailability } from '../lib/useTeslaAvailability'
 import { A11yBadge } from './A11yBadge.jsx'
 
 export function TierRow({ tier, selected, onSelect }) {
+  const teslaAvailable = useTeslaAvailability(tier.id === 'tesla')
+  const unavailable = tier.id === 'tesla' && !teslaAvailable
+  useEffect(() => {
+    if (unavailable && selected) onSelect(RIDE_TIERS[0])
+  }, [unavailable, selected, onSelect])
   return (
     <button
       type="button"
       className={`pressable tier-row-glass ${selected ? 'selected' : ''}`}
+      disabled={unavailable}
       onClick={() => onSelect(tier)}
       style={{
         display: 'flex',
@@ -50,7 +59,8 @@ export function TierRow({ tier, selected, onSelect }) {
           )}
         </div>
         <div style={{ color: 'var(--ink-secondary)', fontSize: 13, marginTop: 2 }}>
-          {tier.eta} · {tier.meta}
+          {unavailable ? 'Unavailable · No approved Tesla Model 3 driver online' : `${tier.eta} · ${tier.meta}`}
+          {tier.id === 'tesla' && <span> · Premium fare: 2× Standard before discounts</span>}
         </div>
       </div>
       <div style={{ fontWeight: 600, fontSize: 17, fontVariantNumeric: 'tabular-nums' }}>

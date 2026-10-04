@@ -1,3 +1,4 @@
+import { isTeslaModel3 } from '../../shared/teslaFleet.js'
 import { supabase } from './supabase'
 import {
   EMAIL_TODO,
@@ -253,9 +254,9 @@ async function saveDriverInfoDirect(userId, payload, email) {
     color: payload.color || null,
     plate: payload.plate,
     seats: payload.seats || 4,
-    is_tesla: Boolean(payload.isTesla),
+    is_tesla: isTeslaModel3(payload),
     autonomous_capable: false,
-    tier: payload.isTesla ? 'tesla_self_driving' : 'standard',
+    tier: isTeslaModel3(payload) ? 'tesla' : 'standard',
   }
   let vehicle = existingVeh?.[0] || null
   if (!vehicle) {

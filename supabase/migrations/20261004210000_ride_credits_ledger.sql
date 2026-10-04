@@ -1,0 +1,2 @@
+-- public.credit_ledger already exists.
+-- This migration does not create, alter, or index it, and does not add columns.
