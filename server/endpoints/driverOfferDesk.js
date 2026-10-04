@@ -4,12 +4,14 @@
  * from searching to offered. driver_id stays empty so accept still races fairly.
  * pass-offer: immediate driver requests persist a pass whose database trigger
  * retargets atomically. Other ride types retain their existing queue behavior.
- * No email.
+ * A new target records a four-channel offer alert. Email stays unsent unless
+ * DRIVER_OFFER_ALERT_EMAIL=send. Push and SMS have no server sender.
  */
 import { admin, cors, json, parseBody, userFromAuth } from '../friendRideLib.js'
 import { driverApprovalStatus } from '../driverApproval.js'
 import { listAssignableDrivers, nextQueuedDriver } from '../autoAssign.js'
 import { offerVisibleToDriver, unchangedOfferQuery } from '../../shared/driverOrder.js'
+import { notifyDriverOffer } from '../driverOfferAlerts.js'
 
 function metaOf(trip) {
   return trip?.metadata && typeof trip.metadata === 'object' && !Array.isArray(trip.metadata)
@@ -47,7 +49,7 @@ async function approvedOnline(sb, userId) {
 }
 
 async function loadTrip(sb, tripId) {
-  const tripRes = await sb.from('trips').select('id, status, rider_id, driver_id, tier, pickup_at, scheduled_for, deposit_cents, metadata').eq('id', tripId).maybeSingle()
+  const tripRes = await sb.from('trips').select('id, status, rider_id, driver_id, tier, pickup_at, scheduled_for, deposit_cents, metadata, pickup_label, dropoff_label').eq('id', tripId).maybeSingle()
   if (tripRes.error) return { error: tripRes.error.message || 'Could not load trip', status: 500 }
   if (!tripRes.data) return { error: 'Trip not found', status: 404 }
   return { trip: tripRes.data }
@@ -116,9 +118,17 @@ export async function handlePassOffer(req, res, deps = {}) {
     if (passed.error) return json(res, 500, { error: 'Could not pass this ride offer', code: 'offer_update_failed' })
     const fresh = await loadTrip(ctx.sb, tripId)
     if (!fresh.trip) return json(res, fresh.status, { error: fresh.error })
+    const nextDriverId = fresh.trip.metadata?.offer_driver_id || null
+    if (nextDriverId && nextDriverId !== ctx.user.id) {
+      await notifyDriverOffer(ctx.sb, {
+        trip: fresh.trip,
+        driverId: nextDriverId,
+        offerMarker: `pass:${ctx.user.id}`,
+      })
+    }
     return json(res, 200, { tripId, status: fresh.trip.status,
-      offerDriverId: fresh.trip.metadata?.offer_driver_id || null,
-      released: !fresh.trip.metadata?.offer_driver_id })
+      offerDriverId: nextDriverId,
+      released: !nextDriverId })
   }
 
   let offerDriverId = null
@@ -155,6 +165,13 @@ export async function handlePassOffer(req, res, deps = {}) {
     .maybeSingle()
   if (updated.error) return json(res, 500, { error: 'Could not pass this ride offer', code: 'offer_update_failed' })
   if (!updated.data) return json(res, 409, { error: 'This ride offer changed. Refresh and try again.', code: 'offer_changed' })
+  if (offerDriverId) {
+    await notifyDriverOffer(ctx.sb, {
+      trip: { ...trip, metadata: nextMeta },
+      driverId: offerDriverId,
+      offerMarker: `pass:${ctx.user.id}`,
+    })
+  }
   return json(res, 200, {
     tripId,
     status: updated.data?.status || 'searching',

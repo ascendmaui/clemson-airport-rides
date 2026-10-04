@@ -1,11 +1,17 @@
 import { listAssignableDrivers } from './autoAssign.js'
+import { notifyDriverOffer } from './driverOfferAlerts.js'
 import { unchangedOfferQuery } from '../shared/driverOrder.js'
 
 /** Advance missed offers without relying on either app staying open. */
-export async function rebroadcastMissedOffers(sb, { now = new Date(), limit = 100, dryRun = false } = {}) {
+export async function rebroadcastMissedOffers(sb, {
+  now = new Date(),
+  limit = 100,
+  dryRun = false,
+  alertDriver = notifyDriverOffer,
+} = {}) {
   const at = now.toISOString()
   const due = await sb.from('trips')
-    .select('id, rider_id, driver_id, status, tier, metadata, deposit_cents, pickup_at, scheduled_for, offer_expires_at')
+    .select('id, rider_id, driver_id, status, tier, metadata, deposit_cents, pickup_at, scheduled_for, offer_expires_at, pickup_label, dropoff_label')
     .in('status', ['searching', 'offered']).is('driver_id', null)
     .lte('offer_expires_at', at)
     .order('offer_expires_at', { ascending: true }).order('id', { ascending: true })
@@ -53,8 +59,18 @@ export async function rebroadcastMissedOffers(sb, { now = new Date(), limit = 10
         .select('id').maybeSingle()
       if (updated.error) throw new Error(updated.error.message)
       if (!updated.data) result.skipped++ // accept, cancel, pass, or another sweep won
-      else if (next) result.advanced++
-      else result.released++
+      else if (next) {
+        result.advanced++
+        try {
+          await alertDriver(sb, {
+            trip: { ...trip, pickup_label: trip.pickup_label, dropoff_label: trip.dropoff_label },
+            driverId: next,
+            offerMarker: `rebroadcast:${at}`,
+          })
+        } catch (alertError) {
+          console.error('[driver-offer-alert]', trip.id, alertError?.message || alertError)
+        }
+      } else result.released++
     } catch (error) {
       result.errors++
       console.error('[matching-rebroadcast]', trip.id, error.message)
