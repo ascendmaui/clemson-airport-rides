@@ -5,6 +5,7 @@ import { acceptActionLabel, declineActionLabel, driverStatusDetail } from './tri
 import { acceptNeedsDriverOnline } from './tripTags.js'
 import {
   DRIVER_TRACK_STEPS,
+  SEARCH_APPROX_WAIT_NOTE,
   SEARCH_PREVIEW_COPY,
   STILL_SEARCHING_COPY,
   STILL_SEARCHING_MS,
@@ -20,6 +21,10 @@ import {
   riderLiveSteps,
   orderedLiveStops,
   riderLiveView,
+  searchingApproxWaitLine,
+  searchingEtaLine,
+  searchingRidePreview,
+  searchingRouteLine,
   showSearchTheater,
   straightLineEta,
 } from './liveTrip.js'
@@ -214,6 +219,48 @@ test('active trip draws a route line without a stored polyline and keeps the str
   }, null)
   assert.equal(stops.length, 2)
   assert.deepEqual(stops[0], [34.6788, -82.843])
+})
+
+test('searching preview draws the stored road or a straight pickup to drop-off and labels the wait as approximate', () => {
+  const trip = {
+    status: 'searching',
+    pickup_lat: 34.6788,
+    pickup_lng: -82.843,
+    dropoff_lat: 34.8957,
+    dropoff_lng: -82.2189,
+    metadata: {},
+    driver_lat: 34.7,
+    driver_lng: -82.8,
+    stops: [
+      { lat: 34.6788, lng: -82.843, label: 'Stadium' },
+      { lat: 34.7, lng: -82.8, label: 'Downtown' },
+    ],
+  }
+  assert.deepEqual(searchingRouteLine(trip), [[34.6788, -82.843], [34.8957, -82.2189]])
+  const minutes = straightLineEta(
+    { lat: trip.pickup_lat, lng: trip.pickup_lng },
+    { lat: trip.dropoff_lat, lng: trip.dropoff_lng },
+  ).etaMin
+  assert.ok(minutes >= 1)
+  assert.match(searchingEtaLine(trip), /straight line to drop-off/)
+  assert.equal(searchingApproxWaitLine(trip), `Approximate wait · about ${minutes} min`)
+  assert.doesNotMatch(searchingApproxWaitLine(trip), /driver|arriv|on the way/i)
+  assert.match(SEARCH_APPROX_WAIT_NOTE, /not a live arrival/i)
+  assert.equal(etaLineFor('searching', { lat: 34.7, lng: -82.8 }, trip), null)
+
+  const encoded = '_p~iF~ps|U_ulLnnqC_mqNvxq`@'
+  const preview = searchingRidePreview({
+    ...trip,
+    metadata: { route_polyline: encoded, route_duration_s: 600 },
+  })
+  assert.equal(preview.route.length, 3)
+  assert.ok(Math.abs(preview.route[0][0] - 38.5) < 0.001)
+  assert.equal(preview.eta, 'About 10 min by road to drop-off')
+  assert.equal(preview.wait, 'Approximate wait · about 10 min')
+  assert.deepEqual(searchingRouteLine(null), [])
+  assert.equal(searchingEtaLine({ status: 'searching' }), null)
+  assert.equal(searchingApproxWaitLine({ status: 'searching' }), 'Approximate wait')
+  assert.match(searchingApproxWaitLine({ ...trip, metadata: { route_duration_s: 90 } }), /about 2 min/)
 })
 
 test('pickup ETA follows current GPS and confirmed arrival replaces countdown', () => {

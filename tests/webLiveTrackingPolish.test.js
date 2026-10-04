@@ -31,6 +31,12 @@ test('web ride tiers and the active trip use the bookable catalog and the route 
   assert.match(tiers, /bookableRideTiers\(/)
   assert.doesNotMatch(tiers, /id: 'xl'|id: 'pet'|id: 'tesla'|upsell === 'tesla'/)
   assert.match(requested, /activeTripRouteLine\(/)
+  assert.match(requested, /searchingRidePreview\(/)
+  assert.match(requested, /searchPreview \? searchPreview\.route : activeTripRouteLine\(tripRow, driverFix\)/)
+  assert.match(requested, /search-wait__spinner/)
+  assert.match(requested, /SEARCH_APPROX_WAIT_NOTE/)
+  assert.match(requested, /fitRoute=\{preview && routePath\.length > 1\}/)
+  assert.match(requested, /driverPosition=\{preview \? null : driverPos\}/)
   assert.match(requested, /eta=\{tripMissing \? null : etaLine\}/)
 })
 

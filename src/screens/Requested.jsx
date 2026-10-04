@@ -18,7 +18,19 @@ import { MidrideCancelSheet } from '../components/MidrideCancelSheet'
 import { isMidrideStatus } from '../lib/tripPhase'
 import { CounterpartChip } from '../components/CounterpartChip'
 import { PARTY_VISIBLE_STATUSES } from '../../packages/rides-native/partyProfile.js'
-import { activeTripRouteLine, etaHoldLine, etaLineFor, orderedLiveStops, riderLiveView, SEARCH_PREVIEW_COPY, showSearchTheater, STILL_SEARCHING_COPY, STILL_SEARCHING_MS } from '../../packages/rides-native/liveTrip.js'
+import {
+  activeTripRouteLine,
+  etaHoldLine,
+  etaLineFor,
+  orderedLiveStops,
+  riderLiveView,
+  SEARCH_APPROX_WAIT_NOTE,
+  SEARCH_PREVIEW_COPY,
+  searchingRidePreview,
+  showSearchTheater,
+  STILL_SEARCHING_COPY,
+  STILL_SEARCHING_MS,
+} from '../../packages/rides-native/liveTrip.js'
 import { TESLA_FLEET_NOTICE, tripTags } from '../../packages/rides-native/tripTags.js'
 import { LivePhase } from '../components/LivePhase'
 import { reconcileCheckoutSession } from '../lib/stripeCheckout'
@@ -228,9 +240,12 @@ export function Requested({ dest = 'GSP Airport', trip = '', driver = 'your driv
       : riderLiveView(status, { preferred, waitingMs })
   const driverFix = driverPos ? { lat: driverPos[0], lng: driverPos[1] } : null
   const locationIssue = trackingIssue(status, locationAt, trackingNow)
-  const etaLine = locationIssue ? null : etaHoldLine(status, etaLineFor(status, driverFix, tripRow))
   const showMap = Boolean(trip) || Boolean(status) || preferred
-  const preview = showSearchTheater(status) && !driverPos
+  const preview = showSearchTheater(status) && !tripRow?.driver_id && !driverPos
+  const searchPreview = preview ? searchingRidePreview(tripRow) : null
+  const etaLine = locationIssue
+    ? null
+    : (searchPreview ? searchPreview.eta : etaHoldLine(status, etaLineFor(status, driverFix, tripRow)))
   const liveStops = orderedLiveStops(tripRow)
   const stopPins = liveStops.map((stop) => ({
     id: stop.id,
@@ -240,12 +255,17 @@ export function Requested({ dest = 'GSP Airport', trip = '', driver = 'your driv
     badge: String(stop.order),
     color: stop.order === 1 ? '#522D80' : (stop.order === liveStops.length || stop.kind === 'dropoff' ? '#F56600' : '#522D80'),
   }))
-  const routePath = activeTripRouteLine(tripRow, driverFix)
+  const routePath = searchPreview ? searchPreview.route : activeTripRouteLine(tripRow, driverFix)
   const dropoff =
     tripRow?.dropoff_lat != null && tripRow?.dropoff_lng != null
       ? [Number(tripRow.dropoff_lat), Number(tripRow.dropoff_lng)]
       : null
-  const mapCenter = driverPos || (liveStops[0] ? [liveStops[0].lat, liveStops[0].lng] : pickup) || CLEMSON
+  const mapCenter = preview && routePath.length > 1
+    ? [
+      (routePath[0][0] + routePath[routePath.length - 1][0]) / 2,
+      (routePath[0][1] + routePath[routePath.length - 1][1]) / 2,
+    ]
+    : (driverPos || (liveStops[0] ? [liveStops[0].lat, liveStops[0].lng] : pickup) || CLEMSON)
 
   useEffect(() => {
     if (!showSearchTheater(status) || driverPos) {
@@ -276,21 +296,29 @@ export function Requested({ dest = 'GSP Airport', trip = '', driver = 'your driv
         />
       )}
       {showMap && (
-        <div className="glass-panel" style={{ borderRadius: 20, overflow: 'hidden', height: 220 }}>
+        <div className="glass-panel search-map" style={{ borderRadius: 20, overflow: 'hidden', height: preview ? 280 : 220, position: 'relative' }}>
           {/* TODO: road-following tiles need a billed Maps key (VITE_GOOGLE_MAPS_API_KEY). Status, progress, and straight-line ETA stay on the card. */}
           <CampusMap
-            height={220}
+            height={preview ? 280 : 220}
             interactive
             center={mapCenter}
-            zoom={liveStops.length > 1 ? 12 : 14}
+            zoom={preview && routePath.length > 1 ? 10 : (liveStops.length > 1 ? 12 : 14)}
             marker={pickup}
             pickupPosition={pickup}
             dropoffPosition={dropoff}
-            driverPosition={driverPos}
-            animateDriver={Boolean(driverPos) && liveStops.length === 0}
+            driverPosition={preview ? null : driverPos}
+            animateDriver={!preview && Boolean(driverPos) && liveStops.length === 0}
             stops={stopPins}
             route={routePath.length > 1 ? routePath : null}
+            routeSecondary={preview && routePath.length > 1 ? routePath : null}
+            fitRoute={preview && routePath.length > 1}
           />
+          {preview && (
+            <div className="search-map-chip" aria-hidden="true">
+              <span className="search-wait__spinner" />
+              <span className="search-map-chip__label">Looking for a driver</span>
+            </div>
+          )}
         </div>
       )}
       <div className="glass-panel glass-panel--elevated" style={{ padding: 24, borderRadius: 20 }}>
@@ -313,6 +341,15 @@ export function Requested({ dest = 'GSP Airport', trip = '', driver = 'your driv
           steps={tripMissing ? [] : phase.steps}
           activeIndex={tripMissing ? -1 : phase.stepIndex}
         />
+        {preview && searchPreview?.wait && (
+          <div className="search-wait" role="status" aria-live="polite">
+            <span className="search-wait__spinner" aria-hidden="true" />
+            <div>
+              <p className="search-wait__time">{searchPreview.wait}</p>
+              <p className="search-wait__note">{SEARCH_APPROX_WAIT_NOTE}</p>
+            </div>
+          </div>
+        )}
         {preview && (
           <p style={{ color: 'var(--ink-secondary)', fontSize: 13, lineHeight: 1.45, marginTop: 10 }}>
             {SEARCH_PREVIEW_COPY}
