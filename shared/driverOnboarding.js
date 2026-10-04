@@ -228,7 +228,7 @@ export function progressSnapshot(ctx = {}) {
 }
 
 export const EMAIL_TODO =
-  'TODO: set RESEND_API_KEY and RESEND_FROM (verified domain) to email seeded admins when a driver applies. The in-app admin dashboard at #/admin lists the application without email.'
+  'TODO: set RESEND_API_KEY and RESEND_FROM (verified domain) to email seeded admins when a driver applies. The in-app admin dashboard at #/admin lists each application with the email submitted on it.'
 
 const DOC_ID_SET = new Set(REQUIRED_DOC_IDS)
 
