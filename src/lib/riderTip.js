@@ -13,6 +13,8 @@ export function fetchTipOffer(tripId) {
   return api('/api/driver?action=tip-choice', { mode: 'offer', tripId })
 }
 
-export function recordTipChoice(tripId, choiceId) {
-  return api('/api/driver?action=tip-choice', { mode: 'record', tripId, choiceId })
+export function recordTipChoice(tripId, choiceId, customDollars) {
+  const payload = { mode: 'record', tripId, choiceId }
+  if (choiceId === 'custom') payload.customDollars = customDollars
+  return api('/api/driver?action=tip-choice', payload)
 }

@@ -12,6 +12,7 @@ function TipBody() {
   const tripId = getHashRoute().params.trip
   const [offer, setOffer] = useState(null)
   const [selectedId, setSelectedId] = useState(null)
+  const [customText, setCustomText] = useState('')
   const [error, setError] = useState(null)
   const [busy, setBusy] = useState(false)
 
@@ -19,6 +20,8 @@ function TipBody() {
     if (!tripId || !user?.id) return undefined
     let alive = true
     setOffer(null)
+    setSelectedId(null)
+    setCustomText('')
     setError(null)
     fetchTipOffer(tripId)
       .then((data) => {
@@ -37,12 +40,12 @@ function TipBody() {
 
   if (!tripId) return <div style={{ padding: 24 }}>Missing trip</div>
 
-  async function save(choiceId) {
+  async function save(choiceId, customDollars) {
     if (!tripId || busy) return
     setBusy(true)
     setError(null)
     try {
-      const data = await recordTipChoice(tripId, choiceId)
+      const data = await recordTipChoice(tripId, choiceId, customDollars)
       setOffer((prev) => ({
         ...(prev || {}),
         choice: data.choice,
@@ -60,10 +63,27 @@ function TipBody() {
     navigate('rate', { trip: tripId })
   }
 
+  function choosePreset(id) {
+    setSelectedId(id)
+    setCustomText('')
+    setError(null)
+  }
+
+  function chooseCustom(nextText) {
+    setCustomText(nextText)
+    setSelectedId('custom')
+    setError(null)
+  }
+
   const charged = Number(offer?.chargedTipCents) > 0
   const saved = offer?.choice
   const driverName = offer?.driverName || 'your driver'
   const presets = Array.isArray(offer?.presets) ? offer.presets : []
+  const customMin = Number(offer?.custom?.minCents)
+  const customMax = Number(offer?.custom?.maxCents)
+  const customRange = Number.isFinite(customMin) && Number.isFinite(customMax)
+    ? `${formatUsdFromCents(customMin)} to ${formatUsdFromCents(customMax)}`
+    : '$1.00 to $100.00'
 
   return (
     <div className="fade-in tip-screen" data-testid="tip-screen">
@@ -98,7 +118,7 @@ function TipBody() {
           <>
             <h1 className="tip-title">Add a tip for {driverName}</h1>
             <p className="tip-copy" data-testid="tip-uncharged-note">
-              Pick an amount or skip. The price comes from this trip. Your card is not charged here.
+              Pick an amount, enter your own, or skip. The price comes from this trip. Your card is not charged here.
             </p>
             <div className="tip-options" role="radiogroup" aria-label="Tip amount">
               {presets.map((preset) => {
@@ -112,7 +132,7 @@ function TipBody() {
                     className={`pressable tip-option${selected ? ' tip-option--selected' : ''}`}
                     data-testid={`tip-option-${preset.id}`}
                     disabled={busy}
-                    onClick={() => setSelectedId(preset.id)}
+                    onClick={() => choosePreset(preset.id)}
                   >
                     {preset.popular ? <span className="tip-popular">Most common</span> : <span className="tip-popular tip-popular--spacer" aria-hidden="true" />}
                     <span className="tip-amount">{formatUsdFromCents(preset.cents)}</span>
@@ -121,8 +141,46 @@ function TipBody() {
                 )
               })}
             </div>
+            <div className="tip-or" aria-hidden="true"><span>or</span></div>
+            <div className={`tip-custom${selectedId === 'custom' ? ' tip-custom--selected' : ''}`}>
+              <label className="tip-custom-label" htmlFor="tip-custom-amount">Custom amount</label>
+              <div className="tip-custom-field">
+                <span className="tip-custom-prefix" aria-hidden="true">$</span>
+                <input
+                  id="tip-custom-amount"
+                  className="tip-custom-input"
+                  data-testid="tip-custom-input"
+                  inputMode="decimal"
+                  autoComplete="off"
+                  enterKeyHint="done"
+                  placeholder="0.00"
+                  maxLength={16}
+                  aria-label="Custom tip amount in dollars"
+                  aria-describedby="tip-custom-hint"
+                  aria-invalid={selectedId === 'custom' && error ? 'true' : undefined}
+                  disabled={busy}
+                  value={customText}
+                  onFocus={() => setSelectedId('custom')}
+                  onChange={(event) => chooseCustom(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key !== 'Enter') return
+                    event.preventDefault()
+                    save('custom', customText)
+                  }}
+                />
+              </div>
+              <p id="tip-custom-hint" className="tip-custom-hint">
+                Any amount from {customRange}. This saves your choice and does not charge your card.
+              </p>
+            </div>
             <div className="tip-actions">
-              <PrimaryButton disabled={busy || !selectedId} onClick={() => selectedId && save(selectedId)}>
+              <PrimaryButton
+                disabled={busy || !selectedId}
+                onClick={() => {
+                  if (selectedId === 'custom') save('custom', customText)
+                  else if (selectedId) save(selectedId)
+                }}
+              >
                 {busy ? 'Saving…' : 'Add tip'}
               </PrimaryButton>
               <button
@@ -141,7 +199,7 @@ function TipBody() {
           <AccessibleAlert
             error={error}
             onDismiss={() => setError(null)}
-            onRetry={() => {
+            onRetry={offer ? undefined : () => {
               setError(null)
               setOffer(null)
               fetchTipOffer(tripId).then(setOffer).catch((err) => setError(err.message || 'Could not load tip choices'))

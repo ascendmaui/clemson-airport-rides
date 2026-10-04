@@ -4,6 +4,11 @@ import { readFileSync } from 'node:fs'
 import driverHandler from '../api/driver.js'
 import {
   applyRiderTipChoice,
+  CUSTOM_TIP_EMPTY,
+  CUSTOM_TIP_FORMAT,
+  CUSTOM_TIP_NEGATIVE,
+  CUSTOM_TIP_RANGE,
+  priceCustomTip,
   priceTipPresets,
   resolveTipChoice,
 } from './riderTipChoice.js'
@@ -128,6 +133,33 @@ test('a large fare stays under the tip cap and stays distinct', () => {
   assert.equal(priced.basis, 'percent')
   assert.deepEqual(priced.presets.map((row) => row.cents), [6000, 8000, 10000])
   assert.ok(priced.presets.every((row) => row.cents <= 10000))
+})
+
+test('a typed custom tip is priced in cents inside the existing range', () => {
+  assert.deepEqual(priceCustomTip('4.50'), { ok: true, cents: 450 })
+  assert.deepEqual(priceCustomTip('$1'), { ok: true, cents: 100 })
+  assert.deepEqual(priceCustomTip('100.00'), { ok: true, cents: 10000 })
+  assert.deepEqual(priceCustomTip(7.25), { ok: true, cents: 725 })
+  assert.equal(priceCustomTip('').error, CUSTOM_TIP_EMPTY)
+  assert.equal(priceCustomTip('   ').error, CUSTOM_TIP_EMPTY)
+  assert.equal(priceCustomTip(null).error, CUSTOM_TIP_EMPTY)
+  assert.equal(priceCustomTip('-3').error, CUSTOM_TIP_NEGATIVE)
+  assert.equal(priceCustomTip(-1).error, CUSTOM_TIP_NEGATIVE)
+  assert.equal(priceCustomTip('0').error, CUSTOM_TIP_RANGE)
+  assert.equal(priceCustomTip('0.99').error, CUSTOM_TIP_RANGE)
+  assert.equal(priceCustomTip('100.01').error, CUSTOM_TIP_RANGE)
+  assert.equal(priceCustomTip('999999').error, CUSTOM_TIP_RANGE)
+  assert.equal(priceCustomTip('nope').error, CUSTOM_TIP_FORMAT)
+  assert.equal(priceCustomTip('4.567').error, CUSTOM_TIP_FORMAT)
+
+  const resolved = resolveTipChoice(2000, 'custom', '4.50')
+  assert.equal(resolved.ok, true)
+  assert.equal(resolved.choice.id, 'custom')
+  assert.equal(resolved.choice.tipCents, 450)
+  assert.equal(resolved.choice.percent, null)
+  assert.equal(resolved.choice.charged, false)
+  assert.equal(resolved.choice.chargeStatus, 'not_wired')
+  assert.equal(resolveTipChoice(1, 'custom', '4.50').choice.tipCents, 450)
 })
 
 test('resolve uses the preset id and ignores a client cent amount', () => {
@@ -257,6 +289,144 @@ test('only a completed trip owned by the rider can be tipped', async () => {
   assert.equal(blocked.status, 409)
   assert.equal(blocked.body.chargedTipCents, 500)
   assert.equal(charged.state.updates.length, 0)
+})
+
+test('a custom amount is stored from the typed dollars and ignores client money', async () => {
+  const sb = mockSb({ fare_cents: 2000 })
+  const result = await applyRiderTipChoice(sb, { id: 'rider-1' }, {
+    mode: 'record',
+    tripId: 'trip-1',
+    choiceId: 'custom',
+    customDollars: '4.50',
+    tipCents: 1,
+    customCents: 1,
+    amountCents: 1,
+    amount: 99,
+    total: 99,
+    fare: 1,
+    fareCents: 1,
+    deposit: 1,
+    depositCents: 1,
+    isStudent: true,
+  }, { now: () => NOW })
+  assert.equal(result.status, 200)
+  assert.equal(result.body.choice.id, 'custom')
+  assert.equal(result.body.choice.tipCents, 450)
+  assert.equal(result.body.choice.percent, null)
+  assert.equal(result.body.choice.charged, false)
+  assert.equal(result.body.chargingWired, false)
+  assert.equal(result.body.chargedTipCents, 0)
+  assert.deepEqual(Object.keys(sb.state.updates[0]), ['metadata'])
+  assert.equal(sb.state.trip.metadata.kind, 'campus')
+  assert.equal(sb.state.trip.metadata.rider_tip_choice.id, 'custom')
+  assert.equal(sb.state.trip.metadata.rider_tip_choice.tipCents, 450)
+  assert.equal(sb.state.trip.metadata.rider_tip_choice.fareCents, 2000)
+  assert.equal(sb.state.trip.metadata.rider_tip_choice.chargeStatus, 'not_wired')
+  assert.equal(sb.state.trip.tip_cents, 0)
+  assert.ok(!sb.state.tables.includes('payments'))
+})
+
+test('custom tip rejects empty, negative, and absurd amounts without saving', async () => {
+  const cases = [
+    [{ customDollars: '' }, CUSTOM_TIP_EMPTY],
+    [{ customDollars: '   ' }, CUSTOM_TIP_EMPTY],
+    [{ customDollars: '-5' }, CUSTOM_TIP_NEGATIVE],
+    [{ amount: -5 }, CUSTOM_TIP_EMPTY],
+    [{ customDollars: '250', tipCents: 25000, amount: 250 }, CUSTOM_TIP_RANGE],
+    [{ customDollars: '0.25', fare: 4000, total: 4000, isStudent: false }, CUSTOM_TIP_RANGE],
+  ]
+  for (const [extra, message] of cases) {
+    const sb = mockSb()
+    const result = await applyRiderTipChoice(sb, { id: 'rider-1' }, {
+      mode: 'record',
+      tripId: 'trip-1',
+      choiceId: 'custom',
+      ...extra,
+    })
+    assert.equal(result.status, 400)
+    assert.equal(result.body.error, message)
+    assert.equal(result.body.chargingWired, false)
+    assert.equal(sb.state.updates.length, 0)
+    assert.ok(!sb.state.tables.includes('payments'))
+  }
+})
+
+test('the same custom amount is idempotent and a different one stays saved', async () => {
+  const sb = mockSb()
+  const first = await applyRiderTipChoice(sb, { id: 'rider-1' }, {
+    mode: 'record',
+    tripId: 'trip-1',
+    choiceId: 'custom',
+    customDollars: '6',
+    amount: 1,
+    fareCents: 1,
+  }, { now: () => NOW })
+  assert.equal(first.status, 200)
+  assert.equal(first.body.choice.tipCents, 600)
+  const same = await applyRiderTipChoice(sb, { id: 'rider-1' }, {
+    mode: 'record',
+    tripId: 'trip-1',
+    choiceId: 'custom',
+    customDollars: '$6.00',
+    tipCents: 1,
+  })
+  assert.equal(same.status, 200)
+  assert.equal(same.body.alreadyRecorded, true)
+  assert.equal(same.body.choice.tipCents, 600)
+  const changed = await applyRiderTipChoice(sb, { id: 'rider-1' }, {
+    mode: 'record',
+    tripId: 'trip-1',
+    choiceId: 'custom',
+    customDollars: '8.00',
+  })
+  assert.equal(changed.status, 409)
+  assert.equal(changed.body.choice.tipCents, 600)
+  const preset = await applyRiderTipChoice(sb, { id: 'rider-1' }, {
+    mode: 'record',
+    tripId: 'trip-1',
+    choiceId: 'pct-20',
+    customDollars: '8.00',
+  })
+  assert.equal(preset.status, 409)
+  assert.equal(sb.state.updates.length, 1)
+  assert.equal(sb.state.trip.metadata.rider_tip_choice.tipCents, 600)
+})
+
+test('a preset choice ignores a typed custom amount', async () => {
+  const sb = mockSb()
+  const result = await applyRiderTipChoice(sb, { id: 'rider-1' }, {
+    mode: 'record',
+    tripId: 'trip-1',
+    choiceId: 'pct-15',
+    customDollars: '50',
+    amount: 50,
+    total: 50,
+    fare: 1,
+    deposit: 0,
+    isStudent: true,
+  }, { now: () => NOW })
+  assert.equal(result.status, 200)
+  assert.equal(result.body.choice.id, 'pct-15')
+  assert.equal(result.body.choice.tipCents, 300)
+  assert.equal(sb.state.trip.metadata.rider_tip_choice.tipCents, 300)
+})
+
+test('the offer tells the website the custom range and still ignores client money', async () => {
+  const sb = mockSb({ fare_cents: 2000 })
+  const result = await applyRiderTipChoice(sb, { id: 'rider-1' }, {
+    mode: 'offer',
+    tripId: 'trip-1',
+    customDollars: '80',
+    amount: 1,
+    fare: 1,
+    total: 1,
+    deposit: 1,
+    isStudent: true,
+  })
+  assert.equal(result.status, 200)
+  assert.deepEqual(result.body.custom, { minCents: 100, maxCents: 10000 })
+  assert.deepEqual(result.body.presets.map((row) => row.cents), [300, 400, 500])
+  assert.equal(sb.state.updates.length, 0)
 })
 
 test('charge mode and a raw cent amount are rejected', async () => {
