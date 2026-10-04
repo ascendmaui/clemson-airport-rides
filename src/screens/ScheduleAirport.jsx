@@ -4,13 +4,12 @@ import { BottomTabs } from '../components/BottomTabs'
 import {
   AIRPORT_RATES,
   abandonCheckoutSession,
-  depositCents,
-  createCheckoutSession,
-  getStripeConfig,
   reconcileCheckoutSession,
 } from '../lib/stripeCheckout'
+import { BillingPicker } from '../components/BillingPicker'
 import { parseCheckoutSessionId } from '../../packages/rides-native/checkoutReturn.js'
-import { formatUsdFromCents, applyStudentDiscount } from '../lib/pricing'
+import { formatUsdFromCents } from '../lib/pricing'
+import { fetchBillingQuote, recordBillingChoice } from '../lib/rideBilling'
 import { checkoutCloseOutcome, depositSurfaceCopy } from '../../packages/rides-native/riderMoney.js'
 import { UNAVAILABLE_COPY } from '../lib/apiErrors.js'
 import { useAuth } from '../lib/auth'
@@ -34,6 +33,12 @@ export function ScheduleAirport() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
   const [bookedNote, setBookedNote] = useState(null)
+  const [offer, setOffer] = useState(null)
+  const [billingLoading, setBillingLoading] = useState(false)
+  const [billingChoice, setBillingChoice] = useState(() => {
+    const requested = String(getHashRoute().params?.billing || '')
+    return requested === 'credits' ? 'credits' : 'deposit'
+  })
   const returnFlags = useMemo(() => getHashRoute().params, [])
   const reconciledSessions = useRef(new Set())
 
@@ -94,48 +99,60 @@ export function ScheduleAirport() {
     }
   }, [returnFlags.canceled, returnFlags.trip])
 
-  const rate = AIRPORT_RATES[airport]
-  const student = applyStudentDiscount(rate.fareCents, {
-    isStudent: studentStatusNow.verified,
-    tier: 'standard',
-  })
-  const fareCents = student.fareCents
-  const deposit = depositCents(fareCents)
-  const remaining = Math.max(0, fareCents - deposit)
-  const quoteCopy = depositSurfaceCopy(
-    { fareCents, depositCents: deposit, remainingCents: remaining },
-    'quote',
-    { studentDiscountCents: student.discountCents },
-  )
-  const stripe = getStripeConfig()
+  useEffect(() => {
+    if (!user?.id) {
+      setOffer(null)
+      setBillingLoading(false)
+      return undefined
+    }
+    let alive = true
+    setBillingLoading(true)
+    fetchBillingQuote({ airport, date: date || undefined, time: time || undefined })
+      .then((next) => {
+        if (!alive) return
+        setOffer(next)
+        setBillingChoice((current) => {
+          if (current === 'credits' && next?.creditsSelectable) return 'credits'
+          return 'deposit'
+        })
+      })
+      .catch(() => {
+        if (alive) setOffer(null)
+      })
+      .finally(() => {
+        if (alive) setBillingLoading(false)
+      })
+    return () => {
+      alive = false
+    }
+  }, [user?.id, airport, date, time])
+
+  const fareCents = offer?.fareCents
+  const deposit = offer?.depositCents
+  const remaining = offer?.remainingCents
+  const quoteCopy = offer
+    ? depositSurfaceCopy(
+      { fareCents: offer.fareCents, depositCents: offer.depositCents, remainingCents: offer.remainingCents },
+      'quote',
+      { studentDiscountCents: offer.discountCents },
+    )
+    : null
 
   const onBook = async () => {
     setBusy(true)
     setError(null)
     try {
-      const session = await createCheckoutSession({
+      const saved = await recordBillingChoice({
+        choice: billingChoice,
         airport,
-        date,
-        time,
-        riderName:
-          user?.user_metadata?.full_name ||
-          user?.email?.split('@')[0] ||
-          'Rider',
-        riderId: user.id,
+        date: date || undefined,
+        time: time || undefined,
       })
-      if (session.url) {
-        window.location.href = session.url
+      if (saved.choice === 'credits') {
+        setBookedNote('Ride credits selected for this trip. The balance was not spent and no card was charged.')
         return
       }
-      if (session.tripId && date) {
-        setBookedNote('This pickup stays scheduled. Drivers can accept it from their upcoming list. Nothing else was charged.')
-        return
-      }
-      if (session.tripId) {
-        navigate('requested', { trip: session.tripId, dest: rate.name, paid: '1' })
-        return
-      }
-      setError('Checkout did not return a payment URL. No charge was made.')
+      setBookedNote('25% deposit requested. No card was charged.')
     } catch (err) {
       setError(err.message || UNAVAILABLE_COPY)
     } finally {
@@ -193,12 +210,7 @@ export function ScheduleAirport() {
         )}
 
         <div style={{ display: 'flex', gap: 10, marginBottom: 20 }}>
-          {Object.values(AIRPORT_RATES).map((a) => {
-            const shown = applyStudentDiscount(a.fareCents, {
-              isStudent: studentStatusNow.verified,
-              tier: 'standard',
-            })
-            return (
+          {Object.values(AIRPORT_RATES).map((a) => (
             <button
               key={a.code}
               type="button"
@@ -214,12 +226,8 @@ export function ScheduleAirport() {
             >
               <div style={{ fontWeight: 700, fontSize: 18 }}>{a.code}</div>
               <div style={{ fontSize: 12, color: 'var(--ink-secondary)', marginTop: 4 }}>{a.name.split('(')[0].trim()}</div>
-              <div style={{ fontWeight: 600, fontSize: 20, marginTop: 10, color: 'var(--orange)' }}>
-                {formatUsdFromCents(shown.fareCents)}
-              </div>
             </button>
-            )
-          })}
+          ))}
         </div>
 
         <label htmlFor="schedule-flight-date" style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink-secondary)' }}>Date</label>
@@ -248,40 +256,61 @@ export function ScheduleAirport() {
         <div className="glass-panel glass-panel--orange" style={{ padding: 16, borderRadius: 16, marginBottom: 16 }}>
           <div style={{ fontSize: 11, letterSpacing: 1.1, fontWeight: 800, color: '#F56600', marginBottom: 8 }}>AIRPORT DEPOSIT · 25%</div>
           <ol style={{ margin: '0 0 12px', paddingLeft: 18, color: '#522D80', fontSize: 13, lineHeight: 1.5, fontWeight: 650 }}>
-            <li>Pay the 25% deposit now in Stripe Checkout (holds the ride).</li>
-            <li>Drivers see your request once the deposit is confirmed.</li>
-            <li>Remaining balance is charged when the trip is complete.</li>
+            <li>Request the 25% deposit. A card is not charged in this step.</li>
+            <li>Drivers see the ride after that deposit is confirmed.</li>
+            <li>The remaining balance stays due when the trip is complete.</li>
           </ol>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
             <span style={{ color: 'var(--ink-secondary)' }}>Full fare</span>
-            <strong style={{ color: '#522D80' }}>{formatUsdFromCents(fareCents)}</strong>
+            <strong style={{ color: '#522D80' }}>{fareCents == null ? '—' : formatUsdFromCents(fareCents)}</strong>
           </div>
-          {student.discountCents > 0 && (
+          {offer?.discountCents > 0 && (
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
               <span style={{ color: 'var(--ink-secondary)' }}>Student discount</span>
-              <strong style={{ color: '#F56600' }}>−{formatUsdFromCents(student.discountCents)}</strong>
+              <strong style={{ color: '#F56600' }}>−{formatUsdFromCents(offer.discountCents)}</strong>
             </div>
           )}
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
             <span style={{ color: 'var(--ink-secondary)' }}>Pay now · 25% deposit</span>
-            <strong style={{ color: '#F56600' }}>{formatUsdFromCents(deposit)}</strong>
+            <strong style={{ color: '#F56600' }}>{deposit == null ? '—' : formatUsdFromCents(deposit)}</strong>
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between' }}>
             <span style={{ color: '#522D80', fontWeight: 700 }}>Due after trip</span>
-            <strong style={{ color: '#522D80' }}>{formatUsdFromCents(remaining)}</strong>
+            <strong style={{ color: '#522D80' }}>{remaining == null ? '—' : formatUsdFromCents(remaining)}</strong>
           </div>
-          <p style={{ fontSize: 12, color: '#522D80', marginTop: 10, lineHeight: 1.45 }}>
-            {quoteCopy}
-          </p>
-          {!stripe.configured && (
-            <p style={{ fontSize: 12, color: '#522D80', marginTop: 8, lineHeight: 1.45 }}>
-              This browser has no Stripe publishable key. Pay deposit still asks the server. If Checkout cannot start, nothing is charged and live mode stays off.
+          {quoteCopy && (
+            <p style={{ fontSize: 12, color: '#522D80', marginTop: 10, lineHeight: 1.45 }}>
+              {quoteCopy}
             </p>
           )}
         </div>
 
-        <PrimaryButton className="primary-cta" onClick={onPayClick} disabled={busy || deposit <= 0}>
-          {busy ? 'Opening Stripe Checkout…' : `Pay ${formatUsdFromCents(deposit)} deposit · hold ride`}
+        <BillingPicker
+          offer={user?.id ? offer : null}
+          selected={billingChoice}
+          onSelect={setBillingChoice}
+          loading={Boolean(user?.id) && billingLoading}
+          signedIn={Boolean(user?.id)}
+        />
+
+        <PrimaryButton
+          className="primary-cta"
+          onClick={onPayClick}
+          disabled={
+            busy
+            || Boolean(user?.id && (billingLoading || !offer))
+            || Boolean(offer && billingChoice === 'credits' && !offer.creditsSelectable)
+            || Boolean(offer && billingChoice !== 'credits' && !(deposit > 0))
+          }
+          data-testid="airport-deposit-request"
+        >
+          {busy
+            ? 'Saving…'
+            : billingChoice === 'credits'
+              ? 'Use ride credits'
+              : deposit == null
+                ? 'Request 25% deposit'
+                : `Request ${formatUsdFromCents(deposit)} deposit`}
         </PrimaryButton>
 
         {error && (

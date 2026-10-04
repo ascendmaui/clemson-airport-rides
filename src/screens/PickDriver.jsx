@@ -54,6 +54,7 @@ export function PickDriver({
   pickupLng = '',
   destLat = '',
   destLng = '',
+  billing = '',
 }) {
   const { user } = useAuth()
   const student = useStudentStatus()
@@ -73,7 +74,7 @@ export function PickDriver({
   const approachPickup = pinLat != null && pinLng != null
     ? { lat: pinLat, lng: pinLng }
     : { lat: stadium.latitude, lng: stadium.longitude }
-  const placeParams = { dest, destLat, destLng, pickup, pickupLat, pickupLng, tier, listCents }
+  const placeParams = { dest, destLat, destLng, pickup, pickupLat, pickupLng, tier, listCents, ...(billing ? { billing } : {}) }
 
   const load = async () => {
     setLoading(true)
@@ -152,12 +153,16 @@ export function PickDriver({
         tier,
         isStudent: student.verified,
         listCents,
+        billingChoice: billing || null,
       })
       navigate('requested', { dest, trip: trip.id, driver: selected?.name || 'Next driver' })
     } catch (err) {
       const redirect = scheduleRedirectForRequestError(err, dest)
       if (redirect) {
-        navigate('schedule', redirect.airport ? { airport: redirect.airport } : {})
+        navigate('schedule', {
+          ...(redirect.airport ? { airport: redirect.airport } : {}),
+          ...(billing ? { billing } : {}),
+        })
         return
       }
       setError(requestFailureMessage(err))

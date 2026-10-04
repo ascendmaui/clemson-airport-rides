@@ -23,6 +23,7 @@ import { receivableDriverIds } from '../driverApproval.js'
 import { listAssignableDrivers } from '../autoAssign.js'
 import { insertTripEvent } from '../tripEvents.js'
 import { notifyDriverOffer } from '../driverOfferAlerts.js'
+import { billingForPricedRide } from '../rideBilling.js'
 
 async function serverDistance(origin, dest) {
   if (origin?.lat == null || dest?.lat == null) return { distanceM: null, durationS: null, polyline: null }
@@ -148,6 +149,18 @@ export default async function handler(req, res, deps = {}) {
     })
   }
 
+  const billing = await billingForPricedRide(sb, user.id, body, priced)
+  if (billing.error) {
+    return json(res, billing.error.status || 409, {
+      error: billing.error.error,
+      code: billing.error.code,
+      fareCents: priced.fareCents,
+      depositCents: priced.depositCents,
+      charged: false,
+      debitedCents: 0,
+    })
+  }
+
   const split = splitPlatformFee(priced.fareCents)
   const riderFirst = firstName(
     user.user_metadata?.full_name || user.user_metadata?.name || user.email?.split('@')[0],
@@ -201,6 +214,7 @@ export default async function handler(req, res, deps = {}) {
       fleet: tier === 'tesla' ? 'tesla_model_3' : 'standard',
       fare_source: 'server',
       airport: priced.airport,
+      ...billing.snapshot,
     },
   }
 

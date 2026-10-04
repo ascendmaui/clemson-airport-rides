@@ -1,20 +1,17 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { CampusMap, STADIUM } from '../components/CampusMap'
 import { AddressSuggest } from '../components/AddressSuggest'
+import { BillingPicker } from '../components/BillingPicker'
 import { PrimaryButton } from '../components/PrimaryButton'
 import { navigate } from '../lib/navigation'
 import { SignInToBookModal, useRequireAuthForAction } from '../components/SignInToBookModal'
+import { useAuth } from '../lib/auth'
 import { useStudentStatus } from '../lib/useStudentStatus'
-import { applyStudentDiscount } from '../lib/pricing'
-import { AIRPORT_RATES, depositCents } from '../lib/stripeCheckout'
+import { fetchBillingQuote } from '../lib/rideBilling'
 import { lookupCatalogPlace, placeFromStop } from '../lib/placeCatalog'
 import { finiteCoordinate, placeFromCoordinates, readBrowserPosition, reverseGeocodeLabel } from '../lib/currentPlace'
 import { destPoint } from '../../packages/rides-native/places.js'
-import {
-  airportCodeFromLabel,
-  depositSurfaceCopy,
-  studentSurfaceCopy,
-} from '../../packages/rides-native/riderMoney.js'
+import { studentSurfaceCopy } from '../../packages/rides-native/riderMoney.js'
 
 function placeForLabel(label, fallbackPoint) {
   const known = placeFromStop(lookupCatalogPlace(label))
@@ -45,21 +42,48 @@ export function ConfirmPickup({
   const [locating, setLocating] = useState(false)
   const [locateNote, setLocateNote] = useState(null)
   const [promptOpen, setPromptOpen] = useState(false)
+  const [offer, setOffer] = useState(null)
+  const [billingLoading, setBillingLoading] = useState(false)
+  const [billingChoice, setBillingChoice] = useState('no_card')
+  const { user } = useAuth()
   const { runOrPrompt } = useRequireAuthForAction()
   const student = useStudentStatus()
   const studentOffer = studentSurfaceCopy(student, 'confirm')
-  const airport = airportCodeFromLabel(dropoff.label)
-  const rate = airport ? AIRPORT_RATES[airport] : null
-  const studentFare = rate
-    ? applyStudentDiscount(rate.fareCents, { isStudent: student.verified, tier: 'standard' })
-    : null
-  const depositCopy = studentFare
-    ? depositSurfaceCopy(
-      { fareCents: studentFare.fareCents, depositCents: depositCents(studentFare.fareCents) },
-      'confirm',
-      { studentDiscountCents: studentFare.discountCents },
-    )
-    : null
+
+  useEffect(() => {
+    if (!user?.id) {
+      setOffer(null)
+      setBillingLoading(false)
+      return undefined
+    }
+    let alive = true
+    setBillingLoading(true)
+    fetchBillingQuote({
+      pickupLabel: pickup.label,
+      pickupLat: pickup.lat,
+      pickupLng: pickup.lng,
+      dest: dropoff.label,
+      destLat: dropoff.lat,
+      destLng: dropoff.lng,
+    })
+      .then((next) => {
+        if (!alive) return
+        setOffer(next)
+        setBillingChoice((current) => {
+          if (current === 'credits' && next?.creditsSelectable) return 'credits'
+          return next?.campus ? 'no_card' : 'deposit'
+        })
+      })
+      .catch(() => {
+        if (alive) setOffer(null)
+      })
+      .finally(() => {
+        if (alive) setBillingLoading(false)
+      })
+    return () => {
+      alive = false
+    }
+  }, [user?.id, pickup.label, pickup.lat, pickup.lng, dropoff.label, dropoff.lat, dropoff.lng])
 
   const nextParams = {
     dest: dropoff.label,
@@ -68,6 +92,7 @@ export function ConfirmPickup({
     pickup: pickup.label,
     pickupLat: String(pickup.lat),
     pickupLng: String(pickup.lng),
+    ...(offer ? { billing: billingChoice } : {}),
   }
 
   const goTiers = () => navigate('tiers', nextParams)
@@ -184,11 +209,13 @@ export function ConfirmPickup({
             marginBottom: 8,
           }}
         />
-        {depositCopy && (
-          <p style={{ fontSize: 13, color: '#522D80', fontWeight: 700, lineHeight: 1.45, marginTop: 0 }}>
-            {depositCopy}
-          </p>
-        )}
+        <BillingPicker
+          offer={user?.id ? offer : null}
+          selected={billingChoice}
+          onSelect={setBillingChoice}
+          loading={Boolean(user?.id) && billingLoading}
+          signedIn={Boolean(user?.id)}
+        />
         <button
           type="button"
           className="pressable"
