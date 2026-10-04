@@ -10,6 +10,7 @@ import {
   STILL_SEARCHING_MS,
   STRAIGHT_LINE_WAIT,
   checkoutSuccessHash,
+  activeTripRouteLine,
   decodeRoutePolyline,
   etaHoldLine,
   etaLineFor,
@@ -181,6 +182,39 @@ test('booked carpool public pins round to 3 decimals and still return without a 
   assert.equal(lobby[0].approximate, false)
 })
 
+
+test('active trip draws a route line without a stored polyline and keeps the straight-line ETA', () => {
+  const trip = {
+    status: 'in_progress',
+    pickup_lat: 34.6788,
+    pickup_lng: -82.843,
+    dropoff_lat: 34.8957,
+    dropoff_lng: -82.2189,
+    metadata: {},
+  }
+  const driver = { lat: 34.7, lng: -82.8 }
+  const line = activeTripRouteLine(trip, driver)
+  assert.equal(line.length, 2)
+  assert.deepEqual(line[0], [34.7, -82.8])
+  assert.deepEqual(line[1], [34.8957, -82.2189])
+  assert.match(etaLineFor('in_progress', driver, trip), /to drop-off/)
+  const waiting = activeTripRouteLine({ ...trip, status: 'searching' }, null)
+  assert.deepEqual(waiting, [[34.6788, -82.843], [34.8957, -82.2189]])
+  const encoded = '_p~iF~ps|U_ulLnnqC_mqNvxq`@'
+  const road = activeTripRouteLine({ ...trip, metadata: { route_polyline: encoded } }, driver)
+  assert.equal(road.length, 3)
+  assert.ok(Math.abs(road[0][0] - 38.5) < 0.001)
+  assert.deepEqual(activeTripRouteLine(null, driver), [])
+  const stops = activeTripRouteLine({
+    status: 'accepted',
+    stops: [
+      { lat: 34.6788, lng: -82.843, label: 'Stadium', order: 0 },
+      { lat: 34.6836, lng: -82.8364, label: 'Downtown', order: 1 },
+    ],
+  }, null)
+  assert.equal(stops.length, 2)
+  assert.deepEqual(stops[0], [34.6788, -82.843])
+})
 
 test('pickup ETA follows current GPS and confirmed arrival replaces countdown', () => {
   const places = { pickup_lat: 34.68, pickup_lng: -82.83, dropoff_lat: 34.9, dropoff_lng: -82.9 }

@@ -37,6 +37,14 @@ export const RIDE_TIERS = [
   { id: 'tesla', name: 'Tesla Model 3', icon: '⚡', eta: '7 min', meta: 'Clemson fleet · a driver is at the wheel', price: 36, premium: true },
 ]
 
+/** Rider booking on the web offers these three. Other catalog rows stay off that screen. */
+export const BOOKABLE_RIDE_TIER_IDS = ['standard', 'wait', 'comfort']
+
+export function bookableRideTiers(catalog = RIDE_TIERS) {
+  const allowed = new Set(BOOKABLE_RIDE_TIER_IDS)
+  return catalog.filter((tier) => tier && allowed.has(tier.id))
+}
+
 const DEST_POINTS = [
   { test: /gsp|greenville/, point: GSP },
   { test: /\bclt\b|charlotte/, point: CLT },

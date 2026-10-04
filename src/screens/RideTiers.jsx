@@ -11,16 +11,9 @@ import { quoteWithSurge } from '../lib/pricing'
 import { useGameDayNotice } from '../lib/useGameDayNotice'
 import { useStudentStatus } from '../lib/useStudentStatus'
 import { displayTierPrice, studentSurfaceCopy } from '../../packages/rides-native/riderMoney.js'
-import { TESLA_FLEET_NOTICE } from '../../packages/rides-native/tripTags.js'
+import { bookableRideTiers } from '../../packages/rides-native/places.js'
 
-const TIERS = [
-  { id: 'standard', name: 'Standard', icon: '🚗', eta: '4 min', meta: '4 seats', price: 18.5 },
-  { id: 'wait', name: 'Wait & Save', icon: '⏱️', eta: '12 min', meta: 'Save ~20%', price: 14.2 },
-  { id: 'comfort', name: 'Extra Comfort', icon: '✨', eta: '6 min', meta: 'Newer cars', price: 23.0 },
-  { id: 'xl', name: 'XL', icon: '🚐', eta: '8 min', meta: '6 seats', price: 28.75 },
-  { id: 'pet', name: 'Pet', icon: '🐶', eta: '9 min', meta: 'Pet-friendly', price: 21.0 },
-  { id: 'tesla', name: 'Tesla Model 3', icon: '⚡', eta: '7 min', meta: 'Clemson fleet · a driver is at the wheel', price: 36.0, premium: true, badge: 'FLEET' },
-]
+const TIERS = bookableRideTiers()
 
 export function RideTiers({
   dest = '1900 GSP Dr',
@@ -75,10 +68,6 @@ export function RideTiers({
   const proceedRequest = () => {
     if (selected.id === 'standard') {
       setUpsell('comfort')
-      return
-    }
-    if (selected.id === 'comfort') {
-      setUpsell('tesla')
       return
     }
     openDrivers(selected.id)
@@ -172,17 +161,12 @@ export function RideTiers({
           })}
         </div>
         <div style={{ padding: '12px 8px 0' }}>
-          {selected.id === 'tesla' && (
-            <p style={{ margin: '0 8px 10px', fontSize: 13, lineHeight: 1.4, color: '#522D80', fontWeight: 650 }}>
-              {TESLA_FLEET_NOTICE}
-            </p>
-          )}
           <PrimaryButton
             className="primary-cta"
-            variant={selected.premium ? 'purple' : 'orange'}
+            variant="orange"
             onClick={onConfirm}
           >
-            {selected.id === 'tesla' ? 'Request Tesla Model 3' : `Select ${selected.name}`}
+            {`Select ${selected.name}`}
           </PrimaryButton>
         </div>
       </div>
@@ -196,20 +180,7 @@ export function RideTiers({
           openDrivers(selected.id)
         }}
         onUpgrade={() => {
-          setSelected(TIERS.find((t) => t.id === 'comfort'))
-          setUpsell(null)
-        }}
-      />
-      <UpsellModal
-        open={upsell === 'tesla'}
-        variant="tesla"
-        upgradePrice={13.0}
-        onClose={() => {
-          setUpsell(null)
-          openDrivers(selected.id)
-        }}
-        onUpgrade={() => {
-          setSelected(TIERS.find((t) => t.id === 'tesla'))
+          setSelected(TIERS.find((t) => t.id === 'comfort') || selected)
           setUpsell(null)
         }}
       />

@@ -282,6 +282,40 @@ export function etaLineFor(status, from, places) {
   return eta.label ? `${eta.label} to ${target.noun}` : null
 }
 
+function routePair(lat, lng) {
+  const next = point(lat, lng)
+  if (!next) return null
+  return [next.lat, next.lng]
+}
+
+/**
+ * [lat, lng] pairs for the rider's active-trip map.
+ * A stored road polyline wins. Otherwise the line follows live stops, the
+ * driver and the current target, or pickup to drop-off.
+ */
+export function activeTripRouteLine(trip, driver) {
+  if (!trip || typeof trip !== 'object') return []
+  const encoded = trip.metadata?.route_polyline || trip.route_polyline || trip.routePolyline || null
+  const road = decodeRoutePolyline(typeof encoded === 'string' ? encoded : null)
+  if (road.length > 1) return road.map((spot) => [spot.lat, spot.lng])
+
+  const stops = orderedLiveStops(trip)
+  if (stops.length > 1) return stops.map((stop) => [stop.lat, stop.lng])
+
+  const pickup = routePair(trip.pickup_lat ?? trip.pickupLat, trip.pickup_lng ?? trip.pickupLng)
+  const dropoff = routePair(trip.dropoff_lat ?? trip.dropoffLat, trip.dropoff_lng ?? trip.dropoffLng)
+  const origin = routePair(driver?.lat ?? driver?.latitude, driver?.lng ?? driver?.longitude)
+  const target = etaTargetForStatus(trip.status, trip)
+  const targetPair = target.point ? routePair(target.point.lat, target.point.lng) : null
+  if (origin && targetPair && (origin[0] !== targetPair[0] || origin[1] !== targetPair[1])) {
+    return [origin, targetPair]
+  }
+  if (pickup && dropoff && (pickup[0] !== dropoff[0] || pickup[1] !== dropoff[1])) {
+    return [pickup, dropoff]
+  }
+  return []
+}
+
 /** ~111m. Same 3-decimal grid as docs/CARPOOL_MATCHING.md Privacy. */
 export function approxPublicCoord(value) {
   const n = Number(value)
