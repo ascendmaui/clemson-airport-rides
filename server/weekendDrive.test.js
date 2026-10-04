@@ -129,6 +129,7 @@ test('pass-offer advances auto-assign to the next online driver', async () => {
   assert.equal(desk.tables.trips[0].status, 'searching')
   assert.equal(desk.tables.trips[0].driver_id, null)
   assert.equal(desk.tables.trips[0].metadata.offer_driver_id, kim)
+  assert.deepEqual(desk.tables.trips[0].metadata.offer_tried_driver_ids, [john])
 })
 
 for (const handler of [handleMarkOffered, handlePassOffer]) {
