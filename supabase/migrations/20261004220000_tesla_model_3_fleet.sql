@@ -1,3 +1,6 @@
+-- Production trips.tier and vehicles.tier use the vehicle_tier enum; Tesla trips persist tier 'tesla'.
+ALTER TYPE public.vehicle_tier ADD VALUE IF NOT EXISTS 'tesla';
+
 -- Fleet eligibility does not change approval status or approval requirements.
 CREATE OR REPLACE FUNCTION public.tesla_driver_eligible(p_driver uuid)
 RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
