@@ -129,6 +129,10 @@ test('cron requires a real bearer secret; supports dry run, method and service e
   assert.equal((await call({})).statusCode, 401)
   assert.equal((await call({ headers: { 'x-vercel-cron': '1' } }, { env: { VERCEL: '1' } })).statusCode, 401)
   assert.equal((await call({ headers: { authorization: 'Bearer wrong' } })).statusCode, 401)
+  assert.equal((await call({
+    headers: { authorization: ['Bearer test-secret', 'Bearer test-secret'] },
+    url: '/api/driver?action=rebroadcast-offers&dry_run=1',
+  })).statusCode, 200)
   assert.equal((await call({ method: 'DELETE' })).statusCode, 405)
   const headers = { authorization: 'Bearer test-secret' }
   assert.equal((await call({ headers }, { sb: null })).statusCode, 503)
