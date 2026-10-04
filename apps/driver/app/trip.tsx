@@ -86,9 +86,10 @@ export default function TripScreen() {
 
   useEffect(() => {
     if (!supabase) return undefined
-    return subscribeTrips(supabase, () => {
-      refresh().catch(() => {})
-    })
+    const pull = () => refresh().catch((err: unknown) => setError(err instanceof Error ? err.message : 'Could not refresh trip. Retrying automatically.'))
+    const unsubscribe = subscribeTrips(supabase, pull)
+    const timer = setInterval(pull, 5000)
+    return () => { unsubscribe(); clearInterval(timer) }
   }, [refresh])
 
   useEffect(() => {
@@ -107,10 +108,10 @@ export default function TripScreen() {
     }
   }, [id, trip?.status])
 
-  useDriverLocation(Boolean(user && trip && trip.status !== 'completed' && trip.status !== 'canceled'), (fix) => {
+  const locationTracking = useDriverLocation(Boolean(user && trip && trip.status !== 'completed' && trip.status !== 'canceled' && trip.status !== 'cancelled_wait'), async (fix) => {
     setSelf({ latitude: fix.lat, longitude: fix.lng })
     if (!supabase || !user) return
-    publishDriverLocation(supabase, user.id, { ...fix, online: true }).catch(() => {})
+    await publishDriverLocation(supabase, user.id, { ...fix, online: true })
   })
 
   async function onAdvance() {
@@ -192,7 +193,7 @@ export default function TripScreen() {
         <LivePhase
           title={trip ? statusHeadline(trip.status) : 'Loading trip'}
           body={trip ? driverStatusDetail(trip.status) : 'Loading this ride.'}
-          eta={etaLine}
+          eta={locationTracking.error ? null : etaLine}
           steps={DRIVER_TRACK_STEPS}
           activeIndex={stepIndex}
           colors={colors}
@@ -254,6 +255,12 @@ export default function TripScreen() {
         ) : (
           <Text style={styles.copy}>{id ? 'This trip is not on your account yet.' : 'Missing trip id.'}</Text>
         )}
+        {locationTracking.error ? (
+            <View>
+              <ErrorText>{locationTracking.error}</ErrorText>
+              <Primary label="Retry location" onPress={locationTracking.retry} />
+            </View>
+          ) : null}
         {error ? <ErrorText>{error}</ErrorText> : null}
         {action ? <Primary label={busy ? 'Updating…' : action} onPress={onAdvance} disabled={busy} tone="purple" /> : null}
         </ScrollView>

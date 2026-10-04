@@ -1,3 +1,4 @@
+import { trackingIssue, withTrackingTimeout } from '../../packages/rides-native/tracking.js'
 import { useEffect, useRef, useState } from 'react'
 import { PrimaryButton } from '../components/PrimaryButton'
 import { AccessibleAlert } from '../components/AccessibleAlert'
@@ -30,6 +31,11 @@ export function Requested({ dest = 'GSP Airport', trip = '', driver = 'your driv
   const [error, setError] = useState(null)
   const [tripRow, setTripRow] = useState(null)
   const [tripMissing, setTripMissing] = useState(false)
+  const [locationAt, setLocationAt] = useState(null)
+  const [trackingError, setTrackingError] = useState(null)
+  const [trackingAttempt, setTrackingAttempt] = useState(0)
+  const [trackingNow, setTrackingNow] = useState(Date.now())
+  useEffect(() => { const timer = setInterval(() => setTrackingNow(Date.now()), 5000); return () => clearInterval(timer) }, [])
   const [driverPos, setDriverPos] = useState(null)
   const [resolvedDriverId, setResolvedDriverId] = useState(driverId || '')
   const [rateNudge, setRateNudge] = useState(false)
@@ -57,13 +63,18 @@ export function Requested({ dest = 'GSP Airport', trip = '', driver = 'your driv
       return undefined
     }
     let alive = true
+    let loading = false
     async function load() {
-      const { data } = await supabase
+      if (loading || !alive) return
+      loading = true
+      try {
+      const { data, error: loadError } = await withTrackingTimeout(supabase
         .from('trips')
         .select('id, status, rider_id, driver_id, pickup_label, dropoff_label, pickup_lat, pickup_lng, dropoff_lat, dropoff_lng, completed_at, canceled_at, requested_at, stops, metadata')
         .eq('id', trip)
-        .maybeSingle()
+        .maybeSingle())
       if (!alive) return
+      if (loadError) { setError('Could not refresh trip status. Retrying automatically.'); return }
       if (!data) {
         setTripMissing(true)
         return
@@ -90,13 +101,16 @@ export function Requested({ dest = 'GSP Airport', trip = '', driver = 'your driv
           /* Pickup pin stays if the friend ride row is not readable. */
         }
       }
+      if (!alive) return
       setTripRow(row)
-      if (data.driver_id) setResolvedDriverId(data.driver_id)
+      setResolvedDriverId(data.driver_id || '')
       if (data.status === 'completed' && user?.id && !ratedCheck.current) {
         ratedCheck.current = true
         const rated = await hasRatedTrip(data.id, user.id)
         if (alive && !rated) setRateNudge(true)
       }
+      } catch { if (alive) setError('Could not refresh trip status. Retrying automatically.') }
+      finally { loading = false }
     }
     load()
 
@@ -129,11 +143,14 @@ export function Requested({ dest = 'GSP Airport', trip = '', driver = 'your driv
   }, [trip, user?.id, paid, sessionId])
 
   useEffect(() => {
-    if (!resolvedDriverId) return undefined
+    if (!resolvedDriverId || ['completed', 'canceled', 'cancelled_wait'].includes(tripRow?.status)) return undefined
     return subscribeDriverStatus(resolvedDriverId, (loc) => {
       setDriverPos([loc.lat, loc.lng])
-    })
-  }, [resolvedDriverId])
+      setLocationAt(loc.updatedAt)
+    }, setTrackingError)
+  }, [resolvedDriverId, trackingAttempt, tripRow?.status])
+
+  useEffect(() => { setDriverPos(null); setLocationAt(null); setTrackingError(null) }, [resolvedDriverId])
 
   async function onShare() {
     if (!trip || !user?.id) {
@@ -198,7 +215,8 @@ export function Requested({ dest = 'GSP Airport', trip = '', driver = 'your driv
       }
       : riderLiveView(status, { preferred, waitingMs })
   const driverFix = driverPos ? { lat: driverPos[0], lng: driverPos[1] } : null
-  const etaLine = etaHoldLine(status, etaLineFor(status, driverFix, tripRow))
+  const locationIssue = trackingIssue(status, locationAt, trackingNow)
+  const etaLine = locationIssue ? null : etaHoldLine(status, etaLineFor(status, driverFix, tripRow))
   const showMap = Boolean(trip) || Boolean(status) || preferred
   const preview = showSearchTheater(status) && !driverPos
   const liveStops = orderedLiveStops(tripRow)
@@ -278,6 +296,7 @@ export function Requested({ dest = 'GSP Airport', trip = '', driver = 'your driv
             {error || 'This trip is not on your account. Request a ride again if you still need a driver.'}
           </p>
         )}
+        {(locationIssue || trackingError) && !['completed', 'canceled', 'cancelled_wait'].includes(status) && <div role="status">{locationIssue || trackingError} <button type="button" onClick={() => setTrackingAttempt((n) => n + 1)}>Retry tracking</button></div>}
         <LivePhase
           kicker={phase.kicker}
           title={tripMissing ? 'No live trip' : phase.title}
