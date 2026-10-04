@@ -1,3 +1,4 @@
+import { startLocationPublisher } from '../../packages/rides-native/tracking.js'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useAuth } from '../lib/auth'
 import { CampusMap, CLEMSON } from '../components/CampusMap'
@@ -235,29 +236,25 @@ function DriverShell({ driverId }) {
     }
   }, [driverId, approved])
 
+  const [locationError, setLocationError] = useState(null)
+  const [locationAttempt, setLocationAttempt] = useState(0)
   useEffect(() => {
     const tracking = approved || Boolean(activeTrip)
-    if (!driverId || !tracking || !presenceReady || !navigator.geolocation) return undefined
-    let alive = true
-    const apply = (pos) => {
-      if (!alive) return
-      const next = [pos.coords.latitude, pos.coords.longitude]
-      setSelfPos(next)
-      publishDriverLocation(driverId, {
-        lat: next[0],
-        lng: next[1],
-        heading: pos.coords.heading,
-        online,
-      }).catch(() => {})
-    }
-    const options = { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 }
-    navigator.geolocation.getCurrentPosition(apply, () => {}, options)
-    const watchId = navigator.geolocation.watchPosition(apply, () => {}, options)
-    return () => {
-      alive = false
-      navigator.geolocation.clearWatch(watchId)
-    }
-  }, [driverId, approved, activeTrip?.id, online, presenceReady])
+    if (!driverId || !tracking || (!presenceReady && !activeTrip)) return undefined
+    if (!navigator.geolocation) { setLocationError('Location is unavailable in this browser.'); return undefined }
+    const stop = startLocationPublisher({
+      locate: () => new Promise((resolve, reject) => navigator.geolocation.getCurrentPosition(resolve, reject,
+        { enableHighAccuracy: true, maximumAge: 0, timeout: 15000 })),
+      publish: (pos) => publishDriverLocation(driverId, {
+        lat: pos.coords.latitude, lng: pos.coords.longitude, heading: pos.coords.heading, online,
+      }),
+      onFix: (pos) => setSelfPos([pos.coords.latitude, pos.coords.longitude]),
+      onError: setLocationError,
+    })
+    const resume = () => { if (!document.hidden) setLocationAttempt((n) => n + 1) }
+    document.addEventListener('visibilitychange', resume)
+    return () => { stop(); document.removeEventListener('visibilitychange', resume) }
+  }, [driverId, approved, activeTrip?.id, online, presenceReady, locationAttempt])
 
   useEffect(() => {
     loadEarnings()
@@ -1183,10 +1180,11 @@ function DriverShell({ driverId }) {
           </div>
           <div style={{ marginTop: 10 }}>
             {/* TODO: road tiles and a traffic ETA need a billed Maps key. This card uses coordinates already on the trip. */}
+            {locationError && <div role="status">{locationError} <button type="button" onClick={() => setLocationAttempt((n) => n + 1)}>Retry location</button></div>}
             <LivePhase
               title={statusHeadline(activeTrip.status)}
               body={driverStatusDetail(activeTrip.status)}
-              eta={activeEta}
+              eta={locationError ? null : activeEta}
               steps={DRIVER_TRACK_STEPS}
               activeIndex={activeStep}
             />

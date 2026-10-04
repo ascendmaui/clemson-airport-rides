@@ -1,12 +1,13 @@
+import { withTrackingTimeout } from '../../packages/rides-native/tracking.js'
 import { supabase } from './supabase'
 
 /** Subscribe to a driver's live lat/lng from driver_status. Returns unsubscribe. */
-export function subscribeDriverStatus(driverId, onUpdate) {
+export function subscribeDriverStatus(driverId, onUpdate, onError) {
   if (!supabase || !driverId) return () => {}
 
   let alive = true
   const emit = (row) => {
-    if (!alive || !row) return
+    if (!alive || !row || row.lat == null || row.lng == null) return
     const lat = Number(row.lat)
     const lng = Number(row.lng)
     if (!Number.isFinite(lat) || !Number.isFinite(lng)) return
@@ -15,21 +16,28 @@ export function subscribeDriverStatus(driverId, onUpdate) {
       lng,
       heading: row.heading != null ? Number(row.heading) : null,
       online: Boolean(row.online),
-      updatedAt: row.updated_at || null,
+      updatedAt: row.location_updated_at || null,
     })
   }
 
+  let pulling = false
   async function pull() {
-    const { data, error } = await supabase
-      .from('driver_status')
-      .select('driver_id, lat, lng, heading, online, updated_at')
-      .eq('driver_id', driverId)
-      .maybeSingle()
-    if (error) {
-      console.warn('[driverTrack]', error.message)
-      return
+    if (pulling || !alive) return
+    pulling = true
+    try {
+      const { data, error } = await withTrackingTimeout(supabase
+        .from('driver_status')
+        .select('driver_id, lat, lng, heading, online, updated_at, location_updated_at')
+        .eq('driver_id', driverId)
+        .maybeSingle())
+      if (error) throw error
+      if (alive) onError?.(null)
+      emit(data)
+    } catch {
+      if (alive) onError?.('Could not refresh driver location. Retrying automatically.')
+    } finally {
+      pulling = false
     }
-    emit(data)
   }
 
   pull()
@@ -56,7 +64,7 @@ export function subscribeDriverStatus(driverId, onUpdate) {
   }
 }
 
-/** Push the driver's own GPS into driver_status (best-effort). */
+/** Push the driver's own GPS into driver_status (throws when the write fails). */
 export async function publishDriverLocation(driverId, { lat, lng, heading = null, online = true }) {
   if (!supabase || !driverId) return
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) return
@@ -67,6 +75,7 @@ export async function publishDriverLocation(driverId, { lat, lng, heading = null
     heading,
     online: Boolean(online),
     updated_at: new Date().toISOString(),
+    location_updated_at: new Date().toISOString(),
   })
-  if (error) console.warn('[driverTrack] publish', error.message)
+  if (error) throw new Error(error.message)
 }

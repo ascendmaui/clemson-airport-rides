@@ -140,6 +140,7 @@ export async function publishDriverLocation(supabase, driverId, { lat, lng, head
     heading: Number.isFinite(Number(heading)) ? Number(heading) : null,
     online: Boolean(online),
     updated_at: new Date().toISOString(),
+    location_updated_at: new Date().toISOString(),
   })
   if (error) throw new Error(error.message)
 }

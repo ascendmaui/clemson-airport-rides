@@ -1,3 +1,4 @@
+import { trackingIssue, withTrackingTimeout } from 'rides-native/tracking'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useEffect, useRef, useState } from 'react'
 import { reconcileCheckout } from 'rides-native/riderMoney.js'
@@ -93,6 +94,8 @@ export default function Requested() {
   const checkoutReturn = paid === '1' || paid === 'true'
   const { user } = useAuth()
   const { trip, error: tripError, loading } = useTripById(tripId || null)
+  const [trackingNow, setTrackingNow] = useState(Date.now())
+  useEffect(() => { const timer = setInterval(() => setTrackingNow(Date.now()), 5000); return () => clearInterval(timer) }, [])
   const [live, setLive] = useState<LiveTrip | null>(null)
   const [mapError, setMapError] = useState<string | null>(null)
   const [refreshing, setRefreshing] = useState(false)
@@ -108,14 +111,22 @@ export default function Requested() {
   const error = tripError || mapError
   const reconciledSessions = useRef(new Set<string>())
 
+  const mapRequest = useRef(0)
+  const mapPending = useRef(false)
+  useEffect(() => () => { mapRequest.current++; mapPending.current = false }, [tripId])
   async function reloadMap() {
-    if (!tripId) return
+    if (!tripId || mapPending.current) return
+    mapPending.current = true
+    const request = ++mapRequest.current
     try {
-      setLive(await loadLiveTrip(tripId))
+      const next = await withTrackingTimeout(loadLiveTrip(tripId))
+      if (request !== mapRequest.current) return
+      setLive(next)
       setMapError(null)
     } catch (err) {
+      if (request !== mapRequest.current) return
       setMapError(err instanceof Error ? err.message : 'Could not load this trip')
-    }
+    } finally { if (request === mapRequest.current) mapPending.current = false }
   }
 
   useEffect(() => {
@@ -139,13 +150,13 @@ export default function Requested() {
     })
     const id = setInterval(() => {
       void reloadMap()
-    }, 12000)
+    }, 5000)
     return () => {
       unsub()
       clearInterval(id)
     }
   }, [tripId, live?.driver_id])
-  const shown = trip || (tripId
+  const shown = (trip && live ? { ...trip, status: live.status } : trip) || (tripId
     ? {
         id: tripId,
         status: live?.status ?? null,
@@ -171,7 +182,8 @@ export default function Requested() {
   const phase = ttlCanceled
     ? { ...basePhase, kicker: 'HOLD EXPIRED', title: 'Deposit hold expired', body: '', steps: [], stepIndex: -1 }
     : basePhase
-  const etaLine = etaHoldLine(
+  const locationIssue = trackingIssue(shown?.status, live?.driverLocationAt, trackingNow)
+  const etaLine = locationIssue ? null : etaHoldLine(
     shown?.status || null,
     etaLineFor(
       shown?.status || null,
@@ -312,6 +324,8 @@ export default function Requested() {
           <View style={[styles.summary, lift(colors, 'rest')]}>
             <CounterpartCard person={person} colors={partyColorsFromPalette(colors)} />
             {ttlCanceled ? null : (
+              <>
+              {locationIssue ? <View accessibilityLiveRegion="polite"><Text style={{ color: colors.title }}>{locationIssue}</Text><Pressable accessibilityRole="button" onPress={() => void reloadMap()}><Text style={{ color: colors.title }}>Retry tracking</Text></Pressable></View> : null}
               <LivePhase
                 kicker={phase.kicker}
                 title=""
@@ -321,6 +335,7 @@ export default function Requested() {
                 activeIndex={phase.stepIndex}
                 colors={colors}
               />
+              </>
             )}
             {approachLive ? (
               <Text style={styles.approach}>

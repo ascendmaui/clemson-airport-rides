@@ -72,7 +72,7 @@ test('straight-line ETA uses existing coordinates and names the pickup or drop-o
       dropoffLng: -82.2189,
       routeDurationS: 600,
     }),
-    /About 10 min by road to drop-off/,
+    /straight line to drop-off/,
   )
   const decoded = decodeRoutePolyline('_p~iF~ps|U_ulLnnqC_mqNvxq`@')
   assert.equal(decoded.length, 3)

@@ -186,6 +186,7 @@ export function riderLiveView(status, options) {
 }
 
 function point(lat, lng) {
+  if (lat == null || lng == null || lat === '' || lng === '') return null
   const latitude = Number(lat)
   const longitude = Number(lng)
   if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null
@@ -270,22 +271,10 @@ export function roadEtaLine(durationS, noun) {
   return `About ${minutes} min by road to ${noun}`
 }
 
-function storedRouteDurationS(places) {
-  const direct = places?.routeDurationS ?? places?.route_duration_s
-  if (Number.isFinite(Number(direct)) && Number(direct) > 0) return Number(direct)
-  const meta = places?.metadata
-  const nested = meta?.route_duration_s
-  if (Number.isFinite(Number(nested)) && Number(nested) > 0) return Number(nested)
-  return null
-}
-
 export function etaLineFor(status, from, places) {
   const target = etaTargetForStatus(status, places)
   if (!target.point || !target.noun) return null
-  if (status === 'in_progress') {
-    const road = roadEtaLine(storedRouteDurationS(places), target.noun)
-    if (road) return road
-  }
+  // Stored route duration is the original whole trip, not remaining travel time.
   const eta = straightLineEta(from, target.point)
   return eta.label ? `${eta.label} to ${target.noun}` : null
 }

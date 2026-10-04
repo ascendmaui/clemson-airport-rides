@@ -242,10 +242,10 @@ export default function DriverHome() {
     }
   }, [heatWindow])
 
-  useDriverLocation(Boolean(user && approved && online), (fix) => {
+  const locationTracking = useDriverLocation(Boolean(user && ((approved && online) || desk?.active)), async (fix) => {
     setSelf({ latitude: fix.lat, longitude: fix.lng })
     if (!supabase || !user) return
-    publishDriverLocation(supabase, user.id, { ...fix, online: true }).catch(() => {})
+    await publishDriverLocation(supabase, user.id, { ...fix, online: true })
   })
 
   async function toggle() {
@@ -529,6 +529,12 @@ export default function DriverHome() {
 
         <View pointerEvents="box-none" style={[styles.dock, { top: dockTop, bottom: tabClearance }]}>
           {!configured ? <ErrorText>Add EXPO_PUBLIC_SUPABASE_ANON_KEY as an EAS environment variable, then rebuild.</ErrorText> : null}
+          {locationTracking.error ? (
+            <View>
+              <ErrorText>{locationTracking.error}</ErrorText>
+              <Primary label="Retry location" onPress={locationTracking.retry} />
+            </View>
+          ) : null}
           {error ? <ErrorText>{error}</ErrorText> : null}
           {!canSeeOffers ? (
             <ScrollView
@@ -567,7 +573,7 @@ export default function DriverHome() {
               <Text style={[styles.liveKicker, { color: colors.orange }]}>LIVE TRIP</Text>
               <Text style={[styles.liveTitle, { color: colors.onAccent }]}>{statusHeadline(desk.active.status)}</Text>
               <Text style={{ color: colors.onAccent }}>{desk.active.pickupLabel} → {desk.active.dropoffLabel}</Text>
-              {liveEta ? <Text style={{ color: colors.orange, fontWeight: '800' }}>{liveEta}</Text> : null}
+              {liveEta && !locationTracking.error ? <Text style={{ color: colors.orange, fontWeight: '800' }}>{liveEta}</Text> : null}
               {riderLine ? <Text style={{ color: colors.onAccent, fontWeight: '700' }}>{riderLine}</Text> : null}
             </Pressable>
           ) : null}

@@ -13,6 +13,7 @@ export type LiveTrip = {
   driverName: string | null
   driverLat: number | null
   driverLng: number | null
+  driverLocationAt: string | null
   requested_at: string | null
   created_at: string | null
   deposit_cents: number | null
@@ -62,11 +63,14 @@ export async function loadLiveTrip(tripId: string): Promise<LiveTrip | null> {
   let driverName: string | null = null
   let driverLat: number | null = null
   let driverLng: number | null = null
+  let driverLocationAt: string | null = null
   if (data.driver_id) {
     const [profile, status] = await Promise.all([
       supabase.from('profiles').select('full_name').eq('id', data.driver_id).maybeSingle(),
-      supabase.from('driver_status').select('lat, lng').eq('driver_id', data.driver_id).maybeSingle(),
+      supabase.from('driver_status').select('lat, lng, location_updated_at').eq('driver_id', data.driver_id).maybeSingle(),
     ])
+    if (status.error) throw new Error(status.error.message)
+    driverLocationAt = status.data?.location_updated_at ?? null
     driverName = profile.data?.full_name || null
     driverLat = status.data?.lat ?? null
     driverLng = status.data?.lng ?? null
@@ -104,6 +108,7 @@ export async function loadLiveTrip(tripId: string): Promise<LiveTrip | null> {
     driverName,
     driverLat,
     driverLng,
+    driverLocationAt,
     requested_at: data.requested_at || null,
     created_at: data.created_at ?? null,
     deposit_cents: data.deposit_cents ?? null,
