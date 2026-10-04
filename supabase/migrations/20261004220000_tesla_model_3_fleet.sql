@@ -1,5 +1,12 @@
 -- Production trips.tier and vehicles.tier use the vehicle_tier enum; Tesla trips persist tier 'tesla'.
-ALTER TYPE public.vehicle_tier ADD VALUE IF NOT EXISTS 'tesla';
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_type t JOIN pg_namespace n ON n.oid = t.typnamespace
+             WHERE t.typname = 'vehicle_tier' AND n.nspname = 'public') THEN
+    ALTER TYPE public.vehicle_tier ADD VALUE IF NOT EXISTS 'tesla';
+  END IF;
+END
+$$;
 
 -- Fleet eligibility does not change approval status or approval requirements.
 CREATE OR REPLACE FUNCTION public.tesla_driver_eligible(p_driver uuid)
