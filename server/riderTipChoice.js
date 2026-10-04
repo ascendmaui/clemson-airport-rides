@@ -1,8 +1,9 @@
 /**
  * Rider tip choice after a completed trip.
- * Amounts come from the stored fare. Client fare, deposit, amount, total,
- * isStudent, and tip cents are ignored. This module records the choice only.
- * It does not create a Stripe charge.
+ * Preset amounts come from the stored fare. A custom amount is the dollars
+ * the rider typed, priced and checked here. Client fare, deposit, amount,
+ * total, isStudent, and tip cents are ignored. This module records the
+ * choice only. It does not charge a card.
  */
 
 export const TIP_MIN_CENTS = 100
@@ -31,7 +32,13 @@ const CLIENT_MONEY_KEYS = [
   'is_student',
   'custom',
   'customCents',
+  'custom_cents',
 ]
+
+export const CUSTOM_TIP_EMPTY = 'Enter a tip amount'
+export const CUSTOM_TIP_NEGATIVE = 'Tip amount cannot be negative'
+export const CUSTOM_TIP_RANGE = 'Enter a tip between $1 and $100'
+export const CUSTOM_TIP_FORMAT = 'Enter a tip amount in dollars, like 4.50'
 
 function finiteFare(value) {
   if (value == null || value === '') return null
@@ -98,22 +105,90 @@ export function priceTipPresets(fareCents) {
   }
 }
 
-export function resolveTipChoice(fareCents, choiceId) {
+/**
+ * Price a typed custom tip. The stored cents come from this check.
+ * Empty, negative, and amounts outside $1–$100 are rejected.
+ */
+export function priceCustomTip(raw) {
+  if (raw == null) return { ok: false, error: CUSTOM_TIP_EMPTY }
+  if (typeof raw === 'number') {
+    if (!Number.isFinite(raw)) return { ok: false, error: CUSTOM_TIP_FORMAT }
+    if (raw < 0) return { ok: false, error: CUSTOM_TIP_NEGATIVE }
+    const cents = Math.round(raw * 100)
+    if (Math.abs(raw - cents / 100) > 0.001) return { ok: false, error: CUSTOM_TIP_FORMAT }
+    return customCentsResult(cents)
+  }
+  if (typeof raw !== 'string') return { ok: false, error: CUSTOM_TIP_FORMAT }
+
+  const trimmed = raw.trim()
+  if (!trimmed) return { ok: false, error: CUSTOM_TIP_EMPTY }
+  if (trimmed.startsWith('-') || trimmed.startsWith('-$')) {
+    return { ok: false, error: CUSTOM_TIP_NEGATIVE }
+  }
+  if (trimmed.length > 16) return { ok: false, error: CUSTOM_TIP_RANGE }
+
+  let cleaned = trimmed
+  if (cleaned.startsWith('$')) cleaned = cleaned.slice(1).trim()
+  if (!cleaned) return { ok: false, error: CUSTOM_TIP_EMPTY }
+  if (cleaned.startsWith('-')) return { ok: false, error: CUSTOM_TIP_NEGATIVE }
+  if (!/^\d+(\.\d{1,2})?$/.test(cleaned)) return { ok: false, error: CUSTOM_TIP_FORMAT }
+
+  const [whole, frac = ''] = cleaned.split('.')
+  const dollars = Number(whole)
+  if (!Number.isSafeInteger(dollars)) return { ok: false, error: CUSTOM_TIP_RANGE }
+  const cents = dollars * 100 + Number((frac + '00').slice(0, 2))
+  return customCentsResult(cents)
+}
+
+function customCentsResult(cents) {
+  if (!Number.isSafeInteger(cents) || cents < 0) {
+    return { ok: false, error: cents < 0 ? CUSTOM_TIP_NEGATIVE : CUSTOM_TIP_RANGE }
+  }
+  if (cents < TIP_MIN_CENTS || cents > TIP_MAX_CENTS) {
+    return { ok: false, error: CUSTOM_TIP_RANGE }
+  }
+  return { ok: true, cents }
+}
+
+function choiceRecord(fields) {
+  return {
+    id: fields.id,
+    tipCents: fields.tipCents,
+    percent: fields.percent,
+    skipped: fields.skipped,
+    charged: false,
+    chargeStatus: 'not_wired',
+  }
+}
+
+export function resolveTipChoice(fareCents, choiceId, customDollars) {
   if (choiceId === 'skip') {
     return {
       ok: true,
       priced: priceTipPresets(fareCents),
-      choice: {
+      choice: choiceRecord({
         id: 'skip',
         tipCents: 0,
         percent: null,
         skipped: true,
-        charged: false,
-        chargeStatus: 'not_wired',
-      },
+      }),
     }
   }
   const priced = priceTipPresets(fareCents)
+  if (choiceId === 'custom') {
+    const custom = priceCustomTip(customDollars)
+    if (!custom.ok) return custom
+    return {
+      ok: true,
+      priced,
+      choice: choiceRecord({
+        id: 'custom',
+        tipCents: custom.cents,
+        percent: null,
+        skipped: false,
+      }),
+    }
+  }
   const preset = priced.presets.find((row) => row.id === choiceId)
   if (!preset) {
     return { ok: false, error: 'Choose a tip from the list or skip' }
@@ -121,15 +196,19 @@ export function resolveTipChoice(fareCents, choiceId) {
   return {
     ok: true,
     priced,
-    choice: {
+    choice: choiceRecord({
       id: preset.id,
       tipCents: preset.cents,
       percent: preset.percent,
       skipped: false,
-      charged: false,
-      chargeStatus: 'not_wired',
-    },
+    }),
   }
+}
+
+function sameRecordedChoice(existing, next) {
+  if (existing.id !== next.id) return false
+  if (next.id !== 'custom') return true
+  return Math.round(Number(existing.tipCents) || 0) === next.tipCents
 }
 
 function metadataObject(metadata) {
@@ -220,6 +299,7 @@ function offerBody(trip, priced, driverName) {
     driverName,
     presets: priced.presets,
     popularId: priced.popularId,
+    custom: { minCents: TIP_MIN_CENTS, maxCents: TIP_MAX_CENTS },
     choice: publicChoice(readRiderTipChoice(trip.metadata)),
     chargedTipCents: chargedTipCents(trip),
     chargingWired: false,
@@ -271,11 +351,11 @@ export async function applyRiderTipChoice(sb, user, rawBody, { now = () => new D
     }
   }
 
-  const resolved = resolveTipChoice(trip.fare_cents, choiceIdFrom(body))
+  const resolved = resolveTipChoice(trip.fare_cents, choiceIdFrom(body), body.customDollars)
   if (!resolved.ok) return { status: 400, body: { error: resolved.error, chargingWired: false } }
 
   if (existing) {
-    if (existing.id === resolved.choice.id) {
+    if (sameRecordedChoice(existing, resolved.choice)) {
       return {
         status: 200,
         body: {
