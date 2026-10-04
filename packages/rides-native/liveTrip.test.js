@@ -49,7 +49,7 @@ test('preferred matching copy cancels instead of falling back to the open pool',
   assert.equal(canceled.body, PREFERRED_CANCELED_COPY)
   assert.equal(riderLiveView('searching').body, OPEN_POOL_COPY)
   assert.equal(riderLiveView('offered').kicker, 'OFFERED')
-  assert.equal(riderLiveView('arriving').kicker, 'EN ROUTE')
+  assert.equal(riderLiveView('arriving').kicker, 'ARRIVING')
   assert.equal(riderLiveView('in_progress').title, 'You are on the way')
   assert.equal(riderLiveView('completed').kicker, 'COMPLETED')
 })
@@ -179,4 +179,19 @@ test('booked carpool public pins round to 3 decimals and still return without a 
   })
   assert.equal(lobby[0].lat, 34.67881)
   assert.equal(lobby[0].approximate, false)
+})
+
+
+test('pickup ETA follows current GPS and confirmed arrival replaces countdown', () => {
+  const places = { pickup_lat: 34.68, pickup_lng: -82.83, dropoff_lat: 34.9, dropoff_lng: -82.9 }
+  const far = etaLineFor('accepted', { lat: 34.8, lng: -82.83 }, places)
+  const close = etaLineFor('arriving', { lat: 34.681, lng: -82.83 }, places)
+  assert.notEqual(far, close)
+  assert.match(close, /to pickup/)
+  assert.equal(etaLineFor('arrived', null, places), 'Driver is at pickup')
+  assert.match(etaLineFor('in_progress', { lat: 34.681, lng: -82.83 }, places), /to drop-off/)
+  assert.equal(etaLineFor('completed', { lat: 34.681, lng: -82.83 }, places), null)
+  assert.equal(etaLineFor('accepted', { lat: 91, lng: -82.83 }, places), null)
+  assert.equal(etaLineFor('accepted', { lat: 34.68, lng: -82.83 }, { pickup_lat: '', pickup_lng: '' }), null)
+  assert.equal(riderLiveView('arriving').steps[2].label, 'Arriving')
 })

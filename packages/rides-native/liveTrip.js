@@ -7,7 +7,7 @@ import { driverApproach, formatDriverDistance, OPEN_POOL_COPY, PREFERRED_CANCELE
 
 export const DRIVER_TRACK_STEPS = [
   { id: 'accepted', label: 'Accepted' },
-  { id: 'arriving', label: 'En route' },
+  { id: 'arriving', label: 'Arriving' },
   { id: 'arrived', label: 'Arrived' },
   { id: 'in_progress', label: 'In trip' },
   { id: 'completed', label: 'Done' },
@@ -69,7 +69,7 @@ export function riderLiveSteps(status) {
   return [
     { id: 'searching', label: 'Searching' },
     { id: 'offered', label: matchStepLabel(status) },
-    { id: 'enroute', label: 'En route' },
+    { id: 'enroute', label: status === 'arriving' ? 'Arriving' : 'En route' },
     { id: 'arrived', label: 'Arrived' },
     { id: 'in_trip', label: 'In trip' },
     { id: 'completed', label: 'Done' },
@@ -127,7 +127,7 @@ export function riderLiveCopy(status, { preferred = false } = {}) {
       }
     case 'arriving':
       return {
-        kicker: 'EN ROUTE',
+        kicker: 'ARRIVING',
         title: 'Your driver is arriving',
         body: 'They are close to pickup. Distance updates from the location they already share.',
       }
@@ -189,7 +189,8 @@ function point(lat, lng) {
   if (lat == null || lng == null || lat === '' || lng === '') return null
   const latitude = Number(lat)
   const longitude = Number(lng)
-  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)
+    || Math.abs(latitude) > 90 || Math.abs(longitude) > 180) return null
   return { lat: latitude, lng: longitude }
 }
 
@@ -272,10 +273,12 @@ export function roadEtaLine(durationS, noun) {
 }
 
 export function etaLineFor(status, from, places) {
+  if (status === 'arrived') return 'Driver is at pickup'
+  const origin = point(from?.lat, from?.lng)
   const target = etaTargetForStatus(status, places)
   if (!target.point || !target.noun) return null
   // Stored route duration is the original whole trip, not remaining travel time.
-  const eta = straightLineEta(from, target.point)
+  const eta = straightLineEta(origin, target.point)
   return eta.label ? `${eta.label} to ${target.noun}` : null
 }
 
