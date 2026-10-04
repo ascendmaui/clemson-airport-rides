@@ -23,7 +23,7 @@ import { CounterpartChip } from '../components/CounterpartChip'
 import { PARTY_VISIBLE_STATUSES } from '../../packages/rides-native/partyProfile.js'
 import { useTripWait } from '../lib/useTripWait'
 import { WaitFeeCard } from '../components/WaitFeeCard'
-import { settleTrip } from '../lib/payments'
+import { api, settleTrip } from '../lib/payments'
 import { PaymentFailedSheet } from '../components/PaymentFailedSheet'
 import { formatPickupAt, isDueNow } from '../lib/scheduledRideModel'
 import {
@@ -34,6 +34,9 @@ import {
   takeReminder,
 } from '../lib/scheduledRides'
 import { pushToast } from '../lib/toasts'
+import { playRideRequestAlert, shouldAlertForRide } from '../lib/rideAlert'
+import { loadLocalPrefs } from '../lib/notificationPrefs'
+import { offerVisibleToDriver } from '../../shared/driverOrder.js'
 import { acceptTrip, declineTrip, listPassedTripIds } from '../../packages/rides-native/driverDesk.js'
 import {
   acceptActionLabel,
@@ -41,6 +44,7 @@ import {
   PREFERRED_REQUEST_NOTE,
   driverStatusDetail,
   statusHeadline,
+  isUnpaidAirportDepositTrip,
   teslaFleetNotice,
   tripTags,
 } from '../../packages/rides-native/tripTags.js'
@@ -98,6 +102,7 @@ function DriverShell({ driverId }) {
     setActiveTrip((prev) => (prev && next && prev.id === next.id ? { ...prev, ...next } : prev))
   })
   const [online, setOnline] = useState(false)
+  const [presenceReady, setPresenceReady] = useState(false)
   const [earningsCents, setEarningsCents] = useState(0)
   const [incentiveExtraCents, setIncentiveExtraCents] = useState(0)
   const [extraByTrip, setExtraByTrip] = useState({})
@@ -111,6 +116,8 @@ function DriverShell({ driverId }) {
   const [heatWindow, setHeatWindow] = useState('now')
   const [heatMeta, setHeatMeta] = useState(null)
   const [application, setApplication] = useState(undefined)
+  const [applicationError, setApplicationError] = useState(null)
+  const [approvalAttempt, setApprovalAttempt] = useState(0)
   const [activeChecked, setActiveChecked] = useState(false)
   const approved = application?.onboarding_status === 'approved'
   const [chatTrip, setChatTrip] = useState(null)
@@ -121,6 +128,9 @@ function DriverShell({ driverId }) {
   const passedOffers = useRef(new Set())
   const knownOpen = useRef(new Set())
   const scheduledPrimed = useRef(false)
+  const offeredMarked = useRef(new Set())
+  const chimedOffers = useRef(new Set())
+  const chimePrimed = useRef(false)
 
   useEffect(() => {
     if (!chatTrip || !activeTrip || chatTrip.id !== activeTrip.id) return
@@ -170,6 +180,7 @@ function DriverShell({ driverId }) {
   useEffect(() => {
     if (!supabase || !driverId) {
       setApplication(null)
+      setApplicationError(null)
       return undefined
     }
     let alive = true
@@ -182,19 +193,22 @@ function DriverShell({ driverId }) {
         if (!alive) return
         if (error) {
           console.error('[driver approval]', error.message)
-          setApplication(null)
+          setApplicationError(error.message || 'Could not check driver approval')
+          setApplication((prev) => (prev && prev.onboarding_status ? prev : null))
           return
         }
+        setApplicationError(null)
         setApplication(data)
       })
     return () => {
       alive = false
     }
-  }, [driverId])
+  }, [driverId, approvalAttempt])
 
   useEffect(() => {
     if (!driverId || !approved || !supabase) return undefined
     let alive = true
+    setPresenceReady(false)
     supabase
       .from('driver_status')
       .select('online')
@@ -204,10 +218,16 @@ function DriverShell({ driverId }) {
         if (!alive) return
         if (!error && data && data.online === false) {
           setOnline(false)
+          setPresenceReady(true)
           return
         }
         setDriverOnline(driverId, true).catch(() => {})
         setOnline(true)
+        setPresenceReady(true)
+      })
+      .catch(() => {
+        if (!alive) return
+        setPresenceReady(true)
       })
     return () => {
       alive = false
@@ -216,7 +236,7 @@ function DriverShell({ driverId }) {
 
   useEffect(() => {
     const tracking = approved || Boolean(activeTrip)
-    if (!driverId || !tracking || !navigator.geolocation) return undefined
+    if (!driverId || !tracking || !presenceReady || !navigator.geolocation) return undefined
     let alive = true
     const apply = (pos) => {
       if (!alive) return
@@ -226,9 +246,8 @@ function DriverShell({ driverId }) {
         lat: next[0],
         lng: next[1],
         heading: pos.coords.heading,
-        online: true,
+        online,
       }).catch(() => {})
-      setOnline(true)
     }
     const options = { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 }
     navigator.geolocation.getCurrentPosition(apply, () => {}, options)
@@ -237,7 +256,7 @@ function DriverShell({ driverId }) {
       alive = false
       navigator.geolocation.clearWatch(watchId)
     }
-  }, [driverId, approved, activeTrip?.id])
+  }, [driverId, approved, activeTrip?.id, online, presenceReady])
 
   useEffect(() => {
     loadEarnings()
@@ -296,12 +315,36 @@ function DriverShell({ driverId }) {
     return () => clearInterval(timer)
   }, [loadScheduled])
 
-  // Load open offers and preferred requests — Realtime alone misses rows already open.
-  // Do not flip searching → offered here. That update fails RLS unless driver_id is
-  // claimed, and a failed claim left riders looking at a review that never started.
+  // Poll while this approved driver is online. Realtime is best-effort.
+  // mark-offered uses the service role so searching can become offered
+  // without claiming driver_id. The client update fails RLS.
   useEffect(() => {
-    if (!supabase || !approved) return undefined
+    if (!supabase || !approved || !online) return undefined
     let alive = true
+    chimePrimed.current = false
+    function noteChime(rows) {
+      const fresh = rows.filter((row) => row?.id && !chimedOffers.current.has(row.id))
+      if (!chimePrimed.current) {
+        rows.forEach((row) => {
+          if (row?.id) chimedOffers.current.add(row.id)
+        })
+        chimePrimed.current = true
+        return
+      }
+      if (!fresh.length) return
+      fresh.forEach((row) => chimedOffers.current.add(row.id))
+      if (shouldAlertForRide(loadLocalPrefs(driverId))) {
+        playRideRequestAlert().catch(() => {})
+      }
+    }
+    function markSearchingOffer(row) {
+      if (!row?.id || row.status !== 'searching' || row.driver_id) return
+      if (offeredMarked.current.has(row.id)) return
+      offeredMarked.current.add(row.id)
+      api('/api/driver?action=mark-offered', { tripId: row.id }).catch(() => {
+        offeredMarked.current.delete(row.id)
+      })
+    }
     async function loadOffers() {
       const open = await supabase
         .from('trips')
@@ -315,20 +358,31 @@ function DriverShell({ driverId }) {
         if (!alive) return
         passedOffers.current = new Set(passed)
       }
-      const row = (open.data || []).find((candidate) => (
+      const rows = (open.data || []).filter((candidate) => (
         isDueNow(candidate)
         && !passedOffers.current.has(candidate.id)
         && !dismissedOffers.current.has(candidate.id)
+        && offerVisibleToDriver(candidate, driverId)
+        && !isUnpaidAirportDepositTrip(candidate)
       ))
-      if (!row || dismissedOffers.current.has(row.id)) return
-      if ((row.status === 'searching' || row.status === 'offered') && !isDueNow(row)) return
+      noteChime(rows)
+      const row = rows[0]
+      if (!row) {
+        setOffer((current) => (
+          current && rows.some((item) => item.id === current.id) ? current : null
+        ))
+        return
+      }
       setOffer(row)
+      markSearchingOffer(row)
     }
     loadOffers()
+    const timer = setInterval(loadOffers, 8000)
     return () => {
       alive = false
+      clearInterval(timer)
     }
-  }, [driverId, approved])
+  }, [driverId, approved, online])
 
   // Poll/load active trips for this driver so E2E accepted trips appear without re-offer.
   useEffect(() => {
@@ -369,14 +423,34 @@ function DriverShell({ driverId }) {
       if (row.status === 'scheduled') {
         loadScheduled()
       }
-      if (row.status === 'requested' && row.driver_id === driverId && !activeTrip && !dismissedOffers.current.has(row.id)) {
+      if (row.status === 'requested' && row.driver_id === driverId && online && !activeTrip && !dismissedOffers.current.has(row.id)) {
         setOffer(row)
       }
       if (row.status === 'searching' || row.status === 'offered') {
+        if (!online) return
+        if (!offerVisibleToDriver(row, driverId)) return
+        if (isUnpaidAirportDepositTrip(row)) return
         if (passedOffers.current.has(row.id)) return
         if (!isDueNow(row)) return
         if (!activeTrip && !dismissedOffers.current.has(row.id)) {
+          if (
+            chimePrimed.current
+            && row.id
+            && !chimedOffers.current.has(row.id)
+            && shouldAlertForRide(loadLocalPrefs(driverId))
+          ) {
+            chimedOffers.current.add(row.id)
+            playRideRequestAlert().catch(() => {})
+          } else if (row.id) {
+            chimedOffers.current.add(row.id)
+          }
           setOffer((current) => (current?.status === 'requested' ? current : row))
+          if (row.status === 'searching' && !row.driver_id && !offeredMarked.current.has(row.id)) {
+            offeredMarked.current.add(row.id)
+            api('/api/driver?action=mark-offered', { tripId: row.id }).catch(() => {
+              offeredMarked.current.delete(row.id)
+            })
+          }
         }
       }
       if (row.status === 'accepted' && row.driver_id === driverId) {
@@ -401,10 +475,18 @@ function DriverShell({ driverId }) {
         setActiveTrip(null)
       }
     })
-  }, [approved, offer?.id, activeTrip?.id, driverId, loadEarnings, loadScheduled])
+  }, [approved, online, offer?.id, activeTrip?.id, driverId, loadEarnings, loadScheduled])
 
   async function acceptOffer() {
     if (!approved) return
+    if (!online) {
+      pushToast({
+        kind: 'system',
+        title: 'Go online first',
+        body: 'Turn the ON switch on before accepting a ride.',
+      })
+      return
+    }
     if (!offer?.id || !supabase || !driverId) return
     try {
       const saved = await acceptTrip(supabase, offer, driverId)
@@ -495,6 +577,7 @@ function DriverShell({ driverId }) {
     const current = offer
     dismissedOffers.current.add(current.id)
     try {
+      await api('/api/driver?action=pass-offer', { tripId: current.id }).catch(() => {})
       await declineTrip(supabase, { id: current.id, status: current.status }, driverId)
       if (current.status !== 'requested') passedOffers.current.add(current.id)
       setOffer(null)
@@ -589,6 +672,23 @@ function DriverShell({ driverId }) {
     return (
       <div style={{ padding: 40, textAlign: 'center', color: 'var(--ink-secondary)' }}>
         Checking driver approval…
+      </div>
+    )
+  }
+
+  if (applicationError && !approved && !activeTrip) {
+    return (
+      <div style={{ padding: 40, textAlign: 'center' }}>
+        <p style={{ fontWeight: 700, marginBottom: 8 }}>Could not check driver approval</p>
+        <p style={{ color: 'var(--ink-secondary)', fontSize: 14, marginBottom: 16 }}>{applicationError}</p>
+        <button
+          type="button"
+          className="pressable"
+          onClick={() => setApprovalAttempt((n) => n + 1)}
+          style={{ fontWeight: 800, color: '#F56600' }}
+        >
+          Try again
+        </button>
       </div>
     )
   }
@@ -707,7 +807,7 @@ function DriverShell({ driverId }) {
                       lat: next[0],
                       lng: next[1],
                       heading: pos.coords.heading,
-                      online: true,
+                      online,
                     }).catch(() => {})
                   }
                 },
@@ -731,7 +831,22 @@ function DriverShell({ driverId }) {
             ◎
           </button>
         )}
-        <div
+        <button
+          type="button"
+          className="pressable"
+          onClick={() => {
+            if (!driverId || !approved) return
+            const next = !online
+            setDriverOnline(driverId, next)
+              .then(() => setOnline(next))
+              .catch((err) => {
+                pushToast({
+                  kind: 'system',
+                  title: 'Could not change online status',
+                  body: err.message || 'Try again.',
+                })
+              })
+          }}
           style={{
             width: 44,
             height: 44,
@@ -747,10 +862,11 @@ function DriverShell({ driverId }) {
             border: '1px solid rgba(255,255,255,0.55)',
             color: online ? 'var(--success)' : 'var(--ink-tertiary)',
           }}
-          title={online ? 'Online' : 'Offline'}
+          title={online ? 'Go offline' : 'Go online'}
+          aria-pressed={online}
         >
           {online ? 'ON' : 'OFF'}
-        </div>
+        </button>
       </div>
 
       
@@ -818,14 +934,16 @@ function DriverShell({ driverId }) {
                 width: 10,
                 height: 10,
                 borderRadius: '50%',
-                background: 'var(--success)',
-                boxShadow: '0 0 0 3px rgba(31,138,76,0.2)',
+                background: online ? 'var(--success)' : 'var(--ink-tertiary)',
+                boxShadow: online ? '0 0 0 3px rgba(31,138,76,0.2)' : 'none',
               }}
             />
-            <span style={{ fontWeight: 600, fontSize: 18 }}>You're online</span>
+            <span style={{ fontWeight: 600, fontSize: 18 }}>{online ? "You're online" : "You're offline"}</span>
           </div>
           <p style={{ fontSize: 13, color: 'var(--ink-secondary)', marginBottom: 12 }}>
-            Looking for rides in Clemson. Carpool offers pay more than a solo trip — take those first.
+            {online
+              ? 'Looking for rides in Clemson. Carpool offers pay more than a solo trip — take those first.'
+              : 'Tap ON to receive ride offers. An approved driver only sees requests while this screen is online.'}
           </p>
           <div style={{
             marginBottom: 12,
@@ -1104,7 +1222,7 @@ function DriverShell({ driverId }) {
               onCancel={() => wait.act('cancel')}
             />
           )}
-          {activeTrip.status === 'arrived' && (
+          {(activeTrip.status === 'arriving' || activeTrip.status === 'arrived') && (
             <PurpleAcceptButton onClick={() => advanceTrip('in_progress')} disabled={advancing}>
               {advancing ? 'Updating…' : 'Start trip'}
             </PurpleAcceptButton>

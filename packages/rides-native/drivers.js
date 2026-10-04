@@ -1,4 +1,5 @@
 import { canReceiveRides } from '../../shared/driverOnboarding.js'
+import { defaultDriverRank, dispatchRankOf } from '../../shared/driverOrder.js'
 import { authedJson } from './apiClient.js'
 import { displayFirstName, standingFromRatings } from './authErrors.js'
 import { GSP, STADIUM } from './places.js'
@@ -146,6 +147,8 @@ export function sortPreferredDrivers(drivers, favoriteIds, pickup) {
     const aOn = a.online ? 0 : 1
     const bOn = b.online ? 0 : 1
     if (aOn !== bOn) return aOn - bOn
+    const rank = dispatchRankOf(a) - dispatchRankOf(b)
+    if (rank !== 0) return rank
     const aEta = driverApproach(a, pickup).etaMin ?? 999
     const bEta = driverApproach(b, pickup).etaMin ?? 999
     if (aEta !== bEta) return aEta - bEta
@@ -235,6 +238,7 @@ function partsFromCardRows(rows) {
       rating_avg: row.rating_avg,
       rating_count: row.rating_count,
       standing: row.standing || null,
+      dispatchRank: Number.isInteger(row.dispatchRank) ? row.dispatchRank : undefined,
     })
     if (row.make || row.model || row.color || row.plate) {
       vehicles.push({
@@ -260,11 +264,37 @@ function rpcMissingDriverCards(error) {
  * Name and vehicle for the picker. Direct profile and vehicle selects are hidden
  * until a trip is accepted, so the card would otherwise read "Driver" / "Vehicle TBD".
  */
+async function overlayDispatchRanks(supabase, parts) {
+  if (!parts?.profiles?.length) return parts
+  const ids = parts.profiles.map((profile) => profile.id).filter(Boolean)
+  try {
+    const data = await authedJson(supabase, '/api/driver?action=cards', {
+      method: 'POST',
+      body: { ids },
+    })
+    const rows = Array.isArray(data?.drivers) ? data.drivers : []
+    const rankById = {}
+    for (const row of rows) {
+      if (row?.id && Number.isInteger(row.dispatchRank)) rankById[row.id] = row.dispatchRank
+    }
+    return {
+      ...parts,
+      profiles: parts.profiles.map((profile) => (
+        rankById[profile.id] == null ? profile : { ...profile, dispatchRank: rankById[profile.id] }
+      )),
+    }
+  } catch {
+    return parts
+  }
+}
+
 async function loadPickerCardParts(supabase, ids) {
   let missing = false
   try {
     const { data, error } = await supabase.rpc('list_driver_cards', { ids })
-    if (!error && rowsLookLikeCards(data)) return partsFromCardRows(data)
+    if (!error && rowsLookLikeCards(data)) {
+      return overlayDispatchRanks(supabase, partsFromCardRows(data))
+    }
     if (error && rpcMissingDriverCards(error)) missing = true
   } catch (err) {
     if (rpcMissingDriverCards(err)) missing = true
@@ -331,6 +361,9 @@ function mapDrivers(statuses, profiles, vehicles) {
       plate: vehicle?.plate || null,
       isTesla: isTeslaVehicle(vehicle),
       tier: vehicle?.tier || 'standard',
+      dispatchRank: Number.isInteger(profile.dispatchRank)
+        ? profile.dispatchRank
+        : defaultDriverRank(profile.email),
     }
   }).filter(Boolean)
 }

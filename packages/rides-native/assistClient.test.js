@@ -66,6 +66,8 @@ test('the marketing page does not install the frozen 1.0.0 binary', () => {
   assert.match(source, /Book a ride/)
   assert.match(source, /WEB_BOOK_URL/)
   assert.match(source, /WEB_DRIVER_URL/)
+  assert.match(source, /APP_DOWNLOADS/)
+  assert.doesNotMatch(source, /const DOWNLOADS/)
 })
 
 test('lost-and-found and ride chat reject empty text before any network call', async () => {

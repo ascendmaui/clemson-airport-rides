@@ -418,6 +418,17 @@ test('sortPreferredDrivers prioritizes favorites, online status, ETA, and alphab
   assert.equal(sortedNoCoords[2].name, 'Zack')
 })
 
+test('sortPreferredDrivers puts the default dispatch rank ahead of ETA', () => {
+  const pickup = { lat: 34.6788, lng: -82.843 }
+  const drivers = [
+    { id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', name: 'Near', online: true, lat: 34.679, lng: -82.843, dispatchRank: 2 },
+    { id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', name: 'Far', online: true, lat: 34.75, lng: -82.84, dispatchRank: 0 },
+  ]
+  const sorted = sortPreferredDrivers(drivers, [], pickup)
+  assert.equal(sorted[0].name, 'Far')
+  assert.equal(sorted[1].name, 'Near')
+})
+
 test('groupDriversForPicker separates favorites from non-favorite online drivers', () => {
   const drivers = [
     { id: A, name: 'Ada', online: false },

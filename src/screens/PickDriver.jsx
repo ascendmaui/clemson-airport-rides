@@ -4,7 +4,7 @@ import { SkeletonDriverCard } from '../components/LoadingSkeleton'
 import { AccessibleAlert } from '../components/AccessibleAlert'
 import { navigate } from '../lib/navigation'
 import { subscribeTrips, supabase, supabaseConfigured } from '../lib/supabase'
-import { requestDriverTrip } from '../lib/trips'
+import { requestDriverTrip, requestFailureMessage } from '../lib/trips'
 import { finiteCoordinate } from '../lib/currentPlace'
 import { useAuth } from '../lib/auth'
 import { useStudentStatus } from '../lib/useStudentStatus'
@@ -124,12 +124,16 @@ export function PickDriver({
   }
 
   const onRequest = async () => {
-    if (!selected) return
-    if (!selected.online) {
+    const someoneOnline = drivers.some((driver) => driver.online)
+    if (selected && !selected.online) {
       setError('That driver is offline. This request does not auto-match.')
       return
     }
-    if ((tier === 'tesla' || tier === 'tesla_self_driving') && !selected.isTesla) {
+    if (!selected && !someoneOnline) {
+      setError('No approved drivers are online right now.')
+      return
+    }
+    if (selected && (tier === 'tesla' || tier === 'tesla_self_driving') && !selected.isTesla) {
       setError('Tesla Model 3 fleet only. That driver is not listed as Tesla.')
       return
     }
@@ -138,7 +142,7 @@ export function PickDriver({
     try {
       const trip = await requestDriverTrip({
         riderId: user.id,
-        driverId: selected.id,
+        ...(selected ? { driverId: selected.id } : { autoAssign: true }),
         dest,
         destLat,
         destLng,
@@ -149,14 +153,14 @@ export function PickDriver({
         isStudent: student.verified,
         listCents,
       })
-      navigate('requested', { dest, trip: trip.id, driver: selected.name })
+      navigate('requested', { dest, trip: trip.id, driver: selected?.name || 'Next driver' })
     } catch (err) {
       const redirect = scheduleRedirectForRequestError(err, dest)
       if (redirect) {
         navigate('schedule', redirect.airport ? { airport: redirect.airport } : {})
         return
       }
-      setError(err.message || 'Could not request that driver')
+      setError(requestFailureMessage(err))
     } finally {
       setBusy(false)
     }
@@ -320,10 +324,12 @@ export function PickDriver({
           </p>
         ) : null}
         <PrimaryButton
-          disabled={!selected?.online || busy}
+          disabled={busy || (selected ? !selected.online : !anyOnline)}
+          loading={busy}
+          spinnerTone="orange"
           onClick={() => runOrPrompt(onRequest, { setPromptOpen, nextPath: 'pick-driver', nextParams: placeParams })}
         >
-          {busy ? 'Requesting…' : selected ? `Request ${selected.name}` : 'Select a driver'}
+          {busy ? 'Requesting…' : selected ? `Request ${selected.name}` : (anyOnline ? 'Request next driver' : 'Select a driver')}
         </PrimaryButton>
       </div>
       <SignInToBookModal open={promptOpen} onClose={() => setPromptOpen(false)} nextPath="pick-driver" nextParams={placeParams} />
