@@ -2,6 +2,7 @@ import { canReceiveRides } from '../../shared/driverOnboarding.js'
 import { authedJson } from './apiClient.js'
 import { displayFirstName, standingFromRatings } from './authErrors.js'
 import { GSP, STADIUM } from './places.js'
+import { airportCodeFromLabel } from './riderMoney.js'
 import { haversineMeters } from './riderShell.js'
 import { isSimulatedDriverId } from './simulatedDrivers.js'
 import { approvalGateMessage } from './syntheticOffers.js'
@@ -218,6 +219,76 @@ export async function saveFavoriteDriverIds(supabase, storage, userId, ids) {
   return { ids: next, persisted: true, note: 'Saved to your account.' }
 }
 
+function rowsLookLikeCards(rows) {
+  return Array.isArray(rows) && rows.some((row) => row && (row.full_name || row.make || row.model || row.color || row.plate))
+}
+
+function partsFromCardRows(rows) {
+  const profiles = []
+  const vehicles = []
+  for (const row of rows) {
+    const id = row?.id
+    if (!id) continue
+    profiles.push({
+      id,
+      full_name: row.full_name || null,
+      rating_avg: row.rating_avg,
+      rating_count: row.rating_count,
+      standing: row.standing || null,
+    })
+    if (row.make || row.model || row.color || row.plate) {
+      vehicles.push({
+        driver_id: id,
+        color: row.color || null,
+        make: row.make || null,
+        model: row.model || null,
+        plate: row.plate || null,
+        tier: row.tier || 'standard',
+        is_tesla: row.is_tesla === true,
+      })
+    }
+  }
+  return profiles.length ? { profiles, vehicles } : null
+}
+
+function rpcMissingDriverCards(error) {
+  const msg = `${error?.message || ''} ${error?.details || ''} ${error?.code || ''}`
+  return /could not find the function|schema cache|PGRST202|does not exist/i.test(msg)
+}
+
+/**
+ * Name and vehicle for the picker. Direct profile and vehicle selects are hidden
+ * until a trip is accepted, so the card would otherwise read "Driver" / "Vehicle TBD".
+ */
+async function loadPickerCardParts(supabase, ids) {
+  let missing = false
+  try {
+    const { data, error } = await supabase.rpc('list_driver_cards', { ids })
+    if (!error && rowsLookLikeCards(data)) return partsFromCardRows(data)
+    if (error && rpcMissingDriverCards(error)) missing = true
+  } catch (err) {
+    if (rpcMissingDriverCards(err)) missing = true
+  }
+  if (!missing) return null
+  try {
+    const data = await authedJson(supabase, '/api/driver?action=cards', {
+      method: 'POST',
+      body: { ids },
+    })
+    const rows = data?.drivers
+    if (rowsLookLikeCards(rows)) return partsFromCardRows(rows)
+  } catch {
+    return null
+  }
+  return null
+}
+
+/** Airport pick-a-driver returns 409. Schedule is where the 25% deposit is collected. */
+export function scheduleRedirectForRequestError(err, destLabel) {
+  if (err?.code !== 'airport_deposit_required') return null
+  return { screen: 'schedule', airport: airportCodeFromLabel(destLabel) }
+}
+
 async function loadProfiles(supabase, ids) {
   let profileRes = await supabase.from('profiles').select(PROFILE_COLUMNS).in('id', ids)
   if (profileRes.error && /standing|rating_avg|rating_count|column|schema cache/i.test(profileRes.error.message || '')) {
@@ -320,6 +391,9 @@ export async function fetchOnlineDrivers(supabase) {
   if (!visible.length) return { drivers: [], error: null }
 
   const visibleIds = visible.map((row) => row.driver_id)
+  const cardParts = await loadPickerCardParts(supabase, visibleIds)
+  if (cardParts) return { drivers: mapDrivers(visible, cardParts.profiles, cardParts.vehicles), error: null }
+
   const vehicleQuery = supabase.from('vehicles').select(VEHICLE_COLUMNS).in('driver_id', visibleIds)
   const profileRes = await loadProfiles(supabase, visibleIds)
   const { data: vehicles } = await vehicleQuery
@@ -338,10 +412,13 @@ export async function fetchDriversByIds(supabase, ids) {
   const visibleIds = wanted.filter((id) => approved.has(id) && !isSimulatedDriverId(id))
   if (!visibleIds.length) return { drivers: [], error: null }
 
+  const cardParts = await loadPickerCardParts(supabase, visibleIds)
   const [statusRes, profileRes, vehicleRes] = await Promise.all([
     supabase.from('driver_status').select(STATUS_COLUMNS).in('driver_id', visibleIds),
-    loadProfiles(supabase, visibleIds),
-    supabase.from('vehicles').select(VEHICLE_COLUMNS).in('driver_id', visibleIds),
+    cardParts ? Promise.resolve({ data: cardParts.profiles, error: null }) : loadProfiles(supabase, visibleIds),
+    cardParts
+      ? Promise.resolve({ data: cardParts.vehicles, error: null })
+      : supabase.from('vehicles').select(VEHICLE_COLUMNS).in('driver_id', visibleIds),
   ])
   if (statusRes.error) return { drivers: [], error: statusRes.error.message }
   if (profileRes.error) return { drivers: [], error: profileRes.error.message }
@@ -408,8 +485,8 @@ export async function fetchDriverApplication(supabase, driverId) {
 }
 
 /**
- * Preferred-driver request. The server writes fare_cents. Client list price
- * and isStudent are not pricing inputs.
+ * Campus driver request. The server writes fare_cents and an open-pool row.
+ * Client list price and isStudent are not pricing inputs.
  */
 export async function requestDriverTrip(supabase, {
   riderId,

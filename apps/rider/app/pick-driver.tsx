@@ -24,10 +24,11 @@ import {
   fetchOnlineDrivers,
   groupDriversForPicker,
   loadFavoriteDriverIds,
-  PREFERRED_MATCH_COPY,
+  OPEN_POOL_COPY,
   PREFERRED_OFFLINE_COPY,
   requestDriverTrip,
   saveFavoriteDriverIds,
+  scheduleRedirectForRequestError,
   sortPreferredDrivers,
   type OnlineDriver,
 } from 'rides-native/drivers'
@@ -229,6 +230,13 @@ export default function PickDriver() {
         params: { dest, trip: trip.id, driver: chosen.name },
       })
     } catch (err) {
+      const redirect = scheduleRedirectForRequestError(err, dest)
+      if (redirect) {
+        router.push(redirect.airport
+          ? { pathname: '/schedule', params: { airport: redirect.airport } }
+          : '/schedule')
+        return
+      }
       setError(err instanceof Error ? err.message : 'Could not request that driver')
     } finally {
       setBusy(false)
@@ -250,7 +258,7 @@ export default function PickDriver() {
         </Pressable>
         <View style={styles.headerCopy}>
           <Text style={styles.title}>Pick a driver</Text>
-          <Text style={styles.sub}>{PREFERRED_MATCH_COPY}</Text>
+          <Text style={styles.sub}>{OPEN_POOL_COPY}</Text>
         </View>
       </View>
       <View style={styles.mapWrap}>

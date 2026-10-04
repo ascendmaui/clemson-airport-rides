@@ -1,6 +1,6 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
-import MapView, { Circle, Marker, PROVIDER_DEFAULT } from 'react-native-maps'
+import MapView, { Circle, Marker, Polyline, PROVIDER_DEFAULT } from 'react-native-maps'
 import { heatColor } from 'rides-native/heat.js'
 import { DOWNTOWN, STADIUM } from 'rides-native/places.js'
 import { SIMULATED_FLEET_BADGE, refuseSimulatedDriverTap } from 'rides-native/simulatedDrivers.js'
@@ -39,6 +39,7 @@ export const CampusMap = forwardRef<CampusMapHandle, CampusMapProps>(function Ca
     pins = [],
     fitPins = false,
     showSimulatedFleet = false,
+    route = [],
   },
   ref: any,
 ) {
@@ -173,6 +174,9 @@ export const CampusMap = forwardRef<CampusMapHandle, CampusMapProps>(function Ca
               )
             })
           : null}
+        {route.length > 1 ? (
+          <Polyline coordinates={route} strokeColor={colors.orange} strokeWidth={4} />
+        ) : null}
         {pins.map((pin: MapPin) => (
           <Marker
             key={pin.id}

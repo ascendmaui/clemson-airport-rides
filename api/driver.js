@@ -1,5 +1,5 @@
 /**
- * POST /api/driver?action=signup|submit-review|offer-preview|tip|wait|cancel-midride|payouts
+ * POST /api/driver?action=signup|submit-review|offer-preview|tip|wait|cancel-midride|payouts|cards
  * GET  /api/driver?action=earnings|payouts
  * Legacy paths are rewritten in vercel.json.
  * trip-wait body.action (arrive|tick|cancel|start|complete) is a sub-action, not the route.
@@ -14,6 +14,7 @@ import handleTripWait from '../server/endpoints/tripWait.js'
 import handleCancelMidride from '../server/endpoints/tripCancelMidride.js'
 import handleDriverPayouts from '../server/endpoints/driverPayouts.js'
 import handleApplicantInbox from '../server/endpoints/applicantInbox.js'
+import handleDriverCards from '../server/endpoints/driverCards.js'
 
 const HANDLERS = {
   signup: handleDriverSignup,
@@ -25,6 +26,7 @@ const HANDLERS = {
   'cancel-midride': handleCancelMidride,
   payouts: handleDriverPayouts,
   inbox: handleApplicantInbox,
+  cards: handleDriverCards,
 }
 
 const LEGACY = {
@@ -44,7 +46,7 @@ export default async function handler(req, res, ...rest) {
   const handle = HANDLERS[action]
   if (!handle) {
     return json(res, 400, {
-      error: 'Unknown driver action. Use action=signup, submit-review, earnings, offer-preview, tip, wait, cancel-midride, payouts, or inbox.',
+      error: 'Unknown driver action. Use action=signup, submit-review, earnings, offer-preview, tip, wait, cancel-midride, payouts, inbox, or cards.',
     })
   }
   return handle(req, res, ...rest)

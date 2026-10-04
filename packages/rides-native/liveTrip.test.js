@@ -10,9 +10,12 @@ import {
   STILL_SEARCHING_MS,
   STRAIGHT_LINE_WAIT,
   checkoutSuccessHash,
+  decodeRoutePolyline,
   etaHoldLine,
   etaLineFor,
+  mapRouteCoordinates,
   riderLiveStepIndex,
+  roadEtaLine,
   riderLiveSteps,
   orderedLiveStops,
   riderLiveView,
@@ -62,6 +65,21 @@ test('straight-line ETA uses existing coordinates and names the pickup or drop-o
     /to drop-off/,
   )
   assert.equal(straightLineEta(null, pickup).label, null)
+  assert.equal(roadEtaLine(600, 'drop-off'), 'About 10 min by road to drop-off')
+  assert.match(
+    etaLineFor('in_progress', from, {
+      dropoffLat: 34.8957,
+      dropoffLng: -82.2189,
+      routeDurationS: 600,
+    }),
+    /About 10 min by road to drop-off/,
+  )
+  const decoded = decodeRoutePolyline('_p~iF~ps|U_ulLnnqC_mqNvxq`@')
+  assert.equal(decoded.length, 3)
+  assert.ok(Math.abs(decoded[0].lat - 38.5) < 0.001)
+  assert.ok(Math.abs(decoded[0].lng - -120.2) < 0.001)
+  assert.equal(mapRouteCoordinates('').length, 0)
+  assert.equal(decodeRoutePolyline(null).length, 0)
 })
 
 test('driver accept and decline labels keep preferred cancel semantics', () => {

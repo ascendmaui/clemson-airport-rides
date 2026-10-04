@@ -1,8 +1,10 @@
 /**
  * POST /api/stripe-payment-methods?action=request-driver
- * Records a preferred-driver trip at the server fare. Client fare, list price,
- * amount, and student flags are ignored. GSP/CLT use the airport quote and a
- * 25% deposit. The rider email gate is studentDiscountGranted.
+ * Records a campus trip at the server fare. Client fare, list price, amount,
+ * and student flags are ignored. Campus rows have no deposit: status searching,
+ * driver_id null, so any approved driver can accept and a decline stays in the
+ * pool. GSP/CLT already collect a 25% deposit in Schedule checkout. This screen
+ * does not open Checkout and does not insert an unpaid airport hold.
  */
 import {
   admin, cors, json, parseBody, userFromAuth, computeRoutes,
@@ -21,10 +23,14 @@ import { receivableDriverIds } from '../driverApproval.js'
 import { insertTripEvent } from '../tripEvents.js'
 
 async function serverDistance(origin, dest) {
-  if (origin?.lat == null || dest?.lat == null) return { distanceM: null, durationS: null }
+  if (origin?.lat == null || dest?.lat == null) return { distanceM: null, durationS: null, polyline: null }
   const route = await computeRoutes(origin, dest, [])
-  if (route.error) return { distanceM: null, durationS: null }
-  return { distanceM: route.distanceM, durationS: route.durationS }
+  if (route.error) return { distanceM: null, durationS: null, polyline: null }
+  return {
+    distanceM: route.distanceM,
+    durationS: route.durationS,
+    polyline: route.polyline || null,
+  }
 }
 
 export default async function handler(req, res, deps = {}) {
@@ -110,15 +116,30 @@ export default async function handler(req, res, deps = {}) {
     return json(res, 409, { error: 'Fare is not set', code: 'fare_not_set' })
   }
 
+  if (Number(priced.depositCents) > 0) {
+    return json(res, 409, {
+      error: 'Airport rides collect a 25% deposit in checkout. Book this trip from Schedule so drivers can see it after that deposit is paid.',
+      code: 'airport_deposit_required',
+      depositCents: priced.depositCents,
+    })
+  }
+
   const split = splitPlatformFee(priced.fareCents)
   const riderFirst = firstName(
     user.user_metadata?.full_name || user.user_metadata?.name || user.email?.split('@')[0],
     'Rider',
   )
+  const routeMeta = distance.polyline
+    ? {
+      route_polyline: distance.polyline,
+      route_duration_s: distance.durationS,
+      route_distance_m: distance.distanceM,
+    }
+    : {}
   const row = {
     rider_id: user.id,
-    driver_id: driverId,
-    status: 'requested',
+    driver_id: null,
+    status: 'searching',
     tier,
     pickup_label: places.pickup.label,
     dropoff_label: places.dropoff.label,
@@ -140,9 +161,10 @@ export default async function handler(req, res, deps = {}) {
     passengers: 1,
     metadata: {
       kind: 'driver_request',
-      purpose: priced.airport ? 'airport' : 'planned',
+      purpose: 'planned',
       preferred_driver_id: driverId,
-      match: 'preferred',
+      match: 'open',
+      ...routeMeta,
       rider_first_name: riderFirst,
       fare_is_estimate: Boolean(priced.estimate),
       isStudent: Boolean(priced.isStudent && priced.discountCents > 0),
@@ -176,10 +198,14 @@ export default async function handler(req, res, deps = {}) {
     },
   })
   if (eventError) {
-    return json(res, 500, {
-      error: eventError.message || 'Could not record trip event',
-      code: 'trip_event_failed',
+    console.error('[request-driver] trip event', eventError.message || eventError)
+    return json(res, 200, {
       trip: inserted.data,
+      fareCents: priced.fareCents,
+      depositCents: priced.depositCents,
+      discountCents: priced.discountCents,
+      studentDiscountApplied: priced.isStudent,
+      eventWarning: eventError.message || 'Could not record trip event',
     })
   }
 

@@ -25,6 +25,7 @@ export type CampusMapProps = {
   pins?: MapPin[]
   fitPins?: boolean
   showSimulatedFleet?: boolean
+  route?: LatLng[]
 }
 
 export type CampusMapHandle = {

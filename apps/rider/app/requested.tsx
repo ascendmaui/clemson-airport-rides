@@ -17,7 +17,7 @@ import { supabase } from '@/lib/supabase'
 import { loadLiveTrip, subscribeLiveTrip, type LiveTrip } from '@/lib/tripWatch'
 import { useTripById } from '@/lib/useRiderTrip'
 import { isActiveRideStatus, listEmergencyContacts, type EmergencyContact } from 'rides-native/safety.js'
-import { etaHoldLine, etaLineFor, orderedLiveStops, riderLiveView, SEARCH_PREVIEW_COPY, showSearchTheater, type LiveStopPin } from 'rides-native/liveTrip'
+import { etaHoldLine, etaLineFor, mapRouteCoordinates, orderedLiveStops, riderLiveView, SEARCH_PREVIEW_COPY, showSearchTheater, type LiveStopPin } from 'rides-native/liveTrip'
 import { holdAirportCode, isOpenUnpaidAirportHold, isUnpaidHoldTtlCancel } from 'rides-native/holdExpiryNotice.js'
 import { LivePhase } from 'rides-native/LivePhase'
 import { isApproachStatus } from '@/lib/approachAlert'
@@ -290,7 +290,7 @@ export default function Requested() {
           </Text>
         ) : null}
         <View style={[styles.map, lift(colors, 'rest')]}>
-          {/* TODO: road-following tiles need a billed Maps key. Pins, status, and straight-line ETA use coordinates already on the trip. */}
+          {/* Road line is the stored Routes polyline when the server had a Maps key. */}
           <CampusMap
             spots={[]}
             showHeat={false}
@@ -299,6 +299,7 @@ export default function Requested() {
             fitPins
             gameDay={false}
             surge={false}
+            route={mapRouteCoordinates(typeof live?.metadata?.route_polyline === 'string' ? live.metadata.route_polyline : null)}
           />
         </View>
         <SosIncomingBanner tripId={shown?.id || null} userId={user?.id || null} active={rideLive} />

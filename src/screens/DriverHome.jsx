@@ -193,11 +193,24 @@ function DriverShell({ driverId }) {
   }, [driverId])
 
   useEffect(() => {
-    if (!driverId || !approved) return undefined
-    setDriverOnline(driverId, true).catch(() => {})
-    setOnline(true)
+    if (!driverId || !approved || !supabase) return undefined
+    let alive = true
+    supabase
+      .from('driver_status')
+      .select('online')
+      .eq('driver_id', driverId)
+      .maybeSingle()
+      .then(({ data, error }) => {
+        if (!alive) return
+        if (!error && data && data.online === false) {
+          setOnline(false)
+          return
+        }
+        setDriverOnline(driverId, true).catch(() => {})
+        setOnline(true)
+      })
     return () => {
-      setDriverOnline(driverId, false).catch(() => {})
+      alive = false
     }
   }, [driverId, approved])
 
@@ -213,6 +226,7 @@ function DriverShell({ driverId }) {
           heading: pos.coords.heading,
           online: true,
         }).catch(() => {})
+        setOnline(true)
       },
       () => {},
       { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 },

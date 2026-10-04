@@ -1,6 +1,6 @@
 import { useRouter } from 'expo-router'
 import * as Location from 'expo-location'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { AccessibilityInfo, Animated, Linking, Modal, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { CampusMap, type MapPin } from '@/components/CampusMap'
@@ -10,8 +10,7 @@ import { CircleButton, GoButton } from '@/components/shell'
 import { DriverStatusCard } from '@/components/DriverStatusCard'
 import { useAuth } from '@/lib/auth'
 import { useFeedback } from '@/lib/feedback'
-import { notifyAcceptedRide, notifyNewRequest } from '@/lib/push'
-import { clemsonMiamiDriverNotification } from 'rides-native/clemsonMiamiPromo.js'
+import { notifyAcceptedRide } from '@/lib/push'
 import { shownCents } from '@/lib/shown'
 import { supabase } from '@/lib/supabase'
 import { useTheme } from '@/lib/theme'
@@ -91,8 +90,6 @@ export default function DriverHome() {
   const shadow = useCardShadow()
   const { user, configured } = useAuth()
   const { pulse } = useFeedback()
-  const seenOffers = useRef(new Set<string>())
-  const offersPrimed = useRef(false)
   const [desk, setDesk] = useState<DriverDesk | null>(null)
   const [todayCents, setTodayCents] = useState(0)
   const [weekCents, setWeekCents] = useState(0)
@@ -217,27 +214,6 @@ export default function DriverHome() {
       refresh().catch(() => {})
     })
   }, [canSeeOffers, refresh])
-
-  useEffect(() => {
-    const offers = desk?.offers || []
-    if (!offersPrimed.current) {
-      offers.forEach((card: DriverCard) => seenOffers.current.add(card.id))
-      offersPrimed.current = true
-      return
-    }
-    const fresh = offers.filter((card: DriverCard) => !seenOffers.current.has(card.id) && !isSyntheticOffer(card))
-    fresh.forEach((card: DriverCard) => seenOffers.current.add(card.id))
-    const next = fresh[0]
-    if (!next) return
-    pulse('request')
-    if (next.promoRide) {
-      const note = clemsonMiamiDriverNotification()
-      AccessibilityInfo.announceForAccessibility(`${note.title}. ${note.body}`)
-    } else {
-      AccessibilityInfo.announceForAccessibility(`New ride offer: ${formatCents(next.driverNetCents)}, pickup at ${next.pickupLabel}`)
-    }
-    notifyNewRequest(next).catch(() => {})
-  }, [desk?.offers, pulse])
 
   useEffect(() => {
     let alive = true

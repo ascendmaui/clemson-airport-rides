@@ -39,6 +39,7 @@ import { CarpoolHub } from './screens/CarpoolHub'
 import { AmbassadorScreen } from './screens/AmbassadorScreen'
 import { ToastProvider, ToastStack } from './lib/toasts'
 import { RideToastWatcher } from './components/RideToastWatcher'
+import { DriverOfferWatcher } from './components/DriverOfferWatcher'
 import { DriverBillingEntry } from './components/DriverBillingEntry'
 import { IncentivesAdmin } from './screens/IncentivesAdmin'
 import { LostFoundWatcher } from './components/LostFoundWatcher'
@@ -234,6 +235,7 @@ export default function App() {
         <div className={site ? 'app-shell app-shell--site' : 'app-shell'} style={{ position: 'relative', height: '100%' }}>
           <AmbassadorAttributionSync />
           <RideToastWatcher />
+          <DriverOfferWatcher />
           <LostFoundWatcher />
           <ToastStack />
           <div

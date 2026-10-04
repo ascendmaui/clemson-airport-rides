@@ -27,11 +27,18 @@ export default async function handler(req, res) {
   if (pe) return json(res, 400, { error: pe })
   if (!body.tripId) return json(res, 400, { error: 'tripId required' })
 
-  const tripRes = await sb
+  let tripRes = await sb
     .from('trips')
-    .select('id, rider_id, driver_id, status, fare_cents, metadata')
+    .select('id, rider_id, driver_id, status, fare_cents, deposit_cents, rider_note, metadata')
     .eq('id', body.tripId)
     .maybeSingle()
+  if (tripRes.error && /deposit_cents|rider_note|column|schema cache/i.test(tripRes.error.message || '')) {
+    tripRes = await sb
+      .from('trips')
+      .select('id, rider_id, driver_id, status, fare_cents, metadata')
+      .eq('id', body.tripId)
+      .maybeSingle()
+  }
   if (tripRes.error || !tripRes.data) return json(res, 404, { error: 'Trip not found' })
   const trip = tripRes.data
 

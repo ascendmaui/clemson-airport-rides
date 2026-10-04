@@ -8,6 +8,7 @@ import {
   fetchDriversByIds,
   fetchOnlineDrivers,
   filterDriversForFleet,
+  scheduleRedirectForRequestError,
   isTeslaDriver,
   isTeslaVehicle,
   TESLA_FLEET_EMPTY_COPY,
@@ -62,6 +63,7 @@ function makeFakeSupabase({
   upsertStatusError = null,
   updateProfileError = null,
   sessionToken = null,
+  driverCards = null,
 } = {}) {
   return {
     auth: {
@@ -71,7 +73,11 @@ function makeFakeSupabase({
       }),
     },
     rpc: async (name, args) => {
-      if (rpcError) return { data: null, error: rpcError }
+      if (rpcError && name !== 'list_driver_cards') return { data: null, error: rpcError }
+      if (name === 'list_driver_cards') {
+        if (rpcError) return { data: null, error: rpcError }
+        return { data: driverCards || null, error: driverCards ? null : { message: `Unknown RPC ${name}` } }
+      }
       if (name === 'list_approved_driver_ids') {
         const ids = args?.ids || []
         const approvedSet = approvedIds ? new Set(approvedIds) : new Set(ids)
@@ -767,6 +773,45 @@ test('fetchOnlineDrivers happy path maps driver profile, status, vehicle, and fi
   assert.equal(driverB.isTesla, false)
   assert.equal(driverB.tier, 'standard')
   assert.equal(driverB.standing, 'good') // derived from standingFromRatings(null, 0)
+})
+
+test('fetchOnlineDrivers shows the driver name and vehicle when profile rows are hidden', async () => {
+  const driverStatus = [{ driver_id: A, online: true, lat: 34.68, lng: -82.84 }]
+  const supabase = makeFakeSupabase({
+    driverStatus,
+    profiles: [],
+    vehicles: [],
+    approvedIds: [A],
+    driverCards: [{
+      id: A,
+      full_name: 'Demo Driver',
+      rating_avg: 0,
+      rating_count: 0,
+      standing: 'good',
+      color: 'gray',
+      make: 'Honda',
+      model: 'Accord',
+      plate: 'DEMO03',
+      tier: 'standard',
+      is_tesla: false,
+    }],
+  })
+  const res = await fetchOnlineDrivers(supabase)
+  assert.equal(res.error, null)
+  assert.equal(res.drivers.length, 1)
+  assert.equal(res.drivers[0].name, 'Demo')
+  assert.equal(res.drivers[0].vehicleLabel, 'gray Honda Accord')
+  assert.equal(res.drivers[0].plate, 'DEMO03')
+  const lines = describeDriver(res.drivers[0])
+  assert.equal(lines.ratingLabel, 'New driver')
+})
+
+test('scheduleRedirectForRequestError opens Schedule for an unpaid airport deposit', () => {
+  const err = new Error('Airport rides collect a 25% deposit in checkout. Book this trip from Schedule so drivers can see it after that deposit is paid.')
+  err.code = 'airport_deposit_required'
+  assert.deepEqual(scheduleRedirectForRequestError(err, 'GSP Airport'), { screen: 'schedule', airport: 'GSP' })
+  assert.deepEqual(scheduleRedirectForRequestError(err, 'Charlotte Douglas (CLT)'), { screen: 'schedule', airport: 'CLT' })
+  assert.equal(scheduleRedirectForRequestError(new Error('That driver is offline.'), 'GSP Airport'), null)
 })
 
 test('fetchOnlineDrivers falls back to narrow profile columns on schema cache error', async () => {

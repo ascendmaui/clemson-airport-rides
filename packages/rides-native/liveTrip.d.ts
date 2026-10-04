@@ -56,6 +56,9 @@ export function etaTargetForStatus(
   } | null | undefined,
 ): EtaTarget
 export function straightLineEta(from: LatLng | null | undefined, to: LatLng | null | undefined): StraightLineEta
+export function decodeRoutePolyline(encoded: string | null | undefined): LatLng[]
+export function mapRouteCoordinates(encoded: string | null | undefined): { latitude: number; longitude: number }[]
+export function roadEtaLine(durationS: number | null | undefined, noun: string | null | undefined): string | null
 export function etaLineFor(
   status: string | null | undefined,
   from: LatLng | null | undefined,

@@ -285,7 +285,7 @@ test('receivableDriverIds returns no one when the application read fails', async
   assert.equal(gate.error, 'schema cache miss')
 })
 
-test('requestDriverTrip skips a pending_review driver and still assigns an approved driver', async () => {
+test('requestDriverTrip skips a pending_review driver and opens a campus offer for an approved driver', async () => {
   const pendingSb = memorySb({
     driver_applications: [{ profile_id: 'driver-pending', onboarding_status: 'pending_review' }],
     profiles: [{ id: 'driver-pending', role: 'driver' }],
@@ -313,7 +313,68 @@ test('requestDriverTrip skips a pending_review driver and still assigns an appro
   })
   assert.equal(allowed.status, 200)
   assert.equal(approvedSb.tables.trips.length, 1)
-  assert.equal(approvedSb.tables.trips[0].driver_id, 'driver-approved')
+  assert.equal(approvedSb.tables.trips[0].driver_id, null)
+  assert.equal(approvedSb.tables.trips[0].status, 'searching')
+  assert.equal(approvedSb.tables.trips[0].deposit_cents, 0)
+  assert.equal(approvedSb.tables.trips[0].metadata.match, 'open')
+  assert.equal(approvedSb.tables.trips[0].metadata.purpose, 'planned')
+})
+
+test('requestDriverTrip does not insert an unpaid airport deposit from pick-a-driver', async () => {
+  const approvedSb = memorySb({
+    driver_applications: [{ profile_id: 'driver-approved', onboarding_status: 'approved' }],
+  })
+  let ensured = false
+  const res = await callHandler(requestDriverTrip, {
+    body: {
+      ...REQUEST_BODY,
+      driverId: 'driver-approved',
+      dropoffLabel: 'GSP Airport',
+      destLat: 34.8956,
+      destLng: -82.2189,
+    },
+  }, {
+    sb: approvedSb.sb,
+    user: { id: 'rider-1', email: 'rider@clemson.edu', user_metadata: { full_name: 'Test Rider' } },
+    ensureProfile: async () => {
+      ensured = true
+      return { ok: true }
+    },
+  })
+  assert.equal(res.status, 409)
+  assert.equal(res.json.code, 'airport_deposit_required')
+  assert.equal(ensured, false)
+  assert.equal(approvedSb.tables.trips?.length || 0, 0)
+})
+
+test('requestDriverTrip keeps the campus trip when the event insert fails', async () => {
+  const approvedSb = memorySb({
+    driver_applications: [{ profile_id: 'driver-approved', onboarding_status: 'approved' }],
+  })
+  const sb = {
+    from(table) {
+      if (table === 'trip_events') {
+        return {
+          insert() {
+            return Promise.resolve({ data: null, error: { message: 'ledger down' } })
+          },
+        }
+      }
+      return approvedSb.sb.from(table)
+    },
+  }
+  const res = await callHandler(requestDriverTrip, {
+    body: { ...REQUEST_BODY, driverId: 'driver-approved' },
+  }, {
+    sb,
+    user: { id: 'rider-1', email: 'rider@clemson.edu', user_metadata: { full_name: 'Test Rider' } },
+    ensureProfile: async () => ({ ok: true }),
+  })
+  assert.equal(res.status, 200)
+  assert.equal(typeof res.json.trip.id, 'string')
+  assert.equal(res.json.eventWarning, 'ledger down')
+  assert.equal(approvedSb.tables.trips.length, 1)
+  assert.equal(approvedSb.tables.trips[0].status, 'searching')
 })
 
 test('trip offer preview hides open trips from pending_review and still previews an accepted trip', async () => {
