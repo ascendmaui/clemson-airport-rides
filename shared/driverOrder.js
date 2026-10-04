@@ -39,6 +39,21 @@ export function offerVisibleToDriver(trip, driverId) {
     ? trip.metadata
     : {}
   const target = typeof meta.offer_driver_id === 'string' ? meta.offer_driver_id : ''
+  if (trip.driver_id && trip.driver_id !== driverId) return false
   if (target) return target === driverId
   return !trip.driver_id || trip.driver_id === driverId
+}
+
+/** Filter before LIMIT so other drivers' targeted offers cannot crowd out the pool. */
+export function visibleOfferQuery(query, driverId) {
+  return query.is('driver_id', null).or(
+    `metadata->>offer_driver_id.is.null,metadata->>offer_driver_id.eq."",metadata->>offer_driver_id.eq.${JSON.stringify(driverId)}`,
+  )
+}
+
+/** Compare the dispatch snapshot as well as status when mutating an offer. */
+export function unchangedOfferQuery(query, trip) {
+  return trip.metadata == null
+    ? query.is('metadata', null)
+    : query.eq('metadata', JSON.stringify(trip.metadata))
 }

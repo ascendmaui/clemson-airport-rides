@@ -13,7 +13,11 @@ function cloneRows(initialTables) {
 function matches(row, filter) {
   const value = row[filter.column]
   switch (filter.kind) {
-    case 'eq': return value === filter.value
+    case 'eq': return filter.column === 'metadata' ? JSON.stringify(value) === filter.value : value === filter.value
+    case 'or': {
+      const target = row.metadata?.offer_driver_id
+      return target == null || target === '' || target === JSON.parse(filter.value.split('metadata->>offer_driver_id.eq.').at(-1))
+    }
     case 'in': return filter.value.includes(value)
     case 'is': return filter.value === null ? value == null : value === filter.value
     case 'not': return filter.operator === 'is' && filter.value === null ? value != null : value !== filter.value
@@ -92,6 +96,7 @@ export function createMatchingSupabase(initialTables = {}) {
     const state = { table, mode: 'select', filters: [], orders: [], limit: null, payload: null }
     const builder = {
       select() { return builder },
+      or(value) { state.filters.push({ kind: 'or', value }); return builder },
       eq(column, value) { state.filters.push({ kind: 'eq', column, value }); return builder },
       in(column, value) { state.filters.push({ kind: 'in', column, value }); return builder },
       is(column, value) { state.filters.push({ kind: 'is', column, value }); return builder },

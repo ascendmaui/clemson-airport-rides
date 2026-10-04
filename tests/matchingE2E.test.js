@@ -319,3 +319,44 @@ test('terminal trip statuses reject late accept without inserting events', async
     assert.equal(supabase._tables.trip_events.length, 0)
   }
 })
+
+
+test('targeted offers fan out only to their target while open offers reach both drivers', async () => {
+  const { supabase, trip, drivers } = seedMatchingScenario()
+  // More hidden requests than the desk page size must not crowd out an eligible offer.
+  supabase._tables.trips.unshift(...Array.from({ length: 25 }, (_, index) => ({
+    ...trip, id: `targeted-${index}`, requested_at: '2026-10-02T00:00:00.000Z',
+    metadata: { offer_driver_id: drivers[0].id },
+  })))
+  const desk = await loadDriverDesk(supabase, drivers[1].id)
+  assert.deepEqual(desk.offers.map((row) => row.id), [trip.id])
+  await assert.rejects(
+    acceptTrip(supabase, { id: 'targeted-0' }, drivers[1].id), /no longer available/,
+  )
+  assert.equal(supabase._tables.trip_events.length, 0)
+  const first = await loadDriverDesk(supabase, drivers[0].id)
+  assert.equal(first.offers.length, 20)
+})
+
+test('a reassigned target between read and claim rejects the stale accept', async () => {
+  const { supabase, trip, drivers } = seedMatchingScenario({
+    trip: { metadata: { offer_driver_id: 'driver-1' } },
+  })
+  const originalFrom = supabase.from
+  supabase.from = (table) => {
+    if (table === 'driver_status') {
+      supabase._tables.trips[0].metadata = { offer_driver_id: drivers[1].id }
+    }
+    return originalFrom(table)
+  }
+  await assert.rejects(acceptTrip(supabase, trip, drivers[0].id), /no longer available/)
+  assert.equal(supabase._tables.trips[0].driver_id, null)
+  assert.equal(supabase._tables.trip_events.length, 0)
+})
+
+test('an absent trip cannot be claimed using a stale card', async () => {
+  const { supabase, trip, drivers } = seedMatchingScenario()
+  supabase._tables.trips.length = 0
+  await assert.rejects(acceptTrip(supabase, trip, drivers[0].id), /no longer available/)
+  assert.equal(supabase._tables.trip_events.length, 0)
+})
