@@ -15,6 +15,7 @@ import handleCancelMidride from '../server/endpoints/tripCancelMidride.js'
 import handleDriverPayouts from '../server/endpoints/driverPayouts.js'
 import handleApplicantInbox from '../server/endpoints/applicantInbox.js'
 import handleDriverCards from '../server/endpoints/driverCards.js'
+import handleMatchingRebroadcast from '../server/endpoints/matchingRebroadcast.js'
 import { handleMarkOffered, handlePassOffer } from '../server/endpoints/driverOfferDesk.js'
 
 const HANDLERS = {
@@ -28,6 +29,7 @@ const HANDLERS = {
   payouts: handleDriverPayouts,
   inbox: handleApplicantInbox,
   cards: handleDriverCards,
+  'rebroadcast-offers': handleMatchingRebroadcast,
   'mark-offered': handleMarkOffered,
   'pass-offer': handlePassOffer,
 }

@@ -124,6 +124,10 @@ export async function handlePassOffer(req, res, deps = {}) {
   const nextMeta = {
     ...meta,
     offer_driver_id: offerDriverId,
+    offer_tried_driver_ids: [...new Set([
+      ...(Array.isArray(meta.offer_tried_driver_ids) ? meta.offer_tried_driver_ids : []),
+      ctx.user.id,
+    ])],
     match: offerDriverId ? meta.match || 'auto' : 'open',
   }
   const updated = await unchangedOfferQuery(ctx.sb
