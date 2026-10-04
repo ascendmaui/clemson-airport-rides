@@ -402,5 +402,5 @@ test('the billing handler does not call Stripe or write a credit debit', () => {
   assert.doesNotMatch(lib, /credit_balance_cents/)
   assert.match(lib, /from\('credit_accounts'\)\.select\('balance_cents'\)/)
   assert.match(sql, /credit_ledger already exists/)
-  assert.doesNotMatch(sql, /CREATE\s+(TABLE|INDEX|POLICY)|ALTER\s+TABLE|ADD\s+COLUMN|INSERT\s+INTO/i)
+  assert.equal(sql.replace(/--[^\n]*/g, '').trim(), '')
 })
