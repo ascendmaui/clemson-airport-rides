@@ -222,9 +222,71 @@ export function straightLineEta(from, to) {
   return { etaMin: approach.etaMin, distanceMi: approach.distanceMi, label }
 }
 
+/** Google encoded polyline → {lat, lng}[]. Empty when the server stored no road route. */
+export function decodeRoutePolyline(encoded) {
+  if (typeof encoded !== 'string' || !encoded) return []
+  let index = 0
+  let lat = 0
+  let lng = 0
+  const path = []
+  while (index < encoded.length) {
+    let shift = 0
+    let result = 0
+    let byte = 0
+    do {
+      if (index >= encoded.length) return path
+      byte = encoded.charCodeAt(index++) - 63
+      result |= (byte & 0x1f) << shift
+      shift += 5
+    } while (byte >= 0x20)
+    const deltaLat = (result & 1) ? ~(result >> 1) : (result >> 1)
+    lat += deltaLat
+    shift = 0
+    result = 0
+    do {
+      if (index >= encoded.length) return path
+      byte = encoded.charCodeAt(index++) - 63
+      result |= (byte & 0x1f) << shift
+      shift += 5
+    } while (byte >= 0x20)
+    const deltaLng = (result & 1) ? ~(result >> 1) : (result >> 1)
+    lng += deltaLng
+    path.push({ lat: lat / 1e5, lng: lng / 1e5 })
+  }
+  return path
+}
+
+export function mapRouteCoordinates(encoded) {
+  return decodeRoutePolyline(encoded).map((point) => ({
+    latitude: point.lat,
+    longitude: point.lng,
+  }))
+}
+
+/** Minutes from a stored Routes duration. Null when the server had no road leg. */
+export function roadEtaLine(durationS, noun) {
+  const seconds = Number(durationS)
+  if (!Number.isFinite(seconds) || seconds <= 0 || !noun) return null
+  const minutes = Math.max(1, Math.round(seconds / 60))
+  return `About ${minutes} min by road to ${noun}`
+}
+
+function storedRouteDurationS(places) {
+  const direct = places?.routeDurationS ?? places?.route_duration_s
+  if (Number.isFinite(Number(direct)) && Number(direct) > 0) return Number(direct)
+  const meta = places?.metadata
+  const nested = meta?.route_duration_s
+  if (Number.isFinite(Number(nested)) && Number(nested) > 0) return Number(nested)
+  return null
+}
+
 export function etaLineFor(status, from, places) {
   const target = etaTargetForStatus(status, places)
   if (!target.point || !target.noun) return null
+  if (status === 'in_progress') {
+    const road = roadEtaLine(storedRouteDurationS(places), target.noun)
+    if (road) return road
+  }
   const eta = straightLineEta(from, target.point)
   return eta.label ? `${eta.label} to ${target.noun}` : null
 }

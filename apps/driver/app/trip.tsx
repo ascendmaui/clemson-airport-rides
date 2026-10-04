@@ -22,7 +22,7 @@ import {
   TESLA_FLEET_NOTICE,
   type DriverCard,
 } from 'rides-native/tripTags'
-import { DRIVER_TRACK_STEPS, etaHoldLine, etaLineFor } from 'rides-native/liveTrip'
+import { DRIVER_TRACK_STEPS, etaHoldLine, etaLineFor, mapRouteCoordinates } from 'rides-native/liveTrip'
 import { LivePhase } from 'rides-native/LivePhase'
 import { ORANGE, PURPLE } from 'rides-native/places.js'
 import { CounterpartCard, RateTripPanel, partyColorsFromPalette } from 'rides-native/PartyScreens'
@@ -122,9 +122,13 @@ export default function TripScreen() {
       if (result?.status === 'completed') {
         pulse('complete')
         const payout = result.settle?.payout
-        setSettleNote(payout?.status
-          ? `Fare collected. Payout ${payout.status}${payout.amountCents ? ` · ${formatCents(payout.amountCents)}` : ''}.`
-          : 'Fare collected from the rider’s saved card or Apple Pay.')
+        if (result.settle?.reason === 'no_card_on_file') {
+          setSettleNote('Trip complete. No card is on file, so this fare was not charged.')
+        } else {
+          setSettleNote(payout?.status
+            ? `Fare collected. Payout ${payout.status}${payout.amountCents ? ` · ${formatCents(payout.amountCents)}` : ''}.`
+            : 'Fare collected from the rider’s saved card or Apple Pay.')
+        }
       } else {
         pulse('accept')
       }
@@ -150,10 +154,12 @@ export default function TripScreen() {
   if (trip?.dropoffLat != null && trip.dropoffLng != null) {
     pins.push({ id: 'drop', latitude: trip.dropoffLat, longitude: trip.dropoffLng, title: trip.dropoffLabel, pinColor: ORANGE })
   }
-  const route: { latitude: number; longitude: number }[] = []
-  if (self) route.push(self)
-  if (rider && !headingToDropoff) route.push(rider)
-  if (target.latitude != null && target.longitude != null) route.push({ latitude: target.latitude, longitude: target.longitude })
+  const road = mapRouteCoordinates(trip?.routePolyline)
+  const straight: { latitude: number; longitude: number }[] = []
+  if (self) straight.push(self)
+  if (rider && !headingToDropoff) straight.push(rider)
+  if (target.latitude != null && target.longitude != null) straight.push({ latitude: target.latitude, longitude: target.longitude })
+  const route = road.length > 1 ? road : straight
   const focus = rider || (target.latitude != null && target.longitude != null
     ? { latitude: target.latitude, longitude: target.longitude }
     : self)
@@ -172,7 +178,7 @@ export default function TripScreen() {
 
   return (
     <View style={styles.screen}>
-      {/* TODO: road-following tiles need a billed Maps key. Progress and straight-line ETA use coordinates already on this trip. */}
+      {/* Road line is the stored Routes polyline when the server had a Maps key. Otherwise the coordinate line stays. */}
       <CampusMap pins={pins} center={focus} route={route.length > 1 ? route : undefined} />
       <View pointerEvents="box-none" style={[styles.sheet, shadow, { paddingBottom: insets.bottom + 12, borderColor: colors.border }]}>
         <View style={[styles.handle, { backgroundColor: colors.track }]} />

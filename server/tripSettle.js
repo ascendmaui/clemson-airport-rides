@@ -16,6 +16,7 @@ import { isAdminIdentity } from '../shared/adminAccess.js'
 import { ensureAuthoritativeFare, storedFareCents } from './authoritativeFare.js'
 import { farePaidCents, tripChargeKey } from './chargeIdempotency.js'
 import { insertTripEvent } from './tripEvents.js'
+import { airportDepositRequiredCents } from '../packages/rides-native/tripTags.js'
 
 const ACTIVE_KEEP = new Set(['accepted', 'arriving', 'in_progress', 'payment_required', 'searching', 'offered'])
 
@@ -37,6 +38,26 @@ function feeKindFor(action, requested) {
   if (action === 'cancel') return 'cancel_fee'
   if (action === 'charge') return 'mid_ride'
   return 'balance'
+}
+
+/**
+ * True when this rider has a saved card. null means the profile could not be read,
+ * so the caller keeps the existing charge path.
+ */
+async function savedCardOnFile({ deps, sb, riderId }) {
+  if (!riderId) return false
+  try {
+    if (typeof deps?.loadProfile === 'function') {
+      const profile = await deps.loadProfile(riderId)
+      return Boolean(profile?.stripe_default_pm_id)
+    }
+    if (!sb) return null
+    const loaded = await sb.from('profiles').select('stripe_default_pm_id').eq('id', riderId).maybeSingle()
+    if (loaded.error) return null
+    return Boolean(loaded.data?.stripe_default_pm_id)
+  } catch {
+    return null
+  }
 }
 
 export async function settleTrip({
@@ -114,8 +135,27 @@ export async function settleTrip({
 
   const chargeKind = action === 'complete' ? (due.kind || 'balance') : kind
   const paidCents = farePaidCents(trip)
+  const depositAlreadyExists = airportDepositRequiredCents(trip) > 0
+  const cardOnFile = depositAlreadyExists
+    ? null
+    : await savedCardOnFile({ deps, sb, riderId: trip.rider_id })
+  // Campus fares have no deposit. This rider build does not save a card, so
+  // complete must not call Stripe. A deposit that already exists keeps the charge path.
+  const campusUncollected = action === 'complete'
+    && due.amountCents > 0
+    && !override
+    && !depositAlreadyExists
+    && cardOnFile === false
   let payment = null
-  if (due.amountCents > 0 && !override) {
+  if (campusUncollected) {
+    payment = {
+      ok: true,
+      method: 'none',
+      reason: 'no_card_on_file',
+      amountCents: due.amountCents,
+      skipped: true,
+    }
+  } else if (due.amountCents > 0 && !override) {
     payment = await collectPayment({
       sb,
       stripe,
@@ -146,11 +186,13 @@ export async function settleTrip({
     })
   }
 
-  const gate = progressionGate({
-    amountDueCents: due.amountCents,
-    payment,
-    adminOverride: override,
-  })
+  const gate = campusUncollected
+    ? { allow: true, reason: 'no_card_on_file' }
+    : progressionGate({
+      amountDueCents: due.amountCents,
+      payment,
+      adminOverride: override,
+    })
 
   if (!gate.allow) {
     return {
@@ -165,7 +207,7 @@ export async function settleTrip({
     }
   }
 
-  if (sb && gate.allow) {
+  if (sb && gate.allow && !campusUncollected) {
     await clearPaymentHold(sb, trip.id, { farePaidDelta: 0 })
   }
 
@@ -186,6 +228,13 @@ export async function settleTrip({
   const patch = action === 'complete'
     ? { status: 'completed', completed_at: now }
     : { status: 'canceled', canceled_at: now }
+  if (campusUncollected) {
+    const metadata = { ...(trip.metadata || {}) }
+    delete metadata.payment_hold
+    metadata.remainder_uncollected = true
+    metadata.remainder_reason = 'no_card_on_file'
+    patch.metadata = metadata
+  }
 
   if (sb) {
     const { error } = await sb.from('trips').update(patch).eq('id', trip.id)

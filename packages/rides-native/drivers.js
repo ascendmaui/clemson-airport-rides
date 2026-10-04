@@ -408,8 +408,8 @@ export async function fetchDriverApplication(supabase, driverId) {
 }
 
 /**
- * Preferred-driver request. The server writes fare_cents. Client list price
- * and isStudent are not pricing inputs.
+ * Campus driver request. The server writes fare_cents and an open-pool row.
+ * Client list price and isStudent are not pricing inputs.
  */
 export async function requestDriverTrip(supabase, {
   riderId,

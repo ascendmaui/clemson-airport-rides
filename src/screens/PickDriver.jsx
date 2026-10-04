@@ -16,7 +16,7 @@ import {
   filterDriversForFleet,
   groupDriversForPicker,
   loadFavoriteDriverIds,
-  PREFERRED_MATCH_COPY,
+  OPEN_POOL_COPY,
   PREFERRED_OFFLINE_COPY,
   saveFavoriteDriverIds,
   sortPreferredDrivers,
@@ -152,7 +152,7 @@ export function PickDriver({ dest = 'GSP Airport', tier = 'standard', listCents 
           {tier === 'tesla' || tier === 'tesla_self_driving' ? 'Pick a Tesla driver' : 'Pick a driver'}
         </h1>
         <p style={{ color: 'var(--ink-secondary)', fontSize: 14, marginTop: 6, lineHeight: 1.45 }}>
-          {tier === 'tesla' || tier === 'tesla_self_driving' ? TESLA_FLEET_PICK_COPY : PREFERRED_MATCH_COPY}
+          {tier === 'tesla' || tier === 'tesla_self_driving' ? TESLA_FLEET_PICK_COPY : OPEN_POOL_COPY}
         </p>
         {tripFlash && (
           <div style={{ marginTop: 10, padding: '8px 12px', borderRadius: 12, background: 'var(--purple-soft)', color: 'var(--purple)', fontSize: 12, fontWeight: 600 }}>
@@ -184,7 +184,7 @@ export function PickDriver({ dest = 'GSP Airport', tier = 'standard', listCents 
                 ? (drivers.length ? PREFERRED_OFFLINE_COPY : TESLA_FLEET_EMPTY_COPY)
                 : (drivers.length
                   ? PREFERRED_OFFLINE_COPY
-                  : 'When a driver goes online in Driver mode, they show up here. This screen does not auto-match.')}
+                  : 'When a driver goes online in Driver mode, they show up here. A campus request stays in the open pool until someone accepts.')}
             </p>
           </div>
         )}

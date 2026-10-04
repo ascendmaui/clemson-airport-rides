@@ -236,6 +236,64 @@ test('settleTrip blocks progression with 402 payment_required when card is decli
   assert.equal(sb.updates.length, 0)
 })
 
+test('settleTrip completes a campus trip with no saved card and does not call Stripe', async () => {
+  let intents = 0
+  const deps = mockDeps({
+    profile: { stripe_customer_id: null, stripe_default_pm_id: null },
+  })
+  const original = deps.createPaymentIntent
+  deps.createPaymentIntent = async (params) => {
+    intents += 1
+    return original(params)
+  }
+  const sb = makeMockSb()
+  const trip = {
+    id: 'trip_campus_nocard',
+    rider_id: 'r1',
+    driver_id: 'd1',
+    status: 'in_progress',
+    fare_cents: 1800,
+    deposit_cents: 0,
+    metadata: { purpose: 'planned', match: 'open' },
+  }
+  const res = await settleTrip({ sb, trip, action: 'complete', deps })
+  assert.equal(res.http, 200)
+  assert.equal(res.body.progressed, true)
+  assert.equal(res.body.status, 'completed')
+  assert.equal(res.body.reason, 'no_card_on_file')
+  assert.equal(intents, 0)
+  assert.equal(deps.payments.length, 0)
+  const tripUpdate = sb.updates.find((u) => u.patch.status === 'completed')
+  assert.equal(tripUpdate.patch.metadata.remainder_uncollected, true)
+  assert.equal(tripUpdate.patch.metadata.payment_hold, undefined)
+})
+
+test('settleTrip still blocks an existing airport deposit when no card is on file', async () => {
+  let intents = 0
+  const deps = mockDeps({
+    profile: { stripe_customer_id: null, stripe_default_pm_id: null },
+  })
+  deps.createPaymentIntent = async () => {
+    intents += 1
+    return { id: 'pi_should_not', status: 'succeeded', amount: 1 }
+  }
+  const sb = makeMockSb()
+  const trip = {
+    id: 'trip_airport_deposit',
+    rider_id: 'r1',
+    driver_id: 'd1',
+    status: 'in_progress',
+    fare_cents: 4000,
+    deposit_cents: 1000,
+    metadata: { purpose: 'airport', airport: 'GSP' },
+  }
+  const res = await settleTrip({ sb, trip, action: 'complete', deps })
+  assert.equal(res.http, 402)
+  assert.equal(res.body.progressed, false)
+  assert.equal(sb.updates.length, 0)
+  assert.equal(intents, 0)
+})
+
 test('settleTrip charge action charges without progressing trip lifecycle', async () => {
   const deps = mockDeps({ balance: 0 })
   const sb = makeMockSb()

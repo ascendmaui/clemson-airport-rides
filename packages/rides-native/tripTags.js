@@ -451,6 +451,10 @@ export function toDriverCard(row, options) {
     riderLat: readLiveLat(meta),
     riderLng: readLiveLng(meta),
     promoRide: meta.promo === CLEMSON_MIAMI_PROMO_ID || meta.promo_ride === true,
+    routePolyline: typeof meta.route_polyline === 'string' && meta.route_polyline ? meta.route_polyline : null,
+    routeDurationS: Number.isFinite(Number(meta.route_duration_s)) && Number(meta.route_duration_s) > 0
+      ? Number(meta.route_duration_s)
+      : null,
   }
 }
 

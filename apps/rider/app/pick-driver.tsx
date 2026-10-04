@@ -24,7 +24,7 @@ import {
   fetchOnlineDrivers,
   groupDriversForPicker,
   loadFavoriteDriverIds,
-  PREFERRED_MATCH_COPY,
+  OPEN_POOL_COPY,
   PREFERRED_OFFLINE_COPY,
   requestDriverTrip,
   saveFavoriteDriverIds,
@@ -250,7 +250,7 @@ export default function PickDriver() {
         </Pressable>
         <View style={styles.headerCopy}>
           <Text style={styles.title}>Pick a driver</Text>
-          <Text style={styles.sub}>{PREFERRED_MATCH_COPY}</Text>
+          <Text style={styles.sub}>{OPEN_POOL_COPY}</Text>
         </View>
       </View>
       <View style={styles.mapWrap}>
