@@ -453,3 +453,58 @@ test('createGroupRide does not assign a pending_review driver and does assign an
   assert.ok(created.rideId)
   assert.equal(approved.tables.friend_rides[0].driver_profile_id, 'driver-approved')
 })
+
+test('requestDriverTrip auto-assigns John before Kim and keeps a picked offer open', async () => {
+  const john = 'john-driver'
+  const kim = 'kim-driver'
+  const other = 'other-driver'
+  const user = { id: 'rider-1', email: 'rider@clemson.edu', user_metadata: { full_name: 'Test Rider' } }
+  const autoSb = memorySb({
+    driver_status: [
+      { driver_id: other, online: true },
+      { driver_id: kim, online: true },
+      { driver_id: john, online: true },
+    ],
+    driver_applications: [
+      { profile_id: john, onboarding_status: 'approved' },
+      { profile_id: kim, onboarding_status: 'approved' },
+      { profile_id: other, onboarding_status: 'approved' },
+    ],
+    profiles: [
+      { id: other, email: 'someone@example.com' },
+      { id: kim, email: 'kimubermaui@gmail.com' },
+      { id: john, email: 'johnmatveyev@gmail.com' },
+    ],
+  })
+  const auto = await callHandler(requestDriverTrip, {
+    body: { ...REQUEST_BODY, autoAssign: true },
+  }, { sb: autoSb.sb, user, ensureProfile: async () => ({ ok: true }) })
+  assert.equal(auto.status, 200)
+  assert.equal(autoSb.tables.trips[0].driver_id, null)
+  assert.equal(autoSb.tables.trips[0].status, 'searching')
+  assert.equal(autoSb.tables.trips[0].deposit_cents, 0)
+  assert.equal(autoSb.tables.trips[0].metadata.match, 'auto')
+  assert.equal(autoSb.tables.trips[0].metadata.offer_driver_id, john)
+  assert.deepEqual(autoSb.tables.trips[0].metadata.auto_assign_queue, [john, kim, other])
+  assert.equal(JSON.stringify(autoSb.tables.trips[0]).includes('@'), false)
+
+  const none = memorySb({ driver_status: [], driver_applications: [], profiles: [] })
+  const empty = await callHandler(requestDriverTrip, {
+    body: { ...REQUEST_BODY, autoAssign: true },
+  }, { sb: none.sb, user, ensureProfile: async () => ({ ok: true }) })
+  assert.equal(empty.status, 409)
+  assert.equal(empty.json.code, 'no_driver_online')
+
+  const pickSb = memorySb({
+    driver_applications: [{ profile_id: kim, onboarding_status: 'approved' }],
+  })
+  const pick = await callHandler(requestDriverTrip, {
+    body: { ...REQUEST_BODY, driverId: kim },
+  }, { sb: pickSb.sb, user, ensureProfile: async () => ({ ok: true }) })
+  assert.equal(pick.status, 200)
+  assert.equal(pickSb.tables.trips[0].metadata.match, 'open')
+  assert.equal(pickSb.tables.trips[0].metadata.offer_driver_id, kim)
+  assert.equal(pickSb.tables.trips[0].metadata.preferred_driver_id, kim)
+  assert.equal(pickSb.tables.trips[0].driver_id, null)
+  assert.equal(pickSb.tables.trips[0].status, 'searching')
+})

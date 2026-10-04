@@ -425,6 +425,22 @@ export function DriverOnboarding() {
     return <div style={{ padding: 40, color: 'var(--ink-secondary)' }}>Loading application…</div>
   }
 
+  if (status === 'approved') {
+    return (
+      <div className="fade-in" style={{ minHeight: '100%', background: 'var(--surface-muted)', padding: '20px 20px 48px' }}>
+        <h1 style={{ fontSize: 26, fontWeight: 800, marginTop: 12, color: 'var(--purple)', letterSpacing: -0.4 }}>
+          You’re approved
+        </h1>
+        <p style={{ color: 'var(--ink-secondary)', fontSize: 14, lineHeight: 1.45, marginTop: 8 }}>
+          You can go online and accept rides. This application does not block driver mode.
+        </p>
+        <div style={{ marginTop: 16 }}>
+          <PrimaryButton variant="purple" onClick={() => navigate('driver')}>Open driver mode</PrimaryButton>
+        </div>
+      </div>
+    )
+  }
+
   const current = flowStep(step) || flowStep('account')
   const stepDocs = (current.docIds || []).map((id) => REQUIRED_DOCUMENTS.find((doc) => doc.id === id)).filter(Boolean)
   const stepDone = stepIsComplete(current.id, gate)

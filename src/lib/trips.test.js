@@ -487,3 +487,13 @@ test('requestDriverTrip lets a whitespace id through and still omits the fare fi
   }))
   assert.equal(slot.calls[0].body.driverId, '   ')
 })
+
+test('auto-assign posts autoAssign and omits driverId', async () => {
+  reset()
+  await requestDriverTrip(priced({ riderId: 'rider-1', autoAssign: true }))
+  const body = slot.calls[0].body
+  assert.equal(body.autoAssign, true)
+  assert.equal('driverId' in body, false)
+  assert.equal('isStudent' in body, false)
+  assert.equal(body.tier, 'standard')
+})

@@ -91,6 +91,7 @@ test('loadPublicDriverCards returns the driver name and vehicle without billing 
   assert.equal(loaded.drivers[0].model, 'Accord')
   assert.equal(loaded.drivers[0].plate, 'DEMO03')
   assert.equal(loaded.drivers[0].color, 'gray')
+  assert.equal(loaded.drivers[0].dispatchRank, 2)
   const encoded = JSON.stringify(loaded.drivers)
   assert.equal(encoded.includes('pm_secret'), false)
   assert.equal(encoded.includes('acct_secret'), false)

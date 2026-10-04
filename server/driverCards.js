@@ -3,6 +3,8 @@
  * The response is an allowlist: name, rating, and vehicle. No email, phone, or Stripe ids.
  */
 
+import { defaultDriverRank } from '../shared/driverOrder.js'
+
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 const CARD_CAP = 40
 
@@ -22,7 +24,7 @@ export function normalizeDriverCardIds(ids) {
   return out
 }
 
-function cardFrom(profile, vehicle) {
+function cardFrom(profile, vehicle, dispatchRank) {
   return {
     id: profile.id,
     full_name: profile.full_name || null,
@@ -35,6 +37,7 @@ function cardFrom(profile, vehicle) {
     plate: vehicle?.plate || null,
     tier: vehicle?.tier || null,
     is_tesla: vehicle?.is_tesla === true,
+    dispatchRank,
   }
 }
 
@@ -59,14 +62,25 @@ export async function loadPublicDriverCards(sb, ids) {
   if (profiles.error) return { drivers: [], error: profiles.error.message }
   if (vehicles.error) return { drivers: [], error: vehicles.error.message }
 
+  const ranks = await sb.from('profiles').select('id, email').in('id', approved)
+  if (ranks.error) return { drivers: [], error: ranks.error.message }
+
   const vehicleByDriver = {}
   for (const vehicle of vehicles.data || []) {
     if (vehicle?.driver_id && !vehicleByDriver[vehicle.driver_id]) {
       vehicleByDriver[vehicle.driver_id] = vehicle
     }
   }
+  const rankById = {}
+  for (const row of ranks.data || []) {
+    if (row?.id) rankById[row.id] = defaultDriverRank(row.email)
+  }
   const drivers = (profiles.data || [])
     .filter((profile) => profile?.id)
-    .map((profile) => cardFrom(profile, vehicleByDriver[profile.id] || null))
+    .map((profile) => cardFrom(
+      profile,
+      vehicleByDriver[profile.id] || null,
+      rankById[profile.id] ?? defaultDriverRank(null),
+    ))
   return { drivers, error: null }
 }

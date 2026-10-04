@@ -20,6 +20,7 @@ import {
   resolveDriverRequestPlaces,
 } from '../authoritativeFare.js'
 import { receivableDriverIds } from '../driverApproval.js'
+import { listAssignableDrivers } from '../autoAssign.js'
 import { insertTripEvent } from '../tripEvents.js'
 
 async function serverDistance(origin, dest) {
@@ -47,7 +48,8 @@ export default async function handler(req, res, deps = {}) {
   if (pe) return json(res, 400, { error: pe })
 
   const driverId = String(body.driverId || '').trim()
-  if (!driverId) return json(res, 400, { error: 'Select a driver first' })
+  const autoAssign = body.autoAssign === true && !driverId
+  if (!driverId && !autoAssign) return json(res, 400, { error: 'Select a driver first' })
 
   const tier = body.tier === 'tesla' ? 'tesla' : 'standard'
   const places = resolveDriverRequestPlaces({
@@ -60,35 +62,56 @@ export default async function handler(req, res, deps = {}) {
   })
   if (places.error) return json(res, 400, { error: places.error })
 
-  const gate = await receivableDriverIds(sb, [driverId])
-  if (gate.error) return json(res, 500, { error: gate.error, code: 'driver_approval_unavailable' })
-  if (!gate.allowed.has(driverId)) {
-    return json(res, 403, {
-      error: 'That driver is not approved to receive rides yet.',
-      code: 'driver_not_approved',
-    })
+  let offerDriverId = driverId
+  let assignQueue = null
+  if (autoAssign) {
+    const ordered = await listAssignableDrivers(sb, { tier })
+    if (ordered.error) {
+      return json(res, 500, { error: 'Could not choose a driver', code: 'auto_assign_unavailable' })
+    }
+    if (!ordered.drivers.length) {
+      return json(res, 409, {
+        error: tier === 'tesla'
+          ? 'No Tesla Model 3 drivers are online right now.'
+          : 'No approved drivers are online right now.',
+        code: 'no_driver_online',
+      })
+    }
+    assignQueue = ordered.drivers.map((driver) => driver.id)
+    offerDriverId = assignQueue[0]
   }
 
-  if (tier === 'tesla') {
-    const vehicleRes = await sb
-      .from('vehicles')
-      .select('is_tesla, tier, make, model')
-      .eq('driver_id', driverId)
-      .limit(1)
-      .maybeSingle()
-    if (vehicleRes.error) {
-      return json(res, 500, { error: vehicleRes.error.message || 'Could not verify Tesla listing', code: 'tesla_vehicle_lookup_failed' })
-    }
-    const vehicle = vehicleRes.data
-    const listed = Boolean(vehicle?.is_tesla)
-      || vehicle?.tier === 'tesla'
-      || vehicle?.tier === 'tesla_self_driving'
-      || (String(vehicle?.make || '').toLowerCase() === 'tesla' && /model\s*3/i.test(String(vehicle?.model || '')))
-    if (!listed) {
-      return json(res, 409, {
-        error: 'That driver is not listed for the Tesla Model 3 fleet. Pick a Tesla-listed driver.',
-        code: 'tesla_driver_required',
+  if (!autoAssign) {
+    const gate = await receivableDriverIds(sb, [driverId])
+    if (gate.error) return json(res, 500, { error: gate.error, code: 'driver_approval_unavailable' })
+    if (!gate.allowed.has(driverId)) {
+      return json(res, 403, {
+        error: 'That driver is not approved to receive rides yet.',
+        code: 'driver_not_approved',
       })
+    }
+
+    if (tier === 'tesla') {
+      const vehicleRes = await sb
+        .from('vehicles')
+        .select('is_tesla, tier, make, model')
+        .eq('driver_id', driverId)
+        .limit(1)
+        .maybeSingle()
+      if (vehicleRes.error) {
+        return json(res, 500, { error: vehicleRes.error.message || 'Could not verify Tesla listing', code: 'tesla_vehicle_lookup_failed' })
+      }
+      const vehicle = vehicleRes.data
+      const listed = Boolean(vehicle?.is_tesla)
+        || vehicle?.tier === 'tesla'
+        || vehicle?.tier === 'tesla_self_driving'
+        || (String(vehicle?.make || '').toLowerCase() === 'tesla' && /model\s*3/i.test(String(vehicle?.model || '')))
+      if (!listed) {
+        return json(res, 409, {
+          error: 'That driver is not listed for the Tesla Model 3 fleet. Pick a Tesla-listed driver.',
+          code: 'tesla_driver_required',
+        })
+      }
     }
   }
 
@@ -163,8 +186,10 @@ export default async function handler(req, res, deps = {}) {
     metadata: {
       kind: 'driver_request',
       purpose: 'planned',
-      preferred_driver_id: driverId,
-      match: 'open',
+      preferred_driver_id: autoAssign ? null : driverId,
+      offer_driver_id: offerDriverId || null,
+      ...(assignQueue ? { auto_assign_queue: assignQueue } : {}),
+      match: autoAssign ? 'auto' : 'open',
       ...routeMeta,
       rider_first_name: riderFirst,
       fare_is_estimate: Boolean(priced.estimate),
@@ -191,7 +216,8 @@ export default async function handler(req, res, deps = {}) {
     trip_id: inserted.data.id,
     kind: 'requested',
     payload: {
-      driver_id: driverId,
+      driver_id: offerDriverId || null,
+      match: autoAssign ? 'auto' : 'open',
       pickup_label: row.pickup_label,
       dropoff_label: row.dropoff_label,
       fare_cents: priced.fareCents,

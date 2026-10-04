@@ -109,7 +109,7 @@ export function riderLiveCopy(status, { preferred = false } = {}) {
       return {
         kicker: 'OFFERED',
         title: 'A driver is reviewing this ride',
-        body: 'The request is in front of a driver. It stays in the open pool until someone accepts.',
+        body: 'The request is in front of a driver. You will see them on the way once they accept.',
       }
     case 'requested':
       return {

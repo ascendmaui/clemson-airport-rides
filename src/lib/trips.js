@@ -1,5 +1,8 @@
 import { destPoint, pickupPoint } from '../../packages/rides-native/places.js'
 import { createServerDriverTrip } from './payments'
+import { requestFailureMessage } from './requestFailure.js'
+
+export { requestFailureMessage }
 
 /**
  * Preferred-driver request. The server writes fare_cents. A client list price
@@ -28,11 +31,13 @@ export async function requestDriverTrip({
   tier = 'standard',
   isStudent = false,
   listCents = 0,
+  autoAssign = false,
 }) {
   void isStudent
   void listCents
   if (!riderId) throw new Error('Sign in required to request a driver')
-  if (!driverId) throw new Error('Select a driver first')
+  const assigning = autoAssign === true && !driverId
+  if (!driverId && !assigning) throw new Error('Select a driver first')
 
   const lat = finitePin(destLat)
   const lng = finitePin(destLng)
@@ -50,7 +55,7 @@ export async function requestDriverTrip({
     }
     : { latitude: stadium.latitude, longitude: stadium.longitude, label: 'Memorial Stadium' }
   const data = await createServerDriverTrip({
-    driverId,
+    ...(assigning ? { autoAssign: true } : { driverId }),
     dest,
     destLat: drop.latitude,
     destLng: drop.longitude,
