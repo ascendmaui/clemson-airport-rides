@@ -518,7 +518,7 @@ export function DriverOnboarding() {
           <Field label="Plate" value={plate} onChange={setPlate} />
           <Field label="Seats" value={seats} onChange={setSeats} type="number" />
           <label style={{ display: 'flex', gap: 10, alignItems: 'center', fontWeight: 650, marginBottom: isTesla ? 8 : 16 }}>
-            <input type="checkbox" checked={isTesla} onChange={(e) => setIsTesla(e.target.checked)} />
+            <input type="checkbox" checked={isTesla} onChange={(e) => { setIsTesla(e.target.checked); if (e.target.checked) { setMake('Tesla'); setModel('Model 3') } }} />
             Tesla Model 3 · a driver still drives
           </label>
           {isTesla ? (

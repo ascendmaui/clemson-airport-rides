@@ -1,3 +1,4 @@
+import { isTeslaModel3 } from '../../shared/teslaFleet.js'
 /**
  * Driver desk: availability, PickDriver requests, scheduled queue, live status.
  * Payments go through the existing /api/driver and /api/stripe-payment-methods routers.
@@ -148,10 +149,11 @@ export async function publishDriverLocation(supabase, driverId, { lat, lng, head
 export async function setTeslaListing(supabase, driverId, { enabled, claimModel3 = false }) {
   const vehicle = await loadVehicle(supabase, driverId)
   if (!vehicle?.id) throw new Error('Add your vehicle in driver onboarding before listing a Tesla.')
+  if (enabled && !claimModel3 && !isTeslaModel3(vehicle)) throw new Error('Set your vehicle make and model to Tesla Model 3 first.')
   const patch = {
     is_tesla: Boolean(enabled),
     autonomous_capable: false,
-    tier: enabled ? 'tesla_self_driving' : 'standard',
+    tier: enabled ? 'tesla' : 'standard',
   }
   if (enabled && claimModel3) {
     patch.make = 'Tesla'
@@ -217,10 +219,10 @@ export async function loadDriverDesk(supabase, driverId) {
     ? new Set(await listPassedTripIds(supabase, driverId))
     : new Set()
   const claimableOpen = approvedForOffers
-    ? openRows.filter((row) => offerVisibleToDriver(row, driverId) && !isUnpaidAirportDepositTrip(row))
+    ? openRows.filter((row) => offerVisibleToDriver(row, driverId) && !isUnpaidAirportDepositTrip(row) && (row.tier !== 'tesla' || isTeslaModel3(vehicle)))
     : []
   const claimableScheduled = approvedForOffers
-    ? scheduledRows.filter((row) => !isUnpaidAirportDepositTrip(row))
+    ? scheduledRows.filter((row) => !isUnpaidAirportDepositTrip(row) && (row.tier !== 'tesla' || isTeslaModel3(vehicle)))
     : []
   const offers = cards(claimableOpen, gameDayLive).filter((card) => {
     if (card.status !== 'requested' && passedIds.has(card.id)) return false

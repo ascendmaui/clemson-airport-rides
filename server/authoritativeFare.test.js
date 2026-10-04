@@ -112,7 +112,7 @@ test('spoofed campus fare and student flag do not set the recorded fare', () => 
     isStudent: true,
     tier: 'tesla',
   })
-  assert.equal(tesla.fareCents, full.fareCents)
+  assert.equal(tesla.fareCents, full.fareCents * 2)
   assert.equal(tesla.isStudent, false)
 })
 
@@ -260,8 +260,8 @@ test('driver-request airport pricing ignores a short pin and keeps the 25% depos
   assert.equal(student.depositCents, cardDepositCents(student.fareCents))
   const tesla = priceDriverRequest(places, { isStudent: true, at: QUIET, tier: 'tesla' })
   assert.equal(tesla.isStudent, false)
-  assert.equal(tesla.fareCents, full.fareCents)
-  assert.equal(tesla.depositCents, cardDepositCents(full.fareCents))
+  assert.equal(tesla.fareCents, full.fareCents * 2)
+  assert.equal(tesla.depositCents, cardDepositCents(tesla.fareCents))
 })
 
 test('a recorded null-fare airport trip prices from the canonical quote', () => {
@@ -466,4 +466,18 @@ test('parseRideAt zoneless ISO follows process TZ; Z does not', () => {
   const et = run('America/New_York')
   assert.equal(et.zoned, '2026-10-02T18:00:00.000Z')
   assert.equal(et.utc, '2026-10-02T14:00:00.000Z')
+})
+
+test('Tesla premium leaves existing Standard, Wait and Comfort server behavior unchanged', () => {
+  const places = { pickup: { label: 'A', lat: 34.68, lng: -82.84 }, dropoff: { label: 'B', lat: 34.69, lng: -82.85 } }
+  const options = { at: QUIET, distanceM: 8000, durationS: 900, isStudent: false }
+  const standard = priceDriverRequest(places, options)
+  for (const tier of ['wait', 'comfort']) {
+    assert.equal(priceDriverRequest(places, { ...options, tier }).fareCents, standard.fareCents)
+  }
+  const tesla = priceDriverRequest(places, { ...options, tier: 'tesla', isStudent: true })
+  assert.equal(tesla.fareCents, standard.fareCents * 2)
+  assert.equal(tesla.tier, 'tesla')
+  assert.equal(tesla.discountCents, 0)
+  assert.equal(tesla.breakdown.vehicle_multiplier, 2)
 })

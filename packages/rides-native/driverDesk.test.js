@@ -774,7 +774,7 @@ test('setTeslaListing updates vehicle tier and attributes when enabled', async (
 
   const updated = await setTeslaListing(supabase, 'driver-1', { enabled: true, claimModel3: true })
   assert.equal(updated.is_tesla, true)
-  assert.equal(updated.tier, 'tesla_self_driving')
+  assert.equal(updated.tier, 'tesla')
   assert.equal(updated.autonomous_capable, false)
   assert.equal(updated.make, 'Tesla')
   assert.equal(updated.model, 'Model 3')
@@ -789,7 +789,7 @@ test('setTeslaListing updates vehicle tier and attributes when enabled', async (
 test('setTeslaListing throws on update query error', async () => {
   const supabase = createFakeSupabase(
     {
-      vehicles: [{ id: 'v-10', driver_id: 'driver-1' }],
+      vehicles: [{ id: 'v-10', driver_id: 'driver-1', make: 'Tesla', model: 'Model 3' }],
     },
     {
       onError(table, state) {
