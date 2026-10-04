@@ -55,6 +55,7 @@ export async function createScheduledTrip({
   pickupAt,
   purpose = 'planned',
   tier = 'standard',
+  billingChoice = null,
 }) {
   if (!supabase) throw new Error('Supabase is not configured')
   if (!user?.id) throw new Error('Sign in required to schedule a ride')
@@ -68,6 +69,7 @@ export async function createScheduledTrip({
     purpose,
     tier,
     weekdays: [],
+    ...(billingChoice ? { billingChoice } : {}),
   })
   return {
     ...data.trip,

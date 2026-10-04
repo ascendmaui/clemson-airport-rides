@@ -32,6 +32,7 @@ export async function requestDriverTrip({
   isStudent = false,
   listCents = 0,
   autoAssign = false,
+  billingChoice = null,
 }) {
   void isStudent
   void listCents
@@ -63,6 +64,7 @@ export async function requestDriverTrip({
     pickupLat: pickup.latitude,
     pickupLng: pickup.longitude,
     tier: tier || 'standard',
+    ...(billingChoice ? { billingChoice } : {}),
   })
   if (!data?.trip?.id) throw new Error('Could not request trip')
   return data.trip

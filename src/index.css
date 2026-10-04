@@ -1608,3 +1608,73 @@ select[aria-invalid="true"]:focus-visible {
   line-height: 1.4;
   color: var(--ink-tertiary);
 }
+
+.billing-picker {
+  margin: 4px 0 14px;
+  padding: 14px;
+  border-radius: 20px;
+  background: linear-gradient(165deg, rgba(255, 255, 255, 0.92), rgba(82, 45, 128, 0.06) 55%, rgba(245, 102, 0, 0.08));
+  box-shadow: var(--shadow-soft);
+}
+.billing-kicker {
+  font-size: 11px;
+  letter-spacing: 1.1px;
+  font-weight: 800;
+  text-transform: uppercase;
+  color: var(--orange);
+  margin-bottom: 10px;
+}
+.billing-copy,
+.billing-note,
+.billing-deposit {
+  margin: 8px 0 0;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--purple);
+  font-weight: 650;
+}
+.billing-options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.billing-option {
+  width: 100%;
+  text-align: left;
+  min-height: 44px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.86);
+  border: 1.5px solid rgba(82, 45, 128, 0.16);
+  box-shadow: var(--shadow-pill);
+  color: var(--purple);
+  transition: transform 200ms var(--ease-spring), box-shadow 220ms var(--ease-soft), border-color 180ms var(--ease-soft), background 180ms var(--ease-soft);
+}
+.billing-option--selected {
+  border-color: var(--orange);
+  background: linear-gradient(180deg, #fff, rgba(245, 102, 0, 0.12));
+  box-shadow: 0 8px 22px rgba(245, 102, 0, 0.16), var(--shadow-soft);
+  transform: translateY(-1px);
+}
+.billing-option--disabled {
+  opacity: 0.55;
+  transform: none;
+  box-shadow: none;
+}
+.billing-option-title {
+  display: block;
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: -0.2px;
+}
+.billing-option-detail {
+  display: block;
+  margin-top: 3px;
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1.4;
+  color: var(--ink-secondary);
+}
+.billing-option--selected .billing-option-detail {
+  color: var(--purple);
+}

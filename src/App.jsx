@@ -117,6 +117,7 @@ function Screen({ path, params }) {
           pickupLng={params.pickupLng || ''}
           destLat={params.destLat || ''}
           destLng={params.destLng || ''}
+          billing={params.billing || ''}
         />
       )
     case 'pick-driver':
@@ -130,6 +131,7 @@ function Screen({ path, params }) {
           pickupLng={params.pickupLng || ''}
           destLat={params.destLat || ''}
           destLng={params.destLng || ''}
+          billing={params.billing || ''}
         />
       )
     case 'requested':

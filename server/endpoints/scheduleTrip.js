@@ -18,6 +18,7 @@ import {
   priceScheduledRequest,
 } from '../authoritativeFare.js'
 import { insertTripEvent } from '../tripEvents.js'
+import { billingForPricedRide } from '../rideBilling.js'
 
 
 /** Integer passenger count from the request; default 1. Prefer passengers over partySize. */
@@ -105,6 +106,18 @@ export default async function handler(req, res, deps = {}) {
     durationS: distance.durationS,
   })
 
+  const billing = await billingForPricedRide(sb, user.id, body, priced)
+  if (billing.error) {
+    return json(res, billing.error.status || 409, {
+      error: billing.error.error,
+      code: billing.error.code,
+      fareCents: priced.fareCents,
+      depositCents: priced.depositCents,
+      charged: false,
+      debitedCents: 0,
+    })
+  }
+
   const split = splitPlatformFee(priced.fareCents)
   const scheduledFor = scheduled ? when.toISOString() : null
   const weekdays = Array.isArray(body.weekdays)
@@ -129,6 +142,7 @@ export default async function handler(req, res, deps = {}) {
     fleet: tier === 'tesla' ? 'tesla_model_3' : 'standard',
     fare_source: 'server',
     airport: priced.airport,
+    ...billing.snapshot,
   }
   const row = {
     rider_id: user.id,
