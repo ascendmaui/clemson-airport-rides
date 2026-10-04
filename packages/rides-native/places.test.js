@@ -163,11 +163,11 @@ describe('RIDE_TIERS', () => {
   })
 
   test('web booking offers only Standard, Wait and Save, and Extra Comfort', () => {
-    assert.deepEqual(BOOKABLE_RIDE_TIER_IDS, ['standard', 'wait', 'comfort'])
+    assert.deepEqual(BOOKABLE_RIDE_TIER_IDS, ['standard', 'wait', 'comfort', 'tesla'])
     const offered = bookableRideTiers()
-    assert.deepEqual(offered.map((tier) => tier.id), ['standard', 'wait', 'comfort'])
-    assert.deepEqual(offered.map((tier) => tier.name), ['Standard', 'Wait & Save', 'Extra Comfort'])
-    assert.equal(offered.some((tier) => tier.id === 'xl' || tier.id === 'pet' || tier.id === 'tesla'), false)
+    assert.deepEqual(offered.map((tier) => tier.id), ['standard', 'wait', 'comfort', 'tesla'])
+    assert.deepEqual(offered.map((tier) => tier.name), ['Standard', 'Wait & Save', 'Extra Comfort', 'Tesla Model 3'])
+    assert.equal(offered.some((tier) => tier.id === 'xl' || tier.id === 'pet'), false)
     assert.deepEqual(bookableRideTiers([{ id: 'xl' }, { id: 'standard', name: 'Standard' }]).map((tier) => tier.id), ['standard'])
   })
 })

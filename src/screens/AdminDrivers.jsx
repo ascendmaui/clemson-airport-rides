@@ -1,3 +1,4 @@
+import { VehicleFleetEditor } from '../components/VehicleFleetEditor'
 import { useEffect, useState } from 'react'
 import { useAuth } from '../lib/auth'
 import { PrimaryButton } from '../components/PrimaryButton'
@@ -225,6 +226,7 @@ export function AdminDrivers({ embedded = false }) {
                 </div>
                 <div style={{ fontSize: 13, color: 'var(--ink-secondary)', marginTop: 4 }}>{row.profile?.email}</div>
                 <div style={{ fontSize: 13, marginTop: 4 }}>{vehicleLabel}</div>
+                {vehicle && <VehicleFleetEditor driverId={row.profile_id} vehicle={vehicle} admin />}
                 {row.review_note && (
                   <div style={{ fontSize: 12, color: 'var(--ink-tertiary)', marginTop: 6 }}>{row.review_note}</div>
                 )}

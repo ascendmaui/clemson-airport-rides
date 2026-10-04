@@ -1306,8 +1306,8 @@ test('open-pool offers are empty for pending_review and still present for approv
 
 
 test('isTeslaVehicle and filterDriversForFleet keep only listed Tesla drivers', () => {
-  assert.equal(isTeslaVehicle({ is_tesla: true }), true)
-  assert.equal(isTeslaVehicle({ tier: 'tesla_self_driving' }), true)
+  assert.equal(isTeslaVehicle({ is_tesla: true }), false)
+  assert.equal(isTeslaVehicle({ tier: 'tesla_self_driving' }), false)
   assert.equal(isTeslaVehicle({ make: 'Tesla', model: 'Model 3' }), true)
   assert.equal(isTeslaVehicle({ make: 'Toyota', model: 'Camry' }), false)
   const drivers = [
@@ -1321,4 +1321,14 @@ test('isTeslaVehicle and filterDriversForFleet keep only listed Tesla drivers', 
   assert.deepEqual(filterDriversForFleet(drivers, 'standard').map((d) => d.id), ['a', 'b', 'c'])
   assert.deepEqual(filterDriversForFleet(drivers, 'tesla').map((d) => d.id), ['a', 'c'])
   assert.match(TESLA_FLEET_EMPTY_COPY, /No Tesla Model 3 drivers/)
+})
+
+test('Tesla eligibility rejects badges, other Tesla models and misleading model names', () => {
+  for (const vehicle of [
+    { make: 'Tesla', model: 'Model Y', is_tesla: true },
+    { make: 'Toyota', model: 'Model 3', tier: 'tesla' },
+    { make: 'Tesla', model: 'Model 30' },
+    { make: 'Tesla', model: 'not Model 3' },
+  ]) assert.equal(isTeslaVehicle(vehicle), false)
+  assert.equal(isTeslaVehicle({ make: ' TESLA ', model: ' Model 3 ' }), true)
 })
