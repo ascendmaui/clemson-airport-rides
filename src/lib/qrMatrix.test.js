@@ -63,7 +63,7 @@ function finderModuleIsDark(dx, dy) {
 
 test('matrix matches QRCode.create at error correction M', () => {
   const samples = [
-    ['url', 'https://expo.dev/accounts/john/projects/clemson-airport-rides'],
+    ['url', 'https://clemsonrides.com/#/home'],
     ['numeric', '1234567890'],
     ['alphanumeric', 'CLEMSON AIRPORT GATE A'],
     ['utf8', 'Clémson — café'],
@@ -88,7 +88,7 @@ test('size follows 17 + 4*version, grows with the input, and stays level M', () 
   assert.equal(short.size, 17 + 4 * shortCreated.version)
   assert.deepEqual(short, matrixFromModules(shortCreated.modules))
 
-  const longerUrl = 'https://expo.dev/accounts/john/projects/clemson-airport-rides'
+  const longerUrl = 'https://clemsonrides.com/#/driver'
   const longer = qrMatrix(longerUrl)
   const longerCreated = modulesAt(longerUrl, 'M')
   assert.ok(longerCreated.version > shortCreated.version)

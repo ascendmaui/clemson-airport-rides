@@ -5,27 +5,48 @@ import { MARKETING_FEATURES } from '../shared/marketingFeatures.js'
 import {
   ANDROID_STORE_URL,
   APP_DOWNLOADS,
-  DRIVER_EXPO_PROJECT,
+  DRIVER_ANDROID_STORE_URL,
+  DRIVER_IOS_STORE_URL,
   IOS_STORE_URL,
-  RIDER_EXPO_PROJECT,
+  RIDER_ANDROID_STORE_URL,
+  RIDER_IOS_STORE_URL,
   WEB_BOOK_URL,
+  WEB_DRIVER_URL,
   WEB_ORIGIN,
   WEB_SCHEDULE_URL,
+  publishedStoreUrl,
 } from '../shared/productLinks.js'
 import { qrMatrix } from '../src/lib/qrMatrix.js'
+
+const EXPO_LINK = /expo\.dev|expo\.go|exp:\/\/|Expo Go/i
 
 test('store listings stay unpublished until real URLs exist', () => {
   assert.equal(IOS_STORE_URL, null)
   assert.equal(ANDROID_STORE_URL, null)
+  assert.equal(RIDER_IOS_STORE_URL, null)
+  assert.equal(RIDER_ANDROID_STORE_URL, null)
+  assert.equal(DRIVER_IOS_STORE_URL, null)
+  assert.equal(DRIVER_ANDROID_STORE_URL, null)
+  assert.equal(publishedStoreUrl('https://expo.dev/accounts/johnmatveyev/projects/clemson-rides-rider'), null)
+  assert.equal(publishedStoreUrl('exp://127.0.0.1:8081'), null)
+  assert.equal(publishedStoreUrl('https://expo.go'), null)
   assert.equal(APP_DOWNLOADS.length, 2)
-  assert.equal(APP_DOWNLOADS[0].href, RIDER_EXPO_PROJECT)
-  assert.equal(APP_DOWNLOADS[1].href, DRIVER_EXPO_PROJECT)
+  assert.equal(APP_DOWNLOADS[0].id, 'rider')
+  assert.equal(APP_DOWNLOADS[0].href, WEB_BOOK_URL)
+  assert.equal(APP_DOWNLOADS[0].iosHref, WEB_BOOK_URL)
+  assert.equal(APP_DOWNLOADS[0].androidHref, WEB_BOOK_URL)
+  assert.equal(APP_DOWNLOADS[1].id, 'driver')
+  assert.equal(APP_DOWNLOADS[1].href, WEB_DRIVER_URL)
+  assert.equal(APP_DOWNLOADS[1].iosHref, WEB_DRIVER_URL)
+  assert.equal(APP_DOWNLOADS[1].androidHref, WEB_DRIVER_URL)
   for (const app of APP_DOWNLOADS) {
-    assert.equal(app.iosHref, app.href)
-    assert.equal(app.androidHref, app.href)
-    assert.match(app.iosNote, /Expo project/)
-    assert.match(app.androidNote, /Expo project/)
-    assert.doesNotMatch(`${app.href} ${app.iosHref} ${app.androidHref}`, /apps\.apple\.com|play\.google\.com/)
+    assert.match(app.iosNote, /not live yet/)
+    assert.match(app.androidNote, /not live yet/)
+    assert.match(app.blurb, /not live yet/)
+    const targets = `${app.href} ${app.iosHref} ${app.androidHref} ${app.iosNote} ${app.androidNote} ${app.blurb}`
+    assert.doesNotMatch(targets, EXPO_LINK)
+    assert.doesNotMatch(targets, /apps\.apple\.com|play\.google\.com|testflight/)
+    assert.match(app.href, /^https:\/\/clemsonrides\.com\//)
   }
 })
 
@@ -61,22 +82,30 @@ test('the marketing page wires downloads and does not invent store ids', () => {
   const source = readFileSync(new URL('../src/screens/Marketing.jsx', import.meta.url), 'utf8')
   assert.match(source, /Get the app/)
   assert.match(source, /Book a ride/)
-  assert.match(source, /RIDER_EXPO_PROJECT/)
-  assert.match(source, /DRIVER_EXPO_PROJECT/)
+  assert.match(source, /WEB_BOOK_URL/)
+  assert.match(source, /WEB_DRIVER_URL/)
+  assert.match(source, /APP_DOWNLOADS/)
+  assert.match(source, /not live yet/)
   assert.match(source, /MARKETING_FEATURES/)
+  assert.doesNotMatch(source, EXPO_LINK)
+  assert.doesNotMatch(source, /RIDER_EXPO_PROJECT|DRIVER_EXPO_PROJECT/)
   assert.doesNotMatch(source, /apps\.apple\.com|play\.google\.com/)
   assert.doesNotMatch(source, /ae9bb5b6|a9cfec15/)
   assert.doesNotMatch(source, /projects\/clemson-airport-rides\/builds/)
 })
 
 test('download QR codes are square modules for the public install links', () => {
-  for (const href of [RIDER_EXPO_PROJECT, DRIVER_EXPO_PROJECT]) {
+  for (const href of [WEB_BOOK_URL, WEB_DRIVER_URL]) {
     const matrix = qrMatrix(href)
     assert.ok(matrix.size >= 21)
     assert.equal(matrix.size % 1, 0)
     assert.equal(matrix.cells.some(([x, y]) => x === 0 && y === 0), true)
     assert.equal(matrix.cells.every(([x, y]) => x < matrix.size && y < matrix.size), true)
   }
+  const rider = APP_DOWNLOADS.find((app) => app.id === 'rider')
+  const driver = APP_DOWNLOADS.find((app) => app.id === 'driver')
+  assert.deepEqual(qrMatrix(rider.href), qrMatrix(WEB_BOOK_URL))
+  assert.deepEqual(qrMatrix(driver.href), qrMatrix(WEB_DRIVER_URL))
 })
 
 test('marketing features exact copy snapshot', (t) => {
