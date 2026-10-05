@@ -30,8 +30,10 @@ import {
   GAME_DAY_PICKUP_HINT,
   GAME_DAY_PICKUP_POINTS,
   GAME_DAY_SCHEDULE_TIME_COPY,
+  eventPickupPointId,
   gameDayScheduleCopy,
   schedulePickupPresets,
+  specialPickupOptionLabel,
 } from '../../shared/gameDayPickupCopy.js'
 
 const PLACES = [
@@ -244,6 +246,9 @@ export function ScheduledRidePlanner() {
   const showScheduleNotice = Boolean(
     scheduleCopy.headline || scheduleCopy.surgeBannerVisible || purpose === 'game_day',
   )
+  const eventPointId = eventPickupPointId(
+    quote?.gameDay?.zone ?? quote?.gameDay?.pickup_zone_label ?? null,
+  )
 
   return (
     <section style={{ marginBottom: 28 }} aria-label="Schedule a ride">
@@ -280,24 +285,39 @@ export function ScheduledRidePlanner() {
       </div>
 
       {purpose === 'game_day' && (
-        <div style={{ marginBottom: 14 }} data-testid="game-day-pickup-points">
-          <p style={{ fontSize: 13, color: 'var(--ink-secondary)', marginTop: 0 }}>
+        <div
+          style={{ marginBottom: 14 }}
+          data-testid="game-day-pickup-points"
+          role="group"
+          aria-labelledby="game-day-pickup-legend"
+        >
+          <p id="game-day-pickup-legend" style={{ fontSize: 13, color: 'var(--ink-secondary)', marginTop: 0, lineHeight: 1.45 }}>
             {GAME_DAY_PICKUP_HINT}
           </p>
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 8 }}>
             {GAME_DAY_PICKUP_POINTS.map((point) => {
               const on = pickup?.label === point.label
+              const eventMatch = eventPointId === point.id
+              const status = [on ? 'Selected' : null, eventMatch ? 'Event pickup' : null].filter(Boolean).join(' · ')
               return (
                 <button
                   key={point.id}
                   type="button"
                   className="pressable"
                   aria-pressed={on}
-                  onClick={() => setPickup({ label: point.label, lat: point.lat, lng: point.lng })}
+                  aria-label={specialPickupOptionLabel(point)}
+                  onClick={() => setPickup({
+                    label: point.label,
+                    detail: point.detail,
+                    menuLabel: specialPickupOptionLabel(point),
+                    lat: point.lat,
+                    lng: point.lng,
+                  })}
                   style={{
                     minHeight: 44,
-                    padding: '8px 12px',
-                    borderRadius: 999,
+                    padding: '10px 12px',
+                    borderRadius: 14,
+                    textAlign: 'left',
                     fontWeight: 700,
                     fontSize: 13,
                     color: on ? '#fff' : '#522D80',
@@ -305,7 +325,15 @@ export function ScheduledRidePlanner() {
                     border: on ? '1px solid #F56600' : '1px solid rgba(245,102,0,0.45)',
                   }}
                 >
-                  {point.label}
+                  <span style={{ display: 'block' }}>{point.label}</span>
+                  <span style={{ display: 'block', fontWeight: 600, fontSize: 12, marginTop: 2 }}>
+                    {point.detail}
+                  </span>
+                  {status ? (
+                    <span style={{ display: 'block', fontSize: 11, fontWeight: 800, letterSpacing: 0.4, marginTop: 4 }}>
+                      {status}
+                    </span>
+                  ) : null}
                 </button>
               )
             })}
@@ -418,7 +446,7 @@ export function ScheduledRidePlanner() {
         <div
           role="status"
           data-testid="game-day-schedule-copy"
-          aria-label={scheduleCopy.surgeBannerText || scheduleCopy.headline || 'Game day'}
+          aria-label={[scheduleCopy.surgeWindowText, scheduleCopy.surgeBannerText, scheduleCopy.headline].filter(Boolean).join('. ') || 'Game day'}
           style={{
             borderRadius: 16,
             padding: '10px 12px',
@@ -440,6 +468,11 @@ export function ScheduledRidePlanner() {
           ) : null}
           {scheduleCopy.surgeBannerVisible && scheduleCopy.surgeBannerText ? (
             <div style={{ fontSize: 13, fontWeight: 800, color: '#F56600', marginTop: 4 }}>{scheduleCopy.surgeBannerText}</div>
+          ) : null}
+          {scheduleCopy.surgeWindowText ? (
+            <div data-testid="game-day-surge-window" style={{ fontSize: 13, color: 'var(--ink-secondary)', marginTop: 4, lineHeight: 1.45 }}>
+              {scheduleCopy.surgeWindowText}
+            </div>
           ) : null}
           {scheduleCopy.body ? (
             <div style={{ fontSize: 13, color: 'var(--ink-secondary)', marginTop: 4, lineHeight: 1.45 }}>{scheduleCopy.body}</div>

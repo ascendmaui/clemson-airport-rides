@@ -17,7 +17,23 @@ export const GAME_DAY_SCHEDULE_OFF_COPY =
   'No game day is on this pickup. The schedule shows the pickup zone and the rider fare multiplier when the quote includes them.'
 
 export const GAME_DAY_PICKUP_HINT =
-  'Special pickup points for a campus event.'
+  'Choose a special pickup point. The name is where the driver meets you. Lot 5 and the stadium gate share one map pin.'
+
+/** Clock windows only. No prices. Hours match the published surge rules. */
+export const CAMPUS_EVENT_SURGE_WINDOW_COPY =
+  'Campus event surge window. A listed campus event uses the event start and end. With no listed event, fall Saturdays run from 11:00 AM until 11:00 PM Eastern.'
+
+export const WEEKEND_SURGE_WINDOW_COPY =
+  'Weekend surge window. Friday 5:00 PM through Sunday, Eastern.'
+
+export const AIRPORT_RUSH_WINDOW_COPY =
+  'Airport rush window. 5:00–8:00 AM and 3:00–7:00 PM Eastern on airport trips.'
+
+export const SURGE_WINDOW_GENERIC_COPY =
+  'A surge window is on for this pickup time.'
+
+export const CAMPUS_EVENT_WINDOW_OFF_COPY =
+  'No campus event surge window is on for this pickup time. A listed event uses its own start and end. Fall Saturdays run from 11:00 AM until 11:00 PM Eastern.'
 
 export const GAME_DAY_PICKUP_POINTS = [
   {
@@ -97,6 +113,23 @@ export function matchGameDayPickupPoint(input) {
   return hit?.point || null
 }
 
+/** Id of the special point that matches a server zone, or null. */
+export function eventPickupPointId(input) {
+  return matchGameDayPickupPoint(input)?.id || null
+}
+
+/**
+ * Label plus the meeting-spot detail, so Lot 5 and the stadium gate stay distinct.
+ * Returns '' when the point has no label.
+ */
+export function specialPickupOptionLabel(point) {
+  if (!point || typeof point !== 'object') return ''
+  const label = cleanText(point.label)
+  const detail = cleanText(point.detail)
+  if (!label) return ''
+  return detail ? `${label} — ${detail}` : label
+}
+
 /**
  * Rider-facing label for a special pickup point.
  * Known points use the shared schedule label. Any other server zone is shown
@@ -134,6 +167,30 @@ export function surgeBannerVisible(input) {
   return multiplier != null && multiplier > 1
 }
 
+function ruleIdOf(input) {
+  if (!input || typeof input !== 'object') return ''
+  return cleanText(input.rule?.id || input.surge?.rule?.id || '')
+}
+
+/**
+ * When the surge note should show, name the clock window.
+ * Does not read or return a price.
+ */
+export function surgeWindowMessage(input, event = null) {
+  if (!surgeBannerVisible(input)) return null
+  const id = ruleIdOf(input)
+  if (id === 'game_day') {
+    const title = cleanText(event?.title)
+    if (title) {
+      return `Campus event surge window is on for ${title}. The window runs from the event start to the event end, Eastern.`
+    }
+    return CAMPUS_EVENT_SURGE_WINDOW_COPY
+  }
+  if (id === 'weekend') return WEEKEND_SURGE_WINDOW_COPY
+  if (id === 'airport_rush') return AIRPORT_RUSH_WINDOW_COPY
+  return SURGE_WINDOW_GENERIC_COPY
+}
+
 /** Same rounding as the home-map game-day notice. Not a fare. */
 export function formatSurgeMultiplierLabel(value) {
   const raw = Number(value)
@@ -153,6 +210,8 @@ export function schedulePickupPresets(basePlaces, purpose) {
   if (purpose !== 'game_day') return base
   const special = GAME_DAY_PICKUP_POINTS.map((point) => ({
     label: point.label,
+    detail: point.detail,
+    menuLabel: specialPickupOptionLabel(point),
     lat: point.lat,
     lng: point.lng,
   }))
@@ -182,6 +241,9 @@ export function gameDayScheduleCopy({ event = null, surge = null, purpose = null
     ].filter(Boolean).join(' · ')
     : null
   const surgeBannerText = visible ? `Surge · ${ruleLabel} ${multiplierLabel}` : null
+  const surgeWindowText = visible
+    ? surgeWindowMessage(surge, event)
+    : (purpose === 'game_day' ? CAMPUS_EVENT_WINDOW_OFF_COPY : null)
   let body = null
   if (hasEvent) body = GAME_DAY_SCHEDULE_LIVE_COPY
   else if (purpose === 'game_day') body = GAME_DAY_SCHEDULE_OFF_COPY
@@ -189,6 +251,7 @@ export function gameDayScheduleCopy({ event = null, surge = null, purpose = null
     specialPickupLabel,
     surgeBannerVisible: visible,
     surgeBannerText,
+    surgeWindowText,
     headline,
     detail,
     body,

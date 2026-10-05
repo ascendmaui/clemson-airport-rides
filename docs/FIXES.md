@@ -2,6 +2,18 @@
 
 Persistent knowledge base for recurring failures. When a matching issue appears, apply the saved fix first.
 
+## 2026-10-05 — clearer game-day pickup picker and surge-window copy
+
+- **What was wrong:** Game-day pickup choices were color-only pills. "Memorial Stadium" and "Memorial Stadium · Lot 5" share one map pin, and the chips did not say which meeting spot was which. The schedule notice named the rider fare multiplier and did not say which clock window the campus event surge follows.
+- **What changed:** Pickup cards now show the meeting-spot detail, a Selected state in text, and an Event pickup mark when the quote zone matches that point. The place list uses the same longer label. A separate surge-window sentence names the campus event, weekend, or airport rush hours and does not include a price. Surge multipliers and cent amounts are unchanged.
+- **Files touched:**
+  - `shared/gameDayPickupCopy.js`
+  - `src/components/ScheduledRidePlanner.jsx`
+  - `src/components/PlacePicker.jsx`
+  - `server/gameDayPricing.test.js`
+  - `docs/FIXES.md`
+- **Verified:** `node --experimental-strip-types --test server/gameDayPricing.test.js` (12/12) and `npm test` (2326/2326). No browser tools were available, so the schedule screen was not clicked in a browser. A gitignored `dist/` build was removed first because it made the retired-copy scan fail.
+
 ## 2026-10-05 — game-day pickup labels and surge banner copy on the web schedule
 
 - **What was wrong:** The schedule screen could save a game-day ride, but it never showed the campus event pickup zone or when the surge note should appear. Quote responses dropped `pickup_zone_label` after reading it for the multiplier. Home and ride-option screens already had that copy; the scheduler did not share it.
