@@ -1,6 +1,6 @@
 # Driver-offer SMS, email, and push
 
-Push uses the stored Expo token. The server posts to Expo only when `EXPO_ACCESS_TOKEN` is set. A locked, asleep, or signed-out phone shows that as a system notification. iOS delivery also needs an APNs key on the Expo project, and Android needs FCM credentials there. This server cannot see those keys. Until both the access token and the platform credentials exist, the client still shows an in-app alert with sound and vibration while the driver is online and the app is open.
+Push uses the stored Expo token. The server posts to Expo even when `EXPO_ACCESS_TOKEN` is unset. Set that token if Enhanced Security for Push is later enabled on the Expo project; a missing token does not block the send while that setting is off. A locked, asleep, or signed-out phone shows the alert as a system notification only when an APNs key (iOS) or FCM credentials (Android) are configured on the Expo project. This server cannot see those keys. Until the platform credentials exist, the client still shows an in-app alert with sound and vibration while the driver is online and the app is open.
 
 # Driver-offer SMS and email
 

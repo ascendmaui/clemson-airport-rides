@@ -1,18 +1,25 @@
 /**
  * Expo push for driver offers.
  * Delivery to a locked or signed-out phone is an OS toast. That path needs
- * EXPO_ACCESS_TOKEN on this server and APNs (iOS) / FCM (Android) credentials
- * on the Expo project. Those Apple/Google keys are not in this repo.
+ * APNs (iOS) and FCM (Android) credentials on the Expo project. Those
+ * Apple/Google keys are not in this repo. EXPO_ACCESS_TOKEN is optional
+ * while Enhanced Security for Push is off. When it is set, the request
+ * includes Authorization: Bearer. Set the token before enabling Enhanced
+ * Security, or Expo will reject the send.
  */
 
 export const EXPO_PUSH_URL = 'https://exp.host/--/api/v2/push/send'
 
 export const PUSH_CREDENTIAL_GAP =
-  'Lock-screen and signed-out alerts need EXPO_ACCESS_TOKEN on the server. iOS also needs an APNs key on the Expo project, and Android needs FCM credentials there. This server cannot see those Apple or Google keys, so a successful token save does not prove a locked phone will toast.'
+  'Lock-screen and signed-out alerts need an APNs key on the Expo project for iOS and FCM credentials there for Android. This server cannot see those Apple or Google keys, so a successful token save does not prove a locked phone will toast. EXPO_ACCESS_TOKEN is optional while Enhanced Security for Push is off, and a missing token does not block the send. Set EXPO_ACCESS_TOKEN if Enhanced Security is later enabled.'
+
+function expoAccessToken(env = process.env) {
+  return String(env?.EXPO_ACCESS_TOKEN || '').trim()
+}
 
 export function pushCredentialStatus(env = process.env) {
   return {
-    expoAccessToken: Boolean(String(env.EXPO_ACCESS_TOKEN || '').trim()),
+    expoAccessToken: Boolean(expoAccessToken(env)),
     apnsConfiguredHere: false,
     fcmConfiguredHere: false,
     note: PUSH_CREDENTIAL_GAP,
@@ -26,15 +33,18 @@ function clean(value) {
 export async function sendExpoPush({ to, title, body, data, sound = 'default', channelId = 'ride-requests' } = {}, deps = {}) {
   const token = String(to || '').trim()
   if (!token) return { sent: false, reason: 'push_token_missing' }
-  const creds = pushCredentialStatus(deps.env || process.env)
-  if (!creds.expoAccessToken) {
-    return { sent: false, reason: 'expo_credentials_missing', gap: creds.note }
-  }
+  const env = deps.env || process.env
+  const creds = pushCredentialStatus(env)
   const fetchImpl = deps.fetch || globalThis.fetch
   if (typeof fetchImpl !== 'function') {
-    return { sent: false, reason: 'expo_credentials_missing', gap: creds.note }
+    return { sent: false, reason: 'expo_push_failed', detail: 'fetch_unavailable', gap: creds.note }
   }
-  const accessToken = String((deps.env || process.env).EXPO_ACCESS_TOKEN).trim()
+  const accessToken = expoAccessToken(env)
+  const headers = {
+    Accept: 'application/json',
+    'Content-Type': 'application/json',
+  }
+  if (accessToken) headers.Authorization = `Bearer ${accessToken}`
   const message = {
     to: token,
     title: clean(title) || 'New ride request',
@@ -48,11 +58,7 @@ export async function sendExpoPush({ to, title, body, data, sound = 'default', c
   try {
     response = await fetchImpl(EXPO_PUSH_URL, {
       method: 'POST',
-      headers: {
-        Accept: 'application/json',
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${accessToken}`,
-      },
+      headers,
       body: JSON.stringify(message),
     })
   } catch (error) {
