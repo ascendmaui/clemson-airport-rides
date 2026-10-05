@@ -17,4 +17,6 @@ export function LivePhase(props: {
   steps?: LiveStep[] | null
   activeIndex: number
   colors: LivePhaseColors
+  children?: ReactNode
+  readableSteps?: boolean
 }): ReactNode

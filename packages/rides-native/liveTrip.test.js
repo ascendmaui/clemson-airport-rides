@@ -6,6 +6,7 @@ import { acceptNeedsDriverOnline } from './tripTags.js'
 import {
   DRIVER_TRACK_STEPS,
   SEARCH_APPROX_WAIT_NOTE,
+  RIDER_SEARCH_MOTION_COPY,
   SEARCH_PREVIEW_COPY,
   STILL_SEARCHING_COPY,
   STILL_SEARCHING_MS,
@@ -106,6 +107,9 @@ test('searching stays honest and an accept opens track without a Maps key', () =
   assert.equal(showSearchTheater('searching'), true)
   assert.equal(showSearchTheater('accepted'), false)
   assert.match(SEARCH_PREVIEW_COPY, /preview/)
+  assert.match(RIDER_SEARCH_MOTION_COPY, /This ride moves forward only when a real driver accepts/)
+  assert.doesNotMatch(RIDER_SEARCH_MOTION_COPY, /driver accept moves/)
+  assert.match(RIDER_SEARCH_MOTION_COPY, /preview/)
   assert.equal(etaHoldLine('accepted', null), STRAIGHT_LINE_WAIT)
   assert.match(etaHoldLine('in_progress', 'About 4 min · 1.2 mi straight line to drop-off'), /drop-off/)
   assert.equal(etaHoldLine('searching', null), null)

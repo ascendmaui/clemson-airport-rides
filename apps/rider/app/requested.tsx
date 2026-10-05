@@ -8,6 +8,7 @@ import { PrimaryButton } from '@/components/Button'
 import { useEnterMotion } from '@/components/enter'
 import { HoldExpiryNotice } from '@/components/HoldExpiryNotice'
 import { CampusMap } from '@/components/CampusMap'
+import { SearchDemoCycle } from '@/components/SearchDemoCycle'
 import type { MapPin } from '@/components/mapTypes'
 import { LiveShareCard } from '@/components/LiveShareCard'
 import { RideMessages } from '@/components/RideMessages'
@@ -18,7 +19,7 @@ import { supabase } from '@/lib/supabase'
 import { loadLiveTrip, subscribeLiveTrip, type LiveTrip } from '@/lib/tripWatch'
 import { useTripById } from '@/lib/useRiderTrip'
 import { isActiveRideStatus, listEmergencyContacts, type EmergencyContact } from 'rides-native/safety.js'
-import { etaHoldLine, etaLineFor, liveDriverTitle, mapRouteCoordinates, orderedLiveStops, riderLiveView, SEARCH_PREVIEW_COPY, showSearchTheater, type LiveStopPin } from 'rides-native/liveTrip'
+import { etaHoldLine, etaLineFor, liveDriverTitle, mapRouteCoordinates, orderedLiveStops, RIDER_SEARCH_MOTION_COPY, riderLiveView, showSearchTheater, type LiveStopPin } from 'rides-native/liveTrip'
 import { holdAirportCode, isOpenUnpaidAirportHold, isUnpaidHoldTtlCancel } from 'rides-native/holdExpiryNotice.js'
 import { LivePhase } from 'rides-native/LivePhase'
 import { isApproachStatus } from '@/lib/approachAlert'
@@ -29,6 +30,8 @@ import { lift } from '@/lib/elevation'
 import type { Palette } from '@/lib/palette'
 import { useTheme } from '@/lib/theme'
 import { useThemedStyles } from '@/lib/useThemedStyles'
+
+const CHECKOUT_RETURN_COPY = 'You\'re back from checkout. This ride is in the open pool.'
 
 function stopColor(stop: LiveStopPin, total: number) {
   if (stop.order === 1) return PURPLE
@@ -191,6 +194,7 @@ export default function Requested() {
   const driverEta = locationIssue ? null : etaLineFor(shown?.status || null, driverFix, live)
   const etaLine = locationIssue ? null : etaHoldLine(shown?.status || null, driverEta)
   const preview = showSearchTheater(shown?.status || null)
+  const searchingMap = shown?.status === 'searching' && !located
   const approachLive = isApproachStatus(shown?.status || null)
   const showCheckoutReturn = checkoutReturn
     && Boolean(tripId)
@@ -218,9 +222,7 @@ export default function Requested() {
   useEffect(() => {
     if (!showCheckoutReturn || announcedCheckout.current) return
     announcedCheckout.current = true
-    AccessibilityInfo.announceForAccessibility(
-      'Stripe Checkout sent you back. This ride is in the open pool. The deposit shows up when Stripe confirms it.',
-    )
+    AccessibilityInfo.announceForAccessibility(CHECKOUT_RETURN_COPY)
   }, [showCheckoutReturn])
 
   useEffect(() => {
@@ -297,7 +299,7 @@ export default function Requested() {
         ) : null}
         {showCheckoutReturn ? (
           <Text style={styles.body} accessibilityLiveRegion="polite">
-            Stripe Checkout sent you back. This ride is in the open pool. The deposit shows up when Stripe confirms it.
+            {CHECKOUT_RETURN_COPY}
           </Text>
         ) : null}
         <View style={[styles.map, lift(colors, 'rest')]}>
@@ -305,9 +307,10 @@ export default function Requested() {
           <CampusMap
             spots={[]}
             showHeat={false}
-            theater={preview && !located}
+            theater={preview && !located && !searchingMap}
+            searchMotion={searchingMap}
             pins={pinsFor(live)}
-            fitPins
+            fitPins={!searchingMap}
             gameDay={false}
             surge={false}
             route={mapRouteCoordinates(typeof live?.metadata?.route_polyline === 'string' ? live.metadata.route_polyline : null)}
@@ -337,7 +340,18 @@ export default function Requested() {
                 steps={phase.steps}
                 activeIndex={phase.stepIndex}
                 colors={colors}
-              />
+                readableSteps
+              >
+                {searchingMap ? (
+                  <SearchDemoCycle
+                    pickup={
+                      live?.pickup_lat != null && live?.pickup_lng != null
+                        ? { lat: live.pickup_lat, lng: live.pickup_lng }
+                        : null
+                    }
+                  />
+                ) : null}
+              </LivePhase>
               </>
             )}
             {approachLive ? (
@@ -359,7 +373,6 @@ export default function Requested() {
               </Text>
             ))}
             <Text style={styles.meta}>Trip {tripId.slice(0, 8)}</Text>
-            <Text style={styles.body}>Airport holds use the 25% Stripe deposit on Schedule.</Text>
             {shown?.status === 'completed' ? (
               <PrimaryButton
                 label="Lost & found"
@@ -370,7 +383,7 @@ export default function Requested() {
             {user ? <RideMessages tripId={tripId} userId={user.id} /> : null}
             <Text style={styles.body}>
               {preview
-                ? SEARCH_PREVIEW_COPY
+                ? RIDER_SEARCH_MOTION_COPY
                 : located
                   ? 'The orange pin is the driver location from driver_status. While they are on the way, a live distance in feet stays on screen and the screen pulses orange as they get closer.'
                   : 'Driver coordinates show up here after someone accepts and shares a location. Until then the straight-line ETA stays on this card. Road tiles need a billed Maps key.'}
@@ -412,6 +425,16 @@ export default function Requested() {
           <Text style={styles.link}>Emergency contacts →</Text>
         </Pressable>
         <PrimaryButton label="Back to rides" onPress={() => router.replace('/')} tone="ghost" />
+        {shown?.status === 'searching' ? (
+          <PrimaryButton
+            label="Schedule"
+            tone="purple"
+            onPress={() => {
+              const code = holdAirportCode(holdTrip)
+              router.push(code ? { pathname: '/schedule', params: { airport: code } } : '/schedule')
+            }}
+          />
+        ) : null}
       </ScrollView>
       </Animated.View>
       <SosSheet

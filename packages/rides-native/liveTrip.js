@@ -31,6 +31,10 @@ export const STILL_SEARCHING_COPY =
 export const SEARCH_PREVIEW_COPY =
   'Orange and purple motion is a preview. Only a real driver accept moves this ride.'
 
+/** Rider looking-for-a-driver screen. The web tracker keeps SEARCH_PREVIEW_COPY. */
+export const RIDER_SEARCH_MOTION_COPY =
+  'Orange and purple motion is a preview. This ride moves forward only when a real driver accepts.'
+
 export const SEARCH_APPROX_WAIT_NOTE =
   'Approximate. No driver has accepted, so this is not a live arrival.'
 
