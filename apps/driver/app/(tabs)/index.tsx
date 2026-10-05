@@ -38,6 +38,7 @@ import {
   acceptActionLabel,
   declineActionLabel,
   declineDisposition,
+  driverStatusDetail,
   formatPickupAt,
   preferredRequestNote,
   statusHeadline,
@@ -46,6 +47,7 @@ import {
   weekNetCents,
   type DriverCard,
 } from 'rides-native/tripTags'
+import { declinePassMessage, offlineWhileOfferedMessage } from 'rides-native/matchingMessages'
 import { etaHoldLine, etaLineFor } from 'rides-native/liveTrip'
 import { ORANGE, PURPLE } from 'rides-native/places.js'
 import { gameDayNotice, type GameDayNotice } from 'rides-native/gameDayNotice.js'
@@ -114,6 +116,7 @@ export default function DriverHome() {
   const [selectedOfferId, setSelectedOfferId] = useState<string | null>(null)
   const [gameNotice, setGameNotice] = useState<GameDayNotice | null>(null)
   const [refreshing, setRefreshing] = useState(false)
+  const [offerNote, setOfferNote] = useState<string | null>(null)
   const gate = useMemo(
     () => driverGateView(status, { rejectionReason: reason }),
     [status, reason]
@@ -269,7 +272,15 @@ export default function DriverHome() {
         setFocusToken((value: number) => value + 1)
       }
       pulse('online')
-      AccessibilityInfo.announceForAccessibility(nextOnline ? 'You are now online' : 'You are now offline')
+      if (nextOnline) {
+        setOfferNote(null)
+        AccessibilityInfo.announceForAccessibility('You are now online')
+      } else {
+        const held = offer && !desk?.active ? { status: offer.status } : null
+        const message = offlineWhileOfferedMessage({ online: false, card: held })
+        setOfferNote(message)
+        AccessibilityInfo.announceForAccessibility(message || 'You are now offline')
+      }
       await refresh()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not update online status')
@@ -308,8 +319,15 @@ export default function DriverHome() {
     setBusy(true)
     setError(null)
     try {
-      await declineTrip(supabase, card, user.id)
+      const result = await declineTrip(supabase, card, user.id)
       pulse('decline')
+      const message = result?.disposition === 'release' && (result.passed || result.released)
+        ? declinePassMessage({ keptSearching: true })
+        : null
+      if (message) {
+        setOfferNote(message)
+        AccessibilityInfo.announceForAccessibility(message)
+      }
       await refresh()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not decline')
@@ -332,6 +350,7 @@ export default function DriverHome() {
     (card: DriverCard) => !isSyntheticOffer(card) && !hiddenOffers.includes(card.id),
   )
   const offer = liveOffers.find((card: DriverCard) => card.id === selectedOfferId) || liveOffers[0] || null
+  const liveCard = online && offer && !desk?.active ? offer : null
   const liveFrom = self
     ? { lat: self.latitude, lng: self.longitude }
     : desk?.lat != null && desk?.lng != null
@@ -536,6 +555,11 @@ export default function DriverHome() {
             </View>
           ) : null}
           {error ? <ErrorText>{error}</ErrorText> : null}
+          {offerNote && !liveCard ? (
+            <Text accessibilityLiveRegion="polite" style={{ color: colors.ink, fontWeight: '700', fontSize: 14 }}>
+              {offerNote}
+            </Text>
+          ) : null}
           {!canSeeOffers ? (
             <ScrollView
               style={styles.statusWrap}
@@ -577,13 +601,17 @@ export default function DriverHome() {
               {riderLine ? <Text style={{ color: colors.onAccent, fontWeight: '700' }}>{riderLine}</Text> : null}
             </Pressable>
           ) : null}
-          {offer && !desk?.active ? (
+          {liveCard ? (
             <RideCard
-              card={offer}
+              card={liveCard}
               busy={busy}
-              notice={null}
-              onAccept={() => onAccept(offer)}
-              onDecline={() => onDecline(offer)}
+              notice={
+                liveCard.status === 'searching' || liveCard.status === 'offered'
+                  ? driverStatusDetail(liveCard.status)
+                  : null
+              }
+              onAccept={() => onAccept(liveCard)}
+              onDecline={() => onDecline(liveCard)}
             />
           ) : null}
           <View style={styles.controls} pointerEvents="box-none">

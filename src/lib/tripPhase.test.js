@@ -98,9 +98,7 @@ test('isTerminalTripStatus detects all terminal lifecycle states', () => {
   assert.equal(isTerminalTripStatus('unknown'), false)
   assert.equal(isTerminalTripStatus('COMPLETED'), false)
 
-  // BUG?: 'cancelled' (British double-l) returns false because only single-l 'canceled' is checked,
-  // whereas 'cancelled_wait' uses double-l while 'canceled' and 'canceled_midride' use single-l.
-  assert.equal(isTerminalTripStatus('cancelled'), false)
+  assert.equal(isTerminalTripStatus('cancelled'), true)
 })
 
 test('isTripSurfaceLive returns true only for LIVE_TRIP_STATUSES', () => {
@@ -194,7 +192,7 @@ test('tripStatusLabel provides human labels for all known trip statuses', () => 
   // Truthy unknown status echoes string representation
   assert.equal(tripStatusLabel('driver_assigned'), 'driver_assigned')
   assert.equal(tripStatusLabel('custom_event'), 'custom_event')
-  assert.equal(tripStatusLabel('cancelled'), 'cancelled')
+  assert.equal(tripStatusLabel('cancelled'), 'Trip canceled')
   assert.equal(tripStatusLabel(123), '123')
 
   // BUG?: Unknown truthy statuses echo raw string directly without user-friendly fallback or title casing.
