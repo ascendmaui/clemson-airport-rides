@@ -16,6 +16,7 @@ import {
   tagLabel,
   tagTone,
 } from './tripTags.js'
+import { formatHourlyRate, ladderOfferNet, offerHourly } from './offerLadder.js'
 
 /** Default time window (in seconds) drivers have to accept an incoming offer. */
 export const DEFAULT_OFFER_TTL_SECONDS = 30
@@ -102,6 +103,25 @@ export function routeHeadline(cardOrPickup, dropoff) {
  */
 export function formatDriverNetPay(card) {
   const fare = fareCollection(card)
+  const ladder = fare.usesStoredPayout ? null : ladderOfferNet(card)
+  if (ladder) {
+    return {
+      netCents: ladder.netCents,
+      formattedNet: formatCents(ladder.netCents),
+      baseNetCents: null,
+      formattedBaseNet: null,
+      carpoolBonusCents: null,
+      formattedCarpoolBonus: null,
+      carpoolIncentiveId: null,
+      isCarpool: false,
+      platformFeeCents: ladder.platformFeeCents,
+      formattedPlatformFee: formatCents(ladder.platformFeeCents),
+      subtext: ladder.subtext,
+      offerPhase: ladder.phase,
+      hourly: offerHourly(card),
+      hourlyText: formatHourlyRate(offerHourly(card).hourlyCents),
+    }
+  }
   const explicitNet = card?.driverNetCents ?? card?.driver_net_cents ?? card?.driverPayoutCents ?? card?.driver_payout_cents
   const netCents = fare.driverNetCents > 0 || explicitNet == null
     ? fare.driverNetCents

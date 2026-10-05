@@ -3,6 +3,7 @@
  * No network and no Stripe calls.
  */
 import { CLEMSON_MIAMI_PROMO_ID } from './clemsonMiamiPromo.js'
+import { explicitOfferPhase, ladderOfferNet } from './offerLadder.js'
 
 export const ACTIONABLE_LEAD_MS = 45 * 60 * 1000
 
@@ -417,6 +418,9 @@ export function toDriverCard(row, options) {
   const fareCents = Math.round(Number(row.fare_cents) || 0)
   const storedDeposit = row.deposit_cents != null ? row.deposit_cents : meta.depositCents
   const first = String(meta.rider_first_name || 'Rider').trim().split(/\s+/)[0] || 'Rider'
+  const phase = explicitOfferPhase({ ...row, metadata: meta })
+  const ladder = phase && phase !== 'expired' ? ladderOfferNet({ ...row, fareCents, status: row.status, metadata: meta, offerPhase: phase }) : null
+  const carpool = carpoolPayFromTrip(row)
   return {
     id: row.id,
     status: row.status,
@@ -433,7 +437,11 @@ export function toDriverCard(row, options) {
     fareCents,
     depositCents: depositSliceCents(fareCents, storedDeposit),
     depositExplicit: row.deposit_cents != null && row.deposit_cents !== '',
-    driverNetCents: tripEarnedCents(row),
+    driverNetCents: carpool?.showBonus ? tripEarnedCents(row) : (ladder ? ladder.netCents : tripEarnedCents(row)),
+    offerPhase: phase,
+    offerShareBps: ladder?.shareBps ?? null,
+    offerExpiresAt: row.offer_expires_at || null,
+    riderAvatarUrl: typeof meta.rider_avatar_url === 'string' ? meta.rider_avatar_url : null,
     ...carpoolCardFields(row),
     firstName: first,
     purpose: meta.purpose || row.rider_note || '',

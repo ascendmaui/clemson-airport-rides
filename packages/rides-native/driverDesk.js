@@ -5,6 +5,7 @@
 import { offerVisibleToDriver, visibleOfferQuery, unchangedOfferQuery } from '../../shared/driverOrder.js'
 import { filterVisibleTrips, pairAllowedByRpc, visibleTripIdSet, WOMEN_ONLY_ACCEPT_ERROR } from './comfortPreference.js'
 import { isStaleLiveOffer } from '../../shared/staleLiveOffer.js'
+import { lockedOfferEconomics } from './offerLadder.js'
 import { missingVehicleYearColumn } from '../../shared/vehicleYear.js'
 import { vehicleServesComfort } from '../../shared/rideOptions.js'
 import { authedJson } from './apiClient.js'
@@ -296,6 +297,25 @@ async function rememberPass(supabase, tripId, driverId) {
   return true
 }
 
+async function lockAcceptedShare(supabase, fresh, driverId) {
+  const economics = lockedOfferEconomics(fresh)
+  if (!economics || !supabase || !fresh?.id) return
+  try {
+    await supabase.from('trips').update({
+      driver_earnings_cents: economics.netCents,
+      platform_fee_cents: economics.platformFeeCents,
+      metadata: {
+        ...(fresh.metadata || {}),
+        driver_share_bps: economics.shareBps,
+        driver_payout_cents: economics.netCents,
+        accepted_offer_phase: economics.phase,
+      },
+    }).eq('id', fresh.id).eq('driver_id', driverId)
+  } catch {
+    /* The accept already committed. Earnings stay on the classic split until a retry. */
+  }
+}
+
 export async function acceptTrip(supabase, trip, driverId) {
   if (!trip?.id) throw new Error('Missing ride')
   if (trip.isSynthetic === true || String(trip.id).startsWith('synthetic-')) {
@@ -334,12 +354,31 @@ export async function acceptTrip(supabase, trip, driverId) {
   if (fresh.status === 'scheduled') {
     const { data, error } = await supabase.rpc('accept_scheduled_trip', { p_trip_id: trip.id })
     if (error) throw new Error(error.message || 'Could not accept scheduled ride')
+    await lockAcceptedShare(supabase, fresh, driverId)
     return data
   }
   const acceptedAt = new Date().toISOString()
+  const economics = lockedOfferEconomics(fresh)
+  const metadata = economics
+    ? {
+      ...(fresh.metadata || {}),
+      driver_share_bps: economics.shareBps,
+      driver_payout_cents: economics.netCents,
+      accepted_offer_phase: economics.phase,
+    }
+    : null
   const { data, error } = await unchangedOfferQuery(supabase
     .from('trips')
-    .update({ status: 'accepted', driver_id: driverId, accepted_at: acceptedAt }), fresh)
+    .update({
+      status: 'accepted',
+      driver_id: driverId,
+      accepted_at: acceptedAt,
+      ...(economics ? {
+        driver_earnings_cents: economics.netCents,
+        platform_fee_cents: economics.platformFeeCents,
+        metadata,
+      } : {}),
+    }), fresh)
     .is('driver_id', null)
     .eq('id', trip.id)
     .in('status', OPEN_OFFER_STATUSES)

@@ -4,10 +4,13 @@
  *
  * in_app is the existing driver-screen chime. It plays only while that screen
  * is open, so this module records the channel and does not play audio.
- * push has a stored Expo token path and no server sender.
+ * push sends through the Expo push API when EXPO_ACCESS_TOKEN is set.
+ * Without that token, or without APNs/FCM on the Expo project, the locked-phone
+ * toast cannot be delivered. The client still shows an in-app alert while online.
  * SMS and email delivery are delegated to driverOfferChannels.js.
  */
 import { dispatchDriverOfferChannels } from './driverOfferChannels.js'
+import { sendExpoPush, PUSH_CREDENTIAL_GAP } from './expoPush.js'
 import { quietFromPrefs } from '../src/lib/quietHours.js'
 
 export const DRIVER_OFFER_ALERT_CHANNELS = Object.freeze(['in_app', 'push', 'sms', 'email'])
@@ -87,8 +90,9 @@ export function buildOfferAlertPlan({
     in_app: { sent: false, reason: 'open_driver_screen_only' },
     push: {
       sent: false,
-      reason: pushTokenPresent ? 'push_sender_missing' : 'push_token_missing',
+      reason: pushTokenPresent ? 'expo_credentials_missing' : 'push_token_missing',
       tokenPresent: Boolean(pushTokenPresent),
+      gap: pushTokenPresent ? PUSH_CREDENTIAL_GAP : undefined,
     },
     sms: { sent: false, reason: 'sms_provider_missing', phoneOnFile: Boolean(phoneOnFile) },
     email: { sent: false, reason: emailOnFile ? 'live_send_disabled' : 'driver_email_missing' },
@@ -97,10 +101,10 @@ export function buildOfferAlertPlan({
   return channels
 }
 
-function tokenPresent(statusRow, tokenRow) {
+function readPushToken(statusRow, tokenRow) {
   const statusToken = String(statusRow?.expo_push_token || '').trim()
   const tableToken = String(tokenRow?.token || '').trim()
-  return Boolean(statusToken || tableToken)
+  return statusToken || tableToken
 }
 
 async function loadDriverContact(sb, driverId) {
@@ -112,7 +116,8 @@ async function loadDriverContact(sb, driverId) {
     phone: String(profile.data?.phone || '').trim(),
     phoneOnFile: Boolean(String(profile.data?.phone || '').trim()),
     prefs: profile.data?.notification_prefs || null,
-    pushTokenPresent: tokenPresent(status.data, token.data),
+    pushToken: readPushToken(status.data, token.data),
+    pushTokenPresent: Boolean(readPushToken(status.data, token.data)),
     error: profile.error || status.error || token.error || null,
   }
 }
@@ -168,6 +173,26 @@ export async function dispatchDriverOfferAlert(sb, {
   if (inserted?.error) {
     const raced = await existingAlert(sb, tripId, driverId, offerMarker)
     if (raced) return { ok: true, tripId, driverId, offerMarker, channels: raced, recorded: true, duplicate: true }
+  }
+
+  if (!inserted?.error && !suppressed && contact.pushToken) {
+    const tier = trip?.tier || trip?.metadata?.ride_option || 'standard'
+    const prefs = contact.prefs?.ride_alerts
+    const mode = prefs && typeof prefs === 'object' ? prefs[tier] || prefs.standard : null
+    const sound = mode === 'silent' || mode === 'vibrate' ? null : 'default'
+    const pushed = await sendExpoPush({
+      to: contact.pushToken,
+      title: offerAlertCopy(trip).title,
+      body: offerAlertCopy(trip).body,
+      sound,
+      data: { tripId, tier },
+    }, deps)
+    channels.push = {
+      sent: Boolean(pushed.sent),
+      reason: pushed.reason,
+      tokenPresent: true,
+      ...(pushed.gap ? { gap: pushed.gap } : {}),
+    }
   }
 
   if (!inserted?.error && !suppressed) {
