@@ -2,6 +2,19 @@
 
 Persistent knowledge base for recurring failures. When a matching issue appears, apply the saved fix first.
 
+## 2026-10-05 — Matching edge helpers for cancel, decline rebroadcast, and offline offer cards
+
+- **Track / machine:** Clemson RIDES · deputy/matching-edge-cases
+- **What was wrong:** Cancel-while-searching, decline-then-rebroadcast, and offline-while-offered had no shared helper. Those edges were only implied by broader desk, SQL, and sweep tests, so a later accept after a searching cancel, a decline's rebroadcast flags, and an offline driver's offer card could drift apart.
+- **What changed:** Added pure helpers in `server/matchingEdge.js` and focused unit tests in `server/matchingEdge.test.js`. A rider cancel of an unassigned searching ride blocks a later accept. A targeted driver decline stamps the rebroadcast path flags (`offer_tried_driver_ids`, next or open `offer_driver_id`, `match`, `offer_release_reason`, `offer_rebroadcast_reason`) and leaves the rider searching. An offline driver does not keep an active searching or offered card, and gets the offline-while-offered message. This does not implement SQL expire-stale-offers.
+- **Files touched:**
+  - `server/matchingEdge.js`
+  - `server/matchingEdge.test.js`
+  - `docs/MATCHING_EDGE_CASES.md`
+  - `package.json`
+  - `docs/FIXES.md`
+- **Verified:** `node --test server/matchingEdge.test.js` (4/4), the acceptance list of the first five `server/*match*.test.js` / `tests/*match*` files (41/41), and `npm test` (2334/2334).
+
 ## 2026-10-02 — GA96: GA audit & tests - abandoned checkout resilience, hold TTL NaN safety, and RPC direct update fallbacks
 
 - **Track / machine:** Clemson RIDES · MacBook Max · `agy/ga-audit-abandoned-checkout-resilience-ga96`
