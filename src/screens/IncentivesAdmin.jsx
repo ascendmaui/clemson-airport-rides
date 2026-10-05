@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useAuth } from '../lib/auth'
 import { navigate } from '../lib/navigation'
 import { fetchFullProfile } from '../lib/profiles'
+import { ADMIN_ACCESS_REQUIRED } from '../lib/adminAccessCopy'
 import { DOW_LABELS, INCENTIVE_TYPES, formatUsdFromCents, isIncentiveAdmin } from '../lib/driverIncentiveMath'
 import {
   blankIncentiveForm,
@@ -120,7 +121,7 @@ export function IncentivesAdmin() {
         </button>
         <h1 style={{ color: 'var(--purple)', marginTop: 16 }}>Driver incentives</h1>
         <p style={{ color: 'var(--ink-secondary)' }}>
-          Only a seeded admin account, or a profile with admin access, can edit incentive windows.
+          {ADMIN_ACCESS_REQUIRED}
         </p>
       </div>
     )

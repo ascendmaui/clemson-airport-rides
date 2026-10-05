@@ -1,12 +1,10 @@
 /** Driver approval gate — shared by the Vite client, Vercel API, and tests. */
 
 import { IC_AGREEMENT_VERSION } from './icAgreement.js'
-import { isAdminIdentity, isSeedAdminEmail, SEEDED_ADMIN_EMAILS } from './adminAccess.js'
+import { isAdminIdentity } from './adminAccess.js'
 
 export { IC_AGREEMENT_HTML, IC_AGREEMENT_TITLE, IC_AGREEMENT_VERSION } from './icAgreement.js'
-export { isAdminIdentity, isSeedAdminEmail, SEEDED_ADMIN_EMAILS }
-
-export const ADMIN_EMAIL = 'john@gmail.com'
+export { isAdminIdentity }
 
 export const ONBOARDING_STATUSES = [
   'pending_info',
@@ -228,7 +226,7 @@ export function progressSnapshot(ctx = {}) {
 }
 
 export const EMAIL_TODO =
-  'TODO: set RESEND_API_KEY and RESEND_FROM (verified domain) to email seeded admins when a driver applies. The in-app admin dashboard at #/admin lists each application with the email submitted on it.'
+  'TODO: set RESEND_API_KEY, RESEND_FROM (verified domain), and ADMIN_NOTIFY_EMAIL to email the admin when a driver applies. The in-app admin dashboard at #/admin lists each application with the email submitted on it.'
 
 const DOC_ID_SET = new Set(REQUIRED_DOC_IDS)
 

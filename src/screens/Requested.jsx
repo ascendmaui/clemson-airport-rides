@@ -7,7 +7,7 @@ import { navigate, shareUrl } from '../lib/navigation'
 import { shouldPromptRiderTip } from '../lib/riderTip'
 import { useAuth } from '../lib/auth'
 import { createLocationShare, startSharingLocation } from '../lib/locationShare'
-import { subscribeDriverStatus } from '../lib/driverTrack'
+import { isLiveTrip, subscribeTripDriverLocation } from '../lib/liveDriverLocation'
 import { supabase } from '../lib/supabase'
 import { hasRatedTrip } from '../lib/ratings'
 import { RideChat, RideMessageButton } from '../components/RideChat'
@@ -49,6 +49,7 @@ export function Requested({ dest = 'GSP Airport', trip = '', driver = 'your driv
   const [trackingNow, setTrackingNow] = useState(Date.now())
   useEffect(() => { const timer = setInterval(() => setTrackingNow(Date.now()), 5000); return () => clearInterval(timer) }, [])
   const [driverPos, setDriverPos] = useState(null)
+  const [driverHeading, setDriverHeading] = useState(null)
   const [resolvedDriverId, setResolvedDriverId] = useState(driverId || '')
   const [rateNudge, setRateNudge] = useState(false)
   const [chatOpen, setChatOpen] = useState(false)
@@ -167,14 +168,15 @@ export function Requested({ dest = 'GSP Airport', trip = '', driver = 'your driv
   }, [trip, user?.id, paid, sessionId, trackingAttempt])
 
   useEffect(() => {
-    if (!resolvedDriverId || ['completed', 'canceled', 'cancelled_wait'].includes(tripRow?.status)) return undefined
-    return subscribeDriverStatus(resolvedDriverId, (loc) => {
+    if (!resolvedDriverId || !isLiveTrip(tripRow?.status)) return undefined
+    return subscribeTripDriverLocation(trip, (loc) => {
       setDriverPos([loc.lat, loc.lng])
+      setDriverHeading(loc.heading)
       setLocationAt(loc.updatedAt)
     }, setTrackingError)
-  }, [resolvedDriverId, trackingAttempt, tripRow?.status])
+  }, [trip, resolvedDriverId, trackingAttempt, tripRow?.status])
 
-  useEffect(() => { setDriverPos(null); setLocationAt(null); setTrackingError(null) }, [resolvedDriverId])
+  useEffect(() => { setDriverPos(null); setDriverHeading(null); setLocationAt(null); setTrackingError(null) }, [resolvedDriverId, tripRow?.status])
 
   async function onShare() {
     if (!trip || !user?.id) {
@@ -307,6 +309,7 @@ export function Requested({ dest = 'GSP Airport', trip = '', driver = 'your driv
             pickupPosition={pickup}
             dropoffPosition={dropoff}
             driverPosition={preview ? null : driverPos}
+            driverHeading={driverHeading}
             animateDriver={!preview && Boolean(driverPos) && liveStops.length === 0}
             stops={stopPins}
             route={routePath.length > 1 ? routePath : null}

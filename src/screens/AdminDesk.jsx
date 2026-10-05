@@ -3,7 +3,8 @@ import { AdminDrivers } from './AdminDrivers'
 import { navigate, getHashRoute } from '../lib/navigation'
 import { useAuth } from '../lib/auth'
 import { supabase } from '../lib/supabase'
-import { SEEDED_ADMIN_EMAILS, isAdminIdentity } from '../lib/driverOnboarding'
+import { AdminAccessDenied } from '../components/AdminAccessDenied'
+import { isAdminIdentity } from '../lib/driverOnboarding'
 import {
   fetchAdminNotifications,
   fetchAdminOverview,
@@ -37,7 +38,7 @@ function readTab() {
   return TABS.some(([id]) => id === tab) ? tab : 'notifications'
 }
 
-export function AdminDesk({ restrictedToEmail = null } = {}) {
+export function AdminDesk() {
   const { user, loading } = useAuth()
   const [allowed, setAllowed] = useState(null)
   const [tab, setTab] = useState(readTab)
@@ -59,17 +60,15 @@ export function AdminDesk({ restrictedToEmail = null } = {}) {
     supabase.from('profiles').select('role, is_admin, email').eq('id', user.id).maybeSingle()
       .then(({ data }) => {
         if (!alive) return
-        const email = String(user.email || data?.email || '').trim().toLowerCase()
-        const restricted = restrictedToEmail ? email === String(restrictedToEmail).trim().toLowerCase() : true
         const adminOk = isAdminIdentity({
           jwtEmail: user.email || data?.email,
           role: data?.role,
           isAdmin: data?.is_admin,
         })
-        setAllowed(Boolean(restricted && adminOk))
+        setAllowed(Boolean(adminOk))
       })
     return () => { alive = false }
-  }, [user, loading, restrictedToEmail])
+  }, [user, loading])
 
   useEffect(() => {
     if (!allowed) return undefined
@@ -81,25 +80,13 @@ export function AdminDesk({ restrictedToEmail = null } = {}) {
     return <div style={{ padding: 40, color: 'var(--ink-secondary)' }}>Loading admin dashboard…</div>
   }
 
-  if (!allowed) {
-    return (
-      <div className="fade-in" style={{ minHeight: '100%', background: 'var(--surface-muted)', padding: 24 }}>
-        <button type="button" className="pressable" onClick={() => navigate('account')} style={{ fontSize: 20 }}>←</button>
-        <h1 style={{ color: 'var(--purple)', marginTop: 12 }}>Admin only</h1>
-        <p style={{ color: 'var(--ink-secondary)', lineHeight: 1.45 }}>
-          {restrictedToEmail
-            ? `Only ${restrictedToEmail} can open /admin-dashboard. Sign in with Google as that account.`
-            : `Sign in with ${SEEDED_ADMIN_EMAILS.join(', ')}. The dashboard is at #/admin or /admin-dashboard. A profile with role admin also has access.`}
-        </p>
-      </div>
-    )
-  }
+  if (!allowed) return <AdminAccessDenied />
 
   return (
     <div className="fade-in" style={{ minHeight: '100%', background: 'var(--surface-muted)', padding: '20px 20px 48px' }}>
       <button type="button" className="pressable" onClick={() => navigate('account')} style={{ fontSize: 20 }}>←</button>
       <div style={{ fontSize: 12, fontWeight: 800, letterSpacing: 1.1, color: '#F56600', marginTop: 12 }}>CLEMSON RIDES</div>
-      <h1 style={{ fontSize: 28, fontWeight: 800, color: '#522D80', margin: '4px 0 0', letterSpacing: -0.4 }}>{restrictedToEmail ? 'Admin dashboard' : 'Admin'}</h1>
+      <h1 style={{ fontSize: 28, fontWeight: 800, color: '#522D80', margin: '4px 0 0', letterSpacing: -0.4 }}>Admin</h1>
       <p style={{ color: 'var(--ink-secondary)', fontSize: 14, lineHeight: 1.45 }}>
         Riders, drivers, applications, trips, and support. Approving a driver unlocks ride accept.
         {overview?.migrationRequired ? ' Apply supabase/migrations/20260924190000_admin_support.sql to turn on notifications and the support inbox.' : ''}

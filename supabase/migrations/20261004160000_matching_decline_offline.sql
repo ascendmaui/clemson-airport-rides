@@ -26,7 +26,7 @@ BEGIN
     AND NOT EXISTS (SELECT 1 FROM public.driver_offer_passes op WHERE op.trip_id = t.id AND op.driver_id = ds.driver_id)
     AND (EXISTS (SELECT 1 FROM public.driver_applications da WHERE da.profile_id = ds.driver_id AND da.onboarding_status = 'approved')
       OR p.is_admin IS TRUE OR p.role::text IN ('admin', 'ops')
-      OR lower(p.email) IN ('johnmatveev@gmail.com', 'johnmatveyev@gmail.com', 'jmat2019@icloud.com', 'john@gmail.com')
+      OR lower(p.email) IN ('johnmatveyev@gmail.com', 'ascendmaui@gmail.com', 'jmat2019@icloud.com')
       OR EXISTS (SELECT 1 FROM public.admin_users a WHERE a.email = lower(p.email) AND a.access_role IN ('admin', 'support')))
     AND (t.tier::text IS DISTINCT FROM 'tesla' OR EXISTS (
       SELECT 1 FROM public.vehicles v WHERE v.driver_id = ds.driver_id
