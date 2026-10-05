@@ -34,7 +34,7 @@ export function sanitizeActions(actions) {
 export const PRODUCT_BRIEF = `
 Clemson RIDES is a campus and airport rideshare for Clemson, South Carolina. It is software that connects riders with independent drivers. It is not Clemson University transit and not a common carrier.
 
-Bottom tabs: Schedule, Friends, Account, Rides (Rides opens the rider home, route "home").
+Bottom tabs: Rides, Schedule, Friends, Account (Rides opens the rider home, route "home").
 
 Account tabs, in order: Profile, Alerts, Billing, Vehicle, Student, Privacy, Help, Support.
 Help explains how the app works. Support is a different chat for bugs, billing problems, ride disputes, account issues, and safety. Help must never create a ticket.

@@ -2,6 +2,19 @@
 
 Persistent knowledge base for recurring failures. When a matching issue appears, apply the saved fix first.
 
+## 2026-10-05 — Web bottom tab order
+
+- **What was wrong:** The web rider bar in `src/components/BottomTabs.jsx` listed Schedule, Friends, Account, then Rides. The order was an inline array, so nothing could assert it. The rider app already uses Rides, Schedule, Friends, Account. The support brief repeated the old web order.
+- **What changed:** Added a pure `WEB_BOTTOM_TABS` export (Rides → Schedule → Friends → Account) and a unit test for that order. `BottomTabs` builds its buttons from the export. Updated the product brief to the same order. Native tab files were left alone.
+- **Files touched:**
+  - `src/lib/webTabOrder.js`
+  - `src/lib/webTabOrder.test.js`
+  - `src/components/BottomTabs.jsx`
+  - `server/productKnowledge.js`
+  - `package.json`
+  - `docs/FIXES.md`
+- **Verified:** `node --test src/lib/webTabOrder.test.js` and `npm test`.
+
 ## 2026-10-02 — GA96: GA audit & tests - abandoned checkout resilience, hold TTL NaN safety, and RPC direct update fallbacks
 
 - **Track / machine:** Clemson RIDES · MacBook Max · `agy/ga-audit-abandoned-checkout-resilience-ga96`
