@@ -80,6 +80,8 @@ Two native apps, version **1.1.0**. They do not replace TestFlight **1.0.0 (1)**
 | Rider | `apps/rider` | `com.ascendmaui.clemsonrides.rider` |
 | Driver | `apps/driver` | `com.ascendmaui.clemsonrides.driver` |
 
+Android package ids, the marketing QR path, and the Play Console checklist (do not submit) are in [docs/android-play-readiness.md](docs/android-play-readiness.md).
+
 Email and password use Supabase `signInWithPassword` / `signUp`, including forgot-password. Social sign-in uses Supabase-native Apple (`signInWithIdToken` + nonce) and Google (`signInWithOAuth` + the `auth/callback` deep link) in both apps. The session is stored in the iOS keychain / Android keystore through `expo-secure-store` (chunked, because a Supabase session is larger than one SecureStore item).
 
 ### Authentication Configuration (Supabase)

@@ -1927,3 +1927,10 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
 - **Files touched:** `docs/android-play-readiness.md`, `docs/FIXES.md`
 - **Verified:** `node --experimental-strip-types --experimental-test-isolation=process --test tests/retiredCopy.test.js` and the acceptance grep.
 
+## 2026-10-05 — Link Android Play readiness doc (pkg-android-play-readiness-docs t2)
+
+- **What was wrong:** `docs/android-play-readiness.md` was not linked from the README, so the package-id, marketing QR, and do-not-submit checklist was easy to miss.
+- **What changed:** Added one sentence under the Mobile section of `README.md` pointing at [docs/android-play-readiness.md](android-play-readiness.md). No app config, store listing, or EAS changes.
+- **Files touched:** `README.md`, `docs/FIXES.md`
+- **Verified:** `npm test` — 2330 pass, 0 fail.
+
