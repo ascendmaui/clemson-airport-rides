@@ -26,6 +26,8 @@ import {
 import { fetchBillingQuote } from '../lib/rideBilling'
 import { useRideOptions } from '../lib/useRideOptions'
 import { NO_DRIVERS_AVAILABLE_COPY, SCHEDULE_AHEAD_LABEL } from '../../shared/rideOptions.js'
+import { displayedPassengers, passengerCountLabel } from '../lib/schedulePartyCopy'
+import { PassengerStepper, WeekendWindowHelper } from './SchedulePartyFields'
 
 const PLACES = [
   ...FRIEND_PLACES,
@@ -46,6 +48,7 @@ export function ScheduledRidePlanner() {
   const [date, setDate] = useState('')
   const [time, setTime] = useState('21:00')
   const [fleet, setFleet] = useState('standard')
+  const [passengers, setPassengers] = useState(1)
   const pickupAt = pickupAtFromLocal(date, time)
   const rideOptions = useRideOptions({ scheduledFor: pickupAt ? pickupAt.toISOString() : null })
   const tierChoices = rideOptions?.catalog?.length ? rideOptions.catalog : []
@@ -196,6 +199,7 @@ export function ScheduledRidePlanner() {
         purpose,
         tier: fleet,
         billingChoice: billingOffer ? billingChoice : null,
+        passengers: displayedPassengers(passengers),
       })
       setSaved(row)
       setDate('')
@@ -260,9 +264,7 @@ export function ScheduledRidePlanner() {
 
       {purpose === 'party_weekend' && (
         <div style={{ marginBottom: 14 }}>
-          <p style={{ fontSize: 13, color: 'var(--ink-secondary)', marginTop: 0 }}>
-            Friday night through Sunday. Use a campus spot or GSP, CLT, or ATL.
-          </p>
+          <WeekendWindowHelper date={date} time={time} showOverview showNote={false} />
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             <button
               type="button"
@@ -311,6 +313,7 @@ export function ScheduledRidePlanner() {
         min={minDate}
         value={date}
         onChange={(e) => setDate(e.target.value)}
+        aria-describedby="weekend-window-note"
         style={{ width: '100%', marginTop: 6, marginBottom: 14, padding: '12px 14px', borderRadius: 12 }}
       />
       <label htmlFor="scheduled-time" style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink-secondary)' }}>Pickup time (Eastern)</label>
@@ -320,8 +323,10 @@ export function ScheduledRidePlanner() {
         className="glass-input"
         value={time}
         onChange={(e) => setTime(e.target.value)}
-        style={{ width: '100%', marginTop: 6, marginBottom: 14, padding: '12px 14px', borderRadius: 12 }}
+        aria-describedby="weekend-window-note"
+        style={{ width: '100%', marginTop: 6, marginBottom: 8, padding: '12px 14px', borderRadius: 12 }}
       />
+      <WeekendWindowHelper date={date} time={time} showNote />
 
       <PlacePicker label="Pickup" mode="pickup" value={pickup} onChange={setPickup} presets={PLACES} showCoordinates={false} />
       <PlacePicker label="Drop-off" mode="dropoff" value={dropoff} onChange={setDropoff} presets={PLACES} showCoordinates={false} />
@@ -357,6 +362,7 @@ export function ScheduledRidePlanner() {
           })}
         </div>
       )}
+      <PassengerStepper passengers={passengers} onChange={setPassengers} />
       <p style={{ fontSize: 13, fontWeight: 700, color: '#F56600' }}>{SCHEDULE_AHEAD_LABEL}</p>
 
       <div className="glass-panel glass-panel--elevated" style={{ padding: 16, borderRadius: 16, marginBottom: 16 }}>
@@ -394,6 +400,7 @@ export function ScheduledRidePlanner() {
           {date && time ? `${date} · ${time}` : 'Choose a date and time.'}
           {pickup?.label && dropoff?.label ? ` · ${pickup.label} → ${dropoff.label}` : ''}
           {fleet ? ` · ${tierChoices.find((row) => row.id === fleet)?.name || 'Standard'}` : ''}
+          {` · ${passengerCountLabel(displayedPassengers(passengers))}`}
         </div>
       </div>
 
@@ -423,7 +430,9 @@ export function ScheduledRidePlanner() {
       {saved && (
         <p style={{ marginTop: 12, color: '#522D80', fontSize: 13, fontWeight: 700, lineHeight: 1.45 }}>
           Confirmed for {formatPickupAt(saved.pickup_at)}.
-           No card was charged. {saved.deposit_cents > 0 ? 'Airport deposit requirements still apply before driver acceptance.' : 'Matching starts about 45 minutes before pickup; a driver is not guaranteed.'}
+          {saved.partyCapacityMessage ? ` ${saved.partyCapacityMessage}` : saved.passengerLabel ? ` ${saved.passengerLabel}.` : ''}
+          {saved.weekendWindowNote ? ` ${saved.weekendWindowNote}` : ''}
+          {' '}No card was charged. {saved.deposit_cents > 0 ? 'Airport deposit requirements still apply before driver acceptance.' : 'Matching starts about 45 minutes before pickup; a driver is not guaranteed.'}
         </p>
       )}
 
@@ -469,6 +478,7 @@ function RideRow({ ride, onCancel }) {
       <div style={{ fontSize: 13, marginTop: 4 }}>{ride.pickupLabel} → {ride.dropoffLabel}</div>
       <div style={{ fontSize: 12, color: 'var(--ink-secondary)', marginTop: 4 }}>
         {ride.purpose ? `${ride.purpose} · ` : ''}
+        {ride.passengerLabel ? `${ride.passengerLabel} · ` : ''}
         {formatUsdFromCents(ride.fareCents)}
         {ride.estimate ? ' estimate' : ''}
         {ride.approxPin ? ` · Approx pin ${ride.approxPin}` : ''}

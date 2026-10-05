@@ -1,7 +1,27 @@
 import assert from 'node:assert/strict'
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { dirname } from 'node:path'
 import test, { describe, beforeEach, afterEach, mock } from 'node:test'
+import { fileURLToPath, pathToFileURL } from 'node:url'
+import { createElement } from 'react'
+import { renderToStaticMarkup } from 'react-dom/server'
 import { register } from 'node:module'
-import scheduleTripHandler from './endpoints/scheduleTrip.js'
+import scheduleTripHandler, {
+  PARTY_FARE_COPY,
+  SCHEDULE_PARTY_SEAT_CAP,
+  WEEKEND_WINDOW_COPY,
+  isScheduleWeekendWindow,
+  partyCapacityMessage,
+  partyFareCopy,
+  passengerCount,
+  passengerCountLabel,
+  weekendWindowCopy,
+  weekendWindowNote,
+} from './endpoints/scheduleTrip.js'
+import { isWeekendPartyWindow } from '../packages/rides-native/tripTags.js'
+import { SCHEDULE_AHEAD_DISCOUNT_BPS, SCHEDULE_AHEAD_DISCOUNT_PCT } from '../shared/rideOptions.js'
+import { displayedPassengers, stepPassengers } from '../src/lib/schedulePartyCopy.js'
+import { toRiderScheduleCard, weekendHelperIso } from '../src/lib/scheduledRideModel.js'
 
 // src/lib/scheduledRides.js is a Vite module (extensionless imports, browser
 // Supabase client). The loader resolves it under Node and swaps in the mock
@@ -1265,6 +1285,378 @@ describe('scheduleTrip endpoint handler', () => {
       assert.equal(res.status, 400)
       assert.equal(tripsInserted.length, 0)
     })
+  })
+
+  describe('Passenger count display and weekend/party copy', () => {
+    const depsFor = (sb) => ({
+      user: mockStandardUser,
+      sb,
+      ensureProfile: async () => ({ ok: true }),
+      now: FROZEN_NOW.getTime(),
+    })
+
+    async function schedule(body) {
+      const { sb, tripsInserted } = createFakeSb()
+      const res = await callHandler(
+        scheduleTripHandler,
+        { method: 'POST', body },
+        depsFor(sb),
+      )
+      assert.equal(res.status, 200, JSON.stringify(res.json))
+      return { json: res.json, row: tripsInserted[0] }
+    }
+
+    function moneySnapshot(saved) {
+      const { json, row } = saved
+      return {
+        fareCents: json.fareCents,
+        depositCents: json.depositCents,
+        discountCents: json.discountCents,
+        scheduleDiscountPct: json.scheduleDiscountPct,
+        scheduleDiscountCents: json.scheduleDiscountCents,
+        scheduleDiscountApplied: json.scheduleDiscountApplied,
+        fareBeforeScheduleDiscountCents: json.fareBeforeScheduleDiscountCents,
+        surge: row.surge_multiplier,
+        platformFee: row.platform_fee_cents,
+        driverEarnings: row.driver_earnings_cents,
+        breakdownDiscount: row.fare_breakdown.schedule_discount_cents,
+        metadataDiscountPct: row.metadata.schedule_discount_pct,
+        metadataDiscountCents: row.metadata.schedule_discount_cents,
+      }
+    }
+
+    test('party weekend inside the window returns passenger and window copy without new fare fields', async () => {
+      const pickupAt = '2026-10-02T21:30:00.000Z' // Friday 5:30 PM EDT
+      const saved = await schedule({
+        ...defaultPlaces,
+        pickupAt,
+        purpose: 'party_weekend',
+        passengers: 2,
+        partySize: 8,
+      })
+      assert.equal(saved.row.passengers, 2)
+      assert.equal(saved.json.passengers, 2)
+      assert.equal(saved.json.passengerLabel, '2 passengers')
+      assert.equal(
+        saved.json.partyCapacityMessage,
+        '2 passengers. Standard, Wait & Save, and Extra Comfort seat 4.',
+      )
+      assert.equal(saved.json.weekendWindowCopy, WEEKEND_WINDOW_COPY)
+      assert.equal(
+        saved.json.weekendWindowNote,
+        'This pickup is inside the weekend window: Friday 5:00 PM through Sunday, Eastern time.',
+      )
+      assert.equal(saved.json.partyFareCopy, PARTY_FARE_COPY)
+      assert.equal(saved.json.scheduleDiscountPct, 10)
+      assert.equal(saved.row.metadata.schedule_discount_pct, 10)
+      assert.equal(saved.row.metadata.party, 'weekend')
+    })
+
+    test('a full car and an over-cap party change the message only', async () => {
+      const pickupAt = '2026-10-03T18:00:00.000Z' // Saturday afternoon
+      const full = await schedule({
+        ...defaultPlaces,
+        pickupAt,
+        purpose: 'party_weekend',
+        passengers: 4,
+      })
+      const over = await schedule({
+        ...defaultPlaces,
+        pickupAt,
+        purpose: 'party_weekend',
+        passengers: 6,
+      })
+      assert.equal(
+        full.json.partyCapacityMessage,
+        '4 passengers. That fills a Standard, Wait & Save, or Extra Comfort car (4 seats).',
+      )
+      assert.equal(
+        over.json.partyCapacityMessage,
+        '6 passengers. That is over the 4-seat cap for Standard, Wait & Save, and Extra Comfort.',
+      )
+      assert.equal(over.row.passengers, 6)
+      assert.deepEqual(moneySnapshot(full), moneySnapshot(over))
+    })
+
+    test('rounded and omitted counts keep the same campus and airport money', async () => {
+      const campusAt = '2026-10-07T16:00:00.000Z' // Wednesday noon EDT, outside the window
+      const one = await schedule({ ...defaultPlaces, pickupAt: campusAt, purpose: 'planned', passengers: 1 })
+      const rounded = await schedule({
+        ...defaultPlaces,
+        pickupAt: campusAt,
+        purpose: 'planned',
+        passengers: 2.5,
+        partySize: 9,
+      })
+      const omitted = await schedule({ ...defaultPlaces, pickupAt: campusAt, purpose: 'planned' })
+      assert.equal(rounded.row.passengers, 3)
+      assert.equal(rounded.json.passengerLabel, '3 passengers')
+      assert.equal(omitted.json.passengerLabel, '1 passenger')
+      assert.equal(one.json.weekendWindowCopy, null)
+      assert.match(one.json.weekendWindowNote, /outside the weekend window/)
+      assert.deepEqual(moneySnapshot(one), moneySnapshot(rounded))
+      assert.deepEqual(moneySnapshot(one), moneySnapshot(omitted))
+      assert.equal(one.json.scheduleDiscountPct, SCHEDULE_AHEAD_DISCOUNT_PCT)
+      assert.equal(one.row.metadata.schedule_discount_pct, 10)
+      assert.ok(one.json.scheduleDiscountCents > 0)
+
+      const airportOne = await schedule({ airport: 'GSP', pickupAt: campusAt, passengers: 1 })
+      const airportParty = await schedule({
+        airport: 'GSP',
+        pickupAt: campusAt,
+        purpose: 'party_weekend',
+        passengers: 4,
+      })
+      assert.deepEqual(moneySnapshot(airportOne), moneySnapshot(airportParty))
+      assert.equal(airportParty.json.weekendWindowCopy, WEEKEND_WINDOW_COPY)
+      assert.equal(airportParty.row.metadata.purpose, 'airport')
+      assert.equal(airportOne.json.depositCents, airportParty.json.depositCents)
+      assert.ok(airportOne.json.depositCents > 0)
+    })
+
+    test('zero passengers does not fall through to partySize on the displayed count', async () => {
+      const saved = await schedule({
+        ...defaultPlaces,
+        pickupAt: '2026-10-02T21:00:00.000Z',
+        purpose: 'party_weekend',
+        passengers: 0,
+        partySize: 4,
+      })
+      assert.equal(saved.row.passengers, 1)
+      assert.equal(saved.json.passengerLabel, '1 passenger')
+      assert.match(saved.json.weekendWindowNote, /inside the weekend window/)
+    })
+  })
+})
+
+describe('scheduleTrip passenger count display and weekend/party copy helpers', () => {
+  test('passengerCount prefers passengers, then partySize, then party_size', () => {
+    assert.equal(passengerCount({ passengers: 6, partySize: 8, party_size: 3 }), 6)
+    assert.equal(passengerCount({ partySize: 4, party_size: 2 }), 4)
+    assert.equal(passengerCount({ party_size: '5' }), 5)
+    assert.equal(passengerCount({ passengers: '2.4' }), 2)
+    assert.equal(passengerCount({ passengers: 2.5 }), 3)
+    assert.equal(passengerCount({ passengers: ' 3 ' }), 3)
+  })
+
+  test('missing and invalid passenger counts display and store as 1', () => {
+    assert.equal(passengerCount({ partySize: 4 }), 4)
+    assert.equal(passengerCount({ passengers: null, partySize: 4 }), 4)
+    for (const passengers of ['', '   ', 0, -3, 'nope', NaN, Infinity, 0.4]) {
+      assert.equal(passengerCount({ passengers, partySize: 4 }), 1, String(passengers))
+      assert.equal(passengerCountLabel(passengers), '1 passenger', String(passengers))
+    }
+    assert.equal(passengerCount({}), 1)
+    assert.equal(passengerCount(null), 1)
+    assert.equal(passengerCountLabel(null), '1 passenger')
+    assert.equal(passengerCountLabel(undefined), '1 passenger')
+    assert.equal(passengerCountLabel({ passengers: '', partySize: 6 }), '1 passenger')
+    assert.equal(passengerCountLabel({ partySize: '', party_size: 5 }), '1 passenger')
+  })
+
+  test('labels and capacity messages name the seat cap and the three ride types', () => {
+    assert.equal(SCHEDULE_PARTY_SEAT_CAP, 4)
+    assert.equal(passengerCountLabel(1), '1 passenger')
+    assert.equal(passengerCountLabel(4), '4 passengers')
+    assert.equal(
+      partyCapacityMessage(1),
+      '1 passenger. Standard, Wait & Save, and Extra Comfort seat 4.',
+    )
+    assert.equal(
+      partyCapacityMessage({ passengers: 4, partySize: 1 }),
+      '4 passengers. That fills a Standard, Wait & Save, or Extra Comfort car (4 seats).',
+    )
+    assert.equal(
+      partyCapacityMessage(8),
+      '8 passengers. That is over the 4-seat cap for Standard, Wait & Save, and Extra Comfort.',
+    )
+    assert.match(partyFareCopy(), /10% schedule-ahead discount/)
+    assert.doesNotMatch(partyFareCopy(), /\b(?:5|15|20|25)%/)
+    assert.equal(SCHEDULE_AHEAD_DISCOUNT_PCT, 10)
+    assert.equal(SCHEDULE_AHEAD_DISCOUNT_BPS, 1000)
+    assert.equal(PARTY_FARE_COPY, partyFareCopy())
+  })
+
+  test('weekend window matches the driver filter and states Eastern bounds', () => {
+    assert.equal(weekendWindowCopy(), WEEKEND_WINDOW_COPY)
+    assert.match(WEEKEND_WINDOW_COPY, /Friday 5:00 PM through Sunday, Eastern time/)
+    assert.match(WEEKEND_WINDOW_COPY, /at least 30 minutes ahead/)
+    assert.match(WEEKEND_WINDOW_COPY, /GSP, CLT, or ATL/)
+    assert.match(WEEKEND_WINDOW_COPY, /Weekend filter/)
+
+    const samples = [
+      '2026-10-02T20:59:00.000Z', // Friday 4:59 PM EDT
+      '2026-10-02T21:00:00.000Z', // Friday 5:00 PM EDT
+      '2026-10-02T21:30:00.000Z', // Friday 5:30 PM EDT
+      '2026-10-03T04:05:00.000Z', // Saturday 12:05 AM EDT
+      '2026-10-04T15:00:00.000Z', // Sunday 11:00 AM EDT
+      '2026-10-05T03:59:00.000Z', // Sunday 11:59 PM EDT
+      '2026-10-05T04:00:00.000Z', // Monday 12:00 AM EDT
+      '2026-10-07T16:00:00.000Z', // Wednesday noon EDT
+      'not-a-date',
+      '',
+    ]
+    for (const iso of samples) {
+      assert.equal(isScheduleWeekendWindow(iso), isWeekendPartyWindow(iso), iso)
+    }
+    assert.equal(isScheduleWeekendWindow(null), false)
+    assert.match(weekendWindowNote(''), /Choose a pickup time/)
+    assert.match(weekendWindowNote('not-a-date'), /Choose a valid pickup time/)
+    assert.match(weekendWindowNote('2026-10-02T21:00:00.000Z'), /inside the weekend window/)
+    assert.match(weekendWindowNote('2026-10-05T04:00:00.000Z'), /outside the weekend window/)
+    assert.match(weekendWindowNote('2026-10-05T04:00:00.000Z'), /You can still schedule it/)
+  })
+
+  test('the web stepper stops at 4 seats and does not clamp the stored parser', () => {
+    assert.equal(passengerCount({ passengers: 6 }), 6)
+    assert.equal(displayedPassengers(6), 4)
+    assert.equal(displayedPassengers(1), 1)
+    assert.equal(displayedPassengers(0), 1)
+    assert.equal(displayedPassengers('nope'), 1)
+    assert.equal(stepPassengers(1, 'down'), 1)
+    assert.equal(stepPassengers(1, 'up'), 2)
+    assert.equal(stepPassengers(3, 'up'), 4)
+    assert.equal(stepPassengers(4, 'up'), 4)
+    assert.equal(stepPassengers(4, 'down'), 3)
+    assert.equal(stepPassengers(9, 'up'), 4)
+    assert.equal(SCHEDULE_AHEAD_DISCOUNT_BPS, 1000)
+  })
+
+  test('weekend helper text follows the Eastern window and stays blank until both fields are set', () => {
+    assert.equal(weekendHelperIso('', '21:00'), '')
+    assert.equal(weekendHelperIso('2026-10-02', ''), '')
+    assert.equal(weekendHelperIso('2026-03-08', '02:30'), 'invalid')
+    assert.equal(weekendHelperIso('2026-10-02', '17:30'), '2026-10-02T21:30:00.000Z')
+    assert.equal(weekendHelperIso('2026-10-02', '16:00'), '2026-10-02T20:00:00.000Z')
+    assert.match(weekendWindowNote(weekendHelperIso('2026-10-02', '17:30')), /inside the weekend window/)
+    assert.match(weekendWindowNote(weekendHelperIso('2026-10-02', '16:00')), /outside the weekend window/)
+    assert.match(weekendWindowNote(weekendHelperIso('', '21:00')), /Choose a pickup time/)
+    assert.match(weekendWindowNote(weekendHelperIso('2026-03-08', '02:30')), /Choose a valid pickup time/)
+  })
+
+  test('upcoming cards show the passenger label without treating it as a fare', () => {
+    const card = toRiderScheduleCard({
+      id: 'party-4',
+      status: 'scheduled',
+      pickup_label: 'Memorial Stadium',
+      dropoff_label: 'GSP Airport',
+      fare_cents: 6800,
+      deposit_cents: 0,
+      passengers: 4,
+      metadata: { purpose: 'party_weekend' },
+    })
+    assert.equal(card.passengers, 4)
+    assert.equal(card.passengerLabel, '4 passengers')
+    assert.equal(card.fareCents, 6800)
+    const missing = toRiderScheduleCard({
+      id: 'legacy',
+      status: 'scheduled',
+      fare_cents: 1200,
+      metadata: { purpose: 'planned' },
+    })
+    assert.equal(missing.passengers, 1)
+    assert.equal(missing.passengerLabel, '1 passenger')
+  })
+})
+
+function buttonTag(html, label) {
+  const tag = html.match(new RegExp(`<button\\b[^>]*aria-label="${label}"[^>]*>`))
+  assert.ok(tag, `missing button ${label}`)
+  return tag[0]
+}
+
+describe('web schedule passenger stepper and weekend window helper', () => {
+  test('the schedule form shows the stepper, capacity message, and weekend helper', async () => {
+    const planner = readFileSync(new URL('../src/components/ScheduledRidePlanner.jsx', import.meta.url), 'utf8')
+    const rides = readFileSync(new URL('../src/lib/scheduledRides.js', import.meta.url), 'utf8')
+    const quoteCall = rides.slice(rides.indexOf('fetchRideQuote({'), rides.indexOf('})', rides.indexOf('fetchRideQuote({')))
+    const estimateCall = planner.slice(
+      planner.indexOf('estimateScheduledFare({'),
+      planner.indexOf('})', planner.indexOf('estimateScheduledFare({')),
+    )
+    const saveCall = planner.slice(
+      planner.indexOf('createScheduledTrip({'),
+      planner.indexOf('})', planner.indexOf('createScheduledTrip({')),
+    )
+
+    assert.match(planner, /<PassengerStepper/)
+    assert.match(planner, /<WeekendWindowHelper[^>]*showOverview/)
+    assert.match(planner, /<WeekendWindowHelper[^>]*showNote/)
+    assert.match(planner, /aria-describedby="weekend-window-note"/)
+    assert.match(planner, /No card was charged/)
+    assert.match(planner, /This is the fare saved on the ride/)
+    assert.doesNotMatch(planner, /Friday night through Sunday/)
+    assert.match(saveCall, /passengers: displayedPassengers\(passengers\)/)
+    assert.doesNotMatch(estimateCall, /passengers/)
+    assert.doesNotMatch(quoteCall, /passengers/)
+    assert.match(rides, /passengers: party/)
+    assert.doesNotMatch(rides, /scheduleDiscountPct\s*[:=]\s*(?!10\b)\d+/)
+
+    const esbuild = await import('esbuild')
+    const built = await esbuild.build({
+      absWorkingDir: fileURLToPath(new URL('..', import.meta.url)),
+      entryPoints: ['src/components/SchedulePartyFields.jsx'],
+      bundle: true,
+      format: 'esm',
+      platform: 'node',
+      write: false,
+      jsx: 'automatic',
+      external: ['react', 'react-dom'],
+    })
+    const outfile = fileURLToPath(new URL('../node_modules/.cache/schedule-party-fields-test.mjs', import.meta.url))
+    mkdirSync(dirname(outfile), { recursive: true })
+    writeFileSync(outfile, built.outputFiles[0].text)
+    let fields
+    try {
+      fields = await import(`${pathToFileURL(outfile).href}?t=${Date.now()}`)
+    } finally {
+      rmSync(outfile, { force: true })
+    }
+    const one = renderToStaticMarkup(createElement(fields.PassengerStepper, { passengers: 1, onChange() {} }))
+    const four = renderToStaticMarkup(createElement(fields.PassengerStepper, { passengers: 4, onChange() {} }))
+    const six = renderToStaticMarkup(createElement(fields.PassengerStepper, { passengers: 6, onChange() {} }))
+    assert.match(one, /Passengers/)
+    assert.match(one, />1 passenger</)
+    assert.match(one, /Standard, Wait &(?:amp;)? Save, and Extra Comfort seat 4/)
+    assert.match(one, /Passenger count does not change the server fare/)
+    assert.match(one, /10% schedule-ahead discount/)
+    assert.match(one, /touch-target-min/)
+    assert.match(buttonTag(one, 'Fewer passengers'), /disabled/)
+    assert.doesNotMatch(buttonTag(one, 'More passengers'), /disabled/)
+    assert.match(four, /That fills a Standard, Wait &(?:amp;)? Save, or Extra Comfort car \(4 seats\)/)
+    assert.match(buttonTag(four, 'More passengers'), /disabled/)
+    assert.doesNotMatch(buttonTag(four, 'Fewer passengers'), /disabled/)
+    assert.match(six, />4 passengers</)
+    assert.doesNotMatch(six, /over the 4-seat cap/)
+
+    const empty = renderToStaticMarkup(createElement(fields.WeekendWindowHelper, {
+      date: '',
+      time: '21:00',
+      showOverview: true,
+      showNote: true,
+    }))
+    assert.match(empty, /Friday 5:00 PM through Sunday, Eastern time/)
+    assert.match(empty, /GSP, CLT, or ATL/)
+    assert.match(empty, /Weekend filter/)
+    assert.match(empty, /Choose a pickup time/)
+    assert.match(empty, /id="weekend-window-copy"/)
+    assert.match(empty, /id="weekend-window-note"/)
+
+    const inside = renderToStaticMarkup(createElement(fields.WeekendWindowHelper, {
+      date: '2026-10-02',
+      time: '17:30',
+      showNote: true,
+    }))
+    assert.match(inside, /inside the weekend window/)
+    assert.doesNotMatch(inside, /id="weekend-window-copy"/)
+
+    const outside = renderToStaticMarkup(createElement(fields.WeekendWindowHelper, {
+      date: '2026-10-07',
+      time: '12:00',
+      showNote: true,
+    }))
+    assert.match(outside, /outside the weekend window/)
+    assert.match(outside, /You can still schedule it/)
   })
 })
 

@@ -2,6 +2,43 @@
 
 Persistent knowledge base for recurring failures. When a matching issue appears, apply the saved fix first.
 
+## 2026-10-05 — Weekend/party schedule UX tests already run under npm test
+
+- **Track / machine:** Clemson RIDES · deputy/weekend-party-schedule-ux · pkg-weekend-party-schedule-ux t3
+- **What was wrong:** The root `npm test` script is an explicit file list. The passenger-label, party-capacity, and weekend-window checks added in t1 and t2 would be skipped if those files were missing from the script.
+- **What changed:** No second copy was added. `server/scheduleTrip.test.js` is already listed once, immediately before `server/releaseScheduledRides.test.js`. `src/lib/scheduledRideModel.test.js` is already listed once, between `src/lib/placeCatalog.test.js` and `src/lib/fareRates.test.js`. Passenger and weekend-window coverage lives in those two files (`src/lib/schedulePartyCopy.js` has no separate suite). Fare math and the 10% schedule-ahead discount (1000 bps) were not changed. `package.json` was not edited.
+- **Files touched:**
+  - `docs/FIXES.md`
+- **Verified:** `npm test` — 2333 pass, 0 fail, 0 skipped (66 suites).
+
+## 2026-10-05 — Weekend/party schedule UX: web stepper, capacity, and window helper
+
+- **Track / machine:** Clemson RIDES · deputy/weekend-party-schedule-ux · t2
+- **What was wrong:** The web schedule form said "Friday night through Sunday" and had no passenger control. Riders could not see the count ("1 passenger" / "4 passengers"), the 4-seat cap for Standard, Wait & Save, and Extra Comfort, or whether the chosen pickup was inside Friday 5:00 PM through Sunday, Eastern time. Confirming a ride did not send the passenger count.
+- **What changed:** Added a 44px passenger stepper, the party-capacity sentence, and the fare note that passenger count does not change the server fare. Weekend / party shows the Eastern window overview. The date and time fields share a live helper that says whether the pickup is inside that window. The stepper stops at 4. The quote request still omits passengers. Schedule-ahead discount stays 10% (1000 bps).
+- **Files touched:**
+  - `src/components/SchedulePartyFields.jsx`
+  - `src/components/ScheduledRidePlanner.jsx`
+  - `src/lib/schedulePartyCopy.js`
+  - `src/lib/scheduledRideModel.js`
+  - `src/lib/scheduledRides.js`
+  - `src/lib/scheduledRideModel.test.js`
+  - `server/scheduleTrip.test.js`
+  - `docs/FIXES.md`
+- **Verified:** `node --experimental-strip-types --test server/scheduleTrip.test.js` renders the stepper and weekend helper. Fare quote calls do not take a passenger count. `npm test` passed (2333 tests).
+
+## 2026-10-05 — Weekend/party schedule UX: passenger display and window copy
+
+- **Track / machine:** Clemson RIDES · deputy/weekend-party-schedule-ux · t1
+- **What was wrong:** `scheduleTrip` stored a passenger count but the response had no rider-facing passenger label, party-capacity message, or weekend-window sentence. "Friday night through Sunday" did not state the Eastern window (Friday 5:00 PM through Sunday) that surge and the driver Weekend filter already use. Party size was easy to misread as a fare input.
+- **What changed:** Added pure helpers for the passenger label, the 4-seat cap message (Standard, Wait & Save, Extra Comfort), and weekend-window copy. The schedule response includes them. Stored passenger parsing is unchanged. Fare, deposit, schedule-ahead 10% (1000 bps), and surge are not inputs of passenger count.
+- **Files touched:**
+  - `src/lib/schedulePartyCopy.js`
+  - `server/endpoints/scheduleTrip.js`
+  - `server/scheduleTrip.test.js`
+  - `docs/FIXES.md`
+- **Verified:** `node --experimental-strip-types --test server/scheduleTrip.test.js` (65 pass) and `tests/retiredCopy.test.js`. `npm test` passes after the new tests avoid retired fleet words.
+
 ## 2026-10-02 — GA96: GA audit & tests - abandoned checkout resilience, hold TTL NaN safety, and RPC direct update fallbacks
 
 - **Track / machine:** Clemson RIDES · MacBook Max · `agy/ga-audit-abandoned-checkout-resilience-ga96`
