@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useJsApiLoader } from '@react-google-maps/api'
 import { FRIEND_PLACES } from '../lib/friendRides'
 import { hotCatalogPlaces, lookupCatalogPlace, placeFromStop, searchCatalogPlaces } from '../lib/placeCatalog'
+import { LOCATION_MISSING_MESSAGE, readBrowserPosition } from '../lib/currentPlace'
 import { MAPS_LOADER_ID, MAP_LIBRARIES, mapsLoaderOptions } from '../lib/googleMapsLoader'
 
 const CURRENT = { label: 'Current location', lat: null, lng: null, _current: true }
@@ -110,23 +111,15 @@ export function PlacePicker({
   async function useCurrentLocation() {
     setLocError(null)
     if (!navigator.geolocation) {
-      setLocError('Location is not available on this device.')
+      setLocError(LOCATION_MISSING_MESSAGE)
       setConfirmOpen(false)
       return
     }
     setLocBusy(true)
     try {
-      const pos = await new Promise((resolve, reject) => {
-        navigator.geolocation.getCurrentPosition(resolve, reject, {
-          enableHighAccuracy: true,
-          timeout: 15000,
-          maximumAge: 10000,
-        })
-      })
-      const lat = pos.coords.latitude
-      const lng = pos.coords.longitude
-      const placeLabel = await reverseGeocodeLabel(lat, lng)
-      onChange?.({ label: placeLabel, lat, lng })
+      const fix = await readBrowserPosition()
+      const placeLabel = await reverseGeocodeLabel(fix.lat, fix.lng)
+      onChange?.({ label: placeLabel, lat: fix.lat, lng: fix.lng })
     } catch (e) {
       setLocError(e?.message || 'Could not get current location. Check permissions.')
     } finally {
