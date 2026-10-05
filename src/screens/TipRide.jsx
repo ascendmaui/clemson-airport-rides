@@ -49,8 +49,8 @@ function TipBody() {
       setOffer((prev) => ({
         ...(prev || {}),
         choice: data.choice,
-        chargingWired: false,
-        chargedTipCents: data.chargedTipCents || 0,
+        chargingWired: Boolean(data.chargingWired),
+        chargedTipCents: data.chargedTipCents || (data.choice?.charged ? data.choice.tipCents : 0),
       }))
     } catch (err) {
       setError(err.message || 'Could not save tip choice')
@@ -107,7 +107,9 @@ function TipBody() {
             <p className="tip-copy">
               {saved.skipped
                 ? 'You can still rate the ride.'
-                : `${formatUsdFromCents(saved.tipCents)} is saved on this trip. Charging that tip is not available yet.`}
+                : saved.charged
+                  ? `${formatUsdFromCents(saved.tipCents)} was charged to your saved card.`
+                  : `${formatUsdFromCents(saved.tipCents)} is saved. No card was charged.`}
             </p>
             <div className="tip-actions">
               <PrimaryButton onClick={goRate}>Rate your driver</PrimaryButton>
@@ -118,7 +120,7 @@ function TipBody() {
           <>
             <h1 className="tip-title">Add a tip for {driverName}</h1>
             <p className="tip-copy" data-testid="tip-uncharged-note">
-              Pick an amount, enter your own, or skip. The price comes from this trip. Your card is not charged here.
+              Pick an amount, enter your own, or skip. The price comes from this trip. A saved card is charged after you add the tip. No card on file means nothing is charged.
             </p>
             <div className="tip-options" role="radiogroup" aria-label="Tip amount">
               {presets.map((preset) => {
@@ -170,7 +172,7 @@ function TipBody() {
                 />
               </div>
               <p id="tip-custom-hint" className="tip-custom-hint">
-                Any amount from {customRange}. This saves your choice and does not charge your card.
+                Any amount from {customRange}. A saved card is charged after you add the tip.
               </p>
             </div>
             <div className="tip-actions">
