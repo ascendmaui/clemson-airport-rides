@@ -12,6 +12,12 @@ import { driverQuizError } from '../shared/driverQuiz.js'
 import { admin, cors, json, parseBody, userFromAuth } from './friendRideLib.js'
 import { loadSubmissionContext, notifyAdminOfApplication } from './driverApproval.js'
 import { submittedApplicantEmail, writeDriverApplication } from '../shared/applicantEmail.js'
+import {
+  parseVehicleYear,
+  vehicleYearMessage,
+  withVehicleYear,
+  writeVehicleWithYearFallback,
+} from '../shared/vehicleYear.js'
 
 export async function handleDriverSignup(req, res) {
   if (cors(req, res)) return
@@ -43,16 +49,19 @@ export async function handleDriverSignup(req, res) {
   const make = String(body.make || '').trim()
   const model = String(body.model || '').trim()
   const plate = String(body.plate || '').trim()
-  const color = String(body.color || '').trim() || null
+  const color = String(body.color || '').trim()
+  const year = parseVehicleYear(body.year)
   const fullName = String(body.fullName || user.user_metadata?.full_name || '').trim()
   const phone = String(body.phone || '').trim()
   const seats = Number(body.seats) > 0 ? Math.min(8, Number(body.seats)) : 4
 
-  if (!fullName) return json(res, 400, { error: 'Full name is required' })
-  if (phone.replace(/\D/g, '').length < 7) return json(res, 400, { error: 'A real phone number is required' })
+  if (!fullName) return json(res, 400, { error: 'Full name is required.' })
+  if (phone.replace(/\D/g, '').length < 10) return json(res, 400, { error: 'Phone must have at least 10 digits.' })
   if (!make || !model || !plate) {
-    return json(res, 400, { error: 'Vehicle make, model, and plate are required' })
+    return json(res, 400, { error: 'Vehicle make, model, and plate are required.' })
   }
+  if (!color) return json(res, 400, { error: 'Vehicle color is required.' })
+  if (year == null) return json(res, 400, { error: vehicleYearMessage() })
 
   const email = (user.email || '').toLowerCase()
   const isClemson = email.endsWith('@clemson.edu') || email.endsWith('@g.clemson.edu')
@@ -116,7 +125,7 @@ export async function handleDriverSignup(req, res) {
       .eq('driver_id', user.id)
       .limit(1)
     let vehicle = existingVeh?.[0] || null
-    const vehFields = {
+    const vehFields = withVehicleYear({
       make,
       model,
       color,
@@ -125,25 +134,15 @@ export async function handleDriverSignup(req, res) {
       is_tesla: Boolean(body.isTesla),
       autonomous_capable: false,
       tier: body.isTesla ? 'tesla_self_driving' : 'standard',
-    }
-    if (!vehicle) {
-      const { data: inserted, error: vErr } = await sb
-        .from('vehicles')
-        .insert({ driver_id: user.id, ...vehFields })
-        .select('*')
-        .single()
-      if (vErr) return json(res, 500, { error: vErr.message })
-      vehicle = inserted
-    } else {
-      const { data: updated, error: vUpErr } = await sb
-        .from('vehicles')
-        .update(vehFields)
-        .eq('id', vehicle.id)
-        .select('*')
-        .single()
-      if (vUpErr) return json(res, 500, { error: vUpErr.message })
-      vehicle = updated
-    }
+    }, year)
+    const savedVehicle = await writeVehicleWithYearFallback((fields) => {
+      if (!vehicle) {
+        return sb.from('vehicles').insert({ driver_id: user.id, ...fields }).select('*').single()
+      }
+      return sb.from('vehicles').update(fields).eq('id', vehicle.id).select('*').single()
+    }, vehFields)
+    if (savedVehicle.error) return json(res, 500, { error: savedVehicle.error.message })
+    vehicle = savedVehicle.data
 
     if (nextStatus !== 'approved') {
       const { error: statusErr } = await sb.from('driver_status').upsert({

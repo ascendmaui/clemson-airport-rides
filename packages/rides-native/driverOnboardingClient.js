@@ -26,6 +26,9 @@ import {
   stepIsComplete,
   submissionBlockers,
 } from '../../shared/driverOnboarding.js'
+import { vehicleAccountErrors, withVehicleYear, writeVehicleWithYearFallback } from '../../shared/vehicleYear.js'
+
+export { vehicleAccountErrors }
 
 export { driverQuizError } from '../../shared/driverQuiz.js'
 
@@ -309,7 +312,7 @@ async function saveDriverInfoDirect(supabase, user, payload) {
 }
 
 async function saveVehicle(supabase, userId, payload) {
-  const vehFields = {
+  const vehFields = withVehicleYear({
     make: payload.make,
     model: payload.model,
     color: payload.color || null,
@@ -318,17 +321,17 @@ async function saveVehicle(supabase, userId, payload) {
     is_tesla: Boolean(payload.isTesla),
     autonomous_capable: false,
     tier: payload.isTesla ? 'tesla_self_driving' : 'standard',
-  }
+  }, payload.year)
   const { data: existingVeh } = await supabase.from('vehicles').select('id').eq('driver_id', userId).limit(1)
   const vehicle = existingVeh?.[0]
-  if (!vehicle) {
-    const { data, error } = await supabase.from('vehicles').insert({ driver_id: userId, ...vehFields }).select('*').single()
-    if (error) throw new Error(error.message)
-    return data
-  }
-  const { data, error } = await supabase.from('vehicles').update(vehFields).eq('id', vehicle.id).select('*').single()
-  if (error) throw new Error(error.message)
-  return data
+  const saved = await writeVehicleWithYearFallback((fields) => {
+    if (!vehicle) {
+      return supabase.from('vehicles').insert({ driver_id: userId, ...fields }).select('*').single()
+    }
+    return supabase.from('vehicles').update(fields).eq('id', vehicle.id).select('*').single()
+  }, vehFields)
+  if (saved.error) throw new Error(saved.error.message)
+  return saved.data
 }
 
 async function keepTeslaStub(supabase, userId, payload) {

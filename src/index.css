@@ -1678,3 +1678,33 @@ select[aria-invalid="true"]:focus-visible {
 .billing-option--selected .billing-option-detail {
   color: var(--purple);
 }
+
+.driver-application {
+  max-width: 100%;
+  overflow-x: clip;
+  box-sizing: border-box;
+}
+.driver-application .sheet,
+.driver-application form {
+  max-width: 100%;
+  overflow-x: clip;
+}
+.driver-application input,
+.driver-application select,
+.driver-application textarea {
+  max-width: 100%;
+  font-size: 16px;
+}
+.driver-application .choice-pair button,
+.driver-application .attest-row {
+  min-height: 44px;
+}
+.driver-application .choice-pair button {
+  min-width: 44px;
+}
+.driver-application .attest-row input {
+  width: 22px;
+  height: 22px;
+  min-height: 22px;
+  flex: 0 0 auto;
+}

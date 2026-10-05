@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import test from 'node:test'
 import { driverQuizError, driverQuizPayload } from '../shared/driverQuiz.js'
 
@@ -17,6 +18,14 @@ test('quiz reports the first incomplete gate and never treats truthy values as a
   assert.match(driverQuizError({ hasCar: 'yes', hasInsurance: true, attestation: true }), /car/i)
   assert.match(driverQuizError({ hasCar: true, hasInsurance: 1, attestation: true }), /insurance/i)
   assert.match(driverQuizError({ hasCar: true, hasInsurance: true, attestation: 'true' }), /confirm/i)
+})
+
+test('the web account step keeps student status optional and explains a No', () => {
+  const screen = readFileSync(new URL('../src/screens/DriverOnboarding.jsx', import.meta.url), 'utf8')
+  assert.match(screen, /Student status is optional/)
+  assert.match(screen, /driverQuizError/)
+  assert.match(screen, /isStudent: answers\.isStudent === true/)
+  assert.doesNotMatch(screen, /Answer Yes to every question/)
 })
 
 test('quiz payload serializes only explicit affirmative answers', () => {

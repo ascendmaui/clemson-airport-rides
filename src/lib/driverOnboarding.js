@@ -38,6 +38,11 @@ import {
   withSubmittedApplicantEmail,
   writeDriverApplication,
 } from '../../shared/applicantEmail.js'
+import {
+  loadApplicantVehicles,
+  withVehicleYear,
+  writeVehicleWithYearFallback,
+} from '../../shared/vehicleYear.js'
 
 export {
   submittedApplicantEmail,
@@ -240,10 +245,10 @@ async function saveDriverInfoDirect(userId, payload, email) {
       .single(),
     {
       profile_id: userId,
-      is_student: true,
+      is_student: payload.isStudent === true,
       has_car: true,
       has_insurance: true,
-      wants_extra_money: true,
+      wants_extra_money: payload.wantsExtraMoney === true,
       attestation_accepted_at: now,
       onboarding_status: nextStatus,
       status: legacyStatusFor(nextStatus),
@@ -258,7 +263,7 @@ async function saveDriverInfoDirect(userId, payload, email) {
     .select('id')
     .eq('driver_id', userId)
     .limit(1)
-  const vehFields = {
+  const vehFields = withVehicleYear({
     make: payload.make,
     model: payload.model,
     color: payload.color || null,
@@ -267,26 +272,16 @@ async function saveDriverInfoDirect(userId, payload, email) {
     is_tesla: isTeslaModel3(payload),
     autonomous_capable: false,
     tier: isTeslaModel3(payload) ? 'tesla' : 'standard',
-  }
+  }, payload.year)
   let vehicle = existingVeh?.[0] || null
-  if (!vehicle) {
-    const { data: inserted, error } = await supabase
-      .from('vehicles')
-      .insert({ driver_id: userId, ...vehFields })
-      .select('*')
-      .single()
-    if (error) throw new Error(error.message)
-    vehicle = inserted
-  } else {
-    const { data: updated, error } = await supabase
-      .from('vehicles')
-      .update(vehFields)
-      .eq('id', vehicle.id)
-      .select('*')
-      .single()
-    if (error) throw new Error(error.message)
-    vehicle = updated
-  }
+  const savedVehicle = await writeVehicleWithYearFallback((fields) => {
+    if (!vehicle) {
+      return supabase.from('vehicles').insert({ driver_id: userId, ...fields }).select('*').single()
+    }
+    return supabase.from('vehicles').update(fields).eq('id', vehicle.id).select('*').single()
+  }, vehFields)
+  if (savedVehicle.error) throw new Error(savedVehicle.error.message)
+  vehicle = savedVehicle.data
 
   if (nextStatus !== 'approved') await supabase.from('driver_status').upsert({
     driver_id: userId,
@@ -506,13 +501,15 @@ async function fetchDriverQueueDirect(status) {
   const ids = (apps || []).map((app) => app.profile_id)
   if (!ids.length) return { applications: [], email_todo_present: false, direct: true }
 
-  const [{ data: profiles }, { data: vehicles }, { data: docs }, { data: taxes }, { data: agreements }] = await Promise.all([
+  const [{ data: profiles }, vehicleResult, { data: docs }, { data: taxes }, { data: agreements }] = await Promise.all([
     supabase.from('profiles').select('id, full_name, email, phone, role, is_admin').in('id', ids),
-    supabase.from('vehicles').select('driver_id, make, model, color, plate, seats, is_tesla').in('driver_id', ids),
+    loadApplicantVehicles(supabase, ids),
     supabase.from('driver_documents').select('profile_id, doc_type').in('profile_id', ids),
     supabase.from('driver_tax_info').select('profile_id, legal_name, tin_last4, tax_classification').in('profile_id', ids),
     supabase.from('driver_agreements').select('profile_id, agreement_version, signature_name, signed_at, agreement_sha256').in('profile_id', ids),
   ])
+  if (vehicleResult.error) throw new Error(vehicleResult.error.message)
+  const vehicles = vehicleResult.data
   const profileById = Object.fromEntries((profiles || []).map((row) => [row.id, row]))
   const vehicleById = {}
   for (const vehicle of vehicles || []) {

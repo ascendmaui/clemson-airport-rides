@@ -35,38 +35,51 @@ import {
   writeOnboardingStep,
 } from '../lib/driverOnboarding'
 import { TESLA_FLEET_NOTICE } from '../../packages/rides-native/tripTags.js'
+import { buildFieldA11yProps, formatAccessibleFormErrorSummary, getFieldErrorProps } from '../lib/formA11y'
+import { loadLatestVehicle, vehicleAccountErrors } from '../../shared/vehicleYear.js'
+import { driverQuizError } from '../../shared/driverQuiz.js'
 
 const QUESTIONS = [
-  { key: 'isStudent', label: 'Are you a student?' },
+  { key: 'isStudent', label: 'Are you a student?', optional: true },
   { key: 'hasCar', label: 'Do you have a car?' },
   { key: 'hasInsurance', label: 'Do you have insurance?' },
-  { key: 'wantsExtraMoney', label: 'Do you want to make extra money driving fellow students?' },
+  { key: 'wantsExtraMoney', label: 'Do you want to make extra money driving fellow students?', optional: true },
 ]
+
+const STUDENT_OPTIONAL_NOTE = 'Student status is optional. Answering No does not block this application.'
 
 const inputStyle = {
   display: 'block',
   width: '100%',
+  maxWidth: '100%',
   marginTop: 6,
   padding: '12px 14px',
   borderRadius: 12,
   border: '1px solid var(--border)',
   background: 'var(--surface)',
-  fontSize: 15,
+  fontSize: 16,
+  minHeight: 44,
 }
 
-function Field({ label, value, onChange, type = 'text', required = true }) {
+function Field({ id, label, value, onChange, type = 'text', required = true, error, inputMode, autoComplete, maxLength }) {
+  const a11y = buildFieldA11yProps({ id, error, required })
   return (
-    <label style={{ display: 'block', marginBottom: 12 }}>
+    <label htmlFor={id} style={{ display: 'block', marginBottom: 12, maxWidth: '100%' }}>
       <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink-secondary)' }}>
         {label}{required ? ' *' : ''}
       </span>
       <input
-        required={required}
+        {...a11y}
         type={type}
+        inputMode={inputMode}
+        autoComplete={autoComplete}
+        maxLength={maxLength}
         value={value}
         onChange={(e) => onChange(e.target.value)}
+        data-driver-field={id}
         style={inputStyle}
       />
+      {error ? <span {...getFieldErrorProps(id)}>{error}</span> : null}
     </label>
   )
 }
@@ -138,7 +151,9 @@ export function DriverOnboarding() {
   const [make, setMake] = useState('')
   const [model, setModel] = useState('')
   const [color, setColor] = useState('')
+  const [year, setYear] = useState('')
   const [plate, setPlate] = useState('')
+  const [fieldErrors, setFieldErrors] = useState({})
   const [seats, setSeats] = useState('4')
   const [isTesla, setIsTesla] = useState(false)
   const [application, setApplication] = useState(null)
@@ -159,7 +174,6 @@ export function DriverOnboarding() {
   const [agreementHash, setAgreementHash] = useState('')
   const [signatureName, setSignatureName] = useState('')
 
-  const allYes = QUESTIONS.every((q) => answers[q.key] === true)
   const uploaded = useMemo(() => docs.map((d) => d.doc_type), [docs])
   const status = application?.onboarding_status || null
   const gate = {
@@ -202,9 +216,7 @@ export function DriverOnboarding() {
           supabase
             ? supabase.from('profiles').select('full_name, phone').eq('id', user.id).maybeSingle()
             : Promise.resolve({ data: null }),
-          supabase
-            ? supabase.from('vehicles').select('make, model, color, plate, seats, is_tesla').eq('driver_id', user.id).order('created_at', { ascending: false }).limit(1).maybeSingle()
-            : Promise.resolve({ data: null }),
+          loadLatestVehicle(supabase, user.id),
           fetchMyTaxProfile(user.id).catch(() => null),
           fetchMyAgreement(user.id).catch(() => null),
           fetchAgreementVersion().catch(() => null),
@@ -235,6 +247,7 @@ export function DriverOnboarding() {
           setMake(vehicle.make || '')
           setModel(vehicle.model || '')
           setColor(vehicle.color || '')
+          setYear(vehicle.year ? String(vehicle.year) : '')
           setPlate(vehicle.plate || '')
           setSeats(String(vehicle.seats || 4))
           setIsTesla(Boolean(vehicle.is_tesla))
@@ -275,23 +288,35 @@ export function DriverOnboarding() {
     e.preventDefault()
     setError(null)
     setNote(null)
-    if (!allYes || !attestation) {
-      setError('Answer Yes to every question and accept the attestation.')
+    const nextErrors = vehicleAccountErrors({ fullName, phone, make, model, color, plate, year })
+    setFieldErrors(nextErrors)
+    const quizError = driverQuizError({
+      hasCar: answers.hasCar,
+      hasInsurance: answers.hasInsurance,
+      attestation,
+    })
+    if (quizError) {
+      setError(quizError)
+      return
+    }
+    if (Object.keys(nextErrors).length) {
+      setError(formatAccessibleFormErrorSummary(nextErrors))
       return
     }
     setBusy(true)
     try {
       const data = await saveDriverInfo(user, {
-        isStudent: true,
+        isStudent: answers.isStudent === true,
         hasCar: true,
         hasInsurance: true,
-        wantsExtraMoney: true,
+        wantsExtraMoney: answers.wantsExtraMoney === true,
         attestationAccepted: true,
         fullName,
         phone,
         make,
         model,
         color,
+        year,
         plate,
         seats: Number(seats) || 4,
         isTesla,
@@ -432,7 +457,7 @@ export function DriverOnboarding() {
 
   if (status === 'approved') {
     return (
-      <div className="fade-in" style={{ minHeight: '100%', background: 'var(--surface-muted)', padding: '20px 20px 48px' }}>
+      <div className="driver-application fade-in" style={{ minHeight: '100%', background: 'var(--surface-muted)', padding: '20px 16px 48px' }}>
         <h1 style={{ fontSize: 26, fontWeight: 800, marginTop: 12, color: 'var(--purple)', letterSpacing: -0.4 }}>
           You’re approved
         </h1>
@@ -458,12 +483,20 @@ export function DriverOnboarding() {
   const taxFormOk = legalName.trim().length >= 2 && Boolean(taxClass) && w9DocReady && (Boolean(taxProfile) || tinDigits.length === 9)
 
   return (
-    <div className="fade-in" style={{ minHeight: '100%', background: 'var(--surface-muted)', padding: '20px 20px 48px' }}>
+    <div className="driver-application fade-in" style={{ minHeight: '100%', background: 'var(--surface-muted)', padding: '20px 16px 48px' }}>
       <button
         type="button"
         className="pressable"
+        aria-label="Back"
         onClick={() => (previous ? go(previous.id) : navigate('account'))}
-        style={{ fontSize: 20 }}
+        style={{
+          fontSize: 20,
+          minWidth: 44,
+          minHeight: 44,
+          display: 'inline-flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
       >
         ←
       </button>
@@ -477,12 +510,14 @@ export function DriverOnboarding() {
       <OnboardingProgress viewing={current.id} onSelect={go} {...gate} />
 
       {step === 'account' && (
-        <form onSubmit={onSaveInfo} className="sheet" style={{ marginTop: 16, padding: 20, borderRadius: 22, boxShadow: 'var(--shadow-pill)' }}>
+        <form noValidate onSubmit={onSaveInfo} className="sheet" style={{ marginTop: 16, padding: 20, borderRadius: 22, boxShadow: 'var(--shadow-pill)' }}>
           <h2 style={{ fontSize: 18, color: 'var(--purple)', marginBottom: 12 }}>Account</h2>
           {QUESTIONS.map((q) => (
             <div key={q.key} style={{ marginBottom: 14 }}>
-              <div style={{ fontWeight: 650, fontSize: 14, marginBottom: 8 }}>{q.label}</div>
-              <div style={{ display: 'flex', gap: 8 }}>
+              <div style={{ fontWeight: 650, fontSize: 14, marginBottom: 8 }}>
+                {q.label}{q.optional ? ' (optional)' : ''}
+              </div>
+              <div className="choice-pair" style={{ display: 'flex', gap: 8 }}>
                 {[true, false].map((val) => (
                   <button
                     key={String(val)}
@@ -502,21 +537,36 @@ export function DriverOnboarding() {
                   </button>
                 ))}
               </div>
+              {q.key === 'isStudent' ? (
+                <p id="student-status-note" role="status" style={{ marginTop: 8, fontSize: 13, lineHeight: 1.4, color: 'var(--ink-secondary)' }}>
+                  {STUDENT_OPTIONAL_NOTE}
+                </p>
+              ) : null}
+              {q.key === 'hasCar' && answers.hasCar === false ? (
+                <p className="field-error-text" role="alert">{driverQuizError({ hasCar: false, hasInsurance: true, attestation: true })}</p>
+              ) : null}
+              {q.key === 'hasInsurance' && answers.hasInsurance === false ? (
+                <p className="field-error-text" role="alert">{driverQuizError({ hasCar: true, hasInsurance: false, attestation: true })}</p>
+              ) : null}
             </div>
           ))}
 
-          <label style={{ display: 'flex', gap: 10, alignItems: 'flex-start', margin: '8px 0 16px', fontSize: 13, lineHeight: 1.4 }}>
+          <label className="attest-row" style={{ display: 'flex', gap: 10, alignItems: 'flex-start', margin: '8px 0 16px', fontSize: 13, lineHeight: 1.4 }}>
             <input type="checkbox" checked={attestation} onChange={(e) => setAttestation(e.target.checked)} style={{ marginTop: 3 }} />
             <span>I attest I carry valid auto insurance and will only offer rides to fellow students.</span>
           </label>
 
-          <Field label="Full name" value={fullName} onChange={setFullName} />
-          <Field label="Phone" value={phone} onChange={setPhone} type="tel" />
-          <Field label="Make" value={make} onChange={setMake} />
-          <Field label="Model" value={model} onChange={setModel} />
-          <Field label="Color" value={color} onChange={setColor} required={false} />
-          <Field label="Plate" value={plate} onChange={setPlate} />
-          <Field label="Seats" value={seats} onChange={setSeats} type="number" />
+          {error && step === 'account' ? (
+            <p id="driver-account-errors" className="form-summary-alert" role="alert">{error}</p>
+          ) : null}
+          <Field id="fullName" label="Full name" value={fullName} onChange={setFullName} autoComplete="name" error={fieldErrors.fullName} />
+          <Field id="phone" label="Phone" value={phone} onChange={setPhone} type="tel" inputMode="tel" autoComplete="tel" error={fieldErrors.phone} />
+          <Field id="make" label="Make" value={make} onChange={setMake} autoComplete="off" error={fieldErrors.make} />
+          <Field id="model" label="Model" value={model} onChange={setModel} autoComplete="off" error={fieldErrors.model} />
+          <Field id="year" label="Year" value={year} onChange={setYear} inputMode="numeric" autoComplete="off" maxLength={4} error={fieldErrors.year} />
+          <Field id="color" label="Color" value={color} onChange={setColor} autoComplete="off" error={fieldErrors.color} />
+          <Field id="plate" label="Plate" value={plate} onChange={setPlate} autoComplete="off" error={fieldErrors.plate} />
+          <Field id="seats" label="Seats" value={seats} onChange={setSeats} type="number" required={false} />
           <label style={{ display: 'flex', gap: 10, alignItems: 'center', fontWeight: 650, marginBottom: isTesla ? 8 : 16 }}>
             <input type="checkbox" checked={isTesla} onChange={(e) => { setIsTesla(e.target.checked); if (e.target.checked) { setMake('Tesla'); setModel('Model 3') } }} />
             Tesla Model 3 · a driver still drives
@@ -526,7 +576,7 @@ export function DriverOnboarding() {
               {TESLA_FLEET_NOTICE}
             </p>
           ) : null}
-          <PrimaryButton type="submit" disabled={busy || !allYes || !attestation}>
+          <PrimaryButton type="submit" disabled={busy}>
             {busy ? 'Saving…' : `Continue to ${adjacentStep('account', 1)?.label || 'the next step'}`}
           </PrimaryButton>
         </form>
@@ -759,7 +809,7 @@ export function DriverOnboarding() {
         </div>
       )}
 
-      {error && <p style={{ color: 'var(--danger)', fontSize: 13, marginTop: 12 }}>{error}</p>}
+      {error && step !== 'account' && <p role="alert" style={{ color: 'var(--danger)', fontSize: 13, marginTop: 12 }}>{error}</p>}
       {note && <p style={{ color: 'var(--purple)', fontSize: 13, marginTop: 12, lineHeight: 1.4 }}>{note}</p>}
     </div>
   )

@@ -4,6 +4,7 @@ import { isTeslaModel3 } from '../../shared/teslaFleet.js'
  * Payments go through the existing /api/driver and /api/stripe-payment-methods routers.
  */
 import { offerVisibleToDriver, visibleOfferQuery, unchangedOfferQuery } from '../../shared/driverOrder.js'
+import { missingVehicleYearColumn } from '../../shared/vehicleYear.js'
 import { authedJson } from './apiClient.js'
 import { approvalGateMessage } from './syntheticOffers.js'
 import {
@@ -81,13 +82,14 @@ export async function loadGameDay(supabase) {
 
 export async function loadVehicle(supabase, driverId) {
   if (!supabase || !driverId) return null
-  const { data, error } = await supabase
-    .from('vehicles')
-    .select('id, make, model, color, plate, seats, is_tesla, autonomous_capable, tier')
-    .eq('driver_id', driverId)
-    .limit(1)
-  if (error) throw new Error(error.message)
-  return data?.[0] || null
+  const withYear = 'id, year, make, model, color, plate, seats, is_tesla, autonomous_capable, tier'
+  const base = 'id, make, model, color, plate, seats, is_tesla, autonomous_capable, tier'
+  let res = await supabase.from('vehicles').select(withYear).eq('driver_id', driverId).limit(1)
+  if (res.error && missingVehicleYearColumn(res.error)) {
+    res = await supabase.from('vehicles').select(base).eq('driver_id', driverId).limit(1)
+  }
+  if (res.error) throw new Error(res.error.message)
+  return res.data?.[0] || null
 }
 
 export async function loadDriverProfile(supabase, driverId) {

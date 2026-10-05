@@ -8,6 +8,7 @@
  */
 import { blockerLabel, isAdminIdentity, onboardingLabel, submissionBlockers } from '../shared/driverOnboarding.js'
 import { selectDriverApplicationQueue, withSubmittedApplicantEmail } from '../shared/applicantEmail.js'
+import { loadApplicantVehicles } from '../shared/vehicleYear.js'
 import { loadSubmissionContext } from '../server/driverApproval.js'
 import {
   admin, cors, json, parseBody, userFromAuth,
@@ -97,13 +98,15 @@ async function queue(sb, res, status) {
     return json(res, 200, { applications: [], email_todo_present: false })
   }
 
-  const [{ data: profiles }, { data: vehicles }, { data: docs }, { data: taxes }, { data: agreements }] = await Promise.all([
+  const [{ data: profiles }, vehicleResult, { data: docs }, { data: taxes }, { data: agreements }] = await Promise.all([
     sb.from('profiles').select('id, full_name, email, phone, role, is_admin').in('id', ids),
-    sb.from('vehicles').select('driver_id, make, model, color, plate, seats, is_tesla').in('driver_id', ids),
+    loadApplicantVehicles(sb, ids),
     sb.from('driver_documents').select('profile_id, doc_type').in('profile_id', ids),
     sb.from('driver_tax_info').select('profile_id, legal_name, tin_last4, tax_classification').in('profile_id', ids),
     sb.from('driver_agreements').select('profile_id, agreement_version, signature_name, signed_at, agreement_sha256').in('profile_id', ids),
   ])
+  if (vehicleResult.error) return json(res, 500, { error: vehicleResult.error.message })
+  const vehicles = vehicleResult.data
   const profileById = Object.fromEntries((profiles || []).map((p) => [p.id, p]))
   const vehicleById = {}
   for (const v of vehicles || []) {
