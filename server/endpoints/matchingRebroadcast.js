@@ -1,6 +1,7 @@
 import { releaseScheduledRides } from '../releaseScheduledRides.js'
 import { timingSafeEqual } from 'node:crypto'
 import { admin, json } from '../friendRideLib.js'
+import { stagingCronBlock } from '../cronGuard.js'
 import { rebroadcastMissedOffers } from '../matchingRebroadcast.js'
 
 function headerValue(headers, name) {
@@ -44,10 +45,13 @@ export default async function handler(req, res, deps = {}) {
     })
     return json(res, 401, { error: 'Cron authorization required' })
   }
-  const sb = deps.sb !== undefined ? deps.sb : admin()
-  if (!sb) return json(res, 503, { error: 'Service unavailable' })
+  const env = deps.env || process.env
   const params = new URL(req.url || '/', 'http://localhost').searchParams
   const dryRun = String(req.query?.dry_run ?? params.get('dry_run')) === '1'
+  const blocked = stagingCronBlock(env, { dryRun })
+  if (blocked) return json(res, blocked.status, blocked.body)
+  const sb = deps.sb !== undefined ? deps.sb : admin()
+  if (!sb) return json(res, 503, { error: 'Service unavailable' })
   try {
     const scheduled = await releaseScheduledRides(sb, { dryRun, ...(deps.now ? { now: deps.now } : {}) })
     const result = await rebroadcastMissedOffers(sb, { dryRun, ...(deps.now ? { now: deps.now } : {}) })

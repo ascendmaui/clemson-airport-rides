@@ -26,6 +26,7 @@
  * Responses:
  * - 200 { ok, scanned, expired, released, skipped, errors, wouldExpire, dryRun, results }
  * - 401 when the caller is not authorized
+ * - 403 when DISABLE_CRON_ENDPOINTS is set. Dry-run is included unless ALLOW_STAGING_DRY_RUN=1.
  * - 405 for any method other than GET or POST (this route is not a browser API)
  * - 503 when the Supabase service role client is missing
  * - 500 { error: "Could not expire unpaid holds" }; the detail is logged server-side
@@ -33,6 +34,7 @@
  */
 import { timingSafeEqual } from 'node:crypto'
 import { admin, stripeClient, stripeOk } from '../friendRideLib.js'
+import { stagingCronBlock } from '../cronGuard.js'
 import { releaseExpiredUnpaidAirportHolds } from '../abandonedCheckout.js'
 
 function headerValue(headers, name) {
@@ -175,13 +177,15 @@ export default async function handler(req, res, overrides = {}) {
   if (!holdTtlCronAuthorized(req, env)) {
     return sendJson(res, 401, { error: 'Cron authorization required' })
   }
+  const dryRun = dryRunRequested(req)
+  const blocked = stagingCronBlock(env, { dryRun })
+  if (blocked) return sendJson(res, blocked.status, blocked.body)
   const sb = Object.prototype.hasOwnProperty.call(overrides, 'sb') ? overrides.sb : admin()
   if (!sb) {
     console.error('[expire-unpaid-airport-holds] service role client unavailable')
     return sendJson(res, 503, { error: 'Service unavailable' })
   }
 
-  const dryRun = dryRunRequested(req)
   const limit = parseHoldSweepLimit(req)
   const ttlMs = parseHoldSweepTtlMs(req)
   const stripe = Object.prototype.hasOwnProperty.call(overrides, 'stripe')

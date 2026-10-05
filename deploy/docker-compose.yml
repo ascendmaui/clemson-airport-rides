@@ -1,0 +1,72 @@
+# Clemson RIDES on the Hostinger VPS.
+# Traefik (container traefik-bmeb-traefik-1) uses host networking and owns
+# ports 80 and 443. It reaches this container through the Docker provider,
+# so this project does not join Traefik's network and does not publish 80/443.
+# Set traefik.docker.network to this project's own bridge (CLEMSON_NETWORK).
+#
+# Debug only: 127.0.0.1:3080 (prod) and 127.0.0.1:3081 (staging). Those ports
+# are free on the box. Do not bind 0.0.0.0.
+
+name: clemson-rides
+
+services:
+  web:
+    image: ghcr.io/ascendmaui/clemson-airport-rides:${IMAGE_TAG:?set IMAGE_TAG to the commit SHA}
+    container_name: clemson-rides-web
+    env_file: /opt/clemson-rides/.env
+    restart: unless-stopped
+    mem_limit: 512m
+    cpus: "1.0"
+    networks:
+      - clemson
+    ports:
+      - "127.0.0.1:3080:3000"
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=${CLEMSON_NETWORK:-clemson_rides_net}
+      - traefik.http.services.clemson.loadbalancer.server.port=3000
+      - traefik.http.routers.clemson.rule=Host(`clemsonrides.com`)
+      - traefik.http.routers.clemson.entrypoints=${TRAEFIK_ENTRYPOINT:-websecure}
+      - traefik.http.routers.clemson.tls=true
+      - traefik.http.routers.clemson.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}
+      - traefik.http.routers.clemson.service=clemson
+      - traefik.http.routers.clemson-www.rule=Host(`www.clemsonrides.com`)
+      - traefik.http.routers.clemson-www.entrypoints=${TRAEFIK_ENTRYPOINT:-websecure}
+      - traefik.http.routers.clemson-www.tls=true
+      - traefik.http.routers.clemson-www.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}
+      - traefik.http.routers.clemson-www.middlewares=clemson-www-redirect
+      - traefik.http.routers.clemson-www.service=clemson
+      - traefik.http.middlewares.clemson-www-redirect.redirectregex.regex=^https://www\.clemsonrides\.com/(.*)
+      - traefik.http.middlewares.clemson-www-redirect.redirectregex.replacement=https://clemsonrides.com/$${1}
+      - traefik.http.middlewares.clemson-www-redirect.redirectregex.permanent=true
+
+  staging:
+    profiles: ["staging"]
+    image: ghcr.io/ascendmaui/clemson-airport-rides:${STAGING_IMAGE_TAG:-staging}
+    container_name: clemson-rides-staging
+    env_file: /opt/clemson-rides/.env
+    # Overrides the shared env file for this container only. Do not put these
+    # in /opt/clemson-rides/.env or production will refuse cron too.
+    environment:
+      DISABLE_CRON_ENDPOINTS: "1"
+      ALLOW_STAGING_DRY_RUN: "1"
+    restart: unless-stopped
+    mem_limit: 512m
+    cpus: "1.0"
+    networks:
+      - clemson
+    ports:
+      - "127.0.0.1:3081:3000"
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=${CLEMSON_NETWORK:-clemson_rides_net}
+      - traefik.http.services.clemson-staging.loadbalancer.server.port=3000
+      - traefik.http.routers.clemson-staging.rule=Host(`clemson-staging.srv1090862.hstgr.cloud`)
+      - traefik.http.routers.clemson-staging.entrypoints=${TRAEFIK_ENTRYPOINT:-websecure}
+      - traefik.http.routers.clemson-staging.tls=true
+      - traefik.http.routers.clemson-staging.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}
+      - traefik.http.routers.clemson-staging.service=clemson-staging
+
+networks:
+  clemson:
+    name: ${CLEMSON_NETWORK:-clemson_rides_net}

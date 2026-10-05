@@ -83,4 +83,4 @@ export function sanitizeMessages(input) {
 }
 
 export const OFFLINE_NOTICE =
-  'Live AI is offline. Set OPENAI_API_KEY or AI_GATEWAY_API_KEY on Vercel. Answers below use your account context and the Clemson RIDES knowledge base.'
+  'Live AI is offline. Set AI_GATEWAY_API_KEY or OPENAI_API_KEY. Answers below use your account context and the Clemson RIDES knowledge base.'
