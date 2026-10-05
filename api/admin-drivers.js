@@ -6,7 +6,9 @@
  *   /api/admin-drivers?action=help-chat|support-chat|ticket
  * Legacy /api/help-chat, /api/support-chat, /api/support-ticket are rewritten here.
  */
-import { blockerLabel, onboardingLabel, submissionBlockers } from '../shared/driverOnboarding.js'
+import { IC_AGREEMENT_VERSION, approvalBlockers, blockerLabel, onboardingLabel } from '../shared/driverOnboarding.js'
+import { rejectAgreementTextEdit } from '../shared/agreementSign.js'
+import { handleCorrectAgreement, handleEmailAgreement } from '../server/agreementHttp.js'
 import { serverIsAdmin } from '../server/adminRoster.js'
 import { selectDriverApplicationQueue, withSubmittedApplicantEmail } from '../shared/applicantEmail.js'
 import { loadApplicantVehicles } from '../shared/vehicleYear.js'
@@ -78,6 +80,10 @@ export default async function handler(req, res) {
 
   const { body, error: pe } = parseBody(req)
   if (pe) return json(res, 400, { error: pe })
+  const locked = rejectAgreementTextEdit(body)
+  if (locked) return json(res, locked.status, locked.body)
+  if (body.action === 'email-agreement') return handleEmailAgreement(sb, res, user, body)
+  if (body.action === 'correct-agreement') return handleCorrectAgreement(sb, res, body)
   if (body.action === 'vehicle') {
     const make = String(body.make || '').trim().slice(0, 80)
     const model = String(body.model || '').trim().slice(0, 80)
@@ -100,15 +106,17 @@ async function queue(sb, res, status) {
     return json(res, 200, { applications: [], email_todo_present: false })
   }
 
-  const [{ data: profiles }, vehicleResult, { data: docs }, { data: taxes }, { data: agreements }] = await Promise.all([
+  const [{ data: profiles }, vehicleResult, { data: docs }, { data: taxes }, { data: agreements }, packetRes] = await Promise.all([
     sb.from('profiles').select('id, full_name, email, phone, role, is_admin').in('id', ids),
     loadApplicantVehicles(sb, ids),
     sb.from('driver_documents').select('profile_id, doc_type').in('profile_id', ids),
     sb.from('driver_tax_info').select('profile_id, legal_name, tin_last4, tax_classification').in('profile_id', ids),
-    sb.from('driver_agreements').select('profile_id, agreement_version, signature_name, signed_at, agreement_sha256').in('profile_id', ids),
+    sb.from('driver_agreements').select('profile_id, agreement_version, signature_name, signed_at, agreement_sha256, html_snapshot').in('profile_id', ids),
+    sb.from('driver_agreement_packets').select('profile_id, agreement_version, html_sha256').in('profile_id', ids),
   ])
   if (vehicleResult.error) return json(res, 500, { error: vehicleResult.error.message })
   const vehicles = vehicleResult.data
+  const packets = packetRes.error ? [] : (packetRes.data || [])
   const profileById = Object.fromEntries((profiles || []).map((p) => [p.id, p]))
   const vehicleById = {}
   for (const v of vehicles || []) {
@@ -131,13 +139,19 @@ async function queue(sb, res, status) {
       agreement_sha256: row.agreement_sha256,
       signature_name: row.signature_name,
       signed_at: row.signed_at,
+      html_snapshot: row.html_snapshot,
     }
+  }
+  const packetByProfile = {}
+  for (const row of packets) {
+    if (row.agreement_version === IC_AGREEMENT_VERSION) packetByProfile[row.profile_id] = row
   }
 
   const applications = (apps || []).map((app) => {
     const tax = taxByProfile[app.profile_id] || null
     const agreement = agreementByProfile[app.profile_id] || null
-    const blockers = submissionBlockers({
+    const packet = packetByProfile[app.profile_id] || null
+    const blockers = approvalBlockers({
       uploaded: docsByProfile[app.profile_id] || [],
       backgroundAuthorized: Boolean(app.background_authorized_at),
       workEligibilityAttested: Boolean(app.work_eligibility_attested_at),
@@ -145,6 +159,8 @@ async function queue(sb, res, status) {
       taxSaved: Boolean(tax?.legal_name && /^[0-9]{4}$/.test(String(tax.tin_last4 || ''))),
       agreementSigned: Boolean(agreement?.signed_at && agreement?.signature_name),
       agreementVersion: agreement?.agreement_version || null,
+      agreementSha256: agreement?.agreement_sha256 || null,
+      packetHash: packet?.html_sha256 || null,
     })
     const presented = withSubmittedApplicantEmail(app, profileById[app.profile_id] || null)
     return {
@@ -201,8 +217,9 @@ async function detail(sb, res, profileId) {
     employment: compliance.employment,
     tax: compliance.tax,
     agreement: compliance.agreement,
-    blockers: compliance.blockers,
-    blocker_labels: compliance.blockers.map(blockerLabel),
+    packet: compliance.packet,
+    blockers: compliance.approvalBlockers,
+    blocker_labels: compliance.approvalBlockers.map(blockerLabel),
   })
 }
 
@@ -228,11 +245,11 @@ async function review(sb, res, adminUser, body) {
     const compliance = await loadSubmissionContext(sb, profileId)
     if (compliance.error) return json(res, 500, { error: compliance.error })
     const alreadyApproved = compliance.onboarding_status === 'approved'
-    if (!alreadyApproved && compliance.blockers.length) {
+    if (!alreadyApproved && compliance.approvalBlockers.length) {
       return json(res, 400, {
         error: 'Review every required document, the W-9, and the signed agreement before approving.',
-        missing: compliance.blockers,
-        missing_labels: compliance.blockers.map(blockerLabel),
+        missing: compliance.approvalBlockers,
+        missing_labels: compliance.approvalBlockers.map(blockerLabel),
       })
     }
   }

@@ -113,8 +113,7 @@ export function stepIsComplete(stepId, ctx = {}) {
     case 'tax':
       return docsDone && Boolean(ctx.taxSaved)
     case 'agreement':
-      return Boolean(ctx.agreementSigned)
-        && ctx.agreementVersion === IC_AGREEMENT_VERSION
+      return agreementStepDone(ctx)
     case 'review':
       return ctx.status === 'pending_review' || ctx.status === 'approved'
     default: {
@@ -182,7 +181,7 @@ function stepFraction(step, ctx) {
       return (docDone + (ctx.taxSaved ? 1 : 0)) / parts
     }
     case 'agreement':
-      return ctx.agreementSigned && ctx.agreementVersion === IC_AGREEMENT_VERSION ? 1 : 0
+      return agreementStepDone(ctx) ? 1 : 0
     case 'review':
       return 0
     default: {
@@ -275,7 +274,25 @@ export function submissionBlockers(ctx = {}) {
   if (!ctx.backgroundAuthorized) blockers.push('background_authorization_attestation')
   if (!ctx.workEligibilityAttested || !ctx.workEligibilityCategory) blockers.push('work_eligibility_attestation')
   if (!ctx.taxSaved) blockers.push('w9_tax_info')
-  if (!ctx.agreementSigned || ctx.agreementVersion !== IC_AGREEMENT_VERSION) blockers.push('ic_agreement')
+  return blockers
+}
+
+function agreementStepDone(ctx) {
+  return Boolean(ctx.taxSaved)
+    || (Boolean(ctx.agreementSigned) && ctx.agreementVersion === IC_AGREEMENT_VERSION)
+}
+
+function agreementSatisfied(ctx) {
+  const signedCurrent = Boolean(ctx.agreementSigned) && ctx.agreementVersion === IC_AGREEMENT_VERSION
+  if (!signedCurrent) return false
+  if (ctx.packetHash && ctx.agreementSha256 !== ctx.packetHash) return false
+  return true
+}
+
+/** Approval still requires the current signed text. Submit does not. */
+export function approvalBlockers(ctx = {}) {
+  const blockers = submissionBlockers(ctx)
+  if (!agreementSatisfied(ctx)) blockers.push('ic_agreement')
   return blockers
 }
 

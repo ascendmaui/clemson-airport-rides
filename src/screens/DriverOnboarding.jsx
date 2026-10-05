@@ -13,23 +13,23 @@ import {
   resolveResumeStep,
   canOpenStep,
   stepIsComplete,
-  IC_AGREEMENT_HTML,
   IC_AGREEMENT_VERSION,
   WORK_ELIGIBILITY_CATEGORIES,
   TAX_CLASSIFICATIONS,
   displayTinLast4,
   submissionBlockers,
   blockerLabel,
+  buildAgreementPrefill,
+  renderPrefilledAgreement,
   fetchMyDriverApplication,
   fetchMyDriverDocuments,
   uploadDriverDocument,
   saveDriverInfo,
   saveEmploymentVerification,
   saveDriverTaxInfo,
+  setDriverMailingAddress,
   fetchMyTaxProfile,
-  fetchAgreementVersion,
   fetchMyAgreement,
-  signDriverAgreement,
   submitDriverReview,
   readOnboardingStep,
   writeOnboardingStep,
@@ -167,13 +167,12 @@ export function DriverOnboarding() {
   const [eligibilityCategory, setEligibilityCategory] = useState('')
   const [eligibilityAttested, setEligibilityAttested] = useState(false)
   const [legalName, setLegalName] = useState('')
+  const [addressLine, setAddressLine] = useState('')
+  const [businessName, setBusinessName] = useState('')
   const [tin, setTin] = useState('')
   const [taxClass, setTaxClass] = useState('individual')
   const [taxProfile, setTaxProfile] = useState(null)
   const [agreement, setAgreement] = useState(null)
-  const [agreementReady, setAgreementReady] = useState(false)
-  const [agreementHash, setAgreementHash] = useState('')
-  const [signatureName, setSignatureName] = useState('')
 
   const uploaded = useMemo(() => docs.map((d) => d.doc_type), [docs])
   const status = application?.onboarding_status || null
@@ -187,6 +186,22 @@ export function DriverOnboarding() {
     agreementSigned: Boolean(agreement?.signed_at && agreement?.signature_name),
     agreementVersion: agreement?.agreement_version || null,
   }
+  const agreementPreviewHtml = useMemo(() => renderPrefilledAgreement(buildAgreementPrefill({
+    legalName: legalName || taxProfile?.legal_name,
+    fullName,
+    address: addressLine || taxProfile?.address_line,
+    phone,
+    email: user?.email,
+    vehicle: { make, model, color, plate, seats },
+    licenseOnFile: uploaded.includes('license_front') && uploaded.includes('license_back'),
+    taxClassification: taxProfile?.tax_classification || taxClass,
+    businessName: businessName || taxProfile?.business_name,
+    tinLast4: taxProfile?.tin_last4,
+    workEligibilityCategory: eligibilityCategory || application?.work_eligibility_category,
+  })), [
+    legalName, taxProfile, fullName, addressLine, phone, user, make, model, color, plate, seats,
+    uploaded, taxClass, businessName, eligibilityCategory, application,
+  ])
   const blockers = useMemo(() => submissionBlockers(gate), [
     gate.status,
     gate.uploaded,
@@ -211,8 +226,12 @@ export function DriverOnboarding() {
         const app = await fetchMyDriverApplication(user.id)
         if (!alive) return
         setApplication(app)
-        if (app?.onboarding_status === 'approved') return
-        const [documents, profileRes, vehicleRes, tax, signed, version] = await Promise.all([
+        if (app?.onboarding_status === 'approved') {
+          const signed = await fetchMyAgreement(user.id).catch(() => null)
+          if (alive) setAgreement(signed)
+          return
+        }
+        const [documents, profileRes, vehicleRes, tax, signed] = await Promise.all([
           fetchMyDriverDocuments(user.id).catch(() => []),
           supabase
             ? supabase.from('profiles').select('full_name, phone').eq('id', user.id).maybeSingle()
@@ -220,22 +239,20 @@ export function DriverOnboarding() {
           loadLatestVehicle(supabase, user.id),
           fetchMyTaxProfile(user.id).catch(() => null),
           fetchMyAgreement(user.id).catch(() => null),
-          fetchAgreementVersion().catch(() => null),
         ])
         if (!alive) return
         setApplication(app)
         setDocs(documents)
         setTaxProfile(tax)
         setAgreement(signed)
-        setAgreementReady(version?.body_html === IC_AGREEMENT_HTML && version?.version === IC_AGREEMENT_VERSION)
-        setAgreementHash(version?.sha256 || '')
         const profile = profileRes.data
         const vehicle = vehicleRes.data
         const profileName = profile?.full_name || user.user_metadata?.full_name || user.email?.split('@')[0] || ''
         setFullName(profileName)
         setLegalName(tax?.legal_name || profileName)
+        setAddressLine(tax?.address_line || '')
+        setBusinessName(tax?.business_name || '')
         setTaxClass(tax?.tax_classification || 'individual')
-        setSignatureName(signed?.signature_name || '')
         if (app?.background_authorized_at) setBackgroundAuthorized(true)
         if (app?.work_eligibility_attested_at) setEligibilityAttested(true)
         if (app?.work_eligibility_category) setEligibilityCategory(app.work_eligibility_category)
@@ -397,32 +414,23 @@ export function DriverOnboarding() {
           legal_name: saved.legal_name,
           tin_last4: saved.tin_last4,
           tax_classification: saved.tax_classification,
+          address_line: addressLine.trim() || null,
+          business_name: businessName.trim() || null,
         })
         setTin('')
       }
+      if (addressLine.trim() || businessName.trim()) {
+        const mailed = await setDriverMailingAddress({
+          addressLine: addressLine.trim(),
+          businessName: businessName.trim(),
+        })
+        setTaxProfile((prev) => ({
+          ...(prev || {}),
+          address_line: mailed.address_line || addressLine.trim() || null,
+          business_name: mailed.business_name || businessName.trim() || prev?.business_name || null,
+        }))
+      }
       openStep(adjacentStep('w9', 1)?.id || 'agreement')
-    } catch (err) {
-      setError(err.message || String(err))
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  async function onSignAgreement() {
-    if (!agreementReady) {
-      setError('The agreement on file does not match this version. Refresh before you sign.')
-      return
-    }
-    if (signatureName.trim().length < 2) {
-      setError('Type your legal name to sign.')
-      return
-    }
-    setError(null)
-    setBusy(true)
-    try {
-      const saved = await signDriverAgreement(signatureName.trim())
-      setAgreement(saved)
-      openStep('review')
     } catch (err) {
       setError(err.message || String(err))
     } finally {
@@ -671,6 +679,8 @@ export function DriverOnboarding() {
             Independent contractors provide a W-9 by entering it here. You do not upload a file. The app stores the full taxpayer identification number in a restricted record and shows only the last four digits.
           </p>
           <Field label="Legal name" value={legalName} onChange={setLegalName} />
+          <Field label="Mailing address" value={addressLine} onChange={setAddressLine} />
+          <Field label="Business name (optional)" value={businessName} onChange={setBusinessName} />
           <label style={{ display: 'block', marginBottom: 12, fontSize: 13, fontWeight: 650 }}>
             Federal tax classification
             <select value={taxClass} onChange={(e) => setTaxClass(e.target.value)} style={inputStyle}>
@@ -730,36 +740,16 @@ export function DriverOnboarding() {
         <div className="sheet" style={{ marginTop: 16, padding: 20, borderRadius: 22, boxShadow: 'var(--shadow-pill)' }}>
           <h2 style={{ fontSize: 18, color: 'var(--purple)', marginBottom: 6 }}>Independent contractor agreement</h2>
           <p style={{ fontSize: 13, color: 'var(--ink-tertiary)', marginTop: 0 }}>
-            Version {IC_AGREEMENT_VERSION}
-            {agreementHash ? ` · ${agreementHash.slice(0, 12)}` : ''}
+            Version {IC_AGREEMENT_VERSION}. You do not sign during the application. An admin reviews this pre-filled copy and emails you a signing link.
           </p>
-          <div
-            style={{
-              maxHeight: 280,
-              overflow: 'auto',
-              padding: 12,
-              borderRadius: 12,
-              border: '1px solid var(--border)',
-              background: 'white',
-              fontSize: 13,
-              lineHeight: 1.45,
-            }}
-            dangerouslySetInnerHTML={{ __html: IC_AGREEMENT_HTML }}
-          />
-          {!agreementReady && (
-            <p style={{ color: 'var(--danger)', fontSize: 13 }}>
-              The stored agreement does not match this version yet. Refresh after the latest update is applied.
-            </p>
-          )}
+          <AgreementHtml html={agreement?.html_snapshot || agreementPreviewHtml} />
           {agreement?.signed_at && (
             <p style={{ fontSize: 13, color: 'var(--purple)' }}>
               Signed by {agreement.signature_name} on {new Date(agreement.signed_at).toLocaleString()}.
-              User {agreement.signer_user_id || user?.id}.
             </p>
           )}
-          <Field label="Type your legal name to sign" value={signatureName} onChange={setSignatureName} />
-          <PrimaryButton type="button" disabled={busy || !agreementReady || signatureName.trim().length < 2} onClick={onSignAgreement}>
-            {busy ? 'Signing…' : agreement?.signed_at ? 'Sign again and continue' : 'Sign and continue'}
+          <PrimaryButton type="button" onClick={() => openStep('review')}>
+            Continue to submit
           </PrimaryButton>
         </div>
       )}
@@ -780,13 +770,14 @@ export function DriverOnboarding() {
                 You can go online and accept rides.
               </p>
               <PrimaryButton variant="purple" onClick={() => navigate('driver')}>Open driver mode</PrimaryButton>
+              {agreement?.html_snapshot && <AgreementHtml html={agreement.html_snapshot} />}
             </>
           )}
           {status === 'pending_review' && blockers.length === 0 && (
             <>
               <h2 style={{ fontSize: 22, color: 'var(--purple)', marginTop: 8 }}>Waiting on admin</h2>
               <p style={{ color: 'var(--ink-secondary)', fontSize: 14, lineHeight: 1.45 }}>
-                License, insurance, registration, car photos, employment attestations, W-9 information, and your signed contractor agreement are in the queue. You will not receive rides until an admin approves them.
+                License, insurance, registration, car photos, employment attestations, W-9 information, and your pre-filled contractor agreement are in the queue. You sign after an admin emails you a link. You will not receive rides until an admin approves them.
               </p>
               {application?.notify_error && (
                 <p style={{ fontSize: 12, color: 'var(--ink-tertiary)', lineHeight: 1.4 }}>{application.notify_error}</p>
@@ -825,5 +816,25 @@ export function DriverOnboarding() {
       {error && step !== 'account' && <p role="alert" style={{ color: 'var(--danger)', fontSize: 13, marginTop: 12 }}>{error}</p>}
       {note && <p style={{ color: 'var(--purple)', fontSize: 13, marginTop: 12, lineHeight: 1.4 }}>{note}</p>}
     </div>
+  )
+}
+
+function AgreementHtml({ html }) {
+  if (!html) return null
+  return (
+    <div
+      style={{
+        maxHeight: 280,
+        overflow: 'auto',
+        marginTop: 12,
+        padding: 12,
+        borderRadius: 12,
+        border: '1px solid var(--border)',
+        background: 'white',
+        fontSize: 13,
+        lineHeight: 1.45,
+      }}
+      dangerouslySetInnerHTML={{ __html: html }}
+    />
   )
 }

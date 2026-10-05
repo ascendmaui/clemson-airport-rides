@@ -15,6 +15,8 @@ import {
   fetchDriverQueue,
   fetchDriverReviewDetail,
   reviewDriverApplication,
+  emailAgreementToDriver,
+  correctAgreementParticulars,
   submittedApplicantEmail,
 } from '../lib/driverOnboarding'
 import { applicantVehicleLabel } from '../../shared/vehicleYear.js'
@@ -45,6 +47,18 @@ export function AdminDrivers({ embedded = false }) {
   const [thread, setThread] = useState({ messages: [], requests: [] })
   const [messageBody, setMessageBody] = useState('')
   const [requestPrompt, setRequestPrompt] = useState('')
+  const [signingUrl, setSigningUrl] = useState('')
+  const [particulars, setParticulars] = useState({
+    legal_name: '',
+    address_line: '',
+    phone: '',
+    business_name: '',
+    vehicle_make: '',
+    vehicle_model: '',
+    vehicle_color: '',
+    vehicle_plate: '',
+    vehicle_seats: '',
+  })
 
   useEffect(() => {
     if (loading) return
@@ -94,6 +108,20 @@ export function AdminDrivers({ embedded = false }) {
       const payload = await fetchDriverReviewDetail(profileId)
       setDocs(payload.documents || [])
       setDetail(payload)
+      setSigningUrl('')
+      const prefill = payload.packet?.prefill || {}
+      const vehicle = rows.find((row) => row.profile_id === profileId)?.vehicle || {}
+      setParticulars({
+        legal_name: prefill.legal_name && prefill.legal_name !== 'Not provided' ? prefill.legal_name : (payload.tax?.legal_name || ''),
+        address_line: prefill.mailing_address && prefill.mailing_address !== 'Not provided' ? prefill.mailing_address : (payload.tax?.address_line || ''),
+        phone: prefill.phone && prefill.phone !== 'Not provided' ? prefill.phone : '',
+        business_name: prefill.business_name && prefill.business_name !== 'Not provided' ? prefill.business_name : (payload.tax?.business_name || ''),
+        vehicle_make: vehicle.make || '',
+        vehicle_model: vehicle.model || '',
+        vehicle_color: vehicle.color || '',
+        vehicle_plate: vehicle.plate || '',
+        vehicle_seats: vehicle.seats ? String(vehicle.seats) : '',
+      })
       const conversation = await fetchApplicantThread(profileId).catch((err) => ({ messages: [], requests: [], error: err.message }))
       setThread({ messages: conversation.messages || [], requests: conversation.requests || [] })
       if (conversation.error) setNote(conversation.error)
@@ -134,6 +162,45 @@ export function AdminDrivers({ embedded = false }) {
       setOpenId(null)
       await load()
     } catch (err) {
+      setError(err.message || String(err))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function correctParticulars(profileId) {
+    setBusy(true)
+    setError(null)
+    try {
+      const data = await correctAgreementParticulars({ profileId, particulars })
+      setDetail((prev) => ({
+        ...(prev || {}),
+        packet: {
+          ...(prev?.packet || {}),
+          prefill: data.prefill,
+          html_snapshot: data.html_snapshot,
+          html_sha256: data.html_sha256,
+        },
+      }))
+      setNote('Agreement particulars updated from the application. The legal text was not edited.')
+    } catch (err) {
+      setError(err.message || String(err))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function emailAgreement(profileId) {
+    setBusy(true)
+    setError(null)
+    try {
+      const data = await emailAgreementToDriver(profileId)
+      setSigningUrl(data.signing_url || '')
+      setNote(data.emailed
+        ? 'Agreement emailed to the driver for signature.'
+        : (data.message || data.error || 'Email sender not configured'))
+    } catch (err) {
+      setSigningUrl(err.payload?.signing_url || '')
       setError(err.message || String(err))
     } finally {
       setBusy(false)
@@ -234,6 +301,15 @@ export function AdminDrivers({ embedded = false }) {
                   )}
                   {docsError && <p style={{ color: 'var(--danger)', fontSize: 13 }}>{docsError}</p>}
                   <ComplianceSummary row={row} detail={detail} />
+                  <AgreementReview
+                    detail={detail}
+                    particulars={particulars}
+                    setParticulars={setParticulars}
+                    signingUrl={signingUrl}
+                    busy={busy}
+                    onCorrect={() => correctParticulars(row.profile_id)}
+                    onEmail={() => emailAgreement(row.profile_id)}
+                  />
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
                     {REQUIRED_DOCUMENTS.map((doc) => {
                       const file = docs.find((d) => d.doc_type === doc.id)
@@ -388,11 +464,81 @@ function ComplianceSummary({ row, detail }) {
           ? `${agreement.signature_name} · ${agreement.agreement_version} · ${String(agreement.agreement_sha256 || '').slice(0, 12)}`
           : 'Not signed'}
       </div>
+      {agreement?.html_snapshot && (
+        <AgreementHtml title="Signed copy" html={agreement.html_snapshot} />
+      )}
       {blockers.length > 0 && row.onboarding_status !== 'approved' && (
         <div style={{ color: 'var(--danger)', marginTop: 6 }}>
           Approve stays off until: {blockers.join(', ')}
         </div>
       )}
+    </div>
+  )
+}
+
+function AgreementReview({ detail, particulars, setParticulars, signingUrl, busy, onCorrect, onEmail }) {
+  const packet = detail?.packet
+  const fields = [
+    ['legal_name', 'Legal name'],
+    ['address_line', 'Mailing address'],
+    ['phone', 'Phone'],
+    ['business_name', 'Business name'],
+    ['vehicle_make', 'Vehicle make'],
+    ['vehicle_model', 'Vehicle model'],
+    ['vehicle_color', 'Vehicle color'],
+    ['vehicle_plate', 'Vehicle plate'],
+    ['vehicle_seats', 'Seats'],
+  ]
+  return (
+    <div style={{ marginTop: 12 }}>
+      <AgreementHtml title="Pre-filled agreement" html={packet?.html_snapshot} />
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 8 }}>
+        {fields.map(([key, label]) => (
+          <label key={key} style={{ fontSize: 12, fontWeight: 650 }}>
+            {label}
+            <input
+              value={particulars[key] || ''}
+              onChange={(e) => setParticulars((prev) => ({ ...prev, [key]: e.target.value }))}
+              style={fieldStyle}
+            />
+          </label>
+        ))}
+      </div>
+      <button type="button" className="pressable" disabled={busy} onClick={onCorrect} style={quietButton}>
+        Save application corrections
+      </button>
+      <button type="button" className="pressable" disabled={busy} onClick={onEmail} style={quietButton}>
+        Email agreement to driver for signature
+      </button>
+      {signingUrl && (
+        <label style={{ display: 'block', marginTop: 8, fontSize: 12, fontWeight: 650 }}>
+          Signing link
+          <input readOnly value={signingUrl} style={fieldStyle} onFocus={(e) => e.target.select()} />
+        </label>
+      )}
+    </div>
+  )
+}
+
+function AgreementHtml({ title, html }) {
+  if (!html) return null
+  return (
+    <div style={{ marginTop: 8 }}>
+      <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--purple)' }}>{title}</div>
+      <div
+        style={{
+          maxHeight: 240,
+          overflow: 'auto',
+          marginTop: 4,
+          padding: 10,
+          borderRadius: 12,
+          border: '1px solid var(--border)',
+          background: 'white',
+          fontSize: 12,
+          lineHeight: 1.4,
+        }}
+        dangerouslySetInnerHTML={{ __html: html }}
+      />
     </div>
   )
 }
