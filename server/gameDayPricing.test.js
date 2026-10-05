@@ -1,6 +1,23 @@
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import test from 'node:test'
 import { loadGameDayMultiplier } from './creditLots.js'
+import { NEIGHBORHOODS } from '../src/lib/carpoolEngine.js'
+import { SURGE_MAX, SURGE_RULES } from '../src/lib/fareRates.js'
+import {
+  GAME_DAY_PICKUP_POINTS,
+  GAME_DAY_SCHEDULE_LIVE_COPY,
+  GAME_DAY_SCHEDULE_OFF_COPY,
+  GAME_DAY_SCHEDULE_TIME_COPY,
+  eventPickupPointId,
+  gameDayScheduleCopy,
+  matchGameDayPickupPoint,
+  schedulePickupPresets,
+  specialPickupOptionLabel,
+  specialPickupPointLabel,
+  surgeBannerVisible,
+  surgeWindowMessage,
+} from '../shared/gameDayPickupCopy.js'
 
 /**
  * Creates a fake Supabase client simulating the game_day_events query chain:
@@ -334,4 +351,237 @@ test('unhandled query exceptions and invalid dates', async () => {
     () => loadGameDayMultiplier(sb, 'not-a-valid-date'),
     RangeError,
   )
+})
+
+test('special pickup labels map known campus points and keep other server zones', () => {
+  assert.equal(specialPickupPointLabel(null), null)
+  assert.equal(specialPickupPointLabel(''), null)
+  assert.equal(specialPickupPointLabel('   '), null)
+  assert.equal(specialPickupPointLabel({}), null)
+
+  assert.equal(specialPickupPointLabel('Death Valley'), 'Memorial Stadium')
+  assert.equal(specialPickupPointLabel('Memorial Stadium Gate 1'), 'Memorial Stadium')
+  assert.equal(specialPickupPointLabel('  Lot 5 / Memorial Stadium  '), 'Memorial Stadium · Lot 5')
+  assert.equal(specialPickupPointLabel({ pickup_zone_label: 'lot 5' }), 'Memorial Stadium · Lot 5')
+  assert.equal(specialPickupPointLabel({ zone: 'Littlejohn Coliseum' }), 'Littlejohn')
+  assert.equal(specialPickupPointLabel({ pickupZone: 'Bowman Field' }), 'Bowman Field')
+
+  assert.equal(specialPickupPointLabel('Perimeter Lot'), 'Perimeter Lot')
+  assert.equal(specialPickupPointLabel({ pickup_zone_label: 'West Campus' }), 'West Campus')
+  assert.equal(specialPickupPointLabel('East Campus'), 'East Campus')
+
+  const longZone = `Tailgate row ${'A'.repeat(90)}`
+  assert.equal(specialPickupPointLabel(longZone).length, 80)
+  assert.equal(matchGameDayPickupPoint('Perimeter Lot'), null)
+
+  for (const id of ['memorial-stadium', 'littlejohn', 'bowman']) {
+    const point = GAME_DAY_PICKUP_POINTS.find((row) => row.id === id)
+    const neighborhood = NEIGHBORHOODS.find((row) => row.id === id)
+    assert.equal(point.lat, neighborhood.lat)
+    assert.equal(point.lng, neighborhood.lng)
+  }
+  const lot = GAME_DAY_PICKUP_POINTS.find((row) => row.id === 'lot-5')
+  const stadium = NEIGHBORHOODS.find((row) => row.id === 'memorial-stadium')
+  assert.equal(lot.lat, stadium.lat)
+  assert.equal(lot.lng, stadium.lng)
+  assert.equal(new Set(GAME_DAY_PICKUP_POINTS.map((row) => row.label)).size, GAME_DAY_PICKUP_POINTS.length)
+})
+
+test('surge banner visibility follows the multiplier and ignores cents', () => {
+  assert.equal(surgeBannerVisible(null), false)
+  assert.equal(surgeBannerVisible(1), false)
+  assert.equal(surgeBannerVisible(1.0), false)
+  assert.equal(surgeBannerVisible(0), false)
+  assert.equal(surgeBannerVisible(0.5), false)
+  assert.equal(surgeBannerVisible(Number.NaN), false)
+  assert.equal(surgeBannerVisible(Number.POSITIVE_INFINITY), false)
+  assert.equal(surgeBannerVisible('1.8×'), false)
+  assert.equal(surgeBannerVisible({ multiplier: null }), false)
+  assert.equal(surgeBannerVisible({ surge_multiplier: 'nope' }), false)
+  assert.equal(surgeBannerVisible({ multiplier: 1, fareCents: 99999 }), false)
+
+  assert.equal(surgeBannerVisible(1.8), true)
+  assert.equal(surgeBannerVisible('1.35'), true)
+  assert.equal(surgeBannerVisible({
+    multiplier: 1.2,
+    rule: { id: 'weekend', label: 'Weekend' },
+    fareCents: 4200,
+  }), true)
+  assert.equal(surgeBannerVisible({ surge: { multiplier: 2.5 } }), true)
+
+  const gameDay = SURGE_RULES.find((rule) => rule.id === 'game_day')
+  const weekend = SURGE_RULES.find((rule) => rule.id === 'weekend')
+  const airport = SURGE_RULES.find((rule) => rule.id === 'airport_rush')
+  assert.equal(gameDay.multiplier, 1.8)
+  assert.equal(weekend.multiplier, 1.2)
+  assert.equal(airport.multiplier, 1.35)
+  assert.equal(SURGE_MAX, 2.5)
+})
+
+test('schedule copy maps the pickup zone and surge banner without fare fields', () => {
+  const live = gameDayScheduleCopy({
+    event: {
+      title: 'Clemson vs. Wake Forest',
+      pickup_zone_label: 'Lot 5 / Memorial Stadium',
+      surge_multiplier: 4,
+    },
+    surge: {
+      multiplier: 1.8,
+      rule: { id: 'game_day', label: 'Game day' },
+      fareCents: 6400,
+    },
+    purpose: 'game_day',
+  })
+  assert.equal(live.specialPickupLabel, 'Memorial Stadium · Lot 5')
+  assert.equal(live.surgeBannerVisible, true)
+  assert.equal(live.headline, 'Clemson vs. Wake Forest · Memorial Stadium · Lot 5 · 1.8×')
+  assert.equal(live.detail, 'Pickup zone · Memorial Stadium · Lot 5 · Rider fare 1.8×')
+  assert.equal(live.surgeBannerText, 'Surge · Game day 1.8×')
+  assert.equal(live.body, GAME_DAY_SCHEDULE_LIVE_COPY)
+  assert.equal(live.multiplierLabel, '1.8×')
+  assert.doesNotMatch(JSON.stringify(live), /6400|\$|cents/)
+  for (const key of Object.keys(live)) {
+    assert.doesNotMatch(key, /cents|deposit|amount|fare/i)
+  }
+
+  const zoneOnly = gameDayScheduleCopy({
+    event: { title: 'Game day', pickup_zone_label: 'West Campus', surge_multiplier: 1 },
+    surge: { multiplier: 1, rule: null },
+    purpose: 'planned',
+  })
+  assert.equal(zoneOnly.specialPickupLabel, 'West Campus')
+  assert.equal(zoneOnly.surgeBannerVisible, false)
+  assert.equal(zoneOnly.surgeBannerText, null)
+  assert.equal(zoneOnly.multiplierLabel, null)
+  assert.equal(zoneOnly.headline, 'Game day · West Campus')
+  assert.equal(zoneOnly.detail, 'Pickup zone · West Campus')
+
+  const noZone = gameDayScheduleCopy({
+    event: { title: 'Clemson vs. NC State' },
+    surge: { multiplier: 1, rule: { id: 'game_day', label: 'Game day' } },
+  })
+  assert.equal(noZone.specialPickupLabel, null)
+  assert.equal(noZone.surgeBannerVisible, false)
+  assert.equal(noZone.detail, 'Pickup zone is on the map')
+
+  const weekend = gameDayScheduleCopy({
+    event: null,
+    surge: { multiplier: 1.2, rule: { id: 'weekend', label: 'Weekend' } },
+    purpose: 'party_weekend',
+  })
+  assert.equal(weekend.headline, null)
+  assert.equal(weekend.body, null)
+  assert.equal(weekend.surgeBannerVisible, true)
+  assert.equal(weekend.surgeBannerText, 'Surge · Weekend 1.2×')
+
+  const off = gameDayScheduleCopy({ purpose: 'game_day' })
+  assert.equal(off.surgeBannerVisible, false)
+  assert.equal(off.specialPickupLabel, null)
+  assert.equal(off.headline, null)
+  assert.equal(off.body, GAME_DAY_SCHEDULE_OFF_COPY)
+  assert.doesNotMatch(GAME_DAY_SCHEDULE_OFF_COPY, /\$|cents/)
+  assert.doesNotMatch(GAME_DAY_SCHEDULE_LIVE_COPY, /\$|cents/)
+  assert.match(GAME_DAY_SCHEDULE_TIME_COPY, /Game-day times are suggestions/)
+
+  const presets = schedulePickupPresets([
+    { label: 'Memorial Stadium', lat: 34.6788, lng: -82.843 },
+    { label: 'Cooper Library', lat: 34.6757, lng: -82.8365 },
+    { label: 'Skip me' },
+  ], 'game_day')
+  assert.equal(presets[0].label, 'Memorial Stadium · Lot 5')
+  assert.equal(presets.filter((place) => place.label === 'Memorial Stadium').length, 1)
+  assert.equal(presets.at(-1).label, 'Cooper Library')
+  assert.equal(presets.some((place) => place.label === 'Skip me'), false)
+  assert.deepEqual(
+    schedulePickupPresets([{ label: 'Cooper Library', lat: 1, lng: 2 }], 'airport').map((place) => place.label),
+    ['Cooper Library'],
+  )
+})
+
+test('web schedule flow renders shared pickup labels and surge banner copy', () => {
+  const root = new URL('..', import.meta.url)
+  const planner = readFileSync(new URL('src/components/ScheduledRidePlanner.jsx', root), 'utf8')
+  const rides = readFileSync(new URL('src/lib/scheduledRides.js', root), 'utf8')
+  const quote = readFileSync(new URL('server/endpoints/quoteFare.js', root), 'utf8')
+  const helper = readFileSync(new URL('shared/gameDayPickupCopy.js', root), 'utf8')
+
+  assert.match(planner, /gameDayScheduleCopy/)
+  assert.match(planner, /GAME_DAY_PICKUP_POINTS/)
+  assert.match(planner, /data-testid="game-day-schedule-copy"/)
+  assert.match(planner, /data-testid="game-day-pickup-points"/)
+  assert.match(planner, /scheduleCopy\.surgeBannerText/)
+  assert.match(planner, /scheduleCopy\.surgeWindowText/)
+  assert.match(planner, /data-testid="game-day-surge-window"/)
+  assert.match(planner, /specialPickupOptionLabel/)
+  assert.match(planner, /eventPickupPointId/)
+  const picker = readFileSync(new URL('src/components/PlacePicker.jsx', root), 'utf8')
+  assert.match(picker, /menuLabel/)
+  assert.match(rides, /gameDay: data\.gameDay \|\| null/)
+  assert.match(quote, /zone: gameDayEvent\.pickup_zone_label/)
+  assert.match(quote, /gameDayMultiplier = game\.multiplier/)
+  assert.doesNotMatch(helper, /quoteFare|fareCents|resolveSurge|SURGE_RULES/)
+  assert.match(helper, /Campus event surge window/)
+  assert.doesNotMatch(helper, /\$\d/)
+})
+
+test('pickup option labels name the meeting spot and surge windows skip prices', () => {
+  const lot = GAME_DAY_PICKUP_POINTS.find((row) => row.id === 'lot-5')
+  const gate = GAME_DAY_PICKUP_POINTS.find((row) => row.id === 'memorial-stadium')
+  assert.equal(specialPickupOptionLabel(lot), 'Memorial Stadium · Lot 5 — Lot 5 perimeter')
+  assert.equal(specialPickupOptionLabel(gate), 'Memorial Stadium — Stadium gate')
+  assert.notEqual(specialPickupOptionLabel(lot), specialPickupOptionLabel(gate))
+  assert.equal(specialPickupOptionLabel(null), '')
+  assert.equal(specialPickupOptionLabel({ label: 'West Campus' }), 'West Campus')
+  assert.equal(eventPickupPointId('Lot 5 / Memorial Stadium'), 'lot-5')
+  assert.equal(eventPickupPointId('Death Valley'), 'memorial-stadium')
+  assert.equal(eventPickupPointId('West Campus'), null)
+
+  const presets = schedulePickupPresets([
+    { label: 'Memorial Stadium', lat: 34.6788, lng: -82.843 },
+    { label: 'Cooper Library', lat: 34.6757, lng: -82.8365 },
+  ], 'game_day')
+  assert.equal(presets[0].menuLabel, 'Memorial Stadium · Lot 5 — Lot 5 perimeter')
+  assert.equal(presets[0].detail, 'Lot 5 perimeter')
+  assert.equal(presets.find((place) => place.label === 'Cooper Library').menuLabel, undefined)
+
+  const live = gameDayScheduleCopy({
+    event: {
+      title: 'Clemson vs. Wake Forest',
+      pickup_zone_label: 'Lot 5 / Memorial Stadium',
+      surge_multiplier: 4,
+    },
+    surge: {
+      multiplier: 1.8,
+      rule: { id: 'game_day', label: 'Game day' },
+      fareCents: 6400,
+    },
+    purpose: 'game_day',
+  })
+  assert.match(live.surgeWindowText, /Campus event surge window is on for Clemson vs\. Wake Forest/)
+  assert.match(live.surgeWindowText, /event start to the event end/)
+  assert.doesNotMatch(live.surgeWindowText, /6400|\$|cents|1\.8/)
+  assert.equal(surgeWindowMessage({ multiplier: 1.8, rule: { id: 'game_day' } }, null),
+    'Campus event surge window. A listed campus event uses the event start and end. With no listed event, fall Saturdays run from 11:00 AM until 11:00 PM Eastern.')
+
+  const weekend = gameDayScheduleCopy({
+    event: null,
+    surge: { multiplier: 1.2, rule: { id: 'weekend', label: 'Weekend' }, fareCents: 4200 },
+    purpose: 'party_weekend',
+  })
+  assert.equal(weekend.surgeWindowText, 'Weekend surge window. Friday 5:00 PM through Sunday, Eastern.')
+  assert.doesNotMatch(weekend.surgeWindowText, /\$|cents|1\.2/)
+
+  const airport = surgeWindowMessage({ multiplier: 1.35, rule: { id: 'airport_rush' } })
+  assert.equal(airport, 'Airport rush window. 5:00–8:00 AM and 3:00–7:00 PM Eastern on airport trips.')
+  assert.doesNotMatch(airport, /\$|cents|1\.35/)
+
+  const generic = surgeWindowMessage({ multiplier: 1.5, rule: { id: 'other' } })
+  assert.equal(generic, 'A surge window is on for this pickup time.')
+  assert.equal(surgeWindowMessage({ multiplier: 1, fareCents: 99999 }), null)
+
+  const off = gameDayScheduleCopy({ purpose: 'game_day' })
+  assert.match(off.surgeWindowText, /No campus event surge window is on/)
+  assert.match(off.surgeWindowText, /11:00 AM until 11:00 PM Eastern/)
+  assert.doesNotMatch(off.surgeWindowText, /\$|cents/)
+  assert.equal(gameDayScheduleCopy({ purpose: 'planned' }).surgeWindowText, null)
 })

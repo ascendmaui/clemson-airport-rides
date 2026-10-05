@@ -156,7 +156,7 @@ export function PlacePicker({
             <option value={selectedLabel}>{selectedLabel}</option>
           ) : null}
           {presets.map((p) => (
-            <option key={p.label} value={p.label}>{p.label}</option>
+            <option key={p.label} value={p.label}>{p.menuLabel || p.label}</option>
           ))}
         </select>
       ) : null}
@@ -214,7 +214,7 @@ export function PlacePicker({
 
       {selectedLabel ? (
         <div style={{ fontSize: 12, color: 'var(--ink-tertiary)', marginTop: 6 }}>
-          Selected: <strong style={{ color: 'var(--ink-secondary)' }}>{selectedLabel}</strong>
+          Selected: <strong style={{ color: 'var(--ink-secondary)' }}>{value?.menuLabel || selectedLabel}</strong>
           {showCoordinates && value?.lat != null && value?.lng != null ? ` · ${Number(value.lat).toFixed(4)}, ${Number(value.lng).toFixed(4)}` : ''}
         </div>
       ) : null}
@@ -233,7 +233,7 @@ export function PlacePicker({
             onClick={() => onChange?.(p)}
             style={chipStyle(selectedLabel === p.label)}
           >
-            {p.label}
+            {p.menuLabel || p.label}
           </button>
         ))}
       </div>
