@@ -4,6 +4,7 @@ import { BottomTabs } from '../components/BottomTabs'
 import {
   AIRPORT_RATES,
   abandonCheckoutSession,
+  createCheckoutSession,
   reconcileCheckoutSession,
 } from '../lib/stripeCheckout'
 import { BillingPicker } from '../components/BillingPicker'
@@ -142,17 +143,41 @@ export function ScheduleAirport() {
     setBusy(true)
     setError(null)
     try {
-      const saved = await recordBillingChoice({
-        choice: billingChoice,
-        airport,
-        date: date || undefined,
-        time: time || undefined,
-      })
-      if (saved.choice === 'credits') {
-        setBookedNote('Ride credits selected for this trip. The balance was not spent and no card was charged.')
+      if (billingChoice === 'credits') {
+        const saved = await recordBillingChoice({
+          choice: 'credits',
+          airport,
+          date: date || undefined,
+          time: time || undefined,
+        })
+        if (saved.choice === 'credits') {
+          setBookedNote('Ride credits selected for this trip. The balance was not spent and no card was charged.')
+        }
         return
       }
-      setBookedNote('25% deposit requested. No card was charged.')
+      const session = await createCheckoutSession({
+        airport,
+        date,
+        time,
+        riderName:
+          user?.user_metadata?.full_name ||
+          user?.email?.split('@')[0] ||
+          'Rider',
+        riderId: user?.id,
+      })
+      if (session.url) {
+        window.location.href = session.url
+        return
+      }
+      if (session.tripId && date) {
+        setBookedNote('This pickup stays scheduled. Drivers can accept it from their upcoming list. Nothing else was charged.')
+        return
+      }
+      if (session.tripId) {
+        navigate('requested', { trip: session.tripId, dest: AIRPORT_RATES[airport].name, paid: '1' })
+        return
+      }
+      setError('Checkout did not return a payment URL. No charge was made.')
     } catch (err) {
       setError(err.message || UNAVAILABLE_COPY)
     } finally {
@@ -256,9 +281,9 @@ export function ScheduleAirport() {
         <div className="glass-panel glass-panel--orange" style={{ padding: 16, borderRadius: 16, marginBottom: 16 }}>
           <div style={{ fontSize: 11, letterSpacing: 1.1, fontWeight: 800, color: '#F56600', marginBottom: 8 }}>AIRPORT DEPOSIT · 25%</div>
           <ol style={{ margin: '0 0 12px', paddingLeft: 18, color: '#522D80', fontSize: 13, lineHeight: 1.5, fontWeight: 650 }}>
-            <li>Request the 25% deposit. A card is not charged in this step.</li>
-            <li>Drivers see the ride after that deposit is confirmed.</li>
-            <li>The remaining balance stays due when the trip is complete.</li>
+            <li>Pay the 25% deposit now in Stripe Checkout (holds the ride).</li>
+            <li>Drivers see your request once the deposit is confirmed.</li>
+            <li>The remaining balance is collected when the trip is complete.</li>
           </ol>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
             <span style={{ color: 'var(--ink-secondary)' }}>Full fare</span>
@@ -305,7 +330,7 @@ export function ScheduleAirport() {
           data-testid="airport-deposit-request"
         >
           {busy
-            ? 'Saving…'
+            ? (billingChoice === 'credits' ? 'Saving…' : 'Opening Stripe Checkout…')
             : billingChoice === 'credits'
               ? 'Use ride credits'
               : deposit == null

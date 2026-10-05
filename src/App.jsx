@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { bindKeyboardInset, scrollFocusedFieldIntoView } from './lib/keyboardInset'
 import { getHashRoute, redirectShareHashToPath } from './lib/navigation'
 import { capturePromoFromLocation } from './lib/riderPromo'
 import {
@@ -237,6 +238,15 @@ export default function App() {
       window.removeEventListener('hashchange', onRoute)
       window.removeEventListener('popstate', onRoute)
       window.clearTimeout(t)
+    }
+  }, [])
+
+  useEffect(() => {
+    const stopInset = bindKeyboardInset()
+    document.addEventListener('focusin', scrollFocusedFieldIntoView)
+    return () => {
+      stopInset()
+      document.removeEventListener('focusin', scrollFocusedFieldIntoView)
     }
   }, [])
 

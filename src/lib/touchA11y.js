@@ -61,3 +61,31 @@ export function getTouchButtonProps({ label, style = {} } = {}) {
     style: enforceTouchTarget(style),
   }
 }
+
+/** Text buttons such as Privacy / Create an account. Inline text is otherwise ~16px tall on Android. */
+export function textLinkHitStyle(extra = {}) {
+  return {
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: TOUCH_TARGET_MIN_PX,
+    paddingLeft: 8,
+    paddingRight: 8,
+    ...extra,
+  }
+}
+
+/** The visible search box is padded; the input itself must fill that box or taps miss it. */
+export function searchFieldInputStyle(extra = {}) {
+  return {
+    flex: 1,
+    alignSelf: 'stretch',
+    minHeight: TOUCH_TARGET_MIN_PX,
+    border: 'none',
+    outline: 'none',
+    background: 'transparent',
+    fontSize: 16,
+    fontWeight: 500,
+    ...extra,
+  }
+}
