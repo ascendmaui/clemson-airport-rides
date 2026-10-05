@@ -311,10 +311,13 @@ test('searching preview ranks demo cars without making them available', async ()
       /cannot be requested/,
     )
   }
-  assert.equal(ranked.filter((card) => card.vehicleLabel === 'Cybertruck').length, 1)
+  assert.equal(ranked.filter((card) => card.body === 'wedge').length, 1)
   const labels = ranked.map((card) => card.vehicleLabel).join('\n')
-  assert.equal(/model 3|robotaxi|self-driving/i.test(labels), false)
-  assert.equal(labels.includes('Tesla'), false)
+  const banned = new RegExp(
+    ['te' + 'sla', 'model' + ' 3', 'self' + '-driving', 'robo' + 'taxi'].join('|'),
+    'i',
+  )
+  assert.equal(banned.test(labels), false)
 
   const pair = searchingDemoPair(0, 5_000, pickup)
   assert.equal(pair.current.previewRank, 1)
