@@ -42,6 +42,8 @@ import { pushToast } from '../lib/toasts'
 import { playRideRequestAlert, shouldAlertForRide } from '../lib/rideAlert'
 import { loadLocalPrefs } from '../lib/notificationPrefs'
 import { offerVisibleToDriver, visibleOfferQuery } from '../../shared/driverOrder.js'
+import { driverRouteForOnboarding } from '../../shared/driverRoute.js'
+import { isStaleLiveOffer } from '../../shared/staleLiveOffer.js'
 import { acceptTrip, declineTrip, listPassedTripIds } from '../../packages/rides-native/driverDesk.js'
 import {
   acceptActionLabel,
@@ -129,7 +131,7 @@ function DriverShell({ driverId }) {
   const [applicationError, setApplicationError] = useState(null)
   const [approvalAttempt, setApprovalAttempt] = useState(0)
   const [activeChecked, setActiveChecked] = useState(false)
-  const approved = application?.onboarding_status === 'approved'
+  const approved = driverRouteForOnboarding(application?.onboarding_status) === 'driver'
   const [chatTrip, setChatTrip] = useState(null)
   const [scheduledOpen, setScheduledOpen] = useState([])
   const [scheduledMine, setScheduledMine] = useState([])
@@ -370,6 +372,7 @@ function DriverShell({ driverId }) {
         && !dismissedOffers.current.has(candidate.id)
         && offerVisibleToDriver(candidate, driverId)
         && !isUnpaidAirportDepositTrip(candidate)
+        && !isStaleLiveOffer(candidate)
       ))
       noteChime(rows)
       const row = rows[0]
@@ -424,6 +427,10 @@ function DriverShell({ driverId }) {
       const row = payload?.new || payload?.record
       if (!row) return
       offerRevision.current += 1
+      if (isStaleLiveOffer(row)) {
+        setOffer((current) => (current?.id === row.id ? null : current))
+        return
+      }
       if (!['searching', 'offered'].includes(row.status) || !offerVisibleToDriver(row, driverId)) {
         setOffer((current) => current?.id === row.id ? null : current)
       }
@@ -438,7 +445,7 @@ function DriverShell({ driverId }) {
         if (!offerVisibleToDriver(row, driverId)) return
         if (isUnpaidAirportDepositTrip(row)) return
         if (passedOffers.current.has(row.id)) return
-        if (!isDueNow(row)) return
+        if (!isDueNow(row) || isStaleLiveOffer(row)) return
         if (!activeTrip && !dismissedOffers.current.has(row.id)) {
           if (
             chimePrimed.current

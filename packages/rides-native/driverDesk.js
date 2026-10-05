@@ -3,6 +3,7 @@
  * Payments go through the existing /api/driver and /api/stripe-payment-methods routers.
  */
 import { offerVisibleToDriver, visibleOfferQuery, unchangedOfferQuery } from '../../shared/driverOrder.js'
+import { isStaleLiveOffer } from '../../shared/staleLiveOffer.js'
 import { missingVehicleYearColumn } from '../../shared/vehicleYear.js'
 import { vehicleServesComfort } from '../../shared/rideOptions.js'
 import { authedJson } from './apiClient.js'
@@ -42,15 +43,23 @@ const TRIP_COLUMNS = [
   'accepted_at',
   'arrived_at',
   'completed_at',
+  'created_at',
+  'requested_at',
+  'offer_expires_at',
 ].join(', ')
 
 const EARNINGS_COLUMNS = 'id, status, fare_cents, deposit_cents, dropoff_label, completed_at, pickup_label, metadata'
 
 async function listTrips(supabase, finish) {
   const run = async (columns) => finish(supabase.from('trips').select(columns))
-  let res = await run(TRIP_COLUMNS)
+  let columns = TRIP_COLUMNS
+  let res = await run(columns)
+  if (res.error && /offer_expires_at|requested_at|created_at/i.test(res.error.message || '')) {
+    columns = columns.replace(/, created_at|, requested_at|, offer_expires_at/g, '')
+    res = await run(columns)
+  }
   if (res.error && /deposit_cents|column|schema cache/i.test(res.error.message || '')) {
-    res = await run(TRIP_COLUMNS.replace('deposit_cents, ', ''))
+    res = await run(columns.replace('deposit_cents, ', ''))
   }
   if (res.error) throw new Error(res.error.message)
   return res.data || []
@@ -212,7 +221,11 @@ export async function loadDriverDesk(supabase, driverId) {
     ? new Set(await listPassedTripIds(supabase, driverId))
     : new Set()
   const claimableOpen = approvedForOffers
-    ? openRows.filter((row) => offerVisibleToDriver(row, driverId) && !isUnpaidAirportDepositTrip(row))
+    ? openRows.filter((row) => (
+      offerVisibleToDriver(row, driverId)
+      && !isUnpaidAirportDepositTrip(row)
+      && !isStaleLiveOffer(row)
+    ))
     : []
   const claimableScheduled = approvedForOffers
     ? scheduledRows.filter((row) => !isUnpaidAirportDepositTrip(row))
