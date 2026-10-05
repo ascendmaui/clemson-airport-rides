@@ -47,6 +47,7 @@ import {
   type DriverCard,
 } from 'rides-native/tripTags'
 import { etaHoldLine, etaLineFor } from 'rides-native/liveTrip'
+import { driverPickupTarget } from 'rides-native/riderLivePickup'
 import { ORANGE, PURPLE } from 'rides-native/places.js'
 import { gameDayNotice, type GameDayNotice } from 'rides-native/gameDayNotice.js'
 import { approvalGateMessage, isSyntheticOffer } from 'rides-native/syntheticOffers'
@@ -344,12 +345,13 @@ export default function DriverHome() {
   const pins: MapPin[] = []
   if (self) pins.push({ id: 'me', ...self, title: 'You', pinColor: ORANGE, kind: 'self' })
   liveOffers.forEach((card: DriverCard) => {
-    if (card.pickupLat == null || card.pickupLng == null) return
+    const pin = driverPickupTarget(card)
+    if (!pin) return
     pins.push({
       id: card.id,
-      latitude: card.pickupLat,
-      longitude: card.pickupLng,
-      title: card.pickupLabel,
+      latitude: pin.latitude,
+      longitude: pin.longitude,
+      title: pin.live ? `${card.pickupLabel} · live` : card.pickupLabel,
       pinColor: PURPLE,
       kind: 'request',
     })

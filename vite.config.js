@@ -7,6 +7,7 @@ import friendHandler from './api/friend-rides.js'
 import carpoolHandler from './api/carpool.js'
 import checkoutSessionHandler from './api/create-checkout-session.js'
 import expireHoldsHandler from './api/expire-unpaid-airport-holds.js'
+import riderLiveHandler from './api/rider-live.js'
 
 const legacy = {
   '/api/help-chat': ['/api/admin-drivers?action=help-chat', adminHandler],
@@ -36,6 +37,7 @@ const direct = {
   '/api/carpool': carpoolHandler,
   '/api/create-checkout-session': checkoutSessionHandler,
   '/api/expire-unpaid-airport-holds': expireHoldsHandler,
+  '/api/rider-live': riderLiveHandler,
 }
 
 function readBody(req) {

@@ -24,6 +24,7 @@ import {
   type DriverCard,
 } from 'rides-native/tripTags'
 import { DRIVER_TRACK_STEPS, etaHoldLine, etaLineFor, mapRouteCoordinates } from 'rides-native/liveTrip'
+import { driverPickupTarget } from 'rides-native/riderLivePickup'
 import { LivePhase } from 'rides-native/LivePhase'
 import { ORANGE, PURPLE } from 'rides-native/places.js'
 import { CounterpartCard, RateTripPanel, partyColorsFromPalette } from 'rides-native/PartyScreens'
@@ -81,8 +82,6 @@ export default function TripScreen() {
       load: () => loadTrip(supabase, id, user?.id),
       onData: (row) => {
         setTrip(row)
-        setRider(row?.riderLat != null && row.riderLng != null
-          ? { latitude: row.riderLat, longitude: row.riderLng } : null)
       },
       onError: (err) => setError(err ? (err instanceof Error ? err.message : 'Could not refresh trip. Retrying automatically.') : null),
     })
@@ -101,7 +100,10 @@ export default function TripScreen() {
     if (!supabase || !id || !trip || trip.status === 'completed' || trip.status === 'canceled' || trip.status === 'cancelled_wait') return undefined
     const reader = createTrackingRefresh({
       load: () => loadRiderFix(supabase, id),
-      onData: (fix) => setRider(fix ? { latitude: fix.latitude, longitude: fix.longitude } : null),
+      onData: (fix) => {
+        if (!fix) return
+        setRider({ latitude: fix.latitude, longitude: fix.longitude })
+      },
       onError: () => {},
     })
     void reader.refresh()
@@ -146,14 +148,29 @@ export default function TripScreen() {
   }
 
   const headingToDropoff = trip?.status === 'in_progress' || trip?.status === 'completed'
+  const bookedPickup = driverPickupTarget(trip)
+  const livePickup = rider
+    ? { latitude: rider.latitude, longitude: rider.longitude, live: true as const }
+    : bookedPickup?.live
+      ? bookedPickup
+      : null
   const target = headingToDropoff
     ? { latitude: trip?.dropoffLat ?? null, longitude: trip?.dropoffLng ?? null, label: trip?.dropoffLabel || 'Drop-off' }
-    : { latitude: trip?.pickupLat ?? null, longitude: trip?.pickupLng ?? null, label: trip?.pickupLabel || 'Pickup' }
+    : livePickup
+      ? { latitude: livePickup.latitude, longitude: livePickup.longitude, label: 'Live pickup' }
+      : { latitude: trip?.pickupLat ?? null, longitude: trip?.pickupLng ?? null, label: trip?.pickupLabel || 'Pickup' }
 
   const pins: MapPin[] = []
   if (self) pins.push({ id: 'me', ...self, title: 'You', pinColor: ORANGE })
-  if (rider) pins.push({ id: 'rider', ...rider, title: trip?.firstName || 'Rider', pinColor: PURPLE })
-  if (trip?.pickupLat != null && trip.pickupLng != null) {
+  if (!headingToDropoff && target.latitude != null && target.longitude != null) {
+    pins.push({
+      id: 'pickup',
+      latitude: target.latitude,
+      longitude: target.longitude,
+      title: livePickup ? 'Live pickup' : (trip?.pickupLabel || 'Pickup'),
+      pinColor: PURPLE,
+    })
+  } else if (trip?.pickupLat != null && trip.pickupLng != null) {
     pins.push({ id: 'pickup', latitude: trip.pickupLat, longitude: trip.pickupLng, title: trip.pickupLabel, pinColor: PURPLE })
   }
   if (trip?.dropoffLat != null && trip.dropoffLng != null) {
@@ -219,7 +236,11 @@ export default function TripScreen() {
             <Text style={styles.copy}>{trip.pickupLabel} → {trip.dropoffLabel}</Text>
             <Text style={styles.fare}>{formatCents(trip.driverNetCents)} net · deposit {formatCents(trip.depositCents)}</Text>
             <Text style={styles.copy}>
-              {rider ? `${trip.firstName} is sharing a live pin.` : 'Rider pin shows when they share location on this trip. Pickup and drop-off stay on the map.'}
+              {livePickup && !headingToDropoff
+                ? `${trip.firstName}'s pickup is live from their phone, within a few feet.`
+                : rider
+                  ? `${trip.firstName} is sharing a live pin.`
+                  : 'Rider pin shows when they share location on this trip. Pickup and drop-off stay on the map.'}
             </Text>
             <View style={styles.tags}>
               {trip.tagLabels.map((label: string) => (
