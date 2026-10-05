@@ -261,7 +261,8 @@ test('GA95: driverPayouts rejects invalid HTTP methods with 405 and Allow/Cache-
 test('GA95: driverPayouts handles Vercel cron skips when unauthenticated', async () => {
   const req = { method: 'POST', headers: { 'x-vercel-cron': '1' } }
   const res = mockRes()
-  await driverPayoutsHandler(req, res, { sb: {}, cronSecret: 'cron_pw_123' })
+  // VERCEL is set on Vercel. Off Vercel a spoofed x-vercel-cron header is ignored.
+  await driverPayoutsHandler(req, res, { sb: {}, cronSecret: 'cron_pw_123', env: { VERCEL: '1' } })
   assert.equal(res.statusCode, 200)
   assert.match(res.headers['cache-control'], /no-store/)
   const body = parseJson(res)

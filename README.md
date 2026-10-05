@@ -4,7 +4,7 @@ Vite + React rider/driver shell · Clemson orange `#F56600` · purple `#522D80`.
 
 **Production SoT:** https://github.com/ascendmaui/clemson-airport-rides  
 **Live:** https://clemsonrides.com  
-**Deploy rule:** production ships only via `git push` to `main` (SHA-tracked Vercel). Do not CLI-deploy over SoT.  
+**Deploy rule:** production host is the Hostinger VPS (`docs/self-hosting.md`). A push to `main` still runs CI; the VPS deploy workflow builds the image and pulls it there. Vercel stays up as a rollback for at least 24 hours after DNS cutover. Do not CLI-deploy over SoT.  
 **Supabase:** `awktabuhijrshmsmagpq` (do not migrate/drop schema)
 
 ## Stack

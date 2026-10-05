@@ -1,0 +1,15 @@
+node_modules
+dist
+.git
+.env
+.env.*
+!.env.example
+*.log
+coverage
+.expo
+apps/*/.expo
+.vercel
+clemson-rides-prod
+clemson-rides-mobile
+*.tgz
+.DS_Store
