@@ -359,6 +359,77 @@ export function resolveDriverRequestPlaces({
   }
 }
 
+/**
+ * Pickup and drop-off for a quote or billing preview.
+ * GSP and CLT use the canonical airport pins. Client fare fields are not read.
+ */
+export function placesForServerFare(body = {}) {
+  const airportHint = body.airport ? String(body.airport).toUpperCase() : null
+  const places = resolveDriverRequestPlaces({
+    pickupLabel: body.pickupLabel || body.pickup?.label,
+    pickupLat: body.pickupLat ?? body.pickup?.lat,
+    pickupLng: body.pickupLng ?? body.pickup?.lng,
+    dropoffLabel: body.dest || body.dropoffLabel || body.dropoff?.label,
+    dropoffLat: body.destLat ?? body.dropoffLat ?? body.dropoff?.lat,
+    dropoffLng: body.destLng ?? body.dropoffLng ?? body.dropoff?.lng,
+  })
+  const airport = airportHint === 'GSP' || airportHint === 'CLT'
+    ? airportHint
+    : (places.airport === 'GSP' || places.airport === 'CLT' ? places.airport : null)
+  if (!airport && places.error) return { error: places.error }
+  const pickup = airport ? CAMPUS_PICKUP : places.pickup
+  const dropoff = airport ? AIRPORT_DROPOFFS[airport] : places.dropoff
+  if (!pickup || !dropoff) return { error: 'Choose a pickup and a drop-off.' }
+  return { pickup, dropoff, airport }
+}
+
+const QUOTED_TIER_IDS = ['standard', 'wait', 'comfort', 'tesla']
+
+/**
+ * Fares the rider is shown. Each tier is priced with priceScheduledRequest,
+ * the same function that writes fare_cents on the trip.
+ */
+export function riderTierQuotes({
+  pickup,
+  dropoff,
+  airport = null,
+  at = new Date(),
+  isStudent = false,
+  tier = 'standard',
+  gameDayMultiplier = null,
+  distanceM = null,
+  durationS = null,
+} = {}) {
+  const requested = QUOTED_TIER_IDS.includes(tier) ? tier : 'standard'
+  const input = {
+    pickup,
+    dropoff,
+    airport,
+    at,
+    isStudent: Boolean(isStudent),
+    gameDayMultiplier,
+    distanceM,
+    durationS,
+  }
+  const tiers = QUOTED_TIER_IDS.map((id) => {
+    const priced = priceScheduledRequest({ ...input, tier: id })
+    return {
+      id,
+      fareCents: priced.fareCents,
+      depositCents: priced.depositCents,
+      discountCents: priced.discountCents,
+      estimate: Boolean(priced.estimate),
+      airport: priced.airport,
+    }
+  })
+  const selected = priceScheduledRequest({ ...input, tier: requested })
+  return {
+    ...selected,
+    tier: requested,
+    tiers,
+  }
+}
+
 /** Server price for a driver request. Airport routes do not use a client distance. */
 export function priceDriverRequest(places, {
   isStudent = false,

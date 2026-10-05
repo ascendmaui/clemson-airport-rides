@@ -1,50 +1,34 @@
 import { supabase } from './supabase'
 import { createServerScheduledTrip } from './payments'
-import { applyStudentDiscount, priceAirportRide } from './pricing'
+import { fetchRideQuote } from './rideBilling'
 import {
-  airportCodeForPlace,
-  distanceFareCents,
   DRIVER_QUEUE_SELECT,
   formatPickupAt,
   nextReminder,
-  tripMeters,
 } from './scheduledRideModel'
 
 const sessionStamps = new Set()
 
-export async function estimateScheduledFare({ pickup, dropoff, isStudent = false, at = new Date() }) {
+export async function estimateScheduledFare({ pickup, dropoff, isStudent = false, at = new Date(), tier = 'standard' } = {}) {
+  void isStudent
   if (pickup?.lat == null || dropoff?.lat == null) return null
-  const code = airportCodeForPlace(dropoff)
-  if (code === 'GSP' || code === 'CLT') {
-    const priced = await priceAirportRide({
-      airport: code,
-      isStudent: Boolean(isStudent),
-      tier: 'standard',
-      at,
-    })
-    return {
-      fareCents: priced.fareCents,
-      depositCents: priced.depositCents,
-      discountCents: priced.discountCents,
-      studentLabel: priced.studentLabel,
-      estimate: false,
-      source: 'airport_flat',
-      airport: code,
-    }
-  }
-
-  const meters = tripMeters(pickup, dropoff)
-  const raw = distanceFareCents(meters, code)
-  const student = applyStudentDiscount(raw, { isStudent: Boolean(isStudent), tier: 'standard' })
+  const when = at instanceof Date ? at.toISOString() : new Date(at).toISOString()
+  const data = await fetchRideQuote({
+    pickup,
+    dropoff,
+    at: when,
+    tier,
+  })
   return {
-    fareCents: student.fareCents,
-    depositCents: 0,
-    discountCents: student.discountCents,
-    studentLabel: student.label,
-    estimate: true,
-    source: code === 'ATL' ? 'atl_estimate' : 'distance',
-    airport: code,
-    miles: meters == null ? null : Math.round((meters / 1609.344) * 10) / 10,
+    fareCents: data.fareCents,
+    depositCents: data.depositCents,
+    discountCents: data.discountCents || 0,
+    studentLabel: data.discountCents > 0 ? 'Clemson student · 10% off Standard' : null,
+    estimate: Boolean(data.estimate),
+    source: 'server',
+    airport: data.airport || null,
+    miles: data.quote?.miles == null ? null : Math.round(Number(data.quote.miles) * 10) / 10,
+    surge: data.surge || null,
   }
 }
 

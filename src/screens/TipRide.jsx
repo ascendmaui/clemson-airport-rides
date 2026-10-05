@@ -122,6 +122,11 @@ function TipBody() {
             <p className="tip-copy" data-testid="tip-uncharged-note">
               Pick an amount, enter your own, or skip. The price comes from this trip. A saved card is charged after you add the tip. No card on file means nothing is charged.
             </p>
+            {Number(offer.fareCents) > 0 && (
+              <p className="tip-copy" data-testid="tip-fare-base">
+                Based on this trip&apos;s {formatUsdFromCents(offer.fareCents)} fare.
+              </p>
+            )}
             <div className="tip-options" role="radiogroup" aria-label="Tip amount">
               {presets.map((preset) => {
                 const selected = selectedId === preset.id

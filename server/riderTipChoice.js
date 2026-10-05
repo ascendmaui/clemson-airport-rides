@@ -10,7 +10,6 @@ import { chargeSavedTip } from './tipCharge.js'
 
 export const TIP_MIN_CENTS = 100
 export const TIP_MAX_CENTS = 10000
-export const TIP_STEP_CENTS = 25
 
 const PERCENTS = [15, 20, 25]
 const NO_FARE_CENTS = [200, 300, 500]
@@ -49,12 +48,8 @@ function finiteFare(value) {
   return Math.max(0, Math.round(n))
 }
 
-function roundToStep(cents) {
-  return Math.round(cents / TIP_STEP_CENTS) * TIP_STEP_CENTS
-}
-
-function clampTip(cents) {
-  return Math.min(TIP_MAX_CENTS, Math.max(TIP_MIN_CENTS, roundToStep(cents)))
+function percentOfFare(fare, percent) {
+  return Math.round((fare * percent) / 100)
 }
 
 function strictlyIncreasing(amounts) {
@@ -88,8 +83,9 @@ export function priceTipPresets(fareCents) {
     return priced
   }
   const basisFare = Math.min(fare, FARE_CAP_CENTS)
-  const amounts = PERCENTS.map((percent) => clampTip(Math.round((basisFare * percent) / 100)))
-  if (!strictlyIncreasing(amounts)) {
+  const amounts = PERCENTS.map((percent) => Math.min(TIP_MAX_CENTS, percentOfFare(basisFare, percent)))
+  const percentFits = amounts.every((cents) => cents >= TIP_MIN_CENTS) && strictlyIncreasing(amounts)
+  if (!percentFits) {
     const priced = flatPresets(LOW_FARE_CENTS, 'low_fare')
     priced.fareCents = fare
     return priced

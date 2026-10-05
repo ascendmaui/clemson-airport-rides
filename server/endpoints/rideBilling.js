@@ -14,11 +14,9 @@ import { studentDiscountGranted } from '../../src/lib/studentDomain.js'
 import { depositSplit, splitPlatformFee } from '../../src/lib/fareRates.js'
 import { firstName } from '../../src/lib/scheduledRideModel.js'
 import {
-  AIRPORT_DROPOFFS,
-  CAMPUS_PICKUP,
   parseRideAt,
+  placesForServerFare,
   priceScheduledRequest,
-  resolveDriverRequestPlaces,
 } from '../authoritativeFare.js'
 import {
   billingForPricedRide,
@@ -69,25 +67,10 @@ async function priceBody(sb, user, body, compute, now) {
     gameDayMultiplier = null
   }
   const isStudent = studentDiscountGranted(user)
-  const airportHint = clean.airport ? String(clean.airport).toUpperCase() : null
-  const places = resolveDriverRequestPlaces({
-    pickupLabel: clean.pickupLabel || clean.pickup?.label,
-    pickupLat: clean.pickupLat ?? clean.pickup?.lat,
-    pickupLng: clean.pickupLng ?? clean.pickup?.lng,
-    dropoffLabel: clean.dest || clean.dropoffLabel || clean.dropoff?.label,
-    dropoffLat: clean.destLat ?? clean.dropoffLat ?? clean.dropoff?.lat,
-    dropoffLng: clean.destLng ?? clean.dropoffLng ?? clean.dropoff?.lng,
-  })
-  const airport = airportHint === 'GSP' || airportHint === 'CLT'
-    ? airportHint
-    : (places.airport === 'GSP' || places.airport === 'CLT' ? places.airport : null)
-  if (!airport && places.error) return { error: places.error, status: 400 }
-  const pickup = airport ? CAMPUS_PICKUP : places.pickup
-  const dropoff = airport ? AIRPORT_DROPOFFS[airport] : places.dropoff
-  if (!pickup || !dropoff) return { error: 'Choose a pickup and a drop-off.', status: 400 }
-  const distance = airport
-    ? await distanceBetween(CAMPUS_PICKUP, AIRPORT_DROPOFFS[airport], compute)
-    : await distanceBetween(pickup, dropoff, compute)
+  const located = placesForServerFare(clean)
+  if (located.error) return { error: located.error, status: 400 }
+  const { pickup, dropoff, airport } = located
+  const distance = await distanceBetween(pickup, dropoff, compute)
   const tier = clean.tier === 'tesla' ? 'tesla' : 'standard'
   const priced = priceScheduledRequest({
     pickup,

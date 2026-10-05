@@ -4,7 +4,6 @@ import { BillingPicker } from './BillingPicker'
 import { PrimaryButton } from './PrimaryButton'
 import { FRIEND_PLACES } from '../lib/friendRides'
 import { useAuth } from '../lib/auth'
-import { useStudentStatus } from '../lib/useStudentStatus'
 import { formatUsdFromCents } from '../lib/pricing'
 import { depositSurfaceCopy } from '../../packages/rides-native/riderMoney.js'
 import { SignInToBookModal, useRequireAuthForAction } from './SignInToBookModal'
@@ -59,7 +58,6 @@ export function ScheduledRidePlanner() {
   const [billingLoading, setBillingLoading] = useState(false)
   const [billingChoice, setBillingChoice] = useState('no_card')
 
-  const isStudent = useStudentStatus().verified
   const minDate = useMemo(() => todayInputValue(), [])
 
   async function refreshMine() {
@@ -112,7 +110,12 @@ export function ScheduledRidePlanner() {
       setQuoteError(null)
       return undefined
     }
-    estimateScheduledFare({ pickup, dropoff, isStudent: isStudent && fleet !== 'tesla', at: pickupAtFromLocal(date, time) || new Date() })
+    estimateScheduledFare({
+      pickup,
+      dropoff,
+      tier: fleet,
+      at: pickupAtFromLocal(date, time) || new Date(),
+    })
       .then((next) => {
         if (!alive) return
         setQuote(next)
@@ -126,7 +129,7 @@ export function ScheduledRidePlanner() {
     return () => {
       alive = false
     }
-  }, [pickup, dropoff, isStudent, fleet, date, time])
+  }, [pickup, dropoff, fleet, date, time, user?.id])
 
   useEffect(() => {
     if (!user?.id || pickup?.lat == null || dropoff?.lat == null) {
@@ -350,7 +353,7 @@ export function ScheduledRidePlanner() {
 
       <div className="glass-panel glass-panel--elevated" style={{ padding: 16, borderRadius: 16, marginBottom: 16 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-          <span style={{ color: 'var(--ink-secondary)' }}>{quote?.estimate === false ? 'Fare' : 'Fare estimate'}</span>
+          <span style={{ color: 'var(--ink-secondary)' }}>Fare</span>
           <strong style={{ color: '#522D80' }}>{quote ? formatUsdFromCents(quote.fareCents) : '—'}</strong>
         </div>
         {quote?.studentLabel && (
@@ -359,10 +362,8 @@ export function ScheduledRidePlanner() {
         <p style={{ fontSize: 12, color: '#522D80', marginTop: 8, lineHeight: 1.45 }}>
           {quote?.depositCents > 0
             ? `${depositSurfaceCopy(quote, 'confirm', { studentDiscountCents: quote.discountCents })} Scheduling does not charge your card. Airport deposit requirements still apply before driver acceptance.`
-            : 'Estimate from distance. Final fare can change when a driver accepts.'}
-          {quote?.source === 'airport_flat' && !(quote?.depositCents > 0)
-            ? ` ${quote.airport} flat rate. Pay the deposit in Airport deposit below if you want to hold it now.`
-            : ''}
+            : 'This is the fare saved on the ride.'}
+          {quote?.estimate ? ' Road miles were estimated from the pins.' : ''}
           {quote?.miles != null ? ` · ${quote.miles} mi` : ''}
         </p>
         {quoteError && <p style={{ color: 'var(--danger)', fontSize: 12, marginTop: 6 }}>{quoteError}</p>}
