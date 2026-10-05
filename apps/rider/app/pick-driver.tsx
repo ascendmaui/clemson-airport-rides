@@ -6,6 +6,7 @@ import { PrimaryButton } from '@/components/Button'
 import { pressStyle, useEnterMotion } from '@/components/enter'
 import { CampusMap } from '@/components/CampusMap'
 import { ClemsonLoader } from '@/components/ClemsonLoader'
+import { PersonMark } from '@/components/PersonMark'
 import type { MapKind } from '@/components/mapTypes'
 import { mapKindLabel } from '@/components/mapTypes'
 import { SignInToBookSheet } from '@/components/SignInToBookSheet'
@@ -170,6 +171,7 @@ export default function PickDriver() {
         accessibilityState={{ selected: on }}
       >
         <View style={styles.cardTop}>
+          <PersonMark id={driver.id} name={driver.name} avatarUrl={driver.avatarUrl} size={40} />
           <View style={{ flex: 1 }}>
             <Text style={styles.name}>{driver.name}</Text>
             <Text style={styles.sub}>{driver.vehicleLabel}{driver.plate ? ` · ${driver.plate}` : ''}</Text>

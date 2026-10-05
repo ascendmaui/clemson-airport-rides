@@ -12,7 +12,14 @@ import {
   SIMULATED_DRIVER_TITLE,
   SIMULATED_DRIVERS,
   SIMULATED_FLEET_BADGE,
+  DEMO_HIDE_RADIUS_M,
+  DEMO_ORANGE,
+  DEMO_PURPLE,
   SIMULATED_FLEET_BOUNDS,
+  demoCarSvg,
+  lerpHeading,
+  portraitKind,
+  visibleDemoCars,
   busyCarSvg,
   isSimulatedDriverId,
   refuseSimulatedDriverTap,
@@ -36,10 +43,10 @@ function insideBounds(lat, lng) {
 
 test('five simulated drivers are busy, not available, and not bookable', () => {
   assert.equal(SIMULATED_DRIVERS.length, SIMULATED_DRIVER_COUNT)
-  assert.equal(SIMULATED_DRIVER_COUNT, 5)
+  assert.equal(SIMULATED_DRIVER_COUNT, 12)
   assert.equal(SIMULATED_DRIVER_TITLE, 'Busy')
-  assert.equal(SIMULATED_FLEET_BADGE, 'Busy · already on a ride')
-  assert.doesNotMatch(SIMULATED_FLEET_BADGE, /available/i)
+  assert.match(SIMULATED_FLEET_BADGE, /cannot be requested/i)
+  assert.doesNotMatch(SIMULATED_FLEET_BADGE, /available to request/i)
   const ids = new Set()
   for (const driver of SIMULATED_DRIVERS) {
     assert.equal(ids.has(driver.id), false)
@@ -48,8 +55,20 @@ test('five simulated drivers are busy, not available, and not bookable', () => {
     assert.equal(driver.status, 'busy')
     assert.equal(driver.bookable, false)
     assert.equal(driver.online, false)
+    assert.equal(driver.is_demo, true)
+    assert.equal(driver.source, 'demo')
+    assert.equal(driver.bookable, false)
     assert.equal(isSimulatedDriverId(driver.id), true)
   }
+  const trucks = SIMULATED_DRIVERS.filter((driver) => driver.make === 'Ford' && driver.model === 'F-150')
+  assert.deepEqual(trucks.map((driver) => driver.colorName), ['White', 'Orange', 'Purple'])
+  const cyber = SIMULATED_DRIVERS.filter((driver) => driver.model === 'Cybertruck')
+  assert.equal(cyber.length, 1)
+  assert.equal(cyber[0].make, 'Tesla')
+  assert.equal(cyber[0].bookable, false)
+  assert.equal(cyber[0].is_demo, true)
+  const luxury = ['BMW', 'Mercedes-Benz', 'Audi', 'Range Rover', 'Lexus', 'Porsche', 'Cadillac', 'Genesis']
+  for (const make of luxury) assert.equal(SIMULATED_DRIVERS.some((driver) => driver.make === make), true)
   assert.equal(isSimulatedDriverId('11111111-1111-4111-8111-111111111111'), false)
 })
 
@@ -91,9 +110,10 @@ test('simulated cars keep moving inside the Clemson campus box at driving speed'
       assert.equal(car.status, 'busy')
       assert.equal(car.bookable, false)
       assert.equal(car.online, false)
-      assert.equal(car.title, 'Busy')
-      assert.match(car.description, /Already driving a rider/)
+      assert.match(car.title, /^[A-Z][a-z]+, /)
+      assert.equal(car.is_demo, true)
       assert.match(car.description, /Not available to request/)
+      assert.doesNotMatch(car.description, /self-driving|robotaxi/i)
       assert.equal(insideBounds(car.lat, car.lng), true)
     }
     const start = 1_000
@@ -230,12 +250,62 @@ test('fetchOnlineDrivers excludes simulated ids even if a status row is online',
   assert.equal(rpcIds, null)
 })
 
-test('busy marker art is labeled Busy and is not the available orange pin', () => {
-  const svg = busyCarSvg(90)
-  assert.match(svg, />Busy</)
-  assert.match(svg, new RegExp(BUSY_MARKER_FILL.replace('#', '#')))
-  assert.equal(svg.includes('#F56600'), false)
+test('demo marker art uses orange and purple tiger stripes and no university marks', () => {
+  const svg = demoCarSvg({ heading: 90, body: 'suv', base: '#1A1A1A' })
+  assert.match(svg, new RegExp(DEMO_ORANGE))
+  assert.match(svg, new RegExp(DEMO_PURPLE))
   assert.equal(svg.includes('Available'), false)
+  assert.equal(svg.includes('Clemson Tigers'), false)
+  assert.equal(svg.includes('tiger paw'), false)
+  assert.equal(/<text/i.test(svg), false)
+  const truck = demoCarSvg({ heading: 0, body: 'truck', base: DEMO_ORANGE })
+  const wedge = demoCarSvg({ heading: 0, body: 'cybertruck', base: '#C5C1B7' })
+  assert.match(truck, /<rect /)
+  assert.match(wedge, /<polygon /)
+  assert.equal(lerpHeading(350, 10, 0.5), 0)
+})
+
+test('demo headshots match the shared roster and real drivers never receive one', () => {
+  const roster = [
+    ['Marcus', 'BMW', 'X5', 'demo-marcus'],
+    ['Jenna', 'Mercedes-Benz', 'GLE', 'demo-jenna'],
+    ['Darnell', 'Audi', 'Q7', 'demo-darnell'],
+    ['Priya', 'Range Rover', 'Sport', 'demo-priya'],
+    ['Carlos', 'Lexus', 'RX', 'demo-carlos'],
+    ['Hannah', 'Porsche', 'Macan', 'demo-hannah'],
+    ['Terrence', 'Cadillac', 'Escalade', 'demo-terrence'],
+    ['Mei', 'Genesis', 'GV80', 'demo-mei'],
+    ['Wade', 'Ford', 'F-150', 'demo-wade'],
+    ['Tasha', 'Ford', 'F-150', 'demo-tasha'],
+    ['Luis', 'Ford', 'F-150', 'demo-luis'],
+    ['Brooke', 'Tesla', 'Cybertruck', 'demo-brooke'],
+  ]
+  assert.deepEqual(
+    SIMULATED_DRIVERS.map((driver) => [driver.firstName, driver.make, driver.model, driver.headshotId]),
+    roster,
+  )
+  const realInitials = portraitKind({ id: 'real-driver', name: 'Sam' })
+  assert.equal(realInitials.kind, 'initials')
+  assert.equal(realInitials.headshotId, null)
+  assert.ok(realInitials.color === '#F56600' || realInitials.color === '#522D80')
+  const realPhoto = portraitKind({ id: 'real-driver', name: 'Sam', avatarUrl: 'https://example.com/a.jpg' })
+  assert.equal(realPhoto.kind, 'photo')
+  assert.equal(realPhoto.headshotId, null)
+  const demo = portraitKind({ id: 'sim-busy-cybertruck', headshotId: 'demo-brooke', avatarUrl: 'https://example.com/a.jpg' })
+  assert.equal(demo.kind, 'demo')
+  assert.equal(demo.headshotId, 'demo-brooke')
+})
+
+test('a real driver hides only the nearby demo car', () => {
+  const fleet = simulatedFleetAt(12_000)
+  const target = fleet[0]
+  const hidden = visibleDemoCars(fleet, [{ id: 'real-1', lat: target.lat, lng: target.lng, online: true }])
+  assert.equal(hidden.some((car) => car.id === target.id), false)
+  assert.ok(hidden.length < fleet.length)
+  assert.ok(hidden.length > 0)
+  const far = visibleDemoCars(fleet, [{ id: 'real-2', lat: 34.5, lng: -82.5 }])
+  assert.equal(far.length, fleet.length)
+  assert.equal(DEMO_HIDE_RADIUS_M <= 400, true)
 })
 
 test('preview layout keeps every demo car inside the map frame', () => {

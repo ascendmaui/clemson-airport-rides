@@ -1,8 +1,8 @@
-import { forwardRef, useImperativeHandle } from 'react'
-import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { forwardRef, useEffect, useImperativeHandle, useMemo, useState } from 'react'
+import { AppState, Pressable, StyleSheet, Text, View } from 'react-native'
 import { heatColor } from 'rides-native/heat.js'
 import { DOWNTOWN, STADIUM } from 'rides-native/places.js'
-import { SIMULATED_FLEET_BADGE, refuseSimulatedDriverTap, simulatedFleetPercent } from 'rides-native/simulatedDrivers.js'
+import { DEMO_ORANGE, DEMO_PURPLE, refuseSimulatedDriverTap, simulatedFleetPercent, visibleDemoCars } from 'rides-native/simulatedDrivers.js'
 import { useSimulatedFleet } from 'rides-native/useSimulatedFleet.js'
 import { mapKindLabel, type CampusMapHandle, type CampusMapProps, type MapPin } from '@/components/mapTypes'
 import type { BusySpot } from '@/lib/busySpots'
@@ -11,12 +11,21 @@ import { useTheme } from '@/lib/theme'
 import { useThemedStyles } from '@/lib/useThemedStyles'
 
 export const CampusMap = forwardRef<CampusMapHandle, CampusMapProps>(function CampusMap(
-  { spots, showHeat, mapType = 'standard', theater = false, gameDay = false, gameDayLabel = null, surge = false, userCoordinate = null, pins = [], showSimulatedFleet = false },
+  { spots, showHeat, mapType = 'standard', theater = false, gameDay = false, gameDayLabel = null, surge = false, userCoordinate = null, pins = [], showSimulatedFleet = false, liveDrivers = [] },
   ref: any,
 ) {
   const { colors } = useTheme()
   const styles = useThemedStyles(makeStyles)
-  const simulatedFleet = useSimulatedFleet(showSimulatedFleet)
+  const [appActive, setAppActive] = useState(AppState.currentState === 'active')
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (state) => setAppActive(state === 'active'))
+    return () => sub.remove()
+  }, [])
+  const simulatedFleet = useSimulatedFleet(showSimulatedFleet, appActive)
+  const demoCars = useMemo(
+    () => (showSimulatedFleet ? visibleDemoCars(simulatedFleet, liveDrivers) : []),
+    [showSimulatedFleet, simulatedFleet, liveDrivers],
+  )
   useImperativeHandle(ref, () => ({
     animateTo() {},
   }))
@@ -67,27 +76,34 @@ export const CampusMap = forwardRef<CampusMapHandle, CampusMapProps>(function Ca
       {pins.map((pin: MapPin) => (
         <Text key={pin.id} style={styles.pinLabel}>{pin.title}</Text>
       ))}
-      {showSimulatedFleet
-        ? simulatedFleet.map((car) => {
-            const spot = simulatedFleetPercent(car.lat, car.lng)
-            return (
-              <Pressable
-                key={car.id}
-                accessibilityRole="image"
-                accessibilityLabel={car.description}
-                onPress={() => {
-                  refuseSimulatedDriverTap(car.id)
-                }}
-                style={[styles.busyCar, { left: `${spot.left}%`, top: `${spot.top}%` }]}
-              >
-                <Text style={styles.busyCarText}>Busy</Text>
-              </Pressable>
-            )
-          })
-        : null}
-      {showSimulatedFleet ? (
-        <Text style={styles.busyNote}>{SIMULATED_FLEET_BADGE}</Text>
-      ) : null}
+      {liveDrivers.map((driver) => {
+        const spot = simulatedFleetPercent(driver.lat, driver.lng)
+        return (
+          <View
+            key={`live-${driver.id}`}
+            accessibilityRole="image"
+            accessibilityLabel={`${driver.name}, ${driver.vehicleLabel || 'driver'}`}
+            style={[styles.busyCar, { left: `${spot.left}%`, top: `${spot.top}%`, backgroundColor: DEMO_ORANGE, transform: [{ rotate: `${driver.heading || 0}deg` }] }]}
+          />
+        )
+      })}
+      {demoCars.map((car) => {
+        const spot = simulatedFleetPercent(car.lat, car.lng)
+        return (
+          <Pressable
+            key={car.id}
+            accessibilityRole="image"
+            accessibilityLabel={car.description}
+            onPress={() => {
+              refuseSimulatedDriverTap(car.id)
+            }}
+            style={[styles.busyCar, { left: `${spot.left}%`, top: `${spot.top}%`, backgroundColor: car.base, transform: [{ rotate: `${car.heading}deg` }] }]}
+          >
+            <View style={{ position: 'absolute', width: 22, height: 3, backgroundColor: DEMO_ORANGE, transform: [{ rotate: '24deg' }] }} />
+            <View style={{ position: 'absolute', width: 22, height: 3, backgroundColor: DEMO_PURPLE, transform: [{ rotate: '-24deg' }] }} />
+          </Pressable>
+        )
+      })}
       <Text style={styles.caption}>
         {DOWNTOWN.latitude.toFixed(3)}, {STADIUM.longitude.toFixed(3)}
       </Text>

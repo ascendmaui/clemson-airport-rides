@@ -131,18 +131,19 @@ export async function setPriorityMode(supabase, driverId, on) {
   if (error) throw new Error(error.message)
 }
 
-export async function publishDriverLocation(supabase, driverId, { lat, lng, heading = null, online = true }) {
+export async function publishDriverLocation(supabase, driverId, { lat, lng, heading = null, online } = {}) {
   if (!supabase || !driverId) return
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) return
-  const { error } = await supabase.from('driver_status').upsert({
+  const row = {
     driver_id: driverId,
     lat,
     lng,
     heading: Number.isFinite(Number(heading)) ? Number(heading) : null,
-    online: Boolean(online),
     updated_at: new Date().toISOString(),
     location_updated_at: new Date().toISOString(),
-  })
+  }
+  if (typeof online === 'boolean') row.online = online
+  const { error } = await supabase.from('driver_status').upsert(row)
   if (error) throw new Error(error.message)
 }
 

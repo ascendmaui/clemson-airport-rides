@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Primary, useCardShadow } from '@/components/chrome'
 import { EmptyState, FadeIn, type MenuRow, RowGroup } from '@/components/day'
 import { SectionLabel } from '@/components/shell'
+import { PersonMark } from '@/components/PersonMark'
 import { useAuth } from '@/lib/auth'
 import { supabase } from '@/lib/supabase'
 import { useTheme } from '@/lib/theme'
@@ -18,14 +19,6 @@ function vehicleSubtitle(vehicle: VehicleRow | null): string {
   const name = [vehicle.make, vehicle.model].filter(Boolean).join(' ')
   const plate = vehicle.plate ? ` · ${vehicle.plate}` : ''
   return `${name || 'Vehicle'}${plate}`
-}
-
-function initials(name: string): string {
-  const parts = name.trim().split(/\s+/).filter(Boolean)
-  if (parts.length === 0) return 'DR'
-  const first = parts[0]?.[0] || ''
-  const last = parts.length > 1 ? parts[parts.length - 1]?.[0] || '' : parts[0]?.[1] || ''
-  return `${first}${last}`.toUpperCase()
 }
 
 export default function MenuScreen() {
@@ -103,8 +96,13 @@ export default function MenuScreen() {
       <ScrollView contentContainerStyle={styles.list} showsVerticalScrollIndicator={false}>
         <FadeIn style={styles.stack}>
           <View style={styles.profile}>
-            <View style={[styles.avatar, shadow, { backgroundColor: colors.fill }]}>
-              <Text style={[styles.avatarText, { color: colors.onAccent }]}>{initials(name)}</Text>
+            <View style={[styles.avatar, shadow, { backgroundColor: 'transparent' }]}>
+              <PersonMark
+                id={user?.id}
+                name={name}
+                avatarUrl={typeof user?.user_metadata?.avatar_url === 'string' ? user.user_metadata.avatar_url : null}
+                size={48}
+              />
             </View>
             <View style={styles.profileCopy}>
               <Text style={[styles.kicker, { color: colors.orange }]}>DRIVER</Text>

@@ -68,7 +68,9 @@ test('offer alerts use exactly the four specified channels', () => {
 
 test('push, sms, and email stay no-send without a live flag, even when contact data exists', async () => {
   const previous = process.env.DRIVER_OFFER_ALERT_EMAIL
+  const previousPush = process.env.DRIVER_OFFER_ALERT_PUSH
   delete process.env.DRIVER_OFFER_ALERT_EMAIL
+  delete process.env.DRIVER_OFFER_ALERT_PUSH
   const originalFetch = globalThis.fetch
   globalThis.fetch = async () => {
     throw new Error('live send')
@@ -109,6 +111,8 @@ test('push, sms, and email stay no-send without a live flag, even when contact d
     globalThis.fetch = originalFetch
     if (previous === undefined) delete process.env.DRIVER_OFFER_ALERT_EMAIL
     else process.env.DRIVER_OFFER_ALERT_EMAIL = previous
+    if (previousPush === undefined) delete process.env.DRIVER_OFFER_ALERT_PUSH
+    else process.env.DRIVER_OFFER_ALERT_PUSH = previousPush
   }
 })
 
@@ -222,6 +226,75 @@ test('a failed alert write does not throw out of the offer', async () => {
   }, { trip, driverId: 'driver-1', offerMarker: 'initial' })
   assert.equal(result.ok, false)
   assert.equal(result.reason, 'alert_failed')
+})
+
+test('APNs sends only a device token when the push flag and credentials are set', async () => {
+  const previous = {
+    DRIVER_OFFER_ALERT_PUSH: process.env.DRIVER_OFFER_ALERT_PUSH,
+    APNS_KEY_ID: process.env.APNS_KEY_ID,
+    APNS_TEAM_ID: process.env.APNS_TEAM_ID,
+    APNS_KEY_P8: process.env.APNS_KEY_P8,
+    APNS_TOPIC: process.env.APNS_TOPIC,
+    APNS_ENV: process.env.APNS_ENV,
+  }
+  process.env.DRIVER_OFFER_ALERT_PUSH = 'send'
+  process.env.APNS_KEY_ID = 'KEYID123'
+  process.env.APNS_TEAM_ID = 'L85AF3V872'
+  process.env.APNS_KEY_P8 = '-----BEGIN PRIVATE KEY-----\nnot-used\n-----END PRIVATE KEY-----'
+  process.env.APNS_TOPIC = 'com.ascendmaui.clemsonrides.driver'
+  process.env.APNS_ENV = 'sandbox'
+  const device = 'ab'.repeat(32)
+  try {
+    const expoOnly = memorySb({
+      profiles: [{ id: 'driver-1', email: 'driver@example.com', phone: '8645550100' }],
+      driver_status: [{ driver_id: 'driver-1', expo_push_token: 'ExponentPushToken[test]' }],
+    })
+    let sends = 0
+    const skipped = await dispatchDriverOfferAlert(expoOnly.sb, {
+      trip,
+      driverId: 'driver-1',
+      offerMarker: 'expo',
+    }, {
+      sendApns: async () => {
+        sends += 1
+        return { sent: true }
+      },
+      sendEmail: async () => ({ emailed: false }),
+    })
+    assert.equal(sends, 0)
+    assert.equal(skipped.channels.push.sent, false)
+    assert.equal(skipped.channels.push.reason, 'apns_device_token_missing')
+    assert.equal(skipped.channels.sms.reason, 'live_send_disabled')
+    assert.equal(JSON.stringify(skipped).includes('ExponentPushToken'), false)
+
+    const ready = memorySb({
+      profiles: [{ id: 'driver-1', phone: '8645550100' }],
+      driver_status: [{ driver_id: 'driver-1', expo_push_token: 'ExponentPushToken[test]', apns_device_token: device }],
+    })
+    const sent = []
+    const result = await dispatchDriverOfferAlert(ready.sb, {
+      trip,
+      driverId: 'driver-1',
+      offerMarker: 'device',
+    }, {
+      sendApns: async (input) => {
+        sent.push(input)
+        return { sent: true, reason: null }
+      },
+    })
+    assert.equal(sent.length, 1)
+    assert.equal(sent[0].token, device)
+    assert.equal(result.channels.push.sent, true)
+    assert.equal(result.channels.push.reason, null)
+    assert.equal(JSON.stringify(result).includes(device), false)
+    assert.equal(JSON.stringify(ready.tables.driver_offer_alerts[0]).includes(device), false)
+    assert.equal(result.channels.sms.sent, false)
+  } finally {
+    for (const [key, value] of Object.entries(previous)) {
+      if (value === undefined) delete process.env[key]
+      else process.env[key] = value
+    }
+  }
 })
 
 test('rebroadcast alerts the next driver and a dry run does not', async () => {

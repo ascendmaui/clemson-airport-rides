@@ -4,6 +4,7 @@ import * as Location from 'expo-location'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   Animated,
+  AppState,
   PanResponder,
   Pressable,
   RefreshControl,
@@ -17,7 +18,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Pill, SheetHandle } from '@/components/Button'
 import { pressStyle, useEnterMotion } from '@/components/enter'
 import { CampusMap } from '@/components/CampusMap'
-import type { CampusMapHandle, LatLng, MapKind } from '@/components/mapTypes'
+import type { CampusMapHandle, LatLng, LiveMapDriver, MapKind } from '@/components/mapTypes'
 import { mapKindLabel } from '@/components/mapTypes'
 import { MainTabs } from '@/components/MainTabs'
 import { Skeleton } from '@/components/Skeleton'
@@ -28,6 +29,7 @@ import { listScheduledTrips, type ScheduledRow } from '@/lib/scheduleApi'
 import { playTigerCue, tapHaptic } from '@/lib/feedback'
 import { displayFirstName } from 'rides-native/authErrors'
 import { campusOverlays } from 'rides-native/riderShell.js'
+import { fetchOnlineDrivers } from 'rides-native/drivers'
 import { loadGameDay } from 'rides-native/driverDesk'
 import { gameDayNotice, type GameDayNotice } from 'rides-native/gameDayNotice.js'
 import { studentSurfaceCopy } from 'rides-native/riderMoney.js'
@@ -76,6 +78,8 @@ export default function RiderHome() {
   const [refreshing, setRefreshing] = useState(false)
   const [mapType, setMapType] = useState<MapKind>('standard')
   const [userCoord, setUserCoord] = useState<LatLng | null>(null)
+  const [liveDrivers, setLiveDrivers] = useState<LiveMapDriver[]>([])
+  const [mapActive, setMapActive] = useState(AppState.currentState === 'active')
   const [locateNote, setLocateNote] = useState<string | null>(null)
   const [locating, setLocating] = useState(false)
   const overlays = useMemo(() => campusOverlays(), [])
@@ -87,6 +91,43 @@ export default function RiderHome() {
   const studentOffer = studentSurfaceCopy(student, 'home')
   const gameDay = Boolean(gameNotice?.live)
   const reminders = useMemo(() => dueScheduleReminders(scheduledRows, clock), [scheduledRows, clock])
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (state) => setMapActive(state === 'active'))
+    return () => sub.remove()
+  }, [])
+
+  useEffect(() => {
+    if (!supabase || !mapActive) return undefined
+    let alive = true
+    const load = () => {
+      fetchOnlineDrivers(supabase).then((result) => {
+        if (!alive) return
+        const next = (result.drivers || [])
+          .filter((driver) => driver.online && driver.lat != null && driver.lng != null)
+          .map((driver) => ({
+            id: driver.id,
+            name: driver.name,
+            vehicleLabel: driver.vehicleLabel,
+            avatarUrl: driver.avatarUrl,
+            lat: Number(driver.lat),
+            lng: Number(driver.lng),
+            heading: driver.heading,
+          }))
+        setLiveDrivers(next)
+      }).catch(() => {})
+    }
+    load()
+    const timer = setInterval(load, 10000)
+    const channel = supabase.channel(`rider-live-drivers-${Date.now()}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'driver_status' }, () => { load() })
+      .subscribe()
+    return () => {
+      alive = false
+      clearInterval(timer)
+      supabase.removeChannel(channel)
+    }
+  }, [mapActive])
+
   const chromeMotion = useEnterMotion(8)
   const sheetMotion = useEnterMotion(16)
 
@@ -298,6 +339,7 @@ export default function RiderHome() {
           surge={surge}
           userCoordinate={userCoord}
           showSimulatedFleet
+          liveDrivers={liveDrivers}
         />
         <Animated.View pointerEvents="box-none" style={[styles.mapChrome, { paddingTop: insets.top + 10 }, chromeMotion]}>
           <View style={styles.topBar}>
