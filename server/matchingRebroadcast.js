@@ -26,7 +26,7 @@ export async function rebroadcastMissedOffers(sb, {
       continue
     }
     try {
-      const eligible = await listAssignableDrivers(sb, { tier: trip.tier || 'standard' })
+      const eligible = await listAssignableDrivers(sb, { tier: trip.tier || 'standard', riderId: trip.rider_id })
       if (eligible.error) throw new Error(eligible.error)
       const passes = await sb.from('driver_offer_passes').select('driver_id').eq('trip_id', trip.id)
       if (passes.error) throw new Error(passes.error.message)

@@ -6,8 +6,11 @@ import { handleTabListKeyDown } from '../lib/tabA11y'
 import { BillingPanel } from '../components/BillingPanel'
 import {
   IconBell, IconCard, IconCar, IconHelp, IconPrivacy, IconProfile,
-  IconSettings, IconSignOut, IconStudent, IconShare,
+  IconSettings, IconSignOut, IconStudent, IconShare, IconShield,
 } from '../components/icons'
+import { WomenOnlyCard } from '../components/WomenOnlyCard'
+import { SafetyHub } from '../components/SafetyHub'
+import { loadComfortPreference, saveComfortPreference } from '../../packages/rides-native/comfortPreference.js'
 import { useAuth } from '../lib/auth'
 import { getHashRoute, navigate } from '../lib/navigation'
 import { fetchProfile, updateMyProfile, findPendingRatingTrip } from '../lib/ratings'
@@ -67,6 +70,7 @@ const NAV = [
   { id: 'vehicle', label: 'Vehicle', Icon: IconCar },
   { id: 'student', label: 'Student', Icon: IconStudent },
   { id: 'privacy', label: 'Privacy', Icon: IconPrivacy },
+  { id: 'safety', label: 'Safety', Icon: IconShield },
   { id: 'help', label: 'Help', Icon: IconHelp },
   { id: 'support', label: 'Support', Icon: IconHelp },
 ]
@@ -108,6 +112,11 @@ export function AccountScreen() {
   const [deleteNote, setDeleteNote] = useState(null)
   const [studentNote, setStudentNote] = useState(null)
   const [studentBusy, setStudentBusy] = useState(false)
+  const [genderIdentity, setGenderIdentity] = useState('unspecified')
+  const [womenOnlyMatching, setWomenOnlyMatching] = useState(false)
+  const [comfortAvailable, setComfortAvailable] = useState(false)
+  const [comfortBusy, setComfortBusy] = useState(false)
+  const [comfortNote, setComfortNote] = useState(null)
   const isDriver = profile?.role === 'driver' || profile?.role === 'both'
   const isAdmin = isAdminIdentity({
     jwtEmail: user?.email,
@@ -127,6 +136,10 @@ export function AccountScreen() {
     setPrivacy(p?.profile_privacy || 'matched')
     setGallery(p?.gallery || [])
     fetchMyDriverApplication(user.id).then(setApplication).catch(() => setApplication(null))
+    const comfort = await loadComfortPreference(supabase, user.id)
+    setGenderIdentity(comfort.genderIdentity)
+    setWomenOnlyMatching(comfort.womenOnlyMatching)
+    setComfortAvailable(comfort.available)
   }
 
   useEffect(() => {
@@ -165,6 +178,25 @@ export function AccountScreen() {
   }
   function toggleStyle(s) {
     setStyles((prev) => (prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s]))
+  }
+
+  async function persistComfort(nextGender, nextWomenOnly) {
+    if (!user?.id) return
+    setComfortBusy(true)
+    setComfortNote(null)
+    try {
+      const saved = await saveComfortPreference(supabase, user.id, {
+        genderIdentity: nextGender,
+        womenOnly: nextWomenOnly,
+      })
+      setGenderIdentity(saved.genderIdentity)
+      setWomenOnlyMatching(saved.womenOnlyMatching)
+      setComfortNote('Comfort preference saved')
+    } catch (err) {
+      setComfortNote(err.message || 'Could not save the comfort preference')
+    } finally {
+      setComfortBusy(false)
+    }
   }
 
   async function onSave() {
@@ -380,6 +412,17 @@ export function AccountScreen() {
                 ))}
               </div>
             </Section>
+
+            <WomenOnlyCard
+              role={isDriver ? (profile?.role === 'both' ? 'both' : 'driver') : 'rider'}
+              genderIdentity={genderIdentity}
+              womenOnlyMatching={womenOnlyMatching}
+              busy={comfortBusy}
+              available={comfortAvailable}
+              note={comfortNote}
+              onGender={(next) => persistComfort(next, next === 'woman' ? womenOnlyMatching : false)}
+              onToggle={(next) => persistComfort(genderIdentity, next)}
+            />
 
             <Section title="Ride style" subtitle="Quiet / Chatty / Music / AC">
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
@@ -701,6 +744,12 @@ export function AccountScreen() {
             {studentNote && (
               <p id="student-verification-note" role="status" aria-live="polite" style={{ fontSize: 13, marginTop: 10, color: '#522D80', fontWeight: 700 }}>{studentNote}</p>
             )}
+          </Section>
+        )}
+
+        {tab === 'safety' && (
+          <Section title="Safety" subtitle="Audio, video, live tracking, and SOS in one place" icon={IconShield}>
+            <SafetyHub userId={user?.id} role={profile?.role || 'rider'} />
           </Section>
         )}
 

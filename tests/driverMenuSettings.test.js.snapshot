@@ -21,6 +21,11 @@ exports[`Driver Menu snapshot 1`] = `
       "icon": "shield-checkmark",
       "title": "Insurance",
       "subtitle": "Your policy and trip coverage notes"
+    },
+    {
+      "icon": "shield",
+      "title": "Safety",
+      "subtitle": "Audio, video, live location, and SOS"
     }
   ],
   "money": [

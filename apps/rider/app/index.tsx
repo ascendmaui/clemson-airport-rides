@@ -48,7 +48,7 @@ const QUICK_ACTIONS = [
   { id: 'schedule', label: 'Schedule a ride', detail: 'Choose a time', icon: 'calendar-outline' as const, href: '/schedule' as const },
   { id: 'carpool', label: 'Carpool', detail: 'Split the surge', icon: 'people-outline' as const, href: '/friends' as const },
   { id: 'history', label: 'Your rides', detail: 'Trip history', icon: 'time-outline' as const, href: '/history' as const },
-  { id: 'safety', label: 'Safety', detail: 'Share and SOS', icon: 'shield-checkmark-outline' as const, href: '/safety' as const },
+  { id: 'safety', label: 'Safety', detail: 'Audio, video, tracking, SOS', icon: 'shield-checkmark-outline' as const, href: '/safety' as const },
 ]
 
 export default function RiderHome() {
