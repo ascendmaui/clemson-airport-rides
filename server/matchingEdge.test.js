@@ -8,12 +8,24 @@ import { cancelSearchingTrip, seedMatchingScenario } from '../tests/fixtures/mat
 import { rebroadcastMissedOffers } from './matchingRebroadcast.js'
 import { shouldExpireStaleLiveOffer } from './staleLiveOffer.js'
 import {
+  DECLINE_NEXT_DRIVER_MESSAGE,
+  DECLINE_OPEN_POOL_MESSAGE,
+  DECLINE_STILL_SEARCHING_MESSAGE,
   OFFLINE_WHILE_OFFERED_MESSAGE,
+  RIDER_DECLINE_NEXT_MESSAGE,
+  RIDER_DECLINE_OPEN_MESSAGE,
+  SEARCHING_CANCEL_ACCEPT_MESSAGE,
   activeOfferCard,
+  declinePassMessage,
   declineRebroadcastFlags,
   offlineWhileOfferedMessage,
+  riderDeclineRebroadcastMessage,
   searchingCancelBlocksLaterAccept,
+  searchingCancelOfferMessage,
 } from './matchingEdge.js'
+import {
+  OFFLINE_WHILE_OFFERED_MESSAGE as reexportedOfflineMessage,
+} from '../packages/rides-native/matchingMessages.js'
 
 const now = new Date('2026-10-04T12:01:00.000Z')
 
@@ -206,5 +218,54 @@ test('the helper file does not implement stale-offer expiry', () => {
   assert.match(doc, /declineRebroadcastFlags/)
   assert.match(doc, /activeOfferCard/)
   assert.match(doc, /offlineWhileOfferedMessage/)
+  assert.match(doc, /searchingCancelOfferMessage/)
+  assert.match(doc, /declinePassMessage/)
+  assert.match(doc, /riderDeclineRebroadcastMessage/)
   assert.match(doc, /do not expire stale offers/)
+})
+
+test('cancel, decline, and offline messages match the edge the screens show', () => {
+  assert.equal(reexportedOfflineMessage, OFFLINE_WHILE_OFFERED_MESSAGE)
+  assert.equal(searchingCancelOfferMessage({ status: 'canceled', driver_id: null }), SEARCHING_CANCEL_ACCEPT_MESSAGE)
+  assert.equal(searchingCancelOfferMessage({ status: 'cancelled', driver_id: '' }), SEARCHING_CANCEL_ACCEPT_MESSAGE)
+  assert.equal(searchingCancelOfferMessage({ status: 'canceled', driver_id: 'driver-1' }), null)
+  assert.equal(searchingCancelOfferMessage(targetedTrip()), null)
+
+  assert.equal(declinePassMessage({ offerDriverId: 'driver-2' }), DECLINE_NEXT_DRIVER_MESSAGE)
+  assert.equal(declinePassMessage({ nextDriverId: 'driver-2', released: true }), DECLINE_NEXT_DRIVER_MESSAGE)
+  assert.equal(declinePassMessage({ released: true }), DECLINE_OPEN_POOL_MESSAGE)
+  assert.equal(declinePassMessage({ keptSearching: true }), DECLINE_STILL_SEARCHING_MESSAGE)
+  assert.equal(declinePassMessage({ unchanged: true, released: true }), null)
+  assert.equal(declinePassMessage(null), null)
+
+  const passed = targetedTrip()
+  passed.metadata = {
+    ...passed.metadata,
+    offer_driver_id: 'driver-2',
+    offer_rebroadcast_reason: 'driver_decline',
+  }
+  assert.equal(riderDeclineRebroadcastMessage(passed), RIDER_DECLINE_NEXT_MESSAGE)
+  const opened = targetedTrip()
+  opened.metadata = {
+    ...opened.metadata,
+    offer_driver_id: null,
+    offer_release_reason: 'driver_decline',
+  }
+  assert.equal(riderDeclineRebroadcastMessage(opened), RIDER_DECLINE_OPEN_MESSAGE)
+  assert.equal(riderDeclineRebroadcastMessage({ ...opened, driver_id: 'driver-9' }), null)
+  assert.equal(riderDeclineRebroadcastMessage({ ...opened, status: 'accepted' }), null)
+
+  const home = readFileSync(new URL('../src/screens/DriverHome.jsx', import.meta.url), 'utf8')
+  const requested = readFileSync(new URL('../src/screens/Requested.jsx', import.meta.url), 'utf8')
+  const detail = readFileSync(new URL('../packages/rides-native/tripTags.js', import.meta.url), 'utf8')
+  const nativeHome = readFileSync(new URL('../apps/driver/app/(tabs)/index.tsx', import.meta.url), 'utf8')
+  assert.match(home, /offlineWhileOfferedMessage/)
+  assert.match(home, /searchingCancelOfferMessage/)
+  assert.match(home, /declinePassMessage/)
+  assert.match(home, /driverStatusDetail\(offer\.status\)/)
+  assert.match(requested, /riderDeclineRebroadcastMessage/)
+  assert.match(detail, /next driver/)
+  assert.match(detail, /open pool/)
+  assert.match(nativeHome, /offlineWhileOfferedMessage/)
+  assert.match(nativeHome, /declinePassMessage/)
 })

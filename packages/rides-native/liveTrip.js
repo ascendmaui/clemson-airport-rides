@@ -162,6 +162,7 @@ export function riderLiveCopy(status, { preferred = false } = {}) {
         body: 'You are at the destination. Rate your driver when you are ready.',
       }
     case 'canceled':
+    case 'cancelled':
     case 'cancelled_wait':
       return {
         kicker: 'CANCELED',

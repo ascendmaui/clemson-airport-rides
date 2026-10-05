@@ -2,6 +2,29 @@
 
 Persistent knowledge base for recurring failures. When a matching issue appears, apply the saved fix first.
 
+## 2026-10-05 — Matching edge messages for cancel, decline rebroadcast, and offline offer cards
+
+- **Track / machine:** Clemson RIDES · deputy/matching-edge-cases
+- **What was wrong:** The cancel, decline, and offline helpers existed, but the screens did not say what those edges do. A rider cancel of an unassigned searching ride cleared the driver card with no "That ride is no longer available." line. A decline was described as always returning the ride to the open pool, so a next-driver rebroadcast looked like the search had stopped. Going offline dropped a searching or offered card with no offline-while-offered sentence. The British spelling `cancelled` still read as an open ride request.
+- **What changed:** `searchingCancelOfferMessage`, `declinePassMessage`, and `riderDeclineRebroadcastMessage` turn the existing helper decisions into copy. The web driver home toasts the cancel and offline sentences, and the pass result when a decline keeps the rider searching. The searching and offered card now says the offer goes to the next driver, or back to the open pool if nobody is left. The rider live card adds the pass note and treats `cancelled` like `canceled`. The driver app hides the offer card while offline and shows the same offline and decline sentences. No migration and no payment change.
+- **Files touched:**
+  - `server/matchingEdge.js`
+  - `server/matchingEdge.test.js`
+  - `packages/rides-native/matchingMessages.js`
+  - `packages/rides-native/matchingMessages.d.ts`
+  - `packages/rides-native/tripTags.js`
+  - `packages/rides-native/liveTrip.js`
+  - `src/screens/DriverHome.jsx`
+  - `src/screens/Requested.jsx`
+  - `src/lib/tripPhase.js`
+  - `src/lib/tripPhase.test.js`
+  - `src/lib/liveDispatchA11y.js`
+  - `apps/driver/app/(tabs)/index.tsx`
+  - `apps/driver/app/queue.tsx`
+  - `docs/MATCHING_EDGE_CASES.md`
+  - `docs/FIXES.md`
+- **Verified:** `node --test server/matchingEdge.test.js src/lib/tripPhase.test.js packages/rides-native/liveTrip.test.js src/lib/driverShift.test.js tests/driverStopShift.test.js tests/driverOfferCard.test.js tests/webLiveDispatchA11y.test.js tests/matchingE2E.test.js server/matchingRebroadcast.test.js` (66/66) and `npm test` (2335/2335).
+
 ## 2026-10-05 — Matching edge helpers for cancel, decline rebroadcast, and offline offer cards
 
 - **Track / machine:** Clemson RIDES · deputy/matching-edge-cases

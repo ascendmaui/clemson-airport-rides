@@ -13,6 +13,7 @@ import { supabase } from '@/lib/supabase'
 import { useTheme } from '@/lib/theme'
 import type { Palette } from '@/lib/palette'
 import { acceptTrip, declineTrip, loadDriverDesk, subscribeTrips } from 'rides-native/driverDesk'
+import { declinePassMessage } from 'rides-native/matchingMessages'
 import { fetchDriverApplication } from 'rides-native/drivers'
 import { isSyntheticOffer } from 'rides-native/syntheticOffers'
 import { driverGateView } from 'rides-native/driverGateView'
@@ -125,6 +126,7 @@ export default function QueueScreen() {
   const [busyId, setBusyId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [warning, setWarning] = useState<string | null>(null)
+  const [offerNote, setOfferNote] = useState<string | null>(null)
   const [status, setStatus] = useState('none')
   const [reason, setReason] = useState<string | null>(null)
   const [refreshing, setRefreshing] = useState(false)
@@ -222,8 +224,12 @@ export default function QueueScreen() {
     setBusyId(card.id)
     setError(null)
     try {
-      await declineTrip(supabase, card, user.id)
+      const result = await declineTrip(supabase, card, user.id)
       pulse('decline')
+      const message = result?.disposition === 'release' && (result.passed || result.released)
+        ? declinePassMessage({ keptSearching: true })
+        : null
+      if (message) setOfferNote(message)
       await refresh()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not decline')
@@ -278,6 +284,9 @@ export default function QueueScreen() {
         </ScrollView>
         {error ? <ErrorText>{error}</ErrorText> : null}
         {warning ? <ErrorText>{warning}</ErrorText> : null}
+        {offerNote ? (
+          <Text accessibilityLiveRegion="polite" style={{ color: colors.ink, fontWeight: '700' }}>{offerNote}</Text>
+        ) : null}
         {!user ? <Primary label="Sign in" onPress={() => router.push('/sign-in')} /> : null}
 
         {!canSeeOffers ? (

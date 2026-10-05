@@ -116,3 +116,54 @@ export function offlineWhileOfferedMessage({ online, card } = {}) {
   if (!OPEN_OFFER_STATUSES.has(card.status)) return null
   return OFFLINE_WHILE_OFFERED_MESSAGE
 }
+
+/** Same sentence the desk throws when a later accept loses to a searching cancel. */
+export const SEARCHING_CANCEL_ACCEPT_MESSAGE = 'That ride is no longer available.'
+
+/** Driver copy when the card they are holding was canceled before anyone was assigned. */
+export function searchingCancelOfferMessage(trip) {
+  return searchingCancelBlocksLaterAccept(trip) ? SEARCHING_CANCEL_ACCEPT_MESSAGE : null
+}
+
+export const DECLINE_NEXT_DRIVER_MESSAGE =
+  'Passed. The rider is still searching. This offer goes to the next driver.'
+
+export const DECLINE_OPEN_POOL_MESSAGE =
+  'Passed. The rider is still searching. This offer is back in the open pool.'
+
+export const DECLINE_STILL_SEARCHING_MESSAGE =
+  'Passed. The rider is still searching. This offer goes to the next driver, or back to the open pool if nobody is left.'
+
+/**
+ * Copy after a decline that keeps the rider searching.
+ * `offerDriverId` / `nextDriverId` means the next target.
+ * `released` means the open pool.
+ * `keptSearching` is the fallback when the caller only knows the ride was released.
+ */
+export function declinePassMessage(result) {
+  if (!result || typeof result !== 'object') return null
+  if (result.unchanged) return null
+  const next = result.offerDriverId || result.nextDriverId || null
+  if (typeof next === 'string' && next) return DECLINE_NEXT_DRIVER_MESSAGE
+  if (result.released === true) return DECLINE_OPEN_POOL_MESSAGE
+  if (result.keptSearching === true) return DECLINE_STILL_SEARCHING_MESSAGE
+  return null
+}
+
+export const RIDER_DECLINE_NEXT_MESSAGE =
+  'A driver passed. You are still searching. The next driver can accept.'
+
+export const RIDER_DECLINE_OPEN_MESSAGE =
+  'A driver passed. You are still searching in the open pool.'
+
+/** Rider copy when a decline rebroadcast left this unassigned ride searching. */
+export function riderDeclineRebroadcastMessage(trip) {
+  if (!trip || typeof trip !== 'object') return null
+  if (trip.driver_id) return null
+  const status = String(trip.status || '').toLowerCase()
+  if (!OPEN_OFFER_STATUSES.has(status)) return null
+  const meta = metadataOf(trip)
+  const reason = meta.offer_rebroadcast_reason || meta.offer_release_reason
+  if (reason !== 'driver_decline') return null
+  return meta.offer_driver_id ? RIDER_DECLINE_NEXT_MESSAGE : RIDER_DECLINE_OPEN_MESSAGE
+}

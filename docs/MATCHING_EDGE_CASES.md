@@ -17,3 +17,11 @@ The caller passes the next eligible driver. This helper does not query presence.
 ## Offline offer card
 
 `activeOfferCard` returns the card only while `online` is exactly true and the card status is `searching` or `offered`. Going offline clears it. The card object itself is not mutated. `offlineWhileOfferedMessage` is the copy for that moment: "You are offline. This offer is no longer on your card." An accepted trip does not use that message.
+
+## Messages
+
+`searchingCancelOfferMessage` is "That ride is no longer available." when a later accept is blocked. The driver offer card says that when the rider cancels an unassigned searching ride. `cancelled` uses the same rider and driver canceled copy as `canceled`.
+
+`declinePassMessage` tells the driver the rider is still searching. `offerDriverId` or `nextDriverId` means the next driver. `released` means the open pool. `keptSearching` covers both when the caller only knows the ride was released. The searching and offered card detail says a decline sends the offer to the next driver, or back to the open pool if nobody is left.
+
+`riderDeclineRebroadcastMessage` tells the rider a driver passed and the search continues, with the next driver or in the open pool. It applies only while the ride is still unassigned and searching or offered, and `offer_rebroadcast_reason` or `offer_release_reason` is `driver_decline`.

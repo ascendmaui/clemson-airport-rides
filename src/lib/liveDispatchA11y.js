@@ -118,6 +118,7 @@ export function formatDispatchStatusAnnouncement({
     case 'completed':
       return 'Trip completed. Thank you for riding!'
     case 'canceled':
+    case 'cancelled':
       return 'This ride has been canceled.'
     default: {
       const title = phaseTitle || DISPATCH_STATUS_TEXT[status] || status

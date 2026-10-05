@@ -35,6 +35,7 @@ import { COMFORT_FLEET_NOTICE, tripTags } from '../../packages/rides-native/trip
 import { LivePhase } from '../components/LivePhase'
 import { reconcileCheckoutSession } from '../lib/stripeCheckout'
 import { parseCheckoutSessionId } from '../../packages/rides-native/checkoutReturn.js'
+import { riderDeclineRebroadcastMessage } from '../../server/matchingEdge.js'
 
 export function Requested({ dest = 'GSP Airport', trip = '', driver = 'your driver', driverId = '', paid = '', sessionId = '' }) {
   const { user } = useAuth()
@@ -220,7 +221,7 @@ export function Requested({ dest = 'GSP Airport', trip = '', driver = 'your driv
       ? [Number(tripRow.pickup_lat), Number(tripRow.pickup_lng)]
       : STADIUM
   const namedDriver = driver && driver !== 'your driver'
-  const preferred = status === 'requested' || (!status && namedDriver) || (status === 'canceled' && namedDriver)
+  const preferred = status === 'requested' || (!status && namedDriver) || ((status === 'canceled' || status === 'cancelled') && namedDriver)
   const requestedAt = tripRow?.requested_at ? new Date(tripRow.requested_at).getTime() : null
   const waitingMs = requestedAt && Number.isFinite(requestedAt) ? Date.now() - requestedAt : 0
   const phase = !trip
@@ -240,6 +241,8 @@ export function Requested({ dest = 'GSP Airport', trip = '', driver = 'your driv
         stepIndex: -1,
       }
       : riderLiveView(status, { preferred, waitingMs })
+  const declineNote = riderDeclineRebroadcastMessage(tripRow)
+  const phaseBody = declineNote ? `${phase.body} ${declineNote}` : phase.body
   const driverFix = driverPos ? { lat: driverPos[0], lng: driverPos[1] } : null
   const locationIssue = trackingIssue(status, locationAt, trackingNow)
   const showMap = Boolean(trip) || Boolean(status) || preferred
@@ -335,11 +338,11 @@ export function Requested({ dest = 'GSP Airport', trip = '', driver = 'your driv
             {error || 'This trip is not on your account. Request a ride again if you still need a driver.'}
           </p>
         )}
-        {(locationIssue || trackingError) && !['completed', 'canceled', 'cancelled_wait'].includes(status) && <div role="status">{locationIssue || trackingError} <button type="button" onClick={() => setTrackingAttempt((n) => n + 1)}>Retry tracking</button></div>}
+        {(locationIssue || trackingError) && !['completed', 'canceled', 'cancelled', 'cancelled_wait'].includes(status) && <div role="status">{locationIssue || trackingError} <button type="button" onClick={() => setTrackingAttempt((n) => n + 1)}>Retry tracking</button></div>}
         <LivePhase
           kicker={phase.kicker}
           title={tripMissing ? 'No live trip' : phase.title}
-          body={tripMissing ? 'There is no matching ride to track on this screen.' : phase.body}
+          body={tripMissing ? 'There is no matching ride to track on this screen.' : phaseBody}
           eta={tripMissing ? null : etaLine}
           steps={tripMissing ? [] : phase.steps}
           activeIndex={tripMissing ? -1 : phase.stepIndex}
