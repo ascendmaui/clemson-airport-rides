@@ -2,6 +2,19 @@
 
 Persistent knowledge base for recurring failures. When a matching issue appears, apply the saved fix first.
 
+## 2026-10-05 — driver onboarding friction UX (t2)
+
+- **What was wrong:** The year, W-9, and unsigned-agreement hints existed only as helpers. The application screens still let a driver tap Continue, Sign, or Submit before the prerequisite was done, and they did not say which single step was next. A blank account form looked ready. Native W-9 Next advanced through empty pages. Employment and agreement sign buttons accepted a tap and then showed an error. A missing vehicle year did not hold later steps, so the driver could leave Account behind. The unsigned agreement was easy to mix up with a blocked submit.
+- **What changed:** The web and driver-app application screens show `nextStepHint` inline on the step it names, on Agreement when the next action is Submit, and on a later step when that gap is holding the forward button. A W-9 hint on a later step waits until W-9 is the earliest unfinished step, so missing documents stay ahead of it. A missing year still shows on every later step, because year is not its own onboarding step. Account Continue stays disabled until the quiz and vehicle fields, including year, are valid, and the first non-year reason is shown next to that button. Document, employment, W-9, agreement, and review forward buttons use `forwardCtaDisabled`: a missing year holds every step after Account, a pending W-9 holds Agreement and Submit, and an unsigned agreement does not disable Submit. Native W-9 Next stays disabled until that page's field is filled. Employment sign and in-app agreement sign stay disabled until eligibility or the review checkbox, the typed name, and the date are present. Native Agreement also offers Continue to Submit, which is the emailed-signature path. No email is sent. Approval blockers and payout rules are unchanged.
+- **Files touched:**
+  - `shared/driverOnboarding.js`
+  - `src/screens/DriverOnboarding.jsx`
+  - `apps/driver/app/onboarding.tsx`
+  - `packages/rides-native/driverOnboardingClient.js`
+  - `packages/rides-native/driverOnboardingClient.d.ts`
+  - `tests/onboardingFriction.test.js`
+  - `docs/FIXES.md`
+
 ## 2026-10-05 — driver onboarding next-step hints (t1)
 
 - **What was wrong:** Incomplete onboarding still used generic copy, and three different gaps were easy to mix up. A missing vehicle year was only `Year must be from 1980 to {max}.` and did not send the driver back to Account after the status had already moved on. A pending W-9 showed up as the noun `W-9 legal name and TIN` (or a single field error). An unsigned agreement showed up as `Signed independent contractor agreement`, while submit stayed open and the review list used submission blockers, so the driver was not told that approval is what waits. Skip-ahead, photo, and review copy stayed generic: `Finish the current step before skipping ahead.`, `Add the photos on this step`, `Continue required steps`, and `Still needed · {label}`.

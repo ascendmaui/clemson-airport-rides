@@ -38,7 +38,7 @@ import { COMFORT_FLEET_NOTICE } from '../../packages/rides-native/tripTags.js'
 import { buildFieldA11yProps, formatAccessibleFormErrorSummary, getFieldErrorProps } from '../lib/formA11y'
 import { loadLatestVehicle, vehicleAccountErrors } from '../../shared/vehicleYear.js'
 import { driverQuizError } from '../../shared/driverQuiz.js'
-import { w9ContinueIssue } from '../../shared/driverOnboarding.js'
+import { forwardCtaDisabled, nextStepHint, nextStepTargetId, showNextStepHint, w9ContinueIssue } from '../../shared/driverOnboarding.js'
 
 const QUESTIONS = [
   { key: 'isStudent', label: 'Are you a student?', optional: true },
@@ -179,12 +179,14 @@ export function DriverOnboarding() {
   const gate = {
     status,
     uploaded,
-    registrationMatch: docs.find((doc) => doc.doc_type === 'registration')?.match_status || null,    backgroundAuthorized: Boolean(application?.background_authorized_at),
+    registrationMatch: docs.find((doc) => doc.doc_type === 'registration')?.match_status || null,
+    backgroundAuthorized: Boolean(application?.background_authorized_at),
     workEligibilityAttested: Boolean(application?.work_eligibility_attested_at),
     workEligibilityCategory: application?.work_eligibility_category || null,
     taxSaved: Boolean(taxProfile?.legal_name && /^[0-9]{4}$/.test(String(taxProfile?.tin_last4 || ''))),
     agreementSigned: Boolean(agreement?.signed_at && agreement?.signature_name),
     agreementVersion: agreement?.agreement_version || null,
+    vehicleYear: year,
   }
   const agreementPreviewHtml = useMemo(() => renderPrefilledAgreement(buildAgreementPrefill({
     legalName: legalName || taxProfile?.legal_name,
@@ -485,6 +487,19 @@ export function DriverOnboarding() {
   const stepDone = stepIsComplete(current.id, gate)
   const previous = adjacentStep(current.id, -1)
   const next = adjacentStep(current.id, 1)
+  const now = new Date()
+  const hint = nextStepHint(gate, now)
+  const hintVisible = showNextStepHint(current.id, gate, now)
+  const stepTarget = nextStepTargetId(gate, now)
+  const accountQuizIssue = driverQuizError({
+    hasCar: answers.hasCar,
+    hasInsurance: answers.hasInsurance,
+    attestation,
+  })
+  const accountIssues = vehicleAccountErrors({ fullName, phone, make, model, color, plate, year }, now)
+  const accountReady = !accountQuizIssue && Object.keys(accountIssues).length === 0
+  const accountBlockReason = accountQuizIssue
+    || (accountIssues.year ? null : Object.values(accountIssues)[0] || null)
   const employmentDocsReady = (flowStep('employment')?.docIds || []).every((id) => uploaded.includes(id))
   const employmentFormOk = backgroundAuthorized && eligibilityAttested && Boolean(eligibilityCategory) && employmentDocsReady
   const w9Issue = w9ContinueIssue({
@@ -521,6 +536,11 @@ export function DriverOnboarding() {
       </p>
 
       <OnboardingProgress viewing={current.id} onSelect={go} {...gate} />
+      {hintVisible ? (
+        <p id="onboarding-next-step" role="status" style={{ marginTop: 12, fontSize: 14, lineHeight: 1.45, color: 'var(--purple)', fontWeight: 650 }}>
+          {hint}
+        </p>
+      ) : null}
 
       {step === 'account' && (
         <form noValidate onSubmit={onSaveInfo} className="sheet" style={{ marginTop: 16, padding: 20, borderRadius: 22, boxShadow: 'var(--shadow-pill)' }}>
@@ -589,7 +609,14 @@ export function DriverOnboarding() {
               {COMFORT_FLEET_NOTICE}
             </p>
           ) : null}
-          <PrimaryButton type="submit" disabled={busy}>
+          {accountBlockReason ? (
+            <p id="account-continue-reason" role="status" className="field-error-text">{accountBlockReason}</p>
+          ) : null}
+          <PrimaryButton
+            type="submit"
+            disabled={busy || !accountReady}
+            aria-describedby={accountBlockReason ? 'account-continue-reason' : (hintVisible ? 'onboarding-next-step' : undefined)}
+          >
             {busy ? 'Saving…' : `Continue to ${adjacentStep('account', 1)?.label || 'the next step'}`}
           </PrimaryButton>
         </form>
@@ -617,7 +644,8 @@ export function DriverOnboarding() {
           <div style={{ marginTop: 16 }}>
             <PrimaryButton
               type="button"
-              disabled={!stepDone || Boolean(uploading)}
+              disabled={!stepDone || Boolean(uploading) || forwardCtaDisabled(current.id, gate, now)}
+              aria-describedby={hintVisible ? 'onboarding-next-step' : undefined}
               onClick={() => go(next?.id || 'review')}
             >
               {stepDone ? `Continue to ${next?.label || 'the next step'}` : 'Add the photos on this step'}
@@ -665,7 +693,12 @@ export function DriverOnboarding() {
             ))}
           </div>
           <div style={{ marginTop: 16 }}>
-            <PrimaryButton type="button" disabled={!employmentFormOk || busy || Boolean(uploading)} onClick={onSaveEmployment}>
+            <PrimaryButton
+              type="button"
+              disabled={!employmentFormOk || busy || Boolean(uploading) || forwardCtaDisabled(current.id, gate, now)}
+              aria-describedby={hintVisible ? 'onboarding-next-step' : undefined}
+              onClick={onSaveEmployment}
+            >
               {busy ? 'Saving…' : `Continue to ${next?.label || 'the next step'}`}
             </PrimaryButton>
           </div>
@@ -726,8 +759,8 @@ export function DriverOnboarding() {
           <div style={{ marginTop: 16 }}>
             <PrimaryButton
               type="button"
-              disabled={!taxFormOk || busy || Boolean(uploading)}
-              aria-describedby={w9Issue ? 'w9-continue-reason' : undefined}
+              disabled={!taxFormOk || busy || Boolean(uploading) || forwardCtaDisabled('w9', gate, now)}
+              aria-describedby={w9Issue ? 'w9-continue-reason' : (hintVisible ? 'onboarding-next-step' : undefined)}
               onClick={onSaveTax}
             >
               {busy ? 'Saving…' : `Continue to ${next?.label || 'the next step'}`}
@@ -748,7 +781,12 @@ export function DriverOnboarding() {
               Signed by {agreement.signature_name} on {new Date(agreement.signed_at).toLocaleString()}.
             </p>
           )}
-          <PrimaryButton type="button" onClick={() => openStep('review')}>
+          <PrimaryButton
+            type="button"
+            onClick={() => openStep('review')}
+            disabled={forwardCtaDisabled('agreement', gate, now)}
+            aria-describedby={hintVisible ? 'onboarding-next-step' : undefined}
+          >
             Continue to submit
           </PrimaryButton>
         </div>
@@ -782,6 +820,9 @@ export function DriverOnboarding() {
               {application?.notify_error && (
                 <p style={{ fontSize: 12, color: 'var(--ink-tertiary)', lineHeight: 1.4 }}>{application.notify_error}</p>
               )}
+              {stepTarget === 'account' && (
+                <PrimaryButton onClick={() => go('account')}>Continue required steps</PrimaryButton>
+              )}
             </>
           )}
           {status === 'rejected' && (
@@ -803,8 +844,12 @@ export function DriverOnboarding() {
                   ? `${blockers.length} item${blockers.length === 1 ? '' : 's'} still needed: ${blockers.map(blockerLabel).join(', ')}.`
                   : 'Everything is in. Submitting does not approve you — an admin still has to verify you.'}
               </p>
-              {blockers.length > 0 && <PrimaryButton onClick={() => go(resolveResumeStep(gate))}>Continue required steps</PrimaryButton>}
-              <PrimaryButton type="button" onClick={onSubmitReview} disabled={busy || blockers.length > 0}>
+              {(blockers.length > 0 || stepTarget === 'account') && (
+                <PrimaryButton onClick={() => go(stepTarget === 'account' ? 'account' : resolveResumeStep(gate))}>
+                  Continue required steps
+                </PrimaryButton>
+              )}
+              <PrimaryButton type="button" onClick={onSubmitReview} disabled={busy || blockers.length > 0 || forwardCtaDisabled('review', gate, now)} aria-describedby={hintVisible ? 'onboarding-next-step' : undefined}>
                 {busy ? 'Submitting…' : 'Submit for admin review'}
               </PrimaryButton>
             </>

@@ -18,7 +18,12 @@ import {
   canOpenStep,
   displayTinLast4,
   driverQuizError,
+  forwardCtaDisabled,
+  nextStepHint,
+  nextStepTargetId,
+  showNextStepHint,
   vehicleAccountErrors,
+  w9SubstepReady,
   loadOnboarding,
   onboardingLabel,
   progressSnapshot,
@@ -493,6 +498,29 @@ export default function OnboardingScreen() {
   const docsContinueDisabled = step?.id === 'registration'
     ? !stepIsComplete('registration', bundle?.ctx || {})
     : stepDocs.some((doc) => !uploaded.has(doc.id))
+  const hintCtx = { ...ctx, vehicleYear: year }
+  const hint = nextStepHint(hintCtx)
+  const hintVisible = showNextStepHint(step?.id || 'account', hintCtx)
+  const stepTarget = nextStepTargetId(hintCtx)
+  const accountIssues = vehicleAccountErrors({ fullName, phone, make, model, color, plate, year })
+  const accountQuizIssue = driverQuizError({
+    hasCar: answers.hasCar,
+    hasInsurance: answers.hasInsurance,
+    attestation,
+  })
+  const accountReady = !accountQuizIssue && Object.keys(accountIssues).length === 0
+  const accountBlockReason = accountQuizIssue || (accountIssues.year ? null : Object.values(accountIssues)[0] || null)
+  const employmentReady = Boolean(eligibility) && signature.trim().length >= 2 && Boolean(signedOn.trim())
+  const agreementSignReady = readAgreement && signature.trim().length >= 2 && Boolean(signedOn.trim())
+  const w9Fields = {
+    legalName,
+    address,
+    tin,
+    taxClass,
+    taxSaved: Boolean(bundle?.ctx?.taxSaved),
+    signature,
+    signedOn,
+  }
 
   if (!user) {
     return (
@@ -529,6 +557,7 @@ export default function OnboardingScreen() {
         <Text style={styles.progressLabel}>
           Step {progress.stepNumber} of {progress.total} · {progress.label} · {progress.percent}%
         </Text>
+        {hintVisible && hint ? <Text style={styles.nextStep} accessibilityRole="text">{hint}</Text> : null}
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.steps}>
           {ONBOARDING_FLOW.map((item) => {
             const done = bundle ? stepIsComplete(item.id, bundle.ctx) : false
@@ -622,7 +651,8 @@ export default function OnboardingScreen() {
                 <Text style={styles.hint}>{COMFORT_FLEET_NOTICE}</Text>
               </View>
             </Pressable>
-            <Primary label={busy ? 'Saving…' : 'Continue to license'} onPress={onSaveAccount} disabled={busy} />
+            {accountBlockReason ? <Text style={styles.hint}>{accountBlockReason}</Text> : null}
+            <Primary label={busy ? 'Saving…' : 'Continue to license'} onPress={onSaveAccount} disabled={busy || !accountReady} />
           </Card>
         ) : null}
 
@@ -653,7 +683,7 @@ export default function OnboardingScreen() {
                 onError={setError}
               />
             ))}
-            <Primary label="Continue" disabled={docsContinueDisabled} onPress={advance} />
+            <Primary label="Continue" disabled={docsContinueDisabled || forwardCtaDisabled(step?.id || 'account', hintCtx)} onPress={advance} />
           </Card>
         ) : null}
 
@@ -687,7 +717,7 @@ export default function OnboardingScreen() {
             <Field label="Date" value={signedOn} onChangeText={setSignedOn} placeholder="YYYY-MM-DD" />
             <SignaturePad onChange={setMark} />
             <Text style={styles.hint}>Signing queues the background check as pending. You do not upload a file.</Text>
-            <Primary label={busy ? 'Saving…' : 'Sign and continue'} onPress={onSaveEmployment} disabled={busy} />
+            <Primary label={busy ? 'Saving…' : 'Sign and continue'} onPress={onSaveEmployment} disabled={busy || !employmentReady || forwardCtaDisabled('employment', hintCtx)} />
           </Card>
         ) : null}
 
@@ -738,9 +768,9 @@ export default function OnboardingScreen() {
             {bundle?.tax?.tin_last4 ? <Text style={styles.saved}>On file: {displayTinLast4(bundle.tax.tin_last4)}</Text> : null}
             <Text style={styles.hint}>Step {w9Step + 1} of 6</Text>
             {w9Step < 5 ? (
-              <Primary label="Next" onPress={() => setW9Step((stepIndex: number) => stepIndex + 1)} />
+              <Primary label="Next" onPress={() => setW9Step((stepIndex: number) => stepIndex + 1)} disabled={!w9SubstepReady(w9Step, w9Fields)} />
             ) : (
-              <Primary label={busy ? 'Saving…' : 'Sign W-9 and continue'} onPress={onSaveTax} disabled={busy} />
+              <Primary label={busy ? 'Saving…' : 'Sign W-9 and continue'} onPress={onSaveTax} disabled={busy || !w9SubstepReady(5, w9Fields) || forwardCtaDisabled('w9', hintCtx)} />
             )}
           </Card>
         ) : null}
@@ -767,7 +797,8 @@ export default function OnboardingScreen() {
             <Field label="Date" value={signedOn} onChangeText={setSignedOn} />
             <SignaturePad onChange={setMark} />
             {bundle?.agreement?.signed_at ? <Text style={styles.saved}>Signed {new Date(String(bundle.agreement.signed_at)).toLocaleString()}</Text> : null}
-            <Primary label={busy ? 'Signing…' : 'Sign and continue'} onPress={onSign} disabled={busy || !readAgreement} tone="purple" />
+            <Primary label="Continue to Submit" onPress={() => go('review')} disabled={forwardCtaDisabled('agreement', hintCtx)} />
+            <Primary label={busy ? 'Signing…' : 'Sign and continue'} onPress={onSign} disabled={busy || !agreementSignReady || forwardCtaDisabled('agreement', hintCtx)} tone="purple" />
           </Card>
         ) : null}
 
@@ -783,7 +814,9 @@ export default function OnboardingScreen() {
               <Text key={code} style={styles.blocker}>Still needed · {blockerLabel(code)}</Text>
             ))}
             {status === 'pending_review' && bundle?.blockers.length === 0 ? <Tag label="Waiting on admin" /> : null}
-            {status !== 'approved' && (bundle?.blockers.length || 0) > 0 ? <Primary label="Continue required steps" onPress={() => go(bundle!.stepId)} /> : null}
+            {status !== 'approved' && ((bundle?.blockers.length || 0) > 0 || stepTarget === 'account') ? (
+              <Primary label="Continue required steps" onPress={() => go(stepTarget === 'account' ? 'account' : bundle!.stepId)} />
+            ) : null}
             {inboxRequests.filter((row: { status: string }) => row.status === 'open').map((row: { id: string; prompt: string }) => (
               <Text key={row.id} style={styles.copy}>More information needed. {row.prompt}</Text>
             ))}
@@ -801,7 +834,7 @@ export default function OnboardingScreen() {
             {status === 'pending_review' || status === 'approved' ? (
               <Primary label="Enter the app" onPress={() => router.replace('/')} />
             ) : (
-              <Primary label={busy ? 'Submitting…' : 'Submit application'} onPress={onSubmit} disabled={busy || (bundle?.blockers.length || 0) > 0} />
+              <Primary label={busy ? 'Submitting…' : 'Submit application'} onPress={onSubmit} disabled={busy || (bundle?.blockers.length || 0) > 0 || forwardCtaDisabled('review', hintCtx)} />
             )}
           </Card>
         ) : null}
@@ -996,6 +1029,7 @@ function useOnboardingStyles() {
     boxOn: { backgroundColor: colors.orange, borderColor: colors.orange },
     checkCopy: { flex: 1, color: colors.ink, fontSize: 14, lineHeight: 20 },
     hint: { color: colors.inkSecondary, fontSize: 13, lineHeight: 18 },
+    nextStep: { color: colors.purple, fontWeight: '700' as const, fontSize: 14, lineHeight: 20 },
     saved: { color: colors.title, fontWeight: '700' as const, fontSize: 13 },
     agreement: { maxHeight: 180, backgroundColor: colors.input, borderRadius: 14, padding: 12 },
     agreementTall: { maxHeight: 280, backgroundColor: colors.input, borderRadius: 14, padding: 12 },

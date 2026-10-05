@@ -7,11 +7,15 @@ import {
   agreementUnsignedNextStepHint,
   blockerLabel,
   firstIncompleteStepId,
+  forwardCtaDisabled,
   nextStepHint,
+  nextStepTargetId,
+  showNextStepHint,
   submissionBlockers,
   vehicleYearNextStepHint,
   w9ContinueIssue,
   w9NextStepHint,
+  w9SubstepReady,
   REQUIRED_DOC_IDS,
 } from '../shared/driverOnboarding.js'
 import { driverQuizError } from '../shared/driverQuiz.js'
@@ -216,4 +220,79 @@ test('unsigned agreement points at Submit and blocks approval only', () => {
   assert.equal(nextStepHint(hashMatch, NOW), null)
   assert.deepEqual(approvalBlockers(hashMatch), [])
   assert.deepEqual(submissionBlockers(readyDocs), [])
+})
+
+test('forward buttons stay off until the year or W-9 is done, and an unsigned agreement still allows submit', () => {
+  const yearGap = { vehicleYear: '', taxSaved: false, agreementSigned: false }
+  assert.equal(nextStepTargetId(yearGap, NOW), 'account')
+  assert.equal(forwardCtaDisabled('account', yearGap, NOW), false)
+  for (const stepId of ['license', 'insurance', 'registration', 'car', 'employment', 'w9', 'agreement', 'review']) {
+    assert.equal(forwardCtaDisabled(stepId, yearGap, NOW), true, stepId)
+    assert.equal(showNextStepHint(stepId, yearGap, NOW), true, stepId)
+  }
+  assert.equal(showNextStepHint('account', yearGap, NOW), true)
+
+  const w9Gap = { ...readyDocs, vehicleYear: 2018, taxSaved: false, agreementSigned: false, agreementVersion: null }
+  assert.equal(firstIncompleteStepId(w9Gap), 'w9')
+  assert.equal(nextStepTargetId(w9Gap, NOW), 'w9')
+  for (const stepId of ['account', 'license', 'insurance', 'registration', 'car', 'employment', 'w9']) {
+    assert.equal(forwardCtaDisabled(stepId, w9Gap, NOW), false, stepId)
+  }
+  assert.equal(forwardCtaDisabled('agreement', w9Gap, NOW), true)
+  assert.equal(forwardCtaDisabled('review', w9Gap, NOW), true)
+  assert.equal(showNextStepHint('w9', w9Gap, NOW), true)
+  assert.equal(showNextStepHint('license', w9Gap, NOW), false)
+  assert.equal(showNextStepHint('review', w9Gap, NOW), true)
+  const docsBeforeW9 = { ...w9Gap, uploaded: [] }
+  assert.equal(firstIncompleteStepId(docsBeforeW9), 'license')
+  assert.equal(showNextStepHint('review', docsBeforeW9, NOW), false)
+  assert.equal(showNextStepHint('w9', docsBeforeW9, NOW), true)
+
+  const unsigned = { vehicleYear: 2018, taxSaved: true, agreementSigned: false }
+  assert.equal(nextStepTargetId(unsigned, NOW), 'review')
+  for (const stepId of ['account', 'license', 'w9', 'agreement', 'review']) {
+    assert.equal(forwardCtaDisabled(stepId, unsigned, NOW), false, stepId)
+  }
+  assert.equal(showNextStepHint('agreement', unsigned, NOW), true)
+  assert.equal(showNextStepHint('review', unsigned, NOW), true)
+  assert.equal(showNextStepHint('license', unsigned, NOW), false)
+  assert.equal(showNextStepHint('account', { vehicleYear: 2018, taxSaved: true, agreementSigned: true, agreementVersion: IC_AGREEMENT_VERSION }, NOW), false)
+})
+
+test('W-9 pages stay disabled until the field on that page is filled', () => {
+  assert.equal(w9SubstepReady(0, { legalName: 'A' }), false)
+  assert.equal(w9SubstepReady(0, { legalName: 'Ada Lovelace' }), true)
+  assert.equal(w9SubstepReady(1, {}), true)
+  assert.equal(w9SubstepReady(2, { taxClass: 'nope' }), false)
+  assert.equal(w9SubstepReady(2, { taxClass: 'individual' }), true)
+  assert.equal(w9SubstepReady(3, { address: '12' }), false)
+  assert.equal(w9SubstepReady(3, { address: '12 Main' }), true)
+  assert.equal(w9SubstepReady(4, { tin: '1234' }), false)
+  assert.equal(w9SubstepReady(4, { tin: '123-45-6789' }), true)
+  assert.equal(w9SubstepReady(4, { tin: '', taxSaved: true }), true)
+  assert.equal(w9SubstepReady(5, { signature: 'A', signedOn: '2026-10-05' }), false)
+  assert.equal(w9SubstepReady(5, { signature: 'Ada Lovelace', signedOn: '' }), false)
+  assert.equal(w9SubstepReady(5, { signature: 'Ada Lovelace', signedOn: '2026-10-05' }), true)
+  assert.equal(w9SubstepReady(9, {}), false)
+})
+
+test('application screens show one inline next step and disable the forward CTAs', () => {
+  assert.match(web, /id="onboarding-next-step"/)
+  assert.match(web, /showNextStepHint\(/)
+  assert.match(web, /forwardCtaDisabled\(/)
+  assert.match(web, /disabled=\{busy \|\| !accountReady\}/)
+  assert.match(web, /forwardCtaDisabled\('review', gate, now\)/)
+  assert.match(web, /forwardCtaDisabled\('agreement', gate, now\)/)
+  assert.match(web, /stepTarget === 'account' \? 'account' : resolveResumeStep\(gate\)/)
+
+  assert.match(native, /showNextStepHint\(/)
+  assert.match(native, /forwardCtaDisabled\(/)
+  assert.match(native, /w9SubstepReady\(/)
+  assert.match(native, /disabled=\{busy \|\| !accountReady\}/)
+  assert.match(native, /disabled=\{!w9SubstepReady\(w9Step, w9Fields\)\}/)
+  assert.match(native, /Continue to Submit/)
+  assert.match(native, /forwardCtaDisabled\('review', hintCtx\)/)
+  assert.match(native, /stepTarget === 'account' \? 'account' : bundle!\.stepId/)
+  assert.match(native, /!employmentReady/)
+  assert.match(native, /!agreementSignReady/)
 })

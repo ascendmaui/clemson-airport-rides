@@ -17,14 +17,19 @@ import {
   displayTinLast4,
   firstIncompleteStepId,
   flowStep,
+  forwardCtaDisabled,
   isRequiredDocType,
   legacyStatusFor,
+  nextStepHint,
+  nextStepTargetId,
   onboardingLabel,
   progressSnapshot,
   resolveResumeStep,
+  showNextStepHint,
   statusAfterInfoSave,
   stepIsComplete,
   submissionBlockers,
+  w9SubstepReady,
 } from '../../shared/driverOnboarding.js'
 import { vehicleAccountErrors, withVehicleYear, writeVehicleWithYearFallback } from '../../shared/vehicleYear.js'
 
@@ -43,10 +48,15 @@ export {
   canOpenStep,
   displayTinLast4,
   flowStep,
+  forwardCtaDisabled,
+  nextStepHint,
+  nextStepTargetId,
   onboardingLabel,
   progressSnapshot,
+  showNextStepHint,
   stepIsComplete,
   submissionBlockers,
+  w9SubstepReady,
 }
 
 const MAX_BYTES = 8 * 1024 * 1024
