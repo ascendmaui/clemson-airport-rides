@@ -28,6 +28,7 @@ import { billingForPricedRide } from '../rideBilling.js'
 import { resolveOfferedTier, vehicleServesComfort } from '../../shared/rideOptions.js'
 import { isSimulatedDriverId } from '../../packages/rides-native/simulatedDrivers.js'
 import { assertTierAvailable } from '../rideAvailability.js'
+import { releaseTigerHeatReservation, reserveTigerHeatOffer } from '../tigerHeatService.js'
 
 function optionError(res, error) {
   return json(res, error.status || 400, {
@@ -191,6 +192,21 @@ export default async function handler(req, res, deps = {}) {
   }
 
   const split = splitPlatformFee(priced.fareCents)
+  let tigerHeat = null
+  try {
+    tigerHeat = await reserveTigerHeatOffer({
+      sb,
+      pickupLat: places.pickup.lat,
+      pickupLng: places.pickup.lng,
+      riderFareCents: priced.fareCents,
+    })
+  } catch (error) {
+    console.warn(JSON.stringify({
+      level: 'warn',
+      msg: 'tiger_heat_offer_skipped',
+      error: error?.message || String(error),
+    }))
+  }
   const riderFirst = firstName(
     user.user_metadata?.full_name || user.user_metadata?.name || user.email?.split('@')[0],
     'Rider',
@@ -243,16 +259,19 @@ export default async function handler(req, res, deps = {}) {
       fare_source: 'server',
       airport: priced.airport,
       ...billing.snapshot,
+      ...(tigerHeat ? { tiger_heat: tigerHeat } : {}),
     },
   }
 
   const profileRes = await runEnsureProfile(sb, user)
   if (!profileRes?.ok) {
+    if (tigerHeat) await releaseTigerHeatReservation({ sb, trip: { metadata: { tiger_heat: tigerHeat } } })
     return json(res, 500, { error: 'Could not create your rider profile', code: 'profile_missing' })
   }
 
   const inserted = await sb.from('trips').insert(row).select('id, status, driver_id, dropoff_label, fare_cents, deposit_cents').single()
   if (inserted.error || !inserted.data) {
+    if (tigerHeat) await releaseTigerHeatReservation({ sb, trip: { metadata: { tiger_heat: tigerHeat } } })
     return json(res, 500, { error: inserted.error?.message || 'Could not request trip' })
   }
   if (offerDriverId) {

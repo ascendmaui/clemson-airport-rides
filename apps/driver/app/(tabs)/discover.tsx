@@ -9,6 +9,8 @@ import { loadGameDay } from 'rides-native/driverDesk'
 import { gameDayNotice, type GameDayNotice } from 'rides-native/gameDayNotice.js'
 import { HEAT_WINDOWS } from 'rides-native/places.js'
 import { loadBusySpots, type BusySpot } from '@/lib/busySpots'
+import { fetchTigerHeatMap } from 'rides-native/tigerHeatClient.js'
+import type { TigerHeatZone } from 'rides-native/tigerHeat.js'
 
 function demandWord(intensity: number): string {
   if (intensity >= 0.75) return 'Busy'
@@ -27,6 +29,7 @@ export default function DiscoverScreen() {
   const [caption, setCaption] = useState('Typical campus patterns for College Ave, the stadium, and the dorms.')
   const [blended, setBlended] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [tigerZones, setTigerZones] = useState<TigerHeatZone[]>([])
 
   useEffect(() => {
     let alive = true
@@ -47,6 +50,18 @@ export default function DiscoverScreen() {
       .finally(() => {
         if (alive) setLoading(false)
       })
+    return () => {
+      alive = false
+    }
+  }, [windowId])
+
+  useEffect(() => {
+    let alive = true
+    fetchTigerHeatMap(windowId).then((result) => {
+      if (alive) setTigerZones(result.zones || [])
+    }).catch(() => {
+      if (alive) setTigerZones([])
+    })
     return () => {
       alive = false
     }
@@ -96,6 +111,14 @@ export default function DiscoverScreen() {
           {game?.detail ? <Text style={{ color: colors.orange, fontWeight: '800' }}>{game.detail}</Text> : null}
           {game ? <Text style={{ color: colors.inkSecondary, lineHeight: 20 }}>{game.body}</Text> : null}
         </Card>
+        {tigerZones.map((zone: TigerHeatZone) => (
+          <Card key={`tiger-${zone.id}`}>
+            <View style={styles.spotHead}>
+              <Text style={[styles.cardTitle, { color: colors.title }]}>{zone.name}</Text>
+              <Text style={{ color: zone.preview ? colors.purple : colors.orange, fontWeight: '800' }}>{zone.bonusLabel}</Text>
+            </View>
+          </Card>
+        ))}
         {!loading && spots.length === 0 ? (
           <Text style={{ color: colors.inkSecondary }}>Campus demand is quiet in this window.</Text>
         ) : null}

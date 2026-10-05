@@ -292,6 +292,7 @@ export default function RiderHome() {
           ref={mapRef}
           spots={spots}
           showHeat={showBusy}
+          heatWindow={heatWindow}
           mapType={mapType}
           gameDay={gameDay}
           gameDayLabel={gameNotice?.live ? gameNotice.headline : null}
