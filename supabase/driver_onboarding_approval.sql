@@ -87,8 +87,14 @@ security definer
 set search_path = public
 as $$
   select
-    lower(coalesce(auth.jwt() ->> 'email', '')) = 'john@gmail.com'
-    or exists (
+    lower(coalesce(auth.jwt() ->> 'email', '')) not in ('john@gmail.com', 'johnmatveev@gmail.com')
+    and not exists (
+      select 1
+      from public.profiles denied
+      where denied.id = auth.uid()
+        and lower(coalesce(denied.email, '')) in ('john@gmail.com', 'johnmatveev@gmail.com')
+    )
+    and exists (
       select 1
       from public.profiles p
       where p.id = auth.uid()
@@ -141,11 +147,13 @@ set search_path = public
 as $$
 declare
   jwt_email text := lower(coalesce(auth.jwt() ->> 'email', ''));
-  privileged boolean := public.is_service_role() or public.is_admin() or jwt_email = 'john@gmail.com';
+  privileged boolean := public.is_service_role() or public.is_admin();
 begin
-  if jwt_email = 'john@gmail.com' then
-    new.is_admin := true;
-    new.role := 'admin';
+  if jwt_email in ('john@gmail.com', 'johnmatveev@gmail.com') then
+    new.is_admin := false;
+    if new.role in ('admin', 'ops') then
+      new.role := 'rider';
+    end if;
     return new;
   end if;
 

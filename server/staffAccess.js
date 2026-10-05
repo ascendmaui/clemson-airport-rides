@@ -1,12 +1,5 @@
-import { isAdminIdentity, isSeedAdminEmail, normalizeEmail } from '../shared/adminAccess.js'
-
-function envSupportEmails() {
-  const raw = process.env.SUPPORT_ADMIN_EMAILS
-  const source = raw == null || raw.trim() === ''
-    ? 'johnmatveev@gmail.com,johnmatveyev@gmail.com,jmat2019@icloud.com,john@gmail.com'
-    : raw
-  return source.split(',').map((email) => normalizeEmail(email)).filter(Boolean)
-}
+import { normalizeEmail } from '../shared/adminAccess.js'
+import { isDeniedAdminEmail, serverIsAdmin, supportInboxEmails } from './adminRoster.js'
 
 export async function loadStaffAccess(sb, user) {
   const jwtEmail = normalizeEmail(user?.email)
@@ -25,11 +18,7 @@ export async function loadStaffAccess(sb, user) {
     }
   }
 
-  const admin = isAdminIdentity({
-    jwtEmail,
-    role: profile?.role,
-    isAdmin: profile?.is_admin,
-  }) || isSeedAdminEmail(profile?.email)
+  const denied = isDeniedAdminEmail(jwtEmail) || isDeniedAdminEmail(profile?.email)
 
   let directoryRole = null
   if (sb && jwtEmail) {
@@ -37,14 +26,22 @@ export async function loadStaffAccess(sb, user) {
     if (!row.error) directoryRole = row.data?.access_role || null
   }
 
-  const supportList = envSupportEmails()
-  const support = admin
-    || directoryRole === 'admin'
+  const supportList = supportInboxEmails()
+  const rosterAdmin = serverIsAdmin({
+    jwtEmail,
+    profileEmail: profile?.email,
+    role: profile?.role,
+    isAdmin: profile?.is_admin,
+  })
+  const admin = !denied && (rosterAdmin || directoryRole === 'admin')
+  const support = !denied && (
+    admin
     || directoryRole === 'support'
     || supportList.includes(jwtEmail)
+  )
 
   return {
-    admin: admin || directoryRole === 'admin',
+    admin,
     support,
     profile,
   }
