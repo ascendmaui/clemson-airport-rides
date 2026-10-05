@@ -2,7 +2,7 @@
   "name": "clemson-airport-rides",
   "version": "1.2.0",
   "private": true,
-  "description": "Clemson RIDES — campus airport ride marketplace (Vite web + Expo rider/driver apps)",
+  "description": "Clemson RIDES \u2014 campus airport ride marketplace (Vite web + Expo rider/driver apps)",
   "engines": {
     "node": ">=20"
   },
