@@ -2,6 +2,16 @@
 
 Persistent knowledge base for recurring failures. When a matching issue appears, apply the saved fix first.
 
+## 2026-10-05 — t3: Wire marketing bookable-tier tests into npm test
+
+- **Track / machine:** Clemson RIDES · MacBook Max · marketing QR worktree
+- **What was wrong:** `shared/marketingFeatures.js` only registers its four bookable-tier tests when that file is the Node test entry. The root `package.json` `test` script listed `tests/marketingSite.test.js` once and did not list `shared/marketingFeatures.js`, so `npm test` never ran those locks.
+- **What changed:** Added `shared/marketingFeatures.js` once, immediately before `tests/marketingSite.test.js`. Left the single demo-map vehicle in `shared/demoFleet.js` and `docs/demo-drivers.md` unchanged. No store submission.
+- **Files touched:**
+  - `package.json`
+  - `docs/FIXES.md`
+- **Verified:** `npm test` (2327 pass, 0 fail). The suite ran the four locks in `shared/marketingFeatures.js`: bookable tiers are Standard, Wait & Save, and Extra Comfort only; feature copy, landing copy, and the product brief do not claim a retired fleet as bookable.
+
 ## 2026-10-05 — t2: Marketing QR call-to-action copy for rider and driver
 
 - **Track / machine:** Clemson RIDES · MacBook Max · marketing QR worktree
