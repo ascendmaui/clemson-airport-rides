@@ -1,6 +1,6 @@
 import { useRouter } from 'expo-router'
 import { useState } from 'react'
-import { Pressable, ScrollView, Text, View } from 'react-native'
+import { Linking, Pressable, ScrollView, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { EmergencyContactsCard } from '@/components/EmergencyContactsCard'
 import { LiveShareCard } from '@/components/LiveShareCard'
@@ -9,6 +9,10 @@ import { SosButton, SosIncomingBanner, SosSheet } from '@/components/SosSheet'
 import { useAuth } from '@/lib/auth'
 import { useActiveRiderTrip } from '@/lib/useRiderTrip'
 import { isActiveRideStatus, type EmergencyContact } from 'rides-native/safety.js'
+import { AudioCaptureCard } from 'rides-native/AudioCaptureCard'
+import { SafetyDeck } from 'rides-native/SafetyDeck'
+import { VideoCaptureCard } from 'rides-native/VideoCaptureCard'
+import { SAFETY_FEATURE_IDS } from '../../../shared/safetyHub.js'
 import { lift } from '@/lib/elevation'
 import type { Palette } from '@/lib/palette'
 import { useTheme } from '@/lib/theme'
@@ -21,6 +25,7 @@ export default function SafetyScreen() {
   const { trip, error, loading } = useActiveRiderTrip(user?.id || null)
   const [contacts, setContacts] = useState<EmergencyContact[]>([])
   const [sosOpen, setSosOpen] = useState(false)
+  const [feature, setFeature] = useState<(typeof SAFETY_FEATURE_IDS)[number]>('audio')
   const { colors } = useTheme()
   const styles = useThemedStyles(makeStyles)
   const rideLive = isActiveRideStatus(trip?.status)
@@ -39,7 +44,7 @@ export default function SafetyScreen() {
       </View>
       <ScrollView contentContainerStyle={styles.list} keyboardShouldPersistTaps="handled">
         <Text style={styles.lead}>
-          Share a live trip link, confirm an SOS, and keep people you can call on this phone.
+          Audio, video, live tracking, and SOS live in this one place. Recording stays on this phone.
         </Text>
         {!user ? (
           <View style={styles.empty}>
@@ -51,24 +56,26 @@ export default function SafetyScreen() {
           <>
             <SosIncomingBanner tripId={trip?.id || null} userId={user.id} active={rideLive} />
             {error ? <Text style={styles.error}>{error}</Text> : null}
-            <LiveShareCard trip={trip} userId={user.id} loading={loading} />
-            <View style={styles.sosCard}>
-              <Text style={styles.kicker}>MID-RIDE</Text>
-              <Text style={styles.cardTitle}>SOS</Text>
-              {rideLive ? (
-                <Text style={styles.body}>
-                  This ride is {trip?.status}. SOS fills the screen in red. The first press confirms and does not dial, then logs the alert on the trip.
-                </Text>
-              ) : (
-                <View style={styles.inlineEmpty}>
-                  <Text style={styles.emptyTitle}>SOS logging waits for an active ride</Text>
-                  <Text style={styles.body}>
-                    You can still open SOS to call 911 or Clemson Police. The in-app alert is saved once a driver has accepted.
-                  </Text>
-                </View>
-              )}
-              <PrimaryButton label="Open SOS" onPress={() => setSosOpen(true)} tone="purple" />
-            </View>
+            <SafetyDeck colors={colors} activeId={feature} onChange={setFeature}>
+              <View style={{ display: feature === 'audio' ? 'flex' : 'none' }}>
+                <AudioCaptureCard status={trip?.status} colors={colors} />
+              </View>
+              <View style={{ display: feature === 'video' ? 'flex' : 'none' }}>
+                <VideoCaptureCard status={trip?.status} colors={colors} />
+              </View>
+              <View style={{ display: feature === 'tracking' ? 'flex' : 'none' }}>
+                <LiveShareCard trip={trip} userId={user.id} loading={loading} />
+              </View>
+              <View style={{ display: feature === 'sos' ? 'flex' : 'none', gap: 8 }}>
+                {rideLive ? (
+                  <Text style={styles.body}>This ride is {trip?.status}. The first press confirms and does not dial.</Text>
+                ) : (
+                  <Text style={styles.body}>You can call 911 or Clemson Police now. The in-app alert is saved once a driver has accepted.</Text>
+                )}
+                <PrimaryButton label="Open SOS" onPress={() => setSosOpen(true)} tone="purple" />
+                <PrimaryButton label="Call 911" onPress={() => Linking.openURL('tel:911')} />
+              </View>
+            </SafetyDeck>
             <EmergencyContactsCard userId={user.id} onContacts={setContacts} />
           </>
         )}

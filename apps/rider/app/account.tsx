@@ -15,8 +15,10 @@ import { displayFirstName } from 'rides-native/authErrors'
 import { useStudentStatus } from '@/lib/useStudentStatus'
 import { FAVORITE_SPOTS } from 'rides-native/riderShell.js'
 import { loadRatingSummary } from 'rides-native/PartyScreens'
-import { supabase } from '@/lib/supabase'
 import { RequireAuth } from '@/components/RequireAuth'
+import { WomenOnlyCard } from 'rides-native/WomenOnlyCard'
+import { loadComfortPreference, saveComfortPreference } from 'rides-native/comfortPreference.js'
+import { supabase } from '@/lib/supabase'
 
 const DISPLAY: { id: DisplayMode; label: string }[] = [
   { id: 'auto', label: 'Auto' },
@@ -52,6 +54,10 @@ function AccountScreen() {
   const [soundsOn, setSoundsOn] = useState(true)
   const [ratingLine, setRatingLine] = useState('New · no ratings yet')
   const [pendingTrip, setPendingTrip] = useState<string | null>(null)
+  const [genderIdentity, setGenderIdentity] = useState('unspecified')
+  const [womenOnly, setWomenOnly] = useState(false)
+  const [comfortAvailable, setComfortAvailable] = useState(false)
+  const [comfortNote, setComfortNote] = useState<string | null>(null)
   const name = user ? displayFirstName(user.user_metadata?.full_name || user.email?.split('@')[0], 'Rider') : null
 
   useEffect(() => {
@@ -73,6 +79,12 @@ function AccountScreen() {
       if (account.error) setError(account.error)
     })
     if (supabase) {
+      loadComfortPreference(supabase, user.id).then((comfort) => {
+        if (!alive) return
+        setGenderIdentity(comfort.genderIdentity)
+        setWomenOnly(comfort.womenOnlyMatching)
+        setComfortAvailable(comfort.available)
+      }).catch(() => {})
       loadRatingSummary(supabase, user.id).then((summary) => {
         if (!alive) return
         setRatingLine(summary.line)
@@ -83,6 +95,23 @@ function AccountScreen() {
       alive = false
     }
   }, [user?.id])
+
+  async function persistComfort(nextGender: string, nextWomenOnly: boolean) {
+    if (!user?.id || !supabase) return
+    setComfortNote(null)
+    try {
+      const saved = await saveComfortPreference(supabase, user.id, {
+        genderIdentity: nextGender,
+        womenOnly: nextWomenOnly,
+      })
+      setGenderIdentity(saved.genderIdentity)
+      setWomenOnly(saved.womenOnlyMatching)
+      setComfortNote('Comfort preference saved')
+      void tapHaptic()
+    } catch (err) {
+      setComfortNote(err instanceof Error ? err.message : 'Could not save the comfort preference')
+    }
+  }
 
   function toggleSpot(spot: string) {
     void tapHaptic()
@@ -140,9 +169,21 @@ function AccountScreen() {
         ) : null}
         <Pressable accessibilityRole="button" onPress={() => router.push('/safety')} style={[styles.safety, lift(colors, 'rest')]}>
           <Text style={styles.safetyKicker}>SAFETY</Text>
-          <Text style={styles.safetyTitle}>SOS, live location, emergency contacts</Text>
-          <Text style={styles.safetyBody}>Share a trip link and confirm an alert before anyone is called.</Text>
+          <Text style={styles.safetyTitle}>Audio, video, live tracking, SOS</Text>
+          <Text style={styles.safetyBody}>One place for recording, a live trip link, and a confirmed SOS.</Text>
         </Pressable>
+        {user ? (
+          <WomenOnlyCard
+            role="rider"
+            genderIdentity={genderIdentity}
+            womenOnlyMatching={womenOnly}
+            available={comfortAvailable}
+            note={comfortNote}
+            colors={colors}
+            onGender={(next: string) => persistComfort(next, next === 'woman' ? womenOnly : false)}
+            onToggle={(next: boolean) => persistComfort(genderIdentity, next)}
+          />
+        ) : null}
         <Text style={styles.copy}>
           {configured
             ? 'Payments, student pricing, promos, and alerts use the same account as the web app.'

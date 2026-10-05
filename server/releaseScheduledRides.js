@@ -15,7 +15,7 @@ export async function releaseScheduledRides(sb, {
   const result = { released: 0, skipped: 0, errors: 0, wouldRelease: 0 }
   for (const trip of due.data || []) {
     try {
-      const eligible = await listAssignableDrivers(sb, { tier: trip.tier })
+      const eligible = await listAssignableDrivers(sb, { tier: trip.tier, riderId: trip.rider_id })
       if (eligible.error) throw new Error(eligible.error)
       const queue = eligible.drivers.map(d => d.id).filter(id => id !== trip.rider_id)
       if (dryRun) { result.wouldRelease++; continue }

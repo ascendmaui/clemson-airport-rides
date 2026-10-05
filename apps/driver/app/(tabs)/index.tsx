@@ -1,7 +1,7 @@
 import { useRouter } from 'expo-router'
 import * as Location from 'expo-location'
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { AccessibilityInfo, Animated, Linking, Modal, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { AccessibilityInfo, Animated, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { CampusMap, type MapPin } from '@/components/CampusMap'
 import { FarePanel } from '@/components/FarePanel'
@@ -33,7 +33,6 @@ import {
   subscribeTrips,
   type DriverDesk,
 } from 'rides-native/driverDesk'
-import { CUPD_PHONE_DISPLAY, CUPD_PHONE_E164 } from 'rides-native/safety.js'
 import {
   acceptActionLabel,
   declineActionLabel,
@@ -102,7 +101,6 @@ export default function DriverHome() {
   const [self, setSelf] = useState<{ latitude: number; longitude: number } | null>(null)
   const [peek, setPeek] = useState(false)
   const [peekPage, setPeekPage] = useState(0)
-  const [safetyOpen, setSafetyOpen] = useState(false)
   const [focusToken, setFocusToken] = useState(0)
   const [showHeat, setShowHeat] = useState(true)
   const [heatWindow, setHeatWindow] = useState('now')
@@ -590,7 +588,7 @@ export default function DriverHome() {
           ) : null}
           <View style={styles.controls} pointerEvents="box-none">
             <View style={styles.toolCol}>
-              <CircleButton icon="shield" label="Safety" onPress={() => setSafetyOpen(true)} />
+              <CircleButton icon="shield" label="Safety" onPress={() => router.push('/safety')} />
               <CircleButton icon="sparkles" label="Priority mode" onPress={onPriority} />
             </View>
             <GoButton
@@ -612,30 +610,6 @@ export default function DriverHome() {
           </View>
         </View>
       </View>
-      <Modal visible={safetyOpen} transparent animationType="slide" onRequestClose={() => setSafetyOpen(false)}>
-        <Pressable
-          style={styles.modalScrim}
-          onPress={() => setSafetyOpen(false)}
-          accessibilityRole="button"
-          accessibilityLabel="Close safety modal"
-          accessibilityHint="Dismisses the safety information"
-        >
-          <Pressable
-            style={[styles.modalCard, { backgroundColor: colors.card }]}
-            onPress={(e: { stopPropagation: () => void }) => e.stopPropagation()}
-            accessibilityRole="none"
-            accessibilityLabel="Safety options"
-          >
-            <Text style={[styles.cardTitle, { color: colors.title }]}>Safety</Text>
-            <Text style={{ color: colors.inkSecondary }}>
-              Clemson University Police are {CUPD_PHONE_DISPLAY}. If you are in danger, call 911.
-            </Text>
-            <Primary label="Call 911" onPress={() => Linking.openURL('tel:911')} />
-            <Primary label={`Call CUPD ${CUPD_PHONE_DISPLAY}`} onPress={() => Linking.openURL(`tel:${CUPD_PHONE_E164}`)} tone="purple" />
-            <Primary label="Close" onPress={() => setSafetyOpen(false)} tone="ghost" />
-          </Pressable>
-        </Pressable>
-      </Modal>
     </View>
   )
 }
@@ -820,8 +794,6 @@ const styles = StyleSheet.create({
   offerBody: { gap: 10, paddingBottom: 2 },
   offerNotice: { fontWeight: '700', fontSize: 13, lineHeight: 18 },
   offerActions: { gap: 8, paddingTop: 10 },
-  modalScrim: { flex: 1, backgroundColor: 'rgba(11,18,32,0.45)', justifyContent: 'flex-end' },
-  modalCard: { borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 20, gap: 12 },
   statusWrap: { flexShrink: 1, maxHeight: 400 },
   statusScrollBody: { flexGrow: 1 },
 })

@@ -3,6 +3,7 @@
  * Payments go through the existing /api/driver and /api/stripe-payment-methods routers.
  */
 import { offerVisibleToDriver, visibleOfferQuery, unchangedOfferQuery } from '../../shared/driverOrder.js'
+import { filterVisibleTrips, pairAllowedByRpc, visibleTripIdSet, WOMEN_ONLY_ACCEPT_ERROR } from './comfortPreference.js'
 import { isStaleLiveOffer } from '../../shared/staleLiveOffer.js'
 import { missingVehicleYearColumn } from '../../shared/vehicleYear.js'
 import { vehicleServesComfort } from '../../shared/rideOptions.js'
@@ -230,7 +231,10 @@ export async function loadDriverDesk(supabase, driverId) {
   const claimableScheduled = approvedForOffers
     ? scheduledRows.filter((row) => !isUnpaidAirportDepositTrip(row))
     : []
-  const offers = cards(claimableOpen, gameDayLive).filter((card) => {
+  const comfortIds = await visibleTripIdSet(supabase, [...claimableOpen, ...claimableScheduled].map((row) => row.id))
+  const comfortOpen = filterVisibleTrips(claimableOpen, comfortIds)
+  const comfortScheduled = filterVisibleTrips(claimableScheduled, comfortIds)
+  const offers = cards(comfortOpen, gameDayLive).filter((card) => {
     if (card.status !== 'requested' && passedIds.has(card.id)) return false
     if (card.status === 'requested') return card.driverId === driverId
     if ((card.status === 'searching' || card.status === 'offered') && !isDueNow(card)) return false
@@ -240,7 +244,7 @@ export async function loadDriverDesk(supabase, driverId) {
   const upcoming = cards(mineRows, gameDayLive).filter((card) => !isDueNow(card))
   return {
     offers,
-    scheduledOpen: cards(claimableScheduled, gameDayLive),
+    scheduledOpen: cards(comfortScheduled, gameDayLive),
     upcoming,
     active,
     online: Boolean(statusRes.data?.online),
@@ -303,6 +307,8 @@ export async function acceptTrip(supabase, trip, driverId) {
   if (fresh.status && !['requested', 'searching', 'offered', 'scheduled'].includes(fresh.status)) {
     throw new Error('That ride is no longer available')
   }
+  const comfortAllowed = await pairAllowedByRpc(supabase, fresh.rider_id, driverId)
+  if (comfortAllowed === false) throw new Error(WOMEN_ONLY_ACCEPT_ERROR)
   // trips.update and accept_scheduled_trip both hit
   // trips_block_unpaid_airport_deposit_accept. This is the desk copy of that error.
   if (isUnpaidAirportDepositTrip(fresh)) {

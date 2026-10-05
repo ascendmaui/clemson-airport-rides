@@ -21,6 +21,7 @@ import {
 } from '../authoritativeFare.js'
 import { receivableDriverIds } from '../driverApproval.js'
 import { listAssignableDrivers } from '../autoAssign.js'
+import { comfortDecision, comfortEmptyMessage } from '../comfortMatch.js'
 import { insertTripEvent } from '../tripEvents.js'
 import { notifyDriverOffer } from '../driverOfferAlerts.js'
 import { billingForPricedRide } from '../rideBilling.js'
@@ -102,11 +103,17 @@ export default async function handler(req, res, deps = {}) {
   let offerDriverId = driverId
   let assignQueue = null
   if (autoAssign) {
-    const ordered = await listAssignableDrivers(sb, { tier })
+    const ordered = await listAssignableDrivers(sb, { tier, riderId: user.id })
     if (ordered.error) {
       return json(res, 500, { error: 'Could not choose a driver', code: 'auto_assign_unavailable' })
     }
     if (!ordered.drivers.length) {
+      if (ordered.womenOnlyBlocked) {
+        return json(res, 409, {
+          error: comfortEmptyMessage(ordered),
+          code: 'women_only_no_driver',
+        })
+      }
       return json(res, 409, {
         error: 'No approved drivers are online right now.',
         code: 'no_driver_online',
@@ -114,6 +121,11 @@ export default async function handler(req, res, deps = {}) {
     }
     assignQueue = ordered.drivers.map((driver) => driver.id)
     offerDriverId = assignQueue[0]
+  }
+
+  if (!autoAssign) {
+    const comfort = await comfortDecision(sb, user.id, driverId)
+    if (!comfort.ok) return json(res, comfort.status || 409, { error: comfort.error, code: comfort.code })
   }
 
   if (!autoAssign && tier === 'comfort') {
