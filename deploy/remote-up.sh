@@ -16,6 +16,11 @@ if [ "$TARGET" != "production" ] && [ "$TARGET" != "staging" ]; then
   echo "TARGET must be production or staging" >&2
   exit 2
 fi
+# A branch push must pass TARGET=staging. BRANCH_PUSH=1 refuses production.
+if [ "${BRANCH_PUSH:-}" = "1" ] && [ "$TARGET" != "staging" ]; then
+  echo "a branch push deploys staging only" >&2
+  exit 1
+fi
 
 mkdir -p "$STATE"
 if [ "$TARGET" = "staging" ]; then
@@ -36,7 +41,6 @@ fi
 export IMAGE_TAG="$TAG"
 export STAGING_IMAGE_TAG="$TAG"
 export CLEMSON_NETWORK="${CLEMSON_NETWORK:-clemson_rides_net}"
-export STAGING_HOST="${STAGING_HOST:-staging.clemsonrides.com}"
 export TRAEFIK_ENTRYPOINT="${TRAEFIK_ENTRYPOINT:-websecure}"
 export TRAEFIK_CERTRESOLVER="${TRAEFIK_CERTRESOLVER:-letsencrypt}"
 

@@ -1,8 +1,14 @@
 name: Deploy VPS
 
 # Builds the image in GitHub Actions (the VPS has no spare RAM for vite build)
-# and SSHes only this compose project. Runs after CI succeeds on main, or
-# when someone starts it by hand for production or staging.
+# and SSHes only this compose project.
+#
+# Production: after CI succeeds on a push to main, or a manual workflow_dispatch
+# once this file is on the default branch.
+# Staging: a push to staging/** or cursor/hostinger-vps-self-host-4d20 runs
+# this file from that branch (workflow_dispatch cannot, until it is on main).
+# A non-main push tags the image staging + SHA and deploys the staging
+# service only. It never tags or starts production.
 on:
   workflow_run:
     workflows: ["CI"]
@@ -20,6 +26,10 @@ on:
         description: Commit SHA to build and deploy. Empty uses the current ref.
         required: false
         type: string
+  push:
+    branches:
+      - 'staging/**'
+      - cursor/hostinger-vps-self-host-4d20
 
 permissions:
   contents: read
@@ -29,6 +39,7 @@ jobs:
   deploy:
     if: >
       github.event_name == 'workflow_dispatch' ||
+      github.event_name == 'push' ||
       (
         github.event.workflow_run.conclusion == 'success' &&
         github.event.workflow_run.event == 'push' &&
@@ -41,17 +52,38 @@ jobs:
         id: meta
         run: |
           set -euo pipefail
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          EVENT="${{ github.event_name }}"
+          if [ "$EVENT" = "workflow_dispatch" ]; then
             SHA="${{ github.event.inputs.git_sha }}"
             if [ -z "$SHA" ]; then SHA="${{ github.sha }}"; fi
             TARGET="${{ github.event.inputs.target }}"
+            BRANCH_PUSH=0
+          elif [ "$EVENT" = "push" ]; then
+            SHA="${{ github.sha }}"
+            TARGET="staging"
+            BRANCH_PUSH=1
           else
             SHA="${{ github.event.workflow_run.head_sha }}"
             TARGET="production"
+            BRANCH_PUSH=0
+          fi
+          if [ "$EVENT" = "push" ] && [ "$TARGET" != "staging" ]; then
+            echo "A branch push deploys staging only." >&2
+            exit 1
+          fi
+          if [ "$TARGET" = "staging" ]; then
+            MOVING="staging"
+          elif [ "$TARGET" = "production" ]; then
+            MOVING="prod"
+          else
+            echo "Unknown target $TARGET" >&2
+            exit 1
           fi
           echo "sha=$SHA" >> "$GITHUB_OUTPUT"
           echo "target=$TARGET" >> "$GITHUB_OUTPUT"
-          echo "Deploying $TARGET at $SHA"
+          echo "moving_tag=$MOVING" >> "$GITHUB_OUTPUT"
+          echo "branch_push=$BRANCH_PUSH" >> "$GITHUB_OUTPUT"
+          echo "Deploying $TARGET at $SHA (image tag $MOVING)"
 
       - uses: actions/checkout@v4
         with:
@@ -72,7 +104,7 @@ jobs:
           push: true
           tags: |
             ghcr.io/ascendmaui/clemson-airport-rides:${{ steps.meta.outputs.sha }}
-            ghcr.io/ascendmaui/clemson-airport-rides:${{ steps.meta.outputs.target == 'staging' && 'staging' || 'prod' }}
+            ghcr.io/ascendmaui/clemson-airport-rides:${{ steps.meta.outputs.moving_tag }}
           build-args: |
             GIT_SHA=${{ steps.meta.outputs.sha }}
             VITE_SUPABASE_URL=${{ secrets.VITE_SUPABASE_URL }}
@@ -107,7 +139,22 @@ jobs:
             fi
           done
 
+      - name: Check SSH deploy key
+        id: ssh
+        env:
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          set +x
+          if [ -z "${VPS_SSH_KEY}" ]; then
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "::notice title=SSH deploy skipped::VPS_SSH_KEY is not set. The image was pushed to GHCR. Add VPS_SSH_KEY, VPS_HOST, VPS_USER, and VPS_KNOWN_HOSTS to deploy the container."
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Deploy over SSH
+        if: steps.ssh.outputs.ready == 'true'
         env:
           VPS_HOST: ${{ secrets.VPS_HOST }}
           VPS_USER: ${{ secrets.VPS_USER }}
@@ -115,6 +162,7 @@ jobs:
           VPS_KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS }}
           SHA: ${{ steps.meta.outputs.sha }}
           TARGET: ${{ steps.meta.outputs.target }}
+          BRANCH_PUSH: ${{ steps.meta.outputs.branch_push }}
         run: |
           set -euo pipefail
           set +x
@@ -127,5 +175,5 @@ jobs:
             -o IdentitiesOnly=yes \
             -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
             "$VPS_USER@$VPS_HOST" \
-            "IMAGE_TAG=$(printf '%q' "$SHA") TARGET=$(printf '%q' "$TARGET") bash -s" \
+            "IMAGE_TAG=$(printf '%q' "$SHA") TARGET=$(printf '%q' "$TARGET") BRANCH_PUSH=$(printf '%q' "$BRANCH_PUSH") bash -s" \
             < deploy/remote-up.sh

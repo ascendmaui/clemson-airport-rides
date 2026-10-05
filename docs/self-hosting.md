@@ -87,7 +87,6 @@ cd /opt/clemson-rides/src
 sudo IMAGE_TAG=<commit-sha> \
   STAGING_IMAGE_TAG=<commit-sha> \
   CLEMSON_NETWORK=clemson_rides_net \
-  STAGING_HOST=staging.clemsonrides.com \
   TRAEFIK_ENTRYPOINT=websecure \
   TRAEFIK_CERTRESOLVER=letsencrypt \
   docker compose -f deploy/docker-compose.yml --project-name clemson-rides up -d --no-build web
@@ -103,21 +102,31 @@ The container limit is 512 MB and 1 CPU (`mem_limit` / `cpus`).
 Staging is a second container, started only with the compose profile, so it does not replace production. It is another 512 MB. Stop it when you are done.
 
 ```bash
-sudo STAGING_HOST=clemson.srv1090862.hstgr.cloud \
-  STAGING_IMAGE_TAG=<commit-sha> \
+sudo STAGING_IMAGE_TAG=<commit-sha> \
   IMAGE_TAG=<commit-sha> \
   docker compose -f /opt/clemson-rides/src/deploy/docker-compose.yml \
   --project-name clemson-rides --profile staging up -d --no-build staging
 curl -fsS http://127.0.0.1:3081/api/healthz
+curl -fsS https://clemson-staging.srv1090862.hstgr.cloud/api/healthz
 ```
 
-`STAGING_HOST` defaults to `staging.clemsonrides.com`. `www.clemsonrides.com` redirects to the apex on the production container.
+The staging Traefik router is only `clemson-staging.srv1090862.hstgr.cloud`. That name already resolves to this VPS, so Let's Encrypt HTTP-01 works before any DNS change for clemsonrides.com. Production stays on `clemsonrides.com`, and `www.clemsonrides.com` redirects to the apex. Staging does not attach to either name.
 
-Manual deploy from GitHub: Actions → Deploy VPS → Run workflow → target `production` or `staging`. A push to `main` deploys production only after the `CI` / `test` workflow succeeds.
+Staging and production share `/opt/clemson-rides/.env`. The staging service sets `DISABLE_CRON_ENDPOINTS=1` and `ALLOW_STAGING_DRY_RUN=1` in Compose, which overrides the shared file for that container only. Do not put those two variables in the shared env file, or production cron will stop too.
+
+With `DISABLE_CRON_ENDPOINTS=1`, these cron calls return 403 even with a valid bearer:
+
+- `/api/driver-payouts` (and `/api/driver?action=payouts` when the caller is the cron bearer)
+- `/api/expire-unpaid-airport-holds`
+- `/api/driver?action=rebroadcast-offers`
+
+A signed-in driver can still GET their earnings summary. A signed-in payout retry POST is also 403, so staging cannot create a Stripe transfer. Dry-run (`?dry_run=1`) is refused unless `ALLOW_STAGING_DRY_RUN=1`. Staging turns that on, because dry-run does not transfer money or write a payout row. Leave it off if you want staging to refuse dry-run as well.
+
+`workflow_dispatch` runs only after this workflow file is on `main`. Until then, a push to `staging/**` or to `cursor/hostinger-vps-self-host-4d20` builds from that branch, pushes the image tagged `staging` and the commit SHA, and deploys the staging service only. That push never tags `prod` and never restarts `clemson-rides-web`. If `VPS_SSH_KEY` is missing, the workflow still pushes the image and skips SSH with a notice. A push to `main` deploys production only after the `CI` / `test` workflow succeeds. Manual deploy, once the file is on `main`: Actions → Deploy VPS → Run workflow → target `production` or `staging`.
 
 ## Check TLS before DNS cutover
 
-Let's Encrypt HTTP-01 for `clemsonrides.com` succeeds only when that name resolves to this VPS, because Traefik answers port 80. Until cutover, issue a cert for a name that already points here (`clemson.srv1090862.hstgr.cloud` or `staging.clemsonrides.com`), and use `--resolve` to preview the apex against the VPS IP:
+Let's Encrypt HTTP-01 for `clemsonrides.com` succeeds only when that name resolves to this VPS, because Traefik answers port 80. `clemson-staging.srv1090862.hstgr.cloud` already points here, so staging can get a certificate before cutover. Use `--resolve` to preview the apex against the VPS IP:
 
 ```bash
 curl --resolve clemsonrides.com:443:31.97.11.12 https://clemsonrides.com/api/healthz

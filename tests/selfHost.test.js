@@ -8,6 +8,8 @@ import { fileURLToPath } from 'node:url'
 import { describe, test } from 'node:test'
 import Stripe from 'stripe'
 import handler, { runningOnVercel } from '../server/endpoints/driverPayouts.js'
+import expireHolds from '../server/endpoints/expireUnpaidAirportHolds.js'
+import rebroadcast from '../server/endpoints/matchingRebroadcast.js'
 import { resolveLanguageModel } from '../server/llm.js'
 import {
   applyRewrites,
@@ -42,25 +44,13 @@ function parseJson(res) {
 }
 
 function mockTrips(trips) {
-  return {
-    from() {
-      return {
-        select() {
-          return {
-            eq() {
-              return {
-                order() {
-                  return {
-                    limit: async () => ({ data: trips, error: null }),
-                  }
-                },
-              }
-            },
-          }
-        },
-      }
-    },
+  const query = {
+    select() { return query },
+    eq() { return query },
+    order() { return query },
+    limit: async () => ({ data: trips, error: null }),
   }
+  return { from() { return query } }
 }
 
 function httpRequest(port, { method = 'GET', path: reqPath = '/', headers = {}, body = null } = {}) {
@@ -333,5 +323,138 @@ test('payout cron accepts bearer alone off Vercel, rejects a missing bearer, and
   }, spoofed, deps)
   assert.equal(spoofed.statusCode, 401)
   assert.equal(transfers, 0)
+})
+
+test('staging cron guard refuses payouts, hold expiry, and rebroadcast even with a valid bearer', async () => {
+  const trip = {
+    id: 'trip_stage',
+    driver_id: 'driver_1',
+    fare_cents: 5000,
+    status: 'completed',
+    metadata: { payout: { status: 'pending', amountCents: 4000, attempts: 0 } },
+  }
+  let transfers = 0
+  const disabled = { CRON_SECRET: 'cron-test-secret', DISABLE_CRON_ENDPOINTS: '1' }
+  const payoutDeps = {
+    sb: mockTrips([trip]),
+    cronSecret: 'cron-test-secret',
+    env: disabled,
+    attemptDriverPayout: async () => {
+      transfers += 1
+      return { ok: true, payout: { status: 'paid', attempts: 1 } }
+    },
+    writePayout: async () => {
+      transfers += 1
+    },
+  }
+  const bearer = { authorization: 'Bearer cron-test-secret' }
+
+  const live = mockRes()
+  await handler({ method: 'POST', url: '/api/driver-payouts', headers: bearer }, live, payoutDeps)
+  assert.equal(live.statusCode, 403)
+  assert.match(parseJson(live).error, /disabled/)
+  assert.equal(transfers, 0)
+
+  const dryDenied = mockRes()
+  await handler({
+    method: 'GET',
+    url: '/api/driver-payouts?dry_run=1',
+    query: { dry_run: '1' },
+    headers: bearer,
+  }, dryDenied, payoutDeps)
+  assert.equal(dryDenied.statusCode, 403)
+  assert.equal(transfers, 0)
+
+  const dryOk = mockRes()
+  await handler({
+    method: 'GET',
+    url: '/api/driver-payouts?dry_run=1',
+    query: { dry_run: '1' },
+    headers: bearer,
+  }, dryOk, { ...payoutDeps, env: { ...disabled, ALLOW_STAGING_DRY_RUN: '1' } })
+  assert.equal(dryOk.statusCode, 200)
+  assert.equal(parseJson(dryOk).dryRun, true)
+  assert.equal(transfers, 0)
+
+  const earnings = mockRes()
+  await handler({
+    method: 'GET',
+    url: '/api/driver-payouts',
+    headers: {},
+  }, earnings, {
+    ...payoutDeps,
+    user: { id: 'driver_1' },
+    summarizeDriverEarnings: () => ({ pending: 1 }),
+  })
+  assert.equal(earnings.statusCode, 200)
+  assert.equal(parseJson(earnings).pending, 1)
+
+  const retry = mockRes()
+  await handler({
+    method: 'POST',
+    url: '/api/driver-payouts',
+    headers: {},
+  }, retry, { ...payoutDeps, user: { id: 'driver_1' } })
+  assert.equal(retry.statusCode, 403)
+  assert.equal(transfers, 0)
+
+  const holds = mockRes()
+  let released = 0
+  await expireHolds({
+    method: 'GET',
+    url: '/api/expire-unpaid-airport-holds',
+    headers: bearer,
+  }, holds, {
+    env: disabled,
+    sb: {},
+    release: async () => {
+      released += 1
+      return { ok: true }
+    },
+  })
+  assert.equal(holds.statusCode, 403)
+  assert.equal(released, 0)
+
+  const holdsDry = mockRes()
+  await expireHolds({
+    method: 'GET',
+    url: '/api/expire-unpaid-airport-holds?dry_run=1',
+    headers: bearer,
+  }, holdsDry, {
+    env: { ...disabled, ALLOW_STAGING_DRY_RUN: '1' },
+    sb: {},
+    release: async () => {
+      released += 1
+      return { ok: true, scanned: 0, expired: 0, released: 0, skipped: 0, errors: 0, wouldExpire: 0, dryRun: true, results: [] }
+    },
+  })
+  assert.equal(holdsDry.statusCode, 200)
+  assert.equal(released, 1)
+
+  const offers = mockRes()
+  let scanned = 0
+  await rebroadcast({
+    method: 'POST',
+    url: '/api/driver?action=rebroadcast-offers',
+    headers: bearer,
+  }, offers, {
+    env: disabled,
+    sb: { from() { scanned += 1 } },
+  })
+  assert.equal(offers.statusCode, 403)
+  assert.equal(scanned, 0)
+
+  const offersDry = mockRes()
+  await rebroadcast({
+    method: 'GET',
+    url: '/api/driver?action=rebroadcast-offers&dry_run=1',
+    headers: bearer,
+  }, offersDry, {
+    env: disabled,
+    sb: { from() { scanned += 1 } },
+  })
+  assert.equal(offersDry.statusCode, 403)
+  assert.match(parseJson(offersDry).error, /Dry-run is disabled/)
+  assert.equal(scanned, 0)
 })
 })

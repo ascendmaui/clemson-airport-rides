@@ -4,10 +4,13 @@
  * Cron: Authorization Bearer CRON_SECRET. On Vercel, x-vercel-cron is also
  * required. Off Vercel the bearer alone runs the sweep. ?dry_run=1 computes
  * due payouts and does not call Stripe or write rows. Bearer still required.
+ * DISABLE_CRON_ENDPOINTS=1 refuses the sweep and a signed-in retry POST.
+ * Dry-run of the sweep is allowed only when ALLOW_STAGING_DRY_RUN=1.
  */
 import {
   admin, cors, json, userFromAuth, stripeClient,
 } from '../friendRideLib.js'
+import { stagingCronBlock } from '../cronGuard.js'
 import { attemptDriverPayout, loadConnectAccount, writePayout } from '../payouts.js'
 import { payoutIsDue, resolveDriverNetCents, summarizeDriverEarnings } from '../../shared/paymentFailure.js'
 
@@ -132,6 +135,11 @@ export default async function handler(req, res, deps = {}) {
       return json(res, 200, { skipped: true, reason: 'Set CRON_SECRET to run scheduled payout retries' })
     }
     const dryRun = payoutDryRunRequested(req) || deps.dryRun === true
+    const blocked = stagingCronBlock(env, { dryRun })
+    if (blocked) {
+      res.setHeader?.('Cache-Control', 'no-store, no-cache, must-revalidate, private')
+      return json(res, blocked.status, blocked.body)
+    }
     const limit = Math.min(Math.max(Number(deps.limit) || 80, 1), 200)
     const listed = await sb
       .from('trips')
@@ -171,6 +179,11 @@ export default async function handler(req, res, deps = {}) {
   const summarize = deps.summarizeDriverEarnings || summarizeDriverEarnings
 
   if (req.method === 'POST') {
+    const blocked = stagingCronBlock(env, { dryRun: false })
+    if (blocked) {
+      res.setHeader?.('Cache-Control', 'no-store, no-cache, must-revalidate, private')
+      return json(res, blocked.status, blocked.body)
+    }
     const loadAccountFn = deps.loadConnectAccount || loadConnectAccount
     const connectAccountId = await loadAccountFn(sb, user.id)
     const results = await runDuePayouts(sb, trips, connectAccountId, deps)

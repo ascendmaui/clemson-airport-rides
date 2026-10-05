@@ -45,6 +45,11 @@ services:
     image: ghcr.io/ascendmaui/clemson-airport-rides:${STAGING_IMAGE_TAG:-staging}
     container_name: clemson-rides-staging
     env_file: /opt/clemson-rides/.env
+    # Overrides the shared env file for this container only. Do not put these
+    # in /opt/clemson-rides/.env or production will refuse cron too.
+    environment:
+      DISABLE_CRON_ENDPOINTS: "1"
+      ALLOW_STAGING_DRY_RUN: "1"
     restart: unless-stopped
     mem_limit: 512m
     cpus: "1.0"
@@ -56,7 +61,7 @@ services:
       - traefik.enable=true
       - traefik.docker.network=${CLEMSON_NETWORK:-clemson_rides_net}
       - traefik.http.services.clemson-staging.loadbalancer.server.port=3000
-      - traefik.http.routers.clemson-staging.rule=Host(`${STAGING_HOST:-staging.clemsonrides.com}`)
+      - traefik.http.routers.clemson-staging.rule=Host(`clemson-staging.srv1090862.hstgr.cloud`)
       - traefik.http.routers.clemson-staging.entrypoints=${TRAEFIK_ENTRYPOINT:-websecure}
       - traefik.http.routers.clemson-staging.tls=true
       - traefik.http.routers.clemson-staging.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}

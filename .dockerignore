@@ -7,6 +7,8 @@ dist
 *.log
 coverage
 .expo
+.expo-shared
+apps
 apps/*/.expo
 .vercel
 clemson-rides-prod
