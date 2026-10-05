@@ -1921,3 +1921,15 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
 - **Files touched:** `server/studentDiscount.test.js`, `docs/FIXES.md`
 - **Verified:** `node --experimental-strip-types --test server/studentEligibility.test.js server/studentDiscount.test.js` (15/15). `npm test` (2325 pass, 0 fail).
 
+## 2026-10-05 — studentFlagsFor treats a missing participant list as no riders
+
+- **Date:** 2026-10-05
+- **Track / machine:** Clemson RIDES · deputy/student-discount-e2e-verify · pkg-student-discount-e2e-verify t2
+- **What was wrong:** `studentFlagsFor` iterated `participants` directly. `null` or `undefined` threw `TypeError` before any flag was returned. The e2e fare tests showed no cents mismatch: `applyStudentDiscount` and `quoteFare` already agree, including blank tier (no discount) and confirmed campus email (1000 bps on Standard only).
+- **What changed:** A missing participant list now returns `[]`, the same result as an empty list. No rider is flagged, so no student discount is applied. Campus email confirmation, domain lock, and `STUDENT_DISCOUNT_BPS` (1000) were not changed.
+- **Files touched:**
+  - `server/studentEligibility.js`
+  - `server/studentEligibility.test.js`
+  - `docs/FIXES.md`
+- **Verified:** `node --experimental-strip-types --test server/studentEligibility.test.js server/studentDiscount.test.js` (15/15). `TZ=UTC npm test` (2325 pass, 0 fail).
+

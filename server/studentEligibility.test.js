@@ -275,7 +275,7 @@ test('error handling: missing users, exceptions, missing admin client, and malfo
   assert.deepEqual(flagsNullSb, [false])
 })
 
-test('ordering matches input participants list and quirks are documented', async () => {
+test('ordering matches input participants list and a missing list is empty', async () => {
   const users = {
     u1: { id: 'u1', email: 's1@clemson.edu', email_confirmed_at: '2026-09-01T00:00:00Z' },
     u2: { id: 'u2', email: 's2@gmail.com', email_confirmed_at: '2026-09-01T00:00:00Z' },
@@ -285,14 +285,7 @@ test('ordering matches input participants list and quirks are documented', async
   const flags = await studentFlagsFor(sb, [{ user_id: 'u1' }, { user_id: 'u2' }, { user_id: 'u3' }])
   assert.deepEqual(flags, [true, false, true])
 
-  // BUG?: studentFlagsFor throws TypeError if participants is null or undefined
-  // because it iterates directly with `for (const participant of participants)`.
-  await assert.rejects(
-    () => studentFlagsFor(sb, null),
-    TypeError,
-  )
-  await assert.rejects(
-    () => studentFlagsFor(sb, undefined),
-    TypeError,
-  )
+  // A missing list is no riders, so nobody is flagged. That is the same as [].
+  assert.deepEqual(await studentFlagsFor(sb, null), [])
+  assert.deepEqual(await studentFlagsFor(sb, undefined), [])
 })

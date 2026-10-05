@@ -7,6 +7,9 @@ import { studentDiscountGranted } from '../src/lib/studentDomain.js'
  */
 export async function studentFlagsFor(sb, participants) {
   const flags = []
+  // No list means no riders. Same result as []: nobody gets the discount.
+  // Throwing here used to abort friend-ride recompute before a fare was saved.
+  if (participants == null) return flags
   for (const participant of participants) {
     if (!participant?.user_id || !sb?.auth?.admin?.getUserById) {
       flags.push(false)
