@@ -2,6 +2,13 @@
 
 Persistent knowledge base for recurring failures. When a matching issue appears, apply the saved fix first.
 
+## 2026-10-05 — Favorite-driver tests already run under npm test
+
+- **What was wrong:** The favorite-driver cases (empty-list copy, favorites-then-approach sort, and a visible error when a save fails) were added to `packages/rides-native/drivers.test.js`. That file was already on the root `package.json` `test` script, so `npm test` would skip them only if the listing were missing or duplicated.
+- **What changed:** Left the `test` script unchanged. `packages/rides-native/drivers.test.js` is listed once, and this package added no other test file. Confirmed the three cases run as part of `npm test`.
+- **Files touched:** `docs/FIXES.md`
+- **Verified:** `npm test` (2324 pass, 0 fail). Passing cases in that run: `empty favorites list copy tells the rider to save a driver`, `sortPreferredDrivers keeps favorites first then approach`, `toggle favorite persistence failure surfaces a user-visible error`.
+
 ## 2026-10-05 — Favorite star accessible name on pick-driver
 
 - **What was wrong:** The pick-driver favorite control read only as Save or Saved. Web had no `aria-label` or pressed state, and the native label did not name the driver, so the star did not say who would be saved or removed. A failed save on native was plain footer text with no alert announcement.
