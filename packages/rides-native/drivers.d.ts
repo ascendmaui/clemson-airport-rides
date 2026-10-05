@@ -82,6 +82,28 @@ export function saveFavoriteDriverIds(
   ids: string[],
 ): Promise<{ ids: string[]; persisted: boolean; note: string }>
 
+export function pickerVehicleLine(
+  vehicleLabel: string | null | undefined,
+  plate: string | number | null | undefined,
+): string
+
+export function loadPickerDriverRecord(
+  supabase: unknown,
+  driverId: string | null | undefined,
+): Promise<{
+  full_name: string | null
+  avatar_url: string | null
+  vehicle: {
+    driver_id: string
+    color: string | null
+    make: string | null
+    model: string | null
+    plate: string | null
+    tier: string
+    is_tesla: boolean
+  } | null
+} | null>
+
 export function scheduleRedirectForRequestError(
   err: { code?: string } | null | undefined,
   destLabel?: string | null,

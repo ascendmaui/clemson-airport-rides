@@ -45,6 +45,9 @@ export type CounterpartView = {
   phone: string
   student: boolean
   vehicle: string
+  plate: string
+  vehicleLine: string
+  photoUrl: string | null
   roleLabel: string
 }
 
@@ -78,6 +81,7 @@ export function validateStars(stars: unknown): string | null
 export function formatRatingLine(avg: number | null | undefined, count: number | null | undefined): string
 export function asSpotList(value: unknown): string[]
 export function vehicleLabelFromRow(vehicle: unknown): string
+export function safePhotoUrl(value: unknown): string | null
 export function toCounterpartView(
   profile: (ProfileDraft & { id: string; full_name?: string | null; vehicle?: unknown }) | null,
   options?: { viewerIsRider?: boolean },
@@ -85,6 +89,7 @@ export function toCounterpartView(
 export function loadOwnProfile(supabase: unknown, userId: string): Promise<ProfileDraft | null>
 export function loadPublicProfile(supabase: unknown, profileId: string): Promise<ProfileDraft | null>
 export function saveOwnProfile(supabase: unknown, userId: string, draft: ProfileDraft): Promise<ProfileDraft>
+export function loadMatchedDriverCard(supabase: unknown, driverId: string): Promise<CounterpartView | null>
 export function loadCounterpart(supabase: unknown, trip: PartyTrip, userId: string): Promise<CounterpartView | null>
 export function fetchTripForRating(supabase: unknown, tripId: string): Promise<PartyTrip | null>
 export function hasRatedTrip(supabase: unknown, tripId: string, raterId: string): Promise<boolean>

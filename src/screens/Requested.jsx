@@ -376,8 +376,17 @@ export function Requested({ dest = 'GSP Airport', trip = '', driver = 'your driv
             {TESLA_FLEET_NOTICE}
           </p>
         )}
+        {resolvedDriverId && PARTY_VISIBLE_STATUSES.includes(status) && (
+          <CounterpartChip
+            profileId={resolvedDriverId}
+            noun="driver"
+            eta={driverPos && !locationIssue ? etaLineFor(status, driverFix, tripRow) : null}
+            onOpen={() => navigate('profile', { id: resolvedDriverId, matched: '1' })}
+          />
+        )}
         <p style={{ color: 'var(--ink-secondary)', fontSize: 15, lineHeight: 1.45, marginTop: 12 }}>
-          {driver} · {tripRow?.pickup_label || 'Pickup'} → {dest || tripRow?.dropoff_label || 'Drop-off'}.
+          {resolvedDriverId && PARTY_VISIBLE_STATUSES.includes(status) ? '' : `${driver} · `}
+          {tripRow?.pickup_label || 'Pickup'} → {dest || tripRow?.dropoff_label || 'Drop-off'}.
           {trip ? ` ID ${String(trip).slice(0, 8)}…` : ''}
         </p>
         {liveStops.length > 0 && (
@@ -400,13 +409,6 @@ export function Requested({ dest = 'GSP Airport', trip = '', driver = 'your driv
           )}
           {showMessages && (
             <RideMessageButton readOnly={chatMode !== 'compose'} onClick={() => setChatOpen(true)} />
-          )}
-          {resolvedDriverId && PARTY_VISIBLE_STATUSES.includes(status) && (
-            <CounterpartChip
-              profileId={resolvedDriverId}
-              noun="driver"
-              onOpen={() => navigate('profile', { id: resolvedDriverId, matched: '1' })}
-            />
           )}
           {status === 'completed' && trip && (
             <button

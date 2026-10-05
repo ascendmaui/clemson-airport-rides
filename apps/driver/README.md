@@ -63,7 +63,7 @@ Not in this build: in-trip chat, a driver-side Apple Pay sheet, and admin review
 2. Finish or resume onboarding. Confirm the progress percent moves, saved name and vehicle refill, and a saved W-9 shows only the last four digits.
 3. With an approved account, go online. Confirm the “Riders can pick you” card lists name, vehicle, and seats, then open the rider app Pick a driver and confirm this driver is listed.
 4. From the rider app, request that driver. The driver app should haptic, chime (unless the phone is on silent), and show a notification. Accept and open the live trip.
-5. On the live trip, confirm pickup and drop-off pins. If the rider shares location, their pin appears. Tap Apple Maps and Google Maps and confirm each opens directions. Step Arriving → I'm here → Start → Complete. Complete should call settle and show the collection line, or the API error if payment is still required.
+5. On the live trip, confirm pickup and drop-off pins. If the rider shares location, their pin appears. Tap Apple Maps and Google Maps and confirm each opens directions. Step Arriving → Arrived → Start → Complete. Complete should call settle and show the collection line, or the API error if payment is still required.
 6. Open Queue filters for Student, Game day, and Weekend. Accept a scheduled ride if one is open. Decline an open match and confirm it is not canceled for every driver.
 7. Open Tesla fleet, show the badge, and tap Request a self-driving trip. Confirm the stub message and that no trip was created.
 8. Open Earnings. Today, this week, balance, and paid out use real rows. A missing service role should show the API error, not a fake paid deposit.

@@ -221,6 +221,14 @@ function rowsLookLikeCards(rows) {
   return Array.isArray(rows) && rows.some((row) => row && (row.full_name || row.make || row.model || row.color || row.plate))
 }
 
+/** Same car line the pick-a-driver list renders: color, make, model, then plate. */
+export function pickerVehicleLine(vehicleLabel, plate) {
+  const car = typeof vehicleLabel === 'string' ? vehicleLabel.trim() : ''
+  const tag = plate == null || plate === false ? '' : String(plate).trim()
+  if (car && tag) return `${car} · ${tag}`
+  return car || tag
+}
+
 function partsFromCardRows(rows) {
   const profiles = []
   const vehicles = []
@@ -230,6 +238,7 @@ function partsFromCardRows(rows) {
     profiles.push({
       id,
       full_name: row.full_name || null,
+      avatar_url: row.avatar_url || null,
       rating_avg: row.rating_avg,
       rating_count: row.rating_count,
       standing: row.standing || null,
@@ -283,13 +292,11 @@ async function overlayDispatchRanks(supabase, parts) {
   }
 }
 
-async function loadPickerCardParts(supabase, ids) {
+async function loadDriverCardRows(supabase, ids) {
   let missing = false
   try {
     const { data, error } = await supabase.rpc('list_driver_cards', { ids })
-    if (!error && rowsLookLikeCards(data)) {
-      return overlayDispatchRanks(supabase, partsFromCardRows(data))
-    }
+    if (!error && rowsLookLikeCards(data)) return partsFromCardRows(data)
     if (error && rpcMissingDriverCards(error)) missing = true
   } catch (err) {
     if (rpcMissingDriverCards(err)) missing = true
@@ -306,6 +313,30 @@ async function loadPickerCardParts(supabase, ids) {
     return null
   }
   return null
+}
+
+async function loadPickerCardParts(supabase, ids) {
+  const parts = await loadDriverCardRows(supabase, ids)
+  if (!parts) return null
+  return overlayDispatchRanks(supabase, parts)
+}
+
+/**
+ * Name and vehicle for a driver the rider already accepted.
+ * Uses the same list_driver_cards / driver-cards path as Pick a driver.
+ */
+export async function loadPickerDriverRecord(supabase, driverId) {
+  if (!supabase || !driverId) return null
+  const parts = await loadDriverCardRows(supabase, [driverId])
+  if (!parts) return null
+  const profile = (parts.profiles || []).find((row) => row.id === driverId) || null
+  const vehicle = (parts.vehicles || []).find((row) => row.driver_id === driverId) || null
+  if (!profile && !vehicle) return null
+  return {
+    full_name: profile?.full_name || null,
+    avatar_url: profile?.avatar_url || null,
+    vehicle: vehicle || null,
+  }
 }
 
 /** Airport pick-a-driver returns 409. Schedule is where the 25% deposit is collected. */

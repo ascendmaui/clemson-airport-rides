@@ -324,7 +324,7 @@ export function statusActionLabel(status) {
     case 'accepted':
       return 'Arriving'
     case 'arriving':
-      return "I'm here"
+      return 'Arrived'
     case 'arrived':
       return 'Start trip'
     case 'in_progress':

@@ -31,6 +31,7 @@ export function RideStyleChips(props: {
 
 export function CounterpartCard(props: {
   person: CounterpartView | null
+  eta?: string | null
   colors?: PartyColors
 }): ReactNode
 

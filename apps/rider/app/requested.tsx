@@ -18,7 +18,7 @@ import { supabase } from '@/lib/supabase'
 import { loadLiveTrip, subscribeLiveTrip, type LiveTrip } from '@/lib/tripWatch'
 import { useTripById } from '@/lib/useRiderTrip'
 import { isActiveRideStatus, listEmergencyContacts, type EmergencyContact } from 'rides-native/safety.js'
-import { etaHoldLine, etaLineFor, mapRouteCoordinates, orderedLiveStops, riderLiveView, SEARCH_PREVIEW_COPY, showSearchTheater, type LiveStopPin } from 'rides-native/liveTrip'
+import { etaHoldLine, etaLineFor, liveDriverTitle, mapRouteCoordinates, orderedLiveStops, riderLiveView, SEARCH_PREVIEW_COPY, showSearchTheater, type LiveStopPin } from 'rides-native/liveTrip'
 import { holdAirportCode, isOpenUnpaidAirportHold, isUnpaidHoldTtlCancel } from 'rides-native/holdExpiryNotice.js'
 import { LivePhase } from 'rides-native/LivePhase'
 import { isApproachStatus } from '@/lib/approachAlert'
@@ -187,14 +187,9 @@ export default function Requested() {
     ? { ...basePhase, kicker: 'HOLD EXPIRED', title: 'Deposit hold expired', body: '', steps: [], stepIndex: -1 }
     : basePhase
   const locationIssue = trackingIssue(shown?.status, live?.driverLocationAt, trackingNow)
-  const etaLine = locationIssue ? null : etaHoldLine(
-    shown?.status || null,
-    etaLineFor(
-      shown?.status || null,
-      live?.driverLat != null && live.driverLng != null ? { lat: live.driverLat, lng: live.driverLng } : null,
-      live,
-    ),
-  )
+  const driverFix = live?.driverLat != null && live.driverLng != null ? { lat: live.driverLat, lng: live.driverLng } : null
+  const driverEta = locationIssue ? null : etaLineFor(shown?.status || null, driverFix, live)
+  const etaLine = locationIssue ? null : etaHoldLine(shown?.status || null, driverEta)
   const preview = showSearchTheater(shown?.status || null)
   const approachLive = isApproachStatus(shown?.status || null)
   const showCheckoutReturn = checkoutReturn
@@ -326,7 +321,11 @@ export default function Requested() {
           </View>
         ) : (
           <View style={[styles.summary, lift(colors, 'rest')]}>
-            <CounterpartCard person={person} colors={partyColorsFromPalette(colors)} />
+            <CounterpartCard
+              person={person}
+              eta={located ? driverEta : null}
+              colors={partyColorsFromPalette(colors)}
+            />
             {ttlCanceled ? null : (
               <>
               {locationIssue ? <View accessibilityLiveRegion="polite"><Text style={{ color: colors.title }}>{locationIssue}</Text><Pressable accessibilityRole="button" onPress={() => void reloadMap(true)}><Text style={{ color: colors.title }}>Retry tracking</Text></Pressable></View> : null}
@@ -349,7 +348,7 @@ export default function Requested() {
             {shown?.status === 'completed' ? (
               <PrimaryButton label="Rate your driver" onPress={() => router.push({ pathname: '/rate', params: { trip: tripId } })} />
             ) : null}
-            <Text style={styles.summaryTitle}>{driverName}</Text>
+            <Text style={styles.summaryTitle}>{liveDriverTitle(person?.name, driverName)}</Text>
             <Text style={styles.body}>
               {shown?.pickup_label || 'Pickup'} → {shown?.dropoff_label || dest || 'your destination'}
               {loading && !shown?.status ? ' · loading' : ''}
