@@ -8,6 +8,7 @@
  */
 import { IC_AGREEMENT_VERSION, approvalBlockers, blockerLabel, onboardingLabel } from '../shared/driverOnboarding.js'
 import { adminResendSetupBanner, rejectAgreementTextEdit } from '../shared/agreementSign.js'
+import { contractApprovalDenial, pickAgreementRow } from '../shared/contractIdentity.js'
 import { handleCorrectAgreement, handleEmailAgreement } from '../server/agreementHttp.js'
 import { serverIsAdmin } from '../server/adminRoster.js'
 import { selectDriverApplicationQueue, withSubmittedApplicantEmail } from '../shared/applicantEmail.js'
@@ -112,7 +113,7 @@ async function queue(sb, res, status) {
     sb.from('driver_documents').select('profile_id, doc_type').in('profile_id', ids),
     sb.from('driver_tax_info').select('profile_id, legal_name, tin_last4, tax_classification').in('profile_id', ids),
     sb.from('driver_agreements').select('profile_id, agreement_version, signature_name, signed_at, agreement_sha256, html_snapshot').in('profile_id', ids),
-    sb.from('driver_agreement_packets').select('profile_id, agreement_version, html_sha256').in('profile_id', ids),
+    sb.from('driver_agreement_packets').select('profile_id, agreement_version, html_sha256, prefill').in('profile_id', ids),
   ])
   if (vehicleResult.error) return json(res, 500, { error: vehicleResult.error.message })
   const vehicles = vehicleResult.data
@@ -132,14 +133,21 @@ async function queue(sb, res, status) {
     tin_last4: row.tin_last4,
     tax_classification: row.tax_classification,
   }]))
-  const agreementByProfile = {}
+  const agreementsByProfile = {}
   for (const row of agreements || []) {
-    agreementByProfile[row.profile_id] = {
-      agreement_version: row.agreement_version,
-      agreement_sha256: row.agreement_sha256,
-      signature_name: row.signature_name,
-      signed_at: row.signed_at,
-      html_snapshot: row.html_snapshot,
+    if (!agreementsByProfile[row.profile_id]) agreementsByProfile[row.profile_id] = []
+    agreementsByProfile[row.profile_id].push(row)
+  }
+  const agreementByProfile = {}
+  for (const [profileId, rows] of Object.entries(agreementsByProfile)) {
+    const picked = pickAgreementRow(rows, IC_AGREEMENT_VERSION)
+    if (!picked) continue
+    agreementByProfile[profileId] = {
+      agreement_version: picked.agreement_version,
+      agreement_sha256: picked.agreement_sha256,
+      signature_name: picked.signature_name,
+      signed_at: picked.signed_at,
+      html_snapshot: picked.html_snapshot,
     }
   }
   const packetByProfile = {}
@@ -161,6 +169,10 @@ async function queue(sb, res, status) {
       agreementVersion: agreement?.agreement_version || null,
       agreementSha256: agreement?.agreement_sha256 || null,
       packetHash: packet?.html_sha256 || null,
+      signatureName: agreement?.signature_name || null,
+      contractLegalName: packet?.prefill?.legal_name || tax?.legal_name || null,
+      applicantName: profileById[app.profile_id]?.full_name || null,
+      applicantLegalName: tax?.legal_name || null,
     })
     const presented = withSubmittedApplicantEmail(app, profileById[app.profile_id] || null)
     return {
@@ -251,6 +263,14 @@ async function review(sb, res, adminUser, body) {
         missing: compliance.approvalBlockers,
         missing_labels: compliance.approvalBlockers.map(blockerLabel),
       })
+    }
+    if (!alreadyApproved) {
+      const denial = contractApprovalDenial({
+        agreementSigned: compliance.ctx.agreementSigned,
+        identity: compliance.contractIdentity,
+        acknowledged: body.acknowledgeContractMismatch === true,
+      })
+      if (denial) return json(res, denial.status, denial.body)
     }
   }
 

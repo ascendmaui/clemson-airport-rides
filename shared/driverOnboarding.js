@@ -2,6 +2,7 @@
 
 import { IC_AGREEMENT_VERSION } from './icAgreement.js'
 import { isAdminIdentity } from './adminAccess.js'
+import { assessContractIdentity } from './contractIdentity.js'
 
 export { IC_AGREEMENT_HTML, IC_AGREEMENT_TITLE, IC_AGREEMENT_VERSION } from './icAgreement.js'
 export { isAdminIdentity }
@@ -283,13 +284,25 @@ function agreementStepDone(ctx) {
 }
 
 function agreementSatisfied(ctx) {
-  const signedCurrent = Boolean(ctx.agreementSigned) && ctx.agreementVersion === IC_AGREEMENT_VERSION
-  if (!signedCurrent) return false
+  if (!ctx.agreementSigned) return false
+  const identity = assessContractIdentity(ctx).status
+  switch (identity) {
+    case 'match':
+    case 'mismatch':
+      return true
+    case 'unknown':
+      break
+    default: {
+      const unexpected = identity
+      throw new Error(`Unknown contract identity: ${unexpected}`)
+    }
+  }
+  if (ctx.agreementVersion !== IC_AGREEMENT_VERSION) return false
   if (ctx.packetHash && ctx.agreementSha256 !== ctx.packetHash) return false
   return true
 }
 
-/** Approval still requires the current signed text. Submit does not. */
+/** Approval requires a signed agreement. Submit does not. A name that matches the applicant satisfies it. */
 export function approvalBlockers(ctx = {}) {
   const blockers = submissionBlockers(ctx)
   if (!agreementSatisfied(ctx)) blockers.push('ic_agreement')

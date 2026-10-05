@@ -30,6 +30,7 @@ import {
   blockerLabel,
 } from '../../shared/driverOnboarding.js'
 import { buildAgreementPrefill, renderPrefilledAgreement } from '../../shared/agreementPrefill.js'
+import { pickAgreementRow } from '../../shared/contractIdentity.js'
 import {
   readStoredApplicantEmail,
   selectDriverApplicationQueue,
@@ -545,9 +546,15 @@ async function fetchDriverQueueDirect(status) {
     tin_last4: row.tin_last4,
     tax_classification: row.tax_classification,
   }]))
-  const agreementByProfile = {}
+  const agreementsByProfile = {}
   for (const row of agreements || []) {
-    if (row.agreement_version === IC_AGREEMENT_VERSION) agreementByProfile[row.profile_id] = row
+    if (!agreementsByProfile[row.profile_id]) agreementsByProfile[row.profile_id] = []
+    agreementsByProfile[row.profile_id].push(row)
+  }
+  const agreementByProfile = {}
+  for (const [profileId, rows] of Object.entries(agreementsByProfile)) {
+    const picked = pickAgreementRow(rows, IC_AGREEMENT_VERSION)
+    if (picked) agreementByProfile[profileId] = picked
   }
 
   const applications = (apps || []).map((app) => {
@@ -562,6 +569,10 @@ async function fetchDriverQueueDirect(status) {
       agreementSigned: Boolean(agreement?.signed_at && agreement?.signature_name),
       agreementVersion: agreement?.agreement_version || null,
       agreementSha256: agreement?.agreement_sha256 || null,
+      signatureName: agreement?.signature_name || null,
+      contractLegalName: tax?.legal_name || null,
+      applicantName: profileById[app.profile_id]?.full_name || null,
+      applicantLegalName: tax?.legal_name || null,
     })
     const presented = withSubmittedApplicantEmail(app, profileById[app.profile_id] || null)
     return {
@@ -691,9 +702,14 @@ export async function signAgreementWithToken({ token, signatureName, accepted })
   return postJson('/api/driver?action=sign-agreement', { token, signatureName, accepted })
 }
 
-export async function reviewDriverApplication({ profileId, decision, reason }) {
+export async function reviewDriverApplication({ profileId, decision, reason, acknowledgeContractMismatch = false }) {
   try {
-    return await postJson('/api/admin-drivers', { profileId, decision, reason })
+    return await postJson('/api/admin-drivers', {
+      profileId,
+      decision,
+      reason,
+      acknowledgeContractMismatch: acknowledgeContractMismatch === true,
+    })
   } catch (err) {
     if (!err.unavailable && !err.network) throw err
     if (!supabase) throw err
