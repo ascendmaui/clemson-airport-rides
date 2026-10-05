@@ -18,6 +18,7 @@ import { farePaidCents, tripChargeKey } from './chargeIdempotency.js'
 import { insertTripEvent } from './tripEvents.js'
 import { debitStoredRideCredits } from './rideCreditSettle.js'
 import { airportDepositRequiredCents } from '../packages/rides-native/tripTags.js'
+import { releaseTigerHeatReservation, settleTigerHeatReservation } from './tigerHeatService.js'
 
 const ACTIVE_KEEP = new Set(['accepted', 'arriving', 'in_progress', 'payment_required', 'searching', 'offered'])
 
@@ -293,6 +294,28 @@ export async function settleTrip({
     metadata.credits_settled = true
     metadata.fare_paid_cents = Math.max(priorPaid, paidTowardFareCents(trip, payments) + due.amountCents)
     patch.metadata = metadata
+  }
+
+  let tigerHeat = null
+  try {
+    if (action === 'cancel' || (action === 'complete' && campusUncollected)) {
+      tigerHeat = await releaseTigerHeatReservation({ sb, trip })
+    } else if (action === 'complete') {
+      tigerHeat = await settleTigerHeatReservation({ sb, trip, completedAt: now })
+    }
+  } catch (error) {
+    console.warn(JSON.stringify({
+      level: 'warn',
+      msg: 'tiger_heat_settle_failed',
+      tripId: trip.id,
+      error: error?.message || String(error),
+    }))
+  }
+  if (tigerHeat) {
+    const metadata = { ...(patch.metadata || trip.metadata || {}) }
+    metadata.tiger_heat = tigerHeat
+    patch.metadata = metadata
+    trip = { ...trip, metadata, status: patch.status }
   }
 
   if (sb) {

@@ -1,10 +1,12 @@
-import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react'
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react'
 import { Animated, Easing, Pressable, StyleSheet, Text, View } from 'react-native'
 import { heatColor } from 'rides-native/heat.js'
 import { DOWNTOWN, STADIUM } from 'rides-native/places.js'
 import { SIMULATED_FLEET_BADGE, refuseSimulatedDriverTap, simulatedFleetPercent } from 'rides-native/simulatedDrivers.js'
 import { demoCarPaint, SEARCH_MAP_DELTA_END, SEARCH_MAP_DELTA_START, SEARCH_MAP_ZOOM_MS } from 'rides-native/searchPreview.js'
 import { useSimulatedFleet } from 'rides-native/useSimulatedFleet.js'
+import { fetchTigerHeatMap } from 'rides-native/tigerHeatClient.js'
+import type { TigerHeatZone } from 'rides-native/tigerHeat.js'
 import { mapKindLabel, type CampusMapHandle, type CampusMapProps, type MapPin } from '@/components/mapTypes'
 import type { BusySpot } from '@/lib/busySpots'
 import type { Palette } from '@/lib/palette'
@@ -12,13 +14,29 @@ import { useTheme } from '@/lib/theme'
 import { useThemedStyles } from '@/lib/useThemedStyles'
 
 export const CampusMap = forwardRef<CampusMapHandle, CampusMapProps>(function CampusMap(
-  { spots, showHeat, mapType = 'standard', theater = false, searchMotion = false, gameDay = false, gameDayLabel = null, surge = false, userCoordinate = null, pins = [], showSimulatedFleet = false },
+  { spots, showHeat, heatWindow = 'now', mapType = 'standard', theater = false, searchMotion = false, gameDay = false, gameDayLabel = null, surge = false, userCoordinate = null, pins = [], showSimulatedFleet = false },
   ref: any,
 ) {
   const { colors } = useTheme()
   const styles = useThemedStyles(makeStyles)
   const simulatedFleet = useSimulatedFleet(showSimulatedFleet || searchMotion)
   const zoom = useRef(new Animated.Value(1)).current
+  const [tigerZones, setTigerZones] = useState<TigerHeatZone[]>([])
+  useEffect(() => {
+    if (!showHeat) {
+      setTigerZones([])
+      return undefined
+    }
+    let alive = true
+    fetchTigerHeatMap(heatWindow).then((result) => {
+      if (alive) setTigerZones(result.zones || [])
+    }).catch(() => {
+      if (alive) setTigerZones([])
+    })
+    return () => {
+      alive = false
+    }
+  }, [showHeat, heatWindow])
   useImperativeHandle(ref, () => ({
     animateTo() {},
   }))
@@ -111,6 +129,16 @@ export const CampusMap = forwardRef<CampusMapHandle, CampusMapProps>(function Ca
         </View>
       ) : null}
       <View style={styles.badges}>
+        {showHeat
+          ? tigerZones.map((zone: TigerHeatZone) => (
+              <Text
+                key={zone.id}
+                style={[styles.badge, zone.preview ? styles.tigerPreview : styles.tigerLive]}
+              >
+                {zone.bonusLabel}
+              </Text>
+            ))
+          : null}
         {gameDay ? <Text style={styles.badge}>{gameDayLabel || 'Game day'}</Text> : null}
         {surge ? <Text style={[styles.badge, styles.surge]}>Surge</Text> : null}
         {userCoordinate ? <Text style={styles.badge}>You</Text> : null}
@@ -187,6 +215,8 @@ function makeStyles(colors: Palette) {
     badges: { flexDirection: 'row' as const, gap: 6, marginBottom: 8 },
     badge: { backgroundColor: colors.purple, color: colors.onAccent, overflow: 'hidden' as const, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3, fontSize: 11, fontWeight: '800' as const },
     surge: { backgroundColor: colors.orange },
+    tigerLive: { backgroundColor: '#F56600', borderWidth: 2, borderColor: '#522D80' },
+    tigerPreview: { backgroundColor: '#522D80', borderWidth: 2, borderColor: '#F56600' },
     row: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 8 },
     pin: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12 },
     pinText: { color: colors.onAccent, fontWeight: '800' as const, fontSize: 12 },

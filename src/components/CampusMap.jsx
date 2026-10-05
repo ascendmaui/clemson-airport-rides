@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { GoogleMap, useJsApiLoader, Marker, Circle, Polyline } from '@react-google-maps/api'
+import { GoogleMap, useJsApiLoader, Marker, Circle, Polygon, Polyline, OverlayView } from '@react-google-maps/api'
 import { downtownNow, heatColor } from '../lib/downtownHeat'
 import { MAPS_LOADER_ID, MAP_LIBRARIES, mapsLoaderOptions } from '../lib/googleMapsLoader'
 import { fetchRideDemand, loadMapType, saveMapType } from '../lib/rideDemand'
 import { MapTypeSelect } from './MapTypeSelect'
 import { SIMULATED_FLEET_BADGE } from '../../packages/rides-native/simulatedDrivers.js'
+import { fetchTigerHeatMap } from '../../packages/rides-native/tigerHeatClient.js'
 import { DriverProfileCard, GoogleFleetMotion, PreviewFleetMotion } from './FleetMotion.jsx'
 
 export const CLEMSON = [34.6784, -82.8397]
@@ -163,7 +164,31 @@ function FallbackRoute({ route }) {
   )
 }
 
-function FallbackMap({ wrapStyle, message, badge, route = null }) {
+function TigerHeatChip({ zone }) {
+  const preview = zone.preview || !zone.payable
+  return (
+    <div
+      data-tiger-heat={preview ? 'preview' : 'live'}
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 6,
+        margin: 4,
+        padding: '6px 10px',
+        borderRadius: 999,
+        background: preview ? '#522D80' : '#F56600',
+        color: '#fff',
+        border: '2px solid #522D80',
+        fontWeight: 800,
+        fontSize: 12,
+      }}
+    >
+      {zone.bonusLabel || 'Tiger Heat'}
+    </div>
+  )
+}
+
+function FallbackMap({ wrapStyle, message, badge, route = null, tigerZones = [] }) {
   return (
     <div
       style={{
@@ -197,6 +222,11 @@ function FallbackMap({ wrapStyle, message, badge, route = null }) {
       ) : null}
       {/* TODO: a live stadium ring on this preview needs Maps JavaScript billing (VITE_GOOGLE_MAPS_API_KEY). The zone and fare multiplier stay on the badge. */}
       <div>{message}</div>
+      {tigerZones.length ? (
+        <div style={{ position: 'absolute', left: 12, top: 12, right: 12, display: 'flex', flexWrap: 'wrap', justifyContent: 'flex-start' }}>
+          {tigerZones.map((zone) => <TigerHeatChip key={zone.id} zone={zone} />)}
+        </div>
+      ) : null}
     </div>
   )
 }
@@ -285,6 +315,7 @@ export function CampusMap({
   const resolvedMapType = activeMapType === 'satellite' || activeMapType === 'hybrid' ? activeMapType : 'roadmap'
   const useClemsonStyles = resolvedMapType === 'roadmap'
   const [demand, setDemand] = useState(null)
+  const [tigerZones, setTigerZones] = useState([])
 
   const setMapType = useCallback((id) => {
     const next = id === 'satellite' || id === 'hybrid' ? id : 'roadmap'
@@ -318,6 +349,22 @@ export function CampusMap({
       cancelled = true
     }
   }, [showHeat, heatMode, heatWindow])
+
+  useEffect(() => {
+    if (!showHeat) {
+      setTigerZones([])
+      return undefined
+    }
+    let cancelled = false
+    fetchTigerHeatMap(heatWindow).then((result) => {
+      if (!cancelled) setTigerZones(result.zones || [])
+    }).catch(() => {
+      if (!cancelled) setTigerZones([])
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [showHeat, heatWindow])
 
   const heatSpots = useMemo(() => {
     if (!showHeat) return []
@@ -424,6 +471,7 @@ export function CampusMap({
           wrapStyle={wrapStyle}
           badge={gameDayLabel}
           route={route}
+          tigerZones={showHeat ? tigerZones : []}
           message="Map preview needs VITE_GOOGLE_MAPS_API_KEY (Maps JavaScript API)."
         />
         <PreviewFleetMotion enabled={showSimulatedFleet} onSelect={setPreviewDriver} />
@@ -435,7 +483,7 @@ export function CampusMap({
   if (loadError) {
     return (
       <div style={{ position: 'relative' }}>
-        <FallbackMap wrapStyle={wrapStyle} badge={gameDayLabel} route={route} message="Google Maps failed to load. Check the API key / referrer." />
+        <FallbackMap wrapStyle={wrapStyle} badge={gameDayLabel} route={route} tigerZones={showHeat ? tigerZones : []} message="Google Maps failed to load. Check the API key / referrer." />
         <PreviewFleetMotion enabled={showSimulatedFleet} onSelect={setPreviewDriver} />
         <DriverProfileCard driver={previewDriver} onClose={() => setPreviewDriver(null)} />
         {showSimulatedFleet ? <FleetBadge /> : null}
@@ -445,7 +493,7 @@ export function CampusMap({
   if (!isLoaded) {
     return (
       <div style={{ position: 'relative' }}>
-        <FallbackMap wrapStyle={wrapStyle} badge={gameDayLabel} route={route} message="Loading map…" />
+        <FallbackMap wrapStyle={wrapStyle} badge={gameDayLabel} route={route} tigerZones={showHeat ? tigerZones : []} message="Loading map…" />
         <PreviewFleetMotion enabled={showSimulatedFleet} onSelect={setPreviewDriver} />
         <DriverProfileCard driver={previewDriver} onClose={() => setPreviewDriver(null)} />
         {showSimulatedFleet ? <FleetBadge /> : null}
@@ -495,6 +543,32 @@ export function CampusMap({
             }}
           />
         ) : null}
+        {tigerZones.map((zone) => (
+          <Polygon
+            key={`tiger-${zone.id}`}
+            paths={(zone.polygon || []).map((point) => ({ lat: point.lat, lng: point.lng }))}
+            options={{
+              strokeColor: zone.strokeColor || PURPLE,
+              strokeOpacity: 0.95,
+              strokeWeight: 2,
+              fillColor: zone.fillColor || ORANGE,
+              fillOpacity: zone.preview ? 0.16 : 0.34,
+            }}
+          />
+        ))}
+        {tigerZones.map((zone) => (
+          <Polygon
+            key={`tiger-inner-${zone.id}`}
+            paths={(zone.innerPolygon || []).map((point) => ({ lat: point.lat, lng: point.lng }))}
+            options={{
+              strokeColor: ORANGE,
+              strokeOpacity: 0.7,
+              strokeWeight: 1,
+              fillColor: PURPLE,
+              fillOpacity: zone.preview ? 0.08 : 0.18,
+            }}
+          />
+        ))}
         {heatSpots.map((s) => (
           <Circle
             key={s.id}
@@ -544,6 +618,31 @@ export function CampusMap({
         {(animatedDriver || driverTarget) && (
           <Marker position={animatedDriver || driverTarget} icon={driverIcon} title="Driver" />
         )}
+        {tigerZones.map((zone) => (
+          <OverlayView
+            key={`tiger-label-${zone.id}`}
+            position={{ lat: zone.lat, lng: zone.lng }}
+            mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}
+          >
+            <div
+              data-tiger-heat={zone.preview ? 'preview' : 'live'}
+              style={{
+                transform: 'translate(-50%, -50%)',
+                padding: '6px 10px',
+                borderRadius: 999,
+                background: zone.preview ? '#522D80' : '#F56600',
+                color: '#fff',
+                border: '2px solid #522D80',
+                fontWeight: 800,
+                fontSize: 12,
+                whiteSpace: 'nowrap',
+                boxShadow: '0 2px 8px rgba(82,45,128,0.25)',
+              }}
+            >
+              {zone.bonusLabel}
+            </div>
+          </OverlayView>
+        ))}
       </GoogleMap>
       <GoogleFleetMotion map={mapReady} enabled={showSimulatedFleet} onSelect={setPreviewDriver} />
       <DriverProfileCard driver={previewDriver} onClose={() => setPreviewDriver(null)} />

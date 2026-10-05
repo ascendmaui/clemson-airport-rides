@@ -5,12 +5,25 @@
  */
 import { applyPayoutAttempt, payoutIsDue, resolveDriverNetCents } from '../shared/paymentFailure.js'
 
+/** Settled Tiger Heat pay replaces the default 80% net. Rider fare is not in this number. */
+export function tigerHeatPayoutCents(trip) {
+  const heat = trip?.metadata?.tiger_heat
+  if (!heat || heat.preview || heat.settled !== true || heat.released) return null
+  const amount = Number(heat.driverEarningsCents)
+  if (!Number.isFinite(amount)) return null
+  return Math.max(0, Math.round(amount))
+}
+
 export function buildPayoutRecord(trip) {
-  const amountCents = resolveDriverNetCents(trip)
+  const heatPay = tigerHeatPayoutCents(trip)
+  const amountCents = heatPay == null ? resolveDriverNetCents(trip) : heatPay
+  const heat = trip?.metadata?.tiger_heat
   return {
     tripId: trip.id,
     driverId: trip.driver_id,
     amountCents,
+    tigerHeatBonusCents: heatPay == null ? 0 : Math.max(0, Math.round(Number(heat?.bonusCents) || 0)),
+    platformFundedCents: heatPay == null ? 0 : Math.max(0, Math.round(Number(heat?.platformFundedCents) || 0)),
     status: amountCents === 0 ? 'paid' : 'pending',
     pending: amountCents !== 0,
     attempts: 0,

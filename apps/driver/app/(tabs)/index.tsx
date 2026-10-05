@@ -397,6 +397,7 @@ export default function DriverHome() {
         focusToken={focusToken}
         spots={spots}
         showHeat={showHeat}
+        heatWindow={heatWindow}
         gameDay={Boolean(gameNotice?.live)}
         gameDayLabel={gameNotice?.live ? gameNotice.headline : null}
         lockOnCenter={Boolean(online && self)}

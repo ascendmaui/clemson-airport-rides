@@ -1,11 +1,13 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Platform, StyleSheet, Text, View } from 'react-native'
 import Constants from 'expo-constants'
-import MapView, { Circle, Marker, Polyline, PROVIDER_DEFAULT } from 'react-native-maps'
+import MapView, { Circle, Marker, Polygon, Polyline, PROVIDER_DEFAULT } from 'react-native-maps'
 import { ANDROID_MAP_UNAVAILABLE, googleMapStyle, nativeMapTilesReady } from 'rides-native/googleMapChrome.js'
 import { heatColor } from 'rides-native/heat.js'
 import { DOWNTOWN, ORANGE, PURPLE, STADIUM } from 'rides-native/places.js'
 import type { BusySpot } from '@/lib/busySpots'
+import { fetchTigerHeatMap } from 'rides-native/tigerHeatClient.js'
+import { toNativeRing, type TigerHeatZone } from 'rides-native/tigerHeat.js'
 import type { MapPin } from './CampusMap'
 
 function rgba(hex: string, alpha: number) {
@@ -24,6 +26,7 @@ export function CampusMap({
   focusToken = 0,
   spots = [],
   showHeat = false,
+  heatWindow = 'now',
   gameDay = false,
   gameDayLabel = null,
   lockOnCenter = false,
@@ -37,6 +40,7 @@ export function CampusMap({
   focusToken?: number
   spots?: BusySpot[]
   showHeat?: boolean
+  heatWindow?: string
   gameDay?: boolean
   gameDayLabel?: string | null
   lockOnCenter?: boolean
@@ -44,6 +48,7 @@ export function CampusMap({
   showsUserLocation?: boolean
 }) {
   const mapRef = useRef<MapView>(null)
+  const [tigerZones, setTigerZones] = useState<TigerHeatZone[]>([])
   const pinsRef = useRef(pins)
   const centerRef = useRef(center)
   pinsRef.current = pins
@@ -59,6 +64,22 @@ export function CampusMap({
   const pinKey = (pins || []).map((pin: MapPin) => `${pin.id}:${pin.latitude.toFixed(4)},${pin.longitude.toFixed(4)}`).join('|')
   const centerKey = center ? `${center.latitude.toFixed(4)},${center.longitude.toFixed(4)}` : ''
   const heatKey = showHeat ? spots.map((spot: BusySpot) => spot.id).join('|') : ''
+
+  useEffect(() => {
+    if (!showHeat) {
+      setTigerZones([])
+      return undefined
+    }
+    let alive = true
+    fetchTigerHeatMap(heatWindow).then((result) => {
+      if (alive) setTigerZones(result.zones || [])
+    }).catch(() => {
+      if (alive) setTigerZones([])
+    })
+    return () => {
+      alive = false
+    }
+  }, [showHeat, heatWindow])
 
   useEffect(() => {
     if (!mapRef.current) return
@@ -136,6 +157,42 @@ export function CampusMap({
         showsUserLocation={showsUserLocation}
       >
         {showHeat
+          ? tigerZones.map((zone: TigerHeatZone) => (
+              <Polygon
+                key={`tiger-${zone.id}`}
+                coordinates={toNativeRing(zone.polygon)}
+                fillColor={zone.preview ? 'rgba(245,102,0,0.18)' : 'rgba(245,102,0,0.36)'}
+                strokeColor="#522D80"
+                strokeWidth={2}
+              />
+            ))
+          : null}
+        {showHeat
+          ? tigerZones.map((zone: TigerHeatZone) => (
+              <Polygon
+                key={`tiger-inner-${zone.id}`}
+                coordinates={toNativeRing(zone.innerPolygon)}
+                fillColor="rgba(82,45,128,0.2)"
+                strokeColor="#F56600"
+                strokeWidth={1}
+              />
+            ))
+          : null}
+        {showHeat
+          ? tigerZones.map((zone: TigerHeatZone) => (
+              <Marker
+                key={`tiger-label-${zone.id}`}
+                coordinate={{ latitude: zone.lat, longitude: zone.lng }}
+                anchor={{ x: 0.5, y: 0.5 }}
+                tracksViewChanges={false}
+              >
+                <View style={[styles.tigerChip, zone.preview ? styles.tigerChipPreview : null]}>
+                  <Text style={styles.tigerChipText}>{zone.bonusLabel}</Text>
+                </View>
+              </Marker>
+            ))
+          : null}
+        {showHeat
           ? spots.map((spot: BusySpot) => (
               <Circle
                 key={spot.id}
@@ -199,6 +256,16 @@ const styles = StyleSheet.create({
   },
   unavailableTitle: { fontSize: 16, fontWeight: '800', color: '#522D80', marginBottom: 8 },
   unavailableBody: { fontSize: 14, lineHeight: 20, textAlign: 'center', color: '#5B6472' },
+  tigerChip: {
+    backgroundColor: '#F56600',
+    borderColor: '#522D80',
+    borderWidth: 2,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  tigerChipPreview: { backgroundColor: '#522D80' },
+  tigerChipText: { color: '#FFFFFF', fontSize: 12, fontWeight: '800' },
   zone: { position: 'absolute', left: 16, top: 88, right: 16, alignItems: 'flex-start' },
   requestDot: {
     width: 14,

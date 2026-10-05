@@ -16,6 +16,7 @@ export type LatLng = { latitude: number; longitude: number }
 export type CampusMapProps = {
   spots: BusySpot[]
   showHeat: boolean
+  heatWindow?: string
   mapType?: MapKind
   theater?: boolean
   searchMotion?: boolean

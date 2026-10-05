@@ -1,14 +1,16 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react'
 import { Platform, StyleSheet, Text, View } from 'react-native'
 import Constants from 'expo-constants'
-import MapView, { Circle, Marker, Polyline, PROVIDER_DEFAULT } from 'react-native-maps'
+import MapView, { Circle, Marker, Polygon, Polyline, PROVIDER_DEFAULT } from 'react-native-maps'
 import { ANDROID_MAP_UNAVAILABLE, googleMapStyle, nativeMapTilesReady } from 'rides-native/googleMapChrome.js'
 import { heatColor } from 'rides-native/heat.js'
 import { DOWNTOWN, STADIUM } from 'rides-native/places.js'
 import { SIMULATED_FLEET_BADGE, refuseSimulatedDriverTap } from 'rides-native/simulatedDrivers.js'
 import { demoCarPaint, SEARCH_MAP_ZOOM_MS, searchMapRegion } from 'rides-native/searchPreview.js'
 import { useSimulatedFleet } from 'rides-native/useSimulatedFleet.js'
-import type { CampusMapHandle, CampusMapProps } from '@/components/mapTypes'
+import { fetchTigerHeatMap } from 'rides-native/tigerHeatClient.js'
+import { toNativeRing, type TigerHeatZone } from 'rides-native/tigerHeat.js'
+import type { CampusMapHandle, CampusMapProps, LatLng } from '@/components/mapTypes'
 import { useTheme } from '@/lib/theme'
 
 function rgba(hex: string, alpha: number) {
@@ -62,6 +64,7 @@ export const CampusMap = forwardRef<CampusMapHandle, CampusMapProps>(function Ca
   {
     spots,
     showHeat,
+    heatWindow = 'now',
     mapType = 'standard',
     theater = false,
     searchMotion = false,
@@ -82,6 +85,7 @@ export const CampusMap = forwardRef<CampusMapHandle, CampusMapProps>(function Ca
   const opened = searchMapRegion(0)
   const [tick, setTick] = useState(0)
   const [radar, setRadar] = useState(90)
+  const [tigerZones, setTigerZones] = useState<TigerHeatZone[]>([])
   const center = showHeat ? DOWNTOWN : STADIUM
 
   useImperativeHandle(ref, () => ({
@@ -160,6 +164,22 @@ export const CampusMap = forwardRef<CampusMapHandle, CampusMapProps>(function Ca
   }, [searchMotion])
 
   useEffect(() => {
+    if (!showHeat) {
+      setTigerZones([])
+      return undefined
+    }
+    let alive = true
+    fetchTigerHeatMap(heatWindow).then((result) => {
+      if (alive) setTigerZones(result.zones || [])
+    }).catch(() => {
+      if (alive) setTigerZones([])
+    })
+    return () => {
+      alive = false
+    }
+  }, [showHeat, heatWindow])
+
+  useEffect(() => {
     if (!theater || searchMotion) return undefined
     const id = setInterval(() => {
       setTick((value: number) => value + 1)
@@ -208,6 +228,42 @@ export const CampusMap = forwardRef<CampusMapHandle, CampusMapProps>(function Ca
       >
         <Marker coordinate={STADIUM} pinColor={colors.orange} title="Memorial Stadium" />
         <Marker coordinate={DOWNTOWN} pinColor={colors.purple} title="Downtown Clemson" />
+        {showHeat
+          ? tigerZones.map((zone: TigerHeatZone) => (
+              <Polygon
+                key={`tiger-${zone.id}`}
+                coordinates={toNativeRing(zone.polygon)}
+                fillColor={zone.preview ? 'rgba(245,102,0,0.18)' : 'rgba(245,102,0,0.36)'}
+                strokeColor="#522D80"
+                strokeWidth={2}
+              />
+            ))
+          : null}
+        {showHeat
+          ? tigerZones.map((zone: TigerHeatZone) => (
+              <Polygon
+                key={`tiger-inner-${zone.id}`}
+                coordinates={toNativeRing(zone.innerPolygon)}
+                fillColor="rgba(82,45,128,0.2)"
+                strokeColor="#F56600"
+                strokeWidth={1}
+              />
+            ))
+          : null}
+        {showHeat
+          ? tigerZones.map((zone: TigerHeatZone) => (
+              <Marker
+                key={`tiger-label-${zone.id}`}
+                coordinate={{ latitude: zone.lat, longitude: zone.lng }}
+                anchor={{ x: 0.5, y: 0.5 }}
+                tracksViewChanges={false}
+              >
+                <View style={[styles.tigerChip, zone.preview ? styles.tigerChipPreview : null]}>
+                  <Text style={styles.tigerChipText}>{zone.bonusLabel}</Text>
+                </View>
+              </Marker>
+            ))
+          : null}
         {showHeat
           ? spots.map((spot: BusySpot) => (
               <Circle
@@ -382,6 +438,16 @@ const styles = StyleSheet.create({
     borderColor: '#FFFFFF',
   },
   stopText: { color: '#FFFFFF', fontSize: 12, fontWeight: '800' },
+  tigerChip: {
+    backgroundColor: '#F56600',
+    borderColor: '#522D80',
+    borderWidth: 2,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  tigerChipPreview: { backgroundColor: '#522D80' },
+  tigerChipText: { color: '#FFFFFF', fontSize: 12, fontWeight: '800' },
   zone: { position: 'absolute', left: 12, bottom: 12, right: 12, alignItems: 'flex-start' },
   zoneText: { overflow: 'hidden', borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6, fontSize: 12, fontWeight: '800' },
   busyCar: { alignItems: 'center', width: 52 },
