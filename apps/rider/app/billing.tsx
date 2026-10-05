@@ -1,12 +1,26 @@
 import { useFocusEffect, useRouter } from 'expo-router'
+import * as Linking from 'expo-linking'
+import * as WebBrowser from 'expo-web-browser'
 import { useCallback, useState } from 'react'
-import { ScrollView, Text, View } from 'react-native'
+import { Modal, ScrollView, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { PrimaryButton } from '@/components/Button'
 import { StackHeader } from '@/components/StackHeader'
 import { useAuth } from '@/lib/auth'
 import { supabase } from '@/lib/supabase'
-import { depositSurfaceCopy, loadRiderBilling } from 'rides-native/riderMoney.js'
+import { parseCheckoutSessionId } from 'rides-native/checkoutReturn.js'
+import {
+  ADD_ANOTHER_PAYMENT_METHOD_ID,
+  ADD_ANOTHER_PAYMENT_METHOD_LABEL,
+  RIDE_PAYMENT_METHODS,
+  buyPrepaidCredits,
+  depositSurfaceCopy,
+  loadPrepaidCredits,
+  loadRiderBilling,
+  prepaidPurchaseSummary,
+  saveCheckoutPaymentMethod,
+  startPaymentMethodSetup,
+} from 'rides-native/riderMoney.js'
 import { formatCents } from 'rides-native/tripTags.js'
 import { lift } from '@/lib/elevation'
 import type { Palette } from '@/lib/palette'
@@ -14,6 +28,7 @@ import { useTheme } from '@/lib/theme'
 import { useThemedStyles } from '@/lib/useThemedStyles'
 import { RequireAuth } from '@/components/RequireAuth'
 
+type PrepaidTier = { id: string; label?: string; priceCents: number; creditCents: number }
 type Card = { brand: string; last4: string | null; billingActivatedAt: string | null }
 type Deposit = { id: string; amount_cents: number | null; status: string | null; created_at: string | null; trip_id: string | null }
 type Ride = {
@@ -35,11 +50,23 @@ function BillingScreen() {
   const [rides, setRides] = useState<Ride[]>([])
   const [note, setNote] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+  const [creditsCents, setCreditsCents] = useState<number | null>(null)
+  const [creditsUnavailable, setCreditsUnavailable] = useState(false)
+  const [creditsLoaded, setCreditsLoaded] = useState(false)
+  const [creditsError, setCreditsError] = useState<string | null>(null)
+  const [tiers, setTiers] = useState<PrepaidTier[]>([])
+  const [pending, setPending] = useState<PrepaidTier | null>(null)
+  const [busy, setBusy] = useState(false)
   const { colors } = useTheme()
   const styles = useThemedStyles(makeStyles)
 
   const load = useCallback(() => {
-    if (!user || !supabase) return undefined
+    if (!user || !supabase) {
+      setCreditsLoaded(true)
+      setCreditsUnavailable(true)
+      setLoading(false)
+      return undefined
+    }
     let alive = true
     setLoading(true)
     loadRiderBilling(supabase, user.id).then((result) => {
@@ -51,6 +78,14 @@ function BillingScreen() {
       setNote(problems.length ? problems.join(' ') : null)
       setLoading(false)
     })
+    loadPrepaidCredits(supabase).then((result) => {
+      if (!alive) return
+      setCreditsCents(result.balanceCents)
+      setCreditsUnavailable(result.unavailable)
+      setCreditsLoaded(true)
+      setCreditsError(result.error)
+      setTiers((result.tiers || []) as PrepaidTier[])
+    })
     return () => {
       alive = false
     }
@@ -58,10 +93,104 @@ function BillingScreen() {
 
   useFocusEffect(load)
 
+  async function onPickMethod(methodId: string) {
+    if (!supabase || busy) return
+    setBusy(true)
+    setNote(null)
+    try {
+      const returnUrl = Linking.createURL('billing')
+      const session = await startPaymentMethodSetup(supabase, { paymentMethod: methodId, returnUrl })
+      if (!session?.url) {
+        setNote(session?.error || 'Could not open payment setup. No charge was made.')
+        return
+      }
+      const result = await WebBrowser.openAuthSessionAsync(session.url, returnUrl)
+      if (result.type !== 'success') {
+        setNote('Payment setup canceled. No charge was made.')
+        return
+      }
+      const sessionId = parseCheckoutSessionId(result.url)
+      if (!sessionId) {
+        setNote('Stripe did not return a setup session. No charge was made.')
+        return
+      }
+      await saveCheckoutPaymentMethod(supabase, sessionId)
+      setNote('Payment method saved.')
+      load()
+    } catch (err) {
+      setNote(err instanceof Error ? err.message : 'Could not add that payment method. No charge was made.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function onConfirmPurchase() {
+    if (!supabase || !pending || busy) return
+    setBusy(true)
+    setNote(null)
+    try {
+      await buyPrepaidCredits(supabase, pending.id)
+      setPending(null)
+      setNote('Credits added.')
+      load()
+    } catch (err) {
+      setNote(err instanceof Error ? err.message : 'Could not buy credits. If the card was not charged, nothing was added.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const pendingSummary = pending ? prepaidPurchaseSummary(pending) : null
+
   return (
     <View style={[styles.screen, { paddingTop: insets.top }]}>
       <StackHeader title="Billing" onBack={() => router.back()} />
       <ScrollView contentContainerStyle={styles.body}>
+        <Text style={styles.creditsLabel} accessibilityRole="header">credits</Text>
+        <View style={[styles.card, lift(colors, 'rest')]} accessibilityLabel="credits">
+          <Text style={styles.cardLast}>
+            {!creditsLoaded
+              ? '…'
+              : creditsUnavailable || creditsCents == null
+                ? 'Balance unavailable'
+                : formatCents(creditsCents)}
+          </Text>
+          {creditsError ? <Text style={styles.error}>{creditsError}</Text> : null}
+        </View>
+
+        <Text style={styles.kicker}>PAYMENT METHODS</Text>
+        <View>
+          {RIDE_PAYMENT_METHODS.map((method) => (
+            <View key={method.id} style={{ marginBottom: 8 }}>
+              <PrimaryButton
+                label={method.label}
+                disabled={busy || !user}
+                onPress={() => onPickMethod(method.id)}
+              />
+            </View>
+          ))}
+          <PrimaryButton
+            label={ADD_ANOTHER_PAYMENT_METHOD_LABEL}
+            tone="outline"
+            disabled={busy || !user}
+            onPress={() => onPickMethod(ADD_ANOTHER_PAYMENT_METHOD_ID)}
+          />
+          <Text style={styles.copy}>
+            Apple Pay and Google Pay open Stripe Checkout in setup mode, which does not charge the card. Apple Pay on the website still needs this domain registered under Stripe Payment method domains.
+          </Text>
+        </View>
+
+        <Text style={styles.kicker}>PREPAID CREDITS</Text>
+        {tiers.map((tier) => (
+          <PrimaryButton
+            key={tier.id}
+            label={tier.label || tier.id}
+            tone="purple"
+            disabled={busy || !user}
+            onPress={() => setPending(tier)}
+          />
+        ))}
+
         {!user ? (
           <>
             <Text style={styles.copy}>Sign in to see the card, deposits, and ride history on this account.</Text>
@@ -112,6 +241,25 @@ function BillingScreen() {
         ))}
         {note ? <Text style={styles.error}>{note}</Text> : null}
       </ScrollView>
+      <Modal visible={Boolean(pendingSummary)} transparent animationType="slide" onRequestClose={() => { if (!busy) setPending(null) }} accessibilityViewIsModal>
+        <View style={styles.modalBackdrop}>
+          <View style={[styles.card, lift(colors, 'float')]}>
+            <Text style={styles.rowTitle}>{pendingSummary?.title}</Text>
+            <Text style={styles.copy}>{pendingSummary?.body}</Text>
+            <PrimaryButton
+              label={busy ? 'Charging…' : (pendingSummary?.confirmLabel || 'Charge')}
+              disabled={busy}
+              onPress={onConfirmPurchase}
+            />
+            <PrimaryButton
+              label={pendingSummary?.cancelLabel || 'Cancel'}
+              tone="outline"
+              disabled={busy}
+              onPress={() => setPending(null)}
+            />
+          </View>
+        </View>
+      </Modal>
     </View>
   )
 }
@@ -121,6 +269,13 @@ function makeStyles(colors: Palette) {
     screen: { flex: 1, backgroundColor: colors.background },
     body: { padding: 20, gap: 10, paddingBottom: 32 },
     kicker: { color: colors.orange, fontWeight: '800' as const, letterSpacing: 1.1, fontSize: 12, marginTop: 8 },
+    creditsLabel: { color: colors.purple, fontWeight: '800' as const, fontSize: 13 },
+    modalBackdrop: {
+      flex: 1,
+      justifyContent: 'flex-end' as const,
+      backgroundColor: colors.scrim,
+      padding: 16,
+    },
     card: {
       backgroundColor: colors.card,
       borderRadius: 16,

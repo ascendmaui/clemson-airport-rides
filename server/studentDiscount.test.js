@@ -4,6 +4,18 @@ import test from 'node:test'
 import { studentDiscountGranted } from '../src/lib/studentDomain.js'
 import { studentFlagsFor } from './studentEligibility.js'
 
+test('ride billing prices from the confirmed email and ignores a client student flag', () => {
+  const billing = readFileSync(new URL('./endpoints/rideBilling.js', import.meta.url), 'utf8')
+  const request = readFileSync(new URL('./endpoints/requestDriverTrip.js', import.meta.url), 'utf8')
+  const fare = readFileSync(new URL('./authoritativeFare.js', import.meta.url), 'utf8')
+  assert.match(billing, /studentDiscountGranted\(user\)/)
+  assert.doesNotMatch(billing, /body\.isStudent/)
+  assert.match(request, /studentDiscountGranted\(user\)/)
+  assert.doesNotMatch(request, /body\.isStudent/)
+  assert.match(fare, /studentDiscountGranted/)
+  assert.match(fare, /spoofedStudent: body\.isStudent === true && !priced\.isStudent/)
+})
+
 test('quote and airport checkout do not read a client student flag', () => {
   const quote = readFileSync(new URL('./endpoints/quoteFare.js', import.meta.url), 'utf8')
   const checkout = readFileSync(new URL('./endpoints/airportCheckout.js', import.meta.url), 'utf8')
