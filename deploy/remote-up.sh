@@ -33,9 +33,22 @@ if [ -f "$PREV_FILE" ]; then
   PREV="$(tr -d '[:space:]' < "$PREV_FILE")"
 fi
 
+if [ ! -f "$COMPOSE" ] && [ ! -d "$REPO/.git" ]; then
+  mkdir -p "$(dirname "$REPO")"
+  git clone --depth 1 https://github.com/ascendmaui/clemson-airport-rides.git "$REPO"
+fi
 if [ -d "$REPO/.git" ]; then
   git -C "$REPO" fetch --depth 1 origin "$TAG"
-  git -C "$REPO" checkout --detach FETCH_HEAD
+  git -C "$REPO" checkout --detach --force FETCH_HEAD
+fi
+if [ ! -f "$COMPOSE" ]; then
+  echo "missing $COMPOSE" >&2
+  exit 1
+fi
+
+if [ -n "${GHCR_TOKEN:-}" ]; then
+  printf '%s' "$GHCR_TOKEN" | docker login ghcr.io -u "${GHCR_USER:-github}" --password-stdin >/dev/null
+  unset GHCR_TOKEN
 fi
 
 export IMAGE_TAG="$TAG"

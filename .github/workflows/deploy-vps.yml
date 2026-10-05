@@ -160,20 +160,29 @@ jobs:
           VPS_USER: ${{ secrets.VPS_USER }}
           VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
           VPS_KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GHCR_USER: ${{ github.actor }}
           SHA: ${{ steps.meta.outputs.sha }}
           TARGET: ${{ steps.meta.outputs.target }}
           BRANCH_PUSH: ${{ steps.meta.outputs.branch_push }}
         run: |
           set -euo pipefail
           set +x
-          umask 077
-          mkdir -p ~/.ssh
-          printf '%s\n' "$VPS_KNOWN_HOSTS" > ~/.ssh/known_hosts
-          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/deploy_key
-          chmod 600 ~/.ssh/deploy_key ~/.ssh/known_hosts
-          ssh -i ~/.ssh/deploy_key \
-            -o IdentitiesOnly=yes \
-            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
-            "$VPS_USER@$VPS_HOST" \
-            "IMAGE_TAG=$(printf '%q' "$SHA") TARGET=$(printf '%q' "$TARGET") BRANCH_PUSH=$(printf '%q' "$BRANCH_PUSH") bash -s" \
+          bash deploy/prepare-ssh.sh
+          host="$(printf '%s' "$VPS_HOST" | tr -d '[:space:]')"
+          user="$(printf '%s' "$VPS_USER" | tr -d '[:space:]')"
+          ssh_opts=(
+            -i "$HOME/.ssh/deploy_key"
+            -o IdentitiesOnly=yes
+            -o BatchMode=yes
+            -o PreferredAuthentications=publickey
+            -o ConnectTimeout=20
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts"
+            -o StrictHostKeyChecking=yes
+          )
+          dest="$user@$host"
+          ssh "${ssh_opts[@]}" "$dest" "mkdir -p /opt/clemson-rides/src/deploy"
+          scp "${ssh_opts[@]}" deploy/docker-compose.yml "$dest:/opt/clemson-rides/src/deploy/docker-compose.yml"
+          ssh "${ssh_opts[@]}" "$dest" \
+            "IMAGE_TAG=$(printf '%q' "$SHA") TARGET=$(printf '%q' "$TARGET") BRANCH_PUSH=$(printf '%q' "$BRANCH_PUSH") GHCR_USER=$(printf '%q' "$GHCR_USER") GHCR_TOKEN=$(printf '%q' "$GHCR_TOKEN") bash -s" \
             < deploy/remote-up.sh
