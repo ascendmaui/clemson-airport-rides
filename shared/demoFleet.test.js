@@ -4,7 +4,7 @@ import path from 'node:path'
 import test from 'node:test'
 import { fileURLToPath } from 'node:url'
 import { BOOKABLE_RIDE_TIER_IDS, bookableRideTiers } from '../packages/rides-native/places.js'
-import { DEMO_FLEET, isDemoDriverId } from './demoFleet.js'
+import { DEMO_FLEET, demoDriverById, demoHeadshotUrl, isDemoDriverId } from './demoFleet.js'
 import { OFFERED_RIDE_TIERS, RIDE_OPTION_CATALOG, isBlockedRideTier } from './rideOptions.js'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
@@ -83,4 +83,42 @@ test('bookable tiers are Standard, Wait & Save, and Extra Comfort', () => {
     }),
     false,
   )
+})
+
+test('demo headshot URLs skip blank, padded, and unsafe paths', () => {
+  for (const car of DEMO_FLEET) {
+    assert.equal(demoHeadshotUrl(car), car.photoSmall)
+    assert.equal(demoHeadshotUrl(car.id, 'large'), car.photo)
+    assert.equal(demoHeadshotUrl(` ${car.id} `), car.photoSmall)
+    assert.equal(demoDriverById(` ${car.id} `)?.id, car.id)
+    assert.equal(isDemoDriverId(` ${car.id} `), true)
+  }
+  assert.equal(demoHeadshotUrl(' demo-marcus '), '/demo-drivers/01-marcus@128.webp')
+  assert.equal(demoHeadshotUrl('demo-marcus', 'large'), '/demo-drivers/01-marcus.webp')
+  assert.equal(demoDriverById(' demo-jenna ')?.firstName, 'Jenna')
+  assert.equal(isDemoDriverId(' demo-jenna '), true)
+  assert.equal(demoHeadshotUrl({
+    id: 'demo-unlisted',
+    isDemo: true,
+    photoSmall: '   ',
+    photo: '/demo-drivers/ada.webp',
+  }), '/demo-drivers/ada.webp')
+  assert.equal(demoHeadshotUrl({
+    id: 'demo-unlisted',
+    isDemo: true,
+    photo: 'https://evil.example/a.jpg',
+  }), null)
+  assert.equal(demoHeadshotUrl({
+    id: 'demo-unlisted',
+    isDemo: true,
+    photo: '/demo-drivers/../secret.webp',
+  }), null)
+  assert.equal(demoHeadshotUrl({
+    id: 'demo-unlisted',
+    isDemo: true,
+    photo: '/demo-drivers/..',
+  }), null)
+  assert.equal(demoHeadshotUrl({ id: 'real-1', photo: '/demo-drivers/01-marcus.webp' }), null)
+  assert.equal(demoHeadshotUrl(null), null)
+  assert.equal(demoHeadshotUrl('not-a-demo'), null)
 })

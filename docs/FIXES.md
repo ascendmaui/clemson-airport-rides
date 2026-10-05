@@ -2,6 +2,18 @@
 
 Persistent knowledge base for recurring failures. When a matching issue appears, apply the saved fix first.
 
+## 2026-10-05 — Shared demo headshot URL polish
+
+- **What was wrong:** `demoDriverById` did not trim ids, so `isDemoDriverId(' demo-marcus ')` was true while the portrait lookup treated that same id as a real driver and showed initials. Demo photo fallback used the first truthy string, including whitespace, off-site URLs, and `/demo-drivers/..`. A real `avatar_url` of `javascript:` or `/Demo-Drivers/...` could be rendered as a photo. `renderDriverPortrait` inserted initials and URLs into markup without escaping.
+- **What changed:** `demoDriverById` now uses the same trimmed key as `isDemoDriverId`. New `demoHeadshotUrl` returns the `@128` marker file, or the large file when asked, and only accepts a site-relative `/demo-drivers/` filename. Catalog photos still win over a caller path. A demo record with no safe headshot falls back to initials. Real avatars must be `http(s)` and must not point at `/demo-drivers/`. Portrait markup escapes `&`, quotes, and angle brackets. Bookable tiers and the live map car count were left as they are.
+- **Files touched:**
+  - `shared/demoFleet.js`
+  - `shared/driverPortrait.js`
+  - `shared/demoFleet.test.js`
+  - `shared/driverPortrait.test.js`
+  - `docs/FIXES.md`
+- **Verified:** `node --experimental-strip-types --test shared/driverPortrait.test.js shared/demoFleet.test.js` and `npm test`.
+
 ## 2026-10-05 — Shared portrait and demo fleet parity tests
 
 - **What was wrong:** `shared/driverPortrait.test.js` checked one catalog headshot and did not cover the URL fallback (fleet lookup, `@128` photo, then the large photo, then initials for a blank real avatar). `shared/demoFleet.test.js` checked `bookable: false` per car and did not lock the bookable tier list to Standard, Wait & Save, and Extra Comfort, or the single unbookable wedge demo car.

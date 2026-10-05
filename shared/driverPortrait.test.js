@@ -126,3 +126,67 @@ test('a real driver uses avatarUrl and a blank avatar falls back to initials', (
   assert.match(markup, />RQ</)
   assert.equal(markup.includes('/demo-drivers/'), false)
 })
+
+test('a padded demo id uses the fleet headshot', () => {
+  const padded = resolveDriverPortrait({ id: ' demo-marcus ' })
+  assert.equal(padded.kind, 'photo')
+  assert.equal(padded.isDemo, true)
+  assert.equal(padded.url, '/demo-drivers/01-marcus@128.webp')
+  assert.equal(padded.initials, null)
+})
+
+test('a demo record with no safe headshot uses initials', () => {
+  const unsafe = resolveDriverPortrait({
+    id: 'demo-unlisted',
+    isDemo: true,
+    firstName: 'Ada',
+    photo: 'https://evil.example/a.jpg',
+    photoSmall: '/demo-drivers/../secret.webp',
+  })
+  assert.equal(unsafe.kind, 'initials')
+  assert.equal(unsafe.isDemo, true)
+  assert.equal(unsafe.initials, 'A')
+  assert.equal(unsafe.url, null)
+  const markup = renderDriverPortrait({
+    id: 'demo-unlisted',
+    isDemo: true,
+    firstName: 'Ada',
+    photo: 'https://evil.example/a.jpg',
+  })
+  assert.match(markup, /data-portrait="initials"/)
+  assert.match(markup, />A</)
+  assert.equal(markup.includes('evil.example'), false)
+})
+
+test('a real avatar must be an http(s) URL and cannot point at a demo headshot', () => {
+  const scripted = {
+    full_name: 'Sam Lee',
+    avatar_url: 'javascript:alert(1)',
+  }
+  const script = resolveDriverPortrait(scripted)
+  assert.equal(script.kind, 'initials')
+  assert.equal(script.initials, 'SL')
+  assert.equal(script.isDemo, false)
+  assert.equal(renderDriverPortrait(scripted).includes('javascript:'), false)
+
+  const cased = {
+    full_name: 'Sam Lee',
+    avatarUrl: '/Demo-Drivers/01-marcus.webp',
+  }
+  assert.equal(resolveDriverPortrait(cased).kind, 'initials')
+  assert.equal(renderDriverPortrait(cased).includes('marcus'), false)
+
+  const quoted = resolveDriverPortrait({
+    full_name: 'Sam Lee',
+    avatar_url: 'https://cdn.example/a.jpg" onerror="alert(1)',
+  })
+  assert.equal(quoted.kind, 'initials')
+  assert.equal(quoted.url, null)
+})
+
+test('initials markup escapes a name that starts with a markup character', () => {
+  const markup = renderDriverPortrait({ full_name: '<tag>' })
+  assert.match(markup, /data-portrait="initials"/)
+  assert.match(markup, />&lt;</)
+  assert.equal(markup.includes('<tag>'), false)
+})
