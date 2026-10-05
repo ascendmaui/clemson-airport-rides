@@ -1,9 +1,13 @@
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import test from 'node:test'
 import {
   describeDriver,
   driverApproach,
   driverAvailabilityLine,
+  EMPTY_FAVORITES_COPY,
+  FAVORITE_ACCOUNT_SAVE_ERROR,
+  FAVORITE_PERSIST_ERROR,
   fetchDriverApplication,
   fetchDriversByIds,
   fetchOnlineDrivers,
@@ -1338,4 +1342,103 @@ test('filterDriversForFleet keeps the driver list', () => {
   ]
   assert.deepEqual(filterDriversForFleet(drivers).map((d) => d.id), ['a', 'b'])
   assert.deepEqual(filterDriversForFleet(null), [])
+})
+
+function readRepo(rel) {
+  return readFileSync(new URL(rel, import.meta.url), 'utf8')
+}
+
+test('empty favorites list copy tells the rider to save a driver', () => {
+  assert.match(EMPTY_FAVORITES_COPY, /No saved drivers yet/)
+  assert.match(EMPTY_FAVORITES_COPY, /top of this list/)
+  assert.equal(groupDriversForPicker([{ id: A, online: true }], []).preferred.length, 0)
+
+  const web = readRepo('../../src/screens/PickDriver.jsx')
+  const native = readRepo('../../apps/rider/app/pick-driver.tsx')
+  for (const source of [web, native]) {
+    assert.match(source, /EMPTY_FAVORITES_COPY/)
+    assert.match(source, /favoriteIds\.length === 0/)
+  }
+  assert.match(web, /role="status"/)
+  assert.match(native, /<Text style=\{styles\.sub\}>\{EMPTY_FAVORITES_COPY\}<\/Text>/)
+})
+
+test('sortPreferredDrivers keeps favorites first then approach', () => {
+  const pickup = { lat: 34.6788, lng: -82.843 }
+  const closestOther = { id: B, name: 'Bea', online: true, lat: 34.679, lng: -82.843 }
+  const closerFavorite = { id: A, name: 'Ada', online: true, lat: 34.7, lng: -82.84 }
+  const fartherFavorite = { id: C, name: 'Cam', online: true, lat: 34.85, lng: -82.84 }
+  const otherEta = driverApproach(closestOther, pickup).etaMin
+  const closerEta = driverApproach(closerFavorite, pickup).etaMin
+  const fartherEta = driverApproach(fartherFavorite, pickup).etaMin
+  assert.ok(otherEta < closerEta)
+  assert.ok(closerEta < fartherEta)
+
+  const sorted = sortPreferredDrivers(
+    [closestOther, fartherFavorite, closerFavorite],
+    [C, A],
+    pickup,
+  )
+  assert.deepEqual(sorted.map((driver) => driver.id), [A, C, B])
+
+  const byApproach = sortPreferredDrivers(
+    [closestOther, fartherFavorite, closerFavorite],
+    [],
+    pickup,
+  )
+  assert.deepEqual(byApproach.map((driver) => driver.id), [B, A, C])
+})
+
+test('toggle favorite persistence failure surfaces a user-visible error', async () => {
+  const storage = makeStorage()
+  const supabase = makeFakeSupabase({
+    updateProfileError: { message: 'Network disconnected' },
+  })
+  const partial = await saveFavoriteDriverIds(supabase, storage, 'user-1', [A])
+  assert.equal(partial.persisted, false)
+  assert.equal(partial.note, 'Saved on this phone.')
+  assert.equal(partial.error, FAVORITE_ACCOUNT_SAVE_ERROR)
+  assert.match(partial.error, /Could not save/)
+
+  const brokenStorage = { setItem: async () => { throw new Error('Disk full') } }
+  const total = await saveFavoriteDriverIds(supabase, brokenStorage, 'user-1', [A])
+  assert.equal(total.persisted, false)
+  assert.equal(total.note, null)
+  assert.equal(total.error, FAVORITE_PERSIST_ERROR)
+  assert.notEqual(total.error, '')
+
+  const throwing = {
+    from() {
+      return {
+        update() {
+          return {
+            eq() {
+              return Promise.reject(new Error('profile update threw'))
+            },
+          }
+        },
+      }
+    },
+  }
+  const threw = await saveFavoriteDriverIds(throwing, brokenStorage, 'user-1', [B])
+  assert.equal(threw.error, FAVORITE_PERSIST_ERROR)
+
+  const phoneOnly = await saveFavoriteDriverIds(null, makeStorage(), 'user-1', [A])
+  assert.equal(phoneOnly.error, null)
+  assert.equal(phoneOnly.note, 'Saved on this phone.')
+
+  const saved = await saveFavoriteDriverIds(makeFakeSupabase({
+    profiles: [{ id: 'user-1', favorite_driver_ids: [] }],
+  }), makeStorage(), 'user-1', [A])
+  assert.equal(saved.persisted, true)
+  assert.equal(saved.error, null)
+
+  const web = readRepo('../../src/screens/PickDriver.jsx')
+  const native = readRepo('../../apps/rider/app/pick-driver.tsx')
+  for (const source of [web, native]) {
+    assert.match(source, /if \(saved\.error\) setError\(saved\.error\)/)
+    assert.match(source, /setError\(err instanceof Error \? err\.message : FAVORITE_PERSIST_ERROR\)/)
+  }
+  assert.match(web, /<AccessibleAlert error=\{error\}/)
+  assert.match(native, /style=\{styles\.error\}/)
 })

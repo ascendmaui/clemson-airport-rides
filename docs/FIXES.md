@@ -2,6 +2,27 @@
 
 Persistent knowledge base for recurring failures. When a matching issue appears, apply the saved fix first.
 
+## 2026-10-05 — Favorite-driver tests already run under npm test
+
+- **What was wrong:** The favorite-driver cases (empty-list copy, favorites-then-approach sort, and a visible error when a save fails) were added to `packages/rides-native/drivers.test.js`. That file was already on the root `package.json` `test` script, so `npm test` would skip them only if the listing were missing or duplicated.
+- **What changed:** Left the `test` script unchanged. `packages/rides-native/drivers.test.js` is listed once, and this package added no other test file. Confirmed the three cases run as part of `npm test`.
+- **Files touched:** `docs/FIXES.md`
+- **Verified:** `npm test` (2324 pass, 0 fail). Passing cases in that run: `empty favorites list copy tells the rider to save a driver`, `sortPreferredDrivers keeps favorites first then approach`, `toggle favorite persistence failure surfaces a user-visible error`.
+
+## 2026-10-05 — Favorite star accessible name on pick-driver
+
+- **What was wrong:** The pick-driver favorite control read only as Save or Saved. Web had no `aria-label` or pressed state, and the native label did not name the driver, so the star did not say who would be saved or removed. A failed save on native was plain footer text with no alert announcement.
+- **What changed:** The control shows ★ when saved and ☆ when not. Web sets `aria-pressed` and `aria-label` (`Save {name}` / `Remove {name} from saved drivers`) and gives the empty-favorites status `aria-live="polite"`. Native sets the same label, `accessibilityState.selected`, and announces save failures with `accessibilityRole="alert"`. Empty-list copy and the account/phone error strings stay as they are.
+- **Files touched:** `src/screens/PickDriver.jsx`, `apps/rider/app/pick-driver.tsx`, `docs/FIXES.md`
+- **Verified:** `node --experimental-strip-types --test packages/rides-native/drivers.test.js` (37 pass) and `npm test` (2324 pass).
+
+## 2026-10-05 — Favorite drivers: empty-list copy and visible save errors
+
+- **What was wrong:** Pick a driver hid an empty favorites list with no explanation. `saveFavoriteDriverIds` treated an account or phone write failure as a quiet note (`Saved on this phone.`) or swallowed the storage error, and both pick-driver screens never put that failure on the error alert.
+- **What changed:** Added `EMPTY_FAVORITES_COPY` and show it on web and native when the rider has no saved drivers. Account or phone save failures now return `FAVORITE_ACCOUNT_SAVE_ERROR` or `FAVORITE_PERSIST_ERROR`, and both screens call `setError` with that string. Sort stays favorites first, then approach (ETA) inside the same online and dispatch-rank bucket. No fare math changes.
+- **Files touched:** `packages/rides-native/drivers.js`, `packages/rides-native/drivers.d.ts`, `packages/rides-native/drivers.test.js`, `src/screens/PickDriver.jsx`, `apps/rider/app/pick-driver.tsx`, `docs/FIXES.md`
+- **Verified:** `node --experimental-strip-types --test packages/rides-native/drivers.test.js`
+
 ## 2026-10-02 — GA96: GA audit & tests - abandoned checkout resilience, hold TTL NaN safety, and RPC direct update fallbacks
 
 - **Track / machine:** Clemson RIDES · MacBook Max · `agy/ga-audit-abandoned-checkout-resilience-ga96`
