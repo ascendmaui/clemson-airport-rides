@@ -2,6 +2,16 @@
 
 Persistent knowledge base for recurring failures. When a matching issue appears, apply the saved fix first.
 
+## 2026-10-05 — driver onboarding next-step hints (t1)
+
+- **What was wrong:** Incomplete onboarding still used generic copy, and three different gaps were easy to mix up. A missing vehicle year was only `Year must be from 1980 to {max}.` and did not send the driver back to Account after the status had already moved on. A pending W-9 showed up as the noun `W-9 legal name and TIN` (or a single field error). An unsigned agreement showed up as `Signed independent contractor agreement`, while submit stayed open and the review list used submission blockers, so the driver was not told that approval is what waits. Skip-ahead, photo, and review copy stayed generic: `Finish the current step before skipping ahead.`, `Add the photos on this step`, `Continue required steps`, and `Still needed · {label}`.
+- **What changed:** Added `vehicleYearNextStepHint`, `w9NextStepHint`, `agreementUnsignedNextStepHint`, and `nextStepHint` in `shared/driverOnboarding.js`. Year wins over a pending W-9, which wins over an unsigned agreement. The hints do not add approval blockers and do not change payout rules. Tests inventory the remaining screen messages and lock the three hints apart.
+- **Files touched:**
+  - `shared/driverOnboarding.js`
+  - `tests/onboardingFriction.test.js`
+  - `package.json`
+  - `docs/FIXES.md`
+
 ## 2026-10-02 — GA96: GA audit & tests - abandoned checkout resilience, hold TTL NaN safety, and RPC direct update fallbacks
 
 - **Track / machine:** Clemson RIDES · MacBook Max · `agy/ga-audit-abandoned-checkout-resilience-ga96`

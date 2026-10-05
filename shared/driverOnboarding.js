@@ -2,6 +2,7 @@
 
 import { IC_AGREEMENT_VERSION } from './icAgreement.js'
 import { isAdminIdentity } from './adminAccess.js'
+import { VEHICLE_YEAR_MIN, maxVehicleYear, parseVehicleYear } from './vehicleYear.js'
 
 export { IC_AGREEMENT_HTML, IC_AGREEMENT_TITLE, IC_AGREEMENT_VERSION } from './icAgreement.js'
 export { isAdminIdentity }
@@ -317,6 +318,46 @@ export function blockerLabel(code) {
       return String(unknown)
     }
   }
+}
+
+/**
+ * Next action when the vehicle year, the W-9, or the contractor agreement is open.
+ * Year wins, then W-9, then the unsigned agreement, so the hint names one step.
+ * An omitted vehicleYear or agreement field means "not loaded", not "missing".
+ * taxSaved counts as pending only when it is false.
+ * These hints do not add approval blockers. Submit stays allowed when the only gap is the signature.
+ */
+export function vehicleYearNextStepHint(now = new Date()) {
+  const max = maxVehicleYear(now)
+  return `Enter the vehicle year (${VEHICLE_YEAR_MIN} to ${max}) on Account, then continue to License.`
+}
+
+export function w9NextStepHint() {
+  return 'Finish the W-9 with your legal name and 9-digit TIN, then continue to Agreement.'
+}
+
+export function agreementUnsignedNextStepHint() {
+  return 'The contractor agreement is unsigned. Continue to Submit. You sign the copy an admin emails you, and approval waits on that signature.'
+}
+
+function hasOwn(obj, key) {
+  return Object.prototype.hasOwnProperty.call(obj || {}, key)
+}
+
+function vehicleYearMissing(ctx, now) {
+  if (!hasOwn(ctx, 'vehicleYear')) return false
+  return parseVehicleYear(ctx.vehicleYear, now) == null
+}
+
+function agreementFieldsPresent(ctx) {
+  return hasOwn(ctx, 'agreementSigned') || hasOwn(ctx, 'agreementVersion') || hasOwn(ctx, 'agreementSha256')
+}
+
+export function nextStepHint(ctx = {}, now = new Date()) {
+  if (vehicleYearMissing(ctx, now)) return vehicleYearNextStepHint(now)
+  if (ctx.taxSaved === false) return w9NextStepHint()
+  if (agreementFieldsPresent(ctx) && !agreementSatisfied(ctx)) return agreementUnsignedNextStepHint()
+  return null
 }
 
 export function canReceiveRides(onboardingStatus) {
