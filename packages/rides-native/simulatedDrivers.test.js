@@ -287,6 +287,17 @@ test('demo fleet source does not insert driver rows, charge cards, or notify', (
   assert.match(webMap, /SIMULATED_FLEET_BADGE/)
 })
 
+test('loaded web map builds the live driver marker from busyCarSvg', () => {
+  const webMap = read('src/components/CampusMap.jsx')
+  assert.match(webMap, /busyCarSvg/)
+  assert.match(webMap, /function busyCarIcon\(heading\)/)
+  assert.match(webMap, /busyCarSvg\(heading\)/)
+  assert.match(webMap, /busyCarIcon\(Number\(driverHeading\)\)/)
+  const fnAt = webMap.indexOf('function busyCarIcon(heading)')
+  const callAt = webMap.indexOf('busyCarIcon(Number(driverHeading))')
+  assert.ok(fnAt > 0 && callAt > fnAt)
+})
+
 test('searching preview ranks demo cars without making them available', async () => {
   const pickup = { lat: 34.6787, lng: -82.8466 }
   const ranked = searchingDemoRanked(1_000_000, pickup)

@@ -4,7 +4,7 @@ import { downtownNow, heatColor } from '../lib/downtownHeat'
 import { MAPS_LOADER_ID, MAP_LIBRARIES, mapsLoaderOptions } from '../lib/googleMapsLoader'
 import { fetchRideDemand, loadMapType, saveMapType } from '../lib/rideDemand'
 import { MapTypeSelect } from './MapTypeSelect'
-import { SIMULATED_FLEET_BADGE } from '../../packages/rides-native/simulatedDrivers.js'
+import { SIMULATED_FLEET_BADGE, busyCarSvg } from '../../packages/rides-native/simulatedDrivers.js'
 import { fetchTigerHeatMap } from '../../packages/rides-native/tigerHeatClient.js'
 import { DriverProfileCard, GoogleFleetMotion, PreviewFleetMotion } from './FleetMotion.jsx'
 
@@ -48,6 +48,20 @@ function numberedPinSvg(color, badge) {
       : undefined,
     anchor: typeof window !== 'undefined' && window.google?.maps
       ? new window.google.maps.Point(w / 2, w / 2)
+      : undefined,
+  }
+}
+
+function busyCarIcon(heading) {
+  const w = 48
+  const h = 56
+  return {
+    url: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(busyCarSvg(heading))}`,
+    scaledSize: typeof window !== 'undefined' && window.google?.maps
+      ? new window.google.maps.Size(w, h)
+      : undefined,
+    anchor: typeof window !== 'undefined' && window.google?.maps
+      ? new window.google.maps.Point(24, 18)
       : undefined,
   }
 }
