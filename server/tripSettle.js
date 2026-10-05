@@ -16,6 +16,7 @@ import { isAdminIdentity } from '../shared/adminAccess.js'
 import { ensureAuthoritativeFare, storedFareCents } from './authoritativeFare.js'
 import { farePaidCents, tripChargeKey } from './chargeIdempotency.js'
 import { insertTripEvent } from './tripEvents.js'
+import { debitStoredRideCredits } from './rideCreditSettle.js'
 import { airportDepositRequiredCents } from '../packages/rides-native/tripTags.js'
 
 const ACTIVE_KEEP = new Set(['accepted', 'arriving', 'in_progress', 'payment_required', 'searching', 'offered'])
@@ -139,15 +140,69 @@ export async function settleTrip({
   const cardOnFile = depositAlreadyExists
     ? null
     : await savedCardOnFile({ deps, sb, riderId: trip.rider_id })
-  // Campus fares have no deposit. This rider build does not save a card, so
-  // complete must not call Stripe. A deposit that already exists keeps the charge path.
+
+  const creditsChoice = action === 'complete'
+    && trip.metadata?.billing_choice === 'credits'
+    && due.amountCents > 0
+    && !override
+  let creditsDebit = null
+  if (creditsChoice) {
+    const alreadyDebited = Math.max(0, Math.round(Number(trip.metadata?.billing_debited_cents) || 0))
+    if (trip.metadata?.credits_settled && alreadyDebited >= due.amountCents) {
+      creditsDebit = { ok: true, duplicate: true, debitedCents: alreadyDebited }
+    } else {
+      try {
+        creditsDebit = await debitStoredRideCredits({
+          sb,
+          store: deps?.creditStore || null,
+          riderId: trip.rider_id,
+          tripId: trip.id,
+          amountCents: due.amountCents,
+        })
+      } catch {
+        creditsDebit = { ok: false, code: 'credits_unavailable', balanceCents: 0, debitedCents: 0 }
+      }
+    }
+    if (!creditsDebit.ok) {
+      const code = creditsDebit.code === 'credits_insufficient' ? 'credits_insufficient' : 'credits_unavailable'
+      const failure = failureResult(code, {
+        amountCents: due.amountCents,
+        tripId: trip.id,
+        kind: 'balance',
+        creditsBalanceCents: creditsDebit.balanceCents,
+      })
+      return {
+        http: 402,
+        body: {
+          error: failure.message,
+          failure,
+          progressed: false,
+          status: 'payment_required',
+          tripStatus: trip.status,
+        },
+      }
+    }
+  }
+
+  // Campus fares have no deposit. With no saved card and no collected credits,
+  // complete must not call Stripe or pay the driver. A credits debit that
+  // succeeded was collected, so the driver can be paid.
   const campusUncollected = action === 'complete'
     && due.amountCents > 0
     && !override
     && !depositAlreadyExists
     && cardOnFile === false
+    && !creditsDebit?.ok
   let payment = null
-  if (campusUncollected) {
+  if (creditsDebit?.ok) {
+    payment = {
+      ok: true,
+      method: 'credits',
+      amountCents: due.amountCents,
+      duplicate: Boolean(creditsDebit.duplicate),
+      debitedCents: creditsDebit.debitedCents,
+    }
+  } else if (campusUncollected) {
     payment = {
       ok: true,
       method: 'none',
@@ -233,6 +288,14 @@ export async function settleTrip({
     delete metadata.payment_hold
     metadata.remainder_uncollected = true
     metadata.remainder_reason = 'no_card_on_file'
+    patch.metadata = metadata
+  } else if (creditsDebit?.ok) {
+    const metadata = { ...(trip.metadata || {}) }
+    const priorPaid = Math.max(farePaidCents(trip), paidTowardFareCents(trip, payments))
+    metadata.billing_debited_cents = due.amountCents
+    metadata.billing_charged = false
+    metadata.credits_settled = true
+    metadata.fare_paid_cents = Math.max(priorPaid, paidTowardFareCents(trip, payments) + due.amountCents)
     patch.metadata = metadata
   }
 

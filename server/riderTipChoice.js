@@ -2,9 +2,11 @@
  * Rider tip choice after a completed trip.
  * Preset amounts come from the stored fare. A custom amount is the dollars
  * the rider typed, priced and checked here. Client fare, deposit, amount,
- * total, isStudent, and tip cents are ignored. This module records the
- * choice only. It does not charge a card.
+ * total, isStudent, and tip cents are ignored. A positive choice is billed
+ * by the tip charge module against a saved card. This file does not name
+ * the card processor. No card leaves the completed trip unchanged.
  */
+import { chargeSavedTip } from './tipCharge.js'
 
 export const TIP_MIN_CENTS = 100
 export const TIP_MAX_CENTS = 10000
@@ -224,21 +226,27 @@ export function readRiderTipChoice(metadata) {
 
 function publicChoice(choice) {
   if (!choice) return null
+  const tipCents = Math.max(0, Math.round(Number(choice.tipCents) || 0))
+  const charged = choice.charged === true || choice.chargeStatus === 'charged'
   return {
     id: choice.id || null,
-    tipCents: Math.max(0, Math.round(Number(choice.tipCents) || 0)),
+    tipCents,
     percent: choice.percent == null ? null : Number(choice.percent),
     skipped: Boolean(choice.skipped),
-    charged: false,
-    chargeStatus: 'not_wired',
+    charged,
+    chargeStatus: choice.chargeStatus || (charged ? 'charged' : 'not_wired'),
     recordedAt: choice.recordedAt || null,
   }
 }
 
 function chargedTipCents(trip) {
   const n = Number(trip?.tip_cents)
-  if (!Number.isFinite(n) || n <= 0) return 0
-  return Math.round(n)
+  if (Number.isFinite(n) && n > 0) return Math.round(n)
+  const choice = readRiderTipChoice(trip?.metadata)
+  if (choice?.charged === true || choice?.chargeStatus === 'charged') {
+    return Math.max(0, Math.round(Number(choice.tipCents) || 0))
+  }
+  return 0
 }
 
 function choiceIdFrom(body) {
@@ -306,11 +314,46 @@ function offerBody(trip, priced, driverName) {
   }
 }
 
+async function billChoice(sb, trip, userId, choice, cardClient, chargeTip) {
+  if (!choice || choice.skipped || choice.tipCents <= 0) {
+    return { ok: true, charged: false, chargeStatus: 'skipped', tipCents: 0 }
+  }
+  const run = chargeTip || chargeSavedTip
+  try {
+    return await run({
+      sb,
+      cardClient,
+      trip,
+      amountCents: choice.tipCents,
+      riderId: userId,
+    })
+  } catch {
+    return { ok: true, charged: false, chargeStatus: 'unavailable', tipCents: 0 }
+  }
+}
+
+function recordedBody(trip, choice, { alreadyRecorded = false } = {}) {
+  const charged = choice?.charged === true || choice?.chargeStatus === 'charged'
+  return {
+    ok: true,
+    mode: 'record',
+    tripId: trip.id,
+    choice: publicChoice(choice),
+    chargedTipCents: charged ? Math.max(0, Math.round(Number(choice.tipCents) || 0)) : 0,
+    chargingWired: charged,
+    alreadyRecorded,
+  }
+}
+
 /**
  * Offer or record a tip choice for the signed-in rider.
- * Returns { status, body }. Never calls Stripe.
+ * Returns { status, body }. Card billing lives in the tip charge module.
  */
-export async function applyRiderTipChoice(sb, user, rawBody, { now = () => new Date() } = {}) {
+export async function applyRiderTipChoice(sb, user, rawBody, {
+  now = () => new Date(),
+  chargeTip = null,
+  cardClient = null,
+} = {}) {
   const body = { ...(rawBody || {}) }
   for (const key of CLIENT_MONEY_KEYS) delete body[key]
 
@@ -354,21 +397,7 @@ export async function applyRiderTipChoice(sb, user, rawBody, { now = () => new D
   const resolved = resolveTipChoice(trip.fare_cents, choiceIdFrom(body), body.customDollars)
   if (!resolved.ok) return { status: 400, body: { error: resolved.error, chargingWired: false } }
 
-  if (existing) {
-    if (sameRecordedChoice(existing, resolved.choice)) {
-      return {
-        status: 200,
-        body: {
-          ok: true,
-          mode: 'record',
-          tripId: trip.id,
-          choice: publicChoice(existing),
-          chargedTipCents: 0,
-          chargingWired: false,
-          alreadyRecorded: true,
-        },
-      }
-    }
+  if (existing && !sameRecordedChoice(existing, resolved.choice)) {
     return {
       status: 409,
       body: {
@@ -379,11 +408,31 @@ export async function applyRiderTipChoice(sb, user, rawBody, { now = () => new D
     }
   }
 
-  const recordedAt = now().toISOString()
+  const alreadySettled = existing && (
+    existing.charged === true
+    || existing.chargeStatus === 'charged'
+    || resolved.choice.skipped
+    || resolved.choice.tipCents <= 0
+  )
+  if (alreadySettled) {
+    return { status: 200, body: recordedBody(trip, existing, { alreadyRecorded: true }) }
+  }
+
+  const charge = await billChoice(sb, trip, user.id, resolved.choice, cardClient, chargeTip)
+
+  if (existing && !charge.charged && charge.chargeStatus === existing.chargeStatus) {
+    return { status: 200, body: recordedBody(trip, existing, { alreadyRecorded: true }) }
+  }
+
+  const recordedAt = existing?.recordedAt || now().toISOString()
   const stored = {
+    ...(existing || resolved.choice),
     ...resolved.choice,
     recordedAt,
-    fareCents: priced.fareCents,
+    fareCents: existing?.fareCents ?? priced.fareCents,
+    charged: Boolean(charge.charged),
+    chargeStatus: charge.chargeStatus || (charge.charged ? 'charged' : 'no_card'),
+    paymentIntentId: charge.paymentIntentId || existing?.paymentIntentId || null,
   }
   const metadata = {
     ...metadataObject(trip.metadata),
@@ -394,15 +443,9 @@ export async function applyRiderTipChoice(sb, user, rawBody, { now = () => new D
     return { status: 500, body: { error: updated.error.message || 'Could not save tip choice' } }
   }
 
-  return {
-    status: 200,
-    body: {
-      ok: true,
-      mode: 'record',
-      tripId: trip.id,
-      choice: publicChoice(stored),
-      chargedTipCents: 0,
-      chargingWired: false,
-    },
+  if (charge.charged) {
+    await sb.from('trips').update({ tip_cents: stored.tipCents }).eq('id', trip.id).eq('rider_id', user.id)
   }
+
+  return { status: 200, body: recordedBody(trip, stored) }
 }
