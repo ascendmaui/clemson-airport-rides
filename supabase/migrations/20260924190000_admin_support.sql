@@ -22,10 +22,9 @@ CREATE TABLE IF NOT EXISTS public.admin_users (
 
 INSERT INTO public.admin_users (email, access_role, note)
 VALUES
-  ('johnmatveev@gmail.com', 'admin', 'Seeded admin'),
-  ('johnmatveyev@gmail.com', 'admin', 'Seeded admin — alternate spelling'),
-  ('jmat2019@icloud.com', 'admin', 'Seeded admin'),
-  ('john@gmail.com', 'admin', 'Existing production admin. Kept so that sign-in is not locked out.')
+  ('johnmatveyev@gmail.com', 'admin', 'Owner'),
+  ('ascendmaui@gmail.com', 'admin', 'Owner'),
+  ('jmat2019@icloud.com', 'admin', 'Owner')
 ON CONFLICT (email) DO UPDATE
 SET access_role = EXCLUDED.access_role,
     note = EXCLUDED.note;

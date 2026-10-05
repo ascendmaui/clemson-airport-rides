@@ -1,4 +1,4 @@
-import { startLocationPublisher, onTrackingResume, createTrackingRefresh } from '../../packages/rides-native/tracking.js'
+import { onTrackingResume, createTrackingRefresh } from '../../packages/rides-native/tracking.js'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useAuth } from '../lib/auth'
 import { CampusMap, CLEMSON } from '../components/CampusMap'
@@ -13,7 +13,7 @@ import { setDriverOnline, subscribeTrips, supabase } from '../lib/supabase'
 import { canReceiveOffers, isOnShift, startShift, stopShift, visibleOffer } from '../lib/driverShift'
 import { DriverShiftControl } from '../components/DriverShiftControl'
 import { grantRiderSocialForTrip } from '../lib/riderReferral'
-import { publishDriverLocation } from '../lib/driverTrack'
+import { isLiveTrip, startTripLocationWatch } from '../lib/liveDriverLocation'
 import { DriverApprovalGate } from './DriverApprovalGate'
 import { driverOfferCopy, driverTakeCents, formatUsd } from '../lib/carpoolEngine'
 import { RideChat, RideMessageButton } from '../components/RideChat'
@@ -239,21 +239,17 @@ function DriverShell({ driverId }) {
   const [locationError, setLocationError] = useState(null)
   const [locationAttempt, setLocationAttempt] = useState(0)
   useEffect(() => {
-    const tracking = (approved && online) || Boolean(activeTrip)
+    const tracking = Boolean(approved && online && activeTrip?.id && isLiveTrip(activeTrip.status))
     if (!driverId || !tracking || (!presenceReady && !activeTrip)) return undefined
-    if (!navigator.geolocation) { setLocationError('Location is unavailable in this browser.'); return undefined }
-    const stop = startLocationPublisher({
-      locate: () => new Promise((resolve, reject) => navigator.geolocation.getCurrentPosition(resolve, reject,
-        { enableHighAccuracy: true, maximumAge: 0, timeout: 15000 })),
-      publish: (pos) => publishDriverLocation(driverId, {
-        lat: pos.coords.latitude, lng: pos.coords.longitude, heading: pos.coords.heading,
-      }),
+    const stop = startTripLocationWatch({
+      tripId: activeTrip.id,
+      driverId,
       onFix: (pos) => setSelfPos([pos.coords.latitude, pos.coords.longitude]),
       onError: setLocationError,
     })
     const offResume = onTrackingResume(() => setLocationAttempt((n) => n + 1))
     return () => { stop(); offResume() }
-  }, [driverId, approved, activeTrip?.id, online, presenceReady, locationAttempt])
+  }, [driverId, approved, activeTrip?.id, activeTrip?.status, online, presenceReady, locationAttempt])
 
   useEffect(() => {
     loadEarnings()
@@ -830,13 +826,6 @@ function DriverShell({ driverId }) {
                 (pos) => {
                   const next = [pos.coords.latitude, pos.coords.longitude]
                   setSelfPos(next)
-                  if (driverId) {
-                    publishDriverLocation(driverId, {
-                      lat: next[0],
-                      lng: next[1],
-                      heading: pos.coords.heading,
-                    }).catch(() => {})
-                  }
                 },
                 () => {},
                 { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 },

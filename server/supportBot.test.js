@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { isAdminIdentity, SEEDED_ADMIN_EMAILS } from '../shared/adminAccess.js'
+import { isAdminIdentity } from '../shared/adminAccess.js'
+import { serverIsAdmin } from './adminRoster.js'
 import { BOT_CONFIDENCE_FLOOR, botShouldEscalate, decideSupportBot } from './supportBot.js'
 
 const rider = {
@@ -12,12 +13,11 @@ const rider = {
   vehicle: null,
 }
 
-test('seeded admin emails include both spellings and the iCloud account', () => {
-  assert.equal(SEEDED_ADMIN_EMAILS.includes('johnmatveev@gmail.com'), true)
-  assert.equal(SEEDED_ADMIN_EMAILS.includes('johnmatveyev@gmail.com'), true)
-  assert.equal(SEEDED_ADMIN_EMAILS.includes('jmat2019@icloud.com'), true)
-  assert.equal(SEEDED_ADMIN_EMAILS.includes('john@gmail.com'), true)
-  assert.equal(isAdminIdentity({ jwtEmail: 'jmat2019@icloud.com' }), true)
+test('unknown gmail addresses are not admins', () => {
+  assert.equal(serverIsAdmin({ jwtEmail: 'john@gmail.com' }), false)
+  assert.equal(serverIsAdmin({ jwtEmail: 'johnmatveev@gmail.com' }), false)
+  assert.equal(serverIsAdmin({ jwtEmail: 'jmat2019@icloud.com' }), true)
+  assert.equal(isAdminIdentity({ jwtEmail: 'john@gmail.com' }), false)
   assert.equal(isAdminIdentity({ jwtEmail: 'student@clemson.edu', role: 'support' }), false)
 })
 

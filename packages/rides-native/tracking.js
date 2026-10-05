@@ -9,6 +9,15 @@ export function trackingIssue(status, timestamp, now = Date.now()) {
   return null
 }
 
+/** Shared browser GPS errors for driver and rider tracking surfaces. */
+export function geolocationErrorMessage(error) {
+  switch (error?.code) {
+    case 1: return 'Location permission is off. Enable it to share your trip location.'
+    case 3: return 'Location timed out. Check your signal and try again.'
+    default: return 'Location sharing interrupted. Check location permission and connection. Retrying automatically.'
+  }
+}
+
 /** One fresh fix and acknowledged write at a time; never resend a cached fix as fresh. */
 export function startLocationPublisher({ locate, publish, onFix, onError, intervalMs = 5000, timeoutMs = 15000 }) {
   let stopped = false

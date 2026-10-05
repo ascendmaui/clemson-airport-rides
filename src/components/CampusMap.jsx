@@ -300,6 +300,7 @@ export function CampusMap({
   onPinMove,
   marker = STADIUM,
   driverPosition = null,
+  driverHeading = null,
   pickupPosition = null,
   dropoffPosition = null,
   selfPosition = null,
@@ -510,7 +511,7 @@ export function CampusMap({
 
   const orangeIcon = pinSvg(ORANGE, 18)
   const purpleIcon = pinSvg(PURPLE, 16)
-  const driverIcon = pinSvg(ORANGE, 20)
+  const driverIcon = Number.isFinite(Number(driverHeading)) ? busyCarIcon(Number(driverHeading)) : pinSvg(ORANGE, 20)
   const surgeHot = heatMode === 'surge'
 
   return (

@@ -4,7 +4,6 @@ import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { IC_AGREEMENT_HTML, IC_AGREEMENT_VERSION } from '../shared/icAgreement.js'
 import {
-  ADMIN_EMAIL,
   ONBOARDING_FLOW,
   REQUIRED_DOC_IDS,
   canReceiveRides,
@@ -188,12 +187,12 @@ test('compliance migration stores the exact agreement and every required doc typ
   assert.equal(sql.includes(hash), false)
 })
 
-test('admin is a seeded email, is_admin, or admin/ops role — not a copied profile email', () => {
-  assert.equal(isAdminIdentity({ jwtEmail: ADMIN_EMAIL }), true)
-  assert.equal(isAdminIdentity({ jwtEmail: 'JOHN@gmail.com' }), true)
-  assert.equal(isAdminIdentity({ jwtEmail: 'johnmatveev@gmail.com' }), true)
-  assert.equal(isAdminIdentity({ jwtEmail: 'JohnMatveyev@gmail.com' }), true)
-  assert.equal(isAdminIdentity({ jwtEmail: 'jmat2019@icloud.com' }), true)
+test('admin is a profile role or is_admin flag — not an email string', () => {
+  assert.equal(isAdminIdentity({ jwtEmail: 'john@gmail.com' }), false)
+  assert.equal(isAdminIdentity({ jwtEmail: 'JOHN@gmail.com' }), false)
+  assert.equal(isAdminIdentity({ jwtEmail: 'johnmatveev@gmail.com' }), false)
+  assert.equal(isAdminIdentity({ jwtEmail: 'JohnMatveyev@gmail.com' }), false)
+  assert.equal(isAdminIdentity({ jwtEmail: 'jmat2019@icloud.com' }), false)
   assert.equal(isAdminIdentity({ jwtEmail: 'student@clemson.edu', isAdmin: true }), true)
   assert.equal(isAdminIdentity({ jwtEmail: 'student@clemson.edu', role: 'admin' }), true)
   assert.equal(isAdminIdentity({ jwtEmail: 'student@clemson.edu', role: 'ops' }), true)
