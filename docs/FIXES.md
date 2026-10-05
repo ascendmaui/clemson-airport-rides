@@ -2,6 +2,22 @@
 
 Persistent knowledge base for recurring failures. When a matching issue appears, apply the saved fix first.
 
+## 2026-10-05 — Weekend/party schedule UX: web stepper, capacity, and window helper
+
+- **Track / machine:** Clemson RIDES · deputy/weekend-party-schedule-ux · t2
+- **What was wrong:** The web schedule form said "Friday night through Sunday" and had no passenger control. Riders could not see the count ("1 passenger" / "4 passengers"), the 4-seat cap for Standard, Wait & Save, and Extra Comfort, or whether the chosen pickup was inside Friday 5:00 PM through Sunday, Eastern time. Confirming a ride did not send the passenger count.
+- **What changed:** Added a 44px passenger stepper, the party-capacity sentence, and the fare note that passenger count does not change the server fare. Weekend / party shows the Eastern window overview. The date and time fields share a live helper that says whether the pickup is inside that window. The stepper stops at 4. The quote request still omits passengers. Schedule-ahead discount stays 10% (1000 bps).
+- **Files touched:**
+  - `src/components/SchedulePartyFields.jsx`
+  - `src/components/ScheduledRidePlanner.jsx`
+  - `src/lib/schedulePartyCopy.js`
+  - `src/lib/scheduledRideModel.js`
+  - `src/lib/scheduledRides.js`
+  - `src/lib/scheduledRideModel.test.js`
+  - `server/scheduleTrip.test.js`
+  - `docs/FIXES.md`
+- **Verified:** `node --experimental-strip-types --test server/scheduleTrip.test.js` renders the stepper and weekend helper. Fare quote calls do not take a passenger count. `npm test` passed (2333 tests).
+
 ## 2026-10-05 — Weekend/party schedule UX: passenger display and window copy
 
 - **Track / machine:** Clemson RIDES · deputy/weekend-party-schedule-ux · t1

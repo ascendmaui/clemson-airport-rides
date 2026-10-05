@@ -1,5 +1,10 @@
 import assert from 'node:assert/strict'
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { dirname } from 'node:path'
 import test, { describe, beforeEach, afterEach, mock } from 'node:test'
+import { fileURLToPath, pathToFileURL } from 'node:url'
+import { createElement } from 'react'
+import { renderToStaticMarkup } from 'react-dom/server'
 import { register } from 'node:module'
 import scheduleTripHandler, {
   PARTY_FARE_COPY,
@@ -15,6 +20,8 @@ import scheduleTripHandler, {
 } from './endpoints/scheduleTrip.js'
 import { isWeekendPartyWindow } from '../packages/rides-native/tripTags.js'
 import { SCHEDULE_AHEAD_DISCOUNT_BPS, SCHEDULE_AHEAD_DISCOUNT_PCT } from '../shared/rideOptions.js'
+import { displayedPassengers, stepPassengers } from '../src/lib/schedulePartyCopy.js'
+import { toRiderScheduleCard, weekendHelperIso } from '../src/lib/scheduledRideModel.js'
 
 // src/lib/scheduledRides.js is a Vite module (extensionless imports, browser
 // Supabase client). The loader resolves it under Node and swaps in the mock
@@ -1498,6 +1505,158 @@ describe('scheduleTrip passenger count display and weekend/party copy helpers', 
     assert.match(weekendWindowNote('2026-10-02T21:00:00.000Z'), /inside the weekend window/)
     assert.match(weekendWindowNote('2026-10-05T04:00:00.000Z'), /outside the weekend window/)
     assert.match(weekendWindowNote('2026-10-05T04:00:00.000Z'), /You can still schedule it/)
+  })
+
+  test('the web stepper stops at 4 seats and does not clamp the stored parser', () => {
+    assert.equal(passengerCount({ passengers: 6 }), 6)
+    assert.equal(displayedPassengers(6), 4)
+    assert.equal(displayedPassengers(1), 1)
+    assert.equal(displayedPassengers(0), 1)
+    assert.equal(displayedPassengers('nope'), 1)
+    assert.equal(stepPassengers(1, 'down'), 1)
+    assert.equal(stepPassengers(1, 'up'), 2)
+    assert.equal(stepPassengers(3, 'up'), 4)
+    assert.equal(stepPassengers(4, 'up'), 4)
+    assert.equal(stepPassengers(4, 'down'), 3)
+    assert.equal(stepPassengers(9, 'up'), 4)
+    assert.equal(SCHEDULE_AHEAD_DISCOUNT_BPS, 1000)
+  })
+
+  test('weekend helper text follows the Eastern window and stays blank until both fields are set', () => {
+    assert.equal(weekendHelperIso('', '21:00'), '')
+    assert.equal(weekendHelperIso('2026-10-02', ''), '')
+    assert.equal(weekendHelperIso('2026-03-08', '02:30'), 'invalid')
+    assert.equal(weekendHelperIso('2026-10-02', '17:30'), '2026-10-02T21:30:00.000Z')
+    assert.equal(weekendHelperIso('2026-10-02', '16:00'), '2026-10-02T20:00:00.000Z')
+    assert.match(weekendWindowNote(weekendHelperIso('2026-10-02', '17:30')), /inside the weekend window/)
+    assert.match(weekendWindowNote(weekendHelperIso('2026-10-02', '16:00')), /outside the weekend window/)
+    assert.match(weekendWindowNote(weekendHelperIso('', '21:00')), /Choose a pickup time/)
+    assert.match(weekendWindowNote(weekendHelperIso('2026-03-08', '02:30')), /Choose a valid pickup time/)
+  })
+
+  test('upcoming cards show the passenger label without treating it as a fare', () => {
+    const card = toRiderScheduleCard({
+      id: 'party-4',
+      status: 'scheduled',
+      pickup_label: 'Memorial Stadium',
+      dropoff_label: 'GSP Airport',
+      fare_cents: 6800,
+      deposit_cents: 0,
+      passengers: 4,
+      metadata: { purpose: 'party_weekend' },
+    })
+    assert.equal(card.passengers, 4)
+    assert.equal(card.passengerLabel, '4 passengers')
+    assert.equal(card.fareCents, 6800)
+    const missing = toRiderScheduleCard({
+      id: 'legacy',
+      status: 'scheduled',
+      fare_cents: 1200,
+      metadata: { purpose: 'planned' },
+    })
+    assert.equal(missing.passengers, 1)
+    assert.equal(missing.passengerLabel, '1 passenger')
+  })
+})
+
+function buttonTag(html, label) {
+  const tag = html.match(new RegExp(`<button\\b[^>]*aria-label="${label}"[^>]*>`))
+  assert.ok(tag, `missing button ${label}`)
+  return tag[0]
+}
+
+describe('web schedule passenger stepper and weekend window helper', () => {
+  test('the schedule form shows the stepper, capacity message, and weekend helper', async () => {
+    const planner = readFileSync(new URL('../src/components/ScheduledRidePlanner.jsx', import.meta.url), 'utf8')
+    const rides = readFileSync(new URL('../src/lib/scheduledRides.js', import.meta.url), 'utf8')
+    const quoteCall = rides.slice(rides.indexOf('fetchRideQuote({'), rides.indexOf('})', rides.indexOf('fetchRideQuote({')))
+    const estimateCall = planner.slice(
+      planner.indexOf('estimateScheduledFare({'),
+      planner.indexOf('})', planner.indexOf('estimateScheduledFare({')),
+    )
+    const saveCall = planner.slice(
+      planner.indexOf('createScheduledTrip({'),
+      planner.indexOf('})', planner.indexOf('createScheduledTrip({')),
+    )
+
+    assert.match(planner, /<PassengerStepper/)
+    assert.match(planner, /<WeekendWindowHelper[^>]*showOverview/)
+    assert.match(planner, /<WeekendWindowHelper[^>]*showNote/)
+    assert.match(planner, /aria-describedby="weekend-window-note"/)
+    assert.match(planner, /No card was charged/)
+    assert.match(planner, /This is the fare saved on the ride/)
+    assert.doesNotMatch(planner, /Friday night through Sunday/)
+    assert.match(saveCall, /passengers: displayedPassengers\(passengers\)/)
+    assert.doesNotMatch(estimateCall, /passengers/)
+    assert.doesNotMatch(quoteCall, /passengers/)
+    assert.match(rides, /passengers: party/)
+    assert.doesNotMatch(rides, /scheduleDiscountPct\s*[:=]\s*(?!10\b)\d+/)
+
+    const esbuild = await import('esbuild')
+    const built = await esbuild.build({
+      absWorkingDir: fileURLToPath(new URL('..', import.meta.url)),
+      entryPoints: ['src/components/SchedulePartyFields.jsx'],
+      bundle: true,
+      format: 'esm',
+      platform: 'node',
+      write: false,
+      jsx: 'automatic',
+      external: ['react', 'react-dom'],
+    })
+    const outfile = fileURLToPath(new URL('../node_modules/.cache/schedule-party-fields-test.mjs', import.meta.url))
+    mkdirSync(dirname(outfile), { recursive: true })
+    writeFileSync(outfile, built.outputFiles[0].text)
+    let fields
+    try {
+      fields = await import(`${pathToFileURL(outfile).href}?t=${Date.now()}`)
+    } finally {
+      rmSync(outfile, { force: true })
+    }
+    const one = renderToStaticMarkup(createElement(fields.PassengerStepper, { passengers: 1, onChange() {} }))
+    const four = renderToStaticMarkup(createElement(fields.PassengerStepper, { passengers: 4, onChange() {} }))
+    const six = renderToStaticMarkup(createElement(fields.PassengerStepper, { passengers: 6, onChange() {} }))
+    assert.match(one, /Passengers/)
+    assert.match(one, />1 passenger</)
+    assert.match(one, /Standard, Wait &(?:amp;)? Save, and Extra Comfort seat 4/)
+    assert.match(one, /Passenger count does not change the server fare/)
+    assert.match(one, /10% schedule-ahead discount/)
+    assert.match(one, /touch-target-min/)
+    assert.match(buttonTag(one, 'Fewer passengers'), /disabled/)
+    assert.doesNotMatch(buttonTag(one, 'More passengers'), /disabled/)
+    assert.match(four, /That fills a Standard, Wait &(?:amp;)? Save, or Extra Comfort car \(4 seats\)/)
+    assert.match(buttonTag(four, 'More passengers'), /disabled/)
+    assert.doesNotMatch(buttonTag(four, 'Fewer passengers'), /disabled/)
+    assert.match(six, />4 passengers</)
+    assert.doesNotMatch(six, /over the 4-seat cap/)
+
+    const empty = renderToStaticMarkup(createElement(fields.WeekendWindowHelper, {
+      date: '',
+      time: '21:00',
+      showOverview: true,
+      showNote: true,
+    }))
+    assert.match(empty, /Friday 5:00 PM through Sunday, Eastern time/)
+    assert.match(empty, /GSP, CLT, or ATL/)
+    assert.match(empty, /Weekend filter/)
+    assert.match(empty, /Choose a pickup time/)
+    assert.match(empty, /id="weekend-window-copy"/)
+    assert.match(empty, /id="weekend-window-note"/)
+
+    const inside = renderToStaticMarkup(createElement(fields.WeekendWindowHelper, {
+      date: '2026-10-02',
+      time: '17:30',
+      showNote: true,
+    }))
+    assert.match(inside, /inside the weekend window/)
+    assert.doesNotMatch(inside, /id="weekend-window-copy"/)
+
+    const outside = renderToStaticMarkup(createElement(fields.WeekendWindowHelper, {
+      date: '2026-10-07',
+      time: '12:00',
+      showNote: true,
+    }))
+    assert.match(outside, /outside the weekend window/)
+    assert.match(outside, /You can still schedule it/)
   })
 })
 

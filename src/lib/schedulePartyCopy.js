@@ -36,6 +36,24 @@ export function passengerCountLabel(countOrBody) {
 }
 
 /**
+ * Count shown on the web stepper. Values above the seat cap clamp to the cap
+ * so the control cannot book more seats than Standard, Wait & Save, and Extra Comfort.
+ * The stored request parser is passengerCount, which does not clamp.
+ */
+export function displayedPassengers(value, cap = SCHEDULE_PARTY_SEAT_CAP) {
+  const n = countFrom(value)
+  return Math.min(cap, n)
+}
+
+/** One step on the passenger control. Stays inside 1..cap. */
+export function stepPassengers(current, direction, cap = SCHEDULE_PARTY_SEAT_CAP) {
+  const n = displayedPassengers(current, cap)
+  if (direction === 'up') return Math.min(cap, n + 1)
+  if (direction === 'down') return Math.max(1, n - 1)
+  return n
+}
+
+/**
  * Party size versus the 4 seats on Standard, Wait & Save, and Extra Comfort.
  * Over-cap copy does not change the stored count or the fare.
  */
