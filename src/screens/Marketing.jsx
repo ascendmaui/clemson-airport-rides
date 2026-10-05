@@ -89,7 +89,7 @@ export function Marketing() {
               <QrMark value={WEB_BOOK_URL} label="Book on web" />
             </div>
             <p style={{ fontSize: 14, margin: 0 }}>
-              Scan to book in the browser. Airport holds use a 25% deposit.
+              Scan to book in the browser. The final fare is charged when the trip ends.
             </p>
             <p className="mkt-fine" style={{ marginTop: 8, wordBreak: 'break-all' }}>{WEB_BOOK_URL}</p>
             <button type="button" className="mkt-text pressable" style={{ marginTop: 8 }} onClick={() => navigate('schedule')}>

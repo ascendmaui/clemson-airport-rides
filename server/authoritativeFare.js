@@ -85,7 +85,8 @@ function finiteCents(value) {
 
 /**
  * Metered campus → GSP/CLT fare. Student 10% only when isStudent is already
- * decided by studentDiscountGranted. Deposit is 25% of that fare (no credits).
+ * decided by studentDiscountGranted. No upfront deposit; the fare is charged
+ * at trip end.
  */
 export function quoteAirportCheckout({
   airport,
@@ -677,15 +678,6 @@ export async function ensureAuthoritativeFare({ sb, trip, at = null } = {}) {
   return { error: 'Fare is not set. This trip cannot settle at $0.', status: 409, code: 'fare_not_set', trip: row }
 }
 
-function sumSucceeded(payments, kinds) {
-  return (payments || []).reduce((sum, row) => {
-    if (row?.status !== 'succeeded') return sum
-    const logical = row?.metadata?.logical_kind || row?.kind
-    if (!kinds.has(logical)) return sum
-    return sum + (Number(row.amount_cents) || 0)
-  }, 0)
-}
-
 /**
  * Amount a public collect call may charge. Fare kinds use the trip row.
  * A client amountCents below that figure is ignored. Tips stay rider-chosen.
@@ -713,23 +705,12 @@ export function serverCollectCents({ kind, trip, payments = [], clientAmountCent
       }
     }
     case 'deposit': {
-      if (!trip) return { error: 'tripId required', status: 400 }
-      const fare = storedFareCents(trip)
-      if (fare == null) return { error: 'Fare is not set. This trip cannot be charged as $0.', status: 409, code: 'fare_not_set' }
-      const stored = trip.deposit_cents == null || trip.deposit_cents === ''
-        ? cardDepositCents(fare)
-        : Math.max(0, Math.round(Number(trip.deposit_cents) || 0))
-      const creditsApplied = Number(trip.fare_breakdown?.credits_debited_cents) > 0
-        || trip.metadata?.credits_applied === true
-      const floor = creditsApplied ? 0 : cardDepositCents(fare)
-      const deposit = Math.min(fare, Math.max(stored, floor))
-      const paid = sumSucceeded(payments, new Set(['deposit', 'airport_deposit']))
-      const amountCents = Math.max(0, deposit - paid)
+      // The 25% airport deposit is retired. Full fare is collected as balance.
       const client = finiteCents(clientAmountCents)
       return {
-        amountCents,
-        source: 'server',
-        clientUnderpaid: client != null && client < amountCents,
+        amountCents: 0,
+        source: 'deposit_retired',
+        clientUnderpaid: client != null && client > 0,
       }
     }
     case 'balance':

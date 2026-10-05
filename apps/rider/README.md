@@ -50,7 +50,7 @@ Tabs are Rides, Schedule, Friends, and Account. The Rides header avatar opens Ac
 
 ## Payments, discounts, and alerts
 
-Schedule quotes `/api/stripe-payment-methods?action=quote` and recomputes the 25% deposit whenever the airport, date, time, or student status changes. If that route is not on the server yet, the screen uses the shared fare card and Pay calls `/api/create-checkout-session` with that deposit. When the route is present, Pay calls `action=airport-checkout` (surge, student 10% on Standard, ride credits). A deposit is shown as received only after a succeeded `payments` row exists.
+Schedule quotes `/api/stripe-payment-methods?action=quote` whenever the airport, date, time, or student status changes. Booking does not charge a card. Pay calls `action=airport-checkout` when that route is present, otherwise `/api/create-checkout-session`. Both book the trip and leave the full fare for trip end. Requesting a ride places a card hold for the estimate plus a buffer. An amount already paid on an older trip is shown only after a succeeded `payments` row exists.
 
 Account → Student writes `profiles.student_verified_at` for `@clemson.edu` / `@g.clemson.edu`. Account → Promo codes calls `claim_rider_social_promo` and `ensure_rider_social_code`. Account → Billing reads the saved card, deposit rows, and ride fares. Account → Notifications reads and writes `profiles.notification_prefs`.
 

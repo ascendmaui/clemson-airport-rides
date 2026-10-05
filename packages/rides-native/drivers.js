@@ -310,7 +310,7 @@ export async function loadPickerDriverRecord(supabase, driverId) {
   }
 }
 
-/** Airport pick-a-driver returns 409. Schedule is where the 25% deposit is collected. */
+/** Older clients sent riders to Schedule after airport_deposit_required. New requests book with no upfront deposit. */
 export function scheduleRedirectForRequestError(err, destLabel) {
   if (err?.code !== 'airport_deposit_required') return null
   return { screen: 'schedule', airport: airportCodeFromLabel(destLabel) }

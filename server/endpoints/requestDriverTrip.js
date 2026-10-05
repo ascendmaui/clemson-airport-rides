@@ -1,10 +1,10 @@
 /**
  * POST /api/stripe-payment-methods?action=request-driver
- * Records a campus trip at the server fare. Client fare, list price, amount,
- * and student flags are ignored. Campus rows have no deposit: status searching,
- * driver_id null, so any approved driver can accept and a decline stays in the
- * pool. GSP/CLT already collect a 25% deposit in Schedule checkout. This screen
- * does not open Checkout and does not insert an unpaid airport hold.
+ * Records a trip at the server fare. Client fare, list price, amount,
+ * and student flags are ignored. Status is searching and driver_id is null,
+ * so any approved driver can accept and a decline stays in the pool.
+ * A manual-capture card hold covers the estimated fare plus a buffer.
+ * Schedule does not take that hold and does not take a deposit.
  */
 import {
   admin, cors, json, parseBody, userFromAuth, computeRoutes,
@@ -31,6 +31,7 @@ import { assertTierAvailable } from '../rideAvailability.js'
 import { releaseTigerHeatReservation, reserveTigerHeatOffer } from '../tigerHeatService.js'
 import { loadRiderMatchPreferences } from '../riderPass.js'
 import { tigerPassMetadata } from '../../shared/tigerPass.js'
+import { authorizeRideRequest } from '../fareAuthorization.js'
 
 function optionError(res, error) {
   return json(res, error.status || 400, {
@@ -180,14 +181,6 @@ export default async function handler(req, res, deps = {}) {
     return json(res, 409, { error: 'Fare is not set', code: 'fare_not_set' })
   }
 
-  if (Number(priced.depositCents) > 0) {
-    return json(res, 409, {
-      error: 'Airport rides collect a 25% deposit in checkout. Book this trip from Schedule so drivers can see it after that deposit is paid.',
-      code: 'airport_deposit_required',
-      depositCents: priced.depositCents,
-    })
-  }
-
   const billing = await billingForPricedRide(sb, user.id, body, priced)
   if (billing.error) {
     return json(res, billing.error.status || 409, {
@@ -305,6 +298,19 @@ export default async function handler(req, res, deps = {}) {
     if (tigerHeat) await releaseTigerHeatReservation({ sb, trip: { metadata: { tiger_heat: tigerHeat } } })
     return json(res, 500, { error: inserted.error?.message || 'Could not request trip' })
   }
+  let authorization = null
+  try {
+    authorization = await authorizeRideRequest({
+      sb,
+      stripe: deps.stripe,
+      trip: { ...inserted.data, metadata: row.metadata, rider_id: user.id },
+      riderId: user.id,
+      estimatedFareCents: priced.fareCents,
+    })
+  } catch (err) {
+    console.error('[request-driver] fare auth', err?.message || err)
+    authorization = { ok: false, parked: true, reason: 'authorization_error' }
+  }
   if (offerDriverId) {
     await notifyDriverOffer(sb, {
       trip: {
@@ -336,6 +342,7 @@ export default async function handler(req, res, deps = {}) {
       depositCents: priced.depositCents,
       discountCents: priced.discountCents,
       studentDiscountApplied: priced.isStudent,
+      authorization,
       eventWarning: eventError.message || 'Could not record trip event',
     })
   }
@@ -346,5 +353,6 @@ export default async function handler(req, res, deps = {}) {
     depositCents: priced.depositCents,
     discountCents: priced.discountCents,
     studentDiscountApplied: priced.isStudent,
+    authorization,
   })
 }

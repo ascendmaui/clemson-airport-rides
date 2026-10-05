@@ -27,12 +27,12 @@ test('parseRecoveryUrl reads hash tokens and query codes', () => {
   assert.equal(parseRecoveryUrl('clemsonrides://set-password'), null)
 })
 
-test('airport quotes and the 25% deposit stay unsurged', () => {
+test('airport quotes stay unsurged and have no upfront deposit', () => {
   const gsp = airportFareCents('GSP')
   const clt = airportFareCents('CLT')
   assert.equal(gsp, 6846)
   assert.equal(clt, 17544)
-  assert.equal(depositCents(gsp), 1712)
+  assert.equal(depositCents(gsp), 0)
   const student = applyStudentDiscount(gsp, true)
   assert.equal(student.discountCents, 685)
   assert.equal(student.fareCents, 6161)

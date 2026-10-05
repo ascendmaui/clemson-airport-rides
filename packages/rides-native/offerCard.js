@@ -303,8 +303,8 @@ export function depositBadge(card) {
   const formattedAmount = formatCents(depositCents)
   return {
     id: 'deposit',
-    label: `25% deposit · ${formattedAmount}`,
-    shortLabel: '25% deposit',
+    label: `Already paid · ${formattedAmount}`,
+    shortLabel: 'Already paid',
     amountCents: depositCents,
     formattedAmount,
     tone: 'orange',
@@ -403,7 +403,7 @@ export function isOfferExpired(cardOrSeconds, options = {}) {
 
 /**
  * Combined accessibility summary describing the offer for assistive technologies.
- * e.g. "Ride offer: $54.40 net pay. From Tillman Hall to GSP Airport. Rider Ava, 4.9 rating. 4 min away · 32 mi. 1 seat. 25% deposit · $17.00."
+ * e.g. "Ride offer: $54.40 net pay. From Tillman Hall to GSP Airport. Rider Ava, 4.9 rating. 4 min away · 32 mi. 1 seat. Fri, Sep 25, 8:12 AM"
  */
 export function offerAccessibilityLabel(cardOrVm, options = {}) {
   if (!cardOrVm) return 'Ride offer: $0.00 net pay. From Pickup to Drop-off'

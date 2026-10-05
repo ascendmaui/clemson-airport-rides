@@ -115,10 +115,10 @@ export default function AccountScreen() {
             onPress={() => router.push('/earnings')}
             style={styles.linkRow}
             accessibilityRole="button"
-            accessibilityLabel="Earnings and deposits"
-            accessibilityHint="Navigates to earnings and deposit breakdown"
+            accessibilityLabel="Earnings"
+            accessibilityHint="Navigates to earnings"
           >
-            <Text style={styles.linkText}>Earnings and deposits</Text>
+            <Text style={styles.linkText}>Earnings</Text>
           </Pressable>
           <Pressable
             onPress={() => router.push('/fleet')}

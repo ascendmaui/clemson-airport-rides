@@ -51,13 +51,13 @@ test('spoofed checkout fare and student flag cannot lower the deposit', () => {
   assert.equal(priced.spoofedStudent, true)
   assert.equal(priced.clientUnderpaid, true)
   assert.equal(priced.fareCents, full.fareCents)
-  assert.equal(priced.unitAmount, full.depositCents)
+  assert.equal(priced.unitAmount, 0)
   assert.equal(priced.depositCents, cardDepositCents(full.fareCents))
-  assert.ok(priced.unitAmount > 25)
+  assert.equal(priced.depositCents, 0)
   assert.ok(priced.fareCents > 100)
 })
 
-test('confirmed clemson email keeps 10% off Standard and 25% of that fare', () => {
+test('confirmed clemson email keeps 10% off Standard and no upfront deposit', () => {
   const full = quoteAirportCheckout({ airport: 'GSP', at: QUIET, isStudent: false })
   const student = quoteAirportCheckout({ airport: 'CLT', at: QUIET, isStudent: true })
   const gspStudent = quoteAirportCheckout({ airport: 'GSP', at: QUIET, isStudent: true })
@@ -73,8 +73,8 @@ test('confirmed clemson email keeps 10% off Standard and 25% of that fare', () =
   })
   assert.equal(priced.isStudent, true)
   assert.equal(priced.fareCents, gspStudent.fareCents)
-  assert.equal(priced.unitAmount, gspStudent.depositCents)
-  assert.ok(priced.unitAmount > 25)
+  assert.equal(priced.unitAmount, 0)
+  assert.equal(gspStudent.depositCents, 0)
 })
 
 test('spoofed campus fare and student flag do not set the recorded fare', () => {
@@ -161,8 +161,8 @@ test('collect and settle ignore a spoofed low amount', () => {
     payments: [],
     clientAmountCents: 25,
   })
-  assert.equal(deposit.amountCents, cardDepositCents(10000))
-  assert.ok(deposit.amountCents > 100)
+  assert.equal(deposit.amountCents, 0)
+  assert.equal(deposit.source, 'deposit_retired')
   const settle = amountDueIgnoringClient({
     action: 'complete',
     trip,
@@ -218,11 +218,14 @@ test('checkout and trip create do not price from client money or isStudent', () 
 
 test('a null fare is not $0 due on collect or settle', () => {
   const trip = { fare_cents: null, deposit_cents: null, metadata: { isStudent: true } }
-  for (const kind of ['balance', 'deposit', 'friend_ride_share']) {
+  for (const kind of ['balance', 'friend_ride_share']) {
     const owed = serverCollectCents({ kind, trip, payments: [], clientAmountCents: 0 })
     assert.equal(owed.code, 'fare_not_set', kind)
     assert.equal(owed.amountCents, undefined, kind)
   }
+  const retired = serverCollectCents({ kind: 'deposit', trip, payments: [], clientAmountCents: 0 })
+  assert.equal(retired.amountCents, 0)
+  assert.equal(retired.source, 'deposit_retired')
   const settle = amountDueIgnoringClient({
     action: 'complete',
     trip,
@@ -240,7 +243,7 @@ test('a null fare is not $0 due on collect or settle', () => {
   assert.equal(free.code, undefined)
 })
 
-test('driver-request airport pricing ignores a short pin and keeps the 25% deposit', () => {
+test('driver-request airport pricing ignores a short pin and takes no upfront deposit', () => {
   const places = resolveDriverRequestPlaces({
     pickupLabel: 'Memorial Stadium',
     pickupLat: 34.6788,

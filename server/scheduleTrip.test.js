@@ -1029,7 +1029,7 @@ describe('scheduleTrip endpoint handler', () => {
   })
 
   describe('Airport trips and special purposes', () => {
-    test('explicit airport GSP overrides pickup to campus and dropoff to GSP with 25% deposit', async () => {
+    test('explicit airport GSP overrides pickup to campus and dropoff to GSP with no upfront deposit', async () => {
       const { sb, tripsInserted } = createFakeSb()
       const futureDate = new Date(Date.now() + 2 * 3600 * 1000).toISOString()
       const res = await callHandler(
@@ -1052,7 +1052,7 @@ describe('scheduleTrip endpoint handler', () => {
       assert.equal(tripsInserted.length, 1)
       assert.equal(tripsInserted[0].pickup_label, 'Memorial Stadium')
       assert.equal(tripsInserted[0].dropoff_label, 'Greenville-Spartanburg International (GSP)')
-      assert.ok(tripsInserted[0].deposit_cents > 0)
+      assert.equal(tripsInserted[0].deposit_cents, 0)
       assert.equal(tripsInserted[0].metadata.airport, 'GSP')
       assert.equal(tripsInserted[0].metadata.purpose, 'airport')
     })

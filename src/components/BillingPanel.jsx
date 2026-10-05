@@ -47,9 +47,9 @@ function billingPurpose(role) {
     return 'Card on file when a ride charges your driver account. Friend-ride shares use this default card.'
   }
   if (role === 'both') {
-    return 'Default card for rider fares, airport deposits, and charges to your driver account.'
+    return 'Default card for rider fares and charges to your driver account.'
   }
-  return 'Default card for friend rides and airport deposits.'
+  return 'Default card for friend rides and the fare hold.'
 }
 
 function roleLabel(role) {

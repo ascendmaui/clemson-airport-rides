@@ -193,7 +193,7 @@ function BillingScreen() {
 
         {!user ? (
           <>
-            <Text style={styles.copy}>Sign in to see the card, deposits, and ride history on this account.</Text>
+            <Text style={styles.copy}>Sign in to see the card and ride history on this account.</Text>
             <PrimaryButton label="Sign in" onPress={() => router.push('/sign-in')} />
           </>
         ) : null}
@@ -209,13 +209,13 @@ function BillingScreen() {
             </>
           ) : (
             <Text style={styles.copy}>
-              {loading ? 'Loading card…' : 'No card on file yet. Airport deposits use Stripe Checkout. This screen never asks for the full card number.'}
+              {loading ? 'Loading card…' : 'No card on file yet. Add a card for the fare hold. This screen never asks for the full card number.'}
             </Text>
           )}
         </View>
 
         <Text style={styles.kicker}>DEPOSITS</Text>
-        {deposits.length === 0 ? <Text style={styles.copy}>{loading ? 'Loading deposits…' : 'No deposit payments on this account.'}</Text> : null}
+        {deposits.length === 0 ? <Text style={styles.copy}>{loading ? 'Loading payments…' : 'No fare payments on this account.'}</Text> : null}
         {deposits.map((row: Deposit) => (
           <View key={row.id} style={[styles.card, lift(colors, 'rest')]}>
             <Text style={styles.rowTitle}>{formatCents(row.amount_cents || 0)}</Text>
