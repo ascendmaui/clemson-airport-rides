@@ -247,6 +247,7 @@ export function toDriverQueueCard(row) {
     purpose: purposeLabel(purpose) || row.rider_note || '',
     passengers: row.passengers || 1,
     automaticMatching: !Number(row.deposit_cents || 0),
+    nearTerm: row.metadata?.near_term_slot === true,
   }
 }
 

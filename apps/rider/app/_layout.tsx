@@ -4,6 +4,7 @@ import { StatusBar } from 'expo-status-bar'
 import { useEffect, type ReactNode } from 'react'
 import { View } from 'react-native'
 import { ApproachAlert } from '@/components/ApproachAlert'
+import { RiderMatchPopup } from '@/components/RiderMatchPopup'
 import { AuthProvider, useAuth } from '@/lib/auth'
 import { PasswordRecoveryListener } from '@/lib/passwordRecovery'
 import { ThemeProvider, useTheme } from '@/lib/theme'
@@ -132,6 +133,7 @@ export default function RootLayout() {
         <Gate>
           <ThemedStack />
           <ApproachHost />
+          <RiderMatchPopup />
         </Gate>
       </AuthProvider>
     </ThemeProvider>

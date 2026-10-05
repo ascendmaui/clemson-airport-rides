@@ -115,12 +115,8 @@ export function RideToastWatcher() {
         // late discover of existing trip — skip noise
         return
       }
-      if (prev === 'scheduled' && row.status === 'accepted') {
-        pushToast({
-          kind: 'driver_accepted',
-          title: 'Scheduled ride accepted',
-          body: row.metadata?.acceptance_message || `${tripBody(row)}. Your driver accepted this scheduled ride.`,
-        })
+      if (row.status === 'accepted') {
+        // RiderMatchPopup owns the match toast and the screen pop-up.
         return
       }
       const kind = TRIP_STATUS_KIND[row.status] || 'system'

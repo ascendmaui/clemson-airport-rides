@@ -3,6 +3,7 @@ import * as Notifications from 'expo-notifications'
 import { Platform } from 'react-native'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { clemsonMiamiDriverNotification } from '../../../packages/rides-native/clemsonMiamiPromo.js'
+import { formatEasternWhen } from '../../../shared/nearTermSlots.js'
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -124,6 +125,27 @@ export async function notifyAcceptedRide(card: {
       title: 'Ride accepted',
       body: `${card.pickupLabel} → ${card.dropoffLabel}`,
       data: { tripId: card.id },
+      sound: 'request.wav',
+      ...androidChannelFields(),
+    },
+    trigger: null,
+  })
+}
+
+export async function notifyScheduledBoard(card: {
+  id: string
+  pickupLabel: string
+  dropoffLabel: string
+  pickupAt?: string | null
+}) {
+  const whenLabel = card.pickupAt ? formatEasternWhen(card.pickupAt) : null
+  const when = whenLabel ? ` · ${whenLabel}` : ''
+  await ensureRideChannel()
+  await Notifications.scheduleNotificationAsync({
+    content: {
+      title: 'Scheduled ride on the board',
+      body: `${card.pickupLabel} → ${card.dropoffLabel}${when}`,
+      data: { tripId: card.id, kind: 'scheduled_board' },
       sound: 'request.wav',
       ...androidChannelFields(),
     },

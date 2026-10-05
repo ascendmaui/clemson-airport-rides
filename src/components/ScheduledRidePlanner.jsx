@@ -26,6 +26,8 @@ import {
 import { fetchBillingQuote } from '../lib/rideBilling'
 import { useRideOptions } from '../lib/useRideOptions'
 import { NO_DRIVERS_AVAILABLE_COPY, SCHEDULE_AHEAD_LABEL } from '../../shared/rideOptions.js'
+import { getHashRoute } from '../lib/navigation'
+import { NearTermSlots } from './NearTermSlots'
 
 const PLACES = [
   ...FRIEND_PLACES,
@@ -63,6 +65,16 @@ export function ScheduledRidePlanner() {
   const [billingChoice, setBillingChoice] = useState('no_card')
 
   const minDate = useMemo(() => todayInputValue(), [])
+
+  useEffect(() => {
+    const params = getHashRoute().params || {}
+    if (params.near !== '1') return
+    const pickupPlace = PLACES.find((place) => place.label === params.pickup)
+    const dropoffPlace = PLACES.find((place) => place.label === params.dropoff)
+    if (pickupPlace) setPickup(pickupPlace)
+    if (dropoffPlace) setDropoff(dropoffPlace)
+    if (params.tier === 'wait' || params.tier === 'comfort' || params.tier === 'standard') setFleet(params.tier)
+  }, [])
 
   useEffect(() => {
     if (!tierChoices.length) return
@@ -325,6 +337,13 @@ export function ScheduledRidePlanner() {
 
       <PlacePicker label="Pickup" mode="pickup" value={pickup} onChange={setPickup} presets={PLACES} showCoordinates={false} />
       <PlacePicker label="Drop-off" mode="dropoff" value={dropoff} onChange={setDropoff} presets={PLACES} showCoordinates={false} />
+
+      <NearTermSlots
+        pickup={pickup}
+        dropoff={dropoff}
+        tier={fleet}
+        onTier={setFleet}
+      />
 
       <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink-secondary)', marginBottom: 8 }}>Vehicle</div>
       {tierChoices.length === 0 ? (
