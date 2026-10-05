@@ -600,7 +600,10 @@ export function AccountScreen() {
               Payment method
             </button>
             <SignedAgreementCopy userId={user?.id} />
-            <button type="button" className="pressable" onClick={() => navigate('driver-onboarding')}
+            <button type="button" className="pressable" onClick={() => navigate(
+              'driver-onboarding',
+              application?.onboarding_status === 'approved' ? { view: 'application' } : {},
+            )}
               style={{ display: 'block', width: '100%', marginTop: 12, padding: 12, borderRadius: 14, fontWeight: 700,
                 color: '#fff', background: 'linear-gradient(135deg, var(--orange), #ff7a1a)' }}>
               {application?.onboarding_status === 'approved' ? 'View driver application' : 'Continue driver application'}

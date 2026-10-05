@@ -35,6 +35,7 @@ import {
   writeOnboardingStep,
 } from '../lib/driverOnboarding'
 import { COMFORT_FLEET_NOTICE } from '../../packages/rides-native/tripTags.js'
+import { driverRouteForOnboarding } from '../../shared/driverRoute.js'
 import { buildFieldA11yProps, formatAccessibleFormErrorSummary, getFieldErrorProps } from '../lib/formA11y'
 import { loadLatestVehicle, vehicleAccountErrors } from '../../shared/vehicleYear.js'
 import { driverQuizError } from '../../shared/driverQuiz.js'
@@ -85,10 +86,18 @@ function Field({ id, label, value, onChange, type = 'text', required = true, err
   )
 }
 
-function preferredStepFromUrl() {
-  if (typeof window === 'undefined') return null
+function onboardingQuery() {
+  if (typeof window === 'undefined') return new URLSearchParams()
   const qs = (window.location.hash || '').split('?')[1] || ''
-  return new URLSearchParams(qs).get('step')
+  return new URLSearchParams(qs)
+}
+
+function preferredStepFromUrl() {
+  return onboardingQuery().get('step')
+}
+
+function reviewingApplication() {
+  return onboardingQuery().get('view') === 'application'
 }
 
 function rememberStep(userId, stepId) {
@@ -176,6 +185,7 @@ export function DriverOnboarding() {
 
   const uploaded = useMemo(() => docs.map((d) => d.doc_type), [docs])
   const status = application?.onboarding_status || null
+  const reviewApplication = reviewingApplication()
   const gate = {
     status,
     uploaded,
@@ -294,6 +304,14 @@ export function DriverOnboarding() {
       alive = false
     }
   }, [user, loading])
+
+  useEffect(() => {
+    if (loading || booting) return undefined
+    if (reviewApplication) return undefined
+    if (driverRouteForOnboarding(status) !== 'driver') return undefined
+    navigate('driver')
+    return undefined
+  }, [loading, booting, status, reviewApplication])
 
   function go(stepId) {
     const next = canOpenStep(stepId, gate) ? stepId : resolveResumeStep({ ...gate, preferred: stepId })
@@ -462,6 +480,10 @@ export function DriverOnboarding() {
 
   if (loading || booting) {
     return <div style={{ padding: 40, color: 'var(--ink-secondary)' }}>Loading application…</div>
+  }
+
+  if (status === 'approved' && !reviewApplication) {
+    return <div style={{ padding: 40, color: 'var(--ink-secondary)' }}>Opening driver mode…</div>
   }
 
   if (status === 'approved') {
