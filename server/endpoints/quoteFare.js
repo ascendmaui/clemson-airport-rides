@@ -73,12 +73,15 @@ export default async function handler(req, res, deps = {}) {
   const sb = deps.sb !== undefined ? deps.sb : admin()
   const user = deps.user !== undefined ? deps.user : await userFromAuth(req)
   let gameDayMultiplier = null
+  let gameDayEvent = null
   if (sb) {
     try {
       const game = await loadGameDayMultiplier(sb, when)
       gameDayMultiplier = game.multiplier
+      gameDayEvent = game.event
     } catch {
       gameDayMultiplier = null
+      gameDayEvent = null
     }
   }
 
@@ -115,6 +118,13 @@ export default async function handler(req, res, deps = {}) {
     version: FARE_RATES_VERSION,
     routeSource: priced.routeSource,
     surge: priced.surge,
+    gameDay: gameDayEvent
+      ? {
+          id: gameDayEvent.id ?? null,
+          title: gameDayEvent.title ?? null,
+          zone: gameDayEvent.pickup_zone_label ?? null,
+        }
+      : null,
     studentDiscountApplied: Boolean(priced.isStudent),
     estimate: Boolean(priced.estimate),
     airport: priced.airport,

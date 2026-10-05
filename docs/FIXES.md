@@ -2,6 +2,19 @@
 
 Persistent knowledge base for recurring failures. When a matching issue appears, apply the saved fix first.
 
+## 2026-10-05 — game-day pickup labels and surge banner copy on the web schedule
+
+- **What was wrong:** The schedule screen could save a game-day ride, but it never showed the campus event pickup zone or when the surge note should appear. Quote responses dropped `pickup_zone_label` after reading it for the multiplier. Home and ride-option screens already had that copy; the scheduler did not share it.
+- **What changed:** Added `shared/gameDayPickupCopy.js` for special pickup labels, surge-banner visibility, and schedule sentences. The web scheduler uses those helpers for game-day pickup chips and the quote notice. The fare quote now returns the event id, title, and zone only. Surge multipliers and cent amounts are unchanged.
+- **Files touched:**
+  - `shared/gameDayPickupCopy.js`
+  - `src/components/ScheduledRidePlanner.jsx`
+  - `src/lib/scheduledRides.js`
+  - `server/endpoints/quoteFare.js`
+  - `server/gameDayPricing.test.js`
+  - `docs/FIXES.md`
+- **Verified:** `node --experimental-strip-types --test server/gameDayPricing.test.js` (11/11) and `npm test` (2325/2325). No browser session was available, so the schedule screen was not clicked in a browser.
+
 ## 2026-10-02 — GA96: GA audit & tests - abandoned checkout resilience, hold TTL NaN safety, and RPC direct update fallbacks
 
 - **Track / machine:** Clemson RIDES · MacBook Max · `agy/ga-audit-abandoned-checkout-resilience-ga96`

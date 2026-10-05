@@ -33,6 +33,7 @@ export async function estimateScheduledFare({ pickup, dropoff, isStudent = false
     airport: data.airport || null,
     miles: data.quote?.miles == null ? null : Math.round(Number(data.quote.miles) * 10) / 10,
     surge: data.surge || null,
+    gameDay: data.gameDay || null,
   }
 }
 
