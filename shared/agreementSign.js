@@ -12,6 +12,14 @@ export function emailSenderConfigured(env = {}) {
   return Boolean(key && !key.includes('placeholder') && from)
 }
 
+/**
+ * Applicants admin setup banner. Live sender env only.
+ * A stored driver_applications.notify_error is a past send, not current setup.
+ */
+export function adminResendSetupBanner(env = {}) {
+  return !emailSenderConfigured(env)
+}
+
 export function assessSignLink({ link, viewerId, now = Date.now() } = {}) {
   if (!link) return { ok: false, reason: 'missing' }
   if (link.revoked_at) return { ok: false, reason: 'revoked' }

@@ -576,7 +576,8 @@ async function fetchDriverQueueDirect(status) {
   })
   return {
     applications,
-    email_todo_present: applications.some((app) => app.notify_error),
+    // Browser fallback cannot see server Resend env. Stored notify_error is not current setup.
+    email_todo_present: false,
     direct: true,
   }
 }

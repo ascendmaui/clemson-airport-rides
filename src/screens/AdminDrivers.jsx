@@ -223,7 +223,7 @@ export function AdminDrivers({ embedded = false }) {
         Approve a driver only after license, insurance, registration, car photos, employment documents, W-9, and the signed contractor agreement are on file. Unapproved drivers cannot receive rides.
       </p>
 
-      {(emailTodo || rows.some((row) => row.notify_error)) && (
+      {emailTodo && (
         <div style={{
           marginTop: 12,
           padding: 12,

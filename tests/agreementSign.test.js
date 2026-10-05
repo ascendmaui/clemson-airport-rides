@@ -7,6 +7,7 @@ import { approvalBlockers } from '../shared/driverOnboarding.js'
 import {
   AGREEMENT_TEXT_LOCKED,
   EMAIL_NOT_CONFIGURED,
+  adminResendSetupBanner,
   assessSignLink,
   emailSenderConfigured,
   particularUpdates,
@@ -136,6 +137,16 @@ test('only an admin can email the agreement, and a missing sender fails without 
     },
   })
   assert.equal(emailSenderConfigured({}), false)
+  assert.equal(adminResendSetupBanner({}), true)
+  assert.equal(adminResendSetupBanner({
+    RESEND_API_KEY: 're_live',
+    RESEND_FROM: 'Clemson RIDES <rides@clemsonrides.com>',
+    ADMIN_NOTIFY_EMAIL: '',
+  }), false)
+  assert.equal(adminResendSetupBanner({
+    RESEND_API_KEY: 're_placeholder_key',
+    RESEND_FROM: 'rides@clemsonrides.com',
+  }), true)
   assert.equal(missing.status, 503)
   assert.equal(missing.body.emailed, false)
   assert.equal(missing.body.ok, undefined)
