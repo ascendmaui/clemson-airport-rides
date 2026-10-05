@@ -74,7 +74,7 @@ export function ConfirmPickup({
         setOffer(next)
         setBillingChoice((current) => {
           if (current === 'credits' && next?.creditsSelectable) return 'credits'
-          return next?.campus ? 'no_card' : 'deposit'
+          return 'no_card'
         })
       })
       .catch(() => {

@@ -1,6 +1,7 @@
 /**
  * Vercel serverless — POST /api/stripe-webhook
- * Records 25% deposits into public.payments when SUPABASE_SERVICE_ROLE_KEY is set.
+ * Records a legacy airport Checkout payment into public.payments when SUPABASE_SERVICE_ROLE_KEY is set.
+ * New bookings do not open that Checkout session. A late paid session still records the amount already paid.
  */
 import Stripe from 'stripe'
 import { createClient } from '@supabase/supabase-js'

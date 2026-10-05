@@ -115,7 +115,7 @@ function mockSupabase(respond) {
   }
 }
 
-test('quoteRide calculates GSP and CLT airport quotes with student discount and 25% deposit', async () => {
+test('quoteRide calculates GSP and CLT airport quotes with student discount and no upfront deposit', async () => {
   const api = await import('./scheduleApi.ts')
 
   const pickup = { label: 'Clemson University Core Campus', lat: 34.678, lng: -82.833 }
@@ -129,7 +129,7 @@ test('quoteRide calculates GSP and CLT airport quotes with student discount and 
   assert.equal(gspQuote.miles, null)
   assert.equal(gspQuote.fareCents, 6846)
   assert.equal(gspQuote.discountCents, 0)
-  assert.equal(gspQuote.depositCents, 1712) // Math.round(6846 * 0.25) = 1712
+  assert.equal(gspQuote.depositCents, 0)
 
   // 2. GSP Student quote (10% off Standard)
   const gspStudentQuote = api.quoteRide(pickup, gspDropoff, true)
@@ -138,7 +138,7 @@ test('quoteRide calculates GSP and CLT airport quotes with student discount and 
   assert.equal(gspStudentQuote.miles, null)
   assert.equal(gspStudentQuote.fareCents, 6161)
   assert.equal(gspStudentQuote.discountCents, 685)
-  assert.equal(gspStudentQuote.depositCents, 1540) // Math.round(6161 * 0.25) = 1540
+  assert.equal(gspStudentQuote.depositCents, 0)
   assert.match(gspStudentQuote.label, /Clemson student/)
 
   // 3. CLT Non-student quote
@@ -148,7 +148,7 @@ test('quoteRide calculates GSP and CLT airport quotes with student discount and 
   assert.equal(cltQuote.miles, null)
   assert.equal(cltQuote.fareCents, 17544)
   assert.equal(cltQuote.discountCents, 0)
-  assert.equal(cltQuote.depositCents, 4386) // Math.round(17544 * 0.25) = 4386
+  assert.equal(cltQuote.depositCents, 0)
 
   // 4. CLT Student quote
   const cltStudentQuote = api.quoteRide(pickup, cltDropoff, true)
@@ -157,7 +157,7 @@ test('quoteRide calculates GSP and CLT airport quotes with student discount and 
   assert.equal(cltStudentQuote.miles, null)
   assert.equal(cltStudentQuote.fareCents, 15790)
   assert.equal(cltStudentQuote.discountCents, 1754)
-  assert.equal(cltStudentQuote.depositCents, 3948) // Math.round(15790 * 0.25) = 3948
+  assert.equal(cltStudentQuote.depositCents, 0)
 })
 
 test('quoteRide calculates distance-based estimates for local campus trips with $0 deposit', async () => {

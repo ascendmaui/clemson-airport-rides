@@ -129,8 +129,7 @@ export function scheduleAheadApplies(at, now = new Date()) {
 
 /**
  * 10% off a server fare that is already the tier price (surge and student
- * included). Tips are not an input. Airport deposit is 25% of the discounted
- * fare; a zero campus deposit stays zero.
+ * included). Tips are not an input. Scheduling does not add an upfront charge.
  */
 export function applyScheduleAheadDiscount(priced, { at, now = new Date(), enabled = false } = {}) {
   const before = Math.max(0, Math.round(Number(priced?.fareCents) || 0))

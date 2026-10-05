@@ -35,7 +35,7 @@ export function SignInToBookSheet({
           </View>
           <Text style={styles.title}>Sign in to book your ride</Text>
           <Text style={styles.body}>
-            Browse freely — login is only needed when you request a ride or pay the 25% deposit.
+            Browse freely — login is only needed when you request a ride.
           </Text>
           <PrimaryButton label="Sign in" onPress={onSignIn} />
           <Pressable

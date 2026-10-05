@@ -19,6 +19,7 @@ import { insertTripEvent } from './tripEvents.js'
 import { debitStoredRideCredits } from './rideCreditSettle.js'
 import { airportDepositRequiredCents } from '../packages/rides-native/tripTags.js'
 import { releaseTigerHeatReservation, settleTigerHeatReservation } from './tigerHeatService.js'
+import { settleFareHold } from './fareAuthorization.js'
 
 const ACTIVE_KEEP = new Set(['accepted', 'arriving', 'in_progress', 'payment_required', 'searching', 'offered'])
 
@@ -134,7 +135,25 @@ export async function settleTrip({
   const chargeKind = action === 'complete' ? (due.kind || 'balance') : kind
   const paidCents = farePaidCents(trip)
   const depositAlreadyExists = airportDepositRequiredCents(trip) > 0
-  const cardOnFile = depositAlreadyExists
+  let fareHold = null
+  if (action === 'complete' && !override && due.amountCents > 0) {
+    try {
+      fareHold = await settleFareHold({
+        sb,
+        stripe,
+        trip,
+        finalFareCents: due.amountCents,
+      })
+    } catch (err) {
+      console.error('[tripSettle] fare hold', err?.message || err)
+      fareHold = failureResult('charge_failed', {
+        amountCents: due.amountCents,
+        tripId: trip.id,
+        kind: 'balance',
+      })
+    }
+  }
+  const cardOnFile = depositAlreadyExists || fareHold
     ? null
     : await savedCardOnFile({ deps, sb, riderId: trip.rider_id })
 
@@ -188,10 +207,13 @@ export async function settleTrip({
     && due.amountCents > 0
     && !override
     && !depositAlreadyExists
+    && !fareHold
     && cardOnFile === false
     && !creditsDebit?.ok
   let payment = null
-  if (creditsDebit?.ok) {
+  if (fareHold) {
+    payment = fareHold
+  } else if (creditsDebit?.ok) {
     payment = {
       ok: true,
       method: 'credits',

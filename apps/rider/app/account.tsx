@@ -29,12 +29,12 @@ const DISPLAY: { id: DisplayMode; label: string }[] = [
 
 const LINKS: { href: '/billing' | '/tiger-pass' | '/student' | '/promo' | '/notifications' | '/history' | '/schedule' | '/help' | '/support' | '/lost-found'; label: string; hint: string }[] = [
   { href: '/tiger-pass', label: TIGER_PASS_NAME, hint: 'Frequent-rider discount, preferred drivers, and ride types' },
-  { href: '/billing', label: 'Billing', hint: 'Card on file, deposits, and ride history' },
+  { href: '/billing', label: 'Billing', hint: 'Card on file and ride history' },
   { href: '/student', label: 'Student', hint: 'Confirmed Clemson email · 10% off Standard' },
   { href: '/promo', label: 'Promo codes', hint: 'Apply a friend code or share yours' },
   { href: '/notifications', label: 'Notifications', hint: 'Ride, billing, friends, and promo alerts' },
-  { href: '/history', label: 'Your rides', hint: 'Fare and deposit on each trip' },
-  { href: '/schedule', label: 'Airport deposit', hint: '25% Stripe checkout for GSP and CLT' },
+  { href: '/history', label: 'Your rides', hint: 'Fare on each trip' },
+  { href: '/schedule', label: 'Airport ride', hint: 'GSP and CLT. The fare is charged when the trip ends' },
   { href: '/help', label: 'Help', hint: 'How booking, Schedule, friends, and billing work' },
   { href: '/support', label: 'Support', hint: 'Charge, ride, bug, or safety tickets' },
   { href: '/lost-found', label: 'Lost & found', hint: 'An item left in the car after a ride' },
@@ -247,7 +247,7 @@ function AccountScreen() {
         </Pressable>
         <Pressable onPress={() => router.push({ pathname: '/legal', params: { doc: 'terms' } })} style={[styles.row, lift(colors, 'rest')]} accessibilityRole="button">
           <Text style={styles.rowTitle}>Terms of service</Text>
-          <Text style={styles.copy}>Airport deposits, wait fees, and driver duties.</Text>
+          <Text style={styles.copy}>Fares, wait fees, and driver duties.</Text>
         </Pressable>
         <Pressable onPress={() => router.push('/delete-account')} style={[styles.row, lift(colors, 'rest')]} accessibilityRole="button">
           <Text style={styles.rowTitle}>Delete account</Text>

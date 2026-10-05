@@ -190,7 +190,7 @@ export function ScheduledRidePlanner() {
         setBillingOffer(next)
         setBillingChoice((current) => {
           if (current === 'credits' && next?.creditsSelectable) return 'credits'
-          return next?.campus ? 'no_card' : 'deposit'
+          return 'no_card'
         })
       })
       .catch(() => {
@@ -411,7 +411,7 @@ export function ScheduledRidePlanner() {
         )}
         <p style={{ fontSize: 12, color: '#522D80', marginTop: 8, lineHeight: 1.45 }}>
           {quote?.depositCents > 0
-            ? `${depositSurfaceCopy(quote, 'confirm', { studentDiscountCents: quote.discountCents })} Scheduling does not charge your card. Airport deposit requirements still apply before driver acceptance.`
+            ? `${depositSurfaceCopy(quote, 'confirm', { studentDiscountCents: quote.discountCents })} Scheduling does not charge your card.`
             : 'This is the fare saved on the ride.'}
           {quote?.estimate ? ' Road miles were estimated from the pins.' : ''}
           {quote?.miles != null ? ` · ${quote.miles} mi` : ''}
@@ -456,7 +456,7 @@ export function ScheduledRidePlanner() {
       {saved && (
         <p style={{ marginTop: 12, color: '#522D80', fontSize: 13, fontWeight: 700, lineHeight: 1.45 }}>
           Confirmed for {formatPickupAt(saved.pickup_at)}.
-           No card was charged. {saved.deposit_cents > 0 ? 'Airport deposit requirements still apply before driver acceptance.' : 'Matching starts about 45 minutes before pickup; a driver is not guaranteed.'}
+           No card was charged. Matching starts about 45 minutes before pickup; a driver is not guaranteed. The final fare is charged when the trip ends.
         </p>
       )}
 

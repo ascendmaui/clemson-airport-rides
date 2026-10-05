@@ -1,7 +1,7 @@
 /**
  * Rider deposit, student, and promo helpers.
  * Quote and checkout go through the existing payment router.
- * Deposit is always 25% of the current cash remainder (Stripe minimum included).
+ * New rides have no upfront deposit. A stored historical amount still formats as already paid.
  */
 import { normalizePromoCode } from './authErrors.js'
 import { WEB_ORIGIN } from '../../shared/productLinks.js'
@@ -85,22 +85,27 @@ export function depositSurfaceCopy(input, surface, { studentDiscountCents = 0 } 
     depositCents: Math.max(0, Math.round(Number(input.depositCents) || 0)),
     remainingCents: Math.max(0, Math.round(Number(input.remainingCents) || 0)),
   }
-  if (balance.depositCents <= 0) return null
   const fare = formatUsdCents(balance.fareCents)
   const deposit = formatUsdCents(balance.depositCents)
   const remaining = formatUsdCents(balance.remainingCents)
   const student = Math.round(Number(studentDiscountCents) || 0) > 0
     ? ' The 10% Standard student discount is already in that fare.'
     : ''
+  if (balance.depositCents <= 0) {
+    if (surface === 'quote' || surface === 'confirm') {
+      return `Estimated fare ${fare}. Requesting the ride places a card hold for this estimate plus a buffer. The final fare is charged when the trip ends.${student}`
+    }
+    return null
+  }
   switch (surface) {
     case 'quote':
-      return `Full fare ${fare}. Pay the 25% deposit of ${deposit} now. Remaining balance ${remaining} is collected when the trip is complete.${student}`
+      return `Fare ${fare}. Already paid ${deposit}. Remaining ${remaining} is charged when the trip ends.${student}`
     case 'confirm':
-      return `Airport fare ${fare}. 25% deposit ${deposit}. Remaining balance ${remaining} is due when the trip is complete.${student}`
+      return `Fare ${fare}. Already paid ${deposit}. Remaining ${remaining} is charged when the trip ends.${student}`
     case 'receipt':
-      return `25% deposit ${deposit}. Remaining balance ${remaining}.${student}`
+      return `Already paid ${deposit}. Remaining balance ${remaining}.${student}`
     case 'upcoming':
-      return `Deposit ${deposit} · remaining balance ${remaining}`
+      return `Already paid ${deposit} · remaining ${remaining}`
     default: {
       const unknown = surface
       throw new Error(`Unknown deposit surface: ${unknown}`)
@@ -114,7 +119,7 @@ export function depositReceiptLines(trip) {
   const balance = depositBalance({ fareCents: trip?.fare_cents, depositCents: stored })
   if (balance.depositCents <= 0) return []
   return [
-    `25% deposit: ${formatUsdCents(balance.depositCents)}`,
+    `Already paid: ${formatUsdCents(balance.depositCents)}`,
     `Remaining balance: ${formatUsdCents(balance.remainingCents)}`,
   ]
 }

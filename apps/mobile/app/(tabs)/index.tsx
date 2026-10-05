@@ -52,10 +52,10 @@ export default function HomeScreen() {
             <Text style={styles.kicker}>CLEMSON RIDES</Text>
             <Text style={styles.title}>Airport rides, glass-smooth</Text>
             <Text style={styles.subtitle}>
-              Browse tiers freely. Sign in only when you book or pay the 25% deposit.
+              Browse tiers freely. Sign in only when you book a ride.
             </Text>
             <Text style={styles.meta}>
-              Supabase {isSupabaseConfigured() ? 'ready' : 'needs keys'} · Stripe deposit at checkout
+              Supabase {isSupabaseConfigured() ? 'ready' : 'needs keys'} · Final fare at trip end
             </Text>
           </GlassCard>
         </FadeIn>
@@ -89,12 +89,12 @@ export default function HomeScreen() {
         <View style={styles.modalRoot}>
           <GlassSheet>
             <Text style={styles.sheetTitle}>Sign in to book</Text>
-            <Text style={styles.sheetBody}>Guests can browse. Booking and the 25% deposit need an account.</Text>
+            <Text style={styles.sheetBody}>Guests can browse. Booking a ride needs an account.</Text>
             <TextInput autoCapitalize="none" keyboardType="email-address" placeholder="Email" placeholderTextColor="#8B939E" value={email} onChangeText={setEmail} style={styles.input} />
             <TextInput secureTextEntry placeholder="Password" placeholderTextColor="#8B939E" value={password} onChangeText={setPassword} style={styles.input} />
             <View style={{ gap: 10, marginTop: 8 }}>
               <SpringButton
-                label="Continue to deposit"
+                label="Continue to book"
                 onPress={() => {
                   if (!email || !password) {
                     Alert.alert('Sign in', 'Enter email and password to book.');

@@ -39,7 +39,8 @@ export function depositCents(fareCents) {
 
 /** @deprecated prefer depositCents — kept for dollar UI display */
 export function depositAmount(totalDollars) {
-  return Math.round(totalDollars * 0.25 * 100) / 100
+  void totalDollars
+  return 0
 }
 
 export function getStripeConfig() {

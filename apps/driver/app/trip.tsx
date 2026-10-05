@@ -234,7 +234,7 @@ export default function TripScreen() {
               <CounterpartCard person={person} colors={partyColors} />
             )}
             <Text style={styles.copy}>{trip.pickupLabel} → {trip.dropoffLabel}</Text>
-            <Text style={styles.fare}>{formatCents(trip.driverNetCents)} net · deposit {formatCents(trip.depositCents)}</Text>
+            <Text style={styles.fare}>{formatCents(trip.driverNetCents)} net{trip.depositCents ? ` · already paid ${formatCents(trip.depositCents)}` : ''}</Text>
             <Text style={styles.copy}>
               {livePickup && !headingToDropoff
                 ? `${trip.firstName}'s pickup is live from their phone, within a few feet.`

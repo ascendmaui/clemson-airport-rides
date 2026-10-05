@@ -81,12 +81,12 @@ function paymentReply(text, context) {
       status: 'escalated',
       escalate: true,
       reason: 'refund_needs_admin',
-      reply: 'I cannot refund or change a Stripe charge from chat. I flagged this ticket for an admin. Airport rides take a 25% deposit at checkout. Friend-ride charges use the card on file in Account → Billing.',
+      reply: 'I cannot refund or change a Stripe charge from chat. I flagged this ticket for an admin. The final fare is charged when the trip ends. Friend-ride charges use the card on file in Account → Billing.',
     })
   }
   const card = context?.billing?.hasCard
     ? `A ${context.billing.brand || 'card'}${context.billing.last4 ? ` ending ${context.billing.last4}` : ''} is on file.`
-    : 'No card is on file. Add one in Account → Billing. Airport deposits can still be paid from Schedule checkout.'
+    : 'No card is on file. Add one in Account → Billing before you request a ride.'
   const latest = context?.recentTrips?.[0]
   const fare = latest?.fareUsd != null
     ? ` The newest trip I can see was $${latest.fareUsd} (${latest.pickup || 'pickup'} → ${latest.dropoff || 'dropoff'}, ${latest.status || 'status unknown'}).`

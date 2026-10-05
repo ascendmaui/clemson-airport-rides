@@ -31,7 +31,7 @@ import type { Palette } from '@/lib/palette'
 import { useTheme } from '@/lib/theme'
 import { useThemedStyles } from '@/lib/useThemedStyles'
 
-const CHECKOUT_RETURN_COPY = 'You\'re back from checkout. This ride is in the open pool.'
+const CHECKOUT_RETURN_COPY = 'You\'re back from checkout. This ride is in the open pool. The final fare is charged when the trip ends.'
 
 function stopColor(stop: LiveStopPin, total: number) {
   if (stop.order === 1) return PURPLE
@@ -373,6 +373,7 @@ export default function Requested() {
               </Text>
             ))}
             <Text style={styles.meta}>Trip {tripId.slice(0, 8)}</Text>
+            <Text style={styles.body}>The final fare is charged when the trip ends.</Text>
             {shown?.status === 'completed' ? (
               <PrimaryButton
                 label="Lost & found"

@@ -49,7 +49,7 @@ Same Supabase tables and `/api/driver` routes as the web app. The rider app is a
 - Queue with live trip updates. Chosen-driver requests can be declined (canceled). Open matches are released back to searching. Student, game-day, and weekend filters stay on the queue.
 - Scheduled weekend and party rides have their own section. Accept calls `accept_scheduled_trip`. “Not this one” only hides that card on this phone.
 - Live trip map: your pin, pickup, drop-off, and the rider pin when `location_shares` / `location_points` (or trip metadata) has a fix. Apple Maps and Google Maps open directions for the current stop.
-- Stripe stays on the existing settle route. The fare panel shows the 25% deposit, the remainder collected on complete, the 80/20 split, and carpool share lines. Apple Pay is the rider’s wallet charged off-session. This phone does not present a PaymentSheet.
+- Stripe stays on the existing settle route. The fare panel shows the fare, any amount already paid, the amount charged at trip end, the 80/20 split, and carpool share lines. Apple Pay is the rider’s wallet charged off-session. This phone does not present a PaymentSheet.
 - Earnings reads `/api/driver?action=earnings` and `/api/driver?action=payouts`: today, this week, pending balance, paid out, deposit lines, and trip history.
 - Extra Comfort is a profile toggle. `autonomous_capable` stays false. “Request a driver operated trip” does not dispatch a car.
 - Expo notifications register a push token (best effort on `driver_status.expo_push_token` or `driver_push_tokens`) and schedule a local alert when a new request arrives while the app is running. A closed app gets a remote push only after a sender uses that token.
