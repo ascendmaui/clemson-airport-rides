@@ -32,6 +32,17 @@ export const PREFERRED_CANCELED_COPY =
 export const OPEN_POOL_COPY =
   'No driver is pinned to this ride. The first available driver can accept it.'
 
+/** Shown when the rider has not saved any drivers yet. */
+export const EMPTY_FAVORITES_COPY =
+  'No saved drivers yet. Save a driver to keep them at the top of this list.'
+
+/** Account and phone both failed. The toggle must show this, not fail quietly. */
+export const FAVORITE_PERSIST_ERROR = 'Could not save that driver. Try again.'
+
+/** Phone has the list. The account write failed, so the rider still sees an error. */
+export const FAVORITE_ACCOUNT_SAVE_ERROR =
+  'Could not save that driver to your account. It is still on this phone.'
+
 /** Ride options do not filter the driver list by a retired fleet. */
 export function filterDriversForFleet(drivers) {
   return Array.isArray(drivers) ? drivers : []
@@ -153,11 +164,12 @@ async function readJson(storage, key) {
 }
 
 async function writeJson(storage, key, value) {
-  if (!storage?.setItem) return
+  if (!storage?.setItem) return false
   try {
     await storage.setItem(key, JSON.stringify(value))
+    return true
   } catch {
-    /* phone storage is a mirror of the profile row */
+    return false
   }
 }
 
@@ -184,16 +196,32 @@ export async function loadFavoriteDriverIds(supabase, storage, userId) {
 
 export async function saveFavoriteDriverIds(supabase, storage, userId, ids) {
   const next = normalizeFavoriteDriverIds(ids)
-  await writeJson(storage, favoriteKey(userId), next)
+  const phoneSaved = await writeJson(storage, favoriteKey(userId), next)
   if (!supabase || !userId) {
-    return { ids: next, persisted: false, note: 'Saved on this phone.' }
+    if (!phoneSaved) {
+      return { ids: next, persisted: false, note: null, error: FAVORITE_PERSIST_ERROR }
+    }
+    return { ids: next, persisted: false, note: 'Saved on this phone.', error: null }
   }
-  const { error } = await supabase
-    .from('profiles')
-    .update({ favorite_driver_ids: next, updated_at: new Date().toISOString() })
-    .eq('id', userId)
-  if (error) return { ids: next, persisted: false, note: 'Saved on this phone.' }
-  return { ids: next, persisted: true, note: 'Saved to your account.' }
+  let error = null
+  try {
+    const res = await supabase
+      .from('profiles')
+      .update({ favorite_driver_ids: next, updated_at: new Date().toISOString() })
+      .eq('id', userId)
+    error = res?.error || null
+  } catch (err) {
+    error = err instanceof Error ? err : new Error(FAVORITE_PERSIST_ERROR)
+  }
+  if (error) {
+    return {
+      ids: next,
+      persisted: false,
+      note: phoneSaved ? 'Saved on this phone.' : null,
+      error: phoneSaved ? FAVORITE_ACCOUNT_SAVE_ERROR : FAVORITE_PERSIST_ERROR,
+    }
+  }
+  return { ids: next, persisted: true, note: 'Saved to your account.', error: null }
 }
 
 function rowsLookLikeCards(rows) {

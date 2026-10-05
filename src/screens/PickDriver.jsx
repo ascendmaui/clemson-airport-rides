@@ -16,6 +16,9 @@ import {
   fetchOnlineDrivers,
   filterDriversForFleet,
   groupDriversForPicker,
+  EMPTY_FAVORITES_COPY,
+  FAVORITE_ACCOUNT_SAVE_ERROR,
+  FAVORITE_PERSIST_ERROR,
   loadFavoriteDriverIds,
   OPEN_POOL_COPY,
   PREFERRED_OFFLINE_COPY,
@@ -117,9 +120,18 @@ export function PickDriver({
       ? favoriteIds.filter((id) => id !== driverId)
       : [...favoriteIds, driverId]
     setFavoriteIds(next)
-    const saved = await saveFavoriteDriverIds(supabase, browserStorage, user.id, next)
-    setFavoriteIds(saved.ids)
-    setFavNote(saved.note)
+    try {
+      const saved = await saveFavoriteDriverIds(supabase, browserStorage, user.id, next)
+      setFavoriteIds(saved.error && !saved.note ? favoriteIds : saved.ids)
+      setFavNote(saved.note)
+      if (saved.error) setError(saved.error)
+      else setError((current) => (
+        current === FAVORITE_PERSIST_ERROR || current === FAVORITE_ACCOUNT_SAVE_ERROR ? null : current
+      ))
+    } catch (err) {
+      setFavoriteIds(favoriteIds)
+      setError(err instanceof Error ? err.message : FAVORITE_PERSIST_ERROR)
+    }
   }
 
   const onRequest = async () => {
@@ -194,6 +206,11 @@ export function PickDriver({
         {favNote && (
           <p style={{ marginTop: 8, fontSize: 12, fontWeight: 700, color: 'var(--purple)' }}>{favNote}</p>
         )}
+        {!loading && favoriteIds.length === 0 ? (
+          <p role="status" style={{ marginTop: 8, fontSize: 13, color: 'var(--ink-secondary)', lineHeight: 1.45 }}>
+            {EMPTY_FAVORITES_COPY}
+          </p>
+        ) : null}
       </div>
 
       <div style={{ flex: 1, padding: '8px 16px 24px', overflowY: 'auto' }}>

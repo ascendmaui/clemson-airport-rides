@@ -20,6 +20,9 @@ import { STUDENT_DISCOUNT_LABEL } from 'rides-native/riderMoney.js'
 import { useStudentStatus } from '@/lib/useStudentStatus'
 import {
   describeDriver,
+  EMPTY_FAVORITES_COPY,
+  FAVORITE_ACCOUNT_SAVE_ERROR,
+  FAVORITE_PERSIST_ERROR,
   fetchDriversByIds,
   fetchOnlineDrivers,
   groupDriversForPicker,
@@ -146,9 +149,18 @@ export default function PickDriver() {
       ? favoriteIds.filter((id: string) => id !== driverId)
       : [...favoriteIds, driverId]
     setFavoriteIds(next)
-    const saved = await saveFavoriteDriverIds(supabase, authStorage, user.id, next)
-    setFavoriteIds(saved.ids)
-    setFavNote(saved.note)
+    try {
+      const saved = await saveFavoriteDriverIds(supabase, authStorage, user.id, next)
+      setFavoriteIds(saved.error && !saved.note ? favoriteIds : saved.ids)
+      setFavNote(saved.note)
+      if (saved.error) setError(saved.error)
+      else setError((current) => (
+        current === FAVORITE_PERSIST_ERROR || current === FAVORITE_ACCOUNT_SAVE_ERROR ? null : current
+      ))
+    } catch (err) {
+      setFavoriteIds(favoriteIds)
+      setError(err instanceof Error ? err.message : FAVORITE_PERSIST_ERROR)
+    }
     await tapHaptic()
   }
 
@@ -341,6 +353,9 @@ export default function PickDriver() {
           </View>
         ) : null}
         {favNote ? <Text style={styles.meta}>{favNote}</Text> : null}
+        {phase === 'results' && favoriteIds.length === 0 ? (
+          <Text style={styles.sub}>{EMPTY_FAVORITES_COPY}</Text>
+        ) : null}
         {phase === 'results' ? renderGroups() : null}
       </Animated.ScrollView>
       <View style={[styles.footer, lift(colors, 'bar'), { paddingBottom: Math.max(insets.bottom, 16) }]}>
