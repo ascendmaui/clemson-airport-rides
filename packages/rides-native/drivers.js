@@ -1,5 +1,5 @@
-import { isTeslaModel3 } from '../../shared/teslaFleet.js'
 import { canReceiveRides } from '../../shared/driverOnboarding.js'
+import { vehicleServesComfort } from '../../shared/rideOptions.js'
 import { defaultDriverRank, dispatchRankOf } from '../../shared/driverOrder.js'
 import { authedJson } from './apiClient.js'
 import { displayFirstName, standingFromRatings } from './authErrors.js'
@@ -16,7 +16,7 @@ const FAVORITE_CAP = 12
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
 const STATUS_COLUMNS = 'driver_id, online, priority_mode, lat, lng, heading, unlock_progress, unlock_target, updated_at'
-const VEHICLE_COLUMNS = 'id, driver_id, make, model, color, plate, seats, is_tesla, autonomous_capable, tier'
+const VEHICLE_COLUMNS = 'id, driver_id, make, model, color, plate, seats, tier'
 const PROFILE_COLUMNS = 'id, full_name, phone, email, avatar_url, role, rating_avg, rating_count, standing'
 const PROFILE_COLUMNS_NARROW = 'id, full_name, phone, email, avatar_url, role'
 
@@ -32,30 +32,9 @@ export const PREFERRED_CANCELED_COPY =
 export const OPEN_POOL_COPY =
   'No driver is pinned to this ride. The first available driver can accept it.'
 
-/** True when the vehicle row is listed as the Tesla Model 3 fleet option. */
-export function isTeslaVehicle(vehicle) {
-  return isTeslaModel3(vehicle)
-}
-
-/** True when a mapped driver card is a Tesla fleet listing. */
-export function isTeslaDriver(driver) {
-  if (!driver) return false
-  if (driver.isTesla === true) return true
-  return isTeslaVehicle(driver.vehicle)
-}
-
-export const TESLA_FLEET_EMPTY_COPY =
-  'No Tesla Model 3 drivers are online right now. Self-driving dispatch is not available.'
-
-export const TESLA_FLEET_PICK_COPY =
-  'Tesla Model 3 fleet only. Pick a listed Tesla driver. A person still drives — there is no robotaxi match.'
-
-/** When the rider chose Tesla, keep only listed Tesla drivers (preferred offline included). */
-export function filterDriversForFleet(drivers, tier) {
-  const list = Array.isArray(drivers) ? drivers : []
-  const wantTesla = tier === 'tesla' || tier === 'tesla_self_driving'
-  if (!wantTesla) return list
-  return list.filter((driver) => isTeslaDriver(driver))
+/** Ride options do not filter the driver list by a retired fleet. */
+export function filterDriversForFleet(drivers) {
+  return Array.isArray(drivers) ? drivers : []
 }
 
 
@@ -252,7 +231,6 @@ function partsFromCardRows(rows) {
         model: row.model || null,
         plate: row.plate || null,
         tier: row.tier || 'standard',
-        is_tesla: row.is_tesla === true,
       })
     }
   }
@@ -385,7 +363,8 @@ function mapDrivers(statuses, profiles, vehicles) {
         ? [vehicle.color, vehicle.make, vehicle.model].filter(Boolean).join(' ')
         : 'Vehicle TBD',
       plate: vehicle?.plate || null,
-      isTesla: isTeslaVehicle(vehicle),
+      comfortClass: vehicleServesComfort(vehicle),
+      isDemo: false,
       tier: vehicle?.tier || 'standard',
       dispatchRank: Number.isInteger(profile.dispatchRank)
         ? profile.dispatchRank

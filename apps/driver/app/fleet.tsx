@@ -6,8 +6,8 @@ import { BackButton, Card, ErrorText, Primary } from '@/components/chrome'
 import { useAuth } from '@/lib/auth'
 import { useFeedback } from '@/lib/feedback'
 import { supabase } from '@/lib/supabase'
-import { loadDriverProfile, loadVehicle, riderFacingCard, setTeslaListing, type FacingCard, type VehicleRow } from 'rides-native/driverDesk'
-import { TESLA_FLEET_NOTICE } from 'rides-native/tripTags'
+import { loadDriverProfile, loadVehicle, riderFacingCard, setServiceClass, type FacingCard, type VehicleRow } from 'rides-native/driverDesk'
+import { COMFORT_FLEET_NOTICE } from 'rides-native/tripTags'
 import { useTheme } from '@/lib/theme'
 import type { Palette } from '@/lib/palette'
 
@@ -44,30 +44,30 @@ export default function FleetScreen() {
     setError(null)
     setStubNote(null)
     try {
-      const saved = await setTeslaListing(supabase, user.id, { enabled, claimModel3 })
+      const saved = await setServiceClass(supabase, user.id, { enabled, claimModel3 })
       setVehicle(saved)
       pulse('online')
       await refresh()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not update the Tesla listing')
+      setError(err instanceof Error ? err.message : 'Could not update the Comfort listing')
     } finally {
       setBusy(false)
     }
   }
 
-  const listed = Boolean(vehicle?.is_tesla)
+  const listed = Boolean(vehicle?.service_class)
 
   return (
     <View style={[styles.screen, { paddingTop: insets.top + 8 }]}>
       <ScrollView contentContainerStyle={styles.list}>
         <BackButton onPress={() => router.back()} />
         <Text style={styles.kicker}>FLEET</Text>
-        <Text style={styles.title}>Tesla Model 3</Text>
+        <Text style={styles.title}>Extra Comfort</Text>
         <Card>
-          <Text style={styles.cardTitle}>Self-driving is not live</Text>
-          <Text style={styles.copy}>{TESLA_FLEET_NOTICE}</Text>
+          <Text style={styles.cardTitle}>driver operated is not live</Text>
+          <Text style={styles.copy}>{COMFORT_FLEET_NOTICE}</Text>
           <Text style={styles.copy}>
-            Riders can pick the Tesla tier in the rider app. If you list one, Pick a driver shows the badge. Accepting that ride means you drive.
+            Riders can pick the Comfort tier in the rider app. If you list one, Pick a driver shows the badge. Accepting that ride means you drive.
           </Text>
         </Card>
         {facing ? (
@@ -78,7 +78,7 @@ export default function FleetScreen() {
             <Text style={styles.copy}>
               {facing.ratingAvg != null ? `${facing.ratingAvg.toFixed(1)} · ${facing.ratingCount} ratings` : 'New driver'}
               {facing.studentVerified ? ' · Clemson student' : ''}
-              {facing.isTesla ? ' · Tesla' : ''}
+              {facing.comfortClass ? ' · Comfort' : ''}
             </Text>
             <Text style={styles.copy}>Go online from home for this card to appear in Pick a driver.</Text>
           </Card>
@@ -90,20 +90,20 @@ export default function FleetScreen() {
         ) : (
           <>
             <Primary
-              label={busy ? 'Saving…' : listed ? 'Remove Tesla listing' : 'Show Tesla badge to riders'}
+              label={busy ? 'Saving…' : listed ? 'Remove Comfort listing' : 'Show Comfort badge to riders'}
               onPress={() => toggle(!listed, false)}
               disabled={busy}
             />
             {!listed ? (
               <Pressable onPress={() => toggle(true, true)} disabled={busy} style={styles.stubButton}>
-                <Text style={styles.stubButtonText}>My car is a Tesla Model 3</Text>
+                <Text style={styles.stubButtonText}>My car is a Extra Comfort</Text>
               </Pressable>
             ) : null}
             <Pressable
-              onPress={() => setStubNote('Self-driving dispatch is not available. No car was assigned, and no autonomy session was started. Clemson fleet rides are driven by a person.')}
+              onPress={() => setStubNote('driver operated dispatch is not available. No car was assigned, and no autonomy session was started. Clemson fleet rides are driven by a person.')}
               style={styles.stubButton}
             >
-              <Text style={styles.stubButtonText}>Check self-driving dispatch</Text>
+              <Text style={styles.stubButtonText}>Check driver operated dispatch</Text>
             </Pressable>
           </>
         )}

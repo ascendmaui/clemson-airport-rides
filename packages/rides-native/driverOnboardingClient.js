@@ -318,9 +318,9 @@ async function saveVehicle(supabase, userId, payload) {
     color: payload.color || null,
     plate: payload.plate,
     seats: payload.seats || 4,
-    is_tesla: Boolean(payload.isTesla),
+    service_class: payload.comfortClass ? 'comfort' : 'standard',
     autonomous_capable: false,
-    tier: payload.isTesla ? 'tesla_self_driving' : 'standard',
+    tier: payload.comfortClass ? 'comfort' : 'standard',
   }, payload.year)
   const { data: existingVeh } = await supabase.from('vehicles').select('id').eq('driver_id', userId).limit(1)
   const vehicle = existingVeh?.[0]
@@ -334,13 +334,13 @@ async function saveVehicle(supabase, userId, payload) {
   return saved.data
 }
 
-async function keepTeslaStub(supabase, userId, payload) {
-  if (!payload?.isTesla || !supabase || !userId) return
+async function keepComfortStub(supabase, userId, payload) {
+  if (!payload?.comfortClass || !supabase || !userId) return
   const { error } = await supabase
     .from('vehicles')
-    .update({ autonomous_capable: false, tier: 'tesla_self_driving', is_tesla: true })
+    .update({ autonomous_capable: false, tier: 'comfort', service_class: 'comfort' })
     .eq('driver_id', userId)
-  if (error) console.warn('[tesla stub]', error.message)
+  if (error) console.warn('[comfort stub]', error.message)
 }
 
 export async function saveDriverInfo(supabase, user, payload) {
@@ -353,12 +353,12 @@ export async function saveDriverInfo(supabase, user, payload) {
   if (quizError) throw new Error(quizError)
   try {
     const saved = await authedJson(supabase, '/api/driver?action=signup', { method: 'POST', body: payload })
-    await keepTeslaStub(supabase, user.id, payload)
+    await keepComfortStub(supabase, user.id, payload)
     return saved
   } catch (err) {
     if (!err.unavailable && !err.network) throw err
     const saved = await saveDriverInfoDirect(supabase, user, payload)
-    await keepTeslaStub(supabase, user.id, payload)
+    await keepComfortStub(supabase, user.id, payload)
     return saved
   }
 }

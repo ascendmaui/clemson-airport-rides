@@ -4,13 +4,8 @@ import { downtownNow, heatColor } from '../lib/downtownHeat'
 import { MAPS_LOADER_ID, MAP_LIBRARIES, mapsLoaderOptions } from '../lib/googleMapsLoader'
 import { fetchRideDemand, loadMapType, saveMapType } from '../lib/rideDemand'
 import { MapTypeSelect } from './MapTypeSelect'
-import {
-  SIMULATED_FLEET_BADGE,
-  busyCarSvg,
-  refuseSimulatedDriverTap,
-  simulatedFleetPercent,
-} from '../../packages/rides-native/simulatedDrivers.js'
-import { useSimulatedFleet } from '../../packages/rides-native/useSimulatedFleet.js'
+import { SIMULATED_FLEET_BADGE } from '../../packages/rides-native/simulatedDrivers.js'
+import { DriverProfileCard, GoogleFleetMotion, PreviewFleetMotion } from './FleetMotion.jsx'
 
 export const CLEMSON = [34.6784, -82.8397]
 export const STADIUM = [34.6788, -82.8430]
@@ -108,20 +103,6 @@ function useAnimatedPosition(target, enabled) {
   return pos
 }
 
-function busyCarIcon(heading) {
-  const w = 48
-  const h = 56
-  return {
-    url: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(busyCarSvg(heading))}`,
-    scaledSize: typeof window !== 'undefined' && window.google?.maps
-      ? new window.google.maps.Size(w, h)
-      : undefined,
-    anchor: typeof window !== 'undefined' && window.google?.maps
-      ? new window.google.maps.Point(24, 18)
-      : undefined,
-  }
-}
-
 function FleetBadge() {
   return (
     <div
@@ -144,49 +125,6 @@ function FleetBadge() {
       {SIMULATED_FLEET_BADGE}
     </div>
   )
-}
-
-function PreviewFleet({ fleet }) {
-  if (!fleet?.length) return null
-  return fleet.map((car) => {
-    const spot = simulatedFleetPercent(car.lat, car.lng)
-    return (
-      <div
-        key={car.id}
-        role="img"
-        aria-label={car.description}
-        data-simulated-driver={car.id}
-        data-simulated-status="busy"
-        data-bookable="false"
-        onClick={(event) => {
-          event.preventDefault()
-          event.stopPropagation()
-          refuseSimulatedDriverTap(car.id)
-        }}
-        style={{
-          position: 'absolute',
-          left: `${spot.left}%`,
-          top: `${spot.top}%`,
-          transform: 'translate(-50%, -50%)',
-          zIndex: 2,
-          minWidth: 44,
-          minHeight: 44,
-          display: 'grid',
-          placeItems: 'center',
-          padding: '4px 8px',
-          borderRadius: 999,
-          background: '#522D80',
-          color: '#fff',
-          fontSize: 11,
-          fontWeight: 800,
-          boxShadow: '0 2px 8px rgba(11,18,32,0.25)',
-          cursor: 'default',
-        }}
-      >
-        Busy
-      </div>
-    )
-  })
 }
 
 function previewRoutePoints(route) {
@@ -225,7 +163,7 @@ function FallbackRoute({ route }) {
   )
 }
 
-function FallbackMap({ wrapStyle, message, badge, fleet = [], route = null }) {
+function FallbackMap({ wrapStyle, message, badge, route = null }) {
   return (
     <div
       style={{
@@ -240,7 +178,6 @@ function FallbackMap({ wrapStyle, message, badge, fleet = [], route = null }) {
       }}
     >
       <FallbackRoute route={route} />
-      <PreviewFleet fleet={fleet} />
       {badge ? (
         <div style={{
           position: 'absolute',
@@ -428,6 +365,8 @@ export function CampusMap({
   }, [areaCircles])
 
   const mapRef = useRef(null)
+  const [mapReady, setMapReady] = useState(null)
+  const [previewDriver, setPreviewDriver] = useState(null)
   const fittedKey = useRef('')
   const stopRef = useRef(stopMarkers)
   const driverRef = useRef(driverTarget)
@@ -457,6 +396,7 @@ export function CampusMap({
   }, [])
   const onLoad = useCallback((map) => {
     mapRef.current = map
+    setMapReady(map)
     fitStopBounds(map)
   }, [fitStopBounds])
 
@@ -477,19 +417,17 @@ export function CampusMap({
     }
   }, [resolvedMapType, isLoaded])
 
-  const simulatedFleet = useSimulatedFleet(showSimulatedFleet)
-  const previewFleet = showSimulatedFleet ? simulatedFleet : []
-
   if (!apiKey) {
     return (
       <div style={{ position: 'relative' }}>
         <FallbackMap
           wrapStyle={wrapStyle}
           badge={gameDayLabel}
-          fleet={previewFleet}
           route={route}
           message="Map preview needs VITE_GOOGLE_MAPS_API_KEY (Maps JavaScript API)."
         />
+        <PreviewFleetMotion enabled={showSimulatedFleet} onSelect={setPreviewDriver} />
+        <DriverProfileCard driver={previewDriver} onClose={() => setPreviewDriver(null)} />
         {showSimulatedFleet ? <FleetBadge /> : null}
       </div>
     )
@@ -497,7 +435,9 @@ export function CampusMap({
   if (loadError) {
     return (
       <div style={{ position: 'relative' }}>
-        <FallbackMap wrapStyle={wrapStyle} badge={gameDayLabel} fleet={previewFleet} route={route} message="Google Maps failed to load. Check the API key / referrer." />
+        <FallbackMap wrapStyle={wrapStyle} badge={gameDayLabel} route={route} message="Google Maps failed to load. Check the API key / referrer." />
+        <PreviewFleetMotion enabled={showSimulatedFleet} onSelect={setPreviewDriver} />
+        <DriverProfileCard driver={previewDriver} onClose={() => setPreviewDriver(null)} />
         {showSimulatedFleet ? <FleetBadge /> : null}
       </div>
     )
@@ -505,7 +445,9 @@ export function CampusMap({
   if (!isLoaded) {
     return (
       <div style={{ position: 'relative' }}>
-        <FallbackMap wrapStyle={wrapStyle} badge={gameDayLabel} fleet={previewFleet} route={route} message="Loading map…" />
+        <FallbackMap wrapStyle={wrapStyle} badge={gameDayLabel} route={route} message="Loading map…" />
+        <PreviewFleetMotion enabled={showSimulatedFleet} onSelect={setPreviewDriver} />
+        <DriverProfileCard driver={previewDriver} onClose={() => setPreviewDriver(null)} />
         {showSimulatedFleet ? <FleetBadge /> : null}
       </div>
     )
@@ -602,21 +544,9 @@ export function CampusMap({
         {(animatedDriver || driverTarget) && (
           <Marker position={animatedDriver || driverTarget} icon={driverIcon} title="Driver" />
         )}
-        {showSimulatedFleet
-          ? simulatedFleet.map((car) => (
-            <Marker
-              key={car.id}
-              position={{ lat: car.lat, lng: car.lng }}
-              icon={busyCarIcon(car.heading)}
-              title={car.title}
-              zIndex={6}
-              onClick={() => {
-                refuseSimulatedDriverTap(car.id)
-              }}
-            />
-          ))
-          : null}
       </GoogleMap>
+      <GoogleFleetMotion map={mapReady} enabled={showSimulatedFleet} onSelect={setPreviewDriver} />
+      <DriverProfileCard driver={previewDriver} onClose={() => setPreviewDriver(null)} />
       {showSimulatedFleet ? <FleetBadge /> : null}
       {gameDayLabel ? (
         <div style={{

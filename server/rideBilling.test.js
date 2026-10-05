@@ -121,6 +121,17 @@ function createSb({ balance = 0, balanceMode = 'row' } = {}) {
           resolve({ data: [{ profile_id: 'driver-1', onboarding_status: 'approved' }], error: null })
           return
         }
+        if (table === 'driver_status') {
+          resolve({ data: [{ driver_id: 'driver-1', online: true }], error: null })
+          return
+        }
+        if (table === 'vehicles') {
+          resolve({
+            data: [{ driver_id: 'driver-1', service_class: 'comfort', tier: 'comfort' }],
+            error: null,
+          })
+          return
+        }
         resolve({ data: [], error: null })
       },
     }
@@ -367,7 +378,8 @@ test('scheduling records credits or the 25% deposit request without spending the
   assert.equal(sb.state.trips.length, 1)
   assert.equal(sb.state.trips[0].metadata.billing_choice, 'credits')
   assert.equal(sb.state.trips[0].metadata.billing_debited_cents, 0)
-  assert.equal(sb.state.trips[0].fare_cents, fare)
+  assert.equal(sb.state.trips[0].metadata.schedule_discount_pct, 10)
+  assert.equal(sb.state.trips[0].fare_cents, fare - Math.round(fare * 0.1))
   assert.equal(sb.state.balance, fare)
   assert.equal(sb.state.creditWrites.length, 0)
 

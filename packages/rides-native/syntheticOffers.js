@@ -91,7 +91,7 @@ function offer(row) {
     driverNetCents: driverNetCents(row.fareCents),
     purpose: row.rideType,
     tier: 'standard',
-    teslaStub: false,
+    comfortStub: false,
     arrivedAt: null,
     shares: [],
     riderLat: null,

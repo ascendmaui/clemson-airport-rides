@@ -23,6 +23,8 @@ import {
   billingOffer,
   readRideCreditBalance,
 } from '../rideBilling.js'
+import { resolveOfferedTier, scheduleDiscountMetadata } from '../../shared/rideOptions.js'
+import { assertTierAvailable } from '../rideAvailability.js'
 
 const CLIENT_MONEY_KEYS = [
   'fareCents',
@@ -71,7 +73,13 @@ async function priceBody(sb, user, body, compute, now) {
   if (located.error) return { error: located.error, status: 400 }
   const { pickup, dropoff, airport } = located
   const distance = await distanceBetween(pickup, dropoff, compute)
-  const tier = clean.tier === 'tesla' ? 'tesla' : 'standard'
+  let tier
+  try {
+    tier = resolveOfferedTier(clean.tier)
+  } catch (error) {
+    return { error: error.message, status: error.status || 400, code: error.code }
+  }
+  const scheduled = Boolean(clean.date || clean.pickupAt || clean.scheduled_for || clean.scheduledFor)
   const priced = priceScheduledRequest({
     pickup,
     dropoff,
@@ -82,8 +90,10 @@ async function priceBody(sb, user, body, compute, now) {
     gameDayMultiplier,
     distanceM: distance.distanceM,
     durationS: distance.durationS,
+    scheduleAhead: scheduled,
+    now,
   })
-  return { priced, pickup, dropoff, when, clean }
+  return { priced, pickup, dropoff, when, clean, tier, scheduled }
 }
 
 function quotePayload(priced, balance) {
@@ -108,6 +118,11 @@ function quotePayload(priced, balance) {
     options: offer.options,
     charged: false,
     debitedCents: 0,
+    fareBeforeScheduleDiscountCents: priced.fareBeforeScheduleDiscountCents ?? priced.fareCents,
+    scheduleDiscountPct: priced.scheduleDiscountPct || 0,
+    scheduleDiscountCents: priced.scheduleDiscountCents || 0,
+    scheduleDiscountApplied: Boolean(priced.scheduleDiscountApplied),
+    tier: priced.tier,
   }
 }
 
@@ -129,8 +144,15 @@ export default async function handler(req, res, deps = {}) {
   if (!mode) return json(res, 400, { error: 'mode must be quote or record' })
 
   const pricedResult = await priceBody(sb, user, body, compute, now)
-  if (pricedResult.error) return json(res, pricedResult.status || 400, { error: pricedResult.error })
-  const { priced, pickup, dropoff, when } = pricedResult
+  if (pricedResult.error) {
+    return json(res, pricedResult.status || 400, { error: pricedResult.error, code: pricedResult.code })
+  }
+  const { priced, pickup, dropoff, when, tier, scheduled } = pricedResult
+  try {
+    await assertTierAvailable(sb, tier, { scheduledFor: scheduled ? when : null, now })
+  } catch (error) {
+    return json(res, error.status || 409, { error: error.message, code: error.code || 'ride_option_unavailable' })
+  }
   if (priced?.fareCents == null || !Number.isFinite(Number(priced.fareCents))) {
     return json(res, 409, { error: 'Fare is not set', code: 'fare_not_set' })
   }
@@ -171,7 +193,7 @@ export default async function handler(req, res, deps = {}) {
     rider_id: user.id,
     driver_id: null,
     status: scheduledFor ? 'scheduled' : 'searching',
-    tier: priced.tier === 'tesla' ? 'tesla' : 'standard',
+    tier: priced.tier,
     pickup_label: pickup.label,
     dropoff_label: dropoff.label,
     pickup_lat: pickup.lat,
@@ -200,6 +222,7 @@ export default async function handler(req, res, deps = {}) {
       rider_first_name: riderFirst,
       isStudent: Boolean(priced.isStudent && priced.discountCents > 0),
       student_discount_cents: Math.max(0, priced.discountCents || 0),
+      ...scheduleDiscountMetadata(priced),
       ...billing.snapshot,
     },
   }

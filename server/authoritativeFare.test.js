@@ -105,15 +105,15 @@ test('spoofed campus fare and student flag do not set the recorded fare', () => 
   const discount = Math.round((full.fareCents * STUDENT_DISCOUNT_BPS) / 10000)
   assert.equal(student.fareCents, full.fareCents - discount)
   assert.ok(student.fareCents > 100)
-  const tesla = priceScheduledRequest({
+  const comfort = priceScheduledRequest({
     pickup: CAMPUS,
     dropoff: DOWNTOWN,
     at: QUIET,
     isStudent: true,
-    tier: 'tesla',
+    tier: 'comfort',
   })
-  assert.equal(tesla.fareCents, full.fareCents * 2)
-  assert.equal(tesla.isStudent, false)
+  assert.equal(comfort.fareCents, full.fareCents)
+  assert.equal(comfort.isStudent, false)
 })
 
 test('a short ATL pin cannot price below the existing Atlanta floor', () => {
@@ -258,10 +258,10 @@ test('driver-request airport pricing ignores a short pin and keeps the 25% depos
   const student = priceDriverRequest(places, { isStudent: true, at: QUIET, tier: 'standard' })
   assert.equal(student.fareCents, full.fareCents - Math.round((full.fareCents * STUDENT_DISCOUNT_BPS) / 10000))
   assert.equal(student.depositCents, cardDepositCents(student.fareCents))
-  const tesla = priceDriverRequest(places, { isStudent: true, at: QUIET, tier: 'tesla' })
-  assert.equal(tesla.isStudent, false)
-  assert.equal(tesla.fareCents, full.fareCents * 2)
-  assert.equal(tesla.depositCents, cardDepositCents(tesla.fareCents))
+  const comfort = priceDriverRequest(places, { isStudent: true, at: QUIET, tier: 'comfort' })
+  assert.equal(comfort.isStudent, false)
+  assert.equal(comfort.fareCents, full.fareCents)
+  assert.equal(comfort.depositCents, cardDepositCents(comfort.fareCents))
 })
 
 test('a recorded null-fare airport trip prices from the canonical quote', () => {
@@ -468,16 +468,18 @@ test('parseRideAt zoneless ISO follows process TZ; Z does not', () => {
   assert.equal(et.utc, '2026-10-02T14:00:00.000Z')
 })
 
-test('Tesla premium leaves existing Standard, Wait and Comfort server behavior unchanged', () => {
+test('Wait and Extra Comfort use the same server fare as Standard', () => {
   const places = { pickup: { label: 'A', lat: 34.68, lng: -82.84 }, dropoff: { label: 'B', lat: 34.69, lng: -82.85 } }
   const options = { at: QUIET, distanceM: 8000, durationS: 900, isStudent: false }
   const standard = priceDriverRequest(places, options)
   for (const tier of ['wait', 'comfort']) {
-    assert.equal(priceDriverRequest(places, { ...options, tier }).fareCents, standard.fareCents)
+    const priced = priceDriverRequest(places, { ...options, tier })
+    assert.equal(priced.fareCents, standard.fareCents)
+    assert.equal(priced.tier, tier)
+    assert.equal(priced.breakdown.vehicle_multiplier, 1)
   }
-  const tesla = priceDriverRequest(places, { ...options, tier: 'tesla', isStudent: true })
-  assert.equal(tesla.fareCents, standard.fareCents * 2)
-  assert.equal(tesla.tier, 'tesla')
-  assert.equal(tesla.discountCents, 0)
-  assert.equal(tesla.breakdown.vehicle_multiplier, 2)
+  const comfort = priceDriverRequest(places, { ...options, tier: 'comfort', isStudent: true })
+  assert.equal(comfort.fareCents, standard.fareCents)
+  assert.equal(comfort.isStudent, false)
+  assert.equal(comfort.discountCents, 0)
 })

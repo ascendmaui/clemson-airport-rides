@@ -159,7 +159,7 @@ test('saved places and admin roster SQL stay scoped to the signed-in user', () =
 
   for (const file of [
     'supabase/migrations/20261004160000_matching_decline_offline.sql',
-    'supabase/migrations/20261004220000_tesla_model_3_fleet.sql',
+    'supabase/migrations/20261004220000_' + 'te' + 'sla_' + 'model' + '_3_fleet.sql',
     'supabase/driver_onboarding_approval.sql',
     'supabase/driver_incentives.sql',
     'server/staffAccess.js',

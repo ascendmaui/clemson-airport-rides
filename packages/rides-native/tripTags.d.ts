@@ -1,9 +1,9 @@
-export const TESLA_FLEET_NOTICE: string
-export function teslaFleetNotice(selected: boolean): string | null
+export const COMFORT_FLEET_NOTICE: string
+export function comfortFleetNotice(selected: boolean): string | null
 export const ACTIONABLE_LEAD_MS: number
 export const UNPAID_AIRPORT_DEPOSIT_ACCEPT_ERROR: string
 
-export type TripTag = 'student' | 'game_day' | 'weekend_party' | 'carpool' | 'tesla' | 'direct' | 'scheduled'
+export type TripTag = 'student' | 'game_day' | 'weekend_party' | 'carpool' | 'comfort' | 'direct' | 'scheduled'
 
 export type FareShare = { id: string; label: string; shareCents: number }
 
@@ -38,7 +38,7 @@ export type DriverCard = {
   tier: string | null
   tags: TripTag[]
   tagLabels: string[]
-  teslaStub: boolean
+  comfortStub: boolean
   arrivedAt: string | null
   passengers: number
   shares: FareShare[]

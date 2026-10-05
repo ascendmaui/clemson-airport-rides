@@ -133,7 +133,7 @@ export async function handlePassOffer(req, res, deps = {}) {
 
   let offerDriverId = null
   if (meta.match === 'auto' && Array.isArray(meta.auto_assign_queue)) {
-    const ordered = await listAssignableDrivers(ctx.sb, { tier: trip.tier === 'tesla' ? 'tesla' : 'standard' })
+    const ordered = await listAssignableDrivers(ctx.sb, { tier: trip.tier || 'standard' })
     if (ordered.error) return json(res, 500, { error: 'Could not read online drivers', code: 'driver_status_unavailable' })
     offerDriverId = nextQueuedDriver(
       meta.auto_assign_queue,

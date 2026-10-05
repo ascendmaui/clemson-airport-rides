@@ -142,7 +142,7 @@ test('TierRow.jsx uses A11yBadge for accessible fleet and tier badges', () => {
   assert.ok(ast, 'TierRow parses cleanly')
 
   assert.match(code, /import\s+\{\s*A11yBadge\s*\}\s+from\s+['"]\.\/A11yBadge\.jsx['"]/, 'imports A11yBadge')
-  assert.match(code, /<A11yBadge\s+variant=\{tier\.id === 'tesla' \? 'fleet' : 'purple'\}>/, 'renders A11yBadge with appropriate variant')
+  assert.match(code, /<A11yBadge variant="purple">/, 'renders A11yBadge')
 })
 
 test('SurgeBadge.jsx exposes role="status", descriptive aria-label, and high-contrast styling', () => {

@@ -25,6 +25,7 @@ import handleAbandonCheckout from '../server/endpoints/abandonCheckout.js'
 import handleReconcileCheckout from '../server/endpoints/reconcileCheckout.js'
 import handleClemsonMiamiCheckout from '../server/endpoints/clemsonMiamiCheckout.js'
 import handleRideBilling from '../server/endpoints/rideBilling.js'
+import handleRideOptions from '../server/endpoints/rideOptions.js'
 
 const HANDLERS = {
   'setup-intent': handleStripeSetupIntent,
@@ -43,6 +44,7 @@ const HANDLERS = {
   'reconcile-checkout': handleReconcileCheckout,
   'clemson-miami': handleClemsonMiamiCheckout,
   billing: handleRideBilling,
+  'ride-options': handleRideOptions,
 }
 
 const LEGACY = {
@@ -62,7 +64,7 @@ export default async function handler(req, res, ...rest) {
   const handle = HANDLERS[action]
   if (!handle) {
     return json(res, 400, {
-      error: 'Unknown payment action. Use action=setup-intent, save, quote, airport-checkout, schedule-trip, request-driver, buy-credits, credits-confirm, abandon-checkout, credit-lots, credits, collect, settle, reconcile-checkout, clemson-miami, or billing.',
+      error: 'Unknown payment action. Use action=setup-intent, save, quote, airport-checkout, schedule-trip, request-driver, buy-credits, credits-confirm, abandon-checkout, credit-lots, credits, collect, settle, reconcile-checkout, clemson-miami, billing, or ride-options.',
     })
   }
   return handle(req, res, ...rest)

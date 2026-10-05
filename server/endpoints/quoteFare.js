@@ -16,6 +16,7 @@ import {
   placesForServerFare,
   riderTierQuotes,
 } from '../authoritativeFare.js'
+import { resolveOfferedTier } from '../../shared/rideOptions.js'
 
 const CLIENT_MONEY_KEYS = [
   'fareCents',
@@ -81,21 +82,31 @@ export default async function handler(req, res, deps = {}) {
     }
   }
 
+  let tier = 'standard'
+  try {
+    tier = resolveOfferedTier(clean.tier)
+  } catch (error) {
+    return json(res, error.status || 400, {
+      error: error.message || 'That ride option is not offered.',
+      code: error.code || 'ride_option_unavailable',
+    })
+  }
+
   const compute = deps.computeRoutes || computeRoutes
   const distance = await distanceBetween(located.pickup, located.dropoff, compute)
-  const tier = clean.tier === 'wait' || clean.tier === 'comfort' || clean.tier === 'tesla'
-    ? clean.tier
-    : 'standard'
+  const scheduled = Boolean(clean.date || clean.pickupAt || clean.scheduled_for || clean.scheduledFor)
   const priced = riderTierQuotes({
     pickup: located.pickup,
     dropoff: located.dropoff,
     airport: located.airport,
     at: when,
+    now,
     isStudent: studentDiscountGranted(user),
     tier,
     gameDayMultiplier,
     distanceM: distance.distanceM,
     durationS: distance.durationS,
+    scheduleAhead: scheduled,
   })
   const split = splitPlatformFee(priced.fareCents)
   const breakdown = priced.breakdown || priced.quote?.breakdown || {}
@@ -111,6 +122,10 @@ export default async function handler(req, res, deps = {}) {
     fareCents: priced.fareCents,
     depositCents: priced.depositCents,
     discountCents: priced.discountCents,
+    fareBeforeScheduleDiscountCents: priced.fareBeforeScheduleDiscountCents ?? priced.fareCents,
+    scheduleDiscountPct: priced.scheduleDiscountPct || 0,
+    scheduleDiscountCents: priced.scheduleDiscountCents || 0,
+    scheduleDiscountApplied: Boolean(priced.scheduleDiscountApplied),
     tiers: priced.tiers,
     quote: {
       fareCents: priced.fareCents,

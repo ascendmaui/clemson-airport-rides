@@ -293,24 +293,24 @@ test('createScheduledTrip validates inputs and posts payload to backend endpoint
     tier: 'standard',
   })
 
-  // 4. Custom tier: tesla
+  // 4. Custom tier: comfort
   state().authedCalls = []
   state().authedResult = {
-    trip: { id: 'trip_tesla_1', status: 'scheduled', pickup_at: pickupAt.toISOString(), pickup_label: pickup.label, dropoff_label: dropoff.label },
+    trip: { id: 'trip_comfort_1', status: 'scheduled', pickup_at: pickupAt.toISOString(), pickup_label: pickup.label, dropoff_label: dropoff.label },
   }
 
-  const teslaTrip = await api.createScheduledTrip({
+  const comfortTrip = await api.createScheduledTrip({
     user: { id: 'usr_99' },
     pickup,
     dropoff,
     pickupAt,
     purpose: 'early_class',
     weekdays: [],
-    tier: 'tesla',
+    tier: 'comfort',
   })
 
-  assert.equal(teslaTrip.id, 'trip_tesla_1')
-  assert.equal(state().authedCalls[0].options.body.tier, 'tesla')
+  assert.equal(comfortTrip.id, 'trip_comfort_1')
+  assert.equal(state().authedCalls[0].options.body.tier, 'comfort')
 
   // 5. Backend returns missing trip id
   state().authedResult = { trip: null }

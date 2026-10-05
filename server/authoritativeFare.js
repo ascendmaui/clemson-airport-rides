@@ -1,8 +1,8 @@
-import { TESLA_FARE_MULTIPLIER } from '../shared/teslaFleet.js'
 /**
  * Server fare for checkout, trip rows, and collect/settle.
  * Student eligibility is studentDiscountGranted (confirmed @clemson.edu / @g.clemson.edu).
  * Client amount, fare_cents, total, and isStudent are not pricing inputs.
+ * Schedule-ahead percent is computed here and is not read from the client.
  */
 import { lookupCatalogPlace } from '../src/lib/placeCatalog.js'
 import { AIRPORT_PLACES, airportCodeForPlace, tripMeters, ATL_FLOOR_CENTS } from '../src/lib/scheduledRideModel.js'
@@ -22,6 +22,19 @@ import {
   readPrecomputedFeeCents,
 } from '../shared/paymentFailure.js'
 import { loadGameDayMultiplier } from './creditLots.js'
+import {
+  applyScheduleAheadDiscount,
+  isOfferedRideTier,
+  resolveOfferedTier,
+  scheduleDiscountMetadata,
+} from '../shared/rideOptions.js'
+
+/** Stored rows keep their label in the UI. A retired tier is not repriced as a live option. */
+function tierForStoredTrip(raw) {
+  const tier = String(raw ?? '').trim().toLowerCase()
+  if (!tier || isOfferedRideTier(tier)) return resolveOfferedTier(tier)
+  return 'standard'
+}
 
 export const CAMPUS_PICKUP = { label: 'Memorial Stadium', lat: 34.6788, lng: -82.843 }
 
@@ -123,13 +136,15 @@ export function priceScheduledRequest({
   gameDayMultiplier = null,
   distanceM = null,
   durationS = null,
+  scheduleAhead = false,
+  now = new Date(),
 } = {}) {
   const explicit = airport ? String(airport).toUpperCase() : null
   const fromPlace = airportCodeForPlace(dropoff) || airportCodeForPlace(pickup)
   const code = explicit === 'GSP' || explicit === 'CLT' || explicit === 'ATL'
     ? explicit
     : fromPlace
-  const tierId = tier === 'tesla' ? 'tesla' : 'standard'
+  const tierId = resolveOfferedTier(tier)
   const student = Boolean(isStudent) && tierId === 'standard'
   const when = at instanceof Date && !Number.isNaN(at.getTime()) ? at : new Date()
 
@@ -142,15 +157,10 @@ export function priceScheduledRequest({
       distanceM,
       durationS,
     })
-    if (tierId === 'tesla') {
-      const fareCents = Math.round(priced.fareCents * TESLA_FARE_MULTIPLIER)
-      const split = splitPlatformFee(fareCents)
-      return { ...priced, tier: tierId, fareCents, depositCents: cardDepositCents(fareCents),
-        breakdown: { ...priced.quote.breakdown, vehicle_multiplier: TESLA_FARE_MULTIPLIER,
-          fare_before_credits_cents: fareCents, rider_pays_cents: fareCents,
-          platform_fee_cents: split.platformFeeCents, driver_earnings_cents: split.driverEarningsCents } }
-    }
-    return { ...priced, tier: tierId }
+    return applyScheduleAheadDiscount(
+      { ...priced, tier: tierId },
+      { at: when, now, enabled: scheduleAhead },
+    )
   }
 
   const hasRoute = distanceM != null || durationS != null
@@ -170,10 +180,10 @@ export function priceScheduledRequest({
     surgeMultiplier: surge.multiplier,
     isStudent: false,
     tier: tierId,
-    vehicleMultiplier: tierId === 'tesla' ? TESLA_FARE_MULTIPLIER : 1,
+    vehicleMultiplier: 1,
   })
   let fareCents = quote.fareBeforeCreditsCents
-  const floorCents = ATL_FLOOR_CENTS * (tierId === 'tesla' ? TESLA_FARE_MULTIPLIER : 1)
+  const floorCents = ATL_FLOOR_CENTS
   const floorApplied = code === 'ATL' && fareCents < floorCents
   if (floorApplied) fareCents = floorCents
   const studentOff = student
@@ -181,7 +191,7 @@ export function priceScheduledRequest({
     : { amountCents: fareCents, discountCents: 0, bps: 0 }
   fareCents = studentOff.amountCents
   const split = splitPlatformFee(fareCents)
-  return {
+  return applyScheduleAheadDiscount({
     airport: null,
     isStudent: student,
     fareCents,
@@ -202,7 +212,7 @@ export function priceScheduledRequest({
       platform_fee_cents: split.platformFeeCents,
       driver_earnings_cents: split.driverEarningsCents,
     },
-  }
+  }, { at: when, now, enabled: scheduleAhead })
 }
 
 /** Checkout Session line amount. Client money fields cannot lower it. */
@@ -210,19 +220,26 @@ export function priceCheckoutBody({
   body = {},
   user = null,
   at = new Date(),
+  now = new Date(),
   gameDayMultiplier = null,
   distanceM = null,
   durationS = null,
 } = {}) {
   const when = parseRideAt(body, at)
-  const priced = quoteAirportCheckout({
+  const tier = resolveOfferedTier(body.tier)
+  const quoted = quoteAirportCheckout({
     airport: body.airport,
     at: when,
-    isStudent: studentDiscountGranted(user),
+    isStudent: studentDiscountGranted(user) && tier === 'standard',
     gameDayMultiplier,
     distanceM,
     durationS,
   })
+  const scheduled = Boolean(body.date || body.pickupAt || body.scheduled_for || body.scheduledFor)
+  const priced = applyScheduleAheadDiscount(
+    { ...quoted, tier },
+    { at: when, now, enabled: scheduled },
+  )
   const clientFare = finiteCents(body.fareCents ?? body.fare_cents ?? body.total ?? body.totalCents ?? body.total_cents)
   const clientCharge = finiteCents(
     body.depositCents ?? body.deposit_cents ?? body.amount ?? body.amountCents ?? body.amount_cents,
@@ -279,6 +296,7 @@ export function airportTripRow({ user, priced, scheduledFor = null, riderFirst =
       student_discount_cents: Math.max(0, Math.round(Number(priced.discountCents) || 0)),
       studentLabel: priced.discountCents > 0 ? 'Clemson student · 10% off Standard' : null,
       fare_source: 'server',
+      ...scheduleDiscountMetadata(priced),
     },
   }
 }
@@ -383,7 +401,7 @@ export function placesForServerFare(body = {}) {
   return { pickup, dropoff, airport }
 }
 
-const QUOTED_TIER_IDS = ['standard', 'wait', 'comfort', 'tesla']
+const QUOTED_TIER_IDS = ['standard', 'wait', 'comfort']
 
 /**
  * Fares the rider is shown. Each tier is priced with priceScheduledRequest,
@@ -394,22 +412,26 @@ export function riderTierQuotes({
   dropoff,
   airport = null,
   at = new Date(),
+  now = new Date(),
   isStudent = false,
   tier = 'standard',
   gameDayMultiplier = null,
   distanceM = null,
   durationS = null,
+  scheduleAhead = false,
 } = {}) {
-  const requested = QUOTED_TIER_IDS.includes(tier) ? tier : 'standard'
+  const requested = resolveOfferedTier(tier)
   const input = {
     pickup,
     dropoff,
     airport,
     at,
+    now,
     isStudent: Boolean(isStudent),
     gameDayMultiplier,
     distanceM,
     durationS,
+    scheduleAhead,
   }
   const tiers = QUOTED_TIER_IDS.map((id) => {
     const priced = priceScheduledRequest({ ...input, tier: id })
@@ -447,7 +469,7 @@ export function priceDriverRequest(places, {
     airport,
     at,
     isStudent: Boolean(isStudent),
-    tier: tier === 'tesla' ? 'tesla' : 'standard',
+    tier: resolveOfferedTier(tier),
     gameDayMultiplier,
     distanceM,
     durationS,
@@ -468,8 +490,9 @@ export function priceRecordedTrip(trip, {
   const pickup = stopFromTrip(trip, 'pickup')
   const dropoff = stopFromTrip(trip, 'dropoff')
   const code = airportCodeForPlace(dropoff) || airportCodeForPlace(pickup)
-  const tier = trip?.tier === 'tesla' || trip?.metadata?.tesla === true ? 'tesla' : 'standard'
+  const tier = tierForStoredTrip(trip?.tier)
   const when = at instanceof Date && !Number.isNaN(at.getTime()) ? at : new Date()
+  const scheduleAhead = Boolean(trip?.pickup_at || trip?.scheduled_for)
   if (code === 'GSP' || code === 'CLT') {
     return {
       priced: priceScheduledRequest({
@@ -480,6 +503,7 @@ export function priceRecordedTrip(trip, {
         isStudent: Boolean(isStudent),
         tier,
         gameDayMultiplier,
+        scheduleAhead,
       }),
     }
   }
@@ -496,6 +520,7 @@ export function priceRecordedTrip(trip, {
       isStudent: Boolean(isStudent),
       tier,
       gameDayMultiplier,
+      scheduleAhead,
     }),
   }
 }
@@ -522,6 +547,7 @@ export function fareRowPatch(trip, priced) {
       student_discount_cents: Math.max(0, Math.round(Number(priced.discountCents) || 0)),
       studentLabel: priced.discountCents > 0 ? 'Clemson student · 10% off Standard' : null,
       airport: priced.airport || null,
+      ...scheduleDiscountMetadata(priced),
     },
   }
   if (trip?.deposit_cents == null || trip.deposit_cents === '') {

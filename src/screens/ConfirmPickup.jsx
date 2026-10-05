@@ -12,6 +12,7 @@ import { lookupCatalogPlace, placeFromStop } from '../lib/placeCatalog'
 import { finiteCoordinate, placeFromCoordinates, readBrowserPosition, reverseGeocodeLabel } from '../lib/currentPlace'
 import { destPoint } from '../../packages/rides-native/places.js'
 import { studentSurfaceCopy } from '../../packages/rides-native/riderMoney.js'
+import { SCHEDULE_AHEAD_LABEL } from '../../shared/rideOptions.js'
 
 function placeForLabel(label, fallbackPoint) {
   const known = placeFromStop(lookupCatalogPlace(label))
@@ -234,6 +235,24 @@ export function ConfirmPickup({
           }}
         >
           {studentOffer.title}
+        </button>
+        <button
+          type="button"
+          className="pressable"
+          onClick={() => navigate('schedule', nextParams)}
+          style={{
+            display: 'block',
+            width: '100%',
+            minHeight: 44,
+            textAlign: 'left',
+            marginBottom: 12,
+            fontSize: 13,
+            fontWeight: 800,
+            color: '#F56600',
+            lineHeight: 1.45,
+          }}
+        >
+          {SCHEDULE_AHEAD_LABEL}
         </button>
         <PrimaryButton className="primary-cta" onClick={onConfirm}>
           Confirm and request

@@ -14,7 +14,7 @@ async function fixture(t) {
     CREATE TABLE profiles (id uuid PRIMARY KEY, email text, role text, is_admin boolean);
     CREATE TABLE driver_applications (profile_id uuid, onboarding_status text);
     CREATE TABLE admin_users (email text, access_role text);
-    CREATE TABLE vehicles (driver_id uuid, is_tesla boolean, tier text, make text, model text);
+    CREATE TABLE vehicles (driver_id uuid, tier text, make text, model text);
     CREATE TABLE driver_status (driver_id uuid PRIMARY KEY, online boolean);
     CREATE TABLE trips (id uuid PRIMARY KEY, rider_id uuid, driver_id uuid, status text, tier text, pickup_at timestamptz, scheduled_for timestamptz, deposit_cents int, metadata jsonb);
     CREATE TABLE driver_offer_passes (trip_id uuid, driver_id uuid, PRIMARY KEY(trip_id, driver_id));
@@ -58,18 +58,13 @@ test('offline and deletion release unseen offers, preserve searching and exhaust
   await f.db.query('UPDATE driver_status SET online=true WHERE driver_id=$1',[a])
   await assert.rejects(f.accept(a), /offer changed/)
 })
-test('selection skips rider, unapproved, prior passes and incompatible fleet, including new arrivals', async t => {
+test('selection skips rider, unapproved, and prior passes, including new arrivals', async t => {
   const f = await fixture(t)
   await f.db.query('UPDATE trips SET rider_id=$1',[b])
   await f.db.exec("UPDATE driver_applications SET onboarding_status='pending'")
   await f.pass(a)
   assert.equal((await f.trip()).metadata.offer_driver_id,null)
-  // Reset with C newly eligible, outside the original queue.
   await f.db.query("UPDATE driver_applications SET onboarding_status='approved' WHERE profile_id=$1",[c])
-  await f.db.query("UPDATE trips SET tier='tesla', metadata=$1",[{kind:'driver_request',offer_driver_id:a,auto_assign_queue:[a,b]}])
-  await f.pass(a)
-  assert.equal((await f.trip()).metadata.offer_driver_id,null)
-  await f.db.query("INSERT INTO vehicles VALUES ($1,true,'tesla','Tesla','Model 3')",[c])
   await f.db.query('UPDATE trips SET metadata=$1',[{kind:'driver_request',offer_driver_id:a,auto_assign_queue:[a,b]}])
   await f.pass(a)
   assert.equal((await f.trip()).metadata.offer_driver_id,c)
@@ -110,51 +105,3 @@ test('retarget invalidates an already-read accept snapshot and a failed release 
   assert.equal((await f.trip()).metadata.offer_driver_id,b)
 })
 
-async function enableTeslaFleet(db) {
-  await db.exec(`CREATE ROLE anon; CREATE ROLE authenticated; CREATE ROLE service_role;
-    CREATE SCHEMA auth;
-    CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE AS $$ SELECT null::uuid $$;`)
-  const sql = readFileSync(new URL('../supabase/migrations/20261004220000_tesla_model_3_fleet.sql', import.meta.url), 'utf8')
-  await db.exec(sql)
-  await db.exec(sql)
-}
-
-test('Tesla availability, insert and accept require approved online Model 3, not badges', async t => {
-  const f = await fixture(t)
-  await enableTeslaFleet(f.db)
-  const available = async () => (await f.db.query('SELECT tesla_fleet_available() AS ok')).rows[0].ok
-  assert.equal(await available(), false)
-  await f.db.query("INSERT INTO vehicles VALUES ($1,true,'tesla','Tesla','Model Y')", [a])
-  assert.equal(await available(), false)
-  const insert = () => f.db.exec("INSERT INTO trips(id,status,tier,metadata) VALUES ('00000000-0000-0000-0000-000000000099','searching','tesla','{}')")
-  await assert.rejects(insert(), /No approved Tesla/)
-  await f.db.exec("UPDATE vehicles SET model=' Model 3 '")
-  assert.equal(await available(), true)
-  await f.db.query("UPDATE driver_applications SET onboarding_status='pending_review' WHERE profile_id=$1", [a])
-  assert.equal(await available(), false)
-  await f.db.query("UPDATE driver_applications SET onboarding_status='approved' WHERE profile_id=$1", [a])
-  await insert()
-  await assert.rejects(f.db.exec("UPDATE trips SET tier='standard' WHERE tier='tesla'"), /cannot be changed/)
-  await assert.rejects(f.db.query("UPDATE trips SET driver_id=$1,status='accepted' WHERE tier='tesla'", [b]), /requires an approved/)
-  await f.db.query('UPDATE driver_status SET online=false WHERE driver_id=$1', [a])
-  assert.equal(await available(), false)
-  await assert.rejects(f.db.query("UPDATE trips SET driver_id=$1,status='accepted' WHERE tier='tesla'", [a]), /requires an approved/)
-  await f.db.query('UPDATE driver_status SET online=true WHERE driver_id=$1', [a])
-  await f.db.query("UPDATE trips SET driver_id=$1,status='accepted' WHERE tier='tesla'", [a])
-  // A driver going offline after acceptance can still progress their existing trip.
-  await f.db.query('UPDATE driver_status SET online=false WHERE driver_id=$1', [a])
-  await f.db.exec("UPDATE trips SET status='in_progress' WHERE tier='tesla'")
-})
-
-test('Tesla decline skips badge-only vehicles and only offers to Model 3 drivers', async t => {
-  const f = await fixture(t)
-  await enableTeslaFleet(f.db)
-  for (const [id, model] of [[a, 'Model 3'], [b, 'Model Y'], [c, 'Model 3']]) {
-    await f.db.query("INSERT INTO vehicles VALUES ($1,true,'tesla','Tesla',$2)", [id, model])
-  }
-  await f.db.exec("UPDATE trips SET tier='tesla'")
-  await f.pass(a)
-  assert.equal((await f.trip()).metadata.offer_driver_id, c)
-  await f.accept(c)
-  assert.equal((await f.trip()).tier, 'tesla')
-})

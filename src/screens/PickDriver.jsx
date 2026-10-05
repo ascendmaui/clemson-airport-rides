@@ -22,11 +22,9 @@ import {
   saveFavoriteDriverIds,
   scheduleRedirectForRequestError,
   sortPreferredDrivers,
-  TESLA_FLEET_EMPTY_COPY,
-  TESLA_FLEET_PICK_COPY,
 } from '../../packages/rides-native/drivers.js'
 import { SignInToBookModal, useRequireAuthForAction } from '../components/SignInToBookModal'
-import { teslaFleetNotice } from '../../packages/rides-native/tripTags.js'
+import { resolveDriverPortrait } from '../../shared/driverPortrait.js'
 
 const browserStorage = {
   async getItem(key) {
@@ -134,8 +132,8 @@ export function PickDriver({
       setError('No approved drivers are online right now.')
       return
     }
-    if (selected && (tier === 'tesla' || tier === 'tesla_self_driving') && !selected.isTesla) {
-      setError('Tesla Model 3 fleet only. That driver is not listed as Tesla.')
+    if (selected && (tier === 'comfort' || tier === 'comfort') && !selected.comfortClass) {
+      setError('Extra Comfort fleet only. That driver is not listed as Comfort.')
       return
     }
     setBusy(true)
@@ -171,7 +169,6 @@ export function PickDriver({
     }
   }
 
-  const teslaNotice = teslaFleetNotice(tier === 'tesla' || tier === 'tesla_self_driving' || Boolean(selected?.isTesla))
   const groups = groupDriversForPicker(sortPreferredDrivers(drivers, favoriteIds, approachPickup), favoriteIds)
   const anyOnline = drivers.some((driver) => driver.online)
   const sections = [
@@ -184,10 +181,10 @@ export function PickDriver({
       <div style={{ padding: '20px 20px 8px' }}>
         <button type="button" className="pressable" onClick={() => navigate('tiers', { dest })} style={{ fontSize: 20 }}>←</button>
         <h1 style={{ fontSize: 24, fontWeight: 700, marginTop: 12 }}>
-          {tier === 'tesla' || tier === 'tesla_self_driving' ? 'Pick a Tesla driver' : 'Pick a driver'}
+          Pick a driver
         </h1>
         <p style={{ color: 'var(--ink-secondary)', fontSize: 14, marginTop: 6, lineHeight: 1.45 }}>
-          {tier === 'tesla' || tier === 'tesla_self_driving' ? TESLA_FLEET_PICK_COPY : OPEN_POOL_COPY}
+          {OPEN_POOL_COPY}
         </p>
         {tripFlash && (
           <div style={{ marginTop: 10, padding: '8px 12px', borderRadius: 12, background: 'var(--purple-soft)', color: 'var(--purple)', fontSize: 12, fontWeight: 600 }}>
@@ -210,16 +207,12 @@ export function PickDriver({
         {!loading && !anyOnline && (
           <div className="sheet" style={{ padding: 24, borderRadius: 20, textAlign: 'center', boxShadow: 'var(--shadow-pill)', marginBottom: 12 }}>
             <p style={{ fontWeight: 700, marginBottom: 8 }}>
-              {tier === 'tesla' || tier === 'tesla_self_driving'
-                ? (drivers.length ? 'Tesla drivers are offline' : 'No Tesla Model 3 drivers online')
-                : (drivers.length ? 'Preferred drivers are offline' : 'No drivers available')}
+              {drivers.length ? 'Preferred drivers are offline' : 'No drivers available'}
             </p>
             <p style={{ fontSize: 13, color: 'var(--ink-secondary)', lineHeight: 1.45 }}>
-              {tier === 'tesla' || tier === 'tesla_self_driving'
-                ? (drivers.length ? PREFERRED_OFFLINE_COPY : TESLA_FLEET_EMPTY_COPY)
-                : (drivers.length
-                  ? PREFERRED_OFFLINE_COPY
-                  : 'When a driver goes online in Driver mode, they show up here. A campus request stays in the open pool until someone accepts.')}
+              {drivers.length
+                ? PREFERRED_OFFLINE_COPY
+                : 'When a driver goes online in Driver mode, they show up here. A campus request stays in the open pool until someone accepts.'}
             </p>
           </div>
         )}
@@ -260,6 +253,15 @@ export function PickDriver({
                   }}
                 >
                   <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
+                    <div style={{ display: 'flex', gap: 10 }}>
+                      {(() => {
+                        const portrait = resolveDriverPortrait(d)
+                        return portrait.kind === 'photo' ? (
+                          <img alt="" src={portrait.url} width="40" height="40" style={{ width: 40, height: 40, borderRadius: '50%', objectFit: 'cover' }} />
+                        ) : (
+                          <span style={{ width: 40, height: 40, borderRadius: '50%', display: 'grid', placeItems: 'center', background: portrait.color, color: '#fff', fontWeight: 800 }}>{portrait.initials}</span>
+                        )
+                      })()}
                     <div>
                       <div style={{ fontWeight: 700, fontSize: 16 }}>
                         {d.name}
@@ -280,9 +282,9 @@ export function PickDriver({
                             Preferred
                           </span>
                         )}
-                        {d.isTesla && (
+                        {d.comfortClass && (
                           <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--purple)', background: 'var(--purple-soft)', padding: '4px 8px', borderRadius: 999 }}>
-                            TESLA
+                            COMFORT
                           </span>
                         )}
                         <button
@@ -297,6 +299,7 @@ export function PickDriver({
                           {saved ? 'Saved' : 'Save'}
                         </button>
                       </div>
+                    </div>
                     </div>
                     <div style={{ fontSize: 12, color: 'var(--ink-secondary)', textAlign: 'right' }}>
                       <div style={{ color: d.online ? '#F56600' : 'var(--ink-secondary)', fontWeight: 800, fontSize: 16 }}>
@@ -313,11 +316,6 @@ export function PickDriver({
       </div>
 
       <div style={{ padding: '12px 20px calc(20px + var(--safe-bottom))' }}>
-        {teslaNotice ? (
-          <p style={{ fontSize: 13, lineHeight: 1.4, color: '#522D80', fontWeight: 650, marginBottom: 8 }}>
-            {teslaNotice}
-          </p>
-        ) : null}
         {student.verified && tier === 'standard' ? (
           <p style={{ fontSize: 13, fontWeight: 800, color: '#F56600', marginBottom: 8 }}>
             {STUDENT_DISCOUNT_LABEL} is on this request.

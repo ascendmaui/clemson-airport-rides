@@ -26,8 +26,6 @@ import {
   summarizeDepositAwareness,
   tagLabel,
   tagTone,
-  TESLA_FLEET_NOTICE,
-  teslaFleetNotice,
   toDriverCard,
   tripEarnedCents,
   tripTags,
@@ -40,15 +38,15 @@ test('driver net is 80 percent and the deposit slice is 25 percent', () => {
   assert.equal(depositSliceCents(10000, 400), 400)
 })
 
-test('student, game day, tesla, and chosen-driver tags come from stored trip fields', () => {
+test('student, game day, comfort, and chosen-driver tags come from stored trip fields', () => {
   const tags = tripTags({
     status: 'requested',
     driver_id: 'drv',
-    tier: 'tesla',
+    tier: 'comfort',
     pickup_label: 'Memorial Stadium',
     metadata: { student_discount_cents: 180, window: 'game_day', purpose: 'tailgate' },
   })
-  assert.deepEqual(tags.sort(), ['direct', 'game_day', 'student', 'tesla', 'weekend_party'].sort())
+  assert.deepEqual(tags.sort(), ['direct', 'game_day', 'student', 'comfort', 'weekend_party'].sort())
   assert.equal(tagLabel('direct'), 'Preferred by rider')
   assert.equal(preferredRequestNote({ tags }), PREFERRED_REQUEST_NOTE)
   assert.equal(preferredRequestNote({ tags: ['student'] }), null)
@@ -93,32 +91,14 @@ test('weekend queue copy names scheduled airport and campus pickups', () => {
   assert.throws(() => queueEmptyCopy('nope'), /Unknown queue filter/)
 })
 
-test('Tesla fleet notice is live and appears only when Tesla is selected', () => {
-  assert.equal(teslaFleetNotice(false), null)
-  assert.equal(teslaFleetNotice(true), TESLA_FLEET_NOTICE)
-  assert.match(TESLA_FLEET_NOTICE, /fleet is live/i)
-  assert.match(TESLA_FLEET_NOTICE, /driver is at the wheel/i)
-  assert.match(TESLA_FLEET_NOTICE, /no self-driving/i)
-  assert.equal(tagLabel('tesla'), 'Tesla Model 3')
-  const tesla = toDriverCard({ id: 't1', status: 'accepted', tier: 'tesla_self_driving', fare_cents: 3600 })
-  const standard = toDriverCard({ id: 't2', status: 'accepted', tier: 'standard', fare_cents: 1800 })
-  assert.equal(tesla.teslaStub, true)
-  assert.equal(tesla.isTeslaFleet, true)
-  assert.equal(teslaFleetNotice(tesla.teslaStub), TESLA_FLEET_NOTICE)
-  assert.equal(standard.teslaStub, false)
-  assert.equal(standard.isTeslaFleet, false)
-  assert.equal(teslaFleetNotice(standard.teslaStub), null)
-})
-
-test('an explicit party weekend purpose tags the weekend filter and a Tesla tier', () => {
+test('an explicit party weekend purpose tags the weekend filter', () => {
   const tags = tripTags({
     status: 'scheduled',
-    tier: 'tesla',
+    tier: 'comfort',
     pickup_at: '2026-09-30T22:00:00.000Z',
-    metadata: { purpose: 'party_weekend', kind: 'scheduled', tesla: true },
+    metadata: { purpose: 'party_weekend', kind: 'scheduled', comfort: true },
   })
   assert.equal(tags.includes('weekend_party'), true)
-  assert.equal(tags.includes('tesla'), true)
   assert.equal(tags.includes('scheduled'), true)
 })
 

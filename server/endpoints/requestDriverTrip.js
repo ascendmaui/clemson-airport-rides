@@ -24,6 +24,16 @@ import { listAssignableDrivers } from '../autoAssign.js'
 import { insertTripEvent } from '../tripEvents.js'
 import { notifyDriverOffer } from '../driverOfferAlerts.js'
 import { billingForPricedRide } from '../rideBilling.js'
+import { resolveOfferedTier, vehicleServesComfort } from '../../shared/rideOptions.js'
+import { isSimulatedDriverId } from '../../packages/rides-native/simulatedDrivers.js'
+import { assertTierAvailable } from '../rideAvailability.js'
+
+function optionError(res, error) {
+  return json(res, error.status || 400, {
+    error: error.message || 'That ride option is not offered.',
+    code: error.code || 'ride_option_unavailable',
+  })
+}
 
 async function serverDistance(origin, dest) {
   if (origin?.lat == null || dest?.lat == null) return { distanceM: null, durationS: null, polyline: null }
@@ -50,10 +60,35 @@ export default async function handler(req, res, deps = {}) {
   if (pe) return json(res, 400, { error: pe })
 
   const driverId = String(body.driverId || '').trim()
+  if (isSimulatedDriverId(driverId)) {
+    return json(res, 409, { error: 'That car is a map preview and cannot be requested.', code: 'ride_option_unavailable' })
+  }
   const autoAssign = body.autoAssign === true && !driverId
   if (!driverId && !autoAssign) return json(res, 400, { error: 'Select a driver first' })
 
-  const tier = body.tier === 'tesla' ? 'tesla' : 'standard'
+  let tier
+  try {
+    tier = resolveOfferedTier(body.tier)
+  } catch (error) {
+    return optionError(res, error)
+  }
+
+  if (!autoAssign) {
+    const gate = await receivableDriverIds(sb, [driverId])
+    if (gate.error) return json(res, 500, { error: gate.error, code: 'driver_approval_unavailable' })
+    if (!gate.allowed.has(driverId)) {
+      return json(res, 403, {
+        error: 'That driver is not approved to receive rides yet.',
+        code: 'driver_not_approved',
+      })
+    }
+  }
+
+  try {
+    await assertTierAvailable(sb, tier)
+  } catch (error) {
+    return optionError(res, error)
+  }
   const places = resolveDriverRequestPlaces({
     pickupLabel: body.pickupLabel,
     pickupLat: body.pickupLat ?? body.pickup_lat,
@@ -73,9 +108,7 @@ export default async function handler(req, res, deps = {}) {
     }
     if (!ordered.drivers.length) {
       return json(res, 409, {
-        error: tier === 'tesla'
-          ? 'No Tesla Model 3 drivers are online right now.'
-          : 'No approved drivers are online right now.',
+        error: 'No approved drivers are online right now.',
         code: 'no_driver_online',
       })
     }
@@ -83,37 +116,21 @@ export default async function handler(req, res, deps = {}) {
     offerDriverId = assignQueue[0]
   }
 
-  if (!autoAssign) {
-    const gate = await receivableDriverIds(sb, [driverId])
-    if (gate.error) return json(res, 500, { error: gate.error, code: 'driver_approval_unavailable' })
-    if (!gate.allowed.has(driverId)) {
-      return json(res, 403, {
-        error: 'That driver is not approved to receive rides yet.',
-        code: 'driver_not_approved',
-      })
+  if (!autoAssign && tier === 'comfort') {
+    const vehicleRes = await sb
+      .from('vehicles')
+      .select('service_class, tier')
+      .eq('driver_id', driverId)
+      .limit(1)
+      .maybeSingle()
+    if (vehicleRes.error) {
+      return json(res, 500, { error: vehicleRes.error.message || 'Could not read the vehicle', code: 'vehicle_lookup_failed' })
     }
-
-    if (tier === 'tesla') {
-      const vehicleRes = await sb
-        .from('vehicles')
-        .select('is_tesla, tier, make, model')
-        .eq('driver_id', driverId)
-        .limit(1)
-        .maybeSingle()
-      if (vehicleRes.error) {
-        return json(res, 500, { error: vehicleRes.error.message || 'Could not verify Tesla listing', code: 'tesla_vehicle_lookup_failed' })
-      }
-      const vehicle = vehicleRes.data
-      const listed = Boolean(vehicle?.is_tesla)
-        || vehicle?.tier === 'tesla'
-        || vehicle?.tier === 'tesla_self_driving'
-        || (String(vehicle?.make || '').toLowerCase() === 'tesla' && /model\s*3/i.test(String(vehicle?.model || '')))
-      if (!listed) {
-        return json(res, 409, {
-          error: 'That driver is not listed for the Tesla Model 3 fleet. Pick a Tesla-listed driver.',
-          code: 'tesla_driver_required',
-        })
-      }
+    if (!vehicleServesComfort(vehicleRes.data)) {
+      return json(res, 409, {
+        error: 'That driver is not available for Extra Comfort.',
+        code: 'ride_option_unavailable',
+      })
     }
   }
 
@@ -210,8 +227,7 @@ export default async function handler(req, res, deps = {}) {
       isStudent: Boolean(priced.isStudent && priced.discountCents > 0),
       student_discount_cents: Math.max(0, priced.discountCents || 0),
       studentLabel: priced.discountCents > 0 ? 'Clemson student · 10% off Standard' : null,
-      tesla: tier === 'tesla',
-      fleet: tier === 'tesla' ? 'tesla_model_3' : 'standard',
+      ride_option: tier,
       fare_source: 'server',
       airport: priced.airport,
       ...billing.snapshot,

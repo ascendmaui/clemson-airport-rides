@@ -31,7 +31,7 @@ import {
   STILL_SEARCHING_COPY,
   STILL_SEARCHING_MS,
 } from '../../packages/rides-native/liveTrip.js'
-import { TESLA_FLEET_NOTICE, tripTags } from '../../packages/rides-native/tripTags.js'
+import { COMFORT_FLEET_NOTICE, tripTags } from '../../packages/rides-native/tripTags.js'
 import { LivePhase } from '../components/LivePhase'
 import { reconcileCheckoutSession } from '../lib/stripeCheckout'
 import { parseCheckoutSessionId } from '../../packages/rides-native/checkoutReturn.js'
@@ -286,7 +286,7 @@ export function Requested({ dest = 'GSP Airport', trip = '', driver = 'your driv
   }, [status, driverPos])
 
   const fleetTags = tripRow ? tripTags(tripRow) : []
-  const isTeslaTrip = fleetTags.includes('tesla')
+  const comfortClassTrip = fleetTags.includes('comfort')
 
   return (
     <div className="fade-in" style={{ minHeight: '100%', padding: 24, display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 16 }}>
@@ -371,9 +371,9 @@ export function Requested({ dest = 'GSP Airport', trip = '', driver = 'your driv
             </p>
           </div>
         )}
-        {isTeslaTrip && !tripMissing && (
+        {comfortClassTrip && !tripMissing && (
           <p style={{ color: '#522D80', fontWeight: 650, fontSize: 13, lineHeight: 1.4, marginTop: 10 }}>
-            {TESLA_FLEET_NOTICE}
+            {COMFORT_FLEET_NOTICE}
           </p>
         )}
         {resolvedDriverId && PARTY_VISIBLE_STATUSES.includes(status) && (

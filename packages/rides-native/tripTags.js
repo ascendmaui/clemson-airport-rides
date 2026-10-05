@@ -1,18 +1,16 @@
 /**
  * Driver-facing labels for trips the web app already stores.
- * No network, no Stripe, no self-driving calls.
+ * No network and no Stripe calls.
  */
 import { CLEMSON_MIAMI_PROMO_ID } from './clemsonMiamiPromo.js'
 
-export const TESLA_FLEET_NOTICE =
-  'Tesla Model 3 fleet is live. A Clemson RIDES driver is at the wheel. There is no self-driving or robotaxi dispatch.'
-
-/** Notice for a selected Tesla Model 3 option. Null when Tesla is not the choice. */
-export function teslaFleetNotice(selected) {
-  return selected ? TESLA_FLEET_NOTICE : null
-}
-
 export const ACTIONABLE_LEAD_MS = 45 * 60 * 1000
+
+/** Retired fleet notices are gone. Callers that still import these get nothing. */
+export const COMFORT_FLEET_NOTICE = ''
+export function comfortFleetNotice() {
+  return null
+}
 
 /** Same sentence the database raises when an accept of an unpaid airport deposit is rejected. */
 export const UNPAID_AIRPORT_DEPOSIT_ACCEPT_ERROR =
@@ -223,9 +221,9 @@ export const TAG_LABELS = {
   game_day: 'Game day',
   weekend_party: 'Weekend / party',
   carpool: 'Carpool · split fare',
-  tesla: 'Tesla Model 3',
   direct: 'Preferred by rider',
   scheduled: 'Scheduled',
+  comfort: 'Extra Comfort',
 }
 
 /**
@@ -249,7 +247,7 @@ export function tagLabel(id) {
 }
 
 export function tagTone(label) {
-  if (/Game|Weekend|Tesla|Student|Preferred/.test(String(label || ''))) return 'orange'
+  if (/Game|Weekend|Student|Preferred/.test(String(label || ''))) return 'orange'
   return 'purple'
 }
 
@@ -286,13 +284,11 @@ export function tripTags(row, { gameDayLive = false } = {}) {
   ) {
     tags.push('weekend_party')
   }
-  const tier = String(row?.tier || meta.tier || '')
-  if (tier === 'tesla' || tier === 'tesla_self_driving' || meta.tesla === true || meta.is_tesla === true) {
-    tags.push('tesla')
-  }
   if (meta.kind === 'carpool' || meta.carpool || meta.fare_breakdown?.carpool) {
     tags.push('carpool')
   }
+  const tier = String(row?.tier || meta.ride_option || '').trim().toLowerCase()
+  if (tier === 'comfort') tags.push('comfort')
   if (row?.status === 'requested' && row?.driver_id) tags.push('direct')
   if (row?.status === 'scheduled' || meta.kind === 'scheduled') tags.push('scheduled')
   return tags
@@ -444,8 +440,6 @@ export function toDriverCard(row, options) {
     tier: row.tier || null,
     tags,
     tagLabels: tags.map(tagLabel),
-    teslaStub: tags.includes('tesla'),
-    isTeslaFleet: tags.includes('tesla'),
     arrivedAt: row.arrived_at || null,
     passengers: Math.max(1, Math.round(Number(row.passengers) || 1)),
     shares: carpoolShareLines(meta),

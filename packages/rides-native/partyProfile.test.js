@@ -159,14 +159,14 @@ test('profile aggregates format the stored average', () => {
     favorite_spots: ['Cooper Library'],
     phone: '8645551212',
     student_verified_at: '2026-01-01',
-    vehicle: { color: 'White', make: 'Tesla', model: 'Model 3', plate: 'TGR1' },
+    vehicle: { color: 'White', make: 'Honda', model: 'Accord', plate: 'TGR1' },
     avatar_url: 'https://cdn.example/sam.jpg',
   }, { viewerIsRider: true })
   assert.equal(view.name, 'Sam Okonkwo')
   assert.equal(view.ratingLine, '4.9 · 8 ratings')
-  assert.equal(view.vehicle, 'White Tesla Model 3')
+  assert.equal(view.vehicle, 'White Honda Accord')
   assert.equal(view.plate, 'TGR1')
-  assert.equal(view.vehicleLine, 'White Tesla Model 3 · TGR1')
+  assert.equal(view.vehicleLine, 'White Honda Accord · TGR1')
   assert.equal(view.photoUrl, 'https://cdn.example/sam.jpg')
   assert.equal(view.roleLabel, 'Your driver')
   assert.equal(view.student, true)
@@ -617,12 +617,12 @@ test('vehicle labels join color make and model and drop falsy parts', () => {
   assert.equal(partyProfile.vehicleLabelFromRow(null), '')
   assert.equal(partyProfile.vehicleLabelFromRow(''), '')
   assert.equal(partyProfile.vehicleLabelFromRow(0), '')
-  assert.equal(partyProfile.vehicleLabelFromRow({ color: 'White', model: 'Model 3' }), 'White Model 3')
+  assert.equal(partyProfile.vehicleLabelFromRow({ color: 'White', model: 'sedan' }), 'White sedan')
   assert.equal(partyProfile.vehicleLabelFromRow({ color: false, make: 'Honda', model: '' }), 'Honda')
   // BUG?: a numeric 0 color is falsy, so it disappears from the label.
-  assert.equal(partyProfile.vehicleLabelFromRow({ color: 0, make: 'Tesla', model: '3' }), 'Tesla 3')
+  assert.equal(partyProfile.vehicleLabelFromRow({ color: 0, make: 'Comfort', model: '3' }), 'Comfort 3')
   // BUG?: a string vehicle label is returned untrimmed.
-  assert.equal(partyProfile.vehicleLabelFromRow('  White Tesla  '), '  White Tesla  ')
+  assert.equal(partyProfile.vehicleLabelFromRow('  White Comfort  '), '  White Comfort  ')
 })
 
 test('counterpart view uses the first name, rider fallback, and raw rating fields', () => {
@@ -914,7 +914,7 @@ test('loadCounterpart shows the other party and a vehicle only to the rider', as
   }
   const asRider = fakeSupabase({
     rpc: { data: profile, error: null },
-    tables: { vehicles: [{ data: [{ color: 'White', make: 'Tesla', model: 'Model 3' }], error: null }] },
+    tables: { vehicles: [{ data: [{ color: 'White', make: 'Honda', model: 'Accord' }], error: null }] },
   })
   const riderView = await loadCounterpart(
     asRider,
@@ -923,7 +923,7 @@ test('loadCounterpart shows the other party and a vehicle only to the rider', as
   )
   assert.equal(riderView.name, 'Sam Okonkwo')
   assert.equal(riderView.roleLabel, 'Your driver')
-  assert.equal(riderView.vehicle, 'White Tesla Model 3')
+  assert.equal(riderView.vehicle, 'White Honda Accord')
   assert.equal(asRider.calls.find((call) => call.op === 'rpc').args.target, 'driver')
   assert.equal(asRider.calls.some((call) => call.table === 'vehicles'), true)
   assert.match(asRider.calls.find((call) => call.table === 'vehicles' && call.op === 'select').columns, /plate/)
@@ -989,8 +989,8 @@ test('loadCounterpart reuses the pick-a-driver card for full name, car, plate, a
             id: 'driver',
             full_name: 'Sam Okonkwo',
             color: 'White',
-            make: 'Tesla',
-            model: 'Model 3',
+            make: 'Honda',
+            model: 'Accord',
             plate: 'TGR1',
             avatar_url: 'https://cdn.example/sam.jpg',
           }],
@@ -1006,7 +1006,7 @@ test('loadCounterpart reuses the pick-a-driver card for full name, car, plate, a
     'rider',
   )
   assert.equal(view.name, 'Sam Okonkwo')
-  assert.equal(view.vehicleLine, 'White Tesla Model 3 · TGR1')
+  assert.equal(view.vehicleLine, 'White Honda Accord · TGR1')
   assert.equal(view.plate, 'TGR1')
   assert.equal(view.photoUrl, 'https://cdn.example/sam.jpg')
   assert.equal(client.calls.some((call) => call.table === 'vehicles'), false)

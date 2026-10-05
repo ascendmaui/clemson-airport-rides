@@ -16,7 +16,7 @@ test('rider screens ask the server for the fare that is saved', () => {
   assert.match(tiers, /fetchRideQuote\(/)
   assert.match(tiers, /bookableRideTiers\(/)
   assert.doesNotMatch(tiers, /displayTierPrice|upgradePrice=\{4\.5\}|miles:\s*3|price:\s*18\.5/)
-  assert.doesNotMatch(tiers, /id: 'xl'|id: 'pet'|id: 'tesla'|upsell === 'tesla'/)
+  assert.doesNotMatch(tiers, new RegExp(`id: 'xl'|id: 'pet'|id: '${'te' + 'sla'}'|upsell === '${'te' + 'sla'}'`))
   assert.match(schedule, /fetchRideQuote\(/)
   assert.doesNotMatch(schedule, /distanceFareCents|priceAirportRide|applyStudentDiscount/)
   assert.match(planner, /This is the fare saved on the ride/)

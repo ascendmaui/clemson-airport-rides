@@ -30,7 +30,7 @@ import { HelpChatPanel } from '../components/HelpChatPanel'
 import { SupportChatPanel } from '../components/SupportChatPanel'
 import { supportTicketRequest } from '../lib/agentChatClient'
 import { ACCOUNT_DELETION_TICKET } from '../../shared/accountDeletion.js'
-import { TESLA_FLEET_NOTICE } from '../../packages/rides-native/tripTags.js'
+import { COMFORT_FLEET_NOTICE } from '../../packages/rides-native/tripTags.js'
 import { CreditPacksPanel } from '../components/CreditPacksPanel'
 import { PrepaidCreditsPanel } from '../components/PrepaidCreditsPanel'
 import { CreditsBalance } from '../components/CreditsBalance'
@@ -583,7 +583,7 @@ export function AccountScreen() {
                   {profile.vehicle.tier ? ` · ${profile.vehicle.tier}` : ''}
                 </div>
                 <p style={{ fontSize: 13, lineHeight: 1.4, color: '#522D80', fontWeight: 650, marginTop: 8 }}>
-                  {TESLA_FLEET_NOTICE}
+                  {COMFORT_FLEET_NOTICE}
                 </p>
                 <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
                   <VehicleFleetEditor driverId={user?.id} vehicle={profile.vehicle} />

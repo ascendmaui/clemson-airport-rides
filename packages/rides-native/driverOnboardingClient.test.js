@@ -987,7 +987,7 @@ test('saveDriverInfo validates quiz, calls API signup, and falls back to direct 
     make: 'Honda',
     model: 'Civic',
     plate: 'ABC-123',
-    isTesla: true,
+    comfortClass: true,
   }
 
   // 3. API happy path

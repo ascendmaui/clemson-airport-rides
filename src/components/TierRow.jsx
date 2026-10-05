@@ -1,19 +1,10 @@
-import { useEffect } from 'react'
-import { RIDE_TIERS } from '../../packages/rides-native/places.js'
-import { useTeslaAvailability } from '../lib/useTeslaAvailability'
 import { A11yBadge } from './A11yBadge.jsx'
 
 export function TierRow({ tier, selected, onSelect }) {
-  const teslaAvailable = useTeslaAvailability(tier.id === 'tesla')
-  const unavailable = tier.id === 'tesla' && !teslaAvailable
-  useEffect(() => {
-    if (unavailable && selected) onSelect(RIDE_TIERS[0])
-  }, [unavailable, selected, onSelect])
   return (
     <button
       type="button"
       className={`pressable tier-row-glass ${selected ? 'selected' : ''}`}
-      disabled={unavailable}
       onClick={() => onSelect(tier)}
       style={{
         display: 'flex',
@@ -35,9 +26,7 @@ export function TierRow({ tier, selected, onSelect }) {
           width: 48,
           height: 48,
           borderRadius: 12,
-          background: tier.premium
-            ? 'linear-gradient(145deg, rgba(82,45,128,0.14), rgba(255,255,255,0.6))'
-            : 'rgba(255,255,255,0.55)',
+          background: 'rgba(255,255,255,0.55)',
           border: '1px solid rgba(255,255,255,0.45)',
           display: 'grid',
           placeItems: 'center',
@@ -53,14 +42,13 @@ export function TierRow({ tier, selected, onSelect }) {
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <span style={{ fontWeight: 600, fontSize: 16 }}>{tier.name}</span>
           {tier.badge && (
-            <A11yBadge variant={tier.id === 'tesla' ? 'fleet' : 'purple'}>
+            <A11yBadge variant="purple">
               {tier.badge}
             </A11yBadge>
           )}
         </div>
         <div style={{ color: 'var(--ink-secondary)', fontSize: 13, marginTop: 2 }}>
-          {unavailable ? 'Unavailable · No approved Tesla Model 3 driver online' : `${tier.eta} · ${tier.meta}`}
-          {tier.id === 'tesla' && <span> · Premium fare: 2× Standard before discounts</span>}
+          {`${tier.eta} · ${tier.meta}`}
         </div>
       </div>
       <div data-testid={`tier-price-${tier.id}`} style={{ fontWeight: 600, fontSize: 17, fontVariantNumeric: 'tabular-nums' }}>
@@ -78,7 +66,6 @@ export function TierRow({ tier, selected, onSelect }) {
             placeItems: 'center',
             fontSize: 12,
             fontWeight: 700,
-            boxShadow: '0 2px 6px var(--orange-glow)',
           }}
         >
           ✓

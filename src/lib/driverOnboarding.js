@@ -1,4 +1,4 @@
-import { isTeslaModel3 } from '../../shared/teslaFleet.js'
+import { serviceClassFromBody } from '../../shared/rideOptions.js'
 import { supabase } from './supabase'
 import {
   EMAIL_TODO,
@@ -268,9 +268,9 @@ async function saveDriverInfoDirect(userId, payload, email) {
     color: payload.color || null,
     plate: payload.plate,
     seats: payload.seats || 4,
-    is_tesla: isTeslaModel3(payload),
     autonomous_capable: false,
-    tier: isTeslaModel3(payload) ? 'tesla' : 'standard',
+    service_class: payload.comfortClass === true || serviceClassFromBody(payload) === 'comfort' ? 'comfort' : 'standard',
+    tier: payload.comfortClass === true || serviceClassFromBody(payload) === 'comfort' ? 'comfort' : 'standard',
   }, payload.year)
   let vehicle = existingVeh?.[0] || null
   const savedVehicle = await writeVehicleWithYearFallback((fields) => {

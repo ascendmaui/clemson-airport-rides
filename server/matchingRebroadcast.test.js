@@ -49,8 +49,8 @@ test('rechecks online status, skips passes and rider, and includes newly online 
   assert.equal(supabase._tables.trips[0].metadata.offer_driver_id, 'driver-4')
 })
 
-test('exhaustion releases to existing open pool; targeted Tesla waves require a Tesla', async () => {
-  const { supabase } = seed({ tier: 'tesla' })
+test('exhaustion releases to existing open pool; targeted Comfort waves require a Comfort', async () => {
+  const { supabase } = seed({ tier: 'comfort' })
   const result = await rebroadcastMissedOffers(supabase, { now })
   assert.equal(result.released, 1)
   assert.equal(supabase._tables.trips[0].metadata.offer_driver_id, null)

@@ -98,7 +98,7 @@ export async function createScheduledTrip({
   pickupAt: Date | null
   purpose: SchedulePurpose
   weekdays: string[]
-  tier?: 'standard' | 'tesla'
+  tier?: 'standard' | 'comfort'
 }) {
   if (!supabase) throw new Error('Supabase is not configured')
   if (!user?.id) throw new Error('Sign in required to schedule a ride')

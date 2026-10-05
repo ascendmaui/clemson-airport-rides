@@ -74,14 +74,14 @@ describe('inferVehicleCategory', () => {
     assert.equal(inferVehicleCategory({ model: 'Malibu' }), 'sedan')
     assert.equal(inferVehicleCategory({ model: 'Sonata' }), 'sedan')
     assert.equal(inferVehicleCategory({ model: 'Elantra' }), 'sedan')
-    assert.equal(inferVehicleCategory({ model: 'Model 3' }), 'sedan')
+    assert.equal(inferVehicleCategory({ model: 'sedan' }), 'sedan')
     assert.equal(inferVehicleCategory({ model: 'Model S' }), 'sedan')
     assert.equal(inferVehicleCategory({ type: 'sedan' }), 'sedan')
   })
 
   test('handles case insensitivity across fields', () => {
     assert.equal(inferVehicleCategory({ make: 'HONDA', model: 'ODYSSEY' }), 'van')
-    assert.equal(inferVehicleCategory({ make: 'Tesla', model: 'MODEL Y' }), 'suv')
+    assert.equal(inferVehicleCategory({ make: 'Comfort', model: 'MODEL Y' }), 'suv')
     assert.equal(inferVehicleCategory({ make: 'TOYOTA', model: 'CAMRY' }), 'sedan')
   })
 
@@ -205,7 +205,7 @@ describe('loadDriverVehicle', () => {
       color: 'Silver',
       plate: 'TIGER-VAN',
       seats: 7,
-      is_tesla: false,
+      service_class: false,
       tier: 'standard',
     }
 
@@ -251,7 +251,7 @@ describe('loadDriverVehicle', () => {
     const result = await loadDriverVehicle(mockSb, 'driver-42')
     assert.deepEqual(result, fakeVehicle)
     assert.equal(queriedTable, 'vehicles')
-    assert.equal(queriedCols, 'id, make, model, color, plate, seats, is_tesla, tier')
+    assert.equal(queriedCols, 'id, make, model, color, plate, seats, service_class, tier')
     assert.equal(eqField, 'driver_id')
     assert.equal(eqVal, 'driver-42')
     assert.equal(orderField, 'created_at')

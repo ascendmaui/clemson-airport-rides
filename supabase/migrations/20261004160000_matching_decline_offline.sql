@@ -28,10 +28,6 @@ BEGIN
       OR p.is_admin IS TRUE OR p.role::text IN ('admin', 'ops')
       OR lower(p.email) IN ('johnmatveyev@gmail.com', 'ascendmaui@gmail.com', 'jmat2019@icloud.com')
       OR EXISTS (SELECT 1 FROM public.admin_users a WHERE a.email = lower(p.email) AND a.access_role IN ('admin', 'support')))
-    AND (t.tier::text IS DISTINCT FROM 'tesla' OR EXISTS (
-      SELECT 1 FROM public.vehicles v WHERE v.driver_id = ds.driver_id
-      AND (v.is_tesla IS TRUE OR lower(v.tier::text) IN ('tesla', 'tesla_self_driving')
-        OR (lower(v.make) = 'tesla' AND lower(v.model) ~ '\mmodel\s*3\M'))))
   ORDER BY coalesce((SELECT ord FROM jsonb_array_elements_text(coalesce(t.metadata->'auto_assign_queue', '[]'::jsonb)) WITH ORDINALITY q(id, ord) WHERE q.id = ds.driver_id::text LIMIT 1), 2147483647),
     CASE lower(p.email) WHEN 'johnmatveyev@gmail.com' THEN 0 WHEN 'kimubermaui@gmail.com' THEN 1 ELSE 2 END, ds.driver_id
   LIMIT 1 FOR UPDATE OF ds SKIP LOCKED;

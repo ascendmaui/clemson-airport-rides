@@ -97,10 +97,10 @@ export default function AccountScreen() {
             onPress={() => router.push('/fleet')}
             style={styles.linkRow}
             accessibilityRole="button"
-            accessibilityLabel="Tesla Model 3 fleet"
-            accessibilityHint="Navigates to Tesla Model 3 fleet options"
+            accessibilityLabel="Extra Comfort fleet"
+            accessibilityHint="Navigates to Extra Comfort fleet options"
           >
-            <Text style={styles.linkText}>Tesla Model 3 fleet</Text>
+            <Text style={styles.linkText}>Extra Comfort fleet</Text>
           </Pressable>
         </>
       ) : null}

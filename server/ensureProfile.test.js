@@ -429,6 +429,21 @@ function createMockEndpointSb({
             })
             return
           }
+          if (table === 'driver_status') {
+            resolve({ data: [{ driver_id: 'drv_test_123', online: true }], error: null })
+            return
+          }
+          if (table === 'vehicles') {
+            resolve({
+              data: [{ driver_id: 'drv_test_123', service_class: 'comfort', tier: 'comfort' }],
+              error: null,
+            })
+            return
+          }
+          if (table === 'trips') {
+            resolve({ data: [], error: null })
+            return
+          }
           resolve({ data: null, error: null })
         },
       }

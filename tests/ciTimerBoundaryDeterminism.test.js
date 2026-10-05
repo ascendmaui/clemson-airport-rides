@@ -31,11 +31,20 @@ async function callHandler(handler, req, deps = {}) {
 function fakeSb() {
   const tripsInserted = []
   const events = []
+  const rows = {
+    driver_applications: [{ profile_id: 'drv-1', onboarding_status: 'approved' }],
+    vehicles: [{ driver_id: 'drv-1', service_class: 'standard', tier: 'standard' }],
+    driver_status: [{ driver_id: 'drv-1', online: true }],
+    trips: [],
+  }
   const sb = {
     from(table) {
       const q = {
+        data: rows[table] || [],
+        error: null,
         select() { return q },
         eq() { return q },
+        in() { return q },
         limit() { return q },
         maybeSingle: async () => ({ data: null, error: null }),
         insert: (row) => {

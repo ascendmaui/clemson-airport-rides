@@ -1,19 +1,21 @@
 /**
- * Demo cars for the rider map during a rush.
+ * Demo cars for the rider map.
  * Drawn only as client-side markers. No driver accounts, no stored presence
  * rows, and no trips a matcher can assign.
  */
 import { haversineMeters } from './riderShell.js'
+import { DEMO_FLEET, DEMO_HIDE_NEAR_METERS, isDemoDriverId } from '../../shared/demoFleet.js'
+import { fleetCarSvg } from '../../shared/fleetCarSvg.js'
 
-export const SIMULATED_DRIVER_COUNT = 5
+export const SIMULATED_DRIVER_COUNT = DEMO_FLEET.length
 export const SIMULATED_FLEET_TICK_MS = 250
-export const SIMULATED_DRIVER_TITLE = 'Busy'
-export const SIMULATED_FLEET_BADGE = 'Busy · already on a ride'
+export const SIMULATED_FLEET_BADGE = 'Preview cars'
 export const BUSY_MARKER_FILL = '#522D80'
+export { DEMO_HIDE_NEAR_METERS }
 
 const ROUTE_DEFS = [
   {
-    id: 'sim-busy-stadium-loop',
+    id: 'demo-marcus',
     area: 'Memorial Stadium',
     routeLabel: 'Loop around Memorial Stadium',
     cruiseMph: 22,
@@ -31,7 +33,7 @@ const ROUTE_DEFS = [
     ],
   },
   {
-    id: 'sim-busy-college-ave',
+    id: 'demo-jenna',
     area: 'College Avenue',
     routeLabel: 'College Avenue between campus and downtown',
     cruiseMph: 20,
@@ -49,7 +51,7 @@ const ROUTE_DEFS = [
     ],
   },
   {
-    id: 'sim-busy-campus-core',
+    id: 'demo-darnell',
     area: 'Clemson campus',
     routeLabel: 'Campus core past Tillman Hall and Sikes Hall',
     cruiseMph: 18,
@@ -65,7 +67,7 @@ const ROUTE_DEFS = [
     ],
   },
   {
-    id: 'sim-busy-stadium-college',
+    id: 'demo-priya',
     area: 'Memorial Stadium and College Avenue',
     routeLabel: 'Memorial Stadium toward College Avenue',
     cruiseMph: 24,
@@ -85,7 +87,7 @@ const ROUTE_DEFS = [
     ],
   },
   {
-    id: 'sim-busy-downtown-block',
+    id: 'demo-carlos',
     area: 'Downtown Clemson',
     routeLabel: 'Downtown loop on College Avenue',
     cruiseMph: 16,
@@ -98,6 +100,108 @@ const ROUTE_DEFS = [
       { lat: 34.6832, lng: -82.8370 },
       { lat: 34.6834, lng: -82.8386 },
       { lat: 34.6848, lng: -82.8386 },
+    ],
+  },
+  {
+    id: 'demo-hannah',
+    area: 'College Avenue',
+    routeLabel: 'North College Avenue',
+    cruiseMph: 19,
+    phase: 0.21,
+    route: [
+      { lat: 34.6828, lng: -82.8362 },
+      { lat: 34.6838, lng: -82.8354 },
+      { lat: 34.6848, lng: -82.8360 },
+      { lat: 34.6842, lng: -82.8376 },
+      { lat: 34.6830, lng: -82.8372 },
+      { lat: 34.6828, lng: -82.8362 },
+    ],
+  },
+  {
+    id: 'demo-terrence',
+    area: 'Memorial Stadium',
+    routeLabel: 'East of Memorial Stadium',
+    cruiseMph: 21,
+    phase: 0.44,
+    route: [
+      { lat: 34.6774, lng: -82.8410 },
+      { lat: 34.6786, lng: -82.8394 },
+      { lat: 34.6796, lng: -82.8408 },
+      { lat: 34.6784, lng: -82.8424 },
+      { lat: 34.6774, lng: -82.8410 },
+    ],
+  },
+  {
+    id: 'demo-mei',
+    area: 'Clemson campus',
+    routeLabel: 'Campus loop south of Tillman Hall',
+    cruiseMph: 17,
+    phase: 0.63,
+    route: [
+      { lat: 34.6778, lng: -82.8368 },
+      { lat: 34.6788, lng: -82.8356 },
+      { lat: 34.6798, lng: -82.8368 },
+      { lat: 34.6788, lng: -82.8382 },
+      { lat: 34.6778, lng: -82.8368 },
+    ],
+  },
+  {
+    id: 'demo-wade',
+    area: 'Downtown Clemson',
+    routeLabel: 'Downtown side streets',
+    cruiseMph: 18,
+    phase: 0.11,
+    route: [
+      { lat: 34.6840, lng: -82.8394 },
+      { lat: 34.6850, lng: -82.8384 },
+      { lat: 34.6854, lng: -82.8368 },
+      { lat: 34.6842, lng: -82.8364 },
+      { lat: 34.6840, lng: -82.8394 },
+    ],
+  },
+  {
+    id: 'demo-tasha',
+    area: 'College Avenue',
+    routeLabel: 'College Avenue southbound',
+    cruiseMph: 22,
+    phase: 0.52,
+    route: [
+      { lat: 34.6862, lng: -82.8376 },
+      { lat: 34.6850, lng: -82.8375 },
+      { lat: 34.6838, lng: -82.8373 },
+      { lat: 34.6826, lng: -82.8374 },
+      { lat: 34.6838, lng: -82.8373 },
+      { lat: 34.6850, lng: -82.8375 },
+      { lat: 34.6862, lng: -82.8376 },
+    ],
+  },
+  {
+    id: 'demo-luis',
+    area: 'Memorial Stadium',
+    routeLabel: 'Stadium service loop',
+    cruiseMph: 16,
+    phase: 0.81,
+    route: [
+      { lat: 34.6798, lng: -82.8448 },
+      { lat: 34.6806, lng: -82.8432 },
+      { lat: 34.6796, lng: -82.8416 },
+      { lat: 34.6784, lng: -82.8430 },
+      { lat: 34.6798, lng: -82.8448 },
+    ],
+  },
+  {
+    id: 'demo-brooke',
+    area: 'Clemson campus',
+    routeLabel: 'Campus edge toward downtown',
+    cruiseMph: 20,
+    phase: 0.29,
+    route: [
+      { lat: 34.6816, lng: -82.8398 },
+      { lat: 34.6824, lng: -82.8384 },
+      { lat: 34.6832, lng: -82.8376 },
+      { lat: 34.6822, lng: -82.8364 },
+      { lat: 34.6812, lng: -82.8378 },
+      { lat: 34.6816, lng: -82.8398 },
     ],
   },
 ]
@@ -117,18 +221,29 @@ function periodMsFor(route, mph) {
   return Math.max(1000, Math.round((meters / metersPerSecond) * 1000))
 }
 
-export const SIMULATED_DRIVERS = ROUTE_DEFS.map((row) => ({
-  id: row.id,
-  area: row.area,
-  routeLabel: row.routeLabel,
-  cruiseMph: row.cruiseMph,
-  phase: row.phase,
-  route: row.route,
-  status: 'busy',
-  bookable: false,
-  online: false,
-  periodMs: periodMsFor(row.route, row.cruiseMph),
-}))
+export const SIMULATED_DRIVERS = ROUTE_DEFS.map((row) => {
+  const profile = DEMO_FLEET.find((car) => car.id === row.id)
+  return {
+    id: row.id,
+    area: row.area,
+    routeLabel: row.routeLabel,
+    cruiseMph: row.cruiseMph,
+    phase: row.phase,
+    route: row.route,
+    status: 'busy',
+    bookable: false,
+    online: false,
+    isDemo: true,
+    source: 'demo',
+    firstName: profile?.firstName || 'Driver',
+    label: profile?.label || row.routeLabel,
+    body: profile?.body || 'suv',
+    livery: profile?.livery || 'tiger',
+    photo: profile?.photo || '',
+    photoSmall: profile?.photoSmall || '',
+    periodMs: periodMsFor(row.route, row.cruiseMph),
+  }
+})
 
 function boundsFromDrivers(drivers) {
   let minLat = Infinity
@@ -209,14 +324,27 @@ function pointAt(driver, nowMs) {
 }
 
 export function simulatedDriverDescription(driver) {
-  return `${driver.routeLabel}. Already driving a rider. Not available to request.`
+  const who = driver.firstName && driver.label ? `${driver.firstName}, ${driver.label}. ` : ''
+  return `${who}${driver.routeLabel}. Already driving a rider. Not available to request.`
 }
 
 export function isSimulatedDriverId(id) {
   const key = String(id || '').trim()
   if (!key) return false
   if (key.startsWith('sim-busy-')) return true
+  if (isDemoDriverId(key)) return true
   return SIMULATED_DRIVERS.some((driver) => driver.id === key)
+}
+
+export function demoCarsNearReal(fleet, realDrivers, meters = DEMO_HIDE_NEAR_METERS) {
+  const real = (realDrivers || []).filter((driver) => driver && !isSimulatedDriverId(driver.id))
+  return (fleet || []).filter((car) => {
+    if (!isSimulatedDriverId(car.id)) return true
+    return !real.some((driver) => {
+      if (driver.lat == null || driver.lng == null) return false
+      return haversineMeters(car, driver) <= meters
+    })
+  })
 }
 
 export function simulatedAlongTrackMeters(driverId, nowMs) {
@@ -237,10 +365,18 @@ export function simulatedFleetAt(nowMs) {
       status: 'busy',
       bookable: false,
       online: false,
+      isDemo: true,
+      source: 'demo',
+      firstName: driver.firstName,
+      label: driver.label,
+      body: driver.body,
+      livery: driver.livery,
+      photo: driver.photo,
+      photoSmall: driver.photoSmall,
       lat: point.lat,
       lng: point.lng,
       heading: point.heading,
-      title: SIMULATED_DRIVER_TITLE,
+      title: driver.firstName,
       description: simulatedDriverDescription(driver),
     }
   })
@@ -266,15 +402,10 @@ export function refuseSimulatedDriverTap(id) {
   }
 }
 
-export function busyCarSvg(heading) {
-  const deg = Number.isFinite(heading) ? ((heading % 360) + 360) % 360 : 0
-  const snapped = Math.round(deg / 15) * 15
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="48" height="56" viewBox="0 0 48 56">
-    <g transform="rotate(${snapped} 24 18)">
-      <rect x="17" y="6" width="14" height="24" rx="5" fill="${BUSY_MARKER_FILL}" stroke="#ffffff" stroke-width="2"/>
-      <rect x="20" y="9" width="8" height="6" rx="1.5" fill="#F7F4F0"/>
-    </g>
-    <rect x="8" y="38" width="32" height="14" rx="7" fill="${BUSY_MARKER_FILL}" stroke="#ffffff" stroke-width="1.5"/>
-    <text x="24" y="48" text-anchor="middle" fill="#ffffff" font-family="Arial,sans-serif" font-size="10" font-weight="700">Busy</text>
-  </svg>`
+export function busyCarSvg(heading, car) {
+  return fleetCarSvg({
+    heading,
+    body: car?.body || 'suv',
+    livery: car?.livery || 'tiger',
+  })
 }

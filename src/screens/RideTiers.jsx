@@ -12,8 +12,8 @@ import { useGameDayNotice } from '../lib/useGameDayNotice'
 import { useStudentStatus } from '../lib/useStudentStatus'
 import { studentSurfaceCopy } from '../../packages/rides-native/riderMoney.js'
 import { bookableRideTiers } from '../../packages/rides-native/places.js'
-
-const TIERS = bookableRideTiers()
+import { useRideOptions } from '../lib/useRideOptions'
+import { NO_DRIVERS_AVAILABLE_COPY, SCHEDULE_AHEAD_LABEL } from '../../shared/rideOptions.js'
 
 export function RideTiers({
   dest = '1900 GSP Dr',
@@ -24,7 +24,10 @@ export function RideTiers({
   destLng = '',
   billing = '',
 }) {
-  const [selected, setSelected] = useState(TIERS[0])
+  const rideOptions = useRideOptions()
+  const availableIds = rideOptions?.availableTierIds || []
+  const tiers = rideOptions ? bookableRideTiers().filter((tier) => availableIds.includes(tier.id)) : []
+  const [selected, setSelected] = useState(null)
   const [upsell, setUpsell] = useState(null)
   const [promptOpen, setPromptOpen] = useState(false)
   const [quote, setQuote] = useState(null)
@@ -56,12 +59,21 @@ export function RideTiers({
   const comfortFare = quotedTier('comfort')?.fareCents
   const upgradeCents = standardFare != null && comfortFare != null ? comfortFare - standardFare : 0
 
+  useEffect(() => {
+    if (!tiers.length) {
+      setSelected(null)
+      return
+    }
+    if (!selected || !tiers.some((tier) => tier.id === selected.id)) setSelected(tiers[0])
+  }, [tiers, selected])
+
   const onSelectTier = (tier) => {
     setSelected(tier)
   }
 
   const openDrivers = (tierId) => {
-    const row = TIERS.find((tier) => tier.id === tierId) || selected
+    const row = tiers.find((tier) => tier.id === tierId) || selected
+    if (!row) return
     navigate('pick-driver', {
       dest,
       destLat,
@@ -75,7 +87,8 @@ export function RideTiers({
   }
 
   const proceedRequest = () => {
-    if (selected.id === 'standard' && upgradeCents > 0) {
+    if (!selected) return
+    if (selected.id === 'standard' && upgradeCents > 0 && tiers.some((tier) => tier.id === 'comfort')) {
       setUpsell('comfort')
       return
     }
@@ -154,7 +167,15 @@ export function RideTiers({
               {quoteError}
             </p>
           )}
-          {TIERS.map((t) => {
+          {rideOptions && tiers.length === 0 ? (
+            <div style={{ padding: '12px 8px' }}>
+              <p style={{ fontWeight: 800, color: '#522D80' }}>{rideOptions.emptyMessage || NO_DRIVERS_AVAILABLE_COPY}</p>
+              <button type="button" className="pressable" onClick={() => navigate('schedule')} style={{ marginTop: 8, fontWeight: 800, color: '#F56600' }}>
+                {SCHEDULE_AHEAD_LABEL}
+              </button>
+            </div>
+          ) : null}
+          {tiers.map((t) => {
             const row = quotedTier(t.id)
             const sameAsStandard = t.id === 'wait' && row && standardFare != null && row.fareCents === standardFare
             const savedPercent = t.id === 'wait' && row && standardFare > 0 && row.fareCents < standardFare
@@ -173,7 +194,7 @@ export function RideTiers({
                   price: row ? row.fareCents / 100 : null,
                   meta,
                 }}
-                selected={selected.id === t.id}
+                selected={selected?.id === t.id}
                 onSelect={onSelectTier}
               />
             )
@@ -184,9 +205,9 @@ export function RideTiers({
             className="primary-cta"
             variant="orange"
             onClick={onConfirm}
-            disabled={!quote}
+            disabled={!quote || !selected}
           >
-            {quote ? `Select ${selected.name}` : 'Loading fare…'}
+            {!quote ? 'Loading fare…' : `Select ${selected.name}`}
           </PrimaryButton>
         </div>
       </div>
@@ -200,7 +221,7 @@ export function RideTiers({
           openDrivers(selected.id)
         }}
         onUpgrade={() => {
-          setSelected(TIERS.find((t) => t.id === 'comfort') || selected)
+          setSelected(tiers.find((t) => t.id === 'comfort') || selected)
           setUpsell(null)
         }}
       />

@@ -9,7 +9,7 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-
 const CARD_CAP = 40
 
 const PROFILE_CARD_COLUMNS = 'id, full_name, rating_avg, rating_count, standing'
-const VEHICLE_CARD_COLUMNS = 'driver_id, color, make, model, plate, tier, is_tesla'
+const VEHICLE_CARD_COLUMNS = 'driver_id, color, make, model, plate, tier, service_class'
 
 export function normalizeDriverCardIds(ids) {
   const list = Array.isArray(ids) ? ids : []
@@ -36,7 +36,7 @@ function cardFrom(profile, vehicle, dispatchRank) {
     model: vehicle?.model || null,
     plate: vehicle?.plate || null,
     tier: vehicle?.tier || null,
-    is_tesla: vehicle?.is_tesla === true,
+    service_class: vehicle?.service_class === true,
     dispatchRank,
   }
 }
