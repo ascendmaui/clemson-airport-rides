@@ -84,6 +84,8 @@ export async function registerDriverPush(supabase: SupabaseClient | null, driver
     }
   }
   const stored = await storeToken(supabase, driverId, token)
+  const deviceToken = await readDeviceToken()
+  if (deviceToken) await storeDeviceToken(supabase, driverId, deviceToken).catch(() => false)
   return {
     granted: true,
     token,
@@ -92,6 +94,41 @@ export async function registerDriverPush(supabase: SupabaseClient | null, driver
       ? 'This phone is registered for new ride requests.'
       : 'In-app alerts are on. Saving the push token failed, so a closed app may miss the ping.',
   }
+}
+
+function isApnsDeviceToken(value: string | null | undefined) {
+  return /^[0-9a-f]{64}$/i.test(String(value || '').trim())
+}
+
+async function readDeviceToken() {
+  const reader = Notifications.getDevicePushTokenAsync
+  if (typeof reader !== 'function') return null
+  try {
+    const issued = await reader()
+    const data = issued && typeof issued.data === 'string' ? issued.data.trim() : ''
+    return isApnsDeviceToken(data) ? data : null
+  } catch {
+    return null
+  }
+}
+
+async function storeDeviceToken(supabase: SupabaseClient | null, driverId: string, token: string) {
+  if (!supabase || !token) return false
+  const updatedAt = new Date().toISOString()
+  const status = await supabase.from('driver_status').upsert({
+    driver_id: driverId,
+    apns_device_token: token,
+    updated_at: updatedAt,
+  })
+  if (!status.error) return true
+  if (!/apns_device_token|column|schema cache/i.test(status.error.message || '')) return false
+  const table = await supabase.from('driver_push_tokens').upsert({
+    driver_id: driverId,
+    token,
+    platform: Platform.OS,
+    updated_at: updatedAt,
+  })
+  return !table.error
 }
 
 async function storeToken(supabase: SupabaseClient | null, driverId: string, token: string | null) {

@@ -25,7 +25,18 @@ export type CampusMapProps = {
   pins?: MapPin[]
   fitPins?: boolean
   showSimulatedFleet?: boolean
+  liveDrivers?: LiveMapDriver[]
   route?: LatLng[]
+}
+
+export type LiveMapDriver = {
+  id: string
+  name: string
+  vehicleLabel?: string | null
+  avatarUrl?: string | null
+  lat: number
+  lng: number
+  heading?: number | null
 }
 
 export type CampusMapHandle = {

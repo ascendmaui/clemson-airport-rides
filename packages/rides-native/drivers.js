@@ -525,12 +525,14 @@ export async function requestDriverTrip(supabase, {
   pickupPoint = STADIUM,
   tier = 'standard',
   isStudent = false,
+  autoAssign = false,
+  billingChoice = null,
 }) {
   void isStudent
   if (!supabase) throw new Error('Supabase is not configured')
   if (!riderId) throw new Error('Sign in required to request a driver')
-  if (!driverId) throw new Error('Select a driver first')
-  if (isSimulatedDriverId(driverId)) {
+  if (!driverId && !autoAssign) throw new Error('Select a driver first')
+  if (driverId && isSimulatedDriverId(driverId)) {
     throw new Error('That driver is busy and cannot be requested.')
   }
 
@@ -539,18 +541,22 @@ export async function requestDriverTrip(supabase, {
   const pickupLat = pickupPoint?.latitude ?? pickupPoint?.lat
   const pickupLng = pickupPoint?.longitude ?? pickupPoint?.lng
 
+  const body = {
+    dest,
+    destLat,
+    destLng,
+    pickupLabel,
+    pickupLat,
+    pickupLng,
+    tier: tier || 'standard',
+  }
+  if (autoAssign && !driverId) body.autoAssign = true
+  else body.driverId = driverId
+  if (billingChoice) body.billingChoice = billingChoice
+
   const data = await authedJson(supabase, '/api/stripe-payment-methods?action=request-driver', {
     method: 'POST',
-    body: {
-      driverId,
-      dest,
-      destLat,
-      destLng,
-      pickupLabel,
-      pickupLat,
-      pickupLng,
-      tier: tier || 'standard',
-    },
+    body,
   })
   if (!data?.trip?.id) throw new Error('Could not request trip')
   return data.trip

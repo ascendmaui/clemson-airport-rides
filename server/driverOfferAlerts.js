@@ -4,11 +4,14 @@
  *
  * in_app is the existing driver-screen chime. It plays only while that screen
  * is open, so this module records the channel and does not play audio.
- * push has a stored Expo token path and no server sender.
+ * push sends a native APNs device token when DRIVER_OFFER_ALERT_PUSH=send
+ * and APNS_KEY_ID, APNS_TEAM_ID, APNS_KEY_P8, APNS_TOPIC, and APNS_ENV are set.
+ * Otherwise a stored token still records push_sender_missing. Expo push tokens are not sent.
  * SMS and email delivery are delegated to driverOfferChannels.js.
  */
 import { dispatchDriverOfferChannels } from './driverOfferChannels.js'
 import { quietFromPrefs } from '../src/lib/quietHours.js'
+import { apnsConfigFromEnv, isApnsDeviceToken, sendApnsAlert } from './apnsPush.js'
 
 export const DRIVER_OFFER_ALERT_CHANNELS = Object.freeze(['in_app', 'push', 'sms', 'email'])
 
@@ -99,13 +102,30 @@ export function buildOfferAlertPlan({
 
 function tokenPresent(statusRow, tokenRow) {
   const statusToken = String(statusRow?.expo_push_token || '').trim()
+  const deviceToken = String(statusRow?.apns_device_token || '').trim()
   const tableToken = String(tokenRow?.token || '').trim()
-  return Boolean(statusToken || tableToken)
+  return Boolean(statusToken || deviceToken || tableToken)
+}
+
+function apnsTokenFrom(statusRow, tokenRow) {
+  const candidates = [statusRow?.apns_device_token, tokenRow?.token]
+  for (const candidate of candidates) {
+    const token = String(candidate || '').trim()
+    if (isApnsDeviceToken(token)) return token
+  }
+  return ''
+}
+
+async function loadStatusRow(sb, driverId) {
+  const withDevice = await sb.from('driver_status').select('expo_push_token, apns_device_token').eq('driver_id', driverId).maybeSingle()
+  if (!withDevice.error) return withDevice
+  if (!/apns_device_token|column|schema cache/i.test(withDevice.error.message || '')) return withDevice
+  return sb.from('driver_status').select('expo_push_token').eq('driver_id', driverId).maybeSingle()
 }
 
 async function loadDriverContact(sb, driverId) {
   const profile = await sb.from('profiles').select('email, phone, notification_prefs').eq('id', driverId).maybeSingle()
-  const status = await sb.from('driver_status').select('expo_push_token').eq('driver_id', driverId).maybeSingle()
+  const status = await loadStatusRow(sb, driverId)
   const token = await sb.from('driver_push_tokens').select('token, platform').eq('driver_id', driverId).maybeSingle()
   return {
     email: String(profile.data?.email || '').trim(),
@@ -113,7 +133,30 @@ async function loadDriverContact(sb, driverId) {
     phoneOnFile: Boolean(String(profile.data?.phone || '').trim()),
     prefs: profile.data?.notification_prefs || null,
     pushTokenPresent: tokenPresent(status.data, token.data),
+    apnsToken: apnsTokenFrom(status.data, token.data),
     error: profile.error || status.error || token.error || null,
+  }
+}
+
+async function deliverPush({ apnsToken, anyToken, title, body, tripId }, deps) {
+  if (!apnsConfigFromEnv().enabled) return null
+  if (!apnsToken) {
+    return {
+      sent: false,
+      reason: anyToken ? 'apns_device_token_missing' : 'push_token_missing',
+      tokenPresent: Boolean(anyToken),
+    }
+  }
+  const send = deps.sendApns || ((input) => sendApnsAlert(input))
+  try {
+    const result = await send({ token: apnsToken, title, body, tripId })
+    return {
+      sent: Boolean(result?.sent),
+      reason: result?.sent ? null : (result?.reason || 'apns_rejected'),
+      tokenPresent: true,
+    }
+  } catch {
+    return { sent: false, reason: 'apns_unreachable', tokenPresent: true }
   }
 }
 
@@ -155,6 +198,18 @@ export async function dispatchDriverOfferAlert(sb, {
     phoneOnFile: contact.phoneOnFile,
     emailOnFile: Boolean(contact.email),
   })
+
+  if (!suppressed) {
+    const copy = offerAlertCopy(trip)
+    const push = await deliverPush({
+      apnsToken: contact.apnsToken,
+      anyToken: contact.pushTokenPresent,
+      title: copy.title,
+      body: copy.body,
+      tripId,
+    }, deps)
+    if (push) channels.push = push
+  }
 
   const alerts = sb.from('driver_offer_alerts')
   const inserted = typeof alerts.insert === 'function'

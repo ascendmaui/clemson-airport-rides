@@ -51,6 +51,12 @@ const notificationsUrl = dataUrl(`
     if (state.tokenError) throw state.tokenError
     return { data: state.tokenData }
   }
+  export async function getDevicePushTokenAsync() {
+    const state = globalThis[key]
+    state.deviceReads = (state.deviceReads || 0) + 1
+    if (state.deviceTokenError) throw state.deviceTokenError
+    return { data: state.deviceToken }
+  }
   export async function scheduleNotificationAsync(request) {
     const state = globalThis[key]
     state.scheduled.push(request)
@@ -130,6 +136,8 @@ function freshPushState() {
     reads: 0,
     asks: 0,
     tokenData: 'ExponentPushToken[abc]',
+    deviceToken: null,
+    deviceTokenError: null,
     tokenError: null,
     tokenOpts: [],
     scheduleError: null,
@@ -600,6 +608,23 @@ test('driver push offline and error states', { concurrency: false }, async (t) =
       },
     ])
     assert.equal(state().reads, 0)
+  })
+
+  await t.test('registerDriverPush stores a native APNs device token when the phone returns one', async () => {
+    const device = 'ab'.repeat(32)
+    state().deviceToken = device
+    const payloads = []
+    const client = supabaseClient((op) => {
+      payloads.push(op.payload)
+      return { error: null }
+    })
+    const result = await push.registerDriverPush(client, 'driver-1')
+    assert.equal(result.token, 'ExponentPushToken[abc]')
+    assert.equal(result.stored, true)
+    assert.equal(payloads.length, 2)
+    assert.equal(payloads[0].expo_push_token, 'ExponentPushToken[abc]')
+    assert.equal(payloads[1].apns_device_token, device)
+    assert.equal(JSON.stringify(payloads[1]).includes('ExponentPushToken'), false)
   })
 
   await t.test('notifyNewRequest uses promo ride copy for the Clemson Miami $1 trip', async () => {

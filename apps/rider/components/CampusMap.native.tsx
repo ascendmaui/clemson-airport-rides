@@ -1,13 +1,14 @@
-import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react'
-import { Platform, StyleSheet, Text, View } from 'react-native'
+import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react'
+import { AppState, Platform, StyleSheet, Text, View } from 'react-native'
 import Constants from 'expo-constants'
-import MapView, { Circle, Marker, Polyline, PROVIDER_DEFAULT } from 'react-native-maps'
+import MapView, { Callout, Circle, Marker, Polyline, PROVIDER_DEFAULT } from 'react-native-maps'
 import { ANDROID_MAP_UNAVAILABLE, googleMapStyle, nativeMapTilesReady } from 'rides-native/googleMapChrome.js'
+import { PersonMark } from '@/components/PersonMark'
 import { heatColor } from 'rides-native/heat.js'
 import { DOWNTOWN, STADIUM } from 'rides-native/places.js'
-import { SIMULATED_FLEET_BADGE, refuseSimulatedDriverTap } from 'rides-native/simulatedDrivers.js'
+import { DEMO_ORANGE, DEMO_PURPLE, lerpHeading, refuseSimulatedDriverTap, visibleDemoCars } from 'rides-native/simulatedDrivers.js'
 import { useSimulatedFleet } from 'rides-native/useSimulatedFleet.js'
-import type { CampusMapHandle, CampusMapProps } from '@/components/mapTypes'
+import type { CampusMapHandle, CampusMapProps, LiveMapDriver } from '@/components/mapTypes'
 import { useTheme } from '@/lib/theme'
 
 function rgba(hex: string, alpha: number) {
@@ -16,6 +17,59 @@ function rgba(hex: string, alpha: number) {
   const g = parseInt(raw.slice(2, 4), 16)
   const b = parseInt(raw.slice(4, 6), 16)
   return `rgba(${r},${g},${b},${alpha})`
+}
+
+function FleetCar({ base, body }: { base: string; body?: string; heading?: number }) {
+  const truck = body === 'truck'
+  const wedge = body === 'cybertruck'
+  return (
+    <View style={{ width: 28, height: 36, alignItems: 'center', justifyContent: 'center' }}>
+      <View style={{
+        width: truck ? 16 : 14,
+        height: wedge ? 26 : truck ? 30 : 24,
+        borderRadius: wedge ? 1 : 5,
+        backgroundColor: base,
+        borderWidth: 2,
+        borderColor: '#FFFFFF',
+        overflow: 'hidden',
+      }}>
+        <View style={{ position: 'absolute', top: 7, left: -6, width: 28, height: 3, backgroundColor: DEMO_ORANGE, transform: [{ rotate: '22deg' }] }} />
+        <View style={{ position: 'absolute', top: 13, left: -6, width: 28, height: 3, backgroundColor: body === 'truck' && base === DEMO_PURPLE ? '#FFFFFF' : DEMO_PURPLE, transform: [{ rotate: '22deg' }] }} />
+      </View>
+    </View>
+  )
+}
+
+function useSmoothedFixes(drivers: LiveMapDriver[], active: boolean) {
+  const [shown, setShown] = useState(drivers)
+  const shownRef = useRef(drivers)
+  useEffect(() => {
+    shownRef.current = shown
+  }, [shown])
+  useEffect(() => {
+    if (!active) return undefined
+    const from = new Map(shownRef.current.map((driver) => [driver.id, driver]))
+    const started = Date.now()
+    let frame = 0
+    const tick = () => {
+      const t = Math.min(1, (Date.now() - started) / 900)
+      const next = drivers.filter((driver) => Number.isFinite(driver.lat) && Number.isFinite(driver.lng)).map((driver) => {
+        const prev = from.get(driver.id)
+        if (!prev) return driver
+        return {
+          ...driver,
+          lat: prev.lat + (driver.lat - prev.lat) * t,
+          lng: prev.lng + (driver.lng - prev.lng) * t,
+          heading: lerpHeading(prev.heading || 0, driver.heading || prev.heading || 0, t),
+        }
+      })
+      setShown(next)
+      if (t < 1) frame = requestAnimationFrame(tick)
+    }
+    frame = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(frame)
+  }, [drivers, active])
+  return shown
 }
 
 function theaterCar(index: number, tick: number, orange: string, purple: string) {
@@ -41,13 +95,24 @@ export const CampusMap = forwardRef<CampusMapHandle, CampusMapProps>(function Ca
     pins = [],
     fitPins = false,
     showSimulatedFleet = false,
+    liveDrivers = [],
     route = [],
   },
   ref: any,
 ) {
   const { colors, scheme } = useTheme()
   const mapRef = useRef<MapView>(null)
-  const simulatedFleet = useSimulatedFleet(showSimulatedFleet)
+  const [appActive, setAppActive] = useState(AppState.currentState === 'active')
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (state) => setAppActive(state === 'active'))
+    return () => sub.remove()
+  }, [])
+  const simulatedFleet = useSimulatedFleet(showSimulatedFleet, appActive)
+  const demoCars = useMemo(
+    () => (showSimulatedFleet ? visibleDemoCars(simulatedFleet, liveDrivers) : []),
+    [showSimulatedFleet, simulatedFleet, liveDrivers],
+  )
+  const movingDrivers = useSmoothedFixes(liveDrivers, appActive)
   const [tick, setTick] = useState(0)
   const [radar, setRadar] = useState(90)
   const center = showHeat ? DOWNTOWN : STADIUM
@@ -182,10 +247,10 @@ export const CampusMap = forwardRef<CampusMapHandle, CampusMapProps>(function Ca
                   title="Preview"
                   description="Ambient car. Not a driver you can request."
                   anchor={{ x: 0.5, y: 0.5 }}
+                  rotation={tick * 24}
+                  tracksViewChanges={false}
                 >
-                  <View style={[styles.car, { backgroundColor: car.color }]}>
-                    <Text style={styles.carGlyph}>🚗</Text>
-                  </View>
+                  <FleetCar base={car.color} heading={0} />
                 </Marker>
               )
             })
@@ -211,34 +276,50 @@ export const CampusMap = forwardRef<CampusMapHandle, CampusMapProps>(function Ca
         {userCoordinate ? (
           <Marker coordinate={userCoordinate} pinColor={colors.purple} title="You" />
         ) : null}
-        {showSimulatedFleet
-          ? simulatedFleet.map((car) => (
-              <Marker
-                key={car.id}
-                coordinate={{ latitude: car.lat, longitude: car.lng }}
-                title={car.title}
-                description={car.description}
-                anchor={{ x: 0.5, y: 0.72 }}
-                tracksViewChanges
-                onPress={() => {
-                  refuseSimulatedDriverTap(car.id)
-                }}
-              >
-                <View style={styles.busyCar} accessibilityLabel={car.description}>
-                  <View style={{ transform: [{ rotate: `${car.heading}deg` }] }}>
-                    <View style={styles.busyGlyph} />
-                  </View>
-                  <Text style={styles.busyLabel}>Busy</Text>
-                </View>
-              </Marker>
-            ))
-          : null}
+        {movingDrivers.map((driver) => (
+          <Marker
+            key={`live-${driver.id}`}
+            coordinate={{ latitude: driver.lat, longitude: driver.lng }}
+            title={driver.name}
+            description={driver.vehicleLabel || 'Driver'}
+            anchor={{ x: 0.5, y: 0.5 }}
+            rotation={driver.heading || 0}
+            tracksViewChanges={false}
+          >
+            <FleetCar base={DEMO_ORANGE} />
+            <Callout>
+              <View style={{ width: 168, alignItems: 'center', padding: 6 }}>
+                <PersonMark id={driver.id} name={driver.name} avatarUrl={driver.avatarUrl} size={48} />
+                <Text style={{ fontWeight: '700', marginTop: 4 }}>{driver.name}</Text>
+              </View>
+            </Callout>
+          </Marker>
+        ))}
+        {demoCars.map((car) => (
+          <Marker
+            key={car.id}
+            coordinate={{ latitude: car.lat, longitude: car.lng }}
+            title={car.title}
+            description={car.description}
+            anchor={{ x: 0.5, y: 0.5 }}
+            rotation={car.heading}
+            tracksViewChanges={false}
+            onPress={() => {
+              refuseSimulatedDriverTap(car.id)
+            }}
+          >
+            <View accessibilityLabel={car.description}>
+              <FleetCar base={car.base} body={car.body} />
+            </View>
+            <Callout>
+              <View style={{ width: 180, alignItems: 'center', padding: 6 }}>
+                <PersonMark id={car.id} name={car.firstName} isDemo headshotId={car.headshotId} size={72} />
+                <Text style={{ fontWeight: '700', marginTop: 4, textAlign: 'center' }}>{car.title}</Text>
+              </View>
+            </Callout>
+          </Marker>
+        ))}
       </MapView>
-      {showSimulatedFleet ? (
-        <View pointerEvents="none" style={styles.busyBadge}>
-          <Text style={styles.busyBadgeText}>{SIMULATED_FLEET_BADGE}</Text>
-        </View>
-      ) : null}
       {gameDay ? (
         <View pointerEvents="none" style={styles.zone}>
           <Text style={[styles.zoneText, { backgroundColor: colors.orange, color: colors.onAccent }]}>

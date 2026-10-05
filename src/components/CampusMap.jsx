@@ -5,9 +5,10 @@ import { MAPS_LOADER_ID, MAP_LIBRARIES, mapsLoaderOptions } from '../lib/googleM
 import { fetchRideDemand, MAP_TYPES, loadMapType, saveMapType } from '../lib/rideDemand'
 import {
   SIMULATED_FLEET_BADGE,
-  busyCarSvg,
+  demoCarSvg,
   refuseSimulatedDriverTap,
   simulatedFleetPercent,
+  visibleDemoCars,
 } from '../../packages/rides-native/simulatedDrivers.js'
 import { useSimulatedFleet } from '../../packages/rides-native/useSimulatedFleet.js'
 
@@ -107,11 +108,11 @@ function useAnimatedPosition(target, enabled) {
   return pos
 }
 
-function busyCarIcon(heading) {
+function busyCarIcon(car) {
   const w = 48
-  const h = 56
+  const h = 64
   return {
-    url: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(busyCarSvg(heading))}`,
+    url: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(demoCarSvg(car))}`,
     scaledSize: typeof window !== 'undefined' && window.google?.maps
       ? new window.google.maps.Size(w, h)
       : undefined,
@@ -307,6 +308,7 @@ export function CampusMap({
   gameDayLabel = null,
   stops = null,
   showSimulatedFleet = false,
+  liveDrivers = [],
   fitRoute = false,
 }) {
   const apiKey = (import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '').trim()
@@ -475,7 +477,7 @@ export function CampusMap({
   }, [resolvedMapType, isLoaded])
 
   const simulatedFleet = useSimulatedFleet(showSimulatedFleet)
-  const previewFleet = showSimulatedFleet ? simulatedFleet : []
+  const previewFleet = showSimulatedFleet ? visibleDemoCars(simulatedFleet, liveDrivers) : []
 
   if (!apiKey) {
     return (
@@ -600,11 +602,11 @@ export function CampusMap({
           <Marker position={animatedDriver || driverTarget} icon={driverIcon} title="Driver" />
         )}
         {showSimulatedFleet
-          ? simulatedFleet.map((car) => (
+          ? previewFleet.map((car) => (
             <Marker
               key={car.id}
               position={{ lat: car.lat, lng: car.lng }}
-              icon={busyCarIcon(car.heading)}
+              icon={busyCarIcon(car)}
               title={car.title}
               zIndex={6}
               onClick={() => {
