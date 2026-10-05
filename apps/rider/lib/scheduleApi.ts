@@ -1,5 +1,5 @@
 import { studentDiscountGranted } from '../../../src/lib/studentDomain.js'
-import { authedJson } from 'rides-native/apiClient'
+import { apiBase, authedJson } from 'rides-native/apiClient'
 import type { AuthUser } from 'rides-native/createAuth'
 import {
   airportFareCents,
@@ -83,6 +83,36 @@ export function riderIsStudent(user: AuthUser | null) {
   return studentDiscountGranted(user)
 }
 
+export async function fetchScheduleSlots(pickup: RidePlace, tier = 'standard') {
+  const res = await fetch(`${apiBase()}/api/stripe-payment-methods?action=schedule-slots`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    body: JSON.stringify({ pickup, tier }),
+  })
+  const body = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(body?.error || 'Could not load pickup times')
+  return body as {
+    waitMinutes: number | null
+    waitLabel: string | null
+    availableDrivers: number
+    emptyMessage: string | null
+    slots: Array<{ id: string; minutesOut: number; pickupAt: string; label: string }>
+  }
+}
+
+export async function fetchMatchNotice(tripId: string) {
+  if (!supabase) throw new Error('Supabase is not configured')
+  return authedJson(supabase, `/api/stripe-payment-methods?action=match-notice&tripId=${encodeURIComponent(tripId)}`) as Promise<{
+    tripId: string
+    title: string
+    body: string
+    driverName: string
+    distanceLabel: string | null
+    etaLabel: string | null
+    pickupLabel: string | null
+  }>
+}
+
 export async function createScheduledTrip({
   user,
   pickup,
@@ -91,6 +121,7 @@ export async function createScheduledTrip({
   purpose,
   weekdays,
   tier = 'standard',
+  nearTerm = false,
 }: {
   user: AuthUser
   pickup: RidePlace
@@ -98,7 +129,8 @@ export async function createScheduledTrip({
   pickupAt: Date | null
   purpose: SchedulePurpose
   weekdays: string[]
-  tier?: 'standard' | 'comfort'
+  tier?: 'standard' | 'comfort' | 'wait'
+  nearTerm?: boolean
 }) {
   if (!supabase) throw new Error('Supabase is not configured')
   if (!user?.id) throw new Error('Sign in required to schedule a ride')
@@ -112,6 +144,7 @@ export async function createScheduledTrip({
       purpose,
       weekdays,
       tier,
+      ...(nearTerm ? { nearTerm: true } : {}),
     },
   }) as { trip: { id: string; status: string | null; pickup_at: string | null; pickup_label: string | null; dropoff_label: string | null } }
   if (!data?.trip?.id) throw new Error('Could not schedule ride')

@@ -1,5 +1,5 @@
 import { supabase } from './supabase'
-import { createServerScheduledTrip } from './payments'
+import { api, createServerScheduledTrip } from './payments'
 import { fetchRideQuote } from './rideBilling'
 import {
   DRIVER_QUEUE_SELECT,
@@ -36,6 +36,22 @@ export async function estimateScheduledFare({ pickup, dropoff, isStudent = false
   }
 }
 
+export async function fetchScheduleSlots({ pickup, tier = 'standard' } = {}) {
+  const res = await fetch('/api/stripe-payment-methods?action=schedule-slots', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    body: JSON.stringify({ pickup, tier }),
+  })
+  const body = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(body.error || 'Could not load pickup times')
+  return body
+}
+
+export async function fetchMatchNotice(tripId) {
+  const data = await api(`/api/stripe-payment-methods?action=match-notice&tripId=${encodeURIComponent(tripId)}`)
+  return data
+}
+
 export async function createScheduledTrip({
   user,
   pickup,
@@ -44,6 +60,7 @@ export async function createScheduledTrip({
   purpose = 'planned',
   tier = 'standard',
   billingChoice = null,
+  nearTerm = false,
 }) {
   if (!supabase) throw new Error('Supabase is not configured')
   if (!user?.id) throw new Error('Sign in required to schedule a ride')
@@ -58,6 +75,7 @@ export async function createScheduledTrip({
     tier,
     weekdays: [],
     ...(billingChoice ? { billingChoice } : {}),
+    ...(nearTerm ? { nearTerm: true } : {}),
   })
   return {
     ...data.trip,

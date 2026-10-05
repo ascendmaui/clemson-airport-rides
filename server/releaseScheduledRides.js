@@ -2,6 +2,7 @@ import { unchangedOfferQuery } from '../shared/driverOrder.js'
 import { listAssignableDrivers } from './autoAssign.js'
 import { notifyDriverOffer } from './driverOfferAlerts.js'
 import { ACTIONABLE_LEAD_MS } from '../src/lib/scheduledRideModel.js'
+import { isNearTermTrip } from '../shared/nearTermSlots.js'
 
 /** Reuse live dispatch unchanged. Preserve the reservation time in metadata. */
 export async function releaseScheduledRides(sb, {
@@ -12,14 +13,20 @@ export async function releaseScheduledRides(sb, {
     .lte('pickup_at', new Date(now.getTime() + ACTIONABLE_LEAD_MS).toISOString())
     .order('pickup_at', { ascending: true }).limit(limit)
   if (due.error) throw new Error(due.error.message)
-  const result = { released: 0, skipped: 0, errors: 0, wouldRelease: 0 }
+  const result = { released: 0, skipped: 0, held: 0, errors: 0, wouldRelease: 0 }
   for (const trip of due.data || []) {
     try {
+      const expired = new Date(trip.pickup_at).getTime() < now.getTime() - 20 * 60_000
+      // Near-term rides stay on the board until pickup so every driver can accept.
+      // At pickup they join the existing live matcher. Past-due rows still cancel.
+      if (isNearTermTrip(trip) && !expired && new Date(trip.pickup_at).getTime() > now.getTime()) {
+        result.held++
+        continue
+      }
       const eligible = await listAssignableDrivers(sb, { tier: trip.tier, riderId: trip.rider_id })
       if (eligible.error) throw new Error(eligible.error)
       const queue = eligible.drivers.map(d => d.id).filter(id => id !== trip.rider_id)
       if (dryRun) { result.wouldRelease++; continue }
-      const expired = new Date(trip.pickup_at).getTime() < now.getTime() - 20 * 60_000
       const metadata = {
         ...trip.metadata,
         scheduled_pickup_at: trip.pickup_at,

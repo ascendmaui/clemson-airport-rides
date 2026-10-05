@@ -15,6 +15,7 @@ const KIND_META = {
   ride_scheduled: { title: 'Scheduled ride', Icon: IconCar, tone: 'orange' },
   ride_reminder: { title: 'Pickup reminder', Icon: IconBell, tone: 'purple' },
   driver_accepted: { title: 'Driver accepted', Icon: IconCar, tone: 'purple' },
+  driver_matched: { title: 'Driver matched', Icon: IconCar, tone: 'purple' },
   driver_en_route: { title: 'Driver en route', Icon: IconCar, tone: 'orange' },
   arrived_pickup: { title: 'Arrived at pickup', Icon: IconCar, tone: 'purple' },
   ride_wait_cancelled: { title: 'Ride canceled', Icon: IconCar, tone: 'orange' },

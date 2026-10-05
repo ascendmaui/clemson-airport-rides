@@ -289,13 +289,7 @@ function DriverShell({ driverId }) {
         scheduledPrimed.current = true
       } else {
         open.forEach((row) => {
-          if (knownOpen.current.has(row.id)) return
           knownOpen.current.add(row.id)
-          pushToast({
-            kind: 'ride_scheduled',
-            title: 'New scheduled ride',
-            body: `${row.pickup_label || 'Pickup'} → ${row.dropoff_label || 'Drop-off'} · ${formatPickupAt(row.pickup_at)}`,
-          })
         })
       }
       if (receiving) {

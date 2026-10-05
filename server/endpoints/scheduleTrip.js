@@ -21,6 +21,9 @@ import { insertTripEvent } from '../tripEvents.js'
 import { billingForPricedRide } from '../rideBilling.js'
 import { resolveOfferedTier, scheduleDiscountMetadata } from '../../shared/rideOptions.js'
 import { assertTierAvailable } from '../rideAvailability.js'
+import { loadNearTermOffer } from '../nearTermAvailability.js'
+import { notifyScheduledBoard } from '../scheduledBoardAlerts.js'
+import { isNearTermRequest, matchRequestedSlot } from '../../shared/nearTermSlots.js'
 
 
 /** Integer passenger count from the request; default 1. Prefer passengers over partySize. */
@@ -75,13 +78,14 @@ export default async function handler(req, res, deps = {}) {
     typeof deps.now === 'function' ? deps.now() : deps.now != null ? Number(deps.now) : Date.now()
   const when = parseRideAt(body, new Date(clockNow))
   const scheduled = Boolean(body.date || body.pickupAt)
+  const nearTerm = scheduled && isNearTermRequest(body)
   if (!Number.isFinite(when.getTime())) return json(res, 400, { error: 'Choose a valid pickup time.' })
-  if (scheduled && when.getTime() < clockNow + 30 * 60 * 1000) {
+  if (!nearTerm && scheduled && when.getTime() < clockNow + 30 * 60 * 1000) {
     return json(res, 400, { error: 'Schedule at least 30 minutes ahead.' })
   }
   try {
     await assertTierAvailable(sb, tier, {
-      scheduledFor: scheduled ? when : null,
+      scheduledFor: nearTerm ? null : (scheduled ? when : null),
       now: new Date(clockNow),
     })
   } catch (error) {
@@ -99,6 +103,31 @@ export default async function handler(req, res, deps = {}) {
   }
   if (!pickup || !dropoff) return json(res, 400, { error: 'Choose a pickup and a drop-off.' })
   if (pickup.label === dropoff.label) return json(res, 400, { error: 'Pickup and drop-off need to be different places.' })
+
+  let nearOffer = null
+  let matchedSlot = null
+  if (nearTerm) {
+    try {
+      nearOffer = await (deps.loadNearTermOffer || loadNearTermOffer)(sb, {
+        pickup,
+        tier,
+        now: new Date(clockNow),
+        excludeDriverId: user.id,
+      })
+    } catch (error) {
+      return json(res, error.status || 400, { error: error.message, code: error.code || 'ride_option_unavailable' })
+    }
+    matchedSlot = matchRequestedSlot(nearOffer.slots, when)
+    if (!matchedSlot) {
+      return json(res, 409, {
+        error: nearOffer.emptyMessage || 'That pickup is outside the 10 to 15 minute window.',
+        code: 'slot_unavailable',
+        waitMinutes: nearOffer.waitMinutes,
+        slots: nearOffer.slots,
+        reason: nearOffer.reason,
+      })
+    }
+  }
 
   const distance = await distanceBetween(pickup, dropoff)
   let gameDayMultiplier = null
@@ -120,7 +149,7 @@ export default async function handler(req, res, deps = {}) {
     gameDayMultiplier,
     distanceM: distance.distanceM,
     durationS: distance.durationS,
-    scheduleAhead: scheduled,
+    scheduleAhead: scheduled && !nearTerm,
     now: new Date(clockNow),
   })
 
@@ -161,6 +190,12 @@ export default async function handler(req, res, deps = {}) {
     ...scheduleDiscountMetadata(priced),
     airport: priced.airport,
     ...billing.snapshot,
+    ...(nearTerm ? {
+      near_term_slot: true,
+      schedule_window: '10_15',
+      wait_minutes: nearOffer?.waitMinutes ?? null,
+      slot_minutes_out: matchedSlot.minutesOut,
+    } : {}),
   }
   const row = {
     rider_id: user.id,
@@ -219,8 +254,21 @@ export default async function handler(req, res, deps = {}) {
     })
   }
 
+  let board = null
+  try {
+    board = await (deps.notifyScheduledBoard || notifyScheduledBoard)(sb, {
+      trip: { ...row, id: inserted.data.id, pickup_at: inserted.data.pickup_at || row.pickup_at },
+    })
+  } catch (error) {
+    console.error('[scheduled-board]', inserted.data.id, error?.message || error)
+    board = { ok: false, notified: 0, reason: 'board_alert_failed' }
+  }
+
   return json(res, 200, {
     trip: inserted.data,
+    nearTerm,
+    slot: matchedSlot,
+    board,
     fareCents: priced.fareCents,
     depositCents: priced.depositCents,
     discountCents: priced.discountCents,

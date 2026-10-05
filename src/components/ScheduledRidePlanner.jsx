@@ -26,11 +26,27 @@ import {
 import { fetchBillingQuote } from '../lib/rideBilling'
 import { useRideOptions } from '../lib/useRideOptions'
 import { NO_DRIVERS_AVAILABLE_COPY, SCHEDULE_AHEAD_LABEL } from '../../shared/rideOptions.js'
+import { getHashRoute } from '../lib/navigation'
+import { lookupCatalogPlace, placeFromStop } from '../lib/placeCatalog'
+import { NearTermSlots } from './NearTermSlots'
+
+const TIER_LABELS = {
+  standard: 'Standard',
+  wait: 'Wait & Save',
+  comfort: 'Extra Comfort',
+}
 
 const PLACES = [
   ...FRIEND_PLACES,
   ...AIRPORT_PLACES.filter((a) => a.code !== 'GSP'),
 ]
+
+function placeFromRouteLabel(label) {
+  if (!label) return null
+  const preset = PLACES.find((place) => place.label === label)
+  if (preset) return preset
+  return placeFromStop(lookupCatalogPlace(label))
+}
 
 function todayInputValue() {
   return new Intl.DateTimeFormat('en-CA', {
@@ -63,6 +79,16 @@ export function ScheduledRidePlanner() {
   const [billingChoice, setBillingChoice] = useState('no_card')
 
   const minDate = useMemo(() => todayInputValue(), [])
+
+  useEffect(() => {
+    const params = getHashRoute().params || {}
+    if (params.near !== '1') return
+    const pickupPlace = placeFromRouteLabel(params.pickup)
+    const dropoffPlace = placeFromRouteLabel(params.dropoff)
+    if (pickupPlace) setPickup(pickupPlace)
+    if (dropoffPlace) setDropoff(dropoffPlace)
+    if (params.tier === 'wait' || params.tier === 'comfort' || params.tier === 'standard') setFleet(params.tier)
+  }, [])
 
   useEffect(() => {
     if (!tierChoices.length) return
@@ -326,6 +352,13 @@ export function ScheduledRidePlanner() {
       <PlacePicker label="Pickup" mode="pickup" value={pickup} onChange={setPickup} presets={PLACES} showCoordinates={false} />
       <PlacePicker label="Drop-off" mode="dropoff" value={dropoff} onChange={setDropoff} presets={PLACES} showCoordinates={false} />
 
+      <NearTermSlots
+        pickup={pickup}
+        dropoff={dropoff}
+        tier={fleet}
+        onTier={setFleet}
+      />
+
       <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink-secondary)', marginBottom: 8 }}>Vehicle</div>
       {tierChoices.length === 0 ? (
         <p style={{ fontSize: 13, lineHeight: 1.45, color: '#522D80', fontWeight: 700 }}>
@@ -393,7 +426,7 @@ export function ScheduledRidePlanner() {
         <div style={{ fontSize: 13, color: 'var(--ink-secondary)' }}>
           {date && time ? `${date} · ${time}` : 'Choose a date and time.'}
           {pickup?.label && dropoff?.label ? ` · ${pickup.label} → ${dropoff.label}` : ''}
-          {fleet ? ` · ${tierChoices.find((row) => row.id === fleet)?.name || 'Standard'}` : ''}
+          {fleet ? ` · ${tierChoices.find((row) => row.id === fleet)?.name || TIER_LABELS[fleet] || 'Standard'}` : ''}
         </div>
       </div>
 

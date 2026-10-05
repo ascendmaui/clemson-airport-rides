@@ -67,8 +67,11 @@ export function ScheduledRideQueue({
                 {ride.firstName}
                 {ride.purpose ? ` · ${ride.purpose}` : ''}
               </div>
-              {ride.automaticMatching && <p style={{ fontSize: 12 }}>Offers start about 45 minutes before pickup.</p>}
-              {onAccept && !ride.automaticMatching && ride.status === 'scheduled' && (
+              {ride.nearTerm && (
+                <p style={{ fontSize: 12 }}>On the board now. Any driver can accept this pickup.</p>
+              )}
+              {ride.automaticMatching && !ride.nearTerm && <p style={{ fontSize: 12 }}>Offers start about 45 minutes before pickup.</p>}
+              {onAccept && ride.status === 'scheduled' && (ride.nearTerm || !ride.automaticMatching) && (
                 <button
                   type="button"
                   className="pressable"

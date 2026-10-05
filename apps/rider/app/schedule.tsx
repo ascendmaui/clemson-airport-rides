@@ -52,6 +52,7 @@ import { localDateInput, localTimeInput, nextPickupDate, RIDE_PLACES } from 'rid
 import { formatCents, formatPickupAt, COMFORT_FLEET_NOTICE } from 'rides-native/tripTags.js'
 import { dueScheduleReminders } from '../../../src/lib/scheduledRideModel.js'
 import { RequireAuth } from '@/components/RequireAuth'
+import { NearTermSlots } from '@/components/NearTermSlots'
 
 const CAMPUS_PURPOSES: SchedulePurpose[] = ['early_class', 'planned', 'recurring']
 type WeekendSpot = 'airport' | 'campus'
@@ -572,6 +573,7 @@ function ScheduleScreen() {
       >
         <Text style={styles.kicker}>SCHEDULE</Text>
         <Text style={styles.title}>Schedule a ride</Text>
+        <NearTermSlots />
         <Text style={styles.copy}>
           Weekend and party nights to the airport or around campus. Pick a date and time, confirm, then find it under Upcoming.
         </Text>
@@ -882,6 +884,8 @@ function ScheduleScreen() {
             ) : null}
             {row.status === 'scheduled' || row.status === 'accepted' ? (
               <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Cancel"
                 onPress={() => {
                   cancelScheduledTrip(row.id).then(() => reload()).catch((err: unknown) => {
                     setError(err instanceof Error ? err.message : 'Could not cancel')

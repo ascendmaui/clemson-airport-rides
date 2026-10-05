@@ -21,6 +21,7 @@ const supabaseUrl = dataUrl(`
 
 const apiClientUrl = dataUrl(`
   const key = ${JSON.stringify(KEY)}
+  export function apiBase() { return 'https://api.test' }
   export async function authedJson(client, path, options) {
     const state = globalThis[key]
     state.authedCalls.push({ client, path, options })
