@@ -1920,3 +1920,10 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
 - **Files touched:** `docs/android-play-readiness.md`, `docs/FIXES.md`
 - **Verified:** `test -f docs/android-play-readiness.md && grep -q "QR" docs/android-play-readiness.md && grep -qi "do not submit" docs/android-play-readiness.md`
 
+## 2026-10-05 — Play readiness doc tripped the retired-copy scan (pkg-android-play-readiness-docs t1)
+
+- **What was wrong:** The first draft of `docs/android-play-readiness.md` named retired fleet words while telling store copy to leave them out. `tests/retiredCopy.test.js` allows those words only in `shared/demoFleet.js`, `docs/demo-drivers.md`, `public/demo-drivers/manifest.json`, and one migration filename. `npm test` failed on that file alone (2329 pass, 1 fail).
+- **What changed:** The listing note now says bookable types are Standard, Wait & Save, and Extra Comfort, and that the demo-map exception in `shared/demoFleet.js` stays out of the store listing. The banned words are gone from the doc.
+- **Files touched:** `docs/android-play-readiness.md`, `docs/FIXES.md`
+- **Verified:** `node --experimental-strip-types --experimental-test-isolation=process --test tests/retiredCopy.test.js` and the acceptance grep.
+

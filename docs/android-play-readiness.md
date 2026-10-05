@@ -4,7 +4,7 @@
 
 Nothing in this repo is wired to a Google Play listing. `RIDER_ANDROID_STORE_URL`, `DRIVER_ANDROID_STORE_URL`, and `ANDROID_STORE_URL` in `shared/productLinks.js` are `null`. QR codes and the Android buttons on the marketing page open `https://clemsonrides.com` until John pastes a real `https://play.google.com/...` URL for that specific app.
 
-Bookable ride types stay Standard, Wait & Save, and Extra Comfort. Do not describe Tesla Model 3, self-driving, or robotaxi in a listing. The one demo-map Cybertruck in `shared/demoFleet.js` is not a bookable vehicle.
+Bookable ride types on a listing are Standard, Wait & Save, and Extra Comfort. Do not add any other vehicle as bookable. The demo-map exception in `shared/demoFleet.js` stays out of the store listing.
 
 ## Current Android package ids
 
