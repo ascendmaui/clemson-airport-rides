@@ -1,10 +1,12 @@
-import { isTeslaModel3 as listedTesla } from '../shared/teslaFleet.js'
 import { receivableDriverIds } from './driverApproval.js'
 import { defaultDriverRank, sortByDefaultDriverOrder } from '../shared/driverOrder.js'
+import { vehicleServesComfort } from '../shared/rideOptions.js'
+import { isSimulatedDriverId } from '../packages/rides-native/simulatedDrivers.js'
 
 /**
  * Approved drivers who are online, John then Kim then everyone else.
  * Email is used for rank and is not returned.
+ * Extra Comfort keeps drivers whose vehicle class qualifies.
  */
 export async function listAssignableDrivers(sb, { tier = 'standard' } = {}) {
   if (!sb) return { drivers: [], error: 'no_client' }
@@ -12,7 +14,7 @@ export async function listAssignableDrivers(sb, { tier = 'standard' } = {}) {
   if (statusRes.error) return { drivers: [], error: statusRes.error.message || 'Could not read online drivers' }
   const ids = []
   for (const row of statusRes.data || []) {
-    if (row?.online && row.driver_id && !ids.includes(row.driver_id)) ids.push(row.driver_id)
+    if (row?.online && row.driver_id && !isSimulatedDriverId(row.driver_id) && !ids.includes(row.driver_id)) ids.push(row.driver_id)
   }
   if (!ids.length) return { drivers: [], error: null }
 
@@ -24,26 +26,24 @@ export async function listAssignableDrivers(sb, { tier = 'standard' } = {}) {
   const profiles = await sb.from('profiles').select('id, email').in('id', allowed)
   if (profiles.error) return { drivers: [], error: profiles.error.message || 'Could not read drivers' }
 
-  let vehiclesByDriver = null
-  let teslaApproved = new Set()
-  if (tier === 'tesla') {
-    const apps = await sb.from('driver_applications').select('profile_id').in('profile_id', allowed).eq('onboarding_status', 'approved')
-    if (apps.error) return { drivers: [], error: apps.error.message }
-    teslaApproved = new Set((apps.data || []).map(row => row.profile_id))
-    const vehicles = await sb.from('vehicles').select('driver_id, is_tesla, tier, make, model').in('driver_id', allowed)
-    if (vehicles.error) return { drivers: [], error: vehicles.error.message || 'Could not verify Tesla listing' }
-    vehiclesByDriver = {}
-    for (const vehicle of vehicles.data || []) {
-      if (vehicle?.driver_id && !vehiclesByDriver[vehicle.driver_id]) {
-        vehiclesByDriver[vehicle.driver_id] = vehicle
-      }
+  let comfortIds = null
+  if (tier === 'comfort') {
+    const vehicles = await sb.from('vehicles').select('driver_id, service_class, tier').in('driver_id', allowed)
+    if (vehicles.error && /service_class|schema cache|column/i.test(vehicles.error.message || '')) {
+      const fallback = await sb.from('vehicles').select('driver_id, tier').in('driver_id', allowed)
+      if (fallback.error) return { drivers: [], error: fallback.error.message || 'Could not read vehicles' }
+      comfortIds = new Set((fallback.data || []).filter((row) => vehicleServesComfort(row)).map((row) => row.driver_id))
+    } else if (vehicles.error) {
+      return { drivers: [], error: vehicles.error.message || 'Could not read vehicles' }
+    } else {
+      comfortIds = new Set((vehicles.data || []).filter((row) => vehicleServesComfort(row)).map((row) => row.driver_id))
     }
   }
 
   const drivers = []
   for (const profile of profiles.data || []) {
     if (!profile?.id || !gate.allowed.has(profile.id)) continue
-    if (tier === 'tesla' && (!teslaApproved.has(profile.id) || !listedTesla(vehiclesByDriver?.[profile.id]))) continue
+    if (comfortIds && !comfortIds.has(profile.id)) continue
     drivers.push({
       id: profile.id,
       dispatchRank: defaultDriverRank(profile.email),

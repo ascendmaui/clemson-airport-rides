@@ -2,8 +2,8 @@
 
 export const VEHICLE_YEAR_MIN = 1980
 
-export const VEHICLE_QUEUE_COLUMNS = 'driver_id, make, model, color, plate, seats, is_tesla'
-export const VEHICLE_QUEUE_COLUMNS_WITH_YEAR = 'driver_id, year, make, model, color, plate, seats, is_tesla'
+export const VEHICLE_QUEUE_COLUMNS = 'driver_id, make, model, color, plate, seats, service_class, tier'
+export const VEHICLE_QUEUE_COLUMNS_WITH_YEAR = 'driver_id, year, make, model, color, plate, seats, service_class, tier'
 
 export function maxVehicleYear(now = new Date()) {
   const year = now instanceof Date ? now.getUTCFullYear() : new Date(now).getUTCFullYear()
@@ -104,8 +104,8 @@ export async function loadLatestVehicle(sb, driverId) {
     .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle()
-  const withYear = 'make, model, year, color, plate, seats, is_tesla'
-  const base = 'make, model, color, plate, seats, is_tesla'
+  const withYear = 'make, model, year, color, plate, seats, service_class, tier'
+  const base = 'make, model, color, plate, seats, service_class, tier'
   const first = await run(withYear)
   if (first?.error && missingVehicleYearColumn(first.error)) return run(base)
   return first

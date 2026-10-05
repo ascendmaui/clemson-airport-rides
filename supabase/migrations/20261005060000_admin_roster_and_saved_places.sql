@@ -178,7 +178,6 @@ BEGIN
         )
       )
     )
-    AND (t.tier::text IS DISTINCT FROM 'tesla' OR public.tesla_driver_eligible(ds.driver_id))
   ORDER BY coalesce((SELECT ord FROM jsonb_array_elements_text(coalesce(t.metadata->'auto_assign_queue', '[]'::jsonb)) WITH ORDINALITY q(id, ord) WHERE q.id = ds.driver_id::text LIMIT 1), 2147483647),
     CASE lower(p.email) WHEN 'johnmatveyev@gmail.com' THEN 0 WHEN 'kimubermaui@gmail.com' THEN 1 ELSE 2 END, ds.driver_id
   LIMIT 1 FOR UPDATE OF ds SKIP LOCKED;

@@ -18,7 +18,7 @@ import {
   publishDriverLocation,
   riderFacingCard,
   setPriorityMode,
-  setTeslaListing,
+  setServiceClass,
   subscribeTrips,
 } from './driverDesk.js'
 import { approvalGateMessage } from './syntheticOffers.js'
@@ -396,13 +396,13 @@ test('riderFacingCard formats complete profile and vehicle card', () => {
       student_verified_at: '2025-01-01T00:00:00.000Z',
     },
     vehicle: {
-      make: 'Tesla',
+      make: 'Comfort',
       model: 'Model Y',
       color: 'White',
       plate: 'CLEM-1',
       seats: 4,
-      is_tesla: true,
-      tier: 'tesla_self_driving',
+      service_class: true,
+      tier: 'comfort',
     },
     online: true,
   })
@@ -413,10 +413,10 @@ test('riderFacingCard formats complete profile and vehicle card', () => {
     ratingAvg: 4.88,
     ratingCount: 50,
     studentVerified: true,
-    vehicleLabel: 'White Tesla Model Y',
+    vehicleLabel: 'White Comfort Model Y',
     plate: 'CLEM-1',
-    isTesla: true,
-    tier: 'tesla_self_driving',
+    comfortClass: true,
+    tier: 'comfort',
     online: true,
     seats: 4,
   })
@@ -432,7 +432,7 @@ test('riderFacingCard provides safe defaults when input is missing or empty', ()
     studentVerified: false,
     vehicleLabel: 'Vehicle TBD',
     plate: null,
-    isTesla: false,
+    comfortClass: false,
     tier: 'standard',
     online: false,
     seats: null,
@@ -539,7 +539,7 @@ test('loadVehicle returns vehicle row for driver', async () => {
         color: 'Silver',
         plate: 'SC-999',
         seats: 4,
-        is_tesla: false,
+        service_class: false,
         autonomous_capable: false,
         tier: 'standard',
       },
@@ -748,17 +748,17 @@ test('publishDriverLocation throws on database error', async () => {
 })
 
 // ---------------------------------------------------------------------------
-// 8. setTeslaListing
+// 8. setServiceClass
 // ---------------------------------------------------------------------------
-test('setTeslaListing throws when driver has no vehicle in onboarding', async () => {
+test('setServiceClass throws when driver has no vehicle in onboarding', async () => {
   const supabase = createFakeSupabase()
   await assert.rejects(
-    () => setTeslaListing(supabase, 'driver-no-car', { enabled: true }),
-    /Add your vehicle in driver onboarding before listing a Tesla/,
+    () => setServiceClass(supabase, 'driver-no-car', 'comfort'),
+    /Add your vehicle in driver onboarding before choosing a service class/,
   )
 })
 
-test('setTeslaListing updates vehicle tier and attributes when enabled', async () => {
+test('setServiceClass stores comfort or standard on the vehicle', async () => {
   const supabase = createFakeSupabase({
     vehicles: [
       {
@@ -767,29 +767,24 @@ test('setTeslaListing updates vehicle tier and attributes when enabled', async (
         make: 'Honda',
         model: 'Civic',
         tier: 'standard',
-        is_tesla: false,
+        service_class: 'standard',
       },
     ],
   })
 
-  const updated = await setTeslaListing(supabase, 'driver-1', { enabled: true, claimModel3: true })
-  assert.equal(updated.is_tesla, true)
-  assert.equal(updated.tier, 'tesla')
-  assert.equal(updated.autonomous_capable, false)
-  assert.equal(updated.make, 'Tesla')
-  assert.equal(updated.model, 'Model 3')
-
-  // Turning off resets tier and is_tesla without modifying make/model
-  const reverted = await setTeslaListing(supabase, 'driver-1', { enabled: false })
-  assert.equal(reverted.is_tesla, false)
+  const updated = await setServiceClass(supabase, 'driver-1', 'comfort')
+  assert.equal(updated.service_class, 'comfort')
+  assert.equal(updated.tier, 'comfort')
+  assert.equal(updated.make, 'Honda')
+  const reverted = await setServiceClass(supabase, 'driver-1', 'standard')
+  assert.equal(reverted.service_class, 'standard')
   assert.equal(reverted.tier, 'standard')
-  assert.equal(reverted.make, 'Tesla')
 })
 
-test('setTeslaListing throws on update query error', async () => {
+test('setServiceClass throws on update query error', async () => {
   const supabase = createFakeSupabase(
     {
-      vehicles: [{ id: 'v-10', driver_id: 'driver-1', make: 'Tesla', model: 'Model 3' }],
+      vehicles: [{ id: 'v-10', driver_id: 'driver-1', make: 'Comfort', model: 'sedan' }],
     },
     {
       onError(table, state) {
@@ -802,7 +797,7 @@ test('setTeslaListing throws on update query error', async () => {
   )
 
   await assert.rejects(
-    () => setTeslaListing(supabase, 'driver-1', { enabled: true }),
+    () => setServiceClass(supabase, 'driver-1', 'comfort'),
     /Failed to update vehicle listing/,
   )
 })
@@ -1431,7 +1426,7 @@ test('loadDriverDesk aggregates offers, scheduled, upcoming, active, and driver 
       { driver_id: 'driver-1', online: true, priority_mode: true, lat: 34.68, lng: -82.84 },
     ],
     vehicles: [
-      { id: 'v-1', driver_id: 'driver-1', make: 'Tesla', model: 'Model 3', is_tesla: true },
+      { id: 'v-1', driver_id: 'driver-1', make: 'Comfort', model: 'sedan', service_class: true },
     ],
     profiles: [
       { id: 'driver-1', full_name: 'Driver One', phone: '864-555-1111' },

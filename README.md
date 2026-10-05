@@ -69,7 +69,7 @@ Clients cannot overwrite `standing`, `rating_avg`, or `rating_count` on their ow
 
 ## Student discount
 
-10% off Standard when the signed-in email is confirmed and ends with `@clemson.edu` or `@g.clemson.edu`. Comfort, XL, Pet, and Tesla are not included. Home, confirm pickup, and ride tiers show that discount only for a confirmed Clemson email, and they say why it is off otherwise. The server applies the same rule.
+10% off Standard when the signed-in email is confirmed and ends with `@clemson.edu` or `@g.clemson.edu`. Other ride types are not included. Home, confirm pickup, and ride tiers show that discount only for a confirmed Clemson email, and they say why it is off otherwise. The server applies the same rule.
 
 ## Mobile
 

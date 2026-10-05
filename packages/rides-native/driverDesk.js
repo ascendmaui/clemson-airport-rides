@@ -1,10 +1,10 @@
-import { isTeslaModel3 } from '../../shared/teslaFleet.js'
 /**
  * Driver desk: availability, PickDriver requests, scheduled queue, live status.
  * Payments go through the existing /api/driver and /api/stripe-payment-methods routers.
  */
 import { offerVisibleToDriver, visibleOfferQuery, unchangedOfferQuery } from '../../shared/driverOrder.js'
 import { missingVehicleYearColumn } from '../../shared/vehicleYear.js'
+import { vehicleServesComfort } from '../../shared/rideOptions.js'
 import { authedJson } from './apiClient.js'
 import { approvalGateMessage } from './syntheticOffers.js'
 import {
@@ -82,8 +82,8 @@ export async function loadGameDay(supabase) {
 
 export async function loadVehicle(supabase, driverId) {
   if (!supabase || !driverId) return null
-  const withYear = 'id, year, make, model, color, plate, seats, is_tesla, autonomous_capable, tier'
-  const base = 'id, make, model, color, plate, seats, is_tesla, autonomous_capable, tier'
+  const withYear = 'id, year, make, model, color, plate, seats, service_class, autonomous_capable, tier'
+  const base = 'id, make, model, color, plate, seats, service_class, autonomous_capable, tier'
   let res = await supabase.from('vehicles').select(withYear).eq('driver_id', driverId).limit(1)
   if (res.error && missingVehicleYearColumn(res.error)) {
     res = await supabase.from('vehicles').select(base).eq('driver_id', driverId).limit(1)
@@ -116,7 +116,7 @@ export function riderFacingCard({ profile, vehicle, online }) {
     studentVerified: Boolean(profile?.student_verified_at),
     vehicleLabel,
     plate: vehicle?.plate || null,
-    isTesla: Boolean(vehicle?.is_tesla) || vehicle?.tier === 'tesla_self_driving',
+    comfortClass: vehicleServesComfort(vehicle),
     tier: vehicle?.tier || 'standard',
     online: Boolean(online),
     seats: vehicle?.seats || null,
@@ -148,20 +148,11 @@ export async function publishDriverLocation(supabase, driverId, { lat, lng, head
   if (error) throw new Error(error.message)
 }
 
-export async function setTeslaListing(supabase, driverId, { enabled, claimModel3 = false }) {
+export async function setServiceClass(supabase, driverId, serviceClass) {
   const vehicle = await loadVehicle(supabase, driverId)
-  if (!vehicle?.id) throw new Error('Add your vehicle in driver onboarding before listing a Tesla.')
-  if (enabled && !claimModel3 && !isTeslaModel3(vehicle)) throw new Error('Set your vehicle make and model to Tesla Model 3 first.')
-  const patch = {
-    is_tesla: Boolean(enabled),
-    autonomous_capable: false,
-    tier: enabled ? 'tesla' : 'standard',
-  }
-  if (enabled && claimModel3) {
-    patch.make = 'Tesla'
-    patch.model = 'Model 3'
-  }
-  const { data, error } = await supabase.from('vehicles').update(patch).eq('id', vehicle.id).select('*').single()
+  if (!vehicle?.id) throw new Error('Add your vehicle in driver onboarding before choosing a service class.')
+  const service_class = serviceClass === 'comfort' ? 'comfort' : 'standard'
+  const { data, error } = await supabase.from('vehicles').update({ service_class, tier: service_class }).eq('id', vehicle.id).select('*').single()
   if (error) throw new Error(error.message)
   return data
 }
@@ -221,10 +212,10 @@ export async function loadDriverDesk(supabase, driverId) {
     ? new Set(await listPassedTripIds(supabase, driverId))
     : new Set()
   const claimableOpen = approvedForOffers
-    ? openRows.filter((row) => offerVisibleToDriver(row, driverId) && !isUnpaidAirportDepositTrip(row) && (row.tier !== 'tesla' || isTeslaModel3(vehicle)))
+    ? openRows.filter((row) => offerVisibleToDriver(row, driverId) && !isUnpaidAirportDepositTrip(row))
     : []
   const claimableScheduled = approvedForOffers
-    ? scheduledRows.filter((row) => !isUnpaidAirportDepositTrip(row) && (row.tier !== 'tesla' || isTeslaModel3(vehicle)))
+    ? scheduledRows.filter((row) => !isUnpaidAirportDepositTrip(row))
     : []
   const offers = cards(claimableOpen, gameDayLive).filter((card) => {
     if (card.status !== 'requested' && passedIds.has(card.id)) return false

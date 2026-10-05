@@ -88,8 +88,8 @@ export default async function handler(req, res) {
     const make = String(body.make || '').trim().slice(0, 80)
     const model = String(body.model || '').trim().slice(0, 80)
     if (!body.profileId || !make || !model) return json(res, 400, { error: 'Driver, make and model required' })
-    const isTesla = make.toLowerCase() === 'tesla' && /^model\s*3$/i.test(model)
-    const result = await sb.from('vehicles').update({ make, model, is_tesla: isTesla, tier: isTesla ? 'tesla' : 'standard' })
+    const serviceClass = body.serviceClass === 'comfort' || body.service_class === 'comfort' ? 'comfort' : 'standard'
+    const result = await sb.from('vehicles').update({ make, model, service_class: serviceClass, tier: serviceClass })
       .eq('driver_id', body.profileId).select('driver_id')
     if (result.error) return json(res, 500, { error: result.error.message })
     if (!result.data?.length) return json(res, 404, { error: 'No vehicle on file' })

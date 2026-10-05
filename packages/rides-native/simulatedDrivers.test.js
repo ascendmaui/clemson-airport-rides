@@ -9,7 +9,6 @@ import { fetchOnlineDrivers, requestDriverTrip } from './drivers.js'
 import {
   BUSY_MARKER_FILL,
   SIMULATED_DRIVER_COUNT,
-  SIMULATED_DRIVER_TITLE,
   SIMULATED_DRIVERS,
   SIMULATED_FLEET_BADGE,
   SIMULATED_FLEET_BOUNDS,
@@ -34,23 +33,25 @@ function insideBounds(lat, lng) {
     && lng <= SIMULATED_FLEET_BOUNDS.maxLng
 }
 
-test('five simulated drivers are busy, not available, and not bookable', () => {
+test('demo drivers are busy, not available, and not bookable', () => {
   assert.equal(SIMULATED_DRIVERS.length, SIMULATED_DRIVER_COUNT)
-  assert.equal(SIMULATED_DRIVER_COUNT, 5)
-  assert.equal(SIMULATED_DRIVER_TITLE, 'Busy')
-  assert.equal(SIMULATED_FLEET_BADGE, 'Busy · already on a ride')
+  assert.equal(SIMULATED_DRIVER_COUNT, 12)
+  assert.equal(SIMULATED_FLEET_BADGE, 'Preview cars')
   assert.doesNotMatch(SIMULATED_FLEET_BADGE, /available/i)
   const ids = new Set()
   for (const driver of SIMULATED_DRIVERS) {
     assert.equal(ids.has(driver.id), false)
     ids.add(driver.id)
-    assert.match(driver.id, /^sim-busy-/)
+    assert.match(driver.id, /^demo-/)
     assert.equal(driver.status, 'busy')
     assert.equal(driver.bookable, false)
     assert.equal(driver.online, false)
+    assert.equal(driver.isDemo, true)
     assert.equal(isSimulatedDriverId(driver.id), true)
+    assert.match(driver.photoSmall, /^\/demo-drivers\//)
   }
   assert.equal(isSimulatedDriverId('11111111-1111-4111-8111-111111111111'), false)
+  assert.equal(isSimulatedDriverId('sim-busy-legacy'), true)
 })
 
 test('simulated cars drive near Memorial Stadium, College Avenue, and campus', () => {
@@ -59,11 +60,11 @@ test('simulated cars drive near Memorial Stadium, College Avenue, and campus', (
   const sikes = { lat: 34.6795, lng: -82.8374 }
   const byId = Object.fromEntries(SIMULATED_DRIVERS.map((driver) => [driver.id, driver]))
 
-  const stadiumLoop = byId['sim-busy-stadium-loop']
-  const college = byId['sim-busy-college-ave']
-  const campus = byId['sim-busy-campus-core']
-  const connector = byId['sim-busy-stadium-college']
-  const downtownLoop = byId['sim-busy-downtown-block']
+  const stadiumLoop = byId['demo-marcus']
+  const college = byId['demo-jenna']
+  const campus = byId['demo-darnell']
+  const connector = byId['demo-priya']
+  const downtownLoop = byId['demo-carlos']
 
   const nearest = (driver, target) => Math.min(
     ...driver.route.map((point) => haversineMeters(point, target)),
@@ -91,7 +92,7 @@ test('simulated cars keep moving inside the Clemson campus box at driving speed'
       assert.equal(car.status, 'busy')
       assert.equal(car.bookable, false)
       assert.equal(car.online, false)
-      assert.equal(car.title, 'Busy')
+      assert.equal(car.title, driver.firstName)
       assert.match(car.description, /Already driving a rider/)
       assert.match(car.description, /Not available to request/)
       assert.equal(insideBounds(car.lat, car.lng), true)
@@ -230,12 +231,13 @@ test('fetchOnlineDrivers excludes simulated ids even if a status row is online',
   assert.equal(rpcIds, null)
 })
 
-test('busy marker art is labeled Busy and is not the available orange pin', () => {
-  const svg = busyCarSvg(90)
-  assert.match(svg, />Busy</)
-  assert.match(svg, new RegExp(BUSY_MARKER_FILL.replace('#', '#')))
-  assert.equal(svg.includes('#F56600'), false)
+test('marker art is a car silhouette in orange and purple', () => {
+  const svg = busyCarSvg(90, { body: 'suv', livery: 'tiger' })
+  assert.match(svg, /<svg/)
+  assert.match(svg, /#F56600/)
+  assert.match(svg, /#522D80/)
   assert.equal(svg.includes('Available'), false)
+  assert.equal(BUSY_MARKER_FILL, '#522D80')
 })
 
 test('preview layout keeps every demo car inside the map frame', () => {
@@ -270,7 +272,8 @@ test('demo fleet source does not insert driver rows, charge cards, or notify', (
   assert.equal(driverHome.includes('simulatedDrivers'), false)
 
   const webMap = read('src/components/CampusMap.jsx')
+  const motion = read('src/components/FleetMotion.jsx')
   assert.match(webMap, /showSimulatedFleet = false/)
-  assert.match(webMap, /refuseSimulatedDriverTap/)
+  assert.match(motion, /refuseSimulatedDriverTap/)
   assert.match(webMap, /SIMULATED_FLEET_BADGE/)
 })

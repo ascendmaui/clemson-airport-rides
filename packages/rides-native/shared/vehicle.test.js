@@ -90,14 +90,14 @@ describe('inferVehicleCategory', () => {
     assert.equal(inferVehicleCategory({ model: 'Malibu' }), 'sedan')
     assert.equal(inferVehicleCategory({ model: 'Sonata' }), 'sedan')
     assert.equal(inferVehicleCategory({ model: 'Elantra' }), 'sedan')
-    assert.equal(inferVehicleCategory({ model: 'Model 3' }), 'sedan')
+    assert.equal(inferVehicleCategory({ model: 'sedan' }), 'sedan')
     assert.equal(inferVehicleCategory({ model: 'Model S' }), 'sedan')
     assert.equal(inferVehicleCategory({ type: 'sedan' }), 'sedan')
   })
 
   test('handles case insensitivity, word boundaries, and unknown vehicles', () => {
     assert.equal(inferVehicleCategory({ make: 'HONDA', model: 'ODYSSEY' }), 'van')
-    assert.equal(inferVehicleCategory({ make: 'Tesla', model: 'MODEL Y' }), 'suv')
+    assert.equal(inferVehicleCategory({ make: 'Comfort', model: 'MODEL Y' }), 'suv')
     // BUG?: inferVehicleCategory defaults unknown vehicle models to 'sedan' rather than null or 'unknown'
     assert.equal(inferVehicleCategory({ make: 'Schwinn', model: 'Bicycle' }), 'sedan')
     assert.equal(inferVehicleCategory({}), 'sedan')
@@ -244,8 +244,8 @@ describe('vehicleTitle', () => {
       'White Toyota Sienna',
     )
     assert.equal(
-      vehicleTitle({ color: 'Midnight Blue', make: 'Tesla', model: 'Model 3' }),
-      'Midnight Blue Tesla Model 3',
+      vehicleTitle({ color: 'Midnight Blue', make: 'Honda', model: 'Accord' }),
+      'Midnight Blue Honda Accord',
     )
   })
 
@@ -359,7 +359,7 @@ describe('loadRegisteredVehicle', () => {
       color: 'White',
       plate: 'SC-1234',
       seats: 5,
-      is_tesla: false,
+      service_class: false,
       tier: 'standard',
     }
 
@@ -407,7 +407,7 @@ describe('loadRegisteredVehicle', () => {
     const res = await loadRegisteredVehicle(mockSupabase, 'driver-abc')
     assert.deepEqual(res, fakeRow)
     assert.equal(calls.table, 'vehicles')
-    assert.equal(calls.columns, 'id, make, model, color, plate, seats, is_tesla, tier')
+    assert.equal(calls.columns, 'id, make, model, color, plate, seats, service_class, tier')
     assert.equal(calls.eqField, 'driver_id')
     assert.equal(calls.eqVal, 'driver-abc')
     assert.equal(calls.orderField, 'created_at')
@@ -545,7 +545,7 @@ describe('saveRegisteredVehicle', () => {
       color: 'Black',
       plate: 'CLEM-1',
       seats: 4,
-      is_tesla: false,
+      service_class: false,
       tier: 'standard',
     }
 
@@ -574,7 +574,7 @@ describe('saveRegisteredVehicle', () => {
             insertPayload = payload
             return {
               select(cols) {
-                assert.equal(cols, 'id, make, model, color, plate, seats, is_tesla, tier')
+                assert.equal(cols, 'id, make, model, color, plate, seats, service_class, tier')
                 return {
                   single: async () => ({ data: insertedVehicle, error: null }),
                 }
@@ -591,7 +591,7 @@ describe('saveRegisteredVehicle', () => {
       color: ' Black ',
       plate: ' CLEM-1 ',
       seats: 4,
-      isTesla: false,
+      comfortClass: false,
     })
 
     assert.equal(checkedUserId, 'driver-123')
@@ -602,7 +602,7 @@ describe('saveRegisteredVehicle', () => {
       color: 'Black',
       plate: 'CLEM-1',
       seats: 4,
-      is_tesla: false,
+      service_class: false,
       autonomous_capable: false,
       tier: 'standard',
     })
@@ -614,13 +614,13 @@ describe('saveRegisteredVehicle', () => {
     let updatedVehicleId = null
     const updatedVehicle = {
       id: 'v-existing-88',
-      make: 'Tesla',
+      make: 'Comfort',
       model: 'Model Y',
       color: null,
       plate: 'TSLA-FUN',
       seats: 7,
-      is_tesla: true,
-      tier: 'tesla_self_driving',
+      service_class: true,
+      tier: 'comfort',
     }
 
     const mockSupabase = {
@@ -649,7 +649,7 @@ describe('saveRegisteredVehicle', () => {
                 updatedVehicleId = val
                 return {
                   select(cols) {
-                    assert.equal(cols, 'id, make, model, color, plate, seats, is_tesla, tier')
+                    assert.equal(cols, 'id, make, model, color, plate, seats, service_class, tier')
                     return {
                       single: async () => ({ data: updatedVehicle, error: null }),
                     }
@@ -663,24 +663,24 @@ describe('saveRegisteredVehicle', () => {
     }
 
     const result = await saveRegisteredVehicle(mockSupabase, 'driver-456', {
-      make: 'Tesla',
+      make: 'Comfort',
       model: 'Model Y',
       color: '   ', // empty string trims to null
       plate: 'TSLA-FUN',
       seats: 7,
-      isTesla: true,
+      comfortClass: true,
     })
 
     assert.equal(updatedVehicleId, 'v-existing-88')
     assert.deepEqual(updatePayload, {
-      make: 'Tesla',
+      make: 'Comfort',
       model: 'Model Y',
       color: null,
       plate: 'TSLA-FUN',
       seats: 7,
-      is_tesla: true,
+      service_class: true,
       autonomous_capable: false,
-      tier: 'tesla_self_driving',
+      tier: 'comfort',
     })
     assert.deepEqual(result, updatedVehicle)
   })

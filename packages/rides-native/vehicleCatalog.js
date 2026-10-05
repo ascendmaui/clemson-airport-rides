@@ -22,7 +22,7 @@ export const VEHICLE_MAKES = [
   'Honda',
   'Ford',
   'Chevrolet',
-  'Tesla',
+  'Genesis',
   'BMW',
   'Mercedes-Benz',
   'Nissan',
@@ -55,7 +55,7 @@ const MODELS = {
   Honda: ['Civic', 'Accord', 'CR-V', 'Pilot', 'HR-V', 'Odyssey', 'Ridgeline'],
   Ford: ['F-150', 'Escape', 'Explorer', 'Mustang', 'Edge', 'Bronco', 'Fusion', 'Focus'],
   Chevrolet: ['Silverado', 'Equinox', 'Malibu', 'Tahoe', 'Traverse', 'Camaro', 'Colorado', 'Bolt'],
-  Tesla: ['Model 3', 'Model Y', 'Model S', 'Model X'],
+  Genesis: ['G70', 'GV70', 'GV80'],
   BMW: ['3 Series', '5 Series', 'X3', 'X5', 'X1', '4 Series'],
   'Mercedes-Benz': ['C-Class', 'E-Class', 'GLC', 'GLE', 'A-Class', 'GLA'],
   Nissan: ['Altima', 'Sentra', 'Rogue', 'Pathfinder', 'Frontier', 'Murano', 'Versa'],
@@ -88,6 +88,6 @@ export function modelsForMake(make) {
   return MODELS[make] ? [...MODELS[make]] : ['Other']
 }
 
-export function isTeslaMakeModel(make, model) {
-  return String(make || '').toLowerCase() === 'tesla' && /model\s*3/i.test(String(model || ''))
+export function comfortClassMakeModel(make, model) {
+  return String(make || '').toLowerCase() === 'comfort' && /model\s*3/i.test(String(model || ''))
 }

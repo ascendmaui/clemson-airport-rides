@@ -341,7 +341,7 @@ test('requestDriverTrip defaults tier and keeps an explicit tier', async () => {
     assert.equal(slot.calls[0].body.tier, 'standard')
   }
 
-  for (const tier of ['standard', 'comfort', 'xl', 'tesla', 'STANDARD']) {
+  for (const tier of ['standard', 'comfort', 'xl', 'comfort', 'STANDARD']) {
     reset()
     await requestDriverTrip(priced({
       riderId: 'rider-1',

@@ -15,7 +15,7 @@ import { lift } from '@/lib/elevation'
 import type { Palette } from '@/lib/palette'
 import { useTheme } from '@/lib/theme'
 import { useThemedStyles } from '@/lib/useThemedStyles'
-import { TESLA_FLEET_NOTICE } from 'rides-native/tripTags'
+import { COMFORT_FLEET_NOTICE } from 'rides-native/tripTags'
 
 export default function RideTiers() {
   const router = useRouter()
@@ -99,7 +99,7 @@ export default function RideTiers() {
               style={({ pressed }) => [
                 styles.row,
                 lift(colors, 'rest'),
-                tier.id === 'tesla' && styles.rowFleet,
+                tier.id === 'comfort' && styles.rowFleet,
                 on && styles.rowOn,
                 pressStyle(pressed),
               ]}
@@ -113,7 +113,7 @@ export default function RideTiers() {
               </View>
               <View style={styles.tierCopy}>
                 <Text style={styles.name}>{tier.name}</Text>
-                {tier.id === 'tesla' ? <Text style={styles.fleetBadge}>Clemson fleet</Text> : null}
+                {tier.id === 'comfort' ? <Text style={styles.fleetBadge}>Clemson fleet</Text> : null}
                 <Text style={styles.meta}>{tier.eta} · {tier.meta}</Text>
                 {quoted.label ? <Text style={styles.discount}>{quoted.label}</Text> : null}
               </View>
@@ -125,13 +125,13 @@ export default function RideTiers() {
           )
         })}
       </Animated.ScrollView>
-      {selected === 'tesla' ? (
+      {selected === 'comfort' ? (
         <View style={styles.stub}>
-          <Text style={styles.stubText}>{TESLA_FLEET_NOTICE}</Text>
+          <Text style={styles.stubText}>{COMFORT_FLEET_NOTICE}</Text>
         </View>
       ) : null}
       <View style={[styles.footer, lift(colors, 'bar'), { paddingBottom: Math.max(insets.bottom, 16) }]}>
-        <PrimaryButton label={selected === 'tesla' ? 'Request Tesla Model 3' : 'Choose a driver'} onPress={onConfirm} tone={selected === 'tesla' ? 'purple' : 'orange'} />
+        <PrimaryButton label={selected === 'comfort' ? 'Request Extra Comfort' : 'Choose a driver'} onPress={onConfirm} tone={selected === 'comfort' ? 'purple' : 'orange'} />
       </View>
       <SignInToBookSheet
         open={promptOpen}

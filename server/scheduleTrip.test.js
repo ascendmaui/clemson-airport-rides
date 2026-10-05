@@ -67,6 +67,26 @@ function createFakeSb({
           operations.push({ op: 'eq', table, col, val })
           return chain
         },
+        in(col, vals) {
+          operations.push({ op: 'in', table, col, vals })
+          if (table === 'driver_applications') {
+            return Promise.resolve({
+              data: [{ profile_id: 'driver-approved', onboarding_status: 'approved' }],
+              error: null,
+            })
+          }
+          if (table === 'driver_status') {
+            return Promise.resolve({ data: [{ driver_id: 'driver-approved', online: true }], error: null })
+          }
+          if (table === 'vehicles') {
+            return Promise.resolve({
+              data: [{ driver_id: 'driver-approved', service_class: 'comfort', tier: 'comfort' }],
+              error: null,
+            })
+          }
+          if (table === 'trips') return Promise.resolve({ data: [], error: null })
+          return Promise.resolve({ data: [], error: null })
+        },
         lte(col, val) {
           operations.push({ op: 'lte', table, col, val })
           currentFilterIso = val
@@ -111,6 +131,16 @@ function createFakeSb({
             }
           }
           return { data: null, error: null }
+        },
+        then(onFulfilled, onRejected) {
+          const payload = table === 'driver_applications'
+            ? { data: [{ profile_id: 'driver-approved', onboarding_status: 'approved' }], error: null }
+            : table === 'driver_status'
+              ? { data: [{ driver_id: 'driver-approved', online: true }], error: null }
+              : table === 'vehicles'
+                ? { data: [{ driver_id: 'driver-approved', service_class: 'comfort', tier: 'comfort' }], error: null }
+                : { data: [], error: null }
+          return Promise.resolve(payload).then(onFulfilled, onRejected)
         },
         insert(payload) {
           operations.push({ op: 'insert', table, payload })
@@ -685,8 +715,16 @@ describe('scheduleTrip endpoint handler', () => {
       const regular = await run(mockStandardUser)
       const student = await run(mockStudentUser)
       assert.equal(regular.res.discountCents, 0)
-      assert.equal(student.res.fareCents + student.res.discountCents, regular.res.fareCents)
-      assert.equal(student.res.discountCents, Math.round(regular.res.fareCents * 0.1))
+      assert.equal(
+        student.res.fareBeforeScheduleDiscountCents + student.res.discountCents,
+        regular.res.fareBeforeScheduleDiscountCents,
+      )
+      assert.equal(
+        student.res.discountCents,
+        Math.round(regular.res.fareBeforeScheduleDiscountCents * 0.1),
+      )
+      assert.equal(student.res.scheduleDiscountApplied, true)
+      assert.equal(regular.res.scheduleDiscountApplied, true)
       // Stored row, response, and the 20/80 split all agree.
       assert.equal(student.row.fare_cents, student.res.fareCents)
       assert.equal(student.row.platform_fee_cents + student.row.driver_earnings_cents, student.row.fare_cents)
@@ -789,7 +827,7 @@ describe('scheduleTrip endpoint handler', () => {
       assert.equal(tripsInserted[0].metadata.isStudent, false)
     })
 
-    test('does NOT grant student discount on Tesla tier even for confirmed student', async () => {
+    test('does NOT grant student discount on Comfort tier even for confirmed student', async () => {
       const { sb, tripsInserted } = createFakeSb()
       const res = await callHandler(
         scheduleTripHandler,
@@ -798,7 +836,7 @@ describe('scheduleTrip endpoint handler', () => {
           body: {
             ...defaultPlaces,
             pickupAt: testPickupTime,
-            tier: 'tesla',
+            tier: 'comfort',
           },
         },
         {
@@ -810,9 +848,8 @@ describe('scheduleTrip endpoint handler', () => {
       assert.equal(res.status, 200)
       assert.equal(res.json.studentDiscountApplied, false)
       assert.equal(res.json.discountCents, 0)
-      assert.equal(tripsInserted[0].tier, 'tesla')
-      assert.equal(tripsInserted[0].metadata.tesla, true)
-      assert.equal(tripsInserted[0].metadata.fleet, 'tesla_model_3')
+      assert.equal(tripsInserted[0].tier, 'comfort')
+      assert.equal(tripsInserted[0].metadata.ride_option, 'comfort')
     })
   })
 

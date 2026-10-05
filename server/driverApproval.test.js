@@ -303,6 +303,8 @@ test('requestDriverTrip skips a pending_review driver and opens a campus offer f
 
   const approvedSb = memorySb({
     driver_applications: [{ profile_id: 'driver-approved', onboarding_status: 'approved' }],
+    driver_status: [{ driver_id: 'driver-approved', online: true }],
+    vehicles: [{ driver_id: 'driver-approved', service_class: 'standard', tier: 'standard' }],
   })
   const allowed = await callHandler(requestDriverTrip, {
     body: { ...REQUEST_BODY, driverId: 'driver-approved' },
@@ -323,6 +325,8 @@ test('requestDriverTrip skips a pending_review driver and opens a campus offer f
 test('requestDriverTrip does not insert an unpaid airport deposit from pick-a-driver', async () => {
   const approvedSb = memorySb({
     driver_applications: [{ profile_id: 'driver-approved', onboarding_status: 'approved' }],
+    driver_status: [{ driver_id: 'driver-approved', online: true }],
+    vehicles: [{ driver_id: 'driver-approved', service_class: 'standard', tier: 'standard' }],
   })
   let ensured = false
   const res = await callHandler(requestDriverTrip, {
@@ -350,6 +354,8 @@ test('requestDriverTrip does not insert an unpaid airport deposit from pick-a-dr
 test('requestDriverTrip keeps the campus trip when the event insert fails', async () => {
   const approvedSb = memorySb({
     driver_applications: [{ profile_id: 'driver-approved', onboarding_status: 'approved' }],
+    driver_status: [{ driver_id: 'driver-approved', online: true }],
+    vehicles: [{ driver_id: 'driver-approved', service_class: 'standard', tier: 'standard' }],
   })
   const sb = {
     from(table) {
@@ -493,10 +499,12 @@ test('requestDriverTrip auto-assigns John before Kim and keeps a picked offer op
     body: { ...REQUEST_BODY, autoAssign: true },
   }, { sb: none.sb, user, ensureProfile: async () => ({ ok: true }) })
   assert.equal(empty.status, 409)
-  assert.equal(empty.json.code, 'no_driver_online')
+  assert.equal(empty.json.code, 'ride_option_unavailable')
 
   const pickSb = memorySb({
     driver_applications: [{ profile_id: kim, onboarding_status: 'approved' }],
+    driver_status: [{ driver_id: kim, online: true }],
+    vehicles: [{ driver_id: kim, service_class: 'standard', tier: 'standard' }],
   })
   const pick = await callHandler(requestDriverTrip, {
     body: { ...REQUEST_BODY, driverId: kim },

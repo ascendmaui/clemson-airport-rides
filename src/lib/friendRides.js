@@ -259,7 +259,7 @@ export function inferVehicleCategory(vehicle) {
   const blob = `${vehicle.type || ''} ${vehicle.tier || ''} ${vehicle.make || ''} ${vehicle.model || ''}`.toLowerCase()
   if (/\b(van|minivan|transit|odyssey|sienna|carnival|pacifica|caravan)\b/.test(blob)) return 'van'
   if (/\b(suv|crossover|suburban|tahoe|explorer|pilot|highlander|4runner|traverse|durango|escalade|yukon|wrangler|bronco|rav4|cr-?v|cx-?5|cx-?9|rogue|pathfinder|murano|model y|model x)\b/.test(blob)) return 'suv'
-  if (/\b(sedan|camry|accord|civic|corolla|altima|malibu|sonata|elantra|model 3|model s)\b/.test(blob)) return 'sedan'
+  if (/\b(sedan|camry|accord|civic|corolla|altima|malibu|sonata|elantra|sedan|model s)\b/.test(blob)) return 'sedan'
   return 'sedan'
 }
 

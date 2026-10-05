@@ -135,9 +135,9 @@ export async function handleDriverSignup(req, res) {
       color,
       plate,
       seats,
-      is_tesla: Boolean(body.isTesla),
+      service_class: body.comfortClass ? 'comfort' : 'standard',
       autonomous_capable: false,
-      tier: body.isTesla ? 'tesla_self_driving' : 'standard',
+      tier: body.comfortClass ? 'comfort' : 'standard',
     }, year)
     const savedVehicle = await writeVehicleWithYearFallback((fields) => {
       if (!vehicle) {

@@ -42,7 +42,7 @@ function cardsSb({ approved = true } = {}) {
                   model: 'Accord',
                   plate: 'DEMO03',
                   tier: 'standard',
-                  is_tesla: false,
+                  service_class: false,
                   stripe_account_id: 'acct_secret',
                 }],
                 error: null,

@@ -9,9 +9,6 @@ import {
   fetchOnlineDrivers,
   filterDriversForFleet,
   scheduleRedirectForRequestError,
-  isTeslaDriver,
-  isTeslaVehicle,
-  TESLA_FLEET_EMPTY_COPY,
   formatDriverDistance,
   groupDriversForPicker,
   loadFavoriteDriverIds,
@@ -743,14 +740,14 @@ test('fetchOnlineDrivers happy path maps driver profile, status, vehicle, and fi
     {
       id: 'v-1',
       driver_id: A,
-      make: 'Tesla',
-      model: 'Model 3',
+      make: 'Honda',
+      model: 'Accord',
       color: 'Midnight Silver',
       plate: 'TGR-123',
       seats: 4,
-      is_tesla: true,
+      service_class: true,
       autonomous_capable: false,
-      tier: 'tesla',
+      tier: 'comfort',
     },
   ]
 
@@ -774,16 +771,16 @@ test('fetchOnlineDrivers happy path maps driver profile, status, vehicle, and fi
   assert.equal(driverA.heading, 180)
   assert.equal(driverA.unlockProgress, 3)
   assert.equal(driverA.unlockTarget, 5)
-  assert.equal(driverA.vehicleLabel, 'Midnight Silver Tesla Model 3')
+  assert.equal(driverA.vehicleLabel, 'Midnight Silver Honda Accord')
   assert.equal(driverA.plate, 'TGR-123')
-  assert.equal(driverA.isTesla, true)
-  assert.equal(driverA.tier, 'tesla')
+  assert.equal(driverA.comfortClass, true)
+  assert.equal(driverA.tier, 'comfort')
 
   const driverB = res.drivers.find((d) => d.id === B)
   assert.equal(driverB.name, 'Sam')
   assert.equal(driverB.vehicleLabel, 'Vehicle TBD')
   assert.equal(driverB.plate, null)
-  assert.equal(driverB.isTesla, false)
+  assert.equal(driverB.comfortClass, false)
   assert.equal(driverB.tier, 'standard')
   assert.equal(driverB.standing, 'good') // derived from standingFromRatings(null, 0)
 })
@@ -806,7 +803,7 @@ test('fetchOnlineDrivers shows the driver name and vehicle when profile rows are
       model: 'Accord',
       plate: 'DEMO03',
       tier: 'standard',
-      is_tesla: false,
+      service_class: false,
     }],
   })
   const res = await fetchOnlineDrivers(supabase)
@@ -820,7 +817,7 @@ test('fetchOnlineDrivers shows the driver name and vehicle when profile rows are
 })
 
 test('loadPickerDriverRecord keeps the pick-a-driver car, plate, and full name', async () => {
-  assert.equal(pickerVehicleLine('Midnight Silver Tesla Model 3', 'TGR-123'), 'Midnight Silver Tesla Model 3 · TGR-123')
+  assert.equal(pickerVehicleLine('Midnight Silver Honda Accord', 'TGR-123'), 'Midnight Silver Honda Accord · TGR-123')
   assert.equal(pickerVehicleLine('gray Honda Accord', ''), 'gray Honda Accord')
   assert.equal(pickerVehicleLine('', 'DEMO03'), 'DEMO03')
   assert.equal(pickerVehicleLine('', null), '')
@@ -829,8 +826,8 @@ test('loadPickerDriverRecord keeps the pick-a-driver car, plate, and full name',
       id: A,
       full_name: 'Jordan Lee',
       color: 'Midnight Silver',
-      make: 'Tesla',
-      model: 'Model 3',
+      make: 'Honda',
+      model: 'Accord',
       plate: 'TGR-123',
       avatar_url: 'https://cdn.example/jordan.jpg',
     }],
@@ -841,7 +838,7 @@ test('loadPickerDriverRecord keeps the pick-a-driver car, plate, and full name',
   assert.equal(pickerVehicleLine(
     [record.vehicle.color, record.vehicle.make, record.vehicle.model].filter(Boolean).join(' '),
     record.vehicle.plate,
-  ), 'Midnight Silver Tesla Model 3 · TGR-123')
+  ), 'Midnight Silver Honda Accord · TGR-123')
   assert.equal(await loadPickerDriverRecord(null, A), null)
   assert.equal(await loadPickerDriverRecord(supabase, ''), null)
 })
@@ -1334,30 +1331,11 @@ test('open-pool offers are empty for pending_review and still present for approv
 })
 
 
-test('isTeslaVehicle and filterDriversForFleet keep only listed Tesla drivers', () => {
-  assert.equal(isTeslaVehicle({ is_tesla: true }), false)
-  assert.equal(isTeslaVehicle({ tier: 'tesla_self_driving' }), false)
-  assert.equal(isTeslaVehicle({ make: 'Tesla', model: 'Model 3' }), true)
-  assert.equal(isTeslaVehicle({ make: 'Toyota', model: 'Camry' }), false)
+test('filterDriversForFleet keeps the driver list', () => {
   const drivers = [
-    { id: 'a', isTesla: true, online: true, name: 'Ava' },
-    { id: 'b', isTesla: false, online: true, name: 'Ben', vehicle: { make: 'Honda', model: 'Civic' } },
-    { id: 'c', isTesla: false, online: true, name: 'Cara', vehicle: { make: 'Tesla', model: 'Model 3' } },
+    { id: 'a', online: true, name: 'Ava' },
+    { id: 'b', online: true, name: 'Ben' },
   ]
-  assert.equal(isTeslaDriver(drivers[0]), true)
-  assert.equal(isTeslaDriver(drivers[1]), false)
-  assert.equal(isTeslaDriver(drivers[2]), true)
-  assert.deepEqual(filterDriversForFleet(drivers, 'standard').map((d) => d.id), ['a', 'b', 'c'])
-  assert.deepEqual(filterDriversForFleet(drivers, 'tesla').map((d) => d.id), ['a', 'c'])
-  assert.match(TESLA_FLEET_EMPTY_COPY, /No Tesla Model 3 drivers/)
-})
-
-test('Tesla eligibility rejects badges, other Tesla models and misleading model names', () => {
-  for (const vehicle of [
-    { make: 'Tesla', model: 'Model Y', is_tesla: true },
-    { make: 'Toyota', model: 'Model 3', tier: 'tesla' },
-    { make: 'Tesla', model: 'Model 30' },
-    { make: 'Tesla', model: 'not Model 3' },
-  ]) assert.equal(isTeslaVehicle(vehicle), false)
-  assert.equal(isTeslaVehicle({ make: ' TESLA ', model: ' Model 3 ' }), true)
+  assert.deepEqual(filterDriversForFleet(drivers).map((d) => d.id), ['a', 'b'])
+  assert.deepEqual(filterDriversForFleet(null), [])
 })

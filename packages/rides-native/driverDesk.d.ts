@@ -8,7 +8,7 @@ export type VehicleRow = {
   color?: string | null
   plate?: string | null
   seats?: number | null
-  is_tesla?: boolean | null
+  service_class?: boolean | null
   autonomous_capable?: boolean | null
   tier?: string | null
 }
@@ -21,7 +21,7 @@ export type FacingCard = {
   studentVerified: boolean
   vehicleLabel: string
   plate: string | null
-  isTesla: boolean
+  comfortClass: boolean
   tier: string
   online: boolean
   seats: number | null
@@ -54,7 +54,7 @@ export function publishDriverLocation(
   driverId: string,
   fix: { lat: number; lng: number; heading?: number | null; online?: boolean },
 ): Promise<void>
-export function setTeslaListing(
+export function setServiceClass(
   supabase: unknown,
   driverId: string,
   input: { enabled: boolean; claimModel3?: boolean },

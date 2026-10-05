@@ -74,14 +74,22 @@ export default async function handler(req, res, deps = {}) {
     gameDayMultiplier = null
   }
 
-  const priced = priceCheckoutBody({
-    body,
-    user,
-    at: when,
-    gameDayMultiplier,
-    distanceM: distance.distanceM,
-    durationS: distance.durationS,
-  })
+  let priced
+  try {
+    priced = priceCheckoutBody({
+      body,
+      user,
+      at: when,
+      gameDayMultiplier,
+      distanceM: distance.distanceM,
+      durationS: distance.durationS,
+    })
+  } catch (error) {
+    return json(res, error.status || 400, {
+      error: error.message || 'That ride option is not offered.',
+      code: error.code || 'ride_option_unavailable',
+    })
+  }
   if (priced.isStudent !== studentDiscountGranted(user)) {
     return json(res, 500, { error: 'Student pricing did not match the signed-in email' })
   }

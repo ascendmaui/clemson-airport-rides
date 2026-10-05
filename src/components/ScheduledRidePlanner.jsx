@@ -24,7 +24,8 @@ import {
   listMyScheduledTrips,
 } from '../lib/scheduledRides'
 import { fetchBillingQuote } from '../lib/rideBilling'
-import { TESLA_FLEET_NOTICE } from '../../packages/rides-native/tripTags.js'
+import { useRideOptions } from '../lib/useRideOptions'
+import { NO_DRIVERS_AVAILABLE_COPY, SCHEDULE_AHEAD_LABEL } from '../../shared/rideOptions.js'
 
 const PLACES = [
   ...FRIEND_PLACES,
@@ -45,6 +46,9 @@ export function ScheduledRidePlanner() {
   const [date, setDate] = useState('')
   const [time, setTime] = useState('21:00')
   const [fleet, setFleet] = useState('standard')
+  const pickupAt = pickupAtFromLocal(date, time)
+  const rideOptions = useRideOptions({ scheduledFor: pickupAt ? pickupAt.toISOString() : null })
+  const tierChoices = rideOptions?.catalog?.length ? rideOptions.catalog : []
   const [pickup, setPickup] = useState(null)
   const [dropoff, setDropoff] = useState(null)
   const [quote, setQuote] = useState(null)
@@ -59,6 +63,11 @@ export function ScheduledRidePlanner() {
   const [billingChoice, setBillingChoice] = useState('no_card')
 
   const minDate = useMemo(() => todayInputValue(), [])
+
+  useEffect(() => {
+    if (!tierChoices.length) return
+    if (!tierChoices.some((row) => row.id === fleet)) setFleet(tierChoices[0].id)
+  }, [tierChoices, fleet])
 
   async function refreshMine() {
     if (!user?.id) {
@@ -318,43 +327,51 @@ export function ScheduledRidePlanner() {
       <PlacePicker label="Drop-off" mode="dropoff" value={dropoff} onChange={setDropoff} presets={PLACES} showCoordinates={false} />
 
       <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink-secondary)', marginBottom: 8 }}>Vehicle</div>
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
-        {[
-          { id: 'standard', label: 'Standard' },
-          { id: 'tesla', label: 'Tesla Model 3' },
-        ].map((option) => {
-          const on = fleet === option.id
-          return (
-            <button
-              key={option.id}
-              type="button"
-              className="pressable"
-              onClick={() => setFleet(option.id)}
-              style={{
-                padding: '8px 12px',
-                borderRadius: 999,
-                fontWeight: 700,
-                fontSize: 13,
-                color: on ? '#fff' : '#522D80',
-                background: on ? (option.id === 'tesla' ? '#522D80' : '#F56600') : 'rgba(82,45,128,0.08)',
-                border: on ? '1px solid transparent' : '1px solid rgba(82,45,128,0.25)',
-              }}
-            >
-              {option.label}
-            </button>
-          )
-        })}
-      </div>
-      {fleet === 'tesla' && (
-        <p style={{ fontSize: 13, lineHeight: 1.45, color: '#522D80', fontWeight: 650, marginTop: 0 }}>
-          {TESLA_FLEET_NOTICE}
+      {tierChoices.length === 0 ? (
+        <p style={{ fontSize: 13, lineHeight: 1.45, color: '#522D80', fontWeight: 700 }}>
+          {rideOptions?.emptyMessage || NO_DRIVERS_AVAILABLE_COPY}
         </p>
+      ) : (
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
+          {tierChoices.map((option) => {
+            const on = fleet === option.id
+            return (
+              <button
+                key={option.id}
+                type="button"
+                className="pressable"
+                onClick={() => setFleet(option.id)}
+                style={{
+                  padding: '8px 12px',
+                  borderRadius: 999,
+                  fontWeight: 700,
+                  fontSize: 13,
+                  color: on ? '#fff' : '#522D80',
+                  background: on ? '#F56600' : 'rgba(82,45,128,0.08)',
+                  border: on ? '1px solid transparent' : '1px solid rgba(82,45,128,0.25)',
+                }}
+              >
+                {option.name}
+              </button>
+            )
+          })}
+        </div>
       )}
+      <p style={{ fontSize: 13, fontWeight: 700, color: '#F56600' }}>{SCHEDULE_AHEAD_LABEL}</p>
 
       <div className="glass-panel glass-panel--elevated" style={{ padding: 16, borderRadius: 16, marginBottom: 16 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
           <span style={{ color: 'var(--ink-secondary)' }}>Fare</span>
-          <strong style={{ color: '#522D80' }}>{quote ? formatUsdFromCents(quote.fareCents) : '—'}</strong>
+          <strong style={{ color: '#522D80' }}>
+            {quote?.scheduleDiscountApplied ? (
+              <>
+                <span style={{ textDecoration: 'line-through', color: 'var(--ink-tertiary)', marginRight: 8 }}>
+                  {formatUsdFromCents(quote.fareBeforeScheduleDiscountCents)}
+                </span>
+                {formatUsdFromCents(quote.fareCents)}
+              </>
+            ) : (quote ? formatUsdFromCents(quote.fareCents) : '—')}
+          </strong>
         </div>
         {quote?.studentLabel && (
           <div style={{ fontSize: 12, color: '#F56600', fontWeight: 700 }}>{quote.studentLabel}</div>
@@ -376,7 +393,7 @@ export function ScheduledRidePlanner() {
         <div style={{ fontSize: 13, color: 'var(--ink-secondary)' }}>
           {date && time ? `${date} · ${time}` : 'Choose a date and time.'}
           {pickup?.label && dropoff?.label ? ` · ${pickup.label} → ${dropoff.label}` : ''}
-          {fleet === 'tesla' ? ' · Tesla Model 3, driver at the wheel' : ''}
+          {fleet ? ` · ${tierChoices.find((row) => row.id === fleet)?.name || 'Standard'}` : ''}
         </div>
       </div>
 
@@ -395,7 +412,7 @@ export function ScheduledRidePlanner() {
       <PrimaryButton
         onClick={() => runOrPrompt(onSchedule, { setPromptOpen, nextPath: 'schedule' })}
         disabled={busy}
-        variant={purpose === 'party_weekend' || fleet === 'tesla' ? 'purple' : 'orange'}
+        variant={purpose === 'party_weekend' ? 'purple' : 'orange'}
       >
         {busy ? 'Confirming…' : purpose === 'party_weekend' ? 'Confirm weekend ride' : 'Confirm scheduled ride'}
       </PrimaryButton>

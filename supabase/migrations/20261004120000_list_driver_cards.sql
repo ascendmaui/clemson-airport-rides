@@ -13,8 +13,7 @@ returns table (
   make text,
   model text,
   plate text,
-  tier text,
-  is_tesla boolean
+  tier text
 )
 language sql
 stable
@@ -31,14 +30,13 @@ as $$
     v.make,
     v.model,
     v.plate,
-    v.tier,
-    v.is_tesla
+    v.tier
   from public.profiles p
   join public.driver_applications da
     on da.profile_id = p.id
    and da.onboarding_status = 'approved'
   left join lateral (
-    select vehicles.color, vehicles.make, vehicles.model, vehicles.plate, vehicles.tier, vehicles.is_tesla
+    select vehicles.color, vehicles.make, vehicles.model, vehicles.plate, vehicles.tier
     from public.vehicles
     where vehicles.driver_id = p.id
     limit 1

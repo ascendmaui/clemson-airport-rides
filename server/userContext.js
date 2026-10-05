@@ -75,7 +75,7 @@ export async function loadUserContext(sb, user) {
   const role = normalizeRole(profile?.role)
 
   const [vehicleRes, appRes, statusRes, tripsRes, ratingsRes] = await Promise.all([
-    selectMaybe(sb, 'vehicles', (q) => q.select('make, model, color, seats, tier, is_tesla').eq('driver_id', user.id).limit(1)),
+    selectMaybe(sb, 'vehicles', (q) => q.select('make, model, color, seats, tier, service_class').eq('driver_id', user.id).limit(1)),
     selectMaybe(sb, 'driver_applications', (q) => q.select('status, reviewed_at').eq('profile_id', user.id).maybeSingle()),
     selectMaybe(sb, 'driver_status', (q) => q.select('online, priority_mode').eq('driver_id', user.id).maybeSingle()),
     selectMaybe(sb, 'trips', (q) => q
@@ -144,7 +144,7 @@ export async function loadUserContext(sb, user) {
         color: vehicleRow.color || null,
         seats: vehicleRow.seats || null,
         tier: vehicleRow.tier || null,
-        isTesla: Boolean(vehicleRow.is_tesla),
+        comfortClass: Boolean(vehicleRow.service_class),
       }
       : null,
     driverApplication: appRes.data?.status

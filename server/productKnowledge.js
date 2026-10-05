@@ -42,7 +42,7 @@ Help explains how the app works. Support is a different chat for bugs, billing p
 Booking a local ride (rider):
 1. Rides tab. Enter a destination or pick a shortcut.
 2. Confirm pickup.
-3. Choose a tier: Standard, Wait & Save, Extra Comfort, XL, Pet, or Tesla Model 3. Tesla Model 3 is the live Clemson fleet option. A person still drives. There is no self-driving dispatch and no robotaxi telemetry. The tier screen shows 10% off Standard only when the signed-in email is confirmed and ends with @clemson.edu or @g.clemson.edu. Otherwise it says why student pricing is off. Comfort, XL, Pet, and Tesla stay full price. Standard on that screen can open an upsell before Pick driver. The Tesla upsell must say a driver is at the wheel.
+3. Choose a tier: Standard, Wait & Save, or Extra Comfort. A tier is shown only when an approved driver can serve it. A person drives every ride. The tier screen shows 10% off Standard only when the signed-in email is confirmed and ends with @clemson.edu or @g.clemson.edu. Otherwise it says why student pricing is off. Wait & Save and Extra Comfort are not included in the student discount. Standard on that screen can open an Extra Comfort upsell before Pick driver. That upsell must say a driver is at the wheel.
 4. Pick driver lists approved drivers who are online, plus any drivers this rider saved. Name, rating, vehicle, and a straight-line ETA show when that data exists. A campus request is status "searching" with no driver pinned. Any approved driver can accept it. A decline leaves it in the pool. GSP and CLT still collect the 25% deposit in Schedule checkout before drivers can see that trip. Airport Schedule remains the checkout path for that deposit.
 5. Requested screen tracks the trip.
 Sign-in is required to book. Guest browsing of marketing and schedule is allowed.
@@ -51,7 +51,7 @@ Weekend and party schedule (rider):
 1. Schedule tab, Weekend / party.
 2. Choose Airport (GSP or CLT) or Campus.
 3. Set date and time at least 30 minutes ahead. Friday 9:00 PM is the starting suggestion.
-4. Confirm saves a scheduled trip with purpose party_weekend. It shows under Upcoming. Drivers see it in the Weekend filter. Optional Tesla Model 3 is the same driver-operated fleet stub.
+4. Confirm saves a scheduled trip with purpose party_weekend. It shows under Upcoming. Drivers see it in the Weekend filter. A pickup at least 30 minutes ahead is 10% off the server fare. Offered tiers are the ones an approved driver can serve.
 
 Airport schedule (rider):
 1. Schedule tab, Airport deposit.
@@ -101,7 +101,7 @@ export const TOPICS = [
   {
     id: 'book-local',
     roles: ['rider'],
-    keywords: ['book', 'where to', 'destination', 'tier', 'standard', 'wait', 'comfort', 'xl', 'tesla', 'pick driver', 'pickup'],
+    keywords: ['book', 'where to', 'destination', 'tier', 'standard', 'wait', 'comfort', 'xl', 'comfort', 'pick driver', 'pickup'],
     title: 'Book a ride',
     steps: [
       'Open the Rides tab.',
@@ -190,7 +190,7 @@ export const TOPICS = [
       'Open Account → Student.',
       'The discount is 10% off Standard fares, including GSP and CLT airport rates.',
       'It applies only when the signed-in email is confirmed and ends with @clemson.edu or @g.clemson.edu. A student flag on the profile does not.',
-      'Comfort, XL, Pet, and Tesla prices are not covered by this discount.',
+      'Wait & Save and Extra Comfort prices are not covered by this discount.',
     ],
     actions: [action('Open Student', 'account', { tab: 'student' })],
   },

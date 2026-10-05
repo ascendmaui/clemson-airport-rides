@@ -456,8 +456,8 @@ test('matchRegistration multiple misses and exact message formatting', () => {
   // All four misses
   const allFour = matchRegistration({
     text: 'South Carolina Honda Civic white ABC1234',
-    make: 'Tesla',
-    model: 'Model 3',
+    make: 'Comfort',
+    model: 'sedan',
     color: 'Red',
     plate: 'EV-1234',
   })

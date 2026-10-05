@@ -49,13 +49,13 @@ import {
   isUnpaidHoldTtlCancel,
 } from 'rides-native/holdExpiryNotice.js'
 import { localDateInput, localTimeInput, nextPickupDate, RIDE_PLACES } from 'rides-native/riderShell.js'
-import { formatCents, formatPickupAt, TESLA_FLEET_NOTICE } from 'rides-native/tripTags.js'
+import { formatCents, formatPickupAt, COMFORT_FLEET_NOTICE } from 'rides-native/tripTags.js'
 import { dueScheduleReminders } from '../../../src/lib/scheduledRideModel.js'
 import { RequireAuth } from '@/components/RequireAuth'
 
 const CAMPUS_PURPOSES: SchedulePurpose[] = ['early_class', 'planned', 'recurring']
 type WeekendSpot = 'airport' | 'campus'
-type FleetChoice = 'standard' | 'tesla'
+type FleetChoice = 'standard' | 'comfort'
 const WEEKDAYS = [
   { id: 'mon', label: 'Mon' },
   { id: 'tue', label: 'Tue' },
@@ -177,7 +177,7 @@ function ScheduleScreen() {
   const quote = useMemo(() => quoteRide(pickup, dropoff, studentOn), [pickup, dropoff, studentOn])
   const weekendDestination = weekendSpot === 'airport' ? airportPlace(weekendAirport) : weekendDropoff
   const weekendQuote = useMemo(
-    () => quoteRide(weekendPickup, weekendDestination, studentOn && fleet !== 'tesla'),
+    () => quoteRide(weekendPickup, weekendDestination, studentOn && fleet !== 'comfort'),
     [weekendPickup, weekendDestination, studentOn, fleet],
   )
   const weekendWhen = nextPickupDate({ date: weekendDate, time: weekendTime })
@@ -496,7 +496,7 @@ function ScheduleScreen() {
         weekdays: [],
         tier: fleet,
       })
-      const fleetLine = fleet === 'tesla' ? ' Tesla Model 3 stays driver-operated.' : ''
+      const fleetLine = fleet === 'comfort' ? ' Extra Comfort stays driver-operated.' : ''
       setBanner(`Weekend / party confirmed for ${formatPickupAt(weekendWhen.toISOString())}. It is under Upcoming, and drivers can accept it from Weekend.${fleetLine}`)
       await successHaptic()
       await reload()
@@ -655,12 +655,12 @@ function ScheduleScreen() {
         <Text style={styles.label}>Vehicle</Text>
         <View style={styles.pills}>
           <Pill label="Standard" active={fleet === 'standard'} onPress={() => chooseFleet('standard')} />
-          <Pill label="Tesla Model 3" active={fleet === 'tesla'} onPress={() => chooseFleet('tesla')} />
+          <Pill label="Extra Comfort" active={fleet === 'comfort'} onPress={() => chooseFleet('comfort')} />
         </View>
-        {fleet === 'tesla' ? (
+        {fleet === 'comfort' ? (
           <View style={styles.fleetNote}>
             <Text style={styles.fleetKicker}>CLEMSON FLEET</Text>
-            <Text style={styles.fleetText}>{TESLA_FLEET_NOTICE}</Text>
+            <Text style={styles.fleetText}>{COMFORT_FLEET_NOTICE}</Text>
           </View>
         ) : null}
         <View style={styles.panel}>
@@ -674,7 +674,7 @@ function ScheduleScreen() {
           </Text>
           {weekendQuote.label ? <Text style={styles.student}>{weekendQuote.label}</Text> : null}
           <Text style={styles.fine}>
-            {fleet === 'tesla' ? 'Tesla Model 3 · a driver is at the wheel.' : 'Standard vehicle.'}
+            {fleet === 'comfort' ? 'Extra Comfort · a driver is at the wheel.' : 'Standard vehicle.'}
             {weekendQuote.depositCents > 0
               ? ` ${depositSurfaceCopy(weekendQuote, 'confirm', { studentDiscountCents: weekendQuote.discountCents }) || ''}`
               : ' Final fare can change when a driver accepts.'}
@@ -868,7 +868,7 @@ function ScheduleScreen() {
               {rowPurpose(row)} · {row.status} · {formatPickupAt(row.pickup_at || row.scheduled_for)}
               {row.metadata?.recurrence?.weekdays?.length ? ` · weekly ${row.metadata.recurrence.weekdays.join(', ')}` : ''}
             </Text>
-            {row.tier === 'tesla' ? <Text style={styles.student}>Tesla Model 3 · driver at the wheel</Text> : null}
+            {row.tier === 'comfort' ? <Text style={styles.student}>Extra Comfort · driver at the wheel</Text> : null}
             {row.deposit_cents ? (
               <Text style={styles.balance}>
                 {depositSurfaceCopy(

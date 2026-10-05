@@ -200,7 +200,7 @@ test('home, confirm, and tiers promise 10% off Standard only for a confirmed Cle
   assert.match(studentSurfaceCopy(unconfirmed, 'home').detail, /Confirm the Clemson email/)
   assert.match(studentSurfaceCopy(other, 'confirm').title, /Other emails stay at full price/)
   assert.match(studentSurfaceCopy(guest, 'tiers').detail, /@g\.clemson\.edu/)
-  for (const tier of ['comfort', 'xl', 'pet', 'tesla', 'wait']) {
+  for (const tier of ['comfort', 'xl', 'pet', 'comfort', 'wait']) {
     assert.equal(displayTierPrice(20, { isStudent: true, tier }).discount, 0)
   }
   assert.throws(() => studentSurfaceCopy(confirmed, 'receipt'), /Unknown student surface/)

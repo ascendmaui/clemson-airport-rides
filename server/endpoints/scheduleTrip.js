@@ -19,6 +19,8 @@ import {
 } from '../authoritativeFare.js'
 import { insertTripEvent } from '../tripEvents.js'
 import { billingForPricedRide } from '../rideBilling.js'
+import { resolveOfferedTier, scheduleDiscountMetadata } from '../../shared/rideOptions.js'
+import { assertTierAvailable } from '../rideAvailability.js'
 
 
 /** Integer passenger count from the request; default 1. Prefer passengers over partySize. */
@@ -62,7 +64,12 @@ export default async function handler(req, res, deps = {}) {
   if (pe) return json(res, 400, { error: pe })
 
   const purpose = PURPOSES.has(body.purpose) ? body.purpose : 'planned'
-  const tier = body.tier === 'tesla' ? 'tesla' : 'standard'
+  let tier
+  try {
+    tier = resolveOfferedTier(body.tier)
+  } catch (error) {
+    return json(res, error.status || 400, { error: error.message, code: error.code || 'ride_option_unavailable' })
+  }
   const airport = body.airport ? String(body.airport).toUpperCase() : null
   const clockNow =
     typeof deps.now === 'function' ? deps.now() : deps.now != null ? Number(deps.now) : Date.now()
@@ -71,6 +78,14 @@ export default async function handler(req, res, deps = {}) {
   if (!Number.isFinite(when.getTime())) return json(res, 400, { error: 'Choose a valid pickup time.' })
   if (scheduled && when.getTime() < clockNow + 30 * 60 * 1000) {
     return json(res, 400, { error: 'Schedule at least 30 minutes ahead.' })
+  }
+  try {
+    await assertTierAvailable(sb, tier, {
+      scheduledFor: scheduled ? when : null,
+      now: new Date(clockNow),
+    })
+  } catch (error) {
+    return json(res, error.status || 409, { error: error.message, code: error.code || 'ride_option_unavailable' })
   }
 
   let pickup = place(body.pickup)
@@ -105,6 +120,8 @@ export default async function handler(req, res, deps = {}) {
     gameDayMultiplier,
     distanceM: distance.distanceM,
     durationS: distance.durationS,
+    scheduleAhead: scheduled,
+    now: new Date(clockNow),
   })
 
   const billing = await billingForPricedRide(sb, user.id, body, priced)
@@ -139,9 +156,9 @@ export default async function handler(req, res, deps = {}) {
     studentLabel: priced.discountCents > 0 ? 'Clemson student · 10% off Standard' : null,
     recurrence: purpose === 'recurring' ? { interval: 'weekly', weekdays } : null,
     party: purpose === 'party_weekend' ? 'weekend' : null,
-    tesla: tier === 'tesla',
-    fleet: tier === 'tesla' ? 'tesla_model_3' : 'standard',
+    ride_option: tier,
     fare_source: 'server',
+    ...scheduleDiscountMetadata(priced),
     airport: priced.airport,
     ...billing.snapshot,
   }
@@ -209,5 +226,9 @@ export default async function handler(req, res, deps = {}) {
     discountCents: priced.discountCents,
     studentDiscountApplied: priced.isStudent,
     estimate: priced.estimate,
+    fareBeforeScheduleDiscountCents: priced.fareBeforeScheduleDiscountCents ?? priced.fareCents,
+    scheduleDiscountPct: priced.scheduleDiscountPct || 0,
+    scheduleDiscountCents: priced.scheduleDiscountCents || 0,
+    scheduleDiscountApplied: Boolean(priced.scheduleDiscountApplied),
   })
 }

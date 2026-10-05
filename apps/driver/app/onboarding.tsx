@@ -35,8 +35,8 @@ import {
 } from 'rides-native/driverOnboardingClient'
 import { extractReadableText, licensePendingCopy, matchRegistration, reviewLicenseImage } from 'rides-native/documentReview'
 import { loadDriverProfile, loadVehicle } from 'rides-native/driverDesk'
-import { TESLA_FLEET_NOTICE } from 'rides-native/tripTags'
-import { isTeslaMakeModel, modelsForMake, VEHICLE_COLORS, VEHICLE_MAKES } from 'rides-native/vehicleCatalog'
+import { COMFORT_FLEET_NOTICE } from 'rides-native/tripTags'
+import { comfortClassMakeModel, modelsForMake, VEHICLE_COLORS, VEHICLE_MAKES } from 'rides-native/vehicleCatalog'
 import { useTheme } from '@/lib/theme'
 import { knowledgeQuizStatus, knowledgeQuizStatusLabel, loadKnowledgeQuiz } from 'rides-native/driverKnowledgeQuiz'
 
@@ -158,7 +158,7 @@ export default function OnboardingScreen() {
   const [plate, setPlate] = useState('')
   const [year, setYear] = useState('')
   const [seats, setSeats] = useState('4')
-  const [isTesla, setIsTesla] = useState(false)
+  const [comfortClass, setIsComfort] = useState(false)
   const [picker, setPicker] = useState<null | 'make' | 'model' | 'color'>(null)
   const [eligibility, setEligibility] = useState('')
   const [legalName, setLegalName] = useState('')
@@ -212,7 +212,7 @@ export default function OnboardingScreen() {
       setYear(vehicle.year ? String(vehicle.year) : '')
       setPlate(String(vehicle.plate || ''))
       setSeats(String(vehicle.seats || 4))
-      setIsTesla(Boolean(vehicle.is_tesla))
+      setIsComfort(Boolean(vehicle.service_class))
     }
     if (tax?.legal_name) setLegalName(String(tax.legal_name))
     if (tax?.tax_classification) setTaxClass(String(tax.tax_classification))
@@ -366,7 +366,7 @@ export default function OnboardingScreen() {
         year,
         plate: plate.trim(),
         seats: Number(seats) || 4,
-        isTesla: isTesla || isTeslaMakeModel(make, model),
+        comfortClass: comfortClass || comfortClassMakeModel(make, model),
       })
       const next = await loadOnboarding(supabase, user.id)
       setBundle(next)
@@ -609,17 +609,17 @@ export default function OnboardingScreen() {
             <Field label="Plate" value={plate} onChangeText={setPlate} />
             <Field label="Seats" value={seats} onChangeText={setSeats} keyboard="number-pad" />
             <Pressable
-              onPress={() => setIsTesla((value: boolean) => !value)}
+              onPress={() => setIsComfort((value: boolean) => !value)}
               accessibilityRole="checkbox"
-              accessibilityLabel="List a Tesla Model 3 on my profile"
-              accessibilityState={{ checked: Boolean(isTesla || isTeslaMakeModel(make, model)) }}
+              accessibilityLabel="List a Extra Comfort on my profile"
+              accessibilityState={{ checked: Boolean(comfortClass || comfortClassMakeModel(make, model)) }}
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               style={styles.checkRow}
             >
-              <View style={[styles.box, (isTesla || isTeslaMakeModel(make, model)) && styles.boxOn]} />
+              <View style={[styles.box, (comfortClass || comfortClassMakeModel(make, model)) && styles.boxOn]} />
               <View style={{ flex: 1 }}>
-                <Text style={styles.checkCopy}>List a Tesla Model 3 on my profile</Text>
-                <Text style={styles.hint}>{TESLA_FLEET_NOTICE}</Text>
+                <Text style={styles.checkCopy}>List a Extra Comfort on my profile</Text>
+                <Text style={styles.hint}>{COMFORT_FLEET_NOTICE}</Text>
               </View>
             </Pressable>
             <Primary label={busy ? 'Saving…' : 'Continue to license'} onPress={onSaveAccount} disabled={busy} />
@@ -833,10 +833,10 @@ export default function OnboardingScreen() {
                     if (picker === 'make') {
                       setMake(option)
                       setModel('')
-                      setIsTesla(isTeslaMakeModel(option, ''))
+                      setIsComfort(comfortClassMakeModel(option, ''))
                     } else if (picker === 'model') {
                       setModel(option)
-                      setIsTesla(isTeslaMakeModel(make, option))
+                      setIsComfort(comfortClassMakeModel(make, option))
                     } else {
                       setColor(option)
                     }

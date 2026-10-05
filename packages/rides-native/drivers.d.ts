@@ -17,7 +17,7 @@ export type OnlineDriver = {
   vehicle: Record<string, unknown> | null
   vehicleLabel: string
   plate: string | null
-  isTesla: boolean
+  comfortClass: boolean
   tier: string
 }
 
@@ -100,7 +100,6 @@ export function loadPickerDriverRecord(
     model: string | null
     plate: string | null
     tier: string
-    is_tesla: boolean
   } | null
 } | null>
 
