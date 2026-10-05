@@ -6,6 +6,51 @@
 #
 # Debug only: 127.0.0.1:3080 (prod) and 127.0.0.1:3081 (staging). Those ports
 # are free on the box. Do not bind 0.0.0.0.
+#
+# web_next / staging_next are overlap backends for deploy/remote-up.sh.
+# They are behind the "overlap" profile so a normal `up` does not start them.
+# Their Traefik labels are the same anchor as the canonical service. Traefik
+# load-balances identical service names and drops the router if those labels differ.
+
+x-app-healthcheck: &app-healthcheck
+  test:
+    - CMD
+    - node
+    - -e
+    - "fetch('http://127.0.0.1:3000/api/healthz').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+  interval: 2s
+  timeout: 3s
+  retries: 20
+  start_period: 15s
+
+x-web-labels: &web-labels
+  - traefik.enable=true
+  - traefik.docker.network=${CLEMSON_NETWORK:-clemson_rides_net}
+  - traefik.http.services.clemson.loadbalancer.server.port=3000
+  - traefik.http.routers.clemson.rule=Host(`clemsonrides.com`)
+  - traefik.http.routers.clemson.entrypoints=${TRAEFIK_ENTRYPOINT:-websecure}
+  - traefik.http.routers.clemson.tls=true
+  - traefik.http.routers.clemson.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}
+  - traefik.http.routers.clemson.service=clemson
+  - traefik.http.routers.clemson-www.rule=Host(`www.clemsonrides.com`)
+  - traefik.http.routers.clemson-www.entrypoints=${TRAEFIK_ENTRYPOINT:-websecure}
+  - traefik.http.routers.clemson-www.tls=true
+  - traefik.http.routers.clemson-www.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}
+  - traefik.http.routers.clemson-www.middlewares=clemson-www-redirect
+  - traefik.http.routers.clemson-www.service=clemson
+  - traefik.http.middlewares.clemson-www-redirect.redirectregex.regex=^https://www\.clemsonrides\.com/(.*)
+  - traefik.http.middlewares.clemson-www-redirect.redirectregex.replacement=https://clemsonrides.com/$${1}
+  - traefik.http.middlewares.clemson-www-redirect.redirectregex.permanent=true
+
+x-staging-labels: &staging-labels
+  - traefik.enable=true
+  - traefik.docker.network=${CLEMSON_NETWORK:-clemson_rides_net}
+  - traefik.http.services.clemson-staging.loadbalancer.server.port=3000
+  - traefik.http.routers.clemson-staging.rule=Host(`clemson-staging.srv1090862.hstgr.cloud`)
+  - traefik.http.routers.clemson-staging.entrypoints=${TRAEFIK_ENTRYPOINT:-websecure}
+  - traefik.http.routers.clemson-staging.tls=true
+  - traefik.http.routers.clemson-staging.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}
+  - traefik.http.routers.clemson-staging.service=clemson-staging
 
 name: clemson-rides
 
@@ -21,24 +66,24 @@ services:
       - clemson
     ports:
       - "127.0.0.1:3080:3000"
-    labels:
-      - traefik.enable=true
-      - traefik.docker.network=${CLEMSON_NETWORK:-clemson_rides_net}
-      - traefik.http.services.clemson.loadbalancer.server.port=3000
-      - traefik.http.routers.clemson.rule=Host(`clemsonrides.com`)
-      - traefik.http.routers.clemson.entrypoints=${TRAEFIK_ENTRYPOINT:-websecure}
-      - traefik.http.routers.clemson.tls=true
-      - traefik.http.routers.clemson.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}
-      - traefik.http.routers.clemson.service=clemson
-      - traefik.http.routers.clemson-www.rule=Host(`www.clemsonrides.com`)
-      - traefik.http.routers.clemson-www.entrypoints=${TRAEFIK_ENTRYPOINT:-websecure}
-      - traefik.http.routers.clemson-www.tls=true
-      - traefik.http.routers.clemson-www.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}
-      - traefik.http.routers.clemson-www.middlewares=clemson-www-redirect
-      - traefik.http.routers.clemson-www.service=clemson
-      - traefik.http.middlewares.clemson-www-redirect.redirectregex.regex=^https://www\.clemsonrides\.com/(.*)
-      - traefik.http.middlewares.clemson-www-redirect.redirectregex.replacement=https://clemsonrides.com/$${1}
-      - traefik.http.middlewares.clemson-www-redirect.redirectregex.permanent=true
+    healthcheck: *app-healthcheck
+    labels: *web-labels
+
+  # Started only by deploy/remote-up.sh (--profile overlap) while web is replaced.
+  # No host port: 3080 stays on web. Same Traefik service name so the router
+  # stays up when web is recreated.
+  web_next:
+    profiles: ["overlap"]
+    image: ghcr.io/ascendmaui/clemson-airport-rides:${IMAGE_TAG:?set IMAGE_TAG to the commit SHA}
+    container_name: clemson-rides-web-next
+    env_file: /opt/clemson-rides/.env
+    restart: unless-stopped
+    mem_limit: 512m
+    cpus: "1.0"
+    networks:
+      - clemson
+    healthcheck: *app-healthcheck
+    labels: *web-labels
 
   staging:
     profiles: ["staging"]
@@ -57,15 +102,24 @@ services:
       - clemson
     ports:
       - "127.0.0.1:3081:3000"
-    labels:
-      - traefik.enable=true
-      - traefik.docker.network=${CLEMSON_NETWORK:-clemson_rides_net}
-      - traefik.http.services.clemson-staging.loadbalancer.server.port=3000
-      - traefik.http.routers.clemson-staging.rule=Host(`clemson-staging.srv1090862.hstgr.cloud`)
-      - traefik.http.routers.clemson-staging.entrypoints=${TRAEFIK_ENTRYPOINT:-websecure}
-      - traefik.http.routers.clemson-staging.tls=true
-      - traefik.http.routers.clemson-staging.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}
-      - traefik.http.routers.clemson-staging.service=clemson-staging
+    healthcheck: *app-healthcheck
+    labels: *staging-labels
+
+  staging_next:
+    profiles: ["overlap"]
+    image: ghcr.io/ascendmaui/clemson-airport-rides:${STAGING_IMAGE_TAG:-staging}
+    container_name: clemson-rides-staging-next
+    env_file: /opt/clemson-rides/.env
+    environment:
+      DISABLE_CRON_ENDPOINTS: "1"
+      ALLOW_STAGING_DRY_RUN: "1"
+    restart: unless-stopped
+    mem_limit: 512m
+    cpus: "1.0"
+    networks:
+      - clemson
+    healthcheck: *app-healthcheck
+    labels: *staging-labels
 
 networks:
   clemson:
