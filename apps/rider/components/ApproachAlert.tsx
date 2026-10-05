@@ -2,8 +2,8 @@ import { useEffect, useRef } from 'react'
 import { Animated, Platform, StyleSheet, Text, View } from 'react-native'
 import { FullWindowOverlay } from 'react-native-screens'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { approachHaptic } from '@/lib/feedback'
-import { formatApproachFeet } from '@/lib/approachAlert'
+import { approachHaptic, playApproachPing } from '@/lib/feedback'
+import { crowdCue, formatApproachFeet } from '@/lib/approachAlert'
 import { useSosEngaged } from '@/lib/sosEngaged'
 import { useDriverApproach } from '@/lib/useDriverApproach'
 import { lift } from '@/lib/elevation'
@@ -24,9 +24,11 @@ export function ApproachAlert({
   const { colors } = useTheme()
   const styles = useThemedStyles(makeStyles)
   const paused = useSosEngaged()
-  const { active, reading, attention, statusLine, waiting } = useDriverApproach(status, driverId)
+  const { active, reading, direction, attention, statusLine, waiting } = useDriverApproach(status, driverId)
   const wash = useRef(new Animated.Value(0)).current
   const bright = useRef(new Animated.Value(0)).current
+  const flash = useRef(new Animated.Value(0)).current
+  const cue = crowdCue(reading?.feet)
   const lastStageHaptic = useRef<string | null>(null)
   const lastClosingHaptic = useRef(0)
   const pulseMode = attention?.pulseMode ?? 'off'
@@ -54,6 +56,32 @@ export function ApproachAlert({
       void approachHaptic(haptic)
     }
   }, [active, haptic, hapticReason, paused, stage])
+
+  useEffect(() => {
+    if (!active || paused || !cue) {
+      flash.stopAnimation()
+      Animated.timing(flash, { toValue: 0, duration: 240, useNativeDriver: true }).start()
+      return undefined
+    }
+    let alive = true
+    const spike = () => {
+      if (!alive) return
+      void approachHaptic(cue.haptic)
+      void playApproachPing()
+      flash.setValue(cue.flash)
+      Animated.timing(flash, {
+        toValue: 0,
+        duration: Math.min(420, Math.round(cue.intervalMs * 0.45)),
+        useNativeDriver: true,
+      }).start()
+    }
+    spike()
+    const timer = setInterval(spike, cue.intervalMs)
+    return () => {
+      alive = false
+      clearInterval(timer)
+    }
+  }, [active, cue?.flash, cue?.haptic, cue?.intervalMs, flash, paused])
 
   useEffect(() => {
     let loop: Animated.CompositeAnimation | null = null
@@ -109,20 +137,36 @@ export function ApproachAlert({
     <View pointerEvents="box-none" style={styles.host}>
       <Animated.View pointerEvents="none" style={[styles.wash, { backgroundColor: colors.orange, opacity: wash }]} />
       <Animated.View pointerEvents="none" style={[styles.wash, { backgroundColor: colors.orangeBright, opacity: bright }]} />
+      <Animated.View pointerEvents="none" style={[styles.wash, { backgroundColor: colors.orange, opacity: flash }]} />
       <View pointerEvents="none" style={[styles.dock, { bottom: Math.max(insets.bottom, 10) + 74 }]}>
         <View
           accessible
           accessibilityRole="text"
           accessibilityLiveRegion="polite"
-          accessibilityLabel={reading ? `${primary}, ${reading.secondary}. ${statusLine}` : `${primary}. ${waiting ?? statusLine}`}
-          style={[styles.card, lift(colors, 'float')]}
+          accessibilityLabel={reading
+            ? `${direction?.compass || 'Driver'} ${primary}. ${direction?.facing || reading.secondary}. ${statusLine}`
+            : `${primary}. ${waiting ?? statusLine}`}
+          style={reading ? [styles.bubble, lift(colors, 'float')] : [styles.card, lift(colors, 'float')]}
         >
-          <View style={styles.dot} />
-          <View style={styles.copy}>
-            <Text style={styles.kicker}>{kicker.toUpperCase()}</Text>
-            <Text style={styles.primary}>{primary}</Text>
-            <Text style={styles.secondary}>{secondary}</Text>
-          </View>
+          {reading ? (
+            <>
+              <View style={[styles.arrowWrap, { transform: [{ rotate: `${direction?.bearing ?? 0}deg` }] }]}>
+                <Text style={styles.arrow}>▲</Text>
+              </View>
+              <Text style={styles.feet}>{formatApproachFeet(reading.feet)}</Text>
+              <Text style={styles.compass}>{direction?.compass || 'Driver'}</Text>
+              <Text style={styles.facing}>{direction?.facing || secondary}</Text>
+            </>
+          ) : (
+            <>
+              <View style={styles.dot} />
+              <View style={styles.copy}>
+                <Text style={styles.kicker}>{kicker.toUpperCase()}</Text>
+                <Text style={styles.primary}>{primary}</Text>
+                <Text style={styles.secondary}>{secondary}</Text>
+              </View>
+            </>
+          )}
         </View>
       </View>
     </View>
@@ -191,6 +235,49 @@ function makeStyles(colors: Palette) {
       color: colors.inkSecondary,
       fontSize: 13,
       fontWeight: '600' as const,
+      marginTop: 2,
+    },
+    bubble: {
+      alignSelf: 'center' as const,
+      width: 176,
+      height: 176,
+      borderRadius: 88,
+      borderWidth: 3,
+      borderColor: colors.orange,
+      backgroundColor: colors.card,
+      alignItems: 'center' as const,
+      justifyContent: 'center' as const,
+      paddingHorizontal: 16,
+    },
+    arrowWrap: {
+      width: 28,
+      height: 28,
+      alignItems: 'center' as const,
+      justifyContent: 'center' as const,
+    },
+    arrow: {
+      color: colors.orange,
+      fontSize: 18,
+      fontWeight: '800' as const,
+    },
+    feet: {
+      color: colors.purple,
+      fontSize: 28,
+      fontWeight: '800' as const,
+      letterSpacing: -0.4,
+    },
+    compass: {
+      color: colors.orange,
+      fontSize: 13,
+      fontWeight: '800' as const,
+      letterSpacing: 0.4,
+      marginTop: 2,
+    },
+    facing: {
+      color: colors.inkSecondary,
+      fontSize: 12,
+      fontWeight: '700' as const,
+      textAlign: 'center' as const,
       marginTop: 2,
     },
   }

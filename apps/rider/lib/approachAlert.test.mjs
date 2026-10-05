@@ -6,8 +6,13 @@ import {
   APPROACH_HERE_FT,
   APPROACH_NEAR_FT,
   approachAttention,
+  approachDirection,
   approachStage,
   approachStatusLine,
+  bearingDegrees,
+  compassPoint,
+  crowdCue,
+  facingPhrase,
   formatApproachDistance,
   formatApproachFeet,
   haversineMeters,
@@ -274,6 +279,49 @@ test('a 1 ft boundary wobble re-fires the stage haptic without previousStage', (
   assert.equal(inward?.decreasing, false)
   assert.equal(inward?.haptic, 'heavy')
   assert.equal(inward?.hapticReason, 'stage')
+})
+
+test('direction is a compass bearing from the rider toward the driver', () => {
+  const north = bearingDegrees(0, 0, 1, 0)
+  const east = bearingDegrees(0, 0, 0, 1)
+  assert.ok(north != null && north < 1)
+  assert.ok(east != null && east > 89 && east < 91)
+  assert.equal(bearingDegrees(Number.NaN, 0, 1, 0), null)
+  assert.equal(compassPoint(0), 'North')
+  assert.equal(compassPoint(45), 'Northeast')
+  assert.equal(compassPoint(90), 'East')
+  assert.equal(compassPoint(359), 'North')
+  assert.equal(compassPoint(null), null)
+  assert.equal(facingPhrase(0, 0), 'Straight ahead')
+  assert.equal(facingPhrase(90, 0), 'To your right')
+  assert.equal(facingPhrase(270, 0), 'To your left')
+  assert.equal(facingPhrase(180, 0), 'Behind you')
+  assert.equal(facingPhrase(10, null), null)
+  assert.equal(facingPhrase(10, -1), null)
+  const aimed = approachDirection({ lat: 34.68, lng: -82.84 }, { lat: 34.681, lng: -82.84 }, 0)
+  assert.equal(aimed?.compass, 'North')
+  assert.equal(aimed?.facing, 'Straight ahead')
+  assert.equal(approachDirection(null, { lat: 1, lng: 1 }), null)
+})
+
+test('crowd-find ping and vibration get faster as the driver gets closer', () => {
+  assert.equal(crowdCue(501), null)
+  assert.equal(crowdCue(null), null)
+  assert.equal(crowdCue(-1), null)
+  const edge = crowdCue(500)
+  const close = crowdCue(200)
+  const here = crowdCue(100)
+  const beside = crowdCue(0)
+  assert.equal(edge?.haptic, 'light')
+  assert.equal(close?.haptic, 'medium')
+  assert.equal(here?.haptic, 'heavy')
+  assert.equal(beside?.haptic, 'heavy')
+  assert.ok(edge && close && here && beside)
+  assert.ok(edge.intervalMs > close.intervalMs)
+  assert.ok(close.intervalMs > here.intervalMs)
+  assert.ok(here.intervalMs >= beside.intervalMs)
+  assert.ok(beside.flash > edge.flash)
+  assert.ok(edge.flash <= 0.7)
 })
 
 test('metersToFeet converts without clamping negatives', () => {

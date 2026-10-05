@@ -2,6 +2,7 @@ import * as Location from 'expo-location'
 import { useEffect, useRef, useState } from 'react'
 import {
   approachAttention,
+  approachDirection,
   approachStatusLine,
   formatApproachDistance,
   haversineMeters,
@@ -10,7 +11,7 @@ import {
 } from '@/lib/approachAlert'
 import { supabase } from '@/lib/supabase'
 
-type Coord = { lat: number; lng: number }
+type Coord = { lat: number; lng: number; heading?: number | null }
 
 export function useDriverApproach(status: string | null, driverId: string | null) {
   const active = isApproachStatus(status)
@@ -41,13 +42,18 @@ export function useDriverApproach(status: string | null, driverId: string | null
         }
         setDenied(false)
         sub = await Location.watchPositionAsync(
-          { accuracy: Location.Accuracy.High, timeInterval: 2000, distanceInterval: 5 },
-          (pos: { coords: { latitude: number; longitude: number } }) => {
+          { accuracy: Location.Accuracy.BestForNavigation, timeInterval: 1000, distanceInterval: 1 },
+          (pos: { coords: { latitude: number; longitude: number; heading?: number | null } }) => {
             if (!alive) return
             const lat = pos.coords.latitude
             const lng = pos.coords.longitude
+            const heading = Number(pos.coords.heading)
             if (!Number.isFinite(lat) || !Number.isFinite(lng)) return
-            setRider({ lat, lng })
+            setRider({
+              lat,
+              lng,
+              heading: Number.isFinite(heading) && heading >= 0 && heading < 360 ? heading : null,
+            })
           },
         )
         if (!alive) sub.remove()
@@ -108,6 +114,7 @@ export function useDriverApproach(status: string | null, driverId: string | null
 
   const meters = rider && driver ? haversineMeters(rider.lat, rider.lng, driver.lat, driver.lng) : null
   const reading = formatApproachDistance(meters)
+  const direction = approachDirection(rider, driver, rider?.heading)
   const feet = reading?.feet ?? null
   const previousFeet = feet == null ? null : prevFeet.current
   const previousStage = feet == null ? null : prevStage.current
@@ -134,6 +141,7 @@ export function useDriverApproach(status: string | null, driverId: string | null
   return {
     active,
     reading,
+    direction,
     attention,
     statusLine: approachStatusLine(attention?.stage ?? null, Boolean(attention?.decreasing), feet),
     waiting,

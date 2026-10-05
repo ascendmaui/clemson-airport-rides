@@ -445,6 +445,7 @@ export function toDriverCard(row, options) {
     shares: carpoolShareLines(meta),
     riderLat: readLiveLat(meta),
     riderLng: readLiveLng(meta),
+    riderFixAt: readLiveAt(meta),
     promoRide: meta.promo === CLEMSON_MIAMI_PROMO_ID || meta.promo_ride === true,
     routePolyline: typeof meta.route_polyline === 'string' && meta.route_polyline ? meta.route_polyline : null,
     routeDurationS: Number.isFinite(Number(meta.route_duration_s)) && Number(meta.route_duration_s) > 0
@@ -463,6 +464,12 @@ function readLiveLng(meta) {
   const live = meta.rider_location || meta.riderLocation || null
   const lng = live?.lng ?? live?.longitude ?? meta.rider_lng
   return lng != null && Number.isFinite(Number(lng)) ? Number(lng) : null
+}
+
+function readLiveAt(meta) {
+  const live = meta.rider_location || meta.riderLocation || null
+  const at = live?.updated_at || live?.updatedAt || null
+  return typeof at === 'string' && at ? at : null
 }
 
 export function carpoolShareLines(metadata) {

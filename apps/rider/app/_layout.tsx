@@ -8,6 +8,7 @@ import { AuthProvider, useAuth } from '@/lib/auth'
 import { PasswordRecoveryListener } from '@/lib/passwordRecovery'
 import { ThemeProvider, useTheme } from '@/lib/theme'
 import { useApproachingTrip } from '@/lib/useRiderTrip'
+import { useRiderPickupStream } from '@/lib/useRiderPickupStream'
 import { BootScreen } from '@/components/BootScreen'
 import { clearAmbassadorCode, loadAmbassadorCode, saveAmbassadorCode } from '@/lib/ambassadorCode'
 import { supabase } from '@/lib/supabase'
@@ -24,6 +25,7 @@ setCarpoolApiBase(resolveApiBase())
 function ApproachHost() {
   const { user } = useAuth()
   const trip = useApproachingTrip(user?.id || null)
+  useRiderPickupStream(user?.id || null)
   return <ApproachAlert status={trip?.status ?? null} driverId={trip?.driver_id ?? null} />
 }
 

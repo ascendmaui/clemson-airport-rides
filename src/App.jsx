@@ -46,6 +46,7 @@ import { DriverOfferWatcher } from './components/DriverOfferWatcher'
 import { DriverBillingEntry } from './components/DriverBillingEntry'
 import { IncentivesAdmin } from './screens/IncentivesAdmin'
 import { LostFoundWatcher } from './components/LostFoundWatcher'
+import { RiderPickupStream } from './components/RiderPickupStream'
 import { LostFound } from './screens/LostFound'
 import { RidesHistory } from './screens/RidesHistory'
 
@@ -280,6 +281,7 @@ export default function App() {
           <RideToastWatcher />
           <DriverOfferWatcher />
           <LostFoundWatcher />
+          <RiderPickupStream />
           <ToastStack />
           <div
             key={`${path}:${params.token || params.id || params.trip || ''}`}
