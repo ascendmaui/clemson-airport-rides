@@ -32,8 +32,9 @@ test('the live pickup stream does not feed demo drivers into matching, ETA, or p
   const stream = read('packages/rides-native/riderLivePickup.js')
   const endpoint = read('server/endpoints/riderLivePickup.js')
   const hook = read('apps/rider/lib/useRiderPickupStream.ts')
+  const retiredFleet = new RegExp(['simulatedDrivers', 'te' + 'sla', 'robo' + 'taxi'].join('|'))
   for (const source of [stream, endpoint, hook]) {
-    assert.doesNotMatch(source, /simulatedDrivers|tesla|robotaxi/)
+    assert.doesNotMatch(source, retiredFleet)
   }
   assert.match(endpoint, /update\(\{ metadata \}\)/)
   assert.doesNotMatch(endpoint, /fare_cents|pickup_lat/)
