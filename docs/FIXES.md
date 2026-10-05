@@ -2,6 +2,15 @@
 
 Persistent knowledge base for recurring failures. When a matching issue appears, apply the saved fix first.
 
+## 2026-10-05 — t2 web bottom tab order
+
+- **What was wrong:** The web bar already rendered Rides, Schedule, Friends, Account from `WEB_BOTTOM_TABS`, and the support brief used the same words, but nothing checked that the brief stayed tied to the bar. A later edit could put Schedule first in the brief again. Open draft #264 still reorders this bar and also edits native rider tabs plus back-button chrome.
+- **What changed:** Asserted the product brief's bottom-tab sentence matches `webBottomTabLabels()` (Rides, Schedule, Friends, Account). Left `BottomTabs` on that shared list. Did not edit native tab files or #264's back buttons. This branch supersedes #264 for the web order only; #264 stays open.
+- **Files touched:**
+  - `server/productKnowledge.test.js`
+  - `docs/FIXES.md`
+- **Verified:** `node --test server/productKnowledge.test.js src/lib/webTabOrder.test.js` and `npm test`.
+
 ## 2026-10-05 — Web bottom tab order
 
 - **What was wrong:** The web rider bar in `src/components/BottomTabs.jsx` listed Schedule, Friends, Account, then Rides. The order was an inline array, so nothing could assert it. The rider app already uses Rides, Schedule, Friends, Account. The support brief repeated the old web order.
