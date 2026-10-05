@@ -2,6 +2,17 @@
 
 Persistent knowledge base for recurring failures. When a matching issue appears, apply the saved fix first.
 
+## 2026-10-05 — Web ride-offer file chime skipped when rewind threw
+
+- **What was wrong:** The web offer chime file fallback (`playChimeFile` in `src/lib/rideAlert.js`) set `currentTime = 0` before calling `play()`. On a new element that has not loaded metadata, that seek throws `InvalidStateError`, the catch returned false, and the first `/sounds/ride-chime.wav` playback never started. Native custom notification sound stayed out of scope; that work is draft #254.
+- **What changed:** Rewind only when `readyState > 0` and `currentTime > 0`, and swallow a seek error so `play()` still runs. Added a unit test with a fake `Audio` whose `currentTime` setter throws. Documented the web path and pointed native asset work at draft #254 in `docs/WEB_OFFER_CHIME.md`.
+- **Files touched:**
+  - `src/lib/rideAlert.js`
+  - `src/lib/rideAlert.test.js`
+  - `docs/WEB_OFFER_CHIME.md`
+  - `docs/FIXES.md`
+- **Verified:** `node --test src/lib/rideAlert.test.js` and `npm test`.
+
 ## 2026-10-05 — Web ride-offer chime no-ops when Audio is missing
 
 - **What was wrong:** The driver web offer chime (`playRideChime` in `src/lib/rideAlert.js`, used by `DriverHome`) already returns false from the file fallback when `Audio` is undefined, but `src/lib/rideAlert.test.js` only checked that the result was a boolean. A missing `Audio` constructor was not pinned, so a throw from `new Audio` could pass the suite.
