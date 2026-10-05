@@ -6,8 +6,14 @@
 # Swap is start-before-stop. Traefik's host-mode Docker provider removes the
 # router while the only backend is down or still starting (that is the
 # clemsonrides.com 404 / reset window). An overlap container with the same
-# Traefik service labels is healthy and attached before the canonical
-# container is recreated, then removed only after the new one is healthy.
+# Traefik service labels stays on the app network until it is healthy and
+# Traefik has served the new SHA, then the canonical container is recreated
+# and the overlap container is removed only after the new one is healthy.
+#
+# Traefik on this VPS reloads on container start, stop, and health_status
+# changes only. A network disconnect or connect does not. The new container
+# must already be on CLEMSON_NETWORK when Docker flips it to healthy, or
+# Traefik never adds it and the public check stays on the previous SHA.
 set -euo pipefail
 set +x
 
@@ -23,6 +29,11 @@ HEALTH_SLEEP_SECONDS=2
 # After Docker marks the new container healthy, Traefik still has to observe
 # that event before the previous backend may leave.
 TRAEFIK_SETTLE_SECONDS=10
+# Poll the public URL until Traefik has served this sha once. The previous
+# container can still answer some requests while both are attached; one new
+# response is enough. 30 x 2s, returning as soon as the new sha is seen.
+TRAEFIK_OBSERVE_ATTEMPTS=30
+TRAEFIK_OBSERVE_SLEEP_SECONDS=2
 LOCK_WAIT_SECONDS=900
 
 if [ "$TARGET" != "production" ] && [ "$TARGET" != "staging" ]; then
@@ -181,23 +192,34 @@ classify_public_health() {
 # 2 = Traefik's own 404 (router missing)
 # 3 = no answer (hairpin or TLS); not proof the router is down
 wait_until_traefik_has_new_sha() {
+  local attempts="${1:-$TRAEFIK_OBSERVE_ATTEMPTS}"
+  local pause="${2:-$TRAEFIK_OBSERVE_SLEEP_SECONDS}"
   local i kind
   local saw_old=0
   local saw_down=0
-  for i in $(seq 1 12); do
+  local saw_none=0
+  for i in $(seq 1 "$attempts"); do
     kind="$(classify_public_health)"
     case "$kind" in
-      new) return 0 ;;
-      old) saw_old=1 ;;
-      traefik404) saw_down=1 ;;
+      new)
+        echo "Traefik served ${TAG} on public health check ${i}"
+        return 0
+        ;;
+      old) saw_old=$((saw_old + 1)) ;;
+      traefik404) saw_down=$((saw_down + 1)) ;;
+      *) saw_none=$((saw_none + 1)) ;;
     esac
-    sleep 1
+    if [ $((i % 5)) -eq 0 ]; then
+      echo "still waiting for Traefik to serve ${TAG} (attempt ${i}, last=${kind})"
+    fi
+    sleep "$pause"
   done
-  if [ "$saw_down" = 1 ]; then
-    return 2
-  fi
-  if [ "$saw_old" = 1 ]; then
+  echo "Traefik public health after ${attempts} tries: old=${saw_old} down=${saw_down} none=${saw_none}"
+  if [ "$saw_old" -gt 0 ]; then
     return 1
+  fi
+  if [ "$saw_down" -gt 0 ]; then
+    return 2
   fi
   return 3
 }
@@ -253,16 +275,16 @@ sync_checkout() {
   fi
 }
 
-attach_when_healthy() {
+# Stay on CLEMSON_NETWORK for the whole health wait. Detaching first hides the
+# health_status event from Traefik, and attaching afterward does not emit one.
+wait_healthy_attached() {
   local name="$1"
-  echo "holding ${name} off ${CLEMSON_NETWORK} until ${TAG} answers /api/healthz"
-  docker network disconnect "$CLEMSON_NETWORK" "$name" >/dev/null 2>&1 || true
-  if ! wait_container_sha "$name"; then
-    return 1
-  fi
   if ! container_on_network "$name"; then
+    echo "${name} is off ${CLEMSON_NETWORK}; attaching before it becomes healthy" >&2
     docker network connect "$CLEMSON_NETWORK" "$name" || return 1
   fi
+  echo "waiting for ${name} to become healthy at ${TAG} on ${CLEMSON_NETWORK}"
+  wait_container_sha "$name" || return 1
   container_on_network "$name"
 }
 
@@ -276,16 +298,18 @@ start_fresh_overlap() {
     remove_overlap
     exit 1
   fi
-  if ! attach_when_healthy "$OVERLAP_NAME"; then
+  if ! wait_healthy_attached "$OVERLAP_NAME"; then
     echo "overlap ${OVERLAP_NAME} did not become healthy at ${TAG}; leaving ${CANONICAL_NAME} in place" >&2
     remove_overlap
     exit 1
   fi
-  echo "overlap ${OVERLAP_NAME} is healthy; waiting ${TRAEFIK_SETTLE_SECONDS}s for Traefik"
-  sleep "$TRAEFIK_SETTLE_SECONDS"
+  echo "overlap ${OVERLAP_NAME} is healthy on ${CLEMSON_NETWORK}"
 }
 
-# Returns 0 when it is safe to take the previous container off the network.
+# Returns 0 when Traefik has served TAG, or when the public URL never answered.
+# Returns 1 when Traefik is still on the previous sha or its own 404.
+# The caller must not replace the live container on 1 unless it first removes
+# the overlap container and is prepared to roll back a failed in-place recreate.
 drain_decision() {
   local probe
   set +e
@@ -298,27 +322,32 @@ drain_decision() {
       return 0
       ;;
     1)
-      echo "Traefik is still serving the previous sha; waiting ${TRAEFIK_SETTLE_SECONDS}s"
-      sleep "$TRAEFIK_SETTLE_SECONDS"
-      set +e
-      wait_until_traefik_has_new_sha
-      probe=$?
-      set -e
-      if [ "$probe" -eq 0 ]; then
-        echo "Traefik is serving ${TAG}"
-        return 0
-      fi
-      echo "refusing to detach ${CANONICAL_NAME}: Traefik has not served ${TAG}" >&2
+      echo "Traefik is still serving the previous sha" >&2
       return 1
       ;;
     2)
-      echo "Traefik returned 404 page not found; not detaching ${CANONICAL_NAME}" >&2
+      echo "Traefik returned 404 page not found" >&2
       return 1
       ;;
     *)
       echo "public health URL did not answer from this host; continuing because ${OVERLAP_NAME} is healthy on ${CLEMSON_NETWORK}"
       return 0
       ;;
+  esac
+}
+
+# After the overlap container is gone, the canonical container is the only
+# backend. 0 or "no answer" is success. A previous sha or Traefik's own 404
+# means the health_status event did not register and the caller should restart.
+confirm_public_after_promotion() {
+  local probe
+  set +e
+  wait_until_traefik_has_new_sha 15 1
+  probe=$?
+  set -e
+  case "$probe" in
+    0|3) return 0 ;;
+    *) return 1 ;;
   esac
 }
 
@@ -329,7 +358,7 @@ recreate_canonical() {
     echo "compose up failed for ${SERVICE}" >&2
     return 1
   fi
-  if ! attach_when_healthy "$CANONICAL_NAME"; then
+  if ! wait_healthy_attached "$CANONICAL_NAME"; then
     echo "${CANONICAL_NAME} did not become healthy at ${TAG}" >&2
     return 1
   fi
@@ -427,13 +456,13 @@ compose_target pull "$SERVICE"
 
 if container_is_routable "$CANONICAL_NAME"; then
   start_fresh_overlap
-  if ! drain_decision; then
+  if drain_decision; then
+    echo "Traefik is serving ${TAG}; recreating ${CANONICAL_NAME} while ${OVERLAP_NAME} stays on ${CLEMSON_NETWORK}"
+  else
+    echo "Traefik did not serve ${TAG} from ${OVERLAP_NAME} on ${CLEMSON_NETWORK}" >&2
+    echo "falling back to an in-place recreate of ${CANONICAL_NAME} and rolling back if health fails" >&2
     remove_overlap
-    exit 1
   fi
-  echo "detaching ${CANONICAL_NAME} from ${CLEMSON_NETWORK} before recreate"
-  docker network disconnect "$CLEMSON_NETWORK" "$CANONICAL_NAME" || true
-  sleep 2
 elif container_is_routable "$OVERLAP_NAME"; then
   echo "keeping ${OVERLAP_NAME}; ${CANONICAL_NAME} is not a healthy backend on ${CLEMSON_NETWORK}"
 else
@@ -449,11 +478,24 @@ if ! recreate_canonical; then
   exit 1
 fi
 
-if container_is_routable "$CANONICAL_NAME"; then
-  remove_overlap
-else
+if ! container_is_routable "$CANONICAL_NAME"; then
   echo "keeping ${OVERLAP_NAME} because ${CANONICAL_NAME} is not routable" >&2
   exit 1
+fi
+
+remove_overlap
+if ! confirm_public_after_promotion; then
+  echo "Traefik is not serving ${TAG} after ${OVERLAP_NAME} was removed; restarting ${CANONICAL_NAME}" >&2
+  if ! docker restart "$CANONICAL_NAME" >/dev/null; then
+    echo "restart of ${CANONICAL_NAME} failed" >&2
+    rollback_previous || true
+    exit 1
+  fi
+  if ! wait_healthy_attached "$CANONICAL_NAME" || ! confirm_public_after_promotion; then
+    echo "Traefik still does not serve ${TAG} after restarting ${CANONICAL_NAME}" >&2
+    rollback_previous || true
+    exit 1
+  fi
 fi
 
 record_success

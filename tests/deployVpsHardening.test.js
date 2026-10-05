@@ -226,13 +226,15 @@ describe('deploy swap', () => {
 
     const tail = remoteUp.slice(remoteUp.indexOf('acquire_deploy_lock\n'))
     const start = tail.indexOf('start_fresh_overlap')
-    const detach = tail.indexOf('detaching')
     const recreate = tail.indexOf('recreate_canonical')
+    const fallbackRemove = tail.indexOf('remove_overlap')
     const promoted = tail.lastIndexOf('remove_overlap')
-    assert.ok(start > 0 && start < detach && detach < recreate && recreate < promoted)
-
-    const drainAbort = tail.indexOf('remove_overlap')
-    assert.ok(drainAbort > start && drainAbort < detach)
+    assert.ok(start > 0 && start < fallbackRemove && fallbackRemove < recreate && recreate < promoted)
+    assert.doesNotMatch(remoteUp, /docker network disconnect/)
+    assert.match(remoteUp, /wait_healthy_attached/)
+    assert.match(remoteUp, /stays on \$\{CLEMSON_NETWORK\}/)
+    assert.match(remoteUp, /falling back to an in-place recreate/)
+    assert.match(remoteUp, /TRAEFIK_OBSERVE_ATTEMPTS=30/)
   })
 
   test('compose healthcheck and overlap services share Traefik labels without taking the debug ports', () => {

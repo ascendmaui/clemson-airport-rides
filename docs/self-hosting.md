@@ -132,11 +132,11 @@ Traefik on this host uses the Docker provider in host networking. With the defau
 
 `deploy/remote-up.sh` avoids that gap when a healthy backend is already up:
 
-1. Start `clemson-rides-web-next` (compose profile `overlap`) with the same Traefik service labels as `web`. It does not publish port 3080.
-2. Keep it off `clemson_rides_net` until Docker says it is healthy and `/api/healthz` shows the new SHA, then attach it and wait 10 seconds so Traefik can add it.
-3. Detach the previous `clemson-rides-web` from that network only after Traefik is observed serving the new SHA, or after the public health URL does not answer from the VPS at all. If Traefik still answers with the old SHA, the script stops and leaves the current container in place.
-4. Recreate `clemson-rides-web`, again off the network until it is healthy, then attach it and wait another 10 seconds.
-5. Remove `clemson-rides-web-next` only after the new `clemson-rides-web` is routable.
+1. Start `clemson-rides-web-next` (compose profile `overlap`) with the same Traefik service labels as `web`. It does not publish port 3080. It stays on `clemson_rides_net` the whole time.
+2. Wait until Docker reports it healthy and its own `/api/healthz` shows the new SHA. Traefik on this host only reloads on container start, stop, and health changes. Taking the container off the network before that health change hides it from Traefik, and connecting it afterward does not add the backend.
+3. Poll the public `/api/healthz` until Traefik serves the new SHA at least once. The previous container may still answer some of those requests. Only then recreate `clemson-rides-web`. The new container also stays on `clemson_rides_net` while it becomes healthy, and the overlap container covers that recreate.
+4. If that poll never sees the new SHA, remove the overlap container first (the live container is still serving), then recreate `clemson-rides-web` in place and roll back to the previous image if `/api/healthz` does not return the new SHA.
+5. Remove `clemson-rides-web-next` only after the new `clemson-rides-web` is healthy on `clemson_rides_net`. If Traefik then answers with the old SHA or its own 404, restart `clemson-rides-web` once so Traefik sees a fresh start and health change. If that still fails, roll back to the previous image.
 
 Host checks against `127.0.0.1:3080/api/healthz` poll for up to 60×2 seconds. That wait happens while the overlap container can still serve, so a longer poll is not a longer public outage. Staging does the same with `clemson-rides-staging-next` and port 3081. A hand `docker compose up` of `web` alone still recreates in place and can 404; use the deploy script for a production swap.
 
