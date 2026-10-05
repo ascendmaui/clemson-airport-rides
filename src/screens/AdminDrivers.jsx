@@ -5,7 +5,6 @@ import { PrimaryButton } from '../components/PrimaryButton'
 import { navigate } from '../lib/navigation'
 import { supabase } from '../lib/supabase'
 import {
-  ADMIN_EMAIL,
   EMAIL_TODO,
   REQUIRED_DOCUMENTS,
   WORK_ELIGIBILITY_CATEGORIES,
@@ -19,6 +18,7 @@ import {
   submittedApplicantEmail,
 } from '../lib/driverOnboarding'
 import { fetchApplicantThread, messageApplicant, requestApplicantInfo } from '../lib/adminDesk'
+import { AdminAccessDenied } from '../components/AdminAccessDenied'
 
 const FILTERS = [
   ['pending_review', 'Needs review'],
@@ -143,17 +143,7 @@ export function AdminDrivers({ embedded = false }) {
     return <div style={{ padding: 40, color: 'var(--ink-secondary)' }}>Loading admin queue…</div>
   }
 
-  if (!allowed) {
-    return (
-      <div className="fade-in" style={{ minHeight: '100%', background: 'var(--surface-muted)', padding: 24 }}>
-        <button type="button" className="pressable" onClick={() => navigate('account')} style={{ fontSize: 20 }}>←</button>
-        <h1 style={{ color: 'var(--purple)', marginTop: 12 }}>Admin only</h1>
-        <p style={{ color: 'var(--ink-secondary)', lineHeight: 1.45 }}>
-          Driver review is limited to {ADMIN_EMAIL} and profiles marked admin. Sign in with that account to approve or reject applications.
-        </p>
-      </div>
-    )
-  }
+  if (!allowed) return <AdminAccessDenied />
 
   return (
     <div className="fade-in" style={{ minHeight: embedded ? undefined : '100%', background: embedded ? 'transparent' : 'var(--surface-muted)', padding: embedded ? '8px 0 24px' : '20px 20px 48px' }}>

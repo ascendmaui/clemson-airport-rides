@@ -153,22 +153,11 @@ STABLE
 SECURITY DEFINER
 SET search_path = public
 AS $$
-  SELECT
-    lower(coalesce(auth.jwt() ->> 'email', '')) = 'john@gmail.com'
-    OR EXISTS (
-      SELECT 1
-      FROM public.profiles p
-      WHERE p.id = auth.uid()
-        AND (
-          lower(coalesce(p.email, '')) = 'john@gmail.com'
-          OR p.role::text IN ('admin', 'ops')
-          OR p.is_admin IS TRUE
-        )
-    );
+  SELECT public.is_admin();
 $$;
 
 COMMENT ON FUNCTION public.is_incentive_admin() IS
-  'True for john@gmail.com, profiles.role admin/ops, or profiles.is_admin.';
+  'True when public.is_admin() is true. Unknown addresses are not admins.';
 
 CREATE OR REPLACE FUNCTION public.driver_incentive_is_active(
   p public.driver_incentives,

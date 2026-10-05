@@ -97,16 +97,15 @@ describe('geographic coordinate constants', () => {
 })
 
 describe('SHORTCUTS', () => {
-  test('exports array of 3 saved place shortcuts', () => {
+  test('exports the public campus shortcut only', () => {
     assert.ok(Array.isArray(SHORTCUTS))
-    assert.equal(SHORTCUTS.length, 3)
+    assert.equal(SHORTCUTS.length, 1)
+    assert.equal(SHORTCUTS.some((item) => /simpsonville/i.test(item.sub)), false)
   })
 
-  test('contains home, clemson, and work shortcuts with required properties', () => {
+  test('contains the clemson shortcut with required properties', () => {
     assert.deepEqual(SHORTCUTS, [
-      { id: 'home', label: 'Home', sub: 'Simpsonville', icon: '🏠' },
       { id: 'clemson', label: 'Clemson University', sub: 'Sikes Hall', icon: '🎓' },
-      { id: 'work', label: 'Work', sub: 'Saved place', icon: '💼' },
     ])
     for (const item of SHORTCUTS) {
       assert.equal(typeof item.id, 'string')

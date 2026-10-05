@@ -1,14 +1,8 @@
 /**
- * Admin allow-list shared by the Vite app, native driver app, and Vercel API.
- * These addresses are identities, not secrets. Real keys stay in env placeholders.
+ * Admin checks shared by the Vite app and the Vercel API.
+ * Addresses are not stored here. The server roster and ADMIN_EMAILS live in
+ * server/adminRoster.js so the client bundle does not ship them.
  */
-
-export const SEEDED_ADMIN_EMAILS = [
-  'johnmatveev@gmail.com',
-  'johnmatveyev@gmail.com',
-  'jmat2019@icloud.com',
-  'john@gmail.com',
-]
 
 export const TICKET_STATUSES = [
   'open',
@@ -24,16 +18,25 @@ export function normalizeEmail(email) {
   return String(email || '').trim().toLowerCase()
 }
 
-export function isSeedAdminEmail(email) {
-  return SEEDED_ADMIN_EMAILS.includes(normalizeEmail(email))
+export function emailsFromList(raw) {
+  const source = Array.isArray(raw) ? raw.join(',') : raw
+  return String(source || '')
+    .split(',')
+    .map((part) => normalizeEmail(part))
+    .filter(Boolean)
 }
 
 /**
- * Full admin: seeded inbox, profiles.role admin/ops, or profiles.is_admin.
- * Support-only staff are not admins and cannot approve drivers.
+ * Admin when the profile role says so, or when the address is on an explicit
+ * allow list. deniedEmails never qualify, including when the profile is
+ * marked admin or the address is also on the allow list.
  */
-export function isAdminIdentity({ jwtEmail, role, isAdmin } = {}) {
-  if (isSeedAdminEmail(jwtEmail)) return true
+export function isAdminIdentity({ jwtEmail, role, isAdmin, allowEmails, deniedEmails } = {}) {
+  const email = normalizeEmail(jwtEmail)
+  const denied = new Set(emailsFromList(deniedEmails))
+  if (email && denied.has(email)) return false
+  const allow = new Set(emailsFromList(allowEmails))
+  if (email && allow.has(email)) return true
   if (isAdmin === true) return true
   if (role === 'admin' || role === 'ops') return true
   return false

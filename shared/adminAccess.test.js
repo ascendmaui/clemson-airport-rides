@@ -9,10 +9,9 @@ for (const key of Object.keys(process.env)) {
 
 const {
   BOT_CONFIDENCE_FLOOR,
-  SEEDED_ADMIN_EMAILS,
   TICKET_STATUSES,
+  emailsFromList,
   isAdminIdentity,
-  isSeedAdminEmail,
   isTicketStatus,
   normalizeEmail,
 } = await import('./adminAccess.js')
@@ -27,37 +26,52 @@ test('normalizeEmail trims and lowercases', () => {
   assert.equal(normalizeEmail('Already@Lower.com'), 'already@lower.com')
 })
 
-test('isSeedAdminEmail matches the seeded inboxes only, ignoring case and outer whitespace', () => {
-  assert.deepEqual(SEEDED_ADMIN_EMAILS, [
-    'johnmatveev@gmail.com',
-    'johnmatveyev@gmail.com',
-    'jmat2019@icloud.com',
-    'john@gmail.com',
+test('emailsFromList splits comma-separated addresses', () => {
+  assert.deepEqual(emailsFromList(' Lead@clemson.edu, ops@clemson.edu '), [
+    'lead@clemson.edu',
+    'ops@clemson.edu',
   ])
-  for (const email of SEEDED_ADMIN_EMAILS) {
-    assert.equal(isSeedAdminEmail(email), true, email)
-    assert.equal(isSeedAdminEmail(email.toUpperCase()), true, email)
-    assert.equal(isSeedAdminEmail(`  ${email}  `), true, email)
-  }
-  assert.equal(isSeedAdminEmail('student@clemson.edu'), false)
-  assert.equal(isSeedAdminEmail('notjohn@gmail.com'), false)
-  assert.equal(isSeedAdminEmail('john@gmail.com.evil'), false)
-  assert.equal(isSeedAdminEmail('john@gmail.com '), true)
-  assert.equal(isSeedAdminEmail(''), false)
-  assert.equal(isSeedAdminEmail(null), false)
-  assert.equal(isSeedAdminEmail(undefined), false)
+  assert.deepEqual(emailsFromList(['Lead@clemson.edu', ' ops@clemson.edu ']), [
+    'lead@clemson.edu',
+    'ops@clemson.edu',
+  ])
+  assert.deepEqual(emailsFromList(''), [])
+  assert.deepEqual(emailsFromList(null), [])
 })
 
-test('isAdminIdentity combines seed email, isAdmin, and role', () => {
+test('john@gmail.com is not an admin from an email alone', () => {
+  assert.equal(isAdminIdentity({ jwtEmail: 'john@gmail.com' }), false)
+  assert.equal(isAdminIdentity({ jwtEmail: 'JOHN@gmail.com' }), false)
+  assert.equal(isAdminIdentity({ jwtEmail: '  john@gmail.com ' }), false)
+  assert.equal(isAdminIdentity({ jwtEmail: 'johnmatveev@gmail.com' }), false)
+  assert.equal(isAdminIdentity({ jwtEmail: 'johnmatveyev@gmail.com' }), false)
+  assert.equal(isAdminIdentity({ jwtEmail: 'ascendmaui@gmail.com' }), false)
+  assert.equal(isAdminIdentity({ jwtEmail: 'jmat2019@icloud.com' }), false)
+  assert.equal(isAdminIdentity({ jwtEmail: 'student@clemson.edu' }), false)
+})
+
+test('denied addresses stay non-admin even with a role, flag, or allow list', () => {
+  const denied = ['john@gmail.com', 'johnmatveev@gmail.com']
+  for (const email of denied) {
+    assert.equal(isAdminIdentity({
+      jwtEmail: email,
+      role: 'admin',
+      isAdmin: true,
+      allowEmails: [email, 'lead@clemson.edu'],
+      deniedEmails: denied,
+    }), false, email)
+  }
+  assert.equal(isAdminIdentity({
+    jwtEmail: 'lead@clemson.edu',
+    allowEmails: 'lead@clemson.edu',
+    deniedEmails: denied,
+  }), true)
+})
+
+test('isAdminIdentity uses profile role and is_admin, not a hardcoded inbox', () => {
   assert.equal(isAdminIdentity(), false)
   assert.equal(isAdminIdentity(undefined), false)
   assert.equal(isAdminIdentity({}), false)
-
-  assert.equal(isAdminIdentity({ jwtEmail: 'JOHN@gmail.com' }), true)
-  assert.equal(isAdminIdentity({ jwtEmail: '  johnmatveev@gmail.com ' }), true)
-  assert.equal(isAdminIdentity({ jwtEmail: 'JohnMatveyev@gmail.com' }), true)
-  assert.equal(isAdminIdentity({ jwtEmail: '\njmat2019@icloud.com\t' }), true)
-  assert.equal(isAdminIdentity({ jwtEmail: 'john@gmail.com', role: 'driver', isAdmin: false }), true)
 
   assert.equal(isAdminIdentity({ jwtEmail: 'student@clemson.edu', isAdmin: true }), true)
   assert.equal(isAdminIdentity({ isAdmin: true }), true)
@@ -76,7 +90,6 @@ test('isAdminIdentity combines seed email, isAdmin, and role', () => {
   assert.equal(isAdminIdentity({ role: 'driver' }), false)
   assert.equal(isAdminIdentity({ role: 'rider' }), false)
   assert.equal(isAdminIdentity({ role: '' }), false)
-  assert.equal(isAdminIdentity({ jwtEmail: 'student@clemson.edu' }), false)
   assert.equal(isAdminIdentity({ jwtEmail: 'student@clemson.edu', role: 'support', isAdmin: false }), false)
   assert.equal(isAdminIdentity({ jwtEmail: '  student@clemson.edu  ', role: 'driver' }), false)
 })

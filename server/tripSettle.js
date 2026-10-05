@@ -12,7 +12,7 @@ import {
   progressionGate,
   readPrecomputedFeeCents,
 } from '../shared/paymentFailure.js'
-import { isAdminIdentity } from '../shared/adminAccess.js'
+import { serverIsAdmin } from './adminRoster.js'
 import { ensureAuthoritativeFare, storedFareCents } from './authoritativeFare.js'
 import { farePaidCents, tripChargeKey } from './chargeIdempotency.js'
 import { insertTripEvent } from './tripEvents.js'
@@ -22,13 +22,9 @@ import { airportDepositRequiredCents } from '../packages/rides-native/tripTags.j
 const ACTIVE_KEEP = new Set(['accepted', 'arriving', 'in_progress', 'payment_required', 'searching', 'offered'])
 
 export function isAdminUser(user, profile) {
-  const allow = String(process.env.ADMIN_EMAILS || '')
-    .split(',')
-    .map((part) => part.trim().toLowerCase())
-    .filter(Boolean)
-  if (user?.email && allow.includes(String(user.email).toLowerCase())) return true
-  return isAdminIdentity({
-    jwtEmail: user?.email || profile?.email,
+  return serverIsAdmin({
+    jwtEmail: user?.email,
+    profileEmail: profile?.email,
     role: profile?.role,
     isAdmin: profile?.is_admin,
   })
