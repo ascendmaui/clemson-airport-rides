@@ -2,7 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { GoogleMap, useJsApiLoader, Marker, Circle, Polyline } from '@react-google-maps/api'
 import { downtownNow, heatColor } from '../lib/downtownHeat'
 import { MAPS_LOADER_ID, MAP_LIBRARIES, mapsLoaderOptions } from '../lib/googleMapsLoader'
-import { fetchRideDemand, MAP_TYPES, loadMapType, saveMapType } from '../lib/rideDemand'
+import { fetchRideDemand, loadMapType, saveMapType } from '../lib/rideDemand'
+import { MapTypeSelect } from './MapTypeSelect'
 import {
   SIMULATED_FLEET_BADGE,
   busyCarSvg,
@@ -323,6 +324,7 @@ export function CampusMap({
           overflow: 'hidden',
           position: 'absolute',
           inset: 0,
+          zIndex: 0,
         }
 
   const mapCenter = useMemo(() => toLatLng(center), [center?.[0], center?.[1]])
@@ -639,58 +641,12 @@ export function CampusMap({
           data-map-type-control="dropdown"
           style={{
             position: 'absolute',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            zIndex: 1000,
-            pointerEvents: 'none',
+            top: 10,
+            right: 10,
+            zIndex: 2,
           }}
         >
-          <label
-            style={{
-              position: 'absolute',
-              top: 10,
-              right: 10,
-              display: 'inline-flex',
-              alignItems: 'center',
-              margin: 0,
-              pointerEvents: 'auto',
-            }}
-          >
-            <span className="sr-only" style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0 0 0 0)' }}>
-              Map type
-            </span>
-            <select
-              aria-label="Map type"
-              value={resolvedMapType}
-              onChange={(e) => setMapType(e.target.value)}
-              style={{
-                appearance: 'none',
-                WebkitAppearance: 'none',
-                MozAppearance: 'none',
-                fontSize: 12,
-                fontWeight: 700,
-                letterSpacing: 0.2,
-                padding: '7px 30px 7px 10px',
-                borderRadius: 12,
-                border: '1px solid rgba(82,45,128,0.35)',
-                background:
-                  '#fff url("data:image/svg+xml;charset=UTF-8,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 width=%2712%27 height=%2712%27 viewBox=%270 0 12 12%27%3E%3Cpath fill=%27%23522D80%27 d=%27M3 4.5L6 8l3-3.5%27/%3E%3C/svg%3E") no-repeat right 10px center',
-                color: '#522D80',
-                boxShadow: '0 2px 10px rgba(11,18,32,0.22)',
-                cursor: 'pointer',
-                minWidth: 108,
-                maxWidth: 148,
-              }}
-            >
-              {MAP_TYPES.map((mt) => (
-                <option key={mt.id} value={mt.id}>
-                  {mt.label}
-                </option>
-              ))}
-            </select>
-          </label>
+          <MapTypeSelect value={resolvedMapType} onChange={setMapType} />
         </div>
       ) : null}
     </div>

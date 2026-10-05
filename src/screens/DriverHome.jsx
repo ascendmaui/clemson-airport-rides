@@ -2,10 +2,11 @@ import { onTrackingResume, createTrackingRefresh } from '../../packages/rides-na
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useAuth } from '../lib/auth'
 import { CampusMap, CLEMSON } from '../components/CampusMap'
+import { DriverDeskHeader } from '../components/DriverDeskHeader'
 import { GameDayStatus } from '../components/GameDayStatus'
 import { useGameDayNotice } from '../lib/useGameDayNotice'
 import { DriverIncentiveBanner, useDriverIncentiveWatch } from '../components/DriverIncentiveBanner'
-import { HEAT_WINDOWS } from '../lib/rideDemand'
+import { HEAT_WINDOWS, loadMapType, saveMapType } from '../lib/rideDemand'
 import { PurpleAcceptButton } from '../components/PrimaryButton'
 import { ScheduledRideQueue } from '../components/ScheduledRideQueue'
 import { navigate } from '../lib/navigation'
@@ -118,6 +119,7 @@ function DriverShell({ driverId }) {
   const [advancing, setAdvancing] = useState(false)
   const [advanceError, setAdvanceError] = useState(null)
   const [selfPos, setSelfPos] = useState(null)
+  const [mapTypeId, setMapTypeId] = useState(() => loadMapType())
   const [showSurge, setShowSurge] = useState(true)
   const [heatWindow, setHeatWindow] = useState('now')
   const [heatMeta, setHeatMeta] = useState(null)
@@ -750,7 +752,7 @@ function DriverShell({ driverId }) {
         heatMode="surge"
         heatWindow={heatWindow}
         onHeatMeta={setHeatMeta}
-        showMapTypeControl={!activeTrip}
+        mapTypeId={mapTypeId}
         center={selfPos || (!scheduledNotDone && activeTrip?.pickup_lat != null ? [activeTrip.pickup_lat, activeTrip.pickup_lng] : CLEMSON)}
         zoom={13}
         marker={selfPos || CLEMSON}
@@ -767,96 +769,34 @@ function DriverShell({ driverId }) {
         driverPosition={selfPos}
       />
 
-      <div
-        style={{
-          position: 'absolute',
-          top: 16,
-          left: 16,
-          right: 16,
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          zIndex: 20,
+      <DriverDeskHeader
+        earningsLabel={centsToDollars(earningsCents)}
+        onMenu={() => navigate('landing')}
+        onEarnings={() => navigate('earnings')}
+        showMapType={!activeTrip}
+        mapTypeId={mapTypeId}
+        onMapTypeChange={(id) => {
+          const next = id === 'satellite' || id === 'hybrid' ? id : 'roadmap'
+          setMapTypeId(next)
+          saveMapType(next)
         }}
-      >
-        <button
-          type="button"
-          className="pressable"
-          onClick={() => navigate('landing')}
-          style={{
-            width: 44,
-            height: 44,
-            borderRadius: '50%',
-            background: 'rgba(255,255,255,0.72)',
-            boxShadow: 'var(--shadow-pill)',
-            fontSize: 18,
-            backdropFilter: 'blur(18px) saturate(1.4)',
-            WebkitBackdropFilter: 'blur(18px) saturate(1.4)',
-            border: '1px solid rgba(255,255,255,0.55)',
-          }}
-        >
-          ☰
-        </button>
-        <div
-          style={{
-            padding: '10px 18px',
-            borderRadius: 999,
-            background: 'rgba(255,255,255,0.72)',
-            fontWeight: 700,
-            fontSize: 17,
-            boxShadow: 'var(--shadow-pill)',
-            backdropFilter: 'blur(18px) saturate(1.4)',
-            WebkitBackdropFilter: 'blur(18px) saturate(1.4)',
-            border: '1px solid rgba(255,255,255,0.55)',
-          }}
-          title="Completed trip earnings"
-        >
-          <button type="button" className="pressable" onClick={() => navigate('earnings')} style={{ font: 'inherit', fontWeight: 700 }}>
-            {centsToDollars(earningsCents)}
-          </button>
-        </div>
-        {headingToPickup && (
-          <button
-            type="button"
-            className="pressable"
-            aria-label="Use current location"
-            onClick={() => {
-              if (!navigator.geolocation) return
-              navigator.geolocation.getCurrentPosition(
-                (pos) => {
-                  const next = [pos.coords.latitude, pos.coords.longitude]
-                  setSelfPos(next)
-                },
-                () => {},
-                { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 },
-              )
-            }}
-            style={{
-              position: 'absolute',
-              top: 64,
-              right: 0,
-              width: 44,
-              height: 44,
-              borderRadius: 22,
-              background: 'rgba(255,255,255,0.92)',
-              boxShadow: 'var(--shadow-pill)',
-              fontWeight: 800,
-              color: 'var(--orange)',
-            }}
-          >
-            ◎
-          </button>
-        )}
-        {(shownOffer || activeTrip) && (
-          <DriverShiftControl
-            compact
-            onShift={online}
-            busy={shiftBusy}
-            onStart={() => setShift(true)}
-            onStop={() => setShift(false)}
-          />
-        )}
-      </div>
+        showShift={Boolean(shownOffer || activeTrip)}
+        onShift={online}
+        shiftBusy={shiftBusy}
+        onStartShift={() => setShift(true)}
+        onStopShift={() => setShift(false)}
+        showLocate={headingToPickup}
+        onLocate={() => {
+          if (!navigator.geolocation) return
+          navigator.geolocation.getCurrentPosition(
+            (pos) => {
+              setSelfPos([pos.coords.latitude, pos.coords.longitude])
+            },
+            () => {},
+            { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 },
+          )
+        }}
+      />
 
       
       {incentiveBanner && (
