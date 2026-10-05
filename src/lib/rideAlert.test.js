@@ -70,3 +70,39 @@ test('playRideChime and playRideRequestAlert complete cleanly without audio hard
     await playRideRequestAlert()
   })
 })
+
+test('playRideChime no-ops safely when Audio is missing', async () => {
+  const audioDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'Audio')
+  const windowDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'window')
+
+  try {
+    // Drop HTMLAudioElement so the file fallback cannot construct a player.
+    Reflect.deleteProperty(globalThis, 'Audio')
+    if (typeof Audio !== 'undefined') {
+      Object.defineProperty(globalThis, 'Audio', {
+        configurable: true,
+        writable: true,
+        value: undefined,
+      })
+    }
+    // Blank window so the Web Audio synth path cannot play and hide a missing Audio.
+    Object.defineProperty(globalThis, 'window', {
+      configurable: true,
+      writable: true,
+      value: {},
+    })
+    assert.equal(typeof Audio, 'undefined')
+
+    assert.equal(await playRideChime(), false)
+    assert.equal(await playRideChime(), false)
+
+    await assert.doesNotReject(async () => {
+      await playRideRequestAlert()
+    })
+  } finally {
+    if (audioDescriptor) Object.defineProperty(globalThis, 'Audio', audioDescriptor)
+    else Reflect.deleteProperty(globalThis, 'Audio')
+    if (windowDescriptor) Object.defineProperty(globalThis, 'window', windowDescriptor)
+    else Reflect.deleteProperty(globalThis, 'window')
+  }
+})

@@ -2,6 +2,15 @@
 
 Persistent knowledge base for recurring failures. When a matching issue appears, apply the saved fix first.
 
+## 2026-10-05 — Web ride-offer chime no-ops when Audio is missing
+
+- **What was wrong:** The driver web offer chime (`playRideChime` in `src/lib/rideAlert.js`, used by `DriverHome`) already returns false from the file fallback when `Audio` is undefined, but `src/lib/rideAlert.test.js` only checked that the result was a boolean. A missing `Audio` constructor was not pinned, so a throw from `new Audio` could pass the suite.
+- **What changed:** Extended the ride-alert unit test to remove `Audio`, disable the Web Audio synth path, and assert `playRideChime` returns false (including a second call) and `playRideRequestAlert` does not reject.
+- **Files touched:**
+  - `src/lib/rideAlert.test.js`
+  - `docs/FIXES.md`
+- **Verified:** `node --test src/lib/rideAlert.test.js` and `npm test`.
+
 ## 2026-10-02 — GA96: GA audit & tests - abandoned checkout resilience, hold TTL NaN safety, and RPC direct update fallbacks
 
 - **Track / machine:** Clemson RIDES · MacBook Max · `agy/ga-audit-abandoned-checkout-resilience-ga96`
