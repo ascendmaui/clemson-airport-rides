@@ -2,6 +2,7 @@ import type { DriverCard } from './tripTags'
 
 export type VehicleRow = {
   id: string
+  year?: number | null
   make?: string | null
   model?: string | null
   color?: string | null

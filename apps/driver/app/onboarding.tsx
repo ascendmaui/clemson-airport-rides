@@ -18,6 +18,7 @@ import {
   canOpenStep,
   displayTinLast4,
   driverQuizError,
+  vehicleAccountErrors,
   loadOnboarding,
   onboardingLabel,
   progressSnapshot,
@@ -155,6 +156,7 @@ export default function OnboardingScreen() {
   const [model, setModel] = useState('')
   const [color, setColor] = useState('')
   const [plate, setPlate] = useState('')
+  const [year, setYear] = useState('')
   const [seats, setSeats] = useState('4')
   const [isTesla, setIsTesla] = useState(false)
   const [picker, setPicker] = useState<null | 'make' | 'model' | 'color'>(null)
@@ -207,6 +209,7 @@ export default function OnboardingScreen() {
       setMake(String(vehicle.make || ''))
       setModel(String(vehicle.model || ''))
       setColor(String(vehicle.color || ''))
+      setYear(vehicle.year ? String(vehicle.year) : '')
       setPlate(String(vehicle.plate || ''))
       setSeats(String(vehicle.seats || 4))
       setIsTesla(Boolean(vehicle.is_tesla))
@@ -340,8 +343,10 @@ export default function OnboardingScreen() {
       setError(quizError)
       return
     }
-    if (!fullName.trim() || phone.replace(/\D/g, '').length < 7 || !make || !model || !color || !plate.trim()) {
-      setError('Name, phone, make, model, color, and plate are required.')
+    const fieldErrors = vehicleAccountErrors({ fullName, phone, make, model, color, plate, year })
+    const fieldMessages = Object.values(fieldErrors)
+    if (fieldMessages.length) {
+      setError(fieldMessages.join(' '))
       return
     }
     setBusy(true)
@@ -358,6 +363,7 @@ export default function OnboardingScreen() {
         make,
         model,
         color,
+        year,
         plate: plate.trim(),
         seats: Number(seats) || 4,
         isTesla: isTesla || isTeslaMakeModel(make, model),
@@ -599,6 +605,7 @@ export default function OnboardingScreen() {
             <PickerField label="Make" value={make || 'Select make'} onPress={() => setPicker('make')} />
             <PickerField label="Model" value={make ? (model || 'Select model') : 'Select make first'} onPress={() => make && setPicker('model')} />
             <PickerField label="Color" value={color || 'Select color'} onPress={() => setPicker('color')} />
+            <Field label="Year" value={year} onChangeText={setYear} keyboard="number-pad" />
             <Field label="Plate" value={plate} onChangeText={setPlate} />
             <Field label="Seats" value={seats} onChangeText={setSeats} keyboard="number-pad" />
             <Pressable

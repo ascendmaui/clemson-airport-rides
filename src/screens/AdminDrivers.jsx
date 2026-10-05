@@ -17,6 +17,7 @@ import {
   reviewDriverApplication,
   submittedApplicantEmail,
 } from '../lib/driverOnboarding'
+import { applicantVehicleLabel } from '../../shared/vehicleYear.js'
 import { fetchApplicantThread, messageApplicant, requestApplicantInfo } from '../lib/adminDesk'
 import { AdminAccessDenied } from '../components/AdminAccessDenied'
 
@@ -205,9 +206,7 @@ export function AdminDrivers({ embedded = false }) {
           const name = row.profile?.full_name || 'Driver'
           const email = submittedApplicantEmail(row, row.profile)
           const vehicle = row.vehicle
-          const vehicleLabel = vehicle
-            ? [vehicle.color, vehicle.make, vehicle.model, vehicle.plate].filter(Boolean).join(' ')
-            : 'No vehicle on file'
+          const vehicleLabel = applicantVehicleLabel(vehicle)
           const active = openId === row.profile_id
           return (
             <div key={row.id} className="sheet" style={{ padding: 16, borderRadius: 18, boxShadow: 'var(--shadow-pill)' }}>
@@ -221,7 +220,7 @@ export function AdminDrivers({ embedded = false }) {
                   {' '}
                   <span style={{ color: 'var(--ink)' }}>{email || 'Not submitted'}</span>
                 </div>
-                <div style={{ fontSize: 13, marginTop: 4 }}>{vehicleLabel}</div>
+                <div data-applicant-vehicle={vehicleLabel} style={{ fontSize: 13, marginTop: 4 }}>{vehicleLabel}</div>
                 {vehicle && <VehicleFleetEditor driverId={row.profile_id} vehicle={vehicle} admin />}
                 {row.review_note && (
                   <div style={{ fontSize: 12, color: 'var(--ink-tertiary)', marginTop: 6 }}>{row.review_note}</div>
