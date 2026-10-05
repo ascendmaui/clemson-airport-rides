@@ -18,6 +18,7 @@ export type CampusMapProps = {
   showHeat: boolean
   mapType?: MapKind
   theater?: boolean
+  searchMotion?: boolean
   gameDay?: boolean
   gameDayLabel?: string | null
   surge?: boolean

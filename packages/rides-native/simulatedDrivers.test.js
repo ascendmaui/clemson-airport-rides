@@ -7,6 +7,15 @@ import { DOWNTOWN, STADIUM } from './places.js'
 import { haversineMeters } from './riderShell.js'
 import { fetchOnlineDrivers, requestDriverTrip } from './drivers.js'
 import {
+  SEARCH_DEMO_CYCLE_MS,
+  SEARCH_MAP_DELTA_END,
+  SEARCH_MAP_DELTA_START,
+  SEARCH_MAP_ZOOM_MS,
+  searchingDemoPair,
+  searchingDemoRanked,
+  searchMapRegion,
+} from './searchPreview.js'
+import {
   BUSY_MARKER_FILL,
   SIMULATED_DRIVER_COUNT,
   SIMULATED_DRIVERS,
@@ -276,4 +285,98 @@ test('demo fleet source does not insert driver rows, charge cards, or notify', (
   assert.match(webMap, /showSimulatedFleet = false/)
   assert.match(motion, /refuseSimulatedDriverTap/)
   assert.match(webMap, /SIMULATED_FLEET_BADGE/)
+})
+
+test('searching preview ranks demo cars without making them available', async () => {
+  const pickup = { lat: 34.6787, lng: -82.8466 }
+  const ranked = searchingDemoRanked(1_000_000, pickup)
+  assert.equal(ranked.length, SIMULATED_DRIVER_COUNT)
+  for (let index = 0; index < ranked.length; index += 1) {
+    const card = ranked[index]
+    if (index > 0) assert.ok(card.previewMeters >= ranked[index - 1].previewMeters)
+    assert.equal(card.previewRank, index + 1)
+    assert.equal(card.isDemo, true)
+    assert.equal(card.source, 'demo')
+    assert.equal(card.bookable, false)
+    assert.equal(card.online, false)
+    assert.equal(card.matched, false)
+    assert.equal(card.affectsAvailability, false)
+    assert.equal(card.affectsEta, false)
+    assert.equal(card.affectsPrice, false)
+    assert.equal(card.etaMin, null)
+    assert.equal(card.priceCents, null)
+    assert.equal(isSimulatedDriverId(card.id), true)
+    await assert.rejects(
+      () => requestDriverTrip({}, { riderId: 'rider-1', driverId: card.id }),
+      /cannot be requested/,
+    )
+  }
+  assert.equal(ranked.filter((card) => card.body === 'wedge').length, 1)
+  const labels = ranked.map((card) => card.vehicleLabel).join('\n')
+  const banned = new RegExp(
+    ['te' + 'sla', 'model' + ' 3', 'self' + '-driving', 'robo' + 'taxi'].join('|'),
+    'i',
+  )
+  assert.equal(banned.test(labels), false)
+
+  const pair = searchingDemoPair(0, 5_000, pickup)
+  assert.equal(pair.current.previewRank, 1)
+  assert.equal(pair.next.previewRank, 2)
+  assert.equal(pair.current.previewMeters <= pair.next.previewMeters, true)
+  const advanced = searchingDemoPair(SEARCH_DEMO_CYCLE_MS, 5_000, pickup)
+  assert.equal(advanced.current.previewRank, 2)
+  assert.equal(advanced.next.previewRank, 3)
+})
+
+test('search map zoom widens over Clemson without speeding the fleet up', () => {
+  const start = searchMapRegion(0)
+  const mid = searchMapRegion(SEARCH_MAP_ZOOM_MS / 2)
+  const end = searchMapRegion(SEARCH_MAP_ZOOM_MS)
+  assert.equal(start.latitudeDelta, SEARCH_MAP_DELTA_START)
+  assert.ok(mid.latitudeDelta > start.latitudeDelta)
+  assert.ok(end.latitudeDelta > mid.latitudeDelta)
+  assert.equal(end.latitudeDelta, SEARCH_MAP_DELTA_END)
+  assert.equal(start.latitude, end.latitude)
+  assert.equal(start.longitude, end.longitude)
+  assert.equal(end.progress, 1)
+
+  const helper = read('packages/rides-native/searchPreview.js')
+  assert.equal(helper.includes('supabase'), false)
+  assert.equal(helper.includes('stripe'), false)
+  assert.equal(helper.includes('.insert('), false)
+  assert.equal(helper.includes('cruiseMph'), false)
+
+  const nativeMap = read('apps/rider/components/CampusMap.native.tsx')
+  assert.match(nativeMap, /useSimulatedFleet\(showSimulatedFleet \|\| searchMotion\)/)
+  assert.match(nativeMap, /refuseSimulatedDriverTap\(car\.id\)/)
+  assert.equal(nativeMap.includes('SIMULATED_FLEET_TICK_MS'), false)
+
+  const requested = read('apps/rider/app/requested.tsx')
+  assert.match(requested, /searchMotion=\{searchingMap\}/)
+  assert.match(requested, /readableSteps/)
+  assert.match(requested, /SearchDemoCycle/)
+  assert.match(requested, /RIDER_SEARCH_MOTION_COPY/)
+  assert.match(requested, /label="Schedule"/)
+  assert.match(requested, /pathname: '\/schedule'/)
+  assert.equal(requested.includes('Airport holds use the 25% Stripe deposit'), false)
+  assert.equal(requested.includes('25%'), false)
+  assert.equal(/Stripe deposit/i.test(requested), false)
+  assert.equal(requested.includes('Only a real driver accept'), false)
+  assert.equal(requested.includes('The deposit shows up'), false)
+
+  const card = read('apps/rider/components/SearchDemoCycle.tsx')
+  assert.equal(/requestDriverTrip|priceCents|etaMin|Stripe|deposit/i.test(card), false)
+
+  const picker = read('apps/rider/app/pick-driver.tsx')
+  assert.equal(picker.includes('searchMotion'), false)
+  assert.equal(picker.includes('SearchDemoCycle'), false)
+
+  const driverTrip = read('apps/driver/app/trip.tsx')
+  assert.equal(driverTrip.includes('readableSteps'), false)
+  assert.equal(driverTrip.includes('searchMotion'), false)
+
+  const webRequested = read('src/screens/Requested.jsx')
+  assert.equal(webRequested.includes('SearchDemoCycle'), false)
+  assert.equal(webRequested.includes('searchMotion'), false)
+  assert.match(webRequested, /SEARCH_PREVIEW_COPY/)
 })
