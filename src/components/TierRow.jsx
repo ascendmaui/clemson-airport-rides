@@ -63,8 +63,8 @@ export function TierRow({ tier, selected, onSelect }) {
           {tier.id === 'tesla' && <span> · Premium fare: 2× Standard before discounts</span>}
         </div>
       </div>
-      <div style={{ fontWeight: 600, fontSize: 17, fontVariantNumeric: 'tabular-nums' }}>
-        ${tier.price.toFixed(2)}
+      <div data-testid={`tier-price-${tier.id}`} style={{ fontWeight: 600, fontSize: 17, fontVariantNumeric: 'tabular-nums' }}>
+        {Number.isFinite(tier.price) ? `$${tier.price.toFixed(2)}` : '—'}
       </div>
       {selected && (
         <div

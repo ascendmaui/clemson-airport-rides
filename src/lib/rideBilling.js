@@ -27,6 +27,11 @@ export function fetchBillingQuote(body) {
   return api('/api/stripe-payment-methods?action=billing', { mode: 'quote', ...placesOnly(body) })
 }
 
+/** Same server fare the trip is saved with. Client money and isStudent are omitted. */
+export function fetchRideQuote(body) {
+  return api('/api/stripe-payment-methods?action=quote', placesOnly(body))
+}
+
 export function recordBillingChoice(body) {
   return api('/api/stripe-payment-methods?action=billing', {
     mode: 'record',

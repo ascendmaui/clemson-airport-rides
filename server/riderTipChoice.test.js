@@ -146,6 +146,18 @@ test('a small fare does not collapse every button to the same dollar', () => {
   assert.equal(new Set(priced.presets.map((row) => row.cents)).size, 3)
 })
 
+test('a minimum campus fare does not pretend the tip base is higher', () => {
+  const priced = priceTipPresets(590)
+  assert.equal(priced.fareCents, 590)
+  assert.equal(priced.basis, 'low_fare')
+  assert.equal(priced.presets.some((row) => row.percent != null), false)
+  const exact = priceTipPresets(700)
+  assert.equal(exact.basis, 'percent')
+  assert.equal(exact.fareCents, 700)
+  assert.deepEqual(exact.presets.map((row) => row.cents), [105, 140, 175])
+  assert.deepEqual(exact.presets.map((row) => row.percent), [15, 20, 25])
+})
+
 test('a large fare stays under the tip cap and stays distinct', () => {
   const priced = priceTipPresets(80000)
   assert.equal(priced.basis, 'percent')

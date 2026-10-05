@@ -1,100 +1,125 @@
 /**
  * POST /api/quote-fare
- * Preview a metered fare. Google Routes when coordinates are sent and the
- * server key is set; otherwise the caller can pass miles/minutes or an airport
- * code (Clemson campus → GSP/CLT fallback).
+ * Preview the fare that schedule, confirm, and driver request will save.
+ * Google Routes when coordinates are sent and the server key is set.
+ * Client fare, deposit, amount, total, miles, and isStudent are ignored.
+ * Student eligibility is studentDiscountGranted on the signed-in user.
  */
 import {
   admin, cors, json, parseBody, userFromAuth, computeRoutes,
 } from '../friendRideLib.js'
 import { loadGameDayMultiplier } from '../creditLots.js'
 import { studentDiscountGranted } from '../../src/lib/studentDomain.js'
+import { FARE_RATES_VERSION, splitPlatformFee } from '../../src/lib/fareRates.js'
 import {
-  quoteFare,
-  resolveSurge,
-  AIRPORT_ROUTE_FALLBACK,
-  FARE_RATES_VERSION,
-} from '../../src/lib/fareRates.js'
+  parseRideAt,
+  placesForServerFare,
+  riderTierQuotes,
+} from '../authoritativeFare.js'
 
-const CAMPUS = { lat: 34.6788, lng: -82.843 }
-const AIRPORTS = {
-  GSP: { lat: 34.8956, lng: -82.2189 },
-  CLT: { lat: 35.2144, lng: -80.9473 },
+const CLIENT_MONEY_KEYS = [
+  'fareCents',
+  'fare_cents',
+  'fare',
+  'depositCents',
+  'deposit_cents',
+  'deposit',
+  'amount',
+  'amountCents',
+  'amount_cents',
+  'total',
+  'totalCents',
+  'total_cents',
+  'listCents',
+  'list_cents',
+  'isStudent',
+  'is_student',
+  'miles',
+  'minutes',
+  'distanceM',
+  'durationS',
+  'vehicleMultiplier',
+  'isCarpool',
+]
+
+function withoutClientMoney(body) {
+  const next = { ...(body || {}) }
+  for (const key of CLIENT_MONEY_KEYS) delete next[key]
+  return next
 }
 
-export default async function handler(req, res) {
+async function distanceBetween(origin, dest, compute) {
+  if (!origin || !dest || origin.lat == null || dest.lat == null) {
+    return { distanceM: null, durationS: null }
+  }
+  const route = await compute(origin, dest, [])
+  if (route?.error) return { distanceM: null, durationS: null }
+  return { distanceM: route.distanceM ?? null, durationS: route.durationS ?? null }
+}
+
+export default async function handler(req, res, deps = {}) {
   if (cors(req, res)) return
   if (req.method !== 'POST') return json(res, 405, { error: 'Method not allowed' })
   const { body, error: pe } = parseBody(req)
   if (pe) return json(res, 400, { error: pe })
 
-  const airport = body.airport ? String(body.airport).toUpperCase() : null
-  const at = body.at ? new Date(body.at) : new Date()
-  let miles = body.miles != null ? Number(body.miles) : null
-  let minutes = body.minutes != null ? Number(body.minutes) : null
-  let distanceM = body.distanceM != null ? Number(body.distanceM) : null
-  let durationS = body.durationS != null ? Number(body.durationS) : null
-  let routeSource = miles != null || distanceM != null ? 'caller' : 'fallback'
+  const clean = withoutClientMoney(body)
+  const now = deps.now instanceof Date ? deps.now : new Date()
+  const when = parseRideAt(clean, now)
+  const located = placesForServerFare(clean)
+  if (located.error) return json(res, 400, { error: located.error })
 
-  if (body.origin && body.destination) {
-    const route = await computeRoutes(body.origin, body.destination, body.intermediates || [])
-    if (!route.error) {
-      distanceM = route.distanceM
-      durationS = route.durationS
-      miles = null
-      minutes = null
-      routeSource = 'google'
-    }
-  } else if (airport && AIRPORTS[airport] && miles == null && distanceM == null) {
-    const route = await computeRoutes(CAMPUS, AIRPORTS[airport], [])
-    if (!route.error) {
-      distanceM = route.distanceM
-      durationS = route.durationS
-      routeSource = 'google'
-    } else {
-      const fb = AIRPORT_ROUTE_FALLBACK[airport]
-      miles = fb.miles
-      minutes = fb.minutes
-      routeSource = 'fallback'
-    }
-  } else if (airport && AIRPORT_ROUTE_FALLBACK[airport] && miles == null && distanceM == null) {
-    miles = AIRPORT_ROUTE_FALLBACK[airport].miles
-    minutes = AIRPORT_ROUTE_FALLBACK[airport].minutes
-    routeSource = 'fallback'
-  }
-
-  let gameMul = null
-  let isStudent = false
-  const sb = admin()
+  const sb = deps.sb !== undefined ? deps.sb : admin()
+  const user = deps.user !== undefined ? deps.user : await userFromAuth(req)
+  let gameDayMultiplier = null
   if (sb) {
-    const game = await loadGameDayMultiplier(sb, at)
-    gameMul = game.multiplier
-    const user = await userFromAuth(req)
-    isStudent = studentDiscountGranted(user)
+    try {
+      const game = await loadGameDayMultiplier(sb, when)
+      gameDayMultiplier = game.multiplier
+    } catch {
+      gameDayMultiplier = null
+    }
   }
 
-  const touchesAirport = Boolean(airport) || Boolean(body.airport)
-  const surge = resolveSurge({ at, airport: touchesAirport, gameDayMultiplier: gameMul })
-  const quote = quoteFare({
-    miles,
-    minutes,
-    distanceM,
-    durationS,
-    surgeMultiplier: surge.multiplier,
-    isStudent,
-    isCarpool: Boolean(body.isCarpool) || Number(body.passengers) >= 2,
-    tier: body.tier || 'standard',
-    vehicleMultiplier: Number(body.vehicleMultiplier) || 1,
+  const compute = deps.computeRoutes || computeRoutes
+  const distance = await distanceBetween(located.pickup, located.dropoff, compute)
+  const tier = clean.tier === 'wait' || clean.tier === 'comfort' || clean.tier === 'tesla'
+    ? clean.tier
+    : 'standard'
+  const priced = riderTierQuotes({
+    pickup: located.pickup,
+    dropoff: located.dropoff,
+    airport: located.airport,
+    at: when,
+    isStudent: studentDiscountGranted(user),
+    tier,
+    gameDayMultiplier,
+    distanceM: distance.distanceM,
+    durationS: distance.durationS,
   })
+  const split = splitPlatformFee(priced.fareCents)
+  const breakdown = priced.breakdown || priced.quote?.breakdown || {}
 
   return json(res, 200, {
     version: FARE_RATES_VERSION,
-    routeSource,
-    surge,
-    studentDiscountApplied: isStudent,
-    quote,
-    fareCents: quote.fareCents,
-    platformFeeCents: quote.platformFeeCents,
-    driverEarningsCents: quote.driverEarningsCents,
+    routeSource: priced.routeSource,
+    surge: priced.surge,
+    studentDiscountApplied: Boolean(priced.isStudent),
+    estimate: Boolean(priced.estimate),
+    airport: priced.airport,
+    tier: priced.tier,
+    fareCents: priced.fareCents,
+    depositCents: priced.depositCents,
+    discountCents: priced.discountCents,
+    tiers: priced.tiers,
+    quote: {
+      fareCents: priced.fareCents,
+      cashCents: priced.fareCents,
+      miles: priced.quote?.miles,
+      minutes: priced.quote?.minutes,
+      breakdown,
+    },
+    platformFeeCents: split.platformFeeCents,
+    driverEarningsCents: split.driverEarningsCents,
   })
 }
