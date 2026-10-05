@@ -204,10 +204,11 @@ export default function PickDriver() {
             onPress={() => { void toggleFavorite(driver.id) }}
             hitSlop={16}
             accessibilityRole="button"
-            accessibilityLabel={saved ? 'Remove preferred driver' : 'Save preferred driver'}
+            accessibilityLabel={saved ? `Remove ${driver.name || 'this driver'} from saved drivers` : `Save ${driver.name || 'this driver'}`}
             accessibilityHint={saved ? 'Removes this driver from your preferred list' : 'Saves this driver as preferred'}
+            accessibilityState={{ selected: saved }}
           >
-            <Text style={saved ? styles.saveOn : styles.saveOff}>{saved ? 'Saved' : 'Save'}</Text>
+            <Text style={saved ? styles.saveOn : styles.saveOff}>{saved ? '★ Saved' : '☆ Save'}</Text>
           </Pressable>
         </View>
       </Pressable>
@@ -366,7 +367,9 @@ export default function PickDriver() {
         {student.verified && tier !== 'standard' ? (
           <Text style={styles.student}>Student pricing is 10% off Standard. This tier stays full price.</Text>
         ) : null}
-        {error && drivers.some((driver: OnlineDriver) => driver.online) ? <Text style={styles.error}>{error}</Text> : null}
+        {error && drivers.some((driver: OnlineDriver) => driver.online) ? (
+          <Text style={styles.error} accessibilityRole="alert" accessibilityLiveRegion="assertive">{error}</Text>
+        ) : null}
         <PrimaryButton
           label={busy ? 'Requesting…' : selectedDriver ? `Request ${selectedDriver.name}` : 'Select a driver'}
           onPress={onRequest}

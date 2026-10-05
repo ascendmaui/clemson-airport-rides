@@ -2,6 +2,13 @@
 
 Persistent knowledge base for recurring failures. When a matching issue appears, apply the saved fix first.
 
+## 2026-10-05 — Favorite star accessible name on pick-driver
+
+- **What was wrong:** The pick-driver favorite control read only as Save or Saved. Web had no `aria-label` or pressed state, and the native label did not name the driver, so the star did not say who would be saved or removed. A failed save on native was plain footer text with no alert announcement.
+- **What changed:** The control shows ★ when saved and ☆ when not. Web sets `aria-pressed` and `aria-label` (`Save {name}` / `Remove {name} from saved drivers`) and gives the empty-favorites status `aria-live="polite"`. Native sets the same label, `accessibilityState.selected`, and announces save failures with `accessibilityRole="alert"`. Empty-list copy and the account/phone error strings stay as they are.
+- **Files touched:** `src/screens/PickDriver.jsx`, `apps/rider/app/pick-driver.tsx`, `docs/FIXES.md`
+- **Verified:** `node --experimental-strip-types --test packages/rides-native/drivers.test.js` (37 pass) and `npm test` (2324 pass).
+
 ## 2026-10-05 — Favorite drivers: empty-list copy and visible save errors
 
 - **What was wrong:** Pick a driver hid an empty favorites list with no explanation. `saveFavoriteDriverIds` treated an account or phone write failure as a quiet note (`Saved on this phone.`) or swallowed the storage error, and both pick-driver screens never put that failure on the error alert.

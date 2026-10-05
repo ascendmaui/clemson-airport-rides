@@ -207,7 +207,7 @@ export function PickDriver({
           <p style={{ marginTop: 8, fontSize: 12, fontWeight: 700, color: 'var(--purple)' }}>{favNote}</p>
         )}
         {!loading && favoriteIds.length === 0 ? (
-          <p role="status" style={{ marginTop: 8, fontSize: 13, color: 'var(--ink-secondary)', lineHeight: 1.45 }}>
+          <p role="status" aria-live="polite" style={{ marginTop: 8, fontSize: 13, color: 'var(--ink-secondary)', lineHeight: 1.45 }}>
             {EMPTY_FAVORITES_COPY}
           </p>
         ) : null}
@@ -307,12 +307,16 @@ export function PickDriver({
                         <button
                           type="button"
                           className="pressable"
+                          aria-pressed={saved}
+                          aria-label={saved ? `Remove ${d.name || 'this driver'} from saved drivers` : `Save ${d.name || 'this driver'}`}
                           onClick={(event) => {
                             event.stopPropagation()
                             toggleFavorite(d.id)
                           }}
-                          style={{ fontSize: 12, fontWeight: 800, color: saved ? '#fff' : 'var(--orange)', background: saved ? 'var(--purple)' : 'transparent', borderRadius: 999, padding: '4px 10px' }}
+                          style={{ fontSize: 12, fontWeight: 800, color: saved ? '#fff' : 'var(--orange)', background: saved ? 'var(--purple)' : 'transparent', borderRadius: 999, padding: '4px 10px', minHeight: 44 }}
                         >
+                          <span aria-hidden="true">{saved ? '★' : '☆'}</span>
+                          {' '}
                           {saved ? 'Saved' : 'Save'}
                         </button>
                       </div>
