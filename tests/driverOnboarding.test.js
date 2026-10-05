@@ -17,6 +17,7 @@ import {
   statusAfterInfoSave,
   blockerLabel,
   submissionBlockers,
+  w9ContinueIssue,
 } from '../shared/driverOnboarding.js'
 
 test('new drivers are not approved by an info save', () => {
@@ -162,6 +163,53 @@ test('submit stays blocked until employment, W-9, and the signed agreement exist
   const missingWork = { ...readyDocs, workEligibilityAttested: false }
   assert.ok(submissionBlockers(missingWork).includes('work_eligibility_attestation'))
   assert.equal(firstIncompleteStepId(missingWork), 'employment')
+})
+
+test('W-9 continue follows the typed tax record, not a file the step cannot upload', () => {
+  assert.equal(REQUIRED_DOC_IDS.includes('w9'), false)
+  assert.equal(w9ContinueIssue({
+    legalName: 'Ada Lovelace',
+    taxClass: 'individual',
+    tin: '123-45-6789',
+  }), null)
+  assert.match(
+    w9ContinueIssue({ legalName: 'A', taxClass: 'individual', tin: '123456789' }),
+    /legal name/i,
+  )
+  assert.match(
+    w9ContinueIssue({ legalName: 'Ada Lovelace', taxClass: 'nope', tin: '123456789' }),
+    /classification/i,
+  )
+  assert.match(
+    w9ContinueIssue({ legalName: 'Ada Lovelace', taxClass: 'individual', tin: '1234' }),
+    /9-digit TIN/,
+  )
+  assert.equal(w9ContinueIssue({
+    legalName: 'Ada Lovelace',
+    taxClass: 'individual',
+    tin: '',
+    taxSaved: true,
+  }), null)
+
+  const savedTax = {
+    status: 'pending_docs',
+    uploaded: REQUIRED_DOC_IDS,
+    backgroundAuthorized: true,
+    workEligibilityAttested: true,
+    workEligibilityCategory: 'citizen',
+    taxSaved: true,
+    agreementSigned: true,
+    agreementVersion: IC_AGREEMENT_VERSION,
+  }
+  assert.equal(submissionBlockers(savedTax).includes('doc:w9'), false)
+  assert.equal(submissionBlockers(savedTax).includes('w9_tax_info'), false)
+  assert.ok(submissionBlockers({ ...savedTax, taxSaved: false }).includes('w9_tax_info'))
+
+  const screen = readFileSync(new URL('../src/screens/DriverOnboarding.jsx', import.meta.url), 'utf8')
+  assert.doesNotMatch(screen, /w9DocReady|uploaded\.includes\('w9'\)/)
+  assert.match(screen, /w9ContinueIssue/)
+  assert.match(screen, /id="w9-continue-reason"/)
+  assert.match(screen, /You do not upload a file/)
 })
 
 test('TIN display is last-4 only', () => {
