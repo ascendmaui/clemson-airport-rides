@@ -228,12 +228,12 @@ test('credits can be selected only when the server balance covers the server far
     airport: 'GSP',
   })
   assert.equal(airport.campus, false)
-  assert.equal(airport.depositCents, Math.round(6400 * 0.25))
+  assert.equal(airport.depositCents, 0)
   assert.equal(airport.creditsSelectable, false)
-  assert.equal(airport.options.some((row) => row.id === 'no_card'), false)
+  assert.equal(airport.options.some((row) => row.id === 'no_card'), true)
 })
 
-test('airport checkout quotes a 25% deposit and ignores client money', async () => {
+test('airport checkout quotes no upfront deposit and ignores client money', async () => {
   const sb = createSb({ balance: 0 })
   const low = await call(handleBilling, {
     mode: 'quote',
@@ -254,7 +254,7 @@ test('airport checkout quotes a 25% deposit and ignores client money', async () 
   assert.equal(high.status, 200)
   assert.equal(low.json.fareCents, high.json.fareCents)
   assert.equal(low.json.depositCents, cardDepositCents(low.json.fareCents))
-  assert.equal(low.json.depositCents, Math.round(low.json.fareCents * 0.25))
+  assert.equal(low.json.depositCents, 0)
   assert.equal(low.json.campus, false)
   assert.equal(low.json.creditsSelectable, false)
   assert.equal(low.json.balanceCents, 0)
@@ -343,14 +343,14 @@ test('campus rides still complete with no card, and airport pick-a-driver does n
     billingChoice: 'credits',
     ...SPOOF,
   }, depsFor(airport, rider('fan@gmail.com')))
-  assert.equal(held.status, 409)
-  assert.equal(held.json.code, 'airport_deposit_required')
-  assert.equal(airport.state.trips.length, 0)
+  assert.equal(held.status, 200, JSON.stringify(held.json))
+  assert.equal(held.json.trip.deposit_cents, 0)
+  assert.equal(airport.state.trips[0].metadata.billing_choice, 'credits')
   assert.equal(airport.state.balance, 100000)
   assert.equal(airport.state.creditWrites.length, 0)
 })
 
-test('scheduling records credits or the 25% deposit request without spending the balance', async () => {
+test('scheduling records credits or a retired deposit choice without spending the balance', async () => {
   const preview = await call(handleBilling, {
     mode: 'quote',
     ...campus,
@@ -395,8 +395,8 @@ test('scheduling records credits or the 25% deposit request without spending the
     now: new Date('2026-09-21T16:00:00.000Z').getTime(),
   })
   assert.equal(deposit.status, 200, JSON.stringify(deposit.json))
-  assert.equal(airport.state.trips[0].metadata.billing_choice, 'deposit')
-  assert.equal(airport.state.trips[0].deposit_cents, cardDepositCents(airport.state.trips[0].fare_cents))
+  assert.equal(airport.state.trips[0].metadata.billing_choice, 'no_card')
+  assert.equal(airport.state.trips[0].deposit_cents, 0)
   assert.equal(airport.state.trips[0].metadata.billing_charged, false)
   assert.equal(airport.state.creditWrites.length, 0)
 })

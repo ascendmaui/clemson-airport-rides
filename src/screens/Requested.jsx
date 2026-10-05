@@ -327,7 +327,7 @@ export function Requested({ dest = 'GSP Airport', trip = '', driver = 'your driv
       <div className="glass-panel glass-panel--elevated" style={{ padding: 24, borderRadius: 20 }}>
         {paid === '1' && trip && !tripMissing && (status === 'searching' || status === 'offered' || !status) && (
           <p style={{ color: '#522D80', fontWeight: 700, fontSize: 13, lineHeight: 1.45, marginTop: 0 }}>
-            Stripe Checkout sent you back. This ride is in the open pool. The deposit shows up when Stripe confirms it.
+            This ride is in the open pool. The final fare is charged when the trip ends.
           </p>
         )}
         {tripMissing && (

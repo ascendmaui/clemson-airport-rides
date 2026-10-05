@@ -49,17 +49,20 @@ import {
   studentTripMeta,
 } from './riderMoney.js'
 
-test('25% deposit matches the fare card and recomputes when the fare changes', () => {
+test('new quotes have no upfront deposit', () => {
   for (const cents of [0, 40, 49, 50, 100, 590, 9999, 12345]) {
     assert.equal(cardDepositCents(cents), fareCardDeposit(cents))
+    assert.equal(cardDepositCents(cents), 0)
   }
   const gsp = recomputeDeposit({ fareCents: 10000 })
   const clt = recomputeDeposit({ fareCents: 18420 })
-  assert.equal(gsp.depositCents, 2500)
-  assert.equal(clt.depositCents, 4605)
-  assert.notEqual(gsp.depositCents, clt.depositCents)
+  assert.equal(gsp.depositCents, 0)
+  assert.equal(clt.depositCents, 0)
+  assert.equal(gsp.fareCents, 10000)
+  assert.equal(clt.fareCents, 18420)
   const afterCredits = recomputeDeposit({ fareCents: 10000, cashCents: 4000 })
-  assert.equal(afterCredits.depositCents, 1000)
+  assert.equal(afterCredits.depositCents, 0)
+  assert.equal(afterCredits.cashCents, 4000)
 })
 
 test('quote parser drops a stale deposit and uses the new cash remainder', () => {
@@ -78,11 +81,12 @@ test('quote parser drops a stale deposit and uses the new cash remainder', () =>
     },
     surge: { multiplier: 1.35, rule: { id: 'airport_rush', label: 'Airport rush' } },
   })
-  assert.equal(first.depositCents, 2000)
-  assert.equal(next.depositCents, 1800)
+  assert.equal(first.depositCents, 0)
+  assert.equal(next.depositCents, 0)
   assert.equal(next.studentDiscountCents, 800)
   assert.equal(next.surgeLabel, 'Airport rush')
-  assert.notEqual(first.depositCents, next.depositCents)
+  assert.equal(first.fareCents, 8000)
+  assert.equal(next.fareCents, 7200)
 
   const omittedCash = parseQuoteResponse({ quote: { fareCents: 4000, breakdown: {} } })
   assert.equal(omittedCash.cashCents, 4000)
@@ -219,18 +223,18 @@ test('home, confirm, and tiers promise 10% off Standard only for a confirmed Cle
   }
 })
 
-test('fallback fare recomputes the 25% deposit for airport, surge, and student', () => {
+test('fallback fare keeps airport, surge, and student prices with no upfront deposit', () => {
   const quiet = new Date('2026-09-22T16:00:00Z')
   const gsp = previewAirportFare({ airport: 'GSP', isStudent: false, at: quiet })
   const clt = previewAirportFare({ airport: 'CLT', isStudent: false, at: quiet })
   const student = previewAirportFare({ airport: 'GSP', isStudent: true, at: quiet })
   const rush = previewAirportFare({ airport: 'GSP', isStudent: false, at: new Date('2026-09-23T20:00:00Z') })
   assert.ok(clt.fareCents > gsp.fareCents)
-  assert.equal(gsp.depositCents, cardDepositCents(gsp.cashCents))
-  assert.equal(clt.depositCents, cardDepositCents(clt.cashCents))
-  assert.notEqual(gsp.depositCents, clt.depositCents)
+  assert.equal(gsp.depositCents, 0)
+  assert.equal(clt.depositCents, 0)
+  assert.ok(clt.fareCents > gsp.fareCents)
   assert.ok(student.studentDiscountCents > 0)
-  assert.ok(student.depositCents < gsp.depositCents)
+  assert.ok(student.fareCents < gsp.fareCents)
   assert.ok(rush.fareCents > gsp.fareCents)
   assert.equal(rush.surgeLabel, 'Airport rush')
   assert.equal(paymentRouteMissing({ status: 400, message: 'Unknown payment method action' }), true)
@@ -267,37 +271,32 @@ test('promo claim copy and referral reward text', () => {
   assert.match(rewards.referred, /20%/)
 })
 
-test('deposit copy shows full fare, 25% deposit, and remaining balance', () => {
+test('deposit copy shows a card hold, and a stored payment stays already paid', () => {
   const student = studentDiscountCents(10000, { isStudent: true, tier: 'standard' })
   const balance = depositBalance({ fareCents: student.fareCents })
   assert.equal(student.fareCents, 9000)
-  assert.equal(balance.depositCents, 2250)
-  assert.equal(balance.remainingCents, 6750)
-  assert.ok(balance.depositCents < depositBalance({ fareCents: 10000 }).depositCents)
+  assert.equal(balance.depositCents, 0)
+  assert.equal(balance.remainingCents, 9000)
   const quote = depositSurfaceCopy(balance, 'quote', { studentDiscountCents: student.discountCents })
-  assert.match(quote, /Full fare \$90\.00/)
-  assert.match(quote, /25% deposit of \$22\.50/)
-  assert.match(quote, /Remaining balance \$67\.50/)
+  assert.match(quote, /Estimated fare \$90\.00/)
+  assert.match(quote, /card hold/)
   assert.match(quote, /10% Standard student discount/)
-  assert.match(depositSurfaceCopy(balance, 'confirm'), /due when the trip is complete/)
-  assert.equal(
-    depositSurfaceCopy(balance, 'upcoming'),
-    'Deposit $22.50 · remaining balance $67.50',
-  )
+  assert.match(depositSurfaceCopy(balance, 'confirm'), /final fare is charged when the trip ends/)
+  assert.equal(depositSurfaceCopy(balance, 'upcoming'), null)
   assert.equal(depositSurfaceCopy({ fareCents: 8000, depositCents: 0 }, 'upcoming'), null)
   const preset = depositSurfaceCopy(
     { fareCents: 10000, depositCents: 100, remainingCents: 5000 },
     'upcoming',
   )
-  assert.equal(preset, 'Deposit $1.00 · remaining balance $50.00')
+  assert.equal(preset, 'Already paid $1.00 · remaining $50.00')
   const lines = depositReceiptLines({ fare_cents: 9000, deposit_cents: 2250 })
-  assert.deepEqual(lines, ['25% deposit: $22.50', 'Remaining balance: $67.50'])
+  assert.deepEqual(lines, ['Already paid: $22.50', 'Remaining balance: $67.50'])
   assert.deepEqual(depositReceiptLines(null), [])
   assert.deepEqual(depositReceiptLines({ fare_cents: 9000 }), [])
   assert.deepEqual(depositReceiptLines({ fare_cents: 9000, deposit_cents: '' }), [])
   assert.deepEqual(depositReceiptLines({ fare_cents: 9000, deposit_cents: 0 }), [])
   assert.deepEqual(depositReceiptLines({ fare_cents: 1000, deposit_cents: 5000 }), [
-    '25% deposit: $10.00',
+    'Already paid: $10.00',
     'Remaining balance: $0.00',
   ])
   assert.deepEqual(depositReceiptLines({ fare_cents: 9000, deposit_cents: '2250' }), lines)
@@ -310,7 +309,7 @@ test('deposit copy shows full fare, 25% deposit, and remaining balance', () => {
     dropoff_label: 'GSP',
   })
   assert.match(receipt, /Fare:/)
-  assert.match(receipt, /25% deposit: \$22\.50/)
+  assert.match(receipt, /Already paid: \$22\.50/)
   assert.match(receipt, /Remaining balance: \$67\.50/)
   assert.equal(checkoutFailureCopy({ message: 'Payments unavailable', payload: { message: 'STRIPE_SECRET_KEY is not configured. Checkout cannot start.' } }), STRIPE_NOT_CONFIGURED_COPY)
   assert.equal(paymentRouteMissing({ status: 503, message: 'Payments unavailable', payload: { message: 'STRIPE_SECRET_KEY is not configured. Checkout cannot start.' } }), false)
@@ -1270,9 +1269,9 @@ test('abandonAirportCheckout calls abandon-checkout API endpoint', async () => {
 test('depositSurfaceCopy covers receipt surface and error cases', () => {
   const balance = depositBalance({ fareCents: 10000, depositCents: 2500 })
   const receipt = depositSurfaceCopy(balance, 'receipt', { studentDiscountCents: 1000 })
-  assert.equal(receipt, '25% deposit $25.00. Remaining balance $75.00. The 10% Standard student discount is already in that fare.')
+  assert.equal(receipt, 'Already paid $25.00. Remaining balance $75.00. The 10% Standard student discount is already in that fare.')
   const receiptNoStudent = depositSurfaceCopy(balance, 'receipt')
-  assert.equal(receiptNoStudent, '25% deposit $25.00. Remaining balance $75.00.')
+  assert.equal(receiptNoStudent, 'Already paid $25.00. Remaining balance $75.00.')
 
   assert.throws(
     () => depositSurfaceCopy(balance, 'nonexistent_surface'),

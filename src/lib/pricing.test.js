@@ -372,7 +372,7 @@ test('priceAirportRide: GSP fallback route, student, no surge', async () => {
   assert.equal(r.fareCents, 6161)
   assert.equal(r.discountCents, 685)
   assert.equal(r.studentLabel, STUDENT_LABEL)
-  assert.equal(r.depositCents, 1540) // round(6161 * 0.25)
+  assert.equal(r.depositCents, 0)
   assert.equal(r.depositCents, cardDepositCents(r.fareCents))
   assert.equal(r.platformFeeCents, 1232) // 20%
   assert.equal(r.driverEarningsCents, 4929)
@@ -401,7 +401,7 @@ test('priceAirportRide: CLT fallback route, student', async () => {
   const r = await priceAirportRide({ airport: 'CLT', isStudent: true, at: WED_NOON_ET })
   assert.equal(r.fareCents, CLT_BASE - 1754) // 15790
   assert.equal(r.discountCents, 1754)
-  assert.equal(r.depositCents, Math.round(15790 * 0.25))
+  assert.equal(r.depositCents, 0)
 })
 
 test('priceAirportRide: game day + airport rush + student stack as highest-surge-then-discount', async () => {

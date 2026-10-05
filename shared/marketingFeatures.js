@@ -4,7 +4,7 @@ export const MARKETING_FEATURES = [
   {
     id: 'airport',
     title: 'Airport rides',
-    body: 'Schedule a ride to Greenville-Spartanburg (GSP) or Charlotte Douglas (CLT). Schedule shows the current fare, and a 25% deposit holds the trip.',
+    body: 'Schedule a ride to Greenville-Spartanburg (GSP) or Charlotte Douglas (CLT). Schedule shows the current fare. The final fare is charged when the trip ends.',
   },
   {
     id: 'student',
@@ -29,6 +29,6 @@ export const MARKETING_FEATURES = [
   {
     id: 'schedule',
     title: 'Schedule',
-    body: 'Plan a pickup ahead of time, or hold an airport ride with a 25% deposit, from the Schedule tab.',
+    body: 'Plan a pickup ahead of time from the Schedule tab. Scheduling does not charge the card.',
   },
 ]

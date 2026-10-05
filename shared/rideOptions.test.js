@@ -85,7 +85,7 @@ test('retired and unknown ride options are rejected and labeled without pricing'
   assert.equal(rideOptionLabel('xl'), 'Retired option')
 })
 
-test('schedule-ahead 10% applies only past the lead time and reprices a deposit from the discounted fare', () => {
+test('schedule-ahead 10% applies only past the lead time and does not add an upfront charge', () => {
   assert.equal(scheduleAheadApplies(LATER, NOW), true)
   assert.equal(scheduleAheadApplies(SOON, NOW), false)
   const airport = applyScheduleAheadDiscount(
@@ -96,7 +96,7 @@ test('schedule-ahead 10% applies only past the lead time and reprices a deposit 
   assert.equal(airport.scheduleDiscountCents, 1000)
   assert.equal(airport.fareBeforeScheduleDiscountCents, 10000)
   assert.equal(airport.fareCents, 9000)
-  assert.equal(airport.depositCents, 2250)
+  assert.equal(airport.depositCents, 0)
   assert.equal(airport.breakdown.schedule_discount_cents, 1000)
 
   const campus = applyScheduleAheadDiscount(

@@ -79,7 +79,7 @@ function HistoryScreen() {
           <View key={row.id} style={[styles.card, lift(colors, 'rest')]}>
             <Text style={styles.cardTitle}>{row.dropoff_label || 'Ride'}</Text>
             <Text style={styles.copy}>{row.pickup_label || 'Pickup'} · {row.status || 'requested'}</Text>
-            <Text style={styles.copy}>Fare {formatCents(row.fare_cents || 0)} · deposit {formatCents(row.deposit_cents || 0)}</Text>
+            <Text style={styles.copy}>Fare {formatCents(row.fare_cents || 0)}{row.deposit_cents ? ` · already paid ${formatCents(row.deposit_cents)}` : ''}</Text>
             {row.status === 'completed' && row.driver_id ? (
               <Pressable
                 accessibilityRole="button"

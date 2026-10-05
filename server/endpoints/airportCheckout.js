@@ -1,14 +1,12 @@
 /**
  * POST /api/airport-checkout
- * Quotes the metered airport fare (surge + student), optionally spends ride
- * credits, and opens Stripe Checkout for the card deposit (25% of the cash
- * remainder). A fully credit-funded fare does not open Checkout.
- * Platform 20% is stored on the trip (full rider price) and on each captured
- * charge (deposit cash, and credit redemption when checkout completes).
+ * Quotes the metered airport fare (surge + student) and books the trip.
+ * No upfront deposit and no Schedule card hold. A fare fully covered by
+ * ride credits is debited now. Any card fare is charged when the trip ends.
+ * Platform 20% is stored on the trip from the full rider price.
  */
 import {
-  admin, cors, json, parseBody, userFromAuth, stripeClient, stripeOk,
-  ensureStripeCustomer, computeRoutes,
+  admin, cors, json, parseBody, userFromAuth, computeRoutes,
 } from '../friendRideLib.js'
 import { ensureProfile } from '../ensureProfile.js'
 import {
@@ -18,16 +16,7 @@ import { studentDiscountGranted } from '../../src/lib/studentDomain.js'
 import { quoteAirportCheckout } from '../authoritativeFare.js'
 import { tigerPassBpsForRider } from '../riderPass.js'
 import { tigerPassMetadata } from '../../shared/tigerPass.js'
-import {
-  splitPlatformFee,
-  feeMetadata,
-  cardDepositCents,
-  depositSplit,
-  depositSplitLabel,
-} from '../../src/lib/fareRates.js'
-import { checkoutSuccessHash } from '../../packages/rides-native/liveTrip.js'
-import { cancelUnopenedCheckoutTrip, rememberCheckoutSession } from '../abandonedCheckout.js'
-import { WEB_ORIGIN } from '../../shared/productLinks.js'
+import { splitPlatformFee } from '../../src/lib/fareRates.js'
 
 const CAMPUS = { label: 'Memorial Stadium', lat: 34.6788, lng: -82.843 }
 const AIRPORTS = {
@@ -70,11 +59,6 @@ export default async function handler(req, res, deps = {}) {
     }
   }
 
-  const { data: profile } = await sb
-    .from('profiles')
-    .select('id, email, full_name, stripe_customer_id')
-    .eq('id', user.id)
-    .maybeSingle()
   const isStudent = studentDiscountGranted(user)
   const tigerPassBps = await tigerPassBpsForRider(sb, user.id, at)
 
@@ -106,20 +90,9 @@ export default async function handler(req, res, deps = {}) {
     fareCents: quoted.fareBeforeCreditsCents,
     useCredits,
   })
-  const fareSplit = splitPlatformFee(settlement.riderPaysCents)
-  const depositCents = cardDepositCents(settlement.cashCents)
-  const split = depositSplit(settlement.riderPaysCents, depositCents)
-
-  const isStripeConfigured = deps.stripeOk ? deps.stripeOk() : stripeOk()
-  if (depositCents > 0 && !isStripeConfigured) {
-    return json(res, 503, {
-      error: 'Payments unavailable',
-      message: 'STRIPE_SECRET_KEY is not configured. Checkout cannot start.',
-      fareCents: settlement.riderPaysCents,
-      depositCents,
-      remainingCents: split.remainingCents,
-    })
-  }
+  const coveredByCredits = settlement.cashCents <= 0 && settlement.creditsDebitedCents > 0
+  const fareCents = coveredByCredits ? settlement.riderPaysCents : quoted.fareBeforeCreditsCents
+  const fareSplit = splitPlatformFee(fareCents)
 
   const profileRes = await runEnsureProfile(sb, user)
   if (!profileRes?.ok) {
@@ -138,8 +111,8 @@ export default async function handler(req, res, deps = {}) {
       pickup_lng: CAMPUS.lng,
       dropoff_lat: dest.lat,
       dropoff_lng: dest.lng,
-      fare_cents: settlement.riderPaysCents,
-      deposit_cents: depositCents,
+      fare_cents: fareCents,
+      deposit_cents: 0,
       platform_fee_cents: fareSplit.platformFeeCents,
       driver_earnings_cents: fareSplit.driverEarningsCents,
       surge_multiplier: surge.multiplier,
@@ -159,8 +132,9 @@ export default async function handler(req, res, deps = {}) {
       metadata: {
         kind: scheduledFor ? 'scheduled' : 'airport',
         airport,
-        pending_credit_debits: depositCents > 0 ? settlement.debits : [],
-        credits_applied: false,
+        pending_credit_debits: [],
+        credits_applied: coveredByCredits,
+        due_at_trip_end_cents: coveredByCredits ? 0 : fareCents,
         ...tigerPassMetadata(priced),
       },
     })
@@ -168,105 +142,40 @@ export default async function handler(req, res, deps = {}) {
     .single()
   if (tripErr) return json(res, 500, { error: tripErr.message || 'Could not create trip' })
 
-  if (depositCents <= 0) {
-    if (settlement.creditsDebitedCents > 0) {
-      try {
-        await debitLots(sb, {
-          profileId: user.id,
-          debits: settlement.debits,
-          note: `airport:${trip.id}`,
-          tripId: trip.id,
-        })
-        await insertChargePayment(sb, {
-          riderId: user.id,
-          tripId: trip.id,
-          kind: 'ride_fare',
-          amountCents: settlement.creditsDebitedCents,
-          metadata: { method: 'credits', airport, discount_cents: settlement.creditDiscountCents },
-        })
-      } catch (err) {
-        await sb.from('trips').update({ status: 'canceled', canceled_at: new Date().toISOString() }).eq('id', trip.id)
-        return json(res, 409, { error: err.message || 'Could not spend credits' })
-      }
+  if (coveredByCredits) {
+    try {
+      await debitLots(sb, {
+        profileId: user.id,
+        debits: settlement.debits,
+        note: `airport:${trip.id}`,
+        tripId: trip.id,
+      })
+      await insertChargePayment(sb, {
+        riderId: user.id,
+        tripId: trip.id,
+        kind: 'ride_fare',
+        amountCents: settlement.creditsDebitedCents,
+        metadata: { method: 'credits', airport, discount_cents: settlement.creditDiscountCents },
+      })
+    } catch (err) {
+      await sb.from('trips').update({ status: 'canceled', canceled_at: new Date().toISOString() }).eq('id', trip.id)
+      return json(res, 409, { error: err.message || 'Could not spend credits' })
     }
-    await sb.from('trips').update({
-      metadata: {
-        kind: scheduledFor ? 'scheduled' : 'airport',
-        airport,
-        pending_credit_debits: [],
-        credits_applied: true,
-      },
-    }).eq('id', trip.id)
-    return json(res, 200, {
-      paidWithCredits: true,
-      tripId: trip.id,
-      fareCents: settlement.riderPaysCents,
-      depositCents: 0,
-      studentDiscountApplied: isStudent,
-      surge,
-      routeSource,
-    })
   }
 
-  try {
-    const stripe = deps.stripe || (deps.stripeClient ? deps.stripeClient() : stripeClient())
-    let customerId = null
-    if (profile) {
-      try { customerId = await ensureStripeCustomer(stripe, sb, profile) } catch { /* guest checkout */ }
-    }
-    const origin = body.origin || process.env.VITE_APP_URL || WEB_ORIGIN
-    const depositFee = splitPlatformFee(depositCents)
-    const session = await stripe.checkout.sessions.create({
-      mode: 'payment',
-      customer: customerId || undefined,
-      success_url: `${origin}/${checkoutSuccessHash({ tripId: trip.id, scheduled: Boolean(scheduledFor) })}&session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${origin}/#/schedule?canceled=1&trip=${trip.id}`,
-      line_items: [{
-        quantity: 1,
-        price_data: {
-          currency: 'usd',
-          unit_amount: depositCents,
-          product_data: {
-            name: `Clemson RIDES ${airport} deposit (25%)`,
-            description: depositSplitLabel(split),
-          },
-        },
-      }],
-      metadata: {
-        ...feeMetadata(depositCents, {
-          kind: 'airport_deposit',
-          airport,
-          tripId: trip.id,
-          riderId: user.id,
-          fareCents: settlement.riderPaysCents,
-          depositCents,
-        }),
-        fare_platform_fee_cents: String(fareSplit.platformFeeCents),
-        fare_driver_earnings_cents: String(fareSplit.driverEarningsCents),
-      },
-    })
-    const remembered = await rememberCheckoutSession(sb, trip.id, session.id)
-    if (!remembered.ok) console.error('[airport-checkout] session bind', remembered.error)
-    return json(res, 200, {
-      id: session.id,
-      url: session.url,
-      tripId: trip.id,
-      airport,
-      fareCents: settlement.riderPaysCents,
-      depositCents,
-      studentDiscountApplied: isStudent,
-      platformFeeCents: depositFee.platformFeeCents,
-      driverEarningsCents: depositFee.driverEarningsCents,
-      surge,
-      routeSource,
-      currency: 'usd',
-    })
-  } catch (err) {
-    console.error('[airport-checkout]', err)
-    await cancelUnopenedCheckoutTrip(sb, trip.id, {
-      reason: 'checkout_create_failed',
-      source: 'airport_checkout',
-    })
-    return json(res, 500, { error: err.message || 'Stripe error', tripId: trip.id })
-  }
+  return json(res, 200, {
+    paidWithCredits: coveredByCredits,
+    charged: false,
+    tripId: trip.id,
+    airport,
+    fareCents,
+    depositCents: 0,
+    dueAtTripEndCents: coveredByCredits ? 0 : fareCents,
+    studentDiscountApplied: isStudent,
+    platformFeeCents: fareSplit.platformFeeCents,
+    driverEarningsCents: fareSplit.driverEarningsCents,
+    surge,
+    routeSource,
+    currency: 'usd',
+  })
 }

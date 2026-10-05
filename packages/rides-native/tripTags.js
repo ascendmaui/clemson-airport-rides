@@ -82,14 +82,13 @@ export function tripEarnedCents(trip) {
   return driverNetCents(trip?.fare_cents ?? trip?.fareCents)
 }
 
-/** 25% airport deposit. A stored deposit_cents wins over the formula. */
+/** Stored amount already collected on an older trip. New trips are not given a deposit. */
 export function depositSliceCents(fareCents, stored) {
+  void fareCents
   if (stored != null && stored !== '' && Number.isFinite(Number(stored))) {
     return Math.max(0, Math.round(Number(stored)))
   }
-  const fare = Math.max(0, Math.round(Number(fareCents) || 0))
-  if (!fare) return 0
-  return Math.round(fare * 0.25)
+  return 0
 }
 
 function metaOf(row) {
@@ -233,10 +232,10 @@ export const TAG_LABELS = {
  * their own phone and the server settles the remainder off-session on complete.)
  */
 export const APPLE_PAY_DRIVER_COPY =
-  'The rider already paid a 25% deposit. The rest is charged to their card automatically when you complete the trip.'
+  'Part of this fare is already paid. The rest is charged to the rider’s card when you complete the trip.'
 
 export const NO_DEPOSIT_DRIVER_COPY =
-  'The fare is charged to the rider’s card automatically when you complete the trip.'
+  'The final fare is charged to the rider’s card when you complete the trip.'
 
 /** Short payment note for the driver. Only mentions a deposit when one was taken. */
 export function driverFareNote(depositCents) {
@@ -504,7 +503,7 @@ function carpoolCardFields(row) {
   }
 }
 
-/** Fare, 25% deposit, remainder still collected on complete, and the 80/20 split. */
+/** Fare, any amount already paid, the rest charged on complete, and the 80/20 split. */
 export function fareCollection(card) {
   const shares = Array.isArray(card?.shares) ? card.shares : carpoolShareLines(card?.metadata)
   const shareSum = shares.reduce((sum, share) => sum + (Number(share.shareCents) || 0), 0)

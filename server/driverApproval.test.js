@@ -322,7 +322,7 @@ test('requestDriverTrip skips a pending_review driver and opens a campus offer f
   assert.equal(approvedSb.tables.trips[0].metadata.purpose, 'planned')
 })
 
-test('requestDriverTrip does not insert an unpaid airport deposit from pick-a-driver', async () => {
+test('requestDriverTrip books an airport ride from pick-a-driver with no upfront deposit', async () => {
   const approvedSb = memorySb({
     driver_applications: [{ profile_id: 'driver-approved', onboarding_status: 'approved' }],
     driver_status: [{ driver_id: 'driver-approved', online: true }],
@@ -345,10 +345,11 @@ test('requestDriverTrip does not insert an unpaid airport deposit from pick-a-dr
       return { ok: true }
     },
   })
-  assert.equal(res.status, 409)
-  assert.equal(res.json.code, 'airport_deposit_required')
-  assert.equal(ensured, false)
-  assert.equal(approvedSb.tables.trips?.length || 0, 0)
+  assert.equal(res.status, 200, JSON.stringify(res.json))
+  assert.equal(ensured, true)
+  assert.equal(approvedSb.tables.trips.length, 1)
+  assert.equal(approvedSb.tables.trips[0].deposit_cents, 0)
+  assert.equal(approvedSb.tables.trips[0].status, 'searching')
 })
 
 test('requestDriverTrip keeps the campus trip when the event insert fails', async () => {

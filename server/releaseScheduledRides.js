@@ -5,10 +5,11 @@ import { notifyDriverOffer } from './driverOfferAlerts.js'
 import { ACTIONABLE_LEAD_MS } from '../src/lib/scheduledRideModel.js'
 import { isNearTermTrip } from '../shared/nearTermSlots.js'
 import { exclusiveOfferPatch, poolOfferPatch } from '../packages/rides-native/offerLadder.js'
+import { authorizeRideRequest } from './fareAuthorization.js'
 
 /** Reuse live dispatch unchanged. Preserve the reservation time in metadata. */
 export async function releaseScheduledRides(sb, {
-  now = new Date(), dryRun = false, limit = 100, alertDriver = notifyDriverOffer,
+  now = new Date(), dryRun = false, limit = 100, alertDriver = notifyDriverOffer, stripe = null,
 } = {}) {
   const due = await sb.from('trips').select('*')
     .eq('status', 'scheduled').is('driver_id', null).eq('deposit_cents', 0)
@@ -57,6 +58,19 @@ export async function releaseScheduledRides(sb, {
       if (updated.error) throw new Error(updated.error.message)
       if (!updated.data) { result.skipped++; continue }
       result.released++
+      if (!expired) {
+        try {
+          await authorizeRideRequest({
+            sb,
+            stripe,
+            trip: { ...trip, metadata },
+            riderId: trip.rider_id,
+            estimatedFareCents: trip.fare_cents,
+          })
+        } catch (error) {
+          console.error('[scheduled-release] fare auth', trip.id, error.message)
+        }
+      }
       if (!expired && queue[0]) {
         try {
           await alertDriver(sb, { trip, driverId: queue[0], offerMarker: 'scheduled-release' })

@@ -17,7 +17,7 @@ export const PRIVACY_SECTIONS = [
     bullets: [
       'Account details: name, email, and authentication identifiers from Supabase Auth. A Clemson (@clemson.edu) email may unlock student pricing.',
       'Student verification markers such as student_verified_at when your Clemson email is confirmed.',
-      'Trip details: pickup/dropoff labels and coordinates, scheduled time, fare/deposit amounts, status history, and driver assignment.',
+      'Trip details: pickup/dropoff labels and coordinates, scheduled time, fare amounts, status history, and driver assignment.',
       'Payment metadata from Stripe Checkout (we do not store full card numbers on Clemson RIDES servers).',
       'Optional profile fields you provide (phone, home/work labels) and device/session signals needed for realtime trip updates.',
     ],
@@ -25,13 +25,13 @@ export const PRIVACY_SECTIONS = [
   {
     heading: 'How we use information',
     paragraphs: [
-      'We use this data to create accounts, apply student pricing when a Clemson email is used, match riders with drivers, process deposit payments, show live trip status, calculate driver earnings from completed fares, prevent abuse, and improve reliability of the campus airport-ride experience. We do not sell your personal information.',
+      'We use this data to create accounts, apply student pricing when a Clemson email is used, match riders with drivers, process fare payments, show live trip status, calculate driver earnings from completed fares, prevent abuse, and improve reliability of the campus airport-ride experience. We do not sell your personal information.',
     ],
   },
   {
     heading: 'Sharing',
     paragraphs: [
-      'We share data only as needed to operate the product: with Stripe for deposits, with Supabase for auth/database/realtime, with drivers assigned to your trip (pickup, dropoff, and status), and when required by law or university policy. Aggregated, non-identifying stats may be used for campus operations reporting.',
+      'We share data only as needed to operate the product: with Stripe for card payments, with Supabase for auth/database/realtime, with drivers assigned to your trip (pickup, dropoff, and status), and when required by law or university policy. Aggregated, non-identifying stats may be used for campus operations reporting.',
     ],
   },
   {
@@ -70,7 +70,7 @@ export const TERMS_SECTIONS = [
   {
     heading: 'The service',
     paragraphs: [
-      'Clemson RIDES connects student riders with drivers for scheduled campus-to-airport trips at published flat rates (for example GSP and CLT). A 25% deposit via Stripe holds your ride; remaining balance and any tips or adjustments may be handled as described in-app at the time of trip. Availability depends on online drivers and is not guaranteed for every requested time.',
+      'Clemson RIDES connects student riders with drivers for scheduled campus-to-airport trips at published flat rates (for example GSP and CLT). Requesting a ride places a card hold for the estimated fare plus a buffer. The final fare is charged when the trip ends. Tips or adjustments may be handled as described in-app. Availability depends on online drivers and is not guaranteed for every requested time.',
     ],
   },
   {
@@ -79,7 +79,7 @@ export const TERMS_SECTIONS = [
       'Be ready at the stated pickup location and time.',
       'Share accurate flight/schedule notes when relevant.',
       'Treat drivers and property respectfully; no illegal activity in vehicles.',
-      'Cancel promptly if plans change; deposit refund rules follow the in-app and Stripe receipt terms.',
+      'Cancel promptly if plans change. A card hold that is not captured is released. Captured fares follow the in-app and Stripe receipt terms.',
     ],
   },
   {
@@ -93,7 +93,7 @@ export const TERMS_SECTIONS = [
   {
     heading: 'Payments & earnings',
     paragraphs: [
-      'Deposits are processed by Stripe. The platform keeps 20% of rider charges (fares, wait fees, and cancellation fees) and the driver keeps 80%. After a driver taps Arrive there is a 3-minute grace at $0, then $1 per minute (rounded up) while the trip stays arrived. On a completed trip that wait fee is split 20% platform / 80% driver. From 5 minutes the driver may cancel; the rider owes the wait fee accrued so far, with the same 20/80 split. At 7 minutes the ride cancels automatically: the rider is charged $5 ($4 wait + $1 cancellation fee), the driver keeps $4, and the platform keeps $1. If a saved card cannot be charged, the fee is still owed and recorded as pending. Payout timing and tax reporting (if any) will be disclosed in driver onboarding or Account. Chargebacks or fraud may result in account suspension.',
+      'Card payments are processed by Stripe. The platform keeps 20% of rider charges (fares, wait fees, and cancellation fees) and the driver keeps 80%. After a driver taps Arrive there is a 3-minute grace at $0, then $1 per minute (rounded up) while the trip stays arrived. On a completed trip that wait fee is split 20% platform / 80% driver. From 5 minutes the driver may cancel; the rider owes the wait fee accrued so far, with the same 20/80 split. At 7 minutes the ride cancels automatically: the rider is charged $5 ($4 wait + $1 cancellation fee), the driver keeps $4, and the platform keeps $1. If a saved card cannot be charged, the fee is still owed and recorded as pending. Payout timing and tax reporting (if any) will be disclosed in driver onboarding or Account. Chargebacks or fraud may result in account suspension.',
     ],
   },
   {

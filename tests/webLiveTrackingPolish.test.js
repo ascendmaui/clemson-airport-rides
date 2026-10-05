@@ -18,10 +18,11 @@ test('live tracking polish exports still-searching copy and search theater', () 
   assert.match(SEARCH_PREVIEW_COPY, /preview/i)
 })
 
-test('deposit surface confirm copy still names 25 percent', () => {
+test('confirm copy names an amount already paid and the remaining fare', () => {
   const copy = depositSurfaceCopy({ fareCents: 8000, depositCents: 2000, remainingCents: 6000 }, 'confirm')
-  assert.match(copy, /25% deposit/)
-  assert.match(copy, /\$20\.00/)
+  assert.match(copy, /Already paid \$20\.00/)
+  assert.match(copy, /\$60\.00/)
+  assert.doesNotMatch(copy, /25% deposit/)
 })
 
 test('web ride tiers and the active trip use the bookable catalog and the route line', () => {

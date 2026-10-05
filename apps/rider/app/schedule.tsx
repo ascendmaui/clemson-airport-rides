@@ -189,7 +189,7 @@ function ScheduleScreen() {
 
   useEffect(() => {
     if (returnPaid !== '1' && returnPaid !== 'true') return
-    setBanner('Stripe Checkout sent you back. The deposit shows up when Stripe confirms it.')
+    setBanner('You are back from checkout. The final fare is charged when the trip ends.')
   }, [returnPaid])
 
   useEffect(() => {
@@ -364,7 +364,7 @@ function ScheduleScreen() {
       const remaining = Math.max(0, farePaid - depositPaid)
       const tripId = typeof session.tripId === 'string' ? session.tripId : ''
       if (session.paidWithCredits) {
-        setBanner(`Ride covered by credits. No card deposit, so there is no remaining card balance.${tripId ? ` Trip ${tripId}.` : ''}`)
+        setBanner(`Ride covered by credits. Nothing else is due on the card.${tripId ? ` Trip ${tripId}.` : ''}`)
         await successHaptic()
         await reload()
         if (tripId && !date) {
@@ -377,7 +377,15 @@ function ScheduleScreen() {
       }
       const url = typeof session.url === 'string' ? session.url : ''
       if (!url) {
-        setError(checkoutFailureCopy(session) || 'Checkout did not return a payment URL. No charge was made.')
+        setBanner(`Ride booked. The final fare ${formatCents(farePaid)} is charged when the trip ends.${tripId ? ` Trip ${tripId}.` : ''}`)
+        await successHaptic()
+        await reload()
+        if (tripId && !date) {
+          router.replace({
+            pathname: '/requested',
+            params: { trip: tripId, dest: airport === 'CLT' ? 'Charlotte Douglas (CLT)' : 'Greenville-Spartanburg (GSP)' },
+          })
+        }
         return
       }
       let ignoreEarlyHold = false
@@ -390,7 +398,7 @@ function ScheduleScreen() {
             /* The countdown appears once the trip row can be read. */
           })
       }
-      setBanner(`Opening Stripe for the ${formatCents(depositPaid)} deposit. Remaining balance ${formatCents(remaining)} is collected when the trip is complete.`)
+      setBanner(`Opening checkout for ${formatCents(depositPaid)}. Remaining ${formatCents(remaining)} is charged when the trip ends.`)
       const browserResult = await openStripeCheckout(url)
       ignoreEarlyHold = true
       if (!tripId || !supabase) {
@@ -436,7 +444,7 @@ function ScheduleScreen() {
       }
       if (outcome === 'paid') {
         setCheckoutTrip(null)
-        setBanner(`Deposit received · ${formatCents(depositPaid)}. Remaining balance ${formatCents(remaining)} is collected when the trip is complete.`)
+        setBanner(`Payment received · ${formatCents(depositPaid)}. Remaining ${formatCents(remaining)} is charged when the trip ends.`)
         await successHaptic()
         if (!date) {
           router.replace({
@@ -450,7 +458,7 @@ function ScheduleScreen() {
         setBanner('Checkout closed. Nothing was charged. That unpaid ride is no longer searching for a driver.')
       } else if (settled.error) {
         if (held && isOpenUnpaidAirportHold(held)) setCheckoutTrip(held)
-        setBanner(`Checkout closed. Could not confirm the deposit yet (${settled.error}). Nothing is marked paid.`)
+        setBanner(`Checkout closed. Could not confirm payment yet (${settled.error}). Nothing is marked paid.`)
       } else if (held && isOpenUnpaidAirportHold(held)) {
         setCheckoutTrip(held)
         setBanner('Checkout closed. Nothing was charged unless Stripe already confirmed it.')
@@ -695,10 +703,10 @@ function ScheduleScreen() {
           style={styles.section}
           onLayout={(event: any) => { depositSectionY.current = event.nativeEvent.layout.y }}
         >
-          Airport deposit
+          Airport ride
         </Text>
         <Text style={styles.copy}>
-          Hold GSP or CLT with a 25% deposit. The amount updates when the airport, time, surge, or student discount changes. Leave the date empty to request a driver now.
+          Book GSP or CLT at the current fare. Nothing is charged now. Leave the date empty to request a driver now. The final fare is charged when the trip ends.
         </Text>
 
         <View style={styles.choices}>
@@ -711,7 +719,7 @@ function ScheduleScreen() {
                 style={[styles.choice, on && styles.choiceOn]}
                 accessibilityRole="button"
                 accessibilityLabel={code === 'GSP' ? 'Greenville-Spartanburg' : 'Charlotte Douglas'}
-                accessibilityHint="Sets the airport for this deposit"
+                accessibilityHint="Sets the airport for this ride"
                 accessibilityState={{ selected: on }}
               >
                 <Text style={styles.choiceCode}>{code}</Text>
@@ -751,19 +759,19 @@ function ScheduleScreen() {
             <Row label={airportQuote.surgeLabel || 'Surge'} value={`${airportQuote.surgeMultiplier}×`} />
           ) : null}
           <Row
-            label="25% deposit"
-            value={airportQuote ? formatCents(airportQuote.depositCents) : quoting ? 'Updating…' : '—'}
+            label="Charged now"
+            value="$0.00"
             strong
           />
           <Row
-            label="Remaining balance"
-            value={airportQuote ? formatCents(Math.max(0, airportQuote.fareCents - airportQuote.depositCents)) : quoting ? 'Updating…' : '—'}
+            label="Due when the trip ends"
+            value={airportQuote ? formatCents(airportQuote.fareCents) : quoting ? 'Updating…' : '—'}
             tone="purple"
           />
           <Text style={styles.balance}>
             {airportQuote
               ? depositSurfaceCopy(airportQuote, 'quote', { studentDiscountCents: airportQuote.studentDiscountCents })
-              : 'Pay deposit stays off until this quote matches the airport and time on screen.'}
+              : 'The fare stays blank until this quote matches the airport and time on screen.'}
             {airportQuote?.routeSource === 'fallback' ? ' Fare card estimate until the quote route answers.' : ''}
           </Text>
         </View>
@@ -782,15 +790,15 @@ function ScheduleScreen() {
         {banner ? <Text style={styles.banner} accessibilityLiveRegion="polite">{banner}</Text> : null}
 
         <PrimaryButton
-          label={busy ? 'Starting checkout…' : airportQuote ? `Pay ${formatCents(airportQuote.depositCents)} deposit` : 'Waiting for fare'}
+          label={busy ? 'Booking ride…' : airportQuote ? 'Book ride' : 'Waiting for fare'}
           onPress={pay}
           disabled={busy || !airportQuote || quoting}
         />
         <Text style={styles.fine}>
-          Pay deposit opens Stripe Checkout. If Stripe is not configured on this machine, checkout stops and nothing is charged. Live mode stays off.
+          Booking does not charge a card. Requesting a ride places a hold for the estimate plus a buffer. The final fare is charged when the trip ends.
         </Text>
         {!user ? (
-          <Text style={styles.copy}>Browse the quote. Sign in when you pay the deposit.</Text>
+          <Text style={styles.copy}>Browse the quote. Sign in when you book the ride.</Text>
         ) : null}
         <Pressable
           onPress={() => router.push('/student')}
@@ -803,7 +811,7 @@ function ScheduleScreen() {
         </Pressable>
 
         <Text style={styles.section}>Class, planned, and weekly rides</Text>
-        <Text style={styles.copy}>These rides save a pickup. Weekend and party trips use the confirm step above. Airport deposits stay on the checkout above.</Text>
+        <Text style={styles.copy}>These rides save a pickup. Weekend and party trips use the confirm step above. Airport rides use the fare above.</Text>
         <View style={styles.pills}>
           {CAMPUS_PURPOSES.map((id) => (
             <Pill key={id} label={purposeLabel(id)} active={purpose === id} onPress={() => choosePurpose(id)} />
