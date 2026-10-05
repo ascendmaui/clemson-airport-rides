@@ -49,6 +49,11 @@ function installHref(storeUrl, webUrl) {
   return publishedStoreUrl(storeUrl) || webUrl
 }
 
+/** Store badge when that listing is published. Otherwise the web action the QR opens. */
+function platformCta(storeUrl, liveLabel, webLabel) {
+  return publishedStoreUrl(storeUrl) ? liveLabel : webLabel
+}
+
 /**
  * QR codes and iOS/Android buttons.
  * Rider opens booking. Driver opens the driver desk.
@@ -62,6 +67,11 @@ export const APP_DOWNLOADS = [
     href: installHref(RIDER_IOS_STORE_URL, WEB_BOOK_URL),
     iosHref: installHref(RIDER_IOS_STORE_URL, WEB_BOOK_URL),
     androidHref: installHref(RIDER_ANDROID_STORE_URL, WEB_BOOK_URL),
+    scanCta: 'Scan to book a ride',
+    openCta: 'Open booking',
+    heroCopy: 'Opens booking in the browser. Airport holds use a 25% deposit.',
+    iosCta: platformCta(RIDER_IOS_STORE_URL, 'App Store', 'Book on iPhone'),
+    androidCta: platformCta(RIDER_ANDROID_STORE_URL, 'Google Play', 'Book on Android'),
     iosNote: publishedStoreUrl(RIDER_IOS_STORE_URL)
       ? 'App Store'
       : 'The App Store listing is not live yet. This opens booking on clemsonrides.com.',
@@ -77,6 +87,11 @@ export const APP_DOWNLOADS = [
     href: installHref(DRIVER_IOS_STORE_URL, WEB_DRIVER_URL),
     iosHref: installHref(DRIVER_IOS_STORE_URL, WEB_DRIVER_URL),
     androidHref: installHref(DRIVER_ANDROID_STORE_URL, WEB_DRIVER_URL),
+    scanCta: 'Scan to open the driver desk',
+    openCta: 'Open driver desk',
+    heroCopy: 'Opens the driver web app so you can accept rides from the browser.',
+    iosCta: platformCta(DRIVER_IOS_STORE_URL, 'App Store', 'Drive on iPhone'),
+    androidCta: platformCta(DRIVER_ANDROID_STORE_URL, 'Google Play', 'Drive on Android'),
     iosNote: publishedStoreUrl(DRIVER_IOS_STORE_URL)
       ? 'App Store'
       : 'The App Store listing is not live yet. This opens the driver web app on clemsonrides.com.',

@@ -18,15 +18,16 @@ function DownloadCard({ app }) {
   return (
     <article className="mkt-card mkt-download">
       <div className="mkt-download-top">
-        {sharedCode ? <QrMark value={app.href} label={app.label} /> : (
+        {sharedCode ? <QrMark value={app.href} label={app.scanCta} /> : (
           <div className="mkt-qr-pair">
-            <QrMark value={app.iosHref} label={`${app.label} iOS`} />
-            <QrMark value={app.androidHref} label={`${app.label} Android`} />
+            <QrMark value={app.iosHref} label={`${app.scanCta} on iPhone`} />
+            <QrMark value={app.androidHref} label={`${app.scanCta} on Android`} />
           </div>
         )}
         <div>
           <div className="mkt-kicker">{app.label}</div>
           <h3>{app.product}</h3>
+          <p className="mkt-scan-cta">{app.scanCta}</p>
           <p>
             {sharedCode
               ? app.blurb
@@ -37,11 +38,11 @@ function DownloadCard({ app }) {
       </div>
       <div className="mkt-platform">
         <a href={app.iosHref} target="_blank" rel="noreferrer">
-          <strong>iOS</strong>
+          <strong>{app.iosCta}</strong>
           <span>{app.iosNote}</span>
         </a>
         <a href={app.androidHref} target="_blank" rel="noreferrer">
-          <strong>Android</strong>
+          <strong>{app.androidCta}</strong>
           <span>{app.androidNote}</span>
         </a>
       </div>
@@ -73,7 +74,7 @@ export function Marketing() {
             <span className="mkt-orange-word">Clemson</span> RIDES
           </h1>
           <p className="mkt-lede">
-            Airport, campus, and game day rides for Tigers. Book in the browser tonight — scan the web QR, or open Book a ride.
+            Airport, campus, and game day rides for Tigers. Book or drive in the browser tonight — scan the rider or driver QR, or open Book a ride.
           </p>
           <div className="mkt-pill">Tigers get you there</div>
           <div className="mkt-actions">
@@ -83,18 +84,35 @@ export function Marketing() {
               Sign up as a driver
             </button>
           </div>
-          <div className="mkt-card" style={{ marginTop: 28, maxWidth: 360, textAlign: 'center' }} aria-label="Web booking QR">
-            <p className="mkt-kicker">Soft launch · web</p>
-            <div style={{ display: 'flex', justifyContent: 'center', margin: '12px 0' }}>
-              <QrMark value={WEB_BOOK_URL} label="Book on web" />
-            </div>
-            <p style={{ fontSize: 14, margin: 0 }}>
-              Scan to book in the browser. Airport holds use a 25% deposit.
-            </p>
-            <p className="mkt-fine" style={{ marginTop: 8, wordBreak: 'break-all' }}>{WEB_BOOK_URL}</p>
-            <button type="button" className="mkt-text pressable" style={{ marginTop: 8 }} onClick={() => navigate('schedule')}>
-              Prefer airport schedule? Open Schedule
-            </button>
+          <div className="mkt-hero-qrs" role="group" aria-label="Rider and driver web QR codes">
+            {APP_DOWNLOADS.map((app) => (
+              <div
+                key={app.id}
+                className="mkt-card mkt-hero-qr"
+                role="group"
+                aria-label={app.id === 'rider' ? 'Web booking QR' : 'Web driver QR'}
+              >
+                <p className="mkt-kicker">Soft launch · web</p>
+                <div className="mkt-hero-qr-mark">
+                  <QrMark value={app.href} label={app.scanCta} />
+                </div>
+                <p className="mkt-scan-cta">{app.scanCta}</p>
+                <p className="mkt-hero-qr-copy">{app.heroCopy}</p>
+                <a className={`mkt-qr-open${app.id === 'driver' ? ' mkt-qr-open--purple' : ''}`} href={app.href}>
+                  {app.openCta}
+                </a>
+                <p className="mkt-fine">{app.href}</p>
+                {app.id === 'rider' ? (
+                  <button type="button" className="mkt-text pressable" onClick={() => navigate('schedule')}>
+                    Prefer airport schedule? Open Schedule
+                  </button>
+                ) : (
+                  <button type="button" className="mkt-text pressable" onClick={() => navigate('driver-signup')}>
+                    New driver? Sign up
+                  </button>
+                )}
+              </div>
+            ))}
           </div>
         </div>
       </section>
@@ -135,8 +153,8 @@ export function Marketing() {
             <h2 id="download-heading">Get the app</h2>
             <p>
               The App Store and Google Play listings are not live yet.
-              The rider code opens booking at {WEB_BOOK_URL}. The driver code opens the driver web app at {WEB_DRIVER_URL}.
-              The iPhone and Android buttons use those same pages.
+              Scan the rider code to book at {WEB_BOOK_URL}. Scan the driver code to open the driver desk at {WEB_DRIVER_URL}.
+              The iPhone and Android buttons open those same pages.
             </p>
           </div>
           <div className="mkt-downloads">

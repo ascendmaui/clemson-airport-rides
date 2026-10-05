@@ -2,6 +2,19 @@
 
 Persistent knowledge base for recurring failures. When a matching issue appears, apply the saved fix first.
 
+## 2026-10-05 — t2: Marketing QR call-to-action copy for rider and driver
+
+- **Track / machine:** Clemson RIDES · MacBook Max · marketing QR worktree
+- **What was wrong:** The landing page had one booking QR and download buttons labeled only "iOS" and "Android". That did not say the code opens booking or the driver desk, and stores are still unpublished. A repo text scan found retired-fleet marketing names only on the demo-map allow-list (`shared/demoFleet.js`, `docs/demo-drivers.md`, `public/demo-drivers/manifest.json`). Those files stay as they are.
+- **What changed:** Rider and driver each get a web QR, an open button, and device buttons that name the web action (`Book on iPhone`, `Book on Android`, `Drive on iPhone`, `Drive on Android`). Notes still say the store listings are not live yet. No store submission.
+- **Files touched:**
+  - `shared/productLinks.js`
+  - `src/screens/Marketing.jsx`
+  - `src/index.css`
+  - `tests/marketingSite.test.js`
+  - `docs/FIXES.md`
+- **Verified:** `node --experimental-strip-types --test src/lib/qrMatrix.test.js tests/marketingSite.test.js tests/retiredCopy.test.js shared/marketingFeatures.js packages/rides-native/assistClient.test.js tests/webTouchTargetA11y.test.js` (68/68). Server-rendered the marketing page: four QR images, rider links to `/#/home`, driver links to `/#/driver`, and no retired-fleet or store-host strings in the markup. `npm test` was 2322/2323 while a local production build's `dist/` was still on disk (it copies the demo-map manifest). Removed `dist/`. `tests/retiredCopy.test.js` then passed. Vite production build succeeded.
+
 ## 2026-10-05 — t1: Marketing bookable-tier scrub tests (Standard / Wait & Save / Extra Comfort only)
 
 - **Track / machine:** Clemson RIDES · MacBook Max · marketing bookable-tier scrub worktree
