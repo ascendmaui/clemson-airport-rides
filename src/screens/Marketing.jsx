@@ -2,6 +2,9 @@ import { navigate } from '../lib/navigation'
 import { PrimaryButton } from '../components/PrimaryButton'
 import { QrMark } from '../components/QrMark'
 import { MARKETING_FEATURES } from '../../shared/marketingFeatures.js'
+import { STANDING_OFFERS } from '../../shared/standingPromos.js'
+import { currentWeeklyCoupon, FRIDAY_DROP_HOUR_ET, FRIDAY_DROP_TIME_ZONE } from '../../shared/weeklyCoupon.js'
+import { RIDE_OPTION_CATALOG } from '../../shared/rideOptions.js'
 import {
   APP_DOWNLOADS,
   SUPPORT_EMAIL,
@@ -9,8 +12,24 @@ import {
   WEB_DRIVER_URL,
 } from '../../shared/productLinks.js'
 
+const RIDE_TYPE_COPY = {
+  standard: 'Everyday seats. The fare is on screen before you request.',
+  wait: 'A few more minutes. A lower fare when time is on your side.',
+  comfort: 'A quieter car. Same matching, a higher class.',
+}
+
+const FRAMES = [
+  { src: '/marketing/clemson-rides-airport.jpg', alt: 'Dawn on an empty road, headlights stretching toward the horizon' },
+  { src: '/marketing/clemson-rides-avenue.jpg', alt: 'Dusk on a brick campus avenue under a deep sky' },
+  { src: '/marketing/clemson-rides-gameday.jpg', alt: 'Stadium lights blooming against a night sky' },
+]
+
 function scrollToDownloads() {
   document.getElementById('get-the-app')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+}
+
+function scrollToCoupon() {
+  document.getElementById('this-weeks-coupon')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
 }
 
 function DownloadCard({ app }) {
@@ -27,11 +46,7 @@ function DownloadCard({ app }) {
         <div>
           <div className="mkt-kicker">{app.label}</div>
           <h3>{app.product}</h3>
-          <p>
-            {sharedCode
-              ? app.blurb
-              : 'Separate codes for the iOS and Android listings.'}
-          </p>
+          <p>{sharedCode ? app.blurb : 'Separate codes for the iOS and Android listings.'}</p>
           <p className="mkt-fine" style={{ wordBreak: 'break-all' }}>{sharedCode ? app.href : `${app.iosHref} · ${app.androidHref}`}</p>
         </div>
       </div>
@@ -50,81 +65,124 @@ function DownloadCard({ app }) {
 }
 
 export function Marketing() {
+  const coupon = currentWeeklyCoupon(new Date())
+  const value = coupon.percentOffBps
+    ? `${coupon.percentOffBps / 100}% off`
+    : `$${(coupon.amountOffCents / 100).toFixed(0)} off`
   return (
     <div className="mkt fade-in">
       <header className="mkt-nav">
         <button type="button" className="mkt-brand pressable" onClick={() => navigate('landing')}>
-          <span className="mkt-brand-mark">CR</span>
           <span>Clemson RIDES</span>
         </button>
         <nav className="mkt-nav-links" aria-label="Marketing">
+          <button type="button" className="pressable" onClick={scrollToCoupon}>This week</button>
           <button type="button" className="pressable" onClick={scrollToDownloads}>Get the app</button>
           <button type="button" className="pressable" onClick={() => navigate('home')}>Book</button>
           <button type="button" className="pressable" onClick={() => navigate('driver-signup')}>Drive</button>
+          <button type="button" className="pressable" onClick={() => navigate('service-area')}>Area</button>
           <button type="button" className="pressable" onClick={() => navigate('privacy')}>Privacy</button>
           <button type="button" className="pressable" onClick={() => navigate('terms')}>Terms</button>
         </nav>
       </header>
 
-      <section className="mkt-hero">
-        <div className="mkt-inner mkt-hero-inner">
-          <p className="mkt-kicker mkt-kicker--light">Ride · Game · Repeat</p>
+      <section className="mkt-stage" aria-label="Clemson RIDES">
+        <img className="mkt-stage-photo" src={FRAMES[0].src} alt={FRAMES[0].alt} />
+        <div className="mkt-stage-shade" aria-hidden="true" />
+        <div className="mkt-inner mkt-stage-copy">
+          <p className="mkt-kicker mkt-kicker--light">Clemson, South Carolina</p>
           <h1>
-            <span className="mkt-orange-word">Clemson</span> RIDES
+            Clemson
+            <span className="mkt-orange-word"> RIDES</span>
           </h1>
           <p className="mkt-lede">
-            Airport, campus, and game day rides for Tigers. Book in the browser tonight — scan the web QR, or open Book a ride.
+            Campus, game day, and the airport. Riders and drivers share one account.
+            Matching is live. The trip stays on the map until you arrive.
           </p>
-          <div className="mkt-pill">Tigers get you there</div>
           <div className="mkt-actions">
             <PrimaryButton fullWidth={false} onClick={() => navigate('home')}>Book a ride</PrimaryButton>
-            <PrimaryButton fullWidth={false} variant="purple" onClick={() => navigate('schedule')}>Airport schedule</PrimaryButton>
             <button type="button" className="mkt-ghost pressable" onClick={() => navigate('driver-signup')}>
-              Sign up as a driver
+              Drive with Clemson RIDES
             </button>
-          </div>
-          <div className="mkt-card" style={{ marginTop: 28, maxWidth: 360, textAlign: 'center' }} aria-label="Web booking QR">
-            <p className="mkt-kicker">Soft launch · web</p>
-            <div style={{ display: 'flex', justifyContent: 'center', margin: '12px 0' }}>
-              <QrMark value={WEB_BOOK_URL} label="Book on web" />
-            </div>
-            <p style={{ fontSize: 14, margin: 0 }}>
-              Scan to book in the browser. The final fare is charged when the trip ends.
-            </p>
-            <p className="mkt-fine" style={{ marginTop: 8, wordBreak: 'break-all' }}>{WEB_BOOK_URL}</p>
-            <button type="button" className="mkt-text pressable" style={{ marginTop: 8 }} onClick={() => navigate('schedule')}>
-              Prefer airport schedule? Open Schedule
+            <button type="button" className="mkt-ghost pressable" onClick={() => navigate('schedule')}>
+              Airport schedule
             </button>
           </div>
         </div>
+        <aside className="mkt-spec" id="this-weeks-coupon" aria-label="This week's coupon">
+          <p className="mkt-kicker">This week · Friday {FRIDAY_DROP_HOUR_ET}:00 {FRIDAY_DROP_TIME_ZONE}</p>
+          <h2>{coupon.title}</h2>
+          <p>{coupon.detail}</p>
+          <p className="mkt-code" aria-label="Coupon code">{coupon.code}</p>
+          <p className="mkt-fine">{value}. New every Friday at 12:00 PM Eastern. {coupon.dropLabel}.</p>
+        </aside>
       </section>
 
       <main className="mkt-inner mkt-main">
+        <section aria-labelledby="offers-heading">
+          <div className="mkt-section-head">
+            <p className="mkt-kicker">Standing offers</p>
+            <h2 id="offers-heading">Always on</h2>
+            <p>The Friday code changes. These four do not.</p>
+          </div>
+          <div className="mkt-offers">
+            {STANDING_OFFERS.map((offer) => (
+              <article key={offer.id} className="mkt-card mkt-offer">
+                <p className="mkt-kicker">{offer.kicker}</p>
+                <h3>{offer.title}</h3>
+                <p>{offer.detail}</p>
+                {offer.purchasable ? (
+                  <button type="button" className="mkt-text pressable" onClick={() => navigate('account', { tab: 'billing' })}>
+                    Buy the $75 package
+                  </button>
+                ) : null}
+              </article>
+            ))}
+          </div>
+        </section>
+
+        <section aria-labelledby="types-heading">
+          <div className="mkt-section-head">
+            <p className="mkt-kicker">Ride types</p>
+            <h2 id="types-heading">Standard, Wait & Save, Extra Comfort</h2>
+          </div>
+          <div className="mkt-types">
+            {RIDE_OPTION_CATALOG.map((tier) => (
+              <article key={tier.id} className="mkt-card mkt-type">
+                <h3>{tier.name}</h3>
+                <p>{RIDE_TYPE_COPY[tier.id]}</p>
+              </article>
+            ))}
+          </div>
+        </section>
+
         <section aria-labelledby="features-heading">
           <div className="mkt-section-head">
             <p className="mkt-kicker">On the app</p>
             <h2 id="features-heading">What you can book today</h2>
             <p>
-              Carpool still splits a campus ride when a Tiger offers the car. The rest of the product is the same on the website and in the native apps.
+              Student pricing, game day, scheduled weekend and party rides, Stripe payments,
+              real-time matching, and live trip tracking.
             </p>
           </div>
           <div className="mkt-grid">
-            {MARKETING_FEATURES.map((feature, index) => (
-              <article key={feature.id} className={`mkt-card mkt-feature ${index % 2 === 0 ? 'mkt-feature--orange' : 'mkt-feature--purple'}`}>
+            {MARKETING_FEATURES.map((feature) => (
+              <article key={feature.id} className="mkt-card mkt-feature">
                 <h3>{feature.title}</h3>
                 <p>{feature.body}</p>
               </article>
             ))}
           </div>
+          <p className="mkt-pay-note">
+            Stripe places a pre-authorization hold for the estimated fare plus a buffer.
+            The full fare is charged when the trip ends.
+          </p>
           <div className="mkt-actions mkt-actions--section">
             <button type="button" className="mkt-ghost mkt-ghost--solid pressable" onClick={() => navigate('carpool', { hub: '1' })}>
               Find a carpool
             </button>
-            <button type="button" className="mkt-text pressable" onClick={() => navigate('carpool', { drive: '1' })}>
-              Offer a carpool
-            </button>
-            <button type="button" className="mkt-text pressable" onClick={() => navigate('driver')}>
-              Already a driver? Open driver mode
+            <button type="button" className="mkt-text pressable" onClick={() => navigate('home')}>
+              Book a ride
             </button>
           </div>
         </section>
@@ -142,9 +200,21 @@ export function Marketing() {
           <div className="mkt-downloads">
             {APP_DOWNLOADS.map((app) => <DownloadCard key={app.id} app={app} />)}
           </div>
-          <p className="mkt-fine">
-            One account on the web, the rider app, and the driver app. Questions: {SUPPORT_EMAIL}
-          </p>
+          <div className="mkt-card mkt-soft" aria-label="Web booking QR">
+            <p className="mkt-kicker">Soft launch · web</p>
+            <div className="mkt-soft-row">
+              <QrMark value={WEB_BOOK_URL} label="Book on web" />
+              <div>
+                <h3>Scan to book in the browser</h3>
+                <p>Same booking flow as the rider app.</p>
+                <p className="mkt-fine" style={{ wordBreak: 'break-all' }}>{WEB_BOOK_URL}</p>
+                <button type="button" className="mkt-text pressable" onClick={() => navigate('schedule')}>
+                  Prefer airport schedule? Open Schedule
+                </button>
+              </div>
+            </div>
+          </div>
+          <p className="mkt-fine">One account on the web, the rider app, and the driver app. Questions: {SUPPORT_EMAIL}</p>
         </section>
       </main>
 
