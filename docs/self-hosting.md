@@ -128,19 +128,42 @@ CI on a pull request also triggers this workflow via `workflow_run`, and the dep
 
 ### Swap
 
-Traefik on this host uses the Docker provider in host networking. With the default `allowEmptyServices=false`, a container that is stopped or still `starting` is not a backend. When `clemson-rides-web` was the only backend, recreating it made `https://clemsonrides.com` (including `/` and `/home` after Google sign-in) answer with Traefik's own `404 page not found`, or reset the connection, until the new process was healthy.
+Traefik on this host (`traefik:latest`, container `traefik-bmeb-traefik-1`) uses the Docker provider in host networking. It reloads when a container starts, dies, or changes `health_status`. It does not reload on Docker network connect or disconnect. With the default `allowEmptyServices=false`, a container that is stopped or still `starting` is not a backend. When `clemson-rides-web` was the only backend, recreating it made `https://clemsonrides.com` (including `/` and `/home` after Google sign-in) answer with Traefik's own `404 page not found`, or reset the connection, until the new process was healthy.
 
-`deploy/remote-up.sh` avoids that gap when a healthy backend is already up:
+The first overlap deploy (image `80d92237bb1a16a2d065c8b91dcc48470e2aa4bb`, Actions run 37290992747) kept the live site on the previous SHA on purpose. `clemson-rides-web-next` became healthy, but the script had already disconnected it from `clemson_rides_net`. The `health_status: healthy` event therefore ran while that container had no address on the network Traefik is told to use, so Traefik ignored the server. The reconnect that followed is not an event Traefik watches, and every public `/api/healthz` sample stayed on the old container. The script refused to drop `clemson-rides-web`. Identical router names were not the failure: Traefik will append servers when two containers define the same service and the router configs match, but it never got a usable address for the new container.
 
-1. Start `clemson-rides-web-next` (compose profile `overlap`) with the same Traefik service labels as `web`. It does not publish port 3080.
-2. Keep it off `clemson_rides_net` until Docker says it is healthy and `/api/healthz` shows the new SHA, then attach it and wait 10 seconds so Traefik can add it.
-3. Detach the previous `clemson-rides-web` from that network only after Traefik is observed serving the new SHA, or after the public health URL does not answer from the VPS at all. If Traefik still answers with the old SHA, the script stops and leaves the current container in place.
-4. Recreate `clemson-rides-web`, again off the network until it is healthy, then attach it and wait another 10 seconds.
-5. Remove `clemson-rides-web-next` only after the new `clemson-rides-web` is routable.
+`deploy/remote-up.sh` now keeps both containers on `clemson_rides_net` for the whole swap. The overlap service publishes different routers (`clemson-next` and `clemson-www-next`, or `clemson-staging-next`) at priority 100. The canonical routers stay at priority 10. Traefik sends the host to the higher priority router, so the public SHA moves to the new container before the old one is recreated. Reusing one router name and hoping for round-robin would keep serving the previous container half the time, and any label drift between the two copies makes Traefik delete that router.
+
+When a healthy backend is already up:
+
+1. Start `clemson-rides-web-next` (compose profile `overlap`) on `clemson_rides_net`. It does not publish port 3080. Do not disconnect it. Docker is still `starting`, so Traefik skips it until the healthcheck passes.
+2. Wait until Docker is healthy, `/api/healthz` inside the container shows the new SHA, then 10 seconds so the `health_status` reload can add the priority-100 routers.
+3. Poll `https://clemsonrides.com/api/healthz` from the VPS. Continue only after that body contains the new SHA. If it still contains a different SHA, or Traefik answers `404 page not found`, remove `clemson-rides-web-next` and leave `clemson-rides-web` in place. If the public URL does not answer at all, continue because the overlap container is healthy on the network.
+4. Recreate `clemson-rides-web` while the priority-100 router is still up. The container stays on `clemson_rides_net`. Traefik's `die`/`start` reloads keep the overlap router, and the new container is filtered until it is healthy.
+5. After the new `clemson-rides-web` is healthy, stop `clemson-rides-web-next`. That `die` event is the reload that leaves the priority-10 router as the only match. Confirm the public health URL still returns the new SHA. If it does not, start the overlap container again and exit non-zero.
 
 Host checks against `127.0.0.1:3080/api/healthz` poll for up to 60×2 seconds. That wait happens while the overlap container can still serve, so a longer poll is not a longer public outage. Staging does the same with `clemson-rides-staging-next` and port 3081. A hand `docker compose up` of `web` alone still recreates in place and can 404; use the deploy script for a production swap.
 
 The overlap container is a second 512 MB cap for about a minute. It is not a reservation. Do not start a second overlap by hand while a deploy is running.
+
+### Verify the next production merge
+
+Do not run Deploy VPS by hand for the pull request that contains this swap. Merging to `main` is what starts it, after CI succeeds.
+
+On that Deploy VPS log, confirm this order:
+
+- `starting clemson-rides-web-next before recreating clemson-rides-web`
+- `waiting for clemson-rides-web-next to become healthy on clemson_rides_net`
+- `Traefik is serving <new sha>`
+- `recreating clemson-rides-web`
+- `Traefik is still serving <new sha> after clemson-rides-web-next stopped`
+- `deployed production <new sha>`
+
+`Traefik is still serving the previous sha` followed by `refusing to detach clemson-rides-web` means the new router never won. The previous container is still the live one. That refusal is intentional.
+
+During the swap, `docker ps` shows `clemson-rides-web` and `clemson-rides-web-next` together, then only `clemson-rides-web`. `curl -fsS https://clemsonrides.com/api/healthz` should change to the new SHA while both containers exist, and it should stay on that SHA after `-next` is gone. `/` and `/home` should keep returning the app. There should be no Traefik `404 page not found` and no empty reply.
+
+Staging is unchanged apart from the same router pattern: only `clemson-rides-staging` / `clemson-staging.srv1090862.hstgr.cloud`. A pull-request CI completion still skips Deploy VPS and uses `deploy-vps-noop-<run id>`, so it does not sit in `deploy-vps-prod`.
 
 ## Check TLS before DNS cutover
 

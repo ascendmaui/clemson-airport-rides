@@ -212,8 +212,14 @@ describe('deploy VPS concurrency', () => {
   })
 })
 
+function labelBlock(anchorName) {
+  const match = compose.match(new RegExp(`&${anchorName}\\n([\\s\\S]*?)\\n\\n`))
+  assert.ok(match, `missing label anchor ${anchorName}`)
+  return match[1]
+}
+
 describe('deploy swap', () => {
-  test('remote-up overlaps a healthy backend before recreating the canonical container', () => {
+  test('remote-up keeps the overlap container on the network until Traefik serves the new SHA', () => {
     execFileSync('bash', ['-n', new URL('../deploy/remote-up.sh', import.meta.url).pathname])
     assert.match(remoteUp, /HEALTH_ATTEMPTS=60/)
     assert.match(remoteUp, /TRAEFIK_SETTLE_SECONDS=10/)
@@ -223,19 +229,36 @@ describe('deploy swap', () => {
     assert.doesNotMatch(remoteUp, /^\s*docker system prune/m)
     assert.match(remoteUp, /clemson-rides-web-next/)
     assert.match(remoteUp, /clemson-rides-staging-next/)
+    assert.match(remoteUp, /health_status/)
+    assert.match(remoteUp, /refusing to detach/)
+    assert.match(remoteUp, /Traefik is still serving the previous sha/)
+    assert.doesNotMatch(remoteUp, /docker network disconnect/)
+    assert.doesNotMatch(remoteUp, /attach_when_healthy/)
+
+    const ready = remoteUp.slice(
+      remoteUp.indexOf('wait_ready_on_network() {'),
+      remoteUp.indexOf('\nstart_fresh_overlap()'),
+    )
+    const connectAt = ready.indexOf('docker network connect')
+    const waitAt = ready.indexOf('wait_container_sha')
+    assert.ok(connectAt > 0 && waitAt > connectAt)
 
     const tail = remoteUp.slice(remoteUp.indexOf('acquire_deploy_lock\n'))
     const start = tail.indexOf('start_fresh_overlap')
-    const detach = tail.indexOf('detaching')
+    const drain = tail.indexOf('if ! drain_decision')
     const recreate = tail.indexOf('recreate_canonical')
     const promoted = tail.lastIndexOf('remove_overlap')
-    assert.ok(start > 0 && start < detach && detach < recreate && recreate < promoted)
+    const confirm = tail.indexOf('confirm_public_still_new')
+    assert.ok(start > 0 && start < drain && drain < recreate && recreate < promoted && promoted < confirm)
 
     const drainAbort = tail.indexOf('remove_overlap')
-    assert.ok(drainAbort > start && drainAbort < detach)
+    assert.ok(drainAbort > start && drainAbort < recreate)
+    assert.match(remoteUp, /priority-100 router/)
+    assert.match(remoteUp, /PUBLIC_OBSERVED/)
+    assert.match(remoteUp, /skipping the post-stop check/)
   })
 
-  test('compose healthcheck and overlap services share Traefik labels without taking the debug ports', () => {
+  test('overlap routers are a higher priority than the canonical routers and do not reuse their names', () => {
     assert.match(dockerfile, /HEALTHCHECK --interval=2s/)
     for (const service of ['web:', 'web_next:', 'staging:', 'staging_next:']) {
       assert.ok(compose.includes(service))
@@ -244,14 +267,46 @@ describe('deploy swap', () => {
     assert.match(compose, /staging_next:[\s\S]*profiles: \["overlap"\]/)
     assert.match(compose, /healthcheck: \*app-healthcheck/)
     assert.match(compose, /web:\n[\s\S]*labels: \*web-labels/)
-    assert.match(compose, /web_next:\n[\s\S]*labels: \*web-labels/)
+    assert.match(compose, /web_next:\n[\s\S]*labels: \*web-next-labels/)
     assert.match(compose, /staging:\n[\s\S]*labels: \*staging-labels/)
-    assert.match(compose, /staging_next:\n[\s\S]*labels: \*staging-labels/)
+    assert.match(compose, /staging_next:\n[\s\S]*labels: \*staging-next-labels/)
     assert.match(compose, /DISABLE_CRON_ENDPOINTS: "1"/)
-    const webNext = compose.split('web_next:')[1].split('staging:')[0]
-    const stagingNext = compose.split('staging_next:')[1]
-    assert.equal(webNext.includes('3080'), false)
-    assert.equal(stagingNext.includes('3081'), false)
+
+    const web = labelBlock('web-labels')
+    const webNext = labelBlock('web-next-labels')
+    const staging = labelBlock('staging-labels')
+    const stagingNext = labelBlock('staging-next-labels')
+    assert.match(web, /traefik\.http\.routers\.clemson\.priority=10/)
+    assert.match(web, /traefik\.http\.routers\.clemson-www\.priority=10/)
+    assert.match(web, /traefik\.http\.services\.clemson\.loadbalancer\.server\.port=3000/)
+    assert.match(webNext, /traefik\.http\.routers\.clemson-next\.priority=100/)
+    assert.match(webNext, /traefik\.http\.routers\.clemson-www-next\.priority=100/)
+    assert.match(webNext, /traefik\.http\.services\.clemson-next\.loadbalancer\.server\.port=3000/)
+    assert.doesNotMatch(webNext, /traefik\.http\.routers\.clemson\.rule/)
+    assert.doesNotMatch(webNext, /traefik\.http\.routers\.clemson\.priority/)
+    assert.doesNotMatch(webNext, /traefik\.http\.services\.clemson\.loadbalancer/)
+    assert.match(web, /Host\(`clemsonrides\.com`\)/)
+    assert.match(webNext, /Host\(`clemsonrides\.com`\)/)
+    assert.match(web, /Host\(`www\.clemsonrides\.com`\)/)
+    assert.match(webNext, /Host\(`www\.clemsonrides\.com`\)/)
+
+    const middleware = (block) => block.split('\n').filter((line) => line.includes('clemson-www-redirect.redirectregex'))
+    assert.deepEqual(middleware(web), middleware(webNext))
+    assert.equal(middleware(web).length, 3)
+
+    assert.match(staging, /traefik\.http\.routers\.clemson-staging\.priority=10/)
+    assert.match(staging, /traefik\.http\.services\.clemson-staging\.loadbalancer\.server\.port=3000/)
+    assert.match(stagingNext, /traefik\.http\.routers\.clemson-staging-next\.priority=100/)
+    assert.match(stagingNext, /traefik\.http\.services\.clemson-staging-next\.loadbalancer\.server\.port=3000/)
+    assert.doesNotMatch(stagingNext, /traefik\.http\.routers\.clemson-staging\.rule/)
+    assert.doesNotMatch(stagingNext, /traefik\.http\.services\.clemson-staging\.loadbalancer/)
+    assert.match(staging, /Host\(`clemson-staging\.srv1090862\.hstgr\.cloud`\)/)
+    assert.match(stagingNext, /Host\(`clemson-staging\.srv1090862\.hstgr\.cloud`\)/)
+
+    const webNextService = compose.split('web_next:')[1].split('staging:')[0]
+    const stagingNextService = compose.split('staging_next:')[1]
+    assert.equal(webNextService.includes('3080'), false)
+    assert.equal(stagingNextService.includes('3081'), false)
     assert.match(compose, /127\.0\.0\.1:3080:3000/)
     assert.match(compose, /127\.0\.0\.1:3081:3000/)
   })
