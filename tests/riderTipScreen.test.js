@@ -23,7 +23,7 @@ test('the rider is prompted only after their own completed trip has no tip choic
   assert.equal(shouldPromptRiderTip(null, 'rider-1'), false)
 })
 
-test('the website tip step asks the server and does not charge a card', () => {
+test('the website tip step asks the server and does not charge from the browser', () => {
   const screen = read('src/screens/TipRide.jsx')
   const client = read('src/lib/riderTip.js')
   const app = read('src/App.jsx')
@@ -42,8 +42,10 @@ test('the website tip step asks the server and does not charge a card', () => {
   assert.match(screen, /data-testid="tip-custom-input"/)
   assert.match(screen, /selectedId === 'custom'/)
   assert.match(screen, /save\('custom', customText\)/)
-  assert.match(screen, /Your card is not charged here/)
-  assert.match(screen, /Charging that tip is not available yet/)
+  assert.match(screen, /A saved card is charged after you add the tip/)
+  assert.match(screen, /No card on file means nothing is charged/)
+  assert.match(screen, /No card was charged/)
+  assert.doesNotMatch(screen, /Charging that tip is not available yet/)
   assert.match(screen, /data-testid="tip-screen"/)
   assert.match(screen, /tip-option-/)
   assert.doesNotMatch(screen, /collectTripPayment|stripe|paymentIntents|amountCents|isStudent/)

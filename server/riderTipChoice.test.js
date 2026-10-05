@@ -29,7 +29,7 @@ function mockRes() {
   }
 }
 
-function mockSb(trip = {}, { failTipColumn = false } = {}) {
+function mockSb(trip = {}, { failTipColumn = false, profile = null, allowPayments = false, allowTipCents = false } = {}) {
   const state = {
     trip: {
       id: 'trip-1',
@@ -43,8 +43,11 @@ function mockSb(trip = {}, { failTipColumn = false } = {}) {
     },
     updates: [],
     tables: [],
+    payments: [],
     tipSelects: 0,
     failTipColumn,
+    allowTipCents,
+    profile: profile || { full_name: 'Alex Driver' },
   }
 
   function tripsBuilder() {
@@ -55,7 +58,7 @@ function mockSb(trip = {}, { failTipColumn = false } = {}) {
       const matches = () => filters.every(([col, val]) => state.trip[col] === val)
       if (op === 'update') {
         if (!matches()) return { data: null, error: { message: 'no row' } }
-        if (Object.prototype.hasOwnProperty.call(patch, 'tip_cents')) {
+        if (Object.prototype.hasOwnProperty.call(patch, 'tip_cents') && !state.allowTipCents) {
           return { data: null, error: { message: 'refused tip_cents write' } }
         }
         state.updates.push(patch)
@@ -85,14 +88,29 @@ function mockSb(trip = {}, { failTipColumn = false } = {}) {
     state,
     from(table) {
       state.tables.push(table)
-      if (table === 'payments') throw new Error('payments must not be touched')
+      if (table === 'payments') {
+        if (!allowPayments) throw new Error('payments must not be touched')
+        return {
+          select() {
+            return {
+              eq() {
+                return Promise.resolve({ data: state.payments, error: null })
+              },
+            }
+          },
+          insert(row) {
+            state.payments.push(row)
+            return Promise.resolve({ data: row, error: null })
+          },
+        }
+      }
       if (table === 'profiles') {
         return {
           select() {
             return {
               eq() {
                 return {
-                  maybeSingle: async () => ({ data: { full_name: 'Alex Driver' }, error: null }),
+                  maybeSingle: async () => ({ data: state.profile, error: null }),
                 }
               },
             }
@@ -220,8 +238,9 @@ test('record stores the server amount and does not write a charge', async () => 
   assert.deepEqual(Object.keys(sb.state.updates[0]), ['metadata'])
   assert.equal(sb.state.trip.metadata.kind, 'campus')
   assert.equal(sb.state.trip.metadata.rider_tip_choice.tipCents, 400)
-  assert.equal(sb.state.trip.metadata.rider_tip_choice.chargeStatus, 'not_wired')
+  assert.equal(sb.state.trip.metadata.rider_tip_choice.chargeStatus, 'no_card')
   assert.equal(sb.state.trip.tip_cents, 0)
+  assert.equal(sb.state.trip.status, 'completed')
   assert.ok(!sb.state.tables.includes('payments'))
 })
 
@@ -321,7 +340,7 @@ test('a custom amount is stored from the typed dollars and ignores client money'
   assert.equal(sb.state.trip.metadata.rider_tip_choice.id, 'custom')
   assert.equal(sb.state.trip.metadata.rider_tip_choice.tipCents, 450)
   assert.equal(sb.state.trip.metadata.rider_tip_choice.fareCents, 2000)
-  assert.equal(sb.state.trip.metadata.rider_tip_choice.chargeStatus, 'not_wired')
+  assert.equal(sb.state.trip.metadata.rider_tip_choice.chargeStatus, 'no_card')
   assert.equal(sb.state.trip.tip_cents, 0)
   assert.ok(!sb.state.tables.includes('payments'))
 })
@@ -427,6 +446,115 @@ test('the offer tells the website the custom range and still ignores client mone
   assert.deepEqual(result.body.custom, { minCents: 100, maxCents: 10000 })
   assert.deepEqual(result.body.presets.map((row) => row.cents), [300, 400, 500])
   assert.equal(sb.state.updates.length, 0)
+})
+
+test('a saved card is charged once from the server tip and a retry does not charge again', async () => {
+  const creates = []
+  const seen = new Map()
+  const sb = mockSb({}, {
+    profile: {
+      full_name: 'Alex Driver',
+      stripe_customer_id: 'cus_tip',
+      stripe_default_pm_id: 'pm_tip',
+    },
+    allowPayments: true,
+    allowTipCents: true,
+  })
+  const cardClient = {
+    paymentIntents: {
+      create: async (params, opts) => {
+        const key = opts?.idempotencyKey
+        if (seen.has(key)) return seen.get(key)
+        const pi = { id: 'pi_tip_1', status: 'succeeded', amount: params.amount }
+        seen.set(key, pi)
+        creates.push({ params, opts })
+        return pi
+      },
+    },
+  }
+  const first = await applyRiderTipChoice(sb, { id: 'rider-1' }, {
+    mode: 'record',
+    tripId: 'trip-1',
+    choiceId: 'pct-20',
+    tipCents: 1,
+    amount: 50,
+  }, { now: () => NOW, cardClient })
+  assert.equal(first.status, 200)
+  assert.equal(first.body.choice.charged, true)
+  assert.equal(first.body.choice.chargeStatus, 'charged')
+  assert.equal(first.body.choice.tipCents, 400)
+  assert.equal(first.body.chargingWired, true)
+  assert.equal(first.body.chargedTipCents, 400)
+  assert.equal(creates.length, 1)
+  assert.equal(creates[0].params.amount, 400)
+  assert.equal(creates[0].params.off_session, true)
+  assert.equal(creates[0].params.confirm, true)
+  assert.equal(creates[0].params.payment_method, 'pm_tip')
+  assert.equal(creates[0].opts.idempotencyKey, 'tip:trip-1')
+  assert.equal(sb.state.trip.tip_cents, 400)
+  assert.equal(sb.state.trip.status, 'completed')
+  assert.equal(sb.state.payments.length, 1)
+  assert.equal(sb.state.payments[0].amount_cents, 400)
+
+  const again = await applyRiderTipChoice(sb, { id: 'rider-1' }, {
+    mode: 'record',
+    tripId: 'trip-1',
+    choiceId: 'pct-20',
+    tipCents: 999999,
+  }, { cardClient })
+  assert.equal(again.status, 409)
+  assert.equal(creates.length, 1)
+  assert.equal(sb.state.payments.length, 1)
+})
+
+test('a declined card still saves the choice and a retry reuses the same charge key', async () => {
+  const creates = []
+  const seen = new Map()
+  const sb = mockSb({}, {
+    profile: {
+      full_name: 'Alex Driver',
+      stripe_customer_id: 'cus_tip',
+      stripe_default_pm_id: 'pm_tip',
+    },
+    allowPayments: true,
+  })
+  const cardClient = {
+    paymentIntents: {
+      create: async (params, opts) => {
+        const key = opts?.idempotencyKey
+        if (seen.has(key)) throw seen.get(key)
+        const err = new Error('card declined')
+        seen.set(key, err)
+        creates.push({ params, opts })
+        throw err
+      },
+    },
+  }
+  const first = await applyRiderTipChoice(sb, { id: 'rider-1' }, {
+    mode: 'record',
+    tripId: 'trip-1',
+    choiceId: 'pct-15',
+  }, { now: () => NOW, cardClient })
+  assert.equal(first.status, 200)
+  assert.equal(first.body.choice.charged, false)
+  assert.equal(first.body.choice.chargeStatus, 'declined')
+  assert.equal(first.body.choice.tipCents, 300)
+  assert.equal(first.body.chargingWired, false)
+  assert.equal(sb.state.trip.status, 'completed')
+  assert.equal(sb.state.trip.tip_cents, 0)
+  assert.equal(sb.state.payments.length, 0)
+  assert.equal(creates.length, 1)
+  assert.equal(creates[0].params.amount, 300)
+
+  const again = await applyRiderTipChoice(sb, { id: 'rider-1' }, {
+    mode: 'record',
+    tripId: 'trip-1',
+    choiceId: 'pct-15',
+  }, { cardClient })
+  assert.equal(again.status, 200)
+  assert.equal(again.body.alreadyRecorded, true)
+  assert.equal(creates.length, 1)
+  assert.equal(sb.state.trip.status, 'completed')
 })
 
 test('charge mode and a raw cent amount are rejected', async () => {

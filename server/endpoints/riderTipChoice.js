@@ -3,7 +3,7 @@
  * Body: { mode: 'offer' | 'record', tripId, choiceId?, customDollars? }
  * choiceId "custom" stores the server-priced typed amount.
  * Client fare, deposit, amount, total, and isStudent are ignored.
- * Records the rider's tip choice. Does not charge a card.
+ * Records the rider's tip choice and bills a saved card from the stored amount.
  */
 import { admin, cors, json, parseBody, userFromAuth } from '../friendRideLib.js'
 import { applyRiderTipChoice } from '../riderTipChoice.js'
