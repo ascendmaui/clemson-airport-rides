@@ -2,7 +2,9 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { PGlite } from '@electric-sql/pglite'
-import { REQUIRED_DOC_IDS, IC_AGREEMENT_VERSION } from '../shared/driverOnboarding.js'
+import { REQUIRED_DOC_IDS } from '../shared/driverOnboarding.js'
+
+const LEGACY_AGREEMENT_VERSION = 'ic-agreement-2026-09-24'
 
 const migration = readFileSync(new URL('../supabase/migrations/20261004140000_applicant_electronic_requirements.sql', import.meta.url), 'utf8')
 
@@ -34,8 +36,9 @@ test('electronic requirements migration tolerates legacy file rows but still req
     assert.equal(await ready(), false)
     await db.query("insert into driver_tax_info values ($1, 'Test Driver', '1234')", [id])
     assert.equal(await ready(), false)
-    await db.query("insert into driver_agreement_versions values ($1, 'hash', 'existing agreement')", [IC_AGREEMENT_VERSION])
-    await db.query("insert into driver_agreements values ($1, $1, $2, 'hash', 'existing agreement', 'Test Driver')", [id, IC_AGREEMENT_VERSION])
+    assert.match(migration, new RegExp(LEGACY_AGREEMENT_VERSION))
+    await db.query("insert into driver_agreement_versions values ($1, 'hash', 'existing agreement')", [LEGACY_AGREEMENT_VERSION])
+    await db.query("insert into driver_agreements values ($1, $1, $2, 'hash', 'existing agreement', 'Test Driver')", [id, LEGACY_AGREEMENT_VERSION])
     assert.equal(await ready(), true)
     await db.query("delete from driver_documents where doc_type = 'license_front'")
     assert.equal(await ready(), false)

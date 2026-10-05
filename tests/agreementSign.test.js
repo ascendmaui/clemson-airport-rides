@@ -282,6 +282,22 @@ test('agreement text cannot be edited; corrections re-render from application fi
   assert.equal(rendered.includes('<p>no</p>'), false)
 })
 
+test('the current agreement version is a new row and does not rewrite the repaired seed', () => {
+  const retired = readFileSync(new URL('../supabase/driver_onboarding_compliance.sql', import.meta.url), 'utf8')
+  assert.equal(retired.includes('$html$'), false)
+  assert.equal(retired.includes('body_html = excluded.body_html'), false)
+  const sql = readFileSync(new URL('../supabase/migrations/20261005090000_ic_agreement_version_row.sql', import.meta.url), 'utf8')
+  assert.equal(sql.includes('$html$'), false)
+  assert.equal(sql.includes('ic-agreement-2026-09-24'), false)
+  assert.match(sql, /on conflict \(version\) do nothing/)
+  const encoded = sql.match(/decode\(\s*'([A-Za-z0-9+/=]+)'/)
+  assert.ok(encoded)
+  const body = Buffer.from(encoded[1], 'base64').toString('utf8')
+  assert.equal(body, IC_AGREEMENT_HTML)
+  assert.equal(body.split('<h1>').length - 1, 1)
+  assert.equal(sql.split(encoded[1]).length - 1, 1)
+})
+
 test('the new migration splits submit from approval and leaves the older migration unchanged', () => {
   const older = readFileSync(new URL('../supabase/migrations/20261004140000_applicant_electronic_requirements.sql', import.meta.url), 'utf8')
   assert.match(older, /signature_name/)

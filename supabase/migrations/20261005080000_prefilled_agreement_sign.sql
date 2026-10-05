@@ -182,7 +182,7 @@ begin
   from public.driver_agreements a
   where a.profile_id = target
     and a.signer_user_id = target
-    and a.agreement_version = 'ic-agreement-2026-09-24'
+    and a.agreement_version = 'ic-agreement-2026-10-05'
     and length(trim(a.signature_name)) >= 2
     and a.signed_at is not null;
 
@@ -193,7 +193,7 @@ begin
   select p.html_sha256 into packet_hash
   from public.driver_agreement_packets p
   where p.profile_id = target
-    and p.agreement_version = 'ic-agreement-2026-09-24';
+    and p.agreement_version = 'ic-agreement-2026-10-05';
 
   if packet_hash is not null and packet_hash is distinct from signed_hash then
     return false;

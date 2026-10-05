@@ -228,15 +228,14 @@ test('TIN display is last-4 only', () => {
   assert.equal(displayTinLast4(null), '')
 })
 
-test('compliance migration stores the exact agreement and every required doc type', () => {
+test('compliance seed no longer rewrites agreement HTML and still lists required docs', () => {
   const sql = readFileSync(new URL('../supabase/driver_onboarding_compliance.sql', import.meta.url), 'utf8')
   for (const id of REQUIRED_DOC_IDS) {
     assert.ok(sql.includes(`'${id}'`), id)
   }
-  const parts = sql.split('$html$')
-  assert.equal(parts[1], IC_AGREEMENT_HTML)
-  assert.equal(parts[3], IC_AGREEMENT_HTML)
-  assert.ok(sql.includes(IC_AGREEMENT_VERSION))
+  assert.equal(sql.includes('$html$'), false)
+  assert.equal(sql.includes('body_html = excluded.body_html'), false)
+  assert.match(sql, /do not re-run/i)
   assert.ok(sql.includes('driver_tax_secrets'))
   assert.equal(sql.includes('return jsonb_build_object(\n    \'legal_name\', cleaned_name,\n    \'tin_last4\', last4,'), true)
   const hash = createHash('sha256').update(IC_AGREEMENT_HTML, 'utf8').digest('hex')
