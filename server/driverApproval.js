@@ -3,13 +3,12 @@
  * Email is best-effort: the admin queue is the source of truth when Resend is unset.
  */
 import {
-  ADMIN_EMAIL,
   EMAIL_TODO,
   IC_AGREEMENT_VERSION,
-  SEEDED_ADMIN_EMAILS,
   canReceiveRides,
   submissionBlockers,
 } from '../shared/driverOnboarding.js'
+import { adminNotifyRecipients } from './adminRoster.js'
 import { WEB_ORIGIN } from '../shared/productLinks.js'
 import { loadStaffAccess } from './staffAccess.js'
 
@@ -152,11 +151,12 @@ export async function receivableDriverIds(sb, profileIds) {
 }
 
 export async function notifyAdminOfApplication({ profile, vehicle }) {
-  const configured = (process.env.ADMIN_NOTIFY_EMAIL || '').trim()
-  const recipients = configured
-    ? configured.split(',').map((email) => email.trim()).filter(Boolean)
-    : SEEDED_ADMIN_EMAILS
-  const to = recipients[0] || ADMIN_EMAIL
+  const recipients = adminNotifyRecipients()
+  const to = recipients[0] || null
+  if (!recipients.length) {
+    console.warn(`[driver-onboarding] ${EMAIL_TODO}`)
+    return { emailed: false, todo: EMAIL_TODO, to: null }
+  }
   const key = (process.env.RESEND_API_KEY || '').trim()
   const appUrl = (process.env.VITE_APP_URL || process.env.APP_URL || WEB_ORIGIN).replace(/\/$/, '')
   const name = profile?.full_name || profile?.email || 'New driver'

@@ -117,6 +117,67 @@ test('src/lib/payments.js: 500 with SUPABASE_SERVICE_ROLE_KEY missing is mapped 
   assert.equal(fetchCount, 1)
 })
 
+test('src/lib/stripeCheckout.js createCheckoutSession omits client fare, deposit, amount, total, and isStudent', async () => {
+  let sentUrl = ''
+  let sent = null
+  const fakeFetch = async (url, options) => {
+    sentUrl = String(url)
+    sent = JSON.parse(options.body)
+    return {
+      status: 200,
+      ok: true,
+      text: async () => JSON.stringify({
+        url: 'https://checkout.stripe.com/c/pay/cs_test_web',
+        tripId: 'trip_web_1',
+        depositCents: 1600,
+      }),
+    }
+  }
+
+  const result = await createCheckoutSession(
+    {
+      airport: 'CLT',
+      riderName: 'Jane',
+      riderId: 'rider_1',
+      date: '2026-10-06',
+      time: '15:00',
+      fareCents: 100,
+      depositCents: 25,
+      amount: 25,
+      total: 1,
+      isStudent: true,
+    },
+    {
+      fetch: fakeFetch,
+      supabase: { auth: { getSession: async () => ({ data: { session: null } }) } },
+    },
+  )
+
+  assert.equal(sentUrl, '/api/create-checkout-session')
+  assert.equal(result.url, 'https://checkout.stripe.com/c/pay/cs_test_web')
+  assert.equal(sent.airport, 'CLT')
+  assert.equal(sent.date, '2026-10-06')
+  assert.equal(sent.time, '15:00')
+  for (const key of [
+    'fareCents',
+    'fare_cents',
+    'fare',
+    'depositCents',
+    'deposit_cents',
+    'deposit',
+    'amount',
+    'amountCents',
+    'amount_cents',
+    'total',
+    'totalCents',
+    'total_cents',
+    'isStudent',
+    'is_student',
+  ]) {
+    assert.equal(Object.hasOwn(sent, key), false, key)
+  }
+})
+
 test('src/lib/stripeCheckout.js createCheckoutSession: 401 refresh retry succeeds', async () => {
   let fetchCount = 0
   const fakeFetch = async () => {

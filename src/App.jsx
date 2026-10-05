@@ -172,7 +172,7 @@ function Screen({ path, params }) {
     case 'admin-dashboard':
       return (
         <RequireAuth>
-          <AdminDesk restrictedToEmail="johnmatveyev@gmail.com" />
+          <AdminDesk />
         </RequireAuth>
       )
     case 'friends':

@@ -1,4 +1,4 @@
-import { isSeedAdminEmail } from '../../shared/adminAccess.js'
+import { isAdminIdentity } from '../../shared/adminAccess.js'
 
 /**
  * Driver incentives — pay math and window matching.
@@ -34,7 +34,6 @@ import { isSeedAdminEmail } from '../../shared/adminAccess.js'
  */
 
 export const PLATFORM_FEE_PERCENT = 20
-export const INCENTIVE_ADMIN_EMAIL = 'john@gmail.com'
 export const DEFAULT_TIMEZONE = 'America/New_York'
 export const DEFAULT_NIGHT_START = '19:00'
 export const DEFAULT_NIGHT_END = '02:00'
@@ -106,12 +105,11 @@ function assertNever(type) {
 }
 
 export function isIncentiveAdmin(user, profile) {
-  const email = String(profile?.email || user?.email || '').trim().toLowerCase()
-  if (email === INCENTIVE_ADMIN_EMAIL) return true
-  if (isSeedAdminEmail(email)) return true
-  if (profile?.is_admin === true) return true
-  const role = profile?.role
-  return role === 'admin' || role === 'ops'
+  return isAdminIdentity({
+    jwtEmail: profile?.email || user?.email,
+    role: profile?.role,
+    isAdmin: profile?.is_admin,
+  })
 }
 
 export function splitFare(grossFareCents) {

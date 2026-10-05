@@ -23,6 +23,11 @@
     },
     "android": {
       "package": "com.ascendmaui.clemsonrides.driver",
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION",
+        "POST_NOTIFICATIONS"
+      ],
       "adaptiveIcon": {
         "backgroundColor": "#522D80",
         "foregroundImage": "./assets/images/android-icon-foreground.png",

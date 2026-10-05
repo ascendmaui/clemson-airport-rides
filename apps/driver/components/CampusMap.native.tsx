@@ -1,6 +1,8 @@
 import { useEffect, useRef } from 'react'
-import { StyleSheet, Text, View } from 'react-native'
+import { Platform, StyleSheet, Text, View } from 'react-native'
+import Constants from 'expo-constants'
 import MapView, { Circle, Marker, Polyline, PROVIDER_DEFAULT } from 'react-native-maps'
+import { ANDROID_MAP_UNAVAILABLE, googleMapStyle, nativeMapTilesReady } from 'rides-native/googleMapChrome.js'
 import { heatColor } from 'rides-native/heat.js'
 import { DOWNTOWN, ORANGE, PURPLE, STADIUM } from 'rides-native/places.js'
 import type { BusySpot } from '@/lib/busySpots'
@@ -101,6 +103,19 @@ export function CampusMap({
     )
   }, [centerKey, pinKey, focusToken, heatKey, showHeat, lockOnCenter])
 
+  const tilesReady = nativeMapTilesReady(Platform.OS, {
+    env: typeof process !== 'undefined' ? process.env : {},
+    manifestKey: Constants.expoConfig?.android?.config?.googleMaps?.apiKey,
+  })
+  if (!tilesReady) {
+    return (
+      <View style={[styles.fill, styles.unavailable]}>
+        <Text style={styles.unavailableTitle}>Map unavailable</Text>
+        <Text style={styles.unavailableBody}>{ANDROID_MAP_UNAVAILABLE}</Text>
+      </View>
+    )
+  }
+
   return (
     <View style={styles.fill}>
       <MapView
@@ -115,18 +130,7 @@ export function CampusMap({
         }}
         mapType="standard"
         userInterfaceStyle={colorScheme}
-        customMapStyle={
-          colorScheme === 'dark'
-            ? [
-                { elementType: 'geometry', stylers: [{ color: '#0e0b14' }] },
-                { elementType: 'labels.text.fill', stylers: [{ color: '#f5f6f8' }] },
-                { elementType: 'labels.text.stroke', stylers: [{ color: '#0e0b14' }] },
-                { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#2a2438' }] },
-                { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#16121f' }] },
-                { featureType: 'poi', elementType: 'geometry', stylers: [{ color: '#120e18' }] },
-              ]
-            : undefined
-        }
+        customMapStyle={googleMapStyle(colorScheme)}
         rotateEnabled={false}
         pitchEnabled={false}
         showsUserLocation={showsUserLocation}
@@ -187,6 +191,14 @@ export function CampusMap({
 
 const styles = StyleSheet.create({
   fill: { flex: 1 },
+  unavailable: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 24,
+    backgroundColor: '#F4F5F8',
+  },
+  unavailableTitle: { fontSize: 16, fontWeight: '800', color: '#522D80', marginBottom: 8 },
+  unavailableBody: { fontSize: 14, lineHeight: 20, textAlign: 'center', color: '#5B6472' },
   zone: { position: 'absolute', left: 16, top: 88, right: 16, alignItems: 'flex-start' },
   requestDot: {
     width: 14,

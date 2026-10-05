@@ -15,10 +15,9 @@ export const DOWNTOWN = { latitude: 34.6836, longitude: -82.8364 }
 export const GSP = { latitude: 34.8957, longitude: -82.2189 }
 export const CLT = { latitude: 35.2144, longitude: -80.9473 }
 
+/** Public campus shortcuts. Personal home and work come from saved_places for auth.uid(). */
 export const SHORTCUTS = [
-  { id: 'home', label: 'Home', sub: 'Simpsonville', icon: '🏠' },
   { id: 'clemson', label: 'Clemson University', sub: 'Sikes Hall', icon: '🎓' },
-  { id: 'work', label: 'Work', sub: 'Saved place', icon: '💼' },
 ]
 
 export const HEAT_WINDOWS = [
