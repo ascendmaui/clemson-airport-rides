@@ -1913,3 +1913,10 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
 - **Files touched:** `server/endpoints/expireUnpaidAirportHolds.js`, `tests/gaAuditExpireHoldsSanitization.test.js`, `package.json`, `docs/FIXES.md`
 - **Verified:** `npm test` passing with 0 failures.
 
+## 2026-10-05 — Android Play readiness checklist (pkg-android-play-readiness-docs t1)
+
+- **What was wrong:** There was no single doc for the current Android package ids, the marketing QR path (`QrMark` / `shared/productLinks.js`), or which EAS commands stop before `eas submit`. Play Console fields John still has to fill were not listed, and nothing carried an explicit do-not-submit banner. Shipped Android fixes #303, #305, and #306 were easy to mistake for a store release.
+- **What changed:** Added `docs/android-play-readiness.md`. It lists rider `com.ascendmaui.clemsonrides.rider`, driver `com.ascendmaui.clemsonrides.driver`, and the frozen `com.ascendmaui.clemsonairportrides` package. It records that store URL constants are null, so QR codes open `https://clemsonrides.com/#/home` and `#/driver`. It lists `eas build` profiles that do not submit, and forbids `eas submit` and `--auto-submit`. It checklists Play Console fields still owed by John and points at merged PRs #303, #305, and #306. No store upload, no `eas submit`, no app config edits.
+- **Files touched:** `docs/android-play-readiness.md`, `docs/FIXES.md`
+- **Verified:** `test -f docs/android-play-readiness.md && grep -q "QR" docs/android-play-readiness.md && grep -qi "do not submit" docs/android-play-readiness.md`
+
