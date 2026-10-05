@@ -15,10 +15,12 @@ import {
   rememberClemsonMiamiFromLocation,
   takeClemsonMiamiNotice,
 } from '../lib/clemsonMiamiRide'
-import { RIDE_STYLES, isProfileComplete, profileFieldError, missingProfileFields } from '../../packages/rides-native/partyProfile.js'
-import { buildFieldA11yProps, getFieldErrorProps } from '../lib/formA11y.js'
+import { RIDE_STYLES } from '../../packages/rides-native/partyProfile.js'
+import { formatAccessibleFormErrorSummary } from '../lib/formA11y.js'
+import { signupFieldErrors } from '../lib/signupFields.js'
 import { takeAuthCallbackError } from '../lib/googleWebAuth'
 import { AccessibleAlert } from '../components/AccessibleAlert'
+import { textLinkHitStyle } from '../lib/touchA11y'
 
 const fieldStyle = {
   width: '100%',
@@ -255,7 +257,7 @@ export function SignInScreen() {
         <button type="button" className="pressable" onClick={() => {
           const { params } = getHashRoute()
           navigate('sign-up', params)
-        }} style={{ color: 'var(--purple)', fontWeight: 700 }}>
+        }} style={textLinkHitStyle({ color: 'var(--purple)', fontWeight: 700 })}>
           Create an account
         </button>
       </p>
@@ -265,7 +267,7 @@ export function SignInScreen() {
 }
 
 function PolicyLinks() {
-  const link = { color: 'var(--purple)', fontWeight: 700 }
+  const link = textLinkHitStyle({ color: 'var(--purple)', fontWeight: 700 })
   return (
     <p style={{ marginTop: 10, fontSize: 13, color: 'var(--ink-tertiary)', textAlign: 'center' }}>
       <button type="button" className="pressable" onClick={() => navigate('privacy')} style={link}>Privacy</button>
@@ -316,18 +318,18 @@ export function SignUpScreen() {
       setError(`Too many signup emails just now. Try again in ${left}s, or sign in if you already created an account.`)
       return
     }
+    const trimmed = email.trim()
+    const fieldErrors = signupFieldErrors({ fullName, phone, bio, rideStyle, email: trimmed, password })
+    if (Object.keys(fieldErrors).length) {
+      setError(formatAccessibleFormErrorSummary(fieldErrors))
+      setInfo(null)
+      return
+    }
     setError(null)
     setInfo(null)
-    const trimmed = email.trim()
     submitLock.current = true
     setBusy(true)
     try {
-      const draft = { full_name: fullName, phone, bio, ride_style: rideStyle }
-      const problem = profileFieldError(draft)
-      if (problem) {
-        setError(problem)
-        return
-      }
       const result = await signUp(trimmed, password, fullName.trim(), gameLink ? '' : promo, { phone, bio, rideStyle })
       const claim = result?.promoClaim
       if (claim?.error) {
@@ -379,9 +381,10 @@ export function SignUpScreen() {
       setGoogleBusy(false)
     }
   }
-  const profileReady = isProfileComplete({ full_name: fullName, phone, bio, ride_style: rideStyle })
-  const missingFields = missingProfileFields({ full_name: fullName, phone, bio, ride_style: rideStyle })
   const showValidation = touchedSubmit
+  const fieldErrors = showValidation
+    ? signupFieldErrors({ fullName, phone, bio, rideStyle, email, password })
+    : {}
   const cta =
     busy ? 'Creating…' : cooldownSec > 0 ? `Wait ${cooldownSec}s…` : 'Create account'
 
@@ -394,73 +397,74 @@ export function SignUpScreen() {
           <AccessibleAlert error={error} onDismiss={() => setError(null)} style={{ marginBottom: 12 }} />
         </div>
       )}
-      <form onSubmit={onSubmit}>
+      <form noValidate onSubmit={onSubmit}>
         <p style={{ fontSize: 12, color: '#522D80', lineHeight: 1.4, marginBottom: 14 }}>
           A profile is required. The other person sees your name, bio, and ride style after a ride is accepted.
         </p>
         <label htmlFor="signup-fullname" style={{ display: 'block', marginBottom: 14 }}>
-          <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink-secondary)' }}>Full name</span>
+          <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink-secondary)' }}>Full name *</span>
           <input
             id="signup-fullname"
-            required
             type="text"
             autoComplete="name"
             value={fullName}
             onChange={(e) => setFullName(e.target.value)}
-            aria-invalid={showValidation && missingFields.includes('full_name') ? 'true' : undefined}
-            aria-describedby={showValidation && missingFields.includes('full_name') ? 'signup-fullname-error' : undefined}
+            aria-required="true"
+            aria-invalid={fieldErrors.fullName ? 'true' : undefined}
+            aria-describedby={fieldErrors.fullName ? 'signup-fullname-error' : undefined}
             style={fieldStyle}
             disabled={blocked}
           />
-          {showValidation && missingFields.includes('full_name') && (
+          {fieldErrors.fullName ? (
             <span id="signup-fullname-error" role="alert" className="field-error-text">
-              Full name is required (minimum 2 characters).
+              {fieldErrors.fullName}
             </span>
-          )}
+          ) : null}
         </label>
         <label htmlFor="signup-phone" style={{ display: 'block', marginBottom: 14 }}>
-          <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink-secondary)' }}>Mobile number</span>
+          <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink-secondary)' }}>Mobile number *</span>
           <input
             id="signup-phone"
-            required
             type="tel"
+            inputMode="tel"
             autoComplete="tel"
             placeholder="864-555-0100"
             value={phone}
             onChange={(e) => setPhone(e.target.value)}
-            aria-invalid={showValidation && missingFields.includes('phone') ? 'true' : undefined}
-            aria-describedby={showValidation && missingFields.includes('phone') ? 'signup-phone-error' : undefined}
+            aria-required="true"
+            aria-invalid={fieldErrors.phone ? 'true' : undefined}
+            aria-describedby={fieldErrors.phone ? 'signup-phone-error' : undefined}
             style={fieldStyle}
             disabled={blocked}
           />
-          {showValidation && missingFields.includes('phone') && (
+          {fieldErrors.phone ? (
             <span id="signup-phone-error" role="alert" className="field-error-text">
-              Valid 10-digit mobile number is required.
+              {fieldErrors.phone}
             </span>
-          )}
+          ) : null}
         </label>
         <label htmlFor="signup-bio" style={{ display: 'block', marginBottom: 14 }}>
-          <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink-secondary)' }}>Short bio</span>
+          <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink-secondary)' }}>Short bio *</span>
           <input
             id="signup-bio"
-            required
             type="text"
             placeholder="How you like to ride"
             value={bio}
             onChange={(e) => setBio(e.target.value)}
-            aria-invalid={showValidation && missingFields.includes('bio') ? 'true' : undefined}
-            aria-describedby={showValidation && missingFields.includes('bio') ? 'signup-bio-error' : undefined}
+            aria-required="true"
+            aria-invalid={fieldErrors.bio ? 'true' : undefined}
+            aria-describedby={fieldErrors.bio ? 'signup-bio-error' : undefined}
             style={fieldStyle}
             disabled={blocked}
           />
-          {showValidation && missingFields.includes('bio') && (
+          {fieldErrors.bio ? (
             <span id="signup-bio-error" role="alert" className="field-error-text">
-              Bio must be at least 8 characters.
+              {fieldErrors.bio}
             </span>
-          )}
+          ) : null}
         </label>
         <div role="group" aria-labelledby="signup-ridestyle-label" style={{ marginBottom: 14 }}>
-          <span id="signup-ridestyle-label" style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink-secondary)' }}>Ride style</span>
+          <span id="signup-ridestyle-label" style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink-secondary)' }}>Ride style *</span>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 8 }}>
             {RIDE_STYLES.map((style) => {
               const on = rideStyle === style
@@ -485,42 +489,54 @@ export function SignUpScreen() {
               )
             })}
           </div>
-          {showValidation && missingFields.includes('ride_style') && (
+          {fieldErrors.rideStyle ? (
             <span id="signup-ridestyle-error" role="alert" className="field-error-text">
-              Please choose a ride style.
+              {fieldErrors.rideStyle}
             </span>
-          )}
+          ) : null}
         </div>
         <label htmlFor="signup-email" style={{ display: 'block', marginBottom: 14 }}>
           <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink-secondary)' }}>
-            Email <span id="signup-email-hint" style={{ fontWeight: 500, color: 'var(--ink-tertiary)' }}>(Clemson email gets student pricing)</span>
+            Email * <span id="signup-email-hint" style={{ fontWeight: 500, color: 'var(--ink-tertiary)' }}>(Clemson email gets student pricing)</span>
           </span>
           <input
             id="signup-email"
-            required
             type="email"
             autoComplete="email"
             placeholder="you@gmail.com"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            aria-describedby="signup-email-hint"
+            aria-required="true"
+            aria-invalid={fieldErrors.email ? 'true' : undefined}
+            aria-describedby={fieldErrors.email ? 'signup-email-hint signup-email-error' : 'signup-email-hint'}
             style={fieldStyle}
             disabled={blocked}
           />
+          {fieldErrors.email ? (
+            <span id="signup-email-error" role="alert" className="field-error-text">
+              {fieldErrors.email}
+            </span>
+          ) : null}
         </label>
         <label htmlFor="signup-password" style={{ display: 'block', marginBottom: 14 }}>
-          <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink-secondary)' }}>Password</span>
+          <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink-secondary)' }}>Password *</span>
           <input
             id="signup-password"
-            required
             type="password"
             autoComplete="new-password"
-            minLength={6}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
+            aria-required="true"
+            aria-invalid={fieldErrors.password ? 'true' : undefined}
+            aria-describedby={fieldErrors.password ? 'signup-password-error' : undefined}
             style={fieldStyle}
             disabled={blocked || created}
           />
+          {fieldErrors.password ? (
+            <span id="signup-password-error" role="alert" className="field-error-text">
+              {fieldErrors.password}
+            </span>
+          ) : null}
         </label>
         {!gameLink && (
         <label htmlFor="signup-promo" style={{ display: 'block', marginBottom: 18 }}>
@@ -559,7 +575,7 @@ export function SignUpScreen() {
             Continue
           </button>
         ) : (
-          <button type="submit" className="pressable primary-cta" disabled={blocked || !profileReady} style={{ width: '100%', padding: 16, borderRadius: 16, background: 'linear-gradient(135deg, var(--orange) 0%, #ff7a1a 100%)', color: '#fff', fontWeight: 700, fontSize: 16, boxShadow: 'var(--shadow-cta)', opacity: blocked || !profileReady ? 0.7 : 1 }}>
+          <button type="submit" className="pressable primary-cta" disabled={blocked} style={{ width: '100%', padding: 16, borderRadius: 16, background: 'linear-gradient(135deg, var(--orange) 0%, #ff7a1a 100%)', color: '#fff', fontWeight: 700, fontSize: 16, boxShadow: 'var(--shadow-cta)', opacity: blocked ? 0.7 : 1 }}>
             {cta}
           </button>
         )}

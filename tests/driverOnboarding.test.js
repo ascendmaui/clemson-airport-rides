@@ -4,7 +4,6 @@ import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { IC_AGREEMENT_HTML, IC_AGREEMENT_VERSION } from '../shared/icAgreement.js'
 import {
-  ADMIN_EMAIL,
   ONBOARDING_FLOW,
   REQUIRED_DOC_IDS,
   canReceiveRides,
@@ -18,6 +17,7 @@ import {
   statusAfterInfoSave,
   blockerLabel,
   submissionBlockers,
+  w9ContinueIssue,
 } from '../shared/driverOnboarding.js'
 
 test('new drivers are not approved by an info save', () => {
@@ -165,6 +165,53 @@ test('submit stays blocked until employment, W-9, and the signed agreement exist
   assert.equal(firstIncompleteStepId(missingWork), 'employment')
 })
 
+test('W-9 continue follows the typed tax record, not a file the step cannot upload', () => {
+  assert.equal(REQUIRED_DOC_IDS.includes('w9'), false)
+  assert.equal(w9ContinueIssue({
+    legalName: 'Ada Lovelace',
+    taxClass: 'individual',
+    tin: '123-45-6789',
+  }), null)
+  assert.match(
+    w9ContinueIssue({ legalName: 'A', taxClass: 'individual', tin: '123456789' }),
+    /legal name/i,
+  )
+  assert.match(
+    w9ContinueIssue({ legalName: 'Ada Lovelace', taxClass: 'nope', tin: '123456789' }),
+    /classification/i,
+  )
+  assert.match(
+    w9ContinueIssue({ legalName: 'Ada Lovelace', taxClass: 'individual', tin: '1234' }),
+    /9-digit TIN/,
+  )
+  assert.equal(w9ContinueIssue({
+    legalName: 'Ada Lovelace',
+    taxClass: 'individual',
+    tin: '',
+    taxSaved: true,
+  }), null)
+
+  const savedTax = {
+    status: 'pending_docs',
+    uploaded: REQUIRED_DOC_IDS,
+    backgroundAuthorized: true,
+    workEligibilityAttested: true,
+    workEligibilityCategory: 'citizen',
+    taxSaved: true,
+    agreementSigned: true,
+    agreementVersion: IC_AGREEMENT_VERSION,
+  }
+  assert.equal(submissionBlockers(savedTax).includes('doc:w9'), false)
+  assert.equal(submissionBlockers(savedTax).includes('w9_tax_info'), false)
+  assert.ok(submissionBlockers({ ...savedTax, taxSaved: false }).includes('w9_tax_info'))
+
+  const screen = readFileSync(new URL('../src/screens/DriverOnboarding.jsx', import.meta.url), 'utf8')
+  assert.doesNotMatch(screen, /w9DocReady|uploaded\.includes\('w9'\)/)
+  assert.match(screen, /w9ContinueIssue/)
+  assert.match(screen, /id="w9-continue-reason"/)
+  assert.match(screen, /You do not upload a file/)
+})
+
 test('TIN display is last-4 only', () => {
   assert.equal(displayTinLast4('6789'), '••••6789')
   assert.equal(displayTinLast4('123456789'), '')
@@ -188,12 +235,12 @@ test('compliance migration stores the exact agreement and every required doc typ
   assert.equal(sql.includes(hash), false)
 })
 
-test('admin is a seeded email, is_admin, or admin/ops role — not a copied profile email', () => {
-  assert.equal(isAdminIdentity({ jwtEmail: ADMIN_EMAIL }), true)
-  assert.equal(isAdminIdentity({ jwtEmail: 'JOHN@gmail.com' }), true)
-  assert.equal(isAdminIdentity({ jwtEmail: 'johnmatveev@gmail.com' }), true)
-  assert.equal(isAdminIdentity({ jwtEmail: 'JohnMatveyev@gmail.com' }), true)
-  assert.equal(isAdminIdentity({ jwtEmail: 'jmat2019@icloud.com' }), true)
+test('admin is a profile role or is_admin flag — not an email string', () => {
+  assert.equal(isAdminIdentity({ jwtEmail: 'john@gmail.com' }), false)
+  assert.equal(isAdminIdentity({ jwtEmail: 'JOHN@gmail.com' }), false)
+  assert.equal(isAdminIdentity({ jwtEmail: 'johnmatveev@gmail.com' }), false)
+  assert.equal(isAdminIdentity({ jwtEmail: 'JohnMatveyev@gmail.com' }), false)
+  assert.equal(isAdminIdentity({ jwtEmail: 'jmat2019@icloud.com' }), false)
   assert.equal(isAdminIdentity({ jwtEmail: 'student@clemson.edu', isAdmin: true }), true)
   assert.equal(isAdminIdentity({ jwtEmail: 'student@clemson.edu', role: 'admin' }), true)
   assert.equal(isAdminIdentity({ jwtEmail: 'student@clemson.edu', role: 'ops' }), true)

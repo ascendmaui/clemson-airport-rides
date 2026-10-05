@@ -5,11 +5,9 @@
  * in_app is the existing driver-screen chime. It plays only while that screen
  * is open, so this module records the channel and does not play audio.
  * push has a stored Expo token path and no server sender.
- * sms has no sender in this repo.
- * email uses the existing Resend helper only when DRIVER_OFFER_ALERT_EMAIL=send.
- * Any other value, including unset, records a no-send result and does not call Resend.
+ * SMS and email delivery are delegated to driverOfferChannels.js.
  */
-import { sendApplicantNotice } from './applicantMail.js'
+import { dispatchDriverOfferChannels } from './driverOfferChannels.js'
 import { quietFromPrefs } from '../src/lib/quietHours.js'
 
 export const DRIVER_OFFER_ALERT_CHANNELS = Object.freeze(['in_app', 'push', 'sms', 'email'])
@@ -99,19 +97,6 @@ export function buildOfferAlertPlan({
   return channels
 }
 
-function liveEmailEnabled() {
-  return (process.env.DRIVER_OFFER_ALERT_EMAIL || '').trim() === 'send'
-}
-
-async function deliverEmail({ to, subject, text }, deps) {
-  if (!liveEmailEnabled()) return { sent: false, reason: 'live_send_disabled' }
-  if (!to) return { sent: false, reason: 'driver_email_missing' }
-  const send = deps.sendEmail || sendApplicantNotice
-  const result = await send({ to, subject, text })
-  if (result?.emailed) return { sent: true, reason: null }
-  return { sent: false, reason: 'email_provider_skipped' }
-}
-
 function tokenPresent(statusRow, tokenRow) {
   const statusToken = String(statusRow?.expo_push_token || '').trim()
   const tableToken = String(tokenRow?.token || '').trim()
@@ -124,6 +109,7 @@ async function loadDriverContact(sb, driverId) {
   const token = await sb.from('driver_push_tokens').select('token, platform').eq('driver_id', driverId).maybeSingle()
   return {
     email: String(profile.data?.email || '').trim(),
+    phone: String(profile.data?.phone || '').trim(),
     phoneOnFile: Boolean(String(profile.data?.phone || '').trim()),
     prefs: profile.data?.notification_prefs || null,
     pushTokenPresent: tokenPresent(status.data, token.data),
@@ -170,15 +156,6 @@ export async function dispatchDriverOfferAlert(sb, {
     emailOnFile: Boolean(contact.email),
   })
 
-  if (!suppressed && contact.email) {
-    const copy = offerAlertCopy(trip)
-    channels.email = await deliverEmail({
-      to: contact.email,
-      subject: copy.title,
-      text: `${copy.body}\nOpen the driver screen to accept or pass.`,
-    }, deps)
-  }
-
   const alerts = sb.from('driver_offer_alerts')
   const inserted = typeof alerts.insert === 'function'
     ? await alerts.insert({
@@ -188,6 +165,28 @@ export async function dispatchDriverOfferAlert(sb, {
       channels,
     })
     : { error: { message: 'driver_offer_alerts insert is unavailable' } }
+  if (inserted?.error) {
+    const raced = await existingAlert(sb, tripId, driverId, offerMarker)
+    if (raced) return { ok: true, tripId, driverId, offerMarker, channels: raced, recorded: true, duplicate: true }
+  }
+
+  if (!inserted?.error && !suppressed) {
+    const delivered = await dispatchDriverOfferChannels({
+      sb, tripId, driverId, offerMarker, phone: contact.phone, email: contact.email,
+      prefs: contact.prefs, suppressed, copy: offerAlertCopy(trip), now,
+    }, deps)
+    channels.sms = delivered.sms
+    channels.email = delivered.email
+    channels.sms.phoneOnFile = contact.phoneOnFile
+    // The first insert is the cross-channel claim. This update is audit/display data only.
+    try {
+      const update = sb.from('driver_offer_alerts')
+      if (typeof update.update === 'function') await update.update({ channels }).eq('trip_id', tripId).eq('driver_id', driverId).eq('offer_marker', offerMarker)
+    } catch { /* delivery succeeded even when the compatibility update is unavailable */ }
+  } else if (!inserted?.error && suppressed) {
+    // Record SMS/email suppression attempts when the additive audit table exists.
+    await dispatchDriverOfferChannels({ sb, tripId, driverId, offerMarker, phone: contact.phone, email: contact.email, prefs: contact.prefs, suppressed, copy: offerAlertCopy(trip), now }, deps)
+  }
   return {
     ok: true,
     tripId,

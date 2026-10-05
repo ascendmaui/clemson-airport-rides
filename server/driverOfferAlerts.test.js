@@ -97,7 +97,7 @@ test('push, sms, and email stay no-send without a live flag, even when contact d
     assert.equal(result.channels.push.reason, 'push_sender_missing')
     assert.equal(result.channels.push.sent, false)
     assert.equal(result.channels.push.tokenPresent, true)
-    assert.equal(result.channels.sms.reason, 'sms_provider_missing')
+    assert.equal(result.channels.sms.reason, 'live_send_disabled')
     assert.equal(result.channels.sms.phoneOnFile, true)
     assert.equal(result.channels.sms.sent, false)
     assert.equal(result.channels.email.reason, 'live_send_disabled')
@@ -114,7 +114,11 @@ test('push, sms, and email stay no-send without a live flag, even when contact d
 
 test('email uses the injected sender only when the live flag is send, and a repeat does not send again', async () => {
   const previous = process.env.DRIVER_OFFER_ALERT_EMAIL
+  const previousKey = process.env.RESEND_API_KEY
+  const previousFrom = process.env.RESEND_FROM
   process.env.DRIVER_OFFER_ALERT_EMAIL = 'send'
+  process.env.RESEND_API_KEY = 'test_key'
+  process.env.RESEND_FROM = 'offers@example.com'
   const originalFetch = globalThis.fetch
   globalThis.fetch = async () => {
     throw new Error('live send')
@@ -151,6 +155,10 @@ test('email uses the injected sender only when the live flag is send, and a repe
     globalThis.fetch = originalFetch
     if (previous === undefined) delete process.env.DRIVER_OFFER_ALERT_EMAIL
     else process.env.DRIVER_OFFER_ALERT_EMAIL = previous
+    if (previousKey === undefined) delete process.env.RESEND_API_KEY
+    else process.env.RESEND_API_KEY = previousKey
+    if (previousFrom === undefined) delete process.env.RESEND_FROM
+    else process.env.RESEND_FROM = previousFrom
   }
 })
 

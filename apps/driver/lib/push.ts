@@ -13,6 +13,36 @@ Notifications.setNotificationHandler({
   }),
 })
 
+export const RIDE_CHANNEL_ID = 'ride-requests'
+
+/** Android 8+ plays a custom sound only when that sound is set on a channel. */
+export function rideChannelRequest() {
+  return {
+    name: 'Ride requests',
+    importance: 4,
+    sound: 'request.wav',
+    vibrationPattern: [0, 250, 120, 250],
+    lockscreenVisibility: 1,
+  }
+}
+
+export async function ensureRideChannel() {
+  if (Platform.OS !== 'android') return false
+  const create = Notifications.setNotificationChannelAsync
+  if (typeof create !== 'function') return false
+  try {
+    await create(RIDE_CHANNEL_ID, rideChannelRequest())
+    return true
+  } catch {
+    return false
+  }
+}
+
+function androidChannelFields(): { channelId?: string } {
+  if (Platform.OS !== 'android') return {}
+  return { channelId: RIDE_CHANNEL_ID }
+}
+
 export type PushState = {
   granted: boolean
   token: string | null
@@ -27,9 +57,11 @@ export async function registerDriverPush(supabase: SupabaseClient | null, driver
   const existing = await Notifications.getPermissionsAsync()
   let status = existing.status
   if (status !== 'granted') {
+    await ensureRideChannel()
     const asked = await Notifications.requestPermissionsAsync()
     status = asked.status
   }
+  await ensureRideChannel()
   if (status !== 'granted') {
     return {
       granted: false,
@@ -86,12 +118,14 @@ export async function notifyAcceptedRide(card: {
   pickupLabel: string
   dropoffLabel: string
 }) {
+  await ensureRideChannel()
   await Notifications.scheduleNotificationAsync({
     content: {
       title: 'Ride accepted',
       body: `${card.pickupLabel} → ${card.dropoffLabel}`,
       data: { tripId: card.id },
       sound: 'request.wav',
+      ...androidChannelFields(),
     },
     trigger: null,
   })
@@ -112,12 +146,14 @@ export async function notifyNewRequest(card: {
   const promo = card.promoRide
     ? clemsonMiamiDriverNotification(card.now ? new Date(card.now) : new Date())
     : null
+  await ensureRideChannel()
   await Notifications.scheduleNotificationAsync({
     content: {
       title: promo?.title || 'New ride request',
       body: promo?.body || routeBody,
       data: { tripId: card.id },
       sound: 'request.wav',
+      ...androidChannelFields(),
     },
     trigger: null,
   })

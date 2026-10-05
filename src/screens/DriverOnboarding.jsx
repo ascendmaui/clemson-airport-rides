@@ -38,6 +38,7 @@ import { TESLA_FLEET_NOTICE } from '../../packages/rides-native/tripTags.js'
 import { buildFieldA11yProps, formatAccessibleFormErrorSummary, getFieldErrorProps } from '../lib/formA11y'
 import { loadLatestVehicle, vehicleAccountErrors } from '../../shared/vehicleYear.js'
 import { driverQuizError } from '../../shared/driverQuiz.js'
+import { w9ContinueIssue } from '../../shared/driverOnboarding.js'
 
 const QUESTIONS = [
   { key: 'isStudent', label: 'Are you a student?', optional: true },
@@ -477,10 +478,14 @@ export function DriverOnboarding() {
   const previous = adjacentStep(current.id, -1)
   const next = adjacentStep(current.id, 1)
   const employmentDocsReady = (flowStep('employment')?.docIds || []).every((id) => uploaded.includes(id))
-  const w9DocReady = uploaded.includes('w9')
   const employmentFormOk = backgroundAuthorized && eligibilityAttested && Boolean(eligibilityCategory) && employmentDocsReady
-  const tinDigits = tin.replace(/\D/g, '')
-  const taxFormOk = legalName.trim().length >= 2 && Boolean(taxClass) && w9DocReady && (Boolean(taxProfile) || tinDigits.length === 9)
+  const w9Issue = w9ContinueIssue({
+    legalName,
+    taxClass,
+    tin,
+    taxSaved: Boolean(taxProfile?.legal_name && /^[0-9]{4}$/.test(String(taxProfile?.tin_last4 || ''))),
+  })
+  const taxFormOk = w9Issue == null
 
   return (
     <div className="driver-application fade-in" style={{ minHeight: '100%', background: 'var(--surface-muted)', padding: '20px 16px 48px' }}>
@@ -663,7 +668,7 @@ export function DriverOnboarding() {
         <div className="sheet" style={{ marginTop: 16, padding: 20, borderRadius: 22, boxShadow: 'var(--shadow-pill)' }}>
           <h2 style={{ fontSize: 18, color: 'var(--purple)', marginBottom: 6 }}>W-9</h2>
           <p style={{ fontSize: 14, color: 'var(--ink-secondary)', lineHeight: 1.45, marginBottom: 14 }}>
-            Independent contractors provide a W-9. Upload the form and enter your legal name and taxpayer identification number. The app stores the full number in a restricted record and shows only the last four digits.
+            Independent contractors provide a W-9 by entering it here. You do not upload a file. The app stores the full taxpayer identification number in a restricted record and shows only the last four digits.
           </p>
           <Field label="Legal name" value={legalName} onChange={setLegalName} />
           <label style={{ display: 'block', marginBottom: 12, fontSize: 13, fontWeight: 650 }}>
@@ -705,8 +710,16 @@ export function DriverOnboarding() {
               />
             ))}
           </div>
+          {w9Issue ? (
+            <p id="w9-continue-reason" role="alert" className="field-error-text">{w9Issue}</p>
+          ) : null}
           <div style={{ marginTop: 16 }}>
-            <PrimaryButton type="button" disabled={!taxFormOk || busy || Boolean(uploading)} onClick={onSaveTax}>
+            <PrimaryButton
+              type="button"
+              disabled={!taxFormOk || busy || Boolean(uploading)}
+              aria-describedby={w9Issue ? 'w9-continue-reason' : undefined}
+              onClick={onSaveTax}
+            >
               {busy ? 'Saving…' : `Continue to ${next?.label || 'the next step'}`}
             </PrimaryButton>
           </div>

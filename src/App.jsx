@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { bindKeyboardInset, scrollFocusedFieldIntoView } from './lib/keyboardInset'
 import { getHashRoute, redirectShareHashToPath } from './lib/navigation'
 import { capturePromoFromLocation } from './lib/riderPromo'
 import {
@@ -171,7 +172,7 @@ function Screen({ path, params }) {
     case 'admin-dashboard':
       return (
         <RequireAuth>
-          <AdminDesk restrictedToEmail="johnmatveyev@gmail.com" />
+          <AdminDesk />
         </RequireAuth>
       )
     case 'friends':
@@ -237,6 +238,15 @@ export default function App() {
       window.removeEventListener('hashchange', onRoute)
       window.removeEventListener('popstate', onRoute)
       window.clearTimeout(t)
+    }
+  }, [])
+
+  useEffect(() => {
+    const stopInset = bindKeyboardInset()
+    document.addEventListener('focusin', scrollFocusedFieldIntoView)
+    return () => {
+      stopInset()
+      document.removeEventListener('focusin', scrollFocusedFieldIntoView)
     }
   }, [])
 

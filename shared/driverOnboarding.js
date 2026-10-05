@@ -1,12 +1,10 @@
 /** Driver approval gate — shared by the Vite client, Vercel API, and tests. */
 
 import { IC_AGREEMENT_VERSION } from './icAgreement.js'
-import { isAdminIdentity, isSeedAdminEmail, SEEDED_ADMIN_EMAILS } from './adminAccess.js'
+import { isAdminIdentity } from './adminAccess.js'
 
 export { IC_AGREEMENT_HTML, IC_AGREEMENT_TITLE, IC_AGREEMENT_VERSION } from './icAgreement.js'
-export { isAdminIdentity, isSeedAdminEmail, SEEDED_ADMIN_EMAILS }
-
-export const ADMIN_EMAIL = 'john@gmail.com'
+export { isAdminIdentity }
 
 export const ONBOARDING_STATUSES = [
   'pending_info',
@@ -228,7 +226,7 @@ export function progressSnapshot(ctx = {}) {
 }
 
 export const EMAIL_TODO =
-  'TODO: set RESEND_API_KEY and RESEND_FROM (verified domain) to email seeded admins when a driver applies. The in-app admin dashboard at #/admin lists each application with the email submitted on it.'
+  'TODO: set RESEND_API_KEY, RESEND_FROM (verified domain), and ADMIN_NOTIFY_EMAIL to email the admin when a driver applies. The in-app admin dashboard at #/admin lists each application with the email submitted on it.'
 
 const DOC_ID_SET = new Set(REQUIRED_DOC_IDS)
 
@@ -246,6 +244,27 @@ export function displayTinLast4(value) {
   const last4 = String(value ?? '')
   if (!/^[0-9]{4}$/.test(last4)) return ''
   return `••••${last4}`
+}
+
+/**
+ * Why the W-9 Continue button is disabled.
+ * A typed legal name, tax classification, and 9-digit TIN are enough.
+ * There is no W-9 file in REQUIRED_DOCUMENTS, and the server gate is taxSaved
+ * (legal name plus TIN last-4), not an uploaded form.
+ */
+export function w9ContinueIssue({ legalName, taxClass, tin, taxSaved = false } = {}) {
+  if (String(legalName || '').trim().length < 2) {
+    return 'Enter your legal name as it appears on your W-9.'
+  }
+  if (!TAX_CLASSIFICATIONS.some((item) => item.id === taxClass)) {
+    return 'Select a federal tax classification.'
+  }
+  if (taxSaved) return null
+  const digits = String(tin || '').replace(/\D/g, '')
+  if (digits.length !== 9) {
+    return 'Enter a 9-digit TIN. Only the last four digits are shown after you save.'
+  }
+  return null
 }
 
 export function submissionBlockers(ctx = {}) {

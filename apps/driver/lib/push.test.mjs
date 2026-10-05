@@ -56,6 +56,10 @@ const notificationsUrl = dataUrl(`
     state.scheduled.push(request)
     if (state.scheduleError) throw state.scheduleError
   }
+  export async function setNotificationChannelAsync(id, channel) {
+    const state = globalThis[key]
+    state.channels.push({ id, channel })
+  }
 `)
 
 const reactNativeUrl = dataUrl(`
@@ -130,6 +134,7 @@ function freshPushState() {
     tokenOpts: [],
     scheduleError: null,
     scheduled: [],
+    channels: [],
     handler,
   }
 }
@@ -521,6 +526,17 @@ test('driver push offline and error states', { concurrency: false }, async (t) =
     })
     const ugly = await rejectionOf(push.registerDriverPush(fallback, 'driver-1'))
     assert.equal(ugly.message, '[object Object]')
+  })
+
+  await t.test('android ride alerts use a channel so the request sound can play', async () => {
+    state().os = 'android'
+    await push.notifyNewRequest(CARD)
+    assert.equal(state().channels.length, 1)
+    assert.equal(state().channels[0].id, 'ride-requests')
+    assert.equal(state().channels[0].channel.sound, 'request.wav')
+    assert.equal(state().channels[0].channel.importance, 4)
+    assert.equal(state().scheduled[0].content.channelId, 'ride-requests')
+    assert.equal(state().scheduled[0].content.sound, 'request.wav')
   })
 
   await t.test('notifyAcceptedRide tells the driver the pin was accepted', async () => {

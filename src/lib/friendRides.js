@@ -178,8 +178,11 @@ export async function retryFriendCharge(token, participantId, extra = {}) {
   })
 }
 
-export async function createSetupIntent() {
-  return api('/api/stripe-payment-methods?action=setup-intent', { method: 'POST', body: {} })
+export async function createSetupIntent({ paymentMethod } = {}) {
+  return api('/api/stripe-payment-methods?action=setup-intent', {
+    method: 'POST',
+    body: { paymentMethod },
+  })
 }
 
 export async function savePaymentMethod({ paymentMethodId, setupIntentId }) {

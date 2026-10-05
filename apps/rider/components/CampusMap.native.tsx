@@ -1,6 +1,8 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react'
-import { StyleSheet, Text, View } from 'react-native'
+import { Platform, StyleSheet, Text, View } from 'react-native'
+import Constants from 'expo-constants'
 import MapView, { Circle, Marker, Polyline, PROVIDER_DEFAULT } from 'react-native-maps'
+import { ANDROID_MAP_UNAVAILABLE, googleMapStyle, nativeMapTilesReady } from 'rides-native/googleMapChrome.js'
 import { heatColor } from 'rides-native/heat.js'
 import { DOWNTOWN, STADIUM } from 'rides-native/places.js'
 import { SIMULATED_FLEET_BADGE, refuseSimulatedDriverTap } from 'rides-native/simulatedDrivers.js'
@@ -96,6 +98,19 @@ export const CampusMap = forwardRef<CampusMapHandle, CampusMapProps>(function Ca
     return () => clearInterval(id)
   }, [theater])
 
+  const tilesReady = nativeMapTilesReady(Platform.OS, {
+    env: typeof process !== 'undefined' ? process.env : {},
+    manifestKey: Constants.expoConfig?.android?.config?.googleMaps?.apiKey,
+  })
+  if (!tilesReady) {
+    return (
+      <View style={[styles.fill, styles.unavailable]}>
+        <Text style={styles.unavailableTitle}>Map unavailable</Text>
+        <Text style={styles.unavailableBody}>{ANDROID_MAP_UNAVAILABLE}</Text>
+      </View>
+    )
+  }
+
   return (
     <View style={styles.fill}>
       <MapView
@@ -110,6 +125,7 @@ export const CampusMap = forwardRef<CampusMapHandle, CampusMapProps>(function Ca
         }}
         mapType={mapType}
         userInterfaceStyle={scheme}
+        customMapStyle={googleMapStyle(scheme)}
         rotateEnabled={false}
         pitchEnabled={false}
         toolbarEnabled={false}
@@ -236,6 +252,14 @@ export const CampusMap = forwardRef<CampusMapHandle, CampusMapProps>(function Ca
 
 const styles = StyleSheet.create({
   fill: { flex: 1 },
+  unavailable: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 24,
+    backgroundColor: '#F4F5F8',
+  },
+  unavailableTitle: { fontSize: 16, fontWeight: '800', color: '#522D80', marginBottom: 8 },
+  unavailableBody: { fontSize: 14, lineHeight: 20, textAlign: 'center', color: '#5B6472' },
   car: {
     width: 28,
     height: 28,
