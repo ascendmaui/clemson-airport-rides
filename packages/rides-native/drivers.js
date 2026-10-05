@@ -7,14 +7,12 @@ import { GSP, STADIUM } from './places.js'
 import { airportCodeFromLabel } from './riderMoney.js'
 import { haversineMeters } from './riderShell.js'
 import { isSimulatedDriverId } from './simulatedDrivers.js'
+import { favoriteIdsForMatching } from '../../shared/riderFavorites.js'
 import { approvalGateMessage } from './syntheticOffers.js'
 
 /** Straight-line campus pace. TODO: a traffic ETA needs a billed GOOGLE_MAPS_API_KEY (Routes). */
 const CAMPUS_MPH = 18
 const STALE_LOCATION_MS = 10 * 60 * 1000
-const FAVORITE_CAP = 12
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
-
 const STATUS_COLUMNS = 'driver_id, online, priority_mode, lat, lng, heading, unlock_progress, unlock_target, updated_at'
 const VEHICLE_COLUMNS = 'id, driver_id, make, model, color, plate, seats, tier'
 const PROFILE_COLUMNS = 'id, full_name, phone, email, avatar_url, role, rating_avg, rating_count, standing'
@@ -48,16 +46,11 @@ export function preferredTripFields(driverId) {
 }
 
 export function normalizeFavoriteDriverIds(raw) {
-  const list = Array.isArray(raw) ? raw : []
-  const ids = []
-  for (const item of list) {
-    if (typeof item !== 'string') continue
-    const id = item.trim()
-    if (!UUID_RE.test(id) || ids.includes(id)) continue
-    ids.push(id)
-    if (ids.length >= FAVORITE_CAP) break
-  }
-  return ids
+  return favoriteIdsForMatching(raw)
+}
+
+export function canFavoriteDriver(driverId) {
+  return favoriteIdsForMatching([driverId]).length === 1
 }
 
 export function driverApproach(driver, pickup) {

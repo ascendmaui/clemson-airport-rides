@@ -17,6 +17,8 @@ import {
   riderTierQuotes,
 } from '../authoritativeFare.js'
 import { resolveOfferedTier } from '../../shared/rideOptions.js'
+import { tigerPassQuoteFields } from '../../shared/tigerPass.js'
+import { loadRiderMatchPreferences } from '../riderPass.js'
 
 const CLIENT_MONEY_KEYS = [
   'fareCents',
@@ -41,6 +43,10 @@ const CLIENT_MONEY_KEYS = [
   'durationS',
   'vehicleMultiplier',
   'isCarpool',
+  'tigerPass',
+  'tigerPassBps',
+  'tiger_pass',
+  'discountBps',
 ]
 
 function withoutClientMoney(body) {
@@ -95,6 +101,7 @@ export default async function handler(req, res, deps = {}) {
   const compute = deps.computeRoutes || computeRoutes
   const distance = await distanceBetween(located.pickup, located.dropoff, compute)
   const scheduled = Boolean(clean.date || clean.pickupAt || clean.scheduled_for || clean.scheduledFor)
+  const pass = user?.id ? await loadRiderMatchPreferences(sb, user.id, now) : null
   const priced = riderTierQuotes({
     pickup: located.pickup,
     dropoff: located.dropoff,
@@ -107,6 +114,7 @@ export default async function handler(req, res, deps = {}) {
     distanceM: distance.distanceM,
     durationS: distance.durationS,
     scheduleAhead: scheduled,
+    tigerPassBps: pass?.discountBps || 0,
   })
   const split = splitPlatformFee(priced.fareCents)
   const breakdown = priced.breakdown || priced.quote?.breakdown || {}
@@ -126,6 +134,8 @@ export default async function handler(req, res, deps = {}) {
     scheduleDiscountPct: priced.scheduleDiscountPct || 0,
     scheduleDiscountCents: priced.scheduleDiscountCents || 0,
     scheduleDiscountApplied: Boolean(priced.scheduleDiscountApplied),
+    ...tigerPassQuoteFields(priced),
+    preferredCarTypes: pass?.carTypes || [],
     tiers: priced.tiers,
     quote: {
       fareCents: priced.fareCents,

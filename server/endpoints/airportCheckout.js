@@ -16,6 +16,8 @@ import {
 } from '../creditLots.js'
 import { studentDiscountGranted } from '../../src/lib/studentDomain.js'
 import { quoteAirportCheckout } from '../authoritativeFare.js'
+import { tigerPassBpsForRider } from '../riderPass.js'
+import { tigerPassMetadata } from '../../shared/tigerPass.js'
 import {
   splitPlatformFee,
   feeMetadata,
@@ -74,6 +76,7 @@ export default async function handler(req, res, deps = {}) {
     .eq('id', user.id)
     .maybeSingle()
   const isStudent = studentDiscountGranted(user)
+  const tigerPassBps = await tigerPassBpsForRider(sb, user.id, at)
 
   let distanceM = null
   let durationS = null
@@ -92,6 +95,7 @@ export default async function handler(req, res, deps = {}) {
     gameDayMultiplier: game.multiplier,
     distanceM,
     durationS,
+    tigerPassBps,
   })
   const quoted = priced.quote
   const surge = priced.surge
@@ -157,6 +161,7 @@ export default async function handler(req, res, deps = {}) {
         airport,
         pending_credit_debits: depositCents > 0 ? settlement.debits : [],
         credits_applied: false,
+        ...tigerPassMetadata(priced),
       },
     })
     .select('id')

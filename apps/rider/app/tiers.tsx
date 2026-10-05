@@ -1,5 +1,5 @@
 import { useLocalSearchParams, useRouter } from 'expo-router'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Animated, Pressable, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { PrimaryButton } from '@/components/Button'
@@ -7,8 +7,10 @@ import { pressStyle, useEnterMotion } from '@/components/enter'
 import { SignInToBookSheet } from '@/components/SignInToBookSheet'
 import { setAuthNext } from '@/lib/authNext'
 import { useAuth } from '@/lib/auth'
+import { supabase } from '@/lib/supabase'
+import { loadTigerPass, type TigerPassStatus } from 'rides-native/tigerPassClient'
 import { oneParam } from '@/lib/oneParam'
-import { formatUsd, RIDE_TIERS } from 'rides-native/places.js'
+import { bookableRideTiers, formatUsd } from 'rides-native/places.js'
 import { displayTierPrice, studentSurfaceCopy } from 'rides-native/riderMoney.js'
 import { useStudentStatus } from '@/lib/useStudentStatus'
 import { lift } from '@/lib/elevation'
@@ -39,11 +41,27 @@ export default function RideTiers() {
   const { user } = useAuth()
   const student = useStudentStatus()
   const studentOffer = studentSurfaceCopy(student, 'tiers')
-  const [selected, setSelected] = useState(RIDE_TIERS[0].id)
+  const tiers = bookableRideTiers()
+  const [pass, setPass] = useState<TigerPassStatus | null>(null)
+  const [selected, setSelected] = useState(tiers[0].id)
   const [promptOpen, setPromptOpen] = useState(false)
   const { colors } = useTheme()
   const styles = useThemedStyles(makeStyles)
   const listMotion = useEnterMotion(14)
+
+  useEffect(() => {
+    if (!user || !supabase) return undefined
+    let alive = true
+    loadTigerPass(supabase).then((next) => {
+      if (!alive) return
+      setPass(next)
+      const preferred = (next.preferredCarTypes || []).find((id) => tiers.some((tier) => tier.id === id))
+      if (preferred) setSelected(preferred)
+    }).catch(() => {})
+    return () => {
+      alive = false
+    }
+  }, [user])
 
   const next = {
     pathname: '/pick-driver' as const,
@@ -88,8 +106,13 @@ export default function RideTiers() {
         <Text style={styles.promoText}>{studentOffer.title}</Text>
         {studentOffer.detail ? <Text style={styles.promoDetail}>{studentOffer.detail}</Text> : null}
       </Pressable>
+      {pass?.active ? (
+        <Pressable accessibilityRole="button" onPress={() => router.push('/tiger-pass')} style={styles.passLine}>
+          <Text style={styles.promoDetail}>{pass.name} · {pass.summary}</Text>
+        </Pressable>
+      ) : null}
       <Animated.ScrollView style={[{ flex: 1 }, listMotion]} contentContainerStyle={styles.list} showsVerticalScrollIndicator={false}>
-        {RIDE_TIERS.map((tier) => {
+        {tiers.map((tier) => {
           const on = tier.id === selected
           const quoted = displayTierPrice(tier.price, { isStudent: student.verified, tier: tier.id })
           return (
@@ -170,6 +193,7 @@ function makeStyles(colors: Palette) {
     promoText: { color: colors.link, fontWeight: '700' as const, fontSize: 13 },
     promoGated: { alignSelf: 'stretch' as const, borderRadius: 16, paddingVertical: 12 },
     promoDetail: { color: colors.inkSecondary, fontSize: 13, lineHeight: 18, marginTop: 4 },
+    passLine: { marginHorizontal: 20, marginBottom: 8 },
     list: { paddingHorizontal: 20, paddingTop: 8, paddingBottom: 20, gap: 10 },
     row: {
       flexDirection: 'row' as const,

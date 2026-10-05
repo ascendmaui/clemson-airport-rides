@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { CampusMap, STADIUM } from '../components/CampusMap'
 import { TierRow } from '../components/TierRow'
 import { PrimaryButton } from '../components/PrimaryButton'
@@ -32,6 +32,7 @@ export function RideTiers({
   const [promptOpen, setPromptOpen] = useState(false)
   const [quote, setQuote] = useState(null)
   const [quoteError, setQuoteError] = useState(null)
+  const userPickedTier = useRef(false)
   const { runOrPrompt } = useRequireAuthForAction()
   const student = useStudentStatus()
   const studentOffer = studentSurfaceCopy(student, 'tiers')
@@ -64,10 +65,14 @@ export function RideTiers({
       setSelected(null)
       return
     }
-    if (!selected || !tiers.some((tier) => tier.id === selected.id)) setSelected(tiers[0])
-  }, [tiers, selected])
+    if (userPickedTier.current && selected && tiers.some((tier) => tier.id === selected.id)) return
+    const preferredId = (quote?.preferredCarTypes || []).find((id) => tiers.some((tier) => tier.id === id))
+    const next = tiers.find((tier) => tier.id === preferredId) || tiers[0]
+    if (!selected || selected.id !== next.id) setSelected(next)
+  }, [tiers, selected, quote])
 
   const onSelectTier = (tier) => {
+    userPickedTier.current = true
     setSelected(tier)
   }
 
@@ -141,6 +146,11 @@ export function RideTiers({
         <div style={{ marginTop: 8 }}>
           <SurgeBadge surge={quote?.surge} />
         </div>
+        {quote?.tigerPassApplied ? (
+          <p style={{ marginTop: 8, fontSize: 13, fontWeight: 700, color: '#522D80' }}>
+            {quote.tigerPassName} · {quote.tigerPassDiscountBps / 100}% off this fare
+          </p>
+        ) : null}
         <div style={{ marginTop: 8 }}>
           <GameDayStatus notice={game.notice} ready={game.ready} compact />
         </div>

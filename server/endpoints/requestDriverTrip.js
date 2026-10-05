@@ -29,6 +29,8 @@ import { resolveOfferedTier, vehicleServesComfort } from '../../shared/rideOptio
 import { isSimulatedDriverId } from '../../packages/rides-native/simulatedDrivers.js'
 import { assertTierAvailable } from '../rideAvailability.js'
 import { releaseTigerHeatReservation, reserveTigerHeatOffer } from '../tigerHeatService.js'
+import { loadRiderMatchPreferences } from '../riderPass.js'
+import { tigerPassMetadata } from '../../shared/tigerPass.js'
 
 function optionError(res, error) {
   return json(res, error.status || 400, {
@@ -103,8 +105,14 @@ export default async function handler(req, res, deps = {}) {
 
   let offerDriverId = driverId
   let assignQueue = null
+  const prefs = await loadRiderMatchPreferences(sb, user.id)
   if (autoAssign) {
-    const ordered = await listAssignableDrivers(sb, { tier, riderId: user.id })
+    const ordered = await listAssignableDrivers(sb, {
+      tier,
+      riderId: user.id,
+      preferredIds: prefs.preferredIds,
+      favoriteIds: prefs.favoriteIds,
+    })
     if (ordered.error) {
       return json(res, 500, { error: 'Could not choose a driver', code: 'auto_assign_unavailable' })
     }
@@ -166,6 +174,7 @@ export default async function handler(req, res, deps = {}) {
     gameDayMultiplier,
     distanceM: distance.distanceM,
     durationS: distance.durationS,
+    tigerPassBps: prefs.discountBps,
   })
   if (priced?.fareCents == null || !Number.isFinite(Number(priced.fareCents))) {
     return json(res, 409, { error: 'Fare is not set', code: 'fare_not_set' })
@@ -249,12 +258,19 @@ export default async function handler(req, res, deps = {}) {
       offer_driver_id: offerDriverId || null,
       ...(assignQueue ? { auto_assign_queue: assignQueue } : {}),
       match: autoAssign ? 'auto' : 'open',
+      offer_preference: !autoAssign
+        ? 'picked'
+        : (prefs.preferredIds.includes(offerDriverId)
+          ? 'tiger_pass'
+          : (prefs.favoriteIds.includes(offerDriverId) ? 'favorite' : 'default')),
+      preferred_car_types: prefs.carTypes,
       ...routeMeta,
       rider_first_name: riderFirst,
       fare_is_estimate: Boolean(priced.estimate),
       isStudent: Boolean(priced.isStudent && priced.discountCents > 0),
       student_discount_cents: Math.max(0, priced.discountCents || 0),
       studentLabel: priced.discountCents > 0 ? 'Clemson student · 10% off Standard' : null,
+      ...tigerPassMetadata(priced),
       ride_option: tier,
       fare_source: 'server',
       airport: priced.airport,

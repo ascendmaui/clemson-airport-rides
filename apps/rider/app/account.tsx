@@ -14,6 +14,7 @@ import { useThemedStyles } from '@/lib/useThemedStyles'
 import { displayFirstName } from 'rides-native/authErrors'
 import { useStudentStatus } from '@/lib/useStudentStatus'
 import { FAVORITE_SPOTS } from 'rides-native/riderShell.js'
+import { TIGER_PASS_NAME } from 'rides-native/tigerPassClient'
 import { loadRatingSummary } from 'rides-native/PartyScreens'
 import { RequireAuth } from '@/components/RequireAuth'
 import { WomenOnlyCard } from 'rides-native/WomenOnlyCard'
@@ -26,7 +27,8 @@ const DISPLAY: { id: DisplayMode; label: string }[] = [
   { id: 'dark', label: 'Dark' },
 ]
 
-const LINKS: { href: '/billing' | '/student' | '/promo' | '/notifications' | '/history' | '/schedule' | '/help' | '/support' | '/lost-found'; label: string; hint: string }[] = [
+const LINKS: { href: '/billing' | '/tiger-pass' | '/student' | '/promo' | '/notifications' | '/history' | '/schedule' | '/help' | '/support' | '/lost-found'; label: string; hint: string }[] = [
+  { href: '/tiger-pass', label: TIGER_PASS_NAME, hint: 'Frequent-rider discount, preferred drivers, and ride types' },
   { href: '/billing', label: 'Billing', hint: 'Card on file, deposits, and ride history' },
   { href: '/student', label: 'Student', hint: 'Confirmed Clemson email · 10% off Standard' },
   { href: '/promo', label: 'Promo codes', hint: 'Apply a friend code or share yours' },

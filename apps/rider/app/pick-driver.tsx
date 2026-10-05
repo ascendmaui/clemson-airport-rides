@@ -20,6 +20,7 @@ import { useStudentStatus } from '@/lib/useStudentStatus'
 import {
   describeDriver,
   fetchDriversByIds,
+  canFavoriteDriver,
   fetchOnlineDrivers,
   groupDriversForPicker,
   loadFavoriteDriverIds,
@@ -38,6 +39,7 @@ import { useTheme } from '@/lib/theme'
 import { useThemedStyles } from '@/lib/useThemedStyles'
 import { searchDelayMs } from 'rides-native/riderShell.js'
 import { comfortFleetNotice } from 'rides-native/tripTags'
+import { setFavoriteDrivers } from 'rides-native/tigerPassClient'
 
 const MAP_KINDS: MapKind[] = ['standard', 'satellite', 'hybrid']
 const NOTIFY_KEY = 'rider.notify.driver'
@@ -141,6 +143,10 @@ export default function PickDriver() {
       setPromptOpen(true)
       return
     }
+    if (!canFavoriteDriver(driverId)) {
+      setFavNote('Map preview cars cannot be saved.')
+      return
+    }
     const next = favoriteIds.includes(driverId)
       ? favoriteIds.filter((id: string) => id !== driverId)
       : [...favoriteIds, driverId]
@@ -148,6 +154,15 @@ export default function PickDriver() {
     const saved = await saveFavoriteDriverIds(supabase, authStorage, user.id, next)
     setFavoriteIds(saved.ids)
     setFavNote(saved.note)
+    try {
+      const remote = await setFavoriteDrivers(supabase, saved.ids)
+      if (Array.isArray(remote?.favoriteDriverIds)) {
+        setFavoriteIds(remote.favoriteDriverIds)
+        if (remote.demoDriversIgnored) setFavNote(remote.demoNote || 'Preview cars were not saved.')
+      }
+    } catch {
+      /* the profile row is already the matching source when the API is down */
+    }
     await tapHaptic()
   }
 

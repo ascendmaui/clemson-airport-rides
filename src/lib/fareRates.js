@@ -34,6 +34,8 @@
  *   2. surge (single highest matching rule, clamped to [1, 2.5])
  *   3. carpool discount
  *   4. student discount
+ *   4b. frequent-rider pass (TIGER_PASS_DISCOUNT_BPS) when the database row is active
+ *   4c. schedule-ahead 10%, when the pickup qualifies
  *   5. prepaid discount on the credit-funded slice only (lot's own %)
  * Card remainder is not prepaid-discounted. Platform 20% is of the final
  * rider price (cash + credits), not of the pre-discount fare.

@@ -35,6 +35,7 @@ import { supportTicketRequest } from '../lib/agentChatClient'
 import { ACCOUNT_DELETION_TICKET } from '../../shared/accountDeletion.js'
 import { COMFORT_FLEET_NOTICE } from '../../packages/rides-native/tripTags.js'
 import { CreditPacksPanel } from '../components/CreditPacksPanel'
+import { TigerPassPanel } from '../components/TigerPassPanel'
 import { PrepaidCreditsPanel } from '../components/PrepaidCreditsPanel'
 import { CreditsBalance } from '../components/CreditsBalance'
 import { QuietHoursCard } from '../components/QuietHoursCard'
@@ -596,6 +597,7 @@ export function AccountScreen() {
         {tab === 'billing' && (
           <div style={{ marginTop: 14 }}>
             <CreditsBalance refreshToken={creditsRefresh} />
+            <TigerPassPanel />
             <BillingPanel profile={profile} onProfileRefresh={() => reload().catch(() => {})} />
             <CreditPacksPanel />
             <PrepaidCreditsPanel onPurchased={() => setCreditsRefresh((n) => n + 1)} />

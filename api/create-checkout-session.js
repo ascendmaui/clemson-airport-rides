@@ -22,6 +22,7 @@ import {
 import { checkoutSuccessHash } from '../packages/rides-native/liveTrip.js'
 import { cancelUnopenedCheckoutTrip, rememberCheckoutSession } from '../server/abandonedCheckout.js'
 import { WEB_ORIGIN } from '../shared/productLinks.js'
+import { tigerPassBpsForRider } from '../server/riderPass.js'
 
 function checkoutOrigin(body) {
   for (const raw of [body.origin, body.successUrl]) {
@@ -76,6 +77,7 @@ export default async function handler(req, res, deps = {}) {
 
   let priced
   try {
+    const tigerPassBps = await tigerPassBpsForRider(sb, user.id, when)
     priced = priceCheckoutBody({
       body,
       user,
@@ -83,6 +85,7 @@ export default async function handler(req, res, deps = {}) {
       gameDayMultiplier,
       distanceM: distance.distanceM,
       durationS: distance.durationS,
+      tigerPassBps,
     })
   } catch (error) {
     return json(res, error.status || 400, {

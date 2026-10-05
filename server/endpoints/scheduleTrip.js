@@ -20,6 +20,8 @@ import {
 import { insertTripEvent } from '../tripEvents.js'
 import { billingForPricedRide } from '../rideBilling.js'
 import { resolveOfferedTier, scheduleDiscountMetadata } from '../../shared/rideOptions.js'
+import { tigerPassBpsForRider } from '../riderPass.js'
+import { tigerPassMetadata } from '../../shared/tigerPass.js'
 import { assertTierAvailable } from '../rideAvailability.js'
 import { loadNearTermOffer } from '../nearTermAvailability.js'
 import { notifyScheduledBoard } from '../scheduledBoardAlerts.js'
@@ -139,6 +141,7 @@ export default async function handler(req, res, deps = {}) {
   }
 
   const isStudent = studentDiscountGranted(user)
+  const tigerPassBps = await tigerPassBpsForRider(sb, user.id, when)
   const priced = priceScheduledRequest({
     pickup,
     dropoff,
@@ -151,6 +154,7 @@ export default async function handler(req, res, deps = {}) {
     durationS: distance.durationS,
     scheduleAhead: scheduled && !nearTerm,
     now: new Date(clockNow),
+    tigerPassBps,
   })
 
   const billing = await billingForPricedRide(sb, user.id, body, priced)
@@ -188,6 +192,7 @@ export default async function handler(req, res, deps = {}) {
     ride_option: tier,
     fare_source: 'server',
     ...scheduleDiscountMetadata(priced),
+    ...tigerPassMetadata(priced),
     airport: priced.airport,
     ...billing.snapshot,
     ...(nearTerm ? {
