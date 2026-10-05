@@ -40,20 +40,37 @@ async function call(handler, body, deps) {
 }
 
 function sb() {
-  const chain = {
-    select() { return chain },
-    eq() { return chain },
-    lte() { return chain },
-    gte() { return chain },
-    gt() { return chain },
-    order() { return chain },
-    limit() { return chain },
-    maybeSingle: async () => ({ data: null, error: null }),
-    then(resolve, reject) {
-      return Promise.resolve({ data: [], error: null }).then(resolve, reject)
+  const rowsFor = (table) => {
+    if (table === 'driver_applications') {
+      return [{ profile_id: 'drv-1', onboarding_status: 'approved' }]
+    }
+    if (table === 'vehicles') {
+      return [{ driver_id: 'drv-1', service_class: 'standard', tier: 'standard' }]
+    }
+    if (table === 'driver_status') {
+      return [{ driver_id: 'drv-1', online: true }]
+    }
+    return []
+  }
+  return {
+    from(table) {
+      const chain = {
+        select() { return chain },
+        eq() { return chain },
+        lte() { return chain },
+        gte() { return chain },
+        gt() { return chain },
+        in() { return chain },
+        order() { return chain },
+        limit() { return chain },
+        maybeSingle: async () => ({ data: null, error: null }),
+        then(resolve, reject) {
+          return Promise.resolve({ data: rowsFor(table), error: null }).then(resolve, reject)
+        },
+      }
+      return chain
     },
   }
-  return { from() { return chain } }
 }
 
 function route(distanceM, durationS) {
