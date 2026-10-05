@@ -47,6 +47,7 @@ export const OPEN_POOL_COPY: string
 
 export function preferredTripFields(driverId: string): { preferred_driver_id: string; match: 'preferred' }
 export function normalizeFavoriteDriverIds(raw: unknown): string[]
+export function canFavoriteDriver(driverId: string | null | undefined): boolean
 export function driverApproach(
   driver: { lat?: number | null; lng?: number | null } | null | undefined,
   pickup: { lat?: number | null; lng?: number | null } | null | undefined,

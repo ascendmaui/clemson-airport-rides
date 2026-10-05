@@ -3,13 +3,19 @@ import { filterAssignableDrivers, loadComfortProfiles } from './comfortMatch.js'
 import { defaultDriverRank, sortByDefaultDriverOrder } from '../shared/driverOrder.js'
 import { vehicleServesComfort } from '../shared/rideOptions.js'
 import { isSimulatedDriverId } from '../packages/rides-native/simulatedDrivers.js'
+import { orderDriversForRider } from '../shared/riderFavorites.js'
 
 /**
  * Approved drivers who are online, John then Kim then everyone else.
  * Email is used for rank and is not returned.
  * Extra Comfort keeps drivers whose vehicle class qualifies.
  */
-export async function listAssignableDrivers(sb, { tier = 'standard', riderId = null } = {}) {
+export async function listAssignableDrivers(sb, {
+  tier = 'standard',
+  riderId = null,
+  preferredIds = [],
+  favoriteIds = [],
+} = {}) {
   if (!sb) return { drivers: [], error: 'no_client' }
   const statusRes = await sb.from('driver_status').select('driver_id, online').eq('online', true)
   if (statusRes.error) return { drivers: [], error: statusRes.error.message || 'Could not read online drivers' }
@@ -67,8 +73,12 @@ export async function listAssignableDrivers(sb, { tier = 'standard', riderId = n
     })
   }
   const filtered = filterAssignableDrivers(ranked, riderRow, { comfortKnown: !profiles.unavailable })
+  const ordered = orderDriversForRider(sortByDefaultDriverOrder(filtered.drivers), {
+    preferredIds,
+    favoriteIds,
+  })
   return {
-    drivers: sortByDefaultDriverOrder(filtered.drivers).map((driver) => ({
+    drivers: ordered.map((driver) => ({
       id: driver.id,
       dispatchRank: driver.dispatchRank,
     })),

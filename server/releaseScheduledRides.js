@@ -1,5 +1,6 @@
 import { unchangedOfferQuery } from '../shared/driverOrder.js'
 import { listAssignableDrivers } from './autoAssign.js'
+import { loadRiderMatchPreferences } from './riderPass.js'
 import { notifyDriverOffer } from './driverOfferAlerts.js'
 import { ACTIONABLE_LEAD_MS } from '../src/lib/scheduledRideModel.js'
 import { isNearTermTrip } from '../shared/nearTermSlots.js'
@@ -23,7 +24,13 @@ export async function releaseScheduledRides(sb, {
         result.held++
         continue
       }
-      const eligible = await listAssignableDrivers(sb, { tier: trip.tier, riderId: trip.rider_id })
+      const prefs = await loadRiderMatchPreferences(sb, trip.rider_id, now)
+      const eligible = await listAssignableDrivers(sb, {
+        tier: trip.tier,
+        riderId: trip.rider_id,
+        preferredIds: prefs.preferredIds,
+        favoriteIds: prefs.favoriteIds,
+      })
       if (eligible.error) throw new Error(eligible.error)
       const queue = eligible.drivers.map(d => d.id).filter(id => id !== trip.rider_id)
       if (dryRun) { result.wouldRelease++; continue }

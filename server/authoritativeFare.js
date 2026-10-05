@@ -28,6 +28,8 @@ import {
   resolveOfferedTier,
   scheduleDiscountMetadata,
 } from '../shared/rideOptions.js'
+import { applyTigerPassDiscount, tigerPassMetadata } from '../shared/tigerPass.js'
+import { tigerPassBpsForRider } from './riderPass.js'
 
 /** Stored rows keep their label in the UI. A retired tier is not repriced as a live option. */
 function tierForStoredTrip(raw) {
@@ -92,6 +94,7 @@ export function quoteAirportCheckout({
   gameDayMultiplier = null,
   distanceM = null,
   durationS = null,
+  tigerPassBps = 0,
 } = {}) {
   const code = String(airport || 'GSP').toUpperCase() === 'CLT' ? 'CLT' : 'GSP'
   const fb = AIRPORT_ROUTE_FALLBACK[code]
@@ -109,7 +112,7 @@ export function quoteAirportCheckout({
     tier: 'standard',
   })
   const fareCents = quote.fareBeforeCreditsCents
-  return {
+  return applyTigerPassDiscount({
     airport: code,
     isStudent: Boolean(isStudent),
     fareCents,
@@ -119,7 +122,7 @@ export function quoteAirportCheckout({
     quote,
     routeSource: hasRoute ? 'google' : 'fallback',
     estimate: false,
-  }
+  }, tigerPassBps)
 }
 
 /**
@@ -138,6 +141,7 @@ export function priceScheduledRequest({
   durationS = null,
   scheduleAhead = false,
   now = new Date(),
+  tigerPassBps = 0,
 } = {}) {
   const explicit = airport ? String(airport).toUpperCase() : null
   const fromPlace = airportCodeForPlace(dropoff) || airportCodeForPlace(pickup)
@@ -156,6 +160,7 @@ export function priceScheduledRequest({
       gameDayMultiplier,
       distanceM,
       durationS,
+      tigerPassBps,
     })
     return applyScheduleAheadDiscount(
       { ...priced, tier: tierId },
@@ -191,7 +196,7 @@ export function priceScheduledRequest({
     : { amountCents: fareCents, discountCents: 0, bps: 0 }
   fareCents = studentOff.amountCents
   const split = splitPlatformFee(fareCents)
-  return applyScheduleAheadDiscount({
+  return applyScheduleAheadDiscount(applyTigerPassDiscount({
     airport: null,
     isStudent: student,
     fareCents,
@@ -212,7 +217,7 @@ export function priceScheduledRequest({
       platform_fee_cents: split.platformFeeCents,
       driver_earnings_cents: split.driverEarningsCents,
     },
-  }, { at: when, now, enabled: scheduleAhead })
+  }, tigerPassBps), { at: when, now, enabled: scheduleAhead })
 }
 
 /** Checkout Session line amount. Client money fields cannot lower it. */
@@ -224,6 +229,7 @@ export function priceCheckoutBody({
   gameDayMultiplier = null,
   distanceM = null,
   durationS = null,
+  tigerPassBps = 0,
 } = {}) {
   const when = parseRideAt(body, at)
   const tier = resolveOfferedTier(body.tier)
@@ -234,6 +240,7 @@ export function priceCheckoutBody({
     gameDayMultiplier,
     distanceM,
     durationS,
+    tigerPassBps,
   })
   const scheduled = Boolean(body.date || body.pickupAt || body.scheduled_for || body.scheduledFor)
   const priced = applyScheduleAheadDiscount(
@@ -419,6 +426,7 @@ export function riderTierQuotes({
   distanceM = null,
   durationS = null,
   scheduleAhead = false,
+  tigerPassBps = 0,
 } = {}) {
   const requested = resolveOfferedTier(tier)
   const input = {
@@ -432,6 +440,7 @@ export function riderTierQuotes({
     distanceM,
     durationS,
     scheduleAhead,
+    tigerPassBps,
   }
   const tiers = QUOTED_TIER_IDS.map((id) => {
     const priced = priceScheduledRequest({ ...input, tier: id })
@@ -440,6 +449,8 @@ export function riderTierQuotes({
       fareCents: priced.fareCents,
       depositCents: priced.depositCents,
       discountCents: priced.discountCents,
+      tigerPassApplied: Boolean(priced.tigerPassApplied),
+      tigerPassDiscountCents: priced.tigerPassDiscountCents || 0,
       estimate: Boolean(priced.estimate),
       airport: priced.airport,
     }
@@ -460,6 +471,7 @@ export function priceDriverRequest(places, {
   gameDayMultiplier = null,
   distanceM = null,
   durationS = null,
+  tigerPassBps = 0,
 } = {}) {
   const airport = places?.airport === 'GSP' || places?.airport === 'CLT' ? places.airport : null
   const atl = places?.airport === 'ATL'
@@ -473,6 +485,7 @@ export function priceDriverRequest(places, {
     gameDayMultiplier,
     distanceM,
     durationS,
+    tigerPassBps,
   })
 }
 
@@ -486,6 +499,7 @@ export function priceRecordedTrip(trip, {
   isStudent = false,
   at = new Date(),
   gameDayMultiplier = null,
+  tigerPassBps = 0,
 } = {}) {
   const pickup = stopFromTrip(trip, 'pickup')
   const dropoff = stopFromTrip(trip, 'dropoff')
@@ -504,6 +518,7 @@ export function priceRecordedTrip(trip, {
         tier,
         gameDayMultiplier,
         scheduleAhead,
+        tigerPassBps,
       }),
     }
   }
@@ -521,6 +536,7 @@ export function priceRecordedTrip(trip, {
       tier,
       gameDayMultiplier,
       scheduleAhead,
+      tigerPassBps,
     }),
   }
 }
@@ -548,6 +564,7 @@ export function fareRowPatch(trip, priced) {
       studentLabel: priced.discountCents > 0 ? 'Clemson student · 10% off Standard' : null,
       airport: priced.airport || null,
       ...scheduleDiscountMetadata(priced),
+      ...tigerPassMetadata(priced),
     },
   }
   if (trip?.deposit_cents == null || trip.deposit_cents === '') {
@@ -621,10 +638,12 @@ export async function ensureAuthoritativeFare({ sb, trip, at = null } = {}) {
     gameDayMultiplier = null
   }
 
+  const tigerPassBps = await tigerPassBpsForRider(sb, row.rider_id, when)
   const quoted = priceRecordedTrip(row, {
     isStudent: studentDiscountGranted(rider),
     at: when,
     gameDayMultiplier,
+    tigerPassBps,
   })
   if (quoted.error || quoted.priced?.fareCents == null) {
     return {

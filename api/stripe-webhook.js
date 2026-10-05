@@ -11,6 +11,7 @@ import { setPaymentHold } from '../server/collectPayment.js'
 import { classifyStripeError, failureResult } from '../shared/paymentFailure.js'
 import { releaseFromCheckoutEvent, restoreLiveTripAfterDeposit } from '../server/abandonedCheckout.js'
 import { applyPaidCheckoutSession, recordDeposit } from '../server/checkoutReconcile.js'
+import { activateTigerPassFromCheckout, syncTigerPassFromStripe } from '../server/riderPass.js'
 
 export { recordDeposit, applyPaidCheckoutSession }
 
@@ -204,6 +205,15 @@ export default async function handler(req, res, deps = {}) {
 
     if (event.type === 'checkout.session.completed' || event.type === 'checkout.session.async_payment_succeeded') {
       const session = event.data?.object
+      if (session?.metadata?.kind === 'tiger_pass') {
+        let tigerPass = { skipped: true, reason: 'no_service_role' }
+        if (activeServiceKey || deps.serviceClient) {
+          const client = deps.serviceClient ? deps.serviceClient() : serviceClient()
+          tigerPass = await activateTigerPassFromCheckout(client, session)
+        }
+        console.log('[stripe-webhook] tiger_pass', { id: session?.id, tigerPass })
+        return sendWebhookJson(res, 200, { received: true, type: event.type, tigerPass })
+      }
       if (session?.metadata?.kind === 'credit_purchase') {
         const granted = await recordCreditPurchase(session)
         console.log('[stripe-webhook] credit_purchase', { id: session?.id, granted })
@@ -226,6 +236,21 @@ export default async function handler(req, res, deps = {}) {
         referral,
       })
       return sendWebhookJson(res, 200, { received: true, type: event.type, recorded, live, referral })
+    }
+
+    const stripeKind = event.data?.object?.metadata?.kind
+    if (
+      stripeKind === 'tiger_pass'
+      && (event.type === 'customer.subscription.deleted'
+        || event.type === 'customer.subscription.updated'
+        || event.type === 'invoice.paid')
+    ) {
+      let tigerPass = { skipped: true, reason: 'no_service_role' }
+      if (activeServiceKey || deps.serviceClient) {
+        const client = deps.serviceClient ? deps.serviceClient() : serviceClient()
+        tigerPass = await syncTigerPassFromStripe(client, event.data.object)
+      }
+      return sendWebhookJson(res, 200, { received: true, type: event.type, tigerPass })
     }
 
     console.log('[stripe-webhook] unhandled', event.type)

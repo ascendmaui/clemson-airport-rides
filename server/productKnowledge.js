@@ -1,3 +1,5 @@
+import { TIGER_PASS_NAME } from '../shared/tigerPass.js'
+
 const ACCOUNT_TABS = ['profile', 'notifications', 'billing', 'vehicle', 'student', 'privacy', 'help', 'support']
 const ROUTES = new Set([
   'schedule', 'friends', 'carpool', 'account', 'home', 'driver',
@@ -76,6 +78,9 @@ From Friends, after a ride exists, or from an active trip. Creates a token link 
 Billing:
 Account → Billing → Add a card. Stripe SetupIntent and Payment Element. The app stores brand and last 4 only, plus billing_activated_at. It does not store the full card number. The saved card is used for friend and carpool shares. Airport deposits use Stripe Checkout, which is separate from the saved-card form.
 If no card is on file, walk the user to Account → Billing → Add a card. Do not ask for the card number in chat.
+
+Frequent-rider pass:
+Account → Billing shows the pass. The rider app also has a pass screen. The display name is a rename hook (TIGER_PASS_NAME, currently ${TIGER_PASS_NAME}). An active pass takes 10% off Standard, Wait & Save, and Extra Comfort after any Clemson student discount and before schedule-ahead. It does not add other ride types. Riders favorite drivers from Pick a driver. Those favorites are offered before the open pool. An active pass can mark a subset as preferred drivers, and those are offered first. Map preview cars are not favorites and never count for matching.
 
 Ratings:
 After a completed trip either person can rate the other once, 1–5 stars plus an optional comment. Account shows a soft reminder. The rate screen is opened as rate?trip=<id>. Skipping is allowed. Driver home sends the driver to that screen when they mark a trip completed.
