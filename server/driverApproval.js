@@ -11,6 +11,7 @@ import {
 } from '../shared/driverOnboarding.js'
 import { adminNotifyRecipients } from './adminRoster.js'
 import { WEB_ORIGIN } from '../shared/productLinks.js'
+import { assessContractIdentity, pickAgreementRow } from '../shared/contractIdentity.js'
 import { loadStaffAccess } from './staffAccess.js'
 
 export { canReceiveRides }
@@ -21,15 +22,17 @@ export async function loadSubmissionContext(sb, profileId) {
   if (docsRes.error && /match_status|review_status|schema cache/i.test(docsRes.error.message || '')) {
     docsRes = await sb.from('driver_documents').select('doc_type').eq('profile_id', profileId)
   }
-  const [appRes, agreementRes] = await Promise.all([
+  const [appRes, agreementRes, profileRes] = await Promise.all([
     sb.from('driver_applications')
       .select('background_authorized_at, work_eligibility_attested_at, work_eligibility_category, onboarding_status')
       .eq('profile_id', profileId)
       .maybeSingle(),
     sb.from('driver_agreements')
       .select('agreement_version, agreement_sha256, signature_name, signed_at, signer_user_id, html_snapshot')
-      .eq('profile_id', profileId)
-      .eq('agreement_version', IC_AGREEMENT_VERSION)
+      .eq('profile_id', profileId),
+    sb.from('profiles')
+      .select('full_name')
+      .eq('id', profileId)
       .maybeSingle(),
   ])
   let taxRes = await sb.from('driver_tax_info')
@@ -50,12 +53,13 @@ export async function loadSubmissionContext(sb, profileId) {
   if (packetRes.error && /driver_agreement_packets|schema cache|does not exist/i.test(packetRes.error.message || '')) {
     packetRes = { data: null, error: null }
   }
-  const error = docsRes.error || appRes.error || taxRes.error || agreementRes.error || packetRes.error
+  const error = docsRes.error || appRes.error || taxRes.error || agreementRes.error || packetRes.error || profileRes.error
   if (error) return { error: error.message }
 
   const tax = taxRes.data || null
-  const agreement = agreementRes.data || null
+  const agreement = pickAgreementRow(agreementRes.data, IC_AGREEMENT_VERSION)
   const app = appRes.data || null
+  const packet = packetRes.data || null
   if (tax && Object.prototype.hasOwnProperty.call(tax, 'tin')) delete tax.tin
 
   const ctx = {
@@ -67,15 +71,20 @@ export async function loadSubmissionContext(sb, profileId) {
     agreementSigned: Boolean(agreement?.signed_at && agreement?.signature_name),
     agreementVersion: agreement?.agreement_version || null,
     agreementSha256: agreement?.agreement_sha256 || null,
-    packetHash: packetRes.data?.html_sha256 || null,
+    packetHash: packet?.html_sha256 || null,
     registrationMatch: (docsRes.data || []).find((row) => row.doc_type === 'registration')?.match_status || null,
+    signatureName: agreement?.signature_name || null,
+    contractLegalName: packet?.prefill?.legal_name || tax?.legal_name || null,
+    applicantName: profileRes.data?.full_name || null,
+    applicantLegalName: tax?.legal_name || null,
   }
-  const packet = packetRes.data || null
+  const contractIdentity = assessContractIdentity(ctx)
 
   return {
     ctx,
     blockers: submissionBlockers(ctx),
     approvalBlockers: approvalBlockers(ctx),
+    contractIdentity,
     tax: tax
       ? {
         legal_name: tax.legal_name,

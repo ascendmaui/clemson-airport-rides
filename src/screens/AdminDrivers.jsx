@@ -20,6 +20,11 @@ import {
   submittedApplicantEmail,
 } from '../lib/driverOnboarding'
 import { applicantVehicleLabel } from '../../shared/vehicleYear.js'
+import {
+  assessContractIdentity,
+  blockersIgnoringContractIdentity,
+  contractMismatchCopy,
+} from '../../shared/contractIdentity.js'
 import { fetchApplicantThread, messageApplicant, requestApplicantInfo } from '../lib/adminDesk'
 import { AdminAccessDenied } from '../components/AdminAccessDenied'
 
@@ -48,6 +53,7 @@ export function AdminDrivers({ embedded = false }) {
   const [messageBody, setMessageBody] = useState('')
   const [requestPrompt, setRequestPrompt] = useState('')
   const [signingUrl, setSigningUrl] = useState('')
+  const [acceptContractMismatch, setAcceptContractMismatch] = useState(false)
   const [particulars, setParticulars] = useState({
     legal_name: '',
     address_line: '',
@@ -104,6 +110,7 @@ export function AdminDrivers({ embedded = false }) {
     setDetail(null)
     setDocsError(null)
     setReason('')
+    setAcceptContractMismatch(false)
     try {
       const payload = await fetchDriverReviewDetail(profileId)
       setDocs(payload.documents || [])
@@ -157,7 +164,12 @@ export function AdminDrivers({ embedded = false }) {
     setError(null)
     setNote(null)
     try {
-      const data = await reviewDriverApplication({ profileId, decision, reason })
+      const data = await reviewDriverApplication({
+        profileId,
+        decision,
+        reason,
+        acknowledgeContractMismatch: decision === 'approve' && acceptContractMismatch,
+      })
       setNote(data.message || (decision === 'approve' ? 'Approved' : 'Rejected'))
       setOpenId(null)
       await load()
@@ -275,6 +287,21 @@ export function AdminDrivers({ embedded = false }) {
           const vehicle = row.vehicle
           const vehicleLabel = applicantVehicleLabel(vehicle)
           const active = openId === row.profile_id
+          const agreementForIdentity = (active && detail?.agreement) || row.agreement || null
+          const taxForIdentity = (active && detail?.tax) || row.tax || null
+          const contractIdentity = assessContractIdentity({
+            signatureName: agreementForIdentity?.signature_name,
+            contractLegalName: (active && detail?.packet?.prefill?.legal_name) || taxForIdentity?.legal_name,
+            applicantName: row.profile?.full_name,
+            applicantLegalName: taxForIdentity?.legal_name,
+          })
+          const agreementSigned = Boolean(agreementForIdentity?.signed_at && agreementForIdentity?.signature_name)
+          const approveBlockers = blockersIgnoringContractIdentity(
+            (active && detail?.blockers) || row.blockers || [],
+            contractIdentity,
+            agreementSigned,
+          )
+          const needsContractConfirm = active && agreementSigned && contractIdentity.status === 'mismatch' && row.onboarding_status !== 'approved'
           return (
             <div key={row.id} className="sheet" style={{ padding: 16, borderRadius: 18, boxShadow: 'var(--shadow-pill)' }}>
               <button type="button" className="pressable" onClick={() => openRow(row.profile_id)} style={{ width: '100%', textAlign: 'left' }}>
@@ -367,9 +394,24 @@ export function AdminDrivers({ embedded = false }) {
                     Send request
                   </button>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 12 }}>
+                    {needsContractConfirm && (
+                      <div>
+                        <p role="alert" style={{ color: 'var(--danger)', fontSize: 13, margin: 0 }}>
+                          {contractMismatchCopy(contractIdentity.contractName, contractIdentity.applicantName)}
+                        </p>
+                        <label style={{ display: 'flex', gap: 8, alignItems: 'flex-start', fontSize: 13, marginTop: 8 }}>
+                          <input
+                            type="checkbox"
+                            checked={acceptContractMismatch}
+                            onChange={(e) => setAcceptContractMismatch(e.target.checked)}
+                          />
+                          <span>I checked the contract. Approve this applicant anyway.</span>
+                        </label>
+                      </div>
+                    )}
                     <PrimaryButton
                       variant="purple"
-                      disabled={busy || (row.onboarding_status !== 'approved' && (row.blockers || detail?.blockers || []).length > 0)}
+                      disabled={busy || (row.onboarding_status !== 'approved' && (approveBlockers.length > 0 || (needsContractConfirm && !acceptContractMismatch)))}
                       onClick={() => decide(row.profile_id, 'approve')}
                     >
                       {busy ? 'Saving…' : 'Approve driver'}
