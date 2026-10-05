@@ -15,13 +15,25 @@ export function placeFromCoordinates(lat, lng, label) {
   return { label: name || 'Current location', lat: latitude, lng: longitude }
 }
 
-export function readBrowserPosition() {
+export const LOCATION_DENIED_MESSAGE = 'Location permission is off. Type an address, or allow location in the browser and try again.'
+export const LOCATION_UNAVAILABLE_MESSAGE = 'Could not read a location fix. Type an address instead.'
+export const LOCATION_TIMEOUT_MESSAGE = 'Location timed out. Type an address, or try again.'
+export const LOCATION_MISSING_MESSAGE = 'Location is not available on this device. Type an address instead.'
+
+/** Map a GeolocationPositionError to copy a rider can act on. Never surface the raw browser string. */
+export function geolocationFailureMessage(error) {
+  const code = Number(error?.code)
+  if (code === 1) return LOCATION_DENIED_MESSAGE
+  if (code === 2) return LOCATION_UNAVAILABLE_MESSAGE
+  if (code === 3) return LOCATION_TIMEOUT_MESSAGE
+  const raw = typeof error?.message === 'string' ? error.message.trim() : ''
+  if (!raw || /denied geolocation/i.test(raw)) return LOCATION_DENIED_MESSAGE
+  return raw
+}
+
+function requestFix(geolocation, options) {
   return new Promise((resolve, reject) => {
-    if (typeof navigator === 'undefined' || !navigator.geolocation) {
-      reject(new Error('Location is not available on this device.'))
-      return
-    }
-    navigator.geolocation.getCurrentPosition(
+    geolocation.getCurrentPosition(
       (pos) => {
         resolve({
           lat: pos.coords.latitude,
@@ -29,12 +41,30 @@ export function readBrowserPosition() {
           heading: pos.coords.heading,
         })
       },
-      (err) => {
-        const message = err?.message || 'Could not get current location. Check permissions.'
-        reject(err instanceof Error ? err : new Error(message))
-      },
-      { enableHighAccuracy: true, timeout: 15000, maximumAge: 10000 },
+      (err) => reject(err),
+      options,
     )
+  })
+}
+
+/**
+ * One GPS read. A precise fix that times out or is unavailable falls back to a
+ * coarse cached fix. Android Chrome often fails enableHighAccuracy indoors.
+ * Permission denial does not retry.
+ */
+export function readBrowserPosition(geolocation = (typeof navigator !== 'undefined' ? navigator.geolocation : undefined)) {
+  if (!geolocation || typeof geolocation.getCurrentPosition !== 'function') {
+    return Promise.reject(new Error(LOCATION_MISSING_MESSAGE))
+  }
+  const precise = { enableHighAccuracy: true, timeout: 12000, maximumAge: 15000 }
+  const coarse = { enableHighAccuracy: false, timeout: 8000, maximumAge: 60000 }
+  return requestFix(geolocation, precise).catch(async (err) => {
+    if (Number(err?.code) === 1) throw new Error(geolocationFailureMessage(err))
+    try {
+      return await requestFix(geolocation, coarse)
+    } catch (coarseErr) {
+      throw new Error(geolocationFailureMessage(Number(coarseErr?.code) ? coarseErr : err))
+    }
   })
 }
 
