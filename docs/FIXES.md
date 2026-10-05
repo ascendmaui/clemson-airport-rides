@@ -1913,3 +1913,10 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
 - **Files touched:** `server/endpoints/expireUnpaidAirportHolds.js`, `tests/gaAuditExpireHoldsSanitization.test.js`, `package.json`, `docs/FIXES.md`
 - **Verified:** `npm test` passing with 0 failures.
 
+## 2026-10-05 — Live trip status chip labels (pkg-live-trip-ui-polish t1)
+
+- **What was wrong:** The rider live-trip map chip was a hardcoded "Looking for a driver" string on the web search map (`src/screens/Requested.jsx`) and only rendered while the open-pool search theater was up. After a driver was accepted, that chip disappeared. Native tracking (`apps/rider/app/requested.tsx`) has no map chip; the accepted driver shows on the counterpart card and the phase kicker. `tripStatusLabel` covers searching/accepted/arriving/arrived/in_progress/completed, but it has no `en_route` chip key, and `riderLiveCopy` labels `accepted` with the kicker "EN ROUTE", so accepted and en route were the same phrase. No shared pure helper mapped the chip set searching / accepted / en_route / arrived / in_progress / completed.
+- **What changed:** Added `liveTripStatusChipLabel` with a frozen label map. `accepted` is "Driver accepted". `en_route` is "En route". The stored trip status `arriving` (and `enroute` / "en route" / "en-route") uses the en route chip. `offered` keeps the searching chip, matching the current search theater. Unknown, blank, and non-string statuses return null so a chip can hide. Did not change GPS ping or location publish code, and did not restyle the map chrome.
+- **Files touched:** `packages/rides-native/liveTripStatusChip.js`, `packages/rides-native/liveTripStatusChip.test.js`, `package.json`, `docs/FIXES.md`
+- **Verified:** `node --test packages/rides-native/liveTripStatusChip.test.js` (3/3) and `npm test` (2333 pass, 0 fail).
+
