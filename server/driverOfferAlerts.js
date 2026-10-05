@@ -4,9 +4,11 @@
  *
  * in_app is the existing driver-screen chime. It plays only while that screen
  * is open, so this module records the channel and does not play audio.
- * push sends through the Expo push API when EXPO_ACCESS_TOKEN is set.
- * Without that token, or without APNs/FCM on the Expo project, the locked-phone
- * toast cannot be delivered. The client still shows an in-app alert while online.
+ * push posts to the Expo push API with or without EXPO_ACCESS_TOKEN.
+ * The token is optional while Enhanced Security for Push is off; when set,
+ * the request sends Authorization: Bearer. Lock-screen delivery still needs
+ * APNs (iOS) or FCM (Android) on the Expo project. The client still shows
+ * an in-app alert while online.
  * SMS and email delivery are delegated to driverOfferChannels.js.
  */
 import { dispatchDriverOfferChannels } from './driverOfferChannels.js'
@@ -90,7 +92,7 @@ export function buildOfferAlertPlan({
     in_app: { sent: false, reason: 'open_driver_screen_only' },
     push: {
       sent: false,
-      reason: pushTokenPresent ? 'expo_credentials_missing' : 'push_token_missing',
+      reason: pushTokenPresent ? 'push_not_sent' : 'push_token_missing',
       tokenPresent: Boolean(pushTokenPresent),
       gap: pushTokenPresent ? PUSH_CREDENTIAL_GAP : undefined,
     },
