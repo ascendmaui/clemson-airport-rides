@@ -9,11 +9,27 @@ test('loadStaffAccess returns false for null user or client', async () => {
   assert.equal(res.profile, null)
 })
 
-test('loadStaffAccess identifies seed admin emails as admin and support', async () => {
+test('loadStaffAccess identifies owner emails as admin and support', async () => {
   const adminUser = { email: 'johnmatveyev@gmail.com' }
   const res = await loadStaffAccess(null, adminUser)
   assert.equal(res.admin, true)
   assert.equal(res.support, true)
+})
+
+test('loadStaffAccess denies john@gmail.com even when support env lists it', async () => {
+  const prev = process.env.SUPPORT_ADMIN_EMAILS
+  process.env.SUPPORT_ADMIN_EMAILS = 'john@gmail.com,johnmatveev@gmail.com'
+  try {
+    const res = await loadStaffAccess(null, { email: 'John@gmail.com' })
+    assert.equal(res.admin, false)
+    assert.equal(res.support, false)
+    const typo = await loadStaffAccess(null, { email: 'johnmatveev@gmail.com' })
+    assert.equal(typo.admin, false)
+    assert.equal(typo.support, false)
+  } finally {
+    if (prev === undefined) delete process.env.SUPPORT_ADMIN_EMAILS
+    else process.env.SUPPORT_ADMIN_EMAILS = prev
+  }
 })
 
 test('loadStaffAccess denies standard student users', async () => {

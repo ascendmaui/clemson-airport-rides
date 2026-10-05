@@ -20,7 +20,7 @@ const { createFakeSb, hasFilter } = await import('../tests/fixtures/admin-suppor
 const GET_ACTIONS = ['overview', 'notifications', 'people', 'trips', 'tickets', 'applicant-thread']
 const POST_ACTIONS = ['mark-notification', 'ticket-reply', 'applicant-message', 'info-request']
 
-const ADMIN_USER = { id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', email: 'john@gmail.com' }
+const ADMIN_USER = { id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', email: 'ops@clemsonrides.test' }
 const PROFILE_ID = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
 const TICKET_ID = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc'
 const NOTIFY_ID = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd'

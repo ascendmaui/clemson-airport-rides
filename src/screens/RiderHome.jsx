@@ -15,25 +15,51 @@ import { hotCatalogPlaces, lookupCatalogPlace, searchCatalogPlaces } from '../li
 import { DOWNTOWN_CENTER } from '../lib/downtownHeat'
 import { HEAT_WINDOWS } from '../lib/rideDemand'
 import { RiderWaitBanner } from '../components/WaitFeeCard'
+import { SHORTCUTS } from '../../packages/rides-native/places.js'
+import { ownerSavedPlaces, welcomeHeading } from '../lib/homePrivacy'
 
-const SHORTCUTS = [
-  { id: 'home', label: 'Home', sub: 'Simpsonville', icon: '🏠' },
-  { id: 'clemson', label: 'Clemson University', sub: 'Sikes Hall', icon: '🎓' },
-  { id: 'work', label: 'Work', sub: 'Saved place', icon: '💼' },
-]
-
-export function RiderHome({ riderName = 'John' }) {
+export function RiderHome() {
   const { notice, ready } = useGameDayNotice()
   const student = useStudentStatus()
   const studentOffer = studentSurfaceCopy(student, 'home')
   const { user } = useAuth()
   const [liveTrip, setLiveTrip] = useState(null)
+  const [profileName, setProfileName] = useState('')
+  const [savedPlaces, setSavedPlaces] = useState([])
   const [query, setQuery] = useState('')
   const [tab, setTab] = useState('home')
   const [showBusy, setShowBusy] = useState(true)
   const [heatWindow, setHeatWindow] = useState('now')
   const [heatMeta, setHeatMeta] = useState(null)
   const suggestions = query.trim().length >= 2 ? searchCatalogPlaces(query).slice(0, 6) : hotCatalogPlaces()
+  useEffect(() => {
+    if (!user?.id || !supabase) {
+      setProfileName('')
+      setSavedPlaces([])
+      return undefined
+    }
+    let alive = true
+    setProfileName('')
+    setSavedPlaces([])
+    supabase.from('profiles').select('full_name').eq('id', user.id).maybeSingle()
+      .then(({ data }) => {
+        if (alive) setProfileName(data?.full_name || '')
+      })
+      .catch(() => {
+        if (alive) setProfileName('')
+      })
+    supabase.from('saved_places').select('id, user_id, label, subtitle').eq('user_id', user.id)
+      .then(({ data }) => {
+        if (alive) setSavedPlaces(ownerSavedPlaces(data, user.id))
+      })
+      .catch(() => {
+        if (alive) setSavedPlaces([])
+      })
+    return () => {
+      alive = false
+    }
+  }, [user?.id])
+
   useEffect(() => {
     if (!user?.id || !supabase) {
       setLiveTrip(null)
@@ -116,7 +142,7 @@ export function RiderHome({ riderName = 'John' }) {
 
         <div style={{ padding: '20px 20px 0', position: 'relative' }}>
           <h1 style={{ fontSize: 24, fontWeight: 600, letterSpacing: -0.4 }}>
-            Welcome, {riderName}
+            {welcomeHeading(profileName, user?.user_metadata?.full_name)}
           </h1>
           <p style={{ color: 'var(--ink-secondary)', fontSize: 15, marginTop: 4, marginBottom: 16 }}>
             Where are you headed, Tiger?
@@ -197,7 +223,7 @@ export function RiderHome({ riderName = 'John' }) {
           </div>
 
           <div style={{ display: 'flex', gap: 10, marginTop: 18, overflowX: 'auto' }}>
-            {SHORTCUTS.map((s) => (
+            {[...savedPlaces, ...SHORTCUTS].map((s) => (
               <button
                 key={s.id}
                 type="button"
