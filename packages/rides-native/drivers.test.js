@@ -15,6 +15,8 @@ import {
   formatDriverDistance,
   groupDriversForPicker,
   loadFavoriteDriverIds,
+  loadPickerDriverRecord,
+  pickerVehicleLine,
   normalizeFavoriteDriverIds,
   OPEN_POOL_COPY,
   PREFERRED_CANCELED_COPY,
@@ -815,6 +817,33 @@ test('fetchOnlineDrivers shows the driver name and vehicle when profile rows are
   assert.equal(res.drivers[0].plate, 'DEMO03')
   const lines = describeDriver(res.drivers[0])
   assert.equal(lines.ratingLabel, 'New driver')
+})
+
+test('loadPickerDriverRecord keeps the pick-a-driver car, plate, and full name', async () => {
+  assert.equal(pickerVehicleLine('Midnight Silver Tesla Model 3', 'TGR-123'), 'Midnight Silver Tesla Model 3 · TGR-123')
+  assert.equal(pickerVehicleLine('gray Honda Accord', ''), 'gray Honda Accord')
+  assert.equal(pickerVehicleLine('', 'DEMO03'), 'DEMO03')
+  assert.equal(pickerVehicleLine('', null), '')
+  const supabase = makeFakeSupabase({
+    driverCards: [{
+      id: A,
+      full_name: 'Jordan Lee',
+      color: 'Midnight Silver',
+      make: 'Tesla',
+      model: 'Model 3',
+      plate: 'TGR-123',
+      avatar_url: 'https://cdn.example/jordan.jpg',
+    }],
+  })
+  const record = await loadPickerDriverRecord(supabase, A)
+  assert.equal(record.full_name, 'Jordan Lee')
+  assert.equal(record.avatar_url, 'https://cdn.example/jordan.jpg')
+  assert.equal(pickerVehicleLine(
+    [record.vehicle.color, record.vehicle.make, record.vehicle.model].filter(Boolean).join(' '),
+    record.vehicle.plate,
+  ), 'Midnight Silver Tesla Model 3 · TGR-123')
+  assert.equal(await loadPickerDriverRecord(null, A), null)
+  assert.equal(await loadPickerDriverRecord(supabase, ''), null)
 })
 
 test('scheduleRedirectForRequestError opens Schedule for an unpaid airport deposit', () => {

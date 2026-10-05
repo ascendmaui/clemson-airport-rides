@@ -20,6 +20,7 @@ import {
   isWeekendPartyWindow,
   matchesQueueFilter,
   nextTripStatus,
+  statusActionLabel,
   PREFERRED_REQUEST_NOTE,
   preferredRequestNote,
   summarizeDepositAwareness,
@@ -145,6 +146,10 @@ test('status advances one step and deposits summarize from payment rows', () => 
   assert.equal(nextTripStatus('arrived'), 'in_progress')
   assert.equal(nextTripStatus('in_progress'), 'completed')
   assert.equal(nextTripStatus('completed'), null)
+  assert.equal(statusActionLabel('accepted'), 'Arriving')
+  assert.equal(statusActionLabel('arriving'), 'Arrived')
+  assert.equal(statusActionLabel('arrived'), 'Start trip')
+  assert.equal(statusActionLabel('in_progress'), 'Complete trip')
   const summary = summarizeDepositAwareness(
     [{ id: 't1', status: 'completed', fare_cents: 4000, completed_at: '2026-10-03T15:00:00.000Z', dropoff_label: 'GSP' }],
     { t1: [{ kind: 'deposit', amountCents: 1000, status: 'succeeded' }, { kind: 'balance', amountCents: 3000, status: 'pending' }] },

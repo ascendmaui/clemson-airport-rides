@@ -14,6 +14,7 @@ import {
   activeTripRouteLine,
   decodeRoutePolyline,
   etaHoldLine,
+  liveDriverTitle,
   etaLineFor,
   mapRouteCoordinates,
   riderLiveStepIndex,
@@ -270,6 +271,10 @@ test('pickup ETA follows current GPS and confirmed arrival replaces countdown', 
   assert.notEqual(far, close)
   assert.match(close, /to pickup/)
   assert.equal(etaLineFor('arrived', null, places), 'Driver is at pickup')
+  assert.equal(liveDriverTitle('Sam Okonkwo', 'Next driver'), 'Sam Okonkwo')
+  assert.equal(liveDriverTitle('', 'Next driver'), 'Your driver')
+  assert.equal(liveDriverTitle(null, 'your driver'), 'Your driver')
+  assert.equal(liveDriverTitle(null, 'Jordan'), 'Jordan')
   assert.match(etaLineFor('in_progress', { lat: 34.681, lng: -82.83 }, places), /to drop-off/)
   assert.equal(etaLineFor('completed', { lat: 34.681, lng: -82.83 }, places), null)
   assert.equal(etaLineFor('accepted', { lat: 91, lng: -82.83 }, places), null)

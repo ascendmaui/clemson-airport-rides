@@ -30,6 +30,7 @@ export const SEARCH_APPROX_WAIT_NOTE: string
 export const STRAIGHT_LINE_WAIT: string
 
 export function showSearchTheater(status: string | null | undefined): boolean
+export function liveDriverTitle(personName: string | null | undefined, fallback: string | null | undefined): string
 export function etaHoldLine(status: string | null | undefined, etaLine: string | null | undefined): string | null
 export function checkoutSuccessHash(input?: { tripId?: string | null; scheduled?: boolean }): string
 

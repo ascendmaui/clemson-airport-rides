@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
+import { Image, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
 import { useRouter, useSegments } from 'expo-router'
+import { pickerVehicleLine } from './drivers.js'
 import {
   RIDE_STYLES,
   findPendingRating,
@@ -143,7 +144,10 @@ function usePartyStyles(colors) {
       backgroundColor: colors.purple,
       alignItems: 'center',
       justifyContent: 'center',
+      overflow: 'hidden',
     },
+    photo: { width: 52, height: 52 },
+    eta: { color: colors.orange, fontWeight: '800', fontSize: 13 },
     avatarText: { color: colors.onAccent, fontWeight: '800', fontSize: 20 },
   })
 }
@@ -170,23 +174,29 @@ export function RideStyleChips({ value, onChange, colors = LIGHT_PARTY }) {
   )
 }
 
-export function CounterpartCard({ person, colors = LIGHT_PARTY }) {
+export function CounterpartCard({ person, eta = null, colors = LIGHT_PARTY }) {
   const styles = usePartyStyles(colors)
   if (!person) return null
+  const carLine = person.vehicleLine || pickerVehicleLine(person.vehicle, person.plate)
   return (
     <View style={styles.card}>
       <Text style={styles.kicker}>{person.roleLabel.toUpperCase()}</Text>
       <View style={styles.row}>
-        <View style={styles.avatar}>
-          <Text style={styles.avatarText}>{person.initial}</Text>
-        </View>
+        {person.photoUrl ? (
+          <Image source={{ uri: person.photoUrl }} style={[styles.avatar, styles.photo]} accessibilityIgnoresInvertColors />
+        ) : (
+          <View style={styles.avatar}>
+            <Text style={styles.avatarText}>{person.initial}</Text>
+          </View>
+        )}
         <View style={{ flex: 1 }}>
           <Text style={styles.name}>{person.name}</Text>
           <Text style={styles.rating}>{person.ratingLine}</Text>
+          {carLine ? <Text style={styles.copy}>{carLine}</Text> : null}
+          {eta ? <Text style={styles.eta}>{eta}</Text> : null}
         </View>
       </View>
       {person.student ? <Text style={styles.copy}>Clemson student</Text> : null}
-      {person.vehicle ? <Text style={styles.copy}>{person.vehicle}</Text> : null}
       {person.rideStyle ? <Text style={styles.copy}>Ride style · {person.rideStyle}</Text> : null}
       {person.bio ? <Text style={styles.copy}>{person.bio}</Text> : null}
       {person.spots.length ? <Text style={styles.copy}>Spots · {person.spots.join(', ')}</Text> : null}

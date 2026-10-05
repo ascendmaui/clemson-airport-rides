@@ -26,6 +26,7 @@ import { fetchFullProfile } from '../lib/profiles'
 import { CounterpartChip } from '../components/CounterpartChip'
 import { PARTY_VISIBLE_STATUSES } from '../../packages/rides-native/partyProfile.js'
 import { useTripWait } from '../lib/useTripWait'
+import { tripWaitAction } from '../lib/tripWaitApi'
 import { WaitFeeCard } from '../components/WaitFeeCard'
 import { api, settleTrip } from '../lib/payments'
 import { PaymentFailedSheet } from '../components/PaymentFailedSheet'
@@ -47,6 +48,7 @@ import {
   declineActionLabel,
   PREFERRED_REQUEST_NOTE,
   driverStatusDetail,
+  statusActionLabel,
   statusHeadline,
   isUnpaidAirportDepositTrip,
   teslaFleetNotice,
@@ -626,6 +628,47 @@ function DriverShell({ driverId }) {
     }
   }
 
+  async function markArrived() {
+    if (!activeTrip?.id || !supabase || advancing) return
+    setAdvancing(true)
+    setAdvanceError(null)
+    try {
+      let next = null
+      try {
+        const res = await tripWaitAction('arrive', activeTrip.id)
+        next = res?.trip || null
+      } catch (err) {
+        if (!err.network && !err.unavailable) {
+          setAdvanceError(err.message || 'Could not mark arrived')
+          return
+        }
+      }
+      if (next?.status === 'arrived') {
+        setActiveTrip((prev) => (prev && prev.id === activeTrip.id ? { ...prev, ...next } : prev))
+        return
+      }
+      const { data: saved, error } = await supabase
+        .from('trips')
+        .update({ status: 'arrived' })
+        .eq('id', activeTrip.id)
+        .eq('driver_id', driverId)
+        .select('id, status, driver_id, arrived_at')
+        .maybeSingle()
+      if (error || saved?.status !== 'arrived') {
+        setAdvanceError(error?.message || 'Could not mark arrived')
+        return
+      }
+      await writeTripEvent(activeTrip.id, 'arrived', {
+        driver_id: driverId,
+        from: activeTrip.status,
+        source: 'driver_home',
+      })
+      setActiveTrip((prev) => (prev && prev.id === activeTrip.id ? { ...prev, ...saved } : prev))
+    } finally {
+      setAdvancing(false)
+    }
+  }
+
   async function advanceTrip(nextStatus) {
     if (!activeTrip?.id || !supabase || advancing) return
     setAdvancing(true)
@@ -1137,7 +1180,12 @@ function DriverShell({ driverId }) {
           )}
           {activeTrip.status === 'accepted' && (
             <PurpleAcceptButton onClick={() => advanceTrip('arriving')} disabled={advancing}>
-              {advancing ? 'Updating…' : 'Arriving'}
+              {advancing ? 'Updating…' : statusActionLabel('accepted')}
+            </PurpleAcceptButton>
+          )}
+          {activeTrip.status === 'arriving' && (
+            <PurpleAcceptButton onClick={markArrived} disabled={advancing}>
+              {advancing ? 'Updating…' : statusActionLabel('arriving')}
             </PurpleAcceptButton>
           )}
           {(activeTrip.status === 'arriving' || activeTrip.status === 'arrived') && (
@@ -1145,17 +1193,12 @@ function DriverShell({ driverId }) {
               trip={activeTrip}
               quote={wait.quote}
               role="driver"
-              busy={wait.busy}
+              busy={wait.busy || advancing}
               error={wait.error}
               charge={wait.charge}
-              onStart={() => wait.act('arrive')}
+              onStart={activeTrip.status === 'arrived' ? () => advanceTrip('in_progress') : undefined}
               onCancel={() => wait.act('cancel')}
             />
-          )}
-          {(activeTrip.status === 'arriving' || activeTrip.status === 'arrived') && (
-            <PurpleAcceptButton onClick={() => advanceTrip('in_progress')} disabled={advancing}>
-              {advancing ? 'Updating…' : 'Start trip'}
-            </PurpleAcceptButton>
           )}
           {activeTrip.status === 'in_progress' && (
             <PurpleAcceptButton onClick={() => advanceTrip('completed')} disabled={advancing}>

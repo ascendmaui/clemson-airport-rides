@@ -42,6 +42,15 @@ export function showSearchTheater(status) {
   return status === 'searching' || status === 'offered'
 }
 
+/** Title for the accepted-driver card. The open-pool placeholder is not a person. */
+export function liveDriverTitle(personName, fallback) {
+  const assigned = typeof personName === 'string' ? personName.trim() : ''
+  if (assigned) return assigned
+  const name = typeof fallback === 'string' ? fallback.trim() : ''
+  if (!name || /^next driver$/i.test(name) || /^your driver$/i.test(name)) return 'Your driver'
+  return name
+}
+
 /** Keep a status line when coordinates are missing so the card is not blank. */
 export function etaHoldLine(status, etaLine) {
   if (etaLine) return etaLine

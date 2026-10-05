@@ -4,6 +4,7 @@
  * Aggregates live on profiles.rating_avg / rating_count (database trigger).
  */
 import { displayFirstName, normalizePromoCode } from './authErrors.js'
+import { loadPickerDriverRecord, pickerVehicleLine } from './drivers.js'
 
 export const SIGNUP_PROFILE_DRAFT_KEY = 'clemson_signup_profile_draft'
 
@@ -221,14 +222,30 @@ export function vehicleLabelFromRow(vehicle) {
   return [vehicle.color, vehicle.make, vehicle.model].filter(Boolean).join(' ')
 }
 
+export function safePhotoUrl(value) {
+  if (typeof value !== 'string') return null
+  const url = value.trim()
+  if (!/^https?:\/\//i.test(url)) return null
+  return url
+}
+
+function vehiclePlate(vehicle) {
+  if (!vehicle || typeof vehicle !== 'object') return ''
+  return vehicle.plate == null ? '' : String(vehicle.plate).trim()
+}
+
 export function toCounterpartView(profile, { viewerIsRider = false } = {}) {
   if (!profile) return null
   const fallback = viewerIsRider ? 'Driver' : 'Rider'
-  const name = displayFirstName(profile.full_name, fallback)
+  const full = typeof profile.full_name === 'string' ? profile.full_name.trim() : ''
+  const first = displayFirstName(profile.full_name, fallback)
+  const name = viewerIsRider && first !== fallback ? full : first
+  const vehicle = vehicleLabelFromRow(profile.vehicle)
+  const plate = vehiclePlate(profile.vehicle)
   return {
     id: profile.id,
     name,
-    initial: name.slice(0, 1).toUpperCase(),
+    initial: (name || fallback).slice(0, 1).toUpperCase(),
     ratingLine: formatRatingLine(profile.rating_avg, profile.rating_count),
     ratingAvg: profile.rating_avg != null ? Number(profile.rating_avg) : null,
     ratingCount: Number(profile.rating_count) || 0,
@@ -237,7 +254,10 @@ export function toCounterpartView(profile, { viewerIsRider = false } = {}) {
     spots: asSpotList(profile.favorite_spots),
     phone: formatPhone(profile.phone),
     student: Boolean(profile.student_verified_at),
-    vehicle: vehicleLabelFromRow(profile.vehicle),
+    vehicle,
+    plate,
+    vehicleLine: pickerVehicleLine(vehicle, plate),
+    photoUrl: safePhotoUrl(profile.avatar_url),
     roleLabel: viewerIsRider ? 'Your driver' : 'Your rider',
   }
 }
@@ -304,7 +324,7 @@ async function loadVehicle(supabase, driverId) {
   try {
     const { data, error } = await supabase
       .from('vehicles')
-      .select('color, make, model')
+      .select('color, make, model, plate')
       .eq('driver_id', driverId)
       .limit(1)
     if (error) return null
@@ -314,14 +334,33 @@ async function loadVehicle(supabase, driverId) {
   }
 }
 
+/** Rider view of the accepted driver: full name, photo, and the picker car/plate. */
+export async function loadMatchedDriverCard(supabase, driverId) {
+  if (!supabase || !driverId) return null
+  const profile = await loadPublicProfile(supabase, driverId)
+  let record = null
+  try {
+    record = await loadPickerDriverRecord(supabase, driverId)
+  } catch {
+    record = null
+  }
+  const vehicle = record?.vehicle || await loadVehicle(supabase, driverId)
+  if (!profile && !vehicle && !record?.full_name) return null
+  return toCounterpartView({
+    ...(profile || { id: driverId }),
+    full_name: profile?.full_name || record?.full_name || '',
+    avatar_url: profile?.avatar_url || record?.avatar_url || null,
+    vehicle,
+  }, { viewerIsRider: true })
+}
+
 export async function loadCounterpart(supabase, trip, userId) {
   const id = counterpartId(trip, userId)
   if (!supabase || !id) return null
+  if (trip.rider_id === userId) return loadMatchedDriverCard(supabase, id)
   const profile = await loadPublicProfile(supabase, id)
   if (!profile) return null
-  const viewerIsRider = trip.rider_id === userId
-  const vehicle = viewerIsRider ? await loadVehicle(supabase, id) : null
-  return toCounterpartView({ ...profile, vehicle }, { viewerIsRider })
+  return toCounterpartView(profile, { viewerIsRider: false })
 }
 
 export async function fetchTripForRating(supabase, tripId) {
