@@ -1913,3 +1913,11 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
 - **Files touched:** `server/endpoints/expireUnpaidAirportHolds.js`, `tests/gaAuditExpireHoldsSanitization.test.js`, `package.json`, `docs/FIXES.md`
 - **Verified:** `npm test` passing with 0 failures.
 
+## 2026-10-05 — Student discount e2e: campus email lock and blank tier
+
+- **Date:** 2026-10-05
+- **What was wrong:** Server tests checked student flags and source scans, but did not prove discount cents. An unverified or non-Clemson email could drift from the fare helpers, and a blank tier could discount in `applyStudentDiscount` or `quoteFare` without the other helper agreeing.
+- **What changed:** Extended `server/studentDiscount.test.js` so `studentFlagsFor` and `studentDiscountGranted` feed both helpers. Unverified and non-Clemson accounts stay at full price. A confirmed `@clemson.edu` account (and the existing `@g.clemson.edu` workspace domain) gets the current 10% Standard discount (1000 bps) with the same cents from both helpers. A blank `''` tier gets no discount on either helper. Discount bps and the campus email lock were not changed.
+- **Files touched:** `server/studentDiscount.test.js`, `docs/FIXES.md`
+- **Verified:** `node --experimental-strip-types --test server/studentEligibility.test.js server/studentDiscount.test.js` (15/15). `npm test` (2325 pass, 0 fail).
+
