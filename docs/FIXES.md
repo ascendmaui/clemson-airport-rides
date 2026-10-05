@@ -2,6 +2,15 @@
 
 Persistent knowledge base for recurring failures. When a matching issue appears, apply the saved fix first.
 
+## 2026-10-05 — Weekend/party schedule UX tests already run under npm test
+
+- **Track / machine:** Clemson RIDES · deputy/weekend-party-schedule-ux · pkg-weekend-party-schedule-ux t3
+- **What was wrong:** The root `npm test` script is an explicit file list. The passenger-label, party-capacity, and weekend-window checks added in t1 and t2 would be skipped if those files were missing from the script.
+- **What changed:** No second copy was added. `server/scheduleTrip.test.js` is already listed once, immediately before `server/releaseScheduledRides.test.js`. `src/lib/scheduledRideModel.test.js` is already listed once, between `src/lib/placeCatalog.test.js` and `src/lib/fareRates.test.js`. Passenger and weekend-window coverage lives in those two files (`src/lib/schedulePartyCopy.js` has no separate suite). Fare math and the 10% schedule-ahead discount (1000 bps) were not changed. `package.json` was not edited.
+- **Files touched:**
+  - `docs/FIXES.md`
+- **Verified:** `npm test` — 2333 pass, 0 fail, 0 skipped (66 suites).
+
 ## 2026-10-05 — Weekend/party schedule UX: web stepper, capacity, and window helper
 
 - **Track / machine:** Clemson RIDES · deputy/weekend-party-schedule-ux · t2
