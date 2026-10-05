@@ -60,7 +60,13 @@ test('marketing features match the shipped product', () => {
     'Weekend and party',
     'Preferred drivers',
     'Schedule',
+    'Real-time matching',
+    'Live trip tracking',
   ])
+  const airport = MARKETING_FEATURES.find((feature) => feature.id === 'airport')
+  assert.match(airport.body, /pre-authorization hold/)
+  assert.match(airport.body, /full fare is charged when the trip ends/)
+  assert.doesNotMatch(airport.body, /25% deposit/)
   const student = MARKETING_FEATURES.find((feature) => feature.id === 'student')
   assert.match(student.body, /10% off Standard/)
   assert.match(student.body, /confirmed/)
@@ -88,6 +94,13 @@ test('the marketing page wires downloads and does not invent store ids', () => {
   assert.doesNotMatch(source, /apps\.apple\.com|play\.google\.com/)
   assert.doesNotMatch(source, /ae9bb5b6|a9cfec15/)
   assert.doesNotMatch(source, /projects\/clemson-airport-rides\/builds/)
+  assert.match(source, /STANDING_OFFERS/)
+  assert.match(source, /currentWeeklyCoupon/)
+  assert.match(source, /Standard, Wait & Save, Extra Comfort/)
+  assert.match(source, /pre-authorization hold/)
+  assert.doesNotMatch(source, /25% deposit/)
+  const retiredFleet = new RegExp(['te' + 'sla', 'model' + ' 3', 'robo' + 'taxi', 'self' + '-driving'].join('|'), 'i')
+  assert.equal(retiredFleet.test(source), false)
 })
 
 test('download QR codes are square modules for the public install links', () => {

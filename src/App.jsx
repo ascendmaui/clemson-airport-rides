@@ -31,6 +31,7 @@ import { AdminDesk } from './screens/AdminDesk'
 import { PickDriver } from './screens/PickDriver'
 import { Requested } from './screens/Requested'
 import { LegalPrivacy, LegalTerms } from './screens/LegalPages'
+import { ServiceArea } from './screens/ServiceArea'
 import { LiveShare } from './screens/LiveShare'
 import { ProfileView } from './screens/ProfileView'
 import { RateRide } from './screens/RateRide'
@@ -43,6 +44,7 @@ import { AmbassadorScreen } from './screens/AmbassadorScreen'
 import { ToastProvider, ToastStack } from './lib/toasts'
 import { RideToastWatcher } from './components/RideToastWatcher'
 import { RiderMatchPopup } from './components/RiderMatchPopup'
+import { WeeklyCouponNotice } from './components/WeeklyCouponNotice'
 import { DriverOfferWatcher } from './components/DriverOfferWatcher'
 import { DriverBillingEntry } from './components/DriverBillingEntry'
 import { IncentivesAdmin } from './screens/IncentivesAdmin'
@@ -74,7 +76,7 @@ function AmbassadorAttributionSync() {
 }
 
 const PROTECTED = new Set(['driver', 'driver-onboarding', 'account', 'driver-signup', 'admin', 'admin-dashboard', 'incentives', 'lost-found', 'history', 'earnings', 'sign-agreement'])
-const SITE_ROUTES = new Set(['landing', '', 'privacy', 'terms'])
+const SITE_ROUTES = new Set(['landing', '', 'privacy', 'terms', 'service-area'])
 
 function Screen({ path, params }) {
   switch (path) {
@@ -89,6 +91,8 @@ function Screen({ path, params }) {
       return <LegalPrivacy />
     case 'terms':
       return <LegalTerms />
+    case 'service-area':
+      return <ServiceArea />
     case 'share':
     case 'live':
       return <LiveShare token={params.token || ''} />
@@ -281,6 +285,7 @@ export default function App() {
           <AmbassadorAttributionSync />
           <RideToastWatcher />
           <RiderMatchPopup />
+          <WeeklyCouponNotice />
           <DriverOfferWatcher />
           <LostFoundWatcher />
           <RiderPickupStream />
