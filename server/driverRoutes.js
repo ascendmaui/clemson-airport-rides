@@ -3,11 +3,11 @@
  * Response bodies match the previous standalone routes.
  */
 import {
-  isAdminIdentity,
   blockerLabel,
   legacyStatusFor,
   statusAfterInfoSave,
 } from '../shared/driverOnboarding.js'
+import { serverIsAdmin } from './adminRoster.js'
 import { driverQuizError } from '../shared/driverQuiz.js'
 import { admin, cors, json, parseBody, userFromAuth } from './friendRideLib.js'
 import { loadSubmissionContext, notifyAdminOfApplication } from './driverApproval.js'
@@ -74,7 +74,10 @@ export async function handleDriverSignup(req, res) {
     if (profileReadErr) return json(res, 500, { error: profileReadErr.message })
 
     const nextStatus = statusAfterInfoSave(existing?.onboarding_status || null)
-    const keepRole = isAdminIdentity({ jwtEmail: email, role: profileRow?.role })
+    const keepRole = serverIsAdmin({
+      jwtEmail: user.email || email,
+      role: profileRow?.role,
+    })
 
     const profilePatch = {
       id: user.id,

@@ -1,12 +1,13 @@
 /**
- * GET  /api/admin-drivers            queue for john@gmail.com / admins
+ * GET  /api/admin-drivers            queue for profiles with admin access
  * GET  /api/admin-drivers?profile_id signed document URLs
  * POST /api/admin-drivers            { profileId, decision: approve|reject, reason }
  * Help and Support (any signed-in rider, not the admin gate):
  *   /api/admin-drivers?action=help-chat|support-chat|ticket
  * Legacy /api/help-chat, /api/support-chat, /api/support-ticket are rewritten here.
  */
-import { blockerLabel, isAdminIdentity, onboardingLabel, submissionBlockers } from '../shared/driverOnboarding.js'
+import { blockerLabel, onboardingLabel, submissionBlockers } from '../shared/driverOnboarding.js'
+import { serverIsAdmin } from '../server/adminRoster.js'
 import { selectDriverApplicationQueue, withSubmittedApplicantEmail } from '../shared/applicantEmail.js'
 import { loadSubmissionContext } from '../server/driverApproval.js'
 import {
@@ -38,8 +39,9 @@ async function requireAdmin(sb, user) {
     .eq('id', user.id)
     .maybeSingle()
   if (error) return { error: error.message, status: 500 }
-  const ok = isAdminIdentity({
+  const ok = serverIsAdmin({
     jwtEmail: user.email,
+    profileEmail: profile?.email,
     role: profile?.role,
     isAdmin: profile?.is_admin,
   })
