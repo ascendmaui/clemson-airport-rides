@@ -8,8 +8,10 @@
  * releaseExpiredUnpaidAirportHolds cancels the unpaid airport hold after
  * UNPAID_AIRPORT_HOLD_TTL_MS. The cancel uses the same trip update and trip_event
  * as the webhook, including checkout_abandoned, so a later paid deposit still restores.
- * Overlapping sweeps expire an open Checkout session only after a conditional
- * claim, and write trip_events only when the status update still matches.
+ * The TTL sweep only reads a Checkout session, so a paid or async-pending deposit
+ * is kept. It does not expire the session and does not charge, refund, capture,
+ * or cancel a Stripe payment. Overlapping sweeps write trip_events only when the
+ * status update still matches.
  */
 import { isAirportDepositPaid, isAirportDepositTrip } from '../packages/rides-native/tripTags.js'
 import { UNPAID_AIRPORT_HOLD_TTL_MS } from '../shared/airportHold.js'
@@ -650,12 +652,15 @@ function stripeStopsHoldSweep(released) {
   )
 }
 
-/** Cancel one unpaid airport hold that has aged past the TTL. Safe to retry. */
+/**
+ * Cancel one unpaid airport hold that has aged past the TTL. Safe to retry.
+ * retrieveSession is read-only. An expireSession argument is ignored: this
+ * path never charges, refunds, captures, or cancels a Stripe payment.
+ */
 export async function releaseExpiredUnpaidAirportHold(sb, trip, {
   now = Date.now(),
   ttlMs = UNPAID_AIRPORT_HOLD_TTL_MS,
   payments,
-  expireSession,
   retrieveSession,
   dryRun = false,
 } = {}) {
@@ -738,7 +743,6 @@ export async function releaseExpiredUnpaidAirportHold(sb, trip, {
           }, {
             reason: 'unpaid_hold_ttl',
             source: 'hold_ttl',
-            expireSession,
             retrieveSession,
           })
           if (stripeStopsHoldSweep(released)) return { ...released, tripId: trip.id }
@@ -757,12 +761,13 @@ export async function releaseExpiredUnpaidAirportHold(sb, trip, {
  * created_at is at least ttlMs ago. A newer stripe_checkout_created_at keeps
  * the row. Paid deposits and non-airport trips are not updated. limit is
  * capped at 40. dryRun reports wouldExpire and does not write.
+ * Never charges, refunds, captures, or cancels a Stripe payment, and never
+ * sends email, SMS, or push. A passed expireSession is ignored.
  */
 export async function releaseExpiredUnpaidAirportHolds(sb, {
   now = Date.now(),
   ttlMs = UNPAID_AIRPORT_HOLD_TTL_MS,
   limit = 40,
-  expireSession,
   retrieveSession,
   dryRun = false,
 } = {}) {
@@ -798,7 +803,6 @@ export async function releaseExpiredUnpaidAirportHolds(sb, {
       results.push(await releaseExpiredUnpaidAirportHold(sb, trip, {
         now,
         ttlMs,
-        expireSession: dryRun ? undefined : expireSession,
         retrieveSession,
         dryRun,
       }))

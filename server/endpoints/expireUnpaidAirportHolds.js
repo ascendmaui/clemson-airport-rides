@@ -10,9 +10,15 @@
  *
  * An external cron calls this about every 15 minutes. Overlapping calls are
  * safe: the hold update matches only while status is still in that set and
- * checkout_abandoned is unset, and only that winner writes trip_events or
- * expires the Stripe Checkout session. Each call scans at most 40 holds.
+ * checkout_abandoned is unset, and only that winner writes trip_events.
+ * Each call scans at most 40 holds.
  * Do not add a 15-minute schedule to vercel.json — Hobby deploys reject it.
+ * Production uses Supabase pg_cron job expire-unpaid-airport-holds
+ * (`7,22,37,52 * * * *` in supabase/migrations/20260925160000_expire_holds_pg_cron.sql).
+ *
+ * This route never charges, refunds, captures, or cancels a Stripe payment
+ * and never sends email, SMS, or push. A Checkout session is only retrieved
+ * so a paid or async-pending deposit is left in the pool.
  *
  * Authorization. No new secret; reuse CRON_SECRET.
  * - External callers send Authorization: Bearer $CRON_SECRET. The secret is
@@ -193,8 +199,9 @@ export default async function handler(req, res, overrides = {}) {
       dryRun,
       limit,
       ttlMs,
-      expireSession: !dryRun && stripe ? (id) => stripe.checkout.sessions.expire(id) : undefined,
-      retrieveSession: stripe ? (id) => stripe.checkout.sessions.retrieve(id) : undefined,
+      retrieveSession: stripe?.checkout?.sessions?.retrieve
+        ? (id) => stripe.checkout.sessions.retrieve(id)
+        : undefined,
     })
     if (!result?.ok) {
       console.error('[expire-unpaid-airport-holds]', result?.error || result?.reason || 'list_failed')
