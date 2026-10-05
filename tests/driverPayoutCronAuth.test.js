@@ -54,9 +54,9 @@ function mockSb(trips) {
 /**
  * @param {'sweep'|'skipped'|'signin'|'forbidden'} expect
  */
-async function invoke({ headers, env, url = '/api/driver-payouts', method = 'GET', user }) {
+async function invoke({ headers, env, url = '/api/driver-payouts', method = 'GET', user, trips }) {
   const res = mockRes()
-  const sb = mockSb([dueTrip()])
+  const sb = mockSb(trips === undefined ? [dueTrip()] : trips)
   const calls = { auth: 0, attempt: 0, write: 0 }
   await driverPayoutsHandler({ method, url, headers }, res, {
     sb,
@@ -177,6 +177,23 @@ test('driver payout cron auth matrix', async () => {
       expect: 'sweep',
     },
     {
+      name: 'off Vercel wrong bearer falls through to sign-in, not skipped',
+      env: offVercel,
+      headers: badBearer,
+      expect: 'signin',
+    },
+    {
+      name: 'off Vercel wrong bearer plus spoofed cron headers is still sign-in',
+      env: offVercel,
+      headers: {
+        ...badBearer,
+        'user-agent': 'vercel-cron/1.0',
+        'x-vercel-cron': '1',
+        'x-vercel-cron-schedule': '0 12 * * *',
+      },
+      expect: 'signin',
+    },
+    {
       name: 'off Vercel spoofed x-vercel-cron is ignored',
       env: offVercel,
       headers: { 'x-vercel-cron': '1' },
@@ -228,6 +245,7 @@ test('driver payout cron auth matrix', async () => {
     } else if (entry.expect === 'signin') {
       assert.equal(result.status, 401, entry.name)
       assert.equal(result.body.error, 'Sign in required', entry.name)
+      assert.equal(result.body.skipped, undefined, entry.name)
       assert.equal(result.calls.attempt, 0, entry.name)
       assert.equal(result.calls.write, 0, entry.name)
       assert.equal(result.calls.auth, 1, entry.name)
@@ -236,6 +254,41 @@ test('driver payout cron auth matrix', async () => {
       assert.fail(`unhandled expect ${entry.expect}`)
     }
   }
+})
+
+test('off Vercel valid bearer dry_run is 200 and a wrong bearer is 401', async () => {
+  const dry = await invoke({
+    env: {},
+    url: '/api/driver-payouts?dry_run=1',
+    headers: { authorization: `Bearer ${SECRET}` },
+    trips: [],
+  })
+  assert.equal(dry.status, 200)
+  assert.equal(dry.body.ok, true)
+  assert.equal(dry.body.dryRun, true)
+  assert.deepEqual(dry.body.results, [])
+  assert.equal(dry.body.skipped, undefined)
+  assert.equal(dry.calls.attempt, 0)
+  assert.equal(dry.calls.write, 0)
+  assert.equal(dry.calls.auth, 0)
+
+  const wrong = await invoke({
+    env: {},
+    url: '/api/driver-payouts?dry_run=1',
+    headers: {
+      authorization: 'Bearer wrong-secret',
+      'user-agent': 'vercel-cron/1.0',
+      'x-vercel-cron': '1',
+    },
+  })
+  assert.equal(wrong.status, 401)
+  assert.equal(wrong.body.error, 'Sign in required')
+  assert.equal(wrong.body.skipped, undefined)
+  assert.equal(wrong.body.ok, undefined)
+  assert.equal(wrong.calls.attempt, 0)
+  assert.equal(wrong.calls.write, 0)
+  assert.equal(wrong.calls.auth, 1)
+  assert.equal(wrong.queries, 0)
 })
 
 test('vercel cron dry_run still requires the bearer and does not transfer', async () => {
