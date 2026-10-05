@@ -15,8 +15,13 @@ import { rideChatMode } from '../lib/tripChatRules'
 import { SosControl } from '../components/SosControl'
 import { isActiveRideStatus } from '../lib/sosAlert'
 import { MidrideCancelSheet } from '../components/MidrideCancelSheet'
-import { isMidrideStatus } from '../lib/tripPhase'
 import { CounterpartChip } from '../components/CounterpartChip'
+import {
+  liveTripMapChip,
+  liveTripMapHeight,
+  liveTripRoutePrefix,
+  liveTripSecondaryActions,
+} from '../../packages/rides-native/liveTripCard.js'
 import { PARTY_VISIBLE_STATUSES } from '../../packages/rides-native/partyProfile.js'
 import {
   activeTripRouteLine,
@@ -287,9 +292,20 @@ export function Requested({ dest = 'GSP Airport', trip = '', driver = 'your driv
 
   const fleetTags = tripRow ? tripTags(tripRow) : []
   const comfortClassTrip = fleetTags.includes('comfort')
+  const driverOnCard = Boolean(resolvedDriverId && PARTY_VISIBLE_STATUSES.includes(status))
+  const mapChip = liveTripMapChip(status)
+  const mapHeight = liveTripMapHeight({ preview, driverOnMap: Boolean(driverPos), status })
+  const routePrefix = liveTripRoutePrefix(driver, driverOnCard)
+  const secondaryActions = liveTripSecondaryActions({
+    status,
+    tripId: trip,
+    tripMissing,
+    showMessages,
+    rateNudge,
+  })
 
   return (
-    <div className="fade-in" style={{ minHeight: '100%', padding: 24, display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 16 }}>
+    <div className="fade-in live-trip">
       {(rideLive || devSosPreview) && (
         <SosControl
           tripId={trip || '00000000-0000-4000-8000-000000000001'}
@@ -298,10 +314,10 @@ export function Requested({ dest = 'GSP Airport', trip = '', driver = 'your driv
         />
       )}
       {showMap && (
-        <div className="glass-panel search-map" style={{ borderRadius: 20, overflow: 'hidden', height: preview ? 280 : 220, position: 'relative' }}>
+        <div className="glass-panel search-map" style={{ height: mapHeight }}>
           {/* TODO: road-following tiles need a billed Maps key (VITE_GOOGLE_MAPS_API_KEY). Status, progress, and straight-line ETA stay on the card. */}
           <CampusMap
-            height={preview ? 280 : 220}
+            height={mapHeight}
             interactive
             center={mapCenter}
             zoom={preview && routePath.length > 1 ? 10 : (liveStops.length > 1 ? 12 : 14)}
@@ -316,15 +332,21 @@ export function Requested({ dest = 'GSP Airport', trip = '', driver = 'your driv
             routeSecondary={preview && routePath.length > 1 ? routePath : null}
             fitRoute={preview && routePath.length > 1}
           />
-          {preview && (
-            <div className="search-map-chip" aria-hidden="true">
-              <span className="search-wait__spinner" />
-              <span className="search-map-chip__label">Looking for a driver</span>
+          {mapChip && (
+            <div
+              className={`search-map-chip search-map-chip--${mapChip.tone}`}
+              data-live-trip-chip={mapChip.tone}
+              aria-hidden="true"
+            >
+              {mapChip.spinning
+                ? <span className="search-wait__spinner search-map-chip__spinner" />
+                : <span className="search-map-chip__dot" />}
+              <span className="search-map-chip__label">{mapChip.label}</span>
             </div>
           )}
         </div>
       )}
-      <div className="glass-panel glass-panel--elevated" style={{ padding: 24, borderRadius: 20 }}>
+      <div className="glass-panel glass-panel--elevated live-trip-card">
         {paid === '1' && trip && !tripMissing && (status === 'searching' || status === 'offered' || !status) && (
           <p style={{ color: '#522D80', fontWeight: 700, fontSize: 13, lineHeight: 1.45, marginTop: 0 }}>
             Stripe Checkout sent you back. This ride is in the open pool. The deposit shows up when Stripe confirms it.
@@ -354,7 +376,7 @@ export function Requested({ dest = 'GSP Airport', trip = '', driver = 'your driv
           </div>
         )}
         {preview && (
-          <p style={{ color: 'var(--ink-secondary)', fontSize: 13, lineHeight: 1.45, marginTop: 10 }}>
+          <p className="live-trip-note">
             {SEARCH_PREVIEW_COPY}
           </p>
         )}
@@ -363,7 +385,7 @@ export function Requested({ dest = 'GSP Airport', trip = '', driver = 'your driv
             role="status"
             aria-live="polite"
             className="glass-panel glass-panel--orange"
-            style={{ marginTop: 12, padding: 12, borderRadius: 14 }}
+            style={{ padding: 12, borderRadius: 14 }}
           >
             <div style={{ fontSize: 11, letterSpacing: 1.1, fontWeight: 800, color: '#F56600' }}>STILL MATCHING</div>
             <p style={{ margin: '6px 0 0', fontSize: 13, lineHeight: 1.45, color: '#522D80', fontWeight: 650 }}>
@@ -372,20 +394,21 @@ export function Requested({ dest = 'GSP Airport', trip = '', driver = 'your driv
           </div>
         )}
         {comfortClassTrip && !tripMissing && (
-          <p style={{ color: '#522D80', fontWeight: 650, fontSize: 13, lineHeight: 1.4, marginTop: 10 }}>
+          <p className="live-trip-comfort">
             {COMFORT_FLEET_NOTICE}
           </p>
         )}
-        {resolvedDriverId && PARTY_VISIBLE_STATUSES.includes(status) && (
+        {driverOnCard && (
           <CounterpartChip
             profileId={resolvedDriverId}
             noun="driver"
             eta={driverPos && !locationIssue ? etaLineFor(status, driverFix, tripRow) : null}
             onOpen={() => navigate('profile', { id: resolvedDriverId, matched: '1' })}
+            style={{ marginTop: 0 }}
           />
         )}
-        <p style={{ color: 'var(--ink-secondary)', fontSize: 15, lineHeight: 1.45, marginTop: 12 }}>
-          {resolvedDriverId && PARTY_VISIBLE_STATUSES.includes(status) ? '' : `${driver} · `}
+        <p className="live-trip-route">
+          {routePrefix}
           {tripRow?.pickup_label || 'Pickup'} → {dest || tripRow?.dropoff_label || 'Drop-off'}.
           {trip ? ` ID ${String(trip).slice(0, 8)}…` : ''}
         </p>
@@ -398,51 +421,70 @@ export function Requested({ dest = 'GSP Airport', trip = '', driver = 'your driv
             ))}
           </ol>
         )}
-        <div style={{ marginTop: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <div className="live-trip-actions">
           <PrimaryButton onClick={onShare} disabled={busy || !trip || tripMissing}>
             {busy ? 'Starting…' : share ? 'Sharing — tap to refresh link' : 'Share my location'}
           </PrimaryButton>
           {share?.token && (
-            <p style={{ fontSize: 12, color: 'var(--ink-tertiary)', wordBreak: 'break-all' }}>
+            <p className="live-trip-share-url">
               {shareUrl(share.token)}
             </p>
           )}
-          {showMessages && (
-            <RideMessageButton readOnly={chatMode !== 'compose'} onClick={() => setChatOpen(true)} />
-          )}
-          {status === 'completed' && trip && (
-            <button
-              type="button"
-              className="pressable"
-              data-testid="post-ride-lost-found"
-              onClick={() => navigate('lost-found', { trip })}
-              style={{ fontWeight: 700, color: 'var(--orange)', padding: '4px 0' }}
-            >
-              Left something in the car?
-            </button>
-          )}
-          {rateNudge && trip && (
-            <div className="glass-panel" style={{ padding: 12, borderRadius: 14, background: 'rgba(245,102,0,0.12)' }}>
-              <div style={{ fontWeight: 700, color: 'var(--purple)', marginBottom: 6, fontSize: 13 }}>Trip complete — rate your driver?</div>
-              <PrimaryButton onClick={() => navigate('rate', { trip })}>Rate now ★</PrimaryButton>
-              <button type="button" className="pressable" onClick={() => setRateNudge(false)} style={{ marginTop: 8, fontWeight: 600, color: 'var(--ink-tertiary)', width: '100%' }}>
-                Soft remind later
-              </button>
+          {secondaryActions.length > 0 && (
+            <div className="live-trip-actions__secondary">
+              {secondaryActions.map((action) => {
+                if (action.id === 'messages') {
+                  return (
+                    <RideMessageButton
+                      key={action.id}
+                      readOnly={chatMode !== 'compose'}
+                      onClick={() => setChatOpen(true)}
+                    />
+                  )
+                }
+                if (action.id === 'lost-found') {
+                  return (
+                    <button
+                      key={action.id}
+                      type="button"
+                      className="pressable live-trip-text-btn"
+                      data-testid="post-ride-lost-found"
+                      onClick={() => navigate('lost-found', { trip })}
+                    >
+                      {action.label}
+                    </button>
+                  )
+                }
+                if (action.id === 'rate') {
+                  return (
+                    <div key={action.id} className="glass-panel live-trip-rate">
+                      <div className="live-trip-rate__title">Trip complete — rate your driver?</div>
+                      <PrimaryButton onClick={() => navigate('rate', { trip })}>Rate now ★</PrimaryButton>
+                      <button type="button" className="pressable live-trip-text-btn live-trip-text-btn--quiet" onClick={() => setRateNudge(false)}>
+                        Soft remind later
+                      </button>
+                    </div>
+                  )
+                }
+                if (action.id === 'cancel') {
+                  return (
+                    <button
+                      key={action.id}
+                      type="button"
+                      className="pressable live-trip-text-btn live-trip-text-btn--danger"
+                      onClick={() => setCancelOpen(true)}
+                    >
+                      {action.label}
+                    </button>
+                  )
+                }
+                return null
+              })}
             </div>
-          )}
-          {isMidrideStatus(status) && trip && (
-            <button
-              type="button"
-              className="pressable"
-              onClick={() => setCancelOpen(true)}
-              style={{ fontWeight: 700, color: 'var(--danger, #b42318)', padding: '4px 0' }}
-            >
-              Cancel this ride
-            </button>
           )}
           <PrimaryButton onClick={() => navigate('home')}>Back home</PrimaryButton>
         </div>
-        {error && !tripMissing && <AccessibleAlert error={error} onDismiss={() => setError(null)} style={{ marginTop: 12 }} />}
+        {error && !tripMissing && <AccessibleAlert error={error} onDismiss={() => setError(null)} />}
       </div>
       {chatOpen && user?.id && tripRow && (
         <RideChat
