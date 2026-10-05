@@ -34,7 +34,7 @@ Demo map drivers and `sim-busy-*` ids are not favorites. `favoriteIdsForMatching
 - `op: list`
 - `op: set` with `driverIds`
 
-Apply `supabase/migrations/20261005193000_tiger_pass.sql` before checkout confirmation. Without that table, preference writes return `tiger_pass_unavailable`. Favorite reads fail soft and matching continues in the default order.
+Apply `supabase/migrations/20261005204500_tiger_pass.sql` before checkout confirmation. Without that table, preference writes return `tiger_pass_unavailable`. Favorite reads fail soft and matching continues in the default order.
 
 The webhook activates `kind: tiger_pass` on `checkout.session.completed`. `invoice.paid` and subscription updates sync only when metadata kind is `tiger_pass`. Other subscription events stay ignored.
 
