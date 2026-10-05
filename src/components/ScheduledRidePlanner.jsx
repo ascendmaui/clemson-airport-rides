@@ -27,12 +27,26 @@ import { fetchBillingQuote } from '../lib/rideBilling'
 import { useRideOptions } from '../lib/useRideOptions'
 import { NO_DRIVERS_AVAILABLE_COPY, SCHEDULE_AHEAD_LABEL } from '../../shared/rideOptions.js'
 import { getHashRoute } from '../lib/navigation'
+import { lookupCatalogPlace, placeFromStop } from '../lib/placeCatalog'
 import { NearTermSlots } from './NearTermSlots'
+
+const TIER_LABELS = {
+  standard: 'Standard',
+  wait: 'Wait & Save',
+  comfort: 'Extra Comfort',
+}
 
 const PLACES = [
   ...FRIEND_PLACES,
   ...AIRPORT_PLACES.filter((a) => a.code !== 'GSP'),
 ]
+
+function placeFromRouteLabel(label) {
+  if (!label) return null
+  const preset = PLACES.find((place) => place.label === label)
+  if (preset) return preset
+  return placeFromStop(lookupCatalogPlace(label))
+}
 
 function todayInputValue() {
   return new Intl.DateTimeFormat('en-CA', {
@@ -69,8 +83,8 @@ export function ScheduledRidePlanner() {
   useEffect(() => {
     const params = getHashRoute().params || {}
     if (params.near !== '1') return
-    const pickupPlace = PLACES.find((place) => place.label === params.pickup)
-    const dropoffPlace = PLACES.find((place) => place.label === params.dropoff)
+    const pickupPlace = placeFromRouteLabel(params.pickup)
+    const dropoffPlace = placeFromRouteLabel(params.dropoff)
     if (pickupPlace) setPickup(pickupPlace)
     if (dropoffPlace) setDropoff(dropoffPlace)
     if (params.tier === 'wait' || params.tier === 'comfort' || params.tier === 'standard') setFleet(params.tier)
@@ -412,7 +426,7 @@ export function ScheduledRidePlanner() {
         <div style={{ fontSize: 13, color: 'var(--ink-secondary)' }}>
           {date && time ? `${date} · ${time}` : 'Choose a date and time.'}
           {pickup?.label && dropoff?.label ? ` · ${pickup.label} → ${dropoff.label}` : ''}
-          {fleet ? ` · ${tierChoices.find((row) => row.id === fleet)?.name || 'Standard'}` : ''}
+          {fleet ? ` · ${tierChoices.find((row) => row.id === fleet)?.name || TIER_LABELS[fleet] || 'Standard'}` : ''}
         </div>
       </div>
 

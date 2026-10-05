@@ -43,7 +43,7 @@ const route = nearTermScheduleRoute({
 // web: navigate(route.web.path, route.web.params)
 ```
 
-`/schedule?near=1` opens the 10–15 minute picker on the rider schedule screen and the website schedule planner.
+`/schedule?near=1` opens the 10–15 minute picker on the rider schedule screen and the website schedule planner. Labels such as Memorial Stadium and Sikes Hall are resolved from the campus catalog, including stops that are not in the short friend-ride preset list.
 
 ## Push gap
 
