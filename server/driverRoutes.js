@@ -11,6 +11,7 @@ import { serverIsAdmin } from './adminRoster.js'
 import { driverQuizError } from '../shared/driverQuiz.js'
 import { admin, cors, json, parseBody, userFromAuth } from './friendRideLib.js'
 import { loadSubmissionContext, notifyAdminOfApplication } from './driverApproval.js'
+import { attachUnsignedPacket } from './agreementPacket.js'
 import { submittedApplicantEmail, writeDriverApplication } from '../shared/applicantEmail.js'
 import {
   parseVehicleYear,
@@ -228,6 +229,9 @@ export async function handleDriverSubmitReview(req, res) {
     .select('id, full_name, email, phone')
     .eq('id', user.id)
     .maybeSingle()
+
+  const attached = await attachUnsignedPacket(sb, user.id)
+  if (attached.error) return json(res, 500, { error: attached.error })
 
   const now = new Date().toISOString()
   const submittedEmail = submittedApplicantEmail(

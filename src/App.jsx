@@ -25,6 +25,7 @@ import { DriverEarnings } from './screens/DriverEarnings'
 import { FriendsScreen, AccountScreen } from './screens/FriendsAccount'
 import { SignInScreen, SignUpScreen } from './screens/AuthScreens'
 import { DriverOnboarding } from './screens/DriverOnboarding'
+import { SignAgreement } from './screens/SignAgreement'
 import { DriverSignup } from './screens/DriverSignup'
 import { AdminDesk } from './screens/AdminDesk'
 import { PickDriver } from './screens/PickDriver'
@@ -70,7 +71,7 @@ function AmbassadorAttributionSync() {
   return null
 }
 
-const PROTECTED = new Set(['driver', 'driver-onboarding', 'account', 'driver-signup', 'admin', 'admin-dashboard', 'incentives', 'lost-found', 'history', 'earnings'])
+const PROTECTED = new Set(['driver', 'driver-onboarding', 'account', 'driver-signup', 'admin', 'admin-dashboard', 'incentives', 'lost-found', 'history', 'earnings', 'sign-agreement'])
 const SITE_ROUTES = new Set(['landing', '', 'privacy', 'terms'])
 
 function Screen({ path, params }) {
@@ -161,6 +162,12 @@ function Screen({ path, params }) {
       return (
         <RequireAuth>
           <DriverSignup />
+        </RequireAuth>
+      )
+    case 'sign-agreement':
+      return (
+        <RequireAuth>
+          <SignAgreement token={params.token || ''} />
         </RequireAuth>
       )
     case 'admin':

@@ -4,7 +4,7 @@
  * Legacy paths are rewritten in vercel.json.
  * trip-wait body.action (arrive|tick|cancel|start|complete) is a sub-action, not the route.
  */
-import { cors, json } from '../server/friendRideLib.js'
+import { admin, cors, json, userFromAuth } from '../server/friendRideLib.js'
 import { resolveRouteAction } from '../server/routeAction.js'
 import { handleDriverSignup, handleDriverSubmitReview } from '../server/driverRoutes.js'
 import handleDriverEarnings from '../server/endpoints/driverEarnings.js'
@@ -18,6 +18,7 @@ import handleApplicantInbox from '../server/endpoints/applicantInbox.js'
 import handleDriverCards from '../server/endpoints/driverCards.js'
 import handleMatchingRebroadcast from '../server/endpoints/matchingRebroadcast.js'
 import { handleMarkOffered, handlePassOffer } from '../server/endpoints/driverOfferDesk.js'
+import { handleSignAgreement } from '../server/agreementHttp.js'
 
 const HANDLERS = {
   signup: handleDriverSignup,
@@ -34,6 +35,7 @@ const HANDLERS = {
   'rebroadcast-offers': handleMatchingRebroadcast,
   'mark-offered': handleMarkOffered,
   'pass-offer': handlePassOffer,
+  'sign-agreement': handleSignAgreementRoute,
 }
 
 const LEGACY = {
@@ -53,8 +55,16 @@ export default async function handler(req, res, ...rest) {
   const handle = HANDLERS[action]
   if (!handle) {
     return json(res, 400, {
-      error: 'Unknown driver action. Use action=signup, submit-review, earnings, offer-preview, tip, tip-choice, wait, cancel-midride, payouts, inbox, cards, mark-offered, or pass-offer.',
+      error: 'Unknown driver action. Use action=signup, submit-review, earnings, offer-preview, tip, tip-choice, wait, cancel-midride, payouts, inbox, cards, mark-offered, pass-offer, or sign-agreement.',
     })
   }
   return handle(req, res, ...rest)
+}
+
+async function handleSignAgreementRoute(req, res) {
+  const sb = admin()
+  if (!sb) return json(res, 503, { error: 'SUPABASE_SERVICE_ROLE_KEY not configured' })
+  const user = await userFromAuth(req)
+  if (!user) return json(res, 401, { error: 'Sign in required' })
+  return handleSignAgreement(req, res, sb, user)
 }

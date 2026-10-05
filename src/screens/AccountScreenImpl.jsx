@@ -23,6 +23,7 @@ import { useToasts, pushToast } from '../lib/toasts'
 import { supabase } from '../lib/supabase'
 import { STUDENT_CLAIM_COPY, STUDENT_DISCOUNT_LABEL, markStudentVerified, studentStatus } from '../../packages/rides-native/riderMoney.js'
 import { fetchMyDriverApplication, isAdminIdentity, onboardingLabel } from '../lib/driverOnboarding'
+import { SignedAgreementCopy } from '../components/SignedAgreementCopy'
 import { ReferFriendsPanel } from './ReferFriends'
 import { isIncentiveAdmin } from '../lib/driverIncentiveMath'
 import { HelpChatPanel } from '../components/HelpChatPanel'
@@ -598,6 +599,7 @@ export function AccountScreen() {
                 color: 'var(--purple)', border: '1.5px solid rgba(82,45,128,0.3)', background: 'rgba(255,255,255,0.55)' }}>
               Payment method
             </button>
+            <SignedAgreementCopy userId={user?.id} />
             <button type="button" className="pressable" onClick={() => navigate('driver-onboarding')}
               style={{ display: 'block', width: '100%', marginTop: 12, padding: 12, borderRadius: 14, fontWeight: 700,
                 color: '#fff', background: 'linear-gradient(135deg, var(--orange), #ff7a1a)' }}>

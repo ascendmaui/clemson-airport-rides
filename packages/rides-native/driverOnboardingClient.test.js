@@ -301,7 +301,7 @@ test('constants and shared re-exports match expected values and shapes', () => {
   assert.equal(BACKGROUND_CONSENT_VERSION, 'background-auth-2026-09-24')
   assert.equal(WORK_ELIGIBILITY_VERSION, 'work-eligibility-2026-09-24')
   assert.equal(W9_FORM_VERSION, 'w9-2026-09-24')
-  assert.equal(IC_AGREEMENT_VERSION, 'ic-agreement-2026-09-24')
+  assert.equal(IC_AGREEMENT_VERSION, 'ic-agreement-2026-10-05')
   assert.equal(IC_AGREEMENT_TITLE, 'Clemson RIDES Independent Contractor Agreement')
 
   assert.ok(Array.isArray(ONBOARDING_FLOW))

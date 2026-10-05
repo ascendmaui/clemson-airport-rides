@@ -26,8 +26,10 @@ import {
   TAX_CLASSIFICATIONS,
   displayTinLast4,
   submissionBlockers,
+  approvalBlockers,
   blockerLabel,
 } from '../../shared/driverOnboarding.js'
+import { buildAgreementPrefill, renderPrefilledAgreement } from '../../shared/agreementPrefill.js'
 import {
   readStoredApplicantEmail,
   selectDriverApplicationQueue,
@@ -65,7 +67,10 @@ export {
   TAX_CLASSIFICATIONS,
   displayTinLast4,
   submissionBlockers,
+  approvalBlockers,
   blockerLabel,
+  buildAgreementPrefill,
+  renderPrefilledAgreement,
 }
 
 const STEP_KEY = (userId) => `clemson_driver_onboarding_step:${userId}`
@@ -330,19 +335,39 @@ export async function saveEmploymentVerification(userId, { backgroundAuthorized,
 
 export async function fetchMyTaxProfile(userId) {
   if (!supabase || !userId) return null
-  const { data, error } = await supabase
+  let result = await supabase
     .from('driver_tax_info')
-    .select('legal_name, tin_last4, tax_classification, updated_at')
+    .select('legal_name, tin_last4, tax_classification, address_line, business_name, updated_at')
     .eq('profile_id', userId)
     .maybeSingle()
-  if (error) throw new Error(error.message)
+  if (result.error && /address_line|business_name|schema cache/i.test(result.error.message || '')) {
+    result = await supabase
+      .from('driver_tax_info')
+      .select('legal_name, tin_last4, tax_classification, updated_at')
+      .eq('profile_id', userId)
+      .maybeSingle()
+  }
+  if (result.error) throw new Error(result.error.message)
+  const data = result.data
   if (!data) return null
   return {
     legal_name: data.legal_name,
     tin_last4: data.tin_last4,
     tax_classification: data.tax_classification,
+    address_line: data.address_line || null,
+    business_name: data.business_name || null,
     updated_at: data.updated_at,
   }
+}
+
+export async function setDriverMailingAddress({ addressLine, businessName }) {
+  if (!supabase) throw new Error('Supabase is not configured')
+  const { data, error } = await supabase.rpc('set_driver_mailing_address', {
+    address_line: addressLine || null,
+    business_name: businessName || null,
+  })
+  if (error) throw new Error(error.message)
+  return data && typeof data === 'object' ? data : {}
 }
 
 /** Sends the TIN only to save_driver_tax_info. The return value is last-4 only. */
@@ -382,7 +407,7 @@ export async function fetchMyAgreement(userId) {
   if (!supabase || !userId) return null
   const { data, error } = await supabase
     .from('driver_agreements')
-    .select('agreement_version, agreement_sha256, signature_name, signed_at, signer_user_id')
+    .select('agreement_version, agreement_sha256, signature_name, signed_at, signer_user_id, html_snapshot')
     .eq('profile_id', userId)
     .eq('agreement_version', IC_AGREEMENT_VERSION)
     .maybeSingle()
@@ -416,6 +441,7 @@ function complianceContext({ application, documents, tax, agreement }) {
     taxSaved: Boolean(tax?.legal_name && /^[0-9]{4}$/.test(String(tax?.tin_last4 || ''))),
     agreementSigned: Boolean(agreement?.signed_at && agreement?.signature_name),
     agreementVersion: agreement?.agreement_version || null,
+    agreementSha256: agreement?.agreement_sha256 || null,
   }
 }
 
@@ -527,7 +553,7 @@ async function fetchDriverQueueDirect(status) {
   const applications = (apps || []).map((app) => {
     const tax = taxByProfile[app.profile_id] || null
     const agreement = agreementByProfile[app.profile_id] || null
-    const blockers = submissionBlockers({
+    const blockers = approvalBlockers({
       uploaded: docsByProfile[app.profile_id] || [],
       backgroundAuthorized: Boolean(app.background_authorized_at),
       workEligibilityAttested: Boolean(app.work_eligibility_attested_at),
@@ -535,6 +561,7 @@ async function fetchDriverQueueDirect(status) {
       taxSaved: Boolean(tax?.legal_name && /^[0-9]{4}$/.test(String(tax.tin_last4 || ''))),
       agreementSigned: Boolean(agreement?.signed_at && agreement?.signature_name),
       agreementVersion: agreement?.agreement_version || null,
+      agreementSha256: agreement?.agreement_sha256 || null,
     })
     const presented = withSubmittedApplicantEmail(app, profileById[app.profile_id] || null)
     return {
@@ -621,7 +648,7 @@ async function fetchDriverReviewDetailDirect(profileId) {
     fetchMyAgreement(profileId),
   ])
   const ctx = complianceContext({ application, documents, tax, agreement })
-  const blockers = submissionBlockers(ctx)
+  const blockers = approvalBlockers(ctx)
   return {
     profile_id: profileId,
     documents,
@@ -636,6 +663,31 @@ async function fetchDriverReviewDetailDirect(profileId) {
     blocker_labels: blockers.map(blockerLabel),
     direct: true,
   }
+}
+
+export async function emailAgreementToDriver(profileId) {
+  try {
+    return await postJson('/api/admin-drivers', { action: 'email-agreement', profileId })
+  } catch (err) {
+    if (err.payload?.signing_url) return { ...err.payload, emailed: false }
+    throw err
+  }
+}
+
+export async function correctAgreementParticulars({ profileId, particulars }) {
+  return postJson('/api/admin-drivers', { action: 'correct-agreement', profileId, particulars })
+}
+
+export async function fetchAgreementToSign(token) {
+  const headers = await authHeaders()
+  const res = await fetch(`/api/driver?action=sign-agreement&token=${encodeURIComponent(token || '')}`, { headers })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(data.error || data.message || `HTTP ${res.status}`)
+  return data
+}
+
+export async function signAgreementWithToken({ token, signatureName, accepted }) {
+  return postJson('/api/driver?action=sign-agreement', { token, signatureName, accepted })
 }
 
 export async function reviewDriverApplication({ profileId, decision, reason }) {

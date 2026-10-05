@@ -15,6 +15,7 @@ import {
   progressSnapshot,
   resolveResumeStep,
   statusAfterInfoSave,
+  approvalBlockers,
   blockerLabel,
   submissionBlockers,
   w9ContinueIssue,
@@ -137,7 +138,7 @@ test('a flagged registration blocks submit until it matches the vehicle', () => 
   assert.match(blockerLabel('registration_match'), /Registration/)
 })
 
-test('submit stays blocked until employment, W-9, and the signed agreement exist', () => {
+test('submit does not require a signature; approval does', () => {
   const readyDocs = {
     status: 'pending_docs',
     uploaded: REQUIRED_DOC_IDS,
@@ -152,9 +153,17 @@ test('submit stays blocked until employment, W-9, and the signed agreement exist
   assert.equal(firstIncompleteStepId(readyDocs), 'review')
 
   const missingSignature = { ...readyDocs, agreementSigned: false, agreementVersion: null }
-  assert.deepEqual(submissionBlockers(missingSignature), ['ic_agreement'])
-  assert.equal(firstIncompleteStepId(missingSignature), 'agreement')
-  assert.equal(resolveResumeStep({ ...missingSignature, preferred: 'review' }), 'agreement')
+  assert.deepEqual(submissionBlockers(missingSignature), [])
+  assert.deepEqual(approvalBlockers(missingSignature), ['ic_agreement'])
+  assert.equal(firstIncompleteStepId(missingSignature), 'review')
+  assert.equal(resolveResumeStep({ ...missingSignature, preferred: 'review' }), 'review')
+
+  const wrongVersion = { ...readyDocs, agreementVersion: 'old-version' }
+  assert.deepEqual(approvalBlockers(wrongVersion), ['ic_agreement'])
+  const hashMismatch = { ...readyDocs, agreementSha256: 'signed', packetHash: 'packet' }
+  assert.deepEqual(approvalBlockers(hashMismatch), ['ic_agreement'])
+  const hashMatch = { ...readyDocs, agreementSha256: 'abc', packetHash: 'abc' }
+  assert.deepEqual(approvalBlockers(hashMatch), [])
 
   const missingTax = { ...readyDocs, taxSaved: false }
   assert.ok(submissionBlockers(missingTax).includes('w9_tax_info'))
@@ -219,15 +228,14 @@ test('TIN display is last-4 only', () => {
   assert.equal(displayTinLast4(null), '')
 })
 
-test('compliance migration stores the exact agreement and every required doc type', () => {
+test('compliance seed no longer rewrites agreement HTML and still lists required docs', () => {
   const sql = readFileSync(new URL('../supabase/driver_onboarding_compliance.sql', import.meta.url), 'utf8')
   for (const id of REQUIRED_DOC_IDS) {
     assert.ok(sql.includes(`'${id}'`), id)
   }
-  const parts = sql.split('$html$')
-  assert.equal(parts[1], IC_AGREEMENT_HTML)
-  assert.equal(parts[3], IC_AGREEMENT_HTML)
-  assert.ok(sql.includes(IC_AGREEMENT_VERSION))
+  assert.equal(sql.includes('$html$'), false)
+  assert.equal(sql.includes('body_html = excluded.body_html'), false)
+  assert.match(sql, /do not re-run/i)
   assert.ok(sql.includes('driver_tax_secrets'))
   assert.equal(sql.includes('return jsonb_build_object(\n    \'legal_name\', cleaned_name,\n    \'tin_last4\', last4,'), true)
   const hash = createHash('sha256').update(IC_AGREEMENT_HTML, 'utf8').digest('hex')
@@ -263,8 +271,6 @@ test('pending review applicants resume each unfinished electronic step without p
     [{ registrationMatch: 'unreadable' }, 'registration'],
     [{ backgroundAuthorized: false }, 'employment'],
     [{ taxSaved: false }, 'w9'],
-    [{ agreementSigned: false }, 'agreement'],
-    [{ agreementVersion: 'old' }, 'agreement'],
   ]) {
     const ctx = { ...completeApplicant, ...patch }
     assert.equal(resolveResumeStep({ ...ctx, preferred: 'review' }), step)
