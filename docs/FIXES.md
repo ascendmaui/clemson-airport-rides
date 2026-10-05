@@ -1933,3 +1933,18 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
   - `docs/FIXES.md`
 - **Verified:** `node --experimental-strip-types --test server/studentEligibility.test.js server/studentDiscount.test.js` (15/15). `TZ=UTC npm test` (2325 pass, 0 fail).
 
+## 2026-10-05 — Student discount e2e paths already run under npm test (pkg-student-discount-e2e-verify t3)
+
+- **Date:** 2026-10-05
+- **Track / machine:** Clemson RIDES · deputy/student-discount-e2e-verify · pkg-student-discount-e2e-verify t3
+- **What was wrong:** t1 extended `server/studentDiscount.test.js` so `studentFlagsFor` and `studentDiscountGranted` feed `applyStudentDiscount` and `quoteFare`. t2 covered a missing participant list in `server/studentEligibility.test.js`. A missing path in the root `"test"` script would let `npm test` skip the campus-email lock and the 1000 bps Standard discount checks.
+- **What changed:** Confirmed these files are already arguments of the root `package.json` `"test"` script, so no new path was added:
+  - `server/studentEligibility.test.js`
+  - `server/studentDiscount.test.js`
+  - `src/lib/studentDomain.test.js`
+  - `src/lib/fareRates.test.js` (`quoteFare`)
+  - `src/lib/pricing.test.js`
+  Campus email confirmation, domain lock, and `STUDENT_DISCOUNT_BPS` (1000) stay as they are.
+- **Files touched:** `docs/FIXES.md`
+- **Verified:** `TZ=UTC npm test` — 2325 pass, 0 fail, 63 suites.
+
