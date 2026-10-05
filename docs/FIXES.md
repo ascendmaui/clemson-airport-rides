@@ -2,6 +2,20 @@
 
 Persistent knowledge base for recurring failures. When a matching issue appears, apply the saved fix first.
 
+## 2026-10-05 — t1: Marketing bookable-tier scrub tests (Standard / Wait & Save / Extra Comfort only)
+
+- **Track / machine:** Clemson RIDES · MacBook Max · marketing bookable-tier scrub worktree
+- **What was wrong:** #321 removed the retired fleet from bookable product, but marketing had no lock that advertised bookable tiers stay Standard, Wait & Save, and Extra Comfort. `node --test shared/marketingFeatures.js` only loaded the module (vacuous pass).
+- **What changed:**
+  - Exported `MARKETING_BOOKABLE_TIER_IDS` / `MARKETING_BOOKABLE_TIERS` from `shared/marketingFeatures.js`, aligned with `OFFERED_RIDE_TIERS` and `RIDE_OPTION_CATALOG`.
+  - Added tests in that file (Node test runner only) plus `tests/marketingSite.test.js` asserting the three names/ids and that landing, marketing, and product copy do not advertise retired fleet as bookable.
+  - The single demo-map exception in `shared/demoFleet.js` / `docs/demo-drivers.md` is unchanged.
+- **Files touched:**
+  - `shared/marketingFeatures.js`
+  - `tests/marketingSite.test.js`
+  - `docs/FIXES.md`
+- **Verified:** `node --experimental-strip-types --test shared/marketingFeatures.js` (4/4), `node --experimental-strip-types --test tests/marketingSite.test.js tests/retiredCopy.test.js tests/criticalCopy.test.js`, Vite production build of the marketing import graph.
+
 ## 2026-10-02 — GA96: GA audit & tests - abandoned checkout resilience, hold TTL NaN safety, and RPC direct update fallbacks
 
 - **Track / machine:** Clemson RIDES · MacBook Max · `agy/ga-audit-abandoned-checkout-resilience-ga96`

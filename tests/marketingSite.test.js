@@ -1,7 +1,15 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { readFileSync } from 'node:fs'
-import { MARKETING_FEATURES } from '../shared/marketingFeatures.js'
+import {
+  MARKETING_BOOKABLE_TIER_IDS,
+  MARKETING_BOOKABLE_TIERS,
+  MARKETING_FEATURES,
+  copyHitsBlockedBookableClaims,
+  marketingFeaturesCopy,
+} from '../shared/marketingFeatures.js'
+import { OFFERED_RIDE_TIERS, RIDE_OPTION_CATALOG } from '../shared/rideOptions.js'
+import { BOOKABLE_RIDE_TIER_IDS, bookableRideTiers } from '../packages/rides-native/places.js'
 import {
   ANDROID_STORE_URL,
   APP_DOWNLOADS,
@@ -52,6 +60,31 @@ test('store listings stay unpublished until real URLs exist', () => {
   }
 })
 
+test('marketing bookable tiers are Standard, Wait & Save, Extra Comfort only', () => {
+  assert.deepEqual(MARKETING_BOOKABLE_TIER_IDS, ['standard', 'wait', 'comfort'])
+  assert.deepEqual([...OFFERED_RIDE_TIERS], ['standard', 'wait', 'comfort'])
+  assert.deepEqual(MARKETING_BOOKABLE_TIER_IDS, [...OFFERED_RIDE_TIERS])
+  assert.deepEqual(MARKETING_BOOKABLE_TIER_IDS, [...BOOKABLE_RIDE_TIER_IDS])
+  assert.deepEqual(
+    bookableRideTiers().map((tier) => tier.id),
+    MARKETING_BOOKABLE_TIER_IDS,
+  )
+  assert.deepEqual(
+    MARKETING_BOOKABLE_TIERS.map((tier) => tier.id),
+    ['standard', 'wait', 'comfort'],
+  )
+  assert.deepEqual(
+    MARKETING_BOOKABLE_TIERS.map((tier) => tier.name),
+    ['Standard', 'Wait & Save', 'Extra Comfort'],
+  )
+  assert.deepEqual(
+    RIDE_OPTION_CATALOG.map((tier) => ({ id: tier.id, name: tier.name })),
+    MARKETING_BOOKABLE_TIERS,
+  )
+  assert.equal(MARKETING_BOOKABLE_TIERS.length, 3)
+  assert.deepEqual(copyHitsBlockedBookableClaims(marketingFeaturesCopy()), [])
+})
+
 test('marketing features match the shipped product', () => {
   assert.deepEqual(MARKETING_FEATURES.map((feature) => feature.title), [
     'Airport rides',
@@ -83,6 +116,7 @@ test('the marketing page wires downloads and does not invent store ids', () => {
   assert.doesNotMatch(source, /const DOWNLOADS/)
   assert.match(source, /not live yet/)
   assert.match(source, /MARKETING_FEATURES/)
+  assert.deepEqual(copyHitsBlockedBookableClaims(source), [])
   assert.doesNotMatch(source, EXPO_LINK)
   assert.doesNotMatch(source, /RIDER_EXPO_PROJECT|DRIVER_EXPO_PROJECT/)
   assert.doesNotMatch(source, /apps\.apple\.com|play\.google\.com/)
