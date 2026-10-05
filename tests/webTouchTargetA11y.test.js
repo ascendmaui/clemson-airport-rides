@@ -72,6 +72,9 @@ test('index.css declares .touch-target-min, .nav-back-btn, and hit-area expansio
   assert.match(css, /min-height:\s*var\(--touch-target-min,\s*44px\)/, 'enforces 44px min-height')
 
   // Dedicated navigation back button class
+  assert.match(css, /\.mkt-nav-links button,\s*\n\.mkt-footer button \{[^}]*min-height:\s*var\(--touch-target-min,\s*44px\)/, 'marketing nav buttons are at least 44px tall')
+  assert.match(css, /\.mkt-brand \{[^}]*min-height:\s*var\(--touch-target-min,\s*44px\)/, 'marketing brand control is at least 44px tall')
+
   assert.match(css, /\.nav-back-btn\s*\{/, 'defines .nav-back-btn')
   assert.match(css, /width:\s*44px;/, 'nav-back-btn sets 44px width')
   assert.match(css, /height:\s*44px;/, 'nav-back-btn sets 44px height')

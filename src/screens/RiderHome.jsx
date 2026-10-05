@@ -179,7 +179,7 @@ export function RiderHome({ riderName = 'John' }) {
             type="button"
             className="pressable"
             onClick={() => goSearch()}
-            style={{ width: '100%', padding: '10px', fontSize: 13, fontWeight: 600, color: 'var(--orange)' }}
+            style={{ width: '100%', minHeight: 44, padding: '10px', fontSize: 13, fontWeight: 600, color: 'var(--orange)' }}
           >
             Search destination →
           </button>

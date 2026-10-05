@@ -19,6 +19,7 @@ import { RIDE_STYLES, isProfileComplete, profileFieldError, missingProfileFields
 import { buildFieldA11yProps, getFieldErrorProps } from '../lib/formA11y.js'
 import { takeAuthCallbackError } from '../lib/googleWebAuth'
 import { AccessibleAlert } from '../components/AccessibleAlert'
+import { textLinkHitStyle } from '../lib/touchA11y'
 
 const fieldStyle = {
   width: '100%',
@@ -255,7 +256,7 @@ export function SignInScreen() {
         <button type="button" className="pressable" onClick={() => {
           const { params } = getHashRoute()
           navigate('sign-up', params)
-        }} style={{ color: 'var(--purple)', fontWeight: 700 }}>
+        }} style={textLinkHitStyle({ color: 'var(--purple)', fontWeight: 700 })}>
           Create an account
         </button>
       </p>
@@ -265,7 +266,7 @@ export function SignInScreen() {
 }
 
 function PolicyLinks() {
-  const link = { color: 'var(--purple)', fontWeight: 700 }
+  const link = textLinkHitStyle({ color: 'var(--purple)', fontWeight: 700 })
   return (
     <p style={{ marginTop: 10, fontSize: 13, color: 'var(--ink-tertiary)', textAlign: 'center' }}>
       <button type="button" className="pressable" onClick={() => navigate('privacy')} style={link}>Privacy</button>
