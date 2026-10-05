@@ -95,7 +95,14 @@ export default function DiscoverScreen() {
           {HEAT_WINDOWS.map((item: { id: string; label: string }) => {
             const on = item.id === windowId
             return (
-              <Pressable key={item.id} onPress={() => setWindowId(item.id)} style={[styles.chip, { backgroundColor: on ? colors.fill : colors.card }]}>
+              <Pressable
+                key={item.id}
+                onPress={() => setWindowId(item.id)}
+                accessibilityRole="button"
+                accessibilityLabel={`${item.label} demand`}
+                accessibilityState={{ selected: on }}
+                style={[styles.chip, { backgroundColor: on ? colors.fill : colors.card }]}
+              >
                 <Text style={{ color: on ? colors.onAccent : colors.title, fontWeight: '800' }}>{item.label}</Text>
               </Pressable>
             )
