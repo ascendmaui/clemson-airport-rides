@@ -7,7 +7,7 @@
  * Legacy /api/help-chat, /api/support-chat, /api/support-ticket are rewritten here.
  */
 import { IC_AGREEMENT_VERSION, approvalBlockers, blockerLabel, onboardingLabel } from '../shared/driverOnboarding.js'
-import { rejectAgreementTextEdit } from '../shared/agreementSign.js'
+import { adminResendSetupBanner, rejectAgreementTextEdit } from '../shared/agreementSign.js'
 import { handleCorrectAgreement, handleEmailAgreement } from '../server/agreementHttp.js'
 import { serverIsAdmin } from '../server/adminRoster.js'
 import { selectDriverApplicationQueue, withSubmittedApplicantEmail } from '../shared/applicantEmail.js'
@@ -103,7 +103,7 @@ async function queue(sb, res, status) {
   if (error) return json(res, 500, { error: error.message })
   const ids = (apps || []).map((a) => a.profile_id)
   if (!ids.length) {
-    return json(res, 200, { applications: [], email_todo_present: false })
+    return json(res, 200, { applications: [], email_todo_present: adminResendSetupBanner(process.env) })
   }
 
   const [{ data: profiles }, vehicleResult, { data: docs }, { data: taxes }, { data: agreements }, packetRes] = await Promise.all([
@@ -176,7 +176,7 @@ async function queue(sb, res, status) {
 
   return json(res, 200, {
     applications,
-    email_todo_present: applications.some((a) => a.notify_error),
+    email_todo_present: adminResendSetupBanner(process.env),
   })
 }
 
