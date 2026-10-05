@@ -423,6 +423,88 @@ select[aria-invalid="true"]:focus-visible {
   animation: onlinePulse 2s var(--ease-soft) infinite;
 }
 
+.driver-desk-header {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  right: 16px;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.driver-desk-header__menu {
+  flex: 0 0 auto;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.72);
+  box-shadow: var(--shadow-pill);
+  font-size: 18px;
+  backdrop-filter: blur(18px) saturate(1.4);
+  -webkit-backdrop-filter: blur(18px) saturate(1.4);
+  border: 1px solid rgba(255, 255, 255, 0.55);
+}
+
+.map-type-select {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  margin: 0;
+}
+
+.driver-desk-header .map-type-select {
+  flex: 0 0 auto;
+}
+
+.driver-desk-header .map-type-select select {
+  min-width: 0;
+  max-width: 118px;
+}
+
+.driver-desk-header__earnings {
+  margin-left: auto;
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+  padding: 10px 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.72);
+  font-weight: 700;
+  font-size: 17px;
+  box-shadow: var(--shadow-pill);
+  backdrop-filter: blur(18px) saturate(1.4);
+  -webkit-backdrop-filter: blur(18px) saturate(1.4);
+  border: 1px solid rgba(255, 255, 255, 0.55);
+}
+
+.driver-desk-header__earnings button {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: inherit;
+  font-weight: 700;
+}
+
+.driver-desk-header__locate {
+  position: absolute;
+  top: 64px;
+  right: 0;
+  width: 44px;
+  height: 44px;
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: var(--shadow-pill);
+  font-weight: 800;
+  color: var(--orange);
+}
+
+.driver-desk-header .driver-shift--compact {
+  flex: 0 0 auto;
+}
+
 .driver-shift {
   display: flex;
   flex-direction: column;
