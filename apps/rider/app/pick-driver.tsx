@@ -9,7 +9,6 @@ import { ClemsonLoader } from '@/components/ClemsonLoader'
 import type { MapKind } from '@/components/mapTypes'
 import { mapKindLabel } from '@/components/mapTypes'
 import { SignInToBookSheet } from '@/components/SignInToBookSheet'
-import { Skeleton } from '@/components/Skeleton'
 import { setAuthNext } from '@/lib/authNext'
 import { useAuth } from '@/lib/auth'
 import { playTigerCue, successHaptic, tapHaptic } from '@/lib/feedback'
@@ -294,8 +293,10 @@ export default function PickDriver() {
       <View style={styles.mapWrap}>
         <CampusMap spots={[]} showHeat={false} mapType={mapType} theater gameDay={false} surge={false} pins={pins} />
         {phase === 'loading' ? (
-          <View style={styles.loader}>
-            <ClemsonLoader />
+          <View style={styles.loader} pointerEvents="none">
+            <View style={[styles.loaderCard, lift(colors, 'float')]}>
+              <ClemsonLoader />
+            </View>
           </View>
         ) : null}
         <View style={styles.kinds}>
@@ -319,7 +320,6 @@ export default function PickDriver() {
         </View>
       </View>
       <Animated.ScrollView style={[styles.listScroll, listMotion]} contentContainerStyle={styles.list} showsVerticalScrollIndicator={false}>
-        {phase === 'loading' ? <Skeleton height={72} /> : null}
         {phase === 'results' && !drivers.some((driver: OnlineDriver) => driver.online) ? (
           <View style={styles.empty}>
             <Text style={styles.emptyTitle}>{drivers.length ? 'Preferred drivers are offline' : 'Still searching'}</Text>
@@ -386,19 +386,33 @@ function makeStyles(colors: Palette) {
     mapWrap: { height: 248, marginHorizontal: 20, borderRadius: 22, overflow: 'hidden' as const },
     loader: {
       position: 'absolute' as const,
-      top: 64,
-      left: 36,
-      right: 36,
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 46,
       alignItems: 'center' as const,
-      backgroundColor: colors.tabBar,
-      borderRadius: 20,
-      paddingTop: 12,
-      paddingBottom: 14,
-      minHeight: 132,
+      justifyContent: 'center' as const,
     },
-    kinds: { position: 'absolute' as const, left: 10, bottom: 10, flexDirection: 'row' as const, gap: 6 },
-    kind: { backgroundColor: colors.card, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 5 },
-    kindOn: { backgroundColor: colors.purple },
+    loaderCard: {
+      alignItems: 'center' as const,
+      backgroundColor: colors.card,
+      borderRadius: 22,
+      borderWidth: 1,
+      borderColor: colors.border,
+      paddingHorizontal: 22,
+      paddingTop: 16,
+      paddingBottom: 14,
+    },
+    kinds: { position: 'absolute' as const, left: 12, bottom: 12, zIndex: 2, flexDirection: 'row' as const, gap: 6 },
+    kind: {
+      backgroundColor: colors.card,
+      borderRadius: 999,
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    kindOn: { backgroundColor: colors.purple, borderColor: colors.purple },
     kindText: { color: colors.link, fontSize: 11, fontWeight: '800' as const },
     kindTextOn: { color: colors.onAccent },
     listScroll: { flex: 1, marginTop: 12 },
