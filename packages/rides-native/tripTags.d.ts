@@ -53,6 +53,10 @@ export type DriverCard = {
   rideType?: string
   isSynthetic?: boolean
   promoRide?: boolean
+  offerPhase?: 'exclusive' | 'pool' | 'scheduled' | 'expired' | null
+  offerShareBps?: number | null
+  offerExpiresAt?: string | null
+  riderAvatarUrl?: string | null
 }
 
 export type FareCollection = {

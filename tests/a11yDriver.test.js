@@ -27,7 +27,6 @@ export const ALLOWLIST = new Set([
   'apps/driver/app/fleet.tsx:98',
   'apps/driver/app/fleet.tsx:102',
   'apps/driver/app/learning.tsx:166',
-  'apps/driver/app/settings/[section].tsx:163',
 ])
 
 /**

@@ -13,7 +13,6 @@ import { ensureProfile } from '../ensureProfile.js'
 import { loadGameDayMultiplier } from '../creditLots.js'
 import { studentDiscountGranted } from '../../src/lib/studentDomain.js'
 import { firstName } from '../../src/lib/scheduledRideModel.js'
-import { splitPlatformFee } from '../../src/lib/fareRates.js'
 import {
   CAMPUS_PICKUP,
   priceDriverRequest,
@@ -24,6 +23,7 @@ import { listAssignableDrivers } from '../autoAssign.js'
 import { comfortDecision, comfortEmptyMessage } from '../comfortMatch.js'
 import { insertTripEvent } from '../tripEvents.js'
 import { notifyDriverOffer } from '../driverOfferAlerts.js'
+import { exclusiveOfferPatch, netCentsForShare, poolOfferPatch, EXCLUSIVE_SHARE_BPS, POOL_SHARE_BPS } from '../../packages/rides-native/offerLadder.js'
 import { billingForPricedRide } from '../rideBilling.js'
 import { resolveOfferedTier, vehicleServesComfort } from '../../shared/rideOptions.js'
 import { isSimulatedDriverId } from '../../packages/rides-native/simulatedDrivers.js'
@@ -200,7 +200,20 @@ export default async function handler(req, res, deps = {}) {
     })
   }
 
-  const split = splitPlatformFee(priced.fareCents)
+  const ladderPatch = offerDriverId ? exclusiveOfferPatch() : poolOfferPatch(new Date())
+  const ladderShare = offerDriverId ? EXCLUSIVE_SHARE_BPS : POOL_SHARE_BPS
+  const ladderNet = netCentsForShare(priced.fareCents, ladderShare)
+  const split = {
+    platformFeeCents: Math.max(0, priced.fareCents - ladderNet),
+    driverEarningsCents: ladderNet,
+  }
+  let riderAvatarUrl = null
+  try {
+    const avatar = await sb.from('profiles').select('avatar_url').eq('id', user.id).maybeSingle()
+    riderAvatarUrl = typeof avatar?.data?.avatar_url === 'string' ? avatar.data.avatar_url : null
+  } catch {
+    riderAvatarUrl = null
+  }
   let tigerHeat = null
   try {
     tigerHeat = await reserveTigerHeatOffer({
@@ -256,6 +269,8 @@ export default async function handler(req, res, deps = {}) {
       purpose: 'planned',
       preferred_driver_id: autoAssign ? null : driverId,
       offer_driver_id: offerDriverId || null,
+      ...ladderPatch,
+      ...(riderAvatarUrl ? { rider_avatar_url: riderAvatarUrl } : {}),
       ...(assignQueue ? { auto_assign_queue: assignQueue } : {}),
       match: autoAssign ? 'auto' : 'open',
       offer_preference: !autoAssign

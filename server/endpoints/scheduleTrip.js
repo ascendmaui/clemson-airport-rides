@@ -11,6 +11,7 @@ import { loadGameDayMultiplier } from '../creditLots.js'
 import { studentDiscountGranted } from '../../src/lib/studentDomain.js'
 import { airportCodeForPlace, firstName } from '../../src/lib/scheduledRideModel.js'
 import { splitPlatformFee } from '../../src/lib/fareRates.js'
+import { netCentsForShare, SCHEDULED_SHARE_BPS, scheduledOfferPatch } from '../../packages/rides-native/offerLadder.js'
 import {
   AIRPORT_DROPOFFS,
   CAMPUS_PICKUP,
@@ -169,8 +170,11 @@ export default async function handler(req, res, deps = {}) {
     })
   }
 
-  const split = splitPlatformFee(priced.fareCents)
   const scheduledFor = scheduled ? when.toISOString() : null
+  const scheduledNet = scheduledFor ? netCentsForShare(priced.fareCents, SCHEDULED_SHARE_BPS) : null
+  const split = scheduledNet == null
+    ? splitPlatformFee(priced.fareCents)
+    : { platformFeeCents: Math.max(0, priced.fareCents - scheduledNet), driverEarningsCents: scheduledNet }
   const weekdays = Array.isArray(body.weekdays)
     ? body.weekdays.filter((day) => typeof day === 'string').slice(0, 7)
     : []
@@ -201,6 +205,7 @@ export default async function handler(req, res, deps = {}) {
       wait_minutes: nearOffer?.waitMinutes ?? null,
       slot_minutes_out: matchedSlot.minutesOut,
     } : {}),
+    ...(scheduledFor ? scheduledOfferPatch() : {}),
   }
   const row = {
     rider_id: user.id,

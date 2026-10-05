@@ -9,10 +9,10 @@ import { oneParam } from '@/lib/oneParam'
 import { useAuth } from '@/lib/auth'
 import { registerDriverPush, type PushState } from '@/lib/push'
 import { supabase } from '@/lib/supabase'
-import { useTheme, type DisplayMode, type NavApp } from '@/lib/theme'
+import { useTheme, type DisplayMode, type NavApp, type RideAlertMode, type RideAlertTier } from '@/lib/theme'
 import { loadDriverProfile } from 'rides-native/driverDesk'
 
-const SECTIONS = ['display', 'privacy', 'address', 'accessibility', 'communication', 'navigation', 'sounds'] as const
+const SECTIONS = ['display', 'privacy', 'address', 'accessibility', 'communication', 'navigation', 'sounds', 'auto-accept'] as const
 type Section = (typeof SECTIONS)[number]
 
 function isSection(value: string): value is Section {
@@ -35,6 +35,8 @@ function sectionTitle(section: Section): string {
       return 'Navigation'
     case 'sounds':
       return 'Sounds and voice'
+    case 'auto-accept':
+      return 'Auto-accept'
     default: {
       const unknown: never = section
       return unknown
@@ -123,22 +125,13 @@ export default function SettingsSection() {
               {push?.detail || 'Checking notification permission…'}
             </Text>
             <Text style={{ color: colors.inkSecondary, lineHeight: 20 }}>
-              Offers still appear in the queue while you are online and this app is open.
+              While you are online with the app open, a new request plays in the app with sound and vibration. Asleep, locked, or signed out, the same request is a system notification. That lock-screen path needs an Expo access token on the server plus APNs for iPhone and FCM for Android on the Expo project. Those keys are not in the app, so a saved push token does not by itself prove a locked phone will toast.
             </Text>
           </Card>
         ) : null}
         {section === 'navigation' ? <NavChoices /> : null}
-        {section === 'sounds' ? (
-          <Card>
-            <View style={styles.row}>
-              <Text style={{ color: colors.ink, fontWeight: '800', flex: 1 }}>Request chime</Text>
-              <Toggle on={theme.sounds} onPress={() => theme.setSounds(!theme.sounds)} label="Request chime" />
-            </View>
-            <Text style={{ color: colors.inkSecondary, lineHeight: 20 }}>
-              The chime stays silent when the phone is on silent. Haptics still fire for new requests.
-            </Text>
-          </Card>
-        ) : null}
+        {section === 'sounds' ? <SoundChoices /> : null}
+        {section === 'auto-accept' ? <AutoAcceptChoices /> : null}
         {error ? <ErrorText>{error}</ErrorText> : null}
       </FadeIn>
     </StackPage>
@@ -164,6 +157,7 @@ function ChoiceCards<T extends string>({
             key={option.id}
             onPress={() => onChange(option.id)}
             accessibilityRole="button"
+            accessibilityLabel={option.label}
             accessibilityState={{ selected: on }}
           >
             <Card style={{ borderColor: on ? colors.orange : colors.border, borderWidth: on ? 1.5 : StyleSheet.hairlineWidth }}>
@@ -176,6 +170,150 @@ function ChoiceCards<T extends string>({
           </Pressable>
         )
       })}
+    </>
+  )
+}
+
+const ALERT_MODES: { id: RideAlertMode; label: string; body: string }[] = [
+  { id: 'chime_vibrate', label: 'Chime and vibrate', body: 'Sound plus vibration.' },
+  { id: 'chime', label: 'Chime only', body: 'Sound, no vibration.' },
+  { id: 'vibrate', label: 'Vibrate only', body: 'A pulse, no sound.' },
+  { id: 'silent', label: 'Silent', body: 'The card still appears.' },
+]
+
+const ALERT_TIERS: { id: RideAlertTier; label: string }[] = [
+  { id: 'standard', label: 'Standard' },
+  { id: 'wait', label: 'Wait & Save' },
+  { id: 'comfort', label: 'Extra Comfort' },
+]
+
+function usePersistDriverAlerts() {
+  const { user } = useAuth()
+  const { rideAlerts, autoAccept } = useTheme()
+  useEffect(() => {
+    if (!user || !supabase) return undefined
+    let cancel = false
+    supabase.from('profiles').select('notification_prefs').eq('id', user.id).maybeSingle().then((res: { data?: { notification_prefs?: object } | null; error?: { message?: string } | null }) => {
+      if (cancel || res.error) return null
+      const next = { ...(res.data?.notification_prefs || {}), ride_alerts: rideAlerts, auto_accept: autoAccept }
+      return supabase.from('profiles').update({ notification_prefs: next }).eq('id', user.id)
+    }).catch(() => null)
+    return () => {
+      cancel = true
+    }
+  }, [autoAccept, rideAlerts, user])
+}
+
+function SoundChoices() {
+  const theme = useTheme()
+  const { colors } = theme
+  usePersistDriverAlerts()
+  return (
+    <>
+      <Card>
+        <View style={styles.row}>
+          <Text style={{ color: colors.ink, fontWeight: '800', flex: 1 }}>Request chime</Text>
+          <Toggle on={theme.sounds} onPress={() => theme.setSounds(!theme.sounds)} label="Request chime" />
+        </View>
+        <Text style={{ color: colors.inkSecondary, lineHeight: 20 }}>
+          Turn the chime off to mute every ride type. Vibration still follows the choice below. The phone’s silent switch mutes the chime.
+        </Text>
+      </Card>
+      {ALERT_TIERS.map((tier) => (
+        <View key={tier.id} style={{ gap: 8 }}>
+          <Text style={{ color: colors.purple, fontWeight: '800' }}>{tier.label}</Text>
+          <ChoiceCards
+            options={ALERT_MODES}
+            value={theme.rideAlerts[tier.id]}
+            onChange={(mode) => theme.setRideAlert(tier.id, mode)}
+          />
+        </View>
+      ))}
+    </>
+  )
+}
+
+const MILE_CHOICES = [1, 2, 3, 5, 10]
+const HOURLY_CHOICES = [15, 20, 25, 30, 40]
+
+function AutoAcceptChoices() {
+  const theme = useTheme()
+  const { colors, autoAccept, setAutoAccept } = theme
+  usePersistDriverAlerts()
+  return (
+    <>
+      <Text style={{ color: colors.inkSecondary, lineHeight: 20 }}>
+        Online requests that match these rules are accepted for you. Favorite riders match even when the other bars are not met. Distance and hourly rate both have to pass when both are on.
+      </Text>
+      <Card>
+        <View style={styles.row}>
+          <Text style={{ color: colors.ink, fontWeight: '800', flex: 1 }}>Within distance</Text>
+          <Toggle on={autoAccept.distanceEnabled} onPress={() => setAutoAccept({ distanceEnabled: !autoAccept.distanceEnabled })} label="Auto-accept by distance" />
+        </View>
+        <View style={styles.chips}>
+          {MILE_CHOICES.map((miles) => {
+            const on = autoAccept.maxPickupMiles === miles
+            return (
+              <Pressable
+                key={miles}
+                onPress={() => setAutoAccept({ maxPickupMiles: miles })}
+                accessibilityRole="button"
+                accessibilityLabel={`Auto-accept within ${miles} miles`}
+                accessibilityState={{ selected: on }}
+                style={[styles.chip, { backgroundColor: on ? colors.orange : colors.segment }]}
+              >
+                <Text style={{ color: on ? '#fff' : colors.title, fontWeight: '800' }}>{miles} mi</Text>
+              </Pressable>
+            )
+          })}
+        </View>
+      </Card>
+      <Card>
+        <View style={styles.row}>
+          <Text style={{ color: colors.ink, fontWeight: '800', flex: 1 }}>Hourly rate</Text>
+          <Toggle on={autoAccept.hourlyEnabled} onPress={() => setAutoAccept({ hourlyEnabled: !autoAccept.hourlyEnabled })} label="Auto-accept by hourly rate" />
+        </View>
+        <View style={styles.chips}>
+          {HOURLY_CHOICES.map((dollars) => {
+            const on = autoAccept.minHourlyCents === dollars * 100
+            return (
+              <Pressable
+                key={dollars}
+                onPress={() => setAutoAccept({ minHourlyCents: dollars * 100 })}
+                accessibilityRole="button"
+                accessibilityLabel={`Auto-accept at ${dollars} dollars per hour or more`}
+                accessibilityState={{ selected: on }}
+                style={[styles.chip, { backgroundColor: on ? colors.purple : colors.segment }]}
+              >
+                <Text style={{ color: on ? '#fff' : colors.title, fontWeight: '800' }}>${dollars}/hr</Text>
+              </Pressable>
+            )
+          })}
+        </View>
+      </Card>
+      <Card>
+        <View style={styles.row}>
+          <Text style={{ color: colors.ink, fontWeight: '800', flex: 1 }}>Favorite riders</Text>
+          <Toggle on={autoAccept.favoritesEnabled} onPress={() => setAutoAccept({ favoritesEnabled: !autoAccept.favoritesEnabled })} label="Auto-accept favorite riders" />
+        </View>
+        <Text style={{ color: colors.inkSecondary, lineHeight: 20 }}>
+          Save a rider from their request card. Those riders are accepted as soon as the offer arrives.
+        </Text>
+        {autoAccept.favoriteRiders.length === 0 ? (
+          <Text style={{ color: colors.ink, fontWeight: '700' }}>No favorite riders yet.</Text>
+        ) : autoAccept.favoriteRiders.map((rider) => (
+          <View key={rider.id} style={styles.row}>
+            <Text style={{ color: colors.title, fontWeight: '800', flex: 1 }}>{rider.name}</Text>
+            <Pressable
+              onPress={() => setAutoAccept({ favoriteRiders: autoAccept.favoriteRiders.filter((row) => row.id !== rider.id) })}
+              accessibilityRole="button"
+              accessibilityLabel={`Remove ${rider.name} from favorites`}
+            >
+              <Text style={{ color: colors.orange, fontWeight: '800' }}>Remove</Text>
+            </Pressable>
+          </View>
+        ))}
+      </Card>
     </>
   )
 }
@@ -199,4 +337,6 @@ function NavChoices() {
 const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   choice: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  chip: { borderRadius: 999, paddingHorizontal: 12, paddingVertical: 8 },
 })

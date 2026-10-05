@@ -5,13 +5,29 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { clemsonMiamiDriverNotification } from '../../../packages/rides-native/clemsonMiamiPromo.js'
 import { formatEasternWhen } from '../../../shared/nearTermSlots.js'
 
+let appActive = true
+let driverOnline = false
+
+/** In-app sound and vibration replace the system toast while the driver is online and the app is open. */
+export function setRideAlertSurface(patch: { active?: boolean; online?: boolean }) {
+  if (patch.active != null) appActive = patch.active
+  if (patch.online != null) driverOnline = patch.online
+}
+
+export function inAppRideAlert() {
+  return appActive && driverOnline
+}
+
 Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowBanner: true,
-    shouldShowList: true,
-    shouldPlaySound: true,
-    shouldSetBadge: false,
-  }),
+  handleNotification: async () => {
+    const inApp = inAppRideAlert()
+    return {
+      shouldShowBanner: !inApp,
+      shouldShowList: true,
+      shouldPlaySound: !inApp,
+      shouldSetBadge: false,
+    }
+  },
 })
 
 export const RIDE_CHANNEL_ID = 'ride-requests'

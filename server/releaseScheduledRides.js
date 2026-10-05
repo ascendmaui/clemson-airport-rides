@@ -4,6 +4,7 @@ import { loadRiderMatchPreferences } from './riderPass.js'
 import { notifyDriverOffer } from './driverOfferAlerts.js'
 import { ACTIONABLE_LEAD_MS } from '../src/lib/scheduledRideModel.js'
 import { isNearTermTrip } from '../shared/nearTermSlots.js'
+import { exclusiveOfferPatch, poolOfferPatch } from '../packages/rides-native/offerLadder.js'
 
 /** Reuse live dispatch unchanged. Preserve the reservation time in metadata. */
 export async function releaseScheduledRides(sb, {
@@ -34,14 +35,16 @@ export async function releaseScheduledRides(sb, {
       if (eligible.error) throw new Error(eligible.error)
       const queue = eligible.drivers.map(d => d.id).filter(id => id !== trip.rider_id)
       if (dryRun) { result.wouldRelease++; continue }
+      const target = expired ? null : queue[0] || null
       const metadata = {
         ...trip.metadata,
         scheduled_pickup_at: trip.pickup_at,
         scheduled_released_at: now.toISOString(),
         kind: 'driver_request',
-        offer_driver_id: expired ? null : queue[0] || null,
+        offer_driver_id: target,
         auto_assign_queue: queue,
-        match: queue.length ? 'auto' : 'open',
+        match: target ? 'auto' : 'open',
+        ...(expired ? {} : (target ? exclusiveOfferPatch() : poolOfferPatch(now))),
       }
       // Compare-and-set: cancellation, early acceptance, and concurrent sweeps win safely.
       const updated = await unchangedOfferQuery(sb.from('trips').update({

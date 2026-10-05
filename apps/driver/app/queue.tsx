@@ -1,6 +1,6 @@
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { Image, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { FarePanel } from '@/components/FarePanel'
 import { BackButton, Card, ErrorText, Primary, Tag } from '@/components/chrome'
@@ -26,13 +26,13 @@ import {
   preferredRequestNote,
   queueEmptyCopy,
   queueFilters,
-  scheduledQueueTitle,
   statusHeadline,
   tagTone,
   COMFORT_FLEET_NOTICE,
   type DriverCard,
   type QueueFilter,
 } from 'rides-native/tripTags'
+import { formatHourlyRate, ladderOfferNet, offerHourly } from 'rides-native/offerLadder.js'
 function useQueueStyles() {
   const { colors } = useTheme()
   return useMemo(() => queueStyles(colors), [colors])
@@ -55,11 +55,33 @@ function QueueCard({
   const active = card.status === 'accepted' || card.status === 'arriving'
   const preferredNote = preferredRequestNote(card)
   const styles = useQueueStyles()
+  const ladder = ladderOfferNet(card)
+  const hourly = formatHourlyRate(offerHourly(card).hourlyCents)
   return (
     <Card>
-      <Text style={styles.cardTitle}>{statusHeadline(card.status)}</Text>
-      <Text style={styles.fare}>{formatCents(card.driverNetCents)} net</Text>
-      <Text style={styles.copy}>{card.firstName} · {card.pickupLabel} → {card.dropoffLabel}</Text>
+      <View style={styles.riderRow}>
+        {card.riderAvatarUrl ? (
+          <Image
+            source={{ uri: card.riderAvatarUrl }}
+            style={styles.avatar}
+            accessibilityIgnoresInvertColors
+            accessibilityLabel={`${card.firstName || 'Rider'} profile photo`}
+          />
+        ) : (
+          <View style={[styles.avatar, styles.avatarFallback]}>
+            <Text style={styles.avatarLetter}>{(card.firstName || 'R').slice(0, 1)}</Text>
+          </View>
+        )}
+        <View style={{ flex: 1 }}>
+          <Text style={styles.cardTitle}>{card.firstName}</Text>
+          <Text style={styles.copy}>{statusHeadline(card.status)}</Text>
+        </View>
+      </View>
+      <Text style={styles.fare}>{formatCents(ladder?.netCents ?? card.driverNetCents)} net</Text>
+      <Text style={styles.note}>{ladder?.subtext || 'You net 80%'}</Text>
+      <Text style={styles.copy}>{hourly}</Text>
+      <Text style={styles.copy}>Pickup · {card.pickupLabel}</Text>
+      <Text style={styles.copy}>Drop-off · {card.dropoffLabel}</Text>
       {card.pickupAt ? <Text style={styles.copy}>{formatPickupAt(card.pickupAt)}</Text> : null}
       {card.passengers > 1 ? <Text style={styles.copy}>{card.passengers} riders · capacity check is your seat count</Text> : null}
       <View style={styles.tags}>
@@ -122,6 +144,7 @@ export default function QueueScreen() {
   const [passed, setPassed] = useState<string[]>([])
   const [rows, setRows] = useState<DriverCard[]>([])
   const [filter, setFilter] = useState<QueueFilter>('all')
+  const [board, setBoard] = useState<'open' | 'scheduled'>('open')
   const [busyId, setBusyId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [warning, setWarning] = useState<string | null>(null)
@@ -233,8 +256,9 @@ export default function QueueScreen() {
   }
 
   const visible = rows.filter((card: DriverCard) => matchesQueueFilter(card, filter) && !passed.includes(card.id))
-  const scheduled = visible.filter((card: DriverCard) => card.status === 'scheduled')
-  const live = visible.filter((card: DriverCard) => card.status !== 'scheduled')
+  const scheduled = visible.filter((card: DriverCard) => card.status === 'scheduled' || card.offerPhase === 'scheduled')
+  const live = visible.filter((card: DriverCard) => card.status !== 'scheduled' && card.offerPhase !== 'scheduled')
+  const shown = board === 'scheduled' ? scheduled : live
   const empty = queueEmptyCopy(filter)
 
   return (
@@ -259,6 +283,29 @@ export default function QueueScreen() {
           {canSeeOffers
             ? 'Chosen-driver requests, open matches, student discounts, game-day rides, and scheduled weekend or party pickups.'
             : 'Ride requests and scheduled pickups will appear here once your driver application is approved.'}
+        </Text>
+
+        <View style={[styles.filters, styles.board]}>
+          {([
+            ['open', 'Open pool'],
+            ['scheduled', 'Scheduled'],
+          ] as const).map(([id, label]) => (
+            <Pressable
+              key={id}
+              onPress={() => setBoard(id)}
+              style={[styles.filter, board === id && styles.filterOn]}
+              accessibilityRole="tab"
+              accessibilityLabel={id === 'scheduled' ? 'Scheduled rides at 75 percent' : 'Open pool'}
+              accessibilityState={{ selected: board === id }}
+            >
+              <Text style={[styles.filterText, board === id && styles.filterTextOn]}>{label}</Text>
+            </Pressable>
+          ))}
+        </View>
+        <Text style={styles.copy}>
+          {board === 'scheduled'
+            ? 'Scheduled rides stay on this tab. You net 75%.'
+            : 'The first offer nets 80% for 15 seconds, then the pool nets 70% for two minutes.'}
         </Text>
 
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filters}>
@@ -304,24 +351,17 @@ export default function QueueScreen() {
                 </Pressable>
               ))}
             </ScrollView>
-            {visible.length === 0 ? (
+            {shown.length === 0 ? (
               <Card>
-                <Text style={styles.cardTitle}>{empty.title}</Text>
-                <Text style={styles.copy}>{empty.body}</Text>
+                <Text style={styles.cardTitle}>{board === 'scheduled' ? 'No scheduled rides' : empty.title}</Text>
+                <Text style={styles.copy}>
+                  {board === 'scheduled'
+                    ? 'Rides booked ahead show up on this tab at 75%.'
+                    : empty.body}
+                </Text>
               </Card>
             ) : null}
-            {live.length > 0 ? <Text style={styles.section}>Open now</Text> : null}
-            {live.map((card: DriverCard) => (
-              <QueueCard key={card.id} card={card} busy={busyId === card.id} onAccept={() => onAccept(card)} onDecline={() => onDecline(card)} onOpen={() => { if (!isSyntheticOffer(card)) router.push({ pathname: '/trip', params: { id: card.id } }) }} />
-            ))}
-            {filter === 'weekend_party' && scheduled.length === 0 && live.length > 0 ? (
-              <Card>
-                <Text style={styles.cardTitle}>No scheduled weekend pickups</Text>
-                <Text style={styles.copy}>Airport and campus rides booked ahead for Friday night through Sunday show up in this list.</Text>
-              </Card>
-            ) : null}
-            {scheduled.length > 0 ? <Text style={styles.section}>{scheduledQueueTitle(filter)}</Text> : null}
-            {scheduled.map((card: DriverCard) => (
+            {shown.map((card: DriverCard) => (
               <QueueCard key={card.id} card={card} busy={busyId === card.id} onAccept={() => onAccept(card)} onDecline={() => onDecline(card)} onOpen={() => { if (!isSyntheticOffer(card)) router.push({ pathname: '/trip', params: { id: card.id } }) }} />
             ))}
           </>
@@ -340,6 +380,11 @@ function queueStyles(colors: Palette) {
     copy: { color: colors.inkSecondary, fontSize: 14, lineHeight: 20 },
     note: { color: colors.orange, fontSize: 13, lineHeight: 18, fontWeight: '700' },
     filters: { gap: 8 },
+    board: { flexDirection: 'row' },
+    riderRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+    avatar: { width: 44, height: 44, borderRadius: 22 },
+    avatarFallback: { backgroundColor: colors.purple, alignItems: 'center', justifyContent: 'center' },
+    avatarLetter: { color: '#fff', fontWeight: '800', fontSize: 18 },
     filter: { backgroundColor: colors.card, borderRadius: 999, paddingHorizontal: 14, paddingVertical: 8 },
     filterOn: { backgroundColor: colors.fill },
     filterText: { color: colors.title, fontWeight: '800' },

@@ -6,12 +6,29 @@ import { CLEMSON_LAT, CLEMSON_LNG, isDaylight } from '@/lib/solar'
 
 export type DisplayMode = 'auto' | 'light' | 'dark'
 export type NavApp = 'apple' | 'google'
+export type RideAlertTier = 'standard' | 'wait' | 'comfort'
+export type RideAlertMode = 'chime_vibrate' | 'chime' | 'vibrate' | 'silent'
+
+export type FavoriteRider = { id: string; name: string }
+
+export type AutoAcceptPrefs = {
+  distanceEnabled: boolean
+  maxPickupMiles: number
+  hourlyEnabled: boolean
+  minHourlyCents: number
+  favoritesEnabled: boolean
+  favoriteRiders: FavoriteRider[]
+}
+
+type RideAlerts = Record<RideAlertTier, RideAlertMode>
 
 type Prefs = {
   displayMode: DisplayMode
   earningsPrivate: boolean
   sounds: boolean
   navApp: NavApp
+  rideAlerts: RideAlerts
+  autoAccept: AutoAcceptPrefs
 }
 
 type ThemeValue = {
@@ -25,15 +42,65 @@ type ThemeValue = {
   setSounds: (value: boolean) => void
   navApp: NavApp
   setNavApp: (value: NavApp) => void
+  rideAlerts: RideAlerts
+  setRideAlert: (tier: RideAlertTier, mode: RideAlertMode) => void
+  autoAccept: AutoAcceptPrefs
+  setAutoAccept: (patch: Partial<AutoAcceptPrefs>) => void
   solarPlace: string
 }
 
 const PREFS_KEY = 'driver.ui.prefs'
+const DEFAULT_ALERTS: RideAlerts = { standard: 'chime_vibrate', wait: 'chime_vibrate', comfort: 'chime_vibrate' }
+const DEFAULT_AUTO: AutoAcceptPrefs = {
+  distanceEnabled: false,
+  maxPickupMiles: 3,
+  hourlyEnabled: false,
+  minHourlyCents: 2000,
+  favoritesEnabled: false,
+  favoriteRiders: [],
+}
 const DEFAULT_PREFS: Prefs = {
   displayMode: 'auto',
   earningsPrivate: false,
   sounds: true,
   navApp: 'apple',
+  rideAlerts: DEFAULT_ALERTS,
+  autoAccept: DEFAULT_AUTO,
+}
+
+function isRideMode(value: unknown): value is RideAlertMode {
+  return value === 'chime_vibrate' || value === 'chime' || value === 'vibrate' || value === 'silent'
+}
+
+function readAlerts(raw: unknown): RideAlerts {
+  const source = raw && typeof raw === 'object' ? raw as Partial<Record<RideAlertTier, unknown>> : {}
+  return {
+    standard: isRideMode(source.standard) ? source.standard : DEFAULT_ALERTS.standard,
+    wait: isRideMode(source.wait) ? source.wait : DEFAULT_ALERTS.wait,
+    comfort: isRideMode(source.comfort) ? source.comfort : DEFAULT_ALERTS.comfort,
+  }
+}
+
+function readAuto(raw: unknown): AutoAcceptPrefs {
+  const source = raw && typeof raw === 'object' ? raw as Partial<AutoAcceptPrefs> : {}
+  const miles = Number(source.maxPickupMiles)
+  const hourly = Number(source.minHourlyCents)
+  const riders = Array.isArray(source.favoriteRiders)
+    ? source.favoriteRiders.flatMap((row) => {
+      const id = typeof row?.id === 'string' ? row.id.trim() : ''
+      if (!id) return []
+      const name = typeof row?.name === 'string' && row.name.trim() ? row.name.trim() : 'Rider'
+      return [{ id, name }]
+    }).slice(0, 50)
+    : []
+  return {
+    distanceEnabled: Boolean(source.distanceEnabled),
+    maxPickupMiles: Number.isFinite(miles) ? Math.min(50, Math.max(0.5, miles)) : DEFAULT_AUTO.maxPickupMiles,
+    hourlyEnabled: Boolean(source.hourlyEnabled),
+    minHourlyCents: Number.isFinite(hourly) ? Math.min(50000, Math.max(0, Math.round(hourly))) : DEFAULT_AUTO.minHourlyCents,
+    favoritesEnabled: Boolean(source.favoritesEnabled),
+    favoriteRiders: riders,
+  }
 }
 
 const ThemeContext = createContext<ThemeValue | null>(null)
@@ -55,6 +122,8 @@ function readPrefs(raw: string | null): Prefs {
       earningsPrivate: Boolean(parsed.earningsPrivate),
       sounds: parsed.sounds === false ? false : true,
       navApp: isNavApp(parsed.navApp) ? parsed.navApp : DEFAULT_PREFS.navApp,
+      rideAlerts: readAlerts(parsed.rideAlerts),
+      autoAccept: readAuto(parsed.autoAccept),
     }
   } catch {
     return DEFAULT_PREFS
@@ -126,6 +195,14 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     setSounds: (sounds: boolean) => update({ sounds }),
     navApp: prefs.navApp,
     setNavApp: (navApp: Prefs['navApp']) => update({ navApp }),
+    rideAlerts: prefs.rideAlerts,
+    setRideAlert: (tier: RideAlertTier, mode: RideAlertMode) => update({
+      rideAlerts: { ...prefs.rideAlerts, [tier]: mode },
+    }),
+    autoAccept: prefs.autoAccept,
+    setAutoAccept: (patch: Partial<AutoAcceptPrefs>) => update({
+      autoAccept: { ...prefs.autoAccept, ...patch },
+    }),
     solarPlace: coords ? 'Last known location' : 'Clemson, SC',
   }
 

@@ -2,11 +2,12 @@ import { Stack, useRouter } from 'expo-router'
 import * as Notifications from 'expo-notifications'
 import { StatusBar } from 'expo-status-bar'
 import { useEffect, type ReactNode } from 'react'
+import { AppState } from 'react-native'
 import { BootScreen } from '@/components/BootScreen'
 import { AuthProvider, useAuth } from '@/lib/auth'
 import { FeedbackProvider } from '@/lib/feedback'
 import { OfferBridge } from '@/components/OfferBridge'
-import { registerDriverPush } from '@/lib/push'
+import { registerDriverPush, setRideAlertSurface } from '@/lib/push'
 import { supabase } from '@/lib/supabase'
 import { ThemeProvider, useTheme } from '@/lib/theme'
 import { ProfileRequiredGate } from 'rides-native/PartyScreens'
@@ -27,7 +28,17 @@ function PushBridge() {
   const { user } = useAuth()
   const router = useRouter()
   useEffect(() => {
-    if (!user) return undefined
+    setRideAlertSurface({ active: AppState.currentState === 'active' })
+    const sub = AppState.addEventListener('change', (state: string) => {
+      setRideAlertSurface({ active: state === 'active' })
+    })
+    return () => sub.remove()
+  }, [])
+  useEffect(() => {
+    if (!user) {
+      setRideAlertSurface({ online: false })
+      return undefined
+    }
     registerDriverPush(supabase, user.id).catch(() => {})
     const sub = Notifications.addNotificationResponseReceivedListener((response: Notifications.NotificationResponse) => {
       const tripId = response.notification.request.content.data?.tripId

@@ -52,8 +52,14 @@ test('rebroadcast, unpaid holds, future pickups, and payment holds are not cance
     offer_expires_at: new Date(now.getTime() - 1000).toISOString(),
     metadata: { kind: 'driver_request', offer_driver_id: 'driver-1' },
   })
-  assert.equal(isStaleLiveOffer(targeted, now), true)
+  assert.equal(isStaleLiveOffer(targeted, now), false)
+  assert.equal(isStaleLiveOffer(targeted, new Date(now.getTime() + 120_000)), true)
   assert.equal(shouldExpireStaleLiveOffer(targeted, now), false)
+  const pooled = stadium({
+    offer_expires_at: new Date(now.getTime() - 1000).toISOString(),
+    metadata: { kind: 'driver_request', offer_phase: 'pool' },
+  })
+  assert.equal(isStaleLiveOffer(pooled, now), true)
   assert.equal(shouldExpireStaleLiveOffer(stadium({
     deposit_cents: 1700,
     rider_note: 'airport',
