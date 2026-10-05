@@ -2,6 +2,16 @@
 
 Persistent knowledge base for recurring failures. When a matching issue appears, apply the saved fix first.
 
+## 2026-10-05 — Shared portrait and demo fleet parity tests
+
+- **What was wrong:** `shared/driverPortrait.test.js` checked one catalog headshot and did not cover the URL fallback (fleet lookup, `@128` photo, then the large photo, then initials for a blank real avatar). `shared/demoFleet.test.js` checked `bookable: false` per car and did not lock the bookable tier list to Standard, Wait & Save, and Extra Comfort, or the single unbookable wedge demo car.
+- **What changed:** Extended those two test files. No production helper behavior changed.
+- **Files touched:**
+  - `shared/driverPortrait.test.js`
+  - `shared/demoFleet.test.js`
+  - `docs/FIXES.md`
+- **Verified:** `node --experimental-strip-types --test shared/driverPortrait.test.js shared/demoFleet.test.js`
+
 ## 2026-10-02 — GA96: GA audit & tests - abandoned checkout resilience, hold TTL NaN safety, and RPC direct update fallbacks
 
 - **Track / machine:** Clemson RIDES · MacBook Max · `agy/ga-audit-abandoned-checkout-resilience-ga96`

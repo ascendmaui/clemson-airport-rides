@@ -50,3 +50,79 @@ test('a demo driver resolves to that driver headshot', () => {
   assert.match(portrait.url, /^\/demo-drivers\/01-marcus@128\.webp$/)
   assert.equal(nameInitials('Mei'), 'M')
 })
+
+test('a demo id with no photo falls back to the fleet headshot', () => {
+  const portrait = resolveDriverPortrait({ id: 'demo-jenna', full_name: 'Not Jenna' })
+  assert.equal(portrait.kind, 'photo')
+  assert.equal(portrait.isDemo, true)
+  assert.equal(portrait.initials, null)
+  assert.equal(portrait.url, '/demo-drivers/02-jenna@128.webp')
+  const markup = renderDriverPortrait({ id: 'demo-jenna' })
+  assert.match(markup, /src="\/demo-drivers\/02-jenna@128\.webp"/)
+  assert.match(markup, /data-portrait="photo"/)
+})
+
+test('a demo record falls back from a missing small headshot to the large photo', () => {
+  const largeOnly = resolveDriverPortrait({
+    id: 'demo-unlisted',
+    isDemo: true,
+    firstName: 'Ada',
+    photo: '/demo-drivers/ada.webp',
+  })
+  assert.equal(largeOnly.kind, 'photo')
+  assert.equal(largeOnly.isDemo, true)
+  assert.equal(largeOnly.url, '/demo-drivers/ada.webp')
+
+  const prefersSmall = resolveDriverPortrait({
+    id: 'demo-unlisted',
+    source: 'demo',
+    photoSmall: '/demo-drivers/ada@128.webp',
+    photo: '/demo-drivers/ada.webp',
+  })
+  assert.equal(prefersSmall.url, '/demo-drivers/ada@128.webp')
+  assert.equal(prefersSmall.isDemo, true)
+
+  const blankSmall = resolveDriverPortrait({
+    id: 'demo-unlisted',
+    isDemo: true,
+    photoSmall: '',
+    photo: '/demo-drivers/ada.webp',
+  })
+  assert.equal(blankSmall.url, '/demo-drivers/ada.webp')
+})
+
+test('a catalog demo id keeps the fleet headshot when the caller also passes a photo', () => {
+  const portrait = resolveDriverPortrait({
+    id: 'demo-marcus',
+    isDemo: true,
+    photoSmall: '/demo-drivers/other@128.webp',
+    photo: '/demo-drivers/other.webp',
+    avatar_url: 'https://cdn.example/marcus.jpg',
+  })
+  assert.equal(portrait.kind, 'photo')
+  assert.equal(portrait.isDemo, true)
+  assert.equal(portrait.url, '/demo-drivers/01-marcus@128.webp')
+})
+
+test('a real driver uses avatarUrl and a blank avatar falls back to initials', () => {
+  const camel = resolveDriverPortrait({
+    full_name: 'Amina Cole',
+    avatarUrl: 'https://cdn.example/amina.jpg',
+  })
+  assert.equal(camel.kind, 'photo')
+  assert.equal(camel.url, 'https://cdn.example/amina.jpg')
+  assert.equal(camel.isDemo, false)
+
+  const blank = resolveDriverPortrait({
+    full_name: 'Riley Quinn',
+    avatar_url: '   ',
+  })
+  assert.equal(blank.kind, 'initials')
+  assert.equal(blank.initials, 'RQ')
+  assert.equal(blank.url, null)
+  assert.equal(blank.isDemo, false)
+  const markup = renderDriverPortrait({ full_name: 'Riley Quinn', avatar_url: '   ' })
+  assert.match(markup, /data-portrait="initials"/)
+  assert.match(markup, />RQ</)
+  assert.equal(markup.includes('/demo-drivers/'), false)
+})
