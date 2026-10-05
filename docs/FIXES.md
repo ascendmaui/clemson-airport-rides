@@ -2,6 +2,18 @@
 
 Persistent knowledge base for recurring failures. When a matching issue appears, apply the saved fix first.
 
+## 2026-10-05 — Weekend/party schedule UX: passenger display and window copy
+
+- **Track / machine:** Clemson RIDES · deputy/weekend-party-schedule-ux · t1
+- **What was wrong:** `scheduleTrip` stored a passenger count but the response had no rider-facing passenger label, party-capacity message, or weekend-window sentence. "Friday night through Sunday" did not state the Eastern window (Friday 5:00 PM through Sunday) that surge and the driver Weekend filter already use. Party size was easy to misread as a fare input.
+- **What changed:** Added pure helpers for the passenger label, the 4-seat cap message (Standard, Wait & Save, Extra Comfort), and weekend-window copy. The schedule response includes them. Stored passenger parsing is unchanged. Fare, deposit, schedule-ahead 10% (1000 bps), and surge are not inputs of passenger count.
+- **Files touched:**
+  - `src/lib/schedulePartyCopy.js`
+  - `server/endpoints/scheduleTrip.js`
+  - `server/scheduleTrip.test.js`
+  - `docs/FIXES.md`
+- **Verified:** `node --experimental-strip-types --test server/scheduleTrip.test.js` (65 pass) and `tests/retiredCopy.test.js`. `npm test` passes after the new tests avoid retired fleet words.
+
 ## 2026-10-02 — GA96: GA audit & tests - abandoned checkout resilience, hold TTL NaN safety, and RPC direct update fallbacks
 
 - **Track / machine:** Clemson RIDES · MacBook Max · `agy/ga-audit-abandoned-checkout-resilience-ga96`

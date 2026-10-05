@@ -1,7 +1,20 @@
 import assert from 'node:assert/strict'
 import test, { describe, beforeEach, afterEach, mock } from 'node:test'
 import { register } from 'node:module'
-import scheduleTripHandler from './endpoints/scheduleTrip.js'
+import scheduleTripHandler, {
+  PARTY_FARE_COPY,
+  SCHEDULE_PARTY_SEAT_CAP,
+  WEEKEND_WINDOW_COPY,
+  isScheduleWeekendWindow,
+  partyCapacityMessage,
+  partyFareCopy,
+  passengerCount,
+  passengerCountLabel,
+  weekendWindowCopy,
+  weekendWindowNote,
+} from './endpoints/scheduleTrip.js'
+import { isWeekendPartyWindow } from '../packages/rides-native/tripTags.js'
+import { SCHEDULE_AHEAD_DISCOUNT_BPS, SCHEDULE_AHEAD_DISCOUNT_PCT } from '../shared/rideOptions.js'
 
 // src/lib/scheduledRides.js is a Vite module (extensionless imports, browser
 // Supabase client). The loader resolves it under Node and swaps in the mock
@@ -1265,6 +1278,226 @@ describe('scheduleTrip endpoint handler', () => {
       assert.equal(res.status, 400)
       assert.equal(tripsInserted.length, 0)
     })
+  })
+
+  describe('Passenger count display and weekend/party copy', () => {
+    const depsFor = (sb) => ({
+      user: mockStandardUser,
+      sb,
+      ensureProfile: async () => ({ ok: true }),
+      now: FROZEN_NOW.getTime(),
+    })
+
+    async function schedule(body) {
+      const { sb, tripsInserted } = createFakeSb()
+      const res = await callHandler(
+        scheduleTripHandler,
+        { method: 'POST', body },
+        depsFor(sb),
+      )
+      assert.equal(res.status, 200, JSON.stringify(res.json))
+      return { json: res.json, row: tripsInserted[0] }
+    }
+
+    function moneySnapshot(saved) {
+      const { json, row } = saved
+      return {
+        fareCents: json.fareCents,
+        depositCents: json.depositCents,
+        discountCents: json.discountCents,
+        scheduleDiscountPct: json.scheduleDiscountPct,
+        scheduleDiscountCents: json.scheduleDiscountCents,
+        scheduleDiscountApplied: json.scheduleDiscountApplied,
+        fareBeforeScheduleDiscountCents: json.fareBeforeScheduleDiscountCents,
+        surge: row.surge_multiplier,
+        platformFee: row.platform_fee_cents,
+        driverEarnings: row.driver_earnings_cents,
+        breakdownDiscount: row.fare_breakdown.schedule_discount_cents,
+        metadataDiscountPct: row.metadata.schedule_discount_pct,
+        metadataDiscountCents: row.metadata.schedule_discount_cents,
+      }
+    }
+
+    test('party weekend inside the window returns passenger and window copy without new fare fields', async () => {
+      const pickupAt = '2026-10-02T21:30:00.000Z' // Friday 5:30 PM EDT
+      const saved = await schedule({
+        ...defaultPlaces,
+        pickupAt,
+        purpose: 'party_weekend',
+        passengers: 2,
+        partySize: 8,
+      })
+      assert.equal(saved.row.passengers, 2)
+      assert.equal(saved.json.passengers, 2)
+      assert.equal(saved.json.passengerLabel, '2 passengers')
+      assert.equal(
+        saved.json.partyCapacityMessage,
+        '2 passengers. Standard, Wait & Save, and Extra Comfort seat 4.',
+      )
+      assert.equal(saved.json.weekendWindowCopy, WEEKEND_WINDOW_COPY)
+      assert.equal(
+        saved.json.weekendWindowNote,
+        'This pickup is inside the weekend window: Friday 5:00 PM through Sunday, Eastern time.',
+      )
+      assert.equal(saved.json.partyFareCopy, PARTY_FARE_COPY)
+      assert.equal(saved.json.scheduleDiscountPct, 10)
+      assert.equal(saved.row.metadata.schedule_discount_pct, 10)
+      assert.equal(saved.row.metadata.party, 'weekend')
+    })
+
+    test('a full car and an over-cap party change the message only', async () => {
+      const pickupAt = '2026-10-03T18:00:00.000Z' // Saturday afternoon
+      const full = await schedule({
+        ...defaultPlaces,
+        pickupAt,
+        purpose: 'party_weekend',
+        passengers: 4,
+      })
+      const over = await schedule({
+        ...defaultPlaces,
+        pickupAt,
+        purpose: 'party_weekend',
+        passengers: 6,
+      })
+      assert.equal(
+        full.json.partyCapacityMessage,
+        '4 passengers. That fills a Standard, Wait & Save, or Extra Comfort car (4 seats).',
+      )
+      assert.equal(
+        over.json.partyCapacityMessage,
+        '6 passengers. That is over the 4-seat cap for Standard, Wait & Save, and Extra Comfort.',
+      )
+      assert.equal(over.row.passengers, 6)
+      assert.deepEqual(moneySnapshot(full), moneySnapshot(over))
+    })
+
+    test('rounded and omitted counts keep the same campus and airport money', async () => {
+      const campusAt = '2026-10-07T16:00:00.000Z' // Wednesday noon EDT, outside the window
+      const one = await schedule({ ...defaultPlaces, pickupAt: campusAt, purpose: 'planned', passengers: 1 })
+      const rounded = await schedule({
+        ...defaultPlaces,
+        pickupAt: campusAt,
+        purpose: 'planned',
+        passengers: 2.5,
+        partySize: 9,
+      })
+      const omitted = await schedule({ ...defaultPlaces, pickupAt: campusAt, purpose: 'planned' })
+      assert.equal(rounded.row.passengers, 3)
+      assert.equal(rounded.json.passengerLabel, '3 passengers')
+      assert.equal(omitted.json.passengerLabel, '1 passenger')
+      assert.equal(one.json.weekendWindowCopy, null)
+      assert.match(one.json.weekendWindowNote, /outside the weekend window/)
+      assert.deepEqual(moneySnapshot(one), moneySnapshot(rounded))
+      assert.deepEqual(moneySnapshot(one), moneySnapshot(omitted))
+      assert.equal(one.json.scheduleDiscountPct, SCHEDULE_AHEAD_DISCOUNT_PCT)
+      assert.equal(one.row.metadata.schedule_discount_pct, 10)
+      assert.ok(one.json.scheduleDiscountCents > 0)
+
+      const airportOne = await schedule({ airport: 'GSP', pickupAt: campusAt, passengers: 1 })
+      const airportParty = await schedule({
+        airport: 'GSP',
+        pickupAt: campusAt,
+        purpose: 'party_weekend',
+        passengers: 4,
+      })
+      assert.deepEqual(moneySnapshot(airportOne), moneySnapshot(airportParty))
+      assert.equal(airportParty.json.weekendWindowCopy, WEEKEND_WINDOW_COPY)
+      assert.equal(airportParty.row.metadata.purpose, 'airport')
+      assert.equal(airportOne.json.depositCents, airportParty.json.depositCents)
+      assert.ok(airportOne.json.depositCents > 0)
+    })
+
+    test('zero passengers does not fall through to partySize on the displayed count', async () => {
+      const saved = await schedule({
+        ...defaultPlaces,
+        pickupAt: '2026-10-02T21:00:00.000Z',
+        purpose: 'party_weekend',
+        passengers: 0,
+        partySize: 4,
+      })
+      assert.equal(saved.row.passengers, 1)
+      assert.equal(saved.json.passengerLabel, '1 passenger')
+      assert.match(saved.json.weekendWindowNote, /inside the weekend window/)
+    })
+  })
+})
+
+describe('scheduleTrip passenger count display and weekend/party copy helpers', () => {
+  test('passengerCount prefers passengers, then partySize, then party_size', () => {
+    assert.equal(passengerCount({ passengers: 6, partySize: 8, party_size: 3 }), 6)
+    assert.equal(passengerCount({ partySize: 4, party_size: 2 }), 4)
+    assert.equal(passengerCount({ party_size: '5' }), 5)
+    assert.equal(passengerCount({ passengers: '2.4' }), 2)
+    assert.equal(passengerCount({ passengers: 2.5 }), 3)
+    assert.equal(passengerCount({ passengers: ' 3 ' }), 3)
+  })
+
+  test('missing and invalid passenger counts display and store as 1', () => {
+    assert.equal(passengerCount({ partySize: 4 }), 4)
+    assert.equal(passengerCount({ passengers: null, partySize: 4 }), 4)
+    for (const passengers of ['', '   ', 0, -3, 'nope', NaN, Infinity, 0.4]) {
+      assert.equal(passengerCount({ passengers, partySize: 4 }), 1, String(passengers))
+      assert.equal(passengerCountLabel(passengers), '1 passenger', String(passengers))
+    }
+    assert.equal(passengerCount({}), 1)
+    assert.equal(passengerCount(null), 1)
+    assert.equal(passengerCountLabel(null), '1 passenger')
+    assert.equal(passengerCountLabel(undefined), '1 passenger')
+    assert.equal(passengerCountLabel({ passengers: '', partySize: 6 }), '1 passenger')
+    assert.equal(passengerCountLabel({ partySize: '', party_size: 5 }), '1 passenger')
+  })
+
+  test('labels and capacity messages name the seat cap and the three ride types', () => {
+    assert.equal(SCHEDULE_PARTY_SEAT_CAP, 4)
+    assert.equal(passengerCountLabel(1), '1 passenger')
+    assert.equal(passengerCountLabel(4), '4 passengers')
+    assert.equal(
+      partyCapacityMessage(1),
+      '1 passenger. Standard, Wait & Save, and Extra Comfort seat 4.',
+    )
+    assert.equal(
+      partyCapacityMessage({ passengers: 4, partySize: 1 }),
+      '4 passengers. That fills a Standard, Wait & Save, or Extra Comfort car (4 seats).',
+    )
+    assert.equal(
+      partyCapacityMessage(8),
+      '8 passengers. That is over the 4-seat cap for Standard, Wait & Save, and Extra Comfort.',
+    )
+    assert.match(partyFareCopy(), /10% schedule-ahead discount/)
+    assert.doesNotMatch(partyFareCopy(), /\b(?:5|15|20|25)%/)
+    assert.equal(SCHEDULE_AHEAD_DISCOUNT_PCT, 10)
+    assert.equal(SCHEDULE_AHEAD_DISCOUNT_BPS, 1000)
+    assert.equal(PARTY_FARE_COPY, partyFareCopy())
+  })
+
+  test('weekend window matches the driver filter and states Eastern bounds', () => {
+    assert.equal(weekendWindowCopy(), WEEKEND_WINDOW_COPY)
+    assert.match(WEEKEND_WINDOW_COPY, /Friday 5:00 PM through Sunday, Eastern time/)
+    assert.match(WEEKEND_WINDOW_COPY, /at least 30 minutes ahead/)
+    assert.match(WEEKEND_WINDOW_COPY, /GSP, CLT, or ATL/)
+    assert.match(WEEKEND_WINDOW_COPY, /Weekend filter/)
+
+    const samples = [
+      '2026-10-02T20:59:00.000Z', // Friday 4:59 PM EDT
+      '2026-10-02T21:00:00.000Z', // Friday 5:00 PM EDT
+      '2026-10-02T21:30:00.000Z', // Friday 5:30 PM EDT
+      '2026-10-03T04:05:00.000Z', // Saturday 12:05 AM EDT
+      '2026-10-04T15:00:00.000Z', // Sunday 11:00 AM EDT
+      '2026-10-05T03:59:00.000Z', // Sunday 11:59 PM EDT
+      '2026-10-05T04:00:00.000Z', // Monday 12:00 AM EDT
+      '2026-10-07T16:00:00.000Z', // Wednesday noon EDT
+      'not-a-date',
+      '',
+    ]
+    for (const iso of samples) {
+      assert.equal(isScheduleWeekendWindow(iso), isWeekendPartyWindow(iso), iso)
+    }
+    assert.equal(isScheduleWeekendWindow(null), false)
+    assert.match(weekendWindowNote(''), /Choose a pickup time/)
+    assert.match(weekendWindowNote('not-a-date'), /Choose a valid pickup time/)
+    assert.match(weekendWindowNote('2026-10-02T21:00:00.000Z'), /inside the weekend window/)
+    assert.match(weekendWindowNote('2026-10-05T04:00:00.000Z'), /outside the weekend window/)
+    assert.match(weekendWindowNote('2026-10-05T04:00:00.000Z'), /You can still schedule it/)
   })
 })
 
