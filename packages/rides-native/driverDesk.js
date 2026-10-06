@@ -304,6 +304,12 @@ export async function acceptTrip(supabase, trip, driverId) {
   }
   const freshRows = await listTrips(supabase, (query) => query.eq('id', trip.id).limit(1))
   const fresh = freshRows[0]
+  if (!fresh) {
+    throw new Error("That ride is no longer available")
+  }
+  if (fresh.metadata?.offer_driver_id && fresh.metadata.offer_driver_id !== driverId) {
+    throw new Error("That ride is no longer available")
+  }
   if (fresh.driver_id && fresh.driver_id !== driverId) throw new Error('That ride is no longer available')
   if (fresh.status && !['requested', 'searching', 'offered', 'scheduled'].includes(fresh.status)) {
     throw new Error('That ride is no longer available')
