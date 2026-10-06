@@ -50,3 +50,43 @@ To test the gate locally, one would need to deploy the migration to a developmen
 ### Migration Status
 
 As of the latest commit, the migration is not applied to the production Supabase project. It requires approval before deployment.
+
+## Additional Edge Case Tests
+
+Beyond the core matching seam and R001-R008 scenarios, additional edge case tests cover:
+
+- Driver going offline after accepting trip (trip acceptance status unchanged)
+- Concurrent cancellation and expiration scenarios (race condition handling)
+- Attempting to cancel scheduled trips (should fail)
+- Attempting to decline expired trips (should fail)
+
+These tests are located in `tests/matchingE2E_edgeCases.test.js` and can be run with:
+
+```sh
+node --test tests/matchingE2E_edgeCases.test.js
+```
+
+## Running All Matching E2E Tests
+
+To run all matching E2E tests (including core tests, R001-R008 scenarios, and edge cases):
+
+```sh
+# Core matching seam tests
+node --test tests/matchingE2E.test.js
+
+# R001-R008 specific scenarios
+node --test tests/matchingE2E_R001.test.js
+node --test tests/matchingE2E_R002.test.js
+node --test tests/matchingE2E_R003.test.js
+node --test tests/matchingE2E_R004.test.js
+node --test tests/matchingE2E_R005.test.js
+node --test tests/matchingE2E_R006.test.js
+node --test tests/matchingE2E_R007.test.js
+node --test tests/matchingE2E_R008.test.js
+
+# Additional edge case tests
+node --test tests/matchingE2E_edgeCases.test.js
+
+# Or run all matching-related tests together
+node --test tests/matchingE2E*.test.js
+```
