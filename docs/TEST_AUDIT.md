@@ -67,6 +67,12 @@ Each R00x test covers a specific scenario:
 - After one driver accepts, other drivers no longer see the trip in any tab (offers, upcoming, active)
 - The accepting driver sees the trip in active tab
 
+**R010**: Driver can accept a trip in requested status
+- Tests acceptance of a trip that is in requested status (not yet searching)
+- Verifies trip status transitions to accepted
+
+- Validates trip event creation
+- Ensures trip no longer appears in driver desk after acceptance
 ### Edge Case Tests (`tests/matchingE2E_edgeCases.test.js`)
 
 Additional tests for boundary conditions:
