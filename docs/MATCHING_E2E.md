@@ -41,11 +41,11 @@ node --test tests/matchingE2E_R009.test.js
 node --test tests/matchingE2E_R010.test.js
 ```
 
-The application-level approval and online checks are covered here. The live database defense-in-depth gap remains until the `driver_approval_accept_gate` migration associated with #118 is safely renamed, reviewed, and applied. This test change does not modify or apply that migration.
+The application-level approval and online checks are covered here. The live database defense-in-depth gap remains until the `driver_approval_accept_gate` migration associated with #118 has been renamed, and awaits review and application. This test change does not modify or apply that migration.
 
 ## Driver Approval Gate
 
-The migration `supabase/migrations/20260925120000_driver_approval_accept_gate.sql` adds a database-level guard that prevents trip acceptance by drivers whose applications are not approved. The fixture in `tests/fixtures/matchingE2E.js` does not implement this guard, so the E2E tests do not cover it. However, the gate is designed to be compatible with the existing matching logic and should be verified separately.
+The migration `supabase/migrations/20260925120001_driver_approval_accept_gate.sql` adds a database-level guard that prevents trip acceptance by drivers whose applications are not approved. The fixture in `tests/fixtures/matchingE2E.js` does not implement this guard, so the E2E tests do not cover it. However, the gate is designed to be compatible with the existing matching logic and should be verified separately.
 
 ### Testing the Gate
 
@@ -72,7 +72,7 @@ node --test tests/matchingE2E_edgeCases.test.js
 
 ## Running All Matching E2E Tests
 
-To run all matching E2E tests (including core tests, R001-R009 scenarios, and edge cases):
+To run all matching E2E tests (including core tests, R001-R010 scenarios, and edge cases):
 
 ```sh
 # Core matching seam tests
