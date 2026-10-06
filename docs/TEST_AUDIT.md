@@ -75,10 +75,11 @@ Each R00x test covers a specific scenario:
 ### Edge Case Tests (`tests/matchingE2E_edgeCases.test.js`)
 
 Additional tests for boundary conditions:
-- Driver going offline after accepting (acceptance persists)
-- Concurrent cancellation and expiration (race conditions)
-- Scheduled trip cancellation attempts (should fail)
-- Declining expired trips (should fail)
+- Driver going offline after accepting trip does not change trip acceptance status
+- Concurrent cancellation and expiration - cancellation wins if processed first
+- Concurrent cancellation and expiration - expiration wins if processed first
+- Rider attempts to cancel a scheduled trip before acceptance (should fail)
+- Driver attempts to decline an already expired trip (should fail)
 
 ## Test Execution
 
