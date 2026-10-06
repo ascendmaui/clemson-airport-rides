@@ -23,6 +23,7 @@ The following scenarios are also covered by dedicated tests:
   * driver desk shows multiple concurrent searching trips as separate offers
   * driver can accept either of multiple concurrent searching trips
   * driver desk does not show completed trips as offers
+- R009: approved online driver does not see a trip accepted by another driver
 
 Run the dedicated tests with:
 
@@ -35,6 +36,7 @@ node --test tests/matchingE2E_R005.test.js
 node --test tests/matchingE2E_R006.test.js
 node --test tests/matchingE2E_R007.test.js
 node --test tests/matchingE2E_R008.test.js
+node --test tests/matchingE2E_R009.test.js
 ```
 
 The application-level approval and online checks are covered here. The live database defense-in-depth gap remains until the `driver_approval_accept_gate` migration associated with #118 is safely renamed, reviewed, and applied. This test change does not modify or apply that migration.
@@ -68,13 +70,13 @@ node --test tests/matchingE2E_edgeCases.test.js
 
 ## Running All Matching E2E Tests
 
-To run all matching E2E tests (including core tests, R001-R008 scenarios, and edge cases):
+To run all matching E2E tests (including core tests, R001-R009 scenarios, and edge cases):
 
 ```sh
 # Core matching seam tests
 node --test tests/matchingE2E.test.js
 
-# R001-R008 specific scenarios
+# R001-R009 specific scenarios
 node --test tests/matchingE2E_R001.test.js
 node --test tests/matchingE2E_R002.test.js
 node --test tests/matchingE2E_R003.test.js
@@ -83,6 +85,7 @@ node --test tests/matchingE2E_R005.test.js
 node --test tests/matchingE2E_R006.test.js
 node --test tests/matchingE2E_R007.test.js
 node --test tests/matchingE2E_R008.test.js
+node --test tests/matchingE2E_R009.test.js
 
 # Additional edge case tests
 node --test tests/matchingE2E_edgeCases.test.js
