@@ -404,12 +404,13 @@ body .mkt-qr-svg {
   }
   .mkt-stage-photo {
     position: absolute;
-    grid-column: 2;
-    grid-row: 1;
-    width: auto;
-    height: auto;
+    top: 32px;
+    right: 28px;
+    bottom: auto;
+    left: auto;
+    width: min(520px, 36vw);
+    height: calc(100% - 64px);
     margin: 0;
-    inset: 32px 32px 32px 0;
     border-radius: 28px;
   }
 }
