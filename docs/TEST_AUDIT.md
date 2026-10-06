@@ -19,7 +19,7 @@ Tests the fundamental matching workflow:
 - Targeted ride protection
 - Terminal status protection
 
-### Dedicated Scenario Tests (R001-R008)
+### Dedicated Scenario Tests (R001-R009)
 
 Each R00x test covers a specific scenario:
 
@@ -61,6 +61,11 @@ Each R00x test covers a specific scenario:
 - Shows multiple trips as separate offers
 - Can accept either trip
 - Completed trips do not appear as offers
+
+**R009**: Approved online driver does not see a trip accepted by another driver
+- Initially shows trip in offers for all approved online drivers
+- After one driver accepts, other drivers no longer see the trip in any tab (offers, upcoming, active)
+- The accepting driver sees the trip in active tab
 
 ### Edge Case Tests (`tests/matchingE2E_edgeCases.test.js`)
 
