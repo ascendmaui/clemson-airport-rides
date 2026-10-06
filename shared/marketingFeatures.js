@@ -4,7 +4,7 @@ export const MARKETING_FEATURES = [
   {
     id: 'airport',
     title: 'Airport rides',
-    body: 'Schedule a ride to Greenville-Spartanburg (GSP) or Charlotte Douglas (CLT). Schedule shows the current fare. The final fare is charged when the trip ends.',
+    body: 'Schedule a ride to Greenville-Spartanburg (GSP) or Charlotte Douglas (CLT). Stripe places a pre-authorization hold for the estimated fare plus a buffer. The full fare is charged when the trip ends.',
   },
   {
     id: 'student',
@@ -29,6 +29,16 @@ export const MARKETING_FEATURES = [
   {
     id: 'schedule',
     title: 'Schedule',
-    body: 'Plan a pickup ahead of time from the Schedule tab. Scheduling does not charge the card.',
+    body: 'Plan a pickup ahead of time from the Schedule tab. Scheduling does not charge the card. Weekend and party trips can be set at least 30 minutes ahead.',
+  },
+  {
+    id: 'matching',
+    title: 'Real-time matching',
+    body: 'A requested ride is offered to nearby drivers. The trip updates when a driver accepts.',
+  },
+  {
+    id: 'tracking',
+    title: 'Live trip tracking',
+    body: 'After a driver accepts, the trip screen follows the ride from pickup through drop-off.',
   },
 ]

@@ -19,83 +19,87 @@ import { RIDE_STYLES } from '../../packages/rides-native/partyProfile.js'
 import { formatAccessibleFormErrorSummary } from '../lib/formA11y.js'
 import { signupFieldErrors } from '../lib/signupFields.js'
 import { takeAuthCallbackError } from '../lib/googleWebAuth'
+import { supabase } from '../lib/supabase'
 import { AccessibleAlert } from '../components/AccessibleAlert'
 import { textLinkHitStyle } from '../lib/touchA11y'
 
 const fieldStyle = {
   width: '100%',
   marginTop: 6,
-  padding: '14px 16px',
-  borderRadius: 14,
-  border: '1px solid rgba(255,255,255,0.35)',
-  background: 'rgba(255,255,255,0.55)',
-  backdropFilter: 'blur(12px)',
-  WebkitBackdropFilter: 'blur(12px)',
-  boxShadow: 'inset 0 1px 2px rgba(11,18,32,0.03)',
+  padding: '16px 14px',
+  borderRadius: 10,
+  border: 'none',
+  background: '#ececec',
   outline: 'none',
-  transition: 'border-color 200ms var(--ease-soft), box-shadow 200ms var(--ease-soft)',
 }
 
-function AuthShell({ title, subtitle, children, back = 'landing' }) {
+function AuthShell({ title, subtitle, children, back = 'landing', step }) {
   return (
-    <div
-      className="fade-in"
-      style={{
-        minHeight: '100%',
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: 24,
-        background: 'linear-gradient(165deg, rgba(82,45,128,0.18) 0%, rgba(245,102,0,0.08) 42%, var(--surface-muted) 100%)',
-      }}
-    >
-      <button
-        type="button"
-        className="pressable glass-pill"
-        onClick={() => navigate(back)}
-        style={{
-          alignSelf: 'flex-start',
-          marginBottom: 12,
-          width: 44,
-          height: 44,
-          borderRadius: 14,
-          fontSize: 18,
-        }}
-      >
-        ←
+    <div className="lux-auth fade-in">
+      <button type="button" className="lux-auth-back pressable" onClick={() => navigate(back)}>
+        Back
       </button>
-      <div
-        className="modal-card glass-panel glass-panel--elevated"
-        style={{
-          width: '100%',
-          maxWidth: 400,
-          padding: 28,
-          borderRadius: 24,
-        }}
-      >
-        <div
-          style={{
-            width: 48,
-            height: 48,
-            borderRadius: 14,
-            background: 'linear-gradient(135deg, var(--orange) 0%, #ff8a3d 100%)',
-            boxShadow: 'var(--shadow-cta)',
-            display: 'grid',
-            placeItems: 'center',
-            color: '#fff',
-            fontWeight: 800,
-            marginBottom: 16,
-          }}
-        >
-          CR
-        </div>
-        <h1 style={{ fontSize: 24, fontWeight: 700, marginBottom: 6, color: 'var(--purple)', letterSpacing: -0.3 }}>
-          {title}
-        </h1>
-        <p style={{ color: 'var(--ink-secondary)', marginBottom: 22, fontSize: 14, lineHeight: 1.45 }}>{subtitle}</p>
-        {children}
+      {step ? <p className="lux-step">{step}</p> : null}
+      <h1>{title}</h1>
+      <p className="lux-auth-sub">{subtitle}</p>
+      <div className="lux-auth-body">{children}</div>
+      <p className="lux-legal-mini">
+        By continuing you agree to the{' '}
+        <button type="button" className="pressable" onClick={() => navigate('terms')}>terms</button>
+        {' '}and{' '}
+        <button type="button" className="pressable" onClick={() => navigate('privacy')}>privacy policy</button>.
+      </p>
+    </div>
+  )
+}
+
+function EmailCode({ email }) {
+  const [digits, setDigits] = useState(['', '', '', '', '', ''])
+  const [note, setNote] = useState(null)
+  const [busy, setBusy] = useState(false)
+  const refs = useRef([])
+
+  function setAt(index, value) {
+    const char = value.replace(/\D/g, '').slice(-1)
+    const next = digits.slice()
+    next[index] = char
+    setDigits(next)
+    if (char && index < 5) refs.current[index + 1]?.focus()
+    if (next.every(Boolean)) submit(next.join(''))
+  }
+
+  async function submit(code) {
+    if (!supabase || busy) return
+    setBusy(true)
+    setNote(null)
+    const { error } = await supabase.auth.verifyOtp({ email, token: code, type: 'email' })
+    setBusy(false)
+    if (error) setNote(error.message || 'That code was not accepted. Use the link in the email.')
+    else navigate('home')
+  }
+
+  return (
+    <div className="lux-otp-block">
+      <p style={{ fontSize: 13, color: '#6d6d6d', marginBottom: 8 }}>Email code, if one was sent.</p>
+      <div className="lux-otp">
+        {digits.map((digit, index) => (
+          <input
+            key={index}
+            ref={(node) => { refs.current[index] = node }}
+            className="lux-field"
+            inputMode="numeric"
+            autoComplete={index === 0 ? 'one-time-code' : 'off'}
+            aria-label={`Digit ${index + 1} of 6`}
+            value={digit}
+            onChange={(e) => setAt(index, e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Backspace' && !digits[index] && index > 0) refs.current[index - 1]?.focus()
+            }}
+          />
+        ))}
       </div>
+      {note ? <p role="status" style={{ color: '#8a3b32', fontSize: 13, marginBottom: 8 }}>{note}</p> : null}
+      {busy ? <p style={{ fontSize: 13, color: '#6d6d6d' }}>Checking the code…</p> : null}
     </div>
   )
 }
@@ -244,7 +248,7 @@ export function SignInScreen() {
   }
 
   return (
-    <AuthShell title="Welcome back" subtitle="Sign in with Google to book airport rides. Surge applies on busy hours and game days.">
+    <AuthShell title="Welcome back" subtitle="Sign in with Google to book airport rides. Surge applies on busy hours and game days." step="Step 1 of 2">
       <GoogleContinue busy={googleBusy} onClick={onGoogle} showEmailDivider={false} variant="primary" />
       <GameRideNote />
       {error && (
@@ -389,7 +393,11 @@ export function SignUpScreen() {
     busy ? 'Creating…' : cooldownSec > 0 ? `Wait ${cooldownSec}s…` : 'Create account'
 
   return (
-    <AuthShell title="Join Clemson RIDES" subtitle="Metered fares to GSP and CLT. Students save 10% on Standard.">
+    <AuthShell
+      title="Join Clemson RIDES"
+      subtitle="Metered fares to GSP and CLT. Students save 10% on Standard."
+      step={created ? 'Step 2 of 2' : 'Step 1 of 2'}
+    >
       <GoogleContinue busy={googleBusy} disabled={busy} onClick={onGoogle} />
       <GameRideNote />
       {error && (
@@ -571,9 +579,12 @@ export function SignUpScreen() {
           </p>
         )}
         {created ? (
-          <button type="button" className="pressable primary-cta" onClick={() => { afterAuthSuccess().catch((err) => setError(err.message || 'Could not continue')) }} style={{ width: '100%', padding: 16, borderRadius: 16, background: 'linear-gradient(135deg, #F56600 0%, #ff7a1a 100%)', color: '#fff', fontWeight: 700, fontSize: 16, boxShadow: 'var(--shadow-cta)' }}>
-            Continue
-          </button>
+          <>
+            <EmailCode email={email.trim()} />
+            <button type="button" className="pressable lux-skip" onClick={() => { afterAuthSuccess().catch((err) => setError(err.message || 'Could not continue')) }}>
+              Continue
+            </button>
+          </>
         ) : (
           <button type="submit" className="pressable primary-cta" disabled={blocked} style={{ width: '100%', padding: 16, borderRadius: 16, background: 'linear-gradient(135deg, var(--orange) 0%, #ff7a1a 100%)', color: '#fff', fontWeight: 700, fontSize: 16, boxShadow: 'var(--shadow-cta)', opacity: blocked ? 0.7 : 1 }}>
             {cta}

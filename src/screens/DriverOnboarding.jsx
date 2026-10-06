@@ -488,7 +488,7 @@ export function DriverOnboarding() {
 
   if (status === 'approved') {
     return (
-      <div className="driver-application fade-in" style={{ minHeight: '100%', background: 'var(--surface-muted)', padding: '20px 16px 48px' }}>
+      <div className="driver-application lux-onboard fade-in" style={{ minHeight: '100%', padding: '20px 16px 48px' }}>
         <h1 style={{ fontSize: 26, fontWeight: 800, marginTop: 12, color: 'var(--purple)', letterSpacing: -0.4 }}>
           You’re approved
         </h1>
@@ -518,7 +518,7 @@ export function DriverOnboarding() {
   const taxFormOk = w9Issue == null
 
   return (
-    <div className="driver-application fade-in" style={{ minHeight: '100%', background: 'var(--surface-muted)', padding: '20px 16px 48px' }}>
+    <div className="driver-application lux-onboard fade-in" style={{ minHeight: '100%', padding: '20px 16px 48px' }}>
       <button
         type="button"
         className="pressable"

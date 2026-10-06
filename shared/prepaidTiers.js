@@ -3,14 +3,41 @@
  * Ride pricing stays in src/lib/pricing.js and server/friendRideLib.js.
  */
 
+/**
+ * credits_100_for_75 is the only 25% bonus. Stripe charges priceCents ($75)
+ * and the wallet receives creditCents ($100). The bonus is not a ride-time
+ * percent and is not copied onto the other packs.
+ */
+export const PREPAID_BONUS_PACKAGE_ID = 'credits_100_for_75'
+
 export const PREPAID_TIERS = [
   { id: 'credits_25', priceCents: 2500, creditCents: 2500, label: '$25 credits' },
   { id: 'credits_50', priceCents: 5000, creditCents: 5200, label: '$50 credits · $2 bonus' },
   { id: 'credits_100', priceCents: 10000, creditCents: 11000, label: '$100 credits · $10 bonus' },
+  {
+    id: PREPAID_BONUS_PACKAGE_ID,
+    priceCents: 7500,
+    creditCents: 10000,
+    label: '$100 ride credits for $75',
+    bonusBps: 2500,
+    bonusScope: 'prepaid_package_only',
+  },
 ]
 
 export function findPrepaidTier(tierId) {
   return PREPAID_TIERS.find((tier) => tier.id === tierId) || null
+}
+
+/** True only for the $75 → $100 package. Other tiers must not carry this scope. */
+export function isPrepaidPackageBonus(tier) {
+  return Boolean(
+    tier
+    && tier.id === PREPAID_BONUS_PACKAGE_ID
+    && tier.bonusScope === 'prepaid_package_only'
+    && tier.bonusBps === 2500
+    && tier.priceCents === 7500
+    && tier.creditCents === 10000,
+  )
 }
 
 /** Stable USD from cents. Matches the rider app's formatCents for whole-dollar packs. */
