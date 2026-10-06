@@ -1,5 +1,7 @@
 -- Tiger Heat Map ledger and solvency knobs.
--- Apply via Supabase migration when the project is linked.
+-- Table shape only. Row level security is
+-- supabase/migrations/20261006180450_tiger_heat_rls.sql.
+-- Apply that migration. This file does not enable RLS.
 --
 -- Rider fare is unchanged. driver_pay_cents is the decoupled driver payout
 -- (existing 80% net + flat Tiger Heat bonus + flat duration adjustment).
