@@ -87,31 +87,6 @@ test('offline and unapproved drivers cannot accept an open-pool trip', async () 
   assert.equal(supabase._tables.trip_events.length, 0)
 })
 
-/* R001: Matching E2E: cancel-while-searching */
-test('rider cancel removes a searching offer and rejects a stale driver accept', async () => {
-  const { supabase, trip, riderId, drivers } = seedMatchingScenario()
-  const driverId = drivers[0].id
-  const offered = (await loadDriverDesk(supabase, driverId)).offers[0]
-  assert.equal(offered.id, trip.id)
-
-  const canceled = await cancelSearchingTrip(supabase, trip.id, riderId)
-  assert.equal(canceled.status, 'canceled')
-  assert.equal(canceled.driver_id, null)
-  assert.match(canceled.canceled_at, /^2026-10-01T08:05:00/)
-
-  const refreshed = await loadDriverDesk(supabase, driverId)
-  assert.deepEqual(refreshed.offers, [])
-  await assert.rejects(
-    () => acceptTrip(supabase, offered, driverId),
-    /no longer available/,
-  )
-
-  const acceptedEvents = supabase._tables.trip_events.filter((event) => event.kind === 'accepted')
-  const canceledEvents = supabase._tables.trip_events.filter((event) => event.kind === 'canceled')
-  assert.equal(acceptedEvents.length, 0)
-  assert.equal(canceledEvents.length, 1)
-  assert.equal(canceledEvents[0].payload.reason, 'rider_cancel')
-})
 
 test('driver going offline during an offer window cannot accept the stale offer', async () => {
   const { supabase, trip, drivers } = seedMatchingScenario()

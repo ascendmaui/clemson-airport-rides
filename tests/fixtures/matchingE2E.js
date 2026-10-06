@@ -74,9 +74,14 @@ export function createMatchingSupabase(initialTables = {}) {
     if (state.mode === 'upsert') {
       const payloads = Array.isArray(state.payload) ? state.payload : [state.payload]
       const result = payloads.map((payload) => {
-        const key = state.table === 'driver_status'
-          ? (row) => row.driver_id === payload.driver_id
-          : (row) => row.id === payload.id
+        let key
+        if (state.table === 'driver_status') {
+          key = (row) => row.driver_id === payload.driver_id
+        } else if (state.table === 'driver_offer_passes') {
+          key = (row) => row.driver_id === payload.driver_id && row.trip_id === payload.trip_id
+        } else {
+          key = (row) => row.id === payload.id
+        }
         const existing = source.find(key)
         if (existing) {
           Object.assign(existing, structuredClone(payload))

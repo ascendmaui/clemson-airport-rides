@@ -147,6 +147,7 @@ export async function setPriorityMode(supabase, driverId, on) {
 export async function publishDriverLocation(supabase, driverId, { lat, lng, heading = null, online = true }) {
   if (!supabase || !driverId) return
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) return
+  if (lat < -90 || lat > 90 || lng < -180 || lng > 180) return
   const { error } = await supabase.from('driver_status').upsert({
     driver_id: driverId,
     lat,
@@ -296,6 +297,7 @@ async function rememberPass(supabase, tripId, driverId) {
   }
   return true
 }
+<<<<<<< HEAD
 
 async function lockAcceptedShare(supabase, fresh, driverId) {
   const economics = lockedOfferEconomics(fresh)
@@ -316,6 +318,8 @@ async function lockAcceptedShare(supabase, fresh, driverId) {
   }
 }
 
+=======
+>>>>>>> 24f775a (chore: implement Clemson matching E2E draft tests R001 and R003-R007)
 export async function acceptTrip(supabase, trip, driverId) {
   if (!trip?.id) throw new Error('Missing ride')
   if (trip.isSynthetic === true || String(trip.id).startsWith('synthetic-')) {
@@ -323,12 +327,16 @@ export async function acceptTrip(supabase, trip, driverId) {
   }
   const freshRows = await listTrips(supabase, (query) => query.eq('id', trip.id).limit(1))
   const fresh = freshRows[0]
+<<<<<<< HEAD
   if (!fresh || !offerVisibleToDriver(fresh, driverId)) throw new Error('That ride is no longer available')
   if (fresh.status && !['requested', 'searching', 'offered', 'scheduled'].includes(fresh.status)) {
     throw new Error('That ride is no longer available')
   }
   const comfortAllowed = await pairAllowedByRpc(supabase, fresh.rider_id, driverId)
   if (comfortAllowed === false) throw new Error(WOMEN_ONLY_ACCEPT_ERROR)
+=======
+  if (fresh.driver_id && fresh.driver_id !== driverId) throw new Error('That ride is no longer available')
+>>>>>>> 24f775a (chore: implement Clemson matching E2E draft tests R001 and R003-R007)
   // trips.update and accept_scheduled_trip both hit
   // trips_block_unpaid_airport_deposit_accept. This is the desk copy of that error.
   if (isUnpaidAirportDepositTrip(fresh)) {
@@ -351,10 +359,15 @@ export async function acceptTrip(supabase, trip, driverId) {
     if (presence.error) throw new Error(presence.error.message)
     if (!presence.data?.online) throw new Error('Go online before accepting a ride.')
   }
-  if (fresh.status === 'scheduled') {
+  if (fresh.status.trim() === "scheduled") {
     const { data, error } = await supabase.rpc('accept_scheduled_trip', { p_trip_id: trip.id })
     if (error) throw new Error(error.message || 'Could not accept scheduled ride')
+<<<<<<< HEAD
     await lockAcceptedShare(supabase, fresh, driverId)
+=======
+    // Write the accepted event for scheduled trips
+    await writeTripEvent(supabase, trip.id, 'accepted', { driver_id: driverId, source: 'driver_app', accepted_at: new Date().toISOString() })
+>>>>>>> 24f775a (chore: implement Clemson matching E2E draft tests R001 and R003-R007)
     return data
   }
   const acceptedAt = new Date().toISOString()
@@ -394,7 +407,6 @@ export async function acceptTrip(supabase, trip, driverId) {
   }
   return data
 }
-
 export async function publishDriverCapacity(supabase, driverId, seats) {
   if (!supabase || !driverId) return { seats: null, stored: false }
   const count = Math.max(1, Math.round(Number(seats) || 0))

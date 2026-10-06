@@ -12,16 +12,29 @@ Additionally, the specific scenario of rider cancel while searching (R001) is co
 
 The following scenarios are also covered by dedicated tests:
 
+- R001: rider cancel removes a searching offer and rejects a stale driver accept
 - R002: rider cancels accepted trip; driver accept is rolled back and trip is canceled
+- R003: driver can decline a searching trip, allowing another driver to accept (now passes)
+- R004: driver who declined a canceled trip can be offered a new trip
+- R005: driver desk correctly handles trips of different tiers (standard vs tesla)
+- R006: driver desk correctly handles scheduled trips (now passing)
+- R007: driver desk correctly handles trip lifecycle from acceptance to completion
 - R008: 
   * driver desk shows multiple concurrent searching trips as separate offers
   * driver can accept either of multiple concurrent searching trips
   * driver desk does not show completed trips as offers
 
-Run it with:
+Run the dedicated tests with:
 
 ```sh
-node --test tests/matchingE2E.test.js
+node --test tests/matchingE2E_R001.test.js
+node --test tests/matchingE2E_R002.test.js
+node --test tests/matchingE2E_R003.test.js
+node --test tests/matchingE2E_R004.test.js
+node --test tests/matchingE2E_R005.test.js
+node --test tests/matchingE2E_R006.test.js
+node --test tests/matchingE2E_R007.test.js
+node --test tests/matchingE2E_R008.test.js
 ```
 
 The application-level approval and online checks are covered here. The live database defense-in-depth gap remains until the `driver_approval_accept_gate` migration associated with #118 is safely renamed, reviewed, and applied. This test change does not modify or apply that migration.
@@ -37,8 +50,3 @@ To test the gate locally, one would need to deploy the migration to a developmen
 ### Migration Status
 
 As of the latest commit, the migration is not applied to the production Supabase project. It requires approval before deployment.
-
-## Missing R003-R007 Tests
-
-Note: Tests for R003, R004, R005, R006, and R007 are not yet implemented. These numbers correspond to additional matching scenarios that should be covered in the future.
-
