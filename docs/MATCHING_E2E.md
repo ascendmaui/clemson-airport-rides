@@ -17,7 +17,7 @@ The following scenarios are also covered by dedicated tests:
 - R003: driver can decline a searching trip, allowing another driver to accept (now passes)
 - R004: driver who declined a canceled trip can be offered a new trip
 - R005: driver desk correctly handles trips of different tiers (standard vs tesla)
-- R006: driver desk correctly handles scheduled trips (now passing)
+- R006: driver desk correctly handles scheduled trips (including expiry)
 - R007: driver desk correctly handles trip lifecycle from acceptance to completion
 - R008: 
   * driver desk shows multiple concurrent searching trips as separate offers

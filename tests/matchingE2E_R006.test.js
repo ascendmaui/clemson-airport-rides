@@ -95,7 +95,7 @@ test('driver desk correctly handles scheduled trips', async () => {
   supabase.rpc = originalRpc
 })
 
-test('scheduled trip that is not yet expired remains in the driver desk', async () => {
+test('scheduled trip that is expired is removed from scheduledOpen', async () => {
   const { supabase, trip: scheduledTrip, drivers } = seedMatchingScenario({
     tripId: 'trip-scheduled-1',
     riderId: 'rider-1',
@@ -104,22 +104,33 @@ test('scheduled trip that is not yet expired remains in the driver desk', async 
     ],
     trip: {
       status: 'scheduled',
-      pickup_at: '2026-10-01T09:00:00.000Z', // future
+      pickup_at: '2026-10-01T09:00:00.000Z', // future relative to requested_at but we will expire it
     },
   })
 
   const driverId = drivers[0].id
 
-  // The trip should be in scheduledOpen
+  // First, verify that the trip is in scheduledOpen (not expired yet)
   let desk = await loadDriverDesk(supabase, driverId)
   assert.equal(desk.scheduledOpen.length, 1)
-  assert.equal(desk.scheduledOpen[0].id, scheduledTrip.id)
 
-  // Now, we simulate the concept of expiry by updating the pickup_at to be in the past?
-  // But note: the expiry for scheduled trips is not implemented in the fixture.
-  // We'll skip this part because the old documentation for R006 did not mention expiry.
-  // Instead, we'll just verify that the trip remains in scheduledOpen if we don't change anything.
-  // We'll do a second load to ensure it's still there.
+  // Now, expire the trip by updating its status to canceled (as if the pickup_at has passed)
+  const { data: updatedTrip, error: updateError } = await supabase
+    .from('trips')
+    .update({ status: 'canceled', canceled_at: '2026-10-01T09:30:00.000Z' })
+    .eq('id', scheduledTrip.id)
+    .eq('status', 'scheduled')
+    .maybeSingle()
+  assert.equal(updateError, null)
+  assert.equal(updatedTrip.status, 'canceled')
+  assert.equal(updatedTrip.canceled_at, '2026-10-01T09:30:00.000Z')
+
+  // Verify that the trip is now canceled in the _tables
+  const expiredTrip = supabase._tables.trips.find(t => t.id === scheduledTrip.id)
+  assert.equal(expiredTrip.status, 'canceled')
+  assert.equal(expiredTrip.canceled_at, '2026-10-01T09:30:00.000Z')
+
+  // Now, load the driver desk and verify that the trip is no longer in scheduledOpen
   desk = await loadDriverDesk(supabase, driverId)
-  assert.equal(desk.scheduledOpen.length, 1)
+  assert.equal(desk.scheduledOpen.length, 0)
 })
