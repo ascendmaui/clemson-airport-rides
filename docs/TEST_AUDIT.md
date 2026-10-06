@@ -19,7 +19,7 @@ Tests the fundamental matching workflow:
 - Targeted ride protection
 - Terminal status protection
 
-### Dedicated Scenario Tests (R001-R009)
+### Dedicated Scenario Tests (R001-R010)
 
 Each R00x test covers a specific scenario:
 
@@ -68,11 +68,10 @@ Each R00x test covers a specific scenario:
 - The accepting driver sees the trip in active tab
 
 **R010**: Driver can accept a trip in requested status
-- Tests acceptance of a trip that is in requested status (not yet searching)
-- Verifies trip status transitions to accepted
-
-- Validates trip event creation
-- Ensures trip no longer appears in driver desk after acceptance
+ - Tests acceptance of a trip that is in requested status (not yet searching)
+ - Verifies trip status transitions to accepted
+ - Validates trip event creation
+ - Ensures trip no longer appears in driver desk after acceptance
 ### Edge Case Tests (`tests/matchingE2E_edgeCases.test.js`)
 
 Additional tests for boundary conditions:
