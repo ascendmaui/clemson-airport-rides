@@ -307,9 +307,6 @@ export async function acceptTrip(supabase, trip, driverId) {
   if (!fresh) {
     throw new Error("That ride is no longer available")
   }
-  if (fresh.metadata?.offer_driver_id && fresh.metadata.offer_driver_id !== driverId) {
-    throw new Error("That ride is no longer available")
-  }
   if (fresh.driver_id && fresh.driver_id !== driverId) throw new Error('That ride is no longer available')
   if (fresh.status && !['requested', 'searching', 'offered', 'scheduled'].includes(fresh.status)) {
     throw new Error('That ride is no longer available')
@@ -336,10 +333,24 @@ export async function acceptTrip(supabase, trip, driverId) {
     if (presence.error) throw new Error(presence.error.message)
     if (!presence.data?.online) throw new Error('Go online before accepting a ride.')
   }
+  // Re-fetch the trip to get the latest state after any potential changes
+  // from checking the driver's online status (e.g., metadata offer_driver_id may have changed).
+  const freshRowsAfter = await listTrips(supabase, (query) => query.eq('id', trip.id).limit(1))
+  const freshAfter = freshRowsAfter[0]
+  if (!freshAfter) {
+    throw new Error("That ride is no longer available")
+  }
+  if (freshAfter.driver_id && freshAfter.driver_id !== driverId) throw new Error('That ride is no longer available')
+  if (freshAfter.status && !['requested', 'searching', 'offered', 'scheduled'].includes(freshAfter.status)) {
+    throw new Error('That ride is no longer available')
+  }
+  if (freshAfter.metadata?.offer_driver_id && freshAfter.metadata.offer_driver_id !== driverId) {
+    throw new Error("That ride is no longer available")
+  }
   // If the trip is scheduled, we need to update the trip's status to 'accepted'
   // and set the accepted_at timestamp.
   let data;
-  if (fresh.status === 'scheduled') {
+  if (freshAfter.status === 'scheduled') {
     // Call RPC for scheduled trips
     const { data: rpcData, error: rpcError } = await supabase.rpc('accept_scheduled_trip', { p_trip_id: trip.id })
     if (rpcError) throw rpcError
@@ -353,9 +364,11 @@ export async function acceptTrip(supabase, trip, driverId) {
       .from('trips')
       .update({ status: 'accepted', accepted_at: new Date().toISOString(), driver_id: driverId })
       .eq('id', trip.id)
+      .in('status', ['requested', 'searching', 'offered'])
+      .eq('driver_id', null)
       .maybeSingle()
     if (error) throw new Error(error.message)
-    if (!dataResult) throw new Error('Trip not found')
+    if (!dataResult) throw new Error('That ride is no longer available')
     // Write the accepted event for on-demand trips
     await writeTripEvent(supabase, trip.id, 'accepted', { driver_id: driverId, source: 'driver_app', accepted_at: new Date().toISOString() })
     data = dataResult;
