@@ -26,12 +26,8 @@
 -- order runs this gate before the deposit trigger, so a row that fails both
 -- raises the approval error. Approved drivers still hit the deposit trigger.
 --
--- Version prefix 20260925120000 is already used by
--- 20260925120000_ambassador_payout_unique.sql. Rename this file to a free
--- version before applying if the Supabase CLI rejects the duplicate.
-
-CREATE OR REPLACE FUNCTION public.assert_driver_may_accept(p_driver uuid)
-RETURNS void
+-- This file was renamed from 20260925120000 to 20260925120001 to avoid a version prefix clash with
+-- 20260925120000_ambassador_payout_unique.sql.
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public
