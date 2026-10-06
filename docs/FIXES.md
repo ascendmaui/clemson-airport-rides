@@ -1913,3 +1913,11 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
 - **Files touched:** `server/endpoints/expireUnpaidAirportHolds.js`, `tests/gaAuditExpireHoldsSanitization.test.js`, `package.json`, `docs/FIXES.md`
 - **Verified:** `npm test` passing with 0 failures.
 
+
+## 2026-10-06 — Fix race conditions in acceptTrip function to prevent double acceptance and handle offer reassignment
+
+- **Track / machine:** Clemson RIDES · MacBook Max · audit-tests-docs-clemson-a
+- **What was wrong:** The `acceptTrip` function in `packages/rides-native/driverDesk.js` had a race condition where after checking the driver's online status, the trip state could change (e.g., another driver accepts, or the trip expires) leading to incorrect acceptance or errors.
+- **What changed:** Re-fetch the trip after checking the driver's online status to ensure the trip is still available and in a valid state before proceeding with acceptance. Also, removed duplicate conditionals that were checked earlier.
+- **Files touched:** `packages/rides-native/driverDesk.js`
+- **Verified:** The matching E2E tests pass (specifically R001-R010 and edge cases) and the full test suite passes.

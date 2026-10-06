@@ -8,7 +8,7 @@
 - simultaneous accepts produce exactly one winner; and
 - offline and unapproved drivers are rejected.
 
-Additionally, the specific scenario of rider cancel while searching (R001) is covered by a dedicated CI test.
+The specific scenario of rider cancel while searching (R001) is covered by a dedicated CI test (listed below).
 
 The following scenarios are also covered by dedicated tests:
 
@@ -26,6 +26,7 @@ The following scenarios are also covered by dedicated tests:
 - R009: approved online driver does not see a trip accepted by another driver
 - R010: driver can accept a trip in requested status
 
+- R011: driver with non-approved application does not see offers and cannot accept trips
 Run the dedicated tests with:
 
 ```sh
@@ -39,7 +40,7 @@ node --test tests/matchingE2E_R007.test.js
 node --test tests/matchingE2E_R008.test.js
 node --test tests/matchingE2E_R009.test.js
 node --test tests/matchingE2E_R010.test.js
-```
+node --test tests/matchingE2E_R011.test.js
 
 The application-level approval and online checks are covered here. The live database defense-in-depth gap remains until the `driver_approval_accept_gate` migration associated with #118 has been renamed, and awaits review and application. This test change does not modify or apply that migration.
 
@@ -57,7 +58,7 @@ As of the latest commit, the migration is not applied to the production Supabase
 
 ## Additional Edge Case Tests
 
-Beyond the core matching seam and R001-R008 scenarios, additional edge case tests cover:
+Beyond the core matching seam and R001-R010 scenarios, additional edge case tests cover:
 
 - Driver going offline after accepting trip (trip acceptance status unchanged)
 - Concurrent cancellation and expiration scenarios (race condition handling)
@@ -78,7 +79,7 @@ To run all matching E2E tests (including core tests, R001-R010 scenarios, and ed
 # Core matching seam tests
 node --test tests/matchingE2E.test.js
 
-# R001-R009 specific scenarios
+# R001-R010 specific scenarios
 node --test tests/matchingE2E_R001.test.js
 node --test tests/matchingE2E_R002.test.js
 node --test tests/matchingE2E_R003.test.js
@@ -90,6 +91,7 @@ node --test tests/matchingE2E_R008.test.js
 node --test tests/matchingE2E_R009.test.js
 node --test tests/matchingE2E_R010.test.js
 
+node --test tests/matchingE2E_R011.test.js
 # Additional edge case tests
 node --test tests/matchingE2E_edgeCases.test.js
 
