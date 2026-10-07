@@ -20,6 +20,7 @@ import { driverOfferCopy, driverTakeCents, formatUsd } from '../lib/carpoolEngin
 import { driverBoostOfferLine } from '../../shared/copy/boost.js'
 import { driverBoostShareCents, formatBoostBadge, readBoostCents } from '../../shared/scheduledBoost.js'
 import { RideChat, RideMessageButton } from '../components/RideChat'
+import { ReportLostItemButton } from '../components/ReportLostItem'
 import { rideChatMode } from '../lib/tripChatRules'
 import { SosControl } from '../components/SosControl'
 import { applyTripDriverIncentives, fetchDriverIncentiveExtras } from '../lib/driverIncentives'
@@ -94,7 +95,7 @@ async function writeTripEvent(tripId, kind, payload = {}) {
 
 const ACTIVE_STATUSES = ['accepted', 'arriving', 'arrived', 'in_progress']
 
-export function DriverHome() {
+export function DriverHome({ openChatTripId = '' }) {
   const { user, loading } = useAuth()
   if (loading) {
     return (
@@ -139,6 +140,10 @@ function DriverShell({ driverId }) {
   const [activeChecked, setActiveChecked] = useState(false)
   const approved = driverRouteForOnboarding(application?.onboarding_status) === 'driver'
   const [chatTrip, setChatTrip] = useState(null)
+  useEffect(() => {
+    if (!openChatTripId) return
+    setChatTrip({ id: openChatTripId })
+  }, [openChatTripId])
   const [scheduledOpen, setScheduledOpen] = useState([])
   const [scheduledMine, setScheduledMine] = useState([])
   const offerRevision = useRef(0)
@@ -1102,6 +1107,11 @@ function DriverShell({ driverId }) {
                     <button type="button" className="pressable" onClick={() => navigate('lost-found', { trip: t.id })} style={{ fontWeight: 700, color: 'var(--orange)', fontSize: 12 }}>
                       Lost item
                     </button>
+                    <ReportLostItemButton
+                      trip={{ id: t.id, status: 'completed', completed_at: t.completed_at, driver_id: driverId }}
+                      userId={driverId}
+                      onOpened={() => setChatTrip({ id: t.id, status: 'completed', completed_at: t.completed_at, driver_id: driverId })}
+                    />
                     <strong style={{ color: 'var(--ink)' }}>
                       {centsToDollars(driverTakeCents(t))}
                       {driverBoostShareCents(readBoostCents(t)) > 0 ? (
@@ -1276,8 +1286,15 @@ function DriverShell({ driverId }) {
 
           {rideChatMode(activeTrip) !== 'closed' && activeTrip.rider_id && (
             <div style={{ marginTop: 16 }}>
-              <RideMessageButton onClick={() => setChatTrip(activeTrip)} />
+              <RideMessageButton tripId={activeTrip.id} userId={driverId} onClick={() => setChatTrip(activeTrip)} />
             </div>
+          )}
+          {activeTrip.status === 'completed' && (
+            <ReportLostItemButton
+              trip={activeTrip}
+              userId={driverId}
+              onOpened={() => setChatTrip(activeTrip)}
+            />
           )}
           {activeTrip.status === 'accepted' && (
             <PurpleAcceptButton onClick={() => advanceTrip('arriving')} disabled={advancing}>

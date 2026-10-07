@@ -1,28 +1,69 @@
 import { useEffect, useState } from 'react'
 import { navigate } from '../lib/navigation'
 import { PrimaryButton } from '../components/PrimaryButton'
-import { QrMark } from '../components/QrMark'
-import { MARKETING_FEATURES } from '../../shared/marketingFeatures.js'
-import { STANDING_OFFERS } from '../../shared/standingPromos.js'
-import { currentWeeklyCoupon, FRIDAY_DROP_HOUR_ET, FRIDAY_DROP_TIME_ZONE } from '../../shared/weeklyCoupon.js'
-import { RIDE_OPTION_CATALOG } from '../../shared/rideOptions.js'
-import {
-  APP_DOWNLOADS,
-  SUPPORT_EMAIL,
-  WEB_BOOK_URL,
-  WEB_DRIVER_URL,
-} from '../../shared/productLinks.js'
+import { MarketingPhoto } from '../components/MarketingPhoto'
+import { messagingGuide } from '../../shared/copy/messaging.js'
+import { FEATURE_IMAGES, HERO_COLLAGE } from '../../shared/marketingImages.js'
 
-const RIDE_TYPE_COPY = {
-  standard: 'Everyday seats. The fare is on screen before you request.',
-  wait: 'A few more minutes. A lower fare when time is on your side.',
-  comfort: 'A quieter car. Same matching, a higher class.',
+const STADIUM = {
+  src: '/marketing/clemson-memorial-stadium.jpg',
+  alt: 'Clemson Memorial Stadium at night, the stands full under the lights',
 }
 
-const FRAMES = [
-  { src: '/marketing/clemson-memorial-stadium.jpg', alt: 'Clemson Memorial Stadium at night, the stands full under the lights' },
-  { src: '/marketing/clemson-rides-avenue.jpg', alt: 'Dusk on a brick campus avenue under a deep sky' },
-  { src: '/marketing/clemson-rides-gameday.jpg', alt: 'Stadium lights blooming against a night sky' },
+const CAMPUS_SHOTS = [
+  {
+    id: FEATURE_IMAGES.student,
+    title: 'Study group',
+    body: 'Rides between the library, class, and home.',
+  },
+  {
+    id: FEATURE_IMAGES.gameday,
+    title: 'Game day',
+    body: 'When a game day is live, the rider home shows the pickup zone and the fare multiplier from the server.',
+  },
+  {
+    id: FEATURE_IMAGES.matching,
+    title: 'On College Avenue',
+    body: 'Request a ride from the curb. The fare is on screen before you confirm.',
+  },
+  {
+    id: FEATURE_IMAGES.tracking,
+    title: 'On your phone',
+    body: 'The trip stays on your phone from the request until you arrive.',
+  },
+]
+
+const SAFETY_CARDS = [
+  {
+    id: 'night-live-tracking',
+    title: 'Live tracking',
+    body: 'After a driver accepts, the trip screen follows the ride from pickup through drop-off.',
+  },
+  {
+    id: 'safety-share-trip',
+    title: 'Share your trip',
+    body: 'Share a live trip link with someone you trust. Location updates while the ride is underway.',
+  },
+  {
+    id: 'night-sos',
+    title: 'SOS',
+    body: 'Call 911 or Clemson Police from the app. The first press confirms and does not dial.',
+  },
+  {
+    id: 'safety-recording',
+    title: 'Voice and audio recording',
+    body: 'Record audio during an active ride, right in the app. You start it on your phone after a driver has accepted. The clip stays on that phone and is not uploaded, and a banner stays up while it is recording.',
+  },
+  {
+    id: 'safety-verified-driver',
+    title: 'Driver review',
+    body: 'New drivers are not auto-approved. Clemson RIDES reviews the application before they take trips.',
+  },
+  {
+    id: 'night-orange-screen',
+    title: 'The ride on your phone',
+    body: 'Request, match, and the trip itself stay on your phone until you arrive.',
+  },
 ]
 
 function scrollToDownloads() {
@@ -38,7 +79,6 @@ function useNavOverPage() {
     if (!stage) return undefined
     const read = () => {
       const top = scroller ? scroller.scrollTop : window.scrollY
-      // Leave the bar clear at the top, then use translucent purple once the page has moved.
       setOverPage(top > 12)
     }
     read()
@@ -53,48 +93,24 @@ function useNavOverPage() {
   return overPage
 }
 
-function scrollToCoupon() {
-  document.getElementById('this-weeks-coupon')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+function LiveMark() {
+  return <span className="mkt-live">Live</span>
 }
 
-function DownloadCard({ app }) {
-  const sharedCode = app.iosHref === app.androidHref
+function SafetyCard({ card }) {
   return (
-    <article className="mkt-card mkt-download">
-      <div className="mkt-download-top">
-        {sharedCode ? <QrMark value={app.href} label={app.label} /> : (
-          <div className="mkt-qr-pair">
-            <QrMark value={app.iosHref} label={`${app.label} iOS`} />
-            <QrMark value={app.androidHref} label={`${app.label} Android`} />
-          </div>
-        )}
-        <div>
-          <div className="mkt-kicker">{app.label}</div>
-          <h3>{app.product}</h3>
-          <p>{sharedCode ? app.blurb : 'Separate codes for the iOS and Android listings.'}</p>
-          <p className="mkt-fine" style={{ wordBreak: 'break-all' }}>{sharedCode ? app.href : `${app.iosHref} · ${app.androidHref}`}</p>
-        </div>
-      </div>
-      <div className="mkt-platform">
-        <a href={app.iosHref} target="_blank" rel="noreferrer">
-          <strong>iOS</strong>
-          <span>{app.iosNote}</span>
-        </a>
-        <a href={app.androidHref} target="_blank" rel="noreferrer">
-          <strong>Android</strong>
-          <span>{app.androidNote}</span>
-        </a>
-      </div>
+    <article className="mkt-card mkt-feature mkt-safety-card">
+      <MarketingPhoto id={card.id} />
+      <LiveMark />
+      <h3>{card.title}</h3>
+      <p>{card.body}</p>
     </article>
   )
 }
 
 export function Marketing() {
   const overPage = useNavOverPage()
-  const coupon = currentWeeklyCoupon(new Date())
-  const value = coupon.percentOffBps
-    ? `${coupon.percentOffBps / 100}% off`
-    : `$${(coupon.amountOffCents / 100).toFixed(0)} off`
+  const riderGuide = messagingGuide('rider')
   return (
     <div className="mkt fade-in">
       <header className={overPage ? 'mkt-nav mkt-nav--scrolled' : 'mkt-nav'}>
@@ -109,146 +125,182 @@ export function Marketing() {
       </header>
 
       <section className="mkt-stage" aria-label="Clemson RIDES">
-        <img className="mkt-stage-photo" src={FRAMES[0].src} alt={FRAMES[0].alt} />
+        <img className="mkt-stage-photo" src={STADIUM.src} alt={STADIUM.alt} />
         <div className="mkt-stage-shade" aria-hidden="true" />
-        <div className="mkt-inner mkt-stage-copy">
-          <p className="mkt-kicker mkt-kicker--light">Clemson, South Carolina</p>
-          <h1>
-            Clemson
-            <span className="mkt-orange-word"> RIDES</span>
-          </h1>
-          <p className="mkt-lede">
-            Campus, game day, and the airport. Riders and drivers share one account.
-            Matching is live. The trip stays on the map until you arrive.
-          </p>
-          <div className="mkt-actions">
-            <PrimaryButton fullWidth={false} onClick={() => navigate('home')}>Book a ride</PrimaryButton>
-            <button type="button" className="mkt-ghost pressable" onClick={() => navigate('driver-signup')}>
-              Drive with Clemson RIDES
-            </button>
-            <button type="button" className="mkt-ghost pressable" onClick={() => navigate('schedule')}>
-              Airport schedule
-            </button>
+        <div className="mkt-stage-layout">
+          <div className="mkt-stage-copy">
+            <div className="mkt-hero-brand">
+              <span className="mkt-brand-mark" aria-hidden="true">CR</span>
+              <p className="mkt-hero-name">Clemson RIDES</p>
+            </div>
+            <h1>Peace of mind, every ride.</h1>
+            <p className="mkt-lede">
+              Rides and carpools built for Clemson students. Split the fare. Ride with friends.
+            </p>
+            <div className="mkt-actions">
+              <PrimaryButton className="mkt-book" fullWidth={false} onClick={() => navigate('home')}>Book a ride</PrimaryButton>
+              <button type="button" className="mkt-ghost pressable" onClick={scrollToDownloads}>
+                Download the app
+              </button>
+            </div>
+            <div className="mkt-choices" role="group" aria-label="Ways to ride">
+              <button type="button" className="mkt-choice pressable" onClick={() => navigate('home')}>Book a ride</button>
+              <button type="button" className="mkt-choice pressable" onClick={() => navigate('carpool', { hub: '1' })}>Book a carpool</button>
+              <button type="button" className="mkt-choice pressable" onClick={() => navigate('schedule')}>Schedule for later</button>
+            </div>
+          </div>
+          <div className="mkt-hero-collage">
+            {HERO_COLLAGE.map((shot) => (
+              <figure key={shot.id} className={shot.className}>
+                <MarketingPhoto id={shot.id} eager={shot.eager} />
+              </figure>
+            ))}
           </div>
         </div>
-        <aside className="mkt-spec" id="this-weeks-coupon" aria-label="This week's coupon">
-          <p className="mkt-kicker">This week · Friday {FRIDAY_DROP_HOUR_ET}:00 {FRIDAY_DROP_TIME_ZONE}</p>
-          <h2>{coupon.title}</h2>
-          <p>{coupon.detail}</p>
-          <p className="mkt-code" aria-label="Coupon code">{coupon.code}</p>
-          <p className="mkt-fine">{value}. New every Friday at 12:00 PM Eastern. {coupon.dropLabel}.</p>
-        </aside>
       </section>
 
       <main className="mkt-inner mkt-main">
-        <section aria-labelledby="offers-heading">
+        <section aria-labelledby="campus-heading">
           <div className="mkt-section-head">
-            <p className="mkt-kicker">Standing offers</p>
-            <h2 id="offers-heading">Always on</h2>
-            <p>The Friday code changes. These four do not.</p>
+            <p className="mkt-kicker">On campus</p>
+            <h2 id="campus-heading">What the ride looks like</h2>
           </div>
-          <div className="mkt-offers">
-            {STANDING_OFFERS.map((offer) => (
-              <article key={offer.id} className="mkt-card mkt-offer">
-                <p className="mkt-kicker">{offer.kicker}</p>
-                <h3>{offer.title}</h3>
-                <p>{offer.detail}</p>
-                {offer.purchasable ? (
-                  <button type="button" className="mkt-text pressable" onClick={() => navigate('account', { tab: 'billing' })}>
-                    Buy the $75 package
-                  </button>
-                ) : null}
+          <div className="mkt-safety-live">
+            {CAMPUS_SHOTS.map((shot) => (
+              <article key={shot.id} className="mkt-card mkt-feature">
+                <MarketingPhoto id={shot.id} />
+                <h3>{shot.title}</h3>
+                <p>{shot.body}</p>
               </article>
             ))}
           </div>
         </section>
 
-        <section aria-labelledby="types-heading">
+        <section className="mkt-block" aria-labelledby="how-heading">
           <div className="mkt-section-head">
-            <p className="mkt-kicker">Ride types</p>
-            <h2 id="types-heading">Standard, Wait & Save, Extra Comfort</h2>
+            <p className="mkt-kicker">How it works</p>
+            <h2 id="how-heading">From class to the ride home</h2>
           </div>
-          <div className="mkt-types">
-            {RIDE_OPTION_CATALOG.map((tier) => (
-              <article key={tier.id} className="mkt-card mkt-type">
-                <h3>{tier.name}</h3>
-                <p>{RIDE_TYPE_COPY[tier.id]}</p>
-              </article>
-            ))}
+          <div className="mkt-safety-live">
+            <article className="mkt-card mkt-feature">
+              <MarketingPhoto id="day-to-class" />
+              <h3>To class</h3>
+              <p>Request a ride when you are heading to class. The fare is on screen before you confirm.</p>
+            </article>
+            <article className="mkt-card mkt-feature">
+              <MarketingPhoto id="day-from-campus" />
+              <h3>From campus</h3>
+              <p>Head back the same way. Schedule ahead, or request when you are ready to leave.</p>
+            </article>
+            <article className="mkt-card mkt-feature">
+              <LiveMark />
+              <h3>{riderGuide.title}</h3>
+              <ul className="mkt-guide">
+                {riderGuide.summary.map((line) => <li key={line}>{line}</li>)}
+              </ul>
+            </article>
+            <article className="mkt-card mkt-feature">
+              <LiveMark />
+              <h3>{riderGuide.lostItemTitle}</h3>
+              <ol className="mkt-guide">
+                {riderGuide.lostItemSteps.map((line) => <li key={line}>{line}</li>)}
+              </ol>
+            </article>
           </div>
         </section>
 
-        <section aria-labelledby="features-heading">
+        <section id="night-safety" className="mkt-safety" aria-labelledby="night-safety-heading">
           <div className="mkt-section-head">
-            <p className="mkt-kicker">On the app</p>
-            <h2 id="features-heading">What you can book today</h2>
-            <p>
-              Student pricing, game day, scheduled weekend and party rides, Stripe payments,
-              real-time matching, and live trip tracking.
-            </p>
+            <p className="mkt-kicker">Nighttime safety</p>
+            <h2 id="night-safety-heading">Peace of mind after dark</h2>
+            <p>These tools are live in the rider app, the driver app, and on the web.</p>
           </div>
-          <div className="mkt-grid">
-            {MARKETING_FEATURES.map((feature) => (
-              <article key={feature.id} className="mkt-card mkt-feature">
-                <h3>{feature.title}</h3>
-                <p>{feature.body}</p>
-              </article>
-            ))}
+          <MarketingPhoto id="night-going-out" className="mkt-section-banner" />
+          <div className="mkt-safety-live">
+            {SAFETY_CARDS.map((card) => <SafetyCard key={card.id} card={card} />)}
           </div>
-          <p className="mkt-pay-note">
-            Stripe places a pre-authorization hold for the estimated fare plus a buffer.
-            The full fare is charged when the trip ends.
-          </p>
-          <div className="mkt-actions mkt-actions--section">
-            <button type="button" className="mkt-ghost mkt-ghost--solid pressable" onClick={() => navigate('carpool', { hub: '1' })}>
-              Find a carpool
+        </section>
+
+        <section className="mkt-block" aria-labelledby="carpool-heading">
+          <div className="mkt-section-head">
+            <p className="mkt-kicker">Carpool</p>
+            <h2 id="carpool-heading">Split the fare</h2>
+            <p>One car, pickups along the way, then the drop-off.</p>
+          </div>
+          <article className="mkt-card mkt-feature">
+            <MarketingPhoto id="carpool-how-it-works" />
+            <ol className="mkt-guide">
+              <li>Share one car</li>
+              <li>Three pickups along the way</li>
+              <li>Then the airport</li>
+            </ol>
+            <button type="button" className="mkt-text pressable" onClick={() => navigate('carpool', { hub: '1' })}>
+              Book a carpool
             </button>
-            <button type="button" className="mkt-text pressable" onClick={() => navigate('home')}>
-              Book a ride
-            </button>
-          </div>
+          </article>
+          <article className="mkt-card mkt-feature">
+            <MarketingPhoto id="carpool-friends-curb" />
+            <h3>Ride with friends</h3>
+            <p>Everyone sees their share before the carpool is charged.</p>
+          </article>
         </section>
 
-        <section id="get-the-app" className="mkt-get" aria-labelledby="download-heading">
+        <section className="mkt-block" aria-labelledby="airport-heading">
           <div className="mkt-section-head">
-            <p className="mkt-kicker">Download</p>
-            <h2 id="download-heading">Get the app</h2>
+            <p className="mkt-kicker">Airport</p>
+            <h2 id="airport-heading">On time for the flight</h2>
+          </div>
+          <article className="mkt-card mkt-feature">
+            <MarketingPhoto id="airport-on-time" />
+            <h3>Airport rides</h3>
             <p>
-              The App Store and Google Play listings are not live yet.
-              The rider code opens booking at {WEB_BOOK_URL}. The driver code opens the driver web app at {WEB_DRIVER_URL}.
-              The iPhone and Android buttons use those same pages.
+              Schedule a ride to Greenville-Spartanburg (GSP) or Charlotte Douglas (CLT).
+              Stripe places a pre-authorization hold for the estimated fare plus a buffer.
+              The full fare is charged when the trip ends.
             </p>
+          </article>
+        </section>
+
+        <section id="why-clemson-rides" className="mkt-block" aria-labelledby="why-heading">
+          <div className="mkt-section-head">
+            <p className="mkt-kicker">Why Clemson Rides</p>
+            <h2 id="why-heading">Built for students here</h2>
           </div>
-          <div className="mkt-downloads">
-            {APP_DOWNLOADS.map((app) => <DownloadCard key={app.id} app={app} />)}
+          <div className="mkt-safety-live">
+            <article className="mkt-card mkt-feature">
+              <MarketingPhoto id="gameday-crowd" />
+              <h3>Game day</h3>
+              <p>When a game day is live, the rider home shows the pickup zone and the fare multiplier from the server.</p>
+            </article>
+            <article className="mkt-card mkt-feature">
+              <MarketingPhoto id="students-carpool-backseat" />
+              <h3>Carpools with friends</h3>
+              <p>Split the fare and ride together.</p>
+            </article>
+            <article className="mkt-card mkt-feature">
+              <MarketingPhoto id="day-from-campus" />
+              <h3>Leaving campus</h3>
+              <p>Daytime rides back from class use the same booking flow.</p>
+            </article>
+            <article className="mkt-card mkt-feature">
+              <MarketingPhoto id="night-orange-screen" />
+              <h3>Night rides</h3>
+              <p>The trip stays on your phone, with live tracking, sharing, and audio recording once a driver has accepted.</p>
+            </article>
           </div>
-          <div className="mkt-card mkt-soft" aria-label="Web booking QR">
-            <p className="mkt-kicker">Soft launch · web</p>
-            <div className="mkt-soft-row">
-              <QrMark value={WEB_BOOK_URL} label="Book on web" />
-              <div>
-                <h3>Scan to book in the browser</h3>
-                <p>Same booking flow as the rider app.</p>
-                <p className="mkt-fine" style={{ wordBreak: 'break-all' }}>{WEB_BOOK_URL}</p>
-                <button type="button" className="mkt-text pressable" onClick={() => navigate('schedule')}>
-                  Prefer airport schedule? Open Schedule
-                </button>
-              </div>
-            </div>
-          </div>
-          <p className="mkt-fine">One account on the web, the rider app, and the driver app. Questions: {SUPPORT_EMAIL}</p>
         </section>
       </main>
 
-      <footer className="mkt-footer">
+      <footer className="mkt-footer" id="get-the-app">
         <div className="mkt-inner mkt-footer-inner">
           <span>Clemson RIDES</span>
           <nav aria-label="Footer">
-            <button type="button" className="pressable" onClick={scrollToCoupon}>This week</button>
+            <button type="button" className="pressable" onClick={() => navigate('driver-signup')}>Drive</button>
             <button type="button" className="pressable" onClick={() => navigate('service-area')}>Service area</button>
+            <button type="button" className="pressable" onClick={() => navigate('account', { tab: 'billing' })}>Tiger Pass</button>
+            <button type="button" className="pressable" onClick={() => navigate('account', { tab: 'safety' })}>Safety</button>
             <button type="button" className="pressable" onClick={() => navigate('privacy')}>Privacy</button>
             <button type="button" className="pressable" onClick={() => navigate('terms')}>Terms</button>
-            <button type="button" className="pressable" onClick={() => navigate('home')}>Book a ride</button>
           </nav>
         </div>
       </footer>

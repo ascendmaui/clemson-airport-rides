@@ -185,4 +185,9 @@ export async function cancelScheduledTrip(tripId: string) {
     .eq('id', tripId)
     .in('status', ['scheduled', 'accepted'])
   if (error) throw new Error(error.message || 'Could not cancel')
+  const hold = await authedJson(supabase, '/api/stripe-payment-methods?action=release-scheduled-boost', {
+    method: 'POST',
+    body: { tripId },
+  }) as { ok?: boolean; error?: string }
+  if (hold && hold.ok === false) throw new Error(hold.error || 'Could not release the hold on your card.')
 }

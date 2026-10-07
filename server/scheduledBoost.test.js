@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { placeFareAuthorization, syncBoostAuthorization } from './fareAuthorization.js'
+import { placeFareAuthorization, releaseOpenFareHold, syncBoostAuthorization } from './fareAuthorization.js'
 import { buildPayoutRecord } from './payouts.js'
 import bumpScheduledBoost from './endpoints/bumpScheduledBoost.js'
+import releaseScheduledBoost from './endpoints/releaseScheduledBoost.js'
 import { insertTripRow } from './scheduledBoostStore.js'
 
 function mockRes() {
@@ -183,6 +184,64 @@ test('bump re-authorizes when increment authorization is not available', async (
   assert.ok(stripe.calls.some((call) => call.op === 'cancel'))
   const created = stripe.calls.find((call) => call.op === 'create')
   assert.equal(created.params.amount, 5000 + 1000 + 1000)
+})
+
+test('rider cancel releases the open boost hold immediately', async () => {
+  const trip = {
+    id: 'trip_cancel',
+    rider_id: 'rider_1',
+    status: 'canceled',
+    fare_cents: 8000,
+    metadata: {
+      boost_cents: 1000,
+      fare_authorization: {
+        status: 'requires_capture',
+        paymentIntentId: 'pi_boost',
+        authorizationCents: 10600,
+        boostCents: 1000,
+      },
+    },
+  }
+  const sb = {
+    from() {
+      const api = {
+        select() { return api },
+        eq() { return api },
+        update(patch) {
+          if (patch.metadata) trip.metadata = patch.metadata
+          return api
+        },
+        maybeSingle() { return Promise.resolve({ data: { ...trip, metadata: { ...trip.metadata } }, error: null }) },
+        then(resolve) { return Promise.resolve({ error: null }).then(resolve) },
+      }
+      return api
+    },
+  }
+  const stripe = scriptedStripe()
+  const released = await call(releaseScheduledBoost, { tripId: 'trip_cancel' }, { sb, user: { id: 'rider_1' }, stripe })
+  assert.equal(released.status, 200)
+  assert.equal(released.json.hold.released, true)
+  assert.equal(stripe.calls[0].op, 'cancel')
+  assert.equal(stripe.calls[0].id, 'pi_boost')
+  assert.equal(trip.metadata.fare_authorization.status, 'canceled')
+  assert.equal(trip.metadata.fare_authorization.reason, 'rider_cancel')
+
+  trip.metadata.boost_cents = 0
+  delete trip.metadata.fare_authorization
+  const plain = await call(releaseScheduledBoost, { tripId: 'trip_cancel' }, { sb, user: { id: 'rider_1' }, stripe })
+  assert.equal(plain.json.reason, 'no_boost')
+  assert.equal(stripe.calls.length, 1)
+
+  const direct = await releaseOpenFareHold({
+    sb,
+    stripe,
+    trip: {
+      id: 'trip_none',
+      metadata: { boost_cents: 500 },
+    },
+  })
+  assert.equal(direct.skipped, true)
+  assert.equal(direct.reason, 'no_open_hold')
 })
 
 test('trip insert falls back to metadata when boost_cents is not migrated yet', async () => {

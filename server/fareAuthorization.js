@@ -318,6 +318,31 @@ export async function authorizeRideRequest({
 }
 
 /**
+ * Drop an open fare hold so the rider is not charged.
+ * Used when they cancel a boosted scheduled ride. No open hold is a no-op.
+ */
+export async function releaseOpenFareHold({ sb, stripe, trip, reason = 'rider_cancel' } = {}) {
+  const auth = trip?.metadata?.fare_authorization
+  if (!auth || auth.status !== 'requires_capture' || !auth.paymentIntentId) {
+    return { ok: true, skipped: true, reason: 'no_open_hold' }
+  }
+  const client = stripe || (stripeOk() ? stripeClient() : null)
+  if (!client?.paymentIntents?.cancel) {
+    return { ok: true, skipped: true, reason: 'stripe_not_configured' }
+  }
+  const canceled = await cancelQuiet(client, { id: auth.paymentIntentId, status: 'requires_capture' })
+  if (!canceled) return { ok: false, reason: 'hold_release_failed', paymentIntentId: auth.paymentIntentId }
+  const fareAuthorization = {
+    ...auth,
+    status: 'canceled',
+    reason,
+    at: new Date().toISOString(),
+  }
+  await mergeTripMetadata(sb, trip.id, { fare_authorization: fareAuthorization })
+  return { ok: true, released: true, reason, paymentIntentId: auth.paymentIntentId }
+}
+
+/**
  * Raise an open fare hold after the rider bumps a scheduled boost.
  * Uses incrementAuthorization when Stripe offers it. Otherwise the open
  * PaymentIntent is canceled and a new manual-capture hold is created.
