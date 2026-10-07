@@ -297,6 +297,10 @@ body .mkt-section-head p {
   color: #fff;
 }
 
+body .mkt-section-head .mkt-kicker {
+  color: #F56600;
+}
+
 body .mkt-offer p,
 body .mkt-type p,
 body .mkt-feature p,
