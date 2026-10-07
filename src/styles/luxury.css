@@ -679,6 +679,33 @@ body .mkt-qr-svg {
   }
 }
 
+/* Keep the phone header on one row without shrinking targets below 44px. */
+@media (max-width: 480px) {
+  body .mkt-nav {
+    flex-wrap: nowrap;
+    align-items: center;
+    padding: 8px;
+    gap: 8px;
+  }
+  body .mkt-nav-links {
+    flex-wrap: nowrap;
+    gap: 8px;
+    margin-left: auto;
+  }
+  body .mkt-brand {
+    flex: 0 1 auto;
+    font-size: 15px;
+    min-height: 44px;
+    padding-left: 8px;
+    padding-right: 0;
+  }
+  body .mkt-nav-links button {
+    min-height: 44px;
+    padding: 8px 10px;
+    font-size: 15px;
+  }
+}
+
 /* Auth */
 .lux-auth {
   min-height: 100%;
