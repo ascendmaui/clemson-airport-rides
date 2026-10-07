@@ -55,6 +55,7 @@ function boundSessionId(trip) {
 }
 
 function parsedMs(value) {
+  if (value instanceof Date) return Number.isFinite(value.getTime()) ? value.getTime() : null
   if (typeof value !== 'string' || !value) return null
   const ms = Date.parse(value)
   return Number.isFinite(ms) ? ms : null
@@ -172,7 +173,7 @@ async function loadDeposits(sb, tripId) {
 }
 
 function metaObject(trip) {
-  return trip?.metadata && typeof trip.metadata === 'object' ? trip.metadata : {}
+  return trip?.metadata && typeof trip.metadata === 'object' && !Array.isArray(trip.metadata) ? trip.metadata : {}
 }
 
 async function writeCanceled(sb, trip, session, { reason, source }) {
@@ -767,7 +768,9 @@ export async function releaseExpiredUnpaidAirportHolds(sb, {
   dryRun = false,
 } = {}) {
   const batchSize = Math.min(40, Math.max(1, Number(limit) || 40))
-  const cutoff = new Date(now - ttlMs).toISOString()
+  const safeNow = Number.isFinite(Number(now)) ? Number(now) : Date.now()
+  const safeTtlMs = Number.isFinite(Number(ttlMs)) && Number(ttlMs) > 0 ? Number(ttlMs) : UNPAID_AIRPORT_HOLD_TTL_MS
+  const cutoff = new Date(safeNow - safeTtlMs).toISOString()
   const listed = await sb
     .from('trips')
     .select('id, status, rider_id, driver_id, scheduled_for, metadata, canceled_at, created_at, deposit_cents, rider_note, hold_expire_claimed_at')
