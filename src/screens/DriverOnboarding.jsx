@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { MarketingPhoto } from '../components/MarketingPhoto'
 import { useAuth } from '../lib/auth'
 import { PrimaryButton } from '../components/PrimaryButton'
 import { ApplicantThread } from '../components/ApplicantThread'
@@ -584,6 +585,17 @@ export function DriverOnboarding() {
       <p style={{ color: 'var(--ink-secondary)', fontSize: 14, lineHeight: 1.45, marginTop: 6 }}>
         New drivers are never auto-approved. Finish each step — your place is saved if you leave.
       </p>
+      {step === 'account' ? (
+        <div className="drive-intro">
+          <figure className="drive-intro-block">
+            <MarketingPhoto id="driver-student" />
+          </figure>
+          <figure className="drive-intro-block">
+            <MarketingPhoto id="safety-verified-driver" />
+            <figcaption>New drivers are not auto-approved. Clemson RIDES reviews the application before they take trips.</figcaption>
+          </figure>
+        </div>
+      ) : null}
 
       <OnboardingProgress viewing={current.id} onSelect={go} {...gate} />
 
