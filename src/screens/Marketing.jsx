@@ -38,8 +38,7 @@ function useNavOverPage() {
     if (!stage) return undefined
     const read = () => {
       const top = scroller ? scroller.scrollTop : window.scrollY
-      // The hero holds a white coupon card. Leave the bar clear at the top,
-      // then use translucent purple once the page has moved.
+      // Leave the bar clear at the top, then use translucent purple once the page has moved.
       setOverPage(top > 12)
     }
     read()
