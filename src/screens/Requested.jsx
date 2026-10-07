@@ -7,7 +7,7 @@ import { navigate, shareUrl } from '../lib/navigation'
 import { shouldPromptRiderTip } from '../lib/riderTip'
 import { useAuth } from '../lib/auth'
 import { createLocationShare, startSharingLocation } from '../lib/locationShare'
-import { isLiveTrip, subscribeTripDriverLocation } from '../lib/liveDriverLocation'
+import { distanceMeters, isLiveTrip, subscribeTripDriverLocation } from '../lib/liveDriverLocation'
 import { supabase } from '../lib/supabase'
 import { hasRatedTrip } from '../lib/ratings'
 import { RideChat, RideMessageButton } from '../components/RideChat'
@@ -17,6 +17,7 @@ import { fetchLostItemReport, subscribeLostItemReports } from '../lib/tripMessag
 import { SosControl } from '../components/SosControl'
 import { isActiveRideStatus } from '../lib/sosAlert'
 import { MidrideCancelSheet } from '../components/MidrideCancelSheet'
+import { RiderSwitchSheet } from '../components/RiderSwitchSheet'
 import { isMidrideStatus } from '../lib/tripPhase'
 import { CounterpartChip } from '../components/CounterpartChip'
 import { PARTY_VISIBLE_STATUSES } from '../../packages/rides-native/partyProfile.js'
@@ -57,6 +58,7 @@ export function Requested({ dest = 'GSP Airport', trip = '', driver = 'your driv
   const [rateNudge, setRateNudge] = useState(false)
   const [chatOpen, setChatOpen] = useState(false)
   const [cancelOpen, setCancelOpen] = useState(false)
+  const [switchOpen, setSwitchOpen] = useState(false)
   const [stillSearching, setStillSearching] = useState(false)
   const searchStartedAt = useRef(null)
   const stopRef = useRef(null)
@@ -325,6 +327,10 @@ export function Requested({ dest = 'GSP Airport', trip = '', driver = 'your driv
     return () => clearInterval(id)
   }, [status, driverPos])
 
+  const approachFeet = (status === 'accepted' || status === 'arriving' || status === 'arrived') && driverPos && pickup
+    ? Math.round(distanceMeters({ lat: driverPos[0], lng: driverPos[1] }, { lat: pickup[0], lng: pickup[1] }))
+    : null
+  const canSwitchDriver = (status === 'accepted' || status === 'arriving') && Boolean(tripRow?.driver_id)
   const fleetTags = tripRow ? tripTags(tripRow) : []
   const comfortClassTrip = fleetTags.includes('comfort')
 
@@ -384,6 +390,11 @@ export function Requested({ dest = 'GSP Airport', trip = '', driver = 'your driv
           steps={tripMissing ? [] : phase.steps}
           activeIndex={tripMissing ? -1 : phase.stepIndex}
         />
+        {Number.isFinite(approachFeet) ? (
+          <p role="status" style={{ marginTop: 10, fontWeight: 800, color: 'var(--orange)' }}>
+            Your driver is {approachFeet.toLocaleString('en-US')} ft away.
+          </p>
+        ) : null}
         {preview && searchPreview?.wait && (
           <div className="search-wait" role="status" aria-live="polite">
             <span className="search-wait__spinner" aria-hidden="true" />
@@ -478,6 +489,16 @@ export function Requested({ dest = 'GSP Airport', trip = '', driver = 'your driv
               </button>
             </div>
           )}
+          {canSwitchDriver && trip && (
+            <button
+              type="button"
+              className="pressable"
+              onClick={() => setSwitchOpen(true)}
+              style={{ fontWeight: 800, color: 'var(--purple)', padding: '4px 0' }}
+            >
+              Change driver
+            </button>
+          )}
           {isMidrideStatus(status) && trip && (
             <button
               type="button"
@@ -498,6 +519,20 @@ export function Requested({ dest = 'GSP Airport', trip = '', driver = 'your driv
           userId={user.id}
           initialTrip={tripRow}
           onClose={() => setChatOpen(false)}
+        />
+      )}
+      {switchOpen && trip && (
+        <RiderSwitchSheet
+          tripId={trip}
+          onClose={() => setSwitchOpen(false)}
+          onDone={(data) => {
+            setSwitchOpen(false)
+            if (data?.next === 'carpool') navigate('carpool', { hub: '1' })
+            else if (data?.next === 'home') navigate('home')
+            else if (data?.trip) {
+              setTripRow((row) => (row ? { ...row, ...data.trip, driver_id: data.trip.driver_id ?? null } : row))
+            }
+          }}
         />
       )}
       {cancelOpen && trip && (

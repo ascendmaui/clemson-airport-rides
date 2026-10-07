@@ -10,6 +10,7 @@ import expireHoldsHandler from './api/expire-unpaid-airport-holds.js'
 import riderLiveHandler from './api/rider-live.js'
 import tigerHeatHandler from './api/tiger-heat.js'
 import tripMessagesHandler from './api/trip-messages.js'
+import riderSwitchHandler from './api/rider-switch.js'
 
 const legacy = {
   '/api/help-chat': ['/api/admin-drivers?action=help-chat', adminHandler],
@@ -42,6 +43,7 @@ const direct = {
   '/api/rider-live': riderLiveHandler,
   '/api/tiger-heat': tigerHeatHandler,
   '/api/trip-messages': tripMessagesHandler,
+  '/api/rider-switch': riderSwitchHandler,
 }
 
 function readBody(req) {
