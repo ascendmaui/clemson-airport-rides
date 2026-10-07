@@ -19,7 +19,7 @@ export default function SignUpRoute() {
   const params = useLocalSearchParams<{ ref?: string }>()
   const { signUp } = useAuth()
   const onSocial = useSocialSignIn()
-  const googleState = googleAuthButtonState(process.env, { scheme: 'clemsonrides' })
+  const googleState = googleAuthButtonState(process.env, { scheme: 'clemsonrides', provider: 'supabase' })
 
   const socialProviders = RIDER_SOCIAL_PROVIDERS.map((provider) => {
     if (provider.id === 'google') {

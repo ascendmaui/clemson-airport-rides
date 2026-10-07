@@ -11,6 +11,7 @@ import { CampusMap } from '@/components/CampusMap'
 import { SearchDemoCycle } from '@/components/SearchDemoCycle'
 import type { MapPin } from '@/components/mapTypes'
 import { LiveShareCard } from '@/components/LiveShareCard'
+import { RiderSwitchSheet } from '@/components/RiderSwitchSheet'
 import { RideMessages } from '@/components/RideMessages'
 import { SosButton, SosIncomingBanner, SosSheet } from '@/components/SosSheet'
 import { useAuth } from '@/lib/auth'
@@ -105,6 +106,7 @@ export default function Requested() {
   const [mapError, setMapError] = useState<string | null>(null)
   const [refreshing, setRefreshing] = useState(false)
   const [sosOpen, setSosOpen] = useState(false)
+  const [switchOpen, setSwitchOpen] = useState(false)
   const [contacts, setContacts] = useState<EmergencyContact[]>([])
   const [person, setPerson] = useState<CounterpartView | null>(null)
   const { colors } = useTheme()
@@ -362,6 +364,9 @@ export default function Requested() {
                 An orange card tracks how close they are, in feet, from the location they already share.
               </Text>
             ) : null}
+            {(shown?.status === 'accepted' || shown?.status === 'arriving') && (shown?.driver_id || live?.driver_id) ? (
+              <PrimaryButton label="Change driver" tone="purple" onPress={() => setSwitchOpen(true)} />
+            ) : null}
             {shown?.status === 'completed' ? (
               <PrimaryButton label="Rate your driver" onPress={() => router.push({ pathname: '/rate', params: { trip: tripId } })} />
             ) : null}
@@ -441,6 +446,19 @@ export default function Requested() {
         ) : null}
       </ScrollView>
       </Animated.View>
+      {tripId ? (
+        <RiderSwitchSheet
+          tripId={tripId}
+          open={switchOpen}
+          onClose={() => setSwitchOpen(false)}
+          onDone={(result) => {
+            setSwitchOpen(false)
+            if (result.next === 'carpool') router.push('/friends')
+            else if (result.next === 'home') router.replace('/')
+            else void reloadMap(true)
+          }}
+        />
+      ) : null}
       <SosSheet
         open={sosOpen}
         onClose={() => setSosOpen(false)}
