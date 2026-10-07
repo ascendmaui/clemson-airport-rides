@@ -21,6 +21,8 @@ import { DESTINATIONS } from '../store.js'
 
 export const ONLY_AT_CLEMSON_RIDES = 'Only at Clemson Rides'
 
+export const FEATURES_HEADING = 'Peace of mind, built in'
+
 export const CONFIRM_LEAD_MINUTES = BACKUP_CONFIRM_WINDOW_MS / 60000
 
 const LEAD_MINUTES = MIN_LEAD_MS / 60000
@@ -56,7 +58,7 @@ const cltFare = airportFare('clt')
 export const FEATURES = [
   {
     id: 'backup-driver',
-    title: 'Backup driver',
+    title: 'Guaranteed pickup',
     exclusive: true,
     what: `Add a second driver for ${backupChoices} on a scheduled ride. If the first driver cannot make it, the backup takes the trip.`,
     steps: [
@@ -70,7 +72,7 @@ export const FEATURES = [
   },
   {
     id: 'confirm',
-    title: 'Drivers confirm first',
+    title: 'Drivers confirm before they come',
     exclusive: true,
     what: `Your driver confirms ${CONFIRM_LEAD_MINUTES} minutes before pickup, or the backup takes over. With no backup, the ride opens to every driver.`,
     steps: [
@@ -84,7 +86,7 @@ export const FEATURES = [
   },
   {
     id: 'on-the-way',
-    title: 'On the way',
+    title: 'On-the-way alerts',
     exclusive: false,
     what: 'After they confirm, a countdown starts. When it hits zero, navigation starts and you are told to sit tight, because your driver is on the way.',
     steps: [
@@ -98,7 +100,7 @@ export const FEATURES = [
   },
   {
     id: 'switch-cancel',
-    title: 'Switch or cancel',
+    title: 'Switch or cancel, your call',
     exclusive: false,
     what: `You can switch once before your driver starts toward you, or cancel. The first driver gets the ${backupChoices}, a switch never counts against them, and a cancel pays that fee to the first driver only.`,
     steps: [
@@ -112,7 +114,7 @@ export const FEATURES = [
   },
   {
     id: 'boosts',
-    title: 'Boost a scheduled ride',
+    title: 'Boost your scheduled ride',
     exclusive: false,
     what: `Add ${boostChoices}, or your own amount, on a scheduled ride. ${driverKeepsBoost()}`,
     steps: [
@@ -235,6 +237,20 @@ export const FEATURES = [
     why: 'The trips are the ones around this campus. Clemson RIDES is not an official Clemson University service.',
   },
   {
+    id: 'airports',
+    title: 'Airport rides',
+    exclusive: false,
+    what: `Schedule a ride to Greenville-Spartanburg (GSP) for ${gspFare} or Charlotte Douglas (CLT) for ${cltFare}.`,
+    steps: [
+      'Open Schedule.',
+      `Choose GSP (${gspFare}) or CLT (${cltFare}).`,
+      `Set a date and time at least ${LEAD_MINUTES} minutes ahead.`,
+      `A pickup that far ahead is ${SCHEDULE_AHEAD_DISCOUNT_PCT}% off the server fare.`,
+      'You can add a backup driver and a boost on that ride.',
+    ],
+    why: 'The airport ride is set before you leave campus. A backup can be in line if you want one.',
+  },
+  {
     id: 'student',
     title: 'Student price',
     exclusive: false,
@@ -273,20 +289,6 @@ export const FEATURES = [
       'Drivers see that ride under weekend and party.',
     ],
     why: 'A night out can be booked ahead, so you are not looking for a ride at the curb.',
-  },
-  {
-    id: 'airports',
-    title: 'Airport rides',
-    exclusive: false,
-    what: `Schedule a ride to Greenville-Spartanburg (GSP) for ${gspFare} or Charlotte Douglas (CLT) for ${cltFare}.`,
-    steps: [
-      'Open Schedule.',
-      `Choose GSP (${gspFare}) or CLT (${cltFare}).`,
-      `Set a date and time at least ${LEAD_MINUTES} minutes ahead.`,
-      `A pickup that far ahead is ${SCHEDULE_AHEAD_DISCOUNT_PCT}% off the server fare.`,
-      'You can add a backup driver and a boost on that ride.',
-    ],
-    why: 'The airport ride is set before you leave campus. A backup can be in line if you want one.',
   },
 ]
 

@@ -319,12 +319,14 @@ test('messaging and lost item blocks are live and follow messagingGuide', async 
   assert.match(guide.lostItemSteps.join(' '), /marks it resolved/)
 })
 
-test('why page and drive page carry the differentiators without crowding the homepage', async () => {
+test('homepage carries the feature sections and the why page points back to them', async () => {
   const home = readFileSync(new URL('../src/screens/Marketing.jsx', import.meta.url), 'utf8')
+  const blocks = readFileSync(new URL('../src/components/FeatureSections.jsx', import.meta.url), 'utf8')
   const why = readFileSync(new URL('../src/screens/WhyClemsonRides.jsx', import.meta.url), 'utf8')
   const drive = readFileSync(new URL('../src/screens/DriveWithUs.jsx', import.meta.url), 'utf8')
   const copy = readFileSync(new URL('../src/content/differentiators.js', import.meta.url), 'utf8')
-  const { FEATURES, ONLY_AT_CLEMSON_RIDES } = await import('../src/content/features.js')
+  const css = readFileSync(new URL('../src/styles/luxury.css', import.meta.url), 'utf8')
+  const { FEATURES, FEATURES_HEADING, ONLY_AT_CLEMSON_RIDES } = await import('../src/content/features.js')
   const {
     DIFFERENTIATOR_CLAIMS_AWAIT_FEATURE_PRS,
     HOMEPAGE_HEADLINE,
@@ -335,25 +337,33 @@ test('why page and drive page carry the differentiators without crowding the hom
   assert.equal(DIFFERENTIATOR_CLAIMS_AWAIT_FEATURE_PRS, true)
   assert.match(copy, /backup-queue/)
   assert.match(copy, /Do not publish this copy on production/)
-  assert.equal(HOMEPAGE_HEADLINE, 'Peace of mind, door to airport.')
+  assert.equal(HOMEPAGE_HEADLINE, 'Peace of mind')
   assert.equal(HOMEPAGE_SUBLINE, "Drivers confirm before they come. A backup is ready if they don't.")
+  assert.equal(FEATURES_HEADING, 'Peace of mind, built in')
   assert.match(home, /HOMEPAGE_HEADLINE/)
   assert.match(home, /HOMEPAGE_SUBLINE/)
-  assert.match(home, /navigate\('why-clemson-rides'\)/)
-  assert.match(home, /HOMEPAGE_SUBLINE/)
-  assert.doesNotMatch(home, /FEATURES|RIDER_DIFFERENTIATORS|DRIVER_EARNINGS|Backup pay|Only at Clemson/)
+  assert.match(home, /FeatureSections/)
+  assert.match(home, /mkt-stage/)
+  assert.match(home, /Book a ride/)
+  assert.doesNotMatch(home, /How it works|DRIVER_EARNINGS|Backup pay|RIDER_DIFFERENTIATORS/)
+  assert.match(blocks, /FEATURES/)
+  assert.match(blocks, /mkt-card mkt-feature/)
+  assert.match(blocks, /What it is/)
+  assert.match(blocks, /How it works/)
+  assert.match(blocks, /Why it matters/)
+  assert.match(blocks, /mkt-guide/)
+  assert.match(blocks, /<details className="mkt-how">/)
+  assert.match(blocks, /min-width: 960px/)
   assert.match(why, /Peace of mind/)
-  assert.match(why, /FEATURES/)
-  assert.match(why, /mkt-card mkt-feature/)
-  assert.match(why, /What it is/)
-  assert.match(why, /How it works/)
-  assert.match(why, /Why it matters/)
-  assert.match(why, /mkt-guide/)
-  assert.match(why, /Back to top/)
+  assert.match(why, /Why Clemson Rides/)
+  assert.match(why, /section: 'features'/)
   assert.match(why, /Book a ride/)
-  assert.match(why, /featureAnchor/)
   assert.match(drive, /DRIVER_EARNINGS/)
   assert.match(drive, /Earn more on scheduled rides/)
+  const desktop = css.slice(css.indexOf('@media (min-width: 960px)'))
+  assert.match(desktop, /\.mkt-home \.mkt-feature-list/)
+  assert.match(desktop, /grid-template-columns:\s*1fr 1fr/)
+  assert.doesNotMatch(css.slice(0, css.indexOf('/* Auth */')), /@media \(max-width:\s*768px\)/)
   for (const item of FEATURES) {
     assert.ok(item.what)
     assert.ok(item.why)
@@ -361,11 +371,11 @@ test('why page and drive page carry the differentiators without crowding the hom
   }
   assert.deepEqual(FEATURES.map((item) => item.title), RIDER_DIFFERENTIATORS.map((item) => item.title))
   assert.deepEqual(RIDER_DIFFERENTIATORS.map((item) => item.title), [
-    'Backup driver',
-    'Drivers confirm first',
-    'On the way',
-    'Switch or cancel',
-    'Boost a scheduled ride',
+    'Guaranteed pickup',
+    'Drivers confirm before they come',
+    'On-the-way alerts',
+    'Switch or cancel, your call',
+    'Boost your scheduled ride',
     'Message your driver',
     'Carpool',
     'Tiger Pass',
@@ -374,10 +384,10 @@ test('why page and drive page carry the differentiators without crowding the hom
     'Safety on the ride',
     'Favorite drivers',
     'Built for Clemson',
+    'Airport rides',
     'Student price',
     'Game day',
     'Weekend and party',
-    'Airport rides',
   ])
   assert.deepEqual(
     RIDER_DIFFERENTIATORS.filter((item) => item.exclusive).map((item) => item.id),

@@ -566,10 +566,12 @@ body .mkt-card .mkt-text:active {
 }
 
 .mkt-home .mkt-stage {
-  flex: 1;
-  min-height: 0;
+  flex: none;
+  min-height: calc(100svh - 68px);
   align-items: center;
   justify-content: center;
+  padding-top: 8px;
+  padding-bottom: 28px;
 }
 
 .mkt-home .mkt-stage h1 {
@@ -587,7 +589,100 @@ body .mkt-card .mkt-text:active {
 }
 
 .mkt-home .mkt-footer {
-  margin: 0 16px 16px;
+  margin: 28px 16px 16px;
+}
+
+.mkt-home .mkt-choices {
+  flex-direction: column;
+  flex-wrap: nowrap;
+  gap: 12px;
+  margin-top: 22px;
+}
+
+.mkt-home .mkt-choice {
+  width: 100%;
+  min-height: 52px;
+  font-size: 17px;
+}
+
+.mkt-feature-section,
+.mkt-close {
+  position: relative;
+  z-index: 1;
+  width: min(1080px, calc(100% - 32px));
+  margin-right: auto;
+  margin-left: auto;
+}
+
+.mkt-feature-section {
+  scroll-margin-top: 84px;
+  padding-top: 12px;
+}
+
+.mkt-feature-list {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.mkt-feature-list .mkt-feature {
+  padding: 24px 22px 22px;
+}
+
+.mkt-feature-list .mkt-feature h3 {
+  margin: 0;
+  font-size: 26px;
+  line-height: 1.15;
+  letter-spacing: -0.4px;
+}
+
+.mkt-how {
+  margin-top: 22px;
+}
+
+.mkt-how summary {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  color: #F56600;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  cursor: pointer;
+  list-style: none;
+}
+
+.mkt-how summary::-webkit-details-marker {
+  display: none;
+}
+
+.mkt-how summary::after {
+  content: '▾';
+  margin-left: 8px;
+  font-size: 16px;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.mkt-how[open] summary::after {
+  content: '▴';
+}
+
+.mkt-how .mkt-guide {
+  margin-top: 8px;
+}
+
+.mkt-close {
+  display: flex;
+  margin-top: 36px;
+  margin-bottom: 8px;
+}
+
+.mkt-close .mkt-choice {
+  width: 100%;
+  min-height: 52px;
+  font-size: 17px;
 }
 
 .mkt-menu,
@@ -1115,6 +1210,16 @@ body .mkt-qr-svg {
   }
   body .mkt-home .mkt-stage h1 {
     max-width: 16ch;
+  }
+  .mkt-home .mkt-feature-list {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px 24px;
+    align-items: start;
+  }
+  .mkt-close .mkt-choice {
+    width: auto;
+    min-width: 220px;
   }
   body .mkt-section-head {
     margin-bottom: 24px;

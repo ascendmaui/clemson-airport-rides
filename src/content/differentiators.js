@@ -17,7 +17,7 @@ import { FEATURES } from './features.js'
 /** Flip to false only after messaging, boost, and backup-queue PRs are in the prod release. */
 export const DIFFERENTIATOR_CLAIMS_AWAIT_FEATURE_PRS = true
 
-export const HOMEPAGE_HEADLINE = 'Peace of mind, door to airport.'
+export const HOMEPAGE_HEADLINE = 'Peace of mind'
 
 export const HOMEPAGE_SUBLINE = "Drivers confirm before they come. A backup is ready if they don't."
 
