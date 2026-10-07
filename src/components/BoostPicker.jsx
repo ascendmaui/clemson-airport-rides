@@ -1,11 +1,16 @@
-import { useState } from 'react'
+import { useId, useState } from 'react'
 import {
-  BOOST_MAX_CENTS,
+  BOOST_INFO_LABEL,
+  BOOST_RIDER_HELPER,
+  boostHowItWorks,
+  riderBoostChosenLine,
+} from '../../shared/copy/boost.js'
+import {
   BOOST_PRESETS_CENTS,
-  BOOST_RIDER_COPY,
   formatBoostDollars,
   parseBoostDollars,
 } from '../../shared/scheduledBoost.js'
+import { A11yModalDialog } from './A11yModal'
 
 /**
  * Rider boost chooser. `cents` is the amount that will be saved.
@@ -14,7 +19,10 @@ import {
 export function BoostPicker({ cents = 0, onChange, minimumCents = 0, heading = 'Driver boost' }) {
   const [custom, setCustom] = useState('')
   const [error, setError] = useState('')
+  const [infoOpen, setInfoOpen] = useState(false)
+  const titleId = `boost-how-${useId().replace(/:/g, '')}`
   const raising = minimumCents > 0
+  const how = boostHowItWorks()
 
   function choose(next) {
     setError('')
@@ -38,9 +46,29 @@ export function BoostPicker({ cents = 0, onChange, minimumCents = 0, heading = '
 
   return (
     <div style={{ marginBottom: 14 }} aria-label={heading}>
-      <div style={{ fontWeight: 800, color: '#522D80', marginBottom: 4 }}>{heading}</div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+        <div style={{ fontWeight: 800, color: '#522D80' }}>{heading}</div>
+        <button
+          type="button"
+          className="pressable"
+          onClick={() => setInfoOpen(true)}
+          aria-label={BOOST_INFO_LABEL}
+          style={{
+            width: 44,
+            height: 44,
+            borderRadius: 999,
+            border: '1px solid rgba(82,45,128,0.35)',
+            background: 'rgba(82,45,128,0.08)',
+            color: '#522D80',
+            fontWeight: 800,
+            fontSize: 16,
+          }}
+        >
+          i
+        </button>
+      </div>
       <p style={{ fontSize: 13, color: 'var(--ink-secondary)', margin: '0 0 10px', lineHeight: 1.45 }}>
-        {BOOST_RIDER_COPY} Up to {formatBoostDollars(BOOST_MAX_CENTS)}.
+        {BOOST_RIDER_HELPER}
       </p>
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
         {!raising && (
@@ -98,10 +126,47 @@ export function BoostPicker({ cents = 0, onChange, minimumCents = 0, heading = '
       </div>
       {cents > 0 && (
         <p style={{ fontSize: 13, fontWeight: 800, color: '#F56600', margin: '8px 0 0' }}>
-          Boost {formatBoostDollars(cents)} · your driver keeps all of it
+          {riderBoostChosenLine(cents)}
         </p>
       )}
       {error && <p role="alert" style={{ color: 'var(--danger)', fontSize: 12, margin: '6px 0 0' }}>{error}</p>}
+      <A11yModalDialog
+        open={infoOpen}
+        onClose={() => setInfoOpen(false)}
+        titleId={titleId}
+        style={{
+          maxWidth: 420,
+          width: 'calc(100% - 32px)',
+          padding: 22,
+          borderRadius: 22,
+          background: '#fff',
+        }}
+      >
+        <h2 id={titleId} style={{ margin: '0 0 8px', color: '#522D80', fontSize: 22 }}>{how.title}</h2>
+        <p style={{ margin: '0 0 12px', lineHeight: 1.45 }}>{how.intro}</p>
+        <ol style={{ margin: 0, paddingLeft: 20, lineHeight: 1.5 }}>
+          {how.steps.map((step) => (
+            <li key={step} style={{ marginBottom: 8 }}>{step}</li>
+          ))}
+        </ol>
+        <button
+          type="button"
+          className="pressable"
+          onClick={() => setInfoOpen(false)}
+          style={{
+            marginTop: 8,
+            minHeight: 44,
+            padding: '10px 16px',
+            borderRadius: 12,
+            fontWeight: 800,
+            color: '#fff',
+            background: '#522D80',
+            border: 'none',
+          }}
+        >
+          Got it
+        </button>
+      </A11yModalDialog>
     </div>
   )
 }

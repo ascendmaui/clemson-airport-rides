@@ -33,6 +33,7 @@ import {
   type QueueFilter,
 } from 'rides-native/tripTags'
 import { formatHourlyRate, ladderOfferNet, offerHourly } from 'rides-native/offerLadder.js'
+import { driverBoostOfferLine } from '../../../shared/copy/boost.js'
 import { compareBoostedFirst, formatBoostBadge } from '../../../shared/scheduledBoost.js'
 function useQueueStyles() {
   const { colors } = useTheme()
@@ -83,6 +84,9 @@ function QueueCard({
         <View style={styles.boostBadge}>
           <Text style={styles.boostText}>{formatBoostBadge(card.boostDriverCents || 0)}</Text>
         </View>
+      ) : null}
+      {(card.boostDriverCents || 0) > 0 ? (
+        <Text style={styles.copy}>{driverBoostOfferLine(card.boostDriverCents || 0)}</Text>
       ) : null}
       <Text style={styles.note}>{ladder?.subtext || 'You net 80%'}</Text>
       <Text style={styles.copy}>{hourly}</Text>

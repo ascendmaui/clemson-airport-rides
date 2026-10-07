@@ -1,5 +1,6 @@
 import { formatUsdFromCents } from '../lib/pricing'
 import { formatPickupAt, toDriverQueueCard } from '../lib/scheduledRideModel'
+import { driverBoostOfferLine } from '../../shared/copy/boost.js'
 import { compareBoostedFirst, formatBoostBadge } from '../../shared/scheduledBoost.js'
 
 /**
@@ -79,6 +80,9 @@ export function ScheduledRideQueue({
                   >
                     {formatBoostBadge(ride.boostDriverCents)}
                   </span>
+                  <p style={{ fontSize: 13, margin: '8px 0 0', lineHeight: 1.4, color: 'var(--ink)' }}>
+                    {driverBoostOfferLine(ride.boostDriverCents)}
+                  </p>
                 </div>
               )}
               <div style={{ fontSize: 13, marginTop: 4 }}>

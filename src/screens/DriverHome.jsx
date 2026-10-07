@@ -17,6 +17,7 @@ import { grantRiderSocialForTrip } from '../lib/riderReferral'
 import { isLiveTrip, startTripLocationWatch } from '../lib/liveDriverLocation'
 import { DriverApprovalGate } from './DriverApprovalGate'
 import { driverOfferCopy, driverTakeCents, formatUsd } from '../lib/carpoolEngine'
+import { driverBoostOfferLine } from '../../shared/copy/boost.js'
 import { driverBoostShareCents, formatBoostBadge, readBoostCents } from '../../shared/scheduledBoost.js'
 import { RideChat, RideMessageButton } from '../components/RideChat'
 import { rideChatMode } from '../lib/tripChatRules'
@@ -1144,6 +1145,9 @@ function DriverShell({ driverId }) {
                   <span style={{ display: 'inline-block', background: '#F56600', color: '#fff', fontWeight: 800, fontSize: 12, borderRadius: 999, padding: '4px 10px' }}>
                     {formatBoostBadge(driverBoostShareCents(readBoostCents(offer)))}
                   </span>
+                  <div style={{ marginTop: 8, fontSize: 13, lineHeight: 1.4 }}>
+                    {driverBoostOfferLine(driverBoostShareCents(readBoostCents(offer)))}
+                  </div>
                 </div>
               ) : null}
             </div>

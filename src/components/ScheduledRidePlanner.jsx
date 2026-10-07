@@ -6,6 +6,7 @@ import { PrimaryButton } from './PrimaryButton'
 import { FRIEND_PLACES } from '../lib/friendRides'
 import { useAuth } from '../lib/auth'
 import { formatUsdFromCents } from '../lib/pricing'
+import { BOOST_SCHEDULE_NOTE } from '../../shared/copy/boost.js'
 import { formatBoostBadge } from '../../shared/scheduledBoost.js'
 import { depositSurfaceCopy } from '../../packages/rides-native/riderMoney.js'
 import { SignInToBookModal, useRequireAuthForAction } from './SignInToBookModal'
@@ -447,7 +448,7 @@ export function ScheduledRidePlanner() {
 
       <BoostPicker cents={boostCents} onChange={setBoostCents} />
 
-      <p>No card charge when you confirm. The boost is added to the fare hold when matching starts, and your driver keeps all of it. Campus rides enter matching about 45 minutes before pickup.</p>
+      <p>{BOOST_SCHEDULE_NOTE}</p>
 
       <PrimaryButton
         onClick={() => runOrPrompt(onSchedule, { setPromptOpen, nextPath: 'schedule' })}

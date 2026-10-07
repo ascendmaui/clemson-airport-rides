@@ -1,11 +1,11 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { fareAuthorizationCents } from './fareAuthorization.js'
+import { boostNudge } from './copy/boost.js'
 import {
   BOOST_DRIVER_SHARE_BPS,
   BOOST_MAX_CENTS,
   BOOST_PRESETS_CENTS,
-  boostNudge,
   captureCentsWithBoost,
   clampBoostCents,
   compareBoostedFirst,

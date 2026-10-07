@@ -116,6 +116,7 @@ export type OfferCardViewModel = {
   timeLeft: TimeLeftModel | null
   timeLeftLabel: string | null
   pickupAtText: string | null
+  boostLine: string | null
   accessibilityLabel: string
 }
 

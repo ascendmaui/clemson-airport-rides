@@ -24,8 +24,6 @@ export const BOOST_PRESETS_CENTS = Object.freeze([500, 1000, 1500, 2000])
  */
 export const BOOST_NUDGE_LEAD_MS = 2 * 60 * 60 * 1000
 
-export const BOOST_RIDER_COPY = 'Add a boost to get matched faster — 100% goes to your driver.'
-
 const UNACCEPTED = new Set(['scheduled', 'searching', 'offered'])
 
 function roundCents(value) {
@@ -150,29 +148,6 @@ export function captureCentsWithBoost(fareDueCents, boostCents = 0) {
 export function boostIsEditable(trip) {
   if (!trip || trip.driver_id) return false
   return UNACCEPTED.has(trip.status)
-}
-
-/**
- * Gentle in-app nudge. Null when a driver is assigned, the pickup is not
- * inside the lead window, or the ride is not still open.
- */
-export function boostNudge(trip, now = new Date()) {
-  if (!boostIsEditable(trip)) return null
-  const when = trip.pickup_at || trip.scheduled_for || trip.pickupAt || trip.metadata?.scheduled_pickup_at
-  if (!when) return null
-  const until = new Date(when).getTime() - (now instanceof Date ? now.getTime() : new Date(now).getTime())
-  if (!Number.isFinite(until) || until <= 0 || until > BOOST_NUDGE_LEAD_MS) return null
-  const boost = readBoostCents(trip)
-  if (boost > 0) {
-    return {
-      id: 'bump',
-      body: 'No driver yet. Raise the boost to get matched faster — 100% goes to your driver.',
-    }
-  }
-  return {
-    id: 'add',
-    body: 'No driver yet. Add a boost to get matched faster — 100% goes to your driver.',
-  }
 }
 
 /** Higher boosts first, then earlier pickups. Ride type does not matter. */

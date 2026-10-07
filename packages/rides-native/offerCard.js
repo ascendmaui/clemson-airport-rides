@@ -17,6 +17,7 @@ import {
   tagTone,
 } from './tripTags.js'
 import { formatHourlyRate, ladderOfferNet, offerHourly } from './offerLadder.js'
+import { driverBoostOfferLine } from '../../shared/copy/boost.js'
 import { driverBoostShareCents, formatBoostBadge, readBoostCents } from '../../shared/scheduledBoost.js'
 
 /** Default time window (in seconds) drivers have to accept an incoming offer. */
@@ -483,6 +484,10 @@ export function offerAccessibilityLabel(cardOrVm, options = {}) {
     parts.push(vm.timeLeft.label)
   }
 
+  if (vm.boostLine) {
+    parts.push(vm.boostLine)
+  }
+
   return parts.join('. ')
 }
 
@@ -502,6 +507,7 @@ export function offerCardViewModel(card, options = {}) {
   const headline = routeHeadline(card)
 
   const pay = formatDriverNetPay(card)
+  const boostLine = pay.boostDriverCents > 0 ? driverBoostOfferLine(pay.boostDriverCents) : null
   const distanceEta = formatDistanceEta(card)
   const eta = formatEta(card?.etaMin ?? card?.eta_min ?? card?.eta)
   const distance = formatDistance(card?.distanceMi ?? card?.distance_mi ?? card?.distance)
@@ -547,6 +553,7 @@ export function offerCardViewModel(card, options = {}) {
     timeLeft,
     timeLeftLabel: timeLabel,
     pickupAtText: card?.pickupAt ? formatPickupAt(card.pickupAt) : null,
+    boostLine,
   }
 
   return {

@@ -1,8 +1,8 @@
 import { zonedCivilToUtc } from '../../shared/rideTime.js'
+import { boostNudge } from '../../shared/copy/boost.js'
 import {
   BOOST_MAX_CENTS,
   boostIsEditable,
-  boostNudge,
   driverBoostShareCents,
   driverPayoutWithBoost,
   readBoostCents,
