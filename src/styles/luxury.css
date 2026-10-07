@@ -572,6 +572,15 @@ body .mkt-card .mkt-text:active {
   justify-content: center;
 }
 
+.mkt-home .mkt-stage h1 {
+  max-width: 16ch;
+}
+
+.mkt-home .mkt-lede {
+  max-width: 34ch;
+  margin: 12px 0 0;
+}
+
 .mkt-home .mkt-stage-copy {
   margin: 0 auto;
   text-align: left;
@@ -1066,6 +1075,9 @@ body .mkt-qr-svg {
     font-size: clamp(52px, 4.4vw, 68px);
     letter-spacing: -1.6px;
     max-width: 14ch;
+  }
+  body .mkt-home .mkt-stage h1 {
+    max-width: 16ch;
   }
   body .mkt-section-head {
     margin-bottom: 24px;
