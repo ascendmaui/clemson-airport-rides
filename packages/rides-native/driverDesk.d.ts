@@ -57,7 +57,7 @@ export function publishDriverLocation(
 export function setServiceClass(
   supabase: unknown,
   driverId: string,
-  input: { enabled: boolean; claimModel3?: boolean },
+  input: 'comfort' | 'standard' | { enabled: boolean },
 ): Promise<VehicleRow>
 export function loadDriverDesk(supabase: unknown, driverId: string): Promise<DriverDesk>
 export function subscribeTrips(supabase: unknown, onChange: () => void): () => void

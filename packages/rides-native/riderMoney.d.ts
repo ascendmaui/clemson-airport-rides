@@ -165,6 +165,32 @@ export function loadTripDeposit(
 export const ADD_ANOTHER_PAYMENT_METHOD_ID: string
 export const ADD_ANOTHER_PAYMENT_METHOD_LABEL: string
 
+export function googlePayTestEnv(publishableKey: string | null | undefined): boolean
+
+export function nativeSetupSheetParams(
+  methodId: string,
+  options?: { testEnv?: boolean },
+): {
+  merchantDisplayName: string
+  returnURL: string
+  primaryButtonLabel: string
+  allowsDelayedPaymentMethods: boolean
+  paymentMethodOrder: string[]
+  link: { display: 'automatic' | 'never' }
+  applePay?: { merchantCountryCode: string }
+  googlePay?: { merchantCountryCode: string; currencyCode: string; testEnv: boolean }
+}
+
+export function nativeWalletUnavailableCopy(methodId: string): string
+
+export function savedPaymentMethodLabel(method: {
+  brand?: string | null
+  last4?: string | null
+  type?: string | null
+  cashtag?: string | null
+  email?: string | null
+} | null): string
+
 export type RidePaymentMethod = {
   id: string
   label: string
@@ -218,13 +244,53 @@ export function buyPrepaidCredits(supabase: unknown, tierId: string): Promise<{
 
 export function startPaymentMethodSetup(
   supabase: unknown,
-  input?: { paymentMethod?: string; returnUrl?: string },
-): Promise<{ url?: string; sessionId?: string; error?: string; note?: string }>
+  input?: { paymentMethod?: string; returnUrl?: string; native?: boolean },
+): Promise<{
+  url?: string
+  sessionId?: string
+  clientSecret?: string
+  setupIntentId?: string
+  publishableKey?: string | null
+  merchantIdentifier?: string | null
+  error?: string
+  note?: string
+}>
 
 export function saveCheckoutPaymentMethod(
   supabase: unknown,
   checkoutSessionId: string,
 ): Promise<{ ok?: boolean; brand?: string; last4?: string }>
+
+export function saveSetupPaymentMethod(
+  supabase: unknown,
+  setupIntentId: string,
+): Promise<{ ok?: boolean; brand?: string; last4?: string; paymentMethodId?: string }>
+
+export type SavedPaymentMethod = {
+  id: string
+  brand: string
+  last4: string | null
+  type?: string
+  cashtag?: string | null
+  email?: string | null
+}
+
+export function listSavedPaymentMethods(supabase: unknown): Promise<{
+  methods?: SavedPaymentMethod[]
+  defaultPmId?: string | null
+  error?: string
+}>
+
+export function updateSavedPaymentMethod(
+  supabase: unknown,
+  input: { action: 'default' | 'detach'; paymentMethodId: string },
+): Promise<{
+  ok?: boolean
+  defaultPmId?: string | null
+  brand?: string | null
+  last4?: string | null
+  methods?: SavedPaymentMethod[]
+}>
 
 export function loadRiderBilling(
   supabase: unknown,

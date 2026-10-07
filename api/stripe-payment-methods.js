@@ -6,10 +6,12 @@
  * Body sub-actions such as buy (prepaid credits) are not route names.
  */
 import { cors, json } from '../server/friendRideLib.js'
-import { resolveRouteAction } from '../server/routeAction.js'
+import { peekJsonBody, resolveRouteAction } from '../server/routeAction.js'
 import {
+  handleListSavedPaymentMethods,
   handleStripeSavePaymentMethod,
   handleStripeSetupIntent,
+  handleUpdateSavedPaymentMethod,
 } from '../server/stripePaymentRoutes.js'
 import handleQuoteFare from '../server/endpoints/quoteFare.js'
 import handleAirportCheckout from '../server/endpoints/airportCheckout.js'
@@ -69,6 +71,14 @@ const LEGACY = {
 export default async function handler(req, res, ...rest) {
   if (cors(req, res)) return
   const action = resolveRouteAction(req, { allowed: Object.keys(HANDLERS), legacy: LEGACY })
+  if (!action) {
+    const body = peekJsonBody(req)
+    const sub = typeof body?.action === 'string' ? body.action : ''
+    if (req.method === 'GET') return handleListSavedPaymentMethods(req, res)
+    if (req.method === 'POST' && (sub === 'default' || sub === 'detach')) {
+      return handleUpdateSavedPaymentMethod(req, res)
+    }
+  }
   const handle = HANDLERS[action]
   if (!handle) {
     return json(res, 400, {
