@@ -5,6 +5,7 @@ import requestDriverTrip from './endpoints/requestDriverTrip.js'
 import handleTigerPass from './endpoints/tigerPass.js'
 import handleFavoriteDrivers from './endpoints/favoriteDrivers.js'
 import { TIGER_PASS_NAME } from '../shared/tigerPass.js'
+import { activateTigerPassFromCheckout, syncTigerPassFromStripe, tigerPassMeta } from './riderPass.js'
 import { percentOffCents } from '../src/lib/fareRates.js'
 import { priceDriverRequest } from './authoritativeFare.js'
 
@@ -253,6 +254,129 @@ test('checkout uses the rename hook and confirm activates the pass', async () =>
   assert.equal(confirmed.json.active, true)
   assert.equal(confirmed.json.name, TIGER_PASS_NAME)
   assert.equal(store.tables.rider_subscriptions[0].status, 'active')
+})
+
+test('checkout refuses a second subscription while the pass is active or past due', async () => {
+  const store = memorySb({
+    profiles: [{ id: RIDER, email: 'rider@example.com' }],
+    rider_subscriptions: [{
+      rider_id: RIDER,
+      status: 'active',
+      current_period_end: '2026-11-01T00:00:00.000Z',
+    }],
+  })
+  const stripe = {
+    checkout: {
+      sessions: {
+        async create() {
+          throw new Error('should not create')
+        },
+      },
+    },
+  }
+  const deps = { sb: store.sb, user: riderUser(), stripe, ensureProfile: async () => ({ ok: true }), now: NOW }
+  const active = await call(handleTigerPass, { op: 'checkout' }, deps)
+  assert.equal(active.status, 409)
+  assert.equal(active.json.code, 'tiger_pass_already_subscribed')
+
+  store.tables.rider_subscriptions[0].status = 'past_due'
+  const due = await call(handleTigerPass, { op: 'checkout' }, deps)
+  assert.equal(due.status, 409)
+  assert.equal(due.json.code, 'tiger_pass_already_subscribed')
+})
+
+test('stripe sync keeps cancel-at-period-end and reads invoice subscription metadata', async () => {
+  const store = memorySb({
+    rider_subscriptions: [{
+      rider_id: RIDER,
+      status: 'active',
+      stripe_subscription_id: 'sub_1',
+      cancel_at_period_end: false,
+      preferred_driver_ids: [],
+      preferred_car_types: [],
+      current_period_end: '2026-11-01T00:00:00.000Z',
+    }],
+  })
+  const periodEnd = Math.floor(new Date('2026-11-01T00:00:00.000Z').getTime() / 1000)
+  const ending = await syncTigerPassFromStripe(store.sb, {
+    object: 'subscription',
+    id: 'sub_1',
+    status: 'active',
+    cancel_at_period_end: true,
+    current_period_end: periodEnd,
+    metadata: { kind: 'tiger_pass', profile_id: RIDER },
+  }, NOW)
+  assert.equal(ending.status, 'active')
+  assert.equal(store.tables.rider_subscriptions[0].status, 'active')
+  assert.equal(store.tables.rider_subscriptions[0].cancel_at_period_end, true)
+
+  const due = await syncTigerPassFromStripe(store.sb, {
+    object: 'subscription',
+    id: 'sub_1',
+    status: 'past_due',
+    metadata: { kind: 'tiger_pass', profile_id: RIDER },
+  }, NOW)
+  assert.equal(due.status, 'past_due')
+  assert.equal(store.tables.rider_subscriptions[0].status, 'past_due')
+
+  store.tables.rider_subscriptions[0].status = 'active'
+  store.tables.rider_subscriptions[0].cancel_at_period_end = true
+  const renewed = await syncTigerPassFromStripe(store.sb, {
+    object: 'invoice',
+    id: 'in_1',
+    paid: true,
+    status: 'paid',
+    customer: 'cus_1',
+    parent: {
+      subscription_details: {
+        subscription: 'sub_1',
+        metadata: { kind: 'tiger_pass', profile_id: RIDER },
+      },
+    },
+    lines: { data: [{ period: { end: Math.floor(new Date('2026-12-01T00:00:00.000Z').getTime() / 1000) } }] },
+  }, NOW)
+  assert.equal(renewed.ok, true)
+  assert.equal(store.tables.rider_subscriptions[0].status, 'active')
+  assert.equal(store.tables.rider_subscriptions[0].cancel_at_period_end, true)
+  assert.equal(store.tables.rider_subscriptions[0].current_period_end, '2026-12-01T00:00:00.000Z')
+  assert.equal(tigerPassMeta({ object: 'invoice', id: 'in_plain' }), null)
+  const ignored = await syncTigerPassFromStripe(store.sb, { object: 'invoice', id: 'in_plain', paid: true }, NOW)
+  assert.equal(ignored.reason, 'not_tiger_pass')
+})
+
+test('checkout completion uses the Stripe subscription period end', async () => {
+  const store = memorySb({})
+  const end = Math.floor(new Date('2026-11-04T00:00:00.000Z').getTime() / 1000)
+  const stripe = {
+    subscriptions: {
+      async retrieve(id) {
+        assert.equal(id, 'sub_1')
+        return { current_period_end: end }
+      },
+    },
+  }
+  const result = await activateTigerPassFromCheckout(store.sb, {
+    id: 'cs_pass',
+    payment_status: 'paid',
+    customer: 'cus_1',
+    subscription: 'sub_1',
+    metadata: { kind: 'tiger_pass', profile_id: RIDER },
+  }, NOW, stripe)
+  assert.equal(result.ok, true)
+  assert.equal(store.tables.rider_subscriptions[0].current_period_end, '2026-11-04T00:00:00.000Z')
+  assert.equal(store.tables.rider_subscriptions[0].status, 'active')
+})
+
+test('rider app confirms a pass return and opens pick-a-driver from the pass screen', () => {
+  const layout = readFileSync(new URL('../apps/rider/app/_layout.tsx', import.meta.url), 'utf8')
+  const screen = readFileSync(new URL('../apps/rider/app/tiger-pass.tsx', import.meta.url), 'utf8')
+  const picker = readFileSync(new URL('../apps/rider/app/pick-driver.tsx', import.meta.url), 'utf8')
+  assert.match(layout, /isTigerPassReturn/)
+  assert.match(layout, /pathname: '\/tiger-pass'/)
+  assert.match(screen, /router\.push\('\/pick-driver'\)/)
+  assert.match(screen, /session\.id/)
+  assert.match(picker, /passPreferredIds/)
+  assert.match(picker, /loadTigerPass/)
 })
 
 test('request pricing does not trust a client pass flag', () => {

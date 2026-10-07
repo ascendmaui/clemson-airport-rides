@@ -1,4 +1,4 @@
-import { useFocusEffect, useRouter } from 'expo-router'
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
 import * as Linking from 'expo-linking'
 import * as WebBrowser from 'expo-web-browser'
 import { useCallback, useState } from 'react'
@@ -8,6 +8,7 @@ import { Pill, PrimaryButton } from '@/components/Button'
 import { RequireAuth } from '@/components/RequireAuth'
 import { StackHeader } from '@/components/StackHeader'
 import { useAuth } from '@/lib/auth'
+import { oneParam } from '@/lib/oneParam'
 import { supabase } from '@/lib/supabase'
 import { lift } from '@/lib/elevation'
 import type { Palette } from '@/lib/palette'
@@ -29,6 +30,8 @@ import {
 function TigerPassScreen() {
   const router = useRouter()
   const insets = useSafeAreaInsets()
+  const params = useLocalSearchParams<{ session_id?: string | string[] }>()
+  const routeSessionId = parseCheckoutSessionId(oneParam(params.session_id))
   const { user } = useAuth()
   const { colors } = useTheme()
   const styles = useThemedStyles(makeStyles)
@@ -40,20 +43,36 @@ function TigerPassScreen() {
   const load = useCallback(() => {
     if (!user || !supabase) return undefined
     let alive = true
-    loadTigerPass(supabase).then(async (next) => {
-      if (!alive) return
-      setStatus(next)
-      const ids = next.favoriteDriverIds || []
-      const cards = ids.length ? await fetchDriversByIds(supabase, ids) : { drivers: [] as OnlineDriver[] }
-      if (!alive) return
-      setDrivers(cards.drivers || [])
-    }).catch((err: unknown) => {
-      if (alive) setNote(err instanceof Error ? err.message : 'Could not load the pass')
-    })
+    ;(async () => {
+      let confirmedNote: string | null = null
+      if (routeSessionId) {
+        try {
+          const confirmed = await confirmTigerPass(supabase, routeSessionId)
+          if (!alive) return
+          confirmedNote = confirmed.active ? `${confirmed.name} is active.` : 'Payment is still processing.'
+          setStatus(confirmed)
+          setNote(confirmedNote)
+        } catch (err: unknown) {
+          if (alive) setNote(err instanceof Error ? err.message : 'Could not confirm checkout')
+        }
+      }
+      try {
+        const next = await loadTigerPass(supabase)
+        if (!alive) return
+        setStatus(next)
+        if (confirmedNote) setNote(next.active ? `${next.name} is active.` : confirmedNote)
+        const ids = next.favoriteDriverIds || []
+        const cards = ids.length ? await fetchDriversByIds(supabase, ids) : { drivers: [] as OnlineDriver[] }
+        if (!alive) return
+        setDrivers(cards.drivers || [])
+      } catch (err: unknown) {
+        if (alive) setNote(err instanceof Error ? err.message : 'Could not load the pass')
+      }
+    })()
     return () => {
       alive = false
     }
-  }, [user])
+  }, [routeSessionId, user])
 
   useFocusEffect(load)
 
@@ -85,23 +104,23 @@ function TigerPassScreen() {
         successUrl: `${returnUrl}?session_id={CHECKOUT_SESSION_ID}`,
         cancelUrl: returnUrl,
       })
-      if (!session.url) {
+      if (!session.url || !session.id) {
         setNote('Checkout did not open. No charge was made.')
         return
       }
       const result = await WebBrowser.openAuthSessionAsync(session.url, returnUrl)
+      const sessionId = (result.type === 'success' ? parseCheckoutSessionId(result.url) : null) || session.id
+      const confirmed = await confirmTigerPass(supabase, sessionId)
+      setStatus(confirmed)
+      if (confirmed.active) {
+        setNote(`${confirmed.name} is active.`)
+        return
+      }
       if (result.type !== 'success') {
         setNote('Checkout canceled. No charge was made.')
         return
       }
-      const sessionId = parseCheckoutSessionId(result.url)
-      if (!sessionId) {
-        setNote('Stripe did not return a session. No pass was started.')
-        return
-      }
-      const confirmed = await confirmTigerPass(supabase, sessionId)
-      setStatus(confirmed)
-      setNote(confirmed.active ? `${confirmed.name} is active.` : 'Payment is still processing.')
+      setNote('Payment is still processing.')
     } catch (err) {
       setNote(err instanceof Error ? err.message : 'Could not start checkout. No charge was made.')
     } finally {
@@ -143,6 +162,8 @@ function TigerPassScreen() {
   const carTypes = status?.carTypes || []
   const selectedCars = status?.preferredCarTypes || []
   const preferred = new Set(status?.preferredDriverIds || [])
+  const pastDue = status?.status === 'past_due'
+  const ending = Boolean(status?.active && status?.cancelAtPeriodEnd)
 
   return (
     <View style={[styles.screen, { paddingTop: insets.top }]}>
@@ -152,13 +173,17 @@ function TigerPassScreen() {
         <Text style={styles.title}>{name}</Text>
         <Text style={styles.copy}>{status?.summary || 'A monthly pass for frequent riders.'}</Text>
         <Text style={styles.copy}>{status?.priceLabel} · {status?.discountPct || 10}% off Standard, Wait & Save, and Extra Comfort.</Text>
-        {status?.active ? <Text style={styles.badge}>Discount is on</Text> : <Text style={styles.copy}>The discount starts after checkout.</Text>}
+        {status?.active ? <Text style={styles.badge}>Discount is on</Text> : null}
+        {pastDue ? <Text style={styles.copy}>Payment is past due, so the discount is off until Stripe marks this subscription active again.</Text> : null}
+        {!status?.active && !pastDue ? <Text style={styles.copy}>The discount starts after checkout.</Text> : null}
+        {ending ? <Text style={styles.copy}>{name} stays on through the end of this period.</Text> : null}
         {status?.currentPeriodEnd ? <Text style={styles.copy}>Current period ends {new Date(status.currentPeriodEnd).toLocaleDateString()}</Text> : null}
-        {status?.active ? (
+        {status?.active && !ending ? (
           <PrimaryButton label={busy ? 'Working…' : 'Cancel pass'} onPress={onCancel} disabled={busy} tone="ghost" />
-        ) : (
-          <PrimaryButton label={busy ? 'Opening…' : `Subscribe · ${status?.priceLabel || ''}`} onPress={onSubscribe} disabled={busy} />
-        )}
+        ) : null}
+        {!status?.active && !pastDue ? (
+          <PrimaryButton label={busy ? 'Opening…' : `Subscribe · ${status?.priceLabel || ''}`} onPress={onSubscribe} disabled={busy || !status} />
+        ) : null}
 
         <View style={[styles.card, lift(colors, 'rest')]}>
           <Text style={styles.rowTitle}>Preferred ride types</Text>
@@ -215,7 +240,7 @@ function TigerPassScreen() {
               </View>
             )
           })}
-          <PrimaryButton label="Pick a driver" tone="purple" onPress={() => router.push('/')} />
+          <PrimaryButton label="Pick a driver" tone="purple" onPress={() => router.push('/pick-driver')} />
         </View>
         {note ? <Text style={styles.note}>{note}</Text> : null}
       </ScrollView>

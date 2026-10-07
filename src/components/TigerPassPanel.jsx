@@ -4,6 +4,7 @@ import { authedJson } from '../lib/apiClient'
 import { getHashRoute } from '../lib/navigation'
 import { supabase } from '../lib/supabase'
 import { fetchDriversByIds } from '../../packages/rides-native/drivers.js'
+import { TIGER_PASS_NAME } from '../../shared/tigerPass.js'
 
 /**
  * Frequent-rider pass. The name shown here is the server payload, which reads
@@ -132,10 +133,12 @@ export function TigerPassPanel() {
   }
 
   if (!user?.id) return null
-  const name = status?.name || 'Pass'
+  const name = status?.name || TIGER_PASS_NAME
   const cars = status?.carTypes || []
   const selectedCars = status?.preferredCarTypes || []
   const preferred = new Set(status?.preferredDriverIds || [])
+  const pastDue = status?.status === 'past_due'
+  const ending = Boolean(status?.active && status?.cancelAtPeriodEnd)
 
   return (
     <section className="glass-panel" style={{ marginTop: 14, padding: 16, borderRadius: 18 }}>
@@ -146,17 +149,28 @@ export function TigerPassPanel() {
       <p style={{ fontSize: 13, color: 'var(--ink-secondary)', marginTop: 4 }}>
         {status?.priceLabel} · {status?.active ? 'Discount is on' : 'Discount starts after checkout'}
       </p>
-      {status?.active ? (
+      {pastDue ? (
+        <p style={{ fontSize: 13, color: 'var(--ink-secondary)', marginTop: 8 }}>
+          Payment is past due, so the discount is off until Stripe marks this subscription active again.
+        </p>
+      ) : null}
+      {ending ? (
+        <p style={{ fontSize: 13, color: 'var(--ink-secondary)', marginTop: 8 }}>
+          {name} stays on through the end of this period.
+        </p>
+      ) : null}
+      {status?.active && !ending ? (
         <button type="button" className="pressable" disabled={busy} onClick={onCancel}
           style={{ marginTop: 10, padding: '10px 14px', borderRadius: 12, fontWeight: 700, color: 'var(--purple)', border: '1px solid rgba(82,45,128,0.3)', background: 'transparent' }}>
           Cancel pass
         </button>
-      ) : (
+      ) : null}
+      {!status?.active && !pastDue ? (
         <button type="button" className="pressable" disabled={busy || !status} onClick={onCheckout}
           style={{ marginTop: 10, padding: '10px 14px', borderRadius: 12, fontWeight: 700, color: '#fff', background: 'linear-gradient(135deg, var(--orange), #ff7a1a)', border: 'none' }}>
           {busy ? 'Opening…' : `Subscribe${status?.priceLabel ? ` · ${status.priceLabel}` : ''}`}
         </button>
-      )}
+      ) : null}
 
       <div style={{ marginTop: 16, fontWeight: 800 }}>Preferred ride types</div>
       <p style={{ fontSize: 12, color: 'var(--ink-tertiary)', marginTop: 4 }}>Standard, Wait & Save, and Extra Comfort only.</p>

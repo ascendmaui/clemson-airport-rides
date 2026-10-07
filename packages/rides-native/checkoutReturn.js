@@ -72,6 +72,24 @@ export function parseCheckoutSessionId(input) {
 }
 
 /**
+ * True when a return URL belongs to the frequent-rider pass, not a ride deposit.
+ * The rider app must confirm that session instead of reconciling a trip.
+ *
+ * @param {unknown} input
+ * @returns {boolean}
+ */
+export function isTigerPassReturn(input) {
+  let raw = ''
+  if (typeof input === 'string') raw = input
+  else if (input && typeof input === 'object') {
+    raw = firstPresentString(input.url, input.href, input.hash) || ''
+  }
+  if (!raw) return false
+  if (/[?&#]tigerPass=1(?:[&#]|$)/.test(raw)) return true
+  return /(?:^|[/])tiger-pass(?:[/?#]|$)/i.test(raw)
+}
+
+/**
  * Parses full checkout return parameters from a URL, hash, or object.
  *
  * @param {unknown} input

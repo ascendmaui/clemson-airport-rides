@@ -12,7 +12,7 @@ import { setPaymentHold } from '../server/collectPayment.js'
 import { classifyStripeError, failureResult } from '../shared/paymentFailure.js'
 import { releaseFromCheckoutEvent, restoreLiveTripAfterDeposit } from '../server/abandonedCheckout.js'
 import { applyPaidCheckoutSession, recordDeposit } from '../server/checkoutReconcile.js'
-import { activateTigerPassFromCheckout, syncTigerPassFromStripe } from '../server/riderPass.js'
+import { activateTigerPassFromCheckout, syncTigerPassFromStripe, tigerPassMeta } from '../server/riderPass.js'
 
 export { recordDeposit, applyPaidCheckoutSession }
 
@@ -210,7 +210,7 @@ export default async function handler(req, res, deps = {}) {
         let tigerPass = { skipped: true, reason: 'no_service_role' }
         if (activeServiceKey || deps.serviceClient) {
           const client = deps.serviceClient ? deps.serviceClient() : serviceClient()
-          tigerPass = await activateTigerPassFromCheckout(client, session)
+          tigerPass = await activateTigerPassFromCheckout(client, session, new Date(), stripe)
         }
         console.log('[stripe-webhook] tiger_pass', { id: session?.id, tigerPass })
         return sendWebhookJson(res, 200, { received: true, type: event.type, tigerPass })
@@ -239,9 +239,9 @@ export default async function handler(req, res, deps = {}) {
       return sendWebhookJson(res, 200, { received: true, type: event.type, recorded, live, referral })
     }
 
-    const stripeKind = event.data?.object?.metadata?.kind
+    const passMeta = tigerPassMeta(event.data?.object)
     if (
-      stripeKind === 'tiger_pass'
+      passMeta
       && (event.type === 'customer.subscription.deleted'
         || event.type === 'customer.subscription.updated'
         || event.type === 'invoice.paid')

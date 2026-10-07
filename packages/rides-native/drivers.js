@@ -123,15 +123,20 @@ export function sortPreferredDrivers(drivers, favoriteIds, pickup) {
   })
 }
 
-export function groupDriversForPicker(drivers, favoriteIds) {
+export function groupDriversForPicker(drivers, favoriteIds, passPreferredIds) {
   const fav = new Set(normalizeFavoriteDriverIds(favoriteIds))
+  const usePass = Array.isArray(passPreferredIds)
+  const pass = new Set(usePass ? normalizeFavoriteDriverIds(passPreferredIds) : [])
+  const passPreferred = []
   const preferred = []
   const online = []
   for (const driver of drivers || []) {
-    if (fav.has(driver.id)) preferred.push(driver)
+    if (usePass && pass.has(driver.id)) passPreferred.push(driver)
+    else if (fav.has(driver.id)) preferred.push(driver)
     else if (driver.online) online.push(driver)
   }
-  return { preferred, online }
+  if (!usePass) return { preferred, online }
+  return { passPreferred, preferred, online }
 }
 
 async function readJson(storage, key) {

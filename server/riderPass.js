@@ -204,6 +204,15 @@ export async function startTigerPassCheckout(sb, user, body, { stripe, ensureStr
     error.code = 'payments_unavailable'
     throw error
   }
+  const existingPass = await readPassRow(sb, user.id)
+  if (subscriptionIsActive(existingPass) || existingPass?.status === 'past_due') {
+    const error = new Error(existingPass?.status === 'past_due'
+      ? 'This pass is past due. A second subscription was not started.'
+      : 'This pass is already active.')
+    error.status = 409
+    error.code = 'tiger_pass_already_subscribed'
+    throw error
+  }
   const profileRes = await sb
     .from('profiles')
     .select('id, email, full_name, stripe_customer_id')
@@ -266,6 +275,7 @@ export async function activateTigerPass(sb, {
   stripeSubscriptionId = null,
   stripeCheckoutSessionId = null,
   periodEnd = null,
+  cancelAtPeriodEnd = false,
   now = new Date(),
 } = {}) {
   if (!riderId) return { skipped: true, reason: 'missing_metadata' }
@@ -278,14 +288,14 @@ export async function activateTigerPass(sb, {
     stripe_subscription_id: stripeSubscriptionId || existing?.stripe_subscription_id || null,
     stripe_checkout_session_id: stripeCheckoutSessionId || existing?.stripe_checkout_session_id || null,
     current_period_end: periodEnd || existing?.current_period_end || periodEndFromUnix(null, now),
-    cancel_at_period_end: false,
+    cancel_at_period_end: Boolean(cancelAtPeriodEnd),
     preferred_driver_ids: favoriteIdsForMatching(existing?.preferred_driver_ids),
     preferred_car_types: filterPreferredCarTypes(existing?.preferred_car_types),
   })
   return { ok: true, riderId, status: row.status, name: TIGER_PASS_NAME }
 }
 
-export async function activateTigerPassFromCheckout(sb, session, now = new Date()) {
+export async function activateTigerPassFromCheckout(sb, session, now = new Date(), stripe = null) {
   const meta = session?.metadata || {}
   if (meta.kind !== TIGER_PASS_PRODUCT_ID) return { skipped: true, reason: 'not_tiger_pass' }
   const riderId = meta.profile_id
@@ -295,13 +305,23 @@ export async function activateTigerPassFromCheckout(sb, session, now = new Date(
   if (paid && paid !== 'paid' && paid !== 'no_payment_required') {
     return { skipped: true, reason: 'unpaid' }
   }
-  const periodEnd = session.current_period_end
-    ? periodEndFromUnix(session.current_period_end, now)
+  const subscriptionId = typeof session.subscription === 'string' ? session.subscription : session.subscription?.id || null
+  let periodEndUnix = session.current_period_end
+  if (!periodEndUnix && subscriptionId && stripe?.subscriptions?.retrieve) {
+    try {
+      const subscription = await stripe.subscriptions.retrieve(subscriptionId)
+      periodEndUnix = subscription?.current_period_end || null
+    } catch {
+      periodEndUnix = null
+    }
+  }
+  const periodEnd = periodEndUnix
+    ? periodEndFromUnix(periodEndUnix, now)
     : periodEndFromUnix(null, now)
   return activateTigerPass(sb, {
     riderId,
     stripeCustomerId: typeof session.customer === 'string' ? session.customer : session.customer?.id || null,
-    stripeSubscriptionId: typeof session.subscription === 'string' ? session.subscription : session.subscription?.id || null,
+    stripeSubscriptionId: subscriptionId,
     stripeCheckoutSessionId: session.id || null,
     periodEnd,
     now,
@@ -364,49 +384,77 @@ export async function cancelTigerPass(sb, user, { stripe, now = new Date() } = {
   return loadRiderPass(sb, user.id, now)
 }
 
-export async function syncTigerPassFromStripe(sb, object, now = new Date()) {
-  if (!object || object.metadata?.kind !== TIGER_PASS_PRODUCT_ID) {
-    return { skipped: true, reason: 'not_tiger_pass' }
+/** Subscription metadata may sit on the object or on the invoice's subscription details. */
+export function tigerPassMeta(object) {
+  if (!object || typeof object !== 'object') return null
+  const candidates = [
+    object.metadata,
+    object.subscription_details?.metadata,
+    object.parent?.subscription_details?.metadata,
+  ]
+  for (const meta of candidates) {
+    if (meta?.kind === TIGER_PASS_PRODUCT_ID) return meta
   }
+  return null
+}
+
+function stripeSubscriptionId(object) {
+  if (!object || typeof object !== 'object') return null
+  if (object.object === 'subscription' && typeof object.id === 'string') return object.id
+  if (typeof object.subscription === 'string') return object.subscription
+  const parentSub = object.parent?.subscription_details?.subscription
+  if (typeof parentSub === 'string') return parentSub
+  const legacy = object.subscription_details?.subscription
+  if (typeof legacy === 'string') return legacy
+  return null
+}
+
+export async function syncTigerPassFromStripe(sb, object, now = new Date()) {
+  const meta = tigerPassMeta(object)
+  if (!meta) return { skipped: true, reason: 'not_tiger_pass' }
   if (!sb) return { skipped: true, reason: 'no_service_role' }
-  let riderId = object.metadata?.profile_id || null
-  if (!riderId && object.object === 'subscription' && object.id) {
-    const found = await sb.from('rider_subscriptions').select('rider_id').eq('stripe_subscription_id', object.id).maybeSingle()
+  const subscriptionId = stripeSubscriptionId(object)
+  let riderId = meta.profile_id || null
+  if (!riderId && subscriptionId) {
+    const found = await sb.from('rider_subscriptions').select('rider_id').eq('stripe_subscription_id', subscriptionId).maybeSingle()
     riderId = found?.data?.rider_id || null
   }
   if (!riderId) return { skipped: true, reason: 'missing_metadata' }
   if (object.object === 'invoice') {
     if (!object.paid && object.status !== 'paid') return { skipped: true, reason: 'unpaid' }
     const end = object.lines?.data?.[0]?.period?.end || object.period_end
+    const existing = await readPassRow(sb, riderId)
     await activateTigerPass(sb, {
       riderId,
       stripeCustomerId: typeof object.customer === 'string' ? object.customer : null,
-      stripeSubscriptionId: typeof object.subscription === 'string' ? object.subscription : null,
+      stripeSubscriptionId: subscriptionId,
       periodEnd: periodEndFromUnix(end, now),
+      cancelAtPeriodEnd: Boolean(existing?.cancel_at_period_end),
       now,
     })
     return { ok: true, riderId, status: 'active' }
   }
   const stripeStatus = String(object.status || '')
-  if (stripeStatus === 'canceled' || stripeStatus === 'incomplete_expired' || object.object === 'subscription' && stripeStatus === 'canceled') {
+  if (stripeStatus === 'canceled' || stripeStatus === 'incomplete_expired') {
     await writePassPatch(sb, riderId, {
       status: 'canceled',
       cancel_at_period_end: false,
-      stripe_subscription_id: object.id || null,
+      stripe_subscription_id: subscriptionId,
       current_period_end: object.current_period_end ? periodEndFromUnix(object.current_period_end, now) : null,
     })
     return { ok: true, riderId, status: 'canceled' }
   }
   if (stripeStatus === 'past_due' || stripeStatus === 'unpaid') {
-    await writePassPatch(sb, riderId, { status: 'past_due', stripe_subscription_id: object.id || null })
+    await writePassPatch(sb, riderId, { status: 'past_due', stripe_subscription_id: subscriptionId })
     return { ok: true, riderId, status: 'past_due' }
   }
   if (stripeStatus === 'active' || stripeStatus === 'trialing') {
     await activateTigerPass(sb, {
       riderId,
       stripeCustomerId: typeof object.customer === 'string' ? object.customer : null,
-      stripeSubscriptionId: object.id || null,
+      stripeSubscriptionId: subscriptionId,
       periodEnd: periodEndFromUnix(object.current_period_end, now),
+      cancelAtPeriodEnd: Boolean(object.cancel_at_period_end),
       now,
     })
     return { ok: true, riderId, status: 'active' }

@@ -70,7 +70,8 @@ export function sortPreferredDrivers<T extends { id: string; online?: boolean; l
 export function groupDriversForPicker<T extends { id: string; online?: boolean }>(
   drivers: T[] | null | undefined,
   favoriteIds: string[] | null | undefined,
-): { preferred: T[]; online: T[] }
+  passPreferredIds?: string[] | null,
+): { preferred: T[]; online: T[]; passPreferred?: T[] }
 export function loadFavoriteDriverIds(
   supabase: unknown,
   storage: KeyValueStorage | null | undefined,

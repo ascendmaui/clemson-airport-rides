@@ -448,6 +448,18 @@ test('groupDriversForPicker separates favorites from non-favorite online drivers
   assert.deepEqual(groupDriversForPicker([], null), { preferred: [], online: [] })
 })
 
+test('groupDriversForPicker puts an active pass preferred subset ahead of other favorites', () => {
+  const drivers = [
+    { id: A, online: true },
+    { id: B, online: true },
+    { id: C, online: true },
+  ]
+  const groups = groupDriversForPicker(drivers, [A, B], [B])
+  assert.deepEqual(groups.passPreferred.map((driver) => driver.id), [B])
+  assert.deepEqual(groups.preferred.map((driver) => driver.id), [A])
+  assert.deepEqual(groups.online.map((driver) => driver.id), [C])
+})
+
 // ---------------------------------------------------------------------------
 // 6. loadFavoriteDriverIds
 // ---------------------------------------------------------------------------
