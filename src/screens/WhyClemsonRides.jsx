@@ -1,7 +1,6 @@
 import { navigate } from '../lib/navigation'
 import { MarketingPhoto } from '../components/MarketingPhoto'
 import { SitePage } from '../components/SitePage'
-import { NIGHT_VENUES } from '../content/images.js'
 
 export function WhyClemsonRides() {
   return (
@@ -13,26 +12,30 @@ export function WhyClemsonRides() {
           <p>
             Clemson RIDES is a student ride product for this campus. It is not an official Clemson University service.
             Pickup spots are campus places. A confirmed @clemson.edu or @g.clemson.edu email gets 10% off Standard.
-            Game day shows the pickup zone and the fare multiplier from the server.
+            That student discount does not include Carpool. Game day shows the pickup zone and the fare multiplier from the server.
           </p>
         </div>
         <div className="mkt-safety-live">
-          <article className="mkt-card mkt-feature">
-            <MarketingPhoto id="library-study-group" />
-            <h3>Between classes</h3>
-            <p>Study groups and class changes use the same booking flow as a ride home.</p>
-          </article>
           <article className="mkt-card mkt-feature">
             <MarketingPhoto id="gameday-crowd" />
             <h3>Game day</h3>
             <p>When a game day is live, the rider home shows the pickup zone and the fare multiplier from the server.</p>
           </article>
-        </div>
-        <div className="mkt-section-head">
-          <h2>College Avenue at night</h2>
-        </div>
-        <div className="mkt-safety-live mkt-venues">
-          {NIGHT_VENUES.map((id) => <MarketingPhoto key={id} id={id} />)}
+          <article className="mkt-card mkt-feature">
+            <MarketingPhoto id="students-carpool-backseat" />
+            <h3>Ride with friends</h3>
+            <p>Carpool is a discounted seat, 15% off, for 1 or 2 seats. It does not pair you with other riders.</p>
+          </article>
+          <article className="mkt-card mkt-feature">
+            <MarketingPhoto id="day-from-campus" />
+            <h3>From campus</h3>
+            <p>Head back the same way. Schedule ahead, or request when you are ready to leave.</p>
+          </article>
+          <article className="mkt-card mkt-feature">
+            <MarketingPhoto id="night-orange-screen" />
+            <h3>Close to the curb</h3>
+            <p>After a driver has accepted, the rider app pulses orange and shows the distance in feet as they get closer.</p>
+          </article>
         </div>
         <button type="button" className="mkt-text pressable" onClick={() => navigate('landing')}>
           Back to the homepage

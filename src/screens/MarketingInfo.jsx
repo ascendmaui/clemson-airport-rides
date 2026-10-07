@@ -3,7 +3,7 @@ import { MarketingChrome } from '../components/MarketingChrome'
 import { MarketingPhoto } from '../components/MarketingPhoto'
 import { FeatureBlock } from '../components/FeatureBlock'
 import { messagingGuide } from '../../shared/copy/messaging.js'
-import { HERO_COLLAGE, NIGHT_VENUES } from '../content/images.js'
+import { HERO_COLLAGE } from '../content/images.js'
 import { APP_DOWNLOADS } from '../../shared/productLinks.js'
 import { RIDE_OPTION_CATALOG, SCHEDULE_AHEAD_DISCOUNT_PCT } from '../../shared/rideOptions.js'
 import { CARPOOL_DISCOUNT_BPS, STUDENT_DISCOUNT_BPS } from '../lib/fareRates.js'
@@ -14,6 +14,7 @@ import {
   APP_STORE_NOTE,
   BUILT_IN,
   BUILT_IN_SECTION,
+  CARPOOL_SECTION,
   SAFETY_FEATURES,
   SAFETY_SECTION,
 } from '../content/peaceOfMind.js'
@@ -66,8 +67,8 @@ function PageHead({ kicker, title, lede }) {
   )
 }
 
-function messagingFeature(guide) {
-  const feature = BUILT_IN.find((item) => item.id === 'messaging')
+function withMessaging(feature, guide) {
+  if (feature.id !== 'messaging' && feature.id !== 'messaging-safety') return feature
   return {
     ...feature,
     what: guide.summary.join(' '),
@@ -75,17 +76,41 @@ function messagingFeature(guide) {
   }
 }
 
+function bookFor(route) {
+  switch (route) {
+    case 'home':
+      return () => navigate('home')
+    case 'carpool':
+      return () => navigate('home', { tier: 'carpool' })
+    case 'schedule':
+      return () => navigate('schedule')
+    default: {
+      const unexpected = route
+      throw new Error(`Unexpected book route: ${String(unexpected)}`)
+    }
+  }
+}
+
 export function HowItWorks() {
   const riderGuide = messagingGuide('rider')
-  const builtIn = BUILT_IN.map((feature) => (feature.id === 'messaging' ? messagingFeature(riderGuide) : feature))
+  const builtIn = BUILT_IN.map((feature) => withMessaging(feature, riderGuide))
   return (
     <MarketingChrome current="how-it-works">
-      <PageHead kicker="How it works" title="From class to the ride home" />
-      <div className="mkt-hero-collage" aria-hidden="true">
+      <PageHead kicker="How it works" title="Peace of mind, built in" lede="Rides and carpools built for Clemson students." />
+      <div className="mkt-hero-collage">
         {HERO_COLLAGE.map((shot) => (
           <figure key={shot.id} className={shot.className}>
             <MarketingPhoto id={shot.id} eager={shot.eager} />
           </figure>
+        ))}
+      </div>
+      <div className="mkt-section-head">
+        <p className="mkt-kicker">{BUILT_IN_SECTION.kicker}</p>
+        <h2>{BUILT_IN_SECTION.title}</h2>
+      </div>
+      <div className="mkt-safety-live mkt-built">
+        {builtIn.map((feature) => (
+          <FeatureBlock key={feature.id} feature={feature} onBook={bookFor(feature.bookRoute)} />
         ))}
       </div>
       <div className="mkt-safety-live">
@@ -95,23 +120,35 @@ export function HowItWorks() {
           <p>Request a ride when you are heading to class. The fare is on screen before you confirm.</p>
         </article>
         <article className="mkt-card mkt-feature">
-          <MarketingPhoto id="day-from-campus" />
-          <h2>From campus</h2>
-          <p>Head back the same way. Schedule ahead, or request when you are ready to leave.</p>
-        </article>
-        <article className="mkt-card mkt-feature">
           <MarketingPhoto id="college-ave-request" />
           <h2>College Avenue</h2>
           <p>Request from a campus spot. The same trip screen follows the ride after a driver accepts.</p>
         </article>
       </div>
       <div className="mkt-section-head">
-        <p className="mkt-kicker">{BUILT_IN_SECTION.kicker}</p>
-        <h2>{BUILT_IN_SECTION.title}</h2>
+        <p className="mkt-kicker">{CARPOOL_SECTION.kicker}</p>
+        <h2>{CARPOOL_SECTION.title}</h2>
+        <p>{CARPOOL_SECTION.what}</p>
       </div>
-      <div className="mkt-safety-live mkt-built">
-        {builtIn.map((feature) => <FeatureBlock key={feature.id} feature={feature} />)}
-      </div>
+      <article className="mkt-card mkt-feature">
+        <MarketingPhoto id="carpool-how-it-works" />
+        <ol className="mkt-guide">
+          {CARPOOL_SECTION.steps.map((step) => (
+            <li key={step.title}>
+              <strong>{step.title}. </strong>
+              {step.body}
+            </li>
+          ))}
+        </ol>
+        <p>{CARPOOL_SECTION.diagramCaption}</p>
+      </article>
+      <article className="mkt-card mkt-feature">
+        <MarketingPhoto id="carpool-friends-curb" />
+        <p><strong>Why it matters. </strong>{CARPOOL_SECTION.why}</p>
+        <button type="button" className="mkt-text pressable" onClick={() => navigate('home', { tier: 'carpool' })}>
+          Book a carpool
+        </button>
+      </article>
     </MarketingChrome>
   )
 }
@@ -170,16 +207,15 @@ export function TigerPassPage() {
 }
 
 export function SafetyPage() {
+  const riderGuide = messagingGuide('rider')
+  const safety = SAFETY_FEATURES.map((feature) => withMessaging(feature, riderGuide))
   return (
     <MarketingChrome current="safety">
-      <PageHead kicker={SAFETY_SECTION.kicker} title={SAFETY_SECTION.title} lede={SAFETY_SECTION.what} />
+      <PageHead kicker={SAFETY_SECTION.kicker} title="Safe nights out" lede={SAFETY_SECTION.what} />
       <p><strong>Why it matters. </strong>{SAFETY_SECTION.why}</p>
       <MarketingPhoto id="night-going-out" className="mkt-section-banner" />
-      <div className="mkt-safety-live mkt-venues">
-        {NIGHT_VENUES.map((id) => <MarketingPhoto key={id} id={id} />)}
-      </div>
       <div className="mkt-safety-live">
-        {SAFETY_FEATURES.map((feature) => <FeatureBlock key={feature.id} feature={feature} />)}
+        {safety.map((feature) => <FeatureBlock key={feature.id} feature={feature} />)}
       </div>
     </MarketingChrome>
   )

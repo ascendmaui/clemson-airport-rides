@@ -1,6 +1,7 @@
 import { navigate } from '../lib/navigation'
 import { MarketingChrome } from '../components/MarketingChrome'
 import { MarketingPhoto } from '../components/MarketingPhoto'
+import { StatusPill } from '../components/FeatureBlock'
 import { AIRPORT_SECTION } from '../content/peaceOfMind.js'
 
 const FRAMES = [
@@ -67,7 +68,13 @@ export function ServiceArea() {
       <article className="mkt-card mkt-feature">
         <MarketingPhoto id="airport-on-time" />
         <ol className="mkt-guide">
-          {AIRPORT_SECTION.steps.map((step) => <li key={step}>{step}</li>)}
+          {AIRPORT_SECTION.points.map((point) => (
+            <li key={point.id}>
+              <StatusPill status={point.status} />
+              <strong>{point.title}. </strong>
+              {point.body}
+            </li>
+          ))}
         </ol>
         <p><strong>Why it matters. </strong>{AIRPORT_SECTION.why}</p>
         <button type="button" className="mkt-text pressable" onClick={() => navigate('schedule')}>

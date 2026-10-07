@@ -524,7 +524,10 @@ body .mkt-card .mkt-text:active {
 
 .mkt-hero-collage {
   position: relative;
-  height: 214px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  height: auto;
   margin: 18px 0 8px;
 }
 
@@ -596,9 +599,9 @@ body .mkt-menu button[aria-current="page"] {
 }
 
 .mkt-hero-shot {
-  position: absolute;
+  position: relative;
   margin: 0;
-  width: 62%;
+  width: 100%;
   padding: 6px;
   border-radius: 22px;
   background: rgba(255, 255, 255, 0.18);
@@ -606,6 +609,7 @@ body .mkt-menu button[aria-current="page"] {
   box-shadow: 0 18px 36px rgba(8, 4, 14, 0.38);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
+  transform: none;
 }
 
 .mkt-hero-shot img,
@@ -618,19 +622,14 @@ body .mkt-menu button[aria-current="page"] {
   border-radius: 16px;
 }
 
-.mkt-hero-shot--lead {
-  z-index: 3;
-  left: 0;
-  bottom: 6px;
-  transform: rotate(-6deg);
-}
-
+.mkt-hero-shot--lead,
 .mkt-hero-shot--request {
-  z-index: 2;
-  right: 0;
-  top: 0;
-  width: 56%;
-  transform: rotate(5deg);
+  left: auto;
+  right: auto;
+  top: auto;
+  bottom: auto;
+  width: 100%;
+  transform: none;
 }
 
 .mkt-hero-shot--backseat {
@@ -681,8 +680,18 @@ body .mkt-menu button[aria-current="page"] {
 }
 
 .mkt-live {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  margin-bottom: 8px;
+  padding: 2px 10px;
+  border-radius: 999px;
   background: #F56600;
   color: #141414;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 .mkt-soon {
@@ -954,10 +963,14 @@ body .mkt-qr-svg {
     padding: 12px 0;
   }
   .mkt-hero-collage {
+    display: block;
     grid-area: collage;
     height: 460px;
     margin: 0;
     align-self: center;
+  }
+  .mkt-hero-shot {
+    position: absolute;
   }
   .mkt-hero-shot--lead {
     width: 78%;

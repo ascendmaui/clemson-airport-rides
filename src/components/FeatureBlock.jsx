@@ -1,20 +1,20 @@
 import { useId, useState } from 'react'
 import { MarketingPhoto } from './MarketingPhoto'
 
-function StatusPill({ status }) {
+export function StatusPill({ status }) {
   switch (status) {
     case 'live':
       return <span className="mkt-live">Live</span>
-    case 'soon':
+    case 'coming':
       return <span className="mkt-soon">Coming soon</span>
     default: {
       const unexpected = status
-      throw new Error(`Unexpected feature status: ${unexpected}`)
+      throw new Error(`Unexpected feature status: ${String(unexpected)}`)
     }
   }
 }
 
-export function FeatureBlock({ feature }) {
+export function FeatureBlock({ feature, onBook }) {
   const [open, setOpen] = useState(false)
   const panelId = useId()
   return (
@@ -36,6 +36,11 @@ export function FeatureBlock({ feature }) {
       <div id={panelId} className="mkt-expand-panel" hidden={!open}>
         <p><strong>How it works. </strong>{feature.how}</p>
       </div>
+      {onBook ? (
+        <button type="button" className="mkt-text pressable" onClick={onBook}>
+          Book
+        </button>
+      ) : null}
     </article>
   )
 }

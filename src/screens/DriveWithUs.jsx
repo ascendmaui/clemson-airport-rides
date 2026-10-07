@@ -15,6 +15,11 @@ export function DriveWithUs() {
             The application asks for your account, then the documents below. New drivers are never auto-approved.
             Clemson RIDES reviews the application before you can take trips.
           </p>
+          <p>
+            Driver net on a trip is 80% of the fare. The platform fee is 20% of fares, tips, wait fees, and cancel fees.
+            A scheduled boost is separate. The driver keeps all of it, and it is not part of that 20% fee.
+            Settled Tiger Heat pay replaces the default 80% net. Payouts are queued. A failed payout stays pending and is retried.
+          </p>
           <p>{APP_STORE_NOTE}</p>
         </div>
         <div className="mkt-safety-live">

@@ -14,7 +14,7 @@ const SIZES = '(min-width: 960px) 340px, 62vw'
 export const HERO_COLLAGE = [
   { id: 'students-carpool-street', className: 'mkt-hero-shot mkt-hero-shot--lead', eager: true },
   { id: 'students-stadium-request', className: 'mkt-hero-shot mkt-hero-shot--request', eager: false },
-  { id: 'airport-on-time', className: 'mkt-hero-shot mkt-hero-shot--backseat', eager: false },
+  { id: 'students-carpool-backseat', className: 'mkt-hero-shot mkt-hero-shot--backseat', eager: false },
 ]
 
 export const NIGHT_VENUES = [

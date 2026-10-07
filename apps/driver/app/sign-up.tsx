@@ -31,7 +31,7 @@ export default function SignUpRoute() {
       storage={authStorage}
       mark="CD"
       showPromo={false}
-      subtitle="Create a driver account. You can set up billing and your profile while an admin reviews the application."
+      subtitle="Drive with Clemson RIDES. You keep 80% of the fare. New drivers are never auto-approved."
       socialProviders={socialProviders}
       onSocial={onSocial}
       onSuccess={() => router.replace('/')}

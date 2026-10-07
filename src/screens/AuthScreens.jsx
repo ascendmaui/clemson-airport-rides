@@ -395,7 +395,7 @@ export function SignUpScreen() {
   return (
     <AuthShell
       title="Join Clemson RIDES"
-      subtitle="Metered fares to GSP and CLT. Students save 10% on Standard."
+      subtitle="Peace of mind, every ride. Rides and carpools for Clemson students."
       step={created ? 'Step 2 of 2' : 'Step 1 of 2'}
     >
       <GoogleContinue busy={googleBusy} disabled={busy} onClick={onGoogle} />
