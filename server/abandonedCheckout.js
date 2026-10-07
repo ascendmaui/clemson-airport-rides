@@ -550,12 +550,13 @@ async function claimStripeExpire(sb, trip, now = Date.now()) {
   if (fresh.driver_id || !UNPAID_CHECKOUT_STATUSES.includes(fresh.status)) {
     return { won: false, reason: 'not_in_pool', status: fresh.status }
   }
+  const safeNow = Number.isFinite(Number(now)) ? Number(now) : (now instanceof Date ? now.getTime() : Date.now())
   const existingClaim = fresh.hold_expire_claimed_at || meta.hold_expire_claim
-  if (claimIsFresh(existingClaim, now)) {
+  if (claimIsFresh(existingClaim, safeNow)) {
     return { won: false, reason: 'expire_in_progress', status: fresh.status }
   }
-  const claimIso = new Date(now).toISOString()
-  const staleCutoff = new Date(now - HOLD_EXPIRE_CLAIM_MS).toISOString()
+  const claimIso = new Date(safeNow).toISOString()
+  const staleCutoff = new Date(safeNow - HOLD_EXPIRE_CLAIM_MS).toISOString()
   const { data, error } = await sb
     .from('trips')
     .update({ hold_expire_claimed_at: claimIso })
@@ -661,9 +662,12 @@ export async function releaseExpiredUnpaidAirportHold(sb, trip, {
 } = {}) {
   if (!trip?.id) return { released: false, reason: 'missing_trip' }
 
+  const safeNow = Number.isFinite(Number(now)) ? Number(now) : (now instanceof Date ? now.getTime() : Date.now())
+  const safeTtlMs = Number.isFinite(Number(ttlMs)) && Number(ttlMs) > 0 ? Number(ttlMs) : UNPAID_AIRPORT_HOLD_TTL_MS
+
   let knownPayments = payments
   if (!knownPayments) {
-    const preliminary = decideUnpaidAirportHoldTtl({ trip, payments: [], now, ttlMs })
+    const preliminary = decideUnpaidAirportHoldTtl({ trip, payments: [], now: safeNow, ttlMs: safeTtlMs })
     if (preliminary.action !== 'cancel') {
       return {
         released: false,
@@ -679,7 +683,7 @@ export async function releaseExpiredUnpaidAirportHold(sb, trip, {
     knownPayments = deposits.payments
   }
 
-  const decision = decideUnpaidAirportHoldTtl({ trip, payments: knownPayments, now, ttlMs })
+  const decision = decideUnpaidAirportHoldTtl({ trip, payments: knownPayments, now: safeNow, ttlMs: safeTtlMs })
   if (decision.action !== 'cancel') {
     return { released: false, reason: decision.reason, status: decision.status || trip.status, tripId: trip.id }
   }
@@ -749,7 +753,7 @@ export async function releaseExpiredUnpaidAirportHold(sb, trip, {
     }
   }
 
-  return cancelExpiredHold(sb, trip, sessionId, { now, ttlMs })
+  return cancelExpiredHold(sb, trip, sessionId, { now: safeNow, ttlMs: safeTtlMs })
 }
 
 /**
@@ -766,8 +770,25 @@ export async function releaseExpiredUnpaidAirportHolds(sb, {
   retrieveSession,
   dryRun = false,
 } = {}) {
+  if (!sb || typeof sb.from !== 'function') {
+    return {
+      ok: false,
+      reason: 'database_client_required',
+      error: 'database_client_required',
+      dryRun: Boolean(dryRun),
+      scanned: 0,
+      expired: 0,
+      released: 0,
+      skipped: 0,
+      errors: 1,
+      wouldExpire: 0,
+      results: [],
+    }
+  }
   const batchSize = Math.min(40, Math.max(1, Number(limit) || 40))
-  const cutoff = new Date(now - ttlMs).toISOString()
+  const safeNow = Number.isFinite(Number(now)) ? Number(now) : (now instanceof Date ? now.getTime() : Date.now())
+  const safeTtlMs = Number.isFinite(Number(ttlMs)) && Number(ttlMs) > 0 ? Number(ttlMs) : UNPAID_AIRPORT_HOLD_TTL_MS
+  const cutoff = new Date(safeNow - safeTtlMs).toISOString()
   const listed = await sb
     .from('trips')
     .select('id, status, rider_id, driver_id, scheduled_for, metadata, canceled_at, created_at, deposit_cents, rider_note, hold_expire_claimed_at')
@@ -796,8 +817,8 @@ export async function releaseExpiredUnpaidAirportHolds(sb, {
   for (const trip of listed.data || []) {
     try {
       results.push(await releaseExpiredUnpaidAirportHold(sb, trip, {
-        now,
-        ttlMs,
+        now: safeNow,
+        ttlMs: safeTtlMs,
         expireSession: dryRun ? undefined : expireSession,
         retrieveSession,
         dryRun,
