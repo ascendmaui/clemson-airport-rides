@@ -1,4 +1,13 @@
 import { zonedCivilToUtc } from '../../shared/rideTime.js'
+import { boostNudge } from '../../shared/copy/boost.js'
+import {
+  BOOST_MAX_CENTS,
+  boostIsEditable,
+  driverBoostShareCents,
+  driverPayoutWithBoost,
+  readBoostCents,
+} from '../../shared/scheduledBoost.js'
+import { netCentsForShare, SCHEDULED_SHARE_BPS } from '../../packages/rides-native/offerLadder.js'
 /** Pure helpers for scheduled rides. No Supabase imports. */
 
 export const MIN_LEAD_MS = 30 * 60 * 1000
@@ -232,39 +241,54 @@ const OPEN_QUEUE_FIELDS = [
   'metadata',
 ]
 
-/** Driver queue card: first name only, no coordinates. */
+/** Driver queue card: first name only, no coordinates. Boost sorts and badges use these fields. */
 export function toDriverQueueCard(row) {
   if (!row) return null
   const purpose = row.metadata?.purpose || ''
+  const boostCents = readBoostCents(row)
+  const fareCents = Math.max(0, Math.round(Number(row.fare_cents) || 0))
+  const storedNet = row.metadata?.driver_payout_cents ?? row.metadata?.carpool?.driver?.payoutCents
+  const fareNet = storedNet != null && storedNet !== '' && Number.isFinite(Number(storedNet))
+    ? Math.max(0, Math.round(Number(storedNet)))
+    : netCentsForShare(fareCents, SCHEDULED_SHARE_BPS)
   return {
     id: row.id,
     status: row.status,
     pickupLabel: row.pickup_label,
     dropoffLabel: row.dropoff_label,
     pickupAt: row.pickup_at || row.scheduled_for || row.metadata?.scheduled_pickup_at,
-    fareCents: row.fare_cents,
+    fareCents,
+    boostCents,
+    boostDriverCents: driverBoostShareCents(boostCents),
+    estimatedEarningsCents: driverPayoutWithBoost(fareNet, boostCents),
     firstName: firstName(row.metadata?.rider_first_name, 'Rider'),
     purpose: purposeLabel(purpose) || row.rider_note || '',
     passengers: row.passengers || 1,
     automaticMatching: !Number(row.deposit_cents || 0),
     nearTerm: row.metadata?.near_term_slot === true,
+    metadata: row.metadata || {},
   }
 }
 
 export function toRiderScheduleCard(row) {
   if (!row) return null
+  const boostCents = readBoostCents(row)
   return {
     id: row.id,
     status: row.status,
+    driverId: row.driver_id || null,
     pickupLabel: row.pickup_label,
     dropoffLabel: row.dropoff_label,
     pickupAt: row.pickup_at || row.scheduled_for || row.metadata?.scheduled_pickup_at,
     fareCents: row.fare_cents,
+    boostCents,
     depositCents: Math.max(0, Math.round(Number(row.deposit_cents) || 0)),
     purpose: purposeLabel(row.metadata?.purpose) || row.rider_note || '',
     estimate: Boolean(row.metadata?.fare_is_estimate),
     approxPin: pinForDisplay(row),
     canCancel: ['scheduled', 'searching', 'offered', 'accepted'].includes(row.status),
+    canBump: boostIsEditable(row) && boostCents < BOOST_MAX_CENTS,
+    nudge: boostNudge(row),
   }
 }
 

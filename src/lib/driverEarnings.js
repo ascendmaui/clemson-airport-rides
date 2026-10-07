@@ -17,6 +17,9 @@
  *   When the 28 days before this Monday also have trips, pace is
  *   70% this-week pace + 30% (those nets ÷ 28).
  *   A quiet week with older trips uses that 28-day average alone.
+ * Boost: trips.boost_cents or metadata.boost_cents. 100% to the driver by default
+ *   (BOOST_DRIVER_SHARE_BPS). It is not part of the 20% platform fee and is
+ *   not the post-trip tip. Shown on its own Boost line.
  * Tips: trips.tip_cents when the column is present, else metadata.tip_cents,
  *   else succeeded payments with kind "tip". Hidden on the week cards when none exist.
  *   The year-end summary always has a tip line (amount, or "not tracked").
@@ -32,6 +35,7 @@
  * GET /api/driver-earnings, which checks the caller and returns aggregates only.
  */
 import { PLATFORM_FEE_RATE, splitPlatformCut } from './platformFee.js'
+import { driverBoostShareCents, readBoostCents } from '../../shared/scheduledBoost.js'
 import { supabase } from './supabase.js'
 import {
   approximateLatLng,
@@ -262,6 +266,7 @@ export function sanitizeCompletedTripForDriver(row, { riderName = '', payments =
     waitFeeCents: canceled ? 0 : (waitFeeCents || 0),
     cancelFeeCents: cancelFeeCents || 0,
   })
+  const boostCents = canceled ? 0 : driverBoostShareCents(readBoostCents(row))
 
   const distance = readDistance(row, bill)
   const duration = readDuration(row, bill)
@@ -291,9 +296,10 @@ export function sanitizeCompletedTripForDriver(row, { riderName = '', payments =
     grossCents: cut.grossCents,
     platformFeeCents: cut.platformFeeCents,
     tipCents: canceled ? null : tipCents,
+    boostCents,
     waitFeeCents: canceled ? null : waitFeeCents,
     cancelFeeCents,
-    earnedCents: cut.driverNetCents,
+    earnedCents: cut.driverNetCents + boostCents,
     distanceM: distance.meters,
     distanceApproximate: distance.approximate,
     durationS: duration.seconds,
@@ -405,11 +411,13 @@ export function summarizeDriverEarnings(trips, { now = new Date(), timeZone = 'A
     todayPlatformFeeCents: sumField(todayTrips, 'platformFeeCents'),
     todayTripCount: todayTrips.length,
     todayTipsCents: tipsTracked ? sumTips(todayTrips) : null,
+    todayBoostCents: sumField(todayTrips, 'boostCents'),
     weekEarningsCents,
     weekGrossCents: sumField(weekTrips, 'grossCents'),
     weekPlatformFeeCents: sumField(weekTrips, 'platformFeeCents'),
     weekTripCount: weekTrips.length,
     weekTipsCents: tipsTracked ? sumTips(weekTrips) : null,
+    weekBoostCents: sumField(weekTrips, 'boostCents'),
     elapsedDays,
     remainingDays,
     projectedRemainderCents,
@@ -473,6 +481,7 @@ export function buildAnnualTaxSummary(trips, { year, timeZone = 'America/New_Yor
   const refundCents = sumField(inYear, 'refundCents')
   const platformFeeCentsTotal = sumField(inYear, 'platformFeeCents')
   const tipsCents = tipsTracked ? inYear.reduce((sum, trip) => sum + (trip.tipCents || 0), 0) : null
+  const boostCents = sumField(inYear, 'boostCents')
   const waitFeeCents = waitTracked ? inYear.reduce((sum, trip) => sum + (trip.waitFeeCents || 0), 0) : null
   const cancelFeeCents = cancelTracked ? inYear.reduce((sum, trip) => sum + (trip.cancelFeeCents || 0), 0) : null
   const grossCents = sumField(inYear, 'grossCents')
@@ -487,6 +496,7 @@ export function buildAnnualTaxSummary(trips, { year, timeZone = 'America/New_Yor
     platformFeeCents: platformFeeCentsTotal,
     platformFeeRate: PLATFORM_FEE_RATE,
     tipsCents,
+    boostCents,
     waitFeeCents,
     cancelFeeCents,
     driverNetCents,
@@ -523,15 +533,17 @@ export function buildAnnualTaxCsv(summary) {
     ['Cancel fees (USD)', cancelCell],
     ['Gross subject to platform fee (USD)', csvMoney(summary.grossCents)],
     ['Platform fees 20% of fares, tips, wait, and cancel (USD)', csvMoney(summary.platformFeeCents)],
+    ['Boost 100% to driver, excluded from platform fee (USD)', csvMoney(summary.boostCents)],
     ['Driver net 80% (USD)', csvMoney(summary.driverNetCents)],
     [],
-    ['Completed at', 'Rider first name', 'Area', 'Fare (USD)', 'Tips (USD)', 'Wait fee (USD)', 'Cancel fee (USD)', 'Platform fee (USD)', 'Driver net (USD)'],
+    ['Completed at', 'Rider first name', 'Area', 'Fare (USD)', 'Tips (USD)', 'Boost (USD)', 'Wait fee (USD)', 'Cancel fee (USD)', 'Platform fee (USD)', 'Driver net (USD)'],
     ...(summary.trips || []).map((trip) => [
       trip.completedAt || '',
       trip.riderFirstName || '',
       trip.routeLabel || 'Trip completed',
       csvMoney(trip.fareCents),
       trip.tipCents == null ? '' : csvMoney(trip.tipCents),
+      csvMoney(trip.boostCents),
       trip.waitFeeCents == null ? '' : csvMoney(trip.waitFeeCents),
       trip.cancelFeeCents == null ? '' : csvMoney(trip.cancelFeeCents),
       csvMoney(trip.platformFeeCents),

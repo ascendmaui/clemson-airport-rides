@@ -15,6 +15,7 @@ import { successHaptic, tapHaptic } from '@/lib/feedback'
 // duplicate oneParam import removed to fix TS2300
 import { openStripeCheckout } from '@/lib/openCheckout'
 import {
+  bumpScheduledBoost,
   cancelScheduledTrip,
   createScheduledTrip,
   listScheduledTrips,
@@ -52,9 +53,12 @@ import {
 } from 'rides-native/holdExpiryNotice.js'
 import { localDateInput, localTimeInput, nextPickupDate, RIDE_PLACES } from 'rides-native/riderShell.js'
 import { formatCents, formatPickupAt } from 'rides-native/tripTags.js'
+import { boostNudge } from '../../../shared/copy/boost.js'
+import { BOOST_MAX_CENTS, boostIsEditable, formatBoostBadge, readBoostCents } from '../../../shared/scheduledBoost.js'
 import { dueScheduleReminders } from '../../../src/lib/scheduledRideModel.js'
 import { RequireAuth } from '@/components/RequireAuth'
 import { NearTermSlots } from '@/components/NearTermSlots'
+import { BoostPicker } from '@/components/BoostPicker'
 
 const CAMPUS_PURPOSES: SchedulePurpose[] = ['early_class', 'planned', 'recurring']
 type WeekendSpot = 'airport' | 'campus'
@@ -199,6 +203,8 @@ function ScheduleScreen() {
   const [weekendDropoff, setWeekendDropoff] = useState<RidePlace>(placeByLabel('Downtown Clemson'))
   const [fleet, setFleet] = useState<FleetChoice>('standard')
   const [seats, setSeats] = useState(1)
+  const [weekendBoost, setWeekendBoost] = useState(0)
+  const [campusBoost, setCampusBoost] = useState(0)
   const [mine, setMine] = useState<ScheduledRow[]>([])
   const [loadingList, setLoadingList] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
@@ -574,6 +580,7 @@ function ScheduleScreen() {
         weekdays: [],
         tier: fleet,
         passengers: fleet === 'carpool' ? seats : undefined,
+        boostCents: weekendBoost,
       })
       setBanner(`Weekend / party confirmed for ${formatPickupAt(weekendWhen.toISOString())}. It is under Upcoming, and drivers can accept it from Weekend.`)
       await successHaptic()
@@ -619,6 +626,7 @@ function ScheduleScreen() {
         pickupAt: when,
         purpose,
         weekdays,
+        boostCents: campusBoost,
       })
       setBanner(`${purposeLabel(purpose)} saved · ${row.id}`)
       await successHaptic()
@@ -764,6 +772,7 @@ function ScheduleScreen() {
               : ' Final fare can change when a driver accepts.'}
           </Text>
         </View>
+        <BoostPicker cents={weekendBoost} onChange={setWeekendBoost} />
         <PrimaryButton
           label={busy ? 'Confirming…' : 'Confirm weekend ride'}
           onPress={confirmWeekend}
@@ -937,6 +946,7 @@ function ScheduleScreen() {
               : `About ${quote.miles ?? '—'} mi. Final fare can change when a driver accepts.`}
           </Text>
         </View>
+        <BoostPicker cents={campusBoost} onChange={setCampusBoost} />
         <PrimaryButton label={busy ? 'Scheduling…' : 'Schedule ride'} onPress={onSchedule} disabled={busy} tone="purple" />
 
         <Text style={styles.section}>Upcoming</Text>
@@ -950,6 +960,9 @@ function ScheduleScreen() {
         ) : null}
         {mine.filter((row: ScheduledRow) => row.status !== 'canceled').map((row: ScheduledRow) => {
           const reminder = reminderByTrip.get(row.id)
+          const boostCents = readBoostCents(row)
+          const nudge = boostNudge(row, clock)
+          const canBump = boostIsEditable(row) && boostCents < BOOST_MAX_CENTS
           return (
             <View key={row.id} style={styles.panel}>
             {reminder ? <Text style={styles.remindKicker}>{reminder.label}</Text> : null}
@@ -959,6 +972,20 @@ function ScheduleScreen() {
               {row.metadata?.recurrence?.weekdays?.length ? ` · weekly ${row.metadata.recurrence.weekdays.join(', ')}` : ''}
             </Text>
             {rideTypeName(String(row.tier || '')) ? <Text style={styles.student}>{rideTypeName(String(row.tier || ''))}</Text> : null}
+            {boostCents > 0 ? <Text style={styles.student}>{formatBoostBadge(boostCents)} · 100% to your driver</Text> : null}
+            {nudge ? <Text style={styles.fine}>{nudge.body}</Text> : null}
+            {canBump ? (
+              <BoostPicker
+                cents={0}
+                minimumCents={boostCents + 1}
+                heading={boostCents > 0 ? 'Raise the boost' : 'Add a boost'}
+                onChange={(cents) => {
+                  bumpScheduledBoost(row.id, cents).then(() => reload()).catch((err: unknown) => {
+                    setError(err instanceof Error ? err.message : 'Could not update boost')
+                  })
+                }}
+              />
+            ) : null}
             {row.deposit_cents ? (
               <Text style={styles.balance}>
                 {depositSurfaceCopy(
