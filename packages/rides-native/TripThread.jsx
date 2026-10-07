@@ -261,6 +261,7 @@ export function TripThread({
                   </Pressable>
                 </>
               ) : (
+                <>
                 <Pressable
                   accessibilityRole="button"
                   accessibilityLabel={role === 'driver' ? 'Report a lost item' : 'I lost an item'}
@@ -272,6 +273,7 @@ export function TripThread({
                   </Text>
                 </Pressable>
                 <Text style={{ color: tone.inkSecondary, fontSize: 13, lineHeight: 18 }}>{guide.reportHint}</Text>
+                </>
               )}
             </View>
           ) : null}
