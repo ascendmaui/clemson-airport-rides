@@ -23,7 +23,8 @@ import {
   COMFORT_FLEET_NOTICE,
   type DriverCard,
 } from 'rides-native/tripTags'
-import { DRIVER_TRACK_STEPS, etaHoldLine, etaLineFor, mapRouteCoordinates } from 'rides-native/liveTrip'
+import { DRIVER_TRACK_STEPS, etaHoldLine } from 'rides-native/liveTrip'
+import { followEtaLine, followMapCoordinates } from 'rides-native/roadFollow'
 import { driverPickupTarget } from 'rides-native/riderLivePickup'
 import { LivePhase } from 'rides-native/LivePhase'
 import { ORANGE, PURPLE } from 'rides-native/places.js'
@@ -181,7 +182,10 @@ export default function TripScreen() {
   if (trip?.dropoffLat != null && trip.dropoffLng != null) {
     pins.push({ id: 'drop', latitude: trip.dropoffLat, longitude: trip.dropoffLng, title: trip.dropoffLabel, pinColor: ORANGE })
   }
-  const road = mapRouteCoordinates(trip?.routePolyline)
+  const road = followMapCoordinates(
+    trip,
+    self ? { lat: self.latitude, lng: self.longitude } : null,
+  )
   const straight: { latitude: number; longitude: number }[] = []
   if (self) straight.push(self)
   if (rider && !headingToDropoff) straight.push(rider)
@@ -195,7 +199,7 @@ export default function TripScreen() {
   const etaLine = trip
     ? etaHoldLine(
       trip.status,
-      etaLineFor(
+      followEtaLine(
         trip.status,
         self ? { lat: self.latitude, lng: self.longitude } : null,
         trip,
@@ -205,7 +209,7 @@ export default function TripScreen() {
 
   return (
     <View style={styles.screen}>
-      {/* Road line is the stored Routes polyline when the server had a Maps key. Otherwise the coordinate line stays. */}
+      {/* Remaining road is the stored polyline when this car is on it. Otherwise the coordinate line stays. */}
       <CampusMap
         pins={pins}
         center={self && !headingToDropoff ? self : focus}
@@ -219,7 +223,7 @@ export default function TripScreen() {
         <LivePhase
           title={trip ? statusHeadline(trip.status) : 'Loading trip'}
           body={trip ? driverStatusDetail(trip.status) : 'Loading this ride.'}
-          eta={locationTracking.error ? null : etaLine}
+          eta={etaLine}
           steps={DRIVER_TRACK_STEPS}
           activeIndex={stepIndex}
           colors={colors}

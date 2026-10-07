@@ -10,8 +10,8 @@ import { isSimulatedDriverId } from './simulatedDrivers.js'
 import { favoriteIdsForMatching } from '../../shared/riderFavorites.js'
 import { approvalGateMessage } from './syntheticOffers.js'
 
-/** Straight-line campus pace. TODO: a traffic ETA needs a billed GOOGLE_MAPS_API_KEY (Routes). */
-const CAMPUS_MPH = 18
+/** Straight-line campus pace. A stored road polyline can scale this; live traffic still needs a billed Routes call. */
+export const CAMPUS_MPH = 18
 const STALE_LOCATION_MS = 10 * 60 * 1000
 const STATUS_COLUMNS = 'driver_id, online, priority_mode, lat, lng, heading, unlock_progress, unlock_target, updated_at'
 const VEHICLE_COLUMNS = 'id, driver_id, make, model, color, plate, seats, tier'

@@ -2,7 +2,7 @@ import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 're
 import { Platform, StyleSheet, Text, View } from 'react-native'
 import Constants from 'expo-constants'
 import MapView, { Circle, Marker, Polygon, Polyline, PROVIDER_DEFAULT } from 'react-native-maps'
-import { ANDROID_MAP_UNAVAILABLE, googleMapStyle, nativeMapTilesReady } from 'rides-native/googleMapChrome.js'
+import { lerpHeading, travelBearing } from 'rides-native/roadFollow.js'
 import { heatColor } from 'rides-native/heat.js'
 import { DOWNTOWN, STADIUM } from 'rides-native/places.js'
 import { SIMULATED_FLEET_BADGE, refuseSimulatedDriverTap } from 'rides-native/simulatedDrivers.js'
@@ -47,6 +47,65 @@ function SearchFleetGlyph({
         transform: [{ rotate: `${heading}deg` }],
       }}
     />
+  )
+}
+
+function MovingDriverMarker({
+  latitude,
+  longitude,
+  heading,
+  title,
+}: {
+  latitude: number
+  longitude: number
+  heading?: number | null
+  title: string
+}) {
+  const [pos, setPos] = useState({ latitude, longitude })
+  const [rotation, setRotation] = useState(heading ?? 0)
+  const fromRef = useRef({ latitude, longitude, heading: heading ?? 0 })
+  const raf = useRef(0)
+
+  useEffect(() => {
+    const from = fromRef.current
+    const bearing = heading ?? travelBearing(
+      { lat: from.latitude, lng: from.longitude },
+      { lat: latitude, lng: longitude },
+    )
+    const toHeading = bearing ?? from.heading
+    const start = Date.now()
+    const dur = 900
+    cancelAnimationFrame(raf.current)
+    const tick = () => {
+      const t = Math.min(1, (Date.now() - start) / dur)
+      const ease = 1 - (1 - t) ** 3
+      const next = {
+        latitude: from.latitude + (latitude - from.latitude) * ease,
+        longitude: from.longitude + (longitude - from.longitude) * ease,
+      }
+      setPos(next)
+      const turned = lerpHeading(from.heading, toHeading, ease)
+      if (turned != null) setRotation(turned)
+      if (t < 1) raf.current = requestAnimationFrame(tick)
+      else fromRef.current = { ...next, heading: toHeading }
+    }
+    raf.current = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(raf.current)
+  }, [latitude, longitude, heading])
+
+  return (
+    <Marker
+      coordinate={pos}
+      anchor={{ x: 0.5, y: 0.5 }}
+      flat
+      rotation={rotation}
+      title={title}
+      tracksViewChanges={false}
+    >
+      <View style={styles.driverCar} accessibilityLabel={title}>
+        <View style={styles.driverNose} />
+      </View>
+    </Marker>
   )
 }
 
@@ -324,7 +383,15 @@ export const CampusMap = forwardRef<CampusMapHandle, CampusMapProps>(function Ca
         {route.length > 1 ? (
           <Polyline coordinates={route} strokeColor={colors.orange} strokeWidth={4} />
         ) : null}
-        {pins.map((pin: MapPin) => (
+        {pins.map((pin: MapPin) => pin.id === 'driver' ? (
+          <MovingDriverMarker
+            key={pin.id}
+            latitude={pin.latitude}
+            longitude={pin.longitude}
+            heading={pin.heading}
+            title={pin.title}
+          />
+        ) : (
           <Marker
             key={pin.id}
             coordinate={{ latitude: pin.latitude, longitude: pin.longitude }}
@@ -480,5 +547,25 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     backgroundColor: '#522D80',
     color: '#FFFFFF',
+  },
+  driverCar: {
+    width: 18,
+    height: 28,
+    borderRadius: 7,
+    backgroundColor: '#F56600',
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+    alignItems: 'center',
+  },
+  driverNose: {
+    marginTop: 2,
+    width: 0,
+    height: 0,
+    borderLeftWidth: 4,
+    borderRightWidth: 4,
+    borderBottomWidth: 6,
+    borderLeftColor: 'transparent',
+    borderRightColor: 'transparent',
+    borderBottomColor: '#522D80',
   },
 })

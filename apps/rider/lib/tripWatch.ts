@@ -14,6 +14,7 @@ export type LiveTrip = {
   driverName: string | null
   driverLat: number | null
   driverLng: number | null
+  driverHeading: number | null
   driverLocationAt: string | null
   requested_at: string | null
   created_at: string | null
@@ -69,6 +70,7 @@ export async function loadLiveTrip(tripId: string): Promise<LiveTrip | null> {
   let driverName: string | null = null
   let driverLat: number | null = null
   let driverLng: number | null = null
+  let driverHeading: number | null = null
   let driverLocationAt: string | null = null
   if (data.driver_id) {
     const profile = await supabase.from('profiles').select('full_name').eq('id', data.driver_id).maybeSingle()
@@ -89,7 +91,7 @@ export async function loadLiveTrip(tripId: string): Promise<LiveTrip | null> {
     if (!coordsFromRow(tripRow)) {
       const status = await supabase
         .from('driver_status')
-        .select('lat, lng, location_updated_at')
+        .select('lat, lng, heading, location_updated_at')
         .eq('driver_id', data.driver_id)
         .maybeSingle()
       statusRow = status.data
@@ -99,6 +101,7 @@ export async function loadLiveTrip(tripId: string): Promise<LiveTrip | null> {
     if (picked.error) throw new Error(picked.error.message || 'Could not read driver location')
     driverLat = picked.fix?.lat ?? null
     driverLng = picked.fix?.lng ?? null
+    driverHeading = picked.fix?.heading ?? null
     driverLocationAt = picked.fix?.updatedAt ?? null
   }
   const metadata = data.metadata && typeof data.metadata === 'object' && !Array.isArray(data.metadata)
@@ -134,6 +137,7 @@ export async function loadLiveTrip(tripId: string): Promise<LiveTrip | null> {
     driverName,
     driverLat,
     driverLng,
+    driverHeading,
     driverLocationAt,
     requested_at: data.requested_at || null,
     created_at: data.created_at ?? null,

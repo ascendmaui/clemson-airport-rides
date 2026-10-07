@@ -56,7 +56,10 @@ import {
   comfortFleetNotice,
   tripTags,
 } from '../../packages/rides-native/tripTags.js'
-import { DRIVER_TRACK_STEPS, etaHoldLine, etaLineFor } from '../../packages/rides-native/liveTrip.js'
+import { DRIVER_TRACK_STEPS, etaHoldLine } from '../../packages/rides-native/liveTrip.js'
+import { directionsEtaLine, followEtaLine, followRouteLine, legNounForStatus, storedRoadSuffix } from '../../packages/rides-native/roadFollow.js'
+import { preferredNavigationUrl } from '../../packages/rides-native/mapsLink.js'
+import { useDrivingLeg } from '../lib/useDrivingLeg'
 import { LivePhase } from '../components/LivePhase'
 
 function ComfortNotice({ row }) {
@@ -123,6 +126,7 @@ function DriverShell({ driverId }) {
   const [advancing, setAdvancing] = useState(false)
   const [advanceError, setAdvanceError] = useState(null)
   const [selfPos, setSelfPos] = useState(null)
+  const [selfHeading, setSelfHeading] = useState(null)
   const [mapTypeId, setMapTypeId] = useState(() => loadMapType())
   const [showSurge, setShowSurge] = useState(true)
   const [heatWindow, setHeatWindow] = useState('now')
@@ -251,7 +255,11 @@ function DriverShell({ driverId }) {
     const stop = startTripLocationWatch({
       tripId: online && liveTripId ? liveTripId : null,
       driverId,
-      onFix: (pos) => setSelfPos([pos.coords.latitude, pos.coords.longitude]),
+      onFix: (pos) => {
+        setSelfPos([pos.coords.latitude, pos.coords.longitude])
+        const heading = Number(pos.coords.heading)
+        setSelfHeading(Number.isFinite(heading) && heading >= 0 ? heading : null)
+      },
       onError: setLocationError,
     })
     const offResume = onTrackingResume(() => setLocationAttempt((n) => n + 1))
@@ -738,6 +746,24 @@ function DriverShell({ driverId }) {
     }
   }
 
+  const driverFix = selfPos ? { lat: selfPos[0], lng: selfPos[1] } : null
+  const snappedRoad = storedRoadSuffix(activeTrip, driverFix)
+  const legNoun = legNounForStatus(activeTrip?.status)
+  const legDest = legNoun === 'drop-off'
+    ? (activeTrip?.dropoff_lat != null && activeTrip?.dropoff_lng != null
+      ? [Number(activeTrip.dropoff_lat), Number(activeTrip.dropoff_lng)]
+      : null)
+    : legNoun === 'pickup'
+      ? (activeTrip?.pickup_lat != null && activeTrip?.pickup_lng != null
+        ? [Number(activeTrip.pickup_lat), Number(activeTrip.pickup_lng)]
+        : null)
+      : null
+  const drivingLeg = useDrivingLeg(
+    selfPos,
+    legDest,
+    Boolean(activeTrip && selfPos && legDest && !snappedRoad),
+  )
+
   if (application === undefined || !activeChecked) {
     return (
       <div style={{ padding: 40, textAlign: 'center', color: 'var(--ink-secondary)' }}>
@@ -771,9 +797,29 @@ function DriverShell({ driverId }) {
   const showIdle = !shownOffer && !activeTrip
   const headingToPickup = Boolean(activeTrip) && ['accepted', 'arriving', 'arrived'].includes(activeTrip.status)
   const scheduledNotDone = Boolean(activeTrip?.pickup_at) && activeTrip.status !== 'completed'
-  const driverFix = selfPos ? { lat: selfPos[0], lng: selfPos[1] } : null
-  const activeEta = activeTrip
-    ? etaHoldLine(activeTrip.status, etaLineFor(activeTrip.status, driverFix, activeTrip))
+  const followedEta = activeTrip ? followEtaLine(activeTrip.status, driverFix, activeTrip) : null
+  const roadEta = activeTrip && !snappedRoad && legNoun
+    ? directionsEtaLine({ meters: drivingLeg?.meters, seconds: drivingLeg?.seconds, noun: legNoun })
+    : null
+  const activeEta = activeTrip ? etaHoldLine(activeTrip.status, roadEta || followedEta) : null
+  const followedRoute = activeTrip ? followRouteLine(activeTrip, driverFix) : []
+  const activeRoute = activeTrip && !snappedRoad && drivingLeg?.path?.length > 1 ? drivingLeg.path : followedRoute
+  const headingToDropoff = Boolean(activeTrip) && ['in_progress', 'completed'].includes(activeTrip.status)
+  const navStop = !activeTrip
+    ? null
+    : headingToDropoff
+      ? {
+        latitude: activeTrip.dropoff_lat,
+        longitude: activeTrip.dropoff_lng,
+        label: activeTrip.dropoff_label || 'Drop-off',
+      }
+      : {
+        latitude: activeTrip.pickup_lat,
+        longitude: activeTrip.pickup_lng,
+        label: activeTrip.pickup_label || 'Pickup',
+      }
+  const navHref = navStop && activeTrip && !['completed', 'canceled', 'cancelled_wait'].includes(activeTrip.status)
+    ? preferredNavigationUrl(navStop, typeof navigator !== 'undefined' ? navigator.userAgent : '')
     : null
   const activeStep = activeTrip ? DRIVER_TRACK_STEPS.findIndex((step) => step.id === activeTrip.status) : -1
 
@@ -798,10 +844,17 @@ function DriverShell({ driverId }) {
         heatWindow={heatWindow}
         onHeatMeta={setHeatMeta}
         mapTypeId={mapTypeId}
-        center={selfPos || (!scheduledNotDone && activeTrip?.pickup_lat != null ? [activeTrip.pickup_lat, activeTrip.pickup_lng] : CLEMSON)}
+        center={
+          activeTrip
+            ? (activeTrip.pickup_lat != null
+              ? [Number(activeTrip.pickup_lat), Number(activeTrip.pickup_lng)]
+              : CLEMSON)
+            : (selfPos || CLEMSON)
+        }
         zoom={13}
         marker={selfPos || CLEMSON}
-        animateDriver={headingToPickup && Boolean(selfPos)}
+        animateDriver={Boolean(selfPos)}
+        driverHeading={selfHeading}
         gameDayLabel={game.notice.live ? game.notice.headline : null}
         pickupPosition={
           scheduledNotDone
@@ -810,6 +863,13 @@ function DriverShell({ driverId }) {
               ? [Number(activeTrip.pickup_lat), Number(activeTrip.pickup_lng)]
               : activeTrip ? CLEMSON : null
         }
+        dropoffPosition={
+          activeTrip?.dropoff_lat != null && activeTrip?.dropoff_lng != null
+            ? [Number(activeTrip.dropoff_lat), Number(activeTrip.dropoff_lng)]
+            : null
+        }
+        route={activeRoute.length > 1 ? activeRoute : null}
+        fitRoute={Boolean(activeTrip && activeRoute.length > 1)}
         selfPosition={selfPos}
         driverPosition={selfPos}
       />
@@ -1146,12 +1206,12 @@ function DriverShell({ driverId }) {
               : 'You are off the clock. This trip is still active.'}
           </p>
           <div style={{ marginTop: 10 }}>
-            {/* TODO: road tiles and a traffic ETA need a billed Maps key. This card uses coordinates already on the trip. */}
+            {/* Road line prefers the stored polyline. A short leg can use one Directions request. */}
             {locationError && <div role="status">{locationError} <button type="button" onClick={() => setLocationAttempt((n) => n + 1)}>Retry location</button></div>}
             <LivePhase
               title={statusHeadline(activeTrip.status)}
               body={driverStatusDetail(activeTrip.status)}
-              eta={locationError ? null : activeEta}
+              eta={activeEta}
               steps={DRIVER_TRACK_STEPS}
               activeIndex={activeStep}
             />
@@ -1174,6 +1234,30 @@ function DriverShell({ driverId }) {
               </div>
             </div>
           </div>
+          {navHref ? (
+            <a
+              href={navHref}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="pressable"
+              aria-label={headingToDropoff ? 'Navigate to drop-off' : 'Navigate to pickup'}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                minHeight: 48,
+                marginTop: 12,
+                padding: '12px 16px',
+                borderRadius: 14,
+                background: '#F56600',
+                color: '#fff',
+                fontWeight: 800,
+                textDecoration: 'none',
+              }}
+            >
+              Navigate
+            </a>
+          ) : null}
 
           {rideChatMode(activeTrip) !== 'closed' && activeTrip.rider_id && (
             <div style={{ marginTop: 16 }}>

@@ -30,6 +30,13 @@ import {
   showSearchTheater,
   straightLineEta,
 } from './liveTrip.js'
+import {
+  followEtaLine,
+  followRouteLine,
+  lerpHeading,
+  storedRoadSuffix,
+  travelBearing,
+} from './roadFollow.js'
 
 test('rider live states run searching, offered or requested, en route, arrived, in trip, completed', () => {
   assert.deepEqual(
@@ -284,4 +291,69 @@ test('pickup ETA follows current GPS and confirmed arrival replaces countdown', 
   assert.equal(etaLineFor('accepted', { lat: 91, lng: -82.83 }, places), null)
   assert.equal(etaLineFor('accepted', { lat: 34.68, lng: -82.83 }, { pickup_lat: '', pickup_lng: '' }), null)
   assert.equal(riderLiveView('arriving').steps[2].label, 'Arriving')
+})
+
+function encodeSigned(value) {
+  let n = value < 0 ? ~(value << 1) : value << 1
+  let out = ''
+  while (n >= 0x20) {
+    out += String.fromCharCode((0x20 | (n & 0x1f)) + 63)
+    n >>= 5
+  }
+  return out + String.fromCharCode(n + 63)
+}
+
+function encodePath(points) {
+  let lat = 0
+  let lng = 0
+  let out = ''
+  for (const point of points) {
+    const nextLat = Math.round(point.lat * 1e5)
+    const nextLng = Math.round(point.lng * 1e5)
+    out += encodeSigned(nextLat - lat)
+    out += encodeSigned(nextLng - lng)
+    lat = nextLat
+    lng = nextLng
+  }
+  return out
+}
+
+test('in-progress ETA follows the stored road and shrinks instead of repeating the whole drive', () => {
+  const points = [
+    { lat: 34.7, lng: -82.84 },
+    { lat: 34.71, lng: -82.84 },
+    { lat: 34.72, lng: -82.84 },
+  ]
+  const encoded = encodePath(points)
+  const trip = {
+    status: 'in_progress',
+    pickup_lat: 34.7,
+    pickup_lng: -82.84,
+    dropoff_lat: 34.72,
+    dropoff_lng: -82.84,
+    metadata: { route_polyline: encoded, route_duration_s: 600 },
+  }
+  const start = followEtaLine('in_progress', { lat: 34.7002, lng: -82.8402 }, trip)
+  const mid = followEtaLine('in_progress', { lat: 34.71, lng: -82.8401 }, trip)
+  assert.match(start, /by road to drop-off/)
+  assert.match(mid, /by road to drop-off/)
+  assert.notEqual(start, mid)
+  assert.match(start, /About 10 min/)
+  assert.match(mid, /About 5 min/)
+  const line = followRouteLine(trip, { lat: 34.71, lng: -82.8401 })
+  assert.ok(line.length >= 2)
+  assert.ok(line[0][0] > 34.705)
+  assert.equal(storedRoadSuffix(trip, { lat: 34.5, lng: -82.84 }), null)
+  const far = followRouteLine(trip, { lat: 34.5, lng: -82.84 })
+  assert.equal(far.length, 3)
+  assert.match(followEtaLine('in_progress', { lat: 34.5, lng: -82.84 }, trip), /straight line to drop-off/)
+  assert.match(followEtaLine('accepted', { lat: 34.71, lng: -82.84 }, trip), /straight line to pickup/)
+})
+
+test('heading blend takes the short way around north', () => {
+  assert.ok(Math.abs(lerpHeading(350, 10, 0.5) - 0) < 0.01 || Math.abs(lerpHeading(350, 10, 0.5) - 360) < 0.01)
+  assert.equal(travelBearing({ lat: 0, lng: 0 }, { lat: 1, lng: 0 }), 0)
+  const east = travelBearing({ lat: 0, lng: 0 }, { lat: 0, lng: 1 })
+  assert.ok(Math.abs(east - 90) < 0.01)
+  assert.equal(travelBearing({ lat: 1, lng: 1 }, { lat: 1, lng: 1 }), null)
 })
