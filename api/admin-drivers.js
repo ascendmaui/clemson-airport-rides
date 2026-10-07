@@ -9,9 +9,10 @@
 import { IC_AGREEMENT_VERSION, approvalBlockers, blockerLabel, onboardingLabel } from '../shared/driverOnboarding.js'
 import { adminResendSetupBanner, rejectAgreementTextEdit } from '../shared/agreementSign.js'
 import { contractApprovalDenial, pickAgreementRow } from '../shared/contractIdentity.js'
+import { backgroundGateFromApplication, missingBackgroundColumns } from '../shared/backgroundCheck.js'
 import { handleCorrectAgreement, handleEmailAgreement } from '../server/agreementHttp.js'
 import { serverIsAdmin } from '../server/adminRoster.js'
-import { selectDriverApplicationQueue, withSubmittedApplicantEmail } from '../shared/applicantEmail.js'
+import { selectDriverApplicationQueue, submittedApplicantEmail, withSubmittedApplicantEmail } from '../shared/applicantEmail.js'
 import { loadApplicantVehicles } from '../shared/vehicleYear.js'
 import { loadSubmissionContext } from '../server/driverApproval.js'
 import {
@@ -35,6 +36,7 @@ const SUPPORT_LEGACY = {
 }
 
 const APP_COLS = 'id, profile_id, onboarding_status, status, is_student, has_car, has_insurance, wants_extra_money, attestation_accepted_at, background_authorized_at, work_eligibility_attested_at, work_eligibility_category, submitted_at, reviewed_at, reviewed_by, rejection_reason, review_note, admin_notified_at, notify_error, created_at'
+const APP_COLS_BACKGROUND = `${APP_COLS}, background_check_status, background_legal_name, background_signature_name, background_signed_on, background_disclosures, background_admin_reviewed_at`
 
 async function requireAdmin(sb, user) {
   const { data: profile, error } = await sb
@@ -100,7 +102,11 @@ export default async function handler(req, res) {
 }
 
 async function queue(sb, res, status) {
-  const { data: apps, error } = await selectDriverApplicationQueue(sb, APP_COLS, status)
+  let queued = await selectDriverApplicationQueue(sb, APP_COLS_BACKGROUND, status)
+  if (queued.error && missingBackgroundColumns(queued.error)) {
+    queued = await selectDriverApplicationQueue(sb, APP_COLS, status)
+  }
+  const { data: apps, error } = queued
   if (error) return json(res, 500, { error: error.message })
   const ids = (apps || []).map((a) => a.profile_id)
   if (!ids.length) {
@@ -159,9 +165,11 @@ async function queue(sb, res, status) {
     const tax = taxByProfile[app.profile_id] || null
     const agreement = agreementByProfile[app.profile_id] || null
     const packet = packetByProfile[app.profile_id] || null
+    const background = backgroundGateFromApplication(app)
     const blockers = approvalBlockers({
       uploaded: docsByProfile[app.profile_id] || [],
-      backgroundAuthorized: Boolean(app.background_authorized_at),
+      ...background,
+      applicantEmail: submittedApplicantEmail(app, profileById[app.profile_id]),
       workEligibilityAttested: Boolean(app.work_eligibility_attested_at),
       workEligibilityCategory: app.work_eligibility_category,
       taxSaved: Boolean(tax?.legal_name && /^[0-9]{4}$/.test(String(tax.tin_last4 || ''))),
@@ -257,11 +265,23 @@ async function review(sb, res, adminUser, body) {
     const compliance = await loadSubmissionContext(sb, profileId)
     if (compliance.error) return json(res, 500, { error: compliance.error })
     const alreadyApproved = compliance.onboarding_status === 'approved'
-    if (!alreadyApproved && compliance.approvalBlockers.length) {
+    const acknowledged = Boolean(compliance.ctx.backgroundReviewAcknowledged) || body.acknowledgeBackgroundReview === true
+    const blockers = approvalBlockers({
+      ...compliance.ctx,
+      backgroundReviewAcknowledged: acknowledged,
+    })
+    if (!alreadyApproved && !compliance.ctx.agreementSigned) {
+      return json(res, 400, {
+        error: 'Approve stays off until the driver signs the contractor agreement.',
+        missing: blockers.includes('ic_agreement') ? blockers : [...blockers, 'ic_agreement'],
+        missing_labels: blockers.map(blockerLabel),
+      })
+    }
+    if (!alreadyApproved && blockers.length) {
       return json(res, 400, {
         error: 'Review every required document, the W-9, and the signed agreement before approving.',
-        missing: compliance.approvalBlockers,
-        missing_labels: compliance.approvalBlockers.map(blockerLabel),
+        missing: blockers,
+        missing_labels: blockers.map(blockerLabel),
       })
     }
     if (!alreadyApproved) {
@@ -275,6 +295,17 @@ async function review(sb, res, adminUser, body) {
   }
 
   const now = new Date().toISOString()
+  if (decision === 'approve' && body.acknowledgeBackgroundReview === true) {
+    const ack = await sb.from('driver_applications')
+      .update({ background_admin_reviewed_at: now })
+      .eq('profile_id', profileId)
+    if (ack.error) {
+      const message = missingBackgroundColumns(ack.error)
+        ? 'Apply the background attestation migration before approving a disclosure.'
+        : ack.error.message
+      return json(res, 500, { error: message })
+    }
+  }
   const next = decision === 'approve' ? 'approved' : 'rejected'
   const { data: app, error: appErr } = await sb
     .from('driver_applications')

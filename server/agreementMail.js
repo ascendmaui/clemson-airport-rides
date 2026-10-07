@@ -178,6 +178,7 @@ export async function sendAgreementForSignature({
       status: 503,
       body: {
         emailed: false,
+        copyable: true,
         error: EMAIL_NOT_CONFIGURED,
         message: EMAIL_NOT_CONFIGURED,
         signing_url: url,
