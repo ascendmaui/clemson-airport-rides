@@ -4,6 +4,7 @@ import { StatusBar } from 'expo-status-bar'
 import { useEffect, type ReactNode } from 'react'
 import { View } from 'react-native'
 import { ApproachAlert } from '@/components/ApproachAlert'
+import { LostItemBanner } from 'rides-native/LostItemBanner.jsx'
 import { RiderMatchPopup } from '@/components/RiderMatchPopup'
 import { AuthProvider, useAuth } from '@/lib/auth'
 import { PasswordRecoveryListener } from '@/lib/passwordRecovery'
@@ -23,11 +24,29 @@ import { setCarpoolApiBase } from 'rides-native/shared/carpoolApi.js'
 
 setCarpoolApiBase(resolveApiBase())
 
+function LostItemHost() {
+  const { user } = useAuth()
+  const { colors } = useTheme()
+  const router = useRouter()
+  if (!user?.id) return null
+  return (
+    <View pointerEvents="box-none" style={{ position: 'absolute', top: 52, left: 0, right: 0, zIndex: 30 }}>
+      <LostItemBanner
+        supabase={supabase}
+        userId={user.id}
+        colors={colors}
+        role="rider"
+        onOpen={(tripId: string) => router.push({ pathname: '/requested', params: { trip: tripId } })}
+      />
+    </View>
+  )
+}
+
 function ApproachHost() {
   const { user } = useAuth()
   const trip = useApproachingTrip(user?.id || null)
   useRiderPickupStream(user?.id || null)
-  return <ApproachAlert status={trip?.status ?? null} driverId={trip?.driver_id ?? null} />
+  return <ApproachAlert status={trip?.status ?? null} driverId={trip?.driver_id ?? null} tripId={trip?.id ?? null} />
 }
 
 function Gate({ children }: { children: ReactNode }) {
@@ -37,6 +56,7 @@ function Gate({ children }: { children: ReactNode }) {
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <ProfileRequiredGate user={user} supabase={supabase} />
+      <LostItemHost />
       {children}
     </View>
   )

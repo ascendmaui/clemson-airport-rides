@@ -11,16 +11,19 @@ import {
 import { PrimaryButton } from '../components/PrimaryButton'
 import { RequireAuth } from '../components/RequireAuth'
 import { RideChat, RideMessageButton } from '../components/RideChat'
+import { ReportLostItemButton } from '../components/ReportLostItem'
 import { rideChatMode } from '../lib/tripChatRules'
 
 function RideMessagesEntry({ trip, userId }) {
   const [open, setOpen] = useState(false)
   if (!trip?.id || !userId || !trip.rider_id || !trip.driver_id) return null
   const mode = rideChatMode(trip)
-  if (mode === 'closed') return null
   return (
     <div style={{ margin: '8px 0' }}>
-      <RideMessageButton readOnly={mode !== 'compose'} onClick={() => setOpen(true)} />
+      {mode !== 'closed' ? (
+        <RideMessageButton readOnly={mode !== 'compose'} tripId={trip.id} userId={userId} onClick={() => setOpen(true)} />
+      ) : null}
+      <ReportLostItemButton trip={trip} userId={userId} onOpened={() => setOpen(true)} />
       {open && (
         <RideChat
           tripId={trip.id}

@@ -20,6 +20,8 @@ import { debitStoredRideCredits } from './rideCreditSettle.js'
 import { airportDepositRequiredCents } from '../packages/rides-native/tripTags.js'
 import { releaseTigerHeatReservation, settleTigerHeatReservation } from './tigerHeatService.js'
 import { settleFareHold } from './fareAuthorization.js'
+import { riderCaptureFareCents } from '../shared/backupDriverQueue.js'
+import { readBoostCents } from '../shared/scheduledBoost.js'
 
 const ACTIVE_KEEP = new Set(['accepted', 'arriving', 'in_progress', 'payment_required', 'searching', 'offered'])
 
@@ -108,7 +110,7 @@ export async function settleTrip({
   const precomputed = explicitAmountCents == null ? readPrecomputedFeeCents(trip, kind) : null
   const due = amountDueForAction({
     action,
-    fareCents: trip.fare_cents,
+    fareCents: action === 'complete' ? riderCaptureFareCents(trip) : trip.fare_cents,
     paidCents: paidTowardFareCents(trip, payments),
     hold: trip.metadata?.payment_hold || null,
     explicitAmountCents,
@@ -135,19 +137,24 @@ export async function settleTrip({
   const chargeKind = action === 'complete' ? (due.kind || 'balance') : kind
   const paidCents = farePaidCents(trip)
   const depositAlreadyExists = airportDepositRequiredCents(trip) > 0
+  const boostCents = action === 'complete' ? readBoostCents(trip) : 0
+  const creditsFare = action === 'complete' && trip.metadata?.billing_choice === 'credits'
+  // Credits cover the fare. The boost is captured from the card hold with the
+  // fare on every other trip. A $0 boost leaves this path unchanged.
+  const captureCents = creditsFare ? boostCents : Math.max(0, Math.round(Number(due.amountCents) || 0)) + boostCents
   let fareHold = null
-  if (action === 'complete' && !override && due.amountCents > 0) {
+  if (action === 'complete' && !override && (due.amountCents > 0 || boostCents > 0)) {
     try {
       fareHold = await settleFareHold({
         sb,
         stripe,
         trip,
-        finalFareCents: due.amountCents,
+        finalFareCents: captureCents,
       })
     } catch (err) {
       console.error('[tripSettle] fare hold', err?.message || err)
       fareHold = failureResult('charge_failed', {
-        amountCents: due.amountCents,
+        amountCents: captureCents,
         tripId: trip.id,
         kind: 'balance',
       })

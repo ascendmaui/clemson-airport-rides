@@ -20,6 +20,39 @@ export function adminResendSetupBanner(env = {}) {
   return !emailSenderConfigured(env)
 }
 
+/** Admin copy for the agreement send. A missing Resend config still yields a copyable link. */
+export function agreementSendOutcome(body = {}) {
+  const signingUrl = String(body?.signing_url || '')
+  if (signingUrl && body?.emailed) {
+    return {
+      ok: true,
+      copyable: true,
+      emailed: true,
+      signingUrl,
+      message: 'Agreement emailed to the driver for signature. The same link is here if you need to copy it.',
+    }
+  }
+  if (signingUrl) {
+    const unconfigured = body?.error === EMAIL_NOT_CONFIGURED || body?.message === EMAIL_NOT_CONFIGURED
+    return {
+      ok: true,
+      copyable: true,
+      emailed: false,
+      signingUrl,
+      message: unconfigured
+        ? 'Email is not configured. Copy this signing link and send it to the driver. Approve stays off until they sign.'
+        : (body?.message || body?.error || 'Copy this signing link and send it to the driver. Approve stays off until they sign.'),
+    }
+  }
+  return {
+    ok: false,
+    copyable: false,
+    emailed: false,
+    signingUrl: '',
+    message: body?.error || body?.message || 'Could not create a signing link.',
+  }
+}
+
 export function assessSignLink({ link, viewerId, now = Date.now() } = {}) {
   if (!link) return { ok: false, reason: 'missing' }
   if (link.revoked_at) return { ok: false, reason: 'revoked' }

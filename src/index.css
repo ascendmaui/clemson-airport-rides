@@ -1025,11 +1025,12 @@ select[aria-invalid="true"]:focus-visible {
   gap: 12px 20px;
   flex-wrap: wrap;
   padding: 12px 16px;
-  background: rgba(255, 255, 255, 0.82);
-  backdrop-filter: blur(18px) saturate(1.4);
-  -webkit-backdrop-filter: blur(18px) saturate(1.4);
-  border-bottom: 1px solid rgba(82, 45, 128, 0.08);
-  box-shadow: 0 8px 24px rgba(11, 18, 32, 0.04);
+  background: transparent;
+  filter: none;
+  border: none;
+  border-bottom: none;
+  box-shadow: none;
+  text-shadow: none;
 }
 .mkt-brand {
   display: inline-flex;

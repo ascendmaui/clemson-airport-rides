@@ -31,12 +31,13 @@ export const RIDE_TIERS = [
   { id: 'standard', name: 'Standard', icon: '🚗', eta: '4 min', meta: '4 seats', price: 18.5 },
   { id: 'wait', name: 'Wait & Save', icon: '⏱️', eta: '12 min', meta: 'Save ~20%', price: 14.2 },
   { id: 'comfort', name: 'Extra Comfort', icon: '✨', eta: '6 min', meta: 'Newer cars', price: 23 },
+  { id: 'carpool', name: 'Carpool', icon: '👥', eta: '8 min', meta: 'Save 15% per seat', price: 15.73 },
   { id: 'xl', name: 'XL', icon: '🚐', eta: '8 min', meta: '6 seats', price: 28.75 },
   { id: 'pet', name: 'Pet', icon: '🐶', eta: '9 min', meta: 'Pet-friendly', price: 21 },
 ]
 
-/** Rider booking offers these three. Other catalog rows stay off that screen. */
-export const BOOKABLE_RIDE_TIER_IDS = ['standard', 'wait', 'comfort']
+/** Rider booking offers these four. Other catalog rows stay off that screen. */
+export const BOOKABLE_RIDE_TIER_IDS = ['standard', 'wait', 'comfort', 'carpool']
 
 export function bookableRideTiers(catalog = RIDE_TIERS) {
   const allowed = new Set(BOOKABLE_RIDE_TIER_IDS)

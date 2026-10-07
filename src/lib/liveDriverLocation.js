@@ -1,4 +1,5 @@
 import { createTrackingRefresh, onTrackingResume, geolocationErrorMessage } from '../../packages/rides-native/tracking.js'
+import { coordsFromRow, headingOrNull, liveFixFromReads, speedOrNull } from '../../packages/rides-native/liveFix.js'
 import { supabase } from './supabase.js'
 
 export const LIVE_TRIP_STATUSES = ['accepted', 'arriving', 'arrived', 'in_progress']
@@ -22,21 +23,49 @@ export function shouldPublishLocation(previous, next, now = Date.now()) {
   return !previous || now - previous.publishedAt >= MIN_PUBLISH_MS || distanceMeters(previous, next) >= MIN_MOVE_METERS
 }
 
-export async function publishTripDriverLocation({ tripId, driverId, coords }) {
-  if (!supabase || !tripId || !driverId) throw new Error('Live location is not configured')
-  const lat = Number(coords?.latitude)
-  const lng = Number(coords?.longitude)
+function locationNumbers(coords) {
+  const lat = Number(coords?.latitude ?? coords?.lat)
+  const lng = Number(coords?.longitude ?? coords?.lng)
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) throw new Error('Invalid location')
-  const { error } = await supabase.from('trip_driver_locations').upsert({
+  return { lat, lng }
+}
+
+async function upsertTripDriverLocation(client, { tripId, driverId, coords, now }) {
+  const { lat, lng } = locationNumbers(coords)
+  const { error } = await client.from('trip_driver_locations').upsert({
     trip_id: tripId,
     driver_id: driverId,
     lat,
     lng,
-    heading: Number.isFinite(Number(coords?.heading)) ? Number(coords.heading) : null,
-    speed: Number.isFinite(Number(coords?.speed)) ? Number(coords.speed) : null,
-    updated_at: new Date().toISOString(),
+    heading: headingOrNull(coords?.heading),
+    speed: speedOrNull(coords?.speed),
+    updated_at: now,
   })
   if (error) throw new Error(error.message)
+}
+
+export async function publishTripDriverLocation({ tripId, driverId, coords }) {
+  if (!supabase || !tripId || !driverId) throw new Error('Live location is not configured')
+  await upsertTripDriverLocation(supabase, { tripId, driverId, coords, now: new Date().toISOString() })
+}
+
+/** Presence plus the active-trip row. The presence write does not change online. */
+export async function publishWebLiveFix(client, { tripId = null, driverId, coords }) {
+  if (!client || !driverId) throw new Error('Live location is not configured')
+  const { lat, lng } = locationNumbers(coords)
+  const now = new Date().toISOString()
+  const status = await client.from('driver_status').upsert({
+    driver_id: driverId,
+    lat,
+    lng,
+    heading: headingOrNull(coords?.heading),
+    updated_at: now,
+    location_updated_at: now,
+  })
+  if (status.error) throw new Error(status.error.message)
+  if (!tripId) return { presence: true, trip: false }
+  await upsertTripDriverLocation(client, { tripId, driverId, coords, now })
+  return { presence: true, trip: true }
 }
 
 /** GPS watcher for an active trip. Writes are throttled to 4s unless movement is 15m+. */
@@ -53,7 +82,7 @@ export function startTripLocationWatch({ tripId, driverId, onFix, onError }) {
     if (!Number.isFinite(next.lat) || !Number.isFinite(next.lng) || publishing || !shouldPublishLocation(previous, next)) return
     publishing = true
     try {
-      await publishTripDriverLocation({ tripId, driverId, coords: position.coords })
+      await publishWebLiveFix(supabase, { tripId, driverId, coords: position.coords })
       if (!stopped) {
         previous = { ...next, publishedAt: Date.now() }
         onFix?.(position)
@@ -68,21 +97,40 @@ export function startTripLocationWatch({ tripId, driverId, onFix, onError }) {
   return () => { stopped = true; navigator.geolocation.clearWatch(watchId) }
 }
 
-/** Reads only the assigned driver's active-trip location; realtime with an 8s fallback. */
-export function subscribeTripDriverLocation(tripId, onUpdate, onError) {
+/** Trip telemetry first, then driver_status when that row is empty. Realtime plus an 8s poll. */
+export function subscribeTripDriverLocation(tripId, onUpdate, onError, driverId = null) {
   if (!supabase || !tripId) return () => {}
+  const presenceId = driverId || null
   let alive = true
   const reader = createTrackingRefresh({
     load: async () => {
-      const { data, error } = await supabase.from('trip_driver_locations')
+      const tripRes = await supabase.from('trip_driver_locations')
         .select('trip_id, driver_id, lat, lng, heading, speed, updated_at').eq('trip_id', tripId).maybeSingle()
-      if (error) throw error
-      return data
+      let statusRes = { data: null, error: null }
+      if (presenceId && !(tripRes.error == null && coordsFromRow(tripRes.data))) {
+        statusRes = await supabase.from('driver_status')
+          .select('lat, lng, heading, location_updated_at').eq('driver_id', presenceId).maybeSingle()
+      }
+      const picked = liveFixFromReads({
+        tripRow: tripRes.error ? null : tripRes.data,
+        tripError: tripRes.error,
+        statusRow: statusRes.data,
+        statusError: statusRes.error,
+      })
+      if (picked.error) throw picked.error
+      if (!picked.fix) return null
+      return {
+        lat: picked.fix.lat,
+        lng: picked.fix.lng,
+        heading: picked.fix.heading,
+        speed: picked.fix.speed,
+        updated_at: picked.fix.updatedAt,
+      }
     },
     onData: (row) => {
-      if (!alive || !row) return
-      const lat = Number(row.lat); const lng = Number(row.lng)
-      if (Number.isFinite(lat) && Number.isFinite(lng)) onUpdate?.({ lat, lng, heading: Number(row.heading), speed: Number(row.speed), updatedAt: row.updated_at })
+      if (!alive) return
+      const fix = coordsFromRow(row)
+      if (fix) onUpdate?.(fix)
     },
     onError: () => onError?.('Could not refresh driver location. Retrying automatically.'),
   })
@@ -90,8 +138,11 @@ export function subscribeTripDriverLocation(tripId, onUpdate, onError) {
   refresh()
   const poll = setInterval(refresh, 8000)
   const offResume = onTrackingResume(() => void reader.refresh(true))
-  const channel = supabase.channel(`trip-driver-location-${tripId}`)
+  let channel = supabase.channel(`trip-driver-location-${tripId}`)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'trip_driver_locations', filter: `trip_id=eq.${tripId}` }, refresh)
-    .subscribe((status) => { if (status === 'SUBSCRIBED') void reader.refresh(true) })
+  if (presenceId) {
+    channel = channel.on('postgres_changes', { event: '*', schema: 'public', table: 'driver_status', filter: `driver_id=eq.${presenceId}` }, refresh)
+  }
+  channel.subscribe((status) => { if (status === 'SUBSCRIBED') void reader.refresh(true) })
   return () => { alive = false; reader.stop(); offResume(); clearInterval(poll); supabase.removeChannel(channel) }
 }

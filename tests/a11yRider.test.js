@@ -589,7 +589,7 @@ test('book-to-track critical rider controls retain meaningful accessibility labe
   assert.match(home, /accessibilityHint="Continues to confirm pickup"/)
   assert.match(confirm, /accessibilityLabel="Note for driver"/)
   assert.match(confirm, /label="Confirm pickup"/)
-  assert.match(driverPicker, /selectedDriver \? `Request \$\{selectedDriver\.name\}` : 'Select a driver'/)
+  assert.match(driverPicker, /selectedDriver \? `Request \$\{selectedDriver\.name\}` : \(anyOnline \? 'Request next driver' : 'Select a driver'\)/)
   assert.match(tracking, /accessibilityLabel="Emergency contacts"/)
 })
 

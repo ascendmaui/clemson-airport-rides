@@ -13,10 +13,11 @@ import { useFeedback } from '@/lib/feedback'
 import { inAppRideAlert, notifyNewRequest, notifyScheduledBoard, setRideAlertSurface } from '@/lib/push'
 import { supabase } from '@/lib/supabase'
 import { useTheme } from '@/lib/theme'
-import { acceptTrip, loadDriverDesk, subscribeTrips } from 'rides-native/driverDesk'
+import { acceptTrip, loadDriverDesk, markSearchingOffers, subscribeTrips } from 'rides-native/driverDesk'
 import { clemsonMiamiDriverNotification } from 'rides-native/clemsonMiamiPromo.js'
 import { isSyntheticOffer } from 'rides-native/syntheticOffers'
 import { formatCents, type DriverCard } from 'rides-native/tripTags'
+import { formatBoostBadge } from '../../../shared/scheduledBoost.js'
 import { offerHourly, pickupMiles, EXCLUSIVE_SECONDS } from 'rides-native/offerLadder.js'
 import { shouldAutoAccept } from 'rides-native/autoAccept.js'
 
@@ -51,7 +52,8 @@ export function OfferBridge() {
   function showBanner(card: DriverCard) {
     const promo = card.promoRide ? clemsonMiamiDriverNotification() : null
     const title = promo?.title || 'New ride request'
-    const body = promo?.body || `${formatCents(card.driverNetCents)} · ${card.pickupLabel} → ${card.dropoffLabel}`
+    const boostBit = (card.boostDriverCents || 0) > 0 ? ` · ${formatBoostBadge(card.boostDriverCents || 0)}` : ''
+    const body = promo?.body || `${formatCents(card.driverNetCents)}${boostBit} · ${card.pickupLabel} → ${card.dropoffLabel}`
     setBanner({ id: card.id, title, body, tier: card.tier || 'standard', shownAt: Date.now() })
     AccessibilityInfo.announceForAccessibility(`${title}. ${body}`)
   }
@@ -92,6 +94,7 @@ export function OfferBridge() {
           }
         }
         const offers = (desk.offers || []).filter((card: DriverCard) => !isSyntheticOffer(card))
+        if (desk.online) markSearchingOffers(supabase, offers).catch(() => {})
         if (!primed.current) {
           offers.forEach((card: DriverCard) => seen.current.add(card.id))
           primed.current = true

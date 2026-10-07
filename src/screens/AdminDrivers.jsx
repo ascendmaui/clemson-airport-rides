@@ -20,6 +20,13 @@ import {
   submittedApplicantEmail,
 } from '../lib/driverOnboarding'
 import { applicantVehicleLabel } from '../../shared/vehicleYear.js'
+import { agreementSendOutcome } from '../../shared/agreementSign.js'
+import {
+  BACKGROUND_DISCLOSURES,
+  VENDOR_CHECK_NOT_PERFORMED,
+  backgroundStatusLabel,
+  storedBackgroundStatus,
+} from '../../shared/backgroundCheck.js'
 import {
   assessContractIdentity,
   blockersIgnoringContractIdentity,
@@ -54,6 +61,7 @@ export function AdminDrivers({ embedded = false }) {
   const [requestPrompt, setRequestPrompt] = useState('')
   const [signingUrl, setSigningUrl] = useState('')
   const [acceptContractMismatch, setAcceptContractMismatch] = useState(false)
+  const [ackBackground, setAckBackground] = useState(false)
   const [particulars, setParticulars] = useState({
     legal_name: '',
     address_line: '',
@@ -111,6 +119,7 @@ export function AdminDrivers({ embedded = false }) {
     setDocsError(null)
     setReason('')
     setAcceptContractMismatch(false)
+    setAckBackground(false)
     try {
       const payload = await fetchDriverReviewDetail(profileId)
       setDocs(payload.documents || [])
@@ -169,6 +178,7 @@ export function AdminDrivers({ embedded = false }) {
         decision,
         reason,
         acknowledgeContractMismatch: decision === 'approve' && acceptContractMismatch,
+        acknowledgeBackgroundReview: decision === 'approve' && ackBackground,
       })
       setNote(data.message || (decision === 'approve' ? 'Approved' : 'Rejected'))
       setOpenId(null)
@@ -207,16 +217,32 @@ export function AdminDrivers({ embedded = false }) {
     setError(null)
     try {
       const data = await emailAgreementToDriver(profileId)
-      setSigningUrl(data.signing_url || '')
-      setNote(data.emailed
-        ? 'Agreement emailed to the driver for signature.'
-        : (data.message || data.error || 'Email sender not configured'))
+      const outcome = agreementSendOutcome(data)
+      setSigningUrl(outcome.signingUrl)
+      if (outcome.ok) setNote(outcome.message)
+      else setError(outcome.message)
     } catch (err) {
-      setSigningUrl(err.payload?.signing_url || '')
-      setError(err.message || String(err))
+      const outcome = agreementSendOutcome(err.payload || {})
+      setSigningUrl(outcome.signingUrl)
+      if (outcome.ok) setNote(outcome.message)
+      else setError(err.message || outcome.message || String(err))
     } finally {
       setBusy(false)
     }
+  }
+
+  async function copySigningLink() {
+    if (!signingUrl) return
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(signingUrl)
+        setNote('Signing link copied. Send it to the driver. Approve stays off until they sign.')
+        return
+      }
+    } catch {
+      // The readonly field stays selected as the fallback.
+    }
+    setNote('Select the signing link and copy it. Approve stays off until they sign.')
   }
 
   if (loading || allowed == null) {
@@ -296,18 +322,29 @@ export function AdminDrivers({ embedded = false }) {
             applicantLegalName: taxForIdentity?.legal_name,
           })
           const agreementSigned = Boolean(agreementForIdentity?.signed_at && agreementForIdentity?.signature_name)
+          const employmentForGate = (active && detail?.employment) || row
+          const backgroundStatus = storedBackgroundStatus(employmentForGate)
+          const backgroundReviewed = Boolean(employmentForGate.background_admin_reviewed_at)
+          const needsBackgroundAck = active && backgroundStatus === 'needs_review' && !backgroundReviewed && row.onboarding_status !== 'approved'
+          const backgroundAckReady = !needsBackgroundAck || ackBackground
           const approveBlockers = blockersIgnoringContractIdentity(
             (active && detail?.blockers) || row.blockers || [],
             contractIdentity,
             agreementSigned,
-          )
+          ).filter((code) => !(code === 'background_needs_review' && backgroundAckReady))
           const needsContractConfirm = active && agreementSigned && contractIdentity.status === 'mismatch' && row.onboarding_status !== 'approved'
+          const approveLocked = row.onboarding_status !== 'approved' && (
+            approveBlockers.length > 0
+            || !agreementSigned
+            || !backgroundAckReady
+            || (needsContractConfirm && !acceptContractMismatch)
+          )
           return (
             <div key={row.id} className="sheet" style={{ padding: 16, borderRadius: 18, boxShadow: 'var(--shadow-pill)' }}>
               <button type="button" className="pressable" onClick={() => openRow(row.profile_id)} style={{ width: '100%', textAlign: 'left' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
                   <div style={{ fontWeight: 800, color: 'var(--purple)' }}>{name}</div>
-                  <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--orange)' }}>{row.onboarding_status !== 'approved' && (row.blockers || []).length > 0 ? 'Waiting on applicant' : onboardingLabel(row.onboarding_status)}</div>
+                  <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--orange)' }}>{row.onboarding_status !== 'approved' && (row.blockers || []).some((code) => code !== 'background_needs_review') ? 'Waiting on applicant' : onboardingLabel(row.onboarding_status)}</div>
                 </div>
                 <div data-applicant-email={email || ''} style={{ fontSize: 13, marginTop: 4, wordBreak: 'break-all' }}>
                   <span style={{ fontWeight: 700, color: 'var(--purple)' }}>Email</span>
@@ -336,6 +373,7 @@ export function AdminDrivers({ embedded = false }) {
                     busy={busy}
                     onCorrect={() => correctParticulars(row.profile_id)}
                     onEmail={() => emailAgreement(row.profile_id)}
+                    onCopy={copySigningLink}
                   />
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
                     {REQUIRED_DOCUMENTS.map((doc) => {
@@ -409,9 +447,19 @@ export function AdminDrivers({ embedded = false }) {
                         </label>
                       </div>
                     )}
+                    {needsBackgroundAck && (
+                      <label style={{ display: 'flex', gap: 8, alignItems: 'flex-start', fontSize: 13 }}>
+                        <input
+                          type="checkbox"
+                          checked={ackBackground}
+                          onChange={(e) => setAckBackground(e.target.checked)}
+                        />
+                        <span>I reviewed the yes disclosure. This is not a completed background check.</span>
+                      </label>
+                    )}
                     <PrimaryButton
                       variant="purple"
-                      disabled={busy || (row.onboarding_status !== 'approved' && (approveBlockers.length > 0 || (needsContractConfirm && !acceptContractMismatch)))}
+                      disabled={busy || approveLocked}
                       onClick={() => decide(row.profile_id, 'approve')}
                     >
                       {busy ? 'Saving…' : 'Approve driver'}
@@ -482,19 +530,39 @@ function ThreadList({ thread }) {
 }
 
 function ComplianceSummary({ row, detail }) {
-  const employment = detail?.employment || {
+  const employment = {
     background_authorized_at: row.background_authorized_at,
+    background_check_status: row.background_check_status,
+    background_disclosures: row.background_disclosures,
+    background_admin_reviewed_at: row.background_admin_reviewed_at,
     work_eligibility_attested_at: row.work_eligibility_attested_at,
     work_eligibility_category: row.work_eligibility_category,
+    ...(detail?.employment || {}),
   }
   const tax = detail?.tax || row.tax || null
   const agreement = detail?.agreement || row.agreement || null
   const blockers = detail?.blocker_labels || row.blocker_labels || []
   const category = WORK_ELIGIBILITY_CATEGORIES.find((item) => item.id === employment.work_eligibility_category)
   const taxClass = TAX_CLASSIFICATIONS.find((item) => item.id === tax?.tax_classification)
+  const backgroundStatus = storedBackgroundStatus(employment)
+  const disclosures = employment.background_disclosures && typeof employment.background_disclosures === 'object'
+    ? employment.background_disclosures
+    : {}
   return (
     <div style={{ fontSize: 13, lineHeight: 1.45, marginBottom: 12, color: 'var(--ink-secondary)' }}>
-      <div>Background check: {employment.background_authorized_at ? 'Authorized' : 'Missing'}</div>
+      <div data-background-status={backgroundStatus}>
+        Background attestation: {backgroundStatusLabel(backgroundStatus, employment)}
+      </div>
+      {BACKGROUND_DISCLOSURES.map((question) => {
+        const value = disclosures[question.id]
+        const answer = value === true ? 'Yes' : value === false ? 'No' : 'Not answered'
+        return (
+          <div key={question.id} data-disclosure={question.id}>
+            {question.prompt} — {answer}
+          </div>
+        )
+      })}
+      <div>{VENDOR_CHECK_NOT_PERFORMED}</div>
       <div>Work eligibility: {category ? category.label : 'Missing'}{employment.work_eligibility_attested_at ? ' · attested' : ''}</div>
       <div>
         W-9: {tax?.legal_name || 'Missing'}
@@ -518,7 +586,7 @@ function ComplianceSummary({ row, detail }) {
   )
 }
 
-function AgreementReview({ detail, particulars, setParticulars, signingUrl, busy, onCorrect, onEmail }) {
+function AgreementReview({ detail, particulars, setParticulars, signingUrl, busy, onCorrect, onEmail, onCopy }) {
   const packet = detail?.packet
   const fields = [
     ['legal_name', 'Legal name'],
@@ -550,13 +618,18 @@ function AgreementReview({ detail, particulars, setParticulars, signingUrl, busy
         Save application corrections
       </button>
       <button type="button" className="pressable" disabled={busy} onClick={onEmail} style={quietButton}>
-        Email agreement to driver for signature
+        Email agreement or copy a signing link
       </button>
       {signingUrl && (
-        <label style={{ display: 'block', marginTop: 8, fontSize: 12, fontWeight: 650 }}>
-          Signing link
-          <input readOnly value={signingUrl} style={fieldStyle} onFocus={(e) => e.target.select()} />
-        </label>
+        <>
+          <label style={{ display: 'block', marginTop: 8, fontSize: 12, fontWeight: 650 }}>
+            Signing link
+            <input readOnly value={signingUrl} style={fieldStyle} onFocus={(e) => e.target.select()} />
+          </label>
+          <button type="button" className="pressable" disabled={busy} onClick={onCopy} style={quietButton}>
+            Copy signing link
+          </button>
+        </>
       )}
     </div>
   )

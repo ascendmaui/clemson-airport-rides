@@ -20,13 +20,17 @@ import {
 } from '../authoritativeFare.js'
 import { insertTripEvent } from '../tripEvents.js'
 import { billingForPricedRide } from '../rideBilling.js'
-import { resolveOfferedTier, scheduleDiscountMetadata } from '../../shared/rideOptions.js'
+import { carpoolSeatCount, resolveOfferedTier, scheduleDiscountMetadata } from '../../shared/rideOptions.js'
 import { tigerPassBpsForRider } from '../riderPass.js'
 import { tigerPassMetadata } from '../../shared/tigerPass.js'
 import { assertTierAvailable } from '../rideAvailability.js'
 import { loadNearTermOffer } from '../nearTermAvailability.js'
 import { notifyScheduledBoard } from '../scheduledBoardAlerts.js'
 import { isNearTermRequest, matchRequestedSlot } from '../../shared/nearTermSlots.js'
+import { backupBookingMetadata, normalizeBackupBonusCents, preauthBaseCents } from '../../shared/backupDriverQueue.js'
+import { authorizeRideRequest } from '../fareAuthorization.js'
+import { boostMetadata, parseBoostCents } from '../../shared/scheduledBoost.js'
+import { insertTripRow } from '../scheduledBoostStore.js'
 
 
 /** Integer passenger count from the request; default 1. Prefer passengers over partySize. */
@@ -156,6 +160,7 @@ export default async function handler(req, res, deps = {}) {
     scheduleAhead: scheduled && !nearTerm,
     now: new Date(clockNow),
     tigerPassBps,
+    seatCount: carpoolSeatCount(tier, passengerCount(body)),
   })
 
   const billing = await billingForPricedRide(sb, user.id, body, priced)
@@ -169,6 +174,17 @@ export default async function handler(req, res, deps = {}) {
       debitedCents: 0,
     })
   }
+
+  const rawBackup = body.backupBonusCents ?? body.backup_bonus_cents
+  const backupRequested = rawBackup != null && rawBackup !== '' && rawBackup !== false && rawBackup !== 0 && rawBackup !== '0'
+  const backupBonusCents = backupRequested ? normalizeBackupBonusCents(rawBackup) : null
+  if (backupRequested && !backupBonusCents) {
+    return json(res, 400, { error: 'Backup driver is $10 or $15.', code: 'backup_bonus_invalid' })
+  }
+  const backupQueue = backupBonusCents && scheduled ? backupBookingMetadata(backupBonusCents, new Date(clockNow)) : null
+  const boostParsed = parseBoostCents(body.boostCents ?? body.boost_cents ?? 0)
+  if (!boostParsed.ok) return json(res, 400, { error: boostParsed.error, code: 'boost_invalid' })
+  const boostCents = scheduled ? boostParsed.cents : 0
 
   const scheduledFor = scheduled ? when.toISOString() : null
   const scheduledNet = scheduledFor ? netCentsForShare(priced.fareCents, SCHEDULED_SHARE_BPS) : null
@@ -206,6 +222,8 @@ export default async function handler(req, res, deps = {}) {
       slot_minutes_out: matchedSlot.minutesOut,
     } : {}),
     ...(scheduledFor ? scheduledOfferPatch() : {}),
+    ...(backupQueue ? { backup_queue: backupQueue } : {}),
+    ...(scheduledFor ? boostMetadata(boostCents) : {}),
   }
   const row = {
     rider_id: user.id,
@@ -228,11 +246,12 @@ export default async function handler(req, res, deps = {}) {
       fare_source: 'server',
       rider_pays_cents: priced.fareCents,
     },
-    passengers: passengerCount(body),
+    passengers: tier === 'carpool' ? carpoolSeatCount(tier, passengerCount(body)) : passengerCount(body),
     pickup_at: scheduledFor,
     scheduled_for: scheduledFor,
     rider_note: purpose,
     metadata,
+    ...(scheduledFor ? { boost_cents: boostCents } : {}),
   }
 
   const profileRes = await runEnsureProfile(sb, user)
@@ -240,7 +259,7 @@ export default async function handler(req, res, deps = {}) {
     return json(res, 500, { error: 'Could not create your rider profile', code: 'profile_missing' })
   }
 
-  const inserted = await sb.from('trips').insert(row).select('id, status, pickup_at, pickup_label, dropoff_label, fare_cents, deposit_cents').single()
+  const inserted = await insertTripRow(sb, row)
   if (inserted.error || !inserted.data) {
     return json(res, 500, { error: inserted.error?.message || 'Could not schedule ride' })
   }
@@ -262,6 +281,20 @@ export default async function handler(req, res, deps = {}) {
       code: 'trip_event_failed',
       trip: inserted.data,
     })
+  }
+
+  if (backupQueue) {
+    try {
+      await (deps.authorizeRideRequest || authorizeRideRequest)({
+        sb,
+        stripe: deps.stripe,
+        trip: { ...row, id: inserted.data.id },
+        riderId: user.id,
+        estimatedFareCents: preauthBaseCents(priced.fareCents, backupBonusCents),
+      })
+    } catch (error) {
+      console.error('[backup-hold]', inserted.data.id, error?.message || error)
+    }
   }
 
   let board = null
@@ -288,5 +321,8 @@ export default async function handler(req, res, deps = {}) {
     scheduleDiscountPct: priced.scheduleDiscountPct || 0,
     scheduleDiscountCents: priced.scheduleDiscountCents || 0,
     scheduleDiscountApplied: Boolean(priced.scheduleDiscountApplied),
+    backupBonusCents: backupBonusCents || 0,
+    backupBooked: Boolean(backupQueue),
+    boostCents,
   })
 }

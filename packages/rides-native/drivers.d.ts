@@ -44,6 +44,7 @@ export const PREFERRED_MATCH_COPY: string
 export const PREFERRED_OFFLINE_COPY: string
 export const PREFERRED_CANCELED_COPY: string
 export const OPEN_POOL_COPY: string
+export const CAMPUS_MPH: number
 
 export function preferredTripFields(driverId: string): { preferred_driver_id: string; match: 'preferred' }
 export function normalizeFavoriteDriverIds(raw: unknown): string[]
@@ -135,12 +136,15 @@ export function requestDriverTrip(
   supabase: unknown,
   input: {
     riderId: string
-    driverId: string
+    driverId?: string | null
+    autoAssign?: boolean
     dest?: string
-    destPoint?: { latitude: number; longitude: number }
+    destPoint?: { latitude?: number; longitude?: number; lat?: number; lng?: number }
     pickupLabel?: string
-    pickupPoint?: { latitude: number; longitude: number }
+    pickupPoint?: { latitude?: number; longitude?: number; lat?: number; lng?: number }
     tier?: string
+    passengers?: number | string | null
     isStudent?: boolean
+    note?: string
   },
-): Promise<{ id: string; status: string; driver_id: string; dropoff_label: string; fare_cents?: number | null; deposit_cents?: number | null }>
+): Promise<{ id: string; status: string; driver_id: string | null; dropoff_label?: string; fare_cents?: number | null; deposit_cents?: number | null }>

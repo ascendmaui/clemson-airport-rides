@@ -6,7 +6,19 @@ import { fileURLToPath } from 'node:url'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const NEEDLE = new RegExp(
-  ['te' + 'sla', 'model' + ' 3', 'self' + '-driving', 'robo' + 'taxi', 'cy' + 'ber'].join('|'),
+  [
+    'te' + 'sla',
+    'model' + ' 3',
+    'self' + '-driving',
+    'robo' + 'taxi',
+    'cy' + 'ber',
+    'at the ' + 'wheel',
+    'driver-' + 'operated',
+    'driver ' + 'operated',
+    'autonomy ' + 'session',
+    'a driver still ' + 'drives',
+    'clemson ' + 'fleet',
+  ].join('|'),
   'i',
 )
 const CONTENT_ALLOW = new Set([

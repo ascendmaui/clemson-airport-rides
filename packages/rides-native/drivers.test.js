@@ -1178,6 +1178,36 @@ test('requestDriverTrip happy path posts to stripe-payment-methods and returns t
   }
 })
 
+test('requestDriverTrip auto-assign omits driverId and keeps the rider note', async () => {
+  const originalFetch = globalThis.fetch
+  try {
+    let captured = null
+    globalThis.fetch = async (url, options) => {
+      captured = { url, options, body: JSON.parse(options.body) }
+      return {
+        ok: true,
+        status: 200,
+        text: async () => JSON.stringify({
+          trip: { id: 'trip-auto', status: 'searching', driver_id: null },
+        }),
+      }
+    }
+    const supabase = makeFakeSupabase({ sessionToken: 'bearer-token-xyz' })
+    const trip = await requestDriverTrip(supabase, {
+      riderId: 'rider-1',
+      autoAssign: true,
+      dest: 'Sikes Hall',
+      note: '  Orange gates  ',
+    })
+    assert.equal(trip.id, 'trip-auto')
+    assert.equal(captured.body.autoAssign, true)
+    assert.equal('driverId' in captured.body, false)
+    assert.equal(captured.body.note, 'Orange gates')
+  } finally {
+    globalThis.fetch = originalFetch
+  }
+})
+
 test('requestDriverTrip applies default destination and stadium pickup points', async () => {
   const originalFetch = globalThis.fetch
   try {

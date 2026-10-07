@@ -1,4 +1,4 @@
-import { trackingIssue, withTrackingTimeout } from 'rides-native/tracking'
+import { trackingIssue, staleEtaLine, withTrackingTimeout } from 'rides-native/tracking'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useEffect, useRef, useState } from 'react'
 import { reconcileCheckout } from 'rides-native/riderMoney.js'
@@ -11,6 +11,7 @@ import { CampusMap } from '@/components/CampusMap'
 import { SearchDemoCycle } from '@/components/SearchDemoCycle'
 import type { MapPin } from '@/components/mapTypes'
 import { LiveShareCard } from '@/components/LiveShareCard'
+import { RiderSwitchSheet } from '@/components/RiderSwitchSheet'
 import { RideMessages } from '@/components/RideMessages'
 import { SosButton, SosIncomingBanner, SosSheet } from '@/components/SosSheet'
 import { useAuth } from '@/lib/auth'
@@ -19,7 +20,8 @@ import { supabase } from '@/lib/supabase'
 import { loadLiveTrip, subscribeLiveTrip, type LiveTrip } from '@/lib/tripWatch'
 import { useTripById } from '@/lib/useRiderTrip'
 import { isActiveRideStatus, listEmergencyContacts, type EmergencyContact } from 'rides-native/safety.js'
-import { etaHoldLine, etaLineFor, liveDriverTitle, mapRouteCoordinates, orderedLiveStops, RIDER_SEARCH_MOTION_COPY, riderLiveView, showSearchTheater, type LiveStopPin } from 'rides-native/liveTrip'
+import { etaHoldLine, liveDriverTitle, orderedLiveStops, RIDER_SEARCH_MOTION_COPY, riderLiveView, showSearchTheater, type LiveStopPin } from 'rides-native/liveTrip'
+import { followEtaLine, followMapCoordinates } from 'rides-native/roadFollow'
 import { holdAirportCode, isOpenUnpaidAirportHold, isUnpaidHoldTtlCancel } from 'rides-native/holdExpiryNotice.js'
 import { LivePhase } from 'rides-native/LivePhase'
 import { isApproachStatus } from '@/lib/approachAlert'
@@ -81,6 +83,7 @@ function pinsFor(trip: LiveTrip | null): MapPin[] {
       longitude: trip.driverLng,
       title: trip.driverName || 'Driver',
       color: ORANGE,
+      heading: trip.driverHeading,
     })
   }
   return pins
@@ -103,6 +106,7 @@ export default function Requested() {
   const [mapError, setMapError] = useState<string | null>(null)
   const [refreshing, setRefreshing] = useState(false)
   const [sosOpen, setSosOpen] = useState(false)
+  const [switchOpen, setSwitchOpen] = useState(false)
   const [contacts, setContacts] = useState<EmergencyContact[]>([])
   const [person, setPerson] = useState<CounterpartView | null>(null)
   const { colors } = useTheme()
@@ -191,8 +195,9 @@ export default function Requested() {
     : basePhase
   const locationIssue = trackingIssue(shown?.status, live?.driverLocationAt, trackingNow)
   const driverFix = live?.driverLat != null && live.driverLng != null ? { lat: live.driverLat, lng: live.driverLng } : null
-  const driverEta = locationIssue ? null : etaLineFor(shown?.status || null, driverFix, live)
-  const etaLine = locationIssue ? null : etaHoldLine(shown?.status || null, driverEta)
+  const driverEta = followEtaLine(shown?.status || null, driverFix, live)
+  const heldEta = etaHoldLine(shown?.status || null, driverEta)
+  const etaLine = staleEtaLine(locationIssue, heldEta, { placeholder: !driverEta })
   const preview = showSearchTheater(shown?.status || null)
   const searchingMap = shown?.status === 'searching' && !located
   const approachLive = isApproachStatus(shown?.status || null)
@@ -303,7 +308,7 @@ export default function Requested() {
           </Text>
         ) : null}
         <View style={[styles.map, lift(colors, 'rest')]}>
-          {/* Road line is the stored Routes polyline when the server had a Maps key. */}
+          {/* Remaining road is the stored polyline when the driver is on it. */}
           <CampusMap
             spots={[]}
             showHeat={false}
@@ -313,7 +318,7 @@ export default function Requested() {
             fitPins={!searchingMap}
             gameDay={false}
             surge={false}
-            route={mapRouteCoordinates(typeof live?.metadata?.route_polyline === 'string' ? live.metadata.route_polyline : null)}
+            route={followMapCoordinates(live, driverFix)}
           />
         </View>
         <SosIncomingBanner tripId={shown?.id || null} userId={user?.id || null} active={rideLive} />
@@ -326,7 +331,7 @@ export default function Requested() {
           <View style={[styles.summary, lift(colors, 'rest')]}>
             <CounterpartCard
               person={person}
-              eta={located ? driverEta : null}
+              eta={located ? staleEtaLine(locationIssue, driverEta, { placeholder: !driverEta }) : null}
               colors={partyColorsFromPalette(colors)}
             />
             {ttlCanceled ? null : (
@@ -359,6 +364,9 @@ export default function Requested() {
                 An orange card tracks how close they are, in feet, from the location they already share.
               </Text>
             ) : null}
+            {(shown?.status === 'accepted' || shown?.status === 'arriving') && (shown?.driver_id || live?.driver_id) ? (
+              <PrimaryButton label="Change driver" tone="purple" onPress={() => setSwitchOpen(true)} />
+            ) : null}
             {shown?.status === 'completed' ? (
               <PrimaryButton label="Rate your driver" onPress={() => router.push({ pathname: '/rate', params: { trip: tripId } })} />
             ) : null}
@@ -386,8 +394,8 @@ export default function Requested() {
               {preview
                 ? RIDER_SEARCH_MOTION_COPY
                 : located
-                  ? 'The orange pin is the driver location from driver_status. While they are on the way, a live distance in feet stays on screen and the screen pulses orange as they get closer.'
-                  : 'Driver coordinates show up here after someone accepts and shares a location. Until then the straight-line ETA stays on this card. Road tiles need a billed Maps key.'}
+                  ? 'The orange pin is your driver’s live location. While they are on the way, a live distance in feet stays on screen and the screen pulses orange as they get closer.'
+                  : 'Driver coordinates show up here after someone accepts and shares a location. The line follows the saved road when the trip has one.'}
             </Text>
           </View>
         )}
@@ -438,6 +446,19 @@ export default function Requested() {
         ) : null}
       </ScrollView>
       </Animated.View>
+      {tripId ? (
+        <RiderSwitchSheet
+          tripId={tripId}
+          open={switchOpen}
+          onClose={() => setSwitchOpen(false)}
+          onDone={(result) => {
+            setSwitchOpen(false)
+            if (result.next === 'carpool') router.push('/friends')
+            else if (result.next === 'home') router.replace('/')
+            else void reloadMap(true)
+          }}
+        />
+      ) : null}
       <SosSheet
         open={sosOpen}
         onClose={() => setSosOpen(false)}

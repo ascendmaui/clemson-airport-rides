@@ -8,6 +8,7 @@ const TIERS = [
   { id: 'standard', name: 'Standard' },
   { id: 'wait', name: 'Wait & Save' },
   { id: 'comfort', name: 'Extra Comfort' },
+  { id: 'carpool', name: 'Carpool' },
 ]
 
 /**

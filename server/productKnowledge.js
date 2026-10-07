@@ -44,7 +44,7 @@ Help explains how the app works. Support is a different chat for bugs, billing p
 Booking a local ride (rider):
 1. Rides tab. Enter a destination or pick a shortcut.
 2. Confirm pickup.
-3. Choose a tier: Standard, Wait & Save, or Extra Comfort. A tier is shown only when an approved driver can serve it. A person drives every ride. The tier screen shows 10% off Standard only when the signed-in email is confirmed and ends with @clemson.edu or @g.clemson.edu. Otherwise it says why student pricing is off. Wait & Save and Extra Comfort are not included in the student discount. Standard on that screen can open an Extra Comfort upsell before Pick driver. That upsell must say a driver is at the wheel.
+3. Choose a tier: Standard, Wait & Save, Extra Comfort, or Carpool. A tier is shown only when an approved driver can serve it. A person drives every ride. Carpool is a discounted per-seat fare (see CARPOOL_DISCOUNT_BPS) for 1 or 2 seats and is dispatched like Standard. The tier screen shows 10% off Standard only when the signed-in email is confirmed and ends with @clemson.edu or @g.clemson.edu. Otherwise it says why student pricing is off. Wait & Save, Extra Comfort, and Carpool are not included in the student discount. Standard on that screen can open an Extra Comfort upsell before Pick driver.
 4. Pick driver lists approved drivers who are online, plus any drivers this rider saved. Name, rating, vehicle, and a straight-line ETA show when that data exists. A request is status "searching" with no driver pinned. Any approved driver can accept it. A decline leaves it in the pool. Requesting a ride places a card hold for the estimated fare plus a buffer. The final fare is charged when the trip ends. Scheduling does not charge a card and does not place that hold.
 5. Requested screen tracks the trip.
 Sign-in is required to book. Guest browsing of marketing and schedule is allowed.
@@ -76,11 +76,11 @@ Live location:
 From Friends, after a ride exists, or from an active trip. Creates a token link (/share/:token or /live/:token). Someone with the link sees the live map. Revoking the share stops it. Do not claim location is shared with the whole campus.
 
 Billing:
-Account → Billing → Add a card. Stripe SetupIntent and Payment Element. The app stores brand and last 4 only, plus billing_activated_at. It does not store the full card number. The saved card is used for the fare hold at ride request, for the final fare, and for friend and carpool shares. A backup card on the same customer may be charged if the default card is declined.
+Account → Billing → Add a card. The website uses a Stripe SetupIntent and the Payment Element. The rider app uses Stripe PaymentSheet for Card, Cash App Pay, Apple Pay, Google Pay, and Link. Saving a method does not charge it. The app stores brand and last 4 only, plus billing_activated_at. It does not store the full card number. The saved method is used for the fare hold at ride request, for the final fare, and for friend and carpool shares. A backup card on the same customer may be charged if the default card is declined.
 If no card is on file, walk the user to Account → Billing → Add a card. Do not ask for the card number in chat.
 
 Frequent-rider pass:
-Account → Billing shows the pass. The rider app also has a pass screen. The display name is a rename hook (TIGER_PASS_NAME, currently ${TIGER_PASS_NAME}). An active pass takes 10% off Standard, Wait & Save, and Extra Comfort after any Clemson student discount and before schedule-ahead. It does not add other ride types. Riders favorite drivers from Pick a driver. Those favorites are offered before the open pool. An active pass can mark a subset as preferred drivers, and those are offered first. Map preview cars are not favorites and never count for matching.
+Account → Billing shows the pass. The rider app also has a pass screen. The display name is a rename hook (TIGER_PASS_NAME, currently ${TIGER_PASS_NAME}). An active pass takes 10% off Standard, Wait & Save, Extra Comfort, and Carpool after any Clemson student discount and before schedule-ahead. It does not add retired ride types. Riders favorite drivers from Pick a driver. Those favorites are offered before the open pool. An active pass can mark a subset as preferred drivers, and those are offered first. Map preview cars are not favorites and never count for matching.
 
 Ratings:
 After a completed trip either person can rate the other once, 1–5 stars plus an optional comment. Account shows a soft reminder. The rate screen is opened as rate?trip=<id>. Skipping is allowed. Driver home sends the driver to that screen when they mark a trip completed.
@@ -106,7 +106,7 @@ export const TOPICS = [
   {
     id: 'book-local',
     roles: ['rider'],
-    keywords: ['book', 'where to', 'destination', 'tier', 'standard', 'wait', 'comfort', 'xl', 'comfort', 'pick driver', 'pickup'],
+    keywords: ['book', 'where to', 'destination', 'tier', 'standard', 'wait', 'comfort', 'carpool', 'xl', 'comfort', 'pick driver', 'pickup'],
     title: 'Book a ride',
     steps: [
       'Open the Rides tab.',
@@ -180,8 +180,8 @@ export const TOPICS = [
     title: 'Add a card',
     steps: [
       'Open Account → Billing.',
-      'Tap Add a card.',
-      'Complete the Stripe form. Clemson RIDES stores the brand and last 4, not the full number.',
+      'Tap Card, Cash App Pay, Apple Pay, Google Pay, Link, or Add another payment method.',
+      'On the phone, Stripe PaymentSheet saves the method. On the website, the Payment Element does. Nothing is charged while saving. Clemson RIDES stores the brand and last 4, not the full number.',
       'The saved card is authorized for the estimated fare plus a buffer when you request a ride. The final fare is charged when the trip ends. A backup card on the account may be charged if the default card is declined. Friend and carpool charges use the saved card when it is on file.',
     ],
     actions: [action('Open Billing', 'account', { tab: 'billing' })],

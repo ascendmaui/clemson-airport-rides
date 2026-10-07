@@ -22,7 +22,8 @@ import { HEAT_WINDOWS } from 'rides-native/places.js'
 import { loadBusySpots, type BusySpot } from '@/lib/busySpots'
 import {
   acceptTrip,
-  declineTrip,
+  declineDriverOffer,
+  markSearchingOffers,
   formatCents,
   loadDriverDesk,
   loadGameDay,
@@ -45,7 +46,8 @@ import {
   weekNetCents,
   type DriverCard,
 } from 'rides-native/tripTags'
-import { etaHoldLine, etaLineFor } from 'rides-native/liveTrip'
+import { etaHoldLine } from 'rides-native/liveTrip'
+import { followEtaLine } from 'rides-native/roadFollow'
 import { driverPickupTarget } from 'rides-native/riderLivePickup'
 import { ORANGE, PURPLE } from 'rides-native/places.js'
 import { gameDayNotice, type GameDayNotice } from 'rides-native/gameDayNotice.js'
@@ -164,6 +166,7 @@ export default function DriverHome() {
     })
     if (currentGate.canSeeOffers) {
       const loaded = await loadDriverDesk(supabase, user.id)
+      if (loaded.online) markSearchingOffers(supabase, loaded.offers).catch(() => {})
       setDesk(loaded)
       if (loaded.lat != null && loaded.lng != null) {
         setSelf({ latitude: Number(loaded.lat), longitude: Number(loaded.lng) })
@@ -250,7 +253,12 @@ export default function DriverHome() {
   const locationTracking = useDriverLocation(Boolean(user && ((approved && online) || desk?.active)), async (fix) => {
     setSelf({ latitude: fix.lat, longitude: fix.lng })
     if (!supabase || !user) return
-    await publishDriverLocation(supabase, user.id, { ...fix, online: true })
+    await publishDriverLocation(supabase, user.id, {
+      ...fix,
+      online: true,
+      tripId: desk?.active?.id ?? null,
+      tripStatus: desk?.active?.status ?? null,
+    })
   })
 
   async function toggle() {
@@ -313,7 +321,7 @@ export default function DriverHome() {
     setBusy(true)
     setError(null)
     try {
-      await declineTrip(supabase, card, user.id)
+      await declineDriverOffer(supabase, card, user.id)
       pulse('decline')
       await refresh()
     } catch (err) {
@@ -343,7 +351,7 @@ export default function DriverHome() {
       ? { lat: Number(desk.lat), lng: Number(desk.lng) }
       : null
   const liveEta = desk?.active
-    ? etaHoldLine(desk.active.status, etaLineFor(desk.active.status, liveFrom, desk.active))
+    ? etaHoldLine(desk.active.status, followEtaLine(desk.active.status, liveFrom, desk.active))
     : null
   const hotspots = spots.slice().sort((a: BusySpot, b: BusySpot) => b.intensity - a.intensity).slice(0, 4)
   const pins: MapPin[] = []
@@ -383,7 +391,6 @@ export default function DriverHome() {
     const card = liveOffers.find((row: DriverCard) => row.id === id)
     if (!card) return
     setSelectedOfferId(card.id)
-    void onAccept(card)
   }
 
   const statusLine = !user
@@ -736,7 +743,7 @@ export function RideCard({
             )}
             <View style={{ flex: 1 }}>
               <Text style={{ color: colors.ink, fontWeight: '800', fontSize: 16 }}>{card.firstName}</Text>
-              <Text style={{ color: colors.inkSecondary }}>{card.tier === 'wait' ? 'Wait & Save' : card.tier === 'comfort' ? 'Extra Comfort' : 'Standard'}</Text>
+              <Text style={{ color: colors.inkSecondary }}>{card.tier === 'wait' ? 'Wait & Save' : card.tier === 'comfort' ? 'Extra Comfort' : card.tier === 'carpool' ? 'Carpool' : 'Standard'}</Text>
             </View>
             {onFavorite ? (
               <Pressable onPress={onFavorite} accessibilityRole="button" accessibilityLabel={favorite ? 'Remove favorite rider' : 'Save favorite rider'}>
@@ -762,6 +769,9 @@ export function RideCard({
                 <Tag key={b.id} label={b.label} tone={b.tone} />
               ))}
             </View>
+          ) : null}
+          {vm.boostLine ? (
+            <Text style={{ color: colors.ink, fontSize: 15, lineHeight: 21 }}>{vm.boostLine}</Text>
           ) : null}
           {preferredNote ? <Text style={{ color: colors.orange, fontWeight: '700' }}>{preferredNote}</Text> : null}
           <Text style={{ color: colors.ink, fontWeight: '700' }}>Pickup · {card.pickupLabel}</Text>

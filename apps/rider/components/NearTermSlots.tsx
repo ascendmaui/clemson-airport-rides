@@ -12,13 +12,14 @@ import { useThemedStyles } from '@/lib/useThemedStyles'
 import { RIDE_PLACES } from 'rides-native/riderShell.js'
 import { NEAR_TERM_MAX_MINUTES, NEAR_TERM_MIN_MINUTES } from '../../../shared/nearTermSlots.js'
 
-type TierId = 'standard' | 'wait' | 'comfort'
+type TierId = 'standard' | 'wait' | 'comfort' | 'carpool'
 type Slot = { id: string; minutesOut: number; pickupAt: string; label: string }
 
 const TIERS: Array<{ id: TierId; name: string }> = [
   { id: 'standard', name: 'Standard' },
   { id: 'wait', name: 'Wait & Save' },
   { id: 'comfort', name: 'Extra Comfort' },
+  { id: 'carpool', name: 'Carpool' },
 ]
 
 function placeByLabel(label: string): RidePlace | null {
@@ -26,7 +27,7 @@ function placeByLabel(label: string): RidePlace | null {
 }
 
 function isTier(value: string): value is TierId {
-  return value === 'standard' || value === 'wait' || value === 'comfort'
+  return value === 'standard' || value === 'wait' || value === 'comfort' || value === 'carpool'
 }
 
 /**

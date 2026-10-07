@@ -13,7 +13,7 @@ import { supabase } from '@/lib/supabase'
 
 type Coord = { lat: number; lng: number; heading?: number | null }
 
-export function useDriverApproach(status: string | null, driverId: string | null) {
+export function useDriverApproach(status: string | null, driverId: string | null, tripId: string | null = null) {
   const active = isApproachStatus(status)
   const [rider, setRider] = useState<Coord | null>(null)
   const [driver, setDriver] = useState<Coord | null>(null)
@@ -25,7 +25,7 @@ export function useDriverApproach(status: string | null, driverId: string | null
     prevFeet.current = null
     prevStage.current = null
     setDriver(null)
-  }, [driverId])
+  }, [driverId, tripId])
 
   useEffect(() => {
     if (!active) return undefined
@@ -72,45 +72,63 @@ export function useDriverApproach(status: string | null, driverId: string | null
     if (!active || !driverId || !supabase) return undefined
     const client = supabase
     let alive = true
-    async function pull() {
-      const { data, error } = await client
-        .from('driver_status')
-        .select('lat, lng')
-        .eq('driver_id', driverId)
-        .maybeSingle()
-      if (!alive || error || !data) return
-      const lat = Number(data.lat)
-      const lng = Number(data.lng)
-      if (!Number.isFinite(lat) || !Number.isFinite(lng)) return
-      setDriver({ lat, lng })
-    }
-    function apply(row: { lat?: unknown; lng?: unknown } | null | undefined) {
+    let tripFix: Coord | null = null
+    let statusFix: Coord | null = null
+    function coordsOf(row: { lat?: unknown; lng?: unknown } | null | undefined): Coord | null {
       const lat = Number(row?.lat)
       const lng = Number(row?.lng)
-      if (!Number.isFinite(lat) || !Number.isFinite(lng)) return
-      setDriver({ lat, lng })
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null
+      return { lat, lng }
+    }
+    function publish() {
+      if (!alive) return
+      setDriver(tripFix || statusFix)
+    }
+    async function pull() {
+      if (tripId) {
+        const tripRes = await client
+          .from('trip_driver_locations')
+          .select('lat, lng')
+          .eq('trip_id', tripId)
+          .maybeSingle()
+        if (!alive) return
+        tripFix = tripRes.error ? null : coordsOf(tripRes.data)
+      } else {
+        tripFix = null
+      }
+      if (!tripFix) {
+        const statusRes = await client
+          .from('driver_status')
+          .select('lat, lng')
+          .eq('driver_id', driverId)
+          .maybeSingle()
+        if (!alive) return
+        statusFix = statusRes.error ? statusFix : coordsOf(statusRes.data)
+      }
+      publish()
     }
     void pull()
-    const channel = client
-      .channel(`approach-driver-${driverId}`)
-      .on(
+    let channel = client.channel(`approach-driver-${tripId || 'open'}-${driverId}`)
+    if (tripId) {
+      channel = channel.on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'driver_status', filter: `driver_id=eq.${driverId}` },
-        (payload) => {
-          if (!alive) return
-          apply((payload.new || null) as { lat?: unknown; lng?: unknown } | null)
-        },
+        { event: '*', schema: 'public', table: 'trip_driver_locations', filter: `trip_id=eq.${tripId}` },
+        () => { void pull() },
       )
-      .subscribe()
-    const timer = setInterval(() => {
-      void pull()
-    }, 8000)
+    }
+    channel = channel.on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'driver_status', filter: `driver_id=eq.${driverId}` },
+      () => { void pull() },
+    )
+    channel.subscribe()
+    const timer = setInterval(() => { void pull() }, 8000)
     return () => {
       alive = false
       clearInterval(timer)
       void client.removeChannel(channel)
     }
-  }, [active, driverId])
+  }, [active, driverId, tripId])
 
   const meters = rider && driver ? haversineMeters(rider.lat, rider.lng, driver.lat, driver.lng) : null
   const reading = formatApproachDistance(meters)

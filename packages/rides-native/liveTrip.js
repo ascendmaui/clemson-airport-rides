@@ -1,7 +1,7 @@
 /**
  * Rider and driver live-trip phases.
- * ETA is straight-line campus pace from coordinates already on the trip or driver_status.
- * TODO: a road-following ETA needs a billed GOOGLE_MAPS_API_KEY (Routes). Do not invent a telemetry API.
+ * etaLineFor stays straight-line campus pace from coordinates already on the trip.
+ * In-trip remaining road distance lives in roadFollow.js and does not call Directions.
  */
 import { driverApproach, formatDriverDistance, OPEN_POOL_COPY, PREFERRED_CANCELED_COPY, PREFERRED_MATCH_COPY } from './drivers.js'
 

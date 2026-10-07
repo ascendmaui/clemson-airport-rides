@@ -30,10 +30,10 @@ function driver(overrides) {
 }
 
 test('live tiers require an approved online driver who is not on a trip', () => {
-  assert.deepEqual(tiersFromDrivers([driver()], 'now'), ['standard', 'wait'])
+  assert.deepEqual(tiersFromDrivers([driver()], 'now'), ['standard', 'wait', 'carpool'])
   assert.deepEqual(
     tiersFromDrivers([driver({ comfort: true })], 'now'),
-    ['standard', 'wait', 'comfort'],
+    ['standard', 'wait', 'comfort', 'carpool'],
   )
   assert.deepEqual(tiersFromDrivers([driver({ online: false, comfort: true })], 'now'), [])
   assert.deepEqual(tiersFromDrivers([driver({ busy: true, comfort: true })], 'now'), [])
@@ -44,8 +44,8 @@ test('live tiers require an approved online driver who is not on a trip', () => 
 test('scheduled tiers ignore who is online and hide a class nobody qualified can serve', () => {
   const offlineComfort = driver({ id: 'a', online: false, comfort: true })
   const standardOnly = driver({ id: 'b', online: false, comfort: false })
-  assert.deepEqual(tiersFromDrivers([offlineComfort], 'scheduled'), ['standard', 'wait', 'comfort'])
-  assert.deepEqual(tiersFromDrivers([standardOnly], 'scheduled'), ['standard', 'wait'])
+  assert.deepEqual(tiersFromDrivers([offlineComfort], 'scheduled'), ['standard', 'wait', 'comfort', 'carpool'])
+  assert.deepEqual(tiersFromDrivers([standardOnly], 'scheduled'), ['standard', 'wait', 'carpool'])
   assert.deepEqual(
     tiersFromDrivers([offlineComfort], 'scheduled').includes('comfort'),
     true,
@@ -53,7 +53,7 @@ test('scheduled tiers ignore who is online and hide a class nobody qualified can
   const booked = driver({ online: false, comfort: true, conflict: true })
   assert.deepEqual(tiersFromDrivers([booked], 'scheduled'), [])
   const other = driver({ id: 'c', online: false, comfort: false, conflict: false })
-  assert.deepEqual(tiersFromDrivers([booked, other], 'scheduled'), ['standard', 'wait'])
+  assert.deepEqual(tiersFromDrivers([booked, other], 'scheduled'), ['standard', 'wait', 'carpool'])
 })
 
 test('comfort follows the vehicle class field, not make or model', () => {
@@ -69,6 +69,8 @@ test('retired and unknown ride options are rejected and labeled without pricing'
   assert.equal(resolveOfferedTier(''), 'standard')
   assert.equal(resolveOfferedTier(' Wait '), 'wait')
   assert.equal(resolveOfferedTier('comfort'), 'comfort')
+  assert.equal(resolveOfferedTier('carpool'), 'carpool')
+  assert.equal(rideOptionLabel('carpool'), 'Carpool')
   const blocked = ['te', 'sla'].join('')
   const blockedAuto = ['te', 'sla_self_driving'].join('')
   const blockedRobot = ['robo', 'taxi'].join('')

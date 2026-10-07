@@ -510,3 +510,15 @@ test('offerCardViewModel isUrgent only while 1 to 10 seconds remain', () => {
   assert.equal(offerCardViewModel(card).timeLeft, null)
 })
 
+test('boosted offer card explains the orange badge in plain language', () => {
+  const vm = offerCardViewModel({
+    pickupLabel: 'Tillman Hall',
+    dropoffLabel: 'GSP Airport',
+    fare_cents: 10000,
+    metadata: { boost_cents: 1000 },
+  })
+  assert.equal(vm.boostLine, "The rider added $10 to get this ride accepted. It's all yours.")
+  assert.match(vm.accessibilityLabel, /It's all yours/)
+  assert.equal(offerCardViewModel({ pickupLabel: 'A', dropoffLabel: 'B' }).boostLine, null)
+})
+

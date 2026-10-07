@@ -3,6 +3,7 @@
 import { IC_AGREEMENT_VERSION } from './icAgreement.js'
 import { isAdminIdentity } from './adminAccess.js'
 import { assessContractIdentity } from './contractIdentity.js'
+import { normalizeApplicantEmail } from './applicantEmail.js'
 
 export { IC_AGREEMENT_HTML, IC_AGREEMENT_TITLE, IC_AGREEMENT_VERSION } from './icAgreement.js'
 export { isAdminIdentity }
@@ -97,13 +98,19 @@ function docsComplete(step, uploaded) {
   return (step.docIds || []).every((id) => have.has(id))
 }
 
+/** Email is required once the caller passes applicantEmail. Older callers omit it. */
+function applicantEmailReady(ctx) {
+  if (!Object.prototype.hasOwnProperty.call(ctx, 'applicantEmail')) return true
+  return Boolean(normalizeApplicantEmail(ctx.applicantEmail))
+}
+
 export function stepIsComplete(stepId, ctx = {}) {
   const step = flowStep(stepId)
   if (!step) return false
   const docsDone = docsComplete(step, ctx.uploaded)
   switch (step.kind) {
     case 'account':
-      return accountInfoSaved(ctx.status)
+      return accountInfoSaved(ctx.status) && applicantEmailReady(ctx)
     case 'documents':
       return docsDone && (stepId !== 'registration' || !['mismatch', 'unreadable'].includes(ctx.registrationMatch))
     case 'employment':
@@ -167,7 +174,7 @@ function stepFraction(step, ctx) {
   const docCount = (step.docIds || []).length
   switch (step.kind) {
     case 'account':
-      return accountInfoSaved(ctx.status) ? 1 : 0
+      return accountInfoSaved(ctx.status) && applicantEmailReady(ctx) ? 1 : 0
     case 'documents':
       return docCount ? docDone / docCount : 0
     case 'employment': {
@@ -275,6 +282,7 @@ export function submissionBlockers(ctx = {}) {
   if (!ctx.backgroundAuthorized) blockers.push('background_authorization_attestation')
   if (!ctx.workEligibilityAttested || !ctx.workEligibilityCategory) blockers.push('work_eligibility_attestation')
   if (!ctx.taxSaved) blockers.push('w9_tax_info')
+  if (!applicantEmailReady(ctx)) blockers.push('applicant_email')
   return blockers
 }
 
@@ -306,6 +314,9 @@ function agreementSatisfied(ctx) {
 export function approvalBlockers(ctx = {}) {
   const blockers = submissionBlockers(ctx)
   if (!agreementSatisfied(ctx)) blockers.push('ic_agreement')
+  if (ctx.backgroundStatus === 'needs_review' && !ctx.backgroundReviewAcknowledged) {
+    blockers.push('background_needs_review')
+  }
   return blockers
 }
 
@@ -318,7 +329,11 @@ export function blockerLabel(code) {
     case 'registration_match':
       return 'Registration that matches the vehicle you entered'
     case 'background_authorization_attestation':
-      return 'Signed background-check authorization'
+      return 'Background attestation (consent is not a completed check)'
+    case 'background_needs_review':
+      return 'Admin review of a background disclosure (not a vendor result)'
+    case 'applicant_email':
+      return 'Email address'
     case 'work_eligibility_attestation':
       return 'Work-eligibility attestation'
     case 'w9_tax_info':

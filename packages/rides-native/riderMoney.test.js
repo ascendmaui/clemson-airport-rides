@@ -33,6 +33,7 @@ import {
   loadTripDeposit,
   markStudentVerified,
   parseQuoteResponse,
+  withTigerPassQuote,
   paymentRouteMissing,
   previewAirportFare,
   promoClaimMessage,
@@ -108,7 +109,51 @@ test('quote parser drops a stale deposit and uses the new cash remainder', () =>
     surgeMultiplier: 1,
     surgeLabel: null,
     routeSource: null,
+    tigerPassApplied: false,
+    tigerPassName: null,
+    tigerPassDiscountBps: 0,
+    tigerPassDiscountCents: 0,
+    preferredCarTypes: [],
+    tiers: [],
   })
+  const passQuote = parseQuoteResponse({
+    tigerPassApplied: true,
+    tigerPassName: 'Tiger Pass',
+    tigerPassDiscountBps: 1000,
+    tigerPassDiscountCents: 900,
+    preferredCarTypes: ['comfort'],
+    tiers: [{ id: 'standard', fareCents: 8100, tigerPassDiscountCents: 900 }],
+    quote: { fareCents: 8100, cashCents: 8100, breakdown: { student_discount_cents: 1000 } },
+  })
+  assert.equal(passQuote.tigerPassApplied, true)
+  assert.equal(passQuote.tigerPassDiscountCents, 900)
+  assert.equal(passQuote.fareCents, 8100)
+  assert.deepEqual(passQuote.preferredCarTypes, ['comfort'])
+  assert.equal(passQuote.tiers[0].id, 'standard')
+})
+
+test('Tiger Pass takes 10% off a quote that already includes the student discount', () => {
+  const idle = withTigerPassQuote({ fareCents: 9000, depositCents: 0 }, { active: false, bps: 1000 })
+  assert.equal(idle.fareCents, 9000)
+  assert.equal(idle.tigerPassApplied, false)
+  const active = withTigerPassQuote({ fareCents: 9000, depositCents: 0, label: 'student' }, {
+    active: true,
+    bps: 1000,
+    name: 'Tiger Pass',
+  })
+  assert.equal(active.fareCents, 8100)
+  assert.equal(active.tigerPassDiscountCents, 900)
+  assert.equal(active.tigerPassName, 'Tiger Pass')
+  assert.equal(active.depositCents, 0)
+  assert.equal(active.label, 'student')
+  const already = withTigerPassQuote({
+    fareCents: 8100,
+    depositCents: 0,
+    tigerPassApplied: true,
+    tigerPassDiscountCents: 900,
+    tigerPassName: 'Tiger Pass',
+  }, { active: true, bps: 1000 })
+  assert.equal(already.fareCents, 8100)
 })
 
 test('student discount is 10% of Standard only', () => {

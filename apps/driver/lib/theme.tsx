@@ -6,7 +6,7 @@ import { CLEMSON_LAT, CLEMSON_LNG, isDaylight } from '@/lib/solar'
 
 export type DisplayMode = 'auto' | 'light' | 'dark'
 export type NavApp = 'apple' | 'google'
-export type RideAlertTier = 'standard' | 'wait' | 'comfort'
+export type RideAlertTier = 'standard' | 'wait' | 'comfort' | 'carpool'
 export type RideAlertMode = 'chime_vibrate' | 'chime' | 'vibrate' | 'silent'
 
 export type FavoriteRider = { id: string; name: string }
@@ -50,7 +50,7 @@ type ThemeValue = {
 }
 
 const PREFS_KEY = 'driver.ui.prefs'
-const DEFAULT_ALERTS: RideAlerts = { standard: 'chime_vibrate', wait: 'chime_vibrate', comfort: 'chime_vibrate' }
+const DEFAULT_ALERTS: RideAlerts = { standard: 'chime_vibrate', wait: 'chime_vibrate', comfort: 'chime_vibrate', carpool: 'chime_vibrate' }
 const DEFAULT_AUTO: AutoAcceptPrefs = {
   distanceEnabled: false,
   maxPickupMiles: 3,
@@ -78,6 +78,7 @@ function readAlerts(raw: unknown): RideAlerts {
     standard: isRideMode(source.standard) ? source.standard : DEFAULT_ALERTS.standard,
     wait: isRideMode(source.wait) ? source.wait : DEFAULT_ALERTS.wait,
     comfort: isRideMode(source.comfort) ? source.comfort : DEFAULT_ALERTS.comfort,
+    carpool: isRideMode(source.carpool) ? source.carpool : DEFAULT_ALERTS.carpool,
   }
 }
 

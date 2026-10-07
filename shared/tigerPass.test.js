@@ -25,15 +25,15 @@ test('the rename hook is the only display name', () => {
   assert.equal(TIGER_PASS_DISCOUNT_BPS, 1000)
 })
 
-test('preferred ride types stay on the three offered options', () => {
-  assert.deepEqual(assertPreferredCarTypes(['comfort', 'wait', 'standard', 'wait']), ['comfort', 'wait', 'standard'])
+test('preferred ride types stay on the offered options', () => {
+  assert.deepEqual(assertPreferredCarTypes(['comfort', 'wait', 'standard', 'carpool', 'wait']), ['comfort', 'wait', 'standard', 'carpool'])
   assert.deepEqual(filterPreferredCarTypes(['xl', 'pet', 'standard']), ['standard'])
   const blocked = ['te', 'sla'].join('')
   const blockedRobot = ['robo', 'taxi'].join('')
   assert.equal(isBlockedRideTier(blocked), true)
-  assert.throws(() => assertPreferredCarTypes([blocked]), /Standard, Wait & Save, and Extra Comfort/)
-  assert.throws(() => assertPreferredCarTypes([blockedRobot, 'comfort']), /Standard, Wait & Save, and Extra Comfort/)
-  assert.throws(() => assertPreferredCarTypes(['xl']), /Standard, Wait & Save, and Extra Comfort/)
+  assert.throws(() => assertPreferredCarTypes([blocked]), /Standard, Wait & Save, Extra Comfort, and Carpool/)
+  assert.throws(() => assertPreferredCarTypes([blockedRobot, 'comfort']), /Standard, Wait & Save, Extra Comfort, and Carpool/)
+  assert.throws(() => assertPreferredCarTypes(['xl']), /Standard, Wait & Save, Extra Comfort, and Carpool/)
 })
 
 test('an active pass discounts after the student rate and reprices a deposit', () => {

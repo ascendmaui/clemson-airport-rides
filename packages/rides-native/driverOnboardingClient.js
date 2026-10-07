@@ -27,6 +27,13 @@ import {
   submissionBlockers,
 } from '../../shared/driverOnboarding.js'
 import { vehicleAccountErrors, withVehicleYear, writeVehicleWithYearFallback } from '../../shared/vehicleYear.js'
+import { resolveSignupApplicantEmail, submittedApplicantEmail, writeDriverApplication } from '../../shared/applicantEmail.js'
+import {
+  BACKGROUND_CONSENT_VERSION,
+  backgroundAttestationWrite,
+  backgroundGateFromApplication,
+  missingBackgroundColumns,
+} from '../../shared/backgroundCheck.js'
 
 export { vehicleAccountErrors }
 
@@ -51,7 +58,7 @@ export {
 
 const MAX_BYTES = 8 * 1024 * 1024
 
-export const BACKGROUND_CONSENT_VERSION = 'background-auth-2026-09-24'
+export { BACKGROUND_CONSENT_VERSION }
 export const WORK_ELIGIBILITY_VERSION = 'work-eligibility-2026-09-24'
 export const W9_FORM_VERSION = 'w9-2026-09-24'
 
@@ -73,11 +80,12 @@ export function agreementPlainText(html = IC_AGREEMENT_HTML) {
     .trim()
 }
 
-function complianceContext({ application, documents, tax, agreement }) {
+function complianceContext({ application, documents, tax, agreement, email }) {
   return {
     status: application?.onboarding_status || null,
     uploaded: (documents || []).map((doc) => doc.doc_type),
-    backgroundAuthorized: Boolean(application?.background_authorized_at),
+    ...backgroundGateFromApplication(application),
+    applicantEmail: submittedApplicantEmail(application, { email: email || application?.applicant_email }),
     workEligibilityAttested: Boolean(application?.work_eligibility_attested_at),
     workEligibilityCategory: application?.work_eligibility_category || null,
     taxSaved: Boolean(tax?.legal_name && /^[0-9]{4}$/.test(String(tax?.tin_last4 || ''))),
@@ -87,15 +95,25 @@ function complianceContext({ application, documents, tax, agreement }) {
   }
 }
 
+const APPLICATION_COLUMNS = 'id, profile_id, onboarding_status, status, rejection_reason, review_note, submitted_at, reviewed_at, background_authorized_at, work_eligibility_attested_at, work_eligibility_category, is_student, has_car, has_insurance, wants_extra_money, attestation_accepted_at, applicant_email, background_check_status, background_legal_name, background_signature_name, background_signed_on, background_disclosures, background_admin_reviewed_at'
+const APPLICATION_COLUMNS_BASIC = 'id, profile_id, onboarding_status, status, rejection_reason, review_note, submitted_at, reviewed_at, background_authorized_at, work_eligibility_attested_at, work_eligibility_category, is_student, has_car, has_insurance, wants_extra_money, attestation_accepted_at'
+
 export async function fetchMyDriverApplication(supabase, userId) {
   if (!supabase || !userId) return null
-  const { data, error } = await supabase
+  let result = await supabase
     .from('driver_applications')
-    .select('id, profile_id, onboarding_status, status, rejection_reason, review_note, submitted_at, reviewed_at, background_authorized_at, work_eligibility_attested_at, work_eligibility_category, is_student, has_car, has_insurance, wants_extra_money, attestation_accepted_at')
+    .select(APPLICATION_COLUMNS)
     .eq('profile_id', userId)
     .maybeSingle()
-  if (error) throw new Error(error.message)
-  return data
+  if (result.error && /applicant_email|background_|schema cache|column/i.test(result.error.message || '')) {
+    result = await supabase
+      .from('driver_applications')
+      .select(APPLICATION_COLUMNS_BASIC)
+      .eq('profile_id', userId)
+      .maybeSingle()
+  }
+  if (result.error) throw new Error(result.error.message)
+  return result.data
 }
 
 export async function fetchMyDriverDocuments(supabase, userId) {
@@ -263,7 +281,7 @@ async function saveDriverInfoDirect(supabase, user, payload) {
 
   const nextStatus = statusAfterInfoSave(existing?.onboarding_status || null)
   const now = new Date().toISOString()
-  const email = user.email || ''
+  const email = resolveSignupApplicantEmail(payload, user)
   const isClemson = email.toLowerCase().endsWith('@clemson.edu') || email.toLowerCase().endsWith('@g.clemson.edu')
   const profilePatch = {
     id: userId,
@@ -276,24 +294,26 @@ async function saveDriverInfoDirect(supabase, user, payload) {
   const { error: profileErr } = await supabase.from('profiles').upsert(profilePatch)
   if (profileErr) throw new Error(profileErr.message)
 
-  const { data: app, error: appErr } = await supabase
-    .from('driver_applications')
-    .upsert(
-      {
-        profile_id: userId,
-        is_student: payload.isStudent === true,
-        has_car: true,
-        has_insurance: true,
-        wants_extra_money: payload.wantsExtraMoney === true,
-        attestation_accepted_at: now,
-        onboarding_status: nextStatus,
-        status: legacyStatusFor(nextStatus),
-      },
-      { onConflict: 'profile_id' },
-    )
-    .select('*')
-    .single()
-  if (appErr) throw new Error(appErr.message)
+  const savedApp = await writeDriverApplication(
+    (row) => supabase
+      .from('driver_applications')
+      .upsert(row, { onConflict: 'profile_id' })
+      .select('*')
+      .single(),
+    {
+      profile_id: userId,
+      is_student: payload.isStudent === true,
+      has_car: true,
+      has_insurance: true,
+      wants_extra_money: payload.wantsExtraMoney === true,
+      attestation_accepted_at: now,
+      onboarding_status: nextStatus,
+      status: legacyStatusFor(nextStatus),
+    },
+    email,
+  )
+  if (savedApp.error) throw new Error(savedApp.error.message)
+  const app = savedApp.data
 
   const vehicle = await saveVehicle(supabase, userId, payload)
   if (nextStatus !== 'approved') await supabase.from('driver_status').upsert({
@@ -351,13 +371,16 @@ export async function saveDriverInfo(supabase, user, payload) {
     attestation: payload?.attestationAccepted,
   })
   if (quizError) throw new Error(quizError)
+  const applicantEmail = resolveSignupApplicantEmail(payload, user)
+  if (!applicantEmail) throw new Error('A valid email is required.')
+  const body = { ...payload, email: applicantEmail }
   try {
-    const saved = await authedJson(supabase, '/api/driver?action=signup', { method: 'POST', body: payload })
+    const saved = await authedJson(supabase, '/api/driver?action=signup', { method: 'POST', body })
     await keepComfortStub(supabase, user.id, payload)
     return saved
   } catch (err) {
     if (!err.unavailable && !err.network) throw err
-    const saved = await saveDriverInfoDirect(supabase, user, payload)
+    const saved = await saveDriverInfoDirect(supabase, user, body)
     await keepComfortStub(supabase, user.id, payload)
     return saved
   }
@@ -375,15 +398,20 @@ export async function saveEmploymentVerification(supabase, userId, input) {
   const signatureName = String(input?.signatureName || '').trim()
   if (signatureName.length < 2) throw new Error('Type your legal name to sign.')
   const signedOn = input?.signedOn || new Date().toISOString().slice(0, 10)
+  const written = backgroundAttestationWrite({
+    legalName: input?.legalName || signatureName,
+    disclosures: input?.disclosures,
+    authorized: true,
+    signatureName,
+    signedOn,
+  })
+  if (written.error) throw new Error(written.error)
   const now = new Date().toISOString()
   const full = {
+    ...written.row,
     background_authorized_at: now,
     work_eligibility_attested_at: now,
     work_eligibility_category: category,
-    background_signature_name: signatureName,
-    background_signed_on: signedOn,
-    background_consent_version: BACKGROUND_CONSENT_VERSION,
-    background_check_status: 'pending',
     work_eligibility_signature_name: signatureName,
     work_eligibility_signed_on: signedOn,
     work_eligibility_consent_version: WORK_ELIGIBILITY_VERSION,
@@ -392,9 +420,12 @@ export async function saveEmploymentVerification(supabase, userId, input) {
     .from('driver_applications')
     .update(full)
     .eq('profile_id', userId)
-    .select('background_authorized_at, work_eligibility_attested_at, work_eligibility_category')
+    .select('background_authorized_at, work_eligibility_attested_at, work_eligibility_category, background_check_status')
     .single()
-  if (saved.error && /column|schema cache/i.test(saved.error.message || '')) {
+  if (saved.error && (missingBackgroundColumns(saved.error) || /column|schema cache/i.test(saved.error.message || ''))) {
+    if (written.assessment.status === 'needs_review') {
+      throw new Error('This disclosure needs admin review. Apply the background attestation migration before continuing.')
+    }
     saved = await supabase
       .from('driver_applications')
       .update({
@@ -407,6 +438,12 @@ export async function saveEmploymentVerification(supabase, userId, input) {
       .single()
   }
   if (saved.error) throw new Error(saved.error.message)
+  saved.data = {
+    ...saved.data,
+    background_check_status: written.assessment.status,
+    background_disclosures: written.assessment.disclosures,
+    vendor_result: null,
+  }
   await recordFormSignature(supabase, userId, {
     formId: 'background_authorization',
     formVersion: BACKGROUND_CONSENT_VERSION,
