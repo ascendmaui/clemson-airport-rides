@@ -8,14 +8,13 @@ export function Marketing() {
       <section className="mkt-stage" aria-label="Clemson RIDES">
         <div className="mkt-stage-copy">
           <h1>{HOMEPAGE_HEADLINE}</h1>
-          <p className="mkt-lede">{HOMEPAGE_SUBLINE}</p>
           <div className="mkt-choices" role="group" aria-label="Ways to ride">
             <button type="button" className="mkt-choice pressable" onClick={() => navigate('home')}>Book a ride</button>
             <button type="button" className="mkt-choice pressable" onClick={() => navigate('home', { tier: 'carpool' })}>Book a carpool</button>
             <button type="button" className="mkt-choice pressable" onClick={() => navigate('schedule')}>Schedule for later</button>
           </div>
           <button type="button" className="mkt-why-link pressable" onClick={() => navigate('why-clemson-rides')}>
-            Why Clemson Rides
+            {HOMEPAGE_SUBLINE}
           </button>
         </div>
       </section>

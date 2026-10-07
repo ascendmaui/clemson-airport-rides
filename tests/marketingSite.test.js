@@ -324,11 +324,11 @@ test('why page and drive page carry the differentiators without crowding the hom
   const why = readFileSync(new URL('../src/screens/WhyClemsonRides.jsx', import.meta.url), 'utf8')
   const drive = readFileSync(new URL('../src/screens/DriveWithUs.jsx', import.meta.url), 'utf8')
   const copy = readFileSync(new URL('../src/content/differentiators.js', import.meta.url), 'utf8')
+  const { FEATURES, ONLY_AT_CLEMSON_RIDES } = await import('../src/content/features.js')
   const {
     DIFFERENTIATOR_CLAIMS_AWAIT_FEATURE_PRS,
     HOMEPAGE_HEADLINE,
     HOMEPAGE_SUBLINE,
-    ONLY_AT_CLEMSON_RIDES,
     RIDER_DIFFERENTIATORS,
     DRIVER_EARNINGS,
   } = await import('../src/content/differentiators.js')
@@ -340,14 +340,26 @@ test('why page and drive page carry the differentiators without crowding the hom
   assert.match(home, /HOMEPAGE_HEADLINE/)
   assert.match(home, /HOMEPAGE_SUBLINE/)
   assert.match(home, /navigate\('why-clemson-rides'\)/)
-  assert.match(home, /Why Clemson Rides/)
-  assert.doesNotMatch(home, /RIDER_DIFFERENTIATORS|DRIVER_EARNINGS|Backup pay|Only at Clemson/)
+  assert.match(home, /HOMEPAGE_SUBLINE/)
+  assert.doesNotMatch(home, /FEATURES|RIDER_DIFFERENTIATORS|DRIVER_EARNINGS|Backup pay|Only at Clemson/)
   assert.match(why, /Peace of mind/)
-  assert.match(why, /RIDER_DIFFERENTIATORS/)
+  assert.match(why, /FEATURES/)
   assert.match(why, /mkt-card mkt-feature/)
-  assert.doesNotMatch(why, /mkt-guide/)
+  assert.match(why, /What it is/)
+  assert.match(why, /How it works/)
+  assert.match(why, /Why it matters/)
+  assert.match(why, /mkt-guide/)
+  assert.match(why, /Back to top/)
+  assert.match(why, /Book a ride/)
+  assert.match(why, /featureAnchor/)
   assert.match(drive, /DRIVER_EARNINGS/)
   assert.match(drive, /Earn more on scheduled rides/)
+  for (const item of FEATURES) {
+    assert.ok(item.what)
+    assert.ok(item.why)
+    assert.ok(item.steps.length >= 3 && item.steps.length <= 5, item.id)
+  }
+  assert.deepEqual(FEATURES.map((item) => item.title), RIDER_DIFFERENTIATORS.map((item) => item.title))
   assert.deepEqual(RIDER_DIFFERENTIATORS.map((item) => item.title), [
     'Backup driver',
     'Drivers confirm first',
@@ -377,7 +389,7 @@ test('why page and drive page carry the differentiators without crowding the hom
     'Backup pay',
     'Switch or cancel',
   ])
-  const blob = `${JSON.stringify(RIDER_DIFFERENTIATORS)} ${JSON.stringify(DRIVER_EARNINGS)} ${HOMEPAGE_HEADLINE} ${HOMEPAGE_SUBLINE}`
+  const blob = `${JSON.stringify(FEATURES)} ${JSON.stringify(DRIVER_EARNINGS)} ${HOMEPAGE_HEADLINE} ${HOMEPAGE_SUBLINE}`
   assert.match(blob, /\$5, \$10, \$15, or \$20/)
   assert.match(blob, /\$10 or \$15/)
   assert.match(blob, /keeps all of it/)

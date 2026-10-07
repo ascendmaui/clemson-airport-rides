@@ -779,6 +779,43 @@ body .mkt-menu button[aria-current="page"] {
   margin-top: 6px;
 }
 
+.mkt-feature-jump {
+  display: block;
+  text-align: left;
+  text-decoration: none;
+  color: inherit;
+}
+
+.mkt-feature-jump:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 3px;
+}
+
+.mkt-feature-block {
+  margin-top: 40px;
+  scroll-margin-top: 156px;
+}
+
+#why-top {
+  scroll-margin-top: 156px;
+}
+
+.mkt-part {
+  margin-top: 22px;
+}
+
+.mkt-part .mkt-kicker {
+  margin-bottom: 8px;
+}
+
+.mkt-section-end {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  align-items: center;
+  margin-top: 28px;
+}
+
 .mkt-spec {
   margin: 8px 0 28px;
   max-width: none;
