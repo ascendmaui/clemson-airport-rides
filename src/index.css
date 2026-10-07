@@ -1026,8 +1026,11 @@ select[aria-invalid="true"]:focus-visible {
   flex-wrap: wrap;
   padding: 12px 16px;
   background: transparent;
+  filter: none;
+  border: none;
   border-bottom: none;
   box-shadow: none;
+  text-shadow: none;
 }
 .mkt-brand {
   display: inline-flex;

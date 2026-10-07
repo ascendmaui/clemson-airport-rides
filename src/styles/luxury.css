@@ -48,24 +48,31 @@ body .mkt-nav {
   background: transparent;
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
+  filter: none;
+  border: none;
   border-bottom: none;
   box-shadow: none;
+  text-shadow: none;
   z-index: 4;
-  transition: background 180ms ease, border-color 180ms ease, backdrop-filter 180ms ease;
+  transition: background 180ms ease;
 }
 
-/* Translucent Clemson purple only after the hero has scrolled away. */
+/* Translucent Clemson purple only after the page has scrolled. No edge, blur, or shadow. */
 body .mkt-nav.mkt-nav--scrolled {
   background: rgba(82, 45, 128, 0.78);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.14);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  filter: none;
+  border: none;
+  border-bottom: none;
+  box-shadow: none;
+  text-shadow: none;
 }
 
 body .mkt-brand,
 body .mkt-nav-links button {
   color: #fff;
-  text-shadow: 0 1px 2px rgba(12, 8, 18, 0.72);
+  text-shadow: none;
 }
 
 body .mkt-footer,
