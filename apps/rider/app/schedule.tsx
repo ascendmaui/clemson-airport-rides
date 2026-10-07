@@ -54,7 +54,8 @@ import {
 import { localDateInput, localTimeInput, nextPickupDate, RIDE_PLACES } from 'rides-native/riderShell.js'
 import { formatCents, formatPickupAt } from 'rides-native/tripTags.js'
 import { dueScheduleReminders } from '../../../src/lib/scheduledRideModel.js'
-import { BOOK_BACKUP_COPY, riderBackupPresentation } from '../../../shared/backupDriverQueue.js'
+import { BOOK_BACKUP_COPY, LOOKING_FOR_BACKUP_LABEL, riderBackupPresentation } from '../../../shared/backupDriverQueue.js'
+import { ScheduledRidesExplainer, ScheduledRidesHint } from 'rides-native/ScheduledRidesInfo'
 import { RequireAuth } from '@/components/RequireAuth'
 import { NearTermSlots } from '@/components/NearTermSlots'
 
@@ -91,6 +92,7 @@ function BackupActions({
 }) {
   const [sheet, setSheet] = useState<null | 'switch' | 'cancel' | 'safety'>(null)
   const [busy, setBusy] = useState(false)
+  const { colors } = useTheme()
   const backupName = backup.backup?.name || 'backup driver'
   async function confirm() {
     if (!sheet) return
@@ -124,6 +126,7 @@ function BackupActions({
       </Pressable>
       {sheet ? (
         <View style={{ marginTop: 8, padding: 10, borderRadius: 12, backgroundColor: 'rgba(82,45,128,0.06)' }}>
+          <ScheduledRidesHint topic={sheet === 'cancel' ? 'cancel' : 'switch'} colors={colors} />
           <Text>{sheet === 'cancel' ? backup.cancelCopy : backup.switchCopy}</Text>
           <Pressable accessibilityRole="button" accessibilityLabel={sheet === 'cancel' ? 'Confirm cancel' : 'Confirm switch'} onPress={confirm} disabled={busy} style={{ marginTop: 8 }}>
             <Text style={{ color: '#F56600', fontWeight: '800' }}>{busy ? 'Saving…' : sheet === 'cancel' ? 'Confirm cancel' : 'Confirm switch'}</Text>
@@ -247,9 +250,7 @@ function BackupPicker({
   return (
     <View style={{ marginTop: 8 }}>
       <Text style={{ color: colors.purple, fontWeight: '800' }}>{BOOK_BACKUP_COPY}</Text>
-      <Text style={{ color: colors.inkSecondary, marginTop: 4, marginBottom: 8 }}>
-        If the first driver flakes, the backup picks up and gets you to the airport on time. The extra is in the fare hold and charged when the trip ends.
-      </Text>
+      <ScheduledRidesHint topic="booking" colors={colors} />
       <View style={{ flexDirection: 'row', gap: 8 }}>
         {choices.map((choice) => {
           const on = value === choice.cents
@@ -780,6 +781,7 @@ function ScheduleScreen() {
       >
         <Text style={styles.kicker}>SCHEDULE</Text>
         <Text style={styles.title}>Schedule a ride</Text>
+        <ScheduledRidesExplainer role="rider" colors={colors} />
         <NearTermSlots />
         <Text style={styles.copy}>
           Weekend and party nights to the airport or around campus. Pick a date and time, confirm, then find it under Upcoming.
@@ -1093,6 +1095,7 @@ function ScheduleScreen() {
             </Text>
             {rideTypeName(String(row.tier || '')) ? <Text style={styles.student}>{rideTypeName(String(row.tier || ''))}</Text> : null}
             {backup?.status ? <Text style={styles.student}>{backup.status}</Text> : null}
+            {backup?.status === LOOKING_FOR_BACKUP_LABEL ? <ScheduledRidesHint topic="looking" colors={colors} /> : null}
             {backup?.notice ? <Text style={styles.fine}>{backup.notice}</Text> : null}
             {backup ? (
               <BackupActions

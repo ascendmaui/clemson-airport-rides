@@ -12,8 +12,10 @@ import {
   backupNumberTwoCopy,
   confirmWindowBounds,
   CONFIRM_TRIP_COPY,
+  departIsDue,
   driverStartedTowardPickup,
   estimateDriveMs,
+  leaveNowAtMs,
   handToUrgentPool,
   isBackupQueueRide,
   promoteBackup,
@@ -258,19 +260,42 @@ export async function confirmBackupTrip(sb, { tripId, driverId, navigate = false
   if (queue.primaryDriverId !== driverId) {
     return { ok: false, status: 403, error: 'Only the assigned driver can confirm this trip' }
   }
-  if (queue.confirmState === 'enroute') return { ok: true, idempotent: true, enroute: true }
+  if (queue.confirmState === 'enroute' || queue.riderNotifiedEnrouteAt) {
+    return { ok: true, idempotent: true, enroute: true, leaveNowAt: queue.leaveNowAt }
+  }
   const at = now.toISOString()
+  const presence = await driverFix(sb, driverId)
+  const driveMs = estimateDriveMs(presence?.fix, pickupPoint(trip))
+  const leaveMs = leaveNowAtMs({ pickupAt: trip.pickup_at, driveMs })
+  const leaveNowAt = queue.leaveNowAt || (leaveMs == null ? null : new Date(leaveMs).toISOString())
+  const due = navigate || departIsDue({
+    confirmedAt: queue.confirmedAt || at,
+    leaveNowAt,
+    navigateStartedAt: null,
+    now,
+  })
   const next = {
     ...queue,
     confirmedAt: queue.confirmedAt || at,
-    navigateStartedAt: navigate ? (queue.navigateStartedAt || at) : queue.navigateStartedAt,
+    leaveNowAt,
+    lastFix: presence?.fix || queue.lastFix,
+    navigateStartedAt: due ? (queue.navigateStartedAt || at) : queue.navigateStartedAt,
     generation: queue.generation + 1,
-    events: [...queue.events, { kind: navigate ? 'navigate' : 'confirmed', at, driverId }].slice(-12),
+    events: [
+      ...queue.events,
+      { kind: due ? 'leave_now' : 'confirmed', at, driverId, leaveNowAt },
+    ].slice(-12),
+  }
+  if (due) {
+    const marked = await markEnroute(sb, trip, next, now)
+    if (!marked.enroute) return { ok: false, status: 409, error: 'This trip changed. Refresh and try again.', raced: true }
+    await audit(sb, trip.id, 'backup_leave_now', { driverId, at, leaveNowAt })
+    return { ok: true, enroute: true, leaveNowAt, navigateStartedAt: next.navigateStartedAt, riderNotified: !marked.idempotent }
   }
   const saved = await commitQueue(sb, trip, next)
   if (!saved) return { ok: false, status: 409, error: 'This trip changed. Refresh and try again.', raced: true }
-  await audit(sb, trip.id, navigate ? 'backup_navigate' : 'backup_confirmed', { driverId, at })
-  return { ok: true, confirmedAt: next.confirmedAt, navigateStartedAt: next.navigateStartedAt }
+  await audit(sb, trip.id, 'backup_confirmed', { driverId, at, leaveNowAt })
+  return { ok: true, confirmedAt: next.confirmedAt, leaveNowAt, navigateStartedAt: null, enroute: false }
 }
 
 export async function cancelBackupPrimary(sb, { tripId, driverId, now = new Date() } = {}) {
@@ -472,17 +497,26 @@ export async function runScheduledDispatchTick(sb, { now = new Date(), dryRun = 
 
     if (live.confirmState === 'window_open') {
       const closes = Date.parse(live.windowClosesAt || '')
-      if (started) {
+      const leaveAt = Date.parse(live.leaveNowAt || '')
+      const departDue = departIsDue({
+        confirmedAt: live.confirmedAt,
+        leaveNowAt: live.leaveNowAt,
+        navigateStartedAt: live.navigateStartedAt,
+        now,
+      })
+      if (started || departDue) {
         const marked = await markEnroute(sb, trip, {
           ...live,
-          movementDetectedAt: moving ? now.toISOString() : live.movementDetectedAt,
+          navigateStartedAt: live.navigateStartedAt || (departDue ? now.toISOString() : null),
+          movementDetectedAt: moving ? now.toISOString() : (departDue ? now.toISOString() : live.movementDetectedAt),
           lastFix: telemetry || presence?.fix || live.lastFix,
         }, now)
         if (marked.raced) summary.raced += 1
         else if (marked.enroute) summary.enroute += 1
         continue
       }
-      if (Number.isFinite(closes) && now.getTime() < closes) {
+      const waitingToLeave = confirmed && Number.isFinite(leaveAt) && now.getTime() < leaveAt
+      if ((Number.isFinite(closes) && now.getTime() < closes) || waitingToLeave) {
         const fix = telemetry || presence?.fix || null
         const changed = Boolean(fix) && JSON.stringify(fix) !== JSON.stringify(live.lastFix || null)
         const offlineChanged = live.backupOfflineDuringWindow !== queue.backupOfflineDuringWindow

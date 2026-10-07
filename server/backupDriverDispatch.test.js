@@ -1,12 +1,13 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { seedMatchingScenario } from '../tests/fixtures/matchingE2E.js'
-import { backupBookingMetadata } from '../shared/backupDriverQueue.js'
+import { backupBookingMetadata, RIDER_ENROUTE_COPY } from '../shared/backupDriverQueue.js'
 import { buildPayoutRecord } from './payouts.js'
 import { releaseScheduledRides } from './releaseScheduledRides.js'
 import {
   acceptBackupSlot,
   cancelBackupPrimary,
+  confirmBackupTrip,
   releaseBackupDriver,
   runScheduledDispatchTick,
 } from './backupDriverDispatch.js'
@@ -96,6 +97,65 @@ test('confirmed driver who does not start toward pickup is released for no movem
   assert.equal(summary.promoted, 1)
   assert.equal(tripOf(sb).metadata.backup_queue.events.at(-1).reason, 'no_movement')
   assert.equal(sb._tables.driver_reliability_strikes[0].reason, 'no_movement')
+})
+
+test('a confirmed driver waits for leave-now, then navigation starts and the rider is told', async () => {
+  const sb = queueTrip({
+    ...backupBookingMetadata(1000, NOW),
+    primaryDriverId: 'driver-1',
+    backupDriverId: 'driver-2',
+    confirmState: 'window_open',
+    windowOpensAt: '2026-10-10T14:50:00.000Z',
+    windowClosesAt: '2026-10-10T14:55:00.000Z',
+    generation: 4,
+  })
+  const confirmed = await confirmBackupTrip(sb, { tripId: 'trip-backup-1', driverId: 'driver-1', now: NOW })
+  assert.equal(confirmed.ok, true)
+  assert.equal(confirmed.enroute, false)
+  const leave = Date.parse(tripOf(sb).metadata.backup_queue.leaveNowAt)
+  assert.equal(leave > Date.parse('2026-10-10T14:55:00.000Z'), true)
+  const waiting = await runScheduledDispatchTick(sb, { now: new Date('2026-10-10T14:56:00.000Z') })
+  assert.equal(waiting.promoted, 0)
+  assert.equal(waiting.enroute, 0)
+  assert.equal(tripOf(sb).metadata.backup_queue.primaryDriverId, 'driver-1')
+  assert.equal(tripOf(sb).driver_id, null)
+  const departed = await runScheduledDispatchTick(sb, { now: new Date(leave + 1000) })
+  assert.equal(departed.enroute, 1)
+  assert.equal(tripOf(sb).status, 'accepted')
+  assert.equal(tripOf(sb).driver_id, 'driver-1')
+  assert.equal(Boolean(tripOf(sb).metadata.backup_queue.navigateStartedAt), true)
+  assert.equal(tripOf(sb).metadata.backup_queue.riderNotice.body, RIDER_ENROUTE_COPY)
+  const again = await runScheduledDispatchTick(sb, { now: new Date(leave + 2000) })
+  assert.equal(again.enroute, 0)
+  assert.equal(again.promoted, 0)
+})
+
+test('confirm after leave-now starts the trip and tells the rider right away', async () => {
+  const sb = queueTrip({
+    ...backupBookingMetadata(1000, NOW),
+    primaryDriverId: 'driver-1',
+    confirmState: 'window_open',
+    windowClosesAt: '2026-10-10T15:05:00.000Z',
+    generation: 4,
+  })
+  sb._tables.driver_status[0].lat = 34.6834
+  sb._tables.driver_status[0].lng = -82.8374
+  const result = await confirmBackupTrip(sb, {
+    tripId: 'trip-backup-1',
+    driverId: 'driver-1',
+    now: new Date(PICKUP),
+  })
+  assert.equal(result.enroute, true)
+  assert.equal(tripOf(sb).status, 'accepted')
+  assert.equal(tripOf(sb).driver_id, 'driver-1')
+  assert.equal(tripOf(sb).metadata.backup_queue.riderNotice.body, RIDER_ENROUTE_COPY)
+  const second = await confirmBackupTrip(sb, {
+    tripId: 'trip-backup-1',
+    driverId: 'driver-1',
+    navigate: true,
+    now: new Date(PICKUP),
+  })
+  assert.equal(second.idempotent, true)
 })
 
 test('early cancel promotes the backup and reopens the backup seat', async () => {

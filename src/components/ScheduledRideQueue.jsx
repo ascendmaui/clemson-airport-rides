@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { formatUsdFromCents } from '../lib/pricing'
 import { formatPickupAt, toDriverQueueCard } from '../lib/scheduledRideModel'
-import { CONFIRM_TRIP_COPY, backupNumberTwoCopy, confirmCountdownLabel, driverBackupPresentation } from '../../shared/backupDriverQueue.js'
+import { CONFIRM_TRIP_COPY, backupNumberTwoCopy, confirmCountdownLabel, driverBackupPresentation, leaveNowCountdownLabel } from '../../shared/backupDriverQueue.js'
+import { ScheduledRidesHint } from './ScheduledRidesInfo'
 
 function ConfirmCountdown({ closesAt }) {
   const [label, setLabel] = useState(() => confirmCountdownLabel(closesAt))
@@ -15,6 +16,31 @@ function ConfirmCountdown({ closesAt }) {
   return <p style={{ fontSize: 22, fontWeight: 800, color: '#F56600', margin: '4px 0 0' }}>{label}</p>
 }
 
+function LeaveNowCountdown({ leaveNowAt, onDue }) {
+  const fired = useRef(false)
+  const onDueRef = useRef(onDue)
+  onDueRef.current = onDue
+  const [label, setLabel] = useState(() => leaveNowCountdownLabel(leaveNowAt))
+  useEffect(() => {
+    fired.current = false
+  }, [leaveNowAt])
+  useEffect(() => {
+    const tick = () => {
+      const next = leaveNowCountdownLabel(leaveNowAt)
+      setLabel(next)
+      if (next === 'Leave now' && !fired.current) {
+        fired.current = true
+        onDueRef.current?.()
+      }
+    }
+    tick()
+    const id = setInterval(tick, 1000)
+    return () => clearInterval(id)
+  }, [leaveNowAt])
+  if (!label) return null
+  return <p style={{ fontSize: 22, fontWeight: 800, color: '#F56600', margin: '4px 0 0' }}>{label}</p>
+}
+
 /**
  * Driver list of scheduled rides.
  * Cards are first-name + labels only — no map pins.
@@ -24,6 +50,7 @@ export function ScheduledRideQueue({
   acceptingId,
   onAccept,
   onConfirm,
+  onDepart,
   onRelease,
   viewerId,
   title = 'Scheduled rides',
@@ -104,9 +131,13 @@ export function ScheduledRideQueue({
                   {ride.backupLabel}
                 </div>
               )}
-              {ride.seat?.lookingForBackup && (
-                <p style={{ fontSize: 12, fontWeight: 700, color: '#522D80' }}>Looking for backup driver</p>
+              {ride.seat?.lookingForBackup && ride.seat?.role === 'primary' && (
+                <>
+                  <p style={{ fontSize: 12, fontWeight: 700, color: '#522D80' }}>Looking for backup driver</p>
+                  <ScheduledRidesHint topic="looking" />
+                </>
               )}
+              {ride.seat?.role === 'open_backup' && <ScheduledRidesHint topic="offer" />}
               {ride.seat?.role === 'backup' && (
                 <p style={{ fontSize: 12, fontWeight: 700, color: '#522D80' }}>{backupNumberTwoCopy(formatPickupAt(ride.pickupAt))}</p>
               )}
@@ -117,6 +148,7 @@ export function ScheduledRideQueue({
                 <div style={{ marginTop: 8, padding: 10, borderRadius: 12, background: 'rgba(245,102,0,0.12)' }}>
                   <div style={{ fontWeight: 800, color: '#F56600' }}>Confirm trip</div>
                   <p style={{ fontSize: 12, margin: '4px 0 8px' }}>{CONFIRM_TRIP_COPY}</p>
+                  <ScheduledRidesHint topic="confirm" />
                   {ride.seat.urgent && (
                     <p style={{ fontSize: 12, fontWeight: 800, color: '#F56600' }}>You are up. Confirm and start toward pickup.</p>
                   )}
@@ -139,6 +171,13 @@ export function ScheduledRideQueue({
                       Confirm trip
                     </button>
                   )}
+                </div>
+              )}
+              {ride.seat?.leaveNowOpen && (
+                <div style={{ marginTop: 8, padding: 10, borderRadius: 12, background: 'rgba(245,102,0,0.12)' }}>
+                  <div style={{ fontWeight: 800, color: '#F56600' }}>Leave now</div>
+                  <ScheduledRidesHint topic="leave" />
+                  <LeaveNowCountdown leaveNowAt={ride.seat.leaveNowAt} onDue={() => onDepart?.(ride.id)} />
                 </div>
               )}
               {ride.nearTerm && (

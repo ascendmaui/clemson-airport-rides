@@ -1,5 +1,5 @@
 import { useLocalSearchParams, useRouter } from 'expo-router'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Image, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { FarePanel } from '@/components/FarePanel'
@@ -18,6 +18,7 @@ import { isSyntheticOffer } from 'rides-native/syntheticOffers'
 import { driverGateView } from 'rides-native/driverGateView'
 import {
   confirmCountdownLabel,
+  leaveNowCountdownLabel,
   formatCents,
   formatPickupAt,
   matchesQueueFilter,
@@ -34,6 +35,7 @@ import {
   type QueueFilter,
 } from 'rides-native/tripTags'
 import { formatHourlyRate, ladderOfferNet, offerHourly } from 'rides-native/offerLadder.js'
+import { ScheduledRidesExplainer, ScheduledRidesHint } from 'rides-native/ScheduledRidesInfo'
 function useQueueStyles() {
   const { colors } = useTheme()
   return useMemo(() => queueStyles(colors), [colors])
@@ -51,6 +53,31 @@ function ConfirmCountdown({ closesAt }: { closesAt?: string | null }) {
   return <Text style={{ color: '#F56600', fontWeight: '800', fontSize: 22, marginTop: 4 }}>{label}</Text>
 }
 
+function LeaveNowCountdown({ leaveNowAt, onDue }: { leaveNowAt?: string | null; onDue: () => void }) {
+  const fired = useRef(false)
+  const onDueRef = useRef(onDue)
+  onDueRef.current = onDue
+  const [label, setLabel] = useState<string | null>(() => leaveNowCountdownLabel(leaveNowAt))
+  useEffect(() => {
+    fired.current = false
+  }, [leaveNowAt])
+  useEffect(() => {
+    const tick = () => {
+      const next = leaveNowCountdownLabel(leaveNowAt)
+      setLabel(next)
+      if (next === 'Leave now' && !fired.current) {
+        fired.current = true
+        onDueRef.current()
+      }
+    }
+    tick()
+    const id = setInterval(tick, 1000)
+    return () => clearInterval(id)
+  }, [leaveNowAt])
+  if (!label) return null
+  return <Text style={{ color: '#F56600', fontWeight: '800', fontSize: 22, marginTop: 4 }}>{label}</Text>
+}
+
 function seatReleaseLabel(role?: string | null) {
   if (role === 'backup') return 'Leave backup seat'
   if (role === 'primary') return 'Can\'t make this trip'
@@ -64,6 +91,7 @@ function QueueCard({
   onDecline,
   onOpen,
   onConfirm,
+  onDepart,
 }: {
   card: DriverCard
   busy: boolean
@@ -71,11 +99,13 @@ function QueueCard({
   onDecline: () => void | Promise<void>
   onOpen: () => void
   onConfirm: () => void | Promise<void>
+  onDepart: () => void | Promise<void>
   key?: string
 }) {
   const active = card.status === 'accepted' || card.status === 'arriving'
   const preferredNote = preferredRequestNote(card)
   const styles = useQueueStyles()
+  const { colors } = useTheme()
   const ladder = ladderOfferNet(card)
   const hourly = formatHourlyRate(offerHourly(card).hourlyCents)
   return (
@@ -105,7 +135,9 @@ function QueueCard({
       <Text style={styles.copy}>Drop-off · {card.dropoffLabel}</Text>
       {card.pickupAt ? <Text style={styles.copy}>{formatPickupAt(card.pickupAt)}</Text> : null}
       {card.backupLabel ? <Text style={[styles.note, { color: '#F56600', fontWeight: '800' }]}>{card.backupLabel}</Text> : null}
-      {card.lookingForBackup ? <Text style={[styles.note, { color: '#522D80' }]}>Looking for backup driver</Text> : null}
+      {card.lookingForBackup && card.backupRole === 'primary' ? <Text style={[styles.note, { color: '#522D80' }]}>Looking for backup driver</Text> : null}
+      {card.lookingForBackup && card.backupRole === 'primary' ? <ScheduledRidesHint topic="looking" colors={colors} /> : null}
+      {card.backupRole === 'open_backup' ? <ScheduledRidesHint topic="offer" colors={colors} /> : null}
       {card.backupRole === 'backup' && card.pickupAt ? (
         <Text style={[styles.note, { color: '#522D80' }]}>{`You're #2 for this trip, pickup at ${formatPickupAt(card.pickupAt)}`}</Text>
       ) : null}
@@ -124,9 +156,17 @@ function QueueCard({
         <View style={{ marginTop: 8, padding: 10, borderRadius: 12, backgroundColor: 'rgba(245,102,0,0.12)' }}>
           <Text style={{ color: '#F56600', fontWeight: '800' }}>Confirm trip</Text>
           <Text style={styles.copy}>{card.backupConfirmCopy}</Text>
+          <ScheduledRidesHint topic="confirm" colors={colors} />
           {card.backupUrgent ? <Text style={[styles.note, { color: '#F56600', fontWeight: '800' }]}>You are up. Confirm and start toward pickup.</Text> : null}
           <ConfirmCountdown closesAt={card.backupConfirmClosesAt} />
           <Primary label={busy ? 'Saving…' : 'Confirm trip'} onPress={onConfirm} disabled={busy} />
+        </View>
+      ) : null}
+      {card.backupLeaveNowOpen ? (
+        <View style={{ marginTop: 8, padding: 10, borderRadius: 12, backgroundColor: 'rgba(245,102,0,0.12)' }}>
+          <Text style={{ color: '#F56600', fontWeight: '800' }}>Leave now</Text>
+          <ScheduledRidesHint topic="leave" colors={colors} />
+          <LeaveNowCountdown leaveNowAt={card.backupLeaveNowAt} onDue={onDepart} />
         </View>
       ) : null}
       {active ? (
@@ -269,6 +309,27 @@ export default function QueueScreen() {
     }
   }
 
+  async function onDepart(card: DriverCard) {
+    if (!supabase) return
+    setBusyId(card.id)
+    setError(null)
+    try {
+      await confirmBackupQueueTrip(supabase, card.id, { navigate: true })
+      pulse('accept')
+      await refresh()
+      router.push({ pathname: '/trip', params: { id: card.id } })
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Could not start navigation'
+      if (/changed|Refresh/i.test(message)) {
+        router.push({ pathname: '/trip', params: { id: card.id } })
+      } else {
+        setError(message)
+      }
+    } finally {
+      setBusyId(null)
+    }
+  }
+
   async function onConfirm(card: DriverCard) {
     if (!supabase) return
     setBusyId(card.id)
@@ -374,6 +435,7 @@ export default function QueueScreen() {
             ? 'Scheduled rides stay on this tab. You net 75%.'
             : 'The first offer nets 80% for 15 seconds, then the pool nets 70% for two minutes.'}
         </Text>
+        {board === 'scheduled' ? <ScheduledRidesExplainer role="driver" colors={colors} /> : null}
 
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filters}>
           {queueFilters().map((item) => (
@@ -429,7 +491,7 @@ export default function QueueScreen() {
               </Card>
             ) : null}
             {shown.map((card: DriverCard) => (
-              <QueueCard key={card.id} card={card} busy={busyId === card.id} onAccept={() => onAccept(card)} onDecline={() => onDecline(card)} onConfirm={() => onConfirm(card)} onOpen={() => { if (!isSyntheticOffer(card)) router.push({ pathname: '/trip', params: { id: card.id } }) }} />
+              <QueueCard key={card.id} card={card} busy={busyId === card.id} onAccept={() => onAccept(card)} onDecline={() => onDecline(card)} onConfirm={() => onConfirm(card)} onDepart={() => onDepart(card)} onOpen={() => { if (!isSyntheticOffer(card)) router.push({ pathname: '/trip', params: { id: card.id } }) }} />
             ))}
           </>
         )}

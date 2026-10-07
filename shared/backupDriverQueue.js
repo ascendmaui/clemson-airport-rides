@@ -5,7 +5,9 @@
  *
  * JOHN — confirm these defaults before they ship to drivers:
  * 1. Window opens at pickup − drive time − 10 min, clamped to 20–60 min before
- *    pickup. The driver then has 5 minutes to confirm and start toward pickup.
+ *    pickup. The driver then has 5 minutes to confirm. After confirm, Leave now
+ *    is pickup minus the drive. At that time navigation and GPS start, and that
+ *    counts as started driving. A confirmed driver is not released before then.
  * 2. If the backup is never needed, they still receive the bonus when they
  *    stayed available through the window (offline during the window forfeits it).
  * 3. A primary who misses the window or cancels early gets a reliability strike
@@ -51,7 +53,7 @@ export const ASSUMED_DRIVE_MPS = 13.4
 export const LOOKING_FOR_BACKUP_LABEL = 'Looking for backup driver'
 export const DRIVER_AND_BACKUP_LABEL = 'Driver + backup confirmed'
 export const CONFIRM_TRIP_COPY = "You're committed to this trip. You'll go to pickup at the right time and complete the trip."
-export const RIDER_ENROUTE_COPY = 'Your driver is on the way, everything is going as planned, sit tight.'
+export const RIDER_ENROUTE_COPY = 'Your driver is on the way. Everything is going as planned. Sit tight.'
 export const URGENT_POOL_LABEL = 'Urgent — needs a driver'
 export const BOOK_BACKUP_COPY = 'Book a backup driver for an additional $10 or $15'
 
@@ -127,6 +129,7 @@ export function readBackupQueue(trip) {
     windowClosesAt: raw.windowClosesAt || null,
     confirmedAt: raw.confirmedAt || null,
     navigateStartedAt: raw.navigateStartedAt || null,
+    leaveNowAt: raw.leaveNowAt || null,
     movementDetectedAt: raw.movementDetectedAt || null,
     promotedFromBackup: raw.promotedFromBackup === true,
     flakedDriverId: raw.flakedDriverId || null,
@@ -204,6 +207,36 @@ export function confirmWindowBounds({ pickupAt, driveMs }) {
     opensAt,
     closesAt: opensAt + BACKUP_CONFIRM_WINDOW_MS,
   }
+}
+
+/** Pickup time minus the drive. Null when the pickup time is missing. */
+export function leaveNowAtMs({ pickupAt, driveMs }) {
+  const pickup = Date.parse(pickupAt || '')
+  if (!Number.isFinite(pickup)) return null
+  const drive = Number.isFinite(Number(driveMs)) && Number(driveMs) > 0 ? Number(driveMs) : 0
+  return pickup - drive
+}
+
+/** "Leave now in m:ss", or "Leave now" once the depart time has arrived. */
+export function leaveNowCountdownLabel(leaveNowAt, now = Date.now()) {
+  const at = Date.parse(leaveNowAt || '')
+  if (!Number.isFinite(at)) return null
+  const clock = now instanceof Date ? now.getTime() : Number(now)
+  const left = at - (Number.isFinite(clock) ? clock : Date.now())
+  if (left <= 0) return 'Leave now'
+  const total = Math.ceil(left / 1000)
+  const minutes = Math.floor(total / 60)
+  const seconds = total % 60
+  return `Leave now in ${minutes}:${String(seconds).padStart(2, '0')}`
+}
+
+/** True once a confirmed driver has reached Leave now and has not departed. */
+export function departIsDue({ confirmedAt, leaveNowAt, navigateStartedAt, now = Date.now() } = {}) {
+  if (!confirmedAt || navigateStartedAt) return false
+  const at = Date.parse(leaveNowAt || '')
+  if (!Number.isFinite(at)) return false
+  const clock = now instanceof Date ? now.getTime() : Number(now)
+  return (Number.isFinite(clock) ? clock : Date.now()) >= at
 }
 
 /** mm:ss remaining in the confirm window. Null when the close time is missing. */
@@ -351,7 +384,10 @@ export function promoteBackup(queue, { reason, now = new Date().toISOString() })
     urgent: true,
     confirmedAt: null,
     navigateStartedAt: null,
+    leaveNowAt: null,
     movementDetectedAt: null,
+    riderNotifiedEnrouteAt: null,
+    riderNotice: null,
     windowOpensAt: now,
     windowClosesAt: new Date(opened + BACKUP_CONFIRM_WINDOW_MS).toISOString(),
     windowNotifiedAt: null,
@@ -376,7 +412,10 @@ export function handToUrgentPool(queue, { reason, now = new Date().toISOString()
     urgent: true,
     confirmedAt: null,
     navigateStartedAt: null,
+    leaveNowAt: null,
     movementDetectedAt: null,
+    riderNotifiedEnrouteAt: null,
+    riderNotice: null,
   }, queue.primaryDriverId, reason, now)
   return withEvent(next, { kind: 'urgent_pool', at: now, reason })
 }
@@ -438,7 +477,10 @@ export function swapBackupDrivers(trip, queue, { now = new Date().toISOString(),
     confirmState: freshWindow ? 'window_open' : 'idle',
     confirmedAt: null,
     navigateStartedAt: null,
+    leaveNowAt: null,
     movementDetectedAt: null,
+    riderNotifiedEnrouteAt: null,
+    riderNotice: null,
     windowOpensAt: freshWindow ? now : null,
     windowClosesAt: freshWindow ? new Date(opened + BACKUP_CONFIRM_WINDOW_MS).toISOString() : null,
     windowNotifiedAt: freshWindow ? now : null,
@@ -502,13 +544,13 @@ export function riderSwitchCopy(backupName, feeCents, formerName) {
   const fee = `$${Math.round((feeCents || 0) / 100)}`
   const next = backupName || 'the backup driver'
   const previous = formerName || 'your current driver'
-  return `Switch to ${next}? They become your driver. The ${fee} backup fee goes to ${previous} as a switch fee. You can switch once.`
+  return `Switch to ${next}? The drivers swap places. ${previous} gets the ${fee} as a switch fee. You can switch once. A switch never counts as a strike.`
 }
 
 export function riderCancelCopy(primaryName, feeCents) {
   const fee = `$${Math.round((feeCents || 0) / 100)}`
   const name = primaryName || 'Your driver'
-  return `Cancel this ride? ${name} receives the ${fee} backup fee as a cancellation fee. The rest of the hold, including any boost, is released. The backup driver is not paid.`
+  return `Cancel this ride? ${name} gets the ${fee} as a cancellation fee. The second driver gets nothing. Any boost is given back. The rest of the hold on your card is released.`
 }
 
 /**
@@ -639,7 +681,7 @@ export function riderBackupPresentation(trip) {
     switchCopy: riderSwitchCopy(backupName, queue.bonusCents, primaryName),
     cancelCopy: queue.primaryDriverId || queue.switchFeeDriverId
       ? riderCancelCopy(primaryName, queue.bonusCents)
-      : 'Cancel this ride? No driver has accepted yet, so the fare hold is released and the backup fee is not charged.',
+      : 'Cancel this ride? No driver has accepted yet, so the hold on your card is released and the backup fee is not charged.',
     feeCents: queue.bonusCents,
     switchesUsed: queue.switchCount || 0,
   }
@@ -657,7 +699,9 @@ export function driverBackupPresentation(trip, driverId) {
         : !queue.backupDriverId
           ? 'open_backup'
           : 'full'
-  const confirmOpen = queue.confirmState === 'window_open' && role === 'primary'
+  const confirmed = Boolean(queue.confirmedAt)
+  const confirmOpen = queue.confirmState === 'window_open' && role === 'primary' && !confirmed
+  const leaveNowOpen = queue.confirmState === 'window_open' && role === 'primary' && confirmed && !queue.navigateStartedAt && Boolean(queue.leaveNowAt)
   return {
     role,
     bonusCents: queue.bonusCents,
@@ -667,6 +711,9 @@ export function driverBackupPresentation(trip, driverId) {
     confirmOpen,
     confirmClosesAt: confirmOpen ? queue.windowClosesAt : null,
     confirmCopy: confirmOpen ? CONFIRM_TRIP_COPY : null,
+    leaveNowAt: leaveNowOpen ? queue.leaveNowAt : null,
+    leaveNowOpen,
+    enroute: queue.confirmState === 'enroute' && role === 'primary',
     urgent: queue.urgent === true && role === 'primary',
     backupSeatCopy: role === 'backup',
     notice: queue.driverNotices?.[driverId]?.body || null,

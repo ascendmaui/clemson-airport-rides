@@ -63,6 +63,9 @@ export type DriverCard = {
   backupConfirmOpen?: boolean
   backupConfirmClosesAt?: string | null
   backupConfirmCopy?: string | null
+  backupLeaveNowAt?: string | null
+  backupLeaveNowOpen?: boolean
+  backupEnroute?: boolean
   backupStatusLine?: string | null
   backupNotice?: string | null
   backupUrgent?: boolean

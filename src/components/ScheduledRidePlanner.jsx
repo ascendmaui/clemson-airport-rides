@@ -27,7 +27,8 @@ import {
 import { fetchBillingQuote } from '../lib/rideBilling'
 import { useRideOptions } from '../lib/useRideOptions'
 import { isOfferedRideTier, NO_DRIVERS_AVAILABLE_COPY, SCHEDULE_AHEAD_LABEL } from '../../shared/rideOptions.js'
-import { BOOK_BACKUP_COPY } from '../../shared/backupDriverQueue.js'
+import { BOOK_BACKUP_COPY, LOOKING_FOR_BACKUP_LABEL } from '../../shared/backupDriverQueue.js'
+import { ScheduledRidesExplainer, ScheduledRidesHint } from './ScheduledRidesInfo'
 import { getHashRoute } from '../lib/navigation'
 import { lookupCatalogPlace, placeFromStop } from '../lib/placeCatalog'
 import { NearTermSlots } from './NearTermSlots'
@@ -277,6 +278,7 @@ export function ScheduledRidePlanner() {
       <p style={{ color: 'var(--ink-secondary)', fontSize: 14, marginTop: 6, marginBottom: 14 }}>
         Weekend and party trips to the airport or campus, plus early classes and other planned pickups. Pick a date and time, confirm, then find it under Upcoming. Drivers see your first name. Map pins stay hidden until the ride is done, then only an approximate pin is shown.
       </p>
+      <ScheduledRidesExplainer role="rider" />
 
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
         {SCHEDULE_PURPOSES.map((p) => {
@@ -484,9 +486,7 @@ export function ScheduledRidePlanner() {
 
       <div className="glass-panel" style={{ padding: 12, borderRadius: 14, marginBottom: 12 }}>
         <div style={{ fontWeight: 800, color: '#522D80' }}>{BOOK_BACKUP_COPY}</div>
-        <p style={{ fontSize: 13, color: 'var(--ink-secondary)', lineHeight: 1.45 }}>
-          Pickup is guaranteed: if the first driver flakes, the backup picks up and gets you there on time. The extra is included in the fare hold and charged when the trip ends.
-        </p>
+        <ScheduledRidesHint topic="booking" />
         <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
           {[[0, 'No backup'], [1000, '$10'], [1500, '$15']].map(([cents, label]) => {
             const on = backupBonusCents === cents
@@ -512,7 +512,7 @@ export function ScheduledRidePlanner() {
         </div>
       </div>
 
-      <p>No card charge when you confirm. The fare hold, including a backup bonus when you add one, is captured when the trip ends. Campus rides enter matching about 45 minutes before pickup.</p>
+      <p>No charge when you confirm. The fare is a hold on your card, including $10 or $15 when you add a second driver. It is charged when the trip ends. Campus rides enter matching about 45 minutes before pickup.</p>
 
       <PrimaryButton
         onClick={() => runOrPrompt(onSchedule, { setPromptOpen, nextPath: 'schedule' })}
@@ -604,6 +604,7 @@ function RideRow({ ride, onCancel, onBackupAction }) {
       {ride.backup?.status && (
         <div style={{ fontSize: 12, fontWeight: 800, color: '#F56600', marginTop: 4 }}>{ride.backup.status}</div>
       )}
+      {ride.backup?.status === LOOKING_FOR_BACKUP_LABEL && <ScheduledRidesHint topic="looking" />}
       {ride.backup?.notice && (
         <div style={{ fontSize: 12, color: '#522D80', marginTop: 4 }}>{ride.backup.notice}</div>
       )}
@@ -644,7 +645,8 @@ function RideRow({ ride, onCancel, onBackupAction }) {
       )}
       {sheet && backup && (
         <div style={{ marginTop: 10, padding: 12, borderRadius: 12, background: 'rgba(82,45,128,0.06)' }}>
-          <p style={{ fontSize: 13, lineHeight: 1.45, marginTop: 0 }}>
+          <ScheduledRidesHint topic={sheet === 'cancel' ? 'cancel' : 'switch'} />
+          <p style={{ fontSize: 13, lineHeight: 1.45 }}>
             {sheet === 'cancel' ? backup.cancelCopy : backup.switchCopy}
           </p>
           <div style={{ display: 'flex', gap: 8 }}>

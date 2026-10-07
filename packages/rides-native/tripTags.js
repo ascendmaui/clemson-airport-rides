@@ -4,9 +4,9 @@
  */
 import { CLEMSON_MIAMI_PROMO_ID } from './clemsonMiamiPromo.js'
 import { explicitOfferPhase, ladderOfferNet } from './offerLadder.js'
-import { LOOKING_FOR_BACKUP_LABEL, confirmCountdownLabel, driverBackupPresentation } from '../../shared/backupDriverQueue.js'
+import { LOOKING_FOR_BACKUP_LABEL, confirmCountdownLabel, driverBackupPresentation, leaveNowCountdownLabel } from '../../shared/backupDriverQueue.js'
 
-export { confirmCountdownLabel }
+export { confirmCountdownLabel, leaveNowCountdownLabel }
 
 export const ACTIONABLE_LEAD_MS = 45 * 60 * 1000
 
@@ -461,6 +461,9 @@ export function toDriverCard(row, options) {
     backupConfirmOpen: Boolean(backup?.confirmOpen),
     backupConfirmClosesAt: backup?.confirmClosesAt || null,
     backupConfirmCopy: backup?.confirmCopy || null,
+    backupLeaveNowAt: backup?.leaveNowAt || null,
+    backupLeaveNowOpen: Boolean(backup?.leaveNowOpen),
+    backupEnroute: Boolean(backup?.enroute),
     backupStatusLine: backup?.statusLine || null,
     backupNotice: backup?.notice || null,
     backupUrgent: Boolean(backup?.urgent),

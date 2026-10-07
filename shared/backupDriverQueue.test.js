@@ -8,6 +8,10 @@ import {
   backupBookingMetadata,
   confirmCountdownLabel,
   confirmWindowOpenLeadMs,
+  departIsDue,
+  driverBackupPresentation,
+  leaveNowAtMs,
+  leaveNowCountdownLabel,
   releaseBackupSeat,
   driverStartedTowardPickup,
   completingPayoutExtraCents,
@@ -34,6 +38,35 @@ test('confirm countdown counts down to the close of the five-minute window', () 
   assert.equal(confirmCountdownLabel(closes, Date.parse('2026-10-10T14:54:30.500Z')), '0:30 left')
   assert.equal(confirmCountdownLabel(closes, Date.parse('2026-10-10T14:55:01.000Z')), '0:00 left')
   assert.equal(confirmCountdownLabel(null), null)
+})
+
+test('leave now is pickup minus the drive, and a confirmed driver waits for it', () => {
+  const pickupAt = '2026-10-10T16:00:00.000Z'
+  const driveMs = 15 * 60 * 1000
+  const leave = leaveNowAtMs({ pickupAt, driveMs })
+  assert.equal(leave, Date.parse(pickupAt) - driveMs)
+  const leaveNowAt = new Date(leave).toISOString()
+  assert.equal(leaveNowCountdownLabel(leaveNowAt, leave - 65000), 'Leave now in 1:05')
+  assert.equal(leaveNowCountdownLabel(leaveNowAt, leave), 'Leave now')
+  assert.equal(leaveNowCountdownLabel(null), null)
+  const trip = {
+    pickup_at: pickupAt,
+    metadata: {
+      backup_queue: {
+        ...backupBookingMetadata(1000),
+        primaryDriverId: 'driver-1',
+        confirmState: 'window_open',
+        confirmedAt: '2026-10-10T15:00:00.000Z',
+        leaveNowAt,
+      },
+    },
+  }
+  const seat = driverBackupPresentation(trip, 'driver-1')
+  assert.equal(seat.confirmOpen, false)
+  assert.equal(seat.leaveNowOpen, true)
+  assert.equal(seat.leaveNowAt, leaveNowAt)
+  assert.equal(departIsDue({ confirmedAt: '2026-10-10T15:00:00.000Z', leaveNowAt, now: leave - 1000 }), false)
+  assert.equal(departIsDue({ confirmedAt: '2026-10-10T15:00:00.000Z', leaveNowAt, now: leave }), true)
 })
 
 test('backup presets are only $10 and $15 and ride the existing pre-auth base', () => {
