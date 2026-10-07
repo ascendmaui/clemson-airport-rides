@@ -63,6 +63,7 @@ export async function createScheduledTrip({
   passengers = null,
   billingChoice = null,
   nearTerm = false,
+  backupBonusCents = null,
 }) {
   if (!supabase) throw new Error('Supabase is not configured')
   if (!user?.id) throw new Error('Sign in required to schedule a ride')
@@ -79,6 +80,7 @@ export async function createScheduledTrip({
     weekdays: [],
     ...(billingChoice ? { billingChoice } : {}),
     ...(nearTerm ? { nearTerm: true } : {}),
+    ...(backupBonusCents ? { backupBonusCents } : {}),
   })
   return {
     ...data.trip,
@@ -129,9 +131,18 @@ export async function listDriverScheduledTrips(driverId) {
   return data || []
 }
 
-export async function acceptScheduledTrip(tripId) {
+export async function postBackupQueue(op, tripId) {
+  if (!tripId) throw new Error('Missing scheduled ride')
+  return api('/api/driver?action=backup-queue', { op, tripId })
+}
+
+export async function acceptScheduledTrip(tripId, { backup = false } = {}) {
   if (!supabase) throw new Error('Supabase is not configured')
   if (!tripId) throw new Error('Missing scheduled ride')
+  if (backup) {
+    const data = await postBackupQueue('accept', tripId)
+    if (!data?.useScheduledRpc) return data
+  }
   const { data, error } = await supabase.rpc('accept_scheduled_trip', { p_trip_id: tripId })
   if (error) throw new Error(error.message || 'Could not accept scheduled ride')
   return data

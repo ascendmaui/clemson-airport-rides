@@ -1,4 +1,10 @@
 import { zonedCivilToUtc } from '../../shared/rideTime.js'
+import {
+  LOOKING_FOR_BACKUP_LABEL,
+  backupBonusLabel,
+  driverBackupPresentation,
+  riderBackupPresentation,
+} from '../../shared/backupDriverQueue.js'
 /** Pure helpers for scheduled rides. No Supabase imports. */
 
 export const MIN_LEAD_MS = 30 * 60 * 1000
@@ -236,6 +242,7 @@ const OPEN_QUEUE_FIELDS = [
 export function toDriverQueueCard(row) {
   if (!row) return null
   const purpose = row.metadata?.purpose || ''
+  const backup = driverBackupPresentation(row, null)
   return {
     id: row.id,
     status: row.status,
@@ -248,6 +255,10 @@ export function toDriverQueueCard(row) {
     passengers: row.passengers || 1,
     automaticMatching: !Number(row.deposit_cents || 0),
     nearTerm: row.metadata?.near_term_slot === true,
+    backupLabel: backup?.bonusLabel || backupBonusLabel(row.metadata?.backup_queue?.bonusCents),
+    lookingForBackup: backup?.lookingForBackup === true,
+    backupStatusLine: backup?.lookingForBackup ? LOOKING_FOR_BACKUP_LABEL : (backup?.statusLine || null),
+    backupRole: backup?.role || null,
   }
 }
 
@@ -265,6 +276,7 @@ export function toRiderScheduleCard(row) {
     estimate: Boolean(row.metadata?.fare_is_estimate),
     approxPin: pinForDisplay(row),
     canCancel: ['scheduled', 'searching', 'offered', 'accepted'].includes(row.status),
+    backup: riderBackupPresentation(row),
   }
 }
 

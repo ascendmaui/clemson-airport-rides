@@ -20,6 +20,7 @@ import { debitStoredRideCredits } from './rideCreditSettle.js'
 import { airportDepositRequiredCents } from '../packages/rides-native/tripTags.js'
 import { releaseTigerHeatReservation, settleTigerHeatReservation } from './tigerHeatService.js'
 import { settleFareHold } from './fareAuthorization.js'
+import { riderCaptureFareCents } from '../shared/backupDriverQueue.js'
 
 const ACTIVE_KEEP = new Set(['accepted', 'arriving', 'in_progress', 'payment_required', 'searching', 'offered'])
 
@@ -108,7 +109,7 @@ export async function settleTrip({
   const precomputed = explicitAmountCents == null ? readPrecomputedFeeCents(trip, kind) : null
   const due = amountDueForAction({
     action,
-    fareCents: trip.fare_cents,
+    fareCents: action === 'complete' ? riderCaptureFareCents(trip) : trip.fare_cents,
     paidCents: paidTowardFareCents(trip, payments),
     hold: trip.metadata?.payment_hold || null,
     explicitAmountCents,

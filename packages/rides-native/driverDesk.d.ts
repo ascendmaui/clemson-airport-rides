@@ -76,6 +76,8 @@ export function publishDriverCapacity(
 ): Promise<{ seats: number | null; stored: boolean }>
 export function listPassedTripIds(supabase: unknown, driverId: string): Promise<string[]>
 export function acceptTrip(supabase: unknown, trip: { id: string; status: string }, driverId: string): Promise<unknown>
+export function confirmBackupQueueTrip(supabase: unknown, tripId: string, options?: { navigate?: boolean }): Promise<unknown>
+export function releaseBackupQueueSeat(supabase: unknown, tripId: string, options?: { role?: string }): Promise<unknown>
 export function markSearchingOffers(
   supabase: unknown,
   offers: { id?: string; status?: string; driverId?: string | null }[] | null | undefined,

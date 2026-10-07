@@ -4,6 +4,9 @@
  */
 import { CLEMSON_MIAMI_PROMO_ID } from './clemsonMiamiPromo.js'
 import { explicitOfferPhase, ladderOfferNet } from './offerLadder.js'
+import { LOOKING_FOR_BACKUP_LABEL, confirmCountdownLabel, driverBackupPresentation } from '../../shared/backupDriverQueue.js'
+
+export { confirmCountdownLabel }
 
 export const ACTIONABLE_LEAD_MS = 45 * 60 * 1000
 
@@ -421,6 +424,10 @@ export function toDriverCard(row, options) {
   const phase = explicitOfferPhase({ ...row, metadata: meta })
   const ladder = phase && phase !== 'expired' ? ladderOfferNet({ ...row, fareCents, status: row.status, metadata: meta, offerPhase: phase }) : null
   const carpool = carpoolPayFromTrip(row)
+  const backup = driverBackupPresentation(row, options?.driverId || null)
+  const tagLabels = tags.map(tagLabel)
+  if (backup?.bonusLabel && !tagLabels.includes(backup.bonusLabel)) tagLabels.push(backup.bonusLabel)
+  if (backup?.lookingForBackup && !tagLabels.includes(LOOKING_FOR_BACKUP_LABEL)) tagLabels.push(LOOKING_FOR_BACKUP_LABEL)
   return {
     id: row.id,
     status: row.status,
@@ -447,7 +454,15 @@ export function toDriverCard(row, options) {
     purpose: meta.purpose || row.rider_note || '',
     tier: row.tier || null,
     tags,
-    tagLabels: tags.map(tagLabel),
+    tagLabels,
+    backupLabel: backup?.bonusLabel || null,
+    backupRole: backup?.role || null,
+    lookingForBackup: Boolean(backup?.lookingForBackup),
+    backupConfirmOpen: Boolean(backup?.confirmOpen),
+    backupConfirmClosesAt: backup?.confirmClosesAt || null,
+    backupConfirmCopy: backup?.confirmCopy || null,
+    backupStatusLine: backup?.statusLine || null,
+    backupUrgent: Boolean(backup?.urgent),
     arrivedAt: row.arrived_at || null,
     passengers: Math.max(1, Math.round(Number(row.passengers) || 1)),
     shares: carpoolShareLines(meta),

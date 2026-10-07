@@ -10,6 +10,7 @@ import { missingVehicleYearColumn } from '../../shared/vehicleYear.js'
 import { vehicleServesComfort } from '../../shared/rideOptions.js'
 import { headingOrNull, isLiveLocationStatus, speedOrNull } from './liveFix.js'
 import { authedJson } from './apiClient.js'
+import { driverBackupPresentation, isBackupQueueRide } from '../../shared/backupDriverQueue.js'
 import { approvalGateMessage } from './syntheticOffers.js'
 import {
   acceptNeedsDriverOnline,
@@ -218,8 +219,8 @@ export async function setServiceClass(supabase, driverId, serviceClass) {
  */
 const OPEN_OFFER_STATUSES = ['searching', 'offered']
 
-function cards(rows, gameDayLive) {
-  return rows.map((row) => toDriverCard(row, { gameDayLive })).filter(Boolean)
+function cards(rows, gameDayLive, driverId) {
+  return rows.map((row) => toDriverCard(row, { gameDayLive, driverId })).filter(Boolean)
 }
 
 export async function loadDriverDesk(supabase, driverId) {
@@ -279,6 +280,16 @@ export async function loadDriverDesk(supabase, driverId) {
   const comfortIds = await visibleTripIdSet(supabase, [...claimableOpen, ...claimableScheduled].map((row) => row.id))
   const comfortOpen = filterVisibleTrips(claimableOpen, comfortIds)
   const comfortScheduled = filterVisibleTrips(claimableScheduled, comfortIds)
+  const backupSeat = (row) => driverBackupPresentation(row, driverId)
+  const scheduledPool = comfortScheduled.filter((row) => {
+    const seat = backupSeat(row)
+    if (!seat) return true
+    return seat.role === 'open_primary' || seat.role === 'open_backup'
+  })
+  const myBackupSeats = comfortScheduled.filter((row) => {
+    const seat = backupSeat(row)
+    return seat?.role === 'primary' || seat?.role === 'backup'
+  })
   const offers = cards(comfortOpen, gameDayLive).filter((card) => {
     if (card.status !== 'requested' && passedIds.has(card.id)) return false
     if (card.status === 'requested') return card.driverId === driverId
@@ -289,8 +300,8 @@ export async function loadDriverDesk(supabase, driverId) {
   const upcoming = cards(mineRows, gameDayLive).filter((card) => !isDueNow(card))
   return {
     offers,
-    scheduledOpen: cards(comfortScheduled, gameDayLive),
-    upcoming,
+    scheduledOpen: cards(scheduledPool, gameDayLive, driverId),
+    upcoming: [...upcoming, ...cards(myBackupSeats, gameDayLive, driverId)],
     active,
     online: Boolean(statusRes.data?.online),
     priority: Boolean(statusRes.data?.priority_mode),
@@ -360,6 +371,24 @@ async function lockAcceptedShare(supabase, fresh, driverId) {
   }
 }
 
+export async function confirmBackupQueueTrip(supabase, tripId, { navigate = false } = {}) {
+  if (!tripId) throw new Error('Missing ride')
+  return authedJson(supabase, '/api/driver?action=backup-queue', {
+    method: 'POST',
+    body: { op: navigate ? 'navigate' : 'confirm', tripId, navigate },
+  })
+}
+
+/** Primary cancel promotes the backup. A backup who leaves reopens that seat. */
+export async function releaseBackupQueueSeat(supabase, tripId, { role = 'primary' } = {}) {
+  if (!tripId) throw new Error('Missing ride')
+  const op = role === 'backup' ? 'release' : 'cancel'
+  return authedJson(supabase, '/api/driver?action=backup-queue', {
+    method: 'POST',
+    body: { op, tripId },
+  })
+}
+
 export async function acceptTrip(supabase, trip, driverId) {
   if (!trip?.id) throw new Error('Missing ride')
   if (trip.isSynthetic === true || String(trip.id).startsWith('synthetic-')) {
@@ -394,6 +423,19 @@ export async function acceptTrip(supabase, trip, driverId) {
     const presence = await supabase.from('driver_status').select('online').eq('driver_id', driverId).maybeSingle()
     if (presence.error) throw new Error(presence.error.message)
     if (!presence.data?.online) throw new Error('Go online before accepting a ride.')
+  }
+  if (fresh.status === 'scheduled' && isBackupQueueRide(fresh)) {
+    const data = await authedJson(supabase, '/api/driver?action=backup-queue', {
+      method: 'POST',
+      body: { op: 'accept', tripId: trip.id },
+    })
+    if (data?.useScheduledRpc) {
+      const accepted = await supabase.rpc('accept_scheduled_trip', { p_trip_id: trip.id })
+      if (accepted.error) throw new Error(accepted.error.message || 'Could not accept scheduled ride')
+      await lockAcceptedShare(supabase, fresh, driverId)
+      return accepted.data
+    }
+    return data
   }
   if (fresh.status === 'scheduled') {
     const { data, error } = await supabase.rpc('accept_scheduled_trip', { p_trip_id: trip.id })
@@ -631,9 +673,9 @@ export async function loadTrip(supabase, tripId, driverId) {
   const row = rows[0]
   if (!row) return null
   if (driverId && row.driver_id && row.driver_id !== driverId && !isActiveStatus(row.status) && row.status !== 'requested') {
-    return toDriverCard(row)
+    return toDriverCard(row, { driverId })
   }
-  return toDriverCard(row)
+  return toDriverCard(row, { driverId })
 }
 
 export async function loadEarnings(supabase, driverId) {

@@ -57,6 +57,14 @@ export type DriverCard = {
   offerShareBps?: number | null
   offerExpiresAt?: string | null
   riderAvatarUrl?: string | null
+  backupLabel?: string | null
+  backupRole?: 'primary' | 'backup' | 'open_primary' | 'open_backup' | 'full' | null
+  lookingForBackup?: boolean
+  backupConfirmOpen?: boolean
+  backupConfirmClosesAt?: string | null
+  backupConfirmCopy?: string | null
+  backupStatusLine?: string | null
+  backupUrgent?: boolean
 }
 
 export type FareCollection = {
@@ -118,6 +126,7 @@ export function isOpenPoolClaimable(row: Record<string, unknown> | null | undefi
 export function zonedWeekdayHour(iso: string | null | undefined, timeZone?: string): { weekday: string; hour: number } | null
 export function isWeekendPartyWindow(iso: string | null | undefined): boolean
 export function formatPickupAt(iso: string | null | undefined): string
+export function confirmCountdownLabel(closesAt: string | null | undefined, now?: number | Date): string | null
 export function isSameZonedDay(iso: string | null | undefined, now?: Date, timeZone?: string): boolean
 export function isDueNow(trip: { pickupAt?: string | null; pickup_at?: string | null; scheduled_for?: string | null } | null, now?: Date): boolean
 export const TAG_LABELS: Record<string, string>

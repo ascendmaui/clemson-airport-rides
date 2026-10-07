@@ -12,11 +12,12 @@ import { oneParam } from '@/lib/oneParam'
 import { supabase } from '@/lib/supabase'
 import { useTheme } from '@/lib/theme'
 import type { Palette } from '@/lib/palette'
-import { acceptTrip, declineDriverOffer, loadDriverDesk, markSearchingOffers, subscribeTrips } from 'rides-native/driverDesk'
+import { acceptTrip, confirmBackupQueueTrip, declineDriverOffer, loadDriverDesk, markSearchingOffers, releaseBackupQueueSeat, subscribeTrips } from 'rides-native/driverDesk'
 import { fetchDriverApplication } from 'rides-native/drivers'
 import { isSyntheticOffer } from 'rides-native/syntheticOffers'
 import { driverGateView } from 'rides-native/driverGateView'
 import {
+  confirmCountdownLabel,
   formatCents,
   formatPickupAt,
   matchesQueueFilter,
@@ -38,18 +39,38 @@ function useQueueStyles() {
   return useMemo(() => queueStyles(colors), [colors])
 }
 
+function ConfirmCountdown({ closesAt }: { closesAt?: string | null }) {
+  const [label, setLabel] = useState<string | null>(() => confirmCountdownLabel(closesAt))
+  useEffect(() => {
+    const tick = () => setLabel(confirmCountdownLabel(closesAt))
+    tick()
+    const id = setInterval(tick, 1000)
+    return () => clearInterval(id)
+  }, [closesAt])
+  if (!label) return null
+  return <Text style={{ color: '#F56600', fontWeight: '800', fontSize: 22, marginTop: 4 }}>{label}</Text>
+}
+
+function seatReleaseLabel(role?: string | null) {
+  if (role === 'backup') return 'Leave backup seat'
+  if (role === 'primary') return 'Can\'t make this trip'
+  return null
+}
+
 function QueueCard({
   card,
   busy,
   onAccept,
   onDecline,
   onOpen,
+  onConfirm,
 }: {
   card: DriverCard
   busy: boolean
   onAccept: () => void | Promise<void>
   onDecline: () => void | Promise<void>
   onOpen: () => void
+  onConfirm: () => void | Promise<void>
   key?: string
 }) {
   const active = card.status === 'accepted' || card.status === 'arriving'
@@ -83,6 +104,12 @@ function QueueCard({
       <Text style={styles.copy}>Pickup · {card.pickupLabel}</Text>
       <Text style={styles.copy}>Drop-off · {card.dropoffLabel}</Text>
       {card.pickupAt ? <Text style={styles.copy}>{formatPickupAt(card.pickupAt)}</Text> : null}
+      {card.backupLabel ? <Text style={[styles.note, { color: '#F56600', fontWeight: '800' }]}>{card.backupLabel}</Text> : null}
+      {card.lookingForBackup ? <Text style={[styles.note, { color: '#522D80' }]}>Looking for backup driver</Text> : null}
+      {card.backupRole === 'backup' && card.pickupAt ? (
+        <Text style={[styles.note, { color: '#522D80' }]}>{`You're #2 for this trip, pickup at ${formatPickupAt(card.pickupAt)}`}</Text>
+      ) : null}
+      {card.backupStatusLine && card.backupRole === 'primary' ? <Text style={styles.note}>{card.backupStatusLine}</Text> : null}
       {card.passengers > 1 ? <Text style={styles.copy}>{card.passengers} riders · capacity check is your seat count</Text> : null}
       <View style={styles.tags}>
         {card.tagLabels.map((label: string) => (
@@ -92,6 +119,15 @@ function QueueCard({
       {preferredNote ? <Text style={styles.note}>{preferredNote}</Text> : null}
       <FarePanel card={card} />
       {card.comfortStub ? <Text style={styles.copy}>{COMFORT_FLEET_NOTICE}</Text> : null}
+      {card.backupConfirmOpen ? (
+        <View style={{ marginTop: 8, padding: 10, borderRadius: 12, backgroundColor: 'rgba(245,102,0,0.12)' }}>
+          <Text style={{ color: '#F56600', fontWeight: '800' }}>Confirm trip</Text>
+          <Text style={styles.copy}>{card.backupConfirmCopy}</Text>
+          {card.backupUrgent ? <Text style={[styles.note, { color: '#F56600', fontWeight: '800' }]}>You are up. Confirm and start toward pickup.</Text> : null}
+          <ConfirmCountdown closesAt={card.backupConfirmClosesAt} />
+          <Primary label={busy ? 'Saving…' : 'Confirm trip'} onPress={onConfirm} disabled={busy} />
+        </View>
+      ) : null}
       {active ? (
         <Primary label="Open live trip" onPress={onOpen} tone="purple" />
       ) : (
@@ -108,7 +144,7 @@ function QueueCard({
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         >
           <Text style={[styles.declineText, declineDisposition(card.status) === 'cancel' && styles.declineCancel]}>
-            {declineActionLabel(card.status)}
+            {seatReleaseLabel(card.backupRole) || declineActionLabel(card.status)}
           </Text>
         </Pressable>
       ) : null}
@@ -232,12 +268,41 @@ export default function QueueScreen() {
     }
   }
 
+  async function onConfirm(card: DriverCard) {
+    if (!supabase) return
+    setBusyId(card.id)
+    setError(null)
+    try {
+      await confirmBackupQueueTrip(supabase, card.id)
+      pulse('accept')
+      await refresh()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not confirm')
+    } finally {
+      setBusyId(null)
+    }
+  }
+
   async function onDecline(card: DriverCard) {
     if (isSyntheticOffer(card)) {
       setPassed((current: string[]) => (current.includes(card.id) ? current : [...current, card.id]))
       return
     }
     if (card.status === 'scheduled') {
+      if ((card.backupRole === 'primary' || card.backupRole === 'backup') && supabase) {
+        setBusyId(card.id)
+        setError(null)
+        try {
+          await releaseBackupQueueSeat(supabase, card.id, { role: card.backupRole })
+          pulse('decline')
+          await refresh()
+        } catch (err) {
+          setError(err instanceof Error ? err.message : 'Could not release this seat')
+        } finally {
+          setBusyId(null)
+        }
+        return
+      }
       setPassed((current: string[]) => (current.includes(card.id) ? current : [...current, card.id]))
       pulse('decline')
       return
@@ -363,7 +428,7 @@ export default function QueueScreen() {
               </Card>
             ) : null}
             {shown.map((card: DriverCard) => (
-              <QueueCard key={card.id} card={card} busy={busyId === card.id} onAccept={() => onAccept(card)} onDecline={() => onDecline(card)} onOpen={() => { if (!isSyntheticOffer(card)) router.push({ pathname: '/trip', params: { id: card.id } }) }} />
+              <QueueCard key={card.id} card={card} busy={busyId === card.id} onAccept={() => onAccept(card)} onDecline={() => onDecline(card)} onConfirm={() => onConfirm(card)} onOpen={() => { if (!isSyntheticOffer(card)) router.push({ pathname: '/trip', params: { id: card.id } }) }} />
             ))}
           </>
         )}

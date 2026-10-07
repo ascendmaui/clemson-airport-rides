@@ -6,6 +6,7 @@ import { ACTIONABLE_LEAD_MS } from '../src/lib/scheduledRideModel.js'
 import { isNearTermTrip } from '../shared/nearTermSlots.js'
 import { exclusiveOfferPatch, poolOfferPatch } from '../packages/rides-native/offerLadder.js'
 import { authorizeRideRequest } from './fareAuthorization.js'
+import { isBackupQueueRide } from '../shared/backupDriverQueue.js'
 
 /** Reuse live dispatch unchanged. Preserve the reservation time in metadata. */
 export async function releaseScheduledRides(sb, {
@@ -23,6 +24,12 @@ export async function releaseScheduledRides(sb, {
       // Near-term rides stay on the board until pickup so every driver can accept.
       // At pickup they join the existing live matcher. Past-due rows still cancel.
       if (isNearTermTrip(trip) && !expired && new Date(trip.pickup_at).getTime() > now.getTime()) {
+        result.held++
+        continue
+      }
+      // Backup-queue rides stay on the scheduled board until the dispatch tick
+      // promotes a backup or reopens the live pool itself.
+      if (isBackupQueueRide(trip) && trip.metadata?.backup_queue?.confirmState !== 'handed_to_pool') {
         result.held++
         continue
       }

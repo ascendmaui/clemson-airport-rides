@@ -26,6 +26,7 @@ import {
 import { fetchBillingQuote } from '../lib/rideBilling'
 import { useRideOptions } from '../lib/useRideOptions'
 import { isOfferedRideTier, NO_DRIVERS_AVAILABLE_COPY, SCHEDULE_AHEAD_LABEL } from '../../shared/rideOptions.js'
+import { BOOK_BACKUP_COPY } from '../../shared/backupDriverQueue.js'
 import { getHashRoute } from '../lib/navigation'
 import { lookupCatalogPlace, placeFromStop } from '../lib/placeCatalog'
 import { NearTermSlots } from './NearTermSlots'
@@ -79,6 +80,7 @@ export function ScheduledRidePlanner() {
   const [billingOffer, setBillingOffer] = useState(null)
   const [billingLoading, setBillingLoading] = useState(false)
   const [billingChoice, setBillingChoice] = useState('no_card')
+  const [backupBonusCents, setBackupBonusCents] = useState(0)
 
   const minDate = useMemo(() => todayInputValue(), [])
 
@@ -226,6 +228,7 @@ export function ScheduledRidePlanner() {
         tier: fleet,
         passengers: fleet === 'carpool' ? seats : null,
         billingChoice: billingOffer ? billingChoice : null,
+        backupBonusCents: backupBonusCents || null,
       })
       setSaved(row)
       setDate('')
@@ -467,7 +470,37 @@ export function ScheduledRidePlanner() {
         />
       )}
 
-      <p>No card charge when you confirm. Campus rides enter matching about 45 minutes before pickup.</p>
+      <div className="glass-panel" style={{ padding: 12, borderRadius: 14, marginBottom: 12 }}>
+        <div style={{ fontWeight: 800, color: '#522D80' }}>{BOOK_BACKUP_COPY}</div>
+        <p style={{ fontSize: 13, color: 'var(--ink-secondary)', lineHeight: 1.45 }}>
+          Pickup is guaranteed: if the first driver flakes, the backup picks up and gets you there on time. The extra is included in the fare hold and charged when the trip ends.
+        </p>
+        <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+          {[[0, 'No backup'], [1000, '$10'], [1500, '$15']].map(([cents, label]) => {
+            const on = backupBonusCents === cents
+            return (
+              <button
+                key={label}
+                type="button"
+                className="pressable"
+                onClick={() => setBackupBonusCents(cents)}
+                style={{
+                  padding: '8px 12px',
+                  borderRadius: 999,
+                  fontWeight: 800,
+                  color: on ? '#fff' : '#522D80',
+                  background: on ? '#F56600' : '#fff',
+                  border: '1px solid rgba(82,45,128,0.2)',
+                }}
+              >
+                {label}
+              </button>
+            )
+          })}
+        </div>
+      </div>
+
+      <p>No card charge when you confirm. The fare hold, including a backup bonus when you add one, is captured when the trip ends. Campus rides enter matching about 45 minutes before pickup.</p>
 
       <PrimaryButton
         onClick={() => runOrPrompt(onSchedule, { setPromptOpen, nextPath: 'schedule' })}
@@ -533,7 +566,13 @@ function RideRow({ ride, onCancel }) {
         {ride.estimate ? ' estimate' : ''}
         {ride.approxPin ? ` · Approx pin ${ride.approxPin}` : ''}
       </div>
-      {ride.depositCents > 0 && (
+      {ride.backup?.status && (
+        <div style={{ fontSize: 12, fontWeight: 800, color: '#F56600', marginTop: 4 }}>{ride.backup.status}</div>
+      )}
+      {ride.backup?.notice && (
+        <div style={{ fontSize: 12, color: '#522D80', marginTop: 4 }}>{ride.backup.notice}</div>
+      )}
+        {ride.depositCents > 0 && (
         <div style={{ fontSize: 12, color: '#522D80', fontWeight: 700, marginTop: 4 }}>
           {depositSurfaceCopy(
             { fareCents: ride.fareCents, depositCents: ride.depositCents },

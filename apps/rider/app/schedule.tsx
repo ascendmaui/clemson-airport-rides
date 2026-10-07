@@ -53,6 +53,7 @@ import {
 import { localDateInput, localTimeInput, nextPickupDate, RIDE_PLACES } from 'rides-native/riderShell.js'
 import { formatCents, formatPickupAt } from 'rides-native/tripTags.js'
 import { dueScheduleReminders } from '../../../src/lib/scheduledRideModel.js'
+import { BOOK_BACKUP_COPY, riderBackupPresentation } from '../../../shared/backupDriverQueue.js'
 import { RequireAuth } from '@/components/RequireAuth'
 import { NearTermSlots } from '@/components/NearTermSlots'
 
@@ -150,6 +151,52 @@ function initialWeekendWhen() {
   return nextPickupDate({ time: '21:00', weekdays: ['fri'] })
 }
 
+function BackupPicker({
+  value,
+  onChange,
+}: {
+  value: 0 | 1000 | 1500
+  onChange: (next: 0 | 1000 | 1500) => void
+}) {
+  const { colors } = useTheme()
+  const choices: Array<{ cents: 0 | 1000 | 1500; label: string }> = [
+    { cents: 0, label: 'No backup' },
+    { cents: 1000, label: '$10' },
+    { cents: 1500, label: '$15' },
+  ]
+  return (
+    <View style={{ marginTop: 8 }}>
+      <Text style={{ color: colors.purple, fontWeight: '800' }}>{BOOK_BACKUP_COPY}</Text>
+      <Text style={{ color: colors.inkSecondary, marginTop: 4, marginBottom: 8 }}>
+        If the first driver flakes, the backup picks up and gets you to the airport on time. The extra is in the fare hold and charged when the trip ends.
+      </Text>
+      <View style={{ flexDirection: 'row', gap: 8 }}>
+        {choices.map((choice) => {
+          const on = value === choice.cents
+          return (
+            <Pressable
+              key={choice.label}
+              onPress={() => onChange(choice.cents)}
+              accessibilityRole="button"
+              accessibilityState={{ selected: on }}
+              style={{
+                paddingHorizontal: 12,
+                paddingVertical: 8,
+                borderRadius: 999,
+                backgroundColor: on ? '#F56600' : colors.card,
+                borderWidth: 1,
+                borderColor: 'rgba(82,45,128,0.2)',
+              }}
+            >
+              <Text style={{ color: on ? '#fff' : '#522D80', fontWeight: '800' }}>{choice.label}</Text>
+            </Pressable>
+          )
+        })}
+      </View>
+    </View>
+  )
+}
+
 function spotLabel(spot: WeekendSpot) {
   switch (spot) {
     case 'airport':
@@ -199,6 +246,7 @@ function ScheduleScreen() {
   const [weekendDropoff, setWeekendDropoff] = useState<RidePlace>(placeByLabel('Downtown Clemson'))
   const [fleet, setFleet] = useState<FleetChoice>('standard')
   const [seats, setSeats] = useState(1)
+  const [backupBonusCents, setBackupBonusCents] = useState<0 | 1000 | 1500>(0)
   const [mine, setMine] = useState<ScheduledRow[]>([])
   const [loadingList, setLoadingList] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
@@ -574,6 +622,7 @@ function ScheduleScreen() {
         weekdays: [],
         tier: fleet,
         passengers: fleet === 'carpool' ? seats : undefined,
+        backupBonusCents: backupBonusCents || null,
       })
       setBanner(`Weekend / party confirmed for ${formatPickupAt(weekendWhen.toISOString())}. It is under Upcoming, and drivers can accept it from Weekend.`)
       await successHaptic()
@@ -619,6 +668,7 @@ function ScheduleScreen() {
         pickupAt: when,
         purpose,
         weekdays,
+        backupBonusCents: backupBonusCents || null,
       })
       setBanner(`${purposeLabel(purpose)} saved · ${row.id}`)
       await successHaptic()
@@ -764,6 +814,7 @@ function ScheduleScreen() {
               : ' Final fare can change when a driver accepts.'}
           </Text>
         </View>
+        <BackupPicker value={backupBonusCents} onChange={setBackupBonusCents} />
         <PrimaryButton
           label={busy ? 'Confirming…' : 'Confirm weekend ride'}
           onPress={confirmWeekend}
@@ -937,6 +988,7 @@ function ScheduleScreen() {
               : `About ${quote.miles ?? '—'} mi. Final fare can change when a driver accepts.`}
           </Text>
         </View>
+        <BackupPicker value={backupBonusCents} onChange={setBackupBonusCents} />
         <PrimaryButton label={busy ? 'Scheduling…' : 'Schedule ride'} onPress={onSchedule} disabled={busy} tone="purple" />
 
         <Text style={styles.section}>Upcoming</Text>
@@ -950,6 +1002,7 @@ function ScheduleScreen() {
         ) : null}
         {mine.filter((row: ScheduledRow) => row.status !== 'canceled').map((row: ScheduledRow) => {
           const reminder = reminderByTrip.get(row.id)
+          const backup = riderBackupPresentation(row)
           return (
             <View key={row.id} style={styles.panel}>
             {reminder ? <Text style={styles.remindKicker}>{reminder.label}</Text> : null}
@@ -959,6 +1012,8 @@ function ScheduleScreen() {
               {row.metadata?.recurrence?.weekdays?.length ? ` · weekly ${row.metadata.recurrence.weekdays.join(', ')}` : ''}
             </Text>
             {rideTypeName(String(row.tier || '')) ? <Text style={styles.student}>{rideTypeName(String(row.tier || ''))}</Text> : null}
+            {backup?.status ? <Text style={styles.student}>{backup.status}</Text> : null}
+            {backup?.notice ? <Text style={styles.fine}>{backup.notice}</Text> : null}
             {row.deposit_cents ? (
               <Text style={styles.balance}>
                 {depositSurfaceCopy(

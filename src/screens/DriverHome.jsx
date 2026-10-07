@@ -36,6 +36,7 @@ import {
   acceptScheduledTrip,
   listDriverScheduledTrips,
   listOpenScheduledTrips,
+  postBackupQueue,
   reminderCopy,
   takeReminder,
 } from '../lib/scheduledRides'
@@ -43,6 +44,7 @@ import { pushToast } from '../lib/toasts'
 import { playRideRequestAlert, shouldAlertForRide } from '../lib/rideAlert'
 import { loadLocalPrefs } from '../lib/notificationPrefs'
 import { offerVisibleToDriver, visibleOfferQuery } from '../../shared/driverOrder.js'
+import { readBackupQueue } from '../../shared/backupDriverQueue.js'
 import { driverRouteForOnboarding } from '../../shared/driverRoute.js'
 import { isStaleLiveOffer } from '../../shared/staleLiveOffer.js'
 import { acceptTrip, declineTrip, listPassedTripIds } from '../../packages/rides-native/driverDesk.js'
@@ -295,9 +297,19 @@ function DriverShell({ driverId }) {
         listOpenScheduledTrips(),
         listDriverScheduledTrips(driverId),
       ])
+      const seatForMe = (row) => {
+        const queue = readBackupQueue(row)
+        return queue && (queue.primaryDriverId === driverId || queue.backupDriverId === driverId)
+      }
+      const pool = open.filter((row) => {
+        const queue = readBackupQueue(row)
+        if (!queue) return true
+        if (seatForMe(row)) return false
+        return !(queue.primaryDriverId && queue.backupDriverId)
+      })
       const receiving = onShiftRef.current
-      setScheduledOpen(receiving ? open : [])
-      setScheduledMine(mine)
+      setScheduledOpen(receiving ? pool : [])
+      setScheduledMine([...mine, ...open.filter(seatForMe)])
       if (!scheduledPrimed.current || !receiving) {
         open.forEach((row) => knownOpen.current.add(row.id))
         scheduledPrimed.current = true
@@ -542,7 +554,8 @@ function DriverShell({ driverId }) {
     if (!tripId || acceptingScheduledId) return
     setAcceptingScheduledId(tripId)
     try {
-      const accepted = await acceptScheduledTrip(tripId)
+      const row = scheduledOpen.find((ride) => ride.id === tripId)
+      const accepted = await acceptScheduledTrip(tripId, { backup: Boolean(readBackupQueue(row)) })
       pushToast({
         kind: 'driver_accepted',
         title: 'Scheduled ride accepted',
@@ -575,7 +588,12 @@ function DriverShell({ driverId }) {
     }
   }
 
-  const futureMine = scheduledMine.filter((trip) => !isDueNow(trip))
+  const futureMine = scheduledMine.filter((trip) => {
+    const queue = readBackupQueue(trip)
+    const mine = queue && (queue.primaryDriverId === driverId || queue.backupDriverId === driverId)
+    if (mine && queue.confirmState !== 'enroute') return true
+    return !isDueNow(trip)
+  })
   async function setShift(next) {
     if (!driverId || shiftBusy) return
     const change = next ? startShift() : stopShift({ trip: activeTrip })
@@ -604,6 +622,46 @@ function DriverShell({ driverId }) {
     }
   }
 
+  async function releaseScheduled(tripId, role) {
+    if (!tripId) return
+    try {
+      await postBackupQueue(role === 'backup' ? 'release' : 'cancel', tripId)
+      pushToast({
+        kind: 'system',
+        title: role === 'backup' ? 'Backup seat released' : 'Trip released',
+        body: role === 'backup'
+          ? 'The backup seat is open again.'
+          : 'The backup driver is up if one was in line.',
+      })
+      await loadScheduled()
+    } catch (err) {
+      pushToast({
+        kind: 'system',
+        title: 'Could not release',
+        body: err.message || 'Try again.',
+      })
+    }
+  }
+
+  async function confirmScheduled(tripId) {
+    if (!tripId) return
+    try {
+      await postBackupQueue('confirm', tripId)
+      pushToast({
+        kind: 'driver_accepted',
+        title: 'Trip confirmed',
+        body: 'Start toward pickup. The rider is notified once you are moving.',
+      })
+      await loadScheduled()
+    } catch (err) {
+      pushToast({
+        kind: 'system',
+        title: 'Could not confirm',
+        body: err.message || 'Try again.',
+      })
+    }
+  }
+
   const scheduledLists = (withEmpty) => (
     <>
       {online && (
@@ -611,12 +669,16 @@ function DriverShell({ driverId }) {
         rides={scheduledOpen}
         acceptingId={acceptingScheduledId}
         onAccept={acceptScheduled}
+        viewerId={driverId}
         emptyHint={withEmpty ? 'No scheduled rides waiting. Weekend and party airport or campus pickups show up here after a rider confirms a time.' : undefined}
       />
       )}
       <ScheduledRideQueue
         rides={futureMine}
         title="Your upcoming"
+        viewerId={driverId}
+        onConfirm={confirmScheduled}
+        onRelease={releaseScheduled}
         emptyHint={withEmpty ? 'Accepted pickups more than 45 minutes out stay in this list.' : undefined}
       />
     </>

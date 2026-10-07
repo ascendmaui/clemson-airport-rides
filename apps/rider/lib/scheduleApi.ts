@@ -133,6 +133,7 @@ export async function createScheduledTrip({
   tier = 'standard',
   passengers,
   nearTerm = false,
+  backupBonusCents = null,
 }: {
   user: AuthUser
   pickup: RidePlace
@@ -143,6 +144,7 @@ export async function createScheduledTrip({
   tier?: 'standard' | 'comfort' | 'wait' | 'carpool'
   passengers?: number
   nearTerm?: boolean
+  backupBonusCents?: number | null
 }) {
   if (!supabase) throw new Error('Supabase is not configured')
   if (!user?.id) throw new Error('Sign in required to schedule a ride')
@@ -158,6 +160,7 @@ export async function createScheduledTrip({
       tier,
       ...(passengers ? { passengers } : {}),
       ...(nearTerm ? { nearTerm: true } : {}),
+      ...(backupBonusCents ? { backupBonusCents } : {}),
     },
   }) as { trip: { id: string; status: string | null; pickup_at: string | null; pickup_label: string | null; dropoff_label: string | null } }
   if (!data?.trip?.id) throw new Error('Could not schedule ride')

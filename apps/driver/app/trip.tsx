@@ -12,8 +12,9 @@ import { oneParam } from '@/lib/oneParam'
 import { openNavigation } from '@/lib/openMaps'
 import { supabase } from '@/lib/supabase'
 import { useDriverLocation } from '@/lib/useDriverLocation'
-import { advanceTrip, loadRiderFix, loadTrip, publishDriverLocation, subscribeTrips } from 'rides-native/driverDesk'
+import { advanceTrip, confirmBackupQueueTrip, loadRiderFix, loadTrip, publishDriverLocation, releaseBackupQueueSeat, subscribeTrips } from 'rides-native/driverDesk'
 import {
+  confirmCountdownLabel,
   driverStatusDetail,
   formatCents,
   preferredRequestNote,
@@ -35,6 +36,18 @@ import type { Palette } from '@/lib/palette'
 import { TripThread } from 'rides-native/TripThread.jsx'
 
 type RiderFix = { latitude: number; longitude: number }
+
+function ConfirmCountdown({ closesAt }: { closesAt?: string | null }) {
+  const [label, setLabel] = useState<string | null>(() => confirmCountdownLabel(closesAt))
+  useEffect(() => {
+    const tick = () => setLabel(confirmCountdownLabel(closesAt))
+    tick()
+    const id = setInterval(tick, 1000)
+    return () => clearInterval(id)
+  }, [closesAt])
+  if (!label) return null
+  return <Text style={{ color: ORANGE, fontWeight: '800', fontSize: 28, marginTop: 6 }}>{label}</Text>
+}
 
 export default function TripScreen() {
   const router = useRouter()
@@ -298,6 +311,54 @@ export default function TripScreen() {
             </View>
           ) : null}
         {error ? <ErrorText>{error}</ErrorText> : null}
+        {trip?.backupConfirmOpen ? (
+          <View style={{ marginBottom: 12, padding: 12, borderRadius: 14, backgroundColor: 'rgba(245,102,0,0.12)' }}>
+            <Text style={{ color: ORANGE, fontWeight: '800', fontSize: 16 }}>Confirm trip</Text>
+            <Text style={{ marginTop: 4 }}>{trip.backupConfirmCopy}</Text>
+            {trip.backupUrgent ? <Text style={{ color: ORANGE, fontWeight: '700', marginTop: 6 }}>You are up. Confirm and start toward pickup.</Text> : null}
+            <ConfirmCountdown closesAt={trip.backupConfirmClosesAt} />
+            <Primary
+              label={busy ? 'Saving…' : 'Confirm trip'}
+              onPress={() => {
+                if (!supabase || !trip.id) return
+                setBusy(true)
+                confirmBackupQueueTrip(supabase, trip.id).then(() => refresh()).catch((err: unknown) => {
+                  setError(err instanceof Error ? err.message : 'Could not confirm')
+                }).finally(() => setBusy(false))
+              }}
+              disabled={busy}
+            />
+            <Primary
+              label="Confirm and start navigation"
+              onPress={() => {
+                if (!supabase || !trip.id) return
+                setBusy(true)
+                confirmBackupQueueTrip(supabase, trip.id, { navigate: true })
+                  .then(() => openNavigation(navApp, target))
+                  .then(() => refresh())
+                  .catch((err: unknown) => setError(err instanceof Error ? err.message : 'Could not start navigation'))
+                  .finally(() => setBusy(false))
+              }}
+              disabled={busy}
+              tone="purple"
+            />
+            {trip.backupRole === 'primary' || trip.backupRole === 'backup' ? (
+              <Primary
+                label={trip.backupRole === 'backup' ? 'Leave backup seat' : 'Can\'t make this trip'}
+                onPress={() => {
+                  if (!supabase || !trip.id || !trip.backupRole) return
+                  setBusy(true)
+                  releaseBackupQueueSeat(supabase, trip.id, { role: trip.backupRole })
+                    .then(() => refresh())
+                    .catch((err: unknown) => setError(err instanceof Error ? err.message : 'Could not release this seat'))
+                    .finally(() => setBusy(false))
+                }}
+                disabled={busy}
+                tone="ghost"
+              />
+            ) : null}
+          </View>
+        ) : null}
         {action ? <Primary label={busy ? 'Updating…' : action} onPress={onAdvance} disabled={busy} tone="purple" /> : null}
         </ScrollView>
       </View>
