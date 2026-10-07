@@ -1,6 +1,6 @@
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { AccessibilityInfo, Pressable, RefreshControl, ScrollView, Text, TextInput, View } from 'react-native'
+import { AccessibilityInfo, Image, Pressable, RefreshControl, ScrollView, Text, TextInput, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Pill, PrimaryButton } from '@/components/Button'
 import { HoldExpiryNotice } from '@/components/HoldExpiryNotice'
@@ -17,6 +17,7 @@ import { openStripeCheckout } from '@/lib/openCheckout'
 import {
   cancelScheduledTrip,
   createScheduledTrip,
+  scheduledRiderAction,
   listScheduledTrips,
   quoteRide,
   type RidePlace,
@@ -56,6 +57,85 @@ import { dueScheduleReminders } from '../../../src/lib/scheduledRideModel.js'
 import { BOOK_BACKUP_COPY, riderBackupPresentation } from '../../../shared/backupDriverQueue.js'
 import { RequireAuth } from '@/components/RequireAuth'
 import { NearTermSlots } from '@/components/NearTermSlots'
+
+function DriverFace({ card, role }: { card?: { name?: string; avatarUrl?: string | null; vehicleLabel?: string; ratingAvg?: number | null; ratingCount?: number } | null; role: string }) {
+  if (!card) return null
+  const rating = card.ratingAvg != null ? `${Number(card.ratingAvg).toFixed(1)} · ${card.ratingCount || 0}` : 'New'
+  return (
+    <View style={{ flexDirection: 'row', gap: 10, alignItems: 'center', marginTop: 8 }}>
+      {card.avatarUrl ? (
+        <Image source={{ uri: card.avatarUrl }} style={{ width: 40, height: 40, borderRadius: 20 }} accessibilityIgnoresInvertColors />
+      ) : (
+        <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: '#522D80', alignItems: 'center', justifyContent: 'center' }}>
+          <Text style={{ color: '#fff', fontWeight: '800' }}>{(card.name || 'D').slice(0, 1)}</Text>
+        </View>
+      )}
+      <View>
+        <Text style={{ color: '#522D80', fontWeight: '800' }}>{role} · {card.name || 'Driver'}</Text>
+        <Text style={{ color: '#522D80' }}>{card.vehicleLabel || 'Vehicle'} · {rating}</Text>
+      </View>
+    </View>
+  )
+}
+
+function BackupActions({
+  tripId,
+  backup,
+  onDone,
+  onError,
+}: {
+  tripId: string
+  backup: NonNullable<ReturnType<typeof riderBackupPresentation>>
+  onDone: () => void
+  onError: (message: string) => void
+}) {
+  const [sheet, setSheet] = useState<null | 'switch' | 'cancel' | 'safety'>(null)
+  const [busy, setBusy] = useState(false)
+  const backupName = backup.backup?.name || 'backup driver'
+  async function confirm() {
+    if (!sheet) return
+    setBusy(true)
+    try {
+      await scheduledRiderAction(sheet === 'cancel' ? 'cancel' : 'switch', tripId, sheet === 'safety' ? { safetyReport: true } : {})
+      setSheet(null)
+      onDone()
+    } catch (err) {
+      onError(err instanceof Error ? err.message : 'Could not update this ride')
+    } finally {
+      setBusy(false)
+    }
+  }
+  return (
+    <View>
+      <DriverFace card={backup.primary} role="Driver" />
+      <DriverFace card={backup.backup} role="Backup" />
+      {backup.canSwitch ? (
+        <Pressable accessibilityRole="button" accessibilityLabel={`Switch to ${backupName}`} onPress={() => setSheet('switch')} style={{ marginTop: 8 }}>
+          <Text style={{ color: '#fff', backgroundColor: '#F56600', fontWeight: '800', overflow: 'hidden', borderRadius: 12, padding: 10 }}>{`Switch to ${backupName}`}</Text>
+        </Pressable>
+      ) : null}
+      {backup.canSafetySwitch ? (
+        <Pressable accessibilityRole="button" accessibilityLabel="Report a safety concern and switch" onPress={() => setSheet('safety')} style={{ marginTop: 8 }}>
+          <Text style={{ color: '#522D80', fontWeight: '700' }}>Report a safety concern and switch</Text>
+        </Pressable>
+      ) : null}
+      <Pressable accessibilityRole="button" accessibilityLabel="Cancel ride" onPress={() => setSheet('cancel')} style={{ marginTop: 8 }}>
+        <Text style={{ color: '#522D80', fontWeight: '700' }}>Cancel ride</Text>
+      </Pressable>
+      {sheet ? (
+        <View style={{ marginTop: 8, padding: 10, borderRadius: 12, backgroundColor: 'rgba(82,45,128,0.06)' }}>
+          <Text>{sheet === 'cancel' ? backup.cancelCopy : backup.switchCopy}</Text>
+          <Pressable accessibilityRole="button" accessibilityLabel={sheet === 'cancel' ? 'Confirm cancel' : 'Confirm switch'} onPress={confirm} disabled={busy} style={{ marginTop: 8 }}>
+            <Text style={{ color: '#F56600', fontWeight: '800' }}>{busy ? 'Saving…' : sheet === 'cancel' ? 'Confirm cancel' : 'Confirm switch'}</Text>
+          </Pressable>
+          <Pressable accessibilityRole="button" accessibilityLabel="Keep ride" onPress={() => setSheet(null)} style={{ marginTop: 6 }}>
+            <Text style={{ color: '#522D80', fontWeight: '700' }}>Keep ride</Text>
+          </Pressable>
+        </View>
+      ) : null}
+    </View>
+  )
+}
 
 const CAMPUS_PURPOSES: SchedulePurpose[] = ['early_class', 'planned', 'recurring']
 type WeekendSpot = 'airport' | 'campus'
@@ -1014,6 +1094,14 @@ function ScheduleScreen() {
             {rideTypeName(String(row.tier || '')) ? <Text style={styles.student}>{rideTypeName(String(row.tier || ''))}</Text> : null}
             {backup?.status ? <Text style={styles.student}>{backup.status}</Text> : null}
             {backup?.notice ? <Text style={styles.fine}>{backup.notice}</Text> : null}
+            {backup ? (
+              <BackupActions
+                tripId={row.id}
+                backup={backup}
+                onDone={() => reload()}
+                onError={(message) => setError(message)}
+              />
+            ) : null}
             {row.deposit_cents ? (
               <Text style={styles.balance}>
                 {depositSurfaceCopy(
@@ -1025,7 +1113,7 @@ function ScheduleScreen() {
             {row.id !== checkoutTrip?.id && isOpenUnpaidAirportHold(row) ? (
               <HoldExpiryNotice trip={row} onRequestAgain={() => requestAgain(row)} />
             ) : null}
-            {row.status === 'scheduled' || row.status === 'accepted' ? (
+            {!backup && (row.status === 'scheduled' || row.status === 'accepted') ? (
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel="Cancel"

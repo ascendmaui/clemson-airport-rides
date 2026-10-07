@@ -15,6 +15,14 @@ alter table public.trips add column if not exists confirm_state text not null de
 alter table public.trips add column if not exists confirm_window_opens_at timestamptz;
 alter table public.trips add column if not exists confirm_window_closes_at timestamptz;
 alter table public.trips add column if not exists confirm_confirmed_at timestamptz;
+alter table public.trips add column if not exists rider_switch_count integer not null default 0;
+alter table public.trips add column if not exists switch_fee_driver_id uuid;
+alter table public.trips add column if not exists switch_fee_cents integer;
+
+comment on column public.trips.rider_switch_count is
+  'Rider switches from the primary to the backup. Default limit is one. Not a reliability strike.';
+comment on column public.trips.switch_fee_driver_id is
+  'Former primary who receives the single backup fee as a switch fee.';
 
 alter table public.trips drop constraint if exists trips_backup_bonus_presets;
 alter table public.trips add constraint trips_backup_bonus_presets
@@ -92,8 +100,12 @@ create table if not exists public.backup_driver_payouts (
   last_error text,
   stripe_transfer_id text,
   updated_at timestamptz not null default now(),
-  primary key (trip_id, role)
+  primary key (trip_id, role),
+  constraint backup_driver_payouts_role_known check (role in ('standby', 'switch_fee', 'cancel_fee'))
 );
+
+comment on table public.backup_driver_payouts is
+  'Second driver transfer for a scheduled backup. standby is the unused-backup bonus. switch_fee is the rider switch. cancel_fee is the rider cancel. The fare payout stays on driver_payouts.';
 
 alter table public.backup_driver_payouts enable row level security;
 

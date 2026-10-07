@@ -20,6 +20,7 @@ import {
 import {
   cancelScheduledTrip,
   createScheduledTrip,
+  scheduledRiderAction,
   estimateScheduledFare,
   listMyScheduledTrips,
 } from '../lib/scheduledRides'
@@ -248,6 +249,17 @@ export function ScheduledRidePlanner() {
       await refreshMine()
     } catch (err) {
       setError(err.message || 'Could not cancel')
+    }
+  }
+
+  async function onBackupAction(op, id, extra) {
+    setError(null)
+    try {
+      const result = await scheduledRiderAction(op, id, extra)
+      if (result?.useExistingCancel) await cancelScheduledTrip(id)
+      await refreshMine()
+    } catch (err) {
+      setError(err.message || 'Could not update this ride')
     }
   }
 
@@ -532,7 +544,7 @@ export function ScheduledRidePlanner() {
           </p>
         )}
         {upcoming.map((ride) => (
-          <RideRow key={ride.id} ride={ride} onCancel={onCancel} />
+          <RideRow key={ride.id} ride={ride} onCancel={onCancel} onBackupAction={onBackupAction} />
         ))}
         {completed.length > 0 && (
           <>
@@ -552,7 +564,30 @@ export function ScheduledRidePlanner() {
   )
 }
 
-function RideRow({ ride, onCancel }) {
+function DriverFace({ card, role }) {
+  if (!card) return null
+  const rating = card.ratingAvg != null ? `${Number(card.ratingAvg).toFixed(1)} · ${card.ratingCount || 0}` : 'New'
+  return (
+    <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginTop: 8 }}>
+      {card.avatarUrl ? (
+        <img src={card.avatarUrl} alt="" width={40} height={40} style={{ width: 40, height: 40, borderRadius: 20, objectFit: 'cover' }} />
+      ) : (
+        <div style={{ width: 40, height: 40, borderRadius: 20, background: '#522D80', color: '#fff', display: 'grid', placeItems: 'center', fontWeight: 800 }}>
+          {(card.name || 'D').slice(0, 1)}
+        </div>
+      )}
+      <div>
+        <div style={{ fontWeight: 800, color: '#522D80' }}>{role} · {card.name || 'Driver'}</div>
+        <div style={{ fontSize: 12, color: 'var(--ink-secondary)' }}>{card.vehicleLabel || 'Vehicle'} · {rating}</div>
+      </div>
+    </div>
+  )
+}
+
+function RideRow({ ride, onCancel, onBackupAction }) {
+  const [sheet, setSheet] = useState(null)
+  const backup = ride.backup
+  const backupName = backup?.backup?.name || 'backup driver'
   return (
     <div className="glass-panel" style={{ padding: 12, borderRadius: 14, marginTop: 8 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
@@ -580,7 +615,24 @@ function RideRow({ ride, onCancel }) {
           )}
         </div>
       )}
-      {ride.canCancel && onCancel && (
+      {backup?.primary ? <DriverFace card={backup.primary} role="Driver" /> : null}
+      {backup?.backup ? <DriverFace card={backup.backup} role="Backup" /> : null}
+      {backup?.canSwitch && onBackupAction && (
+        <button type="button" className="pressable" onClick={() => setSheet('switch')} style={{ marginTop: 8, fontWeight: 800, color: '#fff', background: '#F56600', borderRadius: 12, padding: '10px 12px', width: '100%' }}>
+          {`Switch to ${backupName}`}
+        </button>
+      )}
+      {backup?.canSafetySwitch && onBackupAction && (
+        <button type="button" className="pressable" onClick={() => setSheet('safety')} style={{ marginTop: 8, fontWeight: 700, color: '#522D80', fontSize: 13 }}>
+          Report a safety concern and switch
+        </button>
+      )}
+      {ride.canCancel && backup && onBackupAction && (
+        <button type="button" className="pressable" onClick={() => setSheet('cancel')} style={{ marginTop: 8, fontWeight: 700, color: '#522D80', fontSize: 13 }}>
+          Cancel ride
+        </button>
+      )}
+      {ride.canCancel && !backup && onCancel && (
         <button
           type="button"
           className="pressable"
@@ -589,6 +641,31 @@ function RideRow({ ride, onCancel }) {
         >
           Cancel
         </button>
+      )}
+      {sheet && backup && (
+        <div style={{ marginTop: 10, padding: 12, borderRadius: 12, background: 'rgba(82,45,128,0.06)' }}>
+          <p style={{ fontSize: 13, lineHeight: 1.45, marginTop: 0 }}>
+            {sheet === 'cancel' ? backup.cancelCopy : backup.switchCopy}
+          </p>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button
+              type="button"
+              className="pressable"
+              onClick={() => {
+                const op = sheet === 'cancel' ? 'cancel' : 'switch'
+                const extra = sheet === 'safety' ? { safetyReport: true } : {}
+                setSheet(null)
+                onBackupAction(op, ride.id, extra)
+              }}
+              style={{ fontWeight: 800, color: '#fff', background: '#F56600', borderRadius: 12, padding: '8px 12px' }}
+            >
+              {sheet === 'cancel' ? 'Confirm cancel' : 'Confirm switch'}
+            </button>
+            <button type="button" className="pressable" onClick={() => setSheet(null)} style={{ fontWeight: 700, color: '#522D80' }}>
+              Keep ride
+            </button>
+          </div>
+        </div>
       )}
     </div>
   )

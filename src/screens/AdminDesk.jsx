@@ -219,7 +219,7 @@ function BackupQueueAdmin({ row }) {
       {events.length > 0 && (
         <ul style={{ margin: '6px 0 0', paddingLeft: 18, fontSize: 12 }}>
           {events.slice(-6).map((event, index) => (
-            <li key={`${event.kind}-${event.at || index}`}>{event.kind}{event.reason ? ` · ${event.reason}` : ''}{event.at ? ` · ${event.at}` : ''}</li>
+            <li key={`${event.kind}-${event.at || index}`}>{event.kind}{event.feeLabel ? ` · ${event.feeLabel}` : ''}{event.reason ? ` · ${event.reason}` : ''}{event.safetyReport ? ' · safety report' : ''}{event.at ? ` · ${event.at}` : ''}</li>
           ))}
         </ul>
       )}

@@ -17,7 +17,7 @@ import {
   admin, cors, json, userFromAuth, stripeClient,
 } from '../friendRideLib.js'
 import { stagingCronBlock } from '../cronGuard.js'
-import { attemptDriverPayout, attemptStandbyBackupPayout, loadConnectAccount, writePayout } from '../payouts.js'
+import { attemptDriverPayout, attemptStandbyBackupPayout, attemptSwitchFeePayout, loadConnectAccount, writePayout } from '../payouts.js'
 import { payoutIsDue, resolveDriverNetCents, summarizeDriverEarnings } from '../../shared/paymentFailure.js'
 
 export function cronAuthorized(req, secretOverride) {
@@ -104,7 +104,7 @@ export async function runDuePayouts(sb, trips, connectAccountId, deps = {}) {
   const writeFn = deps.writePayout || writePayout
   const loadAccountFn = deps.loadConnectAccount || loadConnectAccount
   const results = []
-  async function recordStandby(trip, dryRun) {
+  async function recordExtra(trip, dryRun) {
     const standby = await (deps.attemptStandbyBackupPayout || attemptStandbyBackupPayout)({
       sb,
       trip,
@@ -112,23 +112,44 @@ export async function runDuePayouts(sb, trips, connectAccountId, deps = {}) {
       now,
       dryRun,
     })
-    if (!standby?.payout || standby.idempotent) return
-    results.push({
-      tripId: trip.id,
-      role: 'standby',
-      ok: standby.ok !== false,
-      dryRun: Boolean(dryRun),
-      status: standby.payout.status || null,
-      amountCents: standby.payout.amountCents ?? null,
-      driverId: standby.payout.driverId || null,
-      wouldTransfer: dryRun ? standby.payout.amountCents > 0 : undefined,
+    if (standby?.payout && !standby.idempotent) {
+      results.push({
+        tripId: trip.id,
+        role: 'standby',
+        ok: standby.ok !== false,
+        dryRun: Boolean(dryRun),
+        status: standby.payout.status || null,
+        amountCents: standby.payout.amountCents ?? null,
+        driverId: standby.payout.driverId || null,
+        wouldTransfer: dryRun ? standby.payout.amountCents > 0 : undefined,
+      })
+    }
+    const switched = await (deps.attemptSwitchFeePayout || attemptSwitchFeePayout)({
+      sb,
+      trip,
+      stripe: dryRun ? null : stripe,
+      now,
+      dryRun,
     })
+    if (switched?.payout && !switched.idempotent) {
+      results.push({
+        tripId: trip.id,
+        role: 'switch_fee',
+        ok: switched.ok !== false,
+        dryRun: Boolean(dryRun),
+        status: switched.payout.status || null,
+        amountCents: switched.payout.amountCents ?? null,
+        driverId: switched.payout.driverId || null,
+        label: 'Switch fee',
+        wouldTransfer: dryRun ? switched.payout.amountCents > 0 : undefined,
+      })
+    }
   }
 
   for (const trip of trips) {
     const payout = trip.metadata?.payout
     if (!payout || payout.status === 'paid' || !payoutIsDue(payout, now)) {
-      await recordStandby(trip, Boolean(deps.dryRun))
+      await recordExtra(trip, Boolean(deps.dryRun))
       continue
     }
     if (deps.dryRun) {
@@ -147,7 +168,7 @@ export async function runDuePayouts(sb, trips, connectAccountId, deps = {}) {
         nextRetryAt: payout.nextRetryAt || null,
         attempts: payout.attempts || 0,
       })
-      await recordStandby(trip, true)
+      await recordExtra(trip, true)
       continue
     }
     const account = connectAccountId || await loadAccountFn(sb, trip.driver_id)
@@ -161,7 +182,7 @@ export async function runDuePayouts(sb, trips, connectAccountId, deps = {}) {
       nextRetryAt: attempt.payout.nextRetryAt || null,
       attempts: attempt.payout.attempts || 0,
     })
-    await recordStandby(trip, false)
+    await recordExtra(trip, false)
   }
   return results
 }

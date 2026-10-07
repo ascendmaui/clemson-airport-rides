@@ -131,6 +131,11 @@ export async function listDriverScheduledTrips(driverId) {
   return data || []
 }
 
+export async function scheduledRiderAction(op, tripId, extra = {}) {
+  if (!tripId) throw new Error('Missing scheduled ride')
+  return api('/api/stripe-payment-methods?action=scheduled-rider', { op, tripId, ...extra })
+}
+
 export async function postBackupQueue(op, tripId) {
   if (!tripId) throw new Error('Missing scheduled ride')
   return api('/api/driver?action=backup-queue', { op, tripId })

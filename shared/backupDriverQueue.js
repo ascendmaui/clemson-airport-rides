@@ -13,8 +13,13 @@
  *    from a missed confirm.
  * 4. With no backup, the ride reopens to the live pool marked urgent and the
  *    rider and admin are notified. No automatic refund.
- * 5. Rider cancel does not auto-refund the backup fee. The hold is captured
- *    only when the trip completes.
+ * 5. Rider cancel of a backup booking captures only the backup fee for the
+ *    primary and releases the rest of the hold, including any boost.
+ *    A ride with no backup keeps the existing cancel (no fee).
+ * 6. A rider may switch to the backup once. The backup fee is paid once, to
+ *    the former primary, as a switch fee. That driver does not also earn a
+ *    second backup bonus. Switching after the driver has started toward
+ *    pickup requires a safety report.
  */
 
 export const BACKUP_QUEUE_DEPTH = 2
@@ -49,6 +54,30 @@ export const CONFIRM_TRIP_COPY = "You're committed to this trip. You'll go to pi
 export const RIDER_ENROUTE_COPY = 'Your driver is on the way, everything is going as planned, sit tight.'
 export const URGENT_POOL_LABEL = 'Urgent — needs a driver'
 export const BOOK_BACKUP_COPY = 'Book a backup driver for an additional $10 or $15'
+
+/** JOHN: a rider can swap to the backup this many times per trip. */
+export const BACKUP_SWITCH_LIMIT = 1
+
+export const SWITCH_FEE_LABEL = 'Switch fee'
+export const CANCEL_FEE_LABEL = 'Cancellation fee'
+
+/**
+ * JOHN: after a switch, the former primary is the backup and does not earn a
+ * second backup bonus. The single backup fee is the switch fee.
+ */
+export const SECOND_BACKUP_BONUS_AFTER_SWITCH = false
+
+/** JOHN: on a rider cancel, the backup driver is not paid. */
+export const BACKUP_PAID_ON_RIDER_CANCEL = false
+
+/** JOHN: boost is left on the uncaptured remainder, so the rider is not charged it. */
+export const REFUND_BOOST_ON_RIDER_CANCEL = true
+
+/** JOHN: the only post-departure switch is an explicit safety report. */
+export const SWITCH_AFTER_DEPARTURE_REQUIRES_SAFETY = true
+
+/** JOHN: a scheduled ride with no backup keeps today's cancel, which charges no fee. */
+export const CANCEL_FEE_WITHOUT_BACKUP = false
 
 export function backupBonusLabel(cents) {
   const amount = normalizeBackupBonusCents(cents)
@@ -111,6 +140,16 @@ export function readBackupQueue(trip) {
     events: Array.isArray(raw.events) ? raw.events.slice(-12) : [],
     strikes: Array.isArray(raw.strikes) ? raw.strikes : [],
     riderNotice: raw.riderNotice || null,
+    switchCount: Math.max(0, Math.round(Number(raw.switchCount) || 0)),
+    switchFeeDriverId: raw.switchFeeDriverId || null,
+    switchFeeCents: Math.max(0, Math.round(Number(raw.switchFeeCents) || 0)),
+    backupBonusRedirected: raw.backupBonusRedirected === true,
+    primaryCard: raw.primaryCard || null,
+    backupCard: raw.backupCard || null,
+    driverNotices: raw.driverNotices && typeof raw.driverNotices === 'object' ? raw.driverNotices : {},
+    cancelFeeDriverId: raw.cancelFeeDriverId || null,
+    cancelFeeCents: Math.max(0, Math.round(Number(raw.cancelFeeCents) || 0)),
+    cancelSettledAt: raw.cancelSettledAt || null,
   }
 }
 
@@ -347,6 +386,131 @@ export function releaseActiveDriver(queue, { reason, now }) {
   return { action: 'pool', queue: handToUrgentPool(queue, { reason, now }) }
 }
 
+export function driverHasStartedTowardPickup(queue) {
+  if (!queue) return false
+  return queue.confirmState === 'enroute' || Boolean(queue.navigateStartedAt) || Boolean(queue.movementDetectedAt)
+}
+
+function tripAlreadyRolling(trip) {
+  return ['arriving', 'arrived', 'in_progress'].includes(trip?.status)
+}
+
+export function departureBlocksSwitch(trip, queue, safetyReport) {
+  const moving = driverHasStartedTowardPickup(queue) || tripAlreadyRolling(trip)
+  if (!moving) return false
+  if (safetyReport && SWITCH_AFTER_DEPARTURE_REQUIRES_SAFETY) return false
+  return true
+}
+
+export function switchDecision(trip, queue, { safetyReport = false } = {}) {
+  if (!queue?.enabled) return { ok: false, code: 'backup_not_enabled' }
+  if (!queue.primaryDriverId || !queue.backupDriverId) return { ok: false, code: 'backup_not_filled' }
+  if ((queue.switchCount || 0) >= BACKUP_SWITCH_LIMIT) return { ok: false, code: 'switch_limit' }
+  if (departureBlocksSwitch(trip, queue, safetyReport)) return { ok: false, code: 'already_enroute' }
+  return { ok: true }
+}
+
+/**
+ * Rider prefers the backup. The two drivers swap. The backup fee is paid once,
+ * to the former primary, and is not also a standby bonus.
+ */
+export function swapBackupDrivers(trip, queue, { now = new Date().toISOString(), safetyReport = false } = {}) {
+  const decision = switchDecision(trip, queue, { safetyReport })
+  if (!decision.ok) return decision
+  const formerPrimaryId = queue.primaryDriverId
+  const newPrimaryId = queue.backupDriverId
+  const moving = driverHasStartedTowardPickup(queue) || tripAlreadyRolling(trip)
+  const opened = Date.parse(now)
+  const freshWindow = moving || queue.confirmState === 'window_open'
+  const next = withEvent({
+    ...queue,
+    primaryDriverId: newPrimaryId,
+    backupDriverId: formerPrimaryId,
+    primaryCard: queue.backupCard || null,
+    backupCard: queue.primaryCard || null,
+    switchCount: (queue.switchCount || 0) + 1,
+    switchedAt: now,
+    switchFeeDriverId: formerPrimaryId,
+    switchFeeCents: queue.bonusCents,
+    backupBonusRedirected: true,
+    backupStoodBy: SECOND_BACKUP_BONUS_AFTER_SWITCH,
+    promotedFromBackup: false,
+    confirmState: freshWindow ? 'window_open' : 'idle',
+    confirmedAt: null,
+    navigateStartedAt: null,
+    movementDetectedAt: null,
+    windowOpensAt: freshWindow ? now : null,
+    windowClosesAt: freshWindow ? new Date(opened + BACKUP_CONFIRM_WINDOW_MS).toISOString() : null,
+    windowNotifiedAt: freshWindow ? now : null,
+    lastFix: null,
+    urgent: false,
+    driverNotices: {
+      ...(queue.driverNotices || {}),
+      [newPrimaryId]: {
+        title: "You're the driver",
+        body: "You're now the driver for this trip. You'll confirm before pickup and complete the ride.",
+        at: now,
+      },
+      [formerPrimaryId]: {
+        title: "You're the backup",
+        body: "You're #2 for this trip. Pickup time is unchanged.",
+        at: now,
+      },
+    },
+  }, {
+    kind: 'rider_switch',
+    at: now,
+    formerPrimaryId,
+    newPrimaryId,
+    feeCents: queue.bonusCents,
+    feeLabel: SWITCH_FEE_LABEL,
+    safetyReport: Boolean(safetyReport),
+  })
+  return { ok: true, queue: next, formerPrimaryId, newPrimaryId, feeCents: queue.bonusCents }
+}
+
+/**
+ * Capture only the backup fee. Boost stays on the released remainder when
+ * REFUND_BOOST_ON_RIDER_CANCEL is set. No backup booking uses the existing cancel.
+ */
+export function riderCancelCapture(trip) {
+  const queue = readBackupQueue(trip)
+  if (!queue) {
+    return {
+      existingPolicy: true,
+      cents: CANCEL_FEE_WITHOUT_BACKUP ? 0 : 0,
+      feeDriverId: null,
+      boostCents: 0,
+      backupPayoutCents: 0,
+    }
+  }
+  const payee = queue.switchFeeDriverId || queue.primaryDriverId || null
+  const cents = payee ? queue.bonusCents : 0
+  return {
+    existingPolicy: false,
+    cents,
+    feeDriverId: payee,
+    feeLabel: queue.switchFeeDriverId ? SWITCH_FEE_LABEL : CANCEL_FEE_LABEL,
+    boostCents: REFUND_BOOST_ON_RIDER_CANCEL ? readScheduledBoostCents(trip?.metadata) : 0,
+    boostRefunded: REFUND_BOOST_ON_RIDER_CANCEL,
+    backupPayoutCents: BACKUP_PAID_ON_RIDER_CANCEL ? queue.bonusCents : 0,
+    releaseRemainder: true,
+  }
+}
+
+export function riderSwitchCopy(backupName, feeCents, formerName) {
+  const fee = `$${Math.round((feeCents || 0) / 100)}`
+  const next = backupName || 'the backup driver'
+  const previous = formerName || 'your current driver'
+  return `Switch to ${next}? They become your driver. The ${fee} backup fee goes to ${previous} as a switch fee. You can switch once.`
+}
+
+export function riderCancelCopy(primaryName, feeCents) {
+  const fee = `$${Math.round((feeCents || 0) / 100)}`
+  const name = primaryName || 'Your driver'
+  return `Cancel this ride? ${name} receives the ${fee} backup fee as a cancellation fee. The rest of the hold, including any boost, is released. The backup driver is not paid.`
+}
+
 /**
  * Payout split. Fare net is the existing driver share. Boost is added when the
  * scheduled-boost metadata is present. The backup bonus never goes to a
@@ -382,7 +546,9 @@ export function payoutPlanForTrip(trip, fareNetCents) {
     boostCents: readScheduledBoostCents(trip?.metadata),
     bonusCents: queue.bonusCents,
     promoted: queue.promotedFromBackup === true,
-    backupStoodBy: queue.backupStoodBy !== false && !queue.backupOfflineDuringWindow,
+    backupStoodBy: queue.backupBonusRedirected
+      ? SECOND_BACKUP_BONUS_AFTER_SWITCH
+      : queue.backupStoodBy !== false && !queue.backupOfflineDuringWindow,
   })
   return {
     ...split,
@@ -407,17 +573,41 @@ export function standbyPayoutCents(trip) {
   return plan.standbyCents
 }
 
+export function switchFeePayoutForTrip(trip) {
+  const queue = readBackupQueue(trip)
+  if (!queue?.backupBonusRedirected || !queue.switchFeeDriverId || !queue.switchFeeCents) return null
+  if (queue.cancelSettledAt) return null
+  return {
+    driverId: queue.switchFeeDriverId,
+    cents: queue.switchFeeCents,
+    label: SWITCH_FEE_LABEL,
+    role: 'switch_fee',
+  }
+}
+
 export function earningsExtrasForDriver(trip, driverId) {
   const queue = readBackupQueue(trip)
   if (!queue || !driverId) return { cents: 0, parts: [] }
+  const parts = []
+  let cents = 0
   const promoted = queue.promotedFromBackup === true
   if (trip?.driver_id === driverId && promoted) {
-    return { cents: queue.bonusCents, parts: [{ label: 'Backup bonus', cents: queue.bonusCents }] }
+    cents += queue.bonusCents
+    parts.push({ label: 'Backup bonus', cents: queue.bonusCents })
   }
-  if (!promoted && queue.backupDriverId === driverId && queue.backupStoodBy !== false && !queue.backupOfflineDuringWindow) {
-    return { cents: queue.bonusCents, parts: [{ label: 'Backup standby', cents: queue.bonusCents }] }
+  if (!promoted && !queue.backupBonusRedirected && queue.backupDriverId === driverId && queue.backupStoodBy !== false && !queue.backupOfflineDuringWindow) {
+    cents += queue.bonusCents
+    parts.push({ label: 'Backup standby', cents: queue.bonusCents })
   }
-  return { cents: 0, parts: [] }
+  if (queue.switchFeeDriverId === driverId && queue.switchFeeCents && queue.backupBonusRedirected) {
+    cents += queue.switchFeeCents
+    parts.push({ label: SWITCH_FEE_LABEL, cents: queue.switchFeeCents })
+  }
+  if (trip?.status === 'canceled' && queue.cancelFeeDriverId === driverId && queue.cancelFeeCents) {
+    cents += queue.cancelFeeCents
+    parts.push({ label: CANCEL_FEE_LABEL, cents: queue.cancelFeeCents })
+  }
+  return { cents, parts }
 }
 
 export function riderBackupPresentation(trip) {
@@ -428,12 +618,30 @@ export function riderBackupPresentation(trip) {
   else if (queue.confirmState === 'enroute') status = 'Your driver is on the way'
   else if (queue.primaryDriverId && queue.backupDriverId) status = DRIVER_AND_BACKUP_LABEL
   else if (queue.primaryDriverId) status = LOOKING_FOR_BACKUP_LABEL
+  const decision = switchDecision(trip, queue)
+  const primaryName = queue.primaryCard?.name || null
+  const backupName = queue.backupCard?.name || null
+  const safetyAllowed = decision.code === 'already_enroute'
+    && SWITCH_AFTER_DEPARTURE_REQUIRES_SAFETY
+    && Boolean(queue.primaryDriverId && queue.backupDriverId)
+    && (queue.switchCount || 0) < BACKUP_SWITCH_LIMIT
   return {
     status,
     bonusCents: queue.bonusCents,
     bonusLabel: backupBonusLabel(queue.bonusCents),
     notice: queue.riderNotice?.body || null,
     urgent: queue.urgent === true,
+    primary: queue.primaryCard,
+    backup: queue.backupCard,
+    canSwitch: decision.ok,
+    switchCode: decision.ok ? null : decision.code,
+    canSafetySwitch: safetyAllowed,
+    switchCopy: riderSwitchCopy(backupName, queue.bonusCents, primaryName),
+    cancelCopy: queue.primaryDriverId || queue.switchFeeDriverId
+      ? riderCancelCopy(primaryName, queue.bonusCents)
+      : 'Cancel this ride? No driver has accepted yet, so the fare hold is released and the backup fee is not charged.',
+    feeCents: queue.bonusCents,
+    switchesUsed: queue.switchCount || 0,
   }
 }
 
@@ -461,6 +669,7 @@ export function driverBackupPresentation(trip, driverId) {
     confirmCopy: confirmOpen ? CONFIRM_TRIP_COPY : null,
     urgent: queue.urgent === true && role === 'primary',
     backupSeatCopy: role === 'backup',
+    notice: queue.driverNotices?.[driverId]?.body || null,
     statusLine: role === 'backup'
       ? 'You\'re #2 for this trip'
       : role === 'primary' && queue.urgent

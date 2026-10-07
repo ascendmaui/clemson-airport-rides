@@ -4,7 +4,14 @@
  * Failures stay pending and retry on backoff. They are surfaced in earnings.
  */
 import { applyPayoutAttempt, payoutIsDue, resolveDriverNetCents } from '../shared/paymentFailure.js'
-import { completingPayoutExtraCents, payoutPlanForTrip } from '../shared/backupDriverQueue.js'
+import {
+  CANCEL_FEE_LABEL,
+  SWITCH_FEE_LABEL,
+  completingPayoutExtraCents,
+  payoutPlanForTrip,
+  readBackupQueue,
+  switchFeePayoutForTrip,
+} from '../shared/backupDriverQueue.js'
 
 /** Settled Tiger Heat pay replaces the default 80% net. Rider fare is not in this number. */
 export function tigerHeatPayoutCents(trip) {
@@ -184,6 +191,121 @@ async function writeStandbyPayout(sb, trip, payout) {
       amount_cents: payout.amountCents,
       status: payout.status,
       role: 'standby',
+      attempts: payout.attempts || 0,
+      last_error: payout.lastError || null,
+      stripe_transfer_id: payout.stripeTransferId || null,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'trip_id,role' })
+    if (saved?.error && !/relation|does not exist|schema cache/i.test(saved.error.message || '')) {
+      console.error('[payout] backup queue', saved.error.message)
+    }
+  } catch (error) {
+    const message = error?.message || String(error)
+    if (!/relation|does not exist|schema cache/i.test(message)) console.error('[payout] backup queue', message)
+  }
+}
+
+/** Rider-cancel fee. One transfer, even if a switch had already assigned that same fee. */
+export async function attemptCancelFeePayout({ sb, trip, stripe, connectAccountId, now = Date.now(), dryRun = false }) {
+  const queue = readBackupQueue(trip)
+  if (!queue?.cancelFeeDriverId || !queue.cancelFeeCents) return null
+  return attemptRolePayout({
+    sb,
+    trip,
+    stripe,
+    connectAccountId,
+    now,
+    dryRun,
+    plan: {
+      driverId: queue.cancelFeeDriverId,
+      cents: queue.cancelFeeCents,
+      label: queue.switchFeeDriverId ? SWITCH_FEE_LABEL : CANCEL_FEE_LABEL,
+      role: 'cancel_fee',
+    },
+    metadataKey: 'backup_cancel_payout',
+    idempotencyPrefix: 'payout-cancel',
+  })
+}
+
+/** One-time switch fee for the former primary. Separate from the fare payout. */
+export async function attemptSwitchFeePayout({ sb, trip, stripe, connectAccountId, now = Date.now(), dryRun = false }) {
+  const plan = switchFeePayoutForTrip(trip)
+  if (!plan) return null
+  return attemptRolePayout({
+    sb,
+    trip,
+    stripe,
+    connectAccountId,
+    now,
+    dryRun,
+    plan,
+    metadataKey: 'backup_switch_payout',
+    idempotencyPrefix: 'payout-switch',
+  })
+}
+
+async function attemptRolePayout({
+  sb, trip, stripe, connectAccountId, now, dryRun, plan, metadataKey, idempotencyPrefix,
+}) {
+  const existing = trip?.metadata?.[metadataKey]
+  if (existing?.status === 'paid') return { ok: true, payout: existing, idempotent: true }
+  if (dryRun) {
+    return {
+      ok: true,
+      dryRun: true,
+      payout: {
+        tripId: trip.id,
+        driverId: plan.driverId,
+        amountCents: plan.cents,
+        status: existing?.status || 'pending',
+        role: plan.role,
+        label: plan.label,
+      },
+    }
+  }
+  const record = existing || {
+    tripId: trip.id,
+    driverId: plan.driverId,
+    amountCents: plan.cents,
+    status: 'pending',
+    attempts: 0,
+    role: plan.role,
+    label: plan.label,
+  }
+  const account = connectAccountId || await loadConnectAccount(sb, plan.driverId)
+  const synthetic = {
+    id: trip.id,
+    driver_id: plan.driverId,
+    fare_cents: plan.cents,
+    metadata: { driver_net_cents: plan.cents, payout: record },
+  }
+  const result = await attemptDriverPayout({
+    trip: synthetic,
+    stripe,
+    connectAccountId: account,
+    now,
+    idempotencyPrefix,
+  })
+  await writeRolePayout(sb, trip, { ...result.payout, driverId: plan.driverId, role: plan.role, label: plan.label }, metadataKey)
+  return result
+}
+
+async function writeRolePayout(sb, trip, payout, metadataKey) {
+  if (!sb || !trip?.id) return
+  let metadata = { ...(trip.metadata || {}) }
+  const fresh = await sb.from('trips').select('metadata').eq('id', trip.id).maybeSingle()
+  if (!fresh.error && fresh.data?.metadata && typeof fresh.data.metadata === 'object') {
+    metadata = { ...fresh.data.metadata }
+  }
+  metadata = { ...metadata, [metadataKey]: { ...payout, tripId: trip.id } }
+  await sb.from('trips').update({ metadata }).eq('id', trip.id)
+  try {
+    const saved = await sb.from('backup_driver_payouts').upsert({
+      trip_id: trip.id,
+      driver_id: payout.driverId,
+      amount_cents: payout.amountCents,
+      status: payout.status,
+      role: payout.role,
       attempts: payout.attempts || 0,
       last_error: payout.lastError || null,
       stripe_transfer_id: payout.stripeTransferId || null,

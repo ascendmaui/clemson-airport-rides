@@ -131,6 +131,39 @@ async function notifyAdmin(sb, { tripId, title, body }) {
   }
 }
 
+export async function publicDriverCard(sb, driverId) {
+  const card = {
+    id: driverId,
+    name: 'Driver',
+    avatarUrl: null,
+    vehicleLabel: 'Vehicle',
+    ratingAvg: null,
+    ratingCount: 0,
+  }
+  if (!sb || !driverId) return card
+  try {
+    const profile = await sb.from('profiles').select('id, full_name, avatar_url, rating_avg, rating_count').eq('id', driverId).maybeSingle()
+    const row = profile.data
+    if (row) {
+      card.name = row.full_name || card.name
+      card.avatarUrl = row.avatar_url || null
+      card.ratingAvg = row.rating_avg != null ? Number(row.rating_avg) : null
+      card.ratingCount = Math.max(0, Math.round(Number(row.rating_count) || 0))
+    }
+  } catch {
+    /* Profile columns vary. The seat still fills. */
+  }
+  try {
+    const vehicle = await sb.from('vehicles').select('color, make, model').eq('driver_id', driverId).limit(1)
+    const row = Array.isArray(vehicle.data) ? vehicle.data[0] : vehicle.data
+    const label = [row?.color, row?.make, row?.model].filter(Boolean).join(' ')
+    if (label) card.vehicleLabel = label
+  } catch {
+    /* Vehicle is optional on the rider card. */
+  }
+  return card
+}
+
 function pickupPoint(trip) {
   const lat = Number(trip?.pickup_lat)
   const lng = Number(trip?.pickup_lng)
@@ -185,8 +218,10 @@ export async function acceptBackupSlot(sb, { tripId, driverId, now = new Date() 
   if (decision.idempotent) {
     return { ok: true, role: decision.role, idempotent: true, tripId }
   }
+  const card = await publicDriverCard(sb, driverId)
   const stamped = {
     ...decision.queue,
+    ...(decision.role === 'primary' ? { primaryCard: card } : { backupCard: card }),
     events: decision.queue.events.map((event, index, all) => (
       index === all.length - 1 ? { ...event, at: now.toISOString() } : event
     )),

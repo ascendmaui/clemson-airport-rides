@@ -110,6 +110,7 @@ function QueueCard({
         <Text style={[styles.note, { color: '#522D80' }]}>{`You're #2 for this trip, pickup at ${formatPickupAt(card.pickupAt)}`}</Text>
       ) : null}
       {card.backupStatusLine && card.backupRole === 'primary' ? <Text style={styles.note}>{card.backupStatusLine}</Text> : null}
+      {card.backupNotice ? <Text style={[styles.note, { color: '#522D80', fontWeight: '700' }]}>{card.backupNotice}</Text> : null}
       {card.passengers > 1 ? <Text style={styles.copy}>{card.passengers} riders · capacity check is your seat count</Text> : null}
       <View style={styles.tags}>
         {card.tagLabels.map((label: string) => (

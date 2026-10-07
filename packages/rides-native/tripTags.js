@@ -462,6 +462,7 @@ export function toDriverCard(row, options) {
     backupConfirmClosesAt: backup?.confirmClosesAt || null,
     backupConfirmCopy: backup?.confirmCopy || null,
     backupStatusLine: backup?.statusLine || null,
+    backupNotice: backup?.notice || null,
     backupUrgent: Boolean(backup?.urgent),
     arrivedAt: row.arrived_at || null,
     passengers: Math.max(1, Math.round(Number(row.passengers) || 1)),

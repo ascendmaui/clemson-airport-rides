@@ -180,6 +180,14 @@ export async function listScheduledTrips(riderId: string) {
   return (data || []) as ScheduledRow[]
 }
 
+export async function scheduledRiderAction(op: 'detail' | 'switch' | 'cancel', tripId: string, extra: { safetyReport?: boolean } = {}) {
+  if (!supabase) throw new Error('Supabase is not configured')
+  return authedJson(supabase, '/api/stripe-payment-methods?action=scheduled-rider', {
+    method: 'POST',
+    body: { op, tripId, ...extra },
+  })
+}
+
 export async function cancelScheduledTrip(tripId: string) {
   if (!supabase) throw new Error('Supabase is not configured')
   const { error } = await supabase

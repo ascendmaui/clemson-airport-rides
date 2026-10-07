@@ -110,6 +110,9 @@ export function ScheduledRideQueue({
               {ride.seat?.role === 'backup' && (
                 <p style={{ fontSize: 12, fontWeight: 700, color: '#522D80' }}>{backupNumberTwoCopy(formatPickupAt(ride.pickupAt))}</p>
               )}
+              {ride.seat?.notice && (
+                <p style={{ fontSize: 12, fontWeight: 700, color: '#522D80' }}>{ride.seat.notice}</p>
+              )}
               {ride.seat?.confirmOpen && (
                 <div style={{ marginTop: 8, padding: 10, borderRadius: 12, background: 'rgba(245,102,0,0.12)' }}>
                   <div style={{ fontWeight: 800, color: '#F56600' }}>Confirm trip</div>

@@ -10,12 +10,16 @@ import {
   confirmWindowOpenLeadMs,
   releaseBackupSeat,
   driverStartedTowardPickup,
+  completingPayoutExtraCents,
   earningsExtrasForDriver,
   preauthBaseCents,
   promoteBackup,
   readScheduledBoostCents,
+  riderCancelCapture,
   riderCaptureFareCents,
   splitBackupPayout,
+  swapBackupDrivers,
+  switchFeePayoutForTrip,
 } from './backupDriverQueue.js'
 
 test('confirm window lead is drive time plus 10 minutes, clamped to 20–60', () => {
@@ -89,6 +93,60 @@ test('early cancel promotes the backup and reopens the seat', () => {
   assert.equal(promoted.confirmState, 'window_open')
   assert.equal(promoted.flakedDriverId, 'driver-a')
   assert.equal(Date.parse(promoted.windowClosesAt) - Date.parse(promoted.windowOpensAt), BACKUP_CONFIRM_WINDOW_MS)
+})
+
+test('a rider switch swaps the drivers once and pays the backup fee a single time', () => {
+  const filled = acceptBackupRole(acceptBackupRole(backupBookingMetadata(1500), 'driver-a').queue, 'driver-b').queue
+  filled.primaryCard = { id: 'driver-a', name: 'Avery' }
+  filled.backupCard = { id: 'driver-b', name: 'Blair' }
+  const trip = { status: 'scheduled', metadata: { scheduled_boost_cents: 500, backup_queue: filled } }
+  const swapped = swapBackupDrivers(trip, filled, { now: '2026-10-10T14:00:00.000Z' })
+  assert.equal(swapped.ok, true)
+  assert.equal(swapped.queue.primaryDriverId, 'driver-b')
+  assert.equal(swapped.queue.backupDriverId, 'driver-a')
+  assert.equal(swapped.queue.primaryCard.name, 'Blair')
+  assert.equal(swapped.queue.switchFeeDriverId, 'driver-a')
+  assert.equal(swapped.queue.switchFeeCents, 1500)
+  assert.equal(swapped.queue.strikes?.length || 0, 0)
+  assert.equal(swapped.queue.promotedFromBackup, false)
+  const again = swapBackupDrivers(
+    { status: 'scheduled', metadata: { backup_queue: swapped.queue } },
+    swapped.queue,
+    { now: '2026-10-10T14:10:00.000Z' },
+  )
+  assert.equal(again.ok, false)
+  assert.equal(again.code, 'switch_limit')
+  const rolling = { ...filled, confirmState: 'enroute', navigateStartedAt: '2026-10-10T14:00:00.000Z', switchCount: 0 }
+  const blocked = swapBackupDrivers({ status: 'accepted' }, rolling, { now: '2026-10-10T14:05:00.000Z' })
+  assert.equal(blocked.code, 'already_enroute')
+  const safety = swapBackupDrivers({ status: 'accepted' }, rolling, { now: '2026-10-10T14:05:00.000Z', safetyReport: true })
+  assert.equal(safety.ok, true)
+  assert.equal(safety.queue.events.at(-1).safetyReport, true)
+  const pay = switchFeePayoutForTrip({ metadata: { backup_queue: swapped.queue } })
+  assert.equal(pay.driverId, 'driver-a')
+  assert.equal(pay.cents, 1500)
+  assert.equal(pay.label, 'Switch fee')
+  assert.equal(completingPayoutExtraCents({ metadata: { scheduled_boost_cents: 500, backup_queue: swapped.queue } }), 500)
+  assert.equal(earningsExtrasForDriver({ metadata: { backup_queue: swapped.queue } }, 'driver-a').parts[0].label, 'Switch fee')
+  assert.equal(earningsExtrasForDriver({ metadata: { backup_queue: swapped.queue } }, 'driver-b').cents, 0)
+})
+
+test('rider cancel captures the backup fee and leaves boost on the released hold', () => {
+  const filled = acceptBackupRole(acceptBackupRole(backupBookingMetadata(1000), 'driver-a').queue, 'driver-b').queue
+  const trip = {
+    status: 'scheduled',
+    fare_cents: 8000,
+    metadata: { scheduled_boost_cents: 2000, backup_queue: filled },
+  }
+  const plan = riderCancelCapture(trip)
+  assert.equal(plan.cents, 1000)
+  assert.equal(plan.feeDriverId, 'driver-a')
+  assert.equal(plan.boostRefunded, true)
+  assert.equal(plan.boostCents, 2000)
+  assert.equal(plan.backupPayoutCents, 0)
+  assert.notEqual(plan.cents, 8000 + 2000 + 1000)
+  assert.equal(riderCancelCapture({ status: 'scheduled', metadata: {} }).existingPolicy, true)
+  assert.equal(riderCancelCapture({ status: 'scheduled', metadata: {} }).cents, 0)
 })
 
 test('payout is fare plus boost plus backup bonus only when that driver earned it', () => {

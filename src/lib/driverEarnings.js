@@ -558,21 +558,28 @@ async function standbyEarningRows(driverId, seenIds) {
       .filter('metadata->backup_queue->>backupDriverId', 'eq', driverId)
       .limit(100)
     if (listed.error) return []
-    return (listed.data || []).flatMap((row) => {
+    const canceled = await supabase
+      .from('trips')
+      .select('id, driver_id, status, pickup_label, dropoff_label, canceled_at, metadata')
+      .eq('status', 'canceled')
+      .filter('metadata->backup_queue->>cancelFeeDriverId', 'eq', driverId)
+      .limit(100)
+    const rows = [...(listed.data || []), ...((canceled.error ? [] : canceled.data) || [])]
+    return rows.flatMap((row) => {
       if (!row?.id || seenIds.has(row.id) || row.driver_id === driverId) return []
       const extras = earningsExtrasForDriver(row, driverId)
       if (!extras.cents) return []
       return [{
         id: `${row.id}:standby`,
-        status: 'completed',
-        completedAt: row.completed_at || null,
+        status: row.status || 'completed',
+        completedAt: row.completed_at || row.canceled_at || null,
         fareCents: 0,
         refundCents: 0,
         grossCents: extras.cents,
         platformFeeCents: 0,
         tipCents: null,
         waitFeeCents: null,
-        cancelFeeCents: 0,
+        cancelFeeCents: extras.parts.find((part) => part.label === 'Cancellation fee')?.cents || 0,
         earnedCents: extras.cents,
         distanceM: null,
         distanceApproximate: false,
@@ -580,7 +587,7 @@ async function standbyEarningRows(driverId, seenIds) {
         durationApproximate: false,
         pickupLabel: row.pickup_label || 'Backup standby',
         dropoffLabel: row.dropoff_label || 'Backup standby',
-        routeLabel: 'Backup standby',
+        routeLabel: extras.parts[0]?.label || 'Backup standby',
         pickupApprox: null,
         dropoffApprox: null,
         riderFirstName: 'Rider',
