@@ -44,6 +44,7 @@ export const PREFERRED_MATCH_COPY: string
 export const PREFERRED_OFFLINE_COPY: string
 export const PREFERRED_CANCELED_COPY: string
 export const OPEN_POOL_COPY: string
+export const CAMPUS_MPH: number
 
 export function preferredTripFields(driverId: string): { preferred_driver_id: string; match: 'preferred' }
 export function normalizeFavoriteDriverIds(raw: unknown): string[]

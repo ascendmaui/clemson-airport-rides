@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { GoogleMap, useJsApiLoader, Marker, Circle, Polygon, Polyline, OverlayView } from '@react-google-maps/api'
 import { downtownNow, heatColor } from '../lib/downtownHeat'
 import { MAPS_LOADER_ID, MAP_LIBRARIES, mapsLoaderOptions } from '../lib/googleMapsLoader'
+import { googleMapStyle } from '../../packages/rides-native/googleMapChrome.js'
+import { lerpHeading } from '../../packages/rides-native/roadFollow.js'
 import { fetchRideDemand, loadMapType, saveMapType } from '../lib/rideDemand'
 import { MapTypeSelect } from './MapTypeSelect'
 import { SIMULATED_FLEET_BADGE, busyCarSvg } from '../../packages/rides-native/simulatedDrivers.js'
@@ -83,39 +85,65 @@ function pinSvg(color, size = 18) {
   }
 }
 
-function useAnimatedPosition(target, enabled) {
-  const [pos, setPos] = useState(target)
-  const current = useRef(target)
+function useColorSchemeDark() {
+  const [dark, setDark] = useState(() => (
+    typeof window !== 'undefined' && Boolean(window.matchMedia?.('(prefers-color-scheme: dark)').matches)
+  ))
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.matchMedia) return undefined
+    const media = window.matchMedia('(prefers-color-scheme: dark)')
+    const apply = () => setDark(media.matches)
+    apply()
+    media.addEventListener('change', apply)
+    return () => media.removeEventListener('change', apply)
+  }, [])
+  return dark
+}
+
+function AnimatedDriverMarker({ target, heading, enabled }) {
+  const [pose, setPose] = useState(() => (
+    target
+      ? { lat: target.lat, lng: target.lng, heading: Number.isFinite(Number(heading)) ? Number(heading) : null }
+      : null
+  ))
+  const current = useRef(pose)
   const raf = useRef(0)
 
   useEffect(() => {
     if (!target) return undefined
-    if (!enabled || !current.current) {
-      current.current = target
-      setPos(target)
+    const from = current.current
+    const toHeading = Number.isFinite(Number(heading)) ? Number(heading) : from?.heading ?? null
+    if (!enabled || !from) {
+      const next = { lat: target.lat, lng: target.lng, heading: toHeading }
+      current.current = next
+      setPose(next)
       return undefined
     }
-    const from = current.current
-    const to = target
     const start = performance.now()
-    const dur = 800
+    const dur = 900
+    const fromHeading = from.heading
     cancelAnimationFrame(raf.current)
     const tick = (now) => {
       const t = Math.min(1, (now - start) / dur)
       const ease = 1 - (1 - t) ** 3
       const next = {
-        lat: from.lat + (to.lat - from.lat) * ease,
-        lng: from.lng + (to.lng - from.lng) * ease,
+        lat: from.lat + (target.lat - from.lat) * ease,
+        lng: from.lng + (target.lng - from.lng) * ease,
+        heading: lerpHeading(fromHeading, toHeading, ease),
       }
       current.current = next
-      setPos(next)
+      setPose(next)
       if (t < 1) raf.current = requestAnimationFrame(tick)
     }
     raf.current = requestAnimationFrame(tick)
     return () => cancelAnimationFrame(raf.current)
-  }, [target?.lat, target?.lng, enabled])
+  }, [target?.lat, target?.lng, heading, enabled])
 
-  return pos
+  const at = target ? (pose || target) : null
+  if (!at || !target) return null
+  const driverHeading = at.heading
+  const driverIcon = Number.isFinite(Number(driverHeading)) ? busyCarIcon(Number(driverHeading)) : pinSvg(ORANGE, 20)
+  return <Marker position={{ lat: at.lat, lng: at.lng }} icon={driverIcon} title="Driver" />
 }
 
 function FleetBadge() {
@@ -314,7 +342,6 @@ export function CampusMap({
     () => (driverPosition ? toLatLng(driverPosition) : null),
     [driverPosition?.[0], driverPosition?.[1]],
   )
-  const animatedDriver = useAnimatedPosition(driverTarget, Boolean(animateDriver && driverTarget))
   const pickup = useMemo(
     () => (pickupPosition ? toLatLng(pickupPosition) : null),
     [pickupPosition?.[0], pickupPosition?.[1]],
@@ -328,6 +355,7 @@ export function CampusMap({
   const activeMapType = controlled ? mapTypeIdProp : internalMapType
   const resolvedMapType = activeMapType === 'satellite' || activeMapType === 'hybrid' ? activeMapType : 'roadmap'
   const useClemsonStyles = resolvedMapType === 'roadmap'
+  const preferDark = useColorSchemeDark()
   const [demand, setDemand] = useState(null)
   const [tigerZones, setTigerZones] = useState([])
 
@@ -431,28 +459,43 @@ export function CampusMap({
   const fittedKey = useRef('')
   const stopRef = useRef(stopMarkers)
   const driverRef = useRef(driverTarget)
+  const pickupRef = useRef(pickup)
+  const dropoffRef = useRef(dropoff)
   const pathRef = useRef(path)
   const fitRouteRef = useRef(fitRoute)
   stopRef.current = stopMarkers
   driverRef.current = driverTarget
+  pickupRef.current = pickup
+  dropoffRef.current = dropoff
   pathRef.current = path
   fitRouteRef.current = fitRoute
   const fitStopBounds = useCallback((map) => {
     const list = stopRef.current
-    const routePoints = fitRouteRef.current && Array.isArray(pathRef.current) ? pathRef.current : []
+    const fitting = fitRouteRef.current
+    const routePoints = fitting && Array.isArray(pathRef.current) ? pathRef.current : []
+    const pickupPoint = fitting ? pickupRef.current : null
+    const dropoffPoint = fitting ? dropoffRef.current : null
     if (!map || typeof window === 'undefined' || !window.google?.maps) return
-    if (!list.length && routePoints.length < 2) return
+    if (!list.length && routePoints.length < 2 && !pickupPoint && !dropoffPoint) return
     const driver = driverRef.current
-    const routeKey = routePoints.length
-      ? `${routePoints.length}:${routePoints[0].lat.toFixed(4)},${routePoints[0].lng.toFixed(4)}:${routePoints[routePoints.length - 1].lat.toFixed(4)},${routePoints[routePoints.length - 1].lng.toFixed(4)}`
+    const end = routePoints.length ? routePoints[routePoints.length - 1] : null
+    const routeKey = end
+      ? `${Math.round(routePoints.length / 15)}:${end.lat.toFixed(3)},${end.lng.toFixed(3)}`
       : 'noroute'
-    const key = `${driver ? 'd' : 'x'}|${list.map((stop) => `${stop.lat.toFixed(5)},${stop.lng.toFixed(5)}`).join(';')}|${routeKey}`
+    const driverKey = driver ? `${driver.lat.toFixed(2)},${driver.lng.toFixed(2)}` : 'x'
+    const placeKey = [
+      pickupPoint ? `${pickupPoint.lat.toFixed(4)},${pickupPoint.lng.toFixed(4)}` : '',
+      dropoffPoint ? `${dropoffPoint.lat.toFixed(4)},${dropoffPoint.lng.toFixed(4)}` : '',
+    ].join(';')
+    const key = `${driverKey}|${list.map((stop) => `${stop.lat.toFixed(5)},${stop.lng.toFixed(5)}`).join(';')}|${placeKey}|${routeKey}`
     if (fittedKey.current === key) return
     const bounds = new window.google.maps.LatLngBounds()
     for (const stop of list) bounds.extend({ lat: stop.lat, lng: stop.lng })
     for (const spot of routePoints) bounds.extend({ lat: spot.lat, lng: spot.lng })
+    if (pickupPoint) bounds.extend(pickupPoint)
+    if (dropoffPoint) bounds.extend(dropoffPoint)
     if (driver) bounds.extend(driver)
-    map.fitBounds(bounds, routePoints.length > 1 ? 48 : 40)
+    map.fitBounds(bounds, routePoints.length > 1 || pickupPoint ? 48 : 40)
     fittedKey.current = key
   }, [])
   const onLoad = useCallback((map) => {
@@ -463,12 +506,8 @@ export function CampusMap({
 
   useEffect(() => {
     fitStopBounds(mapRef.current)
-  }, [fitStopBounds, stopMarkers, driverTarget, isLoaded, path, fitRoute])
+  }, [fitStopBounds, stopMarkers, driverTarget, pickup, dropoff, isLoaded, path, fitRoute])
 
-  useEffect(() => {
-    if (!mapRef.current || !driverTarget || !animateDriver) return
-    mapRef.current.panTo(driverTarget)
-  }, [driverTarget?.lat, driverTarget?.lng, animateDriver])
   useEffect(() => {
     if (!mapRef.current || !isLoaded) return
     try {
@@ -517,14 +556,14 @@ export function CampusMap({
 
   const orangeIcon = pinSvg(ORANGE, 18)
   const purpleIcon = pinSvg(PURPLE, 16)
-  const driverIcon = Number.isFinite(Number(driverHeading)) ? busyCarIcon(Number(driverHeading)) : pinSvg(ORANGE, 20)
   const surgeHot = heatMode === 'surge'
+  const mapStyles = useClemsonStyles ? (preferDark ? googleMapStyle('dark') : CLEMSON_MAP_STYLES) : null
 
   return (
     <div style={wrapStyle} data-heat-fallback="circles" data-maps-loader={MAPS_LOADER_ID} data-map-type-control={showMapTypeControl ? 'dropdown' : undefined}>
       <GoogleMap
         mapContainerStyle={{ height: '100%', width: '100%' }}
-        center={animatedDriver && animateDriver ? animatedDriver : mapCenter}
+        center={mapCenter}
         zoom={zoom}
         onLoad={onLoad}
         mapTypeId={resolvedMapType}
@@ -532,7 +571,7 @@ export function CampusMap({
           disableDefaultUI: true,
           zoomControl: interactive,
           gestureHandling: interactive || dragPin ? 'greedy' : 'none',
-          styles: useClemsonStyles ? CLEMSON_MAP_STYLES : null,
+          styles: mapStyles,
           clickableIcons: false,
           fullscreenControl: false,
           mapTypeControl: false,
@@ -629,9 +668,7 @@ export function CampusMap({
           />
         ))}
         {self && <Marker position={self} icon={purpleIcon} title="You" />}
-        {(animatedDriver || driverTarget) && (
-          <Marker position={animatedDriver || driverTarget} icon={driverIcon} title="Driver" />
-        )}
+        <AnimatedDriverMarker target={driverTarget} heading={driverHeading} enabled={Boolean(animateDriver && driverTarget)} />
         {tigerZones.map((zone) => (
           <OverlayView
             key={`tiger-label-${zone.id}`}

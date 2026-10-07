@@ -10,6 +10,11 @@ import {
   haversineMeters,
   hourlyRateCents,
   minutesUntilDropoff,
+  DIRECTIONS_MAX_METERS,
+  drivingLegKey,
+  rememberDrivingLeg,
+  readDrivingLeg,
+  shouldRequestDrivingLeg,
 } from './rideGeometry.js'
 
 test('CITY_MPS defines default city speed of 11.5 m/s (~25.7 mph)', () => {
@@ -348,4 +353,19 @@ test('fetchDrivingLeg: safely returns null when window/Google Maps is not presen
   const result = await fetchDrivingLeg([34.6788, -82.8432], [34.8957, -82.2189])
   assert.equal(result, null)
   assert.equal(await fetchDrivingLeg(null, null), null)
+})
+
+test('driving leg cache rounds the origin and skips airport-length fallbacks', () => {
+  const near = drivingLegKey([34.6788, -82.843], [34.6836, -82.8364])
+  const moved = drivingLegKey([34.681, -82.841], [34.6836, -82.8364])
+  assert.equal(near, moved)
+  assert.notEqual(drivingLegKey([35.01, -82.2], [34.6836, -82.8364]), near)
+  assert.equal(shouldRequestDrivingLeg([34.6788, -82.843], [34.6836, -82.8364]), true)
+  assert.equal(shouldRequestDrivingLeg([34.6788, -82.843], [34.8957, -82.2189]), false)
+  assert.ok(DIRECTIONS_MAX_METERS < 20000)
+  const key = drivingLegKey([34.6784, -82.837], [34.6836, -82.8364])
+  rememberDrivingLeg(key, { path: [[34.6784, -82.837], [34.6836, -82.8364]], meters: 800, seconds: 120 })
+  assert.equal(readDrivingLeg(key).seconds, 120)
+  assert.equal(rememberDrivingLeg(key, { path: [] }), undefined)
+  assert.equal(drivingLegKey(null, null), null)
 })

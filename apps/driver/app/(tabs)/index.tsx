@@ -46,7 +46,8 @@ import {
   weekNetCents,
   type DriverCard,
 } from 'rides-native/tripTags'
-import { etaHoldLine, etaLineFor } from 'rides-native/liveTrip'
+import { etaHoldLine } from 'rides-native/liveTrip'
+import { followEtaLine } from 'rides-native/roadFollow'
 import { driverPickupTarget } from 'rides-native/riderLivePickup'
 import { ORANGE, PURPLE } from 'rides-native/places.js'
 import { gameDayNotice, type GameDayNotice } from 'rides-native/gameDayNotice.js'
@@ -350,7 +351,7 @@ export default function DriverHome() {
       ? { lat: Number(desk.lat), lng: Number(desk.lng) }
       : null
   const liveEta = desk?.active
-    ? etaHoldLine(desk.active.status, etaLineFor(desk.active.status, liveFrom, desk.active))
+    ? etaHoldLine(desk.active.status, followEtaLine(desk.active.status, liveFrom, desk.active))
     : null
   const hotspots = spots.slice().sort((a: BusySpot, b: BusySpot) => b.intensity - a.intensity).slice(0, 4)
   const pins: MapPin[] = []

@@ -9,6 +9,7 @@ export type MapPin = {
   title: string
   color: string
   badge?: string
+  heading?: number | null
 }
 
 export type LatLng = { latitude: number; longitude: number }

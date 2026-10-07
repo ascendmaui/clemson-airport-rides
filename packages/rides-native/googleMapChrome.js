@@ -8,6 +8,7 @@ export function googleMapStyle(scheme) {
     { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#2a2438' }] },
     { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#16121f' }] },
     { featureType: 'poi', elementType: 'geometry', stylers: [{ color: '#120e18' }] },
+    { featureType: 'road.highway', elementType: 'geometry.stroke', stylers: [{ color: '#F56600' }] },
   ]
 }
 
