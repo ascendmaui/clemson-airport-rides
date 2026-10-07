@@ -35,6 +35,7 @@
  * GET /api/driver-earnings, which checks the caller and returns aggregates only.
  */
 import { PLATFORM_FEE_RATE, splitPlatformCut } from './platformFee.js'
+import { earningsExtrasForDriver } from '../../shared/backupDriverQueue.js'
 import { driverBoostShareCents, readBoostCents } from '../../shared/scheduledBoost.js'
 import { supabase } from './supabase.js'
 import {
@@ -283,6 +284,8 @@ export function sanitizeCompletedTripForDriver(row, { riderName = '', payments =
   if (distCents) fareParts.push({ label: 'Distance charge', cents: distCents })
   if (timeCents) fareParts.push({ label: 'Time', cents: timeCents })
   if (surgeCents) fareParts.push({ label: 'Surge', cents: surgeCents })
+  const backupExtras = earningsExtrasForDriver(row, row?.driver_id)
+  for (const part of backupExtras.parts) fareParts.push(part)
 
   const pickupLabel = masked.pickup_label || 'Trip completed'
   const dropoffLabel = masked.dropoff_label || 'Trip completed'
@@ -299,7 +302,7 @@ export function sanitizeCompletedTripForDriver(row, { riderName = '', payments =
     boostCents,
     waitFeeCents: canceled ? null : waitFeeCents,
     cancelFeeCents,
-    earnedCents: cut.driverNetCents + boostCents,
+    earnedCents: cut.driverNetCents + boostCents + backupExtras.cents,
     distanceM: distance.meters,
     distanceApproximate: distance.approximate,
     durationS: duration.seconds,
@@ -557,6 +560,58 @@ export function annualTaxCsvFilename(year) {
   return `clemson-rides-earnings-${year}.csv`
 }
 
+async function standbyEarningRows(driverId, seenIds) {
+  if (!supabase || !driverId) return []
+  try {
+    const listed = await supabase
+      .from('trips')
+      .select('id, driver_id, status, pickup_label, dropoff_label, completed_at, metadata')
+      .eq('status', 'completed')
+      .filter('metadata->backup_queue->>backupDriverId', 'eq', driverId)
+      .limit(100)
+    if (listed.error) return []
+    const canceled = await supabase
+      .from('trips')
+      .select('id, driver_id, status, pickup_label, dropoff_label, canceled_at, metadata')
+      .eq('status', 'canceled')
+      .filter('metadata->backup_queue->>cancelFeeDriverId', 'eq', driverId)
+      .limit(100)
+    const rows = [...(listed.data || []), ...((canceled.error ? [] : canceled.data) || [])]
+    return rows.flatMap((row) => {
+      if (!row?.id || seenIds.has(row.id) || row.driver_id === driverId) return []
+      const extras = earningsExtrasForDriver(row, driverId)
+      if (!extras.cents) return []
+      return [{
+        id: `${row.id}:standby`,
+        status: row.status || 'completed',
+        completedAt: row.completed_at || row.canceled_at || null,
+        fareCents: 0,
+        refundCents: 0,
+        grossCents: extras.cents,
+        platformFeeCents: 0,
+        tipCents: null,
+        waitFeeCents: null,
+        cancelFeeCents: extras.parts.find((part) => part.label === 'Cancellation fee')?.cents || 0,
+        earnedCents: extras.cents,
+        distanceM: null,
+        distanceApproximate: false,
+        durationS: null,
+        durationApproximate: false,
+        pickupLabel: row.pickup_label || 'Backup standby',
+        dropoffLabel: row.dropoff_label || 'Backup standby',
+        routeLabel: extras.parts[0]?.label || 'Backup standby',
+        pickupApprox: null,
+        dropoffApprox: null,
+        riderFirstName: 'Rider',
+        fareParts: extras.parts,
+        backupStandby: true,
+      }]
+    })
+  } catch {
+    return []
+  }
+}
+
 async function selectCompletedTrips(driverId) {
   const baseQuery = () => supabase
     .from('trips')
@@ -631,9 +686,10 @@ export async function fetchDriverEarningsReport(driverId, { now = new Date(), ti
     if (row.status === 'canceled' && !(trip.cancelFeeCents > 0)) return []
     return [trip]
   })
+  const standby = await standbyEarningRows(driverId, new Set(trips.map((trip) => trip.id)))
 
   return {
-    trips,
+    trips: [...trips, ...standby],
     summary: summarizeDriverEarnings(trips, { now, timeZone }),
     paymentsLoaded: Boolean(extras),
   }

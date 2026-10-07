@@ -1,4 +1,10 @@
 import { zonedCivilToUtc } from '../../shared/rideTime.js'
+import {
+  LOOKING_FOR_BACKUP_LABEL,
+  backupBonusLabel,
+  driverBackupPresentation,
+  riderBackupPresentation,
+} from '../../shared/backupDriverQueue.js'
 import { boostNudge } from '../../shared/copy/boost.js'
 import {
   BOOST_MAX_CENTS,
@@ -245,6 +251,7 @@ const OPEN_QUEUE_FIELDS = [
 export function toDriverQueueCard(row) {
   if (!row) return null
   const purpose = row.metadata?.purpose || ''
+  const backup = driverBackupPresentation(row, null)
   const boostCents = readBoostCents(row)
   const fareCents = Math.max(0, Math.round(Number(row.fare_cents) || 0))
   const storedNet = row.metadata?.driver_payout_cents ?? row.metadata?.carpool?.driver?.payoutCents
@@ -266,6 +273,10 @@ export function toDriverQueueCard(row) {
     passengers: row.passengers || 1,
     automaticMatching: !Number(row.deposit_cents || 0),
     nearTerm: row.metadata?.near_term_slot === true,
+    backupLabel: backup?.bonusLabel || backupBonusLabel(row.metadata?.backup_queue?.bonusCents),
+    lookingForBackup: backup?.lookingForBackup === true,
+    backupStatusLine: backup?.lookingForBackup ? LOOKING_FOR_BACKUP_LABEL : (backup?.statusLine || null),
+    backupRole: backup?.role || null,
     metadata: row.metadata || {},
   }
 }
@@ -287,6 +298,7 @@ export function toRiderScheduleCard(row) {
     estimate: Boolean(row.metadata?.fare_is_estimate),
     approxPin: pinForDisplay(row),
     canCancel: ['scheduled', 'searching', 'offered', 'accepted'].includes(row.status),
+    backup: riderBackupPresentation(row),
     canBump: boostIsEditable(row) && boostCents < BOOST_MAX_CENTS,
     nudge: boostNudge(row),
   }

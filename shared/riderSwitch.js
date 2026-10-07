@@ -14,6 +14,7 @@ import {
 } from './copy/riderSwitch.js'
 import { exclusiveOfferPatch, EXCLUSIVE_SHARE_BPS, netCentsForShare, poolOfferPatch, POOL_SHARE_BPS } from '../packages/rides-native/offerLadder.js'
 import { OFFERED_RIDE_TIERS, resolveOfferedTier } from './rideOptions.js'
+import { backupQueueAfterRiderSwitch, readBackupQueue } from './backupDriverQueue.js'
 
 export const BEFORE_PICKUP_STATUSES = Object.freeze(['accepted', 'arriving'])
 export const RIDER_SWITCH_ACTIONS = Object.freeze([
@@ -165,6 +166,7 @@ export function commitRiderSwitch({
   const meta = metaOf(trip)
   const passed = Array.isArray(meta.offer_passed_driver_ids) ? meta.offer_passed_driver_ids.slice() : []
   if (previousDriverId && !passed.includes(previousDriverId)) passed.push(previousDriverId)
+  const seatedBackup = readBackupQueue(trip)
   const switchRecord = {
     at: now,
     action,
@@ -175,11 +177,19 @@ export function commitRiderSwitch({
     feeCents: 0,
   }
 
+  const continuingDriverId = ending ? null : nextDriverFor(action, driverId, drivers, previousDriverId)
+  const backupQueue = seatedBackup
+    ? backupQueueAfterRiderSwitch(seatedBackup, { action, nextDriverId: continuingDriverId, now })
+    : null
+  const releasedDriverIds = backupQueue?.releasedDriverIds || []
+  const metadataBase = backupQueue ? { ...meta, backup_queue: backupQueue } : meta
+
   if (ending) {
     return {
       ok: true,
       quote,
       notifyDriverId: null,
+      releasedDriverIds,
       next: action === 'open-carpool' ? 'carpool' : 'home',
       event: {
         kind: 'canceled',
@@ -195,7 +205,7 @@ export function commitRiderSwitch({
         driver_id: null,
         canceled_at: now,
         metadata: {
-          ...meta,
+          ...metadataBase,
           offer_driver_id: null,
           offer_passed_driver_ids: passed,
           rider_switch: switchRecord,
@@ -204,7 +214,7 @@ export function commitRiderSwitch({
     }
   }
 
-  const notifyDriverId = nextDriverFor(action, driverId, drivers, previousDriverId)
+  const notifyDriverId = continuingDriverId
   const ladder = notifyDriverId ? exclusiveOfferPatch() : poolOfferPatch(now)
   const shareBps = notifyDriverId ? EXCLUSIVE_SHARE_BPS : POOL_SHARE_BPS
   const net = netCentsForShare(fare, shareBps)
@@ -212,6 +222,7 @@ export function commitRiderSwitch({
     ok: true,
     quote,
     notifyDriverId,
+    releasedDriverIds,
     next: 'ride',
     event: {
       kind: 'searching',
@@ -233,7 +244,7 @@ export function commitRiderSwitch({
       platform_fee_cents: Math.max(0, fare - net),
       driver_earnings_cents: net,
       metadata: {
-        ...meta,
+        ...metadataBase,
         ...ladder,
         offer_driver_id: notifyDriverId,
         preferred_driver_id: action === 'switch-driver' ? driverId : null,

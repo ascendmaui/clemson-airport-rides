@@ -135,6 +135,7 @@ export async function createScheduledTrip({
   tier = 'standard',
   passengers,
   nearTerm = false,
+  backupBonusCents = null,
   boostCents = 0,
 }: {
   user: AuthUser
@@ -146,6 +147,7 @@ export async function createScheduledTrip({
   tier?: 'standard' | 'comfort' | 'wait' | 'carpool'
   passengers?: number
   nearTerm?: boolean
+  backupBonusCents?: number | null
   boostCents?: number
 }) {
   if (!supabase) throw new Error('Supabase is not configured')
@@ -162,6 +164,7 @@ export async function createScheduledTrip({
       tier,
       ...(passengers ? { passengers } : {}),
       ...(nearTerm ? { nearTerm: true } : {}),
+      ...(backupBonusCents ? { backupBonusCents } : {}),
       ...(boostCents ? { boostCents } : {}),
     },
   }) as { trip: { id: string; status: string | null; pickup_at: string | null; pickup_label: string | null; dropoff_label: string | null } }
@@ -180,6 +183,14 @@ export async function listScheduledTrips(riderId: string) {
     .limit(30)
   if (error) throw new Error(error.message)
   return (data || []) as ScheduledRow[]
+}
+
+export async function scheduledRiderAction(op: 'detail' | 'switch' | 'cancel', tripId: string, extra: { safetyReport?: boolean } = {}) {
+  if (!supabase) throw new Error('Supabase is not configured')
+  return authedJson(supabase, '/api/stripe-payment-methods?action=scheduled-rider', {
+    method: 'POST',
+    body: { op, tripId, ...extra },
+  })
 }
 
 export async function bumpScheduledBoost(tripId: string, boostCents: number) {

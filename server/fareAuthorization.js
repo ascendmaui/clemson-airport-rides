@@ -11,6 +11,7 @@ import {
   shouldRetryAuthorization,
 } from '../shared/fareAuthorization.js'
 import { holdQuoteCents, readBoostCents } from '../shared/scheduledBoost.js'
+import { readBackupQueue } from '../shared/backupDriverQueue.js'
 import { MIN_CARD_CHARGE_CENTS } from '../src/lib/fareRates.js'
 import { insertPaymentRow, setPaymentHold } from './collectPayment.js'
 
@@ -277,11 +278,12 @@ export async function authorizeRideRequest({
   const boostCents = readBoostCents(trip)
   const fareCents = estimatedFareCents ?? trip?.fare_cents
   const choice = trip?.metadata?.billing_choice
-  // Ride credits settle the fare. A boost is still card money, so the hold
-  // is the boost alone. With no boost, scheduling stays on the credits path.
+  // Ride credits settle the fare. A boost and a booked backup fee are still
+  // card money. With neither, scheduling stays on the credits path.
   const creditsFare = choice === 'credits'
-  const quote = holdQuoteCents(creditsFare ? 0 : fareCents, boostCents)
-  if (creditsFare && boostCents <= 0) {
+  const backupBonusCents = readBackupQueue(trip)?.bonusCents || 0
+  const quote = holdQuoteCents(creditsFare ? backupBonusCents : fareCents, boostCents)
+  if (creditsFare && boostCents <= 0 && backupBonusCents <= 0) {
     return { ok: true, skipped: true, reason: 'credits', ...fareAuthorizationCents(fareCents), boostCents: 0 }
   }
   const client = stripe || (stripeOk() ? stripeClient() : null)

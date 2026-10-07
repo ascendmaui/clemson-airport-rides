@@ -204,6 +204,29 @@ function PeoplePanel() {
   )
 }
 
+function BackupQueueAdmin({ row }) {
+  const queue = row?.metadata?.backup_queue
+  if (!queue?.enabled) return null
+  const events = Array.isArray(queue.events) ? queue.events : []
+  return (
+    <div style={{ marginTop: 8, padding: 10, borderRadius: 12, background: 'rgba(245,102,0,0.08)' }}>
+      <div style={{ fontWeight: 800, color: '#F56600' }}>Backup queue</div>
+      <div style={{ fontSize: 12, color: '#522D80', marginTop: 4 }}>
+        Primary {queue.primaryDriverId || 'open'} · Backup {queue.backupDriverId || 'open'} · {queue.confirmState || 'idle'}
+        {queue.bonusCents ? ` · +$${(queue.bonusCents / 100).toFixed(0)}` : ''}
+        {queue.urgent ? ' · urgent' : ''}
+      </div>
+      {events.length > 0 && (
+        <ul style={{ margin: '6px 0 0', paddingLeft: 18, fontSize: 12 }}>
+          {events.slice(-6).map((event, index) => (
+            <li key={`${event.kind}-${event.at || index}`}>{event.kind}{event.feeLabel ? ` · ${event.feeLabel}` : ''}{event.reason ? ` · ${event.reason}` : ''}{event.safetyReport ? ' · safety report' : ''}{event.at ? ` · ${event.at}` : ''}</li>
+          ))}
+        </ul>
+      )}
+    </div>
+  )
+}
+
 function TripsPanel() {
   const [rows, setRows] = useState([])
   const [error, setError] = useState('')
@@ -224,6 +247,7 @@ function TripsPanel() {
             {row.passengers > 1 ? ` · ${row.passengers} seats` : ''}
             {row.fare_cents != null ? ` · $${(Number(row.fare_cents) / 100).toFixed(2)}` : ''}
           </div>
+          <BackupQueueAdmin row={row} />
         </div>
       ))}
     </section>

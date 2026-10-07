@@ -27,6 +27,8 @@ import { assertTierAvailable } from '../rideAvailability.js'
 import { loadNearTermOffer } from '../nearTermAvailability.js'
 import { notifyScheduledBoard } from '../scheduledBoardAlerts.js'
 import { isNearTermRequest, matchRequestedSlot } from '../../shared/nearTermSlots.js'
+import { backupBookingMetadata, normalizeBackupBonusCents, preauthBaseCents } from '../../shared/backupDriverQueue.js'
+import { authorizeRideRequest } from '../fareAuthorization.js'
 import { boostMetadata, parseBoostCents } from '../../shared/scheduledBoost.js'
 import { insertTripRow } from '../scheduledBoostStore.js'
 
@@ -173,6 +175,13 @@ export default async function handler(req, res, deps = {}) {
     })
   }
 
+  const rawBackup = body.backupBonusCents ?? body.backup_bonus_cents
+  const backupRequested = rawBackup != null && rawBackup !== '' && rawBackup !== false && rawBackup !== 0 && rawBackup !== '0'
+  const backupBonusCents = backupRequested ? normalizeBackupBonusCents(rawBackup) : null
+  if (backupRequested && !backupBonusCents) {
+    return json(res, 400, { error: 'Backup driver is $10 or $15.', code: 'backup_bonus_invalid' })
+  }
+  const backupQueue = backupBonusCents && scheduled ? backupBookingMetadata(backupBonusCents, new Date(clockNow)) : null
   const boostParsed = parseBoostCents(body.boostCents ?? body.boost_cents ?? 0)
   if (!boostParsed.ok) return json(res, 400, { error: boostParsed.error, code: 'boost_invalid' })
   const boostCents = scheduled ? boostParsed.cents : 0
@@ -213,6 +222,7 @@ export default async function handler(req, res, deps = {}) {
       slot_minutes_out: matchedSlot.minutesOut,
     } : {}),
     ...(scheduledFor ? scheduledOfferPatch() : {}),
+    ...(backupQueue ? { backup_queue: backupQueue } : {}),
     ...(scheduledFor ? boostMetadata(boostCents) : {}),
   }
   const row = {
@@ -273,6 +283,20 @@ export default async function handler(req, res, deps = {}) {
     })
   }
 
+  if (backupQueue) {
+    try {
+      await (deps.authorizeRideRequest || authorizeRideRequest)({
+        sb,
+        stripe: deps.stripe,
+        trip: { ...row, id: inserted.data.id },
+        riderId: user.id,
+        estimatedFareCents: preauthBaseCents(priced.fareCents, backupBonusCents),
+      })
+    } catch (error) {
+      console.error('[backup-hold]', inserted.data.id, error?.message || error)
+    }
+  }
+
   let board = null
   try {
     board = await (deps.notifyScheduledBoard || notifyScheduledBoard)(sb, {
@@ -297,6 +321,8 @@ export default async function handler(req, res, deps = {}) {
     scheduleDiscountPct: priced.scheduleDiscountPct || 0,
     scheduleDiscountCents: priced.scheduleDiscountCents || 0,
     scheduleDiscountApplied: Boolean(priced.scheduleDiscountApplied),
+    backupBonusCents: backupBonusCents || 0,
+    backupBooked: Boolean(backupQueue),
     boostCents,
   })
 }

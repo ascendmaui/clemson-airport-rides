@@ -12,8 +12,10 @@ import { oneParam } from '@/lib/oneParam'
 import { openNavigation } from '@/lib/openMaps'
 import { supabase } from '@/lib/supabase'
 import { useDriverLocation } from '@/lib/useDriverLocation'
-import { advanceTrip, loadRiderFix, loadTrip, publishDriverLocation, subscribeTrips } from 'rides-native/driverDesk'
+import { advanceTrip, confirmBackupQueueTrip, loadRiderFix, loadTrip, publishDriverLocation, releaseBackupQueueSeat, subscribeTrips } from 'rides-native/driverDesk'
 import {
+  confirmCountdownLabel,
+  leaveNowCountdownLabel,
   driverStatusDetail,
   formatCents,
   preferredRequestNote,
@@ -33,8 +35,34 @@ import { loadCounterpart, type CounterpartView } from 'rides-native/partyProfile
 import { useTheme } from '@/lib/theme'
 import type { Palette } from '@/lib/palette'
 import { TripThread } from 'rides-native/TripThread.jsx'
+import { ScheduledRidesHint } from 'rides-native/ScheduledRidesInfo'
+import { MAPS_HANDOFF_HELPER } from '../../../shared/copy/scheduledRides.js'
 
 type RiderFix = { latitude: number; longitude: number }
+
+function ConfirmCountdown({ closesAt }: { closesAt?: string | null }) {
+  const [label, setLabel] = useState<string | null>(() => confirmCountdownLabel(closesAt))
+  useEffect(() => {
+    const tick = () => setLabel(confirmCountdownLabel(closesAt))
+    tick()
+    const id = setInterval(tick, 1000)
+    return () => clearInterval(id)
+  }, [closesAt])
+  if (!label) return null
+  return <Text style={{ color: ORANGE, fontWeight: '800', fontSize: 28, marginTop: 6 }}>{label}</Text>
+}
+
+function LeaveNowLabel({ leaveNowAt }: { leaveNowAt?: string | null }) {
+  const [label, setLabel] = useState<string | null>(() => leaveNowCountdownLabel(leaveNowAt))
+  useEffect(() => {
+    const tick = () => setLabel(leaveNowCountdownLabel(leaveNowAt))
+    tick()
+    const id = setInterval(tick, 1000)
+    return () => clearInterval(id)
+  }, [leaveNowAt])
+  if (!label) return null
+  return <Text style={{ color: ORANGE, fontWeight: '800', fontSize: 28, marginTop: 6 }}>{label}</Text>
+}
 
 export default function TripScreen() {
   const router = useRouter()
@@ -52,6 +80,8 @@ export default function TripScreen() {
   const [error, setError] = useState<string | null>(null)
   const [settleNote, setSettleNote] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const [mapsOffer, setMapsOffer] = useState(false)
+  const departedTrip = useRef<string | null>(null)
   const [person, setPerson] = useState<CounterpartView | null>(null)
   const partyColors = partyColorsFromPalette(colors)
 
@@ -153,6 +183,34 @@ export default function TripScreen() {
       setBusy(false)
     }
   }
+
+  useEffect(() => {
+    const tripId = trip?.id
+    const leaveAt = trip?.backupLeaveNowAt
+    if (!trip?.backupLeaveNowOpen || !leaveAt || !supabase || !tripId) return undefined
+    const dueAt = Date.parse(leaveAt)
+    if (!Number.isFinite(dueAt)) return undefined
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const fire = () => {
+      if (departedTrip.current === tripId) return
+      departedTrip.current = tripId
+      setMapsOffer(true)
+      confirmBackupQueueTrip(supabase, tripId, { navigate: true })
+        .then(() => refresh())
+        .catch((err: unknown) => {
+          departedTrip.current = null
+          const message = err instanceof Error ? err.message : 'Could not start navigation'
+          if (!/changed|Refresh/i.test(message)) setError(message)
+          refresh()
+        })
+    }
+    const wait = dueAt - Date.now()
+    if (wait <= 0) fire()
+    else timer = setTimeout(fire, wait)
+    return () => {
+      if (timer) clearTimeout(timer)
+    }
+  }, [trip?.backupLeaveNowOpen, trip?.backupLeaveNowAt, trip?.id, supabase, refresh])
 
   const headingToDropoff = trip?.status === 'in_progress' || trip?.status === 'completed'
   const bookedPickup = driverPickupTarget(trip)
@@ -260,6 +318,7 @@ export default function TripScreen() {
             {preferredRequestNote(trip) ? <Text style={styles.note}>{preferredRequestNote(trip)}</Text> : null}
             <FarePanel card={trip} />
             {user ? <TripThread supabase={supabase} tripId={trip.id} userId={user.id} colors={colors} /> : null}
+            {trip.backupEnroute || mapsOffer ? <Text style={styles.copy}>{MAPS_HANDOFF_HELPER}</Text> : null}
             <View style={styles.navRow}>
               {(navApp === 'google' ? ['google', 'apple'] as const : ['apple', 'google'] as const).map((provider) => (
                 <Pressable
@@ -298,6 +357,62 @@ export default function TripScreen() {
             </View>
           ) : null}
         {error ? <ErrorText>{error}</ErrorText> : null}
+        {trip?.backupConfirmOpen ? (
+          <View style={{ marginBottom: 12, padding: 12, borderRadius: 14, backgroundColor: 'rgba(245,102,0,0.12)' }}>
+            <Text style={{ color: ORANGE, fontWeight: '800', fontSize: 16 }}>Confirm trip</Text>
+            <Text style={{ marginTop: 4 }}>{trip.backupConfirmCopy}</Text>
+            <ScheduledRidesHint topic="confirm" colors={colors} />
+            {trip.backupUrgent ? <Text style={{ color: ORANGE, fontWeight: '700', marginTop: 6 }}>You are up. Confirm and start toward pickup.</Text> : null}
+            <ConfirmCountdown closesAt={trip.backupConfirmClosesAt} />
+            <Primary
+              label={busy ? 'Saving…' : 'Confirm trip'}
+              onPress={() => {
+                if (!supabase || !trip.id) return
+                setBusy(true)
+                confirmBackupQueueTrip(supabase, trip.id).then(() => refresh()).catch((err: unknown) => {
+                  setError(err instanceof Error ? err.message : 'Could not confirm')
+                }).finally(() => setBusy(false))
+              }}
+              disabled={busy}
+            />
+            <Primary
+              label="Confirm and start navigation"
+              onPress={() => {
+                if (!supabase || !trip.id) return
+                setBusy(true)
+                confirmBackupQueueTrip(supabase, trip.id, { navigate: true })
+                  .then(() => openNavigation(navApp, target))
+                  .then(() => refresh())
+                  .catch((err: unknown) => setError(err instanceof Error ? err.message : 'Could not start navigation'))
+                  .finally(() => setBusy(false))
+              }}
+              disabled={busy}
+              tone="purple"
+            />
+            {trip.backupRole === 'primary' || trip.backupRole === 'backup' ? (
+              <Primary
+                label={trip.backupRole === 'backup' ? 'Leave backup seat' : 'Can\'t make this trip'}
+                onPress={() => {
+                  if (!supabase || !trip.id || !trip.backupRole) return
+                  setBusy(true)
+                  releaseBackupQueueSeat(supabase, trip.id, { role: trip.backupRole })
+                    .then(() => refresh())
+                    .catch((err: unknown) => setError(err instanceof Error ? err.message : 'Could not release this seat'))
+                    .finally(() => setBusy(false))
+                }}
+                disabled={busy}
+                tone="ghost"
+              />
+            ) : null}
+          </View>
+        ) : null}
+        {trip?.backupLeaveNowOpen ? (
+          <View style={{ marginBottom: 12, padding: 12, borderRadius: 14, backgroundColor: 'rgba(245,102,0,0.12)' }}>
+            <Text style={{ color: ORANGE, fontWeight: '800', fontSize: 16 }}>Leave now</Text>
+            <ScheduledRidesHint topic="leave" colors={colors} />
+            <LeaveNowLabel leaveNowAt={trip.backupLeaveNowAt} />
+          </View>
+        ) : null}
         {action ? <Primary label={busy ? 'Updating…' : action} onPress={onAdvance} disabled={busy} tone="purple" /> : null}
         </ScrollView>
       </View>

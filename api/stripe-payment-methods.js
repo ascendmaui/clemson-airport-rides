@@ -32,6 +32,7 @@ import handleScheduleSlots from '../server/endpoints/scheduleSlots.js'
 import handleMatchNotice from '../server/endpoints/matchNotice.js'
 import handleTigerPass from '../server/endpoints/tigerPass.js'
 import handleFavoriteDrivers from '../server/endpoints/favoriteDrivers.js'
+import handleScheduledRider from '../server/endpoints/scheduledRider.js'
 import handleBumpScheduledBoost from '../server/endpoints/bumpScheduledBoost.js'
 import handleReleaseScheduledBoost from '../server/endpoints/releaseScheduledBoost.js'
 
@@ -57,6 +58,7 @@ const HANDLERS = {
   'match-notice': handleMatchNotice,
   'tiger-pass': handleTigerPass,
   'favorite-drivers': handleFavoriteDrivers,
+  'scheduled-rider': handleScheduledRider,
   'bump-scheduled-boost': handleBumpScheduledBoost,
   'release-scheduled-boost': handleReleaseScheduledBoost,
 }
@@ -86,7 +88,7 @@ export default async function handler(req, res, ...rest) {
   const handle = HANDLERS[action]
   if (!handle) {
     return json(res, 400, {
-      error: 'Unknown payment action. Use action=setup-intent, save, quote, airport-checkout, schedule-trip, schedule-slots, match-notice, request-driver, buy-credits, credits-confirm, abandon-checkout, credit-lots, credits, collect, settle, reconcile-checkout, clemson-miami, billing, ride-options, tiger-pass, favorite-drivers, bump-scheduled-boost, or release-scheduled-boost.',
+      error: 'Unknown payment action. Use action=setup-intent, save, quote, airport-checkout, schedule-trip, schedule-slots, match-notice, request-driver, buy-credits, credits-confirm, abandon-checkout, credit-lots, credits, collect, settle, reconcile-checkout, clemson-miami, billing, ride-options, tiger-pass, favorite-drivers, scheduled-rider, bump-scheduled-boost, or release-scheduled-boost.',
     })
   }
   return handle(req, res, ...rest)

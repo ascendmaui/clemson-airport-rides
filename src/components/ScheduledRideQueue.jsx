@@ -1,7 +1,47 @@
+import { useEffect, useRef, useState } from 'react'
 import { formatUsdFromCents } from '../lib/pricing'
 import { formatPickupAt, toDriverQueueCard } from '../lib/scheduledRideModel'
+import { CONFIRM_TRIP_COPY, backupNumberTwoCopy, confirmCountdownLabel, driverBackupPresentation, leaveNowCountdownLabel } from '../../shared/backupDriverQueue.js'
+import { ScheduledRidesHint } from './ScheduledRidesInfo'
 import { driverBoostOfferLine } from '../../shared/copy/boost.js'
 import { compareBoostedFirst, formatBoostBadge } from '../../shared/scheduledBoost.js'
+
+function ConfirmCountdown({ closesAt }) {
+  const [label, setLabel] = useState(() => confirmCountdownLabel(closesAt))
+  useEffect(() => {
+    const tick = () => setLabel(confirmCountdownLabel(closesAt))
+    tick()
+    const id = setInterval(tick, 1000)
+    return () => clearInterval(id)
+  }, [closesAt])
+  if (!label) return null
+  return <p style={{ fontSize: 22, fontWeight: 800, color: '#F56600', margin: '4px 0 0' }}>{label}</p>
+}
+
+function LeaveNowCountdown({ leaveNowAt, onDue }) {
+  const fired = useRef(false)
+  const onDueRef = useRef(onDue)
+  onDueRef.current = onDue
+  const [label, setLabel] = useState(() => leaveNowCountdownLabel(leaveNowAt))
+  useEffect(() => {
+    fired.current = false
+  }, [leaveNowAt])
+  useEffect(() => {
+    const tick = () => {
+      const next = leaveNowCountdownLabel(leaveNowAt)
+      setLabel(next)
+      if (next === 'Leave now' && !fired.current) {
+        fired.current = true
+        onDueRef.current?.()
+      }
+    }
+    tick()
+    const id = setInterval(tick, 1000)
+    return () => clearInterval(id)
+  }, [leaveNowAt])
+  if (!label) return null
+  return <p style={{ fontSize: 22, fontWeight: 800, color: '#F56600', margin: '4px 0 0' }}>{label}</p>
+}
 
 /**
  * Driver list of scheduled rides.
@@ -11,11 +51,20 @@ export function ScheduledRideQueue({
   rides,
   acceptingId,
   onAccept,
+  onConfirm,
+  onDepart,
+  onRelease,
+  viewerId,
   title = 'Scheduled rides',
   emptyHint,
   emptyAction,
 }) {
-  const cards = (rides || []).map(toDriverQueueCard).filter(Boolean).sort(compareBoostedFirst)
+  const cards = (rides || []).map((row) => {
+    const card = toDriverQueueCard(row)
+    if (!card) return null
+    const seat = driverBackupPresentation(row, viewerId)
+    return { ...card, seat }
+  }).filter(Boolean).sort(compareBoostedFirst)
   if (!cards.length) {
     return (
       <div style={{ marginBottom: 14 }} role="status" aria-label={`${title} empty`}>
@@ -92,6 +141,70 @@ export function ScheduledRideQueue({
                 {ride.firstName}
                 {ride.purpose ? ` · ${ride.purpose}` : ''}
               </div>
+              {ride.backupLabel && (
+                <div style={{
+                  display: 'inline-block',
+                  marginTop: 8,
+                  padding: '3px 8px',
+                  borderRadius: 999,
+                  background: '#F56600',
+                  color: '#fff',
+                  fontSize: 12,
+                  fontWeight: 800,
+                }}
+                >
+                  {ride.backupLabel}
+                </div>
+              )}
+              {ride.seat?.lookingForBackup && ride.seat?.role === 'primary' && (
+                <>
+                  <p style={{ fontSize: 12, fontWeight: 700, color: '#522D80' }}>Looking for backup driver</p>
+                  <ScheduledRidesHint topic="looking" />
+                </>
+              )}
+              {ride.seat?.role === 'open_backup' && <ScheduledRidesHint topic="offer" />}
+              {ride.seat?.role === 'backup' && (
+                <p style={{ fontSize: 12, fontWeight: 700, color: '#522D80' }}>{backupNumberTwoCopy(formatPickupAt(ride.pickupAt))}</p>
+              )}
+              {ride.seat?.notice && (
+                <p style={{ fontSize: 12, fontWeight: 700, color: '#522D80' }}>{ride.seat.notice}</p>
+              )}
+              {ride.seat?.confirmOpen && (
+                <div style={{ marginTop: 8, padding: 10, borderRadius: 12, background: 'rgba(245,102,0,0.12)' }}>
+                  <div style={{ fontWeight: 800, color: '#F56600' }}>Confirm trip</div>
+                  <p style={{ fontSize: 12, margin: '4px 0 8px' }}>{CONFIRM_TRIP_COPY}</p>
+                  <ScheduledRidesHint topic="confirm" />
+                  {ride.seat.urgent && (
+                    <p style={{ fontSize: 12, fontWeight: 800, color: '#F56600' }}>You are up. Confirm and start toward pickup.</p>
+                  )}
+                  <ConfirmCountdown closesAt={ride.seat.confirmClosesAt} />
+                  {onConfirm && (
+                    <button
+                      type="button"
+                      className="pressable"
+                      onClick={() => onConfirm(ride.id)}
+                      style={{
+                        marginTop: 8,
+                        width: '100%',
+                        padding: '10px 12px',
+                        borderRadius: 12,
+                        fontWeight: 800,
+                        color: '#fff',
+                        background: '#F56600',
+                      }}
+                    >
+                      Confirm trip
+                    </button>
+                  )}
+                </div>
+              )}
+              {ride.seat?.leaveNowOpen && (
+                <div style={{ marginTop: 8, padding: 10, borderRadius: 12, background: 'rgba(245,102,0,0.12)' }}>
+                  <div style={{ fontWeight: 800, color: '#F56600' }}>Leave now</div>
+                  <ScheduledRidesHint topic="leave" />
+                  <LeaveNowCountdown leaveNowAt={ride.seat.leaveNowAt} onDue={() => onDepart?.(ride.id)} />
+                </div>
+              )}
               {ride.nearTerm && (
                 <p style={{ fontSize: 12 }}>On the board now. Any driver can accept this pickup.</p>
               )}
@@ -113,7 +226,26 @@ export function ScheduledRideQueue({
                     opacity: acceptingId && !accepting ? 0.6 : 1,
                   }}
                 >
-                  {accepting ? 'Accepting…' : 'Accept scheduled ride'}
+                  {accepting ? 'Accepting…' : (ride.seat?.role === 'open_backup' ? 'Accept backup seat' : 'Accept scheduled ride')}
+                </button>
+              )}
+              {onRelease && (ride.seat?.role === 'primary' || ride.seat?.role === 'backup') && (
+                <button
+                  type="button"
+                  className="pressable"
+                  onClick={() => onRelease(ride.id, ride.seat.role)}
+                  style={{
+                    marginTop: 8,
+                    width: '100%',
+                    padding: '10px 12px',
+                    borderRadius: 12,
+                    fontWeight: 700,
+                    color: '#522D80',
+                    background: 'transparent',
+                    border: '1px solid #522D80',
+                  }}
+                >
+                  {ride.seat.role === 'backup' ? 'Leave backup seat' : 'Can\'t make this trip'}
                 </button>
               )}
             </article>

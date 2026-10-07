@@ -8,6 +8,7 @@ import { priceDriverRequest, resolveDriverRequestPlaces } from '../authoritative
 import { listAssignableDrivers } from '../autoAssign.js'
 import { notifyDriverOffer } from '../driverOfferAlerts.js'
 import { stripeClient, stripeOk } from '../friendRideLib.js'
+import { sendExpoPush } from '../expoPush.js'
 import { loadRiderMatchPreferences } from '../riderPass.js'
 import { insertTripEvent } from '../tripEvents.js'
 import { settleSwitchHold } from '../riderSwitchHold.js'
@@ -15,6 +16,24 @@ import { studentDiscountGranted } from '../../src/lib/studentDomain.js'
 import { commitRiderSwitch, isRiderSwitchAction, quoteRiderSwitch } from '../../shared/riderSwitch.js'
 import { OFFERED_RIDE_TIERS, rideOptionLabel } from '../../shared/rideOptions.js'
 import { openPoolLine } from '../../shared/copy/riderSwitch.js'
+
+async function notifyReleasedDriver(sb, driverId, tripId) {
+  if (!driverId) return
+  try {
+    const status = await sb.from('driver_status').select('expo_push_token').eq('driver_id', driverId).maybeSingle()
+    const token = status?.data?.expo_push_token
+    if (!token) return
+    await sendExpoPush({
+      to: token,
+      title: 'Scheduled ride changed',
+      body: 'The rider changed this pickup. You are released from the backup seat.',
+      data: { tripId, kind: 'backup_released' },
+      channelId: 'ride-requests',
+    })
+  } catch (error) {
+    console.error('[rider-switch] backup release', error?.message || error)
+  }
+}
 
 function num(value) {
   const n = Number(value)
@@ -246,6 +265,9 @@ export async function handleRiderSwitch(sb, user, body, deps = {}) {
     kind: committed.event.kind,
     payload: committed.event.payload,
   })
+  for (const driverId of committed.releasedDriverIds || []) {
+    await notifyReleasedDriver(sb, driverId, trip.id)
+  }
   if (committed.notifyDriverId) {
     await notifyDriverOffer(sb, {
       trip: {
