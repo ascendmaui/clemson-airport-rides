@@ -173,7 +173,7 @@ export function Requested({ dest = 'GSP Airport', trip = '', driver = 'your driv
       setDriverPos([loc.lat, loc.lng])
       setDriverHeading(loc.heading)
       setLocationAt(loc.updatedAt)
-    }, setTrackingError)
+    }, setTrackingError, resolvedDriverId)
   }, [trip, resolvedDriverId, trackingAttempt, tripRow?.status])
 
   useEffect(() => { setDriverPos(null); setDriverHeading(null); setLocationAt(null); setTrackingError(null) }, [resolvedDriverId, tripRow?.status])

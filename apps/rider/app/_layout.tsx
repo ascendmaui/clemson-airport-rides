@@ -27,7 +27,7 @@ function ApproachHost() {
   const { user } = useAuth()
   const trip = useApproachingTrip(user?.id || null)
   useRiderPickupStream(user?.id || null)
-  return <ApproachAlert status={trip?.status ?? null} driverId={trip?.driver_id ?? null} />
+  return <ApproachAlert status={trip?.status ?? null} driverId={trip?.driver_id ?? null} tripId={trip?.id ?? null} />
 }
 
 function Gate({ children }: { children: ReactNode }) {

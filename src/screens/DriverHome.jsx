@@ -245,10 +245,11 @@ function DriverShell({ driverId }) {
   const [locationError, setLocationError] = useState(null)
   const [locationAttempt, setLocationAttempt] = useState(0)
   useEffect(() => {
-    const tracking = Boolean(approved && online && activeTrip?.id && isLiveTrip(activeTrip.status))
-    if (!driverId || !tracking || (!presenceReady && !activeTrip)) return undefined
+    const liveTripId = activeTrip?.id && isLiveTrip(activeTrip.status) ? activeTrip.id : null
+    const tracking = Boolean(approved && (online || liveTripId))
+    if (!driverId || !tracking || (!presenceReady && !liveTripId)) return undefined
     const stop = startTripLocationWatch({
-      tripId: activeTrip.id,
+      tripId: online && liveTripId ? liveTripId : null,
       driverId,
       onFix: (pos) => setSelfPos([pos.coords.latitude, pos.coords.longitude]),
       onError: setLocationError,

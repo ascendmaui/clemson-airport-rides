@@ -117,7 +117,12 @@ export default function TripScreen() {
   const locationTracking = useDriverLocation(Boolean(user && trip && trip.status !== 'completed' && trip.status !== 'canceled' && trip.status !== 'cancelled_wait'), async (fix) => {
     setSelf({ latitude: fix.lat, longitude: fix.lng })
     if (!supabase || !user) return
-    await publishDriverLocation(supabase, user.id, { ...fix, online: true })
+    await publishDriverLocation(supabase, user.id, {
+      ...fix,
+      online: true,
+      tripId: trip?.id ?? null,
+      tripStatus: trip?.status ?? null,
+    })
   })
 
   async function onAdvance() {

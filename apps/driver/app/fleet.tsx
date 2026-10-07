@@ -52,7 +52,8 @@ export default function FleetScreen() {
     }
   }
 
-  const listed = Boolean(facing?.comfortClass)
+  const service = String(vehicle?.service_class ?? '').trim().toLowerCase()
+  const listed = service === 'comfort' || service === 'true' || String(vehicle?.tier || '').trim().toLowerCase() === 'comfort'
 
   return (
     <View style={[styles.screen, { paddingTop: insets.top + 8 }]}>
@@ -74,7 +75,7 @@ export default function FleetScreen() {
             <Text style={styles.copy}>
               {facing.ratingAvg != null ? `${facing.ratingAvg.toFixed(1)} · ${facing.ratingCount} ratings` : 'New driver'}
               {facing.studentVerified ? ' · Clemson student' : ''}
-              {facing.comfortClass ? ' · Comfort' : ''}
+              {listed ? ' · Comfort' : ''}
             </Text>
             <Text style={styles.copy}>Go online from home for this card to appear in Pick a driver.</Text>
           </Card>

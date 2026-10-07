@@ -252,7 +252,12 @@ export default function DriverHome() {
   const locationTracking = useDriverLocation(Boolean(user && ((approved && online) || desk?.active)), async (fix) => {
     setSelf({ latitude: fix.lat, longitude: fix.lng })
     if (!supabase || !user) return
-    await publishDriverLocation(supabase, user.id, { ...fix, online: true })
+    await publishDriverLocation(supabase, user.id, {
+      ...fix,
+      online: true,
+      tripId: desk?.active?.id ?? null,
+      tripStatus: desk?.active?.status ?? null,
+    })
   })
 
   async function toggle() {

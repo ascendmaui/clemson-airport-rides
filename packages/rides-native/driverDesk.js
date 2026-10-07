@@ -8,6 +8,7 @@ import { isStaleLiveOffer } from '../../shared/staleLiveOffer.js'
 import { lockedOfferEconomics } from './offerLadder.js'
 import { missingVehicleYearColumn } from '../../shared/vehicleYear.js'
 import { vehicleServesComfort } from '../../shared/rideOptions.js'
+import { headingOrNull, isLiveLocationStatus, speedOrNull } from './liveFix.js'
 import { authedJson } from './apiClient.js'
 import { approvalGateMessage } from './syntheticOffers.js'
 import {
@@ -144,19 +145,56 @@ export async function setPriorityMode(supabase, driverId, on) {
   if (error) throw new Error(error.message)
 }
 
-export async function publishDriverLocation(supabase, driverId, { lat, lng, heading = null, online = true }) {
+export async function publishDriverLocation(supabase, driverId, {
+  lat,
+  lng,
+  heading = null,
+  online = true,
+  speed = null,
+  tripId = null,
+  tripStatus = null,
+} = {}) {
   if (!supabase || !driverId) return
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) return
+  const now = new Date().toISOString()
   const { error } = await supabase.from('driver_status').upsert({
     driver_id: driverId,
     lat,
     lng,
     heading: Number.isFinite(Number(heading)) ? Number(heading) : null,
     online: Boolean(online),
-    updated_at: new Date().toISOString(),
-    location_updated_at: new Date().toISOString(),
+    updated_at: now,
+    location_updated_at: now,
   })
   if (error) throw new Error(error.message)
+
+  let liveTripId = tripId || null
+  let liveStatus = tripStatus || null
+  if (!liveTripId) {
+    const active = await supabase
+      .from('trips')
+      .select('id, status')
+      .eq('driver_id', driverId)
+      .in('status', ['accepted', 'arriving', 'arrived', 'in_progress'])
+      .order('accepted_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    if (!active.error && active.data?.id) {
+      liveTripId = active.data.id
+      liveStatus = active.data.status || null
+    }
+  }
+  if (!liveTripId || !isLiveLocationStatus(liveStatus)) return
+  const tripWrite = await supabase.from('trip_driver_locations').upsert({
+    trip_id: liveTripId,
+    driver_id: driverId,
+    lat,
+    lng,
+    heading: headingOrNull(heading),
+    speed: speedOrNull(speed),
+    updated_at: now,
+  })
+  if (tripWrite.error) throw new Error(tripWrite.error.message)
 }
 
 function serviceClassFromInput(serviceClass) {

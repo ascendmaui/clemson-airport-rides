@@ -386,7 +386,7 @@ export default function Requested() {
               {preview
                 ? RIDER_SEARCH_MOTION_COPY
                 : located
-                  ? 'The orange pin is the driver location from driver_status. While they are on the way, a live distance in feet stays on screen and the screen pulses orange as they get closer.'
+                  ? 'The orange pin is your driver’s live location. While they are on the way, a live distance in feet stays on screen and the screen pulses orange as they get closer.'
                   : 'Driver coordinates show up here after someone accepts and shares a location. Until then the straight-line ETA stays on this card. Road tiles need a billed Maps key.'}
             </Text>
           </View>

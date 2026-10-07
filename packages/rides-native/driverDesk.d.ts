@@ -52,12 +52,20 @@ export function setPriorityMode(supabase: unknown, driverId: string, on: boolean
 export function publishDriverLocation(
   supabase: unknown,
   driverId: string,
-  fix: { lat: number; lng: number; heading?: number | null; online?: boolean },
+  fix: {
+    lat: number
+    lng: number
+    heading?: number | null
+    online?: boolean
+    speed?: number | null
+    tripId?: string | null
+    tripStatus?: string | null
+  },
 ): Promise<void>
 export function setServiceClass(
   supabase: unknown,
   driverId: string,
-  input: 'comfort' | 'standard' | { enabled: boolean },
+  input: 'comfort' | 'standard' | { enabled: boolean; claimModel3?: boolean },
 ): Promise<VehicleRow>
 export function loadDriverDesk(supabase: unknown, driverId: string): Promise<DriverDesk>
 export function subscribeTrips(supabase: unknown, onChange: () => void): () => void

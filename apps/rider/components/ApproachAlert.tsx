@@ -16,15 +16,17 @@ const STAGE_HAPTIC_GAP_MS = 12000
 export function ApproachAlert({
   status,
   driverId,
+  tripId = null,
 }: {
   status: string | null
   driverId: string | null
+  tripId?: string | null
 }) {
   const insets = useSafeAreaInsets()
   const { colors } = useTheme()
   const styles = useThemedStyles(makeStyles)
   const paused = useSosEngaged()
-  const { active, reading, direction, attention, statusLine, waiting } = useDriverApproach(status, driverId)
+  const { active, reading, direction, attention, statusLine, waiting } = useDriverApproach(status, driverId, tripId)
   const wash = useRef(new Animated.Value(0)).current
   const bright = useRef(new Animated.Value(0)).current
   const flash = useRef(new Animated.Value(0)).current
