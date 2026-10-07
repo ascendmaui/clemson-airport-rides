@@ -58,6 +58,7 @@ export default function PickDriver() {
     dest?: string
     pickup?: string
     tier?: string
+    note?: string
     pickupLat?: string
     pickupLng?: string
     destLat?: string
@@ -66,6 +67,7 @@ export default function PickDriver() {
   const dest = oneParam(params.dest, 'GSP Airport')
   const pickup = oneParam(params.pickup, 'Memorial Stadium')
   const tier = oneParam(params.tier, 'standard')
+  const note = oneParam(params.note)
   const pickupLat = finiteParam(params.pickupLat)
   const pickupLng = finiteParam(params.pickupLng)
   const destLat = finiteParam(params.destLat)
@@ -80,6 +82,7 @@ export default function PickDriver() {
     dest,
     pickup,
     tier,
+    note,
     pickupLat: oneParam(params.pickupLat),
     pickupLng: oneParam(params.pickupLng),
     destLat: oneParam(params.destLat),
@@ -239,14 +242,20 @@ export default function PickDriver() {
       color: colors.orange,
     }))
 
+  const anyOnline = drivers.some((driver: OnlineDriver) => driver.online)
+
   const onRequest = async () => {
-    const chosen = drivers.find((row: OnlineDriver) => row.id === selected)
-    if (!chosen) {
-      setError('Select a driver first')
+    const chosen = drivers.find((row: OnlineDriver) => row.id === selected) || null
+    if (chosen && !chosen.online) {
+      setError('That driver is offline. This request does not auto-match.')
       return
     }
-    if (!chosen.online) {
-      setError('That driver is offline. This request does not auto-match.')
+    if (!chosen && !anyOnline) {
+      setError('No approved drivers are online right now.')
+      return
+    }
+    if (chosen && tier === 'comfort' && !chosen.comfortClass) {
+      setError('Extra Comfort fleet only. That driver is not listed as Comfort.')
       return
     }
     if (!user) {
@@ -259,19 +268,20 @@ export default function PickDriver() {
     try {
       const trip = await requestDriverTrip(supabase, {
         riderId: user.id,
-        driverId: chosen.id,
+        ...(chosen ? { driverId: chosen.id } : { autoAssign: true }),
         dest,
         destPoint: dropPoint,
         pickupLabel: pickup,
         pickupPoint: { latitude: approachPickup.lat, longitude: approachPickup.lng },
         tier,
         isStudent: student.verified,
+        note,
       })
       await successHaptic()
       await playTigerCue()
       router.replace({
         pathname: '/requested',
-        params: { dest, trip: trip.id, driver: chosen.name },
+        params: { dest, trip: trip.id, driver: chosen?.name || 'Next driver' },
       })
     } catch (err) {
       const redirect = scheduleRedirectForRequestError(err, dest)
@@ -368,9 +378,9 @@ export default function PickDriver() {
         ) : null}
         {error && drivers.some((driver: OnlineDriver) => driver.online) ? <Text style={styles.error}>{error}</Text> : null}
         <PrimaryButton
-          label={busy ? 'Requesting…' : selectedDriver ? `Request ${selectedDriver.name}` : 'Select a driver'}
+          label={busy ? 'Requesting…' : selectedDriver ? `Request ${selectedDriver.name}` : (anyOnline ? 'Request next driver' : 'Select a driver')}
           onPress={onRequest}
-          disabled={busy || !selectedDriver?.online}
+          disabled={busy || (selectedDriver ? !selectedDriver.online : !anyOnline)}
         />
       </View>
       <SignInToBookSheet

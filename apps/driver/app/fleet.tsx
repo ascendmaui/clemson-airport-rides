@@ -55,7 +55,8 @@ export default function FleetScreen() {
     }
   }
 
-  const listed = Boolean(vehicle?.service_class)
+  const service = String(vehicle?.service_class ?? '').trim().toLowerCase()
+  const listed = service === 'comfort' || service === 'true' || String(vehicle?.tier || '').trim().toLowerCase() === 'comfort'
 
   return (
     <View style={[styles.screen, { paddingTop: insets.top + 8 }]}>
@@ -95,11 +96,19 @@ export default function FleetScreen() {
               disabled={busy}
             />
             {!listed ? (
-              <Pressable onPress={() => toggle(true, true)} disabled={busy} style={styles.stubButton}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="My car is a Extra Comfort"
+                onPress={() => toggle(true, true)}
+                disabled={busy}
+                style={styles.stubButton}
+              >
                 <Text style={styles.stubButtonText}>My car is a Extra Comfort</Text>
               </Pressable>
             ) : null}
             <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Check driver operated dispatch"
               onPress={() => setStubNote('driver operated dispatch is not available. No car was assigned, and no autonomy session was started. Clemson fleet rides are driven by a person.')}
               style={styles.stubButton}
             >

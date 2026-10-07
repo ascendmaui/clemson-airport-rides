@@ -40,7 +40,9 @@ import {
   quoteInputKey,
   reconcileCheckout,
   startAirportDeposit,
+  withTigerPassQuote,
 } from 'rides-native/riderMoney.js'
+import { loadTigerPass, TIGER_PASS_NAME } from 'rides-native/tigerPassClient'
 import { parseCheckoutSessionId } from 'rides-native/checkoutReturn.js'
 import {
   HOLD_COUNTDOWN_TICK_MS,
@@ -75,6 +77,10 @@ type Quote = {
   surgeMultiplier: number
   surgeLabel: string | null
   routeSource: string | null
+  source?: string
+  tigerPassApplied?: boolean
+  tigerPassName?: string | null
+  tigerPassDiscountCents?: number
 }
 
 type Phase =
@@ -175,17 +181,48 @@ function ScheduleScreen() {
     return byTrip
   }, [reminders])
   const generation = useRef(0)
-  const quote = useMemo(() => quoteRide(pickup, dropoff, studentOn), [pickup, dropoff, studentOn])
+  const [passActive, setPassActive] = useState(false)
+  const [passBps, setPassBps] = useState(0)
+  const [passName, setPassName] = useState(TIGER_PASS_NAME)
+  const quote = useMemo(
+    () => withTigerPassQuote(quoteRide(pickup, dropoff, studentOn), { active: passActive, bps: passBps, name: passName }),
+    [pickup, dropoff, studentOn, passActive, passBps, passName],
+  )
   const weekendDestination = weekendSpot === 'airport' ? airportPlace(weekendAirport) : weekendDropoff
   const weekendQuote = useMemo(
-    () => quoteRide(weekendPickup, weekendDestination, studentOn && fleet !== 'comfort'),
-    [weekendPickup, weekendDestination, studentOn, fleet],
+    () => withTigerPassQuote(
+      quoteRide(weekendPickup, weekendDestination, studentOn && fleet !== 'comfort'),
+      { active: passActive, bps: passBps, name: passName },
+    ),
+    [weekendPickup, weekendDestination, studentOn, fleet, passActive, passBps, passName],
   )
   const weekendWhen = nextPickupDate({ date: weekendDate, time: weekendTime })
 
   useFocusEffect(useCallback(() => {
     setFocusTick((n: number) => n + 1)
   }, []))
+
+  useEffect(() => {
+    if (!user || !supabase) {
+      setPassActive(false)
+      setPassBps(0)
+      return undefined
+    }
+    let alive = true
+    loadTigerPass(supabase).then((status) => {
+      if (!alive) return
+      setPassActive(Boolean(status.active))
+      setPassBps(status.active ? status.discountBps : 0)
+      setPassName(status.name || TIGER_PASS_NAME)
+    }).catch(() => {
+      if (!alive) return
+      setPassActive(false)
+      setPassBps(0)
+    })
+    return () => {
+      alive = false
+    }
+  }, [user?.id, focusTick])
 
   useEffect(() => {
     if (returnPaid !== '1' && returnPaid !== 'true') return
@@ -217,7 +254,10 @@ function ScheduleScreen() {
     return () => clearTimeout(handle)
   }, [airport, date, time, key, focusTick, studentOn, user?.id])
 
-  const airportQuote = phase.status === 'ready' && phase.key === key ? phase.quote : null
+  const airportReady = phase.status === 'ready' && phase.key === key ? phase.quote : null
+  const airportQuote = airportReady && airportReady.source === 'fallback'
+    ? withTigerPassQuote(airportReady, { active: passActive, bps: passBps, name: passName })
+    : airportReady
   const quoting = phase.status === 'loading' || phase.key !== key
 
   async function reload(opts?: { quiet?: boolean }) {
@@ -359,9 +399,7 @@ function ScheduleScreen() {
         riderId: user.id,
         riderName: user.user_metadata?.full_name || user.email?.split('@')[0] || 'Rider',
       })
-      const depositPaid = Number(session.depositCents) || airportQuote.depositCents
       const farePaid = Number(session.fareCents) || airportQuote.fareCents
-      const remaining = Math.max(0, farePaid - depositPaid)
       const tripId = typeof session.tripId === 'string' ? session.tripId : ''
       if (session.paidWithCredits) {
         setBanner(`Ride covered by credits. Nothing else is due on the card.${tripId ? ` Trip ${tripId}.` : ''}`)
@@ -398,11 +436,11 @@ function ScheduleScreen() {
             /* The countdown appears once the trip row can be read. */
           })
       }
-      setBanner(`Opening checkout for ${formatCents(depositPaid)}. Remaining ${formatCents(remaining)} is charged when the trip ends.`)
+      setBanner(`Opening checkout. The final fare ${formatCents(farePaid)} is charged when the trip ends.`)
       const browserResult = await openStripeCheckout(url)
       ignoreEarlyHold = true
       if (!tripId || !supabase) {
-        setBanner('Checkout closed. Deposit received only after Stripe records the payment.')
+        setBanner('Checkout closed. A payment is recorded only after Stripe confirms it.')
         return
       }
       let effectiveSessionId = typeof session.id === 'string' ? session.id : ''
@@ -444,7 +482,7 @@ function ScheduleScreen() {
       }
       if (outcome === 'paid') {
         setCheckoutTrip(null)
-        setBanner(`Payment received · ${formatCents(depositPaid)}. Remaining ${formatCents(remaining)} is charged when the trip ends.`)
+        setBanner(`Payment recorded. The final fare ${formatCents(farePaid)} is charged when the trip ends.`)
         await successHaptic()
         if (!date) {
           router.replace({
@@ -683,6 +721,9 @@ function ScheduleScreen() {
             {weekendQuote.estimate ? 'Fare estimate' : 'Fare'} · {formatUsd(weekendQuote.fareCents / 100)}
           </Text>
           {weekendQuote.label ? <Text style={styles.student}>{weekendQuote.label}</Text> : null}
+          {(weekendQuote.tigerPassDiscountCents || 0) > 0 ? (
+            <Text style={styles.student}>{weekendQuote.tigerPassName || TIGER_PASS_NAME} · −{formatUsd((weekendQuote.tigerPassDiscountCents || 0) / 100)}</Text>
+          ) : null}
           <Text style={styles.fine}>
             {fleet === 'comfort' ? 'Extra Comfort · a driver is at the wheel.' : 'Standard vehicle.'}
             {weekendQuote.depositCents > 0
@@ -754,6 +795,9 @@ function ScheduleScreen() {
           <Row label="Fare" value={airportQuote ? formatCents(airportQuote.fareCents) : quoting ? 'Updating…' : '—'} />
           {airportQuote && airportQuote.studentDiscountCents > 0 ? (
             <Row label="Student discount" value={`−${formatCents(airportQuote.studentDiscountCents)}`} />
+          ) : null}
+          {airportQuote && (airportQuote.tigerPassDiscountCents || 0) > 0 ? (
+            <Row label={airportQuote.tigerPassName || TIGER_PASS_NAME} value={`−${formatCents(airportQuote.tigerPassDiscountCents || 0)}`} />
           ) : null}
           {airportQuote && airportQuote.surgeMultiplier > 1 ? (
             <Row label={airportQuote.surgeLabel || 'Surge'} value={`${airportQuote.surgeMultiplier}×`} />
@@ -851,6 +895,9 @@ function ScheduleScreen() {
         <View style={styles.panel}>
           <Text style={styles.cardLine}>{quote.estimate ? 'Fare estimate' : 'Fare'} · {formatUsd(quote.fareCents / 100)}</Text>
           {quote.label ? <Text style={styles.student}>{quote.label}</Text> : null}
+          {(quote.tigerPassDiscountCents || 0) > 0 ? (
+            <Text style={styles.student}>{quote.tigerPassName || TIGER_PASS_NAME} · −{formatUsd((quote.tigerPassDiscountCents || 0) / 100)}</Text>
+          ) : null}
           <Text style={styles.fine}>
             {quote.depositCents > 0
               ? depositSurfaceCopy(quote, 'confirm', { studentDiscountCents: quote.discountCents })

@@ -8,10 +8,10 @@ import { SignInToBookSheet } from '@/components/SignInToBookSheet'
 import { setAuthNext } from '@/lib/authNext'
 import { useAuth } from '@/lib/auth'
 import { supabase } from '@/lib/supabase'
-import { loadTigerPass, type TigerPassStatus } from 'rides-native/tigerPassClient'
+import { loadTigerPass, TIGER_PASS_NAME, type TigerPassStatus } from 'rides-native/tigerPassClient'
 import { oneParam } from '@/lib/oneParam'
 import { bookableRideTiers, formatUsd } from 'rides-native/places.js'
-import { displayTierPrice, studentSurfaceCopy } from 'rides-native/riderMoney.js'
+import { displayTierPrice, fetchRideQuote, studentSurfaceCopy, withTigerPassQuote, type AirportQuote } from 'rides-native/riderMoney.js'
 import { useStudentStatus } from '@/lib/useStudentStatus'
 import { lift } from '@/lib/elevation'
 import type { Palette } from '@/lib/palette'
@@ -43,6 +43,7 @@ export default function RideTiers() {
   const studentOffer = studentSurfaceCopy(student, 'tiers')
   const tiers = bookableRideTiers()
   const [pass, setPass] = useState<TigerPassStatus | null>(null)
+  const [quote, setQuote] = useState<AirportQuote | null>(null)
   const [selected, setSelected] = useState(tiers[0].id)
   const [promptOpen, setPromptOpen] = useState(false)
   const { colors } = useTheme()
@@ -58,10 +59,27 @@ export default function RideTiers() {
       const preferred = (next.preferredCarTypes || []).find((id) => tiers.some((tier) => tier.id === id))
       if (preferred) setSelected(preferred)
     }).catch(() => {})
+    const pickupLatN = Number(pickupLat)
+    const pickupLngN = Number(pickupLng)
+    const destLatN = Number(destLat)
+    const destLngN = Number(destLng)
+    fetchRideQuote(supabase, {
+      pickupLabel: pickup,
+      pickupLat: Number.isFinite(pickupLatN) ? pickupLatN : undefined,
+      pickupLng: Number.isFinite(pickupLngN) ? pickupLngN : undefined,
+      dest,
+      destLat: Number.isFinite(destLatN) ? destLatN : undefined,
+      destLng: Number.isFinite(destLngN) ? destLngN : undefined,
+    }).then((next) => {
+      if (!alive) return
+      setQuote(next)
+      const preferred = (next.preferredCarTypes || []).find((id) => tiers.some((tier) => tier.id === id))
+      if (preferred) setSelected(preferred)
+    }).catch(() => {})
     return () => {
       alive = false
     }
-  }, [user])
+  }, [user, pickup, pickupLat, pickupLng, dest, destLat, destLng])
 
   const next = {
     pathname: '/pick-driver' as const,
@@ -106,15 +124,29 @@ export default function RideTiers() {
         <Text style={styles.promoText}>{studentOffer.title}</Text>
         {studentOffer.detail ? <Text style={styles.promoDetail}>{studentOffer.detail}</Text> : null}
       </Pressable>
-      {pass?.active ? (
-        <Pressable accessibilityRole="button" onPress={() => router.push('/tiger-pass')} style={styles.passLine}>
-          <Text style={styles.promoDetail}>{pass.name} · {pass.summary}</Text>
+      {pass?.active || quote?.tigerPassApplied ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`${quote?.tigerPassName || pass?.name || TIGER_PASS_NAME} discount`}
+          onPress={() => router.push('/tiger-pass')}
+          style={styles.passLine}
+        >
+          <Text style={styles.promoDetail}>
+            {(quote?.tigerPassName || pass?.name || TIGER_PASS_NAME)} · {quote?.tigerPassApplied || pass?.active
+              ? `${Math.round((quote?.tigerPassDiscountBps || pass?.discountBps || 1000) / 100)}% off this fare`
+              : pass?.summary}
+          </Text>
         </Pressable>
       ) : null}
       <Animated.ScrollView style={[{ flex: 1 }, listMotion]} contentContainerStyle={styles.list} showsVerticalScrollIndicator={false}>
         {tiers.map((tier) => {
           const on = tier.id === selected
-          const quoted = displayTierPrice(tier.price, { isStudent: student.verified, tier: tier.id })
+          const quoted = tierQuote(tier, {
+            isStudent: student.verified,
+            serverTier: (quote?.tiers || []).find((row) => row.id === tier.id) || null,
+            pass,
+            passName: quote?.tigerPassName || pass?.name || TIGER_PASS_NAME,
+          })
           return (
             <Pressable
               key={tier.id}
@@ -142,7 +174,7 @@ export default function RideTiers() {
               </View>
               <View style={styles.priceCol}>
                 <Text style={styles.price}>{formatUsd(quoted.price)}</Text>
-                {quoted.discount > 0 ? <Text style={styles.was}>{formatUsd(tier.price)}</Text> : null}
+                {quoted.discount > 0 ? <Text style={styles.was}>{formatUsd(quoted.was)}</Text> : null}
               </View>
             </Pressable>
           )
@@ -170,6 +202,45 @@ export default function RideTiers() {
       />
     </View>
   )
+}
+
+function tierQuote(
+  tier: { id: string; price: number },
+  {
+    isStudent,
+    serverTier,
+    pass,
+    passName,
+  }: {
+    isStudent: boolean
+    serverTier: { fareCents: number; discountCents?: number; tigerPassDiscountCents?: number; tigerPassApplied?: boolean } | null
+    pass: TigerPassStatus | null
+    passName: string
+  },
+) {
+  if (serverTier && Number.isFinite(serverTier.fareCents)) {
+    const studentOff = Math.max(0, Math.round(serverTier.discountCents || 0))
+    const passOff = Math.max(0, Math.round(serverTier.tigerPassDiscountCents || 0))
+    const before = serverTier.fareCents + studentOff + passOff
+    return {
+      price: serverTier.fareCents / 100,
+      discount: (studentOff + passOff) / 100,
+      was: before / 100,
+      label: passOff > 0 ? `${passName} · 10% off` : (studentOff > 0 ? 'Clemson student · 10% off Standard' : null),
+    }
+  }
+  const catalog = displayTierPrice(tier.price, { isStudent, tier: tier.id })
+  if (!pass?.active) return { ...catalog, was: tier.price }
+  const passed = withTigerPassQuote(
+    { fareCents: catalog.fareCents, depositCents: 0 },
+    { active: true, bps: pass.discountBps, name: passName },
+  )
+  return {
+    price: passed.fareCents / 100,
+    discount: catalog.discount + passed.tigerPassDiscountCents / 100,
+    was: tier.price,
+    label: passed.tigerPassName,
+  }
 }
 
 function makeStyles(colors: Palette) {

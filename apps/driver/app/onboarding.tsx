@@ -2,7 +2,7 @@ import { Redirect, useFocusEffect, useRouter } from 'expo-router'
 import * as DocumentPicker from 'expo-document-picker'
 import * as ImagePicker from 'expo-image-picker'
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { Linking, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { BackButton, Card, ErrorText, Field, Primary, Tag } from '@/components/chrome'
 import { SignaturePad } from '@/components/SignaturePad'
@@ -38,6 +38,7 @@ import { loadDriverProfile, loadVehicle } from 'rides-native/driverDesk'
 import { COMFORT_FLEET_NOTICE } from 'rides-native/tripTags'
 import { comfortClassMakeModel, modelsForMake, VEHICLE_COLORS, VEHICLE_MAKES } from 'rides-native/vehicleCatalog'
 import { useTheme } from '@/lib/theme'
+import { WEB_DRIVER_SIGNUP_URL } from '../../../shared/productLinks.js'
 import { knowledgeQuizStatus, knowledgeQuizStatusLabel, loadKnowledgeQuiz } from 'rides-native/driverKnowledgeQuiz'
 
 const HEADLINE = 'Become a driver'
@@ -523,6 +524,14 @@ export default function OnboardingScreen() {
         <Text style={styles.kicker}>DRIVER APPLICATION</Text>
         <Text style={styles.title}>{HEADLINE}</Text>
         <Text style={styles.copy}>{TAGLINE}</Text>
+        <Pressable
+          onPress={() => { void Linking.openURL(WEB_DRIVER_SIGNUP_URL) }}
+          accessibilityRole="link"
+          accessibilityLabel="Open the website driver application"
+          accessibilityHint="Opens clemsonrides.com if you would rather finish the application in a browser"
+        >
+          <Text style={styles.link}>Prefer the website? Open the driver application</Text>
+        </Pressable>
         <View style={styles.progressTrack}>
           <View style={[styles.progressFill, { width: `${progress.percent}%` }]} />
         </View>
@@ -974,6 +983,7 @@ function useOnboardingStyles() {
     kicker: { color: colors.orange, fontWeight: '800' as const, letterSpacing: 1.1, fontSize: 12, marginTop: 12 },
     title: { fontSize: 28, fontWeight: '800' as const, color: colors.title, letterSpacing: -0.4 },
     copy: { color: colors.inkSecondary, fontSize: 15, lineHeight: 21 },
+    link: { color: colors.purple, fontSize: 14, fontWeight: '800' as const, lineHeight: 20 },
     progressTrack: { height: 8, borderRadius: 999, backgroundColor: colors.track, overflow: 'hidden' as const },
     progressFill: { height: '100%' as const, backgroundColor: colors.orange, borderRadius: 999 },
     progressLabel: { color: colors.title, fontWeight: '700' as const, fontSize: 13 },

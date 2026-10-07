@@ -4,7 +4,10 @@ import test from 'node:test'
 import {
   acceptTrip,
   advanceTrip,
+  declineDriverOffer,
   declineTrip,
+  markSearchingOffers,
+  passOffer,
   formatCents,
   listPassedTripIds,
   loadDriverDesk,
@@ -779,6 +782,10 @@ test('setServiceClass stores comfort or standard on the vehicle', async () => {
   const reverted = await setServiceClass(supabase, 'driver-1', 'standard')
   assert.equal(reverted.service_class, 'standard')
   assert.equal(reverted.tier, 'standard')
+  const fromFleet = await setServiceClass(supabase, 'driver-1', { enabled: true, claimModel3: true })
+  assert.equal(fromFleet.service_class, 'comfort')
+  assert.equal(fromFleet.tier, 'comfort')
+  assert.equal(fromFleet.autonomous_capable, undefined)
 })
 
 test('setServiceClass throws on update query error', async () => {
@@ -1323,6 +1330,37 @@ test('advanceTrip advances in_progress to completed and attaches settle receipt'
   )
 })
 
+test('advanceTrip keeps the settle receipt when the server already completed the trip', async () => {
+  let reads = 0
+  const supabase = {
+    from() {
+      return {
+        update() { return this },
+        select() { return this },
+        eq() { return this },
+        maybeSingle: async () => {
+          reads += 1
+          if (reads === 1) return { data: null, error: null }
+          return { data: { id: 'trip-done', status: 'completed', completed_at: '2026-10-06T00:00:00Z' }, error: null }
+        },
+      }
+    },
+  }
+  await withMockFetch(
+    {
+      '/api/stripe-payment-methods?action=settle': {
+        status: 200,
+        body: { payout: { status: 'pending', amountCents: 1800 } },
+      },
+    },
+    async () => {
+      const res = await advanceTrip(supabase, { id: 'trip-done', status: 'in_progress' }, 'driver-1')
+      assert.equal(res.status, 'completed')
+      assert.deepEqual(res.settle, { payout: { status: 'pending', amountCents: 1800 } })
+    },
+  )
+})
+
 test('advanceTrip translates payment_required error when completing', async () => {
   const supabase = createFakeSupabase(
     {
@@ -1641,6 +1679,57 @@ test('driver offer queries do not send the illegal trip_status requested', () =>
   const track = live.match(/export const RIDER_TRACK_STATUSES = \[([\s\S]*?)\]/)
   assert.ok(track)
   assert.doesNotMatch(track[1], /requested/)
+})
+
+test('markSearchingOffers posts searching rows once and skips claimed offers', async () => {
+  const calls = []
+  await withMockFetch(
+    {
+      '/api/driver?action=mark-offered': (url, options) => {
+        calls.push(JSON.parse(options.body))
+        return {
+          ok: true,
+          status: 200,
+          text: async () => JSON.stringify({ status: 'offered' }),
+        }
+      },
+    },
+    async () => {
+      await markSearchingOffers({}, [
+        { id: 'open-1', status: 'searching', driverId: null },
+        { id: 'mine', status: 'searching', driverId: 'driver-1' },
+        { id: 'offered-1', status: 'offered', driverId: null },
+      ])
+      await markSearchingOffers({}, [{ id: 'open-1', status: 'searching', driverId: null }])
+    },
+  )
+  assert.deepEqual(calls, [{ tripId: 'open-1' }])
+})
+
+test('declineDriverOffer uses pass-offer for a matching request', async () => {
+  let body = null
+  await withMockFetch(
+    {
+      '/api/driver?action=pass-offer': (url, options) => {
+        body = JSON.parse(options.body)
+        return {
+          ok: true,
+          status: 200,
+          text: async () => JSON.stringify({ tripId: 'matching', status: 'searching', offerDriverId: 'driver-2' }),
+        }
+      },
+    },
+    async () => {
+      const result = await declineDriverOffer({}, { id: 'matching', status: 'offered', matchingOffer: true }, 'driver-1')
+      assert.equal(result.via, 'api')
+      assert.equal(result.passed, true)
+    },
+  )
+  assert.deepEqual(body, { tripId: 'matching' })
+})
+
+test('passOffer requires a trip id', async () => {
+  await assert.rejects(() => passOffer({}, ''), /Missing ride/)
 })
 
 test('native matching pass never rewrites a newly retargeted trip', async () => {

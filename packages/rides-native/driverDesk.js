@@ -159,10 +159,15 @@ export async function publishDriverLocation(supabase, driverId, { lat, lng, head
   if (error) throw new Error(error.message)
 }
 
+function comfortClassRequested(serviceClass) {
+  if (serviceClass && typeof serviceClass === 'object') return Boolean(serviceClass.enabled)
+  return serviceClass === 'comfort'
+}
+
 export async function setServiceClass(supabase, driverId, serviceClass) {
   const vehicle = await loadVehicle(supabase, driverId)
   if (!vehicle?.id) throw new Error('Add your vehicle in driver onboarding before choosing a service class.')
-  const service_class = serviceClass === 'comfort' ? 'comfort' : 'standard'
+  const service_class = comfortClassRequested(serviceClass) ? 'comfort' : 'standard'
   const { data, error } = await supabase.from('vehicles').update({ service_class, tier: service_class }).eq('id', vehicle.id).select('*').single()
   if (error) throw new Error(error.message)
   return data
@@ -406,6 +411,52 @@ export async function publishDriverCapacity(supabase, driverId, seats) {
   throw new Error(first.error.message)
 }
 
+const markedSearchingOffers = new Set()
+
+/** Promote visible searching rows to offered. The client update fails RLS. */
+export async function markSearchingOffers(supabase, offers) {
+  if (!supabase) return
+  const pending = []
+  for (const card of offers || []) {
+    if (!card?.id || card.status !== 'searching' || card.driverId) continue
+    if (markedSearchingOffers.has(card.id)) continue
+    markedSearchingOffers.add(card.id)
+    pending.push(
+      authedJson(supabase, '/api/driver?action=mark-offered', {
+        method: 'POST',
+        body: { tripId: card.id },
+      }).catch(() => {
+        markedSearchingOffers.delete(card.id)
+      }),
+    )
+  }
+  await Promise.all(pending)
+}
+
+export async function passOffer(supabase, tripId) {
+  if (!supabase || !tripId) throw new Error('Missing ride')
+  return authedJson(supabase, '/api/driver?action=pass-offer', {
+    method: 'POST',
+    body: { tripId },
+  })
+}
+
+/**
+ * Live matching declines go through pass-offer so the next driver is notified.
+ * If that call fails, the local pass still records the decline.
+ */
+export async function declineDriverOffer(supabase, trip, driverId = null) {
+  if (trip?.matchingOffer && trip?.id) {
+    try {
+      const result = await passOffer(supabase, trip.id)
+      return { disposition: 'release', passed: true, via: 'api', result }
+    } catch {
+      /* The offer API is down. Record the pass on this phone. */
+    }
+  }
+  return declineTrip(supabase, trip, driverId)
+}
+
 export async function declineTrip(supabase, tripOrId, driverId = null) {
   const trip = typeof tripOrId === 'string' ? { id: tripOrId, status: 'requested' } : tripOrId
   if (!trip?.id) return { disposition: 'leave' }
@@ -526,7 +577,7 @@ export async function advanceTrip(supabase, trip, driverId) {
   if (!data || data.status !== next) {
     if (next === 'completed') {
       const again = await supabase.from('trips').select('id, status, completed_at').eq('id', trip.id).maybeSingle()
-      if (again.data?.status === 'completed') return again.data
+      if (again.data?.status === 'completed') return settle ? { ...again.data, settle } : again.data
       throw new Error('Payment is still required before this trip can complete.')
     }
     throw new Error('Trip status did not update.')

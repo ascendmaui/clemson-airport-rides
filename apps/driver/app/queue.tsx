@@ -12,7 +12,7 @@ import { oneParam } from '@/lib/oneParam'
 import { supabase } from '@/lib/supabase'
 import { useTheme } from '@/lib/theme'
 import type { Palette } from '@/lib/palette'
-import { acceptTrip, declineTrip, loadDriverDesk, subscribeTrips } from 'rides-native/driverDesk'
+import { acceptTrip, declineDriverOffer, loadDriverDesk, markSearchingOffers, subscribeTrips } from 'rides-native/driverDesk'
 import { fetchDriverApplication } from 'rides-native/drivers'
 import { isSyntheticOffer } from 'rides-native/syntheticOffers'
 import { driverGateView } from 'rides-native/driverGateView'
@@ -173,6 +173,7 @@ export default function QueueScreen() {
     const currentGate = driverGateView(nextStatus, { rejectionReason: nextReason })
     if (currentGate.canSeeOffers) {
       const desk = await loadDriverDesk(supabase, user.id)
+      if (desk.online) markSearchingOffers(supabase, desk.offers).catch(() => {})
       const merged = [...desk.offers, ...desk.scheduledOpen, ...desk.upcoming]
       const seen = new Set<string>()
       setWarning(desk.warning || null)
@@ -245,7 +246,7 @@ export default function QueueScreen() {
     setBusyId(card.id)
     setError(null)
     try {
-      await declineTrip(supabase, card, user.id)
+      await declineDriverOffer(supabase, card, user.id)
       pulse('decline')
       await refresh()
     } catch (err) {

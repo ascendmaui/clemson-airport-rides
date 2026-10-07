@@ -57,7 +57,7 @@ export function publishDriverLocation(
 export function setServiceClass(
   supabase: unknown,
   driverId: string,
-  input: { enabled: boolean; claimModel3?: boolean },
+  input: 'comfort' | 'standard' | { enabled: boolean; claimModel3?: boolean },
 ): Promise<VehicleRow>
 export function loadDriverDesk(supabase: unknown, driverId: string): Promise<DriverDesk>
 export function subscribeTrips(supabase: unknown, onChange: () => void): () => void
@@ -68,6 +68,16 @@ export function publishDriverCapacity(
 ): Promise<{ seats: number | null; stored: boolean }>
 export function listPassedTripIds(supabase: unknown, driverId: string): Promise<string[]>
 export function acceptTrip(supabase: unknown, trip: { id: string; status: string }, driverId: string): Promise<unknown>
+export function markSearchingOffers(
+  supabase: unknown,
+  offers: { id?: string; status?: string; driverId?: string | null }[] | null | undefined,
+): Promise<void>
+export function passOffer(supabase: unknown, tripId: string): Promise<unknown>
+export function declineDriverOffer(
+  supabase: unknown,
+  trip: { id: string; status?: string; matchingOffer?: boolean },
+  driverId?: string | null,
+): Promise<{ disposition: 'release' | 'leave' | 'cancel'; passed?: boolean; released?: boolean; via?: string }>
 export function declineTrip(
   supabase: unknown,
   tripOrId: string | { id: string; status?: string },

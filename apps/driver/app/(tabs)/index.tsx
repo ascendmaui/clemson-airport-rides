@@ -22,7 +22,8 @@ import { HEAT_WINDOWS } from 'rides-native/places.js'
 import { loadBusySpots, type BusySpot } from '@/lib/busySpots'
 import {
   acceptTrip,
-  declineTrip,
+  declineDriverOffer,
+  markSearchingOffers,
   formatCents,
   loadDriverDesk,
   loadGameDay,
@@ -164,6 +165,7 @@ export default function DriverHome() {
     })
     if (currentGate.canSeeOffers) {
       const loaded = await loadDriverDesk(supabase, user.id)
+      if (loaded.online) markSearchingOffers(supabase, loaded.offers).catch(() => {})
       setDesk(loaded)
       if (loaded.lat != null && loaded.lng != null) {
         setSelf({ latitude: Number(loaded.lat), longitude: Number(loaded.lng) })
@@ -313,7 +315,7 @@ export default function DriverHome() {
     setBusy(true)
     setError(null)
     try {
-      await declineTrip(supabase, card, user.id)
+      await declineDriverOffer(supabase, card, user.id)
       pulse('decline')
       await refresh()
     } catch (err) {
@@ -383,7 +385,6 @@ export default function DriverHome() {
     const card = liveOffers.find((row: DriverCard) => row.id === id)
     if (!card) return
     setSelectedOfferId(card.id)
-    void onAccept(card)
   }
 
   const statusLine = !user

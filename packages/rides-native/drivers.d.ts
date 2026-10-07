@@ -134,12 +134,14 @@ export function requestDriverTrip(
   supabase: unknown,
   input: {
     riderId: string
-    driverId: string
+    driverId?: string | null
+    autoAssign?: boolean
     dest?: string
-    destPoint?: { latitude: number; longitude: number }
+    destPoint?: { latitude?: number; longitude?: number; lat?: number; lng?: number }
     pickupLabel?: string
-    pickupPoint?: { latitude: number; longitude: number }
+    pickupPoint?: { latitude?: number; longitude?: number; lat?: number; lng?: number }
     tier?: string
     isStudent?: boolean
+    note?: string
   },
-): Promise<{ id: string; status: string; driver_id: string; dropoff_label: string; fare_cents?: number | null; deposit_cents?: number | null }>
+): Promise<{ id: string; status: string; driver_id: string | null; dropoff_label?: string; fare_cents?: number | null; deposit_cents?: number | null }>

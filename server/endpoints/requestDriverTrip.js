@@ -222,6 +222,7 @@ export default async function handler(req, res, deps = {}) {
       error: error?.message || String(error),
     }))
   }
+  const riderNote = String(body.note || body.riderNote || '').replace(/\s+/g, ' ').trim().slice(0, 280)
   const riderFirst = firstName(
     user.user_metadata?.full_name || user.user_metadata?.name || user.email?.split('@')[0],
     'Rider',
@@ -257,6 +258,7 @@ export default async function handler(req, res, deps = {}) {
       rider_pays_cents: priced.fareCents,
     },
     passengers: 1,
+    ...(riderNote ? { rider_note: riderNote } : {}),
     metadata: {
       kind: 'driver_request',
       purpose: 'planned',
