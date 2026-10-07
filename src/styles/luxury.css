@@ -605,8 +605,8 @@ body .mkt-card .mkt-text:active {
 }
 
 .mkt-home .mkt-choices {
-  flex-direction: row;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
   gap: 8px;
   margin-top: 12px;
 }
@@ -684,7 +684,7 @@ body .mkt-card .mkt-text:active {
   align-items: center;
   min-height: 44px;
   color: #FF8A3D;
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 700;
   letter-spacing: 0.14em;
   text-transform: uppercase;
@@ -1140,13 +1140,31 @@ body .mkt-info .mkt-card {
 
 body .mkt-feature .mkt-part .mkt-kicker {
   color: #FF8A3D;
+  font-size: 14px;
+}
+
+.mkt-why-intro {
+  margin: 0 0 32px;
+}
+
+.mkt-drive-earnings {
+  margin-top: 28px;
 }
 
 body .mkt-close .mkt-choice,
 body .mkt-section-end .mkt-choice,
-body .mkt-ghost {
+body .mkt-ghost,
+body .mkt-reach .mkt-text {
   background: rgba(15, 10, 25, 0.6);
   border: 1px solid rgba(255, 255, 255, 0.55);
+  color: #fff;
+}
+
+body .mkt-reach .mkt-text:hover,
+body .mkt-reach .mkt-text:focus-visible,
+body .mkt-reach .mkt-text:active {
+  background: rgba(15, 10, 25, 0.82);
+  border-color: #fff;
   color: #fff;
 }
 
@@ -1375,6 +1393,9 @@ body .mkt-qr-svg {
   .mkt-drive-earnings {
     margin-top: 56px;
   }
+  .mkt-why-span {
+    grid-column: 1 / -1;
+  }
   .mkt-home-hero.mkt-hero-collage {
     width: min(560px, calc(100% - 64px));
     margin: 8px auto 32px;
@@ -1499,6 +1520,10 @@ body .mkt-qr-svg {
   body .mkt-menu button {
     padding: 4px 8px;
     font-size: 13px;
+  }
+  .mkt-why-intro {
+    font-size: 17px;
+    line-height: 1.55;
   }
 }
 

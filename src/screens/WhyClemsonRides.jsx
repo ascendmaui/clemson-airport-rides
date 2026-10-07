@@ -7,7 +7,7 @@ const WHY_IDS = ['backup-driver', 'confirm', 'switch-cancel', 'boosts', 'student
 
 function WhyCard({ feature, photoId }) {
   return (
-    <article className="mkt-card mkt-feature">
+    <article className={`mkt-card mkt-feature${feature.id === 'clemson' ? ' mkt-why-span' : ''}`}>
       {photoId ? <MarketingPhoto id={photoId} /> : null}
       {feature.exclusive ? <p className="mkt-kicker">{ONLY_AT_CLEMSON_RIDES}</p> : null}
       <h3>{feature.title}</h3>
@@ -22,12 +22,12 @@ export function WhyClemsonRides() {
   const features = WHY_IDS.map((id) => byId.get(id))
   return (
     <SitePage current="why-clemson-rides">
-      <section aria-labelledby="why-page-heading">
+      <section className="mkt-why" aria-labelledby="why-page-heading">
         <div className="mkt-section-head">
           <p className="mkt-kicker">Why Clemson Rides</p>
           <h2 id="why-page-heading">Peace of mind</h2>
         </div>
-        <p className="mkt-note">
+        <p className="mkt-note mkt-why-intro">
           A generic rideshare sends the open car. Here, a scheduled ride can add a backup driver.
           The driver confirms before they come. You can switch or cancel before they start toward you.
           A boost goes to the driver.

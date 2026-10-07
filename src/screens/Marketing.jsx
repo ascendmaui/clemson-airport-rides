@@ -33,7 +33,6 @@ export function Marketing() {
             </button>
           </div>
           <div className="mkt-choices" role="group" aria-label="Ways to ride">
-            <button type="button" className="mkt-choice pressable" onClick={() => navigate('home')}>Book a ride</button>
             <button type="button" className="mkt-choice pressable" onClick={() => navigate('home', { tier: 'carpool' })}>Book a carpool</button>
             <button type="button" className="mkt-choice pressable" onClick={() => navigate('schedule')}>Schedule for later</button>
           </div>
