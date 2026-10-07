@@ -163,9 +163,9 @@ body .mkt-footer button:active {
 .mkt-stage {
   position: relative;
   min-height: calc(100dvh - 72px);
-  display: grid;
-  align-items: end;
-  align-content: end;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   overflow: visible;
   background: transparent;
 }
@@ -202,8 +202,24 @@ body .mkt-footer {
 }
 
 .mkt-stage-copy {
-  padding: 28px 0 36px;
-  max-width: 640px;
+  width: min(420px, calc(100% - 32px));
+  max-width: 420px;
+  margin: 0 auto;
+  padding: 28px 0 40px;
+}
+
+.mkt-choices {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 28px;
+}
+
+body .mkt-choices .primary-cta,
+body .mkt-choices .mkt-ghost {
+  width: 100%;
+  min-height: 56px;
+  font-size: 18px;
 }
 
 body .mkt-stage h1,
@@ -211,8 +227,8 @@ body .mkt .mkt-stage h1 {
   color: #fff;
   font-weight: 700;
   letter-spacing: -1.6px;
-  font-size: clamp(52px, 8vw, 96px);
-  line-height: 0.94;
+  font-size: 44px;
+  line-height: 1.05;
 }
 
 body .mkt-orange-word {
@@ -246,6 +262,12 @@ body .mkt .primary-cta {
   font-size: 17px;
   min-height: 48px;
   padding-inline: 22px;
+}
+
+body .mkt .mkt-choices .primary-cta,
+body .mkt-choices .mkt-ghost {
+  width: 100%;
+  min-height: 56px;
 }
 
 body .mkt .primary-cta:hover,
@@ -597,20 +619,19 @@ body .mkt-qr-svg {
 
 @media (min-width: 960px) {
   .mkt-stage {
-    grid-template-columns: 1.3fr 0.7fr;
-    align-items: end;
-    align-content: end;
+    min-height: calc(100dvh - 76px);
+    align-items: center;
+    justify-content: center;
   }
   .mkt-stage-copy {
-    grid-column: 1;
-    max-width: 720px;
-    padding: 48px 0 72px;
+    width: min(480px, calc(100% - 64px));
+    max-width: 480px;
+    padding: 48px 0 64px;
   }
-  .mkt-spec {
-    grid-column: 2;
-    margin: 0 28px 72px auto;
-    max-width: 420px;
-    padding: 28px 28px 24px;
+  body .mkt .mkt-choices .primary-cta,
+  body .mkt-choices .mkt-ghost {
+    min-height: 60px;
+    font-size: 20px;
   }
   body .mkt-nav {
     padding: 16px 32px;
@@ -627,8 +648,8 @@ body .mkt-qr-svg {
   }
   body .mkt-stage h1,
   body .mkt .mkt-stage h1 {
-    font-size: clamp(72px, 6vw, 96px);
-    letter-spacing: -2px;
+    font-size: 64px;
+    letter-spacing: -1.6px;
   }
   body .mkt-section-head {
     margin-bottom: 24px;
