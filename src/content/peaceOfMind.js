@@ -76,7 +76,7 @@ export const BUILT_IN = [
     bookRoute: 'home',
     imageId: null,
     title: 'Messaging and lost items',
-    what: 'Chat with your driver, and keep that chat open for a lost item.',
+    what: 'Message your driver after they accept, and during the ride. After the ride, chat opens again only for a lost item.',
     how: '',
     why: 'You can reach the driver during the ride, and a lost item can reopen that chat.',
   },

@@ -3,6 +3,7 @@ import { MarketingPhoto } from '../components/MarketingPhoto'
 import { SitePage } from '../components/SitePage'
 import { ONBOARDING_FLOW } from '../../shared/driverOnboarding.js'
 import { APP_STORE_NOTE } from '../content/peaceOfMind.js'
+import { DRIVER_EARNINGS, RELEASE_NOTE } from '../content/differentiators.js'
 
 export function DriveWithUs() {
   return (
@@ -41,6 +42,22 @@ export function DriveWithUs() {
             <p>The application waits for review. New drivers are not auto-approved.</p>
           </article>
         </div>
+        <div className="mkt-section-head">
+          <p className="mkt-kicker">Earnings</p>
+          <h2>Earn more on scheduled rides</h2>
+        </div>
+        <div className="mkt-safety-live">
+          {DRIVER_EARNINGS.map((item, index) => (
+            <article key={item.id} className="mkt-card mkt-feature">
+              <p className="mkt-kicker">{index + 1}</p>
+              <h3>{item.title}</h3>
+              <ol className="mkt-guide">
+                {item.steps.map((step) => <li key={step}>{step}</li>)}
+              </ol>
+            </article>
+          ))}
+        </div>
+        <p className="mkt-release">{RELEASE_NOTE}</p>
         <button type="button" className="mkt-text pressable" onClick={() => navigate('driver-signup')}>
           Start the driver application
         </button>

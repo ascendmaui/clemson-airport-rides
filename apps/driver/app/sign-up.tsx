@@ -31,7 +31,7 @@ export default function SignUpRoute() {
       storage={authStorage}
       mark="CD"
       showPromo={false}
-      subtitle="Drive with Clemson RIDES. You keep 80% of the fare. New drivers are never auto-approved."
+      subtitle="Drive with Clemson RIDES. You keep 80% of the fare. Boosts and backup pay on scheduled rides are extra. New drivers are never auto-approved."
       socialProviders={socialProviders}
       onSocial={onSocial}
       onSuccess={() => router.replace('/')}

@@ -316,6 +316,48 @@ test('messaging and lost item blocks are live and follow messagingGuide', async 
   assert.match(guide.lostItemSteps.join(' '), /marks it resolved/)
 })
 
+test('why page and drive page carry the differentiators without crowding the homepage', async () => {
+  const home = readFileSync(new URL('../src/screens/Marketing.jsx', import.meta.url), 'utf8')
+  const why = readFileSync(new URL('../src/screens/WhyClemsonRides.jsx', import.meta.url), 'utf8')
+  const drive = readFileSync(new URL('../src/screens/DriveWithUs.jsx', import.meta.url), 'utf8')
+  const copy = readFileSync(new URL('../src/content/differentiators.js', import.meta.url), 'utf8')
+  const { DIFFERENTIATOR_CLAIMS_AWAIT_FEATURE_PRS, HOMEPAGE_TRUST_LINE, RIDER_DIFFERENTIATORS, DRIVER_EARNINGS } = await import('../src/content/differentiators.js')
+  assert.equal(DIFFERENTIATOR_CLAIMS_AWAIT_FEATURE_PRS, true)
+  assert.match(copy, /backup-queue/)
+  assert.match(copy, /Do not publish this copy on production/)
+  assert.equal(HOMEPAGE_TRUST_LINE, 'Guaranteed airport pickups. Drivers confirm before they come.')
+  assert.match(home, /HOMEPAGE_TRUST_LINE/)
+  assert.match(home, /navigate\('why-clemson-rides'\)/)
+  assert.match(home, /Why Clemson Rides/)
+  assert.doesNotMatch(home, /RIDER_DIFFERENTIATORS|DRIVER_EARNINGS|Backup pay/)
+  assert.match(why, /RIDER_DIFFERENTIATORS/)
+  assert.match(why, /mkt-card mkt-feature/)
+  assert.match(why, /mkt-guide/)
+  assert.match(drive, /DRIVER_EARNINGS/)
+  assert.match(drive, /Earn more on scheduled rides/)
+  assert.deepEqual(RIDER_DIFFERENTIATORS.map((item) => item.title), [
+    'Guaranteed airport pickups',
+    'No-flake drivers',
+    'Message your driver',
+    'You are in control',
+  ])
+  assert.deepEqual(DRIVER_EARNINGS.map((item) => item.title), [
+    'Keep the boost',
+    'Backup pay',
+    'Switch or cancel',
+  ])
+  const blob = `${JSON.stringify(RIDER_DIFFERENTIATORS)} ${JSON.stringify(DRIVER_EARNINGS)} ${HOMEPAGE_TRUST_LINE}`
+  assert.match(blob, /\$5, \$10, \$15, or \$20/)
+  assert.match(blob, /\$10 or \$15/)
+  assert.match(blob, /keeps all of it/)
+  assert.match(blob, /Report a lost item/)
+  assert.match(blob, /5 minutes before pickup/)
+  assert.match(blob, /never counts against/)
+  assert.doesNotMatch(blob, /25% deposit/)
+  const retiredFleet = new RegExp(['te' + 'sla', 'model' + ' 3', 'robo' + 'taxi', 'self' + '-driving'].join('|'), 'i')
+  assert.equal(retiredFleet.test(blob), false)
+})
+
 test('homepage menu routes are real screens', () => {
   const app = readFileSync(new URL('../src/App.jsx', import.meta.url), 'utf8')
   const info = readFileSync(new URL('../src/screens/MarketingInfo.jsx', import.meta.url), 'utf8')

@@ -1,6 +1,10 @@
 import { navigate } from '../lib/navigation'
 import { MarketingPhoto } from '../components/MarketingPhoto'
 import { SitePage } from '../components/SitePage'
+import {
+  RELEASE_NOTE,
+  RIDER_DIFFERENTIATORS,
+} from '../content/differentiators.js'
 
 export function WhyClemsonRides() {
   return (
@@ -12,9 +16,24 @@ export function WhyClemsonRides() {
           <p>
             Clemson RIDES is a student ride product for this campus. It is not an official Clemson University service.
             Pickup spots are campus places. A confirmed @clemson.edu or @g.clemson.edu email gets 10% off Standard.
-            That student discount does not include Carpool. Game day shows the pickup zone and the fare multiplier from the server.
+            That student discount does not include Carpool.
           </p>
         </div>
+        <div className="mkt-safety-live">
+          {RIDER_DIFFERENTIATORS.map((item, index) => (
+            <article key={item.id} className="mkt-card mkt-feature">
+              <p className="mkt-kicker">{index + 1}</p>
+              <h3>{item.title}</h3>
+              <ol className="mkt-guide">
+                {item.steps.map((step) => <li key={step}>{step}</li>)}
+              </ol>
+            </article>
+          ))}
+        </div>
+        <p className="mkt-release">{RELEASE_NOTE}</p>
+        <button type="button" className="mkt-text pressable" onClick={() => navigate('drive')}>
+          Drivers: earn more on scheduled rides
+        </button>
         <div className="mkt-safety-live">
           <article className="mkt-card mkt-feature">
             <MarketingPhoto id="gameday-crowd" />

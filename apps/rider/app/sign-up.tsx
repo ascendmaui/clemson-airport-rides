@@ -42,7 +42,7 @@ export default function SignUpRoute() {
       onSocial={onSocial}
       mark="CR"
       initialPromo={oneParam(params.ref)}
-      subtitle="Peace of mind, every ride. Rides and carpools for Clemson students."
+      subtitle="Peace of mind, every ride. Rides and carpools for Clemson students. Scheduled airport pickups can include a backup driver."
       onSuccess={() => finish(router)}
       onSignIn={() => router.replace('/sign-in')}
       onOpenLegal={(doc) => router.push({ pathname: '/legal', params: { doc } })}

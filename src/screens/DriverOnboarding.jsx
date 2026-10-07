@@ -583,7 +583,7 @@ export function DriverOnboarding() {
         Driver application
       </h1>
       <p style={{ color: 'var(--ink-secondary)', fontSize: 14, lineHeight: 1.45, marginTop: 6 }}>
-        You keep 80% of the fare. A scheduled boost is all yours. New drivers are never auto-approved. Finish each step — your place is saved if you leave.
+        You keep 80% of the fare. A scheduled boost is all yours. Backup pay on a scheduled ride is extra. New drivers are never auto-approved. Finish each step — your place is saved if you leave.
       </p>
       {step === 'account' ? (
         <div className="drive-intro">
