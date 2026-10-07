@@ -5,7 +5,7 @@ import { NIGHT_VENUES } from '../content/images.js'
 
 export function WhyClemsonRides() {
   return (
-    <SitePage>
+    <SitePage current="why-clemson-rides">
       <section aria-labelledby="why-page-heading">
         <div className="mkt-section-head">
           <p className="mkt-kicker">Why Clemson Rides</p>

@@ -18,6 +18,15 @@ import { RequireAuth } from './components/RequireAuth'
 import { Marketing } from './screens/Marketing'
 import { WhyClemsonRides } from './screens/WhyClemsonRides'
 import { DriveWithUs } from './screens/DriveWithUs'
+import {
+  FaqPage,
+  GetTheAppPage,
+  HowItWorks,
+  PromosPage,
+  RideTypesPage,
+  SafetyPage,
+  TigerPassPage,
+} from './screens/MarketingInfo'
 import { RiderHome } from './screens/RiderHome'
 import { ConfirmPickup } from './screens/ConfirmPickup'
 import { RideTiers } from './screens/RideTiers'
@@ -79,7 +88,22 @@ function AmbassadorAttributionSync() {
 }
 
 const PROTECTED = new Set(['driver', 'driver-onboarding', 'account', 'driver-signup', 'admin', 'admin-dashboard', 'incentives', 'lost-found', 'history', 'earnings', 'sign-agreement'])
-const SITE_ROUTES = new Set(['landing', '', 'privacy', 'terms', 'service-area', 'why-clemson-rides', 'drive'])
+const SITE_ROUTES = new Set([
+  'landing',
+  '',
+  'privacy',
+  'terms',
+  'service-area',
+  'why-clemson-rides',
+  'drive',
+  'how-it-works',
+  'ride-types',
+  'tiger-pass',
+  'safety',
+  'promos',
+  'faq',
+  'get-the-app',
+])
 
 function Screen({ path, params }) {
   switch (path) {
@@ -100,6 +124,20 @@ function Screen({ path, params }) {
       return <WhyClemsonRides />
     case 'drive':
       return <DriveWithUs />
+    case 'how-it-works':
+      return <HowItWorks />
+    case 'ride-types':
+      return <RideTypesPage />
+    case 'tiger-pass':
+      return <TigerPassPage />
+    case 'safety':
+      return <SafetyPage />
+    case 'promos':
+      return <PromosPage />
+    case 'faq':
+      return <FaqPage />
+    case 'get-the-app':
+      return <GetTheAppPage />
     case 'share':
     case 'live':
       return <LiveShare token={params.token || ''} />

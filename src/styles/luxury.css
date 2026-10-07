@@ -523,8 +523,76 @@ body .mkt-card .mkt-text:active {
 }
 
 .mkt-hero-collage {
+  position: relative;
   height: 214px;
   margin: 18px 0 8px;
+}
+
+.mkt-home {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+}
+
+.mkt-home .mkt-stage {
+  flex: 1;
+  min-height: 0;
+  align-items: center;
+  justify-content: center;
+}
+
+.mkt-home .mkt-stage-copy {
+  margin: 0 auto;
+  text-align: left;
+}
+
+.mkt-home .mkt-footer {
+  margin: 0 16px 16px;
+}
+
+.mkt-menu,
+body .mkt-footer nav.mkt-menu {
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: 100%;
+  flex-wrap: nowrap;
+  gap: 8px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding: 4px 0;
+}
+
+.mkt-menu::-webkit-scrollbar {
+  display: none;
+}
+
+.mkt-info .mkt-menu-bar {
+  position: sticky;
+  top: 68px;
+  z-index: 5;
+  margin: 8px 16px 0;
+  box-shadow: none;
+}
+
+.mkt-page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+body .mkt-info h1 {
+  color: #fff;
+  font-size: clamp(32px, 8vw, 44px);
+  font-weight: 700;
+  letter-spacing: -1px;
+  line-height: 1.05;
+  margin: 0 0 8px;
+}
+
+body .mkt-menu button[aria-current="page"] {
+  background: rgba(245, 102, 0, 0.45);
+  color: #fff;
 }
 
 .mkt-hero-shot {
