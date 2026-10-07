@@ -499,6 +499,7 @@ body .mkt-card .mkt-text:active {
 
 .mkt-choices {
   display: flex;
+  flex-direction: row;
   flex-wrap: wrap;
   gap: 8px;
   margin-top: 14px;
@@ -830,8 +831,8 @@ body .mkt-qr-svg {
   }
   .mkt-stage {
     min-height: calc(100dvh - 76px);
-    align-items: center;
-    padding: 96px 0 48px;
+    align-items: flex-start;
+    padding: 88px 0 48px;
   }
   .mkt-stage-layout {
     display: grid;
