@@ -525,6 +525,103 @@ body .mkt-qr-svg {
   }
 }
 
+/* Phone: content cards are frosted glass over the fixed stadium photo. */
+@media (max-width: 768px) {
+  body .mkt,
+  body .mkt-main {
+    background: transparent;
+  }
+
+  body .mkt-stage-photo,
+  body .mkt-stage-shade {
+    position: fixed;
+  }
+
+  body .mkt-card,
+  body .mkt-feature,
+  body .mkt-type,
+  body .mkt-spec,
+  body .mkt-pay-note,
+  body .mkt-soft,
+  body .mkt-platform a,
+  body .mkt-footer {
+    background: rgba(255, 255, 255, 0.16);
+    border: 1px solid rgba(255, 255, 255, 0.34);
+    border-top-width: 1px;
+    box-shadow: none;
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    color: #fff;
+  }
+
+  body .mkt-card:hover,
+  body .mkt-type:hover,
+  body .mkt-platform a:hover {
+    background: rgba(255, 255, 255, 0.2);
+    border-color: rgba(255, 255, 255, 0.5);
+    box-shadow: none;
+    transform: none;
+  }
+
+  body .mkt-spec h2,
+  body .mkt-download h3,
+  body .mkt-offer h3,
+  body .mkt-type h3,
+  body .mkt-feature h3,
+  body .mkt-soft h3,
+  body .mkt-platform strong {
+    color: #fff;
+  }
+
+  body .mkt-spec p,
+  body .mkt-offer p,
+  body .mkt-type p,
+  body .mkt-feature p,
+  body .mkt-download p,
+  body .mkt-soft p,
+  body .mkt-pay-note,
+  body .mkt-platform span {
+    color: rgba(255, 255, 255, 0.92);
+  }
+
+  body .mkt-card .mkt-fine,
+  body .mkt-spec .mkt-fine {
+    color: rgba(255, 255, 255, 0.82);
+  }
+
+  body .mkt-card .mkt-text,
+  body .mkt-card .mkt-text:hover,
+  body .mkt-card .mkt-text:active {
+    color: #fff;
+    text-decoration-color: #F56600;
+  }
+
+  body .mkt-footer,
+  body .mkt-footer-inner,
+  body .mkt-footer button {
+    color: #fff;
+  }
+
+  body .mkt-footer button:hover,
+  body .mkt-footer button:focus-visible,
+  body .mkt-footer button:active {
+    color: #F56600;
+  }
+
+  @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    body .mkt-card,
+    body .mkt-feature,
+    body .mkt-type,
+    body .mkt-spec,
+    body .mkt-pay-note,
+    body .mkt-soft,
+    body .mkt-platform a,
+    body .mkt-footer {
+      background: rgba(18, 10, 28, 0.92);
+    }
+  }
+}
+
 /* Auth */
 .lux-auth {
   min-height: 100%;

@@ -178,6 +178,27 @@ test('marketing header keeps Book, Drive, and Get the App on a transparent bar',
   assert.match(labelRule[0], /text-shadow:\s*none/)
 })
 
+test('mobile marketing cards are frosted glass and desktop cards stay solid', () => {
+  const css = readFileSync(new URL('../src/styles/luxury.css', import.meta.url), 'utf8')
+  const desktopCard = css.match(/body \.mkt-card \{[^}]+\}/)
+  assert.ok(desktopCard, 'desktop card rule exists')
+  assert.match(desktopCard[0], /background:\s*#fff/)
+  const mobileStart = css.indexOf('/* Phone: content cards are frosted glass')
+  assert.ok(mobileStart > 0, 'mobile glass block exists')
+  const mobile = css.slice(mobileStart, css.indexOf('/* Auth */'))
+  assert.match(mobile, /@media \(max-width:\s*768px\)/)
+  assert.match(mobile, /background:\s*rgba\(255,\s*255,\s*255,\s*0\.16\)/)
+  assert.match(mobile, /backdrop-filter:\s*blur\(16px\)/)
+  assert.match(mobile, /-webkit-backdrop-filter:\s*blur\(16px\)/)
+  assert.match(mobile, /border:\s*1px solid rgba\(255,\s*255,\s*255,\s*0\.34\)/)
+  assert.match(mobile, /box-shadow:\s*none/)
+  assert.match(mobile, /position:\s*fixed/)
+  assert.match(mobile, /@supports not \(\(backdrop-filter: blur\(1px\)\) or \(-webkit-backdrop-filter: blur\(1px\)\)\)/)
+  assert.match(mobile, /background:\s*rgba\(18,\s*10,\s*28,\s*0\.92\)/)
+  assert.match(mobile, /color:\s*#fff/)
+  assert.doesNotMatch(desktopCard[0], /backdrop-filter:\s*blur/)
+})
+
 test('marketing hero surfaces web book QR for soft launch', () => {
   const source = readFileSync(new URL('../src/screens/Marketing.jsx', import.meta.url), 'utf8')
   assert.match(source, /WEB_BOOK_URL/)
