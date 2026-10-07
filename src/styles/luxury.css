@@ -45,20 +45,34 @@ body .mkt {
 }
 
 body .mkt-nav {
-  background: rgba(255, 255, 255, 0.94);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border-bottom: 1px solid rgba(82, 45, 128, 0.12);
-  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.7);
-  z-index: 3;
+  background: transparent;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  border-bottom: none;
+  box-shadow: none;
+  z-index: 4;
+  transition: background 180ms ease, border-color 180ms ease, backdrop-filter 180ms ease;
+}
+
+/* Translucent Clemson purple only after the hero has scrolled away. */
+body .mkt-nav.mkt-nav--scrolled {
+  background: rgba(82, 45, 128, 0.78);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.14);
 }
 
 body .mkt-brand,
-body .mkt-nav-links button,
+body .mkt-nav-links button {
+  color: #fff;
+  text-shadow: 0 1px 2px rgba(12, 8, 18, 0.72);
+}
+
 body .mkt-footer,
 body .mkt-footer-inner,
 body .mkt-footer button {
   color: #141414;
+  text-shadow: none;
 }
 
 body .mkt-brand {
@@ -66,9 +80,14 @@ body .mkt-brand {
   letter-spacing: -0.02em;
   text-transform: none;
   font-size: 16px;
-  color: #522D80;
+  color: #fff;
   border-left: 3px solid #F56600;
   padding-left: 10px;
+}
+
+body .mkt-nav-links {
+  flex-wrap: nowrap;
+  margin-left: auto;
 }
 
 body .mkt-nav-links button,
@@ -76,19 +95,56 @@ body .mkt-footer button {
   font-weight: 600;
   letter-spacing: -0.01em;
   font-size: 14px;
+}
+
+body .mkt-nav-links button {
+  color: #fff;
+  white-space: nowrap;
+}
+
+body .mkt-footer button {
   color: #522D80;
 }
 
 body .mkt-nav-links button:hover,
-body .mkt-footer button:hover {
+body .mkt-nav-links button:focus-visible {
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
+}
+
+body .mkt-footer button:hover,
+body .mkt-footer button:focus-visible {
   background: rgba(245, 102, 0, 0.12);
   color: #F56600;
 }
 
-body .mkt-nav-links button:active,
+body .mkt-nav-links button:active {
+  background: rgba(245, 102, 0, 0.28);
+  color: #fff;
+}
+
 body .mkt-footer button:active {
   background: rgba(82, 45, 128, 0.12);
   color: #522D80;
+}
+
+@media (max-width: 640px) {
+  body .mkt-nav {
+    padding: 8px 12px;
+    gap: 0 8px;
+  }
+  body .mkt-brand {
+    font-size: 15px;
+  }
+  body .mkt-nav-links button {
+    padding-inline: 8px;
+    font-size: 13px;
+  }
+}
+
+#get-the-app,
+#this-weeks-coupon {
+  scroll-margin-top: 84px;
 }
 
 .mkt-stage {
@@ -456,6 +512,9 @@ body .mkt-qr-svg {
   body .mkt.fade-in,
   .mkt-stage-photo {
     animation: none;
+  }
+  body .mkt-nav {
+    transition: none;
   }
 }
 

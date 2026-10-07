@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import { navigate } from '../lib/navigation'
 import { PrimaryButton } from '../components/PrimaryButton'
 import { QrMark } from '../components/QrMark'
@@ -26,6 +27,31 @@ const FRAMES = [
 
 function scrollToDownloads() {
   document.getElementById('get-the-app')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+}
+
+function useNavOverPage() {
+  const [overPage, setOverPage] = useState(false)
+  useEffect(() => {
+    const nav = document.querySelector('.mkt-nav')
+    const stage = document.querySelector('.mkt-stage')
+    const scroller = nav?.closest('.app-shell') || null
+    if (!stage) return undefined
+    const read = () => {
+      const top = scroller ? scroller.scrollTop : window.scrollY
+      // The hero holds a white coupon card. Leave the bar clear at the top,
+      // then use translucent purple once the page has moved.
+      setOverPage(top > 12)
+    }
+    read()
+    const target = scroller || window
+    target.addEventListener('scroll', read, { passive: true })
+    window.addEventListener('resize', read)
+    return () => {
+      target.removeEventListener('scroll', read)
+      window.removeEventListener('resize', read)
+    }
+  }, [])
+  return overPage
 }
 
 function scrollToCoupon() {
@@ -65,24 +91,21 @@ function DownloadCard({ app }) {
 }
 
 export function Marketing() {
+  const overPage = useNavOverPage()
   const coupon = currentWeeklyCoupon(new Date())
   const value = coupon.percentOffBps
     ? `${coupon.percentOffBps / 100}% off`
     : `$${(coupon.amountOffCents / 100).toFixed(0)} off`
   return (
     <div className="mkt fade-in">
-      <header className="mkt-nav">
+      <header className={overPage ? 'mkt-nav mkt-nav--scrolled' : 'mkt-nav'}>
         <button type="button" className="mkt-brand pressable" onClick={() => navigate('landing')}>
           <span>Clemson RIDES</span>
         </button>
         <nav className="mkt-nav-links" aria-label="Marketing">
-          <button type="button" className="pressable" onClick={scrollToCoupon}>This week</button>
-          <button type="button" className="pressable" onClick={scrollToDownloads}>Get the app</button>
           <button type="button" className="pressable" onClick={() => navigate('home')}>Book</button>
           <button type="button" className="pressable" onClick={() => navigate('driver-signup')}>Drive</button>
-          <button type="button" className="pressable" onClick={() => navigate('service-area')}>Area</button>
-          <button type="button" className="pressable" onClick={() => navigate('privacy')}>Privacy</button>
-          <button type="button" className="pressable" onClick={() => navigate('terms')}>Terms</button>
+          <button type="button" className="pressable" onClick={scrollToDownloads}>Get the App</button>
         </nav>
       </header>
 
@@ -221,7 +244,9 @@ export function Marketing() {
       <footer className="mkt-footer">
         <div className="mkt-inner mkt-footer-inner">
           <span>Clemson RIDES</span>
-          <nav aria-label="Legal">
+          <nav aria-label="Footer">
+            <button type="button" className="pressable" onClick={scrollToCoupon}>This week</button>
+            <button type="button" className="pressable" onClick={() => navigate('service-area')}>Service area</button>
             <button type="button" className="pressable" onClick={() => navigate('privacy')}>Privacy</button>
             <button type="button" className="pressable" onClick={() => navigate('terms')}>Terms</button>
             <button type="button" className="pressable" onClick={() => navigate('home')}>Book a ride</button>
