@@ -63,6 +63,13 @@ export function Marketing() {
             >
               Book a carpool
             </button>
+            <button
+              type="button"
+              className="mkt-ghost pressable"
+              onClick={() => navigate('schedule')}
+            >
+              Schedule for later
+            </button>
           </div>
         </div>
       </section>
