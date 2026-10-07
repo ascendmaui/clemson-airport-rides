@@ -60,14 +60,18 @@ test('legal copy is shared and the install links are the current apps', () => {
 
 test('the marketing page does not install the frozen 1.0.0 binary', () => {
   const source = readFileSync(new URL('../../src/screens/Marketing.jsx', import.meta.url), 'utf8')
+  const chrome = readFileSync(new URL('../../src/components/MarketingChrome.jsx', import.meta.url), 'utf8')
+  const drive = readFileSync(new URL('../../src/screens/DriveWithUs.jsx', import.meta.url), 'utf8')
   assert.doesNotMatch(source, /ae9bb5b6|a9cfec15/)
   assert.doesNotMatch(source, /projects\/clemson-airport-rides\/builds/)
   assert.doesNotMatch(source, /expo\.dev|expo\.go|exp:\/\/|RIDER_EXPO_PROJECT|DRIVER_EXPO_PROJECT/)
+  assert.doesNotMatch(chrome, /ae9bb5b6|a9cfec15|expo\.dev|expo\.go|exp:\/\//)
   assert.match(source, /Book a ride/)
   assert.match(source, /navigate\('home'\)/)
   assert.match(source, /navigate\('home', \{ tier: 'carpool' \}\)/)
-  assert.match(source, /navigate\('driver-signup'\)/)
-  assert.match(source, /Get the App/)
+  assert.match(chrome, /Get the App/)
+  assert.match(chrome, /navigate\('drive'\)/)
+  assert.match(drive, /navigate\('driver-signup'\)/)
   assert.doesNotMatch(source, /WEB_BOOK_URL|WEB_DRIVER_URL|APP_DOWNLOADS|const DOWNLOADS/)
 })
 

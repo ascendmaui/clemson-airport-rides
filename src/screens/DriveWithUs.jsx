@@ -6,7 +6,7 @@ import { APP_STORE_NOTE } from '../content/peaceOfMind.js'
 
 export function DriveWithUs() {
   return (
-    <SitePage>
+    <SitePage current="drive">
       <section aria-labelledby="drive-page-heading">
         <div className="mkt-section-head">
           <p className="mkt-kicker">Drive</p>

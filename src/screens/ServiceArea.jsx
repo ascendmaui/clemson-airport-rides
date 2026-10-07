@@ -1,4 +1,7 @@
 import { navigate } from '../lib/navigation'
+import { MarketingChrome } from '../components/MarketingChrome'
+import { MarketingPhoto } from '../components/MarketingPhoto'
+import { AIRPORT_SECTION } from '../content/peaceOfMind.js'
 
 const FRAMES = [
   {
@@ -55,15 +58,26 @@ const LEARN = [
 
 export function ServiceArea() {
   return (
-    <div className="lux-area fade-in">
-      <header className="lux-area-bar">
-        <button type="button" className="pressable" onClick={() => navigate('landing')}>Clemson RIDES</button>
-      </header>
-      <div className="lux-area-hero">
-        <p className="lux-kicker">Service area</p>
-        <h1>Outside the service area</h1>
-        <p>Clemson RIDES covers campus, downtown, and the airport roads we already serve.</p>
+    <MarketingChrome current="service-area">
+      <div className="mkt-section-head">
+        <p className="mkt-kicker">{AIRPORT_SECTION.kicker}</p>
+        <h1>{AIRPORT_SECTION.title}</h1>
+        <p>{AIRPORT_SECTION.what}</p>
       </div>
+      <article className="mkt-card mkt-feature">
+        <MarketingPhoto id="airport-on-time" />
+        <ol className="mkt-guide">
+          {AIRPORT_SECTION.steps.map((step) => <li key={step}>{step}</li>)}
+        </ol>
+        <p><strong>Why it matters. </strong>{AIRPORT_SECTION.why}</p>
+        <button type="button" className="mkt-text pressable" onClick={() => navigate('schedule')}>
+          Schedule for later
+        </button>
+      </article>
+      <article className="mkt-card mkt-feature">
+        <h2>Service area</h2>
+        <p>Clemson, downtown, and scheduled trips to Greenville-Spartanburg and Charlotte. If a stop is outside this area, booking says so before you confirm.</p>
+      </article>
       <div className="lux-carousel" aria-label="Service area maps">
         {FRAMES.map((frame) => (
           <figure key={frame.label} className="lux-frame">
@@ -72,16 +86,15 @@ export function ServiceArea() {
           </figure>
         ))}
       </div>
-      <section className="lux-learn" aria-label="Learn more">
-        <h2 className="lux-learn-title">Learn More</h2>
+      <section className="mkt-safety-live" aria-label="Learn more">
         {LEARN.map((card) => (
-          <article key={card.title} className="lux-learn-card">
+          <article key={card.title} className="mkt-card mkt-feature">
             <h2>{card.title}</h2>
             <p>{card.body}</p>
-            <button type="button" className="pressable" onClick={card.action}>{card.label}</button>
+            <button type="button" className="mkt-text pressable" onClick={card.action}>{card.label}</button>
           </article>
         ))}
       </section>
-    </div>
+    </MarketingChrome>
   )
 }
