@@ -35,8 +35,7 @@ import {
 } from 'rides-native/driverOnboardingClient'
 import { extractReadableText, licensePendingCopy, matchRegistration, reviewLicenseImage } from 'rides-native/documentReview'
 import { loadDriverProfile, loadVehicle } from 'rides-native/driverDesk'
-import { COMFORT_FLEET_NOTICE } from 'rides-native/tripTags'
-import { comfortClassMakeModel, modelsForMake, VEHICLE_COLORS, VEHICLE_MAKES } from 'rides-native/vehicleCatalog'
+import { modelsForMake, VEHICLE_COLORS, VEHICLE_MAKES } from 'rides-native/vehicleCatalog'
 import { useTheme } from '@/lib/theme'
 import { knowledgeQuizStatus, knowledgeQuizStatusLabel, loadKnowledgeQuiz } from 'rides-native/driverKnowledgeQuiz'
 
@@ -366,7 +365,7 @@ export default function OnboardingScreen() {
         year,
         plate: plate.trim(),
         seats: Number(seats) || 4,
-        comfortClass: comfortClass || comfortClassMakeModel(make, model),
+        comfortClass,
       })
       const next = await loadOnboarding(supabase, user.id)
       setBundle(next)
@@ -611,15 +610,14 @@ export default function OnboardingScreen() {
             <Pressable
               onPress={() => setIsComfort((value: boolean) => !value)}
               accessibilityRole="checkbox"
-              accessibilityLabel="List a Extra Comfort on my profile"
-              accessibilityState={{ checked: Boolean(comfortClass || comfortClassMakeModel(make, model)) }}
+              accessibilityLabel="List this car as Extra Comfort"
+              accessibilityState={{ checked: comfortClass }}
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               style={styles.checkRow}
             >
-              <View style={[styles.box, (comfortClass || comfortClassMakeModel(make, model)) && styles.boxOn]} />
+              <View style={[styles.box, comfortClass && styles.boxOn]} />
               <View style={{ flex: 1 }}>
-                <Text style={styles.checkCopy}>List a Extra Comfort on my profile</Text>
-                <Text style={styles.hint}>{COMFORT_FLEET_NOTICE}</Text>
+                <Text style={styles.checkCopy}>List this car as Extra Comfort</Text>
               </View>
             </Pressable>
             <Primary label={busy ? 'Saving…' : 'Continue to license'} onPress={onSaveAccount} disabled={busy} />
@@ -833,10 +831,8 @@ export default function OnboardingScreen() {
                     if (picker === 'make') {
                       setMake(option)
                       setModel('')
-                      setIsComfort(comfortClassMakeModel(option, ''))
                     } else if (picker === 'model') {
                       setModel(option)
-                      setIsComfort(comfortClassMakeModel(make, option))
                     } else {
                       setColor(option)
                     }

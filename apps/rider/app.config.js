@@ -7,6 +7,13 @@ function mapsKey() {
   return key
 }
 
+function stripePlugin() {
+  const merchantIdentifier = String(process.env.EXPO_PUBLIC_STRIPE_MERCHANT_IDENTIFIER || '').trim()
+  const options = { enableGooglePay: true }
+  if (/^merchant\./.test(merchantIdentifier)) options.merchantIdentifier = merchantIdentifier
+  return ['@stripe/stripe-react-native', options]
+}
+
 module.exports = () => {
   const expo = appJson.expo
   const key = mapsKey()
@@ -17,5 +24,6 @@ module.exports = () => {
       googleMaps: { apiKey: key },
     }
   }
-  return { expo: { ...expo, android } }
+  const plugins = [...(expo.plugins || []), stripePlugin()]
+  return { expo: { ...expo, android, plugins } }
 }

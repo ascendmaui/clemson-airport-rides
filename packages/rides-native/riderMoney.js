@@ -27,6 +27,10 @@ export {
   ADD_ANOTHER_PAYMENT_METHOD_ID,
   ADD_ANOTHER_PAYMENT_METHOD_LABEL,
   RIDE_PAYMENT_METHODS,
+  googlePayTestEnv,
+  nativeSetupSheetParams,
+  nativeWalletUnavailableCopy,
+  savedPaymentMethodLabel,
 } from '../../shared/ridePaymentMethods.js'
 export { prepaidPurchaseSummary, prepaidCreditsFromPayload } from '../../shared/prepaidTiers.js'
 
@@ -584,14 +588,15 @@ export async function buyPrepaidCredits(supabase, tierId) {
   })
 }
 
-export async function startPaymentMethodSetup(supabase, { paymentMethod, returnUrl } = {}) {
+export async function startPaymentMethodSetup(supabase, { paymentMethod, returnUrl, native } = {}) {
+  const body = {
+    paymentMethod: paymentMethod || ADD_ANOTHER_PAYMENT_METHOD_ID,
+    returnUrl: returnUrl || 'clemsonrides://billing',
+  }
+  if (!native) body.checkout = true
   return authedJson(supabase, '/api/stripe-payment-methods?action=setup-intent', {
     method: 'POST',
-    body: {
-      paymentMethod: paymentMethod || ADD_ANOTHER_PAYMENT_METHOD_ID,
-      checkout: true,
-      returnUrl: returnUrl || 'clemsonrides://billing',
-    },
+    body,
   })
 }
 
@@ -599,6 +604,24 @@ export async function saveCheckoutPaymentMethod(supabase, checkoutSessionId) {
   return authedJson(supabase, '/api/stripe-payment-methods?action=save', {
     method: 'POST',
     body: { checkoutSessionId },
+  })
+}
+
+export async function saveSetupPaymentMethod(supabase, setupIntentId) {
+  return authedJson(supabase, '/api/stripe-payment-methods?action=save', {
+    method: 'POST',
+    body: { setupIntentId },
+  })
+}
+
+export async function listSavedPaymentMethods(supabase) {
+  return authedJson(supabase, '/api/stripe-payment-methods', { method: 'GET' })
+}
+
+export async function updateSavedPaymentMethod(supabase, { action, paymentMethodId }) {
+  return authedJson(supabase, '/api/stripe-payment-methods', {
+    method: 'POST',
+    body: { action, paymentMethodId },
   })
 }
 

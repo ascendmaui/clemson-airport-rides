@@ -49,7 +49,7 @@ import {
   isUnpaidHoldTtlCancel,
 } from 'rides-native/holdExpiryNotice.js'
 import { localDateInput, localTimeInput, nextPickupDate, RIDE_PLACES } from 'rides-native/riderShell.js'
-import { formatCents, formatPickupAt, COMFORT_FLEET_NOTICE } from 'rides-native/tripTags.js'
+import { formatCents, formatPickupAt } from 'rides-native/tripTags.js'
 import { dueScheduleReminders } from '../../../src/lib/scheduledRideModel.js'
 import { RequireAuth } from '@/components/RequireAuth'
 import { NearTermSlots } from '@/components/NearTermSlots'
@@ -505,8 +505,7 @@ function ScheduleScreen() {
         weekdays: [],
         tier: fleet,
       })
-      const fleetLine = fleet === 'comfort' ? ' Extra Comfort stays driver-operated.' : ''
-      setBanner(`Weekend / party confirmed for ${formatPickupAt(weekendWhen.toISOString())}. It is under Upcoming, and drivers can accept it from Weekend.${fleetLine}`)
+      setBanner(`Weekend / party confirmed for ${formatPickupAt(weekendWhen.toISOString())}. It is under Upcoming, and drivers can accept it from Weekend.`)
       await successHaptic()
       await reload()
     } catch (err) {
@@ -667,12 +666,6 @@ function ScheduleScreen() {
           <Pill label="Standard" active={fleet === 'standard'} onPress={() => chooseFleet('standard')} />
           <Pill label="Extra Comfort" active={fleet === 'comfort'} onPress={() => chooseFleet('comfort')} />
         </View>
-        {fleet === 'comfort' ? (
-          <View style={styles.fleetNote}>
-            <Text style={styles.fleetKicker}>CLEMSON FLEET</Text>
-            <Text style={styles.fleetText}>{COMFORT_FLEET_NOTICE}</Text>
-          </View>
-        ) : null}
         <View style={styles.panel}>
           <Text style={styles.cardLine}>Confirm weekend / party</Text>
           <Text style={styles.fine}>
@@ -684,7 +677,7 @@ function ScheduleScreen() {
           </Text>
           {weekendQuote.label ? <Text style={styles.student}>{weekendQuote.label}</Text> : null}
           <Text style={styles.fine}>
-            {fleet === 'comfort' ? 'Extra Comfort · a driver is at the wheel.' : 'Standard vehicle.'}
+            {fleet === 'comfort' ? 'Extra Comfort vehicle.' : 'Standard vehicle.'}
             {weekendQuote.depositCents > 0
               ? ` ${depositSurfaceCopy(weekendQuote, 'confirm', { studentDiscountCents: weekendQuote.discountCents }) || ''}`
               : ' Final fare can change when a driver accepts.'}
@@ -878,7 +871,7 @@ function ScheduleScreen() {
               {rowPurpose(row)} · {row.status} · {formatPickupAt(row.pickup_at || row.scheduled_for)}
               {row.metadata?.recurrence?.weekdays?.length ? ` · weekly ${row.metadata.recurrence.weekdays.join(', ')}` : ''}
             </Text>
-            {row.tier === 'comfort' ? <Text style={styles.student}>Extra Comfort · driver at the wheel</Text> : null}
+            {row.tier === 'comfort' ? <Text style={styles.student}>Extra Comfort</Text> : null}
             {row.deposit_cents ? (
               <Text style={styles.balance}>
                 {depositSurfaceCopy(
@@ -996,16 +989,6 @@ function makeStyles(colors: Palette) {
     cardLine: { fontWeight: '800' as const, color: colors.ink },
     student: { color: colors.orange, fontWeight: '700' as const, fontSize: 12 },
     cancel: { color: colors.danger, fontWeight: '700' as const, marginTop: 6 },
-    fleetNote: {
-      marginTop: 8,
-      backgroundColor: colors.purpleSoft,
-      borderRadius: 16,
-      padding: 12,
-      borderWidth: 1,
-      borderColor: colors.purple,
-    },
-    fleetKicker: { color: colors.orange, fontWeight: '800' as const, letterSpacing: 1, fontSize: 11, marginBottom: 4 },
-    fleetText: { color: colors.link, fontSize: 13, lineHeight: 18, fontWeight: '600' as const },
     remindCard: {
       backgroundColor: colors.orangeSoft,
       borderRadius: 16,

@@ -779,6 +779,13 @@ test('setServiceClass stores comfort or standard on the vehicle', async () => {
   const reverted = await setServiceClass(supabase, 'driver-1', 'standard')
   assert.equal(reverted.service_class, 'standard')
   assert.equal(reverted.tier, 'standard')
+
+  const fromToggle = await setServiceClass(supabase, 'driver-1', { enabled: true })
+  assert.equal(fromToggle.service_class, 'comfort')
+  assert.equal(fromToggle.tier, 'comfort')
+  assert.equal(fromToggle.make, 'Honda')
+  const cleared = await setServiceClass(supabase, 'driver-1', { enabled: false })
+  assert.equal(cleared.service_class, 'standard')
 })
 
 test('setServiceClass throws on update query error', async () => {

@@ -34,7 +34,6 @@ import {
   readOnboardingStep,
   writeOnboardingStep,
 } from '../lib/driverOnboarding'
-import { COMFORT_FLEET_NOTICE } from '../../packages/rides-native/tripTags.js'
 import { driverRouteForOnboarding } from '../../shared/driverRoute.js'
 import { buildFieldA11yProps, formatAccessibleFormErrorSummary, getFieldErrorProps } from '../lib/formA11y'
 import { loadLatestVehicle, vehicleAccountErrors } from '../../shared/vehicleYear.js'
@@ -602,15 +601,10 @@ export function DriverOnboarding() {
           <Field id="color" label="Color" value={color} onChange={setColor} autoComplete="off" error={fieldErrors.color} />
           <Field id="plate" label="Plate" value={plate} onChange={setPlate} autoComplete="off" error={fieldErrors.plate} />
           <Field id="seats" label="Seats" value={seats} onChange={setSeats} type="number" required={false} />
-          <label style={{ display: 'flex', gap: 10, alignItems: 'center', fontWeight: 650, marginBottom: comfortClass ? 8 : 16 }}>
+          <label style={{ display: 'flex', gap: 10, alignItems: 'center', fontWeight: 650, marginBottom: 16 }}>
             <input type="checkbox" checked={comfortClass} onChange={(e) => setIsComfort(e.target.checked)} />
-            Extra Comfort · a driver still drives
+            List this car as Extra Comfort
           </label>
-          {comfortClass ? (
-            <p style={{ margin: '0 0 16px', fontSize: 13, lineHeight: 1.4, color: '#522D80', fontWeight: 650 }}>
-              {COMFORT_FLEET_NOTICE}
-            </p>
-          ) : null}
           <PrimaryButton type="submit" disabled={busy}>
             {busy ? 'Saving…' : `Continue to ${adjacentStep('account', 1)?.label || 'the next step'}`}
           </PrimaryButton>
