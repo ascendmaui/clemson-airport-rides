@@ -1,70 +1,24 @@
 import { useEffect, useState } from 'react'
 import { navigate } from '../lib/navigation'
 import { PrimaryButton } from '../components/PrimaryButton'
+import { FeatureBlock } from '../components/FeatureBlock'
 import { MarketingPhoto } from '../components/MarketingPhoto'
 import { messagingGuide } from '../../shared/copy/messaging.js'
-import { FEATURE_IMAGES, HERO_COLLAGE } from '../../shared/marketingImages.js'
+import { HERO_COLLAGE, NIGHT_VENUES } from '../content/images.js'
+import {
+  AIRPORT_SECTION,
+  APP_STORE_NOTE,
+  BUILT_IN,
+  BUILT_IN_SECTION,
+  CARPOOL_SECTION,
+  SAFETY_FEATURES,
+  SAFETY_SECTION,
+} from '../content/peaceOfMind.js'
 
 const STADIUM = {
   src: '/marketing/clemson-memorial-stadium.jpg',
   alt: 'Clemson Memorial Stadium at night, the stands full under the lights',
 }
-
-const CAMPUS_SHOTS = [
-  {
-    id: FEATURE_IMAGES.student,
-    title: 'Study group',
-    body: 'Rides between the library, class, and home.',
-  },
-  {
-    id: FEATURE_IMAGES.gameday,
-    title: 'Game day',
-    body: 'When a game day is live, the rider home shows the pickup zone and the fare multiplier from the server.',
-  },
-  {
-    id: FEATURE_IMAGES.matching,
-    title: 'On College Avenue',
-    body: 'Request a ride from the curb. The fare is on screen before you confirm.',
-  },
-  {
-    id: FEATURE_IMAGES.tracking,
-    title: 'On your phone',
-    body: 'The trip stays on your phone from the request until you arrive.',
-  },
-]
-
-const SAFETY_CARDS = [
-  {
-    id: 'night-live-tracking',
-    title: 'Live tracking',
-    body: 'After a driver accepts, the trip screen follows the ride from pickup through drop-off.',
-  },
-  {
-    id: 'safety-share-trip',
-    title: 'Share your trip',
-    body: 'Share a live trip link with someone you trust. Location updates while the ride is underway.',
-  },
-  {
-    id: 'night-sos',
-    title: 'SOS',
-    body: 'Call 911 or Clemson Police from the app. The first press confirms and does not dial.',
-  },
-  {
-    id: 'safety-recording',
-    title: 'Voice and audio recording',
-    body: 'Record audio during an active ride, right in the app. You start it on your phone after a driver has accepted. The clip stays on that phone and is not uploaded, and a banner stays up while it is recording.',
-  },
-  {
-    id: 'safety-verified-driver',
-    title: 'Driver review',
-    body: 'New drivers are not auto-approved. Clemson RIDES reviews the application before they take trips.',
-  },
-  {
-    id: 'night-orange-screen',
-    title: 'The ride on your phone',
-    body: 'Request, match, and the trip itself stay on your phone until you arrive.',
-  },
-]
 
 function scrollToDownloads() {
   document.getElementById('get-the-app')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
@@ -93,24 +47,19 @@ function useNavOverPage() {
   return overPage
 }
 
-function LiveMark() {
-  return <span className="mkt-live">Live</span>
-}
-
-function SafetyCard({ card }) {
-  return (
-    <article className="mkt-card mkt-feature mkt-safety-card">
-      <MarketingPhoto id={card.id} />
-      <LiveMark />
-      <h3>{card.title}</h3>
-      <p>{card.body}</p>
-    </article>
-  )
+function messagingFeature(guide) {
+  const feature = BUILT_IN.find((item) => item.id === 'messaging')
+  return {
+    ...feature,
+    what: guide.summary.join(' '),
+    how: `${guide.title}. ${guide.summary.join(' ')} ${guide.lostItemTitle}. ${guide.lostItemSteps.join(' ')}`,
+  }
 }
 
 export function Marketing() {
   const overPage = useNavOverPage()
   const riderGuide = messagingGuide('rider')
+  const builtIn = BUILT_IN.map((feature) => (feature.id === 'messaging' ? messagingFeature(riderGuide) : feature))
   return (
     <div className="mkt fade-in">
       <header className={overPage ? 'mkt-nav mkt-nav--scrolled' : 'mkt-nav'}>
@@ -160,23 +109,17 @@ export function Marketing() {
       </section>
 
       <main className="mkt-inner mkt-main">
-        <section aria-labelledby="campus-heading">
+        <section aria-labelledby="built-in-heading">
           <div className="mkt-section-head">
-            <p className="mkt-kicker">On campus</p>
-            <h2 id="campus-heading">What the ride looks like</h2>
+            <p className="mkt-kicker">{BUILT_IN_SECTION.kicker}</p>
+            <h2 id="built-in-heading">{BUILT_IN_SECTION.title}</h2>
           </div>
-          <div className="mkt-safety-live">
-            {CAMPUS_SHOTS.map((shot) => (
-              <article key={shot.id} className="mkt-card mkt-feature">
-                <MarketingPhoto id={shot.id} />
-                <h3>{shot.title}</h3>
-                <p>{shot.body}</p>
-              </article>
-            ))}
+          <div className="mkt-safety-live mkt-built">
+            {builtIn.map((feature) => <FeatureBlock key={feature.id} feature={feature} />)}
           </div>
         </section>
 
-        <section className="mkt-block" aria-labelledby="how-heading">
+        <section aria-labelledby="how-heading">
           <div className="mkt-section-head">
             <p className="mkt-kicker">How it works</p>
             <h2 id="how-heading">From class to the ride home</h2>
@@ -193,71 +136,75 @@ export function Marketing() {
               <p>Head back the same way. Schedule ahead, or request when you are ready to leave.</p>
             </article>
             <article className="mkt-card mkt-feature">
-              <LiveMark />
-              <h3>{riderGuide.title}</h3>
-              <ul className="mkt-guide">
-                {riderGuide.summary.map((line) => <li key={line}>{line}</li>)}
-              </ul>
-            </article>
-            <article className="mkt-card mkt-feature">
-              <LiveMark />
-              <h3>{riderGuide.lostItemTitle}</h3>
-              <ol className="mkt-guide">
-                {riderGuide.lostItemSteps.map((line) => <li key={line}>{line}</li>)}
-              </ol>
+              <MarketingPhoto id="college-ave-request" />
+              <h3>College Avenue</h3>
+              <p>Request from a campus spot. The same trip screen follows the ride after a driver accepts.</p>
             </article>
           </div>
         </section>
 
         <section id="night-safety" className="mkt-safety" aria-labelledby="night-safety-heading">
           <div className="mkt-section-head">
-            <p className="mkt-kicker">Nighttime safety</p>
-            <h2 id="night-safety-heading">Peace of mind after dark</h2>
-            <p>These tools are live in the rider app, the driver app, and on the web.</p>
+            <p className="mkt-kicker">{SAFETY_SECTION.kicker}</p>
+            <h2 id="night-safety-heading">{SAFETY_SECTION.title}</h2>
+            <p><strong>What it is. </strong>{SAFETY_SECTION.what}</p>
+            <p><strong>Why it matters. </strong>{SAFETY_SECTION.why}</p>
           </div>
           <MarketingPhoto id="night-going-out" className="mkt-section-banner" />
+          <div className="mkt-safety-live mkt-venues">
+            {NIGHT_VENUES.map((id) => <MarketingPhoto key={id} id={id} />)}
+          </div>
           <div className="mkt-safety-live">
-            {SAFETY_CARDS.map((card) => <SafetyCard key={card.id} card={card} />)}
+            {SAFETY_FEATURES.map((feature) => <FeatureBlock key={feature.id} feature={feature} />)}
           </div>
         </section>
 
         <section className="mkt-block" aria-labelledby="carpool-heading">
           <div className="mkt-section-head">
-            <p className="mkt-kicker">Carpool</p>
-            <h2 id="carpool-heading">Split the fare</h2>
-            <p>One car, pickups along the way, then the drop-off.</p>
+            <p className="mkt-kicker">{CARPOOL_SECTION.kicker}</p>
+            <h2 id="carpool-heading">{CARPOOL_SECTION.title}</h2>
+            <p><strong>What it is. </strong>{CARPOOL_SECTION.what}</p>
           </div>
           <article className="mkt-card mkt-feature">
-            <MarketingPhoto id="carpool-how-it-works" />
             <ol className="mkt-guide">
-              <li>Share one car</li>
-              <li>Three pickups along the way</li>
-              <li>Then the airport</li>
+              {CARPOOL_SECTION.steps.map((step) => <li key={step}>{step}</li>)}
             </ol>
+            <p className="mkt-why"><strong>Why it matters. </strong>{CARPOOL_SECTION.why}</p>
             <button type="button" className="mkt-text pressable" onClick={() => navigate('home', { tier: 'carpool' })}>
               Book a carpool
+            </button>
+            <button type="button" className="mkt-text pressable" onClick={() => navigate('carpool', { hub: '1' })}>
+              Open the carpool hub
             </button>
           </article>
           <article className="mkt-card mkt-feature">
             <MarketingPhoto id="carpool-friends-curb" />
-            <h3>Ride with friends</h3>
-            <p>Everyone sees their share before the carpool is charged.</p>
+            <MarketingPhoto id="carpool-how-it-works" />
+            <h3>{CARPOOL_SECTION.hubTitle}</h3>
+            <p><strong>What it is. </strong>{CARPOOL_SECTION.hubWhat}</p>
+            <p>{CARPOOL_SECTION.diagramCaption}</p>
+            <ol className="mkt-guide">
+              {CARPOOL_SECTION.hubSteps.map((step) => <li key={step}>{step}</li>)}
+            </ol>
           </article>
         </section>
 
         <section className="mkt-block" aria-labelledby="airport-heading">
           <div className="mkt-section-head">
-            <p className="mkt-kicker">Airport</p>
-            <h2 id="airport-heading">On time for the flight</h2>
+            <p className="mkt-kicker">{AIRPORT_SECTION.kicker}</p>
+            <h2 id="airport-heading">{AIRPORT_SECTION.title}</h2>
+            <p><strong>What it is. </strong>{AIRPORT_SECTION.what}</p>
           </div>
           <article className="mkt-card mkt-feature">
             <MarketingPhoto id="airport-on-time" />
-            <h3>Airport rides</h3>
-            <p>
-              Schedule a ride to Greenville-Spartanburg (GSP) or Charlotte Douglas (CLT).
-              Stripe places a pre-authorization hold for the estimated fare plus a buffer.
-              The full fare is charged when the trip ends.
-            </p>
+            <MarketingPhoto id="students-carpool-backseat" />
+            <ol className="mkt-guide">
+              {AIRPORT_SECTION.steps.map((step) => <li key={step}>{step}</li>)}
+            </ol>
+            <p className="mkt-why"><strong>Why it matters. </strong>{AIRPORT_SECTION.why}</p>
+            <button type="button" className="mkt-text pressable" onClick={() => navigate('schedule')}>
+              Schedule for later
+            </button>
           </article>
         </section>
 
@@ -265,35 +212,23 @@ export function Marketing() {
           <div className="mkt-section-head">
             <p className="mkt-kicker">Why Clemson Rides</p>
             <h2 id="why-heading">Built for students here</h2>
+            <p>
+              Campus spots, a student email discount, game day, and scheduled rides to GSP and CLT.
+            </p>
           </div>
-          <div className="mkt-safety-live">
-            <article className="mkt-card mkt-feature">
-              <MarketingPhoto id="gameday-crowd" />
-              <h3>Game day</h3>
-              <p>When a game day is live, the rider home shows the pickup zone and the fare multiplier from the server.</p>
-            </article>
-            <article className="mkt-card mkt-feature">
-              <MarketingPhoto id="students-carpool-backseat" />
-              <h3>Carpools with friends</h3>
-              <p>Split the fare and ride together.</p>
-            </article>
-            <article className="mkt-card mkt-feature">
-              <MarketingPhoto id="day-from-campus" />
-              <h3>Leaving campus</h3>
-              <p>Daytime rides back from class use the same booking flow.</p>
-            </article>
-            <article className="mkt-card mkt-feature">
-              <MarketingPhoto id="night-orange-screen" />
-              <h3>Night rides</h3>
-              <p>The trip stays on your phone, with live tracking, sharing, and audio recording once a driver has accepted.</p>
-            </article>
-          </div>
+          <button type="button" className="mkt-text pressable" onClick={() => navigate('why-clemson-rides')}>
+            Why Clemson Rides
+          </button>
+          <button type="button" className="mkt-text pressable" onClick={() => navigate('drive')}>
+            How driving works
+          </button>
         </section>
       </main>
 
       <footer className="mkt-footer" id="get-the-app">
         <div className="mkt-inner mkt-footer-inner">
           <span>Clemson RIDES</span>
+          <p>{APP_STORE_NOTE}</p>
           <nav aria-label="Footer">
             <button type="button" className="pressable" onClick={() => navigate('driver-signup')}>Drive</button>
             <button type="button" className="pressable" onClick={() => navigate('service-area')}>Service area</button>

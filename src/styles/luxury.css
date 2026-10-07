@@ -192,7 +192,7 @@ body .mkt-footer button:active {
   z-index: 0;
   pointer-events: none;
   background:
-    linear-gradient(180deg, rgba(8, 4, 14, 0.72) 0%, rgba(8, 4, 14, 0.58) 42%, rgba(8, 4, 14, 0.64) 100%);
+    linear-gradient(180deg, rgba(8, 4, 14, 0.38) 0%, rgba(8, 4, 14, 0.16) 46%, rgba(8, 4, 14, 0.28) 100%);
 }
 
 .mkt-stage-layout,
@@ -466,7 +466,7 @@ body .mkt-card .mkt-text:active {
   z-index: -1;
   inset: -12px -12px 40px;
   border-radius: 28px;
-  background: linear-gradient(180deg, rgba(8, 4, 14, 0.46), rgba(8, 4, 14, 0.16) 78%, transparent);
+  background: linear-gradient(180deg, rgba(8, 4, 14, 0.78), rgba(8, 4, 14, 0.55) 72%, rgba(8, 4, 14, 0.2));
   pointer-events: none;
 }
 
@@ -598,19 +598,43 @@ body .mkt-card .mkt-text:active {
   margin-bottom: 16px;
 }
 
-.mkt-live {
+.mkt-live,
+.mkt-soon {
   display: inline-flex;
   align-items: center;
   min-height: 28px;
   margin-bottom: 8px;
   padding: 2px 10px;
   border-radius: 999px;
-  background: #F56600;
-  color: #141414;
   font-size: 12px;
   font-weight: 800;
   letter-spacing: 0.08em;
   text-transform: uppercase;
+}
+
+.mkt-live {
+  background: #F56600;
+  color: #141414;
+}
+
+.mkt-soon {
+  background: #522D80;
+  color: #fff;
+}
+
+.mkt-expand {
+  min-height: 44px;
+  margin-top: 12px;
+  padding: 8px 16px;
+  border: 0;
+  border-radius: 999px;
+  background: #522D80;
+  color: #fff;
+  font-weight: 700;
+}
+
+.mkt-why {
+  margin-top: 8px;
 }
 
 .mkt-guide {
@@ -826,8 +850,20 @@ body .mkt-qr-svg {
   }
   .mkt-stage-shade {
     background:
-      linear-gradient(90deg, rgba(8, 4, 14, 0.72) 0%, rgba(8, 4, 14, 0.48) 46%, rgba(8, 4, 14, 0.34) 100%),
-      linear-gradient(180deg, rgba(8, 4, 14, 0.42) 0%, rgba(8, 4, 14, 0.28) 100%);
+      linear-gradient(90deg, rgba(8, 4, 14, 0.4) 0%, rgba(8, 4, 14, 0.14) 46%, rgba(8, 4, 14, 0.08) 100%),
+      linear-gradient(180deg, rgba(8, 4, 14, 0.22) 0%, rgba(8, 4, 14, 0.1) 100%);
+  }
+  .mkt-peace .mkt-expand {
+    display: none;
+  }
+  .mkt-peace .mkt-expand-panel[hidden] {
+    display: block;
+  }
+  .mkt-safety-live {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .mkt-built {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
   .mkt-stage {
     min-height: calc(100dvh - 76px);
