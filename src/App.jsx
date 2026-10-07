@@ -115,6 +115,7 @@ function Screen({ path, params }) {
           pickup={params.pickup || ''}
           pickupLat={params.pickupLat || ''}
           pickupLng={params.pickupLng || ''}
+          tier={params.tier || ''}
         />
       )
     case 'tiers':
@@ -127,6 +128,8 @@ function Screen({ path, params }) {
           destLat={params.destLat || ''}
           destLng={params.destLng || ''}
           billing={params.billing || ''}
+          tier={params.tier || ''}
+          passengers={params.passengers || ''}
         />
       )
     case 'pick-driver':
@@ -134,6 +137,7 @@ function Screen({ path, params }) {
         <PickDriver
           dest={params.dest || 'GSP Airport'}
           tier={params.tier || 'standard'}
+          passengers={params.passengers || ''}
           listCents={params.listCents || ''}
           pickup={params.pickup || ''}
           pickupLat={params.pickupLat || ''}

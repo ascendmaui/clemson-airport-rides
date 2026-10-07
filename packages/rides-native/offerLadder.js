@@ -13,7 +13,7 @@ export const EXCLUSIVE_SHARE_BPS = 8000
 export const POOL_SHARE_BPS = 7000
 export const SCHEDULED_SHARE_BPS = 7500
 
-export const RIDE_ALERT_TIERS = Object.freeze(['standard', 'wait', 'comfort'])
+export const RIDE_ALERT_TIERS = Object.freeze(['standard', 'wait', 'comfort', 'carpool'])
 export const RIDE_ALERT_MODES = Object.freeze(['chime_vibrate', 'chime', 'vibrate', 'silent'])
 
 const PHASES = new Set(['exclusive', 'pool', 'scheduled', 'expired'])
@@ -53,7 +53,7 @@ export function netCentsForShare(fareCents, shareBps) {
 }
 
 export function rideAlertTier(tier) {
-  if (tier === 'wait' || tier === 'comfort' || tier === 'standard') return tier
+  if (tier === 'wait' || tier === 'comfort' || tier === 'standard' || tier === 'carpool') return tier
   return 'standard'
 }
 
@@ -63,7 +63,7 @@ export function rideAlertMode(mode) {
 }
 
 export function defaultRideAlerts() {
-  return { standard: 'chime_vibrate', wait: 'chime_vibrate', comfort: 'chime_vibrate' }
+  return { standard: 'chime_vibrate', wait: 'chime_vibrate', comfort: 'chime_vibrate', carpool: 'chime_vibrate' }
 }
 
 export function normalizeRideAlerts(raw) {
@@ -73,6 +73,7 @@ export function normalizeRideAlerts(raw) {
     standard: rideAlertMode(source.standard || defaults.standard),
     wait: rideAlertMode(source.wait || defaults.wait),
     comfort: rideAlertMode(source.comfort || defaults.comfort),
+    carpool: rideAlertMode(source.carpool || defaults.carpool),
   }
 }
 

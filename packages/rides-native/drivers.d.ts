@@ -143,6 +143,7 @@ export function requestDriverTrip(
     pickupLabel?: string
     pickupPoint?: { latitude?: number; longitude?: number; lat?: number; lng?: number }
     tier?: string
+    passengers?: number | string | null
     isStudent?: boolean
     note?: string
   },

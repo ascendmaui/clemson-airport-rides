@@ -3,7 +3,7 @@ import { spawnSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
 import { studentDiscountGranted } from '../src/lib/studentDomain.js'
-import { cardDepositCents, STUDENT_DISCOUNT_BPS } from '../src/lib/fareRates.js'
+import { CARPOOL_DISCOUNT_BPS, cardDepositCents, percentOffCents, STUDENT_DISCOUNT_BPS } from '../src/lib/fareRates.js'
 import { ATL_FLOOR_CENTS } from '../src/lib/scheduledRideModel.js'
 import {
   amountDueIgnoringClient,
@@ -485,4 +485,14 @@ test('Wait and Extra Comfort use the same server fare as Standard', () => {
   assert.equal(comfort.fareCents, standard.fareCents)
   assert.equal(comfort.isStudent, false)
   assert.equal(comfort.discountCents, 0)
+  const carpool = priceDriverRequest(places, { ...options, tier: 'carpool', isStudent: true })
+  assert.equal(carpool.tier, 'carpool')
+  assert.equal(carpool.isStudent, false)
+  assert.equal(carpool.fareCents, percentOffCents(standard.fareCents, CARPOOL_DISCOUNT_BPS).amountCents)
+  assert.equal(carpool.breakdown.carpool_discount_bps, CARPOOL_DISCOUNT_BPS)
+  assert.equal(carpool.seatCount, 1)
+  const two = priceDriverRequest(places, { ...options, tier: 'carpool', seatCount: 2 })
+  assert.equal(two.fareCents, carpool.fareCents * 2)
+  assert.equal(two.perSeatFareCents, carpool.fareCents)
+  assert.equal(priceDriverRequest(places, { ...options, tier: 'standard', seatCount: 2 }).fareCents, standard.fareCents)
 })

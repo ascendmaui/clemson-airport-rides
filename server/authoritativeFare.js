@@ -24,6 +24,7 @@ import {
 import { loadGameDayMultiplier } from './creditLots.js'
 import {
   applyScheduleAheadDiscount,
+  carpoolSeatCount,
   isOfferedRideTier,
   resolveOfferedTier,
   scheduleDiscountMetadata,
@@ -96,6 +97,7 @@ export function quoteAirportCheckout({
   distanceM = null,
   durationS = null,
   tigerPassBps = 0,
+  tier = 'standard',
 } = {}) {
   const code = String(airport || 'GSP').toUpperCase() === 'CLT' ? 'CLT' : 'GSP'
   const fb = AIRPORT_ROUTE_FALLBACK[code]
@@ -109,8 +111,7 @@ export function quoteAirportCheckout({
     minutes: hasRoute ? undefined : fb.minutes,
     surgeMultiplier: surge.multiplier,
     isStudent: Boolean(isStudent),
-    isCarpool: false,
-    tier: 'standard',
+    tier,
   })
   const fareCents = quote.fareBeforeCreditsCents
   return applyTigerPassDiscount({
@@ -143,6 +144,7 @@ export function priceScheduledRequest({
   scheduleAhead = false,
   now = new Date(),
   tigerPassBps = 0,
+  seatCount = 1,
 } = {}) {
   const explicit = airport ? String(airport).toUpperCase() : null
   const fromPlace = airportCodeForPlace(dropoff) || airportCodeForPlace(pickup)
@@ -162,11 +164,12 @@ export function priceScheduledRequest({
       distanceM,
       durationS,
       tigerPassBps,
+      tier: tierId,
     })
-    return applyScheduleAheadDiscount(
+    return applyCarpoolSeats(applyScheduleAheadDiscount(
       { ...priced, tier: tierId },
       { at: when, now, enabled: scheduleAhead },
-    )
+    ), tierId, seatCount)
   }
 
   const hasRoute = distanceM != null || durationS != null
@@ -197,7 +200,7 @@ export function priceScheduledRequest({
     : { amountCents: fareCents, discountCents: 0, bps: 0 }
   fareCents = studentOff.amountCents
   const split = splitPlatformFee(fareCents)
-  return applyScheduleAheadDiscount(applyTigerPassDiscount({
+  return applyCarpoolSeats(applyScheduleAheadDiscount(applyTigerPassDiscount({
     airport: null,
     isStudent: student,
     fareCents,
@@ -218,7 +221,36 @@ export function priceScheduledRequest({
       platform_fee_cents: split.platformFeeCents,
       driver_earnings_cents: split.driverEarningsCents,
     },
-  }, tigerPassBps), { at: when, now, enabled: scheduleAhead })
+  }, tigerPassBps), { at: when, now, enabled: scheduleAhead }), tierId, seatCount)
+}
+
+/**
+ * Carpool quotes are per seat. Two seats cost twice the discounted seat.
+ * Other tiers are unchanged. TODO: matching still dispatches each carpool
+ * request on its own standard-eligible car.
+ */
+function applyCarpoolSeats(priced, tierId, seatCount) {
+  if (tierId !== 'carpool') return priced
+  const seats = carpoolSeatCount(tierId, seatCount)
+  const perSeat = Math.max(0, Math.round(Number(priced?.fareCents) || 0))
+  const fareCents = perSeat * seats
+  const split = splitPlatformFee(fareCents)
+  const previous = priced?.breakdown && typeof priced.breakdown === 'object' ? priced.breakdown : {}
+  return {
+    ...priced,
+    fareCents,
+    seatCount: seats,
+    perSeatFareCents: perSeat,
+    breakdown: {
+      ...previous,
+      per_seat_fare_cents: perSeat,
+      seat_count: seats,
+      fare_before_credits_cents: fareCents,
+      rider_pays_cents: fareCents,
+      platform_fee_cents: split.platformFeeCents,
+      driver_earnings_cents: split.driverEarningsCents,
+    },
+  }
 }
 
 /** Checkout Session line amount. Client money fields cannot lower it. */
@@ -242,6 +274,7 @@ export function priceCheckoutBody({
     distanceM,
     durationS,
     tigerPassBps,
+    tier,
   })
   const scheduled = Boolean(body.date || body.pickupAt || body.scheduled_for || body.scheduledFor)
   const priced = applyScheduleAheadDiscount(
@@ -409,7 +442,7 @@ export function placesForServerFare(body = {}) {
   return { pickup, dropoff, airport }
 }
 
-const QUOTED_TIER_IDS = ['standard', 'wait', 'comfort']
+const QUOTED_TIER_IDS = ['standard', 'wait', 'comfort', 'carpool']
 
 /**
  * Fares the rider is shown. Each tier is priced with priceScheduledRequest,
@@ -428,6 +461,7 @@ export function riderTierQuotes({
   durationS = null,
   scheduleAhead = false,
   tigerPassBps = 0,
+  seatCount = 1,
 } = {}) {
   const requested = resolveOfferedTier(tier)
   const input = {
@@ -456,7 +490,7 @@ export function riderTierQuotes({
       airport: priced.airport,
     }
   })
-  const selected = priceScheduledRequest({ ...input, tier: requested })
+  const selected = priceScheduledRequest({ ...input, tier: requested, seatCount })
   return {
     ...selected,
     tier: requested,
@@ -473,6 +507,7 @@ export function priceDriverRequest(places, {
   distanceM = null,
   durationS = null,
   tigerPassBps = 0,
+  seatCount = 1,
 } = {}) {
   const airport = places?.airport === 'GSP' || places?.airport === 'CLT' ? places.airport : null
   const atl = places?.airport === 'ATL'
@@ -487,6 +522,7 @@ export function priceDriverRequest(places, {
     distanceM,
     durationS,
     tigerPassBps,
+    seatCount,
   })
 }
 

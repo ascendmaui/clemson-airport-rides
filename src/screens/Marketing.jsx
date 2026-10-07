@@ -145,7 +145,7 @@ export function Marketing() {
             </div>
             <div className="mkt-choices" role="group" aria-label="Ways to ride">
               <button type="button" className="mkt-choice pressable" onClick={() => navigate('home')}>Book a ride</button>
-              <button type="button" className="mkt-choice pressable" onClick={() => navigate('carpool', { hub: '1' })}>Book a carpool</button>
+              <button type="button" className="mkt-choice pressable" onClick={() => navigate('home', { tier: 'carpool' })}>Book a carpool</button>
               <button type="button" className="mkt-choice pressable" onClick={() => navigate('schedule')}>Schedule for later</button>
             </div>
           </div>
@@ -234,7 +234,7 @@ export function Marketing() {
               <li>Three pickups along the way</li>
               <li>Then the airport</li>
             </ol>
-            <button type="button" className="mkt-text pressable" onClick={() => navigate('carpool', { hub: '1' })}>
+            <button type="button" className="mkt-text pressable" onClick={() => navigate('home', { tier: 'carpool' })}>
               Book a carpool
             </button>
           </article>

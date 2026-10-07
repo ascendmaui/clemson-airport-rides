@@ -16,7 +16,7 @@ import {
   placesForServerFare,
   riderTierQuotes,
 } from '../authoritativeFare.js'
-import { resolveOfferedTier } from '../../shared/rideOptions.js'
+import { carpoolSeatCount, resolveOfferedTier } from '../../shared/rideOptions.js'
 import { tigerPassQuoteFields } from '../../shared/tigerPass.js'
 import { loadRiderMatchPreferences } from '../riderPass.js'
 
@@ -115,6 +115,7 @@ export default async function handler(req, res, deps = {}) {
     durationS: distance.durationS,
     scheduleAhead: scheduled,
     tigerPassBps: pass?.discountBps || 0,
+    seatCount: carpoolSeatCount(tier, clean.passengers ?? clean.partySize ?? clean.party_size),
   })
   const split = splitPlatformFee(priced.fareCents)
   const breakdown = priced.breakdown || priced.quote?.breakdown || {}

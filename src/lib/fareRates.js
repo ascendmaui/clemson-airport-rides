@@ -402,7 +402,8 @@ export function quoteFare({
   const surgeMul = clampSurge(surgeMultiplier)
   const surgedCents = Math.round(classedCents * surgeMul)
 
-  const carpool = isCarpool
+  const sharedSeat = Boolean(isCarpool) || String(tier ?? '').trim().toLowerCase() === 'carpool'
+  const carpool = sharedSeat
     ? percentOffCents(surgedCents, CARPOOL_DISCOUNT_BPS)
     : { amountCents: surgedCents, discountCents: 0, bps: 0 }
   const studentOk = Boolean(isStudent) && (tier == null || tier === 'standard')

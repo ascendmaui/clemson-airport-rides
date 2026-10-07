@@ -1,7 +1,7 @@
 /**
  * Frequent-rider subscription.
  * Rename the product by changing TIGER_PASS_NAME. product id stays tiger_pass.
- * Ride types stay Standard, Wait & Save, and Extra Comfort.
+ * Ride types are Standard, Wait & Save, Extra Comfort, and Carpool.
  */
 import { cardDepositCents, percentOffCents, splitPlatformFee } from '../src/lib/fareRates.js'
 import { isBlockedRideTier, isOfferedRideTier, rideOptionLabel } from './rideOptions.js'
@@ -21,7 +21,7 @@ export const TIGER_PASS_PRICE_CENTS = 999
 /** How long a paid period lasts when Stripe does not send a period end. */
 export const TIGER_PASS_PERIOD_MS = 32 * 24 * 60 * 60 * 1000
 
-const CAR_TYPE_IDS = ['standard', 'wait', 'comfort']
+const CAR_TYPE_IDS = ['standard', 'wait', 'comfort', 'carpool']
 
 export function tigerPassCarTypes() {
   return CAR_TYPE_IDS.map((id) => ({ id, name: rideOptionLabel(id) }))
@@ -35,7 +35,7 @@ export function tigerPassCopy(name = TIGER_PASS_NAME) {
     kicker: 'FREQUENT RIDER',
     discountLabel: `${TIGER_PASS_DISCOUNT_PCT}% off rides`,
     priceLabel: `$${(TIGER_PASS_PRICE_CENTS / 100).toFixed(2)} / month`,
-    summary: `${label} takes ${TIGER_PASS_DISCOUNT_PCT}% off Standard, Wait & Save, and Extra Comfort.`,
+    summary: `${label} takes ${TIGER_PASS_DISCOUNT_PCT}% off Standard, Wait & Save, Extra Comfort, and Carpool.`,
     carTypesLabel: 'Preferred ride types',
     driversLabel: 'Preferred drivers',
     savedDriversLabel: 'Saved drivers',
@@ -64,14 +64,14 @@ export function filterPreferredCarTypes(raw) {
   return ids
 }
 
-/** Writes: anything outside the three offered types is rejected. */
+/** Writes: anything outside the offered types is rejected. */
 export function assertPreferredCarTypes(raw) {
   const list = Array.isArray(raw) ? raw : []
   for (const item of list) {
     const tier = String(item ?? '').trim().toLowerCase()
     if (!tier) continue
     if (!isOfferedRideTier(tier) || isBlockedRideTier(tier)) {
-      const error = new Error('Preferred ride types are Standard, Wait & Save, and Extra Comfort.')
+      const error = new Error('Preferred ride types are Standard, Wait & Save, Extra Comfort, and Carpool.')
       error.status = 400
       error.code = 'ride_option_unavailable'
       throw error

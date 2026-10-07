@@ -172,7 +172,7 @@ function TigerPassScreen() {
         <Text style={styles.kicker}>{status?.active ? 'ACTIVE' : 'FREQUENT RIDER'}</Text>
         <Text style={styles.title}>{name}</Text>
         <Text style={styles.copy}>{status?.summary || 'A monthly pass for frequent riders.'}</Text>
-        <Text style={styles.copy}>{status?.priceLabel} · {status?.discountPct || 10}% off Standard, Wait & Save, and Extra Comfort.</Text>
+        <Text style={styles.copy}>{status?.priceLabel} · {status?.discountPct || 10}% off Standard, Wait & Save, Extra Comfort, and Carpool.</Text>
         {status?.active ? <Text style={styles.badge}>Discount is on</Text> : null}
         {pastDue ? <Text style={styles.copy}>Payment is past due, so the discount is off until Stripe marks this subscription active again.</Text> : null}
         {!status?.active && !pastDue ? <Text style={styles.copy}>The discount starts after checkout.</Text> : null}
@@ -187,7 +187,7 @@ function TigerPassScreen() {
 
         <View style={[styles.card, lift(colors, 'rest')]}>
           <Text style={styles.rowTitle}>Preferred ride types</Text>
-          <Text style={styles.copy}>Choose among Standard, Wait & Save, and Extra Comfort. Other ride types are not offered.</Text>
+          <Text style={styles.copy}>Choose among Standard, Wait & Save, Extra Comfort, and Carpool. Other ride types are not offered.</Text>
           <View style={styles.pills}>
             {carTypes.map((car) => (
               <Pill

@@ -20,7 +20,7 @@ import {
 } from '../authoritativeFare.js'
 import { insertTripEvent } from '../tripEvents.js'
 import { billingForPricedRide } from '../rideBilling.js'
-import { resolveOfferedTier, scheduleDiscountMetadata } from '../../shared/rideOptions.js'
+import { carpoolSeatCount, resolveOfferedTier, scheduleDiscountMetadata } from '../../shared/rideOptions.js'
 import { tigerPassBpsForRider } from '../riderPass.js'
 import { tigerPassMetadata } from '../../shared/tigerPass.js'
 import { assertTierAvailable } from '../rideAvailability.js'
@@ -158,6 +158,7 @@ export default async function handler(req, res, deps = {}) {
     scheduleAhead: scheduled && !nearTerm,
     now: new Date(clockNow),
     tigerPassBps,
+    seatCount: carpoolSeatCount(tier, passengerCount(body)),
   })
 
   const billing = await billingForPricedRide(sb, user.id, body, priced)
@@ -235,7 +236,7 @@ export default async function handler(req, res, deps = {}) {
       fare_source: 'server',
       rider_pays_cents: priced.fareCents,
     },
-    passengers: passengerCount(body),
+    passengers: tier === 'carpool' ? carpoolSeatCount(tier, passengerCount(body)) : passengerCount(body),
     pickup_at: scheduledFor,
     scheduled_for: scheduledFor,
     rider_note: purpose,

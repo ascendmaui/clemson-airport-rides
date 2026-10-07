@@ -9,6 +9,9 @@ import { orderDriversForRider } from '../shared/riderFavorites.js'
  * Approved drivers who are online, John then Kim then everyone else.
  * Email is used for rank and is not returned.
  * Extra Comfort keeps drivers whose vehicle class qualifies.
+ * Carpool uses the same approved drivers as Standard.
+ * TODO: same-direction pooling of two carpool requests is not built;
+ * each carpool booking is offered to one standard-eligible vehicle.
  */
 export async function listAssignableDrivers(sb, {
   tier = 'standard',

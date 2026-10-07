@@ -11,6 +11,7 @@ import {
   ladderOfferNet,
   netCentsForShare,
   normalizeRideAlerts,
+  rideAlertTier,
   offerHourly,
   pickupMiles,
   poolOfferPatch,
@@ -73,6 +74,8 @@ test('ride alert modes are per tier and default to chime plus vibration', () => 
   assert.equal(prefs.standard, 'silent')
   assert.equal(prefs.wait, 'vibrate')
   assert.equal(prefs.comfort, 'chime_vibrate')
+  assert.equal(prefs.carpool, 'chime_vibrate')
+  assert.equal(rideAlertTier('carpool'), 'carpool')
   assert.deepEqual(alertPlayback('chime'), { sound: true, vibrate: false })
   assert.deepEqual(alertPlayback('vibrate'), { sound: false, vibrate: true })
   assert.deepEqual(alertPlayback('silent'), { sound: false, vibrate: false })

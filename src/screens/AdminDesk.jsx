@@ -5,6 +5,7 @@ import { useAuth } from '../lib/auth'
 import { supabase } from '../lib/supabase'
 import { AdminAccessDenied } from '../components/AdminAccessDenied'
 import { isAdminIdentity } from '../lib/driverOnboarding'
+import { rideOptionLabel } from '../../shared/rideOptions.js'
 import {
   fetchAdminNotifications,
   fetchAdminOverview,
@@ -219,6 +220,8 @@ function TripsPanel() {
           <div style={{ fontSize: 13 }}>{row.pickup_label || 'Pickup'} → {row.dropoff_label || 'Drop-off'}</div>
           <div style={{ fontSize: 12, color: 'var(--ink-secondary)', marginTop: 4 }}>
             Rider {row.rider?.full_name || row.rider_id || '—'} · Driver {row.driver?.full_name || row.driver_id || '—'}
+            {row.tier ? ` · ${rideOptionLabel(row.tier)}` : ''}
+            {row.passengers > 1 ? ` · ${row.passengers} seats` : ''}
             {row.fare_cents != null ? ` · $${(Number(row.fare_cents) / 100).toFixed(2)}` : ''}
           </div>
         </div>

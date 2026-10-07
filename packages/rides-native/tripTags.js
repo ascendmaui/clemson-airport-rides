@@ -226,7 +226,7 @@ export const TAG_LABELS = {
   student: 'Student discount',
   game_day: 'Game day',
   weekend_party: 'Weekend / party',
-  carpool: 'Carpool · split fare',
+  carpool: 'Carpool',
   direct: 'Preferred by rider',
   scheduled: 'Scheduled',
   comfort: 'Extra Comfort',
@@ -295,6 +295,7 @@ export function tripTags(row, { gameDayLive = false } = {}) {
   }
   const tier = String(row?.tier || meta.ride_option || '').trim().toLowerCase()
   if (tier === 'comfort') tags.push('comfort')
+  if (tier === 'carpool' && !tags.includes('carpool')) tags.push('carpool')
   if (row?.status === 'requested' && row?.driver_id) tags.push('direct')
   if (row?.status === 'scheduled' || meta.kind === 'scheduled') tags.push('scheduled')
   return tags

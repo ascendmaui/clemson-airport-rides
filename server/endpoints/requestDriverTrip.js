@@ -25,7 +25,7 @@ import { insertTripEvent } from '../tripEvents.js'
 import { notifyDriverOffer } from '../driverOfferAlerts.js'
 import { exclusiveOfferPatch, netCentsForShare, poolOfferPatch, EXCLUSIVE_SHARE_BPS, POOL_SHARE_BPS } from '../../packages/rides-native/offerLadder.js'
 import { billingForPricedRide } from '../rideBilling.js'
-import { resolveOfferedTier, vehicleServesComfort } from '../../shared/rideOptions.js'
+import { carpoolSeatCount, resolveOfferedTier, vehicleServesComfort } from '../../shared/rideOptions.js'
 import { isSimulatedDriverId } from '../../packages/rides-native/simulatedDrivers.js'
 import { assertTierAvailable } from '../rideAvailability.js'
 import { releaseTigerHeatReservation, reserveTigerHeatOffer } from '../tigerHeatService.js'
@@ -168,6 +168,7 @@ export default async function handler(req, res, deps = {}) {
   const routeOrigin = places.airport ? CAMPUS_PICKUP : places.pickup
   const distance = await serverDistance(routeOrigin, places.dropoff)
   const isStudent = studentDiscountGranted(user)
+  const seats = carpoolSeatCount(tier, body.passengers ?? body.partySize ?? body.party_size)
   const priced = priceDriverRequest(places, {
     isStudent,
     at: when,
@@ -176,6 +177,7 @@ export default async function handler(req, res, deps = {}) {
     distanceM: distance.distanceM,
     durationS: distance.durationS,
     tigerPassBps: prefs.discountBps,
+    seatCount: seats,
   })
   if (priced?.fareCents == null || !Number.isFinite(Number(priced.fareCents))) {
     return json(res, 409, { error: 'Fare is not set', code: 'fare_not_set' })
@@ -257,7 +259,7 @@ export default async function handler(req, res, deps = {}) {
       fare_source: 'server',
       rider_pays_cents: priced.fareCents,
     },
-    passengers: 1,
+    passengers: seats,
     ...(riderNote ? { rider_note: riderNote } : {}),
     metadata: {
       kind: 'driver_request',
@@ -282,6 +284,7 @@ export default async function handler(req, res, deps = {}) {
       studentLabel: priced.discountCents > 0 ? 'Clemson student · 10% off Standard' : null,
       ...tigerPassMetadata(priced),
       ride_option: tier,
+      ...(tier === 'carpool' ? { seat_count: seats, per_seat_fare_cents: priced.perSeatFareCents } : {}),
       fare_source: 'server',
       airport: priced.airport,
       ...billing.snapshot,

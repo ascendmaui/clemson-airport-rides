@@ -86,7 +86,7 @@ test('the marketing page is a ride or carpool entry and does not invent store id
   assert.match(source, /Book a carpool/)
   assert.match(source, /Schedule for later/)
   assert.match(source, /navigate\('home'\)/)
-  assert.match(source, /navigate\('carpool', \{ hub: '1' \}\)/)
+  assert.match(source, /navigate\('home', \{ tier: 'carpool' \}\)/)
   assert.match(source, /navigate\('schedule'\)/)
   assert.doesNotMatch(source, /const DOWNLOADS/)
   assert.doesNotMatch(source, /MARKETING_FEATURES/)
@@ -213,14 +213,14 @@ test('marketing cards and buttons use frosted glass on phone and desktop', () =>
   assert.doesNotMatch(card[0], /background:\s*#fff/)
 })
 
-test('marketing hero offers a ride, the carpool hub, and the rider schedule', () => {
+test('marketing hero offers a ride, carpool booking, and the rider schedule', () => {
   const source = readFileSync(new URL('../src/screens/Marketing.jsx', import.meta.url), 'utf8')
   assert.match(source, /Peace of mind, every ride\./)
   assert.match(source, /Book a ride/)
   assert.match(source, /Book a carpool/)
   assert.match(source, /Schedule for later/)
   assert.match(source, /navigate\('home'\)/)
-  assert.match(source, /navigate\('carpool', \{ hub: '1' \}\)/)
+  assert.match(source, /navigate\('home', \{ tier: 'carpool' \}\)/)
   assert.match(source, /navigate\('schedule'\)/)
   assert.doesNotMatch(source, /QrMark|WEB_BOOK_URL|Soft launch/)
 })

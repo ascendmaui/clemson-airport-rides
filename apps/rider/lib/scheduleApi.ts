@@ -1,3 +1,4 @@
+import { CARPOOL_DISCOUNT_BPS, percentOffCents } from '../../../src/lib/fareRates.js'
 import { studentDiscountGranted } from '../../../src/lib/studentDomain.js'
 import { apiBase, authedJson } from 'rides-native/apiClient'
 import type { AuthUser } from 'rides-native/createAuth'
@@ -57,23 +58,32 @@ function airportCode(label: string): 'GSP' | 'CLT' | null {
   return null
 }
 
-export function quoteRide(pickup: RidePlace, dropoff: RidePlace, isStudent: boolean): RideQuote {
+export function quoteRide(pickup: RidePlace, dropoff: RidePlace, isStudent: boolean, tier = 'standard'): RideQuote {
   const airport = airportCode(dropoff.label)
+  const shared = tier === 'carpool'
   if (airport) {
     const raw = airportFareCents(airport) || 0
-    const student = applyStudentDiscount(raw, isStudent)
+    const student = applyStudentDiscount(raw, isStudent && !shared)
+    const priced = shared ? percentOffCents(student.fareCents, CARPOOL_DISCOUNT_BPS) : null
+    const fareCents = priced ? priced.amountCents : student.fareCents
     return {
-      ...student,
-      depositCents: depositCents(student.fareCents),
+      fareCents,
+      discountCents: student.discountCents + (priced?.discountCents || 0),
+      label: shared ? 'Carpool · 15% off per seat' : student.label,
+      depositCents: depositCents(fareCents),
       estimate: false,
       airport,
       miles: null,
     }
   }
   const meters = haversineMeters(pickup, dropoff) || 0
-  const student = applyStudentDiscount(distanceFareCents(meters), isStudent)
+  const student = applyStudentDiscount(distanceFareCents(meters), isStudent && !shared)
+  const priced = shared ? percentOffCents(student.fareCents, CARPOOL_DISCOUNT_BPS) : null
+  const fareCents = priced ? priced.amountCents : student.fareCents
   return {
-    ...student,
+    fareCents,
+    discountCents: student.discountCents + (priced?.discountCents || 0),
+    label: shared ? 'Carpool · 15% off per seat' : student.label,
     depositCents: 0,
     estimate: true,
     airport: null,
@@ -123,6 +133,7 @@ export async function createScheduledTrip({
   purpose,
   weekdays,
   tier = 'standard',
+  passengers,
   nearTerm = false,
   boostCents = 0,
 }: {
@@ -132,7 +143,8 @@ export async function createScheduledTrip({
   pickupAt: Date | null
   purpose: SchedulePurpose
   weekdays: string[]
-  tier?: 'standard' | 'comfort' | 'wait'
+  tier?: 'standard' | 'comfort' | 'wait' | 'carpool'
+  passengers?: number
   nearTerm?: boolean
   boostCents?: number
 }) {
@@ -148,6 +160,7 @@ export async function createScheduledTrip({
       purpose,
       weekdays,
       tier,
+      ...(passengers ? { passengers } : {}),
       ...(nearTerm ? { nearTerm: true } : {}),
       ...(boostCents ? { boostCents } : {}),
     },

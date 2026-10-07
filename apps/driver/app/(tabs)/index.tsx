@@ -743,7 +743,7 @@ export function RideCard({
             )}
             <View style={{ flex: 1 }}>
               <Text style={{ color: colors.ink, fontWeight: '800', fontSize: 16 }}>{card.firstName}</Text>
-              <Text style={{ color: colors.inkSecondary }}>{card.tier === 'wait' ? 'Wait & Save' : card.tier === 'comfort' ? 'Extra Comfort' : 'Standard'}</Text>
+              <Text style={{ color: colors.inkSecondary }}>{card.tier === 'wait' ? 'Wait & Save' : card.tier === 'comfort' ? 'Extra Comfort' : card.tier === 'carpool' ? 'Carpool' : 'Standard'}</Text>
             </View>
             {onFavorite ? (
               <Pressable onPress={onFavorite} accessibilityRole="button" accessibilityLabel={favorite ? 'Remove favorite rider' : 'Save favorite rider'}>

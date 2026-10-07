@@ -9,7 +9,7 @@ import {
 
 const sessionStamps = new Set()
 
-export async function estimateScheduledFare({ pickup, dropoff, isStudent = false, at = new Date(), tier = 'standard' } = {}) {
+export async function estimateScheduledFare({ pickup, dropoff, isStudent = false, at = new Date(), tier = 'standard', passengers = 1 } = {}) {
   void isStudent
   if (pickup?.lat == null || dropoff?.lat == null) return null
   const when = at instanceof Date ? at.toISOString() : new Date(at).toISOString()
@@ -18,6 +18,7 @@ export async function estimateScheduledFare({ pickup, dropoff, isStudent = false
     dropoff,
     at: when,
     tier,
+    passengers,
   })
   return {
     fareCents: data.fareCents,
@@ -59,6 +60,7 @@ export async function createScheduledTrip({
   pickupAt,
   purpose = 'planned',
   tier = 'standard',
+  passengers = null,
   billingChoice = null,
   nearTerm = false,
   boostCents = 0,
@@ -74,6 +76,7 @@ export async function createScheduledTrip({
     pickupAt: when,
     purpose,
     tier,
+    ...(passengers ? { passengers } : {}),
     weekdays: [],
     ...(billingChoice ? { billingChoice } : {}),
     ...(nearTerm ? { nearTerm: true } : {}),
