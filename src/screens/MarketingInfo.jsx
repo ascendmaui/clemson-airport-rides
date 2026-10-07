@@ -1,4 +1,5 @@
-import { navigate } from '../lib/navigation'
+import { useEffect } from 'react'
+import { getHashRoute, navigate } from '../lib/navigation'
 import { MarketingChrome } from '../components/MarketingChrome'
 import { MarketingPhoto } from '../components/MarketingPhoto'
 import { FeatureBlock } from '../components/FeatureBlock'
@@ -94,6 +95,13 @@ function bookFor(route) {
 export function HowItWorks() {
   const riderGuide = messagingGuide('rider')
   const builtIn = BUILT_IN.map((feature) => withMessaging(feature, riderGuide))
+  useEffect(() => {
+    if (getHashRoute().params.section !== 'carpool') return undefined
+    const frame = window.requestAnimationFrame(() => {
+      document.getElementById('carpool')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    })
+    return () => window.cancelAnimationFrame(frame)
+  }, [])
   return (
     <MarketingChrome current="how-it-works">
       <PageHead kicker="How it works" title="Peace of mind, built in" lede="Rides and carpools built for Clemson students." />
@@ -125,12 +133,10 @@ export function HowItWorks() {
           <p>Request from a campus spot. The same trip screen follows the ride after a driver accepts.</p>
         </article>
       </div>
-      <div className="mkt-section-head">
+      <article className="mkt-card mkt-feature" id="carpool">
         <p className="mkt-kicker">{CARPOOL_SECTION.kicker}</p>
         <h2>{CARPOOL_SECTION.title}</h2>
         <p>{CARPOOL_SECTION.what}</p>
-      </div>
-      <article className="mkt-card mkt-feature">
         <MarketingPhoto id="carpool-how-it-works" />
         <ol className="mkt-guide">
           {CARPOOL_SECTION.steps.map((step) => (
@@ -141,8 +147,6 @@ export function HowItWorks() {
           ))}
         </ol>
         <p>{CARPOOL_SECTION.diagramCaption}</p>
-      </article>
-      <article className="mkt-card mkt-feature">
         <MarketingPhoto id="carpool-friends-curb" />
         <p><strong>Why it matters. </strong>{CARPOOL_SECTION.why}</p>
         <button type="button" className="mkt-text pressable" onClick={() => navigate('home', { tier: 'carpool' })}>
@@ -212,10 +216,10 @@ export function SafetyPage() {
   return (
     <MarketingChrome current="safety">
       <PageHead kicker={SAFETY_SECTION.kicker} title="Safe nights out" lede={SAFETY_SECTION.what} />
-      <p><strong>Why it matters. </strong>{SAFETY_SECTION.why}</p>
+      <p className="mkt-note"><strong>Why it matters. </strong>{SAFETY_SECTION.why}</p>
       <MarketingPhoto id="night-going-out" className="mkt-section-banner" />
       <div className="mkt-section-head">
-        <h2>Downtown Clemson, Friday and Saturday nights</h2>
+        <h2 className="mkt-night-title">Downtown Clemson, Friday and Saturday nights</h2>
       </div>
       <div className="mkt-night-strip">
         {NIGHT_VENUES.map((id) => <MarketingPhoto key={id} id={id} className="mkt-night-shot" />)}
@@ -251,7 +255,7 @@ export function PromosPage() {
           ) : null}
         </article>
       ))}
-      <p>Automatic ride discounts do not stack with each other or with the Friday code.</p>
+      <p className="mkt-note">Automatic ride discounts do not stack with each other or with the Friday code.</p>
     </MarketingChrome>
   )
 }

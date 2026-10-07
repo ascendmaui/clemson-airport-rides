@@ -26,6 +26,13 @@ export const NIGHT_VENUES = [
   'college-ave-csp-356-walkons',
 ]
 
+/** Homepage trio under the booking hero. How it works keeps HERO_COLLAGE. */
+export const HOME_HERO = [
+  { id: 'students-carpool-street', className: 'mkt-hero-shot mkt-hero-shot--lead', eager: true },
+  { id: 'students-stadium-request', className: 'mkt-hero-shot mkt-hero-shot--request', eager: false },
+  { id: 'airport-on-time', className: 'mkt-hero-shot mkt-hero-shot--backseat', eager: false },
+]
+
 export const FEATURE_IMAGES = {
   student: 'library-study-group',
   gameday: 'gameday-crowd',

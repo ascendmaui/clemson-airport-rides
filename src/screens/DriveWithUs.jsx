@@ -57,7 +57,7 @@ export function DriveWithUs() {
             </article>
           ))}
         </div>
-        <p className="mkt-release">{RELEASE_NOTE}</p>
+        <p className="mkt-release mkt-note">{RELEASE_NOTE}</p>
         <button type="button" className="mkt-text pressable" onClick={() => navigate('driver-signup')}>
           Start the driver application
         </button>

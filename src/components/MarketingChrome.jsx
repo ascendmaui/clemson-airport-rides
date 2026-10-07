@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { navigate } from '../lib/navigation'
 
 const STADIUM = {
@@ -42,7 +42,19 @@ function useNavOverPage() {
   return overPage
 }
 
-function MenuLinks({ current }) {
+function MenuLinks({ current, menuRef }) {
+  useEffect(() => {
+    const menu = menuRef.current
+    if (!menu || !current) return undefined
+    const frame = window.requestAnimationFrame(() => {
+      const button = menu.querySelector('[aria-current="page"]')
+      if (!button) return
+      const left = button.offsetLeft - (menu.clientWidth - button.offsetWidth) / 2
+      menu.scrollTo({ left: Math.max(0, left) })
+    })
+    return () => window.cancelAnimationFrame(frame)
+  }, [current, menuRef])
+
   return MARKETING_MENU.map((item) => (
     <button
       key={item.id}
@@ -58,9 +70,10 @@ function MenuLinks({ current }) {
 
 export function MarketingChrome({ current = '', home = false, children }) {
   const overPage = useNavOverPage()
+  const menuRef = useRef(null)
   const menu = (
-    <nav className="mkt-menu" aria-label="More">
-      <MenuLinks current={current} />
+    <nav className="mkt-menu" aria-label="More" ref={menuRef}>
+      <MenuLinks current={current} menuRef={menuRef} />
     </nav>
   )
   return (

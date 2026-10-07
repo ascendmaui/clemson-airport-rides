@@ -254,7 +254,7 @@ export const SAFETY_FEATURES = [
 export const CARPOOL_SECTION = {
   kicker: 'Carpool',
   title: 'A discounted seat.',
-  what: 'Carpool v1 is a discounted seat. It is 15% off, for 1 or 2 seats. It does not pair you with other riders.',
+  what: 'Carpool is a discounted seat. It is 15% off, for 1 or 2 seats. It does not pair you with other riders.',
   why: 'The seat costs less than the full fare. Two separate carpool requests are not combined into one car.',
   steps: [
     {
