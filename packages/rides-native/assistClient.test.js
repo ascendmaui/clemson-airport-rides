@@ -64,10 +64,8 @@ test('the marketing page does not install the frozen 1.0.0 binary', () => {
   assert.doesNotMatch(source, /projects\/clemson-airport-rides\/builds/)
   assert.doesNotMatch(source, /expo\.dev|expo\.go|exp:\/\/|RIDER_EXPO_PROJECT|DRIVER_EXPO_PROJECT/)
   assert.match(source, /Book a ride/)
-  assert.match(source, /WEB_BOOK_URL/)
-  assert.match(source, /WEB_DRIVER_URL/)
-  assert.match(source, /APP_DOWNLOADS/)
-  assert.doesNotMatch(source, /const DOWNLOADS/)
+  assert.match(source, /navigate\('home', \{ tier: 'carpool' \}\)/)
+  assert.doesNotMatch(source, /WEB_BOOK_URL|WEB_DRIVER_URL|APP_DOWNLOADS|const DOWNLOADS/)
 })
 
 test('lost-and-found and ride chat reject empty text before any network call', async () => {

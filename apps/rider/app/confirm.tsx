@@ -29,8 +29,9 @@ import { useThemedStyles } from '@/lib/useThemedStyles'
 export default function ConfirmPickup() {
   const router = useRouter()
   const insets = useSafeAreaInsets()
-  const params = useLocalSearchParams<{ dest?: string }>()
+  const params = useLocalSearchParams<{ dest?: string; tier?: string | string[] }>()
   const dest = oneParam(params.dest, 'GSP Airport')
+  const tier = oneParam(params.tier)
   const { user } = useAuth()
   const student = useStudentStatus()
   const studentOffer = studentSurfaceCopy(student, 'confirm')
@@ -64,6 +65,7 @@ export default function ConfirmPickup() {
     pickupLat: String(pickup.lat),
     pickupLng: String(pickup.lng),
     note,
+    ...(tier ? { tier } : {}),
   }
 
   const goTiers = () => {

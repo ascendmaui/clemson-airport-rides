@@ -4,6 +4,7 @@ import handleQuote from './endpoints/quoteFare.js'
 import handleBilling from './endpoints/rideBilling.js'
 import { distanceFareCents } from '../src/lib/scheduledRideModel.js'
 import { tripMeters } from '../src/lib/scheduledRideModel.js'
+import { CARPOOL_DISCOUNT_BPS, percentOffCents } from '../src/lib/fareRates.js'
 import {
   placesForServerFare,
   priceScheduledRequest,
@@ -92,6 +93,21 @@ test('campus tiers use the saved fare, not the catalog placeholder', () => {
   assert.equal(standard.fareCents, quotes.fareCents)
   assert.equal(wait.fareCents, standard.fareCents)
   assert.equal(comfort.fareCents, standard.fareCents)
+  const carpool = quotes.tiers.find((row) => row.id === 'carpool')
+  assert.equal(carpool.fareCents, percentOffCents(standard.fareCents, CARPOOL_DISCOUNT_BPS).amountCents)
+  assert.ok(carpool.fareCents < standard.fareCents)
+  const twoSeats = priceScheduledRequest({
+    pickup: SIKES,
+    dropoff: COOPER,
+    at: QUIET,
+    isStudent: false,
+    tier: 'carpool',
+    distanceM: 400,
+    durationS: 90,
+    seatCount: 2,
+  })
+  assert.equal(twoSeats.perSeatFareCents, carpool.fareCents)
+  assert.equal(twoSeats.fareCents, carpool.fareCents * 2)
   assert.notEqual(standard.fareCents, 1850)
   assert.ok(standard.fareCents < 1000)
 })
@@ -129,6 +145,9 @@ test('an airport quote is the airport fare on every ride type', () => {
     assert.equal(quotes.tiers.find((row) => row.id === id).fareCents, saved.fareCents)
     assert.notEqual(quotes.tiers.find((row) => row.id === id).fareCents, 1850)
   }
+  const carpoolFare = quotes.tiers.find((row) => row.id === 'carpool').fareCents
+  assert.equal(carpoolFare, percentOffCents(saved.fareCents, CARPOOL_DISCOUNT_BPS).amountCents)
+  assert.ok(carpoolFare < saved.fareCents)
 })
 
 test('a game-day schedule quote matches the surged fare that is saved', () => {

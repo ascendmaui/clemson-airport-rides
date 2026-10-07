@@ -29,6 +29,7 @@ export function ConfirmPickup({
   pickup: initialPickup = '',
   pickupLat = '',
   pickupLng = '',
+  tier = '',
 }) {
   const [pickup, setPickup] = useState(() => {
     const lat = finiteCoordinate(pickupLat)
@@ -96,6 +97,7 @@ export function ConfirmPickup({
     pickupLat: String(pickup.lat),
     pickupLng: String(pickup.lng),
     ...(offer ? { billing: billingChoice } : {}),
+    ...(tier ? { tier } : {}),
   }
 
   const goTiers = () => navigate('tiers', nextParams)

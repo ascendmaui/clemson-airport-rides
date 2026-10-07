@@ -58,7 +58,37 @@ import { NearTermSlots } from '@/components/NearTermSlots'
 
 const CAMPUS_PURPOSES: SchedulePurpose[] = ['early_class', 'planned', 'recurring']
 type WeekendSpot = 'airport' | 'campus'
-type FleetChoice = 'standard' | 'comfort'
+type FleetChoice = 'standard' | 'wait' | 'comfort' | 'carpool'
+
+function fleetNote(fleet: FleetChoice): string {
+  switch (fleet) {
+    case 'standard':
+      return 'Standard vehicle.'
+    case 'wait':
+      return 'Wait & Save. Same cars as Standard.'
+    case 'comfort':
+      return 'Extra Comfort vehicle.'
+    case 'carpool':
+      return 'Carpool seat. Any standard-eligible car.'
+    default: {
+      const unknown: never = fleet
+      return unknown
+    }
+  }
+}
+
+function rideTypeName(tier: string): string | null {
+  switch (tier) {
+    case 'wait':
+      return 'Wait & Save'
+    case 'comfort':
+      return 'Extra Comfort'
+    case 'carpool':
+      return 'Carpool'
+    default:
+      return null
+  }
+}
 const WEEKDAYS = [
   { id: 'mon', label: 'Mon' },
   { id: 'tue', label: 'Tue' },
@@ -168,6 +198,7 @@ function ScheduleScreen() {
   const [weekendPickup, setWeekendPickup] = useState<RidePlace>(placeByLabel('Memorial Stadium'))
   const [weekendDropoff, setWeekendDropoff] = useState<RidePlace>(placeByLabel('Downtown Clemson'))
   const [fleet, setFleet] = useState<FleetChoice>('standard')
+  const [seats, setSeats] = useState(1)
   const [mine, setMine] = useState<ScheduledRow[]>([])
   const [loadingList, setLoadingList] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
@@ -191,7 +222,7 @@ function ScheduleScreen() {
   const weekendDestination = weekendSpot === 'airport' ? airportPlace(weekendAirport) : weekendDropoff
   const weekendQuote = useMemo(
     () => withTigerPassQuote(
-      quoteRide(weekendPickup, weekendDestination, studentOn && fleet !== 'comfort'),
+      quoteRide(weekendPickup, weekendDestination, studentOn && fleet === 'standard', fleet),
       { active: passActive, bps: passBps, name: passName },
     ),
     [weekendPickup, weekendDestination, studentOn, fleet, passActive, passBps, passName],
@@ -542,6 +573,7 @@ function ScheduleScreen() {
         purpose: 'party_weekend',
         weekdays: [],
         tier: fleet,
+        passengers: fleet === 'carpool' ? seats : undefined,
       })
       setBanner(`Weekend / party confirmed for ${formatPickupAt(weekendWhen.toISOString())}. It is under Upcoming, and drivers can accept it from Weekend.`)
       await successHaptic()
@@ -702,8 +734,16 @@ function ScheduleScreen() {
         <Text style={styles.label}>Vehicle</Text>
         <View style={styles.pills}>
           <Pill label="Standard" active={fleet === 'standard'} onPress={() => chooseFleet('standard')} />
+          <Pill label="Wait & Save" active={fleet === 'wait'} onPress={() => chooseFleet('wait')} />
           <Pill label="Extra Comfort" active={fleet === 'comfort'} onPress={() => chooseFleet('comfort')} />
+          <Pill label="Carpool" active={fleet === 'carpool'} onPress={() => chooseFleet('carpool')} />
         </View>
+        {fleet === 'carpool' ? (
+          <View style={styles.pills}>
+            <Pill label="1 seat" active={seats === 1} onPress={() => setSeats(1)} />
+            <Pill label="2 seats" active={seats === 2} onPress={() => setSeats(2)} />
+          </View>
+        ) : null}
         <View style={styles.panel}>
           <Text style={styles.cardLine}>Confirm weekend / party</Text>
           <Text style={styles.fine}>
@@ -711,14 +751,14 @@ function ScheduleScreen() {
           </Text>
           <Text style={styles.fine}>{weekendPickup.label} → {weekendDestination.label}</Text>
           <Text style={styles.cardLine}>
-            {weekendQuote.estimate ? 'Fare estimate' : 'Fare'} · {formatUsd(weekendQuote.fareCents / 100)}
+            {weekendQuote.estimate ? 'Fare estimate' : 'Fare'} · {formatUsd((weekendQuote.fareCents * (fleet === 'carpool' ? seats : 1)) / 100)}
           </Text>
           {weekendQuote.label ? <Text style={styles.student}>{weekendQuote.label}</Text> : null}
           {(weekendQuote.tigerPassDiscountCents || 0) > 0 ? (
             <Text style={styles.student}>{weekendQuote.tigerPassName || TIGER_PASS_NAME} · −{formatUsd((weekendQuote.tigerPassDiscountCents || 0) / 100)}</Text>
           ) : null}
           <Text style={styles.fine}>
-            {fleet === 'comfort' ? 'Extra Comfort vehicle.' : 'Standard vehicle.'}
+            {fleetNote(fleet)}
             {weekendQuote.depositCents > 0
               ? ` ${depositSurfaceCopy(weekendQuote, 'confirm', { studentDiscountCents: weekendQuote.discountCents }) || ''}`
               : ' Final fare can change when a driver accepts.'}
@@ -918,7 +958,7 @@ function ScheduleScreen() {
               {rowPurpose(row)} · {row.status} · {formatPickupAt(row.pickup_at || row.scheduled_for)}
               {row.metadata?.recurrence?.weekdays?.length ? ` · weekly ${row.metadata.recurrence.weekdays.join(', ')}` : ''}
             </Text>
-            {row.tier === 'comfort' ? <Text style={styles.student}>Extra Comfort</Text> : null}
+            {rideTypeName(String(row.tier || '')) ? <Text style={styles.student}>{rideTypeName(String(row.tier || ''))}</Text> : null}
             {row.deposit_cents ? (
               <Text style={styles.balance}>
                 {depositSurfaceCopy(

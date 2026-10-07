@@ -13,7 +13,7 @@ import { useStudentStatus } from '../lib/useStudentStatus'
 import { studentSurfaceCopy } from '../../packages/rides-native/riderMoney.js'
 import { bookableRideTiers } from '../../packages/rides-native/places.js'
 import { useRideOptions } from '../lib/useRideOptions'
-import { NO_DRIVERS_AVAILABLE_COPY, SCHEDULE_AHEAD_LABEL } from '../../shared/rideOptions.js'
+import { isOfferedRideTier, NO_DRIVERS_AVAILABLE_COPY, SCHEDULE_AHEAD_LABEL } from '../../shared/rideOptions.js'
 
 export function RideTiers({
   dest = '1900 GSP Dr',
@@ -23,11 +23,18 @@ export function RideTiers({
   destLat = '',
   destLng = '',
   billing = '',
+  tier: initialTier = '',
+  passengers: initialPassengers = '',
 }) {
   const rideOptions = useRideOptions()
   const availableIds = rideOptions?.availableTierIds || []
   const tiers = rideOptions ? bookableRideTiers().filter((tier) => availableIds.includes(tier.id)) : []
+  const presetTier = isOfferedRideTier(initialTier) ? String(initialTier).trim().toLowerCase() : ''
   const [selected, setSelected] = useState(null)
+  const [seats, setSeats] = useState(() => {
+    const n = Math.round(Number(initialPassengers))
+    return n === 2 ? 2 : 1
+  })
   const [upsell, setUpsell] = useState(null)
   const [promptOpen, setPromptOpen] = useState(false)
   const [quote, setQuote] = useState(null)
@@ -66,10 +73,16 @@ export function RideTiers({
       return
     }
     if (userPickedTier.current && selected && tiers.some((tier) => tier.id === selected.id)) return
+    if (presetTier && tiers.some((tier) => tier.id === presetTier)) {
+      userPickedTier.current = true
+      const preset = tiers.find((tier) => tier.id === presetTier)
+      if (!selected || selected.id !== preset.id) setSelected(preset)
+      return
+    }
     const preferredId = (quote?.preferredCarTypes || []).find((id) => tiers.some((tier) => tier.id === id))
     const next = tiers.find((tier) => tier.id === preferredId) || tiers[0]
     if (!selected || selected.id !== next.id) setSelected(next)
-  }, [tiers, selected, quote])
+  }, [tiers, selected, quote, presetTier])
 
   const onSelectTier = (tier) => {
     userPickedTier.current = true
@@ -87,6 +100,7 @@ export function RideTiers({
       pickupLat,
       pickupLng,
       tier: row.id,
+      ...(row.id === 'carpool' ? { passengers: String(seats) } : {}),
       ...(billing ? { billing } : {}),
     })
   }
@@ -188,12 +202,14 @@ export function RideTiers({
           {tiers.map((t) => {
             const row = quotedTier(t.id)
             const sameAsStandard = t.id === 'wait' && row && standardFare != null && row.fareCents === standardFare
-            const savedPercent = t.id === 'wait' && row && standardFare > 0 && row.fareCents < standardFare
+            const savedPercent = (t.id === 'wait' || t.id === 'carpool') && row && standardFare > 0 && row.fareCents < standardFare
               ? Math.round((1 - row.fareCents / standardFare) * 100)
               : 0
             const studentNote = row?.discountCents > 0 ? 'Clemson student · 10% off Standard' : ''
             const meta = [
-              sameAsStandard ? '4 seats' : savedPercent > 0 ? `Save ${savedPercent}%` : t.meta,
+              t.id === 'carpool'
+                ? (savedPercent > 0 ? `Save ${savedPercent}% per seat` : 'Per seat')
+                : sameAsStandard ? '4 seats' : savedPercent > 0 ? `Save ${savedPercent}%` : t.meta,
               studentNote,
             ].filter(Boolean).join(' · ')
             return (
@@ -211,13 +227,41 @@ export function RideTiers({
           })}
         </div>
         <div style={{ padding: '12px 8px 0' }}>
+          {selected?.id === 'carpool' ? (
+            <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
+              {[1, 2].map((count) => (
+                <button
+                  key={count}
+                  type="button"
+                  className="pressable"
+                  aria-pressed={seats === count}
+                  onClick={() => setSeats(count)}
+                  style={{
+                    flex: 1,
+                    minHeight: 44,
+                    borderRadius: 12,
+                    fontWeight: 800,
+                    border: seats === count ? '2px solid #F56600' : '1px solid rgba(82,45,128,0.25)',
+                    background: seats === count ? 'rgba(245,102,0,0.12)' : 'transparent',
+                  }}
+                >
+                  {count === 1 ? '1 seat' : '2 seats'}
+                </button>
+              ))}
+            </div>
+          ) : null}
+          {selected?.id === 'carpool' && quotedTier('carpool')?.fareCents ? (
+            <p style={{ fontSize: 13, fontWeight: 700, margin: '0 0 8px' }}>
+              {seats === 1 ? '1 seat' : '2 seats'} · ${((quotedTier('carpool').fareCents * seats) / 100).toFixed(2)}
+            </p>
+          ) : null}
           <PrimaryButton
             className="primary-cta"
             variant="orange"
             onClick={onConfirm}
             disabled={!quote || !selected}
           >
-            {!quote ? 'Loading fare…' : `Select ${selected.name}`}
+            {!selected ? 'Choose a ride' : !quote ? 'Loading fare…' : `Select ${selected.name}`}
           </PrimaryButton>
         </div>
       </div>

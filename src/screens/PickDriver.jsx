@@ -48,6 +48,7 @@ const browserStorage = {
 export function PickDriver({
   dest = 'GSP Airport',
   tier = 'standard',
+  passengers = '',
   listCents = '',
   pickup = '',
   pickupLat = '',
@@ -164,6 +165,7 @@ export function PickDriver({
         pickupLat,
         pickupLng,
         tier,
+        passengers,
         isStudent: student.verified,
         listCents,
         billingChoice: billing || null,

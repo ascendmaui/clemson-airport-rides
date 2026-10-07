@@ -533,6 +533,7 @@ export async function requestDriverTrip(supabase, {
   pickupLabel = 'Memorial Stadium',
   pickupPoint = STADIUM,
   tier = 'standard',
+  passengers = null,
   isStudent = false,
   note = '',
 }) {
@@ -562,6 +563,7 @@ export async function requestDriverTrip(supabase, {
       pickupLat,
       pickupLng,
       tier: tier || 'standard',
+      ...(passengers ? { passengers } : {}),
       ...(riderNote ? { note: riderNote } : {}),
     },
   })

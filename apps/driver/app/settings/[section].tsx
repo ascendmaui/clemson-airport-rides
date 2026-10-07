@@ -185,6 +185,7 @@ const ALERT_TIERS: { id: RideAlertTier; label: string }[] = [
   { id: 'standard', label: 'Standard' },
   { id: 'wait', label: 'Wait & Save' },
   { id: 'comfort', label: 'Extra Comfort' },
+  { id: 'carpool', label: 'Carpool' },
 ]
 
 function usePersistDriverAlerts() {

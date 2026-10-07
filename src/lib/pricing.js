@@ -74,7 +74,7 @@ export async function quoteWithSurge({
     durationS,
     surgeMultiplier: surge.multiplier,
     isStudent,
-    isCarpool,
+    isCarpool: Boolean(isCarpool) || tier === 'carpool',
     tier,
     vehicleMultiplier,
   })

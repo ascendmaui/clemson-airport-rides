@@ -8,7 +8,7 @@ import { TIGER_PASS_NAME } from '../../shared/tigerPass.js'
 
 /**
  * Frequent-rider pass. The name shown here is the server payload, which reads
- * TIGER_PASS_NAME. Preferred ride types are the three offered options.
+ * TIGER_PASS_NAME. Preferred ride types are the offered options.
  */
 export function TigerPassPanel() {
   const { user } = useAuth()
@@ -173,7 +173,7 @@ export function TigerPassPanel() {
       ) : null}
 
       <div style={{ marginTop: 16, fontWeight: 800 }}>Preferred ride types</div>
-      <p style={{ fontSize: 12, color: 'var(--ink-tertiary)', marginTop: 4 }}>Standard, Wait & Save, and Extra Comfort only.</p>
+      <p style={{ fontSize: 12, color: 'var(--ink-tertiary)', marginTop: 4 }}>Standard, Wait & Save, Extra Comfort, and Carpool only.</p>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 8 }}>
         {cars.map((car) => {
           const on = selectedCars.includes(car.id)

@@ -63,11 +63,13 @@ export default function PickDriver() {
     pickupLng?: string
     destLat?: string
     destLng?: string
+    passengers?: string
   }>()
   const dest = oneParam(params.dest, 'GSP Airport')
   const pickup = oneParam(params.pickup, 'Memorial Stadium')
   const tier = oneParam(params.tier, 'standard')
   const note = oneParam(params.note)
+  const passengers = oneParam(params.passengers)
   const pickupLat = finiteParam(params.pickupLat)
   const pickupLng = finiteParam(params.pickupLng)
   const destLat = finiteParam(params.destLat)
@@ -286,6 +288,7 @@ export default function PickDriver() {
         pickupLabel: pickup,
         pickupPoint: { latitude: approachPickup.lat, longitude: approachPickup.lng },
         tier,
+        ...(passengers ? { passengers } : {}),
         isStudent: student.verified,
         note,
       })

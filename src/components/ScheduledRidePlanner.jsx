@@ -25,7 +25,7 @@ import {
 } from '../lib/scheduledRides'
 import { fetchBillingQuote } from '../lib/rideBilling'
 import { useRideOptions } from '../lib/useRideOptions'
-import { NO_DRIVERS_AVAILABLE_COPY, SCHEDULE_AHEAD_LABEL } from '../../shared/rideOptions.js'
+import { isOfferedRideTier, NO_DRIVERS_AVAILABLE_COPY, SCHEDULE_AHEAD_LABEL } from '../../shared/rideOptions.js'
 import { getHashRoute } from '../lib/navigation'
 import { lookupCatalogPlace, placeFromStop } from '../lib/placeCatalog'
 import { NearTermSlots } from './NearTermSlots'
@@ -34,6 +34,7 @@ const TIER_LABELS = {
   standard: 'Standard',
   wait: 'Wait & Save',
   comfort: 'Extra Comfort',
+  carpool: 'Carpool',
 }
 
 const PLACES = [
@@ -62,6 +63,7 @@ export function ScheduledRidePlanner() {
   const [date, setDate] = useState('')
   const [time, setTime] = useState('21:00')
   const [fleet, setFleet] = useState('standard')
+  const [seats, setSeats] = useState(1)
   const pickupAt = pickupAtFromLocal(date, time)
   const rideOptions = useRideOptions({ scheduledFor: pickupAt ? pickupAt.toISOString() : null })
   const tierChoices = rideOptions?.catalog?.length ? rideOptions.catalog : []
@@ -87,7 +89,7 @@ export function ScheduledRidePlanner() {
     const dropoffPlace = placeFromRouteLabel(params.dropoff)
     if (pickupPlace) setPickup(pickupPlace)
     if (dropoffPlace) setDropoff(dropoffPlace)
-    if (params.tier === 'wait' || params.tier === 'comfort' || params.tier === 'standard') setFleet(params.tier)
+    if (isOfferedRideTier(params.tier)) setFleet(params.tier)
   }, [])
 
   useEffect(() => {
@@ -149,6 +151,7 @@ export function ScheduledRidePlanner() {
       pickup,
       dropoff,
       tier: fleet,
+      passengers: fleet === 'carpool' ? seats : 1,
       at: pickupAtFromLocal(date, time) || new Date(),
     })
       .then((next) => {
@@ -164,7 +167,7 @@ export function ScheduledRidePlanner() {
     return () => {
       alive = false
     }
-  }, [pickup, dropoff, fleet, date, time, user?.id])
+  }, [pickup, dropoff, fleet, seats, date, time, user?.id])
 
   useEffect(() => {
     if (!user?.id || pickup?.lat == null || dropoff?.lat == null) {
@@ -221,6 +224,7 @@ export function ScheduledRidePlanner() {
         pickupAt: check.pickupAt,
         purpose,
         tier: fleet,
+        passengers: fleet === 'carpool' ? seats : null,
         billingChoice: billingOffer ? billingChoice : null,
       })
       setSaved(row)
@@ -390,6 +394,29 @@ export function ScheduledRidePlanner() {
           })}
         </div>
       )}
+      {fleet === 'carpool' ? (
+        <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
+          {[1, 2].map((count) => (
+            <button
+              key={count}
+              type="button"
+              className="pressable"
+              aria-pressed={seats === count}
+              onClick={() => setSeats(count)}
+              style={{
+                flex: 1,
+                minHeight: 44,
+                borderRadius: 12,
+                fontWeight: 800,
+                border: seats === count ? '2px solid #F56600' : '1px solid rgba(82,45,128,0.25)',
+                background: seats === count ? 'rgba(245,102,0,0.12)' : 'transparent',
+              }}
+            >
+              {count === 1 ? '1 seat' : '2 seats'}
+            </button>
+          ))}
+        </div>
+      ) : null}
       <p style={{ fontSize: 13, fontWeight: 700, color: '#F56600' }}>{SCHEDULE_AHEAD_LABEL}</p>
 
       <div className="glass-panel glass-panel--elevated" style={{ padding: 16, borderRadius: 16, marginBottom: 16 }}>

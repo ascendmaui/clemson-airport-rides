@@ -29,6 +29,8 @@ export default function RideTiers() {
     pickupLng?: string
     destLat?: string
     destLng?: string
+    tier?: string
+    passengers?: string
   }>()
   const dest = oneParam(params.dest, 'GSP Airport')
   const pickup = oneParam(params.pickup, 'Memorial Stadium · Lot 5')
@@ -37,13 +39,16 @@ export default function RideTiers() {
   const pickupLng = oneParam(params.pickupLng)
   const destLat = oneParam(params.destLat)
   const destLng = oneParam(params.destLng)
+  const presetTier = oneParam(params.tier)
+  const presetSeats = oneParam(params.passengers) === '2' ? 2 : 1
   const { user } = useAuth()
   const student = useStudentStatus()
   const studentOffer = studentSurfaceCopy(student, 'tiers')
   const tiers = bookableRideTiers()
   const [pass, setPass] = useState<TigerPassStatus | null>(null)
   const [quote, setQuote] = useState<AirportQuote | null>(null)
-  const [selected, setSelected] = useState(tiers[0].id)
+  const [selected, setSelected] = useState(tiers.some((tier) => tier.id === presetTier) ? presetTier : tiers[0].id)
+  const [seats, setSeats] = useState(presetSeats)
   const [promptOpen, setPromptOpen] = useState(false)
   const { colors } = useTheme()
   const styles = useThemedStyles(makeStyles)
@@ -56,7 +61,7 @@ export default function RideTiers() {
       if (!alive) return
       setPass(next)
       const preferred = (next.preferredCarTypes || []).find((id) => tiers.some((tier) => tier.id === id))
-      if (preferred) setSelected(preferred)
+      if (preferred && !tiers.some((tier) => tier.id === presetTier)) setSelected(preferred)
     }).catch(() => {})
     const pickupLatN = Number(pickupLat)
     const pickupLngN = Number(pickupLng)
@@ -73,16 +78,26 @@ export default function RideTiers() {
       if (!alive) return
       setQuote(next)
       const preferred = (next.preferredCarTypes || []).find((id) => tiers.some((tier) => tier.id === id))
-      if (preferred) setSelected(preferred)
+      if (preferred && !tiers.some((tier) => tier.id === presetTier)) setSelected(preferred)
     }).catch(() => {})
     return () => {
       alive = false
     }
-  }, [user, pickup, pickupLat, pickupLng, dest, destLat, destLng])
+  }, [user, pickup, pickupLat, pickupLng, dest, destLat, destLng, presetTier])
 
   const next = {
     pathname: '/pick-driver' as const,
-    params: { dest, destLat, destLng, pickup, pickupLat, pickupLng, note, tier: selected },
+    params: {
+      dest,
+      destLat,
+      destLng,
+      pickup,
+      pickupLat,
+      pickupLng,
+      note,
+      tier: selected,
+      ...(selected === 'carpool' ? { passengers: String(seats) } : {}),
+    },
   }
 
   const onConfirm = () => {
@@ -179,7 +194,31 @@ export default function RideTiers() {
         })}
       </Animated.ScrollView>
       <View style={[styles.footer, lift(colors, 'bar'), { paddingBottom: Math.max(insets.bottom, 16) }]}>
-        <PrimaryButton label={selected === 'comfort' ? 'Request Extra Comfort' : 'Choose a driver'} onPress={onConfirm} tone={selected === 'comfort' ? 'purple' : 'orange'} />
+        {selected === 'carpool' ? (
+          <View style={{ flexDirection: 'row', gap: 8, marginBottom: 10 }}>
+            {[1, 2].map((count) => (
+              <Pressable
+                key={count}
+                onPress={() => setSeats(count)}
+                accessibilityRole="button"
+                accessibilityState={{ selected: seats === count }}
+                accessibilityLabel={count === 1 ? '1 seat' : '2 seats'}
+                style={{
+                  flex: 1,
+                  minHeight: 44,
+                  borderRadius: 12,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  borderWidth: seats === count ? 2 : 1,
+                  borderColor: seats === count ? '#F56600' : 'rgba(82,45,128,0.25)',
+                }}
+              >
+                <Text style={styles.name}>{count === 1 ? '1 seat' : '2 seats'}</Text>
+              </Pressable>
+            ))}
+          </View>
+        ) : null}
+        <PrimaryButton label={selected === 'comfort' ? 'Request Extra Comfort' : selected === 'carpool' ? 'Request Carpool' : 'Choose a driver'} onPress={onConfirm} tone={selected === 'comfort' ? 'purple' : 'orange'} />
       </View>
       <SignInToBookSheet
         open={promptOpen}
