@@ -589,23 +589,109 @@ body .mkt-qr-svg {
     color: rgba(255, 255, 255, 0.82);
   }
 
-  body .mkt-card .mkt-text,
+  body .mkt-brand,
+  body .mkt-nav-links button,
+  body .mkt-ghost,
+  body .mkt-text,
+  body .mkt-footer button {
+    background: rgba(255, 255, 255, 0.16);
+    color: #fff;
+    border: 1px solid rgba(255, 255, 255, 0.4);
+    border-radius: 999px;
+    box-shadow: none;
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    text-decoration: none;
+  }
+
+  body .mkt-ghost--solid,
+  body .mkt-text,
+  body .mkt-card .mkt-text {
+    background: rgba(82, 45, 128, 0.45);
+    color: #fff;
+    border-color: rgba(255, 255, 255, 0.34);
+    text-decoration: none;
+  }
+
+  body .mkt .primary-cta,
+  body .mkt-nav-links .mkt-nav-cta {
+    background: rgba(245, 102, 0, 0.45) !important;
+    color: #fff !important;
+    border: 1px solid rgba(255, 255, 255, 0.45) !important;
+    border-radius: 999px !important;
+    box-shadow: none !important;
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    text-shadow: none;
+  }
+
+  body .mkt-brand:hover,
+  body .mkt-nav-links button:hover,
+  body .mkt-ghost:hover,
+  body .mkt-text:hover,
+  body .mkt-footer button:hover {
+    background: rgba(255, 255, 255, 0.28);
+    color: #fff;
+    box-shadow: none;
+  }
+
+  body .mkt-ghost--solid:hover,
+  body .mkt-ghost--solid:active,
+  body .mkt-text:hover,
+  body .mkt-text:active,
   body .mkt-card .mkt-text:hover,
   body .mkt-card .mkt-text:active {
+    background: rgba(82, 45, 128, 0.62);
     color: #fff;
-    text-decoration-color: #F56600;
+    border-color: rgba(255, 255, 255, 0.5);
+    box-shadow: none;
+    text-decoration: none;
   }
 
-  body .mkt-footer,
-  body .mkt-footer-inner,
-  body .mkt-footer button {
-    color: #fff;
+  body .mkt .primary-cta:hover,
+  body .mkt-nav-links .mkt-nav-cta:hover {
+    background: rgba(245, 102, 0, 0.62) !important;
+    color: #fff !important;
+    border-color: rgba(255, 255, 255, 0.6) !important;
+    box-shadow: none !important;
   }
 
-  body .mkt-footer button:hover,
-  body .mkt-footer button:focus-visible,
+  body .mkt-brand:active,
+  body .mkt-nav-links button:active,
+  body .mkt-ghost:active,
   body .mkt-footer button:active {
-    color: #F56600;
+    background: rgba(255, 255, 255, 0.36);
+    color: #fff;
+    box-shadow: none;
+  }
+
+  body .mkt-ghost--solid:active,
+  body .mkt-text:active,
+  body .mkt-card .mkt-text:active {
+    background: rgba(82, 45, 128, 0.72);
+    color: #fff;
+    border-color: #fff;
+    box-shadow: none;
+  }
+
+  body .mkt .primary-cta:active,
+  body .mkt-nav-links .mkt-nav-cta:active {
+    background: rgba(194, 78, 0, 0.82) !important;
+    color: #fff !important;
+    border-color: #fff !important;
+    box-shadow: none !important;
+  }
+
+  body .mkt button:focus-visible,
+  body .mkt a:focus-visible {
+    outline: 3px solid #fff;
+    outline-offset: 3px;
+  }
+
+  body .mkt .primary-cta:focus-visible,
+  body .mkt-nav-links .mkt-nav-cta:focus-visible {
+    outline: 3px solid #fff;
+    outline-offset: 3px;
   }
 
   @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
@@ -616,8 +702,25 @@ body .mkt-qr-svg {
     body .mkt-pay-note,
     body .mkt-soft,
     body .mkt-platform a,
-    body .mkt-footer {
+    body .mkt-footer,
+    body .mkt-brand,
+    body .mkt-nav-links button,
+    body .mkt-ghost,
+    body .mkt-text,
+    body .mkt-footer button {
       background: rgba(18, 10, 28, 0.92);
+      color: #fff;
+    }
+
+    body .mkt .primary-cta,
+    body .mkt-nav-links .mkt-nav-cta {
+      background: #C24E00 !important;
+      color: #fff !important;
+    }
+
+    body .mkt-ghost--solid {
+      background: #522D80 !important;
+      color: #fff !important;
     }
   }
 }

@@ -105,7 +105,7 @@ export function Marketing() {
         <nav className="mkt-nav-links" aria-label="Marketing">
           <button type="button" className="pressable" onClick={() => navigate('home')}>Book</button>
           <button type="button" className="pressable" onClick={() => navigate('driver-signup')}>Drive</button>
-          <button type="button" className="pressable" onClick={scrollToDownloads}>Get the App</button>
+          <button type="button" className="pressable mkt-nav-cta" onClick={scrollToDownloads}>Get the App</button>
         </nav>
       </header>
 
