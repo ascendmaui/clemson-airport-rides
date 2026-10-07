@@ -11,7 +11,9 @@ import { isLiveTrip, subscribeTripDriverLocation } from '../lib/liveDriverLocati
 import { supabase } from '../lib/supabase'
 import { hasRatedTrip } from '../lib/ratings'
 import { RideChat, RideMessageButton } from '../components/RideChat'
+import { ReportLostItemButton } from '../components/ReportLostItem'
 import { rideChatMode } from '../lib/tripChatRules'
+import { fetchLostItemReport, subscribeLostItemReports } from '../lib/tripMessages'
 import { SosControl } from '../components/SosControl'
 import { isActiveRideStatus } from '../lib/sosAlert'
 import { MidrideCancelSheet } from '../components/MidrideCancelSheet'
@@ -42,6 +44,7 @@ export function Requested({ dest = 'GSP Airport', trip = '', driver = 'your driv
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
   const [tripRow, setTripRow] = useState(null)
+  const [lostReport, setLostReport] = useState(null)
   const [tripMissing, setTripMissing] = useState(false)
   const [locationAt, setLocationAt] = useState(null)
   const [trackingError, setTrackingError] = useState(null)
@@ -168,6 +171,24 @@ export function Requested({ dest = 'GSP Airport', trip = '', driver = 'your driv
   }, [trip, user?.id, paid, sessionId, trackingAttempt])
 
   useEffect(() => {
+    if (!trip) return undefined
+    let alive = true
+    fetchLostItemReport(trip)
+      .then((row) => { if (alive) setLostReport(row) })
+      .catch(() => { if (alive) setLostReport(null) })
+    const unsub = subscribeLostItemReports((payload) => {
+      const next = payload?.new
+      if (!next || next.trip_id === trip) {
+        fetchLostItemReport(trip).then((row) => { if (alive) setLostReport(row) }).catch(() => {})
+      }
+    })
+    return () => {
+      alive = false
+      unsub()
+    }
+  }, [trip])
+
+  useEffect(() => {
     if (!resolvedDriverId || !isLiveTrip(tripRow?.status)) return undefined
     return subscribeTripDriverLocation(trip, (loc) => {
       setDriverPos([loc.lat, loc.lng])
@@ -210,7 +231,7 @@ export function Requested({ dest = 'GSP Airport', trip = '', driver = 'your driv
   }
 
   const status = tripRow?.status || ''
-  const chatMode = rideChatMode(tripRow)
+  const chatMode = rideChatMode(tripRow, Date.now(), lostReport)
   const showMessages = Boolean(user?.id && tripRow?.driver_id && tripRow?.rider_id && chatMode !== 'closed')
   const rideLive = isActiveRideStatus(status)
   const devSosPreview = import.meta.env.DEV && typeof window !== 'undefined'
@@ -427,7 +448,12 @@ export function Requested({ dest = 'GSP Airport', trip = '', driver = 'your driv
             </p>
           )}
           {showMessages && (
-            <RideMessageButton readOnly={chatMode !== 'compose'} onClick={() => setChatOpen(true)} />
+            <RideMessageButton
+              readOnly={chatMode !== 'compose'}
+              tripId={tripRow?.id}
+              userId={user?.id}
+              onClick={() => setChatOpen(true)}
+            />
           )}
           {status === 'completed' && trip && (
             <button
@@ -439,6 +465,9 @@ export function Requested({ dest = 'GSP Airport', trip = '', driver = 'your driv
             >
               Left something in the car?
             </button>
+          )}
+          {status === 'completed' && tripRow && (
+            <ReportLostItemButton trip={tripRow} userId={user?.id} onOpened={() => setChatOpen(true)} />
           )}
           {rateNudge && trip && (
             <div className="glass-panel" style={{ padding: 12, borderRadius: 14, background: 'rgba(245,102,0,0.12)' }}>

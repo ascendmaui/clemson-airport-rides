@@ -113,14 +113,13 @@ export default function EarningsActivity() {
           {rows.map((trip: Trip) => {
             const pay = carpoolPayFromTrip(trip)
             return (
-              <Pressable
-                key={trip.id}
-                onPress={() => router.push({ pathname: '/trip-details', params: { id: trip.id } })}
-                accessibilityRole="button"
-                accessibilityLabel={`${trip.status === 'canceled' ? 'Canceled trip' : 'Completed trip'}, ${trip.pickup_label || 'Pickup'} to ${trip.dropoff_label || 'Drop-off'}, ${trip.status === 'canceled' ? 'No payout' : shownCents(tripEarnedCents(trip), earningsPrivate)}`}
-                accessibilityHint="Opens trip details and breakdown"
-              >
-                <Card>
+              <Card key={trip.id}>
+                <Pressable
+                  onPress={() => router.push({ pathname: '/trip-details', params: { id: trip.id } })}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${trip.status === 'canceled' ? 'Canceled trip' : 'Completed trip'}, ${trip.pickup_label || 'Pickup'} to ${trip.dropoff_label || 'Drop-off'}, ${trip.status === 'canceled' ? 'No payout' : shownCents(tripEarnedCents(trip), earningsPrivate)}`}
+                  accessibilityHint="Opens trip details and breakdown"
+                >
                   <Text style={{ color: colors.title, fontWeight: '800' }}>{trip.status === 'canceled' ? 'Canceled' : 'Clemson RIDES'}</Text>
                   <Text style={{ color: colors.ink }}>{trip.pickup_label || 'Pickup'}</Text>
                   <Text style={{ color: colors.ink }}>{trip.dropoff_label || 'Drop-off'}</Text>
@@ -132,8 +131,18 @@ export default function EarningsActivity() {
                       Base net {shownCents(pay.baseNetCents, earningsPrivate)} · {pay.incentiveId} {shownCents(pay.bonusCents, earningsPrivate)} · total {shownCents(pay.payoutCents, earningsPrivate)}
                     </Text>
                   ) : null}
-                </Card>
-              </Pressable>
+                </Pressable>
+                {trip.status === 'completed' ? (
+                  <Pressable
+                    onPress={() => router.push({ pathname: '/trip-details', params: { id: trip.id, lost: '1' } })}
+                    accessibilityRole="button"
+                    accessibilityLabel="Report a lost item"
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <Text style={{ color: colors.orange, fontWeight: '800' }}>Report a lost item</Text>
+                  </Pressable>
+                ) : null}
+              </Card>
             )
           })}
         </View>
