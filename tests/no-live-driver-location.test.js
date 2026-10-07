@@ -105,10 +105,11 @@ test('riders prefer the trip row and fall back to presence when it is empty', ()
   assert.equal(bothFailed.error.message, 'network down')
 })
 
-test('the website driver publishes presence while online and the trip row only on a live shift', () => {
+test('the website driver publishes presence while online and the trip row on a live shift or a departing backup', () => {
   const home = readFileSync(new URL('../src/screens/DriverHome.jsx', import.meta.url), 'utf8')
   assert.match(home, /const tracking = Boolean\(approved && \(online \|\| liveTripId\)\)/)
-  assert.match(home, /tripId: online && liveTripId \? liveTripId : null/)
+  assert.match(home, /const backupEnroute = readBackupQueue\(activeTrip\)\?\.confirmState === 'enroute'/)
+  assert.match(home, /tripId: liveTripId && \(online \|\| backupEnroute\) \? liveTripId : null/)
   const publisher = readFileSync(new URL('../src/lib/liveDriverLocation.js', import.meta.url), 'utf8')
   assert.match(publisher, /from\('driver_status'\)/)
   assert.match(publisher, /from\('trip_driver_locations'\)/)

@@ -12,7 +12,7 @@ function filledQueue(patch = {}) {
     primaryDriverId: 'driver-1',
     backupDriverId: 'driver-2',
     primaryCard: { id: 'driver-1', name: 'Avery', vehicleLabel: 'Orange Honda', ratingAvg: 4.9, ratingCount: 12 },
-    backupCard: { id: 'driver-2', name: 'Blair', vehicleLabel: 'White Tesla', ratingAvg: 5, ratingCount: 4 },
+    backupCard: { id: 'driver-2', name: 'Blair', vehicleLabel: 'White sedan', ratingAvg: 5, ratingCount: 4 },
     generation: 4,
     ...patch,
   }

@@ -69,7 +69,7 @@ function DriverFace({ card, role }: { card?: { name?: string; avatarUrl?: string
   return (
     <View style={{ flexDirection: 'row', gap: 10, alignItems: 'center', marginTop: 8 }}>
       {card.avatarUrl ? (
-        <Image source={{ uri: card.avatarUrl }} style={{ width: 40, height: 40, borderRadius: 20 }} accessibilityIgnoresInvertColors />
+        <Image source={{ uri: card.avatarUrl }} style={{ width: 40, height: 40, borderRadius: 20 }} accessible={false} accessibilityIgnoresInvertColors />
       ) : (
         <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: '#522D80', alignItems: 'center', justifyContent: 'center' }}>
           <Text style={{ color: '#fff', fontWeight: '800' }}>{(card.name || 'D').slice(0, 1)}</Text>
