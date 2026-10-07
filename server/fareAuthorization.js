@@ -10,6 +10,7 @@ import {
   fareAuthorizationCents,
   shouldRetryAuthorization,
 } from '../shared/fareAuthorization.js'
+import { holdQuoteCents, readBoostCents } from '../shared/scheduledBoost.js'
 import { MIN_CARD_CHARGE_CENTS } from '../src/lib/fareRates.js'
 import { insertPaymentRow, setPaymentHold } from './collectPayment.js'
 
@@ -59,6 +60,7 @@ async function createAuthorization(stripe, {
         riderId: String(riderId || ''),
         estimatedFareCents: String(quote.estimatedFareCents),
         bufferCents: String(quote.bufferCents),
+        boostCents: String(quote.boostCents || 0),
       },
     }, { idempotencyKey })
     if (pi.status === 'requires_capture' || pi.status === 'succeeded') {
@@ -129,7 +131,9 @@ async function mergeTripMetadata(sb, tripId, patch) {
 
 function parkedOutstanding({ quote, code, attempts, amountCents }) {
   return {
-    amountCents: Math.max(0, Math.round(Number(amountCents ?? quote.estimatedFareCents) || 0)),
+    amountCents: Math.max(0, Math.round(Number(
+      amountCents ?? ((quote.estimatedFareCents || 0) + (quote.boostCents || 0)),
+    ) || 0)),
     code: code || 'charge_failed',
     reason: 'authorization_failed',
     attempts,
@@ -152,8 +156,10 @@ export async function placeFareAuthorization({
   paymentMethodId,
   backupPaymentMethodIds,
   estimatedFareCents,
+  boostCents = 0,
+  idempotencySuffix = '',
 }) {
-  const quote = fareAuthorizationCents(estimatedFareCents)
+  const quote = holdQuoteCents(estimatedFareCents, boostCents)
   if (quote.authorizationCents <= 0) {
     return { ok: true, skipped: true, reason: 'zero_fare', ...quote }
   }
@@ -180,6 +186,7 @@ export async function placeFareAuthorization({
 
   const attempts = []
   async function once(pmId, suffix) {
+    const keySuffix = [idempotencySuffix, suffix].filter(Boolean).join(':')
     const result = await createAuthorization(stripe, {
       amountCents: quote.authorizationCents,
       customerId,
@@ -187,7 +194,7 @@ export async function placeFareAuthorization({
       tripId,
       riderId,
       quote,
-      idempotencyKey: authKey(tripId, suffix),
+      idempotencyKey: authKey(tripId, keySuffix),
     })
     attempts.push({
       paymentMethodId: pmId,
@@ -218,6 +225,7 @@ export async function placeFareAuthorization({
       authorizationCents: quote.authorizationCents,
       estimatedFareCents: quote.estimatedFareCents,
       bufferCents: quote.bufferCents,
+      boostCents: quote.boostCents,
       paymentMethodId: result.paymentMethodId,
       backupCard: result.paymentMethodId !== paymentMethodId,
       at: new Date().toISOString(),
@@ -235,6 +243,7 @@ export async function placeFareAuthorization({
           logical_kind: 'fare_authorization',
           buffer_cents: quote.bufferCents,
           estimated_fare_cents: quote.estimatedFareCents,
+          boost_cents: quote.boostCents,
         },
       })
     }
@@ -265,13 +274,18 @@ export async function authorizeRideRequest({
   riderId,
   estimatedFareCents,
 } = {}) {
-  const quote = fareAuthorizationCents(estimatedFareCents ?? trip?.fare_cents)
+  const boostCents = readBoostCents(trip)
+  const fareCents = estimatedFareCents ?? trip?.fare_cents
   const choice = trip?.metadata?.billing_choice
-  if (choice === 'credits') {
-    return { ok: true, skipped: true, reason: 'credits', ...quote }
+  // Ride credits settle the fare. A boost is still card money, so the hold
+  // is the boost alone. With no boost, scheduling stays on the credits path.
+  const creditsFare = choice === 'credits'
+  const quote = holdQuoteCents(creditsFare ? 0 : fareCents, boostCents)
+  if (creditsFare && boostCents <= 0) {
+    return { ok: true, skipped: true, reason: 'credits', ...fareAuthorizationCents(fareCents), boostCents: 0 }
   }
   const client = stripe || (stripeOk() ? stripeClient() : null)
-  if (!client) {
+  if (!client?.paymentIntents?.create) {
     return { ok: true, skipped: true, reason: 'stripe_not_configured', ...quote }
   }
   const profile = await loadCardProfile(sb, riderId || trip?.rider_id)
@@ -283,6 +297,8 @@ export async function authorizeRideRequest({
     customerId: profile?.stripe_customer_id || null,
     paymentMethodId: profile?.stripe_default_pm_id || null,
     estimatedFareCents: quote.estimatedFareCents,
+    boostCents: quote.boostCents,
+    idempotencySuffix: creditsFare ? 'boost' : '',
   })
   if (sb && trip?.id && !placed.skipped) {
     await mergeTripMetadata(sb, trip.id, {
@@ -291,6 +307,7 @@ export async function authorizeRideRequest({
         authorizationCents: quote.authorizationCents,
         estimatedFareCents: quote.estimatedFareCents,
         bufferCents: quote.bufferCents,
+        boostCents: quote.boostCents,
         code: placed.outstanding?.code || placed.failure?.code || null,
         at: new Date().toISOString(),
       },
@@ -298,6 +315,74 @@ export async function authorizeRideRequest({
     })
   }
   return placed
+}
+
+/**
+ * Raise an open fare hold after the rider bumps a scheduled boost.
+ * Uses incrementAuthorization when Stripe offers it. Otherwise the open
+ * PaymentIntent is canceled and a new manual-capture hold is created.
+ * No hold yet (the usual case before the 45-minute release) is a no-op.
+ */
+export async function syncBoostAuthorization({ sb, stripe, trip, boostCents } = {}) {
+  const auth = trip?.metadata?.fare_authorization
+  if (!auth || auth.status !== 'requires_capture' || !auth.paymentIntentId) {
+    return { ok: true, skipped: true, reason: 'no_open_hold' }
+  }
+  const client = stripe || (stripeOk() ? stripeClient() : null)
+  if (!client?.paymentIntents) {
+    return { ok: true, skipped: true, reason: 'stripe_not_configured' }
+  }
+  const creditsFare = trip?.metadata?.billing_choice === 'credits'
+  const quote = holdQuoteCents(creditsFare ? 0 : (auth.estimatedFareCents ?? trip?.fare_cents), boostCents)
+  if (quote.authorizationCents <= Math.max(0, Math.round(Number(auth.authorizationCents) || 0))) {
+    return { ok: true, skipped: true, reason: 'hold_already_covers', ...quote }
+  }
+  if (client.paymentIntents.incrementAuthorization) {
+    try {
+      await client.paymentIntents.incrementAuthorization(auth.paymentIntentId, {
+        amount: quote.authorizationCents,
+      }, { idempotencyKey: `fare_auth_boost:${trip.id}:${quote.boostCents}` })
+      const authorization = {
+        ...auth,
+        authorizationCents: quote.authorizationCents,
+        estimatedFareCents: quote.estimatedFareCents,
+        bufferCents: quote.bufferCents,
+        boostCents: quote.boostCents,
+        bumpedAt: new Date().toISOString(),
+      }
+      await mergeTripMetadata(sb, trip.id, { fare_authorization: authorization })
+      return { ok: true, method: 'increment', authorization, ...quote }
+    } catch (err) {
+      console.error('[fareAuthorization] boost increment', err?.message || err)
+    }
+  }
+  await cancelQuiet(client, { id: auth.paymentIntentId, status: 'requires_capture' })
+  const profile = await loadCardProfile(sb, trip.rider_id)
+  const placed = await placeFareAuthorization({
+    stripe: client,
+    sb,
+    tripId: trip.id,
+    riderId: trip.rider_id,
+    customerId: profile?.stripe_customer_id || null,
+    paymentMethodId: auth.paymentMethodId || profile?.stripe_default_pm_id || null,
+    estimatedFareCents: quote.estimatedFareCents,
+    boostCents: quote.boostCents,
+    idempotencySuffix: `boost:${quote.boostCents}`,
+  })
+  if (sb && trip.id) {
+    await mergeTripMetadata(sb, trip.id, {
+      fare_authorization: placed.authorization || {
+        ...auth,
+        status: 'failed',
+        authorizationCents: quote.authorizationCents,
+        boostCents: quote.boostCents,
+        code: placed.outstanding?.code || placed.failure?.code || null,
+        at: new Date().toISOString(),
+      },
+      outstanding_balance: placed.parked ? placed.outstanding : null,
+    })
+  }
+  return { ...placed, method: placed.ok ? 'reauth' : 'reauth_failed' }
 }
 
 async function chargeOverage(stripe, {
@@ -360,7 +445,7 @@ export async function settleFareHold({ sb, stripe, trip, finalFareCents } = {}) 
   if (!auth || auth.status !== 'requires_capture' || !auth.paymentIntentId) return null
   const client = stripe || (stripeOk() ? stripeClient() : null)
   if (!client?.paymentIntents?.retrieve) return null
-  if (trip?.metadata?.billing_choice === 'credits') {
+  if (trip?.metadata?.billing_choice === 'credits' && readBoostCents(trip) <= 0) {
     await cancelQuiet(client, { id: auth.paymentIntentId, status: 'requires_capture' })
     await mergeTripMetadata(sb, trip.id, {
       fare_authorization: { ...auth, status: 'canceled', reason: 'credits', at: new Date().toISOString() },

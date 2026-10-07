@@ -4,6 +4,7 @@
  */
 import { CLEMSON_MIAMI_PROMO_ID } from './clemsonMiamiPromo.js'
 import { explicitOfferPhase, ladderOfferNet } from './offerLadder.js'
+import { driverBoostShareCents, readBoostCents } from '../../shared/scheduledBoost.js'
 
 export const ACTIONABLE_LEAD_MS = 45 * 60 * 1000
 
@@ -80,6 +81,11 @@ export function tripEarnedCents(trip) {
   const pay = carpoolPayFromTrip(trip)
   if (pay) return pay.payoutCents
   return driverNetCents(trip?.fare_cents ?? trip?.fareCents)
+}
+
+/** Fare net plus the driver share of an upfront boost. The boost is not commissioned. */
+export function tripPayoutCents(trip) {
+  return tripEarnedCents(trip) + driverBoostShareCents(readBoostCents(trip))
 }
 
 /** Stored amount already collected on an older trip. New trips are not given a deposit. */
@@ -420,6 +426,11 @@ export function toDriverCard(row, options) {
   const phase = explicitOfferPhase({ ...row, metadata: meta })
   const ladder = phase && phase !== 'expired' ? ladderOfferNet({ ...row, fareCents, status: row.status, metadata: meta, offerPhase: phase }) : null
   const carpool = carpoolPayFromTrip(row)
+  const boostCents = readBoostCents(row)
+  const boostDriverCents = driverBoostShareCents(boostCents)
+  const fareNet = carpool?.showBonus
+    ? carpool.payoutCents
+    : (ladder ? ladder.netCents : tripEarnedCents(row))
   return {
     id: row.id,
     status: row.status,
@@ -436,7 +447,9 @@ export function toDriverCard(row, options) {
     fareCents,
     depositCents: depositSliceCents(fareCents, storedDeposit),
     depositExplicit: row.deposit_cents != null && row.deposit_cents !== '',
-    driverNetCents: carpool?.showBonus ? tripEarnedCents(row) : (ladder ? ladder.netCents : tripEarnedCents(row)),
+    driverNetCents: fareNet + boostDriverCents,
+    boostCents,
+    boostDriverCents,
     offerPhase: phase,
     offerShareBps: ladder?.shareBps ?? null,
     offerExpiresAt: row.offer_expires_at || null,
@@ -557,7 +570,7 @@ export function weekNetCents(trips, now = new Date()) {
   for (const trip of trips || []) {
     if (trip?.status && trip.status !== 'completed') continue
     if (!isSameZonedWeek(trip?.completed_at, now)) continue
-    total += tripEarnedCents(trip)
+    total += tripPayoutCents(trip)
   }
   return total
 }

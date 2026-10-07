@@ -17,6 +17,7 @@ import {
   tagTone,
 } from './tripTags.js'
 import { formatHourlyRate, ladderOfferNet, offerHourly } from './offerLadder.js'
+import { driverBoostShareCents, formatBoostBadge, readBoostCents } from '../../shared/scheduledBoost.js'
 
 /** Default time window (in seconds) drivers have to accept an incoming offer. */
 export const DEFAULT_OFFER_TTL_SECONDS = 30
@@ -101,13 +102,24 @@ export function routeHeadline(cardOrPickup, dropoff) {
  * Driver net earnings details computed using existing tripTags earnings/fee helpers.
  * Never invents numbers.
  */
+function withBoost(card, fareNetCents, subtext) {
+  const boostCents = readBoostCents(card)
+  const boostDriverCents = driverBoostShareCents(boostCents)
+  const netCents = Math.max(0, Math.round(Number(fareNetCents) || 0)) + boostDriverCents
+  const next = boostDriverCents > 0 ? `${subtext} · includes ${formatBoostBadge(boostDriverCents)}` : subtext
+  return { netCents, subtext: next, boostCents, boostDriverCents }
+}
+
 export function formatDriverNetPay(card) {
   const fare = fareCollection(card)
   const ladder = fare.usesStoredPayout ? null : ladderOfferNet(card)
   if (ladder) {
+    const boosted = withBoost(card, ladder.netCents, ladder.subtext)
     return {
-      netCents: ladder.netCents,
-      formattedNet: formatCents(ladder.netCents),
+      netCents: boosted.netCents,
+      formattedNet: formatCents(boosted.netCents),
+      boostCents: boosted.boostCents,
+      boostDriverCents: boosted.boostDriverCents,
       baseNetCents: null,
       formattedBaseNet: null,
       carpoolBonusCents: null,
@@ -116,21 +128,27 @@ export function formatDriverNetPay(card) {
       isCarpool: false,
       platformFeeCents: ladder.platformFeeCents,
       formattedPlatformFee: formatCents(ladder.platformFeeCents),
-      subtext: ladder.subtext,
+      subtext: boosted.subtext,
       offerPhase: ladder.phase,
       hourly: offerHourly(card),
       hourlyText: formatHourlyRate(offerHourly(card).hourlyCents),
     }
   }
   const explicitNet = card?.driverNetCents ?? card?.driver_net_cents ?? card?.driverPayoutCents ?? card?.driver_payout_cents
-  const netCents = fare.driverNetCents > 0 || explicitNet == null
+  let explicit = explicitNet == null ? null : Math.max(0, Math.round(Number(explicitNet) || 0))
+  if (explicit != null && card?.boostDriverCents != null) {
+    explicit = Math.max(0, explicit - driverBoostShareCents(readBoostCents(card)))
+  }
+  const baseNet = fare.driverNetCents > 0 || explicit == null
     ? fare.driverNetCents
-    : Math.max(0, Math.round(Number(explicitNet) || 0))
+    : explicit
+  const boosted = withBoost(card, baseNet, '')
+  const netCents = boosted.netCents
 
   const formattedNet = formatCents(netCents)
   const isCarpool = Boolean(fare.carpoolIncentiveId)
 
-  let subtext = 'You net 80%'
+  let subtext = boosted.boostDriverCents > 0 ? `You net 80% · includes ${formatBoostBadge(boosted.boostDriverCents)}` : 'You net 80%'
   if (card?.status) {
     const headline = statusHeadline(card.status)
     if (isCarpool) {
@@ -147,6 +165,9 @@ export function formatDriverNetPay(card) {
     const incentiveName = fare.carpoolIncentiveId
     subtext = `Base ${baseFormatted} · ${incentiveName} ${bonusFormatted} · total ${formattedNet}`
   }
+  if (boosted.boostDriverCents > 0 && !/boost/i.test(subtext)) {
+    subtext = `${subtext} · includes ${formatBoostBadge(boosted.boostDriverCents)}`
+  }
 
   return {
     netCents,
@@ -160,6 +181,8 @@ export function formatDriverNetPay(card) {
     platformFeeCents: fare.platformFeeCents,
     formattedPlatformFee: formatCents(fare.platformFeeCents),
     subtext,
+    boostCents: boosted.boostCents,
+    boostDriverCents: boosted.boostDriverCents,
   }
 }
 
@@ -315,6 +338,14 @@ export function depositBadge(card) {
 export function offerBadges(card) {
   if (!card) return []
   const badges = []
+  const boostDriverCents = driverBoostShareCents(readBoostCents(card))
+  if (boostDriverCents > 0) {
+    badges.push({
+      id: 'boost',
+      label: formatBoostBadge(boostDriverCents),
+      tone: 'orange',
+    })
+  }
 
   const airport = airportBadge(card)
   if (airport) badges.push(airport)

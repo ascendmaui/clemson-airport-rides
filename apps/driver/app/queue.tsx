@@ -33,6 +33,7 @@ import {
   type QueueFilter,
 } from 'rides-native/tripTags'
 import { formatHourlyRate, ladderOfferNet, offerHourly } from 'rides-native/offerLadder.js'
+import { compareBoostedFirst, formatBoostBadge } from '../../../shared/scheduledBoost.js'
 function useQueueStyles() {
   const { colors } = useTheme()
   return useMemo(() => queueStyles(colors), [colors])
@@ -77,7 +78,12 @@ function QueueCard({
           <Text style={styles.copy}>{statusHeadline(card.status)}</Text>
         </View>
       </View>
-      <Text style={styles.fare}>{formatCents(ladder?.netCents ?? card.driverNetCents)} net</Text>
+      <Text style={[styles.fare, (card.boostDriverCents || 0) > 0 && { color: '#F56600' }]}>{formatCents(card.driverNetCents)} est. earnings</Text>
+      {(card.boostDriverCents || 0) > 0 ? (
+        <View style={styles.boostBadge}>
+          <Text style={styles.boostText}>{formatBoostBadge(card.boostDriverCents || 0)}</Text>
+        </View>
+      ) : null}
       <Text style={styles.note}>{ladder?.subtext || 'You net 80%'}</Text>
       <Text style={styles.copy}>{hourly}</Text>
       <Text style={styles.copy}>Pickup · {card.pickupLabel}</Text>
@@ -257,7 +263,10 @@ export default function QueueScreen() {
   }
 
   const visible = rows.filter((card: DriverCard) => matchesQueueFilter(card, filter) && !passed.includes(card.id))
-  const scheduled = visible.filter((card: DriverCard) => card.status === 'scheduled' || card.offerPhase === 'scheduled')
+  const scheduled = visible
+    .filter((card: DriverCard) => card.status === 'scheduled' || card.offerPhase === 'scheduled')
+    .slice()
+    .sort(compareBoostedFirst)
   const live = visible.filter((card: DriverCard) => card.status !== 'scheduled' && card.offerPhase !== 'scheduled')
   const shown = board === 'scheduled' ? scheduled : live
   const empty = queueEmptyCopy(filter)
@@ -396,6 +405,14 @@ function queueStyles(colors: Palette) {
     declineText: { color: colors.inkSecondary, fontWeight: '700' },
     declineCancel: { color: colors.orange },
     fare: { color: colors.ink, fontWeight: '800', fontSize: 22 },
+    boostBadge: {
+      alignSelf: 'flex-start',
+      backgroundColor: '#F56600',
+      borderRadius: 999,
+      paddingHorizontal: 10,
+      paddingVertical: 4,
+    },
+    boostText: { color: '#fff', fontWeight: '800', fontSize: 12 },
     tags: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   })
 }

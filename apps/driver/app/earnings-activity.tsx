@@ -8,7 +8,8 @@ import { shownCents } from '@/lib/shown'
 import { supabase } from '@/lib/supabase'
 import { useTheme } from '@/lib/theme'
 import { loadEarnings } from 'rides-native/driverDesk'
-import { carpoolPayFromTrip, tripEarnedCents } from 'rides-native/tripTags'
+import { carpoolPayFromTrip, tripPayoutCents } from 'rides-native/tripTags'
+import { formatBoostBadge, readBoostCents } from '../../../shared/scheduledBoost.js'
 
 type Trip = Awaited<ReturnType<typeof loadEarnings>>['trips'][number]
 type Filter = 'all' | 'completed' | 'canceled'
@@ -112,12 +113,14 @@ export default function EarningsActivity() {
           <Text style={{ color: colors.inkSecondary, fontWeight: '800' }}>{day}</Text>
           {rows.map((trip: Trip) => {
             const pay = carpoolPayFromTrip(trip)
+            const boost = readBoostCents(trip)
+            const earned = trip.status === 'canceled' ? 0 : tripPayoutCents(trip)
             return (
               <Pressable
                 key={trip.id}
                 onPress={() => router.push({ pathname: '/trip-details', params: { id: trip.id } })}
                 accessibilityRole="button"
-                accessibilityLabel={`${trip.status === 'canceled' ? 'Canceled trip' : 'Completed trip'}, ${trip.pickup_label || 'Pickup'} to ${trip.dropoff_label || 'Drop-off'}, ${trip.status === 'canceled' ? 'No payout' : shownCents(tripEarnedCents(trip), earningsPrivate)}`}
+                accessibilityLabel={`${trip.status === 'canceled' ? 'Canceled trip' : 'Completed trip'}, ${trip.pickup_label || 'Pickup'} to ${trip.dropoff_label || 'Drop-off'}, ${trip.status === 'canceled' ? 'No payout' : shownCents(earned, earningsPrivate)}`}
                 accessibilityHint="Opens trip details and breakdown"
               >
                 <Card>
@@ -125,8 +128,11 @@ export default function EarningsActivity() {
                   <Text style={{ color: colors.ink }}>{trip.pickup_label || 'Pickup'}</Text>
                   <Text style={{ color: colors.ink }}>{trip.dropoff_label || 'Drop-off'}</Text>
                   <Text style={{ color: colors.title, fontWeight: '800' }}>
-                    {trip.status === 'canceled' ? 'No payout' : shownCents(tripEarnedCents(trip), earningsPrivate)}
+                    {trip.status === 'canceled' ? 'No payout' : shownCents(earned, earningsPrivate)}
                   </Text>
+                  {trip.status !== 'canceled' && boost > 0 ? (
+                    <Text style={{ color: '#F56600', fontWeight: '800' }}>Boost {formatBoostBadge(boost)}</Text>
+                  ) : null}
                   {trip.status !== 'canceled' && pay?.showBonus ? (
                     <Text style={{ color: colors.inkSecondary }}>
                       Base net {shownCents(pay.baseNetCents, earningsPrivate)} · {pay.incentiveId} {shownCents(pay.bonusCents, earningsPrivate)} · total {shownCents(pay.payoutCents, earningsPrivate)}

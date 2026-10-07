@@ -17,6 +17,7 @@ import { grantRiderSocialForTrip } from '../lib/riderReferral'
 import { isLiveTrip, startTripLocationWatch } from '../lib/liveDriverLocation'
 import { DriverApprovalGate } from './DriverApprovalGate'
 import { driverOfferCopy, driverTakeCents, formatUsd } from '../lib/carpoolEngine'
+import { driverBoostShareCents, formatBoostBadge, readBoostCents } from '../../shared/scheduledBoost.js'
 import { RideChat, RideMessageButton } from '../components/RideChat'
 import { rideChatMode } from '../lib/tripChatRules'
 import { SosControl } from '../components/SosControl'
@@ -1102,6 +1103,9 @@ function DriverShell({ driverId }) {
                     </button>
                     <strong style={{ color: 'var(--ink)' }}>
                       {centsToDollars(driverTakeCents(t))}
+                      {driverBoostShareCents(readBoostCents(t)) > 0 ? (
+                        <span style={{ color: '#F56600' }}> {formatBoostBadge(driverBoostShareCents(readBoostCents(t)))}</span>
+                      ) : null}
                       {extraByTrip[t.id] ? (
                         <span style={{ color: '#F56600' }}> +{centsToDollars(extraByTrip[t.id])}</span>
                       ) : null}
@@ -1129,12 +1133,19 @@ function DriverShell({ driverId }) {
         >
           <div className="sheet-handle" />
           <div style={{ maxHeight: 168, overflowY: 'auto', marginBottom: 8 }}>{scheduledLists(false)}</div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }}>
             <div style={{ fontSize: 32, fontWeight: 700, letterSpacing: -0.5 }}>
-              {centsToDollars(driverTakeCents(offer))}
+              {centsToDollars(driverTakeCents(offer) + driverBoostShareCents(readBoostCents(offer)))}
             </div>
-            <div style={{ fontSize: 13, color: 'var(--ink-secondary)' }}>
+            <div style={{ fontSize: 13, color: 'var(--ink-secondary)', textAlign: 'right' }}>
               {offer.metadata?.carpool ? 'You net · carpool' : 'Live offer'}
+              {readBoostCents(offer) > 0 ? (
+                <div style={{ marginTop: 6 }}>
+                  <span style={{ display: 'inline-block', background: '#F56600', color: '#fff', fontWeight: 800, fontSize: 12, borderRadius: 999, padding: '4px 10px' }}>
+                    {formatBoostBadge(driverBoostShareCents(readBoostCents(offer)))}
+                  </span>
+                </div>
+              ) : null}
             </div>
           </div>
           {offer.metadata?.scheduled_pickup_at && <p>Scheduled pickup: {formatPickupAt(offer.metadata.scheduled_pickup_at)}</p>}

@@ -61,6 +61,7 @@ export async function createScheduledTrip({
   tier = 'standard',
   billingChoice = null,
   nearTerm = false,
+  boostCents = 0,
 }) {
   if (!supabase) throw new Error('Supabase is not configured')
   if (!user?.id) throw new Error('Sign in required to schedule a ride')
@@ -76,6 +77,7 @@ export async function createScheduledTrip({
     weekdays: [],
     ...(billingChoice ? { billingChoice } : {}),
     ...(nearTerm ? { nearTerm: true } : {}),
+    ...(boostCents ? { boostCents } : {}),
   })
   return {
     ...data.trip,
@@ -132,6 +134,11 @@ export async function acceptScheduledTrip(tripId) {
   const { data, error } = await supabase.rpc('accept_scheduled_trip', { p_trip_id: tripId })
   if (error) throw new Error(error.message || 'Could not accept scheduled ride')
   return data
+}
+
+export async function bumpScheduledBoost(tripId, boostCents) {
+  if (!supabase) throw new Error('Supabase is not configured')
+  return api('/api/stripe-payment-methods?action=bump-scheduled-boost', { tripId, boostCents })
 }
 
 export async function cancelScheduledTrip(tripId) {
