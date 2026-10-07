@@ -159,10 +159,15 @@ export async function publishDriverLocation(supabase, driverId, { lat, lng, head
   if (error) throw new Error(error.message)
 }
 
+function comfortClassRequested(serviceClass) {
+  if (serviceClass && typeof serviceClass === 'object') return Boolean(serviceClass.enabled)
+  return serviceClass === 'comfort'
+}
+
 export async function setServiceClass(supabase, driverId, serviceClass) {
   const vehicle = await loadVehicle(supabase, driverId)
   if (!vehicle?.id) throw new Error('Add your vehicle in driver onboarding before choosing a service class.')
-  const service_class = serviceClass === 'comfort' ? 'comfort' : 'standard'
+  const service_class = comfortClassRequested(serviceClass) ? 'comfort' : 'standard'
   const { data, error } = await supabase.from('vehicles').update({ service_class, tier: service_class }).eq('id', vehicle.id).select('*').single()
   if (error) throw new Error(error.message)
   return data

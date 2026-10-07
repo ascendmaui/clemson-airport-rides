@@ -55,7 +55,8 @@ export default function FleetScreen() {
     }
   }
 
-  const listed = Boolean(vehicle?.service_class)
+  const service = String(vehicle?.service_class ?? '').trim().toLowerCase()
+  const listed = service === 'comfort' || service === 'true' || String(vehicle?.tier || '').trim().toLowerCase() === 'comfort'
 
   return (
     <View style={[styles.screen, { paddingTop: insets.top + 8 }]}>

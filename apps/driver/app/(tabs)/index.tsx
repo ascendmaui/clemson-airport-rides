@@ -383,7 +383,6 @@ export default function DriverHome() {
     const card = liveOffers.find((row: DriverCard) => row.id === id)
     if (!card) return
     setSelectedOfferId(card.id)
-    void onAccept(card)
   }
 
   const statusLine = !user
