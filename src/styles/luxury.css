@@ -693,6 +693,22 @@ body .mkt-menu button[aria-current="page"] {
   margin-bottom: 16px;
 }
 
+.mkt-night-strip {
+  display: flex;
+  gap: 12px;
+  margin: 0 0 20px;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scroll-padding-inline: 4px;
+  padding-bottom: 4px;
+}
+
+.mkt-night-shot {
+  flex: 0 0 min(78vw, 320px);
+  margin: 0;
+  scroll-snap-align: start;
+}
+
 .mkt-live,
 .mkt-soon {
   display: inline-flex;
@@ -999,6 +1015,18 @@ body .mkt-qr-svg {
   }
   .mkt-hero-shot {
     position: absolute;
+  }
+  .mkt-night-strip {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    overflow: visible;
+    scroll-snap-type: none;
+    gap: 16px;
+  }
+  .mkt-night-shot {
+    flex: none;
+    width: auto;
+    scroll-snap-align: none;
   }
   .mkt-hero-shot--lead {
     width: 78%;

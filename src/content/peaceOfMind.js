@@ -165,7 +165,7 @@ export const SAFETY_FEATURES = [
     imageId: 'safety-recording',
     title: 'Voice and audio recording',
     what: 'Record audio on this phone during an active ride.',
-    how: 'The rider starts it, only after a driver accepts. Recording starts once a driver has accepted the ride. The clip stays on the phone and is never uploaded. A banner stays up while it is recording. The banner reads "Audio recording is on" or "Video recording is on".',
+    how: 'The rider starts it, only after a driver accepts. The clip stays on the phone and is never uploaded. A banner stays up while it is recording. The banner reads "Audio recording is on" or "Video recording is on".',
     why: 'The clip stays on the phone that started it.',
   },
   {

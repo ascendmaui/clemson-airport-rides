@@ -3,7 +3,7 @@ import { MarketingChrome } from '../components/MarketingChrome'
 import { MarketingPhoto } from '../components/MarketingPhoto'
 import { FeatureBlock } from '../components/FeatureBlock'
 import { messagingGuide } from '../../shared/copy/messaging.js'
-import { HERO_COLLAGE } from '../content/images.js'
+import { HERO_COLLAGE, NIGHT_VENUES } from '../content/images.js'
 import { APP_DOWNLOADS } from '../../shared/productLinks.js'
 import { RIDE_OPTION_CATALOG, SCHEDULE_AHEAD_DISCOUNT_PCT } from '../../shared/rideOptions.js'
 import { CARPOOL_DISCOUNT_BPS, STUDENT_DISCOUNT_BPS } from '../lib/fareRates.js'
@@ -214,6 +214,12 @@ export function SafetyPage() {
       <PageHead kicker={SAFETY_SECTION.kicker} title="Safe nights out" lede={SAFETY_SECTION.what} />
       <p><strong>Why it matters. </strong>{SAFETY_SECTION.why}</p>
       <MarketingPhoto id="night-going-out" className="mkt-section-banner" />
+      <div className="mkt-section-head">
+        <h2>Downtown Clemson, Friday and Saturday nights</h2>
+      </div>
+      <div className="mkt-night-strip">
+        {NIGHT_VENUES.map((id) => <MarketingPhoto key={id} id={id} className="mkt-night-shot" />)}
+      </div>
       <div className="mkt-safety-live">
         {safety.map((feature) => <FeatureBlock key={feature.id} feature={feature} />)}
       </div>
