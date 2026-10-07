@@ -1,5 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import { commitRiderSwitch } from './riderSwitch.js'
 import {
   BACKUP_CONFIRM_WINDOW_MS,
   BACKUP_WINDOW_CEILING_MS,
@@ -19,6 +20,8 @@ import {
   preauthBaseCents,
   promoteBackup,
   readScheduledBoostCents,
+  backupQueueAfterRiderSwitch,
+  riderBackupPresentation,
   riderCancelCapture,
   riderCaptureFareCents,
   splitBackupPayout,
@@ -218,4 +221,57 @@ test('payout is fare plus boost plus backup bonus only when that driver earned i
     driver_id: 'driver-a',
     metadata: { backup_queue: acceptBackupRole(acceptBackupRole(backupBookingMetadata(1000), 'driver-a').queue, 'driver-b').queue },
   }, 'driver-a').cents, 0)
+})
+
+test('a before-pickup cancel releases both backup seats and a switch reassigns the backup', () => {
+  const seated = acceptBackupRole(acceptBackupRole(backupBookingMetadata(1500), 'driver-a').queue, 'driver-b').queue
+  const trip = {
+    id: 'trip-1',
+    rider_id: 'rider-1',
+    driver_id: 'driver-a',
+    status: 'accepted',
+    tier: 'standard',
+    fare_cents: 1850,
+    metadata: {
+      backup_queue: seated,
+      fare_authorization: { status: 'requires_capture', paymentIntentId: 'pi_old', authorizationCents: 2220 },
+    },
+  }
+  const canceled = commitRiderSwitch({ trip, action: 'cancel', now: '2026-10-07T12:00:00.000Z' })
+  assert.equal(canceled.ok, true)
+  const canceledQueue = canceled.update.metadata.backup_queue
+  assert.equal(canceledQueue.confirmState, 'released')
+  assert.equal(canceledQueue.primaryDriverId, null)
+  assert.equal(canceledQueue.backupDriverId, null)
+  assert.deepEqual(canceled.releasedDriverIds, ['driver-a', 'driver-b'])
+  assert.equal(driverBackupPresentation({ metadata: { backup_queue: canceledQueue } }, 'driver-b'), null)
+  assert.equal(riderBackupPresentation({ metadata: { backup_queue: canceledQueue } }), null)
+  assert.equal(acceptBackupRole(canceledQueue, 'driver-c').code, 'backup_released')
+  assert.equal(riderCaptureFareCents({ fare_cents: 1850, metadata: { backup_queue: canceledQueue } }), 1850)
+
+  const switched = commitRiderSwitch({
+    trip,
+    action: 'switch-driver',
+    driverId: 'driver-b',
+    drivers: [{ id: 'driver-b' }],
+    now: '2026-10-07T12:00:00.000Z',
+  })
+  const switchedQueue = switched.update.metadata.backup_queue
+  assert.equal(switched.ok, true)
+  assert.equal(switched.notifyDriverId, 'driver-b')
+  assert.equal(switchedQueue.primaryDriverId, 'driver-b')
+  assert.equal(switchedQueue.backupDriverId, null)
+  assert.equal(switchedQueue.confirmState, 'released')
+  assert.deepEqual(switched.releasedDriverIds, ['driver-a'])
+  assert.equal(switchedQueue.events.at(-1).kind, 'backup_reassigned')
+
+  const other = backupQueueAfterRiderSwitch(seated, {
+    action: 'rerequest',
+    nextDriverId: 'driver-c',
+    now: '2026-10-07T12:00:00.000Z',
+  })
+  assert.equal(other.primaryDriverId, 'driver-c')
+  assert.equal(other.backupDriverId, null)
+  assert.deepEqual(other.releasedDriverIds, ['driver-a', 'driver-b'])
+  assert.equal(other.strikes?.length || 0, seated.strikes?.length || 0)
 })

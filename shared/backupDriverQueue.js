@@ -162,7 +162,7 @@ export function isBackupQueueRide(trip) {
 
 export function backupSlotOpen(trip) {
   const queue = readBackupQueue(trip)
-  if (!queue) return false
+  if (!queue || queue.confirmState === 'released') return false
   return Boolean(queue.primaryDriverId) && !queue.backupDriverId && queue.confirmState !== 'handed_to_pool'
 }
 
@@ -302,7 +302,7 @@ export function preauthBaseCents(fareCents, bonusCents) {
 export function riderCaptureFareCents(trip) {
   const fare = Math.max(0, Math.round(Number(trip?.fare_cents) || 0))
   const queue = readBackupQueue(trip)
-  if (!queue) return fare
+  if (!queue || queue.confirmState === 'released') return fare
   return fare + queue.bonusCents
 }
 
@@ -316,6 +316,7 @@ function withEvent(queue, event) {
 
 export function acceptBackupRole(queue, driverId) {
   if (!queue?.enabled) return { ok: false, code: 'backup_not_enabled' }
+  if (queue.confirmState === 'released') return { ok: false, code: 'backup_released' }
   if (!driverId) return { ok: false, code: 'driver_required' }
   if (queue.confirmState === 'handed_to_pool') return { ok: false, code: 'reopened_to_pool' }
   if (queue.primaryDriverId === driverId) return { ok: true, role: 'primary', idempotent: true, queue }
@@ -418,6 +419,51 @@ export function handToUrgentPool(queue, { reason, now = new Date().toISOString()
     riderNotice: null,
   }, queue.primaryDriverId, reason, now)
   return withEvent(next, { kind: 'urgent_pool', at: now, reason })
+}
+
+/**
+ * The live before-pickup switch closes the backup arrangement.
+ * Cancel releases both drivers. A switch to the backup makes that driver
+ * the primary and clears the second seat. Any other new match releases
+ * the backup. Nobody is struck; the rider asked for the change.
+ */
+export function backupQueueAfterRiderSwitch(queue, { action, nextDriverId = null, now = new Date().toISOString() } = {}) {
+  if (!queue?.enabled || queue.confirmState === 'released') return queue || null
+  const ending = action === 'cancel' || action === 'open-carpool'
+  const formerBackupId = queue.backupDriverId || null
+  const formerPrimaryId = queue.primaryDriverId || null
+  const reassignBackup = !ending && Boolean(formerBackupId) && nextDriverId === formerBackupId
+  const nextPrimary = ending ? null : (reassignBackup ? formerBackupId : (nextDriverId || null))
+  const releasedDriverIds = [formerPrimaryId, formerBackupId].filter((id) => id && id !== nextPrimary)
+  const cleared = {
+    ...queue,
+    primaryDriverId: nextPrimary,
+    backupDriverId: null,
+    primaryCard: reassignBackup ? (queue.backupCard || null) : null,
+    backupCard: null,
+    confirmState: 'released',
+    confirmedAt: null,
+    navigateStartedAt: null,
+    leaveNowAt: null,
+    movementDetectedAt: null,
+    riderNotifiedEnrouteAt: null,
+    riderNotice: null,
+    windowOpensAt: null,
+    windowClosesAt: null,
+    windowNotifiedAt: null,
+    urgent: false,
+    releasedAt: now,
+    releasedReason: action,
+    releasedDriverIds,
+  }
+  return withEvent(cleared, {
+    kind: ending ? 'rider_cancel_release' : (reassignBackup ? 'backup_reassigned' : 'backup_released'),
+    at: now,
+    action,
+    formerPrimaryId,
+    formerBackupId,
+    nextDriverId: nextPrimary,
+  })
 }
 
 export function releaseActiveDriver(queue, { reason, now }) {
@@ -654,7 +700,7 @@ export function earningsExtrasForDriver(trip, driverId) {
 
 export function riderBackupPresentation(trip) {
   const queue = readBackupQueue(trip)
-  if (!queue) return null
+  if (!queue || queue.confirmState === 'released') return null
   let status = 'Backup requested'
   if (queue.confirmState === 'handed_to_pool') status = URGENT_POOL_LABEL
   else if (queue.confirmState === 'enroute') status = 'Your driver is on the way'
@@ -689,7 +735,7 @@ export function riderBackupPresentation(trip) {
 
 export function driverBackupPresentation(trip, driverId) {
   const queue = readBackupQueue(trip)
-  if (!queue) return null
+  if (!queue || queue.confirmState === 'released') return null
   const role = queue.primaryDriverId === driverId
     ? 'primary'
     : queue.backupDriverId === driverId

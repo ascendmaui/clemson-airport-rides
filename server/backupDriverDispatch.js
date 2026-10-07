@@ -477,7 +477,7 @@ export async function runScheduledDispatchTick(sb, { now = new Date(), dryRun = 
   }
   for (const trip of listed.data || []) {
     const queue = queueOf(trip)
-    if (!queue?.primaryDriverId) continue
+    if (!queue?.primaryDriverId || queue.confirmState === 'released') continue
     if (queue.confirmState === 'enroute' || queue.confirmState === 'handed_to_pool') continue
     summary.scanned += 1
     if (dryRun) {

@@ -32,7 +32,9 @@ export function buildPayoutRecord(trip) {
     : Math.max(readBoostCents(trip), readScheduledBoostCents(trip?.metadata))
   const boostCents = driverBoostShareCents(boostSource)
   const queue = readBackupQueue(trip)
-  const backupBonus = heatPay == null && queue?.promotedFromBackup ? queue.bonusCents : 0
+  const backupBonus = heatPay == null && queue?.promotedFromBackup && queue.confirmState !== 'released'
+    ? queue.bonusCents
+    : 0
   const amountCents = driverPayoutWithBoost(fareNetCents, boostSource) + backupBonus
   const heat = trip?.metadata?.tiger_heat
   return {

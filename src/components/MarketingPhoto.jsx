@@ -1,4 +1,4 @@
-import { resolveMarketingImage } from '../../shared/marketingImages.js'
+import { resolveMarketingImage } from '../content/images.js'
 
 export function MarketingPhoto({ id, eager = false, className = '' }) {
   const image = resolveMarketingImage(id)
