@@ -19,7 +19,7 @@ const RIDE_TYPE_COPY = {
 }
 
 const FRAMES = [
-  { src: '/marketing/clemson-rides-airport.jpg', alt: 'Dawn on an empty road, headlights stretching toward the horizon' },
+  { src: '/marketing/clemson-memorial-stadium.jpg', alt: 'Clemson Memorial Stadium at night, the stands full under the lights' },
   { src: '/marketing/clemson-rides-avenue.jpg', alt: 'Dusk on a brick campus avenue under a deep sky' },
   { src: '/marketing/clemson-rides-gameday.jpg', alt: 'Stadium lights blooming against a night sky' },
 ]

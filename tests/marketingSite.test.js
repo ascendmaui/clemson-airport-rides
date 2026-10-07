@@ -128,6 +128,18 @@ test('soft-launch web QR targets stable production book URL', () => {
   assert.doesNotMatch(WEB_ORIGIN, /clemson-rides\.vercel\.app$/)
 })
 
+test('marketing homepage uses the Death Valley photo and Clemson palette', () => {
+  const source = readFileSync(new URL('../src/screens/Marketing.jsx', import.meta.url), 'utf8')
+  const css = readFileSync(new URL('../src/styles/luxury.css', import.meta.url), 'utf8')
+  assert.match(source, /\/marketing\/clemson-memorial-stadium\.jpg/)
+  assert.match(source, /Clemson Memorial Stadium/)
+  assert.match(css, /#F56600/)
+  assert.match(css, /#522D80/)
+  assert.match(css, /position:\s*fixed/)
+  assert.match(css, /mkt-stage-shade/)
+  assert.doesNotMatch(css.split('/* Auth */')[0], /background:\s*#f6f7f8/)
+})
+
 test('marketing hero surfaces web book QR for soft launch', () => {
   const source = readFileSync(new URL('../src/screens/Marketing.jsx', import.meta.url), 'utf8')
   assert.match(source, /WEB_BOOK_URL/)
