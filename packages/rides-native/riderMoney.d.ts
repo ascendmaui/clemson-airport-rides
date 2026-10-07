@@ -11,7 +11,41 @@ export type AirportQuote = {
   surgeLabel: string | null
   routeSource: string | null
   source?: string
+  tigerPassApplied?: boolean
+  tigerPassName?: string | null
+  tigerPassDiscountBps?: number
+  tigerPassDiscountCents?: number
+  preferredCarTypes?: string[]
+  tiers?: { id: string; fareCents: number; discountCents?: number; tigerPassApplied?: boolean; tigerPassDiscountCents?: number }[]
 }
+
+export function withTigerPassQuote<T extends { fareCents?: number; depositCents?: number; tigerPassApplied?: boolean }>(
+  quote: T,
+  input?: { active?: boolean; bps?: number; name?: string },
+): T & {
+  tigerPassApplied: boolean
+  tigerPassName: string | null
+  tigerPassDiscountBps: number
+  tigerPassDiscountCents: number
+  fareCents: number
+  depositCents: number
+}
+
+export function fetchRideQuote(
+  supabase: unknown,
+  body?: {
+    pickupLabel?: string
+    pickupLat?: number
+    pickupLng?: number
+    dest?: string
+    destLat?: number
+    destLng?: number
+    airport?: string
+    date?: string
+    time?: string
+    tier?: string
+  },
+): Promise<AirportQuote>
 
 export type CheckoutSession = {
   id?: string

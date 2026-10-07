@@ -526,19 +526,22 @@ export async function fetchDriverApplication(supabase, driverId) {
  */
 export async function requestDriverTrip(supabase, {
   riderId,
-  driverId,
+  driverId = null,
+  autoAssign = false,
   dest = 'GSP Airport',
   destPoint = GSP,
   pickupLabel = 'Memorial Stadium',
   pickupPoint = STADIUM,
   tier = 'standard',
   isStudent = false,
+  note = '',
 }) {
   void isStudent
   if (!supabase) throw new Error('Supabase is not configured')
   if (!riderId) throw new Error('Sign in required to request a driver')
-  if (!driverId) throw new Error('Select a driver first')
-  if (isSimulatedDriverId(driverId)) {
+  const assigning = autoAssign === true && !driverId
+  if (!driverId && !assigning) throw new Error('Select a driver first')
+  if (driverId && isSimulatedDriverId(driverId)) {
     throw new Error('That driver is busy and cannot be requested.')
   }
 
@@ -546,11 +549,12 @@ export async function requestDriverTrip(supabase, {
   const destLng = destPoint?.longitude ?? destPoint?.lng
   const pickupLat = pickupPoint?.latitude ?? pickupPoint?.lat
   const pickupLng = pickupPoint?.longitude ?? pickupPoint?.lng
+  const riderNote = String(note || '').replace(/\s+/g, ' ').trim().slice(0, 280)
 
   const data = await authedJson(supabase, '/api/stripe-payment-methods?action=request-driver', {
     method: 'POST',
     body: {
-      driverId,
+      ...(assigning ? { autoAssign: true } : { driverId }),
       dest,
       destLat,
       destLng,
@@ -558,6 +562,7 @@ export async function requestDriverTrip(supabase, {
       pickupLat,
       pickupLng,
       tier: tier || 'standard',
+      ...(riderNote ? { note: riderNote } : {}),
     },
   })
   if (!data?.trip?.id) throw new Error('Could not request trip')

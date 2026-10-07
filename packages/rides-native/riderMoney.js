@@ -12,6 +12,7 @@ import {
   isClemsonEmail,
 } from '../../src/lib/studentDomain.js'
 import { authedJson } from './apiClient.js'
+import { applyTigerPassDiscount, TIGER_PASS_DISCOUNT_BPS, TIGER_PASS_NAME } from '../../shared/tigerPass.js'
 import { prepaidCreditsFromPayload } from '../../shared/prepaidTiers.js'
 import { ADD_ANOTHER_PAYMENT_METHOD_ID } from '../../shared/ridePaymentMethods.js'
 import {
@@ -253,14 +254,74 @@ export function parseQuoteResponse(data) {
   const cashCents = quote.cashCents == null ? fareCents : num(quote.cashCents)
   const surge = data?.surge && typeof data.surge === 'object' ? data.surge : null
   const rule = surge?.rule && typeof surge.rule === 'object' ? surge.rule : null
+  const tiers = Array.isArray(data?.tiers) ? data.tiers : []
   return {
     ...recomputeDeposit({ fareCents, cashCents }),
     studentDiscountCents: num(breakdown.student_discount_cents),
     surgeMultiplier: num(surge?.multiplier) || 1,
     surgeLabel: rule?.label || null,
     routeSource: data?.routeSource || null,
+    tigerPassApplied: Boolean(data?.tigerPassApplied),
+    tigerPassName: data?.tigerPassName || null,
+    tigerPassDiscountBps: num(data?.tigerPassDiscountBps),
+    tigerPassDiscountCents: num(data?.tigerPassDiscountCents),
+    preferredCarTypes: Array.isArray(data?.preferredCarTypes) ? data.preferredCarTypes : [],
+    tiers,
   }
 }
+
+/**
+ * Catalog quotes do not know the pass. Apply it after the student discount,
+ * the same order the server uses, and only while the pass is active.
+ */
+export function withTigerPassQuote(quote, { active = false, bps = 0, name = TIGER_PASS_NAME } = {}) {
+  const base = quote && typeof quote === 'object' ? quote : {}
+  const rate = active ? Math.max(0, Math.round(Number(bps) || 0)) : 0
+  if (!rate || base.tigerPassApplied) {
+    return {
+      ...base,
+      tigerPassApplied: Boolean(base.tigerPassApplied),
+      tigerPassName: base.tigerPassName || null,
+      tigerPassDiscountBps: num(base.tigerPassDiscountBps),
+      tigerPassDiscountCents: num(base.tigerPassDiscountCents),
+    }
+  }
+  const next = applyTigerPassDiscount({
+    fareCents: num(base.fareCents),
+    depositCents: num(base.depositCents),
+  }, rate)
+  return {
+    ...base,
+    fareCents: next.fareCents,
+    depositCents: next.depositCents,
+    tigerPassApplied: true,
+    tigerPassName: name || TIGER_PASS_NAME,
+    tigerPassDiscountBps: rate,
+    tigerPassDiscountCents: next.tigerPassDiscountCents,
+  }
+}
+
+/** Server fare for the three offered tiers, including an active Tiger Pass. */
+export async function fetchRideQuote(supabase, body = {}) {
+  const data = await authedJson(supabase, '/api/stripe-payment-methods?action=quote', {
+    method: 'POST',
+    body: {
+      pickupLabel: body.pickupLabel,
+      pickupLat: body.pickupLat,
+      pickupLng: body.pickupLng,
+      dest: body.dest,
+      destLat: body.destLat,
+      destLng: body.destLng,
+      airport: body.airport,
+      date: body.date,
+      time: body.time,
+      tier: body.tier,
+    },
+  })
+  return { ...parseQuoteResponse(data), source: 'api' }
+}
+
+export { TIGER_PASS_DISCOUNT_BPS, TIGER_PASS_NAME }
 
 export function quoteInputKey({ airport, date, time } = {}) {
   const code = airport === 'CLT' ? 'CLT' : 'GSP'
