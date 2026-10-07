@@ -15,7 +15,7 @@ import { clearAmbassadorCode, loadAmbassadorCode, saveAmbassadorCode } from '@/l
 import { supabase } from '@/lib/supabase'
 import { ambassadorCodeFromLocation } from 'rides-native/shared/ambassadorAttribution.js'
 import { claimAmbassadorAttribution } from 'rides-native/shared/carpoolApi.js'
-import { parseCheckoutReturn } from 'rides-native/checkoutReturn.js'
+import { isTigerPassReturn, parseCheckoutReturn, parseCheckoutSessionId } from 'rides-native/checkoutReturn.js'
 import { reconcileCheckout } from 'rides-native/riderMoney.js'
 import { ProfileRequiredGate } from 'rides-native/PartyScreens'
 import { resolveApiBase } from 'rides-native/apiOrigin.js'
@@ -99,6 +99,13 @@ function CheckoutDeepLink() {
     function handleUrl(url: string | null) {
       if (!url) return
       if (/[?&]setup=1(?:&|$)/.test(url)) return
+      if (isTigerPassReturn(url)) {
+        const sessionId = parseCheckoutSessionId(url)
+        if (!sessionId || handled.has(sessionId)) return
+        handled.add(sessionId)
+        router.push({ pathname: '/tiger-pass', params: { session_id: sessionId } })
+        return
+      }
       const ret = parseCheckoutReturn(url)
       if (!ret.sessionId || handled.has(ret.sessionId)) return
       handled.add(ret.sessionId)

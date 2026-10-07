@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { parseCheckoutSessionId, parseCheckoutReturn } from './checkoutReturn.js'
+import { isTigerPassReturn, parseCheckoutSessionId, parseCheckoutReturn } from './checkoutReturn.js'
 import { checkoutSuccessHash } from './liveTrip.js'
 import { NATIVE_CHECKOUT_ORIGIN, reconcileCheckout } from './riderMoney.js'
 
@@ -24,6 +24,14 @@ test('parseCheckoutSessionId: extracts session_id from web hash return URLs', ()
 test('parseCheckoutSessionId: extracts session_id from query params in URL search', () => {
   const urlWithSearch = `${NATIVE_CHECKOUT_ORIGIN}/?session_id=cs_test_search789#/requested?trip=trip_123&paid=1`
   assert.equal(parseCheckoutSessionId(urlWithSearch), 'cs_test_search789')
+})
+
+test('isTigerPassReturn is only the pass link, not a ride or card setup', () => {
+  assert.equal(isTigerPassReturn('clemsonrides://tiger-pass?session_id=cs_test_pass'), true)
+  assert.equal(isTigerPassReturn('https://clemsonrides.com/#/account?tab=billing&tigerPass=1&session_id=cs_test_web'), true)
+  assert.equal(isTigerPassReturn('clemsonrides://requested?paid=1&session_id=cs_test_ride'), false)
+  assert.equal(isTigerPassReturn('clemsonrides://billing?setup=1&session_id=cs_test_card'), false)
+  assert.equal(isTigerPassReturn(''), false)
 })
 
 test('parseCheckoutSessionId: extracts session_id from native deep links', () => {

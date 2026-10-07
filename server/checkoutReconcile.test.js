@@ -412,6 +412,27 @@ test('Stripe retrieve error: gracefully handles errors without throwing unhandle
   assert.equal(db.payments.length, 0)
 })
 
+test('skips tiger_pass sessions instead of requiring a trip', async () => {
+  const db = createMockDb()
+  const session = {
+    id: 'cs_pass_105',
+    status: 'complete',
+    payment_status: 'paid',
+    metadata: { kind: 'tiger_pass', profile_id: 'rider_ada' },
+  }
+  const stripe = createMockStripe(new Map([[session.id, session]]))
+  const result = await reconcileCheckoutSession({
+    stripe,
+    sb: db,
+    sessionId: 'cs_pass_105',
+    userId: 'rider_ada',
+  })
+  assert.equal(result.ok, true)
+  assert.equal(result.skipped, true)
+  assert.equal(result.reason, 'tiger_pass')
+  assert.equal(db.payments.length, 0)
+})
+
 test('skips credit_purchase sessions cleanly', async () => {
   const db = createMockDb()
   const session = {

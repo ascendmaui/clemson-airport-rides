@@ -14,6 +14,8 @@ Change `TIGER_PASS_NAME` in `shared/tigerPass.js`. Checkout, the rider screen, t
 - Favorite drivers from Pick a driver. Favorites persist on `profiles.favorite_driver_ids` and are offered before the open pool on auto-assign, scheduled release, and the queue a decline walks.
 - While the pass is active, preferred drivers (a subset of favorites) are offered first, then other favorites, then the usual John / Kim / everyone else order. Removing a favorite removes them from the preferred list.
 - Cancel keeps the discount until `current_period_end` when Stripe has a subscription id and a period end. Otherwise the pass is canceled immediately.
+- A second checkout is refused while the row is active or `past_due` (`tiger_pass_already_subscribed`). The rider app and Account → Billing hide Subscribe in those states.
+- The rider app opens Checkout with `clemsonrides://tiger-pass`. When the browser closes, it confirms the session id returned by checkout create, even if the redirect URL is missing. A cold start on that link opens the pass screen and confirms. That link is not sent through ride-deposit reconcile.
 
 ## Preview cars
 
@@ -36,7 +38,7 @@ Demo map drivers and `sim-busy-*` ids are not favorites. `favoriteIdsForMatching
 
 Apply `supabase/migrations/20261005204500_tiger_pass.sql` before checkout confirmation. Without that table, preference writes return `tiger_pass_unavailable`. Favorite reads fail soft and matching continues in the default order.
 
-The webhook activates `kind: tiger_pass` on `checkout.session.completed`. `invoice.paid` and subscription updates sync only when metadata kind is `tiger_pass`. Other subscription events stay ignored.
+The webhook activates `kind: tiger_pass` on `checkout.session.completed` and reads the subscription period end when Stripe sends a subscription id. `invoice.paid` and subscription updates sync when metadata kind is `tiger_pass` on the object or on the invoice subscription details. Other subscription events stay ignored. `past_due` turns the discount off. `cancel_at_period_end` on an active subscription keeps the row active through `current_period_end`.
 
 ## Checks
 

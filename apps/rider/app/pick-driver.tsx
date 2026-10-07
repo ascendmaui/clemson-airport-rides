@@ -39,7 +39,7 @@ import { useTheme } from '@/lib/theme'
 import { useThemedStyles } from '@/lib/useThemedStyles'
 import { searchDelayMs } from 'rides-native/riderShell.js'
 import { comfortFleetNotice } from 'rides-native/tripTags'
-import { setFavoriteDrivers } from 'rides-native/tigerPassClient'
+import { loadTigerPass, setFavoriteDrivers, TIGER_PASS_NAME } from 'rides-native/tigerPassClient'
 
 const MAP_KINDS: MapKind[] = ['standard', 'satellite', 'hybrid']
 const NOTIFY_KEY = 'rider.notify.driver'
@@ -97,6 +97,7 @@ export default function PickDriver() {
   const [mapType, setMapType] = useState<MapKind>('standard')
   const [notified, setNotified] = useState(false)
   const [favoriteIds, setFavoriteIds] = useState<string[]>([])
+  const [passPreferredIds, setPassPreferredIds] = useState<string[]>([])
   const [favNote, setFavNote] = useState<string | null>(null)
   const { colors } = useTheme()
   const styles = useThemedStyles(makeStyles)
@@ -110,7 +111,10 @@ export default function PickDriver() {
     const favorites = user?.id
       ? loadFavoriteDriverIds(supabase, authStorage, user.id)
       : Promise.resolve({ ids: [] as string[], note: null })
-    Promise.all([fetchOnlineDrivers(supabase), favorites, wait]).then(async ([result, fav]) => {
+    const pass = user?.id
+      ? loadTigerPass(supabase).catch(() => null)
+      : Promise.resolve(null)
+    Promise.all([fetchOnlineDrivers(supabase), favorites, wait, pass]).then(async ([result, fav, , loadedPass]) => {
       if (!alive) return
       const extraIds = fav.ids.filter((id) => !result.drivers.some((driver) => driver.id === id))
       const extra = extraIds.length
@@ -120,6 +124,7 @@ export default function PickDriver() {
       const merged = sortPreferredDrivers([...result.drivers, ...extra.drivers], fav.ids, approachPickup)
       setDrivers(merged)
       setFavoriteIds(fav.ids)
+      setPassPreferredIds(loadedPass?.active ? loadedPass.preferredDriverIds || [] : [])
       setFavNote(fav.note)
       setError(extra.error || result.error)
       setPhase('results')
@@ -135,7 +140,11 @@ export default function PickDriver() {
 
   const selectedDriver = drivers.find((row: OnlineDriver) => row.id === selected) || null
   const comfortNotice = comfortFleetNotice(tier === 'comfort' || tier === 'comfort' || Boolean(selectedDriver?.comfortClass))
-  const groups = groupDriversForPicker(sortPreferredDrivers(drivers, favoriteIds, approachPickup), favoriteIds)
+  const groups = groupDriversForPicker(
+    sortPreferredDrivers(drivers, favoriteIds, approachPickup),
+    favoriteIds,
+    passPreferredIds.length ? passPreferredIds : undefined,
+  )
 
   async function toggleFavorite(driverId: string) {
     if (!user) {
@@ -158,6 +167,7 @@ export default function PickDriver() {
       const remote = await setFavoriteDrivers(supabase, saved.ids)
       if (Array.isArray(remote?.favoriteDriverIds)) {
         setFavoriteIds(remote.favoriteDriverIds)
+        setPassPreferredIds(remote.active ? remote.preferredDriverIds || [] : [])
         if (remote.demoDriversIgnored) setFavNote(remote.demoNote || 'Preview cars were not saved.')
       }
     } catch {
@@ -217,8 +227,10 @@ export default function PickDriver() {
   }
 
   function renderGroups() {
+    const passFirst = (groups.passPreferred || []).length > 0
     const blocks = [
-      groups.preferred.length ? { title: 'Preferred', rows: groups.preferred } : null,
+      passFirst ? { title: 'Preferred', rows: groups.passPreferred || [] } : null,
+      groups.preferred.length ? { title: passFirst ? 'Favorites' : 'Preferred', rows: groups.preferred } : null,
       groups.online.length ? { title: 'Online now', rows: groups.online } : null,
     ].filter((block): block is { title: string; rows: OnlineDriver[] } => Boolean(block))
     return blocks.map((block) => (
@@ -354,6 +366,9 @@ export default function PickDriver() {
             />
             <PrimaryButton label="Retry" tone="ghost" onPress={() => setAttempt((value: number) => value + 1)} />
           </View>
+        ) : null}
+        {(groups.passPreferred || []).length > 0 ? (
+          <Text style={styles.meta}>{TIGER_PASS_NAME} offers preferred drivers first, then your other saved drivers.</Text>
         ) : null}
         {favNote ? <Text style={styles.meta}>{favNote}</Text> : null}
         {phase === 'results' ? renderGroups() : null}
