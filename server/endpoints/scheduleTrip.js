@@ -29,6 +29,8 @@ import { notifyScheduledBoard } from '../scheduledBoardAlerts.js'
 import { isNearTermRequest, matchRequestedSlot } from '../../shared/nearTermSlots.js'
 import { backupBookingMetadata, normalizeBackupBonusCents, preauthBaseCents } from '../../shared/backupDriverQueue.js'
 import { authorizeRideRequest } from '../fareAuthorization.js'
+import { boostMetadata, parseBoostCents } from '../../shared/scheduledBoost.js'
+import { insertTripRow } from '../scheduledBoostStore.js'
 
 
 /** Integer passenger count from the request; default 1. Prefer passengers over partySize. */
@@ -180,6 +182,10 @@ export default async function handler(req, res, deps = {}) {
     return json(res, 400, { error: 'Backup driver is $10 or $15.', code: 'backup_bonus_invalid' })
   }
   const backupQueue = backupBonusCents && scheduled ? backupBookingMetadata(backupBonusCents, new Date(clockNow)) : null
+  const boostParsed = parseBoostCents(body.boostCents ?? body.boost_cents ?? 0)
+  if (!boostParsed.ok) return json(res, 400, { error: boostParsed.error, code: 'boost_invalid' })
+  const boostCents = scheduled ? boostParsed.cents : 0
+
   const scheduledFor = scheduled ? when.toISOString() : null
   const scheduledNet = scheduledFor ? netCentsForShare(priced.fareCents, SCHEDULED_SHARE_BPS) : null
   const split = scheduledNet == null
@@ -217,6 +223,7 @@ export default async function handler(req, res, deps = {}) {
     } : {}),
     ...(scheduledFor ? scheduledOfferPatch() : {}),
     ...(backupQueue ? { backup_queue: backupQueue } : {}),
+    ...(scheduledFor ? boostMetadata(boostCents) : {}),
   }
   const row = {
     rider_id: user.id,
@@ -244,6 +251,7 @@ export default async function handler(req, res, deps = {}) {
     scheduled_for: scheduledFor,
     rider_note: purpose,
     metadata,
+    ...(scheduledFor ? { boost_cents: boostCents } : {}),
   }
 
   const profileRes = await runEnsureProfile(sb, user)
@@ -251,7 +259,7 @@ export default async function handler(req, res, deps = {}) {
     return json(res, 500, { error: 'Could not create your rider profile', code: 'profile_missing' })
   }
 
-  const inserted = await sb.from('trips').insert(row).select('id, status, pickup_at, pickup_label, dropoff_label, fare_cents, deposit_cents').single()
+  const inserted = await insertTripRow(sb, row)
   if (inserted.error || !inserted.data) {
     return json(res, 500, { error: inserted.error?.message || 'Could not schedule ride' })
   }
@@ -315,5 +323,6 @@ export default async function handler(req, res, deps = {}) {
     scheduleDiscountApplied: Boolean(priced.scheduleDiscountApplied),
     backupBonusCents: backupBonusCents || 0,
     backupBooked: Boolean(backupQueue),
+    boostCents,
   })
 }

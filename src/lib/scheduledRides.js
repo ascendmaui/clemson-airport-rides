@@ -64,6 +64,7 @@ export async function createScheduledTrip({
   billingChoice = null,
   nearTerm = false,
   backupBonusCents = null,
+  boostCents = 0,
 }) {
   if (!supabase) throw new Error('Supabase is not configured')
   if (!user?.id) throw new Error('Sign in required to schedule a ride')
@@ -81,6 +82,7 @@ export async function createScheduledTrip({
     ...(billingChoice ? { billingChoice } : {}),
     ...(nearTerm ? { nearTerm: true } : {}),
     ...(backupBonusCents ? { backupBonusCents } : {}),
+    ...(boostCents ? { boostCents } : {}),
   })
   return {
     ...data.trip,
@@ -153,6 +155,11 @@ export async function acceptScheduledTrip(tripId, { backup = false } = {}) {
   return data
 }
 
+export async function bumpScheduledBoost(tripId, boostCents) {
+  if (!supabase) throw new Error('Supabase is not configured')
+  return api('/api/stripe-payment-methods?action=bump-scheduled-boost', { tripId, boostCents })
+}
+
 export async function cancelScheduledTrip(tripId) {
   if (!supabase) throw new Error('Supabase is not configured')
   const { data, error } = await supabase
@@ -162,7 +169,15 @@ export async function cancelScheduledTrip(tripId) {
     .in('status', ['scheduled', 'searching', 'offered', 'accepted'])
     .select('id')
   if (error) throw new Error(error.message || 'Could not cancel scheduled ride')
+  // Release even when this tap lost the race, so a retry still drops the hold.
+  let releaseError = null
+  try {
+    await api('/api/stripe-payment-methods?action=release-scheduled-boost', { tripId })
+  } catch (err) {
+    releaseError = err
+  }
   if (!data?.length) throw new Error('This ride has changed. Refresh your upcoming rides.')
+  if (releaseError) throw releaseError
 }
 
 /**

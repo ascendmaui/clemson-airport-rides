@@ -5,6 +5,7 @@
  * Scheduled rides stay on their own board and net 75%.
  */
 import { estimateLeg, hourlyRateCents } from '../../src/lib/rideGeometry.js'
+import { driverBoostShareCents, readBoostCents } from '../../shared/scheduledBoost.js'
 
 export const EXCLUSIVE_SECONDS = 15
 export const POOL_SECONDS = 120
@@ -170,7 +171,7 @@ export function lockedOfferEconomics(trip) {
 
 export function offerHourly(card, driver) {
   const priced = ladderOfferNet(card)
-  const net = priced ? priced.netCents : fareCentsOf(card)
+  const net = (priced ? priced.netCents : fareCentsOf(card)) + driverBoostShareCents(readBoostCents(card))
   const pickup = card?.pickupLat != null && card?.pickupLng != null ? [Number(card.pickupLat), Number(card.pickupLng)] : null
   const drop = card?.dropoffLat != null && card?.dropoffLng != null ? [Number(card.dropoffLat), Number(card.dropoffLng)] : null
   const self = driver?.lat != null && driver?.lng != null ? [Number(driver.lat), Number(driver.lng)] : null

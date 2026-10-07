@@ -7,11 +7,12 @@ import { applyPayoutAttempt, payoutIsDue, resolveDriverNetCents } from '../share
 import {
   CANCEL_FEE_LABEL,
   SWITCH_FEE_LABEL,
-  completingPayoutExtraCents,
   payoutPlanForTrip,
   readBackupQueue,
+  readScheduledBoostCents,
   switchFeePayoutForTrip,
 } from '../shared/backupDriverQueue.js'
+import { driverBoostShareCents, driverPayoutWithBoost, readBoostCents } from '../shared/scheduledBoost.js'
 
 /** Settled Tiger Heat pay replaces the default 80% net. Rider fare is not in this number. */
 export function tigerHeatPayoutCents(trip) {
@@ -24,13 +25,22 @@ export function tigerHeatPayoutCents(trip) {
 
 export function buildPayoutRecord(trip) {
   const heatPay = tigerHeatPayoutCents(trip)
-  const backupExtra = heatPay == null ? completingPayoutExtraCents(trip) : 0
-  const amountCents = (heatPay == null ? resolveDriverNetCents(trip) : heatPay) + backupExtra
+  const fareNetCents = heatPay == null ? resolveDriverNetCents(trip) : heatPay
+  const included = trip?.metadata?.boost_included_in_driver_net === true
+  const boostSource = included
+    ? 0
+    : Math.max(readBoostCents(trip), readScheduledBoostCents(trip?.metadata))
+  const boostCents = driverBoostShareCents(boostSource)
+  const queue = readBackupQueue(trip)
+  const backupBonus = heatPay == null && queue?.promotedFromBackup ? queue.bonusCents : 0
+  const amountCents = driverPayoutWithBoost(fareNetCents, boostSource) + backupBonus
   const heat = trip?.metadata?.tiger_heat
   return {
     tripId: trip.id,
     driverId: trip.driver_id,
     amountCents,
+    fareNetCents,
+    boostCents,
     tigerHeatBonusCents: heatPay == null ? 0 : Math.max(0, Math.round(Number(heat?.bonusCents) || 0)),
     platformFundedCents: heatPay == null ? 0 : Math.max(0, Math.round(Number(heat?.platformFundedCents) || 0)),
     status: amountCents === 0 ? 'paid' : 'pending',

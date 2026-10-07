@@ -3,6 +3,8 @@ import { formatUsdFromCents } from '../lib/pricing'
 import { formatPickupAt, toDriverQueueCard } from '../lib/scheduledRideModel'
 import { CONFIRM_TRIP_COPY, backupNumberTwoCopy, confirmCountdownLabel, driverBackupPresentation, leaveNowCountdownLabel } from '../../shared/backupDriverQueue.js'
 import { ScheduledRidesHint } from './ScheduledRidesInfo'
+import { driverBoostOfferLine } from '../../shared/copy/boost.js'
+import { compareBoostedFirst, formatBoostBadge } from '../../shared/scheduledBoost.js'
 
 function ConfirmCountdown({ closesAt }) {
   const [label, setLabel] = useState(() => confirmCountdownLabel(closesAt))
@@ -62,7 +64,7 @@ export function ScheduledRideQueue({
     if (!card) return null
     const seat = driverBackupPresentation(row, viewerId)
     return { ...card, seat }
-  }).filter(Boolean)
+  }).filter(Boolean).sort(compareBoostedFirst)
   if (!cards.length) {
     return (
       <div style={{ marginBottom: 14 }} role="status" aria-label={`${title} empty`}>
@@ -101,14 +103,37 @@ export function ScheduledRideQueue({
               style={{
                 padding: 12,
                 borderRadius: 14,
-                background: 'rgba(255,255,255,0.86)',
-                border: '1px solid rgba(82,45,128,0.18)',
+                background: ride.boostCents > 0 ? 'rgba(245,102,0,0.08)' : 'rgba(255,255,255,0.86)',
+                border: ride.boostCents > 0 ? '2px solid #F56600' : '1px solid rgba(82,45,128,0.18)',
               }}
             >
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'flex-start' }}>
                 <strong style={{ color: '#522D80' }}>{formatPickupAt(ride.pickupAt)}</strong>
-                <span style={{ fontWeight: 800, color: '#F56600' }}>{formatUsdFromCents(ride.fareCents)}</span>
+                <span style={{ fontWeight: 800, color: '#F56600', textAlign: 'right' }}>
+                  {formatUsdFromCents(ride.estimatedEarningsCents)}
+                  <span style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#522D80' }}>est. earnings</span>
+                </span>
               </div>
+              {ride.boostCents > 0 && (
+                <div style={{ marginTop: 8 }}>
+                  <span
+                    style={{
+                      display: 'inline-block',
+                      background: '#F56600',
+                      color: '#fff',
+                      fontWeight: 800,
+                      fontSize: 12,
+                      borderRadius: 999,
+                      padding: '4px 10px',
+                    }}
+                  >
+                    {formatBoostBadge(ride.boostDriverCents)}
+                  </span>
+                  <p style={{ fontSize: 13, margin: '8px 0 0', lineHeight: 1.4, color: 'var(--ink)' }}>
+                    {driverBoostOfferLine(ride.boostDriverCents)}
+                  </p>
+                </div>
+              )}
               <div style={{ fontSize: 13, marginTop: 4 }}>
                 {ride.pickupLabel} → {ride.dropoffLabel}
               </div>

@@ -1,10 +1,13 @@
 import { useEffect, useMemo, useState } from 'react'
 import { PlacePicker } from './PlacePicker'
 import { BillingPicker } from './BillingPicker'
+import { BoostPicker } from './BoostPicker'
 import { PrimaryButton } from './PrimaryButton'
 import { FRIEND_PLACES } from '../lib/friendRides'
 import { useAuth } from '../lib/auth'
 import { formatUsdFromCents } from '../lib/pricing'
+import { BOOST_SCHEDULE_NOTE } from '../../shared/copy/boost.js'
+import { formatBoostBadge } from '../../shared/scheduledBoost.js'
 import { depositSurfaceCopy } from '../../packages/rides-native/riderMoney.js'
 import { SignInToBookModal, useRequireAuthForAction } from './SignInToBookModal'
 import {
@@ -18,6 +21,7 @@ import {
   validateSchedule,
 } from '../lib/scheduledRideModel'
 import {
+  bumpScheduledBoost,
   cancelScheduledTrip,
   createScheduledTrip,
   scheduledRiderAction,
@@ -83,6 +87,7 @@ export function ScheduledRidePlanner() {
   const [billingLoading, setBillingLoading] = useState(false)
   const [billingChoice, setBillingChoice] = useState('no_card')
   const [backupBonusCents, setBackupBonusCents] = useState(0)
+  const [boostCents, setBoostCents] = useState(0)
 
   const minDate = useMemo(() => todayInputValue(), [])
 
@@ -231,6 +236,7 @@ export function ScheduledRidePlanner() {
         passengers: fleet === 'carpool' ? seats : null,
         billingChoice: billingOffer ? billingChoice : null,
         backupBonusCents: backupBonusCents || null,
+        boostCents,
       })
       setSaved(row)
       setDate('')
@@ -512,7 +518,10 @@ export function ScheduledRidePlanner() {
         </div>
       </div>
 
+      <BoostPicker cents={boostCents} onChange={setBoostCents} />
+
       <p>No charge when you confirm. The fare is a hold on your card, including $10 or $15 when you add a second driver. It is charged when the trip ends. Campus rides enter matching about 45 minutes before pickup.</p>
+      <p>{BOOST_SCHEDULE_NOTE}</p>
 
       <PrimaryButton
         onClick={() => runOrPrompt(onSchedule, { setPromptOpen, nextPath: 'schedule' })}
@@ -544,7 +553,17 @@ export function ScheduledRidePlanner() {
           </p>
         )}
         {upcoming.map((ride) => (
-          <RideRow key={ride.id} ride={ride} onCancel={onCancel} onBackupAction={onBackupAction} />
+          <RideRow
+            key={ride.id}
+            ride={ride}
+            onCancel={onCancel}
+            onBackupAction={onBackupAction}
+            onBump={async (cents) => {
+              setError(null)
+              await bumpScheduledBoost(ride.id, cents)
+              await refreshMine()
+            }}
+          />
         ))}
         {completed.length > 0 && (
           <>
@@ -584,12 +603,14 @@ function DriverFace({ card, role }) {
   )
 }
 
-function RideRow({ ride, onCancel, onBackupAction }) {
+function RideRow({ ride, onCancel, onBackupAction, onBump }) {
   const [sheet, setSheet] = useState(null)
+  const [bump, setBump] = useState(0)
+  const [bumpError, setBumpError] = useState('')
   const backup = ride.backup
   const backupName = backup?.backup?.name || 'backup driver'
   return (
-    <div className="glass-panel" style={{ padding: 12, borderRadius: 14, marginTop: 8 }}>
+    <div className="glass-panel" style={{ padding: 12, borderRadius: 14, marginTop: 8, border: ride.boostCents > 0 ? '1px solid #F56600' : undefined }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
         <strong style={{ color: '#522D80' }}>{formatPickupAt(ride.pickupAt)}</strong>
         <span style={{ fontSize: 12, fontWeight: 700, color: '#F56600', textTransform: 'capitalize' }}>{ride.status}</span>
@@ -598,6 +619,7 @@ function RideRow({ ride, onCancel, onBackupAction }) {
       <div style={{ fontSize: 12, color: 'var(--ink-secondary)', marginTop: 4 }}>
         {ride.purpose ? `${ride.purpose} · ` : ''}
         {formatUsdFromCents(ride.fareCents)}
+        {ride.boostCents > 0 ? ` · ${formatBoostBadge(ride.boostCents)}` : ''}
         {ride.estimate ? ' estimate' : ''}
         {ride.approxPin ? ` · Approx pin ${ride.approxPin}` : ''}
       </div>
@@ -627,6 +649,29 @@ function RideRow({ ride, onCancel, onBackupAction }) {
         <button type="button" className="pressable" onClick={() => setSheet('safety')} style={{ marginTop: 8, fontWeight: 700, color: '#522D80', fontSize: 13 }}>
           Report a safety concern and switch
         </button>
+      )}
+      {ride.nudge?.body && (
+        <p style={{ fontSize: 12, color: '#522D80', margin: '8px 0 0', lineHeight: 1.4 }}>{ride.nudge.body}</p>
+      )}
+      {ride.canBump && onBump && (
+        <div style={{ marginTop: 8 }}>
+          <BoostPicker
+            cents={bump}
+            minimumCents={ride.boostCents + 1}
+            heading={ride.boostCents > 0 ? 'Raise the boost' : 'Add a boost'}
+            onChange={async (cents) => {
+              setBump(cents)
+              setBumpError('')
+              try {
+                await onBump(cents)
+                setBump(0)
+              } catch (err) {
+                setBumpError(err.message || 'Could not update boost')
+              }
+            }}
+          />
+          {bumpError && <p role="alert" style={{ color: 'var(--danger)', fontSize: 12 }}>{bumpError}</p>}
+        </div>
       )}
       {ride.canCancel && backup && onBackupAction && (
         <button type="button" className="pressable" onClick={() => setSheet('cancel')} style={{ marginTop: 8, fontWeight: 700, color: '#522D80', fontSize: 13 }}>

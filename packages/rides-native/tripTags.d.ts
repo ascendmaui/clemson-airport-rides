@@ -29,6 +29,8 @@ export type DriverCard = {
   depositCents: number
   depositExplicit: boolean
   driverNetCents: number
+  boostCents?: number
+  boostDriverCents?: number
   baseNetCents?: number | null
   carpoolBonusCents?: number | null
   carpoolIncentiveId?: string | null
@@ -110,6 +112,14 @@ export function tripEarnedCents(trip: {
   baseNetCents?: number | null
   carpoolBonusCents?: number | null
   carpoolIncentiveId?: string | null
+} | null | undefined): number
+
+export function tripPayoutCents(trip: {
+  fare_cents?: number
+  fareCents?: number
+  boost_cents?: number
+  boostCents?: number
+  metadata?: Record<string, unknown> | null
 } | null | undefined): number
 
 export type PaymentRow = {

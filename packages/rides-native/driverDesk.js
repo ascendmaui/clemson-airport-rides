@@ -6,6 +6,7 @@ import { offerVisibleToDriver, visibleOfferQuery, unchangedOfferQuery } from '..
 import { filterVisibleTrips, pairAllowedByRpc, visibleTripIdSet, WOMEN_ONLY_ACCEPT_ERROR } from './comfortPreference.js'
 import { isStaleLiveOffer } from '../../shared/staleLiveOffer.js'
 import { lockedOfferEconomics } from './offerLadder.js'
+import { compareBoostedFirst } from '../../shared/scheduledBoost.js'
 import { missingVehicleYearColumn } from '../../shared/vehicleYear.js'
 import { vehicleServesComfort } from '../../shared/rideOptions.js'
 import { headingOrNull, isLiveLocationStatus, speedOrNull } from './liveFix.js'
@@ -300,7 +301,7 @@ export async function loadDriverDesk(supabase, driverId) {
   const upcoming = cards(mineRows, gameDayLive).filter((card) => !isDueNow(card))
   return {
     offers,
-    scheduledOpen: cards(scheduledPool, gameDayLive, driverId),
+    scheduledOpen: cards(scheduledPool, gameDayLive, driverId).sort(compareBoostedFirst),
     upcoming: [...upcoming, ...cards(myBackupSeats, gameDayLive, driverId)],
     active,
     online: Boolean(statusRes.data?.online),
