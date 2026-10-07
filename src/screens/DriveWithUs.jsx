@@ -42,7 +42,7 @@ export function DriveWithUs() {
             <p>The application waits for review. New drivers are not auto-approved.</p>
           </article>
         </div>
-        <div className="mkt-section-head">
+        <div className="mkt-section-head mkt-drive-earnings">
           <p className="mkt-kicker">Earnings</p>
           <h2>Earn more on scheduled rides</h2>
         </div>

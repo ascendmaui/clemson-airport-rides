@@ -683,7 +683,7 @@ body .mkt-card .mkt-text:active {
   display: flex;
   align-items: center;
   min-height: 44px;
-  color: #F56600;
+  color: #FF8A3D;
   font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.14em;
@@ -697,8 +697,9 @@ body .mkt-card .mkt-text:active {
 }
 
 .mkt-how summary::after {
-  content: '▾';
+  content: '▸';
   margin-left: 8px;
+  color: #FF8A3D;
   font-size: 16px;
   letter-spacing: 0;
   text-transform: none;
@@ -1122,11 +1123,40 @@ body .mkt-footer-inner {
 
 body .mkt-info .mkt-nav,
 body .mkt-info .mkt-nav.mkt-nav--scrolled,
-body .mkt-info .mkt-menu-bar {
+body .mkt-info .mkt-menu-bar,
+body .mkt-home .mkt-nav.mkt-nav--scrolled,
+body .mkt-home .mkt-footer {
   background: rgba(8, 4, 14, 0.88);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
   box-shadow: none;
+}
+
+body .mkt-home .mkt-card,
+body .mkt-info .mkt-card {
+  background: rgba(12, 8, 20, 0.9);
+  border-color: rgba(255, 255, 255, 0.28);
+}
+
+body .mkt-feature .mkt-part .mkt-kicker {
+  color: #FF8A3D;
+}
+
+body .mkt-close .mkt-choice,
+body .mkt-section-end .mkt-choice,
+body .mkt-ghost {
+  background: rgba(15, 10, 25, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  color: #fff;
+}
+
+body .mkt-home .mkt-feature-section .mkt-section-head {
+  background: rgba(8, 4, 14, 0.86);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: 20px;
+  padding: 16px 18px;
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
 }
 
 body .mkt-menu button {
@@ -1147,7 +1177,8 @@ body .mkt-release {
 }
 
 body .mkt-info .mkt-section-head .mkt-kicker,
-body .mkt-info .mkt-card > .mkt-kicker {
+body .mkt-info .mkt-card > .mkt-kicker,
+body .mkt-home .mkt-feature > .mkt-kicker {
   display: inline-flex;
   align-items: center;
   width: fit-content;
@@ -1333,6 +1364,16 @@ body .mkt-qr-svg {
   .mkt-home .mkt-close .mkt-choice {
     width: auto;
     min-width: 220px;
+  }
+  .mkt-home .mkt-footer-inner {
+    width: min(1360px, calc(100% - 48px));
+  }
+  .mkt-home .mkt-footer .mkt-menu {
+    flex-wrap: wrap;
+    overflow: visible;
+  }
+  .mkt-drive-earnings {
+    margin-top: 56px;
   }
   .mkt-home-hero.mkt-hero-collage {
     width: min(560px, calc(100% - 64px));
