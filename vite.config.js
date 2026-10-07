@@ -9,6 +9,7 @@ import checkoutSessionHandler from './api/create-checkout-session.js'
 import expireHoldsHandler from './api/expire-unpaid-airport-holds.js'
 import riderLiveHandler from './api/rider-live.js'
 import tigerHeatHandler from './api/tiger-heat.js'
+import tripMessagesHandler from './api/trip-messages.js'
 
 const legacy = {
   '/api/help-chat': ['/api/admin-drivers?action=help-chat', adminHandler],
@@ -40,6 +41,7 @@ const direct = {
   '/api/expire-unpaid-airport-holds': expireHoldsHandler,
   '/api/rider-live': riderLiveHandler,
   '/api/tiger-heat': tigerHeatHandler,
+  '/api/trip-messages': tripMessagesHandler,
 }
 
 function readBody(req) {

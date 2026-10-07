@@ -32,6 +32,7 @@ import { CounterpartCard, RateTripPanel, partyColorsFromPalette } from 'rides-na
 import { loadCounterpart, type CounterpartView } from 'rides-native/partyProfile.js'
 import { useTheme } from '@/lib/theme'
 import type { Palette } from '@/lib/palette'
+import { TripThread } from 'rides-native/TripThread.jsx'
 
 type RiderFix = { latitude: number; longitude: number }
 
@@ -258,6 +259,7 @@ export default function TripScreen() {
             </View>
             {preferredRequestNote(trip) ? <Text style={styles.note}>{preferredRequestNote(trip)}</Text> : null}
             <FarePanel card={trip} />
+            {user ? <TripThread supabase={supabase} tripId={trip.id} userId={user.id} colors={colors} /> : null}
             <View style={styles.navRow}>
               {(navApp === 'google' ? ['google', 'apple'] as const : ['apple', 'google'] as const).map((provider) => (
                 <Pressable

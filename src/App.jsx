@@ -49,6 +49,7 @@ import { DriverOfferWatcher } from './components/DriverOfferWatcher'
 import { DriverBillingEntry } from './components/DriverBillingEntry'
 import { IncentivesAdmin } from './screens/IncentivesAdmin'
 import { LostFoundWatcher } from './components/LostFoundWatcher'
+import { TripMessageBanner } from './components/TripMessageBanner'
 import { RiderPickupStream } from './components/RiderPickupStream'
 import { LostFound } from './screens/LostFound'
 import { RidesHistory } from './screens/RidesHistory'
@@ -149,7 +150,7 @@ function Screen({ path, params }) {
     case 'driver':
       return (
         <RequireAuth>
-          <DriverHome />
+          <DriverHome openChatTripId={params.chat || ''} />
         </RequireAuth>
       )
     case 'earnings':
@@ -288,6 +289,7 @@ export default function App() {
           <WeeklyCouponNotice />
           <DriverOfferWatcher />
           <LostFoundWatcher />
+          <TripMessageBanner />
           <RiderPickupStream />
           <ToastStack />
           <div
