@@ -1,6 +1,8 @@
 import { useState } from 'react'
+import { messagingGuide } from '../../shared/copy/messaging.js'
 import { canOpenLostItemReport, tripPartyRole } from '../lib/tripChatRules'
 import { notifyLostItemReport, openLostItemReport } from '../lib/tripMessages'
+import { MessagingInfoButton } from './MessagingInfo'
 
 export function ReportLostItemButton({ trip, userId, onOpened }) {
   const role = tripPartyRole(trip, userId)
@@ -10,6 +12,7 @@ export function ReportLostItemButton({ trip, userId, onOpened }) {
   const [busy, setBusy] = useState(false)
   if (!trip?.id || !role || !canOpenLostItemReport(trip, Date.now(), role)) return null
   const label = role === 'driver' ? 'Report a lost item' : 'I lost an item'
+  const hint = messagingGuide(role).reportHint
 
   async function submit(event) {
     event.preventDefault()
@@ -30,22 +33,29 @@ export function ReportLostItemButton({ trip, userId, onOpened }) {
 
   if (!open) {
     return (
-      <button
-        type="button"
-        className="pressable"
-        data-testid="report-lost-item"
-        onClick={() => setOpen(true)}
-        style={{ fontWeight: 800, color: 'var(--orange)', minHeight: 44, textAlign: 'left' }}
-      >
-        {label}
-      </button>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <button
+            type="button"
+            className="pressable"
+            data-testid="report-lost-item"
+            onClick={() => setOpen(true)}
+            style={{ fontWeight: 800, color: 'var(--orange)', minHeight: 44, textAlign: 'left' }}
+          >
+            {label}
+          </button>
+          <MessagingInfoButton role={role} />
+        </div>
+        <p style={{ margin: 0, color: 'var(--ink-secondary)', fontSize: 13, lineHeight: 1.4 }}>{hint}</p>
+      </div>
     )
   }
 
   return (
     <form onSubmit={submit} data-testid="report-lost-item-form" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <p style={{ margin: 0, color: 'var(--ink-secondary)', fontSize: 13, lineHeight: 1.4 }}>{hint}</p>
       <label style={{ fontSize: 13, color: 'var(--ink-secondary)', fontWeight: 600 }}>
-        Optional note
+        Describe the item. A short note is enough.
         <input
           value={note}
           onChange={(event) => setNote(event.target.value)}

@@ -3,6 +3,18 @@ import { readFileSync } from 'node:fs'
 import test from 'node:test'
 import { displayFirstName } from '../src/lib/privacyDisplay.js'
 import {
+  MESSAGING_LOST_ITEM_DAYS,
+  MESSAGING_SUMMARY,
+  chatClosedLine,
+  chatEndedLine,
+  chatOpenLine,
+  inlineChatHelper,
+  lostItemExpiredLine,
+  lostItemOpenLine,
+  lostItemResolvedLine,
+  messagingGuide,
+} from '../shared/copy/messaging.js'
+import {
   LOST_ITEM_THREAD_WINDOW_MS,
   RIDE_CHAT_QUICK_REPLIES,
   canOpenLostItemReport,
@@ -83,8 +95,9 @@ test('ride chat mode follows active status and the 24 hour freeze', () => {
   assert.equal(messageLimitForMode('readonly'), 40)
   assert.equal(messageLimitForMode('closed'), 0)
   assert.equal(rideChatBanner('compose'), null)
-  assert.match(rideChatBanner('readonly'), /read-only/i)
-  assert.match(rideChatBanner('closed'), /closed/i)
+  assert.equal(rideChatBanner('readonly'), chatEndedLine())
+  assert.equal(rideChatBanner('closed'), chatClosedLine())
+  assert.equal(inlineChatHelper({ mode: 'compose' }), chatOpenLine())
 })
 
 test('normalizeMessageBody trims free text and rejects empty or oversized bodies', () => {
@@ -134,13 +147,13 @@ test('lost-item thread reopens messaging until the window ends or it is resolved
   assert.equal(canSendTripMessage(trip, now, open), true)
   assert.equal(canSendTripMessage(trip, now, edge), true)
   assert.equal(rideChatMode(trip, now, open), 'compose')
-  assert.match(rideChatBanner('compose', open, now), /7 days/)
+  assert.equal(rideChatBanner('compose', open, now), lostItemOpenLine(MESSAGING_LOST_ITEM_DAYS))
   assert.equal(canSendTripMessage(trip, now, expired), false)
   assert.equal(rideChatMode(trip, now, expired), 'readonly')
-  assert.match(rideChatBanner('readonly', expired, now), /read-only/i)
+  assert.equal(rideChatBanner('readonly', expired, now), lostItemExpiredLine(MESSAGING_LOST_ITEM_DAYS))
   assert.equal(canSendTripMessage(trip, now, resolved), false)
   assert.equal(rideChatMode(trip, now, resolved), 'readonly')
-  assert.match(rideChatBanner('readonly', resolved, now), /resolved/i)
+  assert.equal(rideChatBanner('readonly', resolved, now), lostItemResolvedLine())
   assert.equal(canSendTripMessage({ status: 'canceled', canceled_at: trip.completed_at }, now, open), false)
 
   assert.equal(canOpenLostItemReport(trip, now, 'driver'), true)
@@ -166,4 +179,27 @@ test('lost-item window constant matches the migration function', () => {
   assert.match(sql, /create or replace function public\.lost_item_thread_window\(\)/)
   assert.equal(sql.match(/interval '7 days'/g)?.length, 1)
   assert.match(sql, /lost_item_thread_window\(\)/)
+  assert.equal(MESSAGING_LOST_ITEM_DAYS * 24 * 60 * 60 * 1000, LOST_ITEM_THREAD_WINDOW_MS)
+})
+
+test('messaging guide uses short numbered steps for rider and driver', () => {
+  assert.equal(MESSAGING_SUMMARY.length, 4)
+  assert.match(MESSAGING_SUMMARY.join(' '), /after a driver accepts/)
+  assert.match(MESSAGING_SUMMARY.join(' '), /during the ride/)
+  assert.match(MESSAGING_SUMMARY.join(' '), /only exception is a lost item/)
+  const driver = messagingGuide('driver')
+  const rider = messagingGuide('rider')
+  assert.equal(driver.title, 'How messaging works')
+  assert.equal(driver.lostItemSteps.length, 5)
+  assert.equal(rider.lostItemSteps.length, 5)
+  assert.match(driver.lostItemSteps[0], /^Tap Report a lost item/)
+  assert.match(driver.lostItemSteps[2], /rider is notified/)
+  assert.match(driver.lostItemSteps[3], /arrange the return/)
+  assert.match(driver.lostItemSteps[4], /7 days/)
+  assert.match(rider.lostItemSteps[0], /notice/)
+  assert.match(rider.lostItemSteps[2], /arrange the return/)
+  assert.match(rider.reportHint, /left something in the car/)
+  assert.equal(inlineChatHelper({ mode: 'readonly', lost: 'resolved' }), lostItemResolvedLine())
+  assert.throws(() => messagingGuide('guest'), /Unexpected messaging role/)
+  assert.throws(() => inlineChatHelper({ mode: 'later' }), /Unexpected ride chat mode/)
 })

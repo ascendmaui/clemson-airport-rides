@@ -25,6 +25,7 @@ function LostItemHost() {
         supabase={supabase}
         userId={user.id}
         colors={colors}
+        role="driver"
         onOpen={(tripId: string) => router.push({ pathname: '/trip', params: { id: tripId } })}
       />
     </View>

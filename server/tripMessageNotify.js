@@ -4,6 +4,7 @@
  */
 import { sendExpoPush } from './expoPush.js'
 import { sendApplicantNotice } from './applicantMail.js'
+import { lostItemNoticeBody } from '../shared/copy/messaging.js'
 import { LOST_ITEM_THREAD_WINDOW_MS } from '../src/lib/tripChatRules.js'
 
 const WINDOW_DAYS = LOST_ITEM_THREAD_WINDOW_MS / (24 * 60 * 60 * 1000)
@@ -30,11 +31,9 @@ export function messageNoticeCopy(body) {
 
 export function lostItemNoticeCopy(description, reporterRole) {
   const item = clean(description, 80)
-  const detail = item ? ` (${item})` : ''
-  const who = reporterRole === 'rider' ? 'Your rider' : 'Your driver'
   return {
     title: 'Lost item on your ride',
-    body: `${who} reported a lost item${detail}. Open the trip to arrange the return. This thread stays open for ${WINDOW_DAYS} days.`,
+    body: lostItemNoticeBody({ description: item, reporterRole, days: WINDOW_DAYS }),
     email: true,
     subject: 'A lost item was reported on your Clemson RIDES trip',
   }

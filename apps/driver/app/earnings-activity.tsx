@@ -7,6 +7,7 @@ import { useAuth } from '@/lib/auth'
 import { shownCents } from '@/lib/shown'
 import { supabase } from '@/lib/supabase'
 import { useTheme } from '@/lib/theme'
+import { messagingGuide } from '../../../shared/copy/messaging.js'
 import { loadEarnings } from 'rides-native/driverDesk'
 import { carpoolPayFromTrip, tripEarnedCents } from 'rides-native/tripTags'
 
@@ -140,6 +141,9 @@ export default function EarningsActivity() {
                     hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                   >
                     <Text style={{ color: colors.orange, fontWeight: '800' }}>Report a lost item</Text>
+                    <Text style={{ color: colors.inkSecondary, fontSize: 13, lineHeight: 18, marginTop: 4 }}>
+                      {messagingGuide('driver').reportHint}
+                    </Text>
                   </Pressable>
                 ) : null}
               </Card>

@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
+import { lostItemBannerFollowUp, lostItemBannerLine } from '../../shared/copy/messaging.js'
+import { MessagingInfoButton } from './MessagingInfo.jsx'
 import { lostItemReportState, subscribeLostItemReports } from './tripMessagesClient.js'
 
 const COLS = 'id, trip_id, reporter_id, description, status, opened_at'
@@ -16,7 +18,7 @@ async function loadOpenReport(supabase, userId) {
   return rows.find((row) => row.reporter_id !== userId && lostItemReportState(row) === 'open') || null
 }
 
-export function LostItemBanner({ supabase, userId, colors, onOpen }) {
+export function LostItemBanner({ supabase, userId, colors, onOpen, role = 'rider' }) {
   const [report, setReport] = useState(null)
   const refresh = useCallback(async () => {
     if (!supabase || !userId) {
@@ -38,7 +40,6 @@ export function LostItemBanner({ supabase, userId, colors, onOpen }) {
 
   if (!report) return null
   const tone = colors || {}
-  const detail = report.description ? ` · ${report.description}` : ''
   return (
     <View style={{
       marginHorizontal: 16,
@@ -48,18 +49,26 @@ export function LostItemBanner({ supabase, userId, colors, onOpen }) {
       backgroundColor: tone.orangeSoft || 'rgba(245,102,0,0.16)',
       gap: 6,
     }}>
-      <Text style={{ color: tone.orange || '#F56600', fontWeight: '800', letterSpacing: 0.6, fontSize: 12 }}>LOST ITEM</Text>
-      <Text style={{ color: tone.ink || '#F5F6F8', fontWeight: '700', fontSize: 15 }}>
-        A lost item was reported on your ride{detail}.
-      </Text>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="Open lost item messages"
-        onPress={() => onOpen?.(report.trip_id)}
-        style={{ minHeight: 44, justifyContent: 'center' }}
-      >
-        <Text style={{ color: tone.link || '#522D80', fontWeight: '800' }}>Open messages</Text>
-      </Pressable>
+      <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 8 }}>
+        <View style={{ flex: 1, gap: 6 }}>
+          <Text style={{ color: tone.orange || '#F56600', fontWeight: '800', letterSpacing: 0.6, fontSize: 12 }}>LOST ITEM</Text>
+          <Text style={{ color: tone.ink || '#F5F6F8', fontWeight: '700', fontSize: 15 }}>
+            {lostItemBannerLine(report.description)}
+          </Text>
+          <Text style={{ color: tone.inkSecondary || tone.ink || '#F5F6F8', fontSize: 13, lineHeight: 18 }}>
+            {lostItemBannerFollowUp()}
+          </Text>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Open lost item messages"
+            onPress={() => onOpen?.(report.trip_id)}
+            style={{ minHeight: 44, justifyContent: 'center' }}
+          >
+            <Text style={{ color: tone.link || '#522D80', fontWeight: '800' }}>Open messages</Text>
+          </Pressable>
+        </View>
+        <MessagingInfoButton role={role === 'driver' ? 'driver' : 'rider'} colors={tone} />
+      </View>
     </View>
   )
 }

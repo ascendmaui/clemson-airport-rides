@@ -17,6 +17,8 @@ import {
   subscribeTripMessages,
   unreadCountForTrip,
 } from '../lib/tripMessages'
+import { chatOpenLine } from '../../shared/copy/messaging.js'
+import { MessagingInfoButton } from './MessagingInfo'
 import {
   RIDE_CHAT_QUICK_REPLIES,
   lostItemReportState,
@@ -177,10 +179,13 @@ export function RideChat({ tripId, userId, initialTrip = null, onClose }) {
   reportRef.current = report
 
   const mode = rideChatMode(trip, Date.now(), report)
-  const banner = loading && !trip ? null : rideChatBanner(mode, report)
+  const banner = loading && !trip
+    ? null
+    : (rideChatBanner(mode, report) ?? (mode === 'compose' ? chatOpenLine() : null))
   const party = Boolean(
     userId && trip && (userId === trip.rider_id || userId === trip.driver_id),
   )
+  const infoRole = userId && trip?.driver_id === userId ? 'driver' : 'rider'
   const counterpartFallback = userId && trip?.rider_id === userId ? 'Driver' : 'Rider'
 
   const refreshTrip = useCallback(async () => {
@@ -397,6 +402,9 @@ export function RideChat({ tripId, userId, initialTrip = null, onClose }) {
           <h1 style={{ fontSize: 20, fontWeight: 800, letterSpacing: -0.3, color: tone.title }}>
             {displayFirstName(shownName, counterpartFallback)}
           </h1>
+        </div>
+        <div style={{ marginLeft: 'auto' }}>
+          <MessagingInfoButton role={infoRole} />
         </div>
       </header>
 

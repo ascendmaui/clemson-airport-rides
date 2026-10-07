@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Pressable, Text, TextInput, View } from 'react-native'
+import { chatEndedLine, chatOpenLine, messagingGuide } from '../../shared/copy/messaging.js'
+import { MessagingInfoButton } from './MessagingInfo.jsx'
 import {
   canOpenLostItemReport,
   fetchLostItemReport,
@@ -113,7 +115,10 @@ export function TripThread({
   const canReport = Boolean(role) && canOpenLostItemReport(trip, Date.now(), role) && lost !== 'open'
   if (!tripId || !trip) return null
   if (mode === 'closed' && !canReport) return null
-  const banner = mode === 'closed' && canReport ? null : rideChatBanner(mode, report)
+  const banner = mode === 'closed' && canReport
+    ? chatEndedLine()
+    : (rideChatBanner(mode, report) ?? (mode === 'compose' ? chatOpenLine() : null))
+  const guide = messagingGuide(role === 'driver' ? 'driver' : 'rider')
   const title = mode === 'readonly' ? 'Ride messages' : 'Message'
 
   async function send(body, quick = false) {
@@ -167,25 +172,29 @@ export function TripThread({
 
   return (
     <View style={{ backgroundColor: tone.card, borderRadius: 20, padding: 16, gap: 8 }}>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={open ? 'Hide ride messages' : title}
-        accessibilityState={{ expanded: open }}
-        onPress={() => setOpen((value) => !value)}
-      >
-        <Text style={{ color: tone.orange, fontWeight: '800', letterSpacing: 1.1, fontSize: 11 }}>RIDE CHAT</Text>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-          <Text style={{ color: tone.title, fontSize: 18, fontWeight: '800' }}>{title}</Text>
-          {unread > 0 ? (
-            <View style={{ minWidth: 22, height: 22, borderRadius: 11, backgroundColor: tone.orange, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 6 }}>
-              <Text style={{ color: tone.onAccent, fontSize: 12, fontWeight: '800' }}>{unread > 9 ? '9+' : String(unread)}</Text>
-            </View>
-          ) : null}
-        </View>
-        <Text style={{ color: tone.inkSecondary, fontSize: 13, lineHeight: 18 }}>
-          {open ? 'Hide the thread' : 'Same trip thread as the website.'}
-        </Text>
-      </Pressable>
+      <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 8 }}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={open ? 'Hide ride messages' : title}
+          accessibilityState={{ expanded: open }}
+          onPress={() => setOpen((value) => !value)}
+          style={{ flex: 1 }}
+        >
+          <Text style={{ color: tone.orange, fontWeight: '800', letterSpacing: 1.1, fontSize: 11 }}>RIDE CHAT</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <Text style={{ color: tone.title, fontSize: 18, fontWeight: '800' }}>{title}</Text>
+            {unread > 0 ? (
+              <View style={{ minWidth: 22, height: 22, borderRadius: 11, backgroundColor: tone.orange, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 6 }}>
+                <Text style={{ color: tone.onAccent, fontSize: 12, fontWeight: '800' }}>{unread > 9 ? '9+' : String(unread)}</Text>
+              </View>
+            ) : null}
+          </View>
+          <Text style={{ color: tone.inkSecondary, fontSize: 13, lineHeight: 18 }}>
+            {open ? 'Hide messages' : 'Tap to open messages'}
+          </Text>
+        </Pressable>
+        <MessagingInfoButton role={role === 'driver' ? 'driver' : 'rider'} colors={tone} />
+      </View>
       {open ? (
         <View style={{ gap: 8 }}>
           {banner ? <Text style={{ color: tone.inkSecondary, fontSize: 13, lineHeight: 18 }}>{banner}</Text> : null}
@@ -222,10 +231,11 @@ export function TripThread({
             <View style={{ gap: 8 }}>
               {reporting ? (
                 <>
+                  <Text style={{ color: tone.inkSecondary, fontSize: 13, lineHeight: 18 }}>{guide.reportHint}</Text>
                   <TextInput
                     value={note}
                     onChangeText={setNote}
-                    placeholder="Optional, like black backpack"
+                    placeholder="Short note, like black backpack"
                     placeholderTextColor={tone.placeholder}
                     maxLength={80}
                     style={{
@@ -261,6 +271,7 @@ export function TripThread({
                     {role === 'driver' ? 'Report a lost item' : 'I lost an item'}
                   </Text>
                 </Pressable>
+                <Text style={{ color: tone.inkSecondary, fontSize: 13, lineHeight: 18 }}>{guide.reportHint}</Text>
               )}
             </View>
           ) : null}

@@ -1,3 +1,5 @@
+import { chatLockLine } from '../../shared/copy/messaging.js'
+
 /**
  * PARTIAL quick replies — exact caller phrases only.
  * Do not add, reword, translate, or remove items until the complete list arrives.
@@ -178,25 +180,5 @@ export function messageLimitForMode(mode) {
  */
 export function rideChatBanner(mode, report = null, now = Date.now()) {
   const lost = lostItemReportState(report, now)
-  if (mode === 'compose' && lost === 'open') {
-    return `Lost item thread. You can message for ${LOST_ITEM_THREAD_WINDOW_DAYS} days, or until either of you marks it resolved.`
-  }
-  if (mode === 'readonly' && lost === 'resolved') {
-    return 'This lost-item thread is resolved. Messages are read-only.'
-  }
-  if (mode === 'readonly' && lost === 'expired') {
-    return 'This lost-item thread has closed. Messages are read-only.'
-  }
-  switch (mode) {
-    case 'compose':
-      return null
-    case 'readonly':
-      return 'This ride has ended. Recent messages are read-only for 24 hours.'
-    case 'closed':
-      return 'This ride chat is closed.'
-    default: {
-      const unexpected = mode
-      throw new Error(`Unexpected ride chat mode: ${unexpected}`)
-    }
-  }
+  return chatLockLine(mode, lost === 'none' ? null : lost, LOST_ITEM_THREAD_WINDOW_DAYS)
 }
