@@ -1913,3 +1913,24 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
 - **Files touched:** `server/endpoints/expireUnpaidAirportHolds.js`, `tests/gaAuditExpireHoldsSanitization.test.js`, `package.json`, `docs/FIXES.md`
 - **Verified:** `npm test` passing with 0 failures.
 
+## 2026-10-07 — [agy] GA97: Stripe webhook retryable 500 classification and dependency injection across tips, credits, and deposits
+
+- **Date:** 2026-10-07
+- **Track / machine:** Clemson RIDES · MacBook Max (agy) · GA97
+- **What was wrong:** `api/stripe-webhook.js` always acknowledged `200 { received: true }` when deposit recording (`applyPaidCheckoutSession`), credit purchases (`grantCreditPack`), tip recording (`recordTip`), or Tiger Pass subscriptions failed due to transient database connection drops or deadlocks. Acknowledging 200 causes Stripe to mark the webhook delivered and drop automatic retry backoffs, leaving riders charged without database payment records or trip status updates. In addition, `recordTip` and `recordCreditPurchase` did not support dependency injection (`deps.recordTip`, `deps.recordCreditPurchase`), and `tests/retiredCopy.test.js` did not skip gitignored build output directories (`dist`, `.expo`, `.vercel`, `build`).
+- **What changed:**
+  - Classified database write failures across `payment_intent.succeeded` tips, `credit_purchase`, `checkout.session.completed`, `async_payment_succeeded`, and Tiger Pass subscription lifecycle events as retryable HTTP 500 errors so Stripe automatically retries event delivery.
+  - Added dependency injection support for `deps.recordTip` and `deps.recordCreditPurchase`.
+  - Added error checks on `payments` query in `recordTip`.
+  - Preserved metadata missing checks returning `200` without creating service clients.
+  - Updated `tests/retiredCopy.test.js` directory walker to exclude `dist`, `.expo`, `.vercel`, and `build` artifacts.
+  - Created dedicated unit test suite in `tests/gaAuditWebhookRetryable.test.js` (7/7 passing) and registered it in `package.json` test runner.
+- **Files touched:**
+  - `api/stripe-webhook.js`
+  - `tests/gaAuditWebhookRetryable.test.js`
+  - `tests/retiredCopy.test.js`
+  - `package.json`
+  - `docs/FIXES.md`
+- **Verified:** `node --test tests/gaAuditWebhookRetryable.test.js api/stripeWebhookValidation.test.js tests/retiredCopy.test.js` (94/94 passing); `npm test` passing with 0 failures.
+
+
