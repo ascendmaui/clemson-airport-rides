@@ -2,6 +2,9 @@
  * Homepage feature copy. Live items match staging code.
  * status "soon" is for branches that are not merged into staging/tf24-integration.
  */
+import { BOOST_SCHEDULE_NOTE, boostHowItWorks } from '../../shared/copy/boost.js'
+
+const boostGuide = boostHowItWorks()
 
 export const BUILT_IN_SECTION = {
   kicker: 'Peace of mind',
@@ -47,12 +50,12 @@ export const BUILT_IN = [
   },
   {
     id: 'boosts',
-    status: 'soon',
+    status: 'live',
     imageId: null,
     title: 'Boosts',
-    what: 'An extra amount a rider can add up front on a scheduled ride.',
-    how: 'Not on staging yet.',
-    why: 'Scheduled rides on staging do not include this boost.',
+    what: boostGuide.intro,
+    how: `${boostGuide.steps.join(' ')} ${BOOST_SCHEDULE_NOTE}`,
+    why: 'A scheduled ride can include extra money so a driver wants to take it.',
   },
   {
     id: 'messaging',
