@@ -162,6 +162,27 @@ test('consolidated handlers reject unknown actions and wrong methods', async () 
     body: {},
   })
   assert.notEqual(reconcile.status, 400)
+
+  const scheduledRider = await call(stripePaymentHandler, {
+    method: 'POST',
+    url: '/api/stripe-payment-methods?action=scheduled-rider',
+    body: {},
+  })
+  assert.notEqual(scheduledRider.status, 400)
+
+  const bumpBoost = await call(stripePaymentHandler, {
+    method: 'POST',
+    url: '/api/stripe-payment-methods?action=bump-scheduled-boost',
+    body: {},
+  })
+  assert.notEqual(bumpBoost.status, 400)
+
+  const releaseBoost = await call(stripePaymentHandler, {
+    method: 'POST',
+    url: '/api/stripe-payment-methods?action=release-scheduled-boost',
+    body: {},
+  })
+  assert.notEqual(releaseBoost.status, 400)
 })
 
 test('saved payment methods list and select are their own routes', async () => {
@@ -204,9 +225,20 @@ test('held routes fold into existing routers and ignore body sub-actions', () =>
   assert.equal(resolveRouteAction({ url: '/api/driver-earnings' }, driver), 'earnings')
 
   const pay = {
-    allowed: ['setup-intent', 'save', 'quote', 'airport-checkout', 'schedule-trip', 'buy-credits', 'credits-confirm', 'credit-lots', 'credits', 'collect', 'settle', 'reconcile-checkout'],
+    allowed: [
+      'setup-intent', 'save', 'quote', 'airport-checkout', 'schedule-trip', 'request-driver',
+      'buy-credits', 'credits-confirm', 'abandon-checkout', 'credit-lots', 'credits', 'collect',
+      'settle', 'reconcile-checkout', 'clemson-miami', 'billing', 'ride-options', 'schedule-slots',
+      'match-notice', 'tiger-pass', 'favorite-drivers', 'scheduled-rider', 'bump-scheduled-boost',
+      'release-scheduled-boost',
+    ],
     legacy: {
+      'stripe-setup-intent': 'setup-intent',
+      'stripe-save-payment-method': 'save',
       'quote-fare': 'quote',
+      'airport-checkout': 'airport-checkout',
+      'buy-credits': 'buy-credits',
+      'credits-confirm': 'credits-confirm',
       'collect-payment': 'collect',
       'trip-settle': 'settle',
     },
@@ -214,6 +246,26 @@ test('held routes fold into existing routers and ignore body sub-actions', () =>
   assert.equal(
     resolveRouteAction({ url: '/api/stripe-payment-methods?action=reconcile-checkout' }, pay),
     'reconcile-checkout',
+  )
+  assert.equal(
+    resolveRouteAction({ url: '/api/stripe-payment-methods?action=scheduled-rider' }, pay),
+    'scheduled-rider',
+  )
+  assert.equal(
+    resolveRouteAction({ url: '/api/stripe-payment-methods?action=bump-scheduled-boost' }, pay),
+    'bump-scheduled-boost',
+  )
+  assert.equal(
+    resolveRouteAction({ url: '/api/stripe-payment-methods?action=release-scheduled-boost' }, pay),
+    'release-scheduled-boost',
+  )
+  assert.equal(
+    resolveRouteAction({ url: '/api/stripe-payment-methods?action=schedule-slots' }, pay),
+    'schedule-slots',
+  )
+  assert.equal(
+    resolveRouteAction({ url: '/api/stripe-save-payment-method' }, pay),
+    'save',
   )
   assert.equal(
     resolveRouteAction({ url: '/api/stripe-payment-methods?action=credits', body: { action: 'buy', tierId: 'pack' } }, pay),
