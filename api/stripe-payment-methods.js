@@ -80,9 +80,9 @@ export default async function handler(req, res, ...rest) {
   if (!action) {
     const body = peekJsonBody(req)
     const sub = typeof body?.action === 'string' ? body.action : ''
-    if (req.method === 'GET') return handleListSavedPaymentMethods(req, res)
+    if (req.method === 'GET') return handleListSavedPaymentMethods(req, res, ...rest)
     if (req.method === 'POST' && (sub === 'default' || sub === 'detach')) {
-      return handleUpdateSavedPaymentMethod(req, res)
+      return handleUpdateSavedPaymentMethod(req, res, ...rest)
     }
   }
   const handle = HANDLERS[action]

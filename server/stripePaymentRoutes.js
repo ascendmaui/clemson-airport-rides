@@ -59,23 +59,24 @@ async function loadProfile(sb, userId) {
   throw new Error(rich.error.message)
 }
 
-export async function handleStripeSetupIntent(req, res) {
+export async function handleStripeSetupIntent(req, res, deps = {}) {
   if (cors(req, res)) return
   if (req.method !== 'POST') return json(res, 405, { error: 'Method not allowed' })
-  if (!stripeOk()) {
+  const stripeAvailable = deps.stripeOk !== undefined ? deps.stripeOk() : stripeOk()
+  if (!stripeAvailable) {
     return json(res, 503, {
       error: 'Payments unavailable',
       message: 'STRIPE_SECRET_KEY is not configured.',
     })
   }
 
-  const sb = admin()
+  const sb = deps.sb !== undefined ? deps.sb : admin()
   if (!sb) return json(res, 503, { error: 'SUPABASE_SERVICE_ROLE_KEY not configured' })
 
-  const user = await userFromAuth(req)
+  const user = deps.user !== undefined ? deps.user : await (deps.userFromAuth || userFromAuth)(req)
   if (!user) return json(res, 401, { error: 'Sign in required' })
 
-  const stripe = stripeClient()
+  const stripe = deps.stripe || stripeClient()
   const { body } = parseBody(req)
 
   try {
@@ -180,15 +181,16 @@ export async function handleStripeSetupIntent(req, res) {
   }
 }
 
-export async function handleStripeSavePaymentMethod(req, res) {
+export async function handleStripeSavePaymentMethod(req, res, deps = {}) {
   if (cors(req, res)) return
   if (req.method !== 'POST') return json(res, 405, { error: 'Method not allowed' })
-  if (!stripeOk()) return json(res, 503, { error: 'Payments unavailable' })
+  const stripeAvailable = deps.stripeOk !== undefined ? deps.stripeOk() : stripeOk()
+  if (!stripeAvailable) return json(res, 503, { error: 'Payments unavailable' })
 
-  const sb = admin()
+  const sb = deps.sb !== undefined ? deps.sb : admin()
   if (!sb) return json(res, 503, { error: 'SUPABASE_SERVICE_ROLE_KEY not configured' })
 
-  const user = await userFromAuth(req)
+  const user = deps.user !== undefined ? deps.user : await (deps.userFromAuth || userFromAuth)(req)
   if (!user) return json(res, 401, { error: 'Sign in required' })
 
   const { body, error: pe } = parseBody(req)
@@ -199,7 +201,7 @@ export async function handleStripeSavePaymentMethod(req, res) {
   const checkoutSessionId = body.checkoutSessionId || body.checkout_session_id
   let sessionCustomer = null
 
-  const stripe = stripeClient()
+  const stripe = deps.stripe || stripeClient()
 
   try {
     if (!paymentMethodId && !setupIntentId && checkoutSessionId) {
@@ -324,22 +326,24 @@ async function paymentMethodOnCustomer(stripe, customerId, paymentMethodId) {
   return pm
 }
 
-export async function handleListSavedPaymentMethods(req, res) {
+export async function handleListSavedPaymentMethods(req, res, deps = {}) {
   if (cors(req, res)) return
   if (req.method !== 'GET') return json(res, 405, { error: 'Method not allowed' })
-  if (!stripeOk()) {
+  const stripeAvailable = deps.stripeOk !== undefined ? deps.stripeOk() : stripeOk()
+  if (!stripeAvailable) {
     return json(res, 503, { error: 'Payments unavailable', message: 'STRIPE_SECRET_KEY is not configured.' })
   }
-  const sb = admin()
+  const sb = deps.sb !== undefined ? deps.sb : admin()
   if (!sb) return json(res, 503, { error: 'SUPABASE_SERVICE_ROLE_KEY not configured' })
-  const user = await userFromAuth(req)
+  const user = deps.user !== undefined ? deps.user : await (deps.userFromAuth || userFromAuth)(req)
   if (!user) return json(res, 401, { error: 'Sign in required' })
+  const stripe = deps.stripe || stripeClient()
   try {
     const { profile } = await loadProfile(sb, user.id)
     const customerId = profile?.stripe_customer_id || null
     const defaultPmId = profile?.stripe_default_pm_id || null
     if (!customerId) return json(res, 200, { methods: [], defaultPmId: null })
-    const methods = await listCustomerPaymentMethods(stripeClient(), customerId)
+    const methods = await listCustomerPaymentMethods(stripe, customerId)
     return json(res, 200, { methods, defaultPmId })
   } catch (e) {
     console.error('[stripe-payment-methods]', e)
@@ -347,13 +351,14 @@ export async function handleListSavedPaymentMethods(req, res) {
   }
 }
 
-export async function handleUpdateSavedPaymentMethod(req, res) {
+export async function handleUpdateSavedPaymentMethod(req, res, deps = {}) {
   if (cors(req, res)) return
   if (req.method !== 'POST') return json(res, 405, { error: 'Method not allowed' })
-  if (!stripeOk()) return json(res, 503, { error: 'Payments unavailable' })
-  const sb = admin()
+  const stripeAvailable = deps.stripeOk !== undefined ? deps.stripeOk() : stripeOk()
+  if (!stripeAvailable) return json(res, 503, { error: 'Payments unavailable' })
+  const sb = deps.sb !== undefined ? deps.sb : admin()
   if (!sb) return json(res, 503, { error: 'SUPABASE_SERVICE_ROLE_KEY not configured' })
-  const user = await userFromAuth(req)
+  const user = deps.user !== undefined ? deps.user : await (deps.userFromAuth || userFromAuth)(req)
   if (!user) return json(res, 401, { error: 'Sign in required' })
   const { body, error: pe } = parseBody(req)
   if (pe) return json(res, 400, { error: pe })
@@ -366,7 +371,7 @@ export async function handleUpdateSavedPaymentMethod(req, res) {
     return json(res, 400, { error: 'paymentMethodId required' })
   }
 
-  const stripe = stripeClient()
+  const stripe = deps.stripe || stripeClient()
   try {
     const { profile } = await loadProfile(sb, user.id)
     const customerId = profile?.stripe_customer_id || null
