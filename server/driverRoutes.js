@@ -20,14 +20,14 @@ import {
   writeVehicleWithYearFallback,
 } from '../shared/vehicleYear.js'
 
-export async function handleDriverSignup(req, res) {
+export async function handleDriverSignup(req, res, deps = {}) {
   if (cors(req, res)) return
   if (req.method !== 'POST') return json(res, 405, { error: 'Method not allowed' })
 
-  const sb = admin()
+  const sb = deps.sb !== undefined ? deps.sb : admin()
   if (!sb) return json(res, 503, { error: 'SUPABASE_SERVICE_ROLE_KEY not configured' })
 
-  const user = await userFromAuth(req)
+  const user = deps.user !== undefined ? deps.user : await (deps.userFromAuth || userFromAuth)(req)
   if (!user) return json(res, 401, { error: 'Sign in required' })
 
   const { body, error: pe } = parseBody(req)
@@ -184,14 +184,14 @@ export async function handleDriverSignup(req, res) {
   }
 }
 
-export async function handleDriverSubmitReview(req, res) {
+export async function handleDriverSubmitReview(req, res, deps = {}) {
   if (cors(req, res)) return
   if (req.method !== 'POST') return json(res, 405, { error: 'Method not allowed' })
 
-  const sb = admin()
+  const sb = deps.sb !== undefined ? deps.sb : admin()
   if (!sb) return json(res, 503, { error: 'SUPABASE_SERVICE_ROLE_KEY not configured' })
 
-  const user = await userFromAuth(req)
+  const user = deps.user !== undefined ? deps.user : await (deps.userFromAuth || userFromAuth)(req)
   if (!user) return json(res, 401, { error: 'Sign in required' })
 
   const { data: app, error: appErr } = await sb
@@ -205,7 +205,8 @@ export async function handleDriverSubmitReview(req, res) {
     return json(res, 200, { ok: true, onboarding_status: 'approved', message: 'Already approved.' })
   }
 
-  const compliance = await loadSubmissionContext(sb, user.id)
+  const loadSubmission = deps.loadSubmissionContext || loadSubmissionContext
+  const compliance = await loadSubmission(sb, user.id)
   if (compliance.error) return json(res, 500, { error: compliance.error })
   if (compliance.blockers.length) {
     return json(res, 400, {
@@ -232,7 +233,8 @@ export async function handleDriverSubmitReview(req, res) {
     .eq('id', user.id)
     .maybeSingle()
 
-  const attached = await attachUnsignedPacket(sb, user.id)
+  const attachPacket = deps.attachUnsignedPacket || attachUnsignedPacket
+  const attached = await attachPacket(sb, user.id)
   if (attached.error) return json(res, 500, { error: attached.error })
 
   const now = new Date().toISOString()
@@ -240,7 +242,8 @@ export async function handleDriverSubmitReview(req, res) {
     { applicant_email: app.applicant_email },
     { email: profile?.email || user.email },
   )
-  const notice = await notifyAdminOfApplication({
+  const notifyAdmin = deps.notifyAdminOfApplication || notifyAdminOfApplication
+  const notice = await notifyAdmin({
     profile: profile || { email: user.email, full_name: user.user_metadata?.full_name },
     vehicle,
   })
