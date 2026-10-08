@@ -2816,6 +2816,89 @@ test('carpool API bounds: action routing, program first-ride vs ambassador, attr
   assert.equal(firstRide.json.code_type, 'first_ride')
   assert.equal(firstRide.json.completedTrips, 0)
   assert.equal(firstRide.json.alreadyUsed, false)
+
+  // 6. Action match bounds: method (non-POST 405), auth (401), missing service role (503), missing lat/lng (400), valid match (200)
+  const getMatch = await call(carpoolHandler, { method: 'GET', url: '/api/carpool?action=match' }, { sb, user: { id: riderId } })
+  assert.equal(getMatch.status, 405)
+
+  const unauthMatch = await call(carpoolHandler, { method: 'POST', url: '/api/carpool?action=match', body: {} }, { sb, user: null })
+  assert.equal(unauthMatch.status, 401)
+
+  const noSbMatch = await call(carpoolHandler, { method: 'POST', url: '/api/carpool?action=match', body: {} }, { sb: null, user: { id: riderId } })
+  assert.equal(noSbMatch.status, 503)
+
+  const badCoordsMatch = await call(carpoolHandler, {
+    method: 'POST',
+    url: '/api/carpool?action=match',
+    body: { pickup: { label: 'Campus' }, dropoff: { label: 'Downtown' } },
+  }, { sb, user: { id: riderId } })
+  assert.equal(badCoordsMatch.status, 400)
+  assert.match(badCoordsMatch.json.error, /pickup and dropoff with lat\/lng are required/i)
+
+  const validMatch = await call(carpoolHandler, {
+    method: 'POST',
+    url: '/api/carpool?action=match',
+    body: {
+      pickup: { lat: 34.678, lng: -82.839, label: 'Douthit Hills' },
+      dropoff: { lat: 34.683, lng: -82.837, label: 'Bowman Field' },
+      displayName: 'Jane R',
+      ambassadorCode: 'sam10',
+    },
+  }, { sb, user: { id: riderId } })
+  assert.equal(validMatch.status, 200)
+  assert.equal(validMatch.json.ok, true)
+  assert.ok(validMatch.json.pitch)
+  assert.ok(validMatch.json.nowQuote)
+
+  // 7. Action group bounds: method (405), missing lat/lng (400), unapproved driver (403), rider marketplace (200)
+  const getGroup = await call(carpoolHandler, { method: 'GET', url: '/api/carpool?action=group' }, { sb, user: { id: riderId } })
+  assert.equal(getGroup.status, 405)
+
+  const badCoordsGroup = await call(carpoolHandler, {
+    method: 'POST',
+    url: '/api/carpool?action=group',
+    body: { pickup: { lat: 34.678 }, dropoff: { lng: -82.837 } },
+  }, { sb, user: { id: riderId } })
+  assert.equal(badCoordsGroup.status, 400)
+  assert.match(badCoordsGroup.json.error, /pickup and dropoff with lat\/lng are required/i)
+
+  const unapprovedDrivingGroup = await call(carpoolHandler, {
+    method: 'POST',
+    url: '/api/carpool?action=group',
+    body: {
+      pickup: { lat: 34.678, lng: -82.839, label: 'Clemson' },
+      dropoff: { lat: 34.852, lng: -82.394, label: 'Greenville' },
+      driving: true,
+    },
+  }, { sb, user: { id: riderId } })
+  assert.equal(unapprovedDrivingGroup.status, 403)
+  assert.equal(unapprovedDrivingGroup.json.code, 'driver_not_approved')
+
+  const validMarketplaceGroup = await call(carpoolHandler, {
+    method: 'POST',
+    url: '/api/carpool?action=group',
+    body: {
+      pickup: { lat: 34.678, lng: -82.839, label: 'Clemson' },
+      dropoff: { lat: 34.852, lng: -82.394, label: 'Greenville' },
+      driving: false,
+      ambassadorCode: 'sam10',
+    },
+  }, { sb, user: { id: riderId } })
+  assert.equal(validMarketplaceGroup.status, 200)
+  assert.ok(validMarketplaceGroup.json.rideId)
+  assert.ok(validMarketplaceGroup.json.token)
+  assert.match(validMarketplaceGroup.json.urlPath, /^\/carpool\//)
+  assert.equal(validMarketplaceGroup.json.matchMode, 'marketplace')
+
+  // 8. Program ambassador action returns referral link and stats
+  const ambProgram = await call(carpoolHandler, {
+    method: 'POST',
+    url: '/api/carpool?action=program',
+    body: { action: 'ambassador' },
+  }, { sb, user: { id: ambassadorId } })
+  assert.equal(ambProgram.status, 200)
+  assert.equal(ambProgram.json.code, 'sam10')
+  assert.match(ambProgram.json.link, /\/a\/sam10/)
 })
 
 test('riderSwitch bounds: method, auth, trip presence, tenant isolation, invalid action, and preview quote', async () => {
