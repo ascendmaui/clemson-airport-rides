@@ -14,6 +14,7 @@ import handleScheduleSlots from '../server/endpoints/scheduleSlots.js'
 import handleQuoteFare from '../server/endpoints/quoteFare.js'
 import handleAirportCheckout from '../server/endpoints/airportCheckout.js'
 import handleScheduledDispatchTick from '../server/endpoints/scheduledDispatchTick.js'
+import apiScheduledDispatchTickHandler from '../api/scheduled-dispatch-tick.js'
 import handleBumpScheduledBoost from '../server/endpoints/bumpScheduledBoost.js'
 import handleReleaseScheduledBoost from '../server/endpoints/releaseScheduledBoost.js'
 import handleDriverEarnings from '../server/endpoints/driverEarnings.js'
@@ -164,6 +165,10 @@ function createFakeSb(initialData = {}) {
           filters.push({ col, op: 'in', val: vals })
           return chain
         },
+        not(col, op, val) {
+          filters.push({ col, op: 'not', subOp: op, val })
+          return chain
+        },
         or(expr) {
           filters.push({ col: '__or__', op: 'or', val: expr })
           return chain
@@ -194,6 +199,12 @@ function createFakeSb(initialData = {}) {
               if (f.op === 'eq') return row[f.col] === f.val
               if (f.op === 'is') return f.val === null ? row[f.col] == null : row[f.col] === f.val
               if (f.op === 'in') return Array.isArray(f.val) ? f.val.includes(row[f.col]) : false
+              if (f.op === 'not') {
+                if (f.subOp === 'is') return f.val === null ? row[f.col] != null : row[f.col] !== f.val
+                if (f.subOp === 'eq') return row[f.col] !== f.val
+                if (f.subOp === 'in') return Array.isArray(f.val) ? !f.val.includes(row[f.col]) : true
+                return true
+              }
               if (f.op === 'or') {
                 const parts = String(f.val || '').split(',')
                 return parts.some((part) => {
@@ -216,6 +227,12 @@ function createFakeSb(initialData = {}) {
               if (f.op === 'eq') return row[f.col] === f.val
               if (f.op === 'is') return f.val === null ? row[f.col] == null : row[f.col] === f.val
               if (f.op === 'in') return Array.isArray(f.val) ? f.val.includes(row[f.col]) : false
+              if (f.op === 'not') {
+                if (f.subOp === 'is') return f.val === null ? row[f.col] != null : row[f.col] !== f.val
+                if (f.subOp === 'eq') return row[f.col] !== f.val
+                if (f.subOp === 'in') return Array.isArray(f.val) ? !f.val.includes(row[f.col]) : true
+                return true
+              }
               if (f.op === 'or') {
                 const parts = String(f.val || '').split(',')
                 return parts.some((part) => {
@@ -348,6 +365,12 @@ function createFakeSb(initialData = {}) {
               if (f.op === 'eq') return row[f.col] === f.val
               if (f.op === 'is') return f.val === null ? row[f.col] == null : row[f.col] === f.val
               if (f.op === 'in') return Array.isArray(f.val) ? f.val.includes(row[f.col]) : false
+              if (f.op === 'not') {
+                if (f.subOp === 'is') return f.val === null ? row[f.col] != null : row[f.col] !== f.val
+                if (f.subOp === 'eq') return row[f.col] !== f.val
+                if (f.subOp === 'in') return Array.isArray(f.val) ? !f.val.includes(row[f.col]) : true
+                return true
+              }
               if (f.op === 'or') {
                 const parts = String(f.val || '').split(',')
                 return parts.some((part) => {
@@ -600,16 +623,28 @@ test('fare bounds: airportCheckout enforces auth and rejects unknown airport cod
 // ---------------------------------------------------------------------------
 
 test('auth bounds: scheduledDispatchTick requires valid cron authorization', async () => {
+  // Method checks
   const putRes = await call(handleScheduledDispatchTick, { method: 'PUT' })
   assert.equal(putRes.status, 405)
+  assert.equal(putRes.headers['allow'], 'GET, POST, OPTIONS')
+  assert.equal(putRes.headers['cache-control'], 'no-store')
+
+  const delRes = await call(handleScheduledDispatchTick, { method: 'DELETE' })
+  assert.equal(delRes.status, 405)
+
+  // Missing db
+  const noSbRes = await call(handleScheduledDispatchTick, { method: 'POST' }, { sb: null, admin: () => null })
+  assert.equal(noSbRes.status, 503)
+  assert.match(noSbRes.json.error, /SUPABASE_SERVICE_ROLE_KEY/)
 
   const env = { CRON_SECRET: 'super-secret-cron-token' }
+  const sb = createFakeSb()
 
   // Missing bearer off Vercel
   const missingBearer = await call(
     handleScheduledDispatchTick,
     { method: 'POST', headers: {} },
-    { sb: createFakeSb(), env }
+    { sb, env }
   )
   assert.equal(missingBearer.status, 401)
   assert.match(missingBearer.json.error, /Cron authorization required/)
@@ -618,17 +653,117 @@ test('auth bounds: scheduledDispatchTick requires valid cron authorization', asy
   const wrongBearer = await call(
     handleScheduledDispatchTick,
     { method: 'POST', headers: { authorization: 'Bearer wrong-secret' } },
-    { sb: createFakeSb(), env }
+    { sb, env }
   )
   assert.equal(wrongBearer.status, 401)
+
+  // Placeholder bearer off Vercel
+  const placeholderBearer = await call(
+    handleScheduledDispatchTick,
+    { method: 'POST', headers: { authorization: 'Bearer placeholder_secret' } },
+    { sb, env: { CRON_SECRET: 'placeholder_secret' } }
+  )
+  assert.equal(placeholderBearer.status, 401)
 
   // Staging disabled block
   const disabledCron = await call(
     handleScheduledDispatchTick,
     { method: 'POST', headers: { authorization: 'Bearer super-secret-cron-token' } },
-    { sb: createFakeSb(), env: { ...env, DISABLE_CRON_ENDPOINTS: '1' } }
+    { sb, env: { ...env, DISABLE_CRON_ENDPOINTS: '1' } }
   )
   assert.equal(disabledCron.status, 403)
+
+  // Valid bearer off Vercel succeeds for POST and GET
+  const validPost = await call(
+    handleScheduledDispatchTick,
+    { method: 'POST', headers: { authorization: 'Bearer super-secret-cron-token' } },
+    { sb, env }
+  )
+  assert.equal(validPost.status, 200)
+  assert.equal(validPost.json.ok, true)
+  assert.equal(validPost.json.dryRun, false)
+
+  const validGet = await call(
+    handleScheduledDispatchTick,
+    { method: 'GET', headers: { authorization: 'Bearer super-secret-cron-token' } },
+    { sb, env }
+  )
+  assert.equal(validGet.status, 200)
+  assert.equal(validGet.json.ok, true)
+
+  // Vercel cron matrix
+  const vercelEnv = { ...env, VERCEL: '1' }
+  // On Vercel: bearer alone without platform cron header is rejected
+  const vercelBearerAlone = await call(
+    handleScheduledDispatchTick,
+    { method: 'POST', headers: { authorization: 'Bearer super-secret-cron-token' } },
+    { sb, env: vercelEnv }
+  )
+  assert.equal(vercelBearerAlone.status, 401)
+
+  // On Vercel: x-vercel-cron header + bearer succeeds
+  const vercelCronHeader = await call(
+    handleScheduledDispatchTick,
+    { method: 'POST', headers: { authorization: 'Bearer super-secret-cron-token', 'x-vercel-cron': '1' } },
+    { sb, env: vercelEnv }
+  )
+  assert.equal(vercelCronHeader.status, 200)
+  assert.equal(vercelCronHeader.json.ok, true)
+
+  // On Vercel: user-agent vercel-cron/1.0 + bearer succeeds
+  const vercelUa = await call(
+    handleScheduledDispatchTick,
+    { method: 'POST', headers: { authorization: 'Bearer super-secret-cron-token', 'user-agent': 'vercel-cron/1.0' } },
+    { sb, env: vercelEnv }
+  )
+  assert.equal(vercelUa.status, 200)
+  assert.equal(vercelUa.json.ok, true)
+
+  // On Vercel: x-vercel-cron-schedule + bearer succeeds
+  const vercelSchedule = await call(
+    handleScheduledDispatchTick,
+    { method: 'POST', headers: { authorization: 'Bearer super-secret-cron-token', 'x-vercel-cron-schedule': '0 12 * * *' } },
+    { sb, env: vercelEnv }
+  )
+  assert.equal(vercelSchedule.status, 200)
+  assert.equal(vercelSchedule.json.ok, true)
+
+  // On Vercel: spoofed header with bad bearer fails
+  const vercelSpoofed = await call(
+    handleScheduledDispatchTick,
+    { method: 'POST', headers: { authorization: 'Bearer wrong-secret', 'x-vercel-cron': '1' } },
+    { sb, env: vercelEnv }
+  )
+  assert.equal(vercelSpoofed.status, 401)
+
+  // Dry run via query parameter
+  const dryRunRes = await call(
+    handleScheduledDispatchTick,
+    {
+      method: 'GET',
+      url: '/api/scheduled-dispatch-tick?dry_run=1',
+      headers: { authorization: 'Bearer super-secret-cron-token' },
+    },
+    { sb, env }
+  )
+  assert.equal(dryRunRes.status, 200)
+  assert.equal(dryRunRes.json.ok, true)
+  assert.equal(dryRunRes.json.dryRun, true)
+
+  // Verify api/scheduled-dispatch-tick.js route wrapper executes identically
+  const apiRouteRes = await call(
+    apiScheduledDispatchTickHandler,
+    { method: 'GET', headers: { authorization: 'Bearer super-secret-cron-token' } },
+    { sb, env }
+  )
+  assert.equal(apiRouteRes.status, 200)
+  assert.equal(apiRouteRes.json.ok, true)
+
+  const apiRouteReject = await call(
+    apiScheduledDispatchTickHandler,
+    { method: 'PUT', headers: {} }
+  )
+  assert.equal(apiRouteReject.status, 405)
 })
 
 test('auth bounds: driverEarnings requires authentication and scopes to driver_id', async () => {
