@@ -13,13 +13,13 @@ import { farePaidCents, tripChargeKey } from '../chargeIdempotency.js'
 
 const KINDS = new Set(['balance', 'tip', 'wait_fee', 'cancel_fee', 'mid_ride', 'friend_ride_share', 'deposit', 'credits_purchase'])
 
-export default async function handler(req, res) {
+export default async function handler(req, res, deps = {}) {
   if (cors(req, res)) return
   if (req.method !== 'POST') return json(res, 405, { error: 'Method not allowed' })
 
-  const sb = admin()
+  const sb = deps.sb !== undefined ? deps.sb : admin()
   if (!sb) return json(res, 503, { error: 'SUPABASE_SERVICE_ROLE_KEY not configured' })
-  const user = await userFromAuth(req)
+  const user = deps.user !== undefined ? deps.user : await (deps.userFromAuth || userFromAuth)(req)
   if (!user) return json(res, 401, { error: 'Sign in required' })
 
   const { body, error: pe } = parseBody(req)
@@ -66,15 +66,18 @@ export default async function handler(req, res) {
     return json(res, 400, { error: 'amountCents must be a non-negative number' })
   }
 
-  if (amountCents > 0 && !stripeOk()) {
+  const isStripeConfigured = deps.stripeOk ? deps.stripeOk() : stripeOk()
+  if (amountCents > 0 && !deps.stripe && !isStripeConfigured) {
     return json(res, 503, { error: 'Payments unavailable', message: 'STRIPE_SECRET_KEY not configured' })
   }
 
   const riderId = trip?.rider_id || user.id
+  const runCollectPayment = deps.collectPayment || collectPayment
+  const stripe = deps.stripe || (isStripeConfigured ? stripeClient() : null)
   try {
-    const result = await collectPayment({
+    const result = await runCollectPayment({
       sb,
-      stripe: stripeClient(),
+      stripe,
       tripId: trip?.id || null,
       riderId,
       amountCents,

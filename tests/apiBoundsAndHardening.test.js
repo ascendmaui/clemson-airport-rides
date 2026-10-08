@@ -27,6 +27,8 @@ import handleExpireUnpaidAirportHolds, {
   parseHoldSweepTtlMs,
   sanitizeHoldResults,
 } from '../server/endpoints/expireUnpaidAirportHolds.js'
+import handleWeeklyCoupon from '../server/endpoints/weeklyCoupon.js'
+import handleCollectPayment from '../server/endpoints/collectPayment.js'
 import { backupBookingMetadata } from '../shared/backupDriverQueue.js'
 
 const NOW = new Date('2026-10-10T15:00:00.000Z')
@@ -903,4 +905,186 @@ test('fare & auth bounds: tripCancelMidride validates auth, rider ownership, and
   assert.equal(alreadyRes.json.ok, true)
   assert.equal(alreadyRes.json.alreadyCanceled, true)
   assert.equal(alreadyRes.json.status, 'canceled_midride')
+})
+
+// ---------------------------------------------------------------------------
+// 10. WEEKLY COUPON PROMO & CRON BOUNDS TESTS
+// ---------------------------------------------------------------------------
+
+test('fare & cron bounds: weeklyCoupon enforces public GET access, cron auth, method restrictions, and staging guards', async () => {
+  const env = { CRON_SECRET: 'weekly_cron_sec_555' }
+
+  // 1. Public GET returns 200 with coupon details and standing offers without requiring auth
+  const getRes = await call(handleWeeklyCoupon, { method: 'GET', url: '/api/weekly-coupon' })
+  assert.equal(getRes.status, 200)
+  assert.ok(getRes.json.coupon)
+  assert.equal(getRes.json.timeZone, 'America/New_York')
+  assert.ok(Array.isArray(getRes.json.standingOffers))
+
+  // 2. Unsupported HTTP method (e.g. DELETE / PUT) returns 405 with Allow header
+  const deleteRes = await call(handleWeeklyCoupon, { method: 'DELETE', url: '/api/weekly-coupon' })
+  assert.equal(deleteRes.status, 405)
+  assert.equal(deleteRes.headers['allow'], 'GET, POST, OPTIONS')
+
+  // 3. POST without bearer token returns 401
+  const noAuthRes = await call(handleWeeklyCoupon, { method: 'POST', url: '/api/weekly-coupon' }, { env })
+  assert.equal(noAuthRes.status, 401)
+  assert.equal(noAuthRes.json.skipped, true)
+  assert.match(noAuthRes.json.reason, /Set CRON_SECRET/i)
+
+  // 4. POST with incorrect bearer token returns 401
+  const badAuthRes = await call(handleWeeklyCoupon, {
+    method: 'POST',
+    url: '/api/weekly-coupon',
+    headers: { authorization: 'Bearer wrong_token' },
+  }, { env })
+  assert.equal(badAuthRes.status, 401)
+  assert.equal(badAuthRes.json.skipped, true)
+
+  // 5. POST with staging cron disable flag returns 403
+  const stagingEnv = { CRON_SECRET: 'weekly_cron_sec_555', DISABLE_CRON_ENDPOINTS: '1' }
+  const blockedRes = await call(handleWeeklyCoupon, {
+    method: 'POST',
+    url: '/api/weekly-coupon',
+    headers: { authorization: 'Bearer weekly_cron_sec_555' },
+  }, { env: stagingEnv })
+  assert.equal(blockedRes.status, 403)
+  assert.match(blockedRes.json.error, /disabled/i)
+
+  // 6. POST with valid bearer token but missing sb client returns 503
+  const noSbRes = await call(handleWeeklyCoupon, {
+    method: 'POST',
+    url: '/api/weekly-coupon',
+    headers: { authorization: 'Bearer weekly_cron_sec_555' },
+  }, { env, sb: null, store: null })
+  assert.equal(noSbRes.status, 503)
+  assert.match(noSbRes.json.error, /SUPABASE_SERVICE_ROLE_KEY not configured/i)
+
+  // 7. POST outside Friday drop hour skips cleanly with reason outside_friday_drop_hour
+  const mockStore = {
+    find: async () => null,
+    claim: async () => true,
+    listRecipients: async () => [],
+    listPushTokens: async () => [],
+  }
+  const skipWindowRes = await call(handleWeeklyCoupon, {
+    method: 'POST',
+    url: '/api/weekly-coupon?dry_run=1',
+    headers: { authorization: 'Bearer weekly_cron_sec_555' },
+  }, { env, store: mockStore, dryRun: true, force: false })
+  assert.equal(skipWindowRes.status, 200)
+  assert.equal(skipWindowRes.json.skipped, true)
+  assert.equal(skipWindowRes.json.reason, 'outside_friday_drop_hour')
+
+  // 8. POST with force: true proceeds to dry-run
+  const dryRunRes = await call(handleWeeklyCoupon, {
+    method: 'POST',
+    url: '/api/weekly-coupon?dry_run=1',
+    headers: { authorization: 'Bearer weekly_cron_sec_555' },
+  }, { env, store: mockStore, dryRun: true, force: true })
+  assert.equal(dryRunRes.status, 200)
+  assert.equal(dryRunRes.json.dryRun, true)
+  assert.equal(dryRunRes.json.skipped, false)
+})
+
+// ---------------------------------------------------------------------------
+// 11. COLLECT PAYMENT FARE & AUTH BOUNDS TESTS
+// ---------------------------------------------------------------------------
+
+test('fare & auth bounds: collectPayment validates method, auth, payment kinds, tenant isolation, and Stripe configuration', async () => {
+  const sb = createFakeSb({
+    trips: [
+      { id: 'trip-rider-1', rider_id: 'rider-1', driver_id: 'driver-1', fare_cents: 2500, deposit_cents: 500, status: 'completed' },
+      { id: 'trip-rider-2', rider_id: 'rider-2', driver_id: 'driver-2', fare_cents: 2500, deposit_cents: 500, status: 'completed' },
+    ],
+    payments: [
+      { id: 'pay-dep-1', trip_id: 'trip-rider-1', kind: 'deposit', status: 'succeeded', amount_cents: 500 },
+    ],
+  })
+
+  // 1. Non-POST returns 405
+  const getRes = await call(handleCollectPayment, { method: 'GET', url: '/api/collect-payment' }, { sb })
+  assert.equal(getRes.status, 405)
+
+  // 2. Unauthenticated returns 401
+  const unauthRes = await call(handleCollectPayment, {
+    method: 'POST',
+    body: { tripId: 'trip-rider-1', kind: 'balance' },
+  }, { sb, user: null })
+  assert.equal(unauthRes.status, 401)
+
+  // 3. Missing service client returns 503
+  const noSbRes = await call(handleCollectPayment, {
+    method: 'POST',
+    body: { tripId: 'trip-rider-1', kind: 'balance' },
+  }, { sb: null, user: { id: 'rider-1' } })
+  assert.equal(noSbRes.status, 503)
+
+  // 4. Unsupported payment kind returns 400
+  const badKindRes = await call(handleCollectPayment, {
+    method: 'POST',
+    body: { tripId: 'trip-rider-1', kind: 'unsupported_bribe' },
+  }, { sb, user: { id: 'rider-1' } })
+  assert.equal(badKindRes.status, 400)
+  assert.match(badKindRes.json.error, /Unsupported payment kind/i)
+
+  // 5. Non-existent trip returns 404
+  const notFoundRes = await call(handleCollectPayment, {
+    method: 'POST',
+    body: { tripId: 'trip-missing', kind: 'balance' },
+  }, { sb, user: { id: 'rider-1' } })
+  assert.equal(notFoundRes.status, 404)
+  assert.match(notFoundRes.json.error, /Trip not found/i)
+
+  // 6. Cross-tenant trip access: caller who is neither rider nor driver returns 403
+  const forbiddenRes = await call(handleCollectPayment, {
+    method: 'POST',
+    body: { tripId: 'trip-rider-2', kind: 'balance' },
+  }, { sb, user: { id: 'rider-1' } })
+  assert.equal(forbiddenRes.status, 403)
+  assert.match(forbiddenRes.json.error, /Not allowed on this trip/i)
+
+  // 7. Missing Stripe configuration when amount > 0 returns 503
+  const stripeUnconfiguredRes = await call(handleCollectPayment, {
+    method: 'POST',
+    body: { tripId: 'trip-rider-1', kind: 'balance' },
+  }, {
+    sb,
+    user: { id: 'rider-1' },
+    stripeOk: () => false,
+    stripe: null,
+  })
+  assert.equal(stripeUnconfiguredRes.status, 503)
+  assert.match(stripeUnconfiguredRes.json.error, /Payments unavailable/i)
+
+  // 8. Successful collection delegation forwards authoritative calculated cents
+  let collectedPayload = null
+  const mockCollectPayment = async (args) => {
+    collectedPayload = args
+    return { ok: true, id: 'pi_test_123', status: 'succeeded' }
+  }
+
+  const successRes = await call(handleCollectPayment, {
+    method: 'POST',
+    body: {
+      tripId: 'trip-rider-1',
+      kind: 'balance',
+      // Client tries to spoof amount:
+      amountCents: 10,
+      total: 10,
+    },
+  }, {
+    sb,
+    user: { id: 'rider-1' },
+    stripeOk: () => true,
+    stripe: { paymentIntents: {} },
+    collectPayment: mockCollectPayment,
+  })
+
+  assert.equal(successRes.status, 200)
+  assert.equal(successRes.json.ok, true)
+  assert.ok(collectedPayload)
+  // Authoritative server balance: 2500 fare - 500 deposit = 2000 cents (not spoofed 10 cents)
+  assert.equal(collectedPayload.amountCents, 2000)
+  assert.equal(collectedPayload.tripId, 'trip-rider-1')
 })
