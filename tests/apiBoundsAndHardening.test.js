@@ -55,6 +55,13 @@ import { backupBookingMetadata } from '../shared/backupDriverQueue.js'
 import handleAdminDrivers from '../api/admin-drivers.js'
 import handleCreateCheckoutSession from '../api/create-checkout-session.js'
 import handleHelpChat from '../server/endpoints/helpChat.js'
+import handleSupportChat from '../server/endpoints/supportChat.js'
+import handleSupportTicket from '../server/endpoints/supportTicket.js'
+import handleRideOptions from '../server/endpoints/rideOptions.js'
+import handleRideBilling from '../server/endpoints/rideBilling.js'
+import handleMatchNotice from '../server/endpoints/matchNotice.js'
+import handleCreditLots from '../server/endpoints/creditLots.js'
+import handlePrepaidCredits from '../server/endpoints/prepaidCredits.js'
 
 const NOW = new Date('2026-10-10T15:00:00.000Z')
 const SIKES = { label: 'Sikes Hall', lat: 34.6795, lng: -82.8374 }
@@ -113,6 +120,9 @@ function createFakeSb(initialData = {}) {
     payments: [],
     ride_bills: [],
     profiles: [],
+    support_tickets: [],
+    support_ticket_messages: [],
+    ticket_replies: [],
     rider_subscriptions: [],
     rider_credit_lots: [],
     rider_credit_ledger: [],
@@ -3294,6 +3304,772 @@ test('helpChat bounds: method, message sanitization, rate limiting, and unauthen
   assert.equal(authHelp.json.source, 'offline')
   assert.ok(authHelp.json.reply.length > 20)
 })
+
+// ---------------------------------------------------------------------------
+// 24. SUPPORT CHAT BOUNDS & TICKET DRAFTING TESTS
+// ---------------------------------------------------------------------------
+
+test('supportChat bounds: method, empty user message, rate limiting, and draft generation', async () => {
+  const sb = createFakeSb({
+    profiles: [
+      { id: 'user-with-card', email: 'cardholder@clemson.edu', stripe_default_pm_id: 'pm_123' },
+    ],
+  })
+
+  // 1. Non-POST returns 405
+  const getRes = await call(handleSupportChat, { method: 'GET' }, { sb })
+  assert.equal(getRes.status, 405)
+
+  // 2. Empty or missing user message returns 400
+  const noUserMsg = await call(handleSupportChat, {
+    method: 'POST',
+    body: { messages: [{ role: 'assistant', content: 'Hello!' }] },
+  }, { sb })
+  assert.equal(noUserMsg.status, 400)
+  assert.equal(noUserMsg.json.error, 'Send a message to Support.')
+
+  // 3. Rate limiting enforcement: returns 429 when bucket limit is reached
+  const rateLimitedRes = await call(handleSupportChat, {
+    method: 'POST',
+    body: { messages: [{ role: 'user', content: 'Help me with my trip.' }] },
+  }, {
+    sb,
+    rateLimit: () => false,
+  })
+  assert.equal(rateLimitedRes.status, 429)
+  assert.match(rateLimitedRes.json.error, /Too many Support messages/i)
+  assert.equal(rateLimitedRes.json.source, 'offline')
+
+  // 4. Unauthenticated caller gets guidance with sign-in reminder note
+  const unauthSupport = await call(handleSupportChat, {
+    method: 'POST',
+    body: { messages: [{ role: 'user', content: 'I need help with my account.' }] },
+  }, {
+    sb,
+    user: null,
+  })
+  assert.equal(unauthSupport.status, 200)
+  assert.equal(unauthSupport.json.source, 'offline')
+  assert.match(unauthSupport.json.reply, /Sign in so Support can see your trips and billing status/i)
+
+  // 5. Authenticated caller with issue prepares a ticketDraft
+  const authSupport = await call(handleSupportChat, {
+    method: 'POST',
+    body: { messages: [{ role: 'user', content: 'I was charged twice on my ride yesterday.' }] },
+  }, {
+    sb,
+    user: { id: 'user-with-card', email: 'cardholder@clemson.edu' },
+  })
+  assert.equal(authSupport.status, 200)
+  assert.equal(authSupport.json.source, 'offline')
+  assert.ok(authSupport.json.reply.length > 20)
+  assert.ok(authSupport.json.ticketDraft != null)
+  assert.equal(authSupport.json.ticketDraft.category, 'billing')
+})
+
+// ---------------------------------------------------------------------------
+// 25. SUPPORT TICKET BOUNDS & LIFECYCLE TESTS
+// ---------------------------------------------------------------------------
+
+test('supportTicket bounds: method, auth, rate limit, list isolation, confirmation gate, and reply validation', async () => {
+  const riderOne = { id: 'rider-ticket-1', email: 'rider1@clemson.edu', role: 'rider' }
+  const riderTwo = { id: 'rider-ticket-2', email: 'rider2@clemson.edu', role: 'rider' }
+  const staffUser = { id: 'staff-1', email: 'ops@clemsonrides.com', role: 'admin' }
+
+  const sb = createFakeSb({
+    profiles: [
+      { id: riderOne.id, email: riderOne.email, role: 'rider' },
+      { id: riderTwo.id, email: riderTwo.email, role: 'rider' },
+      { id: staffUser.id, email: staffUser.email, role: 'admin', is_admin: true },
+    ],
+    support_tickets: [
+      {
+        id: 'ticket-1',
+        user_id: riderOne.id,
+        category: 'billing',
+        subject: 'Double charge dispute',
+        body: 'Charged twice on trip.',
+        status: 'open',
+        created_at: '2026-10-01T12:00:00Z',
+      },
+      {
+        id: 'ticket-2',
+        user_id: riderTwo.id,
+        category: 'general',
+        subject: 'Lost item inquiry',
+        body: 'Left jacket in car.',
+        status: 'open',
+        created_at: '2026-10-02T12:00:00Z',
+      },
+    ],
+  })
+
+  // 1. Method check: PUT and DELETE return 405
+  const putRes = await call(handleSupportTicket, { method: 'PUT' }, { sb, user: riderOne })
+  assert.equal(putRes.status, 405)
+
+  // 2. Auth & service role bounds
+  const noSbRes = await call(handleSupportTicket, { method: 'GET' }, { sb: null, user: riderOne })
+  assert.equal(noSbRes.status, 503)
+
+  const unauthRes = await call(handleSupportTicket, { method: 'GET' }, { sb, user: null })
+  assert.equal(unauthRes.status, 401)
+
+  // 3. Rate limiting enforcement
+  const rateLimitRes = await call(handleSupportTicket, { method: 'POST', body: {} }, {
+    sb,
+    user: riderOne,
+    rateLimit: () => false,
+  })
+  assert.equal(rateLimitRes.status, 429)
+  assert.match(rateLimitRes.json.error, /Too many tickets/i)
+
+  // 4. Ticket list tenant isolation: rider only sees own tickets
+  const riderOneList = await call(handleSupportTicket, { method: 'GET' }, { sb, user: riderOne })
+  assert.equal(riderOneList.status, 200)
+  assert.equal(riderOneList.json.tickets.length, 1)
+  assert.equal(riderOneList.json.tickets[0].id, 'ticket-1')
+
+  // Staff sees all tickets
+  const staffList = await call(handleSupportTicket, { method: 'GET' }, {
+    sb,
+    user: staffUser,
+    staffAccess: async () => ({ admin: true, support: true }),
+  })
+  assert.equal(staffList.status, 200)
+  assert.equal(staffList.json.tickets.length, 2)
+
+  // 5. Filing ticket without confirmation is rejected
+  const unconfirmedFiling = await call(handleSupportTicket, {
+    method: 'POST',
+    body: {
+      category: 'billing',
+      subject: 'Unauthorized surcharge',
+      body: 'I was charged extra without reason.',
+      confirmed: false,
+    },
+  }, { sb, user: riderOne })
+  assert.equal(unconfirmedFiling.status, 400)
+  assert.match(unconfirmedFiling.json.error, /confirm.*before.*file/i)
+
+  // 6. Confirmed ticket is created and triggers bot handling
+  const confirmedFiling = await call(handleSupportTicket, {
+    method: 'POST',
+    body: {
+      category: 'billing',
+      subject: 'Unauthorized surcharge',
+      body: 'I was charged extra without reason.',
+      confirmed: true,
+    },
+  }, { sb, user: riderOne })
+  assert.equal(confirmedFiling.status, 200)
+  assert.ok(confirmedFiling.json.ticket != null)
+  assert.equal(confirmedFiling.json.ticket.subject, 'Unauthorized surcharge')
+  assert.ok(confirmedFiling.json.bot != null)
+
+  // 7. Replying to ticket: missing ticketId or body returns 400
+  const noTicketIdReply = await call(handleSupportTicket, {
+    method: 'POST',
+    body: { op: 'reply', body: 'Here is more information' },
+  }, { sb, user: riderOne })
+  assert.equal(noTicketIdReply.status, 400)
+  assert.match(noTicketIdReply.json.error, /ticketId is required/i)
+
+  const emptyBodyReply = await call(handleSupportTicket, {
+    method: 'POST',
+    body: { op: 'reply', ticketId: 'ticket-1', body: '' },
+  }, { sb, user: riderOne })
+  assert.equal(emptyBodyReply.status, 400)
+  assert.match(emptyBodyReply.json.error, /1–4000 characters/i)
+
+  // 8. Cross-tenant ticket reply isolation: cannot reply to other user's ticket
+  const foreignReply = await call(handleSupportTicket, {
+    method: 'POST',
+    body: { op: 'reply', ticketId: 'ticket-2', body: 'Malicious snooping reply' },
+  }, { sb, user: riderOne })
+  assert.equal(foreignReply.status, 404)
+  assert.match(foreignReply.json.error, /Ticket not found/i)
+})
+
+// ---------------------------------------------------------------------------
+// 26. RIDE OPTIONS & RIDE BILLING BOUNDS TESTS
+// ---------------------------------------------------------------------------
+
+test('rideOptions & rideBilling bounds: methods, auth, client money stripping, quote vs record, and payment options', async () => {
+  const rider = {
+    id: 'rider-billing-1',
+    email: 'rider@clemson.edu',
+    email_confirmed_at: '2026-09-01T12:00:00Z',
+    user_metadata: { full_name: 'Billing Rider' },
+  }
+
+  const sb = createFakeSb({
+    profiles: [
+      { id: rider.id, email: rider.email, full_name: 'Billing Rider', role: 'rider', stripe_default_pm_id: 'pm_test_123' },
+    ],
+    vehicles: [
+      { id: 'v-standard', driver_id: 'driver-std', make: 'Honda', model: 'Accord', service_class: 'standard', tier: 'standard' },
+    ],
+    driver_status: [
+      { driver_id: 'driver-std', online: true },
+    ],
+    driver_applications: [
+      { profile_id: 'driver-std', onboarding_status: 'approved' },
+    ],
+    trips: [
+      {
+        id: 'trip-to-record',
+        rider_id: rider.id,
+        status: 'searching',
+        fare_cents: 3500,
+        metadata: {},
+      },
+    ],
+  })
+
+  // --- rideOptions tests ---
+  // 1. Invalid method returns 405
+  const putOptions = await call(handleRideOptions, { method: 'PUT' }, { sb })
+  assert.equal(putOptions.status, 405)
+
+  // 2. GET returns available tiers
+  const getOptions = await call(handleRideOptions, { method: 'GET' }, { sb })
+  assert.equal(getOptions.status, 200)
+  assert.ok(Array.isArray(getOptions.json.availableTierIds))
+
+  // --- rideBilling tests ---
+  // 3. Non-POST returns 405
+  const getBilling = await call(handleRideBilling, { method: 'GET' }, { sb, user: rider })
+  assert.equal(getBilling.status, 405)
+
+  // 4. Missing sb returns 503, missing user returns 401
+  const noSbBilling = await call(handleRideBilling, { method: 'POST', body: { mode: 'quote' } }, { sb: null, user: rider })
+  assert.equal(noSbBilling.status, 503)
+
+  const unauthBilling = await call(handleRideBilling, { method: 'POST', body: { mode: 'quote' } }, { sb, user: null })
+  assert.equal(unauthBilling.status, 401)
+
+  // 5. Invalid mode returns 400
+  const invalidMode = await call(handleRideBilling, {
+    method: 'POST',
+    body: { mode: 'invalid' },
+  }, { sb, user: rider })
+  assert.equal(invalidMode.status, 400)
+  assert.match(invalidMode.json.error, /mode must be quote or record/i)
+
+  // 6. mode: quote strips client money and returns authoritative quote
+  const quoteRes = await call(handleRideBilling, {
+    method: 'POST',
+    body: {
+      mode: 'quote',
+      pickup: SIKES,
+      dropoff: COOPER,
+      tier: 'standard',
+      fareCents: 100, // Client spoofing
+      total: 100,
+      isStudent: true,
+    },
+  }, {
+    sb,
+    user: rider,
+    computeRoutes: async () => ({ distanceM: 2000, durationS: 300 }),
+  })
+  assert.equal(quoteRes.status, 200)
+  assert.ok(quoteRes.json.fareCents > 100) // Client spoof stripped
+  assert.ok(Array.isArray(quoteRes.json.options))
+  assert.equal(quoteRes.json.charged, false)
+
+  // 7. mode: record requires billing choice or rejects invalid choice
+  const invalidChoiceRecord = await call(handleRideBilling, {
+    method: 'POST',
+    body: {
+      mode: 'record',
+      pickup: SIKES,
+      dropoff: COOPER,
+      tier: 'standard',
+      billingChoice: 'invalid_choice',
+    },
+  }, {
+    sb,
+    user: rider,
+    computeRoutes: async () => ({ distanceM: 2000, durationS: 300 }),
+  })
+  assert.equal(invalidChoiceRecord.status, 400)
+  assert.equal(invalidChoiceRecord.json.code, 'billing_choice_invalid')
+
+  // 8. mode: record with credits fails when balance is zero
+  const creditRecord = await call(handleRideBilling, {
+    method: 'POST',
+    body: {
+      mode: 'record',
+      pickup: SIKES,
+      dropoff: COOPER,
+      tier: 'standard',
+      billingChoice: 'credits',
+    },
+  }, {
+    sb,
+    user: rider,
+    computeRoutes: async () => ({ distanceM: 2000, durationS: 300 }),
+  })
+  assert.equal(creditRecord.status, 409)
+  assert.equal(creditRecord.json.code, 'credits_insufficient')
+
+  // 9. mode: record with no_card succeeds, creates trip with authoritative fare
+  const validRecord = await call(handleRideBilling, {
+    method: 'POST',
+    body: {
+      mode: 'record',
+      pickup: SIKES,
+      dropoff: COOPER,
+      tier: 'standard',
+      billingChoice: 'no_card',
+      fareCents: 1, // Tampered client fare ignored
+    },
+  }, {
+    sb,
+    user: rider,
+    computeRoutes: async () => ({ distanceM: 2000, durationS: 300 }),
+    ensureProfile: async () => ({ ok: true }),
+  })
+  assert.equal(validRecord.status, 200)
+  assert.equal(validRecord.json.choice, 'no_card')
+  assert.equal(validRecord.json.charged, false)
+  assert.ok(validRecord.json.trip != null)
+  assert.ok(validRecord.json.trip.fare_cents > 1)
+})
+
+// ---------------------------------------------------------------------------
+// 27. MATCH NOTICE BOUNDS & APPROACH TESTS
+// ---------------------------------------------------------------------------
+
+test('matchNotice bounds: methods, auth, missing trip, rider isolation, match lifecycle status, demo driver rejection, and live approach calculations', async () => {
+  const rider = { id: 'rider-match-1', email: 'rider@clemson.edu' }
+  const otherRider = { id: 'rider-stranger', email: 'other@clemson.edu' }
+  const driver = { id: 'driver-real-1', full_name: 'Marcus Tiger' }
+
+  const now = new Date('2026-10-10T15:00:00.000Z')
+  const freshLocationTime = new Date('2026-10-10T14:58:00.000Z').toISOString() // 2m ago (fresh)
+
+  const sb = createFakeSb({
+    profiles: [
+      { id: rider.id, email: rider.email, full_name: 'Clemson Rider' },
+      { id: driver.id, full_name: driver.full_name },
+    ],
+    driver_status: [
+      {
+        driver_id: driver.id,
+        lat: 34.6800,
+        lng: -82.8380,
+        updated_at: freshLocationTime,
+        location_updated_at: freshLocationTime,
+      },
+    ],
+    trips: [
+      {
+        id: 'trip-unmatched',
+        rider_id: rider.id,
+        status: 'searching',
+        driver_id: null,
+      },
+      {
+        id: 'trip-demo-car',
+        rider_id: rider.id,
+        status: 'accepted',
+        driver_id: 'demo-marcus',
+      },
+      {
+        id: 'trip-matched-real',
+        rider_id: rider.id,
+        status: 'accepted',
+        driver_id: driver.id,
+        pickup_label: 'Sikes Hall',
+        dropoff_label: 'Cooper Library',
+        pickup_lat: 34.6795,
+        pickup_lng: -82.8374,
+        pickup_at: '2026-10-10T15:15:00.000Z',
+      },
+    ],
+  })
+
+  // 1. Method check: PUT and DELETE return 405
+  const putRes = await call(handleMatchNotice, { method: 'PUT' }, { sb, user: rider })
+  assert.equal(putRes.status, 405)
+
+  // 2. Auth and Supabase checks
+  const noSb = await call(handleMatchNotice, { method: 'GET' }, { sb: null, user: rider })
+  assert.equal(noSb.status, 503)
+
+  const unauth = await call(handleMatchNotice, { method: 'GET' }, { sb, user: null })
+  assert.equal(unauth.status, 401)
+
+  // 3. Missing tripId returns 400
+  const noTrip = await call(handleMatchNotice, { method: 'GET', url: '/api/stripe-payment-methods?action=match-notice' }, { sb, user: rider })
+  assert.equal(noTrip.status, 400)
+  assert.match(noTrip.json.error, /Missing trip/i)
+
+  // 4. Non-existent trip or foreign rider returns 404
+  const notFound = await call(handleMatchNotice, { method: 'GET', url: '/api/stripe-payment-methods?action=match-notice&tripId=ghost-trip' }, { sb, user: rider })
+  assert.equal(notFound.status, 404)
+  assert.match(notFound.json.error, /Ride not found/i)
+
+  const crossRider = await call(handleMatchNotice, { method: 'GET', url: '/api/stripe-payment-methods?action=match-notice&tripId=trip-matched-real' }, { sb, user: otherRider })
+  assert.equal(crossRider.status, 404)
+  assert.match(crossRider.json.error, /Ride not found/i)
+
+  // 5. Trip not matched (status searching / no driver) returns 409
+  const unmatched = await call(handleMatchNotice, { method: 'GET', url: '/api/stripe-payment-methods?action=match-notice&tripId=trip-unmatched' }, { sb, user: rider })
+  assert.equal(unmatched.status, 409)
+  assert.equal(unmatched.json.code, 'not_matched')
+
+  // 6. Preview / simulated car matched returns 409 demo_driver
+  const demoMatch = await call(handleMatchNotice, { method: 'GET', url: '/api/stripe-payment-methods?action=match-notice&tripId=trip-demo-car' }, { sb, user: rider })
+  assert.equal(demoMatch.status, 409)
+  assert.equal(demoMatch.json.code, 'demo_driver')
+
+  // 7. Legitimate matched trip via GET and POST returns calculated approach and driver name
+  const matchedGet = await call(handleMatchNotice, {
+    method: 'GET',
+    url: '/api/stripe-payment-methods?action=match-notice&tripId=trip-matched-real',
+  }, { sb, user: rider, now })
+  assert.equal(matchedGet.status, 200)
+  assert.equal(matchedGet.json.tripId, 'trip-matched-real')
+  assert.equal(matchedGet.json.status, 'accepted')
+  assert.equal(matchedGet.json.driverName, 'Marcus') // firstName resolved
+  assert.ok(matchedGet.json.distanceLabel != null)
+  assert.ok(matchedGet.json.etaLabel != null)
+
+  const matchedPost = await call(handleMatchNotice, {
+    method: 'POST',
+    body: { tripId: 'trip-matched-real' },
+  }, { sb, user: rider, now })
+  assert.equal(matchedPost.status, 200)
+  assert.equal(matchedPost.json.tripId, 'trip-matched-real')
+  assert.equal(matchedPost.json.driverName, 'Marcus')
+})
+
+// ---------------------------------------------------------------------------
+// 28. CREDIT LOTS & PREPAID CREDITS BOUNDS TESTS
+// ---------------------------------------------------------------------------
+
+test('creditLots & prepaidCredits bounds: methods, auth, headers, pack listings, buy validation, payment failures, and credit grants', async () => {
+  const rider = { id: 'rider-credits-1', email: 'rider@clemson.edu' }
+
+  const sb = createFakeSb({
+    profiles: [{ id: rider.id, email: rider.email }],
+    rider_credit_lots: [
+      { id: 'lot-1', rider_id: rider.id, remaining_cents: 2500, expires_at: '2026-11-01T00:00:00Z' },
+    ],
+  })
+
+  // --- creditLots tests ---
+  // 1. Non-GET returns 405 with Allow: GET, OPTIONS and Cache-Control headers
+  const postLots = await call(handleCreditLots, { method: 'POST' }, { sb, user: rider })
+  assert.equal(postLots.status, 405)
+  assert.match(postLots.headers['allow'], /GET, OPTIONS/)
+  assert.match(postLots.headers['cache-control'], /no-store/)
+
+  // 2. Missing sb returns 503, missing user returns 401
+  const noSbLots = await call(handleCreditLots, { method: 'GET' }, { sb: null, user: rider })
+  assert.equal(noSbLots.status, 503)
+
+  const unauthLots = await call(handleCreditLots, { method: 'GET' }, { sb, user: null })
+  assert.equal(unauthLots.status, 401)
+
+  // 3. Valid GET returns balance, lots, and credit packs
+  const getLots = await call(handleCreditLots, { method: 'GET' }, {
+    sb,
+    user: rider,
+    loadCreditLots: async () => [{ id: 'lot-1', remainingCents: 2500 }],
+    creditBalanceCents: async () => 2500,
+  })
+  assert.equal(getLots.status, 200)
+  assert.equal(getLots.json.balanceCents, 2500)
+  assert.equal(getLots.json.lots.length, 1)
+  assert.ok(Array.isArray(getLots.json.packs))
+
+  // --- prepaidCredits tests ---
+  // 4. Invalid methods return 405
+  const delPrepaid = await call(handlePrepaidCredits, { method: 'DELETE' }, { sb, user: rider })
+  assert.equal(delPrepaid.status, 405)
+
+  // 5. Auth and Supabase checks
+  const noSbPrepaid = await call(handlePrepaidCredits, { method: 'GET' }, { sb: null, user: rider })
+  assert.equal(noSbPrepaid.status, 503)
+
+  const unauthPrepaid = await call(handlePrepaidCredits, { method: 'GET' }, { sb, user: null })
+  assert.equal(unauthPrepaid.status, 401)
+
+  // 6. GET returns balance and PREPAID_TIERS
+  const getPrepaid = await call(handlePrepaidCredits, { method: 'GET' }, {
+    sb,
+    user: rider,
+    creditsStore: {
+      getCredits: async () => ({ balanceCents: 5000, unavailable: false }),
+    },
+  })
+  assert.equal(getPrepaid.status, 200)
+  assert.equal(getPrepaid.json.balanceCents, 5000)
+  assert.ok(Array.isArray(getPrepaid.json.tiers))
+
+  // 7. POST validation: invalid action or invalid tier returns 400
+  const badAction = await call(handlePrepaidCredits, {
+    method: 'POST',
+    body: { action: 'withdraw', tierId: 'credit_25' },
+  }, { sb, user: rider })
+  assert.equal(badAction.status, 400)
+  assert.match(badAction.json.error, /action must be buy/i)
+
+  const badTier = await call(handlePrepaidCredits, {
+    method: 'POST',
+    body: { action: 'buy', tierId: 'nonexistent_tier' },
+  }, { sb, user: rider })
+  assert.equal(badTier.status, 400)
+  assert.match(badTier.json.error, /Unknown credit tier/i)
+
+  // 8. POST when Stripe is unavailable returns 503
+  const stripeDown = await call(handlePrepaidCredits, {
+    method: 'POST',
+    body: { action: 'buy', tierId: 'credits_25' },
+  }, { sb, user: rider, stripeOk: () => false })
+  assert.equal(stripeDown.status, 503)
+  assert.match(stripeDown.json.error, /Payments unavailable/i)
+
+  // 9. POST when payment fails (e.g. card declined) returns 402 payment_required
+  const paymentFailed = await call(handlePrepaidCredits, {
+    method: 'POST',
+    body: { action: 'buy', tierId: 'credits_25' },
+  }, {
+    sb,
+    user: rider,
+    stripeOk: () => true,
+    collectPayment: async () => ({ ok: false, message: 'Card was declined', code: 'card_declined' }),
+  })
+  assert.equal(paymentFailed.status, 402)
+  assert.equal(paymentFailed.json.status, 'payment_required')
+  assert.match(paymentFailed.json.error, /Card was declined/i)
+
+  // 10. POST payment succeeds but credit store grant fails returns 500
+  const grantFailed = await call(handlePrepaidCredits, {
+    method: 'POST',
+    body: { action: 'buy', tierId: 'credits_25' },
+  }, {
+    sb,
+    user: rider,
+    stripeOk: () => true,
+    collectPayment: async () => ({ ok: true, paymentId: 'pay_test_123' }),
+    creditsStore: {
+      applyCredits: async () => ({ ok: false, code: 'credits_unavailable' }),
+    },
+  })
+  assert.equal(grantFailed.status, 500)
+  assert.match(grantFailed.json.error, /credits could not be stored/i)
+
+  // 11. POST payment and credit grant succeed returns 200 with balance and granted amounts
+  const successfulBuy = await call(handlePrepaidCredits, {
+    method: 'POST',
+    body: { action: 'buy', tierId: 'credits_25' },
+  }, {
+    sb,
+    user: rider,
+    stripeOk: () => true,
+    collectPayment: async () => ({ ok: true, paymentId: 'pay_test_success' }),
+    creditsStore: {
+      applyCredits: async (uid, amount) => ({ ok: true, balanceCents: 2500 }),
+    },
+  })
+  assert.equal(successfulBuy.status, 200)
+  assert.equal(successfulBuy.json.ok, true)
+  assert.equal(successfulBuy.json.paymentId, 'pay_test_success')
+  assert.equal(successfulBuy.json.grantedCents, 2500)
+  assert.equal(successfulBuy.json.balanceCents, 2500)
+})
+
+// ---------------------------------------------------------------------------
+// 29. SCHEDULED BOOST BOUNDS & RELEASE TESTS
+// ---------------------------------------------------------------------------
+
+test('scheduledBoost bounds: bumpScheduledBoost and releaseScheduledBoost methods, auth, rider isolation, boost bump ranges, locked lifecycle, and hold release', async () => {
+  const rider = { id: 'rider-boost-1', email: 'rider@clemson.edu' }
+  const otherRider = { id: 'rider-stranger', email: 'stranger@clemson.edu' }
+
+  const sb = createFakeSb({
+    trips: [
+      {
+        id: 'trip-editable',
+        rider_id: rider.id,
+        status: 'scheduled',
+        driver_id: null,
+        boost_cents: 1000,
+        fare_cents: 3500,
+        metadata: {},
+      },
+      {
+        id: 'trip-locked-accepted',
+        rider_id: rider.id,
+        status: 'accepted',
+        driver_id: 'driver-123',
+        boost_cents: 1000,
+        fare_cents: 3500,
+        metadata: {},
+      },
+      {
+        id: 'trip-zero-boost',
+        rider_id: rider.id,
+        status: 'canceled',
+        driver_id: null,
+        boost_cents: 0,
+        fare_cents: 3500,
+        metadata: {},
+      },
+      {
+        id: 'trip-boosted-canceled',
+        rider_id: rider.id,
+        status: 'canceled',
+        driver_id: null,
+        boost_cents: 1500,
+        fare_cents: 3500,
+        metadata: {},
+      },
+      {
+        id: 'trip-locked-completed',
+        rider_id: rider.id,
+        status: 'completed',
+        driver_id: 'driver-123',
+        boost_cents: 1000,
+        fare_cents: 3500,
+        metadata: {},
+      },
+    ],
+  })
+
+  // --- bumpScheduledBoost validation tests ---
+  // 1. Missing tripId returns 400
+  const noTripBump = await call(handleBumpScheduledBoost, {
+    method: 'POST',
+    body: { boostCents: 2000 },
+  }, { sb, user: rider })
+  assert.equal(noTripBump.status, 400)
+  assert.match(noTripBump.json.error, /Choose a scheduled ride/i)
+
+  // 2. Locked ride (driver already accepted) returns 409 boost_locked
+  const lockedBump = await call(handleBumpScheduledBoost, {
+    method: 'POST',
+    body: { tripId: 'trip-locked-accepted', boostCents: 2000 },
+  }, { sb, user: rider })
+  assert.equal(lockedBump.status, 409)
+  assert.equal(lockedBump.json.code, 'boost_locked')
+
+  // 3. Invalid boost amounts: empty/non-numeric, negative, over $100 cap, or lower than current
+  const emptyBump = await call(handleBumpScheduledBoost, {
+    method: 'POST',
+    body: { tripId: 'trip-editable', boostCents: 'abc' },
+  }, { sb, user: rider })
+  assert.equal(emptyBump.status, 400)
+  assert.match(emptyBump.json.error, /Enter a boost amount/i)
+
+  const negBump = await call(handleBumpScheduledBoost, {
+    method: 'POST',
+    body: { tripId: 'trip-editable', boostCents: -500 },
+  }, { sb, user: rider })
+  assert.equal(negBump.status, 400)
+  assert.match(negBump.json.error, /Boost cannot be negative/i)
+
+  const overCapBump = await call(handleBumpScheduledBoost, {
+    method: 'POST',
+    body: { tripId: 'trip-editable', boostCents: 15000 }, // $150 > $100
+  }, { sb, user: rider })
+  assert.equal(overCapBump.status, 400)
+  assert.match(overCapBump.json.error, /Boost cannot be more than/i)
+
+  const lowerBump = await call(handleBumpScheduledBoost, {
+    method: 'POST',
+    body: { tripId: 'trip-editable', boostCents: 500 }, // Current is 1000
+  }, { sb, user: rider })
+  assert.equal(lowerBump.status, 400)
+  assert.match(lowerBump.json.error, /Raise the boost above the current amount/i)
+
+  // 4. Valid bump updates boost and returns hold status
+  const validBump = await call(handleBumpScheduledBoost, {
+    method: 'POST',
+    body: { tripId: 'trip-editable', boostCents: 2000 },
+  }, {
+    sb,
+    user: rider,
+    syncBoostAuthorization: async () => ({ ok: true, synced: true }),
+  })
+  assert.equal(validBump.status, 200)
+  assert.equal(validBump.json.ok, true)
+  assert.equal(validBump.json.boostCents, 2000)
+  assert.equal(validBump.json.previousBoostCents, 1000)
+
+  // --- releaseScheduledBoost validation tests ---
+  // 5. Method check: GET/PUT returns 405
+  const getRelease = await call(handleReleaseScheduledBoost, { method: 'GET' }, { sb, user: rider })
+  assert.equal(getRelease.status, 405)
+
+  // 6. Auth and Supabase checks
+  const noSbRelease = await call(handleReleaseScheduledBoost, { method: 'POST', body: { tripId: 'trip-boosted-canceled' } }, { sb: null, user: rider })
+  assert.equal(noSbRelease.status, 503)
+
+  const unauthRelease = await call(handleReleaseScheduledBoost, { method: 'POST', body: { tripId: 'trip-boosted-canceled' } }, { sb, user: null })
+  assert.equal(unauthRelease.status, 401)
+
+  // 7. Missing tripId or cross-tenant rider isolation
+  const noTripRelease = await call(handleReleaseScheduledBoost, { method: 'POST', body: {} }, { sb, user: rider })
+  assert.equal(noTripRelease.status, 400)
+  assert.match(noTripRelease.json.error, /Choose a scheduled ride/i)
+
+  const foreignRelease = await call(handleReleaseScheduledBoost, {
+    method: 'POST',
+    body: { tripId: 'trip-boosted-canceled' },
+  }, { sb, user: otherRider })
+  assert.equal(foreignRelease.status, 404)
+  assert.match(foreignRelease.json.error, /Scheduled ride not found/i)
+
+  // 8. Completed ride status cannot release boost hold (409)
+  const lockedRelease = await call(handleReleaseScheduledBoost, {
+    method: 'POST',
+    body: { tripId: 'trip-locked-completed' },
+  }, { sb, user: rider })
+  assert.equal(lockedRelease.status, 409)
+  assert.equal(lockedRelease.json.code, 'boost_hold_locked')
+
+  // 9. Zero boost trip skips release
+  const zeroBoostRelease = await call(handleReleaseScheduledBoost, {
+    method: 'POST',
+    body: { tripId: 'trip-zero-boost' },
+  }, { sb, user: rider })
+  assert.equal(zeroBoostRelease.status, 200)
+  assert.equal(zeroBoostRelease.json.skipped, true)
+  assert.equal(zeroBoostRelease.json.reason, 'no_boost')
+
+  // 10. Positive boost: hold release failure returns 502
+  const failedRelease = await call(handleReleaseScheduledBoost, {
+    method: 'POST',
+    body: { tripId: 'trip-boosted-canceled' },
+  }, {
+    sb,
+    user: rider,
+    releaseOpenFareHold: async () => ({ ok: false, error: 'Stripe API network timeout' }),
+  })
+  assert.equal(failedRelease.status, 502)
+  assert.equal(failedRelease.json.code, 'hold_release_failed')
+
+  // 11. Positive boost: hold release success returns 200
+  const successRelease = await call(handleReleaseScheduledBoost, {
+    method: 'POST',
+    body: { tripId: 'trip-boosted-canceled' },
+  }, {
+    sb,
+    user: rider,
+    releaseOpenFareHold: async () => ({ ok: true, released: true }),
+  })
+  assert.equal(successRelease.status, 200)
+  assert.equal(successRelease.json.ok, true)
+  assert.equal(successRelease.json.tripId, 'trip-boosted-canceled')
+})
+
 
 
 

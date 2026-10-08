@@ -21,19 +21,19 @@ function isMissingColumnError(message) {
   return /\bcolumn\b/i.test(text) && !/could not find the table/i.test(text)
 }
 
-export default async function handler(req, res) {
+export default async function handler(req, res, deps = {}) {
   if (cors(req, res)) return
   if (req.method !== 'POST' && req.method !== 'GET') {
     return json(res, 405, { error: 'Method not allowed' })
   }
 
-  const sb = adminClient()
+  const sb = deps.sb !== undefined ? deps.sb : adminClient()
   if (!sb) return json(res, 503, { error: 'SUPABASE_SERVICE_ROLE_KEY is not configured.' })
 
-  const user = await userFromAuth(req, sb)
+  const user = deps.user !== undefined ? deps.user : await userFromAuth(req, sb)
   if (!user) return json(res, 401, { error: 'Sign in required' })
 
-  const access = await loadStaffAccess(sb, user)
+  const access = deps.staffAccess ? await deps.staffAccess(sb, user) : await loadStaffAccess(sb, user)
 
   if (req.method === 'GET') {
     let query = sb
@@ -76,7 +76,8 @@ export default async function handler(req, res) {
     return json(res, 200, { tickets, isAdmin: access.admin, isStaff: access.support })
   }
 
-  if (!rateLimit(req, { bucket: 'ticket', userId: user.id, limit: 5, windowMs: 10 * 60_000 })) {
+  const checkRateLimit = deps.rateLimit || rateLimit
+  if (!checkRateLimit(req, { bucket: 'ticket', userId: user.id, limit: 5, windowMs: 10 * 60_000 })) {
     return json(res, 429, { error: 'Too many tickets. Wait a few minutes or email rides@clemson.edu.' })
   }
 

@@ -9,16 +9,16 @@ import { supabaseCreditStore } from '../credits.js'
 import { collectPayment } from '../collectPayment.js'
 import { PREPAID_TIERS, findPrepaidTier } from '../../shared/prepaidTiers.js'
 
-export default async function handler(req, res) {
+export default async function handler(req, res, deps = {}) {
   if (cors(req, res)) return
   if (req.method !== 'GET' && req.method !== 'POST') return json(res, 405, { error: 'Method not allowed' })
 
-  const sb = admin()
+  const sb = deps.sb !== undefined ? deps.sb : admin()
   if (!sb) return json(res, 503, { error: 'SUPABASE_SERVICE_ROLE_KEY not configured' })
-  const user = await userFromAuth(req)
+  const user = deps.user !== undefined ? deps.user : await userFromAuth(req)
   if (!user) return json(res, 401, { error: 'Sign in required' })
 
-  const credits = supabaseCreditStore(sb)
+  const credits = deps.creditsStore || supabaseCreditStore(sb)
 
   if (req.method === 'GET') {
     const balance = await credits.getCredits(user.id)
@@ -34,12 +34,14 @@ export default async function handler(req, res) {
   if (body.action !== 'buy') return json(res, 400, { error: 'action must be buy' })
   const tier = findPrepaidTier(body.tierId)
   if (!tier) return json(res, 400, { error: 'Unknown credit tier' })
-  if (!stripeOk()) return json(res, 503, { error: 'Payments unavailable' })
+  const isStripeOk = deps.stripeOk !== undefined ? deps.stripeOk : stripeOk
+  if (!isStripeOk()) return json(res, 503, { error: 'Payments unavailable' })
 
   try {
-    const paid = await collectPayment({
+    const runCollectPayment = deps.collectPayment || collectPayment
+    const paid = await runCollectPayment({
       sb,
-      stripe: stripeClient(),
+      stripe: deps.stripe || stripeClient(),
       riderId: user.id,
       amountCents: tier.priceCents,
       methods: ['card'],

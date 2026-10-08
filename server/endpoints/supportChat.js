@@ -8,8 +8,8 @@ import { loadUserContext, resolveRoleVariant } from '../userContext.js'
 import { buildSupportTurn } from '../supportAgent.js'
 import { respondWithAgent } from '../runAgent.js'
 
-async function loadContext(req) {
-  const sb = adminClient()
+async function loadContext(req, deps = {}) {
+  const sb = deps.sb !== undefined ? deps.sb : adminClient()
   if (!sb) {
     return {
       context: { signedIn: false },
@@ -17,7 +17,7 @@ async function loadContext(req) {
       note: 'Personalization needs SUPABASE_SERVICE_ROLE_KEY on the server.',
     }
   }
-  const user = await userFromAuth(req, sb)
+  const user = deps.user !== undefined ? deps.user : await userFromAuth(req, sb)
   if (!user) {
     return {
       context: { signedIn: false },
@@ -29,7 +29,7 @@ async function loadContext(req) {
   return { context, userId: user.id, note: null }
 }
 
-export default async function handler(req, res) {
+export default async function handler(req, res, deps = {}) {
   if (cors(req, res)) return
   if (req.method !== 'POST') return json(res, 405, { error: 'Method not allowed' })
 
@@ -43,13 +43,14 @@ export default async function handler(req, res) {
 
   let loaded
   try {
-    loaded = await loadContext(req)
+    loaded = await loadContext(req, deps)
   } catch (err) {
     console.error('[support-chat] context', err?.message || err)
     loaded = { context: { signedIn: false }, userId: null, note: 'Account context could not be loaded.' }
   }
 
-  if (!rateLimit(req, { bucket: 'support', userId: loaded.userId, limit: 16, windowMs: 60_000 })) {
+  const checkRateLimit = deps.rateLimit || rateLimit
+  if (!checkRateLimit(req, { bucket: 'support', userId: loaded.userId, limit: 16, windowMs: 60_000 })) {
     return json(res, 429, {
       error: 'Too many Support messages. Wait a minute and try again.',
       reply: 'Too many Support messages. Wait a minute. You can still email rides@clemson.edu.',
