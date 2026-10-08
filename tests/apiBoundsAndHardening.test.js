@@ -41,6 +41,10 @@ import handleReconcileCheckout from '../server/endpoints/reconcileCheckout.js'
 import handleClemsonMiamiCheckout from '../server/endpoints/clemsonMiamiCheckout.js'
 import handleApplicantInbox from '../server/endpoints/applicantInbox.js'
 import handleDriverCards from '../server/endpoints/driverCards.js'
+import handleScheduleTrip from '../server/endpoints/scheduleTrip.js'
+import handleRequestDriverTrip from '../server/endpoints/requestDriverTrip.js'
+import { handleMarkOffered, handlePassOffer } from '../server/endpoints/driverOfferDesk.js'
+import carpoolHandler from '../api/carpool.js'
 import handleRiderLive from '../api/rider-live.js'
 import { publishRiderPickup } from '../server/endpoints/riderLivePickup.js'
 import { backupBookingMetadata } from '../shared/backupDriverQueue.js'
@@ -220,21 +224,32 @@ function createFakeSb(initialData = {}) {
           }
         },
         update: (patch) => {
-          return {
+          const updateFilters = []
+          const updateObj = {
             eq(col, val) {
-              filters.push({ col, op: 'eq', val })
-              return this
+              updateFilters.push({ col, op: 'eq', val })
+              return updateObj
             },
             is(col, val) {
-              filters.push({ col, op: 'is', val })
-              return this
+              updateFilters.push({ col, op: 'is', val })
+              return updateObj
+            },
+            in(col, vals) {
+              updateFilters.push({ col, op: 'in', val: vals })
+              return updateObj
             },
             select: () => ({
               single: async () => {
                 const target = tables[table].find((row) =>
-                  filters.every((f) => {
-                    if (f.op === 'eq') return row[f.col] === f.val
+                  updateFilters.every((f) => {
+                    if (f.op === 'eq') {
+                      if (f.col === 'metadata' && row.metadata && f.val) {
+                        return JSON.stringify(row.metadata) === (typeof f.val === 'string' ? f.val : JSON.stringify(f.val))
+                      }
+                      return row[f.col] === f.val
+                    }
                     if (f.op === 'is') return f.val === null ? row[f.col] == null : row[f.col] === f.val
+                    if (f.op === 'in') return Array.isArray(f.val) ? f.val.includes(row[f.col]) : false
                     return true
                   })
                 )
@@ -243,9 +258,15 @@ function createFakeSb(initialData = {}) {
               },
               maybeSingle: async () => {
                 const target = tables[table].find((row) =>
-                  filters.every((f) => {
-                    if (f.op === 'eq') return row[f.col] === f.val
+                  updateFilters.every((f) => {
+                    if (f.op === 'eq') {
+                      if (f.col === 'metadata' && row.metadata && f.val) {
+                        return JSON.stringify(row.metadata) === (typeof f.val === 'string' ? f.val : JSON.stringify(f.val))
+                      }
+                      return row[f.col] === f.val
+                    }
                     if (f.op === 'is') return f.val === null ? row[f.col] == null : row[f.col] === f.val
+                    if (f.op === 'in') return Array.isArray(f.val) ? f.val.includes(row[f.col]) : false
                     return true
                   })
                 )
@@ -255,9 +276,15 @@ function createFakeSb(initialData = {}) {
             }),
             then(resolve) {
               const matches = tables[table].filter((row) =>
-                filters.every((f) => {
-                  if (f.op === 'eq') return row[f.col] === f.val
+                updateFilters.every((f) => {
+                  if (f.op === 'eq') {
+                    if (f.col === 'metadata' && row.metadata && f.val) {
+                      return JSON.stringify(row.metadata) === (typeof f.val === 'string' ? f.val : JSON.stringify(f.val))
+                    }
+                    return row[f.col] === f.val
+                  }
                   if (f.op === 'is') return f.val === null ? row[f.col] == null : row[f.col] === f.val
+                  if (f.op === 'in') return Array.isArray(f.val) ? f.val.includes(row[f.col]) : false
                   return true
                 })
               )
@@ -265,12 +292,14 @@ function createFakeSb(initialData = {}) {
               resolve({ data: matches, error: null })
             },
           }
+          return updateObj
         },
         then(resolve) {
           let rows = tables[table].filter((row) =>
             filters.every((f) => {
               if (f.op === 'eq') return row[f.col] === f.val
-              if (f.op === 'in') return f.val.includes(row[f.col])
+              if (f.op === 'is') return f.val === null ? row[f.col] == null : row[f.col] === f.val
+              if (f.op === 'in') return Array.isArray(f.val) ? f.val.includes(row[f.col]) : false
               if (f.op === 'gt') return row[f.col] > f.val
               if (f.op === 'gte') return row[f.col] >= f.val
               if (f.op === 'lte') return row[f.col] <= f.val
@@ -2129,6 +2158,473 @@ test('driver inbox & card bounds: applicantInbox and driverCards enforce method,
   assert.equal(card.email, undefined)
   assert.equal(card.phone, undefined)
   assert.equal(card.tin, undefined)
+})
+
+test('scheduleTrip bounds: method, auth, pickup time lead, tier availability, place validation, backup bonus & boost validation, and authoritative fare ignores client tampering', async () => {
+  const approvedDriverId = '11111111-2222-4333-8444-555555555555'
+  const riderId = '22222222-3333-4444-8555-666666666666'
+  const baseNow = new Date('2026-10-10T12:00:00.000Z')
+  const futureTime = new Date(baseNow.getTime() + 60 * 60 * 1000).toISOString() // 1 hour ahead
+
+  const sb = createFakeSb({
+    profiles: [
+      { id: riderId, full_name: 'Clemson Tiger', email: 'tiger@g.clemson.edu' },
+      { id: approvedDriverId, full_name: 'Approved Driver', email: 'driver@clemson.edu' },
+    ],
+    driver_applications: [{ profile_id: approvedDriverId, onboarding_status: 'approved' }],
+    vehicles: [{ driver_id: approvedDriverId, service_class: 'standard', tier: 'standard' }],
+    driver_status: [{ driver_id: approvedDriverId, online: true }],
+    trips: [],
+    trip_events: [],
+  })
+
+  // 1. Non-POST returns 405
+  const getRes = await call(handleScheduleTrip, { method: 'GET' }, { sb, now: baseNow.getTime() })
+  assert.equal(getRes.status, 405)
+
+  // 2. Missing sb returns 503
+  const noSbRes = await call(handleScheduleTrip, { method: 'POST', body: {} }, { sb: null, user: { id: riderId } })
+  assert.equal(noSbRes.status, 503)
+
+  // 3. Unauthenticated rider returns 401
+  const unauthRes = await call(handleScheduleTrip, { method: 'POST', body: {} }, { sb, user: null })
+  assert.equal(unauthRes.status, 401)
+
+  // 4. Invalid or unsupported tier returns 400
+  const badTier = await call(handleScheduleTrip, {
+    method: 'POST',
+    body: { tier: 'hyperloop', pickupAt: futureTime },
+  }, { sb, user: { id: riderId }, now: baseNow.getTime() })
+  assert.equal(badTier.status, 400)
+  assert.equal(badTier.json.code, 'ride_option_unavailable')
+
+  // 5. Invalid pickup time (spring-forward gap hour) returns 400
+  const badTime = await call(handleScheduleTrip, {
+    method: 'POST',
+    body: { date: '2026-03-08', time: '02:30' },
+  }, { sb, user: { id: riderId }, now: baseNow.getTime() })
+  assert.equal(badTime.status, 400)
+  assert.match(badTime.json.error, /Choose a valid pickup time/i)
+
+  // 6. Booking under 30 minutes in advance when not near-term returns 400
+  const tooSoon = await call(handleScheduleTrip, {
+    method: 'POST',
+    body: {
+      pickupAt: new Date(baseNow.getTime() + 15 * 60 * 1000).toISOString(), // 15 mins
+      pickup: SIKES,
+      dropoff: COOPER,
+    },
+  }, { sb, user: { id: riderId }, now: baseNow.getTime() })
+  assert.equal(tooSoon.status, 400)
+  assert.match(tooSoon.json.error, /Schedule at least 30 minutes ahead/i)
+
+  // 7. Missing pickup or dropoff returns 400
+  const missingPlaces = await call(handleScheduleTrip, {
+    method: 'POST',
+    body: {
+      pickupAt: futureTime,
+      pickup: SIKES,
+      dropoff: null,
+    },
+  }, { sb, user: { id: riderId }, now: baseNow.getTime() })
+  assert.equal(missingPlaces.status, 400)
+  assert.match(missingPlaces.json.error, /Choose a pickup and a drop-off/i)
+
+  // 8. Same pickup and dropoff label returns 400
+  const samePlaces = await call(handleScheduleTrip, {
+    method: 'POST',
+    body: {
+      pickupAt: futureTime,
+      pickup: SIKES,
+      dropoff: { label: SIKES.label, lat: SIKES.lat, lng: SIKES.lng },
+    },
+  }, { sb, user: { id: riderId }, now: baseNow.getTime() })
+  assert.equal(samePlaces.status, 400)
+  assert.match(samePlaces.json.error, /different places/i)
+
+  // 9. Invalid backup bonus amount returns 400
+  const badBackup = await call(handleScheduleTrip, {
+    method: 'POST',
+    body: {
+      pickupAt: futureTime,
+      pickup: SIKES,
+      dropoff: COOPER,
+      backupBonusCents: 500, // $5 is not allowed (only $10 or $15)
+    },
+  }, { sb, user: { id: riderId }, now: baseNow.getTime() })
+  assert.equal(badBackup.status, 400)
+  assert.equal(badBackup.json.code, 'backup_bonus_invalid')
+
+  // 10. Invalid boost amount returns 400
+  const badBoost = await call(handleScheduleTrip, {
+    method: 'POST',
+    body: {
+      pickupAt: futureTime,
+      pickup: SIKES,
+      dropoff: COOPER,
+      boostCents: -500,
+    },
+  }, { sb, user: { id: riderId }, now: baseNow.getTime() })
+  assert.equal(badBoost.status, 400)
+  assert.equal(badBoost.json.code, 'boost_invalid')
+
+  // 11. Profile creation failure returns 500
+  const profileFail = await call(handleScheduleTrip, {
+    method: 'POST',
+    body: {
+      pickupAt: futureTime,
+      pickup: SIKES,
+      dropoff: COOPER,
+    },
+  }, { sb, user: { id: riderId }, now: baseNow.getTime(), ensureProfile: async () => ({ ok: false }) })
+  assert.equal(profileFail.status, 500)
+  assert.equal(profileFail.json.code, 'profile_missing')
+
+  // 12. Valid scheduled trip: ignores client fare tampering, computes authoritative fare with schedule ahead discount
+  const validTrip = await call(handleScheduleTrip, {
+    method: 'POST',
+    body: {
+      pickupAt: futureTime,
+      pickup: SIKES,
+      dropoff: COOPER,
+      fare_cents: 99, // tampered fare
+      amount: 99,     // tampered amount
+      backupBonusCents: 1000, // valid $10 backup
+      boostCents: 500,        // valid $5 boost
+    },
+  }, { sb, user: { id: riderId, email: 'tiger@g.clemson.edu' }, now: baseNow.getTime() })
+  assert.equal(validTrip.status, 200)
+  assert.equal(validTrip.json.trip.status, 'scheduled')
+  assert.equal(validTrip.json.trip.rider_id, riderId)
+  assert.equal(validTrip.json.backupBonusCents, 1000)
+  assert.equal(validTrip.json.backupBooked, true)
+  assert.equal(validTrip.json.boostCents, 500)
+  assert.equal(validTrip.json.scheduleDiscountApplied, true)
+  assert.ok(validTrip.json.fareCents > 100, 'Authoritative fare computed instead of tampered 99 cents')
+})
+
+test('requestDriverTrip bounds: simulated driver rejection, driver approval gate, tier availability, auto-assign empty pool, comfort vehicle check, and authoritative fare & hold', async () => {
+  const approvedDriverId = '11111111-2222-4333-8444-555555555555'
+  const pendingDriverId = '22222222-3333-4444-8555-666666666666'
+  const comfortDriverId = '44444444-5555-4666-8777-888888888888'
+  const riderId = '33333333-4444-4555-8666-777777777777'
+
+  const sb = createFakeSb({
+    profiles: [
+      { id: riderId, full_name: 'Rider Request', email: 'rider@clemson.edu' },
+      { id: approvedDriverId, full_name: 'Approved Driver', email: 'driver@clemson.edu' },
+      { id: pendingDriverId, full_name: 'Pending Driver', email: 'pending@clemson.edu' },
+      { id: comfortDriverId, full_name: 'Comfort Driver', email: 'comfort@clemson.edu' },
+    ],
+    driver_applications: [
+      { profile_id: approvedDriverId, onboarding_status: 'approved' },
+      { profile_id: pendingDriverId, onboarding_status: 'pending' },
+      { profile_id: comfortDriverId, onboarding_status: 'approved' },
+    ],
+    vehicles: [
+      { driver_id: approvedDriverId, service_class: 'standard', tier: 'standard' },
+      { driver_id: comfortDriverId, service_class: 'comfort', tier: 'comfort' },
+    ],
+    driver_status: [
+      { driver_id: approvedDriverId, online: true },
+      { driver_id: comfortDriverId, online: true },
+    ],
+    trips: [],
+    trip_events: [],
+  })
+
+  // 1. Non-POST returns 405
+  const getRes = await call(handleRequestDriverTrip, { method: 'GET' }, { sb })
+  assert.equal(getRes.status, 405)
+
+  // 2. Missing sb returns 503
+  const noSb = await call(handleRequestDriverTrip, { method: 'POST', body: {} }, { sb: null, user: { id: riderId } })
+  assert.equal(noSb.status, 503)
+
+  // 3. Unauthenticated rider returns 401
+  const unauth = await call(handleRequestDriverTrip, { method: 'POST', body: {} }, { sb, user: null })
+  assert.equal(unauth.status, 401)
+
+  // 4. Simulated preview car ID rejected with 409
+  const simCar = await call(handleRequestDriverTrip, {
+    method: 'POST',
+    body: { driverId: 'demo-marcus' },
+  }, { sb, user: { id: riderId } })
+  assert.equal(simCar.status, 409)
+  assert.equal(simCar.json.code, 'ride_option_unavailable')
+  assert.match(simCar.json.error, /map preview and cannot be requested/i)
+
+  // 5. Missing driver when autoAssign is false returns 400
+  const noDriver = await call(handleRequestDriverTrip, {
+    method: 'POST',
+    body: { autoAssign: false },
+  }, { sb, user: { id: riderId } })
+  assert.equal(noDriver.status, 400)
+  assert.match(noDriver.json.error, /Select a driver first/i)
+
+  // 6. Requesting unapproved driver returns 403
+  const unapproved = await call(handleRequestDriverTrip, {
+    method: 'POST',
+    body: {
+      driverId: pendingDriverId,
+      pickupLabel: SIKES.label,
+      pickupLat: SIKES.lat,
+      pickupLng: SIKES.lng,
+      dropoffLabel: COOPER.label,
+      dropoffLat: COOPER.lat,
+      dropoffLng: COOPER.lng,
+    },
+  }, { sb, user: { id: riderId } })
+  assert.equal(unapproved.status, 403)
+  assert.equal(unapproved.json.code, 'driver_not_approved')
+
+  // 7. Auto-assign when no drivers online returns 409
+  const emptySb = createFakeSb({
+    profiles: [{ id: riderId, full_name: 'Rider Request', email: 'rider@clemson.edu' }],
+    driver_applications: [],
+    driver_status: [],
+    vehicles: [],
+    trips: [],
+  })
+  const noOnline = await call(handleRequestDriverTrip, {
+    method: 'POST',
+    body: {
+      autoAssign: true,
+      pickupLabel: SIKES.label,
+      pickupLat: SIKES.lat,
+      pickupLng: SIKES.lng,
+      dropoffLabel: COOPER.label,
+      dropoffLat: COOPER.lat,
+      dropoffLng: COOPER.lng,
+    },
+  }, { sb: emptySb, user: { id: riderId } })
+  assert.equal(noOnline.status, 409)
+
+  // 8. Extra Comfort requested for driver with standard-only vehicle returns 409
+  const comfortMismatch = await call(handleRequestDriverTrip, {
+    method: 'POST',
+    body: {
+      driverId: approvedDriverId,
+      tier: 'comfort',
+      pickupLabel: SIKES.label,
+      pickupLat: SIKES.lat,
+      pickupLng: SIKES.lng,
+      dropoffLabel: COOPER.label,
+      dropoffLat: COOPER.lat,
+      dropoffLng: COOPER.lng,
+    },
+  }, { sb, user: { id: riderId } })
+  assert.equal(comfortMismatch.status, 409)
+  assert.match(comfortMismatch.json.error, /Extra Comfort/i)
+
+  // 9. Valid driver trip request: strips client fare tampering, creates searching trip, authorizes fare hold
+  const validReq = await call(handleRequestDriverTrip, {
+    method: 'POST',
+    body: {
+      driverId: approvedDriverId,
+      pickupLabel: SIKES.label,
+      pickupLat: SIKES.lat,
+      pickupLng: SIKES.lng,
+      dropoffLabel: COOPER.label,
+      dropoffLat: COOPER.lat,
+      dropoffLng: COOPER.lng,
+      fare_cents: 50, // client tamper
+      amount: 50,     // client tamper
+    },
+  }, { sb, user: { id: riderId, email: 'rider@clemson.edu' } })
+  assert.equal(validReq.status, 200)
+  assert.equal(validReq.json.trip.status, 'searching')
+  assert.equal(validReq.json.trip.driver_id, null)
+  assert.ok(validReq.json.fareCents > 50, 'Authoritative fare calculated')
+  assert.ok(validReq.json.authorization != null)
+})
+
+test('driverOfferDesk bounds: mark-offered and pass-offer validate auth, driver approval, online presence, trip ownership, and retargeting queue', async () => {
+  const driverA = '11111111-2222-4333-8444-555555555555'
+  const driverB = '22222222-3333-4444-8555-666666666666'
+  const unapprovedDriver = '33333333-4444-4555-8666-777777777777'
+  const riderId = '44444444-5555-4666-8777-888888888888'
+
+  const sb = createFakeSb({
+    profiles: [
+      { id: driverA, full_name: 'Driver A', email: 'a@clemson.edu' },
+      { id: driverB, full_name: 'Driver B', email: 'b@clemson.edu' },
+      { id: unapprovedDriver, full_name: 'Driver C', email: 'c@clemson.edu' },
+    ],
+    driver_applications: [
+      { profile_id: driverA, onboarding_status: 'approved' },
+      { profile_id: driverB, onboarding_status: 'approved' },
+      { profile_id: unapprovedDriver, onboarding_status: 'submitted' },
+    ],
+    vehicles: [
+      { driver_id: driverA, service_class: 'standard', tier: 'standard' },
+      { driver_id: driverB, service_class: 'standard', tier: 'standard' },
+    ],
+    driver_status: [
+      { driver_id: driverA, online: true },
+      { driver_id: driverB, online: true },
+    ],
+    trips: [
+      {
+        id: 'trip-offered-target',
+        rider_id: riderId,
+        driver_id: null,
+        status: 'searching',
+        metadata: { offer_driver_id: driverA },
+      },
+      {
+        id: 'trip-for-driver-b',
+        rider_id: riderId,
+        driver_id: null,
+        status: 'searching',
+        metadata: { offer_driver_id: driverB },
+      },
+      {
+        id: 'trip-auto-queue',
+        rider_id: riderId,
+        driver_id: null,
+        status: 'searching',
+        metadata: {
+          match: 'auto',
+          offer_driver_id: driverA,
+          auto_assign_queue: [driverA, driverB],
+        },
+      },
+    ],
+    driver_offer_passes: [],
+  })
+
+  // --- handleMarkOffered ---
+  // 1. Non-POST returns 405
+  const getOffer = await call(handleMarkOffered, { method: 'GET' }, { sb })
+  assert.equal(getOffer.status, 405)
+
+  // 2. Unauthenticated returns 401
+  const unauthOffer = await call(handleMarkOffered, { method: 'POST', body: { tripId: 'trip-offered-target' } }, { sb, user: null })
+  assert.equal(unauthOffer.status, 401)
+
+  // 3. Missing tripId returns 400
+  const noTrip = await call(handleMarkOffered, { method: 'POST', body: {} }, { sb, user: { id: driverA } })
+  assert.equal(noTrip.status, 400)
+
+  // 4. Unapproved driver returns 403
+  const unapproved = await call(handleMarkOffered, {
+    method: 'POST',
+    body: { tripId: 'trip-offered-target' },
+  }, { sb, user: { id: unapprovedDriver } })
+  assert.equal(unapproved.status, 403)
+  assert.equal(unapproved.json.code, 'driver_not_approved')
+
+  // 5. Offline driver returns 409
+  const offlineSb = createFakeSb({
+    driver_applications: [{ profile_id: driverA, onboarding_status: 'approved' }],
+    driver_status: [{ driver_id: driverA, online: false }],
+  })
+  const offline = await call(handleMarkOffered, {
+    method: 'POST',
+    body: { tripId: 'trip-offered-target' },
+  }, { sb: offlineSb, user: { id: driverA } })
+  assert.equal(offline.status, 409)
+  assert.equal(offline.json.code, 'driver_offline')
+
+  // 6. Offer targeted to driver B called by driver A returns 403
+  const wrongDriver = await call(handleMarkOffered, {
+    method: 'POST',
+    body: { tripId: 'trip-for-driver-b' },
+  }, { sb, user: { id: driverA } })
+  assert.equal(wrongDriver.status, 403)
+  assert.equal(wrongDriver.json.code, 'offer_not_yours')
+
+  // 7. Offer targeted to driver A called by driver A updates status to offered
+  const validMark = await call(handleMarkOffered, {
+    method: 'POST',
+    body: { tripId: 'trip-offered-target' },
+  }, { sb, user: { id: driverA } })
+  assert.equal(validMark.status, 200)
+  assert.equal(validMark.json.status, 'offered')
+
+  // --- handlePassOffer ---
+  // 8. Passing an offer targeted to another driver returns 403
+  const passWrong = await call(handlePassOffer, {
+    method: 'POST',
+    body: { tripId: 'trip-for-driver-b' },
+  }, { sb, user: { id: driverA } })
+  assert.equal(passWrong.status, 403)
+  assert.equal(passWrong.json.code, 'offer_not_yours')
+
+  // 9. Passing an auto-assign offer advances the queue to next driver (driver B)
+  const passAuto = await call(handlePassOffer, {
+    method: 'POST',
+    body: { tripId: 'trip-auto-queue' },
+  }, { sb, user: { id: driverA } })
+  assert.equal(passAuto.status, 200)
+  assert.equal(passAuto.json.offerDriverId, driverB)
+  assert.equal(passAuto.json.released, false)
+})
+
+test('carpool API bounds: action routing, program first-ride vs ambassador, attribution self-referral rejection, and inactive link handling', async () => {
+  const ambassadorId = '11111111-2222-4333-8444-555555555555'
+  const riderId = '22222222-3333-4444-8555-666666666666'
+
+  const sb = createFakeSb({
+    profiles: [
+      { id: ambassadorId, full_name: 'Ambassador Sam', email: 'sam@clemson.edu' },
+      { id: riderId, full_name: 'Rider Jane', email: 'jane@clemson.edu' },
+    ],
+    ambassador_codes: [
+      { code: 'sam10', code_type: 'ambassador', profile_id: ambassadorId },
+    ],
+    ambassador_attributions: [],
+    first_ride_grants: [],
+    trips: [],
+  })
+
+  // 1. Unknown action returns 400
+  const badAction = await call(carpoolHandler, {
+    method: 'POST',
+    url: '/api/carpool?action=invalid_action',
+  }, { sb, user: { id: riderId } })
+  assert.equal(badAction.status, 400)
+  assert.match(badAction.json.error, /Unknown carpool action/i)
+
+  // 2. Attribute own link returns 409
+  const ownLink = await call(carpoolHandler, {
+    method: 'POST',
+    url: '/api/carpool?action=attribute',
+    body: { code: 'sam10' },
+  }, { sb, user: { id: ambassadorId } })
+  assert.equal(ownLink.status, 409)
+  assert.equal(ownLink.json.code, 'own_link')
+
+  // 3. Attribute inactive/unknown code returns 404
+  const unknownLink = await call(carpoolHandler, {
+    method: 'POST',
+    url: '/api/carpool?action=attribute',
+    body: { code: 'unknown99' },
+  }, { sb, user: { id: riderId } })
+  assert.equal(unknownLink.status, 404)
+  assert.match(unknownLink.json.error, /not active/i)
+
+  // 4. Attribute valid code returns 200
+  const validAttr = await call(carpoolHandler, {
+    method: 'POST',
+    url: '/api/carpool?action=attribute',
+    body: { code: 'sam10' },
+  }, { sb, user: { id: riderId } })
+  assert.equal(validAttr.status, 200)
+  assert.equal(validAttr.json.ok, true)
+
+  // 5. Program first_ride checks eligibility
+  const firstRide = await call(carpoolHandler, {
+    method: 'POST',
+    url: '/api/carpool?action=program',
+    body: { action: 'first_ride' },
+  }, { sb, user: { id: riderId } })
+  assert.equal(firstRide.status, 200)
+  assert.equal(firstRide.json.ok, true)
+  assert.equal(firstRide.json.code_type, 'first_ride')
+  assert.equal(firstRide.json.completedTrips, 0)
+  assert.equal(firstRide.json.alreadyUsed, false)
 })
 
 
