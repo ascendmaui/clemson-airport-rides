@@ -17,13 +17,13 @@ function windowIdFrom(req) {
   }
 }
 
-export default async function handler(req, res) {
+export default async function handler(req, res, deps = {}) {
   if (cors(req, res)) return
   if (req.method !== 'GET' && req.method !== 'HEAD') {
     return json(res, 405, { error: 'Method not allowed' })
   }
   const body = await buildTigerHeatMap({
-    sb: admin(),
+    sb: deps.sb !== undefined ? deps.sb : admin(),
     windowId: windowIdFrom(req),
   })
   if (req.method === 'HEAD') {

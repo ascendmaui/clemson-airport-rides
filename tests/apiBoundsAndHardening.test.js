@@ -45,6 +45,10 @@ import handleScheduleTrip from '../server/endpoints/scheduleTrip.js'
 import handleRequestDriverTrip from '../server/endpoints/requestDriverTrip.js'
 import { handleMarkOffered, handlePassOffer } from '../server/endpoints/driverOfferDesk.js'
 import carpoolHandler from '../api/carpool.js'
+import handleRiderSwitch from '../api/rider-switch.js'
+import handleTripMessages from '../api/trip-messages.js'
+import handleTigerHeat from '../api/tiger-heat.js'
+import handleFriendRides from '../api/friend-rides.js'
 import handleRiderLive from '../api/rider-live.js'
 import { publishRiderPickup } from '../server/endpoints/riderLivePickup.js'
 import { backupBookingMetadata } from '../shared/backupDriverQueue.js'
@@ -2625,6 +2629,223 @@ test('carpool API bounds: action routing, program first-ride vs ambassador, attr
   assert.equal(firstRide.json.code_type, 'first_ride')
   assert.equal(firstRide.json.completedTrips, 0)
   assert.equal(firstRide.json.alreadyUsed, false)
+})
+
+test('riderSwitch bounds: method, auth, trip presence, tenant isolation, invalid action, and preview quote', async () => {
+  const riderA = '11111111-2222-4333-8444-555555555555'
+  const riderB = '22222222-3333-4444-8555-666666666666'
+  const driverId = '33333333-4444-4555-8666-777777777777'
+
+  const sb = createFakeSb({
+    profiles: [
+      { id: riderA, full_name: 'Rider A', email: 'a@clemson.edu' },
+      { id: riderB, full_name: 'Rider B', email: 'b@clemson.edu' },
+      { id: driverId, full_name: 'Driver Dave', email: 'd@clemson.edu' },
+    ],
+    trips: [
+      {
+        id: 'trip-switch-target',
+        rider_id: riderA,
+        driver_id: driverId,
+        status: 'accepted',
+        tier: 'standard',
+        fare_cents: 2500,
+        pickup_label: SIKES.label,
+        pickup_lat: SIKES.lat,
+        pickup_lng: SIKES.lng,
+        dropoff_label: COOPER.label,
+        dropoff_lat: COOPER.lat,
+        dropoff_lng: COOPER.lng,
+      },
+    ],
+    driver_applications: [{ profile_id: driverId, onboarding_status: 'approved' }],
+    driver_status: [{ driver_id: driverId, online: true }],
+    vehicles: [{ driver_id: driverId, service_class: 'standard', tier: 'standard' }],
+  })
+
+  // 1. Non-POST returns 405
+  const getRes = await call(handleRiderSwitch, { method: 'GET' }, { sb })
+  assert.equal(getRes.status, 405)
+
+  // 2. Missing sb returns 503
+  const noSb = await call(handleRiderSwitch, { method: 'POST', body: {} }, { sb: null, user: { id: riderA } })
+  assert.equal(noSb.status, 503)
+
+  // 3. Unauthenticated rider returns 401
+  const unauth = await call(handleRiderSwitch, { method: 'POST', body: {} }, { sb, user: null })
+  assert.equal(unauth.status, 401)
+
+  // 4. Missing tripId returns 400
+  const noTrip = await call(handleRiderSwitch, { method: 'POST', body: {} }, { sb, user: { id: riderA } })
+  assert.equal(noTrip.status, 400)
+  assert.equal(noTrip.json.code, 'trip_required')
+
+  // 5. Non-existent trip returns 404
+  const badTrip = await call(handleRiderSwitch, {
+    method: 'POST',
+    body: { tripId: 'trip-does-not-exist' },
+  }, { sb, user: { id: riderA } })
+  assert.equal(badTrip.status, 404)
+  assert.equal(badTrip.json.code, 'trip_missing')
+
+  // 6. Cross-account attempt returns 403
+  const alienTrip = await call(handleRiderSwitch, {
+    method: 'POST',
+    body: { tripId: 'trip-switch-target' },
+  }, { sb, user: { id: riderB } })
+  assert.equal(alienTrip.status, 403)
+  assert.equal(alienTrip.json.code, 'not_rider')
+
+  // 7. Invalid action when confirm is true returns 400
+  const badAction = await call(handleRiderSwitch, {
+    method: 'POST',
+    body: { tripId: 'trip-switch-target', confirm: true, action: 'teleport' },
+  }, { sb, user: { id: riderA } })
+  assert.equal(badAction.status, 400)
+  assert.equal(badAction.json.code, 'rider_switch_action')
+
+  // 8. Preview mode returns 200 with quote, available tiers, and pool line
+  const preview = await call(handleRiderSwitch, {
+    method: 'POST',
+    body: { tripId: 'trip-switch-target', confirm: false },
+  }, { sb, user: { id: riderA } })
+  assert.equal(preview.status, 200)
+  assert.ok(preview.json.quote != null)
+  assert.ok(Array.isArray(preview.json.tiers))
+})
+
+test('tripMessages bounds: method, action, auth, counterpart access verification, and notifications', async () => {
+  const riderId = '11111111-2222-4333-8444-555555555555'
+  const driverId = '22222222-3333-4444-8555-666666666666'
+  const strangerId = '33333333-4444-4555-8666-777777777777'
+
+  const sb = createFakeSb({
+    trips: [
+      {
+        id: 'trip-chat-1',
+        rider_id: riderId,
+        driver_id: driverId,
+        status: 'accepted',
+      },
+    ],
+    trip_messages: [
+      {
+        id: 'msg-valid-1',
+        trip_id: 'trip-chat-1',
+        sender_id: riderId,
+        body: 'I am waiting by the curb',
+      },
+    ],
+    driver_status: [{ driver_id: driverId, expo_push_token: 'ExponentPushToken[driver-test]' }],
+    profiles: [
+      { id: riderId, email: 'rider@clemson.edu' },
+      { id: driverId, email: 'driver@clemson.edu' },
+    ],
+  })
+
+  // 1. Non-POST returns 405
+  const getRes = await call(handleTripMessages, { method: 'GET' }, { sb })
+  assert.equal(getRes.status, 405)
+
+  // 2. Invalid action returns 400
+  const badAction = await call(handleTripMessages, {
+    method: 'POST',
+    url: '/api/trip-messages?action=unsupported',
+  }, { sb, user: { id: riderId } })
+  assert.equal(badAction.status, 400)
+  assert.match(badAction.json.error, /action=message or action=lost-item/i)
+
+  // 3. Missing sb returns 503
+  const noSb = await call(handleTripMessages, {
+    method: 'POST',
+    url: '/api/trip-messages?action=message',
+    body: {},
+  }, { sb: null, user: { id: riderId } })
+  assert.equal(noSb.status, 503)
+
+  // 4. Unauthenticated returns 401
+  const unauth = await call(handleTripMessages, {
+    method: 'POST',
+    url: '/api/trip-messages?action=message',
+    body: {},
+  }, { sb, user: null })
+  assert.equal(unauth.status, 401)
+
+  // 5. Caller is neither rider nor driver on the trip returns 403
+  const stranger = await call(handleTripMessages, {
+    method: 'POST',
+    url: '/api/trip-messages?action=message',
+    body: { tripId: 'trip-chat-1', messageId: 'msg-valid-1' },
+  }, { sb, user: { id: strangerId } })
+  assert.equal(stranger.status, 403)
+  assert.match(stranger.json.error, /Could not notify/i)
+
+  // 6. Missing messageId or unverified message returns 403
+  const unverified = await call(handleTripMessages, {
+    method: 'POST',
+    url: '/api/trip-messages?action=message',
+    body: { tripId: 'trip-chat-1', messageId: 'msg-spoofed-not-in-db' },
+  }, { sb, user: { id: riderId } })
+  assert.equal(unverified.status, 403)
+  assert.match(unverified.json.error, /Could not notify/i)
+
+  // 7. Verified counterpart message notification returns 200
+  const validMsg = await call(handleTripMessages, {
+    method: 'POST',
+    url: '/api/trip-messages?action=message',
+    body: { tripId: 'trip-chat-1', messageId: 'msg-valid-1' },
+  }, { sb, user: { id: riderId } })
+  assert.equal(validMsg.status, 200)
+  assert.equal(validMsg.json.ok, true)
+})
+
+test('tigerHeat and friendRides bounds: methods, HEAD support, window queries, and action routing', async () => {
+  const sb = createFakeSb({
+    trips: [],
+  })
+
+  // --- tigerHeat tests ---
+  // 1. Non-GET/HEAD returns 405
+  const postHeat = await call(handleTigerHeat, { method: 'POST' }, { sb })
+  assert.equal(postHeat.status, 405)
+
+  // 2. HEAD returns 200 with empty body
+  const headHeat = await call(handleTigerHeat, { method: 'HEAD', url: '/api/tiger-heat?window=now' }, { sb })
+  assert.equal(headHeat.status, 200)
+  assert.equal(headHeat.body, '')
+
+  // 3. GET returns 200 with zones, solvency, and duration policy
+  const getHeat = await call(handleTigerHeat, { method: 'GET', url: '/api/tiger-heat?window=weekday_am' }, { sb })
+  assert.equal(getHeat.status, 200)
+  assert.equal(getHeat.json.label, 'Tiger Heat Map')
+  assert.equal(getHeat.json.windowId, 'weekday_am')
+  assert.ok(Array.isArray(getHeat.json.zones))
+  assert.ok(getHeat.json.solvency != null)
+  assert.ok(getHeat.json.durationPolicy != null)
+
+  // --- friendRides tests ---
+  // 4. Unknown action returns 400
+  const badAction = await call(handleFriendRides, {
+    method: 'POST',
+    url: '/api/friend-rides?action=unknown_action',
+  }, { sb })
+  assert.equal(badAction.status, 400)
+  assert.match(badAction.json.error, /Unknown friend ride action/i)
+
+  // 5. Non-POST on create returns 405
+  const getCreate = await call(handleFriendRides, {
+    method: 'GET',
+    url: '/api/friend-rides?action=create',
+  }, { sb })
+  assert.equal(getCreate.status, 405)
+
+  // 6. Unauthenticated on create returns 401
+  const unauthCreate = await call(handleFriendRides, {
+    method: 'POST',
+    url: '/api/friend-rides?action=create',
+    body: {},
+  }, { sb, user: null })
+  assert.equal(unauthCreate.status, 401)
 })
 
 
