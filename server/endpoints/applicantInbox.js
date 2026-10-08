@@ -7,13 +7,13 @@ import { cors, json, parseBody, userFromAuth, admin } from '../friendRideLib.js'
 
 const MISSING = /schema cache|does not exist|could not find the table/i
 
-export default async function handler(req, res) {
+export default async function handler(req, res, deps = {}) {
   if (cors(req, res)) return
   if (req.method !== 'GET' && req.method !== 'POST') return json(res, 405, { error: 'Method not allowed' })
 
-  const sb = admin()
+  const sb = deps.sb !== undefined ? deps.sb : admin()
   if (!sb) return json(res, 503, { error: 'SUPABASE_SERVICE_ROLE_KEY not configured' })
-  const user = await userFromAuth(req)
+  const user = deps.user !== undefined ? deps.user : await (deps.userFromAuth || userFromAuth)(req)
   if (!user) return json(res, 401, { error: 'Sign in required' })
 
   if (req.method === 'GET') return load(sb, res, user.id)

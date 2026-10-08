@@ -72,9 +72,9 @@ export default async function handler(req, res, deps = {}) {
   const { body, error: pe } = parseBody(req)
   if (pe) return json(res, 400, { error: pe })
 
-  const user = deps.user !== undefined ? deps.user : await userFromAuth(req)
+  const user = deps.user !== undefined ? deps.user : await (deps.userFromAuth || userFromAuth)(req)
   if (!user) return json(res, 401, { error: 'Sign in required' })
-  const sb = deps.sb || admin()
+  const sb = deps.sb !== undefined ? deps.sb : admin()
   if (!sb) return json(res, 503, { error: 'SUPABASE_SERVICE_ROLE_KEY not configured' })
 
   const now = clockFrom(deps)

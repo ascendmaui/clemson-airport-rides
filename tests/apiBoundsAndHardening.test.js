@@ -38,6 +38,9 @@ import handleTripOfferPreview from '../server/endpoints/tripOfferPreview.js'
 import handleTripSettle from '../server/endpoints/tripSettle.js'
 import handleAbandonCheckout from '../server/endpoints/abandonCheckout.js'
 import handleReconcileCheckout from '../server/endpoints/reconcileCheckout.js'
+import handleClemsonMiamiCheckout from '../server/endpoints/clemsonMiamiCheckout.js'
+import handleApplicantInbox from '../server/endpoints/applicantInbox.js'
+import handleDriverCards from '../server/endpoints/driverCards.js'
 import handleRiderLive from '../api/rider-live.js'
 import { publishRiderPickup } from '../server/endpoints/riderLivePickup.js'
 import { backupBookingMetadata } from '../shared/backupDriverQueue.js'
@@ -1926,4 +1929,206 @@ test('checkout hardening: abandonCheckout and reconcileCheckout enforce security
   assert.equal(validReconcile.json.ok, true)
   assert.equal(validReconcile.json.paid, true)
 })
+
+// ---------------------------------------------------------------------------
+// 19. CLEMSON VS MIAMI PROMO CHECKOUT BOUNDS TESTS
+// ---------------------------------------------------------------------------
+
+test('fare & promo bounds: clemsonMiamiCheckout enforces method, auth, promo time window, single-use per rider, and Stripe availability', async () => {
+  const sb = createFakeSb({
+    trips: [
+      {
+        id: 'trip-promo-used',
+        rider_id: 'rider-repeat',
+        status: 'searching',
+        metadata: { promo: 'clemson-miami-2026-10-03', promo_ride: true },
+      },
+    ],
+    profiles: [
+      { id: 'rider-fresh', email: 'fresh@clemson.edu' },
+      { id: 'rider-repeat', email: 'repeat@clemson.edu' },
+    ],
+  })
+
+  const promoOpenDate = new Date(Date.UTC(2026, 9, 3, 16, 0, 0)) // Oct 3 2026, 12:00 PM EDT
+  const promoClosedDate = new Date(Date.UTC(2026, 9, 4, 12, 0, 0)) // Oct 4 2026
+
+  // 1. Non-POST returns 405 with security headers
+  const getPromo = await call(handleClemsonMiamiCheckout, { method: 'GET' }, { sb })
+  assert.equal(getPromo.status, 405)
+  assert.match(getPromo.headers['Cache-Control'] || getPromo.headers['cache-control'], /no-store, no-cache/i)
+  assert.match(getPromo.headers['Allow'] || getPromo.headers['allow'], /POST, OPTIONS/i)
+
+  // 2. Auth bounds
+  const noSbPromo = await call(handleClemsonMiamiCheckout, { method: 'POST' }, { sb: null, user: { id: 'rider-fresh' }, now: promoOpenDate })
+  assert.equal(noSbPromo.status, 503)
+
+  const unauthPromo = await call(handleClemsonMiamiCheckout, { method: 'POST' }, { sb, user: null, now: promoOpenDate })
+  assert.equal(unauthPromo.status, 401)
+
+  // 3. Promo window closed returns 403
+  const closedPromo = await call(handleClemsonMiamiCheckout, {
+    method: 'POST',
+  }, { sb, user: { id: 'rider-fresh' }, now: promoClosedDate })
+  assert.equal(closedPromo.status, 403)
+  assert.equal(closedPromo.json.promoApplied, false)
+  assert.match(closedPromo.json.error, /only available on October 3, 2026/i)
+
+  // 4. Stripe unconfigured returns 503
+  const noStripePromo = await call(handleClemsonMiamiCheckout, {
+    method: 'POST',
+  }, { sb, user: { id: 'rider-fresh' }, now: promoOpenDate, stripeOk: () => false })
+  assert.equal(noStripePromo.status, 503)
+  assert.match(noStripePromo.json.error, /Payments unavailable/i)
+
+  // 5. Account already used the promo returns 409
+  const repeatPromo = await call(handleClemsonMiamiCheckout, {
+    method: 'POST',
+  }, {
+    sb,
+    user: { id: 'rider-repeat' },
+    now: promoOpenDate,
+    stripeOk: () => true,
+    ensureProfile: async () => ({ ok: true }),
+  })
+  assert.equal(repeatPromo.status, 409)
+  assert.equal(repeatPromo.json.promoApplied, false)
+  assert.match(repeatPromo.json.error, /already used the \$1 Clemson vs Miami ride/i)
+
+  // 6. Valid checkout strips client money fields, enforces authoritative $1 fare, and creates session
+  let capturedSessionParams = null
+  const fakeStripe = {
+    checkout: {
+      sessions: {
+        create: async (params) => {
+          capturedSessionParams = params
+          return { id: 'cs_promo_1', url: 'https://checkout.stripe.com/pay/cs_promo_1' }
+        },
+      },
+    },
+  }
+  const validPromo = await call(handleClemsonMiamiCheckout, {
+    method: 'POST',
+    body: {
+      fareCents: 5000, // client tampering
+      depositCents: 2000,
+      amount: 9999,
+      isStudent: true,
+    },
+  }, {
+    sb,
+    user: { id: 'rider-fresh', email: 'fresh@clemson.edu' },
+    now: promoOpenDate,
+    stripeOk: () => true,
+    stripe: fakeStripe,
+    ensureProfile: async () => ({ ok: true }),
+  })
+  assert.equal(validPromo.status, 200)
+  assert.equal(validPromo.json.promoApplied, true)
+  assert.equal(validPromo.json.chargedCents, 100) // $1 authoritative
+  assert.equal(capturedSessionParams.metadata.tripId, validPromo.json.tripId)
+  assert.equal(capturedSessionParams.metadata.promo, 'clemson-miami-2026-10-03')
+  assert.equal(capturedSessionParams.metadata.kind, 'promo_ride')
+})
+
+// ---------------------------------------------------------------------------
+// 20. DRIVER APPLICANT INBOX & CARDS BOUNDS TESTS
+// ---------------------------------------------------------------------------
+
+test('driver inbox & card bounds: applicantInbox and driverCards enforce method, auth, character bounds, and onboarding approval projection', async () => {
+  const approvedDriverId = '11111111-2222-4333-8444-555555555555'
+  const pendingDriverId = '22222222-3333-4444-8555-666666666666'
+
+  const sb = createFakeSb({
+    profiles: [
+      { id: 'app-user-1', email: 'applicant1@clemson.edu', full_name: 'Applicant One' },
+      { id: approvedDriverId, full_name: 'Approved Driver', rating_avg: 4.88, rating_count: 50, standing: 'Top Driver' },
+      { id: pendingDriverId, full_name: 'Pending Driver', rating_avg: 5.0, rating_count: 1, standing: 'New' },
+    ],
+    driver_applications: [
+      { profile_id: approvedDriverId, onboarding_status: 'approved' },
+      { profile_id: pendingDriverId, onboarding_status: 'pending' },
+    ],
+    vehicles: [
+      { driver_id: approvedDriverId, color: 'Orange', make: 'Toyota', model: 'Camry', plate: 'TGR-101', tier: 'standard' },
+      { driver_id: pendingDriverId, color: 'White', make: 'Ford', model: 'Focus', plate: 'TGR-102', tier: 'standard' },
+    ],
+    driver_application_messages: [],
+    driver_info_requests: [
+      { id: 'req-1', profile_id: 'app-user-1', status: 'open', prompt: 'Upload proof of insurance' },
+    ],
+    admin_notifications: [],
+  })
+
+  // --- applicantInbox tests ---
+  // 1. Method bounds: DELETE returns 405
+  const delInbox = await call(handleApplicantInbox, { method: 'DELETE' }, { sb })
+  assert.equal(delInbox.status, 405)
+
+  // 2. Auth bounds
+  const noSbInbox = await call(handleApplicantInbox, { method: 'GET' }, { sb: null })
+  assert.equal(noSbInbox.status, 503)
+
+  const unauthInbox = await call(handleApplicantInbox, { method: 'GET' }, { sb, user: null })
+  assert.equal(unauthInbox.status, 401)
+
+  // 3. Empty message body returns 400
+  const emptyBodyInbox = await call(handleApplicantInbox, {
+    method: 'POST',
+    body: { body: '   ' },
+  }, { sb, user: { id: 'app-user-1' } })
+  assert.equal(emptyBodyInbox.status, 400)
+  assert.match(emptyBodyInbox.json.error, /1–4000 characters/i)
+
+  // 4. Oversized message body (>4000 chars) returns 400
+  const oversizedInbox = await call(handleApplicantInbox, {
+    method: 'POST',
+    body: { body: 'x'.repeat(4001) },
+  }, { sb, user: { id: 'app-user-1' } })
+  assert.equal(oversizedInbox.status, 400)
+  assert.match(oversizedInbox.json.error, /1–4000 characters/i)
+
+  // 5. Valid message posts, fulfills open requests, and logs notification
+  const validInbox = await call(handleApplicantInbox, {
+    method: 'POST',
+    body: { body: 'Here is my updated document' },
+  }, { sb, user: { id: 'app-user-1' } })
+  assert.equal(validInbox.status, 200)
+  assert.equal(validInbox.json.ok, true)
+  assert.equal(validInbox.json.message.body, 'Here is my updated document')
+  assert.equal(validInbox.json.message.author_role, 'applicant')
+
+  // --- driverCards tests ---
+  // 6. Non-POST returns 405
+  const getCards = await call(handleDriverCards, { method: 'GET' }, { sb })
+  assert.equal(getCards.status, 405)
+
+  // 7. Missing sb returns 503
+  const noSbCards = await call(handleDriverCards, { method: 'POST', body: { ids: [] } }, { sb: null })
+  assert.equal(noSbCards.status, 503)
+
+  // 8. Public driver cards only include approved drivers and protect private PII
+  const cardsRes = await call(handleDriverCards, {
+    method: 'POST',
+    body: {
+      ids: [
+        approvedDriverId,
+        pendingDriverId, // pending onboarding -> omitted
+        'not-a-uuid-driver', // non-uuid -> dropped
+      ],
+    },
+  }, { sb })
+  assert.equal(cardsRes.status, 200)
+  assert.equal(cardsRes.json.drivers.length, 1)
+  const card = cardsRes.json.drivers[0]
+  assert.equal(card.id, approvedDriverId)
+  assert.equal(card.full_name, 'Approved Driver')
+  assert.equal(card.make, 'Toyota')
+  assert.equal(card.plate, 'TGR-101')
+  // Private fields must never be exposed
+  assert.equal(card.email, undefined)
+  assert.equal(card.phone, undefined)
+  assert.equal(card.tin, undefined)
+})
+
 
