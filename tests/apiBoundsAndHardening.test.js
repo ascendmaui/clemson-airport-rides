@@ -3116,6 +3116,146 @@ test('tigerHeat and friendRides bounds: methods, HEAD support, window queries, a
     body: {},
   }, { sb, user: null })
   assert.equal(unauthCreate.status, 401)
+
+  // 7. Missing service role returns 503
+  const noSbCreate = await call(handleFriendRides, {
+    method: 'POST',
+    url: '/api/friend-rides?action=create',
+    body: {},
+  }, { sb: null, user: { id: 'driver-1' } })
+  assert.equal(noSbCreate.status, 503)
+
+  const driverWithVeh = 'driver-veh-1'
+  const unapprovedDriver = 'driver-unapproved-1'
+  const sbWithVeh = createFakeSb({
+    trips: [],
+    profiles: [
+      { id: driverWithVeh, full_name: 'Driver Bob', email: 'bob@clemson.edu' },
+      { id: unapprovedDriver, full_name: 'Driver Dan', email: 'dan@clemson.edu' },
+    ],
+    vehicles: [
+      { id: 'v-bob', driver_id: driverWithVeh, make: 'Honda', model: 'CR-V', seats: 4 },
+    ],
+    driver_applications: [
+      { profile_id: driverWithVeh, onboarding_status: 'approved' },
+      { profile_id: unapprovedDriver, onboarding_status: 'pending' },
+    ],
+    friend_rides: [],
+    friend_ride_participants: [],
+  })
+
+  // 8. Offering a carpool without approved driver status returns 403
+  const unapprovedCarpool = await call(handleFriendRides, {
+    method: 'POST',
+    url: '/api/friend-rides?action=create',
+    body: { kind: 'carpool' },
+  }, { sb: sbWithVeh, user: { id: unapprovedDriver } })
+  assert.equal(unapprovedCarpool.status, 403)
+  assert.equal(unapprovedCarpool.json.code, 'driver_not_approved')
+
+  // 9. Offering a friend ride without a vehicle on file returns 400
+  const noVehicleCreate = await call(handleFriendRides, {
+    method: 'POST',
+    url: '/api/friend-rides?action=create',
+    body: { kind: 'friends' },
+  }, { sb: sbWithVeh, user: { id: unapprovedDriver } })
+  assert.equal(noVehicleCreate.status, 400)
+  assert.equal(noVehicleCreate.json.code, 'vehicle_required')
+
+  // 10. Successful friend ride creation returns 200 with ride token and urlPath
+  const createSuccess = await call(handleFriendRides, {
+    method: 'POST',
+    url: '/api/friend-rides?action=create',
+    body: {
+      kind: 'friends',
+      displayName: 'Bob Organizer',
+      pickup: { label: 'Campus Green' },
+      dropoff: { label: 'Downtown' },
+    },
+  }, { sb: sbWithVeh, user: { id: driverWithVeh, email: 'bob@clemson.edu' } })
+  assert.equal(createSuccess.status, 200)
+  assert.ok(createSuccess.json.token)
+  assert.equal(createSuccess.json.kind, 'friends')
+  assert.match(createSuccess.json.urlPath, /^\/friends\//)
+  const createdToken = createSuccess.json.token
+
+  // 11. action=get bounds: missing token returns 400, unknown token returns 404, valid token returns 200
+  const getMissingToken = await call(handleFriendRides, {
+    method: 'GET',
+    url: '/api/friend-rides?action=get',
+  }, { sb: sbWithVeh })
+  assert.equal(getMissingToken.status, 400)
+  assert.match(getMissingToken.json.error, /token required/i)
+
+  const getUnknownToken = await call(handleFriendRides, {
+    method: 'GET',
+    url: '/api/friend-rides?action=get&token=nonexistent_token_99',
+  }, { sb: sbWithVeh })
+  assert.equal(getUnknownToken.status, 404)
+  assert.match(getUnknownToken.json.error, /Friend ride not found/i)
+
+  const getSuccess = await call(handleFriendRides, {
+    method: 'GET',
+    url: `/api/friend-rides?action=get&token=${createdToken}`,
+  }, { sb: sbWithVeh, user: { id: driverWithVeh } })
+  assert.equal(getSuccess.status, 200)
+  assert.equal(getSuccess.json.token, createdToken)
+  assert.equal(getSuccess.json.is_organizer, true)
+  assert.ok(Array.isArray(getSuccess.json.participants))
+
+  // 12. GET with ?token=... without explicit action routes to get automatically
+  const getAutoRoute = await call(handleFriendRides, {
+    method: 'GET',
+    url: `/api/friend-rides?token=${createdToken}`,
+  }, { sb: sbWithVeh, user: { id: driverWithVeh } })
+  assert.equal(getAutoRoute.status, 200)
+  assert.equal(getAutoRoute.json.token, createdToken)
+
+  // 13. action=join bounds: method (405), missing token (400), missing displayName (400), missing coords (400)
+  const getJoin = await call(handleFriendRides, {
+    method: 'GET',
+    url: '/api/friend-rides?action=join',
+  }, { sb: sbWithVeh })
+  assert.equal(getJoin.status, 405)
+
+  const joinMissingToken = await call(handleFriendRides, {
+    method: 'POST',
+    url: '/api/friend-rides?action=join',
+    body: { displayName: 'Alice' },
+  }, { sb: sbWithVeh })
+  assert.equal(joinMissingToken.status, 400)
+  assert.match(joinMissingToken.json.error, /token required/i)
+
+  const joinMissingName = await call(handleFriendRides, {
+    method: 'POST',
+    url: '/api/friend-rides?action=join',
+    body: { token: createdToken, displayName: '' },
+  }, { sb: sbWithVeh })
+  assert.equal(joinMissingName.status, 400)
+  assert.match(joinMissingName.json.error, /displayName required/i)
+
+  const joinMissingPoints = await call(handleFriendRides, {
+    method: 'POST',
+    url: '/api/friend-rides?action=join',
+    body: { token: createdToken, displayName: 'Alice' },
+  }, { sb: sbWithVeh })
+  assert.equal(joinMissingPoints.status, 400)
+  assert.match(joinMissingPoints.json.error, /pickup and\/or dropoff required/i)
+
+  // 14. action=recompute bounds: method (405), missing token (400)
+  const getRecompute = await call(handleFriendRides, {
+    method: 'GET',
+    url: '/api/friend-rides?action=recompute',
+  }, { sb: sbWithVeh })
+  assert.equal(getRecompute.status, 405)
+
+  const recomputeMissingToken = await call(handleFriendRides, {
+    method: 'POST',
+    url: '/api/friend-rides?action=recompute',
+    body: {},
+  }, { sb: sbWithVeh })
+  assert.equal(recomputeMissingToken.status, 400)
+  assert.match(recomputeMissingToken.json.error, /token required/i)
 })
 
 // ---------------------------------------------------------------------------
