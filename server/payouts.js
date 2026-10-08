@@ -118,7 +118,7 @@ export async function writePayout(sb, trip, payout) {
   }
   const row = {
     trip_id: trip.id,
-    driver_id: trip.driver_id,
+    driver_id: trip.driver_id || payout?.driverId || null,
     amount_cents: payout.amountCents,
     status: payout.status,
     attempts: payout.attempts || 0,

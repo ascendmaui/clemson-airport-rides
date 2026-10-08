@@ -348,3 +348,58 @@ test('a signed-in driver on Vercel without a cron signal still gets earnings', a
   assert.equal(result.queries, 1)
   assert.equal(typeof result.body.paidCents, 'number')
 })
+
+test('signed-in driver POST retries due payouts and returns results and summary', async () => {
+  const result = await invoke({
+    env: { VERCEL: '1' },
+    method: 'POST',
+    headers: { 'user-agent': 'Mozilla/5.0' },
+    user: { id: 'd_1' },
+  })
+  assert.equal(result.status, 200)
+  assert.equal(result.calls.attempt, 1)
+  assert.equal(result.calls.write, 1)
+  assert.equal(Array.isArray(result.body.results), true)
+  assert.equal(result.body.results.length, 1)
+  assert.equal(result.body.results[0].status, 'paid')
+  assert.equal(typeof result.body.summary, 'object')
+})
+
+test('driver payouts rejects unsupported methods and enforces 503 on missing db', async () => {
+  const putRes = mockRes()
+  await driverPayoutsHandler({ method: 'PUT', headers: {} }, putRes)
+  assert.equal(putRes.statusCode, 405)
+  assert.equal(putRes.headers['allow'], 'GET, POST, OPTIONS')
+  assert.match(putRes.headers['cache-control'], /no-store/)
+
+  const delRes = mockRes()
+  await driverPayoutsHandler({ method: 'DELETE', headers: {} }, delRes)
+  assert.equal(delRes.statusCode, 405)
+
+  const noSbRes = mockRes()
+  await driverPayoutsHandler({ method: 'GET', headers: {} }, noSbRes, { sb: null, admin: () => null })
+  assert.equal(noSbRes.statusCode, 503)
+  assert.match(JSON.parse(noSbRes.body).error, /SUPABASE_SERVICE_ROLE_KEY/)
+})
+
+test('driver payouts handles database query failure gracefully', async () => {
+  const errSb = {
+    from() {
+      return {
+        select() { return this },
+        eq() { return this },
+        order() { return this },
+        limit: async () => ({ data: null, error: { message: 'Database connection dropped' } }),
+      }
+    },
+  }
+  const res = mockRes()
+  await driverPayoutsHandler({ method: 'GET', headers: {} }, res, {
+    sb: errSb,
+    user: { id: 'd_1' },
+    env: { VERCEL: '1' },
+  })
+  assert.equal(res.statusCode, 500)
+  assert.equal(JSON.parse(res.body).error, 'Database connection dropped')
+})
+
