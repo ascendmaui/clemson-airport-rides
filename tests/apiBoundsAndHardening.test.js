@@ -52,6 +52,9 @@ import handleFriendRides from '../api/friend-rides.js'
 import handleRiderLive from '../api/rider-live.js'
 import { publishRiderPickup } from '../server/endpoints/riderLivePickup.js'
 import { backupBookingMetadata } from '../shared/backupDriverQueue.js'
+import handleAdminDrivers from '../api/admin-drivers.js'
+import handleCreateCheckoutSession from '../api/create-checkout-session.js'
+import handleHelpChat from '../server/endpoints/helpChat.js'
 
 const NOW = new Date('2026-10-10T15:00:00.000Z')
 const SIKES = { label: 'Sikes Hall', lat: 34.6795, lng: -82.8374 }
@@ -101,6 +104,11 @@ function createFakeSb(initialData = {}) {
     trip_events: [],
     driver_applications: [],
     driver_status: [],
+    driver_documents: [],
+    driver_tax_info: [],
+    driver_agreements: [],
+    driver_agreement_packets: [],
+    ratings: [],
     vehicles: [],
     payments: [],
     ride_bills: [],
@@ -113,6 +121,15 @@ function createFakeSb(initialData = {}) {
 
   return {
     _tables: tables,
+    storage: {
+      from(bucket) {
+        return {
+          async createSignedUrl(path, ttl) {
+            return { data: { signedUrl: `https://fake.storage/${bucket}/${path}?signed=1` }, error: null }
+          },
+        }
+      },
+    },
     from(table) {
       if (!tables[table]) tables[table] = []
       let selectedCols = '*'
@@ -135,6 +152,10 @@ function createFakeSb(initialData = {}) {
         },
         in(col, vals) {
           filters.push({ col, op: 'in', val: vals })
+          return chain
+        },
+        or(expr) {
+          filters.push({ col: '__or__', op: 'or', val: expr })
           return chain
         },
         gt(col, val) {
@@ -162,7 +183,15 @@ function createFakeSb(initialData = {}) {
             filters.every((f) => {
               if (f.op === 'eq') return row[f.col] === f.val
               if (f.op === 'is') return f.val === null ? row[f.col] == null : row[f.col] === f.val
-              if (f.op === 'in') return f.val.includes(row[f.col])
+              if (f.op === 'in') return Array.isArray(f.val) ? f.val.includes(row[f.col]) : false
+              if (f.op === 'or') {
+                const parts = String(f.val || '').split(',')
+                return parts.some((part) => {
+                  const [pCol, pOp, pVal] = part.split('.')
+                  if (pOp === 'eq') return row[pCol] === pVal
+                  return false
+                })
+              }
               if (f.op === 'gt') return row[f.col] > f.val
               if (f.op === 'gte') return row[f.col] >= f.val
               if (f.op === 'lte') return row[f.col] <= f.val
@@ -176,7 +205,15 @@ function createFakeSb(initialData = {}) {
             filters.every((f) => {
               if (f.op === 'eq') return row[f.col] === f.val
               if (f.op === 'is') return f.val === null ? row[f.col] == null : row[f.col] === f.val
-              if (f.op === 'in') return f.val.includes(row[f.col])
+              if (f.op === 'in') return Array.isArray(f.val) ? f.val.includes(row[f.col]) : false
+              if (f.op === 'or') {
+                const parts = String(f.val || '').split(',')
+                return parts.some((part) => {
+                  const [pCol, pOp, pVal] = part.split('.')
+                  if (pOp === 'eq') return row[pCol] === pVal
+                  return false
+                })
+              }
               if (f.op === 'gt') return row[f.col] > f.val
               if (f.op === 'gte') return row[f.col] >= f.val
               if (f.op === 'lte') return row[f.col] <= f.val
@@ -242,9 +279,9 @@ function createFakeSb(initialData = {}) {
               updateFilters.push({ col, op: 'in', val: vals })
               return updateObj
             },
-            select: () => ({
-              single: async () => {
-                const target = tables[table].find((row) =>
+            select: () => {
+              const run = () => {
+                const matches = tables[table].filter((row) =>
                   updateFilters.every((f) => {
                     if (f.op === 'eq') {
                       if (f.col === 'metadata' && row.metadata && f.val) {
@@ -257,27 +294,24 @@ function createFakeSb(initialData = {}) {
                     return true
                   })
                 )
-                if (target) Object.assign(target, patch)
-                return { data: target || null, error: null }
-              },
-              maybeSingle: async () => {
-                const target = tables[table].find((row) =>
-                  updateFilters.every((f) => {
-                    if (f.op === 'eq') {
-                      if (f.col === 'metadata' && row.metadata && f.val) {
-                        return JSON.stringify(row.metadata) === (typeof f.val === 'string' ? f.val : JSON.stringify(f.val))
-                      }
-                      return row[f.col] === f.val
-                    }
-                    if (f.op === 'is') return f.val === null ? row[f.col] == null : row[f.col] === f.val
-                    if (f.op === 'in') return Array.isArray(f.val) ? f.val.includes(row[f.col]) : false
-                    return true
-                  })
-                )
-                if (target) Object.assign(target, patch)
-                return { data: target || null, error: null }
-              },
-            }),
+                for (const m of matches) Object.assign(m, patch)
+                return matches
+              }
+              return {
+                single: async () => {
+                  const matches = run()
+                  return { data: matches[0] || null, error: matches[0] ? null : { message: 'Row not found' } }
+                },
+                maybeSingle: async () => {
+                  const matches = run()
+                  return { data: matches[0] || null, error: null }
+                },
+                then(resolve) {
+                  const matches = run()
+                  resolve({ data: matches, error: null })
+                },
+              }
+            },
             then(resolve) {
               const matches = tables[table].filter((row) =>
                 updateFilters.every((f) => {
@@ -304,6 +338,14 @@ function createFakeSb(initialData = {}) {
               if (f.op === 'eq') return row[f.col] === f.val
               if (f.op === 'is') return f.val === null ? row[f.col] == null : row[f.col] === f.val
               if (f.op === 'in') return Array.isArray(f.val) ? f.val.includes(row[f.col]) : false
+              if (f.op === 'or') {
+                const parts = String(f.val || '').split(',')
+                return parts.some((part) => {
+                  const [pCol, pOp, pVal] = part.split('.')
+                  if (pOp === 'eq') return row[pCol] === pVal
+                  return false
+                })
+              }
               if (f.op === 'gt') return row[f.col] > f.val
               if (f.op === 'gte') return row[f.col] >= f.val
               if (f.op === 'lte') return row[f.col] <= f.val
@@ -2847,5 +2889,411 @@ test('tigerHeat and friendRides bounds: methods, HEAD support, window queries, a
   }, { sb, user: null })
   assert.equal(unauthCreate.status, 401)
 })
+
+// ---------------------------------------------------------------------------
+// 21. ADMIN DRIVERS BOUNDS TESTS
+// ---------------------------------------------------------------------------
+
+test('admin drivers bounds: handleAdminDrivers method, auth, admin gate, locked agreement, vehicle update, and approval gates', async () => {
+  const adminUser = { id: 'admin-1', email: 'ops@clemsonrides.com', role: 'admin' }
+  const riderUser = { id: 'rider-1', email: 'rider@clemson.edu', role: 'rider' }
+  const driverUser = { id: 'driver-1', email: 'applicant@clemson.edu', role: 'driver' }
+
+  const sb = createFakeSb({
+    profiles: [
+      { id: adminUser.id, email: adminUser.email, role: 'admin', is_admin: true, full_name: 'Ops Admin' },
+      { id: riderUser.id, email: riderUser.email, role: 'rider', is_admin: false, full_name: 'Regular Rider' },
+      { id: driverUser.id, email: driverUser.email, role: 'driver', is_admin: false, full_name: 'Dan Driver' },
+      { id: 'driver-applicant', email: 'app@clemson.edu', role: 'rider', is_admin: false, full_name: 'Alex Applicant' },
+      { id: 'denied-1', email: 'john@gmail.com', role: 'admin', is_admin: true, full_name: 'Denied User' },
+    ],
+    vehicles: [
+      { id: 'v-1', driver_id: driverUser.id, make: 'Toyota', model: 'Camry', year: 2022, service_class: 'standard', tier: 'standard' },
+    ],
+    driver_applications: [
+      {
+        id: 'app-driver-1',
+        profile_id: driverUser.id,
+        onboarding_status: 'approved',
+        status: 'approved',
+        work_eligibility_attested_at: '2026-09-01T12:00:00Z',
+        work_eligibility_category: 'citizen',
+        applicant_email: driverUser.email,
+        submitted_at: '2026-09-01T12:00:00Z',
+      },
+      {
+        id: 'app-1',
+        profile_id: 'driver-applicant',
+        onboarding_status: 'submitted',
+        status: 'submitted',
+        work_eligibility_attested_at: '2026-10-01T12:00:00Z',
+        work_eligibility_category: 'citizen',
+        applicant_email: 'app@clemson.edu',
+        submitted_at: '2026-10-01T12:00:00Z',
+      },
+    ],
+    driver_status: [
+      { driver_id: driverUser.id, online: true },
+    ],
+    driver_documents: [
+      { id: 'doc-1', profile_id: driverUser.id, doc_type: 'drivers_license', storage_path: 'driver-1/dl.pdf' },
+    ],
+  })
+
+  // 1. Method validation: PUT and DELETE return 405
+  const putRes = await call(handleAdminDrivers, { method: 'PUT' }, { sb, user: adminUser })
+  assert.equal(putRes.status, 405)
+
+  const delRes = await call(handleAdminDrivers, { method: 'DELETE' }, { sb, user: adminUser })
+  assert.equal(delRes.status, 405)
+
+  // 2. Auth & service role: missing sb returns 503, missing user returns 401
+  const noSbRes = await call(handleAdminDrivers, { method: 'GET' }, { sb: null })
+  assert.equal(noSbRes.status, 503)
+
+  const unauthRes = await call(handleAdminDrivers, { method: 'GET' }, { sb, user: null })
+  assert.equal(unauthRes.status, 401)
+
+  // 3. Admin gate: regular rider gets 403 Admin only
+  const riderGate = await call(handleAdminDrivers, { method: 'GET' }, { sb, user: riderUser })
+  assert.equal(riderGate.status, 403)
+  assert.equal(riderGate.json.error, 'Admin only')
+
+  // Denied email returns 403
+  const deniedGate = await call(handleAdminDrivers, { method: 'GET' }, {
+    sb,
+    user: { id: 'denied-1', email: 'john@gmail.com' },
+  })
+  assert.equal(deniedGate.status, 403)
+
+  // 4. Locked agreement text tampering rejection
+  const tamperedHtml = await call(handleAdminDrivers, {
+    method: 'POST',
+    body: { profileId: 'driver-applicant', decision: 'approve', html: '<h1>Tampered Terms</h1>' },
+  }, { sb, user: adminUser })
+  assert.equal(tamperedHtml.status, 400)
+  assert.match(tamperedHtml.json.error, /Agreement text cannot be edited/i)
+
+  const tamperedCamelHtml = await call(handleAdminDrivers, {
+    method: 'POST',
+    body: { profileId: 'driver-applicant', decision: 'approve', agreementHtml: '<h1>Tampered</h1>' },
+  }, { sb, user: adminUser })
+  assert.equal(tamperedCamelHtml.status, 400)
+  assert.match(tamperedCamelHtml.json.error, /Agreement text cannot be edited/i)
+
+  // 5. Vehicle action bounds
+  const badVehMissing = await call(handleAdminDrivers, {
+    method: 'POST',
+    body: { action: 'vehicle', profileId: '' },
+  }, { sb, user: adminUser })
+  assert.equal(badVehMissing.status, 400)
+  assert.match(badVehMissing.json.error, /Driver, make and model required/i)
+
+  const badVehNoMake = await call(handleAdminDrivers, {
+    method: 'POST',
+    body: { action: 'vehicle', profileId: driverUser.id, make: '', model: 'Highlander' },
+  }, { sb, user: adminUser })
+  assert.equal(badVehNoMake.status, 400)
+
+  const vehNotFound = await call(handleAdminDrivers, {
+    method: 'POST',
+    body: { action: 'vehicle', profileId: 'driver-ghost', make: 'Ford', model: 'Explorer' },
+  }, { sb, user: adminUser })
+  assert.equal(vehNotFound.status, 404)
+  assert.match(vehNotFound.json.error, /No vehicle on file/i)
+
+  const vehSuccess = await call(handleAdminDrivers, {
+    method: 'POST',
+    body: {
+      action: 'vehicle',
+      profileId: driverUser.id,
+      make: 'Subaru',
+      model: 'Outback',
+      serviceClass: 'comfort',
+    },
+  }, { sb, user: adminUser })
+  assert.equal(vehSuccess.status, 200)
+  assert.equal(vehSuccess.json.message, 'Vehicle updated')
+  const updatedVeh = sb._tables.vehicles.find((v) => v.driver_id === driverUser.id)
+  assert.equal(updatedVeh.make, 'Subaru')
+  assert.equal(updatedVeh.model, 'Outback')
+  assert.equal(updatedVeh.service_class, 'comfort')
+
+  // 6. Review action bounds
+  const noProfileReview = await call(handleAdminDrivers, {
+    method: 'POST',
+    body: { decision: 'approve' },
+  }, { sb, user: adminUser })
+  assert.equal(noProfileReview.status, 400)
+  assert.match(noProfileReview.json.error, /profileId is required/i)
+
+  const badDecision = await call(handleAdminDrivers, {
+    method: 'POST',
+    body: { profileId: 'driver-applicant', decision: 'maybe' },
+  }, { sb, user: adminUser })
+  assert.equal(badDecision.status, 400)
+  assert.match(badDecision.json.error, /decision must be approve or reject/i)
+
+  const rejectNoReason = await call(handleAdminDrivers, {
+    method: 'POST',
+    body: { profileId: 'driver-applicant', decision: 'reject', reason: 'no' },
+  }, { sb, user: adminUser })
+  assert.equal(rejectNoReason.status, 400)
+  assert.match(rejectNoReason.json.error, /rejection reason is required/i)
+
+  const ghostProfile = await call(handleAdminDrivers, {
+    method: 'POST',
+    body: { profileId: 'ghost-profile-id', decision: 'approve' },
+  }, { sb, user: adminUser })
+  assert.equal(ghostProfile.status, 404)
+  assert.match(ghostProfile.json.error, /Driver profile not found/i)
+
+  // 7. Approve blockers: missing signed agreement
+  const approveNoAgreed = await call(handleAdminDrivers, {
+    method: 'POST',
+    body: { profileId: 'driver-applicant', decision: 'approve' },
+  }, { sb, user: adminUser })
+  assert.equal(approveNoAgreed.status, 400)
+  assert.match(approveNoAgreed.json.error, /Approve stays off until the driver signs the contractor agreement/i)
+  assert.ok(approveNoAgreed.json.missing.includes('ic_agreement'))
+
+  // 8. Rejection lifecycle: downgrades driver to rider and turns off online status
+  const rejectRes = await call(handleAdminDrivers, {
+    method: 'POST',
+    body: {
+      profileId: driverUser.id,
+      decision: 'reject',
+      reason: 'Failed annual vehicle safety check',
+    },
+  }, { sb, user: adminUser })
+  assert.equal(rejectRes.status, 200)
+  assert.equal(rejectRes.json.ok, true)
+  assert.equal(rejectRes.json.onboarding_status, 'rejected')
+  const rejectedProf = sb._tables.profiles.find((p) => p.id === driverUser.id)
+  assert.equal(rejectedProf.role, 'rider')
+  const rejectedStatus = sb._tables.driver_status.find((s) => s.driver_id === driverUser.id)
+  assert.equal(rejectedStatus.online, false)
+
+  // 9. Queue listing (GET /api/admin-drivers)
+  const queueRes = await call(handleAdminDrivers, {
+    method: 'GET',
+    url: '/api/admin-drivers',
+  }, { sb, user: adminUser })
+  assert.equal(queueRes.status, 200)
+  assert.ok(Array.isArray(queueRes.json.applications))
+
+  // 10. Detail read (GET /api/admin-drivers?profile_id=...)
+  const detailRes = await call(handleAdminDrivers, {
+    method: 'GET',
+    url: `/api/admin-drivers?profile_id=${driverUser.id}`,
+  }, { sb, user: adminUser })
+  assert.equal(detailRes.status, 200)
+  assert.equal(detailRes.json.profile_id, driverUser.id)
+  assert.ok(Array.isArray(detailRes.json.documents))
+
+  // 11. Support routing: ?action=help-chat executes help chat handler
+  const helpRouteRes = await call(handleAdminDrivers, {
+    method: 'POST',
+    url: '/api/admin-drivers?action=help-chat',
+    body: {
+      messages: [{ role: 'user', content: 'What are the airport pickup spots?' }],
+    },
+  }, { sb, user: adminUser })
+  assert.equal(helpRouteRes.status, 200)
+  assert.equal(helpRouteRes.json.source, 'offline')
+})
+
+// ---------------------------------------------------------------------------
+// 22. CREATE CHECKOUT SESSION BOUNDS & INTEGRITY TESTS
+// ---------------------------------------------------------------------------
+
+test('create-checkout-session bounds: method, auth, student discount spoofing, fare tampering, and cross-account trip isolation', async () => {
+  const clemsonStudent = {
+    id: 'student-1',
+    email: 'tigers26@clemson.edu',
+    email_confirmed_at: '2026-09-01T12:00:00Z',
+    user_metadata: { full_name: 'Clemson Tiger' },
+  }
+  const regularRider = {
+    id: 'rider-ext',
+    email: 'rider@gmail.com',
+    email_confirmed_at: '2026-09-01T12:00:00Z',
+    user_metadata: { full_name: 'External Rider' },
+  }
+  const unconfirmedStudent = {
+    id: 'student-unconfirmed',
+    email: 'freshman@clemson.edu',
+    email_confirmed_at: null,
+    user_metadata: { full_name: 'Unconfirmed Student' },
+  }
+  const otherRider = {
+    id: 'rider-other',
+    email: 'other@clemson.edu',
+  }
+
+  const sb = createFakeSb({
+    profiles: [
+      { id: clemsonStudent.id, email: clemsonStudent.email, full_name: 'Clemson Tiger', role: 'rider' },
+      { id: regularRider.id, email: regularRider.email, full_name: 'External Rider', role: 'rider' },
+      { id: unconfirmedStudent.id, email: unconfirmedStudent.email, full_name: 'Unconfirmed Student', role: 'rider' },
+      { id: otherRider.id, email: otherRider.email, full_name: 'Other Rider', role: 'rider' },
+    ],
+    trips: [
+      {
+        id: 'trip-existing-student',
+        rider_id: clemsonStudent.id,
+        fare_cents: 4500,
+        deposit_cents: 0,
+        status: 'searching',
+        metadata: { airport: 'GSP' },
+      },
+      {
+        id: 'trip-other-rider',
+        rider_id: otherRider.id,
+        fare_cents: 5000,
+        deposit_cents: 0,
+        status: 'searching',
+        metadata: { airport: 'GSP' },
+      },
+    ],
+  })
+
+  // 1. Method validation: GET returns 405 with Allow header
+  const getRes = await call(handleCreateCheckoutSession, { method: 'GET' }, { sb, user: regularRider })
+  assert.equal(getRes.status, 405)
+  assert.equal(getRes.headers.allow, 'POST, OPTIONS')
+
+  // 2. Auth & service role bounds
+  const unauthRes = await call(handleCreateCheckoutSession, { method: 'POST', body: {} }, { sb, user: null })
+  assert.equal(unauthRes.status, 401)
+  assert.equal(unauthRes.json.error, 'Sign in required')
+
+  const noSbRes = await call(handleCreateCheckoutSession, { method: 'POST', body: {} }, { sb: null, user: regularRider })
+  assert.equal(noSbRes.status, 503)
+  assert.equal(noSbRes.json.error, 'SUPABASE_SERVICE_ROLE_KEY not configured')
+
+  // 3. Student discount spoof prevention: non-clemson email submitting isStudent: true
+  const spoofRes = await call(handleCreateCheckoutSession, {
+    method: 'POST',
+    body: {
+      airport: 'GSP',
+      isStudent: true,
+      fareCents: 1500, // Client tampering
+    },
+  }, { sb, user: regularRider, ensureProfile: async () => ({ ok: true }) })
+  assert.equal(spoofRes.status, 200)
+  assert.equal(spoofRes.json.studentDiscountApplied, false)
+  assert.equal(spoofRes.json.clientFareIgnored, true)
+  assert.ok(spoofRes.json.fareCents > 1500)
+  assert.equal(spoofRes.json.depositCents, 0)
+  assert.equal(spoofRes.json.dueAtTripEndCents, spoofRes.json.fareCents)
+
+  // 4. Unconfirmed Clemson student domain: discount held until email confirmed
+  const unconfirmedRes = await call(handleCreateCheckoutSession, {
+    method: 'POST',
+    body: {
+      airport: 'GSP',
+    },
+  }, { sb, user: unconfirmedStudent, ensureProfile: async () => ({ ok: true }) })
+  assert.equal(unconfirmedRes.status, 200)
+  assert.equal(unconfirmedRes.json.studentDiscountApplied, false)
+
+  // 5. Confirmed Clemson student receives 10% student discount on Standard tier
+  const studentRes = await call(handleCreateCheckoutSession, {
+    method: 'POST',
+    body: {
+      airport: 'GSP',
+    },
+  }, { sb, user: clemsonStudent, ensureProfile: async () => ({ ok: true }) })
+  assert.equal(studentRes.status, 200)
+  assert.equal(studentRes.json.studentDiscountApplied, true)
+  assert.ok(studentRes.json.fareCents < spoofRes.json.fareCents) // 10% lower than standard non-student
+
+  // 5. Cross-account trip security: updating trip belonging to another rider returns 404
+  const stolenTripRes = await call(handleCreateCheckoutSession, {
+    method: 'POST',
+    body: {
+      tripId: 'trip-other-rider',
+      airport: 'GSP',
+    },
+  }, { sb, user: clemsonStudent, ensureProfile: async () => ({ ok: true }) })
+  assert.equal(stolenTripRes.status, 404)
+  assert.equal(stolenTripRes.json.error, 'Trip not found')
+
+  // 6. Updating own tripId preserves trip ownership and updates fare breakdown
+  const updateOwnTrip = await call(handleCreateCheckoutSession, {
+    method: 'POST',
+    body: {
+      tripId: 'trip-existing-student',
+      airport: 'GSP',
+    },
+  }, { sb, user: clemsonStudent, ensureProfile: async () => ({ ok: true }) })
+  assert.equal(updateOwnTrip.status, 200)
+  assert.equal(updateOwnTrip.json.tripId, 'trip-existing-student')
+  const tripInDb = sb._tables.trips.find((t) => t.id === 'trip-existing-student')
+  assert.equal(tripInDb.fare_cents, updateOwnTrip.json.fareCents)
+  assert.equal(tripInDb.deposit_cents, 0)
+})
+
+// ---------------------------------------------------------------------------
+// 23. HELP CHAT BOUNDS & OFFLINE GUIDANCE TESTS
+// ---------------------------------------------------------------------------
+
+test('helpChat bounds: method, message sanitization, rate limiting, and unauthenticated/authenticated guidance', async () => {
+  const sb = createFakeSb({
+    profiles: [
+      { id: 'user-with-card', email: 'cardholder@clemson.edu', stripe_default_pm_id: 'pm_123' },
+    ],
+  })
+
+  // 1. Non-POST returns 405
+  const getRes = await call(handleHelpChat, { method: 'GET' }, { sb })
+  assert.equal(getRes.status, 405)
+
+  // 2. Empty or missing user message returns 400
+  const noUserMsg = await call(handleHelpChat, {
+    method: 'POST',
+    body: { messages: [{ role: 'assistant', content: 'Hello!' }] },
+  }, { sb })
+  assert.equal(noUserMsg.status, 400)
+  assert.equal(noUserMsg.json.error, 'Send a question to Help.')
+
+  // 3. Rate limiting enforcement: returns 429 when bucket limit is reached
+  const rateLimitedRes = await call(handleHelpChat, {
+    method: 'POST',
+    body: { messages: [{ role: 'user', content: 'How do I add a card?' }] },
+  }, {
+    sb,
+    rateLimit: () => false,
+  })
+  assert.equal(rateLimitedRes.status, 429)
+  assert.match(rateLimitedRes.json.error, /Too many Help messages/i)
+  assert.equal(rateLimitedRes.json.source, 'offline')
+
+  // 4. Unauthenticated caller gets guidance with sign-in reminder note
+  const unauthHelp = await call(handleHelpChat, {
+    method: 'POST',
+    body: { messages: [{ role: 'user', content: 'How do I book a ride to GSP airport?' }] },
+  }, {
+    sb,
+    user: null,
+  })
+  assert.equal(unauthHelp.status, 200)
+  assert.equal(unauthHelp.json.source, 'offline')
+  assert.match(unauthHelp.json.reply, /Sign in so Help can use your trips and billing status/i)
+
+  // 5. Authenticated caller gets personalized offline guidance
+  const authHelp = await call(handleHelpChat, {
+    method: 'POST',
+    body: { messages: [{ role: 'user', content: 'What is the refund policy?' }] },
+  }, {
+    sb,
+    user: { id: 'user-with-card', email: 'cardholder@clemson.edu' },
+  })
+  assert.equal(authHelp.status, 200)
+  assert.equal(authHelp.json.source, 'offline')
+  assert.ok(authHelp.json.reply.length > 20)
+})
+
 
 

@@ -63,10 +63,10 @@ export default async function handler(req, res, ...rest) {
   return handle(req, res, ...rest)
 }
 
-async function handleSignAgreementRoute(req, res) {
-  const sb = admin()
+async function handleSignAgreementRoute(req, res, deps = {}) {
+  const sb = deps.sb ?? admin()
   if (!sb) return json(res, 503, { error: 'SUPABASE_SERVICE_ROLE_KEY not configured' })
-  const user = await userFromAuth(req)
+  const user = deps.user !== undefined ? deps.user : await userFromAuth(req)
   if (!user) return json(res, 401, { error: 'Sign in required' })
   return handleSignAgreement(req, res, sb, user)
 }

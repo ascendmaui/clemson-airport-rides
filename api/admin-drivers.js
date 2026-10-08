@@ -55,19 +55,19 @@ async function requireAdmin(sb, user) {
   return { profile }
 }
 
-export default async function handler(req, res) {
+export default async function handler(req, res, deps = {}) {
   if (cors(req, res)) return
   const supportAction = resolveRouteAction(req, {
     allowed: Object.keys(SUPPORT_HANDLERS),
     legacy: SUPPORT_LEGACY,
   })
-  if (supportAction) return SUPPORT_HANDLERS[supportAction](req, res)
+  if (supportAction) return SUPPORT_HANDLERS[supportAction](req, res, deps)
   if (req.method !== 'GET' && req.method !== 'POST') return json(res, 405, { error: 'Method not allowed' })
 
-  const sb = admin()
+  const sb = deps.sb ?? admin()
   if (!sb) return json(res, 503, { error: 'SUPABASE_SERVICE_ROLE_KEY not configured' })
 
-  const user = await userFromAuth(req)
+  const user = deps.user !== undefined ? deps.user : await userFromAuth(req)
   if (!user) return json(res, 401, { error: 'Sign in required' })
 
   const gate = await requireAdmin(sb, user)
