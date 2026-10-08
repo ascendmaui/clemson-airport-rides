@@ -150,22 +150,23 @@ async function loadTrip(sb, tripId) {
   return { trip: data }
 }
 
-export default async function handler(req, res) {
+export default async function handler(req, res, deps = {}) {
   if (cors(req, res)) return
   if (req.method !== 'POST') return json(res, 405, { error: 'Method not allowed' })
 
-  const sb = admin()
+  const sb = deps.sb !== undefined ? deps.sb : admin()
   if (!sb) return json(res, 503, { error: 'SUPABASE_SERVICE_ROLE_KEY not configured' })
 
-  const user = await userFromAuth(req)
+  const user = deps.user !== undefined ? deps.user : await (deps.userFromAuth || userFromAuth)(req)
   if (!user) return json(res, 401, { error: 'Sign in required' })
 
   const { body, error: pe } = parseBody(req)
   if (pe) return json(res, 400, { error: pe })
 
-  const tripId = body.tripId || body.trip_id
+  const rawTripId = body?.tripId || body?.trip_id
+  const tripId = typeof rawTripId === 'string' ? rawTripId.trim() : ''
   if (!tripId) return json(res, 400, { error: 'tripId required' })
-  const confirm = body.confirm === true
+  const confirm = body?.confirm === true
 
   const { rates, maxCancels, windowDays } = readFareRates()
 
