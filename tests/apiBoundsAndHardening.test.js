@@ -35,6 +35,9 @@ import handleFavoriteDrivers from '../server/endpoints/favoriteDrivers.js'
 import handleBuyCredits from '../server/endpoints/buyCredits.js'
 import handleCreditsConfirm from '../server/endpoints/creditsConfirm.js'
 import handleTripOfferPreview from '../server/endpoints/tripOfferPreview.js'
+import handleTripSettle from '../server/endpoints/tripSettle.js'
+import handleAbandonCheckout from '../server/endpoints/abandonCheckout.js'
+import handleReconcileCheckout from '../server/endpoints/reconcileCheckout.js'
 import handleRiderLive from '../api/rider-live.js'
 import { publishRiderPickup } from '../server/endpoints/riderLivePickup.js'
 import { backupBookingMetadata } from '../shared/backupDriverQueue.js'
@@ -1704,3 +1707,223 @@ test('fare & GPS bounds: riderLivePickup enforces method, auth, coordinate bound
   assert.equal(validLive.json.rider_location.accuracy_m, 8)
   assert.equal(validLive.json.rider_location.heading, 180)
 })
+
+// ---------------------------------------------------------------------------
+// 17. TRIP SETTLE BOUNDS & TENANT ISOLATION TESTS
+// ---------------------------------------------------------------------------
+
+test('fare & settlement bounds: tripSettle validates method, auth, tenant boundaries, lifecycle gates, and authoritative balance', async () => {
+  const sb = createFakeSb({
+    trips: [
+      { id: 'trip-active', rider_id: 'rider-1', driver_id: 'driver-1', status: 'in_progress', fare_cents: 3500 },
+      { id: 'trip-wait-fee', rider_id: 'rider-1', driver_id: 'driver-1', status: 'in_progress', fare_cents: 3500, metadata: { wait_fee_cents: 500 } },
+      { id: 'trip-completed', rider_id: 'rider-1', driver_id: 'driver-1', status: 'completed', fare_cents: 3500 },
+      { id: 'trip-alien', rider_id: 'stranger-rider', driver_id: 'stranger-driver', status: 'in_progress', fare_cents: 3500 },
+    ],
+    payments: [],
+    profiles: [
+      { id: 'rider-1', email: 'rider1@clemson.edu', role: 'rider' },
+      { id: 'driver-1', email: 'driver1@clemson.edu', role: 'driver' },
+      { id: 'admin-user', email: 'admin@clemson.edu', role: 'admin' },
+      { id: 'stranger', email: 'stranger@other.com', role: 'rider' },
+    ],
+  })
+
+  // 1. Non-POST returns 405
+  const getSettle = await call(handleTripSettle, { method: 'GET' }, { sb })
+  assert.equal(getSettle.status, 405)
+
+  // 2. Auth bounds: missing sb returns 503, missing user returns 401
+  const noSbSettle = await call(handleTripSettle, { method: 'POST', body: { tripId: 'trip-active' } }, { sb: null })
+  assert.equal(noSbSettle.status, 503)
+
+  const unauthSettle = await call(handleTripSettle, { method: 'POST', body: { tripId: 'trip-active' } }, { sb, user: null })
+  assert.equal(unauthSettle.status, 401)
+
+  // 3. Missing tripId returns 400
+  const noTripSettle = await call(handleTripSettle, { method: 'POST', body: {} }, { sb, user: { id: 'rider-1' } })
+  assert.equal(noTripSettle.status, 400)
+  assert.match(noTripSettle.json.error, /tripId required/i)
+
+  // 4. Non-existent trip returns 404
+  const notFoundSettle = await call(handleTripSettle, {
+    method: 'POST',
+    body: { tripId: 'trip-nonexistent' },
+  }, { sb, user: { id: 'rider-1' } })
+  assert.equal(notFoundSettle.status, 404)
+  assert.match(notFoundSettle.json.error, /Trip not found/i)
+
+  // 5. Cross-tenant caller (not rider, not driver, not admin) returns 403
+  const alienSettle = await call(handleTripSettle, {
+    method: 'POST',
+    body: { tripId: 'trip-active' },
+  }, { sb, user: { id: 'stranger' } })
+  assert.equal(alienSettle.status, 403)
+  assert.match(alienSettle.json.error, /Not allowed on this trip/i)
+
+  // 6. Already completed trip returns 409 when action !== 'charge'
+  const alreadyDoneSettle = await call(handleTripSettle, {
+    method: 'POST',
+    body: { tripId: 'trip-completed', action: 'complete' },
+  }, { sb, user: { id: 'driver-1' } })
+  assert.equal(alreadyDoneSettle.status, 409)
+  assert.match(alreadyDoneSettle.json.error, /Trip already completed/i)
+
+  // 7. Action 'charge' with unpaid fee when Stripe unconfigured returns 503
+  const noStripeSettle = await call(handleTripSettle, {
+    method: 'POST',
+    body: { tripId: 'trip-wait-fee', action: 'charge', feeKind: 'wait_fee' },
+  }, { sb, user: { id: 'driver-1' }, stripeOk: () => false, stripe: null })
+  assert.equal(noStripeSettle.status, 503)
+  assert.match(noStripeSettle.json.error, /Payments unavailable/i)
+
+  // 8. Successful settlement invokes settleTrip with authoritative context
+  let capturedSettleArgs = null
+  const fakeSettleFn = async (args) => {
+    capturedSettleArgs = args
+    return { http: 200, body: { ok: true, tripId: args.trip.id, action: args.action } }
+  }
+  const validSettle = await call(handleTripSettle, {
+    method: 'POST',
+    body: { tripId: 'trip-active', action: 'complete', amountCents: 100 }, // client tries to inject $1 amount
+  }, { sb, user: { id: 'driver-1' }, stripeOk: () => true, stripe: {}, settleTrip: fakeSettleFn })
+  assert.equal(validSettle.status, 200)
+  assert.equal(validSettle.json.ok, true)
+  assert.equal(capturedSettleArgs.explicitAmountCents, null) // client money was stripped
+})
+
+// ---------------------------------------------------------------------------
+// 18. CHECKOUT HARDENING: ABANDON AND RECONCILE CHECKOUT TESTS
+// ---------------------------------------------------------------------------
+
+test('checkout hardening: abandonCheckout and reconcileCheckout enforce security headers, session validity, and rider ownership', async () => {
+  const sb = createFakeSb({
+    trips: [
+      { id: 'trip-chk-rider1', rider_id: 'rider-chk-1', status: 'searching', metadata: { stripe_checkout_session_id: 'cs_rider1' } },
+      { id: 'trip-chk-alien', rider_id: 'alien-rider', status: 'searching', metadata: { stripe_checkout_session_id: 'cs_alien' } },
+    ],
+    payments: [],
+  })
+
+  // --- abandonCheckout tests ---
+  // 1. Emits strict security headers
+  const getAbandon = await call(handleAbandonCheckout, { method: 'GET' }, { sb })
+  assert.equal(getAbandon.status, 405)
+  assert.match(getAbandon.headers['Cache-Control'] || getAbandon.headers['cache-control'], /no-store, no-cache/i)
+  assert.match(getAbandon.headers['Pragma'] || getAbandon.headers['pragma'], /no-cache/i)
+  assert.match(getAbandon.headers['Allow'] || getAbandon.headers['allow'], /POST, OPTIONS/i)
+
+  // 2. Auth bounds
+  const noSbAbandon = await call(handleAbandonCheckout, { method: 'POST', body: { tripId: 'trip-chk-rider1' } }, { sb: null })
+  assert.equal(noSbAbandon.status, 503)
+
+  const unauthAbandon = await call(handleAbandonCheckout, { method: 'POST', body: { tripId: 'trip-chk-rider1' } }, { sb, user: null })
+  assert.equal(unauthAbandon.status, 401)
+
+  // 3. Missing tripId returns 400
+  const noTripAbandon = await call(handleAbandonCheckout, { method: 'POST', body: {} }, { sb, user: { id: 'rider-chk-1' } })
+  assert.equal(noTripAbandon.status, 400)
+  assert.match(noTripAbandon.json.error, /tripId required/i)
+
+  // 4. Cross-tenant trip ownership returns 404 (isolation)
+  const alienTripAbandon = await call(handleAbandonCheckout, {
+    method: 'POST',
+    body: { tripId: 'trip-chk-alien' },
+  }, { sb, user: { id: 'rider-chk-1' } })
+  assert.equal(alienTripAbandon.status, 404)
+  assert.match(alienTripAbandon.json.error, /Trip not found/i)
+
+  // 5. Session mismatch returns 403
+  const fakeStripe = {
+    checkout: {
+      sessions: {
+        retrieve: async (id) => {
+          if (id === 'cs_mismatch_trip') return { id, metadata: { tripId: 'different-trip', riderId: 'rider-chk-1' } }
+          if (id === 'cs_mismatch_rider') return { id, metadata: { tripId: 'trip-chk-rider1', riderId: 'other-rider' } }
+          return { id, metadata: { tripId: 'trip-chk-rider1', riderId: 'rider-chk-1' } }
+        },
+        expire: async (id) => ({ id, status: 'expired' }),
+      },
+    },
+  }
+  const mismatchTripAbandon = await call(handleAbandonCheckout, {
+    method: 'POST',
+    body: { tripId: 'trip-chk-rider1', sessionId: 'cs_mismatch_trip' },
+  }, { sb, user: { id: 'rider-chk-1' }, stripeOk: () => true, stripe: fakeStripe })
+  assert.equal(mismatchTripAbandon.status, 403)
+  assert.match(mismatchTripAbandon.json.error, /Session does not match this trip/i)
+
+  const mismatchRiderAbandon = await call(handleAbandonCheckout, {
+    method: 'POST',
+    body: { tripId: 'trip-chk-rider1', sessionId: 'cs_mismatch_rider' },
+  }, { sb, user: { id: 'rider-chk-1' }, stripeOk: () => true, stripe: fakeStripe })
+  assert.equal(mismatchRiderAbandon.status, 403)
+  assert.match(mismatchRiderAbandon.json.error, /Not your checkout/i)
+
+  // 6. Valid release returns 200
+  const validAbandon = await call(handleAbandonCheckout, {
+    method: 'POST',
+    body: { tripId: 'trip-chk-rider1', sessionId: 'cs_rider1' },
+  }, {
+    sb,
+    user: { id: 'rider-chk-1' },
+    stripeOk: () => true,
+    stripe: fakeStripe,
+    releaseUnpaidCheckoutTrip: async () => ({ canceled: true }),
+  })
+  assert.equal(validAbandon.status, 200)
+  assert.equal(validAbandon.json.ok, true)
+  assert.equal(validAbandon.json.canceled, true)
+
+  // --- reconcileCheckout tests ---
+  // 7. Security headers and method bounds
+  const getReconcile = await call(handleReconcileCheckout, { method: 'GET' }, { sb })
+  assert.equal(getReconcile.status, 405)
+  assert.match(getReconcile.headers['Cache-Control'] || getReconcile.headers['cache-control'], /no-store, no-cache/i)
+  assert.match(getReconcile.headers['Allow'] || getReconcile.headers['allow'], /POST, OPTIONS/i)
+
+  // 8. Auth bounds
+  const unauthReconcile = await call(handleReconcileCheckout, {
+    method: 'POST',
+    body: { sessionId: 'cs_valid' },
+  }, { sb, user: null, stripeOk: () => true, stripe: fakeStripe })
+  assert.equal(unauthReconcile.status, 401)
+
+  // 9. Missing sessionId returns 400
+  const noSessionReconcile = await call(handleReconcileCheckout, {
+    method: 'POST',
+    body: {},
+  }, { sb, user: { id: 'rider-chk-1' }, stripeOk: () => true, stripe: fakeStripe })
+  assert.equal(noSessionReconcile.status, 400)
+  assert.match(noSessionReconcile.json.error, /sessionId required/i)
+
+  // 10. Malformed sessionId returns 400
+  const badSessionReconcile = await call(handleReconcileCheckout, {
+    method: 'POST',
+    body: { sessionId: 'not_a_checkout_session' },
+  }, {
+    sb,
+    user: { id: 'rider-chk-1' },
+    stripeOk: () => true,
+    stripe: fakeStripe,
+    reconcileCheckoutSession: async () => ({ ok: false, error: 'invalid_session_id', status: 400 }),
+  })
+  assert.equal(badSessionReconcile.status, 400)
+  assert.equal(badSessionReconcile.json.error, 'invalid_session_id')
+
+  // 11. Valid reconciliation completes with 200
+  const validReconcile = await call(handleReconcileCheckout, {
+    method: 'POST',
+    body: { sessionId: 'cs_rider1' },
+  }, {
+    sb,
+    user: { id: 'rider-chk-1' },
+    stripeOk: () => true,
+    stripe: fakeStripe,
+    reconcileCheckoutSession: async () => ({ ok: true, paid: true, tripId: 'trip-chk-rider1', status: 200 }),
+  })
+  assert.equal(validReconcile.status, 200)
+  assert.equal(validReconcile.json.ok, true)
+  assert.equal(validReconcile.json.paid, true)
+})
+

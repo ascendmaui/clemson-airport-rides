@@ -14,13 +14,13 @@ import {
 import { isAdminUser, settleTrip } from '../tripSettle.js'
 import { amountDueIgnoringClient } from '../authoritativeFare.js'
 
-export default async function handler(req, res) {
+export default async function handler(req, res, deps = {}) {
   if (cors(req, res)) return
   if (req.method !== 'POST') return json(res, 405, { error: 'Method not allowed' })
 
-  const sb = admin()
+  const sb = deps.sb !== undefined ? deps.sb : admin()
   if (!sb) return json(res, 503, { error: 'SUPABASE_SERVICE_ROLE_KEY not configured' })
-  const user = await userFromAuth(req)
+  const user = deps.user !== undefined ? deps.user : await (deps.userFromAuth || userFromAuth)(req)
   if (!user) return json(res, 401, { error: 'Sign in required' })
 
   const { body, error: pe } = parseBody(req)
@@ -63,14 +63,17 @@ export default async function handler(req, res) {
     feeKind: body.feeKind || null,
     clientAmountCents: body.amountCents ?? body.amount ?? body.total ?? body.fare_cents,
   })
-  if (Number(duePreview.amountCents) > 0 && body.action === 'charge' && !stripeOk()) {
+  const stripeOkFn = deps.stripeOk || stripeOk
+  if (Number(duePreview.amountCents) > 0 && body.action === 'charge' && !stripeOkFn()) {
     return json(res, 503, { error: 'Payments unavailable' })
   }
 
   try {
-    const settled = await settleTrip({
+    const settleFn = deps.settleTrip || settleTrip
+    const stripe = deps.stripe !== undefined ? deps.stripe : (stripeOkFn() ? stripeClient() : null)
+    const settled = await settleFn({
       sb,
-      stripe: stripeClient(),
+      stripe,
       trip,
       payments,
       action: body.action,
@@ -84,7 +87,8 @@ export default async function handler(req, res) {
     })
     return json(res, settled.http, settled.body)
   } catch (err) {
-    console.error('[trip-settle]', err)
-    return json(res, 500, { error: err.message || 'Server error' })
+    const status = err.status || 500
+    if (status >= 500) console.error('[trip-settle]', err)
+    return json(res, status, { error: err.message || 'Server error' })
   }
 }
