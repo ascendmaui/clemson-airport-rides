@@ -30,6 +30,13 @@ import handleExpireUnpaidAirportHolds, {
 } from '../server/endpoints/expireUnpaidAirportHolds.js'
 import handleWeeklyCoupon from '../server/endpoints/weeklyCoupon.js'
 import handleCollectPayment from '../server/endpoints/collectPayment.js'
+import handleTigerPass from '../server/endpoints/tigerPass.js'
+import handleFavoriteDrivers from '../server/endpoints/favoriteDrivers.js'
+import handleBuyCredits from '../server/endpoints/buyCredits.js'
+import handleCreditsConfirm from '../server/endpoints/creditsConfirm.js'
+import handleTripOfferPreview from '../server/endpoints/tripOfferPreview.js'
+import handleRiderLive from '../api/rider-live.js'
+import { publishRiderPickup } from '../server/endpoints/riderLivePickup.js'
 import { backupBookingMetadata } from '../shared/backupDriverQueue.js'
 
 const NOW = new Date('2026-10-10T15:00:00.000Z')
@@ -84,6 +91,9 @@ function createFakeSb(initialData = {}) {
     payments: [],
     ride_bills: [],
     profiles: [],
+    rider_subscriptions: [],
+    rider_credit_lots: [],
+    rider_credit_ledger: [],
     ...initialData,
   }
 
@@ -113,6 +123,18 @@ function createFakeSb(initialData = {}) {
           filters.push({ col, op: 'in', val: vals })
           return chain
         },
+        gt(col, val) {
+          filters.push({ col, op: 'gt', val })
+          return chain
+        },
+        gte(col, val) {
+          filters.push({ col, op: 'gte', val })
+          return chain
+        },
+        lte(col, val) {
+          filters.push({ col, op: 'lte', val })
+          return chain
+        },
         order(col, opts) {
           orderCol = { col, opts }
           return chain
@@ -127,6 +149,9 @@ function createFakeSb(initialData = {}) {
               if (f.op === 'eq') return row[f.col] === f.val
               if (f.op === 'is') return f.val === null ? row[f.col] == null : row[f.col] === f.val
               if (f.op === 'in') return f.val.includes(row[f.col])
+              if (f.op === 'gt') return row[f.col] > f.val
+              if (f.op === 'gte') return row[f.col] >= f.val
+              if (f.op === 'lte') return row[f.col] <= f.val
               return true
             })
           )
@@ -138,6 +163,9 @@ function createFakeSb(initialData = {}) {
               if (f.op === 'eq') return row[f.col] === f.val
               if (f.op === 'is') return f.val === null ? row[f.col] == null : row[f.col] === f.val
               if (f.op === 'in') return f.val.includes(row[f.col])
+              if (f.op === 'gt') return row[f.col] > f.val
+              if (f.op === 'gte') return row[f.col] >= f.val
+              if (f.op === 'lte') return row[f.col] <= f.val
               return true
             })
           )
@@ -160,6 +188,31 @@ function createFakeSb(initialData = {}) {
             },
           }
         },
+        upsert: (rowOrRows, opts = {}) => {
+          const incoming = Array.isArray(rowOrRows) ? rowOrRows : [rowOrRows]
+          const onConflict = opts.onConflict || 'id'
+          const results = []
+          for (const item of incoming) {
+            const idx = tables[table].findIndex((r) => r[onConflict] === item[onConflict])
+            if (idx >= 0) {
+              tables[table][idx] = { ...tables[table][idx], ...item }
+              results.push(tables[table][idx])
+            } else {
+              const entry = { id: item.id || `gen-${Math.random().toString(36).slice(2, 9)}`, ...item }
+              tables[table].push(entry)
+              results.push(entry)
+            }
+          }
+          return {
+            select: () => ({
+              single: async () => ({ data: results[0] || null, error: null }),
+              maybeSingle: async () => ({ data: results[0] || null, error: null }),
+            }),
+            then(resolve) {
+              resolve({ data: results, error: null })
+            },
+          }
+        },
         update: (patch) => {
           return {
             eq(col, val) {
@@ -171,6 +224,17 @@ function createFakeSb(initialData = {}) {
               return this
             },
             select: () => ({
+              single: async () => {
+                const target = tables[table].find((row) =>
+                  filters.every((f) => {
+                    if (f.op === 'eq') return row[f.col] === f.val
+                    if (f.op === 'is') return f.val === null ? row[f.col] == null : row[f.col] === f.val
+                    return true
+                  })
+                )
+                if (target) Object.assign(target, patch)
+                return { data: target || null, error: null }
+              },
               maybeSingle: async () => {
                 const target = tables[table].find((row) =>
                   filters.every((f) => {
@@ -201,6 +265,9 @@ function createFakeSb(initialData = {}) {
             filters.every((f) => {
               if (f.op === 'eq') return row[f.col] === f.val
               if (f.op === 'in') return f.val.includes(row[f.col])
+              if (f.op === 'gt') return row[f.col] > f.val
+              if (f.op === 'gte') return row[f.col] >= f.val
+              if (f.op === 'lte') return row[f.col] <= f.val
               return true
             })
           )
@@ -1198,4 +1265,442 @@ test('fare & auth bounds: tripTip validates method, auth, status bounds, and tip
   }, { sb, stripeOk: () => true, stripe: fakeStripe, user: { id: 'rider-1' } })
   assert.equal(mismatchRes.status, 403)
   assert.match(mismatchRes.json.error, /does not match this trip/i)
+})
+
+// ---------------------------------------------------------------------------
+// 13. FAVORITE DRIVERS & TIGER PASS BOUNDS TESTS
+// ---------------------------------------------------------------------------
+
+test('fare & pass bounds: favoriteDrivers and tigerPass enforce methods, auth, demo filtering, and status gates', async () => {
+  const sb = createFakeSb({
+    profiles: [
+      { id: 'rider-1', full_name: 'Clemson Rider', email: 'rider@clemson.edu', favorite_driver_ids: ['drv-1'] },
+    ],
+    rider_subscriptions: [
+      {
+        rider_id: 'rider-active',
+        product_id: 'prod_tiger_pass',
+        status: 'active',
+        current_period_end: new Date('2026-11-10').toISOString(),
+      },
+    ],
+  })
+
+  // --- favoriteDrivers tests ---
+  // 1. Method bounds: PUT/DELETE reject with 405
+  const putFav = await call(handleFavoriteDrivers, { method: 'PUT' }, { sb })
+  assert.equal(putFav.status, 405)
+
+  // 2. Auth bounds: missing sb returns 503, missing user returns 401
+  const noSbFav = await call(handleFavoriteDrivers, { method: 'GET' }, { sb: null })
+  assert.equal(noSbFav.status, 503)
+
+  const unauthFav = await call(handleFavoriteDrivers, { method: 'GET' }, { sb, user: null })
+  assert.equal(unauthFav.status, 401)
+
+  // 3. GET returns pass payload
+  const getFav = await call(handleFavoriteDrivers, { method: 'GET' }, { sb, user: { id: 'rider-1' } })
+  assert.equal(getFav.status, 200)
+  assert.equal(Array.isArray(getFav.json.favoriteDriverIds), true)
+
+  // 4. Invalid op returns 400
+  const invalidOpFav = await call(handleFavoriteDrivers, {
+    method: 'POST',
+    body: { op: 'destroy' },
+  }, { sb, user: { id: 'rider-1' }, ensureProfile: async () => ({ ok: true }) })
+  assert.equal(invalidOpFav.status, 400)
+  assert.match(invalidOpFav.json.error, /Unknown favorite action/i)
+
+  // 5. op=set filters demo/preview and non-UUID drivers, retaining valid driver UUIDs
+  const validDriverId = 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11'
+  const setFav = await call(handleFavoriteDrivers, {
+    method: 'POST',
+    body: {
+      op: 'set',
+      driverIds: [validDriverId, 'demo-car-2', 'sim-busy-driver-3', 'non-uuid-tampered'],
+    },
+  }, { sb, user: { id: 'rider-1' }, ensureProfile: async () => ({ ok: true }) })
+  assert.equal(setFav.status, 200)
+  assert.equal(setFav.json.demoDriversIgnored, true)
+  assert.deepEqual(setFav.json.favoriteDriverIds, [validDriverId])
+
+  // --- tigerPass tests ---
+  // 6. Method bounds: DELETE rejects with 405
+  const delPass = await call(handleTigerPass, { method: 'DELETE' }, { sb })
+  assert.equal(delPass.status, 405)
+
+  // 7. Auth bounds: missing sb 503, missing user 401
+  const noSbPass = await call(handleTigerPass, { method: 'GET' }, { sb: null })
+  assert.equal(noSbPass.status, 503)
+
+  const unauthPass = await call(handleTigerPass, { method: 'GET' }, { sb, user: null })
+  assert.equal(unauthPass.status, 401)
+
+  // 8. Invalid op returns 400
+  const invalidOpPass = await call(handleTigerPass, {
+    method: 'POST',
+    body: { op: 'supercharge' },
+  }, { sb, user: { id: 'rider-1' }, ensureProfile: async () => ({ ok: true }) })
+  assert.equal(invalidOpPass.status, 400)
+  assert.match(invalidOpPass.json.error, /Unknown pass action/i)
+
+  // 9. op=checkout with unconfigured Stripe returns 503
+  const noStripePass = await call(handleTigerPass, {
+    method: 'POST',
+    body: { op: 'checkout' },
+  }, { sb, user: { id: 'rider-1' }, stripeOk: () => false, stripe: null, ensureProfile: async () => ({ ok: true }) })
+  assert.equal(noStripePass.status, 503)
+
+  // 10. op=checkout with already active subscription returns 409
+  const fakeStripe = {
+    checkout: {
+      sessions: {
+        create: async (params) => ({ id: 'cs_pass_123', url: 'https://checkout.stripe.com', ...params }),
+      },
+    },
+  }
+  const alreadyActivePass = await call(handleTigerPass, {
+    method: 'POST',
+    body: { op: 'checkout' },
+  }, { sb, user: { id: 'rider-active' }, stripeOk: () => true, stripe: fakeStripe, ensureProfile: async () => ({ ok: true }) })
+  assert.equal(alreadyActivePass.status, 409)
+  assert.match(alreadyActivePass.json.error, /already active/i)
+})
+
+// ---------------------------------------------------------------------------
+// 14. BUY CREDITS & CREDITS CONFIRM BOUNDS TESTS
+// ---------------------------------------------------------------------------
+
+test('fare & credit bounds: buyCredits and creditsConfirm validate methods, auth, pack bounds, and cross-tenant purchase isolation', async () => {
+  const sb = createFakeSb({
+    profiles: [
+      { id: 'user-buyer', full_name: 'Buyer Tiger', email: 'buyer@clemson.edu' },
+      { id: 'user-stranger', full_name: 'Stranger', email: 'stranger@clemson.edu' },
+    ],
+  })
+
+  let createdCheckoutParams = null
+  const fakeStripe = {
+    checkout: {
+      sessions: {
+        create: async (params) => {
+          createdCheckoutParams = params
+          return { id: 'cs_cred_999', url: 'https://checkout.stripe.com/cs_cred_999' }
+        },
+        retrieve: async (sessionId) => {
+          if (sessionId === 'cs_not_credit') {
+            return { id: sessionId, payment_status: 'paid', metadata: { kind: 'fare_deposit' } }
+          }
+          if (sessionId === 'cs_alien') {
+            return {
+              id: sessionId,
+              payment_status: 'paid',
+              metadata: { kind: 'credit_purchase', profile_id: 'user-stranger', pack_id: 'pack_50' },
+            }
+          }
+          if (sessionId === 'cs_unpaid') {
+            return {
+              id: sessionId,
+              payment_status: 'unpaid',
+              metadata: { kind: 'credit_purchase', profile_id: 'user-buyer', pack_id: 'pack_50' },
+            }
+          }
+          return {
+            id: sessionId,
+            payment_status: 'paid',
+            payment_intent: 'pi_cred_success',
+            metadata: { kind: 'credit_purchase', profile_id: 'user-buyer', pack_id: 'pack_50' },
+          }
+        },
+      },
+    },
+  }
+
+  // --- buyCredits tests ---
+  // 1. Non-POST returns 405 + Allow: POST, OPTIONS
+  const getBuy = await call(handleBuyCredits, { method: 'GET' }, { sb })
+  assert.equal(getBuy.status, 405)
+  assert.match(getBuy.headers['Allow'] || getBuy.headers['allow'], /POST, OPTIONS/i)
+
+  // 2. Stripe unconfigured returns 503
+  const noStripeBuy = await call(handleBuyCredits, {
+    method: 'POST',
+    body: { packId: 'pack_50' },
+  }, { sb, stripeOk: () => false, stripe: null })
+  assert.equal(noStripeBuy.status, 503)
+
+  // 3. Unauthenticated returns 401
+  const unauthBuy = await call(handleBuyCredits, {
+    method: 'POST',
+    body: { packId: 'pack_50' },
+  }, { sb, stripeOk: () => true, stripe: fakeStripe, user: null })
+  assert.equal(unauthBuy.status, 401)
+
+  // 4. Unknown credit pack returns 400
+  const badPackBuy = await call(handleBuyCredits, {
+    method: 'POST',
+    body: { packId: 'pack_9999_hacked' },
+  }, { sb, stripeOk: () => true, stripe: fakeStripe, user: { id: 'user-buyer' } })
+  assert.equal(badPackBuy.status, 400)
+  assert.match(badPackBuy.json.error, /Unknown credit pack/i)
+
+  // 5. Valid pack strips client price tampering and uses authoritative server rates
+  const validBuy = await call(handleBuyCredits, {
+    method: 'POST',
+    body: {
+      packId: 'pack_50',
+      loadCents: 999999, // tampered money field
+      unit_amount: 100,  // tampered price field
+    },
+  }, { sb, stripeOk: () => true, stripe: fakeStripe, user: { id: 'user-buyer' } })
+  assert.equal(validBuy.status, 200)
+  assert.equal(validBuy.json.id, 'cs_cred_999')
+  assert.equal(createdCheckoutParams.line_items[0].price_data.unit_amount, 5000)
+  assert.equal(createdCheckoutParams.metadata.load_cents, '5000')
+  assert.equal(createdCheckoutParams.metadata.discount_bps, '500')
+
+  // --- creditsConfirm tests ---
+  // 6. Non-POST returns 405
+  const getConf = await call(handleCreditsConfirm, { method: 'GET' }, { sb })
+  assert.equal(getConf.status, 405)
+
+  // 7. Unauthenticated returns 401
+  const unauthConf = await call(handleCreditsConfirm, {
+    method: 'POST',
+    body: { sessionId: 'cs_valid' },
+  }, { sb, stripeOk: () => true, stripe: fakeStripe, user: null })
+  assert.equal(unauthConf.status, 401)
+
+  // 8. Missing sessionId returns 400
+  const noSessionConf = await call(handleCreditsConfirm, {
+    method: 'POST',
+    body: {},
+  }, { sb, stripeOk: () => true, stripe: fakeStripe, user: { id: 'user-buyer' } })
+  assert.equal(noSessionConf.status, 400)
+  assert.match(noSessionConf.json.error, /sessionId required/i)
+
+  // 9. Non-credit purchase returns 400
+  const notCredConf = await call(handleCreditsConfirm, {
+    method: 'POST',
+    body: { sessionId: 'cs_not_credit' },
+  }, { sb, stripeOk: () => true, stripe: fakeStripe, user: { id: 'user-buyer' } })
+  assert.equal(notCredConf.status, 400)
+  assert.match(notCredConf.json.error, /Not a credit purchase/i)
+
+  // 10. Cross-tenant purchase isolation returns 403
+  const alienConf = await call(handleCreditsConfirm, {
+    method: 'POST',
+    body: { sessionId: 'cs_alien' },
+  }, { sb, stripeOk: () => true, stripe: fakeStripe, user: { id: 'user-buyer' } })
+  assert.equal(alienConf.status, 403)
+  assert.match(alienConf.json.error, /Not your purchase/i)
+
+  // 11. Unpaid session returns 409
+  const unpaidConf = await call(handleCreditsConfirm, {
+    method: 'POST',
+    body: { sessionId: 'cs_unpaid' },
+  }, { sb, stripeOk: () => true, stripe: fakeStripe, user: { id: 'user-buyer' } })
+  assert.equal(unpaidConf.status, 409)
+  assert.match(unpaidConf.json.error, /Payment not completed/i)
+
+  // 12. Valid paid session confirms and grants pack
+  const successConf = await call(handleCreditsConfirm, {
+    method: 'POST',
+    body: { sessionId: 'cs_valid_paid' },
+  }, { sb, stripeOk: () => true, stripe: fakeStripe, user: { id: 'user-buyer' } })
+  assert.equal(successConf.status, 200)
+  assert.equal(successConf.json.ok, true)
+  assert.equal(successConf.json.already, false)
+  assert.equal(successConf.json.pack.id, 'pack_50')
+})
+
+// ---------------------------------------------------------------------------
+// 15. TRIP OFFER PREVIEW PRIVACY & DRIVER BOUNDS TESTS
+// ---------------------------------------------------------------------------
+
+test('driver auth & privacy bounds: tripOfferPreview validates method, driver status, approval gates, and privacy display', async () => {
+  const sb = createFakeSb({
+    trips: [
+      { id: 'trip-open', rider_id: 'rider-secret', driver_id: null, status: 'searching' },
+      { id: 'trip-taken', rider_id: 'rider-secret', driver_id: 'other-driver', status: 'accepted' },
+    ],
+    driver_status: [
+      { driver_id: 'driver-approved', is_online: true },
+      { driver_id: 'driver-unapproved', is_online: true },
+    ],
+    profiles: [
+      {
+        id: 'rider-secret',
+        full_name: 'Johnathon Doe-Clemson',
+        email: 'secret_email@clemson.edu',
+        phone: '864-555-1234',
+        rating_avg: 4.92,
+        rating_count: 18,
+        standing: 'Good standing',
+      },
+    ],
+  })
+
+  // 1. Non-POST returns 405
+  const getPrev = await call(handleTripOfferPreview, { method: 'GET' }, { sb })
+  assert.equal(getPrev.status, 405)
+
+  // 2. Auth bounds: missing sb returns 503, missing user returns 401
+  const noSbPrev = await call(handleTripOfferPreview, { method: 'POST', body: { tripId: 'trip-open' } }, { sb: null })
+  assert.equal(noSbPrev.status, 503)
+
+  const unauthPrev = await call(handleTripOfferPreview, { method: 'POST', body: { tripId: 'trip-open' } }, { sb, user: null })
+  assert.equal(unauthPrev.status, 401)
+
+  // 3. Missing tripId returns 400
+  const noTripPrev = await call(handleTripOfferPreview, { method: 'POST', body: {} }, { sb, user: { id: 'driver-approved' } })
+  assert.equal(noTripPrev.status, 400)
+  assert.match(noTripPrev.json.error, /tripId required/i)
+
+  // 4. Non-driver caller returns 403
+  const nonDriverPrev = await call(handleTripOfferPreview, {
+    method: 'POST',
+    body: { tripId: 'trip-open' },
+  }, { sb, user: { id: 'random-rider' } })
+  assert.equal(nonDriverPrev.status, 403)
+  assert.match(nonDriverPrev.json.error, /Drivers only/i)
+
+  // 5. Non-existent trip returns 404
+  const notFoundPrev = await call(handleTripOfferPreview, {
+    method: 'POST',
+    body: { tripId: 'trip-ghost' },
+  }, { sb, user: { id: 'driver-approved' } })
+  assert.equal(notFoundPrev.status, 404)
+  assert.match(notFoundPrev.json.error, /Trip not found/i)
+
+  // 6. Unavailable trip (taken by another driver) returns 404
+  const takenPrev = await call(handleTripOfferPreview, {
+    method: 'POST',
+    body: { tripId: 'trip-taken' },
+  }, { sb, user: { id: 'driver-approved' } })
+  assert.equal(takenPrev.status, 404)
+  assert.match(takenPrev.json.error, /Trip not available/i)
+
+  // 7. Unapproved driver blocked by onboarding gate returns 403
+  const unapprovedPrev = await call(handleTripOfferPreview, {
+    method: 'POST',
+    body: { tripId: 'trip-open' },
+  }, {
+    sb,
+    user: { id: 'driver-unapproved' },
+    receivableDriverIds: async () => ({ allowed: new Set(), error: null }),
+  })
+  assert.equal(unapprovedPrev.status, 403)
+  assert.equal(unapprovedPrev.json.code, 'driver_not_approved')
+
+  // 8. Approved driver gets privacy-preserving preview (first name only, no email/phone)
+  const approvedPrev = await call(handleTripOfferPreview, {
+    method: 'POST',
+    body: { tripId: 'trip-open' },
+  }, {
+    sb,
+    user: { id: 'driver-approved' },
+    receivableDriverIds: async () => ({ allowed: new Set(['driver-approved']), error: null }),
+  })
+  assert.equal(approvedPrev.status, 200)
+  assert.equal(approvedPrev.json.riderFirstName, 'Johnathon')
+  assert.equal(approvedPrev.json.ratingAvg, 4.92)
+  assert.equal(approvedPrev.json.ratingCount, 18)
+  assert.equal(approvedPrev.json.standing, 'Good standing')
+  assert.equal(approvedPrev.json.email, undefined)
+  assert.equal(approvedPrev.json.phone, undefined)
+  assert.equal(approvedPrev.json.full_name, undefined)
+})
+
+// ---------------------------------------------------------------------------
+// 16. RIDER LIVE PICKUP BOUNDS & ACCURACY GATE TESTS
+// ---------------------------------------------------------------------------
+
+test('fare & GPS bounds: riderLivePickup enforces method, auth, coordinate bounds, GPS accuracy, and trip lifecycle', async () => {
+  const sb = createFakeSb({
+    trips: [
+      { id: 'trip-booking', rider_id: 'rider-live-1', driver_id: null, status: 'searching', metadata: {} },
+      { id: 'trip-done', rider_id: 'rider-live-1', driver_id: 'driver-1', status: 'completed', metadata: {} },
+      { id: 'trip-other', rider_id: 'stranger-rider', driver_id: null, status: 'searching', metadata: {} },
+    ],
+  })
+
+  // 1. Non-POST returns 405
+  const getLive = await call(handleRiderLive, { method: 'GET' }, { sb })
+  assert.equal(getLive.status, 405)
+
+  // 2. Auth bounds: missing sb returns 503, missing user returns 401
+  const noSbLive = await call(handleRiderLive, { method: 'POST', body: { tripId: 'trip-booking', lat: 34.67, lng: -82.83 } }, { sb: null })
+  assert.equal(noSbLive.status, 503)
+
+  const unauthLive = await call(handleRiderLive, { method: 'POST', body: { tripId: 'trip-booking', lat: 34.67, lng: -82.83 } }, { sb, user: null })
+  assert.equal(unauthLive.status, 401)
+
+  // 3. Missing tripId returns 400
+  const noTripLive = await call(handleRiderLive, {
+    method: 'POST',
+    body: { lat: 34.67, lng: -82.83 },
+  }, { sb, user: { id: 'rider-live-1' } })
+  assert.equal(noTripLive.status, 400)
+  assert.match(noTripLive.json.error, /tripId required/i)
+
+  // 4. Invalid latitude returns 400
+  const badLatLive = await call(handleRiderLive, {
+    method: 'POST',
+    body: { tripId: 'trip-booking', lat: 95.0, lng: -82.83 },
+  }, { sb, user: { id: 'rider-live-1' } })
+  assert.equal(badLatLive.status, 400)
+  assert.match(badLatLive.json.error, /latitude is required/i)
+
+  // 5. Invalid longitude returns 400
+  const badLngLive = await call(handleRiderLive, {
+    method: 'POST',
+    body: { tripId: 'trip-booking', lat: 34.67, lng: -195.0 },
+  }, { sb, user: { id: 'rider-live-1' } })
+  assert.equal(badLngLive.status, 400)
+  assert.match(badLngLive.json.error, /longitude is required/i)
+
+  // 6. Inaccurate GPS (>30m outdoor gate) rejected with 400
+  const coarseGpsLive = await call(handleRiderLive, {
+    method: 'POST',
+    body: { tripId: 'trip-booking', lat: 34.67, lng: -82.83, accuracy: 45 },
+  }, { sb, user: { id: 'rider-live-1' } })
+  assert.equal(coarseGpsLive.status, 400)
+  assert.match(coarseGpsLive.json.error, /Waiting for a closer GPS fix/i)
+
+  // 7. Negative accuracy rejected with 400
+  const negAccLive = await call(handleRiderLive, {
+    method: 'POST',
+    body: { tripId: 'trip-booking', lat: 34.67, lng: -82.83, accuracy: -5 },
+  }, { sb, user: { id: 'rider-live-1' } })
+  assert.equal(negAccLive.status, 400)
+  assert.match(negAccLive.json.error, /Accuracy is not a distance/i)
+
+  // 8. Cross-tenant trip ownership returns 404 (isolation)
+  const crossTenantLive = await call(handleRiderLive, {
+    method: 'POST',
+    body: { tripId: 'trip-other', lat: 34.67, lng: -82.83, accuracy: 10 },
+  }, { sb, user: { id: 'rider-live-1' } })
+  assert.equal(crossTenantLive.status, 404)
+  assert.match(crossTenantLive.json.error, /Trip not found/i)
+
+  // 9. Trip lifecycle gate: completed trip returns 409
+  const completedLive = await call(handleRiderLive, {
+    method: 'POST',
+    body: { tripId: 'trip-done', lat: 34.67, lng: -82.83, accuracy: 10 },
+  }, { sb, user: { id: 'rider-live-1' } })
+  assert.equal(completedLive.status, 409)
+  assert.match(completedLive.json.error, /only on while this ride is booking/i)
+
+  // 10. Valid streamable trip updates live GPS fix with 200
+  const validLive = await call(handleRiderLive, {
+    method: 'POST',
+    body: { tripId: 'trip-booking', lat: 34.6795, lng: -82.8374, accuracy: 8, heading: 180 },
+  }, { sb, user: { id: 'rider-live-1' }, opts: { now: () => new Date('2026-10-10T15:30:00Z') } })
+  assert.equal(validLive.status, 200)
+  assert.equal(validLive.json.ok, true)
+  assert.equal(validLive.json.rider_location.lat, 34.6795)
+  assert.equal(validLive.json.rider_location.lng, -82.8374)
+  assert.equal(validLive.json.rider_location.accuracy_m, 8)
+  assert.equal(validLive.json.rider_location.heading, 180)
 })

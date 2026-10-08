@@ -30,7 +30,9 @@ export async function publishRiderPickup(sb, user, rawBody, { now = () => new Da
   const tripId = String(rawBody?.tripId || rawBody?.trip_id || '').trim()
   if (!tripId) return { status: 400, body: { error: 'tripId required' } }
 
-  const normalized = normalizeRiderFix(rawBody, now().toISOString())
+  const nowDate = typeof now === 'function' ? now() : now
+  const timestamp = nowDate instanceof Date && !isNaN(nowDate.getTime()) ? nowDate.toISOString() : new Date().toISOString()
+  const normalized = normalizeRiderFix(rawBody, timestamp)
   if (!normalized.ok) return { status: 400, body: { error: normalized.error } }
 
   const trip = await loadTrip(sb, tripId)
