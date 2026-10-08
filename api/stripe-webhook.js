@@ -30,7 +30,14 @@ const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || ''
 const MAX_WEBHOOK_PAYLOAD_BYTES = 1024 * 1024
 
 function readRawBody(req, maxBytes = MAX_WEBHOOK_PAYLOAD_BYTES) {
+  if (Buffer.isBuffer(req.rawBody)) return Promise.resolve(req.rawBody)
+  if (typeof req.rawBody === 'string') return Promise.resolve(Buffer.from(req.rawBody))
+  if (Buffer.isBuffer(req.body)) return Promise.resolve(req.body)
   return new Promise((resolve, reject) => {
+    if (req.readableEnded) {
+      resolve(Buffer.alloc(0))
+      return
+    }
     const chunks = []
     let totalLength = 0
     req.on('data', (c) => {

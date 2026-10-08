@@ -18,8 +18,12 @@ export default async function handleScheduledRider(req, res, deps = {}) {
   const tripId = String(body.tripId || body.trip_id || '').trim()
   if (!tripId) return json(res, 400, { error: 'Trip id required' })
   const op = String(body.op || 'detail')
-  const now = deps.now ? new Date(deps.now) : new Date()
-  const safetyReport = body.safetyReport === true || body.safety_report === true
+  let now = new Date()
+  if (deps.now) {
+    const candidate = new Date(deps.now)
+    if (!Number.isNaN(candidate.getTime())) now = candidate
+  }
+  const safetyReport = body.safetyReport === true || body.safety_report === true || body.safetyReport === 'true' || body.safety_report === 'true'
 
   if (op === 'detail') {
     const result = await backupRideDetail(sb, { tripId, riderId: user.id })
