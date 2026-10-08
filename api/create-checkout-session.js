@@ -77,7 +77,8 @@ export default async function handler(req, res, deps = {}) {
       code: error.code || 'ride_option_unavailable',
     })
   }
-  if (priced.isStudent !== studentDiscountGranted(user)) {
+  const expectedStudent = studentDiscountGranted(user) && priced.tier === 'standard'
+  if (priced.isStudent !== expectedStudent) {
     return json(res, 500, { error: 'Student pricing did not match the signed-in email' })
   }
 

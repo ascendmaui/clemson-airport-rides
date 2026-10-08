@@ -3378,6 +3378,23 @@ test('create-checkout-session bounds: method, auth, student discount spoofing, f
   const tripInDb = sb._tables.trips.find((t) => t.id === 'trip-existing-student')
   assert.equal(tripInDb.fare_cents, updateOwnTrip.json.fareCents)
   assert.equal(tripInDb.deposit_cents, 0)
+
+  // 7. Confirmed student booking carpool tier (2 seats): carpool discount applies, student discount excluded, 2 seats priced
+  const carpoolRes = await call(handleCreateCheckoutSession, {
+    method: 'POST',
+    body: {
+      airport: 'GSP',
+      tier: 'carpool',
+      seatCount: 2,
+    },
+  }, { sb, user: clemsonStudent, ensureProfile: async () => ({ ok: true }) })
+  assert.equal(carpoolRes.status, 200)
+  assert.equal(carpoolRes.json.studentDiscountApplied, false)
+  const createdCarpoolTrip = sb._tables.trips.find((t) => t.id === carpoolRes.json.tripId)
+  assert.ok(createdCarpoolTrip)
+  assert.equal(createdCarpoolTrip.tier, 'carpool')
+  assert.equal(createdCarpoolTrip.passengers, 2)
+  assert.equal(createdCarpoolTrip.fare_cents, carpoolRes.json.fareCents)
 })
 
 // ---------------------------------------------------------------------------

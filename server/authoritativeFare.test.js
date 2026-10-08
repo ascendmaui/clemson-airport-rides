@@ -496,3 +496,119 @@ test('Wait and Extra Comfort use the same server fare as Standard', () => {
   assert.equal(two.perSeatFareCents, carpool.fareCents)
   assert.equal(priceDriverRequest(places, { ...options, tier: 'standard', seatCount: 2 }).fareCents, standard.fareCents)
 })
+
+test('carpool pricing bounds on scheduled requests and checkout body', () => {
+  const at = new Date(QUIET.getTime() + 86400000) // 24h ahead
+  const now = QUIET
+
+  // Airport GSP carpool request
+  const standardGsp = priceScheduledRequest({
+    airport: 'GSP',
+    at,
+    now,
+    tier: 'standard',
+    isStudent: false,
+    scheduleAhead: false,
+  })
+
+  // 1 seat carpool
+  const carpool1 = priceScheduledRequest({
+    airport: 'GSP',
+    at,
+    now,
+    tier: 'carpool',
+    isStudent: false,
+    seatCount: 1,
+    scheduleAhead: false,
+  })
+  assert.equal(carpool1.tier, 'carpool')
+  assert.equal(carpool1.seatCount, 1)
+  assert.equal(carpool1.fareCents, percentOffCents(standardGsp.fareCents, CARPOOL_DISCOUNT_BPS).amountCents)
+  assert.equal(carpool1.perSeatFareCents, carpool1.fareCents)
+
+  // 2 seats carpool
+  const carpool2 = priceScheduledRequest({
+    airport: 'GSP',
+    at,
+    now,
+    tier: 'carpool',
+    isStudent: false,
+    seatCount: 2,
+    scheduleAhead: false,
+  })
+  assert.equal(carpool2.seatCount, 2)
+  assert.equal(carpool2.perSeatFareCents, carpool1.fareCents)
+  assert.equal(carpool2.fareCents, carpool1.fareCents * 2)
+  assert.equal(carpool2.breakdown.per_seat_fare_cents, carpool1.fareCents)
+  assert.equal(carpool2.breakdown.seat_count, 2)
+  assert.equal(carpool2.breakdown.rider_pays_cents, carpool2.fareCents)
+
+  // Bounds clamping on seatCount: < 1 clamps to 1, > 2 clamps to 2
+  const carpoolNegative = priceScheduledRequest({
+    airport: 'GSP',
+    at,
+    now,
+    tier: 'carpool',
+    seatCount: -2,
+    scheduleAhead: false,
+  })
+  assert.equal(carpoolNegative.seatCount, 1)
+  assert.equal(carpoolNegative.fareCents, carpool1.fareCents)
+
+  const carpoolOverCap = priceScheduledRequest({
+    airport: 'GSP',
+    at,
+    now,
+    tier: 'carpool',
+    seatCount: 10,
+    scheduleAhead: false,
+  })
+  assert.equal(carpoolOverCap.seatCount, 2)
+  assert.equal(carpoolOverCap.fareCents, carpool2.fareCents)
+
+  // Student discount is ignored for carpool tier (only standard gets student discount)
+  const carpoolStudent = priceScheduledRequest({
+    airport: 'GSP',
+    at,
+    now,
+    tier: 'carpool',
+    isStudent: true,
+    seatCount: 1,
+    scheduleAhead: false,
+  })
+  assert.equal(carpoolStudent.fareCents, carpool1.fareCents)
+  assert.equal(carpoolStudent.discountCents || 0, 0)
+
+  // Schedule ahead discount applies before seatCount multiplication
+  const carpoolSched2 = priceScheduledRequest({
+    airport: 'GSP',
+    at,
+    now,
+    tier: 'carpool',
+    seatCount: 2,
+    scheduleAhead: true,
+  })
+  const expectedPerSeat = percentOffCents(carpool1.fareCents, 1000).amountCents
+  assert.equal(carpoolSched2.perSeatFareCents, expectedPerSeat)
+  assert.equal(carpoolSched2.fareCents, expectedPerSeat * 2)
+
+  // Checkout body with carpool tier ignores client-submitted money
+  const checkoutCarpool = priceCheckoutBody({
+    body: {
+      airport: 'GSP',
+      tier: 'carpool',
+      seatCount: 2,
+      fareCents: 100,
+      total: 100,
+      isStudent: true,
+    },
+    user: TIGER,
+    at,
+    now,
+  })
+  assert.equal(checkoutCarpool.tier, 'carpool')
+  assert.equal(checkoutCarpool.seatCount, 2)
+  assert.equal(checkoutCarpool.fareCents, carpool2.fareCents)
+  assert.ok(checkoutCarpool.fareCents > 100)
+})
+

@@ -277,9 +277,13 @@ export function priceCheckoutBody({
     tier,
   })
   const scheduled = Boolean(body.date || body.pickupAt || body.scheduled_for || body.scheduledFor)
-  const priced = applyScheduleAheadDiscount(
-    { ...quoted, tier },
-    { at: when, now, enabled: scheduled },
+  const priced = applyCarpoolSeats(
+    applyScheduleAheadDiscount(
+      { ...quoted, tier },
+      { at: when, now, enabled: scheduled },
+    ),
+    tier,
+    body.seatCount ?? body.seats ?? body.seat_count,
   )
   const clientFare = finiteCents(body.fareCents ?? body.fare_cents ?? body.total ?? body.totalCents ?? body.total_cents)
   const clientCharge = finiteCents(
@@ -304,7 +308,7 @@ export function airportTripRow({ user, priced, scheduledFor = null, riderFirst =
   return {
     rider_id: user.id,
     status: scheduledFor ? 'scheduled' : 'searching',
-    tier: 'standard',
+    tier: priced.tier || 'standard',
     pickup_label: CAMPUS_PICKUP.label,
     dropoff_label: dest.label,
     pickup_lat: CAMPUS_PICKUP.lat,
@@ -322,7 +326,7 @@ export function airportTripRow({ user, priced, scheduledFor = null, riderFirst =
       fare_source: 'server',
       rider_pays_cents: priced.fareCents,
     },
-    passengers: 1,
+    passengers: priced.seatCount || 1,
     pickup_at: scheduledFor,
     scheduled_for: scheduledFor,
     rider_note: scheduledFor ? 'airport' : null,

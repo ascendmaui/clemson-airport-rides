@@ -1,9 +1,12 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import {
+  CARPOOL_MAX_SEATS,
   NO_DRIVERS_AVAILABLE_COPY,
   SCHEDULE_AHEAD_DISCOUNT_PCT,
   applyScheduleAheadDiscount,
+  carpoolSeatCount,
+  driverQualifiesForTier,
   isBlockedRideTier,
   pickupConflicts,
   resolveOfferedTier,
@@ -128,3 +131,50 @@ test('a pickup within 45 minutes conflicts with a reservation', () => {
   assert.equal(pickupConflicts('2026-10-05T18:00:00.000Z', '2026-10-05T18:30:00.000Z'), true)
   assert.equal(pickupConflicts('2026-10-05T18:00:00.000Z', '2026-10-05T19:00:00.000Z'), false)
 })
+
+test('carpoolSeatCount enforces 1-2 seat bounds for carpool and 1 seat for other tiers', () => {
+  assert.equal(CARPOOL_MAX_SEATS, 2)
+
+  // Non-carpool tiers always return 1 seat regardless of raw input
+  assert.equal(carpoolSeatCount('standard', 2), 1)
+  assert.equal(carpoolSeatCount('standard', 5), 1)
+  assert.equal(carpoolSeatCount('wait', 2), 1)
+  assert.equal(carpoolSeatCount('comfort', 4), 1)
+  assert.equal(carpoolSeatCount('', 2), 1)
+  assert.equal(carpoolSeatCount(null, 2), 1)
+
+  // Carpool tier clamps to [1, 2]
+  assert.equal(carpoolSeatCount('carpool', undefined), 1)
+  assert.equal(carpoolSeatCount('carpool', null), 1)
+  assert.equal(carpoolSeatCount('carpool', NaN), 1)
+  assert.equal(carpoolSeatCount('carpool', 'invalid'), 1)
+  assert.equal(carpoolSeatCount('carpool', -5), 1)
+  assert.equal(carpoolSeatCount('carpool', 0), 1)
+  assert.equal(carpoolSeatCount('carpool', 1), 1)
+  assert.equal(carpoolSeatCount('carpool', 2), 2)
+  assert.equal(carpoolSeatCount('carpool', 3), 2)
+  assert.equal(carpoolSeatCount('carpool', 4), 2)
+  assert.equal(carpoolSeatCount('carpool', 100), 2)
+  assert.equal(carpoolSeatCount('carpool', ' 2 '), 2)
+  assert.equal(carpoolSeatCount('carpool', 1.8), 2)
+})
+
+test('driverQualifiesForTier verifies standard and carpool share the same approved driver pool', () => {
+  const approved = { approved: true, suspended: false, comfort: false }
+  const suspended = { approved: true, suspended: true, comfort: false }
+  const unapproved = { approved: false, suspended: false, comfort: false }
+  const comfortOnly = { approved: true, suspended: false, comfort: true }
+
+  assert.equal(driverQualifiesForTier(approved, 'standard'), true)
+  assert.equal(driverQualifiesForTier(approved, 'carpool'), true)
+  assert.equal(driverQualifiesForTier(approved, 'wait'), true)
+  assert.equal(driverQualifiesForTier(approved, 'comfort'), false)
+
+  assert.equal(driverQualifiesForTier(comfortOnly, 'comfort'), true)
+  assert.equal(driverQualifiesForTier(comfortOnly, 'carpool'), true)
+
+  assert.equal(driverQualifiesForTier(suspended, 'carpool'), false)
+  assert.equal(driverQualifiesForTier(suspended, 'standard'), false)
+  assert.equal(driverQualifiesForTier(unapproved, 'carpool'), false)
+})
+
