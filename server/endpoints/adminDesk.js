@@ -40,7 +40,7 @@ function isUuid(value) {
   return UUID.test(String(value || ''))
 }
 
-export default async function handler(req, res) {
+export default async function handler(req, res, deps = {}) {
   if (cors(req, res)) return
   const action = resolveRouteAction(req, { allowed: ACTIONS })
   if (!action) {
@@ -52,20 +52,20 @@ export default async function handler(req, res) {
   if (expectsGet && req.method !== 'GET') return json(res, 405, { error: 'Method not allowed' })
   if (!expectsGet && req.method !== 'POST') return json(res, 405, { error: 'Method not allowed' })
 
-  const sb = admin()
+  const sb = deps.sb !== undefined ? deps.sb : admin()
   if (!sb) return json(res, 503, { error: 'SUPABASE_SERVICE_ROLE_KEY not configured' })
 
-  const user = await userFromAuth(req)
+  const user = deps.user !== undefined ? deps.user : await (deps.userFromAuth || userFromAuth)(req)
   if (!user) return json(res, 401, { error: 'Sign in required' })
 
-  const access = await loadStaffAccess(sb, user)
+  const access = deps.staffAccess ? await deps.staffAccess(sb, user) : await (deps.loadStaffAccess || loadStaffAccess)(sb, user)
   if (!access.admin) return json(res, 403, { error: 'Admin only' })
 
   const url = new URL(req.url || '/', 'http://localhost')
   if (req.method === 'GET') return read(sb, res, action, url)
   const { body, error } = parseBody(req)
   if (error) return json(res, 400, { error })
-  return write(sb, res, action, user, body)
+  return write(sb, res, action, user, body, deps)
 }
 
 async function read(sb, res, action, url) {
@@ -89,16 +89,16 @@ async function read(sb, res, action, url) {
   }
 }
 
-async function write(sb, res, action, user, body) {
+async function write(sb, res, action, user, body, deps = {}) {
   switch (action) {
     case 'mark-notification':
       return markNotification(sb, res, body)
     case 'ticket-reply':
       return ticketReply(sb, res, user, body)
     case 'applicant-message':
-      return applicantMessage(sb, res, user, body)
+      return applicantMessage(sb, res, user, body, deps)
     case 'info-request':
-      return infoRequest(sb, res, user, body)
+      return infoRequest(sb, res, user, body, deps)
     default: {
       const unknown = action
       return json(res, 400, { error: `Unknown admin write: ${unknown}` })
@@ -308,7 +308,7 @@ async function ticketReply(sb, res, user, body) {
   return json(res, 200, { ok: true, ticket: update.data })
 }
 
-async function applicantMessage(sb, res, user, body) {
+async function applicantMessage(sb, res, user, body, deps = {}) {
   const profileId = String(body.profileId || body.profile_id || '')
   const text = String(body.body || '').trim()
   if (!isUuid(profileId)) return json(res, 400, { error: 'profileId must be a uuid' })
@@ -318,10 +318,10 @@ async function applicantMessage(sb, res, user, body) {
     text,
     kind: 'message',
     subject: 'Message from Clemson RIDES admin',
-  })
+  }, deps)
 }
 
-async function infoRequest(sb, res, user, body) {
+async function infoRequest(sb, res, user, body, deps = {}) {
   const profileId = String(body.profileId || body.profile_id || '')
   const text = String(body.prompt || body.body || '').trim()
   if (!isUuid(profileId)) return json(res, 400, { error: 'profileId must be a uuid' })
@@ -331,7 +331,8 @@ async function infoRequest(sb, res, user, body) {
   if (profile.error) return json(res, 500, { error: profile.error.message })
   if (!profile.data) return json(res, 404, { error: 'Applicant not found' })
 
-  const notice = await sendApplicantNotice({
+  const sendNotice = deps.sendApplicantNotice || sendApplicantNotice
+  const notice = await sendNotice({
     to: profile.data.email,
     subject: 'Clemson RIDES needs more information',
     text: `An admin asked for more information on your driver application:\n\n${text}\n\nOpen the driver application to reply.`,
@@ -369,12 +370,13 @@ async function infoRequest(sb, res, user, body) {
   })
 }
 
-async function storeApplicantNote(sb, res, user, { profileId, text, kind, subject }) {
+async function storeApplicantNote(sb, res, user, { profileId, text, kind, subject }, deps = {}) {
   const profile = await sb.from('profiles').select('id, email').eq('id', profileId).maybeSingle()
   if (profile.error) return json(res, 500, { error: profile.error.message })
   if (!profile.data) return json(res, 404, { error: 'Applicant not found' })
 
-  const notice = await sendApplicantNotice({
+  const sendNotice = deps.sendApplicantNotice || sendApplicantNotice
+  const notice = await sendNotice({
     to: profile.data.email,
     subject,
     text,
