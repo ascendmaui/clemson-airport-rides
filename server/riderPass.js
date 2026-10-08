@@ -114,8 +114,6 @@ async function writeFavorites(sb, riderId, ids) {
 async function writePassPatch(sb, riderId, patch) {
   const existing = await readPassRow(sb, riderId)
   const row = {
-    rider_id: riderId,
-    product_id: TIGER_PASS_PRODUCT_ID,
     status: existing?.status || 'inactive',
     discount_bps: existing?.discount_bps ?? TIGER_PASS_DISCOUNT_BPS,
     preferred_driver_ids: favoriteIdsForMatching(existing?.preferred_driver_ids),

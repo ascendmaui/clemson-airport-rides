@@ -32,7 +32,7 @@ const NAME_ALLOW = new Set([
 
 function walk(dir, out = []) {
   for (const name of readdirSync(dir)) {
-    if (name === 'node_modules' || name === '.git') continue
+    if (name === 'node_modules' || name === '.git' || name === 'dist') continue
     const abs = path.join(dir, name)
     const rel = path.relative(root, abs)
     if (statSync(abs).isDirectory()) walk(abs, out)
