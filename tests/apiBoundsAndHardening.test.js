@@ -19,6 +19,7 @@ import handleReleaseScheduledBoost from '../server/endpoints/releaseScheduledBoo
 import handleDriverEarnings from '../server/endpoints/driverEarnings.js'
 import handleTripCancelMidride from '../server/endpoints/tripCancelMidride.js'
 import handleTripWait from '../server/endpoints/tripWait.js'
+import handleTripTip from '../server/endpoints/tripTip.js'
 import handleRiderTipChoice from '../server/endpoints/riderTipChoice.js'
 import handleBackupQueue from '../server/endpoints/backupQueue.js'
 import handleMatchingRebroadcast from '../server/endpoints/matchingRebroadcast.js'
@@ -1087,4 +1088,114 @@ test('fare & auth bounds: collectPayment validates method, auth, payment kinds, 
   // Authoritative server balance: 2500 fare - 500 deposit = 2000 cents (not spoofed 10 cents)
   assert.equal(collectedPayload.amountCents, 2000)
   assert.equal(collectedPayload.tripId, 'trip-rider-1')
+})
+
+// ---------------------------------------------------------------------------
+// 12. TRIP TIP BOUNDS & ERROR STATUS CODE TESTS
+// ---------------------------------------------------------------------------
+
+test('fare & auth bounds: tripTip validates method, auth, status bounds, and tip ranges', async () => {
+  const sb = createFakeSb({
+    trips: [
+      { id: 'trip-comp-untipped', rider_id: 'rider-1', driver_id: 'driver-1', fare_cents: 3000, tip_cents: null, status: 'completed' },
+      { id: 'trip-comp-tipped', rider_id: 'rider-1', driver_id: 'driver-1', fare_cents: 3000, tip_cents: 500, status: 'completed' },
+      { id: 'trip-not-done', rider_id: 'rider-1', driver_id: 'driver-1', fare_cents: 3000, tip_cents: null, status: 'in_progress' },
+      { id: 'trip-alien', rider_id: 'rider-stranger', driver_id: 'driver-1', fare_cents: 3000, tip_cents: null, status: 'completed' },
+    ],
+    profiles: [
+      { id: 'rider-1', stripe_customer_id: 'cus_1', stripe_default_pm_id: 'pm_1' },
+    ],
+  })
+
+  // 1. Non-POST returns 405
+  const getRes = await call(handleTripTip, { method: 'GET', url: '/api/trip-tip' }, { sb })
+  assert.equal(getRes.status, 405)
+
+  // 2. Stripe unconfigured returns 503
+  const noStripeRes = await call(handleTripTip, {
+    method: 'POST',
+    body: { tripId: 'trip-comp-untipped', tipCents: 500 },
+  }, { sb, stripeOk: () => false, stripe: null })
+  assert.equal(noStripeRes.status, 503)
+  assert.match(noStripeRes.json.error, /Payments unavailable/i)
+
+  // 3. Unauthenticated returns 401
+  const unauthRes = await call(handleTripTip, {
+    method: 'POST',
+    body: { tripId: 'trip-comp-untipped', tipCents: 500 },
+  }, { sb, stripeOk: () => true, stripe: {}, user: null })
+  assert.equal(unauthRes.status, 401)
+
+  // 4. Missing tripId returns 400
+  const noTripRes = await call(handleTripTip, {
+    method: 'POST',
+    body: { tipCents: 500 },
+  }, { sb, stripeOk: () => true, stripe: {}, user: { id: 'rider-1' } })
+  assert.equal(noTripRes.status, 400)
+  assert.match(noTripRes.json.error, /tripId required/i)
+
+  // 5. Cross-tenant trip ownership returns 404 (isolation / no data leak)
+  const crossTenantRes = await call(handleTripTip, {
+    method: 'POST',
+    body: { tripId: 'trip-alien', tipCents: 500 },
+  }, { sb, stripeOk: () => true, stripe: {}, user: { id: 'rider-1' } })
+  assert.equal(crossTenantRes.status, 404)
+  assert.match(crossTenantRes.json.error, /Trip not found/i)
+
+  // 6. Incomplete trip returns 409
+  const incompleteRes = await call(handleTripTip, {
+    method: 'POST',
+    body: { tripId: 'trip-not-done', tipCents: 500 },
+  }, { sb, stripeOk: () => true, stripe: {}, user: { id: 'rider-1' } })
+  assert.equal(incompleteRes.status, 409)
+  assert.match(incompleteRes.json.error, /once the trip is completed/i)
+
+  // 7. Already tipped trip returns 409
+  const alreadyTippedRes = await call(handleTripTip, {
+    method: 'POST',
+    body: { tripId: 'trip-comp-tipped', tipCents: 500 },
+  }, { sb, stripeOk: () => true, stripe: {}, user: { id: 'rider-1' } })
+  assert.equal(alreadyTippedRes.status, 409)
+  assert.match(alreadyTippedRes.json.error, /Tip already added/i)
+
+  // 8. Tip amount bounds: sub-dollar (<100) or over $100 (>10000) returns 400
+  const lowTipRes = await call(handleTripTip, {
+    method: 'POST',
+    body: { tripId: 'trip-comp-untipped', tipCents: 50 },
+  }, { sb, stripeOk: () => true, stripe: {}, user: { id: 'rider-1' } })
+  assert.equal(lowTipRes.status, 400)
+  assert.match(lowTipRes.json.error, /between \$1 and \$100/i)
+
+  const highTipRes = await call(handleTripTip, {
+    method: 'POST',
+    body: { tripId: 'trip-comp-untipped', tipCents: 15000 },
+  }, { sb, stripeOk: () => true, stripe: {}, user: { id: 'rider-1' } })
+  assert.equal(highTipRes.status, 400)
+  assert.match(highTipRes.json.error, /between \$1 and \$100/i)
+
+  // 9. Finalize mode: missing paymentIntentId returns 400
+  const noPiRes = await call(handleTripTip, {
+    method: 'POST',
+    body: { tripId: 'trip-comp-untipped', mode: 'finalize' },
+  }, { sb, stripeOk: () => true, stripe: {}, user: { id: 'rider-1' } })
+  assert.equal(noPiRes.status, 400)
+  assert.match(noPiRes.json.error, /paymentIntentId required/i)
+
+  // 10. Finalize mode: cross-tenant payment intent mismatch returns 403
+  const fakeStripe = {
+    paymentIntents: {
+      retrieve: async () => ({
+        id: 'pi_alien',
+        amount: 500,
+        status: 'succeeded',
+        metadata: { kind: 'tip', tripId: 'trip-comp-untipped', riderId: 'alien-rider' },
+      }),
+    },
+  }
+  const mismatchRes = await call(handleTripTip, {
+    method: 'POST',
+    body: { tripId: 'trip-comp-untipped', mode: 'finalize', paymentIntentId: 'pi_alien' },
+  }, { sb, stripeOk: () => true, stripe: fakeStripe, user: { id: 'rider-1' } })
+  assert.equal(mismatchRes.status, 403)
+  assert.match(mismatchRes.json.error, /does not match this trip/i)
 })

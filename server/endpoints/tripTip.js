@@ -12,30 +12,33 @@ import {
 const MIN_TIP = 100
 const MAX_TIP = 10000
 
-export default async function handler(req, res) {
+export default async function handler(req, res, deps = {}) {
   if (cors(req, res)) return
   if (req.method !== 'POST') return json(res, 405, { error: 'Method not allowed' })
-  if (!stripeOk()) {
+  const stripeOkFn = deps.stripeOk || stripeOk
+  if (!deps.stripe && !stripeOkFn()) {
     return json(res, 503, {
       error: 'Payments unavailable',
       message: 'STRIPE_SECRET_KEY is not configured. Tips cannot be charged.',
     })
   }
-  const sb = admin()
+  const sb = deps.sb !== undefined ? deps.sb : admin()
   if (!sb) return json(res, 503, { error: 'SUPABASE_SERVICE_ROLE_KEY not configured' })
-  const user = await userFromAuth(req)
+  const user = deps.user !== undefined ? deps.user : await (deps.userFromAuth || userFromAuth)(req)
   if (!user) return json(res, 401, { error: 'Sign in required' })
 
   const { body, error: pe } = parseBody(req)
   if (pe) return json(res, 400, { error: pe })
 
+  const stripe = deps.stripe || (stripeOkFn() ? stripeClient() : null)
   const mode = body.mode === 'finalize' ? 'finalize' : 'charge'
   try {
-    if (mode === 'finalize') return await finalize(res, sb, user, body)
-    return await charge(res, sb, user, body)
+    if (mode === 'finalize') return await finalize(res, sb, user, body, stripe)
+    return await charge(res, sb, user, body, stripe)
   } catch (err) {
-    console.error('[trip-tip]', err)
-    return json(res, 500, { error: err.message || 'Tip failed' })
+    const status = err.status || 500
+    if (status >= 500) console.error('[trip-tip]', err)
+    return json(res, status, { error: err.message || 'Tip failed' })
   }
 }
 
@@ -74,13 +77,13 @@ function tipAmount(body) {
   return cents
 }
 
-async function charge(res, sb, user, body) {
+async function charge(res, sb, user, body, stripeClientOverride) {
   const trip = await loadOwnedTrip(sb, user.id, body.tripId)
   if (Number(trip.tip_cents) > 0) {
     return json(res, 409, { error: 'Tip already added', tipCents: trip.tip_cents })
   }
   const cents = tipAmount(body)
-  const stripe = stripeClient()
+  const stripe = stripeClientOverride || stripeClient()
 
   const { data: profile } = await sb
     .from('profiles')
@@ -138,11 +141,11 @@ async function charge(res, sb, user, body) {
   })
 }
 
-async function finalize(res, sb, user, body) {
+async function finalize(res, sb, user, body, stripeClientOverride) {
   const trip = await loadOwnedTrip(sb, user.id, body.tripId)
   const piId = body.paymentIntentId
   if (!piId) return json(res, 400, { error: 'paymentIntentId required' })
-  const stripe = stripeClient()
+  const stripe = stripeClientOverride || stripeClient()
   const pi = await stripe.paymentIntents.retrieve(piId)
   if (pi.metadata?.kind !== 'tip' || pi.metadata?.tripId !== trip.id || pi.metadata?.riderId !== user.id) {
     return json(res, 403, { error: 'Payment does not match this trip' })
