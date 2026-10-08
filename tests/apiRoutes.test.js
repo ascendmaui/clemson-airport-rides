@@ -7,7 +7,7 @@ import driverHandler from '../api/driver.js'
 import stripePaymentHandler from '../api/stripe-payment-methods.js'
 
 const CARPOOL = {
-  allowed: ['match', 'group', 'program'],
+  allowed: ['match', 'group', 'program', 'attribute'],
   legacy: {
     'carpool-match': 'match',
     'carpool-group': 'group',
@@ -212,9 +212,30 @@ test('saved payment methods list and select are their own routes', async () => {
 
 test('held routes fold into existing routers and ignore body sub-actions', () => {
   const driver = {
-    allowed: ['signup', 'submit-review', 'earnings', 'offer-preview', 'tip', 'wait', 'cancel-midride', 'payouts'],
+    allowed: [
+      'signup',
+      'submit-review',
+      'earnings',
+      'offer-preview',
+      'tip',
+      'tip-choice',
+      'wait',
+      'cancel-midride',
+      'payouts',
+      'inbox',
+      'cards',
+      'rebroadcast-offers',
+      'mark-offered',
+      'pass-offer',
+      'sign-agreement',
+      'backup-queue',
+    ],
     legacy: {
+      'driver-signup': 'signup',
+      'driver-submit-review': 'submit-review',
       'driver-earnings': 'earnings',
+      'trip-offer-preview': 'offer-preview',
+      'trip-tip': 'tip',
       'trip-wait': 'wait',
       'trip-cancel-midride': 'cancel-midride',
       'driver-payouts': 'payouts',
@@ -223,6 +244,11 @@ test('held routes fold into existing routers and ignore body sub-actions', () =>
   assert.equal(resolveRouteAction({ url: '/api/driver?action=wait', body: { action: 'arrive', tripId: 't' } }, driver), 'wait')
   assert.equal(resolveRouteAction({ url: '/api/trip-wait', body: { action: 'tick' } }, driver), 'wait')
   assert.equal(resolveRouteAction({ url: '/api/driver-earnings' }, driver), 'earnings')
+  assert.equal(resolveRouteAction({ url: '/api/driver?action=cards' }, driver), 'cards')
+  assert.equal(resolveRouteAction({ url: '/api/driver?action=inbox' }, driver), 'inbox')
+  assert.equal(resolveRouteAction({ url: '/api/driver?action=sign-agreement' }, driver), 'sign-agreement')
+  assert.equal(resolveRouteAction({ url: '/api/driver?action=backup-queue' }, driver), 'backup-queue')
+  assert.equal(resolveRouteAction({ url: '/api/trip-tip' }, driver), 'tip')
 
   const pay = {
     allowed: [
