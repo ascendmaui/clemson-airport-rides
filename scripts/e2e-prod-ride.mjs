@@ -6,7 +6,10 @@ import { fileURLToPath } from 'node:url'
 import { setTimeout as delay } from 'node:timers/promises'
 import { createClient } from '@supabase/supabase-js'
 import { isE2ETestEmail } from '../shared/e2eTestAccounts.js'
-import { acceptTrip, advanceTrip } from '../packages/rides-native/driverDesk.js'
+import { acceptTrip, advanceTrip, publishDriverLocation } from '../packages/rides-native/driverDesk.js'
+import { coordsFromRow, liveFixFromReads } from '../packages/rides-native/liveFix.js'
+import { submitPartyRating } from '../packages/rides-native/partyProfile.js'
+import { buildReceiptText, money } from '../src/lib/receiptText.js'
 
 /** Small dotenv subset: literal KEY=VALUE, optional export/quotes/comments, no expansion. */
 export function parseEnvFile(source) {
@@ -65,8 +68,8 @@ const ride = {
   dest: 'Clemson Downtown', destLat: 34.6834, destLng: -82.8374,
 }
 const NOTE = 'E2E TEST - automated harness'
-const rideSteps = ['card', 'driver_online', 'quote', 'book', 'offer', 'accept', 'en_route', 'pickup',
-  'in_progress', 'complete', 'capture', 'tip', 'payout_ledger']
+const rideSteps = ['card', 'driver_online', 'quote', 'book', 'offer', 'accept', 'en_route', 'tracking', 'pickup',
+  'in_progress', 'complete', 'capture', 'receipt', 'tip', 'rating', 'payout_ledger']
 
 function requireThat(condition, message) {
   if (!condition) throw new Error(message)
@@ -264,7 +267,12 @@ export async function main(args = process.argv.slice(2)) {
         const quote = await api(rider, '/api/quote-fare', ride)
         requireThat(Number.isFinite(quote.fareCents) && quote.fareCents > 0, failureDetail('Quote has no positive fare', quote))
         summary.fareCents = quote.fareCents
-        return `Standard fare ${quote.fareCents} cents`
+        // Report every quoted tier; identical prices across tiers are flagged, not failed.
+        const tiers = (Array.isArray(quote.tiers) ? quote.tiers : [])
+          .filter(row => typeof row?.id === 'string' && Number.isFinite(row.fareCents))
+        const tierText = tiers.map(row => `${row.id} ${row.fareCents}`).join(', ')
+        const same = tiers.length > 1 && tiers.every(row => row.id === 'carpool' || row.fareCents === quote.fareCents)
+        return `Standard fare ${quote.fareCents} cents${tierText ? `; tiers ${tierText}` : ''}${same ? '; WARNING non-carpool tiers quote the same fare' : ''}`
       })
       await step('book', async () => {
         bookingAttempted = true // Never retry a booking; cleanup recovers a lost response.
@@ -308,6 +316,43 @@ export async function main(args = process.argv.slice(2)) {
         return `trip ${summary.tripId}: accepted with driverDesk locked economics`
       })
       await step('en_route', () => advance('arriving'))
+      await step('tracking', async () => {
+        // Native driver trip.tsx publishes presence plus trip telemetry through this helper.
+        const trip = await readTrip()
+        const publishedAt = Date.now()
+        const fixes = [0.002, 0.001].map(offset => ({
+          lat: ride.pickupLat + offset, lng: ride.pickupLng + offset,
+        }))
+        for (const fix of fixes) {
+          await publishDriverLocation(driver, driverId, {
+            ...fix, online: true, tripId: trip.id, tripStatus: trip.status,
+          })
+        }
+        const latest = fixes.at(-1)
+        return retryRead(async () => {
+          // Mirror rider tripWatch.loadLiveTrip: trip fix first, presence only as fallback.
+          const tripRes = await rider.from('trip_driver_locations')
+            .select('lat, lng, heading, speed, updated_at').eq('trip_id', summary.tripId).maybeSingle()
+          const tripRow = tripRes.error ? null : tripRes.data
+          let statusRes = { data: null, error: null }
+          if (!coordsFromRow(tripRow)) {
+            statusRes = await rider.from('driver_status').select('lat, lng, heading, location_updated_at')
+              .eq('driver_id', driverId).maybeSingle()
+          }
+          const picked = liveFixFromReads({ tripRow, tripError: tripRes.error,
+            statusRow: statusRes.data, statusError: statusRes.error })
+          const source = coordsFromRow(tripRow) ? 'trip_driver_locations' : 'driver_status'
+          const at = Date.parse(picked.fix?.updatedAt)
+          const ageMs = Date.now() - at
+          requireThat(!picked.error && picked.fix
+            && Math.abs(picked.fix.lat - latest.lat) <= 0.00001
+            && Math.abs(picked.fix.lng - latest.lng) <= 0.00001
+            && Number.isFinite(ageMs) && ageMs >= -1000 && ageMs <= 30_000 && at >= publishedAt - 1000,
+          failureDetail(`Rider ${source} did not show latest driver coordinates with a fresh timestamp; age ${Number.isFinite(ageMs) ? `${ageMs}ms` : 'unknown'}`,
+            tripRes.error, statusRes.error, picked.error))
+          return `2 driver updates toward pickup; rider read ${source}; location age ${ageMs}ms; latest coordinates verified`
+        })
+      })
       await step('pickup', async () => { await presence(true); return advance('arrived') })
       await step('in_progress', () => advance('in_progress'))
       await step('complete', async () => {
@@ -329,6 +374,22 @@ export async function main(args = process.argv.slice(2)) {
         summary.capturedCents = payment.amountCents
         return `${auth?.status === 'captured' ? 'captured hold' : 'direct card charge succeeded'} ${payment.amountCents} cents; PaymentIntent ${payment.paymentIntentId}; payment_status ${trip.payment_status || 'not exposed'}`
       })
+      await step('receipt', async () => retryRead(async () => {
+        // ReceiptScreen uses src/lib/ratings.fetchTripForRating and buildReceiptText.
+        const result = await rider.from('trips')
+          .select('id, status, rider_id, driver_id, pickup_label, dropoff_label, fare_cents, deposit_cents, tip_cents, completed_at, canceled_at')
+          .eq('id', summary.tripId).maybeSingle()
+        requireThat(!result.error && result.data?.rider_id === riderId,
+          failureDetail('Rider receipt trip unreadable', result.error))
+        const trip = result.data
+        const fare = Number(trip.fare_cents)
+        const tip = Number(trip.tip_cents) || 0
+        const text = buildReceiptText(trip)
+        requireThat(trip.status === 'completed' && fare === summary.capturedCents
+          && text.split('\n').includes(`Total: ${money(summary.capturedCents + tip)}`),
+        failureDetail(`Receipt fare ${fare} cents does not match captured ${summary.capturedCents} cents or rendered total`, result.error))
+        return `rider read trips via web ReceiptScreen; fare ${fare} cents; tip ${tip} cents; total ${fare + tip} cents (before tip step)`
+      }))
       await step('tip', async () => {
         const path = '/api/driver?action=tip-choice'
         const offer = await api(rider, path, { mode: 'offer', tripId: summary.tripId })
@@ -358,6 +419,20 @@ export async function main(args = process.argv.slice(2)) {
           return row
         })
         return `choice ${body.choiceId}; rider trip tip_cents ${trip.tip_cents}; ${paymentInfo || 'payment info not exposed'}`
+      })
+      await step('rating', async () => {
+        // RiderTripEnd and the driver's RateTripPanel both use submitPartyRating.
+        for (const [client, raterId, rateeId] of [[rider, riderId, driverId], [driver, driverId, riderId]]) {
+          const saved = await submitPartyRating(client, { tripId: summary.tripId, raterId, stars: 5 })
+          await retryRead(async () => {
+            const result = await client.from('ratings').select('id, stars, ratee_id')
+              .eq('trip_id', summary.tripId).eq('rater_id', raterId).maybeSingle()
+            requireThat(!result.error && result.data?.id === saved.id && result.data?.stars === 5
+              && result.data?.ratee_id === rateeId,
+            failureDetail(`${raterId === riderId ? 'Rider' : 'Driver'} ratings read did not verify persisted 5 stars`, result.error))
+          })
+        }
+        return 'ratings: rider rated driver and driver rated rider 5 stars; each verified through their own session'
       })
       await step('payout_ledger', async () => retryRead(async () => {
         const ledger = await driver.from('driver_payouts').select('trip_id, driver_id, amount_cents, status')
