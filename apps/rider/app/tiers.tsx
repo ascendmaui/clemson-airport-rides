@@ -1,3 +1,4 @@
+import { Ionicons } from '@expo/vector-icons'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useEffect, useState } from 'react'
 import { Animated, Pressable, Text, View } from 'react-native'
@@ -11,6 +12,7 @@ import { supabase } from '@/lib/supabase'
 import { loadTigerPass, TIGER_PASS_NAME, type TigerPassStatus } from 'rides-native/tigerPassClient'
 import { oneParam } from '@/lib/oneParam'
 import { bookableRideTiers, formatUsd } from 'rides-native/places.js'
+import { rideTypeIconName } from 'rides-native/rideTypeIcons.js'
 import { displayTierPrice, fetchRideQuote, studentSurfaceCopy, withTigerPassQuote, type AirportQuote } from 'rides-native/riderMoney.js'
 import { useStudentStatus } from '@/lib/useStudentStatus'
 import { lift } from '@/lib/elevation'
@@ -178,7 +180,7 @@ export default function RideTiers() {
               accessibilityState={{ selected: on }}
             >
               <View style={[styles.iconWell, on && styles.iconWellOn]}>
-                <Text style={styles.icon}>{tier.icon}</Text>
+                <Ionicons name={rideTypeIconName(tier.id)} size={22} color={on ? colors.orange : colors.purple} />
               </View>
               <View style={styles.tierCopy}>
                 <Text style={styles.name}>{tier.name}</Text>
@@ -321,7 +323,6 @@ function makeStyles(colors: Palette) {
     iconWellOn: { backgroundColor: colors.card },
     tierCopy: { flex: 1 },
     priceCol: { alignItems: 'flex-end' as const },
-    icon: { fontSize: 22 },
     name: { fontWeight: '700' as const, fontSize: 16, color: colors.ink },
     meta: { color: colors.inkSecondary, fontSize: 12, marginTop: 2 },
     price: { fontWeight: '800' as const, color: colors.ink, fontSize: 16 },
