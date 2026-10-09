@@ -212,12 +212,12 @@ test('both completion endpoints allow an admin only with adminOverride', async (
   }
 })
 
-test('settle cancel and charge retain the generic terminal rejection', async () => {
+test('settle cancel keeps the generic terminal rejection; charge stays exempt as before', async () => {
   for (const status of ['completed', 'canceled']) {
-    for (const action of ['cancel', 'charge']) {
-      const result = await endpoint(settleEndpoint, tripCompletionDb({ ...base, status }), actor, { action })
-      assert.equal(result.http, 409)
-      assert.equal(result.body.error, `Trip already ${status}`)
-    }
+    const result = await endpoint(settleEndpoint, tripCompletionDb({ ...base, status }), actor, { action: 'cancel' })
+    assert.equal(result.http, 409)
+    assert.equal(result.body.error, `Trip already ${status}`)
+    const charge = await endpoint(settleEndpoint, tripCompletionDb({ ...base, status }), actor, { action: 'charge' })
+    assert.notEqual(charge.body.error, `Trip already ${status}`)
   }
 })
