@@ -147,7 +147,7 @@ test('public support route has real support content and contact links', () => {
   assert.match(support, /<PageHead kicker="Help" title="Support" \/>/)
   assert.match(info, /APP_DOWNLOADS, SUPPORT_EMAIL/)
   assert.match(support, /mailto:\$\{SUPPORT_EMAIL\}/)
-  assert.equal(SUPPORT_EMAIL, 'rides@clemson.edu')
+  assert.equal(SUPPORT_EMAIL, 'rides@clemsonrides.com')
   for (const route of ['faq', 'privacy', 'terms']) {
     assert.match(support, new RegExp(`navigate\\('${route}'\\)`))
   }

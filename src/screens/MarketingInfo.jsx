@@ -292,8 +292,8 @@ export function SupportPage() {
         <p>In an emergency, call 911. The in-ride Safety screen has SOS.</p>
       </article>
       <article className="mkt-card mkt-feature">
-        <h2>Delete a rider account</h2>
-        <p>In the rider app, go to Account → Delete account → File deletion request. This files a support request; the account remains until the request is processed.</p>
+        <h2>Delete your account</h2>
+        <p>Rider app: Account → Delete account → File deletion request. Driver app: Menu → Delete account → File deletion request. Each files a support request; the account remains until the request is processed.</p>
       </article>
       <article className="mkt-card mkt-feature">
         <h2>Payments</h2>

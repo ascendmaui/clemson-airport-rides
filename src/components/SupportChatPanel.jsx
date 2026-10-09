@@ -16,7 +16,7 @@ function welcome(role) {
 function mailtoFor(draft) {
   const subject = encodeURIComponent(draft?.subject || 'Clemson RIDES support')
   const body = encodeURIComponent(draft?.body || '')
-  return `mailto:rides@clemson.edu?subject=${subject}&body=${body}`
+  return `mailto:rides@clemsonrides.com?subject=${subject}&body=${body}`
 }
 
 export function SupportChatPanel({ accountRole = null, active = true }) {
@@ -84,7 +84,7 @@ export function SupportChatPanel({ accountRole = null, active = true }) {
       chat.setMessages((current) => [...current, {
         id: `file-err-${Date.now()}`,
         role: 'assistant',
-        content: `${error.message || 'Could not file the ticket.'} You can email rides@clemson.edu with the same details.`,
+        content: `${error.message || 'Could not file the ticket.'} You can email rides@clemsonrides.com with the same details.`,
       }])
     } finally {
       setFiling(false)

@@ -52,7 +52,7 @@ export default async function handler(req, res) {
   if (!rateLimit(req, { bucket: 'support', userId: loaded.userId, limit: 16, windowMs: 60_000 })) {
     return json(res, 429, {
       error: 'Too many Support messages. Wait a minute and try again.',
-      reply: 'Too many Support messages. Wait a minute. You can still email rides@clemson.edu.',
+      reply: 'Too many Support messages. Wait a minute. You can still email rides@clemsonrides.com.',
       source: 'offline',
     })
   }

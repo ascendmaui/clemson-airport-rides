@@ -803,7 +803,7 @@ export function AccountScreen() {
         {tab === 'help' && (
           <Section title="Also in Help" subtitle="Email, lost and found, and policies" icon={IconHelp}>
             <a
-              href="mailto:rides@clemson.edu?subject=Clemson%20RIDES%20help"
+              href="mailto:rides@clemsonrides.com?subject=Clemson%20RIDES%20help"
               className="pressable"
               style={{
                 display: 'block', padding: 14, borderRadius: 14, fontWeight: 700, color: 'var(--purple)',
