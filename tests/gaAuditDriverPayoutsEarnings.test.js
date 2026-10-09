@@ -295,7 +295,7 @@ test('GA95: driverPayouts executes due payouts on authorized cron', async () => 
       assert.equal(table, 'trips')
       return {
         select: () => ({
-          eq: () => ({
+          in: () => ({
             order: () => ({
               limit: async (lim) => {
                 assert.equal(lim, 80)
@@ -348,7 +348,7 @@ test('GA95: driverPayouts returns summary for signed-in driver GET request', asy
     from: () => ({
       select: () => ({
         eq: () => ({
-          eq: () => ({
+          in: () => ({
             order: () => ({
               limit: async () => ({ data: mockTrips, error: null }),
             }),
@@ -387,7 +387,7 @@ test('GA95: driverPayouts triggers manual retry on driver POST request', async (
     from: () => ({
       select: () => ({
         eq: () => ({
-          eq: () => ({
+          in: () => ({
             order: () => ({
               limit: async () => ({ data: mockTrips, error: null }),
             }),
@@ -453,7 +453,7 @@ test('GA95: driver API router dispatches earnings and payouts actions forwarding
     from: () => ({
       select: () => ({
         eq: () => ({
-          eq: () => ({
+          in: () => ({
             order: () => ({
               limit: async () => {
                 payoutsCalled = true

@@ -61,6 +61,9 @@ const TRIP_BASE = [
   'accepted_at',
   'requested_at',
   'canceled_at',
+  'wait_fee_cents',
+  'cancel_fee_cents',
+  'driver_wait_earnings_cents',
   'metadata',
 ].join(', ')
 
@@ -257,14 +260,15 @@ export function sanitizeCompletedTripForDriver(row, { riderName = '', payments =
     .reduce((sum, p) => sum + paymentAmount(p), 0)
   const waitFeeCents = readWaitFeeCents(row)
   const cancelFeeCents = readCancelFeeCents(row, payments)
-  const canceled = row?.status === 'canceled'
+  const noShow = row?.status === 'cancelled_wait'
+  const canceled = row?.status === 'canceled' || noShow
   const grossFareCents = fareCents > 0 ? fareCents : collected
   const refundCents = Math.min(refunds, grossFareCents)
   const fareAfterRefundCents = canceled ? 0 : Math.max(0, grossFareCents - refundCents)
   const cut = splitPlatformCut({
     fareCents: fareAfterRefundCents,
     tipCents: canceled ? 0 : (tipCents || 0),
-    waitFeeCents: canceled ? 0 : (waitFeeCents || 0),
+    waitFeeCents: canceled && !noShow ? 0 : (waitFeeCents || 0),
     cancelFeeCents: cancelFeeCents || 0,
   })
   const boostCents = canceled ? 0 : driverBoostShareCents(readBoostCents(row))
@@ -276,16 +280,17 @@ export function sanitizeCompletedTripForDriver(row, { riderName = '', payments =
 
   /** @type {{ label: string, cents: number }[]} */
   const fareParts = []
+  if (noShow) fareParts.push({ label: 'No-show fee', cents: Math.max(0, Number(row.driver_wait_earnings_cents) || 0) })
   const base = Number(bill?.baseCents ?? bill?.base_cents) || 0
   const distCents = Number(bill?.distanceCents ?? bill?.distance_cents) || 0
   const timeCents = Number(bill?.timeCents ?? bill?.time_cents) || 0
   const surgeCents = Number(bill?.surgeCents ?? bill?.surge_cents) || 0
-  if (base) fareParts.push({ label: 'Base', cents: base })
-  if (distCents) fareParts.push({ label: 'Distance charge', cents: distCents })
-  if (timeCents) fareParts.push({ label: 'Time', cents: timeCents })
-  if (surgeCents) fareParts.push({ label: 'Surge', cents: surgeCents })
+  if (!noShow && base) fareParts.push({ label: 'Base', cents: base })
+  if (!noShow && distCents) fareParts.push({ label: 'Distance charge', cents: distCents })
+  if (!noShow && timeCents) fareParts.push({ label: 'Time', cents: timeCents })
+  if (!noShow && surgeCents) fareParts.push({ label: 'Surge', cents: surgeCents })
   const backupExtras = earningsExtrasForDriver(row, row?.driver_id)
-  for (const part of backupExtras.parts) fareParts.push(part)
+  if (!noShow) for (const part of backupExtras.parts) fareParts.push(part)
 
   const pickupLabel = masked.pickup_label || 'Trip completed'
   const dropoffLabel = masked.dropoff_label || 'Trip completed'
@@ -297,12 +302,12 @@ export function sanitizeCompletedTripForDriver(row, { riderName = '', payments =
     fareCents: fareAfterRefundCents,
     refundCents: canceled ? 0 : refundCents,
     grossCents: cut.grossCents,
-    platformFeeCents: cut.platformFeeCents,
+    platformFeeCents: noShow ? Math.max(0, cut.grossCents - (Number(row.driver_wait_earnings_cents) || 0)) : cut.platformFeeCents,
     tipCents: canceled ? null : tipCents,
     boostCents,
-    waitFeeCents: canceled ? null : waitFeeCents,
+    waitFeeCents: canceled && !noShow ? null : waitFeeCents,
     cancelFeeCents,
-    earnedCents: cut.driverNetCents + boostCents + backupExtras.cents,
+    earnedCents: noShow ? Math.max(0, Number(row.driver_wait_earnings_cents) || 0) : cut.driverNetCents + boostCents + backupExtras.cents,
     distanceM: distance.meters,
     distanceApproximate: distance.approximate,
     durationS: duration.seconds,
@@ -617,7 +622,7 @@ async function selectCompletedTrips(driverId) {
     .from('trips')
     .select(`${TRIP_BASE}, tip_cents`)
     .eq('driver_id', driverId)
-    .in('status', ['completed', 'canceled'])
+    .in('status', ['completed', 'canceled', 'cancelled_wait'])
     .order('completed_at', { ascending: false })
     .limit(1000)
 
@@ -628,7 +633,7 @@ async function selectCompletedTrips(driverId) {
     .from('trips')
     .select(TRIP_BASE)
     .eq('driver_id', driverId)
-    .in('status', ['completed', 'canceled'])
+    .in('status', ['completed', 'canceled', 'cancelled_wait'])
     .order('completed_at', { ascending: false })
     .limit(1000)
 }
