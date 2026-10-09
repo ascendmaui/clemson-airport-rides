@@ -527,6 +527,9 @@ async function chargeOverage(stripe, {
  */
 export async function settleFareHold({ sb, stripe, trip, finalFareCents } = {}) {
   const auth = trip?.metadata?.fare_authorization
+  if (auth?.status === 'captured' && auth.paymentIntentId) {
+    return { ok: true, duplicate: true, method: 'card', amountCents: auth.capturedCents, paymentIntentId: auth.paymentIntentId, status: 'succeeded' }
+  }
   if (!auth || auth.status !== 'requires_capture' || !auth.paymentIntentId) return null
   const client = stripe || (stripeOk() ? stripeClient() : null)
   if (!client?.paymentIntents?.retrieve) return null
@@ -559,7 +562,7 @@ export async function settleFareHold({ sb, stripe, trip, finalFareCents } = {}) 
   if (paymentIntent?.status === 'succeeded') {
     const capturedCents = Math.min(finalFare, Number(paymentIntent.amount_received || paymentIntent.amount) || finalFare)
     await recordCapture(sb, trip, auth, capturedCents, paymentIntent.id)
-    return { ok: true, method: 'card', amountCents: capturedCents, paymentIntentId: paymentIntent.id, status: 'succeeded' }
+    return { ok: true, duplicate: true, method: 'card', amountCents: capturedCents, paymentIntentId: paymentIntent.id, status: 'succeeded' }
   }
 
   if (plan.action === 'cancel' || plan.action === 'waive') {
@@ -734,7 +737,13 @@ async function recordCapture(sb, trip, auth, capturedCents, paymentIntentId, ext
         ...extra,
       },
     })
-    const prior = Math.max(0, Math.round(Number(trip.metadata?.fare_paid_cents) || 0))
+    const current = await sb.from('trips').select('metadata').eq('id', trip.id).maybeSingle()
+    const metadata = current.data?.metadata || trip.metadata || {}
+    const prior = Math.max(0, Math.round(Number(metadata.fare_paid_cents) || 0))
+    const previous = metadata.fare_authorization
+    const alreadyCaptured = previous?.paymentIntentId === paymentIntentId
+      ? Math.max(0, Number(previous.capturedCents) || 0)
+      : 0
     await mergeTripMetadata(sb, trip.id, {
       fare_authorization: {
         ...auth,
@@ -743,7 +752,7 @@ async function recordCapture(sb, trip, auth, capturedCents, paymentIntentId, ext
         paymentIntentId,
         ...extra,
       },
-      fare_paid_cents: prior + capturedCents,
+      fare_paid_cents: prior + Math.max(0, capturedCents - alreadyCaptured),
       outstanding_balance: null,
     })
   }

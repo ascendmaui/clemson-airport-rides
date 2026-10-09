@@ -9,7 +9,13 @@ import {
   tripChargeKey,
   waitChargeKey,
 } from './chargeIdempotency.js'
-import { settleTrip } from './tripSettle.js'
+import { settleTrip as settleTripService } from './tripSettle.js'
+import { tripCompletionDb } from '../tests/fixtures/tripCompletionDb.js'
+
+// Payment tests exercise an authorized driver against a live trip row.
+function settleTrip(options) {
+  return settleTripService({ ...options, sb: options.sb || tripCompletionDb(options.trip), actor: options.actor || { id: options.trip?.driver_id } })
+}
 
 const RIDE_ID = 'ride_1'
 const USER_ID = 'user_1'
@@ -361,6 +367,7 @@ test('trip settle keeps one card charge when the fare changes before anything is
   const trip = {
     id: 'trip_settle',
     rider_id: USER_ID,
+    driver_id: 'driver',
     status: 'in_progress',
     fare_cents: FARE_A,
     metadata: {},
@@ -388,6 +395,7 @@ test('a fare drift during requires_action reuses the trip balance PaymentIntent'
   const trip = {
     id: 'trip_open',
     rider_id: USER_ID,
+    driver_id: 'driver',
     status: 'in_progress',
     fare_cents: FARE_A,
     metadata: { fare_paid_cents: 0 },
@@ -419,6 +427,7 @@ test('a later balance due after fare_paid_cents moves is a new charge', async ()
   const trip = {
     id: 'trip_bal',
     rider_id: USER_ID,
+    driver_id: 'driver',
     status: 'in_progress',
     fare_cents: 4000,
     metadata: { fare_paid_cents: 0 },

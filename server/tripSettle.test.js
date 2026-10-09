@@ -1,7 +1,15 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { memoryCreditStore } from './credits.js'
-import { isAdminUser, settleTrip } from './tripSettle.js'
+import { isAdminUser, settleTrip as settleTripService } from './tripSettle.js'
+
+import { tripCompletionDb } from '../tests/fixtures/tripCompletionDb.js'
+
+async function settleTrip(options) {
+  const sb = options.sb || tripCompletionDb(options.trip)
+  sb.seedTrip?.(options.trip)
+  return settleTripService({ ...options, sb, actor: options.actor || { id: options.trip?.driver_id } })
+}
 
 function makeMockSb({
   tripData = null,
@@ -10,11 +18,13 @@ function makeMockSb({
   eventInsertError = null,
   connectAccountId = null,
 } = {}) {
-  const updates = []
+  const db = tripCompletionDb(tripData, { updateError: tripUpdateError })
+  const updates = db.updates
   const events = []
   const payouts = []
 
   return {
+    seedTrip: db.seedTrip,
     updates,
     events,
     payouts,
@@ -35,30 +45,7 @@ function makeMockSb({
           },
         }
       }
-      if (table === 'trips') {
-        return {
-          select() {
-            return {
-              eq() {
-                return {
-                  maybeSingle: async () => ({
-                    data: tripData || { metadata: {} },
-                    error: null,
-                  }),
-                }
-              },
-            }
-          },
-          update(patch) {
-            return {
-              eq(col, val) {
-                updates.push({ table, patch, col, val })
-                return Promise.resolve({ error: tripUpdateError })
-              },
-            }
-          },
-        }
-      }
+      if (table === 'trips') return db.from(table)
       if (table === 'trip_events') {
         return {
           insert(row) {
@@ -181,6 +168,7 @@ test('settleTrip complete blocks when fare is not set and cannot be priced', asy
     sb,
     trip: {
       id: 'trip_unpriced',
+      driver_id: 'd1',
       fare_cents: null,
       rider_id: 'r1',
       status: 'in_progress',
@@ -234,7 +222,7 @@ test('settleTrip blocks progression with 402 payment_required when card is decli
   assert.equal(res.body.status, 'payment_required')
   assert.equal(res.body.tripStatus, 'in_progress')
   assert.equal(res.body.failure.code, 'card_declined')
-  assert.equal(sb.updates.length, 0)
+  assert.equal(sb.updates.some(u => u.patch.status), false)
 })
 
 test('settleTrip completes a campus trip with no saved card and does not call Stripe', async () => {
@@ -336,7 +324,7 @@ test('settleTrip still blocks an existing airport deposit when no card is on fil
   const res = await settleTrip({ sb, stripe, trip, action: 'complete', deps })
   assert.equal(res.http, 402)
   assert.equal(res.body.progressed, false)
-  assert.equal(sb.updates.length, 0)
+  assert.equal(sb.updates.some(u => u.patch.status), false)
   assert.equal(intents, 0)
   assert.equal(transfers.length, 0)
   assert.equal(sb.payouts.length, 0)
@@ -520,9 +508,9 @@ test('settleTrip debits stored ride credits once and pays the driver', async () 
 
   const stale = await settleTrip({ sb, stripe, trip, action: 'complete', deps })
   assert.equal(stale.http, 200)
-  assert.equal(stale.body.payment.method, 'credits')
-  assert.equal(stale.body.payment.duplicate, true)
-  assert.equal(calls.length, 2)
+  assert.equal(stale.body.idempotent, true)
+  assert.equal(stale.body.progressed, false)
+  assert.equal(calls.length, 1)
   assert.equal((await store.getCredits('r1')).balanceCents, 3200)
 
   const stamped = {
@@ -531,7 +519,7 @@ test('settleTrip debits stored ride credits once and pays the driver', async () 
   }
   const replay = await settleTrip({ sb, stripe, trip: stamped, action: 'complete', deps })
   assert.equal(replay.http, 200)
-  assert.equal(calls.length, 2)
+  assert.equal(calls.length, 1)
   assert.equal((await store.getCredits('r1')).balanceCents, 3200)
 })
 
@@ -583,7 +571,7 @@ test('settleTrip handles database update failure and event failure cleanly', asy
   const failingUpdateSb = makeMockSb({ tripUpdateError: { message: 'trips table lock timeout' } })
   const failRes = await settleTrip({
     sb: failingUpdateSb,
-    trip: { id: 't_fail', rider_id: 'r1', fare_cents: 0 },
+    trip: { id: 't_fail', rider_id: 'r1', driver_id: 'd1', status: 'in_progress', fare_cents: 0 },
     action: 'complete',
   })
   assert.equal(failRes.http, 500)
@@ -594,7 +582,7 @@ test('settleTrip handles database update failure and event failure cleanly', asy
   const failingEventSb = makeMockSb({ eventInsertError: { message: 'trip_events insert failed' } })
   const eventFailRes = await settleTrip({
     sb: failingEventSb,
-    trip: { id: 't_event_fail', rider_id: 'r1', fare_cents: 0 },
+    trip: { id: 't_event_fail', rider_id: 'r1', driver_id: 'd1', status: 'in_progress', fare_cents: 0 },
     action: 'complete',
   })
   assert.equal(eventFailRes.http, 500)

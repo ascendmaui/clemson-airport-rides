@@ -28,7 +28,7 @@ export default async function handleTripStatus(req, res, deps = {}) {
     const trip = read.data
     if (!trip) return fail(404, 'trip_not_found', 'Trip not found')
     // Authorization precedes idempotency: a rider cannot replay a driver action.
-    if (trip.rider_id === user.id || (op !== 'accept' && trip.driver_id !== user.id)) {
+    if (op !== 'complete' && (trip.rider_id === user.id || (op !== 'accept' && trip.driver_id !== user.id))) {
       return fail(403, 'forbidden', 'Not allowed on this trip')
     }
     if (op === 'accept') {
@@ -50,7 +50,10 @@ export default async function handleTripStatus(req, res, deps = {}) {
         return fail(409, 'scheduled_rpc_required', 'Use scheduled ride acceptance for this trip')
       }
     }
-    const transition = resolveDriverTransition({ status: trip.status, op })
+    // Completion owns status checks and replay handling in settleTrip.
+    const transition = op === 'complete'
+      ? { via: 'settle' }
+      : resolveDriverTransition({ status: trip.status, op })
     if (transition.error) return fail(409, transition.error, op === 'accept' ? 'That ride is no longer available' : transition.error)
     if (transition.idempotent) {
       if (op === 'accept' && trip.driver_id !== user.id) return fail(409, 'offer_unavailable', 'That ride is no longer available')
@@ -63,11 +66,11 @@ export default async function handleTripStatus(req, res, deps = {}) {
     if (transition.via === 'settle') {
       const payments = await sb.from('payments').select('id, status, kind, amount_cents, metadata').eq('trip_id', tripId)
       if (payments.error) throw payments.error
-      const settled = await (deps.settleTrip || settleTrip)({ sb, stripe: (deps.stripeClient || stripeClient)(), trip, payments: payments.data || [], action: 'complete', actor: user })
+      const settled = await (deps.settleTrip || settleTrip)({ sb, stripe: (deps.stripeClient || stripeClient)(), trip, payments: payments.data || [], action: 'complete', actor: user, adminOverride: Boolean(body.adminOverride) })
       if (settled.http !== 200) return json(res, settled.http, { ...settled.body, ok: false, settle: settled.body })
       const fresh = await sb.from('trips').select('*').eq('id', tripId).maybeSingle()
       if (fresh.error) throw fresh.error
-      return json(res, 200, { ok: true, trip: fresh.data, settle: settled.body })
+      return json(res, 200, { ...settled.body, ok: true, trip: fresh.data, settle: settled.body })
     }
     const patch = { status: transition.to }
     let query

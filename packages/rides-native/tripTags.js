@@ -346,6 +346,11 @@ export function statusActionLabel(status) {
       return 'Start trip'
     case 'in_progress':
       return 'Complete trip'
+    case 'completed':
+    case 'canceled':
+    case 'canceled_midride':
+    case 'cancelled_wait':
+      return null
     default:
       return null
   }
@@ -371,8 +376,11 @@ export function statusHeadline(status) {
     case 'completed':
       return 'Completed'
     case 'canceled':
+      return 'Ride canceled'
+    case 'canceled_midride':
+      return 'Trip ended early'
     case 'cancelled_wait':
-      return 'Canceled'
+      return 'Canceled: rider no-show'
     default:
       return status ? String(status) : 'Ride'
   }
@@ -398,8 +406,11 @@ export function driverStatusDetail(status) {
     case 'completed':
       return 'This trip is complete.'
     case 'canceled':
+      return 'This ride is canceled. You can return home.'
+    case 'canceled_midride':
+      return 'The rider ended this trip early. You can return home.'
     case 'cancelled_wait':
-      return 'This trip is canceled.'
+      return 'The rider did not arrive, so this ride is canceled. You can return home.'
     default:
       return 'Trip status updates as you move through the ride.'
   }

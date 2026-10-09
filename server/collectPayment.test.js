@@ -4,7 +4,13 @@ import { cardDepositCents } from '../src/lib/fareRates.js'
 import { memoryCreditStore } from './credits.js'
 import { collectPayment } from './collectPayment.js'
 import { quoteAirportCheckout } from './authoritativeFare.js'
-import { settleTrip } from './tripSettle.js'
+import { settleTrip as settleTripService } from './tripSettle.js'
+import { tripCompletionDb } from '../tests/fixtures/tripCompletionDb.js'
+
+// Payment tests exercise an authorized driver against a live trip row.
+function settleTrip(options) {
+  return settleTripService({ ...options, sb: options.sb || tripCompletionDb(options.trip), actor: options.actor || { id: options.trip?.driver_id } })
+}
 import { attemptDriverPayout } from './payouts.js'
 
 function ioHarness({ balance = 0, hasCard = true } = {}) {
@@ -293,7 +299,8 @@ function fareDb(initial, user) {
 test('a completed null-fare airport trip is priced before it can settle', async () => {
   const when = '2026-09-23T15:00:00.000Z'
   const h = ioHarness({ balance: 0, hasCard: true })
-  const refused = await settleTrip({
+  const refused = await settleTripService({
+    actor: { id: 'driver' },
     trip: {
       id: 'trip_null',
       rider_id: 'rider',
