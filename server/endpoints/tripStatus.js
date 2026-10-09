@@ -8,9 +8,14 @@ import { applyTripWait } from '../tripWait.js'
 import { settleTrip } from '../tripSettle.js'
 import { cancelDriverTrip } from '../driverCancel.js'
 import { insertTripEvent } from '../tripEvents.js'
+import { withActionReceipts } from '../actionReceipts.js'
 
 export default async function handleTripStatus(req, res, deps = {}) {
   if (cors(req, res)) return
+  return withActionReceipts(req, res, deps, runTripStatus, { admin, json, parseBody, userFromAuth })
+}
+
+async function runTripStatus(req, res, deps = {}) {
   const fail = (http, code, error = code) => json(res, http, { ok: false, code, error })
   if (req.method !== 'POST') return fail(405, 'method_not_allowed', 'Method not allowed')
   const sb = deps.sb !== undefined ? deps.sb : admin()

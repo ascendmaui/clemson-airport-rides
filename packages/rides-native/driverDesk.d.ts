@@ -108,7 +108,7 @@ export function loadRiderFix(
   supabase: unknown,
   tripId: string,
 ): Promise<{ latitude: number; longitude: number; updatedAt: string | null } | null>
-export function driverTripAction(supabase: unknown, tripId: string, op: 'accept' | 'arriving' | 'arrive' | 'start' | 'complete' | 'cancel'): Promise<{ trip: DriverTripRow }>
+export function driverTripAction(supabase: unknown, tripId: string, op: 'accept' | 'arriving' | 'arrive' | 'start' | 'complete' | 'cancel', options?: { idempotencyKey?: string; signal?: AbortSignal }): Promise<{ trip: DriverTripRow }>
 export function tripWaitTick(supabase: unknown, tripId: string): Promise<{ trip: DriverTripRow; serverNow: string }>
 export function advanceTrip(
   supabase: unknown,
@@ -132,5 +132,9 @@ export function loadEarnings(supabase: unknown, driverId: string): Promise<{
 }>
 export function formatCents(cents: number): string
 
-export function driverStopAction(supabase: unknown, tripId: string, stopIndex: number, op: 'arrive' | 'start' | 'drop'): Promise<{ ok: boolean; trip: DriverTripRow; idempotent?: boolean }>
+export function driverStopAction(supabase: unknown, tripId: string, stopIndex: number, op: 'arrive' | 'start' | 'drop', options?: { idempotencyKey?: string; signal?: AbortSignal }): Promise<{ ok: boolean; trip: DriverTripRow; idempotent?: boolean }>
+export function advanceOpFor(status: string | null | undefined): 'arriving' | 'arrive' | 'start' | 'complete' | null
+export const QUEUED_ACTION_TIMEOUT_MS: number
+export function sendQueuedDriverAction(supabase: unknown, action: { id: string; tripId: string; kind: 'status' | 'stop'; op: string; stopIndex?: number }, options?: { timeoutMs?: number }): Promise<any>
+export function advanceResultTrip(result: any): (DriverTripRow & { settle?: { reason?: string; payment?: unknown; payout?: { status?: string; amountCents?: number; waitCents?: number } | null } | null }) | null
 export function driverCancelTrip(supabase: unknown, tripId: string, reason: string, note?: string): Promise<{ ok: boolean; idempotent?: boolean }>

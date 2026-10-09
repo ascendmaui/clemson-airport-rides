@@ -610,11 +610,11 @@ export async function tripWaitTick(supabase, tripId) {
   })
 }
 
-export async function driverTripAction(supabase, tripId, op) {
+export async function driverTripAction(supabase, tripId, op, { idempotencyKey, signal } = {}) {
   if (!tripId) throw new Error('Missing ride')
   try {
     return await authedJson(supabase, '/api/driver?action=trip-status', {
-      method: 'POST', body: { tripId, op },
+      method: 'POST', body: { tripId, op, ...(idempotencyKey ? { idempotencyKey } : {}) }, signal,
     })
   } catch (err) {
     if (op === 'complete' && (err.status === 402 || /payment_required/i.test(err.message || ''))) {
@@ -625,11 +625,42 @@ export async function driverTripAction(supabase, tripId, op) {
 }
 
 /** Carpool stop action: arrive / start (rider in car) / drop at one ordered stop. */
-export async function driverStopAction(supabase, tripId, stopIndex, op) {
+export async function driverStopAction(supabase, tripId, stopIndex, op, { idempotencyKey, signal } = {}) {
   if (!tripId) throw new Error('Missing ride')
   return authedJson(supabase, '/api/driver?action=trip-stop', {
-    method: 'POST', body: { tripId, stopIndex, op },
+    method: 'POST', body: { tripId, stopIndex, op, ...(idempotencyKey ? { idempotencyKey } : {}) }, signal,
   })
+}
+
+/** Trip-status op for the driver's main action button, or null. */
+export function advanceOpFor(status) {
+  const next = nextTripStatus(status)
+  return { arriving: 'arriving', arrived: 'arrive', in_progress: 'start', completed: 'complete' }[next] || null
+}
+
+export const QUEUED_ACTION_TIMEOUT_MS = 12000
+
+/**
+ * Sends one queued tap (offline action queue). The queue's id is the idempotency
+ * key. A weak signal times out instead of hanging; the tap stays queued and the
+ * retry carries the same key, so a request that did land is not applied twice.
+ */
+export async function sendQueuedDriverAction(supabase, action, { timeoutMs = QUEUED_ACTION_TIMEOUT_MS } = {}) {
+  const controller = typeof AbortController === 'function' ? new AbortController() : null
+  const timer = controller ? setTimeout(() => controller.abort(), timeoutMs) : null
+  const options = { idempotencyKey: action?.id, signal: controller?.signal }
+  try {
+    if (action?.kind === 'stop') return await driverStopAction(supabase, action.tripId, action.stopIndex, action.op, options)
+    return await driverTripAction(supabase, action?.tripId, action?.op, options)
+  } finally {
+    if (timer) clearTimeout(timer)
+  }
+}
+
+/** Flattens a trip-status response the way advanceTrip does. */
+export function advanceResultTrip(result) {
+  if (!result?.trip) return null
+  return { ...result.trip, ...(result.settle ? { settle: result.settle } : {}), ...(result.wait ? { wait: result.wait } : {}), ...(result.idempotent ? { idempotent: true } : {}) }
 }
 
 export async function driverCancelTrip(supabase, tripId, reason, note) {
@@ -640,11 +671,10 @@ export async function driverCancelTrip(supabase, tripId, reason, note) {
 }
 
 export async function advanceTrip(supabase, trip, driverId) {
-  const next = nextTripStatus(trip?.status)
-  const op = { arriving: 'arriving', arrived: 'arrive', in_progress: 'start', completed: 'complete' }[next]
+  const op = advanceOpFor(trip?.status)
   if (!op || !trip?.id) throw new Error('This trip cannot be advanced')
   const result = await driverTripAction(supabase, trip.id, op)
-  return { ...result.trip, ...(result.settle ? { settle: result.settle } : {}), ...(result.wait ? { wait: result.wait } : {}), ...(result.idempotent ? { idempotent: true } : {}) }
+  return advanceResultTrip(result)
 }
 
 export async function loadTrip(supabase, tripId, driverId) {

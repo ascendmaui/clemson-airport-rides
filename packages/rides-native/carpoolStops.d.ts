@@ -21,6 +21,7 @@ export function allStopsDone(stops: TripStop[]): boolean
 export function stopFlowStarted(trip: unknown): boolean
 export function stopNextOp(stop: TripStop | null | undefined): StopOp | null
 export function applyStopOp(stops: TripStop[], input: { index: number; op: StopOp; at?: string }): { stops?: TripStop[]; stop?: TripStop; idempotent?: boolean; error?: string; nextIndex?: number }
+export function tripOpForStop(stop: TripStop | null | undefined, op: StopOp, tripStatus: string): 'arrive' | 'start' | null
 export function stopTitle(stop: TripStop | null | undefined): string
 export function stopActionLabel(stop: TripStop | null | undefined): string | null
 export function stopStatusLabel(stop: TripStop | null | undefined): string
