@@ -5,10 +5,11 @@ export function tripEndSummary(card: Partial<DriverCard> | null | undefined): {
   title: string
   lines: TripEndLine[]
   net: { label: string; value: string; cents: number }
-  tip: { label: string; value: string; note: string; pending: boolean }
+  tip: { label: string; value: string; note: string; pending: boolean; headline: string | null; cents: number }
   payoutLine: string
   accessibilityLabel: string
 }
+export function tipLine(riderFirstName: string | null | undefined, tipCents: number): string | null
 export const POSITIVE_RATING_TAGS: readonly string[]
 export const ISSUE_RATING_TAGS: readonly string[]
 export const RATING_TAGS: readonly string[]

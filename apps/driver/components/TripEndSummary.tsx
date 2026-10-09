@@ -15,6 +15,9 @@ export function TripEndSummary({ card }: { card: DriverCard }) {
       style={[styles.box, { backgroundColor: colors.track, borderColor: colors.orange }]}
     >
       <Text style={[styles.kicker, { color: colors.orange }]}>{summary.title.toUpperCase()}</Text>
+      {summary.tip.headline ? (
+        <Text accessibilityLiveRegion="polite" style={[styles.tipHeadline, { color: colors.orange }]}>{summary.tip.headline}</Text>
+      ) : null}
       <Text style={[styles.net, { color: colors.title }]}>{summary.net.value}</Text>
       <Text style={[styles.netLabel, { color: colors.inkSecondary }]}>{summary.net.label}</Text>
       <View style={styles.lines}>
@@ -54,4 +57,5 @@ const styles = StyleSheet.create({
   value: { fontSize: 14, fontWeight: '700' },
   strong: { fontWeight: '900' },
   note: { fontSize: 12, lineHeight: 17 },
+  tipHeadline: { fontSize: 15, fontWeight: '900' },
 })
