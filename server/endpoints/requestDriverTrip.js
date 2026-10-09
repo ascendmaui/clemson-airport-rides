@@ -32,6 +32,7 @@ import { releaseTigerHeatReservation, reserveTigerHeatOffer } from '../tigerHeat
 import { loadRiderMatchPreferences } from '../riderPass.js'
 import { tigerPassMetadata } from '../../shared/tigerPass.js'
 import { authorizeRideRequest } from '../fareAuthorization.js'
+import { isE2ETestUser } from '../../shared/e2eTestAccounts.js'
 
 function optionError(res, error) {
   return json(res, error.status || 400, {
@@ -59,6 +60,7 @@ export default async function handler(req, res, deps = {}) {
   if (!sb) return json(res, 503, { error: 'SUPABASE_SERVICE_ROLE_KEY not configured' })
   const user = deps.user !== undefined ? deps.user : await userFromAuth(req)
   if (!user) return json(res, 401, { error: 'Sign in required' })
+  const e2eRider = isE2ETestUser(user)
   const runEnsureProfile = deps.ensureProfile || ensureProfile
 
   const { body, error: pe } = parseBody(req)
@@ -87,6 +89,11 @@ export default async function handler(req, res, deps = {}) {
         code: 'driver_not_approved',
       })
     }
+    const driver = await sb.from('profiles').select('email').eq('id', driverId).maybeSingle()
+    if (driver.error) return json(res, 500, { error: 'Could not read driver profile', code: 'driver_lookup_failed' })
+    if (e2eRider !== isE2ETestUser(driver.data)) {
+      return json(res, 409, { error: 'That ride option is not available.', code: 'ride_option_unavailable' })
+    }
   }
 
   try {
@@ -111,6 +118,8 @@ export default async function handler(req, res, deps = {}) {
     const ordered = await listAssignableDrivers(sb, {
       tier,
       riderId: user.id,
+      riderEmail: user.email,
+      riderIsE2E: e2eRider,
       preferredIds: prefs.preferredIds,
       favoriteIds: prefs.favoriteIds,
     })
@@ -262,6 +271,7 @@ export default async function handler(req, res, deps = {}) {
     passengers: seats,
     ...(riderNote ? { rider_note: riderNote } : {}),
     metadata: {
+      ...(e2eRider ? { e2e_test: true } : {}),
       kind: 'driver_request',
       purpose: 'planned',
       preferred_driver_id: autoAssign ? null : driverId,

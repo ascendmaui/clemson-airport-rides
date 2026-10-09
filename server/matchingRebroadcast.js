@@ -33,6 +33,10 @@ export async function rebroadcastMissedOffers(sb, {
   }
   for (const trip of due.data || []) {
     const meta = trip.metadata || {}
+    if (meta.e2e_test === true) {
+      result.skipped++
+      continue
+    }
     const pool = isPoolPhase(trip)
     if (meta.kind !== 'driver_request' || (!meta.offer_driver_id && !pool) || Number(trip.deposit_cents || 0) !== 0
         || trip.pickup_at || trip.scheduled_for) {
