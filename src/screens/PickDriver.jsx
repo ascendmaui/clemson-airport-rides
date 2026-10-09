@@ -1,3 +1,5 @@
+import { useDemoBusyRoster } from '../lib/useDemoBusyRoster.js'
+import { busyRosterFor } from '../../packages/rides-native/busyRoster.js'
 import { useEffect, useState } from 'react'
 import { PrimaryButton } from '../components/PrimaryButton'
 import { SkeletonDriverCard } from '../components/LoadingSkeleton'
@@ -60,6 +62,8 @@ export function PickDriver({
   const { user } = useAuth()
   const student = useStudentStatus()
   const { runOrPrompt } = useRequireAuthForAction()
+  const demoBusyRoster = useDemoBusyRoster()
+  const busy = busyRosterFor({ enabled: demoBusyRoster })
   const [drivers, setDrivers] = useState([])
   const [favoriteIds, setFavoriteIds] = useState([])
   const [favNote, setFavNote] = useState(null)
@@ -67,7 +71,7 @@ export function PickDriver({
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState(null)
   const [tripFlash, setTripFlash] = useState(null)
-  const [busy, setBusy] = useState(false)
+  const [requesting, setRequesting] = useState(false)
   const [promptOpen, setPromptOpen] = useState(false)
   const stadium = pickupPoint(pickup || 'Memorial Stadium')
   const pinLat = finiteCoordinate(pickupLat)
@@ -152,7 +156,7 @@ export function PickDriver({
       setError('Extra Comfort fleet only. That driver is not listed as Comfort.')
       return
     }
-    setBusy(true)
+    setRequesting(true)
     setError(null)
     try {
       const trip = await requestDriverTrip({
@@ -182,7 +186,7 @@ export function PickDriver({
       }
       setError(requestFailureMessage(err))
     } finally {
-      setBusy(false)
+      setRequesting(false)
     }
   }
 
@@ -330,6 +334,29 @@ export function PickDriver({
             })}
           </div>
         ))}
+        {/* Busy roster: display only; kept outside real driver sections. */}
+        {busy.length > 0 && (
+          <section aria-label="Busy now">
+            <h2 style={{ fontSize: 12, fontWeight: 800, color: 'var(--ink-secondary)', margin: '8px 4px' }}>BUSY NOW</h2>
+            {busy.map((driver) => {
+              const portrait = resolveDriverPortrait(driver)
+              return (
+                <div key={driver.id} aria-disabled="true" style={{ opacity: 0.55, border: '1.5px solid #aaa', borderRadius: 16, padding: 16, marginBottom: 10, background: 'var(--surface)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <span style={{ width: 40, height: 40, flexShrink: 0, borderRadius: '50%', display: 'grid', placeItems: 'center', background: portrait.color, color: '#fff', fontWeight: 800 }}>{portrait.initials}</span>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontWeight: 700 }}>{driver.name}</div>
+                      <div style={{ fontSize: 12, marginTop: 4 }}>★ {driver.rating} · {driver.tripCount.toLocaleString('en-US')} trips</div>
+                      <div style={{ fontSize: 13, marginTop: 4, color: 'var(--ink-secondary)' }}>{driver.vehicleLabel}</div>
+                    </div>
+                    <span style={{ fontSize: 11, fontWeight: 700, borderRadius: 999, padding: '5px 8px', background: driver.status === 'on_trip' ? '#f4dfcc' : '#e5e5e5', color: driver.status === 'on_trip' ? '#855023' : '#555' }}>{driver.statusLabel}</span>
+                  </div>
+                </div>
+              )
+            })}
+          </section>
+        )}
+        {/* End busy roster. */}
       </div>
 
       <div style={{ padding: '12px 20px calc(20px + var(--safe-bottom))' }}>
@@ -344,12 +371,12 @@ export function PickDriver({
           </p>
         ) : null}
         <PrimaryButton
-          disabled={busy || (selected ? !selected.online : !anyOnline)}
-          loading={busy}
+          disabled={requesting || (selected ? !selected.online : !anyOnline)}
+          loading={requesting}
           spinnerTone="orange"
           onClick={() => runOrPrompt(onRequest, { setPromptOpen, nextPath: 'pick-driver', nextParams: placeParams })}
         >
-          {busy ? 'Requesting…' : selected ? `Request ${selected.name}` : (anyOnline ? 'Request next driver' : 'Select a driver')}
+          {requesting ? 'Requesting…' : selected ? `Request ${selected.name}` : (anyOnline ? 'Request next driver' : 'Select a driver')}
         </PrimaryButton>
       </div>
       <SignInToBookModal open={promptOpen} onClose={() => setPromptOpen(false)} nextPath="pick-driver" nextParams={placeParams} />
