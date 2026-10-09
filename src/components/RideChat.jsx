@@ -19,6 +19,12 @@ import {
 } from '../lib/tripMessages'
 import { chatOpenLine } from '../../shared/copy/messaging.js'
 import { MessagingInfoButton } from './MessagingInfo'
+import { supabase } from '../lib/supabase'
+import { authedJson } from '../lib/apiClient'
+import {
+  buildChatModerationTicket, chatBlockKey, createChatBlockStore,
+  CHAT_BLOCK_COPY, CHAT_REPORT_CONFIRMATION, CHAT_REPORT_REASONS, CHAT_SUPPORT_COPY,
+} from '../../packages/rides-native/chatModeration.js'
 import {
   RIDE_CHAT_QUICK_REPLIES,
   lostItemReportState,
@@ -28,6 +34,12 @@ import {
 
 const TRIP_ID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+
+const blockStore = createChatBlockStore({
+  getItem: (key) => window.localStorage.getItem(key),
+  setItem: (key, value) => window.localStorage.setItem(key, value),
+  removeItem: (key) => window.localStorage.removeItem(key),
+})
 
 function formatStamp(iso) {
   if (!iso) return ''
@@ -171,6 +183,10 @@ export function RideChat({ tripId, userId, initialTrip = null, onClose }) {
   const [sending, setSending] = useState(false)
   const [error, setError] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [blockState, setBlockState] = useState(null)
+  const [moderationTarget, setModerationTarget] = useState(null)
+  const [reason, setReason] = useState(CHAT_REPORT_REASONS[0])
+  const [moderationNotice, setModerationNotice] = useState('')
   const scrollerRef = useRef(null)
   const markedRef = useRef(new Set())
   const tripRef = useRef(initialTrip)
@@ -187,6 +203,24 @@ export function RideChat({ tripId, userId, initialTrip = null, onClose }) {
   )
   const infoRole = userId && trip?.driver_id === userId ? 'driver' : 'rider'
   const counterpartFallback = userId && trip?.rider_id === userId ? 'Driver' : 'Rider'
+  const otherUserId = party ? (infoRole === 'rider' ? trip.driver_id : trip.rider_id) : null
+  const blockKey = userId && otherUserId ? chatBlockKey(userId, otherUserId) : null
+  const blockReady = Boolean(blockKey && blockState?.key === blockKey)
+  const blocked = blockReady && blockState.blocked
+  const visibleMessages = messages.filter((message) => message.sender_id === userId || (blockReady && !blocked))
+
+  useEffect(() => {
+    if (!blockKey) return undefined
+    let alive = true
+    const update = (key, value) => {
+      if (alive && key === blockKey) setBlockState({ key, blocked: value })
+    }
+    const unsubscribe = blockStore.subscribe(update)
+    blockStore.isBlocked(userId, otherUserId)
+      .then((value) => update(blockKey, value))
+      .catch(() => { if (alive) setError(`Could not load blocked users. Reopen this chat to retry. ${CHAT_SUPPORT_COPY}`) })
+    return () => { alive = false; unsubscribe() }
+  }, [blockKey, userId, otherUserId])
 
   const refreshTrip = useCallback(async () => {
     if (!tripId) return null
@@ -235,7 +269,6 @@ export function RideChat({ tripId, userId, initialTrip = null, onClose }) {
         }
         if (!alive) return
         await refreshMessages(live)
-        if (alive) setError(null)
       } catch (err) {
         if (alive) setError(err.message || 'Could not load messages')
       } finally {
@@ -291,7 +324,7 @@ export function RideChat({ tripId, userId, initialTrip = null, onClose }) {
   }, [messages, mode])
 
   useEffect(() => {
-    if (!userId || mode === 'closed') return undefined
+    if (!userId || mode === 'closed' || !blockReady || blocked) return undefined
     const unread = messages.filter(
       (message) => message.sender_id !== userId && !message.read_at && !markedRef.current.has(message.id),
     )
@@ -306,7 +339,7 @@ export function RideChat({ tripId, userId, initialTrip = null, onClose }) {
       ids.forEach((id) => markedRef.current.delete(id))
     })
     return undefined
-  }, [messages, userId, mode])
+  }, [messages, userId, mode, blockReady, blocked])
 
   useEffect(() => {
     if (!trip || !userId || headerName) return undefined
@@ -324,8 +357,60 @@ export function RideChat({ tripId, userId, initialTrip = null, onClose }) {
 
   const shownName = headerName || counterpartFallback
 
+  async function fileModeration(action, message = null) {
+    if (sending || !party || !otherUserId) return
+    setSending(true)
+    setError(null)
+    setModerationNotice('')
+    let locallyBlocked = false
+    try {
+      if (action === 'block') {
+        await blockStore.setBlocked(userId, otherUserId, true)
+        locallyBlocked = true
+        setDraft('')
+      }
+      const result = await authedJson(supabase, '/api/support-ticket', {
+        method: 'POST',
+        body: buildChatModerationTicket({
+          tripId, roleVariant: infoRole, reportedRole: infoRole === 'rider' ? 'driver' : 'rider',
+          reportedUserId: otherUserId, reason: action === 'report' ? reason : undefined,
+          message, action,
+        }),
+      })
+      if (!result?.ticket?.id) throw new Error('Could not confirm the support ticket')
+      setModerationNotice(`${action === 'block' ? 'Blocked on this device. ' : ''}${CHAT_REPORT_CONFIRMATION} ${CHAT_SUPPORT_COPY}`)
+    } catch (err) {
+      setError(`${locallyBlocked ? 'Blocked on this device, but the support ticket failed. Use Report to retry. ' : ''}${err.message || 'Could not file the support ticket'}. ${CHAT_SUPPORT_COPY}`)
+    } finally {
+      setSending(false)
+    }
+  }
+
+  function confirmReport(event) {
+    event.preventDefault()
+    if (!window.confirm(`Report trip chat? ${reason}. Submit for review? ${CHAT_SUPPORT_COPY}`)) return
+    const message = moderationTarget?.message || null
+    setModerationTarget(null)
+    void fileModeration('report', message)
+  }
+
+  async function confirmBlock() {
+    if (!window.confirm(blocked ? `Unblock this person? Their messages will be visible and you can send again while chat is open. ${CHAT_SUPPORT_COPY}` : `Block this person? ${CHAT_BLOCK_COPY}`)) return
+    if (!blocked) { await fileModeration('block'); return }
+    setSending(true)
+    try {
+      await blockStore.setBlocked(userId, otherUserId, false)
+      setError(null)
+      setModerationNotice('Unblocked on this device.')
+    } catch {
+      setError(`Could not unblock. Try again. ${CHAT_SUPPORT_COPY}`)
+    } finally {
+      setSending(false)
+    }
+  }
+
   async function transmit(body, { quick = false } = {}) {
-    if (mode !== 'compose' || sending || !party) return
+    if (mode !== 'compose' || sending || !party || !blockReady || blocked) return
     setSending(true)
     setError(null)
     try {
@@ -408,6 +493,26 @@ export function RideChat({ tripId, userId, initialTrip = null, onClose }) {
         </div>
       </header>
 
+      {party && otherUserId && (
+        <div style={{ display: 'flex', gap: 16, padding: '0 16px' }}>
+          <button type="button" className="pressable" disabled={sending} onClick={() => { setReason(CHAT_REPORT_REASONS[0]); setModerationTarget({ message: null }) }} style={{ minHeight: 44, color: tone.title }}>Report</button>
+          <button type="button" className="pressable" disabled={sending || !blockReady} onClick={confirmBlock} style={{ minHeight: 44, color: tone.title }}>{blocked ? 'Unblock' : 'Block'}</button>
+        </div>
+      )}
+      {moderationTarget && (
+        <form onSubmit={confirmReport} aria-label="Report trip chat" style={{ padding: 16, color: tone.ink }}>
+          <label htmlFor="chat-report-reason">Reason for reporting</label>
+          <select id="chat-report-reason" value={reason} onChange={(event) => setReason(event.target.value)} style={{ minHeight: 44, margin: 8 }}>
+            {CHAT_REPORT_REASONS.map((option) => <option key={option}>{option}</option>)}
+          </select>
+          <button type="submit" disabled={sending} style={{ minHeight: 44, color: tone.title }}>Report</button>
+          <button type="button" onClick={() => setModerationTarget(null)} style={{ minHeight: 44, marginLeft: 16, color: tone.title }}>Cancel</button>
+          <p>{CHAT_SUPPORT_COPY}</p>
+        </form>
+      )}
+      {blocked && <p role="status" style={{ padding: '8px 16px', color: tone.ink }}>Blocked on this device. Their messages are hidden and sending is disabled. {CHAT_SUPPORT_COPY}</p>}
+      {moderationNotice && <p role="status" style={{ padding: '8px 16px', color: tone.ink }}>{moderationNotice}</p>}
+
       {banner && (
         <div
           data-testid="ride-chat-banner"
@@ -468,12 +573,12 @@ export function RideChat({ tripId, userId, initialTrip = null, onClose }) {
         {!loading && party && mode === 'closed' && (
           <p style={{ color: 'var(--ink-secondary)', fontSize: 14 }}>Messages from this ride are hidden.</p>
         )}
-        {!loading && party && mode !== 'closed' && messages.length === 0 && (
+        {!loading && party && blockReady && !blocked && mode !== 'closed' && visibleMessages.length === 0 && (
           <p style={{ color: 'var(--ink-secondary)', fontSize: 14, lineHeight: 1.45 }}>
             No messages yet.
           </p>
         )}
-        {party && mode !== 'closed' && messages.map((message) => {
+        {party && mode !== 'closed' && visibleMessages.map((message) => {
           const mine = message.sender_id === userId
           return (
             <div
@@ -508,12 +613,13 @@ export function RideChat({ tripId, userId, initialTrip = null, onClose }) {
                 {formatStamp(message.created_at)}
                 {mine ? ` · ${message.read_at ? 'Read' : 'Sent'}` : ''}
               </div>
+              {!mine && <button type="button" disabled={sending} aria-label="Report this message" onClick={() => { setReason(CHAT_REPORT_REASONS[0]); setModerationTarget({ message }) }} style={{ minHeight: 44, color: tone.title }}>Report</button>}
             </div>
           )
         })}
       </div>
 
-      {mode === 'compose' && party && (
+      {mode === 'compose' && party && blockReady && !blocked && (
         <div
           style={{
             padding: '8px 16px calc(14px + var(--safe-bottom))',
@@ -593,7 +699,7 @@ export function RideChat({ tripId, userId, initialTrip = null, onClose }) {
       )}
 
       {error && (
-        <p style={{ color: 'var(--danger)', fontSize: 13, padding: '0 16px 12px', fontWeight: 600 }}>
+        <p role="alert" style={{ color: 'var(--danger)', fontSize: 13, padding: '0 16px 12px', fontWeight: 600 }}>
           {error}
         </p>
       )}
