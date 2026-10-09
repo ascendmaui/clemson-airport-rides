@@ -55,6 +55,7 @@ function boundSessionId(trip) {
 }
 
 function parsedMs(value) {
+  if (value instanceof Date) return Number.isFinite(value.getTime()) ? value.getTime() : null
   if (typeof value !== 'string' || !value) return null
   const ms = Date.parse(value)
   return Number.isFinite(ms) ? ms : null
@@ -172,7 +173,7 @@ async function loadDeposits(sb, tripId) {
 }
 
 function metaObject(trip) {
-  return trip?.metadata && typeof trip.metadata === 'object' ? trip.metadata : {}
+  return trip?.metadata && typeof trip.metadata === 'object' && !Array.isArray(trip.metadata) ? trip.metadata : {}
 }
 
 async function writeCanceled(sb, trip, session, { reason, source }) {
