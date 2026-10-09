@@ -1957,5 +1957,25 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
   - `package.json`
   - `docs/FIXES.md`
 - **Verified:** `node --test tests/gaAuditWebhookRetryable.test.js api/stripeWebhookValidation.test.js tests/retiredCopy.test.js` (94/94 passing); `npm test` passing with 0 failures.
+## 2026-10-07 — [agy] GA98: Expire unpaid airport holds cutoff calculation resilience, Date object anchor handling, and cron auth override injection
+
+- **Date:** 2026-10-07
+- **Track / machine:** Clemson RIDES · MacBook Max (agy) · GA98
+- **What was wrong:** In `server/abandonedCheckout.js`, `releaseExpiredUnpaidAirportHolds` calculated `const cutoff = new Date(now - ttlMs).toISOString()`. If `now` or `ttlMs` was non-finite or `NaN`, `new Date(NaN).toISOString()` threw an unhandled `RangeError: Invalid time value`, crashing the sweep routine. Additionally, `parsedMs` only accepted strings, failing when timestamps were parsed into `Date` objects, and `metaObject` did not guard against array corruption (`[]`). Furthermore, `server/endpoints/expireUnpaidAirportHolds.js` lacked `overrides.cronSecret` injection support for isolated test execution without mutating `process.env`.
+- **What changed:**
+  - Hardened `cutoff` computation in `releaseExpiredUnpaidAirportHolds` by sanitizing `now` to `safeNow` and `ttlMs` to `safeTtlMs`, preventing invalid `Date` values and `RangeError` exceptions.
+  - Extended `parsedMs` in `server/abandonedCheckout.js` to safely convert `Date` instances to numeric milliseconds.
+  - Added array guard `!Array.isArray(trip.metadata)` in `metaObject(trip)` to prevent metadata type confusion.
+  - Added `overrides.cronSecret` support to `holdTtlCronAuthorized` in `server/endpoints/expireUnpaidAirportHolds.js`.
+  - Updated `tests/retiredCopy.test.js` directory walker to skip build output directories (`dist`, `.expo`, `.vercel`, `build`).
+  - Added dedicated unit test suite in `tests/gaAuditHoldTtlHardening.test.js` (7/7 passing) and registered it in `package.json` test runner.
+- **Files touched:**
+  - `server/abandonedCheckout.js`
+  - `server/endpoints/expireUnpaidAirportHolds.js`
+  - `tests/gaAuditHoldTtlHardening.test.js`
+  - `tests/retiredCopy.test.js`
+  - `package.json`
+  - `docs/FIXES.md`
+- **Verified:** `node --test tests/gaAuditHoldTtlHardening.test.js server/abandonedCheckout.test.js tests/retiredCopy.test.js` (59/59 passing); `npm test` passing with 0 failures.
 
 
