@@ -18,10 +18,11 @@ test('live tracking polish exports still-searching copy and search theater', () 
   assert.match(SEARCH_PREVIEW_COPY, /preview/i)
 })
 
-test('deposit surface confirm copy still names 25 percent', () => {
+test('confirm copy names an amount already paid and the remaining fare', () => {
   const copy = depositSurfaceCopy({ fareCents: 8000, depositCents: 2000, remainingCents: 6000 }, 'confirm')
-  assert.match(copy, /25% deposit/)
-  assert.match(copy, /\$20\.00/)
+  assert.match(copy, /Already paid \$20\.00/)
+  assert.match(copy, /\$60\.00/)
+  assert.doesNotMatch(copy, /25% deposit/)
 })
 
 test('web ride tiers and the active trip use the bookable catalog and the route line', () => {
@@ -29,12 +30,13 @@ test('web ride tiers and the active trip use the bookable catalog and the route 
   const requested = readFileSync(new URL('../src/screens/Requested.jsx', import.meta.url), 'utf8')
   assert.match(tiers, /useRideOptions/)
   assert.doesNotMatch(tiers, /id: 'xl'|id: 'pet'/)
-  assert.match(requested, /activeTripRouteLine\(/)
+  assert.match(requested, /followRouteLine\(/)
   assert.match(requested, /searchingRidePreview\(/)
-  assert.match(requested, /searchPreview \? searchPreview\.route : activeTripRouteLine\(tripRow, driverFix\)/)
+  assert.match(requested, /searchPreview\s*\n\s*\? searchPreview\.route/)
   assert.match(requested, /search-wait__spinner/)
   assert.match(requested, /SEARCH_APPROX_WAIT_NOTE/)
-  assert.match(requested, /fitRoute=\{preview && routePath\.length > 1\}/)
+  assert.match(requested, /fitRoute=\{routePath\.length > 1\}/)
+  assert.match(requested, /staleEtaLine/)
   assert.match(requested, /driverPosition=\{preview \? null : driverPos\}/)
   assert.match(requested, /eta=\{tripMissing \? null : etaLine\}/)
 })

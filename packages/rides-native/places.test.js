@@ -137,14 +137,14 @@ describe('HEAT_WINDOWS', () => {
 })
 
 describe('RIDE_TIERS', () => {
-  test('exports array of 5 ride tiers', () => {
+  test('exports the ride tier catalog', () => {
     assert.ok(Array.isArray(RIDE_TIERS))
-    assert.equal(RIDE_TIERS.length, 5)
+    assert.equal(RIDE_TIERS.length, 6)
   })
 
   test('validates tier shapes, pricing, and metadata', () => {
     const tierIds = RIDE_TIERS.map((t) => t.id)
-    assert.deepEqual(tierIds, ['standard', 'wait', 'comfort', 'xl', 'pet'])
+    assert.deepEqual(tierIds, ['standard', 'wait', 'comfort', 'carpool', 'xl', 'pet'])
 
     for (const tier of RIDE_TIERS) {
       assert.equal(typeof tier.id, 'string')
@@ -160,11 +160,11 @@ describe('RIDE_TIERS', () => {
     assert.equal(comfort.price, 23)
   })
 
-  test('web booking offers only Standard, Wait and Save, and Extra Comfort', () => {
-    assert.deepEqual(BOOKABLE_RIDE_TIER_IDS, ['standard', 'wait', 'comfort'])
+  test('web booking offers Standard, Wait and Save, Extra Comfort, and Carpool', () => {
+    assert.deepEqual(BOOKABLE_RIDE_TIER_IDS, ['standard', 'wait', 'comfort', 'carpool'])
     const offered = bookableRideTiers()
-    assert.deepEqual(offered.map((tier) => tier.id), ['standard', 'wait', 'comfort'])
-    assert.deepEqual(offered.map((tier) => tier.name), ['Standard', 'Wait & Save', 'Extra Comfort'])
+    assert.deepEqual(offered.map((tier) => tier.id), ['standard', 'wait', 'comfort', 'carpool'])
+    assert.deepEqual(offered.map((tier) => tier.name), ['Standard', 'Wait & Save', 'Extra Comfort', 'Carpool'])
     assert.equal(offered.some((tier) => tier.id === 'xl' || tier.id === 'pet'), false)
     assert.deepEqual(bookableRideTiers([{ id: 'xl' }, { id: 'standard', name: 'Standard' }]).map((tier) => tier.id), ['standard'])
   })

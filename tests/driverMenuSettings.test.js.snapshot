@@ -21,6 +21,11 @@ exports[`Driver Menu snapshot 1`] = `
       "icon": "shield-checkmark",
       "title": "Insurance",
       "subtitle": "Your policy and trip coverage notes"
+    },
+    {
+      "icon": "shield",
+      "title": "Safety",
+      "subtitle": "Audio, video, live location, and SOS"
     }
   ],
   "money": [
@@ -105,7 +110,7 @@ exports[`Driver Settings snapshot 1`] = `
     {
       "icon": "chatbubbles",
       "title": "Communication",
-      "subtitle": "Trip alerts on this phone"
+      "subtitle": "Lock screen and in-app ride alerts"
     },
     {
       "icon": "navigate",
@@ -115,7 +120,12 @@ exports[`Driver Settings snapshot 1`] = `
     {
       "icon": "volume-high",
       "title": "Sounds and voice",
-      "subtitle": "Request chime"
+      "subtitle": "Chime and vibration by ride type"
+    },
+    {
+      "icon": "flash",
+      "title": "Auto-accept",
+      "subtitle": "Distance, hourly rate, favorite riders"
     }
   ]
 }

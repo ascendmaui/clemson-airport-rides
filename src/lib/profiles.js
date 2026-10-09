@@ -55,7 +55,15 @@ export const GALLERY_KINDS = [
 ]
 
 const PROFILE_COLS =
-  'id, role, is_admin, full_name, email, bio, avatar_url, student_verified_at, rating_avg, rating_count, phone, favorite_spots, music_taste, ride_style, profile_privacy, stripe_customer_id, stripe_default_pm_id, notification_prefs, billing_activated_at, stripe_card_brand, stripe_card_last4'
+  'id, role, is_admin, full_name, email, bio, avatar_url, student_verified_at, rating_avg, rating_count, phone, favorite_spots, music_taste, ride_style, profile_privacy, stripe_customer_id, stripe_default_pm_id, notification_prefs, billing_activated_at, stripe_card_brand, stripe_card_last4, gender_identity, women_only_matching'
+
+function withoutComfortFields(profile) {
+  if (!profile) return profile
+  const next = { ...profile }
+  delete next.gender_identity
+  delete next.women_only_matching
+  return next
+}
 
 export function filterProfileByPrivacy(profile, { isOwner = false, isMatched = false } = {}) {
   if (!profile) return null
@@ -63,7 +71,7 @@ export function filterProfileByPrivacy(profile, { isOwner = false, isMatched = f
   if ('is_admin' in profile) delete profile.is_admin
   const privacy = profile.profile_privacy || 'matched'
   if (privacy === 'private' && !isMatched) {
-    return {
+    return withoutComfortFields({
       id: profile.id,
       full_name: profile.full_name,
       avatar_url: profile.avatar_url,
@@ -72,10 +80,10 @@ export function filterProfileByPrivacy(profile, { isOwner = false, isMatched = f
       role: profile.role,
       profile_privacy: privacy,
       _access: 'minimal',
-    }
+    })
   }
   if (privacy === 'matched' && !isMatched) {
-    return {
+    return withoutComfortFields({
       id: profile.id,
       full_name: profile.full_name,
       avatar_url: profile.avatar_url,
@@ -89,9 +97,9 @@ export function filterProfileByPrivacy(profile, { isOwner = false, isMatched = f
       profile_privacy: privacy,
       gallery: [],
       _access: 'matched_locked',
-    }
+    })
   }
-  return { ...profile, _access: privacy === 'public' ? 'public' : 'matched' }
+  return withoutComfortFields({ ...profile, _access: privacy === 'public' ? 'public' : 'matched' })
 }
 
 export async function fetchFullProfile(userId, { viewerId = null, assumeMatched = false } = {}) {

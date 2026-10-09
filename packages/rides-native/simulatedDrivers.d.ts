@@ -31,6 +31,10 @@ export type SimulatedFleetCar = {
   heading: number
   title: string
   description: string
+  firstName?: string
+  label?: string
+  body?: string
+  livery?: string
 }
 
 export type SimulatedTapResult = {

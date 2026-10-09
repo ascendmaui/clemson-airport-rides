@@ -29,6 +29,7 @@ export function ConfirmPickup({
   pickup: initialPickup = '',
   pickupLat = '',
   pickupLng = '',
+  tier = '',
 }) {
   const [pickup, setPickup] = useState(() => {
     const lat = finiteCoordinate(pickupLat)
@@ -42,6 +43,8 @@ export function ConfirmPickup({
   const [note, setNote] = useState('')
   const [locating, setLocating] = useState(false)
   const [locateNote, setLocateNote] = useState(null)
+  const [focus, setFocus] = useState(() => [pickup.lat, pickup.lng])
+  const [dragPickup, setDragPickup] = useState(true)
   const [promptOpen, setPromptOpen] = useState(false)
   const [offer, setOffer] = useState(null)
   const [billingLoading, setBillingLoading] = useState(false)
@@ -72,7 +75,7 @@ export function ConfirmPickup({
         setOffer(next)
         setBillingChoice((current) => {
           if (current === 'credits' && next?.creditsSelectable) return 'credits'
-          return next?.campus ? 'no_card' : 'deposit'
+          return 'no_card'
         })
       })
       .catch(() => {
@@ -94,6 +97,7 @@ export function ConfirmPickup({
     pickupLat: String(pickup.lat),
     pickupLng: String(pickup.lng),
     ...(offer ? { billing: billingChoice } : {}),
+    ...(tier ? { tier } : {}),
   }
 
   const goTiers = () => navigate('tiers', nextParams)
@@ -106,6 +110,13 @@ export function ConfirmPickup({
     })
   }
 
+  function pinPlace(place, setter, field) {
+    if (!place) return
+    setter(place)
+    if (place.lat != null && place.lng != null) setFocus([place.lat, place.lng])
+    setDragPickup(field !== 'dropoff')
+  }
+
   async function onLocate() {
     setLocating(true)
     setLocateNote(null)
@@ -113,7 +124,7 @@ export function ConfirmPickup({
       const fix = await readBrowserPosition()
       const label = await reverseGeocodeLabel(fix.lat, fix.lng)
       const place = placeFromCoordinates(fix.lat, fix.lng, label)
-      if (place) setPickup(place)
+      pinPlace(place, setPickup, 'pickup')
     } catch (err) {
       setLocateNote(err?.message || 'Could not get current location. Check permissions.')
     } finally {
@@ -133,12 +144,14 @@ export function ConfirmPickup({
           <CampusMap
             height={260}
             interactive
-            dragPin
-            center={[pickup.lat, pickup.lng]}
+            dragPin={dragPickup}
+            center={focus}
             marker={[pickup.lat, pickup.lng]}
+            pickupPosition={[pickup.lat, pickup.lng]}
+            dropoffPosition={[dropoff.lat, dropoff.lng]}
             onPinMove={(next) => {
               const place = placeFromCoordinates(next?.[0], next?.[1], pickup.label === 'Memorial Stadium' ? 'Dropped pin' : pickup.label)
-              if (place) setPickup(place)
+              pinPlace(place, setPickup, 'pickup')
             }}
           />
           <button
@@ -166,7 +179,7 @@ export function ConfirmPickup({
           </button>
         </div>
         <p style={{ fontSize: 12, color: 'var(--ink-tertiary)', marginTop: 8, textAlign: 'center' }}>
-          Use current location, type an address, or drag the pin
+          The location icon on pickup and drop-off pins that stop. Drag still moves the pickup pin.
         </p>
         {locateNote ? (
           <p style={{ fontSize: 12, color: 'var(--danger, #b00020)', marginTop: 4, textAlign: 'center' }}>{locateNote}</p>
@@ -185,13 +198,13 @@ export function ConfirmPickup({
         <AddressSuggest
           label="Pickup address"
           value={pickup}
-          onChange={setPickup}
+          onChange={(place) => pinPlace(place, setPickup, 'pickup')}
           placeholder="Type a pickup — Grand Marc, stadium, or a street"
         />
         <AddressSuggest
           label="Drop-off address"
           value={dropoff}
-          onChange={setDropoff}
+          onChange={(place) => pinPlace(place, setDropoff, 'dropoff')}
           placeholder="Type a drop-off — campus, GSP, or a street"
         />
         <label style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink-secondary)' }}>Add note for driver</label>

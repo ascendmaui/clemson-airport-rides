@@ -13,6 +13,7 @@ import { pickupPoint } from '../../packages/rides-native/places.js'
 import {
   describeDriver,
   fetchDriversByIds,
+  canFavoriteDriver,
   fetchOnlineDrivers,
   filterDriversForFleet,
   groupDriversForPicker,
@@ -25,6 +26,7 @@ import {
 } from '../../packages/rides-native/drivers.js'
 import { SignInToBookModal, useRequireAuthForAction } from '../components/SignInToBookModal'
 import { resolveDriverPortrait } from '../../shared/driverPortrait.js'
+import { setFavoriteDrivers } from '../../packages/rides-native/tigerPassClient.js'
 
 const browserStorage = {
   async getItem(key) {
@@ -46,6 +48,7 @@ const browserStorage = {
 export function PickDriver({
   dest = 'GSP Airport',
   tier = 'standard',
+  passengers = '',
   listCents = '',
   pickup = '',
   pickupLat = '',
@@ -113,6 +116,10 @@ export function PickDriver({
       setPromptOpen(true)
       return
     }
+    if (!canFavoriteDriver(driverId)) {
+      setFavNote('Map preview cars cannot be saved.')
+      return
+    }
     const next = favoriteIds.includes(driverId)
       ? favoriteIds.filter((id) => id !== driverId)
       : [...favoriteIds, driverId]
@@ -120,6 +127,15 @@ export function PickDriver({
     const saved = await saveFavoriteDriverIds(supabase, browserStorage, user.id, next)
     setFavoriteIds(saved.ids)
     setFavNote(saved.note)
+    try {
+      const remote = await setFavoriteDrivers(supabase, saved.ids)
+      if (Array.isArray(remote?.favoriteDriverIds)) {
+        setFavoriteIds(remote.favoriteDriverIds)
+        if (remote.demoDriversIgnored) setFavNote(remote.demoNote || 'Preview cars were not saved.')
+      }
+    } catch {
+      /* profile row remains the matching source when the API is down */
+    }
   }
 
   const onRequest = async () => {
@@ -149,6 +165,7 @@ export function PickDriver({
         pickupLat,
         pickupLng,
         tier,
+        passengers,
         isStudent: student.verified,
         listCents,
         billingChoice: billing || null,

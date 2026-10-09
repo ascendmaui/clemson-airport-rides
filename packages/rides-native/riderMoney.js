@@ -1,7 +1,7 @@
 /**
  * Rider deposit, student, and promo helpers.
  * Quote and checkout go through the existing payment router.
- * Deposit is always 25% of the current cash remainder (Stripe minimum included).
+ * New rides have no upfront deposit. A stored historical amount still formats as already paid.
  */
 import { normalizePromoCode } from './authErrors.js'
 import { WEB_ORIGIN } from '../../shared/productLinks.js'
@@ -12,6 +12,7 @@ import {
   isClemsonEmail,
 } from '../../src/lib/studentDomain.js'
 import { authedJson } from './apiClient.js'
+import { applyTigerPassDiscount, TIGER_PASS_DISCOUNT_BPS, TIGER_PASS_NAME } from '../../shared/tigerPass.js'
 import { prepaidCreditsFromPayload } from '../../shared/prepaidTiers.js'
 import { ADD_ANOTHER_PAYMENT_METHOD_ID } from '../../shared/ridePaymentMethods.js'
 import {
@@ -27,6 +28,10 @@ export {
   ADD_ANOTHER_PAYMENT_METHOD_ID,
   ADD_ANOTHER_PAYMENT_METHOD_LABEL,
   RIDE_PAYMENT_METHODS,
+  googlePayTestEnv,
+  nativeSetupSheetParams,
+  nativeWalletUnavailableCopy,
+  savedPaymentMethodLabel,
 } from '../../shared/ridePaymentMethods.js'
 export { prepaidPurchaseSummary, prepaidCreditsFromPayload } from '../../shared/prepaidTiers.js'
 
@@ -85,22 +90,27 @@ export function depositSurfaceCopy(input, surface, { studentDiscountCents = 0 } 
     depositCents: Math.max(0, Math.round(Number(input.depositCents) || 0)),
     remainingCents: Math.max(0, Math.round(Number(input.remainingCents) || 0)),
   }
-  if (balance.depositCents <= 0) return null
   const fare = formatUsdCents(balance.fareCents)
   const deposit = formatUsdCents(balance.depositCents)
   const remaining = formatUsdCents(balance.remainingCents)
   const student = Math.round(Number(studentDiscountCents) || 0) > 0
     ? ' The 10% Standard student discount is already in that fare.'
     : ''
+  if (balance.depositCents <= 0) {
+    if (surface === 'quote' || surface === 'confirm') {
+      return `Estimated fare ${fare}. Requesting the ride places a card hold for this estimate plus a buffer. The final fare is charged when the trip ends.${student}`
+    }
+    return null
+  }
   switch (surface) {
     case 'quote':
-      return `Full fare ${fare}. Pay the 25% deposit of ${deposit} now. Remaining balance ${remaining} is collected when the trip is complete.${student}`
+      return `Fare ${fare}. Already paid ${deposit}. Remaining ${remaining} is charged when the trip ends.${student}`
     case 'confirm':
-      return `Airport fare ${fare}. 25% deposit ${deposit}. Remaining balance ${remaining} is due when the trip is complete.${student}`
+      return `Fare ${fare}. Already paid ${deposit}. Remaining ${remaining} is charged when the trip ends.${student}`
     case 'receipt':
-      return `25% deposit ${deposit}. Remaining balance ${remaining}.${student}`
+      return `Already paid ${deposit}. Remaining balance ${remaining}.${student}`
     case 'upcoming':
-      return `Deposit ${deposit} · remaining balance ${remaining}`
+      return `Already paid ${deposit} · remaining ${remaining}`
     default: {
       const unknown = surface
       throw new Error(`Unknown deposit surface: ${unknown}`)
@@ -114,7 +124,7 @@ export function depositReceiptLines(trip) {
   const balance = depositBalance({ fareCents: trip?.fare_cents, depositCents: stored })
   if (balance.depositCents <= 0) return []
   return [
-    `25% deposit: ${formatUsdCents(balance.depositCents)}`,
+    `Already paid: ${formatUsdCents(balance.depositCents)}`,
     `Remaining balance: ${formatUsdCents(balance.remainingCents)}`,
   ]
 }
@@ -244,14 +254,74 @@ export function parseQuoteResponse(data) {
   const cashCents = quote.cashCents == null ? fareCents : num(quote.cashCents)
   const surge = data?.surge && typeof data.surge === 'object' ? data.surge : null
   const rule = surge?.rule && typeof surge.rule === 'object' ? surge.rule : null
+  const tiers = Array.isArray(data?.tiers) ? data.tiers : []
   return {
     ...recomputeDeposit({ fareCents, cashCents }),
     studentDiscountCents: num(breakdown.student_discount_cents),
     surgeMultiplier: num(surge?.multiplier) || 1,
     surgeLabel: rule?.label || null,
     routeSource: data?.routeSource || null,
+    tigerPassApplied: Boolean(data?.tigerPassApplied),
+    tigerPassName: data?.tigerPassName || null,
+    tigerPassDiscountBps: num(data?.tigerPassDiscountBps),
+    tigerPassDiscountCents: num(data?.tigerPassDiscountCents),
+    preferredCarTypes: Array.isArray(data?.preferredCarTypes) ? data.preferredCarTypes : [],
+    tiers,
   }
 }
+
+/**
+ * Catalog quotes do not know the pass. Apply it after the student discount,
+ * the same order the server uses, and only while the pass is active.
+ */
+export function withTigerPassQuote(quote, { active = false, bps = 0, name = TIGER_PASS_NAME } = {}) {
+  const base = quote && typeof quote === 'object' ? quote : {}
+  const rate = active ? Math.max(0, Math.round(Number(bps) || 0)) : 0
+  if (!rate || base.tigerPassApplied) {
+    return {
+      ...base,
+      tigerPassApplied: Boolean(base.tigerPassApplied),
+      tigerPassName: base.tigerPassName || null,
+      tigerPassDiscountBps: num(base.tigerPassDiscountBps),
+      tigerPassDiscountCents: num(base.tigerPassDiscountCents),
+    }
+  }
+  const next = applyTigerPassDiscount({
+    fareCents: num(base.fareCents),
+    depositCents: num(base.depositCents),
+  }, rate)
+  return {
+    ...base,
+    fareCents: next.fareCents,
+    depositCents: next.depositCents,
+    tigerPassApplied: true,
+    tigerPassName: name || TIGER_PASS_NAME,
+    tigerPassDiscountBps: rate,
+    tigerPassDiscountCents: next.tigerPassDiscountCents,
+  }
+}
+
+/** Server fare for the three offered tiers, including an active Tiger Pass. */
+export async function fetchRideQuote(supabase, body = {}) {
+  const data = await authedJson(supabase, '/api/stripe-payment-methods?action=quote', {
+    method: 'POST',
+    body: {
+      pickupLabel: body.pickupLabel,
+      pickupLat: body.pickupLat,
+      pickupLng: body.pickupLng,
+      dest: body.dest,
+      destLat: body.destLat,
+      destLng: body.destLng,
+      airport: body.airport,
+      date: body.date,
+      time: body.time,
+      tier: body.tier,
+    },
+  })
+  return { ...parseQuoteResponse(data), source: 'api' }
+}
+
+export { TIGER_PASS_DISCOUNT_BPS, TIGER_PASS_NAME }
 
 export function quoteInputKey({ airport, date, time } = {}) {
   const code = airport === 'CLT' ? 'CLT' : 'GSP'
@@ -579,14 +649,15 @@ export async function buyPrepaidCredits(supabase, tierId) {
   })
 }
 
-export async function startPaymentMethodSetup(supabase, { paymentMethod, returnUrl } = {}) {
+export async function startPaymentMethodSetup(supabase, { paymentMethod, returnUrl, native } = {}) {
+  const body = {
+    paymentMethod: paymentMethod || ADD_ANOTHER_PAYMENT_METHOD_ID,
+    returnUrl: returnUrl || 'clemsonrides://billing',
+  }
+  if (!native) body.checkout = true
   return authedJson(supabase, '/api/stripe-payment-methods?action=setup-intent', {
     method: 'POST',
-    body: {
-      paymentMethod: paymentMethod || ADD_ANOTHER_PAYMENT_METHOD_ID,
-      checkout: true,
-      returnUrl: returnUrl || 'clemsonrides://billing',
-    },
+    body,
   })
 }
 
@@ -594,6 +665,24 @@ export async function saveCheckoutPaymentMethod(supabase, checkoutSessionId) {
   return authedJson(supabase, '/api/stripe-payment-methods?action=save', {
     method: 'POST',
     body: { checkoutSessionId },
+  })
+}
+
+export async function saveSetupPaymentMethod(supabase, setupIntentId) {
+  return authedJson(supabase, '/api/stripe-payment-methods?action=save', {
+    method: 'POST',
+    body: { setupIntentId },
+  })
+}
+
+export async function listSavedPaymentMethods(supabase) {
+  return authedJson(supabase, '/api/stripe-payment-methods', { method: 'GET' })
+}
+
+export async function updateSavedPaymentMethod(supabase, { action, paymentMethodId }) {
+  return authedJson(supabase, '/api/stripe-payment-methods', {
+    method: 'POST',
+    body: { action, paymentMethodId },
   })
 }
 

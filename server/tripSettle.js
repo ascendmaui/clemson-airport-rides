@@ -18,6 +18,10 @@ import { farePaidCents, tripChargeKey } from './chargeIdempotency.js'
 import { insertTripEvent } from './tripEvents.js'
 import { debitStoredRideCredits } from './rideCreditSettle.js'
 import { airportDepositRequiredCents } from '../packages/rides-native/tripTags.js'
+import { releaseTigerHeatReservation, settleTigerHeatReservation } from './tigerHeatService.js'
+import { settleFareHold } from './fareAuthorization.js'
+import { riderCaptureFareCents } from '../shared/backupDriverQueue.js'
+import { readBoostCents } from '../shared/scheduledBoost.js'
 
 const ACTIVE_KEEP = new Set(['accepted', 'arriving', 'in_progress', 'payment_required', 'searching', 'offered'])
 
@@ -106,7 +110,7 @@ export async function settleTrip({
   const precomputed = explicitAmountCents == null ? readPrecomputedFeeCents(trip, kind) : null
   const due = amountDueForAction({
     action,
-    fareCents: trip.fare_cents,
+    fareCents: action === 'complete' ? riderCaptureFareCents(trip) : trip.fare_cents,
     paidCents: paidTowardFareCents(trip, payments),
     hold: trip.metadata?.payment_hold || null,
     explicitAmountCents,
@@ -133,7 +137,30 @@ export async function settleTrip({
   const chargeKind = action === 'complete' ? (due.kind || 'balance') : kind
   const paidCents = farePaidCents(trip)
   const depositAlreadyExists = airportDepositRequiredCents(trip) > 0
-  const cardOnFile = depositAlreadyExists
+  const boostCents = action === 'complete' ? readBoostCents(trip) : 0
+  const creditsFare = action === 'complete' && trip.metadata?.billing_choice === 'credits'
+  // Credits cover the fare. The boost is captured from the card hold with the
+  // fare on every other trip. A $0 boost leaves this path unchanged.
+  const captureCents = creditsFare ? boostCents : Math.max(0, Math.round(Number(due.amountCents) || 0)) + boostCents
+  let fareHold = null
+  if (action === 'complete' && !override && (due.amountCents > 0 || boostCents > 0)) {
+    try {
+      fareHold = await settleFareHold({
+        sb,
+        stripe,
+        trip,
+        finalFareCents: captureCents,
+      })
+    } catch (err) {
+      console.error('[tripSettle] fare hold', err?.message || err)
+      fareHold = failureResult('charge_failed', {
+        amountCents: captureCents,
+        tripId: trip.id,
+        kind: 'balance',
+      })
+    }
+  }
+  const cardOnFile = depositAlreadyExists || fareHold
     ? null
     : await savedCardOnFile({ deps, sb, riderId: trip.rider_id })
 
@@ -187,10 +214,13 @@ export async function settleTrip({
     && due.amountCents > 0
     && !override
     && !depositAlreadyExists
+    && !fareHold
     && cardOnFile === false
     && !creditsDebit?.ok
   let payment = null
-  if (creditsDebit?.ok) {
+  if (fareHold) {
+    payment = fareHold
+  } else if (creditsDebit?.ok) {
     payment = {
       ok: true,
       method: 'credits',
@@ -293,6 +323,28 @@ export async function settleTrip({
     metadata.credits_settled = true
     metadata.fare_paid_cents = Math.max(priorPaid, paidTowardFareCents(trip, payments) + due.amountCents)
     patch.metadata = metadata
+  }
+
+  let tigerHeat = null
+  try {
+    if (action === 'cancel' || (action === 'complete' && campusUncollected)) {
+      tigerHeat = await releaseTigerHeatReservation({ sb, trip })
+    } else if (action === 'complete') {
+      tigerHeat = await settleTigerHeatReservation({ sb, trip, completedAt: now })
+    }
+  } catch (error) {
+    console.warn(JSON.stringify({
+      level: 'warn',
+      msg: 'tiger_heat_settle_failed',
+      tripId: trip.id,
+      error: error?.message || String(error),
+    }))
+  }
+  if (tigerHeat) {
+    const metadata = { ...(patch.metadata || trip.metadata || {}) }
+    metadata.tiger_heat = tigerHeat
+    patch.metadata = metadata
+    trip = { ...trip, metadata, status: patch.status }
   }
 
   if (sb) {

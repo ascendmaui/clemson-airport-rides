@@ -88,7 +88,7 @@ export function SignInToBookModal({ open, onClose, nextPath, nextParams = {} }) 
           Sign in to book your ride
         </h2>
         <p style={{ marginTop: 8, color: 'var(--ink-secondary)', fontSize: 14, lineHeight: 1.45 }}>
-          Browse freely — login is only needed when you request a ride or pay the 25% deposit.
+          Browse freely — login is only needed when you request a ride.
         </p>
         <button
           type="button"

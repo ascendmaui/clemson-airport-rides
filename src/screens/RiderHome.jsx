@@ -7,7 +7,8 @@ import { SearchField } from '../components/SearchField'
 import { Pill } from '../components/Pill'
 import { BottomTabs } from '../components/BottomTabs'
 import { CampusMap, STADIUM } from '../components/CampusMap'
-import { navigate } from '../lib/navigation'
+import { getHashRoute, navigate } from '../lib/navigation'
+import { isOfferedRideTier } from '../../shared/rideOptions.js'
 import { useAuth } from '../lib/auth'
 import { supabase } from '../lib/supabase'
 import { RIDER_TRACK_STATUSES, riderLiveView } from '../../packages/rides-native/liveTrip.js'
@@ -87,7 +88,11 @@ export function RiderHome() {
 
   const goSearch = (dest) => {
     const known = lookupCatalogPlace(dest || query)
-    navigate('confirm', { dest: known?.label || dest || query || 'GSP Airport' })
+    const tier = String(getHashRoute().params?.tier || '').trim().toLowerCase()
+    navigate('confirm', {
+      dest: known?.label || dest || query || 'GSP Airport',
+      ...(isOfferedRideTier(tier) ? { tier } : {}),
+    })
   }
 
   return (

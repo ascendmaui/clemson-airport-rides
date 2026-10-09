@@ -19,7 +19,6 @@ const INTERACTIVE = new Set(['Pressable', 'TouchableOpacity', 'Button'])
 
 const ALLOWLIST = [
   'apps/rider/app/history.tsx:61:9 <Pressable>',
-  'apps/rider/app/schedule.tsx:884:15 <Pressable>',
   'apps/rider/components/EmergencyContactsCard.tsx:192:15 <Pressable>',
   'apps/rider/components/EmergencyContactsCard.tsx:196:13 <Pressable>',
 ]
@@ -590,7 +589,7 @@ test('book-to-track critical rider controls retain meaningful accessibility labe
   assert.match(home, /accessibilityHint="Continues to confirm pickup"/)
   assert.match(confirm, /accessibilityLabel="Note for driver"/)
   assert.match(confirm, /label="Confirm pickup"/)
-  assert.match(driverPicker, /selectedDriver \? `Request \$\{selectedDriver\.name\}` : 'Select a driver'/)
+  assert.match(driverPicker, /selectedDriver \? `Request \$\{selectedDriver\.name\}` : \(anyOnline \? 'Request next driver' : 'Select a driver'\)/)
   assert.match(tracking, /accessibilityLabel="Emergency contacts"/)
 })
 

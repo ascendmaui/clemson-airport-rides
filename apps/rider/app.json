@@ -15,7 +15,9 @@
       "bundleIdentifier": "com.ascendmaui.clemsonrides.rider",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
-        "NSLocationWhenInUseUsageDescription": "Clemson RIDES uses your location to center the campus map, shares it on a trip link you send, and attaches GPS when you confirm an SOS."
+        "NSLocationWhenInUseUsageDescription": "Clemson RIDES uses your location to center the campus map, shares it on a trip link you send, and attaches GPS when you confirm an SOS.",
+        "NSMicrophoneUsageDescription": "Clemson RIDES uses the microphone only when you start an audio or video recording during an active ride. The clip stays on this phone.",
+        "NSCameraUsageDescription": "Clemson RIDES uses the camera only when you start a video recording during an active ride. The clip stays on this phone."
       },
       "associatedDomains": [
         "applinks:clemsonrides.com",
@@ -26,7 +28,9 @@
       "package": "com.ascendmaui.clemsonrides.rider",
       "permissions": [
         "ACCESS_COARSE_LOCATION",
-        "ACCESS_FINE_LOCATION"
+        "ACCESS_FINE_LOCATION",
+        "CAMERA",
+        "RECORD_AUDIO"
       ],
       "adaptiveIcon": {
         "backgroundColor": "#F56600",
@@ -80,7 +84,20 @@
           "backgroundColor": "#F56600"
         }
       ],
-      "expo-audio",
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "Clemson RIDES uses the microphone only when you start an audio or video recording during an active ride. The clip stays on this phone."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Clemson RIDES does not need your photo library for ride recording. Video clips you start are kept on this phone.",
+          "cameraPermission": "Clemson RIDES uses the camera only when you start a video recording during an active ride. The clip stays on this phone.",
+          "microphonePermission": "Clemson RIDES uses the microphone only when you start an audio or video recording during an active ride. The clip stays on this phone."
+        }
+      ],
       "expo-apple-authentication",
       "expo-web-browser"
     ],

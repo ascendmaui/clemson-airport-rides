@@ -34,13 +34,12 @@ function matches(row, filter) {
 export function createMatchingSupabase(initialTables = {}) {
   const tables = cloneRows(initialTables)
 
-  function rowsFor(name) {
-    if (!tables[name]) tables[name] = []
-    return tables[name]
-  }
-
   function run(state) {
-    const source = rowsFor(state.table)
+    if (!tables[state.table]) {
+      if (state.mode === 'select') return { data: [], error: null }
+      tables[state.table] = []
+    }
+    const source = tables[state.table]
     const selected = () => {
       let rows = source.filter((row) => state.filters.every((filter) => matches(row, filter)))
       for (const order of [...state.orders].reverse()) {

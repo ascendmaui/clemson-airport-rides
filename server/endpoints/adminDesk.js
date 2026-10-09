@@ -167,7 +167,7 @@ async function people(sb, res, role) {
 }
 
 async function trips(sb, res, status) {
-  const columns = 'id, status, rider_id, driver_id, pickup_label, dropoff_label, fare_cents, tier, passengers'
+  const columns = 'id, status, rider_id, driver_id, pickup_label, dropoff_label, fare_cents, tier, passengers, metadata'
   let query = sb.from('trips').select(columns).limit(40)
   if (status) query = query.eq('status', status)
   let result = await query

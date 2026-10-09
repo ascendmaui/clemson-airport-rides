@@ -1,6 +1,6 @@
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { AccessibilityInfo, Pressable, RefreshControl, ScrollView, Text, TextInput, View } from 'react-native'
+import { AccessibilityInfo, Image, Pressable, RefreshControl, ScrollView, Text, TextInput, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Pill, PrimaryButton } from '@/components/Button'
 import { HoldExpiryNotice } from '@/components/HoldExpiryNotice'
@@ -15,8 +15,10 @@ import { successHaptic, tapHaptic } from '@/lib/feedback'
 // duplicate oneParam import removed to fix TS2300
 import { openStripeCheckout } from '@/lib/openCheckout'
 import {
+  bumpScheduledBoost,
   cancelScheduledTrip,
   createScheduledTrip,
+  scheduledRiderAction,
   listScheduledTrips,
   quoteRide,
   type RidePlace,
@@ -40,7 +42,9 @@ import {
   quoteInputKey,
   reconcileCheckout,
   startAirportDeposit,
+  withTigerPassQuote,
 } from 'rides-native/riderMoney.js'
+import { loadTigerPass, TIGER_PASS_NAME } from 'rides-native/tigerPassClient'
 import { parseCheckoutSessionId } from 'rides-native/checkoutReturn.js'
 import {
   HOLD_COUNTDOWN_TICK_MS,
@@ -49,13 +53,130 @@ import {
   isUnpaidHoldTtlCancel,
 } from 'rides-native/holdExpiryNotice.js'
 import { localDateInput, localTimeInput, nextPickupDate, RIDE_PLACES } from 'rides-native/riderShell.js'
-import { formatCents, formatPickupAt, COMFORT_FLEET_NOTICE } from 'rides-native/tripTags.js'
+import { formatCents, formatPickupAt } from 'rides-native/tripTags.js'
+import { boostNudge } from '../../../shared/copy/boost.js'
+import { BOOST_MAX_CENTS, boostIsEditable, formatBoostBadge, readBoostCents } from '../../../shared/scheduledBoost.js'
 import { dueScheduleReminders } from '../../../src/lib/scheduledRideModel.js'
+import { BOOK_BACKUP_COPY, LOOKING_FOR_BACKUP_LABEL, riderBackupPresentation } from '../../../shared/backupDriverQueue.js'
+import { ScheduledRidesExplainer, ScheduledRidesHint } from 'rides-native/ScheduledRidesInfo'
 import { RequireAuth } from '@/components/RequireAuth'
+import { NearTermSlots } from '@/components/NearTermSlots'
+import { BoostPicker } from '@/components/BoostPicker'
+
+function DriverFace({ card, role }: { card?: { name?: string; avatarUrl?: string | null; vehicleLabel?: string; ratingAvg?: number | null; ratingCount?: number } | null; role: string }) {
+  if (!card) return null
+  const rating = card.ratingAvg != null ? `${Number(card.ratingAvg).toFixed(1)} · ${card.ratingCount || 0}` : 'New'
+  return (
+    <View style={{ flexDirection: 'row', gap: 10, alignItems: 'center', marginTop: 8 }}>
+      {card.avatarUrl ? (
+        <Image source={{ uri: card.avatarUrl }} style={{ width: 40, height: 40, borderRadius: 20 }} accessible={false} accessibilityIgnoresInvertColors />
+      ) : (
+        <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: '#522D80', alignItems: 'center', justifyContent: 'center' }}>
+          <Text style={{ color: '#fff', fontWeight: '800' }}>{(card.name || 'D').slice(0, 1)}</Text>
+        </View>
+      )}
+      <View>
+        <Text style={{ color: '#522D80', fontWeight: '800' }}>{role} · {card.name || 'Driver'}</Text>
+        <Text style={{ color: '#522D80' }}>{card.vehicleLabel || 'Vehicle'} · {rating}</Text>
+      </View>
+    </View>
+  )
+}
+
+function BackupActions({
+  tripId,
+  backup,
+  onDone,
+  onError,
+}: {
+  tripId: string
+  backup: NonNullable<ReturnType<typeof riderBackupPresentation>>
+  onDone: () => void
+  onError: (message: string) => void
+}) {
+  const [sheet, setSheet] = useState<null | 'switch' | 'cancel' | 'safety'>(null)
+  const [busy, setBusy] = useState(false)
+  const { colors } = useTheme()
+  const backupName = backup.backup?.name || 'backup driver'
+  async function confirm() {
+    if (!sheet) return
+    setBusy(true)
+    try {
+      await scheduledRiderAction(sheet === 'cancel' ? 'cancel' : 'switch', tripId, sheet === 'safety' ? { safetyReport: true } : {})
+      setSheet(null)
+      onDone()
+    } catch (err) {
+      onError(err instanceof Error ? err.message : 'Could not update this ride')
+    } finally {
+      setBusy(false)
+    }
+  }
+  return (
+    <View>
+      <DriverFace card={backup.primary} role="Driver" />
+      <DriverFace card={backup.backup} role="Backup" />
+      {backup.canSwitch ? (
+        <Pressable accessibilityRole="button" accessibilityLabel={`Switch to ${backupName}`} onPress={() => setSheet('switch')} style={{ marginTop: 8 }}>
+          <Text style={{ color: '#fff', backgroundColor: '#F56600', fontWeight: '800', overflow: 'hidden', borderRadius: 12, padding: 10 }}>{`Switch to ${backupName}`}</Text>
+        </Pressable>
+      ) : null}
+      {backup.canSafetySwitch ? (
+        <Pressable accessibilityRole="button" accessibilityLabel="Report a safety concern and switch" onPress={() => setSheet('safety')} style={{ marginTop: 8 }}>
+          <Text style={{ color: '#522D80', fontWeight: '700' }}>Report a safety concern and switch</Text>
+        </Pressable>
+      ) : null}
+      <Pressable accessibilityRole="button" accessibilityLabel="Cancel ride" onPress={() => setSheet('cancel')} style={{ marginTop: 8 }}>
+        <Text style={{ color: '#522D80', fontWeight: '700' }}>Cancel ride</Text>
+      </Pressable>
+      {sheet ? (
+        <View style={{ marginTop: 8, padding: 10, borderRadius: 12, backgroundColor: 'rgba(82,45,128,0.06)' }}>
+          <ScheduledRidesHint topic={sheet === 'cancel' ? 'cancel' : 'switch'} colors={colors} />
+          <Text>{sheet === 'cancel' ? backup.cancelCopy : backup.switchCopy}</Text>
+          <Pressable accessibilityRole="button" accessibilityLabel={sheet === 'cancel' ? 'Confirm cancel' : 'Confirm switch'} onPress={confirm} disabled={busy} style={{ marginTop: 8 }}>
+            <Text style={{ color: '#F56600', fontWeight: '800' }}>{busy ? 'Saving…' : sheet === 'cancel' ? 'Confirm cancel' : 'Confirm switch'}</Text>
+          </Pressable>
+          <Pressable accessibilityRole="button" accessibilityLabel="Keep ride" onPress={() => setSheet(null)} style={{ marginTop: 6 }}>
+            <Text style={{ color: '#522D80', fontWeight: '700' }}>Keep ride</Text>
+          </Pressable>
+        </View>
+      ) : null}
+    </View>
+  )
+}
 
 const CAMPUS_PURPOSES: SchedulePurpose[] = ['early_class', 'planned', 'recurring']
 type WeekendSpot = 'airport' | 'campus'
-type FleetChoice = 'standard' | 'comfort'
+type FleetChoice = 'standard' | 'wait' | 'comfort' | 'carpool'
+
+function fleetNote(fleet: FleetChoice): string {
+  switch (fleet) {
+    case 'standard':
+      return 'Standard vehicle.'
+    case 'wait':
+      return 'Wait & Save. Same cars as Standard.'
+    case 'comfort':
+      return 'Extra Comfort vehicle.'
+    case 'carpool':
+      return 'Carpool seat. Any standard-eligible car.'
+    default: {
+      const unknown: never = fleet
+      return unknown
+    }
+  }
+}
+
+function rideTypeName(tier: string): string | null {
+  switch (tier) {
+    case 'wait':
+      return 'Wait & Save'
+    case 'comfort':
+      return 'Extra Comfort'
+    case 'carpool':
+      return 'Carpool'
+    default:
+      return null
+  }
+}
 const WEEKDAYS = [
   { id: 'mon', label: 'Mon' },
   { id: 'tue', label: 'Tue' },
@@ -74,6 +195,10 @@ type Quote = {
   surgeMultiplier: number
   surgeLabel: string | null
   routeSource: string | null
+  source?: string
+  tigerPassApplied?: boolean
+  tigerPassName?: string | null
+  tigerPassDiscountCents?: number
 }
 
 type Phase =
@@ -111,6 +236,50 @@ function airportPlace(code: 'GSP' | 'CLT'): RidePlace {
 
 function initialWeekendWhen() {
   return nextPickupDate({ time: '21:00', weekdays: ['fri'] })
+}
+
+function BackupPicker({
+  value,
+  onChange,
+}: {
+  value: 0 | 1000 | 1500
+  onChange: (next: 0 | 1000 | 1500) => void
+}) {
+  const { colors } = useTheme()
+  const choices: Array<{ cents: 0 | 1000 | 1500; label: string }> = [
+    { cents: 0, label: 'No backup' },
+    { cents: 1000, label: '$10' },
+    { cents: 1500, label: '$15' },
+  ]
+  return (
+    <View style={{ marginTop: 8 }}>
+      <Text style={{ color: colors.purple, fontWeight: '800' }}>{BOOK_BACKUP_COPY}</Text>
+      <ScheduledRidesHint topic="booking" colors={colors} />
+      <View style={{ flexDirection: 'row', gap: 8 }}>
+        {choices.map((choice) => {
+          const on = value === choice.cents
+          return (
+            <Pressable
+              key={choice.label}
+              onPress={() => onChange(choice.cents)}
+              accessibilityRole="button"
+              accessibilityState={{ selected: on }}
+              style={{
+                paddingHorizontal: 12,
+                paddingVertical: 8,
+                borderRadius: 999,
+                backgroundColor: on ? '#F56600' : colors.card,
+                borderWidth: 1,
+                borderColor: 'rgba(82,45,128,0.2)',
+              }}
+            >
+              <Text style={{ color: on ? '#fff' : '#522D80', fontWeight: '800' }}>{choice.label}</Text>
+            </Pressable>
+          )
+        })}
+      </View>
+    </View>
+  )
 }
 
 function spotLabel(spot: WeekendSpot) {
@@ -161,6 +330,10 @@ function ScheduleScreen() {
   const [weekendPickup, setWeekendPickup] = useState<RidePlace>(placeByLabel('Memorial Stadium'))
   const [weekendDropoff, setWeekendDropoff] = useState<RidePlace>(placeByLabel('Downtown Clemson'))
   const [fleet, setFleet] = useState<FleetChoice>('standard')
+  const [seats, setSeats] = useState(1)
+  const [backupBonusCents, setBackupBonusCents] = useState<0 | 1000 | 1500>(0)
+  const [weekendBoost, setWeekendBoost] = useState(0)
+  const [campusBoost, setCampusBoost] = useState(0)
   const [mine, setMine] = useState<ScheduledRow[]>([])
   const [loadingList, setLoadingList] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
@@ -174,11 +347,20 @@ function ScheduleScreen() {
     return byTrip
   }, [reminders])
   const generation = useRef(0)
-  const quote = useMemo(() => quoteRide(pickup, dropoff, studentOn), [pickup, dropoff, studentOn])
+  const [passActive, setPassActive] = useState(false)
+  const [passBps, setPassBps] = useState(0)
+  const [passName, setPassName] = useState(TIGER_PASS_NAME)
+  const quote = useMemo(
+    () => withTigerPassQuote(quoteRide(pickup, dropoff, studentOn), { active: passActive, bps: passBps, name: passName }),
+    [pickup, dropoff, studentOn, passActive, passBps, passName],
+  )
   const weekendDestination = weekendSpot === 'airport' ? airportPlace(weekendAirport) : weekendDropoff
   const weekendQuote = useMemo(
-    () => quoteRide(weekendPickup, weekendDestination, studentOn && fleet !== 'comfort'),
-    [weekendPickup, weekendDestination, studentOn, fleet],
+    () => withTigerPassQuote(
+      quoteRide(weekendPickup, weekendDestination, studentOn && fleet === 'standard', fleet),
+      { active: passActive, bps: passBps, name: passName },
+    ),
+    [weekendPickup, weekendDestination, studentOn, fleet, passActive, passBps, passName],
   )
   const weekendWhen = nextPickupDate({ date: weekendDate, time: weekendTime })
 
@@ -187,8 +369,30 @@ function ScheduleScreen() {
   }, []))
 
   useEffect(() => {
+    if (!user || !supabase) {
+      setPassActive(false)
+      setPassBps(0)
+      return undefined
+    }
+    let alive = true
+    loadTigerPass(supabase).then((status) => {
+      if (!alive) return
+      setPassActive(Boolean(status.active))
+      setPassBps(status.active ? status.discountBps : 0)
+      setPassName(status.name || TIGER_PASS_NAME)
+    }).catch(() => {
+      if (!alive) return
+      setPassActive(false)
+      setPassBps(0)
+    })
+    return () => {
+      alive = false
+    }
+  }, [user?.id, focusTick])
+
+  useEffect(() => {
     if (returnPaid !== '1' && returnPaid !== 'true') return
-    setBanner('Stripe Checkout sent you back. The deposit shows up when Stripe confirms it.')
+    setBanner('You are back from checkout. The final fare is charged when the trip ends.')
   }, [returnPaid])
 
   useEffect(() => {
@@ -216,7 +420,10 @@ function ScheduleScreen() {
     return () => clearTimeout(handle)
   }, [airport, date, time, key, focusTick, studentOn, user?.id])
 
-  const airportQuote = phase.status === 'ready' && phase.key === key ? phase.quote : null
+  const airportReady = phase.status === 'ready' && phase.key === key ? phase.quote : null
+  const airportQuote = airportReady && airportReady.source === 'fallback'
+    ? withTigerPassQuote(airportReady, { active: passActive, bps: passBps, name: passName })
+    : airportReady
   const quoting = phase.status === 'loading' || phase.key !== key
 
   async function reload(opts?: { quiet?: boolean }) {
@@ -358,12 +565,10 @@ function ScheduleScreen() {
         riderId: user.id,
         riderName: user.user_metadata?.full_name || user.email?.split('@')[0] || 'Rider',
       })
-      const depositPaid = Number(session.depositCents) || airportQuote.depositCents
       const farePaid = Number(session.fareCents) || airportQuote.fareCents
-      const remaining = Math.max(0, farePaid - depositPaid)
       const tripId = typeof session.tripId === 'string' ? session.tripId : ''
       if (session.paidWithCredits) {
-        setBanner(`Ride covered by credits. No card deposit, so there is no remaining card balance.${tripId ? ` Trip ${tripId}.` : ''}`)
+        setBanner(`Ride covered by credits. Nothing else is due on the card.${tripId ? ` Trip ${tripId}.` : ''}`)
         await successHaptic()
         await reload()
         if (tripId && !date) {
@@ -376,7 +581,15 @@ function ScheduleScreen() {
       }
       const url = typeof session.url === 'string' ? session.url : ''
       if (!url) {
-        setError(checkoutFailureCopy(session) || 'Checkout did not return a payment URL. No charge was made.')
+        setBanner(`Ride booked. The final fare ${formatCents(farePaid)} is charged when the trip ends.${tripId ? ` Trip ${tripId}.` : ''}`)
+        await successHaptic()
+        await reload()
+        if (tripId && !date) {
+          router.replace({
+            pathname: '/requested',
+            params: { trip: tripId, dest: airport === 'CLT' ? 'Charlotte Douglas (CLT)' : 'Greenville-Spartanburg (GSP)' },
+          })
+        }
         return
       }
       let ignoreEarlyHold = false
@@ -389,11 +602,11 @@ function ScheduleScreen() {
             /* The countdown appears once the trip row can be read. */
           })
       }
-      setBanner(`Opening Stripe for the ${formatCents(depositPaid)} deposit. Remaining balance ${formatCents(remaining)} is collected when the trip is complete.`)
+      setBanner(`Opening checkout. The final fare ${formatCents(farePaid)} is charged when the trip ends.`)
       const browserResult = await openStripeCheckout(url)
       ignoreEarlyHold = true
       if (!tripId || !supabase) {
-        setBanner('Checkout closed. Deposit received only after Stripe records the payment.')
+        setBanner('Checkout closed. A payment is recorded only after Stripe confirms it.')
         return
       }
       let effectiveSessionId = typeof session.id === 'string' ? session.id : ''
@@ -435,7 +648,7 @@ function ScheduleScreen() {
       }
       if (outcome === 'paid') {
         setCheckoutTrip(null)
-        setBanner(`Deposit received · ${formatCents(depositPaid)}. Remaining balance ${formatCents(remaining)} is collected when the trip is complete.`)
+        setBanner(`Payment recorded. The final fare ${formatCents(farePaid)} is charged when the trip ends.`)
         await successHaptic()
         if (!date) {
           router.replace({
@@ -449,7 +662,7 @@ function ScheduleScreen() {
         setBanner('Checkout closed. Nothing was charged. That unpaid ride is no longer searching for a driver.')
       } else if (settled.error) {
         if (held && isOpenUnpaidAirportHold(held)) setCheckoutTrip(held)
-        setBanner(`Checkout closed. Could not confirm the deposit yet (${settled.error}). Nothing is marked paid.`)
+        setBanner(`Checkout closed. Could not confirm payment yet (${settled.error}). Nothing is marked paid.`)
       } else if (held && isOpenUnpaidAirportHold(held)) {
         setCheckoutTrip(held)
         setBanner('Checkout closed. Nothing was charged unless Stripe already confirmed it.')
@@ -495,9 +708,11 @@ function ScheduleScreen() {
         purpose: 'party_weekend',
         weekdays: [],
         tier: fleet,
+        passengers: fleet === 'carpool' ? seats : undefined,
+        backupBonusCents: backupBonusCents || null,
+        boostCents: weekendBoost,
       })
-      const fleetLine = fleet === 'comfort' ? ' Extra Comfort stays driver-operated.' : ''
-      setBanner(`Weekend / party confirmed for ${formatPickupAt(weekendWhen.toISOString())}. It is under Upcoming, and drivers can accept it from Weekend.${fleetLine}`)
+      setBanner(`Weekend / party confirmed for ${formatPickupAt(weekendWhen.toISOString())}. It is under Upcoming, and drivers can accept it from Weekend.`)
       await successHaptic()
       await reload()
     } catch (err) {
@@ -541,6 +756,8 @@ function ScheduleScreen() {
         pickupAt: when,
         purpose,
         weekdays,
+        backupBonusCents: backupBonusCents || null,
+        boostCents: campusBoost,
       })
       setBanner(`${purposeLabel(purpose)} saved · ${row.id}`)
       await successHaptic()
@@ -572,6 +789,8 @@ function ScheduleScreen() {
       >
         <Text style={styles.kicker}>SCHEDULE</Text>
         <Text style={styles.title}>Schedule a ride</Text>
+        <ScheduledRidesExplainer role="rider" colors={colors} />
+        <NearTermSlots />
         <Text style={styles.copy}>
           Weekend and party nights to the airport or around campus. Pick a date and time, confirm, then find it under Upcoming.
         </Text>
@@ -655,12 +874,14 @@ function ScheduleScreen() {
         <Text style={styles.label}>Vehicle</Text>
         <View style={styles.pills}>
           <Pill label="Standard" active={fleet === 'standard'} onPress={() => chooseFleet('standard')} />
+          <Pill label="Wait & Save" active={fleet === 'wait'} onPress={() => chooseFleet('wait')} />
           <Pill label="Extra Comfort" active={fleet === 'comfort'} onPress={() => chooseFleet('comfort')} />
+          <Pill label="Carpool" active={fleet === 'carpool'} onPress={() => chooseFleet('carpool')} />
         </View>
-        {fleet === 'comfort' ? (
-          <View style={styles.fleetNote}>
-            <Text style={styles.fleetKicker}>CLEMSON FLEET</Text>
-            <Text style={styles.fleetText}>{COMFORT_FLEET_NOTICE}</Text>
+        {fleet === 'carpool' ? (
+          <View style={styles.pills}>
+            <Pill label="1 seat" active={seats === 1} onPress={() => setSeats(1)} />
+            <Pill label="2 seats" active={seats === 2} onPress={() => setSeats(2)} />
           </View>
         ) : null}
         <View style={styles.panel}>
@@ -670,16 +891,21 @@ function ScheduleScreen() {
           </Text>
           <Text style={styles.fine}>{weekendPickup.label} → {weekendDestination.label}</Text>
           <Text style={styles.cardLine}>
-            {weekendQuote.estimate ? 'Fare estimate' : 'Fare'} · {formatUsd(weekendQuote.fareCents / 100)}
+            {weekendQuote.estimate ? 'Fare estimate' : 'Fare'} · {formatUsd((weekendQuote.fareCents * (fleet === 'carpool' ? seats : 1)) / 100)}
           </Text>
           {weekendQuote.label ? <Text style={styles.student}>{weekendQuote.label}</Text> : null}
+          {(weekendQuote.tigerPassDiscountCents || 0) > 0 ? (
+            <Text style={styles.student}>{weekendQuote.tigerPassName || TIGER_PASS_NAME} · −{formatUsd((weekendQuote.tigerPassDiscountCents || 0) / 100)}</Text>
+          ) : null}
           <Text style={styles.fine}>
-            {fleet === 'comfort' ? 'Extra Comfort · a driver is at the wheel.' : 'Standard vehicle.'}
+            {fleetNote(fleet)}
             {weekendQuote.depositCents > 0
               ? ` ${depositSurfaceCopy(weekendQuote, 'confirm', { studentDiscountCents: weekendQuote.discountCents }) || ''}`
               : ' Final fare can change when a driver accepts.'}
           </Text>
         </View>
+        <BackupPicker value={backupBonusCents} onChange={setBackupBonusCents} />
+        <BoostPicker cents={weekendBoost} onChange={setWeekendBoost} />
         <PrimaryButton
           label={busy ? 'Confirming…' : 'Confirm weekend ride'}
           onPress={confirmWeekend}
@@ -693,10 +919,10 @@ function ScheduleScreen() {
           style={styles.section}
           onLayout={(event: any) => { depositSectionY.current = event.nativeEvent.layout.y }}
         >
-          Airport deposit
+          Airport ride
         </Text>
         <Text style={styles.copy}>
-          Hold GSP or CLT with a 25% deposit. The amount updates when the airport, time, surge, or student discount changes. Leave the date empty to request a driver now.
+          Book GSP or CLT at the current fare. Nothing is charged now. Leave the date empty to request a driver now. The final fare is charged when the trip ends.
         </Text>
 
         <View style={styles.choices}>
@@ -709,7 +935,7 @@ function ScheduleScreen() {
                 style={[styles.choice, on && styles.choiceOn]}
                 accessibilityRole="button"
                 accessibilityLabel={code === 'GSP' ? 'Greenville-Spartanburg' : 'Charlotte Douglas'}
-                accessibilityHint="Sets the airport for this deposit"
+                accessibilityHint="Sets the airport for this ride"
                 accessibilityState={{ selected: on }}
               >
                 <Text style={styles.choiceCode}>{code}</Text>
@@ -745,23 +971,26 @@ function ScheduleScreen() {
           {airportQuote && airportQuote.studentDiscountCents > 0 ? (
             <Row label="Student discount" value={`−${formatCents(airportQuote.studentDiscountCents)}`} />
           ) : null}
+          {airportQuote && (airportQuote.tigerPassDiscountCents || 0) > 0 ? (
+            <Row label={airportQuote.tigerPassName || TIGER_PASS_NAME} value={`−${formatCents(airportQuote.tigerPassDiscountCents || 0)}`} />
+          ) : null}
           {airportQuote && airportQuote.surgeMultiplier > 1 ? (
             <Row label={airportQuote.surgeLabel || 'Surge'} value={`${airportQuote.surgeMultiplier}×`} />
           ) : null}
           <Row
-            label="25% deposit"
-            value={airportQuote ? formatCents(airportQuote.depositCents) : quoting ? 'Updating…' : '—'}
+            label="Charged now"
+            value="$0.00"
             strong
           />
           <Row
-            label="Remaining balance"
-            value={airportQuote ? formatCents(Math.max(0, airportQuote.fareCents - airportQuote.depositCents)) : quoting ? 'Updating…' : '—'}
+            label="Due when the trip ends"
+            value={airportQuote ? formatCents(airportQuote.fareCents) : quoting ? 'Updating…' : '—'}
             tone="purple"
           />
           <Text style={styles.balance}>
             {airportQuote
               ? depositSurfaceCopy(airportQuote, 'quote', { studentDiscountCents: airportQuote.studentDiscountCents })
-              : 'Pay deposit stays off until this quote matches the airport and time on screen.'}
+              : 'The fare stays blank until this quote matches the airport and time on screen.'}
             {airportQuote?.routeSource === 'fallback' ? ' Fare card estimate until the quote route answers.' : ''}
           </Text>
         </View>
@@ -780,15 +1009,15 @@ function ScheduleScreen() {
         {banner ? <Text style={styles.banner} accessibilityLiveRegion="polite">{banner}</Text> : null}
 
         <PrimaryButton
-          label={busy ? 'Starting checkout…' : airportQuote ? `Pay ${formatCents(airportQuote.depositCents)} deposit` : 'Waiting for fare'}
+          label={busy ? 'Booking ride…' : airportQuote ? 'Book ride' : 'Waiting for fare'}
           onPress={pay}
           disabled={busy || !airportQuote || quoting}
         />
         <Text style={styles.fine}>
-          Pay deposit opens Stripe Checkout. If Stripe is not configured on this machine, checkout stops and nothing is charged. Live mode stays off.
+          Booking does not charge a card. Requesting a ride places a hold for the estimate plus a buffer. The final fare is charged when the trip ends.
         </Text>
         {!user ? (
-          <Text style={styles.copy}>Browse the quote. Sign in when you pay the deposit.</Text>
+          <Text style={styles.copy}>Browse the quote. Sign in when you book the ride.</Text>
         ) : null}
         <Pressable
           onPress={() => router.push('/student')}
@@ -801,7 +1030,7 @@ function ScheduleScreen() {
         </Pressable>
 
         <Text style={styles.section}>Class, planned, and weekly rides</Text>
-        <Text style={styles.copy}>These rides save a pickup. Weekend and party trips use the confirm step above. Airport deposits stay on the checkout above.</Text>
+        <Text style={styles.copy}>These rides save a pickup. Weekend and party trips use the confirm step above. Airport rides use the fare above.</Text>
         <View style={styles.pills}>
           {CAMPUS_PURPOSES.map((id) => (
             <Pill key={id} label={purposeLabel(id)} active={purpose === id} onPress={() => choosePurpose(id)} />
@@ -841,12 +1070,17 @@ function ScheduleScreen() {
         <View style={styles.panel}>
           <Text style={styles.cardLine}>{quote.estimate ? 'Fare estimate' : 'Fare'} · {formatUsd(quote.fareCents / 100)}</Text>
           {quote.label ? <Text style={styles.student}>{quote.label}</Text> : null}
+          {(quote.tigerPassDiscountCents || 0) > 0 ? (
+            <Text style={styles.student}>{quote.tigerPassName || TIGER_PASS_NAME} · −{formatUsd((quote.tigerPassDiscountCents || 0) / 100)}</Text>
+          ) : null}
           <Text style={styles.fine}>
             {quote.depositCents > 0
               ? depositSurfaceCopy(quote, 'confirm', { studentDiscountCents: quote.discountCents })
               : `About ${quote.miles ?? '—'} mi. Final fare can change when a driver accepts.`}
           </Text>
         </View>
+        <BackupPicker value={backupBonusCents} onChange={setBackupBonusCents} />
+        <BoostPicker cents={campusBoost} onChange={setCampusBoost} />
         <PrimaryButton label={busy ? 'Scheduling…' : 'Schedule ride'} onPress={onSchedule} disabled={busy} tone="purple" />
 
         <Text style={styles.section}>Upcoming</Text>
@@ -860,6 +1094,10 @@ function ScheduleScreen() {
         ) : null}
         {mine.filter((row: ScheduledRow) => row.status !== 'canceled').map((row: ScheduledRow) => {
           const reminder = reminderByTrip.get(row.id)
+          const backup = riderBackupPresentation(row)
+          const boostCents = readBoostCents(row)
+          const nudge = boostNudge(row, clock)
+          const canBump = boostIsEditable(row) && boostCents < BOOST_MAX_CENTS
           return (
             <View key={row.id} style={styles.panel}>
             {reminder ? <Text style={styles.remindKicker}>{reminder.label}</Text> : null}
@@ -868,7 +1106,32 @@ function ScheduleScreen() {
               {rowPurpose(row)} · {row.status} · {formatPickupAt(row.pickup_at || row.scheduled_for)}
               {row.metadata?.recurrence?.weekdays?.length ? ` · weekly ${row.metadata.recurrence.weekdays.join(', ')}` : ''}
             </Text>
-            {row.tier === 'comfort' ? <Text style={styles.student}>Extra Comfort · driver at the wheel</Text> : null}
+            {rideTypeName(String(row.tier || '')) ? <Text style={styles.student}>{rideTypeName(String(row.tier || ''))}</Text> : null}
+            {backup?.status ? <Text style={styles.student}>{backup.status}</Text> : null}
+            {backup?.status === LOOKING_FOR_BACKUP_LABEL ? <ScheduledRidesHint topic="looking" colors={colors} /> : null}
+            {backup?.notice ? <Text style={styles.fine}>{backup.notice}</Text> : null}
+            {backup ? (
+              <BackupActions
+                tripId={row.id}
+                backup={backup}
+                onDone={() => reload()}
+                onError={(message) => setError(message)}
+              />
+            ) : null}
+            {boostCents > 0 ? <Text style={styles.student}>{formatBoostBadge(boostCents)} · 100% to your driver</Text> : null}
+            {nudge ? <Text style={styles.fine}>{nudge.body}</Text> : null}
+            {canBump ? (
+              <BoostPicker
+                cents={0}
+                minimumCents={boostCents + 1}
+                heading={boostCents > 0 ? 'Raise the boost' : 'Add a boost'}
+                onChange={(cents) => {
+                  bumpScheduledBoost(row.id, cents).then(() => reload()).catch((err: unknown) => {
+                    setError(err instanceof Error ? err.message : 'Could not update boost')
+                  })
+                }}
+              />
+            ) : null}
             {row.deposit_cents ? (
               <Text style={styles.balance}>
                 {depositSurfaceCopy(
@@ -880,8 +1143,10 @@ function ScheduleScreen() {
             {row.id !== checkoutTrip?.id && isOpenUnpaidAirportHold(row) ? (
               <HoldExpiryNotice trip={row} onRequestAgain={() => requestAgain(row)} />
             ) : null}
-            {row.status === 'scheduled' || row.status === 'accepted' ? (
+            {!backup && (row.status === 'scheduled' || row.status === 'accepted') ? (
               <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Cancel"
                 onPress={() => {
                   cancelScheduledTrip(row.id).then(() => reload()).catch((err: unknown) => {
                     setError(err instanceof Error ? err.message : 'Could not cancel')
@@ -984,16 +1249,6 @@ function makeStyles(colors: Palette) {
     cardLine: { fontWeight: '800' as const, color: colors.ink },
     student: { color: colors.orange, fontWeight: '700' as const, fontSize: 12 },
     cancel: { color: colors.danger, fontWeight: '700' as const, marginTop: 6 },
-    fleetNote: {
-      marginTop: 8,
-      backgroundColor: colors.purpleSoft,
-      borderRadius: 16,
-      padding: 12,
-      borderWidth: 1,
-      borderColor: colors.purple,
-    },
-    fleetKicker: { color: colors.orange, fontWeight: '800' as const, letterSpacing: 1, fontSize: 11, marginBottom: 4 },
-    fleetText: { color: colors.link, fontSize: 13, lineHeight: 18, fontWeight: '600' as const },
     remindCard: {
       backgroundColor: colors.orangeSoft,
       borderRadius: 16,
