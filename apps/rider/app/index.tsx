@@ -537,7 +537,7 @@ export default function RiderHome() {
                 accessibilityLabel={`${shortcut.label}. ${shortcut.sub}`}
                 accessibilityHint="Requests a ride to this place"
               >
-                <Text style={styles.shortcutIcon}>{shortcut.icon}</Text>
+                <Ionicons name="school-outline" size={22} color={colors.purple} style={styles.shortcutIcon} />
                 <Text style={styles.shortcutLabel}>{shortcut.label}</Text>
                 <Text style={styles.shortcutSub}>{shortcut.sub}</Text>
               </Pressable>
