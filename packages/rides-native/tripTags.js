@@ -418,6 +418,17 @@ export function driverStatusDetail(status) {
   }
 }
 
+/** Shown on the driver trip screen once the 500 m pickup geofence (or the driver) marks the trip arriving. */
+export function arrivedPromptCopy({ firstName, pickupLabel } = {}) {
+  const who = String(firstName || '').trim() || 'your rider'
+  const where = String(pickupLabel || '').trim() || 'pickup'
+  return {
+    title: 'Arrived?',
+    body: `You are close to ${where}. Confirm when you are at the curb so ${who} is told and the free wait starts.`,
+    action: "Yes, I've arrived",
+  }
+}
+
 export function acceptActionLabel(status) {
   switch (status) {
     case 'scheduled':

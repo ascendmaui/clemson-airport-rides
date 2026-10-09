@@ -474,6 +474,7 @@ test('driver push offline and error states', { concurrency: false }, async (t) =
       assert.equal(op.payload.token, 'ExponentPushToken[abc]')
       assert.equal(op.payload.platform, 'android')
       assert.equal(op.payload.updated_at, updatedAt)
+      assert.deepEqual(op.payload.features, ['trip_status_v1'])
       assertIso(op.payload.updated_at)
       return { error: null }
     })
@@ -506,6 +507,33 @@ test('driver push offline and error states', { concurrency: false }, async (t) =
     assert.equal(result.stored, true)
     assert.equal(result.detail, REGISTERED)
     assert.equal(state().ops.length, 2)
+  })
+
+  await t.test('a database without driver_push_tokens.features still stores the token', async () => {
+    const payloads = []
+    const client = supabaseClient((op) => {
+      if (op.table === 'driver_status') return { error: { message: 'schema cache' } }
+      payloads.push(op.payload)
+      if (op.payload.features) return { error: { message: "Could not find the 'features' column of 'driver_push_tokens' in the schema cache" } }
+      return { error: null }
+    })
+    const result = await push.registerDriverPush(client, 'driver-1')
+    assert.equal(result.stored, true)
+    assert.equal(payloads.length, 2)
+    assert.equal('features' in payloads[1], false)
+  })
+
+  await t.test('the status-push feature flag matches the server', async () => {
+    const server = await import('../../../server/tripStatusNotices.js')
+    assert.equal(push.TRIP_STATUS_PUSH_FEATURE, server.DRIVER_STATUS_PUSH_FEATURE)
+  })
+
+  await t.test('trip status pushes are told apart from ride offers', () => {
+    assert.equal(push.isTripStatusPush({ kind: 'arrive_prompt', tripId: 't' }), true)
+    assert.equal(push.isTripStatusPush({ kind: 'rider_canceled' }), true)
+    assert.equal(push.isTripStatusPush({ tripId: 't' }), false)
+    assert.equal(push.isTripStatusPush({ kind: 'scheduled_board' }), false)
+    assert.equal(push.isTripStatusPush(null), false)
   })
 
   await t.test('a failed fallback upsert stays unstored with a readable detail', async () => {

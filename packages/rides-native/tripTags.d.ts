@@ -202,3 +202,5 @@ export function summarizeDepositAwareness(
   todayNetCents: number
   lines: { tripId: string; dropoff: string; line: string; fareCents: number }[]
 }
+
+export function arrivedPromptCopy(input?: { firstName?: string | null; pickupLabel?: string | null }): { title: string; body: string; action: string }

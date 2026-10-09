@@ -1,7 +1,7 @@
 import { createTrackingRefresh } from 'rides-native/tracking'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { AppState, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { AccessibilityInfo, AppState, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { CampusMap, type MapPin } from '@/components/CampusMap'
 import { WaitTimer } from '@/components/WaitTimer'
@@ -23,6 +23,7 @@ import { publishDriverLocation, startTripBackgroundLocation, stopTripBackgroundL
 import { isActiveTripLocationStatus } from 'rides-native/backgroundLocation'
 import { driverTripAction, tripWaitTick, advanceTrip, confirmBackupQueueTrip, loadRiderFix, loadTrip, releaseBackupQueueSeat, subscribeTrips } from 'rides-native/driverDesk'
 import {
+  arrivedPromptCopy,
   confirmCountdownLabel,
   leaveNowCountdownLabel,
   driverStatusDetail,
@@ -334,6 +335,17 @@ export default function TripScreen() {
       ? { latitude: livePickup.latitude, longitude: livePickup.longitude, label: 'Live pickup' }
       : { latitude: trip?.pickupLat ?? null, longitude: trip?.pickupLng ?? null, label: trip?.pickupLabel || 'Pickup' }
 
+  // The 500 m geofence flips accepted → arriving server-side. Tell the driver right away.
+  const lastStatus = useRef<string | null>(null)
+  useEffect(() => {
+    const before = lastStatus.current
+    lastStatus.current = trip?.status ?? null
+    if (before === 'accepted' && trip?.status === 'arriving') {
+      pulse('accept')
+      AccessibilityInfo.announceForAccessibility?.('Arrived? Confirm when you are at pickup.')
+    }
+  }, [trip?.status, pulse])
+
   const targetRef = useRef(target)
   targetRef.current = target
 
@@ -430,6 +442,16 @@ export default function TripScreen() {
           activeIndex={stepIndex}
           colors={colors}
         />
+        {trip?.status === 'arriving' ? (() => {
+          const prompt = arrivedPromptCopy({ firstName: trip.firstName, pickupLabel: trip.pickupLabel })
+          return (
+            <View accessibilityRole="summary" style={[styles.arrivePrompt, { borderColor: colors.orange }]}>
+              <Text style={styles.arriveTitle}>{prompt.title}</Text>
+              <Text style={styles.copy}>{prompt.body}</Text>
+              <Primary label={busy ? 'Updating…' : prompt.action} onPress={onAdvance} disabled={busy} tone="orange" />
+            </View>
+          )
+        })() : null}
         {trip ? (
           <>
             {trip.status === 'completed' && user ? (
@@ -576,7 +598,7 @@ export default function TripScreen() {
         ) : null}
         {terminalTrip && trip?.status !== 'completed' ? <Primary label="Back to Home" onPress={() => router.replace('/')} tone="purple" /> : null}
         {trip && ['accepted', 'arriving'].includes(trip.status) ? <DriverCancelSheet key={trip.id} supabase={supabase} tripId={trip.id} scheduled={Boolean(trip.pickupAt)} disabled={busy} onCanceled={onDriverCanceled} /> : null}
-        {action ? <Primary label={busy ? 'Updating…' : action} onPress={onAdvance} disabled={busy} tone="purple" /> : null}
+        {action && trip?.status !== 'arriving' ? <Primary label={busy ? 'Updating…' : action} onPress={onAdvance} disabled={busy} tone="purple" /> : null}
         </ScrollView>
       </View>
       <SosSheet
@@ -614,6 +636,8 @@ function tripStyles(colors: Palette) {
     navRow: { flexDirection: 'row', gap: 8 },
     nav: { flex: 1, backgroundColor: colors.fill, borderRadius: 14, paddingVertical: 12, alignItems: 'center' },
     navPrimary: { flex: 2 },
+    arrivePrompt: { borderWidth: 2, borderRadius: 18, padding: 14, gap: 8 },
+    arriveTitle: { color: colors.title, fontWeight: '900', fontSize: 28 },
     navText: { color: colors.onAccent, fontWeight: '800' },
     settle: { color: colors.title, fontWeight: '700', lineHeight: 20 },
   })
