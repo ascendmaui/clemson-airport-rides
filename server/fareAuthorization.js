@@ -31,6 +31,12 @@ function stripeErrorField(value) {
   return typeof value === 'string' ? value : null
 }
 
+export function isIncrementalAuthIneligible(err) {
+  const raw = err?.raw || err
+  return raw?.code === 'payment_intent_invalid_parameter'
+    && /not eligible for the requested card features/i.test(raw?.message || '')
+}
+
 async function cancelQuiet(stripe, paymentIntent) {
   const id = paymentIntent?.id
   const status = paymentIntent?.status
@@ -54,7 +60,7 @@ async function createAuthorization(stripe, {
   idempotencyKey,
 }) {
   try {
-    const pi = await stripe.paymentIntents.create({
+    const params = {
       amount: amountCents,
       currency: 'usd',
       customer: customerId,
@@ -74,9 +80,24 @@ async function createAuthorization(stripe, {
         bufferCents: String(quote.bufferCents),
         boostCents: String(quote.boostCents || 0),
       },
-    }, { idempotencyKey })
+    }
+    let pi
+    let basicAuthorization = false
+    try {
+      pi = await stripe.paymentIntents.create(params, { idempotencyKey })
+    } catch (err) {
+      if (!isIncrementalAuthIneligible(err)) throw err
+      const basicParams = { ...params }
+      // The incremental request is currently the only payment method option.
+      delete basicParams.payment_method_options
+      pi = await stripe.paymentIntents.create(basicParams, { idempotencyKey: `${idempotencyKey}:basic` })
+      basicAuthorization = true
+    }
     if (pi.status === 'requires_capture' || pi.status === 'succeeded') {
-      return { ok: true, paymentIntent: pi, paymentMethodId }
+      return {
+        ok: true, paymentIntent: pi, paymentMethodId,
+        ...(basicAuthorization ? { incrementalAuthorization: false } : {}),
+      }
     }
     const code = pi.status === 'requires_action' ? 'authentication_required' : 'charge_failed'
     return {
@@ -265,6 +286,7 @@ export async function placeFareAuthorization({
       boostCents: quote.boostCents,
       paymentMethodId: result.paymentMethodId,
       backupCard: result.paymentMethodId !== paymentMethodId,
+      ...(result.incrementalAuthorization === false ? { incrementalAuthorization: false } : {}),
       at: new Date().toISOString(),
     }
     if (sb && tripId) {
