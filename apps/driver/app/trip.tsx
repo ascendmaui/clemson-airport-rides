@@ -543,6 +543,12 @@ export default function TripScreen() {
               <CounterpartCard person={person} colors={partyColors} />
             )}
             <Text style={styles.copy}>{trip.pickupLabel} → {trip.dropoffLabel}</Text>
+            {trip.airportContext ? (
+              <View accessibilityLabel={`Airport: ${trip.airportContext.line}`} style={styles.airport}>
+                <Text style={styles.airportChip}>{trip.airportContext.chip} · {trip.airportContext.curb}</Text>
+                {trip.airportContext.flightLine ? <Text style={styles.fare}>{trip.airportContext.flightLine}</Text> : null}
+              </View>
+            ) : null}
             {trip.status === 'cancelled_wait' ? (
               <View accessibilityLabel="Rider no-show result" style={{ gap: 4 }}>
                 <Text style={styles.fare}>Rider no-show</Text>
@@ -733,5 +739,7 @@ function tripStyles(colors: Palette) {
     arriveTitle: { color: colors.title, fontWeight: '900', fontSize: 28 },
     navText: { color: colors.onAccent, fontWeight: '800' },
     settle: { color: colors.title, fontWeight: '700', lineHeight: 20 },
+    airport: { borderRadius: 14, padding: 10, gap: 2, backgroundColor: colors.track },
+    airportChip: { color: colors.purple, fontWeight: '900', letterSpacing: 0.5 },
   })
 }

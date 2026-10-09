@@ -778,6 +778,11 @@ export function RideCard({
           {preferredNote ? <Text style={{ color: colors.orange, fontWeight: '700' }}>{preferredNote}</Text> : null}
           <Text style={{ color: colors.ink, fontWeight: '700' }}>Pickup · {card.pickupLabel}</Text>
           <Text style={{ color: colors.ink, fontWeight: '700' }}>Drop-off · {card.dropoffLabel}</Text>
+          {card.airportContext ? (
+            <Text style={{ color: colors.purple, fontWeight: '800' }} accessibilityLabel={`Airport: ${card.airportContext.line}`}>
+              {card.airportContext.line}
+            </Text>
+          ) : null}
           {vm.distanceEta ? (
             <Text style={{ color: colors.inkSecondary }}>
               {vm.distanceEta}

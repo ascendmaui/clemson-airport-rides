@@ -96,6 +96,8 @@ export function startAirportDeposit(
     studentDiscountCents?: number
     riderId?: string
     riderName?: string
+    /** Optional flight for the driver: number like DL 1234, time HH:MM. */
+    flight?: { number?: string; time?: string }
   },
 ): Promise<CheckoutSession>
 

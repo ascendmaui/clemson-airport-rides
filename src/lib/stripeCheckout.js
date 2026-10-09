@@ -68,6 +68,7 @@ export async function createCheckoutSession({
   riderId,
   date,
   time,
+  flight,
 }, options = {}) {
   const rate = AIRPORT_RATES[airport]
   if (!rate) throw new Error('Unknown airport')
@@ -81,6 +82,7 @@ export async function createCheckoutSession({
     riderId: riderId || '',
     date: date || undefined,
     time: time || undefined,
+    ...(flight && (flight.number || flight.time) ? { flight } : {}),
     origin,
     successUrl:
       successUrl ||

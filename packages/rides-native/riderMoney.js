@@ -457,6 +457,8 @@ export async function startAirportDeposit(supabase, params = {}) {
         airport: code,
         date: day,
         time: day ? (clock || '12:00') : undefined,
+        // Optional; the server validates and shows it to the driver.
+        ...(params.flight && (params.flight.number || params.flight.time) ? { flight: params.flight } : {}),
         useCredits: true,
         origin: NATIVE_CHECKOUT_ORIGIN,
       },

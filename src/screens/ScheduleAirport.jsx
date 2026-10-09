@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { normalizeFlight } from '../../shared/airportContext.js'
 import { PrimaryButton } from '../components/PrimaryButton'
 import { BottomTabs } from '../components/BottomTabs'
 import {
@@ -31,6 +32,8 @@ export function ScheduleAirport() {
   })
   const [date, setDate] = useState('')
   const [time, setTime] = useState('')
+  const [flightNumber, setFlightNumber] = useState('')
+  const [flightTime, setFlightTime] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
   const [bookedNote, setBookedNote] = useState(null)
@@ -153,10 +156,13 @@ export function ScheduleAirport() {
         }
         return
       }
+      const flightCheck = normalizeFlight({ number: flightNumber, time: flightTime })
+      if (flightCheck.error) throw new Error(flightCheck.error)
       const session = await createCheckoutSession({
         airport,
         date,
         time,
+        flight: { number: flightNumber.trim(), time: flightTime.trim() },
         riderName:
           user?.user_metadata?.full_name ||
           user?.email?.split('@')[0] ||
@@ -273,8 +279,31 @@ export function ScheduleAirport() {
           onChange={(e) => setTime(e.target.value)}
           aria-invalid={Boolean(error && /time/i.test(error)) ? 'true' : undefined}
           aria-describedby={error ? 'schedule-airport-error' : undefined}
-          style={{ width: '100%', marginTop: 6, marginBottom: 20, padding: '12px 14px', borderRadius: 12 }}
+          style={{ width: '100%', marginTop: 6, marginBottom: 14, padding: '12px 14px', borderRadius: 12 }}
         />
+        <label htmlFor="schedule-flight-number" style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink-secondary)' }}>Flight number (optional)</label>
+        <input
+          id="schedule-flight-number"
+          type="text"
+          className="glass-input"
+          placeholder="DL 1234"
+          autoCapitalize="characters"
+          value={flightNumber}
+          onChange={(e) => setFlightNumber(e.target.value)}
+          aria-describedby="schedule-flight-help"
+          style={{ width: '100%', marginTop: 6, marginBottom: 14, padding: '12px 14px', borderRadius: 12 }}
+        />
+        <label htmlFor="schedule-flight-at" style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink-secondary)' }}>Flight time (optional)</label>
+        <input
+          id="schedule-flight-at"
+          type="time"
+          className="glass-input"
+          value={flightTime}
+          onChange={(e) => setFlightTime(e.target.value)}
+          aria-describedby="schedule-flight-help"
+          style={{ width: '100%', marginTop: 6, marginBottom: 6, padding: '12px 14px', borderRadius: 12 }}
+        />
+        <p id="schedule-flight-help" style={{ fontSize: 12, color: 'var(--ink-secondary)', margin: '0 0 20px' }}>Your driver sees the airline, terminal and flight time.</p>
 
         <div className="glass-panel glass-panel--orange" style={{ padding: 16, borderRadius: 16, marginBottom: 16 }}>
           <div style={{ fontSize: 11, letterSpacing: 1.1, fontWeight: 800, color: '#F56600', marginBottom: 8 }}>FULL FARE AT TRIP END</div>

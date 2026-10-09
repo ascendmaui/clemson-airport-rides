@@ -1,3 +1,4 @@
+import { normalizeFlight } from 'rides-native/airportContext'
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AccessibilityInfo, Image, Pressable, RefreshControl, ScrollView, Text, TextInput, View } from 'react-native'
@@ -310,6 +311,8 @@ function ScheduleScreen() {
   const [airport, setAirport] = useState<'GSP' | 'CLT'>('GSP')
   const [date, setDate] = useState('')
   const [time, setTime] = useState('')
+  const [flightNumber, setFlightNumber] = useState('')
+  const [flightTime, setFlightTime] = useState('')
   const [focusTick, setFocusTick] = useState(0)
   const [phase, setPhase] = useState<Phase>({ status: 'loading', key: 'GSP||' })
   const [busy, setBusy] = useState(false)
@@ -551,6 +554,11 @@ function ScheduleScreen() {
       return
     }
     if (!airportQuote || quoting) return
+    const flightCheck = normalizeFlight({ number: flightNumber, time: flightTime })
+    if (flightCheck.error) {
+      setError(flightCheck.error)
+      return
+    }
     setBusy(true)
     setError(null)
     setBanner(null)
@@ -559,6 +567,7 @@ function ScheduleScreen() {
         airport,
         date,
         time,
+        flight: { number: flightNumber.trim(), time: flightTime.trim() },
         fareCents: airportQuote.fareCents,
         depositCents: airportQuote.depositCents,
         studentDiscountCents: airportQuote.studentDiscountCents,
@@ -964,6 +973,27 @@ function ScheduleScreen() {
           autoCapitalize="none"
           style={styles.input}
           accessibilityLabel="Pickup time"
+        />
+        <Text style={styles.label}>Flight (optional)</Text>
+        <TextInput
+          value={flightNumber}
+          onChangeText={setFlightNumber}
+          placeholder="Flight number, like DL 1234"
+          placeholderTextColor={colors.placeholder}
+          autoCapitalize="characters"
+          autoCorrect={false}
+          style={styles.input}
+          accessibilityLabel="Flight number, optional"
+          accessibilityHint="Your driver sees the airline and terminal"
+        />
+        <TextInput
+          value={flightTime}
+          onChangeText={setFlightTime}
+          placeholder="Flight time HH:MM (optional)"
+          placeholderTextColor={colors.placeholder}
+          autoCapitalize="none"
+          style={styles.input}
+          accessibilityLabel="Flight time, optional"
         />
 
         <View style={styles.panel}>

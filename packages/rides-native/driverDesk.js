@@ -60,6 +60,7 @@ const TRIP_COLUMNS = [
   'requested_at',
   'offer_expires_at',
   'stops',
+  'flight',
 ].join(', ')
 
 const EARNINGS_COLUMNS = 'id, status, canceled_at, wait_fee_cents, cancel_fee_cents, driver_wait_earnings_cents, fare_cents, deposit_cents, dropoff_label, completed_at, pickup_label, metadata'
@@ -68,8 +69,8 @@ async function listTrips(supabase, finish) {
   const run = async (columns) => finish(supabase.from('trips').select(columns))
   let columns = TRIP_COLUMNS
   let res = await run(columns)
-  if (res.error && /offer_expires_at|requested_at|created_at|boost_cents|backup_bonus_cents|tip_cents|stops/i.test(res.error.message || '')) {
-    columns = columns.replace(/, created_at|, requested_at|, offer_expires_at|, boost_cents|, backup_bonus_cents|, tip_cents|, stops/g, '')
+  if (res.error && /offer_expires_at|requested_at|created_at|boost_cents|backup_bonus_cents|tip_cents|stops|flight/i.test(res.error.message || '')) {
+    columns = columns.replace(/, created_at|, requested_at|, offer_expires_at|, boost_cents|, backup_bonus_cents|, tip_cents|, stops|, flight/g, '')
     res = await run(columns)
   }
   if (res.error && /deposit_cents|column|schema cache/i.test(res.error.message || '')) {
