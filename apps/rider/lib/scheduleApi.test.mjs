@@ -444,3 +444,13 @@ test('cancelScheduledTrip marks trip canceled and enforces status restriction', 
     /Row locked by concurrent transaction/
   )
 })
+
+test('scheduled cancel still succeeds when hold-release request fails', async () => {
+  const api = await import('./scheduleApi.ts')
+  const bridge = await import(supabaseUrl)
+  initState()
+  bridge.__setSupabase(mockSupabase(() => ({ error: null })))
+  globalThis[KEY].authedError = new Error('Hold-release request unavailable')
+  await api.cancelScheduledTrip('trip_999')
+  assert.equal(globalThis[KEY].authedCalls[0].path, '/api/stripe-payment-methods?action=release-scheduled-boost')
+})

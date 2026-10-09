@@ -5,6 +5,7 @@
  * accept_scheduled_trip path stays in place.
  */
 import { admin, cors, json, parseBody, userFromAuth } from '../friendRideLib.js'
+import { releaseOpenFareHold } from '../fareAuthorization.js'
 import {
   acceptBackupSlot,
   cancelBackupPrimary,
@@ -49,6 +50,16 @@ export default async function handleBackupQueue(req, res, deps = {}) {
   if (op === 'cancel') {
     const result = await cancelBackupPrimary(sb, { tripId, driverId: user.id, now })
     if (!result.ok) return json(res, result.status || 409, { error: result.error })
+    // Promotion and urgent-pool fallback continue the ride and keep its hold.
+    try {
+      const loaded = await sb.from('trips').select('id, status, metadata').eq('id', tripId).maybeSingle()
+      if (loaded.error) console.error('[backup-queue] cancel reload', loaded.error.message)
+      if (['canceled', 'canceled_midride', 'cancelled_wait'].includes(loaded.data?.status)) {
+        await releaseOpenFareHold({ sb, stripe: deps.stripe, trip: loaded.data, reason: 'backup_cancel' })
+      }
+    } catch (error) {
+      console.error('[backup-queue] cancel hold release', tripId, error?.message || error)
+    }
     return json(res, 200, result)
   }
   if (op === 'release') {

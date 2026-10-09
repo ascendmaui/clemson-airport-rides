@@ -164,10 +164,11 @@ async function loadCardProfile(sb, riderId) {
   return row.data
 }
 
-async function mergeTripMetadata(sb, tripId, patch) {
+async function mergeTripMetadata(sb, tripId, patch, { strict = false } = {}) {
   if (!sb || !tripId) return
   const row = await sb.from('trips').select('id, metadata').eq('id', tripId).maybeSingle()
   if (row.error || !row.data) {
+    if (strict) throw new Error(row.error?.message || 'Trip missing during hold release')
     console.error('[fareAuthorization] trip', row.error?.message || 'missing')
     return
   }
@@ -177,7 +178,10 @@ async function mergeTripMetadata(sb, tripId, patch) {
     else metadata[key] = value
   }
   const updated = await sb.from('trips').update({ metadata }).eq('id', tripId)
-  if (updated.error) console.error('[fareAuthorization] metadata', updated.error.message)
+  if (updated.error) {
+    if (strict) throw new Error(updated.error.message)
+    console.error('[fareAuthorization] metadata', updated.error.message)
+  }
 }
 
 function parkedOutstanding({ quote, code, attempts, amountCents }) {
@@ -378,28 +382,43 @@ export async function authorizeRideRequest({
 }
 
 /**
- * Drop an open fare hold so the rider is not charged.
- * Used when they cancel a boosted scheduled ride. No open hold is a no-op.
+ * Release an open fare hold without interrupting cancellation. A stable Stripe
+ * idempotency key and terminal-intent checks make retries safe, including when
+ * Stripe succeeded but the metadata write failed.
  */
 export async function releaseOpenFareHold({ sb, stripe, trip, reason = 'rider_cancel' } = {}) {
   const auth = trip?.metadata?.fare_authorization
   if (!auth || auth.status !== 'requires_capture' || !auth.paymentIntentId) {
     return { ok: true, skipped: true, reason: 'no_open_hold' }
   }
-  const client = stripe || (stripeOk() ? stripeClient() : null)
-  if (!client?.paymentIntents?.cancel) {
-    return { ok: true, skipped: true, reason: 'stripe_not_configured' }
+  try {
+    const client = stripe || (stripeOk() ? stripeClient() : null)
+    if (!client?.paymentIntents?.cancel) {
+      console.warn('[fareAuthorization] release skipped', trip.id, 'stripe_not_configured')
+      return { ok: true, skipped: true, reason: 'stripe_not_configured' }
+    }
+    const intent = client.paymentIntents.retrieve
+      ? await client.paymentIntents.retrieve(auth.paymentIntentId)
+      : null
+    if (intent?.status === 'succeeded' || intent?.status === 'processing') {
+      const captured = { ...auth, status: 'captured', at: new Date().toISOString() }
+      await mergeTripMetadata(sb, trip.id, { fare_authorization: captured }, { strict: true })
+      trip.metadata = { ...trip.metadata, fare_authorization: captured }
+      return { ok: true, skipped: true, reason: 'hold_captured', paymentIntentId: auth.paymentIntentId }
+    }
+    if (intent?.status !== 'canceled') {
+      await client.paymentIntents.cancel(auth.paymentIntentId, {}, {
+        idempotencyKey: `fare_release:${auth.paymentIntentId}`,
+      })
+    }
+    const fareAuthorization = { ...auth, status: 'canceled', reason, at: new Date().toISOString() }
+    await mergeTripMetadata(sb, trip.id, { fare_authorization: fareAuthorization }, { strict: true })
+    trip.metadata = { ...trip.metadata, fare_authorization: fareAuthorization }
+    return { ok: true, released: true, reason, paymentIntentId: auth.paymentIntentId }
+  } catch (error) {
+    console.error('[fareAuthorization] release failed', trip?.id, reason, error?.message || error)
+    return { ok: false, reason: 'hold_release_failed', paymentIntentId: auth.paymentIntentId }
   }
-  const canceled = await cancelQuiet(client, { id: auth.paymentIntentId, status: 'requires_capture' })
-  if (!canceled) return { ok: false, reason: 'hold_release_failed', paymentIntentId: auth.paymentIntentId }
-  const fareAuthorization = {
-    ...auth,
-    status: 'canceled',
-    reason,
-    at: new Date().toISOString(),
-  }
-  await mergeTripMetadata(sb, trip.id, { fare_authorization: fareAuthorization })
-  return { ok: true, released: true, reason, paymentIntentId: auth.paymentIntentId }
 }
 
 /**

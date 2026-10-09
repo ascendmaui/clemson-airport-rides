@@ -170,14 +170,12 @@ export async function cancelScheduledTrip(tripId) {
     .select('id')
   if (error) throw new Error(error.message || 'Could not cancel scheduled ride')
   // Release even when this tap lost the race, so a retry still drops the hold.
-  let releaseError = null
   try {
     await api('/api/stripe-payment-methods?action=release-scheduled-boost', { tripId })
   } catch (err) {
-    releaseError = err
+    console.error('[scheduled-rides] hold release failed', tripId, err?.message || err)
   }
   if (!data?.length) throw new Error('This ride has changed. Refresh your upcoming rides.')
-  if (releaseError) throw releaseError
 }
 
 /**
