@@ -1,11 +1,17 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
+  acceptBackupSlot,
+  confirmBackupTrip,
+  cancelBackupPrimary,
+  releaseBackupDriver,
+  publicDriverCard,
   runScheduledDispatchTick,
 } from '../server/backupDriverDispatch.js'
 import scheduledDispatchTickHandler from '../server/endpoints/scheduledDispatchTick.js'
+import { releaseScheduledRides } from '../server/releaseScheduledRides.js'
 import { backupBookingMetadata } from '../shared/backupDriverQueue.js'
-import { createMatchingSupabase } from './fixtures/matchingE2E.js'
+import { createMatchingSupabase, seedMatchingScenario } from './fixtures/matchingE2E.js'
 
 function mockRes() {
   return {
@@ -259,3 +265,231 @@ test('scheduledDispatchTickHandler: honors ALLOW_STAGING_DRY_RUN when staging cr
   assert.equal(body.ok, true)
   assert.equal(body.dryRun, true)
 })
+
+test('publicDriverCard: populates driver card with profile and vehicle info, falls back safely', async () => {
+  // 1. null sb or driverId returns defaults
+  const empty1 = await publicDriverCard(null, 'driver_1')
+  assert.equal(empty1.name, 'Driver')
+  assert.equal(empty1.vehicleLabel, 'Vehicle')
+  assert.equal(empty1.id, 'driver_1')
+
+  const empty2 = await publicDriverCard({}, null)
+  assert.equal(empty2.name, 'Driver')
+  assert.equal(empty2.id, null)
+
+  // 2. Loads profile and vehicle
+  const sb = createMatchingSupabase({
+    profiles: [
+      { id: 'd_tiger', full_name: 'Trevor Lawrence', avatar_url: 'https://avatar.com/1', rating_avg: 4.95, rating_count: 125 },
+    ],
+    vehicles: [
+      { driver_id: 'd_tiger', color: 'Orange', make: 'Ford', model: 'F-150' },
+    ],
+  })
+  const card = await publicDriverCard(sb, 'd_tiger')
+  assert.equal(card.id, 'd_tiger')
+  assert.equal(card.name, 'Trevor Lawrence')
+  assert.equal(card.avatarUrl, 'https://avatar.com/1')
+  assert.equal(card.ratingAvg, 4.95)
+  assert.equal(card.ratingCount, 125)
+  assert.equal(card.vehicleLabel, 'Orange Ford F-150')
+})
+
+test('acceptBackupSlot: enforces rider-driver isolation, handles non-backup rides and race collisions', async () => {
+  const now = new Date('2026-10-10T15:00:00.000Z')
+  // 1. Trip not found -> 404
+  const sbEmpty = createMatchingSupabase({ trips: [] })
+  const resNotFound = await acceptBackupSlot(sbEmpty, { tripId: 'trip_none', driverId: 'd_1' })
+  assert.equal(resNotFound.status, 404)
+
+  // 2. Non-backup ride -> returns useScheduledRpc: true
+  const plainTrip = { id: 'trip_plain', status: 'scheduled', metadata: {} }
+  const sbPlain = createMatchingSupabase({ trips: [plainTrip] })
+  const resPlain = await acceptBackupSlot(sbPlain, { tripId: 'trip_plain', driverId: 'd_1' })
+  assert.equal(resPlain.useScheduledRpc, true)
+
+  // 3. Driver is the rider -> 403
+  const ownRide = {
+    id: 'trip_own',
+    status: 'scheduled',
+    rider_id: 'd_rider_driver',
+    metadata: {
+      backup_queue: {
+        ...backupBookingMetadata(1000, now),
+      },
+    },
+  }
+  const sbOwn = createMatchingSupabase({ trips: [ownRide] })
+  const resOwn = await acceptBackupSlot(sbOwn, { tripId: 'trip_own', driverId: 'd_rider_driver' })
+  assert.equal(resOwn.status, 403)
+  assert.match(resOwn.error, /can't accept your own ride/)
+})
+
+test('confirmBackupTrip: handles non-primary driver, idempotent enroute, and navigate immediately', async () => {
+  const now = new Date('2026-10-10T15:00:00.000Z')
+  const trip = {
+    id: 'trip_confirm_edge',
+    status: 'scheduled',
+    pickup_at: '2026-10-10T15:30:00.000Z',
+    pickup_lat: 34.6784,
+    pickup_lng: -82.8397,
+    metadata: {
+      backup_queue: {
+        ...backupBookingMetadata(1000, now),
+        primaryDriverId: 'driver_primary',
+        backupDriverId: 'driver_backup',
+        confirmState: 'window_open',
+        windowOpensAt: '2026-10-10T14:50:00.000Z',
+        windowClosesAt: '2026-10-10T15:05:00.000Z',
+        events: [],
+      },
+    },
+  }
+  const sb = createMatchingSupabase({
+    trips: [trip],
+    trip_events: [],
+    driver_status: [{ driver_id: 'driver_primary', online: true }],
+  })
+
+  // 1. Wrong driver attempts confirm -> 403
+  const resWrong = await confirmBackupTrip(sb, { tripId: 'trip_confirm_edge', driverId: 'driver_stranger' })
+  assert.equal(resWrong.status, 403)
+  assert.match(resWrong.error, /Only the assigned driver/)
+
+  // 2. Primary driver confirms with navigate: true -> transitions to enroute immediately
+  const resNav = await confirmBackupTrip(sb, { tripId: 'trip_confirm_edge', driverId: 'driver_primary', navigate: true, now })
+  assert.equal(resNav.ok, true)
+  assert.equal(resNav.enroute, true)
+
+  // 3. Second call when already enroute returns idempotent
+  const resAgain = await confirmBackupTrip(sb, { tripId: 'trip_confirm_edge', driverId: 'driver_primary', now })
+  assert.equal(resAgain.ok, true)
+  assert.equal(resAgain.idempotent, true)
+})
+
+test('cancelBackupPrimary and releaseBackupDriver: handles seat actions, promotion, pool handoff, and access control', async () => {
+  const now = new Date('2026-10-10T15:00:00.000Z')
+  // 1. cancelBackupPrimary with backup driver present promotes the backup
+  const tripWithBackup = {
+    id: 'trip_promote_case',
+    status: 'scheduled',
+    pickup_at: '2026-10-10T16:00:00.000Z',
+    metadata: {
+      backup_queue: {
+        ...backupBookingMetadata(1000, now),
+        primaryDriverId: 'driver_p1',
+        backupDriverId: 'driver_b1',
+        events: [],
+      },
+    },
+  }
+  const sbPromote = createMatchingSupabase({
+    trips: [tripWithBackup],
+    trip_events: [],
+    driver_reliability_strikes: [],
+  })
+  const promoteRes = await cancelBackupPrimary(sbPromote, { tripId: 'trip_promote_case', driverId: 'driver_p1', now })
+  assert.equal(promoteRes.ok, true)
+  assert.equal(promoteRes.action, 'promote')
+  const promotedTrip = sbPromote._tables.trips[0]
+  assert.equal(promotedTrip.metadata.backup_queue.primaryDriverId, 'driver_b1')
+  assert.equal(promotedTrip.metadata.backup_queue.backupDriverId, null)
+
+  // 2. releaseBackupDriver ensures only the backup driver can release their seat
+  const tripForRelease = {
+    id: 'trip_rel_case',
+    status: 'scheduled',
+    metadata: {
+      backup_queue: {
+        ...backupBookingMetadata(1000, now),
+        primaryDriverId: 'driver_p2',
+        backupDriverId: 'driver_b2',
+        events: [],
+      },
+    },
+  }
+  const sbRelease = createMatchingSupabase({
+    trips: [tripForRelease],
+    trip_events: [],
+  })
+  // Stranger gets 403
+  const strangerRes = await releaseBackupDriver(sbRelease, { tripId: 'trip_rel_case', driverId: 'driver_stranger', now })
+  assert.equal(strangerRes.status, 403)
+
+  // Actual backup driver succeeds
+  const relRes = await releaseBackupDriver(sbRelease, { tripId: 'trip_rel_case', driverId: 'driver_b2', now })
+  assert.equal(relRes.ok, true)
+  assert.equal(relRes.action, 'released')
+  assert.equal(relRes.lookingForBackup, true)
+  assert.equal(sbRelease._tables.trips[0].metadata.backup_queue.backupDriverId, null)
+})
+
+test('releaseScheduledRides: holds near-term and backup-queue rides, releases handed_to_pool rides', async () => {
+  const now = new Date('2026-10-10T15:30:00.000Z')
+  const pickupNear = '2026-10-10T15:45:00.000Z' // 15 mins out -> near-term
+  const pickupFuture = '2026-10-10T16:00:00.000Z' // 30 mins out
+
+  // 1. Near-term ride is held
+  const seededNear = seedMatchingScenario({
+    tripId: 'trip_near_held',
+    trip: {
+      status: 'scheduled',
+      driver_id: null,
+      pickup_at: pickupNear,
+      scheduled_for: pickupNear,
+      deposit_cents: 0,
+      metadata: { kind: 'scheduled', near_term_slot: true },
+    },
+  })
+  const nearRes = await releaseScheduledRides(seededNear.supabase, { now, alertDriver: async () => {} })
+  assert.equal(nearRes.held, 1)
+  assert.equal(nearRes.released, 0)
+
+  // 2. Backup-queue ride in window_open is held
+  const seededBq = seedMatchingScenario({
+    tripId: 'trip_bq_held',
+    trip: {
+      status: 'scheduled',
+      driver_id: null,
+      pickup_at: pickupFuture,
+      scheduled_for: pickupFuture,
+      deposit_cents: 0,
+      metadata: {
+        kind: 'scheduled',
+        backup_queue: {
+          ...backupBookingMetadata(1000, now),
+          primaryDriverId: 'driver_p',
+          backupDriverId: 'driver_b',
+          confirmState: 'window_open',
+        },
+      },
+    },
+  })
+  const bqRes = await releaseScheduledRides(seededBq.supabase, { now, alertDriver: async () => {} })
+  assert.equal(bqRes.held, 1)
+  assert.equal(bqRes.released, 0)
+
+  // 3. Backup-queue ride with confirmState: 'handed_to_pool' IS released to live matcher
+  const seededPool = seedMatchingScenario({
+    tripId: 'trip_bq_pooled',
+    trip: {
+      status: 'scheduled',
+      driver_id: null,
+      pickup_at: pickupFuture,
+      scheduled_for: pickupFuture,
+      deposit_cents: 0,
+      metadata: {
+        kind: 'scheduled',
+        backup_queue: {
+          ...backupBookingMetadata(1000, now),
+          confirmState: 'handed_to_pool',
+        },
+      },
+    },
+  })
+  const poolRes = await releaseScheduledRides(seededPool.supabase, { now, alertDriver: async () => {} })
+  assert.equal(poolRes.released, 1)
+  assert.equal(poolRes.held, 0)
+  assert.equal(seededPool.supabase._tables.trips[0].status, 'searching')
+})
+
