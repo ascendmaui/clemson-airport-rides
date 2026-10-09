@@ -26,6 +26,32 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
   - `package.json`
   - `docs/FIXES.md`
 - **Verified:** `node --test tests/gaAuditWebhookAndHoldHardening.test.js` (7/7 passing), `node --test server/abandonedCheckout.test.js` (41/41 passing), `node --test api/stripeWebhookValidation.test.js` (86/86 passing), and full `npm test` passing.
+## 2026-10-07 — GA99: Reconcile checkout & airport checkout hardening, quote sanitization, and hold sweep parameter parsing
+
+- **Track / machine:** Clemson RIDES · MacBook Max · `agy/ga-audit-reconcile-airport-checkout-ga99`
+- **What was wrong:**
+  1. `server/endpoints/reconcileCheckout.js` only checked `body.sessionId` or `body.session_id`. When users were redirected back from Stripe Checkout returns (`?session_id=...`), or when clients passed session IDs with enclosing quotes or query parameters, reconciliation failed with 400 `sessionId required`.
+  2. `server/checkoutReconcile.js` (`reconcileCheckoutSession`) did not strip enclosing single/double quotes from `sessionId`, causing spurious 400 `invalid_session_id` errors when input strings were passed as `\"cs_...\"`.
+  3. `server/endpoints/airportCheckout.js` did not trim or sanitize `body.airport`, causing lookups for airport codes with whitespace to fail. It also lacked dependency injection for `computeRoutes`, `loadGameDayMultiplier`, `quoteAirportCheckout`, `planSettlement`, `debitLots`, `insertChargePayment`, `tigerPassBpsForRider`, and `studentDiscountGranted`, preventing isolated unit testing.
+  4. `server/endpoints/expireUnpaidAirportHolds.js` only parsed `limit`, `ttl_ms`, and `dry_run` from query parameters and URL query strings. When automated tools or admins triggered sweeps via POST requests with JSON body parameters, the options were ignored.
+  5. `tests/retiredCopy.test.js` did not ignore build directories (`dist`, `.expo`, `.vercel`, `build`), risking scan failures if build artifacts existed in the workspace.
+- **What changed:**
+  - `server/endpoints/reconcileCheckout.js`: Added fallback to `req.query.sessionId` and `req.query.session_id`, and sanitized `sessionId` by stripping enclosing quotes (`^["']|["']$`) and whitespace.
+  - `server/checkoutReconcile.js`: Sanitized `sessionId` in `reconcileCheckoutSession` by stripping enclosing quotes and trimming before validation and Stripe retrieval.
+  - `server/endpoints/airportCheckout.js`: Sanitized `airport` with `.trim().toUpperCase()`, and added dependency injection support across routing, pricing, settlement, credit debiting, and pass calculations.
+  - `server/endpoints/expireUnpaidAirportHolds.js`: Extended `parseHoldSweepLimit`, `parseHoldSweepTtlMs`, and `dryRunRequested` to accept parameters from `req.body` on POST invocations in addition to query parameters.
+  - `tests/retiredCopy.test.js`: Added `dist`, `.expo`, `.vercel`, and `build` directory exclusions to `walk()`.
+  - Added test suite `tests/gaAuditReconcileAirportCheckoutHardening.test.js` (6/6 passing) and registered it in `package.json`.
+- **Files touched:**
+  - `server/endpoints/reconcileCheckout.js`
+  - `server/checkoutReconcile.js`
+  - `server/endpoints/airportCheckout.js`
+  - `server/endpoints/expireUnpaidAirportHolds.js`
+  - `tests/retiredCopy.test.js`
+  - `tests/gaAuditReconcileAirportCheckoutHardening.test.js`
+  - `package.json`
+  - `docs/FIXES.md`
+- **Verified:** `node --test tests/gaAuditReconcileAirportCheckoutHardening.test.js` (6/6 passing) and full test runner `npm test`.
 
 ## 2026-10-02 — GA96: GA audit & tests - abandoned checkout resilience, hold TTL NaN safety, and RPC direct update fallbacks
 
