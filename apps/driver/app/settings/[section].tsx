@@ -320,17 +320,27 @@ function AutoAcceptChoices() {
 }
 
 function NavChoices() {
-  const { colors, navApp, setNavApp } = useTheme()
+  const { colors, navApp, setNavApp, autoNavigate, setAutoNavigate } = useTheme()
   const options: { id: NavApp; label: string }[] = [
     { id: 'apple', label: 'Apple Maps' },
     { id: 'google', label: 'Google Maps' },
+    { id: 'waze', label: 'Waze' },
   ]
   return (
     <>
       <Text style={{ color: colors.inkSecondary, lineHeight: 20 }}>
-        The live trip screen opens this app first. This does not add a maps key or turn-by-turn inside Clemson RIDES.
+        Your nav app opens with directions to pickup when you accept a ride, then to drop-off when you start the trip. If it is not installed, the next app opens instead.
       </Text>
       <ChoiceCards options={options} value={navApp} onChange={setNavApp} />
+      <Card>
+        <View style={styles.row}>
+          <Text style={{ color: colors.ink, fontWeight: '800', flex: 1 }}>Open navigation automatically</Text>
+          <Toggle on={autoNavigate} onPress={() => setAutoNavigate(!autoNavigate)} label="Open navigation automatically" />
+        </View>
+        <Text style={{ color: colors.inkSecondary, lineHeight: 20 }}>
+          Off: use the Navigate button on the live trip screen instead.
+        </Text>
+      </Card>
     </>
   )
 }

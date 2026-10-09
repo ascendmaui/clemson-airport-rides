@@ -41,6 +41,7 @@ export type DriverCard = {
   tags: TripTag[]
   tagLabels: string[]
   comfortStub: boolean
+  acceptedAt?: string | null
   arrivedAt: string | null
   waitFeeCents: number
   cancelFeeCents: number

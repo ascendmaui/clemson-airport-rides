@@ -1,23 +1,21 @@
 import { Linking } from 'react-native'
-import { navigationLinks } from 'rides-native/mapsLink'
+import { navAppOrder, navigationUrl, type NavApp } from 'rides-native/mapsLink'
 
-export async function openNavigation(
-  provider: 'apple' | 'google',
-  stop: { latitude: number | null; longitude: number | null; label: string },
-) {
-  const links = navigationLinks({
-    latitude: stop.latitude,
-    longitude: stop.longitude,
-    label: stop.label,
-  })
-  const primary = provider === 'apple' ? links.apple : links.google
-  try {
-    await Linking.openURL(primary)
-  } catch (err) {
-    if (provider === 'apple') {
-      await Linking.openURL(links.google)
-      return
+type Stop = { latitude: number | null; longitude: number | null; label: string }
+
+/**
+ * Opens directions in the chosen app. If that app cannot open, tries the
+ * remaining apps in a stable order (Waze → Apple → Google, and so on).
+ */
+export async function openNavigation(provider: NavApp, stop: Stop) {
+  let last: unknown = null
+  for (const app of navAppOrder(provider)) {
+    try {
+      await Linking.openURL(navigationUrl(app, stop))
+      return app
+    } catch (err) {
+      last = err
     }
-    throw err instanceof Error ? err : new Error('Could not open maps')
   }
+  throw last instanceof Error ? last : new Error('Could not open maps')
 }

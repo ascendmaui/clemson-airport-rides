@@ -3,9 +3,10 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from '
 import { authStorage } from '@/lib/storage'
 import { paletteFor, type Palette, type Scheme } from '@/lib/palette'
 import { CLEMSON_LAT, CLEMSON_LNG, isDaylight } from '@/lib/solar'
+import { isNavApp as isKnownNavApp, type NavApp as SharedNavApp } from 'rides-native/mapsLink'
 
 export type DisplayMode = 'auto' | 'light' | 'dark'
-export type NavApp = 'apple' | 'google'
+export type NavApp = SharedNavApp
 export type RideAlertTier = 'standard' | 'wait' | 'comfort' | 'carpool'
 export type RideAlertMode = 'chime_vibrate' | 'chime' | 'vibrate' | 'silent'
 
@@ -27,6 +28,7 @@ type Prefs = {
   earningsPrivate: boolean
   sounds: boolean
   navApp: NavApp
+  autoNavigate: boolean
   rideAlerts: RideAlerts
   autoAccept: AutoAcceptPrefs
 }
@@ -42,6 +44,8 @@ type ThemeValue = {
   setSounds: (value: boolean) => void
   navApp: NavApp
   setNavApp: (value: NavApp) => void
+  autoNavigate: boolean
+  setAutoNavigate: (value: boolean) => void
   rideAlerts: RideAlerts
   setRideAlert: (tier: RideAlertTier, mode: RideAlertMode) => void
   autoAccept: AutoAcceptPrefs
@@ -64,6 +68,7 @@ const DEFAULT_PREFS: Prefs = {
   earningsPrivate: false,
   sounds: true,
   navApp: 'apple',
+  autoNavigate: true,
   rideAlerts: DEFAULT_ALERTS,
   autoAccept: DEFAULT_AUTO,
 }
@@ -111,7 +116,7 @@ function isDisplayMode(value: unknown): value is DisplayMode {
 }
 
 function isNavApp(value: unknown): value is NavApp {
-  return value === 'apple' || value === 'google'
+  return isKnownNavApp(value)
 }
 
 function readPrefs(raw: string | null): Prefs {
@@ -123,6 +128,7 @@ function readPrefs(raw: string | null): Prefs {
       earningsPrivate: Boolean(parsed.earningsPrivate),
       sounds: parsed.sounds === false ? false : true,
       navApp: isNavApp(parsed.navApp) ? parsed.navApp : DEFAULT_PREFS.navApp,
+      autoNavigate: parsed.autoNavigate === false ? false : true,
       rideAlerts: readAlerts(parsed.rideAlerts),
       autoAccept: readAuto(parsed.autoAccept),
     }
@@ -196,6 +202,8 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     setSounds: (sounds: boolean) => update({ sounds }),
     navApp: prefs.navApp,
     setNavApp: (navApp: Prefs['navApp']) => update({ navApp }),
+    autoNavigate: prefs.autoNavigate,
+    setAutoNavigate: (autoNavigate: boolean) => update({ autoNavigate }),
     rideAlerts: prefs.rideAlerts,
     setRideAlert: (tier: RideAlertTier, mode: RideAlertMode) => update({
       rideAlerts: { ...prefs.rideAlerts, [tier]: mode },
