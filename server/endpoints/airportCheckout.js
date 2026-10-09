@@ -37,20 +37,22 @@ export default async function handler(req, res, deps = {}) {
 
   const sb = deps.sb || admin()
   if (!sb) return json(res, 503, { error: 'SUPABASE_SERVICE_ROLE_KEY not configured' })
-  const user = deps.user !== undefined ? deps.user : await userFromAuth(req)
+  const userFromAuthFn = deps.userFromAuth || userFromAuth
+  const user = deps.user !== undefined ? deps.user : await userFromAuthFn(req)
   if (!user) return json(res, 401, { error: 'Sign in required' })
   const runEnsureProfile = deps.ensureProfile || ensureProfile
 
   const { body, error: pe } = parseBody(req)
   if (pe) return json(res, 400, { error: pe })
 
-  const airport = String(body.airport || 'GSP').toUpperCase()
+  const rawAirport = body?.airport || 'GSP'
+  const airport = (typeof rawAirport === 'string' ? rawAirport.trim() : String(rawAirport || 'GSP').trim()).toUpperCase()
   const dest = AIRPORTS[airport]
   if (!dest) return json(res, 400, { error: 'Unknown airport' })
 
   let scheduledFor = null
   let at = new Date()
-  if (body.date) {
+  if (body?.date) {
     const hhmm = body.time || '12:00'
     const parsed = new Date(`${body.date}T${hhmm}:00`)
     if (!Number.isNaN(parsed.getTime())) {
@@ -59,20 +61,24 @@ export default async function handler(req, res, deps = {}) {
     }
   }
 
-  const isStudent = studentDiscountGranted(user)
-  const tigerPassBps = await tigerPassBpsForRider(sb, user.id, at)
+  const isStudent = deps.studentDiscountGranted ? deps.studentDiscountGranted(user) : studentDiscountGranted(user)
+  const tigerPassBpsFn = deps.tigerPassBpsForRider || tigerPassBpsForRider
+  const tigerPassBps = await tigerPassBpsFn(sb, user.id, at)
 
   let distanceM = null
   let durationS = null
   let routeSource = 'fallback'
-  const route = await computeRoutes(CAMPUS, dest, [])
-  if (!route.error) {
+  const computeRoutesFn = deps.computeRoutes || computeRoutes
+  const route = await computeRoutesFn(CAMPUS, dest, [])
+  if (!route?.error) {
     distanceM = route.distanceM
     durationS = route.durationS
     routeSource = 'google'
   }
-  const game = await loadGameDayMultiplier(sb, at)
-  const priced = quoteAirportCheckout({
+  const loadGameDayMultiplierFn = deps.loadGameDayMultiplier || loadGameDayMultiplier
+  const game = await loadGameDayMultiplierFn(sb, at)
+  const quoteAirportCheckoutFn = deps.quoteAirportCheckout || quoteAirportCheckout
+  const priced = quoteAirportCheckoutFn({
     airport,
     at,
     isStudent,
@@ -84,8 +90,9 @@ export default async function handler(req, res, deps = {}) {
   const quoted = priced.quote
   const surge = priced.surge
 
-  const useCredits = body.useCredits !== false
-  const settlement = await planSettlement(sb, {
+  const useCredits = body?.useCredits !== false
+  const planSettlementFn = deps.planSettlement || planSettlement
+  const settlement = await planSettlementFn(sb, {
     profileId: user.id,
     fareCents: quoted.fareBeforeCreditsCents,
     useCredits,
@@ -144,13 +151,15 @@ export default async function handler(req, res, deps = {}) {
 
   if (coveredByCredits) {
     try {
-      await debitLots(sb, {
+      const debitLotsFn = deps.debitLots || debitLots
+      await debitLotsFn(sb, {
         profileId: user.id,
         debits: settlement.debits,
         note: `airport:${trip.id}`,
         tripId: trip.id,
       })
-      await insertChargePayment(sb, {
+      const insertChargePaymentFn = deps.insertChargePayment || insertChargePayment
+      await insertChargePaymentFn(sb, {
         riderId: user.id,
         tripId: trip.id,
         kind: 'ride_fare',

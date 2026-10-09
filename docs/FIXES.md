@@ -2,6 +2,99 @@
 
 Persistent knowledge base for recurring failures. When a matching issue appears, apply the saved fix first.
 
+## 2026-10-07 — [agy] GA97: GA audit & tests - expire-unpaid holds timestamp safety, client guards, and Stripe webhook retryable resilience
+
+- **Track / machine:** Clemson RIDES · MacBook Max · `agy/ga-audit-expire-holds-webhook-hardening-ga97`
+- **What was wrong:**
+  1. `releaseExpiredUnpaidAirportHolds` and `claimStripeExpire` in `server/abandonedCheckout.js` calculated `new Date(now - ttlMs).toISOString()` without validating `now` and `ttlMs`. If `now` was `NaN`, `null`, or an invalid Date, `new Date(NaN).toISOString()` threw an uncaught `RangeError: Invalid time value`.
+  2. `releaseExpiredUnpaidAirportHolds` threw `TypeError: Cannot read properties of undefined (reading 'from')` when the Supabase client `sb` was missing or invalid, rather than returning `{ ok: false, reason: 'database_client_required' }`.
+  3. `api/stripe-webhook.js` did not support pre-buffered `req.rawBody` or `req.body` (Buffers or strings) in `readRawBody`, attaching stream event listeners even if streams were already closed/buffered in serverless adapters.
+  4. `api/stripe-webhook.js` rejected Stripe restricted API keys starting with `rk_` (`rk_live_...` or `rk_test_...`), erroneously classifying them as unconfigured and entering stub mode.
+  5. In `api/stripe-webhook.js`, if `recordTip` or `applyPaidCheckoutSession` failed on transient database inserts or updates, the handler returned HTTP 200, acknowledging delivery to Stripe and permanently preventing Stripe from retrying the event.
+  6. The outer catch block in `api/stripe-webhook.js` ignored explicit 5xx statuses on thrown errors, preventing retryable server errors from signaling Stripe.
+- **What changed:**
+  - Exported `readRawBody` in `api/stripe-webhook.js` with instant resolution for pre-buffered `Buffer` or `string` payloads (`req.rawBody`, `req.body`) while maintaining the 1MB payload ceiling.
+  - Allowed both `sk_` and `rk_` key prefixes in `api/stripe-webhook.js`.
+  - Hardened error reporting on `payment_intent.succeeded` (tip) and `checkout.session.completed` (deposit apply) to return HTTP 500 when database recording fails (`applied.ok === false`), allowing Stripe to retry.
+  - Sanitized `now` and `ttlMs` into `safeNow` and `safeTtlMs` across `releaseExpiredUnpaidAirportHolds`, `releaseExpiredUnpaidAirportHold`, and `claimStripeExpire` in `server/abandonedCheckout.js`.
+  - Added defensive database client guard in `releaseExpiredUnpaidAirportHolds` returning `{ ok: false, reason: 'database_client_required' }`.
+  - Added comprehensive test suite in `tests/gaAuditWebhookAndHoldHardening.test.js` (7/7 passing) and registered in `package.json`.
+- **Files touched:**
+  - `api/stripe-webhook.js`
+  - `server/abandonedCheckout.js`
+  - `tests/gaAuditWebhookAndHoldHardening.test.js`
+  - `package.json`
+  - `docs/FIXES.md`
+- **Verified:** `node --test tests/gaAuditWebhookAndHoldHardening.test.js` (7/7 passing), `node --test server/abandonedCheckout.test.js` (41/41 passing), `node --test api/stripeWebhookValidation.test.js` (86/86 passing), and full `npm test` passing.
+## 2026-10-07 — GA99: Reconcile checkout & airport checkout hardening, quote sanitization, and hold sweep parameter parsing
+
+- **Track / machine:** Clemson RIDES · MacBook Max · `agy/ga-audit-reconcile-airport-checkout-ga99`
+- **What was wrong:**
+  1. `server/endpoints/reconcileCheckout.js` only checked `body.sessionId` or `body.session_id`. When users were redirected back from Stripe Checkout returns (`?session_id=...`), or when clients passed session IDs with enclosing quotes or query parameters, reconciliation failed with 400 `sessionId required`.
+  2. `server/checkoutReconcile.js` (`reconcileCheckoutSession`) did not strip enclosing single/double quotes from `sessionId`, causing spurious 400 `invalid_session_id` errors when input strings were passed as `\"cs_...\"`.
+  3. `server/endpoints/airportCheckout.js` did not trim or sanitize `body.airport`, causing lookups for airport codes with whitespace to fail. It also lacked dependency injection for `computeRoutes`, `loadGameDayMultiplier`, `quoteAirportCheckout`, `planSettlement`, `debitLots`, `insertChargePayment`, `tigerPassBpsForRider`, and `studentDiscountGranted`, preventing isolated unit testing.
+  4. `server/endpoints/expireUnpaidAirportHolds.js` only parsed `limit`, `ttl_ms`, and `dry_run` from query parameters and URL query strings. When automated tools or admins triggered sweeps via POST requests with JSON body parameters, the options were ignored.
+  5. `tests/retiredCopy.test.js` did not ignore build directories (`dist`, `.expo`, `.vercel`, `build`), risking scan failures if build artifacts existed in the workspace.
+- **What changed:**
+  - `server/endpoints/reconcileCheckout.js`: Added fallback to `req.query.sessionId` and `req.query.session_id`, and sanitized `sessionId` by stripping enclosing quotes (`^["']|["']$`) and whitespace.
+  - `server/checkoutReconcile.js`: Sanitized `sessionId` in `reconcileCheckoutSession` by stripping enclosing quotes and trimming before validation and Stripe retrieval.
+  - `server/endpoints/airportCheckout.js`: Sanitized `airport` with `.trim().toUpperCase()`, and added dependency injection support across routing, pricing, settlement, credit debiting, and pass calculations.
+  - `server/endpoints/expireUnpaidAirportHolds.js`: Extended `parseHoldSweepLimit`, `parseHoldSweepTtlMs`, and `dryRunRequested` to accept parameters from `req.body` on POST invocations in addition to query parameters.
+  - `tests/retiredCopy.test.js`: Added `dist`, `.expo`, `.vercel`, and `build` directory exclusions to `walk()`.
+  - Added test suite `tests/gaAuditReconcileAirportCheckoutHardening.test.js` (6/6 passing) and registered it in `package.json`.
+- **Files touched:**
+  - `server/endpoints/reconcileCheckout.js`
+  - `server/checkoutReconcile.js`
+  - `server/endpoints/airportCheckout.js`
+  - `server/endpoints/expireUnpaidAirportHolds.js`
+  - `tests/retiredCopy.test.js`
+  - `tests/gaAuditReconcileAirportCheckoutHardening.test.js`
+  - `package.json`
+  - `docs/FIXES.md`
+- **Verified:** `node --test tests/gaAuditReconcileAirportCheckoutHardening.test.js` (6/6 passing) and full test runner `npm test`.
+
+## 2026-10-05 — Web ride-offer file chime skipped when rewind threw
+
+- **What was wrong:** The web offer chime file fallback (`playChimeFile` in `src/lib/rideAlert.js`) set `currentTime = 0` before calling `play()`. On a new element that has not loaded metadata, that seek throws `InvalidStateError`, the catch returned false, and the first `/sounds/ride-chime.wav` playback never started. Native custom notification sound stayed out of scope; that work is draft #254.
+- **What changed:** Rewind only when `readyState > 0` and `currentTime > 0`, and swallow a seek error so `play()` still runs. Added a unit test with a fake `Audio` whose `currentTime` setter throws. Documented the web path and pointed native asset work at draft #254 in `docs/WEB_OFFER_CHIME.md`.
+- **Files touched:**
+  - `src/lib/rideAlert.js`
+  - `src/lib/rideAlert.test.js`
+  - `docs/WEB_OFFER_CHIME.md`
+  - `docs/FIXES.md`
+- **Verified:** `node --test src/lib/rideAlert.test.js` and `npm test`.
+
+## 2026-10-05 — Web ride-offer chime no-ops when Audio is missing
+
+- **What was wrong:** The driver web offer chime (`playRideChime` in `src/lib/rideAlert.js`, used by `DriverHome`) already returns false from the file fallback when `Audio` is undefined, but `src/lib/rideAlert.test.js` only checked that the result was a boolean. A missing `Audio` constructor was not pinned, so a throw from `new Audio` could pass the suite.
+- **What changed:** Extended the ride-alert unit test to remove `Audio`, disable the Web Audio synth path, and assert `playRideChime` returns false (including a second call) and `playRideRequestAlert` does not reject.
+- **Files touched:**
+  - `src/lib/rideAlert.test.js`
+  - `docs/FIXES.md`
+- **Verified:** `node --test src/lib/rideAlert.test.js` and `npm test`.
+
+## 2026-10-05 — t2 web bottom tab order
+
+- **What was wrong:** The web bar already rendered Rides, Schedule, Friends, Account from `WEB_BOTTOM_TABS`, and the support brief used the same words, but nothing checked that the brief stayed tied to the bar. A later edit could put Schedule first in the brief again. Open draft #264 still reorders this bar and also edits native rider tabs plus back-button chrome.
+- **What changed:** Asserted the product brief's bottom-tab sentence matches `webBottomTabLabels()` (Rides, Schedule, Friends, Account). Left `BottomTabs` on that shared list. Did not edit native tab files or #264's back buttons. This branch supersedes #264 for the web order only; #264 stays open.
+- **Files touched:**
+  - `server/productKnowledge.test.js`
+  - `docs/FIXES.md`
+- **Verified:** `node --test server/productKnowledge.test.js src/lib/webTabOrder.test.js` and `npm test`.
+
+## 2026-10-05 — Web bottom tab order
+
+- **What was wrong:** The web rider bar in `src/components/BottomTabs.jsx` listed Schedule, Friends, Account, then Rides. The order was an inline array, so nothing could assert it. The rider app already uses Rides, Schedule, Friends, Account. The support brief repeated the old web order.
+- **What changed:** Added a pure `WEB_BOTTOM_TABS` export (Rides → Schedule → Friends → Account) and a unit test for that order. `BottomTabs` builds its buttons from the export. Updated the product brief to the same order. Native tab files were left alone.
+- **Files touched:**
+  - `src/lib/webTabOrder.js`
+  - `src/lib/webTabOrder.test.js`
+  - `src/components/BottomTabs.jsx`
+  - `server/productKnowledge.js`
+  - `package.json`
+  - `docs/FIXES.md`
+- **Verified:** `node --test src/lib/webTabOrder.test.js` and `npm test`.
+
 ## 2026-10-02 — GA96: GA audit & tests - abandoned checkout resilience, hold TTL NaN safety, and RPC direct update fallbacks
 
 - **Track / machine:** Clemson RIDES · MacBook Max · `agy/ga-audit-abandoned-checkout-resilience-ga96`
@@ -1912,4 +2005,100 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
   - Wired `tests/gaAuditExpireHoldsSanitization.test.js` into root `package.json` test script.
 - **Files touched:** `server/endpoints/expireUnpaidAirportHolds.js`, `tests/gaAuditExpireHoldsSanitization.test.js`, `package.json`, `docs/FIXES.md`
 - **Verified:** `npm test` passing with 0 failures.
+
+## 2026-10-07 — [agy] GA97: Stripe webhook retryable 500 classification and dependency injection across tips, credits, and deposits
+
+- **Date:** 2026-10-07
+- **Track / machine:** Clemson RIDES · MacBook Max (agy) · GA97
+- **What was wrong:** `api/stripe-webhook.js` always acknowledged `200 { received: true }` when deposit recording (`applyPaidCheckoutSession`), credit purchases (`grantCreditPack`), tip recording (`recordTip`), or Tiger Pass subscriptions failed due to transient database connection drops or deadlocks. Acknowledging 200 causes Stripe to mark the webhook delivered and drop automatic retry backoffs, leaving riders charged without database payment records or trip status updates. In addition, `recordTip` and `recordCreditPurchase` did not support dependency injection (`deps.recordTip`, `deps.recordCreditPurchase`), and `tests/retiredCopy.test.js` did not skip gitignored build output directories (`dist`, `.expo`, `.vercel`, `build`).
+- **What changed:**
+  - Classified database write failures across `payment_intent.succeeded` tips, `credit_purchase`, `checkout.session.completed`, `async_payment_succeeded`, and Tiger Pass subscription lifecycle events as retryable HTTP 500 errors so Stripe automatically retries event delivery.
+  - Added dependency injection support for `deps.recordTip` and `deps.recordCreditPurchase`.
+  - Added error checks on `payments` query in `recordTip`.
+  - Preserved metadata missing checks returning `200` without creating service clients.
+  - Updated `tests/retiredCopy.test.js` directory walker to exclude `dist`, `.expo`, `.vercel`, and `build` artifacts.
+  - Created dedicated unit test suite in `tests/gaAuditWebhookRetryable.test.js` (7/7 passing) and registered it in `package.json` test runner.
+- **Files touched:**
+  - `api/stripe-webhook.js`
+  - `tests/gaAuditWebhookRetryable.test.js`
+  - `tests/retiredCopy.test.js`
+  - `package.json`
+  - `docs/FIXES.md`
+- **Verified:** `node --test tests/gaAuditWebhookRetryable.test.js api/stripeWebhookValidation.test.js tests/retiredCopy.test.js` (94/94 passing); `npm test` passing with 0 failures.
+## 2026-10-07 — [agy] GA98: Expire unpaid airport holds cutoff calculation resilience, Date object anchor handling, and cron auth override injection
+
+- **Date:** 2026-10-07
+- **Track / machine:** Clemson RIDES · MacBook Max (agy) · GA98
+- **What was wrong:** In `server/abandonedCheckout.js`, `releaseExpiredUnpaidAirportHolds` calculated `const cutoff = new Date(now - ttlMs).toISOString()`. If `now` or `ttlMs` was non-finite or `NaN`, `new Date(NaN).toISOString()` threw an unhandled `RangeError: Invalid time value`, crashing the sweep routine. Additionally, `parsedMs` only accepted strings, failing when timestamps were parsed into `Date` objects, and `metaObject` did not guard against array corruption (`[]`). Furthermore, `server/endpoints/expireUnpaidAirportHolds.js` lacked `overrides.cronSecret` injection support for isolated test execution without mutating `process.env`.
+- **What changed:**
+  - Hardened `cutoff` computation in `releaseExpiredUnpaidAirportHolds` by sanitizing `now` to `safeNow` and `ttlMs` to `safeTtlMs`, preventing invalid `Date` values and `RangeError` exceptions.
+  - Extended `parsedMs` in `server/abandonedCheckout.js` to safely convert `Date` instances to numeric milliseconds.
+  - Added array guard `!Array.isArray(trip.metadata)` in `metaObject(trip)` to prevent metadata type confusion.
+  - Added `overrides.cronSecret` support to `holdTtlCronAuthorized` in `server/endpoints/expireUnpaidAirportHolds.js`.
+  - Updated `tests/retiredCopy.test.js` directory walker to skip build output directories (`dist`, `.expo`, `.vercel`, `build`).
+  - Added dedicated unit test suite in `tests/gaAuditHoldTtlHardening.test.js` (7/7 passing) and registered it in `package.json` test runner.
+- **Files touched:**
+  - `server/abandonedCheckout.js`
+  - `server/endpoints/expireUnpaidAirportHolds.js`
+  - `tests/gaAuditHoldTtlHardening.test.js`
+  - `tests/retiredCopy.test.js`
+  - `package.json`
+  - `docs/FIXES.md`
+- **Verified:** `node --test tests/gaAuditHoldTtlHardening.test.js server/abandonedCheckout.test.js tests/retiredCopy.test.js` (59/59 passing); `npm test` passing with 0 failures.
+
+## 2026-10-05 — Android Play readiness checklist (pkg-android-play-readiness-docs t1)
+
+- **What was wrong:** There was no single doc for the current Android package ids, the marketing QR path (`QrMark` / `shared/productLinks.js`), or which EAS commands stop before `eas submit`. Play Console fields John still has to fill were not listed, and nothing carried an explicit do-not-submit banner. Shipped Android fixes #303, #305, and #306 were easy to mistake for a store release.
+- **What changed:** Added `docs/android-play-readiness.md`. It lists rider `com.ascendmaui.clemsonrides.rider`, driver `com.ascendmaui.clemsonrides.driver`, and the frozen `com.ascendmaui.clemsonairportrides` package. It records that store URL constants are null, so QR codes open `https://clemsonrides.com/#/home` and `#/driver`. It lists `eas build` profiles that do not submit, and forbids `eas submit` and `--auto-submit`. It checklists Play Console fields still owed by John and points at merged PRs #303, #305, and #306. No store upload, no `eas submit`, no app config edits.
+- **Files touched:** `docs/android-play-readiness.md`, `docs/FIXES.md`
+- **Verified:** `test -f docs/android-play-readiness.md && grep -q "QR" docs/android-play-readiness.md && grep -qi "do not submit" docs/android-play-readiness.md`
+
+## 2026-10-05 — Play readiness doc tripped the retired-copy scan (pkg-android-play-readiness-docs t1)
+
+- **What was wrong:** The first draft of `docs/android-play-readiness.md` named retired fleet words while telling store copy to leave them out. `tests/retiredCopy.test.js` allows those words only in `shared/demoFleet.js`, `docs/demo-drivers.md`, `public/demo-drivers/manifest.json`, and one migration filename. `npm test` failed on that file alone (2329 pass, 1 fail).
+- **What changed:** The listing note now says bookable types are Standard, Wait & Save, and Extra Comfort, and that the demo-map exception in `shared/demoFleet.js` stays out of the store listing. The banned words are gone from the doc.
+- **Files touched:** `docs/android-play-readiness.md`, `docs/FIXES.md`
+- **Verified:** `node --experimental-strip-types --experimental-test-isolation=process --test tests/retiredCopy.test.js` and the acceptance grep.
+
+## 2026-10-05 — Link Android Play readiness doc (pkg-android-play-readiness-docs t2)
+
+- **What was wrong:** `docs/android-play-readiness.md` was not linked from the README, so the package-id, marketing QR, and do-not-submit checklist was easy to miss.
+- **What changed:** Added one sentence under the Mobile section of `README.md` pointing at [docs/android-play-readiness.md](android-play-readiness.md). No app config, store listing, or EAS changes.
+- **Files touched:** `README.md`, `docs/FIXES.md`
+- **Verified:** `npm test` — 2330 pass, 0 fail.
+
+## 2026-10-05 — Student discount e2e: campus email lock and blank tier
+
+- **Date:** 2026-10-05
+- **What was wrong:** Server tests checked student flags and source scans, but did not prove discount cents. An unverified or non-Clemson email could drift from the fare helpers, and a blank tier could discount in `applyStudentDiscount` or `quoteFare` without the other helper agreeing.
+- **What changed:** Extended `server/studentDiscount.test.js` so `studentFlagsFor` and `studentDiscountGranted` feed both helpers. Unverified and non-Clemson accounts stay at full price. A confirmed `@clemson.edu` account (and the existing `@g.clemson.edu` workspace domain) gets the current 10% Standard discount (1000 bps) with the same cents from both helpers. A blank `''` tier gets no discount on either helper. Discount bps and the campus email lock were not changed.
+- **Files touched:** `server/studentDiscount.test.js`, `docs/FIXES.md`
+- **Verified:** `node --experimental-strip-types --test server/studentEligibility.test.js server/studentDiscount.test.js` (15/15). `npm test` (2325 pass, 0 fail).
+
+## 2026-10-05 — studentFlagsFor treats a missing participant list as no riders
+
+- **Date:** 2026-10-05
+- **Track / machine:** Clemson RIDES · deputy/student-discount-e2e-verify · pkg-student-discount-e2e-verify t2
+- **What was wrong:** `studentFlagsFor` iterated `participants` directly. `null` or `undefined` threw `TypeError` before any flag was returned. The e2e fare tests showed no cents mismatch: `applyStudentDiscount` and `quoteFare` already agree, including blank tier (no discount) and confirmed campus email (1000 bps on Standard only).
+- **What changed:** A missing participant list now returns `[]`, the same result as an empty list. No rider is flagged, so no student discount is applied. Campus email confirmation, domain lock, and `STUDENT_DISCOUNT_BPS` (1000) were not changed.
+- **Files touched:**
+  - `server/studentEligibility.js`
+  - `server/studentEligibility.test.js`
+  - `docs/FIXES.md`
+- **Verified:** `node --experimental-strip-types --test server/studentEligibility.test.js server/studentDiscount.test.js` (15/15). `TZ=UTC npm test` (2325 pass, 0 fail).
+
+## 2026-10-05 — Student discount e2e paths already run under npm test (pkg-student-discount-e2e-verify t3)
+
+- **Date:** 2026-10-05
+- **Track / machine:** Clemson RIDES · deputy/student-discount-e2e-verify · pkg-student-discount-e2e-verify t3
+- **What was wrong:** t1 extended `server/studentDiscount.test.js` so `studentFlagsFor` and `studentDiscountGranted` feed `applyStudentDiscount` and `quoteFare`. t2 covered a missing participant list in `server/studentEligibility.test.js`. A missing path in the root `"test"` script would let `npm test` skip the campus-email lock and the 1000 bps Standard discount checks.
+- **What changed:** Confirmed these files are already arguments of the root `package.json` `"test"` script, so no new path was added:
+  - `server/studentEligibility.test.js`
+  - `server/studentDiscount.test.js`
+  - `src/lib/studentDomain.test.js`
+  - `src/lib/fareRates.test.js` (`quoteFare`)
+  - `src/lib/pricing.test.js`
+  Campus email confirmation, domain lock, and `STUDENT_DISCOUNT_BPS` (1000) stay as they are.
+- **Files touched:** `docs/FIXES.md`
+- **Verified:** `TZ=UTC npm test` — 2325 pass, 0 fail, 63 suites.
 
