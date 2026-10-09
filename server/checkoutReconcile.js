@@ -249,7 +249,7 @@ export async function reconcileCheckoutSession(
 ) {
   const deps = { ...inlineDeps, ...extraDeps }
 
-  const trimmedId = typeof sessionId === 'string' ? sessionId.trim() : ''
+  const trimmedId = typeof sessionId === 'string' ? sessionId.trim().replace(/^["']|["']$/g, '').trim() : ''
   if (!trimmedId || !trimmedId.startsWith('cs_') || trimmedId.length <= 3) {
     return { ok: false, error: 'invalid_session_id', status: 400, reason: 'bad_id' }
   }
