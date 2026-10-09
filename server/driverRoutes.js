@@ -233,8 +233,10 @@ export async function handleDriverSubmitReview(req, res, deps = {}) {
     .eq('id', user.id)
     .maybeSingle()
 
-  const attachPacket = deps.attachUnsignedPacket || attachUnsignedPacket
-  const attached = await attachPacket(sb, user.id)
+  const attachCustom = deps.attachUnsignedPacket
+  const attached = attachCustom
+    ? await attachCustom(sb, user.id)
+    : await attachUnsignedPacket(sb, user.id)
   if (attached.error) return json(res, 500, { error: attached.error })
 
   const now = new Date().toISOString()
@@ -242,11 +244,16 @@ export async function handleDriverSubmitReview(req, res, deps = {}) {
     { applicant_email: app.applicant_email },
     { email: profile?.email || user.email },
   )
-  const notifyAdmin = deps.notifyAdminOfApplication || notifyAdminOfApplication
-  const notice = await notifyAdmin({
-    profile: profile || { email: user.email, full_name: user.user_metadata?.full_name },
-    vehicle,
-  })
+  const notifyCustom = deps.notifyAdminOfApplication
+  const notice = notifyCustom
+    ? await notifyCustom({
+        profile: profile || { email: user.email, full_name: user.user_metadata?.full_name },
+        vehicle,
+      })
+    : await notifyAdminOfApplication({
+        profile: profile || { email: user.email, full_name: user.user_metadata?.full_name },
+        vehicle,
+      })
 
   const saved = await writeDriverApplication(
     (payload) => sb
