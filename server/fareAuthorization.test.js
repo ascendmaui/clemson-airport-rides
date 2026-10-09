@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
 import { capturePlan, fareAuthorizationCents, shouldRetryAuthorization } from '../shared/fareAuthorization.js'
-import { authorizeRideRequest, placeFareAuthorization, settleFareHold } from './fareAuthorization.js'
+import { authorizeRideRequest, isIncrementalAuthIneligible, placeFareAuthorization, settleFareHold } from './fareAuthorization.js'
 
 function memoryDb(seed = {}) {
   const tables = {
@@ -140,6 +140,122 @@ test('capture plan partial-captures inside the hold, increments above it, and wa
   assert.equal(shouldRetryAuthorization('charge_failed'), true)
   assert.equal(shouldRetryAuthorization('expired_card'), false)
   assert.equal(shouldRetryAuthorization('authentication_required'), false)
+})
+
+test('incremental eligibility detection requires both the code and message', () => {
+  const raw = {
+    type: 'invalid_request_error',
+    code: 'payment_intent_invalid_parameter',
+    message: 'This account is NOT ELIGIBLE FOR THE REQUESTED CARD FEATURES.',
+  }
+  assert.equal(isIncrementalAuthIneligible(raw), true)
+  assert.equal(isIncrementalAuthIneligible({ raw, message: 'Wrapper message' }), true)
+  assert.equal(isIncrementalAuthIneligible({ ...raw, code: 'parameter_unknown' }), false)
+  assert.equal(isIncrementalAuthIneligible({ ...raw, message: 'Invalid amount' }), false)
+  assert.equal(isIncrementalAuthIneligible(null), false)
+})
+
+test('an ineligible account retries a basic hold with identical fare params and persists the flag', async () => {
+  const db = memoryDb({
+    profiles: [{ id: 'rider_1', stripe_customer_id: 'cus_1', stripe_default_pm_id: 'pm_default' }],
+    trips: [{ id: 'trip_basic', rider_id: 'rider_1', fare_cents: 5000, boost_cents: 1000, metadata: {} }],
+  })
+  const err = new Error('Wrapper message')
+  err.raw = {
+    type: 'invalid_request_error',
+    code: 'payment_intent_invalid_parameter',
+    param: null,
+    message: 'This account is not eligible for the requested card features. See https://stripe.com/docs/payments/flexible-payments for more details.',
+  }
+  const stripe = scriptedStripe({ creates: [{ error: err }, { id: 'pi_basic', status: 'requires_capture' }] })
+  const placed = await authorizeRideRequest({ sb: db, stripe, trip: db.tables.trips[0] })
+  assert.equal(placed.ok, true)
+  assert.equal(placed.authorization.paymentIntentId, 'pi_basic')
+  assert.equal(placed.authorization.incrementalAuthorization, false)
+  assert.equal(db.tables.trips[0].metadata.fare_authorization.incrementalAuthorization, false)
+  assert.equal(placed.attempts.length, 1)
+  const creates = stripe.calls.filter((call) => call.op === 'create')
+  assert.equal(creates.length, 2)
+  assert.equal(creates[0].params.payment_method_options.card.request_incremental_authorization, 'if_available')
+  assert.equal(creates[1].params.payment_method_options, undefined)
+  assert.deepEqual(creates[1].options, { idempotencyKey: `${creates[0].options.idempotencyKey}:basic` })
+  const expected = { ...creates[0].params }
+  delete expected.payment_method_options
+  assert.deepEqual(creates[1].params, expected)
+  assert.equal(expected.amount, 7000)
+  assert.deepEqual(expected.metadata, {
+    kind: 'fare_authorization', tripId: 'trip_basic', riderId: 'rider_1',
+    estimatedFareCents: '5000', bufferCents: '1000', boostCents: '1000',
+  })
+})
+
+test('other invalid request errors keep one create per attempt and the existing failure code', async (t) => {
+  t.mock.method(console, 'error', () => {})
+  for (const raw of [
+    { code: 'payment_intent_invalid_parameter', message: 'Invalid amount' },
+    { code: 'parameter_unknown', message: 'This account is not eligible for the requested card features.' },
+  ]) {
+    const stripe = scriptedStripe({ creates: [{ error: { raw: { type: 'invalid_request_error', ...raw } } }] })
+    const placed = await placeFareAuthorization({
+      stripe, tripId: 'trip_invalid', customerId: 'cus_1', paymentMethodId: 'pm_default',
+      backupPaymentMethodIds: [], estimatedFareCents: 5000,
+    })
+    assert.equal(placed.ok, false)
+    assert.equal(placed.failure.code, 'charge_failed')
+    assert.deepEqual(placed.attempts.map((attempt) => attempt.suffix), ['initial', 'retry'])
+    const creates = stripe.calls.filter((call) => call.op === 'create')
+    assert.equal(creates.length, placed.attempts.length)
+    assert.deepEqual(creates.map((call) => call.options.idempotencyKey), ['fare_auth:trip_invalid', 'fare_auth:trip_invalid:retry'])
+    for (const call of creates) {
+      assert.equal(call.params.payment_method_options.card.request_incremental_authorization, 'if_available')
+    }
+  }
+})
+
+test('an eligible account keeps the original incremental hold request', async () => {
+  const stripe = scriptedStripe({ creates: [{ id: 'pi_eligible', status: 'requires_capture' }] })
+  const placed = await placeFareAuthorization({
+    stripe, tripId: 'trip_eligible', riderId: 'rider_1', customerId: 'cus_1', paymentMethodId: 'pm_default',
+    backupPaymentMethodIds: [], estimatedFareCents: 5000,
+  })
+  assert.equal(placed.ok, true)
+  assert.equal(placed.authorization.incrementalAuthorization, undefined)
+  const creates = stripe.calls.filter((call) => call.op === 'create')
+  assert.equal(creates.length, 1)
+  assert.deepEqual(creates[0], {
+    op: 'create',
+    params: {
+      amount: 6000, currency: 'usd', customer: 'cus_1', payment_method: 'pm_default',
+      capture_method: 'manual', confirm: true, off_session: true,
+      payment_method_options: { card: { request_incremental_authorization: 'if_available' } },
+      description: 'Clemson RIDES fare hold',
+      metadata: {
+        kind: 'fare_authorization', tripId: 'trip_eligible', riderId: 'rider_1',
+        estimatedFareCents: '5000', bufferCents: '1000', boostCents: '0',
+      },
+    },
+    options: { idempotencyKey: 'fare_auth:trip_eligible' },
+  })
+})
+
+test('a failed basic hold does not repeat the fallback within an authorization attempt', async (t) => {
+  t.mock.method(console, 'error', () => {})
+  const err = {
+    code: 'payment_intent_invalid_parameter',
+    message: 'This account is not eligible for the requested card features.',
+  }
+  const stripe = scriptedStripe({ creates: [{ error: err }] })
+  const placed = await placeFareAuthorization({
+    stripe, tripId: 'trip_basic_fail', customerId: 'cus_1', paymentMethodId: 'pm_default',
+    backupPaymentMethodIds: [], estimatedFareCents: 5000,
+  })
+  assert.equal(placed.ok, false)
+  assert.equal(placed.failure.code, 'charge_failed')
+  assert.equal(placed.attempts.length, 2)
+  assert.deepEqual(stripe.calls.filter((call) => call.op === 'create').map((call) => call.options.idempotencyKey), [
+    'fare_auth:trip_basic_fail', 'fare_auth:trip_basic_fail:basic',
+    'fare_auth:trip_basic_fail:retry', 'fare_auth:trip_basic_fail:retry:basic',
+  ])
 })
 
 test('a decline is retried once on the same card', async () => {
