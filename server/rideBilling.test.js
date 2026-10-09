@@ -117,6 +117,10 @@ function createSb({ balance = 0, balanceMode = 'row' } = {}) {
         return done
       },
       then(resolve) {
+        if (table === 'profiles') {
+          resolve({ data: [{ id: 'driver-1', email: 'driver@example.com' }], error: null })
+          return
+        }
         if (table === 'driver_applications') {
           resolve({ data: [{ profile_id: 'driver-1', onboarding_status: 'approved' }], error: null })
           return

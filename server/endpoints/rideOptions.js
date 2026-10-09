@@ -3,7 +3,8 @@
  * Optional scheduled_for (ISO) or date+time (Eastern, same as schedule-trip).
  * Returns only tiers a driver can serve. Clients poll about every 10 seconds.
  */
-import { admin, cors, json, parseBody } from '../friendRideLib.js'
+import { isE2ETestUser } from '../../shared/e2eTestAccounts.js'
+import { admin, cors, json, parseBody, userFromAuth } from '../friendRideLib.js'
 import { parseRideAt } from '../authoritativeFare.js'
 import { loadRideAvailability } from '../rideAvailability.js'
 
@@ -22,6 +23,7 @@ export default async function handler(req, res, deps = {}) {
   if (cors(req, res)) return
   if (req.method !== 'GET' && req.method !== 'POST') return json(res, 405, { error: 'Method not allowed' })
   const sb = deps.sb || admin()
+  const user = deps.user !== undefined ? deps.user : await userFromAuth(req)
   const now = deps.now instanceof Date ? deps.now : new Date()
   let body = {}
   if (req.method === 'POST') {
@@ -37,7 +39,7 @@ export default async function handler(req, res, deps = {}) {
     }
   }
   const when = scheduledForFrom(body, now)
-  const snapshot = await loadRideAvailability(sb, { scheduledFor: when, now })
+  const snapshot = await loadRideAvailability(sb, { scheduledFor: when, now, riderIsE2E: isE2ETestUser(user) })
   if (snapshot.error && !snapshot.availableTierIds.length) {
     return json(res, 200, snapshot)
   }
