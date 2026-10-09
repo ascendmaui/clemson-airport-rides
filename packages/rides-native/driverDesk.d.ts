@@ -65,7 +65,9 @@ export function publishDriverLocation(
     lat: number
     lng: number
     heading?: number | null
+    /** Omit for location-only writes; only the presence heartbeat sends true. */
     online?: boolean
+    onlineSource?: 'heartbeat' | null
     speed?: number | null
     tripId?: string | null
     tripStatus?: string | null

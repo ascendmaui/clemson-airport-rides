@@ -14,9 +14,8 @@ import { notifyAcceptedRide, setRideAlertSurface } from '@/lib/push'
 import { shownCents } from '@/lib/shown'
 import { supabase } from '@/lib/supabase'
 import { useTheme } from '@/lib/theme'
-import { useDriverLocation } from '@/lib/useDriverLocation'
-import { publishDriverLocation } from '@/lib/backgroundLocation'
-import { fetchDriverApplication, setDriverOnline } from 'rides-native/drivers'
+import { driverPresence, goOffline, goOnline, usePresence } from '@/lib/presence'
+import { fetchDriverApplication } from 'rides-native/drivers'
 import { displayFirstName } from 'rides-native/authErrors'
 import { heatColor } from 'rides-native/heat.js'
 import { HEAT_WINDOWS } from 'rides-native/places.js'
@@ -250,16 +249,18 @@ export default function DriverHome() {
     }
   }, [heatWindow])
 
-  const locationTracking = useDriverLocation(Boolean(user && ((approved && online) || desk?.active)), async (fix) => {
-    setSelf({ latitude: fix.lat, longitude: fix.lng })
-    if (!supabase || !user) return
-    await publishDriverLocation(supabase, user.id, {
-      ...fix,
-      online: true,
-      tripId: desk?.active?.id ?? null,
-      tripStatus: desk?.active?.status ?? null,
-    })
-  })
+  // One app-wide heartbeat (lib/presence). This screen only configures it, so a second
+  // mounted Home (e.g. after a deep-link sign-in) cannot keep writing online after END.
+  const locationTracking = usePresence()
+  useEffect(() => { driverPresence.setDriver(user?.id ?? null) }, [user?.id])
+  useEffect(() => {
+    if (!desk || !status) return
+    driverPresence.adoptServerOnline(Boolean(approved && desk.online))
+  }, [desk, status, approved])
+  useEffect(() => {
+    driverPresence.setTrip(desk?.active ? { id: desk.active.id, status: desk.active.status } : null)
+  }, [desk?.active?.id, desk?.active?.status])
+  useEffect(() => driverPresence.onFix((fix) => setSelf({ latitude: fix.lat, longitude: fix.lng })), [])
 
   async function toggle() {
     if (!user) {
@@ -275,7 +276,8 @@ export default function DriverHome() {
     try {
       const nextOnline = !online
       const fix = nextOnline ? await currentFix() : null
-      await setDriverOnline(supabase, user.id, nextOnline, fix)
+      if (nextOnline) await goOnline(user.id, fix)
+      else await goOffline(user.id)
       if (fix) setSelf({ latitude: fix.lat, longitude: fix.lng })
       if (nextOnline) {
         await publishDriverCapacity(supabase, user.id, desk?.vehicle?.seats)

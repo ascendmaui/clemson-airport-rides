@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { AccessibilityInfo, StyleSheet, Text, View } from 'react-native'
 import { backInQueueCopy } from 'rides-native/tripEndSummary'
 import { setDriverOnline } from 'rides-native/drivers'
+import { goOffline as endShift } from '@/lib/presence'
 import { ErrorText, Primary } from '@/components/chrome'
 import { useTheme } from '@/lib/theme'
 
@@ -48,7 +49,7 @@ export function BackInQueue({
     setBusy(true)
     setError(null)
     try {
-      await setDriverOnline(supabase, driverId, false)
+      await endShift(driverId)
       setOnline(false)
       AccessibilityInfo.announceForAccessibility('You are now offline')
     } catch (err) {
