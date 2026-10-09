@@ -51,6 +51,7 @@ as $$
       and t.status in (
         'accepted'::public.trip_status,
         'arriving'::public.trip_status,
+        'arrived'::public.trip_status,
         'in_progress'::public.trip_status
       )
       and (t.rider_id = auth.uid() or t.driver_id = auth.uid())

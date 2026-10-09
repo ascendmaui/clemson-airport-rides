@@ -3,7 +3,7 @@ export const CUPD_PHONE_E164 = '+18646562222'
 export const CUPD_PHONE_DISPLAY = '(864) 656-2222'
 export const CUPD_EMAIL = 'police@clemson.edu'
 
-export const ACTIVE_RIDE_STATUSES = ['accepted', 'arriving', 'in_progress']
+export const ACTIVE_RIDE_STATUSES = ['accepted', 'arriving', 'arrived', 'in_progress']
 
 export const SOS_CHANNELS = ['tel_911', 'tel_cupd', 'sms', 'mailto', 'web_share', 'banner']
 

@@ -5,6 +5,7 @@ import { AppState, Pressable, ScrollView, StyleSheet, Text, View } from 'react-n
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { CampusMap, type MapPin } from '@/components/CampusMap'
 import { FarePanel } from '@/components/FarePanel'
+import { SosButton, SosSheet } from '@/components/SosSheet'
 import { ErrorText, Primary, Tag, useCardShadow } from '@/components/chrome'
 import { useAuth } from '@/lib/auth'
 import { useFeedback } from '@/lib/feedback'
@@ -37,6 +38,7 @@ import type { Palette } from '@/lib/palette'
 import { TripThread } from 'rides-native/TripThread.jsx'
 import { ScheduledRidesHint } from 'rides-native/ScheduledRidesInfo'
 import { MAPS_HANDOFF_HELPER } from '../../../shared/copy/scheduledRides.js'
+import { isActiveRideStatus } from 'rides-native/safety.js'
 
 type RiderFix = { latitude: number; longitude: number }
 
@@ -75,6 +77,8 @@ export default function TripScreen() {
   const shadow = useCardShadow()
   const styles = useMemo(() => tripStyles(colors), [colors])
   const [trip, setTrip] = useState<DriverCard | null>(null)
+  const sosActive = isActiveRideStatus(trip?.status)
+  const [sosOpen, setSosOpen] = useState(false)
   const terminalTrip = Boolean(trip && ['completed', 'canceled', 'canceled_midride', 'cancelled_wait'].includes(trip.status))
   const [self, setSelf] = useState<{ latitude: number; longitude: number } | null>(null)
   const [rider, setRider] = useState<RiderFix | null>(null)
@@ -85,6 +89,8 @@ export default function TripScreen() {
   const departedTrip = useRef<string | null>(null)
   const [person, setPerson] = useState<CounterpartView | null>(null)
   const partyColors = partyColorsFromPalette(colors)
+
+  useEffect(() => setSosOpen(false), [trip?.id, sosActive])
 
   const readerRef = useRef<ReturnType<typeof createTrackingRefresh> | null>(null)
   const refresh = useCallback(() => readerRef.current?.refresh(true) ?? Promise.resolve(), [])
@@ -279,7 +285,10 @@ export default function TripScreen() {
       <View pointerEvents="box-none" style={[styles.sheet, shadow, { paddingBottom: insets.bottom + 12, borderColor: colors.border }]}>
         <View style={[styles.handle, { backgroundColor: colors.track }]} />
         <ScrollView style={styles.sheetScroll} contentContainerStyle={styles.sheetContent} showsVerticalScrollIndicator={false}>
-        <Text style={styles.kicker} onPress={() => router.back()}>← LIVE TRIP</Text>
+        <View style={styles.sheetHeader}>
+          <Text style={styles.kicker} onPress={() => router.back()}>← LIVE TRIP</Text>
+          {sosActive ? <SosButton onPress={() => setSosOpen(true)} /> : null}
+        </View>
         <LivePhase
           title={trip ? statusHeadline(trip.status) : 'Loading trip'}
           body={trip ? driverStatusDetail(trip.status) : 'Loading this ride.'}
@@ -418,6 +427,13 @@ export default function TripScreen() {
         {action ? <Primary label={busy ? 'Updating…' : action} onPress={onAdvance} disabled={busy} tone="purple" /> : null}
         </ScrollView>
       </View>
+      <SosSheet
+        open={sosOpen && sosActive}
+        onClose={() => setSosOpen(false)}
+        trip={trip}
+        userId={user?.id ?? null}
+        fix={self ? { lat: self.latitude, lng: self.longitude } : null}
+      />
     </View>
   )
 }
@@ -437,6 +453,7 @@ function tripStyles(colors: Palette) {
     handle: { alignSelf: 'center', width: 36, height: 4, borderRadius: 2, marginBottom: 4 },
     sheetScroll: { flexGrow: 0 },
     sheetContent: { gap: 8, paddingBottom: 8 },
+    sheetHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
     kicker: { color: colors.orange, fontWeight: '800', letterSpacing: 1 },
     copy: { color: colors.inkSecondary, fontSize: 14, lineHeight: 20 },
     note: { color: colors.orange, fontSize: 13, lineHeight: 18, fontWeight: '700' },

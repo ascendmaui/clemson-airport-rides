@@ -14,7 +14,7 @@ import {
   recordingIndicatorLabel,
 } from '../../shared/safetyHub.js'
 
-const ACTIVE = ['accepted', 'arriving', 'in_progress']
+const ACTIVE = ['accepted', 'arriving', 'arrived', 'in_progress']
 
 export function SafetyHub({ userId, role = 'rider' }) {
   const [activeId, setActiveId] = useState('audio')
