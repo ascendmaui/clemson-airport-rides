@@ -99,3 +99,6 @@ export function orderedLiveStops(
   source: unknown,
   options?: { approximate?: boolean },
 ): LiveStopPin[]
+
+export const DRIVER_CANCELED_RIDER_COPY: string
+export function driverCancelNotice(trip: { status?: string | null; metadata?: Record<string, unknown> | null } | null, lastSeenAt?: string | null): { at: string; message: string } | null

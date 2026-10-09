@@ -6,6 +6,7 @@ import { startLocationPublisher } from 'rides-native/tracking'
 export type DriverFix = { lat: number; lng: number; heading: number | null }
 
 export function useDriverLocation(enabled: boolean, onFix: (fix: DriverFix) => void | Promise<void>) {
+  const stopRef = useRef<(() => void) | null>(null)
   const onFixRef = useRef(onFix)
   onFixRef.current = onFix
   const [error, setError] = useState<string | null>(null)
@@ -15,6 +16,7 @@ export function useDriverLocation(enabled: boolean, onFix: (fix: DriverFix) => v
     if (!enabled) { setError(null); return }
     let stop: (() => void) | undefined
     let alive = true
+    stopRef.current = () => { alive = false; stop?.() }
     async function start() {
       try {
         const permission = await Location.requestForegroundPermissionsAsync()
@@ -36,7 +38,7 @@ export function useDriverLocation(enabled: boolean, onFix: (fix: DriverFix) => v
     }
     void start()
     const listener = AppState.addEventListener('change', (state) => { if (state === 'active') retry() })
-    return () => { alive = false; stop?.(); listener.remove() }
+    return () => { alive = false; stop?.(); stopRef.current = null; listener.remove() }
   }, [enabled, attempt])
-  return { error, retry }
+  return { error, retry, stop: () => stopRef.current?.() }
 }

@@ -23,6 +23,7 @@ import { isMidrideStatus } from '../lib/tripPhase'
 import { CounterpartChip } from '../components/CounterpartChip'
 import { PARTY_VISIBLE_STATUSES } from '../../packages/rides-native/partyProfile.js'
 import {
+  driverCancelNotice,
   etaHoldLine,
   orderedLiveStops,
   riderLiveView,
@@ -233,6 +234,15 @@ export function Requested({ dest = 'GSP Airport', trip = '', driver = 'your driv
     }
   }
 
+  const seenDriverCancels = useRef(new Map())
+  const [cancelNotice, setCancelNotice] = useState(null)
+  useEffect(() => {
+    if (tripRow?.status !== 'searching') { setCancelNotice(null); return }
+    const notice = driverCancelNotice(tripRow, seenDriverCancels.current.get(trip))
+    if (!notice) return
+    seenDriverCancels.current.set(trip, notice.at)
+    setCancelNotice({ ...notice, tripId: trip })
+  }, [trip, tripRow])
   const status = tripRow?.status || ''
   const chatMode = rideChatMode(tripRow, Date.now(), lostReport)
   const showMessages = Boolean(user?.id && tripRow?.driver_id && tripRow?.rider_id && chatMode !== 'closed')
@@ -377,6 +387,7 @@ export function Requested({ dest = 'GSP Airport', trip = '', driver = 'your driv
             This ride is in the open pool. The final fare is charged when the trip ends.
           </p>
         )}
+        {cancelNotice?.tripId === trip && status === 'searching' && <AccessibleAlert key={cancelNotice.at} variant="warning" role="alert" ariaLive="assertive" message={cancelNotice.message} />}
         {tripMissing && (
           <p style={{ color: '#522D80', fontWeight: 700, fontSize: 14, lineHeight: 1.45 }}>
             {error || 'This trip is not on your account. Request a ride again if you still need a driver.'}

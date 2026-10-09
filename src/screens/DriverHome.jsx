@@ -2,6 +2,8 @@ import { onTrackingResume, createTrackingRefresh } from '../../packages/rides-na
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useAuth } from '../lib/auth'
 import { CampusMap, CLEMSON } from '../components/CampusMap'
+import { DriverCancelSheet } from '../components/DriverCancelSheet'
+import { DRIVER_CANCEL_SUCCESS } from '../../shared/driverCancel.js'
 import { DriverDeskHeader } from '../components/DriverDeskHeader'
 import { GameDayStatus } from '../components/GameDayStatus'
 import { useGameDayNotice } from '../lib/useGameDayNotice'
@@ -269,6 +271,7 @@ function DriverShell({ driverId }) {
     }
   }, [driverId, approved])
 
+  const stopTripLocation = useRef(null)
   const [locationError, setLocationError] = useState(null)
   const [locationAttempt, setLocationAttempt] = useState(0)
   useEffect(() => {
@@ -286,8 +289,9 @@ function DriverShell({ driverId }) {
       },
       onError: setLocationError,
     })
+    stopTripLocation.current = stop
     const offResume = onTrackingResume(() => setLocationAttempt((n) => n + 1))
-    return () => { stop(); offResume() }
+    return () => { stop(); stopTripLocation.current = null; offResume() }
   }, [driverId, approved, activeTrip?.id, activeTrip?.status, online, presenceReady, locationAttempt])
 
   useEffect(() => {
@@ -753,6 +757,14 @@ function DriverShell({ driverId }) {
 
   async function markArrived() {
     return advanceTrip('arrived')
+  }
+
+  function onDriverCanceled() {
+    stopTripLocation.current?.()
+    setActiveTrip(null)
+    setChatTrip(null)
+    setOffer(null)
+    pushToast({ kind: 'system', title: DRIVER_CANCEL_SUCCESS })
   }
 
   async function advanceTrip(nextStatus) {
@@ -1372,6 +1384,7 @@ function DriverShell({ driverId }) {
               onOpened={() => setChatTrip(activeTrip)}
             />
           )}
+          {['accepted', 'arriving'].includes(activeTrip.status) && !activeTrip.scheduled_for && !activeTrip.pickup_at && <DriverCancelSheet key={activeTrip.id} supabase={supabase} tripId={activeTrip.id} disabled={advancing} onCanceled={onDriverCanceled} />}
           {activeTrip.status === 'accepted' && (
             <PurpleAcceptButton onClick={() => advanceTrip('arriving')} disabled={advancing}>
               {advancing ? 'Updating…' : statusActionLabel('accepted')}

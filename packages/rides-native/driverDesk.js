@@ -609,6 +609,13 @@ export async function driverTripAction(supabase, tripId, op) {
   }
 }
 
+export async function driverCancelTrip(supabase, tripId, reason, note) {
+  if (!tripId) throw new Error('Missing ride')
+  return authedJson(supabase, '/api/driver?action=trip-status', {
+    method: 'POST', body: { tripId, op: 'driver-cancel', reason, ...(note ? { note } : {}) },
+  })
+}
+
 export async function advanceTrip(supabase, trip, driverId) {
   const next = nextTripStatus(trip?.status)
   const op = { arriving: 'arriving', arrived: 'arrive', in_progress: 'start', completed: 'complete' }[next]

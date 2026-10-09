@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { CampusMap, type MapPin } from '@/components/CampusMap'
 import { WaitTimer } from '@/components/WaitTimer'
 import { waitTimerAnchor, type WaitAnchor } from 'rides-native/waitTimer'
+import { DriverCancelSheet } from '@/components/DriverCancelSheet'
 import { FarePanel } from '@/components/FarePanel'
 import { SosButton, SosSheet } from '@/components/SosSheet'
 import { ErrorText, Primary, Tag, useCardShadow } from '@/components/chrome'
@@ -171,6 +172,12 @@ export default function TripScreen() {
       tripStatus: trip?.status ?? null,
     })
   })
+
+  function onDriverCanceled() {
+    locationTracking.stop()
+    pulse('complete')
+    router.replace('/')
+  }
 
   async function onAdvance() {
     if (!supabase || !user || !trip || terminalTrip) return
@@ -489,6 +496,7 @@ export default function TripScreen() {
           </View>
         ) : null}
         {terminalTrip && trip?.status !== 'completed' ? <Primary label="Back to Home" onPress={() => router.replace('/')} tone="purple" /> : null}
+        {trip && ['accepted', 'arriving'].includes(trip.status) ? <DriverCancelSheet key={trip.id} supabase={supabase} tripId={trip.id} scheduled={Boolean(trip.pickupAt)} disabled={busy} onCanceled={onDriverCanceled} /> : null}
         {action ? <Primary label={busy ? 'Updating…' : action} onPress={onAdvance} disabled={busy} tone="purple" /> : null}
         </ScrollView>
       </View>
