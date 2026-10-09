@@ -8,6 +8,7 @@ import { BootScreen } from '@/components/BootScreen'
 import { AuthProvider, useAuth } from '@/lib/auth'
 import { FeedbackProvider } from '@/lib/feedback'
 import { OfferBridge } from '@/components/OfferBridge'
+import { ActiveTripResume } from '@/components/ActiveTripResume'
 import { LostItemBanner } from 'rides-native/LostItemBanner.jsx'
 import { registerDriverPush, setRideAlertSurface } from '@/lib/push'
 import { supabase } from '@/lib/supabase'
@@ -112,6 +113,7 @@ export default function RootLayout() {
             <PushBridge />
             <OfferBridge />
             <ThemedStack />
+            <ActiveTripResume />
           </Gate>
         </FeedbackProvider>
       </AuthProvider>
