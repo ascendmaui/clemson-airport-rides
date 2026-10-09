@@ -29,7 +29,7 @@ const OTHER_USER = { id: OTHER_ID, email: 'bo@clemson.edu' }
 const SUBJECT = 'Map crashes on open'
 const BODY = 'The rider map crashes when the screen opens.'
 const MISSING_GET = 'Support tickets are not in the database yet. Apply supabase/migrations/20260923120000_support_tickets.sql and supabase/migrations/20260924190000_admin_support.sql.'
-const MISSING_POST = 'Support tickets are not in the database yet. Apply supabase/migrations/20260923120000_support_tickets.sql and supabase/migrations/20260924190000_admin_support.sql, or email rides@clemson.edu.'
+const MISSING_POST = 'Support tickets are not in the database yet. Apply supabase/migrations/20260923120000_support_tickets.sql and supabase/migrations/20260924190000_admin_support.sql, or email rides@clemsonrides.com.'
 const LIST_COLUMNS = 'id, user_id, role_variant, category, subject, body, status, bot_intent, escalation_reason, created_at'
 const FALLBACK_COLUMNS = 'id, user_id, role_variant, category, subject, body, status, created_at'
 
@@ -456,7 +456,7 @@ test('sixth ticket POST in the window is 429 and a different user is not', async
   }
   const blocked = await invoke({ method: 'POST', body: validBody(), client: sb })
   assert.equal(blocked.status, 429)
-  assert.equal(blocked.json.error, 'Too many tickets. Wait a few minutes or email rides@clemson.edu.')
+  assert.equal(blocked.json.error, 'Too many tickets. Wait a few minutes or email rides@clemsonrides.com.')
   assert.equal(calls('support_tickets', 'insert').length, 0)
   assert.equal(bot.state.calls.length, 0)
   assert.deepEqual(http.rateLimitCalls[0], {

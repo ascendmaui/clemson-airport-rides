@@ -10,6 +10,7 @@ import {
   IOS_STORE_URL,
   RIDER_ANDROID_STORE_URL,
   RIDER_IOS_STORE_URL,
+  SUPPORT_EMAIL,
   WEB_BOOK_URL,
   WEB_DRIVER_URL,
   WEB_ORIGIN,
@@ -130,6 +131,26 @@ test('soft-launch web QR targets stable production book URL', () => {
   assert.equal(WEB_BOOK_URL, 'https://clemsonrides.com/#/home')
   assert.equal(WEB_SCHEDULE_URL, 'https://clemsonrides.com/#/schedule')
   assert.doesNotMatch(WEB_ORIGIN, /clemson-rides\.vercel\.app$/)
+})
+
+test('public support route has real support content and contact links', () => {
+  const app = readFileSync(new URL('../src/App.jsx', import.meta.url), 'utf8')
+  const chrome = readFileSync(new URL('../src/components/MarketingChrome.jsx', import.meta.url), 'utf8')
+  const info = readFileSync(new URL('../src/screens/MarketingInfo.jsx', import.meta.url), 'utf8')
+  const siteRoutes = app.slice(app.indexOf('const SITE_ROUTES'), app.indexOf('function Screen'))
+  const support = info.slice(info.indexOf('export function SupportPage()'), info.indexOf('export function GetTheAppPage()'))
+  assert.match(siteRoutes, /'support'/)
+  assert.match(app, /case 'support':\s*return <SupportPage \/>/)
+  assert.match(app, /\bSupportPage,/)
+  assert.match(chrome, /\{ id: 'support', label: 'Support' \},\s*\{ id: 'privacy'/)
+  assert.match(support, /<MarketingChrome current="support">/)
+  assert.match(support, /<PageHead kicker="Help" title="Support" \/>/)
+  assert.match(info, /APP_DOWNLOADS, SUPPORT_EMAIL/)
+  assert.match(support, /mailto:\$\{SUPPORT_EMAIL\}/)
+  assert.equal(SUPPORT_EMAIL, 'rides@clemsonrides.com')
+  for (const route of ['faq', 'privacy', 'terms']) {
+    assert.match(support, new RegExp(`navigate\\('${route}'\\)`))
+  }
 })
 
 test('marketing homepage uses the Death Valley photo and Clemson palette', () => {
