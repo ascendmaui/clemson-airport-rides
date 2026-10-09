@@ -6,6 +6,7 @@ import { isUnpaidAirportDepositTrip, UNPAID_AIRPORT_DEPOSIT_ACCEPT_ERROR } from 
 import { WOMEN_ONLY_ACCEPT_ERROR } from '../../shared/womenOnlyMatch.js'
 import { applyTripWait } from '../tripWait.js'
 import { settleTrip } from '../tripSettle.js'
+import { cancelDriverTrip } from '../driverCancel.js'
 import { insertTripEvent } from '../tripEvents.js'
 
 export default async function handleTripStatus(req, res, deps = {}) {
@@ -27,6 +28,11 @@ export default async function handleTripStatus(req, res, deps = {}) {
     if (read.error) throw read.error
     const trip = read.data
     if (!trip) return fail(404, 'trip_not_found', 'Trip not found')
+    // Driver cancel authenticates its recorded actor on replay after assignment is cleared.
+    if (op === 'driver-cancel') {
+      const result = await cancelDriverTrip(sb, user, trip, body, deps)
+      return json(res, result.status, result.body)
+    }
     // Authorization precedes idempotency: a rider cannot replay a driver action.
     if (op !== 'complete' && (trip.rider_id === user.id || (op !== 'accept' && trip.driver_id !== user.id))) {
       return fail(403, 'forbidden', 'Not allowed on this trip')
@@ -54,7 +60,7 @@ export default async function handleTripStatus(req, res, deps = {}) {
     const transition = op === 'complete'
       ? { via: 'settle' }
       : resolveDriverTransition({ status: trip.status, op })
-    if (transition.error) return fail(409, transition.error, op === 'accept' ? 'That ride is no longer available' : transition.error)
+    if (transition.error) return json(res, 409, { ok: false, code: transition.error, error: op === 'accept' ? 'That ride is no longer available' : transition.error, ...(transition.hint ? { hint: transition.hint } : {}) })
     if (transition.idempotent) {
       if (op === 'accept' && trip.driver_id !== user.id) return fail(409, 'offer_unavailable', 'That ride is no longer available')
       return json(res, 200, { ok: true, trip, idempotent: true })

@@ -160,13 +160,14 @@ test('wait actions delegate once and start surfaces cancellation and charging', 
   }
 })
 
-test('wait timer errors are 409 and early driver cancel is not supported', async () => {
+test('wait timer errors are 409 and legacy cancel is still limited to the wait path', async () => {
   const timer = await request(fakeSb({ ...base, status: 'arrived' }), 'cancel', { applyTripWait: async () => { throw Object.assign(new Error('Cancel ride opens after 5 minutes of waiting'), { status: 409 }) } })
   assert.equal(timer.http, 409)
   for (const status of ['accepted', 'arriving']) {
     const result = await request(fakeSb({ ...base, status }), 'cancel')
     assert.equal(result.http, 409)
-    assert.equal(result.body.code, 'not_supported_yet')
+    assert.equal(result.body.code, 'invalid_transition')
+    assert.match(result.body.hint, /driver-cancel/)
   }
 })
 

@@ -20,7 +20,7 @@ import { supabase } from '@/lib/supabase'
 import { loadLiveTrip, subscribeLiveTrip, type LiveTrip } from '@/lib/tripWatch'
 import { useTripById } from '@/lib/useRiderTrip'
 import { isActiveRideStatus, listEmergencyContacts, type EmergencyContact } from 'rides-native/safety.js'
-import { etaHoldLine, liveDriverTitle, orderedLiveStops, RIDER_SEARCH_MOTION_COPY, riderLiveView, showSearchTheater, type LiveStopPin } from 'rides-native/liveTrip'
+import { driverCancelNotice, etaHoldLine, liveDriverTitle, orderedLiveStops, RIDER_SEARCH_MOTION_COPY, riderLiveView, showSearchTheater, type LiveStopPin } from 'rides-native/liveTrip'
 import { followEtaLine, followMapCoordinates } from 'rides-native/roadFollow'
 import { holdAirportCode, isOpenUnpaidAirportHold, isUnpaidHoldTtlCancel } from 'rides-native/holdExpiryNotice.js'
 import { LivePhase } from 'rides-native/LivePhase'
@@ -176,6 +176,16 @@ export default function Requested() {
         rider_id: user?.id || null,
       }
     : null)
+  const seenDriverCancels = useRef(new Map<string, string>())
+  const [cancelNotice, setCancelNotice] = useState<{ tripId: string; at: string; message: string } | null>(null)
+  useEffect(() => {
+    if (shown?.status !== 'searching') { setCancelNotice(null); return }
+    const notice = driverCancelNotice({ status: shown.status, metadata: live?.metadata ?? trip?.metadata }, seenDriverCancels.current.get(tripId))
+    if (!notice) return
+    seenDriverCancels.current.set(tripId, notice.at)
+    setCancelNotice({ ...notice, tripId })
+    AccessibilityInfo.announceForAccessibility(notice.message)
+  }, [tripId, shown?.status, live?.metadata, trip?.metadata])
   const namedDriver = driver !== 'Your driver'
   const holdTrip = {
     status: trip?.status ?? live?.status ?? null,
@@ -301,6 +311,11 @@ export default function Requested() {
               router.push(code ? { pathname: '/schedule', params: { airport: code } } : '/schedule')
             }}
           />
+        ) : null}
+        {cancelNotice?.tripId === tripId && shown?.status === 'searching' ? (
+          <View style={{ padding: 14, borderRadius: 14, backgroundColor: colors.orangeSoft }}>
+            <Text style={styles.body} accessibilityLiveRegion="polite">{cancelNotice.message}</Text>
+          </View>
         ) : null}
         {showCheckoutReturn ? (
           <Text style={styles.body} accessibilityLiveRegion="polite">
