@@ -129,7 +129,7 @@ test('null, undefined, and "none" statuses return the initial unstarted become a
       canGoOnline: false,
       canSeeOffers: false,
       title: 'Become a driver',
-      body: 'For Clemson University students — and for drivers already on Uber or Lyft.',
+      body: 'For Clemson University students and experienced rideshare drivers.',
       primaryAction: 'Become a driver',
     })
   }

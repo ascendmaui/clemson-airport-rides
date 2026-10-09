@@ -12,7 +12,7 @@ import { shownCents } from '@/lib/shown'
 import { supabase } from '@/lib/supabase'
 import { useTheme } from '@/lib/theme'
 import { loadEarnings, loadTrip } from 'rides-native/driverDesk'
-import { formatCents, formatPickupAt, comfortFleetNotice, type DriverCard } from 'rides-native/tripTags'
+import { formatCents, formatPickupAt, comfortFleetNotice, incentiveLabel, type DriverCard } from 'rides-native/tripTags'
 import { ORANGE, PURPLE } from 'rides-native/places.js'
 import { TripThread } from 'rides-native/TripThread.jsx'
 
@@ -71,7 +71,7 @@ export default function TripDetailsScreen() {
           <Text style={{ color: colors.inkSecondary }}>Upfront fare {shownCents(trip.fareCents, earningsPrivate)}</Text>
           {trip.carpoolIncentiveId ? (
             <Text style={{ color: colors.inkSecondary }}>
-              Base net {shownCents(trip.baseNetCents || 0, earningsPrivate)} · {trip.carpoolIncentiveId} {shownCents(trip.carpoolBonusCents || 0, earningsPrivate)} · total {shownCents(trip.driverPayoutCents || trip.driverNetCents, earningsPrivate)}
+              Base net {shownCents(trip.baseNetCents || 0, earningsPrivate)} · {incentiveLabel(trip.carpoolIncentiveId)} {shownCents(trip.carpoolBonusCents || 0, earningsPrivate)} · total {shownCents(trip.driverPayoutCents || trip.driverNetCents, earningsPrivate)}
             </Text>
           ) : null}
           {tip != null && tip > 0 ? (

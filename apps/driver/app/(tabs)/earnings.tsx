@@ -112,11 +112,11 @@ export default function EarningsHub() {
                 onDetails={() => router.push('/earnings-details')}
               />
               {week <= 0 ? (
-                <SoftNote>No completed trips this week. You keep 80% of each fare once a ride finishes. Carpool trips add driver_carpool_bonus on the stored payout.</SoftNote>
+                <SoftNote>No completed trips this week. You keep 80% of each fare once a ride finishes. Carpool trips add a carpool bonus to your payout.</SoftNote>
               ) : (
                 <SoftNote>
                   {carpoolBonus
-                    ? 'This week includes carpool payouts. Totals use metadata.driver_payout_cents, including driver_carpool_bonus.'
+                    ? 'This week includes carpool payouts. Totals include the carpool bonus.'
                     : 'This week’s total is the 80% you keep. Open details for day, week, month, and year.'}
                 </SoftNote>
               )}
@@ -148,7 +148,7 @@ export default function EarningsHub() {
                   {standard
                     ? 'No completed trips yet. The chart shows the standard split until one is on file. You keep 80%.'
                     : carpoolBonus
-                      ? 'Completed trips on this account. Carpool totals are metadata.driver_payout_cents (base net plus driver_carpool_bonus). Tips, when present, sit in Other.'
+                      ? 'Completed trips on this account. Carpool totals are your base net plus the carpool bonus. Tips, when present, sit in Other.'
                       : 'Completed trips on this account. You keep 80% of the fare. Boost is shown separately and is not in the platform fee. Tips, when present, sit in Other.'}
                 </Text>
                 {earningsPrivate ? (
