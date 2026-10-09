@@ -20,6 +20,23 @@ function authKey(tripId, suffix) {
   return suffix ? `${base}:${suffix}` : base
 }
 
+function stripeErrorMessage(message) {
+  if (typeof message !== 'string') return null
+  return message.trim()
+    .replace(/\b(?:[sr]k_(?:test|live)_[A-Za-z0-9_]+|(?:pi|seti)_[A-Za-z0-9_]+_secret_[A-Za-z0-9_]+)\b/g, '[redacted]')
+    .slice(0, 300)
+}
+
+function stripeErrorField(value) {
+  return typeof value === 'string' ? value : null
+}
+
+export function isIncrementalAuthIneligible(err) {
+  const raw = err?.raw || err
+  return raw?.code === 'payment_intent_invalid_parameter'
+    && /not eligible for the requested card features/i.test(raw?.message || '')
+}
+
 async function cancelQuiet(stripe, paymentIntent) {
   const id = paymentIntent?.id
   const status = paymentIntent?.status
@@ -43,7 +60,7 @@ async function createAuthorization(stripe, {
   idempotencyKey,
 }) {
   try {
-    const pi = await stripe.paymentIntents.create({
+    const params = {
       amount: amountCents,
       currency: 'usd',
       customer: customerId,
@@ -63,19 +80,52 @@ async function createAuthorization(stripe, {
         bufferCents: String(quote.bufferCents),
         boostCents: String(quote.boostCents || 0),
       },
-    }, { idempotencyKey })
+    }
+    let pi
+    let basicAuthorization = false
+    try {
+      pi = await stripe.paymentIntents.create(params, { idempotencyKey })
+    } catch (err) {
+      if (!isIncrementalAuthIneligible(err)) throw err
+      const basicParams = { ...params }
+      // The incremental request is currently the only payment method option.
+      delete basicParams.payment_method_options
+      pi = await stripe.paymentIntents.create(basicParams, { idempotencyKey: `${idempotencyKey}:basic` })
+      basicAuthorization = true
+    }
     if (pi.status === 'requires_capture' || pi.status === 'succeeded') {
-      return { ok: true, paymentIntent: pi, paymentMethodId }
+      return {
+        ok: true, paymentIntent: pi, paymentMethodId,
+        ...(basicAuthorization ? { incrementalAuthorization: false } : {}),
+      }
     }
     const code = pi.status === 'requires_action' ? 'authentication_required' : 'charge_failed'
-    return { ok: false, code, paymentIntent: pi, paymentMethodId }
+    return {
+      ok: false, code, paymentIntent: pi, paymentMethodId,
+      stripeError: {
+        status: pi.status,
+        last_payment_error: {
+          code: stripeErrorField(pi.last_payment_error?.code),
+          decline_code: stripeErrorField(pi.last_payment_error?.decline_code),
+          message: stripeErrorMessage(pi.last_payment_error?.message),
+        },
+      },
+    }
   } catch (err) {
+    const raw = err?.raw || err
     return {
       ok: false,
       code: classifyStripeError(err),
       message: err?.message || 'Card declined',
       paymentIntent: err?.payment_intent || err?.raw?.payment_intent || null,
       paymentMethodId,
+      stripeError: {
+        type: stripeErrorField(raw?.type),
+        code: stripeErrorField(raw?.code),
+        decline_code: stripeErrorField(raw?.decline_code),
+        param: stripeErrorField(raw?.param),
+        message: stripeErrorMessage(raw?.message),
+      },
     }
   }
 }
@@ -203,8 +253,15 @@ export async function placeFareAuthorization({
       ok: result.ok,
       code: result.ok ? null : result.code,
       backup: pmId !== paymentMethodId,
+      ...(result.stripeError ? { stripeError: result.stripeError } : {}),
     })
-    if (!result.ok) await cancelQuiet(stripe, result.paymentIntent)
+    if (!result.ok) {
+      console.error(JSON.stringify({
+        level: 'error', msg: 'fare_authorization_failed', tripId,
+        code: result.code, stripeError: result.stripeError,
+      }))
+      await cancelQuiet(stripe, result.paymentIntent)
+    }
     return result
   }
 
@@ -229,6 +286,7 @@ export async function placeFareAuthorization({
       boostCents: quote.boostCents,
       paymentMethodId: result.paymentMethodId,
       backupCard: result.paymentMethodId !== paymentMethodId,
+      ...(result.incrementalAuthorization === false ? { incrementalAuthorization: false } : {}),
       at: new Date().toISOString(),
     }
     if (sb && tripId) {

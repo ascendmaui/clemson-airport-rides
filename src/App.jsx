@@ -25,6 +25,7 @@ import {
   PromosPage,
   RideTypesPage,
   SafetyPage,
+  SupportPage,
   TigerPassPage,
 } from './screens/MarketingInfo'
 import { RiderHome } from './screens/RiderHome'
@@ -102,6 +103,7 @@ const SITE_ROUTES = new Set([
   'safety',
   'promos',
   'faq',
+  'support',
   'get-the-app',
 ])
 
@@ -136,6 +138,8 @@ function Screen({ path, params }) {
       return <PromosPage />
     case 'faq':
       return <FaqPage />
+    case 'support':
+      return <SupportPage />
     case 'get-the-app':
       return <GetTheAppPage />
     case 'share':

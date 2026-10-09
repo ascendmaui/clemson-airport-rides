@@ -3,6 +3,8 @@
  * In-app is the board row plus the open-app toast. Push has no server sender.
  * SMS and email stay on the live-offer flag path and are not used here.
  */
+import { isE2ETestUser } from '../shared/e2eTestAccounts.js'
+import { eligibleDriverIdsForRider } from './e2eDriverEligibility.js'
 import { isSimulatedDriverId } from '../packages/rides-native/simulatedDrivers.js'
 import { scheduledBoardCopy, SCHEDULED_BOARD_MARKER } from '../shared/nearTermSlots.js'
 
@@ -39,19 +41,27 @@ export function boardAlertChannels({ pushTokenPresent = false, title = '', body 
   }
 }
 
-export async function notifyScheduledBoard(sb, { trip } = {}) {
+export async function notifyScheduledBoard(sb, { trip, riderIsE2E } = {}) {
   const tripId = trip?.id
   if (!sb || !tripId) {
     return { ok: false, notified: 0, drivers: 0, reason: 'alert_target_missing', pushGap: PUSH_GAP }
   }
   try {
     const applications = await rowsOf(sb.from('driver_applications').select('profile_id, onboarding_status'))
-    const ids = []
+    let ids = []
     for (const row of applications) {
       const id = row?.profile_id
       if (!approvedRow(row) || !id || isSimulatedDriverId(id) || id === trip.rider_id) continue
       if (!ids.includes(id)) ids.push(id)
     }
+    let e2eRider = riderIsE2E === true || trip.metadata?.e2e_test === true
+    if (riderIsE2E === undefined && !e2eRider && trip.rider_id) {
+      try {
+        const rider = await sb.from('profiles').select('email').eq('id', trip.rider_id).maybeSingle()
+        if (!rider.error) e2eRider = isE2ETestUser(rider.data)
+      } catch { /* Unknown rider identity defaults to real. */ }
+    }
+    ids = await eligibleDriverIdsForRider(sb, ids, e2eRider)
     if (!ids.length) {
       return { ok: true, notified: 0, drivers: 0, reason: 'no_drivers', pushGap: PUSH_GAP, marker: SCHEDULED_BOARD_MARKER }
     }

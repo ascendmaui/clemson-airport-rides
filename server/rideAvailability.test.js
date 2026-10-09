@@ -12,12 +12,13 @@ function table(rows) {
   }
 }
 
-function client({ applications, vehicles, status, trips }) {
+function client({ applications, vehicles, status, trips, profiles = applications.map(row => ({ id: row.profile_id, email: `${row.profile_id}@example.com` })) }) {
   const tables = {
     driver_applications: table(applications),
     vehicles: table(vehicles),
     driver_status: table(status),
     trips: table(trips),
+    profiles: table(profiles),
   }
   return {
     from(name) {
@@ -126,6 +127,7 @@ test('missing service class column still reads tier', async () => {
   }
   const sb = {
     from(name) {
+      if (name === 'profiles') return table([{ id: 'a', email: 'a@example.com' }])
       if (name === 'vehicles') return vehicles
       if (name === 'driver_applications') {
         return table([{ profile_id: 'a', onboarding_status: 'approved' }])

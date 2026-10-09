@@ -17,6 +17,7 @@ export const MARKETING_MENU = [
   { id: 'drive', label: 'Drive with us' },
   { id: 'promos', label: 'Promos' },
   { id: 'faq', label: 'FAQ' },
+  { id: 'support', label: 'Support' },
   { id: 'privacy', label: 'Privacy' },
   { id: 'terms', label: 'Terms' },
 ]

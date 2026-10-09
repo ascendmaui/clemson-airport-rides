@@ -15,7 +15,7 @@ export const WEB_DRIVER_URL = `${WEB_ORIGIN}/#/driver`
 /** Driver onboarding / signup. */
 export const WEB_DRIVER_SIGNUP_URL = `${WEB_ORIGIN}/#/driver-signup`
 
-export const SUPPORT_EMAIL = 'rides@clemson.edu'
+export const SUPPORT_EMAIL = 'rides@clemsonrides.com'
 
 /**
  * Public App Store and Google Play URLs.

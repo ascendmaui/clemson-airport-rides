@@ -4,6 +4,7 @@
  * Scheduled: no published shift plan exists. Options are tiers at least one
  * approved driver can serve, skipping drivers already booked near that pickup.
  */
+import { eligibleDriverIdsForRider } from './e2eDriverEligibility.js'
 import { ACTIONABLE_LEAD_MS } from '../src/lib/scheduledRideModel.js'
 import { isSimulatedDriverId } from '../packages/rides-native/simulatedDrivers.js'
 import {
@@ -50,9 +51,9 @@ function indexByDriver(rows) {
 
 /**
  * @param {object} sb
- * @param {{ scheduledFor?: string | Date | null, now?: Date }} [options]
+ * @param {{ scheduledFor?: string | Date | null, now?: Date, riderIsE2E?: boolean }} [options]
  */
-export async function loadRideAvailability(sb, { scheduledFor = null, now = new Date() } = {}) {
+export async function loadRideAvailability(sb, { scheduledFor = null, now = new Date(), riderIsE2E = false } = {}) {
   const clock = now instanceof Date ? now : new Date(now)
   const when = scheduledFor ? new Date(scheduledFor) : null
   const scheduled = Boolean(when && !Number.isNaN(when.getTime()) && when.getTime() > clock.getTime())
@@ -74,12 +75,13 @@ export async function loadRideAvailability(sb, { scheduledFor = null, now = new 
       error: apps.error.message || 'Could not read drivers',
     })
   }
-  const approvedIds = []
+  let approvedIds = []
   for (const row of apps.data || []) {
     if (approvedRow(row) && row.profile_id && !isSimulatedDriverId(row.profile_id) && !approvedIds.includes(row.profile_id)) {
       approvedIds.push(row.profile_id)
     }
   }
+  approvedIds = await eligibleDriverIdsForRider(sb, approvedIds, riderIsE2E)
   if (!approvedIds.length) {
     return availabilityPayload({
       mode: scheduled ? 'scheduled' : 'now',
@@ -184,8 +186,8 @@ export function availabilityPayload({ mode, scheduledFor, tierIds, error = null 
   }
 }
 
-export async function assertTierAvailable(sb, tier, { scheduledFor = null, now = new Date() } = {}) {
-  const snapshot = await loadRideAvailability(sb, { scheduledFor, now })
+export async function assertTierAvailable(sb, tier, { scheduledFor = null, now = new Date(), riderIsE2E = false } = {}) {
+  const snapshot = await loadRideAvailability(sb, { scheduledFor, now, riderIsE2E })
   if (snapshot.error) {
     const error = new Error('Could not check ride availability.')
     error.status = 503

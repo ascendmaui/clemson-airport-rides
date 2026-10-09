@@ -77,7 +77,7 @@ export default async function handler(req, res) {
   }
 
   if (!rateLimit(req, { bucket: 'ticket', userId: user.id, limit: 5, windowMs: 10 * 60_000 })) {
-    return json(res, 429, { error: 'Too many tickets. Wait a few minutes or email rides@clemson.edu.' })
+    return json(res, 429, { error: 'Too many tickets. Wait a few minutes or email rides@clemsonrides.com.' })
   }
 
   const { body, error: parseError } = parseBody(req)
@@ -149,7 +149,7 @@ async function insertTicket(sb, row) {
 function insertError(res, error) {
   if (MISSING_TABLE.test(error.message || '')) {
     return json(res, 503, {
-      error: 'Support tickets are not in the database yet. Apply supabase/migrations/20260923120000_support_tickets.sql and supabase/migrations/20260924190000_admin_support.sql, or email rides@clemson.edu.',
+      error: 'Support tickets are not in the database yet. Apply supabase/migrations/20260923120000_support_tickets.sql and supabase/migrations/20260924190000_admin_support.sql, or email rides@clemsonrides.com.',
     })
   }
   if (/foreign key|profiles/i.test(error.message || '')) {

@@ -147,6 +147,8 @@ export async function runDuePayouts(sb, trips, connectAccountId, deps = {}) {
   }
 
   for (const trip of trips) {
+    // Test ledger entries must never be retried by the daily transfer batch.
+    if (trip.metadata?.e2e_test === true) continue
     const payout = trip.metadata?.payout
     if (!payout || payout.status === 'paid' || !payoutIsDue(payout, now)) {
       await recordExtra(trip, Boolean(deps.dryRun))
