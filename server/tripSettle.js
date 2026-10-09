@@ -21,6 +21,7 @@ import { airportDepositRequiredCents } from '../packages/rides-native/tripTags.j
 import { releaseTigerHeatReservation, settleTigerHeatReservation } from './tigerHeatService.js'
 import { settleFareHold } from './fareAuthorization.js'
 import { riderCaptureFareCents } from '../shared/backupDriverQueue.js'
+import { claimCompletion, completionResult, releaseCompletion } from './tripCompletion.js'
 import { readBoostCents } from '../shared/scheduledBoost.js'
 
 const ACTIVE_KEEP = new Set(['accepted', 'arriving', 'in_progress', 'payment_required', 'searching', 'offered'])
@@ -91,6 +92,11 @@ export async function settleTrip({
     return { http: 403, body: { error: 'Admin override is not available for this account' } }
   }
 
+  if (action === 'complete') {
+    const result = completionResult(trip, actor, override)
+    if (result) return result
+  }
+
   if (action === 'complete' && storedFareCents(trip) == null) {
     const ensured = await ensureAuthoritativeFare({ sb, trip })
     if (ensured.error || storedFareCents(ensured.trip) == null) {
@@ -106,6 +112,27 @@ export async function settleTrip({
     trip = ensured.trip
   }
 
+  let completionClaim = null
+  if (action === 'complete') {
+    const claimed = await claimCompletion(sb, trip.id, actor, override)
+    if (claimed.result) return claimed.result
+    trip = claimed.trip
+    completionClaim = claimed.claim
+  }
+  const result = await settleClaimedTrip({
+    sb, stripe, trip, payments, action, explicitAmountCents, feeKind,
+    requireFee, override, methods, paymentMethodId, actor, deps, completionClaim,
+  })
+  if (completionClaim && result.http !== 200 && result.http < 500) {
+    await releaseCompletion(sb, trip.id, completionClaim)
+  }
+  return result
+}
+
+async function settleClaimedTrip({
+  sb, stripe, trip, payments, action, explicitAmountCents, feeKind,
+  requireFee, override, methods, paymentMethodId, actor, deps, completionClaim,
+}) {
   const kind = feeKindFor(action, feeKind)
   const precomputed = explicitAmountCents == null ? readPrecomputedFeeCents(trip, kind) : null
   const due = amountDueForAction({
@@ -305,6 +332,18 @@ export async function settleTrip({
     }
   }
 
+  if (action === 'complete') {
+    const fresh = await sb.from('trips').select('*').eq('id', trip.id).maybeSingle()
+    if (fresh.error) return { http: 500, body: { error: fresh.error.message, payment, progressed: false } }
+    if (!fresh.data) return { http: 404, body: { error: 'Trip not found' } }
+    const result = completionResult(fresh.data, actor, override)
+    if (result) return result
+    if (fresh.data.metadata?.completion_claim?.token !== completionClaim.token) {
+      return { http: 409, body: { code: 'completion_in_progress', progressed: false } }
+    }
+    trip = fresh.data
+  }
+
   const now = new Date().toISOString()
   const patch = action === 'complete'
     ? { status: 'completed', completed_at: now }
@@ -348,8 +387,20 @@ export async function settleTrip({
   }
 
   if (sb) {
-    const { error } = await sb.from('trips').update(patch).eq('id', trip.id)
+    let write = sb.from('trips').update(patch).eq('id', trip.id)
+    if (action === 'complete') {
+      write = write.eq('status', 'in_progress').eq('metadata->completion_claim->>token', completionClaim.token)
+      if (!override) write = write.eq('driver_id', actor.id)
+    }
+    const { data, error } = action === 'complete'
+      ? await write.select('id').maybeSingle()
+      : await write
     if (error) return { http: 500, body: { error: error.message, payment, progressed: false } }
+    if (action === 'complete' && !data) {
+      const fresh = await sb.from('trips').select('*').eq('id', trip.id).maybeSingle()
+      if (fresh.error) return { http: 500, body: { error: fresh.error.message, progressed: false } }
+      return completionResult(fresh.data || {}, actor, override) || { http: 409, body: { code: 'invalid_status', progressed: false } }
+    }
     const { error: eventError } = await insertTripEvent(sb, {
       trip_id: trip.id,
       kind: patch.status,

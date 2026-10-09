@@ -477,6 +477,27 @@ test('trip end captures the final fare inside the hold', async () => {
   assert.equal(db.tables.payments[0].amount_cents, 9000)
 })
 
+test('already captured fare holds never capture again or inflate paid cents on a stale retry', async () => {
+  const trip = {
+    id: 'trip_captured', rider_id: 'rider_1',
+    metadata: { fare_authorization: { status: 'requires_capture', paymentIntentId: 'pi_hold', authorizationCents: 12000 } },
+  }
+  const db = memoryDb({ trips: [structuredClone(trip)] })
+  const stripe = scriptedStripe({ retrieve: async () => ({ id: 'pi_hold', status: 'succeeded', amount: 12000, amount_received: 9000 }) })
+  const args = { sb: db, stripe, trip, finalFareCents: 9000 }
+  assert.equal((await settleFareHold(args)).duplicate, true)
+  assert.equal(db.tables.trips[0].metadata.fare_paid_cents, 9000)
+  // Replay an old row whose authorization still says requires_capture.
+  assert.equal((await settleFareHold(args)).duplicate, true)
+  assert.equal(db.tables.trips[0].metadata.fare_paid_cents, 9000)
+  assert.equal(stripe.calls.some(call => ['capture', 'increment', 'create', 'cancel'].includes(call.op)), false)
+  const calls = stripe.calls.length
+  const current = await settleFareHold({ ...args, trip: db.tables.trips[0] })
+  assert.equal(current.ok, true)
+  assert.equal(current.duplicate, true)
+  assert.equal(stripe.calls.length, calls)
+})
+
 test('a final fare above the hold increments the authorization', async () => {
   const db = memoryDb({
     profiles: [{ id: 'rider_1', stripe_customer_id: 'cus_1', stripe_default_pm_id: 'pm_default' }],

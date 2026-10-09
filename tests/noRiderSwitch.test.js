@@ -301,5 +301,6 @@ test('settleSwitchHold places a new manual-capture hold when the ride has none',
 
 test('the driver trip screen starts location sharing from the active trip', () => {
   const source = readFileSync(new URL('../apps/driver/app/trip.tsx', import.meta.url), 'utf8')
-  assert.match(source, /useDriverLocation\(Boolean\(user && trip && trip\.status !== 'completed'/)
+  assert.match(source, /useDriverLocation\(Boolean\(user && trip && !terminalTrip\)/)
+  assert.match(source, /\['completed', 'canceled', 'canceled_midride', 'cancelled_wait'\]\.includes\(trip\.status\)/)
 })

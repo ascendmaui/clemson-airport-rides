@@ -5,7 +5,7 @@ import driverHandler from '../api/driver.js'
 
 function fakeSb(trip, options = {}) {
   const tables = {
-    trips: [{ ...trip }], trip_events: [], payments: [],
+    trips: [{ ...trip }], trip_events: [], payments: [], profiles: [],
     driver_applications: [{ profile_id: 'd1', onboarding_status: options.approval || 'approved' }],
     driver_status: [{ driver_id: 'd1', online: options.online ?? true }],
   }

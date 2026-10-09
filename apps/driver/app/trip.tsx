@@ -75,6 +75,7 @@ export default function TripScreen() {
   const shadow = useCardShadow()
   const styles = useMemo(() => tripStyles(colors), [colors])
   const [trip, setTrip] = useState<DriverCard | null>(null)
+  const terminalTrip = Boolean(trip && ['completed', 'canceled', 'canceled_midride', 'cancelled_wait'].includes(trip.status))
   const [self, setSelf] = useState<{ latitude: number; longitude: number } | null>(null)
   const [rider, setRider] = useState<RiderFix | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -129,7 +130,7 @@ export default function TripScreen() {
   }, [refresh, id, user?.id])
 
   useEffect(() => {
-    if (!supabase || !id || !trip || trip.status === 'completed' || trip.status === 'canceled' || trip.status === 'cancelled_wait') return undefined
+    if (!supabase || !id || !trip || terminalTrip) return undefined
     const reader = createTrackingRefresh({
       load: () => loadRiderFix(supabase, id),
       onData: (fix) => {
@@ -144,9 +145,9 @@ export default function TripScreen() {
     })
     const timer = setInterval(() => void reader.refresh(), 5000)
     return () => { reader.stop(); listener.remove(); clearInterval(timer) }
-  }, [id, trip?.status])
+  }, [id, trip?.status, terminalTrip])
 
-  const locationTracking = useDriverLocation(Boolean(user && trip && trip.status !== 'completed' && trip.status !== 'canceled' && trip.status !== 'cancelled_wait'), async (fix) => {
+  const locationTracking = useDriverLocation(Boolean(user && trip && !terminalTrip), async (fix) => {
     setSelf({ latitude: fix.lat, longitude: fix.lng })
     if (!supabase || !user) return
     await publishDriverLocation(supabase, user.id, {
@@ -158,7 +159,7 @@ export default function TripScreen() {
   })
 
   async function onAdvance() {
-    if (!supabase || !user || !trip) return
+    if (!supabase || !user || !trip || terminalTrip) return
     setBusy(true)
     setError(null)
     try {
@@ -253,7 +254,7 @@ export default function TripScreen() {
   const focus = rider || (target.latitude != null && target.longitude != null
     ? { latitude: target.latitude, longitude: target.longitude }
     : self)
-  const action = trip ? statusActionLabel(trip.status) : null
+  const action = trip && !terminalTrip ? statusActionLabel(trip.status) : null
   const stepIndex = DRIVER_TRACK_STEPS.findIndex((step) => step.id === trip?.status)
   const etaLine = trip
     ? etaHoldLine(
@@ -413,6 +414,7 @@ export default function TripScreen() {
             <LeaveNowLabel leaveNowAt={trip.backupLeaveNowAt} />
           </View>
         ) : null}
+        {terminalTrip && trip?.status !== 'completed' ? <Primary label="Back to Home" onPress={() => router.replace('/')} tone="purple" /> : null}
         {action ? <Primary label={busy ? 'Updating…' : action} onPress={onAdvance} disabled={busy} tone="purple" /> : null}
         </ScrollView>
       </View>

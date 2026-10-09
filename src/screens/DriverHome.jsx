@@ -84,6 +84,12 @@ function centsToDollars(cents) {
   return `$${(Number(cents) / 100).toFixed(2)}`
 }
 
+const CANCEL_NOTICES = {
+  canceled: 'Ride canceled',
+  canceled_midride: 'The rider ended this trip early',
+  cancelled_wait: 'Canceled: rider no-show',
+}
+
 const ACTIVE_STATUSES = ['accepted', 'arriving', 'arrived', 'in_progress']
 
 export function DriverHome({ openChatTripId = '' }) {
@@ -102,7 +108,26 @@ function DriverShell({ driverId }) {
   const [priority, setPriority] = useState(false)
   const [offer, setOffer] = useState(null)
   const [activeTrip, setActiveTrip] = useState(null)
+  const activeTripRef = useRef(null)
+  activeTripRef.current = activeTrip
+  const cancelNotified = useRef(null)
   const [payFailure, setPayFailure] = useState(null)
+  const clearCanceledTrip = useCallback((row) => {
+    const notice = CANCEL_NOTICES[row?.status]
+    // Ignore an older poll response that arrives after realtime cancellation.
+    if (!notice) return Boolean(row?.id && cancelNotified.current === row.id)
+    setActiveTrip((current) => current?.id === row.id ? null : current)
+    setPayFailure(null)
+    setAdvanceError(null)
+    if (cancelNotified.current !== row.id) {
+      cancelNotified.current = row.id
+      pushToast({ kind: 'system', title: notice })
+    }
+    return true
+  }, [])
+  useEffect(() => {
+    if (activeTrip) clearCanceledTrip(activeTrip)
+  }, [activeTrip, clearCanceledTrip])
   const wait = useTripWait(activeTrip, (next) => {
     setActiveTrip((prev) => (prev && next && prev.id === next.id ? { ...prev, ...next } : prev))
   })
@@ -413,6 +438,12 @@ function DriverShell({ driverId }) {
     }
     const reader = createTrackingRefresh({
       load: async () => {
+        const current = activeTripRef.current
+        if (current?.id) {
+          const latest = await supabase.from('trips').select('*').eq('id', current.id).maybeSingle()
+          if (latest.error) throw latest.error
+          if (latest.data && CANCEL_NOTICES[latest.data.status]) return latest.data
+        }
         const { data, error } = await supabase.from('trips').select('*')
           .eq('driver_id', driverId).in('status', ACTIVE_STATUSES)
           .order('accepted_at', { ascending: false }).limit(8)
@@ -421,7 +452,7 @@ function DriverShell({ driverId }) {
       },
       onData: (row) => {
         offerRevision.current += 1
-        setActiveTrip(row)
+        if (!clearCanceledTrip(row)) setActiveTrip(row)
         if (row) setOffer((prev) => (prev?.id === row.id ? null : prev))
         setActiveChecked(true)
       },
@@ -431,7 +462,7 @@ function DriverShell({ driverId }) {
     const timer = setInterval(() => void reader.refresh(), 8000)
     const offResume = onTrackingResume(() => void reader.refresh(true))
     return () => { reader.stop(); offResume(); clearInterval(timer) }
-  }, [driverId])
+  }, [driverId, clearCanceledTrip])
 
   useEffect(() => {
     if (!approved) return undefined
@@ -497,11 +528,11 @@ function DriverShell({ driverId }) {
       if (row.status === 'canceled' && offer?.id === row.id) {
         setOffer(null)
       }
-      if ((row.status === 'canceled' || row.status === 'cancelled_wait') && activeTrip?.id === row.id) {
-        setActiveTrip(null)
+      if (CANCEL_NOTICES[row.status] && activeTripRef.current?.id === row.id) {
+        clearCanceledTrip(row)
       }
     })
-  }, [approved, online, offer?.id, activeTrip?.id, driverId, loadEarnings, loadScheduled])
+  }, [approved, online, offer?.id, activeTrip?.id, driverId, loadEarnings, loadScheduled, clearCanceledTrip])
 
   async function acceptOffer() {
     if (!approved) return
@@ -837,7 +868,7 @@ function DriverShell({ driverId }) {
         longitude: activeTrip.pickup_lng,
         label: activeTrip.pickup_label || 'Pickup',
       }
-  const navHref = navStop && activeTrip && !['completed', 'canceled', 'cancelled_wait'].includes(activeTrip.status)
+  const navHref = navStop && activeTrip && ACTIVE_STATUSES.includes(activeTrip.status)
     ? preferredNavigationUrl(navStop, typeof navigator !== 'undefined' ? navigator.userAgent : '')
     : null
   const activeStep = activeTrip ? DRIVER_TRACK_STEPS.findIndex((step) => step.id === activeTrip.status) : -1
@@ -1214,7 +1245,7 @@ function DriverShell({ driverId }) {
         </div>
       )}
 
-      {activeTrip && (
+      {activeTrip && ACTIVE_STATUSES.includes(activeTrip.status) && (
         <div
           className="sheet glass-panel--elevated"
           style={{
