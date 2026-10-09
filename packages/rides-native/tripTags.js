@@ -33,6 +33,17 @@ export function formatCents(cents) {
 /** Named carpool incentive. Recent earnings use metadata.driver_payout_cents. */
 export const DRIVER_CARPOOL_BONUS_ID = 'driver_carpool_bonus'
 
+const INCENTIVE_LABELS = { [DRIVER_CARPOOL_BONUS_ID]: 'Carpool bonus' }
+
+/** Human label for an incentive id. Never show the raw key to drivers. */
+export function incentiveLabel(id) {
+  const key = String(id || '').trim()
+  if (!key) return ''
+  if (INCENTIVE_LABELS[key]) return INCENTIVE_LABELS[key]
+  const words = key.replace(/^driver_/, '').replace(/[_-]+/g, ' ').trim()
+  return words ? words.charAt(0).toUpperCase() + words.slice(1) : 'Bonus'
+}
+
 /** Driver keeps 80%. Platform fee is 20% of the fare, rounded once. */
 export function driverNetCents(fareCents) {
   const fare = Math.max(0, Math.round(Number(fareCents) || 0))

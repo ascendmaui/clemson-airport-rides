@@ -1,5 +1,5 @@
 import { StyleSheet, Text, View } from 'react-native'
-import { driverFareNote, fareCollection, formatCents, type DriverCard } from 'rides-native/tripTags'
+import { driverFareNote, fareCollection, formatCents, incentiveLabel, type DriverCard } from 'rides-native/tripTags'
 import { useTheme } from '@/lib/theme'
 
 export function FarePanel({ card }: { card: DriverCard }) {
@@ -14,7 +14,7 @@ export function FarePanel({ card }: { card: DriverCard }) {
       {fare.carpoolIncentiveId ? (
         <>
           <Row label="Base net" value={formatCents(fare.baseNetCents || 0)} />
-          <Row label={`Carpool bonus · ${fare.carpoolIncentiveId}`} value={formatCents(fare.carpoolBonusCents || 0)} />
+          <Row label={incentiveLabel(fare.carpoolIncentiveId)} value={formatCents(fare.carpoolBonusCents || 0)} />
           <Row label="You net" value={formatCents(fare.driverNetCents)} strong />
         </>
       ) : (

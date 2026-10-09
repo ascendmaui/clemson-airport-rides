@@ -145,7 +145,8 @@ test('driver net pay reuses existing earnings helpers without inventing numbers'
   assert.equal(carpoolPay.formattedCarpoolBonus, '$11.00')
   assert.equal(carpoolPay.carpoolIncentiveId, 'driver_carpool_bonus')
   assert.match(carpoolPay.subtext, /base \$64\.00/i)
-  assert.match(carpoolPay.subtext, /driver_carpool_bonus \$11\.00/i)
+  assert.match(carpoolPay.subtext, /Carpool bonus \$11\.00/)
+  assert.doesNotMatch(carpoolPay.subtext, /driver_carpool_bonus/)
   assert.match(carpoolPay.subtext, /total \$75\.00/i)
 
   // Card with explicit net but 0 fareCents

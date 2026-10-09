@@ -9,7 +9,7 @@ import { supabase } from '@/lib/supabase'
 import { useTheme } from '@/lib/theme'
 import { messagingGuide } from '../../../shared/copy/messaging.js'
 import { loadEarnings } from 'rides-native/driverDesk'
-import { carpoolPayFromTrip, tripPayoutCents } from 'rides-native/tripTags'
+import { carpoolPayFromTrip, incentiveLabel, tripPayoutCents } from 'rides-native/tripTags'
 import { formatBoostBadge, readBoostCents } from '../../../shared/scheduledBoost.js'
 
 type Trip = Awaited<ReturnType<typeof loadEarnings>>['trips'][number]
@@ -135,7 +135,7 @@ export default function EarningsActivity() {
                   ) : null}
                   {trip.status !== 'canceled' && pay?.showBonus ? (
                     <Text style={{ color: colors.inkSecondary }}>
-                      Base net {shownCents(pay.baseNetCents, earningsPrivate)} · {pay.incentiveId} {shownCents(pay.bonusCents, earningsPrivate)} · total {shownCents(pay.payoutCents, earningsPrivate)}
+                      Base net {shownCents(pay.baseNetCents, earningsPrivate)} · {incentiveLabel(pay.incentiveId)} {shownCents(pay.bonusCents, earningsPrivate)} · total {shownCents(pay.payoutCents, earningsPrivate)}
                     </Text>
                   ) : null}
                 </Pressable>
