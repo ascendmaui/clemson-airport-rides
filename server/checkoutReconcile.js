@@ -239,7 +239,7 @@ export async function applyPaidCheckoutSession(serviceClient, session, deps = {}
  * - Validates sessionId format (cs_...)
  * - Retrieves Checkout Session from Stripe
  * - Verifies session.metadata.tripId belongs to userId
- * - Skips credit_purchase sessions
+ * - Skips credit_purchase and tiger_pass sessions
  * - If unpaid: returns { ok: true, paid: false, tripId } with no writes
  * - If paid: applies paid deposit side effects idempotently and returns { ok, paid, alreadyRecorded, tripId }
  */
@@ -249,7 +249,7 @@ export async function reconcileCheckoutSession(
 ) {
   const deps = { ...inlineDeps, ...extraDeps }
 
-  const trimmedId = typeof sessionId === 'string' ? sessionId.trim() : ''
+  const trimmedId = typeof sessionId === 'string' ? sessionId.trim().replace(/^["']|["']$/g, '').trim() : ''
   if (!trimmedId || !trimmedId.startsWith('cs_') || trimmedId.length <= 3) {
     return { ok: false, error: 'invalid_session_id', status: 400, reason: 'bad_id' }
   }
@@ -269,8 +269,8 @@ export async function reconcileCheckoutSession(
     return { ok: false, error: 'session_not_found', status: 404, reason: 'not_found' }
   }
 
-  if (session?.metadata?.kind === 'credit_purchase') {
-    return { ok: true, skipped: true, paid: false, reason: 'credit_purchase' }
+  if (session?.metadata?.kind === 'credit_purchase' || session?.metadata?.kind === 'tiger_pass') {
+    return { ok: true, skipped: true, paid: false, reason: session.metadata.kind }
   }
 
   const tripId = session?.metadata?.tripId

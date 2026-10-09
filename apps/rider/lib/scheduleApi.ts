@@ -1,5 +1,6 @@
+import { CARPOOL_DISCOUNT_BPS, percentOffCents } from '../../../src/lib/fareRates.js'
 import { studentDiscountGranted } from '../../../src/lib/studentDomain.js'
-import { authedJson } from 'rides-native/apiClient'
+import { apiBase, authedJson } from 'rides-native/apiClient'
 import type { AuthUser } from 'rides-native/createAuth'
 import {
   airportFareCents,
@@ -36,9 +37,11 @@ export type ScheduledRow = {
   rider_note: string | null
   tier: string | null
   created_at: string | null
+  driver_id?: string | null
   metadata: {
     purpose?: string
     kind?: string
+    boost_cents?: number
     airport?: string
     fare_paid_cents?: number
     stripe_checkout_created_at?: string | null
@@ -55,23 +58,32 @@ function airportCode(label: string): 'GSP' | 'CLT' | null {
   return null
 }
 
-export function quoteRide(pickup: RidePlace, dropoff: RidePlace, isStudent: boolean): RideQuote {
+export function quoteRide(pickup: RidePlace, dropoff: RidePlace, isStudent: boolean, tier = 'standard'): RideQuote {
   const airport = airportCode(dropoff.label)
+  const shared = tier === 'carpool'
   if (airport) {
     const raw = airportFareCents(airport) || 0
-    const student = applyStudentDiscount(raw, isStudent)
+    const student = applyStudentDiscount(raw, isStudent && !shared)
+    const priced = shared ? percentOffCents(student.fareCents, CARPOOL_DISCOUNT_BPS) : null
+    const fareCents = priced ? priced.amountCents : student.fareCents
     return {
-      ...student,
-      depositCents: depositCents(student.fareCents),
+      fareCents,
+      discountCents: student.discountCents + (priced?.discountCents || 0),
+      label: shared ? 'Carpool · 15% off per seat' : student.label,
+      depositCents: depositCents(fareCents),
       estimate: false,
       airport,
       miles: null,
     }
   }
   const meters = haversineMeters(pickup, dropoff) || 0
-  const student = applyStudentDiscount(distanceFareCents(meters), isStudent)
+  const student = applyStudentDiscount(distanceFareCents(meters), isStudent && !shared)
+  const priced = shared ? percentOffCents(student.fareCents, CARPOOL_DISCOUNT_BPS) : null
+  const fareCents = priced ? priced.amountCents : student.fareCents
   return {
-    ...student,
+    fareCents,
+    discountCents: student.discountCents + (priced?.discountCents || 0),
+    label: shared ? 'Carpool · 15% off per seat' : student.label,
     depositCents: 0,
     estimate: true,
     airport: null,
@@ -83,6 +95,36 @@ export function riderIsStudent(user: AuthUser | null) {
   return studentDiscountGranted(user)
 }
 
+export async function fetchScheduleSlots(pickup: RidePlace, tier = 'standard') {
+  const res = await fetch(`${apiBase()}/api/stripe-payment-methods?action=schedule-slots`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    body: JSON.stringify({ pickup, tier }),
+  })
+  const body = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(body?.error || 'Could not load pickup times')
+  return body as {
+    waitMinutes: number | null
+    waitLabel: string | null
+    availableDrivers: number
+    emptyMessage: string | null
+    slots: Array<{ id: string; minutesOut: number; pickupAt: string; label: string }>
+  }
+}
+
+export async function fetchMatchNotice(tripId: string) {
+  if (!supabase) throw new Error('Supabase is not configured')
+  return authedJson(supabase, `/api/stripe-payment-methods?action=match-notice&tripId=${encodeURIComponent(tripId)}`) as Promise<{
+    tripId: string
+    title: string
+    body: string
+    driverName: string
+    distanceLabel: string | null
+    etaLabel: string | null
+    pickupLabel: string | null
+  }>
+}
+
 export async function createScheduledTrip({
   user,
   pickup,
@@ -91,6 +133,10 @@ export async function createScheduledTrip({
   purpose,
   weekdays,
   tier = 'standard',
+  passengers,
+  nearTerm = false,
+  backupBonusCents = null,
+  boostCents = 0,
 }: {
   user: AuthUser
   pickup: RidePlace
@@ -98,7 +144,11 @@ export async function createScheduledTrip({
   pickupAt: Date | null
   purpose: SchedulePurpose
   weekdays: string[]
-  tier?: 'standard' | 'comfort'
+  tier?: 'standard' | 'comfort' | 'wait' | 'carpool'
+  passengers?: number
+  nearTerm?: boolean
+  backupBonusCents?: number | null
+  boostCents?: number
 }) {
   if (!supabase) throw new Error('Supabase is not configured')
   if (!user?.id) throw new Error('Sign in required to schedule a ride')
@@ -112,6 +162,10 @@ export async function createScheduledTrip({
       purpose,
       weekdays,
       tier,
+      ...(passengers ? { passengers } : {}),
+      ...(nearTerm ? { nearTerm: true } : {}),
+      ...(backupBonusCents ? { backupBonusCents } : {}),
+      ...(boostCents ? { boostCents } : {}),
     },
   }) as { trip: { id: string; status: string | null; pickup_at: string | null; pickup_label: string | null; dropoff_label: string | null } }
   if (!data?.trip?.id) throw new Error('Could not schedule ride')
@@ -122,13 +176,29 @@ export async function listScheduledTrips(riderId: string) {
   if (!supabase) return []
   const { data, error } = await supabase
     .from('trips')
-    .select('id, status, pickup_label, dropoff_label, fare_cents, deposit_cents, pickup_at, scheduled_for, rider_note, tier, created_at, metadata')
+    .select('id, status, driver_id, pickup_label, dropoff_label, fare_cents, deposit_cents, pickup_at, scheduled_for, rider_note, tier, created_at, metadata')
     .eq('rider_id', riderId)
     .not('pickup_at', 'is', null)
     .order('pickup_at', { ascending: true })
     .limit(30)
   if (error) throw new Error(error.message)
   return (data || []) as ScheduledRow[]
+}
+
+export async function scheduledRiderAction(op: 'detail' | 'switch' | 'cancel', tripId: string, extra: { safetyReport?: boolean } = {}) {
+  if (!supabase) throw new Error('Supabase is not configured')
+  return authedJson(supabase, '/api/stripe-payment-methods?action=scheduled-rider', {
+    method: 'POST',
+    body: { op, tripId, ...extra },
+  })
+}
+
+export async function bumpScheduledBoost(tripId: string, boostCents: number) {
+  if (!supabase) throw new Error('Supabase is not configured')
+  return authedJson(supabase, '/api/stripe-payment-methods?action=bump-scheduled-boost', {
+    method: 'POST',
+    body: { tripId, boostCents },
+  })
 }
 
 export async function cancelScheduledTrip(tripId: string) {
@@ -139,4 +209,9 @@ export async function cancelScheduledTrip(tripId: string) {
     .eq('id', tripId)
     .in('status', ['scheduled', 'accepted'])
   if (error) throw new Error(error.message || 'Could not cancel')
+  const hold = await authedJson(supabase, '/api/stripe-payment-methods?action=release-scheduled-boost', {
+    method: 'POST',
+    body: { tripId },
+  }) as { ok?: boolean; error?: string }
+  if (hold && hold.ok === false) throw new Error(hold.error || 'Could not release the hold on your card.')
 }

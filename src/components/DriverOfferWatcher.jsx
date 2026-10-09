@@ -8,17 +8,47 @@ import { supabase } from '../lib/supabase'
 import { pushToast } from '../lib/toasts'
 import { isDueNow, isUnpaidAirportDepositTrip } from '../../packages/rides-native/tripTags.js'
 import { offerVisibleToDriver, visibleOfferQuery } from '../../shared/driverOrder.js'
+import { isStaleLiveOffer } from '../../shared/staleLiveOffer.js'
+import { scheduledBoardCopy } from '../../shared/nearTermSlots.js'
 
 export function DriverOfferWatcher() {
   const { user } = useAuth()
   const seen = useRef(new Set())
+  const seenBoard = useRef(new Set())
   const primed = useRef(false)
+  const boardPrimed = useRef(false)
 
   useEffect(() => {
     if (!supabase || !user?.id) return undefined
     let alive = true
     primed.current = false
+    boardPrimed.current = false
     seen.current = new Set()
+    seenBoard.current = new Set()
+
+    async function lookBoard() {
+      if (!alive) return
+      const { data, error } = await supabase
+        .from('trips')
+        .select('id, status, pickup_label, dropoff_label, pickup_at, scheduled_for, driver_id')
+        .eq('status', 'scheduled')
+        .is('driver_id', null)
+        .order('pickup_at', { ascending: true })
+        .limit(25)
+      if (!alive || error) return
+      const rows = data || []
+      if (!boardPrimed.current) {
+        rows.forEach((row) => seenBoard.current.add(row.id))
+        boardPrimed.current = true
+        return
+      }
+      rows.forEach((row) => {
+        if (!row?.id || seenBoard.current.has(row.id)) return
+        seenBoard.current.add(row.id)
+        const copy = scheduledBoardCopy(row)
+        pushToast({ kind: 'ride_scheduled', title: copy.title, body: copy.body })
+      })
+    }
 
     async function look() {
       if (!alive) return
@@ -28,6 +58,7 @@ export function DriverOfferWatcher() {
         .eq('profile_id', user.id)
         .maybeSingle()
       if (!alive || app.error || app.data?.onboarding_status !== 'approved') return
+      await lookBoard()
       const presence = await supabase
         .from('driver_status')
         .select('online')
@@ -36,7 +67,7 @@ export function DriverOfferWatcher() {
       if (!alive || presence.error || !presence.data?.online) return
       const { data, error } = await visibleOfferQuery(supabase
         .from('trips')
-        .select('id, status, rider_id, driver_id, pickup_label, dropoff_label, pickup_at, scheduled_for, deposit_cents, metadata, rider_note')
+        .select('id, status, rider_id, driver_id, pickup_label, dropoff_label, pickup_at, scheduled_for, deposit_cents, metadata, rider_note, created_at, requested_at, offer_expires_at')
         .in('status', ['searching', 'offered']), user.id)
         .order('requested_at', { ascending: false })
         .limit(8)
@@ -45,6 +76,7 @@ export function DriverOfferWatcher() {
         offerVisibleToDriver(row, user.id)
         && isDueNow(row)
         && !isUnpaidAirportDepositTrip(row)
+        && !isStaleLiveOffer(row)
       ))
       if (!primed.current) {
         rows.forEach((row) => seen.current.add(row.id))

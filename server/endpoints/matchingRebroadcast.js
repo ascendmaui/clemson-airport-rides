@@ -3,6 +3,7 @@ import { timingSafeEqual } from 'node:crypto'
 import { admin, json } from '../friendRideLib.js'
 import { stagingCronBlock } from '../cronGuard.js'
 import { rebroadcastMissedOffers } from '../matchingRebroadcast.js'
+import { expireStaleLiveOffers } from '../staleLiveOffer.js'
 
 function headerValue(headers, name) {
   if (!headers || typeof headers !== 'object') return ''
@@ -55,7 +56,9 @@ export default async function handler(req, res, deps = {}) {
   try {
     const scheduled = await releaseScheduledRides(sb, { dryRun, ...(deps.now ? { now: deps.now } : {}) })
     const result = await rebroadcastMissedOffers(sb, { dryRun, ...(deps.now ? { now: deps.now } : {}) })
-    return json(res, result.errors || scheduled.errors ? 500 : 200, { ok: result.errors + scheduled.errors === 0, ...result, scheduled })
+    const staleOffers = await expireStaleLiveOffers(sb, { dryRun, ...(deps.now ? { now: deps.now } : {}) })
+    const errors = result.errors + scheduled.errors + staleOffers.errors
+    return json(res, errors ? 500 : 200, { ok: errors === 0, ...result, scheduled, staleOffers })
   } catch (error) {
     console.error('[matching-rebroadcast]', error.message)
     return json(res, 500, { error: 'Could not rebroadcast ride offers' })

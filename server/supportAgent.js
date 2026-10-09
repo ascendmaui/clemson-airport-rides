@@ -96,7 +96,7 @@ function diagnosis(category, context, role) {
   if (category === 'billing') {
     const card = context?.billing?.hasCard
       ? `A ${context.billing.brand || 'card'}${context.billing.last4 ? ` ending ${context.billing.last4}` : ''} is on file.`
-      : 'No card is on file. That blocks friend-ride charges. Airport deposits use Checkout from Schedule and can fail separately.'
+      : 'No card is on file. That blocks friend-ride charges and the fare hold placed when a ride is requested.'
     const trip = latest?.fareUsd != null
       ? ` Latest trip fare on file: $${latest.fareUsd} (${latest.pickup || 'pickup'} → ${latest.dropoff || 'dropoff'}, ${latest.status || 'status unknown'}).`
       : ''

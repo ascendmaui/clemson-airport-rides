@@ -16,6 +16,17 @@ import {
 } from './lib/friendRides'
 import { RequireAuth } from './components/RequireAuth'
 import { Marketing } from './screens/Marketing'
+import { WhyClemsonRides } from './screens/WhyClemsonRides'
+import { DriveWithUs } from './screens/DriveWithUs'
+import {
+  FaqPage,
+  GetTheAppPage,
+  HowItWorks,
+  PromosPage,
+  RideTypesPage,
+  SafetyPage,
+  TigerPassPage,
+} from './screens/MarketingInfo'
 import { RiderHome } from './screens/RiderHome'
 import { ConfirmPickup } from './screens/ConfirmPickup'
 import { RideTiers } from './screens/RideTiers'
@@ -31,6 +42,7 @@ import { AdminDesk } from './screens/AdminDesk'
 import { PickDriver } from './screens/PickDriver'
 import { Requested } from './screens/Requested'
 import { LegalPrivacy, LegalTerms } from './screens/LegalPages'
+import { ServiceArea } from './screens/ServiceArea'
 import { LiveShare } from './screens/LiveShare'
 import { ProfileView } from './screens/ProfileView'
 import { RateRide } from './screens/RateRide'
@@ -42,10 +54,14 @@ import { CarpoolHub } from './screens/CarpoolHub'
 import { AmbassadorScreen } from './screens/AmbassadorScreen'
 import { ToastProvider, ToastStack } from './lib/toasts'
 import { RideToastWatcher } from './components/RideToastWatcher'
+import { RiderMatchPopup } from './components/RiderMatchPopup'
+import { WeeklyCouponNotice } from './components/WeeklyCouponNotice'
 import { DriverOfferWatcher } from './components/DriverOfferWatcher'
 import { DriverBillingEntry } from './components/DriverBillingEntry'
 import { IncentivesAdmin } from './screens/IncentivesAdmin'
 import { LostFoundWatcher } from './components/LostFoundWatcher'
+import { TripMessageBanner } from './components/TripMessageBanner'
+import { RiderPickupStream } from './components/RiderPickupStream'
 import { LostFound } from './screens/LostFound'
 import { RidesHistory } from './screens/RidesHistory'
 
@@ -72,7 +88,22 @@ function AmbassadorAttributionSync() {
 }
 
 const PROTECTED = new Set(['driver', 'driver-onboarding', 'account', 'driver-signup', 'admin', 'admin-dashboard', 'incentives', 'lost-found', 'history', 'earnings', 'sign-agreement'])
-const SITE_ROUTES = new Set(['landing', '', 'privacy', 'terms'])
+const SITE_ROUTES = new Set([
+  'landing',
+  '',
+  'privacy',
+  'terms',
+  'service-area',
+  'why-clemson-rides',
+  'drive',
+  'how-it-works',
+  'ride-types',
+  'tiger-pass',
+  'safety',
+  'promos',
+  'faq',
+  'get-the-app',
+])
 
 function Screen({ path, params }) {
   switch (path) {
@@ -87,6 +118,26 @@ function Screen({ path, params }) {
       return <LegalPrivacy />
     case 'terms':
       return <LegalTerms />
+    case 'service-area':
+      return <ServiceArea />
+    case 'why-clemson-rides':
+      return <WhyClemsonRides />
+    case 'drive':
+      return <DriveWithUs />
+    case 'how-it-works':
+      return <HowItWorks />
+    case 'ride-types':
+      return <RideTypesPage />
+    case 'tiger-pass':
+      return <TigerPassPage />
+    case 'safety':
+      return <SafetyPage />
+    case 'promos':
+      return <PromosPage />
+    case 'faq':
+      return <FaqPage />
+    case 'get-the-app':
+      return <GetTheAppPage />
     case 'share':
     case 'live':
       return <LiveShare token={params.token || ''} />
@@ -108,6 +159,7 @@ function Screen({ path, params }) {
           pickup={params.pickup || ''}
           pickupLat={params.pickupLat || ''}
           pickupLng={params.pickupLng || ''}
+          tier={params.tier || ''}
         />
       )
     case 'tiers':
@@ -120,6 +172,8 @@ function Screen({ path, params }) {
           destLat={params.destLat || ''}
           destLng={params.destLng || ''}
           billing={params.billing || ''}
+          tier={params.tier || ''}
+          passengers={params.passengers || ''}
         />
       )
     case 'pick-driver':
@@ -127,6 +181,7 @@ function Screen({ path, params }) {
         <PickDriver
           dest={params.dest || 'GSP Airport'}
           tier={params.tier || 'standard'}
+          passengers={params.passengers || ''}
           listCents={params.listCents || ''}
           pickup={params.pickup || ''}
           pickupLat={params.pickupLat || ''}
@@ -143,7 +198,7 @@ function Screen({ path, params }) {
     case 'driver':
       return (
         <RequireAuth>
-          <DriverHome />
+          <DriverHome openChatTripId={params.chat || ''} />
         </RequireAuth>
       )
     case 'earnings':
@@ -278,8 +333,12 @@ export default function App() {
         <div className={site ? 'app-shell app-shell--site' : 'app-shell'} style={{ position: 'relative', height: '100%' }}>
           <AmbassadorAttributionSync />
           <RideToastWatcher />
+          <RiderMatchPopup />
+          <WeeklyCouponNotice />
           <DriverOfferWatcher />
           <LostFoundWatcher />
+          <TripMessageBanner />
+          <RiderPickupStream />
           <ToastStack />
           <div
             key={`${path}:${params.token || params.id || params.trip || ''}`}

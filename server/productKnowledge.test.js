@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
+import { webBottomTabLabels } from '../src/lib/webTabOrder.js'
 import {
   PRODUCT_BRIEF,
   action,
@@ -75,5 +76,15 @@ test('PRODUCT_BRIEF contains authoritative Clemson discount rules', () => {
   assert.ok(PRODUCT_BRIEF.includes('@clemson.edu'))
   assert.ok(PRODUCT_BRIEF.includes('@g.clemson.edu'))
   assert.ok(PRODUCT_BRIEF.includes('10% off Standard only'))
-  assert.ok(PRODUCT_BRIEF.includes('25% deposit'))
+  assert.ok(PRODUCT_BRIEF.includes('card hold for the estimated fare plus a buffer'))
+  assert.equal(PRODUCT_BRIEF.includes('25% deposit'), false)
+})
+
+test('PRODUCT_BRIEF lists web bottom tabs in the same order as the web bar', () => {
+  const order = webBottomTabLabels().join(', ')
+  assert.equal(order, 'Rides, Schedule, Friends, Account')
+  assert.ok(
+    PRODUCT_BRIEF.includes(`Bottom tabs: ${order} (Rides opens the rider home, route "home").`),
+    'support brief must follow the web bar, left to right',
+  )
 })

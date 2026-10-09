@@ -1,4 +1,4 @@
-import { trackingIssue, withTrackingTimeout, onTrackingResume } from '../../packages/rides-native/tracking.js'
+import { trackingIssue, staleEtaLine, withTrackingTimeout, onTrackingResume } from '../../packages/rides-native/tracking.js'
 import { useEffect, useRef, useState } from 'react'
 import { PrimaryButton } from '../components/PrimaryButton'
 import { AccessibleAlert } from '../components/AccessibleAlert'
@@ -7,21 +7,22 @@ import { navigate, shareUrl } from '../lib/navigation'
 import { shouldPromptRiderTip } from '../lib/riderTip'
 import { useAuth } from '../lib/auth'
 import { createLocationShare, startSharingLocation } from '../lib/locationShare'
-import { isLiveTrip, subscribeTripDriverLocation } from '../lib/liveDriverLocation'
+import { distanceMeters, isLiveTrip, subscribeTripDriverLocation } from '../lib/liveDriverLocation'
 import { supabase } from '../lib/supabase'
 import { hasRatedTrip } from '../lib/ratings'
 import { RideChat, RideMessageButton } from '../components/RideChat'
+import { ReportLostItemButton } from '../components/ReportLostItem'
 import { rideChatMode } from '../lib/tripChatRules'
+import { fetchLostItemReport, subscribeLostItemReports } from '../lib/tripMessages'
 import { SosControl } from '../components/SosControl'
 import { isActiveRideStatus } from '../lib/sosAlert'
 import { MidrideCancelSheet } from '../components/MidrideCancelSheet'
+import { RiderSwitchSheet } from '../components/RiderSwitchSheet'
 import { isMidrideStatus } from '../lib/tripPhase'
 import { CounterpartChip } from '../components/CounterpartChip'
 import { PARTY_VISIBLE_STATUSES } from '../../packages/rides-native/partyProfile.js'
 import {
-  activeTripRouteLine,
   etaHoldLine,
-  etaLineFor,
   orderedLiveStops,
   riderLiveView,
   SEARCH_APPROX_WAIT_NOTE,
@@ -31,6 +32,8 @@ import {
   STILL_SEARCHING_COPY,
   STILL_SEARCHING_MS,
 } from '../../packages/rides-native/liveTrip.js'
+import { followEtaLine, followRouteLine, legNounForStatus, storedRoadSuffix, directionsEtaLine } from '../../packages/rides-native/roadFollow.js'
+import { useDrivingLeg } from '../lib/useDrivingLeg'
 import { COMFORT_FLEET_NOTICE, tripTags } from '../../packages/rides-native/tripTags.js'
 import { LivePhase } from '../components/LivePhase'
 import { reconcileCheckoutSession } from '../lib/stripeCheckout'
@@ -42,6 +45,7 @@ export function Requested({ dest = 'GSP Airport', trip = '', driver = 'your driv
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
   const [tripRow, setTripRow] = useState(null)
+  const [lostReport, setLostReport] = useState(null)
   const [tripMissing, setTripMissing] = useState(false)
   const [locationAt, setLocationAt] = useState(null)
   const [trackingError, setTrackingError] = useState(null)
@@ -54,6 +58,7 @@ export function Requested({ dest = 'GSP Airport', trip = '', driver = 'your driv
   const [rateNudge, setRateNudge] = useState(false)
   const [chatOpen, setChatOpen] = useState(false)
   const [cancelOpen, setCancelOpen] = useState(false)
+  const [switchOpen, setSwitchOpen] = useState(false)
   const [stillSearching, setStillSearching] = useState(false)
   const searchStartedAt = useRef(null)
   const stopRef = useRef(null)
@@ -168,12 +173,30 @@ export function Requested({ dest = 'GSP Airport', trip = '', driver = 'your driv
   }, [trip, user?.id, paid, sessionId, trackingAttempt])
 
   useEffect(() => {
+    if (!trip) return undefined
+    let alive = true
+    fetchLostItemReport(trip)
+      .then((row) => { if (alive) setLostReport(row) })
+      .catch(() => { if (alive) setLostReport(null) })
+    const unsub = subscribeLostItemReports((payload) => {
+      const next = payload?.new
+      if (!next || next.trip_id === trip) {
+        fetchLostItemReport(trip).then((row) => { if (alive) setLostReport(row) }).catch(() => {})
+      }
+    })
+    return () => {
+      alive = false
+      unsub()
+    }
+  }, [trip])
+
+  useEffect(() => {
     if (!resolvedDriverId || !isLiveTrip(tripRow?.status)) return undefined
     return subscribeTripDriverLocation(trip, (loc) => {
       setDriverPos([loc.lat, loc.lng])
       setDriverHeading(loc.heading)
       setLocationAt(loc.updatedAt)
-    }, setTrackingError)
+    }, setTrackingError, resolvedDriverId)
   }, [trip, resolvedDriverId, trackingAttempt, tripRow?.status])
 
   useEffect(() => { setDriverPos(null); setDriverHeading(null); setLocationAt(null); setTrackingError(null) }, [resolvedDriverId, tripRow?.status])
@@ -210,7 +233,7 @@ export function Requested({ dest = 'GSP Airport', trip = '', driver = 'your driv
   }
 
   const status = tripRow?.status || ''
-  const chatMode = rideChatMode(tripRow)
+  const chatMode = rideChatMode(tripRow, Date.now(), lostReport)
   const showMessages = Boolean(user?.id && tripRow?.driver_id && tripRow?.rider_id && chatMode !== 'closed')
   const rideLive = isActiveRideStatus(status)
   const devSosPreview = import.meta.env.DEV && typeof window !== 'undefined'
@@ -245,9 +268,25 @@ export function Requested({ dest = 'GSP Airport', trip = '', driver = 'your driv
   const showMap = Boolean(trip) || Boolean(status) || preferred
   const preview = showSearchTheater(status) && !tripRow?.driver_id && !driverPos
   const searchPreview = preview ? searchingRidePreview(tripRow) : null
-  const etaLine = locationIssue
-    ? null
-    : (searchPreview ? searchPreview.eta : etaHoldLine(status, etaLineFor(status, driverFix, tripRow)))
+  const snappedRoad = storedRoadSuffix(tripRow, driverFix, status)
+  const noun = legNounForStatus(status)
+  const legDest = noun === 'drop-off'
+    ? (tripRow?.dropoff_lat != null && tripRow?.dropoff_lng != null
+      ? [Number(tripRow.dropoff_lat), Number(tripRow.dropoff_lng)]
+      : null)
+    : noun === 'pickup'
+      ? (tripRow?.pickup_lat != null && tripRow?.pickup_lng != null
+        ? [Number(tripRow.pickup_lat), Number(tripRow.pickup_lng)]
+        : null)
+      : null
+  const drivingLeg = useDrivingLeg(driverPos, legDest, Boolean(!preview && !snappedRoad && driverPos && legDest))
+  const followedEta = followEtaLine(status, driverFix, tripRow)
+  const roadEta = !snappedRoad && noun
+    ? directionsEtaLine({ meters: drivingLeg?.meters, seconds: drivingLeg?.seconds, noun })
+    : null
+  const computedEta = roadEta || followedEta
+  const heldEta = searchPreview ? searchPreview.eta : etaHoldLine(status, computedEta)
+  const etaLine = staleEtaLine(locationIssue, heldEta, { placeholder: !searchPreview && !computedEta })
   const liveStops = orderedLiveStops(tripRow)
   const stopPins = liveStops.map((stop) => ({
     id: stop.id,
@@ -257,17 +296,20 @@ export function Requested({ dest = 'GSP Airport', trip = '', driver = 'your driv
     badge: String(stop.order),
     color: stop.order === 1 ? '#522D80' : (stop.order === liveStops.length || stop.kind === 'dropoff' ? '#F56600' : '#522D80'),
   }))
-  const routePath = searchPreview ? searchPreview.route : activeTripRouteLine(tripRow, driverFix)
+  const followedRoute = followRouteLine(tripRow, driverFix)
+  const routePath = searchPreview
+    ? searchPreview.route
+    : (!snappedRoad && drivingLeg?.path?.length > 1 ? drivingLeg.path : followedRoute)
   const dropoff =
     tripRow?.dropoff_lat != null && tripRow?.dropoff_lng != null
       ? [Number(tripRow.dropoff_lat), Number(tripRow.dropoff_lng)]
       : null
-  const mapCenter = preview && routePath.length > 1
+  const mapCenter = routePath.length > 1
     ? [
       (routePath[0][0] + routePath[routePath.length - 1][0]) / 2,
       (routePath[0][1] + routePath[routePath.length - 1][1]) / 2,
     ]
-    : (driverPos || (liveStops[0] ? [liveStops[0].lat, liveStops[0].lng] : pickup) || CLEMSON)
+    : (pickup || CLEMSON)
 
   useEffect(() => {
     if (!showSearchTheater(status) || driverPos) {
@@ -285,6 +327,10 @@ export function Requested({ dest = 'GSP Airport', trip = '', driver = 'your driv
     return () => clearInterval(id)
   }, [status, driverPos])
 
+  const approachFeet = (status === 'accepted' || status === 'arriving' || status === 'arrived') && driverPos && pickup
+    ? Math.round(distanceMeters({ lat: driverPos[0], lng: driverPos[1] }, { lat: pickup[0], lng: pickup[1] }))
+    : null
+  const canSwitchDriver = (status === 'accepted' || status === 'arriving') && Boolean(tripRow?.driver_id)
   const fleetTags = tripRow ? tripTags(tripRow) : []
   const comfortClassTrip = fleetTags.includes('comfort')
 
@@ -299,7 +345,7 @@ export function Requested({ dest = 'GSP Airport', trip = '', driver = 'your driv
       )}
       {showMap && (
         <div className="glass-panel search-map" style={{ borderRadius: 20, overflow: 'hidden', height: preview ? 280 : 220, position: 'relative' }}>
-          {/* TODO: road-following tiles need a billed Maps key (VITE_GOOGLE_MAPS_API_KEY). Status, progress, and straight-line ETA stay on the card. */}
+          {/* Road line is the stored polyline, or one throttled Directions leg under 12 km. */}
           <CampusMap
             height={preview ? 280 : 220}
             interactive
@@ -310,11 +356,11 @@ export function Requested({ dest = 'GSP Airport', trip = '', driver = 'your driv
             dropoffPosition={dropoff}
             driverPosition={preview ? null : driverPos}
             driverHeading={driverHeading}
-            animateDriver={!preview && Boolean(driverPos) && liveStops.length === 0}
+            animateDriver={!preview && Boolean(driverPos)}
             stops={stopPins}
             route={routePath.length > 1 ? routePath : null}
             routeSecondary={preview && routePath.length > 1 ? routePath : null}
-            fitRoute={preview && routePath.length > 1}
+            fitRoute={routePath.length > 1}
           />
           {preview && (
             <div className="search-map-chip" aria-hidden="true">
@@ -327,7 +373,7 @@ export function Requested({ dest = 'GSP Airport', trip = '', driver = 'your driv
       <div className="glass-panel glass-panel--elevated" style={{ padding: 24, borderRadius: 20 }}>
         {paid === '1' && trip && !tripMissing && (status === 'searching' || status === 'offered' || !status) && (
           <p style={{ color: '#522D80', fontWeight: 700, fontSize: 13, lineHeight: 1.45, marginTop: 0 }}>
-            Stripe Checkout sent you back. This ride is in the open pool. The deposit shows up when Stripe confirms it.
+            This ride is in the open pool. The final fare is charged when the trip ends.
           </p>
         )}
         {tripMissing && (
@@ -344,6 +390,11 @@ export function Requested({ dest = 'GSP Airport', trip = '', driver = 'your driv
           steps={tripMissing ? [] : phase.steps}
           activeIndex={tripMissing ? -1 : phase.stepIndex}
         />
+        {Number.isFinite(approachFeet) ? (
+          <p role="status" style={{ marginTop: 10, fontWeight: 800, color: 'var(--orange)' }}>
+            Your driver is {approachFeet.toLocaleString('en-US')} ft away.
+          </p>
+        ) : null}
         {preview && searchPreview?.wait && (
           <div className="search-wait" role="status" aria-live="polite">
             <span className="search-wait__spinner" aria-hidden="true" />
@@ -380,7 +431,7 @@ export function Requested({ dest = 'GSP Airport', trip = '', driver = 'your driv
           <CounterpartChip
             profileId={resolvedDriverId}
             noun="driver"
-            eta={driverPos && !locationIssue ? etaLineFor(status, driverFix, tripRow) : null}
+            eta={driverPos ? staleEtaLine(locationIssue, computedEta, { placeholder: !computedEta }) : null}
             onOpen={() => navigate('profile', { id: resolvedDriverId, matched: '1' })}
           />
         )}
@@ -408,7 +459,12 @@ export function Requested({ dest = 'GSP Airport', trip = '', driver = 'your driv
             </p>
           )}
           {showMessages && (
-            <RideMessageButton readOnly={chatMode !== 'compose'} onClick={() => setChatOpen(true)} />
+            <RideMessageButton
+              readOnly={chatMode !== 'compose'}
+              tripId={tripRow?.id}
+              userId={user?.id}
+              onClick={() => setChatOpen(true)}
+            />
           )}
           {status === 'completed' && trip && (
             <button
@@ -421,6 +477,9 @@ export function Requested({ dest = 'GSP Airport', trip = '', driver = 'your driv
               Left something in the car?
             </button>
           )}
+          {status === 'completed' && tripRow && (
+            <ReportLostItemButton trip={tripRow} userId={user?.id} onOpened={() => setChatOpen(true)} />
+          )}
           {rateNudge && trip && (
             <div className="glass-panel" style={{ padding: 12, borderRadius: 14, background: 'rgba(245,102,0,0.12)' }}>
               <div style={{ fontWeight: 700, color: 'var(--purple)', marginBottom: 6, fontSize: 13 }}>Trip complete — rate your driver?</div>
@@ -429,6 +488,16 @@ export function Requested({ dest = 'GSP Airport', trip = '', driver = 'your driv
                 Soft remind later
               </button>
             </div>
+          )}
+          {canSwitchDriver && trip && (
+            <button
+              type="button"
+              className="pressable"
+              onClick={() => setSwitchOpen(true)}
+              style={{ fontWeight: 800, color: 'var(--purple)', padding: '4px 0' }}
+            >
+              Change driver
+            </button>
           )}
           {isMidrideStatus(status) && trip && (
             <button
@@ -450,6 +519,20 @@ export function Requested({ dest = 'GSP Airport', trip = '', driver = 'your driv
           userId={user.id}
           initialTrip={tripRow}
           onClose={() => setChatOpen(false)}
+        />
+      )}
+      {switchOpen && trip && (
+        <RiderSwitchSheet
+          tripId={trip}
+          onClose={() => setSwitchOpen(false)}
+          onDone={(data) => {
+            setSwitchOpen(false)
+            if (data?.next === 'carpool') navigate('carpool', { hub: '1' })
+            else if (data?.next === 'home') navigate('home')
+            else if (data?.trip) {
+              setTripRow((row) => (row ? { ...row, ...data.trip, driver_id: data.trip.driver_id ?? null } : row))
+            }
+          }}
         />
       )}
       {cancelOpen && trip && (

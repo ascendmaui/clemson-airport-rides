@@ -72,7 +72,7 @@ export function requestRide({ destId, direction, pickup, passengers, flight }) {
     dropoffLat: dropPt.lat,
     dropoffLng: dropPt.lng,
     fareCents: dest.fare,
-    depositCents: Math.round(dest.fare * 0.25),
+    depositCents: 0,
     passengers,
     flight: flight || null,
     requestedAt: Date.now(),

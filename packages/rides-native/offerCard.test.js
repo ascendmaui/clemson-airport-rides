@@ -274,8 +274,8 @@ test('airport and deposit badges: airport trip detection, deposit formatting, an
   const depBadge = depositBadge(gspCard)
   assert.deepEqual(depBadge, {
     id: 'deposit',
-    label: '25% deposit · $17.00',
-    shortLabel: '25% deposit',
+    label: 'Already paid · $17.00',
+    shortLabel: 'Already paid',
     amountCents: 1700,
     formattedAmount: '$17.00',
     tone: 'orange',
@@ -397,7 +397,7 @@ test('offerCardViewModel formats synthetic offers end-to-end', () => {
   assert.equal(avaVm.seats.seatsLabel, '1 seat')
   assert.equal(avaVm.isAirport, true)
   assert.equal(avaVm.airport?.code, 'GSP')
-  assert.equal(avaVm.deposit?.formattedAmount, '$17.00')
+  assert.equal(avaVm.deposit, null)
 
   // Mason: Downtown Clemson -> The Pier
   const masonVm = offerCardViewModel(mason)
@@ -420,7 +420,7 @@ test('offerCardViewModel formats synthetic offers end-to-end', () => {
   assert.equal(jordanVm.distanceEta, '8 min away · 33 mi')
   assert.equal(jordanVm.seats.seatsLabel, '3 seats')
   assert.equal(jordanVm.isAirport, true)
-  assert.equal(jordanVm.deposit?.formattedAmount, '$18.50')
+  assert.equal(jordanVm.deposit, null)
 })
 
 test('offerCardViewModel safely handles empty, null, or sparse card', () => {
@@ -457,7 +457,7 @@ test('offerAccessibilityLabel provides a combined concise summary for screen rea
   assert.ok(avaVm.accessibilityLabel)
   assert.equal(
     avaVm.accessibilityLabel,
-    'Ride offer: $54.40 net pay. From Tillman Hall to GSP Airport. Rider Ava, 4.9 rating. 4 min away · 32 mi. 1 seat. 25% deposit · $17.00. Fri, Sep 25, 8:12 AM',
+    'Ride offer: $54.40 net pay. From Tillman Hall to GSP Airport. Rider Ava, 4.9 rating. 4 min away · 32 mi. 1 seat. Fri, Sep 25, 8:12 AM',
   )
   assert.equal(offerAccessibilityLabel(ava, { now: '2026-09-25T12:00:00.000Z' }), avaVm.accessibilityLabel)
 
@@ -466,7 +466,7 @@ test('offerAccessibilityLabel provides a combined concise summary for screen rea
   assert.ok(masonVm.accessibilityLabel)
   assert.equal(
     masonVm.accessibilityLabel,
-    'Ride offer: $11.20 net pay. From Downtown Clemson to The Pier. Rider Mason, 4.8 rating. 6 min away · 2.4 mi. 2 seats. 25% deposit · $3.50. Fri, Sep 25, 8:45 AM',
+    'Ride offer: $11.20 net pay. From Downtown Clemson to The Pier. Rider Mason, 4.8 rating. 6 min away · 2.4 mi. 2 seats. Fri, Sep 25, 8:45 AM',
   )
 
   // Direct card object with countdown passed to offerAccessibilityLabel
@@ -508,5 +508,17 @@ test('offerCardViewModel isUrgent only while 1 to 10 seconds remain', () => {
   assert.equal(negative.isExpired, true)
 
   assert.equal(offerCardViewModel(card).timeLeft, null)
+})
+
+test('boosted offer card explains the orange badge in plain language', () => {
+  const vm = offerCardViewModel({
+    pickupLabel: 'Tillman Hall',
+    dropoffLabel: 'GSP Airport',
+    fare_cents: 10000,
+    metadata: { boost_cents: 1000 },
+  })
+  assert.equal(vm.boostLine, "The rider added $10 to get this ride accepted. It's all yours.")
+  assert.match(vm.accessibilityLabel, /It's all yours/)
+  assert.equal(offerCardViewModel({ pickupLabel: 'A', dropoffLabel: 'B' }).boostLine, null)
 })
 

@@ -6,7 +6,7 @@ export const WEB_ORIGIN = 'https://clemsonrides.com'
 /** Passenger soft-launch QR target — hash router book home (campus / airport / game-day entry). */
 export const WEB_BOOK_URL = `${WEB_ORIGIN}/#/home`
 
-/** Airport schedule + 25% deposit hold. */
+/** Airport schedule. The fare is charged when the trip ends. */
 export const WEB_SCHEDULE_URL = `${WEB_ORIGIN}/#/schedule`
 
 /** Driver desk (accept rides). */

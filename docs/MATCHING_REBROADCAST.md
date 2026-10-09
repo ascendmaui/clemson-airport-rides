@@ -1,27 +1,29 @@
-# Missed offer rebroadcast
+# Missed offer ladder
 
-Targeted, immediate `driver_request` rides now have a server-owned 60-second offer window. A database cron calls `GET /api/driver?action=rebroadcast-offers` every minute. Healthy cron delivery advances a missed target roughly 60–120 seconds after assignment, even when both apps are closed. Each run handles the oldest 100 due rides; backlog or a failed run can add latency.
+The first targeted offer is exclusive for 15 seconds at an 80% driver share. When that window ends, the ride opens to every eligible online driver at 70% for two minutes, then expires. Scheduled rides stay on their own driver-app tab at 75% and are not part of this sweep. A database trigger owns the deadlines (`20261005203000_offer_ladder_windows.sql`, replacing the 60-second window in `20261004150000_matching_offer_deadline.sql`).
 
-The sweep reuses the existing driver approval and fleet eligibility checks. It skips offline drivers, the rider, explicit passes, and targets already tried in this attempt. It preserves the original queue order, then considers eligible drivers who came online later. Each next target gets a fresh window. When no untried eligible driver remains, the ride returns to the existing open pool, where later arrivals can find it. This fallback retains the existing pool's visibility and acceptance rules; it does not cancel the ride or retry payments.
+A database cron calls `GET /api/driver?action=rebroadcast-offers` every minute. The sweep moves a due exclusive offer into the pool and cancels a due pool offer. Because that job is minute-resolution, a missed exclusive offer opens the pool on the next tick after `offer_expires_at` (within about a minute of the 15-second mark, not on a sub-minute timer). The driver card stays on screen through that gap. Each run handles the oldest 100 due rides.
 
-`offer_expires_at` is maintained by a database trigger. Marking an offer seen or editing unrelated metadata does not extend it. Changing targets resets it; acceptance, cancellation, and release to the pool clear it. Explicit passes record the driver in the attempt history and use the same deadline trigger. Scheduled rides, airport deposit holds, other trip kinds, and already assigned rides are excluded.
+The pool alert goes to eligible online drivers and skips the rider and anyone who already passed. Explicit decline still uses the existing pass path and can advance to another driver before the exclusive window ends. A timeout does not walk the driver list one by one.
 
-The update compares trip status, an empty `driver_id`, the full metadata snapshot, and the exact deadline. An accept, cancel, pass, metadata edit, or overlapping sweep can win; a losing sweep skips the row without overwriting it. Existing web/native realtime subscriptions and polling reload the trip. The rider stays searching until an actual accept; no driver is assigned by a timeout. A stale driver's accept fails when the ride is retargeted to another driver. The sweep records its last reason/time and attempted drivers in metadata in the same atomic update, without a separate event write that could fail after dispatch.
+`offer_expires_at` is maintained by the trigger. Marking an offer seen or editing unrelated metadata does not extend it. Entering the pool sets a fresh two-minute deadline. Acceptance and cancellation clear it. Scheduled rides, airport deposit holds, other trip kinds, and already assigned rides are excluded.
+
+The update compares trip status, an empty `driver_id`, the full metadata snapshot, and the exact deadline. An accept, cancel, pass, metadata edit, or overlapping sweep can win; a losing sweep skips the row without overwriting it. The rider stays searching until an actual accept. The sweep records its reason, time, and attempted drivers in metadata in the same atomic update.
 
 ## Rollout
 
-1. Apply `20261004150000_matching_offer_deadline.sql`. Existing eligible targets receive a full 60-second window. This is compatible with existing clients.
+1. Apply `20261004150000_matching_offer_deadline.sql`, then `20261005203000_offer_ladder_windows.sql`. New exclusive targets receive a 15-second window. Pool phase receives two minutes.
 2. Deploy the API change. Check that `CRON_SECRET` is configured and matches the existing Vault secret `clemson_cron_secret`. The route requires the bearer secret; a cron header alone is insufficient.
 3. Call the route with `dry_run=1` and the bearer header to inspect counts without writes. A missing migration causes a generic 500 rather than an unguarded fallback.
-4. Apply `20261004151000_matching_rebroadcast_cron.sql` to enable the minute job using the existing pg_cron/pg_net infrastructure. Inspect `cron.job`, `cron.job_run_details`, and pg_net responses to confirm delivery. Database job success alone does not establish HTTP success.
+4. Apply `20261004151000_matching_rebroadcast_cron.sql` if the minute job is not already enabled. Inspect `cron.job`, `cron.job_run_details`, and pg_net responses to confirm delivery. Database job success alone does not establish HTTP success.
 
-No deployment or live migration is performed as part of this draft PR. To pause sweeps, run `select cron.unschedule('matching-rebroadcast');` in the deployment environment. Existing acceptance still works with the deadline column/trigger present.
+No deployment or live migration is performed as part of this change. To pause sweeps, run `select cron.unschedule('matching-rebroadcast');` in the deployment environment.
 
 ## Verify
 
-- Run `node --test server/matchingRebroadcast.test.js server/matchingRebroadcastSql.test.js server/weekendDrive.test.js tests/matchingE2E.test.js shared/driverOrder.test.js`, then `npm test` and `npm run build`.
-- In a test environment with two approved online drivers, request an immediate campus ride. Leave the first target's card unseen, then repeat with it seen but ignored. After its window and the next cron tick, only the next target should see the targeted offer. The rider should still be searching with no assigned driver.
-- Try the old card's Accept while the next driver accepts. Exactly one claim may win. If the first accept commits before timeout, the sweep leaves it alone; otherwise the stale target is rejected. The rider and winning driver should both show the same accepted trip.
-- Cancel during the window, or race two authenticated sweep requests. A canceled ride must stay canceled, and overlapping sweeps must not skip a target.
-- Take the next driver offline, pass an offer, or bring another eligible driver online after the request. Confirm the next timeout skips offline/passed/tried drivers and can discover the new driver. Exhaust the targets and confirm release to the open pool.
-- Confirm targeted Comfort waves choose Comfort-listed drivers. Confirm scheduled rides and deposit holds are untouched. Check response counts (`scanned`, `advanced`, `released`, `skipped`, `errors`, `wouldAdvance`); per-trip failures remain due for a later retry and produce HTTP 500 with counts.
+- Run `node --test server/matchingRebroadcast.test.js server/matchingRebroadcastSql.test.js server/offerLadderSql.test.js server/weekendDrive.test.js tests/matchingE2E.test.js shared/driverOrder.test.js`, then `npm test` and `npm run build`.
+- In a test environment with two approved online drivers, request an immediate campus ride. Leave the first target's card unseen. After its 15-second deadline and the next cron tick, both eligible drivers should see the 70% pool offer. The rider should still be searching with no assigned driver.
+- Accept during the exclusive window. The sweep must leave that row alone. Exactly one claim may win.
+- Cancel during the window, or race two authenticated sweep requests. A canceled ride must stay canceled.
+- Pass an offer, or take a driver offline. The pool alert skips that driver. After the two-minute pool deadline, the ride is canceled with `offer_expired`.
+- Confirm scheduled rides and deposit holds are untouched. Check response counts (`scanned`, `advanced`, `pooled`, `released`, `expired`, `skipped`, `errors`, `wouldAdvance`, `wouldPool`, `wouldExpire`).

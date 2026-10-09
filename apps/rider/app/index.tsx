@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons'
-import { useRouter } from 'expo-router'
+import { useLocalSearchParams, useRouter } from 'expo-router'
 import * as Location from 'expo-location'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
@@ -26,6 +26,7 @@ import { useAuth } from '@/lib/auth'
 import { setAuthNext } from '@/lib/authNext'
 import { listScheduledTrips, type ScheduledRow } from '@/lib/scheduleApi'
 import { playTigerCue, tapHaptic } from '@/lib/feedback'
+import { oneParam } from '@/lib/oneParam'
 import { displayFirstName } from 'rides-native/authErrors'
 import { campusOverlays } from 'rides-native/riderShell.js'
 import { loadGameDay } from 'rides-native/driverDesk'
@@ -48,11 +49,16 @@ const QUICK_ACTIONS = [
   { id: 'schedule', label: 'Schedule a ride', detail: 'Choose a time', icon: 'calendar-outline' as const, href: '/schedule' as const },
   { id: 'carpool', label: 'Carpool', detail: 'Split the surge', icon: 'people-outline' as const, href: '/friends' as const },
   { id: 'history', label: 'Your rides', detail: 'Trip history', icon: 'time-outline' as const, href: '/history' as const },
-  { id: 'safety', label: 'Safety', detail: 'Share and SOS', icon: 'shield-checkmark-outline' as const, href: '/safety' as const },
+  { id: 'safety', label: 'Safety', detail: 'Audio, video, tracking, SOS', icon: 'shield-checkmark-outline' as const, href: '/safety' as const },
 ]
 
 export default function RiderHome() {
   const router = useRouter()
+  const routeParams = useLocalSearchParams<{ tier?: string | string[] }>()
+  const presetTier = oneParam(routeParams.tier)
+  const tierParams = presetTier === 'standard' || presetTier === 'wait' || presetTier === 'comfort' || presetTier === 'carpool'
+    ? { tier: presetTier }
+    : {}
   const insets = useSafeAreaInsets()
   const { height: windowH } = useWindowDimensions()
   const { user, configured } = useAuth()
@@ -251,7 +257,7 @@ export default function RiderHome() {
     if (dest) {
       const known = lookupCatalogPlace(dest)
       void tapHaptic()
-      router.push({ pathname: '/confirm', params: { dest: known?.label || dest } })
+      router.push({ pathname: '/confirm', params: { dest: known?.label || dest, ...tierParams } })
       return
     }
     const typed = lookupCatalogPlace(query)
@@ -261,7 +267,7 @@ export default function RiderHome() {
     }
     setDestError(null)
     void tapHaptic()
-    router.push({ pathname: '/confirm', params: { dest: typed.label } })
+    router.push({ pathname: '/confirm', params: { dest: typed.label, ...tierParams } })
   }
 
   async function onLocate() {
@@ -292,6 +298,7 @@ export default function RiderHome() {
           ref={mapRef}
           spots={spots}
           showHeat={showBusy}
+          heatWindow={heatWindow}
           mapType={mapType}
           gameDay={gameDay}
           gameDayLabel={gameNotice?.live ? gameNotice.headline : null}

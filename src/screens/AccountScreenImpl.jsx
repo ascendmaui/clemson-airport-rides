@@ -6,8 +6,11 @@ import { handleTabListKeyDown } from '../lib/tabA11y'
 import { BillingPanel } from '../components/BillingPanel'
 import {
   IconBell, IconCard, IconCar, IconHelp, IconPrivacy, IconProfile,
-  IconSettings, IconSignOut, IconStudent, IconShare,
+  IconSchedule, IconSettings, IconSignOut, IconStudent, IconShare, IconShield,
 } from '../components/icons'
+import { WomenOnlyCard } from '../components/WomenOnlyCard'
+import { SafetyHub } from '../components/SafetyHub'
+import { loadComfortPreference, saveComfortPreference } from '../../packages/rides-native/comfortPreference.js'
 import { useAuth } from '../lib/auth'
 import { getHashRoute, navigate } from '../lib/navigation'
 import { fetchProfile, updateMyProfile, findPendingRatingTrip } from '../lib/ratings'
@@ -32,6 +35,7 @@ import { supportTicketRequest } from '../lib/agentChatClient'
 import { ACCOUNT_DELETION_TICKET } from '../../shared/accountDeletion.js'
 import { COMFORT_FLEET_NOTICE } from '../../packages/rides-native/tripTags.js'
 import { CreditPacksPanel } from '../components/CreditPacksPanel'
+import { TigerPassPanel } from '../components/TigerPassPanel'
 import { PrepaidCreditsPanel } from '../components/PrepaidCreditsPanel'
 import { CreditsBalance } from '../components/CreditsBalance'
 import { QuietHoursCard } from '../components/QuietHoursCard'
@@ -60,15 +64,16 @@ function Section({ title, subtitle, children, icon: Icon }) {
 }
 
 const NAV = [
+  { id: 'billing', label: 'Payment', Icon: IconCard },
+  { id: 'support', label: 'Support', Icon: IconHelp },
   { id: 'profile', label: 'Profile', Icon: IconProfile },
   { id: 'refer', label: 'Refer friends', Icon: IconShare },
   { id: 'notifications', label: 'Alerts', Icon: IconBell },
-  { id: 'billing', label: 'Billing', Icon: IconCard },
   { id: 'vehicle', label: 'Vehicle', Icon: IconCar },
   { id: 'student', label: 'Student', Icon: IconStudent },
   { id: 'privacy', label: 'Privacy', Icon: IconPrivacy },
+  { id: 'safety', label: 'Safety', Icon: IconShield },
   { id: 'help', label: 'Help', Icon: IconHelp },
-  { id: 'support', label: 'Support', Icon: IconHelp },
 ]
 
 const ACCOUNT_TABS = new Set(NAV.map((n) => n.id))
@@ -108,6 +113,11 @@ export function AccountScreen() {
   const [deleteNote, setDeleteNote] = useState(null)
   const [studentNote, setStudentNote] = useState(null)
   const [studentBusy, setStudentBusy] = useState(false)
+  const [genderIdentity, setGenderIdentity] = useState('unspecified')
+  const [womenOnlyMatching, setWomenOnlyMatching] = useState(false)
+  const [comfortAvailable, setComfortAvailable] = useState(false)
+  const [comfortBusy, setComfortBusy] = useState(false)
+  const [comfortNote, setComfortNote] = useState(null)
   const isDriver = profile?.role === 'driver' || profile?.role === 'both'
   const isAdmin = isAdminIdentity({
     jwtEmail: user?.email,
@@ -127,6 +137,10 @@ export function AccountScreen() {
     setPrivacy(p?.profile_privacy || 'matched')
     setGallery(p?.gallery || [])
     fetchMyDriverApplication(user.id).then(setApplication).catch(() => setApplication(null))
+    const comfort = await loadComfortPreference(supabase, user.id)
+    setGenderIdentity(comfort.genderIdentity)
+    setWomenOnlyMatching(comfort.womenOnlyMatching)
+    setComfortAvailable(comfort.available)
   }
 
   useEffect(() => {
@@ -165,6 +179,25 @@ export function AccountScreen() {
   }
   function toggleStyle(s) {
     setStyles((prev) => (prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s]))
+  }
+
+  async function persistComfort(nextGender, nextWomenOnly) {
+    if (!user?.id) return
+    setComfortBusy(true)
+    setComfortNote(null)
+    try {
+      const saved = await saveComfortPreference(supabase, user.id, {
+        genderIdentity: nextGender,
+        womenOnly: nextWomenOnly,
+      })
+      setGenderIdentity(saved.genderIdentity)
+      setWomenOnlyMatching(saved.womenOnlyMatching)
+      setComfortNote('Comfort preference saved')
+    } catch (err) {
+      setComfortNote(err.message || 'Could not save the comfort preference')
+    } finally {
+      setComfortBusy(false)
+    }
   }
 
   async function onSave() {
@@ -255,20 +288,21 @@ export function AccountScreen() {
   const studentOk = studentNow.verified
 
   return (
-    <div className="route-fade" style={{ display: 'flex', flexDirection: 'column', minHeight: '100%' }}>
+    <div className="route-fade lux-account" style={{ display: 'flex', flexDirection: 'column', minHeight: '100%' }}>
       <div style={{ flex: 1, padding: '20px 18px 28px', overflowY: 'auto' }}>
         <button type="button" className="pressable glass-pill nav-back-btn" aria-label="Back to home" onClick={() => navigate('home')}
           style={{ marginBottom: 10 }}>
-          <IconSettings size={18} color="#522D80" />
+          <IconSettings size={18} color="#f4f1ea" />
         </button>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
-          <IconProfile size={26} />
-          <h1 style={{ fontSize: 24, fontWeight: 800, color: 'var(--purple)', letterSpacing: -0.3 }}>Account</h1>
+        <div className="lux-profile">
+          <button type="button" className="lux-avatar pressable" onClick={() => fileRef.current?.click()} aria-label="Add profile photo">
+            {profile?.avatar_url ? <img src={profile.avatar_url} alt="" /> : <span aria-hidden="true">+</span>}
+            <span className="lux-avatar-add" aria-hidden="true">+</span>
+          </button>
+          <input ref={fileRef} type="file" accept="image/*" hidden onChange={onAvatar} />
+          <h1>{fullName || 'Rider'}</h1>
         </div>
-        <p style={{ fontSize: 13, color: 'var(--ink-secondary)', marginBottom: 12 }}>
-          Profile, alerts, billing & driver settings
-        </p>
 
         {isIncentiveAdmin(user, profile) && (
           <button
@@ -305,6 +339,13 @@ export function AccountScreen() {
             </div>
           </div>
         )}
+
+        <nav className="lux-shortcuts" aria-label="Account shortcuts">
+          <button type="button" className="account-nav-item pressable" onClick={() => navigate('history')}>
+            <IconSchedule size={18} color="#e4c39a" aria-hidden="true" />
+            <span>Ride History</span>
+          </button>
+        </nav>
 
         <div
           className="account-nav"
@@ -356,7 +397,6 @@ export function AccountScreen() {
                   <span style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: 'rgba(0,0,0,0.45)',
                     fontSize: 10, fontWeight: 700, padding: '3px 0' }}>{uploading ? '…' : 'Edit'}</span>
                 </button>
-                <input ref={fileRef} type="file" accept="image/*" hidden onChange={onAvatar} />
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 12, letterSpacing: 1.2, fontWeight: 700, color: 'var(--orange)' }}>YOUR VIBE</div>
                   <input value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="Display name"
@@ -380,6 +420,17 @@ export function AccountScreen() {
                 ))}
               </div>
             </Section>
+
+            <WomenOnlyCard
+              role={isDriver ? (profile?.role === 'both' ? 'both' : 'driver') : 'rider'}
+              genderIdentity={genderIdentity}
+              womenOnlyMatching={womenOnlyMatching}
+              busy={comfortBusy}
+              available={comfortAvailable}
+              note={comfortNote}
+              onGender={(next) => persistComfort(next, next === 'woman' ? womenOnlyMatching : false)}
+              onToggle={(next) => persistComfort(genderIdentity, next)}
+            />
 
             <Section title="Ride style" subtitle="Quiet / Chatty / Music / AC">
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
@@ -553,6 +604,7 @@ export function AccountScreen() {
         {tab === 'billing' && (
           <div style={{ marginTop: 14 }}>
             <CreditsBalance refreshToken={creditsRefresh} />
+            <TigerPassPanel />
             <BillingPanel profile={profile} onProfileRefresh={() => reload().catch(() => {})} />
             <CreditPacksPanel />
             <PrepaidCreditsPanel onPurchased={() => setCreditsRefresh((n) => n + 1)} />
@@ -600,7 +652,10 @@ export function AccountScreen() {
               Payment method
             </button>
             <SignedAgreementCopy userId={user?.id} />
-            <button type="button" className="pressable" onClick={() => navigate('driver-onboarding')}
+            <button type="button" className="pressable" onClick={() => navigate(
+              'driver-onboarding',
+              application?.onboarding_status === 'approved' ? { view: 'application' } : {},
+            )}
               style={{ display: 'block', width: '100%', marginTop: 12, padding: 12, borderRadius: 14, fontWeight: 700,
                 color: '#fff', background: 'linear-gradient(135deg, var(--orange), #ff7a1a)' }}>
               {application?.onboarding_status === 'approved' ? 'View driver application' : 'Continue driver application'}
@@ -698,6 +753,12 @@ export function AccountScreen() {
             {studentNote && (
               <p id="student-verification-note" role="status" aria-live="polite" style={{ fontSize: 13, marginTop: 10, color: '#522D80', fontWeight: 700 }}>{studentNote}</p>
             )}
+          </Section>
+        )}
+
+        {tab === 'safety' && (
+          <Section title="Safety" subtitle="Audio, video, live tracking, and SOS in one place" icon={IconShield}>
+            <SafetyHub userId={user?.id} role={profile?.role || 'rider'} />
           </Section>
         )}
 
@@ -817,13 +878,10 @@ export function AccountScreen() {
             {deleteBusy ? 'Filing deletion request…' : 'Request account deletion'}
           </button>
           {deleteNote ? <div style={{ fontSize: 13, color: 'var(--ink-secondary)', marginBottom: 12 }}>{deleteNote}</div> : null}
-          <button type="button" className="pressable primary-cta" onClick={onSignOut}
-            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-              width: '100%', marginTop: 4, padding: 14, borderRadius: 14,
-              background: 'linear-gradient(135deg, var(--orange) 0%, #ff7a1a 100%)',
-              color: '#fff', fontWeight: 700, boxShadow: 'var(--shadow-cta)' }}>
-            <IconSignOut size={18} color="#fff" />
-            Sign out
+          <p className="lux-version">Clemson RIDES · 1.2.0</p>
+          <button type="button" className="pressable lux-signout" onClick={onSignOut}>
+            <IconSignOut size={18} color="#f4f1ea" />
+            Sign Out
           </button>
         </div>
       </div>

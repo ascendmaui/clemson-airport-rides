@@ -1,7 +1,10 @@
+import { useEffect, useState } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { heatColor } from 'rides-native/heat.js'
 import { useTheme } from '@/lib/theme'
 import type { BusySpot } from '@/lib/busySpots'
+import { fetchTigerHeatMap } from 'rides-native/tigerHeatClient.js'
+import type { TigerHeatZone } from 'rides-native/tigerHeat.js'
 
 export type MapPin = {
   id: string
@@ -18,6 +21,7 @@ export function CampusMap({
   colorScheme,
   spots = [],
   showHeat = false,
+  heatWindow = 'now',
   gameDay = false,
   gameDayLabel = null,
   lockOnCenter = false,
@@ -31,6 +35,7 @@ export function CampusMap({
   focusToken?: number
   spots?: BusySpot[]
   showHeat?: boolean
+  heatWindow?: string
   gameDay?: boolean
   gameDayLabel?: string | null
   lockOnCenter?: boolean
@@ -39,6 +44,22 @@ export function CampusMap({
 }) {
   const { colors, scheme } = useTheme()
   const mode = colorScheme || scheme
+  const [tigerZones, setTigerZones] = useState<TigerHeatZone[]>([])
+  useEffect(() => {
+    if (!showHeat) {
+      setTigerZones([])
+      return undefined
+    }
+    let alive = true
+    fetchTigerHeatMap(heatWindow).then((result) => {
+      if (alive) setTigerZones(result.zones || [])
+    }).catch(() => {
+      if (alive) setTigerZones([])
+    })
+    return () => {
+      alive = false
+    }
+  }, [showHeat, heatWindow])
   return (
     <View style={[styles.map, { backgroundColor: mode === 'dark' ? colors.mapFallback : '#E4D7F2' }]}>
       {showHeat
@@ -59,6 +80,18 @@ export function CampusMap({
             />
           ))
         : null}
+      {showHeat && tigerZones.length ? (
+        <View style={styles.tigerRow}>
+          {tigerZones.map((zone: TigerHeatZone) => (
+            <Text
+              key={zone.id}
+              style={[styles.tigerChip, zone.preview ? styles.tigerPreview : styles.tigerLive]}
+            >
+              {zone.bonusLabel}
+            </Text>
+          ))}
+        </View>
+      ) : null}
       {gameDay ? (
         <Text style={[styles.zone, { backgroundColor: colors.orange, color: colors.onAccent }]}>
           {gameDayLabel || 'Game day'}
@@ -98,6 +131,10 @@ const styles = StyleSheet.create({
   sub: { marginTop: 6, fontSize: 12, zIndex: 1 },
   pin: { marginTop: 4, fontSize: 11, fontWeight: '700', zIndex: 1 },
   requestPin: { fontSize: 13 },
+  tigerRow: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 6, zIndex: 2, marginBottom: 8 },
+  tigerChip: { overflow: 'hidden', borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6, fontSize: 12, fontWeight: '800', color: '#fff' },
+  tigerLive: { backgroundColor: '#F56600', borderWidth: 2, borderColor: '#522D80' },
+  tigerPreview: { backgroundColor: '#522D80', borderWidth: 2, borderColor: '#F56600' },
   zone: {
     position: 'absolute',
     top: 16,

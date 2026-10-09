@@ -7,14 +7,12 @@ import { GSP, STADIUM } from './places.js'
 import { airportCodeFromLabel } from './riderMoney.js'
 import { haversineMeters } from './riderShell.js'
 import { isSimulatedDriverId } from './simulatedDrivers.js'
+import { favoriteIdsForMatching } from '../../shared/riderFavorites.js'
 import { approvalGateMessage } from './syntheticOffers.js'
 
-/** Straight-line campus pace. TODO: a traffic ETA needs a billed GOOGLE_MAPS_API_KEY (Routes). */
-const CAMPUS_MPH = 18
+/** Straight-line campus pace. A stored road polyline can scale this; live traffic still needs a billed Routes call. */
+export const CAMPUS_MPH = 18
 const STALE_LOCATION_MS = 10 * 60 * 1000
-const FAVORITE_CAP = 12
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
-
 const STATUS_COLUMNS = 'driver_id, online, priority_mode, lat, lng, heading, unlock_progress, unlock_target, updated_at'
 const VEHICLE_COLUMNS = 'id, driver_id, make, model, color, plate, seats, tier'
 const PROFILE_COLUMNS = 'id, full_name, phone, email, avatar_url, role, rating_avg, rating_count, standing'
@@ -48,16 +46,11 @@ export function preferredTripFields(driverId) {
 }
 
 export function normalizeFavoriteDriverIds(raw) {
-  const list = Array.isArray(raw) ? raw : []
-  const ids = []
-  for (const item of list) {
-    if (typeof item !== 'string') continue
-    const id = item.trim()
-    if (!UUID_RE.test(id) || ids.includes(id)) continue
-    ids.push(id)
-    if (ids.length >= FAVORITE_CAP) break
-  }
-  return ids
+  return favoriteIdsForMatching(raw)
+}
+
+export function canFavoriteDriver(driverId) {
+  return favoriteIdsForMatching([driverId]).length === 1
 }
 
 export function driverApproach(driver, pickup) {
@@ -130,15 +123,20 @@ export function sortPreferredDrivers(drivers, favoriteIds, pickup) {
   })
 }
 
-export function groupDriversForPicker(drivers, favoriteIds) {
+export function groupDriversForPicker(drivers, favoriteIds, passPreferredIds) {
   const fav = new Set(normalizeFavoriteDriverIds(favoriteIds))
+  const usePass = Array.isArray(passPreferredIds)
+  const pass = new Set(usePass ? normalizeFavoriteDriverIds(passPreferredIds) : [])
+  const passPreferred = []
   const preferred = []
   const online = []
   for (const driver of drivers || []) {
-    if (fav.has(driver.id)) preferred.push(driver)
+    if (usePass && pass.has(driver.id)) passPreferred.push(driver)
+    else if (fav.has(driver.id)) preferred.push(driver)
     else if (driver.online) online.push(driver)
   }
-  return { preferred, online }
+  if (!usePass) return { preferred, online }
+  return { passPreferred, preferred, online }
 }
 
 async function readJson(storage, key) {
@@ -317,7 +315,7 @@ export async function loadPickerDriverRecord(supabase, driverId) {
   }
 }
 
-/** Airport pick-a-driver returns 409. Schedule is where the 25% deposit is collected. */
+/** Older clients sent riders to Schedule after airport_deposit_required. New requests book with no upfront deposit. */
 export function scheduleRedirectForRequestError(err, destLabel) {
   if (err?.code !== 'airport_deposit_required') return null
   return { screen: 'schedule', airport: airportCodeFromLabel(destLabel) }
@@ -528,19 +526,23 @@ export async function fetchDriverApplication(supabase, driverId) {
  */
 export async function requestDriverTrip(supabase, {
   riderId,
-  driverId,
+  driverId = null,
+  autoAssign = false,
   dest = 'GSP Airport',
   destPoint = GSP,
   pickupLabel = 'Memorial Stadium',
   pickupPoint = STADIUM,
   tier = 'standard',
+  passengers = null,
   isStudent = false,
+  note = '',
 }) {
   void isStudent
   if (!supabase) throw new Error('Supabase is not configured')
   if (!riderId) throw new Error('Sign in required to request a driver')
-  if (!driverId) throw new Error('Select a driver first')
-  if (isSimulatedDriverId(driverId)) {
+  const assigning = autoAssign === true && !driverId
+  if (!driverId && !assigning) throw new Error('Select a driver first')
+  if (driverId && isSimulatedDriverId(driverId)) {
     throw new Error('That driver is busy and cannot be requested.')
   }
 
@@ -548,11 +550,12 @@ export async function requestDriverTrip(supabase, {
   const destLng = destPoint?.longitude ?? destPoint?.lng
   const pickupLat = pickupPoint?.latitude ?? pickupPoint?.lat
   const pickupLng = pickupPoint?.longitude ?? pickupPoint?.lng
+  const riderNote = String(note || '').replace(/\s+/g, ' ').trim().slice(0, 280)
 
   const data = await authedJson(supabase, '/api/stripe-payment-methods?action=request-driver', {
     method: 'POST',
     body: {
-      driverId,
+      ...(assigning ? { autoAssign: true } : { driverId }),
       dest,
       destLat,
       destLng,
@@ -560,6 +563,8 @@ export async function requestDriverTrip(supabase, {
       pickupLat,
       pickupLng,
       tier: tier || 'standard',
+      ...(passengers ? { passengers } : {}),
+      ...(riderNote ? { note: riderNote } : {}),
     },
   })
   if (!data?.trip?.id) throw new Error('Could not request trip')

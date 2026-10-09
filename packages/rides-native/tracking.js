@@ -4,9 +4,20 @@ export function trackingIssue(status, timestamp, now = Date.now()) {
   const time = Date.parse(timestamp || '')
   if (!Number.isFinite(time)) return 'Waiting for driver location. Retrying automatically.'
   if (now - time > LOCATION_STALE_MS || time > now + LOCATION_STALE_MS) {
-    return 'Location updates stalled. Last known pin shown; ETA unavailable. Retrying automatically.'
+    return 'Location updates stalled. Last known pin shown. Retrying automatically.'
   }
   return null
+}
+
+/**
+ * A stalled fix keeps the last ETA and marks it. Waiting for the first fix
+ * still hides the number. The placeholder hold line is left unchanged.
+ */
+export function staleEtaLine(issue, etaLine, { placeholder = false } = {}) {
+  if (!issue) return etaLine || null
+  if (!/stalled/i.test(String(issue))) return null
+  if (!etaLine || placeholder) return etaLine || null
+  return `${etaLine} · last known`
 }
 
 /** Shared browser GPS errors for driver and rider tracking surfaces. */
