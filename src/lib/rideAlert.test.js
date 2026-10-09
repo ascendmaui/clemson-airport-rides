@@ -70,3 +70,91 @@ test('playRideChime and playRideRequestAlert complete cleanly without audio hard
     await playRideRequestAlert()
   })
 })
+
+test('playRideChime no-ops safely when Audio is missing', async () => {
+  const audioDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'Audio')
+  const windowDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'window')
+
+  try {
+    // Drop HTMLAudioElement so the file fallback cannot construct a player.
+    Reflect.deleteProperty(globalThis, 'Audio')
+    if (typeof Audio !== 'undefined') {
+      Object.defineProperty(globalThis, 'Audio', {
+        configurable: true,
+        writable: true,
+        value: undefined,
+      })
+    }
+    // Blank window so the Web Audio synth path cannot play and hide a missing Audio.
+    Object.defineProperty(globalThis, 'window', {
+      configurable: true,
+      writable: true,
+      value: {},
+    })
+    assert.equal(typeof Audio, 'undefined')
+
+    assert.equal(await playRideChime(), false)
+    assert.equal(await playRideChime(), false)
+
+    await assert.doesNotReject(async () => {
+      await playRideRequestAlert()
+    })
+  } finally {
+    if (audioDescriptor) Object.defineProperty(globalThis, 'Audio', audioDescriptor)
+    else Reflect.deleteProperty(globalThis, 'Audio')
+    if (windowDescriptor) Object.defineProperty(globalThis, 'window', windowDescriptor)
+    else Reflect.deleteProperty(globalThis, 'window')
+  }
+})
+
+test('playRideChime file fallback still plays when rewind throws before metadata', async () => {
+  const audioDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'Audio')
+  const windowDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'window')
+  const plays = []
+
+  class FakeAudio {
+    constructor(url) {
+      this.url = url
+      this.preload = ''
+      this.readyState = 0
+    }
+
+    get currentTime() {
+      return 0
+    }
+
+    set currentTime(_value) {
+      const err = new Error('The media element is not seekable yet')
+      err.name = 'InvalidStateError'
+      throw err
+    }
+
+    play() {
+      plays.push(this.url)
+      return Promise.resolve()
+    }
+  }
+
+  try {
+    Object.defineProperty(globalThis, 'Audio', {
+      configurable: true,
+      writable: true,
+      value: FakeAudio,
+    })
+    Object.defineProperty(globalThis, 'window', {
+      configurable: true,
+      writable: true,
+      value: {},
+    })
+
+    assert.equal(await playRideChime(), true)
+    assert.deepEqual(plays, ['/sounds/ride-chime.wav'])
+    assert.equal(await playRideChime(), true)
+    assert.equal(plays.length, 2)
+  } finally {
+    if (audioDescriptor) Object.defineProperty(globalThis, 'Audio', audioDescriptor)
+    else Reflect.deleteProperty(globalThis, 'Audio')
+    if (windowDescriptor) Object.defineProperty(globalThis, 'window', windowDescriptor)
+    else Reflect.deleteProperty(globalThis, 'window')
+  }
+})

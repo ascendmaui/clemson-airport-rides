@@ -1,6 +1,9 @@
 /**
  * New-ride alert: cha-ching tone + short haptic.
  * Quiet hours / DND and the ride notification toggle suppress both.
+ *
+ * Web offer chime only. The native custom notification sound is draft #254
+ * (docs/WEB_OFFER_CHIME.md). Do not swap in that native asset from here.
  */
 import { isQuietNow } from './quietHours.js'
 
@@ -88,6 +91,16 @@ export async function playRideChime() {
   return playChimeFile()
 }
 
+function rewindChime(el) {
+  // currentTime throws InvalidStateError before metadata loads (readyState 0).
+  // That used to abort the whole fallback, so the first file chime never played.
+  try {
+    if (el.readyState > 0 && el.currentTime > 0) el.currentTime = 0
+  } catch {
+    /* not seekable yet; play() starts at the beginning */
+  }
+}
+
 function playChimeFile() {
   try {
     if (typeof Audio === 'undefined') return false
@@ -95,7 +108,7 @@ function playChimeFile() {
       chimeEl = new Audio(CHIME_URL)
       chimeEl.preload = 'auto'
     }
-    chimeEl.currentTime = 0
+    rewindChime(chimeEl)
     const pending = chimeEl.play()
     if (pending && typeof pending.catch === 'function') pending.catch(() => {})
     return true
