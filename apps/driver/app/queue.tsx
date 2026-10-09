@@ -144,6 +144,7 @@ function QueueCard({
       <Text style={styles.copy}>{hourly}</Text>
       <Text style={styles.copy}>Pickup · {card.pickupLabel}</Text>
       <Text style={styles.copy}>Drop-off · {card.dropoffLabel}</Text>
+      {card.airportContext ? <Text style={styles.note} accessibilityLabel={`Airport: ${card.airportContext.line}`}>{card.airportContext.line}</Text> : null}
       {card.pickupAt ? <Text style={styles.copy}>{formatPickupAt(card.pickupAt)}</Text> : null}
       {card.backupLabel ? <Text style={[styles.note, { color: '#F56600', fontWeight: '800' }]}>{card.backupLabel}</Text> : null}
       {card.lookingForBackup && card.backupRole === 'primary' ? <Text style={[styles.note, { color: '#522D80' }]}>Looking for backup driver</Text> : null}

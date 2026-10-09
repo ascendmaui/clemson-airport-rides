@@ -15,6 +15,8 @@ export type QueueFilter = 'all' | 'student' | 'game_day' | 'weekend_party'
 export type DriverCard = {
   /** Carpool ordered stops; empty for single-rider trips. */
   stops: import('./carpoolStops').TripStop[]
+  /** Airport trips only: terminal or airline and the rider's flight. */
+  airportContext: import('./airportContext').AirportContext | null
   id: string
   status: string
   matchingOffer?: boolean

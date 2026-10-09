@@ -22,6 +22,7 @@ import { receivableDriverIds } from '../driverApproval.js'
 import { listAssignableDrivers } from '../autoAssign.js'
 import { comfortDecision, comfortEmptyMessage } from '../comfortMatch.js'
 import { insertTripEvent } from '../tripEvents.js'
+import { flightFromBody } from '../../shared/airportContext.js'
 import { notifyDriverOffer } from '../driverOfferAlerts.js'
 import { exclusiveOfferPatch, netCentsForShare, poolOfferPatch, EXCLUSIVE_SHARE_BPS, POOL_SHARE_BPS } from '../../packages/rides-native/offerLadder.js'
 import { billingForPricedRide } from '../rideBilling.js'
@@ -114,6 +115,8 @@ export default async function handler(req, res, deps = {}) {
     dropoffLng: body.destLng ?? body.dest_lng ?? body.dropoffLng,
   })
   if (places.error) return json(res, 400, { error: places.error })
+  const flightInput = flightFromBody(body)
+  if (flightInput.error) return json(res, 400, { error: flightInput.error, code: flightInput.code })
 
   let offerDriverId = driverId
   let assignQueue = null
@@ -274,7 +277,9 @@ export default async function handler(req, res, deps = {}) {
     },
     passengers: seats,
     ...(riderNote ? { rider_note: riderNote } : {}),
+    ...(flightInput.column ? { flight: flightInput.column } : {}),
     metadata: {
+      ...(flightInput.flight ? { flight: flightInput.flight } : {}),
       ...(e2eRider ? { e2e_test: true } : {}),
       kind: 'driver_request',
       purpose: 'planned',

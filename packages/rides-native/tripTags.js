@@ -8,6 +8,7 @@ import { LOOKING_FOR_BACKUP_LABEL, confirmCountdownLabel, driverBackupPresentati
 import { driverBoostShareCents, readBoostCents } from '../../shared/scheduledBoost.js'
 import { driverTripEarnings, driverTripNetCents, payoutStatusLine } from '../../shared/driverTripEarnings.js'
 import { tripStops } from '../../shared/carpoolStops.js'
+import { airportTripContext } from '../../shared/airportContext.js'
 
 export { confirmCountdownLabel, leaveNowCountdownLabel }
 
@@ -540,6 +541,8 @@ export function toDriverCard(row, options) {
     promoRide: meta.promo === CLEMSON_MIAMI_PROMO_ID || meta.promo_ride === true,
     // Carpool pools: ordered pickups then drop-offs. Empty for single-rider trips.
     stops: tripStops({ ...row, metadata: meta }),
+    // GSP / CLT / ATL: terminal or airline, plus the rider's flight when they entered one.
+    airportContext: airportTripContext({ ...row, metadata: meta }),
     routePolyline: typeof meta.route_polyline === 'string' && meta.route_polyline ? meta.route_polyline : null,
     routeDurationS: Number.isFinite(Number(meta.route_duration_s)) && Number(meta.route_duration_s) > 0
       ? Number(meta.route_duration_s)

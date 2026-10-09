@@ -20,6 +20,7 @@ import {
   priceScheduledRequest,
 } from '../authoritativeFare.js'
 import { insertTripEvent } from '../tripEvents.js'
+import { flightFromBody } from '../../shared/airportContext.js'
 import { billingForPricedRide } from '../rideBilling.js'
 import { carpoolSeatCount, resolveOfferedTier, scheduleDiscountMetadata } from '../../shared/rideOptions.js'
 import { tigerPassBpsForRider } from '../riderPass.js'
@@ -101,6 +102,8 @@ export default async function handler(req, res, deps = {}) {
     return json(res, error.status || 409, { error: error.message, code: error.code || 'ride_option_unavailable' })
   }
 
+  const flightInput = flightFromBody(body)
+  if (flightInput.error) return json(res, 400, { error: flightInput.error, code: flightInput.code })
   let pickup = place(body.pickup)
   let dropoff = place(body.dropoff)
   const airportCode = airport === 'GSP' || airport === 'CLT'
@@ -217,6 +220,7 @@ export default async function handler(req, res, deps = {}) {
     ...scheduleDiscountMetadata(priced),
     ...tigerPassMetadata(priced),
     airport: priced.airport,
+    ...(flightInput.flight ? { flight: flightInput.flight } : {}),
     ...billing.snapshot,
     ...(nearTerm ? {
       near_term_slot: true,
@@ -253,6 +257,7 @@ export default async function handler(req, res, deps = {}) {
     pickup_at: scheduledFor,
     scheduled_for: scheduledFor,
     rider_note: purpose,
+    ...(flightInput.column ? { flight: flightInput.column } : {}),
     metadata,
     ...(scheduledFor ? { boost_cents: boostCents } : {}),
   }

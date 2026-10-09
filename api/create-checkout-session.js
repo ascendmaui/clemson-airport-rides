@@ -12,6 +12,7 @@ import { loadGameDayMultiplier } from '../server/creditLots.js'
 import { studentDiscountGranted } from '../src/lib/studentDomain.js'
 import { splitPlatformFee } from '../src/lib/fareRates.js'
 import { firstName } from '../src/lib/scheduledRideModel.js'
+import { flightFromBody } from '../shared/airportContext.js'
 import {
   AIRPORT_DROPOFFS,
   CAMPUS_PICKUP,
@@ -47,6 +48,9 @@ export default async function handler(req, res, deps = {}) {
   if (!sb) return json(res, 503, { error: 'SUPABASE_SERVICE_ROLE_KEY not configured' })
   const runEnsureProfile = deps.ensureProfile || ensureProfile
 
+  // Optional rider flight (number + time) for the driver's airport context.
+  const flightInput = flightFromBody(body)
+  if (flightInput.error) return json(res, 400, { error: flightInput.error, code: flightInput.code })
   const when = parseRideAt(body, new Date())
   const airport = String(body.airport || 'GSP').toUpperCase() === 'CLT' ? 'CLT' : 'GSP'
   const dest = AIRPORT_DROPOFFS[airport]
@@ -110,7 +114,8 @@ export default async function handler(req, res, deps = {}) {
       driver_earnings_cents: row.driver_earnings_cents,
       surge_multiplier: row.surge_multiplier,
       fare_breakdown: row.fare_breakdown,
-      metadata: { ...(existing.data.metadata || {}), ...row.metadata },
+      metadata: { ...(existing.data.metadata || {}), ...row.metadata, ...(flightInput.flight ? { flight: flightInput.flight } : {}) },
+      ...(flightInput.column ? { flight: flightInput.column } : {}),
     }).eq('id', tripId).eq('rider_id', user.id)
     if (upErr) return json(res, 500, { error: upErr.message || 'Could not record fare' })
   } else {
@@ -119,6 +124,10 @@ export default async function handler(req, res, deps = {}) {
       return json(res, 500, { error: 'Could not create your rider profile', code: 'profile_missing' })
     }
     const row = airportTripRow({ user, priced, scheduledFor, riderFirst })
+    if (flightInput.flight) {
+      row.metadata = { ...(row.metadata || {}), flight: flightInput.flight }
+      row.flight = flightInput.column
+    }
     const inserted = await sb.from('trips').insert(row).select('id').single()
     if (inserted.error || !inserted.data) {
       return json(res, 500, { error: inserted.error?.message || 'Could not create trip' })

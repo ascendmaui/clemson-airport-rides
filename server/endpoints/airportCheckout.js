@@ -17,6 +17,7 @@ import { quoteAirportCheckout } from '../authoritativeFare.js'
 import { tigerPassBpsForRider } from '../riderPass.js'
 import { tigerPassMetadata } from '../../shared/tigerPass.js'
 import { splitPlatformFee } from '../../src/lib/fareRates.js'
+import { flightFromBody } from '../../shared/airportContext.js'
 
 const CAMPUS = { label: 'Memorial Stadium', lat: 34.6788, lng: -82.843 }
 const AIRPORTS = {
@@ -49,6 +50,9 @@ export default async function handler(req, res, deps = {}) {
   const airport = (typeof rawAirport === 'string' ? rawAirport.trim() : String(rawAirport || 'GSP').trim()).toUpperCase()
   const dest = AIRPORTS[airport]
   if (!dest) return json(res, 400, { error: 'Unknown airport' })
+  // Optional rider flight (number + time) for the driver's airport context.
+  const flightInput = flightFromBody(body)
+  if (flightInput.error) return json(res, 400, { error: flightInput.error, code: flightInput.code })
 
   let scheduledFor = null
   let at = new Date()
@@ -134,11 +138,13 @@ export default async function handler(req, res, deps = {}) {
         rider_pays_cents: settlement.riderPaysCents,
       },
       passengers: 1,
+      ...(flightInput.column ? { flight: flightInput.column } : {}),
       pickup_at: scheduledFor,
       scheduled_for: scheduledFor,
       metadata: {
         kind: scheduledFor ? 'scheduled' : 'airport',
         airport,
+        ...(flightInput.flight ? { flight: flightInput.flight } : {}),
         pending_credit_debits: [],
         credits_applied: coveredByCredits,
         due_at_trip_end_cents: coveredByCredits ? 0 : fareCents,
