@@ -21,13 +21,16 @@ import { useFeedback } from '@/lib/feedback'
 import { oneParam } from '@/lib/oneParam'
 import { openNavigation } from '@/lib/openMaps'
 import { authStorage } from '@/lib/storage'
+import { driverActionQueue, useDriverActionQueue } from '@/lib/actionQueue'
+import { waitingForSignalLabel, type ActionQueueEvent } from 'rides-native/actionQueue'
+import { projectQueuedTrip } from 'rides-native/queuedTrip'
 import { navAppLabel, navAppOrder } from 'rides-native/mapsLink'
 import { autoNavigationKey, autoNavigationLeg, autoNavigationStopLeg, readLaunchedLegs, withLaunchedLeg } from 'rides-native/autoNavigation'
 import { supabase } from '@/lib/supabase'
 import { useDriverLocation } from '@/lib/useDriverLocation'
 import { publishDriverLocation, startTripBackgroundLocation, stopTripBackgroundLocation } from '@/lib/backgroundLocation'
 import { isActiveTripLocationStatus } from 'rides-native/backgroundLocation'
-import { driverStopAction, driverTripAction, tripWaitTick, advanceTrip, confirmBackupQueueTrip, loadRiderFix, loadTrip, releaseBackupQueueSeat, subscribeTrips } from 'rides-native/driverDesk'
+import { advanceOpFor, advanceResultTrip, driverStopAction, driverTripAction, tripWaitTick, advanceTrip, confirmBackupQueueTrip, loadRiderFix, loadTrip, releaseBackupQueueSeat, subscribeTrips } from 'rides-native/driverDesk'
 import {
   arrivedPromptCopy,
   confirmCountdownLabel,
@@ -93,7 +96,24 @@ export default function TripScreen() {
   const { colors, navApp, autoNavigate } = useTheme()
   const shadow = useCardShadow()
   const styles = useMemo(() => tripStyles(colors), [colors])
-  const [trip, setTrip] = useState<DriverCard | null>(null)
+  const [serverTrip, setTrip] = useState<DriverCard | null>(null)
+  const readerRef = useRef<ReturnType<typeof createTrackingRefresh> | null>(null)
+  // Offline action queue: taps saved without signal show as done here and are
+  // sent in order (same idempotency key on every retry) once signal returns.
+  const onQueueEvent = useCallback((event: ActionQueueEvent) => {
+    if (event.action.tripId !== id) return
+    // Adopt the server's trip from a background send before the saved-tap projection goes away.
+    const sentTrip = event.type === 'sent' ? event.result?.trip : null
+    if (sentTrip?.id === id) setTrip(toDriverCard(sentTrip, { driverId: user?.id }))
+    if (event.type === 'failed') {
+      const message = event.error instanceof Error ? event.error.message : 'A saved tap could not be applied'
+      setError(`${message} Check the trip and tap again.`)
+    }
+    void readerRef.current?.refresh(true)
+  }, [id, user?.id])
+  const queueState = useDriverActionQueue(onQueueEvent)
+  const trip = useMemo(() => projectQueuedTrip(serverTrip, queueState.actions), [serverTrip, queueState.actions])
+  const signalLabel = waitingForSignalLabel(queueState.actions.filter((a) => a.tripId === trip?.id).length)
   const sosActive = isActiveRideStatus(trip?.status)
   const [sosOpen, setSosOpen] = useState(false)
   const terminalTrip = Boolean(trip && ['completed', 'canceled', 'canceled_midride', 'cancelled_wait'].includes(trip.status))
@@ -130,7 +150,6 @@ export default function TripScreen() {
     AccessibilityInfo.announceForAccessibility(canceledView.announcement)
   }, [trip?.id, trip?.status, trip?.released])
 
-  const readerRef = useRef<ReturnType<typeof createTrackingRefresh> | null>(null)
   const refresh = useCallback(() => readerRef.current?.refresh(true) ?? Promise.resolve(), [])
 
   useEffect(() => {
@@ -244,7 +263,27 @@ export default function TripScreen() {
     setBusy(true)
     setError(null)
     try {
-      const result = await advanceTrip(supabase, trip, user.id)
+      const queue = driverActionQueue()
+      const op = advanceOpFor(trip.status)
+      let result
+      if (queue && op) {
+        const outcome = await queue.submit({ kind: 'status', tripId: trip.id, op })
+        if (outcome.status === 'queued') {
+          // Saved for when signal returns; the screen already shows the next step.
+          if (op === 'complete') {
+            await stopTripBackgroundLocation(trip.id)
+            setSettleNote('Trip complete. The fare is collected as soon as you have signal.')
+            pulse('complete')
+          } else {
+            pulse('accept')
+          }
+          return
+        }
+        if (outcome.status !== 'sent') throw outcome.error
+        result = advanceResultTrip(outcome.result)
+      } else {
+        result = await advanceTrip(supabase, trip, user.id)
+      }
       if (result?.status && !isActiveTripLocationStatus(result.status)) {
         await stopTripBackgroundLocation(trip.id)
       }
@@ -311,7 +350,19 @@ export default function TripScreen() {
     setBusy(true)
     setError(null)
     try {
-      const result = await driverStopAction(supabase, trip.id, stop.index, op)
+      const queue = driverActionQueue()
+      let result
+      if (queue) {
+        const outcome = await queue.submit({ kind: 'stop', tripId: trip.id, stopIndex: stop.index, op })
+        if (outcome.status === 'queued') {
+          pulse(op === 'drop' ? 'complete' : 'accept')
+          return
+        }
+        if (outcome.status !== 'sent') throw outcome.error
+        result = outcome.result
+      } else {
+        result = await driverStopAction(supabase, trip.id, stop.index, op)
+      }
       if (result?.trip) setTrip(toDriverCard(result.trip, { driverId: user.id }))
       pulse(op === 'drop' ? 'complete' : 'accept')
       await refresh()
@@ -638,6 +689,12 @@ export default function TripScreen() {
               <Primary label="Retry location" onPress={locationTracking.retry} />
             </View>
           ) : null}
+        {signalLabel ? (
+          <View accessibilityRole="alert" accessibilityLabel={signalLabel} style={[styles.signal, { borderColor: colors.orange }]}>
+            <Text style={[styles.signalText, { color: colors.title }]}>{signalLabel}</Text>
+            <Text style={[styles.signalNote, { color: colors.inkSecondary }]}>Your taps are saved and send in order when you have signal.</Text>
+          </View>
+        ) : null}
         {error ? <ErrorText>{error}</ErrorText> : null}
         {trip?.backupConfirmOpen ? (
           <View style={{ marginBottom: 12, padding: 12, borderRadius: 14, backgroundColor: 'rgba(245,102,0,0.12)' }}>
@@ -714,6 +771,9 @@ export default function TripScreen() {
 function tripStyles(colors: Palette) {
   return StyleSheet.create({
     screen: { flex: 1, backgroundColor: colors.background },
+    signal: { borderWidth: 2, borderRadius: 14, padding: 10, gap: 2 },
+    signalText: { fontSize: 15, fontWeight: '900' },
+    signalNote: { fontSize: 12, lineHeight: 17 },
     sheet: {
       backgroundColor: colors.card,
       borderTopLeftRadius: 28,

@@ -11,6 +11,7 @@
 import { admin, cors, json, parseBody, userFromAuth } from '../friendRideLib.js'
 import { applyTripWait } from '../tripWait.js'
 import { insertTripEvent } from '../tripEvents.js'
+import { withActionReceipts } from '../actionReceipts.js'
 import {
   applyStopOp,
   riderFareCapture,
@@ -127,6 +128,10 @@ export async function applyTripStop(sb, { tripId, stopIndex, op, actorId }, deps
 
 export default async function handleTripStop(req, res, deps = {}) {
   if (cors(req, res)) return
+  return withActionReceipts(req, res, deps, runTripStop, { admin, json, parseBody, userFromAuth })
+}
+
+async function runTripStop(req, res, deps = {}) {
   if (req.method !== 'POST') return json(res, 405, { ok: false, code: 'method_not_allowed', error: 'Method not allowed' })
   const sb = deps.sb !== undefined ? deps.sb : admin()
   if (!sb) return json(res, 503, { ok: false, code: 'service_unavailable', error: 'Service unavailable' })

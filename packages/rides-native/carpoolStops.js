@@ -8,6 +8,7 @@ export {
   stopActionLabel,
   stopFlowStarted,
   stopNextOp,
+  tripOpForStop,
   stopStatusLabel,
   stopTitle,
   tripStops,
