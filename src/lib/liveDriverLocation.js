@@ -1,3 +1,4 @@
+import { uniqueChannelTopic } from '../../packages/rides-native/realtimeChannel.js'
 import { createTrackingRefresh, onTrackingResume, geolocationErrorMessage } from '../../packages/rides-native/tracking.js'
 import { coordsFromRow, headingOrNull, liveFixFromReads, speedOrNull } from '../../packages/rides-native/liveFix.js'
 import { supabase } from './supabase.js'
@@ -138,7 +139,7 @@ export function subscribeTripDriverLocation(tripId, onUpdate, onError, driverId 
   refresh()
   const poll = setInterval(refresh, 8000)
   const offResume = onTrackingResume(() => void reader.refresh(true))
-  let channel = supabase.channel(`trip-driver-location-${tripId}`)
+  let channel = supabase.channel(uniqueChannelTopic(`trip-driver-location-${tripId}`))
     .on('postgres_changes', { event: '*', schema: 'public', table: 'trip_driver_locations', filter: `trip_id=eq.${tripId}` }, refresh)
   if (presenceId) {
     channel = channel.on('postgres_changes', { event: '*', schema: 'public', table: 'driver_status', filter: `driver_id=eq.${presenceId}` }, refresh)

@@ -1,3 +1,4 @@
+import { uniqueChannelTopic } from '../../packages/rides-native/realtimeChannel.js'
 import { createClient } from '@supabase/supabase-js'
 import { fetchOnlineDrivers as fetchSharedOnlineDrivers } from '../../packages/rides-native/drivers.js'
 
@@ -55,7 +56,7 @@ export async function fetchOnlineDrivers() {
 export function subscribeTrips(onChange) {
   if (!supabase) return () => {}
   const channel = supabase
-    .channel('trips-realtime')
+    .channel(uniqueChannelTopic('trips-realtime'))
     .on(
       'postgres_changes',
       { event: '*', schema: 'public', table: 'trips' },

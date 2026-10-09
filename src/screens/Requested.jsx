@@ -1,3 +1,4 @@
+import { uniqueChannelTopic } from '../../packages/rides-native/realtimeChannel.js'
 import { trackingIssue, staleEtaLine, withTrackingTimeout, onTrackingResume } from '../../packages/rides-native/tracking.js'
 import { useEffect, useRef, useState } from 'react'
 import { PrimaryButton } from '../components/PrimaryButton'
@@ -157,7 +158,7 @@ export function Requested({ dest = 'GSP Airport', trip = '', driver = 'your driv
     }
 
     const channel = supabase
-      .channel(`requested-trip-${trip}`)
+      .channel(uniqueChannelTopic(`requested-trip-${trip}`))
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'trips', filter: `id=eq.${trip}` },

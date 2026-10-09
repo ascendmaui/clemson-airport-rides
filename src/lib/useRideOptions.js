@@ -1,3 +1,4 @@
+import { uniqueChannelTopic } from '../../packages/rides-native/realtimeChannel.js'
 import { useEffect, useState } from 'react'
 import { RIDE_OPTIONS_POLL_MS } from '../../shared/rideOptions.js'
 import { supabase } from './supabase.js'
@@ -31,7 +32,7 @@ export function useRideOptions({ scheduledFor = null } = {}) {
     let channel = null
     if (supabase) {
       channel = supabase
-        .channel(`ride-options-${scheduledFor || 'now'}`)
+        .channel(uniqueChannelTopic(`ride-options-${scheduledFor || 'now'}`))
         .on('postgres_changes', { event: '*', schema: 'public', table: 'driver_status' }, () => { load() })
         .subscribe()
     }

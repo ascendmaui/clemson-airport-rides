@@ -1,3 +1,4 @@
+import { uniqueChannelTopic } from '../../packages/rides-native/realtimeChannel.js'
 /**
  * Watches trip / friend_ride / ride_bills changes and emits toasts.
  * Supabase realtime when available; poll fallback on active screens.
@@ -212,7 +213,7 @@ export function RideToastWatcher() {
     hydrate().catch(() => { primed.current = true })
 
     const channel = supabase
-      .channel(`toasts-${user.id}`)
+      .channel(uniqueChannelTopic(`toasts-${user.id}`))
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'trips', filter: `rider_id=eq.${user.id}` },
