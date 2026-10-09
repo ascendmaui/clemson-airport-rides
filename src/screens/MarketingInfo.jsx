@@ -5,7 +5,7 @@ import { MarketingPhoto } from '../components/MarketingPhoto'
 import { FeatureBlock } from '../components/FeatureBlock'
 import { messagingGuide } from '../../shared/copy/messaging.js'
 import { HERO_COLLAGE, NIGHT_VENUES } from '../content/images.js'
-import { APP_DOWNLOADS } from '../../shared/productLinks.js'
+import { APP_DOWNLOADS, SUPPORT_EMAIL } from '../../shared/productLinks.js'
 import { RIDE_OPTION_CATALOG, SCHEDULE_AHEAD_DISCOUNT_PCT } from '../../shared/rideOptions.js'
 import { CARPOOL_DISCOUNT_BPS, STUDENT_DISCOUNT_BPS } from '../lib/fareRates.js'
 import { tigerPassCopy } from '../../shared/tigerPass.js'
@@ -270,6 +270,41 @@ export function FaqPage() {
           <p>{item.a}</p>
         </article>
       ))}
+    </MarketingChrome>
+  )
+}
+
+export function SupportPage() {
+  return (
+    <MarketingChrome current="support">
+      <PageHead kicker="Help" title="Support" />
+      <article className="mkt-card mkt-feature">
+        <h2>Get help in the apps</h2>
+        <p>Rider app: Account → Help for how-to questions, or Account → Support to describe a problem. The in-app assistant can draft a support ticket for you to confirm.</p>
+        <p>Driver app: Inbox → Support shows your tickets. You can file a bug report in the app.</p>
+      </article>
+      <article className="mkt-card mkt-feature">
+        <h2>Email</h2>
+        <p>Contact <a href={`mailto:${SUPPORT_EMAIL}`}>{SUPPORT_EMAIL}</a>.</p>
+      </article>
+      <article className="mkt-card mkt-feature">
+        <h2>Safety</h2>
+        <p>In an emergency, call 911. The in-ride Safety screen has SOS.</p>
+      </article>
+      <article className="mkt-card mkt-feature">
+        <h2>Delete a rider account</h2>
+        <p>In the rider app, go to Account → Delete account → File deletion request. This files a support request; the account remains until the request is processed.</p>
+      </article>
+      <article className="mkt-card mkt-feature">
+        <h2>Payments</h2>
+        <p>When you book, your card is pre-authorized for the estimated fare. This is a hold, not a deposit. The fare is charged when the trip ends.</p>
+      </article>
+      <article className="mkt-card mkt-feature">
+        <h2>More information</h2>
+        <button type="button" className="mkt-text pressable" onClick={() => navigate('faq')}>FAQ</button>
+        <button type="button" className="mkt-text pressable" onClick={() => navigate('privacy')}>Privacy</button>
+        <button type="button" className="mkt-text pressable" onClick={() => navigate('terms')}>Terms</button>
+      </article>
     </MarketingChrome>
   )
 }
