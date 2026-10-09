@@ -193,7 +193,12 @@ export async function setPaymentHold(sb, tripId, failure) {
   if (upd.error) console.error('[collectPayment] hold', upd.error.message)
 }
 
-export async function clearPaymentHold(sb, tripId, { farePaidDelta = 0 } = {}) {
+/**
+ * Clear a payment hold after the gate allows progress. paymentStatus defaults
+ * to 'paid'; a cancel that charged nothing passes 'no_charge' so a canceled
+ * $0 trip never reads as paid.
+ */
+export async function clearPaymentHold(sb, tripId, { farePaidDelta = 0, paymentStatus = 'paid' } = {}) {
   if (!sb || !tripId) return
   const trip = await readTrip(sb, tripId)
   if (!trip) return
@@ -202,7 +207,7 @@ export async function clearPaymentHold(sb, tripId, { farePaidDelta = 0 } = {}) {
   if (farePaidDelta) {
     metadata.fare_paid_cents = Math.max(0, Math.round(Number(metadata.fare_paid_cents) || 0) + farePaidDelta)
   }
-  const patch = { metadata, payment_status: 'paid' }
+  const patch = { metadata, payment_status: paymentStatus }
   let upd = await sb.from('trips').update(patch).eq('id', tripId)
   if (upd.error && /payment_status|column|schema cache/i.test(upd.error.message || '')) {
     upd = await sb.from('trips').update({ metadata }).eq('id', tripId)
