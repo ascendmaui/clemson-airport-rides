@@ -7,16 +7,30 @@ import { bookableRideTiers } from './places.js'
 import { RIDE_TYPE_ICONS, rideTypeIconName } from './rideTypeIcons.js'
 
 // Resolve the rider's installed version, not a different app's icon package.
-// Install with npm ci --prefix apps/rider before running the root suite.
-const riderRequire = createRequire(new URL('../../apps/rider/package.json', import.meta.url))
-const glyphMap = riderRequire('@expo/vector-icons/build/vendor/react-native-vector-icons/glyphmaps/Ionicons.json')
+// CI installs only root deps, so the glyph check runs wherever apps/rider deps exist.
+function riderGlyphMap() {
+  try {
+    const riderRequire = createRequire(new URL('../../apps/rider/package.json', import.meta.url))
+    return riderRequire('@expo/vector-icons/build/vendor/react-native-vector-icons/glyphmaps/Ionicons.json')
+  } catch {
+    return null
+  }
+}
+const glyphMap = riderGlyphMap()
 
-test('every offered ride type maps to a glyph in the rider bundled Ionicons font', () => {
+test('every offered ride type maps to a stable Ionicons name', () => {
   assert.deepEqual(Object.keys(RIDE_TYPE_ICONS), OFFERED_RIDE_TIERS)
   assert.deepEqual(bookableRideTiers().map((tier) => tier.id), OFFERED_RIDE_TIERS)
   for (const id of OFFERED_RIDE_TIERS) {
     const name = rideTypeIconName(id)
     assert.equal(name, RIDE_TYPE_ICONS[id])
+    assert.match(name, /^[a-z]+(-[a-z]+)*$/)
+  }
+})
+
+test('every ride type icon exists in the rider bundled Ionicons font', { skip: glyphMap ? false : 'apps/rider dependencies not installed' }, () => {
+  for (const id of OFFERED_RIDE_TIERS) {
+    const name = rideTypeIconName(id)
     assert.ok(Object.hasOwn(glyphMap, name), `${id}: missing Ionicons glyph ${name}`)
     assert.equal(typeof glyphMap[name], 'number')
   }
