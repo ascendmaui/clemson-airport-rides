@@ -71,6 +71,12 @@
       "expo-router",
       "expo-secure-store",
       [
+        "expo-notifications",
+        {
+          "color": "#F56600"
+        }
+      ],
+      [
         "expo-location",
         {
           "locationWhenInUsePermission": "Clemson RIDES uses your location to center the campus map, shares it on a trip link you send, and attaches GPS when you confirm an SOS."

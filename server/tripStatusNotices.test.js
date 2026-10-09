@@ -155,3 +155,11 @@ test('a missing outbox table (migration not applied yet) is a no-op', async () =
   const result = await sweepTripStatusNotices(sb, { now })
   assert.equal(result.unavailable, true)
 })
+
+test('riders who turned off Ride updates get no status push', async () => {
+  const db = seed({ profiles: [{ id: 'd1', full_name: 'Alex Rivera' }, { id: 'r1', notification_prefs: { ride: false } }] })
+  const sent = []
+  await sweepTripStatusNotices(db, { now, sendPush: async (m) => { sent.push(m); return { sent: true } } })
+  assert.deepEqual(sent.map((m) => m.data.kind), ['arrive_prompt'])
+  assert.equal(db.tables.trip_status_notices[0].result, 'no_token')
+})

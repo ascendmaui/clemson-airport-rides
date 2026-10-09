@@ -83,8 +83,15 @@ async function maybeSingle(query) {
   }
 }
 
+/** Riders who turned off "Ride updates" in Notifications get no status pushes. */
+export async function riderWantsRideUpdates(sb, riderId) {
+  const profile = await maybeSingle(sb.from('profiles').select('notification_prefs').eq('id', riderId).maybeSingle())
+  return profile?.notification_prefs?.ride !== false
+}
+
 export async function readRiderPushToken(sb, riderId) {
   if (!riderId) return null
+  if (!await riderWantsRideUpdates(sb, riderId)) return null
   const row = await maybeSingle(sb.from('rider_push_tokens').select('token').eq('rider_id', riderId).maybeSingle())
   return clean(row?.token, 200) || null
 }

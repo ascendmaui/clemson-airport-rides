@@ -21,6 +21,8 @@ import { reconcileCheckout } from 'rides-native/riderMoney.js'
 import { ProfileRequiredGate } from 'rides-native/PartyScreens'
 import { resolveApiBase } from 'rides-native/apiOrigin.js'
 import { setCarpoolApiBase } from 'rides-native/shared/carpoolApi.js'
+import * as Notifications from 'expo-notifications'
+import { registerRiderPush, tripIdFromPush } from '@/lib/push'
 
 setCarpoolApiBase(resolveApiBase())
 
@@ -83,6 +85,29 @@ function AmbassadorDeepLink() {
     const sub = Linking.addEventListener('url', (event: { url: string }) => open(event.url))
     return () => sub.remove()
   }, [router])
+  return null
+}
+
+const handledPushes = new Set<string>()
+
+/** Refreshes the rider push token and opens the trip when a ride-status push is tapped. */
+function RiderPushBridge() {
+  const { user } = useAuth()
+  const router = useRouter()
+  useEffect(() => {
+    if (!user?.id) return undefined
+    registerRiderPush(supabase, user.id).catch(() => {})
+    const open = (response: Notifications.NotificationResponse | null) => {
+      const id = response?.notification.request.identifier
+      if (!response || (id && handledPushes.has(id))) return
+      if (id) handledPushes.add(id)
+      const tripId = tripIdFromPush(response.notification.request.content.data)
+      if (tripId) router.push({ pathname: '/requested', params: { trip: tripId } })
+    }
+    Notifications.getLastNotificationResponseAsync().then(open).catch(() => {})
+    const sub = Notifications.addNotificationResponseReceivedListener(open)
+    return () => sub.remove()
+  }, [router, user?.id])
   return null
 }
 
@@ -156,6 +181,7 @@ export default function RootLayout() {
         <PasswordRecoveryListener />
         <AmbassadorDeepLink />
         <AmbassadorClaim />
+        <RiderPushBridge />
         <CheckoutDeepLink />
         <Gate>
           <ThemedStack />
