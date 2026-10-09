@@ -9,7 +9,7 @@
 import {
   admin, cors, json, parseBody, userFromAuth,
 } from '../friendRideLib.js'
-import { releaseOpenFareHold } from '../fareAuthorization.js'
+import { releaseOpenFareHold, settleFareHold } from '../fareAuthorization.js'
 import { collectMidrideCharge } from '../collectTripCharge.js'
 import {
   MIDRIDE_STATUS,
@@ -273,11 +273,35 @@ export default async function handler(req, res, deps = {}) {
       return json(res, 409, { error: 'Trip status changed. Refresh and try again.', code: 'status_changed' })
     }
 
-    // The trip has ended even if its separate partial-fare charge fails.
     const endedTrip = { ...trip, status: MIDRIDE_STATUS, metadata }
-    await releaseOpenFareHold({ sb, stripe: deps.stripe, trip: endedTrip, reason: 'midride_cancel' })
-    Object.assign(metadata, endedTrip.metadata)
     await endLocationShares(sb, trip.id)
+
+    // Prefer capturing the partial fare from the open hold: one charge on the
+    // rider's card, and Stripe releases the rest of the authorization. If that
+    // is not possible, release the hold and fall back to a separate charge.
+    let holdCapture = null
+    const openHold = metadata?.fare_authorization?.status === 'requires_capture'
+    if (openHold && quote.toCollectCents >= 50) {
+      try {
+        holdCapture = await (deps.settleFareHold || settleFareHold)({
+          sb, stripe: deps.stripe, trip: endedTrip, finalFareCents: quote.toCollectCents,
+        })
+      } catch (error) {
+        console.error('[cancel-midride] hold capture', trip.id, error?.message || error)
+        holdCapture = null
+      }
+      if (!holdCapture?.ok || holdCapture.method !== 'card') holdCapture = null
+      const fresh = await loadTrip(sb, trip.id)
+      if (fresh.trip?.metadata) {
+        Object.assign(metadata, fresh.trip.metadata)
+        endedTrip.metadata = metadata
+      }
+    }
+    if (!holdCapture) {
+      // The trip has ended even if the separate partial-fare charge fails.
+      await releaseOpenFareHold({ sb, stripe: deps.stripe, trip: endedTrip, reason: 'midride_cancel' })
+      Object.assign(metadata, endedTrip.metadata)
+    }
 
     let paymentStatus = 'uncollected'
     let stripePaymentIntentId = null
@@ -291,6 +315,10 @@ export default async function handler(req, res, deps = {}) {
     } else if (quote.toCollectCents < 50) {
       // Stripe's minimum charge is $0.50. A leftover below that is not sent to the card.
       paymentStatus = 'waived_below_minimum'
+    } else if (holdCapture) {
+      paymentStatus = 'succeeded'
+      stripePaymentIntentId = holdCapture.paymentIntentId || null
+      chargeSource = 'fare_hold'
     } else {
       const { data: profile } = await sb
         .from('profiles')
