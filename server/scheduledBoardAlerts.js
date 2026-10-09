@@ -3,6 +3,7 @@
  * In-app is the board row plus the open-app toast. Push has no server sender.
  * SMS and email stay on the live-offer flag path and are not used here.
  */
+import { readDriverPushTokens } from './driverPushToken.js'
 import { isE2ETestUser } from '../shared/e2eTestAccounts.js'
 import { eligibleDriverIdsForRider } from './e2eDriverEligibility.js'
 import { isSimulatedDriverId } from '../packages/rides-native/simulatedDrivers.js'
@@ -10,7 +11,7 @@ import { scheduledBoardCopy, SCHEDULED_BOARD_MARKER } from '../shared/nearTermSl
 
 export { SCHEDULED_BOARD_MARKER }
 
-const PUSH_GAP = 'Expo push tokens can be stored on driver_status or driver_push_tokens. No server push sender is configured, so a closed app is not pinged. In-app board alerts still record, and the open driver app shows a local notification.'
+const PUSH_GAP = 'Expo push tokens are stored privately in driver_push_tokens. No server push sender is configured, so a closed app is not pinged. In-app board alerts still record, and the open driver app shows a local notification.'
 
 function approvedRow(row) {
   return String(row?.onboarding_status || '').trim().toLowerCase() === 'approved'
@@ -20,12 +21,6 @@ async function rowsOf(query) {
   const result = await query
   if (result?.error) throw new Error(result.error.message || 'Could not read drivers')
   return result?.data || []
-}
-
-function tokenFor(driverId, statusRows, tokenRows) {
-  const status = (statusRows || []).find((row) => row?.driver_id === driverId)
-  const stored = (tokenRows || []).find((row) => row?.driver_id === driverId)
-  return Boolean(String(status?.expo_push_token || '').trim() || String(stored?.token || '').trim())
 }
 
 export function boardAlertChannels({ pushTokenPresent = false, title = '', body = '' } = {}) {
@@ -65,9 +60,8 @@ export async function notifyScheduledBoard(sb, { trip, riderIsE2E } = {}) {
     if (!ids.length) {
       return { ok: true, notified: 0, drivers: 0, reason: 'no_drivers', pushGap: PUSH_GAP, marker: SCHEDULED_BOARD_MARKER }
     }
-    const [statusRows, tokenRows, priorRows] = await Promise.all([
-      rowsOf(sb.from('driver_status').select('driver_id, expo_push_token').in('driver_id', ids)),
-      rowsOf(sb.from('driver_push_tokens').select('driver_id, token').in('driver_id', ids)),
+    const [tokens, priorRows] = await Promise.all([
+      readDriverPushTokens(sb, ids),
       rowsOf(sb.from('driver_offer_alerts').select('driver_id, offer_marker').eq('trip_id', tripId).eq('offer_marker', SCHEDULED_BOARD_MARKER)),
     ])
     const already = new Set((priorRows || []).map((row) => row.driver_id).filter(Boolean))
@@ -75,13 +69,18 @@ export async function notifyScheduledBoard(sb, { trip, riderIsE2E } = {}) {
     let notified = 0
     let pushTokens = 0
     for (const driverId of ids) {
-      const pushTokenPresent = tokenFor(driverId, statusRows, tokenRows)
+      const pushTokenPresent = Boolean(tokens.get(driverId)?.token)
       if (pushTokenPresent) pushTokens += 1
       if (already.has(driverId)) {
         notified += 1
         continue
       }
       const channels = boardAlertChannels({ pushTokenPresent, title: copy.title, body: copy.body })
+      const token = tokens.get(driverId)?.token
+      if (token) {
+        channels.push.tokenKind = /^Expo(nent)?PushToken\[/.test(token) ? 'expo' : 'raw'
+        if (channels.push.tokenKind === 'raw') channels.push.reason = 'raw_device_token_unsupported'
+      }
       const inserted = await sb.from('driver_offer_alerts').insert({
         trip_id: tripId,
         driver_id: driverId,

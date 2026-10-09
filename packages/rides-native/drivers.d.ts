@@ -148,3 +148,5 @@ export function requestDriverTrip(
     note?: string
   },
 ): Promise<{ id: string; status: string; driver_id: string | null; dropoff_label?: string; fare_cents?: number | null; deposit_cents?: number | null }>
+
+export function filterDriversForFleet<T extends { id: string }>(drivers: T[], tier?: string, viewerId?: string | null): T[]
