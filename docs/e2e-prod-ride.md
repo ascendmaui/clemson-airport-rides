@@ -3,8 +3,9 @@
 `scripts/e2e-prod-ride.mjs` drives one short Standard ride from Cooper Library to
 Clemson Downtown through the deployed HTTP API and separate Supabase rider and
 driver sessions. It uses the real `driverDesk` acceptance and advancement helpers,
-including locked offer economics, arrival, settlement, capture, a positive tip, and a
-positive payout ledger check. Each step has a 30-second HTTP deadline; reads retry
+including locked offer economics, live driver tracking, arrival, settlement, capture,
+a rider receipt, a positive tip, mutual five-star ratings, and a positive payout
+ledger check. Each step has a 30-second HTTP deadline; reads retry
 up to three times for eventual consistency. It prints `STEP <name> PASS|FAIL|SKIP`
 lines and ends with a JSON summary. Any failure exits nonzero and runs cleanup.
 
@@ -62,8 +63,8 @@ Stripe test mode. If booking creates a searching trip and the persisted
 `metadata.e2e_test` is `true`, a failed pre-authorization records `book FAIL` with
 the authorization code and readable Stripe messages from
 `metadata.outstanding_balance.attempts[*].stripeError.message`, then continues
-through offer, accept, en route, pickup, in progress, completion, capture, tip,
-and payout ledger. Capture accepts either a captured hold or a successful direct
+through offer, accept, en route, tracking, pickup, in progress, completion, capture,
+receipt, tip, rating, and payout ledger. Capture accepts either a captured hold or a successful direct
 card charge from settlement (`payment.ok`, `method: card`, `status: succeeded`,
 a positive amount and PaymentIntent ID); its detail identifies which occurred.
 The run still exits nonzero because booking failed. Without the flag, a failed
@@ -72,6 +73,31 @@ and other failures still stop subsequent steps and run cleanup.
 
 Failure details include underlying Supabase messages or HTTP status and JSON
 error/code when available. Credentials remain redacted.
+
+`tracking` runs between en route and pickup. It publishes two positions moving
+toward Cooper Library with the native driver's `publishDriverLocation` helper
+(`apps/driver/app/trip.tsx`, `packages/rides-native/driverDesk.js`): upserts to
+`driver_status` and `trip_driver_locations`. Using the rider session, it mirrors
+`apps/rider/lib/tripWatch.ts`'s location queries and shared `liveFixFromReads`:
+read `trip_driver_locations` for this trip first, then `driver_status` for this
+driver only if there is no usable trip fix. It requires the latest coordinates
+within 0.00001 degrees and a timestamp from this publication, at most 30 seconds
+old (one second of clock tolerance). Detail names the source and location age.
+
+`receipt` runs after capture and before tip. It mirrors the web
+`src/screens/ReceiptScreen.jsx` query in `src/lib/ratings.js`: rider-authenticated
+`trips` read of receipt fields, rendered with `src/lib/receiptText.js`'s
+`buildReceiptText`. The fare must equal the captured cents and the rendered total
+must equal captured fare plus any existing tip. The detail reports fare, tip, and
+total at that point, before the subsequent tip. No email action is invoked.
+
+`rating` runs after tip. Both parties submit five stars with the native apps'
+`submitPartyRating` (`apps/rider/components/RiderTripEnd.tsx` and the driver's
+`RateTripPanel` in `packages/rides-native/PartyScreens.jsx`). That helper reads
+`trips`, checks existing `ratings`, and inserts `ratings` with trip, rater, ratee,
+stars, and a null comment. Each party then reads their own rating by trip and
+rater to verify the saved ID, five stars, and counterpart. Writes are not retried;
+only verification reads retry. These test ratings remain for audit with the trip.
 
 Tip uses the apps' `POST /api/driver?action=tip-choice` offer and record flow:
 custom $1 when the offered bounds allow it, otherwise the smallest positive
