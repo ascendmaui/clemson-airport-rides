@@ -2,6 +2,7 @@
  * Available-driver wait for near-term slots.
  * Approved, online, not on a trip, not a demo map driver.
  */
+import { eligibleDriverIdsForRider } from './e2eDriverEligibility.js'
 import { isSimulatedDriverId } from '../packages/rides-native/simulatedDrivers.js'
 import {
   BUSY_TRIP_STATUSES,
@@ -57,6 +58,7 @@ export async function loadNearTermOffer(sb, {
   tier = 'standard',
   now = new Date(),
   excludeDriverId = null,
+  riderIsE2E = false,
 } = {}) {
   const resolvedTier = resolveOfferedTier(tier)
   const clock = now instanceof Date ? now : new Date(now)
@@ -74,12 +76,13 @@ export async function loadNearTermOffer(sb, {
   if (!sb) return empty('no_drivers')
 
   const applications = await rowsOf(sb.from('driver_applications').select('profile_id, onboarding_status'))
-  const approvedIds = []
+  let approvedIds = []
   for (const row of applications) {
     const id = row?.profile_id
     if (!approvedRow(row) || !id || isSimulatedDriverId(id) || id === excludeDriverId) continue
     if (!approvedIds.includes(id)) approvedIds.push(id)
   }
+  approvedIds = await eligibleDriverIdsForRider(sb, approvedIds, riderIsE2E)
   if (!approvedIds.length) return empty('no_drivers')
 
   const [presence, trips, vehicles] = await Promise.all([

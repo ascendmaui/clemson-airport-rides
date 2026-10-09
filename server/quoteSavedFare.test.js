@@ -42,6 +42,7 @@ async function call(handler, body, deps) {
 
 function sb() {
   const rowsFor = (table) => {
+    if (table === 'profiles') return [{ id: 'drv-1', email: 'driver@example.com' }]
     if (table === 'driver_applications') {
       return [{ profile_id: 'drv-1', onboarding_status: 'approved' }]
     }

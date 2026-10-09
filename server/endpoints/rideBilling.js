@@ -5,6 +5,7 @@
  * Client fare, deposit, amount, total, and isStudent are ignored.
  * Recording a choice does not spend credits and does not charge a card.
  */
+import { isE2ETestUser } from '../../shared/e2eTestAccounts.js'
 import {
   admin, cors, json, parseBody, userFromAuth, computeRoutes,
 } from '../friendRideLib.js'
@@ -154,7 +155,7 @@ export default async function handler(req, res, deps = {}) {
   }
   const { priced, pickup, dropoff, when, tier, scheduled } = pricedResult
   try {
-    await assertTierAvailable(sb, tier, { scheduledFor: scheduled ? when : null, now })
+    await assertTierAvailable(sb, tier, { scheduledFor: scheduled ? when : null, now, riderIsE2E: isE2ETestUser(user) })
   } catch (error) {
     return json(res, error.status || 409, { error: error.message, code: error.code || 'ride_option_unavailable' })
   }

@@ -84,6 +84,7 @@ function createFakeSb({
               error: null,
             })
           }
+          if (table === 'profiles') return Promise.resolve({ data: [{ id: 'driver-approved', email: 'driver@example.com' }], error: null })
           if (table === 'trips') return Promise.resolve({ data: [], error: null })
           return Promise.resolve({ data: [], error: null })
         },

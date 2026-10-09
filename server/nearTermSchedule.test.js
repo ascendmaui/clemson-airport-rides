@@ -76,7 +76,11 @@ function fleet() {
     vehicles: [],
     driver_push_tokens: [],
     driver_offer_alerts: [],
-    profiles: [{ id: 'driver-near', full_name: 'Ava Stone' }],
+    profiles: [
+      { id: 'driver-near', email: 'near@example.com', full_name: 'Ava Stone' },
+      { id: 'driver-offline', email: 'offline@example.com' },
+      { id: 'driver-busy', email: 'busy@example.com' },
+    ],
   }
 }
 

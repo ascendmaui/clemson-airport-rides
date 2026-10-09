@@ -97,7 +97,7 @@ export default async function handler(req, res, deps = {}) {
   }
 
   try {
-    await assertTierAvailable(sb, tier)
+    await assertTierAvailable(sb, tier, { riderIsE2E: e2eRider })
   } catch (error) {
     return optionError(res, error)
   }

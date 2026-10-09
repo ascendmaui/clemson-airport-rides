@@ -302,6 +302,7 @@ test('requestDriverTrip skips a pending_review driver and opens a campus offer f
   assert.equal(pendingSb.tables.trips?.length || 0, 0)
 
   const approvedSb = memorySb({
+    profiles: [{ id: 'driver-approved', email: 'driver@example.com' }],
     driver_applications: [{ profile_id: 'driver-approved', onboarding_status: 'approved' }],
     driver_status: [{ driver_id: 'driver-approved', online: true }],
     vehicles: [{ driver_id: 'driver-approved', service_class: 'standard', tier: 'standard' }],
@@ -324,6 +325,7 @@ test('requestDriverTrip skips a pending_review driver and opens a campus offer f
 
 test('requestDriverTrip books an airport ride from pick-a-driver with no upfront deposit', async () => {
   const approvedSb = memorySb({
+    profiles: [{ id: 'driver-approved', email: 'driver@example.com' }],
     driver_applications: [{ profile_id: 'driver-approved', onboarding_status: 'approved' }],
     driver_status: [{ driver_id: 'driver-approved', online: true }],
     vehicles: [{ driver_id: 'driver-approved', service_class: 'standard', tier: 'standard' }],
@@ -354,6 +356,7 @@ test('requestDriverTrip books an airport ride from pick-a-driver with no upfront
 
 test('requestDriverTrip keeps the campus trip when the event insert fails', async () => {
   const approvedSb = memorySb({
+    profiles: [{ id: 'driver-approved', email: 'driver@example.com' }],
     driver_applications: [{ profile_id: 'driver-approved', onboarding_status: 'approved' }],
     driver_status: [{ driver_id: 'driver-approved', online: true }],
     vehicles: [{ driver_id: 'driver-approved', service_class: 'standard', tier: 'standard' }],
@@ -503,6 +506,7 @@ test('requestDriverTrip auto-assigns John before Kim and keeps a picked offer op
   assert.equal(empty.json.code, 'ride_option_unavailable')
 
   const pickSb = memorySb({
+    profiles: [{ id: kim, email: 'kim@example.com' }],
     driver_applications: [{ profile_id: kim, onboarding_status: 'approved' }],
     driver_status: [{ driver_id: kim, online: true }],
     vehicles: [{ driver_id: kim, service_class: 'standard', tier: 'standard' }],
