@@ -159,7 +159,8 @@ export async function publishDriverLocation(supabase, driverId, {
   lat,
   lng,
   heading = null,
-  online = true,
+  online,
+  onlineSource = null,
   speed = null,
   tripId = null,
   tripStatus = null,
@@ -167,15 +168,24 @@ export async function publishDriverLocation(supabase, driverId, {
   if (!supabase || !driverId) return
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) return
   const now = new Date().toISOString()
-  const { error } = await supabase.from('driver_status').upsert({
+  const row = {
     driver_id: driverId,
     lat,
     lng,
     heading: Number.isFinite(Number(heading)) ? Number(heading) : null,
-    online: Boolean(online),
     updated_at: now,
     location_updated_at: now,
-  })
+  }
+  // Presence is only written when asked for. Location-only (trip) writes leave online alone.
+  if (typeof online === 'boolean') {
+    row.online = online
+    if (onlineSource) row.online_source = onlineSource
+  }
+  let { error } = await supabase.from('driver_status').upsert(row)
+  if (error && row.online_source && /online_source/i.test(error.message || '')) {
+    delete row.online_source
+    ;({ error } = await supabase.from('driver_status').upsert(row))
+  }
   if (error) throw new Error(error.message)
 
   let liveTripId = tripId || null

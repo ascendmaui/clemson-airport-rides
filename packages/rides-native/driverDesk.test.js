@@ -822,7 +822,9 @@ test('publishDriverLocation throws when the trip location write fails', async ()
     }),
     /trip location rejected/,
   )
-  assert.equal(supabase._tables.driver_status[0].online, true)
+  // Location-only writes no longer set presence; only the app heartbeat writes online.
+  assert.equal(supabase._tables.driver_status[0].online, undefined)
+  assert.equal(supabase._tables.driver_status[0].lat, 34.68)
 })
 
 test('publishDriverLocation throws on database error', async () => {

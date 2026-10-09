@@ -171,8 +171,13 @@ export async function main(args = process.argv.slice(2)) {
   }
   async function presence(online, lat = ride.pickupLat, lng = ride.pickupLng) {
     const at = new Date().toISOString()
-    const result = await driver.from('driver_status').upsert({ driver_id: driverId, online, lat, lng,
-      updated_at: at, location_updated_at: at }, { onConflict: 'driver_id' })
+    // Going online is the app's GO action; the driver_status guard only accepts GO right after END.
+    const row = { driver_id: driverId, online, lat, lng, updated_at: at, location_updated_at: at, online_source: online ? 'go' : 'end' }
+    let result = await driver.from('driver_status').upsert(row, { onConflict: 'driver_id' })
+    if (result.error && /online_source/i.test(result.error.message || '')) {
+      delete row.online_source
+      result = await driver.from('driver_status').upsert(row, { onConflict: 'driver_id' })
+    }
     requireThat(!result.error, failureDetail(`Could not set driver ${online ? 'online' : 'offline'}`, result.error))
     const check = await driver.from('driver_status').select('online').eq('driver_id', driverId).maybeSingle()
     requireThat(!check.error && check.data?.online === online, failureDetail('Driver presence did not persist', check.error))

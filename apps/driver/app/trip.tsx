@@ -223,9 +223,9 @@ export default function TripScreen() {
   const locationTracking = useDriverLocation(Boolean(user && trip && !terminalTrip), async (fix) => {
     setSelf({ latitude: fix.lat, longitude: fix.lng })
     if (!supabase || !user || !activeTrip) return
+    // Location only: presence (online) is written by the app-wide heartbeat, never here.
     await publishDriverLocation(supabase, user.id, {
       ...fix,
-      online: true,
       tripId: trip?.id ?? null,
       tripStatus: trip?.status ?? null,
     })

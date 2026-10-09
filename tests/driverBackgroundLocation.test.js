@@ -47,9 +47,9 @@ test('trip screen starts active tracking, stops all terminal trips, and offers S
 
 test('foreground and background reuse the dual-table publisher and persisted throttle', () => {
   const task = read('apps/driver/lib/backgroundLocation.ts')
-  for (const file of ['apps/driver/app/trip.tsx', 'apps/driver/app/(tabs)/index.tsx']) {
-    assert.match(read(file), /import \{[^}]*publishDriverLocation[^}]*\} from '@\/lib\/backgroundLocation'/)
-  }
+  assert.match(read('apps/driver/app/trip.tsx'), /import \{[^}]*publishDriverLocation[^}]*\} from '@\/lib\/backgroundLocation'/)
+  // Home goes through the app-wide presence heartbeat, which uses the same publisher.
+  assert.match(read('apps/driver/lib/presence.ts'), /import \{[^}]*publishDriverLocation[^}]*\} from '\.\/backgroundLocation'/)
   assert.match(task, /publishDriverLocation as writeDriverLocation.*from 'rides-native\/driverDesk'/)
   assert.match(task, /await writeDriverLocation\(client, driverId, fix\)/)
   assert.match(task, /shouldPublishTripLocation\(lastPublishedAt, Date\.now\(\)\)/)

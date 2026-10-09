@@ -498,6 +498,8 @@ export async function setDriverOnline(supabase, driverId, online, fix = null) {
   const row = {
     driver_id: driverId,
     online: Boolean(online),
+    // GO is the only client write the server accepts as coming back online right after END.
+    online_source: online ? 'go' : 'end',
     updated_at: new Date().toISOString(),
   }
   if (fix && Number.isFinite(Number(fix.lat)) && Number.isFinite(Number(fix.lng))) {
@@ -505,7 +507,11 @@ export async function setDriverOnline(supabase, driverId, online, fix = null) {
     row.lng = Number(fix.lng)
     if (fix.heading != null && Number.isFinite(Number(fix.heading))) row.heading = Number(fix.heading)
   }
-  const { error } = await supabase.from('driver_status').upsert(row)
+  let { error } = await supabase.from('driver_status').upsert(row)
+  if (error && /online_source/i.test(error.message || '')) {
+    delete row.online_source
+    ;({ error } = await supabase.from('driver_status').upsert(row))
+  }
   if (error) throw new Error(error.message)
   return { ok: true }
 }

@@ -56,10 +56,20 @@ async function publish(client: unknown, driverId: string, fix: DriverLocationInp
   await authStorage.setItem(LAST_PUBLISH_KEY, String(Date.now()))
 }
 
-/** Same presence + trip telemetry publisher for both foreground driver screens. */
-export function publishDriverLocation(client: unknown, driverId: string, fix: DriverLocationInput): Promise<void> {
+export type PublishGuards = { isCurrent?: () => boolean; onlineIsCurrent?: () => boolean }
+
+/**
+ * Location (and, from the presence heartbeat only, online) publisher for foreground screens.
+ * Guards are re-checked inside the queue, right before the write, so a write queued before
+ * END cannot mark the driver online after it.
+ */
+export function publishDriverLocation(client: unknown, driverId: string, fix: DriverLocationInput, guards: PublishGuards = {}): Promise<void> {
   return serial(async () => {
     if (!supabase) return
+    if (guards.isCurrent && !guards.isCurrent()) return
+    if (fix.online && guards.onlineIsCurrent && !guards.onlineIsCurrent()) {
+      fix = { ...fix, online: undefined, onlineSource: undefined }
+    }
     const { data, error } = await supabase.auth.getSession()
     if (error) throw error
     if (data.session?.user.id !== driverId) return
@@ -88,7 +98,6 @@ TaskManager.defineTask<{ locations: Location.LocationObject[] }>(DRIVER_TRIP_LOC
         lng: location.coords.longitude,
         heading: location.coords.heading,
         speed: location.coords.speed,
-        online: true,
         tripId: trip.id,
         tripStatus: trip.status,
       })
@@ -125,6 +134,11 @@ export function startTripBackgroundLocation(tripId: string): Promise<BackgroundL
     }
     return 'started'
   })
+}
+
+/** Resolves once every queued location write has finished (END waits on this). */
+export function drainLocationWrites(): Promise<void> {
+  return serial(async () => {})
 }
 
 export function stopTripBackgroundLocation(expectedTripId?: string): Promise<void> {
