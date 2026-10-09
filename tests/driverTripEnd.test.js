@@ -107,7 +107,7 @@ test('trip-end summary shows fare, wait fee, tip pending, and net', () => {
   assert.deepEqual(labels, ['Trip fare', 'Platform fee', 'Wait fee'])
   assert.equal(summary.lines[2].value, '+$3.20')
   assert.equal(summary.lines[2].note, 'Rider paid $4.00')
-  assert.equal(summary.tip.value, 'Pending')
+  assert.equal(summary.tip.value, 'None yet')
   assert.equal(summary.tip.pending, true)
   assert.equal(summary.net.label, 'Net earnings')
   assert.equal(summary.net.value, '$19.20')

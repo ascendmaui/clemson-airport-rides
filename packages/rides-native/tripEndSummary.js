@@ -7,6 +7,30 @@ import { formatCents } from './tripTags.js'
 
 const cents = (value) => Math.max(0, Math.round(Number(value) || 0))
 
+/** Tip copy for the summary and the tip push: "Riley tipped you $3". */
+export function tipLine(riderFirstName, tipCents) {
+  const amount = cents(tipCents)
+  if (amount <= 0) return null
+  const who = String(riderFirstName || '').trim().split(/\s+/)[0]
+  const dollars = amount % 100 === 0 ? `$${amount / 100}` : formatCents(amount)
+  return `${who && who !== 'Rider' ? who : 'Your rider'} tipped you ${dollars}`
+}
+
+function tripEndTip(card, earnings) {
+  const tipCents = cents(card?.tipCents ?? earnings?.tipCents)
+  if (tipCents > 0) {
+    return {
+      label: 'Tip',
+      value: `+${formatCents(tipCents)}`,
+      note: 'Added to Other on Earnings',
+      pending: false,
+      headline: tipLine(card?.firstName, tipCents),
+      cents: tipCents,
+    }
+  }
+  return { label: 'Tip', value: 'None yet', note: 'Riders can tip after the trip. You get a notification when one arrives.', pending: true, headline: null, cents: 0 }
+}
+
 /**
  * Lines for the completed-trip summary card.
  * Tip is shown on its own line: it is charged after the trip and is not in this payout.
@@ -38,17 +62,14 @@ export function tripEndSummary(card) {
   if (earnings && earnings.backupBonusCents > 0) {
     lines.push({ key: 'backup', label: 'Backup bonus', value: `+${formatCents(earnings.backupBonusCents)}` })
   }
-  const tipCents = cents(card?.tipCents ?? earnings?.tipCents)
-  const tip = tipCents > 0
-    ? { label: 'Tip', value: `+${formatCents(tipCents)}`, note: 'Paid to you separately', pending: false }
-    : { label: 'Tip', value: 'Pending', note: 'The rider can still add a tip', pending: true }
+  const tip = tripEndTip(card, earnings)
   return {
     title: 'Trip complete',
     lines,
     net: { label: 'Net earnings', value: formatCents(netCents), cents: netCents },
     tip,
     payoutLine: card?.payoutStatusLine || 'Payout is on the way.',
-    accessibilityLabel: `Trip complete. Net earnings ${formatCents(netCents)}. Tip ${tip.value}.`,
+    accessibilityLabel: `Trip complete. Net earnings ${formatCents(netCents)}. ${tip.headline ? `${tip.headline}.` : 'No tip yet.'}`,
   }
 }
 

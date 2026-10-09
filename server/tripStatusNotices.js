@@ -27,6 +27,7 @@ export const NOTICE_KINDS = Object.freeze({
   rider_no_show: Object.freeze({ role: 'driver', statuses: Object.freeze(['cancelled_wait']) }),
   driver_canceled: Object.freeze({ role: 'rider', statuses: Object.freeze([]), released: 'live' }),
   wait_canceled: Object.freeze({ role: 'rider', statuses: Object.freeze(['cancelled_wait']) }),
+  driver_tipped: Object.freeze({ role: 'driver', statuses: Object.freeze(['completed']) }),
 })
 
 const LIVE_STATUSES = Object.freeze(['searching', 'offered', 'scheduled', 'accepted', 'arriving', 'arrived'])
@@ -63,6 +64,7 @@ export function tripStatusNoticeCopy(kind, {
   switched = false,
   riderFeeCents = 0,
   driverWaitCents = 0,
+  tipCents = 0,
 } = {}) {
   const who = noticeFirstName(driverName)
   const rider = noticeFirstName(riderName, 'The rider')
@@ -107,6 +109,13 @@ export function tripStatusNoticeCopy(kind, {
           ? `Your driver waited at ${pickup}. A ${money(riderFeeCents)} no-show fee applies.`
           : `Your driver waited at ${pickup} and the ride was canceled.`,
       }
+    case 'driver_tipped': {
+      const amount = Math.max(0, Math.round(Number(tipCents) || 0))
+      if (amount <= 0) return null
+      const dollars = amount % 100 === 0 ? `$${amount / 100}` : money(amount)
+      const who = rider === 'The rider' ? 'Your rider' : rider
+      return { title: `${who} tipped you ${dollars}`, body: 'It shows in Other on your Earnings tab.' }
+    }
     default:
       return null
   }
@@ -178,6 +187,7 @@ async function noticeContext(sb, trip, notice) {
     switched: Boolean(meta.rider_switch),
     riderFeeCents: (Number(trip.wait_fee_cents) || 0) + (Number(trip.cancel_fee_cents) || 0),
     driverWaitCents: Number(trip.driver_wait_earnings_cents) || 0,
+    tipCents: Number(trip.tip_cents) || 0,
   }
   if (driverSide || !driverId) return { ...base, driverName: '', vehicle: '' }
   const profile = await maybeSingle(sb.from('profiles').select('full_name').eq('id', driverId).maybeSingle())
@@ -223,7 +233,7 @@ export async function sweepTripStatusNotices(sb, { now = new Date(), dryRun = fa
       const claimed = await claim.select('id')
       if (claimed.error || !claimed.data?.length) continue
       const trip = await maybeSingle(sb.from('trips')
-        .select('id, status, rider_id, driver_id, pickup_label, metadata, wait_fee_cents, cancel_fee_cents, driver_wait_earnings_cents')
+        .select('id, status, rider_id, driver_id, pickup_label, metadata, wait_fee_cents, cancel_fee_cents, driver_wait_earnings_cents, tip_cents')
         .eq('id', row.trip_id).maybeSingle())
       if (!noticeIsCurrent(row, trip)) { await finish(sb, row.id, 'stale', nowIso); skip(row.id); continue }
       const copy = tripStatusNoticeCopy(row.kind, await noticeContext(sb, trip, row))
