@@ -436,3 +436,175 @@ test('api/carpool: router routes actions and rejects unknown actions with 400', 
   await carpoolApiHandler({ method: 'OPTIONS', headers: { origin: 'http://localhost:3000' } }, resOptions)
   assert.equal(resOptions.statusCode, 204)
 })
+
+test('handleCarpoolProgram: ambassador action returns stats with referral link or 503 on schema failure', async () => {
+  // 1. Success with code returns 200 with referral link
+  const sbOk = {
+    from: (table) => {
+      if (table === 'ambassador_codes') {
+        return {
+          select: () => ({
+            eq: () => ({
+              maybeSingle: async () => ({
+                data: { code: 'TIGER123', code_type: 'ambassador', created_at: new Date().toISOString() },
+                error: null,
+              }),
+            }),
+          }),
+        }
+      }
+      if (table === 'ambassador_payout_ledger') {
+        return {
+          select: () => ({
+            eq: () => ({
+              order: () => ({
+                limit: async () => ({
+                  data: [{ id: 'l1', amount_cents: 500, status: 'pending' }, { id: 'l2', amount_cents: 500, status: 'paid' }],
+                  error: null,
+                }),
+              }),
+            }),
+          }),
+        }
+      }
+      return {}
+    },
+  }
+
+  const resOk = mockRes()
+  await handleCarpoolProgram(
+    { method: 'POST', body: { action: 'ambassador', origin: 'https://rides.clemson.edu' } },
+    resOk,
+    { sb: sbOk, user: { id: 'u_amb' } },
+  )
+  assert.equal(resOk.statusCode, 200)
+  const bodyOk = parseJson(resOk)
+  assert.equal(bodyOk.ok, true)
+  assert.equal(bodyOk.code, 'TIGER123')
+  assert.equal(bodyOk.link, 'https://rides.clemson.edu/a/TIGER123')
+  assert.equal(bodyOk.pendingCents, 500)
+  assert.equal(bodyOk.paidCents, 500)
+
+  // 2. Schema missing returns 503
+  const sbMissing = {
+    from: () => ({
+      select: () => ({
+        eq: () => ({
+          maybeSingle: async () => ({
+            data: null,
+            error: { message: 'relation "ambassador_codes" does not exist' },
+          }),
+        }),
+      }),
+    }),
+  }
+  const resMissing = mockRes()
+  await handleCarpoolProgram(
+    { method: 'POST', body: { action: 'ambassador' } },
+    resMissing,
+    { sb: sbMissing, user: { id: 'u_amb' } },
+  )
+  assert.equal(resMissing.statusCode, 503)
+  assert.equal(parseJson(resMissing).code, 'schema_missing')
+})
+
+test('handleCarpoolAttribute: status code matrix for own link (409), schema missing (503), inactive (404), and errors', async () => {
+  // 1. Own link -> 409
+  const sbOwn = {
+    from: () => ({
+      select: () => ({
+        eq: () => ({
+          maybeSingle: async () => ({
+            data: { profile_id: 'u_attr', code: 'MY_CODE', code_type: 'ambassador' },
+            error: null,
+          }),
+        }),
+      }),
+    }),
+  }
+  const resOwn = mockRes()
+  await handleCarpoolAttribute(
+    { method: 'POST', body: { code: 'MY_CODE' } },
+    resOwn,
+    { sb: sbOwn, user: { id: 'u_attr' } },
+  )
+  assert.equal(resOwn.statusCode, 409)
+  assert.equal(parseJson(resOwn).code, 'own_link')
+
+  // 2. Schema missing -> 503
+  const sbMissing = {
+    from: () => ({
+      select: () => ({
+        eq: () => ({
+          maybeSingle: async () => ({
+            data: null,
+            error: { message: 'relation "ambassador_codes" does not exist' },
+          }),
+        }),
+      }),
+    }),
+  }
+  const resMissing = mockRes()
+  await handleCarpoolAttribute(
+    { method: 'POST', body: { code: 'SOME_CODE' } },
+    resMissing,
+    { sb: sbMissing, user: { id: 'u_attr' } },
+  )
+  assert.equal(resMissing.statusCode, 503)
+  assert.equal(parseJson(resMissing).code, 'schema_missing')
+
+  // 3. Inactive code -> 404
+  const sbInactive = {
+    from: () => ({
+      select: () => ({
+        eq: () => ({
+          maybeSingle: async () => ({ data: null, error: null }),
+        }),
+      }),
+    }),
+  }
+  const resInactive = mockRes()
+  await handleCarpoolAttribute(
+    { method: 'POST', body: { code: 'UNKNOWN_CODE' } },
+    resInactive,
+    { sb: sbInactive, user: { id: 'u_attr' } },
+  )
+  assert.equal(resInactive.statusCode, 404)
+  assert.match(parseJson(resInactive).error, /not active/i)
+})
+
+test('handleCarpoolGroup: rejects unapproved driver attempting driving carpool with 403', async () => {
+  const sbUnapproved = {
+    from: (table) => {
+      if (table === 'driver_applications') {
+        return {
+          select: () => ({
+            in: () => ({
+              eq: () => Promise.resolve({ data: [], error: null }),
+            }),
+          }),
+        }
+      }
+      return {}
+    },
+  }
+
+  const resUnapproved = mockRes()
+  await handleCarpoolGroup(
+    {
+      method: 'POST',
+      body: {
+        pickup: { lat: 34.68, lng: -82.83 },
+        dropoff: { lat: 34.69, lng: -82.84 },
+        driving: true,
+      },
+    },
+    resUnapproved,
+    { sb: sbUnapproved, user: { id: 'd_unapproved' } },
+  )
+  assert.equal(resUnapproved.statusCode, 403)
+  const body = parseJson(resUnapproved)
+  assert.equal(body.code, 'driver_not_approved')
+  assert.match(body.error, /Admin must approve your driver application/)
+})
+
