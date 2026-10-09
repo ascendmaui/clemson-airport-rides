@@ -72,7 +72,7 @@ export default function BugReportScreen() {
   return (
     <StackPage title="Bug Reporter" onBack={() => router.back()}>
       <Text style={{ color: colors.inkSecondary, lineHeight: 20 }}>
-        This files the existing support ticket. You can also email rides@clemson.edu.
+        This files the existing support ticket. You can also email rides@clemsonrides.com.
       </Text>
       <View style={styles.chips}>
         {CATEGORIES.map((item) => {

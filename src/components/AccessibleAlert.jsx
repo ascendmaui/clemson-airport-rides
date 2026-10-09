@@ -115,6 +115,7 @@ export class AccessibleErrorBoundary extends React.Component {
   }
 
   componentDidCatch(error, errorInfo) {
+    console.error('[boundary]', error, errorInfo)
     if (typeof this.props.onError === 'function') {
       this.props.onError(error, errorInfo)
     }

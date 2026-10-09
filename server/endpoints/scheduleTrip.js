@@ -3,6 +3,7 @@
  * Records a campus or airport trip at the server fare. Client fare_cents,
  * amount, total, and isStudent are ignored.
  */
+import { isE2ETestUser } from '../../shared/e2eTestAccounts.js'
 import {
   admin, cors, json, parseBody, userFromAuth, computeRoutes,
 } from '../friendRideLib.js'
@@ -94,6 +95,7 @@ export default async function handler(req, res, deps = {}) {
     await assertTierAvailable(sb, tier, {
       scheduledFor: nearTerm ? null : (scheduled ? when : null),
       now: new Date(clockNow),
+      riderIsE2E: isE2ETestUser(user),
     })
   } catch (error) {
     return json(res, error.status || 409, { error: error.message, code: error.code || 'ride_option_unavailable' })
@@ -120,6 +122,7 @@ export default async function handler(req, res, deps = {}) {
         tier,
         now: new Date(clockNow),
         excludeDriverId: user.id,
+        riderIsE2E: isE2ETestUser(user),
       })
     } catch (error) {
       return json(res, error.status || 400, { error: error.message, code: error.code || 'ride_option_unavailable' })
@@ -300,6 +303,7 @@ export default async function handler(req, res, deps = {}) {
   let board = null
   try {
     board = await (deps.notifyScheduledBoard || notifyScheduledBoard)(sb, {
+      riderIsE2E: isE2ETestUser(user),
       trip: { ...row, id: inserted.data.id, pickup_at: inserted.data.pickup_at || row.pickup_at },
     })
   } catch (error) {

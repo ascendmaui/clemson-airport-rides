@@ -1,3 +1,4 @@
+import { uniqueChannelTopic } from './realtimeChannel.js'
 import { authedJson } from './apiClient.js'
 import {
   canOpenLostItemReport,
@@ -95,7 +96,7 @@ export async function markTripMessagesRead(supabase, ids) {
 export function subscribeTripMessages(supabase, tripId, onChange) {
   if (!supabase || !tripId) return () => {}
   const channel = supabase
-    .channel(`trip-messages-${tripId}`)
+    .channel(uniqueChannelTopic(`trip-messages-${tripId}`))
     .on(
       'postgres_changes',
       { event: '*', schema: 'public', table: 'trip_messages', filter: `trip_id=eq.${tripId}` },
@@ -110,7 +111,7 @@ export function subscribeTripMessages(supabase, tripId, onChange) {
 export function subscribeTripChatStatus(supabase, tripId, onChange) {
   if (!supabase || !tripId) return () => {}
   const channel = supabase
-    .channel(`trip-chat-status-${tripId}`)
+    .channel(uniqueChannelTopic(`trip-chat-status-${tripId}`))
     .on(
       'postgres_changes',
       { event: 'UPDATE', schema: 'public', table: 'trips', filter: `id=eq.${tripId}` },
@@ -222,7 +223,7 @@ export async function notifyLostItemReport(supabase, { tripId, reportId }) {
 export function subscribeLostItemReports(supabase, onChange) {
   if (!supabase) return () => {}
   const channel = supabase
-    .channel('trip-lost-item-reports')
+    .channel(uniqueChannelTopic('trip-lost-item-reports'))
     .on(
       'postgres_changes',
       { event: '*', schema: 'public', table: 'trip_lost_item_reports' },

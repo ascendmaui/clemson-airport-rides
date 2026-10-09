@@ -935,7 +935,7 @@ test('subscribeTrips creates channel and triggers callback on change', () => {
   })
 
   assert.equal(supabase._channels.length, 1)
-  assert.match(supabase._channels[0].name, /^driver-trips-/)
+  assert.match(supabase._channels[0].name, /^driver-trips:/)
 
   supabase._channels[0].trigger()
   assert.equal(callCount, 1)

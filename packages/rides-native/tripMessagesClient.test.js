@@ -587,7 +587,7 @@ test('subscribeTripMessages wires channel correctly and returns functional unsub
 
   assert.equal(fake.channels.length, 1)
   const ch = fake.channels[0]
-  assert.equal(ch.name, 'trip-messages-trip-777')
+  assert.match(ch.name, /^trip-messages-trip-777:\d+-[a-z0-9]+$/)
   assert.equal(ch.subscribed, true)
   assert.equal(ch.event, 'postgres_changes')
   assert.deepEqual(ch.filter, {
@@ -640,7 +640,7 @@ test('subscribeTripChatStatus wires channel correctly and extracts payload.new',
 
   assert.equal(fake.channels.length, 1)
   const ch = fake.channels[0]
-  assert.equal(ch.name, 'trip-chat-status-trip-888')
+  assert.match(ch.name, /^trip-chat-status-trip-888:\d+-[a-z0-9]+$/)
   assert.equal(ch.subscribed, true)
   assert.equal(ch.event, 'postgres_changes')
   assert.deepEqual(ch.filter, {

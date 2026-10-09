@@ -48,7 +48,7 @@ import {
 } from '../../../shared/backgroundCheck.js'
 
 const HEADLINE = 'Become a driver'
-const TAGLINE = 'For Clemson University students — and for drivers already on Uber or Lyft.'
+const TAGLINE = 'For Clemson University students and experienced rideshare drivers.'
 
 const STEP_KINDS = ['account', 'documents', 'employment', 'tax', 'agreement', 'review'] as const
 type StepKind = (typeof STEP_KINDS)[number]

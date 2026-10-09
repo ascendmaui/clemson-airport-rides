@@ -10,7 +10,7 @@ export function QrMark({ value, label }) {
       className="mkt-qr-svg"
       viewBox={`0 0 ${span} ${span}`}
       role="img"
-      aria-label={`${label} QR code`}
+      aria-label={label}
     >
       <rect width={span} height={span} fill="#ffffff" />
       {matrix.cells.map(([x, y]) => (

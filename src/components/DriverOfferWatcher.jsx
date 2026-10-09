@@ -1,3 +1,4 @@
+import { uniqueChannelTopic } from '../../packages/rides-native/realtimeChannel.js'
 /**
  * On-screen offer alerts for an approved driver, including after they leave Driver Home.
  * Uses the existing toast sender. Does not send email or a closed-app push.
@@ -96,7 +97,7 @@ export function DriverOfferWatcher() {
 
     look()
     const channel = supabase
-      .channel(`driver-offers-${user.id}`)
+      .channel(uniqueChannelTopic(`driver-offers-${user.id}`))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'trips' }, () => { look() })
       .subscribe()
     const poll = setInterval(look, 12000)

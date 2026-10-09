@@ -120,7 +120,7 @@ export function buildHelpTurn({ messages, context, roleVariant }) {
   const actions = []
 
   if (issue) {
-    paragraphs.push('I only walk through how Clemson RIDES works. I cannot file a ticket, reverse a charge, or change a trip. Open Account → Support and describe what happened. Email rides@clemson.edu if you would rather write a person directly.')
+    paragraphs.push('I only walk through how Clemson RIDES works. I cannot file a ticket, reverse a charge, or change a trip. Open Account → Support and describe what happened. Email rides@clemsonrides.com if you would rather write a person directly.')
     actions.push(action('Open Support', 'account', { tab: 'support' }))
   }
 

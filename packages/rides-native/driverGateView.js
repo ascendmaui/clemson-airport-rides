@@ -110,7 +110,7 @@ export function driverGateView(onboardingStatus, { rejectionReason, missingItems
         canGoOnline: false,
         canSeeOffers: false,
         title: 'Become a driver',
-        body: 'For Clemson University students — and for drivers already on Uber or Lyft.',
+        body: 'For Clemson University students and experienced rideshare drivers.',
         primaryAction: 'Become a driver',
       }
   }

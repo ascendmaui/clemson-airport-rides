@@ -107,14 +107,14 @@ export function AssistChat({
         id: nextId(),
         role: 'assistant',
         content: id
-          ? `Ticket ${id} is open. Email rides@clemson.edu and mention that id if you need a person sooner.`
+          ? `Ticket ${id} is open. Email rides@clemsonrides.com and mention that id if you need a person sooner.`
           : 'The ticket was filed.',
       }])
     } catch (err) {
       setMessages((current: ChatMessage[]) => [...current, {
         id: nextId(),
         role: 'assistant',
-        content: err instanceof Error ? err.message : 'Could not file the ticket. Email rides@clemson.edu.',
+        content: err instanceof Error ? err.message : 'Could not file the ticket. Email rides@clemsonrides.com.',
       }])
     } finally {
       setFiling(false)
