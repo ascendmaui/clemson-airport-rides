@@ -32,6 +32,7 @@ import { lift } from '@/lib/elevation'
 import type { Palette } from '@/lib/palette'
 import { useTheme } from '@/lib/theme'
 import { useThemedStyles } from '@/lib/useThemedStyles'
+import { registerRiderPush } from '@/lib/push'
 
 const CHECKOUT_RETURN_COPY = 'You\'re back from checkout. This ride is in the open pool. The final fare is charged when the trip ends.'
 
@@ -117,6 +118,12 @@ export default function Requested() {
   const driverName = live?.driverName || driver
   const error = tripError || mapError
   const reconciledSessions = useRef(new Set<string>())
+
+  // Ask for notification permission once a ride exists, so "on the way / here" can reach a locked phone.
+  useEffect(() => {
+    if (!user?.id || !tripId) return
+    registerRiderPush(supabase, user.id, { prompt: true }).catch(() => {})
+  }, [user?.id, tripId])
 
   const mapRequest = useRef(0)
   const mapPending = useRef(false)
