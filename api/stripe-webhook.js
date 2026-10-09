@@ -29,7 +29,11 @@ const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || ''
 
 const MAX_WEBHOOK_PAYLOAD_BYTES = 1024 * 1024
 
-function readRawBody(req, maxBytes = MAX_WEBHOOK_PAYLOAD_BYTES) {
+export function readRawBody(req, maxBytes = MAX_WEBHOOK_PAYLOAD_BYTES) {
+  if (Buffer.isBuffer(req?.rawBody)) return Promise.resolve(req.rawBody)
+  if (typeof req?.rawBody === 'string') return Promise.resolve(Buffer.from(req.rawBody))
+  if (Buffer.isBuffer(req?.body)) return Promise.resolve(req.body)
+  if (typeof req?.body === 'string') return Promise.resolve(Buffer.from(req.body))
   return new Promise((resolve, reject) => {
     const chunks = []
     let totalLength = 0
@@ -151,7 +155,8 @@ export default async function handler(req, res, deps = {}) {
   const rawServiceKey = deps.serviceKey !== undefined ? deps.serviceKey : (process.env.SUPABASE_SERVICE_ROLE_KEY || serviceKey)
   const activeServiceKey = typeof rawServiceKey === 'string' ? rawServiceKey.trim() : ''
 
-  if (!stripeKey || !stripeKey.startsWith('sk_') || stripeKey.includes('placeholder')) {
+  const isValidKey = (stripeKey.startsWith('sk_') || stripeKey.startsWith('rk_')) && !stripeKey.includes('placeholder')
+  if (!stripeKey || !isValidKey) {
     return sendWebhookJson(res, 200, {
       stub: true,
       message: 'STRIPE_SECRET_KEY not set — webhook stub acknowledged',
@@ -172,8 +177,13 @@ export default async function handler(req, res, deps = {}) {
     if (event.type === 'payment_intent.succeeded' && event.data?.object?.metadata?.kind === 'tip') {
       const recordTipFn = deps.recordTip || recordTip
       const recorded = await recordTipFn(event.data.object)
-      const retryable = recorded?.ok === false
-      return sendWebhookJson(res, retryable ? 500 : 200, { received: true, type: event.type, recorded })
+      const retryable = recorded?.ok === false && !recorded?.skipped
+      return sendWebhookJson(res, retryable ? 500 : 200, {
+        received: true,
+        type: event.type,
+        recorded,
+        ...(retryable ? { error: recorded.error } : {}),
+      })
     }
 
     if (event.type === 'payment_intent.payment_failed') {
@@ -248,8 +258,15 @@ export default async function handler(req, res, deps = {}) {
         live,
         referral,
       })
-      const retryable = applied?.ok === false || (recorded && recorded.ok === false && !recorded.skipped)
-      return sendWebhookJson(res, retryable ? 500 : 200, { received: true, type: event.type, recorded, live, referral })
+      const retryable = (applied?.ok === false && !applied?.skipped) || (recorded && recorded.ok === false && !recorded.skipped)
+      return sendWebhookJson(res, retryable ? 500 : 200, {
+        received: true,
+        type: event.type,
+        recorded,
+        live,
+        referral,
+        ...(retryable ? { error: applied?.error || recorded?.error } : {}),
+      })
     }
 
     const passMeta = tigerPassMeta(event.data?.object)
@@ -273,6 +290,11 @@ export default async function handler(req, res, deps = {}) {
     return sendWebhookJson(res, 200, { received: true, type: event.type })
   } catch (err) {
     console.error('[stripe-webhook]', err)
-    return sendWebhookJson(res, 400, { error: err.message || 'Webhook error' })
+    const status = typeof err?.status === 'number' && err.status >= 400 && err.status < 600
+      ? err.status
+      : (typeof err?.statusCode === 'number' && err.statusCode >= 400 && err.statusCode < 600
+        ? err.statusCode
+        : 400)
+    return sendWebhookJson(res, status, { error: err.message || 'Webhook error' })
   }
 }

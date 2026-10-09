@@ -2,6 +2,31 @@
 
 Persistent knowledge base for recurring failures. When a matching issue appears, apply the saved fix first.
 
+## 2026-10-07 — [agy] GA97: GA audit & tests - expire-unpaid holds timestamp safety, client guards, and Stripe webhook retryable resilience
+
+- **Track / machine:** Clemson RIDES · MacBook Max · `agy/ga-audit-expire-holds-webhook-hardening-ga97`
+- **What was wrong:**
+  1. `releaseExpiredUnpaidAirportHolds` and `claimStripeExpire` in `server/abandonedCheckout.js` calculated `new Date(now - ttlMs).toISOString()` without validating `now` and `ttlMs`. If `now` was `NaN`, `null`, or an invalid Date, `new Date(NaN).toISOString()` threw an uncaught `RangeError: Invalid time value`.
+  2. `releaseExpiredUnpaidAirportHolds` threw `TypeError: Cannot read properties of undefined (reading 'from')` when the Supabase client `sb` was missing or invalid, rather than returning `{ ok: false, reason: 'database_client_required' }`.
+  3. `api/stripe-webhook.js` did not support pre-buffered `req.rawBody` or `req.body` (Buffers or strings) in `readRawBody`, attaching stream event listeners even if streams were already closed/buffered in serverless adapters.
+  4. `api/stripe-webhook.js` rejected Stripe restricted API keys starting with `rk_` (`rk_live_...` or `rk_test_...`), erroneously classifying them as unconfigured and entering stub mode.
+  5. In `api/stripe-webhook.js`, if `recordTip` or `applyPaidCheckoutSession` failed on transient database inserts or updates, the handler returned HTTP 200, acknowledging delivery to Stripe and permanently preventing Stripe from retrying the event.
+  6. The outer catch block in `api/stripe-webhook.js` ignored explicit 5xx statuses on thrown errors, preventing retryable server errors from signaling Stripe.
+- **What changed:**
+  - Exported `readRawBody` in `api/stripe-webhook.js` with instant resolution for pre-buffered `Buffer` or `string` payloads (`req.rawBody`, `req.body`) while maintaining the 1MB payload ceiling.
+  - Allowed both `sk_` and `rk_` key prefixes in `api/stripe-webhook.js`.
+  - Hardened error reporting on `payment_intent.succeeded` (tip) and `checkout.session.completed` (deposit apply) to return HTTP 500 when database recording fails (`applied.ok === false`), allowing Stripe to retry.
+  - Sanitized `now` and `ttlMs` into `safeNow` and `safeTtlMs` across `releaseExpiredUnpaidAirportHolds`, `releaseExpiredUnpaidAirportHold`, and `claimStripeExpire` in `server/abandonedCheckout.js`.
+  - Added defensive database client guard in `releaseExpiredUnpaidAirportHolds` returning `{ ok: false, reason: 'database_client_required' }`.
+  - Added comprehensive test suite in `tests/gaAuditWebhookAndHoldHardening.test.js` (7/7 passing) and registered in `package.json`.
+- **Files touched:**
+  - `api/stripe-webhook.js`
+  - `server/abandonedCheckout.js`
+  - `tests/gaAuditWebhookAndHoldHardening.test.js`
+  - `package.json`
+  - `docs/FIXES.md`
+- **Verified:** `node --test tests/gaAuditWebhookAndHoldHardening.test.js` (7/7 passing), `node --test server/abandonedCheckout.test.js` (41/41 passing), `node --test api/stripeWebhookValidation.test.js` (86/86 passing), and full `npm test` passing.
+
 ## 2026-10-02 — GA96: GA audit & tests - abandoned checkout resilience, hold TTL NaN safety, and RPC direct update fallbacks
 
 - **Track / machine:** Clemson RIDES · MacBook Max · `agy/ga-audit-abandoned-checkout-resilience-ga96`
