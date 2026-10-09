@@ -1,6 +1,7 @@
 import { useRouter, useFocusEffect } from 'expo-router'
+import { Ionicons } from '@expo/vector-icons'
 import { useCallback, useState } from 'react'
-import { ScrollView, StyleSheet, Text, View } from 'react-native'
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Primary, useCardShadow } from '@/components/chrome'
 import { EmptyState, FadeIn, type MenuRow, RowGroup } from '@/components/day'
@@ -135,6 +136,19 @@ export default function MenuScreen() {
           <RowGroup rows={resources} />
           <SectionLabel>Account</SectionLabel>
           <RowGroup rows={account} />
+          <Pressable
+            onPress={() => router.push('/delete-account')}
+            accessibilityRole="button"
+            accessibilityLabel="Delete account"
+            accessibilityHint="Opens the account deletion request screen"
+            style={[styles.deleteRow, { backgroundColor: colors.card, borderColor: colors.danger }]}
+          >
+            <Ionicons name="trash-outline" size={20} color={colors.danger} />
+            <View style={styles.deleteCopy}>
+              <Text style={[styles.deleteTitle, { color: colors.danger }]}>Delete account</Text>
+              <Text style={{ color: colors.inkSecondary }}>Request deletion of your account and trip history</Text>
+            </View>
+          </Pressable>
         </FadeIn>
       </ScrollView>
     </View>
@@ -151,4 +165,7 @@ const styles = StyleSheet.create({
   profileCopy: { flex: 1, gap: 2 },
   kicker: { fontWeight: '800', letterSpacing: 1.1, fontSize: 12 },
   title: { fontSize: 28, fontWeight: '800', letterSpacing: -0.4 },
+  deleteRow: { flexDirection: 'row', alignItems: 'center', gap: 12, borderWidth: 1, borderRadius: 16, padding: 16, marginTop: 8, minHeight: 60 },
+  deleteCopy: { flex: 1, gap: 2 },
+  deleteTitle: { fontWeight: '800', fontSize: 16 },
 })

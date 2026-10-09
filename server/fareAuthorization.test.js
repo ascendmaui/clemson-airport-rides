@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
 import { capturePlan, fareAuthorizationCents, shouldRetryAuthorization } from '../shared/fareAuthorization.js'
-import { authorizeRideRequest, placeFareAuthorization, settleFareHold } from './fareAuthorization.js'
+import { authorizeRideRequest, isIncrementalAuthIneligible, placeFareAuthorization, settleFareHold } from './fareAuthorization.js'
 
 function memoryDb(seed = {}) {
   const tables = {
@@ -77,6 +77,7 @@ function scriptedStripe({ creates = [], methods = [], capture, increment, retrie
           status: step?.status || 'requires_capture',
           amount: params.amount,
           amount_received: step?.status === 'succeeded' ? params.amount : 0,
+          ...(step?.last_payment_error ? { last_payment_error: step.last_payment_error } : {}),
         }
       },
       async cancel(id) {
@@ -139,6 +140,122 @@ test('capture plan partial-captures inside the hold, increments above it, and wa
   assert.equal(shouldRetryAuthorization('charge_failed'), true)
   assert.equal(shouldRetryAuthorization('expired_card'), false)
   assert.equal(shouldRetryAuthorization('authentication_required'), false)
+})
+
+test('incremental eligibility detection requires both the code and message', () => {
+  const raw = {
+    type: 'invalid_request_error',
+    code: 'payment_intent_invalid_parameter',
+    message: 'This account is NOT ELIGIBLE FOR THE REQUESTED CARD FEATURES.',
+  }
+  assert.equal(isIncrementalAuthIneligible(raw), true)
+  assert.equal(isIncrementalAuthIneligible({ raw, message: 'Wrapper message' }), true)
+  assert.equal(isIncrementalAuthIneligible({ ...raw, code: 'parameter_unknown' }), false)
+  assert.equal(isIncrementalAuthIneligible({ ...raw, message: 'Invalid amount' }), false)
+  assert.equal(isIncrementalAuthIneligible(null), false)
+})
+
+test('an ineligible account retries a basic hold with identical fare params and persists the flag', async () => {
+  const db = memoryDb({
+    profiles: [{ id: 'rider_1', stripe_customer_id: 'cus_1', stripe_default_pm_id: 'pm_default' }],
+    trips: [{ id: 'trip_basic', rider_id: 'rider_1', fare_cents: 5000, boost_cents: 1000, metadata: {} }],
+  })
+  const err = new Error('Wrapper message')
+  err.raw = {
+    type: 'invalid_request_error',
+    code: 'payment_intent_invalid_parameter',
+    param: null,
+    message: 'This account is not eligible for the requested card features. See https://stripe.com/docs/payments/flexible-payments for more details.',
+  }
+  const stripe = scriptedStripe({ creates: [{ error: err }, { id: 'pi_basic', status: 'requires_capture' }] })
+  const placed = await authorizeRideRequest({ sb: db, stripe, trip: db.tables.trips[0] })
+  assert.equal(placed.ok, true)
+  assert.equal(placed.authorization.paymentIntentId, 'pi_basic')
+  assert.equal(placed.authorization.incrementalAuthorization, false)
+  assert.equal(db.tables.trips[0].metadata.fare_authorization.incrementalAuthorization, false)
+  assert.equal(placed.attempts.length, 1)
+  const creates = stripe.calls.filter((call) => call.op === 'create')
+  assert.equal(creates.length, 2)
+  assert.equal(creates[0].params.payment_method_options.card.request_incremental_authorization, 'if_available')
+  assert.equal(creates[1].params.payment_method_options, undefined)
+  assert.deepEqual(creates[1].options, { idempotencyKey: `${creates[0].options.idempotencyKey}:basic` })
+  const expected = { ...creates[0].params }
+  delete expected.payment_method_options
+  assert.deepEqual(creates[1].params, expected)
+  assert.equal(expected.amount, 7000)
+  assert.deepEqual(expected.metadata, {
+    kind: 'fare_authorization', tripId: 'trip_basic', riderId: 'rider_1',
+    estimatedFareCents: '5000', bufferCents: '1000', boostCents: '1000',
+  })
+})
+
+test('other invalid request errors keep one create per attempt and the existing failure code', async (t) => {
+  t.mock.method(console, 'error', () => {})
+  for (const raw of [
+    { code: 'payment_intent_invalid_parameter', message: 'Invalid amount' },
+    { code: 'parameter_unknown', message: 'This account is not eligible for the requested card features.' },
+  ]) {
+    const stripe = scriptedStripe({ creates: [{ error: { raw: { type: 'invalid_request_error', ...raw } } }] })
+    const placed = await placeFareAuthorization({
+      stripe, tripId: 'trip_invalid', customerId: 'cus_1', paymentMethodId: 'pm_default',
+      backupPaymentMethodIds: [], estimatedFareCents: 5000,
+    })
+    assert.equal(placed.ok, false)
+    assert.equal(placed.failure.code, 'charge_failed')
+    assert.deepEqual(placed.attempts.map((attempt) => attempt.suffix), ['initial', 'retry'])
+    const creates = stripe.calls.filter((call) => call.op === 'create')
+    assert.equal(creates.length, placed.attempts.length)
+    assert.deepEqual(creates.map((call) => call.options.idempotencyKey), ['fare_auth:trip_invalid', 'fare_auth:trip_invalid:retry'])
+    for (const call of creates) {
+      assert.equal(call.params.payment_method_options.card.request_incremental_authorization, 'if_available')
+    }
+  }
+})
+
+test('an eligible account keeps the original incremental hold request', async () => {
+  const stripe = scriptedStripe({ creates: [{ id: 'pi_eligible', status: 'requires_capture' }] })
+  const placed = await placeFareAuthorization({
+    stripe, tripId: 'trip_eligible', riderId: 'rider_1', customerId: 'cus_1', paymentMethodId: 'pm_default',
+    backupPaymentMethodIds: [], estimatedFareCents: 5000,
+  })
+  assert.equal(placed.ok, true)
+  assert.equal(placed.authorization.incrementalAuthorization, undefined)
+  const creates = stripe.calls.filter((call) => call.op === 'create')
+  assert.equal(creates.length, 1)
+  assert.deepEqual(creates[0], {
+    op: 'create',
+    params: {
+      amount: 6000, currency: 'usd', customer: 'cus_1', payment_method: 'pm_default',
+      capture_method: 'manual', confirm: true, off_session: true,
+      payment_method_options: { card: { request_incremental_authorization: 'if_available' } },
+      description: 'Clemson RIDES fare hold',
+      metadata: {
+        kind: 'fare_authorization', tripId: 'trip_eligible', riderId: 'rider_1',
+        estimatedFareCents: '5000', bufferCents: '1000', boostCents: '0',
+      },
+    },
+    options: { idempotencyKey: 'fare_auth:trip_eligible' },
+  })
+})
+
+test('a failed basic hold does not repeat the fallback within an authorization attempt', async (t) => {
+  t.mock.method(console, 'error', () => {})
+  const err = {
+    code: 'payment_intent_invalid_parameter',
+    message: 'This account is not eligible for the requested card features.',
+  }
+  const stripe = scriptedStripe({ creates: [{ error: err }] })
+  const placed = await placeFareAuthorization({
+    stripe, tripId: 'trip_basic_fail', customerId: 'cus_1', paymentMethodId: 'pm_default',
+    backupPaymentMethodIds: [], estimatedFareCents: 5000,
+  })
+  assert.equal(placed.ok, false)
+  assert.equal(placed.failure.code, 'charge_failed')
+  assert.equal(placed.attempts.length, 2)
+  assert.deepEqual(stripe.calls.filter((call) => call.op === 'create').map((call) => call.options.idempotencyKey), [
+    'fare_auth:trip_basic_fail', 'fare_auth:trip_basic_fail:basic',
+    'fare_auth:trip_basic_fail:retry', 'fare_auth:trip_basic_fail:retry:basic',
+  ])
 })
 
 test('a decline is retried once on the same card', async () => {
@@ -214,6 +331,101 @@ test('failed authorization parks the estimate and does not set a payment hold', 
   assert.equal(db.tables.trips[0].metadata.outstanding_balance.reason, 'authorization_failed')
   assert.equal(db.tables.trips[0].metadata.payment_hold, undefined)
   assert.equal(db.tables.payments.length, 0)
+})
+
+test('Stripe request errors persist only sanitized diagnostics and keep charge_failed retries', async (t) => {
+  const db = memoryDb({
+    profiles: [{ id: 'rider_1', stripe_customer_id: 'cus_1', stripe_default_pm_id: 'pm_default' }],
+    trips: [{ id: 'trip_diagnostics', rider_id: 'rider_1', fare_cents: 5000, metadata: {} }],
+  })
+  const message = `Unknown parameter. ${'x'.repeat(350)}`
+  const err = new Error('Wrapper message must not replace raw message')
+  err.raw = {
+    type: 'invalid_request_error',
+    code: 'parameter_unknown',
+    param: 'payment_method_options[card][request_incremental_authorization]',
+    message: `  ${message}  `,
+    headers: { authorization: 'secret header' },
+    api_key: 'sk_test_private',
+    client_secret: 'pi_private_secret_private',
+    payment_intent: { id: 'pi_failed', status: 'requires_payment_method', client_secret: 'pi_private_secret_private' },
+  }
+  const stripe = scriptedStripe({ creates: [{ error: err }], methods: ['pm_backup'] })
+  const log = t.mock.method(console, 'error', () => {})
+  const placed = await authorizeRideRequest({ sb: db, stripe, trip: db.tables.trips[0] })
+  const expected = {
+    type: 'invalid_request_error',
+    code: 'parameter_unknown',
+    decline_code: null,
+    param: 'payment_method_options[card][request_incremental_authorization]',
+    message: message.slice(0, 300),
+  }
+  assert.equal(placed.ok, false)
+  assert.equal(placed.failure.code, 'charge_failed')
+  assert.equal(placed.outstanding.code, 'charge_failed')
+  assert.equal(db.tables.trips[0].metadata.fare_authorization.code, 'charge_failed')
+  assert.equal(placed.attempts.length, 3)
+  assert.deepEqual(placed.attempts.map((attempt) => attempt.suffix), ['initial', 'retry', 'pm:pm_backup'])
+  for (const attempt of placed.attempts) {
+    assert.equal(attempt.code, 'charge_failed')
+    assert.deepEqual(attempt.stripeError, expected)
+  }
+  assert.deepEqual(db.tables.trips[0].metadata.outstanding_balance.attempts, placed.attempts)
+  assert.equal(log.mock.calls.length, 3)
+  for (const call of log.mock.calls) {
+    assert.equal(call.arguments.length, 1)
+    assert.deepEqual(JSON.parse(call.arguments[0]), {
+      level: 'error', msg: 'fare_authorization_failed', tripId: 'trip_diagnostics',
+      code: 'charge_failed', stripeError: expected,
+    })
+  }
+})
+
+test('Stripe diagnostics use the error itself when raw is absent and redact secrets', async (t) => {
+  t.mock.method(console, 'error', () => {})
+  const err = new Error('  Invalid key sk_test_private and client secret pi_private_secret_private  ')
+  err.type = 'api_error'
+  const placed = await placeFareAuthorization({
+    stripe: scriptedStripe({ creates: [{ error: err }] }),
+    tripId: 'trip_fallback', customerId: 'cus_1', paymentMethodId: 'pm_default',
+    backupPaymentMethodIds: [], estimatedFareCents: 5000,
+  })
+  assert.equal(placed.failure.code, 'charge_failed')
+  assert.deepEqual(placed.attempts[0].stripeError, {
+    type: 'api_error', code: null, decline_code: null, param: null,
+    message: 'Invalid key [redacted] and client secret [redacted]',
+  })
+})
+
+test('unsuccessful PaymentIntents include sanitized last payment errors without changing codes', async (t) => {
+  const log = t.mock.method(console, 'error', () => {})
+  for (const status of ['requires_payment_method', 'requires_action']) {
+    const message = 'Declined. '.repeat(40)
+    const stripe = scriptedStripe({ creates: [{
+      status,
+      last_payment_error: {
+        code: 'card_declined', decline_code: 'generic_decline', message,
+        payment_method: { id: 'pm_default' }, client_secret: 'pi_private_secret_private',
+      },
+    }] })
+    const placed = await placeFareAuthorization({
+      stripe, tripId: 'trip_status', customerId: 'cus_1', paymentMethodId: 'pm_default',
+      backupPaymentMethodIds: [], estimatedFareCents: 5000,
+    })
+    const code = status === 'requires_action' ? 'authentication_required' : 'charge_failed'
+    assert.equal(placed.failure.code, code)
+    assert.equal(placed.attempts.length, status === 'requires_action' ? 1 : 2)
+    for (const attempt of placed.attempts) {
+      assert.equal(attempt.code, code)
+      assert.deepEqual(attempt.stripeError, {
+        status,
+        last_payment_error: {
+          code: 'card_declined', decline_code: 'generic_decline', message: message.trim().slice(0, 300),
+        },
+      })
+    }
+  }
+  assert.equal(log.mock.calls.length, 3)
 })
 
 test('missing Stripe skips the hold and writes nothing', async () => {
