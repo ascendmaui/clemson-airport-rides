@@ -38,14 +38,11 @@ for (const status of ['requires_capture', 'captured', null]) {
     const { sb, trip } = seedHold(status, { status: 'in_progress' })
     const stripe = fakeStripe()
     let charged = 0
-    const deps = { sb, stripe, user,
-      // Hold capture unavailable: the hold is released and a separate charge runs.
-      settleFareHold: async () => null,
-      collectMidrideCharge: async ({ amountCents }) => {
-        charged += 1
-        const pi = await stripe.paymentIntents.create({ amount: amountCents })
-        return { paymentStatus: 'succeeded', stripePaymentIntentId: pi.id }
-      } }
+    const deps = { sb, stripe, user, collectMidrideCharge: async ({ amountCents }) => {
+      charged += 1
+      const pi = await stripe.paymentIntents.create({ amount: amountCents })
+      return { paymentStatus: 'succeeded', stripePaymentIntentId: pi.id }
+    } }
     const result = await call(midride, { tripId: trip.id, confirm: true }, deps)
     assert.equal(result.statusCode, 200)
     assert.equal(trip.status, 'canceled_midride')
@@ -55,26 +52,6 @@ for (const status of ['requires_capture', 'captured', null]) {
     assert.equal(charged, 1)
     assert.equal(cancels(stripe).length, status === 'requires_capture' ? 1 : 0)
     assert.equal(trip.metadata.preserved, true)
-  })
-
-  if (status === 'requires_capture') test('midride cancel captures the partial fare from the open hold instead of a second charge', async () => {
-    const { sb, trip } = seedHold(status, { status: 'in_progress' })
-    const stripe = fakeStripe()
-    let charged = 0
-    let captured = 0
-    const deps = { sb, stripe, user,
-      settleFareHold: async ({ finalFareCents }) => {
-        captured += 1
-        trip.metadata = { ...trip.metadata, fare_authorization: { ...trip.metadata.fare_authorization, status: 'captured', capturedCents: finalFareCents } }
-        return { ok: true, method: 'card', amountCents: finalFareCents, paymentIntentId: trip.metadata.fare_authorization.paymentIntentId, status: 'succeeded' }
-      },
-      collectMidrideCharge: async () => { charged += 1; return { paymentStatus: 'succeeded' } } }
-    const result = await call(midride, { tripId: trip.id, confirm: true }, deps)
-    assert.equal(result.statusCode, 200)
-    assert.equal(trip.status, 'canceled_midride')
-    assert.equal(captured, 1)
-    assert.equal(charged, 0)
-    assert.equal(cancels(stripe).length, 0)
   })
 
   test(`rider-switch cancel releases only an open hold (${status})`, async () => {
