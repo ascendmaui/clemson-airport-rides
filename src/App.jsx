@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { bindKeyboardInset, scrollFocusedFieldIntoView } from './lib/keyboardInset'
-import { getHashRoute, redirectShareHashToPath } from './lib/navigation'
+import { getHashRoute, navigate, redirectShareHashToPath } from './lib/navigation'
 import { capturePromoFromLocation } from './lib/riderPromo'
 import {
   hasClemsonMiamiLink,
@@ -15,6 +15,7 @@ import {
   rememberedAmbassador,
 } from './lib/friendRides'
 import { RequireAuth } from './components/RequireAuth'
+import { AccessibleAlert, AccessibleErrorBoundary } from './components/AccessibleAlert'
 import { Marketing } from './screens/Marketing'
 import { WhyClemsonRides } from './screens/WhyClemsonRides'
 import { DriveWithUs } from './screens/DriveWithUs'
@@ -285,6 +286,29 @@ function Screen({ path, params }) {
   }
 }
 
+function RouteErrorFallback({ path, params, reset }) {
+  const requested = path === 'requested'
+  return (
+    <div className="accessible-error-boundary">
+      <AccessibleAlert
+        title={requested ? 'Unable to display your trip' : 'Unable to display this page'}
+        message={requested
+          ? 'Your ride request may already be placed. Check your trip status before requesting another ride.'
+          : 'Something went wrong while loading this page. Please try again.'}
+        onRetry={reset}
+        onDismiss={() => navigate('home')}
+        dismissLabel="Back home"
+      >
+        {requested && params.trip && (
+          <a className="pressable" href={`#/requested?trip=${encodeURIComponent(params.trip)}`} onClick={reset}>
+            Reopen your trip
+          </a>
+        )}
+      </AccessibleAlert>
+    </div>
+  )
+}
+
 export default function App() {
   const [{ path, params }, setRoute] = useState(() => getHashRoute())
   const { user, loading } = useAuth()
@@ -330,31 +354,37 @@ export default function App() {
 
   const overflow = path === 'driver' ? 'hidden' : 'auto'
   const site = SITE_ROUTES.has(path)
+  const routeKey = `${path}:${params.token || params.id || params.trip || ''}`
 
   return (
     <ToastProvider>
       <div className={site ? 'desktop-frame desktop-frame--site' : 'desktop-frame'}>
         <div className={site ? 'app-shell app-shell--site' : 'app-shell'} style={{ position: 'relative', height: '100%' }}>
-          <AmbassadorAttributionSync />
-          <RideToastWatcher />
-          <RiderMatchPopup />
-          <WeeklyCouponNotice />
-          <DriverOfferWatcher />
-          <LostFoundWatcher />
-          <TripMessageBanner />
-          <RiderPickupStream />
+          <AccessibleErrorBoundary fallback={() => null}><AmbassadorAttributionSync /></AccessibleErrorBoundary>
+          <AccessibleErrorBoundary fallback={() => null}><RideToastWatcher /></AccessibleErrorBoundary>
+          <AccessibleErrorBoundary fallback={() => null}><RiderMatchPopup /></AccessibleErrorBoundary>
+          <AccessibleErrorBoundary fallback={() => null}><WeeklyCouponNotice /></AccessibleErrorBoundary>
+          <AccessibleErrorBoundary fallback={() => null}><DriverOfferWatcher /></AccessibleErrorBoundary>
+          <AccessibleErrorBoundary fallback={() => null}><LostFoundWatcher /></AccessibleErrorBoundary>
+          <AccessibleErrorBoundary fallback={() => null}><TripMessageBanner /></AccessibleErrorBoundary>
+          <AccessibleErrorBoundary fallback={() => null}><RiderPickupStream /></AccessibleErrorBoundary>
           <ToastStack />
           <div
-            key={`${path}:${params.token || params.id || params.trip || ''}`}
+            key={routeKey}
             className={site ? 'route-fade route-site' : 'route-fade'}
             style={site ? undefined : { position: 'absolute', inset: 0, width: '100%', height: '100%', overflow }}
             data-protected={PROTECTED.has(path) ? '1' : '0'}
             data-guest-browse={PROTECTED.has(path) ? '0' : '1'}
             data-route={path}
           >
-            <Screen path={path} params={params} />
+            <AccessibleErrorBoundary
+              key={routeKey}
+              fallback={({ reset }) => <RouteErrorFallback path={path} params={params} reset={reset} />}
+            >
+              <Screen path={path} params={params} />
+            </AccessibleErrorBoundary>
           </div>
-          {path === 'driver' && <DriverBillingEntry />}
+          {path === 'driver' && <AccessibleErrorBoundary fallback={() => null}><DriverBillingEntry /></AccessibleErrorBoundary>}
         </div>
       </div>
     </ToastProvider>
