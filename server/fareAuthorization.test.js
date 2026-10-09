@@ -77,6 +77,7 @@ function scriptedStripe({ creates = [], methods = [], capture, increment, retrie
           status: step?.status || 'requires_capture',
           amount: params.amount,
           amount_received: step?.status === 'succeeded' ? params.amount : 0,
+          ...(step?.last_payment_error ? { last_payment_error: step.last_payment_error } : {}),
         }
       },
       async cancel(id) {
@@ -214,6 +215,101 @@ test('failed authorization parks the estimate and does not set a payment hold', 
   assert.equal(db.tables.trips[0].metadata.outstanding_balance.reason, 'authorization_failed')
   assert.equal(db.tables.trips[0].metadata.payment_hold, undefined)
   assert.equal(db.tables.payments.length, 0)
+})
+
+test('Stripe request errors persist only sanitized diagnostics and keep charge_failed retries', async (t) => {
+  const db = memoryDb({
+    profiles: [{ id: 'rider_1', stripe_customer_id: 'cus_1', stripe_default_pm_id: 'pm_default' }],
+    trips: [{ id: 'trip_diagnostics', rider_id: 'rider_1', fare_cents: 5000, metadata: {} }],
+  })
+  const message = `Unknown parameter. ${'x'.repeat(350)}`
+  const err = new Error('Wrapper message must not replace raw message')
+  err.raw = {
+    type: 'invalid_request_error',
+    code: 'parameter_unknown',
+    param: 'payment_method_options[card][request_incremental_authorization]',
+    message: `  ${message}  `,
+    headers: { authorization: 'secret header' },
+    api_key: 'sk_test_private',
+    client_secret: 'pi_private_secret_private',
+    payment_intent: { id: 'pi_failed', status: 'requires_payment_method', client_secret: 'pi_private_secret_private' },
+  }
+  const stripe = scriptedStripe({ creates: [{ error: err }], methods: ['pm_backup'] })
+  const log = t.mock.method(console, 'error', () => {})
+  const placed = await authorizeRideRequest({ sb: db, stripe, trip: db.tables.trips[0] })
+  const expected = {
+    type: 'invalid_request_error',
+    code: 'parameter_unknown',
+    decline_code: null,
+    param: 'payment_method_options[card][request_incremental_authorization]',
+    message: message.slice(0, 300),
+  }
+  assert.equal(placed.ok, false)
+  assert.equal(placed.failure.code, 'charge_failed')
+  assert.equal(placed.outstanding.code, 'charge_failed')
+  assert.equal(db.tables.trips[0].metadata.fare_authorization.code, 'charge_failed')
+  assert.equal(placed.attempts.length, 3)
+  assert.deepEqual(placed.attempts.map((attempt) => attempt.suffix), ['initial', 'retry', 'pm:pm_backup'])
+  for (const attempt of placed.attempts) {
+    assert.equal(attempt.code, 'charge_failed')
+    assert.deepEqual(attempt.stripeError, expected)
+  }
+  assert.deepEqual(db.tables.trips[0].metadata.outstanding_balance.attempts, placed.attempts)
+  assert.equal(log.mock.calls.length, 3)
+  for (const call of log.mock.calls) {
+    assert.equal(call.arguments.length, 1)
+    assert.deepEqual(JSON.parse(call.arguments[0]), {
+      level: 'error', msg: 'fare_authorization_failed', tripId: 'trip_diagnostics',
+      code: 'charge_failed', stripeError: expected,
+    })
+  }
+})
+
+test('Stripe diagnostics use the error itself when raw is absent and redact secrets', async (t) => {
+  t.mock.method(console, 'error', () => {})
+  const err = new Error('  Invalid key sk_test_private and client secret pi_private_secret_private  ')
+  err.type = 'api_error'
+  const placed = await placeFareAuthorization({
+    stripe: scriptedStripe({ creates: [{ error: err }] }),
+    tripId: 'trip_fallback', customerId: 'cus_1', paymentMethodId: 'pm_default',
+    backupPaymentMethodIds: [], estimatedFareCents: 5000,
+  })
+  assert.equal(placed.failure.code, 'charge_failed')
+  assert.deepEqual(placed.attempts[0].stripeError, {
+    type: 'api_error', code: null, decline_code: null, param: null,
+    message: 'Invalid key [redacted] and client secret [redacted]',
+  })
+})
+
+test('unsuccessful PaymentIntents include sanitized last payment errors without changing codes', async (t) => {
+  const log = t.mock.method(console, 'error', () => {})
+  for (const status of ['requires_payment_method', 'requires_action']) {
+    const message = 'Declined. '.repeat(40)
+    const stripe = scriptedStripe({ creates: [{
+      status,
+      last_payment_error: {
+        code: 'card_declined', decline_code: 'generic_decline', message,
+        payment_method: { id: 'pm_default' }, client_secret: 'pi_private_secret_private',
+      },
+    }] })
+    const placed = await placeFareAuthorization({
+      stripe, tripId: 'trip_status', customerId: 'cus_1', paymentMethodId: 'pm_default',
+      backupPaymentMethodIds: [], estimatedFareCents: 5000,
+    })
+    const code = status === 'requires_action' ? 'authentication_required' : 'charge_failed'
+    assert.equal(placed.failure.code, code)
+    assert.equal(placed.attempts.length, status === 'requires_action' ? 1 : 2)
+    for (const attempt of placed.attempts) {
+      assert.equal(attempt.code, code)
+      assert.deepEqual(attempt.stripeError, {
+        status,
+        last_payment_error: {
+          code: 'card_declined', decline_code: 'generic_decline', message: message.trim().slice(0, 300),
+        },
+      })
+    }
+  }
+  assert.equal(log.mock.calls.length, 3)
 })
 
 test('missing Stripe skips the hold and writes nothing', async () => {
