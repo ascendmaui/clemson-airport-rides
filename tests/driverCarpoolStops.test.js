@@ -18,5 +18,9 @@ test('stop actions go through the server and settle refuses open stops', () => {
   const desk = read('packages/rides-native/driverDesk.js')
   assert.match(desk, /'\/api\/driver\?action=trip-stop'/)
   assert.match(read('api/driver.js'), /'trip-stop': handleTripStop/)
-  assert.match(read('server/tripSettle.js'), /stopFlowStarted\(trip\) && !allStopsDone\(tripStops\(trip\)\)/)
+  const settle = read('server/tripSettle.js')
+  assert.match(settle, /stopFlowStarted\(trip\) && !allStopsDone\(tripStops\(trip\)\)/)
+  // Checked before and again after the completion claim.
+  assert.equal(settle.match(/!override && stopsPending\(trip\)/g).length, 2)
+  assert.match(read('server/endpoints/tripWait.js'), /action === 'complete'[\s\S]*stopFlowStarted\(read\.data\) && !allStopsDone/)
 })

@@ -6,6 +6,7 @@
  */
 import { admin, cors, json, parseBody, userFromAuth } from '../friendRideLib.js'
 import { applyTripWait } from '../tripWait.js'
+import { allStopsDone, stopFlowStarted, tripStops } from '../../shared/carpoolStops.js'
 
 export default async function handler(req, res) {
   if (cors(req, res)) return
@@ -23,6 +24,14 @@ export default async function handler(req, res) {
   const tripId = parsed.body.tripId || parsed.body.trip_id
 
   try {
+    if (action === 'complete' && typeof tripId === 'string' && tripId) {
+      // Same carpool stop gate as /api/driver?action=trip-status complete.
+      const read = await sb.from('trips').select('id, stops, metadata').eq('id', tripId).maybeSingle()
+      if (read.error) throw read.error
+      if (read.data && stopFlowStarted(read.data) && !allStopsDone(tripStops(read.data))) {
+        return json(res, 409, { error: 'Finish every stop before completing this carpool.', code: 'stops_pending' })
+      }
+    }
     const result = await applyTripWait(sb, { action, tripId, actorId: user.id })
     return json(res, 200, result)
   } catch (err) {

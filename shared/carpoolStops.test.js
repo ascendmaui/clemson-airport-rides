@@ -112,3 +112,28 @@ test('per-rider fare capture at drop-off', () => {
   assert.equal(riderFareCapture({ id: 'pa', status: 'paid', fare_cents: 900 }, { status: 'pending' }).status, 'pending')
   assert.equal(fareCaptureLine({ status: 'captured', capturedCents: 1200 }, 'Avery'), 'Avery · $12.00 collected')
 })
+
+test('a drop-off at another rider pickup point stays its own stop', async () => {
+  const { buildWaypointList } = await import('../server/friendRideCore.js')
+  const parts = [
+    { id: 'A', pickup: { lat: 1, lng: 1 }, dropoff: { lat: 2, lng: 2 } },
+    { id: 'B', pickup: { lat: 2, lng: 2 }, dropoff: { lat: 3, lng: 3 } },
+  ]
+  const w = buildWaypointList(parts)
+  const stops = tripStops({ stops: [w.origin, ...w.intermediates, w.destination], metadata: { kind: 'carpool', participants: parts } })
+  assert.deepEqual(stops.map((s) => [s.kind, s.participantIds]), [
+    ['pickup', ['A']], ['pickup', ['B']], ['dropoff', ['A']], ['dropoff', ['B']],
+  ])
+})
+
+test('riders sharing a pickup point share one stop', async () => {
+  const { buildWaypointList } = await import('../server/friendRideCore.js')
+  const parts = [
+    { id: 'A', pickup: { lat: 1, lng: 1 }, dropoff: { lat: 5, lng: 5 } },
+    { id: 'B', pickup: { lat: 1, lng: 1 }, dropoff: { lat: 3, lng: 3 } },
+    { id: 'C', pickup: { lat: 2, lng: 2 }, dropoff: { lat: 5, lng: 5 } },
+  ]
+  const w = buildWaypointList(parts)
+  assert.deepEqual(w.origin.participantIds, ['A', 'B'])
+  assert.deepEqual(w.destination.participantIds.sort(), ['A', 'C'])
+})

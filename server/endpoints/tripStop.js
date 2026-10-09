@@ -52,6 +52,9 @@ async function captureFares(sb, stop) {
   })
 }
 
+/** Trip statuses where a stop write may land. */
+const STOP_WRITE_STATUSES = ['accepted', 'arriving', 'arrived', 'in_progress']
+
 export async function applyTripStop(sb, { tripId, stopIndex, op, actorId }, deps = {}) {
   const fail = (http, code, extra = {}) => ({ http, body: { ok: false, code, error: MESSAGES[code] || code, ...extra } })
   const read = await sb.from('trips').select('*').eq('id', tripId).maybeSingle()
@@ -88,20 +91,19 @@ export async function applyTripStop(sb, { tripId, stopIndex, op, actorId }, deps
     applied.stops[index] = stop
   }
 
-  const metadata = { ...(trip.metadata || {}) }
-  const rev = Number.isInteger(metadata.stop_rev) ? metadata.stop_rev : null
-  metadata.stop_flow = true
-  metadata.stop_rev = (rev ?? 0) + 1
-  if (op === 'drop') {
-    const captures = { ...(metadata.carpool_captures || {}) }
-    for (const fare of stop.fares || []) captures[fare.participantId] = { ...fare, stopIndex: index, at: stop.doneAt }
-    metadata.carpool_captures = captures
-  }
+  // Stop state lives only in trips.stops (each drop-off keeps its rider fares), so a
+  // stop write never replaces metadata that other paths update. stops[0].rev guards
+  // concurrent stop writes; the status filter refuses a write after a cancel.
+  const raw = Array.isArray(trip.stops) ? trip.stops : []
+  const rev = Number.isInteger(raw[0]?.rev) ? raw[0].rev : null
+  const nextStops = storedStops(trip, applied.stops)
+  nextStops[0] = { ...nextStops[0], rev: (rev ?? 0) + 1 }
   let write = sb.from('trips')
-    .update({ stops: storedStops(trip, applied.stops), metadata })
+    .update({ stops: nextStops })
     .eq('id', tripId)
     .eq('driver_id', actorId)
-  write = rev == null ? write.is('metadata->stop_rev', null) : write.eq('metadata->stop_rev', rev)
+    .in('status', STOP_WRITE_STATUSES)
+  write = rev == null ? write.is('stops->0->>rev', null) : write.eq('stops->0->>rev', String(rev))
   const saved = await write.select('*').maybeSingle()
   if (saved.error) throw saved.error
   if (!saved.data) return fail(409, 'stop_conflict')

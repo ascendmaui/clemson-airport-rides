@@ -39,6 +39,21 @@ export function autoNavigationLeg({ status, enabled = true, launched = [], accep
   return 'pickup'
 }
 
+const STOP_LEG = /^stop:\d{1,2}$/
+function isLeg(leg) {
+  return leg === 'pickup' || leg === 'dropoff' || (typeof leg === 'string' && STOP_LEG.test(leg))
+}
+
+/**
+ * Carpool stop list, trip started: each next stop opens the nav app once.
+ * @returns {string|null} 'stop:<index>' or null
+ */
+export function autoNavigationStopLeg({ enabled = true, launched = [], stopIndex = null } = {}) {
+  if (!enabled || !Number.isInteger(stopIndex) || stopIndex < 0) return null
+  const leg = `stop:${stopIndex}`
+  return (Array.isArray(launched) ? launched : []).includes(leg) ? null : leg
+}
+
 export function autoNavigationKey(tripId) {
   return `driver.auto-nav.${tripId}`
 }
@@ -48,7 +63,7 @@ export function readLaunchedLegs(raw) {
   if (!raw) return []
   try {
     const parsed = JSON.parse(raw)
-    return Array.isArray(parsed) ? parsed.filter((leg) => leg === 'pickup' || leg === 'dropoff') : []
+    return Array.isArray(parsed) ? parsed.filter(isLeg) : []
   } catch {
     return []
   }

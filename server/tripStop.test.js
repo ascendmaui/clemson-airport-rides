@@ -20,13 +20,15 @@ function fakeSb(trip) {
         insert(row) { state.events.push(row); return Promise.resolve({ data: null, error: null }) },
         eq(col, val) { q.filters.push(['eq', col, val]); return chain },
         is(col, val) { q.filters.push(['is', col, val]); return chain },
-        in() { return chain },
+        in(col, vals) { q.filters.push(['in', col, vals]); return chain },
         async maybeSingle() {
           if (q.op === 'update') {
             state.filters.push(q.filters)
-            const rev = state.trip.metadata?.stop_rev ?? null
-            const want = q.filters.find(([, c]) => c === 'metadata->stop_rev')
-            if (want && (want[0] === 'is' ? rev !== null : rev !== want[2])) return { data: null, error: null }
+            const rev = state.trip.stops?.[0]?.rev ?? null
+            const want = q.filters.find(([, c]) => c === 'stops->0->>rev')
+            if (want && (want[0] === 'is' ? rev !== null : String(rev) !== want[2])) return { data: null, error: null }
+            const statuses = q.filters.find(([op, c]) => op === 'in' && c === 'status')
+            if (statuses && !statuses[2].includes(state.trip.status)) return { data: null, error: null }
             state.trip = { ...state.trip, ...q.patch }
             state.updates.push(q.patch)
           }
@@ -58,8 +60,9 @@ test('first pickup arrive moves the trip to arrived through the wait clock', asy
   assert.equal(res.http, 200)
   assert.deepEqual(calls, ['arrive'])
   assert.equal(sb.state.trip.stops[0].status, 'arrived')
-  assert.equal(sb.state.trip.metadata.stop_flow, true)
-  assert.equal(sb.state.trip.metadata.stop_rev, 1)
+  assert.equal(sb.state.trip.stops[0].rev, 1)
+  // Metadata is never rewritten by a stop action.
+  assert.ok(sb.state.updates.every((patch) => !('metadata' in patch)))
   assert.equal(sb.state.events[0].kind, 'stop_arrive')
   // Replay is idempotent and does not touch the wait clock again.
   const again = await applyTripStop(sb, { tripId: 't1', stopIndex: 0, op: 'arrive', actorId: 'd1' }, { applyTripWait })
@@ -76,15 +79,52 @@ test('out-of-order stops and later stops before Start are refused', async () => 
 
 test('a drop-off records each rider fare and the stop revision guards concurrent writes', async () => {
   const doneStops = stops.map((s, i) => (i < 2 ? { ...s, status: 'done' } : s))
-  const sb = fakeSb({ ...base, status: 'in_progress', stops: doneStops, metadata: { ...base.metadata, stop_flow: true, stop_rev: 4 } })
+  doneStops[0] = { ...doneStops[0], rev: 4 }
+  const sb = fakeSb({ ...base, status: 'in_progress', stops: doneStops })
   const captureFares = async (_sb, stop) => stop.participantIds.map((id) => ({ participantId: id, fareCents: 1000, capturedCents: 1000, status: 'captured' }))
   const res = await applyTripStop(sb, { tripId: 't1', stopIndex: 2, op: 'drop', actorId: 'd1' }, { captureFares })
   assert.equal(res.http, 200)
   assert.equal(sb.state.trip.stops[2].status, 'done')
   assert.equal(sb.state.trip.stops[2].fares.length, 2)
-  assert.equal(sb.state.trip.metadata.carpool_captures.pb.capturedCents, 1000)
-  assert.equal(sb.state.trip.metadata.stop_rev, 5)
-  assert.deepEqual(sb.state.filters[0].find(([, c]) => c === 'metadata->stop_rev'), ['eq', 'metadata->stop_rev', 4])
+  assert.equal(sb.state.trip.stops[2].fares.find((f) => f.participantId === 'pb').capturedCents, 1000)
+  assert.equal(sb.state.trip.stops[0].rev, 5)
+  assert.deepEqual(sb.state.filters[0].find(([, c]) => c === 'stops->0->>rev'), ['eq', 'stops->0->>rev', '4'])
+  assert.equal(sb.state.trip.metadata.kind, 'carpool')
+})
+
+test('a stop write loses to a concurrent stop write or a cancel', async () => {
+  const doneStops = stops.map((s, i) => (i < 2 ? { ...s, status: 'done' } : s))
+  doneStops[0] = { ...doneStops[0], rev: 2 }
+  const captureFares = async () => []
+  const raced = fakeSb({ ...base, status: 'in_progress', stops: doneStops })
+  const realFrom = raced.from.bind(raced)
+  let reads = 0
+  raced.from = (table) => {
+    const chain = realFrom(table)
+    if (table === 'trips' && reads++ === 0) {
+      const ms = chain.maybeSingle
+      chain.maybeSingle = async () => { const out = await ms(); raced.state.trip.stops = raced.state.trip.stops.map((s, i) => (i === 0 ? { ...s, rev: 3 } : s)); return out }
+    }
+    return chain
+  }
+  const lost = await applyTripStop(raced, { tripId: 't1', stopIndex: 2, op: 'drop', actorId: 'd1' }, { captureFares })
+  assert.equal(lost.http, 409)
+  assert.equal(lost.body.code, 'stop_conflict')
+
+  const canceled = fakeSb({ ...base, status: 'in_progress', stops: doneStops })
+  const realFrom2 = canceled.from.bind(canceled)
+  let reads2 = 0
+  canceled.from = (table) => {
+    const chain = realFrom2(table)
+    if (table === 'trips' && reads2++ === 0) {
+      const ms = chain.maybeSingle
+      chain.maybeSingle = async () => { const out = await ms(); canceled.state.trip.status = 'canceled_midride'; return out }
+    }
+    return chain
+  }
+  const refused = await applyTripStop(canceled, { tripId: 't1', stopIndex: 2, op: 'drop', actorId: 'd1' }, { captureFares })
+  assert.equal(refused.http, 409)
+  assert.equal(canceled.state.updates.length, 0)
 })
 
 test('a failed Start at the first pickup leaves the stop open', async () => {

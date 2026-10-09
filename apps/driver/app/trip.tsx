@@ -22,7 +22,7 @@ import { oneParam } from '@/lib/oneParam'
 import { openNavigation } from '@/lib/openMaps'
 import { authStorage } from '@/lib/storage'
 import { navAppLabel, navAppOrder } from 'rides-native/mapsLink'
-import { autoNavigationKey, autoNavigationLeg, readLaunchedLegs, withLaunchedLeg } from 'rides-native/autoNavigation'
+import { autoNavigationKey, autoNavigationLeg, autoNavigationStopLeg, readLaunchedLegs, withLaunchedLeg } from 'rides-native/autoNavigation'
 import { supabase } from '@/lib/supabase'
 import { useDriverLocation } from '@/lib/useDriverLocation'
 import { publishDriverLocation, startTripBackgroundLocation, stopTripBackgroundLocation } from '@/lib/backgroundLocation'
@@ -410,13 +410,17 @@ export default function TripScreen() {
     let alive = true
     const tripId = trip.id
     const status = trip.status
+    const stopIndex = multiStop && currentStop ? currentStop.index : null
     void (async () => {
       if (autoNavRunning.current) return
       autoNavRunning.current = true
       try {
         const key = autoNavigationKey(tripId)
         const launched = readLaunchedLegs(await authStorage.getItem(key))
-        const leg = autoNavigationLeg({ status, enabled: autoNavigate, launched, acceptedAt: trip.acceptedAt ?? null, pickupAt: trip.pickupAt })
+        // Carpool after Start: each next stop (pickup B, then each drop-off) opens once.
+        const leg = status === 'in_progress' && stopIndex != null
+          ? autoNavigationStopLeg({ enabled: autoNavigate, launched, stopIndex })
+          : autoNavigationLeg({ status, enabled: autoNavigate, launched, acceptedAt: trip.acceptedAt ?? null, pickupAt: trip.pickupAt })
         if (!alive || !leg || AppState.currentState !== 'active') return
         await authStorage.setItem(key, JSON.stringify(withLaunchedLeg(launched, leg)))
         await openNavigation(navApp, targetRef.current)
@@ -427,7 +431,7 @@ export default function TripScreen() {
       }
     })()
     return () => { alive = false }
-  }, [trip?.id, trip?.status, autoNavigate, navApp])
+  }, [trip?.id, trip?.status, autoNavigate, navApp, multiStop, currentStop?.index])
 
   const pins: MapPin[] = []
   if (self) pins.push({ id: 'me', ...self, title: 'You', pinColor: ORANGE })

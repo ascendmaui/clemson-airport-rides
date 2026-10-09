@@ -25,6 +25,15 @@ import { claimCompletion, completionResult, releaseCompletion } from './tripComp
 import { readBoostCents } from '../shared/scheduledBoost.js'
 import { allStopsDone, stopFlowStarted, tripStops } from '../shared/carpoolStops.js'
 
+function stopsPendingResult() {
+  return { http: 409, body: { error: 'Finish every stop before completing this carpool.', code: 'stops_pending', progressed: false } }
+}
+
+/** Carpool stop flow started and a pickup or drop-off is still open. */
+function stopsPending(trip) {
+  return stopFlowStarted(trip) && !allStopsDone(tripStops(trip))
+}
+
 const ACTIVE_KEEP = new Set(['accepted', 'arriving', 'in_progress', 'payment_required', 'searching', 'offered'])
 
 export function isAdminUser(user, profile) {
@@ -98,12 +107,7 @@ export async function settleTrip({
     if (result) return result
     // Carpool stop flow: every pickup and drop-off is resolved before the
     // pool completes. Builds without the stop list never start it.
-    if (!override && stopFlowStarted(trip) && !allStopsDone(tripStops(trip))) {
-      return {
-        http: 409,
-        body: { error: 'Finish every stop before completing this carpool.', code: 'stops_pending', progressed: false },
-      }
-    }
+    if (!override && stopsPending(trip)) return stopsPendingResult()
   }
 
   if (action === 'complete' && storedFareCents(trip) == null) {
@@ -127,6 +131,11 @@ export async function settleTrip({
     if (claimed.result) return claimed.result
     trip = claimed.trip
     completionClaim = claimed.claim
+    // Re-check stops on the claimed row: a stop may have changed since the first read.
+    if (!override && stopsPending(trip)) {
+      await releaseCompletion(sb, trip.id, completionClaim)
+      return stopsPendingResult()
+    }
   }
   const result = await settleClaimedTrip({
     sb, stripe, trip, payments, action, explicitAmountCents, feeKind,
