@@ -1,3 +1,6 @@
+import { useDemoBusyRoster } from '@/lib/useDemoBusyRoster'
+import { busyRosterFor } from 'rides-native/busyRoster.js'
+import { resolveDriverPortrait } from '../../../shared/driverPortrait.js'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useEffect, useState } from 'react'
 import { Animated, Pressable, Text, View } from 'react-native'
@@ -93,12 +96,14 @@ export default function PickDriver() {
   }
   const { user } = useAuth()
   const student = useStudentStatus()
+  const demoBusyRoster = useDemoBusyRoster()
+  const busy = busyRosterFor({ enabled: demoBusyRoster })
   const [drivers, setDrivers] = useState<OnlineDriver[]>([])
   const [error, setError] = useState<string | null>(null)
   const [phase, setPhase] = useState<'loading' | 'results'>('loading')
   const [attempt, setAttempt] = useState(0)
   const [selected, setSelected] = useState<string | null>(null)
-  const [busy, setBusy] = useState(false)
+  const [requesting, setRequesting] = useState(false)
   const [promptOpen, setPromptOpen] = useState(false)
   const [mapType, setMapType] = useState<MapKind>('standard')
   const [notified, setNotified] = useState(false)
@@ -278,7 +283,7 @@ export default function PickDriver() {
       setPromptOpen(true)
       return
     }
-    setBusy(true)
+    setRequesting(true)
     setError(null)
     try {
       const trip = await requestDriverTrip(supabase, {
@@ -309,7 +314,7 @@ export default function PickDriver() {
       }
       setError(err instanceof Error ? err.message : 'Could not request that driver')
     } finally {
-      setBusy(false)
+      setRequesting(false)
     }
   }
 
@@ -386,6 +391,31 @@ export default function PickDriver() {
         ) : null}
         {favNote ? <Text style={styles.meta}>{favNote}</Text> : null}
         {phase === 'results' ? renderGroups() : null}
+        {/* Busy roster: display only; kept outside real driver sections. */}
+        {busy.length > 0 ? (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>BUSY NOW</Text>
+            {busy.map((driver) => {
+              const portrait = resolveDriverPortrait(driver)
+              return (
+                <View key={driver.id} aria-disabled={true} accessibilityState={{ disabled: true }} style={[styles.card, { opacity: 0.55, borderColor: '#aaa' }]}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                    <View style={{ width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', backgroundColor: portrait.color || '#522D80' }}>
+                      <Text style={{ color: '#fff', fontWeight: '800' }}>{portrait.initials}</Text>
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.name}>{driver.name}</Text>
+                      <Text style={styles.meta}>★ {driver.rating} · {driver.tripCount.toLocaleString('en-US')} trips</Text>
+                      <Text style={styles.sub}>{driver.vehicleLabel}</Text>
+                    </View>
+                    <Text style={{ fontSize: 11, fontWeight: '700', borderRadius: 12, paddingHorizontal: 8, paddingVertical: 5, backgroundColor: driver.status === 'on_trip' ? '#f4dfcc' : '#e5e5e5', color: driver.status === 'on_trip' ? '#855023' : '#555' }}>{driver.statusLabel}</Text>
+                  </View>
+                </View>
+              )
+            })}
+          </View>
+        ) : null}
+        {/* End busy roster. */}
       </Animated.ScrollView>
       <View style={[styles.footer, lift(colors, 'bar'), { paddingBottom: Math.max(insets.bottom, 16) }]}>
         {comfortNotice ? <Text style={styles.comfortNotice}>{comfortNotice}</Text> : null}
@@ -397,9 +427,9 @@ export default function PickDriver() {
         ) : null}
         {error && drivers.some((driver: OnlineDriver) => driver.online) ? <Text style={styles.error}>{error}</Text> : null}
         <PrimaryButton
-          label={busy ? 'Requesting…' : selectedDriver ? `Request ${selectedDriver.name}` : (anyOnline ? 'Request next driver' : 'Select a driver')}
+          label={requesting ? 'Requesting…' : selectedDriver ? `Request ${selectedDriver.name}` : (anyOnline ? 'Request next driver' : 'Select a driver')}
           onPress={onRequest}
-          disabled={busy || (selectedDriver ? !selectedDriver.online : !anyOnline)}
+          disabled={requesting || (selectedDriver ? !selectedDriver.online : !anyOnline)}
         />
       </View>
       <SignInToBookSheet
