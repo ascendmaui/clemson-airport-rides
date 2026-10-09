@@ -60,6 +60,12 @@ export default function EarningsHub() {
   let boostSum = 0
   let carpoolBonus = false
   for (const trip of data?.trips || []) {
+    if (trip.status === 'cancelled_wait') {
+      const net = tripEarnedCents(trip)
+      you += net
+      platform += Math.max(0, (trip.wait_fee_cents || 0) + (trip.cancel_fee_cents || 0) - net)
+      continue
+    }
     if (trip.status !== 'completed') continue
     const fare = Math.max(0, Math.round(Number(trip.fare_cents) || 0))
     const net = tripEarnedCents(trip)
@@ -67,7 +73,7 @@ export default function EarningsHub() {
     if (carpoolPayFromTrip(trip)?.showBonus) carpoolBonus = true
     you += net
     boostSum += boost
-    platform += Math.max(0, fare - net)
+    platform += Math.max(0, fare + (trip.wait_fee_cents || 0) - net)
     const payments = (data?.paymentsByTrip?.[trip.id] || []) as TipPayment[]
     other += tipCentsFromPayments(payments)
   }

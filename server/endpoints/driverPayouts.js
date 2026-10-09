@@ -17,8 +17,8 @@ import {
   admin, cors, json, userFromAuth, stripeClient,
 } from '../friendRideLib.js'
 import { stagingCronBlock } from '../cronGuard.js'
-import { attemptDriverPayout, attemptStandbyBackupPayout, attemptSwitchFeePayout, loadConnectAccount, writePayout } from '../payouts.js'
-import { payoutIsDue, resolveDriverNetCents, summarizeDriverEarnings } from '../../shared/paymentFailure.js'
+import { buildPayoutRecord, buildWaitCancelPayoutRecord, attemptDriverPayout, attemptStandbyBackupPayout, attemptSwitchFeePayout, loadConnectAccount, writePayout } from '../payouts.js'
+import { payoutIsDue, summarizeDriverEarnings } from '../../shared/paymentFailure.js'
 
 export function cronAuthorized(req, secretOverride) {
   const secret = (secretOverride !== undefined ? secretOverride : (process.env.CRON_SECRET || '')).trim()
@@ -155,9 +155,9 @@ export async function runDuePayouts(sb, trips, connectAccountId, deps = {}) {
       continue
     }
     if (deps.dryRun) {
-      const rawAmount = payout.amountCents
+      const rawAmount = trip.status === 'cancelled_wait' ? buildWaitCancelPayoutRecord(trip).amountCents : payout.amountCents
       const amountCents = rawAmount == null || rawAmount === ''
-        ? resolveDriverNetCents(trip)
+        ? buildPayoutRecord(trip).amountCents
         : Math.max(0, Math.round(Number(rawAmount) || 0))
       results.push({
         tripId: trip.id,
@@ -226,8 +226,8 @@ export default async function handler(req, res, deps = {}) {
     const limit = Math.min(Math.max(Number(deps.limit) || 80, 1), 200)
     const listed = await sb
       .from('trips')
-      .select('id, driver_id, fare_cents, status, metadata, dropoff_label')
-      .eq('status', 'completed')
+      .select('id, driver_id, fare_cents, status, driver_wait_earnings_cents, metadata, dropoff_label')
+      .in('status', ['completed', 'cancelled_wait'])
       .order('completed_at', { ascending: false })
       .limit(limit)
     if (listed.error) {
@@ -248,9 +248,9 @@ export default async function handler(req, res, deps = {}) {
   const limit = Math.min(Math.max(Number(deps.limit) || 40, 1), 100)
   const listed = await sb
     .from('trips')
-    .select('id, driver_id, rider_id, fare_cents, status, metadata, dropoff_label, completed_at')
+    .select('id, driver_id, rider_id, fare_cents, status, driver_wait_earnings_cents, metadata, dropoff_label, completed_at')
     .eq('driver_id', user.id)
-    .eq('status', 'completed')
+    .in('status', ['completed', 'cancelled_wait'])
     .order('completed_at', { ascending: false })
     .limit(limit)
 

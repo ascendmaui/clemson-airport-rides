@@ -367,7 +367,7 @@ export async function fetchTripForRating(supabase, tripId) {
   if (!supabase || !tripId) return null
   const { data, error } = await supabase
     .from('trips')
-    .select('id, status, rider_id, driver_id, pickup_label, dropoff_label, completed_at')
+    .select('id, status, rider_id, driver_id, pickup_label, dropoff_label, wait_fee_cents, completed_at')
     .eq('id', tripId)
     .maybeSingle()
   if (error) throw new Error(error.message)

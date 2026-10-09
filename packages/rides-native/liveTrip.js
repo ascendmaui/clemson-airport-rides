@@ -5,6 +5,20 @@
  */
 import { driverApproach, formatDriverDistance, OPEN_POOL_COPY, PREFERRED_CANCELED_COPY, PREFERRED_MATCH_COPY } from './drivers.js'
 
+export const DRIVER_CANCELED_RIDER_COPY = "Your driver had to cancel. We're finding you another driver now. You won't be charged for this."
+
+/** Latest unseen cancellation while the same trip returns to searching. */
+export function driverCancelNotice(trip, lastSeenAt = null) {
+  if (trip?.status !== 'searching') return null
+  const entries = trip?.metadata?.driver_cancels
+  if (!Array.isArray(entries) || !entries.length) return null
+  const latest = entries[entries.length - 1]
+  const timestamp = Date.parse(latest?.at || '')
+  const seen = Date.parse(lastSeenAt || '')
+  if (!Number.isFinite(timestamp) || (Number.isFinite(seen) && timestamp <= seen)) return null
+  return { at: latest.at, message: DRIVER_CANCELED_RIDER_COPY }
+}
+
 export const DRIVER_TRACK_STEPS = [
   { id: 'accepted', label: 'Accepted' },
   { id: 'arriving', label: 'Arriving' },

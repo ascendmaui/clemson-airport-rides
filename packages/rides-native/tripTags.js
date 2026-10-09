@@ -92,13 +92,15 @@ export function carpoolPayFromTrip(row) {
 
 /** Recent earnings: carpool uses metadata.driver_payout_cents, otherwise 80% of the fare. */
 export function tripEarnedCents(trip) {
+  if (trip?.status === 'cancelled_wait') return Math.max(0, Math.round(Number(trip.driver_wait_earnings_cents ?? trip.driverWaitEarningsCents) || 0))
   const pay = carpoolPayFromTrip(trip)
-  if (pay) return pay.payoutCents
-  return driverNetCents(trip?.fare_cents ?? trip?.fareCents)
+  const waitCents = trip?.status === 'completed' ? Math.max(0, Math.round(Number(trip.driver_wait_earnings_cents ?? trip.driverWaitEarningsCents) || 0)) : 0
+  return (pay ? pay.payoutCents : driverNetCents(trip?.fare_cents ?? trip?.fareCents)) + waitCents
 }
 
 /** Fare net plus the driver share of an upfront boost. The boost is not commissioned. */
 export function tripPayoutCents(trip) {
+  if (trip?.status === 'cancelled_wait') return tripEarnedCents(trip)
   return tripEarnedCents(trip) + driverBoostShareCents(readBoostCents(trip))
 }
 
@@ -477,7 +479,7 @@ export function toDriverCard(row, options) {
     fareCents,
     depositCents: depositSliceCents(fareCents, storedDeposit),
     depositExplicit: row.deposit_cents != null && row.deposit_cents !== '',
-    driverNetCents: fareNet + boostDriverCents,
+    driverNetCents: row.status === 'cancelled_wait' ? tripEarnedCents(row) : fareNet + boostDriverCents,
     boostCents,
     boostDriverCents,
     offerPhase: phase,
@@ -503,6 +505,9 @@ export function toDriverCard(row, options) {
     backupNotice: backup?.notice || null,
     backupUrgent: Boolean(backup?.urgent),
     arrivedAt: row.arrived_at || null,
+    waitFeeCents: Math.max(0, Number(row.wait_fee_cents) || 0),
+    cancelFeeCents: Math.max(0, Number(row.cancel_fee_cents) || 0),
+    driverWaitEarningsCents: Math.max(0, Number(row.driver_wait_earnings_cents) || 0),
     passengers: Math.max(1, Math.round(Number(row.passengers) || 1)),
     shares: carpoolShareLines(meta),
     riderLat: readLiveLat(meta),
@@ -610,8 +615,8 @@ export function isSameZonedWeek(iso, now = new Date(), timeZone = 'America/New_Y
 export function weekNetCents(trips, now = new Date()) {
   let total = 0
   for (const trip of trips || []) {
-    if (trip?.status && trip.status !== 'completed') continue
-    if (!isSameZonedWeek(trip?.completed_at, now)) continue
+    if (trip?.status && !['completed', 'cancelled_wait'].includes(trip.status)) continue
+    if (!isSameZonedWeek(trip?.status === 'cancelled_wait' ? trip?.canceled_at : trip?.completed_at, now)) continue
     total += tripPayoutCents(trip)
   }
   return total
@@ -735,10 +740,10 @@ export function summarizeDepositAwareness(trips, paymentsByTrip, now = new Date(
       if (succeeded(row.status)) depositPaidCents += cents
       else depositOpenCents += cents
     }
-    if (trip.status === 'completed') {
+    if (['completed', 'cancelled_wait'].includes(trip.status)) {
       const net = tripEarnedCents(trip)
       driverNetCentsTotal += net
-      if (isSameZonedDay(trip.completed_at, now)) todayNetCents += net
+      if (isSameZonedDay(trip.status === 'cancelled_wait' ? trip.canceled_at : trip.completed_at, now)) todayNetCents += net
     }
     const line = depositStatusLine(payments)
     if (line) {

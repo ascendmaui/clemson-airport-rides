@@ -4,7 +4,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AppState, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { CampusMap, type MapPin } from '@/components/CampusMap'
+import { WaitTimer } from '@/components/WaitTimer'
+import { waitTimerAnchor, type WaitAnchor } from 'rides-native/waitTimer'
+import { DriverCancelSheet } from '@/components/DriverCancelSheet'
 import { FarePanel } from '@/components/FarePanel'
+import { SosButton, SosSheet } from '@/components/SosSheet'
 import { ErrorText, Primary, Tag, useCardShadow } from '@/components/chrome'
 import { useAuth } from '@/lib/auth'
 import { useFeedback } from '@/lib/feedback'
@@ -14,7 +18,7 @@ import { supabase } from '@/lib/supabase'
 import { useDriverLocation } from '@/lib/useDriverLocation'
 import { publishDriverLocation, startTripBackgroundLocation, stopTripBackgroundLocation } from '@/lib/backgroundLocation'
 import { isActiveTripLocationStatus } from 'rides-native/backgroundLocation'
-import { advanceTrip, confirmBackupQueueTrip, loadRiderFix, loadTrip, releaseBackupQueueSeat, subscribeTrips } from 'rides-native/driverDesk'
+import { driverTripAction, tripWaitTick, advanceTrip, confirmBackupQueueTrip, loadRiderFix, loadTrip, releaseBackupQueueSeat, subscribeTrips } from 'rides-native/driverDesk'
 import {
   confirmCountdownLabel,
   leaveNowCountdownLabel,
@@ -24,6 +28,7 @@ import {
   statusActionLabel,
   statusHeadline,
   tagTone,
+  toDriverCard,
   COMFORT_FLEET_NOTICE,
   type DriverCard,
 } from 'rides-native/tripTags'
@@ -39,6 +44,7 @@ import type { Palette } from '@/lib/palette'
 import { TripThread } from 'rides-native/TripThread.jsx'
 import { ScheduledRidesHint } from 'rides-native/ScheduledRidesInfo'
 import { MAPS_HANDOFF_HELPER } from '../../../shared/copy/scheduledRides.js'
+import { isActiveRideStatus } from 'rides-native/safety.js'
 
 type RiderFix = { latitude: number; longitude: number }
 
@@ -77,6 +83,8 @@ export default function TripScreen() {
   const shadow = useCardShadow()
   const styles = useMemo(() => tripStyles(colors), [colors])
   const [trip, setTrip] = useState<DriverCard | null>(null)
+  const sosActive = isActiveRideStatus(trip?.status)
+  const [sosOpen, setSosOpen] = useState(false)
   const terminalTrip = Boolean(trip && ['completed', 'canceled', 'canceled_midride', 'cancelled_wait'].includes(trip.status))
   const activeTrip = isActiveTripLocationStatus(trip?.status)
   const [backgroundNote, setBackgroundNote] = useState<string | null>(null)
@@ -85,10 +93,14 @@ export default function TripScreen() {
   const [error, setError] = useState<string | null>(null)
   const [settleNote, setSettleNote] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const [waitAnchor, setWaitAnchor] = useState<WaitAnchor | null>(null)
+  const [waitError, setWaitError] = useState<string | null>(null)
   const [mapsOffer, setMapsOffer] = useState(false)
   const departedTrip = useRef<string | null>(null)
   const [person, setPerson] = useState<CounterpartView | null>(null)
   const partyColors = partyColorsFromPalette(colors)
+
+  useEffect(() => setSosOpen(false), [trip?.id, sosActive])
 
   const readerRef = useRef<ReturnType<typeof createTrackingRefresh> | null>(null)
   const refresh = useCallback(() => readerRef.current?.refresh(true) ?? Promise.resolve(), [])
@@ -118,8 +130,11 @@ export default function TripScreen() {
     const reader = createTrackingRefresh({
       load: () => loadTrip(supabase, id, user?.id),
       onData: (row) => {
-        setTrip(row)
         if (!row) void stopTripBackgroundLocation(id).catch(() => {})
+        // A poll begun before Start or cancel must not restore the wait screen.
+        setTrip((current) => current && current.id === row?.id && row?.status === 'arrived'
+          && ['in_progress', 'completed', 'canceled', 'canceled_midride', 'cancelled_wait'].includes(current.status)
+          ? current : row)
       },
       onError: (err) => setError(err ? (err instanceof Error ? err.message : 'Could not refresh trip. Retrying automatically.') : null),
     })
@@ -189,6 +204,12 @@ export default function TripScreen() {
     })
   })
 
+  function onDriverCanceled() {
+    locationTracking.stop()
+    pulse('complete')
+    router.replace('/')
+  }
+
   async function onAdvance() {
     if (!supabase || !user || !trip || terminalTrip) return
     setBusy(true)
@@ -198,15 +219,18 @@ export default function TripScreen() {
       if (result?.status && !isActiveTripLocationStatus(result.status)) {
         await stopTripBackgroundLocation(trip.id)
       }
-      if (result?.status === 'completed') {
+      if (result?.status === 'cancelled_wait') {
+        setTrip(toDriverCard(result, { driverId: user.id }))
+      } else if (result?.status === 'completed') {
         pulse('complete')
         const payout = result.settle?.payout
         if (result.settle?.reason === 'no_card_on_file') {
           setSettleNote('Trip complete. No card is on file, so this fare was not charged.')
         } else {
-          setSettleNote(payout?.status
+          const waitNote = payout?.waitCents > 0 ? ` Wait time ${formatCents(payout.waitCents)} included.` : ''
+          setSettleNote((payout?.status
             ? `Fare collected. Payout ${payout.status}${payout.amountCents ? ` · ${formatCents(payout.amountCents)}` : ''}.`
-            : 'Fare collected from the rider’s saved card or Apple Pay.')
+            : 'Fare collected from the rider’s saved card or Apple Pay.') + waitNote)
         }
       } else {
         pulse('accept')
@@ -214,6 +238,53 @@ export default function TripScreen() {
       await refresh()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not update this trip')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  useEffect(() => {
+    setWaitAnchor(null)
+    setWaitError(null)
+    if (!supabase || !trip || trip.status !== 'arrived') return undefined
+    const tripId = trip.id
+    let alive = true
+    let ticking = false
+    const tick = async () => {
+      if (ticking) return
+      ticking = true
+      try {
+        const result = await tripWaitTick(supabase, tripId)
+        if (!alive) return
+        setWaitError(null)
+        setWaitAnchor(waitTimerAnchor(result.trip.arrived_at || null, result.serverNow))
+        // A slow arrived tick must not undo Start trip or a terminal result.
+        setTrip((current) => current?.id === tripId && current.status === 'arrived'
+          ? toDriverCard(result.trip, { driverId: user?.id }) : current)
+      } catch (err) {
+        if (alive) setWaitError(err instanceof Error ? err.message : 'Could not sync wait timer. Retrying automatically.')
+      } finally {
+        ticking = false
+      }
+    }
+    void tick()
+    const timer = setInterval(() => void tick(), 10000)
+    const listener = AppState.addEventListener('change', (state) => {
+      if (state === 'active') void tick()
+    })
+    return () => { alive = false; clearInterval(timer); listener.remove() }
+  }, [trip?.id, trip?.status, trip?.arrivedAt, user?.id])
+
+  async function onNoShow() {
+    if (!supabase || !trip || trip.status !== 'arrived' || busy) return
+    setBusy(true)
+    setError(null)
+    try {
+      const result = await driverTripAction(supabase, trip.id, 'cancel')
+      setTrip(toDriverCard(result.trip, { driverId: user?.id }))
+      await refresh()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not cancel this ride')
     } finally {
       setBusy(false)
     }
@@ -313,7 +384,10 @@ export default function TripScreen() {
       <View pointerEvents="box-none" style={[styles.sheet, shadow, { paddingBottom: insets.bottom + 12, borderColor: colors.border }]}>
         <View style={[styles.handle, { backgroundColor: colors.track }]} />
         <ScrollView style={styles.sheetScroll} contentContainerStyle={styles.sheetContent} showsVerticalScrollIndicator={false}>
-        <Text style={styles.kicker} onPress={() => router.back()}>← LIVE TRIP</Text>
+        <View style={styles.sheetHeader}>
+          <Text style={styles.kicker} onPress={() => router.back()}>← LIVE TRIP</Text>
+          {sosActive ? <SosButton onPress={() => setSosOpen(true)} /> : null}
+        </View>
         <LivePhase
           title={trip ? statusHeadline(trip.status) : 'Loading trip'}
           body={trip ? driverStatusDetail(trip.status) : 'Loading this ride.'}
@@ -337,7 +411,15 @@ export default function TripScreen() {
               <CounterpartCard person={person} colors={partyColors} />
             )}
             <Text style={styles.copy}>{trip.pickupLabel} → {trip.dropoffLabel}</Text>
-            <Text style={styles.fare}>{formatCents(trip.driverNetCents)} net{trip.depositCents ? ` · already paid ${formatCents(trip.depositCents)}` : ''}</Text>
+            {trip.status === 'cancelled_wait' ? (
+              <View accessibilityLabel="Rider no-show result" style={{ gap: 4 }}>
+                <Text style={styles.fare}>Rider no-show</Text>
+                <Text style={styles.copy}>Rider charged {formatCents(trip.waitFeeCents + trip.cancelFeeCents)}</Text>
+                <Text style={styles.fare}>You earn {formatCents(trip.driverWaitEarningsCents)}</Text>
+              </View>
+            ) : <Text style={styles.fare}>{formatCents(trip.driverNetCents)} net{trip.depositCents ? ` · already paid ${formatCents(trip.depositCents)}` : ''}</Text>}
+            {trip.status === 'arrived' ? <WaitTimer arrivedAt={trip.arrivedAt} anchor={waitAnchor} busy={busy} onCancel={onNoShow} /> : null}
+            {waitError ? <ErrorText>{waitError}</ErrorText> : null}
             <Text style={styles.copy}>
               {livePickup && !headingToDropoff
                 ? `${trip.firstName}'s pickup is live from their phone, within a few feet.`
@@ -351,7 +433,7 @@ export default function TripScreen() {
               ))}
             </View>
             {preferredRequestNote(trip) ? <Text style={styles.note}>{preferredRequestNote(trip)}</Text> : null}
-            <FarePanel card={trip} />
+            {trip.status !== 'cancelled_wait' ? <FarePanel card={trip} /> : null}
             {user ? <TripThread supabase={supabase} tripId={trip.id} userId={user.id} colors={colors} /> : null}
             {trip.backupEnroute || mapsOffer ? <Text style={styles.copy}>{MAPS_HANDOFF_HELPER}</Text> : null}
             <View style={styles.navRow}>
@@ -459,9 +541,17 @@ export default function TripScreen() {
           </View>
         ) : null}
         {terminalTrip && trip?.status !== 'completed' ? <Primary label="Back to Home" onPress={() => router.replace('/')} tone="purple" /> : null}
+        {trip && ['accepted', 'arriving'].includes(trip.status) ? <DriverCancelSheet key={trip.id} supabase={supabase} tripId={trip.id} scheduled={Boolean(trip.pickupAt)} disabled={busy} onCanceled={onDriverCanceled} /> : null}
         {action ? <Primary label={busy ? 'Updating…' : action} onPress={onAdvance} disabled={busy} tone="purple" /> : null}
         </ScrollView>
       </View>
+      <SosSheet
+        open={sosOpen && sosActive}
+        onClose={() => setSosOpen(false)}
+        trip={trip}
+        userId={user?.id ?? null}
+        fix={self ? { lat: self.latitude, lng: self.longitude } : null}
+      />
     </View>
   )
 }
@@ -481,6 +571,7 @@ function tripStyles(colors: Palette) {
     handle: { alignSelf: 'center', width: 36, height: 4, borderRadius: 2, marginBottom: 4 },
     sheetScroll: { flexGrow: 0 },
     sheetContent: { gap: 8, paddingBottom: 8 },
+    sheetHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
     kicker: { color: colors.orange, fontWeight: '800', letterSpacing: 1 },
     copy: { color: colors.inkSecondary, fontSize: 14, lineHeight: 20 },
     note: { color: colors.orange, fontSize: 13, lineHeight: 18, fontWeight: '700' },

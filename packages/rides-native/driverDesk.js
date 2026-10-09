@@ -48,13 +48,17 @@ const TRIP_COLUMNS = [
   'metadata',
   'accepted_at',
   'arrived_at',
+  'wait_fee_cents',
+  'cancel_fee_cents',
+  'driver_wait_earnings_cents',
+  'canceled_at',
   'completed_at',
   'created_at',
   'requested_at',
   'offer_expires_at',
 ].join(', ')
 
-const EARNINGS_COLUMNS = 'id, status, fare_cents, deposit_cents, dropoff_label, completed_at, pickup_label, metadata'
+const EARNINGS_COLUMNS = 'id, status, canceled_at, wait_fee_cents, cancel_fee_cents, driver_wait_earnings_cents, fare_cents, deposit_cents, dropoff_label, completed_at, pickup_label, metadata'
 
 async function listTrips(supabase, finish) {
   const run = async (columns) => finish(supabase.from('trips').select(columns))
@@ -584,6 +588,13 @@ export async function loadRiderFix(supabase, tripId) {
   }
 }
 
+export async function tripWaitTick(supabase, tripId) {
+  if (!tripId) throw new Error('Missing ride')
+  return authedJson(supabase, '/api/driver?action=wait', {
+    method: 'POST', body: { action: 'tick', tripId },
+  })
+}
+
 export async function driverTripAction(supabase, tripId, op) {
   if (!tripId) throw new Error('Missing ride')
   try {
@@ -596,6 +607,13 @@ export async function driverTripAction(supabase, tripId, op) {
     }
     throw err
   }
+}
+
+export async function driverCancelTrip(supabase, tripId, reason, note) {
+  if (!tripId) throw new Error('Missing ride')
+  return authedJson(supabase, '/api/driver?action=trip-status', {
+    method: 'POST', body: { tripId, op: 'driver-cancel', reason, ...(note ? { note } : {}) },
+  })
 }
 
 export async function advanceTrip(supabase, trip, driverId) {
@@ -625,15 +643,15 @@ export async function loadEarnings(supabase, driverId) {
     .from('trips')
     .select(EARNINGS_COLUMNS)
     .eq('driver_id', driverId)
-    .in('status', ['completed', 'canceled'])
+    .in('status', ['completed', 'canceled', 'cancelled_wait'])
     .order('completed_at', { ascending: false })
     .limit(40)
   if (tripRes.error && /deposit_cents|column|schema cache/i.test(tripRes.error.message || '')) {
     tripRes = await supabase
       .from('trips')
-      .select('id, status, fare_cents, dropoff_label, completed_at, pickup_label, metadata')
+      .select('id, status, fare_cents, canceled_at, wait_fee_cents, cancel_fee_cents, driver_wait_earnings_cents, dropoff_label, completed_at, pickup_label, metadata')
       .eq('driver_id', driverId)
-      .in('status', ['completed', 'canceled'])
+      .in('status', ['completed', 'canceled', 'cancelled_wait'])
       .order('completed_at', { ascending: false })
       .limit(40)
   }

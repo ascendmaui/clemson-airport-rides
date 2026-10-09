@@ -1,5 +1,14 @@
 import type { DriverCard } from './tripTags'
 
+export type DriverTripRow = Record<string, unknown> & {
+  id: string
+  status: string
+  arrived_at?: string | null
+  wait_fee_cents?: number
+  cancel_fee_cents?: number
+  driver_wait_earnings_cents?: number
+}
+
 export type VehicleRow = {
   id: string
   year?: number | null
@@ -97,14 +106,16 @@ export function loadRiderFix(
   supabase: unknown,
   tripId: string,
 ): Promise<{ latitude: number; longitude: number; updatedAt: string | null } | null>
+export function driverTripAction(supabase: unknown, tripId: string, op: 'accept' | 'arriving' | 'arrive' | 'start' | 'complete' | 'cancel'): Promise<{ trip: DriverTripRow }>
+export function tripWaitTick(supabase: unknown, tripId: string): Promise<{ trip: DriverTripRow; serverNow: string }>
 export function advanceTrip(
   supabase: unknown,
   trip: { id: string; status: string },
   driverId: string,
-): Promise<{ status?: string; settle?: { reason?: string; payment?: unknown; payout?: { status?: string; amountCents?: number } | null } | null }>
+): Promise<DriverTripRow & { settle?: { reason?: string; payment?: unknown; payout?: { status?: string; amountCents?: number } | null } | null }>
 export function loadTrip(supabase: unknown, tripId: string, driverId?: string): Promise<DriverCard | null>
 export function loadEarnings(supabase: unknown, driverId: string): Promise<{
-  trips: { id: string; status?: string; fare_cents?: number; dropoff_label?: string | null; completed_at?: string | null; pickup_label?: string | null; metadata?: Record<string, unknown> | null }[]
+  trips: { id: string; status?: string; canceled_at?: string | null; wait_fee_cents?: number; cancel_fee_cents?: number; driver_wait_earnings_cents?: number; fare_cents?: number; dropoff_label?: string | null; completed_at?: string | null; pickup_label?: string | null; metadata?: Record<string, unknown> | null }[]
   paymentsByTrip: Record<string, { kind?: string; amountCents?: number; status?: string }[]>
   payouts: { paidCents?: number; pendingCents?: number; pending?: unknown[] } | null
   summary: {
@@ -118,3 +129,5 @@ export function loadEarnings(supabase: unknown, driverId: string): Promise<{
   payoutError: string | null
 }>
 export function formatCents(cents: number): string
+
+export function driverCancelTrip(supabase: unknown, tripId: string, reason: string, note?: string): Promise<{ ok: boolean; idempotent?: boolean }>

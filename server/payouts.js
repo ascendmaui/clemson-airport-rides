@@ -3,6 +3,7 @@
  * work has already split the fare; otherwise the shared 20% helper.
  * Failures stay pending and retry on backoff. They are surfaced in earnings.
  */
+import { stripeClient } from './friendRideLib.js'
 import { applyPayoutAttempt, payoutIsDue, resolveDriverNetCents } from '../shared/paymentFailure.js'
 import {
   CANCEL_FEE_LABEL,
@@ -23,7 +24,22 @@ export function tigerHeatPayoutCents(trip) {
   return Math.max(0, Math.round(amount))
 }
 
+/** Wait cancellations never include the booked fare, boosts, or carpool bonuses. */
+export function buildWaitCancelPayoutRecord(trip) {
+  const amountCents = Math.max(0, Math.round(Number(trip.driver_wait_earnings_cents) || 0))
+  return {
+    tripId: trip.id, driverId: trip.driver_id, kind: 'wait_cancel',
+    amountCents, fareNetCents: 0, boostCents: 0, waitCents: amountCents,
+    status: amountCents === 0 ? 'paid' : 'pending', pending: amountCents !== 0,
+    attempts: 0, lastError: null, nextRetryAt: null, stripeTransferId: null,
+  }
+}
+
 export function buildPayoutRecord(trip) {
+  if (trip.status === 'cancelled_wait') return buildWaitCancelPayoutRecord(trip)
+  if (['canceled', 'canceled_midride'].includes(trip.status)) {
+    return buildWaitCancelPayoutRecord({ ...trip, driver_wait_earnings_cents: 0 })
+  }
   const heatPay = tigerHeatPayoutCents(trip)
   const fareNetCents = heatPay == null ? resolveDriverNetCents(trip) : heatPay
   const included = trip?.metadata?.boost_included_in_driver_net === true
@@ -35,7 +51,8 @@ export function buildPayoutRecord(trip) {
   const backupBonus = heatPay == null && queue?.promotedFromBackup && queue.confirmState !== 'released'
     ? queue.bonusCents
     : 0
-  const amountCents = driverPayoutWithBoost(fareNetCents, boostSource) + backupBonus
+  const waitCents = trip.status === 'completed' ? Math.max(0, Math.round(Number(trip.driver_wait_earnings_cents) || 0)) : 0
+  const amountCents = driverPayoutWithBoost(fareNetCents, boostSource) + backupBonus + waitCents
   const heat = trip?.metadata?.tiger_heat
   return {
     tripId: trip.id,
@@ -43,6 +60,7 @@ export function buildPayoutRecord(trip) {
     amountCents,
     fareNetCents,
     boostCents,
+    waitCents,
     tigerHeatBonusCents: heatPay == null ? 0 : Math.max(0, Math.round(Number(heat?.bonusCents) || 0)),
     platformFundedCents: heatPay == null ? 0 : Math.max(0, Math.round(Number(heat?.platformFundedCents) || 0)),
     status: amountCents === 0 ? 'paid' : 'pending',
@@ -55,8 +73,13 @@ export function buildPayoutRecord(trip) {
 }
 
 export async function attemptDriverPayout({ trip, stripe, connectAccountId, now = Date.now(), idempotencyPrefix = 'payout' }) {
-  const existing = trip?.metadata?.payout || buildPayoutRecord(trip)
-  const amountCents = existing.amountCents ?? resolveDriverNetCents(trip)
+  const stored = trip?.metadata?.payout || buildPayoutRecord(trip)
+  const existing = trip.status === 'cancelled_wait'
+    ? { ...stored, ...buildWaitCancelPayoutRecord(trip), status: stored.status,
+      pending: stored.pending, attempts: stored.attempts, lastError: stored.lastError,
+      nextRetryAt: stored.nextRetryAt, stripeTransferId: stored.stripeTransferId }
+    : stored
+  const amountCents = existing.amountCents ?? buildPayoutRecord(trip).amountCents
   if (!amountCents) {
     const paid = applyPayoutAttempt(existing, { ok: true, now, amountCents: 0, transferId: null })
     return { ok: true, payout: { ...paid, amountCents: 0 }, zero: true }
@@ -77,13 +100,14 @@ export async function attemptDriverPayout({ trip, stripe, connectAccountId, now 
   }
   try {
     if (!stripe?.transfers?.create) throw new Error('Stripe transfers unavailable')
+    // One wait transfer even if concurrent ticks or a lost response replay it.
     const transfer = await stripe.transfers.create({
       amount: amountCents,
       currency: 'usd',
       destination: connectAccountId,
       transfer_group: trip.id,
       metadata: { tripId: trip.id, driverId: trip.driver_id || '' },
-    }, { idempotencyKey: `${idempotencyPrefix}:${trip.id}:${existing.attempts || 0}` })
+    }, { idempotencyKey: trip.status === 'cancelled_wait' ? `payout-wait:${trip.id}` : `${idempotencyPrefix}:${trip.id}:${existing.attempts || 0}` })
     const payout = applyPayoutAttempt(existing, {
       ok: true,
       now,
@@ -140,6 +164,27 @@ export async function enqueueAndAttemptPayout({ sb, stripe, trip, connectAccount
   const result = await attemptDriverPayout({ trip: nextTrip, stripe, connectAccountId, now })
   await writePayout(sb, trip, result.payout)
   return result
+}
+
+/** Called only after the rider's wait charge succeeds. Re-read durable payout state. */
+export async function enqueueWaitCancelPayout({ sb, trip, stripe, connectAccountId, now }) {
+  if (trip?.status !== 'cancelled_wait') return { ok: true, skipped: true }
+  const fresh = await sb.from('trips').select('metadata').eq('id', trip.id).maybeSingle()
+  if (fresh.error) throw new Error(fresh.error.message)
+  const queued = await sb.from('driver_payouts').select('*').eq('trip_id', trip.id).maybeSingle()
+  if (queued.error) throw new Error(queued.error.message)
+  const metadata = { ...(fresh.data?.metadata || trip.metadata || {}) }
+  if (queued.data) {
+    const row = queued.data
+    metadata.payout = {
+      ...buildWaitCancelPayoutRecord(trip), status: row.status, pending: row.status !== 'paid',
+      attempts: row.attempts || 0, lastError: row.last_error, nextRetryAt: row.next_retry_at,
+      stripeTransferId: row.stripe_transfer_id,
+    }
+  }
+  const account = connectAccountId || await loadConnectAccount(sb, trip.driver_id)
+  return enqueueAndAttemptPayout({ sb, trip: { ...trip, metadata },
+    stripe: stripe === undefined ? stripeClient() : stripe, connectAccountId: account, now })
 }
 
 /** Standby backup bonus. Separate transfer so the completing driver's payout row stays put. */

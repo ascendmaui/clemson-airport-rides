@@ -287,8 +287,8 @@ test('published police contacts and share origin stay on the public host', () =>
 })
 
 test('shareable statuses include the wait, and active statuses are the accepted ride', () => {
-  assert.deepEqual(SHAREABLE_TRIP_STATUSES, ['searching', 'offered', 'accepted', 'arriving', 'in_progress'])
-  assert.deepEqual(ACTIVE_RIDE_STATUSES, ['accepted', 'arriving', 'in_progress'])
+  assert.deepEqual(SHAREABLE_TRIP_STATUSES, ['searching', 'offered', 'accepted', 'arriving', 'arrived', 'in_progress'])
+  assert.deepEqual(ACTIVE_RIDE_STATUSES, ['accepted', 'arriving', 'arrived', 'in_progress'])
   for (const status of ACTIVE_RIDE_STATUSES) {
     assert.equal(isActiveRideStatus(status), true)
     assert.equal(isShareableTripStatus(status), true)
@@ -297,18 +297,10 @@ test('shareable statuses include the wait, and active statuses are the accepted 
   assert.equal(isShareableTripStatus('offered'), true)
   assert.equal(isActiveRideStatus('searching'), false)
   assert.equal(isActiveRideStatus('offered'), false)
-  for (const status of ['completed', 'canceled', 'cancelled_wait', 'scheduled', null, undefined, '']) {
+  for (const status of ['completed', 'canceled', 'canceled_midride', 'cancelled_wait', 'scheduled', null, undefined, '']) {
     assert.equal(isShareableTripStatus(status), false, String(status))
     assert.equal(isActiveRideStatus(status), false, String(status))
   }
-  // BUG?: 'arrived' is a live status (driver at pickup, between arriving and
-  // in_progress). It is missing from SHAREABLE_TRIP_STATUSES and
-  // ACTIVE_RIDE_STATUSES, so the safety screen's active-trip query drops the
-  // ride and SOS logging turns off while the rider is getting in the car.
-  // 'requested' (preferred ride waiting on a named driver) is also missing
-  // from the shareable list, unlike 'searching' and 'offered'.
-  assert.equal(isShareableTripStatus('arrived'), false)
-  assert.equal(isActiveRideStatus('arrived'), false)
   assert.equal(isShareableTripStatus('requested'), false)
   assert.equal(isActiveRideStatus('requested'), false)
 })

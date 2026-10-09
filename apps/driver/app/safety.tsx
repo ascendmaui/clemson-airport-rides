@@ -1,11 +1,13 @@
-import { useRouter } from 'expo-router'
-import { useEffect, useMemo, useState } from 'react'
-import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { useFocusEffect, useRouter } from 'expo-router'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { AppState, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { AudioCaptureCard } from 'rides-native/AudioCaptureCard'
 import { SafetyDeck } from 'rides-native/SafetyDeck'
 import { VideoCaptureCard } from 'rides-native/VideoCaptureCard'
-import { CUPD_PHONE_DISPLAY, CUPD_PHONE_E164 } from 'rides-native/safety.js'
+import { ACTIVE_RIDE_STATUSES, CUPD_PHONE_DISPLAY, CUPD_PHONE_E164 } from 'rides-native/safety.js'
+import { subscribeTrips } from 'rides-native/driverDesk'
+import { SosButton, SosSheet, type SosTrip } from '@/components/SosSheet'
 import { SAFETY_FEATURE_IDS, driverTrackingCopy } from '../../../shared/safetyHub.js'
 import { useAuth } from '@/lib/auth'
 import { supabase } from '@/lib/supabase'
@@ -19,29 +21,62 @@ export default function DriverSafetyScreen() {
   const { colors } = useTheme()
   const styles = useMemo(() => makeStyles(colors), [colors])
   const [feature, setFeature] = useState<(typeof SAFETY_FEATURE_IDS)[number]>('sos')
-  const [status, setStatus] = useState<string | null>(null)
+  const [trip, setTrip] = useState<SosTrip | null>(null)
+  const status = trip?.status ?? null
+  const [fix, setFix] = useState<{ lat: number; lng: number } | null>(null)
+  const [sosOpen, setSosOpen] = useState(false)
   const [armed, setArmed] = useState<'911' | 'cupd' | null>(null)
 
-  useEffect(() => {
-    if (!user?.id || !supabase) return undefined
+  useEffect(() => setSosOpen(false), [trip?.id])
+
+  useFocusEffect(useCallback(() => {
+    const client = supabase
+    const driverId = user?.id
+    if (!driverId || !client) {
+      setTrip(null)
+      setFix(null)
+      return undefined
+    }
     let alive = true
-    supabase
-      .from('trips')
-      .select('status')
-      .eq('driver_id', user.id)
-      .in('status', ['accepted', 'arriving', 'in_progress'])
-      .limit(1)
-      .maybeSingle()
-      .then(({ data }) => {
-        if (alive) setStatus(data?.status || null)
-      })
-      .catch(() => {
-        if (alive) setStatus(null)
-      })
+    let loading = false
+    async function refresh() {
+      if (loading) return
+      loading = true
+      try {
+        const [ride, location] = await Promise.all([
+          client!.from('trips').select('id, status, pickup_label, dropoff_label')
+            .eq('driver_id', driverId!).in('status', [...ACTIVE_RIDE_STATUSES])
+            .order('accepted_at', { ascending: false }).limit(1).maybeSingle(),
+          client!.from('driver_status').select('lat, lng').eq('driver_id', driverId!).maybeSingle(),
+        ])
+        if (!alive) return
+        if (!ride.error) setTrip(ride.data ? {
+          id: ride.data.id,
+          status: ride.data.status,
+          pickupLabel: ride.data.pickup_label,
+          dropoffLabel: ride.data.dropoff_label,
+        } : null)
+        if (!location.error) setFix(Number.isFinite(location.data?.lat) && Number.isFinite(location.data?.lng)
+          ? { lat: location.data!.lat, lng: location.data!.lng } : null)
+      } catch {
+        // Keep the last trip and fix available when a refresh is offline.
+      } finally {
+        loading = false
+      }
+    }
+    void refresh()
+    const timer = setInterval(() => void refresh(), 5000)
+    const stop = subscribeTrips(client, () => void refresh())
+    const listener = AppState.addEventListener('change', (state) => {
+      if (state === 'active') void refresh()
+    })
     return () => {
       alive = false
+      clearInterval(timer)
+      stop()
+      listener.remove()
     }
-  }, [user?.id])
+  }, [user?.id]))
 
   function call(kind: '911' | 'cupd') {
     if (armed !== kind) {
@@ -79,18 +114,28 @@ export default function DriverSafetyScreen() {
             <Text style={styles.body}>{driverTrackingCopy()}</Text>
           </View>
           <View style={{ display: feature === 'sos' ? 'flex' : 'none', gap: 8 }}>
-            <Text style={styles.body}>
-              Clemson University Police are {CUPD_PHONE_DISPLAY}. The first press confirms and does not dial.
-            </Text>
-            <Pressable accessibilityRole="button" accessibilityLabel="Call 911" onPress={() => call('911')} style={[styles.action, { backgroundColor: colors.danger }]}>
-              <Text style={styles.actionText}>{armed === '911' ? 'Confirm call 911' : 'Call 911'}</Text>
-            </Pressable>
-            <Pressable accessibilityRole="button" accessibilityLabel={`Call Clemson Police ${CUPD_PHONE_DISPLAY}`} onPress={() => call('cupd')} style={[styles.action, { backgroundColor: colors.purple }]}>
-              <Text style={styles.actionText}>{armed === 'cupd' ? `Confirm CUPD ${CUPD_PHONE_DISPLAY}` : `Call Clemson Police ${CUPD_PHONE_DISPLAY}`}</Text>
-            </Pressable>
+            {trip ? (
+              <>
+                <Text style={styles.body}>Emergency help for your active trip.</Text>
+                <SosButton onPress={() => setSosOpen(true)} />
+              </>
+            ) : (
+              <>
+                <Text style={styles.body}>
+                  Clemson University Police are {CUPD_PHONE_DISPLAY}. The first press confirms and does not dial.
+                </Text>
+                <Pressable accessibilityRole="button" accessibilityLabel="Call 911" onPress={() => call('911')} style={[styles.action, { backgroundColor: colors.danger }]}>
+                  <Text style={styles.actionText}>{armed === '911' ? 'Confirm call 911' : 'Call 911'}</Text>
+                </Pressable>
+                <Pressable accessibilityRole="button" accessibilityLabel={`Call Clemson Police ${CUPD_PHONE_DISPLAY}`} onPress={() => call('cupd')} style={[styles.action, { backgroundColor: colors.purple }]}>
+                  <Text style={styles.actionText}>{armed === 'cupd' ? `Confirm CUPD ${CUPD_PHONE_DISPLAY}` : `Call Clemson Police ${CUPD_PHONE_DISPLAY}`}</Text>
+                </Pressable>
+              </>
+            )}
           </View>
         </SafetyDeck>
       </ScrollView>
+      <SosSheet open={sosOpen && Boolean(trip)} onClose={() => setSosOpen(false)} trip={trip} userId={user?.id ?? null} fix={fix} />
     </View>
   )
 }

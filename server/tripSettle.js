@@ -14,7 +14,7 @@ import {
 } from '../shared/paymentFailure.js'
 import { serverIsAdmin } from './adminRoster.js'
 import { ensureAuthoritativeFare, storedFareCents } from './authoritativeFare.js'
-import { farePaidCents, tripChargeKey } from './chargeIdempotency.js'
+import { farePaidCents, tripChargeKey, waitFeeBilledCents } from './chargeIdempotency.js'
 import { insertTripEvent } from './tripEvents.js'
 import { debitStoredRideCredits } from './rideCreditSettle.js'
 import { airportDepositRequiredCents } from '../packages/rides-native/tripTags.js'
@@ -165,18 +165,27 @@ async function settleClaimedTrip({
   const paidCents = farePaidCents(trip)
   const depositAlreadyExists = airportDepositRequiredCents(trip) > 0
   const boostCents = action === 'complete' ? readBoostCents(trip) : 0
+  const waitFeeCents = action === 'complete' ? Math.max(0, Math.round(Number(trip.wait_fee_cents) || 0)) : 0
+  const waitBilledCents = waitFeeBilledCents(trip, payments)
+  const waitToBillCents = Math.max(0, waitFeeCents - waitBilledCents)
   const creditsFare = action === 'complete' && trip.metadata?.billing_choice === 'credits'
-  // Credits cover the fare. The boost is captured from the card hold with the
-  // fare on every other trip. A $0 boost leaves this path unchanged.
-  const captureCents = creditsFare ? boostCents : Math.max(0, Math.round(Number(due.amountCents) || 0)) + boostCents
+  // Credits cover only the fare; boost and frozen wait fees use the card.
+  const captureCents = (creditsFare ? 0 : Math.max(0, Math.round(Number(due.amountCents) || 0))) + boostCents + waitToBillCents
+  const collectionCents = action === 'complete' ? captureCents : due.amountCents
+  const billingMetadata = action === 'complete' ? {
+    fare_billed_cents: creditsFare ? 0 : due.amountCents,
+    boost_billed_cents: boostCents,
+    wait_fee_billed_cents: waitToBillCents,
+  } : {}
   let fareHold = null
-  if (action === 'complete' && !override && (due.amountCents > 0 || boostCents > 0)) {
+  if (action === 'complete' && !override && (due.amountCents > 0 || captureCents > 0)) {
     try {
       fareHold = await settleFareHold({
         sb,
         stripe,
         trip,
         finalFareCents: captureCents,
+        billingMetadata,
       })
     } catch (err) {
       console.error('[tripSettle] fare hold', err?.message || err)
@@ -244,10 +253,11 @@ async function settleClaimedTrip({
     && !fareHold
     && cardOnFile === false
     && !creditsDebit?.ok
+    && waitToBillCents === 0
   let payment = null
   if (fareHold) {
     payment = fareHold
-  } else if (creditsDebit?.ok) {
+  } else if (creditsDebit?.ok && collectionCents === 0) {
     payment = {
       ok: true,
       method: 'credits',
@@ -263,21 +273,21 @@ async function settleClaimedTrip({
       amountCents: due.amountCents,
       skipped: true,
     }
-  } else if (due.amountCents > 0 && !override) {
+  } else if (collectionCents > 0 && !override) {
     payment = await collectPayment({
       sb,
       stripe,
       deps,
       tripId: trip.id,
       riderId: trip.rider_id,
-      amountCents: due.amountCents,
-      methods,
+      amountCents: collectionCents,
+      methods: creditsFare ? ['card'] : methods,
       kind: chargeKind,
       idempotencyKey: tripChargeKey(trip.id, trip.rider_id, chargeKind, paidCents),
       hold: true,
       midRide: action !== 'complete' || ['accepted', 'arriving', 'in_progress'].includes(trip.status),
       paymentMethodId,
-      metadata: { action, feeKind: chargeKind },
+      metadata: { action, feeKind: chargeKind, ...billingMetadata },
     })
   } else if (override && due.amountCents > 0) {
     payment = await collectPayment({
@@ -297,7 +307,7 @@ async function settleClaimedTrip({
   const gate = campusUncollected
     ? { allow: true, reason: 'no_card_on_file' }
     : progressionGate({
-      amountDueCents: due.amountCents,
+      amountDueCents: action === 'complete' ? due.amountCents + boostCents + waitToBillCents : due.amountCents,
       payment,
       adminOverride: override,
     })
@@ -363,6 +373,12 @@ async function settleClaimedTrip({
     metadata.fare_paid_cents = Math.max(priorPaid, paidTowardFareCents(trip, payments) + due.amountCents)
     patch.metadata = metadata
   }
+  if (action === 'complete' && waitFeeCents > 0 && !override) {
+    patch.metadata = {
+      ...(patch.metadata || trip.metadata || {}),
+      wait_fee_billed_cents: Math.min(waitFeeCents, waitBilledCents + waitToBillCents),
+    }
+  }
 
   let tigerHeat = null
   try {
@@ -405,7 +421,8 @@ async function settleClaimedTrip({
     const { error: eventError } = await insertTripEvent(sb, {
       trip_id: trip.id,
       kind: patch.status,
-      payload: { source: 'trip_settle', reason: gate.reason, amount_cents: due.amountCents },
+      payload: { source: 'trip_settle', reason: gate.reason, amount_cents: due.amountCents,
+        ...(waitFeeCents > 0 ? { wait_fee_billed_cents: override ? waitBilledCents : waitFeeCents } : {}) },
     })
     if (eventError) {
       return {
@@ -444,7 +461,7 @@ async function settleClaimedTrip({
       status: patch.status,
       reason: gate.reason,
       payment,
-      payout: payout ? { ok: payout.ok, status: payout.payout?.status, lastError: payout.payout?.lastError || null, amountCents: payout.payout?.amountCents } : null,
+      payout: payout ? { ok: payout.ok, status: payout.payout?.status, lastError: payout.payout?.lastError || null, amountCents: payout.payout?.amountCents, waitCents: payout.payout?.waitCents || 0 } : null,
       keptActive: ACTIVE_KEEP.has(trip.status) && !gate.allow,
     },
   }

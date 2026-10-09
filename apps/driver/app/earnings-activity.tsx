@@ -56,13 +56,13 @@ export default function EarningsActivity() {
 
   const visible = useMemo(() => trips.filter((trip: Trip) => {
     if (filter === 'all') return true
-    return trip.status === filter
+    return trip.status === filter || (filter === 'canceled' && trip.status === 'cancelled_wait')
   }), [filter, trips])
 
   const groups = useMemo(() => {
     const map = new Map<string, Trip[]>()
     for (const trip of visible) {
-      const key = (trip.completed_at || '').slice(0, 10) || 'Undated'
+      const key = (trip.completed_at || trip.canceled_at || '').slice(0, 10) || 'Undated'
       const list = map.get(key) || []
       list.push(trip)
       map.set(key, list)
@@ -113,23 +113,27 @@ export default function EarningsActivity() {
         <View key={day} style={styles.group}>
           <Text style={{ color: colors.inkSecondary, fontWeight: '800' }}>{day}</Text>
           {rows.map((trip: Trip) => {
-            const pay = carpoolPayFromTrip(trip)
-            const boost = readBoostCents(trip)
+            const noShow = trip.status === 'cancelled_wait'
+            const pay = noShow ? null : carpoolPayFromTrip(trip)
+            const boost = noShow ? 0 : readBoostCents(trip)
             const earned = trip.status === 'canceled' ? 0 : tripPayoutCents(trip)
             return (
               <Card key={trip.id}>
                 <Pressable
                   onPress={() => router.push({ pathname: '/trip-details', params: { id: trip.id } })}
                   accessibilityRole="button"
-                  accessibilityLabel={`${trip.status === 'canceled' ? 'Canceled trip' : 'Completed trip'}, ${trip.pickup_label || 'Pickup'} to ${trip.dropoff_label || 'Drop-off'}, ${trip.status === 'canceled' ? 'No payout' : shownCents(earned, earningsPrivate)}`}
+                  accessibilityLabel={`${noShow ? 'No-show fee' : trip.status === 'canceled' ? 'Canceled trip' : 'Completed trip'}, ${trip.pickup_label || 'Pickup'} to ${trip.dropoff_label || 'Drop-off'}, ${trip.status === 'canceled' ? 'No payout' : shownCents(earned, earningsPrivate)}`}
                   accessibilityHint="Opens trip details and breakdown"
                 >
-                  <Text style={{ color: colors.title, fontWeight: '800' }}>{trip.status === 'canceled' ? 'Canceled' : 'Clemson RIDES'}</Text>
+                  <Text style={{ color: colors.title, fontWeight: '800' }}>{noShow ? 'No-show fee' : trip.status === 'canceled' ? 'Canceled' : 'Clemson RIDES'}</Text>
                   <Text style={{ color: colors.ink }}>{trip.pickup_label || 'Pickup'}</Text>
                   <Text style={{ color: colors.ink }}>{trip.dropoff_label || 'Drop-off'}</Text>
                   <Text style={{ color: colors.title, fontWeight: '800' }}>
                     {trip.status === 'canceled' ? 'No payout' : shownCents(earned, earningsPrivate)}
                   </Text>
+                  {trip.status === 'completed' && (trip.driver_wait_earnings_cents || 0) > 0 ? (
+                    <Text style={{ color: colors.inkSecondary }}>Wait time {shownCents(trip.driver_wait_earnings_cents, earningsPrivate)}</Text>
+                  ) : null}
                   {trip.status !== 'canceled' && boost > 0 ? (
                     <Text style={{ color: '#F56600', fontWeight: '800' }}>Boost {formatBoostBadge(boost)}</Text>
                   ) : null}

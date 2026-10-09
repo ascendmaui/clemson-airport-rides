@@ -250,7 +250,7 @@ export function sumFarePaidCents(payments) {
     if (row?.status !== 'succeeded') return sum
     const logical = row?.metadata?.logical_kind || row?.kind
     if (!FARE_KINDS.has(logical)) return sum
-    return sum + (Number(row.amount_cents) || 0)
+    return sum + (Number(row.metadata?.fare_billed_cents ?? row.amount_cents) || 0)
   }, 0)
 }
 
@@ -327,6 +327,7 @@ export function resolvePlatformFeeCents(grossCents, metadata) {
 }
 
 export function resolveDriverNetCents(trip) {
+  if (trip?.status === 'cancelled_wait') return Math.max(0, Math.round(Number(trip.driver_wait_earnings_cents) || 0))
   const meta = trip?.metadata || {}
   const explicit = meta.driver_net_cents ?? meta.driver_payout_cents ?? meta.payout_cents
   if (explicit != null && explicit !== '') {
