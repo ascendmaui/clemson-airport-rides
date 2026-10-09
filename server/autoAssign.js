@@ -27,7 +27,7 @@ export async function listAssignableDrivers(sb, {
   if (statusRes.error) return { drivers: [], error: statusRes.error.message || 'Could not read online drivers' }
   const ids = []
   for (const row of statusRes.data || []) {
-    if (row?.online && row.driver_id && !isSimulatedDriverId(row.driver_id) && !ids.includes(row.driver_id)) ids.push(row.driver_id)
+    if (row?.online && row.driver_id && row.driver_id !== riderId && !isSimulatedDriverId(row.driver_id) && !ids.includes(row.driver_id)) ids.push(row.driver_id)
   }
   if (!ids.length) return { drivers: [], error: null }
 
@@ -76,7 +76,7 @@ export async function listAssignableDrivers(sb, {
 
   const ranked = []
   for (const profile of profiles.rows || []) {
-    if (!profile?.id || !gate.allowed.has(profile.id)) continue
+    if (!profile?.id || profile.id === riderId || !gate.allowed.has(profile.id)) continue
     if (isE2ETestUser(profile) !== e2eRider) continue
     if (comfortIds && !comfortIds.has(profile.id)) continue
     ranked.push({

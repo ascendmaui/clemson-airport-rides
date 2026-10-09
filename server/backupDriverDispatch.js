@@ -4,6 +4,7 @@
  * the backup-queue migration is applied. Column and strike-table writes are
  * best-effort and ignored when those relations are absent.
  */
+import { readDriverPushToken } from './driverPushToken.js'
 import { unchangedOfferQuery } from '../shared/driverOrder.js'
 import { insertTripEvent } from './tripEvents.js'
 import { sendExpoPush } from './expoPush.js'
@@ -77,13 +78,7 @@ async function recordStrike(sb, { driverId, tripId, reason, at }) {
 
 async function pushToDriver(sb, driverId, { title, body, tripId, kind }) {
   if (!driverId) return { sent: false, reason: 'no_driver' }
-  let token = null
-  try {
-    const status = await sb.from('driver_status').select('expo_push_token').eq('driver_id', driverId).maybeSingle()
-    token = status.data?.expo_push_token || null
-  } catch {
-    token = null
-  }
+  const { token } = await readDriverPushToken(sb, driverId)
   if (!token) return { sent: false, reason: 'push_token_missing' }
   return sendExpoPush({
     to: token,

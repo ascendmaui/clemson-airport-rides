@@ -67,6 +67,10 @@ export default async function handler(req, res, deps = {}) {
   if (pe) return json(res, 400, { error: pe })
 
   const driverId = String(body.driverId || '').trim()
+  if (driverId === user.id) return json(res, 409, {
+    code: 'own_driver_account',
+    error: "That's your own driver account. Pick another driver, or sign in to a separate rider account to test.",
+  })
   if (isSimulatedDriverId(driverId)) {
     return json(res, 409, { error: 'That car is a map preview and cannot be requested.', code: 'ride_option_unavailable' })
   }

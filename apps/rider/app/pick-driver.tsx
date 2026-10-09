@@ -22,6 +22,7 @@ import {
   fetchDriversByIds,
   canFavoriteDriver,
   fetchOnlineDrivers,
+  filterDriversForFleet,
   groupDriversForPicker,
   loadFavoriteDriverIds,
   OPEN_POOL_COPY,
@@ -126,7 +127,7 @@ export default function PickDriver() {
         ? await fetchDriversByIds(supabase, extraIds)
         : { drivers: [] as OnlineDriver[], error: null }
       if (!alive) return
-      const merged = sortPreferredDrivers([...result.drivers, ...extra.drivers], fav.ids, approachPickup)
+      const merged = sortPreferredDrivers(filterDriversForFleet([...result.drivers, ...extra.drivers], tier, user?.id), fav.ids, approachPickup)
       setDrivers(merged)
       setFavoriteIds(fav.ids)
       setPassPreferredIds(loadedPass?.active ? loadedPass.preferredDriverIds || [] : [])

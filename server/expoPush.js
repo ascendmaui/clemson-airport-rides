@@ -33,6 +33,7 @@ function clean(value) {
 export async function sendExpoPush({ to, title, body, data, sound = 'default', channelId = 'ride-requests' } = {}, deps = {}) {
   const token = String(to || '').trim()
   if (!token) return { sent: false, reason: 'push_token_missing' }
+  if (!/^Expo(nent)?PushToken\[/.test(token)) return { sent: false, reason: 'raw_device_token_unsupported' }
   const env = deps.env || process.env
   const creds = pushCredentialStatus(env)
   const fetchImpl = deps.fetch || globalThis.fetch
@@ -70,12 +71,12 @@ export async function sendExpoPush({ to, title, body, data, sound = 'default', c
   } catch {
     payload = null
   }
-  const ticket = Array.isArray(payload?.data) ? payload.data[0] : null
+  const ticket = Array.isArray(payload?.data) ? payload.data[0] : payload?.data
   if (!response.ok || ticket?.status === 'error') {
     const detail = ticket?.details?.error || ticket?.message || `http_${response.status}`
     const reason = /credentials|invalidcredentials/i.test(String(detail))
       ? 'expo_credentials_missing'
-      : 'expo_push_rejected'
+      : detail === 'DeviceNotRegistered' ? 'device_not_registered' : 'expo_push_rejected'
     return { sent: false, reason, detail: clean(detail), gap: creds.note }
   }
   return { sent: true, reason: 'sent' }

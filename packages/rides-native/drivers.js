@@ -31,8 +31,9 @@ export const OPEN_POOL_COPY =
   'No driver is pinned to this ride. The first available driver can accept it.'
 
 /** Ride options do not filter the driver list by a retired fleet. */
-export function filterDriversForFleet(drivers) {
-  return Array.isArray(drivers) ? drivers : []
+export function filterDriversForFleet(drivers, _tier, viewerId = null) {
+  const list = Array.isArray(drivers) ? drivers : []
+  return viewerId ? list.filter((driver) => driver.id !== viewerId) : list
 }
 
 

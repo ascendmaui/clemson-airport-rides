@@ -90,7 +90,7 @@ export function PickDriver({
       ? await fetchDriversByIds(supabase, extraIds)
       : { drivers: [], error: null }
     const merged = sortPreferredDrivers(
-      filterDriversForFleet([...online, ...extra.drivers], tier),
+      filterDriversForFleet([...online, ...extra.drivers], tier, user?.id),
       fav.ids,
       approachPickup,
     )
