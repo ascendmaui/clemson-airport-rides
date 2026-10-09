@@ -17,6 +17,7 @@ import handleCancelMidride from '../server/endpoints/tripCancelMidride.js'
 import handleDriverPayouts from '../server/endpoints/driverPayouts.js'
 import handleApplicantInbox from '../server/endpoints/applicantInbox.js'
 import handleDriverCards from '../server/endpoints/driverCards.js'
+import handleTripSweeps from '../server/endpoints/tripSweeps.js'
 import handleMatchingRebroadcast from '../server/endpoints/matchingRebroadcast.js'
 import { handleMarkOffered, handlePassOffer } from '../server/endpoints/driverOfferDesk.js'
 import { handleSignAgreement } from '../server/agreementHttp.js'
@@ -38,6 +39,7 @@ const HANDLERS = {
   inbox: handleApplicantInbox,
   cards: handleDriverCards,
   'rebroadcast-offers': handleMatchingRebroadcast,
+  'trip-sweeps': handleTripSweeps,
   'mark-offered': handleMarkOffered,
   'pass-offer': handlePassOffer,
   'sign-agreement': handleSignAgreementRoute,
@@ -61,7 +63,7 @@ export default async function handler(req, res, ...rest) {
   const handle = HANDLERS[action]
   if (!handle) {
     return json(res, 400, {
-      error: 'Unknown driver action. Use action=signup, submit-review, earnings, offer-preview, tip, tip-choice, wait, trip-status, cancel-midride, payouts, inbox, cards, mark-offered, pass-offer, sign-agreement, backup-queue, or app-config.',
+      error: 'Unknown driver action. Use action=signup, submit-review, earnings, offer-preview, tip, tip-choice, wait, trip-status, cancel-midride, payouts, inbox, cards, mark-offered, pass-offer, sign-agreement, backup-queue, trip-sweeps, or app-config.',
     })
   }
   return handle(req, res, ...rest)

@@ -19,7 +19,7 @@ import { insertTripEvent } from './tripEvents.js'
 import { debitStoredRideCredits } from './rideCreditSettle.js'
 import { airportDepositRequiredCents } from '../packages/rides-native/tripTags.js'
 import { releaseTigerHeatReservation, settleTigerHeatReservation } from './tigerHeatService.js'
-import { settleFareHold } from './fareAuthorization.js'
+import { releaseOpenFareHold, settleFareHold } from './fareAuthorization.js'
 import { riderCaptureFareCents } from '../shared/backupDriverQueue.js'
 import { claimCompletion, completionResult, releaseCompletion } from './tripCompletion.js'
 import { readBoostCents } from '../shared/scheduledBoost.js'
@@ -401,6 +401,7 @@ async function settleClaimedTrip({
       if (fresh.error) return { http: 500, body: { error: fresh.error.message, progressed: false } }
       return completionResult(fresh.data || {}, actor, override) || { http: 409, body: { code: 'invalid_status', progressed: false } }
     }
+    if (action === 'cancel') await releaseOpenFareHold({ sb, stripe, trip, reason: 'settle_cancel' })
     const { error: eventError } = await insertTripEvent(sb, {
       trip_id: trip.id,
       kind: patch.status,
@@ -419,6 +420,8 @@ async function settleClaimedTrip({
       }
     }
   }
+
+  if (!sb && action === 'cancel') await releaseOpenFareHold({ sb, stripe, trip, reason: 'settle_cancel' })
 
   let payout = null
   // This complete did not collect the fare. A Connect transfer would pay the

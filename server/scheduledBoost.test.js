@@ -229,7 +229,7 @@ test('rider cancel releases the open boost hold immediately', async () => {
   trip.metadata.boost_cents = 0
   delete trip.metadata.fare_authorization
   const plain = await call(releaseScheduledBoost, { tripId: 'trip_cancel' }, { sb, user: { id: 'rider_1' }, stripe })
-  assert.equal(plain.json.reason, 'no_boost')
+  assert.equal(plain.json.hold.reason, 'no_open_hold')
   assert.equal(stripe.calls.length, 1)
 
   const direct = await releaseOpenFareHold({

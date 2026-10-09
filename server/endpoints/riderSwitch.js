@@ -231,7 +231,8 @@ export async function handleRiderSwitch(sb, user, body, deps = {}) {
 
   const profile = await cardProfile(sb, user.id)
   const stripe = deps.stripe !== undefined ? deps.stripe : (stripeOk() ? stripeClient() : null)
-  const settled = await settleSwitchHold({
+  const ending = committed.update.status === 'canceled'
+  const settled = ending ? { ok: true, patch: null } : await settleSwitchHold({
     stripe,
     sb,
     trip,
@@ -258,6 +259,10 @@ export async function handleRiderSwitch(sb, user, body, deps = {}) {
   }
   if (!updated.data) {
     return { status: 409, body: { error: 'This ride changed. Refresh and try again.', code: 'rider_switch_conflict' } }
+  }
+
+  if (ending) {
+    await settleSwitchHold({ sb, stripe, trip: { ...trip, metadata }, quote: { hold: 'release' } })
   }
 
   const event = await insertTripEvent(sb, {

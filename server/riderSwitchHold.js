@@ -4,6 +4,7 @@
  */
 import { fareAuthorizationCents } from '../shared/fareAuthorization.js'
 import { insertPaymentRow } from './collectPayment.js'
+import { releaseOpenFareHold } from './fareAuthorization.js'
 
 function authOf(trip) {
   const auth = trip?.metadata?.fare_authorization
@@ -50,21 +51,17 @@ export async function settleSwitchHold({
   }
 
   if (hold === 'release') {
-    const stripeCanceled = await cancelIntent(stripe, auth?.paymentIntentId)
-    if (auth?.paymentIntentId && stripe?.paymentIntents?.cancel && !stripeCanceled) {
-      return { ok: false, patch: null, error: 'Could not release the card hold. Try again.', code: 'hold_release_failed' }
+    const result = await releaseOpenFareHold({ stripe, sb, trip, reason: 'rider_switch' })
+    if (result.released) {
+      try {
+        await markReleasedPayment(sb, trip?.id, auth?.paymentIntentId)
+      } catch (error) {
+        console.error('[rider-switch] payment release', error?.message || error)
+      }
     }
-    await markReleasedPayment(sb, trip?.id, auth?.paymentIntentId)
     return {
       ok: true,
-      patch: {
-        fare_authorization: {
-          ...(auth || {}),
-          status: 'canceled',
-          reason: 'rider_switch',
-          at: new Date().toISOString(),
-        },
-      },
+      patch: result.released ? { fare_authorization: trip.metadata.fare_authorization } : null,
     }
   }
 

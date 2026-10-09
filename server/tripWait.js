@@ -14,6 +14,7 @@
  *   are stored as pending. The fee is owed; nothing is marked succeeded.
  */
 import { ensureStripeCustomer, stripeClient, stripeOk } from './friendRideLib.js'
+import { releaseOpenFareHold } from './fareAuthorization.js'
 import { quoteWait } from '../src/lib/waitFee.js'
 import { reuseStoredIntent, waitChargeKey } from './chargeIdempotency.js'
 
@@ -278,7 +279,7 @@ export async function chargeWaitFees(sb, trip) {
   }
 }
 
-export async function applyTripWait(sb, { action, tripId, actorId }) {
+export async function applyTripWait(sb, { action, tripId, actorId }, deps = {}) {
   assertAction(action, tripId)
   if (!actorId || typeof actorId !== 'string' || !actorId.trim()) throw httpError('Sign in required', 401)
 
@@ -292,8 +293,12 @@ export async function applyTripWait(sb, { action, tripId, actorId }) {
   if (!trip?.id) throw httpError('Wait update returned no trip', 500)
 
   let charge = null
-  if (data.should_charge) {
-    charge = await chargeWaitFees(sb, trip)
+  try {
+    if (data.should_charge) charge = await (deps.chargeWaitFees || chargeWaitFees)(sb, trip)
+  } finally {
+    if (trip.status === 'cancelled_wait') {
+      await releaseOpenFareHold({ sb, stripe: deps.stripe, trip, reason: 'wait_cancel' })
+    }
   }
 
   const serverNow = data?.server_now || new Date().toISOString()

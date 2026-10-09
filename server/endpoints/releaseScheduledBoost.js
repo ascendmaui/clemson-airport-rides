@@ -2,7 +2,7 @@
  * POST /api/stripe-payment-methods?action=release-scheduled-boost
  * After the rider cancels a boosted scheduled ride, drop the open card hold
  * immediately. The hold covers the fare estimate and the boost together.
- * A ride with no boost, or no hold yet, is left alone.
+ * Canceled rides release the fare hold even without a boost.
  */
 import { admin, cors, json, parseBody, userFromAuth } from '../friendRideLib.js'
 import { releaseOpenFareHold } from '../fareAuthorization.js'
@@ -32,7 +32,7 @@ export default async function handler(req, res, deps = {}) {
   if (!RELEASABLE.has(trip.status)) {
     return json(res, 409, { error: 'This ride can no longer release a boost hold.', code: 'boost_hold_locked' })
   }
-  if (readBoostCents(trip) <= 0) {
+  if (trip.status !== 'canceled' && readBoostCents(trip) <= 0) {
     return json(res, 200, { ok: true, skipped: true, reason: 'no_boost' })
   }
 
@@ -46,10 +46,10 @@ export default async function handler(req, res, deps = {}) {
     })
   } catch (error) {
     console.error('[release-scheduled-boost]', trip.id, error?.message || error)
-    return json(res, 502, { error: 'Could not release the hold on your card.', code: 'hold_release_failed' })
+    hold = { ok: false, reason: 'hold_release_failed' }
   }
   if (hold?.ok === false) {
-    return json(res, 502, { error: 'Could not release the hold on your card.', code: 'hold_release_failed', hold })
+    console.error('[release-scheduled-boost] hold release failed', trip.id)
   }
 
   return json(res, 200, { ok: true, tripId: trip.id, hold })
