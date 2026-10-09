@@ -31,7 +31,7 @@ export default function SignInRoute() {
     <SignInScreen
       signIn={signIn}
       mark="CD"
-      subtitle="Continue with Google. This screen waits while the account owner confirms."
+      subtitle="Sign in with the email and password on your driver account."
       socialProviders={socialProviders}
       onSocial={onSocial}
       resetPassword={resetPassword}

@@ -168,7 +168,7 @@ export const CampusMap = forwardRef<CampusMapHandle, CampusMapProps>(function Ca
                 }}
                 style={[styles.busyCar, { left: `${spot.left}%`, top: `${spot.top}%` }]}
               >
-                <Text style={styles.busyCarText}>Busy</Text>
+                <View style={styles.busyCarDot} />
               </Pressable>
             )
           })
@@ -234,7 +234,7 @@ function makeStyles(colors: Palette) {
       justifyContent: 'center' as const,
       paddingHorizontal: 8,
     },
-    busyCarText: { color: '#FFFFFF', fontSize: 11, fontWeight: '800' as const },
+    busyCarDot: { width: 12, height: 12, borderRadius: 6, backgroundColor: '#FFFFFF' },
     busyNote: {
       position: 'absolute' as const,
       right: 12,
