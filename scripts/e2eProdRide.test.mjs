@@ -197,7 +197,7 @@ async function withMockRun({ args = ['--confirm-prod-e2e'], key = 'pk_test_fake'
     }
     else if (fullRide && url.includes('/rest/v1/trips')) {
       if (options.method === 'PATCH') Object.assign(trip, body)
-      if (new URL(url).searchParams.get('select')?.includes('canceled_at')) {
+      if (new URL(url).searchParams.get('select')?.endsWith('canceled_at')) {
         if (receiptReadError) { status = 403; result = { message: 'receipt trip forbidden' } }
         else result = { ...trip, fare_cents: receiptFare }
       } else result = options.headers?.Accept?.includes('vnd.pgrst.object') ? trip : [trip]
@@ -330,7 +330,7 @@ test('new lifecycle checks mirror participant sessions, location fallback, recei
     assert.equal(new URL(read.url).searchParams.get('trip_id'), 'eq.trip_mock')
     assert.match(result.summary.steps.find(s => s.name === 'tracking').detail,
       new RegExp(`rider read ${trackingFallback ? 'driver_status' : 'trip_driver_locations'}; location age \\d+ms`))
-    const receipt = result.calls.find(c => new URL(c.url).searchParams.get('select')?.includes('canceled_at'))
+    const receipt = result.calls.find(c => new URL(c.url).searchParams.get('select')?.endsWith('canceled_at'))
     assert.equal(receipt.authorization, 'Bearer fake-rider-token')
     assert.match(result.summary.steps.find(s => s.name === 'receipt').detail, /fare 800 cents; tip 0 cents; total 800 cents/)
     const inserts = result.calls.filter(c => c.url.includes('/rest/v1/ratings') && c.method === 'POST')

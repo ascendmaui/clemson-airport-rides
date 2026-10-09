@@ -42,6 +42,9 @@ export type DriverCard = {
   tagLabels: string[]
   comfortStub: boolean
   arrivedAt: string | null
+  waitFeeCents: number
+  cancelFeeCents: number
+  driverWaitEarningsCents: number
   passengers: number
   shares: FareShare[]
   riderLat: number | null
@@ -107,6 +110,9 @@ export function carpoolPayFromTrip(row: {
 } | null
 
 export function tripEarnedCents(trip: {
+  status?: string
+  driver_wait_earnings_cents?: number
+  driverWaitEarningsCents?: number
   fare_cents?: number
   fareCents?: number
   metadata?: Record<string, unknown> | null
@@ -117,6 +123,9 @@ export function tripEarnedCents(trip: {
 } | null | undefined): number
 
 export function tripPayoutCents(trip: {
+  status?: string
+  driver_wait_earnings_cents?: number
+  driverWaitEarningsCents?: number
   fare_cents?: number
   fareCents?: number
   boost_cents?: number
@@ -158,7 +167,7 @@ export function statusHeadline(status: string): string
 export function driverStatusDetail(status: string | null | undefined): string
 export function acceptActionLabel(status: string | null | undefined): string
 export function acceptNeedsDriverOnline(status: string | null | undefined): boolean
-export function toDriverCard(row: Record<string, unknown> | null | undefined, options?: { gameDayLive?: boolean }): DriverCard | null
+export function toDriverCard(row: Record<string, unknown> | null | undefined, options?: { gameDayLive?: boolean; driverId?: string }): DriverCard | null
 export function matchesQueueFilter(card: { tags: string[] } | null, filter: QueueFilter): boolean
 export function queueFilters(): QueueFilter[]
 export function queueEmptyCopy(filter: QueueFilter): { title: string; body: string }

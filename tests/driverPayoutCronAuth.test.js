@@ -39,6 +39,7 @@ function mockSb(trips) {
   const query = {
     select() { return query },
     eq() { return query },
+    in() { return query },
     order() { return query },
     limit: async () => {
       state.queries += 1

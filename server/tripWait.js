@@ -15,6 +15,7 @@
  */
 import { ensureStripeCustomer, stripeClient, stripeOk } from './friendRideLib.js'
 import { releaseOpenFareHold } from './fareAuthorization.js'
+import { enqueueWaitCancelPayout } from './payouts.js'
 import { quoteWait } from '../src/lib/waitFee.js'
 import { reuseStoredIntent, waitChargeKey } from './chargeIdempotency.js'
 
@@ -293,8 +294,12 @@ export async function applyTripWait(sb, { action, tripId, actorId }, deps = {}) 
   if (!trip?.id) throw httpError('Wait update returned no trip', 500)
 
   let charge = null
+  let payout = null
   try {
     if (data.should_charge) charge = await (deps.chargeWaitFees || chargeWaitFees)(sb, trip)
+    if (trip.status === 'cancelled_wait' && charge?.status === 'succeeded') {
+      payout = await (deps.enqueueWaitCancelPayout || enqueueWaitCancelPayout)({ sb, trip, stripe: deps.stripe })
+    }
   } finally {
     if (trip.status === 'cancelled_wait') {
       await releaseOpenFareHold({ sb, stripe: deps.stripe, trip, reason: 'wait_cancel' })
@@ -305,5 +310,5 @@ export async function applyTripWait(sb, { action, tripId, actorId }, deps = {}) 
   const parsedServerMs = new Date(serverNow).getTime()
   const serverMs = Number.isFinite(parsedServerMs) ? parsedServerMs : Date.now()
   const quote = quoteWait(trip.arrived_at, serverMs)
-  return { trip, serverNow, quote, charge, should_charge: Boolean(data.should_charge) }
+  return { trip, serverNow, quote, charge, payout, should_charge: Boolean(data.should_charge) }
 }

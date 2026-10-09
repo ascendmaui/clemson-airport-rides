@@ -8,6 +8,10 @@ export type EarningTrip = {
   id: string
   status?: string
   fare_cents?: number
+  canceled_at?: string | null
+  wait_fee_cents?: number
+  cancel_fee_cents?: number
+  driver_wait_earnings_cents?: number
   completed_at?: string | null
   pickup_label?: string | null
   dropoff_label?: string | null
@@ -290,8 +294,9 @@ export function reportPeriod(
   let canceled = 0
 
   for (const trip of trips || []) {
-    if (!trip.completed_at) continue
-    const when = new Date(trip.completed_at)
+    const timestamp = trip.status === 'cancelled_wait' ? trip.canceled_at : trip.completed_at
+    if (!timestamp) continue
+    const when = new Date(timestamp)
     if (Number.isNaN(when.getTime())) continue
     const parts = zoned(when)
     if (!inRange(parts, anchorParts, period)) continue
@@ -299,9 +304,11 @@ export function reportPeriod(
       canceled += 1
       continue
     }
-    if (trip.status && trip.status !== 'completed') continue
-    completed += 1
-    const fare = Math.max(0, Math.round(Number(trip.fare_cents) || 0))
+    const noShow = trip.status === 'cancelled_wait'
+    if (trip.status && trip.status !== 'completed' && !noShow) continue
+    if (noShow) canceled += 1
+    else completed += 1
+    const fare = noShow ? (trip.wait_fee_cents || 0) + (trip.cancel_fee_cents || 0) : Math.max(0, Math.round(Number(trip.fare_cents) || 0))
     const net = periodNetCents(trip)
     const fee = Math.max(0, fare - net)
     totalCents += net

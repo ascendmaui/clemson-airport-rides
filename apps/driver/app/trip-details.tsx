@@ -68,8 +68,8 @@ export default function TripDetailsScreen() {
         <>
           <Text style={{ color: colors.inkSecondary }}>Clemson RIDES · {when}</Text>
           <Text style={{ color: colors.ink, fontSize: 40, fontWeight: '800' }}>{shownCents(trip.driverNetCents, earningsPrivate)}</Text>
-          <Text style={{ color: colors.inkSecondary }}>Upfront fare {shownCents(trip.fareCents, earningsPrivate)}</Text>
-          {trip.carpoolIncentiveId ? (
+          <Text style={{ color: colors.inkSecondary }}>{trip.status === 'cancelled_wait' ? `No-show fee · Rider charged ${shownCents(trip.waitFeeCents + trip.cancelFeeCents, earningsPrivate)}` : `Upfront fare ${shownCents(trip.fareCents, earningsPrivate)}`}</Text>
+          {trip.status !== 'cancelled_wait' && trip.carpoolIncentiveId ? (
             <Text style={{ color: colors.inkSecondary }}>
               Base net {shownCents(trip.baseNetCents || 0, earningsPrivate)} · {incentiveLabel(trip.carpoolIncentiveId)} {shownCents(trip.carpoolBonusCents || 0, earningsPrivate)} · total {shownCents(trip.driverPayoutCents || trip.driverNetCents, earningsPrivate)}
             </Text>
@@ -114,7 +114,7 @@ export default function TripDetailsScreen() {
             <Text style={{ color: colors.inkSecondary }}>No tip payment is on this trip.</Text>
           )}
           <Text style={{ color: colors.inkSecondary }}>Thanks notes are not sent from the driver app yet.</Text>
-          <FarePanel card={trip} />
+          {trip.status !== 'cancelled_wait' ? <FarePanel card={trip} /> : null}
           {user ? (
             <TripThread supabase={supabase} tripId={trip.id} userId={user.id} colors={colors} promptLostItem={lost} />
           ) : null}
