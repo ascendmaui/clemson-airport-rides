@@ -446,6 +446,10 @@ test('settleTrip cancel transitions trip to canceled and logs event', async () =
   const cancelEvent = sb.events.find((e) => e.kind === 'canceled')
   assert.ok(cancelEvent)
   assert.equal(cancelEvent.kind, 'canceled')
+
+  // A $0 cancel is never recorded as paid.
+  assert.ok(!sb.updates.some((u) => u.patch.payment_status === 'paid'))
+  assert.ok(sb.updates.some((u) => u.patch.payment_status === 'no_charge'))
 })
 
 test('settleTrip debits stored ride credits once and pays the driver', async () => {

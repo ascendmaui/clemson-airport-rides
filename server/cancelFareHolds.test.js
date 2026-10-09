@@ -257,3 +257,32 @@ test('a cancel fee already collected from the fare intent is neither charged aga
   assert.equal(stripe.calls.length, 0)
   assert.equal(trip.metadata.fare_authorization.status, 'captured')
 })
+
+test('a released hold closes its pending payment row; captured rows are never touched', async () => {
+  const { sb, trip } = seedHold()
+  sb._tables.payments.push(
+    { id: 'hold-row', trip_id: trip.id, rider_id: 'rider-1', kind: 'balance', status: 'pending', amount_cents: 2220,
+      stripe_payment_intent_id: 'pi_hold', idempotency_key: `fare_auth:${trip.id}` },
+    { id: 'other-row', trip_id: trip.id, rider_id: 'rider-1', kind: 'cancel_fee', status: 'succeeded', amount_cents: 500,
+      stripe_payment_intent_id: 'pi_hold' },
+  )
+  const stripe = fakeStripe()
+  const result = await settleTrip({ sb, stripe, trip: structuredClone(trip), action: 'cancel' })
+  assert.equal(result.http, 200)
+  assert.equal(trip.metadata.fare_authorization.status, 'canceled')
+  const rows = Object.fromEntries(sb._tables.payments.map((row) => [row.id, row.status]))
+  assert.deepEqual(rows, { 'hold-row': 'canceled', 'other-row': 'succeeded' })
+  // A canceled trip that collected nothing is not marked paid.
+  assert.notEqual(trip.payment_status, 'paid')
+})
+
+test('a hold released earlier still gets its payment row closed on the next release call', async () => {
+  const { sb, trip } = seedHold('canceled')
+  sb._tables.payments.push({ id: 'hold-row', trip_id: trip.id, rider_id: 'rider-1', kind: 'balance', status: 'pending',
+    amount_cents: 2220, stripe_payment_intent_id: 'pi_hold' })
+  const stripe = fakeStripe()
+  const out = await releaseOpenFareHold({ sb, stripe, trip, reason: 'cancel_sweep' })
+  assert.equal(out.skipped, true)
+  assert.equal(cancels(stripe).length, 0)
+  assert.equal(sb._tables.payments[0].status, 'canceled')
+})

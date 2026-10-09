@@ -344,7 +344,9 @@ async function settleClaimedTrip({
   }
 
   if (sb && gate.allow && !campusUncollected) {
-    await clearPaymentHold(sb, trip.id, { farePaidDelta: 0 })
+    // A cancel that collected nothing is not "paid" (it would show up in payouts and reports).
+    const nothingCollected = action === 'cancel' && !payment && !(collectionCents > 0)
+    await clearPaymentHold(sb, trip.id, { farePaidDelta: 0, ...(nothingCollected ? { paymentStatus: 'no_charge' } : {}) })
   }
 
   if (action === 'charge') {

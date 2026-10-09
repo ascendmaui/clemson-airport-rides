@@ -386,8 +386,39 @@ export async function authorizeRideRequest({
  * idempotency key and terminal-intent checks make retries safe, including when
  * Stripe succeeded but the metadata write failed.
  */
+/** Payment rows still open for a released hold. A captured or failed row is never touched. */
+const RELEASABLE_PAYMENT_STATUSES = ['pending', 'requires_capture']
+
+/**
+ * Mark the payments row of a released fare hold canceled, so a pending hold
+ * row never counts toward payouts, reports, or "paid" after a cancel.
+ * Best-effort: a failure is logged and the cancel continues.
+ */
+export async function markReleasedHoldPayment(sb, tripId, paymentIntentId) {
+  if (!sb?.from || !tripId || !paymentIntentId) return { ok: true, skipped: true }
+  try {
+    const updated = await sb.from('payments')
+      .update({ status: 'canceled' })
+      .eq('trip_id', tripId)
+      .eq('stripe_payment_intent_id', paymentIntentId)
+      .in('status', RELEASABLE_PAYMENT_STATUSES)
+    if (updated?.error) {
+      console.error('[fareAuthorization] payment release', tripId, updated.error.message || updated.error)
+      return { ok: false }
+    }
+    return { ok: true }
+  } catch (error) {
+    console.error('[fareAuthorization] payment release', tripId, error?.message || error)
+    return { ok: false }
+  }
+}
+
 export async function releaseOpenFareHold({ sb, stripe, trip, reason = 'rider_cancel' } = {}) {
   const auth = trip?.metadata?.fare_authorization
+  if (auth?.status === 'canceled' && auth.paymentIntentId && trip?.id) {
+    // Released earlier; make sure its payment row was closed too (idempotent).
+    await markReleasedHoldPayment(sb, trip.id, auth.paymentIntentId)
+  }
   if (!auth || auth.status !== 'requires_capture' || !auth.paymentIntentId) {
     return { ok: true, skipped: true, reason: 'no_open_hold' }
   }
@@ -414,6 +445,7 @@ export async function releaseOpenFareHold({ sb, stripe, trip, reason = 'rider_ca
     const fareAuthorization = { ...auth, status: 'canceled', reason, at: new Date().toISOString() }
     await mergeTripMetadata(sb, trip.id, { fare_authorization: fareAuthorization }, { strict: true })
     trip.metadata = { ...trip.metadata, fare_authorization: fareAuthorization }
+    await markReleasedHoldPayment(sb, trip.id, auth.paymentIntentId)
     return { ok: true, released: true, reason, paymentIntentId: auth.paymentIntentId }
   } catch (error) {
     console.error('[fareAuthorization] release failed', trip?.id, reason, error?.message || error)
