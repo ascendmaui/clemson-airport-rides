@@ -7,6 +7,7 @@ import { explicitOfferPhase, ladderOfferNet } from './offerLadder.js'
 import { LOOKING_FOR_BACKUP_LABEL, confirmCountdownLabel, driverBackupPresentation, leaveNowCountdownLabel } from '../../shared/backupDriverQueue.js'
 import { driverBoostShareCents, readBoostCents } from '../../shared/scheduledBoost.js'
 import { driverTripEarnings, driverTripNetCents, payoutStatusLine } from '../../shared/driverTripEarnings.js'
+import { tripStops } from '../../shared/carpoolStops.js'
 
 export { confirmCountdownLabel, leaveNowCountdownLabel }
 
@@ -537,6 +538,8 @@ export function toDriverCard(row, options) {
     riderLng: readLiveLng(meta),
     riderFixAt: readLiveAt(meta),
     promoRide: meta.promo === CLEMSON_MIAMI_PROMO_ID || meta.promo_ride === true,
+    // Carpool pools: ordered pickups then drop-offs. Empty for single-rider trips.
+    stops: tripStops({ ...row, metadata: meta }),
     routePolyline: typeof meta.route_polyline === 'string' && meta.route_polyline ? meta.route_polyline : null,
     routeDurationS: Number.isFinite(Number(meta.route_duration_s)) && Number(meta.route_duration_s) > 0
       ? Number(meta.route_duration_s)

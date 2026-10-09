@@ -23,6 +23,7 @@ import { releaseOpenFareHold, settleFareHold } from './fareAuthorization.js'
 import { riderCaptureFareCents } from '../shared/backupDriverQueue.js'
 import { claimCompletion, completionResult, releaseCompletion } from './tripCompletion.js'
 import { readBoostCents } from '../shared/scheduledBoost.js'
+import { allStopsDone, stopFlowStarted, tripStops } from '../shared/carpoolStops.js'
 
 const ACTIVE_KEEP = new Set(['accepted', 'arriving', 'in_progress', 'payment_required', 'searching', 'offered'])
 
@@ -95,6 +96,14 @@ export async function settleTrip({
   if (action === 'complete') {
     const result = completionResult(trip, actor, override)
     if (result) return result
+    // Carpool stop flow: every pickup and drop-off is resolved before the
+    // pool completes. Builds without the stop list never start it.
+    if (!override && stopFlowStarted(trip) && !allStopsDone(tripStops(trip))) {
+      return {
+        http: 409,
+        body: { error: 'Finish every stop before completing this carpool.', code: 'stops_pending', progressed: false },
+      }
+    }
   }
 
   if (action === 'complete' && storedFareCents(trip) == null) {

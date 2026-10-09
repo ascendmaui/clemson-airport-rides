@@ -13,6 +13,8 @@ export function driverFareNote(depositCents: number): string
 export type QueueFilter = 'all' | 'student' | 'game_day' | 'weekend_party'
 
 export type DriverCard = {
+  /** Carpool ordered stops; empty for single-rider trips. */
+  stops: import('./carpoolStops').TripStop[]
   id: string
   status: string
   matchingOffer?: boolean

@@ -132,4 +132,5 @@ export function loadEarnings(supabase: unknown, driverId: string): Promise<{
 }>
 export function formatCents(cents: number): string
 
+export function driverStopAction(supabase: unknown, tripId: string, stopIndex: number, op: 'arrive' | 'start' | 'drop'): Promise<{ ok: boolean; trip: DriverTripRow; idempotent?: boolean }>
 export function driverCancelTrip(supabase: unknown, tripId: string, reason: string, note?: string): Promise<{ ok: boolean; idempotent?: boolean }>
