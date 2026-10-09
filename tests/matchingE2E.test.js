@@ -1,18 +1,25 @@
 import assert from 'node:assert/strict'
-import test from 'node:test'
+import test, { beforeEach } from 'node:test'
 import {
-  acceptTrip,
   loadDriverDesk,
   publishDriverLocation,
 } from '../packages/rides-native/driverDesk.js'
 import { etaLineFor, riderLiveView, showSearchTheater } from '../packages/rides-native/liveTrip.js'
 import {
+  acceptMatchingTrip as acceptTrip,
+  matchingApiFetch,
   cancelSearchingTrip,
   expireSearchingTrip,
   requestDriverTrip,
   riderTrackingSnapshot,
   seedMatchingScenario,
 } from './fixtures/matchingE2E.js'
+
+beforeEach((t) => {
+  const originalFetch = globalThis.fetch
+  globalThis.fetch = matchingApiFetch
+  t.after(() => { globalThis.fetch = originalFetch })
+})
 
 test('searching trip crosses driver offer, accept, event, and rider En route tracking seam', async () => {
   const { supabase, trip, drivers } = seedMatchingScenario()

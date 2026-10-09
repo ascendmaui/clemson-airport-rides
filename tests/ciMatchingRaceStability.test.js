@@ -1,16 +1,23 @@
 import assert from 'node:assert/strict'
-import test from 'node:test'
+import test, { beforeEach } from 'node:test'
 import {
-  acceptTrip,
   advanceTrip,
   declineTrip,
   loadDriverDesk,
 } from '../packages/rides-native/driverDesk.js'
 import {
+  acceptMatchingTrip as acceptTrip,
+  matchingApiFetch,
   cancelSearchingTrip,
   expireSearchingTrip,
   seedMatchingScenario,
 } from './fixtures/matchingE2E.js'
+
+beforeEach((t) => {
+  const originalFetch = globalThis.fetch
+  globalThis.fetch = matchingApiFetch
+  t.after(() => { globalThis.fetch = originalFetch })
+})
 
 test('CI flake hunters: 3-way concurrent driver accept race produces exactly 1 winner and 2 rejects', async () => {
   const { supabase, trip, drivers } = seedMatchingScenario({

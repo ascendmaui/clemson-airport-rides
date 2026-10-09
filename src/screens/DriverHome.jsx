@@ -29,9 +29,9 @@ import { fetchFullProfile } from '../lib/profiles'
 import { CounterpartChip } from '../components/CounterpartChip'
 import { PARTY_VISIBLE_STATUSES } from '../../packages/rides-native/partyProfile.js'
 import { useTripWait } from '../lib/useTripWait'
-import { tripWaitAction } from '../lib/tripWaitApi'
+import { driverTripAction } from '../lib/driverOffers'
 import { WaitFeeCard } from '../components/WaitFeeCard'
-import { api, settleTrip } from '../lib/payments'
+import { api } from '../lib/payments'
 import { PaymentFailedSheet } from '../components/PaymentFailedSheet'
 import { formatPickupAt, isDueNow } from '../lib/scheduledRideModel'
 import {
@@ -82,19 +82,6 @@ function ComfortNotice({ row }) {
 function centsToDollars(cents) {
   if (cents == null) return '—'
   return `$${(Number(cents) / 100).toFixed(2)}`
-}
-
-async function writeTripEvent(tripId, kind, payload = {}) {
-  if (!supabase || !tripId) return
-  const { error } = await supabase.from('trip_events').insert({
-    trip_id: tripId,
-    kind,
-    payload,
-  })
-  if (error) {
-    console.error('[trip_events]', kind, error.message)
-    throw new Error(error.message || `Could not record trip event (${kind})`)
-  }
 }
 
 const ACTIVE_STATUSES = ['accepted', 'arriving', 'arrived', 'in_progress']
@@ -734,44 +721,7 @@ function DriverShell({ driverId }) {
   }
 
   async function markArrived() {
-    if (!activeTrip?.id || !supabase || advancing) return
-    setAdvancing(true)
-    setAdvanceError(null)
-    try {
-      let next = null
-      try {
-        const res = await tripWaitAction('arrive', activeTrip.id)
-        next = res?.trip || null
-      } catch (err) {
-        if (!err.network && !err.unavailable) {
-          setAdvanceError(err.message || 'Could not mark arrived')
-          return
-        }
-      }
-      if (next?.status === 'arrived') {
-        setActiveTrip((prev) => (prev && prev.id === activeTrip.id ? { ...prev, ...next } : prev))
-        return
-      }
-      const { data: saved, error } = await supabase
-        .from('trips')
-        .update({ status: 'arrived' })
-        .eq('id', activeTrip.id)
-        .eq('driver_id', driverId)
-        .select('id, status, driver_id, arrived_at')
-        .maybeSingle()
-      if (error || saved?.status !== 'arrived') {
-        setAdvanceError(error?.message || 'Could not mark arrived')
-        return
-      }
-      await writeTripEvent(activeTrip.id, 'arrived', {
-        driver_id: driverId,
-        from: activeTrip.status,
-        source: 'driver_home',
-      })
-      setActiveTrip((prev) => (prev && prev.id === activeTrip.id ? { ...prev, ...saved } : prev))
-    } finally {
-      setAdvancing(false)
-    }
+    return advanceTrip('arrived')
   }
 
   async function advanceTrip(nextStatus) {
@@ -779,45 +729,9 @@ function DriverShell({ driverId }) {
     setAdvancing(true)
     try {
       setAdvanceError(null)
-      const patch = { status: nextStatus }
-      if (nextStatus === 'completed') {
-        try {
-          await settleTrip({ tripId: activeTrip.id, action: 'complete' })
-        } catch (err) {
-          setPayFailure(err.failure || err.payload?.failure || {
-            message: err.message || 'Payment required before this trip can complete',
-            alternatives: ['retry', 'add_card', 'use_credits'],
-          })
-          setAdvanceError(err.message || 'Payment required before this trip can complete')
-          return
-        }
-        patch.completed_at = new Date().toISOString()
-      }
-      const { data: saved, error } = await supabase
-        .from('trips')
-        .update(patch)
-        .eq('id', activeTrip.id)
-        .select('id, status, driver_id, completed_at')
-        .maybeSingle()
-      if (error) {
-        console.error(error)
-        setAdvanceError(error.message || 'Could not update this trip')
-        return
-      }
-      if (!saved || saved.status !== nextStatus) {
-        setAdvanceError(
-          nextStatus === 'completed'
-            ? 'This ride is not completed yet, so rating stays closed.'
-            : 'Trip status did not update.',
-        )
-        return
-      }
-      await writeTripEvent(activeTrip.id, nextStatus, {
-        driver_id: driverId,
-        from: activeTrip.status,
-        source: 'driver_home',
-        ...(patch.completed_at ? { completed_at: patch.completed_at } : {}),
-      })
+      const op = { arriving: 'arriving', arrived: 'arrive', in_progress: 'start', completed: 'complete', cancelled_wait: 'cancel' }[nextStatus]
+      const result = await driverTripAction(supabase, activeTrip.id, op)
+      const saved = result.trip
       if (nextStatus === 'completed') {
         if (!saved.driver_id) {
           setAdvanceError('This trip has no driver yet, so it cannot be rated.')
@@ -836,6 +750,16 @@ function DriverShell({ driverId }) {
       } else {
         setActiveTrip({ ...activeTrip, ...saved })
       }
+    } catch (err) {
+      if (nextStatus === 'completed' && err.status === 402) {
+        setPayFailure(err.failure || err.payload?.failure || {
+          message: err.message || 'Payment required before this trip can complete',
+          alternatives: ['retry', 'add_card', 'use_credits'],
+        })
+      }
+      setAdvanceError(err.status === 402
+        ? 'Payment is still required before this trip can complete.'
+        : err.message || 'Could not update this trip')
     } finally {
       setAdvancing(false)
     }
@@ -1436,7 +1360,7 @@ function DriverShell({ driverId }) {
               error={wait.error}
               charge={wait.charge}
               onStart={activeTrip.status === 'arrived' ? () => advanceTrip('in_progress') : undefined}
-              onCancel={() => wait.act('cancel')}
+              onCancel={() => advanceTrip('cancelled_wait')}
             />
           )}
           {activeTrip.status === 'in_progress' && (
