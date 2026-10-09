@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { getHashRoute, navigate } from '../lib/navigation'
 import { MarketingChrome } from '../components/MarketingChrome'
 import { MarketingPhoto } from '../components/MarketingPhoto'
+import { QrMark } from '../components/QrMark'
 import { FeatureBlock } from '../components/FeatureBlock'
 import { messagingGuide } from '../../shared/copy/messaging.js'
 import { HERO_COLLAGE, NIGHT_VENUES } from '../content/images.js'
@@ -319,6 +320,10 @@ export function GetTheAppPage() {
           <p>{app.blurb}</p>
           <p>{app.iosNote}</p>
           <p>{app.androidNote}</p>
+          <a className="mkt-text pressable" href={app.testflightHref} target="_blank" rel="noopener">
+            Join the iPhone beta (TestFlight)
+          </a>
+          <QrMark value={app.testflightHref} label={`QR code for ${app.product} TestFlight beta`} />
           <button
             type="button"
             className="mkt-text pressable"
