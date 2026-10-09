@@ -126,6 +126,19 @@ test('a drop-off at another rider pickup point stays its own stop', async () => 
   ])
 })
 
+test('the booking path builds the same stops as the core helper', async () => {
+  const lib = await import('../server/friendRideLib.js')
+  const core = await import('../server/friendRideCore.js')
+  const parts = [
+    { id: 'A', pickup: { lat: 1, lng: 1 }, dropoff: { lat: 2, lng: 2 } },
+    { id: 'B', pickup: { lat: 2, lng: 2 }, dropoff: { lat: 3, lng: 3 } },
+  ]
+  const a = lib.buildWaypointList(parts)
+  const b = core.buildWaypointList(parts)
+  assert.deepEqual([a.origin, ...a.intermediates, a.destination], [b.origin, ...b.intermediates, b.destination])
+  assert.equal(a.intermediates.length, 2)
+})
+
 test('riders sharing a pickup point share one stop', async () => {
   const { buildWaypointList } = await import('../server/friendRideCore.js')
   const parts = [

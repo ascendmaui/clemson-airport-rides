@@ -172,12 +172,13 @@ export function buildWaypointList(participants) {
   const origin = pickups[0]
   const destination = dropoffs[dropoffs.length - 1]
   const intermediates = []
-  const seen = new Set([`${origin.lat},${origin.lng}`, `${destination.lat},${destination.lng}`])
-  // A rider whose stop matches an existing point rides with that stop (driver stop list).
+  // Keyed by kind: a drop-off at another rider's pickup point is still its own stop.
+  const seen = new Set([`pickup:${origin.lat},${origin.lng}`, `dropoff:${destination.lat},${destination.lng}`])
+  // A rider whose stop matches an existing point of the same kind rides with that stop (driver stop list).
   const sameKind = (s) => [s.kind === 'pickup' ? origin : destination, ...intermediates]
     .find((row) => row.kind === s.kind && row.lat === s.lat && row.lng === s.lng)
   for (const s of [...pickups.slice(1), ...dropoffs.slice(0, -1)]) {
-    const k = `${s.lat},${s.lng}`
+    const k = `${s.kind}:${s.lat},${s.lng}`
     if (seen.has(k)) {
       const host = sameKind(s)
       if (host && !host.participantIds.includes(s.participantId)) host.participantIds.push(s.participantId)
