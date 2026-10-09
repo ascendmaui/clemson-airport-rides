@@ -1,11 +1,11 @@
 /**
  * How a driver face is shown.
- * Demo cars use their own headshot.
- * A real driver uses avatar_url when they uploaded one.
- * A real driver without a photo gets initials on orange or purple.
+ * Demo cars use their own headshot from demoHeadshotUrl.
+ * A real driver uses an http(s) avatar_url when they uploaded one.
+ * A real driver without a safe photo gets initials on orange or purple.
  * A real driver never receives a demo headshot.
  */
-import { demoDriverById } from './demoFleet.js'
+import { demoDriverById, demoHeadshotUrl, isDemoDriverId } from './demoFleet.js'
 
 export const PORTRAIT_ORANGE = '#F56600'
 export const PORTRAIT_PURPLE = '#522D80'
@@ -29,21 +29,30 @@ function uploadedPhoto(driver) {
   const raw = driver?.avatar_url || driver?.avatarUrl || ''
   const url = String(raw || '').trim()
   if (!url) return ''
-  if (url.includes('/demo-drivers/')) return ''
+  if (/\/demo-drivers\//i.test(url)) return ''
+  if (!/^https?:\/\//i.test(url)) return ''
+  if (/[\s"'<>]/.test(url)) return ''
   return url
 }
 
+function driverName(driver, catalog) {
+  return driver?.full_name || driver?.fullName || driver?.name || driver?.firstName || catalog?.firstName || ''
+}
+
 export function resolveDriverPortrait(driver) {
-  const demo = driver?.isDemo === true || driver?.source === 'demo'
-    ? driver
-    : demoDriverById(driver?.id)
-  if (demo && (driver?.isDemo === true || driver?.source === 'demo' || demoDriverById(driver?.id))) {
-    const row = demoDriverById(driver?.id) || demo
+  const headshot = demoHeadshotUrl(driver, 'small')
+  if (headshot) {
+    return { kind: 'photo', url: headshot, initials: null, color: null, isDemo: true }
+  }
+  const catalog = demoDriverById(driver?.id)
+  const markedDemo = driver?.isDemo === true || driver?.source === 'demo' || isDemoDriverId(driver?.id)
+  if (markedDemo) {
+    const name = driverName(driver, catalog)
     return {
-      kind: 'photo',
-      url: row.photoSmall || row.photo || driver.photoSmall || driver.photo,
-      initials: null,
-      color: null,
+      kind: 'initials',
+      url: null,
+      initials: nameInitials(name),
+      color: initialsBadgeColor(name),
       isDemo: true,
     }
   }
@@ -51,7 +60,7 @@ export function resolveDriverPortrait(driver) {
   if (photo) {
     return { kind: 'photo', url: photo, initials: null, color: null, isDemo: false }
   }
-  const name = driver?.full_name || driver?.fullName || driver?.name || ''
+  const name = driverName(driver, null)
   return {
     kind: 'initials',
     url: null,
@@ -61,11 +70,19 @@ export function resolveDriverPortrait(driver) {
   }
 }
 
+function escapeMarkup(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+}
+
 /** Markup for tests and non-React callers. Real drivers never point at demo photos. */
 export function renderDriverPortrait(driver) {
   const portrait = resolveDriverPortrait(driver)
-  if (portrait.kind === 'photo') {
-    return `<img alt="" src="${portrait.url}" data-portrait="photo" />`
+  if (portrait.kind === 'photo' && portrait.url) {
+    return `<img alt="" src="${escapeMarkup(portrait.url)}" data-portrait="photo" />`
   }
-  return `<span data-portrait="initials" data-color="${portrait.color}">${portrait.initials}</span>`
+  return `<span data-portrait="initials" data-color="${escapeMarkup(portrait.color)}">${escapeMarkup(portrait.initials)}</span>`
 }

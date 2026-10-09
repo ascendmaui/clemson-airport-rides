@@ -184,10 +184,56 @@ export const DEMO_FLEET = [
 
 const BY_ID = new Map(DEMO_FLEET.map((row) => [row.id, row]))
 
+function demoIdKey(id) {
+  return String(id || '').trim()
+}
+
 export function demoDriverById(id) {
-  return BY_ID.get(String(id || '')) || null
+  return BY_ID.get(demoIdKey(id)) || null
 }
 
 export function isDemoDriverId(id) {
-  return BY_ID.has(String(id || '').trim())
+  return BY_ID.has(demoIdKey(id))
+}
+
+// Site-relative demo files only. Rejects traversal, queries, and off-site URLs.
+const DEMO_HEADSHOT_PATH = /^\/demo-drivers\/[A-Za-z0-9@._-]+$/
+
+function demoHeadshotPath(value) {
+  const url = String(value ?? '').trim()
+  if (!DEMO_HEADSHOT_PATH.test(url)) return ''
+  const name = url.slice('/demo-drivers/'.length)
+  if (name === '.' || name === '..' || name.includes('..')) return ''
+  return url
+}
+
+function firstDemoHeadshot(values) {
+  for (const value of values) {
+    const url = demoHeadshotPath(value)
+    if (url) return url
+  }
+  return null
+}
+
+/**
+ * Marker badges use the @128 file. Pass 'large' for the profile card.
+ * A catalog row wins over a caller-supplied path. Real drivers return null.
+ * A string id is accepted. Blank, padded, and unsafe values are skipped.
+ */
+export function demoHeadshotUrl(driver, size = 'small') {
+  if (driver == null || typeof driver !== 'object') {
+    const catalog = demoDriverById(driver)
+    if (!catalog) return null
+    const ordered = size === 'large'
+      ? [catalog.photo, catalog.photoSmall]
+      : [catalog.photoSmall, catalog.photo]
+    return firstDemoHeadshot(ordered)
+  }
+  const catalog = demoDriverById(driver.id)
+  const marked = driver.isDemo === true || driver.source === 'demo' || Boolean(catalog)
+  if (!marked) return null
+  const ordered = size === 'large'
+    ? [catalog?.photo, catalog?.photoSmall, driver.photo, driver.photoSmall]
+    : [catalog?.photoSmall, catalog?.photo, driver.photoSmall, driver.photo]
+  return firstDemoHeadshot(ordered)
 }
