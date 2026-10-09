@@ -51,6 +51,9 @@ export function RateTripPanel(props: {
   colors?: PartyColors
   onDone?: () => void
   onLater?: () => void
+  /** Tag chips for the chosen star count (saved to ratings.tags). */
+  tagsForStars?: (stars: number) => string[]
+  onSubmitted?: (rating: { stars: number; tags: string[] }) => void
 }): ReactNode
 
 export function loadRatingSummary(

@@ -306,11 +306,15 @@ export function RateTripPanel({
   colors = LIGHT_PARTY,
   onDone,
   onLater,
+  tagsForStars,
+  onSubmitted,
 }) {
   const styles = usePartyStyles(colors)
+  const [tags, setTags] = useState([])
   const [trip, setTrip] = useState(null)
   const [person, setPerson] = useState(null)
   const [stars, setStars] = useState(5)
+  const tagOptions = typeof tagsForStars === 'function' ? tagsForStars(stars) : []
   const [comment, setComment] = useState('')
   const [error, setError] = useState(null)
   const [done, setDone] = useState(false)
@@ -354,8 +358,10 @@ export function RateTripPanel({
     setBusy(true)
     setError(null)
     try {
-      await submitPartyRating(supabase, { tripId, raterId: userId, stars, comment })
+      const chosen = tags.filter((tag) => tagOptions.includes(tag))
+      await submitPartyRating(supabase, { tripId, raterId: userId, stars, comment, tags: chosen })
       setDone(true)
+      if (onSubmitted) onSubmitted({ stars, tags: chosen })
     } catch (err) {
       setError(err?.message || 'Could not submit rating')
     } finally {
@@ -394,7 +400,13 @@ export function RateTripPanel({
             {[1, 2, 3, 4, 5].map((value) => (
               <Pressable
                 key={value}
-                onPress={() => setStars(value)}
+                onPress={() => {
+                  setStars(value)
+                  if (typeof tagsForStars === 'function') {
+                    const allowed = tagsForStars(value)
+                    setTags((current) => current.filter((tag) => allowed.includes(tag)))
+                  }
+                }}
                 accessibilityRole="button"
                 accessibilityLabel={`${value} star${value === 1 ? '' : 's'}`}
                 accessibilityHint="Sets the rating"
@@ -405,6 +417,32 @@ export function RateTripPanel({
               </Pressable>
             ))}
           </View>
+          {tagOptions.length ? (
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }} accessibilityLabel={stars >= 4 ? 'What went well' : 'What went wrong'}>
+              {tagOptions.map((tag) => {
+                const selected = tags.includes(tag)
+                return (
+                  <Pressable
+                    key={tag}
+                    onPress={() => setTags((current) => (current.includes(tag) ? current.filter((t) => t !== tag) : [...current, tag].slice(0, 5)))}
+                    accessibilityRole="button"
+                    accessibilityLabel={tag}
+                    accessibilityState={{ selected }}
+                    style={{
+                      paddingVertical: 8,
+                      paddingHorizontal: 12,
+                      borderRadius: 999,
+                      borderWidth: 1,
+                      borderColor: selected ? colors.orange : (colors.border || LIGHT_PARTY.border),
+                      backgroundColor: selected ? colors.orange : 'transparent',
+                    }}
+                  >
+                    <Text style={{ fontWeight: '700', fontSize: 13, color: selected ? (colors.onAccent || '#FFFFFF') : (colors.ink || LIGHT_PARTY.ink) }}>{tag}</Text>
+                  </Pressable>
+                )
+              })}
+            </View>
+          ) : null}
           <TextInput
             value={comment}
             onChangeText={setComment}

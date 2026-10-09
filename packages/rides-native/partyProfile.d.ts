@@ -95,6 +95,7 @@ export function fetchTripForRating(supabase: unknown, tripId: string): Promise<P
 export function hasRatedTrip(supabase: unknown, tripId: string, raterId: string): Promise<boolean>
 export function submitPartyRating(
   supabase: unknown,
-  input: { tripId: string; raterId: string; stars: number; comment?: string },
+  input: { tripId: string; raterId: string; stars: number; comment?: string; tags?: string[] },
 ): Promise<{ id: string; stars: number }>
 export function findPendingRating(supabase: unknown, userId: string): Promise<PartyTrip | null>
+export function cleanRatingTags(tags: unknown): string[]
