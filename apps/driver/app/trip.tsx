@@ -5,6 +5,7 @@ import { AccessibilityInfo, AppState, Linking, Pressable, ScrollView, StyleSheet
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { CampusMap, type MapPin } from '@/components/CampusMap'
 import { WaitTimer } from '@/components/WaitTimer'
+import { RiderConfirmCard } from '@/components/RiderConfirmCard'
 import { waitTimerAnchor, type WaitAnchor } from 'rides-native/waitTimer'
 import { DriverCancelSheet } from '@/components/DriverCancelSheet'
 import { FarePanel } from '@/components/FarePanel'
@@ -463,7 +464,7 @@ export default function TripScreen() {
                 onDone={() => router.replace('/')}
                 onLater={() => router.replace('/')}
               />
-            ) : (
+            ) : trip.status === 'arrived' ? null : (
               <CounterpartCard person={person} colors={partyColors} />
             )}
             <Text style={styles.copy}>{trip.pickupLabel} → {trip.dropoffLabel}</Text>
@@ -474,6 +475,14 @@ export default function TripScreen() {
                 <Text style={styles.fare}>You earn {formatCents(trip.driverWaitEarningsCents)}</Text>
               </View>
             ) : <Text style={styles.fare}>{formatCents(trip.driverNetCents)} net{trip.depositCents ? ` · already paid ${formatCents(trip.depositCents)}` : ''}</Text>}
+            {trip.status === 'arrived' ? (
+              <RiderConfirmCard
+                firstName={trip.firstName}
+                photoUrl={person?.photoUrl || trip.riderAvatarUrl || null}
+                busy={busy}
+                onStart={onAdvance}
+              />
+            ) : null}
             {trip.status === 'arrived' ? <WaitTimer arrivedAt={trip.arrivedAt} anchor={waitAnchor} busy={busy} onCancel={onNoShow} /> : null}
             {waitError ? <ErrorText>{waitError}</ErrorText> : null}
             <Text style={styles.copy}>
@@ -598,7 +607,7 @@ export default function TripScreen() {
         ) : null}
         {terminalTrip && trip?.status !== 'completed' ? <Primary label="Back to Home" onPress={() => router.replace('/')} tone="purple" /> : null}
         {trip && ['accepted', 'arriving'].includes(trip.status) ? <DriverCancelSheet key={trip.id} supabase={supabase} tripId={trip.id} scheduled={Boolean(trip.pickupAt)} disabled={busy} onCanceled={onDriverCanceled} /> : null}
-        {action && trip?.status !== 'arriving' ? <Primary label={busy ? 'Updating…' : action} onPress={onAdvance} disabled={busy} tone="purple" /> : null}
+        {action && trip?.status !== 'arriving' && trip?.status !== 'arrived' ? <Primary label={busy ? 'Updating…' : action} onPress={onAdvance} disabled={busy} tone="purple" /> : null}
         </ScrollView>
       </View>
       <SosSheet
