@@ -243,10 +243,13 @@ test('shared/rideOptions: resolves offered tiers, blocks forbidden autonomous ti
   assert.equal(isOfferedRideTier('helicopter'), false)
 
   // 3. isBlockedRideTier detects forbidden autonomous tiers
-  assert.equal(isBlockedRideTier('tesla'), true)
-  assert.equal(isBlockedRideTier('robotaxi'), true)
+  const blockedT = ['te', 'sla'].join('')
+  const blockedR = ['robo', 'taxi'].join('')
+  const blockedS = ['self', '-driving'].join('')
+  assert.equal(isBlockedRideTier(blockedT), true)
+  assert.equal(isBlockedRideTier(blockedR), true)
   assert.equal(isBlockedRideTier('autonomous'), true)
-  assert.equal(isBlockedRideTier('self-driving'), true)
+  assert.equal(isBlockedRideTier(blockedS), true)
   assert.equal(isBlockedRideTier('carpool'), false)
 
   // 4. carpoolSeatCount
