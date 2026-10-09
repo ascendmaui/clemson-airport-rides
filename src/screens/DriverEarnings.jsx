@@ -75,7 +75,7 @@ function TripDetail({ trip }) {
       <Line label="Duration" value={formatDuration(trip.durationS, { approximate: trip.durationApproximate })} />
       {trip.fareParts?.length > 0 && (
         <div style={{ marginTop: 8 }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--ink-tertiary)', textTransform: 'uppercase' }}>Included in the fare</div>
+          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--ink-tertiary)', textTransform: 'uppercase' }}>{trip.status === 'cancelled_wait' ? 'No-show earnings' : 'Included in the fare'}</div>
           {trip.fareParts.map((part) => (
             <Line key={part.label} label={part.label} value={money(part.cents)} />
           ))}
@@ -221,7 +221,7 @@ export function DriverEarningsView({
                     <strong style={{ color: 'var(--orange)' }}>{money(trip.earnedCents)}</strong>
                   </div>
                   <div style={{ marginTop: 4, fontSize: 14, fontWeight: 700, color: 'var(--ink)' }}>
-                    {trip.status === 'canceled' ? 'Canceled · ' : ''}{trip.routeLabel}
+                    {trip.status === 'cancelled_wait' ? 'No-show fee · ' : trip.status === 'canceled' ? 'Canceled · ' : ''}{trip.routeLabel}
                   </div>
                   {trip.riderFirstName ? (
                     <div style={{ marginTop: 2, fontSize: 12, color: 'var(--ink-secondary)' }}>{trip.riderFirstName}</div>

@@ -1193,7 +1193,7 @@ test('applyTripWait executes chargeWaitFees when should_charge is true (cancel o
     action: 'cancel',
     tripId: 'trip_cancel_1',
     actorId: 'driver_1',
-  })
+  }, { enqueueWaitCancelPayout: async () => ({ ok: true }) })
 
   assert.deepEqual(res.trip, trip)
   assert.equal(res.serverNow, serverNow)

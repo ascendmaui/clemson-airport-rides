@@ -3,7 +3,14 @@ import { admin, json } from '../friendRideLib.js'
 import { stagingCronBlock } from '../cronGuard.js'
 import { sweepCanceledHolds } from '../canceledHoldSweep.js'
 
-const SWEEPS = [{ name: 'canceled_holds', run: sweepCanceledHolds }]
+import { sweepWaitAutoCancel } from '../waitAutoCancelSweep.js'
+import { sweepWaitFeeCharge } from '../waitFeeChargeSweep.js'
+
+export const SWEEPS = [
+  { name: 'canceled_holds', run: sweepCanceledHolds },
+  { name: 'wait-auto-cancel', run: sweepWaitAutoCancel },
+  { name: 'wait-fee-charge', run: sweepWaitFeeCharge },
+]
 
 function headerValue(headers, name) {
   if (!headers || typeof headers !== 'object') return ''
@@ -54,13 +61,13 @@ export default async function handler(req, res, deps = {}) {
   const sb = deps.sb !== undefined ? deps.sb : admin()
   if (!sb) return json(res, 503, { error: 'Service unavailable' })
   const results = {}
-  const total = { released: 0, failed: 0, skipped: 0, ids: { released: [], failed: [], skipped: [] } }
+  const total = { released: 0, canceled: 0, charged: 0, failed: 0, skipped: 0, ids: { released: [], canceled: [], charged: [], failed: [], skipped: [] } }
   let errors = 0
   for (const sweep of deps.sweeps || SWEEPS) {
     try {
       const result = await sweep.run(sb, { dryRun, now: deps.now, stripe: deps.stripe })
       results[sweep.name] = result
-      for (const key of ['released', 'failed', 'skipped']) {
+      for (const key of ['released', 'canceled', 'charged', 'failed', 'skipped']) {
         total[key] += result[key] || 0
         total.ids[key].push(...(result.ids?.[key] || []))
       }

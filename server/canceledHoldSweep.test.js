@@ -124,7 +124,7 @@ test('trip-sweeps follows matching auth header parsing and returns counts and id
     const response = await call(driver, {}, { sb, stripe, env, now }, { method: 'GET', url: '/api/driver?action=trip-sweeps', headers })
     assert.equal(response.statusCode, 200)
     assert.equal(response.body.released, 1)
-    assert.deepEqual(response.body.ids, { released: ['ended'], failed: [], skipped: [] })
+    assert.deepEqual(response.body.ids, { released: ['ended'], canceled: [], charged: [], failed: [], skipped: [] })
   }
 })
 
