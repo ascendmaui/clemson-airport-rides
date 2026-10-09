@@ -29,7 +29,11 @@ const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || ''
 
 const MAX_WEBHOOK_PAYLOAD_BYTES = 1024 * 1024
 
-function readRawBody(req, maxBytes = MAX_WEBHOOK_PAYLOAD_BYTES) {
+export function readRawBody(req, maxBytes = MAX_WEBHOOK_PAYLOAD_BYTES) {
+  if (Buffer.isBuffer(req?.rawBody)) return Promise.resolve(req.rawBody)
+  if (typeof req?.rawBody === 'string') return Promise.resolve(Buffer.from(req.rawBody))
+  if (Buffer.isBuffer(req?.body)) return Promise.resolve(req.body)
+  if (typeof req?.body === 'string') return Promise.resolve(Buffer.from(req.body))
   return new Promise((resolve, reject) => {
     const chunks = []
     let totalLength = 0
@@ -47,8 +51,10 @@ function readRawBody(req, maxBytes = MAX_WEBHOOK_PAYLOAD_BYTES) {
   })
 }
 
-function serviceClient() {
-  return createClient(supabaseUrl, serviceKey, {
+function serviceClient(key) {
+  const k = (key !== undefined ? key : serviceKey) || ''
+  if (!k) return null
+  return createClient(supabaseUrl, k, {
     auth: { persistSession: false, autoRefreshToken: false },
   })
 }
@@ -59,13 +65,15 @@ async function recordTip(pi) {
   const riderId = pi?.metadata?.riderId
   if (!tripId || !riderId) return { skipped: true, reason: 'missing_metadata' }
   const supabase = serviceClient()
+  if (!supabase) return { skipped: true, reason: 'no_service_role' }
   const amount = Number(pi.amount) || Number(pi.metadata?.tipCents) || 0
   const split = splitPlatformFee(amount)
-  const { data: existing } = await supabase
+  const { data: existing, error: selErr } = await supabase
     .from('payments')
     .select('id')
     .eq('stripe_payment_intent_id', pi.id)
     .maybeSingle()
+  if (selErr) return { ok: false, error: selErr.message }
   if (!existing) {
     const { error } = await supabase.from('payments').insert({
       trip_id: tripId,
@@ -91,10 +99,12 @@ async function recordCreditPurchase(session) {
   const profileId = session?.metadata?.profile_id
   const packId = session?.metadata?.pack_id
   if (!profileId || !packId) return { skipped: true, reason: 'missing_metadata' }
+  const supabase = serviceClient()
+  if (!supabase) return { skipped: true, reason: 'no_service_role' }
   const piId = typeof session.payment_intent === 'string'
     ? session.payment_intent
     : session.payment_intent?.id || null
-  return grantCreditPack(serviceClient(), {
+  return grantCreditPack(supabase, {
     profileId,
     packId,
     stripePaymentIntentId: piId,
@@ -145,7 +155,8 @@ export default async function handler(req, res, deps = {}) {
   const rawServiceKey = deps.serviceKey !== undefined ? deps.serviceKey : (process.env.SUPABASE_SERVICE_ROLE_KEY || serviceKey)
   const activeServiceKey = typeof rawServiceKey === 'string' ? rawServiceKey.trim() : ''
 
-  if (!stripeKey || !stripeKey.startsWith('sk_') || stripeKey.includes('placeholder')) {
+  const isValidKey = (stripeKey.startsWith('sk_') || stripeKey.startsWith('rk_')) && !stripeKey.includes('placeholder')
+  if (!stripeKey || !isValidKey) {
     return sendWebhookJson(res, 200, {
       stub: true,
       message: 'STRIPE_SECRET_KEY not set — webhook stub acknowledged',
@@ -164,8 +175,15 @@ export default async function handler(req, res, deps = {}) {
     }
 
     if (event.type === 'payment_intent.succeeded' && event.data?.object?.metadata?.kind === 'tip') {
-      const recorded = await recordTip(event.data.object)
-      return sendWebhookJson(res, 200, { received: true, type: event.type, recorded })
+      const recordTipFn = deps.recordTip || recordTip
+      const recorded = await recordTipFn(event.data.object)
+      const retryable = recorded?.ok === false && !recorded?.skipped
+      return sendWebhookJson(res, retryable ? 500 : 200, {
+        received: true,
+        type: event.type,
+        recorded,
+        ...(retryable ? { error: recorded.error } : {}),
+      })
     }
 
     if (event.type === 'payment_intent.payment_failed') {
@@ -210,15 +228,19 @@ export default async function handler(req, res, deps = {}) {
         let tigerPass = { skipped: true, reason: 'no_service_role' }
         if (activeServiceKey || deps.serviceClient) {
           const client = deps.serviceClient ? deps.serviceClient() : serviceClient()
-          tigerPass = await activateTigerPassFromCheckout(client, session, new Date(), stripe)
+          const activateTigerPassFn = deps.activateTigerPassFromCheckout || activateTigerPassFromCheckout
+          tigerPass = await activateTigerPassFn(client, session, new Date(), stripe)
         }
         console.log('[stripe-webhook] tiger_pass', { id: session?.id, tigerPass })
-        return sendWebhookJson(res, 200, { received: true, type: event.type, tigerPass })
+        const retryable = tigerPass?.ok === false
+        return sendWebhookJson(res, retryable ? 500 : 200, { received: true, type: event.type, tigerPass })
       }
       if (session?.metadata?.kind === 'credit_purchase') {
-        const granted = await recordCreditPurchase(session)
+        const recordCreditPurchaseFn = deps.recordCreditPurchase || recordCreditPurchase
+        const granted = await recordCreditPurchaseFn(session)
         console.log('[stripe-webhook] credit_purchase', { id: session?.id, granted })
-        return sendWebhookJson(res, 200, { received: true, type: event.type, granted })
+        const retryable = granted?.ok === false
+        return sendWebhookJson(res, retryable ? 500 : 200, { received: true, type: event.type, granted })
       }
       const client = deps.serviceClient ? deps.serviceClient() : (activeServiceKey ? serviceClient() : null)
       const applyFn = deps.applyPaidCheckoutSession || applyPaidCheckoutSession
@@ -227,7 +249,7 @@ export default async function handler(req, res, deps = {}) {
         grantRiderSocialForTrip: deps.grantRiderSocialForTrip || grantRiderSocialForTrip,
         isAsyncPaymentSucceeded: event.type === 'checkout.session.async_payment_succeeded',
       })
-      const { recorded, live, referral } = applied
+      const { recorded, live, referral } = applied || {}
       console.log('[stripe-webhook] checkout.session.completed', {
         id: session?.id,
         metadata: session?.metadata,
@@ -236,7 +258,15 @@ export default async function handler(req, res, deps = {}) {
         live,
         referral,
       })
-      return sendWebhookJson(res, 200, { received: true, type: event.type, recorded, live, referral })
+      const retryable = (applied?.ok === false && !applied?.skipped) || (recorded && recorded.ok === false && !recorded.skipped)
+      return sendWebhookJson(res, retryable ? 500 : 200, {
+        received: true,
+        type: event.type,
+        recorded,
+        live,
+        referral,
+        ...(retryable ? { error: applied?.error || recorded?.error } : {}),
+      })
     }
 
     const passMeta = tigerPassMeta(event.data?.object)
@@ -249,15 +279,22 @@ export default async function handler(req, res, deps = {}) {
       let tigerPass = { skipped: true, reason: 'no_service_role' }
       if (activeServiceKey || deps.serviceClient) {
         const client = deps.serviceClient ? deps.serviceClient() : serviceClient()
-        tigerPass = await syncTigerPassFromStripe(client, event.data.object)
+        const syncTigerPassFn = deps.syncTigerPassFromStripe || syncTigerPassFromStripe
+        tigerPass = await syncTigerPassFn(client, event.data.object)
       }
-      return sendWebhookJson(res, 200, { received: true, type: event.type, tigerPass })
+      const retryable = tigerPass?.ok === false
+      return sendWebhookJson(res, retryable ? 500 : 200, { received: true, type: event.type, tigerPass })
     }
 
     console.log('[stripe-webhook] unhandled', event.type)
     return sendWebhookJson(res, 200, { received: true, type: event.type })
   } catch (err) {
     console.error('[stripe-webhook]', err)
-    return sendWebhookJson(res, 400, { error: err.message || 'Webhook error' })
+    const status = typeof err?.status === 'number' && err.status >= 400 && err.status < 600
+      ? err.status
+      : (typeof err?.statusCode === 'number' && err.statusCode >= 400 && err.statusCode < 600
+        ? err.statusCode
+        : 400)
+    return sendWebhookJson(res, status, { error: err.message || 'Webhook error' })
   }
 }
