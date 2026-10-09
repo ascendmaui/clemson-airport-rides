@@ -1,6 +1,7 @@
 /**
- * Turn a stop into Apple Maps and Google Maps directions URLs.
- * Callers open them with the platform linker. No SDK key.
+ * Turn a stop into Apple Maps, Google Maps and Waze directions URLs.
+ * Callers open them with the platform linker. No SDK key. Every URL is https
+ * or http (no custom scheme), so no LSApplicationQueriesSchemes entry is needed.
  */
 
 function coord(value) {
@@ -28,7 +29,34 @@ export function navigationLinks({ latitude, longitude, label } = {}) {
   const google = hasPoint
     ? `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}&travelmode=driving`
     : `https://www.google.com/maps/dir/?api=1&destination=${query}&travelmode=driving`
-  return { apple, google, hasPoint }
+  const waze = hasPoint
+    ? `https://waze.com/ul?ll=${lat},${lng}&navigate=yes`
+    : `https://waze.com/ul?q=${query}&navigate=yes`
+  return { apple, google, waze, hasPoint }
+}
+
+export const NAV_APPS = Object.freeze(['apple', 'google', 'waze'])
+
+export function isNavApp(value) {
+  return NAV_APPS.includes(value)
+}
+
+export function navAppLabel(app) {
+  if (app === 'google') return 'Google Maps'
+  if (app === 'waze') return 'Waze'
+  return 'Apple Maps'
+}
+
+/** Preferred app first, then the rest in a stable order. Used for buttons and open fallbacks. */
+export function navAppOrder(preferred) {
+  const first = isNavApp(preferred) ? preferred : 'apple'
+  return [first, ...NAV_APPS.filter((app) => app !== first)]
+}
+
+/** One URL for the driver's chosen nav app. Unknown apps open Apple Maps. */
+export function navigationUrl(app, stop) {
+  const links = navigationLinks(stop || {})
+  return links[isNavApp(app) ? app : 'apple']
 }
 
 /** One URL for a Navigate button. iPhone opens Apple Maps; everyone else opens Google Maps. */

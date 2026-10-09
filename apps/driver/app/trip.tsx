@@ -14,6 +14,9 @@ import { useAuth } from '@/lib/auth'
 import { useFeedback } from '@/lib/feedback'
 import { oneParam } from '@/lib/oneParam'
 import { openNavigation } from '@/lib/openMaps'
+import { authStorage } from '@/lib/storage'
+import { navAppLabel, navAppOrder } from 'rides-native/mapsLink'
+import { autoNavigationKey, autoNavigationLeg, readLaunchedLegs, withLaunchedLeg } from 'rides-native/autoNavigation'
 import { supabase } from '@/lib/supabase'
 import { useDriverLocation } from '@/lib/useDriverLocation'
 import { publishDriverLocation, startTripBackgroundLocation, stopTripBackgroundLocation } from '@/lib/backgroundLocation'
@@ -79,7 +82,7 @@ export default function TripScreen() {
   const id = oneParam(params.id)
   const { user } = useAuth()
   const { pulse } = useFeedback()
-  const { colors, navApp } = useTheme()
+  const { colors, navApp, autoNavigate } = useTheme()
   const shadow = useCardShadow()
   const styles = useMemo(() => tripStyles(colors), [colors])
   const [trip, setTrip] = useState<DriverCard | null>(null)
@@ -331,6 +334,37 @@ export default function TripScreen() {
       ? { latitude: livePickup.latitude, longitude: livePickup.longitude, label: 'Live pickup' }
       : { latitude: trip?.pickupLat ?? null, longitude: trip?.pickupLng ?? null, label: trip?.pickupLabel || 'Pickup' }
 
+  const targetRef = useRef(target)
+  targetRef.current = target
+
+  // Accept hands off to the driver's nav app for pickup; Start trip hands off for drop-off.
+  // Each leg opens once per trip, also across relaunches.
+  const autoNavRunning = useRef(false)
+  useEffect(() => {
+    if (!trip?.id || !autoNavigate || !['accepted', 'arriving', 'in_progress'].includes(trip.status)) return undefined
+    if (trip.backupConfirmOpen || trip.backupLeaveNowOpen) return undefined
+    let alive = true
+    const tripId = trip.id
+    const status = trip.status
+    void (async () => {
+      if (autoNavRunning.current) return
+      autoNavRunning.current = true
+      try {
+        const key = autoNavigationKey(tripId)
+        const launched = readLaunchedLegs(await authStorage.getItem(key))
+        const leg = autoNavigationLeg({ status, enabled: autoNavigate, launched, acceptedAt: trip.acceptedAt ?? null, pickupAt: trip.pickupAt })
+        if (!alive || !leg || AppState.currentState !== 'active') return
+        await authStorage.setItem(key, JSON.stringify(withLaunchedLeg(launched, leg)))
+        await openNavigation(navApp, targetRef.current)
+      } catch (err) {
+        if (alive) setError(err instanceof Error ? err.message : 'Could not open maps')
+      } finally {
+        autoNavRunning.current = false
+      }
+    })()
+    return () => { alive = false }
+  }, [trip?.id, trip?.status, autoNavigate, navApp])
+
   const pins: MapPin[] = []
   if (self) pins.push({ id: 'me', ...self, title: 'You', pinColor: ORANGE })
   if (!headingToDropoff && target.latitude != null && target.longitude != null) {
@@ -437,17 +471,17 @@ export default function TripScreen() {
             {user ? <TripThread supabase={supabase} tripId={trip.id} userId={user.id} colors={colors} /> : null}
             {trip.backupEnroute || mapsOffer ? <Text style={styles.copy}>{MAPS_HANDOFF_HELPER}</Text> : null}
             <View style={styles.navRow}>
-              {(navApp === 'google' ? ['google', 'apple'] as const : ['apple', 'google'] as const).map((provider) => (
+              {navAppOrder(navApp).map((provider, index) => (
                 <Pressable
                   key={provider}
                   onPress={() => openNavigation(provider, target).catch((err: unknown) => setError(err instanceof Error ? err.message : 'Could not open maps'))}
-                  style={styles.nav}
+                  style={[styles.nav, index === 0 ? styles.navPrimary : null]}
                   accessibilityRole="button"
-                  accessibilityLabel={`Open directions in ${provider === 'apple' ? 'Apple Maps' : 'Google Maps'}`}
+                  accessibilityLabel={`Open directions in ${navAppLabel(provider)}`}
                   accessibilityHint={`Opens navigation to ${headingToDropoff ? 'drop-off' : 'pickup'}`}
                   hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
                 >
-                  <Text style={styles.navText}>{provider === 'apple' ? 'Apple Maps' : 'Google Maps'}</Text>
+                  <Text style={styles.navText}>{index === 0 ? `Navigate · ${navAppLabel(provider)}` : navAppLabel(provider)}</Text>
                 </Pressable>
               ))}
             </View>
@@ -579,6 +613,7 @@ function tripStyles(colors: Palette) {
     tags: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
     navRow: { flexDirection: 'row', gap: 8 },
     nav: { flex: 1, backgroundColor: colors.fill, borderRadius: 14, paddingVertical: 12, alignItems: 'center' },
+    navPrimary: { flex: 2 },
     navText: { color: colors.onAccent, fontWeight: '800' },
     settle: { color: colors.title, fontWeight: '700', lineHeight: 20 },
   })

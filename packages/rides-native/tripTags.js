@@ -504,6 +504,7 @@ export function toDriverCard(row, options) {
     backupStatusLine: backup?.statusLine || null,
     backupNotice: backup?.notice || null,
     backupUrgent: Boolean(backup?.urgent),
+    acceptedAt: row.accepted_at || null,
     arrivedAt: row.arrived_at || null,
     waitFeeCents: Math.max(0, Number(row.wait_fee_cents) || 0),
     cancelFeeCents: Math.max(0, Number(row.cancel_fee_cents) || 0),
