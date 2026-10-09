@@ -1,5 +1,11 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Pressable, Text, TextInput, View } from 'react-native'
+import { Alert, Modal, Pressable, Text, TextInput, View } from 'react-native'
+import { authedJson } from './apiClient.js'
+import { secureStoreAdapter } from './secureStore.js'
+import {
+  buildChatModerationTicket, chatBlockKey, createChatBlockStore,
+  CHAT_BLOCK_COPY, CHAT_REPORT_CONFIRMATION, CHAT_REPORT_REASONS, CHAT_SUPPORT_COPY,
+} from './chatModeration.js'
 import { chatEndedLine, chatOpenLine, messagingGuide } from '../../shared/copy/messaging.js'
 import { MessagingInfoButton } from './MessagingInfo.jsx'
 import {
@@ -41,6 +47,8 @@ const FALLBACK = {
   placeholder: '#8B939E',
 }
 
+const blockStore = createChatBlockStore(secureStoreAdapter)
+
 export function TripThread({
   supabase,
   tripId,
@@ -59,6 +67,28 @@ export function TripThread({
   const [busy, setBusy] = useState(false)
   const [unread, setUnread] = useState(0)
   const [reporting, setReporting] = useState(Boolean(promptLostItem))
+  const [blockState, setBlockState] = useState(null)
+  const [moderationTarget, setModerationTarget] = useState(null)
+  const [reason, setReason] = useState(CHAT_REPORT_REASONS[0])
+  const role = tripPartyRole(trip, userId)
+  const otherUserId = role === 'rider' ? trip?.driver_id : role === 'driver' ? trip?.rider_id : null
+  const blockKey = userId && otherUserId ? chatBlockKey(userId, otherUserId) : null
+  const blockReady = Boolean(blockKey && blockState?.key === blockKey)
+  const blocked = blockReady && blockState.blocked
+  const visibleRows = rows.filter((row) => row.sender_id === userId || (blockReady && !blocked))
+
+  useEffect(() => {
+    if (!blockKey) return undefined
+    let alive = true
+    const update = (key, value) => {
+      if (alive && key === blockKey) setBlockState({ key, blocked: value })
+    }
+    const unsubscribe = blockStore.subscribe(update)
+    blockStore.isBlocked(userId, otherUserId)
+      .then((value) => update(blockKey, value))
+      .catch(() => { if (alive) setError(`Could not load blocked users. Reopen this chat to retry. ${CHAT_SUPPORT_COPY}`) })
+    return () => { alive = false; unsubscribe() }
+  }, [blockKey, userId, otherUserId])
 
   const refresh = useCallback(async () => {
     if (!supabase || !tripId) return
@@ -110,7 +140,6 @@ export function TripThread({
   }, [promptLostItem])
 
   const mode = rideChatMode(trip, Date.now(), report)
-  const role = tripPartyRole(trip, userId)
   const lost = lostItemReportState(report)
   const canReport = Boolean(role) && canOpenLostItemReport(trip, Date.now(), role) && lost !== 'open'
   if (!tripId || !trip) return null
@@ -121,8 +150,59 @@ export function TripThread({
   const guide = messagingGuide(role === 'driver' ? 'driver' : 'rider')
   const title = mode === 'readonly' ? 'Ride messages' : 'Message'
 
+  async function fileModeration(action, message = null) {
+    if (busy || !role || !otherUserId) return
+    setBusy(true)
+    setError(null)
+    let locallyBlocked = false
+    try {
+      if (action === 'block') {
+        await blockStore.setBlocked(userId, otherUserId, true)
+        locallyBlocked = true
+        setDraft('')
+      }
+      const result = await authedJson(supabase, '/api/support-ticket', {
+        method: 'POST',
+        body: buildChatModerationTicket({
+          tripId, roleVariant: role, reportedRole: role === 'rider' ? 'driver' : 'rider',
+          reportedUserId: otherUserId, reason: action === 'report' ? reason : undefined,
+          message, action,
+        }),
+      })
+      if (!result?.ticket?.id) throw new Error('Could not confirm the support ticket')
+      Alert.alert(action === 'block' ? 'Blocked' : 'Report sent', `${action === 'block' ? 'Blocked on this device. ' : ''}${CHAT_REPORT_CONFIRMATION} ${CHAT_SUPPORT_COPY}`)
+    } catch (err) {
+      setError(`${locallyBlocked ? 'Blocked on this device, but the support ticket failed. Use Report to retry. ' : ''}${err instanceof Error ? err.message : 'Could not file the support ticket'}. ${CHAT_SUPPORT_COPY}`)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  function confirmReport() {
+    const message = moderationTarget?.message || null
+    Alert.alert('Report trip chat?', `${reason}. Submit this ${message ? 'message' : 'chat'} for review? ${CHAT_SUPPORT_COPY}`, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Report', onPress: () => { setModerationTarget(null); setOpen(true); void fileModeration('report', message) } },
+    ])
+  }
+
+  function confirmBlock() {
+    Alert.alert(blocked ? 'Unblock this person?' : 'Block this person?', blocked ? `Their messages will be visible and you can send again while chat is open. ${CHAT_SUPPORT_COPY}` : CHAT_BLOCK_COPY, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: blocked ? 'Unblock' : 'Block', style: blocked ? 'default' : 'destructive', onPress: () => {
+        setOpen(true)
+        if (!blocked) { void fileModeration('block'); return }
+        setBusy(true)
+        blockStore.setBlocked(userId, otherUserId, false)
+          .then(() => setError(null))
+          .catch(() => setError(`Could not unblock. Try again. ${CHAT_SUPPORT_COPY}`))
+          .finally(() => setBusy(false))
+      } },
+    ])
+  }
+
   async function send(body, quick = false) {
-    if (!supabase || mode !== 'compose' || busy) return
+    if (!supabase || !role || mode !== 'compose' || busy || !blockReady || blocked) return
     setBusy(true)
     setError(null)
     try {
@@ -183,7 +263,7 @@ export function TripThread({
           <Text style={{ color: tone.orange, fontWeight: '800', letterSpacing: 1.1, fontSize: 11 }}>RIDE CHAT</Text>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
             <Text style={{ color: tone.title, fontSize: 18, fontWeight: '800' }}>{title}</Text>
-            {unread > 0 ? (
+            {blockReady && !blocked && unread > 0 ? (
               <View style={{ minWidth: 22, height: 22, borderRadius: 11, backgroundColor: tone.orange, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 6 }}>
                 <Text style={{ color: tone.onAccent, fontSize: 12, fontWeight: '800' }}>{unread > 9 ? '9+' : String(unread)}</Text>
               </View>
@@ -195,15 +275,47 @@ export function TripThread({
         </Pressable>
         <MessagingInfoButton role={role === 'driver' ? 'driver' : 'rider'} colors={tone} />
       </View>
+      {role && otherUserId ? (
+        <View style={{ flexDirection: 'row', gap: 16 }}>
+          <Pressable accessibilityRole="button" accessibilityLabel="Report trip chat" disabled={busy} onPress={() => { setReason(CHAT_REPORT_REASONS[0]); setModerationTarget({ message: null }) }} style={{ minHeight: 44, justifyContent: 'center' }}>
+            <Text style={{ color: tone.link, fontWeight: '800' }}>Report</Text>
+          </Pressable>
+          <Pressable accessibilityRole="button" accessibilityLabel={blocked ? 'Unblock this person' : 'Block this person'} disabled={busy || !blockReady} onPress={confirmBlock} style={{ minHeight: 44, justifyContent: 'center', opacity: busy || !blockReady ? 0.5 : 1 }}>
+            <Text style={{ color: tone.link, fontWeight: '800' }}>{blocked ? 'Unblock' : 'Block'}</Text>
+          </Pressable>
+        </View>
+      ) : null}
+      <Modal visible={Boolean(moderationTarget)} transparent animationType="fade" onRequestClose={() => setModerationTarget(null)}>
+        <View style={{ flex: 1, justifyContent: 'center', padding: 24, backgroundColor: 'rgba(0,0,0,0.5)' }}>
+          <View accessibilityViewIsModal style={{ backgroundColor: tone.card, padding: 20, borderRadius: 20, gap: 8 }}>
+            <Text accessibilityRole="header" style={{ color: tone.title, fontSize: 20, fontWeight: '800' }}>Report trip chat</Text>
+            <Text style={{ color: tone.inkSecondary }}>{CHAT_SUPPORT_COPY}</Text>
+            {CHAT_REPORT_REASONS.map((option) => (
+              <Pressable key={option} accessibilityRole="radio" accessibilityState={{ checked: reason === option }} onPress={() => setReason(option)} style={{ minHeight: 44, justifyContent: 'center' }}>
+                <Text style={{ color: tone.ink, fontWeight: reason === option ? '800' : '400' }}>{reason === option ? '● ' : '○ '}{option}</Text>
+              </Pressable>
+            ))}
+            <Pressable accessibilityRole="button" disabled={busy} onPress={confirmReport} style={{ minHeight: 44, justifyContent: 'center' }}>
+              <Text style={{ color: tone.link, fontWeight: '800' }}>Report</Text>
+            </Pressable>
+            <Pressable accessibilityRole="button" onPress={() => setModerationTarget(null)} style={{ minHeight: 44, justifyContent: 'center' }}>
+              <Text style={{ color: tone.link }}>Cancel</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
       {open ? (
         <View style={{ gap: 8 }}>
           {banner ? <Text style={{ color: tone.inkSecondary, fontSize: 13, lineHeight: 18 }}>{banner}</Text> : null}
-          {rows.length === 0 ? <Text style={{ color: tone.inkSecondary, fontSize: 13 }}>No messages yet.</Text> : null}
-          {rows.map((row) => {
+          {blocked ? <Text style={{ color: tone.inkSecondary, fontSize: 13 }}>Blocked on this device. Their messages are hidden and sending is disabled. {CHAT_SUPPORT_COPY}</Text> : null}
+          {blockReady && !blocked && visibleRows.length === 0 ? <Text style={{ color: tone.inkSecondary, fontSize: 13 }}>No messages yet.</Text> : null}
+          {visibleRows.map((row) => {
             const mine = row.sender_id === userId
             return (
-              <View
+              <Pressable
                 key={row.id}
+                accessibilityHint={mine ? undefined : 'Long press to report this message'}
+                onLongPress={mine || busy || !role ? undefined : () => { setReason(CHAT_REPORT_REASONS[0]); setModerationTarget({ message: row }) }}
                 style={{
                   alignSelf: mine ? 'flex-end' : 'flex-start',
                   backgroundColor: mine ? tone.orange : tone.elevated,
@@ -214,7 +326,7 @@ export function TripThread({
                 }}
               >
                 <Text style={{ color: mine ? tone.onAccent : tone.ink, fontSize: 15, lineHeight: 20 }}>{row.body}</Text>
-              </View>
+              </Pressable>
             )
           })}
           {lost === 'open' ? (
@@ -277,7 +389,7 @@ export function TripThread({
               )}
             </View>
           ) : null}
-          {mode === 'compose' ? (
+          {mode === 'compose' && role && blockReady && !blocked ? (
             <>
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
                 {RIDE_CHAT_QUICK_REPLIES.map((phrase) => (
@@ -285,6 +397,7 @@ export function TripThread({
                     key={phrase}
                     accessibilityRole="button"
                     accessibilityLabel={phrase}
+                    disabled={busy}
                     onPress={() => { void send(phrase, true) }}
                     style={{ backgroundColor: tone.purpleSoft, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 8 }}
                   >
@@ -322,9 +435,9 @@ export function TripThread({
               </Pressable>
             </>
           ) : null}
-          {error ? <Text style={{ color: tone.danger, fontSize: 13 }}>{error}</Text> : null}
         </View>
       ) : null}
+      {error ? <Text accessibilityRole="alert" style={{ color: tone.danger, fontSize: 13 }}>{error}</Text> : null}
     </View>
   )
 }
