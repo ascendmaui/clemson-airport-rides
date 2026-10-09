@@ -10,7 +10,7 @@ import * as Notifications from 'expo-notifications'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useAuth } from '@/lib/auth'
 import { useFeedback } from '@/lib/feedback'
-import { inAppRideAlert, notifyNewRequest, notifyScheduledBoard, setRideAlertSurface } from '@/lib/push'
+import { inAppRideAlert, isTripStatusPush, notifyNewRequest, notifyScheduledBoard, setRideAlertSurface } from '@/lib/push'
 import { supabase } from '@/lib/supabase'
 import { useTheme } from '@/lib/theme'
 import { acceptTrip, loadDriverDesk, markSearchingOffers, subscribeTrips } from 'rides-native/driverDesk'
@@ -142,6 +142,8 @@ export function OfferBridge() {
     const received = Notifications.addNotificationReceivedListener((event: Notifications.Notification) => {
       if (!inAppRideAlert()) return
       const content = event.request.content
+      // Arrived? / rider-canceled pushes are trip updates, not offers. The trip screen shows them.
+      if (isTripStatusPush(content.data)) return
       const tripId = typeof content.data?.tripId === 'string' ? content.data.tripId : ''
       if (tripId && seen.current.has(tripId)) return
       if (tripId) seen.current.add(tripId)

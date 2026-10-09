@@ -32,6 +32,16 @@ Notifications.setNotificationHandler({
 
 export const RIDE_CHANNEL_ID = 'ride-requests'
 
+/** Must match DRIVER_STATUS_PUSH_FEATURE in server/tripStatusNotices.js. */
+export const TRIP_STATUS_PUSH_FEATURE = 'trip_status_v1'
+/** Server status pushes; these are not ride offers, so the offer banner ignores them. */
+export const TRIP_STATUS_PUSH_KINDS = ['arrive_prompt', 'rider_canceled', 'rider_ended_early', 'rider_no_show']
+
+export function isTripStatusPush(data: unknown): boolean {
+  const kind = data && typeof data === 'object' ? (data as { kind?: unknown }).kind : null
+  return typeof kind === 'string' && TRIP_STATUS_PUSH_KINDS.includes(kind)
+}
+
 /** Android 8+ plays a custom sound only when that sound is set on a channel. */
 export function rideChannelRequest() {
   return {
@@ -121,13 +131,13 @@ async function storeToken(supabase: SupabaseClient | null, driverId: string, tok
   })
   if (!status.error) return true
   if (!/expo_push_token|column|schema cache/i.test(status.error.message || '')) return false
-  const table = await supabase.from('driver_push_tokens').upsert({
-    driver_id: driverId,
-    token,
-    platform: Platform.OS,
-    updated_at: updatedAt,
-  })
-  return !table.error
+  const row = { driver_id: driverId, token, platform: Platform.OS, updated_at: updatedAt }
+  // features tells the server this build handles trip status pushes (Arrived?, rider canceled).
+  const table = await supabase.from('driver_push_tokens').upsert({ ...row, features: [TRIP_STATUS_PUSH_FEATURE] })
+  if (!table.error) return true
+  if (!/features|schema cache/i.test(table.error.message || '')) return false
+  const plain = await supabase.from('driver_push_tokens').upsert(row)
+  return !plain.error
 }
 
 export async function notifyAcceptedRide(card: {

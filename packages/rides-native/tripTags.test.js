@@ -321,3 +321,13 @@ test('driver fare note is short, driver-friendly, and only mentions a deposit wh
     assert.ok(copy.length <= 120, copy)
   }
 })
+
+test('arrived prompt names the rider and pickup, with safe fallbacks', async () => {
+  const { arrivedPromptCopy } = await import('./tripTags.js')
+  const copy = arrivedPromptCopy({ firstName: 'Riley', pickupLabel: 'Cooper Library' })
+  assert.equal(copy.title, 'Arrived?')
+  assert.match(copy.body, /close to Cooper Library/)
+  assert.match(copy.body, /Riley is told/)
+  assert.equal(copy.action, "Yes, I've arrived")
+  assert.match(arrivedPromptCopy().body, /close to pickup.*your rider is told/)
+})
