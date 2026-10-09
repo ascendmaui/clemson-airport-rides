@@ -94,8 +94,8 @@ export function carpoolPayFromTrip(row) {
 export function tripEarnedCents(trip) {
   if (trip?.status === 'cancelled_wait') return Math.max(0, Math.round(Number(trip.driver_wait_earnings_cents ?? trip.driverWaitEarningsCents) || 0))
   const pay = carpoolPayFromTrip(trip)
-  if (pay) return pay.payoutCents
-  return driverNetCents(trip?.fare_cents ?? trip?.fareCents)
+  const waitCents = trip?.status === 'completed' ? Math.max(0, Math.round(Number(trip.driver_wait_earnings_cents ?? trip.driverWaitEarningsCents) || 0)) : 0
+  return (pay ? pay.payoutCents : driverNetCents(trip?.fare_cents ?? trip?.fareCents)) + waitCents
 }
 
 /** Fare net plus the driver share of an upfront boost. The boost is not commissioned. */

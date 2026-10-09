@@ -73,7 +73,7 @@ export default function EarningsHub() {
     if (carpoolPayFromTrip(trip)?.showBonus) carpoolBonus = true
     you += net
     boostSum += boost
-    platform += Math.max(0, fare - net)
+    platform += Math.max(0, fare + (trip.wait_fee_cents || 0) - net)
     const payments = (data?.paymentsByTrip?.[trip.id] || []) as TipPayment[]
     other += tipCentsFromPayments(payments)
   }

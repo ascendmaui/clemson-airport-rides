@@ -250,7 +250,7 @@ export function sumFarePaidCents(payments) {
     if (row?.status !== 'succeeded') return sum
     const logical = row?.metadata?.logical_kind || row?.kind
     if (!FARE_KINDS.has(logical)) return sum
-    return sum + (Number(row.amount_cents) || 0)
+    return sum + (Number(row.metadata?.fare_billed_cents ?? row.amount_cents) || 0)
   }, 0)
 }
 

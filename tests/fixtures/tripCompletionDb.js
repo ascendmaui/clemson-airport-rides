@@ -22,6 +22,7 @@ export function tripCompletionDb(trip = null, options = {}) {
           if (key === 'metadata') return isDeepStrictEqual(row.metadata ?? null, val === null ? null : JSON.parse(val))
           if (key === 'metadata->completion_claim->>token') return row.metadata?.completion_claim?.token === val
           if (key === 'metadata->completion_claim') return (row.metadata?.completion_claim ?? null) === val
+          if (Array.isArray(val)) return val.includes(row[key])
           return row[key] === val || (row[key] == null && val === null)
         }))
         if (op === 'update') rows.forEach(row => Object.assign(row, structuredClone(patch)))
@@ -38,6 +39,7 @@ export function tripCompletionDb(trip = null, options = {}) {
       const query = {
         select() { return query },
         eq(key, val) { filters.push([key, val]); return query },
+        in(key, vals) { filters.push([key, vals]); return query },
         is(key, val) { filters.push([key, val]); return query },
         update(value) { op = 'update'; patch = value; return query },
         insert(value) { op = 'insert'; patch = value; return query },
