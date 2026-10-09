@@ -29,6 +29,8 @@ export type DriverCard = {
   depositCents: number
   depositExplicit: boolean
   driverNetCents: number
+  /** Local only: the trip vanished from this driver's account (rider switched or canceled). */
+  released?: boolean
   /** Payout-queue breakdown once a driver holds the trip (same math as server/payouts.js). */
   earnings?: DriverTripEarnings | null
   tipCents?: number

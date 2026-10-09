@@ -21,7 +21,20 @@ export const NOTICE_KINDS = Object.freeze({
   driver_arriving: Object.freeze({ role: 'rider', statuses: Object.freeze(['arriving']) }),
   driver_arrived: Object.freeze({ role: 'rider', statuses: Object.freeze(['arrived']) }),
   arrive_prompt: Object.freeze({ role: 'driver', statuses: Object.freeze(['arriving']) }),
+  // Released kinds: the recipient no longer shares this driver, so the usual driver match is skipped.
+  rider_canceled: Object.freeze({ role: 'driver', statuses: Object.freeze(['canceled']), released: 'any' }),
+  rider_ended_early: Object.freeze({ role: 'driver', statuses: Object.freeze(['canceled_midride']) }),
+  rider_no_show: Object.freeze({ role: 'driver', statuses: Object.freeze(['cancelled_wait']) }),
+  driver_canceled: Object.freeze({ role: 'rider', statuses: Object.freeze([]), released: 'live' }),
+  wait_canceled: Object.freeze({ role: 'rider', statuses: Object.freeze(['cancelled_wait']) }),
 })
+
+const LIVE_STATUSES = Object.freeze(['searching', 'offered', 'scheduled', 'accepted', 'arriving', 'arrived'])
+
+function money(cents) {
+  const n = Math.max(0, Math.round(Number(cents) || 0))
+  return `$${(n / 100).toFixed(2)}`
+}
 
 function clean(value, max = 80) {
   return String(value ?? '').replace(/\s+/g, ' ').trim().slice(0, max)
@@ -42,8 +55,17 @@ export function vehicleLine(vehicle) {
 const graceMinutes = Math.round(GRACE_MS / 60000)
 
 /** Push copy for one notice. Null for an unknown kind. */
-export function tripStatusNoticeCopy(kind, { driverName = '', pickupLabel = '', vehicle = '' } = {}) {
+export function tripStatusNoticeCopy(kind, {
+  driverName = '',
+  riderName = '',
+  pickupLabel = '',
+  vehicle = '',
+  switched = false,
+  riderFeeCents = 0,
+  driverWaitCents = 0,
+} = {}) {
   const who = noticeFirstName(driverName)
+  const rider = noticeFirstName(riderName, 'The rider')
   const pickup = clean(pickupLabel) || 'your pickup'
   switch (kind) {
     case 'driver_en_route':
@@ -60,6 +82,31 @@ export function tripStatusNoticeCopy(kind, { driverName = '', pickupLabel = '', 
       }
     case 'arrive_prompt':
       return { title: 'Arrived at pickup?', body: `You are near ${pickup}. Tap to confirm you have arrived.` }
+    case 'rider_canceled':
+      return {
+        title: 'Ride canceled',
+        body: switched
+          ? `${rider} changed their ride. You're free for the next offer.`
+          : `${rider} canceled this ride. You're free for the next offer.`,
+      }
+    case 'rider_ended_early':
+      return { title: 'Trip ended early', body: `${rider} ended the trip early. Open the trip to see your pay.` }
+    case 'rider_no_show':
+      return {
+        title: 'Rider no-show',
+        body: Number(driverWaitCents) > 0
+          ? `The ride was canceled after the wait. You earn ${money(driverWaitCents)}.`
+          : 'The ride was canceled after the wait.',
+      }
+    case 'driver_canceled':
+      return { title: 'Your driver canceled', body: `We're finding you another driver for ${pickup}.` }
+    case 'wait_canceled':
+      return {
+        title: 'Ride canceled',
+        body: Number(riderFeeCents) > 0
+          ? `Your driver waited at ${pickup}. A ${money(riderFeeCents)} no-show fee applies.`
+          : `Your driver waited at ${pickup} and the ride was canceled.`,
+      }
     default:
       return null
   }
@@ -68,10 +115,18 @@ export function tripStatusNoticeCopy(kind, { driverName = '', pickupLabel = '', 
 export function noticeIsCurrent(notice, trip) {
   const spec = NOTICE_KINDS[notice?.kind]
   if (!spec || !trip) return false
-  if (notice.driver_id && trip.driver_id !== notice.driver_id) return false
+  const status = String(trip.status)
   if (spec.role === 'rider' && trip.rider_id !== notice.recipient_id) return false
+  if (spec.released) {
+    // Sent to the side that lost the other party: current once the trip has moved off that driver.
+    if (spec.role === 'driver' && notice.recipient_id !== notice.driver_id) return false
+    if (spec.statuses.includes(status)) return true
+    const movedOn = Boolean(notice.driver_id) && trip.driver_id !== notice.driver_id
+    return spec.released === 'live' ? movedOn && LIVE_STATUSES.includes(status) : movedOn
+  }
+  if (notice.driver_id && trip.driver_id !== notice.driver_id) return false
   if (spec.role === 'driver' && trip.driver_id !== notice.recipient_id) return false
-  return spec.statuses.includes(String(trip.status))
+  return spec.statuses.includes(status)
 }
 
 async function maybeSingle(query) {
@@ -105,14 +160,33 @@ export async function readDriverStatusPushToken(sb, driverId) {
   return clean(row?.token, 200) || null
 }
 
-async function noticeContext(sb, trip) {
-  const profile = await maybeSingle(sb.from('profiles').select('full_name').eq('id', trip.driver_id).maybeSingle())
+async function noticeContext(sb, trip, notice) {
+  const driverId = notice?.driver_id || trip.driver_id
+  const meta = trip.metadata && typeof trip.metadata === 'object' ? trip.metadata : {}
+  const driverSide = NOTICE_KINDS[notice?.kind]?.role === 'driver'
+  let riderName = ''
+  if (driverSide) {
+    riderName = clean(meta.rider_first_name)
+    if (!riderName && trip.rider_id) {
+      const rider = await maybeSingle(sb.from('profiles').select('full_name').eq('id', trip.rider_id).maybeSingle())
+      riderName = rider?.full_name || ''
+    }
+  }
+  const base = {
+    riderName,
+    pickupLabel: trip.pickup_label || '',
+    switched: Boolean(meta.rider_switch),
+    riderFeeCents: (Number(trip.wait_fee_cents) || 0) + (Number(trip.cancel_fee_cents) || 0),
+    driverWaitCents: Number(trip.driver_wait_earnings_cents) || 0,
+  }
+  if (driverSide || !driverId) return { ...base, driverName: '', vehicle: '' }
+  const profile = await maybeSingle(sb.from('profiles').select('full_name').eq('id', driverId).maybeSingle())
   let vehicle = null
   try {
-    const result = await sb.from('vehicles').select('color, make, model, plate').eq('driver_id', trip.driver_id).limit(1)
+    const result = await sb.from('vehicles').select('color, make, model, plate').eq('driver_id', driverId).limit(1)
     vehicle = result?.error ? null : result?.data?.[0] || null
   } catch { vehicle = null }
-  return { driverName: profile?.full_name || '', pickupLabel: trip.pickup_label || '', vehicle: vehicleLine(vehicle) }
+  return { ...base, driverName: profile?.full_name || '', vehicle: vehicleLine(vehicle) }
 }
 
 async function finish(sb, id, result, nowIso) {
@@ -148,9 +222,11 @@ export async function sweepTripStatusNotices(sb, { now = new Date(), dryRun = fa
       claim = row.claimed_at ? claim.eq('claimed_at', row.claimed_at) : claim.is('claimed_at', null)
       const claimed = await claim.select('id')
       if (claimed.error || !claimed.data?.length) continue
-      const trip = await maybeSingle(sb.from('trips').select('id, status, rider_id, driver_id, pickup_label').eq('id', row.trip_id).maybeSingle())
+      const trip = await maybeSingle(sb.from('trips')
+        .select('id, status, rider_id, driver_id, pickup_label, metadata, wait_fee_cents, cancel_fee_cents, driver_wait_earnings_cents')
+        .eq('id', row.trip_id).maybeSingle())
       if (!noticeIsCurrent(row, trip)) { await finish(sb, row.id, 'stale', nowIso); skip(row.id); continue }
-      const copy = tripStatusNoticeCopy(row.kind, await noticeContext(sb, trip))
+      const copy = tripStatusNoticeCopy(row.kind, await noticeContext(sb, trip, row))
       const rider = row.recipient_role === 'rider'
       const token = rider ? await readRiderPushToken(sb, row.recipient_id) : await readDriverStatusPushToken(sb, row.recipient_id)
       if (!copy || !token) { await finish(sb, row.id, copy ? 'no_token' : 'unknown_kind', nowIso); skip(row.id); continue }
