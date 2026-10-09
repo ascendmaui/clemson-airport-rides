@@ -91,3 +91,11 @@ test('trip-status and trip-stop store idempotency receipts', () => {
   assert.match(sql, /enable row level security/)
   assert.match(sql, /revoke all on public\.driver_action_receipts from public, anon, authenticated/)
 })
+
+test('a canceled trip is never shown as in progress because of saved taps', () => {
+  const shown = projectQueuedTrip({ id: 't1', status: 'canceled', stops: [] }, [{ id: 'k', tripId: 't1', kind: 'status', op: 'start' }])
+  assert.equal(shown.status, 'canceled')
+  const trip = read('apps/driver/app/trip.tsx')
+  // A background send adopts the returned trip before the projection is removed.
+  assert.match(trip, /event\.type === 'sent' \? event\.result\?\.trip : null/)
+})

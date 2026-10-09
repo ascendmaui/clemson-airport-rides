@@ -102,12 +102,15 @@ export default function TripScreen() {
   // sent in order (same idempotency key on every retry) once signal returns.
   const onQueueEvent = useCallback((event: ActionQueueEvent) => {
     if (event.action.tripId !== id) return
+    // Adopt the server's trip from a background send before the saved-tap projection goes away.
+    const sentTrip = event.type === 'sent' ? event.result?.trip : null
+    if (sentTrip?.id === id) setTrip(toDriverCard(sentTrip, { driverId: user?.id }))
     if (event.type === 'failed') {
       const message = event.error instanceof Error ? event.error.message : 'A saved tap could not be applied'
       setError(`${message} Check the trip and tap again.`)
     }
     void readerRef.current?.refresh(true)
-  }, [id])
+  }, [id, user?.id])
   const queueState = useDriverActionQueue(onQueueEvent)
   const trip = useMemo(() => projectQueuedTrip(serverTrip, queueState.actions), [serverTrip, queueState.actions])
   const signalLabel = waitingForSignalLabel(queueState.actions.filter((a) => a.tripId === trip?.id).length)

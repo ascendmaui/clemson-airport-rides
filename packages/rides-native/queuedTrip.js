@@ -3,7 +3,7 @@
  * the queued status and stop taps applied in order. Pure; never persisted.
  */
 import { applyStopOp, tripOpForStop } from '../../shared/carpoolStops.js'
-import { projectTripStatus, waitingForSignalLabel } from './actionQueue.js'
+import { TERMINAL_TRIP_STATUSES, projectTripStatus, waitingForSignalLabel } from './actionQueue.js'
 
 const STATUS_AFTER_TRIP_OP = { arrive: 'arrived', start: 'in_progress' }
 
@@ -11,6 +11,10 @@ export function projectQueuedTrip(card, actions = []) {
   if (!card) return card
   const mine = (Array.isArray(actions) ? actions : []).filter((a) => a?.tripId === card.id)
   if (!mine.length) return card
+  // Canceled or completed on the server: show that, not the saved taps (they will be refused).
+  if (TERMINAL_TRIP_STATUSES.includes(card.status)) {
+    return { ...card, queuedTaps: mine.length, waitingForSignal: waitingForSignalLabel(mine.length) }
+  }
   let status = card.status
   let stops = Array.isArray(card.stops) ? card.stops : []
   for (const action of mine) {

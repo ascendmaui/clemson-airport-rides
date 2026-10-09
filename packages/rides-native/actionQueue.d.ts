@@ -25,6 +25,9 @@ export const QUEUE_STORAGE_KEY: string
 export const QUEUEABLE_STATUS_OPS: readonly string[]
 export const QUEUEABLE_STOP_OPS: readonly string[]
 export function isOfflineError(err: unknown): boolean
+export function isServerRetryError(err: unknown): boolean
+export const MAX_SERVER_RETRIES: number
+export const TERMINAL_TRIP_STATUSES: readonly string[]
 export function retryDelayMs(attempts: number): number
 export function newIdempotencyKey(now?: number, random?: () => number): string
 export function isQueueableAction(action: unknown): boolean
