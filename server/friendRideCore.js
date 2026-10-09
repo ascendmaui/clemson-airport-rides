@@ -144,8 +144,8 @@ export function buildWaypointList(participants) {
   for (const p of participants) {
     const pu = stopLatLng(p.pickup)
     const dr = stopLatLng(p.dropoff)
-    if (pu) pickups.push({ ...pu, participantId: p.id, kind: 'pickup' })
-    if (dr) dropoffs.push({ ...dr, participantId: p.id, kind: 'dropoff' })
+    if (pu) pickups.push({ ...pu, participantId: p.id, participantIds: [p.id], kind: 'pickup' })
+    if (dr) dropoffs.push({ ...dr, participantId: p.id, participantIds: [p.id], kind: 'dropoff' })
   }
   if (!pickups.length || !dropoffs.length) {
     return { error: 'Need at least one pickup and one dropoff across the group' }
@@ -153,12 +153,25 @@ export function buildWaypointList(participants) {
   const origin = pickups[0]
   const destination = dropoffs[dropoffs.length - 1]
   const intermediates = []
-  const seen = new Set([`${origin.lat},${origin.lng}`, `${destination.lat},${destination.lng}`])
+  // Keyed by kind: a drop-off at another rider's pickup point is still its own stop.
+  const seen = new Set([`pickup:${origin.lat},${origin.lng}`, `dropoff:${destination.lat},${destination.lng}`])
+  // A rider whose stop matches an existing point of the same kind rides with that stop (driver stop list).
+  const sameKind = (s) => [s.kind === 'pickup' ? origin : destination, ...intermediates]
+    .find((row) => row.kind === s.kind && row.lat === s.lat && row.lng === s.lng)
   for (const s of [...pickups.slice(1), ...dropoffs.slice(0, -1)]) {
-    const k = `${s.lat},${s.lng}`
-    if (seen.has(k)) continue
+    const k = `${s.kind}:${s.lat},${s.lng}`
+    if (seen.has(k)) {
+      const host = sameKind(s)
+      if (host && !host.participantIds.includes(s.participantId)) host.participantIds.push(s.participantId)
+      continue
+    }
     seen.add(k)
     intermediates.push(s)
+  }
+  for (const d of dropoffs.slice(0, -1)) {
+    if (d.lat === destination.lat && d.lng === destination.lng && !destination.participantIds.includes(d.participantId)) {
+      destination.participantIds.push(d.participantId)
+    }
   }
   return { origin, destination, intermediates, pickups, dropoffs }
 }

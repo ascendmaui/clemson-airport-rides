@@ -59,6 +59,7 @@ const TRIP_COLUMNS = [
   'created_at',
   'requested_at',
   'offer_expires_at',
+  'stops',
 ].join(', ')
 
 const EARNINGS_COLUMNS = 'id, status, canceled_at, wait_fee_cents, cancel_fee_cents, driver_wait_earnings_cents, fare_cents, deposit_cents, dropoff_label, completed_at, pickup_label, metadata'
@@ -67,8 +68,8 @@ async function listTrips(supabase, finish) {
   const run = async (columns) => finish(supabase.from('trips').select(columns))
   let columns = TRIP_COLUMNS
   let res = await run(columns)
-  if (res.error && /offer_expires_at|requested_at|created_at|boost_cents|backup_bonus_cents|tip_cents/i.test(res.error.message || '')) {
-    columns = columns.replace(/, created_at|, requested_at|, offer_expires_at|, boost_cents|, backup_bonus_cents|, tip_cents/g, '')
+  if (res.error && /offer_expires_at|requested_at|created_at|boost_cents|backup_bonus_cents|tip_cents|stops/i.test(res.error.message || '')) {
+    columns = columns.replace(/, created_at|, requested_at|, offer_expires_at|, boost_cents|, backup_bonus_cents|, tip_cents|, stops/g, '')
     res = await run(columns)
   }
   if (res.error && /deposit_cents|column|schema cache/i.test(res.error.message || '')) {
@@ -620,6 +621,14 @@ export async function driverTripAction(supabase, tripId, op) {
     }
     throw err
   }
+}
+
+/** Carpool stop action: arrive / start (rider in car) / drop at one ordered stop. */
+export async function driverStopAction(supabase, tripId, stopIndex, op) {
+  if (!tripId) throw new Error('Missing ride')
+  return authedJson(supabase, '/api/driver?action=trip-stop', {
+    method: 'POST', body: { tripId, stopIndex, op },
+  })
 }
 
 export async function driverCancelTrip(supabase, tripId, reason, note) {

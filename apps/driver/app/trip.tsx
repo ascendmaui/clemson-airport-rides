@@ -6,6 +6,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { CampusMap, type MapPin } from '@/components/CampusMap'
 import { WaitTimer } from '@/components/WaitTimer'
 import { RiderConfirmCard } from '@/components/RiderConfirmCard'
+import { StopList } from '@/components/StopList'
+import { allStopsDone, nextStopIndex, type StopOp, type TripStop } from 'rides-native/carpoolStops'
 import { waitTimerAnchor, type WaitAnchor } from 'rides-native/waitTimer'
 import { DriverCancelSheet } from '@/components/DriverCancelSheet'
 import { FarePanel } from '@/components/FarePanel'
@@ -20,12 +22,12 @@ import { oneParam } from '@/lib/oneParam'
 import { openNavigation } from '@/lib/openMaps'
 import { authStorage } from '@/lib/storage'
 import { navAppLabel, navAppOrder } from 'rides-native/mapsLink'
-import { autoNavigationKey, autoNavigationLeg, readLaunchedLegs, withLaunchedLeg } from 'rides-native/autoNavigation'
+import { autoNavigationKey, autoNavigationLeg, autoNavigationStopLeg, readLaunchedLegs, withLaunchedLeg } from 'rides-native/autoNavigation'
 import { supabase } from '@/lib/supabase'
 import { useDriverLocation } from '@/lib/useDriverLocation'
 import { publishDriverLocation, startTripBackgroundLocation, stopTripBackgroundLocation } from '@/lib/backgroundLocation'
 import { isActiveTripLocationStatus } from 'rides-native/backgroundLocation'
-import { driverTripAction, tripWaitTick, advanceTrip, confirmBackupQueueTrip, loadRiderFix, loadTrip, releaseBackupQueueSeat, subscribeTrips } from 'rides-native/driverDesk'
+import { driverStopAction, driverTripAction, tripWaitTick, advanceTrip, confirmBackupQueueTrip, loadRiderFix, loadTrip, releaseBackupQueueSeat, subscribeTrips } from 'rides-native/driverDesk'
 import {
   arrivedPromptCopy,
   confirmCountdownLabel,
@@ -302,6 +304,25 @@ export default function TripScreen() {
     return () => { alive = false; clearInterval(timer); listener.remove() }
   }, [trip?.id, trip?.status, trip?.arrivedAt, user?.id])
 
+  // Carpool: one ordered stop at a time. The first pickup also moves the trip
+  // to Arrived / In trip; Complete trip appears once every stop is resolved.
+  async function onStopAction(stop: TripStop, op: StopOp) {
+    if (!supabase || !user || !trip || terminalTrip || busy) return
+    setBusy(true)
+    setError(null)
+    try {
+      const result = await driverStopAction(supabase, trip.id, stop.index, op)
+      if (result?.trip) setTrip(toDriverCard(result.trip, { driverId: user.id }))
+      pulse(op === 'drop' ? 'complete' : 'accept')
+      await refresh()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not update this stop')
+      await refresh()
+    } finally {
+      setBusy(false)
+    }
+  }
+
   async function onNoShow() {
     if (!supabase || !trip || trip.status !== 'arrived' || busy) return
     setBusy(true)
@@ -345,14 +366,22 @@ export default function TripScreen() {
     }
   }, [trip?.backupLeaveNowOpen, trip?.backupLeaveNowAt, trip?.id, supabase, refresh])
 
-  const headingToDropoff = trip?.status === 'in_progress' || trip?.status === 'completed'
+  const stops: TripStop[] = trip?.stops ?? []
+  const multiStop = stops.length > 0
+  const currentStop = multiStop ? stops[nextStopIndex(stops)] ?? null : null
+  const stopsDone = multiStop && allStopsDone(stops)
+  const headingToDropoff = multiStop
+    ? currentStop?.kind === 'dropoff' || trip?.status === 'completed'
+    : trip?.status === 'in_progress' || trip?.status === 'completed'
   const bookedPickup = driverPickupTarget(trip)
   const livePickup = rider
     ? { latitude: rider.latitude, longitude: rider.longitude, live: true as const }
     : bookedPickup?.live
       ? bookedPickup
       : null
-  const target = headingToDropoff
+  const target = currentStop && currentStop.lat != null && currentStop.lng != null
+    ? { latitude: currentStop.lat, longitude: currentStop.lng, label: currentStop.label }
+    : headingToDropoff
     ? { latitude: trip?.dropoffLat ?? null, longitude: trip?.dropoffLng ?? null, label: trip?.dropoffLabel || 'Drop-off' }
     : livePickup
       ? { latitude: livePickup.latitude, longitude: livePickup.longitude, label: 'Live pickup' }
@@ -381,13 +410,17 @@ export default function TripScreen() {
     let alive = true
     const tripId = trip.id
     const status = trip.status
+    const stopIndex = multiStop && currentStop ? currentStop.index : null
     void (async () => {
       if (autoNavRunning.current) return
       autoNavRunning.current = true
       try {
         const key = autoNavigationKey(tripId)
         const launched = readLaunchedLegs(await authStorage.getItem(key))
-        const leg = autoNavigationLeg({ status, enabled: autoNavigate, launched, acceptedAt: trip.acceptedAt ?? null, pickupAt: trip.pickupAt })
+        // Carpool after Start: each next stop (pickup B, then each drop-off) opens once.
+        const leg = status === 'in_progress' && stopIndex != null
+          ? autoNavigationStopLeg({ enabled: autoNavigate, launched, stopIndex })
+          : autoNavigationLeg({ status, enabled: autoNavigate, launched, acceptedAt: trip.acceptedAt ?? null, pickupAt: trip.pickupAt })
         if (!alive || !leg || AppState.currentState !== 'active') return
         await authStorage.setItem(key, JSON.stringify(withLaunchedLeg(launched, leg)))
         await openNavigation(navApp, targetRef.current)
@@ -398,11 +431,16 @@ export default function TripScreen() {
       }
     })()
     return () => { alive = false }
-  }, [trip?.id, trip?.status, autoNavigate, navApp])
+  }, [trip?.id, trip?.status, autoNavigate, navApp, multiStop, currentStop?.index])
 
   const pins: MapPin[] = []
   if (self) pins.push({ id: 'me', ...self, title: 'You', pinColor: ORANGE })
-  if (!headingToDropoff && target.latitude != null && target.longitude != null) {
+  if (multiStop) {
+    for (const stop of stops) {
+      if (stop.lat == null || stop.lng == null || stop.status === 'done') continue
+      pins.push({ id: `stop-${stop.index}`, latitude: stop.lat, longitude: stop.lng, title: `${stop.index + 1}. ${stop.label}`, pinColor: stop.kind === 'pickup' ? PURPLE : ORANGE })
+    }
+  } else if (!headingToDropoff && target.latitude != null && target.longitude != null) {
     pins.push({
       id: 'pickup',
       latitude: target.latitude,
@@ -413,7 +451,7 @@ export default function TripScreen() {
   } else if (trip?.pickupLat != null && trip.pickupLng != null) {
     pins.push({ id: 'pickup', latitude: trip.pickupLat, longitude: trip.pickupLng, title: trip.pickupLabel, pinColor: PURPLE })
   }
-  if (trip?.dropoffLat != null && trip.dropoffLng != null) {
+  if (!multiStop && trip?.dropoffLat != null && trip.dropoffLng != null) {
     pins.push({ id: 'drop', latitude: trip.dropoffLat, longitude: trip.dropoffLng, title: trip.dropoffLabel, pinColor: ORANGE })
   }
   const road = followMapCoordinates(
@@ -472,7 +510,7 @@ export default function TripScreen() {
             <Primary label={canceledView.action} onPress={() => router.replace('/')} tone="orange" />
           </View>
         ) : null}
-        {trip?.status === 'arriving' ? (() => {
+        {trip?.status === 'arriving' && !multiStop ? (() => {
           const prompt = arrivedPromptCopy({ firstName: trip.firstName, pickupLabel: trip.pickupLabel })
           return (
             <View accessibilityRole="summary" style={[styles.arrivePrompt, { borderColor: colors.orange }]}>
@@ -512,7 +550,8 @@ export default function TripScreen() {
                 <Text style={styles.fare}>You earn {formatCents(trip.driverWaitEarningsCents)}</Text>
               </View>
             ) : trip.status !== 'completed' ? <Text style={styles.fare}>{formatCents(trip.driverNetCents)} net{trip.depositCents ? ` · already paid ${formatCents(trip.depositCents)}` : ''}</Text> : null}
-            {trip.status === 'arrived' ? (
+            {multiStop && !terminalTrip ? <StopList stops={stops} busy={busy} onAction={onStopAction} /> : null}
+            {trip.status === 'arrived' && !multiStop ? (
               <RiderConfirmCard
                 firstName={trip.firstName}
                 photoUrl={person?.photoUrl || trip.riderAvatarUrl || null}
@@ -652,7 +691,7 @@ export default function TripScreen() {
         ) : null}
         {terminalTrip && trip?.status !== 'completed' && !canceledView ? <Primary label="Back to Home" onPress={() => router.replace('/')} tone="purple" /> : null}
         {trip && ['accepted', 'arriving'].includes(trip.status) ? <DriverCancelSheet key={trip.id} supabase={supabase} tripId={trip.id} scheduled={Boolean(trip.pickupAt)} disabled={busy} onCanceled={onDriverCanceled} /> : null}
-        {action && trip?.status !== 'arriving' && trip?.status !== 'arrived' ? <Primary label={busy ? 'Updating…' : action} onPress={onAdvance} disabled={busy} tone="purple" /> : null}
+        {action && trip?.status !== 'arriving' && trip?.status !== 'arrived' && (!multiStop || (stopsDone && trip?.status === 'in_progress')) ? <Primary label={busy ? 'Updating…' : action} onPress={onAdvance} disabled={busy} tone="purple" /> : null}
         </ScrollView>
       </View>
       <SosSheet

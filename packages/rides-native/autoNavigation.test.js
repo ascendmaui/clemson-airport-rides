@@ -42,3 +42,14 @@ test('launched legs storage is tolerant', () => {
   assert.deepEqual(withLaunchedLeg(['pickup'], 'dropoff'), ['pickup', 'dropoff'])
   assert.deepEqual(withLaunchedLeg(['pickup'], 'pickup'), ['pickup'])
 })
+
+test('carpool stops open the nav app once per stop after Start', async () => {
+  const { autoNavigationStopLeg, readLaunchedLegs, withLaunchedLeg } = await import('./autoNavigation.js')
+  assert.equal(autoNavigationStopLeg({ stopIndex: 1, launched: ['pickup'] }), 'stop:1')
+  const launched = withLaunchedLeg(['pickup'], 'stop:1')
+  assert.deepEqual(readLaunchedLegs(JSON.stringify(launched)), ['pickup', 'stop:1'])
+  assert.equal(autoNavigationStopLeg({ stopIndex: 1, launched }), null)
+  assert.equal(autoNavigationStopLeg({ stopIndex: 2, launched }), 'stop:2')
+  assert.equal(autoNavigationStopLeg({ stopIndex: 2, launched, enabled: false }), null)
+  assert.equal(autoNavigationStopLeg({ stopIndex: null, launched }), null)
+})
