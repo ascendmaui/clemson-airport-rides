@@ -133,7 +133,7 @@ Create two apps. Package names must match the table above on the first upload. T
 - [ ] Phone screenshots, at least two per app. Not in the repo.
 - [ ] Tablet screenshots if Play requires them (`supportsTablet` is set on iOS; Android does not declare a separate tablet target).
 - [ ] Category (John picks; Maps & Navigation or Travel & Local are the closest fits).
-- [ ] Contact email. Product support constant is `rides@clemson.edu` (`SUPPORT_EMAIL`). John confirms that address is the Play listing contact.
+- [ ] Contact email. Product support constant is `rides@clemsonrides.com` (`SUPPORT_EMAIL`). John confirms that address is the Play listing contact.
 - [ ] Website: `https://clemsonrides.com` is the public host.
 - [ ] Privacy policy URL. The live page is `https://clemsonrides.com/#/privacy` (last updated September 22, 2026, `shared/legalCopy.js`). John confirms Play accepts that hash URL. If it does not, a path URL is still required. Terms are `https://clemsonrides.com/#/terms`.
 

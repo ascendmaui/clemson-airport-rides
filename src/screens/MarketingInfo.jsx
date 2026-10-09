@@ -2,10 +2,11 @@ import { useEffect } from 'react'
 import { getHashRoute, navigate } from '../lib/navigation'
 import { MarketingChrome } from '../components/MarketingChrome'
 import { MarketingPhoto } from '../components/MarketingPhoto'
+import { QrMark } from '../components/QrMark'
 import { FeatureBlock } from '../components/FeatureBlock'
 import { messagingGuide } from '../../shared/copy/messaging.js'
 import { HERO_COLLAGE, NIGHT_VENUES } from '../content/images.js'
-import { APP_DOWNLOADS } from '../../shared/productLinks.js'
+import { APP_DOWNLOADS, SUPPORT_EMAIL } from '../../shared/productLinks.js'
 import { RIDE_OPTION_CATALOG, SCHEDULE_AHEAD_DISCOUNT_PCT } from '../../shared/rideOptions.js'
 import { CARPOOL_DISCOUNT_BPS, STUDENT_DISCOUNT_BPS } from '../lib/fareRates.js'
 import { tigerPassCopy } from '../../shared/tigerPass.js'
@@ -274,6 +275,41 @@ export function FaqPage() {
   )
 }
 
+export function SupportPage() {
+  return (
+    <MarketingChrome current="support">
+      <PageHead kicker="Help" title="Support" />
+      <article className="mkt-card mkt-feature">
+        <h2>Get help in the apps</h2>
+        <p>Rider app: Account → Help for how-to questions, or Account → Support to describe a problem. The in-app assistant can draft a support ticket for you to confirm.</p>
+        <p>Driver app: Inbox → Support shows your tickets. You can file a bug report in the app.</p>
+      </article>
+      <article className="mkt-card mkt-feature">
+        <h2>Email</h2>
+        <p>Contact <a href={`mailto:${SUPPORT_EMAIL}`}>{SUPPORT_EMAIL}</a>.</p>
+      </article>
+      <article className="mkt-card mkt-feature">
+        <h2>Safety</h2>
+        <p>In an emergency, call 911. The in-ride Safety screen has SOS.</p>
+      </article>
+      <article className="mkt-card mkt-feature">
+        <h2>Delete your account</h2>
+        <p>Rider app: Account → Delete account → File deletion request. Driver app: Menu → Delete account → File deletion request. Each files a support request; the account remains until the request is processed.</p>
+      </article>
+      <article className="mkt-card mkt-feature">
+        <h2>Payments</h2>
+        <p>When you book, your card is pre-authorized for the estimated fare. This is a hold, not a deposit. The fare is charged when the trip ends.</p>
+      </article>
+      <article className="mkt-card mkt-feature">
+        <h2>More information</h2>
+        <button type="button" className="mkt-text pressable" onClick={() => navigate('faq')}>FAQ</button>
+        <button type="button" className="mkt-text pressable" onClick={() => navigate('privacy')}>Privacy</button>
+        <button type="button" className="mkt-text pressable" onClick={() => navigate('terms')}>Terms</button>
+      </article>
+    </MarketingChrome>
+  )
+}
+
 export function GetTheAppPage() {
   return (
     <MarketingChrome current="get-the-app">
@@ -284,6 +320,10 @@ export function GetTheAppPage() {
           <p>{app.blurb}</p>
           <p>{app.iosNote}</p>
           <p>{app.androidNote}</p>
+          <a className="mkt-text pressable" href={app.testflightHref} target="_blank" rel="noopener">
+            Join the iPhone beta (TestFlight)
+          </a>
+          <QrMark value={app.testflightHref} label={`QR code for ${app.product} TestFlight beta`} />
           <button
             type="button"
             className="mkt-text pressable"

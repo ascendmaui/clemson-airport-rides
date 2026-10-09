@@ -1077,7 +1077,7 @@ function DriverShell({ driverId }) {
             <div style={{ fontWeight: 800, color: 'var(--purple)' }}>Carpool bonus</div>
             <p style={{ fontSize: 12, color: 'var(--ink-secondary)', margin: '4px 0 0', lineHeight: 1.45 }}>
               Multi-rider hops pay you 80% of the pool, which is built to beat a solo fare plus a
-              <strong> driver_carpool_bonus</strong> ($2 per extra rider and $0.40 per mile). Riders see their split before anyone is charged.
+              <strong> carpool bonus</strong> ($2 per extra rider and $0.40 per mile). Riders see their split before anyone is charged.
             </p>
             <button type="button" className="pressable" onClick={() => navigate('carpool', { drive: '1' })}
               style={{ marginTop: 8, fontWeight: 800, color: '#F56600' }}>

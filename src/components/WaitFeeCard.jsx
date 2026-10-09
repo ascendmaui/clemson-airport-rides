@@ -1,3 +1,4 @@
+import { uniqueChannelTopic } from '../../packages/rides-native/realtimeChannel.js'
 import { useEffect, useState } from 'react'
 import { useAuth } from '../lib/auth'
 import { supabase } from '../lib/supabase'
@@ -273,7 +274,7 @@ export function RiderWaitBanner() {
     }
     load()
     const channel = supabase
-      .channel(`rider-wait-${user.id}`)
+      .channel(uniqueChannelTopic(`rider-wait-${user.id}`))
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'trips', filter: `rider_id=eq.${user.id}` },

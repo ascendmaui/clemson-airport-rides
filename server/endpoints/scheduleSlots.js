@@ -3,7 +3,8 @@
  * Current wait from available drivers, then pickup slots 10 to 15 minutes out.
  * Demo drivers are excluded. No driver names are returned.
  */
-import { admin, cors, json, parseBody } from '../friendRideLib.js'
+import { isE2ETestUser } from '../../shared/e2eTestAccounts.js'
+import { admin, cors, json, parseBody, userFromAuth } from '../friendRideLib.js'
 import { loadNearTermOffer } from '../nearTermAvailability.js'
 
 function pickupFrom(body) {
@@ -19,6 +20,7 @@ export default async function handler(req, res, deps = {}) {
   if (cors(req, res)) return
   if (req.method !== 'GET' && req.method !== 'POST') return json(res, 405, { error: 'Method not allowed' })
   const sb = deps.sb || admin()
+  const user = deps.user !== undefined ? deps.user : await userFromAuth(req)
   const now = deps.now instanceof Date ? deps.now : new Date()
   let body = {}
   if (req.method === 'POST') {
@@ -40,6 +42,7 @@ export default async function handler(req, res, deps = {}) {
       pickup: pickupFrom(body),
       tier: body.tier || 'standard',
       now,
+      riderIsE2E: isE2ETestUser(user),
     })
   } catch (error) {
     return json(res, error.status || 400, {

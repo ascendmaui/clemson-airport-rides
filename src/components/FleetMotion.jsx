@@ -1,3 +1,4 @@
+import { uniqueChannelTopic } from '../../packages/rides-native/realtimeChannel.js'
 import { useEffect, useRef, useState } from 'react'
 import { fleetCarSvg, initialsMarkerSvg } from '../../shared/fleetCarSvg.js'
 import { resolveDriverPortrait } from '../../shared/driverPortrait.js'
@@ -70,7 +71,7 @@ export function useLiveMapDrivers(enabled) {
     pull()
     const timer = setInterval(pull, 8000)
     const channel = supabase
-      .channel('map-driver-status')
+      .channel(uniqueChannelTopic('map-driver-status'))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'driver_status' }, () => { pull() })
       .subscribe()
     return () => {

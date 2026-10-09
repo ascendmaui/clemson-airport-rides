@@ -11,6 +11,7 @@ import {
   fareCollection,
   formatCents,
   formatPickupAt,
+  incentiveLabel,
   isAirportDepositTrip,
   statusHeadline,
   tagLabel,
@@ -155,7 +156,7 @@ export function formatDriverNetPay(card) {
     if (isCarpool) {
       const baseFormatted = formatCents(fare.baseNetCents || 0)
       const bonusFormatted = formatCents(fare.carpoolBonusCents || 0)
-      const incentiveName = fare.carpoolIncentiveId
+      const incentiveName = incentiveLabel(fare.carpoolIncentiveId)
       subtext = `${headline} · base ${baseFormatted} · ${incentiveName} ${bonusFormatted} · total ${formattedNet}`
     } else {
       subtext = `${headline} · you net 80%`
@@ -163,7 +164,7 @@ export function formatDriverNetPay(card) {
   } else if (isCarpool) {
     const baseFormatted = formatCents(fare.baseNetCents || 0)
     const bonusFormatted = formatCents(fare.carpoolBonusCents || 0)
-    const incentiveName = fare.carpoolIncentiveId
+    const incentiveName = incentiveLabel(fare.carpoolIncentiveId)
     subtext = `Base ${baseFormatted} · ${incentiveName} ${bonusFormatted} · total ${formattedNet}`
   }
   if (boosted.boostDriverCents > 0 && !/boost/i.test(subtext)) {

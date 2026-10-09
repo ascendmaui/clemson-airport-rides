@@ -1,3 +1,4 @@
+import { uniqueChannelTopic } from '../../packages/rides-native/realtimeChannel.js'
 import { useEffect, useRef, useState } from 'react'
 import { A11yModalDialog } from './A11yModal'
 import { PrimaryButton } from './PrimaryButton'
@@ -75,7 +76,7 @@ export function RiderMatchPopup() {
 
     load()
     const channel = supabase
-      .channel(`rider-match-${user.id}`)
+      .channel(uniqueChannelTopic(`rider-match-${user.id}`))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'trips', filter: `rider_id=eq.${user.id}` }, (payload) => {
         consider(payload.new)
       })

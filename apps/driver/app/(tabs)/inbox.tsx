@@ -140,7 +140,7 @@ export default function InboxScreen() {
           ) : (
             <>
               <SoftNote>
-                Tickets filed from Bug Reporter. Email rides@clemson.edu if the ticket service is down.
+                Tickets filed from Bug Reporter. Email rides@clemsonrides.com if the ticket service is down.
               </SoftNote>
               {!user ? (
                 <EmptyState

@@ -88,6 +88,8 @@ export type FareCollection = {
 
 export const DRIVER_CARPOOL_BONUS_ID: string
 
+export function incentiveLabel(id: string | null | undefined): string
+
 export function carpoolPayFromTrip(row: {
   fare_cents?: number
   fareCents?: number
