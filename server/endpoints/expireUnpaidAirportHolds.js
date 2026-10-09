@@ -88,6 +88,12 @@ function dryRunRequested(req) {
     const value = Array.isArray(raw) ? raw[0] : raw
     if (flagOn(value)) return true
   }
+  const body = req?.body
+  if (body && typeof body === 'object') {
+    const raw = body.dry_run ?? body.dryRun
+    const value = Array.isArray(raw) ? raw[0] : raw
+    if (flagOn(value)) return true
+  }
   const url = String(req?.url || '')
   const qIndex = url.indexOf('?')
   if (qIndex === -1) return false
@@ -101,6 +107,9 @@ export const MAX_UNPAID_HOLD_TTL_MS = 7 * 24 * 60 * 60 * 1000 // 7 days maximum 
 export function parseHoldSweepLimit(req) {
   const query = req?.query
   let raw = query && typeof query === 'object' ? query.limit : undefined
+  if (raw === undefined && req?.body && typeof req.body === 'object') {
+    raw = req.body.limit
+  }
   if (raw === undefined) {
     const url = String(req?.url || '')
     const qIndex = url.indexOf('?')
@@ -119,6 +128,10 @@ export function parseHoldSweepTtlMs(req) {
   const query = req?.query
   let rawMs = query && typeof query === 'object' ? (query.ttl_ms ?? query.ttlMs) : undefined
   let rawSec = query && typeof query === 'object' ? (query.ttl_seconds ?? query.ttlSeconds) : undefined
+  if (rawMs === undefined && rawSec === undefined && req?.body && typeof req.body === 'object') {
+    rawMs = req.body.ttl_ms ?? req.body.ttlMs
+    rawSec = req.body.ttl_seconds ?? req.body.ttlSeconds
+  }
   if (rawMs === undefined && rawSec === undefined) {
     const url = String(req?.url || '')
     const qIndex = url.indexOf('?')
