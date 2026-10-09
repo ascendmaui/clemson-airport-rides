@@ -308,7 +308,7 @@ export function reportPeriod(
     if (trip.status && trip.status !== 'completed' && !noShow) continue
     if (noShow) canceled += 1
     else completed += 1
-    const fare = noShow ? (trip.wait_fee_cents || 0) + (trip.cancel_fee_cents || 0) : Math.max(0, Math.round(Number(trip.fare_cents) || 0))
+    const fare = noShow ? (trip.wait_fee_cents || 0) + (trip.cancel_fee_cents || 0) : Math.max(0, Math.round(Number(trip.fare_cents) || 0)) + Math.max(0, Number(trip.wait_fee_cents) || 0)
     const net = periodNetCents(trip)
     const fee = Math.max(0, fare - net)
     totalCents += net

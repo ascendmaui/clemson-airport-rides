@@ -66,7 +66,7 @@ function TripDetail({ trip }) {
       {trip.refundCents > 0 ? <Line label="Refund" value={`−${money(trip.refundCents)}`} /> : null}
       {trip.tipCents != null ? <Line label="Tip" value={money(trip.tipCents)} /> : null}
       {trip.boostCents > 0 ? <Line label="Boost" value={money(trip.boostCents)} hint="100% to you · not in the platform fee" /> : null}
-      {trip.waitFeeCents != null ? <Line label="Wait fee" value={money(trip.waitFeeCents)} /> : null}
+      {trip.driverWaitEarningsCents > 0 ? <Line label="Wait time" value={money(trip.driverWaitEarningsCents)} /> : null}
       {trip.cancelFeeCents != null ? <Line label="Cancel fee" value={money(trip.cancelFeeCents)} /> : null}
       <Line label="Gross" value={money(trip.grossCents)} />
       <Line label="Platform fee" value={`−${money(trip.platformFeeCents)}`} hint="20% of fares, tips, wait, and cancel fees" />

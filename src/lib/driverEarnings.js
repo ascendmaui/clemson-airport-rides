@@ -256,8 +256,8 @@ export function sanitizeCompletedTripForDriver(row, { riderName = '', payments =
     .filter((p) => p.kind === 'refund')
     .reduce((sum, p) => sum + paymentAmount(p), 0)
   const collected = succeeded
-    .filter((p) => p.kind !== 'refund' && p.kind !== 'tip' && !CANCEL_PAYMENT_KINDS.has(String(p.kind)))
-    .reduce((sum, p) => sum + paymentAmount(p), 0)
+    .filter((p) => p.kind !== 'refund' && p.kind !== 'tip' && p.kind !== 'wait_fee' && !CANCEL_PAYMENT_KINDS.has(String(p.kind)))
+    .reduce((sum, p) => sum + Math.max(0, paymentAmount(p) - (Number(p.waitFeeBilledCents ?? p.metadata?.wait_fee_billed_cents) || 0)), 0)
   const waitFeeCents = readWaitFeeCents(row)
   const cancelFeeCents = readCancelFeeCents(row, payments)
   const noShow = row?.status === 'cancelled_wait'
@@ -271,6 +271,11 @@ export function sanitizeCompletedTripForDriver(row, { riderName = '', payments =
     waitFeeCents: canceled && !noShow ? 0 : (waitFeeCents || 0),
     cancelFeeCents: cancelFeeCents || 0,
   })
+  const storedWait = row?.status === 'completed' && row.driver_wait_earnings_cents != null
+    ? Math.max(0, Math.round(Number(row.driver_wait_earnings_cents) || 0)) : null
+  const withoutWait = splitPlatformCut({ fareCents: fareAfterRefundCents, tipCents: canceled ? 0 : (tipCents || 0), cancelFeeCents: cancelFeeCents || 0 })
+  const driverWaitEarningsCents = storedWait ?? Math.max(0, cut.driverNetCents - withoutWait.driverNetCents)
+  const earnedBeforeBoost = storedWait == null ? cut.driverNetCents : withoutWait.driverNetCents + storedWait
   const boostCents = canceled ? 0 : driverBoostShareCents(readBoostCents(row))
 
   const distance = readDistance(row, bill)
@@ -302,12 +307,13 @@ export function sanitizeCompletedTripForDriver(row, { riderName = '', payments =
     fareCents: fareAfterRefundCents,
     refundCents: canceled ? 0 : refundCents,
     grossCents: cut.grossCents,
-    platformFeeCents: noShow ? Math.max(0, cut.grossCents - (Number(row.driver_wait_earnings_cents) || 0)) : cut.platformFeeCents,
+    platformFeeCents: noShow ? Math.max(0, cut.grossCents - (Number(row.driver_wait_earnings_cents) || 0)) : cut.grossCents - earnedBeforeBoost,
     tipCents: canceled ? null : tipCents,
     boostCents,
     waitFeeCents: canceled && !noShow ? null : waitFeeCents,
     cancelFeeCents,
-    earnedCents: noShow ? Math.max(0, Number(row.driver_wait_earnings_cents) || 0) : cut.driverNetCents + boostCents + backupExtras.cents,
+    driverWaitEarningsCents,
+    earnedCents: noShow ? Math.max(0, Number(row.driver_wait_earnings_cents) || 0) : earnedBeforeBoost + boostCents + backupExtras.cents,
     distanceM: distance.meters,
     distanceApproximate: distance.approximate,
     durationS: duration.seconds,

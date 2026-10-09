@@ -286,7 +286,7 @@ export async function collectPayment(input) {
       idempotency_key: idempotencyKey,
       metadata: { ...metadata, logical_kind: kind, admin_override: true },
     })
-    if (hold && tripId) await io.clearHold(tripId, { farePaidDelta: isFareKind(kind) ? amount : 0 })
+    if (hold && tripId) await io.clearHold(tripId, { farePaidDelta: isFareKind(kind) ? (metadata.fare_billed_cents ?? amount) : 0 })
     return {
       ok: true,
       status: 'succeeded',
@@ -481,7 +481,7 @@ export async function collectPayment(input) {
       },
     })
     if (hold && tripId) {
-      await io.clearHold(tripId, { farePaidDelta: isFareKind(kind) ? amount : 0 })
+      await io.clearHold(tripId, { farePaidDelta: isFareKind(kind) ? (metadata.fare_billed_cents ?? amount) : 0 })
     }
     const method = plan.cardCents && plan.creditsAppliedCents ? 'credits+card' : plan.cardCents ? 'card' : 'credits'
     return {
@@ -572,7 +572,7 @@ async function recordPaidIntent(io, pi, fields) {
     idempotency_key: idempotencyKey,
     metadata: { ...(metadata || {}), logical_kind: kind, stripe_status: pi.status, idempotent: true },
   })
-  if (hold && tripId) await io.clearHold(tripId, { farePaidDelta: isFareKind(kind) ? amount : 0 })
+  if (hold && tripId) await io.clearHold(tripId, { farePaidDelta: isFareKind(kind) ? (metadata.fare_billed_cents ?? amount) : 0 })
   return {
     ok: true,
     status: 'succeeded',

@@ -544,15 +544,18 @@ async function chargeOverage(stripe, {
  * Convert a requires_capture hold into the final fare.
  * Returns null when this trip has no open authorization.
  */
-export async function settleFareHold({ sb, stripe, trip, finalFareCents } = {}) {
+export async function settleFareHold({ sb, stripe, trip, finalFareCents, billingMetadata = {} } = {}) {
   const auth = trip?.metadata?.fare_authorization
   if (auth?.status === 'captured' && auth.paymentIntentId) {
+    // A previously captured fare cannot collect a newly due wait balance.
+    // Let settlement use its saved-card fallback for that balance.
+    if (Number(billingMetadata.wait_fee_billed_cents) > 0) return null
     return { ok: true, duplicate: true, method: 'card', amountCents: auth.capturedCents, paymentIntentId: auth.paymentIntentId, status: 'succeeded' }
   }
   if (!auth || auth.status !== 'requires_capture' || !auth.paymentIntentId) return null
   const client = stripe || (stripeOk() ? stripeClient() : null)
   if (!client?.paymentIntents?.retrieve) return null
-  if (trip?.metadata?.billing_choice === 'credits' && readBoostCents(trip) <= 0) {
+  if (trip?.metadata?.billing_choice === 'credits' && readBoostCents(trip) <= 0 && Number(billingMetadata.wait_fee_billed_cents || 0) <= 0) {
     await cancelQuiet(client, { id: auth.paymentIntentId, status: 'requires_capture' })
     await mergeTripMetadata(sb, trip.id, {
       fare_authorization: { ...auth, status: 'canceled', reason: 'credits', at: new Date().toISOString() },
@@ -580,7 +583,7 @@ export async function settleFareHold({ sb, stripe, trip, finalFareCents } = {}) 
 
   if (paymentIntent?.status === 'succeeded') {
     const capturedCents = Math.min(finalFare, Number(paymentIntent.amount_received || paymentIntent.amount) || finalFare)
-    await recordCapture(sb, trip, auth, capturedCents, paymentIntent.id)
+    await recordCapture(sb, trip, auth, capturedCents, paymentIntent.id, billingMetadata)
     return { ok: true, duplicate: true, method: 'card', amountCents: capturedCents, paymentIntentId: paymentIntent.id, status: 'succeeded' }
   }
 
@@ -655,7 +658,7 @@ export async function settleFareHold({ sb, stripe, trip, finalFareCents } = {}) 
         riderId: trip.rider_id,
       })
       if (replacement.ok) {
-        await recordCapture(sb, trip, auth, finalFare, replacement.paymentIntent.id, { replaced: true })
+        await recordCapture(sb, trip, auth, finalFare, replacement.paymentIntent.id, { ...billingMetadata, replaced: true })
         return {
           ok: true,
           method: 'card',
@@ -686,7 +689,7 @@ export async function settleFareHold({ sb, stripe, trip, finalFareCents } = {}) 
   const capturedAmount = Math.max(0, Math.round(Number(captured.amount_received || captureCents) || captureCents))
   const overage = Math.max(0, finalFare - capturedAmount)
   if (overage <= 0) {
-    await recordCapture(sb, trip, auth, capturedAmount, captured.id)
+    await recordCapture(sb, trip, auth, capturedAmount, captured.id, billingMetadata)
     return { ok: true, method: 'card', amountCents: capturedAmount, paymentIntentId: captured.id, status: 'succeeded' }
   }
 
@@ -702,7 +705,7 @@ export async function settleFareHold({ sb, stripe, trip, finalFareCents } = {}) 
     : { ok: false, code: 'no_payment_method' }
 
   if (extra.ok) {
-    await recordCapture(sb, trip, auth, finalFare, captured.id, { overagePaymentIntentId: extra.paymentIntent.id })
+    await recordCapture(sb, trip, auth, finalFare, captured.id, { ...billingMetadata, overagePaymentIntentId: extra.paymentIntent.id })
     return {
       ok: true,
       method: 'card',
@@ -714,7 +717,7 @@ export async function settleFareHold({ sb, stripe, trip, finalFareCents } = {}) 
     }
   }
 
-  await recordCapture(sb, trip, { ...auth, status: 'partial' }, capturedAmount, captured.id)
+  await recordCapture(sb, trip, { ...auth, status: 'partial' }, capturedAmount, captured.id, billingMetadata)
   const outstanding = {
     amountCents: overage,
     code: extra.code || 'charge_failed',
@@ -742,6 +745,12 @@ export async function settleFareHold({ sb, stripe, trip, finalFareCents } = {}) 
 
 async function recordCapture(sb, trip, auth, capturedCents, paymentIntentId, extra = {}) {
   if (sb && trip?.id) {
+    if (extra.fare_billed_cents != null) {
+      extra = { ...extra,
+        wait_fee_billed_cents: Math.min(extra.wait_fee_billed_cents || 0, Math.max(0, capturedCents - extra.fare_billed_cents - (extra.boost_billed_cents || 0))),
+        fare_billed_cents: Math.min(extra.fare_billed_cents, capturedCents),
+      }
+    }
     await insertPaymentRow(sb, {
       trip_id: trip.id,
       rider_id: trip.rider_id,
@@ -771,7 +780,8 @@ async function recordCapture(sb, trip, auth, capturedCents, paymentIntentId, ext
         paymentIntentId,
         ...extra,
       },
-      fare_paid_cents: prior + Math.max(0, capturedCents - alreadyCaptured),
+      fare_paid_cents: prior + Math.max(0, (extra.fare_billed_cents ?? capturedCents) - (previous?.fare_billed_cents ?? alreadyCaptured)),
+      ...(extra.wait_fee_billed_cents > 0 ? { wait_fee_billed_cents: Math.max(Number(metadata.wait_fee_billed_cents) || 0, extra.wait_fee_billed_cents) } : {}),
       outstanding_balance: null,
     })
   }

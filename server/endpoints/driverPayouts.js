@@ -17,8 +17,8 @@ import {
   admin, cors, json, userFromAuth, stripeClient,
 } from '../friendRideLib.js'
 import { stagingCronBlock } from '../cronGuard.js'
-import { buildWaitCancelPayoutRecord, attemptDriverPayout, attemptStandbyBackupPayout, attemptSwitchFeePayout, loadConnectAccount, writePayout } from '../payouts.js'
-import { payoutIsDue, resolveDriverNetCents, summarizeDriverEarnings } from '../../shared/paymentFailure.js'
+import { buildPayoutRecord, buildWaitCancelPayoutRecord, attemptDriverPayout, attemptStandbyBackupPayout, attemptSwitchFeePayout, loadConnectAccount, writePayout } from '../payouts.js'
+import { payoutIsDue, summarizeDriverEarnings } from '../../shared/paymentFailure.js'
 
 export function cronAuthorized(req, secretOverride) {
   const secret = (secretOverride !== undefined ? secretOverride : (process.env.CRON_SECRET || '')).trim()
@@ -157,7 +157,7 @@ export async function runDuePayouts(sb, trips, connectAccountId, deps = {}) {
     if (deps.dryRun) {
       const rawAmount = trip.status === 'cancelled_wait' ? buildWaitCancelPayoutRecord(trip).amountCents : payout.amountCents
       const amountCents = rawAmount == null || rawAmount === ''
-        ? resolveDriverNetCents(trip)
+        ? buildPayoutRecord(trip).amountCents
         : Math.max(0, Math.round(Number(rawAmount) || 0))
       results.push({
         tripId: trip.id,

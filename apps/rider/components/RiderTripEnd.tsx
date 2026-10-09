@@ -49,6 +49,7 @@ export function RiderTripEnd({
 }) {
   const { colors } = useTheme()
   const styles = useThemedStyles(makeStyles)
+  const [waitFeeCents, setWaitFeeCents] = useState(0)
   const [stars, setStars] = useState(AUTO_RIDER_STARS)
   const [review, setReview] = useState('')
   const [choiceId, setChoiceId] = useState<string | null>(null)
@@ -71,6 +72,7 @@ export function RiderTripEnd({
       try {
         const row = await fetchTripForRating(supabase, tripId)
         if (!alive) return
+        setWaitFeeCents(Math.max(0, Number(row?.wait_fee_cents) || 0))
         const reason = ratingBlockReason(row, userId)
         if (reason) {
           setBlock(reason)
@@ -181,6 +183,7 @@ export function RiderTripEnd({
   return (
     <View style={styles.card}>
       <Text style={styles.kicker}>TRIP END</Text>
+      {waitFeeCents > 0 ? <Text style={styles.copy}>Wait time {formatCents(waitFeeCents)}</Text> : null}
       <Text style={styles.title}>How was {offer?.driverName || 'your driver'}?</Text>
       <Text style={styles.copy}>
         {alreadyRated

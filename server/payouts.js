@@ -29,7 +29,7 @@ export function buildWaitCancelPayoutRecord(trip) {
   const amountCents = Math.max(0, Math.round(Number(trip.driver_wait_earnings_cents) || 0))
   return {
     tripId: trip.id, driverId: trip.driver_id, kind: 'wait_cancel',
-    amountCents, fareNetCents: 0, boostCents: 0,
+    amountCents, fareNetCents: 0, boostCents: 0, waitCents: amountCents,
     status: amountCents === 0 ? 'paid' : 'pending', pending: amountCents !== 0,
     attempts: 0, lastError: null, nextRetryAt: null, stripeTransferId: null,
   }
@@ -51,7 +51,8 @@ export function buildPayoutRecord(trip) {
   const backupBonus = heatPay == null && queue?.promotedFromBackup && queue.confirmState !== 'released'
     ? queue.bonusCents
     : 0
-  const amountCents = driverPayoutWithBoost(fareNetCents, boostSource) + backupBonus
+  const waitCents = trip.status === 'completed' ? Math.max(0, Math.round(Number(trip.driver_wait_earnings_cents) || 0)) : 0
+  const amountCents = driverPayoutWithBoost(fareNetCents, boostSource) + backupBonus + waitCents
   const heat = trip?.metadata?.tiger_heat
   return {
     tripId: trip.id,
@@ -59,6 +60,7 @@ export function buildPayoutRecord(trip) {
     amountCents,
     fareNetCents,
     boostCents,
+    waitCents,
     tigerHeatBonusCents: heatPay == null ? 0 : Math.max(0, Math.round(Number(heat?.bonusCents) || 0)),
     platformFundedCents: heatPay == null ? 0 : Math.max(0, Math.round(Number(heat?.platformFundedCents) || 0)),
     status: amountCents === 0 ? 'paid' : 'pending',
@@ -77,7 +79,7 @@ export async function attemptDriverPayout({ trip, stripe, connectAccountId, now 
       pending: stored.pending, attempts: stored.attempts, lastError: stored.lastError,
       nextRetryAt: stored.nextRetryAt, stripeTransferId: stored.stripeTransferId }
     : stored
-  const amountCents = existing.amountCents ?? resolveDriverNetCents(trip)
+  const amountCents = existing.amountCents ?? buildPayoutRecord(trip).amountCents
   if (!amountCents) {
     const paid = applyPayoutAttempt(existing, { ok: true, now, amountCents: 0, transferId: null })
     return { ok: true, payout: { ...paid, amountCents: 0 }, zero: true }

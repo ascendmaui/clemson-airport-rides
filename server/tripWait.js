@@ -17,7 +17,7 @@ import { ensureStripeCustomer, stripeClient, stripeOk } from './friendRideLib.js
 import { releaseOpenFareHold } from './fareAuthorization.js'
 import { enqueueWaitCancelPayout } from './payouts.js'
 import { quoteWait } from '../src/lib/waitFee.js'
-import { reuseStoredIntent, waitChargeKey } from './chargeIdempotency.js'
+import { reuseStoredIntent, waitChargeKey, waitFeeBilledCents } from './chargeIdempotency.js'
 
 const ACTIONS = new Set(['arrive', 'tick', 'cancel', 'start', 'complete'])
 
@@ -47,9 +47,9 @@ export function assertAction(action, tripId) {
 async function loadPayments(sb, tripId) {
   const { data, error } = await sb
     .from('payments')
-    .select('id, kind, status, amount_cents, stripe_payment_intent_id')
+    .select('id, kind, status, amount_cents, stripe_payment_intent_id, metadata')
     .eq('trip_id', tripId)
-    .in('kind', ['wait_fee', 'cancel_fee'])
+    .in('kind', ['wait_fee', 'cancel_fee', 'balance'])
   if (error) throw httpError(error.message, 500)
   return data || []
 }
@@ -101,7 +101,11 @@ export async function chargeWaitFees(sb, trip) {
   }
 
   const prior = await loadPayments(sb, trip.id)
-  const paid = prior
+  if (trip.status === 'completed' && waitFeeBilledCents(trip, prior.filter((p) => p.kind === 'balance')) >= waitFee) {
+    return { status: 'succeeded', reason: 'already_billed', amountCents: waitFee }
+  }
+  const feePayments = prior.filter((p) => ['wait_fee', 'cancel_fee'].includes(p.kind))
+  const paid = feePayments
     .filter((p) => p.status === 'succeeded')
     .reduce((sum, p) => sum + (Number(p.amount_cents) || 0), 0)
   if (paid >= amount) {
@@ -155,7 +159,7 @@ export async function chargeWaitFees(sb, trip) {
   }
 
   const reason = trip.wait_cancel_reason || (trip.status === 'completed' ? 'complete' : 'wait')
-  const inflightId = [...prior].reverse().find((row) => (
+  const inflightId = [...feePayments].reverse().find((row) => (
     row.status !== 'succeeded'
     && row.stripe_payment_intent_id
     && String(row.stripe_payment_intent_id).startsWith('pi_')

@@ -61,7 +61,7 @@ export default async function handler(req, res, deps = {}) {
   }
 
   const [{ data: payments, error: payErr }, { data: bills, error: billErr }] = await Promise.all([
-    sb.from('payments').select('trip_id, kind, amount_cents, status').in('trip_id', ids),
+    sb.from('payments').select('trip_id, kind, amount_cents, status, metadata').in('trip_id', ids),
     sb.from('ride_bills').select('trip_id, base_cents, distance_cents, time_cents, surge_cents, distance_m, duration_s').in('trip_id', ids),
   ])
 
@@ -74,7 +74,7 @@ export default async function handler(req, res, deps = {}) {
     return json(res, 500, { error: billErr.message || 'Could not load fare detail' })
   }
 
-  /** @type {Record<string, { kind: string, amountCents: number, status: string }[]>} */
+  /** @type {Record<string, { kind: string, amountCents: number, status: string, waitFeeBilledCents: number }[]>} */
   const paymentsByTrip = {}
   for (const row of payments || []) {
     if (!row.trip_id) continue
@@ -83,6 +83,7 @@ export default async function handler(req, res, deps = {}) {
       kind: row.kind,
       amountCents: Number(row.amount_cents) || 0,
       status: row.status,
+      waitFeeBilledCents: Math.max(0, Number(row.metadata?.wait_fee_billed_cents) || 0),
     })
     paymentsByTrip[row.trip_id] = list
   }
