@@ -34,6 +34,8 @@
  *   2. surge (single highest matching rule, clamped to [1, 2.5])
  *   3. carpool discount
  *   4. student discount
+ *   4b. frequent-rider pass (TIGER_PASS_DISCOUNT_BPS) when the database row is active
+ *   4c. schedule-ahead 10%, when the pickup qualifies
  *   5. prepaid discount on the credit-funded slice only (lot's own %)
  * Card remainder is not prepaid-discounted. Platform 20% is of the final
  * rider price (cash + credits), not of the pre-discount fare.
@@ -98,20 +100,18 @@ export const MIN_CARD_CHARGE_CENTS = 50
 export const STRIPE_NOT_CONFIGURED_COPY =
   'Stripe checkout is not configured on this machine. No charge was made. Live mode stays off.'
 
-/** 25% of the card remainder, never below Stripe's minimum when cash remains. */
+/**
+ * Upfront airport deposit is retired. New quotes collect the full fare at
+ * trip end. A stored historical deposit still passes through depositSplit.
+ */
 export function cardDepositCents(cashCents) {
-  const cash = Math.max(0, Math.round(Number(cashCents) || 0))
-  if (cash <= 0) return 0
-  const quarter = Math.round(cash * 0.25)
-  if (quarter >= MIN_CARD_CHARGE_CENTS) return Math.min(cash, quarter)
-  if (cash >= MIN_CARD_CHARGE_CENTS) return Math.min(cash, MIN_CARD_CHARGE_CENTS)
+  void cashCents
   return 0
 }
 
 /**
- * Fare, 25% deposit, and the balance still due.
- * A stored deposit (including 0) wins. Otherwise the deposit is 25% of the fare
- * already in hand — call this after the Standard student discount, not before.
+ * Fare and any amount already collected on an older trip.
+ * A stored deposit (including 0) wins. New fares have no upfront deposit.
  */
 export function depositSplit(fareCents, storedDeposit) {
   const fare = Math.max(0, Math.round(Number(fareCents) || 0))
@@ -128,7 +128,11 @@ export function depositSplit(fareCents, storedDeposit) {
 
 export function depositSplitLabel(split) {
   const usd = (cents) => `$${(Math.max(0, Math.round(Number(cents) || 0)) / 100).toFixed(2)}`
-  return `Fare ${usd(split?.fareCents)} · 25% deposit ${usd(split?.depositCents)} · remaining balance ${usd(split?.remainingCents)}`
+  const deposit = Math.max(0, Math.round(Number(split?.depositCents) || 0))
+  if (deposit <= 0) {
+    return `Fare ${usd(split?.fareCents)}. The full fare is charged when the trip ends.`
+  }
+  return `Fare ${usd(split?.fareCents)} · already paid ${usd(deposit)} · remaining ${usd(split?.remainingCents)}`
 }
 
 export const WAIT_CANCEL = {
@@ -398,7 +402,8 @@ export function quoteFare({
   const surgeMul = clampSurge(surgeMultiplier)
   const surgedCents = Math.round(classedCents * surgeMul)
 
-  const carpool = isCarpool
+  const sharedSeat = Boolean(isCarpool) || String(tier ?? '').trim().toLowerCase() === 'carpool'
+  const carpool = sharedSeat
     ? percentOffCents(surgedCents, CARPOOL_DISCOUNT_BPS)
     : { amountCents: surgedCents, discountCents: 0, bps: 0 }
   const studentOk = Boolean(isStudent) && (tier == null || tier === 'standard')

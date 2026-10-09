@@ -25,7 +25,7 @@ export function BillingPicker({ offer, selected, onSelect, loading = false, sign
         <p className="billing-copy">
           {signedIn
             ? 'The server price is unavailable right now. Ride credits stay hidden until it loads.'
-            : 'Sign in to see ride credits. Campus rides stay available with no card. Airport rides request a 25% deposit.'}
+            : 'Sign in to see ride credits. Scheduling does not charge a card. The final fare is charged when the trip ends.'}
         </p>
       </div>
     )
@@ -46,34 +46,17 @@ export function BillingPicker({ offer, selected, onSelect, loading = false, sign
     <div className="billing-picker" data-testid="billing-picker">
       <div className="billing-kicker">How this ride is paid</div>
       <div className="billing-options" role="radiogroup" aria-label="How this ride is paid">
-        {offer.campus && (
-          <button
-            type="button"
-            role="radio"
-            aria-checked={selected === 'no_card'}
-            className={optionClass(selected === 'no_card', true)}
-            data-testid="billing-option-no_card"
-            onClick={() => onSelect('no_card')}
-          >
-            <span className="billing-option-title">No card</span>
-            <span className="billing-option-detail">Campus rides can be requested with no card.</span>
-          </button>
-        )}
-        {!offer.campus && (
-          <button
-            type="button"
-            role="radio"
-            aria-checked={selected === 'deposit'}
-            className={optionClass(selected === 'deposit', true)}
-            data-testid="billing-option-deposit"
-            onClick={() => onSelect('deposit')}
-          >
-            <span className="billing-option-title">25% deposit</span>
-            <span className="billing-option-detail">
-              {offer.depositCents > 0 ? formatUsdFromCents(offer.depositCents) : '25% of the fare'} requested. A card is not charged here.
-            </span>
-          </button>
-        )}
+        <button
+          type="button"
+          role="radio"
+          aria-checked={selected === 'no_card' || selected === 'deposit'}
+          className={optionClass(selected === 'no_card' || selected === 'deposit', true)}
+          data-testid="billing-option-no_card"
+          onClick={() => onSelect('no_card')}
+        >
+          <span className="billing-option-title">No card</span>
+          <span className="billing-option-detail">A card is not charged here. The final fare is charged when the trip ends.</span>
+        </button>
         <button
           type="button"
           role="radio"
@@ -99,9 +82,7 @@ export function BillingPicker({ offer, selected, onSelect, loading = false, sign
       {depositCopy && (
         <p className="billing-deposit" data-testid="billing-deposit-request">{depositCopy}</p>
       )}
-      {offer.campus && (
-        <p className="billing-note">No card is required to request this campus ride.</p>
-      )}
+      <p className="billing-note">No card is charged when you schedule. Requesting a ride places a hold for the estimate plus a buffer.</p>
     </div>
   )
 }

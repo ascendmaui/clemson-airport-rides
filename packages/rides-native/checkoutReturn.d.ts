@@ -8,4 +8,6 @@ export interface CheckoutReturn {
 
 export function parseCheckoutSessionId(input: unknown): string | null
 
+export function isTigerPassReturn(input: unknown): boolean
+
 export function parseCheckoutReturn(input: unknown): CheckoutReturn

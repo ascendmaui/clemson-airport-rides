@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { navigationLinks } from './mapsLink.js'
+import { navigationLinks, preferredNavigationUrl } from './mapsLink.js'
 
 test('directions urls use coordinates when the stop has them', () => {
   const links = navigationLinks({ latitude: 34.6788, longitude: -82.843, label: 'Memorial Stadium' })
@@ -142,4 +142,11 @@ test('documented quirks and potential bugs in current implementation', () => {
   // BUG?: Apple Maps URL uses insecure http:// protocol instead of https://
   const sample = navigationLinks({ label: 'Campus' })
   assert.match(sample.apple, /^http:\/\/maps\.apple\.com\//)
+})
+
+test('one-tap navigate prefers Apple Maps on iPhone and Google Maps elsewhere', () => {
+  const stop = { latitude: 34.6788, longitude: -82.843, label: 'Memorial Stadium' }
+  assert.match(preferredNavigationUrl(stop, 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)'), /^http:\/\/maps\.apple\.com\//)
+  assert.match(preferredNavigationUrl(stop, 'Mozilla/5.0 (Linux; Android 14)'), /^https:\/\/www\.google\.com\/maps\/dir\//)
+  assert.match(preferredNavigationUrl(stop, ''), /google\.com\/maps/)
 })

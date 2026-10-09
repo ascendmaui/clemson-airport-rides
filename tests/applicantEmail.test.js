@@ -168,13 +168,22 @@ test('review list copy shows the submitted email and does not send mail', () => 
   const screen = readFileSync(new URL('../src/screens/AdminDrivers.jsx', import.meta.url), 'utf8')
   assert.match(screen, /submittedApplicantEmail/)
   assert.match(screen, /data-applicant-email/)
+  const onboarding = readFileSync(new URL('../src/screens/DriverOnboarding.jsx', import.meta.url), 'utf8')
+  assert.match(onboarding, /id="applicantEmail"/)
+  assert.match(onboarding, /data-applicant-email/)
+  const driverApp = readFileSync(new URL('../apps/driver/app/onboarding.tsx', import.meta.url), 'utf8')
+  assert.match(driverApp, /label="Email"/)
   assert.match(screen, />Email</)
   assert.equal(EMAIL_TODO.includes('without email'), false)
   assert.match(EMAIL_TODO, /#\/admin/)
   assert.match(EMAIL_TODO, /email submitted/)
+  assert.match(screen, /\{emailTodo && \(/)
+  assert.doesNotMatch(screen, /rows\.some\(\(row\) => row\.notify_error\)/)
   assert.doesNotMatch(screen, /api\.resend\.com|sendApplicantNotice|DRIVER_OFFER_ALERT_EMAIL/)
 
   const routes = readFileSync(new URL('../server/driverRoutes.js', import.meta.url), 'utf8')
+  assert.match(routes, /resolveSignupApplicantEmail/)
+  assert.match(routes, /A valid email is required\./)
   assert.equal((routes.match(/notifyAdminOfApplication\(/g) || []).length, 1)
   assert.match(routes, /writeDriverApplication/)
   assert.doesNotMatch(routes, /api\.resend\.com|DRIVER_OFFER_ALERT_EMAIL\s*=\s*send/)
@@ -187,6 +196,10 @@ test('review list copy shows the submitted email and does not send mail', () => 
   }
   assert.match(migrationSql, /add column if not exists applicant_email/i)
   assert.doesNotMatch(migrationSql, /create table/i)
+  assert.match(adminApi, /adminResendSetupBanner\(process\.env\)/)
+  assert.doesNotMatch(adminApi, /email_todo_present: applications\.some\(\(a\) => a\.notify_error\)/)
+  const queueClient = readFileSync(new URL('../src/lib/driverOnboarding.js', import.meta.url), 'utf8')
+  assert.doesNotMatch(queueClient, /email_todo_present: applications\.some/)
 })
 
 test('applicant email migration is safe when the column already exists and backfills blank rows', async () => {

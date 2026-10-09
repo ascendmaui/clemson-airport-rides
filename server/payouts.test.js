@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { attemptDriverPayout, buildPayoutRecord } from './payouts.js'
+import { attemptDriverPayout, buildPayoutRecord, tigerHeatPayoutCents } from './payouts.js'
 
 test('buildPayoutRecord initializes pending record from trip fare', () => {
   const trip = {
@@ -135,4 +135,36 @@ test('attemptDriverPayout handles Stripe API errors with retry backoff', async (
   assert.equal(skipRes.ok, false)
   assert.equal(skipRes.skipped, true)
   assert.equal(skipRes.reason, 'not_due')
+})
+
+test('a settled Tiger Heat bonus replaces the 80 percent payout and an offer does not', () => {
+  const fareOnly = { id: 'trip_plain', driver_id: 'driver_1', fare_cents: 5000 }
+  assert.equal(tigerHeatPayoutCents(fareOnly), null)
+  assert.equal(buildPayoutRecord(fareOnly).amountCents, 4000)
+  assert.equal(buildPayoutRecord(fareOnly).tigerHeatBonusCents, 0)
+
+  const offered = {
+    ...fareOnly,
+    metadata: { tiger_heat: { settled: false, bonusCents: 1200, driverEarningsCents: 5200 } },
+  }
+  assert.equal(tigerHeatPayoutCents(offered), null)
+  assert.equal(buildPayoutRecord(offered).amountCents, 4000)
+
+  const settled = {
+    ...fareOnly,
+    metadata: {
+      tiger_heat: {
+        settled: true,
+        preview: false,
+        bonusCents: 1200,
+        driverEarningsCents: 5200,
+        platformFundedCents: 200,
+      },
+    },
+  }
+  assert.equal(tigerHeatPayoutCents(settled), 5200)
+  const record = buildPayoutRecord(settled)
+  assert.equal(record.amountCents, 5200)
+  assert.equal(record.tigerHeatBonusCents, 1200)
+  assert.equal(record.platformFundedCents, 200)
 })

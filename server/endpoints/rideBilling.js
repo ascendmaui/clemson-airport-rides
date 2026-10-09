@@ -24,6 +24,8 @@ import {
   readRideCreditBalance,
 } from '../rideBilling.js'
 import { resolveOfferedTier, scheduleDiscountMetadata } from '../../shared/rideOptions.js'
+import { tigerPassQuoteFields } from '../../shared/tigerPass.js'
+import { tigerPassBpsForRider } from '../riderPass.js'
 import { assertTierAvailable } from '../rideAvailability.js'
 
 const CLIENT_MONEY_KEYS = [
@@ -80,6 +82,7 @@ async function priceBody(sb, user, body, compute, now) {
     return { error: error.message, status: error.status || 400, code: error.code }
   }
   const scheduled = Boolean(clean.date || clean.pickupAt || clean.scheduled_for || clean.scheduledFor)
+  const tigerPassBps = await tigerPassBpsForRider(sb, user?.id, now)
   const priced = priceScheduledRequest({
     pickup,
     dropoff,
@@ -92,6 +95,7 @@ async function priceBody(sb, user, body, compute, now) {
     durationS: distance.durationS,
     scheduleAhead: scheduled,
     now,
+    tigerPassBps,
   })
   return { priced, pickup, dropoff, when, clean, tier, scheduled }
 }
@@ -122,6 +126,7 @@ function quotePayload(priced, balance) {
     scheduleDiscountPct: priced.scheduleDiscountPct || 0,
     scheduleDiscountCents: priced.scheduleDiscountCents || 0,
     scheduleDiscountApplied: Boolean(priced.scheduleDiscountApplied),
+    ...tigerPassQuoteFields(priced),
     tier: priced.tier,
   }
 }

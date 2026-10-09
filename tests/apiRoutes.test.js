@@ -164,6 +164,31 @@ test('consolidated handlers reject unknown actions and wrong methods', async () 
   assert.notEqual(reconcile.status, 400)
 })
 
+test('saved payment methods list and select are their own routes', async () => {
+  const listed = await call(stripePaymentHandler, {
+    method: 'GET',
+    url: '/api/stripe-payment-methods',
+  })
+  assert.notEqual(listed.status, 400)
+  assert.ok([200, 401, 503].includes(listed.status))
+
+  const select = await call(stripePaymentHandler, {
+    method: 'POST',
+    url: '/api/stripe-payment-methods',
+    body: { action: 'default', paymentMethodId: 'pm_card' },
+  })
+  assert.notEqual(select.status, 400)
+  assert.ok([200, 401, 503].includes(select.status))
+
+  const remove = await call(stripePaymentHandler, {
+    method: 'POST',
+    url: '/api/stripe-payment-methods',
+    body: { action: 'detach', paymentMethodId: 'pm_card' },
+  })
+  assert.notEqual(remove.status, 400)
+  assert.ok([200, 401, 503].includes(remove.status))
+})
+
 test('held routes fold into existing routers and ignore body sub-actions', () => {
   const driver = {
     allowed: ['signup', 'submit-review', 'earnings', 'offer-preview', 'tip', 'wait', 'cancel-midride', 'payouts'],

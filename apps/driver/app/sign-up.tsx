@@ -10,7 +10,7 @@ export default function SignUpRoute() {
   const router = useRouter()
   const { signUp } = useAuth()
   const onSocial = useSocialSignIn()
-  const googleState = googleAuthButtonState(process.env, { scheme: 'clemsonrides-driver' })
+  const googleState = googleAuthButtonState(process.env, { scheme: 'clemsonrides-driver', provider: 'supabase' })
 
   const socialProviders = DRIVER_SOCIAL_PROVIDERS.map((provider) => {
     if (provider.id === 'google') {
@@ -31,7 +31,7 @@ export default function SignUpRoute() {
       storage={authStorage}
       mark="CD"
       showPromo={false}
-      subtitle="Create a driver account. You can set up billing and your profile while an admin reviews the application."
+      subtitle="Drive with Clemson RIDES. You keep 80% of the fare. Boosts and backup pay on scheduled rides are extra. New drivers are never auto-approved."
       socialProviders={socialProviders}
       onSocial={onSocial}
       onSuccess={() => router.replace('/')}

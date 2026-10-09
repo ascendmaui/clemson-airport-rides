@@ -62,11 +62,13 @@ test('offer alerts use exactly the four specified channels', () => {
   assert.deepEqual(DRIVER_OFFER_ALERT_CHANNELS, ['in_app', 'push', 'sms', 'email'])
   const plan = buildOfferAlertPlan({ pushTokenPresent: true, phoneOnFile: true, emailOnFile: true })
   assert.deepEqual(Object.keys(plan), [...DRIVER_OFFER_ALERT_CHANNELS])
+  assert.equal(plan.push.reason, 'push_not_sent')
+  assert.match(plan.push.gap, /does not block the send/)
   assert.equal(JSON.stringify(plan).includes('@'), false)
   assert.equal(offerAlertCopy(trip).body, 'Memorial Stadium → Tillman Hall')
 })
 
-test('push, sms, and email stay no-send without a live flag, even when contact data exists', async () => {
+test('push posts without an access token while sms and email stay no-send', async () => {
   const previous = process.env.DRIVER_OFFER_ALERT_EMAIL
   delete process.env.DRIVER_OFFER_ALERT_EMAIL
   const originalFetch = globalThis.fetch
@@ -80,12 +82,18 @@ test('push, sms, and email stay no-send without a live flag, even when contact d
       driver_push_tokens: [],
     })
     let senderCalls = 0
+    let pushCall = null
     const result = await dispatchDriverOfferAlert(db.sb, {
       trip,
       driverId: 'driver-1',
       offerMarker: 'initial',
       now: new Date('2026-10-04T18:00:00.000Z'),
     }, {
+      env: {},
+      fetch: async (url, init) => {
+        pushCall = { url, init }
+        return { ok: true, status: 200, json: async () => ({ data: [{ status: 'ok' }] }) }
+      },
       sendEmail: async () => {
         senderCalls += 1
         return { emailed: true }
@@ -94,8 +102,10 @@ test('push, sms, and email stay no-send without a live flag, even when contact d
     assert.equal(senderCalls, 0)
     assert.equal(result.channels.in_app.reason, 'open_driver_screen_only')
     assert.equal(result.channels.in_app.sent, false)
-    assert.equal(result.channels.push.reason, 'push_sender_missing')
-    assert.equal(result.channels.push.sent, false)
+    assert.equal(pushCall.init.method, 'POST')
+    assert.equal(Object.hasOwn(pushCall.init.headers, 'Authorization'), false)
+    assert.equal(result.channels.push.reason, 'sent')
+    assert.equal(result.channels.push.sent, true)
     assert.equal(result.channels.push.tokenPresent, true)
     assert.equal(result.channels.sms.reason, 'live_send_disabled')
     assert.equal(result.channels.sms.phoneOnFile, true)
@@ -247,6 +257,7 @@ test('rebroadcast alerts the next driver and a dry run does not', async () => {
   assert.equal(dry.wouldAdvance, 1)
   assert.deepEqual(calls, [])
   const live = await rebroadcastMissedOffers(supabase, { now, alertDriver })
+  assert.equal(live.pooled, 1)
   assert.equal(live.advanced, 1)
-  assert.deepEqual(calls, ['driver-2'])
+  assert.deepEqual(calls, ['driver-1', 'driver-2'])
 })

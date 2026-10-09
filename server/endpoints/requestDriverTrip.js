@@ -1,10 +1,10 @@
 /**
  * POST /api/stripe-payment-methods?action=request-driver
- * Records a campus trip at the server fare. Client fare, list price, amount,
- * and student flags are ignored. Campus rows have no deposit: status searching,
- * driver_id null, so any approved driver can accept and a decline stays in the
- * pool. GSP/CLT already collect a 25% deposit in Schedule checkout. This screen
- * does not open Checkout and does not insert an unpaid airport hold.
+ * Records a trip at the server fare. Client fare, list price, amount,
+ * and student flags are ignored. Status is searching and driver_id is null,
+ * so any approved driver can accept and a decline stays in the pool.
+ * A manual-capture card hold covers the estimated fare plus a buffer.
+ * Schedule does not take that hold and does not take a deposit.
  */
 import {
   admin, cors, json, parseBody, userFromAuth, computeRoutes,
@@ -13,7 +13,6 @@ import { ensureProfile } from '../ensureProfile.js'
 import { loadGameDayMultiplier } from '../creditLots.js'
 import { studentDiscountGranted } from '../../src/lib/studentDomain.js'
 import { firstName } from '../../src/lib/scheduledRideModel.js'
-import { splitPlatformFee } from '../../src/lib/fareRates.js'
 import {
   CAMPUS_PICKUP,
   priceDriverRequest,
@@ -21,12 +20,19 @@ import {
 } from '../authoritativeFare.js'
 import { receivableDriverIds } from '../driverApproval.js'
 import { listAssignableDrivers } from '../autoAssign.js'
+import { comfortDecision, comfortEmptyMessage } from '../comfortMatch.js'
 import { insertTripEvent } from '../tripEvents.js'
 import { notifyDriverOffer } from '../driverOfferAlerts.js'
+import { exclusiveOfferPatch, netCentsForShare, poolOfferPatch, EXCLUSIVE_SHARE_BPS, POOL_SHARE_BPS } from '../../packages/rides-native/offerLadder.js'
 import { billingForPricedRide } from '../rideBilling.js'
-import { resolveOfferedTier, vehicleServesComfort } from '../../shared/rideOptions.js'
+import { carpoolSeatCount, resolveOfferedTier, vehicleServesComfort } from '../../shared/rideOptions.js'
 import { isSimulatedDriverId } from '../../packages/rides-native/simulatedDrivers.js'
 import { assertTierAvailable } from '../rideAvailability.js'
+import { releaseTigerHeatReservation, reserveTigerHeatOffer } from '../tigerHeatService.js'
+import { loadRiderMatchPreferences } from '../riderPass.js'
+import { tigerPassMetadata } from '../../shared/tigerPass.js'
+import { authorizeRideRequest } from '../fareAuthorization.js'
+import { isE2ETestUser } from '../../shared/e2eTestAccounts.js'
 
 function optionError(res, error) {
   return json(res, error.status || 400, {
@@ -54,6 +60,7 @@ export default async function handler(req, res, deps = {}) {
   if (!sb) return json(res, 503, { error: 'SUPABASE_SERVICE_ROLE_KEY not configured' })
   const user = deps.user !== undefined ? deps.user : await userFromAuth(req)
   if (!user) return json(res, 401, { error: 'Sign in required' })
+  const e2eRider = isE2ETestUser(user)
   const runEnsureProfile = deps.ensureProfile || ensureProfile
 
   const { body, error: pe } = parseBody(req)
@@ -82,6 +89,11 @@ export default async function handler(req, res, deps = {}) {
         code: 'driver_not_approved',
       })
     }
+    const driver = await sb.from('profiles').select('email').eq('id', driverId).maybeSingle()
+    if (driver.error) return json(res, 500, { error: 'Could not read driver profile', code: 'driver_lookup_failed' })
+    if (e2eRider !== isE2ETestUser(driver.data)) {
+      return json(res, 409, { error: 'That ride option is not available.', code: 'ride_option_unavailable' })
+    }
   }
 
   try {
@@ -101,12 +113,26 @@ export default async function handler(req, res, deps = {}) {
 
   let offerDriverId = driverId
   let assignQueue = null
+  const prefs = await loadRiderMatchPreferences(sb, user.id)
   if (autoAssign) {
-    const ordered = await listAssignableDrivers(sb, { tier })
+    const ordered = await listAssignableDrivers(sb, {
+      tier,
+      riderId: user.id,
+      riderEmail: user.email,
+      riderIsE2E: e2eRider,
+      preferredIds: prefs.preferredIds,
+      favoriteIds: prefs.favoriteIds,
+    })
     if (ordered.error) {
       return json(res, 500, { error: 'Could not choose a driver', code: 'auto_assign_unavailable' })
     }
     if (!ordered.drivers.length) {
+      if (ordered.womenOnlyBlocked) {
+        return json(res, 409, {
+          error: comfortEmptyMessage(ordered),
+          code: 'women_only_no_driver',
+        })
+      }
       return json(res, 409, {
         error: 'No approved drivers are online right now.',
         code: 'no_driver_online',
@@ -114,6 +140,11 @@ export default async function handler(req, res, deps = {}) {
     }
     assignQueue = ordered.drivers.map((driver) => driver.id)
     offerDriverId = assignQueue[0]
+  }
+
+  if (!autoAssign) {
+    const comfort = await comfortDecision(sb, user.id, driverId)
+    if (!comfort.ok) return json(res, comfort.status || 409, { error: comfort.error, code: comfort.code })
   }
 
   if (!autoAssign && tier === 'comfort') {
@@ -146,6 +177,7 @@ export default async function handler(req, res, deps = {}) {
   const routeOrigin = places.airport ? CAMPUS_PICKUP : places.pickup
   const distance = await serverDistance(routeOrigin, places.dropoff)
   const isStudent = studentDiscountGranted(user)
+  const seats = carpoolSeatCount(tier, body.passengers ?? body.partySize ?? body.party_size)
   const priced = priceDriverRequest(places, {
     isStudent,
     at: when,
@@ -153,17 +185,11 @@ export default async function handler(req, res, deps = {}) {
     gameDayMultiplier,
     distanceM: distance.distanceM,
     durationS: distance.durationS,
+    tigerPassBps: prefs.discountBps,
+    seatCount: seats,
   })
   if (priced?.fareCents == null || !Number.isFinite(Number(priced.fareCents))) {
     return json(res, 409, { error: 'Fare is not set', code: 'fare_not_set' })
-  }
-
-  if (Number(priced.depositCents) > 0) {
-    return json(res, 409, {
-      error: 'Airport rides collect a 25% deposit in checkout. Book this trip from Schedule so drivers can see it after that deposit is paid.',
-      code: 'airport_deposit_required',
-      depositCents: priced.depositCents,
-    })
   }
 
   const billing = await billingForPricedRide(sb, user.id, body, priced)
@@ -178,7 +204,36 @@ export default async function handler(req, res, deps = {}) {
     })
   }
 
-  const split = splitPlatformFee(priced.fareCents)
+  const ladderPatch = offerDriverId ? exclusiveOfferPatch() : poolOfferPatch(new Date())
+  const ladderShare = offerDriverId ? EXCLUSIVE_SHARE_BPS : POOL_SHARE_BPS
+  const ladderNet = netCentsForShare(priced.fareCents, ladderShare)
+  const split = {
+    platformFeeCents: Math.max(0, priced.fareCents - ladderNet),
+    driverEarningsCents: ladderNet,
+  }
+  let riderAvatarUrl = null
+  try {
+    const avatar = await sb.from('profiles').select('avatar_url').eq('id', user.id).maybeSingle()
+    riderAvatarUrl = typeof avatar?.data?.avatar_url === 'string' ? avatar.data.avatar_url : null
+  } catch {
+    riderAvatarUrl = null
+  }
+  let tigerHeat = null
+  try {
+    tigerHeat = await reserveTigerHeatOffer({
+      sb,
+      pickupLat: places.pickup.lat,
+      pickupLng: places.pickup.lng,
+      riderFareCents: priced.fareCents,
+    })
+  } catch (error) {
+    console.warn(JSON.stringify({
+      level: 'warn',
+      msg: 'tiger_heat_offer_skipped',
+      error: error?.message || String(error),
+    }))
+  }
+  const riderNote = String(body.note || body.riderNote || '').replace(/\s+/g, ' ').trim().slice(0, 280)
   const riderFirst = firstName(
     user.user_metadata?.full_name || user.user_metadata?.name || user.email?.split('@')[0],
     'Rider',
@@ -213,35 +268,63 @@ export default async function handler(req, res, deps = {}) {
       fare_source: 'server',
       rider_pays_cents: priced.fareCents,
     },
-    passengers: 1,
+    passengers: seats,
+    ...(riderNote ? { rider_note: riderNote } : {}),
     metadata: {
+      ...(e2eRider ? { e2e_test: true } : {}),
       kind: 'driver_request',
       purpose: 'planned',
       preferred_driver_id: autoAssign ? null : driverId,
       offer_driver_id: offerDriverId || null,
+      ...ladderPatch,
+      ...(riderAvatarUrl ? { rider_avatar_url: riderAvatarUrl } : {}),
       ...(assignQueue ? { auto_assign_queue: assignQueue } : {}),
       match: autoAssign ? 'auto' : 'open',
+      offer_preference: !autoAssign
+        ? 'picked'
+        : (prefs.preferredIds.includes(offerDriverId)
+          ? 'tiger_pass'
+          : (prefs.favoriteIds.includes(offerDriverId) ? 'favorite' : 'default')),
+      preferred_car_types: prefs.carTypes,
       ...routeMeta,
       rider_first_name: riderFirst,
       fare_is_estimate: Boolean(priced.estimate),
       isStudent: Boolean(priced.isStudent && priced.discountCents > 0),
       student_discount_cents: Math.max(0, priced.discountCents || 0),
       studentLabel: priced.discountCents > 0 ? 'Clemson student · 10% off Standard' : null,
+      ...tigerPassMetadata(priced),
       ride_option: tier,
+      ...(tier === 'carpool' ? { seat_count: seats, per_seat_fare_cents: priced.perSeatFareCents } : {}),
       fare_source: 'server',
       airport: priced.airport,
       ...billing.snapshot,
+      ...(tigerHeat ? { tiger_heat: tigerHeat } : {}),
     },
   }
 
   const profileRes = await runEnsureProfile(sb, user)
   if (!profileRes?.ok) {
+    if (tigerHeat) await releaseTigerHeatReservation({ sb, trip: { metadata: { tiger_heat: tigerHeat } } })
     return json(res, 500, { error: 'Could not create your rider profile', code: 'profile_missing' })
   }
 
   const inserted = await sb.from('trips').insert(row).select('id, status, driver_id, dropoff_label, fare_cents, deposit_cents').single()
   if (inserted.error || !inserted.data) {
+    if (tigerHeat) await releaseTigerHeatReservation({ sb, trip: { metadata: { tiger_heat: tigerHeat } } })
     return json(res, 500, { error: inserted.error?.message || 'Could not request trip' })
+  }
+  let authorization = null
+  try {
+    authorization = await authorizeRideRequest({
+      sb,
+      stripe: deps.stripe,
+      trip: { ...inserted.data, metadata: row.metadata, rider_id: user.id },
+      riderId: user.id,
+      estimatedFareCents: priced.fareCents,
+    })
+  } catch (err) {
+    console.error('[request-driver] fare auth', err?.message || err)
+    authorization = { ok: false, parked: true, reason: 'authorization_error' }
   }
   if (offerDriverId) {
     await notifyDriverOffer(sb, {
@@ -274,6 +357,7 @@ export default async function handler(req, res, deps = {}) {
       depositCents: priced.depositCents,
       discountCents: priced.discountCents,
       studentDiscountApplied: priced.isStudent,
+      authorization,
       eventWarning: eventError.message || 'Could not record trip event',
     })
   }
@@ -284,5 +368,6 @@ export default async function handler(req, res, deps = {}) {
     depositCents: priced.depositCents,
     discountCents: priced.discountCents,
     studentDiscountApplied: priced.isStudent,
+    authorization,
   })
 }

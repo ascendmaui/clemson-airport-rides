@@ -1,7 +1,7 @@
 import { useRouter } from 'expo-router'
 import * as Location from 'expo-location'
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import { AccessibilityInfo, Animated, Linking, Modal, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { AccessibilityInfo, Animated, Image, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { CampusMap, type MapPin } from '@/components/CampusMap'
 import { FarePanel } from '@/components/FarePanel'
@@ -10,7 +10,7 @@ import { CircleButton, GoButton } from '@/components/shell'
 import { DriverStatusCard } from '@/components/DriverStatusCard'
 import { useAuth } from '@/lib/auth'
 import { useFeedback } from '@/lib/feedback'
-import { notifyAcceptedRide } from '@/lib/push'
+import { notifyAcceptedRide, setRideAlertSurface } from '@/lib/push'
 import { shownCents } from '@/lib/shown'
 import { supabase } from '@/lib/supabase'
 import { useTheme } from '@/lib/theme'
@@ -22,7 +22,8 @@ import { HEAT_WINDOWS } from 'rides-native/places.js'
 import { loadBusySpots, type BusySpot } from '@/lib/busySpots'
 import {
   acceptTrip,
-  declineTrip,
+  declineDriverOffer,
+  markSearchingOffers,
   formatCents,
   loadDriverDesk,
   loadGameDay,
@@ -33,7 +34,6 @@ import {
   subscribeTrips,
   type DriverDesk,
 } from 'rides-native/driverDesk'
-import { CUPD_PHONE_DISPLAY, CUPD_PHONE_E164 } from 'rides-native/safety.js'
 import {
   acceptActionLabel,
   declineActionLabel,
@@ -46,13 +46,16 @@ import {
   weekNetCents,
   type DriverCard,
 } from 'rides-native/tripTags'
-import { etaHoldLine, etaLineFor } from 'rides-native/liveTrip'
+import { etaHoldLine } from 'rides-native/liveTrip'
+import { followEtaLine } from 'rides-native/roadFollow'
+import { driverPickupTarget } from 'rides-native/riderLivePickup'
 import { ORANGE, PURPLE } from 'rides-native/places.js'
 import { gameDayNotice, type GameDayNotice } from 'rides-native/gameDayNotice.js'
 import { approvalGateMessage, isSyntheticOffer } from 'rides-native/syntheticOffers'
 import { driverGateView } from 'rides-native/driverGateView'
 import { loadCounterpart } from 'rides-native/partyProfile.js'
 import { offerCardViewModel } from 'rides-native/offerCard'
+import { EXCLUSIVE_SECONDS, exclusiveSecondsLeft, formatHourlyRate, offerHourly, poolSecondsLeft } from 'rides-native/offerLadder.js'
 
 /** Home map overlay grid: screen-edge gutter, spacing between floating pieces, clearance under the status bar. */
 const EDGE = 16
@@ -86,7 +89,7 @@ function demandWord(intensity: number): string {
 export default function DriverHome() {
   const router = useRouter()
   const insets = useSafeAreaInsets()
-  const { colors, scheme, earningsPrivate, setEarningsPrivate } = useTheme()
+  const { colors, scheme, earningsPrivate, setEarningsPrivate, autoAccept, setAutoAccept } = useTheme()
   const shadow = useCardShadow()
   const { user, configured } = useAuth()
   const { pulse } = useFeedback()
@@ -101,7 +104,6 @@ export default function DriverHome() {
   const [self, setSelf] = useState<{ latitude: number; longitude: number } | null>(null)
   const [peek, setPeek] = useState(false)
   const [peekPage, setPeekPage] = useState(0)
-  const [safetyOpen, setSafetyOpen] = useState(false)
   const [focusToken, setFocusToken] = useState(0)
   const [showHeat, setShowHeat] = useState(true)
   const [heatWindow, setHeatWindow] = useState('now')
@@ -122,6 +124,11 @@ export default function DriverHome() {
   const canGoOnline = gate.canGoOnline
   const approved = status === 'approved'
   const online = Boolean(desk?.online)
+  const barY = useRef(new Animated.Value(120)).current
+  useEffect(() => {
+    setRideAlertSurface({ online })
+    Animated.timing(barY, { toValue: online ? 0 : 120, duration: 280, useNativeDriver: true }).start()
+  }, [barY, online])
   const name = user ? displayFirstName(user.user_metadata?.full_name || user.email?.split('@')[0], 'Driver') : 'Driver'
   const tabClearance = insets.bottom + 72
   // The dock is pinned between the status bar / Dynamic Island and the tab bar.
@@ -159,6 +166,7 @@ export default function DriverHome() {
     })
     if (currentGate.canSeeOffers) {
       const loaded = await loadDriverDesk(supabase, user.id)
+      if (loaded.online) markSearchingOffers(supabase, loaded.offers).catch(() => {})
       setDesk(loaded)
       if (loaded.lat != null && loaded.lng != null) {
         setSelf({ latitude: Number(loaded.lat), longitude: Number(loaded.lng) })
@@ -245,7 +253,12 @@ export default function DriverHome() {
   const locationTracking = useDriverLocation(Boolean(user && ((approved && online) || desk?.active)), async (fix) => {
     setSelf({ latitude: fix.lat, longitude: fix.lng })
     if (!supabase || !user) return
-    await publishDriverLocation(supabase, user.id, { ...fix, online: true })
+    await publishDriverLocation(supabase, user.id, {
+      ...fix,
+      online: true,
+      tripId: desk?.active?.id ?? null,
+      tripStatus: desk?.active?.status ?? null,
+    })
   })
 
   async function toggle() {
@@ -308,7 +321,7 @@ export default function DriverHome() {
     setBusy(true)
     setError(null)
     try {
-      await declineTrip(supabase, card, user.id)
+      await declineDriverOffer(supabase, card, user.id)
       pulse('decline')
       await refresh()
     } catch (err) {
@@ -338,18 +351,19 @@ export default function DriverHome() {
       ? { lat: Number(desk.lat), lng: Number(desk.lng) }
       : null
   const liveEta = desk?.active
-    ? etaHoldLine(desk.active.status, etaLineFor(desk.active.status, liveFrom, desk.active))
+    ? etaHoldLine(desk.active.status, followEtaLine(desk.active.status, liveFrom, desk.active))
     : null
   const hotspots = spots.slice().sort((a: BusySpot, b: BusySpot) => b.intensity - a.intensity).slice(0, 4)
   const pins: MapPin[] = []
   if (self) pins.push({ id: 'me', ...self, title: 'You', pinColor: ORANGE, kind: 'self' })
   liveOffers.forEach((card: DriverCard) => {
-    if (card.pickupLat == null || card.pickupLng == null) return
+    const pin = driverPickupTarget(card)
+    if (!pin) return
     pins.push({
       id: card.id,
-      latitude: card.pickupLat,
-      longitude: card.pickupLng,
-      title: card.pickupLabel,
+      latitude: pin.latitude,
+      longitude: pin.longitude,
+      title: pin.live ? `${card.pickupLabel} · live` : card.pickupLabel,
       pinColor: PURPLE,
       kind: 'request',
     })
@@ -377,7 +391,6 @@ export default function DriverHome() {
     const card = liveOffers.find((row: DriverCard) => row.id === id)
     if (!card) return
     setSelectedOfferId(card.id)
-    void onAccept(card)
   }
 
   const statusLine = !user
@@ -397,6 +410,7 @@ export default function DriverHome() {
         focusToken={focusToken}
         spots={spots}
         showHeat={showHeat}
+        heatWindow={heatWindow}
         gameDay={Boolean(gameNotice?.live)}
         gameDayLabel={gameNotice?.live ? gameNotice.headline : null}
         lockOnCenter={Boolean(online && self)}
@@ -582,13 +596,24 @@ export default function DriverHome() {
               card={offer}
               busy={busy}
               notice={null}
+              driver={liveFrom ? { lat: liveFrom.lat, lng: liveFrom.lng } : null}
+              favorite={Boolean(offer.riderId && autoAccept.favoriteRiders.some((rider) => rider.id === offer.riderId))}
+              onFavorite={() => {
+                if (!offer.riderId) return
+                const next = autoAccept.favoriteRiders.filter((rider) => rider.id !== offer.riderId)
+                setAutoAccept({
+                  favoriteRiders: autoAccept.favoriteRiders.some((rider) => rider.id === offer.riderId)
+                    ? next
+                    : [{ id: offer.riderId, name: offer.firstName }, ...autoAccept.favoriteRiders].slice(0, 50),
+                })
+              }}
               onAccept={() => onAccept(offer)}
               onDecline={() => onDecline(offer)}
             />
           ) : null}
           <View style={styles.controls} pointerEvents="box-none">
             <View style={styles.toolCol}>
-              <CircleButton icon="shield" label="Safety" onPress={() => setSafetyOpen(true)} />
+              <CircleButton icon="shield" label="Safety" onPress={() => router.push('/safety')} />
               <CircleButton icon="sparkles" label="Priority mode" onPress={onPriority} />
             </View>
             <GoButton
@@ -603,37 +628,18 @@ export default function DriverHome() {
               <CircleButton icon="locate" label="Recenter map" onPress={() => setFocusToken((value: number) => value + 1)} />
             </View>
           </View>
-          <View style={[styles.bar, shadow, { backgroundColor: colors.card }]} accessibilityLiveRegion="polite">
+          <Animated.View
+            style={[styles.bar, shadow, { backgroundColor: colors.card, transform: [{ translateY: barY }] }]}
+            accessibilityLiveRegion="polite"
+            accessibilityElementsHidden={!online}
+            pointerEvents={online ? 'auto' : 'none'}
+          >
             <CircleButton icon="options" label="Ride queue" onPress={() => router.push('/queue')} />
-            <Text style={[styles.barText, { color: colors.title }]} accessibilityLiveRegion="polite">{statusLine}</Text>
+            <Text style={[styles.barText, { color: colors.title }]} accessibilityLiveRegion="polite">{online ? statusLine : ''}</Text>
             <CircleButton icon="list" label="Open queue" onPress={() => router.push('/queue')} />
-          </View>
+          </Animated.View>
         </View>
       </View>
-      <Modal visible={safetyOpen} transparent animationType="slide" onRequestClose={() => setSafetyOpen(false)}>
-        <Pressable
-          style={styles.modalScrim}
-          onPress={() => setSafetyOpen(false)}
-          accessibilityRole="button"
-          accessibilityLabel="Close safety modal"
-          accessibilityHint="Dismisses the safety information"
-        >
-          <Pressable
-            style={[styles.modalCard, { backgroundColor: colors.card }]}
-            onPress={(e: { stopPropagation: () => void }) => e.stopPropagation()}
-            accessibilityRole="none"
-            accessibilityLabel="Safety options"
-          >
-            <Text style={[styles.cardTitle, { color: colors.title }]}>Safety</Text>
-            <Text style={{ color: colors.inkSecondary }}>
-              Clemson University Police are {CUPD_PHONE_DISPLAY}. If you are in danger, call 911.
-            </Text>
-            <Primary label="Call 911" onPress={() => Linking.openURL('tel:911')} />
-            <Primary label={`Call CUPD ${CUPD_PHONE_DISPLAY}`} onPress={() => Linking.openURL(`tel:${CUPD_PHONE_E164}`)} tone="purple" />
-            <Primary label="Close" onPress={() => setSafetyOpen(false)} tone="ghost" />
-          </Pressable>
-        </Pressable>
-      </Modal>
     </View>
   )
 }
@@ -642,26 +648,62 @@ export function RideCard({
   card,
   busy,
   notice,
+  driver,
+  favorite,
+  onFavorite,
   onAccept,
   onDecline,
 }: {
   card: DriverCard
   busy: boolean
   notice?: string | null
+  driver?: { lat: number; lng: number } | null
+  favorite?: boolean
+  onFavorite?: () => void
   onAccept: () => void
   onDecline: () => void
 }) {
   const { colors } = useTheme()
-  const vm = offerCardViewModel(card)
+  const [tick, setTick] = useState(() => Date.now())
+  const seenAt = useRef(Date.now())
+  useEffect(() => {
+    seenAt.current = Date.now()
+  }, [card.id])
+  const waitingOnPool = card.offerPhase === 'pool' || card.offerPhase === 'scheduled' || card.status === 'scheduled'
+  const exclusiveLeft = waitingOnPool
+    ? null
+    : (exclusiveSecondsLeft(card, tick) ?? Math.max(0, EXCLUSIVE_SECONDS - Math.round((tick - seenAt.current) / 1000)))
+  const poolLeft = poolSecondsLeft(card, tick)
+  const secondsLeft = exclusiveLeft ?? poolLeft
+  const pulsing = exclusiveLeft != null && exclusiveLeft > 0
+  const vm = offerCardViewModel(secondsLeft == null ? card : { ...card, secondsLeft })
+  const hourly = formatHourlyRate(offerHourly(card, driver).hourlyCents)
   const preferredNote = preferredRequestNote(card)
   const opacity = useState(() => new Animated.Value(0))[0]
+  const glow = useRef(new Animated.Value(0.35)).current
   const scrollRef = useRef<ScrollView>(null)
   const [viewport, setViewport] = useState(0)
   const [content, setContent] = useState(0)
   const overflows = viewport > 0 && content > viewport + 1
   useEffect(() => {
+    const timer = setInterval(() => setTick(Date.now()), 1000)
+    return () => clearInterval(timer)
+  }, [card.id])
+  useEffect(() => {
     Animated.timing(opacity, { toValue: 1, duration: 280, useNativeDriver: true }).start()
   }, [opacity])
+  useEffect(() => {
+    if (!pulsing) {
+      glow.setValue(1)
+      return undefined
+    }
+    const loop = Animated.loop(Animated.sequence([
+      Animated.timing(glow, { toValue: 1, duration: 700, useNativeDriver: true }),
+      Animated.timing(glow, { toValue: 0.35, duration: 700, useNativeDriver: true }),
+    ]))
+    loop.start()
+    return () => loop.stop()
+  }, [glow, pulsing])
   useEffect(() => {
     // Hint that the breakdown scrolls when the card had to shrink to fit.
     if (overflows) scrollRef.current?.flashScrollIndicators()
@@ -671,7 +713,7 @@ export function RideCard({
     // only the details scroll — Accept / Decline stay pinned and visible.
     <Animated.View style={[styles.offerWrap, { opacity }]}>
       <Card
-        style={styles.offerCard}
+        style={[styles.offerCard, pulsing ? { borderColor: colors.orange, borderWidth: 2 } : null]}
         accessibilityRole="summary"
         accessibilityLabel={vm.accessibilityLabel}
       >
@@ -686,6 +728,29 @@ export function RideCard({
           onContentSizeChange={(_: number, height: number) => setContent(height)}
         >
           {notice ? <Text style={[styles.offerNotice, { color: colors.orange }]}>{notice}</Text> : null}
+          <View style={styles.riderRow}>
+            {card.riderAvatarUrl ? (
+              <Image
+                source={{ uri: card.riderAvatarUrl }}
+                style={styles.avatar}
+                accessibilityIgnoresInvertColors
+                accessibilityLabel={`${card.firstName || 'Rider'} profile photo`}
+              />
+            ) : (
+              <View style={[styles.avatar, styles.avatarFallback, { backgroundColor: colors.purple }]}>
+                <Text style={styles.avatarLetter}>{(card.firstName || 'R').slice(0, 1)}</Text>
+              </View>
+            )}
+            <View style={{ flex: 1 }}>
+              <Text style={{ color: colors.ink, fontWeight: '800', fontSize: 16 }}>{card.firstName}</Text>
+              <Text style={{ color: colors.inkSecondary }}>{card.tier === 'wait' ? 'Wait & Save' : card.tier === 'comfort' ? 'Extra Comfort' : card.tier === 'carpool' ? 'Carpool' : 'Standard'}</Text>
+            </View>
+            {onFavorite ? (
+              <Pressable onPress={onFavorite} accessibilityRole="button" accessibilityLabel={favorite ? 'Remove favorite rider' : 'Save favorite rider'}>
+                <Text style={{ color: favorite ? colors.orange : colors.purple, fontWeight: '800' }}>{favorite ? 'Favorite' : 'Save rider'}</Text>
+              </Pressable>
+            ) : null}
+          </View>
           <View style={styles.offerFareRow}>
             <Text style={[styles.offerFare, { color: colors.ink }]} accessibilityLabel={`Driver net pay ${vm.pay.formattedNet}`}>
               {vm.pay.formattedNet}
@@ -695,6 +760,9 @@ export function RideCard({
           <Text style={{ color: colors.inkSecondary }}>
             {vm.pay.subtext}
           </Text>
+          <Text style={{ color: colors.orange, fontWeight: '800' }} accessibilityLabel={`Hourly rate ${hourly}`}>
+            {hourly}
+          </Text>
           {vm.badges.length > 0 ? (
             <View style={styles.tags}>
               {vm.badges.map((b: { id: string; label: string; tone?: 'orange' | 'purple' }) => (
@@ -702,13 +770,10 @@ export function RideCard({
               ))}
             </View>
           ) : null}
+          {vm.boostLine ? (
+            <Text style={{ color: colors.ink, fontSize: 15, lineHeight: 21 }}>{vm.boostLine}</Text>
+          ) : null}
           {preferredNote ? <Text style={{ color: colors.orange, fontWeight: '700' }}>{preferredNote}</Text> : null}
-          <Text style={{ color: colors.ink, fontWeight: '700' }}>
-            {vm.rider.firstName}
-            {vm.rider.ratingText ? ` · ${vm.rider.ratingText}` : ''}
-            {vm.rider.rideType ? ` · ${vm.rider.rideType}` : ''}
-            {vm.seats.seatsLabel ? ` · ${vm.seats.seatsLabel}` : ''}
-          </Text>
           <Text style={{ color: colors.ink, fontWeight: '700' }}>Pickup · {card.pickupLabel}</Text>
           <Text style={{ color: colors.ink, fontWeight: '700' }}>Drop-off · {card.dropoffLabel}</Text>
           {vm.distanceEta ? (
@@ -720,7 +785,17 @@ export function RideCard({
           {vm.deposit ? (
             <Text style={{ color: colors.inkSecondary }}>{vm.deposit.label}</Text>
           ) : null}
-          {vm.timeLeft?.label ? (
+          {pulsing ? (
+            <Animated.Text style={{ color: colors.orange, fontWeight: '800', opacity: glow }}>
+              {exclusiveLeft}s to accept
+            </Animated.Text>
+          ) : poolLeft != null ? (
+            <Text style={{ color: colors.purple, fontWeight: '800' }}>
+              {poolLeft > 0 ? `Pool · ${poolLeft}s left` : 'Pool offer ended'}
+            </Text>
+          ) : exclusiveLeft === 0 ? (
+            <Text style={{ color: colors.purple, fontWeight: '800' }}>Opening the pool</Text>
+          ) : vm.timeLeft?.label ? (
             <Text style={{ color: vm.timeLeft.isUrgent ? colors.orange : colors.inkSecondary, fontWeight: '700' }}>
               {vm.timeLeft.label}
             </Text>
@@ -800,6 +875,10 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   barText: { fontWeight: '800', fontSize: 16, flex: 1, textAlign: 'center' },
+  riderRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  avatar: { width: 44, height: 44, borderRadius: 22 },
+  avatarFallback: { alignItems: 'center', justifyContent: 'center' },
+  avatarLetter: { color: '#fff', fontWeight: '800', fontSize: 18 },
   offerFareRow: { flexDirection: 'row', alignItems: 'baseline', gap: 6 },
   offerFare: { fontSize: 34, fontWeight: '800', letterSpacing: -0.6 },
   offerFareTag: { fontSize: 16, fontWeight: '700' },
@@ -818,8 +897,6 @@ const styles = StyleSheet.create({
   offerBody: { gap: 10, paddingBottom: 2 },
   offerNotice: { fontWeight: '700', fontSize: 13, lineHeight: 18 },
   offerActions: { gap: 8, paddingTop: 10 },
-  modalScrim: { flex: 1, backgroundColor: 'rgba(11,18,32,0.45)', justifyContent: 'flex-end' },
-  modalCard: { borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 20, gap: 12 },
   statusWrap: { flexShrink: 1, maxHeight: 400 },
   statusScrollBody: { flexGrow: 1 },
 })

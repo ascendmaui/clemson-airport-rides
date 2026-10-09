@@ -204,6 +204,23 @@ test('driver push offline and error states', { concurrency: false }, async (t) =
     })
   })
 
+  await t.test('an open online driver suppresses the system toast', async () => {
+    push.setRideAlertSurface({ active: true, online: true })
+    const inApp = await state().handler.handleNotification()
+    assert.equal(push.inAppRideAlert(), true)
+    assert.deepEqual(inApp, {
+      shouldShowBanner: false,
+      shouldShowList: true,
+      shouldPlaySound: false,
+      shouldSetBadge: false,
+    })
+    push.setRideAlertSurface({ active: false, online: true })
+    const locked = await state().handler.handleNotification()
+    assert.equal(locked.shouldShowBanner, true)
+    assert.equal(locked.shouldPlaySound, true)
+    push.setRideAlertSurface({ active: true, online: false })
+  })
+
   await t.test('registerDriverPush asks the driver to sign in when there is no id', async () => {
     const client = supabaseClient(() => {
       throw new Error('should not touch supabase')

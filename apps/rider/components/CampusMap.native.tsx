@@ -1,13 +1,16 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react'
 import { Platform, StyleSheet, Text, View } from 'react-native'
 import Constants from 'expo-constants'
-import MapView, { Circle, Marker, Polyline, PROVIDER_DEFAULT } from 'react-native-maps'
-import { ANDROID_MAP_UNAVAILABLE, googleMapStyle, nativeMapTilesReady } from 'rides-native/googleMapChrome.js'
+import MapView, { Circle, Marker, Polygon, Polyline, PROVIDER_DEFAULT } from 'react-native-maps'
+import { lerpHeading, travelBearing } from 'rides-native/roadFollow.js'
 import { heatColor } from 'rides-native/heat.js'
 import { DOWNTOWN, STADIUM } from 'rides-native/places.js'
 import { SIMULATED_FLEET_BADGE, refuseSimulatedDriverTap } from 'rides-native/simulatedDrivers.js'
+import { demoCarPaint, SEARCH_MAP_ZOOM_MS, searchMapRegion } from 'rides-native/searchPreview.js'
 import { useSimulatedFleet } from 'rides-native/useSimulatedFleet.js'
-import type { CampusMapHandle, CampusMapProps } from '@/components/mapTypes'
+import { fetchTigerHeatMap } from 'rides-native/tigerHeatClient.js'
+import { toNativeRing, type TigerHeatZone } from 'rides-native/tigerHeat.js'
+import type { CampusMapHandle, CampusMapProps, LatLng } from '@/components/mapTypes'
 import { useTheme } from '@/lib/theme'
 
 function rgba(hex: string, alpha: number) {
@@ -16,6 +19,94 @@ function rgba(hex: string, alpha: number) {
   const g = parseInt(raw.slice(2, 4), 16)
   const b = parseInt(raw.slice(4, 6), 16)
   return `rgba(${r},${g},${b},${alpha})`
+}
+
+function SearchFleetGlyph({
+  heading,
+  livery,
+  body,
+  label,
+}: {
+  heading: number
+  livery?: string
+  body?: string
+  label: string
+}) {
+  const paint = demoCarPaint({ livery })
+  const wedge = body === 'wedge'
+  return (
+    <View
+      accessibilityLabel={label}
+      style={{
+        width: wedge ? 22 : 14,
+        height: wedge ? 16 : 22,
+        borderRadius: wedge ? 2 : 5,
+        backgroundColor: paint.fill,
+        borderColor: paint.edge,
+        borderWidth: 2,
+        transform: [{ rotate: `${heading}deg` }],
+      }}
+    />
+  )
+}
+
+function MovingDriverMarker({
+  latitude,
+  longitude,
+  heading,
+  title,
+}: {
+  latitude: number
+  longitude: number
+  heading?: number | null
+  title: string
+}) {
+  const [pos, setPos] = useState({ latitude, longitude })
+  const [rotation, setRotation] = useState(heading ?? 0)
+  const fromRef = useRef({ latitude, longitude, heading: heading ?? 0 })
+  const raf = useRef(0)
+
+  useEffect(() => {
+    const from = fromRef.current
+    const bearing = heading ?? travelBearing(
+      { lat: from.latitude, lng: from.longitude },
+      { lat: latitude, lng: longitude },
+    )
+    const toHeading = bearing ?? from.heading
+    const start = Date.now()
+    const dur = 900
+    cancelAnimationFrame(raf.current)
+    const tick = () => {
+      const t = Math.min(1, (Date.now() - start) / dur)
+      const ease = 1 - (1 - t) ** 3
+      const next = {
+        latitude: from.latitude + (latitude - from.latitude) * ease,
+        longitude: from.longitude + (longitude - from.longitude) * ease,
+      }
+      setPos(next)
+      const turned = lerpHeading(from.heading, toHeading, ease)
+      if (turned != null) setRotation(turned)
+      if (t < 1) raf.current = requestAnimationFrame(tick)
+      else fromRef.current = { ...next, heading: toHeading }
+    }
+    raf.current = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(raf.current)
+  }, [latitude, longitude, heading])
+
+  return (
+    <Marker
+      coordinate={pos}
+      anchor={{ x: 0.5, y: 0.5 }}
+      flat
+      rotation={rotation}
+      title={title}
+      tracksViewChanges={false}
+    >
+      <View style={styles.driverCar} accessibilityLabel={title}>
+        <View style={styles.driverNose} />
+      </View>
+    </Marker>
+  )
 }
 
 function theaterCar(index: number, tick: number, orange: string, purple: string) {
@@ -32,8 +123,10 @@ export const CampusMap = forwardRef<CampusMapHandle, CampusMapProps>(function Ca
   {
     spots,
     showHeat,
+    heatWindow = 'now',
     mapType = 'standard',
     theater = false,
+    searchMotion = false,
     gameDay = false,
     gameDayLabel = null,
     surge = false,
@@ -47,9 +140,11 @@ export const CampusMap = forwardRef<CampusMapHandle, CampusMapProps>(function Ca
 ) {
   const { colors, scheme } = useTheme()
   const mapRef = useRef<MapView>(null)
-  const simulatedFleet = useSimulatedFleet(showSimulatedFleet)
+  const simulatedFleet = useSimulatedFleet(showSimulatedFleet || searchMotion)
+  const opened = searchMapRegion(0)
   const [tick, setTick] = useState(0)
   const [radar, setRadar] = useState(90)
+  const [tigerZones, setTigerZones] = useState<TigerHeatZone[]>([])
   const center = showHeat ? DOWNTOWN : STADIUM
 
   useImperativeHandle(ref, () => ({
@@ -71,7 +166,7 @@ export const CampusMap = forwardRef<CampusMapHandle, CampusMapProps>(function Ca
     .join('|')
 
   useEffect(() => {
-    if (!fitPins || !pins.length || !mapRef.current) return undefined
+    if (searchMotion || !fitPins || !pins.length || !mapRef.current) return undefined
     const coords = pins.map((pin) => ({ latitude: pin.latitude, longitude: pin.longitude }))
     if (coords.length === 1) {
       mapRef.current.animateToRegion({
@@ -87,16 +182,70 @@ export const CampusMap = forwardRef<CampusMapHandle, CampusMapProps>(function Ca
       animated: true,
     })
     return undefined
-  }, [fitPins, fitKey])
+  }, [searchMotion, fitPins, fitKey])
 
   useEffect(() => {
-    if (!theater) return undefined
+    if (!searchMotion) return undefined
+    let cancelled = false
+    let attempts = 0
+    let widen: ReturnType<typeof setTimeout> | undefined
+    const start = searchMapRegion(0)
+    const end = searchMapRegion(SEARCH_MAP_ZOOM_MS)
+    const frame = (region: ReturnType<typeof searchMapRegion>, duration: number) => {
+      mapRef.current?.animateToRegion(
+        {
+          latitude: region.latitude,
+          longitude: region.longitude,
+          latitudeDelta: region.latitudeDelta,
+          longitudeDelta: region.longitudeDelta,
+        },
+        duration,
+      )
+    }
+    const wait = setInterval(() => {
+      if (cancelled) return
+      attempts += 1
+      if (!mapRef.current) {
+        if (attempts > 40) clearInterval(wait)
+        return
+      }
+      clearInterval(wait)
+      frame(start, 40)
+      widen = setTimeout(() => {
+        if (!cancelled) frame(end, SEARCH_MAP_ZOOM_MS)
+      }, 120)
+    }, 50)
+    return () => {
+      cancelled = true
+      clearInterval(wait)
+      if (widen) clearTimeout(widen)
+    }
+  }, [searchMotion])
+
+  useEffect(() => {
+    if (!showHeat) {
+      setTigerZones([])
+      return undefined
+    }
+    let alive = true
+    fetchTigerHeatMap(heatWindow).then((result) => {
+      if (alive) setTigerZones(result.zones || [])
+    }).catch(() => {
+      if (alive) setTigerZones([])
+    })
+    return () => {
+      alive = false
+    }
+  }, [showHeat, heatWindow])
+
+  useEffect(() => {
+    if (!theater || searchMotion) return undefined
     const id = setInterval(() => {
       setTick((value: number) => value + 1)
       setRadar((value: number) => (value > 320 ? 80 : value + 36))
     }, 700)
     return () => clearInterval(id)
-  }, [theater])
+  }, [theater, searchMotion])
 
   const tilesReady = nativeMapTilesReady(Platform.OS, {
     env: typeof process !== 'undefined' ? process.env : {},
@@ -117,7 +266,12 @@ export const CampusMap = forwardRef<CampusMapHandle, CampusMapProps>(function Ca
         ref={mapRef}
         provider={PROVIDER_DEFAULT}
         style={StyleSheet.absoluteFill}
-        initialRegion={{
+        initialRegion={searchMotion ? {
+          latitude: opened.latitude,
+          longitude: opened.longitude,
+          latitudeDelta: opened.latitudeDelta,
+          longitudeDelta: opened.longitudeDelta,
+        } : {
           latitude: center.latitude,
           longitude: center.longitude,
           latitudeDelta: showHeat ? 0.028 : 0.04,
@@ -133,6 +287,42 @@ export const CampusMap = forwardRef<CampusMapHandle, CampusMapProps>(function Ca
       >
         <Marker coordinate={STADIUM} pinColor={colors.orange} title="Memorial Stadium" />
         <Marker coordinate={DOWNTOWN} pinColor={colors.purple} title="Downtown Clemson" />
+        {showHeat
+          ? tigerZones.map((zone: TigerHeatZone) => (
+              <Polygon
+                key={`tiger-${zone.id}`}
+                coordinates={toNativeRing(zone.polygon)}
+                fillColor={zone.preview ? 'rgba(245,102,0,0.18)' : 'rgba(245,102,0,0.36)'}
+                strokeColor="#522D80"
+                strokeWidth={2}
+              />
+            ))
+          : null}
+        {showHeat
+          ? tigerZones.map((zone: TigerHeatZone) => (
+              <Polygon
+                key={`tiger-inner-${zone.id}`}
+                coordinates={toNativeRing(zone.innerPolygon)}
+                fillColor="rgba(82,45,128,0.2)"
+                strokeColor="#F56600"
+                strokeWidth={1}
+              />
+            ))
+          : null}
+        {showHeat
+          ? tigerZones.map((zone: TigerHeatZone) => (
+              <Marker
+                key={`tiger-label-${zone.id}`}
+                coordinate={{ latitude: zone.lat, longitude: zone.lng }}
+                anchor={{ x: 0.5, y: 0.5 }}
+                tracksViewChanges={false}
+              >
+                <View style={[styles.tigerChip, zone.preview ? styles.tigerChipPreview : null]}>
+                  <Text style={styles.tigerChipText}>{zone.bonusLabel}</Text>
+                </View>
+              </Marker>
+            ))
+          : null}
         {showHeat
           ? spots.map((spot: BusySpot) => (
               <Circle
@@ -163,7 +353,7 @@ export const CampusMap = forwardRef<CampusMapHandle, CampusMapProps>(function Ca
             strokeWidth={2}
           />
         ) : null}
-        {theater ? (
+        {theater && !searchMotion ? (
           <Circle
             center={STADIUM}
             radius={radar}
@@ -172,7 +362,7 @@ export const CampusMap = forwardRef<CampusMapHandle, CampusMapProps>(function Ca
             strokeWidth={2}
           />
         ) : null}
-        {theater
+        {theater && !searchMotion
           ? [0, 1, 2, 3].map((index) => {
               const car = theaterCar(index, tick, colors.orange, colors.purple)
               return (
@@ -193,7 +383,15 @@ export const CampusMap = forwardRef<CampusMapHandle, CampusMapProps>(function Ca
         {route.length > 1 ? (
           <Polyline coordinates={route} strokeColor={colors.orange} strokeWidth={4} />
         ) : null}
-        {pins.map((pin: MapPin) => (
+        {pins.map((pin: MapPin) => pin.id === 'driver' ? (
+          <MovingDriverMarker
+            key={pin.id}
+            latitude={pin.latitude}
+            longitude={pin.longitude}
+            heading={pin.heading}
+            title={pin.title}
+          />
+        ) : (
           <Marker
             key={pin.id}
             coordinate={{ latitude: pin.latitude, longitude: pin.longitude }}
@@ -211,7 +409,33 @@ export const CampusMap = forwardRef<CampusMapHandle, CampusMapProps>(function Ca
         {userCoordinate ? (
           <Marker coordinate={userCoordinate} pinColor={colors.purple} title="You" />
         ) : null}
-        {showSimulatedFleet
+        {searchMotion
+          ? simulatedFleet.map((car) => {
+              const who = car.firstName || car.title || 'Driver'
+              const vehicle = car.label || car.routeLabel
+              return (
+                <Marker
+                  key={`search-${car.id}`}
+                  coordinate={{ latitude: car.lat, longitude: car.lng }}
+                  title={who}
+                  description={vehicle}
+                  anchor={{ x: 0.5, y: 0.5 }}
+                  tracksViewChanges
+                  onPress={() => {
+                    refuseSimulatedDriverTap(car.id)
+                  }}
+                >
+                  <SearchFleetGlyph
+                    heading={car.heading}
+                    livery={car.livery}
+                    body={car.body}
+                    label={`${who}, ${vehicle}`}
+                  />
+                </Marker>
+              )
+            })
+          : null}
+        {showSimulatedFleet && !searchMotion
           ? simulatedFleet.map((car) => (
               <Marker
                 key={car.id}
@@ -234,7 +458,7 @@ export const CampusMap = forwardRef<CampusMapHandle, CampusMapProps>(function Ca
             ))
           : null}
       </MapView>
-      {showSimulatedFleet ? (
+      {showSimulatedFleet && !searchMotion ? (
         <View pointerEvents="none" style={styles.busyBadge}>
           <Text style={styles.busyBadgeText}>{SIMULATED_FLEET_BADGE}</Text>
         </View>
@@ -281,6 +505,16 @@ const styles = StyleSheet.create({
     borderColor: '#FFFFFF',
   },
   stopText: { color: '#FFFFFF', fontSize: 12, fontWeight: '800' },
+  tigerChip: {
+    backgroundColor: '#F56600',
+    borderColor: '#522D80',
+    borderWidth: 2,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  tigerChipPreview: { backgroundColor: '#522D80' },
+  tigerChipText: { color: '#FFFFFF', fontSize: 12, fontWeight: '800' },
   zone: { position: 'absolute', left: 12, bottom: 12, right: 12, alignItems: 'flex-start' },
   zoneText: { overflow: 'hidden', borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6, fontSize: 12, fontWeight: '800' },
   busyCar: { alignItems: 'center', width: 52 },
@@ -313,5 +547,25 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     backgroundColor: '#522D80',
     color: '#FFFFFF',
+  },
+  driverCar: {
+    width: 18,
+    height: 28,
+    borderRadius: 7,
+    backgroundColor: '#F56600',
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+    alignItems: 'center',
+  },
+  driverNose: {
+    marginTop: 2,
+    width: 0,
+    height: 0,
+    borderLeftWidth: 4,
+    borderRightWidth: 4,
+    borderBottomWidth: 6,
+    borderLeftColor: 'transparent',
+    borderRightColor: 'transparent',
+    borderBottomColor: '#522D80',
   },
 })
