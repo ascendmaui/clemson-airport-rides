@@ -67,7 +67,9 @@ async function withMockRun({ args = ['--confirm-prod-e2e'], key = 'pk_test_fake'
   payoutRls = false, failedHold = false, e2eFlag = true, directCharge = false,
   paymentOverride = {}, failTip = false, persistedError = true,
   tipCustom = true, tipPresets = [{ id: 'pct-20', cents: 160 }, { id: 'pct-15', cents: 120 }],
-  tipPersisted = true, failTipOffer = false } = {}) {
+  tipPersisted = true, failTipOffer = false, trackingFallback = false, staleTracking = false,
+  failTrackingWrite = false, trackingReadError = false, receiptFare = 800, receiptReadError = false,
+  failRating = false, ratingReadError = false, ratingPersisted = true } = {}) {
   const folder = await mkdtemp(join(tmpdir(), 'e2e-ride-test-'))
   const filename = join(folder, 'env')
   await writeFile(filename, '')
@@ -80,6 +82,8 @@ async function withMockRun({ args = ['--confirm-prod-e2e'], key = 'pk_test_fake'
   const calls = [], logs = []
   let online = false
   let trip = null
+  let driverStatus = {}, tripLocation = null
+  const ratings = []
   let defaultCard = !noCard
   Object.assign(process.env, config)
   console.log = line => logs.push(line)
@@ -105,8 +109,28 @@ async function withMockRun({ args = ['--confirm-prod-e2e'], key = 'pk_test_fake'
     else if (url.includes('/rest/v1/driver_status')) {
       if (body) {
         if (failOnline && body.online) { status = 403; result = { message: 'online rejected' } }
-        else { online = body.online; result = {} }
-      } else result = { online }
+        else { online = body.online; driverStatus = { ...driverStatus, ...body }; result = {} }
+      } else if (trackingReadError && new Headers(options.headers).get('authorization') === 'Bearer fake-rider-token') {
+        status = 403; result = { message: 'presence forbidden' }
+      } else result = { ...driverStatus, online }
+    } else if (fullRide && url.includes('/rest/v1/trip_driver_locations')) {
+      if (body) {
+        if (failTrackingWrite) { status = 403; result = { message: 'telemetry write forbidden' } }
+        else { tripLocation = { ...body }; result = {} }
+      } else if (trackingReadError) { status = 403; result = { message: 'telemetry read forbidden' } }
+      else result = trackingFallback ? null : staleTracking
+        ? { ...tripLocation, lat: tripLocation.lat + 0.001, updated_at: '2000-01-01T00:00:00Z' } : tripLocation
+    } else if (fullRide && url.includes('/rest/v1/ratings')) {
+      const rater = new URL(url).searchParams.get('rater_id')?.slice(3)
+      if (body) {
+        if (failRating) { status = 403; result = { message: 'ratings insert forbidden', code: '42501' } }
+        else {
+          result = { ...body, id: `rating-${body.rater_id}` }
+          if (ratingPersisted) ratings.push(result)
+        }
+      } else if (ratingReadError && new URL(url).searchParams.get('select') !== 'id') {
+        status = 403; result = { message: 'ratings read forbidden' }
+      } else result = ratings.find(row => row.rater_id === rater) || null
     } else if (fullRide && url.endsWith('/api/quote-fare')) result = { fareCents: 800 }
     else if (fullRide && url.endsWith('?action=request-driver')) {
       trip = { id: 'trip_mock', rider_id: 'rider', driver_id: null, status: 'searching', fare_cents: 800,
@@ -157,7 +181,10 @@ async function withMockRun({ args = ['--confirm-prod-e2e'], key = 'pk_test_fake'
     }
     else if (fullRide && url.includes('/rest/v1/trips')) {
       if (options.method === 'PATCH') Object.assign(trip, body)
-      result = options.headers?.Accept?.includes('vnd.pgrst.object') ? trip : [trip]
+      if (new URL(url).searchParams.get('select')?.includes('canceled_at')) {
+        if (receiptReadError) { status = 403; result = { message: 'receipt trip forbidden' } }
+        else result = { ...trip, fare_cents: receiptFare }
+      } else result = options.headers?.Accept?.includes('vnd.pgrst.object') ? trip : [trip]
     } else if (fullRide && url.includes('/rest/v1/driver_applications')) result = { onboarding_status: 'approved' }
     else if (fullRide && url.includes('/rest/v1/rpc/women_only_pair_allowed')) result = true
     else if (fullRide && url.includes('/rest/v1/trip_events')) result = {}
@@ -260,6 +287,88 @@ test('tip selects the smallest positive preset when custom is unavailable', asyn
   assert.equal(result.trip.tip_cents, 100)
 })
 
+test('new lifecycle checks mirror participant sessions, location fallback, receipt fields and mutual ratings', async () => {
+  for (const trackingFallback of [false, true]) {
+    const result = await withMockRun({ fullRide: true, trackingFallback })
+    assert.equal(result.exitCode, 0, result.logs.join('\n'))
+    const steps = result.summary.steps.map(row => row.name)
+    assert.equal(steps.indexOf('tracking'), steps.indexOf('en_route') + 1)
+    assert.equal(steps.indexOf('pickup'), steps.indexOf('tracking') + 1)
+    assert.equal(steps.indexOf('receipt'), steps.indexOf('capture') + 1)
+    assert.equal(steps.indexOf('rating'), steps.indexOf('tip') + 1)
+    const updates = result.calls.filter(c => c.url.includes('/rest/v1/trip_driver_locations') && c.method === 'POST')
+    assert.equal(updates.length, 2)
+    for (const call of updates) {
+      assert.equal(call.authorization, 'Bearer fake-driver-token')
+      assert.equal(call.body.trip_id, 'trip_mock')
+      assert.equal(call.body.driver_id, 'driver')
+      assert.ok(result.calls.some(c => c.url.includes('/rest/v1/driver_status') && c.method === 'POST'
+        && c.body.lat === call.body.lat && c.body.lng === call.body.lng))
+    }
+    assert.ok(updates[1].body.lat < updates[0].body.lat)
+    assert.ok(updates[1].body.lng < updates[0].body.lng)
+    const read = result.calls.find(c => c.url.includes('/rest/v1/trip_driver_locations') && c.method === 'GET')
+    assert.equal(read.authorization, 'Bearer fake-rider-token')
+    assert.equal(new URL(read.url).searchParams.get('trip_id'), 'eq.trip_mock')
+    assert.match(result.summary.steps.find(s => s.name === 'tracking').detail,
+      new RegExp(`rider read ${trackingFallback ? 'driver_status' : 'trip_driver_locations'}; location age \\d+ms`))
+    const receipt = result.calls.find(c => new URL(c.url).searchParams.get('select')?.includes('canceled_at'))
+    assert.equal(receipt.authorization, 'Bearer fake-rider-token')
+    assert.match(result.summary.steps.find(s => s.name === 'receipt').detail, /fare 800 cents; tip 0 cents; total 800 cents/)
+    const inserts = result.calls.filter(c => c.url.includes('/rest/v1/ratings') && c.method === 'POST')
+    assert.deepEqual(inserts.map(c => c.body), [
+      { trip_id: 'trip_mock', rater_id: 'rider', ratee_id: 'driver', stars: 5, comment: null },
+      { trip_id: 'trip_mock', rater_id: 'driver', ratee_id: 'rider', stars: 5, comment: null },
+    ])
+    for (const call of inserts) {
+      assert.equal(call.authorization, `Bearer fake-${call.body.rater_id}-token`)
+      assert.ok(result.calls.some(c => c.url.includes('/rest/v1/ratings') && c.method === 'GET'
+        && new URL(c.url).searchParams.get('select') === 'id,stars,ratee_id'
+        && c.authorization === call.authorization))
+    }
+  }
+})
+
+test('tracking rejects stale positions and preserves write/read diagnostics, skipping pickup', async () => {
+  for (const [options, message] of [
+    [{ staleTracking: true }, /latest driver coordinates.*age/],
+    [{ failTrackingWrite: true }, /telemetry write forbidden/],
+    [{ trackingReadError: true }, /telemetry read forbidden.*presence forbidden/],
+  ]) {
+    const result = await withMockRun({ fullRide: true, ...options })
+    assert.equal(result.exitCode, 1)
+    assert.match(result.summary.steps.find(s => s.name === 'tracking').detail, message)
+    assert.equal(result.summary.steps.find(s => s.name === 'pickup').status, 'SKIP')
+    assert.equal(result.summary.steps.find(s => s.name === 'cleanup').status, 'PASS')
+  }
+})
+
+test('receipt requires rider visibility and fare equality, skipping tip on failure', async () => {
+  for (const [options, message] of [
+    [{ receiptFare: 900 }, /fare 900 cents does not match captured 800/],
+    [{ receiptReadError: true }, /receipt trip forbidden/],
+  ]) {
+    const result = await withMockRun({ fullRide: true, ...options })
+    assert.equal(result.exitCode, 1)
+    assert.match(result.summary.steps.find(s => s.name === 'receipt').detail, message)
+    assert.equal(result.summary.steps.find(s => s.name === 'tip').status, 'SKIP')
+  }
+})
+
+test('rating requires persisted participant reads and includes underlying insert/read errors', async () => {
+  for (const [options, message] of [
+    [{ failRating: true }, /ratings insert forbidden/],
+    [{ ratingReadError: true }, /ratings read forbidden/],
+    [{ ratingPersisted: false }, /did not verify persisted 5 stars/],
+  ]) {
+    const result = await withMockRun({ fullRide: true, ...options })
+    assert.equal(result.exitCode, 1)
+    assert.match(result.summary.steps.find(s => s.name === 'rating').detail, message)
+    assert.equal(result.summary.steps.find(s => s.name === 'payout_ledger').status, 'SKIP')
+    assert.equal(result.calls.filter(c => c.url.includes('/rest/v1/ratings') && c.method === 'POST').length, 1)
+  }
+})
+
 test('tip requires a usable offer and a positive persisted tip even when record is OK', async () => {
   for (const options of [{ tipPersisted: false }, { failTipOffer: true }, { tipCustom: false, tipPresets: [] }]) {
     const result = await withMockRun({ fullRide: true, ...options })
@@ -297,7 +406,7 @@ test('failed hold continues all later steps only with opt-in and still exits non
     assert.match(book.detail, /authorization code charge_failed/)
     assert.match(book.detail, /Stripe account is not eligible for holds/)
     assert.match(book.detail, /second attempt \[redacted\]/)
-    for (const name of ['offer', 'accept', 'en_route', 'pickup', 'in_progress', 'complete', 'capture', 'tip', 'payout_ledger', 'cleanup']) {
+    for (const name of ['offer', 'accept', 'en_route', 'tracking', 'pickup', 'in_progress', 'complete', 'capture', 'receipt', 'tip', 'rating', 'payout_ledger', 'cleanup']) {
       assert.equal(result.summary.steps.find(s => s.name === name).status, 'PASS', result.logs.join('\n'))
     }
     assert.match(result.summary.steps.find(s => s.name === 'capture').detail,
