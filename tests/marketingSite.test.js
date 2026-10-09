@@ -7,16 +7,20 @@ import {
   APP_DOWNLOADS,
   DRIVER_ANDROID_STORE_URL,
   DRIVER_IOS_STORE_URL,
+  DRIVER_TESTFLIGHT_URL,
   IOS_STORE_URL,
   RIDER_ANDROID_STORE_URL,
   RIDER_IOS_STORE_URL,
+  RIDER_TESTFLIGHT_URL,
   WEB_BOOK_URL,
   WEB_DRIVER_URL,
   WEB_ORIGIN,
   WEB_SCHEDULE_URL,
+  publicTestFlightUrl,
   publishedStoreUrl,
 } from '../shared/productLinks.js'
 import { qrMatrix } from '../src/lib/qrMatrix.js'
+import { APP_STORE_NOTE } from '../src/content/peaceOfMind.js'
 
 const EXPO_LINK = /expo\.dev|expo\.go|exp:\/\/|Expo Go/i
 
@@ -30,24 +34,32 @@ test('store listings stay unpublished until real URLs exist', () => {
   assert.equal(publishedStoreUrl('https://expo.dev/accounts/johnmatveyev/projects/clemson-rides-rider'), null)
   assert.equal(publishedStoreUrl('exp://127.0.0.1:8081'), null)
   assert.equal(publishedStoreUrl('https://expo.go'), null)
+  assert.equal(RIDER_TESTFLIGHT_URL, 'https://testflight.apple.com/join/DXcYmBQg')
+  assert.equal(DRIVER_TESTFLIGHT_URL, 'https://testflight.apple.com/join/P7PD2FQK')
+  assert.equal(publicTestFlightUrl(RIDER_TESTFLIGHT_URL), RIDER_TESTFLIGHT_URL)
+  assert.equal(publicTestFlightUrl(DRIVER_TESTFLIGHT_URL), DRIVER_TESTFLIGHT_URL)
+  for (const invalid of ['http://testflight.apple.com/join/DXcYmBQg', 'https://other.testflight.apple.com/join/DXcYmBQg', 'https://testflight.apple.com/join/DXcYmBQg?other=1', 'https://testflight.apple.com/join/', 'https://apps.apple.com/app/example']) {
+    assert.equal(publicTestFlightUrl(invalid), null)
+  }
   assert.equal(APP_DOWNLOADS.length, 2)
   assert.equal(APP_DOWNLOADS[0].id, 'rider')
-  assert.equal(APP_DOWNLOADS[0].href, 'https://clemsonrides.com/#/home')
-  assert.equal(APP_DOWNLOADS[0].iosHref, 'https://clemsonrides.com/#/home')
-  assert.equal(APP_DOWNLOADS[0].androidHref, 'https://clemsonrides.com/#/home')
   assert.equal(APP_DOWNLOADS[0].href, WEB_BOOK_URL)
+  assert.equal(APP_DOWNLOADS[0].androidHref, WEB_BOOK_URL)
+  assert.equal(APP_DOWNLOADS[0].iosHref, RIDER_TESTFLIGHT_URL)
+  assert.equal(APP_DOWNLOADS[0].testflightHref, RIDER_TESTFLIGHT_URL)
   assert.equal(APP_DOWNLOADS[1].id, 'driver')
-  assert.equal(APP_DOWNLOADS[1].href, 'https://clemsonrides.com/#/driver')
-  assert.equal(APP_DOWNLOADS[1].iosHref, 'https://clemsonrides.com/#/driver')
-  assert.equal(APP_DOWNLOADS[1].androidHref, 'https://clemsonrides.com/#/driver')
   assert.equal(APP_DOWNLOADS[1].href, WEB_DRIVER_URL)
+  assert.equal(APP_DOWNLOADS[1].androidHref, WEB_DRIVER_URL)
+  assert.equal(APP_DOWNLOADS[1].iosHref, DRIVER_TESTFLIGHT_URL)
+  assert.equal(APP_DOWNLOADS[1].testflightHref, DRIVER_TESTFLIGHT_URL)
   for (const app of APP_DOWNLOADS) {
-    assert.match(app.iosNote, /not live yet/)
+    assert.equal(app.iosNote, 'iPhone: install the public beta through TestFlight.')
     assert.match(app.androidNote, /not live yet/)
-    assert.match(app.blurb, /not live yet/)
-    const targets = `${app.href} ${app.iosHref} ${app.androidHref} ${app.iosNote} ${app.androidNote} ${app.blurb}`
+    assert.match(app.blurb, /iPhone: install the public beta through TestFlight\./)
+    assert.match(app.blurb, /Play Store listing is not live yet/)
+    const targets = `${app.href} ${app.iosHref} ${app.androidHref} ${app.testflightHref}`
     assert.doesNotMatch(targets, EXPO_LINK)
-    assert.doesNotMatch(targets, /apps\.apple\.com|play\.google\.com|testflight/)
+    assert.doesNotMatch(targets, /apps\.apple\.com|play\.google\.com/)
     assert.match(app.href, /^https:\/\/clemsonrides\.com\//)
   }
 })
@@ -108,17 +120,30 @@ test('the marketing page is a ride or carpool entry and does not invent store id
 })
 
 test('download QR codes are square modules for the public install links', () => {
-  for (const href of [WEB_BOOK_URL, WEB_DRIVER_URL]) {
-    const matrix = qrMatrix(href)
+  for (const [app, expectedUrl] of [[APP_DOWNLOADS[0], RIDER_TESTFLIGHT_URL], [APP_DOWNLOADS[1], DRIVER_TESTFLIGHT_URL]]) {
+    assert.equal(app.testflightHref, expectedUrl)
+    const matrix = qrMatrix(app.testflightHref)
     assert.ok(matrix.size >= 21)
     assert.equal(matrix.size % 1, 0)
     assert.equal(matrix.cells.some(([x, y]) => x === 0 && y === 0), true)
     assert.equal(matrix.cells.every(([x, y]) => x < matrix.size && y < matrix.size), true)
+    assert.deepEqual(matrix, qrMatrix(expectedUrl))
+    assert.notDeepEqual(matrix, qrMatrix(app.href))
   }
-  const rider = APP_DOWNLOADS.find((app) => app.id === 'rider')
-  const driver = APP_DOWNLOADS.find((app) => app.id === 'driver')
-  assert.deepEqual(qrMatrix(rider.href), qrMatrix(WEB_BOOK_URL))
-  assert.deepEqual(qrMatrix(driver.href), qrMatrix(WEB_DRIVER_URL))
+  const source = readFileSync(new URL('../src/screens/MarketingInfo.jsx', import.meta.url), 'utf8')
+  assert.match(source, /href=\{app\.testflightHref\} target="_blank" rel="noopener"/)
+  assert.match(source, /Join the iPhone beta \(TestFlight\)/)
+  assert.match(source, /<QrMark value=\{app\.testflightHref\} label=\{`QR code for \$\{app\.product\} TestFlight beta`\} \/>/)
+  assert.match(source, /Open the driver desk/)
+  assert.match(source, /Book a ride/)
+})
+
+test('beta availability note reads correctly on the app and driver pages', () => {
+  assert.equal(APP_STORE_NOTE, 'iPhone apps are in public beta on TestFlight. The App Store and Play Store listings are not live yet.')
+  const appPage = readFileSync(new URL('../src/screens/MarketingInfo.jsx', import.meta.url), 'utf8')
+  const drivePage = readFileSync(new URL('../src/screens/DriveWithUs.jsx', import.meta.url), 'utf8')
+  assert.match(appPage, /lede=\{APP_STORE_NOTE\}/)
+  assert.match(drivePage, /\{APP_STORE_NOTE\}/)
 })
 
 test('marketing features exact copy snapshot', (t) => {
