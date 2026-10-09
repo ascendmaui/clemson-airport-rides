@@ -64,8 +64,8 @@ function secretsEqual(presented, expected) {
   return timingSafeEqual(left, right)
 }
 
-export function holdTtlCronAuthorized(req, env = process.env) {
-  const secret = String(env?.CRON_SECRET || '').trim()
+export function holdTtlCronAuthorized(req, env = process.env, overrides = {}) {
+  const secret = String(overrides?.cronSecret || env?.CRON_SECRET || '').trim()
   const usable = Boolean(secret) && !secret.includes('placeholder')
   const headers = req?.headers || {}
   if (usable && secretsEqual(bearerToken(headerValue(headers, 'authorization')), secret)) return true
@@ -187,7 +187,7 @@ export default async function handler(req, res, overrides = {}) {
     return sendJson(res, 405, { error: 'Method not allowed' })
   }
   const env = overrides.env || process.env
-  if (!holdTtlCronAuthorized(req, env)) {
+  if (!holdTtlCronAuthorized(req, env, overrides)) {
     return sendJson(res, 401, { error: 'Cron authorization required' })
   }
   const dryRun = dryRunRequested(req)
