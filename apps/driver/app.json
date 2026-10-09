@@ -15,7 +15,10 @@
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "NSMicrophoneUsageDescription": "Clemson RIDES uses the microphone only when you start an audio or video recording during an active ride. The clip stays on this phone.",
-        "NSCameraUsageDescription": "Clemson RIDES uses the camera for driver documents and for a video clip you start during a ride. Ride clips stay on this phone."
+        "NSCameraUsageDescription": "Clemson RIDES uses the camera for driver documents and for a video clip you start during a ride. Ride clips stay on this phone.",
+        "UIBackgroundModes": [
+          "location"
+        ]
       },
       "usesAppleSignIn": true,
       "associatedDomains": [
@@ -73,7 +76,12 @@
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "Clemson RIDES uses your location while you are online so riders can see your car on the map."
+          "locationWhenInUsePermission": "Clemson RIDES uses your location while you are online so riders can see your car on the map.",
+          "locationAlwaysAndWhenInUsePermission": "Clemson RIDES uses your location during an active trip, including while you use Maps or the phone is locked, so your rider can see your car and knows when you arrive. Location sharing stops when the trip ends.",
+          "locationAlwaysPermission": "Clemson RIDES uses your location during an active trip, including while you use Maps or the phone is locked, so your rider can see your car and knows when you arrive. Location sharing stops when the trip ends.",
+          "isIosBackgroundLocationEnabled": true,
+          "isAndroidBackgroundLocationEnabled": true,
+          "isAndroidForegroundServiceEnabled": true
         }
       ],
       [

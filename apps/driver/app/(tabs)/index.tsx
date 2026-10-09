@@ -15,6 +15,7 @@ import { shownCents } from '@/lib/shown'
 import { supabase } from '@/lib/supabase'
 import { useTheme } from '@/lib/theme'
 import { useDriverLocation } from '@/lib/useDriverLocation'
+import { publishDriverLocation } from '@/lib/backgroundLocation'
 import { fetchDriverApplication, setDriverOnline } from 'rides-native/drivers'
 import { displayFirstName } from 'rides-native/authErrors'
 import { heatColor } from 'rides-native/heat.js'
@@ -29,7 +30,6 @@ import {
   loadGameDay,
   loadEarnings,
   publishDriverCapacity,
-  publishDriverLocation,
   setPriorityMode,
   subscribeTrips,
   type DriverDesk,

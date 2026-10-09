@@ -1,3 +1,4 @@
+import '@/lib/backgroundLocation'
 import { Stack, useRouter } from 'expo-router'
 import * as Notifications from 'expo-notifications'
 import { StatusBar } from 'expo-status-bar'
@@ -13,6 +14,7 @@ import { supabase } from '@/lib/supabase'
 import { ThemeProvider, useTheme } from '@/lib/theme'
 import { ProfileRequiredGate } from 'rides-native/PartyScreens'
 import { PasswordRecoveryListener } from '@/lib/passwordRecovery'
+import { reconcileTripBackgroundLocation } from '@/lib/backgroundLocation'
 
 function LostItemHost() {
   const { user } = useAuth()
@@ -34,6 +36,17 @@ function LostItemHost() {
 
 function Gate({ children }: { children: ReactNode }) {
   const { loading, user } = useAuth()
+  useEffect(() => {
+    if (loading) return undefined
+    const reconcile = () => {
+      void reconcileTripBackgroundLocation().catch(() => {})
+    }
+    reconcile()
+    const listener = AppState.addEventListener('change', (state) => {
+      if (state === 'active') reconcile()
+    })
+    return () => listener.remove()
+  }, [loading, user?.id])
   if (loading) return <BootScreen />
   return (
     <View style={{ flex: 1 }}>
