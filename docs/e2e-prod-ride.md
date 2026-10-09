@@ -43,9 +43,10 @@ ineligible. The harness verifies the trip flag before accepting.
 ```sh
 node scripts/e2e-prod-ride.mjs --confirm-prod-e2e
 node scripts/e2e-prod-ride.mjs --confirm-prod-e2e --dry-check
+node scripts/e2e-prod-ride.mjs --confirm-prod-e2e --continue-without-hold
 ```
 
-Both modes require the confirmation flag and both reserved email addresses.
+All runs require the confirmation flag and both reserved email addresses.
 Dry check only signs in and checks Stripe mode; it creates a SetupIntent but does
 not confirm a card, change driver presence, or book.
 
@@ -55,6 +56,22 @@ live. It then prints `STEP book SKIP live Stripe: refusing to place a real hold`
 and exits successfully with capture/payout explicitly unexercised. Only a
 `pk_test_` key and a retrieved `livemode: false` allow booking, capture and tip.
 SetupIntent creation does not place a fare hold. No secret Stripe key is used.
+
+`--continue-without-hold` is an opt-in diagnostic mode honored only with verified
+Stripe test mode. If booking creates a searching trip and the persisted
+`metadata.e2e_test` is `true`, a failed pre-authorization records `book FAIL` with
+the authorization code and readable Stripe messages from
+`metadata.outstanding_balance.attempts[*].stripeError.message`, then continues
+through offer, accept, en route, pickup, in progress, completion, capture, tip,
+and payout ledger. Capture accepts either a captured hold or a successful direct
+card charge from settlement (`payment.ok`, `method: card`, `status: succeeded`,
+a positive amount and PaymentIntent ID); its detail identifies which occurred.
+The run still exits nonzero because booking failed. Without the flag, a failed
+hold stops the ride. The flag never permits booking in live or uncertain mode,
+and other failures still stop subsequent steps and run cleanup.
+
+Failure details include underlying Supabase messages or HTTP status and JSON
+error/code when available. Credentials remain redacted.
 
 In test mode, a missing/unreadable default card triggers confirmation with
 `pm_card_visa` and saving through the normal API. A payout ledger with a positive
@@ -84,6 +101,7 @@ rows fall back to the driver's own trip `metadata.payout`.
 Local verification, without production access:
 
 ```sh
+node --test scripts/e2eProdRide.test.mjs
 npm test
 node --check scripts/e2e-prod-ride.mjs
 ```

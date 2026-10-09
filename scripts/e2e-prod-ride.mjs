@@ -38,6 +38,27 @@ export function decideStripeMode(publishableKey, setupIntent, retrievalError = n
     ? 'test' : 'live'
 }
 
+/** A failed hold can only be bypassed for an explicitly marked, created test trip. */
+export function shouldContinueWithoutHold({ flag, stripeMode, tripCreated, e2eFlag }) {
+  return flag === true && stripeMode === 'test' && tripCreated === true && e2eFlag === true
+}
+
+/** Only diagnostic fields; never dump response bodies that may contain credentials. */
+export function errorDetail(result) {
+  if (!result) return ''
+  if (typeof result === 'string') return result
+  return [...new Set([
+    result.message, result.code,
+    typeof result.error === 'string' ? result.error : result.error?.message,
+    result.error?.code, result.failure?.message, result.failure?.code,
+  ].filter(value => typeof value === 'string' && value))].join('; ')
+}
+
+function failureDetail(message, ...results) {
+  const details = results.map(errorDetail).filter(Boolean)
+  return [message, ...details].join(': ')
+}
+
 const ride = {
   tier: 'standard', pickupLabel: 'Clemson University - Cooper Library',
   pickupLat: 34.6766, pickupLng: -82.8364,
@@ -56,13 +77,15 @@ export async function main(args = process.argv.slice(2)) {
   let env = { ...process.env }
   let signal = null
   let rider, driver, riderId, driverId, setup, settle
+  let continuedWithoutHold = false
+  let lastHttpFailure = null
   let onlineTouched = false
   let bookingAttempted = false
   const dryCheck = args.includes('--dry-check')
   const startedAt = new Date().toISOString()
   const originalFetch = globalThis.fetch
   const oldApiBase = process.env.EXPO_PUBLIC_API_BASE
-  const secrets = new Set()
+  const secrets = new Set(Object.entries(env).filter(([key]) => /PASSWORD|TOKEN|KEY|SECRET/.test(key)).map(([, value]) => value))
 
   function safeDetail(raw) {
     let text = String(raw || '').replace(/[\r\n]+/g, ' ')
@@ -76,15 +99,16 @@ export async function main(args = process.argv.slice(2)) {
     summary.steps.push(row)
     console.log(`STEP ${name} ${status} ${row.detail}`)
   }
-  async function step(name, fn) {
+  async function step(name, fn, continueOnFailure = () => false) {
+    lastHttpFailure = null
     signal = AbortSignal.timeout(30_000)
     try {
       const detail = await fn()
       signal.throwIfAborted()
       record(name, 'PASS', detail)
     } catch (error) {
-      record(name, 'FAIL', signal.aborted ? 'step timed out after 30s' : error.message)
-      throw error
+      record(name, 'FAIL', failureDetail(signal.aborted ? `step timed out after 30s: ${error.message}` : error.message, lastHttpFailure))
+      if (signal.aborted || !continueOnFailure()) throw error
     } finally { signal = null }
   }
   // All HTTP, Supabase and imported driverDesk requests share the current step deadline.
@@ -92,8 +116,15 @@ export async function main(args = process.argv.slice(2)) {
   async function boundedFetch(url, options = {}) {
     signal?.throwIfAborted()
     const signals = [signal, options.signal].filter(Boolean)
-    return originalFetch(url, { ...options, redirect: 'error',
+    const response = await originalFetch(url, { ...options, redirect: 'error',
       signal: signals.length ? AbortSignal.any(signals) : AbortSignal.timeout(30_000) })
+    // Also retain raw HTTP diagnostics for requests made by driverDesk, whose UI
+    // error helpers may otherwise replace the server's message with friendly copy.
+    if (!response.ok) {
+      const body = await response.clone().json().catch(() => null)
+      lastHttpFailure = failureDetail(`HTTP ${response.status}`, body)
+    }
+    return response
   }
   async function api(client, path, body) {
     const session = client ? await client.auth.getSession() : null
@@ -105,8 +136,9 @@ export async function main(args = process.argv.slice(2)) {
       headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
       body: body === undefined ? undefined : JSON.stringify(body),
     })
-    requireThat(response.ok, `${path}: HTTP ${response.status}`)
-    return response.json()
+    const bodyResult = await response.json().catch(() => null)
+    requireThat(response.ok, failureDetail(`${path}: HTTP ${response.status}`, bodyResult))
+    return bodyResult
   }
   async function stripeRequest(path, fields, method = 'GET') {
     const response = await boundedFetch(`https://api.stripe.com/v1/${path}${method === 'GET' ? `?${new URLSearchParams(fields)}` : ''}`, {
@@ -114,8 +146,9 @@ export async function main(args = process.argv.slice(2)) {
         ...(method === 'POST' ? { 'Content-Type': 'application/x-www-form-urlencoded' } : {}) },
       body: method === 'POST' ? new URLSearchParams(fields) : undefined,
     })
-    requireThat(response.ok, `Stripe request: HTTP ${response.status}`)
-    return response.json()
+    const bodyResult = await response.json().catch(() => null)
+    requireThat(response.ok, failureDetail(`Stripe request: HTTP ${response.status}`, bodyResult))
+    return bodyResult
   }
   async function retryRead(fn) {
     let error
@@ -129,7 +162,7 @@ export async function main(args = process.argv.slice(2)) {
   async function readTrip(client = driver) {
     return retryRead(async () => {
       const result = await client.from('trips').select('*').eq('id', summary.tripId).maybeSingle()
-      requireThat(!result.error && result.data, 'Trip unreadable or not yet visible')
+      requireThat(!result.error && result.data, failureDetail('Trip unreadable or not yet visible', result.error))
       return result.data
     })
   }
@@ -137,13 +170,13 @@ export async function main(args = process.argv.slice(2)) {
     const at = new Date().toISOString()
     const result = await driver.from('driver_status').upsert({ driver_id: driverId, online, lat, lng,
       updated_at: at, location_updated_at: at }, { onConflict: 'driver_id' })
-    requireThat(!result.error, `Could not set driver ${online ? 'online' : 'offline'}`)
+    requireThat(!result.error, failureDetail(`Could not set driver ${online ? 'online' : 'offline'}`, result.error))
     const check = await driver.from('driver_status').select('online').eq('driver_id', driverId).maybeSingle()
-    requireThat(!check.error && check.data?.online === online, 'Driver presence did not persist')
+    requireThat(!check.error && check.data?.online === online, failureDetail('Driver presence did not persist', check.error))
   }
   async function advance(expected) {
     const result = await advanceTrip(driver, await readTrip(), driverId)
-    requireThat(result.status === expected, `Expected ${expected}`)
+    requireThat(result.status === expected, failureDetail(`Expected ${expected}; got ${result.status}`, result))
     if (result.settle) settle = result.settle
     const stored = await readTrip()
     requireThat(stored.status === expected, `Stored status is not ${expected}`)
@@ -155,7 +188,7 @@ export async function main(args = process.argv.slice(2)) {
     await step('safety', async () => {
       const filename = env.E2E_ENV_FILE || `${homedir()}/.config/clemson-e2e/env`
       try { env = { ...parseEnvFile(await readFile(filename, 'utf8')), ...env } }
-      catch (error) { if (error.code !== 'ENOENT' || env.E2E_ENV_FILE) throw new Error('Cannot read E2E env file') }
+      catch (error) { if (error.code !== 'ENOENT' || env.E2E_ENV_FILE) throw new Error(failureDetail('Cannot read E2E env file', error)) }
       for (const [key, value] of Object.entries(env)) {
         if (/PASSWORD|TOKEN|KEY|SECRET/.test(key)) secrets.add(value)
       }
@@ -187,7 +220,7 @@ export async function main(args = process.argv.slice(2)) {
       driver = createClient(env.SUPABASE_URL, env.SUPABASE_ANON_KEY, options)
       for (const [client, role] of [[rider, 'RIDER'], [driver, 'DRIVER']]) {
         const result = await client.auth.signInWithPassword({ email: env[`E2E_${role}_EMAIL`], password: env[`E2E_${role}_PASSWORD`] })
-        requireThat(!result.error && result.data?.session && isE2ETestEmail(result.data.user?.email), `${role.toLowerCase()} sign-in failed`)
+        requireThat(!result.error && result.data?.session && isE2ETestEmail(result.data.user?.email), failureDetail(`${role.toLowerCase()} sign-in failed`, result.error))
         secrets.add(result.data.session.access_token)
         secrets.add(result.data.session.refresh_token)
         if (role === 'RIDER') riderId = result.data.user.id
@@ -198,13 +231,13 @@ export async function main(args = process.argv.slice(2)) {
     })
     await step('stripe_mode', async () => {
       setup = await api(rider, '/api/stripe-setup-intent', {})
-      requireThat(/^seti_[A-Za-z0-9]+$/.test(setup.setupIntentId) && setup.clientSecret, 'SetupIntent response missing id/client secret')
+      requireThat(/^seti_[A-Za-z0-9]+$/.test(setup.setupIntentId) && setup.clientSecret, failureDetail('SetupIntent response missing id/client secret', setup))
       secrets.add(setup.clientSecret)
       let retrieved, retrievalError
       try { retrieved = await stripeRequest(`setup_intents/${setup.setupIntentId}`, { client_secret: setup.clientSecret }) }
       catch (error) { retrievalError = error }
       summary.stripeMode = decideStripeMode(env.STRIPE_PUBLISHABLE_KEY, retrieved, retrievalError)
-      return `${summary.stripeMode}; key prefix ${env.STRIPE_PUBLISHABLE_KEY.startsWith('pk_live_') ? 'pk_live_' : 'pk_test_'}${retrievalError ? '; retrieval failed, treated as live' : ''}`
+      return `${summary.stripeMode}; key prefix ${env.STRIPE_PUBLISHABLE_KEY.startsWith('pk_live_') ? 'pk_live_' : 'pk_test_'}${retrievalError ? `; retrieval failed, treated as live: ${retrievalError.message}` : ''}`
     })
     if (dryCheck || summary.stripeMode === 'live') {
       summary.note = dryCheck ? 'Dry check only; capture/payout not exercised' : 'Live or uncertain Stripe; capture/payout not exercised'
@@ -217,9 +250,9 @@ export async function main(args = process.argv.slice(2)) {
         const confirmed = await stripeRequest(`setup_intents/${setup.setupIntentId}/confirm`, {
           client_secret: setup.clientSecret, payment_method: 'pm_card_visa',
         }, 'POST')
-        requireThat(confirmed.status === 'succeeded', 'Test card SetupIntent did not succeed')
+        requireThat(confirmed.status === 'succeeded', failureDetail(`Test card SetupIntent did not succeed; status ${confirmed.status}`, confirmed))
         const saved = await api(rider, '/api/stripe-save-payment-method', { setupIntentId: setup.setupIntentId })
-        requireThat(saved.ok === true, 'Default test card was not saved')
+        requireThat(saved.ok === true, failureDetail('Default test card was not saved', saved))
         return 'pm_card_visa confirmed and saved'
       })
       await step('driver_online', async () => {
@@ -229,7 +262,7 @@ export async function main(args = process.argv.slice(2)) {
       })
       await step('quote', async () => {
         const quote = await api(rider, '/api/quote-fare', ride)
-        requireThat(Number.isFinite(quote.fareCents) && quote.fareCents > 0, 'Quote has no positive fare')
+        requireThat(Number.isFinite(quote.fareCents) && quote.fareCents > 0, failureDetail('Quote has no positive fare', quote))
         summary.fareCents = quote.fareCents
         return `Standard fare ${quote.fareCents} cents`
       })
@@ -239,10 +272,22 @@ export async function main(args = process.argv.slice(2)) {
           ...ride, driverId, note: NOTE,
         })
         summary.tripId = booked.trip?.id || null
-        requireThat(summary.tripId && booked.trip.status === 'searching', 'Booking did not return a searching trip')
+        requireThat(summary.tripId && booked.trip.status === 'searching', failureDetail('Booking did not return a searching trip', booked))
         const trip = await readTrip(rider)
         requireThat(trip.metadata?.e2e_test === true, 'Server has not marked the trip as e2e_test; stopping')
-        requireThat(booked.authorization?.ok === true && !booked.authorization.skipped, 'Fare authorization failed or was skipped')
+        if (booked.authorization?.ok !== true || booked.authorization.skipped) {
+          continuedWithoutHold = shouldContinueWithoutHold({
+            flag: args.includes('--continue-without-hold') && booked.authorization?.ok !== true, stripeMode: summary.stripeMode,
+            tripCreated: Boolean(summary.tripId), e2eFlag: trip.metadata?.e2e_test,
+          })
+          const attempts = trip.metadata?.outstanding_balance?.attempts
+          const stripeMessages = Array.isArray(attempts)
+            ? attempts.map(attempt => attempt?.stripeError?.message).filter(Boolean) : []
+          const authorization = booked.authorization
+          const code = authorization?.code || authorization?.failure?.code || authorization?.outstanding?.code || 'not exposed'
+          throw new Error(failureDetail(`Fare authorization failed or was skipped; authorization code ${code}`,
+            ...stripeMessages, authorization))
+        }
         let pi = booked.authorization.authorization?.paymentIntentId || trip.metadata?.fare_authorization?.paymentIntentId
         if (!pi) {
           const payments = await rider.from('payments').select('stripe_payment_intent_id').eq('trip_id', summary.tripId).limit(10)
@@ -250,7 +295,7 @@ export async function main(args = process.argv.slice(2)) {
         }
         summary.paymentIntentId = pi || null
         return `trip ${summary.tripId}; ${pi ? `PaymentIntent ${pi}` : 'PaymentIntent id not exposed/readable'}; fare ${booked.fareCents} cents`
-      })
+      }, () => continuedWithoutHold)
       await step('offer', async () => {
         const trip = await readTrip()
         requireThat(trip.metadata?.offer_driver_id === driverId, 'Offer is not assigned to the test driver')
@@ -259,7 +304,7 @@ export async function main(args = process.argv.slice(2)) {
       })
       await step('accept', async () => {
         const accepted = await acceptTrip(driver, await readTrip(), driverId)
-        requireThat(accepted.status === 'accepted' && accepted.driver_id === driverId, 'Conditional acceptance failed')
+        requireThat(accepted.status === 'accepted' && accepted.driver_id === driverId, failureDetail('Conditional acceptance failed', accepted))
         return `trip ${summary.tripId}: accepted with driverDesk locked economics`
       })
       await step('en_route', () => advance('arriving'))
@@ -276,14 +321,17 @@ export async function main(args = process.argv.slice(2)) {
         const payment = settle?.payment
         const auth = trip.metadata?.fare_authorization
         requireThat(settle?.ok === true && payment?.ok === true && payment.status === 'succeeded'
-          && payment.paymentIntentId && payment.amountCents > 0 && auth?.status === 'captured',
-        'Settlement did not prove a captured card hold')
+          && payment.paymentIntentId && payment.amountCents > 0
+          && (auth?.status === 'captured' || (continuedWithoutHold && payment.method === 'card')),
+        failureDetail(continuedWithoutHold
+          ? 'Settlement did not prove a captured hold or successful direct card charge'
+          : 'Settlement did not prove a captured card hold', settle, payment))
         summary.capturedCents = payment.amountCents
-        return `captured ${payment.amountCents} cents; PaymentIntent ${payment.paymentIntentId}; payment_status ${trip.payment_status || 'not exposed'}`
+        return `${auth?.status === 'captured' ? 'captured hold' : 'direct card charge succeeded'} ${payment.amountCents} cents; PaymentIntent ${payment.paymentIntentId}; payment_status ${trip.payment_status || 'not exposed'}`
       })
       await step('tip', async () => {
         const result = await api(rider, '/api/trip-tip', { tripId: summary.tripId, amountCents: 100, mode: 'charge' })
-        requireThat(result.ok === true && result.tipCents === 100, 'Saved-card tip did not succeed')
+        requireThat(result.ok === true && result.tipCents === 100, failureDetail('Saved-card tip did not succeed', result))
         return '100 cents charged to saved test card'
       })
       await step('payout_ledger', async () => retryRead(async () => {
@@ -296,7 +344,7 @@ export async function main(args = process.argv.slice(2)) {
         const trip = await readTrip()
         const payout = trip.metadata?.payout
         requireThat(trip.driver_id === driverId && payout?.amountCents > 0 && payout.status,
-          'No positive payout ledger row or trip metadata.payout visible')
+          failureDetail('No positive payout ledger row or trip metadata.payout visible', ledger.error, payout))
         summary.capturePayoutExercised = true
         return `trip metadata ledger ${payout.amountCents} cents; status ${payout.status} (pending/failed without Connect is expected)`
       }))
@@ -316,14 +364,14 @@ export async function main(args = process.argv.slice(2)) {
           if (bookingAttempted && !summary.tripId) {
             const recovered = await rider.from('trips').select('id').eq('rider_id', riderId)
               .eq('rider_note', NOTE).gte('created_at', startedAt).order('created_at', { ascending: false }).limit(2)
-            requireThat(!recovered.error && recovered.data?.length <= 1, 'Cannot safely identify booking after lost response; inspect test rider trips')
+            requireThat(!recovered.error && recovered.data?.length <= 1, failureDetail('Cannot safely identify booking after lost response; inspect test rider trips', recovered.error))
             summary.tripId = recovered.data?.[0]?.id || null
           }
           if (summary.tripId) {
             let trip = await readTrip(rider)
             if (!['completed', 'canceled', 'cancelled_wait'].includes(trip.status)) {
               const canceled = await api(rider, '/api/stripe-payment-methods?action=settle', { tripId: summary.tripId, action: 'cancel' })
-              requireThat(canceled.ok === true, 'Rider cancellation did not succeed')
+              requireThat(canceled.ok === true, failureDetail('Rider cancellation did not succeed', canceled))
               trip = await readTrip(rider)
             }
             requireThat(['completed', 'canceled', 'cancelled_wait'].includes(trip.status)

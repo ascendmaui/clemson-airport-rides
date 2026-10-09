@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { mkdtemp, writeFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { parseEnvFile, assertE2EGuard, decideStripeMode, main } from './e2e-prod-ride.mjs'
+import { parseEnvFile, assertE2EGuard, decideStripeMode, shouldContinueWithoutHold, errorDetail, main } from './e2e-prod-ride.mjs'
 
 test('env parser supports literal values, quotes, comments, CRLF and export without expansion', () => {
   assert.deepEqual(parseEnvFile(`
@@ -42,11 +42,30 @@ test('Stripe mode fails closed unless test key plus explicitly non-live retrieva
   assert.equal(decideStripeMode('invalid', { livemode: false }), 'live')
 })
 
+test('continuation requires the flag, verified test mode, created trip and strict E2E marker', () => {
+  const allowed = { flag: true, stripeMode: 'test', tripCreated: true, e2eFlag: true }
+  assert.equal(shouldContinueWithoutHold(allowed), true)
+  for (const [key, values] of Object.entries({ flag: [false, undefined, 'true'],
+    stripeMode: ['live', undefined], tripCreated: [false, undefined], e2eFlag: [false, undefined, 'true'] })) {
+    for (const value of values) assert.equal(shouldContinueWithoutHold({ ...allowed, [key]: value }), false)
+  }
+})
+
+test('error details select messages and codes without dumping response credentials', () => {
+  assert.equal(errorDetail({ error: { message: 'declined', code: 'card_declined', clientSecret: 'secret' },
+    password: 'secret' }), 'declined; card_declined')
+  assert.equal(errorDetail({ message: 'forbidden', code: '42501' }), 'forbidden; 42501')
+  assert.equal(errorDetail({ error: 'failed', code: 'failed', failure: { code: 'failed' } }), 'failed')
+  assert.equal(errorDetail(null), '')
+  assert.equal(errorDetail('raw message'), 'raw message')
+})
+
 // These exercise the real CLI orchestration with all network calls intercepted locally.
 // No production URL, account, key or credentials are used.
 async function withMockRun({ args = ['--confirm-prod-e2e'], key = 'pk_test_fake', retrievalFails = false,
   failOnline = false, fullRide = false, noCard = false, failOffer = false, lostBookingResponse = false,
-  payoutRls = false } = {}) {
+  payoutRls = false, failedHold = false, e2eFlag = true, directCharge = false,
+  paymentOverride = {}, failTip = false, persistedError = true } = {}) {
   const folder = await mkdtemp(join(tmpdir(), 'e2e-ride-test-'))
   const filename = join(folder, 'env')
   await writeFile(filename, '')
@@ -89,11 +108,19 @@ async function withMockRun({ args = ['--confirm-prod-e2e'], key = 'pk_test_fake'
     } else if (fullRide && url.endsWith('/api/quote-fare')) result = { fareCents: 800 }
     else if (fullRide && url.endsWith('?action=request-driver')) {
       trip = { id: 'trip_mock', rider_id: 'rider', driver_id: null, status: 'searching', fare_cents: 800,
-        tier: 'standard', deposit_cents: 0, rider_note: body.note, metadata: { e2e_test: true,
+        tier: 'standard', deposit_cents: 0, rider_note: body.note, metadata: { e2e_test: e2eFlag,
           offer_driver_id: 'driver', offer_phase: 'exclusive', offer_share_bps: 8000,
           fare_authorization: { status: 'requires_capture', paymentIntentId: 'pi_mock' } } }
+      if (failedHold) {
+        trip.metadata.fare_authorization = { status: 'failed' }
+        if (persistedError) trip.metadata.outstanding_balance = { attempts: [
+          { stripeError: { message: 'Stripe account is not eligible for holds' } },
+          { stripeError: { message: `second attempt rider-fake-password ${key} fake-rider-token` } },
+        ] }
+      }
       if (lostBookingResponse) throw new Error('Simulated lost booking response')
-      result = { trip, fareCents: 800, authorization: { ok: true, authorization: { paymentIntentId: 'pi_mock' } } }
+      result = { trip, fareCents: 800, authorization: failedHold ? { ok: false, failure: { code: 'charge_failed' } }
+        : { ok: true, authorization: { paymentIntentId: 'pi_mock' } } }
     } else if (fullRide && url.endsWith('?action=mark-offered')) {
       if (failOffer) { status = 503; result = { error: 'offer failed' } }
       else { trip.status = 'offered'; result = { ok: true } }
@@ -104,10 +131,11 @@ async function withMockRun({ args = ['--confirm-prod-e2e'], key = 'pk_test_fake'
       result = { trip }
     } else if (fullRide && url.endsWith('?action=settle')) {
       trip.status = body.action === 'complete' ? 'completed' : 'canceled'
-      trip.metadata.fare_authorization.status = body.action === 'complete' ? 'captured' : 'canceled'
+      trip.metadata.fare_authorization.status = body.action === 'complete' ? (directCharge ? 'failed' : 'captured') : 'canceled'
       trip.metadata.payout = { amountCents: 640, status: 'pending' }
-      result = { ok: true, status: trip.status, payment: { ok: true, status: 'succeeded', amountCents: 800, paymentIntentId: 'pi_mock' } }
-    } else if (fullRide && url.endsWith('/api/trip-tip')) result = { ok: true, tipCents: 100 }
+      result = { ok: true, status: trip.status, payment: { ok: true, method: 'card', status: 'succeeded', amountCents: 800, paymentIntentId: 'pi_mock', ...paymentOverride } }
+    } else if (fullRide && url.endsWith('/api/trip-tip')) result = failTip
+      ? { ok: false, error: { message: 'tip declined', code: 'card_declined' } } : { ok: true, tipCents: 100 }
     else if (fullRide && url.includes('/rest/v1/trips')) {
       if (options.method === 'PATCH') Object.assign(trip, body)
       result = options.headers?.Accept?.includes('vnd.pgrst.object') ? trip : [trip]
@@ -147,7 +175,9 @@ test('CLI refuses without flag before any network request', async () => {
 })
 
 test('live key or failed Stripe retrieval exits successfully before card, presence or booking', async () => {
-  for (const options of [{ key: 'pk_live_fake' }, { retrievalFails: true }]) {
+  for (const options of [{ key: 'pk_live_fake' }, { retrievalFails: true },
+    { key: 'pk_live_fake', args: ['--confirm-prod-e2e', '--continue-without-hold'] },
+    { retrievalFails: true, args: ['--confirm-prod-e2e', '--continue-without-hold'] }]) {
     const result = await withMockRun(options)
     assert.equal(result.exitCode, 0)
     assert.equal(result.summary.stripeMode, 'live')
@@ -170,6 +200,7 @@ test('a failed online step stops the ride and still sets driver offline', async 
   const result = await withMockRun({ failOnline: true })
   assert.equal(result.exitCode, 1)
   assert.equal(result.summary.steps.find(s => s.name === 'driver_online').status, 'FAIL')
+  assert.match(result.summary.steps.find(s => s.name === 'driver_online').detail, /online rejected/)
   assert.equal(result.summary.steps.find(s => s.name === 'book').status, 'SKIP')
   assert.equal(result.summary.steps.find(s => s.name === 'cleanup').status, 'PASS')
   assert.equal(result.online, false)
@@ -204,4 +235,61 @@ test('offer failure or a lost booking response cancels exactly one trip and rele
     assert.equal(result.calls.filter(c => c.url.endsWith('?action=request-driver')).length, 1)
     assert.equal(result.calls.filter(c => c.body?.action === 'cancel').length, 1)
   }
+})
+
+const continueArgs = ['--confirm-prod-e2e', '--continue-without-hold']
+
+test('failed hold continues all later steps only with opt-in and still exits nonzero', async () => {
+  for (const directCharge of [true, false]) {
+    const result = await withMockRun({ fullRide: true, failedHold: true, directCharge, args: continueArgs })
+    assert.equal(result.exitCode, 1, result.logs.join('\n'))
+    const book = result.summary.steps.find(s => s.name === 'book')
+    assert.equal(book.status, 'FAIL')
+    assert.match(book.detail, /authorization code charge_failed/)
+    assert.match(book.detail, /Stripe account is not eligible for holds/)
+    assert.match(book.detail, /second attempt \[redacted\]/)
+    for (const name of ['offer', 'accept', 'en_route', 'pickup', 'in_progress', 'complete', 'capture', 'tip', 'payout_ledger', 'cleanup']) {
+      assert.equal(result.summary.steps.find(s => s.name === name).status, 'PASS', result.logs.join('\n'))
+    }
+    assert.match(result.summary.steps.find(s => s.name === 'capture').detail,
+      directCharge ? /direct card charge succeeded/ : /captured hold/)
+    assert.equal(result.summary.capturePayoutExercised, true)
+    assert.equal(result.trip.status, 'completed')
+    assert.equal(result.online, false)
+  }
+})
+
+test('failed hold stops without opt-in; unmarked or lost-response bookings stop even with opt-in', async () => {
+  for (const options of [{}, { e2eFlag: false, args: continueArgs }, { lostBookingResponse: true, args: continueArgs }]) {
+    const result = await withMockRun({ fullRide: true, failedHold: true, ...options })
+    assert.equal(result.exitCode, 1)
+    assert.equal(result.summary.steps.find(s => s.name === 'book').status, 'FAIL')
+    assert.equal(result.summary.steps.find(s => s.name === 'offer').status, 'SKIP')
+    assert.equal(result.summary.steps.find(s => s.name === 'cleanup').status, 'PASS')
+    assert.equal(result.trip.status, 'canceled')
+  }
+})
+
+test('continuation tolerates unreadable persisted diagnostics and still enforces direct card settlement', async () => {
+  const success = await withMockRun({ fullRide: true, failedHold: true, directCharge: true,
+    persistedError: false, args: continueArgs })
+  assert.equal(success.summary.steps.find(s => s.name === 'capture').status, 'PASS')
+  for (const paymentOverride of [{ ok: false, error: 'charge rejected', code: 'charge_failed' },
+    { method: 'credits' }, { status: 'requires_action' }]) {
+    const result = await withMockRun({ fullRide: true, failedHold: true, directCharge: true,
+      args: continueArgs, paymentOverride })
+    assert.equal(result.summary.steps.find(s => s.name === 'capture').status, 'FAIL')
+    assert.equal(result.summary.steps.find(s => s.name === 'tip').status, 'SKIP')
+    if (paymentOverride.error) assert.match(result.summary.steps.find(s => s.name === 'capture').detail, /charge_failed.*charge rejected/)
+  }
+  const normal = await withMockRun({ fullRide: true, directCharge: true })
+  assert.equal(normal.summary.steps.find(s => s.name === 'capture').status, 'FAIL')
+})
+
+test('HTTP and JSON failures include server diagnostics and stop later steps', async () => {
+  const http = await withMockRun({ fullRide: true, failOffer: true })
+  assert.match(http.summary.steps.find(s => s.name === 'offer').detail, /HTTP 503.*offer failed/)
+  const json = await withMockRun({ fullRide: true, failedHold: true, args: continueArgs, failTip: true })
+  assert.match(json.summary.steps.find(s => s.name === 'tip').detail, /tip declined.*card_declined/)
+  assert.equal(json.summary.steps.find(s => s.name === 'payout_ledger').status, 'SKIP')
 })
