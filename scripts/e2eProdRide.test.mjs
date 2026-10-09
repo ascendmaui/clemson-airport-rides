@@ -150,11 +150,27 @@ async function withMockRun({ args = ['--confirm-prod-e2e'], key = 'pk_test_fake'
     } else if (fullRide && url.endsWith('?action=mark-offered')) {
       if (failOffer) { status = 503; result = { error: 'offer failed' } }
       else { trip.status = 'offered'; result = { ok: true } }
-    } else if (fullRide && url.endsWith('?action=wait')) {
-      assert.equal(body.action, 'arrive')
-      trip.status = 'arrived'
-      trip.arrived_at = new Date().toISOString()
-      result = { trip }
+    } else if (fullRide && url.endsWith('?action=trip-status')) {
+      assert.equal(options.headers.Authorization, 'Bearer fake-driver-token')
+      assert.equal(body.tripId, trip.id)
+      const to = { accept: 'accepted', arriving: 'arriving', arrive: 'arrived', start: 'in_progress', complete: 'completed' }[body.op]
+      assert.ok(to, `Unexpected driver op: ${body.op}`)
+      trip.status = to
+      result = { ok: true, trip }
+      if (body.op === 'accept') {
+        trip.driver_id = 'driver'
+        trip.accepted_at = new Date().toISOString()
+        trip.driver_earnings_cents = 640
+        trip.platform_fee_cents = 160
+        Object.assign(trip.metadata, { driver_payout_cents: 640, driver_share_bps: 8000, accepted_offer_phase: 'exclusive' })
+      }
+      if (body.op === 'arrive') trip.arrived_at = new Date().toISOString()
+      if (body.op === 'complete') {
+        trip.completed_at = new Date().toISOString()
+        trip.metadata.fare_authorization.status = directCharge ? 'failed' : 'captured'
+        trip.metadata.payout = { amountCents: 640, status: 'pending' }
+        result.settle = { ok: true, status: trip.status, payment: { ok: true, method: 'card', status: 'succeeded', amountCents: 800, paymentIntentId: 'pi_mock', ...paymentOverride } }
+      }
     } else if (fullRide && url.endsWith('?action=settle')) {
       trip.status = body.action === 'complete' ? 'completed' : 'canceled'
       trip.metadata.fare_authorization.status = body.action === 'complete' ? (directCharge ? 'failed' : 'captured') : 'canceled'
@@ -263,7 +279,9 @@ test('test mode drives the real driverDesk lifecycle, saves a card and verifies 
     assert.equal(result.trip.status, 'completed')
     assert.equal(result.trip.metadata.driver_payout_cents, 640)
     assert.equal(result.online, false)
-    const completion = result.calls.findIndex(c => c.body?.action === 'complete')
+    assert.deepEqual(result.calls.filter(c => c.url.endsWith('?action=trip-status')).map(c => c.body.op), ['accept', 'arriving', 'arrive', 'start', 'complete'])
+    assert.equal(result.calls.some(c => c.url.includes('/rest/v1/trips') && c.method === 'PATCH'), false)
+    const completion = result.calls.findIndex(c => c.body?.op === 'complete')
     const tip = result.calls.findIndex(c => c.url.endsWith('?action=tip-choice'))
     assert.ok(result.calls.slice(completion + 1, tip).some(c => c.body?.online === false))
     assert.deepEqual(result.calls.filter(c => c.url.endsWith('?action=tip-choice')).map(c => c.body), [

@@ -1,9 +1,15 @@
 import assert from 'node:assert/strict'
-import test from 'node:test'
+import test, { beforeEach } from 'node:test'
 import { rebroadcastMissedOffers } from './matchingRebroadcast.js'
 import handler from '../api/driver.js'
-import { seedMatchingScenario } from '../tests/fixtures/matchingE2E.js'
-import { acceptTrip, loadDriverDesk } from '../packages/rides-native/driverDesk.js'
+import { seedMatchingScenario, acceptMatchingTrip as acceptTrip, matchingApiFetch } from '../tests/fixtures/matchingE2E.js'
+import { loadDriverDesk } from '../packages/rides-native/driverDesk.js'
+
+beforeEach((t) => {
+  const originalFetch = globalThis.fetch
+  globalThis.fetch = matchingApiFetch
+  t.after(() => { globalThis.fetch = originalFetch })
+})
 
 const now = new Date('2026-10-04T12:01:00.000Z')
 function seed(overrides = {}) {

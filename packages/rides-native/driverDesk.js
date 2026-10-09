@@ -3,7 +3,7 @@ import { uniqueChannelTopic } from './realtimeChannel.js'
  * Driver desk: availability, PickDriver requests, scheduled queue, live status.
  * Payments go through the existing /api/driver and /api/stripe-payment-methods routers.
  */
-import { offerVisibleToDriver, visibleOfferQuery, unchangedOfferQuery } from '../../shared/driverOrder.js'
+import { offerVisibleToDriver, visibleOfferQuery } from '../../shared/driverOrder.js'
 import { filterVisibleTrips, pairAllowedByRpc, visibleTripIdSet, WOMEN_ONLY_ACCEPT_ERROR } from './comfortPreference.js'
 import { isStaleLiveOffer } from '../../shared/staleLiveOffer.js'
 import { lockedOfferEconomics } from './offerLadder.js'
@@ -445,42 +445,8 @@ export async function acceptTrip(supabase, trip, driverId) {
     await lockAcceptedShare(supabase, fresh, driverId)
     return data
   }
-  const acceptedAt = new Date().toISOString()
-  const economics = lockedOfferEconomics(fresh)
-  const metadata = economics
-    ? {
-      ...(fresh.metadata || {}),
-      driver_share_bps: economics.shareBps,
-      driver_payout_cents: economics.netCents,
-      accepted_offer_phase: economics.phase,
-    }
-    : null
-  const { data, error } = await unchangedOfferQuery(supabase
-    .from('trips')
-    .update({
-      status: 'accepted',
-      driver_id: driverId,
-      accepted_at: acceptedAt,
-      ...(economics ? {
-        driver_earnings_cents: economics.netCents,
-        platform_fee_cents: economics.platformFeeCents,
-        metadata,
-      } : {}),
-    }), fresh)
-    .is('driver_id', null)
-    .eq('id', trip.id)
-    .in('status', OPEN_OFFER_STATUSES)
-    .select('id, status, driver_id, accepted_at')
-    .maybeSingle()
-  if (error) throw new Error(error.message)
-  if (!data) throw new Error('That ride is no longer available')
-  try {
-    await writeTripEvent(supabase, trip.id, 'accepted', { driver_id: driverId, source: 'driver_app', accepted_at: acceptedAt })
-  } catch (error) {
-    // The conditional claim already committed. Keep both screens on the accepted trip.
-    return { ...data, eventWarning: error.message }
-  }
-  return data
+  const result = await driverTripAction(supabase, trip.id, 'accept')
+  return result.trip
 }
 
 export async function publishDriverCapacity(supabase, driverId, seats) {
@@ -618,55 +584,26 @@ export async function loadRiderFix(supabase, tripId) {
   }
 }
 
+export async function driverTripAction(supabase, tripId, op) {
+  if (!tripId) throw new Error('Missing ride')
+  try {
+    return await authedJson(supabase, '/api/driver?action=trip-status', {
+      method: 'POST', body: { tripId, op },
+    })
+  } catch (err) {
+    if (op === 'complete' && (err.status === 402 || /payment_required/i.test(err.message || ''))) {
+      err.message = 'Payment is still required before this trip can complete.'
+    }
+    throw err
+  }
+}
+
 export async function advanceTrip(supabase, trip, driverId) {
   const next = nextTripStatus(trip?.status)
-  if (!next || !trip?.id) throw new Error('This trip cannot be advanced')
-  if (next === 'arrived') {
-    try {
-      await authedJson(supabase, '/api/driver?action=wait', {
-        method: 'POST',
-        body: { action: 'arrive', tripId: trip.id },
-      })
-    } catch (err) {
-      if (!err.network && !err.unavailable) throw err
-      const { error } = await supabase.from('trips').update({ status: 'arrived' }).eq('id', trip.id).eq('driver_id', driverId)
-      if (error) throw new Error(error.message)
-    }
-    await writeTripEvent(supabase, trip.id, 'arrived', { driver_id: driverId, source: 'driver_app' })
-    return { status: 'arrived' }
-  }
-  let settle = null
-  if (next === 'completed') {
-    settle = await authedJson(supabase, '/api/stripe-payment-methods?action=settle', {
-      method: 'POST',
-      body: { tripId: trip.id, action: 'complete' },
-    })
-  }
-  const patch = { status: next }
-  if (next === 'completed') patch.completed_at = new Date().toISOString()
-  const { data, error } = await supabase
-    .from('trips')
-    .update(patch)
-    .eq('id', trip.id)
-    .eq('driver_id', driverId)
-    .select('id, status, completed_at')
-    .maybeSingle()
-  if (error) {
-    if (next === 'completed' && /payment_required/i.test(error.message || '')) {
-      throw new Error('Payment is still required before this trip can complete.')
-    }
-    throw new Error(error.message)
-  }
-  if (!data || data.status !== next) {
-    if (next === 'completed') {
-      const again = await supabase.from('trips').select('id, status, completed_at').eq('id', trip.id).maybeSingle()
-      if (again.data?.status === 'completed') return settle ? { ...again.data, settle } : again.data
-      throw new Error('Payment is still required before this trip can complete.')
-    }
-    throw new Error('Trip status did not update.')
-  }
-  await writeTripEvent(supabase, trip.id, next, { driver_id: driverId, from: trip.status, source: 'driver_app' })
-  return settle ? { ...data, settle } : data
+  const op = { arriving: 'arriving', arrived: 'arrive', in_progress: 'start', completed: 'complete' }[next]
+  if (!op || !trip?.id) throw new Error('This trip cannot be advanced')
+  const result = await driverTripAction(supabase, trip.id, op)
+  return { ...result.trip, ...(result.settle ? { settle: result.settle } : {}), ...(result.wait ? { wait: result.wait } : {}), ...(result.idempotent ? { idempotent: true } : {}) }
 }
 
 export async function loadTrip(supabase, tripId, driverId) {

@@ -300,5 +300,5 @@ export async function applyTripWait(sb, { action, tripId, actorId }) {
   const parsedServerMs = new Date(serverNow).getTime()
   const serverMs = Number.isFinite(parsedServerMs) ? parsedServerMs : Date.now()
   const quote = quoteWait(trip.arrived_at, serverMs)
-  return { trip, serverNow, quote, charge }
+  return { trip, serverNow, quote, charge, should_charge: Boolean(data.should_charge) }
 }

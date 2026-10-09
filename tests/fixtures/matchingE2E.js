@@ -1,3 +1,6 @@
+import { acceptTrip } from '../../packages/rides-native/driverDesk.js'
+import handleTripStatus from '../../server/endpoints/tripStatus.js'
+
 const DEFAULT_PICKUP = { lat: 34.6834, lng: -82.8374 }
 const DEFAULT_DROPOFF = { lat: 34.8957, lng: -82.2189 }
 
@@ -127,6 +130,7 @@ export function createMatchingSupabase(initialTables = {}) {
   return {
     _tables: tables,
     from: query,
+    rpc: async () => ({ data: null, error: { code: 'PGRST202', message: 'Optional RPC not installed' } }),
     channel() {
       const channel = { on() { return channel }, subscribe() { return channel } }
       return channel
@@ -285,4 +289,25 @@ export async function requestDriverTrip(supabase, {
   })
   if (event.error) throw event.error
   return data
+}
+
+// Exercise the real server endpoint at the client HTTP boundary, without credentials.
+const apiSessions = new Map()
+let sessionSequence = 0
+export async function acceptMatchingTrip(supabase, trip, driverId) {
+  const token = `matching-test-${++sessionSequence}`
+  apiSessions.set(token, { sb: supabase, user: { id: driverId } })
+  const client = { ...supabase, auth: { getSession: async () => ({ data: { session: { access_token: token } } }) } }
+  try { return await acceptTrip(client, trip, driverId) } finally { apiSessions.delete(token) }
+}
+
+export async function matchingApiFetch(url, options) {
+  if (!String(url).includes('/api/driver?action=trip-status')) throw new Error(`Unexpected fixture request: ${url}`)
+  const token = options.headers.Authorization?.replace(/^Bearer /, '')
+  const deps = apiSessions.get(token)
+  if (!deps) throw new Error('Missing matching test session')
+  let body
+  const res = { setHeader() {}, end(value) { body = value } }
+  await handleTripStatus({ method: options.method, headers: options.headers, body: options.body }, res, deps)
+  return { ok: res.statusCode >= 200 && res.statusCode < 300, status: res.statusCode, text: async () => body }
 }
