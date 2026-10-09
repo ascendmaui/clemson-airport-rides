@@ -19,7 +19,14 @@ export function inAppRideAlert() {
 }
 
 Notifications.setNotificationHandler({
-  handleNotification: async () => {
+  handleNotification: async (notification) => {
+    const data = notification?.request?.content?.data
+    if (isTripStatusPush(data)) {
+      // The offer banner ignores status pushes, so they show as normal alerts even in the app.
+      // The trip screen already shows its own Arrived? card, so that one stays quiet in the foreground.
+      const quiet = (data as { kind?: string }).kind === 'arrive_prompt'
+      return { shouldShowBanner: !quiet, shouldShowList: true, shouldPlaySound: !quiet, shouldSetBadge: false }
+    }
     const inApp = inAppRideAlert()
     return {
       shouldShowBanner: !inApp,

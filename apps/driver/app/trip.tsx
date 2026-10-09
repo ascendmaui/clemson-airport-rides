@@ -53,6 +53,7 @@ import { TripThread } from 'rides-native/TripThread.jsx'
 import { ScheduledRidesHint } from 'rides-native/ScheduledRidesInfo'
 import { MAPS_HANDOFF_HELPER } from '../../../shared/copy/scheduledRides.js'
 import { isActiveRideStatus } from 'rides-native/safety.js'
+import { MISSING_TRIP_VIEW, driverCanceledView, nextDriverTripCard } from 'rides-native/tripCanceled'
 
 type RiderFix = { latitude: number; longitude: number }
 
@@ -94,6 +95,10 @@ export default function TripScreen() {
   const sosActive = isActiveRideStatus(trip?.status)
   const [sosOpen, setSosOpen] = useState(false)
   const terminalTrip = Boolean(trip && ['completed', 'canceled', 'canceled_midride', 'cancelled_wait'].includes(trip.status))
+  const [tripLoaded, setTripLoaded] = useState(false)
+  // Rider cancel, switch, early end, or no-show: explain it and offer a way back to offers.
+  const canceledView = driverCanceledView(trip)
+  const seenStatus = useRef<string | null>(null)
   const activeTrip = isActiveTripLocationStatus(trip?.status)
   const [backgroundNote, setBackgroundNote] = useState<string | null>(null)
   const [self, setSelf] = useState<{ latitude: number; longitude: number } | null>(null)
@@ -112,6 +117,16 @@ export default function TripScreen() {
   const partyColors = partyColorsFromPalette(colors)
 
   useEffect(() => setSosOpen(false), [trip?.id, sosActive])
+
+  useEffect(() => {
+    const status = trip ? `${trip.id}:${trip.status}:${trip.released ? 'released' : ''}` : null
+    const before = seenStatus.current
+    seenStatus.current = status
+    // Only when it changes while this screen is open, not when opening an already-canceled trip.
+    if (!before || !status || before === status || !canceledView) return
+    pulse('complete')
+    AccessibilityInfo.announceForAccessibility(canceledView.announcement)
+  }, [trip?.id, trip?.status, trip?.released])
 
   const readerRef = useRef<ReturnType<typeof createTrackingRefresh> | null>(null)
   const refresh = useCallback(() => readerRef.current?.refresh(true) ?? Promise.resolve(), [])
@@ -145,7 +160,8 @@ export default function TripScreen() {
         // A poll begun before Start or cancel must not restore the wait screen.
         setTrip((current) => current && current.id === row?.id && row?.status === 'arrived'
           && ['in_progress', 'completed', 'canceled', 'canceled_midride', 'cancelled_wait'].includes(current.status)
-          ? current : row)
+          ? current : nextDriverTripCard(current, row))
+        setTripLoaded(true)
       },
       onError: (err) => setError(err ? (err instanceof Error ? err.message : 'Could not refresh trip. Retrying automatically.') : null),
     })
@@ -449,6 +465,13 @@ export default function TripScreen() {
           activeIndex={stepIndex}
           colors={colors}
         />
+        {canceledView ? (
+          <View accessibilityRole="summary" style={[styles.arrivePrompt, { borderColor: colors.inkSecondary }]}>
+            <Text style={styles.arriveTitle} accessibilityRole="header">{canceledView.title}</Text>
+            <Text style={styles.copy}>{canceledView.body}</Text>
+            <Primary label={canceledView.action} onPress={() => router.replace('/')} tone="orange" />
+          </View>
+        ) : null}
         {trip?.status === 'arriving' ? (() => {
           const prompt = arrivedPromptCopy({ firstName: trip.firstName, pickupLabel: trip.pickupLabel })
           return (
@@ -515,7 +538,7 @@ export default function TripScreen() {
             {trip.status !== 'cancelled_wait' && trip.status !== 'completed' ? <FarePanel card={trip} /> : null}
             {user ? <TripThread supabase={supabase} tripId={trip.id} userId={user.id} colors={colors} /> : null}
             {trip.backupEnroute || mapsOffer ? <Text style={styles.copy}>{MAPS_HANDOFF_HELPER}</Text> : null}
-            <View style={styles.navRow}>
+            {canceledView ? null : <View style={styles.navRow}>
               {navAppOrder(navApp).map((provider, index) => (
                 <Pressable
                   key={provider}
@@ -529,7 +552,7 @@ export default function TripScreen() {
                   <Text style={styles.navText}>{index === 0 ? `Navigate · ${navAppLabel(provider)}` : navAppLabel(provider)}</Text>
                 </Pressable>
               ))}
-            </View>
+            </View>}
             <Pressable
               onPress={() => router.push({ pathname: '/trip-details', params: { id: trip.id } })}
               accessibilityRole="button"
@@ -544,7 +567,15 @@ export default function TripScreen() {
             {settleNote ? <Text style={styles.settle}>{settleNote}</Text> : null}
           </>
         ) : (
-          <Text style={styles.copy}>{id ? 'This trip is not on your account yet.' : 'Missing trip id.'}</Text>
+          tripLoaded && id ? (
+            <View accessibilityRole="summary" style={[styles.arrivePrompt, { borderColor: colors.inkSecondary }]}>
+              <Text style={styles.arriveTitle} accessibilityRole="header">{MISSING_TRIP_VIEW.title}</Text>
+              <Text style={styles.copy}>{MISSING_TRIP_VIEW.body}</Text>
+              <Primary label={MISSING_TRIP_VIEW.action} onPress={() => router.replace('/')} tone="orange" />
+            </View>
+          ) : (
+            <Text style={styles.copy}>{id ? 'Loading this ride.' : 'Missing trip id.'}</Text>
+          )
         )}
         {backgroundNote && activeTrip ? (
           <View>
@@ -619,7 +650,7 @@ export default function TripScreen() {
             <LeaveNowLabel leaveNowAt={trip.backupLeaveNowAt} />
           </View>
         ) : null}
-        {terminalTrip && trip?.status !== 'completed' ? <Primary label="Back to Home" onPress={() => router.replace('/')} tone="purple" /> : null}
+        {terminalTrip && trip?.status !== 'completed' && !canceledView ? <Primary label="Back to Home" onPress={() => router.replace('/')} tone="purple" /> : null}
         {trip && ['accepted', 'arriving'].includes(trip.status) ? <DriverCancelSheet key={trip.id} supabase={supabase} tripId={trip.id} scheduled={Boolean(trip.pickupAt)} disabled={busy} onCanceled={onDriverCanceled} /> : null}
         {action && trip?.status !== 'arriving' && trip?.status !== 'arrived' ? <Primary label={busy ? 'Updating…' : action} onPress={onAdvance} disabled={busy} tone="purple" /> : null}
         </ScrollView>

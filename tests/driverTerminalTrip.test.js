@@ -40,5 +40,7 @@ test('native stops tracking every terminal trip and offers a Home exit after can
   assert.match(source, /const terminalTrip = Boolean\(trip && \['completed', 'canceled', 'canceled_midride', 'cancelled_wait'\]\.includes\(trip\.status\)\)/)
   assert.match(source, /useDriverLocation\(Boolean\(user && trip && !terminalTrip\)/)
   assert.match(source, /const action = trip && !terminalTrip \? statusActionLabel\(trip\.status\) : null/)
-  assert.match(source, /terminalTrip && trip\?\.status !== 'completed' \? <Primary label="Back to Home" onPress=\{\(\) => router\.replace\('\/'\)\}/)
+  // Canceled, ended-early, and no-show trips get the "Back to queue" card; anything else keeps Back to Home.
+  assert.match(source, /<Primary label=\{canceledView\.action\} onPress=\{\(\) => router\.replace\('\/'\)\}/)
+  assert.match(source, /terminalTrip && trip\?\.status !== 'completed' && !canceledView \? <Primary label="Back to Home" onPress=\{\(\) => router\.replace\('\/'\)\}/)
 })
