@@ -26,6 +26,7 @@ export const RIDER_TRACK_STATUSES: string[]
 export const STILL_SEARCHING_MS: number
 export const STILL_SEARCHING_COPY: string
 export const SEARCH_PREVIEW_COPY: string
+export const RIDER_SEARCH_MOTION_COPY: string
 export const SEARCH_APPROX_WAIT_NOTE: string
 export const STRAIGHT_LINE_WAIT: string
 

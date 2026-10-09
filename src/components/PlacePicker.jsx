@@ -220,11 +220,15 @@ export function PlacePicker({
       ) : null}
 
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
-        {isPickup && (
-          <button type="button" className="pressable" onClick={() => setConfirmOpen(true)} style={chipStyle(false)}>
-            📍 Current location
-          </button>
-        )}
+        <button
+          type="button"
+          className="pressable"
+          aria-label={isPickup ? 'Use current location as pickup' : 'Use current location as drop-off'}
+          onClick={() => setConfirmOpen(true)}
+          style={chipStyle(false)}
+        >
+          ◎ Current location
+        </button>
         {presets.map((p) => (
           <button
             key={p.label}
@@ -258,7 +262,9 @@ export function PlacePicker({
           >
             <div style={{ fontWeight: 800, color: 'var(--purple)', marginBottom: 8 }}>Allow location?</div>
             <p style={{ fontSize: 13, color: 'var(--ink-secondary)', lineHeight: 1.45, marginBottom: 14 }}>
-              Use your current location as the pickup pin. Your browser will ask for permission.
+              {isPickup
+                ? 'Use your current location as the pickup pin. Your browser will ask for permission.'
+                : 'Use your current location as the drop-off pin. Your browser will ask for permission.'}
             </p>
             <div style={{ display: 'flex', gap: 8 }}>
               <button

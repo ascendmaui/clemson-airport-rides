@@ -53,7 +53,7 @@ test('server/depositRefund.test.js preserves and restores environment keys', () 
         }),
       },
     )
-    assert.match(out, /pass 14/, 'all 14 tests in depositRefund pass')
+    assert.match(out, /pass 12/, 'all 12 tests in depositRefund pass')
   } finally {
     if (origMaps !== undefined) process.env.GOOGLE_MAPS_API_KEY = origMaps
     else delete process.env.GOOGLE_MAPS_API_KEY

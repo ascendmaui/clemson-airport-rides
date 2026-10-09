@@ -21,6 +21,66 @@ exports[`Driver Offer Card snapshot 1`] = `
               "name": "View",
               "children": [
                 {
+                  "type": "Conditional",
+                  "branches": [
+                    {
+                      "name": "Image",
+                      "children": []
+                    },
+                    {
+                      "name": "View",
+                      "children": [
+                        {
+                          "name": "Text",
+                          "children": []
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "name": "View",
+                  "children": [
+                    {
+                      "name": "Text",
+                      "children": []
+                    },
+                    {
+                      "name": "Text",
+                      "children": [
+                        {
+                          "type": "Conditional",
+                          "branches": []
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "Conditional",
+                  "branches": [
+                    {
+                      "name": "Pressable",
+                      "children": [
+                        {
+                          "name": "Text",
+                          "children": [
+                            {
+                              "type": "Conditional",
+                              "branches": []
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "name": "View",
+              "children": [
+                {
                   "name": "Text",
                   "children": []
                 },
@@ -29,6 +89,10 @@ exports[`Driver Offer Card snapshot 1`] = `
                   "children": []
                 }
               ]
+            },
+            {
+              "name": "Text",
+              "children": []
             },
             {
               "name": "Text",
@@ -53,19 +117,11 @@ exports[`Driver Offer Card snapshot 1`] = `
               ]
             },
             {
-              "name": "Text",
-              "children": [
+              "type": "Conditional",
+              "branches": [
                 {
-                  "type": "Conditional",
-                  "branches": []
-                },
-                {
-                  "type": "Conditional",
-                  "branches": []
-                },
-                {
-                  "type": "Conditional",
-                  "branches": []
+                  "name": "Text",
+                  "children": []
                 }
               ]
             },

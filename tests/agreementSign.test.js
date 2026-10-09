@@ -7,7 +7,9 @@ import { approvalBlockers } from '../shared/driverOnboarding.js'
 import {
   AGREEMENT_TEXT_LOCKED,
   EMAIL_NOT_CONFIGURED,
+  adminResendSetupBanner,
   assessSignLink,
+  agreementSendOutcome,
   emailSenderConfigured,
   particularUpdates,
   rejectAgreementTextEdit,
@@ -136,14 +138,30 @@ test('only an admin can email the agreement, and a missing sender fails without 
     },
   })
   assert.equal(emailSenderConfigured({}), false)
+  assert.equal(adminResendSetupBanner({}), true)
+  assert.equal(adminResendSetupBanner({
+    RESEND_API_KEY: 're_live',
+    RESEND_FROM: 'Clemson RIDES <rides@clemsonrides.com>',
+    ADMIN_NOTIFY_EMAIL: '',
+  }), false)
+  assert.equal(adminResendSetupBanner({
+    RESEND_API_KEY: 're_placeholder_key',
+    RESEND_FROM: 'rides@clemsonrides.com',
+  }), true)
   assert.equal(missing.status, 503)
   assert.equal(missing.body.emailed, false)
   assert.equal(missing.body.ok, undefined)
   assert.notEqual(missing.body.ok, true)
   assert.equal(missing.body.message, EMAIL_NOT_CONFIGURED)
   assert.equal(missing.body.error, EMAIL_NOT_CONFIGURED)
+  assert.equal(missing.body.copyable, true)
   assert.match(missing.body.signing_url, /#\/sign-agreement\?token=one-time-token/)
   assert.equal(fetched, false)
+  const outcome = agreementSendOutcome(missing.body)
+  assert.equal(outcome.copyable, true)
+  assert.equal(outcome.emailed, false)
+  assert.match(outcome.message, /Copy this signing link/)
+  assert.match(outcome.signingUrl, /sign-agreement/)
   assert.equal(store.sends.length, 1)
   assert.equal(store.sends[0].result, 'not_configured')
   assert.equal(store.sends[0].to, 'ada@clemson.edu')

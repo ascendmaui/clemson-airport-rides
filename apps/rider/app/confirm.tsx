@@ -1,11 +1,12 @@
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import * as Location from 'expo-location'
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { Animated, Pressable, ScrollView, Text, TextInput, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { PrimaryButton, SheetHandle } from '@/components/Button'
 import { useEnterMotion } from '@/components/enter'
 import { CampusMap } from '@/components/CampusMap'
+import type { CampusMapHandle } from '@/components/mapTypes'
 import { SignInToBookSheet } from '@/components/SignInToBookSheet'
 import { setAuthNext } from '@/lib/authNext'
 import { useAuth } from '@/lib/auth'
@@ -28,8 +29,9 @@ import { useThemedStyles } from '@/lib/useThemedStyles'
 export default function ConfirmPickup() {
   const router = useRouter()
   const insets = useSafeAreaInsets()
-  const params = useLocalSearchParams<{ dest?: string }>()
+  const params = useLocalSearchParams<{ dest?: string; tier?: string | string[] }>()
   const dest = oneParam(params.dest, 'GSP Airport')
+  const tier = oneParam(params.tier)
   const { user } = useAuth()
   const student = useStudentStatus()
   const studentOffer = studentSurfaceCopy(student, 'confirm')
@@ -47,8 +49,9 @@ export default function ConfirmPickup() {
   const [pickup, setPickup] = useState<Place>(initialPickup)
   const [dropoff, setDropoff] = useState<Place>(initialDrop)
   const [note, setNote] = useState('')
-  const [locating, setLocating] = useState(false)
+  const [locating, setLocating] = useState<'pickup' | 'dropoff' | null>(null)
   const [locateNote, setLocateNote] = useState<string | null>(null)
+  const mapRef = useRef<CampusMapHandle>(null)
   const [promptOpen, setPromptOpen] = useState(false)
   const { colors } = useTheme()
   const styles = useThemedStyles(makeStyles)
@@ -62,6 +65,7 @@ export default function ConfirmPickup() {
     pickupLat: String(pickup.lat),
     pickupLng: String(pickup.lng),
     note,
+    ...(tier ? { tier } : {}),
   }
 
   const goTiers = () => {
@@ -77,8 +81,8 @@ export default function ConfirmPickup() {
     setPromptOpen(true)
   }
 
-  async function onLocate() {
-    setLocating(true)
+  async function onLocate(which: 'pickup' | 'dropoff') {
+    setLocating(which)
     setLocateNote(null)
     try {
       const permission = await Location.requestForegroundPermissionsAsync()
@@ -86,16 +90,24 @@ export default function ConfirmPickup() {
         setLocateNote('Location permission is off.')
         return
       }
-      const position = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced })
-      setPickup({
+      let position
+      try {
+        position = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.BestForNavigation })
+      } catch {
+        position = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High })
+      }
+      const place = {
         label: 'Current location',
         lat: position.coords.latitude,
         lng: position.coords.longitude,
-      })
+      }
+      if (which === 'dropoff') setDropoff(place)
+      else setPickup(place)
+      mapRef.current?.animateTo({ latitude: place.lat, longitude: place.lng }, 0.01)
     } catch (err) {
       setLocateNote(err instanceof Error ? err.message : 'Could not read your location.')
     } finally {
-      setLocating(false)
+      setLocating(null)
     }
   }
 
@@ -103,6 +115,7 @@ export default function ConfirmPickup() {
     <View style={styles.screen}>
       <View style={styles.map}>
         <CampusMap
+          ref={mapRef}
           spots={[]}
           showHeat={false}
           pins={[{
@@ -111,19 +124,25 @@ export default function ConfirmPickup() {
             longitude: pickup.lng,
             title: pickup.label,
             color: colors.orange,
+          }, {
+            id: 'dropoff',
+            latitude: dropoff.lat,
+            longitude: dropoff.lng,
+            title: dropoff.label,
+            color: colors.purple,
           }]}
         />
         <Pressable
-          onPress={onLocate}
-          disabled={locating}
+          onPress={() => { void onLocate('pickup') }}
+          disabled={locating != null}
           style={[styles.locate, lift(colors, 'float'), { top: insets.top + 10 }]}
           accessibilityRole="button"
           accessibilityLabel="Use current location as pickup"
-          accessibilityHint="Detects your location and sets it as the pickup"
-          accessibilityState={{ busy: locating }}
+          accessibilityHint="Pins your location as the pickup on the map"
+          accessibilityState={{ busy: locating === 'pickup' }}
           hitSlop={8}
         >
-          <Text style={styles.locateLabel}>{locating ? '…' : '◎'}</Text>
+          <Text style={styles.locateLabel}>{locating === 'pickup' ? '…' : '◎'}</Text>
         </Pressable>
         <Pressable
           onPress={() => router.back()}
@@ -146,17 +165,23 @@ export default function ConfirmPickup() {
       >
         <SheetHandle />
         <Text style={styles.title}>Confirm pickup spot</Text>
-        <Text style={styles.hint}>Type a pickup or drop-off and pick a suggestion, or use current location. You do not have to drop a pin.</Text>
+        <Text style={styles.hint}>The location icon on pickup and drop-off pins that stop on the map. You can also type a campus or airport stop.</Text>
         {locateNote ? <Text style={styles.locateNote}>{locateNote}</Text> : null}
         <NeighborhoodPicker
           label="Pickup address"
           value={pickup}
-          onChange={setPickup}
+          onChange={(place) => {
+            setPickup(place)
+            mapRef.current?.animateTo({ latitude: place.lat, longitude: place.lng }, 0.01)
+          }}
         />
         <NeighborhoodPicker
           label="Drop-off address"
           value={dropoff}
-          onChange={setDropoff}
+          onChange={(place) => {
+            setDropoff(place)
+            mapRef.current?.animateTo({ latitude: place.lat, longitude: place.lng }, 0.01)
+          }}
         />
         <Text style={styles.fieldLabel}>Add note for driver</Text>
         <TextInput

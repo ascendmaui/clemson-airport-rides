@@ -30,3 +30,10 @@ export function navigationLinks({ latitude, longitude, label } = {}) {
     : `https://www.google.com/maps/dir/?api=1&destination=${query}&travelmode=driving`
   return { apple, google, hasPoint }
 }
+
+/** One URL for a Navigate button. iPhone opens Apple Maps; everyone else opens Google Maps. */
+export function preferredNavigationUrl(stop, userAgent = '') {
+  const links = navigationLinks(stop)
+  const ios = /iPhone|iPad|iPod/i.test(String(userAgent || ''))
+  return ios ? links.apple : links.google
+}

@@ -44,9 +44,11 @@ export const PREFERRED_MATCH_COPY: string
 export const PREFERRED_OFFLINE_COPY: string
 export const PREFERRED_CANCELED_COPY: string
 export const OPEN_POOL_COPY: string
+export const CAMPUS_MPH: number
 
 export function preferredTripFields(driverId: string): { preferred_driver_id: string; match: 'preferred' }
 export function normalizeFavoriteDriverIds(raw: unknown): string[]
+export function canFavoriteDriver(driverId: string | null | undefined): boolean
 export function driverApproach(
   driver: { lat?: number | null; lng?: number | null } | null | undefined,
   pickup: { lat?: number | null; lng?: number | null } | null | undefined,
@@ -69,7 +71,8 @@ export function sortPreferredDrivers<T extends { id: string; online?: boolean; l
 export function groupDriversForPicker<T extends { id: string; online?: boolean }>(
   drivers: T[] | null | undefined,
   favoriteIds: string[] | null | undefined,
-): { preferred: T[]; online: T[] }
+  passPreferredIds?: string[] | null,
+): { preferred: T[]; online: T[]; passPreferred?: T[] }
 export function loadFavoriteDriverIds(
   supabase: unknown,
   storage: KeyValueStorage | null | undefined,
@@ -133,12 +136,15 @@ export function requestDriverTrip(
   supabase: unknown,
   input: {
     riderId: string
-    driverId: string
+    driverId?: string | null
+    autoAssign?: boolean
     dest?: string
-    destPoint?: { latitude: number; longitude: number }
+    destPoint?: { latitude?: number; longitude?: number; lat?: number; lng?: number }
     pickupLabel?: string
-    pickupPoint?: { latitude: number; longitude: number }
+    pickupPoint?: { latitude?: number; longitude?: number; lat?: number; lng?: number }
     tier?: string
+    passengers?: number | string | null
     isStudent?: boolean
+    note?: string
   },
-): Promise<{ id: string; status: string; driver_id: string; dropoff_label: string; fare_cents?: number | null; deposit_cents?: number | null }>
+): Promise<{ id: string; status: string; driver_id: string | null; dropoff_label?: string; fare_cents?: number | null; deposit_cents?: number | null }>

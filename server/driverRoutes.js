@@ -12,7 +12,7 @@ import { driverQuizError } from '../shared/driverQuiz.js'
 import { admin, cors, json, parseBody, userFromAuth } from './friendRideLib.js'
 import { loadSubmissionContext, notifyAdminOfApplication } from './driverApproval.js'
 import { attachUnsignedPacket } from './agreementPacket.js'
-import { submittedApplicantEmail, writeDriverApplication } from '../shared/applicantEmail.js'
+import { resolveSignupApplicantEmail, submittedApplicantEmail, writeDriverApplication } from '../shared/applicantEmail.js'
 import {
   parseVehicleYear,
   vehicleYearMessage,
@@ -64,7 +64,9 @@ export async function handleDriverSignup(req, res) {
   if (!color) return json(res, 400, { error: 'Vehicle color is required.' })
   if (year == null) return json(res, 400, { error: vehicleYearMessage() })
 
-  const email = (user.email || '').toLowerCase()
+  const applicantEmail = resolveSignupApplicantEmail(body, user)
+  if (!applicantEmail) return json(res, 400, { error: 'A valid email is required.' })
+  const email = applicantEmail
   const isClemson = email.endsWith('@clemson.edu') || email.endsWith('@g.clemson.edu')
   const now = new Date().toISOString()
 
@@ -93,7 +95,7 @@ export async function handleDriverSignup(req, res) {
       id: user.id,
       full_name: fullName,
       phone,
-      email: user.email || null,
+      email: applicantEmail,
       updated_at: now,
     }
     if (isClemson) profilePatch.student_verified_at = now
@@ -118,7 +120,7 @@ export async function handleDriverSignup(req, res) {
         onboarding_status: nextStatus,
         status: legacyStatusFor(nextStatus),
       },
-      user.email,
+      applicantEmail,
     )
     if (savedApp.error) return json(res, 500, { error: savedApp.error.message })
     const app = savedApp.data

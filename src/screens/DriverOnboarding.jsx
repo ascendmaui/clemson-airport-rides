@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { MarketingPhoto } from '../components/MarketingPhoto'
 import { useAuth } from '../lib/auth'
 import { PrimaryButton } from '../components/PrimaryButton'
 import { ApplicantThread } from '../components/ApplicantThread'
@@ -34,12 +35,20 @@ import {
   readOnboardingStep,
   writeOnboardingStep,
 } from '../lib/driverOnboarding'
-import { COMFORT_FLEET_NOTICE } from '../../packages/rides-native/tripTags.js'
 import { driverRouteForOnboarding } from '../../shared/driverRoute.js'
 import { buildFieldA11yProps, formatAccessibleFormErrorSummary, getFieldErrorProps } from '../lib/formA11y'
 import { loadLatestVehicle, vehicleAccountErrors } from '../../shared/vehicleYear.js'
 import { driverQuizError } from '../../shared/driverQuiz.js'
 import { w9ContinueIssue } from '../../shared/driverOnboarding.js'
+import { applicantEmailError } from '../../shared/applicantEmail.js'
+import {
+  BACKGROUND_DISCLOSURES,
+  assessBackgroundAttestation,
+  backgroundGateFromApplication,
+  backgroundStatusLabel,
+  emptyDisclosures,
+  normalizeDisclosures,
+} from '../../shared/backgroundCheck.js'
 
 const QUESTIONS = [
   { key: 'isStudent', label: 'Are you a student?', optional: true },
@@ -157,6 +166,7 @@ export function DriverOnboarding() {
   })
   const [attestation, setAttestation] = useState(false)
   const [fullName, setFullName] = useState('')
+  const [applicantEmail, setApplicantEmail] = useState('')
   const [phone, setPhone] = useState('')
   const [make, setMake] = useState('')
   const [model, setModel] = useState('')
@@ -173,6 +183,11 @@ export function DriverOnboarding() {
   const [error, setError] = useState(null)
   const [note, setNote] = useState(null)
   const [backgroundAuthorized, setBackgroundAuthorized] = useState(false)
+  const [bgStep, setBgStep] = useState(0)
+  const [bgLegalName, setBgLegalName] = useState('')
+  const [disclosures, setDisclosures] = useState(emptyDisclosures)
+  const [bgSignature, setBgSignature] = useState('')
+  const [bgSignedOn, setBgSignedOn] = useState(() => new Date().toISOString().slice(0, 10))
   const [eligibilityCategory, setEligibilityCategory] = useState('')
   const [eligibilityAttested, setEligibilityAttested] = useState(false)
   const [legalName, setLegalName] = useState('')
@@ -186,10 +201,13 @@ export function DriverOnboarding() {
   const uploaded = useMemo(() => docs.map((d) => d.doc_type), [docs])
   const status = application?.onboarding_status || null
   const reviewApplication = reviewingApplication()
+  const backgroundGate = backgroundGateFromApplication(application)
   const gate = {
     status,
     uploaded,
-    registrationMatch: docs.find((doc) => doc.doc_type === 'registration')?.match_status || null,    backgroundAuthorized: Boolean(application?.background_authorized_at),
+    registrationMatch: docs.find((doc) => doc.doc_type === 'registration')?.match_status || null,
+    ...backgroundGate,
+    applicantEmail: application?.applicant_email || '',
     workEligibilityAttested: Boolean(application?.work_eligibility_attested_at),
     workEligibilityCategory: application?.work_eligibility_category || null,
     taxSaved: Boolean(taxProfile?.legal_name && /^[0-9]{4}$/.test(String(taxProfile?.tin_last4 || ''))),
@@ -201,7 +219,7 @@ export function DriverOnboarding() {
     fullName,
     address: addressLine || taxProfile?.address_line,
     phone,
-    email: user?.email,
+    email: applicantEmail || application?.applicant_email || user?.email,
     vehicle: { make, model, color, plate, seats },
     licenseOnFile: uploaded.includes('license_front') && uploaded.includes('license_back'),
     taxClassification: taxProfile?.tax_classification || taxClass,
@@ -209,7 +227,7 @@ export function DriverOnboarding() {
     tinLast4: taxProfile?.tin_last4,
     workEligibilityCategory: eligibilityCategory || application?.work_eligibility_category,
   })), [
-    legalName, taxProfile, fullName, addressLine, phone, user, make, model, color, plate, seats,
+    legalName, taxProfile, fullName, addressLine, phone, user, applicantEmail, application, make, model, color, plate, seats,
     uploaded, taxClass, businessName, eligibilityCategory, application,
   ])
   const blockers = useMemo(() => submissionBlockers(gate), [
@@ -217,6 +235,7 @@ export function DriverOnboarding() {
     gate.uploaded,
     gate.registrationMatch,
     gate.backgroundAuthorized,
+    gate.applicantEmail,
     gate.workEligibilityAttested,
     gate.workEligibilityCategory,
     gate.taxSaved,
@@ -259,11 +278,16 @@ export function DriverOnboarding() {
         const vehicle = vehicleRes.data
         const profileName = profile?.full_name || user.user_metadata?.full_name || user.email?.split('@')[0] || ''
         setFullName(profileName)
+        setApplicantEmail(app?.applicant_email || user.email || '')
         setLegalName(tax?.legal_name || profileName)
+        setBgLegalName(app?.background_legal_name || tax?.legal_name || profileName)
+        setBgSignature(app?.background_signature_name || '')
+        if (app?.background_signed_on) setBgSignedOn(String(app.background_signed_on).slice(0, 10))
+        if (app?.background_disclosures) setDisclosures(normalizeDisclosures(app.background_disclosures))
         setAddressLine(tax?.address_line || '')
         setBusinessName(tax?.business_name || '')
         setTaxClass(tax?.tax_classification || 'individual')
-        if (app?.background_authorized_at) setBackgroundAuthorized(true)
+        if (backgroundGateFromApplication(app).backgroundAuthorized) setBackgroundAuthorized(true)
         if (app?.work_eligibility_attested_at) setEligibilityAttested(true)
         if (app?.work_eligibility_category) setEligibilityCategory(app.work_eligibility_category)
         setPhone(profile?.phone || '')
@@ -284,7 +308,8 @@ export function DriverOnboarding() {
           status: app?.onboarding_status,
           uploaded: documents.map((d) => d.doc_type),
           registrationMatch: documents.find((doc) => doc.doc_type === 'registration')?.match_status || null,
-          backgroundAuthorized: Boolean(app?.background_authorized_at),
+          ...backgroundGateFromApplication(app),
+          applicantEmail: app?.applicant_email || '',
           workEligibilityAttested: Boolean(app?.work_eligibility_attested_at),
           workEligibilityCategory: app?.work_eligibility_category || null,
           taxSaved: Boolean(tax?.legal_name && /^[0-9]{4}$/.test(String(tax?.tin_last4 || ''))),
@@ -325,6 +350,8 @@ export function DriverOnboarding() {
     setError(null)
     setNote(null)
     const nextErrors = vehicleAccountErrors({ fullName, phone, make, model, color, plate, year })
+    const emailIssue = applicantEmailError(applicantEmail)
+    if (emailIssue) nextErrors.applicantEmail = emailIssue
     setFieldErrors(nextErrors)
     const quizError = driverQuizError({
       hasCar: answers.hasCar,
@@ -348,6 +375,7 @@ export function DriverOnboarding() {
         wantsExtraMoney: answers.wantsExtraMoney === true,
         attestationAccepted: true,
         fullName,
+        email: applicantEmail,
         phone,
         make,
         model,
@@ -358,7 +386,12 @@ export function DriverOnboarding() {
         comfortClass,
       })
       const nextStatus = data.onboarding_status
-      setApplication((prev) => ({ ...(prev || {}), ...(data.application || {}), onboarding_status: nextStatus }))
+      setApplication((prev) => ({
+        ...(prev || {}),
+        ...(data.application || {}),
+        onboarding_status: nextStatus,
+        applicant_email: data.application?.applicant_email || applicantEmail.trim().toLowerCase(),
+      }))
       setNote(data.message)
       const nextStep = nextStatus === 'approved' || nextStatus === 'pending_review'
         ? 'review'
@@ -403,6 +436,10 @@ export function DriverOnboarding() {
       const saved = await saveEmploymentVerification(user.id, {
         backgroundAuthorized: true,
         category: eligibilityCategory,
+        legalName: bgLegalName,
+        disclosures,
+        signatureName: bgSignature,
+        signedOn: bgSignedOn,
       })
       setApplication((prev) => ({ ...(prev || {}), ...saved }))
       openStep(adjacentStep('employment', 1)?.id || 'w9')
@@ -488,7 +525,7 @@ export function DriverOnboarding() {
 
   if (status === 'approved') {
     return (
-      <div className="driver-application fade-in" style={{ minHeight: '100%', background: 'var(--surface-muted)', padding: '20px 16px 48px' }}>
+      <div className="driver-application lux-onboard fade-in" style={{ minHeight: '100%', padding: '20px 16px 48px' }}>
         <h1 style={{ fontSize: 26, fontWeight: 800, marginTop: 12, color: 'var(--purple)', letterSpacing: -0.4 }}>
           You’re approved
         </h1>
@@ -508,7 +545,14 @@ export function DriverOnboarding() {
   const previous = adjacentStep(current.id, -1)
   const next = adjacentStep(current.id, 1)
   const employmentDocsReady = (flowStep('employment')?.docIds || []).every((id) => uploaded.includes(id))
-  const employmentFormOk = backgroundAuthorized && eligibilityAttested && Boolean(eligibilityCategory) && employmentDocsReady
+  const backgroundAssessment = assessBackgroundAttestation({
+    legalName: bgLegalName,
+    disclosures,
+    authorized: backgroundAuthorized,
+    signatureName: bgSignature,
+    signedOn: bgSignedOn,
+  })
+  const employmentFormOk = backgroundAssessment.complete && eligibilityAttested && Boolean(eligibilityCategory) && employmentDocsReady
   const w9Issue = w9ContinueIssue({
     legalName,
     taxClass,
@@ -518,7 +562,7 @@ export function DriverOnboarding() {
   const taxFormOk = w9Issue == null
 
   return (
-    <div className="driver-application fade-in" style={{ minHeight: '100%', background: 'var(--surface-muted)', padding: '20px 16px 48px' }}>
+    <div className="driver-application lux-onboard fade-in" style={{ minHeight: '100%', padding: '20px 16px 48px' }}>
       <button
         type="button"
         className="pressable"
@@ -539,8 +583,19 @@ export function DriverOnboarding() {
         Driver application
       </h1>
       <p style={{ color: 'var(--ink-secondary)', fontSize: 14, lineHeight: 1.45, marginTop: 6 }}>
-        New drivers are never auto-approved. Finish each step — your place is saved if you leave.
+        You keep 80% of the fare. A scheduled boost is all yours. Backup pay on a scheduled ride is extra. New drivers are never auto-approved. Finish each step — your place is saved if you leave.
       </p>
+      {step === 'account' ? (
+        <div className="drive-intro">
+          <figure className="drive-intro-block">
+            <MarketingPhoto id="driver-student" />
+          </figure>
+          <figure className="drive-intro-block">
+            <MarketingPhoto id="safety-verified-driver" />
+            <figcaption>New drivers are not auto-approved. Clemson RIDES reviews the application before they take trips.</figcaption>
+          </figure>
+        </div>
+      ) : null}
 
       <OnboardingProgress viewing={current.id} onSelect={go} {...gate} />
 
@@ -595,6 +650,7 @@ export function DriverOnboarding() {
             <p id="driver-account-errors" className="form-summary-alert" role="alert">{error}</p>
           ) : null}
           <Field id="fullName" label="Full name" value={fullName} onChange={setFullName} autoComplete="name" error={fieldErrors.fullName} />
+          <Field id="applicantEmail" label="Email" value={applicantEmail} onChange={setApplicantEmail} type="email" inputMode="email" autoComplete="email" error={fieldErrors.applicantEmail} />
           <Field id="phone" label="Phone" value={phone} onChange={setPhone} type="tel" inputMode="tel" autoComplete="tel" error={fieldErrors.phone} />
           <Field id="make" label="Make" value={make} onChange={setMake} autoComplete="off" error={fieldErrors.make} />
           <Field id="model" label="Model" value={model} onChange={setModel} autoComplete="off" error={fieldErrors.model} />
@@ -602,15 +658,10 @@ export function DriverOnboarding() {
           <Field id="color" label="Color" value={color} onChange={setColor} autoComplete="off" error={fieldErrors.color} />
           <Field id="plate" label="Plate" value={plate} onChange={setPlate} autoComplete="off" error={fieldErrors.plate} />
           <Field id="seats" label="Seats" value={seats} onChange={setSeats} type="number" required={false} />
-          <label style={{ display: 'flex', gap: 10, alignItems: 'center', fontWeight: 650, marginBottom: comfortClass ? 8 : 16 }}>
+          <label style={{ display: 'flex', gap: 10, alignItems: 'center', fontWeight: 650, marginBottom: 16 }}>
             <input type="checkbox" checked={comfortClass} onChange={(e) => setIsComfort(e.target.checked)} />
-            Extra Comfort · a driver still drives
+            List this car as Extra Comfort
           </label>
-          {comfortClass ? (
-            <p style={{ margin: '0 0 16px', fontSize: 13, lineHeight: 1.4, color: '#522D80', fontWeight: 650 }}>
-              {COMFORT_FLEET_NOTICE}
-            </p>
-          ) : null}
           <PrimaryButton type="submit" disabled={busy}>
             {busy ? 'Saving…' : `Continue to ${adjacentStep('account', 1)?.label || 'the next step'}`}
           </PrimaryButton>
@@ -650,47 +701,109 @@ export function DriverOnboarding() {
 
       {current.kind === 'employment' && (
         <div className="sheet" style={{ marginTop: 16, padding: 20, borderRadius: 22, boxShadow: 'var(--shadow-pill)' }}>
-          <h2 style={{ fontSize: 18, color: 'var(--purple)', marginBottom: 6 }}>Employment verification</h2>
+          <h2 style={{ fontSize: 18, color: 'var(--purple)', marginBottom: 6 }}>Background attestation</h2>
           <p style={{ fontSize: 14, color: 'var(--ink-secondary)', lineHeight: 1.45, marginBottom: 14 }}>
-            Authorize a background check and attest that you are eligible to work. Complete the attestations below. An admin reviews them before you can receive rides.
+            Step {bgStep + 1} of 3. This records your authorization and disclosures. It does not run a background check and it does not mark you clear.
           </p>
-          <label style={{ display: 'flex', gap: 10, alignItems: 'flex-start', marginBottom: 14, fontSize: 13, lineHeight: 1.45 }}>
-            <input type="checkbox" checked={backgroundAuthorized} onChange={(e) => setBackgroundAuthorized(e.target.checked)} style={{ marginTop: 3 }} />
-            <span>I authorize Clemson RIDES and its screening provider to obtain a background check, including motor-vehicle records, as a condition of driving on the platform.</span>
-          </label>
-          <label style={{ display: 'block', marginBottom: 12, fontSize: 13, fontWeight: 650 }}>
-            Eligibility to work
-            <select
-              value={eligibilityCategory}
-              onChange={(e) => setEligibilityCategory(e.target.value)}
-              style={inputStyle}
-            >
-              <option value="">Select a category</option>
-              {WORK_ELIGIBILITY_CATEGORIES.map((item) => (
-                <option key={item.id} value={item.id}>{item.label}</option>
+          {bgStep === 0 && (
+            <>
+              <Field id="bgLegalName" label="Legal name" value={bgLegalName} onChange={setBgLegalName} autoComplete="name" />
+              <PrimaryButton type="button" disabled={bgLegalName.trim().length < 2} onClick={() => setBgStep(1)}>
+                Continue to disclosures
+              </PrimaryButton>
+            </>
+          )}
+          {bgStep === 1 && (
+            <>
+              {BACKGROUND_DISCLOSURES.map((question) => (
+                <fieldset key={question.id} style={{ border: '1px solid var(--border)', borderRadius: 12, padding: 12, marginBottom: 10 }}>
+                  <legend style={{ fontSize: 13, fontWeight: 650, padding: '0 4px' }}>{question.prompt}</legend>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    {[false, true].map((value) => (
+                      <button
+                        key={String(value)}
+                        type="button"
+                        className="pressable"
+                        onClick={() => setDisclosures((prev) => ({ ...prev, [question.id]: value }))}
+                        style={{
+                          flex: 1,
+                          padding: 10,
+                          borderRadius: 12,
+                          fontWeight: 700,
+                          border: disclosures[question.id] === value ? '2px solid var(--purple)' : '1px solid var(--border)',
+                          background: disclosures[question.id] === value ? 'rgba(82,45,128,0.12)' : 'var(--surface)',
+                        }}
+                      >
+                        {value ? 'Yes' : 'No'}
+                      </button>
+                    ))}
+                  </div>
+                </fieldset>
               ))}
-            </select>
-          </label>
-          <label style={{ display: 'flex', gap: 10, alignItems: 'flex-start', marginBottom: 14, fontSize: 13, lineHeight: 1.45 }}>
-            <input type="checkbox" checked={eligibilityAttested} onChange={(e) => setEligibilityAttested(e.target.checked)} style={{ marginTop: 3 }} />
-            <span>I attest that I am eligible to work in the United States in the category I selected, and that the document I upload is genuine and relates to me.</span>
-          </label>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {stepDocs.map((doc) => (
-              <DocCard
-                key={doc.id}
-                doc={doc}
-                saved={docs.find((d) => d.doc_type === doc.id)}
-                busy={uploading === doc.id}
-                onFile={(file) => onUpload(doc.id, file)}
-              />
-            ))}
-          </div>
-          <div style={{ marginTop: 16 }}>
-            <PrimaryButton type="button" disabled={!employmentFormOk || busy || Boolean(uploading)} onClick={onSaveEmployment}>
-              {busy ? 'Saving…' : `Continue to ${next?.label || 'the next step'}`}
-            </PrimaryButton>
-          </div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button type="button" className="pressable" onClick={() => setBgStep(0)} style={{ padding: 12, borderRadius: 12, fontWeight: 700 }}>Back</button>
+                <PrimaryButton
+                  type="button"
+                  disabled={BACKGROUND_DISCLOSURES.some((question) => disclosures[question.id] == null)}
+                  onClick={() => setBgStep(2)}
+                >
+                  Continue to authorization
+                </PrimaryButton>
+              </div>
+            </>
+          )}
+          {bgStep === 2 && (
+            <>
+              <label style={{ display: 'flex', gap: 10, alignItems: 'flex-start', marginBottom: 14, fontSize: 13, lineHeight: 1.45 }}>
+                <input type="checkbox" checked={backgroundAuthorized} onChange={(e) => setBackgroundAuthorized(e.target.checked)} style={{ marginTop: 3 }} />
+                <span>I authorize Clemson RIDES to request a background check, including motor-vehicle records, if a screening vendor is connected later. Signing this does not mean a check was completed.</span>
+              </label>
+              <Field id="bgSignature" label="Type your legal name to sign" value={bgSignature} onChange={setBgSignature} autoComplete="name" />
+              <label style={{ display: 'block', marginBottom: 12, fontSize: 13, fontWeight: 650 }}>
+                Date
+                <input type="date" value={bgSignedOn} onChange={(e) => setBgSignedOn(e.target.value)} style={inputStyle} />
+              </label>
+              <p style={{ fontSize: 13, lineHeight: 1.45, color: 'var(--ink-secondary)' }}>
+                {backgroundAssessment.complete
+                  ? `${backgroundStatusLabel(backgroundAssessment.status)}. ${backgroundAssessment.status === 'needs_review' ? 'An admin must look at a yes answer before you can be approved.' : 'An admin still has to approve you. This is not a completed check.'}`
+                  : (backgroundAssessment.issue || 'Finish the authorization.')}
+              </p>
+              <label style={{ display: 'block', marginBottom: 12, fontSize: 13, fontWeight: 650 }}>
+                Eligibility to work
+                <select
+                  value={eligibilityCategory}
+                  onChange={(e) => setEligibilityCategory(e.target.value)}
+                  style={inputStyle}
+                >
+                  <option value="">Select a category</option>
+                  {WORK_ELIGIBILITY_CATEGORIES.map((item) => (
+                    <option key={item.id} value={item.id}>{item.label}</option>
+                  ))}
+                </select>
+              </label>
+              <label style={{ display: 'flex', gap: 10, alignItems: 'flex-start', marginBottom: 14, fontSize: 13, lineHeight: 1.45 }}>
+                <input type="checkbox" checked={eligibilityAttested} onChange={(e) => setEligibilityAttested(e.target.checked)} style={{ marginTop: 3 }} />
+                <span>I attest that I am eligible to work in the United States in the category I selected.</span>
+              </label>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {stepDocs.map((doc) => (
+                  <DocCard
+                    key={doc.id}
+                    doc={doc}
+                    saved={docs.find((d) => d.doc_type === doc.id)}
+                    busy={uploading === doc.id}
+                    onFile={(file) => onUpload(doc.id, file)}
+                  />
+                ))}
+              </div>
+              <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
+                <button type="button" className="pressable" onClick={() => setBgStep(1)} style={{ padding: 12, borderRadius: 12, fontWeight: 700 }}>Back</button>
+                <PrimaryButton type="button" disabled={!employmentFormOk || busy || Boolean(uploading)} onClick={onSaveEmployment}>
+                  {busy ? 'Saving…' : `Continue to ${next?.label || 'the next step'}`}
+                </PrimaryButton>
+              </div>
+            </>
+          )}
         </div>
       )}
 
@@ -795,6 +908,11 @@ export function DriverOnboarding() {
               {agreement?.html_snapshot && <AgreementHtml html={agreement.html_snapshot} />}
             </>
           )}
+          <p data-applicant-email={application?.applicant_email || applicantEmail || ''} style={{ fontSize: 14, marginTop: 8 }}>
+            <span style={{ fontWeight: 700, color: 'var(--purple)' }}>Email</span>
+            {' '}
+            {application?.applicant_email || applicantEmail || 'Not submitted'}
+          </p>
           {status === 'pending_review' && blockers.length === 0 && (
             <>
               <h2 style={{ fontSize: 22, color: 'var(--purple)', marginTop: 8 }}>Waiting on admin</h2>

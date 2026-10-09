@@ -86,7 +86,7 @@ function offer(row) {
     status: 'offered',
     driverId: null,
     riderId: null,
-    depositCents: Math.round(row.fareCents * 0.25),
+    depositCents: 0,
     depositExplicit: true,
     driverNetCents: driverNetCents(row.fareCents),
     purpose: row.rideType,

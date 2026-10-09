@@ -9,8 +9,8 @@ export function FarePanel({ card }: { card: DriverCard }) {
     <View style={[styles.box, { backgroundColor: colors.track }]}>
       <Text style={[styles.title, { color: colors.title }]}>Fare</Text>
       <Row label="Trip fare" value={formatCents(fare.fareCents)} />
-      <Row label="25% deposit" value={formatCents(fare.depositCents)} />
-      <Row label="Collected on complete" value={formatCents(fare.remainderCents)} />
+      {fare.depositCents > 0 ? <Row label="Already paid" value={formatCents(fare.depositCents)} /> : null}
+      <Row label="Charged at trip end" value={formatCents(fare.remainderCents)} />
       {fare.carpoolIncentiveId ? (
         <>
           <Row label="Base net" value={formatCents(fare.baseNetCents || 0)} />

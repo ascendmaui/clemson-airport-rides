@@ -14,24 +14,28 @@ function seed(overrides = {}) {
   } })
 }
 
-test('unseen and seen offers advance at the deadline and old cards cannot accept', async () => {
+test('a missed 15-second exclusive offer opens the 70% pool and the card stays', async () => {
   for (const status of ['searching', 'offered']) {
     const { supabase, trip } = seed({ status })
     const before = await rebroadcastMissedOffers(supabase, { now: new Date(now.getTime() - 1) })
     assert.equal(before.scanned, 0)
     const result = await rebroadcastMissedOffers(supabase, { now })
+    assert.equal(result.pooled, 1)
     assert.equal(result.advanced, 1)
     const stored = supabase._tables.trips[0]
     assert.equal(stored.status, 'searching')
     assert.equal(stored.driver_id, null)
-    assert.equal(stored.metadata.offer_driver_id, 'driver-2')
+    assert.equal(stored.metadata.offer_driver_id, null)
+    assert.equal(stored.metadata.offer_phase, 'pool')
+    assert.equal(stored.metadata.offer_share_bps, 7000)
+    assert.equal(stored.metadata.match, 'open')
     assert.equal(stored.metadata.preserved, 'yes')
-    assert.deepEqual((await loadDriverDesk(supabase, 'driver-1')).offers, [])
+    assert.equal((await loadDriverDesk(supabase, 'driver-1')).offers[0].id, trip.id)
     assert.equal((await loadDriverDesk(supabase, 'driver-2')).offers[0].id, trip.id)
-    await assert.rejects(acceptTrip(supabase, trip, 'driver-1'), /no longer available/)
-    await acceptTrip(supabase, trip, 'driver-2')
+    await acceptTrip(supabase, stored, 'driver-1')
     assert.equal(supabase._tables.trip_events.length, 1)
-    assert.equal(supabase._tables.trips[0].driver_id, 'driver-2')
+    assert.equal(supabase._tables.trips[0].driver_id, 'driver-1')
+    await assert.rejects(acceptTrip(supabase, stored, 'driver-2'), /no longer available/)
     assert.equal((await rebroadcastMissedOffers(supabase, { now })).scanned, 0)
   }
 })
@@ -45,8 +49,12 @@ test('rechecks online status, skips passes and rider, and includes newly online 
     supabase._tables.profiles.push({ id })
   }
   supabase._tables.driver_offer_passes.push({ driver_id: 'driver-3', trip_id: 'trip-searching-1' })
-  assert.equal((await rebroadcastMissedOffers(supabase, { now })).advanced, 1)
-  assert.equal(supabase._tables.trips[0].metadata.offer_driver_id, 'driver-4')
+  const result = await rebroadcastMissedOffers(supabase, { now })
+  assert.equal(result.pooled, 1)
+  assert.equal(supabase._tables.trips[0].metadata.offer_phase, 'pool')
+  assert.equal(supabase._tables.trips[0].metadata.offer_driver_id, null)
+  assert.equal((await loadDriverDesk(supabase, 'driver-3')).offers.length, 0)
+  assert.equal((await loadDriverDesk(supabase, 'driver-4')).offers[0].id, 'trip-searching-1')
 })
 
 test('exhaustion releases to existing open pool; targeted Comfort waves require a Comfort', async () => {
@@ -71,9 +79,10 @@ test('overlapping sweeps have one winner and do not skip a target', async () => 
   const results = await Promise.all([
     rebroadcastMissedOffers(supabase, { now }), rebroadcastMissedOffers(supabase, { now }),
   ])
-  assert.equal(results.reduce((sum, row) => sum + row.advanced, 0), 1)
+  assert.equal(results.reduce((sum, row) => sum + row.pooled, 0), 1)
   assert.equal(results.reduce((sum, row) => sum + row.skipped, 0), 1)
-  assert.equal(supabase._tables.trips[0].metadata.offer_driver_id, 'driver-2')
+  assert.equal(supabase._tables.trips[0].metadata.offer_driver_id, null)
+  assert.equal(supabase._tables.trips[0].metadata.offer_phase, 'pool')
 })
 
 for (const winner of ['accepted', 'canceled', 'pass', 'metadata']) {
@@ -158,7 +167,8 @@ test('due batch is bounded and ordered oldest first', async () => {
   supabase._tables.trips.push({ ...trip, id: 'older', offer_expires_at: '2026-10-04T12:00:00.000Z' })
   const result = await rebroadcastMissedOffers(supabase, { now, limit: 1 })
   assert.equal(result.scanned, 1)
-  assert.equal(result.advanced, 1)
+  assert.equal(result.pooled, 1)
   assert.equal(supabase._tables.trips[0].metadata.offer_driver_id, 'driver-1')
-  assert.equal(supabase._tables.trips[1].metadata.offer_driver_id, 'driver-2')
+  assert.equal(supabase._tables.trips[1].metadata.offer_phase, 'pool')
+  assert.equal(supabase._tables.trips[1].metadata.offer_driver_id, null)
 })

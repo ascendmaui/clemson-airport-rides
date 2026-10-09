@@ -448,6 +448,18 @@ test('groupDriversForPicker separates favorites from non-favorite online drivers
   assert.deepEqual(groupDriversForPicker([], null), { preferred: [], online: [] })
 })
 
+test('groupDriversForPicker puts an active pass preferred subset ahead of other favorites', () => {
+  const drivers = [
+    { id: A, online: true },
+    { id: B, online: true },
+    { id: C, online: true },
+  ]
+  const groups = groupDriversForPicker(drivers, [A, B], [B])
+  assert.deepEqual(groups.passPreferred.map((driver) => driver.id), [B])
+  assert.deepEqual(groups.preferred.map((driver) => driver.id), [A])
+  assert.deepEqual(groups.online.map((driver) => driver.id), [C])
+})
+
 // ---------------------------------------------------------------------------
 // 6. loadFavoriteDriverIds
 // ---------------------------------------------------------------------------
@@ -1161,6 +1173,36 @@ test('requestDriverTrip happy path posts to stripe-payment-methods and returns t
     assert.equal(captured.body.tier, 'comfort')
     // isStudent is not passed to server in the request body
     assert.equal('isStudent' in captured.body, false)
+  } finally {
+    globalThis.fetch = originalFetch
+  }
+})
+
+test('requestDriverTrip auto-assign omits driverId and keeps the rider note', async () => {
+  const originalFetch = globalThis.fetch
+  try {
+    let captured = null
+    globalThis.fetch = async (url, options) => {
+      captured = { url, options, body: JSON.parse(options.body) }
+      return {
+        ok: true,
+        status: 200,
+        text: async () => JSON.stringify({
+          trip: { id: 'trip-auto', status: 'searching', driver_id: null },
+        }),
+      }
+    }
+    const supabase = makeFakeSupabase({ sessionToken: 'bearer-token-xyz' })
+    const trip = await requestDriverTrip(supabase, {
+      riderId: 'rider-1',
+      autoAssign: true,
+      dest: 'Sikes Hall',
+      note: '  Orange gates  ',
+    })
+    assert.equal(trip.id, 'trip-auto')
+    assert.equal(captured.body.autoAssign, true)
+    assert.equal('driverId' in captured.body, false)
+    assert.equal(captured.body.note, 'Orange gates')
   } finally {
     globalThis.fetch = originalFetch
   }

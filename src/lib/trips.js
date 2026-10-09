@@ -29,6 +29,7 @@ export async function requestDriverTrip({
   pickupLat = null,
   pickupLng = null,
   tier = 'standard',
+  passengers = null,
   isStudent = false,
   listCents = 0,
   autoAssign = false,
@@ -64,6 +65,7 @@ export async function requestDriverTrip({
     pickupLat: pickup.latitude,
     pickupLng: pickup.longitude,
     tier: tier || 'standard',
+    ...(passengers ? { passengers } : {}),
     ...(billingChoice ? { billingChoice } : {}),
   })
   if (!data?.trip?.id) throw new Error('Could not request trip')

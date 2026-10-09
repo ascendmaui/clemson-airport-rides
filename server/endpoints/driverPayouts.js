@@ -1,9 +1,15 @@
 /**
  * GET  /api/driver-payouts — pending and paid payouts for the signed-in driver
  * POST /api/driver-payouts — retry due payouts (automatic backoff)
- * Cron: Authorization Bearer CRON_SECRET. On Vercel, x-vercel-cron is also
- * required. Off Vercel the bearer alone runs the sweep. ?dry_run=1 computes
- * due payouts and does not call Stripe or write rows. Bearer still required.
+ * Cron: Authorization Bearer CRON_SECRET.
+ * On Vercel the sweep runs only when that bearer matches and the request
+ * carries a platform cron signal: legacy x-vercel-cron, the documented
+ * user-agent vercel-cron/1.0, or x-vercel-cron-schedule
+ * (https://vercel.com/docs/cron-jobs). A signal with a missing or wrong
+ * bearer returns { skipped: true } and does not move money. Off Vercel
+ * (VERCEL unset) the bearer alone runs the sweep; spoofed cron headers and
+ * the Vercel user-agent are ignored. ?dry_run=1 still requires the bearer
+ * and does not call Stripe or write rows.
  * DISABLE_CRON_ENDPOINTS=1 refuses the sweep and a signed-in retry POST.
  * Dry-run of the sweep is allowed only when ALLOW_STAGING_DRY_RUN=1.
  */
@@ -11,7 +17,7 @@ import {
   admin, cors, json, userFromAuth, stripeClient,
 } from '../friendRideLib.js'
 import { stagingCronBlock } from '../cronGuard.js'
-import { attemptDriverPayout, loadConnectAccount, writePayout } from '../payouts.js'
+import { attemptDriverPayout, attemptStandbyBackupPayout, attemptSwitchFeePayout, loadConnectAccount, writePayout } from '../payouts.js'
 import { payoutIsDue, resolveDriverNetCents, summarizeDriverEarnings } from '../../shared/paymentFailure.js'
 
 export function cronAuthorized(req, secretOverride) {
@@ -24,14 +30,42 @@ export function cronAuthorized(req, secretOverride) {
   return match[1].trim() === secret
 }
 
+/** Documented Vercel Cron user-agent. https://vercel.com/docs/cron-jobs */
+const VERCEL_CRON_USER_AGENT = 'vercel-cron/1.0'
+
+function matchingHeader(headers, name) {
+  if (!headers || typeof headers !== 'object') return undefined
+  const want = name.toLowerCase()
+  for (const key of Object.keys(headers)) {
+    if (String(key).toLowerCase() !== want) continue
+    const raw = headers[key]
+    return Array.isArray(raw) ? raw[0] : raw
+  }
+  return undefined
+}
+
+function headerText(headers, name) {
+  const raw = matchingHeader(headers, name)
+  if (typeof raw === 'boolean') return raw ? 'true' : 'false'
+  if (raw == null) return ''
+  return String(raw)
+}
+
+/**
+ * True when the request looks like a Vercel Cron invocation.
+ * Does not authorize money movement. The handler still requires a matching
+ * CRON_SECRET bearer, and ignores this signal when VERCEL is unset.
+ *
+ * Signals, any one of them:
+ * - x-vercel-cron (legacy; any present value, including an empty string)
+ * - user-agent containing vercel-cron/1.0 (current Vercel docs)
+ * - x-vercel-cron-schedule with a non-empty cron expression (current Vercel docs)
+ */
 export function isVercelCron(req) {
-  return Boolean(
-    req.headers?.['x-vercel-cron'] ||
-    req.headers?.['X-Vercel-Cron'] ||
-    req.headers?.['X-VERCEL-CRON'] ||
-    req.headers?.['x-vercel-cron'] === '' ||
-    req.headers?.['x-vercel-cron'] === '1'
-  )
+  const headers = req?.headers
+  if (matchingHeader(headers, 'x-vercel-cron') !== undefined) return true
+  if (headerText(headers, 'x-vercel-cron-schedule').trim()) return true
+  return headerText(headers, 'user-agent').toLowerCase().includes(VERCEL_CRON_USER_AGENT)
 }
 
 function runtimeEnv(deps) {
@@ -70,10 +104,56 @@ export async function runDuePayouts(sb, trips, connectAccountId, deps = {}) {
   const writeFn = deps.writePayout || writePayout
   const loadAccountFn = deps.loadConnectAccount || loadConnectAccount
   const results = []
+  async function recordExtra(trip, dryRun) {
+    const standby = await (deps.attemptStandbyBackupPayout || attemptStandbyBackupPayout)({
+      sb,
+      trip,
+      stripe: dryRun ? null : stripe,
+      now,
+      dryRun,
+    })
+    if (standby?.payout && !standby.idempotent) {
+      results.push({
+        tripId: trip.id,
+        role: 'standby',
+        ok: standby.ok !== false,
+        dryRun: Boolean(dryRun),
+        status: standby.payout.status || null,
+        amountCents: standby.payout.amountCents ?? null,
+        driverId: standby.payout.driverId || null,
+        wouldTransfer: dryRun ? standby.payout.amountCents > 0 : undefined,
+      })
+    }
+    const switched = await (deps.attemptSwitchFeePayout || attemptSwitchFeePayout)({
+      sb,
+      trip,
+      stripe: dryRun ? null : stripe,
+      now,
+      dryRun,
+    })
+    if (switched?.payout && !switched.idempotent) {
+      results.push({
+        tripId: trip.id,
+        role: 'switch_fee',
+        ok: switched.ok !== false,
+        dryRun: Boolean(dryRun),
+        status: switched.payout.status || null,
+        amountCents: switched.payout.amountCents ?? null,
+        driverId: switched.payout.driverId || null,
+        label: 'Switch fee',
+        wouldTransfer: dryRun ? switched.payout.amountCents > 0 : undefined,
+      })
+    }
+  }
+
   for (const trip of trips) {
+    // Test ledger entries must never be retried by the daily transfer batch.
+    if (trip.metadata?.e2e_test === true) continue
     const payout = trip.metadata?.payout
-    if (!payout || payout.status === 'paid') continue
-    if (!payoutIsDue(payout, now)) continue
+    if (!payout || payout.status === 'paid' || !payoutIsDue(payout, now)) {
+      await recordExtra(trip, Boolean(deps.dryRun))
+      continue
+    }
     if (deps.dryRun) {
       const rawAmount = payout.amountCents
       const amountCents = rawAmount == null || rawAmount === ''
@@ -90,6 +170,7 @@ export async function runDuePayouts(sb, trips, connectAccountId, deps = {}) {
         nextRetryAt: payout.nextRetryAt || null,
         attempts: payout.attempts || 0,
       })
+      await recordExtra(trip, true)
       continue
     }
     const account = connectAccountId || await loadAccountFn(sb, trip.driver_id)
@@ -103,6 +184,7 @@ export async function runDuePayouts(sb, trips, connectAccountId, deps = {}) {
       nextRetryAt: attempt.payout.nextRetryAt || null,
       attempts: attempt.payout.attempts || 0,
     })
+    await recordExtra(trip, false)
   }
   return results
 }
@@ -125,9 +207,10 @@ export default async function handler(req, res, deps = {}) {
   const secretArg = deps.cronSecret !== undefined ? deps.cronSecret : env.CRON_SECRET
   const bearerOk = deps.cronAuthorized ? deps.cronAuthorized(req) : cronAuthorized(req, secretArg)
   const onVercel = runningOnVercel(env)
-  // On Vercel the platform header selects the cron path, and the bearer must
-  // still match. Off Vercel (VERCEL unset) the bearer alone is enough, matching
-  // hold-expiry. A spoofed x-vercel-cron header is ignored when VERCEL is unset.
+  // On Vercel a platform signal selects the cron path (legacy x-vercel-cron,
+  // user-agent vercel-cron/1.0, or x-vercel-cron-schedule). The bearer must
+  // still match. Off Vercel (VERCEL unset) the bearer alone is enough.
+  // Spoofed cron headers and the Vercel user-agent are ignored when VERCEL is unset.
   const cronPath = (onVercel && isVercelCron(req)) || (!onVercel && bearerOk)
   if (cronPath) {
     if (!bearerOk) {

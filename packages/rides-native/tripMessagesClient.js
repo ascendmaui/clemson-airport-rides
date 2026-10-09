@@ -1,21 +1,33 @@
+import { authedJson } from './apiClient.js'
 import {
+  canOpenLostItemReport,
   canonicalQuickReply,
   messageLimitForMode,
+  normalizeLostItemDescription,
   normalizeMessageBody,
   rideChatMode,
+  tripPartyRole,
 } from '../../src/lib/tripChatRules.js'
 
 export {
+  LOST_ITEM_DESCRIPTION_MAX,
+  LOST_ITEM_THREAD_WINDOW_MS,
+  canOpenLostItemReport,
+  canSendTripMessage,
   canonicalQuickReply,
+  lostItemReportState,
   messageLimitForMode,
+  normalizeLostItemDescription,
   normalizeMessageBody,
   rideChatMode,
   rideChatBanner,
+  tripPartyRole,
   RIDE_CHAT_QUICK_REPLIES,
 } from '../../src/lib/tripChatRules.js'
 
 const MESSAGE_COLS = 'id, trip_id, sender_id, body, created_at, read_at'
 const TRIP_COLS = 'id, status, rider_id, driver_id, completed_at, canceled_at'
+const LOST_COLS = 'id, trip_id, reporter_id, reporter_role, description, status, opened_at, resolved_at, resolved_by'
 
 function requireClient(supabase) {
   if (!supabase) throw new Error('Supabase is not configured')
@@ -110,6 +122,114 @@ export function subscribeTripChatStatus(supabase, tripId, onChange) {
   }
 }
 
-export function messageLimitForTrip(trip, now) {
-  return messageLimitForMode(rideChatMode(trip, now))
+export function messageLimitForTrip(trip, now, report) {
+  return messageLimitForMode(rideChatMode(trip, now, report))
+}
+
+export async function fetchLostItemReport(supabase, tripId) {
+  requireClient(supabase)
+  const { data, error } = await supabase
+    .from('trip_lost_item_reports')
+    .select(LOST_COLS)
+    .eq('trip_id', tripId)
+    .order('opened_at', { ascending: false })
+    .limit(1)
+  if (error) throw new Error(error.message)
+  return Array.isArray(data) ? (data[0] || null) : (data || null)
+}
+
+export async function openLostItemReport(supabase, { tripId, description }) {
+  requireClient(supabase)
+  const note = normalizeLostItemDescription(description)
+  const trip = await fetchTripChat(supabase, tripId)
+  const { data: authData, error: authError } = await supabase.auth.getUser()
+  if (authError) throw new Error(authError.message)
+  const userId = authData?.user?.id
+  if (!userId) throw new Error('Sign in to report a lost item')
+  const role = tripPartyRole(trip, userId)
+  if (!canOpenLostItemReport(trip, Date.now(), role)) {
+    throw new Error('Lost-item messaging is only available for a recently completed trip')
+  }
+  const { data, error } = await supabase
+    .from('trip_lost_item_reports')
+    .insert({
+      trip_id: tripId,
+      reporter_id: userId,
+      reporter_role: role,
+      description: note,
+      status: 'open',
+    })
+    .select(LOST_COLS)
+    .single()
+  if (error) throw new Error(error.message)
+  return data
+}
+
+export async function resolveLostItemReport(supabase, reportId) {
+  requireClient(supabase)
+  const { data: authData, error: authError } = await supabase.auth.getUser()
+  if (authError) throw new Error(authError.message)
+  const userId = authData?.user?.id
+  if (!userId) throw new Error('Sign in to resolve this thread')
+  const { error } = await supabase
+    .from('trip_lost_item_reports')
+    .update({
+      status: 'resolved',
+      resolved_by: userId,
+      resolved_at: new Date().toISOString(),
+    })
+    .eq('id', reportId)
+  if (error) throw new Error(error.message)
+  return { id: reportId, status: 'resolved' }
+}
+
+export async function unreadCountForTrip(supabase, tripId, userId) {
+  if (!supabase || !tripId || !userId) return 0
+  const { data, error } = await supabase
+    .from('trip_messages')
+    .select('id')
+    .eq('trip_id', tripId)
+    .is('read_at', null)
+    .neq('sender_id', userId)
+  if (error) throw new Error(error.message)
+  return Array.isArray(data) ? data.length : 0
+}
+
+export async function notifyTripMessage(supabase, { tripId, messageId }) {
+  if (!supabase || !tripId || !messageId) return
+  try {
+    await authedJson(supabase, '/api/trip-messages?action=message', {
+      method: 'POST',
+      body: { tripId, messageId },
+    })
+  } catch {
+    // The message row is already saved. Push is best-effort.
+  }
+}
+
+export async function notifyLostItemReport(supabase, { tripId, reportId }) {
+  if (!supabase || !tripId || !reportId) return
+  try {
+    await authedJson(supabase, '/api/trip-messages?action=lost-item', {
+      method: 'POST',
+      body: { tripId, reportId },
+    })
+  } catch {
+    // Realtime still updates an open app when the report row lands.
+  }
+}
+
+export function subscribeLostItemReports(supabase, onChange) {
+  if (!supabase) return () => {}
+  const channel = supabase
+    .channel('trip-lost-item-reports')
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'trip_lost_item_reports' },
+      (payload) => onChange?.(payload),
+    )
+    .subscribe()
+  return () => {
+    supabase.removeChannel(channel)
+  }
 }
