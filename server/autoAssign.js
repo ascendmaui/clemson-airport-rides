@@ -4,6 +4,7 @@ import { defaultDriverRank, sortByDefaultDriverOrder } from '../shared/driverOrd
 import { vehicleServesComfort } from '../shared/rideOptions.js'
 import { isSimulatedDriverId } from '../packages/rides-native/simulatedDrivers.js'
 import { orderDriversForRider } from '../shared/riderFavorites.js'
+import { isE2ETestUser } from '../shared/e2eTestAccounts.js'
 
 /**
  * Approved drivers who are online, John then Kim then everyone else.
@@ -16,6 +17,8 @@ import { orderDriversForRider } from '../shared/riderFavorites.js'
 export async function listAssignableDrivers(sb, {
   tier = 'standard',
   riderId = null,
+  riderEmail = null,
+  riderIsE2E = false,
   preferredIds = [],
   favoriteIds = [],
 } = {}) {
@@ -35,6 +38,14 @@ export async function listAssignableDrivers(sb, {
 
   const profiles = await loadComfortProfiles(sb, allowed)
   if (profiles.error) return { drivers: [], error: profiles.error }
+
+  let riderIdentity = { email: riderEmail }
+  if (riderEmail == null && riderId) {
+    const identity = await sb.from('profiles').select('email').eq('id', riderId).maybeSingle()
+    if (identity.error) return { drivers: [], error: identity.error.message || 'Could not read the rider' }
+    riderIdentity = identity.data
+  }
+  const e2eRider = riderIsE2E || isE2ETestUser(riderIdentity)
 
   let riderRow = null
   if (riderId && !profiles.unavailable) {
@@ -66,6 +77,7 @@ export async function listAssignableDrivers(sb, {
   const ranked = []
   for (const profile of profiles.rows || []) {
     if (!profile?.id || !gate.allowed.has(profile.id)) continue
+    if (isE2ETestUser(profile) !== e2eRider) continue
     if (comfortIds && !comfortIds.has(profile.id)) continue
     ranked.push({
       id: profile.id,
