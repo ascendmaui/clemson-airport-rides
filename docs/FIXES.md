@@ -2004,4 +2004,24 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
   - `docs/FIXES.md`
 - **Verified:** `node --test tests/gaAuditHoldTtlHardening.test.js server/abandonedCheckout.test.js tests/retiredCopy.test.js` (59/59 passing); `npm test` passing with 0 failures.
 
+## 2026-10-05 — Android Play readiness checklist (pkg-android-play-readiness-docs t1)
+
+- **What was wrong:** There was no single doc for the current Android package ids, the marketing QR path (`QrMark` / `shared/productLinks.js`), or which EAS commands stop before `eas submit`. Play Console fields John still has to fill were not listed, and nothing carried an explicit do-not-submit banner. Shipped Android fixes #303, #305, and #306 were easy to mistake for a store release.
+- **What changed:** Added `docs/android-play-readiness.md`. It lists rider `com.ascendmaui.clemsonrides.rider`, driver `com.ascendmaui.clemsonrides.driver`, and the frozen `com.ascendmaui.clemsonairportrides` package. It records that store URL constants are null, so QR codes open `https://clemsonrides.com/#/home` and `#/driver`. It lists `eas build` profiles that do not submit, and forbids `eas submit` and `--auto-submit`. It checklists Play Console fields still owed by John and points at merged PRs #303, #305, and #306. No store upload, no `eas submit`, no app config edits.
+- **Files touched:** `docs/android-play-readiness.md`, `docs/FIXES.md`
+- **Verified:** `test -f docs/android-play-readiness.md && grep -q "QR" docs/android-play-readiness.md && grep -qi "do not submit" docs/android-play-readiness.md`
+
+## 2026-10-05 — Play readiness doc tripped the retired-copy scan (pkg-android-play-readiness-docs t1)
+
+- **What was wrong:** The first draft of `docs/android-play-readiness.md` named retired fleet words while telling store copy to leave them out. `tests/retiredCopy.test.js` allows those words only in `shared/demoFleet.js`, `docs/demo-drivers.md`, `public/demo-drivers/manifest.json`, and one migration filename. `npm test` failed on that file alone (2329 pass, 1 fail).
+- **What changed:** The listing note now says bookable types are Standard, Wait & Save, and Extra Comfort, and that the demo-map exception in `shared/demoFleet.js` stays out of the store listing. The banned words are gone from the doc.
+- **Files touched:** `docs/android-play-readiness.md`, `docs/FIXES.md`
+- **Verified:** `node --experimental-strip-types --experimental-test-isolation=process --test tests/retiredCopy.test.js` and the acceptance grep.
+
+## 2026-10-05 — Link Android Play readiness doc (pkg-android-play-readiness-docs t2)
+
+- **What was wrong:** `docs/android-play-readiness.md` was not linked from the README, so the package-id, marketing QR, and do-not-submit checklist was easy to miss.
+- **What changed:** Added one sentence under the Mobile section of `README.md` pointing at [docs/android-play-readiness.md](android-play-readiness.md). No app config, store listing, or EAS changes.
+- **Files touched:** `README.md`, `docs/FIXES.md`
+- **Verified:** `npm test` — 2330 pass, 0 fail.
 
