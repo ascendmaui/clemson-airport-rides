@@ -1,3 +1,4 @@
+import { uniqueChannelTopic } from './realtimeChannel.js'
 /**
  * Driver desk: availability, PickDriver requests, scheduled queue, live status.
  * Payments go through the existing /api/driver and /api/stripe-payment-methods routers.
@@ -320,7 +321,7 @@ export async function loadDriverDesk(supabase, driverId) {
 export function subscribeTrips(supabase, onChange) {
   if (!supabase) return () => {}
   const channel = supabase
-    .channel(`driver-trips-${Date.now()}`)
+    .channel(uniqueChannelTopic('driver-trips'))
     .on('postgres_changes', { event: '*', schema: 'public', table: 'trips' }, () => onChange())
     .subscribe()
   return () => {
