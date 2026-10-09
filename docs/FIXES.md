@@ -2,6 +2,142 @@
 
 Persistent knowledge base for recurring failures. When a matching issue appears, apply the saved fix first.
 
+## 2026-10-07 — [agy] GA97: GA audit & tests - expire-unpaid holds timestamp safety, client guards, and Stripe webhook retryable resilience
+
+- **Track / machine:** Clemson RIDES · MacBook Max · `agy/ga-audit-expire-holds-webhook-hardening-ga97`
+- **What was wrong:**
+  1. `releaseExpiredUnpaidAirportHolds` and `claimStripeExpire` in `server/abandonedCheckout.js` calculated `new Date(now - ttlMs).toISOString()` without validating `now` and `ttlMs`. If `now` was `NaN`, `null`, or an invalid Date, `new Date(NaN).toISOString()` threw an uncaught `RangeError: Invalid time value`.
+  2. `releaseExpiredUnpaidAirportHolds` threw `TypeError: Cannot read properties of undefined (reading 'from')` when the Supabase client `sb` was missing or invalid, rather than returning `{ ok: false, reason: 'database_client_required' }`.
+  3. `api/stripe-webhook.js` did not support pre-buffered `req.rawBody` or `req.body` (Buffers or strings) in `readRawBody`, attaching stream event listeners even if streams were already closed/buffered in serverless adapters.
+  4. `api/stripe-webhook.js` rejected Stripe restricted API keys starting with `rk_` (`rk_live_...` or `rk_test_...`), erroneously classifying them as unconfigured and entering stub mode.
+  5. In `api/stripe-webhook.js`, if `recordTip` or `applyPaidCheckoutSession` failed on transient database inserts or updates, the handler returned HTTP 200, acknowledging delivery to Stripe and permanently preventing Stripe from retrying the event.
+  6. The outer catch block in `api/stripe-webhook.js` ignored explicit 5xx statuses on thrown errors, preventing retryable server errors from signaling Stripe.
+- **What changed:**
+  - Exported `readRawBody` in `api/stripe-webhook.js` with instant resolution for pre-buffered `Buffer` or `string` payloads (`req.rawBody`, `req.body`) while maintaining the 1MB payload ceiling.
+  - Allowed both `sk_` and `rk_` key prefixes in `api/stripe-webhook.js`.
+  - Hardened error reporting on `payment_intent.succeeded` (tip) and `checkout.session.completed` (deposit apply) to return HTTP 500 when database recording fails (`applied.ok === false`), allowing Stripe to retry.
+  - Sanitized `now` and `ttlMs` into `safeNow` and `safeTtlMs` across `releaseExpiredUnpaidAirportHolds`, `releaseExpiredUnpaidAirportHold`, and `claimStripeExpire` in `server/abandonedCheckout.js`.
+  - Added defensive database client guard in `releaseExpiredUnpaidAirportHolds` returning `{ ok: false, reason: 'database_client_required' }`.
+  - Added comprehensive test suite in `tests/gaAuditWebhookAndHoldHardening.test.js` (7/7 passing) and registered in `package.json`.
+- **Files touched:**
+  - `api/stripe-webhook.js`
+  - `server/abandonedCheckout.js`
+  - `tests/gaAuditWebhookAndHoldHardening.test.js`
+  - `package.json`
+  - `docs/FIXES.md`
+- **Verified:** `node --test tests/gaAuditWebhookAndHoldHardening.test.js` (7/7 passing), `node --test server/abandonedCheckout.test.js` (41/41 passing), `node --test api/stripeWebhookValidation.test.js` (86/86 passing), and full `npm test` passing.
+## 2026-10-07 — GA99: Reconcile checkout & airport checkout hardening, quote sanitization, and hold sweep parameter parsing
+
+- **Track / machine:** Clemson RIDES · MacBook Max · `agy/ga-audit-reconcile-airport-checkout-ga99`
+- **What was wrong:**
+  1. `server/endpoints/reconcileCheckout.js` only checked `body.sessionId` or `body.session_id`. When users were redirected back from Stripe Checkout returns (`?session_id=...`), or when clients passed session IDs with enclosing quotes or query parameters, reconciliation failed with 400 `sessionId required`.
+  2. `server/checkoutReconcile.js` (`reconcileCheckoutSession`) did not strip enclosing single/double quotes from `sessionId`, causing spurious 400 `invalid_session_id` errors when input strings were passed as `\"cs_...\"`.
+  3. `server/endpoints/airportCheckout.js` did not trim or sanitize `body.airport`, causing lookups for airport codes with whitespace to fail. It also lacked dependency injection for `computeRoutes`, `loadGameDayMultiplier`, `quoteAirportCheckout`, `planSettlement`, `debitLots`, `insertChargePayment`, `tigerPassBpsForRider`, and `studentDiscountGranted`, preventing isolated unit testing.
+  4. `server/endpoints/expireUnpaidAirportHolds.js` only parsed `limit`, `ttl_ms`, and `dry_run` from query parameters and URL query strings. When automated tools or admins triggered sweeps via POST requests with JSON body parameters, the options were ignored.
+  5. `tests/retiredCopy.test.js` did not ignore build directories (`dist`, `.expo`, `.vercel`, `build`), risking scan failures if build artifacts existed in the workspace.
+- **What changed:**
+  - `server/endpoints/reconcileCheckout.js`: Added fallback to `req.query.sessionId` and `req.query.session_id`, and sanitized `sessionId` by stripping enclosing quotes (`^["']|["']$`) and whitespace.
+  - `server/checkoutReconcile.js`: Sanitized `sessionId` in `reconcileCheckoutSession` by stripping enclosing quotes and trimming before validation and Stripe retrieval.
+  - `server/endpoints/airportCheckout.js`: Sanitized `airport` with `.trim().toUpperCase()`, and added dependency injection support across routing, pricing, settlement, credit debiting, and pass calculations.
+  - `server/endpoints/expireUnpaidAirportHolds.js`: Extended `parseHoldSweepLimit`, `parseHoldSweepTtlMs`, and `dryRunRequested` to accept parameters from `req.body` on POST invocations in addition to query parameters.
+  - `tests/retiredCopy.test.js`: Added `dist`, `.expo`, `.vercel`, and `build` directory exclusions to `walk()`.
+  - Added test suite `tests/gaAuditReconcileAirportCheckoutHardening.test.js` (6/6 passing) and registered it in `package.json`.
+- **Files touched:**
+  - `server/endpoints/reconcileCheckout.js`
+  - `server/checkoutReconcile.js`
+  - `server/endpoints/airportCheckout.js`
+  - `server/endpoints/expireUnpaidAirportHolds.js`
+  - `tests/retiredCopy.test.js`
+  - `tests/gaAuditReconcileAirportCheckoutHardening.test.js`
+  - `package.json`
+  - `docs/FIXES.md`
+- **Verified:** `node --test tests/gaAuditReconcileAirportCheckoutHardening.test.js` (6/6 passing) and full test runner `npm test`.
+
+## 2026-10-02 — GA96: GA audit & tests - abandoned checkout resilience, hold TTL NaN safety, and RPC direct update fallbacks
+
+- **Track / machine:** Clemson RIDES · MacBook Max · `agy/ga-audit-abandoned-checkout-resilience-ga96`
+- **What was wrong:**
+  1. `decideUnpaidAirportHoldTtl` in `server/abandonedCheckout.js` performed `now - anchor < ttlMs` without sanitizing `now` or `ttlMs`. If `now` was passed as `NaN`, `null`, or an invalid Date, `now - anchor` evaluated to `NaN`, making `< ttlMs` false and prematurely canceling active holds.
+  2. `writeCanceled` in `server/abandonedCheckout.js` relied solely on `merge_trip_metadata` Postgres RPC without fallback. If the RPC function was missing, encountered schema/permission errors, or threw an unhandled exception, the hold cancelation failed with an error, leaving stale unpaid holds in the match pool.
+  3. `rememberCheckoutSession` in `server/abandonedCheckout.js` lacked a fallback to direct table update if `merge_trip_metadata` failed, which historically caused checkout session bind failures during database migration transitions.
+  4. `restoreLiveTripAfterDeposit` in `server/abandonedCheckout.js` accessed `session.id` directly in metadata assignment without safe navigation, and lacked direct update fallback if the RPC call failed when stamping already-live trips.
+- **What changed:**
+  - Hardened `decideUnpaidAirportHoldTtl` to ensure `safeNow` and `safeTtlMs` are finite positive numbers, falling back to `Date.now()` and `UNPAID_AIRPORT_HOLD_TTL_MS`.
+  - Added conditional direct table update fallback (`.update({ status: 'canceled', ... }).in('status', UNPAID_CHECKOUT_STATUSES).is('driver_id', null)`) in `writeCanceled` when `merge_trip_metadata` RPC is unavailable or fails.
+  - Added direct table update fallback in `rememberCheckoutSession` to guarantee session IDs are bound to trip metadata even if RPC encounters an issue.
+  - Added direct update fallback in `restoreLiveTripAfterDeposit` for already-live trip metadata stamps and guarded `session?.id`.
+  - Added unit test suite in `tests/gaAuditAbandonedCheckoutResilience.test.js` (5/5 passing) and registered script in `package.json`.
+- **Files touched:**
+  - `server/abandonedCheckout.js`
+  - `tests/gaAuditAbandonedCheckoutResilience.test.js`
+  - `package.json`
+  - `docs/FIXES.md`
+- **Verified:** `node --test tests/gaAuditAbandonedCheckoutResilience.test.js` (5/5 passing), `node --test server/abandonedCheckout.test.js` (41/41 passing), and full `npm test` passing.
+## 2026-10-02 — GA96: Credit purchase checkout, confirmation, and balance lots endpoints audit and hardening
+- **Track / machine:** Clemson RIDES · MacBook Max · `agy/ga-audit-credit-purchases-confirm-ga96`
+  1. `server/endpoints/buyCredits.js` lacked dependency injection for unit testing (`deps.sb`, `deps.stripe`, `deps.user`, `deps.findCreditPack`), did not trim `body.packId`, and did not set `Cache-Control: no-store` and `Allow: POST, OPTIONS` headers.
+  2. `server/endpoints/creditsConfirm.js` lacked dependency injection (`deps.sb`, `deps.stripe`, `deps.user`, `deps.grantCreditPack`), did not trim or validate string `sessionId`, and lacked security headers.
+  3. `server/endpoints/creditLots.js` lacked dependency injection (`deps.sb`, `deps.user`, `deps.loadCreditLots`, `deps.creditBalanceCents`) and security `Cache-Control: no-store` and `Allow: GET, OPTIONS` headers on 405 Method Not Allowed responses.
+  4. Endpoints lacked comprehensive isolated unit tests.
+  - Hardened `server/endpoints/buyCredits.js` with dependency injection, input trimming, and strict `Cache-Control: no-store, no-cache, must-revalidate, private` and `Allow: POST, OPTIONS` headers.
+  - Hardened `server/endpoints/creditsConfirm.js` with dependency injection, `sessionId` whitespace trimming and validation, and security headers.
+  - Hardened `server/endpoints/creditLots.js` with dependency injection and cache-control/allow headers.
+  - Added comprehensive unit test suite in `tests/gaAuditCreditPurchasesConfirm.test.js` (9/9 passing) and registered it in root `package.json` test runner.
+  - `server/endpoints/buyCredits.js`
+  - `server/endpoints/creditsConfirm.js`
+  - `server/endpoints/creditLots.js`
+  - `tests/gaAuditCreditPurchasesConfirm.test.js`
+- **Verified:** `node --test tests/gaAuditCreditPurchasesConfirm.test.js` (9/9) and full `npm test` suite.
+## 2026-10-02 — GA95: Driver payouts & earnings endpoints audit, cron auth hardening, and test coverage
+- **Track / machine:** Clemson RIDES · MacBook Max · `agy/ga-audit-driver-payouts-earnings-ga95`
+  1. `server/endpoints/driverEarnings.js` defined its own `json()` writer without stream write protection, recreated Supabase client on every invocation with module-level constants instead of using `friendRideLib.js`, lacked dependency injection for unit testing, and omitted `Cache-Control: no-store` and `Allow: GET, OPTIONS` headers on 405 Method Not Allowed responses.
+  2. `server/endpoints/driverPayouts.js` lacked dependency injection for unit testing (`deps.sb`, `deps.stripe`, `deps.userFromAuth`, `deps.attemptDriverPayout`, `deps.writePayout`, `deps.loadConnectAccount`), had sensitive Vercel cron matching susceptible to header case differences (`x-vercel-cron` vs `X-Vercel-Cron`), did not trim whitespace on `CRON_SECRET`, and omitted security `Cache-Control` and `Allow: GET, POST, OPTIONS` headers.
+  3. `api/driver.js` router did not forward additional dependency injection arguments (`...rest`) to underlying endpoints, breaking testability through the router.
+  4. Neither `driverEarnings.js` nor `driverPayouts.js` had dedicated unit tests.
+  - Hardened `server/endpoints/driverEarnings.js` with `friendRideLib` imports, `resolveUser` helper supporting token extraction and dependency injection, `Allow: GET, OPTIONS`, and `Cache-Control: no-store, no-cache, must-revalidate, private` headers.
+  - Hardened `server/endpoints/driverPayouts.js` with case-insensitive `isVercelCron`, whitespace-trimmed `cronAuthorized`, full dependency injection across `runDuePayouts` and `handler`, and standard security/allow headers.
+  - Updated `api/driver.js` to forward `...rest` to all driver handlers.
+  - Implemented comprehensive unit test suite in `tests/gaAuditDriverPayoutsEarnings.test.js` (15/15 passing) and registered it in root `package.json` test runner.
+  - `server/endpoints/driverEarnings.js`
+  - `server/endpoints/driverPayouts.js`
+  - `api/driver.js`
+  - `tests/gaAuditDriverPayoutsEarnings.test.js`
+- **Verified:** `node --test tests/gaAuditDriverPayoutsEarnings.test.js` (15/15) and full `npm test` suite.
+## 2026-10-02 — GA95: Atomic merge_trip_metadata RPC reconcile, abandon checkout hardening, and security headers
+- **Track / machine:** Clemson RIDES · MacBook Max · `agy/ga-audit-checkout-reconcile-rpc-ga95`
+  1. `server/checkoutReconcile.js` `recordDeposit`: overwrote entire `trips.metadata` via `supabase.from('trips').update({ metadata: nextMeta })`, risking clobbering concurrent writes (e.g. concurrent webhook stamps or hold-sweep updates) instead of using the atomic Postgres RPC `merge_trip_metadata`.
+  2. `server/checkoutReconcile.js` `reconcileCheckoutSession`: did not trim `sessionId` with surrounding whitespace before format check and Stripe retrieval.
+  3. `server/endpoints/reconcileCheckout.js`: lacked `Cache-Control` / `Pragma` headers, did not set `Allow: POST, OPTIONS` on 405 Method Not Allowed, and did not trim whitespace on `sessionId`.
+  4. `server/endpoints/abandonCheckout.js`: lacked `Cache-Control` / `Pragma` headers, did not set `Allow: POST, OPTIONS` on 405 Method Not Allowed, lacked dependency injection (`deps`) for testing, and did not trim `tripId` or `sessionId` inputs.
+  - Updated `recordDeposit` in `server/checkoutReconcile.js` to build a clean metadata `patch` and invoke Postgres RPC `merge_trip_metadata(p_trip_id, p_patch)` atomically, falling back safely to `.update()` if RPC is missing or fails.
+  - Trimmed `sessionId` in `reconcileCheckoutSession`.
+  - Added `Cache-Control: no-store, no-cache, must-revalidate, private`, `Pragma: no-cache`, `Allow: POST, OPTIONS` on 405, and `sessionId` trimming to `server/endpoints/reconcileCheckout.js`.
+  - Added `Cache-Control: no-store, no-cache, must-revalidate, private`, `Pragma: no-cache`, `Allow: POST, OPTIONS` on 405, dependency injection (`deps = {}`), and input trimming to `server/endpoints/abandonCheckout.js`.
+  - Added unit test suite in `tests/gaAuditCheckoutReconcileRpc.test.js` (5/5 passing) and updated `server/checkoutReconcile.test.js` (20/20 passing).
+  - `server/checkoutReconcile.js`
+  - `server/checkoutReconcile.test.js`
+  - `server/endpoints/reconcileCheckout.js`
+  - `server/endpoints/abandonCheckout.js`
+  - `tests/gaAuditCheckoutReconcileRpc.test.js`
+- **Verified:** `node --test tests/gaAuditCheckoutReconcileRpc.test.js` (5/5 passing) and full `npm test` passing.
+## 2026-10-02 — GA94: Webhook signature case-insensitivity, secret hygiene, and checkout headers
+- **Track / machine:** Clemson RIDES · MacBook Max · `agy/ga-audit-webhook-signature-headers-ga94`
+  1. `api/stripe-webhook.js` checked signatures using hardcoded `stripe-signature` and `Stripe-Signature` keys, failing if upstream proxies or test harnesses passed other case variations like `STRIPE-SIGNATURE` or signatures with untrimmed whitespace.
+  2. Secret environment variables (`STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `SUPABASE_SERVICE_ROLE_KEY`) were not trimmed, creating risks of signature verification failure or key recognition issues if copy-pasted with trailing newlines or whitespace.
+  3. `api/create-checkout-session.js` and `server/endpoints/airportCheckout.js` did not set `Cache-Control: no-store` or `Allow: POST, OPTIONS` headers on 405 Method Not Allowed responses.
+  4. Response helpers lacked safeguards against `ERR_STREAM_WRITE_AFTER_END` and `ERR_HTTP_HEADERS_SENT` when responses were already closed or headers were already sent.
+  - Exported `extractStripeSignature` performing case-insensitive header lookup and whitespace trimming across string or array values.
+  - Trimmed all injected and environment secrets safely with fallback defaults.
+  - Implemented `sendWebhookJson` and hardened `json()` in `server/friendRideLib.js` to guard against `res.writableEnded` and `res.headersSent`.
+  - Added `Cache-Control: no-store, no-cache, must-revalidate, private` and `Allow: POST, OPTIONS` headers to checkout session and airport checkout endpoints.
+  - Added unit test suite `tests/gaAuditWebhookSignatureHeaders.test.js` (4/4 passing) and registered it in `package.json`.
+  - `api/stripe-webhook.js`
+  - `api/create-checkout-session.js`
+  - `server/endpoints/airportCheckout.js`
+  - `server/friendRideLib.js`
+  - `tests/gaAuditWebhookSignatureHeaders.test.js`
+- **Verified:** `npm test` passing 100% across all suites.
+
 ## 2026-10-01 — Expire unpaid airport holds & Stripe webhook endpoint hardening
 
 - **Track / machine:** Clemson RIDES · MacBook Max · `feat/max-agy-burn-ttl-webhooks`
@@ -197,7 +333,7 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
 ## 2026-09-25 — Wire authUrl.js unit tests into root test script
 
 - **Track / machine:** Clemson RIDES · deputy/auth-url-r2 · pkg-auth-url-r2 t3
-- **What was wrong:** `packages/rides-native/authUrl.js` needed test suite verification under the root `package.json` `test` script to ensure all auth URL parsing (app-scheme deep links, clemson-rides.vercel.app web callbacks, PKCE codes, and hash-routed session recovery) is continuously verified on `npm test`.
+- **What was wrong:** `packages/rides-native/authUrl.js` needed test suite verification under the root `package.json` `test` script to ensure all auth URL parsing (app-scheme deep links, clemsonrides.com web callbacks, PKCE codes, and hash-routed session recovery) is continuously verified on `npm test`.
 - **What changed:** Confirmed `packages/rides-native/authUrl.test.js` is wired into the root `package.json` `test` script and passes cleanly with 16/16 unit tests. Ran full `npm test` suite (807/807 tests passing) ensuring offline test isolation and zero regressions.
 - **Files touched:** `docs/FIXES.md`
 
@@ -538,30 +674,30 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
 ## 2026-09-25 — wire apiClient + carpoolApi tests; sweep stale checkout domain [t3]
 
 - **Track / machine:** Deputy · pkg-domain-tests-92-93 t3 · deputy/domain-tests-92-93
-- **What was wrong:** Draft PRs #92 (`origin/deputy/api-client-tests`) and #93 (`origin/deputy/carpool-api-tests`) were skipped because they still expected `https://clemson-airport-rides.vercel.app`. The replacement suites landed on this branch (`packages/rides-native/apiClient.test.js`, `packages/rides-native/shared/carpoolApi.test.js`) but were not listed in the root `npm test` script. `packages/rides-native/checkoutReturn.test.js` was already listed and still built fixture URLs on the old host. Production checkout returns use `NATIVE_CHECKOUT_ORIGIN` (`WEB_ORIGIN` in `shared/productLinks.js`, `https://clemson-rides.vercel.app`).
-- **What changed:** This package supersedes #92 and #93. Both replacement test files are appended to the `test` script. Checkout-return fixtures now use `NATIVE_CHECKOUT_ORIGIN` and assert that origin is `https://clemson-rides.vercel.app`. No production source file still hardcodes `clemson-airport-rides.vercel.app`, so `shared/productLinks.js` was not changed. `apps/mobile/app/(tabs)/schedule.tsx` still inlines the current `https://clemson-rides.vercel.app` fallback; that is the live origin, not the old host.
+- **What was wrong:** Draft PRs #92 (`origin/deputy/api-client-tests`) and #93 (`origin/deputy/carpool-api-tests`) were skipped because they still expected `https://clemsonrides.com`. The replacement suites landed on this branch (`packages/rides-native/apiClient.test.js`, `packages/rides-native/shared/carpoolApi.test.js`) but were not listed in the root `npm test` script. `packages/rides-native/checkoutReturn.test.js` was already listed and still built fixture URLs on the old host. Production checkout returns use `NATIVE_CHECKOUT_ORIGIN` (`WEB_ORIGIN` in `shared/productLinks.js`, `https://clemsonrides.com`).
+- **What changed:** This package supersedes #92 and #93. Both replacement test files are appended to the `test` script. Checkout-return fixtures now use `NATIVE_CHECKOUT_ORIGIN` and assert that origin is `https://clemsonrides.com`. No production source file still hardcodes `clemsonrides.com`, so `shared/productLinks.js` was not changed. `apps/mobile/app/(tabs)/schedule.tsx` still inlines the current `https://clemsonrides.com` fallback; that is the live origin, not the old host.
 - **Files touched:**
   - `package.json`
   - `packages/rides-native/checkoutReturn.test.js`
   - `docs/FIXES.md`
 - **Verified:** `npm test` (836 pass, 0 fail), including `packages/rides-native/checkoutReturn.test.js`, `packages/rides-native/apiClient.test.js`, and `packages/rides-native/shared/carpoolApi.test.js`.
 
-## 2026-09-25 — carpoolApi tests on clemson-rides.vercel.app [t2]
+## 2026-09-25 — carpoolApi tests on clemsonrides.com [t2]
 
 - **Track / machine:** Deputy · pkg-domain-tests-92-93 t2 · deputy/domain-tests-92-93
-- **What was wrong:** `packages/rides-native/shared/carpoolApi.test.js` from draft PR #93 (`origin/deputy/carpool-api-tests`) still expected `https://clemson-airport-rides.vercel.app`, and its non-OK cases expected the old inline client (`HTTP 500`, `HTTP 503`, `API unavailable` on an HTML 502). `setCarpoolApiBase` on main still used `.replace(/\/$/, '')`, so an override with two or more trailing slashes kept a leftover slash and joined a bad URL. That one-line `/\/+$/` fix from the draft branch was not on main.
-- **What changed:** Brought the test file onto this branch. The default host now comes from `DEFAULT_API_BASE` in `packages/rides-native/apiOrigin.js` (`https://clemson-rides.vercel.app`). 500/502 assertions follow `friendlyApiError` generic copy; 503 follows the unavailable copy. `apiErrorMessage` on a non-JSON 502 still returns the raw HTML stored on `payload.message` when the friendly kind is not auth or unavailable. `setCarpoolApiBase` now strips every trailing slash.
+- **What was wrong:** `packages/rides-native/shared/carpoolApi.test.js` from draft PR #93 (`origin/deputy/carpool-api-tests`) still expected `https://clemsonrides.com`, and its non-OK cases expected the old inline client (`HTTP 500`, `HTTP 503`, `API unavailable` on an HTML 502). `setCarpoolApiBase` on main still used `.replace(/\/$/, '')`, so an override with two or more trailing slashes kept a leftover slash and joined a bad URL. That one-line `/\/+$/` fix from the draft branch was not on main.
+- **What changed:** Brought the test file onto this branch. The default host now comes from `DEFAULT_API_BASE` in `packages/rides-native/apiOrigin.js` (`https://clemsonrides.com`). 500/502 assertions follow `friendlyApiError` generic copy; 503 follows the unavailable copy. `apiErrorMessage` on a non-JSON 502 still returns the raw HTML stored on `payload.message` when the friendly kind is not auth or unavailable. `setCarpoolApiBase` now strips every trailing slash.
 - **Files touched:**
   - `packages/rides-native/shared/carpoolApi.js`
   - `packages/rides-native/shared/carpoolApi.test.js`
   - `docs/FIXES.md`
 - **Verified:** `node --experimental-strip-types --test packages/rides-native/shared/carpoolApi.test.js` (13/13 passing).
 
-## 2026-09-25 — apiClient tests expect clemson-rides.vercel.app [t1]
+## 2026-09-25 — apiClient tests expect clemsonrides.com [t1]
 
 - **Track / machine:** Deputy · pkg-domain-tests-92-93 t1 · deputy/domain-tests-92-93
-- **What was wrong:** The apiClient tests brought over from draft PR #92 still expected `https://clemson-airport-rides.vercel.app`. One case hardcoded the joined URL as `vercel.appapi/trips` against that old host. Other assertions described the pre-#90 client: raw server messages, `getSession` errors thrown out of `authedJson`, a missing `getSession` throwing `TypeError`, and `JSON.stringify` failures wrapped as network errors. The `getSession` cases called live `fetch` because nothing was mocked.
-- **What changed:** Expected bases now come from `DEFAULT_API_BASE` in `packages/rides-native/apiOrigin.js` (`https://clemson-rides.vercel.app`, the `WEB_ORIGIN` `apiClient.js` uses when `EXPO_PUBLIC_API_BASE` is unset). A path with no leading slash is asserted as `` `${apiBase()}${path}` ``, which is the real join. Error assertions follow `friendlyApiError` (auth copy on 401, unavailable copy on 503, generic copy on 422/500/502). `getSession` failures and a supabase object with no `getSession` continue without a token, against a fake fetch. A circular body throws `TypeError` before fetch. Production source was not changed.
+- **What was wrong:** The apiClient tests brought over from draft PR #92 still expected `https://clemsonrides.com`. One case hardcoded the joined URL as `vercel.appapi/trips` against that old host. Other assertions described the pre-#90 client: raw server messages, `getSession` errors thrown out of `authedJson`, a missing `getSession` throwing `TypeError`, and `JSON.stringify` failures wrapped as network errors. The `getSession` cases called live `fetch` because nothing was mocked.
+- **What changed:** Expected bases now come from `DEFAULT_API_BASE` in `packages/rides-native/apiOrigin.js` (`https://clemsonrides.com`, the `WEB_ORIGIN` `apiClient.js` uses when `EXPO_PUBLIC_API_BASE` is unset). A path with no leading slash is asserted as `` `${apiBase()}${path}` ``, which is the real join. Error assertions follow `friendlyApiError` (auth copy on 401, unavailable copy on 503, generic copy on 422/500/502). `getSession` failures and a supabase object with no `getSession` continue without a token, against a fake fetch. A circular body throws `TypeError` before fetch. Production source was not changed.
 - **Files touched:**
   - `packages/rides-native/apiClient.test.js`
   - `docs/FIXES.md`
@@ -660,7 +796,7 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
 - **Track / machine:** Clemson RIDES · deputy/google-signin-prep · pkg-google-signin-prep t3
 - **Problem:** `packages/rides-native/googleAuthConfig.test.js` was created in t1 and extended in t2 to validate Google OAuth readiness gating and error mapping, but was not wired into root `package.json`'s `test` script. Furthermore, enabling Google Sign-In requires external setup in Google Cloud Console and Supabase Auth that cannot be automated in code and was previously undocumented.
 - **Fix:**
-  - Created `docs/google-signin-setup.md` detailing the complete manual setup steps for John: Google Cloud Console OAuth consent screen and client IDs (Web client with Supabase callback URL `https://awktabuhijrshmsmagpq.supabase.co/auth/v1/callback` and production web origin `https://clemson-rides.vercel.app`, iOS clients for `com.ascendmaui.clemsonrides.rider` and `com.ascendmaui.clemsonrides.driver`, and Android clients), Supabase Auth provider toggle and redirect allowlist (`clemsonrides://**`, `clemsonrides-driver://**`, `https://clemson-rides.vercel.app/**`), and environment variable placement table for EAS build profiles (`EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID`, `EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID`), local `.env` files, and the Supabase Dashboard secret.
+  - Created `docs/google-signin-setup.md` detailing the complete manual setup steps for John: Google Cloud Console OAuth consent screen and client IDs (Web client with Supabase callback URL `https://awktabuhijrshmsmagpq.supabase.co/auth/v1/callback` and production web origin `https://clemsonrides.com`, iOS clients for `com.ascendmaui.clemsonrides.rider` and `com.ascendmaui.clemsonrides.driver`, and Android clients), Supabase Auth provider toggle and redirect allowlist (`clemsonrides://**`, `clemsonrides-driver://**`, `https://clemsonrides.com/**`), and environment variable placement table for EAS build profiles (`EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID`, `EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID`), local `.env` files, and the Supabase Dashboard secret.
   - Appended `packages/rides-native/googleAuthConfig.test.js` to the `test` script in root `package.json`.
 - **Files touched:**
   - `docs/google-signin-setup.md`
@@ -845,7 +981,7 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
   - Migrations applied to awktabuhijrshmsmagpq: `hold_claim_atomic` (#80: `trips.hold_expire_claimed_at`, `public.merge_trip_metadata`, EXECUTE revoked from anon/authenticated, granted to service_role) then `card_brand_and_trip_created_at` (#82: `profiles.stripe_card_brand`, `profiles.stripe_card_last4`, `trips.created_at` backfilled from requested_at, NOT NULL default now()). #78 RLS fix was already live (`20260925015128 fix_profiles_trips_rls_recursion`) and was not reapplied. Pre-apply count: 2 unpaid airport holds past the 20-minute TTL that the expiry job would cancel.
   - #91 squash-merged as 327a304; #72–#90 closed as shipped in #91 (#75/#76 superseded by #77).
   - Production deploy `clemson-rides-1wy0w9c4y` from 327a304 via `vercel deploy --prod --scope john-matveyev-macbooki9` (no git-integration deploy fired).
-  - Test PRs #94, #95, #96, #97 merged after syncing with main (package.json test list union, FIXES.md keep-both). #92 and #93 skipped: their assertions expect the old `clemson-airport-rides.vercel.app` default and pre-#90 apiClient error shapes (13 and 12 failures after syncing with main).
+  - Test PRs #94, #95, #96, #97 merged after syncing with main (package.json test list union, FIXES.md keep-both). #92 and #93 skipped: their assertions expect the old `clemsonrides.com` default and pre-#90 apiClient error shapes (13 and 12 failures after syncing with main).
 - **Smoke test (prod):** `/` 200; setup-intent 200 (also via `/api/stripe-setup-intent`); quote 200; airport-checkout 200 (cs_test session); reconcile-checkout on the unpaid session 200 `{ok:true, paid:false}`; reconcile-checkout unauthenticated 401; expire-unpaid-airport-holds without cron auth 401; unsigned webhook 400. Throwaway user and trip deleted.
 - **Bug found:** `public.merge_trip_metadata` fails on every call with `operator does not exist: trip_status = text`. `trips.status` is the `trip_status` enum but the function compares it to `p_expected_statuses text[]` and assigns `COALESCE(p_new_status text, status)`. The unit tests use a fake Supabase client, so they could not catch it. Affected: airport-checkout session bind (logs `[airport-checkout] session bind operator does not exist: trip_status = text`, response still 200), abandon-checkout release (200 with `released:false, reason:update_failed`), and the unpaid-hold expiry sweep's cancel. Paid deposits are unaffected because `recordDeposit` stamps `fare_paid_cents`/`checkout_deposit` with a plain update.
 - **Fix (pending John's approval, not applied):** compare `status::text = ANY(p_expected_statuses)` and set `status = COALESCE(p_new_status::public.trip_status, status)`. See the follow-up migration PR.
@@ -1027,13 +1163,13 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
 - **Files:** `apps/driver/README.md`, `README.md`, `apps/rider/.env.example`, `apps/driver/.env.example`, `packages/rides-native/googleAuth.js`, `packages/rides-native/googleAuth.d.ts`, `package.json`, `scripts/typecheck.mjs`, `tests/noClerk.test.js`, `docs/FIXES.md`.
 - **Verified:** `npm ci --no-audit --no-fund --loglevel=error && npm test && npm run typecheck` — 352/352 tests. With both app `node_modules` folders absent, typecheck installed them, then `tsc --noEmit` and `node --check` exited 0. No type errors to fix.
 
-## 2026-09-24 — Apps still pointed at the old clemson-airport-rides.vercel.app domain
+## 2026-09-24 — Apps still pointed at the old clemsonrides.com domain
 
 - **Track / machine:** Clemson RIDES · Johns-iMac (worktree fix/clemson-rides-domain) · edits by Google Anti-Gravity CLI (`agy -p`), reviewed and finished by hand
-- **Problem:** Production web/API moved to the new Vercel project `https://clemson-rides.vercel.app`, but native API calls, Stripe Checkout return origins, share/carpool/promo links, server email links and docs still used `https://clemson-airport-rides.vercel.app`.
+- **Problem:** Production web/API moved to the new Vercel project `https://clemsonrides.com`, but native API calls, Stripe Checkout return origins, share/carpool/promo links, server email links and docs still used `https://clemsonrides.com`.
 - **Root cause:** The origin was hardcoded in ~20 places (native `apiClient`, `carpoolApi`, `safety`, `riderMoney`, rider `_layout`/`apiAuth`, mobile `schedule`, server checkout/friend/carpool/driver-approval fallbacks, web link helpers) instead of one constant.
 - **Fix:**
-  - `shared/productLinks.js` `WEB_ORIGIN` is the single source: `https://clemson-rides.vercel.app`.
+  - `shared/productLinks.js` `WEB_ORIGIN` is the single source: `https://clemsonrides.com`.
   - New `packages/rides-native/apiOrigin.js` (+ `.d.ts`): `DEFAULT_API_BASE = WEB_ORIGIN`, `resolveApiBase()` = `EXPO_PUBLIC_API_BASE` or the default, trailing slash stripped. Used by `apiClient.js`, `shared/carpoolApi.js`, rider `app/_layout.tsx` and `lib/apiAuth.ts`.
   - `safety.js` `SHARE_ORIGIN`, `riderMoney.js` `NATIVE_CHECKOUT_ORIGIN` and promo share URL use `WEB_ORIGIN`.
   - Server/web fallbacks (`buyCredits`, `airportCheckout`, `create-checkout-session`, `friendRideRoutes`, `carpoolRoutes`, `driverApproval`, `src/lib/{navigation,friendRides,riderPromo}.js`) import `WEB_ORIGIN`; env overrides (`VITE_APP_URL`, `APP_URL`, `body.origin`) still win.
@@ -1042,13 +1178,13 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
 - **External config still on the old domain (dashboards, not code):** Vercel `VITE_APP_URL` / `APP_URL` if set (they override the fallback), EAS `EXPO_PUBLIC_API_BASE` for rider/driver, Stripe webhook endpoint (`/api/stripe-webhook`), Supabase Auth Site URL / redirect URLs, Google OAuth authorized origins.
 ## 2026-09-24 — "Sign in required" on deposit / add card: SUPABASE_SERVICE_ROLE_KEY missing on the new Vercel project
 
-- **Track / machine:** Clemson RIDES · iOS TestFlight build 18 (1.1.0) · Vercel project `clemson-rides` (team `john-matveyev-macbooki9`, domain `clemson-rides.vercel.app`)
+- **Track / machine:** Clemson RIDES · iOS TestFlight build 18 (1.1.0) · Vercel project `clemson-rides` (team `john-matveyev-macbooki9`, domain `clemsonrides.com`)
 - **Symptom:** Signed in with Supabase auth, tapping Pay on the airport deposit showed "Sign in required"; Billing could not add a card ("Supabase service role key on Vercel is not configured").
-- **Root cause:** The new `clemson-rides` Vercel project had no `SUPABASE_SERVICE_ROLE_KEY`. `userFromAuth()` (`server/friendRideLib.js`) needs `admin()` to call `auth.getUser(token)`; with no key it returns null, so `api/create-checkout-session.js` answers **401 "Sign in required"** (masking the real problem) and the setup-intent route in `server/stripePaymentRoutes.js` answers **503 "SUPABASE_SERVICE_ROLE_KEY not configured"**. Not the old domain: `clemson-airport-rides.vercel.app` (still on `af87b60`) already verified Supabase tokens and had the key.
+- **Root cause:** The new `clemson-rides` Vercel project had no `SUPABASE_SERVICE_ROLE_KEY`. `userFromAuth()` (`server/friendRideLib.js`) needs `admin()` to call `auth.getUser(token)`; with no key it returns null, so `api/create-checkout-session.js` answers **401 "Sign in required"** (masking the real problem) and the setup-intent route in `server/stripePaymentRoutes.js` answers **503 "SUPABASE_SERVICE_ROLE_KEY not configured"**. Not the old domain: `clemsonrides.com` (still on `af87b60`) already verified Supabase tokens and had the key.
 - **Fix (no app build):** Added `SUPABASE_SERVICE_ROLE_KEY` (Production + Preview sensitive, Development encrypted) to `clemson-rides`, then redeployed the current production deployment (`dpl_udfb4nTmj4z5npSHETddSW9tV32F` → `clemson-rides-9atbwgh0y`, same source) with John's approval, ~10:00 PM ET.
-- **Verified:** Throwaway Supabase user on `clemson-rides.vercel.app`: `action=setup-intent` 200 (client_secret), `action=airport-checkout` 200 (Stripe Checkout session), `create-checkout-session` 200. User and its trips deleted afterwards.
+- **Verified:** Throwaway Supabase user on `clemsonrides.com`: `action=setup-intent` 200 (client_secret), `action=airport-checkout` 200 (Stripe Checkout session), `create-checkout-session` 200. User and its trips deleted afterwards.
 - **Next time:** When a new Vercel project/domain is created, diff env var NAMES against the old project before pointing apps at it. Consider making `userFromAuth` return a 503 (not 401) when the service key is missing so the error is not mistaken for an auth problem.
-- **Still open:** `profiles.stripe_card_brand` / `stripe_card_last4` and `trips.created_at` missing (migration `20260925020500_card_brand_and_trip_created_at.sql`, not applied); Stripe webhook endpoint for `clemson-rides.vercel.app/api/stripe-webhook` not registered; Stripe is in test mode (`cs_test_`); `SUPABASE_URL` is Production-only on `clemson-rides` (code falls back to the project URL).
+- **Still open:** `profiles.stripe_card_brand` / `stripe_card_last4` and `trips.created_at` missing (migration `20260925020500_card_brand_and_trip_created_at.sql`, not applied); Stripe webhook endpoint for `clemsonrides.com/api/stripe-webhook` not registered; Stripe is in test mode (`cs_test_`); `SUPABASE_URL` is Production-only on `clemson-rides` (code falls back to the project URL).
 ## 2026-09-24 — Wire ensureProfile tests into test script (t3)
 
 - **Track / machine:** Clemson RIDES · worktree deputy-pkg-profile-ensure / branch deputy/profile-ensure
@@ -1505,7 +1641,7 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
 - **Evidence:**
   - Build 15 (both apps) was archived 15:49 ET from the main checkout (branch fix/expo-modules-jsi-xcode26, same code as main 5bca959). Rider Hermes bundle: 38 `clerk` strings, oauth_apple/google/facebook, `sso-callback`, `/api/clerk-supabase-session`, a pk_test for choice-gibbon-3653. It has no `EXPO_PUBLIC_CLERK_GOOGLE_*_CLIENT_ID` values, so native Google falls back to browser SSO. Driver bundle: 0 `clerk`, 0 oauth_* strings, `DRIVER_GOOGLE_PROVIDER` + Supabase `/auth/callback`, so the driver is Google-only via Supabase OAuth.
   - Clerk FAPI (dev instance ins_3JkxnM…): oauth_google / oauth_facebook sign_ins + sign_ups -> 200 for `clemsonrides://`, `clemsonrides-rider://`, and `clemsonrides-driver://sso-callback` (no redirect allowlist enforced), and the Google/Facebook consent pages load (Clerk shared dev creds). oauth_apple, oauth_token_apple, google_one_tap -> 422 `form_param_value_invalid` "... does not match one of the allowed values for parameter strategy".
-  - Vercel `CLERK_SECRET_KEY` is `sk_live_` for the **production** instance ins_3JkydZ… (JWKS kid ins_3JkydZ…, domain clemson-airport-rides.vercel.app, `/__clerk` proxy not live, 0 redirect URLs). The apps' pk_test tokens are signed by kid ins_3JkxnM…, so `verifyToken` in `/api/clerk-supabase-session` can never verify them -> 401 "Clerk session token was rejected".
+  - Vercel `CLERK_SECRET_KEY` is `sk_live_` for the **production** instance ins_3JkydZ… (JWKS kid ins_3JkydZ…, domain clemsonrides.com, `/__clerk` proxy not live, 0 redirect URLs). The apps' pk_test tokens are signed by kid ins_3JkxnM…, so `verifyToken` in `/api/clerk-supabase-session` can never verify them -> 401 "Clerk session token was rejected".
 - **Root cause:** Clerk dev/prod instance mismatch: the apps authenticate against the development instance, but the Vercel bridge holds the production instance's secret, so every Google/Facebook sign-in dies at the bridge after Clerk succeeds. Apple is additionally disabled on the dev instance (422). The driver's 400 is separate (Supabase providers off; build 15 has no Clerk).
 - **Fix (worktree, uncommitted, not deployed):** `server/clerkSupabaseBridge.js` `clerkSecrets()` + `verifyWithAnySecret()`; `api/clerk-supabase-session.js` tries `CLERK_SECRET_KEY` then `CLERK_SECRET_KEY_DEV` and loads the user with whichever secret verified; tests added. README documents `CLERK_SECRET_KEY_DEV`.
 - **To ship:** add Vercel env `CLERK_SECRET_KEY_DEV` = dev instance (choice-gibbon-3653) `sk_test_…` from Clerk dashboard -> API keys (Development), then deploy. No app rebuild needed for rider Google/Facebook. Enable Apple on the dev instance (dashboard) for Apple.
@@ -1572,7 +1708,7 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
 
 ## 2026-09-24 — Driver desk test suite (pkg-i9-driverdesk-tests t1)
 - **Problem:** `packages/rides-native/driverDesk.js` had zero unit tests covering its driver desk helpers (availability, PickDriver requests, queue management, status advances, and earnings).
-- **What was changed:** Created `packages/rides-native/driverDesk.test.js` covering all 18 exported functions (`formatCents`, `riderFacingCard`, `loadGameDay`, `loadVehicle`, `loadDriverProfile`, `setPriorityMode`, `publishDriverLocation`, `setTeslaListing`, `subscribeTrips`, `listPassedTripIds`, `publishDriverCapacity`, `acceptTrip`, `declineTrip`, `loadRiderFix`, `advanceTrip`, `loadTrip`, `loadDriverDesk`, `loadEarnings`) using an in-memory fake Supabase query builder. Covered happy paths, empty results, Supabase error results, missing/invalid arguments, and returned object shapes without network calls or non-deterministic date dependencies. Updated `package.json` test script to include the new test file.
+- **What was changed:** Created `packages/rides-native/driverDesk.test.js` covering all 18 exported functions (`formatCents`, `riderFacingCard`, `loadGameDay`, `loadVehicle`, `loadDriverProfile`, `setPriorityMode`, `publishDriverLocation`, `setServiceClass`, `subscribeTrips`, `listPassedTripIds`, `publishDriverCapacity`, `acceptTrip`, `declineTrip`, `loadRiderFix`, `advanceTrip`, `loadTrip`, `loadDriverDesk`, `loadEarnings`) using an in-memory fake Supabase query builder. Covered happy paths, empty results, Supabase error results, missing/invalid arguments, and returned object shapes without network calls or non-deterministic date dependencies. Updated `package.json` test script to include the new test file.
 - **Suspicious behaviors documented (`// BUG?:`):**
   - `riderFacingCard`: if `vehicle` is `{}` or lacks color/make/model, `vehicleLabel` evaluates to `""` instead of `'Vehicle TBD'`.
   - `publishDriverCapacity`: `Math.max(1, ...)` ensures `count` is always >= 1, so `if (!count)` is unreachable dead code; passing 0 or null seats sets seats to 1 rather than clearing them.
@@ -1811,3 +1947,61 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
 - **What changed:** Both paths are already arguments of the root `package.json` `"test"` script. `apps/rider/lib/approachAlert.test.mjs` has been listed since the approaching-driver alert. `packages/rides-native/safety.test.js` has been listed with the native safety suite. t1 and t2 did not add a new test file, so the script did not need another path.
 - **Files touched:** `docs/FIXES.md`
 - **Verified:** `npm test` — 798 pass, 0 fail, including the approachAlert cases (haversine, feet readout, 100/200/500 ft stages, status line with feet or nearby, previousStage hold).
+
+## 2026-10-02 — [agy] GA93: Expire unpaid airport holds query bounds, TTL safety clamping, and error sanitization
+
+- **Date:** 2026-10-02
+- **Track / machine:** Clemson RIDES · MacBook Max (agy) · GA93
+- **What was wrong:** `server/endpoints/expireUnpaidAirportHolds.js` did not parse `limit` or `ttl_ms`/`ttl_seconds` query parameters, meaning custom batch limits or TTLs could not be configured safely. In addition, raw database errors in the `results` array could leak internal database constraint details to external cron callers, and bearer tokens with surrounding quotes (from shell or config quotes) failed constant-time authentication.
+- **What changed:**
+  - Implemented `parseHoldSweepLimit(req)` strictly clamping sweep batch limits between 1 and 40 (defaulting to 40).
+  - Implemented `parseHoldSweepTtlMs(req)` supporting `ttl_ms` and `ttl_seconds` with strict safety floor (`MIN_UNPAID_HOLD_TTL_MS = 15 minutes`) and safety ceiling (`MAX_UNPAID_HOLD_TTL_MS = 7 days`) to prevent misconfigured cron jobs from prematurely purging active holds.
+  - Implemented `sanitizeHoldResults(results)` to truncate and sanitize internal database constraint details before returning JSON responses.
+  - Enhanced `bearerToken(header)` to strip surrounding quotes and trim whitespace.
+  - Added defensive stream guards `if (!res.headersSent)` and `if (res.writableEnded) return`.
+  - Added dedicated unit test suite `tests/gaAuditExpireHoldsSanitization.test.js`.
+  - Wired `tests/gaAuditExpireHoldsSanitization.test.js` into root `package.json` test script.
+- **Files touched:** `server/endpoints/expireUnpaidAirportHolds.js`, `tests/gaAuditExpireHoldsSanitization.test.js`, `package.json`, `docs/FIXES.md`
+- **Verified:** `npm test` passing with 0 failures.
+
+## 2026-10-07 — [agy] GA97: Stripe webhook retryable 500 classification and dependency injection across tips, credits, and deposits
+
+- **Date:** 2026-10-07
+- **Track / machine:** Clemson RIDES · MacBook Max (agy) · GA97
+- **What was wrong:** `api/stripe-webhook.js` always acknowledged `200 { received: true }` when deposit recording (`applyPaidCheckoutSession`), credit purchases (`grantCreditPack`), tip recording (`recordTip`), or Tiger Pass subscriptions failed due to transient database connection drops or deadlocks. Acknowledging 200 causes Stripe to mark the webhook delivered and drop automatic retry backoffs, leaving riders charged without database payment records or trip status updates. In addition, `recordTip` and `recordCreditPurchase` did not support dependency injection (`deps.recordTip`, `deps.recordCreditPurchase`), and `tests/retiredCopy.test.js` did not skip gitignored build output directories (`dist`, `.expo`, `.vercel`, `build`).
+- **What changed:**
+  - Classified database write failures across `payment_intent.succeeded` tips, `credit_purchase`, `checkout.session.completed`, `async_payment_succeeded`, and Tiger Pass subscription lifecycle events as retryable HTTP 500 errors so Stripe automatically retries event delivery.
+  - Added dependency injection support for `deps.recordTip` and `deps.recordCreditPurchase`.
+  - Added error checks on `payments` query in `recordTip`.
+  - Preserved metadata missing checks returning `200` without creating service clients.
+  - Updated `tests/retiredCopy.test.js` directory walker to exclude `dist`, `.expo`, `.vercel`, and `build` artifacts.
+  - Created dedicated unit test suite in `tests/gaAuditWebhookRetryable.test.js` (7/7 passing) and registered it in `package.json` test runner.
+- **Files touched:**
+  - `api/stripe-webhook.js`
+  - `tests/gaAuditWebhookRetryable.test.js`
+  - `tests/retiredCopy.test.js`
+  - `package.json`
+  - `docs/FIXES.md`
+- **Verified:** `node --test tests/gaAuditWebhookRetryable.test.js api/stripeWebhookValidation.test.js tests/retiredCopy.test.js` (94/94 passing); `npm test` passing with 0 failures.
+## 2026-10-07 — [agy] GA98: Expire unpaid airport holds cutoff calculation resilience, Date object anchor handling, and cron auth override injection
+
+- **Date:** 2026-10-07
+- **Track / machine:** Clemson RIDES · MacBook Max (agy) · GA98
+- **What was wrong:** In `server/abandonedCheckout.js`, `releaseExpiredUnpaidAirportHolds` calculated `const cutoff = new Date(now - ttlMs).toISOString()`. If `now` or `ttlMs` was non-finite or `NaN`, `new Date(NaN).toISOString()` threw an unhandled `RangeError: Invalid time value`, crashing the sweep routine. Additionally, `parsedMs` only accepted strings, failing when timestamps were parsed into `Date` objects, and `metaObject` did not guard against array corruption (`[]`). Furthermore, `server/endpoints/expireUnpaidAirportHolds.js` lacked `overrides.cronSecret` injection support for isolated test execution without mutating `process.env`.
+- **What changed:**
+  - Hardened `cutoff` computation in `releaseExpiredUnpaidAirportHolds` by sanitizing `now` to `safeNow` and `ttlMs` to `safeTtlMs`, preventing invalid `Date` values and `RangeError` exceptions.
+  - Extended `parsedMs` in `server/abandonedCheckout.js` to safely convert `Date` instances to numeric milliseconds.
+  - Added array guard `!Array.isArray(trip.metadata)` in `metaObject(trip)` to prevent metadata type confusion.
+  - Added `overrides.cronSecret` support to `holdTtlCronAuthorized` in `server/endpoints/expireUnpaidAirportHolds.js`.
+  - Updated `tests/retiredCopy.test.js` directory walker to skip build output directories (`dist`, `.expo`, `.vercel`, `build`).
+  - Added dedicated unit test suite in `tests/gaAuditHoldTtlHardening.test.js` (7/7 passing) and registered it in `package.json` test runner.
+- **Files touched:**
+  - `server/abandonedCheckout.js`
+  - `server/endpoints/expireUnpaidAirportHolds.js`
+  - `tests/gaAuditHoldTtlHardening.test.js`
+  - `tests/retiredCopy.test.js`
+  - `package.json`
+  - `docs/FIXES.md`
+- **Verified:** `node --test tests/gaAuditHoldTtlHardening.test.js server/abandonedCheckout.test.js tests/retiredCopy.test.js` (59/59 passing); `npm test` passing with 0 failures.
+
+

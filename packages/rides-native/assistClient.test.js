@@ -5,7 +5,7 @@ import { createLostFoundReport } from './lostFoundClient.js'
 import { sendTripMessage } from './tripMessagesClient.js'
 import { ACCOUNT_DELETION_TICKET } from '../../shared/accountDeletion.js'
 import { PRIVACY_SECTIONS, TERMS_SECTIONS } from '../../shared/legalCopy.js'
-import { DRIVER_EXPO_PROJECT, FROZEN_EXPO_SLUG, RIDER_EXPO_PROJECT } from '../../shared/productLinks.js'
+import { FROZEN_EXPO_SLUG, WEB_BOOK_URL, WEB_DRIVER_URL } from '../../shared/productLinks.js'
 import { validateTicket } from '../../server/supportAgent.js'
 import { readFileSync } from 'node:fs'
 
@@ -52,18 +52,27 @@ test('account deletion ticket matches the support validator', () => {
 test('legal copy is shared and the install links are the current apps', () => {
   assert.ok(PRIVACY_SECTIONS.some((section) => section.heading === 'Your choices'))
   assert.ok(TERMS_SECTIONS.some((section) => section.heading === 'Payments & earnings'))
-  assert.match(RIDER_EXPO_PROJECT, /clemson-rides-rider/)
-  assert.match(DRIVER_EXPO_PROJECT, /clemson-rides-driver/)
+  assert.equal(WEB_BOOK_URL, 'https://clemsonrides.com/#/home')
+  assert.equal(WEB_DRIVER_URL, 'https://clemsonrides.com/#/driver')
+  assert.doesNotMatch(`${WEB_BOOK_URL} ${WEB_DRIVER_URL}`, /expo\.dev|expo\.go|exp:\/\//)
   assert.equal(FROZEN_EXPO_SLUG, 'clemson-airport-rides')
 })
 
 test('the marketing page does not install the frozen 1.0.0 binary', () => {
   const source = readFileSync(new URL('../../src/screens/Marketing.jsx', import.meta.url), 'utf8')
+  const chrome = readFileSync(new URL('../../src/components/MarketingChrome.jsx', import.meta.url), 'utf8')
+  const drive = readFileSync(new URL('../../src/screens/DriveWithUs.jsx', import.meta.url), 'utf8')
   assert.doesNotMatch(source, /ae9bb5b6|a9cfec15/)
   assert.doesNotMatch(source, /projects\/clemson-airport-rides\/builds/)
+  assert.doesNotMatch(source, /expo\.dev|expo\.go|exp:\/\/|RIDER_EXPO_PROJECT|DRIVER_EXPO_PROJECT/)
+  assert.doesNotMatch(chrome, /ae9bb5b6|a9cfec15|expo\.dev|expo\.go|exp:\/\//)
   assert.match(source, /Book a ride/)
-  assert.match(source, /RIDER_EXPO_PROJECT/)
-  assert.match(source, /DRIVER_EXPO_PROJECT/)
+  assert.match(source, /navigate\('home'\)/)
+  assert.match(source, /navigate\('home', \{ tier: 'carpool' \}\)/)
+  assert.match(chrome, /Get the App/)
+  assert.match(chrome, /navigate\('drive'\)/)
+  assert.match(drive, /navigate\('driver-signup'\)/)
+  assert.doesNotMatch(source, /WEB_BOOK_URL|WEB_DRIVER_URL|APP_DOWNLOADS|const DOWNLOADS/)
 })
 
 test('lost-and-found and ride chat reject empty text before any network call', async () => {

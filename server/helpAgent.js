@@ -148,7 +148,7 @@ export function buildHelpTurn({ messages, context, roleVariant }) {
 
   if (context?.signedIn && context.student && topic?.id !== 'student' && /student|discount|clemson\.edu/.test(question.toLowerCase())) {
     paragraphs.push(context.student.verified
-      ? 'Your confirmed Clemson email applies 10% off Standard. Comfort, XL, Pet, and Tesla stay full price.'
+      ? 'Your confirmed Clemson email applies 10% off Standard. Other ride types stay full price.'
       : context.student.emailEligible
         ? STUDENT_CONFIRM_EMAIL_COPY
         : STUDENT_EMAIL_REQUIRED_COPY)

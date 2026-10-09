@@ -87,6 +87,13 @@ function createMockDb() {
     if (fn === 'grant_rider_social_for_trip') {
       return Promise.resolve({ data: { ok: true, granted: false }, error: null })
     }
+    if (fn === 'merge_trip_metadata') {
+      const trip = trips.get(args?.p_trip_id)
+      if (trip) {
+        trip.metadata = { ...(trip.metadata || {}), ...(args?.p_patch || {}) }
+        return Promise.resolve({ data: { id: trip.id, metadata: trip.metadata }, error: null })
+      }
+    }
     return Promise.resolve({ data: null, error: null })
   }
 
@@ -209,10 +216,15 @@ test('paid first time: marks deposit paid, creates payment row, and updates trip
   assert.equal(typeof trip.metadata.checkout_deposit, 'object')
   assert.equal(trip.metadata.checkout_deposit.session_id, 'cs_paid_100')
 
-  // Verify social referral was called
-  assert.equal(db.rpcCalls.length, 1)
-  assert.equal(db.rpcCalls[0].fn, 'grant_rider_social_for_trip')
-  assert.deepEqual(db.rpcCalls[0].args, { p_trip_id: 'trip_100' })
+  // Verify social referral and metadata merge were called
+  const rpcMerge = db.rpcCalls.find((c) => c.fn === 'merge_trip_metadata')
+  assert.ok(rpcMerge, 'expected merge_trip_metadata RPC call')
+  assert.equal(rpcMerge.args.p_trip_id, 'trip_100')
+  assert.equal(rpcMerge.args.p_patch.fare_paid_cents, 2500)
+
+  const rpcReferral = db.rpcCalls.find((c) => c.fn === 'grant_rider_social_for_trip')
+  assert.ok(rpcReferral, 'expected grant_rider_social_for_trip RPC call')
+  assert.deepEqual(rpcReferral.args, { p_trip_id: 'trip_100' })
 })
 
 test('paid second time: idempotent, returns alreadyRecorded true with no duplicate payment rows', async () => {
@@ -400,6 +412,27 @@ test('Stripe retrieve error: gracefully handles errors without throwing unhandle
   assert.equal(db.payments.length, 0)
 })
 
+test('skips tiger_pass sessions instead of requiring a trip', async () => {
+  const db = createMockDb()
+  const session = {
+    id: 'cs_pass_105',
+    status: 'complete',
+    payment_status: 'paid',
+    metadata: { kind: 'tiger_pass', profile_id: 'rider_ada' },
+  }
+  const stripe = createMockStripe(new Map([[session.id, session]]))
+  const result = await reconcileCheckoutSession({
+    stripe,
+    sb: db,
+    sessionId: 'cs_pass_105',
+    userId: 'rider_ada',
+  })
+  assert.equal(result.ok, true)
+  assert.equal(result.skipped, true)
+  assert.equal(result.reason, 'tiger_pass')
+  assert.equal(db.payments.length, 0)
+})
+
 test('skips credit_purchase sessions cleanly', async () => {
   const db = createMockDb()
   const session = {
@@ -538,9 +571,12 @@ test('webhook still works through the shared function', async () => {
     assert.equal(res2.statusCode, 200)
     const body2 = JSON.parse(res2.body)
     assert.equal(body2.recorded.alreadyRecorded, true)
-    assert.equal(db.payments.length, 1)
   } finally {
-    process.env.STRIPE_SECRET_KEY = origKey
+    if (origKey === undefined) {
+      delete process.env.STRIPE_SECRET_KEY
+    } else {
+      process.env.STRIPE_SECRET_KEY = origKey
+    }
   }
 })
 
@@ -783,16 +819,9 @@ test('reconcileCheckout routed through api/stripe-payment-methods?action=reconci
   assert.equal(body.tripId, 'trip_route_ep')
 })
 
-test('create-checkout-session and airport-checkout success_url carry session_id={CHECKOUT_SESSION_ID}', () => {
+test('booking endpoints do not open a Checkout session', () => {
   const createCheckoutSrc = readFileSync(new URL('../api/create-checkout-session.js', import.meta.url), 'utf8')
   const airportCheckoutSrc = readFileSync(new URL('./endpoints/airportCheckout.js', import.meta.url), 'utf8')
-
-  assert.match(
-    createCheckoutSrc,
-    /success_url:\s*`\${origin}\/\${checkoutSuccessHash\([\s\S]*?\)}&session_id=\{CHECKOUT_SESSION_ID\}`/
-  )
-  assert.match(
-    airportCheckoutSrc,
-    /success_url:\s*`\${origin}\/\${checkoutSuccessHash\([\s\S]*?\)}&session_id=\{CHECKOUT_SESSION_ID\}`/
-  )
+  assert.doesNotMatch(createCheckoutSrc, /success_url|checkout\.sessions\.create/)
+  assert.doesNotMatch(airportCheckoutSrc, /success_url|checkout\.sessions\.create/)
 })

@@ -1,9 +1,13 @@
-import { useEffect, useRef } from 'react'
-import { StyleSheet, Text, View } from 'react-native'
-import MapView, { Circle, Marker, Polyline, PROVIDER_DEFAULT } from 'react-native-maps'
+import { useEffect, useRef, useState } from 'react'
+import { Platform, StyleSheet, Text, View } from 'react-native'
+import Constants from 'expo-constants'
+import MapView, { Circle, Marker, Polygon, Polyline, PROVIDER_DEFAULT } from 'react-native-maps'
+import { ANDROID_MAP_UNAVAILABLE, googleMapStyle, nativeMapTilesReady } from 'rides-native/googleMapChrome.js'
 import { heatColor } from 'rides-native/heat.js'
 import { DOWNTOWN, ORANGE, PURPLE, STADIUM } from 'rides-native/places.js'
 import type { BusySpot } from '@/lib/busySpots'
+import { fetchTigerHeatMap } from 'rides-native/tigerHeatClient.js'
+import { toNativeRing, type TigerHeatZone } from 'rides-native/tigerHeat.js'
 import type { MapPin } from './CampusMap'
 
 function rgba(hex: string, alpha: number) {
@@ -22,8 +26,12 @@ export function CampusMap({
   focusToken = 0,
   spots = [],
   showHeat = false,
+  heatWindow = 'now',
   gameDay = false,
   gameDayLabel = null,
+  lockOnCenter = false,
+  onPinPress,
+  showsUserLocation = false,
 }: {
   pins?: MapPin[]
   center?: { latitude: number; longitude: number } | null
@@ -32,10 +40,15 @@ export function CampusMap({
   focusToken?: number
   spots?: BusySpot[]
   showHeat?: boolean
+  heatWindow?: string
   gameDay?: boolean
   gameDayLabel?: string | null
+  lockOnCenter?: boolean
+  onPinPress?: (id: string) => void
+  showsUserLocation?: boolean
 }) {
   const mapRef = useRef<MapView>(null)
+  const [tigerZones, setTigerZones] = useState<TigerHeatZone[]>([])
   const pinsRef = useRef(pins)
   const centerRef = useRef(center)
   pinsRef.current = pins
@@ -53,7 +66,36 @@ export function CampusMap({
   const heatKey = showHeat ? spots.map((spot: BusySpot) => spot.id).join('|') : ''
 
   useEffect(() => {
+    if (!showHeat) {
+      setTigerZones([])
+      return undefined
+    }
+    let alive = true
+    fetchTigerHeatMap(heatWindow).then((result) => {
+      if (alive) setTigerZones(result.zones || [])
+    }).catch(() => {
+      if (alive) setTigerZones([])
+    })
+    return () => {
+      alive = false
+    }
+  }, [showHeat, heatWindow])
+
+  useEffect(() => {
     if (!mapRef.current) return
+    if (lockOnCenter && centerRef.current) {
+      const next = centerRef.current
+      mapRef.current.animateToRegion(
+        {
+          latitude: next.latitude,
+          longitude: next.longitude,
+          latitudeDelta: 0.045,
+          longitudeDelta: 0.045,
+        },
+        450,
+      )
+      return
+    }
     if (showHeat && spots.length > 1) {
       mapRef.current.fitToCoordinates(
         spots.map((spot: BusySpot) => ({ latitude: spot.lat, longitude: spot.lng })),
@@ -80,7 +122,20 @@ export function CampusMap({
       },
       450,
     )
-  }, [centerKey, pinKey, focusToken, heatKey, showHeat])
+  }, [centerKey, pinKey, focusToken, heatKey, showHeat, lockOnCenter])
+
+  const tilesReady = nativeMapTilesReady(Platform.OS, {
+    env: typeof process !== 'undefined' ? process.env : {},
+    manifestKey: Constants.expoConfig?.android?.config?.googleMaps?.apiKey,
+  })
+  if (!tilesReady) {
+    return (
+      <View style={[styles.fill, styles.unavailable]}>
+        <Text style={styles.unavailableTitle}>Map unavailable</Text>
+        <Text style={styles.unavailableBody}>{ANDROID_MAP_UNAVAILABLE}</Text>
+      </View>
+    )
+  }
 
   return (
     <View style={styles.fill}>
@@ -96,22 +151,47 @@ export function CampusMap({
         }}
         mapType="standard"
         userInterfaceStyle={colorScheme}
-        customMapStyle={
-          colorScheme === 'dark'
-            ? [
-                { elementType: 'geometry', stylers: [{ color: '#0e0b14' }] },
-                { elementType: 'labels.text.fill', stylers: [{ color: '#f5f6f8' }] },
-                { elementType: 'labels.text.stroke', stylers: [{ color: '#0e0b14' }] },
-                { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#2a2438' }] },
-                { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#16121f' }] },
-                { featureType: 'poi', elementType: 'geometry', stylers: [{ color: '#120e18' }] },
-              ]
-            : undefined
-        }
+        customMapStyle={googleMapStyle(colorScheme)}
         rotateEnabled={false}
         pitchEnabled={false}
-        showsUserLocation={false}
+        showsUserLocation={showsUserLocation}
       >
+        {showHeat
+          ? tigerZones.map((zone: TigerHeatZone) => (
+              <Polygon
+                key={`tiger-${zone.id}`}
+                coordinates={toNativeRing(zone.polygon)}
+                fillColor={zone.preview ? 'rgba(245,102,0,0.18)' : 'rgba(245,102,0,0.36)'}
+                strokeColor="#522D80"
+                strokeWidth={2}
+              />
+            ))
+          : null}
+        {showHeat
+          ? tigerZones.map((zone: TigerHeatZone) => (
+              <Polygon
+                key={`tiger-inner-${zone.id}`}
+                coordinates={toNativeRing(zone.innerPolygon)}
+                fillColor="rgba(82,45,128,0.2)"
+                strokeColor="#F56600"
+                strokeWidth={1}
+              />
+            ))
+          : null}
+        {showHeat
+          ? tigerZones.map((zone: TigerHeatZone) => (
+              <Marker
+                key={`tiger-label-${zone.id}`}
+                coordinate={{ latitude: zone.lat, longitude: zone.lng }}
+                anchor={{ x: 0.5, y: 0.5 }}
+                tracksViewChanges={false}
+              >
+                <View style={[styles.tigerChip, zone.preview ? styles.tigerChipPreview : null]}>
+                  <Text style={styles.tigerChipText}>{zone.bonusLabel}</Text>
+                </View>
+              </Marker>
+            ))
+          : null}
         {showHeat
           ? spots.map((spot: BusySpot) => (
               <Circle
@@ -136,12 +216,24 @@ export function CampusMap({
             strokeWidth={2}
           />
         ) : null}
-        {markers.map((pin: MapPin) => (
+        {markers.map((pin: MapPin) => pin.kind === 'request' ? (
+          <Marker
+            key={pin.id}
+            coordinate={{ latitude: pin.latitude, longitude: pin.longitude }}
+            title={pin.title}
+            description="Tap to accept"
+            anchor={{ x: 0.5, y: 0.5 }}
+            onPress={() => onPinPress?.(pin.id)}
+          >
+            <View style={[styles.requestDot, { backgroundColor: pin.pinColor || PURPLE }]} />
+          </Marker>
+        ) : (
           <Marker
             key={pin.id}
             coordinate={{ latitude: pin.latitude, longitude: pin.longitude }}
             title={pin.title}
             pinColor={pin.pinColor || ORANGE}
+            onPress={() => onPinPress?.(pin.id)}
           />
         ))}
       </MapView>
@@ -156,7 +248,32 @@ export function CampusMap({
 
 const styles = StyleSheet.create({
   fill: { flex: 1 },
+  unavailable: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 24,
+    backgroundColor: '#F4F5F8',
+  },
+  unavailableTitle: { fontSize: 16, fontWeight: '800', color: '#522D80', marginBottom: 8 },
+  unavailableBody: { fontSize: 14, lineHeight: 20, textAlign: 'center', color: '#5B6472' },
+  tigerChip: {
+    backgroundColor: '#F56600',
+    borderColor: '#522D80',
+    borderWidth: 2,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  tigerChipPreview: { backgroundColor: '#522D80' },
+  tigerChipText: { color: '#FFFFFF', fontSize: 12, fontWeight: '800' },
   zone: { position: 'absolute', left: 16, top: 88, right: 16, alignItems: 'flex-start' },
+  requestDot: {
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+  },
   zoneText: {
     backgroundColor: ORANGE,
     color: '#fff',

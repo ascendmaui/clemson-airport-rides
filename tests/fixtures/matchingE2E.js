@@ -13,7 +13,11 @@ function cloneRows(initialTables) {
 function matches(row, filter) {
   const value = row[filter.column]
   switch (filter.kind) {
-    case 'eq': return value === filter.value
+    case 'eq': return filter.column === 'metadata' ? JSON.stringify(value) === filter.value : value === filter.value
+    case 'or': {
+      const target = row.metadata?.offer_driver_id
+      return target == null || target === '' || target === JSON.parse(filter.value.split('metadata->>offer_driver_id.eq.').at(-1))
+    }
     case 'in': return filter.value.includes(value)
     case 'is': return filter.value === null ? value == null : value === filter.value
     case 'not': return filter.operator === 'is' && filter.value === null ? value != null : value !== filter.value
@@ -30,13 +34,12 @@ function matches(row, filter) {
 export function createMatchingSupabase(initialTables = {}) {
   const tables = cloneRows(initialTables)
 
-  function rowsFor(name) {
-    if (!tables[name]) tables[name] = []
-    return tables[name]
-  }
-
   function run(state) {
-    const source = rowsFor(state.table)
+    if (!tables[state.table]) {
+      if (state.mode === 'select') return { data: [], error: null }
+      tables[state.table] = []
+    }
+    const source = tables[state.table]
     const selected = () => {
       let rows = source.filter((row) => state.filters.every((filter) => matches(row, filter)))
       for (const order of [...state.orders].reverse()) {
@@ -92,6 +95,7 @@ export function createMatchingSupabase(initialTables = {}) {
     const state = { table, mode: 'select', filters: [], orders: [], limit: null, payload: null }
     const builder = {
       select() { return builder },
+      or(value) { state.filters.push({ kind: 'or', value }); return builder },
       eq(column, value) { state.filters.push({ kind: 'eq', column, value }); return builder },
       in(column, value) { state.filters.push({ kind: 'in', column, value }); return builder },
       is(column, value) { state.filters.push({ kind: 'is', column, value }); return builder },
@@ -197,4 +201,88 @@ export function riderTrackingSnapshot(supabase, tripId) {
     driverLat: status?.lat ?? null,
     driverLng: status?.lng ?? null,
   }
+}
+
+export async function cancelSearchingTrip(supabase, tripId, riderId, at = '2026-10-01T08:05:00.000Z') {
+  const { data, error } = await supabase
+    .from('trips')
+    .update({ status: 'canceled', canceled_at: at })
+    .eq('id', tripId)
+    .eq('rider_id', riderId)
+    .in('status', ['searching', 'offered'])
+    .select('id, status, rider_id, driver_id, canceled_at')
+    .maybeSingle()
+  if (error) throw error
+  if (!data) throw new Error('That ride is no longer searching')
+
+  const event = await supabase.from('trip_events').insert({
+    trip_id: tripId,
+    kind: 'canceled',
+    payload: { reason: 'rider_cancel', source: 'rider_app', canceled_at: at },
+  })
+  if (event.error) throw event.error
+  return data
+}
+
+export async function expireSearchingTrip(supabase, tripId, {
+  expiredBefore,
+  at = '2026-10-01T08:15:00.000Z',
+} = {}) {
+  if (!expiredBefore) throw new Error('An expiry cutoff is required')
+  const { data, error } = await supabase
+    .from('trips')
+    .update({ status: 'canceled', canceled_at: at })
+    .eq('id', tripId)
+    .in('status', ['searching', 'offered'])
+    .lte('requested_at', expiredBefore)
+    .select('id, status, rider_id, driver_id, requested_at, canceled_at')
+    .maybeSingle()
+  if (error) throw error
+  if (!data) throw new Error('That ride is not eligible for search expiry')
+
+  const event = await supabase.from('trip_events').insert({
+    trip_id: tripId,
+    kind: 'canceled',
+    payload: { reason: 'search_ttl_expired', source: 'matching_ttl', canceled_at: at },
+  })
+  if (event.error) throw event.error
+  return data
+}
+
+export async function requestDriverTrip(supabase, {
+  id,
+  riderId,
+  pickupLabel = 'Memorial Stadium',
+  dropoffLabel = 'Downtown Clemson',
+  requestedAt = '2026-10-01T08:06:00.000Z',
+} = {}) {
+  if (!id || !riderId) throw new Error('Trip and rider are required')
+  const row = {
+    id,
+    rider_id: riderId,
+    driver_id: null,
+    status: 'searching',
+    tier: 'standard',
+    pickup_label: pickupLabel,
+    dropoff_label: dropoffLabel,
+    pickup_lat: DEFAULT_PICKUP.lat,
+    pickup_lng: DEFAULT_PICKUP.lng,
+    dropoff_lat: 34.6857,
+    dropoff_lng: -82.8147,
+    requested_at: requestedAt,
+    metadata: {},
+  }
+  const { data, error } = await supabase
+    .from('trips')
+    .insert(row)
+    .select('*')
+    .single()
+  if (error) throw error
+  const event = await supabase.from('trip_events').insert({
+    trip_id: id,
+    kind: 'searching',
+    payload: { source: 'rider_app' },
+  })
+  if (event.error) throw event.error
+  return data
 }

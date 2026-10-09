@@ -55,9 +55,10 @@ export function ProfileView() {
     >
       <button
         type="button"
-        className="pressable glass-pill"
+        className="pressable glass-pill nav-back-btn"
+        aria-label="Go back"
         onClick={() => window.history.back()}
-        style={{ width: 40, height: 40, borderRadius: 12, marginBottom: 12 }}
+        style={{ marginBottom: 12 }}
       >
         ←
       </button>

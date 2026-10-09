@@ -1,11 +1,13 @@
 import { useRouter } from 'expo-router'
 import { useEffect, useMemo, useState } from 'react'
-import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useAuth } from '@/lib/auth'
 import { registerDriverPush, type PushState } from '@/lib/push'
 import { supabase } from '@/lib/supabase'
 import { displayFirstName } from 'rides-native/authErrors'
+import { WomenOnlyCard } from 'rides-native/WomenOnlyCard'
+import { loadComfortPreference, saveComfortPreference } from 'rides-native/comfortPreference.js'
 import { useTheme } from '@/lib/theme'
 import type { Palette } from '@/lib/palette'
 
@@ -18,9 +20,18 @@ export default function AccountScreen() {
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [push, setPush] = useState<PushState | null>(null)
+  const [genderIdentity, setGenderIdentity] = useState('unspecified')
+  const [womenOnly, setWomenOnly] = useState(false)
+  const [comfortAvailable, setComfortAvailable] = useState(false)
+  const [comfortNote, setComfortNote] = useState<string | null>(null)
 
   useEffect(() => {
     if (!user) return
+    loadComfortPreference(supabase, user.id).then((comfort) => {
+      setGenderIdentity(comfort.genderIdentity)
+      setWomenOnly(comfort.womenOnlyMatching)
+      setComfortAvailable(comfort.available)
+    }).catch(() => {})
     registerDriverPush(supabase, user.id).then(setPush).catch((err) => {
       setPush({
         granted: false,
@@ -31,6 +42,22 @@ export default function AccountScreen() {
     })
   }, [user])
   const name = user ? displayFirstName(user.user_metadata?.full_name || user.email?.split('@')[0], 'Driver') : null
+
+  async function persistComfort(nextGender: string, nextWomenOnly: boolean) {
+    if (!user?.id || !supabase) return
+    setComfortNote(null)
+    try {
+      const saved = await saveComfortPreference(supabase, user.id, {
+        genderIdentity: nextGender,
+        womenOnly: nextWomenOnly,
+      })
+      setGenderIdentity(saved.genderIdentity)
+      setWomenOnly(saved.womenOnlyMatching)
+      setComfortNote('Comfort preference saved')
+    } catch (err) {
+      setComfortNote(err instanceof Error ? err.message : 'Could not save the comfort preference')
+    }
+  }
 
   async function onSignOut() {
     setBusy(true)
@@ -46,7 +73,7 @@ export default function AccountScreen() {
   }
 
   return (
-    <View style={[styles.screen, { paddingTop: insets.top + 12 }]}>
+    <ScrollView style={[styles.screen, { paddingTop: insets.top + 12 }]} contentContainerStyle={styles.list}>
       <Pressable
         onPress={() => router.back()}
         style={styles.back}
@@ -88,21 +115,33 @@ export default function AccountScreen() {
             onPress={() => router.push('/earnings')}
             style={styles.linkRow}
             accessibilityRole="button"
-            accessibilityLabel="Earnings and deposits"
-            accessibilityHint="Navigates to earnings and deposit breakdown"
+            accessibilityLabel="Earnings"
+            accessibilityHint="Navigates to earnings"
           >
-            <Text style={styles.linkText}>Earnings and deposits</Text>
+            <Text style={styles.linkText}>Earnings</Text>
           </Pressable>
           <Pressable
             onPress={() => router.push('/fleet')}
             style={styles.linkRow}
             accessibilityRole="button"
-            accessibilityLabel="Tesla Model 3 fleet"
-            accessibilityHint="Navigates to Tesla Model 3 fleet options"
+            accessibilityLabel="Extra Comfort fleet"
+            accessibilityHint="Navigates to Extra Comfort fleet options"
           >
-            <Text style={styles.linkText}>Tesla Model 3 fleet</Text>
+            <Text style={styles.linkText}>Extra Comfort fleet</Text>
           </Pressable>
         </>
+      ) : null}
+      {user ? (
+        <WomenOnlyCard
+          role="driver"
+          genderIdentity={genderIdentity}
+          womenOnlyMatching={womenOnly}
+          available={comfortAvailable}
+          note={comfortNote}
+          colors={colors}
+          onGender={(next: string) => persistComfort(next, next === 'woman' ? womenOnly : false)}
+          onToggle={(next: boolean) => persistComfort(genderIdentity, next)}
+        />
       ) : null}
       {user ? (
         <Pressable
@@ -126,13 +165,14 @@ export default function AccountScreen() {
           <Text style={styles.primaryText}>Sign in</Text>
         </Pressable>
       )}
-    </View>
+    </ScrollView>
   )
 }
 
 function accountStyles(colors: Palette) {
   return StyleSheet.create({
-    screen: { flex: 1, backgroundColor: colors.background, padding: 20, gap: 12 },
+    screen: { flex: 1, backgroundColor: colors.background },
+    list: { padding: 20, gap: 12, paddingBottom: 40 },
     back: { width: 40, height: 40, borderRadius: 12, backgroundColor: colors.card, alignItems: 'center', justifyContent: 'center' },
     backText: { color: colors.title, fontSize: 18, fontWeight: '700' },
     title: { fontSize: 28, fontWeight: '800', color: colors.title },

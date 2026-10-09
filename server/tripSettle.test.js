@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
+import { memoryCreditStore } from './credits.js'
 import { isAdminUser, settleTrip } from './tripSettle.js'
 
 function makeMockSb({
@@ -144,7 +145,11 @@ test('isAdminUser identifies admins across env var, roles, and flags', () => {
     assert.equal(isAdminUser(null, null), false)
     assert.equal(isAdminUser({}, {}), false)
   } finally {
-    process.env.ADMIN_EMAILS = prevEnv
+    if (prevEnv === undefined) {
+      delete process.env.ADMIN_EMAILS
+    } else {
+      process.env.ADMIN_EMAILS = prevEnv
+    }
   }
 })
 
@@ -232,6 +237,111 @@ test('settleTrip blocks progression with 402 payment_required when card is decli
   assert.equal(sb.updates.length, 0)
 })
 
+test('settleTrip completes a campus trip with no saved card and does not call Stripe', async () => {
+  let intents = 0
+  const deps = mockDeps({
+    profile: { stripe_customer_id: null, stripe_default_pm_id: null },
+  })
+  const original = deps.createPaymentIntent
+  deps.createPaymentIntent = async (params) => {
+    intents += 1
+    return original(params)
+  }
+  const sb = makeMockSb()
+  const trip = {
+    id: 'trip_campus_nocard',
+    rider_id: 'r1',
+    driver_id: 'd1',
+    status: 'in_progress',
+    fare_cents: 1800,
+    deposit_cents: 0,
+    metadata: { purpose: 'planned', match: 'open' },
+  }
+  const res = await settleTrip({ sb, trip, action: 'complete', deps })
+  assert.equal(res.http, 200)
+  assert.equal(res.body.progressed, true)
+  assert.equal(res.body.status, 'completed')
+  assert.equal(res.body.reason, 'no_card_on_file')
+  assert.equal(intents, 0)
+  assert.equal(deps.payments.length, 0)
+  const tripUpdate = sb.updates.find((u) => u.patch.status === 'completed')
+  assert.equal(tripUpdate.patch.metadata.remainder_uncollected, true)
+  assert.equal(tripUpdate.patch.metadata.payment_hold, undefined)
+  assert.equal(res.body.payout, null)
+  assert.equal(sb.payouts.length, 0)
+})
+
+test('settleTrip does not attempt a payout when the campus fare was not collected', async () => {
+  const transfers = []
+  const stripe = {
+    transfers: {
+      create: async (params) => {
+        transfers.push(params)
+        return { id: 'tr_uncollected' }
+      },
+    },
+  }
+  const deps = mockDeps({
+    profile: { stripe_customer_id: null, stripe_default_pm_id: null },
+  })
+  const sb = makeMockSb({ connectAccountId: 'acct_demo_driver' })
+  const trip = {
+    id: 'trip_campus_uncollected_payout',
+    rider_id: 'r1',
+    driver_id: 'd1',
+    status: 'in_progress',
+    fare_cents: 1800,
+    deposit_cents: 0,
+    metadata: { purpose: 'planned', match: 'open' },
+  }
+  const res = await settleTrip({ sb, stripe, trip, action: 'complete', deps })
+  assert.equal(res.http, 200)
+  assert.equal(res.body.progressed, true)
+  assert.equal(res.body.status, 'completed')
+  assert.equal(res.body.reason, 'no_card_on_file')
+  assert.equal(res.body.payout, null)
+  assert.equal(transfers.length, 0)
+  assert.equal(sb.payouts.length, 0)
+  assert.equal(deps.payments.length, 0)
+})
+
+test('settleTrip still blocks an existing airport deposit when no card is on file', async () => {
+  let intents = 0
+  const deps = mockDeps({
+    profile: { stripe_customer_id: null, stripe_default_pm_id: null },
+  })
+  deps.createPaymentIntent = async () => {
+    intents += 1
+    return { id: 'pi_should_not', status: 'succeeded', amount: 1 }
+  }
+  const sb = makeMockSb()
+  const trip = {
+    id: 'trip_airport_deposit',
+    rider_id: 'r1',
+    driver_id: 'd1',
+    status: 'in_progress',
+    fare_cents: 4000,
+    deposit_cents: 1000,
+    metadata: { purpose: 'airport', airport: 'GSP' },
+  }
+  const transfers = []
+  const stripe = {
+    transfers: {
+      create: async (params) => {
+        transfers.push(params)
+        return { id: 'tr_deposit_should_not' }
+      },
+    },
+  }
+  const res = await settleTrip({ sb, stripe, trip, action: 'complete', deps })
+  assert.equal(res.http, 402)
+  assert.equal(res.body.progressed, false)
+  assert.equal(sb.updates.length, 0)
+  assert.equal(intents, 0)
+  assert.equal(transfers.length, 0)
+  assert.equal(sb.payouts.length, 0)
+})
+
 test('settleTrip charge action charges without progressing trip lifecycle', async () => {
   const deps = mockDeps({ balance: 0 })
   const sb = makeMockSb()
@@ -265,6 +375,15 @@ test('settleTrip charge action charges without progressing trip lifecycle', asyn
 })
 
 test('settleTrip complete transitions trip, logs event, and triggers driver payout', async () => {
+  const transfers = []
+  const stripe = {
+    transfers: {
+      create: async (params) => {
+        transfers.push(params)
+        return { id: 'tr_collected' }
+      },
+    },
+  }
   const deps = mockDeps({ balance: 0 })
   const sb = makeMockSb({ connectAccountId: 'acct_stripe_driver' })
   const trip = {
@@ -278,6 +397,7 @@ test('settleTrip complete transitions trip, logs event, and triggers driver payo
 
   const res = await settleTrip({
     sb,
+    stripe,
     trip,
     action: 'complete',
     deps,
@@ -300,9 +420,13 @@ test('settleTrip complete transitions trip, logs event, and triggers driver payo
   assert.equal(completedEvent.payload.source, 'trip_settle')
   assert.equal(completedEvent.payload.amount_cents, 4000)
 
-  // Payout queue updated
+  // Saved card was charged, so the driver payout still runs.
+  assert.equal(deps.payments.length, 1)
   assert.ok(res.body.payout)
   assert.equal(res.body.payout.amountCents, 3200) // 80% of 4000 fare
+  assert.equal(transfers.length, 1)
+  assert.equal(transfers[0].destination, 'acct_stripe_driver')
+  assert.equal(transfers[0].amount, 3200)
 })
 
 test('settleTrip cancel transitions trip to canceled and logs event', async () => {
@@ -334,6 +458,124 @@ test('settleTrip cancel transitions trip to canceled and logs event', async () =
   const cancelEvent = sb.events.find((e) => e.kind === 'canceled')
   assert.ok(cancelEvent)
   assert.equal(cancelEvent.kind, 'canceled')
+})
+
+test('settleTrip debits stored ride credits once and pays the driver', async () => {
+  const calls = []
+  const store = memoryCreditStore({ r1: 5000 })
+  const creditStore = {
+    async applyCredits(userId, delta, meta) {
+      calls.push({ userId, delta, meta })
+      return store.applyCredits(userId, delta, meta)
+    },
+  }
+  let intents = 0
+  const deps = mockDeps({
+    profile: { stripe_customer_id: null, stripe_default_pm_id: null },
+  })
+  deps.creditStore = creditStore
+  deps.createPaymentIntent = async () => {
+    intents += 1
+    return { id: 'pi_should_not', status: 'succeeded', amount: 1 }
+  }
+  const transfers = []
+  const stripe = {
+    transfers: {
+      create: async (params) => {
+        transfers.push(params)
+        return { id: 'tr_credits' }
+      },
+    },
+  }
+  const sb = makeMockSb({ connectAccountId: 'acct_credits_driver' })
+  const trip = {
+    id: 'trip_credits',
+    rider_id: 'r1',
+    driver_id: 'd1',
+    status: 'in_progress',
+    fare_cents: 1800,
+    deposit_cents: 0,
+    metadata: { purpose: 'planned', billing_choice: 'credits', billing_charged: false, billing_debited_cents: 0 },
+  }
+  const res = await settleTrip({ sb, stripe, trip, action: 'complete', deps })
+  assert.equal(res.http, 200)
+  assert.equal(res.body.progressed, true)
+  assert.equal(res.body.status, 'completed')
+  assert.equal(res.body.payment.method, 'credits')
+  assert.equal(intents, 0)
+  assert.equal(deps.payments.length, 0)
+  assert.equal(calls.length, 1)
+  assert.equal(calls[0].delta, -1800)
+  assert.equal(calls[0].meta.idempotencyKey, 'ride_credits:trip_credits')
+  assert.equal(calls[0].meta.kind, 'ride_redemption')
+  assert.equal((await store.getCredits('r1')).balanceCents, 3200)
+  const tripUpdate = sb.updates.find((u) => u.patch.status === 'completed')
+  assert.equal(tripUpdate.patch.metadata.billing_debited_cents, 1800)
+  assert.equal(tripUpdate.patch.metadata.billing_charged, false)
+  assert.equal(tripUpdate.patch.metadata.credits_settled, true)
+  assert.equal(tripUpdate.patch.metadata.fare_paid_cents, 1800)
+  assert.equal(tripUpdate.patch.metadata.remainder_uncollected, undefined)
+  assert.equal(res.body.payout.amountCents, 1440)
+  assert.equal(transfers.length, 1)
+
+  const stale = await settleTrip({ sb, stripe, trip, action: 'complete', deps })
+  assert.equal(stale.http, 200)
+  assert.equal(stale.body.payment.method, 'credits')
+  assert.equal(stale.body.payment.duplicate, true)
+  assert.equal(calls.length, 2)
+  assert.equal((await store.getCredits('r1')).balanceCents, 3200)
+
+  const stamped = {
+    ...trip,
+    metadata: tripUpdate.patch.metadata,
+  }
+  const replay = await settleTrip({ sb, stripe, trip: stamped, action: 'complete', deps })
+  assert.equal(replay.http, 200)
+  assert.equal(calls.length, 2)
+  assert.equal((await store.getCredits('r1')).balanceCents, 3200)
+})
+
+test('settleTrip refuses to complete a credits ride when the balance is short', async () => {
+  const calls = []
+  const store = memoryCreditStore({ r1: 100 })
+  const creditStore = {
+    async applyCredits(userId, delta, meta) {
+      calls.push({ userId, delta, meta })
+      return store.applyCredits(userId, delta, meta)
+    },
+  }
+  let intents = 0
+  const deps = mockDeps({
+    profile: { stripe_customer_id: null, stripe_default_pm_id: null },
+  })
+  deps.creditStore = creditStore
+  deps.createPaymentIntent = async () => {
+    intents += 1
+    return { id: 'pi_should_not', status: 'succeeded', amount: 1 }
+  }
+  const transfers = []
+  const stripe = {
+    transfers: { create: async (params) => { transfers.push(params); return { id: 'tr_no' } } },
+  }
+  const sb = makeMockSb({ connectAccountId: 'acct_credits_driver' })
+  const trip = {
+    id: 'trip_credits_short',
+    rider_id: 'r1',
+    driver_id: 'd1',
+    status: 'in_progress',
+    fare_cents: 1800,
+    metadata: { billing_choice: 'credits' },
+  }
+  const res = await settleTrip({ sb, stripe, trip, action: 'complete', deps })
+  assert.equal(res.http, 402)
+  assert.equal(res.body.progressed, false)
+  assert.equal(res.body.failure.code, 'credits_insufficient')
+  assert.equal(sb.updates.some((u) => u.patch.status === 'completed'), false)
+  assert.equal(sb.payouts.length, 0)
+  assert.equal(transfers.length, 0)
+  assert.equal(intents, 0)
+  assert.equal(calls.length, 1)
+  assert.equal((await store.getCredits('r1')).balanceCents, 100)
 })
 
 test('settleTrip handles database update failure and event failure cleanly', async () => {

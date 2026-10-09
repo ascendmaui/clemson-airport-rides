@@ -1,5 +1,5 @@
 /**
- * 25% deposit (depositCents) and POST /api/airport-checkout with injected fakes.
+ * Retired upfront deposit (depositCents is 0) and POST /api/airport-checkout with injected fakes.
  * No network, no Stripe SDK, no service-role client.
  *
  * Handler deps actually read:
@@ -9,7 +9,7 @@
  * injected — the fake sb has to answer those queries.
  */
 import assert from 'node:assert/strict'
-import test, { describe } from 'node:test'
+import test, { before, after, describe } from 'node:test'
 import { register } from 'node:module'
 import { depositCents } from '../src/lib/stripeCheckout.js'
 import {
@@ -21,8 +21,20 @@ import {
 import { quoteAirportCheckout } from './authoritativeFare.js'
 import { studentDiscountGranted } from '../src/lib/studentDomain.js'
 
-delete process.env.GOOGLE_MAPS_API_KEY
-delete process.env.GOOGLE_ROUTES_API_KEY
+const origMapsKey = process.env.GOOGLE_MAPS_API_KEY
+const origRoutesKey = process.env.GOOGLE_ROUTES_API_KEY
+
+before(() => {
+  delete process.env.GOOGLE_MAPS_API_KEY
+  delete process.env.GOOGLE_ROUTES_API_KEY
+})
+
+after(() => {
+  if (origMapsKey !== undefined) process.env.GOOGLE_MAPS_API_KEY = origMapsKey
+  else delete process.env.GOOGLE_MAPS_API_KEY
+  if (origRoutesKey !== undefined) process.env.GOOGLE_ROUTES_API_KEY = origRoutesKey
+  else delete process.env.GOOGLE_ROUTES_API_KEY
+})
 
 // pricing.js (pulled in by midrideCancel.js) uses Vite-style extensionless
 // specifiers. Node ESM will not load that graph unless a resolver adds .js.
@@ -255,18 +267,16 @@ function riderProfile(user, customerId) {
 }
 
 describe('depositCents', () => {
-  test('rounds 25% of odd-cent fares to the nearest cent', () => {
-    // 1001 * 0.25 = 250.25 → 250; 1003 * 0.25 = 250.75 → 251
-    assert.equal(depositCents(1001), 250)
-    assert.equal(depositCents(1003), 251)
-    // 401 * 0.25 = 100.25 → 100; 403 * 0.25 = 100.75 → 101
-    assert.equal(depositCents(401), 100)
-    assert.equal(depositCents(403), 101)
-    assert.equal(depositCents('1001'), 250)
-    // Cash is rounded to cents before the quarter is taken.
-    assert.equal(depositCents(100.4), depositCents(100))
-    assert.equal(depositCents(100.6), depositCents(101))
+  test('is 0 for every new fare, including odd cents, huge fares, and a student fare', () => {
+    for (const value of [1, 40, 49, 50, 51, 100, 196, 199, 200, 201, 203, 401, 403, 1001, 1003, '1001', 100.4, 100.6, 8_000_000_000, Number.MAX_SAFE_INTEGER]) {
+      assert.equal(depositCents(value), 0, `depositCents(${String(value)})`)
+    }
     assert.equal(depositCents(1001), cardDepositCents(1001))
+    const full = quoteFare({ miles: 48, minutes: 55, isStudent: false, tier: 'standard' })
+    const student = quoteFare({ miles: 48, minutes: 55, isStudent: true, tier: 'standard' })
+    assert.ok(student.fareBeforeCreditsCents < full.fareBeforeCreditsCents)
+    assert.equal(depositCents(student.fareBeforeCreditsCents), 0)
+    assert.equal(depositCents(full.fareBeforeCreditsCents), 0)
   })
 
   test('is 0 for zero, negative, NaN, and non-numeric input', () => {
@@ -275,46 +285,8 @@ describe('depositCents', () => {
     }
   })
 
-  test('takes 25% of a huge fare without flipping sign or dropping the quarter', () => {
-    assert.equal(depositCents(8_000_000_000), 2_000_000_000)
-    // 10_000_000_001 * 0.25 = 2_500_000_000.25 → 2_500_000_000
-    assert.equal(depositCents(10_000_000_001), 2_500_000_000)
-    // 10_000_000_003 * 0.25 = 2_500_000_000.75 → 2_500_000_001
-    assert.equal(depositCents(10_000_000_003), 2_500_000_001)
-    assert.equal(depositCents(Number.MAX_SAFE_INTEGER), 2_251_799_813_685_248)
-    assert.ok(depositCents(Number.MAX_SAFE_INTEGER) > 0)
-    assert.ok(depositCents(Number.MAX_SAFE_INTEGER) < Number.MAX_SAFE_INTEGER)
-  })
-
-  test('of a student-discounted fare is 25% of the discounted fare, not the full fare', () => {
-    const full = quoteFare({ miles: 48, minutes: 55, isStudent: false, tier: 'standard' })
-    const student = quoteFare({ miles: 48, minutes: 55, isStudent: true, tier: 'standard' })
-    assert.ok(student.breakdown.student_discount_cents > 0)
-    assert.ok(student.fareBeforeCreditsCents < full.fareBeforeCreditsCents)
-    assert.equal(depositCents(student.fareBeforeCreditsCents), Math.round(student.fareBeforeCreditsCents * 0.25))
-    assert.equal(depositCents(full.fareBeforeCreditsCents), Math.round(full.fareBeforeCreditsCents * 0.25))
-    assert.ok(depositCents(student.fareBeforeCreditsCents) < depositCents(full.fareBeforeCreditsCents))
-    // depositCents does not itself apply the student percent.
-    assert.notEqual(
-      depositCents(full.fareBeforeCreditsCents),
-      depositCents(student.fareBeforeCreditsCents),
-    )
-  })
-
-  test('raises a card remainder to the Stripe minimum and waives cash below it', () => {
+  test('keeps the Stripe card minimum for a final fare below fifty cents', () => {
     assert.equal(MIN_CARD_CHARGE_CENTS, 50)
-    assert.equal(depositCents(1), 0)
-    assert.equal(depositCents(40), 0)
-    assert.equal(depositCents(49), 0)
-    assert.equal(depositCents(50), 50)
-    assert.equal(depositCents(51), 50)
-    assert.equal(depositCents(100), 50)
-    assert.equal(depositCents(196), 50)
-    assert.equal(depositCents(199), 50)
-    assert.equal(depositCents(200), 50)
-    assert.equal(depositCents(201), 50)
-    // 203 * 0.25 = 50.75 → 51, so the minimum no longer lifts the quarter.
-    assert.equal(depositCents(203), 51)
   })
 })
 
@@ -366,7 +338,7 @@ describe('airport checkout handler', () => {
     assert.equal(stripe.sessions.length, 0)
   })
 
-  test('fare mismatch: Stripe is charged 25% of the authoritative fare', async () => {
+  test('a spoofed client fare books the server fare and does not open Checkout', async () => {
     const sb = createCheckoutSb({
       profiles: [riderProfile(GMAIL, 'cus_test_ada')],
     })
@@ -383,7 +355,7 @@ describe('airport checkout handler', () => {
     const priced = expectedQuote(body, GMAIL)
     assert.equal(studentDiscountGranted(GMAIL), false)
     assert.ok(priced.fareCents > body.fareCents)
-    assert.ok(priced.depositCents > body.depositCents)
+    assert.equal(priced.depositCents, 0)
 
     const { res, json } = await invoke(
       { method: 'POST', body, headers: {} },
@@ -397,27 +369,16 @@ describe('airport checkout handler', () => {
     )
 
     assert.equal(res.statusCode, 200)
-    assert.equal(stripe.sessions.length, 1)
-    const params = stripe.sessions[0].params
-    const unit = params.line_items[0].price_data.unit_amount
-    assert.equal(unit, priced.depositCents)
-    assert.equal(unit, depositCents(priced.fareCents))
-    assert.equal(unit, Math.round(priced.fareCents * 0.25))
-    assert.notEqual(unit, body.depositCents)
-    assert.ok(unit < priced.fareCents)
-    assert.equal(params.line_items[0].price_data.currency, 'usd')
-    assert.match(params.line_items[0].price_data.product_data.name, /GSP deposit \(25%\)/)
-    assert.equal(params.customer, 'cus_test_ada')
-    assert.equal(params.metadata.kind, 'airport_deposit')
-    assert.equal(params.metadata.depositCents, String(unit))
-    assert.equal(params.metadata.fareCents, String(priced.fareCents))
-    assert.equal(json.depositCents, unit)
+    assert.equal(stripe.sessions.length, 0)
+    assert.equal(json.depositCents, 0)
+    assert.equal(json.charged, false)
     assert.equal(json.fareCents, priced.fareCents)
+    assert.equal(json.dueAtTripEndCents, priced.fareCents)
     assert.equal(json.studentDiscountApplied, false)
     assert.equal(json.currency, 'usd')
     assert.equal(json.routeSource, 'fallback')
-    assert.equal(json.url, stripe.sessions[0].session.url)
-    const fee = splitPlatformFee(unit)
+    assert.equal(json.url, undefined)
+    const fee = splitPlatformFee(priced.fareCents)
     assert.equal(json.platformFeeCents, fee.platformFeeCents)
     assert.equal(json.driverEarningsCents, fee.driverEarningsCents)
 
@@ -426,17 +387,16 @@ describe('airport checkout handler', () => {
     assert.equal(trip.status, 'scheduled')
     assert.equal(trip.rider_id, GMAIL.id)
     assert.equal(trip.fare_cents, priced.fareCents)
-    assert.equal(trip.deposit_cents, unit)
-    assert.equal(trip.metadata.stripe_checkout_session_id, json.id)
+    assert.equal(trip.deposit_cents, 0)
     assert.equal(sb.tables.payments.length, 0)
   })
 
-  test('confirmed Clemson email deposits 25% of the discounted fare, ignoring a higher client amount', async () => {
+  test('confirmed Clemson email books the discounted fare and ignores a higher client amount', async () => {
     const full = expectedQuote(QUIET_BODY, GMAIL)
     const studentQuote = expectedQuote(QUIET_BODY, TIGER)
     assert.equal(studentDiscountGranted(TIGER), true)
-    assert.ok(studentQuote.depositCents < full.depositCents)
-    assert.equal(studentQuote.depositCents, depositCents(studentQuote.fareCents))
+    assert.ok(studentQuote.fareCents < full.fareCents)
+    assert.equal(studentQuote.depositCents, 0)
 
     const sb = createCheckoutSb({
       profiles: [riderProfile(TIGER, 'cus_test_tiger')],
@@ -460,18 +420,16 @@ describe('airport checkout handler', () => {
     )
 
     assert.equal(res.statusCode, 200)
-    const unit = stripe.sessions[0].params.line_items[0].price_data.unit_amount
-    assert.equal(unit, studentQuote.depositCents)
-    assert.equal(unit, Math.round(studentQuote.fareCents * 0.25))
-    assert.notEqual(unit, body.depositCents)
+    assert.equal(stripe.sessions.length, 0)
     assert.equal(json.fareCents, studentQuote.fareCents)
-    assert.equal(json.depositCents, unit)
+    assert.equal(json.depositCents, 0)
+    assert.equal(json.charged, false)
     assert.equal(json.studentDiscountApplied, true)
     assert.equal(sb.tables.trips[0].fare_cents, studentQuote.fareCents)
-    assert.equal(sb.tables.trips[0].deposit_cents, unit)
+    assert.equal(sb.tables.trips[0].deposit_cents, 0)
   })
 
-  test('payments unavailable returns the authoritative deposit and does not open a trip', async () => {
+  test('booking does not require Stripe and still opens the trip', async () => {
     const sb = createCheckoutSb()
     const stripe = createFakeStripe()
     let ensured = 0
@@ -491,23 +449,18 @@ describe('airport checkout handler', () => {
       },
     )
 
-    assert.equal(res.statusCode, 503)
-    assert.equal(json.error, 'Payments unavailable')
-    assert.equal(json.depositCents, priced.depositCents)
-    assert.equal(json.depositCents, depositCents(priced.fareCents))
+    assert.equal(res.statusCode, 200)
+    assert.equal(json.depositCents, 0)
+    assert.equal(json.charged, false)
     assert.equal(json.fareCents, priced.fareCents)
-    assert.equal(json.remainingCents, priced.fareCents - priced.depositCents)
-    assert.notEqual(json.depositCents, body.depositCents)
-    assert.equal(ensured, 0)
-    assert.equal(sb.tables.trips.length, 0)
+    assert.equal(json.dueAtTripEndCents, priced.fareCents)
+    assert.equal(ensured, 1)
+    assert.equal(sb.tables.trips.length, 1)
+    assert.equal(sb.tables.trips[0].deposit_cents, 0)
     assert.equal(stripe.sessions.length, 0)
   })
 
-  test('idempotency key reuse: a repeated POST is not deduped', async () => {
-    // BUG?: stripe.checkout.sessions.create is called with no idempotencyKey.
-    // The fake above WOULD return the first session if the same key were sent
-    // again. A retried POST, even one that carries Idempotency-Key, opens a
-    // second scheduled trip and a second Checkout Session instead.
+  test('a repeated POST books two trips and does not open Checkout', async () => {
     const sb = createCheckoutSb({
       profiles: [riderProfile(GMAIL, 'cus_test_ada')],
     })
@@ -527,22 +480,18 @@ describe('airport checkout handler', () => {
 
     assert.equal(first.res.statusCode, 200)
     assert.equal(second.res.statusCode, 200)
-    assert.equal(stripe.sessions.length, 2)
-    assert.equal(stripe.sessions[0].options, null)
-    assert.equal(stripe.sessions[1].options, null)
-    assert.equal(stripe.sessions[0].params.idempotencyKey, undefined)
-    assert.equal(stripe.sessions[1].params.idempotencyKey, undefined)
-    assert.notEqual(first.json.id, second.json.id)
+    assert.equal(stripe.sessions.length, 0)
     assert.notEqual(first.json.tripId, second.json.tripId)
-    assert.equal(first.json.depositCents, second.json.depositCents)
+    assert.equal(first.json.depositCents, 0)
+    assert.equal(second.json.depositCents, 0)
     assert.equal(sb.tables.trips.length, 2)
     assert.equal(sb.tables.trips[0].status, 'scheduled')
     assert.equal(sb.tables.trips[1].status, 'scheduled')
-    assert.equal(sb.tables.trips[0].metadata.stripe_checkout_session_id, first.json.id)
-    assert.equal(sb.tables.trips[1].metadata.stripe_checkout_session_id, second.json.id)
+    assert.equal(sb.tables.trips[0].deposit_cents, 0)
+    assert.equal(sb.tables.trips[1].deposit_cents, 0)
   })
 
-  test('Stripe error returns a clean 500 and cancels the trip it just inserted', async () => {
+  test('a Stripe outage does not block a booking that charges nothing now', async () => {
     const sb = createCheckoutSb({
       profiles: [riderProfile(GMAIL, 'cus_test_ada')],
     })
@@ -551,43 +500,25 @@ describe('airport checkout handler', () => {
       throw new Error('stripe down')
     }
     const priced = expectedQuote(QUIET_BODY, GMAIL)
-    const errors = []
-    const orig = console.error
-    console.error = (...args) => { errors.push(args) }
-    try {
-      const { res, json } = await invoke(
-        { method: 'POST', body: { ...QUIET_BODY, depositCents: 1 }, headers: {} },
-        {
-          sb,
-          user: GMAIL,
-          stripe,
-          stripeOk: () => true,
-          ensureProfile: async () => ({ ok: true }),
-        },
-      )
+    const { res, json } = await invoke(
+      { method: 'POST', body: { ...QUIET_BODY, depositCents: 1 }, headers: {} },
+      {
+        sb,
+        user: GMAIL,
+        stripe,
+        stripeOk: () => true,
+        ensureProfile: async () => ({ ok: true }),
+      },
+    )
 
-      assert.equal(res.statusCode, 500)
-      assert.deepEqual(json, { error: 'stripe down', tripId: sb.tables.trips[0].id })
-      assert.equal(json.stack, undefined)
-      assert.equal(json.url, undefined)
-      assert.equal(sb.tables.trips.length, 1)
-      const trip = sb.tables.trips[0]
-      assert.equal(trip.status, 'canceled')
-      assert.notEqual(trip.status, 'searching')
-      assert.notEqual(trip.status, 'scheduled')
-      assert.ok(trip.canceled_at)
-      assert.equal(trip.deposit_cents, priced.depositCents)
-      assert.equal(trip.metadata.checkout_abandoned.reason, 'checkout_create_failed')
-      assert.equal(trip.metadata.checkout_abandoned.source, 'airport_checkout')
-      assert.equal(trip.metadata.stripe_checkout_session_id, undefined)
-      assert.equal(sb.tables.payments.length, 0)
-      assert.equal(sb.tables.trip_events.length, 1)
-      assert.equal(sb.tables.trip_events[0].kind, 'canceled')
-      assert.equal(sb.tables.trip_events[0].trip_id, trip.id)
-    } finally {
-      console.error = orig
-    }
-    assert.equal(errors.length, 1)
+    assert.equal(res.statusCode, 200)
+    assert.equal(json.charged, false)
+    assert.equal(json.depositCents, 0)
+    assert.equal(json.fareCents, priced.fareCents)
+    assert.equal(sb.tables.trips.length, 1)
+    assert.equal(sb.tables.trips[0].status, 'scheduled')
+    assert.equal(sb.tables.trips[0].deposit_cents, 0)
+    assert.equal(stripe.sessions.length, 0)
   })
 })
 
@@ -644,13 +575,13 @@ describe('midrideCancel helpers', () => {
     }
     assert.equal(
       midrideChargeSummary(covered),
-      '$25.00 trip charge ($20.00 so far + $5.00 cancel fee). Your deposit covers it — no extra card charge.',
+      '$25.00 trip charge ($20.00 so far + $5.00 cancel fee). Amount already paid covers it — no extra card charge.',
     )
 
     const partial = { ...covered, toCollectCents: 1000, depositPaidCents: 1500 }
     assert.equal(
       midrideChargeSummary(partial),
-      '$25.00 trip charge ($20.00 so far + $5.00 cancel fee). Card charge now $10.00 after your deposit.',
+      '$25.00 trip charge ($20.00 so far + $5.00 cancel fee). Card charge now $10.00 after the amount already paid.',
     )
 
     const bare = { ...covered, toCollectCents: 2500, depositPaidCents: 0 }

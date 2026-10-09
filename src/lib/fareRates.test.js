@@ -81,7 +81,7 @@ test('weekday airport rush and quiet midday', () => {
   assert.equal(friday.rule.id, 'weekend')
 })
 
-test('25% deposit is taken after the 10% Standard student discount', () => {
+test('student discount lowers the fare and new quotes have no upfront deposit', () => {
   const full = quoteFare({ miles: 48, minutes: 55, isStudent: false, tier: 'standard' })
   const student = quoteFare({ miles: 48, minutes: 55, isStudent: true, tier: 'standard' })
   assert.ok(student.breakdown.student_discount_cents > 0)
@@ -90,13 +90,12 @@ test('25% deposit is taken after the 10% Standard student discount', () => {
     full.fareBeforeCreditsCents - student.breakdown.student_discount_cents,
   )
   const split = depositSplit(student.fareBeforeCreditsCents)
-  assert.equal(split.depositCents, cardDepositCents(student.fareBeforeCreditsCents))
-  assert.ok(split.depositCents < cardDepositCents(full.fareBeforeCreditsCents))
-  assert.equal(split.remainingCents, student.fareBeforeCreditsCents - split.depositCents)
+  assert.equal(split.depositCents, 0)
+  assert.equal(split.remainingCents, student.fareBeforeCreditsCents)
   assert.equal(depositSplit(9000, 0).depositCents, 0)
   assert.equal(depositSplit(9000, 2000).remainingCents, 7000)
-  assert.match(depositSplitLabel(split), /25% deposit/)
-  assert.match(depositSplitLabel(split), /remaining balance/)
+  assert.match(depositSplitLabel(split), /full fare is charged when the trip ends/)
+  assert.match(depositSplitLabel(depositSplit(9000, 2000)), /already paid/)
 })
 
 test('stacking is carpool then student then prepaid on credits only', () => {

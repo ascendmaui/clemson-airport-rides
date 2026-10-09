@@ -4,12 +4,12 @@ export const MARKETING_FEATURES = [
   {
     id: 'airport',
     title: 'Airport rides',
-    body: 'Schedule a ride to Greenville-Spartanburg (GSP) or Charlotte Douglas (CLT). Schedule shows the current fare, and a 25% deposit holds the trip.',
+    body: 'Schedule a ride to Greenville-Spartanburg (GSP) or Charlotte Douglas (CLT). Stripe places a pre-authorization hold for the estimated fare plus a buffer. The full fare is charged when the trip ends.',
   },
   {
     id: 'student',
     title: 'Student discount',
-    body: '10% off Standard when the signed-in email is confirmed and ends with @clemson.edu or @g.clemson.edu. Comfort, XL, Pet, and Tesla are not included.',
+    body: '10% off Standard when the signed-in email is confirmed and ends with @clemson.edu or @g.clemson.edu. Other ride types are not included.',
   },
   {
     id: 'gameday',
@@ -22,11 +22,6 @@ export const MARKETING_FEATURES = [
     body: 'From Schedule, pick airport or campus and a time at least 30 minutes ahead. The trip is saved for drivers in the Weekend filter.',
   },
   {
-    id: 'tesla',
-    title: 'Tesla Model 3',
-    body: 'Tesla Model 3 is a Clemson fleet option on the tier list and on weekend scheduling. A driver is at the wheel. There is no self-driving dispatch.',
-  },
-  {
     id: 'preferred',
     title: 'Preferred drivers',
     body: 'Save drivers you want to ride with. Pick driver lists them first, and the request stays with that driver. If they decline, the trip is canceled instead of matching someone else.',
@@ -34,6 +29,16 @@ export const MARKETING_FEATURES = [
   {
     id: 'schedule',
     title: 'Schedule',
-    body: 'Plan a pickup ahead of time, or hold an airport ride with a 25% deposit, from the Schedule tab.',
+    body: 'Plan a pickup ahead of time from the Schedule tab. Scheduling does not charge the card. Weekend and party trips can be set at least 30 minutes ahead.',
+  },
+  {
+    id: 'matching',
+    title: 'Real-time matching',
+    body: 'A requested ride is offered to nearby drivers. The trip updates when a driver accepts.',
+  },
+  {
+    id: 'tracking',
+    title: 'Live trip tracking',
+    body: 'After a driver accepts, the trip screen follows the ride from pickup through drop-off.',
   },
 ]

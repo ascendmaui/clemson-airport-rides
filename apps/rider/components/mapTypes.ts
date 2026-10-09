@@ -9,6 +9,7 @@ export type MapPin = {
   title: string
   color: string
   badge?: string
+  heading?: number | null
 }
 
 export type LatLng = { latitude: number; longitude: number }
@@ -16,14 +17,18 @@ export type LatLng = { latitude: number; longitude: number }
 export type CampusMapProps = {
   spots: BusySpot[]
   showHeat: boolean
+  heatWindow?: string
   mapType?: MapKind
   theater?: boolean
+  searchMotion?: boolean
   gameDay?: boolean
   gameDayLabel?: string | null
   surge?: boolean
   userCoordinate?: LatLng | null
   pins?: MapPin[]
   fitPins?: boolean
+  showSimulatedFleet?: boolean
+  route?: LatLng[]
 }
 
 export type CampusMapHandle = {

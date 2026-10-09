@@ -3,7 +3,9 @@ import { AdminDrivers } from './AdminDrivers'
 import { navigate, getHashRoute } from '../lib/navigation'
 import { useAuth } from '../lib/auth'
 import { supabase } from '../lib/supabase'
-import { SEEDED_ADMIN_EMAILS, isAdminIdentity } from '../lib/driverOnboarding'
+import { AdminAccessDenied } from '../components/AdminAccessDenied'
+import { isAdminIdentity } from '../lib/driverOnboarding'
+import { rideOptionLabel } from '../../shared/rideOptions.js'
 import {
   fetchAdminNotifications,
   fetchAdminOverview,
@@ -59,11 +61,12 @@ export function AdminDesk() {
     supabase.from('profiles').select('role, is_admin, email').eq('id', user.id).maybeSingle()
       .then(({ data }) => {
         if (!alive) return
-        setAllowed(isAdminIdentity({
+        const adminOk = isAdminIdentity({
           jwtEmail: user.email || data?.email,
           role: data?.role,
           isAdmin: data?.is_admin,
-        }))
+        })
+        setAllowed(Boolean(adminOk))
       })
     return () => { alive = false }
   }, [user, loading])
@@ -78,17 +81,7 @@ export function AdminDesk() {
     return <div style={{ padding: 40, color: 'var(--ink-secondary)' }}>Loading admin dashboard…</div>
   }
 
-  if (!allowed) {
-    return (
-      <div className="fade-in" style={{ minHeight: '100%', background: 'var(--surface-muted)', padding: 24 }}>
-        <button type="button" className="pressable" onClick={() => navigate('account')} style={{ fontSize: 20 }}>←</button>
-        <h1 style={{ color: 'var(--purple)', marginTop: 12 }}>Admin only</h1>
-        <p style={{ color: 'var(--ink-secondary)', lineHeight: 1.45 }}>
-          Sign in with {SEEDED_ADMIN_EMAILS.join(', ')}. The dashboard is at #/admin. A profile with role admin also has access.
-        </p>
-      </div>
-    )
-  }
+  if (!allowed) return <AdminAccessDenied />
 
   return (
     <div className="fade-in" style={{ minHeight: '100%', background: 'var(--surface-muted)', padding: '20px 20px 48px' }}>
@@ -211,6 +204,29 @@ function PeoplePanel() {
   )
 }
 
+function BackupQueueAdmin({ row }) {
+  const queue = row?.metadata?.backup_queue
+  if (!queue?.enabled) return null
+  const events = Array.isArray(queue.events) ? queue.events : []
+  return (
+    <div style={{ marginTop: 8, padding: 10, borderRadius: 12, background: 'rgba(245,102,0,0.08)' }}>
+      <div style={{ fontWeight: 800, color: '#F56600' }}>Backup queue</div>
+      <div style={{ fontSize: 12, color: '#522D80', marginTop: 4 }}>
+        Primary {queue.primaryDriverId || 'open'} · Backup {queue.backupDriverId || 'open'} · {queue.confirmState || 'idle'}
+        {queue.bonusCents ? ` · +$${(queue.bonusCents / 100).toFixed(0)}` : ''}
+        {queue.urgent ? ' · urgent' : ''}
+      </div>
+      {events.length > 0 && (
+        <ul style={{ margin: '6px 0 0', paddingLeft: 18, fontSize: 12 }}>
+          {events.slice(-6).map((event, index) => (
+            <li key={`${event.kind}-${event.at || index}`}>{event.kind}{event.feeLabel ? ` · ${event.feeLabel}` : ''}{event.reason ? ` · ${event.reason}` : ''}{event.safetyReport ? ' · safety report' : ''}{event.at ? ` · ${event.at}` : ''}</li>
+          ))}
+        </ul>
+      )}
+    </div>
+  )
+}
+
 function TripsPanel() {
   const [rows, setRows] = useState([])
   const [error, setError] = useState('')
@@ -227,8 +243,11 @@ function TripsPanel() {
           <div style={{ fontSize: 13 }}>{row.pickup_label || 'Pickup'} → {row.dropoff_label || 'Drop-off'}</div>
           <div style={{ fontSize: 12, color: 'var(--ink-secondary)', marginTop: 4 }}>
             Rider {row.rider?.full_name || row.rider_id || '—'} · Driver {row.driver?.full_name || row.driver_id || '—'}
+            {row.tier ? ` · ${rideOptionLabel(row.tier)}` : ''}
+            {row.passengers > 1 ? ` · ${row.passengers} seats` : ''}
             {row.fare_cents != null ? ` · $${(Number(row.fare_cents) / 100).toFixed(2)}` : ''}
           </div>
+          <BackupQueueAdmin row={row} />
         </div>
       ))}
     </section>

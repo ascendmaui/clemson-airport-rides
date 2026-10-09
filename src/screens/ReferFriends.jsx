@@ -105,7 +105,7 @@ export function ReferFriendsPanel({ userId }) {
     <>
       <Section
         title="Refer friends"
-        subtitle="Share your code. Rewards are added only after they finish their first ride — not when they sign up."
+        subtitle="Share your code. Rewards are added only after they finish their first ride — not when they sign up. A free ride unlocks after two friends each confirm a @clemson.edu or @g.clemson.edu email. Other addresses do not count."
       >
         <div
           style={{

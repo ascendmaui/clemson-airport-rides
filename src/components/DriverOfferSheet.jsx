@@ -1,3 +1,4 @@
+import { formatPickupAt } from '../lib/scheduledRideModel'
 import { PurpleAcceptButton } from './PrimaryButton'
 import { SkeletonOfferStream } from './LoadingSkeleton'
 import { formatMiles, formatMinutes, clockTime, hourlyRateCents } from '../lib/rideGeometry'
@@ -41,6 +42,9 @@ export function DriverOfferSheet({
       }}
     >
       <div className="sheet-handle" />
+      {offer?.metadata?.scheduled_pickup_at && (
+        <p>Scheduled pickup: {formatPickupAt(offer.metadata.scheduled_pickup_at)}</p>
+      )}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 12 }}>
         <div>
           <div style={{ fontSize: 12, fontWeight: 800, letterSpacing: 1.1, color: 'var(--orange)' }}>

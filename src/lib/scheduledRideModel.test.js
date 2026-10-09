@@ -127,3 +127,15 @@ test('due reminders ignore empty input and pickups that already passed the grace
   }], now)
   assert.deepEqual(late, [])
 })
+
+test('Clemson scheduling rejects nonexistent dates and uses Eastern time', async () => {
+  const { pickupAtFromLocal, schedulePreset, SCHEDULE_PRESETS } = await import('./scheduledRideModel.js')
+  assert.equal(pickupAtFromLocal('2026-03-08', '02:30'), null)
+  assert.equal(pickupAtFromLocal('2026-02-30', '12:00'), null)
+  assert.equal(pickupAtFromLocal('2026-10-09', '21:00').toISOString(), '2026-10-10T01:00:00.000Z')
+  assert.equal(pickupAtFromLocal('2026-11-01', '01:30').toISOString(), '2026-11-01T05:30:00.000Z')
+  assert.deepEqual(schedulePreset(SCHEDULE_PRESETS[0], new Date('2026-10-10T00:45:00Z')), {
+    date: '2026-10-16', time: '21:00', purpose: 'party_weekend',
+  })
+  assert.equal(schedulePreset(SCHEDULE_PRESETS[2], new Date('2026-10-09T12:00:00Z')).date, '2026-10-10')
+})

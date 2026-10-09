@@ -3,14 +3,22 @@
  * Response bodies match the previous standalone routes.
  */
 import {
-  isAdminIdentity,
   blockerLabel,
   legacyStatusFor,
   statusAfterInfoSave,
 } from '../shared/driverOnboarding.js'
+import { serverIsAdmin } from './adminRoster.js'
 import { driverQuizError } from '../shared/driverQuiz.js'
 import { admin, cors, json, parseBody, userFromAuth } from './friendRideLib.js'
 import { loadSubmissionContext, notifyAdminOfApplication } from './driverApproval.js'
+import { attachUnsignedPacket } from './agreementPacket.js'
+import { resolveSignupApplicantEmail, submittedApplicantEmail, writeDriverApplication } from '../shared/applicantEmail.js'
+import {
+  parseVehicleYear,
+  vehicleYearMessage,
+  withVehicleYear,
+  writeVehicleWithYearFallback,
+} from '../shared/vehicleYear.js'
 
 export async function handleDriverSignup(req, res) {
   if (cors(req, res)) return
@@ -42,18 +50,23 @@ export async function handleDriverSignup(req, res) {
   const make = String(body.make || '').trim()
   const model = String(body.model || '').trim()
   const plate = String(body.plate || '').trim()
-  const color = String(body.color || '').trim() || null
+  const color = String(body.color || '').trim()
+  const year = parseVehicleYear(body.year)
   const fullName = String(body.fullName || user.user_metadata?.full_name || '').trim()
   const phone = String(body.phone || '').trim()
   const seats = Number(body.seats) > 0 ? Math.min(8, Number(body.seats)) : 4
 
-  if (!fullName) return json(res, 400, { error: 'Full name is required' })
-  if (phone.replace(/\D/g, '').length < 7) return json(res, 400, { error: 'A real phone number is required' })
+  if (!fullName) return json(res, 400, { error: 'Full name is required.' })
+  if (phone.replace(/\D/g, '').length < 10) return json(res, 400, { error: 'Phone must have at least 10 digits.' })
   if (!make || !model || !plate) {
-    return json(res, 400, { error: 'Vehicle make, model, and plate are required' })
+    return json(res, 400, { error: 'Vehicle make, model, and plate are required.' })
   }
+  if (!color) return json(res, 400, { error: 'Vehicle color is required.' })
+  if (year == null) return json(res, 400, { error: vehicleYearMessage() })
 
-  const email = (user.email || '').toLowerCase()
+  const applicantEmail = resolveSignupApplicantEmail(body, user)
+  if (!applicantEmail) return json(res, 400, { error: 'A valid email is required.' })
+  const email = applicantEmail
   const isClemson = email.endsWith('@clemson.edu') || email.endsWith('@g.clemson.edu')
   const now = new Date().toISOString()
 
@@ -73,13 +86,16 @@ export async function handleDriverSignup(req, res) {
     if (profileReadErr) return json(res, 500, { error: profileReadErr.message })
 
     const nextStatus = statusAfterInfoSave(existing?.onboarding_status || null)
-    const keepRole = isAdminIdentity({ jwtEmail: email, role: profileRow?.role })
+    const keepRole = serverIsAdmin({
+      jwtEmail: user.email || email,
+      role: profileRow?.role,
+    })
 
     const profilePatch = {
       id: user.id,
       full_name: fullName,
       phone,
-      email: user.email || null,
+      email: applicantEmail,
       updated_at: now,
     }
     if (isClemson) profilePatch.student_verified_at = now
@@ -88,24 +104,26 @@ export async function handleDriverSignup(req, res) {
     const { error: profileErr } = await sb.from('profiles').upsert(profilePatch)
     if (profileErr) return json(res, 500, { error: profileErr.message })
 
-    const { data: app, error: appErr } = await sb
-      .from('driver_applications')
-      .upsert(
-        {
-          profile_id: user.id,
-          is_student: isStudent,
-          has_car: true,
-          has_insurance: true,
-          wants_extra_money: wantsExtraMoney,
-          attestation_accepted_at: now,
-          onboarding_status: nextStatus,
-          status: legacyStatusFor(nextStatus),
-        },
-        { onConflict: 'profile_id' },
-      )
-      .select('*')
-      .single()
-    if (appErr) return json(res, 500, { error: appErr.message })
+    const savedApp = await writeDriverApplication(
+      (payload) => sb
+        .from('driver_applications')
+        .upsert(payload, { onConflict: 'profile_id' })
+        .select('*')
+        .single(),
+      {
+        profile_id: user.id,
+        is_student: isStudent,
+        has_car: true,
+        has_insurance: true,
+        wants_extra_money: wantsExtraMoney,
+        attestation_accepted_at: now,
+        onboarding_status: nextStatus,
+        status: legacyStatusFor(nextStatus),
+      },
+      applicantEmail,
+    )
+    if (savedApp.error) return json(res, 500, { error: savedApp.error.message })
+    const app = savedApp.data
 
     const { data: existingVeh } = await sb
       .from('vehicles')
@@ -113,41 +131,33 @@ export async function handleDriverSignup(req, res) {
       .eq('driver_id', user.id)
       .limit(1)
     let vehicle = existingVeh?.[0] || null
-    const vehFields = {
+    const vehFields = withVehicleYear({
       make,
       model,
       color,
       plate,
       seats,
-      is_tesla: Boolean(body.isTesla),
+      service_class: body.comfortClass ? 'comfort' : 'standard',
       autonomous_capable: false,
-      tier: body.isTesla ? 'tesla_self_driving' : 'standard',
-    }
-    if (!vehicle) {
-      const { data: inserted, error: vErr } = await sb
-        .from('vehicles')
-        .insert({ driver_id: user.id, ...vehFields })
-        .select('*')
-        .single()
-      if (vErr) return json(res, 500, { error: vErr.message })
-      vehicle = inserted
-    } else {
-      const { data: updated, error: vUpErr } = await sb
-        .from('vehicles')
-        .update(vehFields)
-        .eq('id', vehicle.id)
-        .select('*')
-        .single()
-      if (vUpErr) return json(res, 500, { error: vUpErr.message })
-      vehicle = updated
-    }
+      tier: body.comfortClass ? 'comfort' : 'standard',
+    }, year)
+    const savedVehicle = await writeVehicleWithYearFallback((fields) => {
+      if (!vehicle) {
+        return sb.from('vehicles').insert({ driver_id: user.id, ...fields }).select('*').single()
+      }
+      return sb.from('vehicles').update(fields).eq('id', vehicle.id).select('*').single()
+    }, vehFields)
+    if (savedVehicle.error) return json(res, 500, { error: savedVehicle.error.message })
+    vehicle = savedVehicle.data
 
-    const { error: statusErr } = await sb.from('driver_status').upsert({
-      driver_id: user.id,
-      online: false,
-      updated_at: now,
-    })
-    if (statusErr) return json(res, 500, { error: statusErr.message })
+    if (nextStatus !== 'approved') {
+      const { error: statusErr } = await sb.from('driver_status').upsert({
+        driver_id: user.id,
+        online: false,
+        updated_at: now,
+      })
+      if (statusErr) return json(res, 500, { error: statusErr.message })
+    }
 
     if (isClemson) {
       const { error: svErr } = await sb.from('student_verifications').upsert(
@@ -222,25 +232,47 @@ export async function handleDriverSubmitReview(req, res) {
     .eq('id', user.id)
     .maybeSingle()
 
+  const attached = await attachUnsignedPacket(sb, user.id)
+  if (attached.error) return json(res, 500, { error: attached.error })
+
   const now = new Date().toISOString()
+  const submittedEmail = submittedApplicantEmail(
+    { applicant_email: app.applicant_email },
+    { email: profile?.email || user.email },
+  )
   const notice = await notifyAdminOfApplication({
     profile: profile || { email: user.email, full_name: user.user_metadata?.full_name },
     vehicle,
   })
 
-  const { data: updated, error: upErr } = await sb
-    .from('driver_applications')
-    .update({
+  const saved = await writeDriverApplication(
+    (payload) => sb
+      .from('driver_applications')
+      .update(payload)
+      .eq('profile_id', user.id)
+      .neq('onboarding_status', 'approved')
+      .select('*')
+      .maybeSingle(),
+    {
       onboarding_status: 'pending_review',
       status: legacyStatusFor('pending_review'),
       submitted_at: now,
       admin_notified_at: notice.emailed ? now : null,
       notify_error: notice.emailed ? null : notice.todo,
-    })
-    .eq('profile_id', user.id)
-    .select('*')
-    .single()
-  if (upErr) return json(res, 500, { error: upErr.message })
+    },
+    submittedEmail,
+  )
+  if (saved.error) return json(res, 500, { error: saved.error.message })
+  const updated = saved.data
+  if (!updated) {
+    const { data: current, error } = await sb.from('driver_applications')
+      .select('onboarding_status').eq('profile_id', user.id).maybeSingle()
+    if (error) return json(res, 500, { error: error.message })
+    if (current?.onboarding_status === 'approved') {
+      return json(res, 200, { ok: true, onboarding_status: 'approved', message: 'Already approved.' })
+    }
+    return json(res, 409, { error: 'Application changed. Refresh and try again.' })
+  }
 
   return json(res, 200, {
     ok: true,

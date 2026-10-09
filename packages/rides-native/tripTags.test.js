@@ -20,13 +20,12 @@ import {
   isWeekendPartyWindow,
   matchesQueueFilter,
   nextTripStatus,
+  statusActionLabel,
   PREFERRED_REQUEST_NOTE,
   preferredRequestNote,
   summarizeDepositAwareness,
   tagLabel,
   tagTone,
-  TESLA_FLEET_NOTICE,
-  teslaFleetNotice,
   toDriverCard,
   tripEarnedCents,
   tripTags,
@@ -35,19 +34,19 @@ import {
 
 test('driver net is 80 percent and the deposit slice is 25 percent', () => {
   assert.equal(driverNetCents(10000), 8000)
-  assert.equal(depositSliceCents(10000), 2500)
+  assert.equal(depositSliceCents(10000), 0)
   assert.equal(depositSliceCents(10000, 400), 400)
 })
 
-test('student, game day, tesla, and chosen-driver tags come from stored trip fields', () => {
+test('student, game day, comfort, and chosen-driver tags come from stored trip fields', () => {
   const tags = tripTags({
     status: 'requested',
     driver_id: 'drv',
-    tier: 'tesla',
+    tier: 'comfort',
     pickup_label: 'Memorial Stadium',
     metadata: { student_discount_cents: 180, window: 'game_day', purpose: 'tailgate' },
   })
-  assert.deepEqual(tags.sort(), ['direct', 'game_day', 'student', 'tesla', 'weekend_party'].sort())
+  assert.deepEqual(tags.sort(), ['direct', 'game_day', 'student', 'comfort', 'weekend_party'].sort())
   assert.equal(tagLabel('direct'), 'Preferred by rider')
   assert.equal(preferredRequestNote({ tags }), PREFERRED_REQUEST_NOTE)
   assert.equal(preferredRequestNote({ tags: ['student'] }), null)
@@ -92,29 +91,14 @@ test('weekend queue copy names scheduled airport and campus pickups', () => {
   assert.throws(() => queueEmptyCopy('nope'), /Unknown queue filter/)
 })
 
-test('Tesla fleet notice is profile-only and appears only when Tesla is selected', () => {
-  assert.equal(teslaFleetNotice(false), null)
-  assert.equal(teslaFleetNotice(true), TESLA_FLEET_NOTICE)
-  assert.match(TESLA_FLEET_NOTICE, /profile option only/)
-  assert.match(TESLA_FLEET_NOTICE, /person still drives/)
-  assert.match(TESLA_FLEET_NOTICE, /no self-driving dispatch/)
-  const tesla = toDriverCard({ id: 't1', status: 'accepted', tier: 'tesla_self_driving', fare_cents: 3600 })
-  const standard = toDriverCard({ id: 't2', status: 'accepted', tier: 'standard', fare_cents: 1800 })
-  assert.equal(tesla.teslaStub, true)
-  assert.equal(teslaFleetNotice(tesla.teslaStub), TESLA_FLEET_NOTICE)
-  assert.equal(standard.teslaStub, false)
-  assert.equal(teslaFleetNotice(standard.teslaStub), null)
-})
-
-test('an explicit party weekend purpose tags the weekend filter and a Tesla tier stays a stub tag', () => {
+test('an explicit party weekend purpose tags the weekend filter', () => {
   const tags = tripTags({
     status: 'scheduled',
-    tier: 'tesla',
+    tier: 'comfort',
     pickup_at: '2026-09-30T22:00:00.000Z',
-    metadata: { purpose: 'party_weekend', kind: 'scheduled', tesla: true },
+    metadata: { purpose: 'party_weekend', kind: 'scheduled', comfort: true },
   })
   assert.equal(tags.includes('weekend_party'), true)
-  assert.equal(tags.includes('tesla'), true)
   assert.equal(tags.includes('scheduled'), true)
 })
 
@@ -142,6 +126,10 @@ test('status advances one step and deposits summarize from payment rows', () => 
   assert.equal(nextTripStatus('arrived'), 'in_progress')
   assert.equal(nextTripStatus('in_progress'), 'completed')
   assert.equal(nextTripStatus('completed'), null)
+  assert.equal(statusActionLabel('accepted'), 'Arriving')
+  assert.equal(statusActionLabel('arriving'), 'Arrived')
+  assert.equal(statusActionLabel('arrived'), 'Start trip')
+  assert.equal(statusActionLabel('in_progress'), 'Complete trip')
   const summary = summarizeDepositAwareness(
     [{ id: 't1', status: 'completed', fare_cents: 4000, completed_at: '2026-10-03T15:00:00.000Z', dropoff_label: 'GSP' }],
     { t1: [{ kind: 'deposit', amountCents: 1000, status: 'succeeded' }, { kind: 'balance', amountCents: 3000, status: 'pending' }] },
@@ -177,8 +165,8 @@ test('carpool shares replace the listed fare and keep the 25 percent deposit', (
   assert.equal(card.passengers, 3)
   const fare = fareCollection(card)
   assert.equal(fare.fareCents, 2400)
-  assert.equal(fare.depositCents, 600)
-  assert.equal(fare.remainderCents, 1800)
+  assert.equal(fare.depositCents, 0)
+  assert.equal(fare.remainderCents, 2400)
   assert.equal(fare.driverNetCents, 1920)
   assert.equal(fare.platformFeeCents, 480)
   assert.equal(fare.shares[1].label, 'Blair')
@@ -323,7 +311,7 @@ test('unpaid airport deposit trips are gated out of the open pool until paid', (
 test('driver fare note is short, driver-friendly, and only mentions a deposit when one was taken', () => {
   assert.equal(
     driverFareNote(1850),
-    'The rider already paid a 25% deposit. The rest is charged to their card automatically when you complete the trip.',
+    'Part of this fare is already paid. The rest is charged to the rider’s card when you complete the trip.',
   )
   assert.equal(driverFareNote(1850), APPLE_PAY_DRIVER_COPY)
   assert.equal(driverFareNote(0), NO_DEPOSIT_DRIVER_COPY)

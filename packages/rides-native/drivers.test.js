@@ -7,9 +7,13 @@ import {
   fetchDriverApplication,
   fetchDriversByIds,
   fetchOnlineDrivers,
+  filterDriversForFleet,
+  scheduleRedirectForRequestError,
   formatDriverDistance,
   groupDriversForPicker,
   loadFavoriteDriverIds,
+  loadPickerDriverRecord,
+  pickerVehicleLine,
   normalizeFavoriteDriverIds,
   OPEN_POOL_COPY,
   PREFERRED_CANCELED_COPY,
@@ -58,6 +62,7 @@ function makeFakeSupabase({
   upsertStatusError = null,
   updateProfileError = null,
   sessionToken = null,
+  driverCards = null,
 } = {}) {
   return {
     auth: {
@@ -67,7 +72,11 @@ function makeFakeSupabase({
       }),
     },
     rpc: async (name, args) => {
-      if (rpcError) return { data: null, error: rpcError }
+      if (rpcError && name !== 'list_driver_cards') return { data: null, error: rpcError }
+      if (name === 'list_driver_cards') {
+        if (rpcError) return { data: null, error: rpcError }
+        return { data: driverCards || null, error: driverCards ? null : { message: `Unknown RPC ${name}` } }
+      }
       if (name === 'list_approved_driver_ids') {
         const ids = args?.ids || []
         const approvedSet = approvedIds ? new Set(approvedIds) : new Set(ids)
@@ -408,6 +417,17 @@ test('sortPreferredDrivers prioritizes favorites, online status, ETA, and alphab
   assert.equal(sortedNoCoords[2].name, 'Zack')
 })
 
+test('sortPreferredDrivers puts the default dispatch rank ahead of ETA', () => {
+  const pickup = { lat: 34.6788, lng: -82.843 }
+  const drivers = [
+    { id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', name: 'Near', online: true, lat: 34.679, lng: -82.843, dispatchRank: 2 },
+    { id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', name: 'Far', online: true, lat: 34.75, lng: -82.84, dispatchRank: 0 },
+  ]
+  const sorted = sortPreferredDrivers(drivers, [], pickup)
+  assert.equal(sorted[0].name, 'Far')
+  assert.equal(sorted[1].name, 'Near')
+})
+
 test('groupDriversForPicker separates favorites from non-favorite online drivers', () => {
   const drivers = [
     { id: A, name: 'Ada', online: false },
@@ -426,6 +446,18 @@ test('groupDriversForPicker separates favorites from non-favorite online drivers
   // null or empty drivers list
   assert.deepEqual(groupDriversForPicker(null, [A]), { preferred: [], online: [] })
   assert.deepEqual(groupDriversForPicker([], null), { preferred: [], online: [] })
+})
+
+test('groupDriversForPicker puts an active pass preferred subset ahead of other favorites', () => {
+  const drivers = [
+    { id: A, online: true },
+    { id: B, online: true },
+    { id: C, online: true },
+  ]
+  const groups = groupDriversForPicker(drivers, [A, B], [B])
+  assert.deepEqual(groups.passPreferred.map((driver) => driver.id), [B])
+  assert.deepEqual(groups.preferred.map((driver) => driver.id), [A])
+  assert.deepEqual(groups.online.map((driver) => driver.id), [C])
 })
 
 // ---------------------------------------------------------------------------
@@ -720,14 +752,14 @@ test('fetchOnlineDrivers happy path maps driver profile, status, vehicle, and fi
     {
       id: 'v-1',
       driver_id: A,
-      make: 'Tesla',
-      model: 'Model 3',
+      make: 'Honda',
+      model: 'Accord',
       color: 'Midnight Silver',
       plate: 'TGR-123',
       seats: 4,
-      is_tesla: true,
+      service_class: true,
       autonomous_capable: false,
-      tier: 'tesla',
+      tier: 'comfort',
     },
   ]
 
@@ -751,18 +783,84 @@ test('fetchOnlineDrivers happy path maps driver profile, status, vehicle, and fi
   assert.equal(driverA.heading, 180)
   assert.equal(driverA.unlockProgress, 3)
   assert.equal(driverA.unlockTarget, 5)
-  assert.equal(driverA.vehicleLabel, 'Midnight Silver Tesla Model 3')
+  assert.equal(driverA.vehicleLabel, 'Midnight Silver Honda Accord')
   assert.equal(driverA.plate, 'TGR-123')
-  assert.equal(driverA.isTesla, true)
-  assert.equal(driverA.tier, 'tesla')
+  assert.equal(driverA.comfortClass, true)
+  assert.equal(driverA.tier, 'comfort')
 
   const driverB = res.drivers.find((d) => d.id === B)
   assert.equal(driverB.name, 'Sam')
   assert.equal(driverB.vehicleLabel, 'Vehicle TBD')
   assert.equal(driverB.plate, null)
-  assert.equal(driverB.isTesla, false)
+  assert.equal(driverB.comfortClass, false)
   assert.equal(driverB.tier, 'standard')
   assert.equal(driverB.standing, 'good') // derived from standingFromRatings(null, 0)
+})
+
+test('fetchOnlineDrivers shows the driver name and vehicle when profile rows are hidden', async () => {
+  const driverStatus = [{ driver_id: A, online: true, lat: 34.68, lng: -82.84 }]
+  const supabase = makeFakeSupabase({
+    driverStatus,
+    profiles: [],
+    vehicles: [],
+    approvedIds: [A],
+    driverCards: [{
+      id: A,
+      full_name: 'Demo Driver',
+      rating_avg: 0,
+      rating_count: 0,
+      standing: 'good',
+      color: 'gray',
+      make: 'Honda',
+      model: 'Accord',
+      plate: 'DEMO03',
+      tier: 'standard',
+      service_class: false,
+    }],
+  })
+  const res = await fetchOnlineDrivers(supabase)
+  assert.equal(res.error, null)
+  assert.equal(res.drivers.length, 1)
+  assert.equal(res.drivers[0].name, 'Demo')
+  assert.equal(res.drivers[0].vehicleLabel, 'gray Honda Accord')
+  assert.equal(res.drivers[0].plate, 'DEMO03')
+  const lines = describeDriver(res.drivers[0])
+  assert.equal(lines.ratingLabel, 'New driver')
+})
+
+test('loadPickerDriverRecord keeps the pick-a-driver car, plate, and full name', async () => {
+  assert.equal(pickerVehicleLine('Midnight Silver Honda Accord', 'TGR-123'), 'Midnight Silver Honda Accord · TGR-123')
+  assert.equal(pickerVehicleLine('gray Honda Accord', ''), 'gray Honda Accord')
+  assert.equal(pickerVehicleLine('', 'DEMO03'), 'DEMO03')
+  assert.equal(pickerVehicleLine('', null), '')
+  const supabase = makeFakeSupabase({
+    driverCards: [{
+      id: A,
+      full_name: 'Jordan Lee',
+      color: 'Midnight Silver',
+      make: 'Honda',
+      model: 'Accord',
+      plate: 'TGR-123',
+      avatar_url: 'https://cdn.example/jordan.jpg',
+    }],
+  })
+  const record = await loadPickerDriverRecord(supabase, A)
+  assert.equal(record.full_name, 'Jordan Lee')
+  assert.equal(record.avatar_url, 'https://cdn.example/jordan.jpg')
+  assert.equal(pickerVehicleLine(
+    [record.vehicle.color, record.vehicle.make, record.vehicle.model].filter(Boolean).join(' '),
+    record.vehicle.plate,
+  ), 'Midnight Silver Honda Accord · TGR-123')
+  assert.equal(await loadPickerDriverRecord(null, A), null)
+  assert.equal(await loadPickerDriverRecord(supabase, ''), null)
+})
+
+test('scheduleRedirectForRequestError opens Schedule for an unpaid airport deposit', () => {
+  const err = new Error('Airport rides collect a 25% deposit in checkout. Book this trip from Schedule so drivers can see it after that deposit is paid.')
+  err.code = 'airport_deposit_required'
+  assert.deepEqual(scheduleRedirectForRequestError(err, 'GSP Airport'), { screen: 'schedule', airport: 'GSP' })
+  assert.deepEqual(scheduleRedirectForRequestError(err, 'Charlotte Douglas (CLT)'), { screen: 'schedule', airport: 'CLT' })
+  assert.equal(scheduleRedirectForRequestError(new Error('That driver is offline.'), 'GSP Airport'), null)
 })
 
 test('fetchOnlineDrivers falls back to narrow profile columns on schema cache error', async () => {
@@ -948,6 +1046,21 @@ test('setDriverOnline checks missing config, sign in, application approval, and 
   assert.equal(driverStatus[0].driver_id, A)
   assert.equal(driverStatus[0].online, true)
 
+  const located = await setDriverOnline(supabaseApproved, A, true, { lat: 34.683, lng: -82.837, heading: 20 })
+  assert.deepEqual(located, { ok: true })
+  assert.equal(driverStatus.length, 1)
+  assert.equal(driverStatus[0].driver_id, A)
+  assert.equal(driverStatus[0].online, true)
+  assert.equal(driverStatus[0].lat, 34.683)
+  assert.equal(driverStatus[0].lng, -82.837)
+  assert.equal(driverStatus[0].heading, 20)
+  assert.equal(driverStatus.some((row) => row.driver_id !== A), false)
+
+  await setDriverOnline(supabaseApproved, A, true, { lat: 34.684, lng: -82.838, heading: null })
+  assert.equal(driverStatus.length, 1)
+  assert.equal(driverStatus[0].lat, 34.684)
+  assert.equal(driverStatus[0].heading, 20)
+
   // Going offline (online = false) does NOT check application gate
   const offlineRes = await setDriverOnline(supabasePending, A, false)
   assert.deepEqual(offlineRes, { ok: true })
@@ -1065,6 +1178,36 @@ test('requestDriverTrip happy path posts to stripe-payment-methods and returns t
   }
 })
 
+test('requestDriverTrip auto-assign omits driverId and keeps the rider note', async () => {
+  const originalFetch = globalThis.fetch
+  try {
+    let captured = null
+    globalThis.fetch = async (url, options) => {
+      captured = { url, options, body: JSON.parse(options.body) }
+      return {
+        ok: true,
+        status: 200,
+        text: async () => JSON.stringify({
+          trip: { id: 'trip-auto', status: 'searching', driver_id: null },
+        }),
+      }
+    }
+    const supabase = makeFakeSupabase({ sessionToken: 'bearer-token-xyz' })
+    const trip = await requestDriverTrip(supabase, {
+      riderId: 'rider-1',
+      autoAssign: true,
+      dest: 'Sikes Hall',
+      note: '  Orange gates  ',
+    })
+    assert.equal(trip.id, 'trip-auto')
+    assert.equal(captured.body.autoAssign, true)
+    assert.equal('driverId' in captured.body, false)
+    assert.equal(captured.body.note, 'Orange gates')
+  } finally {
+    globalThis.fetch = originalFetch
+  }
+})
+
 test('requestDriverTrip applies default destination and stadium pickup points', async () => {
   const originalFetch = globalThis.fetch
   try {
@@ -1166,6 +1309,11 @@ function deskSupabase({ onboardingStatus, trips }) {
     const state = { filters: [] }
     const builder = {
       select() { return builder },
+      or(value) {
+        const driverId = JSON.parse(value.split('metadata->>offer_driver_id.eq.').at(-1))
+        state.filters.push((row) => !row.metadata?.offer_driver_id || row.metadata.offer_driver_id === driverId)
+        return builder
+      },
       eq(col, val) {
         state.filters.push((row) => row[col] === val)
         return builder
@@ -1222,4 +1370,14 @@ test('open-pool offers are empty for pending_review and still present for approv
   assert.deepEqual(approved.offers.map((card) => card.id), ['trip-open'])
   assert.deepEqual(approved.scheduledOpen.map((card) => card.id), ['trip-sched'])
   assert.equal(approved.active?.id, 'trip-live')
+})
+
+
+test('filterDriversForFleet keeps the driver list', () => {
+  const drivers = [
+    { id: 'a', online: true, name: 'Ava' },
+    { id: 'b', online: true, name: 'Ben' },
+  ]
+  assert.deepEqual(filterDriversForFleet(drivers).map((d) => d.id), ['a', 'b'])
+  assert.deepEqual(filterDriversForFleet(null), [])
 })

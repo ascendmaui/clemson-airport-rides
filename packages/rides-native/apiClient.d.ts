@@ -8,6 +8,7 @@ export function authedJson<T = Record<string, unknown>>(
     body?: unknown
     headers?: Record<string, string>
     fetch?: typeof fetch
+    signal?: AbortSignal
   },
 ): Promise<T>
 

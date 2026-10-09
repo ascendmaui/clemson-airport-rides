@@ -1,3 +1,5 @@
+import { TIGER_PASS_NAME } from '../shared/tigerPass.js'
+
 const ACCOUNT_TABS = ['profile', 'notifications', 'billing', 'vehicle', 'student', 'privacy', 'help', 'support']
 const ROUTES = new Set([
   'schedule', 'friends', 'carpool', 'account', 'home', 'driver',
@@ -42,8 +44,8 @@ Help explains how the app works. Support is a different chat for bugs, billing p
 Booking a local ride (rider):
 1. Rides tab. Enter a destination or pick a shortcut.
 2. Confirm pickup.
-3. Choose a tier: Standard, Wait & Save, Extra Comfort, XL, Pet, or Tesla Model 3. Tesla Model 3 is the Clemson fleet option. A person still drives. There is no live self-driving dispatch and no robotaxi telemetry. The tier screen shows 10% off Standard only when the signed-in email is confirmed and ends with @clemson.edu or @g.clemson.edu. Otherwise it says why student pricing is off. Comfort, XL, Pet, and Tesla stay full price. Standard on that screen can open an upsell before Pick driver. The Tesla upsell must say a driver is at the wheel.
-4. Pick driver lists approved drivers who are online, plus any drivers this rider saved. Name, rating, vehicle, and a straight-line ETA show when that data exists. The request is status "requested" and is pinned to that driver. If they decline, the trip is canceled. It does not auto-match to another driver. Airport Schedule is the open pool (status "searching").
+3. Choose a tier: Standard, Wait & Save, Extra Comfort, or Carpool. A tier is shown only when an approved driver can serve it. A person drives every ride. Carpool is a discounted per-seat fare (see CARPOOL_DISCOUNT_BPS) for 1 or 2 seats and is dispatched like Standard. The tier screen shows 10% off Standard only when the signed-in email is confirmed and ends with @clemson.edu or @g.clemson.edu. Otherwise it says why student pricing is off. Wait & Save, Extra Comfort, and Carpool are not included in the student discount. Standard on that screen can open an Extra Comfort upsell before Pick driver.
+4. Pick driver lists approved drivers who are online, plus any drivers this rider saved. Name, rating, vehicle, and a straight-line ETA show when that data exists. A request is status "searching" with no driver pinned. Any approved driver can accept it. A decline leaves it in the pool. Requesting a ride places a card hold for the estimated fare plus a buffer. The final fare is charged when the trip ends. Scheduling does not charge a card and does not place that hold.
 5. Requested screen tracks the trip.
 Sign-in is required to book. Guest browsing of marketing and schedule is allowed.
 
@@ -51,15 +53,15 @@ Weekend and party schedule (rider):
 1. Schedule tab, Weekend / party.
 2. Choose Airport (GSP or CLT) or Campus.
 3. Set date and time at least 30 minutes ahead. Friday 9:00 PM is the starting suggestion.
-4. Confirm saves a scheduled trip with purpose party_weekend. It shows under Upcoming. Drivers see it in the Weekend filter. Optional Tesla Model 3 is the same driver-operated fleet stub.
+4. Confirm saves a scheduled trip with purpose party_weekend. It shows under Upcoming. Drivers see it in the Weekend filter. A pickup at least 30 minutes ahead is 10% off the server fare. Offered tiers are the ones an approved driver can serve.
 
 Airport schedule (rider):
-1. Schedule tab, Airport deposit.
+1. Schedule tab, Airport ride.
 2. Choose GSP (Greenville-Spartanburg, flat $75) or CLT (Charlotte Douglas, flat $175).
 3. Optional date and time.
-4. Book creates a trip in status "searching" (pickup Memorial Stadium) and starts Stripe Checkout for a 25% deposit. A date keeps that hold scheduled.
-Airport flat rates are not game-day surged. A confirmed @clemson.edu or @g.clemson.edu account gets 10% off Standard, which includes these airport fares because Schedule prices them as Standard. Deposit is 25% of the fare after that discount. A profile student flag does not apply the discount.
-Do not invent a refund window. Terms say cancel promptly and deposit refund rules follow the in-app and Stripe receipt terms.
+4. Book creates a trip in status "searching" (pickup Memorial Stadium) or "scheduled" when a date is set. No card is charged at booking. The final fare is charged when the trip ends.
+Airport flat rates are not game-day surged. A confirmed @clemson.edu or @g.clemson.edu account gets 10% off Standard, which includes these airport fares because Schedule prices them as Standard. A profile student flag does not apply the discount.
+Do not invent a refund window. Terms say cancel promptly. Card holds that are not captured are released. Receipt terms in the app and in Stripe still apply to captured fares.
 
 Student discount:
 10% off Standard only. Account → Student. Eligible only when the signed-in account email is confirmed and ends with @clemson.edu or @g.clemson.edu. @g.clemson.edu does not end with the characters @clemson.edu, and both domains count. profiles.student_verified_at and a client student flag do not apply the discount. Other tiers are not discounted by this rule.
@@ -74,8 +76,11 @@ Live location:
 From Friends, after a ride exists, or from an active trip. Creates a token link (/share/:token or /live/:token). Someone with the link sees the live map. Revoking the share stops it. Do not claim location is shared with the whole campus.
 
 Billing:
-Account → Billing → Add a card. Stripe SetupIntent and Payment Element. The app stores brand and last 4 only, plus billing_activated_at. It does not store the full card number. The saved card is used for friend and carpool shares. Airport deposits use Stripe Checkout, which is separate from the saved-card form.
+Account → Billing → Add a card. The website uses a Stripe SetupIntent and the Payment Element. The rider app uses Stripe PaymentSheet for Card, Cash App Pay, Apple Pay, Google Pay, and Link. Saving a method does not charge it. The app stores brand and last 4 only, plus billing_activated_at. It does not store the full card number. The saved method is used for the fare hold at ride request, for the final fare, and for friend and carpool shares. A backup card on the same customer may be charged if the default card is declined.
 If no card is on file, walk the user to Account → Billing → Add a card. Do not ask for the card number in chat.
+
+Frequent-rider pass:
+Account → Billing shows the pass. The rider app also has a pass screen. The display name is a rename hook (TIGER_PASS_NAME, currently ${TIGER_PASS_NAME}). An active pass takes 10% off Standard, Wait & Save, Extra Comfort, and Carpool after any Clemson student discount and before schedule-ahead. It does not add retired ride types. Riders favorite drivers from Pick a driver. Those favorites are offered before the open pool. An active pass can mark a subset as preferred drivers, and those are offered first. Map preview cars are not favorites and never count for matching.
 
 Ratings:
 After a completed trip either person can rate the other once, 1–5 stars plus an optional comment. Account shows a soft reminder. The rate screen is opened as rate?trip=<id>. Skipping is allowed. Driver home sends the driver to that screen when they mark a trip completed.
@@ -101,14 +106,14 @@ export const TOPICS = [
   {
     id: 'book-local',
     roles: ['rider'],
-    keywords: ['book', 'where to', 'destination', 'tier', 'standard', 'wait', 'comfort', 'xl', 'tesla', 'pick driver', 'pickup'],
+    keywords: ['book', 'where to', 'destination', 'tier', 'standard', 'wait', 'comfort', 'carpool', 'xl', 'comfort', 'pick driver', 'pickup'],
     title: 'Book a ride',
     steps: [
       'Open the Rides tab.',
       'Enter where you are headed, or tap a shortcut.',
       'Confirm the pickup.',
       'Choose a tier. Student pricing is 10% off Standard only.',
-      'Pick an online driver. That request stays with them. If they decline, it is canceled and does not auto-match.',
+      'Pick an online driver. A campus request stays in the open pool until someone accepts. A decline does not cancel it.',
       'Watch the trip on Requested.',
     ],
     actions: [action('Open Rides', 'home'), action('Confirm pickup', 'confirm')],
@@ -122,8 +127,8 @@ export const TOPICS = [
       'Open the Schedule tab.',
       'Choose GSP ($75 flat) or CLT ($175 flat).',
       'Add a date and time if you have them.',
-      'Book. A signed-in rider gets a searching trip and Stripe Checkout for the 25% deposit.',
-      'A confirmed @clemson.edu or @g.clemson.edu email gets 10% off that Standard fare before the deposit is calculated. Other emails stay full price.',
+      'Book. A signed-in rider gets a searching or scheduled trip. No card is charged at booking.',
+      'A confirmed @clemson.edu or @g.clemson.edu email gets 10% off that Standard fare. Other emails stay full price. The final fare is charged when the trip ends.',
     ],
     actions: [action('Open Schedule', 'schedule')],
   },
@@ -175,9 +180,9 @@ export const TOPICS = [
     title: 'Add a card',
     steps: [
       'Open Account → Billing.',
-      'Tap Add a card.',
-      'Complete the Stripe form. Clemson RIDES stores the brand and last 4, not the full number.',
-      'Airport deposits still go through Stripe Checkout from Schedule. Friend and carpool charges use the saved card when it is on file.',
+      'Tap Card, Cash App Pay, Apple Pay, Google Pay, Link, or Add another payment method.',
+      'On the phone, Stripe PaymentSheet saves the method. On the website, the Payment Element does. Nothing is charged while saving. Clemson RIDES stores the brand and last 4, not the full number.',
+      'The saved card is authorized for the estimated fare plus a buffer when you request a ride. The final fare is charged when the trip ends. A backup card on the account may be charged if the default card is declined. Friend and carpool charges use the saved card when it is on file.',
     ],
     actions: [action('Open Billing', 'account', { tab: 'billing' })],
   },
@@ -190,7 +195,7 @@ export const TOPICS = [
       'Open Account → Student.',
       'The discount is 10% off Standard fares, including GSP and CLT airport rates.',
       'It applies only when the signed-in email is confirmed and ends with @clemson.edu or @g.clemson.edu. A student flag on the profile does not.',
-      'Comfort, XL, Pet, and Tesla prices are not covered by this discount.',
+      'Wait & Save and Extra Comfort prices are not covered by this discount.',
     ],
     actions: [action('Open Student', 'account', { tab: 'student' })],
   },

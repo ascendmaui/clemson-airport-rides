@@ -1,9 +1,9 @@
-export const TESLA_FLEET_NOTICE: string
-export function teslaFleetNotice(selected: boolean): string | null
+export const COMFORT_FLEET_NOTICE: string
+export function comfortFleetNotice(selected: boolean): string | null
 export const ACTIONABLE_LEAD_MS: number
 export const UNPAID_AIRPORT_DEPOSIT_ACCEPT_ERROR: string
 
-export type TripTag = 'student' | 'game_day' | 'weekend_party' | 'carpool' | 'tesla' | 'direct' | 'scheduled'
+export type TripTag = 'student' | 'game_day' | 'weekend_party' | 'carpool' | 'comfort' | 'direct' | 'scheduled'
 
 export type FareShare = { id: string; label: string; shareCents: number }
 
@@ -15,6 +15,7 @@ export type QueueFilter = 'all' | 'student' | 'game_day' | 'weekend_party'
 export type DriverCard = {
   id: string
   status: string
+  matchingOffer?: boolean
   driverId: string | null
   riderId: string | null
   pickupLabel: string
@@ -28,6 +29,8 @@ export type DriverCard = {
   depositCents: number
   depositExplicit: boolean
   driverNetCents: number
+  boostCents?: number
+  boostDriverCents?: number
   baseNetCents?: number | null
   carpoolBonusCents?: number | null
   carpoolIncentiveId?: string | null
@@ -37,17 +40,37 @@ export type DriverCard = {
   tier: string | null
   tags: TripTag[]
   tagLabels: string[]
-  teslaStub: boolean
+  comfortStub: boolean
   arrivedAt: string | null
   passengers: number
   shares: FareShare[]
   riderLat: number | null
   riderLng: number | null
+  riderFixAt: string | null
+  routePolyline?: string | null
+  routeDurationS?: number | null
   riderRating?: number
   etaMin?: number
   distanceMi?: number
   rideType?: string
   isSynthetic?: boolean
+  promoRide?: boolean
+  offerPhase?: 'exclusive' | 'pool' | 'scheduled' | 'expired' | null
+  offerShareBps?: number | null
+  offerExpiresAt?: string | null
+  riderAvatarUrl?: string | null
+  backupLabel?: string | null
+  backupRole?: 'primary' | 'backup' | 'open_primary' | 'open_backup' | 'full' | null
+  lookingForBackup?: boolean
+  backupConfirmOpen?: boolean
+  backupConfirmClosesAt?: string | null
+  backupConfirmCopy?: string | null
+  backupLeaveNowAt?: string | null
+  backupLeaveNowOpen?: boolean
+  backupEnroute?: boolean
+  backupStatusLine?: string | null
+  backupNotice?: string | null
+  backupUrgent?: boolean
 }
 
 export type FareCollection = {
@@ -91,6 +114,14 @@ export function tripEarnedCents(trip: {
   carpoolIncentiveId?: string | null
 } | null | undefined): number
 
+export function tripPayoutCents(trip: {
+  fare_cents?: number
+  fareCents?: number
+  boost_cents?: number
+  boostCents?: number
+  metadata?: Record<string, unknown> | null
+} | null | undefined): number
+
 export type PaymentRow = {
   kind?: string
   amountCents?: number
@@ -109,6 +140,7 @@ export function isOpenPoolClaimable(row: Record<string, unknown> | null | undefi
 export function zonedWeekdayHour(iso: string | null | undefined, timeZone?: string): { weekday: string; hour: number } | null
 export function isWeekendPartyWindow(iso: string | null | undefined): boolean
 export function formatPickupAt(iso: string | null | undefined): string
+export function confirmCountdownLabel(closesAt: string | null | undefined, now?: number | Date): string | null
 export function isSameZonedDay(iso: string | null | undefined, now?: Date, timeZone?: string): boolean
 export function isDueNow(trip: { pickupAt?: string | null; pickup_at?: string | null; scheduled_for?: string | null } | null, now?: Date): boolean
 export const TAG_LABELS: Record<string, string>

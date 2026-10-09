@@ -1,13 +1,12 @@
 import { useRouter } from 'expo-router'
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { BackButton, Card, ErrorText, Primary } from '@/components/chrome'
 import { useAuth } from '@/lib/auth'
 import { useFeedback } from '@/lib/feedback'
 import { supabase } from '@/lib/supabase'
-import { loadDriverProfile, loadVehicle, riderFacingCard, setTeslaListing, type FacingCard, type VehicleRow } from 'rides-native/driverDesk'
-import { TESLA_FLEET_NOTICE } from 'rides-native/tripTags'
+import { loadDriverProfile, loadVehicle, riderFacingCard, setServiceClass, type FacingCard, type VehicleRow } from 'rides-native/driverDesk'
 import { useTheme } from '@/lib/theme'
 import type { Palette } from '@/lib/palette'
 
@@ -20,7 +19,6 @@ export default function FleetScreen() {
   const styles = useMemo(() => fleetStyles(colors), [colors])
   const [vehicle, setVehicle] = useState<VehicleRow | null>(null)
   const [facing, setFacing] = useState<FacingCard | null>(null)
-  const [stubNote, setStubNote] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
@@ -38,36 +36,35 @@ export default function FleetScreen() {
     refresh().catch((err: unknown) => setError(err instanceof Error ? err.message : 'Could not load your vehicle'))
   }, [refresh])
 
-  async function toggle(enabled: boolean, claimModel3 = false) {
+  async function toggle(enabled: boolean) {
     if (!user || !supabase) return
     setBusy(true)
     setError(null)
-    setStubNote(null)
     try {
-      const saved = await setTeslaListing(supabase, user.id, { enabled, claimModel3 })
+      const saved = await setServiceClass(supabase, user.id, { enabled })
       setVehicle(saved)
       pulse('online')
       await refresh()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not update the Tesla listing')
+      setError(err instanceof Error ? err.message : 'Could not update the Comfort listing')
     } finally {
       setBusy(false)
     }
   }
 
-  const listed = Boolean(vehicle?.is_tesla)
+  const service = String(vehicle?.service_class ?? '').trim().toLowerCase()
+  const listed = service === 'comfort' || service === 'true' || String(vehicle?.tier || '').trim().toLowerCase() === 'comfort'
 
   return (
     <View style={[styles.screen, { paddingTop: insets.top + 8 }]}>
       <ScrollView contentContainerStyle={styles.list}>
         <BackButton onPress={() => router.back()} />
         <Text style={styles.kicker}>FLEET</Text>
-        <Text style={styles.title}>Tesla Model 3</Text>
+        <Text style={styles.title}>Extra Comfort</Text>
         <Card>
-          <Text style={styles.cardTitle}>Self-driving is not live</Text>
-          <Text style={styles.copy}>{TESLA_FLEET_NOTICE}</Text>
+          <Text style={styles.cardTitle}>Comfort listing</Text>
           <Text style={styles.copy}>
-            Riders can pick the Tesla tier in the rider app. If you list one, Pick a driver shows the badge. Accepting that ride means you drive.
+            Show the Extra Comfort badge in Pick a driver when this car should take those trips.
           </Text>
         </Card>
         {facing ? (
@@ -78,34 +75,20 @@ export default function FleetScreen() {
             <Text style={styles.copy}>
               {facing.ratingAvg != null ? `${facing.ratingAvg.toFixed(1)} · ${facing.ratingCount} ratings` : 'New driver'}
               {facing.studentVerified ? ' · Clemson student' : ''}
-              {facing.isTesla ? ' · Tesla' : ''}
+              {listed ? ' · Comfort' : ''}
             </Text>
             <Text style={styles.copy}>Go online from home for this card to appear in Pick a driver.</Text>
           </Card>
         ) : null}
         {error ? <ErrorText>{error}</ErrorText> : null}
-        {stubNote ? <Text style={styles.stub}>{stubNote}</Text> : null}
         {!vehicle ? (
           <Primary label="Add a vehicle" onPress={() => router.push('/onboarding')} />
         ) : (
-          <>
-            <Primary
-              label={busy ? 'Saving…' : listed ? 'Remove Tesla listing' : 'Show Tesla badge to riders'}
-              onPress={() => toggle(!listed, false)}
-              disabled={busy}
-            />
-            {!listed ? (
-              <Pressable onPress={() => toggle(true, true)} disabled={busy} style={styles.stubButton}>
-                <Text style={styles.stubButtonText}>My car is a Tesla Model 3</Text>
-              </Pressable>
-            ) : null}
-            <Pressable
-              onPress={() => setStubNote('Self-driving dispatch is not available. No car was assigned, and no autonomy session was started. Clemson fleet rides are driven by a person.')}
-              style={styles.stubButton}
-            >
-              <Text style={styles.stubButtonText}>Check self-driving dispatch</Text>
-            </Pressable>
-          </>
+          <Primary
+            label={busy ? 'Saving…' : listed ? 'Remove Comfort listing' : 'Show Comfort badge to riders'}
+            onPress={() => toggle(!listed)}
+            disabled={busy}
+          />
         )}
       </ScrollView>
     </View>
@@ -121,8 +104,5 @@ function fleetStyles(colors: Palette) {
     cardTitle: { color: colors.title, fontWeight: '800', fontSize: 18 },
     name: { color: colors.ink, fontWeight: '800', fontSize: 20 },
     copy: { color: colors.inkSecondary, fontSize: 14, lineHeight: 20 },
-    stub: { color: colors.title, fontWeight: '700', lineHeight: 20 },
-    stubButton: { alignItems: 'center', paddingVertical: 12 },
-    stubButtonText: { color: colors.orange, fontWeight: '800' },
   })
 }

@@ -1,50 +1,89 @@
 /** Canonical public surfaces for the one Clemson RIDES product. */
 
-export const WEB_ORIGIN = 'https://clemson-rides.vercel.app'
+/** Sole public production web host. vercel.app deploy aliases redirect here. */
+export const WEB_ORIGIN = 'https://clemsonrides.com'
 
-export const RIDER_EXPO_PROJECT = 'https://expo.dev/accounts/johnmatveyev/projects/clemson-rides-rider'
+/** Passenger soft-launch QR target — hash router book home (campus / airport / game-day entry). */
+export const WEB_BOOK_URL = `${WEB_ORIGIN}/#/home`
 
-export const DRIVER_EXPO_PROJECT = 'https://expo.dev/accounts/johnmatveyev/projects/clemson-rides-driver'
+/** Airport schedule. The fare is charged when the trip ends. */
+export const WEB_SCHEDULE_URL = `${WEB_ORIGIN}/#/schedule`
+
+/** Driver desk (accept rides). */
+export const WEB_DRIVER_URL = `${WEB_ORIGIN}/#/driver`
+
+/** Driver onboarding / signup. */
+export const WEB_DRIVER_SIGNUP_URL = `${WEB_ORIGIN}/#/driver-signup`
 
 export const SUPPORT_EMAIL = 'rides@clemson.edu'
 
 /**
- * Public App Store / TestFlight and Google Play URLs.
- * Stay null until a real listing is published. Do not invent store ids.
+ * Public App Store and Google Play URLs.
+ * Stay null until a real listing for that specific app is published.
+ * Do not invent store ids. This repo has no public TestFlight link.
+ * Rider and driver are separate binaries, so one shared store URL is not used.
  */
 export const IOS_STORE_URL = null
 
 export const ANDROID_STORE_URL = null
 
-/** Install targets for the marketing download section. iOS and Android share the Expo project until a store URL exists. */
+export const RIDER_IOS_STORE_URL = null
+
+export const RIDER_ANDROID_STORE_URL = null
+
+export const DRIVER_IOS_STORE_URL = null
+
+export const DRIVER_ANDROID_STORE_URL = null
+
+const PUBLIC_STORE_HOST = /^https:\/\/(apps\.apple\.com|play\.google\.com)\//
+
+/** A store button may use only an already-published App Store or Play Store https URL. */
+export function publishedStoreUrl(url) {
+  if (typeof url !== 'string') return null
+  const trimmed = url.trim()
+  if (!PUBLIC_STORE_HOST.test(trimmed)) return null
+  return trimmed
+}
+
+function installHref(storeUrl, webUrl) {
+  return publishedStoreUrl(storeUrl) || webUrl
+}
+
+/**
+ * QR codes and iOS/Android buttons.
+ * Rider opens booking. Driver opens the driver desk.
+ * A public store listing replaces that web URL only for the app it belongs to.
+ */
 export const APP_DOWNLOADS = [
   {
     id: 'rider',
     label: 'Rider',
     product: 'Clemson RIDES',
-    href: RIDER_EXPO_PROJECT,
-    iosHref: IOS_STORE_URL || RIDER_EXPO_PROJECT,
-    androidHref: ANDROID_STORE_URL || RIDER_EXPO_PROJECT,
-    iosNote: IOS_STORE_URL
-      ? 'App Store or TestFlight'
-      : 'No public TestFlight or App Store link yet. This opens the rider Expo project.',
-    androidNote: ANDROID_STORE_URL
+    href: installHref(RIDER_IOS_STORE_URL, WEB_BOOK_URL),
+    iosHref: installHref(RIDER_IOS_STORE_URL, WEB_BOOK_URL),
+    androidHref: installHref(RIDER_ANDROID_STORE_URL, WEB_BOOK_URL),
+    iosNote: publishedStoreUrl(RIDER_IOS_STORE_URL)
+      ? 'App Store'
+      : 'The App Store listing is not live yet. This opens booking on clemsonrides.com.',
+    androidNote: publishedStoreUrl(RIDER_ANDROID_STORE_URL)
       ? 'Google Play'
-      : 'No Google Play link yet. This opens the rider Expo project.',
+      : 'The Play Store listing is not live yet. This opens booking on clemsonrides.com.',
+    blurb: 'One code for booking. iPhone and Android both open clemsonrides.com. The App Store and Play Store listings are not live yet.',
   },
   {
     id: 'driver',
     label: 'Driver',
     product: 'Clemson RIDES Driver',
-    href: DRIVER_EXPO_PROJECT,
-    iosHref: IOS_STORE_URL || DRIVER_EXPO_PROJECT,
-    androidHref: ANDROID_STORE_URL || DRIVER_EXPO_PROJECT,
-    iosNote: IOS_STORE_URL
-      ? 'App Store or TestFlight'
-      : 'No public TestFlight or App Store link yet. This opens the driver Expo project.',
-    androidNote: ANDROID_STORE_URL
+    href: installHref(DRIVER_IOS_STORE_URL, WEB_DRIVER_URL),
+    iosHref: installHref(DRIVER_IOS_STORE_URL, WEB_DRIVER_URL),
+    androidHref: installHref(DRIVER_ANDROID_STORE_URL, WEB_DRIVER_URL),
+    iosNote: publishedStoreUrl(DRIVER_IOS_STORE_URL)
+      ? 'App Store'
+      : 'The App Store listing is not live yet. This opens the driver web app on clemsonrides.com.',
+    androidNote: publishedStoreUrl(DRIVER_ANDROID_STORE_URL)
       ? 'Google Play'
-      : 'No Google Play link yet. This opens the driver Expo project.',
+      : 'The Play Store listing is not live yet. This opens the driver web app on clemsonrides.com.',
+    blurb: 'One code for the driver web app. iPhone and Android both open clemsonrides.com. The App Store and Play Store listings are not live yet.',
   },
 ]
 

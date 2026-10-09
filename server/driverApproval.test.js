@@ -285,7 +285,7 @@ test('receivableDriverIds returns no one when the application read fails', async
   assert.equal(gate.error, 'schema cache miss')
 })
 
-test('requestDriverTrip skips a pending_review driver and still assigns an approved driver', async () => {
+test('requestDriverTrip skips a pending_review driver and opens a campus offer for an approved driver', async () => {
   const pendingSb = memorySb({
     driver_applications: [{ profile_id: 'driver-pending', onboarding_status: 'pending_review' }],
     profiles: [{ id: 'driver-pending', role: 'driver' }],
@@ -303,6 +303,8 @@ test('requestDriverTrip skips a pending_review driver and still assigns an appro
 
   const approvedSb = memorySb({
     driver_applications: [{ profile_id: 'driver-approved', onboarding_status: 'approved' }],
+    driver_status: [{ driver_id: 'driver-approved', online: true }],
+    vehicles: [{ driver_id: 'driver-approved', service_class: 'standard', tier: 'standard' }],
   })
   const allowed = await callHandler(requestDriverTrip, {
     body: { ...REQUEST_BODY, driverId: 'driver-approved' },
@@ -313,7 +315,73 @@ test('requestDriverTrip skips a pending_review driver and still assigns an appro
   })
   assert.equal(allowed.status, 200)
   assert.equal(approvedSb.tables.trips.length, 1)
-  assert.equal(approvedSb.tables.trips[0].driver_id, 'driver-approved')
+  assert.equal(approvedSb.tables.trips[0].driver_id, null)
+  assert.equal(approvedSb.tables.trips[0].status, 'searching')
+  assert.equal(approvedSb.tables.trips[0].deposit_cents, 0)
+  assert.equal(approvedSb.tables.trips[0].metadata.match, 'open')
+  assert.equal(approvedSb.tables.trips[0].metadata.purpose, 'planned')
+})
+
+test('requestDriverTrip books an airport ride from pick-a-driver with no upfront deposit', async () => {
+  const approvedSb = memorySb({
+    driver_applications: [{ profile_id: 'driver-approved', onboarding_status: 'approved' }],
+    driver_status: [{ driver_id: 'driver-approved', online: true }],
+    vehicles: [{ driver_id: 'driver-approved', service_class: 'standard', tier: 'standard' }],
+  })
+  let ensured = false
+  const res = await callHandler(requestDriverTrip, {
+    body: {
+      ...REQUEST_BODY,
+      driverId: 'driver-approved',
+      dropoffLabel: 'GSP Airport',
+      destLat: 34.8956,
+      destLng: -82.2189,
+    },
+  }, {
+    sb: approvedSb.sb,
+    user: { id: 'rider-1', email: 'rider@clemson.edu', user_metadata: { full_name: 'Test Rider' } },
+    ensureProfile: async () => {
+      ensured = true
+      return { ok: true }
+    },
+  })
+  assert.equal(res.status, 200, JSON.stringify(res.json))
+  assert.equal(ensured, true)
+  assert.equal(approvedSb.tables.trips.length, 1)
+  assert.equal(approvedSb.tables.trips[0].deposit_cents, 0)
+  assert.equal(approvedSb.tables.trips[0].status, 'searching')
+})
+
+test('requestDriverTrip keeps the campus trip when the event insert fails', async () => {
+  const approvedSb = memorySb({
+    driver_applications: [{ profile_id: 'driver-approved', onboarding_status: 'approved' }],
+    driver_status: [{ driver_id: 'driver-approved', online: true }],
+    vehicles: [{ driver_id: 'driver-approved', service_class: 'standard', tier: 'standard' }],
+  })
+  const sb = {
+    from(table) {
+      if (table === 'trip_events') {
+        return {
+          insert() {
+            return Promise.resolve({ data: null, error: { message: 'ledger down' } })
+          },
+        }
+      }
+      return approvedSb.sb.from(table)
+    },
+  }
+  const res = await callHandler(requestDriverTrip, {
+    body: { ...REQUEST_BODY, driverId: 'driver-approved' },
+  }, {
+    sb,
+    user: { id: 'rider-1', email: 'rider@clemson.edu', user_metadata: { full_name: 'Test Rider' } },
+    ensureProfile: async () => ({ ok: true }),
+  })
+  assert.equal(res.status, 200)
+  assert.equal(typeof res.json.trip.id, 'string')
+  assert.equal(res.json.eventWarning, 'ledger down')
+  assert.equal(approvedSb.tables.trips.length, 1)
+  assert.equal(approvedSb.tables.trips[0].status, 'searching')
 })
 
 test('trip offer preview hides open trips from pending_review and still previews an accepted trip', async () => {
@@ -391,4 +459,128 @@ test('createGroupRide does not assign a pending_review driver and does assign an
   assert.equal(created.ok, undefined)
   assert.ok(created.rideId)
   assert.equal(approved.tables.friend_rides[0].driver_profile_id, 'driver-approved')
+})
+
+test('requestDriverTrip auto-assigns John before Kim and keeps a picked offer open', async () => {
+  const john = 'john-driver'
+  const kim = 'kim-driver'
+  const other = 'other-driver'
+  const user = { id: 'rider-1', email: 'rider@clemson.edu', user_metadata: { full_name: 'Test Rider' } }
+  const autoSb = memorySb({
+    driver_status: [
+      { driver_id: other, online: true },
+      { driver_id: kim, online: true },
+      { driver_id: john, online: true },
+    ],
+    driver_applications: [
+      { profile_id: john, onboarding_status: 'approved' },
+      { profile_id: kim, onboarding_status: 'approved' },
+      { profile_id: other, onboarding_status: 'approved' },
+    ],
+    profiles: [
+      { id: other, email: 'someone@example.com' },
+      { id: kim, email: 'kimubermaui@gmail.com' },
+      { id: john, email: 'johnmatveyev@gmail.com' },
+    ],
+  })
+  const auto = await callHandler(requestDriverTrip, {
+    body: { ...REQUEST_BODY, autoAssign: true },
+  }, { sb: autoSb.sb, user, ensureProfile: async () => ({ ok: true }) })
+  assert.equal(auto.status, 200)
+  assert.equal(autoSb.tables.trips[0].driver_id, null)
+  assert.equal(autoSb.tables.trips[0].status, 'searching')
+  assert.equal(autoSb.tables.trips[0].deposit_cents, 0)
+  assert.equal(autoSb.tables.trips[0].metadata.match, 'auto')
+  assert.equal(autoSb.tables.trips[0].metadata.offer_driver_id, john)
+  assert.deepEqual(autoSb.tables.trips[0].metadata.auto_assign_queue, [john, kim, other])
+  assert.equal(JSON.stringify(autoSb.tables.trips[0]).includes('@'), false)
+
+  const none = memorySb({ driver_status: [], driver_applications: [], profiles: [] })
+  const empty = await callHandler(requestDriverTrip, {
+    body: { ...REQUEST_BODY, autoAssign: true },
+  }, { sb: none.sb, user, ensureProfile: async () => ({ ok: true }) })
+  assert.equal(empty.status, 409)
+  assert.equal(empty.json.code, 'ride_option_unavailable')
+
+  const pickSb = memorySb({
+    driver_applications: [{ profile_id: kim, onboarding_status: 'approved' }],
+    driver_status: [{ driver_id: kim, online: true }],
+    vehicles: [{ driver_id: kim, service_class: 'standard', tier: 'standard' }],
+  })
+  const pick = await callHandler(requestDriverTrip, {
+    body: { ...REQUEST_BODY, driverId: kim },
+  }, { sb: pickSb.sb, user, ensureProfile: async () => ({ ok: true }) })
+  assert.equal(pick.status, 200)
+  assert.equal(pickSb.tables.trips[0].metadata.match, 'open')
+  assert.equal(pickSb.tables.trips[0].metadata.offer_driver_id, kim)
+  assert.equal(pickSb.tables.trips[0].metadata.preferred_driver_id, kim)
+  assert.equal(pickSb.tables.trips[0].driver_id, null)
+  assert.equal(pickSb.tables.trips[0].status, 'searching')
+})
+
+test('women-only comfort preference skips drivers who do not match and blocks a direct request', async () => {
+  const rider = 'rider-woman'
+  const man = 'driver-man'
+  const woman = 'driver-woman'
+  const user = { id: rider, email: 'rider@clemson.edu', user_metadata: { full_name: 'Ava Rider' } }
+  const autoSb = memorySb({
+    driver_status: [
+      { driver_id: man, online: true },
+      { driver_id: woman, online: true },
+    ],
+    driver_applications: [
+      { profile_id: man, onboarding_status: 'approved' },
+      { profile_id: woman, onboarding_status: 'approved' },
+    ],
+    profiles: [
+      { id: rider, email: 'rider@clemson.edu', gender_identity: 'woman', women_only_matching: true },
+      { id: man, email: 'man@example.com', gender_identity: 'man', women_only_matching: false },
+      { id: woman, email: 'woman@example.com', gender_identity: 'woman', women_only_matching: false },
+    ],
+  })
+  const auto = await callHandler(requestDriverTrip, {
+    body: { ...REQUEST_BODY, autoAssign: true },
+  }, { sb: autoSb.sb, user, ensureProfile: async () => ({ ok: true }) })
+  assert.equal(auto.status, 200)
+  assert.deepEqual(autoSb.tables.trips[0].metadata.auto_assign_queue, [woman])
+  assert.equal(autoSb.tables.trips[0].metadata.offer_driver_id, woman)
+
+  const blocked = memorySb({
+    driver_status: [{ driver_id: man, online: true }],
+    driver_applications: [{ profile_id: man, onboarding_status: 'approved' }],
+    profiles: [
+      { id: rider, gender_identity: 'woman', women_only_matching: true },
+      { id: man, email: 'man@example.com', gender_identity: 'man', women_only_matching: false },
+    ],
+  })
+  const none = await callHandler(requestDriverTrip, {
+    body: { ...REQUEST_BODY, autoAssign: true },
+  }, { sb: blocked.sb, user, ensureProfile: async () => ({ ok: true }) })
+  assert.equal(none.status, 409)
+  assert.equal(none.json.code, 'women_only_no_driver')
+  assert.equal(blocked.tables.trips.length, 0)
+
+  const pick = await callHandler(requestDriverTrip, {
+    body: { ...REQUEST_BODY, driverId: man },
+  }, { sb: blocked.sb, user, ensureProfile: async () => ({ ok: true }) })
+  assert.equal(pick.status, 409)
+  assert.equal(pick.json.code, 'women_only_mismatch')
+
+  const driverPref = memorySb({
+    driver_status: [{ driver_id: woman, online: true }],
+    driver_applications: [{ profile_id: woman, onboarding_status: 'approved' }],
+    profiles: [
+      { id: 'rider-man', gender_identity: 'man', women_only_matching: false },
+      { id: woman, email: 'woman@example.com', gender_identity: 'woman', women_only_matching: true },
+    ],
+  })
+  const passenger = await callHandler(requestDriverTrip, {
+    body: { ...REQUEST_BODY, autoAssign: true },
+  }, {
+    sb: driverPref.sb,
+    user: { id: 'rider-man', email: 'sam@clemson.edu', user_metadata: { full_name: 'Sam Rider' } },
+    ensureProfile: async () => ({ ok: true }),
+  })
+  assert.equal(passenger.status, 409)
+  assert.equal(passenger.json.code, 'women_only_no_driver')
 })

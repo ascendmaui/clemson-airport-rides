@@ -7,7 +7,7 @@
 
 export const OPERATOR_NAME = 'Clemson RIDES / Operator'
 
-export const IC_AGREEMENT_VERSION = 'ic-agreement-2026-09-24'
+export const IC_AGREEMENT_VERSION = 'ic-agreement-2026-10-05'
 
 export const IC_AGREEMENT_TITLE = 'Clemson RIDES Independent Contractor Agreement'
 

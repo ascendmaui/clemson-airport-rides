@@ -16,7 +16,7 @@ export default function SignInRoute() {
   const router = useRouter()
   const { signIn, resetPassword } = useAuth()
   const onSocial = useSocialSignIn()
-  const googleState = googleAuthButtonState(process.env, { scheme: 'clemsonrides' })
+  const googleState = googleAuthButtonState(process.env, { scheme: 'clemsonrides', provider: 'supabase' })
 
   const socialProviders = RIDER_SOCIAL_PROVIDERS.map((provider) => {
     if (provider.id === 'google') {

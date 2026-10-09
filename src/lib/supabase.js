@@ -17,6 +17,15 @@ export const supabaseConfigured = Boolean(url && key)
 export const supabase = supabaseConfigured
   ? createClient(url, key, {
       realtime: { params: { eventsPerSecond: 8 } },
+      auth: {
+        // PKCE returns ?code= on redirectTo. detectSessionInUrl exchanges it
+        // and also reads #access_token&refresh_token when the provider uses
+        // the implicit hash. Hash-router variants are finished in auth.jsx.
+        detectSessionInUrl: true,
+        persistSession: true,
+        autoRefreshToken: true,
+        flowType: 'pkce',
+      },
     })
   : null
 
@@ -36,6 +45,7 @@ export async function pingSupabase() {
 /**
  * Online drivers from driver_status + profiles + vehicles.
  * Shared with the rider app. No demo / simulated fleet arrays.
+ * Rush-hour cars are client markers from simulatedDrivers.js, not rows here.
  */
 export async function fetchOnlineDrivers() {
   return fetchSharedOnlineDrivers(supabase)

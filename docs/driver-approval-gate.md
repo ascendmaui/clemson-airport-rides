@@ -110,3 +110,36 @@ Client `fetchOnlineDrivers` already depends on `list_approved_driver_ids`. If th
 ## Tests for this map
 
 `server/driverApproval.test.js` pins `canReceiveRides` for every `ONBOARDING_STATUSES` value plus `null` / `undefined` / garbage, and `driverApprovalStatus` against a fake `sb` (approved, `pending_review`, missing row, DB error, admin exception). t2 adds fake-sb coverage that a `pending_review` driver is skipped on preferred assign, offer preview, and driving carpool create, while an approved driver is not. `packages/rides-native/drivers.test.js` covers the online list and open-pool desk the same way.
+
+
+### Approved drivers skip applicant steps
+
+An application with `onboarding_status = approved` is sufficient for the existing
+online, offer, and accept gates. Missing documents, a missing W-9, or an older
+IC agreement must not turn an approved driver back into an applicant. Online
+presence alone does not grant approval to an applicant.
+
+Web onboarding reads approval first and shows its approved screen without loading
+compliance records. Native onboarding reads approval first and returns approved
+drivers to driver home. Native home and queue retain their last confirmed state
+when a refresh fails; a successful read of a changed status still takes effect.
+Both direct submission fallbacks return success for approved drivers without
+reading compliance records or writing application status. API and direct review
+updates exclude approved rows, including approval concurrent with submission.
+Applicant document, W-9, agreement, and admin-approval checks remain in place.
+
+Verification (use test accounts; do not send application-notification emails):
+
+- With an approved application and missing compliance records or an old agreement,
+  open web driver home and native driver home, then open an onboarding deep link.
+  Web shows approval; native returns home without applicant steps or re-signing.
+- Go online, receive an offer, and accept a test ride. Approval alone satisfies the
+  onboarding gate; existing trip/payment eligibility rules still apply.
+- Fail a native application refresh after approval was loaded: home/queue retain
+  the last confirmed approval and show the read error rather than applicant copy.
+- With a pending applicant, verify incomplete submission is rejected and online,
+  offers, and acceptance remain gated. Complete onboarding before admin approval.
+- Unit tests simulate an unavailable API and an approval concurrent with direct
+  submission; both must preserve `approved` and never write it to `pending_review`.
+
+No database migration is required for this change.

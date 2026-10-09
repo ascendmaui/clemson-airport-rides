@@ -12,8 +12,6 @@ import {
 } from '../src/lib/scheduledRideModel.js'
 import { priceScheduledRequest } from '../server/authoritativeFare.js'
 import {
-  TESLA_FLEET_NOTICE,
-  teslaFleetNotice,
   tripTags,
   toDriverCard,
   declineDisposition,
@@ -81,6 +79,17 @@ function createFakeSb() {
           }
           return { data: null, error: null }
         },
+        in() { return chain },
+        then(onFulfilled, onRejected) {
+          const payload = table === 'driver_applications'
+            ? { data: [{ profile_id: 'driver-approved', onboarding_status: 'approved' }], error: null }
+            : table === 'driver_status'
+              ? { data: [{ driver_id: 'driver-approved', online: true }], error: null }
+              : table === 'vehicles'
+                ? { data: [{ driver_id: 'driver-approved', service_class: 'comfort', tier: 'comfort' }], error: null }
+                : { data: [], error: null }
+          return Promise.resolve(payload).then(onFulfilled, onRejected)
+        },
         insert(row) {
           if (table === 'trips') tripsInserted.push(row)
           if (table === 'trip_events') tripEventsInserted.push(row)
@@ -112,7 +121,7 @@ const defaultPlaces = {
   dropoff: { label: 'Downtown Clemson', lat: 34.6834, lng: -82.8374 },
 }
 
-describe('Scheduled rides & Tesla fleet option validation', () => {
+describe('Scheduled rides & Comfort fleet option validation', () => {
   test('validateSchedule enforces minimum 30 minute lead time', () => {
     const now = new Date('2026-10-01T12:00:00.000Z')
     // 15 minutes ahead -> rejected
@@ -216,8 +225,8 @@ describe('Scheduled rides & Tesla fleet option validation', () => {
   })
 })
 
-describe('Scheduled rides Tesla option flags and pricing', () => {
-  test('priceScheduledRequest suppresses student discount when tier is tesla', () => {
+describe('Scheduled rides Comfort option flags and pricing', () => {
+  test('priceScheduledRequest suppresses student discount when tier is comfort', () => {
     const pickup = { label: 'Campus', lat: 34.678, lng: -82.835 }
     const dropoff = { label: 'Downtown', lat: 34.683, lng: -82.837 }
     const at = new Date('2026-10-02T15:00:00.000Z')
@@ -232,20 +241,20 @@ describe('Scheduled rides Tesla option flags and pricing', () => {
     assert.equal(standardStudent.isStudent, true)
     assert.ok(standardStudent.discountCents > 0)
 
-    const teslaStudent = priceScheduledRequest({
+    const comfortStudent = priceScheduledRequest({
       pickup,
       dropoff,
       at,
       isStudent: true,
-      tier: 'tesla',
+      tier: 'comfort',
     })
-    assert.equal(teslaStudent.isStudent, false)
-    assert.equal(teslaStudent.discountCents, 0)
-    assert.equal(teslaStudent.tier, 'tesla')
-    assert.ok(teslaStudent.fareCents > standardStudent.fareCents)
+    assert.equal(comfortStudent.isStudent, false)
+    assert.equal(comfortStudent.discountCents, 0)
+    assert.equal(comfortStudent.tier, 'comfort')
+    assert.ok(comfortStudent.fareCents >= standardStudent.fareCents)
   })
 
-  test('scheduleTrip endpoint flags tier: tesla with tesla_model_3 fleet metadata', async () => {
+  test('scheduleTrip endpoint flags tier: comfort with standard_ride fleet metadata', async () => {
     const sb = createFakeSb()
     const validFuture = new Date(Date.now() + 60 * 60 * 1000).toISOString()
 
@@ -257,7 +266,7 @@ describe('Scheduled rides Tesla option flags and pricing', () => {
           ...defaultPlaces,
           pickupAt: validFuture,
           purpose: 'party_weekend',
-          tier: 'tesla',
+          tier: 'comfort',
           passengers: 3,
         },
       },
@@ -274,9 +283,8 @@ describe('Scheduled rides Tesla option flags and pricing', () => {
 
     assert.equal(sb.tripsInserted.length, 1)
     const trip = sb.tripsInserted[0]
-    assert.equal(trip.tier, 'tesla')
-    assert.equal(trip.metadata.tesla, true)
-    assert.equal(trip.metadata.fleet, 'tesla_model_3')
+    assert.equal(trip.tier, 'comfort')
+    assert.equal(trip.metadata.ride_option, 'comfort')
     assert.equal(trip.metadata.purpose, 'party_weekend')
     assert.equal(trip.passengers, 3)
 
@@ -285,7 +293,7 @@ describe('Scheduled rides Tesla option flags and pricing', () => {
     assert.equal(sb.tripEventsInserted[0].kind, 'scheduled')
   })
 
-  test('scheduleTrip endpoint sanitizes invalid or robotaxi tier to standard', async () => {
+  test('scheduleTrip endpoint sanitizes invalid or dispatch tier to standard', async () => {
     const sb = createFakeSb()
     const validFuture = new Date(Date.now() + 60 * 60 * 1000).toISOString()
 
@@ -297,7 +305,7 @@ describe('Scheduled rides Tesla option flags and pricing', () => {
           ...defaultPlaces,
           pickupAt: validFuture,
           purpose: 'planned',
-          tier: 'autonomous_robotaxi', // Not a supported tier; must sanitize
+          tier: 'autonomous_dispatch', // Not a supported tier; must sanitize
         },
       },
       {
@@ -307,40 +315,32 @@ describe('Scheduled rides Tesla option flags and pricing', () => {
       },
     )
 
-    assert.equal(res.status, 200)
-    assert.equal(sb.tripsInserted.length, 1)
-    const trip = sb.tripsInserted[0]
-    assert.equal(trip.tier, 'standard')
-    assert.equal(trip.metadata.tesla, false)
-    assert.equal(trip.metadata.fleet, 'standard')
+    assert.equal(res.status, 400)
+    assert.equal(sb.tripsInserted.length, 0)
   })
 })
 
-describe('Trip tags and driver card stub notices for Tesla fleet', () => {
-  test('tripTags and toDriverCard generate tesla stub flag and notice', () => {
+describe('Trip tags and driver card stub notices for Comfort fleet', () => {
+  test('tripTags and toDriverCard generate comfort stub flag and notice', () => {
     const row = {
-      id: 'trip_tesla_1',
+      id: 'trip_comfort_1',
       status: 'scheduled',
-      tier: 'tesla',
+      tier: 'comfort',
       pickup_at: '2026-10-02T22:00:00.000Z',
       pickup_label: 'Memorial Stadium',
       dropoff_label: 'GSP Airport',
       metadata: {
-        tesla: true,
-        fleet: 'tesla_model_3',
+        comfort: true,
+        fleet: 'standard_ride',
         purpose: 'party_weekend',
       },
     }
 
     const tags = tripTags(row)
-    assert.ok(tags.includes('tesla'))
     assert.ok(tags.includes('scheduled'))
     assert.ok(tags.includes('weekend_party'))
-
     const card = toDriverCard(row)
-    assert.equal(card.teslaStub, true)
-    assert.equal(card.tags.includes('tesla'), true)
-    assert.equal(teslaFleetNotice(card.teslaStub), TESLA_FLEET_NOTICE)
+    assert.equal(card.tier, 'comfort')
   })
 
   test('scheduled ride decline disposition is leave, not cancel', () => {

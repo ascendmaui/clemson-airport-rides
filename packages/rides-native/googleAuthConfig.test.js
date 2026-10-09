@@ -30,6 +30,18 @@ test('exports expected constants and env keys', () => {
   assert.equal(GOOGLE_AUTH_COMING_SOON, 'Google sign-in is coming soon')
 })
 
+test('supabase google stays enabled when app client ids are empty', () => {
+  const res = googleAuthConfig({}, { scheme: 'clemsonrides-driver', provider: 'supabase' })
+  assert.equal(res.enabled, true)
+  assert.equal(res.redirectUri, 'clemsonrides-driver://auth/callback')
+  assert.equal(res.message, null)
+  const button = googleAuthButtonState({}, { scheme: 'clemsonrides-driver', provider: 'supabase' })
+  assert.equal(button.enabled, true)
+  assert.equal(button.disabled, false)
+  assert.equal(button.hidden, false)
+  assert.equal(button.message, null)
+})
+
 test('unconfigured fake env reports missing keys and disabled status', () => {
   const fakeEnv = {}
   const res = googleAuthConfig(fakeEnv)

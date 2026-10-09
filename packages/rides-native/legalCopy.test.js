@@ -205,7 +205,7 @@ test('TERMS_SECTIONS conforms to required structure and unique headings', () => 
 test('TERMS_SECTIONS contains core financial, operational, and fee rules', () => {
   const service = TERMS_SECTIONS.find((s) => s.heading === 'The service')
   assert.ok(service)
-  assert.match(service.paragraphs[0], /25% deposit via Stripe/)
+  assert.match(service.paragraphs[0], /card hold for the estimated fare plus a buffer/)
   assert.match(service.paragraphs[0], /GSP and CLT/)
 
   const riderResp = TERMS_SECTIONS.find((s) => s.heading === 'Rider responsibilities')

@@ -47,6 +47,15 @@ const ACCOUNT_EXISTS_MSG =
 const INVALID_CREDENTIALS_MSG =
   'That email and password do not match. Reset your password, or continue with Google.'
 
+/** The generic failure the driver sign-in screen must not show. */
+export function isGenericAuthFailure(message) {
+  const text = String(message || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[.!]+$/g, '')
+  return /something went wrong[.,]?\s*please try again$/.test(text)
+}
+
 export function mapAuthError(error) {
   if (isRateLimitError(error)) {
     const err = new Error(RATE_LIMIT_MSG)

@@ -1,0 +1,167 @@
+# Clemson RIDES on the Hostinger VPS.
+# Traefik (container traefik-bmeb-traefik-1) uses host networking and owns
+# ports 80 and 443. It reaches this container through the Docker provider,
+# so this project does not join Traefik's network and does not publish 80/443.
+# Set traefik.docker.network to this project's own bridge (CLEMSON_NETWORK).
+#
+# Debug only: 127.0.0.1:3080 (prod) and 127.0.0.1:3081 (staging). Those ports
+# are free on the box. Do not bind 0.0.0.0.
+#
+# web_next / staging_next are overlap backends for deploy/remote-up.sh.
+# They are behind the "overlap" profile so a normal `up` does not start them.
+#
+# Overlap uses its own router and service names at priority 100. The canonical
+# routers stay at priority 10. Traefik picks the highest priority router, so
+# the public host moves to the new container as soon as that router exists.
+# Reusing the canonical router name is not safe here: Traefik deletes a router
+# defined twice when the two configs are not identical, and round-robin on one
+# shared service does not prefer the new SHA. The www redirect middleware is
+# copied verbatim onto both containers; a differing copy would be deleted too.
+
+x-app-healthcheck: &app-healthcheck
+  test:
+    - CMD
+    - node
+    - -e
+    - "fetch('http://127.0.0.1:3000/api/healthz').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+  interval: 2s
+  timeout: 3s
+  retries: 20
+  start_period: 15s
+
+x-web-labels: &web-labels
+  - traefik.enable=true
+  - traefik.docker.network=${CLEMSON_NETWORK:-clemson_rides_net}
+  - traefik.http.services.clemson.loadbalancer.server.port=3000
+  - traefik.http.routers.clemson.rule=Host(`clemsonrides.com`)
+  - traefik.http.routers.clemson.priority=10
+  - traefik.http.routers.clemson.entrypoints=${TRAEFIK_ENTRYPOINT:-websecure}
+  - traefik.http.routers.clemson.tls=true
+  - traefik.http.routers.clemson.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}
+  - traefik.http.routers.clemson.service=clemson
+  - traefik.http.routers.clemson-www.rule=Host(`www.clemsonrides.com`)
+  - traefik.http.routers.clemson-www.priority=10
+  - traefik.http.routers.clemson-www.entrypoints=${TRAEFIK_ENTRYPOINT:-websecure}
+  - traefik.http.routers.clemson-www.tls=true
+  - traefik.http.routers.clemson-www.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}
+  - traefik.http.routers.clemson-www.middlewares=clemson-www-redirect
+  - traefik.http.routers.clemson-www.service=clemson
+  - traefik.http.middlewares.clemson-www-redirect.redirectregex.regex=^https://www\.clemsonrides\.com/(.*)
+  - traefik.http.middlewares.clemson-www-redirect.redirectregex.replacement=https://clemsonrides.com/$${1}
+  - traefik.http.middlewares.clemson-www-redirect.redirectregex.permanent=true
+
+x-web-next-labels: &web-next-labels
+  - traefik.enable=true
+  - traefik.docker.network=${CLEMSON_NETWORK:-clemson_rides_net}
+  - traefik.http.services.clemson-next.loadbalancer.server.port=3000
+  - traefik.http.routers.clemson-next.rule=Host(`clemsonrides.com`)
+  - traefik.http.routers.clemson-next.priority=100
+  - traefik.http.routers.clemson-next.entrypoints=${TRAEFIK_ENTRYPOINT:-websecure}
+  - traefik.http.routers.clemson-next.tls=true
+  - traefik.http.routers.clemson-next.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}
+  - traefik.http.routers.clemson-next.service=clemson-next
+  - traefik.http.routers.clemson-www-next.rule=Host(`www.clemsonrides.com`)
+  - traefik.http.routers.clemson-www-next.priority=100
+  - traefik.http.routers.clemson-www-next.entrypoints=${TRAEFIK_ENTRYPOINT:-websecure}
+  - traefik.http.routers.clemson-www-next.tls=true
+  - traefik.http.routers.clemson-www-next.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}
+  - traefik.http.routers.clemson-www-next.middlewares=clemson-www-redirect
+  - traefik.http.routers.clemson-www-next.service=clemson-next
+  - traefik.http.middlewares.clemson-www-redirect.redirectregex.regex=^https://www\.clemsonrides\.com/(.*)
+  - traefik.http.middlewares.clemson-www-redirect.redirectregex.replacement=https://clemsonrides.com/$${1}
+  - traefik.http.middlewares.clemson-www-redirect.redirectregex.permanent=true
+
+x-staging-labels: &staging-labels
+  - traefik.enable=true
+  - traefik.docker.network=${CLEMSON_NETWORK:-clemson_rides_net}
+  - traefik.http.services.clemson-staging.loadbalancer.server.port=3000
+  - traefik.http.routers.clemson-staging.rule=Host(`clemson-staging.srv1090862.hstgr.cloud`)
+  - traefik.http.routers.clemson-staging.priority=10
+  - traefik.http.routers.clemson-staging.entrypoints=${TRAEFIK_ENTRYPOINT:-websecure}
+  - traefik.http.routers.clemson-staging.tls=true
+  - traefik.http.routers.clemson-staging.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}
+  - traefik.http.routers.clemson-staging.service=clemson-staging
+
+x-staging-next-labels: &staging-next-labels
+  - traefik.enable=true
+  - traefik.docker.network=${CLEMSON_NETWORK:-clemson_rides_net}
+  - traefik.http.services.clemson-staging-next.loadbalancer.server.port=3000
+  - traefik.http.routers.clemson-staging-next.rule=Host(`clemson-staging.srv1090862.hstgr.cloud`)
+  - traefik.http.routers.clemson-staging-next.priority=100
+  - traefik.http.routers.clemson-staging-next.entrypoints=${TRAEFIK_ENTRYPOINT:-websecure}
+  - traefik.http.routers.clemson-staging-next.tls=true
+  - traefik.http.routers.clemson-staging-next.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}
+  - traefik.http.routers.clemson-staging-next.service=clemson-staging-next
+
+name: clemson-rides
+
+services:
+  web:
+    image: ghcr.io/ascendmaui/clemson-airport-rides:${IMAGE_TAG:?set IMAGE_TAG to the commit SHA}
+    container_name: clemson-rides-web
+    env_file: /opt/clemson-rides/.env
+    restart: unless-stopped
+    mem_limit: 512m
+    cpus: "1.0"
+    networks:
+      - clemson
+    ports:
+      - "127.0.0.1:3080:3000"
+    healthcheck: *app-healthcheck
+    labels: *web-labels
+
+  # Started only by deploy/remote-up.sh (--profile overlap) while web is replaced.
+  # No host port: 3080 stays on web. Higher-priority routers so Traefik sends
+  # clemsonrides.com to this container before web is recreated.
+  web_next:
+    profiles: ["overlap"]
+    image: ghcr.io/ascendmaui/clemson-airport-rides:${IMAGE_TAG:?set IMAGE_TAG to the commit SHA}
+    container_name: clemson-rides-web-next
+    env_file: /opt/clemson-rides/.env
+    restart: unless-stopped
+    mem_limit: 512m
+    cpus: "1.0"
+    networks:
+      - clemson
+    healthcheck: *app-healthcheck
+    labels: *web-next-labels
+
+  staging:
+    profiles: ["staging"]
+    image: ghcr.io/ascendmaui/clemson-airport-rides:${STAGING_IMAGE_TAG:-staging}
+    container_name: clemson-rides-staging
+    env_file: /opt/clemson-rides/.env
+    # Overrides the shared env file for this container only. Do not put these
+    # in /opt/clemson-rides/.env or production will refuse cron too.
+    environment:
+      DISABLE_CRON_ENDPOINTS: "1"
+      ALLOW_STAGING_DRY_RUN: "1"
+    restart: unless-stopped
+    mem_limit: 512m
+    cpus: "1.0"
+    networks:
+      - clemson
+    ports:
+      - "127.0.0.1:3081:3000"
+    healthcheck: *app-healthcheck
+    labels: *staging-labels
+
+  staging_next:
+    profiles: ["overlap"]
+    image: ghcr.io/ascendmaui/clemson-airport-rides:${STAGING_IMAGE_TAG:-staging}
+    container_name: clemson-rides-staging-next
+    env_file: /opt/clemson-rides/.env
+    environment:
+      DISABLE_CRON_ENDPOINTS: "1"
+      ALLOW_STAGING_DRY_RUN: "1"
+    restart: unless-stopped
+    mem_limit: 512m
+    cpus: "1.0"
+    networks:
+      - clemson
+    healthcheck: *app-healthcheck
+    labels: *staging-next-labels
+
+networks:
+  clemson:
+    name: ${CLEMSON_NETWORK:-clemson_rides_net}

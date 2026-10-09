@@ -155,8 +155,8 @@ function scriptedSupabase(responses) {
 }
 
 test('share links use the public /share/:token path', () => {
-  assert.equal(shareUrl('abc123'), 'https://clemson-rides.vercel.app/share/abc123')
-  assert.equal(shareUrl('a b'), 'https://clemson-rides.vercel.app/share/a%20b')
+  assert.equal(shareUrl('abc123'), 'https://clemsonrides.com/share/abc123')
+  assert.equal(shareUrl('a b'), 'https://clemsonrides.com/share/a%20b')
   assert.throws(() => shareUrl('  '), /Share token required/)
 })
 
@@ -277,7 +277,7 @@ test('SOS log rejects an unknown channel and stores a banner', async () => {
 })
 
 test('published police contacts and share origin stay on the public host', () => {
-  assert.equal(SHARE_ORIGIN, 'https://clemson-rides.vercel.app')
+  assert.equal(SHARE_ORIGIN, 'https://clemsonrides.com')
   assert.equal(CUPD_PHONE_E164, '+18646562222')
   assert.equal(CUPD_PHONE_DISPLAY, '(864) 656-2222')
   assert.equal(CUPD_EMAIL, 'police@clemson.edu')

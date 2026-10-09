@@ -24,10 +24,7 @@ export const ALLOWLIST = new Set([
   'apps/driver/app/(tabs)/index.tsx:664',
   'apps/driver/app/bug-report.tsx:81',
   'apps/driver/app/bug-report.tsx:90',
-  'apps/driver/app/fleet.tsx:98',
-  'apps/driver/app/fleet.tsx:102',
   'apps/driver/app/learning.tsx:166',
-  'apps/driver/app/settings/[section].tsx:163',
 ])
 
 /**
@@ -241,4 +238,15 @@ test('scanner flags Image without accessibilityLabel or accessible={false}', () 
 
   const decorative = scanCode('<Image source={pattern} accessible={false} />')
   assert.equal(decorative.length, 0)
+})
+
+test('queue accept and decline controls retain actionable labels', () => {
+  const queue = fs.readFileSync(path.join(REPO_ROOT, 'apps/driver/app/queue.tsx'), 'utf8')
+  const chrome = fs.readFileSync(path.join(REPO_ROOT, 'apps/driver/components/chrome.tsx'), 'utf8')
+
+  assert.match(queue, /<Primary label=\{busy \? 'Saving…' : acceptActionLabel\(card\.status\)\}/)
+  assert.match(queue, /accessibilityRole="button"/)
+  assert.match(queue, /accessibilityLabel=\{declineActionLabel\(card\.status\)\}/)
+  assert.match(queue, /accessibilityState=\{\{ disabled: busy \}\}/)
+  assert.match(chrome, /accessibilityLabel=\{accessibilityLabel \|\| label\}/)
 })

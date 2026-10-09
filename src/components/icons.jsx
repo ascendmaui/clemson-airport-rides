@@ -209,6 +209,15 @@ export function IconClose({ size = 16, color = '#5B6472', ...p }) {
   )
 }
 
+export function IconShield({ size, color = ORANGE, ...p }) {
+  return (
+    <Svg size={size} title="Safety" {...p}>
+      <path d="M12 3.4 19 6.2v5.4c0 4.2-2.8 7.2-7 8.9-4.2-1.7-7-4.7-7-8.9V6.2L12 3.4Z" stroke={color} strokeWidth="1.7" strokeLinejoin="round" />
+      <path d="m8.8 12.1 2.1 2.1 4.3-4.4" stroke={PURPLE} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+    </Svg>
+  )
+}
+
 export function IconSignOut({ size, color = ORANGE, ...p }) {
   return (
     <Svg size={size} title="Sign out" {...p}>
@@ -235,6 +244,7 @@ export const ICONS = {
   schedule: IconSchedule,
   privacy: IconPrivacy,
   student: IconStudent,
+  shield: IconShield,
   close: IconClose,
   signOut: IconSignOut,
 }

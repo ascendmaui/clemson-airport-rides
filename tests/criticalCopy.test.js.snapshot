@@ -10,7 +10,7 @@ exports[`Critical student and game-day copy snapshot 1`] = `
   "MARKETING_STUDENT": {
     "id": "student",
     "title": "Student discount",
-    "body": "10% off Standard when the signed-in email is confirmed and ends with @clemson.edu or @g.clemson.edu. Comfort, XL, Pet, and Tesla are not included."
+    "body": "10% off Standard when the signed-in email is confirmed and ends with @clemson.edu or @g.clemson.edu. Other ride types are not included."
   },
   "MARKETING_GAMEDAY": {
     "id": "gameday",

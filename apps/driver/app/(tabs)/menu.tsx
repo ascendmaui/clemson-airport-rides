@@ -82,6 +82,7 @@ export default function MenuScreen() {
     { icon: 'car', title: 'Vehicles', subtitle: vehicleSubtitle(vehicle), onPress: () => router.push('/vehicles') },
     { icon: 'document-text', title: 'Documents', subtitle: 'License, insurance, registration', onPress: () => router.push('/documents') },
     { icon: 'shield-checkmark', title: 'Insurance', subtitle: 'Your policy and trip coverage notes', onPress: () => router.push('/insurance') },
+    { icon: 'shield', title: 'Safety', subtitle: 'Audio, video, live location, and SOS', onPress: () => router.push('/safety') },
   ]
   const money: MenuRow[] = [
     { icon: 'calculator', title: 'Tax info', subtitle: 'W-9 on your application', onPress: () => router.push('/tax') },
@@ -95,7 +96,7 @@ export default function MenuScreen() {
   const account: MenuRow[] = [
     { icon: 'settings', title: 'Settings', subtitle: 'Display, navigation, and sounds', onPress: () => router.push('/settings') },
     { icon: 'swap-horizontal', title: 'Switch account', subtitle: 'One driver session on this phone', onPress: () => router.push('/switch-account') },
-    { icon: 'car-sport', title: 'Tesla Model 3 listing', subtitle: 'Existing fleet toggle', onPress: () => router.push('/fleet') },
+    { icon: 'car-sport', title: 'Vehicle', subtitle: 'Make, model, and service class', onPress: () => router.push('/vehicles') },
   ]
 
   return (

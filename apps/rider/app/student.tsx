@@ -72,7 +72,7 @@ function StudentScreen() {
         <Text style={styles.copy}>{STUDENT_CLAIM_COPY}</Text>
         {status.verified ? (
           <Text style={styles.copy}>
-            {STUDENT_DISCOUNT_LABEL} is on Standard quotes. Comfort, XL, Pet, and Tesla stay full price. The airport deposit uses the discounted fare.
+            {STUDENT_DISCOUNT_LABEL} is on Standard quotes. Extra Comfort stays full price. The airport fare uses the discounted Standard price.
           </Text>
         ) : (
           <Text style={styles.copy}>{status.gateCopy}</Text>

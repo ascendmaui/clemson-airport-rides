@@ -9,7 +9,10 @@ export default function SignInRoute() {
   const router = useRouter()
   const { signIn, resetPassword } = useAuth()
   const onSocial = useSocialSignIn()
-  const googleState = googleAuthButtonState(process.env, { scheme: 'clemsonrides-driver' })
+  const googleState = googleAuthButtonState(process.env, {
+    scheme: 'clemsonrides-driver',
+    provider: 'supabase',
+  })
 
   const socialProviders = DRIVER_SOCIAL_PROVIDERS.map((provider) => {
     if (provider.id === 'google') {
@@ -28,13 +31,14 @@ export default function SignInRoute() {
     <SignInScreen
       signIn={signIn}
       mark="CD"
-      subtitle="Sign in with Apple, Google, or the email and password on your driver account."
+      subtitle="Continue with Google. This screen waits while the account owner confirms."
       socialProviders={socialProviders}
       onSocial={onSocial}
       resetPassword={resetPassword}
       onForgotPassword={() => router.push('/forgot-password')}
       onSuccess={() => router.replace('/')}
       onCreateAccount={() => router.push('/sign-up')}
+      ownerRequest
       onBack={() => {
         if (router.canGoBack()) router.back()
         else router.replace('/')

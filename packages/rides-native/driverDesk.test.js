@@ -1,9 +1,13 @@
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import test from 'node:test'
 import {
   acceptTrip,
   advanceTrip,
+  declineDriverOffer,
   declineTrip,
+  markSearchingOffers,
+  passOffer,
   formatCents,
   listPassedTripIds,
   loadDriverDesk,
@@ -17,7 +21,7 @@ import {
   publishDriverLocation,
   riderFacingCard,
   setPriorityMode,
-  setTeslaListing,
+  setServiceClass,
   subscribeTrips,
 } from './driverDesk.js'
 import { approvalGateMessage } from './syntheticOffers.js'
@@ -44,7 +48,11 @@ function createFakeSupabase(initialTables = {}, options = {}) {
   function matchFilter(row, filter) {
     const { type, col, val, op } = filter
     const rowVal = row[col]
-    if (type === 'eq') return rowVal === val
+    if (type === 'eq') return col === 'metadata' ? JSON.stringify(rowVal) === val : rowVal === val
+    if (type === 'or') {
+      const target = row.metadata?.offer_driver_id
+      return target == null || target === '' || target === JSON.parse(val.split('metadata->>offer_driver_id.eq.').at(-1))
+    }
     if (type === 'neq') return rowVal !== val
     if (type === 'in') return Array.isArray(val) && val.includes(rowVal)
     if (type === 'is') {
@@ -121,6 +129,8 @@ function createFakeSupabase(initialTables = {}, options = {}) {
         let existingIndex = -1
         if (table === 'driver_status') {
           existingIndex = tableRows.findIndex((row) => row.driver_id === item.driver_id)
+        } else if (table === 'trip_driver_locations') {
+          existingIndex = tableRows.findIndex((row) => row.trip_id === item.trip_id)
         } else if (table === 'driver_offer_passes') {
           existingIndex = tableRows.findIndex(
             (row) => row.driver_id === item.driver_id && row.trip_id === item.trip_id,
@@ -204,6 +214,7 @@ function createFakeSupabase(initialTables = {}, options = {}) {
         state.filters.push({ type: 'in', col, val })
         return builder
       },
+      or(val) { state.filters.push({ type: 'or', val }); return builder },
       is(col, val) {
         state.filters.push({ type: 'is', col, val })
         return builder
@@ -390,13 +401,13 @@ test('riderFacingCard formats complete profile and vehicle card', () => {
       student_verified_at: '2025-01-01T00:00:00.000Z',
     },
     vehicle: {
-      make: 'Tesla',
+      make: 'Comfort',
       model: 'Model Y',
       color: 'White',
       plate: 'CLEM-1',
       seats: 4,
-      is_tesla: true,
-      tier: 'tesla_self_driving',
+      service_class: true,
+      tier: 'comfort',
     },
     online: true,
   })
@@ -407,10 +418,10 @@ test('riderFacingCard formats complete profile and vehicle card', () => {
     ratingAvg: 4.88,
     ratingCount: 50,
     studentVerified: true,
-    vehicleLabel: 'White Tesla Model Y',
+    vehicleLabel: 'White Comfort Model Y',
     plate: 'CLEM-1',
-    isTesla: true,
-    tier: 'tesla_self_driving',
+    comfortClass: true,
+    tier: 'comfort',
     online: true,
     seats: 4,
   })
@@ -426,7 +437,7 @@ test('riderFacingCard provides safe defaults when input is missing or empty', ()
     studentVerified: false,
     vehicleLabel: 'Vehicle TBD',
     plate: null,
-    isTesla: false,
+    comfortClass: false,
     tier: 'standard',
     online: false,
     seats: null,
@@ -533,7 +544,7 @@ test('loadVehicle returns vehicle row for driver', async () => {
         color: 'Silver',
         plate: 'SC-999',
         seats: 4,
-        is_tesla: false,
+        service_class: false,
         autonomous_capable: false,
         tier: 'standard',
       },
@@ -725,6 +736,94 @@ test('publishDriverLocation upserts driver location and normalizes heading', asy
   assert.equal(updated.online, false)
 })
 
+test('publishDriverLocation writes trip telemetry for a live trip and keeps presence', async () => {
+  const supabase = createFakeSupabase({
+    trips: [{ id: 'trip-live', driver_id: 'driver-1', status: 'in_progress', accepted_at: '2026-10-07T00:00:00Z' }],
+  })
+  await publishDriverLocation(supabase, 'driver-1', {
+    lat: 34.68,
+    lng: -82.83,
+    heading: -1,
+    speed: -3,
+    online: true,
+  })
+  const status = supabase._tables.driver_status.find((row) => row.driver_id === 'driver-1')
+  assert.equal(status.lat, 34.68)
+  assert.equal(status.online, true)
+  assert.equal(status.heading, -1)
+  const loc = supabase._tables.trip_driver_locations.find((row) => row.trip_id === 'trip-live')
+  assert.equal(loc.driver_id, 'driver-1')
+  assert.equal(loc.lat, 34.68)
+  assert.equal(loc.lng, -82.83)
+  assert.equal(loc.heading, null)
+  assert.equal(loc.speed, null)
+
+  await publishDriverLocation(supabase, 'driver-1', {
+    lat: 34.681,
+    lng: -82.831,
+    heading: 90,
+    speed: 4,
+    online: true,
+    tripId: 'trip-explicit',
+    tripStatus: 'arriving',
+  })
+  const explicit = supabase._tables.trip_driver_locations.find((row) => row.trip_id === 'trip-explicit')
+  assert.equal(explicit.heading, 90)
+  assert.equal(explicit.speed, 4)
+  assert.equal(supabase._tables.trip_driver_locations.length, 2)
+})
+
+test('publishDriverLocation does not write trip telemetry for a non-live trip', async () => {
+  const supabase = createFakeSupabase({
+    trips: [
+      { id: 'trip-search', driver_id: 'driver-1', status: 'searching' },
+      { id: 'trip-live', driver_id: 'driver-1', status: 'accepted', accepted_at: '2026-10-07T00:00:00Z' },
+    ],
+  })
+  await publishDriverLocation(supabase, 'driver-1', {
+    lat: 34.68,
+    lng: -82.83,
+    tripId: 'trip-search',
+    tripStatus: 'searching',
+  })
+  assert.equal(supabase._tables.trip_driver_locations?.length || 0, 0)
+  const status = supabase._tables.driver_status.find((row) => row.driver_id === 'driver-1')
+  assert.equal(status.lat, 34.68)
+})
+
+test('publishDriverLocation keeps presence when the live-trip lookup fails', async () => {
+  const supabase = createFakeSupabase({}, {
+    onError(table, state) {
+      if (table === 'trips' && state.mode === 'select') return { message: 'trips unavailable' }
+      return null
+    },
+  })
+  await publishDriverLocation(supabase, 'driver-1', { lat: 34.68, lng: -82.83, online: true })
+  assert.equal(supabase._tables.driver_status[0].lat, 34.68)
+  assert.equal(supabase._tables.trip_driver_locations?.length || 0, 0)
+})
+
+test('publishDriverLocation throws when the trip location write fails', async () => {
+  const supabase = createFakeSupabase(
+    {},
+    {
+      tableErrors: {
+        trip_driver_locations: { message: 'trip location rejected' },
+      },
+    },
+  )
+  await assert.rejects(
+    () => publishDriverLocation(supabase, 'driver-1', {
+      lat: 34.68,
+      lng: -82.83,
+      tripId: 'trip-1',
+      tripStatus: 'accepted',
+    }),
+    /trip location rejected/,
+  )
+  assert.equal(supabase._tables.driver_status[0].online, true)
+})
+
 test('publishDriverLocation throws on database error', async () => {
   const supabase = createFakeSupabase(
     {},
@@ -742,17 +841,17 @@ test('publishDriverLocation throws on database error', async () => {
 })
 
 // ---------------------------------------------------------------------------
-// 8. setTeslaListing
+// 8. setServiceClass
 // ---------------------------------------------------------------------------
-test('setTeslaListing throws when driver has no vehicle in onboarding', async () => {
+test('setServiceClass throws when driver has no vehicle in onboarding', async () => {
   const supabase = createFakeSupabase()
   await assert.rejects(
-    () => setTeslaListing(supabase, 'driver-no-car', { enabled: true }),
-    /Add your vehicle in driver onboarding before listing a Tesla/,
+    () => setServiceClass(supabase, 'driver-no-car', 'comfort'),
+    /Add your vehicle in driver onboarding before choosing a service class/,
   )
 })
 
-test('setTeslaListing updates vehicle tier and attributes when enabled', async () => {
+test('setServiceClass stores comfort or standard on the vehicle', async () => {
   const supabase = createFakeSupabase({
     vehicles: [
       {
@@ -761,29 +860,47 @@ test('setTeslaListing updates vehicle tier and attributes when enabled', async (
         make: 'Honda',
         model: 'Civic',
         tier: 'standard',
-        is_tesla: false,
+        service_class: 'standard',
       },
     ],
   })
 
-  const updated = await setTeslaListing(supabase, 'driver-1', { enabled: true, claimModel3: true })
-  assert.equal(updated.is_tesla, true)
-  assert.equal(updated.tier, 'tesla_self_driving')
-  assert.equal(updated.autonomous_capable, false)
-  assert.equal(updated.make, 'Tesla')
-  assert.equal(updated.model, 'Model 3')
-
-  // Turning off resets tier and is_tesla without modifying make/model
-  const reverted = await setTeslaListing(supabase, 'driver-1', { enabled: false })
-  assert.equal(reverted.is_tesla, false)
+  const updated = await setServiceClass(supabase, 'driver-1', 'comfort')
+  assert.equal(updated.service_class, 'comfort')
+  assert.equal(updated.tier, 'comfort')
+  assert.equal(updated.make, 'Honda')
+  const reverted = await setServiceClass(supabase, 'driver-1', 'standard')
+  assert.equal(reverted.service_class, 'standard')
   assert.equal(reverted.tier, 'standard')
-  assert.equal(reverted.make, 'Tesla')
+  const fromToggle = await setServiceClass(supabase, 'driver-1', { enabled: true })
+  assert.equal(fromToggle.service_class, 'comfort')
+  assert.equal(fromToggle.tier, 'comfort')
+  assert.equal(fromToggle.make, 'Honda')
+  const cleared = await setServiceClass(supabase, 'driver-1', { enabled: false })
+  assert.equal(cleared.service_class, 'standard')
+  const fromFleet = await setServiceClass(supabase, 'driver-1', { enabled: true, claimModel3: true })
+  assert.equal(fromFleet.service_class, 'comfort')
+  assert.equal(fromFleet.tier, 'comfort')
+  assert.equal(fromFleet.make, 'Honda')
+  assert.equal(fromFleet.autonomous_capable, undefined)
+  const clearedModel = await setServiceClass(supabase, 'driver-1', { enabled: false, claimModel3: true })
+  assert.equal(clearedModel.service_class, 'standard')
+  assert.equal(clearedModel.tier, 'standard')
+  assert.equal(clearedModel.autonomous_capable, undefined)
 })
 
-test('setTeslaListing throws on update query error', async () => {
+test('fleet listing treats only comfort as Comfort', () => {
+  const fleet = readFileSync(new URL('../../apps/driver/app/fleet.tsx', import.meta.url), 'utf8')
+  assert.match(fleet, /service === 'comfort' \|\| service === 'true'/)
+  assert.match(fleet, /String\(vehicle\?\.tier \|\| ''\)\.trim\(\)\.toLowerCase\(\) === 'comfort'/)
+  assert.doesNotMatch(fleet, /Boolean\(vehicle\?\.service_class\)/)
+  assert.doesNotMatch(fleet, /Boolean\(facing\?\.comfortClass\)/)
+})
+
+test('setServiceClass throws on update query error', async () => {
   const supabase = createFakeSupabase(
     {
-      vehicles: [{ id: 'v-10', driver_id: 'driver-1' }],
+      vehicles: [{ id: 'v-10', driver_id: 'driver-1', make: 'Comfort', model: 'sedan' }],
     },
     {
       onError(table, state) {
@@ -796,7 +913,7 @@ test('setTeslaListing throws on update query error', async () => {
   )
 
   await assert.rejects(
-    () => setTeslaListing(supabase, 'driver-1', { enabled: true }),
+    () => setServiceClass(supabase, 'driver-1', 'comfort'),
     /Failed to update vehicle listing/,
   )
 })
@@ -1003,7 +1120,7 @@ test('acceptTrip accepts on-demand trip and logs trip_events', async () => {
   assert.equal(event.payload?.driver_id, 'driver-1')
 })
 
-test('acceptTrip surfaces trip_events insert failures instead of swallowing them', async () => {
+test('acceptTrip returns the committed claim with a warning when the event write fails', async () => {
   const supabase = createFakeSupabase(
     {
       trips: [{ id: 'trip-od-ev', status: 'offered' }],
@@ -1024,10 +1141,9 @@ test('acceptTrip surfaces trip_events insert failures instead of swallowing them
   const originalError = console.error
   console.error = (...args) => { logged.push(args.map(String).join(' ')) }
   try {
-    await assert.rejects(
-      () => acceptTrip(supabase, { id: 'trip-od-ev', status: 'offered' }, 'driver-1'),
-      /trip_events insert denied/,
-    )
+    const accepted = await acceptTrip(supabase, { id: 'trip-od-ev', status: 'offered' }, 'driver-1')
+    assert.equal(accepted.status, 'accepted')
+    assert.match(accepted.eventWarning, /trip_events insert denied/)
   } finally {
     console.error = originalError
   }
@@ -1165,7 +1281,7 @@ test('declineTrip releases searching ride by recording pass without rewriting tr
   assert.ok(pass)
 })
 
-test('declineTrip cancels requested ride and records canceled trip_event', async () => {
+test('declineTrip does not write the illegal requested status into the trip update', async () => {
   const supabase = createFakeSupabase({
     trips: [{ id: 'trip-req', status: 'requested' }],
   })
@@ -1174,8 +1290,9 @@ test('declineTrip cancels requested ride and records canceled trip_event', async
   assert.deepEqual(res, { disposition: 'cancel' })
 
   const trip = supabase._tables.trips.find((t) => t.id === 'trip-req')
-  assert.equal(trip.status, 'canceled')
-  assert.ok(typeof trip.canceled_at === 'string')
+  // "requested" is not a trip_status value, so the update filter cannot include it.
+  assert.equal(trip.status, 'requested')
+  assert.equal(trip.canceled_at, undefined)
 
   const event = supabase._tables.trip_events.find((e) => e.trip_id === 'trip-req')
   assert.ok(event)
@@ -1322,6 +1439,37 @@ test('advanceTrip advances in_progress to completed and attaches settle receipt'
   )
 })
 
+test('advanceTrip keeps the settle receipt when the server already completed the trip', async () => {
+  let reads = 0
+  const supabase = {
+    from() {
+      return {
+        update() { return this },
+        select() { return this },
+        eq() { return this },
+        maybeSingle: async () => {
+          reads += 1
+          if (reads === 1) return { data: null, error: null }
+          return { data: { id: 'trip-done', status: 'completed', completed_at: '2026-10-06T00:00:00Z' }, error: null }
+        },
+      }
+    },
+  }
+  await withMockFetch(
+    {
+      '/api/stripe-payment-methods?action=settle': {
+        status: 200,
+        body: { payout: { status: 'pending', amountCents: 1800 } },
+      },
+    },
+    async () => {
+      const res = await advanceTrip(supabase, { id: 'trip-done', status: 'in_progress' }, 'driver-1')
+      assert.equal(res.status, 'completed')
+      assert.deepEqual(res.settle, { payout: { status: 'pending', amountCents: 1800 } })
+    },
+  )
+})
+
 test('advanceTrip translates payment_required error when completing', async () => {
   const supabase = createFakeSupabase(
     {
@@ -1425,7 +1573,7 @@ test('loadDriverDesk aggregates offers, scheduled, upcoming, active, and driver 
       { driver_id: 'driver-1', online: true, priority_mode: true, lat: 34.68, lng: -82.84 },
     ],
     vehicles: [
-      { id: 'v-1', driver_id: 'driver-1', make: 'Tesla', model: 'Model 3', is_tesla: true },
+      { id: 'v-1', driver_id: 'driver-1', make: 'Comfort', model: 'sedan', service_class: true },
     ],
     profiles: [
       { id: 'driver-1', full_name: 'Driver One', phone: '864-555-1111' },
@@ -1628,4 +1776,75 @@ test('loadEarnings retries without deposit_cents on schema cache error', async (
     assert.equal(earnings.trips.length, 1)
     assert.equal(earnings.trips[0].id, 'trip-earn-3')
   })
+})
+
+test('driver offer queries do not send the illegal trip_status requested', () => {
+  const desk = readFileSync(new URL('./driverDesk.js', import.meta.url), 'utf8')
+  const live = readFileSync(new URL('./liveTrip.js', import.meta.url), 'utf8')
+  const home = readFileSync(new URL('../../src/screens/DriverHome.jsx', import.meta.url), 'utf8')
+  assert.doesNotMatch(desk, /\.in\('status', \[[^\]]*requested/)
+  assert.doesNotMatch(home, /\.eq\('status', 'requested'\)/)
+  assert.doesNotMatch(home, /\.in\('status', \[[^\]]*requested/)
+  const track = live.match(/export const RIDER_TRACK_STATUSES = \[([\s\S]*?)\]/)
+  assert.ok(track)
+  assert.doesNotMatch(track[1], /requested/)
+})
+
+test('markSearchingOffers posts searching rows once and skips claimed offers', async () => {
+  const calls = []
+  await withMockFetch(
+    {
+      '/api/driver?action=mark-offered': (url, options) => {
+        calls.push(JSON.parse(options.body))
+        return {
+          ok: true,
+          status: 200,
+          text: async () => JSON.stringify({ status: 'offered' }),
+        }
+      },
+    },
+    async () => {
+      await markSearchingOffers({}, [
+        { id: 'open-1', status: 'searching', driverId: null },
+        { id: 'mine', status: 'searching', driverId: 'driver-1' },
+        { id: 'offered-1', status: 'offered', driverId: null },
+      ])
+      await markSearchingOffers({}, [{ id: 'open-1', status: 'searching', driverId: null }])
+    },
+  )
+  assert.deepEqual(calls, [{ tripId: 'open-1' }])
+})
+
+test('declineDriverOffer uses pass-offer for a matching request', async () => {
+  let body = null
+  await withMockFetch(
+    {
+      '/api/driver?action=pass-offer': (url, options) => {
+        body = JSON.parse(options.body)
+        return {
+          ok: true,
+          status: 200,
+          text: async () => JSON.stringify({ tripId: 'matching', status: 'searching', offerDriverId: 'driver-2' }),
+        }
+      },
+    },
+    async () => {
+      const result = await declineDriverOffer({}, { id: 'matching', status: 'offered', matchingOffer: true }, 'driver-1')
+      assert.equal(result.via, 'api')
+      assert.equal(result.passed, true)
+    },
+  )
+  assert.deepEqual(body, { tripId: 'matching' })
+})
+
+test('passOffer requires a trip id', async () => {
+  await assert.rejects(() => passOffer({}, ''), /Missing ride/)
+})
+
+test('native matching pass never rewrites a newly retargeted trip', async () => {
+  const supabase = createFakeSupabase({ trips: [{ id: 'matching', status: 'offered', driver_id: null }] })
+  const result = await declineTrip(supabase, { id: 'matching', status: 'offered', matchingOffer: true }, 'driver-1')
+  assert.equal(result.passed, true)
+  assert.equal(supabase._tables.trips[0].status, 'offered')
+  assert.equal(supabase._tables.driver_offer_passes[0].trip_id, 'matching')
 })

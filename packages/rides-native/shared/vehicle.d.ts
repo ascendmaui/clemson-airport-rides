@@ -5,7 +5,7 @@ export type RegisteredVehicle = {
   color?: string | null
   plate?: string | null
   seats?: number | null
-  is_tesla?: boolean | null
+  service_class?: boolean | null
   tier?: string | null
 }
 
@@ -37,5 +37,5 @@ export function loadRegisteredVehicle(supabase: VehicleClient, userId: string): 
 export function saveRegisteredVehicle(
   supabase: VehicleClient,
   userId: string,
-  payload: { make?: string; model?: string; color?: string; plate?: string; seats?: number; isTesla?: boolean },
+  payload: { make?: string; model?: string; color?: string; plate?: string; seats?: number; comfortClass?: boolean },
 ): Promise<RegisteredVehicle>

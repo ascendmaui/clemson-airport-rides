@@ -97,16 +97,21 @@ export async function recordDeposit(supabase, session, deps = {}) {
   const meta = trip?.metadata && typeof trip.metadata === 'object' ? trip.metadata : {}
   const debits = Array.isArray(meta.pending_credit_debits) ? meta.pending_credit_debits : []
   const nextMeta = { ...meta }
+  const patch = {}
   let tripNeedsUpdate = false
 
   if (!alreadyRecorded && amount > 0) {
-    nextMeta.fare_paid_cents = Math.max(0, Math.round(Number(meta.fare_paid_cents) || 0) + amount)
+    const nextPaid = Math.max(0, Math.round(Number(meta.fare_paid_cents) || 0) + amount)
+    nextMeta.fare_paid_cents = nextPaid
+    patch.fare_paid_cents = nextPaid
     tripNeedsUpdate = true
   }
 
   // Happy-path paid marker for the driver match gate (restore path also stamps this).
   if (!nextMeta.checkout_deposit || typeof nextMeta.checkout_deposit !== 'object') {
-    nextMeta.checkout_deposit = { session_id: session?.id || null, at: new Date().toISOString() }
+    const stamp = { session_id: session?.id || null, at: new Date().toISOString() }
+    nextMeta.checkout_deposit = stamp
+    patch.checkout_deposit = stamp
     tripNeedsUpdate = true
   }
 
@@ -131,11 +136,29 @@ export async function recordDeposit(supabase, session, deps = {}) {
     }
     nextMeta.credits_applied = true
     nextMeta.pending_credit_debits = []
+    patch.credits_applied = true
+    patch.pending_credit_debits = []
     tripNeedsUpdate = true
   }
 
   if (trip && tripNeedsUpdate) {
-    await supabase.from('trips').update({ metadata: nextMeta }).eq('id', tripId)
+    let rpcSucceeded = false
+    if (typeof supabase.rpc === 'function') {
+      try {
+        const { data: rpcData, error: rpcErr } = await supabase.rpc('merge_trip_metadata', {
+          p_trip_id: tripId,
+          p_patch: patch,
+        })
+        if (!rpcErr && rpcData) {
+          rpcSucceeded = true
+        }
+      } catch {
+        rpcSucceeded = false
+      }
+    }
+    if (!rpcSucceeded) {
+      await supabase.from('trips').update({ metadata: nextMeta }).eq('id', tripId)
+    }
   }
 
   return { ok: true, alreadyRecorded }
@@ -216,7 +239,7 @@ export async function applyPaidCheckoutSession(serviceClient, session, deps = {}
  * - Validates sessionId format (cs_...)
  * - Retrieves Checkout Session from Stripe
  * - Verifies session.metadata.tripId belongs to userId
- * - Skips credit_purchase sessions
+ * - Skips credit_purchase and tiger_pass sessions
  * - If unpaid: returns { ok: true, paid: false, tripId } with no writes
  * - If paid: applies paid deposit side effects idempotently and returns { ok, paid, alreadyRecorded, tripId }
  */
@@ -226,7 +249,8 @@ export async function reconcileCheckoutSession(
 ) {
   const deps = { ...inlineDeps, ...extraDeps }
 
-  if (!sessionId || typeof sessionId !== 'string' || !sessionId.startsWith('cs_') || sessionId.length <= 3) {
+  const trimmedId = typeof sessionId === 'string' ? sessionId.trim().replace(/^["']|["']$/g, '').trim() : ''
+  if (!trimmedId || !trimmedId.startsWith('cs_') || trimmedId.length <= 3) {
     return { ok: false, error: 'invalid_session_id', status: 400, reason: 'bad_id' }
   }
 
@@ -236,7 +260,7 @@ export async function reconcileCheckoutSession(
 
   let session
   try {
-    session = await stripe.checkout.sessions.retrieve(sessionId)
+    session = await stripe.checkout.sessions.retrieve(trimmedId)
   } catch (err) {
     return { ok: false, error: err?.message || 'stripe_retrieve_error', status: 502, reason: 'stripe_retrieve_error' }
   }
@@ -245,8 +269,8 @@ export async function reconcileCheckoutSession(
     return { ok: false, error: 'session_not_found', status: 404, reason: 'not_found' }
   }
 
-  if (session?.metadata?.kind === 'credit_purchase') {
-    return { ok: true, skipped: true, paid: false, reason: 'credit_purchase' }
+  if (session?.metadata?.kind === 'credit_purchase' || session?.metadata?.kind === 'tiger_pass') {
+    return { ok: true, skipped: true, paid: false, reason: session.metadata.kind }
   }
 
   const tripId = session?.metadata?.tripId

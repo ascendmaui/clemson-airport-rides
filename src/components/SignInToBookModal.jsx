@@ -1,5 +1,6 @@
 import { useAuth } from '../lib/auth'
 import { navigate } from '../lib/navigation'
+import { useModalA11y } from './A11yModal'
 
 /** Soft auth gate helpers + "Sign in to book your ride" modal. */
 export function resumeAfterAuth(params = {}) {
@@ -22,6 +23,8 @@ export function useRequireAuthForAction() {
 }
 
 export function SignInToBookModal({ open, onClose, nextPath, nextParams = {} }) {
+  const dialogRef = useModalA11y({ isOpen: open, onClose })
+
   if (!open) return null
 
   const goSignIn = () => {
@@ -55,6 +58,7 @@ export function SignInToBookModal({ open, onClose, nextPath, nextParams = {} }) 
       }}
     >
       <div
+        ref={dialogRef}
         className="modal-card glass-panel glass-panel--elevated"
         style={{
           width: '100%',
@@ -84,7 +88,7 @@ export function SignInToBookModal({ open, onClose, nextPath, nextParams = {} }) 
           Sign in to book your ride
         </h2>
         <p style={{ marginTop: 8, color: 'var(--ink-secondary)', fontSize: 14, lineHeight: 1.45 }}>
-          Browse freely — login is only needed when you request a ride or pay the 25% deposit.
+          Browse freely — login is only needed when you request a ride.
         </p>
         <button
           type="button"

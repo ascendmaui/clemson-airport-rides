@@ -1,13 +1,17 @@
+import { trackingIssue, staleEtaLine, withTrackingTimeout } from 'rides-native/tracking'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useEffect, useRef, useState } from 'react'
 import { reconcileCheckout } from 'rides-native/riderMoney.js'
-import { AccessibilityInfo, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native'
+import { AppState, AccessibilityInfo, Animated, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { PrimaryButton } from '@/components/Button'
+import { useEnterMotion } from '@/components/enter'
 import { HoldExpiryNotice } from '@/components/HoldExpiryNotice'
 import { CampusMap } from '@/components/CampusMap'
+import { SearchDemoCycle } from '@/components/SearchDemoCycle'
 import type { MapPin } from '@/components/mapTypes'
 import { LiveShareCard } from '@/components/LiveShareCard'
+import { RiderSwitchSheet } from '@/components/RiderSwitchSheet'
 import { RideMessages } from '@/components/RideMessages'
 import { SosButton, SosIncomingBanner, SosSheet } from '@/components/SosSheet'
 import { useAuth } from '@/lib/auth'
@@ -16,7 +20,8 @@ import { supabase } from '@/lib/supabase'
 import { loadLiveTrip, subscribeLiveTrip, type LiveTrip } from '@/lib/tripWatch'
 import { useTripById } from '@/lib/useRiderTrip'
 import { isActiveRideStatus, listEmergencyContacts, type EmergencyContact } from 'rides-native/safety.js'
-import { etaHoldLine, etaLineFor, orderedLiveStops, riderLiveView, SEARCH_PREVIEW_COPY, showSearchTheater, type LiveStopPin } from 'rides-native/liveTrip'
+import { etaHoldLine, liveDriverTitle, orderedLiveStops, RIDER_SEARCH_MOTION_COPY, riderLiveView, showSearchTheater, type LiveStopPin } from 'rides-native/liveTrip'
+import { followEtaLine, followMapCoordinates } from 'rides-native/roadFollow'
 import { holdAirportCode, isOpenUnpaidAirportHold, isUnpaidHoldTtlCancel } from 'rides-native/holdExpiryNotice.js'
 import { LivePhase } from 'rides-native/LivePhase'
 import { isApproachStatus } from '@/lib/approachAlert'
@@ -27,6 +32,8 @@ import { lift } from '@/lib/elevation'
 import type { Palette } from '@/lib/palette'
 import { useTheme } from '@/lib/theme'
 import { useThemedStyles } from '@/lib/useThemedStyles'
+
+const CHECKOUT_RETURN_COPY = 'You\'re back from checkout. This ride is in the open pool. The final fare is charged when the trip ends.'
 
 function stopColor(stop: LiveStopPin, total: number) {
   if (stop.order === 1) return PURPLE
@@ -76,6 +83,7 @@ function pinsFor(trip: LiveTrip | null): MapPin[] {
       longitude: trip.driverLng,
       title: trip.driverName || 'Driver',
       color: ORANGE,
+      heading: trip.driverHeading,
     })
   }
   return pins
@@ -92,28 +100,40 @@ export default function Requested() {
   const checkoutReturn = paid === '1' || paid === 'true'
   const { user } = useAuth()
   const { trip, error: tripError, loading } = useTripById(tripId || null)
+  const [trackingNow, setTrackingNow] = useState(Date.now())
+  useEffect(() => { const timer = setInterval(() => setTrackingNow(Date.now()), 5000); return () => clearInterval(timer) }, [])
   const [live, setLive] = useState<LiveTrip | null>(null)
   const [mapError, setMapError] = useState<string | null>(null)
   const [refreshing, setRefreshing] = useState(false)
   const [sosOpen, setSosOpen] = useState(false)
+  const [switchOpen, setSwitchOpen] = useState(false)
   const [contacts, setContacts] = useState<EmergencyContact[]>([])
   const [person, setPerson] = useState<CounterpartView | null>(null)
   const { colors } = useTheme()
   const styles = useThemedStyles(makeStyles)
+  const sheetMotion = useEnterMotion(12)
   const rideLive = isActiveRideStatus(trip?.status)
   const located = live?.driverLat != null && live?.driverLng != null
   const driverName = live?.driverName || driver
   const error = tripError || mapError
   const reconciledSessions = useRef(new Set<string>())
 
-  async function reloadMap() {
-    if (!tripId) return
+  const mapRequest = useRef(0)
+  const mapPending = useRef(false)
+  useEffect(() => () => { mapRequest.current++; mapPending.current = false }, [tripId])
+  async function reloadMap(recover = false) {
+    if (!tripId || (mapPending.current && !recover)) return
+    mapPending.current = true
+    const request = ++mapRequest.current
     try {
-      setLive(await loadLiveTrip(tripId))
+      const next = await withTrackingTimeout(loadLiveTrip(tripId))
+      if (request !== mapRequest.current) return
+      setLive(next)
       setMapError(null)
     } catch (err) {
+      if (request !== mapRequest.current) return
       setMapError(err instanceof Error ? err.message : 'Could not load this trip')
-    }
+    } finally { if (request === mapRequest.current) mapPending.current = false }
   }
 
   useEffect(() => {
@@ -135,15 +155,19 @@ export default function Requested() {
     const unsub = subscribeLiveTrip(tripId, live?.driver_id || null, () => {
       void reloadMap()
     })
+    const listener = AppState.addEventListener('change', (state) => {
+      if (state === 'active') { setTrackingNow(Date.now()); void reloadMap(true) }
+    })
     const id = setInterval(() => {
       void reloadMap()
-    }, 12000)
+    }, 5000)
     return () => {
+      listener.remove()
       unsub()
       clearInterval(id)
     }
   }, [tripId, live?.driver_id])
-  const shown = trip || (tripId
+  const shown = (trip && live ? { ...trip, status: live.status } : trip) || (tripId
     ? {
         id: tripId,
         status: live?.status ?? null,
@@ -169,15 +193,13 @@ export default function Requested() {
   const phase = ttlCanceled
     ? { ...basePhase, kicker: 'HOLD EXPIRED', title: 'Deposit hold expired', body: '', steps: [], stepIndex: -1 }
     : basePhase
-  const etaLine = etaHoldLine(
-    shown?.status || null,
-    etaLineFor(
-      shown?.status || null,
-      live?.driverLat != null && live.driverLng != null ? { lat: live.driverLat, lng: live.driverLng } : null,
-      live,
-    ),
-  )
+  const locationIssue = trackingIssue(shown?.status, live?.driverLocationAt, trackingNow)
+  const driverFix = live?.driverLat != null && live.driverLng != null ? { lat: live.driverLat, lng: live.driverLng } : null
+  const driverEta = followEtaLine(shown?.status || null, driverFix, live)
+  const heldEta = etaHoldLine(shown?.status || null, driverEta)
+  const etaLine = staleEtaLine(locationIssue, heldEta, { placeholder: !driverEta })
   const preview = showSearchTheater(shown?.status || null)
+  const searchingMap = shown?.status === 'searching' && !located
   const approachLive = isApproachStatus(shown?.status || null)
   const showCheckoutReturn = checkoutReturn
     && Boolean(tripId)
@@ -205,9 +227,7 @@ export default function Requested() {
   useEffect(() => {
     if (!showCheckoutReturn || announcedCheckout.current) return
     announcedCheckout.current = true
-    AccessibilityInfo.announceForAccessibility(
-      'Stripe Checkout sent you back. This ride is in the open pool. The deposit shows up when Stripe confirms it.',
-    )
+    AccessibilityInfo.announceForAccessibility(CHECKOUT_RETURN_COPY)
   }, [showCheckoutReturn])
 
   useEffect(() => {
@@ -240,7 +260,7 @@ export default function Requested() {
   }, [shown?.id, shown?.status, shown?.rider_id, live?.driver_id, trip?.driver_id, user])
 
   return (
-    <View style={[styles.screen, { paddingTop: insets.top }]}>
+    <View style={[styles.screen, { paddingTop: insets.top + 8 }]}>
       <View style={styles.header}>
         <Pressable
           accessibilityRole="button"
@@ -254,14 +274,14 @@ export default function Requested() {
         </Pressable>
         <View style={styles.headerCopy}>
           <Text style={styles.kicker}>{ttlCanceled ? 'HOLD EXPIRED' : 'LIVE RIDE'}</Text>
-          <Text style={styles.title}>{phase.title}</Text>
-          <Text style={styles.kicker}>LIVE RIDE</Text>
           <Text style={styles.title} accessibilityRole="header" accessibilityLiveRegion="polite">{phase.title}</Text>
         </View>
         <SosButton onPress={() => setSosOpen(true)} />
       </View>
+      <Animated.View style={[styles.sheet, sheetMotion]}>
       <ScrollView
-        contentContainerStyle={styles.list}
+        style={styles.sheetScroll}
+        contentContainerStyle={[styles.list, { paddingBottom: insets.bottom + 28 }]}
         refreshControl={(
           <RefreshControl
             refreshing={refreshing}
@@ -284,19 +304,21 @@ export default function Requested() {
         ) : null}
         {showCheckoutReturn ? (
           <Text style={styles.body} accessibilityLiveRegion="polite">
-            Stripe Checkout sent you back. This ride is in the open pool. The deposit shows up when Stripe confirms it.
+            {CHECKOUT_RETURN_COPY}
           </Text>
         ) : null}
-        <View style={styles.map}>
-          {/* TODO: road-following tiles need a billed Maps key. Pins, status, and straight-line ETA use coordinates already on the trip. */}
+        <View style={[styles.map, lift(colors, 'rest')]}>
+          {/* Remaining road is the stored polyline when the driver is on it. */}
           <CampusMap
             spots={[]}
             showHeat={false}
-            theater={preview && !located}
+            theater={preview && !located && !searchingMap}
+            searchMotion={searchingMap}
             pins={pinsFor(live)}
-            fitPins
+            fitPins={!searchingMap}
             gameDay={false}
             surge={false}
+            route={followMapCoordinates(live, driverFix)}
           />
         </View>
         <SosIncomingBanner tripId={shown?.id || null} userId={user?.id || null} active={rideLive} />
@@ -306,9 +328,15 @@ export default function Requested() {
             <Text style={styles.body}>Request a ride from the map. This screen shares your location and SOS once that trip exists.</Text>
           </View>
         ) : (
-          <View style={styles.summary}>
-            <CounterpartCard person={person} colors={partyColorsFromPalette(colors)} />
+          <View style={[styles.summary, lift(colors, 'rest')]}>
+            <CounterpartCard
+              person={person}
+              eta={located ? staleEtaLine(locationIssue, driverEta, { placeholder: !driverEta }) : null}
+              colors={partyColorsFromPalette(colors)}
+            />
             {ttlCanceled ? null : (
+              <>
+              {locationIssue ? <View accessibilityLiveRegion="polite"><Text style={{ color: colors.title }}>{locationIssue}</Text><Pressable accessibilityRole="button" onPress={() => void reloadMap(true)}><Text style={{ color: colors.title }}>Retry tracking</Text></Pressable></View> : null}
               <LivePhase
                 kicker={phase.kicker}
                 title=""
@@ -317,17 +345,32 @@ export default function Requested() {
                 steps={phase.steps}
                 activeIndex={phase.stepIndex}
                 colors={colors}
-              />
+                readableSteps
+              >
+                {searchingMap ? (
+                  <SearchDemoCycle
+                    pickup={
+                      live?.pickup_lat != null && live?.pickup_lng != null
+                        ? { lat: live.pickup_lat, lng: live.pickup_lng }
+                        : null
+                    }
+                  />
+                ) : null}
+              </LivePhase>
+              </>
             )}
             {approachLive ? (
               <Text style={styles.approach}>
                 An orange card tracks how close they are, in feet, from the location they already share.
               </Text>
             ) : null}
+            {(shown?.status === 'accepted' || shown?.status === 'arriving') && (shown?.driver_id || live?.driver_id) ? (
+              <PrimaryButton label="Change driver" tone="purple" onPress={() => setSwitchOpen(true)} />
+            ) : null}
             {shown?.status === 'completed' ? (
               <PrimaryButton label="Rate your driver" onPress={() => router.push({ pathname: '/rate', params: { trip: tripId } })} />
             ) : null}
-            <Text style={styles.summaryTitle}>{driverName}</Text>
+            <Text style={styles.summaryTitle}>{liveDriverTitle(person?.name, driverName)}</Text>
             <Text style={styles.body}>
               {shown?.pickup_label || 'Pickup'} → {shown?.dropoff_label || dest || 'your destination'}
               {loading && !shown?.status ? ' · loading' : ''}
@@ -338,7 +381,7 @@ export default function Requested() {
               </Text>
             ))}
             <Text style={styles.meta}>Trip {tripId.slice(0, 8)}</Text>
-            <Text style={styles.body}>Airport holds use the 25% Stripe deposit on Schedule.</Text>
+            <Text style={styles.body}>The final fare is charged when the trip ends.</Text>
             {shown?.status === 'completed' ? (
               <PrimaryButton
                 label="Lost & found"
@@ -349,10 +392,10 @@ export default function Requested() {
             {user ? <RideMessages tripId={tripId} userId={user.id} /> : null}
             <Text style={styles.body}>
               {preview
-                ? SEARCH_PREVIEW_COPY
+                ? RIDER_SEARCH_MOTION_COPY
                 : located
-                  ? 'The orange pin is the driver location from driver_status. While they are on the way, a live distance in feet stays on screen and the screen pulses orange as they get closer.'
-                  : 'Driver coordinates show up here after someone accepts and shares a location. Until then the straight-line ETA stays on this card. Road tiles need a billed Maps key.'}
+                  ? 'The orange pin is your driver’s live location. While they are on the way, a live distance in feet stays on screen and the screen pulses orange as they get closer.'
+                  : 'Driver coordinates show up here after someone accepts and shares a location. The line follows the saved road when the trip has one.'}
             </Text>
           </View>
         )}
@@ -366,7 +409,7 @@ export default function Requested() {
         ) : (
           <LiveShareCard trip={shown} userId={user.id} loading={loading && Boolean(tripId)} />
         )}
-        <View style={styles.sosCard}>
+        <View style={[styles.sosCard, lift(colors, 'rest')]}>
           <Text style={styles.kicker}>SOS</Text>
           <Text style={styles.cardTitle}>Need help on this ride?</Text>
           {rideLive ? (
@@ -391,7 +434,31 @@ export default function Requested() {
           <Text style={styles.link}>Emergency contacts →</Text>
         </Pressable>
         <PrimaryButton label="Back to rides" onPress={() => router.replace('/')} tone="ghost" />
+        {shown?.status === 'searching' ? (
+          <PrimaryButton
+            label="Schedule"
+            tone="purple"
+            onPress={() => {
+              const code = holdAirportCode(holdTrip)
+              router.push(code ? { pathname: '/schedule', params: { airport: code } } : '/schedule')
+            }}
+          />
+        ) : null}
       </ScrollView>
+      </Animated.View>
+      {tripId ? (
+        <RiderSwitchSheet
+          tripId={tripId}
+          open={switchOpen}
+          onClose={() => setSwitchOpen(false)}
+          onDone={(result) => {
+            setSwitchOpen(false)
+            if (result.next === 'carpool') router.push('/friends')
+            else if (result.next === 'home') router.replace('/')
+            else void reloadMap(true)
+          }}
+        />
+      ) : null}
       <SosSheet
         open={sosOpen}
         onClose={() => setSosOpen(false)}
@@ -407,26 +474,28 @@ export default function Requested() {
 function makeStyles(colors: Palette) {
   return {
     screen: { flex: 1, backgroundColor: colors.background },
-    header: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 12, paddingHorizontal: 16, paddingBottom: 8 },
-    back: { width: 40, height: 40, borderRadius: 14, backgroundColor: colors.card, alignItems: 'center' as const, justifyContent: 'center' as const },
+    header: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 12, paddingHorizontal: 20, paddingBottom: 12 },
+    back: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.card, alignItems: 'center' as const, justifyContent: 'center' as const },
     backLabel: { fontSize: 18, color: colors.title, fontWeight: '700' as const },
     headerCopy: { flex: 1 },
     kicker: { color: colors.orange, fontWeight: '800' as const, letterSpacing: 1.1, fontSize: 11 },
-    title: { color: colors.title, fontSize: 22, fontWeight: '800' as const },
-    list: { padding: 16, gap: 14, paddingBottom: 140 },
-    map: { height: 240, borderRadius: 20, overflow: 'hidden' as const },
-    summary: { backgroundColor: colors.card, borderRadius: 20, padding: 16 },
-    summaryTitle: { color: colors.ink, fontSize: 18, fontWeight: '800' as const, marginBottom: 6 },
-    approach: { color: colors.purple, fontSize: 13, lineHeight: 18, fontWeight: '700' as const, marginTop: 8 },
+    title: { color: colors.title, fontSize: 22, fontWeight: '700' as const, letterSpacing: -0.4, marginTop: 2 },
+    sheet: { flex: 1 },
+    sheetScroll: { flex: 1 },
+    list: { paddingHorizontal: 20, gap: 14 },
+    map: { height: 280, borderRadius: 22, overflow: 'hidden' as const },
+    summary: { backgroundColor: colors.card, borderRadius: 20, padding: 16, gap: 8, borderWidth: 1, borderColor: colors.border },
+    summaryTitle: { color: colors.ink, fontSize: 18, fontWeight: '700' as const, letterSpacing: -0.3, marginTop: 4 },
+    approach: { color: colors.purple, fontSize: 13, lineHeight: 18, fontWeight: '700' as const },
     body: { color: colors.inkSecondary, fontSize: 14, lineHeight: 20 },
     stopLine: { color: colors.ink, fontSize: 14, lineHeight: 20, fontWeight: '700' as const },
-    meta: { color: colors.link, fontWeight: '700' as const, fontSize: 12, marginTop: 8 },
-    empty: { backgroundColor: colors.card, borderRadius: 20, padding: 16, gap: 8 },
-    emptyTitle: { color: colors.title, fontWeight: '800' as const, fontSize: 16 },
+    meta: { color: colors.link, fontWeight: '700' as const, fontSize: 12, marginTop: 4 },
+    empty: { backgroundColor: colors.card, borderRadius: 20, padding: 16, gap: 8, borderWidth: 1, borderColor: colors.border },
+    emptyTitle: { color: colors.title, fontWeight: '700' as const, fontSize: 16, letterSpacing: -0.2 },
     inlineEmpty: { backgroundColor: colors.purpleSoft, borderRadius: 16, padding: 12, marginBottom: 12 },
-    error: { color: colors.danger, fontSize: 13 },
-    sosCard: { backgroundColor: colors.card, borderRadius: 20, padding: 16 },
-    cardTitle: { color: colors.title, fontSize: 20, fontWeight: '800' as const, marginTop: 4, marginBottom: 8 },
-    link: { color: colors.link, fontWeight: '800' as const, fontSize: 15 },
+    error: { color: colors.danger, fontSize: 13, lineHeight: 18 },
+    sosCard: { backgroundColor: colors.card, borderRadius: 20, padding: 16, borderWidth: 1, borderColor: colors.border, gap: 4 },
+    cardTitle: { color: colors.title, fontSize: 20, fontWeight: '700' as const, letterSpacing: -0.3, marginTop: 2, marginBottom: 6 },
+    link: { color: colors.link, fontWeight: '700' as const, fontSize: 15 },
   }
 }

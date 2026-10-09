@@ -1,3 +1,5 @@
+import { searchFieldInputStyle } from '../lib/touchA11y'
+
 export function SearchField({
   value,
   onChange,
@@ -16,11 +18,18 @@ export function SearchField({
     <div
       role="search"
       className={`search-field-container ${className}`}
+      onPointerDown={(event) => {
+        const input = event.currentTarget.querySelector('input')
+        if (!input || event.target === input) return
+        event.preventDefault()
+        input.focus()
+      }}
       style={{
         display: 'flex',
         alignItems: 'center',
         gap: 12,
-        padding: '14px 16px',
+        padding: '4px 16px',
+        minHeight: 52,
         background: 'var(--surface)',
         borderRadius: 16,
         border: orangeOutline ? '2px solid var(--orange)' : '1px solid var(--border)',
@@ -56,15 +65,7 @@ export function SearchField({
         autoComplete={autoComplete}
         disabled={disabled}
         className="search-field-input"
-        style={{
-          flex: 1,
-          border: 'none',
-          outline: 'none',
-          background: 'transparent',
-          color: 'var(--ink)',
-          fontSize: 16,
-          fontWeight: 500,
-        }}
+        style={searchFieldInputStyle({ color: 'var(--ink)' })}
         {...rest}
       />
     </div>

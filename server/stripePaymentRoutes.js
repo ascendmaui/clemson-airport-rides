@@ -12,6 +12,33 @@ import {
   stripeOk,
   ensureStripeCustomer,
 } from './friendRideLib.js'
+import {
+  ADD_ANOTHER_PAYMENT_METHOD_ID,
+  buildSetupCheckoutParams,
+  buildSetupIntentParams,
+  listCustomerPaymentMethods,
+  narrowSetupPaymentMethodTypes,
+  readPublicStripeConfig,
+  setupPaymentMethodTypes,
+  summarizeSavedPaymentMethod,
+} from '../shared/ridePaymentMethods.js'
+
+async function createWithAllowedTypes(types, create) {
+  let attempt = types
+  let lastError = null
+  while (attempt) {
+    try {
+      const result = await create(attempt)
+      return { result, types: attempt }
+    } catch (err) {
+      lastError = err
+      const next = narrowSetupPaymentMethodTypes(attempt, err?.message || err?.raw?.message)
+      if (!next) break
+      attempt = next
+    }
+  }
+  throw lastError
+}
 
 async function loadProfile(sb, userId) {
   const rich = await sb
@@ -74,15 +101,50 @@ export async function handleStripeSetupIntent(req, res) {
       email: profile.email || user.email,
     })
 
-    const setupIntent = await stripe.setupIntents.create({
-      customer: customerId,
-      usage: 'off_session',
-      automatic_payment_methods: { enabled: true },
-      metadata: {
-        profile_id: user.id,
-        kind: 'save_card',
-      },
+    const methodId = typeof body?.paymentMethod === 'string' && body.paymentMethod
+      ? body.paymentMethod
+      : ADD_ANOTHER_PAYMENT_METHOD_ID
+    const requestedTypes = setupPaymentMethodTypes(methodId)
+    const wantsCheckout = body?.checkout === true
+
+    const created = await createWithAllowedTypes(requestedTypes, (types) => {
+      if (wantsCheckout) {
+        return stripe.checkout.sessions.create(buildSetupCheckoutParams({
+          customerId,
+          userId: user.id,
+          paymentMethod: methodId,
+          types,
+          returnUrl: body?.returnUrl,
+        }))
+      }
+      return stripe.setupIntents.create(buildSetupIntentParams({
+        customerId,
+        userId: user.id,
+        paymentMethod: methodId,
+        types,
+      }))
     })
+
+    const pub = readPublicStripeConfig()
+
+    if (wantsCheckout) {
+      const session = created.result
+      return json(res, 200, {
+        url: session.url,
+        sessionId: session.id,
+        customerId,
+        paymentMethodTypes: created.types,
+        hasDefaultPm: Boolean(profile.stripe_default_pm_id),
+        defaultPmId: profile.stripe_default_pm_id || null,
+        billingActivatedAt: profile.billing_activated_at || null,
+        publishableKey: pub.publishableKey,
+        merchantIdentifier: pub.merchantIdentifier,
+        schemaNote: softFail || undefined,
+        note: 'Apple Pay on the website needs the domain registered in Stripe Dashboard → Payment method domains. This setup checkout does not charge the card.',
+      })
+    }
+
+    const setupIntent = created.result
 
     let cardBrand = profile.stripe_card_brand || null
     let cardLast4 = profile.stripe_card_last4 || null
@@ -100,14 +162,17 @@ export async function handleStripeSetupIntent(req, res) {
       clientSecret: setupIntent.client_secret,
       setupIntentId: setupIntent.id,
       customerId,
+      paymentMethodTypes: created.types,
       hasDefaultPm: Boolean(profile.stripe_default_pm_id),
       defaultPmId: profile.stripe_default_pm_id || null,
       cardBrand,
       cardLast4,
       billingActivatedAt: profile.billing_activated_at || null,
+      publishableKey: pub.publishableKey,
+      merchantIdentifier: pub.merchantIdentifier,
       schemaNote: softFail || undefined,
-      publishableKeyHint: 'Use VITE_STRIPE_PUBLISHABLE_KEY with Payment Element',
-      note: body?.note || 'Apple Pay: register domain in Stripe Dashboard.',
+      publishableKeyHint: 'Use the publishable key with PaymentSheet or the Payment Element. Setup does not charge the card.',
+      note: body?.note || 'Apple Pay on the website needs the domain registered in Stripe Dashboard. The rider app uses PaymentSheet when the publishable key is set.',
     })
   } catch (e) {
     console.error('[stripe-setup-intent]', e)
@@ -130,14 +195,29 @@ export async function handleStripeSavePaymentMethod(req, res) {
   if (pe) return json(res, 400, { error: pe })
 
   const paymentMethodId = body.paymentMethodId || body.payment_method
-  const setupIntentId = body.setupIntentId || body.setup_intent
-  if (!paymentMethodId && !setupIntentId) {
-    return json(res, 400, { error: 'paymentMethodId or setupIntentId required' })
-  }
+  let setupIntentId = body.setupIntentId || body.setup_intent
+  const checkoutSessionId = body.checkoutSessionId || body.checkout_session_id
+  let sessionCustomer = null
 
   const stripe = stripeClient()
 
   try {
+    if (!paymentMethodId && !setupIntentId && checkoutSessionId) {
+      const session = await stripe.checkout.sessions.retrieve(String(checkoutSessionId))
+      if (session.mode !== 'setup' || session.status !== 'complete') {
+        return json(res, 400, { error: 'Setup checkout is not complete' })
+      }
+      if (session.metadata?.profile_id && session.metadata.profile_id !== user.id) {
+        return json(res, 403, { error: 'Setup session does not belong to this account' })
+      }
+      sessionCustomer = typeof session.customer === 'string' ? session.customer : session.customer?.id || null
+      const siRef = session.setup_intent
+      setupIntentId = typeof siRef === 'string' ? siRef : siRef?.id
+    }
+    if (!paymentMethodId && !setupIntentId) {
+      return json(res, 400, { error: 'paymentMethodId or setupIntentId required' })
+    }
+
     let pmId = paymentMethodId
     if (!pmId && setupIntentId) {
       const si = await stripe.setupIntents.retrieve(setupIntentId)
@@ -157,6 +237,10 @@ export async function handleStripeSavePaymentMethod(req, res) {
       .select('id, stripe_customer_id')
       .eq('id', user.id)
       .single()
+
+    if (sessionCustomer && profile?.stripe_customer_id && sessionCustomer !== profile.stripe_customer_id) {
+      return json(res, 403, { error: 'Setup session does not belong to this account' })
+    }
 
     if (profile?.stripe_customer_id) {
       await stripe.customers.update(profile.stripe_customer_id, {
@@ -205,6 +289,138 @@ export async function handleStripeSavePaymentMethod(req, res) {
       billingActivatedAt: now,
     })
   } catch (e) {
+    return json(res, 500, { error: e.message || 'Server error' })
+  }
+}
+
+async function storeDefaultPaymentMethod(sb, userId, { pmId, brand, last4, activate }) {
+  const now = new Date().toISOString()
+  const basePatch = {
+    stripe_default_pm_id: pmId,
+    updated_at: now,
+  }
+  const richPatch = {
+    ...basePatch,
+    stripe_card_brand: brand,
+    stripe_card_last4: last4,
+  }
+  if (activate) richPatch.billing_activated_at = now
+  let { error } = await sb.from('profiles').update(richPatch).eq('id', userId)
+  if (error && /column|schema cache|billing_activated|stripe_card_/i.test(error.message || '')) {
+    const retry = await sb.from('profiles').update(basePatch).eq('id', userId)
+    error = retry.error
+    if (!error && activate) {
+      await sb.from('profiles').update({ billing_activated_at: now, updated_at: now }).eq('id', userId)
+    }
+  }
+  if (error) throw new Error(error.message)
+  return now
+}
+
+async function paymentMethodOnCustomer(stripe, customerId, paymentMethodId) {
+  const pm = await stripe.paymentMethods.retrieve(paymentMethodId)
+  const pmCustomer = typeof pm.customer === 'string' ? pm.customer : pm.customer?.id || null
+  if (!customerId || pmCustomer !== customerId) return null
+  return pm
+}
+
+export async function handleListSavedPaymentMethods(req, res) {
+  if (cors(req, res)) return
+  if (req.method !== 'GET') return json(res, 405, { error: 'Method not allowed' })
+  if (!stripeOk()) {
+    return json(res, 503, { error: 'Payments unavailable', message: 'STRIPE_SECRET_KEY is not configured.' })
+  }
+  const sb = admin()
+  if (!sb) return json(res, 503, { error: 'SUPABASE_SERVICE_ROLE_KEY not configured' })
+  const user = await userFromAuth(req)
+  if (!user) return json(res, 401, { error: 'Sign in required' })
+  try {
+    const { profile } = await loadProfile(sb, user.id)
+    const customerId = profile?.stripe_customer_id || null
+    const defaultPmId = profile?.stripe_default_pm_id || null
+    if (!customerId) return json(res, 200, { methods: [], defaultPmId: null })
+    const methods = await listCustomerPaymentMethods(stripeClient(), customerId)
+    return json(res, 200, { methods, defaultPmId })
+  } catch (e) {
+    console.error('[stripe-payment-methods]', e)
+    return json(res, 500, { error: e.message || 'Server error' })
+  }
+}
+
+export async function handleUpdateSavedPaymentMethod(req, res) {
+  if (cors(req, res)) return
+  if (req.method !== 'POST') return json(res, 405, { error: 'Method not allowed' })
+  if (!stripeOk()) return json(res, 503, { error: 'Payments unavailable' })
+  const sb = admin()
+  if (!sb) return json(res, 503, { error: 'SUPABASE_SERVICE_ROLE_KEY not configured' })
+  const user = await userFromAuth(req)
+  if (!user) return json(res, 401, { error: 'Sign in required' })
+  const { body, error: pe } = parseBody(req)
+  if (pe) return json(res, 400, { error: pe })
+  const action = body?.action
+  const paymentMethodId = String(body?.paymentMethodId || '')
+  if (action !== 'default' && action !== 'detach') {
+    return json(res, 400, { error: 'Unknown payment method action' })
+  }
+  if (!/^pm_[A-Za-z0-9]+$/.test(paymentMethodId)) {
+    return json(res, 400, { error: 'paymentMethodId required' })
+  }
+
+  const stripe = stripeClient()
+  try {
+    const { profile } = await loadProfile(sb, user.id)
+    const customerId = profile?.stripe_customer_id || null
+    if (!customerId) return json(res, 400, { error: 'No payment method on this account' })
+    const pm = await paymentMethodOnCustomer(stripe, customerId, paymentMethodId)
+    if (!pm) return json(res, 403, { error: 'That payment method is not on this account' })
+
+    if (action === 'default') {
+      await stripe.customers.update(customerId, {
+        invoice_settings: { default_payment_method: paymentMethodId },
+      })
+      const summary = summarizeSavedPaymentMethod(pm)
+      const billingActivatedAt = await storeDefaultPaymentMethod(sb, user.id, {
+        pmId: paymentMethodId,
+        brand: summary?.brand || null,
+        last4: summary?.last4 || null,
+        activate: true,
+      })
+      const methods = await listCustomerPaymentMethods(stripe, customerId)
+      return json(res, 200, {
+        ok: true,
+        paymentMethodId,
+        defaultPmId: paymentMethodId,
+        brand: summary?.brand || null,
+        last4: summary?.last4 || null,
+        billingActivatedAt,
+        methods,
+      })
+    }
+
+    await stripe.paymentMethods.detach(paymentMethodId)
+    const methods = (await listCustomerPaymentMethods(stripe, customerId)).filter((row) => row.id !== paymentMethodId)
+    const wasDefault = profile.stripe_default_pm_id === paymentMethodId
+    const next = wasDefault ? (methods[0] || null) : (methods.find((row) => row.id === profile.stripe_default_pm_id) || methods[0] || null)
+    if (wasDefault || !methods.some((row) => row.id === profile.stripe_default_pm_id)) {
+      await stripe.customers.update(customerId, {
+        invoice_settings: { default_payment_method: next?.id || '' },
+      })
+      await storeDefaultPaymentMethod(sb, user.id, {
+        pmId: next?.id || null,
+        brand: next?.brand || null,
+        last4: next?.last4 || null,
+        activate: false,
+      })
+    }
+    return json(res, 200, {
+      ok: true,
+      defaultPmId: next?.id || null,
+      brand: next?.brand || null,
+      last4: next?.last4 || null,
+      methods,
+    })
+  } catch (e) {
+    console.error('[stripe-payment-methods]', e)
     return json(res, 500, { error: e.message || 'Server error' })
   }
 }

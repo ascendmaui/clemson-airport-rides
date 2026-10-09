@@ -67,6 +67,26 @@ function createFakeSb({
           operations.push({ op: 'eq', table, col, val })
           return chain
         },
+        in(col, vals) {
+          operations.push({ op: 'in', table, col, vals })
+          if (table === 'driver_applications') {
+            return Promise.resolve({
+              data: [{ profile_id: 'driver-approved', onboarding_status: 'approved' }],
+              error: null,
+            })
+          }
+          if (table === 'driver_status') {
+            return Promise.resolve({ data: [{ driver_id: 'driver-approved', online: true }], error: null })
+          }
+          if (table === 'vehicles') {
+            return Promise.resolve({
+              data: [{ driver_id: 'driver-approved', service_class: 'comfort', tier: 'comfort' }],
+              error: null,
+            })
+          }
+          if (table === 'trips') return Promise.resolve({ data: [], error: null })
+          return Promise.resolve({ data: [], error: null })
+        },
         lte(col, val) {
           operations.push({ op: 'lte', table, col, val })
           currentFilterIso = val
@@ -111,6 +131,16 @@ function createFakeSb({
             }
           }
           return { data: null, error: null }
+        },
+        then(onFulfilled, onRejected) {
+          const payload = table === 'driver_applications'
+            ? { data: [{ profile_id: 'driver-approved', onboarding_status: 'approved' }], error: null }
+            : table === 'driver_status'
+              ? { data: [{ driver_id: 'driver-approved', online: true }], error: null }
+              : table === 'vehicles'
+                ? { data: [{ driver_id: 'driver-approved', service_class: 'comfort', tier: 'comfort' }], error: null }
+                : { data: [], error: null }
+          return Promise.resolve(payload).then(onFulfilled, onRejected)
         },
         insert(payload) {
           operations.push({ op: 'insert', table, payload })
@@ -685,9 +715,17 @@ describe('scheduleTrip endpoint handler', () => {
       const regular = await run(mockStandardUser)
       const student = await run(mockStudentUser)
       assert.equal(regular.res.discountCents, 0)
-      assert.equal(student.res.fareCents + student.res.discountCents, regular.res.fareCents)
-      assert.equal(student.res.discountCents, Math.round(regular.res.fareCents * 0.1))
-      // Stored row, response, and the 20/80 split all agree.
+      assert.equal(
+        student.res.fareBeforeScheduleDiscountCents + student.res.discountCents,
+        regular.res.fareBeforeScheduleDiscountCents,
+      )
+      assert.equal(
+        student.res.discountCents,
+        Math.round(regular.res.fareBeforeScheduleDiscountCents * 0.1),
+      )
+      assert.equal(student.res.scheduleDiscountApplied, true)
+      assert.equal(regular.res.scheduleDiscountApplied, true)
+      // Stored row and response agree. Scheduled rides lock a 75/25 split.
       assert.equal(student.row.fare_cents, student.res.fareCents)
       assert.equal(student.row.platform_fee_cents + student.row.driver_earnings_cents, student.row.fare_cents)
       assert.equal(student.row.fare_breakdown.rider_pays_cents, student.res.fareCents)
@@ -789,7 +827,7 @@ describe('scheduleTrip endpoint handler', () => {
       assert.equal(tripsInserted[0].metadata.isStudent, false)
     })
 
-    test('does NOT grant student discount on Tesla tier even for confirmed student', async () => {
+    test('does NOT grant student discount on Comfort tier even for confirmed student', async () => {
       const { sb, tripsInserted } = createFakeSb()
       const res = await callHandler(
         scheduleTripHandler,
@@ -798,7 +836,7 @@ describe('scheduleTrip endpoint handler', () => {
           body: {
             ...defaultPlaces,
             pickupAt: testPickupTime,
-            tier: 'tesla',
+            tier: 'comfort',
           },
         },
         {
@@ -810,9 +848,8 @@ describe('scheduleTrip endpoint handler', () => {
       assert.equal(res.status, 200)
       assert.equal(res.json.studentDiscountApplied, false)
       assert.equal(res.json.discountCents, 0)
-      assert.equal(tripsInserted[0].tier, 'tesla')
-      assert.equal(tripsInserted[0].metadata.tesla, true)
-      assert.equal(tripsInserted[0].metadata.fleet, 'tesla_model_3')
+      assert.equal(tripsInserted[0].tier, 'comfort')
+      assert.equal(tripsInserted[0].metadata.ride_option, 'comfort')
     })
   })
 
@@ -992,7 +1029,7 @@ describe('scheduleTrip endpoint handler', () => {
   })
 
   describe('Airport trips and special purposes', () => {
-    test('explicit airport GSP overrides pickup to campus and dropoff to GSP with 25% deposit', async () => {
+    test('explicit airport GSP overrides pickup to campus and dropoff to GSP with no upfront deposit', async () => {
       const { sb, tripsInserted } = createFakeSb()
       const futureDate = new Date(Date.now() + 2 * 3600 * 1000).toISOString()
       const res = await callHandler(
@@ -1015,7 +1052,7 @@ describe('scheduleTrip endpoint handler', () => {
       assert.equal(tripsInserted.length, 1)
       assert.equal(tripsInserted[0].pickup_label, 'Memorial Stadium')
       assert.equal(tripsInserted[0].dropoff_label, 'Greenville-Spartanburg International (GSP)')
-      assert.ok(tripsInserted[0].deposit_cents > 0)
+      assert.equal(tripsInserted[0].deposit_cents, 0)
       assert.equal(tripsInserted[0].metadata.airport, 'GSP')
       assert.equal(tripsInserted[0].metadata.purpose, 'airport')
     })
@@ -1181,23 +1218,24 @@ describe('scheduleTrip endpoint handler', () => {
     })
 
     test('accepts a pickup exactly 30 minutes ahead and rejects 1ms inside', async () => {
-      const exact = new Date(Date.now() + 30 * 60 * 1000).toISOString()
+      const fixedNow = 1770000000000
+      const exact = new Date(fixedNow + 30 * 60 * 1000).toISOString()
       const { sb, tripsInserted } = createFakeSb()
       const accepted = await callHandler(
         scheduleTripHandler,
         { method: 'POST', body: { ...defaultPlaces, pickupAt: exact } },
-        depsFor(sb),
+        { ...depsFor(sb), now: fixedNow },
       )
       assert.equal(accepted.status, 200)
       assert.equal(tripsInserted[0].status, 'scheduled')
       assert.equal(tripsInserted[0].pickup_at, exact)
 
-      const inside = new Date(Date.now() + 30 * 60 * 1000 - 1).toISOString()
+      const inside = new Date(fixedNow + 30 * 60 * 1000 - 1).toISOString()
       const { sb: sbEarly } = createFakeSb()
       const rejected = await callHandler(
         scheduleTripHandler,
         { method: 'POST', body: { ...defaultPlaces, pickupAt: inside } },
-        depsFor(sbEarly),
+        { ...depsFor(sbEarly), now: fixedNow },
       )
       assert.equal(rejected.status, 400)
       assert.deepEqual(rejected.json, { error: 'Schedule at least 30 minutes ahead.' })
@@ -1219,19 +1257,12 @@ describe('scheduleTrip endpoint handler', () => {
       assert.equal(tripsInserted[0].scheduled_for, null)
     })
 
-    test('spring-gap date+time throws when the scheduled instant is formatted', async () => {
+    test('spring-gap date+time returns a validation error', async () => {
       const { sb, tripsInserted } = createFakeSb()
-      await assert.rejects(
-        () => callHandler(
-          scheduleTripHandler,
-          {
-            method: 'POST',
-            body: { ...defaultPlaces, date: '2026-03-08', time: '02:30' },
-          },
-          depsFor(sb),
-        ),
-        /Invalid time value/,
-      )
+      const res = await callHandler(scheduleTripHandler, {
+        method: 'POST', body: { ...defaultPlaces, date: '2026-03-08', time: '02:30' },
+      }, depsFor(sb))
+      assert.equal(res.status, 400)
       assert.equal(tripsInserted.length, 0)
     })
   })

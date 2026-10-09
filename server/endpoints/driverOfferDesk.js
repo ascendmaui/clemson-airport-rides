@@ -1,0 +1,181 @@
+/**
+ * Driver-screen offer desk.
+ * mark-offered: an approved online driver who can see the trip moves it
+ * from searching to offered. driver_id stays empty so accept still races fairly.
+ * pass-offer: immediate driver requests persist a pass whose database trigger
+ * retargets atomically. Other ride types retain their existing queue behavior.
+ * A new target records a four-channel offer alert. Email stays unsent unless
+ * DRIVER_OFFER_ALERT_EMAIL=send. Push and SMS have no server sender.
+ */
+import { admin, cors, json, parseBody, userFromAuth } from '../friendRideLib.js'
+import { driverApprovalStatus } from '../driverApproval.js'
+import { listAssignableDrivers, nextQueuedDriver } from '../autoAssign.js'
+import { offerVisibleToDriver, unchangedOfferQuery } from '../../shared/driverOrder.js'
+import { notifyDriverOffer } from '../driverOfferAlerts.js'
+
+function metaOf(trip) {
+  return trip?.metadata && typeof trip.metadata === 'object' && !Array.isArray(trip.metadata)
+    ? trip.metadata
+    : {}
+}
+
+async function caller(req, res, deps) {
+  if (cors(req, res)) return null
+  if (req.method !== 'POST') {
+    json(res, 405, { error: 'Method not allowed' })
+    return null
+  }
+  const sb = deps.sb || admin()
+  if (!sb) {
+    json(res, 503, { error: 'SUPABASE_SERVICE_ROLE_KEY not configured' })
+    return null
+  }
+  const user = deps.user !== undefined ? deps.user : await userFromAuth(req)
+  if (!user) {
+    json(res, 401, { error: 'Sign in required' })
+    return null
+  }
+  return { sb, user }
+}
+
+async function approvedOnline(sb, userId) {
+  const gate = await driverApprovalStatus(sb, userId)
+  if (gate.error) return { ok: false, status: 500, error: 'Could not check driver approval', code: 'driver_approval_unavailable' }
+  if (!gate.approved) return { ok: false, status: 403, error: 'Finish approval to go online. Your account is still under review.', code: 'driver_not_approved' }
+  const presence = await sb.from('driver_status').select('online').eq('driver_id', userId).maybeSingle()
+  if (presence.error) return { ok: false, status: 500, error: 'Could not check online status', code: 'driver_status_unavailable' }
+  if (!presence.data?.online) return { ok: false, status: 409, error: 'Go online before accepting a ride.', code: 'driver_offline' }
+  return { ok: true }
+}
+
+async function loadTrip(sb, tripId) {
+  const tripRes = await sb.from('trips').select('id, status, rider_id, driver_id, tier, pickup_at, scheduled_for, deposit_cents, metadata, pickup_label, dropoff_label').eq('id', tripId).maybeSingle()
+  if (tripRes.error) return { error: tripRes.error.message || 'Could not load trip', status: 500 }
+  if (!tripRes.data) return { error: 'Trip not found', status: 404 }
+  return { trip: tripRes.data }
+}
+
+export async function handleMarkOffered(req, res, deps = {}) {
+  const ctx = await caller(req, res, deps)
+  if (!ctx) return
+  const { body, error: pe } = parseBody(req)
+  if (pe) return json(res, 400, { error: pe })
+  const tripId = String(body.tripId || '').trim()
+  if (!tripId) return json(res, 400, { error: 'tripId required' })
+
+  const ready = await approvedOnline(ctx.sb, ctx.user.id)
+  if (!ready.ok) return json(res, ready.status, { error: ready.error, code: ready.code })
+
+  const loaded = await loadTrip(ctx.sb, tripId)
+  if (!loaded.trip) return json(res, loaded.status, { error: loaded.error })
+  const trip = loaded.trip
+  if (!offerVisibleToDriver(trip, ctx.user.id)) {
+    return json(res, 403, { error: 'This ride offer is for another driver.', code: 'offer_not_yours' })
+  }
+  if (trip.status !== 'searching' || trip.driver_id) {
+    return json(res, 200, { tripId, status: trip.status, unchanged: true })
+  }
+
+  const updated = await unchangedOfferQuery(ctx.sb
+    .from('trips')
+    .update({ status: 'offered' }), trip)
+    .is('driver_id', null)
+    .eq('id', tripId)
+    .eq('status', 'searching')
+    .select('id, status')
+    .maybeSingle()
+  if (updated.error) return json(res, 500, { error: 'Could not update this ride offer', code: 'offer_update_failed' })
+  if (!updated.data) return json(res, 409, { error: 'This ride offer changed. Refresh and try again.', code: 'offer_changed' })
+  return json(res, 200, { tripId, status: updated.data.status })
+}
+
+export async function handlePassOffer(req, res, deps = {}) {
+  const ctx = await caller(req, res, deps)
+  if (!ctx) return
+  const { body, error: pe } = parseBody(req)
+  if (pe) return json(res, 400, { error: pe })
+  const tripId = String(body.tripId || '').trim()
+  if (!tripId) return json(res, 400, { error: 'tripId required' })
+
+  const ready = await driverApprovalStatus(ctx.sb, ctx.user.id)
+  if (ready.error) return json(res, 500, { error: 'Could not check driver approval', code: 'driver_approval_unavailable' })
+  if (!ready.approved) return json(res, 403, { error: 'Finish approval to go online. Your account is still under review.', code: 'driver_not_approved' })
+
+  const loaded = await loadTrip(ctx.sb, tripId)
+  if (!loaded.trip) return json(res, loaded.status, { error: loaded.error })
+  const trip = loaded.trip
+  if (!['searching', 'offered'].includes(trip.status) || trip.driver_id) {
+    return json(res, 200, { tripId, status: trip.status, unchanged: true })
+  }
+  const meta = metaOf(trip)
+  if (!offerVisibleToDriver(trip, ctx.user.id)) {
+    return json(res, 403, { error: 'This ride offer is for another driver.', code: 'offer_not_yours' })
+  }
+
+  if (meta.kind === 'driver_request' && !trip.pickup_at && !trip.scheduled_for && !Number(trip.deposit_cents || 0)) {
+    // The pass and retarget commit together in the database, also for native clients.
+    const passed = await ctx.sb.from('driver_offer_passes').upsert({ trip_id: tripId, driver_id: ctx.user.id })
+    if (passed.error) return json(res, 500, { error: 'Could not pass this ride offer', code: 'offer_update_failed' })
+    const fresh = await loadTrip(ctx.sb, tripId)
+    if (!fresh.trip) return json(res, fresh.status, { error: fresh.error })
+    const nextDriverId = fresh.trip.metadata?.offer_driver_id || null
+    if (nextDriverId && nextDriverId !== ctx.user.id) {
+      await notifyDriverOffer(ctx.sb, {
+        trip: fresh.trip,
+        driverId: nextDriverId,
+        offerMarker: `pass:${ctx.user.id}`,
+      })
+    }
+    return json(res, 200, { tripId, status: fresh.trip.status,
+      offerDriverId: nextDriverId,
+      released: !nextDriverId })
+  }
+
+  let offerDriverId = null
+  if (meta.match === 'auto' && Array.isArray(meta.auto_assign_queue)) {
+    const ordered = await listAssignableDrivers(ctx.sb, { tier: trip.tier || 'standard', riderId: trip.rider_id })
+    if (ordered.error) return json(res, 500, { error: 'Could not read online drivers', code: 'driver_status_unavailable' })
+    offerDriverId = nextQueuedDriver(
+      meta.auto_assign_queue,
+      ctx.user.id,
+      ordered.drivers.map((driver) => driver.id),
+    )
+  }
+
+  const nextMeta = {
+    ...meta,
+    offer_driver_id: offerDriverId,
+    offer_tried_driver_ids: [...new Set([
+      ...(Array.isArray(meta.offer_tried_driver_ids) ? meta.offer_tried_driver_ids : []),
+      ctx.user.id,
+    ])],
+    match: offerDriverId ? meta.match || 'auto' : 'open',
+  }
+  const updated = await unchangedOfferQuery(ctx.sb
+    .from('trips')
+    .update({
+      status: 'searching',
+      driver_id: null,
+      metadata: nextMeta,
+    }), trip)
+    .is('driver_id', null)
+    .eq('id', tripId)
+    .in('status', ['searching', 'offered'])
+    .select('id, status, metadata')
+    .maybeSingle()
+  if (updated.error) return json(res, 500, { error: 'Could not pass this ride offer', code: 'offer_update_failed' })
+  if (!updated.data) return json(res, 409, { error: 'This ride offer changed. Refresh and try again.', code: 'offer_changed' })
+  if (offerDriverId) {
+    await notifyDriverOffer(ctx.sb, {
+      trip: { ...trip, metadata: nextMeta },
+      driverId: offerDriverId,
+      offerMarker: `pass:${ctx.user.id}`,
+    })
+  }
+  return json(res, 200, {
+    tripId,
+    status: updated.data?.status || 'searching',
+    offerDriverId,
+    released: !offerDriverId,
+  })
+}

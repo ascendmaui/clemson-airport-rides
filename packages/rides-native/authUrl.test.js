@@ -126,9 +126,9 @@ test('app-scheme deep links: Expo development URLs', () => {
   )
 })
 
-test('clemson-rides.vercel.app and web URLs: session tokens in hash fragment', () => {
+test('clemsonrides.com and web URLs: session tokens in hash fragment', () => {
   assert.deepEqual(
-    parseSupabaseAuthUrl('https://clemson-rides.vercel.app/auth/callback#access_token=w_at1&refresh_token=w_rt1&type=magiclink'),
+    parseSupabaseAuthUrl('https://clemsonrides.com/auth/callback#access_token=w_at1&refresh_token=w_rt1&type=magiclink'),
     {
       kind: 'session',
       accessToken: 'w_at1',
@@ -138,7 +138,7 @@ test('clemson-rides.vercel.app and web URLs: session tokens in hash fragment', (
   )
 
   assert.deepEqual(
-    parseSupabaseAuthUrl('https://clemson-rides.vercel.app/set-password#access_token=w_at2&refresh_token=w_rt2&type=recovery'),
+    parseSupabaseAuthUrl('https://clemsonrides.com/set-password#access_token=w_at2&refresh_token=w_rt2&type=recovery'),
     {
       kind: 'session',
       accessToken: 'w_at2',
@@ -149,7 +149,7 @@ test('clemson-rides.vercel.app and web URLs: session tokens in hash fragment', (
 
   // Legacy origin compatibility
   assert.deepEqual(
-    parseSupabaseAuthUrl('https://clemson-airport-rides.vercel.app/auth/callback#access_token=leg_at&refresh_token=leg_rt'),
+    parseSupabaseAuthUrl('https://clemsonrides.com/auth/callback#access_token=leg_at&refresh_token=leg_rt'),
     {
       kind: 'session',
       accessToken: 'leg_at',
@@ -159,9 +159,9 @@ test('clemson-rides.vercel.app and web URLs: session tokens in hash fragment', (
   )
 })
 
-test('clemson-rides.vercel.app and web URLs: session tokens in query string', () => {
+test('clemsonrides.com and web URLs: session tokens in query string', () => {
   assert.deepEqual(
-    parseSupabaseAuthUrl('https://clemson-rides.vercel.app/auth/callback?access_token=wq_at&refresh_token=wq_rt&type=invite'),
+    parseSupabaseAuthUrl('https://clemsonrides.com/auth/callback?access_token=wq_at&refresh_token=wq_rt&type=invite'),
     {
       kind: 'session',
       accessToken: 'wq_at',
@@ -181,9 +181,9 @@ test('clemson-rides.vercel.app and web URLs: session tokens in query string', ()
   )
 })
 
-test('clemson-rides.vercel.app and web URLs: PKCE code in query or hash', () => {
+test('clemsonrides.com and web URLs: PKCE code in query or hash', () => {
   assert.deepEqual(
-    parseSupabaseAuthUrl('https://clemson-rides.vercel.app/auth/callback?code=web_pkce_q&type=signup'),
+    parseSupabaseAuthUrl('https://clemsonrides.com/auth/callback?code=web_pkce_q&type=signup'),
     {
       kind: 'code',
       code: 'web_pkce_q',
@@ -192,7 +192,7 @@ test('clemson-rides.vercel.app and web URLs: PKCE code in query or hash', () => 
   )
 
   assert.deepEqual(
-    parseSupabaseAuthUrl('https://clemson-rides.vercel.app/auth/callback#code=web_pkce_h'),
+    parseSupabaseAuthUrl('https://clemsonrides.com/auth/callback#code=web_pkce_h'),
     {
       kind: 'code',
       code: 'web_pkce_h',
@@ -233,7 +233,7 @@ test('partial or fragment-only URL strings', () => {
 test('precedence: session tokens take precedence over PKCE code', () => {
   // When both session tokens and code are present in URL, session is preferred
   assert.deepEqual(
-    parseSupabaseAuthUrl('https://clemson-rides.vercel.app/auth/callback#access_token=s_at&refresh_token=s_rt&code=ignored_code'),
+    parseSupabaseAuthUrl('https://clemsonrides.com/auth/callback#access_token=s_at&refresh_token=s_rt&code=ignored_code'),
     {
       kind: 'session',
       accessToken: 's_at',
@@ -247,7 +247,7 @@ test('precedence: hash fragment parameters take precedence over query parameters
   // Hash tokens override query tokens
   assert.deepEqual(
     parseSupabaseAuthUrl(
-      'https://clemson-rides.vercel.app/auth/callback?access_token=q_at&refresh_token=q_rt#access_token=h_at&refresh_token=h_rt',
+      'https://clemsonrides.com/auth/callback?access_token=q_at&refresh_token=q_rt#access_token=h_at&refresh_token=h_rt',
     ),
     {
       kind: 'session',
@@ -259,7 +259,7 @@ test('precedence: hash fragment parameters take precedence over query parameters
 
   // Hash code overrides query code
   assert.deepEqual(
-    parseSupabaseAuthUrl('https://clemson-rides.vercel.app/auth/callback?code=q_code#code=h_code'),
+    parseSupabaseAuthUrl('https://clemsonrides.com/auth/callback?code=q_code#code=h_code'),
     {
       kind: 'code',
       code: 'h_code',
@@ -269,7 +269,7 @@ test('precedence: hash fragment parameters take precedence over query parameters
 
   // Hash type overrides query type
   assert.deepEqual(
-    parseSupabaseAuthUrl('https://clemson-rides.vercel.app/auth/callback?code=c1&type=q_type#type=h_type'),
+    parseSupabaseAuthUrl('https://clemsonrides.com/auth/callback?code=c1&type=q_type#type=h_type'),
     {
       kind: 'code',
       code: 'c1',
@@ -279,7 +279,7 @@ test('precedence: hash fragment parameters take precedence over query parameters
 
   // BUG?: Tokens are picked independently from hash then query, which combines tokens split across query and hash fragments
   assert.deepEqual(
-    parseSupabaseAuthUrl('https://clemson-rides.vercel.app/auth/callback?refresh_token=split_rt#access_token=split_at'),
+    parseSupabaseAuthUrl('https://clemsonrides.com/auth/callback?refresh_token=split_rt#access_token=split_at'),
     {
       kind: 'session',
       accessToken: 'split_at',
@@ -309,14 +309,14 @@ test('empty, null, undefined, and non-string inputs return null', () => {
 
 test('URLs missing auth tokens or codes return null', () => {
   // Bare URLs with no parameters
-  assert.equal(parseSupabaseAuthUrl('https://clemson-rides.vercel.app'), null)
-  assert.equal(parseSupabaseAuthUrl('https://clemson-rides.vercel.app/auth/callback'), null)
+  assert.equal(parseSupabaseAuthUrl('https://clemsonrides.com'), null)
+  assert.equal(parseSupabaseAuthUrl('https://clemsonrides.com/auth/callback'), null)
   assert.equal(parseSupabaseAuthUrl('clemsonrides://reset-password'), null)
   assert.equal(parseSupabaseAuthUrl('clemsonrides-driver://set-password'), null)
 
   // Unrelated parameters
   assert.equal(
-    parseSupabaseAuthUrl('https://clemson-rides.vercel.app/auth/callback?utm_source=email&redirect_to=/home'),
+    parseSupabaseAuthUrl('https://clemsonrides.com/auth/callback?utm_source=email&redirect_to=/home'),
     null,
   )
   assert.equal(
@@ -326,27 +326,27 @@ test('URLs missing auth tokens or codes return null', () => {
 
   // BUG?: When only access_token is present without refresh_token, parseSupabaseAuthUrl returns null rather than a partial session
   assert.equal(
-    parseSupabaseAuthUrl('https://clemson-rides.vercel.app/auth/callback#access_token=only_at'),
+    parseSupabaseAuthUrl('https://clemsonrides.com/auth/callback#access_token=only_at'),
     null,
   )
 
   // Only refresh_token without access_token
   assert.equal(
-    parseSupabaseAuthUrl('https://clemson-rides.vercel.app/auth/callback#refresh_token=only_rt'),
+    parseSupabaseAuthUrl('https://clemsonrides.com/auth/callback#refresh_token=only_rt'),
     null,
   )
 
   // Empty string token values evaluate to falsy and return null
   assert.equal(
-    parseSupabaseAuthUrl('https://clemson-rides.vercel.app/auth/callback#access_token=&refresh_token='),
+    parseSupabaseAuthUrl('https://clemsonrides.com/auth/callback#access_token=&refresh_token='),
     null,
   )
   assert.equal(
-    parseSupabaseAuthUrl('https://clemson-rides.vercel.app/auth/callback#access_token=at&refresh_token='),
+    parseSupabaseAuthUrl('https://clemsonrides.com/auth/callback#access_token=at&refresh_token='),
     null,
   )
   assert.equal(
-    parseSupabaseAuthUrl('https://clemson-rides.vercel.app/auth/callback?code='),
+    parseSupabaseAuthUrl('https://clemsonrides.com/auth/callback?code='),
     null,
   )
 })
@@ -355,7 +355,7 @@ test('error branches and error redirect parameters', () => {
   // BUG?: parseSupabaseAuthUrl returns null on error redirects without extracting error or error_description, forcing consumers (e.g. googleAuth.js) to re-parse raw URLs
   assert.equal(
     parseSupabaseAuthUrl(
-      'https://clemson-rides.vercel.app/auth/callback?error=access_denied&error_code=403&error_description=User+cancelled+the+sign-in+flow',
+      'https://clemsonrides.com/auth/callback?error=access_denied&error_code=403&error_description=User+cancelled+the+sign-in+flow',
     ),
     null,
   )
@@ -369,7 +369,7 @@ test('error branches and error redirect parameters', () => {
 
   // BUG?: parseSupabaseAuthUrl does not check for error parameters, so a URL with both error and code still returns the code instead of null or an error descriptor
   assert.deepEqual(
-    parseSupabaseAuthUrl('https://clemson-rides.vercel.app/auth/callback?error=server_error&code=pkce_with_error'),
+    parseSupabaseAuthUrl('https://clemsonrides.com/auth/callback?error=server_error&code=pkce_with_error'),
     {
       kind: 'code',
       code: 'pkce_with_error',
@@ -381,7 +381,7 @@ test('error branches and error redirect parameters', () => {
 test('URL structural quirks and encoding behaviors', () => {
   // When '#' appears before '?' in the URL (such as hash routing '#/route?code=xyz'), query parameters are properly extracted
   assert.deepEqual(
-    parseSupabaseAuthUrl('https://clemson-rides.vercel.app/#/auth/callback?code=pkce_spa'),
+    parseSupabaseAuthUrl('https://clemsonrides.com/#/auth/callback?code=pkce_spa'),
     {
       kind: 'code',
       code: 'pkce_spa',
@@ -389,7 +389,7 @@ test('URL structural quirks and encoding behaviors', () => {
     },
   )
   assert.deepEqual(
-    parseSupabaseAuthUrl('https://clemson-rides.vercel.app/#/set-password?access_token=spa_at&refresh_token=spa_rt'),
+    parseSupabaseAuthUrl('https://clemsonrides.com/#/set-password?access_token=spa_at&refresh_token=spa_rt'),
     {
       kind: 'session',
       accessToken: 'spa_at',
@@ -398,7 +398,7 @@ test('URL structural quirks and encoding behaviors', () => {
     },
   )
   assert.deepEqual(
-    parseSupabaseAuthUrl('https://clemson-rides.vercel.app/#/set-password?access_token=spa_at&refresh_token=spa_rt&type=recovery'),
+    parseSupabaseAuthUrl('https://clemsonrides.com/#/set-password?access_token=spa_at&refresh_token=spa_rt&type=recovery'),
     {
       kind: 'session',
       accessToken: 'spa_at',

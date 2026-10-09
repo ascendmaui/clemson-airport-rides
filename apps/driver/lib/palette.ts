@@ -31,6 +31,12 @@ export type Palette = {
   segmentTextOn: string
   statusBar: 'light' | 'dark'
   online: string
+  onlineSoft: string
+  orangeSoft: string
+  purpleSoft: string
+  link: string
+  placeholder: string
+  scrim: string
 }
 
 export const lightPalette: Palette = {
@@ -62,6 +68,12 @@ export const lightPalette: Palette = {
   segmentTextOn: '#FFFFFF',
   statusBar: 'dark',
   online: '#1F7A4D',
+  onlineSoft: 'rgba(31,138,76,0.10)',
+  orangeSoft: 'rgba(245,102,0,0.12)',
+  purpleSoft: 'rgba(82,45,128,0.08)',
+  link: PURPLE,
+  placeholder: '#8B939E',
+  scrim: 'rgba(11,18,32,0.42)',
 }
 
 /**
@@ -98,6 +110,12 @@ export const darkPalette: Palette = {
   segmentTextOn: '#FFFFFF',
   statusBar: 'light',
   online: '#7DCEA0',
+  onlineSoft: 'rgba(125,206,160,0.16)',
+  orangeSoft: 'rgba(245,102,0,0.18)',
+  purpleSoft: 'rgba(212,196,240,0.12)',
+  link: '#D4C4F0',
+  placeholder: '#8E879C',
+  scrim: 'rgba(0,0,0,0.62)',
 }
 
 export function paletteFor(scheme: Scheme): Palette {

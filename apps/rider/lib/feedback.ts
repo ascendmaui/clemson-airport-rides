@@ -1,11 +1,13 @@
 import { createAudioPlayer, setAudioModeAsync, type AudioPlayer } from 'expo-audio'
 import * as Haptics from 'expo-haptics'
+import pingSource from '../assets/sounds/ping.wav'
 import tigerSource from '../assets/sounds/tiger.wav'
 import { authStorage } from '@/lib/storage'
 
 const SOUNDS_KEY = 'rider.sounds.enabled'
 
 let player: AudioPlayer | null = null
+let pingPlayer: AudioPlayer | null = null
 let modeReady = false
 
 export async function soundsEnabled() {
@@ -71,6 +73,28 @@ export async function approachHaptic(level: ApproachHapticLevel) {
  * Clemson cue via expo-audio. playsInSilentMode is false so iOS mute and
  * Android silent/vibrate suppress the clip.
  */
+/** Short locator ping for the crowd-find approach alert. Honors the mute switch. */
+export async function playApproachPing() {
+  if (!(await soundsEnabled())) return
+  try {
+    if (!modeReady) {
+      await setAudioModeAsync({
+        playsInSilentMode: false,
+        interruptionMode: 'mixWithOthers',
+        allowsRecording: false,
+        shouldPlayInBackground: false,
+        shouldRouteThroughEarpiece: false,
+      })
+      modeReady = true
+    }
+    if (!pingPlayer) pingPlayer = createAudioPlayer(pingSource)
+    await pingPlayer.seekTo(0)
+    pingPlayer.play()
+  } catch {
+    /* asset or platform audio can fail closed */
+  }
+}
+
 export async function playTigerCue() {
   if (!(await soundsEnabled())) return
   try {

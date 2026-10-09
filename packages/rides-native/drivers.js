@@ -1,18 +1,20 @@
 import { canReceiveRides } from '../../shared/driverOnboarding.js'
+import { vehicleServesComfort } from '../../shared/rideOptions.js'
+import { defaultDriverRank, dispatchRankOf } from '../../shared/driverOrder.js'
 import { authedJson } from './apiClient.js'
 import { displayFirstName, standingFromRatings } from './authErrors.js'
 import { GSP, STADIUM } from './places.js'
+import { airportCodeFromLabel } from './riderMoney.js'
 import { haversineMeters } from './riderShell.js'
+import { isSimulatedDriverId } from './simulatedDrivers.js'
+import { favoriteIdsForMatching } from '../../shared/riderFavorites.js'
 import { approvalGateMessage } from './syntheticOffers.js'
 
-/** Straight-line campus pace. TODO: a traffic ETA needs a billed GOOGLE_MAPS_API_KEY (Routes). */
-const CAMPUS_MPH = 18
+/** Straight-line campus pace. A stored road polyline can scale this; live traffic still needs a billed Routes call. */
+export const CAMPUS_MPH = 18
 const STALE_LOCATION_MS = 10 * 60 * 1000
-const FAVORITE_CAP = 12
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
-
 const STATUS_COLUMNS = 'driver_id, online, priority_mode, lat, lng, heading, unlock_progress, unlock_target, updated_at'
-const VEHICLE_COLUMNS = 'id, driver_id, make, model, color, plate, seats, is_tesla, autonomous_capable, tier'
+const VEHICLE_COLUMNS = 'id, driver_id, make, model, color, plate, seats, tier'
 const PROFILE_COLUMNS = 'id, full_name, phone, email, avatar_url, role, rating_avg, rating_count, standing'
 const PROFILE_COLUMNS_NARROW = 'id, full_name, phone, email, avatar_url, role'
 
@@ -28,6 +30,12 @@ export const PREFERRED_CANCELED_COPY =
 export const OPEN_POOL_COPY =
   'No driver is pinned to this ride. The first available driver can accept it.'
 
+/** Ride options do not filter the driver list by a retired fleet. */
+export function filterDriversForFleet(drivers) {
+  return Array.isArray(drivers) ? drivers : []
+}
+
+
 const favoriteKey = (userId) => `rider.preferredDrivers.${userId || 'anon'}`
 
 export function preferredTripFields(driverId) {
@@ -38,16 +46,11 @@ export function preferredTripFields(driverId) {
 }
 
 export function normalizeFavoriteDriverIds(raw) {
-  const list = Array.isArray(raw) ? raw : []
-  const ids = []
-  for (const item of list) {
-    if (typeof item !== 'string') continue
-    const id = item.trim()
-    if (!UUID_RE.test(id) || ids.includes(id)) continue
-    ids.push(id)
-    if (ids.length >= FAVORITE_CAP) break
-  }
-  return ids
+  return favoriteIdsForMatching(raw)
+}
+
+export function canFavoriteDriver(driverId) {
+  return favoriteIdsForMatching([driverId]).length === 1
 }
 
 export function driverApproach(driver, pickup) {
@@ -111,6 +114,8 @@ export function sortPreferredDrivers(drivers, favoriteIds, pickup) {
     const aOn = a.online ? 0 : 1
     const bOn = b.online ? 0 : 1
     if (aOn !== bOn) return aOn - bOn
+    const rank = dispatchRankOf(a) - dispatchRankOf(b)
+    if (rank !== 0) return rank
     const aEta = driverApproach(a, pickup).etaMin ?? 999
     const bEta = driverApproach(b, pickup).etaMin ?? 999
     if (aEta !== bEta) return aEta - bEta
@@ -118,15 +123,20 @@ export function sortPreferredDrivers(drivers, favoriteIds, pickup) {
   })
 }
 
-export function groupDriversForPicker(drivers, favoriteIds) {
+export function groupDriversForPicker(drivers, favoriteIds, passPreferredIds) {
   const fav = new Set(normalizeFavoriteDriverIds(favoriteIds))
+  const usePass = Array.isArray(passPreferredIds)
+  const pass = new Set(usePass ? normalizeFavoriteDriverIds(passPreferredIds) : [])
+  const passPreferred = []
   const preferred = []
   const online = []
   for (const driver of drivers || []) {
-    if (fav.has(driver.id)) preferred.push(driver)
+    if (usePass && pass.has(driver.id)) passPreferred.push(driver)
+    else if (fav.has(driver.id)) preferred.push(driver)
     else if (driver.online) online.push(driver)
   }
-  return { preferred, online }
+  if (!usePass) return { preferred, online }
+  return { passPreferred, preferred, online }
 }
 
 async function readJson(storage, key) {
@@ -184,6 +194,133 @@ export async function saveFavoriteDriverIds(supabase, storage, userId, ids) {
   return { ids: next, persisted: true, note: 'Saved to your account.' }
 }
 
+function rowsLookLikeCards(rows) {
+  return Array.isArray(rows) && rows.some((row) => row && (row.full_name || row.make || row.model || row.color || row.plate))
+}
+
+/** Same car line the pick-a-driver list renders: color, make, model, then plate. */
+export function pickerVehicleLine(vehicleLabel, plate) {
+  const car = typeof vehicleLabel === 'string' ? vehicleLabel.trim() : ''
+  const tag = plate == null || plate === false ? '' : String(plate).trim()
+  if (car && tag) return `${car} · ${tag}`
+  return car || tag
+}
+
+function partsFromCardRows(rows) {
+  const profiles = []
+  const vehicles = []
+  for (const row of rows) {
+    const id = row?.id
+    if (!id) continue
+    profiles.push({
+      id,
+      full_name: row.full_name || null,
+      avatar_url: row.avatar_url || null,
+      rating_avg: row.rating_avg,
+      rating_count: row.rating_count,
+      standing: row.standing || null,
+      dispatchRank: Number.isInteger(row.dispatchRank) ? row.dispatchRank : undefined,
+    })
+    if (row.make || row.model || row.color || row.plate) {
+      vehicles.push({
+        driver_id: id,
+        color: row.color || null,
+        make: row.make || null,
+        model: row.model || null,
+        plate: row.plate || null,
+        tier: row.tier || 'standard',
+      })
+    }
+  }
+  return profiles.length ? { profiles, vehicles } : null
+}
+
+function rpcMissingDriverCards(error) {
+  const msg = `${error?.message || ''} ${error?.details || ''} ${error?.code || ''}`
+  return /could not find the function|schema cache|PGRST202|does not exist/i.test(msg)
+}
+
+/**
+ * Name and vehicle for the picker. Direct profile and vehicle selects are hidden
+ * until a trip is accepted, so the card would otherwise read "Driver" / "Vehicle TBD".
+ */
+async function overlayDispatchRanks(supabase, parts) {
+  if (!parts?.profiles?.length) return parts
+  const ids = parts.profiles.map((profile) => profile.id).filter(Boolean)
+  try {
+    const data = await authedJson(supabase, '/api/driver?action=cards', {
+      method: 'POST',
+      body: { ids },
+    })
+    const rows = Array.isArray(data?.drivers) ? data.drivers : []
+    const rankById = {}
+    for (const row of rows) {
+      if (row?.id && Number.isInteger(row.dispatchRank)) rankById[row.id] = row.dispatchRank
+    }
+    return {
+      ...parts,
+      profiles: parts.profiles.map((profile) => (
+        rankById[profile.id] == null ? profile : { ...profile, dispatchRank: rankById[profile.id] }
+      )),
+    }
+  } catch {
+    return parts
+  }
+}
+
+async function loadDriverCardRows(supabase, ids) {
+  let missing = false
+  try {
+    const { data, error } = await supabase.rpc('list_driver_cards', { ids })
+    if (!error && rowsLookLikeCards(data)) return partsFromCardRows(data)
+    if (error && rpcMissingDriverCards(error)) missing = true
+  } catch (err) {
+    if (rpcMissingDriverCards(err)) missing = true
+  }
+  if (!missing) return null
+  try {
+    const data = await authedJson(supabase, '/api/driver?action=cards', {
+      method: 'POST',
+      body: { ids },
+    })
+    const rows = data?.drivers
+    if (rowsLookLikeCards(rows)) return partsFromCardRows(rows)
+  } catch {
+    return null
+  }
+  return null
+}
+
+async function loadPickerCardParts(supabase, ids) {
+  const parts = await loadDriverCardRows(supabase, ids)
+  if (!parts) return null
+  return overlayDispatchRanks(supabase, parts)
+}
+
+/**
+ * Name and vehicle for a driver the rider already accepted.
+ * Uses the same list_driver_cards / driver-cards path as Pick a driver.
+ */
+export async function loadPickerDriverRecord(supabase, driverId) {
+  if (!supabase || !driverId) return null
+  const parts = await loadDriverCardRows(supabase, [driverId])
+  if (!parts) return null
+  const profile = (parts.profiles || []).find((row) => row.id === driverId) || null
+  const vehicle = (parts.vehicles || []).find((row) => row.driver_id === driverId) || null
+  if (!profile && !vehicle) return null
+  return {
+    full_name: profile?.full_name || null,
+    avatar_url: profile?.avatar_url || null,
+    vehicle: vehicle || null,
+  }
+}
+
+/** Older clients sent riders to Schedule after airport_deposit_required. New requests book with no upfront deposit. */
+export function scheduleRedirectForRequestError(err, destLabel) {
+  if (err?.code !== 'airport_deposit_required') return null
+  return { screen: 'schedule', airport: airportCodeFromLabel(destLabel) }
+}
+
 async function loadProfiles(supabase, ids) {
   let profileRes = await supabase.from('profiles').select(PROFILE_COLUMNS).in('id', ids)
   if (profileRes.error && /standing|rating_avg|rating_count|column|schema cache/i.test(profileRes.error.message || '')) {
@@ -224,8 +361,12 @@ function mapDrivers(statuses, profiles, vehicles) {
         ? [vehicle.color, vehicle.make, vehicle.model].filter(Boolean).join(' ')
         : 'Vehicle TBD',
       plate: vehicle?.plate || null,
-      isTesla: Boolean(vehicle?.is_tesla),
+      comfortClass: vehicleServesComfort(vehicle),
+      isDemo: false,
       tier: vehicle?.tier || 'standard',
+      dispatchRank: Number.isInteger(profile.dispatchRank)
+        ? profile.dispatchRank
+        : defaultDriverRank(profile.email),
     }
   }).filter(Boolean)
 }
@@ -275,15 +416,20 @@ export async function fetchOnlineDrivers(supabase) {
     .eq('online', true)
 
   if (statusErr) return { drivers: [], error: statusErr.message }
-  if (!statuses?.length) return { drivers: [], error: null }
+  // Map-only rush cars are not selectable, even if a stray status row uses their id.
+  const liveStatuses = (statuses || []).filter((row) => row?.driver_id && !isSimulatedDriverId(row.driver_id))
+  if (!liveStatuses.length) return { drivers: [], error: null }
 
-  const ids = statuses.map((row) => row.driver_id)
+  const ids = liveStatuses.map((row) => row.driver_id)
   const { approved, error: approvedErr } = await visibleApprovedIds(supabase, ids)
   if (approvedErr) return { drivers: [], error: approvedErr }
-  const visible = statuses.filter((row) => approved.has(row.driver_id))
+  const visible = liveStatuses.filter((row) => approved.has(row.driver_id))
   if (!visible.length) return { drivers: [], error: null }
 
   const visibleIds = visible.map((row) => row.driver_id)
+  const cardParts = await loadPickerCardParts(supabase, visibleIds)
+  if (cardParts) return { drivers: mapDrivers(visible, cardParts.profiles, cardParts.vehicles), error: null }
+
   const vehicleQuery = supabase.from('vehicles').select(VEHICLE_COLUMNS).in('driver_id', visibleIds)
   const profileRes = await loadProfiles(supabase, visibleIds)
   const { data: vehicles } = await vehicleQuery
@@ -299,13 +445,16 @@ export async function fetchDriversByIds(supabase, ids) {
 
   const { approved, error: approvedErr } = await visibleApprovedIds(supabase, wanted)
   if (approvedErr) return { drivers: [], error: approvedErr }
-  const visibleIds = wanted.filter((id) => approved.has(id))
+  const visibleIds = wanted.filter((id) => approved.has(id) && !isSimulatedDriverId(id))
   if (!visibleIds.length) return { drivers: [], error: null }
 
+  const cardParts = await loadPickerCardParts(supabase, visibleIds)
   const [statusRes, profileRes, vehicleRes] = await Promise.all([
     supabase.from('driver_status').select(STATUS_COLUMNS).in('driver_id', visibleIds),
-    loadProfiles(supabase, visibleIds),
-    supabase.from('vehicles').select(VEHICLE_COLUMNS).in('driver_id', visibleIds),
+    cardParts ? Promise.resolve({ data: cardParts.profiles, error: null }) : loadProfiles(supabase, visibleIds),
+    cardParts
+      ? Promise.resolve({ data: cardParts.vehicles, error: null })
+      : supabase.from('vehicles').select(VEHICLE_COLUMNS).in('driver_id', visibleIds),
   ])
   if (statusRes.error) return { drivers: [], error: statusRes.error.message }
   if (profileRes.error) return { drivers: [], error: profileRes.error.message }
@@ -325,7 +474,11 @@ export async function fetchDriversByIds(supabase, ids) {
   return { drivers: mapDrivers(statuses, profileRes.data, vehicleRes.data), error: null }
 }
 
-export async function setDriverOnline(supabase, driverId, online) {
+/**
+ * Writes online (and an optional GPS fix) for this driver id only.
+ * Does not create a trip, charge a card, or mark any other driver — including demo bots — online.
+ */
+export async function setDriverOnline(supabase, driverId, online, fix = null) {
   if (!supabase) throw new Error('Supabase is not configured')
   if (!driverId) throw new Error('Sign in required')
   if (online) {
@@ -341,11 +494,17 @@ export async function setDriverOnline(supabase, driverId, online) {
       throw err
     }
   }
-  const { error } = await supabase.from('driver_status').upsert({
+  const row = {
     driver_id: driverId,
     online: Boolean(online),
     updated_at: new Date().toISOString(),
-  })
+  }
+  if (fix && Number.isFinite(Number(fix.lat)) && Number.isFinite(Number(fix.lng))) {
+    row.lat = Number(fix.lat)
+    row.lng = Number(fix.lng)
+    if (fix.heading != null && Number.isFinite(Number(fix.heading))) row.heading = Number(fix.heading)
+  }
+  const { error } = await supabase.from('driver_status').upsert(row)
   if (error) throw new Error(error.message)
   return { ok: true }
 }
@@ -362,33 +521,41 @@ export async function fetchDriverApplication(supabase, driverId) {
 }
 
 /**
- * Preferred-driver request. The server writes fare_cents. Client list price
- * and isStudent are not pricing inputs.
+ * Campus driver request. The server writes fare_cents and an open-pool row.
+ * Client list price and isStudent are not pricing inputs.
  */
 export async function requestDriverTrip(supabase, {
   riderId,
-  driverId,
+  driverId = null,
+  autoAssign = false,
   dest = 'GSP Airport',
   destPoint = GSP,
   pickupLabel = 'Memorial Stadium',
   pickupPoint = STADIUM,
   tier = 'standard',
+  passengers = null,
   isStudent = false,
+  note = '',
 }) {
   void isStudent
   if (!supabase) throw new Error('Supabase is not configured')
   if (!riderId) throw new Error('Sign in required to request a driver')
-  if (!driverId) throw new Error('Select a driver first')
+  const assigning = autoAssign === true && !driverId
+  if (!driverId && !assigning) throw new Error('Select a driver first')
+  if (driverId && isSimulatedDriverId(driverId)) {
+    throw new Error('That driver is busy and cannot be requested.')
+  }
 
   const destLat = destPoint?.latitude ?? destPoint?.lat
   const destLng = destPoint?.longitude ?? destPoint?.lng
   const pickupLat = pickupPoint?.latitude ?? pickupPoint?.lat
   const pickupLng = pickupPoint?.longitude ?? pickupPoint?.lng
+  const riderNote = String(note || '').replace(/\s+/g, ' ').trim().slice(0, 280)
 
   const data = await authedJson(supabase, '/api/stripe-payment-methods?action=request-driver', {
     method: 'POST',
     body: {
-      driverId,
+      ...(assigning ? { autoAssign: true } : { driverId }),
       dest,
       destLat,
       destLng,
@@ -396,6 +563,8 @@ export async function requestDriverTrip(supabase, {
       pickupLat,
       pickupLng,
       tier: tier || 'standard',
+      ...(passengers ? { passengers } : {}),
+      ...(riderNote ? { note: riderNote } : {}),
     },
   })
   if (!data?.trip?.id) throw new Error('Could not request trip')

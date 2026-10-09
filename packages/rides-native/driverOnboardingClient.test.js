@@ -199,6 +199,10 @@ function createFakeSupabase(config = {}) {
         state.filters.push({ col, val })
         return builder
       },
+      neq(col, val) {
+        state.filters.push({ col, val, op: 'neq' })
+        return builder
+      },
       limit(n) {
         state.limit = n
         return builder
@@ -294,10 +298,10 @@ function createFakeSupabase(config = {}) {
 // ---------------------------------------------------------------------------
 
 test('constants and shared re-exports match expected values and shapes', () => {
-  assert.equal(BACKGROUND_CONSENT_VERSION, 'background-auth-2026-09-24')
+  assert.equal(BACKGROUND_CONSENT_VERSION, 'background-auth-2026-10-07')
   assert.equal(WORK_ELIGIBILITY_VERSION, 'work-eligibility-2026-09-24')
   assert.equal(W9_FORM_VERSION, 'w9-2026-09-24')
-  assert.equal(IC_AGREEMENT_VERSION, 'ic-agreement-2026-09-24')
+  assert.equal(IC_AGREEMENT_VERSION, 'ic-agreement-2026-10-05')
   assert.equal(IC_AGREEMENT_TITLE, 'Clemson RIDES Independent Contractor Agreement')
 
   assert.ok(Array.isArray(ONBOARDING_FLOW))
@@ -541,7 +545,10 @@ test('loadOnboarding aggregates expected keys when fakes return empty rows', asy
   assert.deepEqual(bundle.ctx, {
     status: null,
     uploaded: [],
+    backgroundStatus: 'pending',
     backgroundAuthorized: false,
+    backgroundReviewAcknowledged: false,
+    applicantEmail: '',
     workEligibilityAttested: false,
     workEligibilityCategory: null,
     taxSaved: false,
@@ -562,6 +569,8 @@ test('loadOnboarding aggregates correctly when onboarding is fully completed', a
     id: 'app-99',
     profile_id: 'user-99',
     onboarding_status: 'pending_docs',
+    applicant_email: 'ready@clemson.edu',
+    background_check_status: 'authorized',
     background_authorized_at: '2026-09-24T00:00:00Z',
     work_eligibility_attested_at: '2026-09-24T00:00:00Z',
     work_eligibility_category: 'citizen',
@@ -876,6 +885,8 @@ test('submitDriverReview: auth-missing and API unavailable direct fallback paths
     id: 'app-ready',
     profile_id: 'user-ready',
     onboarding_status: 'pending_docs',
+    applicant_email: 'ready@clemson.edu',
+    background_check_status: 'authorized',
     background_authorized_at: '2026-09-24T00:00:00Z',
     work_eligibility_attested_at: '2026-09-24T00:00:00Z',
     work_eligibility_category: 'citizen',
@@ -898,13 +909,20 @@ test('submitDriverReview: auth-missing and API unavailable direct fallback paths
     signer_user_id: 'user-ready',
   }
 
+  let approvalWinsRace = false
+  let approvedDuringSubmit = false
   const readySb = createFakeSupabase({
     tables: {
       driver_applications: (state) => {
         if (state.operation === 'update') {
+          assert.ok(state.filters.some((f) => f.col === 'onboarding_status' && f.op === 'neq' && f.val === 'approved'))
+          if (approvalWinsRace) {
+            approvedDuringSubmit = true
+            return { data: null, error: null }
+          }
           return { data: { ...fullApp, onboarding_status: 'pending_review' }, error: null }
         }
-        return { data: fullApp, error: null }
+        return { data: approvedDuringSubmit ? { ...fullApp, onboarding_status: 'approved' } : fullApp, error: null }
       },
       driver_documents: { data: fullDocs },
       driver_tax_info: { data: fullTax },
@@ -916,6 +934,11 @@ test('submitDriverReview: auth-missing and API unavailable direct fallback paths
   assert.equal(directRes.ok, true)
   assert.equal(directRes.direct, true)
   assert.equal(directRes.onboarding_status, 'pending_review')
+
+  approvalWinsRace = true
+  const raced = await submitDriverReview(readySb, 'user-ready')
+  assert.equal(raced.onboarding_status, 'approved')
+  assert.equal(raced.ok, true)
 
   // 4. API returns 400 Bad Request (non-network, non-unavailable) -> rethrows without falling back
   stubFetch({
@@ -971,7 +994,7 @@ test('saveDriverInfo validates quiz, calls API signup, and falls back to direct 
     make: 'Honda',
     model: 'Civic',
     plate: 'ABC-123',
-    isTesla: true,
+    comfortClass: true,
   }
 
   // 3. API happy path
@@ -1022,7 +1045,7 @@ test('saveDriverInfo validates quiz, calls API signup, and falls back to direct 
     },
   })
   await assert.rejects(
-    () => saveDriverInfo(directSb, { id: 'u1' }, validPayload),
+    () => saveDriverInfo(directSb, { id: 'u1', email: 'driver@clemson.edu' }, validPayload),
     /Invalid phone format/,
   )
 })
@@ -1144,16 +1167,36 @@ test('saveEmploymentVerification validates input, updates application, and recor
   )
 
   // Happy path
+  const cleanDisclosures = { conviction: false, license_action: false, impaired_driving: false }
   const res = await saveEmploymentVerification(sb, 'u1', {
     backgroundAuthorized: true,
+    legalName: 'John Hancock',
+    disclosures: cleanDisclosures,
     category: 'citizen',
     signatureName: 'John Hancock',
+    signedOn: '2026-10-07',
   })
-  assert.ok(res)
+  assert.equal(res.background_check_status, 'authorized')
+  assert.equal(res.vendor_result, null)
+  const employmentUpdate = sb.calls.from.find((call) => call.table === 'driver_applications' && call.operation === 'update')
+  assert.equal(employmentUpdate.payload.background_check_status, 'authorized')
+  assert.equal(employmentUpdate.payload.background_check_status === 'clear', false)
+  assert.equal(employmentUpdate.payload.background_check_status === 'pending', false)
+
+  const flagged = await saveEmploymentVerification(sb, 'u1', {
+    backgroundAuthorized: true,
+    legalName: 'John Hancock',
+    disclosures: { ...cleanDisclosures, conviction: true },
+    category: 'citizen',
+    signatureName: 'John Hancock',
+    signedOn: '2026-10-07',
+  })
+  assert.equal(flagged.background_check_status, 'needs_review')
+  assert.equal(flagged.vendor_result, null)
 
   // Check form signatures recorded
   const formSigCalls = sb.calls.from.filter((c) => c.table === 'driver_form_signatures')
-  assert.equal(formSigCalls.length, 2)
+  assert.equal(formSigCalls.length, 4)
   const formIds = formSigCalls.map((c) => c.payload.form_id)
   assert.ok(formIds.includes('background_authorization'))
   assert.ok(formIds.includes('work_eligibility'))
@@ -1230,4 +1273,57 @@ test('loadApplicantInbox and replyApplicantInbox call /api/driver?action=inbox w
   assert.equal(fetchCalls[1].options.headers.Authorization, 'Bearer valid-test-token')
   assert.equal(fetchCalls[1].options.method, 'POST')
   assert.deepEqual(JSON.parse(fetchCalls[1].options.body), { body: 'I have uploaded my documents.' })
+})
+
+test('approved onboarding skips all compliance reads, even when those tables fail', async () => {
+  const sb = createFakeSupabase({ fromHandler(state) {
+    assert.equal(state.table, 'driver_applications')
+    assert.equal(state.operation, 'select')
+    return { data: { onboarding_status: 'approved' }, error: null }
+  } })
+  const bundle = await loadOnboarding(sb, 'approved-driver')
+  assert.equal(bundle.application.onboarding_status, 'approved')
+  assert.deepEqual(bundle.blockers, [])
+  assert.equal(bundle.progress.percent, 100)
+})
+
+test('approved review fallback is idempotent without documents, tax, or agreement', async () => {
+  stubFetch({ '/api/driver': { status: 503, body: { error: 'unavailable' } } })
+  const sb = createFakeSupabase({ fromHandler(state) {
+    assert.equal(state.table, 'driver_applications')
+    assert.equal(state.operation, 'select')
+    return { data: { onboarding_status: 'approved' }, error: null }
+  } })
+  const result = await submitDriverReview(sb, 'approved-driver')
+  assert.equal(result.onboarding_status, 'approved')
+  assert.equal(result.ok, true)
+})
+
+test('pending review resumes missing electronic forms, while approved resume remains open', async () => {
+  for (const status of ['pending_review', 'approved']) {
+    const sb = createFakeSupabase({ tables: {
+      driver_applications: { data: { onboarding_status: status, applicant_email: 'existing@clemson.edu' } },
+      driver_documents: { data: REQUIRED_DOCUMENTS.map((doc) => ({ doc_type: doc.id })) },
+    } })
+    const bundle = await loadOnboarding(sb, 'existing-driver')
+    assert.equal(bundle.stepId, status === 'approved' ? 'review' : 'employment')
+    assert.ok(!bundle.blockers.includes('doc:w9'))
+  }
+})
+
+test('approved fallback profile save preserves online status and submit never downgrades approval', async () => {
+  stubFetch({}) // API unavailable; all requests are mocked.
+  const sb = createFakeSupabase({ tables: {
+    driver_applications: { data: { onboarding_status: 'approved' } },
+    vehicles: { data: [] },
+  } })
+  const saved = await saveDriverInfo(sb, { id: 'approved-driver', email: 'approved@clemson.edu' }, {
+    hasCar: true, hasInsurance: true, attestationAccepted: true,
+    fullName: 'Approved Driver', phone: '8645550100', make: 'Honda', model: 'Civic', plate: 'TEST',
+  })
+  assert.equal(saved.onboarding_status, 'approved')
+  assert.equal(sb.calls.from.some((call) => call.table === 'driver_status'), false)
+  const submitted = await submitDriverReview(sb, 'approved-driver')
+  assert.equal(submitted.onboarding_status, 'approved')
+  assert.equal(sb.calls.from.some((call) => call.table === 'driver_applications' && call.operation === 'update'), false)
 })

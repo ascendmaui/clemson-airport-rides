@@ -11,6 +11,7 @@ import { loadGameDayMultiplier } from '../creditLots.js'
 import { studentDiscountGranted } from '../../src/lib/studentDomain.js'
 import { airportCodeForPlace, firstName } from '../../src/lib/scheduledRideModel.js'
 import { splitPlatformFee } from '../../src/lib/fareRates.js'
+import { netCentsForShare, SCHEDULED_SHARE_BPS, scheduledOfferPatch } from '../../packages/rides-native/offerLadder.js'
 import {
   AIRPORT_DROPOFFS,
   CAMPUS_PICKUP,
@@ -18,6 +19,18 @@ import {
   priceScheduledRequest,
 } from '../authoritativeFare.js'
 import { insertTripEvent } from '../tripEvents.js'
+import { billingForPricedRide } from '../rideBilling.js'
+import { carpoolSeatCount, resolveOfferedTier, scheduleDiscountMetadata } from '../../shared/rideOptions.js'
+import { tigerPassBpsForRider } from '../riderPass.js'
+import { tigerPassMetadata } from '../../shared/tigerPass.js'
+import { assertTierAvailable } from '../rideAvailability.js'
+import { loadNearTermOffer } from '../nearTermAvailability.js'
+import { notifyScheduledBoard } from '../scheduledBoardAlerts.js'
+import { isNearTermRequest, matchRequestedSlot } from '../../shared/nearTermSlots.js'
+import { backupBookingMetadata, normalizeBackupBonusCents, preauthBaseCents } from '../../shared/backupDriverQueue.js'
+import { authorizeRideRequest } from '../fareAuthorization.js'
+import { boostMetadata, parseBoostCents } from '../../shared/scheduledBoost.js'
+import { insertTripRow } from '../scheduledBoostStore.js'
 
 
 /** Integer passenger count from the request; default 1. Prefer passengers over partySize. */
@@ -29,7 +42,7 @@ function passengerCount(body) {
   return n
 }
 
-const PURPOSES = new Set(['early_class', 'airport', 'planned', 'party_weekend', 'recurring'])
+const PURPOSES = new Set(['game_day', 'early_class', 'airport', 'planned', 'party_weekend', 'recurring'])
 
 function place(value) {
   if (!value || typeof value !== 'object') return null
@@ -61,12 +74,29 @@ export default async function handler(req, res, deps = {}) {
   if (pe) return json(res, 400, { error: pe })
 
   const purpose = PURPOSES.has(body.purpose) ? body.purpose : 'planned'
-  const tier = body.tier === 'tesla' ? 'tesla' : 'standard'
+  let tier
+  try {
+    tier = resolveOfferedTier(body.tier)
+  } catch (error) {
+    return json(res, error.status || 400, { error: error.message, code: error.code || 'ride_option_unavailable' })
+  }
   const airport = body.airport ? String(body.airport).toUpperCase() : null
-  const when = parseRideAt(body, new Date())
+  const clockNow =
+    typeof deps.now === 'function' ? deps.now() : deps.now != null ? Number(deps.now) : Date.now()
+  const when = parseRideAt(body, new Date(clockNow))
   const scheduled = Boolean(body.date || body.pickupAt)
-  if (scheduled && when.getTime() < Date.now() + 30 * 60 * 1000) {
+  const nearTerm = scheduled && isNearTermRequest(body)
+  if (!Number.isFinite(when.getTime())) return json(res, 400, { error: 'Choose a valid pickup time.' })
+  if (!nearTerm && scheduled && when.getTime() < clockNow + 30 * 60 * 1000) {
     return json(res, 400, { error: 'Schedule at least 30 minutes ahead.' })
+  }
+  try {
+    await assertTierAvailable(sb, tier, {
+      scheduledFor: nearTerm ? null : (scheduled ? when : null),
+      now: new Date(clockNow),
+    })
+  } catch (error) {
+    return json(res, error.status || 409, { error: error.message, code: error.code || 'ride_option_unavailable' })
   }
 
   let pickup = place(body.pickup)
@@ -81,6 +111,31 @@ export default async function handler(req, res, deps = {}) {
   if (!pickup || !dropoff) return json(res, 400, { error: 'Choose a pickup and a drop-off.' })
   if (pickup.label === dropoff.label) return json(res, 400, { error: 'Pickup and drop-off need to be different places.' })
 
+  let nearOffer = null
+  let matchedSlot = null
+  if (nearTerm) {
+    try {
+      nearOffer = await (deps.loadNearTermOffer || loadNearTermOffer)(sb, {
+        pickup,
+        tier,
+        now: new Date(clockNow),
+        excludeDriverId: user.id,
+      })
+    } catch (error) {
+      return json(res, error.status || 400, { error: error.message, code: error.code || 'ride_option_unavailable' })
+    }
+    matchedSlot = matchRequestedSlot(nearOffer.slots, when)
+    if (!matchedSlot) {
+      return json(res, 409, {
+        error: nearOffer.emptyMessage || 'That pickup is outside the 10 to 15 minute window.',
+        code: 'slot_unavailable',
+        waitMinutes: nearOffer.waitMinutes,
+        slots: nearOffer.slots,
+        reason: nearOffer.reason,
+      })
+    }
+  }
+
   const distance = await distanceBetween(pickup, dropoff)
   let gameDayMultiplier = null
   try {
@@ -91,6 +146,7 @@ export default async function handler(req, res, deps = {}) {
   }
 
   const isStudent = studentDiscountGranted(user)
+  const tigerPassBps = await tigerPassBpsForRider(sb, user.id, when)
   const priced = priceScheduledRequest({
     pickup,
     dropoff,
@@ -101,10 +157,40 @@ export default async function handler(req, res, deps = {}) {
     gameDayMultiplier,
     distanceM: distance.distanceM,
     durationS: distance.durationS,
+    scheduleAhead: scheduled && !nearTerm,
+    now: new Date(clockNow),
+    tigerPassBps,
+    seatCount: carpoolSeatCount(tier, passengerCount(body)),
   })
 
-  const split = splitPlatformFee(priced.fareCents)
+  const billing = await billingForPricedRide(sb, user.id, body, priced)
+  if (billing.error) {
+    return json(res, billing.error.status || 409, {
+      error: billing.error.error,
+      code: billing.error.code,
+      fareCents: priced.fareCents,
+      depositCents: priced.depositCents,
+      charged: false,
+      debitedCents: 0,
+    })
+  }
+
+  const rawBackup = body.backupBonusCents ?? body.backup_bonus_cents
+  const backupRequested = rawBackup != null && rawBackup !== '' && rawBackup !== false && rawBackup !== 0 && rawBackup !== '0'
+  const backupBonusCents = backupRequested ? normalizeBackupBonusCents(rawBackup) : null
+  if (backupRequested && !backupBonusCents) {
+    return json(res, 400, { error: 'Backup driver is $10 or $15.', code: 'backup_bonus_invalid' })
+  }
+  const backupQueue = backupBonusCents && scheduled ? backupBookingMetadata(backupBonusCents, new Date(clockNow)) : null
+  const boostParsed = parseBoostCents(body.boostCents ?? body.boost_cents ?? 0)
+  if (!boostParsed.ok) return json(res, 400, { error: boostParsed.error, code: 'boost_invalid' })
+  const boostCents = scheduled ? boostParsed.cents : 0
+
   const scheduledFor = scheduled ? when.toISOString() : null
+  const scheduledNet = scheduledFor ? netCentsForShare(priced.fareCents, SCHEDULED_SHARE_BPS) : null
+  const split = scheduledNet == null
+    ? splitPlatformFee(priced.fareCents)
+    : { platformFeeCents: Math.max(0, priced.fareCents - scheduledNet), driverEarningsCents: scheduledNet }
   const weekdays = Array.isArray(body.weekdays)
     ? body.weekdays.filter((day) => typeof day === 'string').slice(0, 7)
     : []
@@ -123,10 +209,21 @@ export default async function handler(req, res, deps = {}) {
     studentLabel: priced.discountCents > 0 ? 'Clemson student · 10% off Standard' : null,
     recurrence: purpose === 'recurring' ? { interval: 'weekly', weekdays } : null,
     party: purpose === 'party_weekend' ? 'weekend' : null,
-    tesla: tier === 'tesla',
-    fleet: tier === 'tesla' ? 'tesla_model_3' : 'standard',
+    ride_option: tier,
     fare_source: 'server',
+    ...scheduleDiscountMetadata(priced),
+    ...tigerPassMetadata(priced),
     airport: priced.airport,
+    ...billing.snapshot,
+    ...(nearTerm ? {
+      near_term_slot: true,
+      schedule_window: '10_15',
+      wait_minutes: nearOffer?.waitMinutes ?? null,
+      slot_minutes_out: matchedSlot.minutesOut,
+    } : {}),
+    ...(scheduledFor ? scheduledOfferPatch() : {}),
+    ...(backupQueue ? { backup_queue: backupQueue } : {}),
+    ...(scheduledFor ? boostMetadata(boostCents) : {}),
   }
   const row = {
     rider_id: user.id,
@@ -149,11 +246,12 @@ export default async function handler(req, res, deps = {}) {
       fare_source: 'server',
       rider_pays_cents: priced.fareCents,
     },
-    passengers: passengerCount(body),
+    passengers: tier === 'carpool' ? carpoolSeatCount(tier, passengerCount(body)) : passengerCount(body),
     pickup_at: scheduledFor,
     scheduled_for: scheduledFor,
     rider_note: purpose,
     metadata,
+    ...(scheduledFor ? { boost_cents: boostCents } : {}),
   }
 
   const profileRes = await runEnsureProfile(sb, user)
@@ -161,7 +259,7 @@ export default async function handler(req, res, deps = {}) {
     return json(res, 500, { error: 'Could not create your rider profile', code: 'profile_missing' })
   }
 
-  const inserted = await sb.from('trips').insert(row).select('id, status, pickup_at, pickup_label, dropoff_label, fare_cents, deposit_cents').single()
+  const inserted = await insertTripRow(sb, row)
   if (inserted.error || !inserted.data) {
     return json(res, 500, { error: inserted.error?.message || 'Could not schedule ride' })
   }
@@ -185,12 +283,46 @@ export default async function handler(req, res, deps = {}) {
     })
   }
 
+  if (backupQueue) {
+    try {
+      await (deps.authorizeRideRequest || authorizeRideRequest)({
+        sb,
+        stripe: deps.stripe,
+        trip: { ...row, id: inserted.data.id },
+        riderId: user.id,
+        estimatedFareCents: preauthBaseCents(priced.fareCents, backupBonusCents),
+      })
+    } catch (error) {
+      console.error('[backup-hold]', inserted.data.id, error?.message || error)
+    }
+  }
+
+  let board = null
+  try {
+    board = await (deps.notifyScheduledBoard || notifyScheduledBoard)(sb, {
+      trip: { ...row, id: inserted.data.id, pickup_at: inserted.data.pickup_at || row.pickup_at },
+    })
+  } catch (error) {
+    console.error('[scheduled-board]', inserted.data.id, error?.message || error)
+    board = { ok: false, notified: 0, reason: 'board_alert_failed' }
+  }
+
   return json(res, 200, {
     trip: inserted.data,
+    nearTerm,
+    slot: matchedSlot,
+    board,
     fareCents: priced.fareCents,
     depositCents: priced.depositCents,
     discountCents: priced.discountCents,
     studentDiscountApplied: priced.isStudent,
     estimate: priced.estimate,
+    fareBeforeScheduleDiscountCents: priced.fareBeforeScheduleDiscountCents ?? priced.fareCents,
+    scheduleDiscountPct: priced.scheduleDiscountPct || 0,
+    scheduleDiscountCents: priced.scheduleDiscountCents || 0,
+    scheduleDiscountApplied: Boolean(priced.scheduleDiscountApplied),
+    backupBonusCents: backupBonusCents || 0,
+    backupBooked: Boolean(backupQueue),
+    boostCents,
   })
 }

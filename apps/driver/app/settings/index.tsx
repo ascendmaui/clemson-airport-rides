@@ -15,9 +15,10 @@ export default function SettingsScreen() {
   const general: MenuRow[] = [
     { icon: 'accessibility', title: 'Accessibility', subtitle: 'Text size follows the phone', onPress: () => router.push('/settings/accessibility') },
     { icon: 'sunny', title: 'Display', subtitle: 'Auto, light, or dark', onPress: () => router.push('/settings/display') },
-    { icon: 'chatbubbles', title: 'Communication', subtitle: 'Trip alerts on this phone', onPress: () => router.push('/settings/communication') },
+    { icon: 'chatbubbles', title: 'Communication', subtitle: 'Lock screen and in-app ride alerts', onPress: () => router.push('/settings/communication') },
     { icon: 'navigate', title: 'Navigation', subtitle: 'Apple Maps or Google Maps', onPress: () => router.push('/settings/navigation') },
-    { icon: 'volume-high', title: 'Sounds and voice', subtitle: 'Request chime', onPress: () => router.push('/settings/sounds') },
+    { icon: 'volume-high', title: 'Sounds and voice', subtitle: 'Chime and vibration by ride type', onPress: () => router.push('/settings/sounds') },
+    { icon: 'flash', title: 'Auto-accept', subtitle: 'Distance, hourly rate, favorite riders', onPress: () => router.push('/settings/auto-accept') },
   ]
 
   return (

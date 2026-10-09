@@ -63,11 +63,11 @@ function fakeSupabase(token = 'test-bearer-token-123') {
 
 test('setCarpoolApiBase / apiBase: defaults, strips trailing slash, and resets override', () => {
   // DEFAULT_API_BASE is WEB_ORIGIN from shared/productLinks.js, via apiOrigin.js.
-  assert.equal(DEFAULT_API_BASE, 'https://clemson-rides.vercel.app')
+  assert.equal(DEFAULT_API_BASE, 'https://clemsonrides.com')
   assert.equal(apiBase(), DEFAULT_API_BASE)
 
-  setCarpoolApiBase('https://preview.clemson-rides.vercel.app/')
-  assert.equal(apiBase(), 'https://preview.clemson-rides.vercel.app')
+  setCarpoolApiBase('https://preview.clemsonrides.com/')
+  assert.equal(apiBase(), 'https://preview.clemsonrides.com')
 
   setCarpoolApiBase('http://localhost:3000')
   assert.equal(apiBase(), 'http://localhost:3000')

@@ -2,12 +2,13 @@ import type { DriverCard } from './tripTags'
 
 export type VehicleRow = {
   id: string
+  year?: number | null
   make?: string | null
   model?: string | null
   color?: string | null
   plate?: string | null
   seats?: number | null
-  is_tesla?: boolean | null
+  service_class?: boolean | null
   autonomous_capable?: boolean | null
   tier?: string | null
 }
@@ -20,7 +21,7 @@ export type FacingCard = {
   studentVerified: boolean
   vehicleLabel: string
   plate: string | null
-  isTesla: boolean
+  comfortClass: boolean
   tier: string
   online: boolean
   seats: number | null
@@ -51,12 +52,20 @@ export function setPriorityMode(supabase: unknown, driverId: string, on: boolean
 export function publishDriverLocation(
   supabase: unknown,
   driverId: string,
-  fix: { lat: number; lng: number; heading?: number | null; online?: boolean },
+  fix: {
+    lat: number
+    lng: number
+    heading?: number | null
+    online?: boolean
+    speed?: number | null
+    tripId?: string | null
+    tripStatus?: string | null
+  },
 ): Promise<void>
-export function setTeslaListing(
+export function setServiceClass(
   supabase: unknown,
   driverId: string,
-  input: { enabled: boolean; claimModel3?: boolean },
+  input: 'comfort' | 'standard' | { enabled: boolean; claimModel3?: boolean },
 ): Promise<VehicleRow>
 export function loadDriverDesk(supabase: unknown, driverId: string): Promise<DriverDesk>
 export function subscribeTrips(supabase: unknown, onChange: () => void): () => void
@@ -67,6 +76,18 @@ export function publishDriverCapacity(
 ): Promise<{ seats: number | null; stored: boolean }>
 export function listPassedTripIds(supabase: unknown, driverId: string): Promise<string[]>
 export function acceptTrip(supabase: unknown, trip: { id: string; status: string }, driverId: string): Promise<unknown>
+export function confirmBackupQueueTrip(supabase: unknown, tripId: string, options?: { navigate?: boolean }): Promise<unknown>
+export function releaseBackupQueueSeat(supabase: unknown, tripId: string, options?: { role?: string }): Promise<unknown>
+export function markSearchingOffers(
+  supabase: unknown,
+  offers: { id?: string; status?: string; driverId?: string | null }[] | null | undefined,
+): Promise<void>
+export function passOffer(supabase: unknown, tripId: string): Promise<unknown>
+export function declineDriverOffer(
+  supabase: unknown,
+  trip: { id: string; status?: string; matchingOffer?: boolean },
+  driverId?: string | null,
+): Promise<{ disposition: 'release' | 'leave' | 'cancel'; passed?: boolean; released?: boolean; via?: string }>
 export function declineTrip(
   supabase: unknown,
   tripOrId: string | { id: string; status?: string },
@@ -80,7 +101,7 @@ export function advanceTrip(
   supabase: unknown,
   trip: { id: string; status: string },
   driverId: string,
-): Promise<{ status?: string; settle?: { payment?: unknown; payout?: { status?: string; amountCents?: number } | null } | null }>
+): Promise<{ status?: string; settle?: { reason?: string; payment?: unknown; payout?: { status?: string; amountCents?: number } | null } | null }>
 export function loadTrip(supabase: unknown, tripId: string, driverId?: string): Promise<DriverCard | null>
 export function loadEarnings(supabase: unknown, driverId: string): Promise<{
   trips: { id: string; status?: string; fare_cents?: number; dropoff_label?: string | null; completed_at?: string | null; pickup_label?: string | null; metadata?: Record<string, unknown> | null }[]

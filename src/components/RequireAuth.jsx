@@ -26,7 +26,7 @@ export function RequireAuth({ children }) {
   function goSignIn() {
     const { path, params } = getHashRoute()
     if (path === 'sign-in' || path === 'sign-up') return
-    if (path === 'account' || path === 'admin') {
+    if (path === 'account' || path === 'admin' || path === 'driver') {
       navigate('sign-in', {
         next: path,
         ...(params.tab ? { tab: params.tab } : {}),

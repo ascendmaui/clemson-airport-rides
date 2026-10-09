@@ -25,6 +25,15 @@ export function stepIsComplete(stepId: string, ctx?: Record<string, unknown>): b
 export function submissionBlockers(ctx?: Record<string, unknown>): string[]
 export function agreementPlainText(html?: string): string
 export function driverQuizError(input?: { hasCar?: boolean | null; hasInsurance?: boolean | null; attestation?: boolean | null }): string | null
+export function vehicleAccountErrors(fields?: {
+  fullName?: string
+  phone?: string
+  make?: string
+  model?: string
+  color?: string
+  plate?: string
+  year?: string | number
+}, now?: Date): Record<string, string>
 
 export type OnboardingBundle = {
   application: Record<string, unknown> | null

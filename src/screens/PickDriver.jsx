@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react'
 import { PrimaryButton } from '../components/PrimaryButton'
 import { SkeletonDriverCard } from '../components/LoadingSkeleton'
+import { AccessibleAlert } from '../components/AccessibleAlert'
 import { navigate } from '../lib/navigation'
 import { subscribeTrips, supabase, supabaseConfigured } from '../lib/supabase'
-import { requestDriverTrip } from '../lib/trips'
+import { requestDriverTrip, requestFailureMessage } from '../lib/trips'
+import { finiteCoordinate } from '../lib/currentPlace'
 import { useAuth } from '../lib/auth'
 import { useStudentStatus } from '../lib/useStudentStatus'
 import { STUDENT_DISCOUNT_LABEL } from '../../packages/rides-native/riderMoney.js'
@@ -11,16 +13,20 @@ import { pickupPoint } from '../../packages/rides-native/places.js'
 import {
   describeDriver,
   fetchDriversByIds,
+  canFavoriteDriver,
   fetchOnlineDrivers,
+  filterDriversForFleet,
   groupDriversForPicker,
   loadFavoriteDriverIds,
-  PREFERRED_MATCH_COPY,
+  OPEN_POOL_COPY,
   PREFERRED_OFFLINE_COPY,
   saveFavoriteDriverIds,
+  scheduleRedirectForRequestError,
   sortPreferredDrivers,
 } from '../../packages/rides-native/drivers.js'
 import { SignInToBookModal, useRequireAuthForAction } from '../components/SignInToBookModal'
-import { teslaFleetNotice } from '../../packages/rides-native/tripTags.js'
+import { resolveDriverPortrait } from '../../shared/driverPortrait.js'
+import { setFavoriteDrivers } from '../../packages/rides-native/tigerPassClient.js'
 
 const browserStorage = {
   async getItem(key) {
@@ -39,7 +45,18 @@ const browserStorage = {
   },
 }
 
-export function PickDriver({ dest = 'GSP Airport', tier = 'standard', listCents = '' }) {
+export function PickDriver({
+  dest = 'GSP Airport',
+  tier = 'standard',
+  passengers = '',
+  listCents = '',
+  pickup = '',
+  pickupLat = '',
+  pickupLng = '',
+  destLat = '',
+  destLng = '',
+  billing = '',
+}) {
   const { user } = useAuth()
   const student = useStudentStatus()
   const { runOrPrompt } = useRequireAuthForAction()
@@ -52,8 +69,13 @@ export function PickDriver({ dest = 'GSP Airport', tier = 'standard', listCents 
   const [tripFlash, setTripFlash] = useState(null)
   const [busy, setBusy] = useState(false)
   const [promptOpen, setPromptOpen] = useState(false)
-  const pickup = pickupPoint('Memorial Stadium')
-  const approachPickup = { lat: pickup.latitude, lng: pickup.longitude }
+  const stadium = pickupPoint(pickup || 'Memorial Stadium')
+  const pinLat = finiteCoordinate(pickupLat)
+  const pinLng = finiteCoordinate(pickupLng)
+  const approachPickup = pinLat != null && pinLng != null
+    ? { lat: pinLat, lng: pinLng }
+    : { lat: stadium.latitude, lng: stadium.longitude }
+  const placeParams = { dest, destLat, destLng, pickup, pickupLat, pickupLng, tier, listCents, ...(billing ? { billing } : {}) }
 
   const load = async () => {
     setLoading(true)
@@ -67,7 +89,11 @@ export function PickDriver({ dest = 'GSP Airport', tier = 'standard', listCents 
     const extra = extraIds.length
       ? await fetchDriversByIds(supabase, extraIds)
       : { drivers: [], error: null }
-    const merged = sortPreferredDrivers([...online, ...extra.drivers], fav.ids, approachPickup)
+    const merged = sortPreferredDrivers(
+      filterDriversForFleet([...online, ...extra.drivers], tier),
+      fav.ids,
+      approachPickup,
+    )
     setDrivers(merged)
     setSelected((current) => merged.find((driver) => driver.id === current?.id) || null)
     setFavoriteIds(fav.ids)
@@ -83,11 +109,15 @@ export function PickDriver({ dest = 'GSP Airport', tier = 'standard', listCents 
       load()
     })
     return unsub
-  }, [user?.id])
+  }, [user?.id, tier])
 
   const toggleFavorite = async (driverId) => {
     if (!user?.id) {
       setPromptOpen(true)
+      return
+    }
+    if (!canFavoriteDriver(driverId)) {
+      setFavNote('Map preview cars cannot be saved.')
       return
     }
     const next = favoriteIds.includes(driverId)
@@ -97,12 +127,29 @@ export function PickDriver({ dest = 'GSP Airport', tier = 'standard', listCents 
     const saved = await saveFavoriteDriverIds(supabase, browserStorage, user.id, next)
     setFavoriteIds(saved.ids)
     setFavNote(saved.note)
+    try {
+      const remote = await setFavoriteDrivers(supabase, saved.ids)
+      if (Array.isArray(remote?.favoriteDriverIds)) {
+        setFavoriteIds(remote.favoriteDriverIds)
+        if (remote.demoDriversIgnored) setFavNote(remote.demoNote || 'Preview cars were not saved.')
+      }
+    } catch {
+      /* profile row remains the matching source when the API is down */
+    }
   }
 
   const onRequest = async () => {
-    if (!selected) return
-    if (!selected.online) {
+    const someoneOnline = drivers.some((driver) => driver.online)
+    if (selected && !selected.online) {
       setError('That driver is offline. This request does not auto-match.')
+      return
+    }
+    if (!selected && !someoneOnline) {
+      setError('No approved drivers are online right now.')
+      return
+    }
+    if (selected && (tier === 'comfort' || tier === 'comfort') && !selected.comfortClass) {
+      setError('Extra Comfort fleet only. That driver is not listed as Comfort.')
       return
     }
     setBusy(true)
@@ -110,21 +157,35 @@ export function PickDriver({ dest = 'GSP Airport', tier = 'standard', listCents 
     try {
       const trip = await requestDriverTrip({
         riderId: user.id,
-        driverId: selected.id,
+        ...(selected ? { driverId: selected.id } : { autoAssign: true }),
         dest,
+        destLat,
+        destLng,
+        pickupLabel: pickup,
+        pickupLat,
+        pickupLng,
         tier,
+        passengers,
         isStudent: student.verified,
         listCents,
+        billingChoice: billing || null,
       })
-      navigate('requested', { dest, trip: trip.id, driver: selected.name })
+      navigate('requested', { dest, trip: trip.id, driver: selected?.name || 'Next driver' })
     } catch (err) {
-      setError(err.message || 'Could not request that driver')
+      const redirect = scheduleRedirectForRequestError(err, dest)
+      if (redirect) {
+        navigate('schedule', {
+          ...(redirect.airport ? { airport: redirect.airport } : {}),
+          ...(billing ? { billing } : {}),
+        })
+        return
+      }
+      setError(requestFailureMessage(err))
     } finally {
       setBusy(false)
     }
   }
 
-  const teslaNotice = teslaFleetNotice(tier === 'tesla' || tier === 'tesla_self_driving' || Boolean(selected?.isTesla))
   const groups = groupDriversForPicker(sortPreferredDrivers(drivers, favoriteIds, approachPickup), favoriteIds)
   const anyOnline = drivers.some((driver) => driver.online)
   const sections = [
@@ -136,9 +197,11 @@ export function PickDriver({ dest = 'GSP Airport', tier = 'standard', listCents 
     <div className="fade-in" style={{ minHeight: '100%', background: 'var(--surface-muted)', display: 'flex', flexDirection: 'column' }}>
       <div style={{ padding: '20px 20px 8px' }}>
         <button type="button" className="pressable" onClick={() => navigate('tiers', { dest })} style={{ fontSize: 20 }}>←</button>
-        <h1 style={{ fontSize: 24, fontWeight: 700, marginTop: 12 }}>Pick a driver</h1>
+        <h1 style={{ fontSize: 24, fontWeight: 700, marginTop: 12 }}>
+          Pick a driver
+        </h1>
         <p style={{ color: 'var(--ink-secondary)', fontSize: 14, marginTop: 6, lineHeight: 1.45 }}>
-          {PREFERRED_MATCH_COPY}
+          {OPEN_POOL_COPY}
         </p>
         {tripFlash && (
           <div style={{ marginTop: 10, padding: '8px 12px', borderRadius: 12, background: 'var(--purple-soft)', color: 'var(--purple)', fontSize: 12, fontWeight: 600 }}>
@@ -157,14 +220,16 @@ export function PickDriver({ dest = 'GSP Airport', tier = 'standard', listCents 
           </p>
         )}
         {loading && <SkeletonDriverCard count={3} />}
-        {error && <p style={{ color: '#b00020', padding: 12 }}>{error}</p>}
+        {error && <AccessibleAlert error={error} onDismiss={() => setError(null)} style={{ margin: '8px 0' }} />}
         {!loading && !anyOnline && (
           <div className="sheet" style={{ padding: 24, borderRadius: 20, textAlign: 'center', boxShadow: 'var(--shadow-pill)', marginBottom: 12 }}>
-            <p style={{ fontWeight: 700, marginBottom: 8 }}>{drivers.length ? 'Preferred drivers are offline' : 'No drivers available'}</p>
+            <p style={{ fontWeight: 700, marginBottom: 8 }}>
+              {drivers.length ? 'Preferred drivers are offline' : 'No drivers available'}
+            </p>
             <p style={{ fontSize: 13, color: 'var(--ink-secondary)', lineHeight: 1.45 }}>
               {drivers.length
                 ? PREFERRED_OFFLINE_COPY
-                : 'When a driver goes online in Driver mode, they show up here. This screen does not auto-match.'}
+                : 'When a driver goes online in Driver mode, they show up here. A campus request stays in the open pool until someone accepts.'}
             </p>
           </div>
         )}
@@ -205,6 +270,15 @@ export function PickDriver({ dest = 'GSP Airport', tier = 'standard', listCents 
                   }}
                 >
                   <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
+                    <div style={{ display: 'flex', gap: 10 }}>
+                      {(() => {
+                        const portrait = resolveDriverPortrait(d)
+                        return portrait.kind === 'photo' ? (
+                          <img alt="" src={portrait.url} width="40" height="40" style={{ width: 40, height: 40, borderRadius: '50%', objectFit: 'cover' }} />
+                        ) : (
+                          <span style={{ width: 40, height: 40, borderRadius: '50%', display: 'grid', placeItems: 'center', background: portrait.color, color: '#fff', fontWeight: 800 }}>{portrait.initials}</span>
+                        )
+                      })()}
                     <div>
                       <div style={{ fontWeight: 700, fontSize: 16 }}>
                         {d.name}
@@ -225,9 +299,9 @@ export function PickDriver({ dest = 'GSP Airport', tier = 'standard', listCents 
                             Preferred
                           </span>
                         )}
-                        {d.isTesla && (
+                        {d.comfortClass && (
                           <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--purple)', background: 'var(--purple-soft)', padding: '4px 8px', borderRadius: 999 }}>
-                            TESLA
+                            COMFORT
                           </span>
                         )}
                         <button
@@ -242,6 +316,7 @@ export function PickDriver({ dest = 'GSP Airport', tier = 'standard', listCents 
                           {saved ? 'Saved' : 'Save'}
                         </button>
                       </div>
+                    </div>
                     </div>
                     <div style={{ fontSize: 12, color: 'var(--ink-secondary)', textAlign: 'right' }}>
                       <div style={{ color: d.online ? '#F56600' : 'var(--ink-secondary)', fontWeight: 800, fontSize: 16 }}>
@@ -258,11 +333,6 @@ export function PickDriver({ dest = 'GSP Airport', tier = 'standard', listCents 
       </div>
 
       <div style={{ padding: '12px 20px calc(20px + var(--safe-bottom))' }}>
-        {teslaNotice ? (
-          <p style={{ fontSize: 13, lineHeight: 1.4, color: '#522D80', fontWeight: 650, marginBottom: 8 }}>
-            {teslaNotice}
-          </p>
-        ) : null}
         {student.verified && tier === 'standard' ? (
           <p style={{ fontSize: 13, fontWeight: 800, color: '#F56600', marginBottom: 8 }}>
             {STUDENT_DISCOUNT_LABEL} is on this request.
@@ -274,13 +344,15 @@ export function PickDriver({ dest = 'GSP Airport', tier = 'standard', listCents 
           </p>
         ) : null}
         <PrimaryButton
-          disabled={!selected?.online || busy}
-          onClick={() => runOrPrompt(onRequest, { setPromptOpen, nextPath: 'pick-driver', nextParams: { dest } })}
+          disabled={busy || (selected ? !selected.online : !anyOnline)}
+          loading={busy}
+          spinnerTone="orange"
+          onClick={() => runOrPrompt(onRequest, { setPromptOpen, nextPath: 'pick-driver', nextParams: placeParams })}
         >
-          {busy ? 'Requesting…' : selected ? `Request ${selected.name}` : 'Select a driver'}
+          {busy ? 'Requesting…' : selected ? `Request ${selected.name}` : (anyOnline ? 'Request next driver' : 'Select a driver')}
         </PrimaryButton>
       </div>
-      <SignInToBookModal open={promptOpen} onClose={() => setPromptOpen(false)} nextPath="pick-driver" nextParams={{ dest }} />
+      <SignInToBookModal open={promptOpen} onClose={() => setPromptOpen(false)} nextPath="pick-driver" nextParams={placeParams} />
     </div>
   )
 }

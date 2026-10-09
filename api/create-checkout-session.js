@@ -1,16 +1,16 @@
 /**
  * Vercel serverless — POST /api/create-checkout-session
- * Charges the server airport quote (surge + confirmed Clemson student 10%
- * on Standard). The Stripe line is 25% of that fare. Client fare, deposit,
- * amount, total, and isStudent are ignored.
+ * Books the server airport quote (surge + confirmed Clemson student 10%
+ * on Standard). No deposit Checkout session. The full fare is charged when
+ * the trip ends. Client fare, deposit, amount, total, and isStudent are ignored.
  */
 import {
-  admin, cors, json, parseBody, userFromAuth, stripeClient, stripeOk, computeRoutes,
+  admin, cors, json, parseBody, userFromAuth, computeRoutes,
 } from '../server/friendRideLib.js'
 import { ensureProfile } from '../server/ensureProfile.js'
 import { loadGameDayMultiplier } from '../server/creditLots.js'
 import { studentDiscountGranted } from '../src/lib/studentDomain.js'
-import { feeMetadata, splitPlatformFee, depositSplit, depositSplitLabel } from '../src/lib/fareRates.js'
+import { splitPlatformFee } from '../src/lib/fareRates.js'
 import { firstName } from '../src/lib/scheduledRideModel.js'
 import {
   AIRPORT_DROPOFFS,
@@ -19,22 +19,7 @@ import {
   parseRideAt,
   priceCheckoutBody,
 } from '../server/authoritativeFare.js'
-import { checkoutSuccessHash } from '../packages/rides-native/liveTrip.js'
-import { cancelUnopenedCheckoutTrip, rememberCheckoutSession } from '../server/abandonedCheckout.js'
-import { WEB_ORIGIN } from '../shared/productLinks.js'
-
-function checkoutOrigin(body) {
-  for (const raw of [body.origin, body.successUrl]) {
-    if (!raw || typeof raw !== 'string') continue
-    try {
-      const url = new URL(raw)
-      if (url.protocol === 'https:' || url.protocol === 'http:') return url.origin
-    } catch {
-      /* try the next candidate */
-    }
-  }
-  return process.env.VITE_APP_URL || WEB_ORIGIN
-}
+import { tigerPassBpsForRider } from '../server/riderPass.js'
 
 async function routeDistance(origin, dest) {
   const route = await computeRoutes(origin, dest, [])
@@ -44,7 +29,14 @@ async function routeDistance(origin, dest) {
 
 export default async function handler(req, res, deps = {}) {
   if (cors(req, res)) return
-  if (req.method !== 'POST') return json(res, 405, { error: 'Method not allowed' })
+  if (!res.headersSent) {
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private')
+    res.setHeader('Pragma', 'no-cache')
+  }
+  if (req.method !== 'POST') {
+    if (!res.headersSent) res.setHeader('Allow', 'POST, OPTIONS')
+    return json(res, 405, { error: 'Method not allowed' })
+  }
 
   const { body, error: pe } = parseBody(req)
   if (pe) return json(res, 400, { error: pe })
@@ -67,14 +59,24 @@ export default async function handler(req, res, deps = {}) {
     gameDayMultiplier = null
   }
 
-  const priced = priceCheckoutBody({
-    body,
-    user,
-    at: when,
-    gameDayMultiplier,
-    distanceM: distance.distanceM,
-    durationS: distance.durationS,
-  })
+  let priced
+  try {
+    const tigerPassBps = await tigerPassBpsForRider(sb, user.id, when)
+    priced = priceCheckoutBody({
+      body,
+      user,
+      at: when,
+      gameDayMultiplier,
+      distanceM: distance.distanceM,
+      durationS: distance.durationS,
+      tigerPassBps,
+    })
+  } catch (error) {
+    return json(res, error.status || 400, {
+      error: error.message || 'That ride option is not offered.',
+      code: error.code || 'ride_option_unavailable',
+    })
+  }
   if (priced.isStudent !== studentDiscountGranted(user)) {
     return json(res, 500, { error: 'Student pricing did not match the signed-in email' })
   }
@@ -86,15 +88,6 @@ export default async function handler(req, res, deps = {}) {
     currency: 'usd',
     studentDiscountApplied: priced.isStudent,
     clientFareIgnored: priced.clientUnderpaid || priced.spoofedStudent,
-  }
-
-  const isStripeConfigured = deps.stripeOk ? deps.stripeOk() : stripeOk()
-  if (priced.depositCents > 0 && !isStripeConfigured) {
-    return json(res, 503, {
-      error: 'Payments unavailable',
-      message: 'STRIPE_SECRET_KEY is not configured. Checkout cannot start.',
-      ...quotePayload,
-    })
   }
 
   const scheduledFor = body.date ? priced.at.toISOString() : null
@@ -133,61 +126,15 @@ export default async function handler(req, res, deps = {}) {
     tripId = inserted.data.id
   }
 
-  if (priced.depositCents <= 0) {
-    return json(res, 200, { ...quotePayload, tripId, paidWithCredits: false })
-  }
-
-  try {
-    const stripe = deps.stripe || (deps.stripeClient ? deps.stripeClient() : stripeClient())
-    const origin = checkoutOrigin(body)
-    const split = depositSplit(priced.fareCents, priced.depositCents)
-    const fareSplit = splitPlatformFee(priced.fareCents)
-    const session = await stripe.checkout.sessions.create({
-      mode: 'payment',
-      success_url: `${origin}/${checkoutSuccessHash({ tripId, scheduled: Boolean(scheduledFor) })}&session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${origin}/#/schedule?canceled=1&trip=${tripId}`,
-      line_items: [{
-        quantity: 1,
-        price_data: {
-          currency: 'usd',
-          unit_amount: priced.unitAmount,
-          product_data: {
-            name: `Clemson RIDES ${priced.airport} deposit (25%)`,
-            description: depositSplitLabel(split),
-          },
-        },
-      }],
-      metadata: feeMetadata(priced.depositCents, {
-        airport: priced.airport,
-        fareCents: priced.fareCents,
-        depositCents: priced.depositCents,
-        riderName: riderFirst,
-        kind: 'airport_deposit',
-        tripId,
-        riderId: user.id,
-        fare_platform_fee_cents: fareSplit.platformFeeCents,
-        fare_driver_earnings_cents: fareSplit.driverEarningsCents,
-      }),
-    })
-    const remembered = await rememberCheckoutSession(sb, tripId, session.id)
-    if (!remembered.ok) console.error('[create-checkout-session] session bind', remembered.error)
-    return json(res, 200, {
-      id: session.id,
-      url: session.url,
-      tripId,
-      ...quotePayload,
-    })
-  } catch (err) {
-    console.error('[create-checkout-session]', err)
-    await cancelUnopenedCheckoutTrip(sb, tripId, {
-      reason: 'checkout_create_failed',
-      source: 'create_checkout_session',
-    })
-    return json(res, 500, {
-      error: err.message || 'Stripe error',
-      message: 'Stripe Checkout Session create failed',
-      tripId,
-      ...quotePayload,
-    })
-  }
+  const fareSplit = splitPlatformFee(priced.fareCents)
+  return json(res, 200, {
+    ...quotePayload,
+    depositCents: 0,
+    tripId,
+    paidWithCredits: false,
+    charged: false,
+    dueAtTripEndCents: priced.fareCents,
+    platformFeeCents: fareSplit.platformFeeCents,
+    driverEarningsCents: fareSplit.driverEarningsCents,
+  })
 }

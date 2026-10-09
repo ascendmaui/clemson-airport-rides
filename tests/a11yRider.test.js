@@ -19,7 +19,6 @@ const INTERACTIVE = new Set(['Pressable', 'TouchableOpacity', 'Button'])
 
 const ALLOWLIST = [
   'apps/rider/app/history.tsx:61:9 <Pressable>',
-  'apps/rider/app/schedule.tsx:884:15 <Pressable>',
   'apps/rider/components/EmergencyContactsCard.tsx:192:15 <Pressable>',
   'apps/rider/components/EmergencyContactsCard.tsx:196:13 <Pressable>',
 ]
@@ -577,6 +576,21 @@ test('images need accessibilityLabel or accessible={false}', () => {
   assert.deepEqual(idsIn('<Image source={src} accessible={hidden} />'), ['fixture.tsx:1:1 <Image>'])
   assert.deepEqual(idsIn('<Image source={src} accessible />'), ['fixture.tsx:1:1 <Image>'])
   assert.deepEqual(idsIn('<ImageBackground source={src} />'), [])
+})
+
+test('book-to-track critical rider controls retain meaningful accessibility labels', () => {
+  const home = readFileSync(path.join(ROOT, 'apps/rider/app/index.tsx'), 'utf8')
+  const confirm = readFileSync(path.join(ROOT, 'apps/rider/app/confirm.tsx'), 'utf8')
+  const driverPicker = readFileSync(path.join(ROOT, 'apps/rider/app/pick-driver.tsx'), 'utf8')
+  const tracking = readFileSync(path.join(ROOT, 'apps/rider/app/requested.tsx'), 'utf8')
+
+  assert.match(home, /accessibilityLabel="Destination"/)
+  assert.match(home, /accessibilityLabel="Search destination"/)
+  assert.match(home, /accessibilityHint="Continues to confirm pickup"/)
+  assert.match(confirm, /accessibilityLabel="Note for driver"/)
+  assert.match(confirm, /label="Confirm pickup"/)
+  assert.match(driverPicker, /selectedDriver \? `Request \$\{selectedDriver\.name\}` : \(anyOnline \? 'Request next driver' : 'Select a driver'\)/)
+  assert.match(tracking, /accessibilityLabel="Emergency contacts"/)
 })
 
 test('strings and comments are not elements', () => {

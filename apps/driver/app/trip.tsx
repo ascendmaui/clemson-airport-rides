@@ -1,6 +1,7 @@
+import { createTrackingRefresh } from 'rides-native/tracking'
 import { useLocalSearchParams, useRouter } from 'expo-router'
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { AppState, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { CampusMap, type MapPin } from '@/components/CampusMap'
 import { FarePanel } from '@/components/FarePanel'
@@ -11,26 +12,57 @@ import { oneParam } from '@/lib/oneParam'
 import { openNavigation } from '@/lib/openMaps'
 import { supabase } from '@/lib/supabase'
 import { useDriverLocation } from '@/lib/useDriverLocation'
-import { advanceTrip, loadRiderFix, loadTrip, publishDriverLocation, subscribeTrips } from 'rides-native/driverDesk'
+import { advanceTrip, confirmBackupQueueTrip, loadRiderFix, loadTrip, publishDriverLocation, releaseBackupQueueSeat, subscribeTrips } from 'rides-native/driverDesk'
 import {
+  confirmCountdownLabel,
+  leaveNowCountdownLabel,
   driverStatusDetail,
   formatCents,
   preferredRequestNote,
   statusActionLabel,
   statusHeadline,
   tagTone,
-  TESLA_FLEET_NOTICE,
+  COMFORT_FLEET_NOTICE,
   type DriverCard,
 } from 'rides-native/tripTags'
-import { DRIVER_TRACK_STEPS, etaHoldLine, etaLineFor } from 'rides-native/liveTrip'
+import { DRIVER_TRACK_STEPS, etaHoldLine } from 'rides-native/liveTrip'
+import { followEtaLine, followMapCoordinates } from 'rides-native/roadFollow'
+import { driverPickupTarget } from 'rides-native/riderLivePickup'
 import { LivePhase } from 'rides-native/LivePhase'
 import { ORANGE, PURPLE } from 'rides-native/places.js'
 import { CounterpartCard, RateTripPanel, partyColorsFromPalette } from 'rides-native/PartyScreens'
 import { loadCounterpart, type CounterpartView } from 'rides-native/partyProfile.js'
 import { useTheme } from '@/lib/theme'
 import type { Palette } from '@/lib/palette'
+import { TripThread } from 'rides-native/TripThread.jsx'
+import { ScheduledRidesHint } from 'rides-native/ScheduledRidesInfo'
+import { MAPS_HANDOFF_HELPER } from '../../../shared/copy/scheduledRides.js'
 
 type RiderFix = { latitude: number; longitude: number }
+
+function ConfirmCountdown({ closesAt }: { closesAt?: string | null }) {
+  const [label, setLabel] = useState<string | null>(() => confirmCountdownLabel(closesAt))
+  useEffect(() => {
+    const tick = () => setLabel(confirmCountdownLabel(closesAt))
+    tick()
+    const id = setInterval(tick, 1000)
+    return () => clearInterval(id)
+  }, [closesAt])
+  if (!label) return null
+  return <Text style={{ color: ORANGE, fontWeight: '800', fontSize: 28, marginTop: 6 }}>{label}</Text>
+}
+
+function LeaveNowLabel({ leaveNowAt }: { leaveNowAt?: string | null }) {
+  const [label, setLabel] = useState<string | null>(() => leaveNowCountdownLabel(leaveNowAt))
+  useEffect(() => {
+    const tick = () => setLabel(leaveNowCountdownLabel(leaveNowAt))
+    tick()
+    const id = setInterval(tick, 1000)
+    return () => clearInterval(id)
+  }, [leaveNowAt])
+  if (!label) return null
+  return <Text style={{ color: ORANGE, fontWeight: '800', fontSize: 28, marginTop: 6 }}>{label}</Text>
+}
 
 export default function TripScreen() {
   const router = useRouter()
@@ -48,21 +80,13 @@ export default function TripScreen() {
   const [error, setError] = useState<string | null>(null)
   const [settleNote, setSettleNote] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const [mapsOffer, setMapsOffer] = useState(false)
+  const departedTrip = useRef<string | null>(null)
   const [person, setPerson] = useState<CounterpartView | null>(null)
   const partyColors = partyColorsFromPalette(colors)
 
-  const refresh = useCallback(async () => {
-    if (!supabase || !id) return
-    const row = await loadTrip(supabase, id, user?.id)
-    setTrip(row)
-    if (row?.riderLat != null && row.riderLng != null) {
-      setRider({ latitude: row.riderLat, longitude: row.riderLng })
-    }
-  }, [id, user?.id])
-
-  useEffect(() => {
-    refresh().catch((err: unknown) => setError(err instanceof Error ? err.message : 'Could not load this trip'))
-  }, [refresh])
+  const readerRef = useRef<ReturnType<typeof createTrackingRefresh> | null>(null)
+  const refresh = useCallback(() => readerRef.current?.refresh(true) ?? Promise.resolve(), [])
 
   useEffect(() => {
     if (!supabase || !user || !trip?.riderId) {
@@ -85,32 +109,52 @@ export default function TripScreen() {
   }, [trip?.id, trip?.status, trip?.riderId, user?.id])
 
   useEffect(() => {
-    if (!supabase) return undefined
-    return subscribeTrips(supabase, () => {
-      refresh().catch(() => {})
+    if (!supabase || !id) return undefined
+    const reader = createTrackingRefresh({
+      load: () => loadTrip(supabase, id, user?.id),
+      onData: (row) => {
+        setTrip(row)
+      },
+      onError: (err) => setError(err ? (err instanceof Error ? err.message : 'Could not refresh trip. Retrying automatically.') : null),
     })
-  }, [refresh])
+    readerRef.current = reader
+    const pull = () => reader.refresh()
+    void pull()
+    const listener = AppState.addEventListener('change', (state) => {
+      if (state === 'active') void reader.refresh(true)
+    })
+    const unsubscribe = subscribeTrips(supabase, pull)
+    const timer = setInterval(pull, 5000)
+    return () => { reader.stop(); readerRef.current = null; listener.remove(); unsubscribe(); clearInterval(timer) }
+  }, [refresh, id, user?.id])
 
   useEffect(() => {
-    if (!supabase || !id || !trip || trip.status === 'completed' || trip.status === 'canceled') return undefined
-    let alive = true
-    const pull = () => {
-      loadRiderFix(supabase, id).then((fix) => {
-        if (alive && fix) setRider({ latitude: fix.latitude, longitude: fix.longitude })
-      }).catch(() => {})
-    }
-    pull()
-    const timer = setInterval(pull, 5000)
-    return () => {
-      alive = false
-      clearInterval(timer)
-    }
+    if (!supabase || !id || !trip || trip.status === 'completed' || trip.status === 'canceled' || trip.status === 'cancelled_wait') return undefined
+    const reader = createTrackingRefresh({
+      load: () => loadRiderFix(supabase, id),
+      onData: (fix) => {
+        if (!fix) return
+        setRider({ latitude: fix.latitude, longitude: fix.longitude })
+      },
+      onError: () => {},
+    })
+    void reader.refresh()
+    const listener = AppState.addEventListener('change', (state) => {
+      if (state === 'active') void reader.refresh(true)
+    })
+    const timer = setInterval(() => void reader.refresh(), 5000)
+    return () => { reader.stop(); listener.remove(); clearInterval(timer) }
   }, [id, trip?.status])
 
-  useDriverLocation(Boolean(user && trip && trip.status !== 'completed' && trip.status !== 'canceled'), (fix) => {
+  const locationTracking = useDriverLocation(Boolean(user && trip && trip.status !== 'completed' && trip.status !== 'canceled' && trip.status !== 'cancelled_wait'), async (fix) => {
     setSelf({ latitude: fix.lat, longitude: fix.lng })
     if (!supabase || !user) return
-    publishDriverLocation(supabase, user.id, { ...fix, online: true }).catch(() => {})
+    await publishDriverLocation(supabase, user.id, {
+      ...fix,
+      online: true,
+      tripId: trip?.id ?? null,
+      tripStatus: trip?.status ?? null,
+    })
   })
 
   async function onAdvance() {
@@ -122,9 +166,13 @@ export default function TripScreen() {
       if (result?.status === 'completed') {
         pulse('complete')
         const payout = result.settle?.payout
-        setSettleNote(payout?.status
-          ? `Fare collected. Payout ${payout.status}${payout.amountCents ? ` · ${formatCents(payout.amountCents)}` : ''}.`
-          : 'Fare collected from the rider’s saved card or Apple Pay.')
+        if (result.settle?.reason === 'no_card_on_file') {
+          setSettleNote('Trip complete. No card is on file, so this fare was not charged.')
+        } else {
+          setSettleNote(payout?.status
+            ? `Fare collected. Payout ${payout.status}${payout.amountCents ? ` · ${formatCents(payout.amountCents)}` : ''}.`
+            : 'Fare collected from the rider’s saved card or Apple Pay.')
+        }
       } else {
         pulse('accept')
       }
@@ -136,24 +184,72 @@ export default function TripScreen() {
     }
   }
 
+  useEffect(() => {
+    const tripId = trip?.id
+    const leaveAt = trip?.backupLeaveNowAt
+    if (!trip?.backupLeaveNowOpen || !leaveAt || !supabase || !tripId) return undefined
+    const dueAt = Date.parse(leaveAt)
+    if (!Number.isFinite(dueAt)) return undefined
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const fire = () => {
+      if (departedTrip.current === tripId) return
+      departedTrip.current = tripId
+      setMapsOffer(true)
+      confirmBackupQueueTrip(supabase, tripId, { navigate: true })
+        .then(() => refresh())
+        .catch((err: unknown) => {
+          departedTrip.current = null
+          const message = err instanceof Error ? err.message : 'Could not start navigation'
+          if (!/changed|Refresh/i.test(message)) setError(message)
+          refresh()
+        })
+    }
+    const wait = dueAt - Date.now()
+    if (wait <= 0) fire()
+    else timer = setTimeout(fire, wait)
+    return () => {
+      if (timer) clearTimeout(timer)
+    }
+  }, [trip?.backupLeaveNowOpen, trip?.backupLeaveNowAt, trip?.id, supabase, refresh])
+
   const headingToDropoff = trip?.status === 'in_progress' || trip?.status === 'completed'
+  const bookedPickup = driverPickupTarget(trip)
+  const livePickup = rider
+    ? { latitude: rider.latitude, longitude: rider.longitude, live: true as const }
+    : bookedPickup?.live
+      ? bookedPickup
+      : null
   const target = headingToDropoff
     ? { latitude: trip?.dropoffLat ?? null, longitude: trip?.dropoffLng ?? null, label: trip?.dropoffLabel || 'Drop-off' }
-    : { latitude: trip?.pickupLat ?? null, longitude: trip?.pickupLng ?? null, label: trip?.pickupLabel || 'Pickup' }
+    : livePickup
+      ? { latitude: livePickup.latitude, longitude: livePickup.longitude, label: 'Live pickup' }
+      : { latitude: trip?.pickupLat ?? null, longitude: trip?.pickupLng ?? null, label: trip?.pickupLabel || 'Pickup' }
 
   const pins: MapPin[] = []
   if (self) pins.push({ id: 'me', ...self, title: 'You', pinColor: ORANGE })
-  if (rider) pins.push({ id: 'rider', ...rider, title: trip?.firstName || 'Rider', pinColor: PURPLE })
-  if (trip?.pickupLat != null && trip.pickupLng != null) {
+  if (!headingToDropoff && target.latitude != null && target.longitude != null) {
+    pins.push({
+      id: 'pickup',
+      latitude: target.latitude,
+      longitude: target.longitude,
+      title: livePickup ? 'Live pickup' : (trip?.pickupLabel || 'Pickup'),
+      pinColor: PURPLE,
+    })
+  } else if (trip?.pickupLat != null && trip.pickupLng != null) {
     pins.push({ id: 'pickup', latitude: trip.pickupLat, longitude: trip.pickupLng, title: trip.pickupLabel, pinColor: PURPLE })
   }
   if (trip?.dropoffLat != null && trip.dropoffLng != null) {
     pins.push({ id: 'drop', latitude: trip.dropoffLat, longitude: trip.dropoffLng, title: trip.dropoffLabel, pinColor: ORANGE })
   }
-  const route: { latitude: number; longitude: number }[] = []
-  if (self) route.push(self)
-  if (rider && !headingToDropoff) route.push(rider)
-  if (target.latitude != null && target.longitude != null) route.push({ latitude: target.latitude, longitude: target.longitude })
+  const road = followMapCoordinates(
+    trip,
+    self ? { lat: self.latitude, lng: self.longitude } : null,
+  )
+  const straight: { latitude: number; longitude: number }[] = []
+  if (self) straight.push(self)
+  if (rider && !headingToDropoff) straight.push(rider)
+  if (target.latitude != null && target.longitude != null) straight.push({ latitude: target.latitude, longitude: target.longitude })
+  const route = road.length > 1 ? road : straight
   const focus = rider || (target.latitude != null && target.longitude != null
     ? { latitude: target.latitude, longitude: target.longitude }
     : self)
@@ -162,7 +258,7 @@ export default function TripScreen() {
   const etaLine = trip
     ? etaHoldLine(
       trip.status,
-      etaLineFor(
+      followEtaLine(
         trip.status,
         self ? { lat: self.latitude, lng: self.longitude } : null,
         trip,
@@ -172,9 +268,15 @@ export default function TripScreen() {
 
   return (
     <View style={styles.screen}>
-      {/* TODO: road-following tiles need a billed Maps key. Progress and straight-line ETA use coordinates already on this trip. */}
-      <CampusMap pins={pins} center={focus} route={route.length > 1 ? route : undefined} />
-      <View pointerEvents="box-none" style={[styles.sheet, shadow, { paddingBottom: insets.bottom + 12 }]}>
+      {/* Remaining road is the stored polyline when this car is on it. Otherwise the coordinate line stays. */}
+      <CampusMap
+        pins={pins}
+        center={self && !headingToDropoff ? self : focus}
+        route={route.length > 1 ? route : undefined}
+        showsUserLocation={!headingToDropoff}
+      />
+      <View pointerEvents="box-none" style={[styles.sheet, shadow, { paddingBottom: insets.bottom + 12, borderColor: colors.border }]}>
+        <View style={[styles.handle, { backgroundColor: colors.track }]} />
         <ScrollView style={styles.sheetScroll} contentContainerStyle={styles.sheetContent} showsVerticalScrollIndicator={false}>
         <Text style={styles.kicker} onPress={() => router.back()}>← LIVE TRIP</Text>
         <LivePhase
@@ -200,9 +302,13 @@ export default function TripScreen() {
               <CounterpartCard person={person} colors={partyColors} />
             )}
             <Text style={styles.copy}>{trip.pickupLabel} → {trip.dropoffLabel}</Text>
-            <Text style={styles.fare}>{formatCents(trip.driverNetCents)} net · deposit {formatCents(trip.depositCents)}</Text>
+            <Text style={styles.fare}>{formatCents(trip.driverNetCents)} net{trip.depositCents ? ` · already paid ${formatCents(trip.depositCents)}` : ''}</Text>
             <Text style={styles.copy}>
-              {rider ? `${trip.firstName} is sharing a live pin.` : 'Rider pin shows when they share location on this trip. Pickup and drop-off stay on the map.'}
+              {livePickup && !headingToDropoff
+                ? `${trip.firstName}'s pickup is live from their phone, within a few feet.`
+                : rider
+                  ? `${trip.firstName} is sharing a live pin.`
+                  : 'Rider pin shows when they share location on this trip. Pickup and drop-off stay on the map.'}
             </Text>
             <View style={styles.tags}>
               {trip.tagLabels.map((label: string) => (
@@ -211,6 +317,8 @@ export default function TripScreen() {
             </View>
             {preferredRequestNote(trip) ? <Text style={styles.note}>{preferredRequestNote(trip)}</Text> : null}
             <FarePanel card={trip} />
+            {user ? <TripThread supabase={supabase} tripId={trip.id} userId={user.id} colors={colors} /> : null}
+            {trip.backupEnroute || mapsOffer ? <Text style={styles.copy}>{MAPS_HANDOFF_HELPER}</Text> : null}
             <View style={styles.navRow}>
               {(navApp === 'google' ? ['google', 'apple'] as const : ['apple', 'google'] as const).map((provider) => (
                 <Pressable
@@ -236,13 +344,75 @@ export default function TripScreen() {
               <Text style={styles.settle}>Trip details</Text>
             </Pressable>
             <Text style={styles.copy}>Directions to {headingToDropoff ? 'drop-off' : 'pickup'} · {target.label}</Text>
-            {trip.teslaStub ? <Text style={styles.copy}>{TESLA_FLEET_NOTICE}</Text> : null}
+            {trip.comfortStub ? <Text style={styles.copy}>{COMFORT_FLEET_NOTICE}</Text> : null}
             {settleNote ? <Text style={styles.settle}>{settleNote}</Text> : null}
           </>
         ) : (
           <Text style={styles.copy}>{id ? 'This trip is not on your account yet.' : 'Missing trip id.'}</Text>
         )}
+        {locationTracking.error ? (
+            <View>
+              <ErrorText>{locationTracking.error}</ErrorText>
+              <Primary label="Retry location" onPress={locationTracking.retry} />
+            </View>
+          ) : null}
         {error ? <ErrorText>{error}</ErrorText> : null}
+        {trip?.backupConfirmOpen ? (
+          <View style={{ marginBottom: 12, padding: 12, borderRadius: 14, backgroundColor: 'rgba(245,102,0,0.12)' }}>
+            <Text style={{ color: ORANGE, fontWeight: '800', fontSize: 16 }}>Confirm trip</Text>
+            <Text style={{ marginTop: 4 }}>{trip.backupConfirmCopy}</Text>
+            <ScheduledRidesHint topic="confirm" colors={colors} />
+            {trip.backupUrgent ? <Text style={{ color: ORANGE, fontWeight: '700', marginTop: 6 }}>You are up. Confirm and start toward pickup.</Text> : null}
+            <ConfirmCountdown closesAt={trip.backupConfirmClosesAt} />
+            <Primary
+              label={busy ? 'Saving…' : 'Confirm trip'}
+              onPress={() => {
+                if (!supabase || !trip.id) return
+                setBusy(true)
+                confirmBackupQueueTrip(supabase, trip.id).then(() => refresh()).catch((err: unknown) => {
+                  setError(err instanceof Error ? err.message : 'Could not confirm')
+                }).finally(() => setBusy(false))
+              }}
+              disabled={busy}
+            />
+            <Primary
+              label="Confirm and start navigation"
+              onPress={() => {
+                if (!supabase || !trip.id) return
+                setBusy(true)
+                confirmBackupQueueTrip(supabase, trip.id, { navigate: true })
+                  .then(() => openNavigation(navApp, target))
+                  .then(() => refresh())
+                  .catch((err: unknown) => setError(err instanceof Error ? err.message : 'Could not start navigation'))
+                  .finally(() => setBusy(false))
+              }}
+              disabled={busy}
+              tone="purple"
+            />
+            {trip.backupRole === 'primary' || trip.backupRole === 'backup' ? (
+              <Primary
+                label={trip.backupRole === 'backup' ? 'Leave backup seat' : 'Can\'t make this trip'}
+                onPress={() => {
+                  if (!supabase || !trip.id || !trip.backupRole) return
+                  setBusy(true)
+                  releaseBackupQueueSeat(supabase, trip.id, { role: trip.backupRole })
+                    .then(() => refresh())
+                    .catch((err: unknown) => setError(err instanceof Error ? err.message : 'Could not release this seat'))
+                    .finally(() => setBusy(false))
+                }}
+                disabled={busy}
+                tone="ghost"
+              />
+            ) : null}
+          </View>
+        ) : null}
+        {trip?.backupLeaveNowOpen ? (
+          <View style={{ marginBottom: 12, padding: 12, borderRadius: 14, backgroundColor: 'rgba(245,102,0,0.12)' }}>
+            <Text style={{ color: ORANGE, fontWeight: '800', fontSize: 16 }}>Leave now</Text>
+            <ScheduledRidesHint topic="leave" colors={colors} />
+            <LeaveNowLabel leaveNowAt={trip.backupLeaveNowAt} />
+          </View>
+        ) : null}
         {action ? <Primary label={busy ? 'Updating…' : action} onPress={onAdvance} disabled={busy} tone="purple" /> : null}
         </ScrollView>
       </View>
@@ -257,10 +427,12 @@ function tripStyles(colors: Palette) {
       backgroundColor: colors.card,
       borderTopLeftRadius: 28,
       borderTopRightRadius: 28,
+      borderTopWidth: StyleSheet.hairlineWidth,
       padding: 18,
       gap: 8,
       maxHeight: '78%',
     },
+    handle: { alignSelf: 'center', width: 36, height: 4, borderRadius: 2, marginBottom: 4 },
     sheetScroll: { flexGrow: 0 },
     sheetContent: { gap: 8, paddingBottom: 8 },
     kicker: { color: colors.orange, fontWeight: '800', letterSpacing: 1 },

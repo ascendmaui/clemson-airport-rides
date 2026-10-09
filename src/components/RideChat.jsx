@@ -3,17 +3,25 @@ import { createPortal } from 'react-dom'
 import { displayFirstName } from '../lib/privacyDisplay'
 import {
   fetchCounterpartFirstName,
+  fetchLostItemReport,
   fetchTripChat,
   listTripMessages,
   markTripMessagesRead,
   messageLimitForTrip,
+  notifyTripMessage,
+  resolveLostItemReport,
   sendTripMessage,
   sendTripQuickReply,
+  subscribeLostItemReports,
   subscribeTripChatStatus,
   subscribeTripMessages,
+  unreadCountForTrip,
 } from '../lib/tripMessages'
+import { chatOpenLine } from '../../shared/copy/messaging.js'
+import { MessagingInfoButton } from './MessagingInfo'
 import {
   RIDE_CHAT_QUICK_REPLIES,
+  lostItemReportState,
   rideChatBanner,
   rideChatMode,
 } from '../lib/tripChatRules'
@@ -33,6 +41,47 @@ function formatStamp(iso) {
   })
 }
 
+function useChatTone() {
+  const [dark, setDark] = useState(() => (
+    typeof window !== 'undefined' && window.matchMedia?.('(prefers-color-scheme: dark)').matches
+  ))
+  useEffect(() => {
+    const media = window.matchMedia?.('(prefers-color-scheme: dark)')
+    if (!media) return undefined
+    const onChange = () => setDark(media.matches)
+    media.addEventListener('change', onChange)
+    return () => media.removeEventListener('change', onChange)
+  }, [])
+  if (dark) {
+    return {
+      canvas: '#0E0B14',
+      header: '#16121F',
+      title: '#F5F6F8',
+      ink: '#F5F6F8',
+      mine: '#F56600',
+      mineText: '#fff',
+      theirs: '#1E192A',
+      theirsText: '#F5F6F8',
+      input: '#120E18',
+      chip: '#1E192A',
+      composer: '#16121F',
+    }
+  }
+  return {
+    canvas: '#F4F5F8',
+    header: 'rgba(255,255,255,0.88)',
+    title: '#522D80',
+    ink: '#0B1220',
+    mine: '#F56600',
+    mineText: '#fff',
+    theirs: '#F3E9FA',
+    theirsText: '#522D80',
+    input: '#fff',
+    chip: '#fff',
+    composer: 'rgba(255,255,255,0.92)',
+  }
+}
+
 function upsertMessage(list, row) {
   if (!row?.id) return list
   const patch = Object.fromEntries(
@@ -48,7 +97,23 @@ function upsertMessage(list, row) {
   return next
 }
 
-export function RideMessageButton({ onClick, readOnly = false, disabled = false }) {
+export function RideMessageButton({ onClick, readOnly = false, disabled = false, tripId = null, userId = null }) {
+  const [unread, setUnread] = useState(0)
+  useEffect(() => {
+    if (!tripId || !userId) return undefined
+    let alive = true
+    const load = () => {
+      unreadCountForTrip(tripId, userId)
+        .then((count) => { if (alive) setUnread(count) })
+        .catch(() => {})
+    }
+    load()
+    const unsub = subscribeTripMessages(tripId, load)
+    return () => {
+      alive = false
+      unsub()
+    }
+  }, [tripId, userId])
   return (
     <button
       type="button"
@@ -61,16 +126,37 @@ export function RideMessageButton({ onClick, readOnly = false, disabled = false 
         minHeight: 48,
         padding: '12px 16px',
         borderRadius: 16,
-        background: '#fff',
+        background: 'var(--surface, #fff)',
         color: '#522D80',
         fontWeight: 700,
         fontSize: 16,
         letterSpacing: -0.2,
         border: '1.5px solid rgba(82,45,128,0.45)',
         boxShadow: '0 6px 16px rgba(82,45,128,0.08)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 8,
       }}
     >
       {readOnly ? 'Ride messages' : 'Message'}
+      {unread > 0 ? (
+        <span
+          data-testid="ride-message-unread"
+          style={{
+            minWidth: 22,
+            height: 22,
+            borderRadius: 11,
+            padding: '0 6px',
+            background: '#F56600',
+            color: '#fff',
+            fontSize: 12,
+            lineHeight: '22px',
+          }}
+        >
+          {unread > 9 ? '9+' : unread}
+        </span>
+      ) : null}
     </button>
   )
 }
@@ -78,7 +164,9 @@ export function RideMessageButton({ onClick, readOnly = false, disabled = false 
 export function RideChat({ tripId, userId, initialTrip = null, onClose }) {
   const [trip, setTrip] = useState(initialTrip)
   const [messages, setMessages] = useState([])
+  const [report, setReport] = useState(null)
   const [headerName, setHeaderName] = useState('')
+  const tone = useChatTone()
   const [draft, setDraft] = useState('')
   const [sending, setSending] = useState(false)
   const [error, setError] = useState(null)
@@ -86,13 +174,18 @@ export function RideChat({ tripId, userId, initialTrip = null, onClose }) {
   const scrollerRef = useRef(null)
   const markedRef = useRef(new Set())
   const tripRef = useRef(initialTrip)
+  const reportRef = useRef(null)
   tripRef.current = trip
+  reportRef.current = report
 
-  const mode = rideChatMode(trip)
-  const banner = loading && !trip ? null : rideChatBanner(mode)
+  const mode = rideChatMode(trip, Date.now(), report)
+  const banner = loading && !trip
+    ? null
+    : (rideChatBanner(mode, report) ?? (mode === 'compose' ? chatOpenLine() : null))
   const party = Boolean(
     userId && trip && (userId === trip.rider_id || userId === trip.driver_id),
   )
+  const infoRole = userId && trip?.driver_id === userId ? 'driver' : 'rider'
   const counterpartFallback = userId && trip?.rider_id === userId ? 'Driver' : 'Rider'
 
   const refreshTrip = useCallback(async () => {
@@ -104,7 +197,7 @@ export function RideChat({ tripId, userId, initialTrip = null, onClose }) {
 
   const refreshMessages = useCallback(async (liveTrip) => {
     const current = liveTrip === undefined ? tripRef.current : liveTrip
-    const limit = messageLimitForTrip(current)
+    const limit = messageLimitForTrip(current, Date.now(), reportRef.current)
     if (!limit) {
       setMessages([])
       return
@@ -129,7 +222,10 @@ export function RideChat({ tripId, userId, initialTrip = null, onClose }) {
     ;(async () => {
       try {
         const row = await refreshTrip()
+        const lost = await fetchLostItemReport(tripId).catch(() => null)
         if (!alive) return
+        setReport(lost)
+        reportRef.current = lost
         const live = row || tripRef.current
         if (live && userId && (userId === live.rider_id || userId === live.driver_id)) {
           const otherId = userId === live.rider_id ? live.driver_id : live.rider_id
@@ -165,6 +261,16 @@ export function RideChat({ tripId, userId, initialTrip = null, onClose }) {
       if (!row) return
       setTrip((current) => ({ ...(current || {}), ...row }))
     })
+    const unsubLost = subscribeLostItemReports((payload) => {
+      const next = payload?.new
+      if (next?.trip_id && next.trip_id !== tripId) return
+      fetchLostItemReport(tripId)
+        .then((lost) => {
+          setReport(lost)
+          reportRef.current = lost
+        })
+        .catch(() => {})
+    })
     const poll = setInterval(() => {
       refreshTrip()
         .then((row) => refreshMessages(row || tripRef.current))
@@ -173,6 +279,7 @@ export function RideChat({ tripId, userId, initialTrip = null, onClose }) {
     return () => {
       unsubMessages()
       unsubTrip()
+      unsubLost()
       clearInterval(poll)
     }
   }, [tripId, refreshMessages, refreshTrip])
@@ -227,6 +334,7 @@ export function RideChat({ tripId, userId, initialTrip = null, onClose }) {
         : await sendTripMessage({ tripId, body })
       setMessages((current) => upsertMessage(current, row))
       if (!quick) setDraft('')
+      if (row?.id) notifyTripMessage({ tripId, messageId: row.id })
     } catch (err) {
       setError(err.message || 'Could not send')
     } finally {
@@ -256,7 +364,7 @@ export function RideChat({ tripId, userId, initialTrip = null, onClose }) {
         display: 'flex',
         flexDirection: 'column',
         background:
-          'radial-gradient(120% 80% at 0% 0%, rgba(245,102,0,0.16), transparent 46%), radial-gradient(90% 70% at 100% 0%, rgba(82,45,128,0.16), transparent 42%), #F4F5F8',
+          `radial-gradient(120% 80% at 0% 0%, rgba(245,102,0,0.16), transparent 46%), radial-gradient(90% 70% at 100% 0%, rgba(82,45,128,0.16), transparent 42%), ${tone.canvas}`,
       }}
     >
       <header
@@ -265,7 +373,7 @@ export function RideChat({ tripId, userId, initialTrip = null, onClose }) {
           alignItems: 'center',
           gap: 12,
           padding: '14px 16px 12px',
-          background: 'rgba(255,255,255,0.88)',
+          background: tone.header,
           borderBottom: '1px solid rgba(82,45,128,0.08)',
           boxShadow: '0 8px 24px rgba(82,45,128,0.06)',
         }}
@@ -291,9 +399,12 @@ export function RideChat({ tripId, userId, initialTrip = null, onClose }) {
           <div style={{ fontSize: 12, letterSpacing: 1.1, fontWeight: 700, color: '#F56600' }}>
             THIS RIDE
           </div>
-          <h1 style={{ fontSize: 20, fontWeight: 800, letterSpacing: -0.3, color: '#522D80' }}>
+          <h1 style={{ fontSize: 20, fontWeight: 800, letterSpacing: -0.3, color: tone.title }}>
             {displayFirstName(shownName, counterpartFallback)}
           </h1>
+        </div>
+        <div style={{ marginLeft: 'auto' }}>
+          <MessagingInfoButton role={infoRole} />
         </div>
       </header>
 
@@ -312,6 +423,32 @@ export function RideChat({ tripId, userId, initialTrip = null, onClose }) {
           }}
         >
           {banner}
+        </div>
+      )}
+
+      {party && lostItemReportState(report) === 'open' && (
+        <div style={{ margin: '12px 16px 0' }}>
+          <button
+            type="button"
+            className="pressable"
+            data-testid="resolve-lost-item"
+            disabled={sending}
+            onClick={() => {
+              if (!report?.id) return
+              setSending(true)
+              resolveLostItemReport(report.id)
+                .then(() => fetchLostItemReport(tripId))
+                .then((lost) => {
+                  setReport(lost)
+                  reportRef.current = lost
+                })
+                .catch((err) => setError(err.message || 'Could not resolve this thread'))
+                .finally(() => setSending(false))
+            }}
+            style={{ minHeight: 44, fontWeight: 800, color: '#522D80' }}
+          >
+            Mark resolved
+          </button>
         </div>
       )}
 
@@ -354,8 +491,8 @@ export function RideChat({ tripId, userId, initialTrip = null, onClose }) {
                   maxWidth: '78%',
                   padding: '12px 14px',
                   borderRadius: mine ? '20px 20px 6px 20px' : '20px 20px 20px 6px',
-                  background: mine ? '#F56600' : '#F3E9FA',
-                  color: mine ? '#fff' : '#522D80',
+                  background: mine ? tone.mine : tone.theirs,
+                  color: mine ? tone.mineText : tone.theirsText,
                   fontSize: 16,
                   lineHeight: 1.35,
                   letterSpacing: -0.1,
@@ -380,7 +517,7 @@ export function RideChat({ tripId, userId, initialTrip = null, onClose }) {
         <div
           style={{
             padding: '8px 16px calc(14px + var(--safe-bottom))',
-            background: 'rgba(255,255,255,0.92)',
+            background: tone.composer,
             borderTop: '1px solid rgba(82,45,128,0.08)',
           }}
         >
@@ -400,8 +537,8 @@ export function RideChat({ tripId, userId, initialTrip = null, onClose }) {
                   minHeight: 44,
                   padding: '10px 14px',
                   borderRadius: 999,
-                  background: '#fff',
-                  color: '#522D80',
+                  background: tone.chip,
+                  color: tone.title,
                   border: '1.5px solid rgba(245,102,0,0.75)',
                   fontWeight: 700,
                   fontSize: 14,
@@ -430,8 +567,8 @@ export function RideChat({ tripId, userId, initialTrip = null, onClose }) {
                 borderRadius: 16,
                 border: '1px solid rgba(82,45,128,0.16)',
                 padding: '0 14px',
-                background: '#fff',
-                color: 'var(--ink)',
+                background: tone.input,
+                color: tone.ink,
               }}
             />
             <button

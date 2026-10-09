@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useJsApiLoader } from '@react-google-maps/api'
 import { FRIEND_PLACES } from '../lib/friendRides'
 import { hotCatalogPlaces, lookupCatalogPlace, placeFromStop, searchCatalogPlaces } from '../lib/placeCatalog'
+import { LOCATION_MISSING_MESSAGE, readBrowserPosition } from '../lib/currentPlace'
 import { MAPS_LOADER_ID, MAP_LIBRARIES, mapsLoaderOptions } from '../lib/googleMapsLoader'
 
 const CURRENT = { label: 'Current location', lat: null, lng: null, _current: true }
@@ -110,23 +111,15 @@ export function PlacePicker({
   async function useCurrentLocation() {
     setLocError(null)
     if (!navigator.geolocation) {
-      setLocError('Location is not available on this device.')
+      setLocError(LOCATION_MISSING_MESSAGE)
       setConfirmOpen(false)
       return
     }
     setLocBusy(true)
     try {
-      const pos = await new Promise((resolve, reject) => {
-        navigator.geolocation.getCurrentPosition(resolve, reject, {
-          enableHighAccuracy: true,
-          timeout: 15000,
-          maximumAge: 10000,
-        })
-      })
-      const lat = pos.coords.latitude
-      const lng = pos.coords.longitude
-      const placeLabel = await reverseGeocodeLabel(lat, lng)
-      onChange?.({ label: placeLabel, lat, lng })
+      const fix = await readBrowserPosition()
+      const placeLabel = await reverseGeocodeLabel(fix.lat, fix.lng)
+      onChange?.({ label: placeLabel, lat: fix.lat, lng: fix.lng })
     } catch (e) {
       setLocError(e?.message || 'Could not get current location. Check permissions.')
     } finally {
@@ -227,11 +220,15 @@ export function PlacePicker({
       ) : null}
 
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
-        {isPickup && (
-          <button type="button" className="pressable" onClick={() => setConfirmOpen(true)} style={chipStyle(false)}>
-            📍 Current location
-          </button>
-        )}
+        <button
+          type="button"
+          className="pressable"
+          aria-label={isPickup ? 'Use current location as pickup' : 'Use current location as drop-off'}
+          onClick={() => setConfirmOpen(true)}
+          style={chipStyle(false)}
+        >
+          ◎ Current location
+        </button>
         {presets.map((p) => (
           <button
             key={p.label}
@@ -265,7 +262,9 @@ export function PlacePicker({
           >
             <div style={{ fontWeight: 800, color: 'var(--purple)', marginBottom: 8 }}>Allow location?</div>
             <p style={{ fontSize: 13, color: 'var(--ink-secondary)', lineHeight: 1.45, marginBottom: 14 }}>
-              Use your current location as the pickup pin. Your browser will ask for permission.
+              {isPickup
+                ? 'Use your current location as the pickup pin. Your browser will ask for permission.'
+                : 'Use your current location as the drop-off pin. Your browser will ask for permission.'}
             </p>
             <div style={{ display: 'flex', gap: 8 }}>
               <button

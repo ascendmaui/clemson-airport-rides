@@ -1,51 +1,56 @@
 import { supabase } from './supabase'
-import { createServerScheduledTrip } from './payments'
-import { applyStudentDiscount, priceAirportRide } from './pricing'
+import { api, createServerScheduledTrip } from './payments'
+import { fetchRideQuote } from './rideBilling'
 import {
-  airportCodeForPlace,
-  distanceFareCents,
   DRIVER_QUEUE_SELECT,
   formatPickupAt,
   nextReminder,
-  tripMeters,
 } from './scheduledRideModel'
 
 const sessionStamps = new Set()
 
-export async function estimateScheduledFare({ pickup, dropoff, isStudent = false, at = new Date() }) {
+export async function estimateScheduledFare({ pickup, dropoff, isStudent = false, at = new Date(), tier = 'standard', passengers = 1 } = {}) {
+  void isStudent
   if (pickup?.lat == null || dropoff?.lat == null) return null
-  const code = airportCodeForPlace(dropoff)
-  if (code === 'GSP' || code === 'CLT') {
-    const priced = await priceAirportRide({
-      airport: code,
-      isStudent: Boolean(isStudent),
-      tier: 'standard',
-      at,
-    })
-    return {
-      fareCents: priced.fareCents,
-      depositCents: priced.depositCents,
-      discountCents: priced.discountCents,
-      studentLabel: priced.studentLabel,
-      estimate: false,
-      source: 'airport_flat',
-      airport: code,
-    }
-  }
-
-  const meters = tripMeters(pickup, dropoff)
-  const raw = distanceFareCents(meters, code)
-  const student = applyStudentDiscount(raw, { isStudent: Boolean(isStudent), tier: 'standard' })
+  const when = at instanceof Date ? at.toISOString() : new Date(at).toISOString()
+  const data = await fetchRideQuote({
+    pickup,
+    dropoff,
+    at: when,
+    tier,
+    passengers,
+  })
   return {
-    fareCents: student.fareCents,
-    depositCents: 0,
-    discountCents: student.discountCents,
-    studentLabel: student.label,
-    estimate: true,
-    source: code === 'ATL' ? 'atl_estimate' : 'distance',
-    airport: code,
-    miles: meters == null ? null : Math.round((meters / 1609.344) * 10) / 10,
+    fareCents: data.fareCents,
+    depositCents: data.depositCents,
+    discountCents: data.discountCents || 0,
+    fareBeforeScheduleDiscountCents: data.fareBeforeScheduleDiscountCents ?? data.fareCents,
+    scheduleDiscountPct: data.scheduleDiscountPct || 0,
+    scheduleDiscountCents: data.scheduleDiscountCents || 0,
+    scheduleDiscountApplied: Boolean(data.scheduleDiscountApplied),
+    studentLabel: data.discountCents > 0 ? 'Clemson student · 10% off Standard' : null,
+    estimate: Boolean(data.estimate),
+    source: 'server',
+    airport: data.airport || null,
+    miles: data.quote?.miles == null ? null : Math.round(Number(data.quote.miles) * 10) / 10,
+    surge: data.surge || null,
   }
+}
+
+export async function fetchScheduleSlots({ pickup, tier = 'standard' } = {}) {
+  const res = await fetch('/api/stripe-payment-methods?action=schedule-slots', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    body: JSON.stringify({ pickup, tier }),
+  })
+  const body = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(body.error || 'Could not load pickup times')
+  return body
+}
+
+export async function fetchMatchNotice(tripId) {
+  const data = await api(`/api/stripe-payment-methods?action=match-notice&tripId=${encodeURIComponent(tripId)}`)
+  return data
 }
 
 export async function createScheduledTrip({
@@ -55,6 +60,11 @@ export async function createScheduledTrip({
   pickupAt,
   purpose = 'planned',
   tier = 'standard',
+  passengers = null,
+  billingChoice = null,
+  nearTerm = false,
+  backupBonusCents = null,
+  boostCents = 0,
 }) {
   if (!supabase) throw new Error('Supabase is not configured')
   if (!user?.id) throw new Error('Sign in required to schedule a ride')
@@ -67,7 +77,12 @@ export async function createScheduledTrip({
     pickupAt: when,
     purpose,
     tier,
+    ...(passengers ? { passengers } : {}),
     weekdays: [],
+    ...(billingChoice ? { billingChoice } : {}),
+    ...(nearTerm ? { nearTerm: true } : {}),
+    ...(backupBonusCents ? { backupBonusCents } : {}),
+    ...(boostCents ? { boostCents } : {}),
   })
   return {
     ...data.trip,
@@ -83,11 +98,12 @@ export async function listMyScheduledTrips(riderId) {
     .from('trips')
     .select('id, status, pickup_label, dropoff_label, pickup_lat, pickup_lng, dropoff_lat, dropoff_lng, fare_cents, deposit_cents, pickup_at, scheduled_for, rider_note, metadata, driver_id')
     .eq('rider_id', riderId)
-    .not('pickup_at', 'is', null)
+    .in('status', ['scheduled', 'searching', 'offered', 'accepted', 'arriving', 'arrived', 'in_progress'])
+    .or('pickup_at.not.is.null,metadata->>scheduled_pickup_at.not.is.null')
     .order('pickup_at', { ascending: true })
-    .limit(30)
+    .limit(100)
   if (error) throw new Error(error.message)
-  return data || []
+  return (data || []).sort((a, b) => new Date(a.pickup_at || a.metadata?.scheduled_pickup_at) - new Date(b.pickup_at || b.metadata?.scheduled_pickup_at))
 }
 
 export async function listOpenScheduledTrips() {
@@ -117,22 +133,51 @@ export async function listDriverScheduledTrips(driverId) {
   return data || []
 }
 
-export async function acceptScheduledTrip(tripId) {
+export async function scheduledRiderAction(op, tripId, extra = {}) {
+  if (!tripId) throw new Error('Missing scheduled ride')
+  return api('/api/stripe-payment-methods?action=scheduled-rider', { op, tripId, ...extra })
+}
+
+export async function postBackupQueue(op, tripId) {
+  if (!tripId) throw new Error('Missing scheduled ride')
+  return api('/api/driver?action=backup-queue', { op, tripId })
+}
+
+export async function acceptScheduledTrip(tripId, { backup = false } = {}) {
   if (!supabase) throw new Error('Supabase is not configured')
   if (!tripId) throw new Error('Missing scheduled ride')
+  if (backup) {
+    const data = await postBackupQueue('accept', tripId)
+    if (!data?.useScheduledRpc) return data
+  }
   const { data, error } = await supabase.rpc('accept_scheduled_trip', { p_trip_id: tripId })
   if (error) throw new Error(error.message || 'Could not accept scheduled ride')
   return data
 }
 
+export async function bumpScheduledBoost(tripId, boostCents) {
+  if (!supabase) throw new Error('Supabase is not configured')
+  return api('/api/stripe-payment-methods?action=bump-scheduled-boost', { tripId, boostCents })
+}
+
 export async function cancelScheduledTrip(tripId) {
   if (!supabase) throw new Error('Supabase is not configured')
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from('trips')
     .update({ status: 'canceled', canceled_at: new Date().toISOString() })
     .eq('id', tripId)
-    .in('status', ['scheduled', 'accepted'])
+    .in('status', ['scheduled', 'searching', 'offered', 'accepted'])
+    .select('id')
   if (error) throw new Error(error.message || 'Could not cancel scheduled ride')
+  // Release even when this tap lost the race, so a retry still drops the hold.
+  let releaseError = null
+  try {
+    await api('/api/stripe-payment-methods?action=release-scheduled-boost', { tripId })
+  } catch (err) {
+    releaseError = err
+  }
+  if (!data?.length) throw new Error('This ride has changed. Refresh your upcoming rides.')
+  if (releaseError) throw releaseError
 }
 
 /**

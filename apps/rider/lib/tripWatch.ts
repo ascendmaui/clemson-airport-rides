@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase'
+import { coordsFromRow, isLiveLocationStatus, liveFixFromReads } from 'rides-native/liveFix.js'
 
 export type LiveTrip = {
   id: string
@@ -13,6 +14,8 @@ export type LiveTrip = {
   driverName: string | null
   driverLat: number | null
   driverLng: number | null
+  driverHeading: number | null
+  driverLocationAt: string | null
   requested_at: string | null
   created_at: string | null
   deposit_cents: number | null
@@ -37,6 +40,11 @@ export function subscribeLiveTrip(tripId: string, driverId: string | null, onCha
     { event: '*', schema: 'public', table: 'trips', filter: `id=eq.${tripId}` },
     () => onChange(),
   )
+  channel.on(
+    'postgres_changes',
+    { event: '*', schema: 'public', table: 'trip_driver_locations', filter: `trip_id=eq.${tripId}` },
+    () => onChange(),
+  )
   if (driverId) {
     channel.on(
       'postgres_changes',
@@ -44,7 +52,7 @@ export function subscribeLiveTrip(tripId: string, driverId: string | null, onCha
       () => onChange(),
     )
   }
-  channel.subscribe()
+  channel.subscribe((status) => { if (status === 'SUBSCRIBED') onChange() })
   return () => {
     void client.removeChannel(channel)
   }
@@ -62,14 +70,39 @@ export async function loadLiveTrip(tripId: string): Promise<LiveTrip | null> {
   let driverName: string | null = null
   let driverLat: number | null = null
   let driverLng: number | null = null
+  let driverHeading: number | null = null
+  let driverLocationAt: string | null = null
   if (data.driver_id) {
-    const [profile, status] = await Promise.all([
-      supabase.from('profiles').select('full_name').eq('id', data.driver_id).maybeSingle(),
-      supabase.from('driver_status').select('lat, lng').eq('driver_id', data.driver_id).maybeSingle(),
-    ])
+    const profile = await supabase.from('profiles').select('full_name').eq('id', data.driver_id).maybeSingle()
     driverName = profile.data?.full_name || null
-    driverLat = status.data?.lat ?? null
-    driverLng = status.data?.lng ?? null
+    let tripRow: { lat?: unknown; lng?: unknown; heading?: unknown; speed?: unknown; updated_at?: string | null } | null = null
+    let tripError: { message?: string } | null = null
+    if (isLiveLocationStatus(data.status)) {
+      const tripRes = await supabase
+        .from('trip_driver_locations')
+        .select('lat, lng, heading, speed, updated_at')
+        .eq('trip_id', data.id)
+        .maybeSingle()
+      tripRow = tripRes.error ? null : tripRes.data
+      tripError = tripRes.error
+    }
+    let statusRow: { lat?: unknown; lng?: unknown; location_updated_at?: string | null } | null = null
+    let statusError: { message?: string } | null = null
+    if (!coordsFromRow(tripRow)) {
+      const status = await supabase
+        .from('driver_status')
+        .select('lat, lng, heading, location_updated_at')
+        .eq('driver_id', data.driver_id)
+        .maybeSingle()
+      statusRow = status.data
+      statusError = status.error
+    }
+    const picked = liveFixFromReads({ tripRow, tripError, statusRow, statusError })
+    if (picked.error) throw new Error(picked.error.message || 'Could not read driver location')
+    driverLat = picked.fix?.lat ?? null
+    driverLng = picked.fix?.lng ?? null
+    driverHeading = picked.fix?.heading ?? null
+    driverLocationAt = picked.fix?.updatedAt ?? null
   }
   const metadata = data.metadata && typeof data.metadata === 'object' && !Array.isArray(data.metadata)
     ? data.metadata as Record<string, unknown>
@@ -104,6 +137,8 @@ export async function loadLiveTrip(tripId: string): Promise<LiveTrip | null> {
     driverName,
     driverLat,
     driverLng,
+    driverHeading,
+    driverLocationAt,
     requested_at: data.requested_at || null,
     created_at: data.created_at ?? null,
     deposit_cents: data.deposit_cents ?? null,

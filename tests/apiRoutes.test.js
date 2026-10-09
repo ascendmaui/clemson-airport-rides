@@ -41,9 +41,9 @@ function mockRes() {
   }
 }
 
-async function call(handler, req) {
+async function call(handler, req, ...rest) {
   const res = mockRes()
-  await handler({ headers: {}, ...req }, res)
+  await handler({ headers: {}, ...req }, res, ...rest)
   let json = null
   try {
     json = res.body ? JSON.parse(res.body) : null
@@ -164,6 +164,31 @@ test('consolidated handlers reject unknown actions and wrong methods', async () 
   assert.notEqual(reconcile.status, 400)
 })
 
+test('saved payment methods list and select are their own routes', async () => {
+  const listed = await call(stripePaymentHandler, {
+    method: 'GET',
+    url: '/api/stripe-payment-methods',
+  })
+  assert.notEqual(listed.status, 400)
+  assert.ok([200, 401, 503].includes(listed.status))
+
+  const select = await call(stripePaymentHandler, {
+    method: 'POST',
+    url: '/api/stripe-payment-methods',
+    body: { action: 'default', paymentMethodId: 'pm_card' },
+  })
+  assert.notEqual(select.status, 400)
+  assert.ok([200, 401, 503].includes(select.status))
+
+  const remove = await call(stripePaymentHandler, {
+    method: 'POST',
+    url: '/api/stripe-payment-methods',
+    body: { action: 'detach', paymentMethodId: 'pm_card' },
+  })
+  assert.notEqual(remove.status, 400)
+  assert.ok([200, 401, 503].includes(remove.status))
+})
+
 test('held routes fold into existing routers and ignore body sub-actions', () => {
   const driver = {
     allowed: ['signup', 'submit-review', 'earnings', 'offer-preview', 'tip', 'wait', 'cancel-midride', 'payouts'],
@@ -207,19 +232,65 @@ test('held routes fold into existing routers and ignore body sub-actions', () =>
 })
 
 test('GET friend ride with a token reaches the get handler', async () => {
-  const viaQuery = await call(friendRidesHandler, {
-    method: 'GET',
-    url: '/api/friend-rides?token=abc',
-  })
-  const viaLegacy = await call(friendRidesHandler, {
-    method: 'GET',
-    url: '/api/friend-rides-get?token=abc',
-  })
-  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+  const origKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+  try {
+    delete process.env.SUPABASE_SERVICE_ROLE_KEY
+    const viaQuery = await call(friendRidesHandler, {
+      method: 'GET',
+      url: '/api/friend-rides?token=abc',
+    })
+    const viaLegacy = await call(friendRidesHandler, {
+      method: 'GET',
+      url: '/api/friend-rides-get?token=abc',
+    })
     assert.equal(viaQuery.status, 503)
     assert.equal(viaLegacy.status, 503)
-    return
+  } finally {
+    if (origKey !== undefined) process.env.SUPABASE_SERVICE_ROLE_KEY = origKey
+    else delete process.env.SUPABASE_SERVICE_ROLE_KEY
   }
-  assert.notEqual(viaQuery.status, 400)
-  assert.notEqual(viaLegacy.status, 400)
+})
+
+test('consolidated route handlers forward injected dependencies to sub-handlers', async () => {
+  const fakeSb = {
+    from(table) {
+      const chain = {
+        select() { return chain },
+        eq() { return chain },
+        in() { return chain },
+        order() { return chain },
+        limit() { return chain },
+        maybeSingle: async () => {
+          if (table === 'friend_rides') {
+            return {
+              data: {
+                id: 'r1',
+                token: 'tok-mock',
+                status: 'open',
+                driver_profile_id: 'd1',
+              },
+              error: null,
+            }
+          }
+          if (table === 'vehicles') {
+            return { data: { make: 'Toyota', model: 'Prius', seats: 4 }, error: null }
+          }
+          return { data: null, error: null }
+        },
+        then(resolve) {
+          resolve({ data: [], error: null })
+        },
+      }
+      return chain
+    },
+  }
+
+  const result = await call(
+    friendRidesHandler,
+    { method: 'GET', url: '/api/friend-rides?token=tok-mock' },
+    { sb: fakeSb },
+  )
+
+  assert.equal(result.status, 200)
+  assert.equal(result.json.id, 'r1')
 })

@@ -13,8 +13,10 @@ import { reminderCopy, stampScheduledReminder, takeReminder } from '../lib/sched
 const TRIP_STATUS_KIND = {
   searching: 'ride_requested',
   offered: 'ride_requested',
+  requested: 'ride_requested',
   accepted: 'driver_accepted',
   arriving: 'driver_en_route',
+  arrived: 'arrived_pickup',
   in_progress: 'trip_started',
   completed: 'trip_completed',
   canceled: 'system',
@@ -32,6 +34,7 @@ export function RideToastWatcher() {
   const seenTrip = useRef(new Map()) // id -> status
   const seenFriend = useRef(new Map()) // id -> status|participantCount
   const seenBill = useRef(new Map()) // id -> status
+  const seenPay = useRef(new Map()) // id -> status
   const primed = useRef(false)
 
   // Load prefs into toast cache
@@ -74,6 +77,17 @@ export function RideToastWatcher() {
       ;(trips || []).forEach((t) => seenTrip.current.set(t.id, t.status))
       ;(rides || []).forEach((r) => seenFriend.current.set(r.id, r.status))
       ;(bills || []).forEach((b) => seenBill.current.set(b.id, b.status))
+      try {
+        const { data: payments } = await supabase
+          .from('payments')
+          .select('id, status, amount_cents')
+          .eq('rider_id', user.id)
+          .order('created_at', { ascending: false })
+          .limit(8)
+        ;(payments || []).forEach((row) => seenPay.current.set(row.id, row.status))
+      } catch {
+        /* payments stay on the poll below */
+      }
       primed.current = true
       ;(trips || []).forEach(maybeRemind)
     }
@@ -101,16 +115,11 @@ export function RideToastWatcher() {
         // late discover of existing trip — skip noise
         return
       }
-      if (prev === 'scheduled' && row.status === 'accepted') {
-        pushToast({
-          kind: 'driver_accepted',
-          title: 'Scheduled ride accepted',
-          body: row.metadata?.acceptance_message || `${tripBody(row)}. Your driver accepted this scheduled ride.`,
-        })
+      if (row.status === 'accepted') {
+        // RiderMatchPopup owns the match toast and the screen pop-up.
         return
       }
-      let kind = TRIP_STATUS_KIND[row.status] || 'system'
-      if (row.status === 'arriving') kind = 'arrived_pickup'
+      const kind = TRIP_STATUS_KIND[row.status] || 'system'
       const titles = {
         ride_requested: 'Ride requested',
         driver_accepted: 'Driver accepted',
@@ -125,6 +134,32 @@ export function RideToastWatcher() {
         title: titles[kind] || 'Trip update',
         body: tripBody(row),
       })
+      if (row.status === 'completed' && row.metadata?.remainder_uncollected) {
+        pushToast({
+          kind: 'payment_required',
+          title: 'Fare not charged',
+          body: 'No card is on file. This campus trip completed without a charge.',
+        })
+      }
+    }
+
+    function onPaymentRow(row) {
+      if (!row?.id) return
+      if (!primed.current) {
+        seenPay.current.set(row.id, row.status)
+        return
+      }
+      const prev = seenPay.current.get(row.id)
+      if (prev === row.status) return
+      seenPay.current.set(row.id, row.status)
+      if (prev == null) return
+      const cents = Number(row.amount_cents) || 0
+      const dollars = (cents / 100).toLocaleString('en-US', { style: 'currency', currency: 'USD' })
+      if (/fail|error|canceled|cancelled/i.test(row.status || '')) {
+        pushToast({ kind: 'payment_failed', title: 'Payment failed', body: dollars })
+      } else if (/paid|succeeded|captured|charged/i.test(row.status || '')) {
+        pushToast({ kind: 'fare_charged', title: 'Payment received', body: dollars })
+      }
     }
 
     function onFriendRow(row) {
@@ -198,6 +233,11 @@ export function RideToastWatcher() {
         { event: '*', schema: 'public', table: 'ride_bills', filter: `participant_profile_id=eq.${user.id}` },
         (payload) => onBillRow(payload.new),
       )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'payments', filter: `rider_id=eq.${user.id}` },
+        (payload) => onPaymentRow(payload.new),
+      )
       .subscribe()
 
     // Poll fallback (Realtime may be disabled)
@@ -227,6 +267,14 @@ export function RideToastWatcher() {
           .order('created_at', { ascending: false })
           .limit(5)
         ;(bills || []).forEach(onBillRow)
+
+        const { data: payments } = await supabase
+          .from('payments')
+          .select('id, status, amount_cents')
+          .eq('rider_id', user.id)
+          .order('created_at', { ascending: false })
+          .limit(8)
+        ;(payments || []).forEach(onPaymentRow)
       } catch {
         /* ignore poll errors */
       }

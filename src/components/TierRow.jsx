@@ -1,3 +1,5 @@
+import { A11yBadge } from './A11yBadge.jsx'
+
 export function TierRow({ tier, selected, onSelect }) {
   return (
     <button
@@ -24,9 +26,7 @@ export function TierRow({ tier, selected, onSelect }) {
           width: 48,
           height: 48,
           borderRadius: 12,
-          background: tier.premium
-            ? 'linear-gradient(145deg, rgba(82,45,128,0.14), rgba(255,255,255,0.6))'
-            : 'rgba(255,255,255,0.55)',
+          background: 'rgba(255,255,255,0.55)',
           border: '1px solid rgba(255,255,255,0.45)',
           display: 'grid',
           placeItems: 'center',
@@ -42,28 +42,17 @@ export function TierRow({ tier, selected, onSelect }) {
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <span style={{ fontWeight: 600, fontSize: 16 }}>{tier.name}</span>
           {tier.badge && (
-            <span
-              style={{
-                fontSize: 10,
-                fontWeight: 700,
-                letterSpacing: 0.4,
-                color: 'var(--purple)',
-                background: 'rgba(82,45,128,0.12)',
-                border: '1px solid rgba(82,45,128,0.18)',
-                padding: '2px 7px',
-                borderRadius: 999,
-              }}
-            >
+            <A11yBadge variant="purple">
               {tier.badge}
-            </span>
+            </A11yBadge>
           )}
         </div>
         <div style={{ color: 'var(--ink-secondary)', fontSize: 13, marginTop: 2 }}>
-          {tier.eta} · {tier.meta}
+          {`${tier.eta} · ${tier.meta}`}
         </div>
       </div>
-      <div style={{ fontWeight: 600, fontSize: 17, fontVariantNumeric: 'tabular-nums' }}>
-        ${tier.price.toFixed(2)}
+      <div data-testid={`tier-price-${tier.id}`} style={{ fontWeight: 600, fontSize: 17, fontVariantNumeric: 'tabular-nums' }}>
+        {Number.isFinite(tier.price) ? `$${tier.price.toFixed(2)}` : '—'}
       </div>
       {selected && (
         <div
@@ -77,7 +66,6 @@ export function TierRow({ tier, selected, onSelect }) {
             placeItems: 'center',
             fontSize: 12,
             fontWeight: 700,
-            boxShadow: '0 2px 6px var(--orange-glow)',
           }}
         >
           ✓

@@ -1,12 +1,14 @@
+import { createTrackingRefresh, onTrackingResume } from '../../packages/rides-native/tracking.js'
+import { locationFields } from './driverShift.js'
 import { supabase } from './supabase'
 
 /** Subscribe to a driver's live lat/lng from driver_status. Returns unsubscribe. */
-export function subscribeDriverStatus(driverId, onUpdate) {
+export function subscribeDriverStatus(driverId, onUpdate, onError) {
   if (!supabase || !driverId) return () => {}
 
   let alive = true
   const emit = (row) => {
-    if (!alive || !row) return
+    if (!alive || !row || row.lat == null || row.lng == null) return
     const lat = Number(row.lat)
     const lng = Number(row.lng)
     if (!Number.isFinite(lat) || !Number.isFinite(lng)) return
@@ -15,25 +17,25 @@ export function subscribeDriverStatus(driverId, onUpdate) {
       lng,
       heading: row.heading != null ? Number(row.heading) : null,
       online: Boolean(row.online),
-      updatedAt: row.updated_at || null,
+      updatedAt: row.location_updated_at || null,
     })
   }
 
-  async function pull() {
-    const { data, error } = await supabase
-      .from('driver_status')
-      .select('driver_id, lat, lng, heading, online, updated_at')
-      .eq('driver_id', driverId)
-      .maybeSingle()
-    if (error) {
-      console.warn('[driverTrack]', error.message)
-      return
-    }
-    emit(data)
-  }
-
-  pull()
+  const reader = createTrackingRefresh({
+    load: async () => {
+      const { data, error } = await supabase.from('driver_status')
+        .select('driver_id, lat, lng, heading, online, updated_at, location_updated_at')
+        .eq('driver_id', driverId).maybeSingle()
+      if (error) throw error
+      return data
+    },
+    onData: emit,
+    onError: (error) => onError?.(error ? 'Could not refresh driver location. Retrying automatically.' : null),
+  })
+  const pull = () => reader.refresh()
+  void pull()
   const poll = setInterval(pull, 4000)
+  const offResume = onTrackingResume(() => void reader.refresh(true))
 
   const channel = supabase
     .channel(`driver-status-${driverId}`)
@@ -45,28 +47,33 @@ export function subscribeDriverStatus(driverId, onUpdate) {
         table: 'driver_status',
         filter: `driver_id=eq.${driverId}`,
       },
-      (payload) => emit(payload.new || payload.record),
+      () => void pull(),
     )
-    .subscribe()
+    .subscribe((status) => { if (status === 'SUBSCRIBED') void reader.refresh(true) })
 
   return () => {
     alive = false
+    reader.stop()
+    offResume()
     clearInterval(poll)
     supabase.removeChannel(channel)
   }
 }
 
-/** Push the driver's own GPS into driver_status (best-effort). */
-export async function publishDriverLocation(driverId, { lat, lng, heading = null, online = true }) {
+/** Push the driver's own GPS into driver_status (throws when the write fails). */
+export async function publishDriverLocation(driverId, fix) {
   if (!supabase || !driverId) return
+  const { lat, lng, heading, online } = locationFields(fix)
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) return
-  const { error } = await supabase.from('driver_status').upsert({
+  const row = {
     driver_id: driverId,
     lat,
     lng,
     heading,
-    online: Boolean(online),
     updated_at: new Date().toISOString(),
-  })
-  if (error) console.warn('[driverTrack] publish', error.message)
+    location_updated_at: new Date().toISOString(),
+  }
+  if (typeof online === 'boolean') row.online = online
+  const { error } = await supabase.from('driver_status').upsert(row)
+  if (error) throw new Error(error.message)
 }

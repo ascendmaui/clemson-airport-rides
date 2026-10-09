@@ -39,7 +39,7 @@ export function offerCapacity(vehicle, { tailgate = false } = {}) {
   }
 }
 
-const VEHICLE_COLUMNS = 'id, make, model, color, plate, seats, is_tesla, tier'
+const VEHICLE_COLUMNS = 'id, make, model, color, plate, seats, service_class, tier'
 
 export async function loadRegisteredVehicle(supabase, userId) {
   if (!supabase || !userId) return null
@@ -69,9 +69,9 @@ export async function saveRegisteredVehicle(supabase, userId, payload) {
     color: String(p.color || '').trim() || null,
     plate,
     seats,
-    is_tesla: Boolean(p.isTesla),
+    service_class: Boolean(p.comfortClass),
     autonomous_capable: false,
-    tier: p.isTesla ? 'tesla_self_driving' : 'standard',
+    tier: p.comfortClass ? 'comfort' : 'standard',
   }
   const { data: existing, error: readErr } = await supabase.from('vehicles').select('id').eq('driver_id', userId).limit(1)
   if (readErr) throw new Error(readErr.message)

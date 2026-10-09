@@ -1,5 +1,6 @@
 import { PrimaryButton } from './PrimaryButton'
 import { formatUsdFromCents } from '../lib/pricing'
+import { useModalA11y } from './A11yModal'
 
 const LABELS = {
   retry: 'Retry payment',
@@ -17,6 +18,8 @@ export function PaymentFailedSheet({
   onBuyCredits,
   onDismiss,
 }) {
+  const sheetRef = useModalA11y({ isOpen: Boolean(failure), onClose: onDismiss })
+
   if (!failure) return null
   const actions = {
     retry: onRetry,
@@ -44,6 +47,7 @@ export function PaymentFailedSheet({
       }}
     >
       <div
+        ref={sheetRef}
         className="glass-panel glass-panel--elevated"
         style={{
           width: 'min(440px, 100%)',

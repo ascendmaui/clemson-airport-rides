@@ -1,6 +1,7 @@
 /**
  * Vercel serverless — POST /api/stripe-webhook
- * Records 25% deposits into public.payments when SUPABASE_SERVICE_ROLE_KEY is set.
+ * Records a legacy airport Checkout payment into public.payments when SUPABASE_SERVICE_ROLE_KEY is set.
+ * New bookings do not open that Checkout session. A late paid session still records the amount already paid.
  */
 import Stripe from 'stripe'
 import { createClient } from '@supabase/supabase-js'
@@ -11,6 +12,7 @@ import { setPaymentHold } from '../server/collectPayment.js'
 import { classifyStripeError, failureResult } from '../shared/paymentFailure.js'
 import { releaseFromCheckoutEvent, restoreLiveTripAfterDeposit } from '../server/abandonedCheckout.js'
 import { applyPaidCheckoutSession, recordDeposit } from '../server/checkoutReconcile.js'
+import { activateTigerPassFromCheckout, syncTigerPassFromStripe, tigerPassMeta } from '../server/riderPass.js'
 
 export { recordDeposit, applyPaidCheckoutSession }
 
@@ -27,7 +29,11 @@ const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || ''
 
 const MAX_WEBHOOK_PAYLOAD_BYTES = 1024 * 1024
 
-function readRawBody(req, maxBytes = MAX_WEBHOOK_PAYLOAD_BYTES) {
+export function readRawBody(req, maxBytes = MAX_WEBHOOK_PAYLOAD_BYTES) {
+  if (Buffer.isBuffer(req?.rawBody)) return Promise.resolve(req.rawBody)
+  if (typeof req?.rawBody === 'string') return Promise.resolve(Buffer.from(req.rawBody))
+  if (Buffer.isBuffer(req?.body)) return Promise.resolve(req.body)
+  if (typeof req?.body === 'string') return Promise.resolve(Buffer.from(req.body))
   return new Promise((resolve, reject) => {
     const chunks = []
     let totalLength = 0
@@ -45,8 +51,10 @@ function readRawBody(req, maxBytes = MAX_WEBHOOK_PAYLOAD_BYTES) {
   })
 }
 
-function serviceClient() {
-  return createClient(supabaseUrl, serviceKey, {
+function serviceClient(key) {
+  const k = (key !== undefined ? key : serviceKey) || ''
+  if (!k) return null
+  return createClient(supabaseUrl, k, {
     auth: { persistSession: false, autoRefreshToken: false },
   })
 }
@@ -57,13 +65,15 @@ async function recordTip(pi) {
   const riderId = pi?.metadata?.riderId
   if (!tripId || !riderId) return { skipped: true, reason: 'missing_metadata' }
   const supabase = serviceClient()
+  if (!supabase) return { skipped: true, reason: 'no_service_role' }
   const amount = Number(pi.amount) || Number(pi.metadata?.tipCents) || 0
   const split = splitPlatformFee(amount)
-  const { data: existing } = await supabase
+  const { data: existing, error: selErr } = await supabase
     .from('payments')
     .select('id')
     .eq('stripe_payment_intent_id', pi.id)
     .maybeSingle()
+  if (selErr) return { ok: false, error: selErr.message }
   if (!existing) {
     const { error } = await supabase.from('payments').insert({
       trip_id: tripId,
@@ -89,10 +99,12 @@ async function recordCreditPurchase(session) {
   const profileId = session?.metadata?.profile_id
   const packId = session?.metadata?.pack_id
   if (!profileId || !packId) return { skipped: true, reason: 'missing_metadata' }
+  const supabase = serviceClient()
+  if (!supabase) return { skipped: true, reason: 'no_service_role' }
   const piId = typeof session.payment_intent === 'string'
     ? session.payment_intent
     : session.payment_intent?.id || null
-  return grantCreditPack(serviceClient(), {
+  return grantCreditPack(supabase, {
     profileId,
     packId,
     stripePaymentIntentId: piId,
@@ -103,26 +115,52 @@ async function recordCreditPurchase(session) {
 // Deposit paid-marking (payments insert, restoreLiveTripAfterDeposit, checkout_deposit stamp, referral)
 // is handled idempotently via applyPaidCheckoutSession in server/checkoutReconcile.js.
 
+export function extractStripeSignature(headers) {
+  if (!headers || typeof headers !== 'object') return ''
+  for (const [key, value] of Object.entries(headers)) {
+    if (key.toLowerCase() === 'stripe-signature') {
+      const val = Array.isArray(value) ? value[0] : value
+      return typeof val === 'string' ? val.trim() : ''
+    }
+  }
+  return ''
+}
+
+function sendWebhookJson(res, status, body) {
+  if (res.writableEnded) return
+  res.statusCode = status
+  if (!res.headersSent) {
+    res.setHeader('Content-Type', 'application/json')
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private')
+    res.setHeader('Pragma', 'no-cache')
+  }
+  res.end(JSON.stringify(body))
+}
+
 export default async function handler(req, res, deps = {}) {
-  res.setHeader('Content-Type', 'application/json')
-  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private')
-  res.setHeader('Pragma', 'no-cache')
+  if (!res.headersSent) {
+    res.setHeader('Content-Type', 'application/json')
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private')
+    res.setHeader('Pragma', 'no-cache')
+  }
   if (req.method !== 'POST') {
-    res.setHeader('Allow', 'POST')
-    res.statusCode = 405
-    return res.end(JSON.stringify({ error: 'Method not allowed' }))
+    if (!res.headersSent) res.setHeader('Allow', 'POST')
+    return sendWebhookJson(res, 405, { error: 'Method not allowed' })
   }
 
-  const stripeKey = deps.stripeSecret || process.env.STRIPE_SECRET_KEY || stripeSecret
-  const whSecret = deps.webhookSecret !== undefined ? deps.webhookSecret : (process.env.STRIPE_WEBHOOK_SECRET || webhookSecret)
-  const activeServiceKey = deps.serviceKey !== undefined ? deps.serviceKey : (process.env.SUPABASE_SERVICE_ROLE_KEY || serviceKey)
+  const rawStripeKey = deps.stripeSecret !== undefined ? deps.stripeSecret : (process.env.STRIPE_SECRET_KEY || stripeSecret)
+  const stripeKey = typeof rawStripeKey === 'string' ? rawStripeKey.trim() : ''
+  const rawWhSecret = deps.webhookSecret !== undefined ? deps.webhookSecret : (process.env.STRIPE_WEBHOOK_SECRET || webhookSecret)
+  const whSecret = typeof rawWhSecret === 'string' ? rawWhSecret.trim() : ''
+  const rawServiceKey = deps.serviceKey !== undefined ? deps.serviceKey : (process.env.SUPABASE_SERVICE_ROLE_KEY || serviceKey)
+  const activeServiceKey = typeof rawServiceKey === 'string' ? rawServiceKey.trim() : ''
 
-  if (!stripeKey || !stripeKey.startsWith('sk_') || stripeKey.includes('placeholder')) {
-    res.statusCode = 200
-    return res.end(JSON.stringify({
+  const isValidKey = (stripeKey.startsWith('sk_') || stripeKey.startsWith('rk_')) && !stripeKey.includes('placeholder')
+  if (!stripeKey || !isValidKey) {
+    return sendWebhookJson(res, 200, {
       stub: true,
       message: 'STRIPE_SECRET_KEY not set — webhook stub acknowledged',
-    }))
+    })
   }
 
   try {
@@ -130,17 +168,22 @@ export default async function handler(req, res, deps = {}) {
     const rawBody = await readRawBody(req)
     let event
     if (whSecret && !whSecret.includes('placeholder')) {
-      const rawSig = req.headers ? (req.headers['stripe-signature'] ?? req.headers['Stripe-Signature']) : null
-      const sig = Array.isArray(rawSig) ? rawSig[0] : (rawSig || '')
+      const sig = extractStripeSignature(req.headers)
       event = stripe.webhooks.constructEvent(rawBody, sig, whSecret)
     } else {
       event = JSON.parse(rawBody.toString('utf8'))
     }
 
     if (event.type === 'payment_intent.succeeded' && event.data?.object?.metadata?.kind === 'tip') {
-      const recorded = await recordTip(event.data.object)
-      res.statusCode = 200
-      return res.end(JSON.stringify({ received: true, type: event.type, recorded }))
+      const recordTipFn = deps.recordTip || recordTip
+      const recorded = await recordTipFn(event.data.object)
+      const retryable = recorded?.ok === false && !recorded?.skipped
+      return sendWebhookJson(res, retryable ? 500 : 200, {
+        received: true,
+        type: event.type,
+        recorded,
+        ...(retryable ? { error: recorded.error } : {}),
+      })
     }
 
     if (event.type === 'payment_intent.payment_failed') {
@@ -163,8 +206,7 @@ export default async function handler(req, res, deps = {}) {
         held = true
         console.error('[stripe-webhook] payment_failed', { tripId, code, pi: pi?.id })
       }
-      res.statusCode = 200
-      return res.end(JSON.stringify({ received: true, type: event.type, held, code }))
+      return sendWebhookJson(res, 200, { received: true, type: event.type, held, code })
     }
 
     if (event.type === 'checkout.session.expired' || event.type === 'checkout.session.async_payment_failed') {
@@ -177,17 +219,28 @@ export default async function handler(req, res, deps = {}) {
       const retryable = released?.reason === 'update_failed'
         || released?.reason === 'trip_unreadable'
         || released?.reason === 'payments_unreadable'
-      res.statusCode = retryable ? 500 : 200
-      return res.end(JSON.stringify({ received: true, type: event.type, released }))
+      return sendWebhookJson(res, retryable ? 500 : 200, { received: true, type: event.type, released })
     }
 
     if (event.type === 'checkout.session.completed' || event.type === 'checkout.session.async_payment_succeeded') {
       const session = event.data?.object
+      if (session?.metadata?.kind === 'tiger_pass') {
+        let tigerPass = { skipped: true, reason: 'no_service_role' }
+        if (activeServiceKey || deps.serviceClient) {
+          const client = deps.serviceClient ? deps.serviceClient() : serviceClient()
+          const activateTigerPassFn = deps.activateTigerPassFromCheckout || activateTigerPassFromCheckout
+          tigerPass = await activateTigerPassFn(client, session, new Date(), stripe)
+        }
+        console.log('[stripe-webhook] tiger_pass', { id: session?.id, tigerPass })
+        const retryable = tigerPass?.ok === false
+        return sendWebhookJson(res, retryable ? 500 : 200, { received: true, type: event.type, tigerPass })
+      }
       if (session?.metadata?.kind === 'credit_purchase') {
-        const granted = await recordCreditPurchase(session)
+        const recordCreditPurchaseFn = deps.recordCreditPurchase || recordCreditPurchase
+        const granted = await recordCreditPurchaseFn(session)
         console.log('[stripe-webhook] credit_purchase', { id: session?.id, granted })
-        res.statusCode = 200
-        return res.end(JSON.stringify({ received: true, type: event.type, granted }))
+        const retryable = granted?.ok === false
+        return sendWebhookJson(res, retryable ? 500 : 200, { received: true, type: event.type, granted })
       }
       const client = deps.serviceClient ? deps.serviceClient() : (activeServiceKey ? serviceClient() : null)
       const applyFn = deps.applyPaidCheckoutSession || applyPaidCheckoutSession
@@ -196,7 +249,7 @@ export default async function handler(req, res, deps = {}) {
         grantRiderSocialForTrip: deps.grantRiderSocialForTrip || grantRiderSocialForTrip,
         isAsyncPaymentSucceeded: event.type === 'checkout.session.async_payment_succeeded',
       })
-      const { recorded, live, referral } = applied
+      const { recorded, live, referral } = applied || {}
       console.log('[stripe-webhook] checkout.session.completed', {
         id: session?.id,
         metadata: session?.metadata,
@@ -205,16 +258,43 @@ export default async function handler(req, res, deps = {}) {
         live,
         referral,
       })
-      res.statusCode = 200
-      return res.end(JSON.stringify({ received: true, type: event.type, recorded, live, referral }))
+      const retryable = (applied?.ok === false && !applied?.skipped) || (recorded && recorded.ok === false && !recorded.skipped)
+      return sendWebhookJson(res, retryable ? 500 : 200, {
+        received: true,
+        type: event.type,
+        recorded,
+        live,
+        referral,
+        ...(retryable ? { error: applied?.error || recorded?.error } : {}),
+      })
+    }
+
+    const passMeta = tigerPassMeta(event.data?.object)
+    if (
+      passMeta
+      && (event.type === 'customer.subscription.deleted'
+        || event.type === 'customer.subscription.updated'
+        || event.type === 'invoice.paid')
+    ) {
+      let tigerPass = { skipped: true, reason: 'no_service_role' }
+      if (activeServiceKey || deps.serviceClient) {
+        const client = deps.serviceClient ? deps.serviceClient() : serviceClient()
+        const syncTigerPassFn = deps.syncTigerPassFromStripe || syncTigerPassFromStripe
+        tigerPass = await syncTigerPassFn(client, event.data.object)
+      }
+      const retryable = tigerPass?.ok === false
+      return sendWebhookJson(res, retryable ? 500 : 200, { received: true, type: event.type, tigerPass })
     }
 
     console.log('[stripe-webhook] unhandled', event.type)
-    res.statusCode = 200
-    return res.end(JSON.stringify({ received: true, type: event.type }))
+    return sendWebhookJson(res, 200, { received: true, type: event.type })
   } catch (err) {
     console.error('[stripe-webhook]', err)
-    res.statusCode = 400
-    return res.end(JSON.stringify({ error: err.message || 'Webhook error' }))
+    const status = typeof err?.status === 'number' && err.status >= 400 && err.status < 600
+      ? err.status
+      : (typeof err?.statusCode === 'number' && err.statusCode >= 400 && err.statusCode < 600
+        ? err.statusCode
+        : 400)
+    return sendWebhookJson(res, status, { error: err.message || 'Webhook error' })
   }
 }

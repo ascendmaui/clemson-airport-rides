@@ -1,17 +1,21 @@
 /**
  * Driver-facing labels for trips the web app already stores.
- * No network, no Stripe, no self-driving calls.
+ * No network and no Stripe calls.
  */
+import { CLEMSON_MIAMI_PROMO_ID } from './clemsonMiamiPromo.js'
+import { explicitOfferPhase, ladderOfferNet } from './offerLadder.js'
+import { LOOKING_FOR_BACKUP_LABEL, confirmCountdownLabel, driverBackupPresentation, leaveNowCountdownLabel } from '../../shared/backupDriverQueue.js'
+import { driverBoostShareCents, readBoostCents } from '../../shared/scheduledBoost.js'
 
-export const TESLA_FLEET_NOTICE =
-  'Coming soon. Tesla Model 3 is a profile option only. A person still drives the car. There is no self-driving dispatch.'
-
-/** Notice for a selected Tesla Model 3 option. Null when Tesla is not the choice. */
-export function teslaFleetNotice(selected) {
-  return selected ? TESLA_FLEET_NOTICE : null
-}
+export { confirmCountdownLabel, leaveNowCountdownLabel }
 
 export const ACTIONABLE_LEAD_MS = 45 * 60 * 1000
+
+/** Retired fleet notices are gone. Callers that still import these get nothing. */
+export const COMFORT_FLEET_NOTICE = ''
+export function comfortFleetNotice() {
+  return null
+}
 
 /** Same sentence the database raises when an accept of an unpaid airport deposit is rejected. */
 export const UNPAID_AIRPORT_DEPOSIT_ACCEPT_ERROR =
@@ -82,14 +86,18 @@ export function tripEarnedCents(trip) {
   return driverNetCents(trip?.fare_cents ?? trip?.fareCents)
 }
 
-/** 25% airport deposit. A stored deposit_cents wins over the formula. */
+/** Fare net plus the driver share of an upfront boost. The boost is not commissioned. */
+export function tripPayoutCents(trip) {
+  return tripEarnedCents(trip) + driverBoostShareCents(readBoostCents(trip))
+}
+
+/** Stored amount already collected on an older trip. New trips are not given a deposit. */
 export function depositSliceCents(fareCents, stored) {
+  void fareCents
   if (stored != null && stored !== '' && Number.isFinite(Number(stored))) {
     return Math.max(0, Math.round(Number(stored)))
   }
-  const fare = Math.max(0, Math.round(Number(fareCents) || 0))
-  if (!fare) return 0
-  return Math.round(fare * 0.25)
+  return 0
 }
 
 function metaOf(row) {
@@ -221,10 +229,10 @@ export const TAG_LABELS = {
   student: 'Student discount',
   game_day: 'Game day',
   weekend_party: 'Weekend / party',
-  carpool: 'Carpool · split fare',
-  tesla: 'Tesla Model 3 · stub',
+  carpool: 'Carpool',
   direct: 'Preferred by rider',
   scheduled: 'Scheduled',
+  comfort: 'Extra Comfort',
 }
 
 /**
@@ -233,10 +241,10 @@ export const TAG_LABELS = {
  * their own phone and the server settles the remainder off-session on complete.)
  */
 export const APPLE_PAY_DRIVER_COPY =
-  'The rider already paid a 25% deposit. The rest is charged to their card automatically when you complete the trip.'
+  'Part of this fare is already paid. The rest is charged to the rider’s card when you complete the trip.'
 
 export const NO_DEPOSIT_DRIVER_COPY =
-  'The fare is charged to the rider’s card automatically when you complete the trip.'
+  'The final fare is charged to the rider’s card when you complete the trip.'
 
 /** Short payment note for the driver. Only mentions a deposit when one was taken. */
 export function driverFareNote(depositCents) {
@@ -248,7 +256,7 @@ export function tagLabel(id) {
 }
 
 export function tagTone(label) {
-  if (/Game|Weekend|Tesla|Student|Preferred/.test(String(label || ''))) return 'orange'
+  if (/Game|Weekend|Student|Preferred/.test(String(label || ''))) return 'orange'
   return 'purple'
 }
 
@@ -285,13 +293,12 @@ export function tripTags(row, { gameDayLive = false } = {}) {
   ) {
     tags.push('weekend_party')
   }
-  const tier = String(row?.tier || meta.tier || '')
-  if (tier === 'tesla' || tier === 'tesla_self_driving' || meta.tesla === true || meta.is_tesla === true) {
-    tags.push('tesla')
-  }
   if (meta.kind === 'carpool' || meta.carpool || meta.fare_breakdown?.carpool) {
     tags.push('carpool')
   }
+  const tier = String(row?.tier || meta.ride_option || '').trim().toLowerCase()
+  if (tier === 'comfort') tags.push('comfort')
+  if (tier === 'carpool' && !tags.includes('carpool')) tags.push('carpool')
   if (row?.status === 'requested' && row?.driver_id) tags.push('direct')
   if (row?.status === 'scheduled' || meta.kind === 'scheduled') tags.push('scheduled')
   return tags
@@ -323,7 +330,7 @@ export function statusActionLabel(status) {
     case 'accepted':
       return 'Arriving'
     case 'arriving':
-      return "I'm here"
+      return 'Arrived'
     case 'arrived':
       return 'Start trip'
     case 'in_progress':
@@ -420,10 +427,23 @@ export function toDriverCard(row, options) {
   const fareCents = Math.round(Number(row.fare_cents) || 0)
   const storedDeposit = row.deposit_cents != null ? row.deposit_cents : meta.depositCents
   const first = String(meta.rider_first_name || 'Rider').trim().split(/\s+/)[0] || 'Rider'
+  const phase = explicitOfferPhase({ ...row, metadata: meta })
+  const ladder = phase && phase !== 'expired' ? ladderOfferNet({ ...row, fareCents, status: row.status, metadata: meta, offerPhase: phase }) : null
+  const carpool = carpoolPayFromTrip(row)
+  const backup = driverBackupPresentation(row, options?.driverId || null)
+  const tagLabels = tags.map(tagLabel)
+  if (backup?.bonusLabel && !tagLabels.includes(backup.bonusLabel)) tagLabels.push(backup.bonusLabel)
+  if (backup?.lookingForBackup && !tagLabels.includes(LOOKING_FOR_BACKUP_LABEL)) tagLabels.push(LOOKING_FOR_BACKUP_LABEL)
+  const boostCents = readBoostCents(row)
+  const boostDriverCents = driverBoostShareCents(boostCents)
+  const fareNet = carpool?.showBonus
+    ? carpool.payoutCents
+    : (ladder ? ladder.netCents : tripEarnedCents(row))
   return {
     id: row.id,
     status: row.status,
     driverId: row.driver_id || null,
+    matchingOffer: meta.kind === 'driver_request' && !row.pickup_at && !row.scheduled_for && !Number(row.deposit_cents || 0),
     riderId: row.rider_id || null,
     pickupLabel: row.pickup_label || 'Pickup',
     dropoffLabel: row.dropoff_label || 'Drop-off',
@@ -435,19 +455,42 @@ export function toDriverCard(row, options) {
     fareCents,
     depositCents: depositSliceCents(fareCents, storedDeposit),
     depositExplicit: row.deposit_cents != null && row.deposit_cents !== '',
-    driverNetCents: tripEarnedCents(row),
+    driverNetCents: fareNet + boostDriverCents,
+    boostCents,
+    boostDriverCents,
+    offerPhase: phase,
+    offerShareBps: ladder?.shareBps ?? null,
+    offerExpiresAt: row.offer_expires_at || null,
+    riderAvatarUrl: typeof meta.rider_avatar_url === 'string' ? meta.rider_avatar_url : null,
     ...carpoolCardFields(row),
     firstName: first,
     purpose: meta.purpose || row.rider_note || '',
     tier: row.tier || null,
     tags,
-    tagLabels: tags.map(tagLabel),
-    teslaStub: tags.includes('tesla'),
+    tagLabels,
+    backupLabel: backup?.bonusLabel || null,
+    backupRole: backup?.role || null,
+    lookingForBackup: Boolean(backup?.lookingForBackup),
+    backupConfirmOpen: Boolean(backup?.confirmOpen),
+    backupConfirmClosesAt: backup?.confirmClosesAt || null,
+    backupConfirmCopy: backup?.confirmCopy || null,
+    backupLeaveNowAt: backup?.leaveNowAt || null,
+    backupLeaveNowOpen: Boolean(backup?.leaveNowOpen),
+    backupEnroute: Boolean(backup?.enroute),
+    backupStatusLine: backup?.statusLine || null,
+    backupNotice: backup?.notice || null,
+    backupUrgent: Boolean(backup?.urgent),
     arrivedAt: row.arrived_at || null,
     passengers: Math.max(1, Math.round(Number(row.passengers) || 1)),
     shares: carpoolShareLines(meta),
     riderLat: readLiveLat(meta),
     riderLng: readLiveLng(meta),
+    riderFixAt: readLiveAt(meta),
+    promoRide: meta.promo === CLEMSON_MIAMI_PROMO_ID || meta.promo_ride === true,
+    routePolyline: typeof meta.route_polyline === 'string' && meta.route_polyline ? meta.route_polyline : null,
+    routeDurationS: Number.isFinite(Number(meta.route_duration_s)) && Number(meta.route_duration_s) > 0
+      ? Number(meta.route_duration_s)
+      : null,
   }
 }
 
@@ -461,6 +504,12 @@ function readLiveLng(meta) {
   const live = meta.rider_location || meta.riderLocation || null
   const lng = live?.lng ?? live?.longitude ?? meta.rider_lng
   return lng != null && Number.isFinite(Number(lng)) ? Number(lng) : null
+}
+
+function readLiveAt(meta) {
+  const live = meta.rider_location || meta.riderLocation || null
+  const at = live?.updated_at || live?.updatedAt || null
+  return typeof at === 'string' && at ? at : null
 }
 
 export function carpoolShareLines(metadata) {
@@ -487,7 +536,7 @@ function carpoolCardFields(row) {
   }
 }
 
-/** Fare, 25% deposit, remainder still collected on complete, and the 80/20 split. */
+/** Fare, any amount already paid, the rest charged on complete, and the 80/20 split. */
 export function fareCollection(card) {
   const shares = Array.isArray(card?.shares) ? card.shares : carpoolShareLines(card?.metadata)
   const shareSum = shares.reduce((sum, share) => sum + (Number(share.shareCents) || 0), 0)
@@ -541,7 +590,7 @@ export function weekNetCents(trips, now = new Date()) {
   for (const trip of trips || []) {
     if (trip?.status && trip.status !== 'completed') continue
     if (!isSameZonedWeek(trip?.completed_at, now)) continue
-    total += tripEarnedCents(trip)
+    total += tripPayoutCents(trip)
   }
   return total
 }

@@ -1,23 +1,22 @@
 /**
  * Rider and driver live-trip phases.
- * ETA is straight-line campus pace from coordinates already on the trip or driver_status.
- * TODO: a road-following ETA needs a billed GOOGLE_MAPS_API_KEY (Routes). Do not invent a telemetry API.
+ * etaLineFor stays straight-line campus pace from coordinates already on the trip.
+ * In-trip remaining road distance lives in roadFollow.js and does not call Directions.
  */
 import { driverApproach, formatDriverDistance, OPEN_POOL_COPY, PREFERRED_CANCELED_COPY, PREFERRED_MATCH_COPY } from './drivers.js'
 
 export const DRIVER_TRACK_STEPS = [
   { id: 'accepted', label: 'Accepted' },
-  { id: 'arriving', label: 'En route' },
+  { id: 'arriving', label: 'Arriving' },
   { id: 'arrived', label: 'Arrived' },
   { id: 'in_progress', label: 'In trip' },
   { id: 'completed', label: 'Done' },
 ]
 
-/** Statuses a rider can open from home into the live track screen. */
+/** Statuses the rider home query may send. `requested` is not a trip_status value. */
 export const RIDER_TRACK_STATUSES = [
   'searching',
   'offered',
-  'requested',
   'accepted',
   'arriving',
   'arrived',
@@ -32,12 +31,28 @@ export const STILL_SEARCHING_COPY =
 export const SEARCH_PREVIEW_COPY =
   'Orange and purple motion is a preview. Only a real driver accept moves this ride.'
 
+/** Rider looking-for-a-driver screen. The web tracker keeps SEARCH_PREVIEW_COPY. */
+export const RIDER_SEARCH_MOTION_COPY =
+  'Orange and purple motion is a preview. This ride moves forward only when a real driver accepts.'
+
+export const SEARCH_APPROX_WAIT_NOTE =
+  'Approximate. No driver has accepted, so this is not a live arrival.'
+
 export const STRAIGHT_LINE_WAIT =
   'Straight-line ETA shows when the driver shares a location. Road time needs a billed Maps key.'
 
 /** Preview cars belong on the open-pool search, not after a driver is assigned. */
 export function showSearchTheater(status) {
   return status === 'searching' || status === 'offered'
+}
+
+/** Title for the accepted-driver card. The open-pool placeholder is not a person. */
+export function liveDriverTitle(personName, fallback) {
+  const assigned = typeof personName === 'string' ? personName.trim() : ''
+  if (assigned) return assigned
+  const name = typeof fallback === 'string' ? fallback.trim() : ''
+  if (!name || /^next driver$/i.test(name) || /^your driver$/i.test(name)) return 'Your driver'
+  return name
 }
 
 /** Keep a status line when coordinates are missing so the card is not blank. */
@@ -70,7 +85,7 @@ export function riderLiveSteps(status) {
   return [
     { id: 'searching', label: 'Searching' },
     { id: 'offered', label: matchStepLabel(status) },
-    { id: 'enroute', label: 'En route' },
+    { id: 'enroute', label: status === 'arriving' ? 'Arriving' : 'En route' },
     { id: 'arrived', label: 'Arrived' },
     { id: 'in_trip', label: 'In trip' },
     { id: 'completed', label: 'Done' },
@@ -110,7 +125,7 @@ export function riderLiveCopy(status, { preferred = false } = {}) {
       return {
         kicker: 'OFFERED',
         title: 'A driver is reviewing this ride',
-        body: 'The request is in front of a driver. It stays in the open pool until someone accepts.',
+        body: 'The request is in front of a driver. You will see them on the way once they accept.',
       }
     case 'requested':
       return {
@@ -128,7 +143,7 @@ export function riderLiveCopy(status, { preferred = false } = {}) {
       }
     case 'arriving':
       return {
-        kicker: 'EN ROUTE',
+        kicker: 'ARRIVING',
         title: 'Your driver is arriving',
         body: 'They are close to pickup. Distance updates from the location they already share.',
       }
@@ -187,9 +202,11 @@ export function riderLiveView(status, options) {
 }
 
 function point(lat, lng) {
+  if (lat == null || lng == null || lat === '' || lng === '') return null
   const latitude = Number(lat)
   const longitude = Number(lng)
-  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)
+    || Math.abs(latitude) > 90 || Math.abs(longitude) > 180) return null
   return { lat: latitude, lng: longitude }
 }
 
@@ -222,11 +239,169 @@ export function straightLineEta(from, to) {
   return { etaMin: approach.etaMin, distanceMi: approach.distanceMi, label }
 }
 
+/** Google encoded polyline → {lat, lng}[]. Empty when the server stored no road route. */
+export function decodeRoutePolyline(encoded) {
+  if (typeof encoded !== 'string' || !encoded) return []
+  let index = 0
+  let lat = 0
+  let lng = 0
+  const path = []
+  while (index < encoded.length) {
+    let shift = 0
+    let result = 0
+    let byte = 0
+    do {
+      if (index >= encoded.length) return path
+      byte = encoded.charCodeAt(index++) - 63
+      result |= (byte & 0x1f) << shift
+      shift += 5
+    } while (byte >= 0x20)
+    const deltaLat = (result & 1) ? ~(result >> 1) : (result >> 1)
+    lat += deltaLat
+    shift = 0
+    result = 0
+    do {
+      if (index >= encoded.length) return path
+      byte = encoded.charCodeAt(index++) - 63
+      result |= (byte & 0x1f) << shift
+      shift += 5
+    } while (byte >= 0x20)
+    const deltaLng = (result & 1) ? ~(result >> 1) : (result >> 1)
+    lng += deltaLng
+    path.push({ lat: lat / 1e5, lng: lng / 1e5 })
+  }
+  return path
+}
+
+export function mapRouteCoordinates(encoded) {
+  return decodeRoutePolyline(encoded).map((point) => ({
+    latitude: point.lat,
+    longitude: point.lng,
+  }))
+}
+
+/** Minutes from a stored Routes duration. Null when the server had no road leg. */
+export function roadEtaLine(durationS, noun) {
+  const seconds = Number(durationS)
+  if (!Number.isFinite(seconds) || seconds <= 0 || !noun) return null
+  const minutes = Math.max(1, Math.round(seconds / 60))
+  return `About ${minutes} min by road to ${noun}`
+}
+
 export function etaLineFor(status, from, places) {
+  if (status === 'arrived') return 'Driver is at pickup'
+  const origin = point(from?.lat, from?.lng)
   const target = etaTargetForStatus(status, places)
   if (!target.point || !target.noun) return null
-  const eta = straightLineEta(from, target.point)
+  // Stored route duration is the original whole trip, not remaining travel time.
+  const eta = straightLineEta(origin, target.point)
   return eta.label ? `${eta.label} to ${target.noun}` : null
+}
+
+function routePair(lat, lng) {
+  const next = point(lat, lng)
+  if (!next) return null
+  return [next.lat, next.lng]
+}
+
+/**
+ * [lat, lng] pairs for the rider's active-trip map.
+ * A stored road polyline wins. Otherwise the line follows live stops, the
+ * driver and the current target, or pickup to drop-off.
+ */
+export function activeTripRouteLine(trip, driver) {
+  if (!trip || typeof trip !== 'object') return []
+  const encoded = trip.metadata?.route_polyline || trip.route_polyline || trip.routePolyline || null
+  const road = decodeRoutePolyline(typeof encoded === 'string' ? encoded : null)
+  if (road.length > 1) return road.map((spot) => [spot.lat, spot.lng])
+
+  const stops = orderedLiveStops(trip)
+  if (stops.length > 1) return stops.map((stop) => [stop.lat, stop.lng])
+
+  const pickup = routePair(trip.pickup_lat ?? trip.pickupLat, trip.pickup_lng ?? trip.pickupLng)
+  const dropoff = routePair(trip.dropoff_lat ?? trip.dropoffLat, trip.dropoff_lng ?? trip.dropoffLng)
+  const origin = routePair(driver?.lat ?? driver?.latitude, driver?.lng ?? driver?.longitude)
+  const target = etaTargetForStatus(trip.status, trip)
+  const targetPair = target.point ? routePair(target.point.lat, target.point.lng) : null
+  if (origin && targetPair && (origin[0] !== targetPair[0] || origin[1] !== targetPair[1])) {
+    return [origin, targetPair]
+  }
+  if (pickup && dropoff && (pickup[0] !== dropoff[0] || pickup[1] !== dropoff[1])) {
+    return [pickup, dropoff]
+  }
+  return []
+}
+
+function storedPolyline(trip) {
+  const encoded = trip?.metadata?.route_polyline || trip?.route_polyline || trip?.routePolyline || null
+  return typeof encoded === 'string' ? encoded : null
+}
+
+function storedRouteDurationS(trip) {
+  const meta = trip?.metadata && typeof trip.metadata === 'object' ? trip.metadata : {}
+  const raw = meta.route_duration_s ?? trip?.route_duration_s ?? trip?.routeDurationS ?? null
+  const seconds = Number(raw)
+  if (!Number.isFinite(seconds) || seconds <= 0) return null
+  return seconds
+}
+
+function chosenEnds(trip) {
+  return {
+    pickup: point(trip?.pickup_lat ?? trip?.pickupLat, trip?.pickup_lng ?? trip?.pickupLng),
+    dropoff: point(trip?.dropoff_lat ?? trip?.dropoffLat, trip?.dropoff_lng ?? trip?.dropoffLng),
+  }
+}
+
+/**
+ * Route while a driver is still unassigned.
+ * A stored road polyline wins. Otherwise a straight line between the pickup
+ * and drop-off the rider already chose. A driver coordinate is never added.
+ */
+export function searchingRouteLine(trip) {
+  if (!trip || typeof trip !== 'object') return []
+  const road = decodeRoutePolyline(storedPolyline(trip))
+  if (road.length > 1) return road.map((spot) => [spot.lat, spot.lng])
+  const { pickup, dropoff } = chosenEnds(trip)
+  if (!pickup || !dropoff) return []
+  if (pickup.lat === dropoff.lat && pickup.lng === dropoff.lng) return []
+  return [[pickup.lat, pickup.lng], [dropoff.lat, dropoff.lng]]
+}
+
+function searchingEstimateMinutes(trip) {
+  const duration = storedRouteDurationS(trip)
+  if (duration) return Math.max(1, Math.round(duration / 60))
+  const { pickup, dropoff } = chosenEnds(trip)
+  return straightLineEta(pickup, dropoff).etaMin
+}
+
+/** Ride ETA from the stored road duration, or the existing straight-line pace. */
+export function searchingEtaLine(trip) {
+  if (!trip || typeof trip !== 'object') return null
+  const road = roadEtaLine(storedRouteDurationS(trip), 'drop-off')
+  if (road) return road
+  const { pickup, dropoff } = chosenEnds(trip)
+  const eta = straightLineEta(pickup, dropoff)
+  return eta.label ? `${eta.label} to drop-off` : null
+}
+
+/**
+ * Wait during search. Minutes come from the stored road duration when the
+ * server saved one, otherwise the same straight-line pace. The label stays
+ * approximate and does not claim a driver is arriving.
+ */
+export function searchingApproxWaitLine(trip) {
+  if (!trip || typeof trip !== 'object') return null
+  const minutes = searchingEstimateMinutes(trip)
+  if (minutes == null) return 'Approximate wait'
+  return `Approximate wait · about ${minutes} min`
+}
+
+export function searchingRidePreview(trip) {
+  return {
+    route: searchingRouteLine(trip),
+    eta: searchingEtaLine(trip),
+    wait: searchingApproxWaitLine(trip),
+  }
 }
 
 /** ~111m. Same 3-decimal grid as docs/CARPOOL_MATCHING.md Privacy. */

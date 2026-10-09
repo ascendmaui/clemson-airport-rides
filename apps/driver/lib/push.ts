@@ -2,15 +2,63 @@ import Constants from 'expo-constants'
 import * as Notifications from 'expo-notifications'
 import { Platform } from 'react-native'
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { clemsonMiamiDriverNotification } from '../../../packages/rides-native/clemsonMiamiPromo.js'
+import { formatEasternWhen } from '../../../shared/nearTermSlots.js'
+
+let appActive = true
+let driverOnline = false
+
+/** In-app sound and vibration replace the system toast while the driver is online and the app is open. */
+export function setRideAlertSurface(patch: { active?: boolean; online?: boolean }) {
+  if (patch.active != null) appActive = patch.active
+  if (patch.online != null) driverOnline = patch.online
+}
+
+export function inAppRideAlert() {
+  return appActive && driverOnline
+}
 
 Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowBanner: true,
-    shouldShowList: true,
-    shouldPlaySound: true,
-    shouldSetBadge: false,
-  }),
+  handleNotification: async () => {
+    const inApp = inAppRideAlert()
+    return {
+      shouldShowBanner: !inApp,
+      shouldShowList: true,
+      shouldPlaySound: !inApp,
+      shouldSetBadge: false,
+    }
+  },
 })
+
+export const RIDE_CHANNEL_ID = 'ride-requests'
+
+/** Android 8+ plays a custom sound only when that sound is set on a channel. */
+export function rideChannelRequest() {
+  return {
+    name: 'Ride requests',
+    importance: 4,
+    sound: 'request.wav',
+    vibrationPattern: [0, 250, 120, 250],
+    lockscreenVisibility: 1,
+  }
+}
+
+export async function ensureRideChannel() {
+  if (Platform.OS !== 'android') return false
+  const create = Notifications.setNotificationChannelAsync
+  if (typeof create !== 'function') return false
+  try {
+    await create(RIDE_CHANNEL_ID, rideChannelRequest())
+    return true
+  } catch {
+    return false
+  }
+}
+
+function androidChannelFields(): { channelId?: string } {
+  if (Platform.OS !== 'android') return {}
+  return { channelId: RIDE_CHANNEL_ID }
+}
 
 export type PushState = {
   granted: boolean
@@ -26,9 +74,11 @@ export async function registerDriverPush(supabase: SupabaseClient | null, driver
   const existing = await Notifications.getPermissionsAsync()
   let status = existing.status
   if (status !== 'granted') {
+    await ensureRideChannel()
     const asked = await Notifications.requestPermissionsAsync()
     status = asked.status
   }
+  await ensureRideChannel()
   if (status !== 'granted') {
     return {
       granted: false,
@@ -80,22 +130,68 @@ async function storeToken(supabase: SupabaseClient | null, driverId: string, tok
   return !table.error
 }
 
+export async function notifyAcceptedRide(card: {
+  id: string
+  pickupLabel: string
+  dropoffLabel: string
+}) {
+  await ensureRideChannel()
+  await Notifications.scheduleNotificationAsync({
+    content: {
+      title: 'Ride accepted',
+      body: `${card.pickupLabel} → ${card.dropoffLabel}`,
+      data: { tripId: card.id },
+      sound: 'request.wav',
+      ...androidChannelFields(),
+    },
+    trigger: null,
+  })
+}
+
+export async function notifyScheduledBoard(card: {
+  id: string
+  pickupLabel: string
+  dropoffLabel: string
+  pickupAt?: string | null
+}) {
+  const whenLabel = card.pickupAt ? formatEasternWhen(card.pickupAt) : null
+  const when = whenLabel ? ` · ${whenLabel}` : ''
+  await ensureRideChannel()
+  await Notifications.scheduleNotificationAsync({
+    content: {
+      title: 'Scheduled ride on the board',
+      body: `${card.pickupLabel} → ${card.dropoffLabel}${when}`,
+      data: { tripId: card.id, kind: 'scheduled_board' },
+      sound: 'request.wav',
+      ...androidChannelFields(),
+    },
+    trigger: null,
+  })
+}
+
 export async function notifyNewRequest(card: {
   id: string
   pickupLabel: string
   dropoffLabel: string
   tagLabels?: string[]
+  promoRide?: boolean
+  now?: string | number | Date
 }) {
   const flags = (card.tagLabels || []).slice(0, 3).join(' · ')
-  const body = flags
+  const routeBody = flags
     ? `${card.pickupLabel} → ${card.dropoffLabel} · ${flags}`
     : `${card.pickupLabel} → ${card.dropoffLabel}`
+  const promo = card.promoRide
+    ? clemsonMiamiDriverNotification(card.now ? new Date(card.now) : new Date())
+    : null
+  await ensureRideChannel()
   await Notifications.scheduleNotificationAsync({
     content: {
-      title: 'New ride request',
-      body,
+      title: promo?.title || 'New ride request',
+      body: promo?.body || routeBody,
       data: { tripId: card.id },
       sound: 'request.wav',
+      ...androidChannelFields(),
     },
     trigger: null,
   })

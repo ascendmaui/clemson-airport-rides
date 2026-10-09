@@ -14,7 +14,7 @@ async function loadContext(req) {
     return {
       context: { signedIn: false },
       userId: null,
-      note: 'Personalization needs SUPABASE_SERVICE_ROLE_KEY on Vercel.',
+      note: 'Personalization needs SUPABASE_SERVICE_ROLE_KEY on the server.',
     }
   }
   const user = await userFromAuth(req, sb)

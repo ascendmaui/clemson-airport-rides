@@ -3,14 +3,20 @@
  * Email is best-effort: the admin queue is the source of truth when Resend is unset.
  */
 import {
-  ADMIN_EMAIL,
   EMAIL_TODO,
   IC_AGREEMENT_VERSION,
-  SEEDED_ADMIN_EMAILS,
+  approvalBlockers,
   canReceiveRides,
   submissionBlockers,
 } from '../shared/driverOnboarding.js'
+import { adminNotifyRecipients } from './adminRoster.js'
 import { WEB_ORIGIN } from '../shared/productLinks.js'
+import { assessContractIdentity, pickAgreementRow } from '../shared/contractIdentity.js'
+import { missingApplicantEmailColumn, submittedApplicantEmail } from '../shared/applicantEmail.js'
+import {
+  backgroundGateFromApplication,
+  missingBackgroundColumns,
+} from '../shared/backgroundCheck.js'
 import { loadStaffAccess } from './staffAccess.js'
 
 export { canReceiveRides }
@@ -21,45 +27,94 @@ export async function loadSubmissionContext(sb, profileId) {
   if (docsRes.error && /match_status|review_status|schema cache/i.test(docsRes.error.message || '')) {
     docsRes = await sb.from('driver_documents').select('doc_type').eq('profile_id', profileId)
   }
-  const [appRes, taxRes, agreementRes] = await Promise.all([
-    sb.from('driver_applications')
+  const applicationColumns = 'background_authorized_at, work_eligibility_attested_at, work_eligibility_category, onboarding_status, applicant_email, background_check_status, background_legal_name, background_signature_name, background_signed_on, background_disclosures, background_admin_reviewed_at'
+  let appRes = await sb.from('driver_applications')
+    .select(applicationColumns)
+    .eq('profile_id', profileId)
+    .maybeSingle()
+  if (appRes.error && (missingApplicantEmailColumn(appRes.error) || missingBackgroundColumns(appRes.error))) {
+    appRes = await sb.from('driver_applications')
       .select('background_authorized_at, work_eligibility_attested_at, work_eligibility_category, onboarding_status')
       .eq('profile_id', profileId)
-      .maybeSingle(),
-    sb.from('driver_tax_info').select('legal_name, tin_last4, tax_classification').eq('profile_id', profileId).maybeSingle(),
+      .maybeSingle()
+  }
+  const [agreementRes, profileRes] = await Promise.all([
     sb.from('driver_agreements')
       .select('agreement_version, agreement_sha256, signature_name, signed_at, signer_user_id, html_snapshot')
-      .eq('profile_id', profileId)
-      .eq('agreement_version', IC_AGREEMENT_VERSION)
+      .eq('profile_id', profileId),
+    sb.from('profiles')
+      .select('full_name, email')
+      .eq('id', profileId)
       .maybeSingle(),
   ])
-  const error = docsRes.error || appRes.error || taxRes.error || agreementRes.error
+  let taxRes = await sb.from('driver_tax_info')
+    .select('legal_name, tin_last4, tax_classification, address_line, business_name')
+    .eq('profile_id', profileId)
+    .maybeSingle()
+  if (taxRes.error && /address_line|business_name|schema cache/i.test(taxRes.error.message || '')) {
+    taxRes = await sb.from('driver_tax_info')
+      .select('legal_name, tin_last4, tax_classification')
+      .eq('profile_id', profileId)
+      .maybeSingle()
+  }
+  let packetRes = await sb.from('driver_agreement_packets')
+    .select('agreement_version, prefill, html_snapshot, html_sha256')
+    .eq('profile_id', profileId)
+    .eq('agreement_version', IC_AGREEMENT_VERSION)
+    .maybeSingle()
+  if (packetRes.error && /driver_agreement_packets|schema cache|does not exist/i.test(packetRes.error.message || '')) {
+    packetRes = { data: null, error: null }
+  }
+  const error = docsRes.error || appRes.error || taxRes.error || agreementRes.error || packetRes.error || profileRes.error
   if (error) return { error: error.message }
 
   const tax = taxRes.data || null
-  const agreement = agreementRes.data || null
+  const agreement = pickAgreementRow(agreementRes.data, IC_AGREEMENT_VERSION)
   const app = appRes.data || null
+  const packet = packetRes.data || null
   if (tax && Object.prototype.hasOwnProperty.call(tax, 'tin')) delete tax.tin
 
+  const background = backgroundGateFromApplication(app)
+  const applicantEmail = submittedApplicantEmail(app, profileRes.data)
   const ctx = {
     uploaded: (docsRes.data || []).map((row) => row.doc_type),
-    backgroundAuthorized: Boolean(app?.background_authorized_at),
+    ...background,
+    applicantEmail,
     workEligibilityAttested: Boolean(app?.work_eligibility_attested_at),
     workEligibilityCategory: app?.work_eligibility_category || null,
     taxSaved: Boolean(tax?.legal_name && /^[0-9]{4}$/.test(String(tax.tin_last4 || ''))),
     agreementSigned: Boolean(agreement?.signed_at && agreement?.signature_name),
     agreementVersion: agreement?.agreement_version || null,
+    agreementSha256: agreement?.agreement_sha256 || null,
+    packetHash: packet?.html_sha256 || null,
     registrationMatch: (docsRes.data || []).find((row) => row.doc_type === 'registration')?.match_status || null,
+    signatureName: agreement?.signature_name || null,
+    contractLegalName: packet?.prefill?.legal_name || tax?.legal_name || null,
+    applicantName: profileRes.data?.full_name || null,
+    applicantLegalName: tax?.legal_name || null,
   }
+  const contractIdentity = assessContractIdentity(ctx)
 
   return {
     ctx,
     blockers: submissionBlockers(ctx),
+    approvalBlockers: approvalBlockers(ctx),
+    contractIdentity,
     tax: tax
       ? {
         legal_name: tax.legal_name,
         tin_last4: tax.tin_last4,
         tax_classification: tax.tax_classification,
+        address_line: tax.address_line || null,
+        business_name: tax.business_name || null,
+      }
+      : null,
+    packet: packet
+      ? {
+        agreement_version: packet.agreement_version,
+        prefill: packet.prefill,
+        html_snapshot: packet.html_snapshot,
+        html_sha256: packet.html_sha256,
       }
       : null,
     agreement: agreement
@@ -74,9 +129,17 @@ export async function loadSubmissionContext(sb, profileId) {
       : null,
     employment: {
       background_authorized_at: app?.background_authorized_at || null,
+      background_check_status: background.backgroundStatus,
+      background_legal_name: app?.background_legal_name || null,
+      background_signature_name: app?.background_signature_name || null,
+      background_signed_on: app?.background_signed_on || null,
+      background_disclosures: app?.background_disclosures || null,
+      background_admin_reviewed_at: app?.background_admin_reviewed_at || null,
+      vendor_result: null,
       work_eligibility_attested_at: app?.work_eligibility_attested_at || null,
       work_eligibility_category: app?.work_eligibility_category || null,
     },
+    applicantEmail,
     onboarding_status: app?.onboarding_status || null,
   }
 }
@@ -152,11 +215,12 @@ export async function receivableDriverIds(sb, profileIds) {
 }
 
 export async function notifyAdminOfApplication({ profile, vehicle }) {
-  const configured = (process.env.ADMIN_NOTIFY_EMAIL || '').trim()
-  const recipients = configured
-    ? configured.split(',').map((email) => email.trim()).filter(Boolean)
-    : SEEDED_ADMIN_EMAILS
-  const to = recipients[0] || ADMIN_EMAIL
+  const recipients = adminNotifyRecipients()
+  const to = recipients[0] || null
+  if (!recipients.length) {
+    console.warn(`[driver-onboarding] ${EMAIL_TODO}`)
+    return { emailed: false, todo: EMAIL_TODO, to: null }
+  }
   const key = (process.env.RESEND_API_KEY || '').trim()
   const appUrl = (process.env.VITE_APP_URL || process.env.APP_URL || WEB_ORIGIN).replace(/\/$/, '')
   const name = profile?.full_name || profile?.email || 'New driver'

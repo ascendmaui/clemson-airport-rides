@@ -12,7 +12,7 @@ Native apps and UI components already contain readiness gating (`packages/rides-
   - URL: `https://awktabuhijrshmsmagpq.supabase.co`
   - OAuth Callback: `https://awktabuhijrshmsmagpq.supabase.co/auth/v1/callback`
 - **Web App / Production Domain:**
-  - Site URL: `https://clemson-rides.vercel.app`
+  - Site URL: `https://clemsonrides.com`
 - **Rider Native App:**
   - Bundle Identifier / Package Name: `com.ascendmaui.clemsonrides.rider`
   - URL Scheme: `clemsonrides`
@@ -39,8 +39,8 @@ Native apps and UI components already contain readiness gating (`packages/rides-
    - **App name:** `Clemson RIDES`
    - **User support email:** `johnmatveyev@gmail.com` (or `jmat2019@icloud.com`)
    - **App domain:**
-     - Application home page: `https://clemson-rides.vercel.app`
-     - Application privacy policy link: `https://clemson-rides.vercel.app`
+     - Application home page: `https://clemsonrides.com`
+     - Application privacy policy link: `https://clemsonrides.com`
    - **Developer contact information:** `johnmatveyev@gmail.com`
 4. Under **Scopes**, click **Add or Remove Scopes** and select:
    - `.../auth/userinfo.email`
@@ -54,14 +54,14 @@ Supabase Auth executes the OAuth 2.0 authorization code exchange using Google's 
 1. Navigate to **APIs & Services** → **Credentials** → **Create Credentials** → **OAuth client ID**.
 2. Select Application type: **Web application**.
 3. Name: `Clemson RIDES Web & Supabase Backend`.
-4. **Authorized JavaScript origins**:
-   - `https://clemson-rides.vercel.app`
-   - `https://awktabuhijrshmsmagpq.supabase.co`
-   - `http://localhost:5173` *(for local web development)*
-   - `http://localhost:8081` *(for Expo web development)*
+4. **Authorized JavaScript origins** (only these — no vercel.app):
+   - `https://clemsonrides.com`
+   - `https://www.clemsonrides.com`
 5. **Authorized redirect URIs**:
-   - `https://awktabuhijrshmsmagpq.supabase.co/auth/v1/callback` *(CRITICAL: Supabase Auth OAuth callback)*
-   - `https://clemson-rides.vercel.app`
+   - `https://clemsonrides.com/api/auth/callback/google`
+   - `https://www.clemsonrides.com/api/auth/callback/google`
+   - `https://awktabuhijrshmsmagpq.supabase.co/auth/v1/callback` (Supabase Google OAuth — keep)
+
 6. Click **Create**.
 7. Copy and securely save:
    - **Web Client ID** (e.g. `[CLIENT_ID].apps.googleusercontent.com`)
@@ -108,14 +108,12 @@ Google requires an iOS OAuth client matching each app's bundle identifier for na
 
 ### 2.1 Supabase Redirect Allowlist
 1. Go to **Authentication** → **URL Configuration**.
-2. **Site URL:** Ensure it is set to `https://clemson-rides.vercel.app`.
-3. **Redirect URLs (Allowlist):** Ensure the following URIs are present:
-   - `https://clemson-rides.vercel.app/**`
-   - `https://clemson-rides.vercel.app`
+2. **Site URL:** Ensure it is set to `https://clemsonrides.com`.
+3. **Redirect URLs (Allowlist):** Ensure the following URIs are present (no vercel.app):
+   - `https://clemsonrides.com/**`
+   - `https://www.clemsonrides.com/**`
    - `clemsonrides://**` *(matches `clemsonrides://auth/callback`)*
    - `clemsonrides-driver://**` *(matches `clemsonrides-driver://auth/callback`)*
-   - `http://localhost:5173/**` *(local Vite web)*
-   - `exp://**` *(Expo Go / development builds)*
 4. Click **Save**.
 
 ---

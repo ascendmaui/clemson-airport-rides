@@ -127,8 +127,8 @@ test('banner copy names the driver boost, not rider surge', () => {
   assert.doesNotMatch(activeIncentiveBanner(DEFAULT_WINDOWS.slice(0, 1)), /surge/i)
 })
 
-test('admin gate is john@gmail.com, is_admin, or admin/ops role', () => {
-  assert.equal(isIncentiveAdmin({ email: 'John@gmail.com' }, null), true)
+test('incentive admin follows profile role or is_admin, not a hardcoded inbox', () => {
+  assert.equal(isIncentiveAdmin({ email: 'John@gmail.com' }, null), false)
   assert.equal(isIncentiveAdmin({ email: 'ada@clemson.edu' }, { role: 'driver' }), false)
   assert.equal(isIncentiveAdmin({ email: 'ada@clemson.edu' }, { role: 'admin' }), true)
   assert.equal(isIncentiveAdmin({ email: 'ada@clemson.edu' }, { is_admin: true }), true)

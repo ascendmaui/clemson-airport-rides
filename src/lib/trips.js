@@ -1,5 +1,8 @@
 import { destPoint, pickupPoint } from '../../packages/rides-native/places.js'
 import { createServerDriverTrip } from './payments'
+import { requestFailureMessage } from './requestFailure.js'
+
+export { requestFailureMessage }
 
 /**
  * Preferred-driver request. The server writes fare_cents. A client list price
@@ -22,30 +25,48 @@ export async function requestDriverTrip({
   dest = 'GSP Airport',
   destLat = null,
   destLng = null,
+  pickupLabel = null,
+  pickupLat = null,
+  pickupLng = null,
   tier = 'standard',
+  passengers = null,
   isStudent = false,
   listCents = 0,
+  autoAssign = false,
+  billingChoice = null,
 }) {
   void isStudent
   void listCents
   if (!riderId) throw new Error('Sign in required to request a driver')
-  if (!driverId) throw new Error('Select a driver first')
+  const assigning = autoAssign === true && !driverId
+  if (!driverId && !assigning) throw new Error('Select a driver first')
 
   const lat = finitePin(destLat)
   const lng = finitePin(destLng)
   const drop = lat != null && lng != null
     ? { latitude: lat, longitude: lng }
     : destPoint(dest)
-  const pickup = pickupPoint('Memorial Stadium')
+  const plat = finitePin(pickupLat)
+  const plng = finitePin(pickupLng)
+  const stadium = pickupPoint('Memorial Stadium')
+  const pickup = plat != null && plng != null
+    ? {
+      latitude: plat,
+      longitude: plng,
+      label: String(pickupLabel || '').trim() || 'Current location',
+    }
+    : { latitude: stadium.latitude, longitude: stadium.longitude, label: 'Memorial Stadium' }
   const data = await createServerDriverTrip({
-    driverId,
+    ...(assigning ? { autoAssign: true } : { driverId }),
     dest,
     destLat: drop.latitude,
     destLng: drop.longitude,
-    pickupLabel: 'Memorial Stadium',
+    pickupLabel: pickup.label,
     pickupLat: pickup.latitude,
     pickupLng: pickup.longitude,
     tier: tier || 'standard',
+    ...(passengers ? { passengers } : {}),
+    ...(billingChoice ? { billingChoice } : {}),
   })
   if (!data?.trip?.id) throw new Error('Could not request trip')
   return data.trip

@@ -2,6 +2,7 @@
  * Server fare for checkout, trip rows, and collect/settle.
  * Student eligibility is studentDiscountGranted (confirmed @clemson.edu / @g.clemson.edu).
  * Client amount, fare_cents, total, and isStudent are not pricing inputs.
+ * Schedule-ahead percent is computed here and is not read from the client.
  */
 import { lookupCatalogPlace } from '../src/lib/placeCatalog.js'
 import { AIRPORT_PLACES, airportCodeForPlace, tripMeters, ATL_FLOOR_CENTS } from '../src/lib/scheduledRideModel.js'
@@ -21,6 +22,22 @@ import {
   readPrecomputedFeeCents,
 } from '../shared/paymentFailure.js'
 import { loadGameDayMultiplier } from './creditLots.js'
+import {
+  applyScheduleAheadDiscount,
+  carpoolSeatCount,
+  isOfferedRideTier,
+  resolveOfferedTier,
+  scheduleDiscountMetadata,
+} from '../shared/rideOptions.js'
+import { applyTigerPassDiscount, tigerPassMetadata } from '../shared/tigerPass.js'
+import { tigerPassBpsForRider } from './riderPass.js'
+
+/** Stored rows keep their label in the UI. A retired tier is not repriced as a live option. */
+function tierForStoredTrip(raw) {
+  const tier = String(raw ?? '').trim().toLowerCase()
+  if (!tier || isOfferedRideTier(tier)) return resolveOfferedTier(tier)
+  return 'standard'
+}
 
 export const CAMPUS_PICKUP = { label: 'Memorial Stadium', lat: 34.6788, lng: -82.843 }
 
@@ -31,81 +48,8 @@ export const AIRPORT_DROPOFFS = {
 
 const METERS_PER_MILE = 1609.344
 
-/** Clemson wall clock for date+time (not host TZ / Vercel UTC). */
-export const RIDE_TIME_ZONE = 'America/New_York'
-
-function zonedCivilParts(date, timeZone = RIDE_TIME_ZONE) {
-  const fmt = new Intl.DateTimeFormat('en-US', {
-    timeZone,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    hourCycle: 'h23',
-  })
-  const parts = Object.fromEntries(fmt.formatToParts(date).map((p) => [p.type, p.value]))
-  return {
-    year: Number(parts.year),
-    month: Number(parts.month),
-    day: Number(parts.day),
-    hour: Number(parts.hour),
-    minute: Number(parts.minute),
-    second: Number(parts.second),
-  }
-}
-
-/** Offset minutes east of UTC for Instant `date` in `timeZone` (EDT → -240). */
-function zonedOffsetMinutes(date, timeZone = RIDE_TIME_ZONE) {
-  const name =
-    new Intl.DateTimeFormat('en-US', { timeZone, timeZoneName: 'longOffset' })
-      .formatToParts(date)
-      .find((p) => p.type === 'timeZoneName')?.value || 'GMT'
-  const m = /^GMT([+-])(\d{1,2})(?::(\d{2}))?$/.exec(name)
-  if (!m) return 0
-  const sign = m[1] === '-' ? -1 : 1
-  return sign * (Number(m[2]) * 60 + Number(m[3] || 0))
-}
-
-/**
- * Civil Y-M-D H:M:S in `timeZone` → UTC Date.
- * DST: non-existent spring-gap hours → Invalid Date; ambiguous fall-back → first occurrence.
- */
-export function zonedCivilToUtc(
-  year,
-  month,
-  day,
-  hour,
-  minute,
-  second = 0,
-  timeZone = RIDE_TIME_ZONE,
-) {
-  const asUtc = Date.UTC(year, month - 1, day, hour, minute, second)
-  const offsets = new Set([
-    zonedOffsetMinutes(new Date(asUtc - 36 * 3600_000), timeZone),
-    zonedOffsetMinutes(new Date(asUtc), timeZone),
-    zonedOffsetMinutes(new Date(asUtc + 36 * 3600_000), timeZone),
-  ])
-  const matches = []
-  for (const off of offsets) {
-    const instant = asUtc - off * 60_000
-    const p = zonedCivilParts(new Date(instant), timeZone)
-    if (
-      p.year === year &&
-      p.month === month &&
-      p.day === day &&
-      p.hour === hour &&
-      p.minute === minute &&
-      p.second === second
-    ) {
-      matches.push(instant)
-    }
-  }
-  if (matches.length === 0) return new Date(NaN)
-  matches.sort((a, b) => a - b)
-  return new Date(matches[0])
-}
+import { RIDE_TIME_ZONE, zonedCivilToUtc } from '../shared/rideTime.js'
+export { RIDE_TIME_ZONE, zonedCivilToUtc } from '../shared/rideTime.js'
 
 /**
  * Resolve ride Instant from body.
@@ -142,7 +86,8 @@ function finiteCents(value) {
 
 /**
  * Metered campus → GSP/CLT fare. Student 10% only when isStudent is already
- * decided by studentDiscountGranted. Deposit is 25% of that fare (no credits).
+ * decided by studentDiscountGranted. No upfront deposit; the fare is charged
+ * at trip end.
  */
 export function quoteAirportCheckout({
   airport,
@@ -151,6 +96,8 @@ export function quoteAirportCheckout({
   gameDayMultiplier = null,
   distanceM = null,
   durationS = null,
+  tigerPassBps = 0,
+  tier = 'standard',
 } = {}) {
   const code = String(airport || 'GSP').toUpperCase() === 'CLT' ? 'CLT' : 'GSP'
   const fb = AIRPORT_ROUTE_FALLBACK[code]
@@ -164,11 +111,10 @@ export function quoteAirportCheckout({
     minutes: hasRoute ? undefined : fb.minutes,
     surgeMultiplier: surge.multiplier,
     isStudent: Boolean(isStudent),
-    isCarpool: false,
-    tier: 'standard',
+    tier,
   })
   const fareCents = quote.fareBeforeCreditsCents
-  return {
+  return applyTigerPassDiscount({
     airport: code,
     isStudent: Boolean(isStudent),
     fareCents,
@@ -178,7 +124,7 @@ export function quoteAirportCheckout({
     quote,
     routeSource: hasRoute ? 'google' : 'fallback',
     estimate: false,
-  }
+  }, tigerPassBps)
 }
 
 /**
@@ -195,13 +141,17 @@ export function priceScheduledRequest({
   gameDayMultiplier = null,
   distanceM = null,
   durationS = null,
+  scheduleAhead = false,
+  now = new Date(),
+  tigerPassBps = 0,
+  seatCount = 1,
 } = {}) {
   const explicit = airport ? String(airport).toUpperCase() : null
   const fromPlace = airportCodeForPlace(dropoff) || airportCodeForPlace(pickup)
   const code = explicit === 'GSP' || explicit === 'CLT' || explicit === 'ATL'
     ? explicit
     : fromPlace
-  const tierId = tier === 'tesla' ? 'tesla' : 'standard'
+  const tierId = resolveOfferedTier(tier)
   const student = Boolean(isStudent) && tierId === 'standard'
   const when = at instanceof Date && !Number.isNaN(at.getTime()) ? at : new Date()
 
@@ -213,8 +163,13 @@ export function priceScheduledRequest({
       gameDayMultiplier,
       distanceM,
       durationS,
+      tigerPassBps,
+      tier: tierId,
     })
-    return { ...priced, tier: tierId }
+    return applyCarpoolSeats(applyScheduleAheadDiscount(
+      { ...priced, tier: tierId },
+      { at: when, now, enabled: scheduleAhead },
+    ), tierId, seatCount)
   }
 
   const hasRoute = distanceM != null || durationS != null
@@ -234,16 +189,18 @@ export function priceScheduledRequest({
     surgeMultiplier: surge.multiplier,
     isStudent: false,
     tier: tierId,
+    vehicleMultiplier: 1,
   })
   let fareCents = quote.fareBeforeCreditsCents
-  const floorApplied = code === 'ATL' && fareCents < ATL_FLOOR_CENTS
-  if (floorApplied) fareCents = ATL_FLOOR_CENTS
+  const floorCents = ATL_FLOOR_CENTS
+  const floorApplied = code === 'ATL' && fareCents < floorCents
+  if (floorApplied) fareCents = floorCents
   const studentOff = student
     ? percentOffCents(fareCents, STUDENT_DISCOUNT_BPS)
     : { amountCents: fareCents, discountCents: 0, bps: 0 }
   fareCents = studentOff.amountCents
   const split = splitPlatformFee(fareCents)
-  return {
+  return applyCarpoolSeats(applyScheduleAheadDiscount(applyTigerPassDiscount({
     airport: null,
     isStudent: student,
     fareCents,
@@ -264,6 +221,35 @@ export function priceScheduledRequest({
       platform_fee_cents: split.platformFeeCents,
       driver_earnings_cents: split.driverEarningsCents,
     },
+  }, tigerPassBps), { at: when, now, enabled: scheduleAhead }), tierId, seatCount)
+}
+
+/**
+ * Carpool quotes are per seat. Two seats cost twice the discounted seat.
+ * Other tiers are unchanged. TODO: matching still dispatches each carpool
+ * request on its own standard-eligible car.
+ */
+function applyCarpoolSeats(priced, tierId, seatCount) {
+  if (tierId !== 'carpool') return priced
+  const seats = carpoolSeatCount(tierId, seatCount)
+  const perSeat = Math.max(0, Math.round(Number(priced?.fareCents) || 0))
+  const fareCents = perSeat * seats
+  const split = splitPlatformFee(fareCents)
+  const previous = priced?.breakdown && typeof priced.breakdown === 'object' ? priced.breakdown : {}
+  return {
+    ...priced,
+    fareCents,
+    seatCount: seats,
+    perSeatFareCents: perSeat,
+    breakdown: {
+      ...previous,
+      per_seat_fare_cents: perSeat,
+      seat_count: seats,
+      fare_before_credits_cents: fareCents,
+      rider_pays_cents: fareCents,
+      platform_fee_cents: split.platformFeeCents,
+      driver_earnings_cents: split.driverEarningsCents,
+    },
   }
 }
 
@@ -272,19 +258,29 @@ export function priceCheckoutBody({
   body = {},
   user = null,
   at = new Date(),
+  now = new Date(),
   gameDayMultiplier = null,
   distanceM = null,
   durationS = null,
+  tigerPassBps = 0,
 } = {}) {
   const when = parseRideAt(body, at)
-  const priced = quoteAirportCheckout({
+  const tier = resolveOfferedTier(body.tier)
+  const quoted = quoteAirportCheckout({
     airport: body.airport,
     at: when,
-    isStudent: studentDiscountGranted(user),
+    isStudent: studentDiscountGranted(user) && tier === 'standard',
     gameDayMultiplier,
     distanceM,
     durationS,
+    tigerPassBps,
+    tier,
   })
+  const scheduled = Boolean(body.date || body.pickupAt || body.scheduled_for || body.scheduledFor)
+  const priced = applyScheduleAheadDiscount(
+    { ...quoted, tier },
+    { at: when, now, enabled: scheduled },
+  )
   const clientFare = finiteCents(body.fareCents ?? body.fare_cents ?? body.total ?? body.totalCents ?? body.total_cents)
   const clientCharge = finiteCents(
     body.depositCents ?? body.deposit_cents ?? body.amount ?? body.amountCents ?? body.amount_cents,
@@ -341,6 +337,7 @@ export function airportTripRow({ user, priced, scheduledFor = null, riderFirst =
       student_discount_cents: Math.max(0, Math.round(Number(priced.discountCents) || 0)),
       studentLabel: priced.discountCents > 0 ? 'Clemson student · 10% off Standard' : null,
       fare_source: 'server',
+      ...scheduleDiscountMetadata(priced),
     },
   }
 }
@@ -421,6 +418,86 @@ export function resolveDriverRequestPlaces({
   }
 }
 
+/**
+ * Pickup and drop-off for a quote or billing preview.
+ * GSP and CLT use the canonical airport pins. Client fare fields are not read.
+ */
+export function placesForServerFare(body = {}) {
+  const airportHint = body.airport ? String(body.airport).toUpperCase() : null
+  const places = resolveDriverRequestPlaces({
+    pickupLabel: body.pickupLabel || body.pickup?.label,
+    pickupLat: body.pickupLat ?? body.pickup?.lat,
+    pickupLng: body.pickupLng ?? body.pickup?.lng,
+    dropoffLabel: body.dest || body.dropoffLabel || body.dropoff?.label,
+    dropoffLat: body.destLat ?? body.dropoffLat ?? body.dropoff?.lat,
+    dropoffLng: body.destLng ?? body.dropoffLng ?? body.dropoff?.lng,
+  })
+  const airport = airportHint === 'GSP' || airportHint === 'CLT'
+    ? airportHint
+    : (places.airport === 'GSP' || places.airport === 'CLT' ? places.airport : null)
+  if (!airport && places.error) return { error: places.error }
+  const pickup = airport ? CAMPUS_PICKUP : places.pickup
+  const dropoff = airport ? AIRPORT_DROPOFFS[airport] : places.dropoff
+  if (!pickup || !dropoff) return { error: 'Choose a pickup and a drop-off.' }
+  return { pickup, dropoff, airport }
+}
+
+const QUOTED_TIER_IDS = ['standard', 'wait', 'comfort', 'carpool']
+
+/**
+ * Fares the rider is shown. Each tier is priced with priceScheduledRequest,
+ * the same function that writes fare_cents on the trip.
+ */
+export function riderTierQuotes({
+  pickup,
+  dropoff,
+  airport = null,
+  at = new Date(),
+  now = new Date(),
+  isStudent = false,
+  tier = 'standard',
+  gameDayMultiplier = null,
+  distanceM = null,
+  durationS = null,
+  scheduleAhead = false,
+  tigerPassBps = 0,
+  seatCount = 1,
+} = {}) {
+  const requested = resolveOfferedTier(tier)
+  const input = {
+    pickup,
+    dropoff,
+    airport,
+    at,
+    now,
+    isStudent: Boolean(isStudent),
+    gameDayMultiplier,
+    distanceM,
+    durationS,
+    scheduleAhead,
+    tigerPassBps,
+  }
+  const tiers = QUOTED_TIER_IDS.map((id) => {
+    const priced = priceScheduledRequest({ ...input, tier: id })
+    return {
+      id,
+      fareCents: priced.fareCents,
+      depositCents: priced.depositCents,
+      discountCents: priced.discountCents,
+      tigerPassApplied: Boolean(priced.tigerPassApplied),
+      tigerPassDiscountCents: priced.tigerPassDiscountCents || 0,
+      estimate: Boolean(priced.estimate),
+      airport: priced.airport,
+    }
+  })
+  const selected = priceScheduledRequest({ ...input, tier: requested, seatCount })
+  return {
+    ...selected,
+    tier: requested,
+    tiers,
+  }
+}
+
 /** Server price for a driver request. Airport routes do not use a client distance. */
 export function priceDriverRequest(places, {
   isStudent = false,
@@ -429,6 +506,8 @@ export function priceDriverRequest(places, {
   gameDayMultiplier = null,
   distanceM = null,
   durationS = null,
+  tigerPassBps = 0,
+  seatCount = 1,
 } = {}) {
   const airport = places?.airport === 'GSP' || places?.airport === 'CLT' ? places.airport : null
   const atl = places?.airport === 'ATL'
@@ -438,10 +517,12 @@ export function priceDriverRequest(places, {
     airport,
     at,
     isStudent: Boolean(isStudent),
-    tier: tier === 'tesla' ? 'tesla' : 'standard',
+    tier: resolveOfferedTier(tier),
     gameDayMultiplier,
     distanceM,
     durationS,
+    tigerPassBps,
+    seatCount,
   })
 }
 
@@ -455,12 +536,14 @@ export function priceRecordedTrip(trip, {
   isStudent = false,
   at = new Date(),
   gameDayMultiplier = null,
+  tigerPassBps = 0,
 } = {}) {
   const pickup = stopFromTrip(trip, 'pickup')
   const dropoff = stopFromTrip(trip, 'dropoff')
   const code = airportCodeForPlace(dropoff) || airportCodeForPlace(pickup)
-  const tier = trip?.tier === 'tesla' || trip?.metadata?.tesla === true ? 'tesla' : 'standard'
+  const tier = tierForStoredTrip(trip?.tier)
   const when = at instanceof Date && !Number.isNaN(at.getTime()) ? at : new Date()
+  const scheduleAhead = Boolean(trip?.pickup_at || trip?.scheduled_for)
   if (code === 'GSP' || code === 'CLT') {
     return {
       priced: priceScheduledRequest({
@@ -471,6 +554,8 @@ export function priceRecordedTrip(trip, {
         isStudent: Boolean(isStudent),
         tier,
         gameDayMultiplier,
+        scheduleAhead,
+        tigerPassBps,
       }),
     }
   }
@@ -487,6 +572,8 @@ export function priceRecordedTrip(trip, {
       isStudent: Boolean(isStudent),
       tier,
       gameDayMultiplier,
+      scheduleAhead,
+      tigerPassBps,
     }),
   }
 }
@@ -513,6 +600,8 @@ export function fareRowPatch(trip, priced) {
       student_discount_cents: Math.max(0, Math.round(Number(priced.discountCents) || 0)),
       studentLabel: priced.discountCents > 0 ? 'Clemson student · 10% off Standard' : null,
       airport: priced.airport || null,
+      ...scheduleDiscountMetadata(priced),
+      ...tigerPassMetadata(priced),
     },
   }
   if (trip?.deposit_cents == null || trip.deposit_cents === '') {
@@ -586,10 +675,12 @@ export async function ensureAuthoritativeFare({ sb, trip, at = null } = {}) {
     gameDayMultiplier = null
   }
 
+  const tigerPassBps = await tigerPassBpsForRider(sb, row.rider_id, when)
   const quoted = priceRecordedTrip(row, {
     isStudent: studentDiscountGranted(rider),
     at: when,
     gameDayMultiplier,
+    tigerPassBps,
   })
   if (quoted.error || quoted.priced?.fareCents == null) {
     return {
@@ -623,15 +714,6 @@ export async function ensureAuthoritativeFare({ sb, trip, at = null } = {}) {
   return { error: 'Fare is not set. This trip cannot settle at $0.', status: 409, code: 'fare_not_set', trip: row }
 }
 
-function sumSucceeded(payments, kinds) {
-  return (payments || []).reduce((sum, row) => {
-    if (row?.status !== 'succeeded') return sum
-    const logical = row?.metadata?.logical_kind || row?.kind
-    if (!kinds.has(logical)) return sum
-    return sum + (Number(row.amount_cents) || 0)
-  }, 0)
-}
-
 /**
  * Amount a public collect call may charge. Fare kinds use the trip row.
  * A client amountCents below that figure is ignored. Tips stay rider-chosen.
@@ -659,23 +741,12 @@ export function serverCollectCents({ kind, trip, payments = [], clientAmountCent
       }
     }
     case 'deposit': {
-      if (!trip) return { error: 'tripId required', status: 400 }
-      const fare = storedFareCents(trip)
-      if (fare == null) return { error: 'Fare is not set. This trip cannot be charged as $0.', status: 409, code: 'fare_not_set' }
-      const stored = trip.deposit_cents == null || trip.deposit_cents === ''
-        ? cardDepositCents(fare)
-        : Math.max(0, Math.round(Number(trip.deposit_cents) || 0))
-      const creditsApplied = Number(trip.fare_breakdown?.credits_debited_cents) > 0
-        || trip.metadata?.credits_applied === true
-      const floor = creditsApplied ? 0 : cardDepositCents(fare)
-      const deposit = Math.min(fare, Math.max(stored, floor))
-      const paid = sumSucceeded(payments, new Set(['deposit', 'airport_deposit']))
-      const amountCents = Math.max(0, deposit - paid)
+      // The 25% airport deposit is retired. Full fare is collected as balance.
       const client = finiteCents(clientAmountCents)
       return {
-        amountCents,
-        source: 'server',
-        clientUnderpaid: client != null && client < amountCents,
+        amountCents: 0,
+        source: 'deposit_retired',
+        clientUnderpaid: client != null && client > 0,
       }
     }
     case 'balance':

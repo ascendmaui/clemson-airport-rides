@@ -12,13 +12,15 @@ import { shownCents } from '@/lib/shown'
 import { supabase } from '@/lib/supabase'
 import { useTheme } from '@/lib/theme'
 import { loadEarnings, loadTrip } from 'rides-native/driverDesk'
-import { formatCents, formatPickupAt, teslaFleetNotice, type DriverCard } from 'rides-native/tripTags'
+import { formatCents, formatPickupAt, comfortFleetNotice, type DriverCard } from 'rides-native/tripTags'
 import { ORANGE, PURPLE } from 'rides-native/places.js'
+import { TripThread } from 'rides-native/TripThread.jsx'
 
 export default function TripDetailsScreen() {
   const router = useRouter()
-  const params = useLocalSearchParams<{ id?: string }>()
+  const params = useLocalSearchParams<{ id?: string; lost?: string }>()
   const id = oneParam(params.id)
+  const lost = oneParam(params.lost) === '1'
   const { user } = useAuth()
   const { colors, scheme, earningsPrivate } = useTheme()
   const [trip, setTrip] = useState<DriverCard | null>(null)
@@ -53,7 +55,7 @@ export default function TripDetailsScreen() {
     trip?.dropoffLat != null && trip.dropoffLng != null ? { latitude: trip.dropoffLat, longitude: trip.dropoffLng } : null,
   )
   const when = trip?.pickupAt ? formatPickupAt(trip.pickupAt) : 'Time not recorded'
-  const teslaNotice = teslaFleetNotice(Boolean(trip?.teslaStub))
+  const comfortNotice = comfortFleetNotice(Boolean(trip?.comfortStub))
 
   return (
     <StackPage
@@ -101,8 +103,8 @@ export default function TripDetailsScreen() {
             <Text style={{ color: colors.ink }}>{trip.pickupLabel}</Text>
             <Text style={{ color: colors.ink }}>{trip.dropoffLabel}</Text>
           </Card>
-          {teslaNotice ? (
-            <Text style={{ color: colors.inkSecondary, lineHeight: 20 }}>{teslaNotice}</Text>
+          {comfortNotice ? (
+            <Text style={{ color: colors.inkSecondary, lineHeight: 20 }}>{comfortNotice}</Text>
           ) : null}
           {tip != null ? (
             <Text style={{ color: colors.title, fontWeight: '800' }}>
@@ -113,6 +115,9 @@ export default function TripDetailsScreen() {
           )}
           <Text style={{ color: colors.inkSecondary }}>Thanks notes are not sent from the driver app yet.</Text>
           <FarePanel card={trip} />
+          {user ? (
+            <TripThread supabase={supabase} tripId={trip.id} userId={user.id} colors={colors} promptLostItem={lost} />
+          ) : null}
           <Primary label="Open live trip" onPress={() => router.push({ pathname: '/trip', params: { id: trip.id } })} tone="purple" />
           {trip.status === 'completed' ? (
             <Primary label="Rate your rider" onPress={() => router.push({ pathname: '/rate', params: { trip: trip.id } })} />

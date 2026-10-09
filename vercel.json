@@ -145,6 +145,14 @@
     {
       "path": "/api/driver-payouts",
       "schedule": "0 12 * * *"
+    },
+    {
+      "path": "/api/weekly-coupon?slot=edt",
+      "schedule": "0 16 * * 5"
+    },
+    {
+      "path": "/api/weekly-coupon?slot=est",
+      "schedule": "0 17 * * 5"
     }
   ]
 }

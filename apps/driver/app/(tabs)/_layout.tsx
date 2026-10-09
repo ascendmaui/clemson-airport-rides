@@ -13,6 +13,11 @@ export default function DriverTabs() {
         tabBarStyle: {
           backgroundColor: colors.tabBar,
           borderTopColor: colors.border,
+          shadowColor: colors.shadow,
+          shadowOpacity: 0.08,
+          shadowRadius: 12,
+          shadowOffset: { width: 0, height: -4 },
+          elevation: 8,
         },
         tabBarLabelStyle: { fontWeight: '700', fontSize: 11 },
       }}
@@ -21,35 +26,35 @@ export default function DriverTabs() {
         name="index"
         options={{
           title: 'Home',
-          tabBarIcon: ({ color, size }: { color: string; size: number }) => <Ionicons name="home" color={color} size={size} />,
+          tabBarIcon: ({ color, size }) => <Ionicons name="home" color={color} size={size} />,
         }}
       />
       <Tabs.Screen
         name="discover"
         options={{
           title: 'Discover',
-          tabBarIcon: ({ color, size }: { color: string; size: number }) => <Ionicons name="compass" color={color} size={size} />,
+          tabBarIcon: ({ color, size }) => <Ionicons name="compass" color={color} size={size} />,
         }}
       />
       <Tabs.Screen
         name="earnings"
         options={{
           title: 'Earnings',
-          tabBarIcon: ({ color, size }: { color: string; size: number }) => <Ionicons name="cash" color={color} size={size} />,
+          tabBarIcon: ({ color, size }) => <Ionicons name="cash" color={color} size={size} />,
         }}
       />
       <Tabs.Screen
         name="inbox"
         options={{
           title: 'Inbox',
-          tabBarIcon: ({ color, size }: { color: string; size: number }) => <Ionicons name="mail" color={color} size={size} />,
+          tabBarIcon: ({ color, size }) => <Ionicons name="mail" color={color} size={size} />,
         }}
       />
       <Tabs.Screen
         name="menu"
         options={{
           title: 'Menu',
-          tabBarIcon: ({ color, size }: { color: string; size: number }) => <Ionicons name="menu" color={color} size={size} />,
+          tabBarIcon: ({ color, size }) => <Ionicons name="menu" color={color} size={size} />,
         }}
       />
     </Tabs>

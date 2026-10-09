@@ -41,6 +41,7 @@ export function getHashRoute() {
   }
   if (path === 'profile' && segments[1] && !params.id) params.id = segments[1]
   if (path === 'rate' && segments[1] && !params.trip) params.trip = segments[1]
+  if (path === 'tip' && segments[1] && !params.trip) params.trip = segments[1]
   if (path === 'account' && segments[1] && !params.tab) {
     params.tab = decodeURIComponent(segments[1])
   }

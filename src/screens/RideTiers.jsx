@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { CampusMap, STADIUM } from '../components/CampusMap'
 import { TierRow } from '../components/TierRow'
 import { PrimaryButton } from '../components/PrimaryButton'
@@ -7,26 +7,39 @@ import { navigate } from '../lib/navigation'
 import { SignInToBookModal, useRequireAuthForAction } from '../components/SignInToBookModal'
 import { SurgeBadge } from '../components/SurgeBadge'
 import { GameDayStatus } from '../components/GameDayStatus'
-import { quoteWithSurge } from '../lib/pricing'
+import { fetchRideQuote } from '../lib/rideBilling'
 import { useGameDayNotice } from '../lib/useGameDayNotice'
 import { useStudentStatus } from '../lib/useStudentStatus'
-import { displayTierPrice, studentSurfaceCopy } from '../../packages/rides-native/riderMoney.js'
-import { TESLA_FLEET_NOTICE } from '../../packages/rides-native/tripTags.js'
+import { studentSurfaceCopy } from '../../packages/rides-native/riderMoney.js'
+import { bookableRideTiers } from '../../packages/rides-native/places.js'
+import { useRideOptions } from '../lib/useRideOptions'
+import { isOfferedRideTier, NO_DRIVERS_AVAILABLE_COPY, SCHEDULE_AHEAD_LABEL } from '../../shared/rideOptions.js'
 
-const TIERS = [
-  { id: 'standard', name: 'Standard', icon: '🚗', eta: '4 min', meta: '4 seats', price: 18.5 },
-  { id: 'wait', name: 'Wait & Save', icon: '⏱️', eta: '12 min', meta: 'Save ~20%', price: 14.2 },
-  { id: 'comfort', name: 'Extra Comfort', icon: '✨', eta: '6 min', meta: 'Newer cars', price: 23.0 },
-  { id: 'xl', name: 'XL', icon: '🚐', eta: '8 min', meta: '6 seats', price: 28.75 },
-  { id: 'pet', name: 'Pet', icon: '🐶', eta: '9 min', meta: 'Pet-friendly', price: 21.0 },
-  { id: 'tesla', name: 'Tesla Model 3', icon: '⚡', eta: '7 min', meta: 'Clemson fleet · a driver is at the wheel', price: 36.0, premium: true, badge: 'FLEET' },
-]
-
-export function RideTiers({ dest = '1900 GSP Dr' }) {
-  const [selected, setSelected] = useState(TIERS[0])
+export function RideTiers({
+  dest = '1900 GSP Dr',
+  pickup = '',
+  pickupLat = '',
+  pickupLng = '',
+  destLat = '',
+  destLng = '',
+  billing = '',
+  tier: initialTier = '',
+  passengers: initialPassengers = '',
+}) {
+  const rideOptions = useRideOptions()
+  const availableIds = rideOptions?.availableTierIds || []
+  const tiers = rideOptions ? bookableRideTiers().filter((tier) => availableIds.includes(tier.id)) : []
+  const presetTier = isOfferedRideTier(initialTier) ? String(initialTier).trim().toLowerCase() : ''
+  const [selected, setSelected] = useState(null)
+  const [seats, setSeats] = useState(() => {
+    const n = Math.round(Number(initialPassengers))
+    return n === 2 ? 2 : 1
+  })
   const [upsell, setUpsell] = useState(null)
   const [promptOpen, setPromptOpen] = useState(false)
-  const [surge, setSurge] = useState(null)
+  const [quote, setQuote] = useState(null)
+  const [quoteError, setQuoteError] = useState(null)
+  const userPickedTier = useRef(false)
   const { runOrPrompt } = useRequireAuthForAction()
   const student = useStudentStatus()
   const studentOffer = studentSurfaceCopy(student, 'tiers')
@@ -34,39 +47,68 @@ export function RideTiers({ dest = '1900 GSP Dr' }) {
 
   useEffect(() => {
     let alive = true
-    quoteWithSurge({ miles: 3, minutes: 10, airport: false, isStudent: student.verified })
-      .then((q) => { if (alive) setSurge(q.surge) })
-      .catch(() => {})
+    setQuote(null)
+    setQuoteError(null)
+    fetchRideQuote({
+      pickupLabel: pickup,
+      pickupLat,
+      pickupLng,
+      dest,
+      destLat,
+      destLng,
+    })
+      .then((data) => { if (alive) setQuote(data) })
+      .catch((err) => { if (alive) setQuoteError(err?.message || 'Fare unavailable') })
     return () => { alive = false }
-  }, [student.verified])
+  }, [pickup, pickupLat, pickupLng, dest, destLat, destLng])
 
-  const surgeMul = surge?.multiplier > 1 ? surge.multiplier : 1
+  const quotedTier = (id) => (quote?.tiers || []).find((row) => row.id === id) || null
+  const standardFare = quotedTier('standard')?.fareCents
+  const comfortFare = quotedTier('comfort')?.fareCents
+  const upgradeCents = standardFare != null && comfortFare != null ? comfortFare - standardFare : 0
+
+  useEffect(() => {
+    if (!tiers.length) {
+      setSelected(null)
+      return
+    }
+    if (userPickedTier.current && selected && tiers.some((tier) => tier.id === selected.id)) return
+    if (presetTier && tiers.some((tier) => tier.id === presetTier)) {
+      userPickedTier.current = true
+      const preset = tiers.find((tier) => tier.id === presetTier)
+      if (!selected || selected.id !== preset.id) setSelected(preset)
+      return
+    }
+    const preferredId = (quote?.preferredCarTypes || []).find((id) => tiers.some((tier) => tier.id === id))
+    const next = tiers.find((tier) => tier.id === preferredId) || tiers[0]
+    if (!selected || selected.id !== next.id) setSelected(next)
+  }, [tiers, selected, quote, presetTier])
 
   const onSelectTier = (tier) => {
+    userPickedTier.current = true
     setSelected(tier)
   }
 
   const openDrivers = (tierId) => {
-    const row = TIERS.find((tier) => tier.id === tierId) || selected
-    const quoted = displayTierPrice(row.price, {
-      isStudent: student.verified,
-      tier: row.id,
-      surgeMultiplier: surgeMul,
-    })
+    const row = tiers.find((tier) => tier.id === tierId) || selected
+    if (!row) return
     navigate('pick-driver', {
       dest,
+      destLat,
+      destLng,
+      pickup,
+      pickupLat,
+      pickupLng,
       tier: row.id,
-      listCents: String(quoted.fareCents + quoted.discountCents),
+      ...(row.id === 'carpool' ? { passengers: String(seats) } : {}),
+      ...(billing ? { billing } : {}),
     })
   }
 
   const proceedRequest = () => {
-    if (selected.id === 'standard') {
+    if (!selected) return
+    if (selected.id === 'standard' && upgradeCents > 0 && tiers.some((tier) => tier.id === 'comfort')) {
       setUpsell('comfort')
-      return
-    }
-    if (selected.id === 'comfort') {
-      setUpsell('tesla')
       return
     }
     openDrivers(selected.id)
@@ -76,14 +118,14 @@ export function RideTiers({ dest = '1900 GSP Dr' }) {
     runOrPrompt(proceedRequest, {
       setPromptOpen,
       nextPath: 'tiers',
-      nextParams: { dest },
+      nextParams: { dest, destLat, destLng, pickup, pickupLat, pickupLng, ...(billing ? { billing } : {}) },
     })
   }
 
   return (
     <div className="fade-in" style={{ display: 'flex', flexDirection: 'column', height: '100%', background: 'transparent' }}>
       <div style={{ padding: '12px 16px 0' }}>
-        <button type="button" className="pressable glass-pill" onClick={() => navigate('confirm', { dest })} style={{ fontSize: 20, marginBottom: 8, width: 40, height: 40, borderRadius: 12 }}>←</button>
+        <button type="button" className="pressable glass-pill nav-back-btn" aria-label="Back to pickup confirmation" onClick={() => navigate('confirm', { dest, destLat, destLng, pickup, pickupLat, pickupLng, ...(billing ? { billing } : {}) })} style={{ marginBottom: 8 }}>←</button>
         <div className="glass-panel" style={{ borderRadius: 16, overflow: 'hidden', padding: 4 }}>
           <CampusMap
             height={140}
@@ -116,8 +158,13 @@ export function RideTiers({ dest = '1900 GSP Dr' }) {
           {studentOffer.detail}
         </button>
         <div style={{ marginTop: 8 }}>
-          <SurgeBadge surge={surge} />
+          <SurgeBadge surge={quote?.surge} />
         </div>
+        {quote?.tigerPassApplied ? (
+          <p style={{ marginTop: 8, fontSize: 13, fontWeight: 700, color: '#522D80' }}>
+            {quote.tigerPassName} · {quote.tigerPassDiscountBps / 100}% off this fare
+          </p>
+        ) : null}
         <div style={{ marginTop: 8 }}>
           <GameDayStatus notice={game.notice} ready={game.ready} compact />
         </div>
@@ -139,38 +186,82 @@ export function RideTiers({ dest = '1900 GSP Dr' }) {
       >
         <div className="sheet-handle" />
         <div style={{ flex: 1 }}>
-          {TIERS.map((t) => {
-            const quoted = displayTierPrice(t.price, {
-              isStudent: student.verified,
-              tier: t.id,
-              surgeMultiplier: surgeMul,
-            })
+          {quoteError && (
+            <p role="alert" style={{ color: 'var(--danger, #b00020)', fontSize: 13, fontWeight: 700, margin: '8px 8px 0' }}>
+              {quoteError}
+            </p>
+          )}
+          {rideOptions && tiers.length === 0 ? (
+            <div style={{ padding: '12px 8px' }}>
+              <p style={{ fontWeight: 800, color: '#522D80' }}>{rideOptions.emptyMessage || NO_DRIVERS_AVAILABLE_COPY}</p>
+              <button type="button" className="pressable" onClick={() => navigate('schedule')} style={{ marginTop: 8, fontWeight: 800, color: '#F56600' }}>
+                {SCHEDULE_AHEAD_LABEL}
+              </button>
+            </div>
+          ) : null}
+          {tiers.map((t) => {
+            const row = quotedTier(t.id)
+            const sameAsStandard = t.id === 'wait' && row && standardFare != null && row.fareCents === standardFare
+            const savedPercent = (t.id === 'wait' || t.id === 'carpool') && row && standardFare > 0 && row.fareCents < standardFare
+              ? Math.round((1 - row.fareCents / standardFare) * 100)
+              : 0
+            const studentNote = row?.discountCents > 0 ? 'Clemson student · 10% off Standard' : ''
+            const meta = [
+              t.id === 'carpool'
+                ? (savedPercent > 0 ? `Save ${savedPercent}% per seat` : 'Per seat')
+                : sameAsStandard ? '4 seats' : savedPercent > 0 ? `Save ${savedPercent}%` : t.meta,
+              studentNote,
+            ].filter(Boolean).join(' · ')
             return (
               <TierRow
                 key={t.id}
                 tier={{
                   ...t,
-                  price: quoted.price,
-                  meta: quoted.label ? `${t.meta} · ${quoted.label}` : t.meta,
+                  price: row ? row.fareCents / 100 : null,
+                  meta,
                 }}
-                selected={selected.id === t.id}
+                selected={selected?.id === t.id}
                 onSelect={onSelectTier}
               />
             )
           })}
         </div>
         <div style={{ padding: '12px 8px 0' }}>
-          {selected.id === 'tesla' && (
-            <p style={{ margin: '0 8px 10px', fontSize: 13, lineHeight: 1.4, color: '#522D80', fontWeight: 650 }}>
-              {TESLA_FLEET_NOTICE}
+          {selected?.id === 'carpool' ? (
+            <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
+              {[1, 2].map((count) => (
+                <button
+                  key={count}
+                  type="button"
+                  className="pressable"
+                  aria-pressed={seats === count}
+                  onClick={() => setSeats(count)}
+                  style={{
+                    flex: 1,
+                    minHeight: 44,
+                    borderRadius: 12,
+                    fontWeight: 800,
+                    border: seats === count ? '2px solid #F56600' : '1px solid rgba(82,45,128,0.25)',
+                    background: seats === count ? 'rgba(245,102,0,0.12)' : 'transparent',
+                  }}
+                >
+                  {count === 1 ? '1 seat' : '2 seats'}
+                </button>
+              ))}
+            </div>
+          ) : null}
+          {selected?.id === 'carpool' && quotedTier('carpool')?.fareCents ? (
+            <p style={{ fontSize: 13, fontWeight: 700, margin: '0 0 8px' }}>
+              {seats === 1 ? '1 seat' : '2 seats'} · ${((quotedTier('carpool').fareCents * seats) / 100).toFixed(2)}
             </p>
-          )}
+          ) : null}
           <PrimaryButton
             className="primary-cta"
-            variant={selected.premium ? 'purple' : 'orange'}
+            variant="orange"
             onClick={onConfirm}
+            disabled={!quote || !selected}
           >
-            {selected.id === 'tesla' ? 'Request Tesla Model 3' : `Select ${selected.name}`}
+            {!selected ? 'Choose a ride' : !quote ? 'Loading fare…' : `Select ${selected.name}`}
           </PrimaryButton>
         </div>
       </div>
@@ -178,26 +269,13 @@ export function RideTiers({ dest = '1900 GSP Dr' }) {
       <UpsellModal
         open={upsell === 'comfort'}
         variant="comfort"
-        upgradePrice={4.5}
+        upgradePrice={upgradeCents / 100}
         onClose={() => {
           setUpsell(null)
           openDrivers(selected.id)
         }}
         onUpgrade={() => {
-          setSelected(TIERS.find((t) => t.id === 'comfort'))
-          setUpsell(null)
-        }}
-      />
-      <UpsellModal
-        open={upsell === 'tesla'}
-        variant="tesla"
-        upgradePrice={13.0}
-        onClose={() => {
-          setUpsell(null)
-          openDrivers(selected.id)
-        }}
-        onUpgrade={() => {
-          setSelected(TIERS.find((t) => t.id === 'tesla'))
+          setSelected(tiers.find((t) => t.id === 'comfort') || selected)
           setUpsell(null)
         }}
       />

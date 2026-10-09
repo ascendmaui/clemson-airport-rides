@@ -1,8 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { GoogleMap, useJsApiLoader, Marker, Circle, Polyline } from '@react-google-maps/api'
+import { GoogleMap, useJsApiLoader, Marker, Circle, Polygon, Polyline, OverlayView } from '@react-google-maps/api'
 import { downtownNow, heatColor } from '../lib/downtownHeat'
 import { MAPS_LOADER_ID, MAP_LIBRARIES, mapsLoaderOptions } from '../lib/googleMapsLoader'
-import { fetchRideDemand, MAP_TYPES, loadMapType, saveMapType } from '../lib/rideDemand'
+import { googleMapStyle } from '../../packages/rides-native/googleMapChrome.js'
+import { lerpHeading } from '../../packages/rides-native/roadFollow.js'
+import { fetchRideDemand, loadMapType, saveMapType } from '../lib/rideDemand'
+import { MapTypeSelect } from './MapTypeSelect'
+import { SIMULATED_FLEET_BADGE, busyCarSvg } from '../../packages/rides-native/simulatedDrivers.js'
+import { fetchTigerHeatMap } from '../../packages/rides-native/tigerHeatClient.js'
+import { DriverProfileCard, GoogleFleetMotion, PreviewFleetMotion } from './FleetMotion.jsx'
 
 export const CLEMSON = [34.6784, -82.8397]
 export const STADIUM = [34.6788, -82.8430]
@@ -48,6 +54,20 @@ function numberedPinSvg(color, badge) {
   }
 }
 
+function busyCarIcon(heading) {
+  const w = 48
+  const h = 56
+  return {
+    url: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(busyCarSvg(heading))}`,
+    scaledSize: typeof window !== 'undefined' && window.google?.maps
+      ? new window.google.maps.Size(w, h)
+      : undefined,
+    anchor: typeof window !== 'undefined' && window.google?.maps
+      ? new window.google.maps.Point(24, 18)
+      : undefined,
+  }
+}
+
 function pinSvg(color, size = 18) {
   const s = size
   return {
@@ -65,42 +85,152 @@ function pinSvg(color, size = 18) {
   }
 }
 
-function useAnimatedPosition(target, enabled) {
-  const [pos, setPos] = useState(target)
-  const current = useRef(target)
+function useColorSchemeDark() {
+  const [dark, setDark] = useState(() => (
+    typeof window !== 'undefined' && Boolean(window.matchMedia?.('(prefers-color-scheme: dark)').matches)
+  ))
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.matchMedia) return undefined
+    const media = window.matchMedia('(prefers-color-scheme: dark)')
+    const apply = () => setDark(media.matches)
+    apply()
+    media.addEventListener('change', apply)
+    return () => media.removeEventListener('change', apply)
+  }, [])
+  return dark
+}
+
+function AnimatedDriverMarker({ target, heading, enabled }) {
+  const [pose, setPose] = useState(() => (
+    target
+      ? { lat: target.lat, lng: target.lng, heading: Number.isFinite(Number(heading)) ? Number(heading) : null }
+      : null
+  ))
+  const current = useRef(pose)
   const raf = useRef(0)
 
   useEffect(() => {
     if (!target) return undefined
-    if (!enabled || !current.current) {
-      current.current = target
-      setPos(target)
+    const from = current.current
+    const toHeading = Number.isFinite(Number(heading)) ? Number(heading) : from?.heading ?? null
+    if (!enabled || !from) {
+      const next = { lat: target.lat, lng: target.lng, heading: toHeading }
+      current.current = next
+      setPose(next)
       return undefined
     }
-    const from = current.current
-    const to = target
     const start = performance.now()
-    const dur = 800
+    const dur = 900
+    const fromHeading = from.heading
     cancelAnimationFrame(raf.current)
     const tick = (now) => {
       const t = Math.min(1, (now - start) / dur)
       const ease = 1 - (1 - t) ** 3
       const next = {
-        lat: from.lat + (to.lat - from.lat) * ease,
-        lng: from.lng + (to.lng - from.lng) * ease,
+        lat: from.lat + (target.lat - from.lat) * ease,
+        lng: from.lng + (target.lng - from.lng) * ease,
+        heading: lerpHeading(fromHeading, toHeading, ease),
       }
       current.current = next
-      setPos(next)
+      setPose(next)
       if (t < 1) raf.current = requestAnimationFrame(tick)
     }
     raf.current = requestAnimationFrame(tick)
     return () => cancelAnimationFrame(raf.current)
-  }, [target?.lat, target?.lng, enabled])
+  }, [target?.lat, target?.lng, heading, enabled])
 
-  return pos
+  const at = target ? (pose || target) : null
+  if (!at || !target) return null
+  const driverHeading = at.heading
+  const driverIcon = Number.isFinite(Number(driverHeading)) ? busyCarIcon(Number(driverHeading)) : pinSvg(ORANGE, 20)
+  return <Marker position={{ lat: at.lat, lng: at.lng }} icon={driverIcon} title="Driver" />
 }
 
-function FallbackMap({ wrapStyle, message, badge }) {
+function FleetBadge() {
+  return (
+    <div
+      role="note"
+      data-simulated-fleet="busy"
+      style={{
+        position: 'absolute',
+        right: 12,
+        bottom: 12,
+        zIndex: 3,
+        pointerEvents: 'none',
+        padding: '6px 10px',
+        borderRadius: 999,
+        background: '#522D80',
+        color: '#fff',
+        fontWeight: 800,
+        fontSize: 12,
+      }}
+    >
+      {SIMULATED_FLEET_BADGE}
+    </div>
+  )
+}
+
+function previewRoutePoints(route) {
+  const spots = (route || [])
+    .map((spot) => toLatLng(spot))
+    .filter((spot) => Number.isFinite(spot.lat) && Number.isFinite(spot.lng))
+  if (spots.length < 2) return []
+  const lats = spots.map((spot) => spot.lat)
+  const lngs = spots.map((spot) => spot.lng)
+  const minLat = Math.min(...lats)
+  const maxLat = Math.max(...lats)
+  const minLng = Math.min(...lngs)
+  const maxLng = Math.max(...lngs)
+  const latSpan = maxLat - minLat || 0.01
+  const lngSpan = maxLng - minLng || 0.01
+  return spots.map((spot) => ({
+    x: 14 + ((spot.lng - minLng) / lngSpan) * 72,
+    y: 86 - ((spot.lat - minLat) / latSpan) * 72,
+  }))
+}
+
+function FallbackRoute({ route }) {
+  const points = previewRoutePoints(route)
+  if (points.length < 2) return null
+  const d = points.map((spot, index) => `${index === 0 ? 'M' : 'L'} ${spot.x.toFixed(1)} ${spot.y.toFixed(1)}`).join(' ')
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 100 100"
+      preserveAspectRatio="none"
+      style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none' }}
+    >
+      <path d={d} fill="none" stroke="#F56600" strokeWidth="5" strokeLinecap="round" strokeLinejoin="round" opacity="0.35" />
+      <path d={d} fill="none" stroke="#522D80" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+function TigerHeatChip({ zone }) {
+  const preview = zone.preview || !zone.payable
+  return (
+    <div
+      data-tiger-heat={preview ? 'preview' : 'live'}
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 6,
+        margin: 4,
+        padding: '6px 10px',
+        borderRadius: 999,
+        background: preview ? '#522D80' : '#F56600',
+        color: '#fff',
+        border: '2px solid #522D80',
+        fontWeight: 800,
+        fontSize: 12,
+      }}
+    >
+      {zone.bonusLabel || 'Tiger Heat'}
+    </div>
+  )
+}
+
+function FallbackMap({ wrapStyle, message, badge, route = null, tigerZones = [] }) {
   return (
     <div
       style={{
@@ -114,6 +244,7 @@ function FallbackMap({ wrapStyle, message, badge }) {
         fontSize: 13,
       }}
     >
+      <FallbackRoute route={route} />
       {badge ? (
         <div style={{
           position: 'absolute',
@@ -133,6 +264,11 @@ function FallbackMap({ wrapStyle, message, badge }) {
       ) : null}
       {/* TODO: a live stadium ring on this preview needs Maps JavaScript billing (VITE_GOOGLE_MAPS_API_KEY). The zone and fare multiplier stay on the badge. */}
       <div>{message}</div>
+      {tigerZones.length ? (
+        <div style={{ position: 'absolute', left: 12, top: 12, right: 12, display: 'flex', flexWrap: 'wrap', justifyContent: 'flex-start' }}>
+          {tigerZones.map((zone) => <TigerHeatChip key={zone.id} zone={zone} />)}
+        </div>
+      ) : null}
     </div>
   )
 }
@@ -174,12 +310,15 @@ export function CampusMap({
   onPinMove,
   marker = STADIUM,
   driverPosition = null,
+  driverHeading = null,
   pickupPosition = null,
   dropoffPosition = null,
   selfPosition = null,
   animateDriver = false,
   gameDayLabel = null,
   stops = null,
+  showSimulatedFleet = false,
+  fitRoute = false,
 }) {
   const apiKey = (import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '').trim()
   const { isLoaded, loadError } = useJsApiLoader(mapsLoaderOptions(apiKey))
@@ -194,6 +333,7 @@ export function CampusMap({
           overflow: 'hidden',
           position: 'absolute',
           inset: 0,
+          zIndex: 0,
         }
 
   const mapCenter = useMemo(() => toLatLng(center), [center?.[0], center?.[1]])
@@ -202,7 +342,6 @@ export function CampusMap({
     () => (driverPosition ? toLatLng(driverPosition) : null),
     [driverPosition?.[0], driverPosition?.[1]],
   )
-  const animatedDriver = useAnimatedPosition(driverTarget, Boolean(animateDriver && driverTarget))
   const pickup = useMemo(
     () => (pickupPosition ? toLatLng(pickupPosition) : null),
     [pickupPosition?.[0], pickupPosition?.[1]],
@@ -216,7 +355,9 @@ export function CampusMap({
   const activeMapType = controlled ? mapTypeIdProp : internalMapType
   const resolvedMapType = activeMapType === 'satellite' || activeMapType === 'hybrid' ? activeMapType : 'roadmap'
   const useClemsonStyles = resolvedMapType === 'roadmap'
+  const preferDark = useColorSchemeDark()
   const [demand, setDemand] = useState(null)
+  const [tigerZones, setTigerZones] = useState([])
 
   const setMapType = useCallback((id) => {
     const next = id === 'satellite' || id === 'hybrid' ? id : 'roadmap'
@@ -250,6 +391,22 @@ export function CampusMap({
       cancelled = true
     }
   }, [showHeat, heatMode, heatWindow])
+
+  useEffect(() => {
+    if (!showHeat) {
+      setTigerZones([])
+      return undefined
+    }
+    let cancelled = false
+    fetchTigerHeatMap(heatWindow).then((result) => {
+      if (!cancelled) setTigerZones(result.zones || [])
+    }).catch(() => {
+      if (!cancelled) setTigerZones([])
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [showHeat, heatWindow])
 
   const heatSpots = useMemo(() => {
     if (!showHeat) return []
@@ -297,36 +454,60 @@ export function CampusMap({
   }, [areaCircles])
 
   const mapRef = useRef(null)
+  const [mapReady, setMapReady] = useState(null)
+  const [previewDriver, setPreviewDriver] = useState(null)
   const fittedKey = useRef('')
   const stopRef = useRef(stopMarkers)
   const driverRef = useRef(driverTarget)
+  const pickupRef = useRef(pickup)
+  const dropoffRef = useRef(dropoff)
+  const pathRef = useRef(path)
+  const fitRouteRef = useRef(fitRoute)
   stopRef.current = stopMarkers
   driverRef.current = driverTarget
+  pickupRef.current = pickup
+  dropoffRef.current = dropoff
+  pathRef.current = path
+  fitRouteRef.current = fitRoute
   const fitStopBounds = useCallback((map) => {
     const list = stopRef.current
-    if (!map || !list.length || typeof window === 'undefined' || !window.google?.maps) return
+    const fitting = fitRouteRef.current
+    const routePoints = fitting && Array.isArray(pathRef.current) ? pathRef.current : []
+    const pickupPoint = fitting ? pickupRef.current : null
+    const dropoffPoint = fitting ? dropoffRef.current : null
+    if (!map || typeof window === 'undefined' || !window.google?.maps) return
+    if (!list.length && routePoints.length < 2 && !pickupPoint && !dropoffPoint) return
     const driver = driverRef.current
-    const key = `${driver ? 'd' : 'x'}|${list.map((stop) => `${stop.lat.toFixed(5)},${stop.lng.toFixed(5)}`).join(';')}`
+    const end = routePoints.length ? routePoints[routePoints.length - 1] : null
+    const routeKey = end
+      ? `${Math.round(routePoints.length / 15)}:${end.lat.toFixed(3)},${end.lng.toFixed(3)}`
+      : 'noroute'
+    const driverKey = driver ? `${driver.lat.toFixed(2)},${driver.lng.toFixed(2)}` : 'x'
+    const placeKey = [
+      pickupPoint ? `${pickupPoint.lat.toFixed(4)},${pickupPoint.lng.toFixed(4)}` : '',
+      dropoffPoint ? `${dropoffPoint.lat.toFixed(4)},${dropoffPoint.lng.toFixed(4)}` : '',
+    ].join(';')
+    const key = `${driverKey}|${list.map((stop) => `${stop.lat.toFixed(5)},${stop.lng.toFixed(5)}`).join(';')}|${placeKey}|${routeKey}`
     if (fittedKey.current === key) return
     const bounds = new window.google.maps.LatLngBounds()
     for (const stop of list) bounds.extend({ lat: stop.lat, lng: stop.lng })
+    for (const spot of routePoints) bounds.extend({ lat: spot.lat, lng: spot.lng })
+    if (pickupPoint) bounds.extend(pickupPoint)
+    if (dropoffPoint) bounds.extend(dropoffPoint)
     if (driver) bounds.extend(driver)
-    map.fitBounds(bounds, 40)
+    map.fitBounds(bounds, routePoints.length > 1 || pickupPoint ? 48 : 40)
     fittedKey.current = key
   }, [])
   const onLoad = useCallback((map) => {
     mapRef.current = map
+    setMapReady(map)
     fitStopBounds(map)
   }, [fitStopBounds])
 
   useEffect(() => {
     fitStopBounds(mapRef.current)
-  }, [fitStopBounds, stopMarkers, driverTarget, isLoaded])
+  }, [fitStopBounds, stopMarkers, driverTarget, pickup, dropoff, isLoaded, path, fitRoute])
 
-  useEffect(() => {
-    if (!mapRef.current || !driverTarget || !animateDriver) return
-    mapRef.current.panTo(driverTarget)
-  }, [driverTarget?.lat, driverTarget?.lng, animateDriver])
   useEffect(() => {
     if (!mapRef.current || !isLoaded) return
     try {
@@ -338,30 +519,51 @@ export function CampusMap({
 
   if (!apiKey) {
     return (
-      <FallbackMap
-        wrapStyle={wrapStyle}
-        badge={gameDayLabel}
-        message="Map preview needs VITE_GOOGLE_MAPS_API_KEY (Maps JavaScript API)."
-      />
+      <div style={{ position: 'relative' }}>
+        <FallbackMap
+          wrapStyle={wrapStyle}
+          badge={gameDayLabel}
+          route={route}
+          tigerZones={showHeat ? tigerZones : []}
+          message="Map preview needs VITE_GOOGLE_MAPS_API_KEY (Maps JavaScript API)."
+        />
+        <PreviewFleetMotion enabled={showSimulatedFleet} onSelect={setPreviewDriver} />
+        <DriverProfileCard driver={previewDriver} onClose={() => setPreviewDriver(null)} />
+        {showSimulatedFleet ? <FleetBadge /> : null}
+      </div>
     )
   }
   if (loadError) {
-    return <FallbackMap wrapStyle={wrapStyle} badge={gameDayLabel} message="Google Maps failed to load. Check the API key / referrer." />
+    return (
+      <div style={{ position: 'relative' }}>
+        <FallbackMap wrapStyle={wrapStyle} badge={gameDayLabel} route={route} tigerZones={showHeat ? tigerZones : []} message="Google Maps failed to load. Check the API key / referrer." />
+        <PreviewFleetMotion enabled={showSimulatedFleet} onSelect={setPreviewDriver} />
+        <DriverProfileCard driver={previewDriver} onClose={() => setPreviewDriver(null)} />
+        {showSimulatedFleet ? <FleetBadge /> : null}
+      </div>
+    )
   }
   if (!isLoaded) {
-    return <FallbackMap wrapStyle={wrapStyle} badge={gameDayLabel} message="Loading map…" />
+    return (
+      <div style={{ position: 'relative' }}>
+        <FallbackMap wrapStyle={wrapStyle} badge={gameDayLabel} route={route} tigerZones={showHeat ? tigerZones : []} message="Loading map…" />
+        <PreviewFleetMotion enabled={showSimulatedFleet} onSelect={setPreviewDriver} />
+        <DriverProfileCard driver={previewDriver} onClose={() => setPreviewDriver(null)} />
+        {showSimulatedFleet ? <FleetBadge /> : null}
+      </div>
+    )
   }
 
   const orangeIcon = pinSvg(ORANGE, 18)
   const purpleIcon = pinSvg(PURPLE, 16)
-  const driverIcon = pinSvg(ORANGE, 20)
   const surgeHot = heatMode === 'surge'
+  const mapStyles = useClemsonStyles ? (preferDark ? googleMapStyle('dark') : CLEMSON_MAP_STYLES) : null
 
   return (
     <div style={wrapStyle} data-heat-fallback="circles" data-maps-loader={MAPS_LOADER_ID} data-map-type-control={showMapTypeControl ? 'dropdown' : undefined}>
       <GoogleMap
         mapContainerStyle={{ height: '100%', width: '100%' }}
-        center={animatedDriver && animateDriver ? animatedDriver : mapCenter}
+        center={mapCenter}
         zoom={zoom}
         onLoad={onLoad}
         mapTypeId={resolvedMapType}
@@ -369,7 +571,7 @@ export function CampusMap({
           disableDefaultUI: true,
           zoomControl: interactive,
           gestureHandling: interactive || dragPin ? 'greedy' : 'none',
-          styles: useClemsonStyles ? CLEMSON_MAP_STYLES : null,
+          styles: mapStyles,
           clickableIcons: false,
           fullscreenControl: false,
           mapTypeControl: false,
@@ -394,6 +596,32 @@ export function CampusMap({
             }}
           />
         ) : null}
+        {tigerZones.map((zone) => (
+          <Polygon
+            key={`tiger-${zone.id}`}
+            paths={(zone.polygon || []).map((point) => ({ lat: point.lat, lng: point.lng }))}
+            options={{
+              strokeColor: zone.strokeColor || PURPLE,
+              strokeOpacity: 0.95,
+              strokeWeight: 2,
+              fillColor: zone.fillColor || ORANGE,
+              fillOpacity: zone.preview ? 0.16 : 0.34,
+            }}
+          />
+        ))}
+        {tigerZones.map((zone) => (
+          <Polygon
+            key={`tiger-inner-${zone.id}`}
+            paths={(zone.innerPolygon || []).map((point) => ({ lat: point.lat, lng: point.lng }))}
+            options={{
+              strokeColor: ORANGE,
+              strokeOpacity: 0.7,
+              strokeWeight: 1,
+              fillColor: PURPLE,
+              fillOpacity: zone.preview ? 0.08 : 0.18,
+            }}
+          />
+        ))}
         {heatSpots.map((s) => (
           <Circle
             key={s.id}
@@ -421,7 +649,7 @@ export function CampusMap({
           />
         ))}
         {secondaryPath && (
-          <Polyline path={secondaryPath} options={{ strokeColor: ORANGE, strokeWeight: 4, strokeOpacity: 0.8 }} />
+          <Polyline path={secondaryPath} options={{ strokeColor: ORANGE, strokeWeight: 9, strokeOpacity: 0.35 }} />
         )}
         {path && (
           <Polyline path={path} options={{ strokeColor: PURPLE, strokeWeight: 5, strokeOpacity: 0.9 }} />
@@ -440,10 +668,36 @@ export function CampusMap({
           />
         ))}
         {self && <Marker position={self} icon={purpleIcon} title="You" />}
-        {(animatedDriver || driverTarget) && (
-          <Marker position={animatedDriver || driverTarget} icon={driverIcon} title="Driver" />
-        )}
+        <AnimatedDriverMarker target={driverTarget} heading={driverHeading} enabled={Boolean(animateDriver && driverTarget)} />
+        {tigerZones.map((zone) => (
+          <OverlayView
+            key={`tiger-label-${zone.id}`}
+            position={{ lat: zone.lat, lng: zone.lng }}
+            mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}
+          >
+            <div
+              data-tiger-heat={zone.preview ? 'preview' : 'live'}
+              style={{
+                transform: 'translate(-50%, -50%)',
+                padding: '6px 10px',
+                borderRadius: 999,
+                background: zone.preview ? '#522D80' : '#F56600',
+                color: '#fff',
+                border: '2px solid #522D80',
+                fontWeight: 800,
+                fontSize: 12,
+                whiteSpace: 'nowrap',
+                boxShadow: '0 2px 8px rgba(82,45,128,0.25)',
+              }}
+            >
+              {zone.bonusLabel}
+            </div>
+          </OverlayView>
+        ))}
       </GoogleMap>
+      <GoogleFleetMotion map={mapReady} enabled={showSimulatedFleet} onSelect={setPreviewDriver} />
+      <DriverProfileCard driver={previewDriver} onClose={() => setPreviewDriver(null)} />
+      {showSimulatedFleet ? <FleetBadge /> : null}
       {gameDayLabel ? (
         <div style={{
           position: 'absolute',
@@ -467,58 +721,12 @@ export function CampusMap({
           data-map-type-control="dropdown"
           style={{
             position: 'absolute',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            zIndex: 1000,
-            pointerEvents: 'none',
+            top: 10,
+            right: 10,
+            zIndex: 2,
           }}
         >
-          <label
-            style={{
-              position: 'absolute',
-              top: 10,
-              right: 10,
-              display: 'inline-flex',
-              alignItems: 'center',
-              margin: 0,
-              pointerEvents: 'auto',
-            }}
-          >
-            <span className="sr-only" style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0 0 0 0)' }}>
-              Map type
-            </span>
-            <select
-              aria-label="Map type"
-              value={resolvedMapType}
-              onChange={(e) => setMapType(e.target.value)}
-              style={{
-                appearance: 'none',
-                WebkitAppearance: 'none',
-                MozAppearance: 'none',
-                fontSize: 12,
-                fontWeight: 700,
-                letterSpacing: 0.2,
-                padding: '7px 30px 7px 10px',
-                borderRadius: 12,
-                border: '1px solid rgba(82,45,128,0.35)',
-                background:
-                  '#fff url("data:image/svg+xml;charset=UTF-8,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 width=%2712%27 height=%2712%27 viewBox=%270 0 12 12%27%3E%3Cpath fill=%27%23522D80%27 d=%27M3 4.5L6 8l3-3.5%27/%3E%3C/svg%3E") no-repeat right 10px center',
-                color: '#522D80',
-                boxShadow: '0 2px 10px rgba(11,18,32,0.22)',
-                cursor: 'pointer',
-                minWidth: 108,
-                maxWidth: 148,
-              }}
-            >
-              {MAP_TYPES.map((mt) => (
-                <option key={mt.id} value={mt.id}>
-                  {mt.label}
-                </option>
-              ))}
-            </select>
-          </label>
+          <MapTypeSelect value={resolvedMapType} onChange={setMapType} />
         </div>
       ) : null}
     </div>

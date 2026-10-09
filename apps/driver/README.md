@@ -27,7 +27,7 @@ npx expo start
 Optional API base (defaults to production):
 
 ```bash
-npx eas-cli env:create --name EXPO_PUBLIC_API_BASE --value https://clemson-rides.vercel.app --environment production --visibility plaintext
+npx eas-cli env:create --name EXPO_PUBLIC_API_BASE --value https://clemsonrides.com --environment production --visibility plaintext
 ```
 
 ## Driver shell
@@ -49,9 +49,9 @@ Same Supabase tables and `/api/driver` routes as the web app. The rider app is a
 - Queue with live trip updates. Chosen-driver requests can be declined (canceled). Open matches are released back to searching. Student, game-day, and weekend filters stay on the queue.
 - Scheduled weekend and party rides have their own section. Accept calls `accept_scheduled_trip`. “Not this one” only hides that card on this phone.
 - Live trip map: your pin, pickup, drop-off, and the rider pin when `location_shares` / `location_points` (or trip metadata) has a fix. Apple Maps and Google Maps open directions for the current stop.
-- Stripe stays on the existing settle route. The fare panel shows the 25% deposit, the remainder collected on complete, the 80/20 split, and carpool share lines. Apple Pay is the rider’s wallet charged off-session. This phone does not present a PaymentSheet.
+- Stripe stays on the existing settle route. The fare panel shows the fare, any amount already paid, the amount charged at trip end, the 80/20 split, and carpool share lines. Apple Pay is the rider’s wallet charged off-session. This phone does not present a PaymentSheet.
 - Earnings reads `/api/driver?action=earnings` and `/api/driver?action=payouts`: today, this week, pending balance, paid out, deposit lines, and trip history.
-- Tesla Model 3 is a profile toggle. `autonomous_capable` stays false. “Request a self-driving trip” does not dispatch a car.
+- Extra Comfort is a profile toggle on the vehicle. Showing the badge lists that car for Extra Comfort trips.
 - Expo notifications register a push token (best effort on `driver_status.expo_push_token` or `driver_push_tokens`) and schedule a local alert when a new request arrives while the app is running. A closed app gets a remote push only after a sender uses that token.
 - Haptics plus a short chime from `expo-audio`. Playback is silent-mode aware (`playsInSilentMode: false`).
 
@@ -63,8 +63,8 @@ Not in this build: in-trip chat, a driver-side Apple Pay sheet, and admin review
 2. Finish or resume onboarding. Confirm the progress percent moves, saved name and vehicle refill, and a saved W-9 shows only the last four digits.
 3. With an approved account, go online. Confirm the “Riders can pick you” card lists name, vehicle, and seats, then open the rider app Pick a driver and confirm this driver is listed.
 4. From the rider app, request that driver. The driver app should haptic, chime (unless the phone is on silent), and show a notification. Accept and open the live trip.
-5. On the live trip, confirm pickup and drop-off pins. If the rider shares location, their pin appears. Tap Apple Maps and Google Maps and confirm each opens directions. Step Arriving → I'm here → Start → Complete. Complete should call settle and show the collection line, or the API error if payment is still required.
+5. On the live trip, confirm pickup and drop-off pins. If the rider shares location, their pin appears. Tap Apple Maps and Google Maps and confirm each opens directions. Step Arriving → Arrived → Start → Complete. Complete should call settle and show the collection line, or the API error if payment is still required.
 6. Open Queue filters for Student, Game day, and Weekend. Accept a scheduled ride if one is open. Decline an open match and confirm it is not canceled for every driver.
-7. Open Tesla fleet, show the badge, and tap Request a self-driving trip. Confirm the stub message and that no trip was created.
+7. Open Extra Comfort, show the badge, and confirm the listing saves. Removing it clears the badge.
 8. Open Earnings. Today, this week, balance, and paid out use real rows. A missing service role should show the API error, not a fake paid deposit.
 9. Open Account and confirm the notification line. A simulator may say the push token is unavailable; the in-app alert path still runs on a new request.

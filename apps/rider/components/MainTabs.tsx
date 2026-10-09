@@ -47,8 +47,10 @@ export function MainTabs({ active }: { active: 'schedule' | 'friends' | 'account
             }}
             style={styles.item}
           >
-            <Ionicons name={tab.icon} size={22} color={color} />
-            <Text style={[styles.label, { color }]}>{tab.label}</Text>
+            <View style={[styles.iconWrap, on && styles.iconOn]}>
+              <Ionicons name={tab.icon} size={21} color={color} />
+            </View>
+            <Text style={[styles.label, on && styles.labelOn, { color }]}>{tab.label}</Text>
           </Pressable>
         )
       })}
@@ -64,8 +66,18 @@ function makeStyles(colors: Palette) {
       borderTopWidth: 1,
       borderTopColor: colors.border,
       paddingTop: 8,
+      paddingHorizontal: 6,
     },
-    item: { flex: 1, alignItems: 'center' as const, gap: 2 },
-    label: { fontSize: 11, fontWeight: '700' as const },
+    item: { flex: 1, alignItems: 'center' as const, gap: 2, paddingVertical: 2 },
+    iconWrap: {
+      width: 48,
+      height: 28,
+      borderRadius: 14,
+      alignItems: 'center' as const,
+      justifyContent: 'center' as const,
+    },
+    iconOn: { backgroundColor: colors.orangeSoft },
+    label: { fontSize: 11, fontWeight: '600' as const, letterSpacing: 0.1 },
+    labelOn: { fontWeight: '700' as const },
   }
 }

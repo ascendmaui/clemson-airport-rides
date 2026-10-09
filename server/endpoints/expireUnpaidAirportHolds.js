@@ -26,6 +26,7 @@
  * Responses:
  * - 200 { ok, scanned, expired, released, skipped, errors, wouldExpire, dryRun, results }
  * - 401 when the caller is not authorized
+ * - 403 when DISABLE_CRON_ENDPOINTS is set. Dry-run is included unless ALLOW_STAGING_DRY_RUN=1.
  * - 405 for any method other than GET or POST (this route is not a browser API)
  * - 503 when the Supabase service role client is missing
  * - 500 { error: "Could not expire unpaid holds" }; the detail is logged server-side
@@ -33,6 +34,7 @@
  */
 import { timingSafeEqual } from 'node:crypto'
 import { admin, stripeClient, stripeOk } from '../friendRideLib.js'
+import { stagingCronBlock } from '../cronGuard.js'
 import { releaseExpiredUnpaidAirportHolds } from '../abandonedCheckout.js'
 
 function headerValue(headers, name) {
@@ -49,9 +51,9 @@ function headerValue(headers, name) {
 }
 
 function bearerToken(header) {
-  const match = /^Bearer\s+(\S+)\s*$/i.exec(String(header || '').trim())
+  const match = /^Bearer\s+(\S.*?)\s*$/i.exec(String(header || '').trim())
   if (!match) return ''
-  return match[1].replace(/^["']|["']$/g, '')
+  return match[1].replace(/^["']|["']$/g, '').trim()
 }
 
 /** Constant-time compare. Different lengths return false without throwing. */
@@ -62,8 +64,8 @@ function secretsEqual(presented, expected) {
   return timingSafeEqual(left, right)
 }
 
-export function holdTtlCronAuthorized(req, env = process.env) {
-  const secret = String(env?.CRON_SECRET || '').trim()
+export function holdTtlCronAuthorized(req, env = process.env, overrides = {}) {
+  const secret = String(overrides?.cronSecret || env?.CRON_SECRET || '').trim()
   const usable = Boolean(secret) && !secret.includes('placeholder')
   const headers = req?.headers || {}
   if (usable && secretsEqual(bearerToken(headerValue(headers, 'authorization')), secret)) return true
@@ -86,6 +88,12 @@ function dryRunRequested(req) {
     const value = Array.isArray(raw) ? raw[0] : raw
     if (flagOn(value)) return true
   }
+  const body = req?.body
+  if (body && typeof body === 'object') {
+    const raw = body.dry_run ?? body.dryRun
+    const value = Array.isArray(raw) ? raw[0] : raw
+    if (flagOn(value)) return true
+  }
   const url = String(req?.url || '')
   const qIndex = url.indexOf('?')
   if (qIndex === -1) return false
@@ -93,30 +101,106 @@ function dryRunRequested(req) {
   return flagOn(params.get('dry_run') ?? params.get('dryRun'))
 }
 
+export const MIN_UNPAID_HOLD_TTL_MS = 15 * 60 * 1000 // 15 minutes minimum safety floor
+export const MAX_UNPAID_HOLD_TTL_MS = 7 * 24 * 60 * 60 * 1000 // 7 days maximum ceiling
+
+export function parseHoldSweepLimit(req) {
+  const query = req?.query
+  let raw = query && typeof query === 'object' ? query.limit : undefined
+  if (raw === undefined && req?.body && typeof req.body === 'object') {
+    raw = req.body.limit
+  }
+  if (raw === undefined) {
+    const url = String(req?.url || '')
+    const qIndex = url.indexOf('?')
+    if (qIndex !== -1) {
+      const params = new URLSearchParams(url.slice(qIndex + 1))
+      raw = params.get('limit')
+    }
+  }
+  const value = Array.isArray(raw) ? raw[0] : raw
+  const n = parseInt(String(value ?? ''), 10)
+  if (!Number.isFinite(n) || n <= 0) return 40
+  return Math.min(40, n)
+}
+
+export function parseHoldSweepTtlMs(req) {
+  const query = req?.query
+  let rawMs = query && typeof query === 'object' ? (query.ttl_ms ?? query.ttlMs) : undefined
+  let rawSec = query && typeof query === 'object' ? (query.ttl_seconds ?? query.ttlSeconds) : undefined
+  if (rawMs === undefined && rawSec === undefined && req?.body && typeof req.body === 'object') {
+    rawMs = req.body.ttl_ms ?? req.body.ttlMs
+    rawSec = req.body.ttl_seconds ?? req.body.ttlSeconds
+  }
+  if (rawMs === undefined && rawSec === undefined) {
+    const url = String(req?.url || '')
+    const qIndex = url.indexOf('?')
+    if (qIndex !== -1) {
+      const params = new URLSearchParams(url.slice(qIndex + 1))
+      rawMs = params.get('ttl_ms') ?? params.get('ttlMs')
+      rawSec = params.get('ttl_seconds') ?? params.get('ttlSeconds')
+    }
+  }
+  if (rawMs != null) {
+    const val = Array.isArray(rawMs) ? rawMs[0] : rawMs
+    const parsed = parseInt(String(val ?? ''), 10)
+    if (Number.isFinite(parsed) && parsed > 0) {
+      return Math.min(MAX_UNPAID_HOLD_TTL_MS, Math.max(MIN_UNPAID_HOLD_TTL_MS, parsed))
+    }
+  }
+  if (rawSec != null) {
+    const val = Array.isArray(rawSec) ? rawSec[0] : rawSec
+    const parsed = parseInt(String(val ?? ''), 10)
+    if (Number.isFinite(parsed) && parsed > 0) {
+      return Math.min(MAX_UNPAID_HOLD_TTL_MS, Math.max(MIN_UNPAID_HOLD_TTL_MS, parsed * 1000))
+    }
+  }
+  return undefined
+}
+
+export function sanitizeHoldResults(results) {
+  if (!Array.isArray(results)) return []
+  return results.map((r) => {
+    if (!r || typeof r !== 'object') return r
+    if (!r.error) return r
+    const sanitizedError = String(r.error).split('\n')[0].slice(0, 100)
+    return { ...r, error: sanitizedError }
+  })
+}
+
 function sendJson(res, status, body) {
+  if (res.writableEnded) return
   res.statusCode = status
-  res.setHeader('Content-Type', 'application/json')
+  if (!res.headersSent) {
+    res.setHeader('Content-Type', 'application/json')
+  }
   res.end(JSON.stringify(body))
 }
 
 export default async function handler(req, res, overrides = {}) {
-  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private')
-  res.setHeader('Pragma', 'no-cache')
+  if (!res.headersSent) {
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private')
+    res.setHeader('Pragma', 'no-cache')
+  }
   if (req.method !== 'GET' && req.method !== 'POST') {
-    res.setHeader('Allow', 'GET, POST')
+    if (!res.headersSent) res.setHeader('Allow', 'GET, POST')
     return sendJson(res, 405, { error: 'Method not allowed' })
   }
   const env = overrides.env || process.env
-  if (!holdTtlCronAuthorized(req, env)) {
+  if (!holdTtlCronAuthorized(req, env, overrides)) {
     return sendJson(res, 401, { error: 'Cron authorization required' })
   }
+  const dryRun = dryRunRequested(req)
+  const blocked = stagingCronBlock(env, { dryRun })
+  if (blocked) return sendJson(res, blocked.status, blocked.body)
   const sb = Object.prototype.hasOwnProperty.call(overrides, 'sb') ? overrides.sb : admin()
   if (!sb) {
     console.error('[expire-unpaid-airport-holds] service role client unavailable')
     return sendJson(res, 503, { error: 'Service unavailable' })
   }
 
-  const dryRun = dryRunRequested(req)
+  const limit = parseHoldSweepLimit(req)
+  const ttlMs = parseHoldSweepTtlMs(req)
   const stripe = Object.prototype.hasOwnProperty.call(overrides, 'stripe')
     ? overrides.stripe
     : (stripeOk() ? stripeClient() : null)
@@ -124,6 +208,8 @@ export default async function handler(req, res, overrides = {}) {
   try {
     const result = await release(sb, {
       dryRun,
+      limit,
+      ttlMs,
       expireSession: !dryRun && stripe ? (id) => stripe.checkout.sessions.expire(id) : undefined,
       retrieveSession: stripe ? (id) => stripe.checkout.sessions.retrieve(id) : undefined,
     })
@@ -140,7 +226,7 @@ export default async function handler(req, res, overrides = {}) {
       errors: Number(result.errors) || 0,
       wouldExpire: Number(result.wouldExpire) || 0,
       dryRun: Boolean(result.dryRun),
-      results: Array.isArray(result.results) ? result.results : [],
+      results: sanitizeHoldResults(result.results),
     })
   } catch (err) {
     console.error('[expire-unpaid-airport-holds]', err)

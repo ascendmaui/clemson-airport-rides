@@ -4,7 +4,6 @@ import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { IC_AGREEMENT_HTML, IC_AGREEMENT_VERSION } from '../shared/icAgreement.js'
 import {
-  ADMIN_EMAIL,
   ONBOARDING_FLOW,
   REQUIRED_DOC_IDS,
   canReceiveRides,
@@ -16,8 +15,10 @@ import {
   progressSnapshot,
   resolveResumeStep,
   statusAfterInfoSave,
+  approvalBlockers,
   blockerLabel,
   submissionBlockers,
+  w9ContinueIssue,
 } from '../shared/driverOnboarding.js'
 
 test('new drivers are not approved by an info save', () => {
@@ -84,7 +85,7 @@ test('progress bar includes every required step and does not skip unfinished wor
     resolveResumeStep({ status: 'pending_docs', uploaded: licenseOnly, preferred: 'account' }),
     'account',
   )
-  assert.equal(resolveResumeStep({ status: 'pending_review', uploaded: REQUIRED_DOC_IDS }), 'review')
+  assert.equal(resolveResumeStep({ status: 'pending_review', uploaded: REQUIRED_DOC_IDS }), 'employment')
 })
 
 test('progress percent fills as documents land and hits 100 at review', () => {
@@ -107,6 +108,12 @@ test('progress percent fills as documents land and hits 100 at review', () => {
 
   const submitted = progressSnapshot({
     status: 'pending_review',
+    backgroundAuthorized: true,
+    workEligibilityAttested: true,
+    workEligibilityCategory: 'citizen',
+    taxSaved: true,
+    agreementSigned: true,
+    agreementVersion: IC_AGREEMENT_VERSION,
     uploaded: REQUIRED_DOC_IDS,
     viewing: 'review',
   })
@@ -131,7 +138,7 @@ test('a flagged registration blocks submit until it matches the vehicle', () => 
   assert.match(blockerLabel('registration_match'), /Registration/)
 })
 
-test('submit stays blocked until employment, W-9, and the signed agreement exist', () => {
+test('submit does not require a signature; approval does', () => {
   const readyDocs = {
     status: 'pending_docs',
     uploaded: REQUIRED_DOC_IDS,
@@ -146,9 +153,17 @@ test('submit stays blocked until employment, W-9, and the signed agreement exist
   assert.equal(firstIncompleteStepId(readyDocs), 'review')
 
   const missingSignature = { ...readyDocs, agreementSigned: false, agreementVersion: null }
-  assert.deepEqual(submissionBlockers(missingSignature), ['ic_agreement'])
-  assert.equal(firstIncompleteStepId(missingSignature), 'agreement')
-  assert.equal(resolveResumeStep({ ...missingSignature, preferred: 'review' }), 'agreement')
+  assert.deepEqual(submissionBlockers(missingSignature), [])
+  assert.deepEqual(approvalBlockers(missingSignature), ['ic_agreement'])
+  assert.equal(firstIncompleteStepId(missingSignature), 'review')
+  assert.equal(resolveResumeStep({ ...missingSignature, preferred: 'review' }), 'review')
+
+  const wrongVersion = { ...readyDocs, agreementVersion: 'old-version' }
+  assert.deepEqual(approvalBlockers(wrongVersion), ['ic_agreement'])
+  const hashMismatch = { ...readyDocs, agreementSha256: 'signed', packetHash: 'packet' }
+  assert.deepEqual(approvalBlockers(hashMismatch), ['ic_agreement'])
+  const hashMatch = { ...readyDocs, agreementSha256: 'abc', packetHash: 'abc' }
+  assert.deepEqual(approvalBlockers(hashMatch), [])
 
   const missingTax = { ...readyDocs, taxSaved: false }
   assert.ok(submissionBlockers(missingTax).includes('w9_tax_info'))
@@ -159,6 +174,53 @@ test('submit stays blocked until employment, W-9, and the signed agreement exist
   assert.equal(firstIncompleteStepId(missingWork), 'employment')
 })
 
+test('W-9 continue follows the typed tax record, not a file the step cannot upload', () => {
+  assert.equal(REQUIRED_DOC_IDS.includes('w9'), false)
+  assert.equal(w9ContinueIssue({
+    legalName: 'Ada Lovelace',
+    taxClass: 'individual',
+    tin: '123-45-6789',
+  }), null)
+  assert.match(
+    w9ContinueIssue({ legalName: 'A', taxClass: 'individual', tin: '123456789' }),
+    /legal name/i,
+  )
+  assert.match(
+    w9ContinueIssue({ legalName: 'Ada Lovelace', taxClass: 'nope', tin: '123456789' }),
+    /classification/i,
+  )
+  assert.match(
+    w9ContinueIssue({ legalName: 'Ada Lovelace', taxClass: 'individual', tin: '1234' }),
+    /9-digit TIN/,
+  )
+  assert.equal(w9ContinueIssue({
+    legalName: 'Ada Lovelace',
+    taxClass: 'individual',
+    tin: '',
+    taxSaved: true,
+  }), null)
+
+  const savedTax = {
+    status: 'pending_docs',
+    uploaded: REQUIRED_DOC_IDS,
+    backgroundAuthorized: true,
+    workEligibilityAttested: true,
+    workEligibilityCategory: 'citizen',
+    taxSaved: true,
+    agreementSigned: true,
+    agreementVersion: IC_AGREEMENT_VERSION,
+  }
+  assert.equal(submissionBlockers(savedTax).includes('doc:w9'), false)
+  assert.equal(submissionBlockers(savedTax).includes('w9_tax_info'), false)
+  assert.ok(submissionBlockers({ ...savedTax, taxSaved: false }).includes('w9_tax_info'))
+
+  const screen = readFileSync(new URL('../src/screens/DriverOnboarding.jsx', import.meta.url), 'utf8')
+  assert.doesNotMatch(screen, /w9DocReady|uploaded\.includes\('w9'\)/)
+  assert.match(screen, /w9ContinueIssue/)
+  assert.match(screen, /id="w9-continue-reason"/)
+  assert.match(screen, /You do not upload a file/)
+})
+
 test('TIN display is last-4 only', () => {
   assert.equal(displayTinLast4('6789'), '••••6789')
   assert.equal(displayTinLast4('123456789'), '')
@@ -166,15 +228,14 @@ test('TIN display is last-4 only', () => {
   assert.equal(displayTinLast4(null), '')
 })
 
-test('compliance migration stores the exact agreement and every required doc type', () => {
+test('compliance seed no longer rewrites agreement HTML and still lists required docs', () => {
   const sql = readFileSync(new URL('../supabase/driver_onboarding_compliance.sql', import.meta.url), 'utf8')
   for (const id of REQUIRED_DOC_IDS) {
     assert.ok(sql.includes(`'${id}'`), id)
   }
-  const parts = sql.split('$html$')
-  assert.equal(parts[1], IC_AGREEMENT_HTML)
-  assert.equal(parts[3], IC_AGREEMENT_HTML)
-  assert.ok(sql.includes(IC_AGREEMENT_VERSION))
+  assert.equal(sql.includes('$html$'), false)
+  assert.equal(sql.includes('body_html = excluded.body_html'), false)
+  assert.match(sql, /do not re-run/i)
   assert.ok(sql.includes('driver_tax_secrets'))
   assert.equal(sql.includes('return jsonb_build_object(\n    \'legal_name\', cleaned_name,\n    \'tin_last4\', last4,'), true)
   const hash = createHash('sha256').update(IC_AGREEMENT_HTML, 'utf8').digest('hex')
@@ -182,16 +243,48 @@ test('compliance migration stores the exact agreement and every required doc typ
   assert.equal(sql.includes(hash), false)
 })
 
-test('admin is a seeded email, is_admin, or admin/ops role — not a copied profile email', () => {
-  assert.equal(isAdminIdentity({ jwtEmail: ADMIN_EMAIL }), true)
-  assert.equal(isAdminIdentity({ jwtEmail: 'JOHN@gmail.com' }), true)
-  assert.equal(isAdminIdentity({ jwtEmail: 'johnmatveev@gmail.com' }), true)
-  assert.equal(isAdminIdentity({ jwtEmail: 'JohnMatveyev@gmail.com' }), true)
-  assert.equal(isAdminIdentity({ jwtEmail: 'jmat2019@icloud.com' }), true)
+test('admin is a profile role or is_admin flag — not an email string', () => {
+  assert.equal(isAdminIdentity({ jwtEmail: 'john@gmail.com' }), false)
+  assert.equal(isAdminIdentity({ jwtEmail: 'JOHN@gmail.com' }), false)
+  assert.equal(isAdminIdentity({ jwtEmail: 'johnmatveev@gmail.com' }), false)
+  assert.equal(isAdminIdentity({ jwtEmail: 'JohnMatveyev@gmail.com' }), false)
+  assert.equal(isAdminIdentity({ jwtEmail: 'jmat2019@icloud.com' }), false)
   assert.equal(isAdminIdentity({ jwtEmail: 'student@clemson.edu', isAdmin: true }), true)
   assert.equal(isAdminIdentity({ jwtEmail: 'student@clemson.edu', role: 'admin' }), true)
   assert.equal(isAdminIdentity({ jwtEmail: 'student@clemson.edu', role: 'ops' }), true)
   assert.equal(isAdminIdentity({ jwtEmail: 'student@clemson.edu', role: 'driver' }), false)
   assert.equal(isAdminIdentity({ jwtEmail: 'student@clemson.edu' }), false)
   assert.equal(isAdminIdentity({ jwtEmail: 'student@clemson.edu', role: 'support' }), false)
+})
+
+const completeApplicant = {
+  status: 'pending_review', uploaded: REQUIRED_DOC_IDS,
+  backgroundAuthorized: true, workEligibilityAttested: true,
+  workEligibilityCategory: 'citizen', taxSaved: true,
+  agreementSigned: true, agreementVersion: IC_AGREEMENT_VERSION,
+}
+
+test('pending review applicants resume each unfinished electronic step without phantom uploads', () => {
+  for (const [patch, step] of [
+    [{ uploaded: [] }, 'license'],
+    [{ registrationMatch: 'mismatch' }, 'registration'],
+    [{ registrationMatch: 'unreadable' }, 'registration'],
+    [{ backgroundAuthorized: false }, 'employment'],
+    [{ taxSaved: false }, 'w9'],
+  ]) {
+    const ctx = { ...completeApplicant, ...patch }
+    assert.equal(resolveResumeStep({ ...ctx, preferred: 'review' }), step)
+    assert.ok(progressSnapshot(ctx).percent < 100)
+  }
+  assert.deepEqual(submissionBlockers(completeApplicant), [])
+  assert.equal(resolveResumeStep(completeApplicant), 'review')
+  assert.equal(progressSnapshot(completeApplicant).percent, 100)
+  assert.equal(resolveResumeStep({ status: 'pending_info' }), 'account')
+})
+
+test('approved drivers skip resume requirements even with no compliance records', () => {
+  const ctx = { status: 'approved', uploaded: [], registrationMatch: 'mismatch' }
+  assert.equal(resolveResumeStep(ctx), 'review')
+  assert.equal(progressSnapshot(ctx).percent, 100)
+  assert.equal(canReceiveRides(ctx.status), true)
 })

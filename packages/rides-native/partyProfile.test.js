@@ -159,11 +159,15 @@ test('profile aggregates format the stored average', () => {
     favorite_spots: ['Cooper Library'],
     phone: '8645551212',
     student_verified_at: '2026-01-01',
-    vehicle: { color: 'White', make: 'Tesla', model: 'Model 3' },
+    vehicle: { color: 'White', make: 'Honda', model: 'Accord', plate: 'TGR1' },
+    avatar_url: 'https://cdn.example/sam.jpg',
   }, { viewerIsRider: true })
-  assert.equal(view.name, 'Sam')
+  assert.equal(view.name, 'Sam Okonkwo')
   assert.equal(view.ratingLine, '4.9 · 8 ratings')
-  assert.equal(view.vehicle, 'White Tesla Model 3')
+  assert.equal(view.vehicle, 'White Honda Accord')
+  assert.equal(view.plate, 'TGR1')
+  assert.equal(view.vehicleLine, 'White Honda Accord · TGR1')
+  assert.equal(view.photoUrl, 'https://cdn.example/sam.jpg')
   assert.equal(view.roleLabel, 'Your driver')
   assert.equal(view.student, true)
   assert.equal(view.phone, '(864) 555-1212')
@@ -193,7 +197,9 @@ const EXPORTED_HELPERS = [
   'formatRatingLine',
   'asSpotList',
   'vehicleLabelFromRow',
+  'safePhotoUrl',
   'toCounterpartView',
+  'loadMatchedDriverCard',
   'loadOwnProfile',
   'loadPublicProfile',
   'saveOwnProfile',
@@ -611,12 +617,12 @@ test('vehicle labels join color make and model and drop falsy parts', () => {
   assert.equal(partyProfile.vehicleLabelFromRow(null), '')
   assert.equal(partyProfile.vehicleLabelFromRow(''), '')
   assert.equal(partyProfile.vehicleLabelFromRow(0), '')
-  assert.equal(partyProfile.vehicleLabelFromRow({ color: 'White', model: 'Model 3' }), 'White Model 3')
+  assert.equal(partyProfile.vehicleLabelFromRow({ color: 'White', model: 'sedan' }), 'White sedan')
   assert.equal(partyProfile.vehicleLabelFromRow({ color: false, make: 'Honda', model: '' }), 'Honda')
   // BUG?: a numeric 0 color is falsy, so it disappears from the label.
-  assert.equal(partyProfile.vehicleLabelFromRow({ color: 0, make: 'Tesla', model: '3' }), 'Tesla 3')
+  assert.equal(partyProfile.vehicleLabelFromRow({ color: 0, make: 'Comfort', model: '3' }), 'Comfort 3')
   // BUG?: a string vehicle label is returned untrimmed.
-  assert.equal(partyProfile.vehicleLabelFromRow('  White Tesla  '), '  White Tesla  ')
+  assert.equal(partyProfile.vehicleLabelFromRow('  White Comfort  '), '  White Comfort  ')
 })
 
 test('counterpart view uses the first name, rider fallback, and raw rating fields', () => {
@@ -648,6 +654,14 @@ test('counterpart view uses the first name, rider fallback, and raw rating field
   assert.equal(rider.student, true)
   // BUG?: favorite spots are passed through asSpotList, which does not trim them.
   assert.deepEqual(rider.spots, ['  Library  '])
+
+  const unsafe = toCounterpartView({
+    full_name: 'Sam Okonkwo',
+    avatar_url: 'javascript:alert(1)',
+  }, { viewerIsRider: true })
+  assert.equal(unsafe.name, 'Sam Okonkwo')
+  assert.equal(unsafe.photoUrl, null)
+  assert.equal(toCounterpartView({ full_name: 'Sam Okonkwo' }).name, 'Sam')
 
   assert.equal(toCounterpartView(null), null)
   const zero = toCounterpartView({ full_name: 'Sam', rating_avg: 0, rating_count: 0 })
@@ -900,18 +914,19 @@ test('loadCounterpart shows the other party and a vehicle only to the rider', as
   }
   const asRider = fakeSupabase({
     rpc: { data: profile, error: null },
-    tables: { vehicles: [{ data: [{ color: 'White', make: 'Tesla', model: 'Model 3' }], error: null }] },
+    tables: { vehicles: [{ data: [{ color: 'White', make: 'Honda', model: 'Accord' }], error: null }] },
   })
   const riderView = await loadCounterpart(
     asRider,
     { status: 'accepted', rider_id: 'rider', driver_id: 'driver' },
     'rider',
   )
-  assert.equal(riderView.name, 'Sam')
+  assert.equal(riderView.name, 'Sam Okonkwo')
   assert.equal(riderView.roleLabel, 'Your driver')
-  assert.equal(riderView.vehicle, 'White Tesla Model 3')
+  assert.equal(riderView.vehicle, 'White Honda Accord')
   assert.equal(asRider.calls.find((call) => call.op === 'rpc').args.target, 'driver')
   assert.equal(asRider.calls.some((call) => call.table === 'vehicles'), true)
+  assert.match(asRider.calls.find((call) => call.table === 'vehicles' && call.op === 'select').columns, /plate/)
 
   const asDriver = fakeSupabase({
     rpc: { data: { ...profile, id: 'rider', full_name: 'Jordan Lee' }, error: null },
@@ -955,6 +970,47 @@ test('loadCounterpart shows the other party and a vehicle only to the rider', as
   )
   assert.equal(caught.vehicle, '')
   assert.equal(caught.roleLabel, 'Your driver')
+})
+
+test('loadCounterpart reuses the pick-a-driver card for full name, car, plate, and photo', async () => {
+  const profile = {
+    id: 'driver',
+    full_name: 'Sam Okonkwo',
+    avatar_url: 'https://cdn.example/sam.jpg',
+    rating_avg: 4.9,
+    rating_count: 8,
+  }
+  const client = fakeSupabase({
+    rpc(fn) {
+      if (fn === 'counterpart_profile') return { data: profile, error: null }
+      if (fn === 'list_driver_cards') {
+        return {
+          data: [{
+            id: 'driver',
+            full_name: 'Sam Okonkwo',
+            color: 'White',
+            make: 'Honda',
+            model: 'Accord',
+            plate: 'TGR1',
+            avatar_url: 'https://cdn.example/sam.jpg',
+          }],
+          error: null,
+        }
+      }
+      return { data: null, error: { message: 'missing function list_driver_cards' } }
+    },
+  })
+  const view = await loadCounterpart(
+    client,
+    { status: 'accepted', rider_id: 'rider', driver_id: 'driver' },
+    'rider',
+  )
+  assert.equal(view.name, 'Sam Okonkwo')
+  assert.equal(view.vehicleLine, 'White Honda Accord · TGR1')
+  assert.equal(view.plate, 'TGR1')
+  assert.equal(view.photoUrl, 'https://cdn.example/sam.jpg')
+  assert.equal(client.calls.some((call) => call.table === 'vehicles'), false)
+  assert.equal(client.calls.some((call) => call.op === 'rpc' && call.fn === 'list_driver_cards'), true)
 })
 
 test('fetchTripForRating and hasRatedTrip distinguish a missing table from a hard error', async () => {

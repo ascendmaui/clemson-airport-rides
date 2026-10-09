@@ -1,0 +1,101 @@
+[
+  {
+    "id": "demo-marcus",
+    "firstName": "Marcus",
+    "vehicle": "BMW X5",
+    "file512": "01-marcus.webp",
+    "file128": "01-marcus@128.webp",
+    "isDemo": true
+  },
+  {
+    "id": "demo-jenna",
+    "firstName": "Jenna",
+    "vehicle": "Mercedes GLE",
+    "file512": "02-jenna.webp",
+    "file128": "02-jenna@128.webp",
+    "isDemo": true
+  },
+  {
+    "id": "demo-darnell",
+    "firstName": "Darnell",
+    "vehicle": "Audi Q7",
+    "file512": "03-darnell.webp",
+    "file128": "03-darnell@128.webp",
+    "isDemo": true
+  },
+  {
+    "id": "demo-priya",
+    "firstName": "Priya",
+    "vehicle": "Range Rover Sport",
+    "file512": "04-priya.webp",
+    "file128": "04-priya@128.webp",
+    "isDemo": true
+  },
+  {
+    "id": "demo-carlos",
+    "firstName": "Carlos",
+    "vehicle": "Lexus RX",
+    "file512": "05-carlos.webp",
+    "file128": "05-carlos@128.webp",
+    "isDemo": true
+  },
+  {
+    "id": "demo-hannah",
+    "firstName": "Hannah",
+    "vehicle": "Porsche Macan",
+    "file512": "06-hannah.webp",
+    "file128": "06-hannah@128.webp",
+    "isDemo": true
+  },
+  {
+    "id": "demo-terrence",
+    "firstName": "Terrence",
+    "vehicle": "Cadillac Escalade",
+    "file512": "07-terrence.webp",
+    "file128": "07-terrence@128.webp",
+    "isDemo": true
+  },
+  {
+    "id": "demo-mei",
+    "firstName": "Mei",
+    "vehicle": "Genesis GV80",
+    "file512": "08-mei.webp",
+    "file128": "08-mei@128.webp",
+    "isDemo": true
+  },
+  {
+    "id": "demo-wade",
+    "firstName": "Wade",
+    "vehicle": "Ford F-150",
+    "color": "white",
+    "file512": "09-wade.webp",
+    "file128": "09-wade@128.webp",
+    "isDemo": true
+  },
+  {
+    "id": "demo-tasha",
+    "firstName": "Tasha",
+    "vehicle": "Ford F-150",
+    "color": "orange",
+    "file512": "10-tasha.webp",
+    "file128": "10-tasha@128.webp",
+    "isDemo": true
+  },
+  {
+    "id": "demo-luis",
+    "firstName": "Luis",
+    "vehicle": "Ford F-150",
+    "color": "purple",
+    "file512": "11-luis.webp",
+    "file128": "11-luis@128.webp",
+    "isDemo": true
+  },
+  {
+    "id": "demo-brooke",
+    "firstName": "Brooke",
+    "vehicle": "Tesla Cybertruck",
+    "file512": "12-brooke.webp",
+    "file128": "12-brooke@128.webp",
+    "isDemo": true
+  }
+]

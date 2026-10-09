@@ -20,7 +20,7 @@ export function useSocialSignIn(scheme = 'clemsonrides-driver') {
       }
 
       if (providerId === 'google') {
-        const config = googleAuthConfig(process.env, { scheme })
+        const config = googleAuthConfig(process.env, { scheme, provider: 'supabase' })
         if (!config.enabled) {
           throw mapGoogleAuthError(new Error('Google sign-in is coming soon'))
         }

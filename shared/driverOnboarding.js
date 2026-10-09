@@ -1,12 +1,12 @@
 /** Driver approval gate — shared by the Vite client, Vercel API, and tests. */
 
 import { IC_AGREEMENT_VERSION } from './icAgreement.js'
-import { isAdminIdentity, isSeedAdminEmail, SEEDED_ADMIN_EMAILS } from './adminAccess.js'
+import { isAdminIdentity } from './adminAccess.js'
+import { assessContractIdentity } from './contractIdentity.js'
+import { normalizeApplicantEmail } from './applicantEmail.js'
 
 export { IC_AGREEMENT_HTML, IC_AGREEMENT_TITLE, IC_AGREEMENT_VERSION } from './icAgreement.js'
-export { isAdminIdentity, isSeedAdminEmail, SEEDED_ADMIN_EMAILS }
-
-export const ADMIN_EMAIL = 'john@gmail.com'
+export { isAdminIdentity }
 
 export const ONBOARDING_STATUSES = [
   'pending_info',
@@ -98,15 +98,21 @@ function docsComplete(step, uploaded) {
   return (step.docIds || []).every((id) => have.has(id))
 }
 
+/** Email is required once the caller passes applicantEmail. Older callers omit it. */
+function applicantEmailReady(ctx) {
+  if (!Object.prototype.hasOwnProperty.call(ctx, 'applicantEmail')) return true
+  return Boolean(normalizeApplicantEmail(ctx.applicantEmail))
+}
+
 export function stepIsComplete(stepId, ctx = {}) {
   const step = flowStep(stepId)
   if (!step) return false
   const docsDone = docsComplete(step, ctx.uploaded)
   switch (step.kind) {
     case 'account':
-      return accountInfoSaved(ctx.status)
+      return accountInfoSaved(ctx.status) && applicantEmailReady(ctx)
     case 'documents':
-      return docsDone
+      return docsDone && (stepId !== 'registration' || !['mismatch', 'unreadable'].includes(ctx.registrationMatch))
     case 'employment':
       return docsDone
         && Boolean(ctx.backgroundAuthorized)
@@ -115,8 +121,7 @@ export function stepIsComplete(stepId, ctx = {}) {
     case 'tax':
       return docsDone && Boolean(ctx.taxSaved)
     case 'agreement':
-      return Boolean(ctx.agreementSigned)
-        && ctx.agreementVersion === IC_AGREEMENT_VERSION
+      return agreementStepDone(ctx)
     case 'review':
       return ctx.status === 'pending_review' || ctx.status === 'approved'
     default: {
@@ -127,7 +132,7 @@ export function stepIsComplete(stepId, ctx = {}) {
 }
 
 export function firstIncompleteStepId(ctx = {}) {
-  if (ctx.status === 'pending_review' || ctx.status === 'approved') return 'review'
+  if (ctx.status === 'approved') return 'review'
   for (const step of ONBOARDING_FLOW) {
     if (!stepIsComplete(step.id, ctx)) return step.id
   }
@@ -136,7 +141,7 @@ export function firstIncompleteStepId(ctx = {}) {
 
 /**
  * Resume a saved screen without skipping unfinished work.
- * Pending review / approved always land on the last step.
+ * Approved drivers always land on the last step; incomplete applicants resume work.
  */
 export function canOpenStep(stepId, ctx = {}) {
   if (ctx.status === 'pending_review' || ctx.status === 'approved' || ctx.status === 'rejected') return true
@@ -147,7 +152,7 @@ export function canOpenStep(stepId, ctx = {}) {
 }
 
 export function resolveResumeStep(ctx = {}) {
-  if (ctx.status === 'pending_review' || ctx.status === 'approved') return 'review'
+  if (ctx.status === 'approved') return 'review'
   const first = firstIncompleteStepId(ctx)
   if (!ctx.preferred) return first
   const prefIdx = ONBOARDING_FLOW.findIndex((step) => step.id === ctx.preferred)
@@ -169,7 +174,7 @@ function stepFraction(step, ctx) {
   const docCount = (step.docIds || []).length
   switch (step.kind) {
     case 'account':
-      return accountInfoSaved(ctx.status) ? 1 : 0
+      return accountInfoSaved(ctx.status) && applicantEmailReady(ctx) ? 1 : 0
     case 'documents':
       return docCount ? docDone / docCount : 0
     case 'employment': {
@@ -184,7 +189,7 @@ function stepFraction(step, ctx) {
       return (docDone + (ctx.taxSaved ? 1 : 0)) / parts
     }
     case 'agreement':
-      return ctx.agreementSigned && ctx.agreementVersion === IC_AGREEMENT_VERSION ? 1 : 0
+      return agreementStepDone(ctx) ? 1 : 0
     case 'review':
       return 0
     default: {
@@ -199,7 +204,7 @@ export function progressSnapshot(ctx = {}) {
   const { status, viewing } = ctx
   const total = ONBOARDING_FLOW.length
   const viewIndex = Math.max(0, ONBOARDING_FLOW.findIndex((step) => step.id === viewing))
-  if (status === 'pending_review' || status === 'approved') {
+  if (status === 'approved' || (status === 'pending_review' && submissionBlockers(ctx).length === 0)) {
     const current = ONBOARDING_FLOW[viewIndex]
     const onReview = !viewing || viewing === 'review'
     return {
@@ -228,7 +233,7 @@ export function progressSnapshot(ctx = {}) {
 }
 
 export const EMAIL_TODO =
-  'TODO: set RESEND_API_KEY and RESEND_FROM (verified domain) to email seeded admins when a driver applies. The in-app admin dashboard at #/admin lists the application without email.'
+  'TODO: set RESEND_API_KEY, RESEND_FROM (verified domain), and ADMIN_NOTIFY_EMAIL to email the admin when a driver applies. The in-app admin dashboard at #/admin lists each application with the email submitted on it.'
 
 const DOC_ID_SET = new Set(REQUIRED_DOC_IDS)
 
@@ -248,6 +253,27 @@ export function displayTinLast4(value) {
   return `••••${last4}`
 }
 
+/**
+ * Why the W-9 Continue button is disabled.
+ * A typed legal name, tax classification, and 9-digit TIN are enough.
+ * There is no W-9 file in REQUIRED_DOCUMENTS, and the server gate is taxSaved
+ * (legal name plus TIN last-4), not an uploaded form.
+ */
+export function w9ContinueIssue({ legalName, taxClass, tin, taxSaved = false } = {}) {
+  if (String(legalName || '').trim().length < 2) {
+    return 'Enter your legal name as it appears on your W-9.'
+  }
+  if (!TAX_CLASSIFICATIONS.some((item) => item.id === taxClass)) {
+    return 'Select a federal tax classification.'
+  }
+  if (taxSaved) return null
+  const digits = String(tin || '').replace(/\D/g, '')
+  if (digits.length !== 9) {
+    return 'Enter a 9-digit TIN. Only the last four digits are shown after you save.'
+  }
+  return null
+}
+
 export function submissionBlockers(ctx = {}) {
   const blockers = missingDocuments(ctx.uploaded).map((id) => `doc:${id}`)
   if (ctx.registrationMatch === 'mismatch' || ctx.registrationMatch === 'unreadable') {
@@ -256,7 +282,41 @@ export function submissionBlockers(ctx = {}) {
   if (!ctx.backgroundAuthorized) blockers.push('background_authorization_attestation')
   if (!ctx.workEligibilityAttested || !ctx.workEligibilityCategory) blockers.push('work_eligibility_attestation')
   if (!ctx.taxSaved) blockers.push('w9_tax_info')
-  if (!ctx.agreementSigned || ctx.agreementVersion !== IC_AGREEMENT_VERSION) blockers.push('ic_agreement')
+  if (!applicantEmailReady(ctx)) blockers.push('applicant_email')
+  return blockers
+}
+
+function agreementStepDone(ctx) {
+  return Boolean(ctx.taxSaved)
+    || (Boolean(ctx.agreementSigned) && ctx.agreementVersion === IC_AGREEMENT_VERSION)
+}
+
+function agreementSatisfied(ctx) {
+  if (!ctx.agreementSigned) return false
+  const identity = assessContractIdentity(ctx).status
+  switch (identity) {
+    case 'match':
+    case 'mismatch':
+      return true
+    case 'unknown':
+      break
+    default: {
+      const unexpected = identity
+      throw new Error(`Unknown contract identity: ${unexpected}`)
+    }
+  }
+  if (ctx.agreementVersion !== IC_AGREEMENT_VERSION) return false
+  if (ctx.packetHash && ctx.agreementSha256 !== ctx.packetHash) return false
+  return true
+}
+
+/** Approval requires a signed agreement. Submit does not. A name that matches the applicant satisfies it. */
+export function approvalBlockers(ctx = {}) {
+  const blockers = submissionBlockers(ctx)
+  if (!agreementSatisfied(ctx)) blockers.push('ic_agreement')
+  if (ctx.backgroundStatus === 'needs_review' && !ctx.backgroundReviewAcknowledged) {
+    blockers.push('background_needs_review')
+  }
   return blockers
 }
 
@@ -269,7 +329,11 @@ export function blockerLabel(code) {
     case 'registration_match':
       return 'Registration that matches the vehicle you entered'
     case 'background_authorization_attestation':
-      return 'Signed background-check authorization'
+      return 'Background attestation (consent is not a completed check)'
+    case 'background_needs_review':
+      return 'Admin review of a background disclosure (not a vendor result)'
+    case 'applicant_email':
+      return 'Email address'
     case 'work_eligibility_attestation':
       return 'Work-eligibility attestation'
     case 'w9_tax_info':
@@ -329,7 +393,7 @@ export function onboardingLabel(status) {
     case 'pending_info':
       return 'Finish your info'
     case 'pending_docs':
-      return 'Upload documents'
+      return 'Waiting on applicant — continue application'
     case 'pending_review':
       return 'Waiting for admin review'
     case 'approved':

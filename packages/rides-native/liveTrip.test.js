@@ -5,20 +5,38 @@ import { acceptActionLabel, declineActionLabel, driverStatusDetail } from './tri
 import { acceptNeedsDriverOnline } from './tripTags.js'
 import {
   DRIVER_TRACK_STEPS,
+  SEARCH_APPROX_WAIT_NOTE,
+  RIDER_SEARCH_MOTION_COPY,
   SEARCH_PREVIEW_COPY,
   STILL_SEARCHING_COPY,
   STILL_SEARCHING_MS,
   STRAIGHT_LINE_WAIT,
   checkoutSuccessHash,
+  activeTripRouteLine,
+  decodeRoutePolyline,
   etaHoldLine,
+  liveDriverTitle,
   etaLineFor,
+  mapRouteCoordinates,
   riderLiveStepIndex,
+  roadEtaLine,
   riderLiveSteps,
   orderedLiveStops,
   riderLiveView,
+  searchingApproxWaitLine,
+  searchingEtaLine,
+  searchingRidePreview,
+  searchingRouteLine,
   showSearchTheater,
   straightLineEta,
 } from './liveTrip.js'
+import {
+  followEtaLine,
+  followRouteLine,
+  lerpHeading,
+  storedRoadSuffix,
+  travelBearing,
+} from './roadFollow.js'
 
 test('rider live states run searching, offered or requested, en route, arrived, in trip, completed', () => {
   assert.deepEqual(
@@ -46,7 +64,7 @@ test('preferred matching copy cancels instead of falling back to the open pool',
   assert.equal(canceled.body, PREFERRED_CANCELED_COPY)
   assert.equal(riderLiveView('searching').body, OPEN_POOL_COPY)
   assert.equal(riderLiveView('offered').kicker, 'OFFERED')
-  assert.equal(riderLiveView('arriving').kicker, 'EN ROUTE')
+  assert.equal(riderLiveView('arriving').kicker, 'ARRIVING')
   assert.equal(riderLiveView('in_progress').title, 'You are on the way')
   assert.equal(riderLiveView('completed').kicker, 'COMPLETED')
 })
@@ -62,6 +80,21 @@ test('straight-line ETA uses existing coordinates and names the pickup or drop-o
     /to drop-off/,
   )
   assert.equal(straightLineEta(null, pickup).label, null)
+  assert.equal(roadEtaLine(600, 'drop-off'), 'About 10 min by road to drop-off')
+  assert.match(
+    etaLineFor('in_progress', from, {
+      dropoffLat: 34.8957,
+      dropoffLng: -82.2189,
+      routeDurationS: 600,
+    }),
+    /straight line to drop-off/,
+  )
+  const decoded = decodeRoutePolyline('_p~iF~ps|U_ulLnnqC_mqNvxq`@')
+  assert.equal(decoded.length, 3)
+  assert.ok(Math.abs(decoded[0].lat - 38.5) < 0.001)
+  assert.ok(Math.abs(decoded[0].lng - -120.2) < 0.001)
+  assert.equal(mapRouteCoordinates('').length, 0)
+  assert.equal(decodeRoutePolyline(null).length, 0)
 })
 
 test('driver accept and decline labels keep preferred cancel semantics', () => {
@@ -81,6 +114,9 @@ test('searching stays honest and an accept opens track without a Maps key', () =
   assert.equal(showSearchTheater('searching'), true)
   assert.equal(showSearchTheater('accepted'), false)
   assert.match(SEARCH_PREVIEW_COPY, /preview/)
+  assert.match(RIDER_SEARCH_MOTION_COPY, /This ride moves forward only when a real driver accepts/)
+  assert.doesNotMatch(RIDER_SEARCH_MOTION_COPY, /driver accept moves/)
+  assert.match(RIDER_SEARCH_MOTION_COPY, /preview/)
   assert.equal(etaHoldLine('accepted', null), STRAIGHT_LINE_WAIT)
   assert.match(etaHoldLine('in_progress', 'About 4 min · 1.2 mi straight line to drop-off'), /drop-off/)
   assert.equal(etaHoldLine('searching', null), null)
@@ -161,4 +197,163 @@ test('booked carpool public pins round to 3 decimals and still return without a 
   })
   assert.equal(lobby[0].lat, 34.67881)
   assert.equal(lobby[0].approximate, false)
+})
+
+
+test('active trip draws a route line without a stored polyline and keeps the straight-line ETA', () => {
+  const trip = {
+    status: 'in_progress',
+    pickup_lat: 34.6788,
+    pickup_lng: -82.843,
+    dropoff_lat: 34.8957,
+    dropoff_lng: -82.2189,
+    metadata: {},
+  }
+  const driver = { lat: 34.7, lng: -82.8 }
+  const line = activeTripRouteLine(trip, driver)
+  assert.equal(line.length, 2)
+  assert.deepEqual(line[0], [34.7, -82.8])
+  assert.deepEqual(line[1], [34.8957, -82.2189])
+  assert.match(etaLineFor('in_progress', driver, trip), /to drop-off/)
+  const waiting = activeTripRouteLine({ ...trip, status: 'searching' }, null)
+  assert.deepEqual(waiting, [[34.6788, -82.843], [34.8957, -82.2189]])
+  const encoded = '_p~iF~ps|U_ulLnnqC_mqNvxq`@'
+  const road = activeTripRouteLine({ ...trip, metadata: { route_polyline: encoded } }, driver)
+  assert.equal(road.length, 3)
+  assert.ok(Math.abs(road[0][0] - 38.5) < 0.001)
+  assert.deepEqual(activeTripRouteLine(null, driver), [])
+  const stops = activeTripRouteLine({
+    status: 'accepted',
+    stops: [
+      { lat: 34.6788, lng: -82.843, label: 'Stadium', order: 0 },
+      { lat: 34.6836, lng: -82.8364, label: 'Downtown', order: 1 },
+    ],
+  }, null)
+  assert.equal(stops.length, 2)
+  assert.deepEqual(stops[0], [34.6788, -82.843])
+})
+
+test('searching preview draws the stored road or a straight pickup to drop-off and labels the wait as approximate', () => {
+  const trip = {
+    status: 'searching',
+    pickup_lat: 34.6788,
+    pickup_lng: -82.843,
+    dropoff_lat: 34.8957,
+    dropoff_lng: -82.2189,
+    metadata: {},
+    driver_lat: 34.7,
+    driver_lng: -82.8,
+    stops: [
+      { lat: 34.6788, lng: -82.843, label: 'Stadium' },
+      { lat: 34.7, lng: -82.8, label: 'Downtown' },
+    ],
+  }
+  assert.deepEqual(searchingRouteLine(trip), [[34.6788, -82.843], [34.8957, -82.2189]])
+  const minutes = straightLineEta(
+    { lat: trip.pickup_lat, lng: trip.pickup_lng },
+    { lat: trip.dropoff_lat, lng: trip.dropoff_lng },
+  ).etaMin
+  assert.ok(minutes >= 1)
+  assert.match(searchingEtaLine(trip), /straight line to drop-off/)
+  assert.equal(searchingApproxWaitLine(trip), `Approximate wait · about ${minutes} min`)
+  assert.doesNotMatch(searchingApproxWaitLine(trip), /driver|arriv|on the way/i)
+  assert.match(SEARCH_APPROX_WAIT_NOTE, /not a live arrival/i)
+  assert.equal(etaLineFor('searching', { lat: 34.7, lng: -82.8 }, trip), null)
+
+  const encoded = '_p~iF~ps|U_ulLnnqC_mqNvxq`@'
+  const preview = searchingRidePreview({
+    ...trip,
+    metadata: { route_polyline: encoded, route_duration_s: 600 },
+  })
+  assert.equal(preview.route.length, 3)
+  assert.ok(Math.abs(preview.route[0][0] - 38.5) < 0.001)
+  assert.equal(preview.eta, 'About 10 min by road to drop-off')
+  assert.equal(preview.wait, 'Approximate wait · about 10 min')
+  assert.deepEqual(searchingRouteLine(null), [])
+  assert.equal(searchingEtaLine({ status: 'searching' }), null)
+  assert.equal(searchingApproxWaitLine({ status: 'searching' }), 'Approximate wait')
+  assert.match(searchingApproxWaitLine({ ...trip, metadata: { route_duration_s: 90 } }), /about 2 min/)
+})
+
+test('pickup ETA follows current GPS and confirmed arrival replaces countdown', () => {
+  const places = { pickup_lat: 34.68, pickup_lng: -82.83, dropoff_lat: 34.9, dropoff_lng: -82.9 }
+  const far = etaLineFor('accepted', { lat: 34.8, lng: -82.83 }, places)
+  const close = etaLineFor('arriving', { lat: 34.681, lng: -82.83 }, places)
+  assert.notEqual(far, close)
+  assert.match(close, /to pickup/)
+  assert.equal(etaLineFor('arrived', null, places), 'Driver is at pickup')
+  assert.equal(liveDriverTitle('Sam Okonkwo', 'Next driver'), 'Sam Okonkwo')
+  assert.equal(liveDriverTitle('', 'Next driver'), 'Your driver')
+  assert.equal(liveDriverTitle(null, 'your driver'), 'Your driver')
+  assert.equal(liveDriverTitle(null, 'Jordan'), 'Jordan')
+  assert.match(etaLineFor('in_progress', { lat: 34.681, lng: -82.83 }, places), /to drop-off/)
+  assert.equal(etaLineFor('completed', { lat: 34.681, lng: -82.83 }, places), null)
+  assert.equal(etaLineFor('accepted', { lat: 91, lng: -82.83 }, places), null)
+  assert.equal(etaLineFor('accepted', { lat: 34.68, lng: -82.83 }, { pickup_lat: '', pickup_lng: '' }), null)
+  assert.equal(riderLiveView('arriving').steps[2].label, 'Arriving')
+})
+
+function encodeSigned(value) {
+  let n = value < 0 ? ~(value << 1) : value << 1
+  let out = ''
+  while (n >= 0x20) {
+    out += String.fromCharCode((0x20 | (n & 0x1f)) + 63)
+    n >>= 5
+  }
+  return out + String.fromCharCode(n + 63)
+}
+
+function encodePath(points) {
+  let lat = 0
+  let lng = 0
+  let out = ''
+  for (const point of points) {
+    const nextLat = Math.round(point.lat * 1e5)
+    const nextLng = Math.round(point.lng * 1e5)
+    out += encodeSigned(nextLat - lat)
+    out += encodeSigned(nextLng - lng)
+    lat = nextLat
+    lng = nextLng
+  }
+  return out
+}
+
+test('in-progress ETA follows the stored road and shrinks instead of repeating the whole drive', () => {
+  const points = [
+    { lat: 34.7, lng: -82.84 },
+    { lat: 34.71, lng: -82.84 },
+    { lat: 34.72, lng: -82.84 },
+  ]
+  const encoded = encodePath(points)
+  const trip = {
+    status: 'in_progress',
+    pickup_lat: 34.7,
+    pickup_lng: -82.84,
+    dropoff_lat: 34.72,
+    dropoff_lng: -82.84,
+    metadata: { route_polyline: encoded, route_duration_s: 600 },
+  }
+  const start = followEtaLine('in_progress', { lat: 34.7002, lng: -82.8402 }, trip)
+  const mid = followEtaLine('in_progress', { lat: 34.71, lng: -82.8401 }, trip)
+  assert.match(start, /by road to drop-off/)
+  assert.match(mid, /by road to drop-off/)
+  assert.notEqual(start, mid)
+  assert.match(start, /About 10 min/)
+  assert.match(mid, /About 5 min/)
+  const line = followRouteLine(trip, { lat: 34.71, lng: -82.8401 })
+  assert.ok(line.length >= 2)
+  assert.ok(line[0][0] > 34.705)
+  assert.equal(storedRoadSuffix(trip, { lat: 34.5, lng: -82.84 }), null)
+  const far = followRouteLine(trip, { lat: 34.5, lng: -82.84 })
+  assert.equal(far.length, 3)
+  assert.match(followEtaLine('in_progress', { lat: 34.5, lng: -82.84 }, trip), /straight line to drop-off/)
+  assert.match(followEtaLine('accepted', { lat: 34.71, lng: -82.84 }, trip), /straight line to pickup/)
+})
+
+test('heading blend takes the short way around north', () => {
+  assert.ok(Math.abs(lerpHeading(350, 10, 0.5) - 0) < 0.01 || Math.abs(lerpHeading(350, 10, 0.5) - 360) < 0.01)
+  assert.equal(travelBearing({ lat: 0, lng: 0 }, { lat: 1, lng: 0 }), 0)
+  const east = travelBearing({ lat: 0, lng: 0 }, { lat: 0, lng: 1 })
+  assert.ok(Math.abs(east - 90) < 0.01)
+  assert.equal(travelBearing({ lat: 1, lng: 1 }, { lat: 1, lng: 1 }), null)
 })

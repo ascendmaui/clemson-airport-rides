@@ -21,6 +21,8 @@ export const RIDE_TIERS: {
   price: number
   premium?: boolean
 }[]
+export const BOOKABLE_RIDE_TIER_IDS: string[]
+export function bookableRideTiers(catalog?: typeof RIDE_TIERS): typeof RIDE_TIERS
 export function destPoint(label: string): { latitude: number; longitude: number }
 export function pickupPoint(label: string): { latitude: number; longitude: number }
 export function formatUsd(amount: number): string

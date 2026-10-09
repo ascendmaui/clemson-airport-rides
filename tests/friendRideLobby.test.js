@@ -1,6 +1,9 @@
-process.env.GOOGLE_MAPS_API_KEY = process.env.GOOGLE_MAPS_API_KEY || 'mock_key_for_tests'
+const origMapsKey = process.env.GOOGLE_MAPS_API_KEY
+if (!process.env.GOOGLE_MAPS_API_KEY) {
+  process.env.GOOGLE_MAPS_API_KEY = 'mock_key_for_tests'
+}
 
-import test, { describe } from 'node:test'
+import test, { after, before, describe } from 'node:test'
 import assert from 'node:assert/strict'
 
 const {
@@ -34,7 +37,20 @@ function mockReq(method, body = {}, query = {}) {
 
 describe('FriendRide Lobby', () => {
   let db = {}
-  
+  const originalMapsKey = process.env.GOOGLE_MAPS_API_KEY
+
+  before(() => {
+    process.env.GOOGLE_MAPS_API_KEY = originalMapsKey || 'mock_key_for_tests'
+  })
+
+  after(() => {
+    if (originalMapsKey === undefined) {
+      delete process.env.GOOGLE_MAPS_API_KEY
+    } else {
+      process.env.GOOGLE_MAPS_API_KEY = originalMapsKey
+    }
+  })
+
   function createFakeSb() {
     const rides = []
     const participants = []
@@ -107,6 +123,26 @@ describe('FriendRide Lobby', () => {
     return { sb, rides, participants }
   }
 
+  test('create rejects an unauthenticated organizer without writing a ride', async () => {
+    const { sb, rides, participants } = createFakeSb()
+    const res = mockRes()
+
+    await handleFriendRideCreate(
+      mockReq('POST', {
+        displayName: 'Anonymous',
+        pickup: { address: 'A', lat: 1, lng: 1 },
+        dropoff: { address: 'B', lat: 2, lng: 2 },
+      }),
+      res,
+      { sb, user: null },
+    )
+
+    assert.equal(res.statusCode, 401)
+    assert.deepEqual(JSON.parse(res.body), { error: 'Sign in required' })
+    assert.equal(rides.length, 0)
+    assert.equal(participants.length, 0)
+  })
+
   test('happy path: create, join, get', async () => {
     const { sb, rides, participants } = createFakeSb()
     const user = { id: 'u1', email: 'org@clemson.edu', user_metadata: { full_name: 'Org' } }
@@ -125,6 +161,9 @@ describe('FriendRide Lobby', () => {
     const created = JSON.parse(resCreate.body)
     assert.equal(created.ride.organizer_id, 'u1')
     assert.equal(created.ride.status, 'collecting')
+    assert.equal(created.kind, 'friends')
+    assert.equal(created.urlPath, `/friends/${created.token}`)
+    assert.equal(created.participant.user_id, 'u1')
     
     const token = created.ride.token
     
@@ -149,6 +188,8 @@ describe('FriendRide Lobby', () => {
     assert.equal(resJoin.statusCode, 200)
     const joined = JSON.parse(resJoin.body)
     assert.equal(joined.ride.participants.length, 2)
+    assert.equal(joined.participant.user_id, 'u2')
+    assert.equal(joined.participant.status, 'joined')
   })
 
   test('happy path: recompute (mocks Maps API)', async () => {
@@ -192,6 +233,7 @@ describe('FriendRide Lobby', () => {
       return origFetch(url, init)
     }
 
+    const prevKey = process.env.GOOGLE_MAPS_API_KEY
     try {
       process.env.GOOGLE_MAPS_API_KEY = 'mock_key_for_tests'
       const reqRecompute = mockReq('POST', { token: 'tok-xyz', splitMode: 'even' })
@@ -202,7 +244,19 @@ describe('FriendRide Lobby', () => {
       assert.equal(data.token, 'tok-xyz')
       assert.ok(data.total_fare_cents > 0)
     } finally {
+      if (prevKey === undefined) delete process.env.GOOGLE_MAPS_API_KEY
+      else process.env.GOOGLE_MAPS_API_KEY = prevKey
       global.fetch = origFetch
+      if (prevKey === undefined) delete process.env.GOOGLE_MAPS_API_KEY
+      else process.env.GOOGLE_MAPS_API_KEY = prevKey
+    }
+  })
+
+  after(() => {
+    if (origMapsKey === undefined) {
+      delete process.env.GOOGLE_MAPS_API_KEY
+    } else {
+      process.env.GOOGLE_MAPS_API_KEY = origMapsKey
     }
   })
 })

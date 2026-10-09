@@ -56,6 +56,10 @@ const notificationsUrl = dataUrl(`
     state.scheduled.push(request)
     if (state.scheduleError) throw state.scheduleError
   }
+  export async function setNotificationChannelAsync(id, channel) {
+    const state = globalThis[key]
+    state.channels.push({ id, channel })
+  }
 `)
 
 const reactNativeUrl = dataUrl(`
@@ -130,6 +134,7 @@ function freshPushState() {
     tokenOpts: [],
     scheduleError: null,
     scheduled: [],
+    channels: [],
     handler,
   }
 }
@@ -186,6 +191,7 @@ test('driver push offline and error states', { concurrency: false }, async (t) =
   await t.test('exports registration and the local request alert', () => {
     assert.equal(typeof push.registerDriverPush, 'function')
     assert.equal(typeof push.notifyNewRequest, 'function')
+    assert.equal(typeof push.notifyAcceptedRide, 'function')
   })
 
   await t.test('the notification handler shows a banner and plays a sound', async () => {
@@ -196,6 +202,23 @@ test('driver push offline and error states', { concurrency: false }, async (t) =
       shouldPlaySound: true,
       shouldSetBadge: false,
     })
+  })
+
+  await t.test('an open online driver suppresses the system toast', async () => {
+    push.setRideAlertSurface({ active: true, online: true })
+    const inApp = await state().handler.handleNotification()
+    assert.equal(push.inAppRideAlert(), true)
+    assert.deepEqual(inApp, {
+      shouldShowBanner: false,
+      shouldShowList: true,
+      shouldPlaySound: false,
+      shouldSetBadge: false,
+    })
+    push.setRideAlertSurface({ active: false, online: true })
+    const locked = await state().handler.handleNotification()
+    assert.equal(locked.shouldShowBanner, true)
+    assert.equal(locked.shouldPlaySound, true)
+    push.setRideAlertSurface({ active: true, online: false })
   })
 
   await t.test('registerDriverPush asks the driver to sign in when there is no id', async () => {
@@ -522,6 +545,32 @@ test('driver push offline and error states', { concurrency: false }, async (t) =
     assert.equal(ugly.message, '[object Object]')
   })
 
+  await t.test('android ride alerts use a channel so the request sound can play', async () => {
+    state().os = 'android'
+    await push.notifyNewRequest(CARD)
+    assert.equal(state().channels.length, 1)
+    assert.equal(state().channels[0].id, 'ride-requests')
+    assert.equal(state().channels[0].channel.sound, 'request.wav')
+    assert.equal(state().channels[0].channel.importance, 4)
+    assert.equal(state().scheduled[0].content.channelId, 'ride-requests')
+    assert.equal(state().scheduled[0].content.sound, 'request.wav')
+  })
+
+  await t.test('notifyAcceptedRide tells the driver the pin was accepted', async () => {
+    await push.notifyAcceptedRide(CARD)
+    assert.deepEqual(state().scheduled, [
+      {
+        content: {
+          title: 'Ride accepted',
+          body: 'White C → GSP',
+          data: { tripId: 'trip-1' },
+          sound: 'request.wav',
+        },
+        trigger: null,
+      },
+    ])
+  })
+
   await t.test('notifyNewRequest copies the trip into a local notification', async () => {
     await push.notifyNewRequest({
       ...CARD,
@@ -568,6 +617,24 @@ test('driver push offline and error states', { concurrency: false }, async (t) =
       },
     ])
     assert.equal(state().reads, 0)
+  })
+
+  await t.test('notifyNewRequest uses promo ride copy for the Clemson Miami $1 trip', async () => {
+    await push.notifyNewRequest({
+      id: 'promo-1',
+      pickupLabel: 'Somewhere else',
+      dropoffLabel: 'GSP',
+      promoRide: true,
+      now: '2026-10-03T19:00:00.000Z',
+    })
+    const note = state().scheduled[0]
+    assert.equal(note.content.title, 'Promo ride')
+    assert.match(note.content.body, /promo ride/i)
+    assert.match(note.content.body, /fare \$1/)
+    assert.match(note.content.body, /within Clemson/)
+    assert.match(note.content.body, /Clemson Miami game/)
+    assert.match(note.content.body, /until 7:30 PM/)
+    assert.equal(note.content.data.tripId, 'promo-1')
   })
 
   await t.test('notifyNewRequest propagates scheduler network, timeout, and raw errors', async () => {

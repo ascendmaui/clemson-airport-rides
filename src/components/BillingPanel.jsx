@@ -8,6 +8,16 @@ import {
 import { loadStripeJs, PAYMENT_ELEMENT_APPEARANCE } from '../lib/stripeElements'
 import { stripeMountNode, waitForStripeMountNode } from '../lib/stripeMountTarget'
 import { getStripeConfig } from '../lib/stripeCheckout'
+import {
+  ADD_ANOTHER_PAYMENT_METHOD_ID,
+  ADD_ANOTHER_PAYMENT_METHOD_LABEL,
+  RIDE_PAYMENT_METHODS,
+  expressCheckoutPaymentMethods,
+  isWalletPaymentMethod,
+  paymentElementOrder,
+  paymentElementWallets,
+  walletUnavailableCopy,
+} from '../../shared/ridePaymentMethods.js'
 import { fetchMyRideBills } from '../lib/rideBills'
 import { getHashRoute } from '../lib/navigation'
 import { supabase } from '../lib/supabase'
@@ -37,9 +47,9 @@ function billingPurpose(role) {
     return 'Card on file when a ride charges your driver account. Friend-ride shares use this default card.'
   }
   if (role === 'both') {
-    return 'Default card for rider fares, airport deposits, and charges to your driver account.'
+    return 'Default card for rider fares and charges to your driver account.'
   }
-  return 'Default card for friend rides and airport deposits.'
+  return 'Default card for friend rides and the fare hold.'
 }
 
 function roleLabel(role) {
@@ -88,12 +98,14 @@ export function BillingPanel({ profile, onProfileRefresh }) {
   const paymentElementRef = useRef(null)
   const redirectHandled = useRef(false)
   const mountRef = useRef(null)
+  const persistRef = useRef(null)
   const [card, setCard] = useState(() => loadCardDisplay(user?.id))
   const [activatedAt, setActivatedAt] = useState(profile?.billing_activated_at || null)
   const [hasPm, setHasPm] = useState(Boolean(profile?.stripe_default_pm_id))
   const [methods, setMethods] = useState([])
   const [defaultPmId, setDefaultPmId] = useState(profile?.stripe_default_pm_id || null)
   const [showForm, setShowForm] = useState(false)
+  const [setupMethod, setSetupMethod] = useState(ADD_ANOTHER_PAYMENT_METHOD_ID)
   const [clientSecret, setClientSecret] = useState(null)
   const [formReady, setFormReady] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -225,7 +237,7 @@ export function BillingPanel({ profile, onProfileRefresh }) {
     ;(async () => {
       try {
         if (!stripeConfigured) throw new Error('Stripe publishable key not configured')
-        const setup = await createSetupIntent()
+        const setup = await createSetupIntent({ paymentMethod: setupMethod })
         if (cancelled) return
         if (!setup?.clientSecret) throw new Error('SetupIntent did not return a client secret')
         if (setup.cardBrand || setup.cardLast4) {
@@ -246,7 +258,7 @@ export function BillingPanel({ profile, onProfileRefresh }) {
       cancelled = true
       setBusy(false)
     }
-  }, [showForm, stripeConfigured]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [showForm, stripeConfigured, setupMethod]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // setShowForm(true) renders/expands the stable container first.
   // This effect mounts only after a frame where mountRef.current is in the document.
@@ -256,6 +268,7 @@ export function BillingPanel({ profile, onProfileRefresh }) {
     let paymentElement = null
     let slowTimer = 0
 
+    const walletMethod = isWalletPaymentMethod(setupMethod)
     ;(async () => {
       try {
         const target = await waitForStripeMountNode(
@@ -264,7 +277,7 @@ export function BillingPanel({ profile, onProfileRefresh }) {
         )
         if (cancelled) return
         if (!target) {
-          setErr('Card form container is not in the document yet.')
+          setErr('Payment form container is not in the document yet.')
           return
         }
         const stripe = await loadStripeJs()
@@ -276,32 +289,73 @@ export function BillingPanel({ profile, onProfileRefresh }) {
           clientSecret,
           appearance: PAYMENT_ELEMENT_APPEARANCE,
         })
-        paymentElement = elements.create('payment', { layout: 'tabs' })
-        paymentElement.on('ready', () => {
-          window.clearTimeout(slowTimer)
-          if (!cancelled) {
+        const returnUrl = `${window.location.origin}${window.location.pathname}#/account?tab=billing`
+        if (walletMethod) {
+          paymentElement = elements.create('expressCheckout', {
+            paymentMethods: expressCheckoutPaymentMethods(setupMethod),
+          })
+          paymentElement.on('ready', (event) => {
+            window.clearTimeout(slowTimer)
+            if (cancelled) return
+            const available = event?.availablePaymentMethods
+            const ready = setupMethod === 'apple_pay' ? available?.applePay : available?.googlePay
+            if (!ready) {
+              setFormReady(false)
+              setErr(walletUnavailableCopy(setupMethod))
+              return
+            }
             setFormReady(true)
-            setErr((prev) => (prev && /did not finish loading/i.test(prev) ? null : prev))
-          }
-        })
-        paymentElement.on('loaderror', (event) => {
-          if (!cancelled) setErr(event?.error?.message || 'Card form failed to load')
-        })
+            setErr(null)
+          })
+          paymentElement.on('confirm', async () => {
+            setBusy(true)
+            setErr(null)
+            try {
+              const { error, setupIntent } = await stripe.confirmSetup({
+                elements,
+                redirect: 'if_required',
+                confirmParams: { return_url: returnUrl },
+              })
+              if (error) throw new Error(error.message || 'Wallet setup failed')
+              await persistRef.current?.(setupIntent)
+            } catch (e) {
+              if (!cancelled) setErr(e.message || 'Could not save that wallet')
+            } finally {
+              if (!cancelled) setBusy(false)
+            }
+          })
+        } else {
+          paymentElement = elements.create('payment', {
+            layout: 'tabs',
+            wallets: paymentElementWallets(setupMethod),
+            paymentMethodOrder: paymentElementOrder(setupMethod),
+          })
+          paymentElement.on('ready', () => {
+            window.clearTimeout(slowTimer)
+            if (!cancelled) {
+              setFormReady(true)
+              setErr((prev) => (prev && /did not finish loading/i.test(prev) ? null : prev))
+            }
+          })
+          paymentElement.on('loaderror', (event) => {
+            if (!cancelled) setErr(event?.error?.message || 'Payment form failed to load')
+          })
+        }
         if (cancelled) return
+        slowTimer = window.setTimeout(() => {
+          if (!cancelled) setErr('Payment form did not finish loading. Close it and choose the method again.')
+        }, 15000)
         paymentElement.mount(stillThere)
         if (cancelled) {
           try { paymentElement.unmount() } catch { /* already gone */ }
           return
         }
-        slowTimer = window.setTimeout(() => {
-          if (!cancelled) setErr('Card form did not finish loading. Close it and try Add card again.')
-        }, 15000)
         elementsRef.current = elements
         paymentElementRef.current = paymentElement
       } catch (e) {
         if (!cancelled) {
           setFormReady(false)
-          setErr(e.message || 'Could not mount card form')
+          setErr(e.message || 'Could not mount payment form')
         }
       }
     })()
@@ -317,13 +371,14 @@ export function BillingPanel({ profile, onProfileRefresh }) {
         try { pe.unmount() } catch { /* already unmounted */ }
       }
     }
-  }, [showForm, clientSecret])
+  }, [showForm, clientSecret, setupMethod])
 
-  function openCardForm() {
+  function openCardForm(methodId) {
     setErr(null)
     setMsg(null)
     setFormReady(false)
     setClientSecret(null)
+    setSetupMethod(methodId || ADD_ANOTHER_PAYMENT_METHOD_ID)
     // Show the container before any Stripe mount. The effect mounts on the next frame.
     setShowForm(true)
   }
@@ -334,9 +389,29 @@ export function BillingPanel({ profile, onProfileRefresh }) {
     setFormReady(false)
   }
 
+  async function persistSetupIntent(setupIntent) {
+    const setupIntentId = setupIntent?.id
+    const paymentMethodId =
+      typeof setupIntent?.payment_method === 'string'
+        ? setupIntent.payment_method
+        : setupIntent?.payment_method?.id
+    const saved = await savePaymentMethod({ paymentMethodId, setupIntentId })
+    applySaved(saved)
+    const act = await markBillingActivated(user.id)
+    if (act.at) setActivatedAt(act.at)
+    if (act.softFail) {
+      setMsg(`Payment method saved. billing_activated_at soft-fail: ${act.softFail}`)
+    } else {
+      setMsg('Payment method saved.')
+    }
+    closeCardForm()
+    onProfileRefresh?.()
+  }
+  persistRef.current = persistSetupIntent
+
   async function onSaveCard() {
     if (!stripeRef.current || !elementsRef.current || !formReady) {
-      setErr('Card form is still loading')
+      setErr('Payment form is still loading')
       return
     }
     setBusy(true)
@@ -350,24 +425,8 @@ export function BillingPanel({ profile, onProfileRefresh }) {
           return_url: `${window.location.origin}${window.location.pathname}#/account?tab=billing`,
         },
       })
-      if (error) throw new Error(error.message || 'Card confirmation failed')
-      const setupIntentId = setupIntent?.id
-      const paymentMethodId =
-        typeof setupIntent?.payment_method === 'string'
-          ? setupIntent.payment_method
-          : setupIntent?.payment_method?.id
-
-      const saved = await savePaymentMethod({ paymentMethodId, setupIntentId })
-      applySaved(saved)
-      const act = await markBillingActivated(user.id)
-      if (act.at) setActivatedAt(act.at)
-      if (act.softFail) {
-        setMsg(`Card saved. billing_activated_at soft-fail: ${act.softFail}`)
-      } else {
-        setMsg('Account activated — card on file.')
-      }
-      closeCardForm()
-      onProfileRefresh?.()
+      if (error) throw new Error(error.message || 'Payment confirmation failed')
+      await persistSetupIntent(setupIntent)
     } catch (e) {
       setErr(e.message || 'Save failed')
     } finally {
@@ -555,9 +614,49 @@ export function BillingPanel({ profile, onProfileRefresh }) {
 
         {!showForm ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            <PrimaryButton onClick={openCardForm} disabled={busy || !stripeConfigured} data-testid="add-card">
-              {busy ? 'Loading…' : 'Add card'}
-            </PrimaryButton>
+            <div role="group" aria-label="Payment methods" data-testid="payment-method-picker" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {RIDE_PAYMENT_METHODS.map((method) => (
+                <button
+                  key={method.id}
+                  type="button"
+                  className="pressable"
+                  disabled={busy || !stripeConfigured}
+                  data-testid={`pay-method-${method.id}`}
+                  onClick={() => openCardForm(method.id)}
+                  style={{
+                    textAlign: 'left',
+                    padding: '12px 14px',
+                    borderRadius: 14,
+                    fontWeight: 800,
+                    color: 'var(--ink)',
+                    border: '1px solid rgba(82,45,128,0.16)',
+                    background: 'rgba(255,255,255,0.7)',
+                  }}
+                >
+                  {method.label}
+                </button>
+              ))}
+              <button
+                type="button"
+                className="pressable"
+                disabled={busy || !stripeConfigured}
+                data-testid="add-another-payment-method"
+                onClick={() => openCardForm(ADD_ANOTHER_PAYMENT_METHOD_ID)}
+                style={{
+                  padding: '12px 14px',
+                  borderRadius: 14,
+                  fontWeight: 800,
+                  color: 'var(--purple)',
+                  border: '1.5px solid rgba(82,45,128,0.35)',
+                  background: 'rgba(255,255,255,0.85)',
+                }}
+              >
+                {busy ? 'Loading…' : ADD_ANOTHER_PAYMENT_METHOD_LABEL}
+              </button>
+            </div>
+            <p style={{ fontSize: 11, color: 'var(--ink-tertiary)', margin: 0, lineHeight: 1.4 }}>
+              Apple Pay in this browser needs the site registered under Stripe Payment method domains. Google Pay needs a supported browser. Choosing a method opens Stripe and does not charge the card.
+            </p>
             {(hasPm || card?.last4 || methods.length > 0) && !activatedAt && (
               <button
                 type="button"
@@ -600,9 +699,11 @@ export function BillingPanel({ profile, onProfileRefresh }) {
                 {busy ? 'Preparing secure card form…' : 'Loading card form…'}
               </div>
             )}
-            <PrimaryButton onClick={onSaveCard} disabled={busy || !formReady} data-testid="save-card">
-              {busy ? 'Saving…' : activatedAt || hasPm ? 'Save & replace' : 'Save card & activate'}
-            </PrimaryButton>
+            {!isWalletPaymentMethod(setupMethod) && (
+              <PrimaryButton onClick={onSaveCard} disabled={busy || !formReady} data-testid="save-card">
+                {busy ? 'Saving…' : 'Save payment method'}
+              </PrimaryButton>
+            )}
             <button
               type="button"
               className="pressable"
@@ -612,7 +713,9 @@ export function BillingPanel({ profile, onProfileRefresh }) {
               Cancel
             </button>
             <p style={{ fontSize: 11, color: 'var(--ink-tertiary)', marginTop: 10, lineHeight: 1.4 }}>
-              Apple Pay appears when the domain is verified in the Stripe Dashboard.
+              {isWalletPaymentMethod(setupMethod)
+                ? 'Use the Apple Pay or Google Pay button above. It saves the wallet for ride charges and does not charge the card now. Apple Pay on this site still needs the domain verified in the Stripe Dashboard.'
+                : 'Apple Pay and Google Pay also appear here when this browser can use them and the Apple Pay domain is verified.'}
             </p>
           </div>
         )}

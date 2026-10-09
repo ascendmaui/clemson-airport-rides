@@ -76,9 +76,9 @@ function assertPayload(body, expected) {
   assert.equal('isStudent' in body, false)
   assert.equal('listCents' in body, false)
   assert.equal('riderId' in body, false)
-  assert.equal(body.pickupLabel, 'Memorial Stadium')
-  assert.equal(body.pickupLat, stadium.latitude)
-  assert.equal(body.pickupLng, stadium.longitude)
+  assert.equal(body.pickupLabel, expected.pickupLabel)
+  assert.equal(body.pickupLat, expected.pickupLat)
+  assert.equal(body.pickupLng, expected.pickupLng)
   assert.deepEqual(body, expected)
 }
 
@@ -180,9 +180,9 @@ test('requestDriverTrip posts custom pins and returns the server trip', async ()
     dest: 'Sikes Hall',
     destLat: 34.8526,
     destLng: -82.394,
-    pickupLabel: 'Memorial Stadium',
-    pickupLat: stadium.latitude,
-    pickupLng: stadium.longitude,
+    pickupLabel: 'Sikes Hall',
+    pickupLat: 1,
+    pickupLng: 2,
     tier: 'comfort',
   })
   assert.equal(stadium.latitude, 34.6788)
@@ -341,7 +341,7 @@ test('requestDriverTrip defaults tier and keeps an explicit tier', async () => {
     assert.equal(slot.calls[0].body.tier, 'standard')
   }
 
-  for (const tier of ['standard', 'comfort', 'xl', 'tesla', 'STANDARD']) {
+  for (const tier of ['standard', 'comfort', 'xl', 'comfort', 'STANDARD']) {
     reset()
     await requestDriverTrip(priced({
       riderId: 'rider-1',
@@ -486,4 +486,14 @@ test('requestDriverTrip lets a whitespace id through and still omits the fare fi
     destLng: -82.8,
   }))
   assert.equal(slot.calls[0].body.driverId, '   ')
+})
+
+test('auto-assign posts autoAssign and omits driverId', async () => {
+  reset()
+  await requestDriverTrip(priced({ riderId: 'rider-1', autoAssign: true }))
+  const body = slot.calls[0].body
+  assert.equal(body.autoAssign, true)
+  assert.equal('driverId' in body, false)
+  assert.equal('isStudent' in body, false)
+  assert.equal(body.tier, 'standard')
 })
