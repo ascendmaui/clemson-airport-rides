@@ -453,7 +453,6 @@ export const CampusMap = forwardRef<CampusMapHandle, CampusMapProps>(function Ca
                   <View style={{ transform: [{ rotate: `${car.heading}deg` }] }}>
                     <View style={styles.busyGlyph} />
                   </View>
-                  <Text style={styles.busyLabel}>Busy</Text>
                 </View>
               </Marker>
             ))
@@ -526,17 +525,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#522D80',
     borderWidth: 2,
     borderColor: '#FFFFFF',
-  },
-  busyLabel: {
-    marginTop: 2,
-    overflow: 'hidden',
-    borderRadius: 8,
-    paddingHorizontal: 6,
-    paddingVertical: 1,
-    backgroundColor: '#522D80',
-    color: '#FFFFFF',
-    fontSize: 10,
-    fontWeight: '800',
   },
   busyBadge: { position: 'absolute', right: 12, bottom: 12 },
   busyBadgeText: {
