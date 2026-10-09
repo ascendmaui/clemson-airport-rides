@@ -1,7 +1,7 @@
 import { createTrackingRefresh } from 'rides-native/tracking'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { AppState, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { AppState, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { CampusMap, type MapPin } from '@/components/CampusMap'
 import { WaitTimer } from '@/components/WaitTimer'
@@ -16,7 +16,9 @@ import { oneParam } from '@/lib/oneParam'
 import { openNavigation } from '@/lib/openMaps'
 import { supabase } from '@/lib/supabase'
 import { useDriverLocation } from '@/lib/useDriverLocation'
-import { driverTripAction, tripWaitTick, advanceTrip, confirmBackupQueueTrip, loadRiderFix, loadTrip, publishDriverLocation, releaseBackupQueueSeat, subscribeTrips } from 'rides-native/driverDesk'
+import { publishDriverLocation, startTripBackgroundLocation, stopTripBackgroundLocation } from '@/lib/backgroundLocation'
+import { isActiveTripLocationStatus } from 'rides-native/backgroundLocation'
+import { driverTripAction, tripWaitTick, advanceTrip, confirmBackupQueueTrip, loadRiderFix, loadTrip, releaseBackupQueueSeat, subscribeTrips } from 'rides-native/driverDesk'
 import {
   confirmCountdownLabel,
   leaveNowCountdownLabel,
@@ -84,6 +86,8 @@ export default function TripScreen() {
   const sosActive = isActiveRideStatus(trip?.status)
   const [sosOpen, setSosOpen] = useState(false)
   const terminalTrip = Boolean(trip && ['completed', 'canceled', 'canceled_midride', 'cancelled_wait'].includes(trip.status))
+  const activeTrip = isActiveTripLocationStatus(trip?.status)
+  const [backgroundNote, setBackgroundNote] = useState<string | null>(null)
   const [self, setSelf] = useState<{ latitude: number; longitude: number } | null>(null)
   const [rider, setRider] = useState<RiderFix | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -126,6 +130,7 @@ export default function TripScreen() {
     const reader = createTrackingRefresh({
       load: () => loadTrip(supabase, id, user?.id),
       onData: (row) => {
+        if (!row) void stopTripBackgroundLocation(id).catch(() => {})
         // A poll begun before Start or cancel must not restore the wait screen.
         setTrip((current) => current && current.id === row?.id && row?.status === 'arrived'
           && ['in_progress', 'completed', 'canceled', 'canceled_midride', 'cancelled_wait'].includes(current.status)
@@ -143,6 +148,32 @@ export default function TripScreen() {
     const timer = setInterval(pull, 5000)
     return () => { reader.stop(); readerRef.current = null; listener.remove(); unsubscribe(); clearInterval(timer) }
   }, [refresh, id, user?.id])
+
+  useEffect(() => {
+    if (!trip) return undefined
+    let alive = true
+    const updateBackgroundLocation = async () => {
+      if (!activeTrip || terminalTrip || !user) {
+        await stopTripBackgroundLocation(trip.id)
+        if (alive) setBackgroundNote(null)
+        return
+      }
+      try {
+        const status = await startTripBackgroundLocation(trip.id)
+        if (alive) setBackgroundNote(status === 'background-denied'
+          ? 'Set location to Always so your rider can still see you while you use Maps.'
+          : null)
+      } catch {
+        if (alive) setBackgroundNote('Background location could not start. Check location in Settings, then return to retry.')
+      }
+    }
+    void updateBackgroundLocation().catch(() => {})
+    const listener = AppState.addEventListener('change', (state) => {
+      if (state === 'active') void updateBackgroundLocation().catch(() => {})
+    })
+    // Navigation away from this screen must keep an active trip's service alive.
+    return () => { alive = false; listener.remove() }
+  }, [trip?.id, activeTrip, terminalTrip, user?.id])
 
   useEffect(() => {
     if (!supabase || !id || !trip || terminalTrip) return undefined
@@ -164,7 +195,7 @@ export default function TripScreen() {
 
   const locationTracking = useDriverLocation(Boolean(user && trip && !terminalTrip), async (fix) => {
     setSelf({ latitude: fix.lat, longitude: fix.lng })
-    if (!supabase || !user) return
+    if (!supabase || !user || !activeTrip) return
     await publishDriverLocation(supabase, user.id, {
       ...fix,
       online: true,
@@ -185,6 +216,9 @@ export default function TripScreen() {
     setError(null)
     try {
       const result = await advanceTrip(supabase, trip, user.id)
+      if (result?.status && !isActiveTripLocationStatus(result.status)) {
+        await stopTripBackgroundLocation(trip.id)
+      }
       if (result?.status === 'cancelled_wait') {
         setTrip(toDriverCard(result, { driverId: user.id }))
       } else if (result?.status === 'completed') {
@@ -433,6 +467,16 @@ export default function TripScreen() {
         ) : (
           <Text style={styles.copy}>{id ? 'This trip is not on your account yet.' : 'Missing trip id.'}</Text>
         )}
+        {backgroundNote && activeTrip ? (
+          <View>
+            <Text style={styles.note}>{backgroundNote}</Text>
+            <Pressable accessibilityRole="button" accessibilityLabel="Open location settings"
+              onPress={() => { void Linking.openSettings().catch(() => setError('Could not open Settings. Open your phone’s Settings to update location permission.')) }}
+              style={styles.nav}>
+              <Text style={styles.navText}>Open Settings</Text>
+            </Pressable>
+          </View>
+        ) : null}
         {locationTracking.error ? (
             <View>
               <ErrorText>{locationTracking.error}</ErrorText>
