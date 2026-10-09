@@ -11,6 +11,7 @@
  * an in-app alert while online.
  * SMS and email delivery are delegated to driverOfferChannels.js.
  */
+import { readDriverPushToken } from './driverPushToken.js'
 import { dispatchDriverOfferChannels } from './driverOfferChannels.js'
 import { sendExpoPush, PUSH_CREDENTIAL_GAP } from './expoPush.js'
 import { quietFromPrefs } from '../src/lib/quietHours.js'
@@ -103,24 +104,17 @@ export function buildOfferAlertPlan({
   return channels
 }
 
-function readPushToken(statusRow, tokenRow) {
-  const statusToken = String(statusRow?.expo_push_token || '').trim()
-  const tableToken = String(tokenRow?.token || '').trim()
-  return statusToken || tableToken
-}
-
 async function loadDriverContact(sb, driverId) {
   const profile = await sb.from('profiles').select('email, phone, notification_prefs').eq('id', driverId).maybeSingle()
-  const status = await sb.from('driver_status').select('expo_push_token').eq('driver_id', driverId).maybeSingle()
-  const token = await sb.from('driver_push_tokens').select('token, platform').eq('driver_id', driverId).maybeSingle()
+  const push = await readDriverPushToken(sb, driverId)
   return {
     email: String(profile.data?.email || '').trim(),
     phone: String(profile.data?.phone || '').trim(),
     phoneOnFile: Boolean(String(profile.data?.phone || '').trim()),
     prefs: profile.data?.notification_prefs || null,
-    pushToken: readPushToken(status.data, token.data),
-    pushTokenPresent: Boolean(readPushToken(status.data, token.data)),
-    error: profile.error || status.error || token.error || null,
+    pushToken: push.token,
+    pushTokenPresent: Boolean(push.token),
+    error: profile.error || null,
   }
 }
 
@@ -163,6 +157,9 @@ export async function dispatchDriverOfferAlert(sb, {
     emailOnFile: Boolean(contact.email),
   })
 
+  const tokenKind = contact.pushToken ? (/^Expo(nent)?PushToken\[/.test(contact.pushToken) ? 'expo' : 'raw') : null
+  if (tokenKind) channels.push.tokenKind = tokenKind
+
   const alerts = sb.from('driver_offer_alerts')
   const inserted = typeof alerts.insert === 'function'
     ? await alerts.insert({
@@ -182,19 +179,28 @@ export async function dispatchDriverOfferAlert(sb, {
     const prefs = contact.prefs?.ride_alerts
     const mode = prefs && typeof prefs === 'object' ? prefs[tier] || prefs.standard : null
     const sound = mode === 'silent' || mode === 'vibrate' ? null : 'default'
-    const pushed = await sendExpoPush({
-      to: contact.pushToken,
-      title: offerAlertCopy(trip).title,
-      body: offerAlertCopy(trip).body,
-      sound,
-      data: { tripId, tier },
-    }, deps)
+    const pushed = tokenKind === 'raw'
+      ? { sent: false, reason: 'raw_device_token_unsupported' }
+      : await sendExpoPush({
+        to: contact.pushToken,
+        title: offerAlertCopy(trip).title,
+        body: offerAlertCopy(trip).body,
+        sound,
+        data: { tripId, tier },
+      }, deps)
     channels.push = {
       sent: Boolean(pushed.sent),
       reason: pushed.reason,
       tokenPresent: true,
+      tokenKind,
       ...(pushed.gap ? { gap: pushed.gap } : {}),
     }
+  }
+
+  if (channels.push.reason === 'device_not_registered') {
+    try {
+      await sb.from('driver_push_tokens').delete().eq('driver_id', driverId).eq('token', contact.pushToken)
+    } catch { /* Best effort; avoid removing a concurrently refreshed token. */ }
   }
 
   if (!inserted?.error && !suppressed) {

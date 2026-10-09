@@ -10,6 +10,7 @@
  * skipped with reason expo_access_token_missing), CRON_SECRET,
  * SUPABASE_SERVICE_ROLE_KEY for the recipient list and the drop claim.
  */
+import { readDriverPushTokens } from '../driverPushToken.js'
 import { admin, cors, json } from '../friendRideLib.js'
 import { stagingCronBlock } from '../cronGuard.js'
 import { cronAuthorized, isVercelCron, runningOnVercel } from './driverPayouts.js'
@@ -82,18 +83,8 @@ export function supabaseDropStore(sb) {
       return rows(result)
     },
     async listPushTokens() {
-      const tokens = []
-      const status = await sb.from('driver_status').select('expo_push_token').limit(500)
-      for (const row of rows(status)) {
-        const token = String(row.expo_push_token || '').trim()
-        if (token) tokens.push(token)
-      }
-      const table = await sb.from('driver_push_tokens').select('token').limit(500)
-      for (const row of rows(table)) {
-        const token = String(row.token || '').trim()
-        if (token) tokens.push(token)
-      }
-      return tokens
+      const tokens = await readDriverPushTokens(sb)
+      return [...tokens.values()].map((row) => row.token).filter((token) => /^Expo(nent)?PushToken\[/.test(token || ''))
     },
   }
 }

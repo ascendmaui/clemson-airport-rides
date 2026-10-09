@@ -2,6 +2,7 @@
  * Best-effort push and email when a trip message or lost-item thread opens.
  * The message row itself is written by the client under RLS. This module only notifies.
  */
+import { readDriverPushToken } from './driverPushToken.js'
 import { sendExpoPush } from './expoPush.js'
 import { sendApplicantNotice } from './applicantMail.js'
 import { lostItemNoticeBody } from '../shared/copy/messaging.js'
@@ -49,10 +50,8 @@ async function firstToken(sb, table, column, idColumn, userId) {
 
 export async function pushTokenForUser(sb, userId) {
   if (!userId) return null
-  const driverStatus = await firstToken(sb, 'driver_status', 'expo_push_token', 'driver_id', userId)
-  if (driverStatus) return driverStatus
-  const driverTable = await firstToken(sb, 'driver_push_tokens', 'token', 'driver_id', userId)
-  if (driverTable) return driverTable
+  const { token } = await readDriverPushToken(sb, userId)
+  if (token) return token
   return firstToken(sb, 'rider_push_tokens', 'token', 'rider_id', userId)
 }
 

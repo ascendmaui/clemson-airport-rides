@@ -3,6 +3,7 @@
  * Before pickup, the rider can drop the matched driver and ask again.
  * confirm omitted returns the fee, the hold plan, online drivers, and prices.
  */
+import { readDriverPushToken } from '../driverPushToken.js'
 import { loadGameDayMultiplier } from '../creditLots.js'
 import { priceDriverRequest, resolveDriverRequestPlaces } from '../authoritativeFare.js'
 import { listAssignableDrivers } from '../autoAssign.js'
@@ -20,8 +21,7 @@ import { openPoolLine } from '../../shared/copy/riderSwitch.js'
 async function notifyReleasedDriver(sb, driverId, tripId) {
   if (!driverId) return
   try {
-    const status = await sb.from('driver_status').select('expo_push_token').eq('driver_id', driverId).maybeSingle()
-    const token = status?.data?.expo_push_token
+    const { token } = await readDriverPushToken(sb, driverId)
     if (!token) return
     await sendExpoPush({
       to: token,

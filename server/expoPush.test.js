@@ -89,3 +89,18 @@ test('silent ride-alert prefs omit the push sound', async () => {
   })
   assert.equal(body.sound, undefined)
 })
+
+test('credential detection and device rejection have distinct reasons', async () => {
+  for (const [error, reason] of [['InvalidCredentials', 'expo_credentials_missing'], ['DeviceNotRegistered', 'device_not_registered'], ['MessageTooBig', 'expo_push_rejected']]) {
+    const result = await sendExpoPush({ to: 'ExpoPushToken[test]' }, {
+      env: {}, fetch: async () => ({ ok: true, json: async () => ({ data: { status: 'error', details: { error } } }) }),
+    })
+    assert.equal(result.sent, false)
+    assert.equal(result.reason, reason)
+  }
+})
+
+test('shared sender rejects raw tokens before fetching', async () => {
+  const result = await sendExpoPush({ to: 'a'.repeat(64) }, { fetch: async () => assert.fail('raw token sent') })
+  assert.equal(result.reason, 'raw_device_token_unsupported')
+})

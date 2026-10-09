@@ -3,6 +3,7 @@
  * The backup fee is captured once. A switch redirects it to the former
  * primary. A cancel partial-captures it and releases the rest of the hold.
  */
+import { readDriverPushToken } from './driverPushToken.js'
 import { unchangedOfferQuery } from '../shared/driverOrder.js'
 import { insertTripEvent } from './tripEvents.js'
 import { sendExpoPush } from './expoPush.js'
@@ -42,13 +43,7 @@ async function audit(sb, tripId, kind, payload) {
 
 async function pushToDriver(sb, driverId, { title, body, tripId, kind }) {
   if (!driverId) return
-  let token = null
-  try {
-    const status = await sb.from('driver_status').select('expo_push_token').eq('driver_id', driverId).maybeSingle()
-    token = status.data?.expo_push_token || null
-  } catch {
-    token = null
-  }
+  const { token } = await readDriverPushToken(sb, driverId)
   if (!token) return
   await sendExpoPush({
     to: token,
