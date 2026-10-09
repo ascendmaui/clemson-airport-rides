@@ -65,7 +65,9 @@ test('error details select messages and codes without dumping response credentia
 async function withMockRun({ args = ['--confirm-prod-e2e'], key = 'pk_test_fake', retrievalFails = false,
   failOnline = false, fullRide = false, noCard = false, failOffer = false, lostBookingResponse = false,
   payoutRls = false, failedHold = false, e2eFlag = true, directCharge = false,
-  paymentOverride = {}, failTip = false, persistedError = true } = {}) {
+  paymentOverride = {}, failTip = false, persistedError = true,
+  tipCustom = true, tipPresets = [{ id: 'pct-20', cents: 160 }, { id: 'pct-15', cents: 120 }],
+  tipPersisted = true, failTipOffer = false } = {}) {
   const folder = await mkdtemp(join(tmpdir(), 'e2e-ride-test-'))
   const filename = join(folder, 'env')
   await writeFile(filename, '')
@@ -85,7 +87,7 @@ async function withMockRun({ args = ['--confirm-prod-e2e'], key = 'pk_test_fake'
     const url = String(input)
     const body = options.body instanceof URLSearchParams ? Object.fromEntries(options.body)
       : options.body ? JSON.parse(String(options.body)) : undefined
-    calls.push({ url, body, method: options.method || 'GET' })
+    calls.push({ url, body, method: options.method || 'GET', authorization: new Headers(options.headers).get('authorization') })
     let result, status = 200
     if (url.includes('/auth/v1/token')) {
       const role = body.email.toLowerCase().includes('+rider') ? 'rider' : 'driver'
@@ -134,8 +136,25 @@ async function withMockRun({ args = ['--confirm-prod-e2e'], key = 'pk_test_fake'
       trip.metadata.fare_authorization.status = body.action === 'complete' ? (directCharge ? 'failed' : 'captured') : 'canceled'
       trip.metadata.payout = { amountCents: 640, status: 'pending' }
       result = { ok: true, status: trip.status, payment: { ok: true, method: 'card', status: 'succeeded', amountCents: 800, paymentIntentId: 'pi_mock', ...paymentOverride } }
-    } else if (fullRide && url.endsWith('/api/trip-tip')) result = failTip
-      ? { ok: false, error: { message: 'tip declined', code: 'card_declined' } } : { ok: true, tipCents: 100 }
+    } else if (fullRide && url.endsWith('?action=tip-choice')) {
+      assert.equal(options.headers.Authorization, 'Bearer fake-rider-token')
+      assert.equal(body.tripId, trip.id)
+      if (body.mode === 'offer') result = failTipOffer ? { ok: false, error: 'offer unavailable' }
+        : { ok: true, mode: 'offer', presets: tipPresets,
+          ...(tipCustom ? { custom: { minCents: 100, maxCents: 10000 } } : {}) }
+      else {
+        assert.equal(body.mode, 'record')
+        const cents = body.choiceId === 'custom' ? Number(body.customDollars) * 100
+          : tipPresets.find(row => row.id === body.choiceId)?.cents
+        if (tipPersisted && !failTip) trip.tip_cents = cents
+        result = failTip ? { ok: false, error: { message: 'tip declined', code: 'card_declined' } }
+          : { ok: true, mode: 'record', choice: { id: body.choiceId, tipCents: cents,
+            charged: tipPersisted, chargeStatus: tipPersisted ? 'charged' : 'no_card' },
+            chargedTipCents: tipPersisted ? cents : 0,
+            payment: { paymentIntentId: 'pi_tip_mock', status: tipPersisted ? 'succeeded' : 'failed',
+              clientSecret: 'seti_fake_secret_fake' } }
+      }
+    }
     else if (fullRide && url.includes('/rest/v1/trips')) {
       if (options.method === 'PATCH') Object.assign(trip, body)
       result = options.headers?.Accept?.includes('vnd.pgrst.object') ? trip : [trip]
@@ -218,8 +237,38 @@ test('test mode drives the real driverDesk lifecycle, saves a card and verifies 
     assert.equal(result.trip.metadata.driver_payout_cents, 640)
     assert.equal(result.online, false)
     const completion = result.calls.findIndex(c => c.body?.action === 'complete')
-    const tip = result.calls.findIndex(c => c.url.endsWith('/api/trip-tip'))
+    const tip = result.calls.findIndex(c => c.url.endsWith('?action=tip-choice'))
     assert.ok(result.calls.slice(completion + 1, tip).some(c => c.body?.online === false))
+    assert.deepEqual(result.calls.filter(c => c.url.endsWith('?action=tip-choice')).map(c => c.body), [
+      { mode: 'offer', tripId: 'trip_mock' },
+      { mode: 'record', tripId: 'trip_mock', choiceId: 'custom', customDollars: '1' },
+    ])
+    const recorded = result.calls.findIndex(c => c.body?.mode === 'record')
+    assert.ok(result.calls.slice(recorded + 1).some(c => c.url.includes('/rest/v1/trips')
+      && c.method === 'GET' && c.authorization === 'Bearer fake-rider-token'))
+    assert.match(result.summary.steps.find(s => s.name === 'tip').detail,
+      /tip_cents 100; charged true; chargeStatus charged; chargedTipCents 100; paymentIntentId pi_tip_mock; status succeeded/)
+  }
+})
+
+test('tip selects the smallest positive preset when custom is unavailable', async () => {
+  const result = await withMockRun({ fullRide: true, tipCustom: false,
+    tipPresets: [{ id: 'skip', cents: 0 }, { id: 'large', cents: 300 }, { id: 'small', cents: 100 }] })
+  assert.equal(result.exitCode, 0, result.logs.join('\n'))
+  assert.deepEqual(result.calls.find(c => c.body?.mode === 'record').body,
+    { mode: 'record', tripId: 'trip_mock', choiceId: 'small' })
+  assert.equal(result.trip.tip_cents, 100)
+})
+
+test('tip requires a usable offer and a positive persisted tip even when record is OK', async () => {
+  for (const options of [{ tipPersisted: false }, { failTipOffer: true }, { tipCustom: false, tipPresets: [] }]) {
+    const result = await withMockRun({ fullRide: true, ...options })
+    assert.equal(result.exitCode, 1)
+    const tip = result.summary.steps.find(s => s.name === 'tip')
+    assert.equal(tip.status, 'FAIL')
+    assert.equal(result.summary.steps.find(s => s.name === 'payout_ledger').status, 'SKIP')
+    if (options.tipPersisted === false) assert.match(tip.detail, /positive tip_cents.*charged false.*chargeStatus no_card/)
+    else assert.equal(result.calls.some(c => c.body?.mode === 'record'), false)
   }
 })
 

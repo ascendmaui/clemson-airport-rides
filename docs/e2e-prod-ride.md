@@ -3,7 +3,7 @@
 `scripts/e2e-prod-ride.mjs` drives one short Standard ride from Cooper Library to
 Clemson Downtown through the deployed HTTP API and separate Supabase rider and
 driver sessions. It uses the real `driverDesk` acceptance and advancement helpers,
-including locked offer economics, arrival, settlement, capture, a $1 tip, and a
+including locked offer economics, arrival, settlement, capture, a positive tip, and a
 positive payout ledger check. Each step has a 30-second HTTP deadline; reads retry
 up to three times for eventual consistency. It prints `STEP <name> PASS|FAIL|SKIP`
 lines and ends with a JSON summary. Any failure exits nonzero and runs cleanup.
@@ -72,6 +72,12 @@ and other failures still stop subsequent steps and run cleanup.
 
 Failure details include underlying Supabase messages or HTTP status and JSON
 error/code when available. Credentials remain redacted.
+
+Tip uses the apps' `POST /api/driver?action=tip-choice` offer and record flow:
+custom $1 when the offered bounds allow it, otherwise the smallest positive
+preset. The harness verifies `tip_cents > 0` through the rider's Supabase session
+and reports payment diagnostics returned by record. An OK record response alone
+does not pass the step.
 
 In test mode, a missing/unreadable default card triggers confirmation with
 `pm_card_visa` and saving through the normal API. A payout ledger with a positive

@@ -330,9 +330,34 @@ export async function main(args = process.argv.slice(2)) {
         return `${auth?.status === 'captured' ? 'captured hold' : 'direct card charge succeeded'} ${payment.amountCents} cents; PaymentIntent ${payment.paymentIntentId}; payment_status ${trip.payment_status || 'not exposed'}`
       })
       await step('tip', async () => {
-        const result = await api(rider, '/api/trip-tip', { tripId: summary.tripId, amountCents: 100, mode: 'charge' })
-        requireThat(result.ok === true && result.tipCents === 100, failureDetail('Saved-card tip did not succeed', result))
-        return '100 cents charged to saved test card'
+        const path = '/api/driver?action=tip-choice'
+        const offer = await api(rider, path, { mode: 'offer', tripId: summary.tripId })
+        requireThat(offer?.ok === true, failureDetail('Could not load tip offer', offer))
+        const smallest = (Array.isArray(offer.presets) ? offer.presets : [])
+          .filter(row => typeof row?.id === 'string' && Number.isFinite(row.cents) && row.cents > 0)
+          .sort((a, b) => a.cents - b.cents)[0]
+        const customDollar = Number.isFinite(offer.custom?.minCents) && offer.custom.minCents <= 100
+          && Number.isFinite(offer.custom?.maxCents) && offer.custom.maxCents >= 100
+        requireThat(customDollar || smallest, 'Tip offer has no positive choice or custom $1 option')
+        const body = { mode: 'record', tripId: summary.tripId,
+          choiceId: customDollar ? 'custom' : smallest.id,
+          ...(customDollar ? { customDollars: '1' } : {}) }
+        const result = await api(rider, path, body)
+        // Allowlist payment diagnostics; response bodies may contain client secrets.
+        const paymentInfo = [result?.choice, result, result?.payment].flatMap(info => {
+          if (!info) return []
+          return ['charged', 'chargedTipCents', 'chargeStatus', 'paymentIntentId', 'status']
+            .filter(key => ['string', 'number', 'boolean'].includes(typeof info[key]))
+            .map(key => `${key} ${info[key]}`)
+        }).join('; ')
+        requireThat(result?.ok === true, failureDetail('Saved-card tip record did not succeed', result))
+        const trip = await retryRead(async () => {
+          const row = await readTrip(rider)
+          requireThat(Number.isFinite(Number(row.tip_cents)) && Number(row.tip_cents) > 0,
+            `Rider trip read did not verify positive tip_cents; choice ${body.choiceId}; ${paymentInfo || 'payment info not exposed'}`)
+          return row
+        })
+        return `choice ${body.choiceId}; rider trip tip_cents ${trip.tip_cents}; ${paymentInfo || 'payment info not exposed'}`
       })
       await step('payout_ledger', async () => retryRead(async () => {
         const ledger = await driver.from('driver_payouts').select('trip_id, driver_id, amount_cents, status')
