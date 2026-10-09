@@ -5,11 +5,13 @@ import { sweepCanceledHolds } from '../canceledHoldSweep.js'
 
 import { sweepWaitAutoCancel } from '../waitAutoCancelSweep.js'
 import { sweepWaitFeeCharge } from '../waitFeeChargeSweep.js'
+import { sweepTripStatusNotices } from '../tripStatusNotices.js'
 
 export const SWEEPS = [
   { name: 'canceled_holds', run: sweepCanceledHolds },
   { name: 'wait-auto-cancel', run: sweepWaitAutoCancel },
   { name: 'wait-fee-charge', run: sweepWaitFeeCharge },
+  { name: 'trip-status-notices', run: sweepTripStatusNotices },
 ]
 
 function headerValue(headers, name) {
@@ -63,7 +65,11 @@ export default async function handler(req, res, deps = {}) {
   const results = {}
   const total = { released: 0, canceled: 0, charged: 0, failed: 0, skipped: 0, ids: { released: [], canceled: [], charged: [], failed: [], skipped: [] } }
   let errors = 0
-  for (const sweep of deps.sweeps || SWEEPS) {
+  // The trips status trigger asks for just the notice drain so a push lands in seconds.
+  const only = String(req.query?.only ?? params.get('only') ?? '').trim()
+  const sweeps = (deps.sweeps || SWEEPS).filter((sweep) => !only || sweep.name === only)
+  if (only && !sweeps.length) return json(res, 400, { error: 'Unknown sweep' })
+  for (const sweep of sweeps) {
     try {
       const result = await sweep.run(sb, { dryRun, now: deps.now, stripe: deps.stripe })
       results[sweep.name] = result

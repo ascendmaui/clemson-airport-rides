@@ -113,7 +113,7 @@ test('sweep dry runs never tick, charge, or transfer; selection errors propagate
   }
 })
 test('endpoint registers both sweeps and totals canceled and charged counts and failures', async () => {
-  assert.deepEqual(SWEEPS.map(s => s.name), ['canceled_holds', 'wait-auto-cancel', 'wait-fee-charge'])
+  assert.deepEqual(SWEEPS.map(s => s.name), ['canceled_holds', 'wait-auto-cancel', 'wait-fee-charge', 'trip-status-notices'])
   const response = await call(sweeps, {}, { sb: {}, env: { CRON_SECRET: 'test' }, sweeps: [
     { name: 'wait-auto-cancel', run: async () => ({ canceled: 2, failed: 1, ids: { canceled: ['a', 'b'], failed: ['c'] } }) },
     { name: 'wait-fee-charge', run: async () => ({ charged: 1, skipped: 1, ids: { charged: ['d'], skipped: ['e'] } }) },
