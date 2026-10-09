@@ -53,6 +53,48 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
   - `docs/FIXES.md`
 - **Verified:** `node --test tests/gaAuditReconcileAirportCheckoutHardening.test.js` (6/6 passing) and full test runner `npm test`.
 
+## 2026-10-05 — Web ride-offer file chime skipped when rewind threw
+
+- **What was wrong:** The web offer chime file fallback (`playChimeFile` in `src/lib/rideAlert.js`) set `currentTime = 0` before calling `play()`. On a new element that has not loaded metadata, that seek throws `InvalidStateError`, the catch returned false, and the first `/sounds/ride-chime.wav` playback never started. Native custom notification sound stayed out of scope; that work is draft #254.
+- **What changed:** Rewind only when `readyState > 0` and `currentTime > 0`, and swallow a seek error so `play()` still runs. Added a unit test with a fake `Audio` whose `currentTime` setter throws. Documented the web path and pointed native asset work at draft #254 in `docs/WEB_OFFER_CHIME.md`.
+- **Files touched:**
+  - `src/lib/rideAlert.js`
+  - `src/lib/rideAlert.test.js`
+  - `docs/WEB_OFFER_CHIME.md`
+  - `docs/FIXES.md`
+- **Verified:** `node --test src/lib/rideAlert.test.js` and `npm test`.
+
+## 2026-10-05 — Web ride-offer chime no-ops when Audio is missing
+
+- **What was wrong:** The driver web offer chime (`playRideChime` in `src/lib/rideAlert.js`, used by `DriverHome`) already returns false from the file fallback when `Audio` is undefined, but `src/lib/rideAlert.test.js` only checked that the result was a boolean. A missing `Audio` constructor was not pinned, so a throw from `new Audio` could pass the suite.
+- **What changed:** Extended the ride-alert unit test to remove `Audio`, disable the Web Audio synth path, and assert `playRideChime` returns false (including a second call) and `playRideRequestAlert` does not reject.
+- **Files touched:**
+  - `src/lib/rideAlert.test.js`
+  - `docs/FIXES.md`
+- **Verified:** `node --test src/lib/rideAlert.test.js` and `npm test`.
+
+## 2026-10-05 — t2 web bottom tab order
+
+- **What was wrong:** The web bar already rendered Rides, Schedule, Friends, Account from `WEB_BOTTOM_TABS`, and the support brief used the same words, but nothing checked that the brief stayed tied to the bar. A later edit could put Schedule first in the brief again. Open draft #264 still reorders this bar and also edits native rider tabs plus back-button chrome.
+- **What changed:** Asserted the product brief's bottom-tab sentence matches `webBottomTabLabels()` (Rides, Schedule, Friends, Account). Left `BottomTabs` on that shared list. Did not edit native tab files or #264's back buttons. This branch supersedes #264 for the web order only; #264 stays open.
+- **Files touched:**
+  - `server/productKnowledge.test.js`
+  - `docs/FIXES.md`
+- **Verified:** `node --test server/productKnowledge.test.js src/lib/webTabOrder.test.js` and `npm test`.
+
+## 2026-10-05 — Web bottom tab order
+
+- **What was wrong:** The web rider bar in `src/components/BottomTabs.jsx` listed Schedule, Friends, Account, then Rides. The order was an inline array, so nothing could assert it. The rider app already uses Rides, Schedule, Friends, Account. The support brief repeated the old web order.
+- **What changed:** Added a pure `WEB_BOTTOM_TABS` export (Rides → Schedule → Friends → Account) and a unit test for that order. `BottomTabs` builds its buttons from the export. Updated the product brief to the same order. Native tab files were left alone.
+- **Files touched:**
+  - `src/lib/webTabOrder.js`
+  - `src/lib/webTabOrder.test.js`
+  - `src/components/BottomTabs.jsx`
+  - `server/productKnowledge.js`
+  - `package.json`
+  - `docs/FIXES.md`
+- **Verified:** `node --test src/lib/webTabOrder.test.js` and `npm test`.
+
 ## 2026-10-02 — GA96: GA audit & tests - abandoned checkout resilience, hold TTL NaN safety, and RPC direct update fallbacks
 
 - **Track / machine:** Clemson RIDES · MacBook Max · `agy/ga-audit-abandoned-checkout-resilience-ga96`
@@ -2024,4 +2066,39 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
 - **What changed:** Added one sentence under the Mobile section of `README.md` pointing at [docs/android-play-readiness.md](android-play-readiness.md). No app config, store listing, or EAS changes.
 - **Files touched:** `README.md`, `docs/FIXES.md`
 - **Verified:** `npm test` — 2330 pass, 0 fail.
+
+## 2026-10-05 — Student discount e2e: campus email lock and blank tier
+
+- **Date:** 2026-10-05
+- **What was wrong:** Server tests checked student flags and source scans, but did not prove discount cents. An unverified or non-Clemson email could drift from the fare helpers, and a blank tier could discount in `applyStudentDiscount` or `quoteFare` without the other helper agreeing.
+- **What changed:** Extended `server/studentDiscount.test.js` so `studentFlagsFor` and `studentDiscountGranted` feed both helpers. Unverified and non-Clemson accounts stay at full price. A confirmed `@clemson.edu` account (and the existing `@g.clemson.edu` workspace domain) gets the current 10% Standard discount (1000 bps) with the same cents from both helpers. A blank `''` tier gets no discount on either helper. Discount bps and the campus email lock were not changed.
+- **Files touched:** `server/studentDiscount.test.js`, `docs/FIXES.md`
+- **Verified:** `node --experimental-strip-types --test server/studentEligibility.test.js server/studentDiscount.test.js` (15/15). `npm test` (2325 pass, 0 fail).
+
+## 2026-10-05 — studentFlagsFor treats a missing participant list as no riders
+
+- **Date:** 2026-10-05
+- **Track / machine:** Clemson RIDES · deputy/student-discount-e2e-verify · pkg-student-discount-e2e-verify t2
+- **What was wrong:** `studentFlagsFor` iterated `participants` directly. `null` or `undefined` threw `TypeError` before any flag was returned. The e2e fare tests showed no cents mismatch: `applyStudentDiscount` and `quoteFare` already agree, including blank tier (no discount) and confirmed campus email (1000 bps on Standard only).
+- **What changed:** A missing participant list now returns `[]`, the same result as an empty list. No rider is flagged, so no student discount is applied. Campus email confirmation, domain lock, and `STUDENT_DISCOUNT_BPS` (1000) were not changed.
+- **Files touched:**
+  - `server/studentEligibility.js`
+  - `server/studentEligibility.test.js`
+  - `docs/FIXES.md`
+- **Verified:** `node --experimental-strip-types --test server/studentEligibility.test.js server/studentDiscount.test.js` (15/15). `TZ=UTC npm test` (2325 pass, 0 fail).
+
+## 2026-10-05 — Student discount e2e paths already run under npm test (pkg-student-discount-e2e-verify t3)
+
+- **Date:** 2026-10-05
+- **Track / machine:** Clemson RIDES · deputy/student-discount-e2e-verify · pkg-student-discount-e2e-verify t3
+- **What was wrong:** t1 extended `server/studentDiscount.test.js` so `studentFlagsFor` and `studentDiscountGranted` feed `applyStudentDiscount` and `quoteFare`. t2 covered a missing participant list in `server/studentEligibility.test.js`. A missing path in the root `"test"` script would let `npm test` skip the campus-email lock and the 1000 bps Standard discount checks.
+- **What changed:** Confirmed these files are already arguments of the root `package.json` `"test"` script, so no new path was added:
+  - `server/studentEligibility.test.js`
+  - `server/studentDiscount.test.js`
+  - `src/lib/studentDomain.test.js`
+  - `src/lib/fareRates.test.js` (`quoteFare`)
+  - `src/lib/pricing.test.js`
+  Campus email confirmation, domain lock, and `STUDENT_DISCOUNT_BPS` (1000) stay as they are.
+- **Files touched:** `docs/FIXES.md`
+- **Verified:** `TZ=UTC npm test` — 2325 pass, 0 fail, 63 suites.
 
