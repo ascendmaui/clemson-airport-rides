@@ -4,25 +4,17 @@
  * Failures stay pending and retry on backoff. They are surfaced in earnings.
  */
 import { stripeClient } from './friendRideLib.js'
-import { applyPayoutAttempt, payoutIsDue, resolveDriverNetCents } from '../shared/paymentFailure.js'
+import { applyPayoutAttempt, payoutIsDue } from '../shared/paymentFailure.js'
 import {
   CANCEL_FEE_LABEL,
   SWITCH_FEE_LABEL,
   payoutPlanForTrip,
   readBackupQueue,
-  readScheduledBoostCents,
   switchFeePayoutForTrip,
 } from '../shared/backupDriverQueue.js'
-import { driverBoostShareCents, driverPayoutWithBoost, readBoostCents } from '../shared/scheduledBoost.js'
+import { driverTripEarnings, tigerHeatPayoutCents } from '../shared/driverTripEarnings.js'
 
-/** Settled Tiger Heat pay replaces the default 80% net. Rider fare is not in this number. */
-export function tigerHeatPayoutCents(trip) {
-  const heat = trip?.metadata?.tiger_heat
-  if (!heat || heat.preview || heat.settled !== true || heat.released) return null
-  const amount = Number(heat.driverEarningsCents)
-  if (!Number.isFinite(amount)) return null
-  return Math.max(0, Math.round(amount))
-}
+export { tigerHeatPayoutCents }
 
 /** Wait cancellations never include the booked fare, boosts, or carpool bonuses. */
 export function buildWaitCancelPayoutRecord(trip) {
@@ -40,29 +32,18 @@ export function buildPayoutRecord(trip) {
   if (['canceled', 'canceled_midride'].includes(trip.status)) {
     return buildWaitCancelPayoutRecord({ ...trip, driver_wait_earnings_cents: 0 })
   }
-  const heatPay = tigerHeatPayoutCents(trip)
-  const fareNetCents = heatPay == null ? resolveDriverNetCents(trip) : heatPay
-  const included = trip?.metadata?.boost_included_in_driver_net === true
-  const boostSource = included
-    ? 0
-    : Math.max(readBoostCents(trip), readScheduledBoostCents(trip?.metadata))
-  const boostCents = driverBoostShareCents(boostSource)
-  const queue = readBackupQueue(trip)
-  const backupBonus = heatPay == null && queue?.promotedFromBackup && queue.confirmState !== 'released'
-    ? queue.bonusCents
-    : 0
-  const waitCents = trip.status === 'completed' ? Math.max(0, Math.round(Number(trip.driver_wait_earnings_cents) || 0)) : 0
-  const amountCents = driverPayoutWithBoost(fareNetCents, boostSource) + backupBonus + waitCents
-  const heat = trip?.metadata?.tiger_heat
+  // Same calculation every driver screen shows (shared/driverTripEarnings.js).
+  const earned = driverTripEarnings(trip)
+  const amountCents = earned.netCents
   return {
     tripId: trip.id,
     driverId: trip.driver_id,
     amountCents,
-    fareNetCents,
-    boostCents,
-    waitCents,
-    tigerHeatBonusCents: heatPay == null ? 0 : Math.max(0, Math.round(Number(heat?.bonusCents) || 0)),
-    platformFundedCents: heatPay == null ? 0 : Math.max(0, Math.round(Number(heat?.platformFundedCents) || 0)),
+    fareNetCents: earned.fareNetCents,
+    boostCents: earned.boostCents,
+    waitCents: earned.waitCents,
+    tigerHeatBonusCents: earned.tigerHeatBonusCents,
+    platformFundedCents: earned.platformFundedCents,
     status: amountCents === 0 ? 'paid' : 'pending',
     pending: amountCents !== 0,
     attempts: 0,

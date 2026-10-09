@@ -206,6 +206,7 @@ const EXPORTED_HELPERS = [
   'loadCounterpart',
   'fetchTripForRating',
   'hasRatedTrip',
+  'cleanRatingTags',
   'submitPartyRating',
   'findPendingRating',
 ]

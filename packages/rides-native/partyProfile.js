@@ -389,7 +389,18 @@ export async function hasRatedTrip(supabase, tripId, raterId) {
   return Boolean(data?.id)
 }
 
-export async function submitPartyRating(supabase, { tripId, raterId, stars, comment }) {
+/** Short labels only; ratings.tags allows at most 5. */
+export function cleanRatingTags(tags) {
+  const out = []
+  for (const tag of Array.isArray(tags) ? tags : []) {
+    const value = String(tag || '').trim().slice(0, 40)
+    if (value && !out.includes(value)) out.push(value)
+    if (out.length >= 5) break
+  }
+  return out
+}
+
+export async function submitPartyRating(supabase, { tripId, raterId, stars, comment, tags }) {
   if (!supabase) throw new Error('Supabase is not configured')
   const starError = validateStars(stars)
   if (starError) throw new Error(starError)
@@ -399,17 +410,20 @@ export async function submitPartyRating(supabase, { tripId, raterId, stars, comm
   if (await hasRatedTrip(supabase, tripId, raterId)) throw new Error('You already rated this trip')
   const rateeId = raterId === trip.rider_id ? trip.driver_id : trip.rider_id
   const note = String(comment || '').trim().slice(0, 280)
-  const { data, error } = await supabase
-    .from('ratings')
-    .insert({
-      trip_id: tripId,
-      rater_id: raterId,
-      ratee_id: rateeId,
-      stars: Number(stars),
-      comment: note || null,
-    })
-    .select('id, stars')
-    .single()
+  const row = {
+    trip_id: tripId,
+    rater_id: raterId,
+    ratee_id: rateeId,
+    stars: Number(stars),
+    comment: note || null,
+  }
+  const cleanTags = cleanRatingTags(tags)
+  const insert = (values) => supabase.from('ratings').insert(values).select('id, stars').single()
+  let { data, error } = await insert(cleanTags.length ? { ...row, tags: cleanTags } : row)
+  // Before the ratings.tags migration lands, save the stars and note without tags.
+  if (error && cleanTags.length && /tags|schema cache|column/i.test(error.message || '')) {
+    ;({ data, error } = await insert(row))
+  }
   if (error) throw new Error(explainRatingError(error.message))
   if (!data?.id) throw new Error('Rating was not saved')
   return data

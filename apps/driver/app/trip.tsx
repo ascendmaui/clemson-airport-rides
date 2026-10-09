@@ -9,6 +9,9 @@ import { RiderConfirmCard } from '@/components/RiderConfirmCard'
 import { waitTimerAnchor, type WaitAnchor } from 'rides-native/waitTimer'
 import { DriverCancelSheet } from '@/components/DriverCancelSheet'
 import { FarePanel } from '@/components/FarePanel'
+import { TripEndSummary } from '@/components/TripEndSummary'
+import { BackInQueue } from '@/components/BackInQueue'
+import { ratingTagOptions } from 'rides-native/tripEndSummary'
 import { SosButton, SosSheet } from '@/components/SosSheet'
 import { ErrorText, Primary, Tag, useCardShadow } from '@/components/chrome'
 import { useAuth } from '@/lib/auth'
@@ -103,6 +106,9 @@ export default function TripScreen() {
   const [mapsOffer, setMapsOffer] = useState(false)
   const departedTrip = useRef<string | null>(null)
   const [person, setPerson] = useState<CounterpartView | null>(null)
+  // Completed trips: summary → rating → Back in queue.
+  const [ratingClosed, setRatingClosed] = useState(false)
+  useEffect(() => setRatingClosed(false), [trip?.id])
   const partyColors = partyColorsFromPalette(colors)
 
   useEffect(() => setSosOpen(false), [trip?.id, sosActive])
@@ -456,14 +462,22 @@ export default function TripScreen() {
         {trip ? (
           <>
             {trip.status === 'completed' && user ? (
-              <RateTripPanel
-                supabase={supabase}
-                userId={user.id}
-                tripId={trip.id}
-                colors={partyColors}
-                onDone={() => router.replace('/')}
-                onLater={() => router.replace('/')}
-              />
+              <>
+                <TripEndSummary card={trip} />
+                {ratingClosed ? (
+                  <BackInQueue supabase={supabase} driverId={user.id} onSeeOffers={() => router.replace('/')} />
+                ) : (
+                  <RateTripPanel
+                    supabase={supabase}
+                    userId={user.id}
+                    tripId={trip.id}
+                    colors={partyColors}
+                    tagsForStars={ratingTagOptions}
+                    onDone={() => setRatingClosed(true)}
+                    onLater={() => setRatingClosed(true)}
+                  />
+                )}
+              </>
             ) : trip.status === 'arrived' ? null : (
               <CounterpartCard person={person} colors={partyColors} />
             )}
@@ -474,7 +488,7 @@ export default function TripScreen() {
                 <Text style={styles.copy}>Rider charged {formatCents(trip.waitFeeCents + trip.cancelFeeCents)}</Text>
                 <Text style={styles.fare}>You earn {formatCents(trip.driverWaitEarningsCents)}</Text>
               </View>
-            ) : <Text style={styles.fare}>{formatCents(trip.driverNetCents)} net{trip.depositCents ? ` · already paid ${formatCents(trip.depositCents)}` : ''}</Text>}
+            ) : trip.status !== 'completed' ? <Text style={styles.fare}>{formatCents(trip.driverNetCents)} net{trip.depositCents ? ` · already paid ${formatCents(trip.depositCents)}` : ''}</Text> : null}
             {trip.status === 'arrived' ? (
               <RiderConfirmCard
                 firstName={trip.firstName}
@@ -498,7 +512,7 @@ export default function TripScreen() {
               ))}
             </View>
             {preferredRequestNote(trip) ? <Text style={styles.note}>{preferredRequestNote(trip)}</Text> : null}
-            {trip.status !== 'cancelled_wait' ? <FarePanel card={trip} /> : null}
+            {trip.status !== 'cancelled_wait' && trip.status !== 'completed' ? <FarePanel card={trip} /> : null}
             {user ? <TripThread supabase={supabase} tripId={trip.id} userId={user.id} colors={colors} /> : null}
             {trip.backupEnroute || mapsOffer ? <Text style={styles.copy}>{MAPS_HANDOFF_HELPER}</Text> : null}
             <View style={styles.navRow}>

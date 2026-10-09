@@ -6,6 +6,7 @@ import { CLEMSON_MIAMI_PROMO_ID } from './clemsonMiamiPromo.js'
 import { explicitOfferPhase, ladderOfferNet } from './offerLadder.js'
 import { LOOKING_FOR_BACKUP_LABEL, confirmCountdownLabel, driverBackupPresentation, leaveNowCountdownLabel } from '../../shared/backupDriverQueue.js'
 import { driverBoostShareCents, readBoostCents } from '../../shared/scheduledBoost.js'
+import { driverTripEarnings, driverTripNetCents, payoutStatusLine } from '../../shared/driverTripEarnings.js'
 
 export { confirmCountdownLabel, leaveNowCountdownLabel }
 
@@ -455,6 +456,8 @@ export function acceptNeedsDriverOnline(status) {
   }
 }
 
+const DRIVER_EARNINGS_STATUSES = new Set(['accepted', 'arriving', 'arrived', 'in_progress', 'completed', 'cancelled_wait'])
+
 export function toDriverCard(row, options) {
   if (!row?.id) return null
   const meta = metaOf(row)
@@ -474,6 +477,9 @@ export function toDriverCard(row, options) {
   const fareNet = carpool?.showBonus
     ? carpool.payoutCents
     : (ladder ? ladder.netCents : tripEarnedCents(row))
+  // Once a driver holds the trip, every screen shows the payout-queue number.
+  const assigned = Boolean(row.driver_id) && DRIVER_EARNINGS_STATUSES.has(String(row.status || ''))
+  const earnings = assigned ? driverTripEarnings({ ...row, metadata: meta }) : null
   return {
     id: row.id,
     status: row.status,
@@ -490,7 +496,12 @@ export function toDriverCard(row, options) {
     fareCents,
     depositCents: depositSliceCents(fareCents, storedDeposit),
     depositExplicit: row.deposit_cents != null && row.deposit_cents !== '',
-    driverNetCents: row.status === 'cancelled_wait' ? tripEarnedCents(row) : fareNet + boostDriverCents,
+    driverNetCents: earnings
+      ? driverTripNetCents({ ...row, metadata: meta })
+      : (row.status === 'cancelled_wait' ? tripEarnedCents(row) : fareNet + boostDriverCents),
+    earnings,
+    tipCents: Math.max(0, Math.round(Number(row.tip_cents) || 0)),
+    payoutStatusLine: row.status === 'completed' || row.status === 'cancelled_wait' ? payoutStatusLine({ metadata: meta }) : null,
     boostCents,
     boostDriverCents,
     offerPhase: phase,
@@ -585,18 +596,33 @@ export function fareCollection(card) {
     ? Math.max(0, Math.round(Number(card.depositCents ?? card.deposit_cents) || 0))
     : depositSliceCents(fareCents, shareSum > 0 ? card?.deposit_cents : (card?.depositCents ?? card?.deposit_cents))
   const pay = carpoolPayFromTrip(card)
-  const net = pay ? pay.payoutCents : driverNetCents(fareCents)
+  const earnings = card?.earnings && card.earnings.kind === 'trip' ? card.earnings : null
+  const ladder = earnings || pay ? null : ladderOfferNet({ ...card, fareCents })
+  const net = earnings ? earnings.fareNetCents : (pay ? pay.payoutCents : (ladder ? ladder.netCents : driverNetCents(fareCents)))
+  const extras = earnings || pay ? null : (ladder ? ladder.percent : 80)
+  const boostNetCents = earnings ? earnings.boostCents : driverBoostShareCents(readBoostCents(card))
+  const backupBonusCents = earnings ? earnings.backupBonusCents : 0
+  const waitNetCents = earnings ? earnings.waitCents : 0
+  // Same total as the trip header (card.driverNetCents) once the trip is assigned.
+  const totalNetCents = earnings && Number.isFinite(Number(card.driverNetCents))
+    ? Math.max(0, Math.round(Number(card.driverNetCents)))
+    : net + boostNetCents + backupBonusCents + waitNetCents
   return {
     fareCents,
     depositCents,
     remainderCents: Math.max(0, fareCents - depositCents),
     driverNetCents: net,
+    boostNetCents,
+    backupBonusCents,
+    waitNetCents,
+    totalNetCents,
     platformFeeCents: Math.max(0, fareCents - net),
     shares,
     baseNetCents: pay?.showBonus ? pay.baseNetCents : null,
     carpoolBonusCents: pay?.showBonus ? pay.bonusCents : null,
     carpoolIncentiveId: pay?.showBonus ? (pay.incentiveId || DRIVER_CARPOOL_BONUS_ID) : null,
     usesStoredPayout: Boolean(pay),
+    sharePercent: extras,
   }
 }
 

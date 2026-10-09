@@ -29,6 +29,10 @@ export type DriverCard = {
   depositCents: number
   depositExplicit: boolean
   driverNetCents: number
+  /** Payout-queue breakdown once a driver holds the trip (same math as server/payouts.js). */
+  earnings?: DriverTripEarnings | null
+  tipCents?: number
+  payoutStatusLine?: string | null
   boostCents?: number
   boostDriverCents?: number
   baseNetCents?: number | null
@@ -88,6 +92,28 @@ export type FareCollection = {
   carpoolBonusCents?: number | null
   carpoolIncentiveId?: string | null
   usesStoredPayout?: boolean
+  boostNetCents: number
+  backupBonusCents: number
+  waitNetCents: number
+  /** Matches DriverCard.driverNetCents once assigned. */
+  totalNetCents: number
+  /** Percent of the fare kept when no stored payout applies (80, or the offer ladder share). */
+  sharePercent: number | null
+}
+
+export type DriverTripEarnings = {
+  kind: 'trip' | 'cancel'
+  fareCents: number
+  fareNetCents: number
+  platformFeeCents: number
+  boostCents: number
+  backupBonusCents: number
+  waitCents: number
+  riderWaitFeeCents: number
+  tigerHeatBonusCents: number
+  platformFundedCents: number
+  tipCents: number
+  netCents: number
 }
 
 export const DRIVER_CARPOOL_BONUS_ID: string

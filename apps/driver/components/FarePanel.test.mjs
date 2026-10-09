@@ -14,7 +14,8 @@ test('FarePanel keeps the DriverCard card prop and core fare rows', () => {
   for (const label of ['Trip fare', 'Already paid', 'Charged at trip end']) {
     assert.match(source, new RegExp(`label="${label}"`))
   }
-  assert.match(source, /label=\{fare\.usesStoredPayout \? 'You net' : 'You net · 80%'\}/)
+  assert.match(source, /label="You net" value=\{formatCents\(fare\.totalNetCents\)\} strong/)
+  assert.match(source, /Fare net · \$\{fare\.sharePercent\}%/)
   assert.match(source, /driverFareNote\(fare\.depositCents\)/)
 })
 
@@ -25,12 +26,17 @@ test('FarePanel fare contract supplies the display fields for a normal driver ca
     depositCents: 0,
     remainderCents: 1001,
     driverNetCents: 801,
+    boostNetCents: 0,
+    backupBonusCents: 0,
+    waitNetCents: 0,
+    totalNetCents: 801,
     platformFeeCents: 200,
     shares: [],
     baseNetCents: null,
     carpoolBonusCents: null,
     carpoolIncentiveId: null,
     usesStoredPayout: false,
+    sharePercent: 80,
   })
 })
 
