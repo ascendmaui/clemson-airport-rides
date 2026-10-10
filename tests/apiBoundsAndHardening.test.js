@@ -1265,7 +1265,7 @@ test('fare & cron bounds: weeklyCoupon enforces public GET access, cron auth, me
     method: 'POST',
     url: '/api/weekly-coupon?dry_run=1',
     headers: { authorization: 'Bearer weekly_cron_sec_555' },
-  }, { env, store: mockStore, dryRun: true, force: false })
+  }, { env, store: mockStore, dryRun: true, force: false, now: new Date('2026-10-08T15:00:00Z') })
   assert.equal(skipWindowRes.status, 200)
   assert.equal(skipWindowRes.json.skipped, true)
   assert.equal(skipWindowRes.json.reason, 'outside_friday_drop_hour')
