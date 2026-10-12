@@ -736,3 +736,8 @@ export async function loadEarnings(supabase, driverId) {
 }
 
 export { formatCents }
+
+/** Driver perks summary (streaks and bonus ledger; later perks add fields). */
+export async function loadDriverPerks(supabase) {
+  return authedJson(supabase, '/api/driver?action=perks')
+}

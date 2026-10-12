@@ -24,6 +24,7 @@ import { handleMarkOffered, handlePassOffer } from '../server/endpoints/driverOf
 import { handleSignAgreement } from '../server/agreementHttp.js'
 import handleAppConfig from '../server/endpoints/appConfig.js'
 import handleBackupQueue from '../server/endpoints/backupQueue.js'
+import handleDriverPerks from '../server/endpoints/driverPerks.js'
 
 const HANDLERS = {
   'app-config': handleAppConfig,
@@ -46,6 +47,7 @@ const HANDLERS = {
   'pass-offer': handlePassOffer,
   'sign-agreement': handleSignAgreementRoute,
   'backup-queue': handleBackupQueue,
+  perks: handleDriverPerks,
 }
 
 const LEGACY = {
@@ -65,7 +67,7 @@ export default async function handler(req, res, ...rest) {
   const handle = HANDLERS[action]
   if (!handle) {
     return json(res, 400, {
-      error: 'Unknown driver action. Use action=signup, submit-review, earnings, offer-preview, tip, tip-choice, wait, trip-status, trip-stop, cancel-midride, payouts, inbox, cards, mark-offered, pass-offer, sign-agreement, backup-queue, trip-sweeps, or app-config.',
+      error: 'Unknown driver action. Use action=signup, submit-review, earnings, offer-preview, tip, tip-choice, wait, trip-status, trip-stop, cancel-midride, payouts, inbox, cards, mark-offered, pass-offer, sign-agreement, backup-queue, perks, trip-sweeps, or app-config.',
     })
   }
   return handle(req, res, ...rest)

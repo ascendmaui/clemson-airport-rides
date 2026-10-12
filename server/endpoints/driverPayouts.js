@@ -19,6 +19,7 @@ import {
 import { stagingCronBlock } from '../cronGuard.js'
 import { buildPayoutRecord, buildWaitCancelPayoutRecord, attemptDriverPayout, attemptStandbyBackupPayout, attemptSwitchFeePayout, loadConnectAccount, writePayout } from '../payouts.js'
 import { payoutIsDue, summarizeDriverEarnings } from '../../shared/paymentFailure.js'
+import { payBonusLedger } from '../perks.js'
 
 export function cronAuthorized(req, secretOverride) {
   const secret = (secretOverride !== undefined ? secretOverride : (process.env.CRON_SECRET || '')).trim()
@@ -235,6 +236,19 @@ export default async function handler(req, res, deps = {}) {
       return json(res, 500, { error: listed.error.message })
     }
     const results = await runDuePayouts(sb, listed.data || [], null, { ...deps, dryRun })
+    // Streak, referral and surge bonuses ride the same daily sweep. Injected
+    // test databases skip it unless the test passes payBonusLedger.
+    const payBonuses = deps.payBonusLedger || (deps.sb === undefined ? payBonusLedger : null)
+    if (!dryRun && payBonuses) {
+      const bonusStripe = deps.stripe !== undefined ? deps.stripe : stripeClient()
+      if (bonusStripe) {
+        try {
+          for (const r of await payBonuses(sb, bonusStripe)) results.push({ ...r, role: 'bonus' })
+        } catch (err) {
+          console.error('[payout] bonus ledger', err?.message)
+        }
+      }
+    }
     res.setHeader?.('Cache-Control', 'no-store, no-cache, must-revalidate, private')
     return json(res, 200, dryRun ? { ok: true, dryRun: true, results } : { ok: true, results })
   }
