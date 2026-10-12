@@ -4,6 +4,7 @@ import { navigate, getHashRoute } from '../lib/navigation'
 import { useAuth } from '../lib/auth'
 import { supabase } from '../lib/supabase'
 import { AdminAccessDenied } from '../components/AdminAccessDenied'
+import { AdminEventsPanel } from '../components/AdminEventsPanel'
 import { isAdminIdentity } from '../lib/driverOnboarding'
 import { rideOptionLabel } from '../../shared/rideOptions.js'
 import {
@@ -23,6 +24,7 @@ const TABS = [
   ['people', 'People'],
   ['trips', 'Trips'],
   ['support', 'Support'],
+  ['events', 'Events'],
 ]
 
 const TICKET_FILTERS = [
@@ -125,6 +127,7 @@ export function AdminDesk() {
       {tab === 'people' && <PeoplePanel />}
       {tab === 'trips' && <TripsPanel />}
       {tab === 'support' && <SupportPanel />}
+      {tab === 'events' && <AdminEventsPanel />}
     </div>
   )
 }
