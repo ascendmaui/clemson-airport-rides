@@ -27,12 +27,14 @@ import { LivePhase } from 'rides-native/LivePhase'
 import { isApproachStatus } from '@/lib/approachAlert'
 import { ORANGE, PURPLE } from 'rides-native/places.js'
 import { CounterpartCard, partyColorsFromPalette } from 'rides-native/PartyScreens'
+import { CommunityMatchChips } from 'rides-native/CommunityMatchChips'
 import { loadCounterpart, type CounterpartView } from 'rides-native/partyProfile.js'
 import { lift } from '@/lib/elevation'
 import type { Palette } from '@/lib/palette'
 import { useTheme } from '@/lib/theme'
 import { useThemedStyles } from '@/lib/useThemedStyles'
 import { registerRiderPush } from '@/lib/push'
+import { riderFlightView } from 'rides-native/flightStatus'
 
 const CHECKOUT_RETURN_COPY = 'You\'re back from checkout. This ride is in the open pool. The final fare is charged when the trip ends.'
 
@@ -206,7 +208,11 @@ export default function Requested() {
   const preferred = shown?.status === 'requested' || (!shown?.status && namedDriver) || (shown?.status === 'canceled' && namedDriver)
   const requestedAt = live?.requested_at ? new Date(live.requested_at).getTime() : null
   const waitingMs = requestedAt && Number.isFinite(requestedAt) ? Date.now() - requestedAt : 0
-  const basePhase = riderLiveView(shown?.status || null, { preferred, waitingMs })
+  const flightView = riderFlightView({ ...(shown || {}), metadata: live?.metadata ?? trip?.metadata ?? null }, shown?.status || null)
+  const livePhase = riderLiveView(shown?.status || null, { preferred, waitingMs })
+  const basePhase = flightView?.waitingTitle
+    ? { ...livePhase, title: flightView.waitingTitle, body: 'Head to the Arrivals curb. The trip starts once you are in the car.' }
+    : livePhase
   const phase = ttlCanceled
     ? { ...basePhase, kicker: 'HOLD EXPIRED', title: 'Deposit hold expired', body: '', steps: [], stepIndex: -1 }
     : basePhase
@@ -292,6 +298,7 @@ export default function Requested() {
         <View style={styles.headerCopy}>
           <Text style={styles.kicker}>{ttlCanceled ? 'HOLD EXPIRED' : 'LIVE RIDE'}</Text>
           <Text style={styles.title} accessibilityRole="header" accessibilityLiveRegion="polite">{phase.title}</Text>
+          {flightView?.line && !ttlCanceled ? <Text style={styles.kicker} accessibilityLiveRegion="polite">{flightView.line}</Text> : null}
         </View>
         <SosButton onPress={() => setSosOpen(true)} />
       </View>
@@ -356,6 +363,7 @@ export default function Requested() {
               eta={located ? staleEtaLine(locationIssue, driverEta, { placeholder: !driverEta }) : null}
               colors={partyColorsFromPalette(colors)}
             />
+            {person && tripId ? <CommunityMatchChips supabase={supabase} tripId={tripId} colors={colors} /> : null}
             {ttlCanceled ? null : (
               <>
               {locationIssue ? <View accessibilityLiveRegion="polite"><Text style={{ color: colors.title }}>{locationIssue}</Text><Pressable accessibilityRole="button" onPress={() => void reloadMap(true)}><Text style={{ color: colors.title }}>Retry tracking</Text></Pressable></View> : null}

@@ -1,3 +1,4 @@
+import { driverVehicleStandardIssue } from '../../shared/vehicleStandards.js'
 import { useEffect, useMemo, useState } from 'react'
 import { MarketingPhoto } from '../components/MarketingPhoto'
 import { useAuth } from '../lib/auth'
@@ -644,7 +645,12 @@ export function DriverOnboarding() {
                 </p>
               ) : null}
               {q.key === 'hasCar' && answers.hasCar === false ? (
-                <p className="field-error-text" role="alert">{driverQuizError({ hasCar: false, hasInsurance: true, attestation: true })}</p>
+                <>
+                  <p className="field-error-text" role="alert">{driverQuizError({ hasCar: false, hasInsurance: true, attestation: true })}</p>
+                  <p style={{ fontSize: 14, margin: '6px 0 0' }}>
+                    <a href="/drivers/rentals" data-testid="no-car-rent-one">No car? Rent one</a> from a Clemson RIDES rental partner. Rentals open once your license is approved and your background check passes (this also applies to the needs_vehicle path).
+                  </p>
+                </>
               ) : null}
               {q.key === 'hasInsurance' && answers.hasInsurance === false ? (
                 <p className="field-error-text" role="alert">{driverQuizError({ hasCar: true, hasInsurance: false, attestation: true })}</p>
@@ -666,6 +672,11 @@ export function DriverOnboarding() {
           <Field id="make" label="Make" value={make} onChange={setMake} autoComplete="off" error={fieldErrors.make} />
           <Field id="model" label="Model" value={model} onChange={setModel} autoComplete="off" error={fieldErrors.model} />
           <Field id="year" label="Year" value={year} onChange={setYear} inputMode="numeric" autoComplete="off" maxLength={4} error={fieldErrors.year} />
+          {/^\d{4}$/.test(String(year || '')) && driverVehicleStandardIssue({ year: Number(year) }) && (
+            <p className="field-hint" role="status" style={{ fontSize: 13, margin: '4px 0 8px' }}>
+              {driverVehicleStandardIssue({ year: Number(year) }).message} No car that qualifies? <a href="/drivers/rentals">Rent one from a partner</a>.
+            </p>
+          )}
           <Field id="color" label="Color" value={color} onChange={setColor} autoComplete="off" error={fieldErrors.color} />
           <Field id="plate" label="Plate" value={plate} onChange={setPlate} autoComplete="off" error={fieldErrors.plate} />
           <fieldset className="title-status" data-title-status={titleStatus || 'unset'}>

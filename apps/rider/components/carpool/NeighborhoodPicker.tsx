@@ -130,7 +130,7 @@ export function NeighborhoodPicker({
         ))}
       </ScrollView>
       <View style={styles.filters}>
-        {FILTERS.map((item: { id: string; label: string }) => {
+        {FILTERS.map((item) => {
           const on = !query.trim() && group === item.id
           return (
             <Pressable
