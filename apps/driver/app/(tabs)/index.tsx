@@ -8,6 +8,7 @@ import { FarePanel } from '@/components/FarePanel'
 import { Card, ErrorText, Primary, Tag, useCardShadow } from '@/components/chrome'
 import { CircleButton, GoButton } from '@/components/shell'
 import { DriverStatusCard } from '@/components/DriverStatusCard'
+import { ForecastCard } from '@/components/ForecastCard'
 import { useAuth } from '@/lib/auth'
 import { useFeedback } from '@/lib/feedback'
 import { notifyAcceptedRide, setRideAlertSurface } from '@/lib/push'
@@ -55,7 +56,11 @@ import { approvalGateMessage, isSyntheticOffer } from 'rides-native/syntheticOff
 import { driverGateView } from 'rides-native/driverGateView'
 import { loadCounterpart } from 'rides-native/partyProfile.js'
 import { offerCardViewModel } from 'rides-native/offerCard'
-import { EXCLUSIVE_SECONDS, exclusiveSecondsLeft, formatHourlyRate, offerHourly, poolSecondsLeft } from 'rides-native/offerLadder.js'
+import { offerCardGauge } from 'rides-native/offerGauge'
+import { fetchOfferPreview, riderInitials } from 'rides-native/offerPreviewClient'
+import { OfferGauge } from '@/components/OfferGauge'
+import { tipBoostOfferLine } from '../../../../shared/prepaidTip.js'
+import { EXCLUSIVE_SECONDS, exclusiveSecondsLeft, poolSecondsLeft } from 'rides-native/offerLadder.js'
 
 /** Home map overlay grid: screen-edge gutter, spacing between floating pieces, clearance under the status bar. */
 const EDGE = 16
@@ -564,6 +569,7 @@ export default function DriverHome() {
               {gameNotice.live ? `${gameNotice.detail}. ${gameNotice.body}` : gameNotice.body}
             </Text>
           ) : null}
+          {canSeeOffers && !desk?.active ? <ForecastCard /> : null}
         </View>
 
         <View style={styles.flex} pointerEvents="box-none" />
@@ -704,7 +710,21 @@ export function RideCard({
   const secondsLeft = exclusiveLeft ?? poolLeft
   const pulsing = exclusiveLeft != null && exclusiveLeft > 0
   const vm = offerCardViewModel(secondsLeft == null ? card : { ...card, secondsLeft })
-  const hourly = formatHourlyRate(offerHourly(card, driver).hourlyCents)
+  const gauge = offerCardGauge(card, driver)
+  const [preview, setPreview] = useState<Awaited<ReturnType<typeof fetchOfferPreview>>>(null)
+  useEffect(() => {
+    let alive = true
+    setPreview(null)
+    if (!isSyntheticOffer(card)) {
+      fetchOfferPreview(supabase, card.id).then((p) => { if (alive) setPreview(p) })
+    }
+    return () => { alive = false }
+  }, [card.id])
+  const riderFirst = displayFirstName(card.firstName || preview?.firstName || '', 'Rider')
+  const avatarUrl = card.riderAvatarUrl || preview?.avatarUrl || null
+  const ratingAvg = (card as { riderRating?: number }).riderRating ?? preview?.ratingAvg ?? null
+  const prepaidTipCents = Number((card as { prepaidTipCents?: number }).prepaidTipCents) || 0
+  const tipBoostLine = tipBoostOfferLine(vm.pay.netCents + prepaidTipCents, prepaidTipCents)
   const preferredNote = preferredRequestNote(card)
   const opacity = useState(() => new Animated.Value(0))[0]
   const glow = useRef(new Animated.Value(0.35)).current
@@ -756,22 +776,28 @@ export function RideCard({
         >
           {notice ? <Text style={[styles.offerNotice, { color: colors.orange }]}>{notice}</Text> : null}
           <View style={styles.riderRow}>
-            {card.riderAvatarUrl ? (
+            {avatarUrl ? (
               <Image
-                source={{ uri: card.riderAvatarUrl }}
+                source={{ uri: avatarUrl }}
                 style={styles.avatar}
                 accessibilityIgnoresInvertColors
-                accessibilityLabel={`${card.firstName || 'Rider'} profile photo`}
+                accessibilityLabel={`${riderFirst} profile photo`}
               />
             ) : (
               <View style={[styles.avatar, styles.avatarFallback, { backgroundColor: colors.purple }]}>
-                <Text style={styles.avatarLetter}>{(card.firstName || 'R').slice(0, 1)}</Text>
+                <Text style={styles.avatarLetter}>{riderInitials(riderFirst)}</Text>
               </View>
             )}
             <View style={{ flex: 1 }}>
-              <Text style={{ color: colors.ink, fontWeight: '800', fontSize: 16 }}>{card.firstName}</Text>
-              <Text style={{ color: colors.inkSecondary }}>{card.tier === 'wait' ? 'Wait & Save' : card.tier === 'comfort' ? 'Extra Comfort' : card.tier === 'carpool' ? 'Carpool' : 'Standard'}</Text>
+              <Text style={[styles.riderName, { color: colors.ink }]}>{riderFirst}</Text>
+              <Text
+                style={[styles.riderMeta, { color: colors.inkSecondary }]}
+                accessibilityLabel={ratingAvg != null ? `Rider rating ${Number(ratingAvg).toFixed(1)} stars` : 'New rider, no rating yet'}
+              >
+                {ratingAvg != null ? `★ ${Number(ratingAvg).toFixed(1)}` : '★ New'} · {card.tier === 'wait' ? 'Wait & Save' : card.tier === 'comfort' ? 'Extra Comfort' : card.tier === 'carpool' ? 'Carpool' : 'Standard'}
+              </Text>
             </View>
+            <OfferGauge gauge={gauge} offerId={card.id} />
             {onFavorite ? (
               <Pressable onPress={onFavorite} accessibilityRole="button" accessibilityLabel={favorite ? 'Remove favorite rider' : 'Save favorite rider'}>
                 <Text style={{ color: favorite ? colors.orange : colors.purple, fontWeight: '800' }}>{favorite ? 'Favorite' : 'Save rider'}</Text>
@@ -784,11 +810,14 @@ export function RideCard({
             </Text>
             <Text style={[styles.offerFareTag, { color: colors.inkSecondary }]}>net</Text>
           </View>
+          {tipBoostLine ? (
+            <View style={styles.tags} accessibilityLabel={tipBoostLine}>
+              <Text style={{ color: colors.ink, fontWeight: '700' }}>{tipBoostLine}</Text>
+              <Tag label="Tip boost" tone="purple" />
+            </View>
+          ) : null}
           <Text style={{ color: colors.inkSecondary }}>
             {vm.pay.subtext}
-          </Text>
-          <Text style={{ color: colors.orange, fontWeight: '800' }} accessibilityLabel={`Hourly rate ${hourly}`}>
-            {hourly}
           </Text>
           {vm.badges.length > 0 ? (
             <View style={styles.tags}>
@@ -916,10 +945,15 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   barText: { fontWeight: '800', fontSize: 16, flex: 1, textAlign: 'center' },
-  riderRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  avatar: { width: 44, height: 44, borderRadius: 22 },
+  riderRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  riderName: { fontWeight: '700', fontSize: 16, letterSpacing: -0.3 },
+  riderMeta: { fontWeight: '600', fontSize: 13, marginTop: 2, letterSpacing: -0.1 },
+  avatar: {
+    width: 44, height: 44, borderRadius: 22,
+    borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(82,45,128,0.28)',
+  },
   avatarFallback: { alignItems: 'center', justifyContent: 'center' },
-  avatarLetter: { color: '#fff', fontWeight: '800', fontSize: 18 },
+  avatarLetter: { color: '#fff', fontWeight: '700', fontSize: 16, letterSpacing: -0.3 },
   offerFareRow: { flexDirection: 'row', alignItems: 'baseline', gap: 6 },
   offerFare: { fontSize: 34, fontWeight: '800', letterSpacing: -0.6 },
   offerFareTag: { fontSize: 16, fontWeight: '700' },

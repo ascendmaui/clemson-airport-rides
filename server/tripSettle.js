@@ -23,6 +23,7 @@ import { releaseOpenFareHold, settleFareHold } from './fareAuthorization.js'
 import { riderCaptureFareCents } from '../shared/backupDriverQueue.js'
 import { claimCompletion, completionResult, releaseCompletion } from './tripCompletion.js'
 import { readBoostCents } from '../shared/scheduledBoost.js'
+import { readPrepaidTipCents } from '../shared/prepaidTip.js'
 import { allStopsDone, stopFlowStarted, tripStops } from '../shared/carpoolStops.js'
 
 function stopsPendingResult() {
@@ -183,16 +184,19 @@ async function settleClaimedTrip({
   const paidCents = farePaidCents(trip)
   const depositAlreadyExists = airportDepositRequiredCents(trip) > 0
   const boostCents = action === 'complete' ? readBoostCents(trip) : 0
+  // Tip boost chosen at booking: captured with the fare, card money even on credits.
+  const prepaidTipCents = action === 'complete' ? readPrepaidTipCents(trip) : 0
   const waitFeeCents = action === 'complete' ? Math.max(0, Math.round(Number(trip.wait_fee_cents) || 0)) : 0
   const waitBilledCents = waitFeeBilledCents(trip, payments)
   const waitToBillCents = Math.max(0, waitFeeCents - waitBilledCents)
   const creditsFare = action === 'complete' && trip.metadata?.billing_choice === 'credits'
   // Credits cover only the fare; boost and frozen wait fees use the card.
-  const captureCents = (creditsFare ? 0 : Math.max(0, Math.round(Number(due.amountCents) || 0))) + boostCents + waitToBillCents
+  const captureCents = (creditsFare ? 0 : Math.max(0, Math.round(Number(due.amountCents) || 0))) + boostCents + prepaidTipCents + waitToBillCents
   const collectionCents = action === 'complete' ? captureCents : due.amountCents
   const billingMetadata = action === 'complete' ? {
     fare_billed_cents: creditsFare ? 0 : due.amountCents,
     boost_billed_cents: boostCents,
+    prepaid_tip_billed_cents: prepaidTipCents,
     wait_fee_billed_cents: waitToBillCents,
   } : {}
   let fareHold = null
@@ -325,7 +329,7 @@ async function settleClaimedTrip({
   const gate = campusUncollected
     ? { allow: true, reason: 'no_card_on_file' }
     : progressionGate({
-      amountDueCents: action === 'complete' ? due.amountCents + boostCents + waitToBillCents : due.amountCents,
+      amountDueCents: action === 'complete' ? due.amountCents + boostCents + prepaidTipCents + waitToBillCents : due.amountCents,
       payment,
       adminOverride: override,
     })
@@ -481,7 +485,7 @@ async function settleClaimedTrip({
       status: patch.status,
       reason: gate.reason,
       payment,
-      payout: payout ? { ok: payout.ok, status: payout.payout?.status, lastError: payout.payout?.lastError || null, amountCents: payout.payout?.amountCents, waitCents: payout.payout?.waitCents || 0 } : null,
+      payout: payout ? { ok: payout.ok, status: payout.payout?.status, lastError: payout.payout?.lastError || null, amountCents: payout.payout?.amountCents, waitCents: payout.payout?.waitCents || 0, prepaidTipCents: payout.payout?.prepaidTipCents || 0 } : null,
       keptActive: ACTIVE_KEEP.has(trip.status) && !gate.allow,
     },
   }
