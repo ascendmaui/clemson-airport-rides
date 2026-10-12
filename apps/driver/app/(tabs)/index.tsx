@@ -54,7 +54,10 @@ import { approvalGateMessage, isSyntheticOffer } from 'rides-native/syntheticOff
 import { driverGateView } from 'rides-native/driverGateView'
 import { loadCounterpart } from 'rides-native/partyProfile.js'
 import { offerCardViewModel } from 'rides-native/offerCard'
-import { EXCLUSIVE_SECONDS, exclusiveSecondsLeft, formatHourlyRate, offerHourly, poolSecondsLeft } from 'rides-native/offerLadder.js'
+import { offerCardGauge } from 'rides-native/offerGauge'
+import { fetchOfferPreview, riderInitials } from 'rides-native/offerPreviewClient'
+import { OfferGauge } from '@/components/OfferGauge'
+import { EXCLUSIVE_SECONDS, exclusiveSecondsLeft, poolSecondsLeft } from 'rides-native/offerLadder.js'
 
 /** Home map overlay grid: screen-edge gutter, spacing between floating pieces, clearance under the status bar. */
 const EDGE = 16
@@ -679,7 +682,19 @@ export function RideCard({
   const secondsLeft = exclusiveLeft ?? poolLeft
   const pulsing = exclusiveLeft != null && exclusiveLeft > 0
   const vm = offerCardViewModel(secondsLeft == null ? card : { ...card, secondsLeft })
-  const hourly = formatHourlyRate(offerHourly(card, driver).hourlyCents)
+  const gauge = offerCardGauge(card, driver)
+  const [preview, setPreview] = useState<Awaited<ReturnType<typeof fetchOfferPreview>>>(null)
+  useEffect(() => {
+    let alive = true
+    setPreview(null)
+    if (!isSyntheticOffer(card)) {
+      fetchOfferPreview(supabase, card.id).then((p) => { if (alive) setPreview(p) })
+    }
+    return () => { alive = false }
+  }, [card.id])
+  const riderFirst = displayFirstName(card.firstName || preview?.firstName || '', 'Rider')
+  const avatarUrl = card.riderAvatarUrl || preview?.avatarUrl || null
+  const ratingAvg = (card as { riderRating?: number }).riderRating ?? preview?.ratingAvg ?? null
   const preferredNote = preferredRequestNote(card)
   const opacity = useState(() => new Animated.Value(0))[0]
   const glow = useRef(new Animated.Value(0.35)).current
@@ -731,22 +746,28 @@ export function RideCard({
         >
           {notice ? <Text style={[styles.offerNotice, { color: colors.orange }]}>{notice}</Text> : null}
           <View style={styles.riderRow}>
-            {card.riderAvatarUrl ? (
+            {avatarUrl ? (
               <Image
-                source={{ uri: card.riderAvatarUrl }}
+                source={{ uri: avatarUrl }}
                 style={styles.avatar}
                 accessibilityIgnoresInvertColors
-                accessibilityLabel={`${card.firstName || 'Rider'} profile photo`}
+                accessibilityLabel={`${riderFirst} profile photo`}
               />
             ) : (
               <View style={[styles.avatar, styles.avatarFallback, { backgroundColor: colors.purple }]}>
-                <Text style={styles.avatarLetter}>{(card.firstName || 'R').slice(0, 1)}</Text>
+                <Text style={styles.avatarLetter}>{riderInitials(riderFirst)}</Text>
               </View>
             )}
             <View style={{ flex: 1 }}>
-              <Text style={{ color: colors.ink, fontWeight: '800', fontSize: 16 }}>{card.firstName}</Text>
-              <Text style={{ color: colors.inkSecondary }}>{card.tier === 'wait' ? 'Wait & Save' : card.tier === 'comfort' ? 'Extra Comfort' : card.tier === 'carpool' ? 'Carpool' : 'Standard'}</Text>
+              <Text style={{ color: colors.ink, fontWeight: '800', fontSize: 16 }}>{riderFirst}</Text>
+              <Text
+                style={{ color: colors.inkSecondary, fontWeight: '600' }}
+                accessibilityLabel={ratingAvg != null ? `Rider rating ${Number(ratingAvg).toFixed(1)} stars` : 'New rider, no rating yet'}
+              >
+                {ratingAvg != null ? `★ ${Number(ratingAvg).toFixed(1)}` : '★ New'} · {card.tier === 'wait' ? 'Wait & Save' : card.tier === 'comfort' ? 'Extra Comfort' : card.tier === 'carpool' ? 'Carpool' : 'Standard'}
+              </Text>
             </View>
+            <OfferGauge gauge={gauge} offerId={card.id} />
             {onFavorite ? (
               <Pressable onPress={onFavorite} accessibilityRole="button" accessibilityLabel={favorite ? 'Remove favorite rider' : 'Save favorite rider'}>
                 <Text style={{ color: favorite ? colors.orange : colors.purple, fontWeight: '800' }}>{favorite ? 'Favorite' : 'Save rider'}</Text>
@@ -761,9 +782,6 @@ export function RideCard({
           </View>
           <Text style={{ color: colors.inkSecondary }}>
             {vm.pay.subtext}
-          </Text>
-          <Text style={{ color: colors.orange, fontWeight: '800' }} accessibilityLabel={`Hourly rate ${hourly}`}>
-            {hourly}
           </Text>
           {vm.badges.length > 0 ? (
             <View style={styles.tags}>

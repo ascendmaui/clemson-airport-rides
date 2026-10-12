@@ -1,0 +1,173 @@
+/**
+ * "Worth-it" $/hr pill + arc for the driver offer card.
+ * All motion runs on the UI thread via Reanimated; reduce-motion keeps colors with static effects.
+ */
+import { useEffect, useMemo } from 'react'
+import { StyleSheet, Text, View } from 'react-native'
+import * as Haptics from 'expo-haptics'
+import { LinearGradient } from 'expo-linear-gradient'
+import Animated, {
+  Easing,
+  cancelAnimation,
+  useAnimatedStyle,
+  useReducedMotion,
+  useSharedValue,
+  withDelay,
+  withRepeat,
+  withSequence,
+  withTiming,
+} from 'react-native-reanimated'
+import { GAUGE_PALETTE, type GaugeEffects, type GaugeTier } from 'rides-native/offerGauge'
+import { useTheme } from '@/lib/theme'
+
+type Gauge = {
+  text: string
+  tier: GaugeTier | null
+  tierLabel: string | null
+  fill: number
+  level: number | null
+  effects: GaugeEffects
+  accessibilityLabel: string
+}
+
+const ARC = 30
+const STROKE = 4
+
+/** Semicircle arc built from two clipped rings (no SVG dependency). */
+function Arc({ fill, color, track }: { fill: number; color: string; track: string }) {
+  const deg = -180 + 180 * Math.max(0, Math.min(1, fill))
+  return (
+    <View style={{ width: ARC, height: ARC / 2, overflow: 'hidden' }} importantForAccessibility="no-hide-descendants">
+      <View style={[styles.ring, { borderColor: track }]} />
+      <View style={[styles.ring, { borderColor: 'transparent', borderTopColor: color, borderLeftColor: color, transform: [{ rotate: `${deg + 45}deg` }] }]} />
+    </View>
+  )
+}
+
+function Sparkle({ index, count, color, still }: { index: number; count: number; color: string; still: boolean }) {
+  const t = useSharedValue(still ? 0.6 : 0)
+  useEffect(() => {
+    if (still) return undefined
+    t.value = withDelay(index * 180, withRepeat(withSequence(
+      withTiming(1, { duration: 520, easing: Easing.out(Easing.quad) }),
+      withTiming(0, { duration: 680, easing: Easing.in(Easing.quad) }),
+    ), -1))
+    return () => cancelAnimation(t)
+  }, [still, index, t])
+  const angle = (index / count) * Math.PI * 2
+  const style = useAnimatedStyle(() => ({ opacity: t.value, transform: [{ scale: 0.4 + t.value * 0.6 }] }))
+  return (
+    <Animated.View
+      pointerEvents="none"
+      style={[styles.sparkle, { backgroundColor: color, left: `${50 + Math.cos(angle) * 54}%`, top: `${50 + Math.sin(angle) * 70}%` }, style]}
+    />
+  )
+}
+
+export function OfferGauge({ gauge, offerId }: { gauge: Gauge; offerId: string }) {
+  const { scheme } = useTheme()
+  const reduce = useReducedMotion()
+  const tier = gauge.tier ?? 'orange'
+  const swatch = GAUGE_PALETTE[tier][scheme === 'dark' ? 'dark' : 'light']
+  const fx = gauge.effects
+  const fancy = Boolean(swatch.gradient)
+
+  const sweep = useSharedValue(0)
+  const glow = useSharedValue(fx.glow)
+  const spin = useSharedValue(0)
+  const burst = useSharedValue(0)
+
+  useEffect(() => {
+    if (reduce) {
+      sweep.value = 0.5
+      glow.value = fx.glow
+      return undefined
+    }
+    if (fx.shimmerMs > 0) {
+      sweep.value = 0
+      sweep.value = withRepeat(withTiming(1, { duration: fx.shimmerMs, easing: Easing.inOut(Easing.cubic) }), -1)
+    }
+    if (fx.glow > 0) {
+      glow.value = withRepeat(withSequence(
+        withTiming(fx.glow, { duration: 900 }),
+        withTiming(fx.glow * 0.45, { duration: 900 }),
+      ), -1, true)
+    }
+    if (fx.ring) spin.value = withRepeat(withTiming(360, { duration: fx.crown ? 6000 : 4200, easing: Easing.linear }), -1)
+    if (fx.burst) burst.value = withSequence(withTiming(1, { duration: 420, easing: Easing.out(Easing.back(2)) }), withTiming(0.6, { duration: 600 }))
+    return () => {
+      cancelAnimation(sweep)
+      cancelAnimation(glow)
+      cancelAnimation(spin)
+      cancelAnimation(burst)
+    }
+  }, [reduce, fx.shimmerMs, fx.glow, fx.ring, fx.burst, fx.crown, sweep, glow, spin, burst])
+
+  // One celebratory moment per offer: Crown = single success, Diamond V = double tap.
+  useEffect(() => {
+    if (!fx.haptics) return undefined
+    let cancelled = false
+    void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {})
+    const timer = fx.haptics > 1
+      ? setTimeout(() => { if (!cancelled) void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy).catch(() => {}) }, 140)
+      : null
+    return () => {
+      cancelled = true
+      if (timer) clearTimeout(timer)
+    }
+  }, [offerId, fx.haptics])
+
+  const sweepStyle = useAnimatedStyle(() => ({ transform: [{ translateX: -80 + sweep.value * 220 }, { rotate: '18deg' }] }))
+  const glowStyle = useAnimatedStyle(() => ({ opacity: glow.value, shadowOpacity: glow.value }))
+  const ringStyle = useAnimatedStyle(() => ({ transform: [{ rotate: `${spin.value}deg` }] }))
+  const burstStyle = useAnimatedStyle(() => ({ opacity: burst.value * 0.7, transform: [{ scale: 0.9 + burst.value * 0.35 }] }))
+  const sparkles = useMemo(() => Array.from({ length: fx.sparkles }, (_, i) => i), [fx.sparkles])
+
+  return (
+    <View style={styles.wrap} accessible accessibilityRole="text" accessibilityLabel={gauge.accessibilityLabel}>
+      {fx.glow > 0 ? (
+        <Animated.View pointerEvents="none" style={[styles.glow, { backgroundColor: swatch.accent, shadowColor: swatch.accent }, glowStyle]} />
+      ) : null}
+      {fx.burst ? (
+        <Animated.View pointerEvents="none" style={[styles.burst, { borderColor: swatch.accent }, burstStyle]} />
+      ) : null}
+      {fx.ring ? (
+        <Animated.View pointerEvents="none" style={[styles.ring2, { borderTopColor: swatch.accent, borderRightColor: 'transparent', borderBottomColor: 'transparent', borderLeftColor: swatch.accent }, ringStyle]} />
+      ) : null}
+      <View style={[styles.pill, { backgroundColor: swatch.bg, borderColor: swatch.accent }]}>
+        {fancy ? (
+          <LinearGradient colors={swatch.gradient as [string, string, string]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
+        ) : null}
+        {fx.shimmerMs > 0 ? (
+          <Animated.View pointerEvents="none" style={[styles.sweep, sweepStyle]}>
+            <LinearGradient colors={['rgba(255,255,255,0)', 'rgba(255,255,255,0.55)', 'rgba(255,255,255,0)']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={StyleSheet.absoluteFill} />
+          </Animated.View>
+        ) : null}
+        <Arc fill={gauge.fill} color={tier === 'crown' ? '#FFFFFF' : swatch.accent} track={scheme === 'dark' ? 'rgba(255,255,255,0.18)' : 'rgba(0,0,0,0.10)'} />
+        <View>
+          <Text style={[styles.value, { color: swatch.fg }]}>{tier === 'crown' ? '♛ ' : ''}{gauge.text}</Text>
+          {gauge.tierLabel ? <Text style={[styles.label, { color: swatch.fg }]}>{gauge.tierLabel}</Text> : null}
+        </View>
+        {sparkles.map((i) => (
+          <Sparkle key={i} index={i} count={sparkles.length} color={tier === 'crown' ? '#FFE9A8' : '#FFFFFF'} still={reduce} />
+        ))}
+      </View>
+    </View>
+  )
+}
+
+const styles = StyleSheet.create({
+  wrap: { alignItems: 'center', justifyContent: 'center' },
+  pill: {
+    flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 12, paddingVertical: 6,
+    borderRadius: 999, borderWidth: StyleSheet.hairlineWidth * 2, overflow: 'hidden', minHeight: 44,
+  },
+  ring: { position: 'absolute', width: ARC, height: ARC, borderRadius: ARC / 2, borderWidth: STROKE },
+  value: { fontSize: 17, fontWeight: '800', fontVariant: ['tabular-nums'], letterSpacing: -0.3 },
+  label: { fontSize: 11, fontWeight: '700', opacity: 0.9, letterSpacing: 0.4, textTransform: 'uppercase' },
+  sweep: { position: 'absolute', top: -20, bottom: -20, width: 36 },
+  glow: { position: 'absolute', top: -6, bottom: -6, left: -6, right: -6, borderRadius: 999, shadowRadius: 14, shadowOffset: { width: 0, height: 0 } },
+  burst: { position: 'absolute', top: -12, bottom: -12, left: -12, right: -12, borderRadius: 999, borderWidth: 2, borderStyle: 'dashed' },
+  ring2: { position: 'absolute', top: -4, bottom: -4, left: -4, right: -4, borderRadius: 999, borderWidth: 2 },
+  sparkle: { position: 'absolute', width: 4, height: 4, borderRadius: 2, marginLeft: -2, marginTop: -2 },
+})
