@@ -6,7 +6,9 @@ import { DriverCancelSheet } from '../components/DriverCancelSheet'
 import { DRIVER_CANCEL_SUCCESS } from '../../shared/driverCancel.js'
 import { DriverDeskHeader } from '../components/DriverDeskHeader'
 import { GameDayStatus } from '../components/GameDayStatus'
+import { GameDayBoard, GameDaySurgeNote } from '../components/GameDayBoard'
 import { useGameDayNotice } from '../lib/useGameDayNotice'
+import { useGameDayExperience } from '../../packages/rides-native/useGameDayExperience.js'
 import { DriverIncentiveBanner, useDriverIncentiveWatch } from '../components/DriverIncentiveBanner'
 import { HEAT_WINDOWS, loadMapType, saveMapType } from '../lib/rideDemand'
 import { PurpleAcceptButton } from '../components/PrimaryButton'
@@ -107,6 +109,7 @@ export function DriverHome({ openChatTripId = '' }) {
 function DriverShell({ driverId }) {
   const { user } = useAuth()
   const game = useGameDayNotice()
+  const gameDay = useGameDayExperience(supabase, { driverId })
   const [priority, setPriority] = useState(false)
   const [offer, setOffer] = useState(null)
   const [activeTrip, setActiveTrip] = useState(null)
@@ -1023,6 +1026,15 @@ function DriverShell({ driverId }) {
         >
           <div className="sheet-handle" />
           {scheduledLists(true)}
+          {gameDay.ready ? (
+            <div style={{ marginBottom: 12 }}>
+              {gameDay.model.phase !== 'off' ? (
+                <GameDayBoard model={gameDay.model} audience="driver" onTogglePrep={gameDay.togglePrep} />
+              ) : (
+                <GameDaySurgeNote model={gameDay.model} audience="driver" />
+              )}
+            </div>
+          ) : null}
           <DriverShiftControl
             onShift={online}
             busy={shiftBusy}
