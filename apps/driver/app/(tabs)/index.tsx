@@ -8,6 +8,7 @@ import { FarePanel } from '@/components/FarePanel'
 import { Card, ErrorText, Primary, Tag, useCardShadow } from '@/components/chrome'
 import { CircleButton, GoButton } from '@/components/shell'
 import { DriverStatusCard } from '@/components/DriverStatusCard'
+import { PerksStrip } from '@/components/PerksStrip'
 import { ForecastCard } from '@/components/ForecastCard'
 import { useAuth } from '@/lib/auth'
 import { useFeedback } from '@/lib/feedback'
@@ -569,6 +570,7 @@ export default function DriverHome() {
               {gameNotice.live ? `${gameNotice.detail}. ${gameNotice.body}` : gameNotice.body}
             </Text>
           ) : null}
+          <PerksStrip />
           {canSeeOffers && !desk?.active ? <ForecastCard /> : null}
         </View>
 

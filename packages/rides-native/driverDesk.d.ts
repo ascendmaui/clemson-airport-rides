@@ -139,6 +139,13 @@ export function sendQueuedDriverAction(supabase: unknown, action: { id: string; 
 export function advanceResultTrip(result: any): (DriverTripRow & { settle?: { reason?: string; payment?: unknown; payout?: { status?: string; amountCents?: number; waitCents?: number } | null } | null }) | null
 export function driverCancelTrip(supabase: unknown, tripId: string, reason: string, note?: string): Promise<{ ok: boolean; idempotent?: boolean }>
 
+export type StreakView = { enabled: boolean; current: number; target: number; toNext: number; progress: number; bonusCents: number }
+export type DriverPerks = {
+  streaks?: { trips: StreakView; days: StreakView }
+  bonuses?: { kind: string; amountCents: number; status: string; at: string }[]
+  [key: string]: unknown
+}
+export function loadDriverPerks(supabase: unknown): Promise<DriverPerks>
 export type CashoutQuote = {
   state: 'needs_setup' | 'already_today' | 'zero_balance' | 'below_fee' | 'ready'
   method?: 'instant' | 'standard'

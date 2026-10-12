@@ -737,6 +737,11 @@ export async function loadEarnings(supabase, driverId) {
 
 export { formatCents }
 
+/** Driver perks summary (streaks and bonus ledger; later perks add fields). */
+export async function loadDriverPerks(supabase) {
+  return authedJson(supabase, '/api/driver?action=perks')
+}
+
 /** Instant cash-out quote: { state, method, grossCents, feeCents, netCents }. */
 export async function loadCashoutQuote(supabase) {
   return authedJson(supabase, '/api/driver?action=cashout')
