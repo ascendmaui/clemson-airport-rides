@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { currentToast, dismissToast, resetToasts, showToast, subscribeToasts } from './toastStore.js'
+import { currentToast, dismissToast, resetToasts, showToast, subscribeToasts } from '../packages/rides-native/toastStore.js'
 
 test('shows one toast at a time and promotes the next on dismiss', () => {
   resetToasts()
@@ -39,14 +39,14 @@ test('empty titles are ignored and the queue is capped', () => {
 })
 
 test('host is glass, springs in, auto-dismisses, swipes up to dismiss, and is mounted in both apps', () => {
-  const host = readFileSync(new URL('./ToastHost.jsx', import.meta.url), 'utf8')
+  const host = readFileSync(new URL('../packages/rides-native/ToastHost.jsx', import.meta.url), 'utf8')
   assert.match(host, /BlurView/)
   assert.match(host, /Animated\.spring\(y/)
   assert.match(host, /setTimeout\(\(\) => hide\(toast\.id\), toast\.durationMs\)/)
   assert.match(host, /g\.dy < -24 \|\| g\.vy < -0\.6/)
   assert.match(host, /accessibilityRole="alert"/)
   for (const app of ['rider', 'driver']) {
-    const layout = readFileSync(new URL(`../../apps/${app}/app/_layout.tsx`, import.meta.url), 'utf8')
+    const layout = readFileSync(new URL(`../apps/${app}/app/_layout.tsx`, import.meta.url), 'utf8')
     assert.match(layout, /<ToastMount \/>/)
   }
 })
