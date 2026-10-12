@@ -11,8 +11,9 @@ import { registerDriverPush, type PushState } from '@/lib/push'
 import { supabase } from '@/lib/supabase'
 import { useTheme, type DisplayMode, type NavApp, type RideAlertMode, type RideAlertTier } from '@/lib/theme'
 import { loadDriverProfile } from 'rides-native/driverDesk'
+import { QuietHoursChoices } from '@/components/QuietHoursChoices'
 
-const SECTIONS = ['display', 'privacy', 'address', 'accessibility', 'communication', 'navigation', 'sounds', 'auto-accept'] as const
+const SECTIONS = ['display', 'privacy', 'address', 'accessibility', 'communication', 'navigation', 'sounds', 'auto-accept', 'quiet-hours'] as const
 type Section = (typeof SECTIONS)[number]
 
 function isSection(value: string): value is Section {
@@ -37,6 +38,8 @@ function sectionTitle(section: Section): string {
       return 'Sounds and voice'
     case 'auto-accept':
       return 'Auto-accept'
+    case 'quiet-hours':
+      return 'Quiet hours'
     default: {
       const unknown: never = section
       return unknown
@@ -132,6 +135,7 @@ export default function SettingsSection() {
         {section === 'navigation' ? <NavChoices /> : null}
         {section === 'sounds' ? <SoundChoices /> : null}
         {section === 'auto-accept' ? <AutoAcceptChoices /> : null}
+        {section === 'quiet-hours' ? <QuietHoursChoices /> : null}
         {error ? <ErrorText>{error}</ErrorText> : null}
       </FadeIn>
     </StackPage>
@@ -193,11 +197,12 @@ function usePersistDriverAlerts() {
   const { rideAlerts, autoAccept } = useTheme()
   useEffect(() => {
     if (!user || !supabase) return undefined
+    const client = supabase
     let cancel = false
-    supabase.from('profiles').select('notification_prefs').eq('id', user.id).maybeSingle().then((res: { data?: { notification_prefs?: object } | null; error?: { message?: string } | null }) => {
+    void Promise.resolve(client.from('profiles').select('notification_prefs').eq('id', user.id).maybeSingle()).then((res: { data?: { notification_prefs?: object } | null; error?: { message?: string } | null }) => {
       if (cancel || res.error) return null
       const next = { ...(res.data?.notification_prefs || {}), ride_alerts: rideAlerts, auto_accept: autoAccept }
-      return supabase.from('profiles').update({ notification_prefs: next }).eq('id', user.id)
+      return client.from('profiles').update({ notification_prefs: next }).eq('id', user.id)
     }).catch(() => null)
     return () => {
       cancel = true

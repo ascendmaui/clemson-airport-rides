@@ -35,6 +35,7 @@
  * GET /api/driver-earnings, which checks the caller and returns aggregates only.
  */
 import { PLATFORM_FEE_RATE, splitPlatformCut } from './platformFee.js'
+import { readPrepaidTipCents } from '../../shared/prepaidTip.js'
 import { earningsExtrasForDriver } from '../../shared/backupDriverQueue.js'
 import { driverBoostShareCents, readBoostCents } from '../../shared/scheduledBoost.js'
 import { supabase } from './supabase.js'
@@ -277,6 +278,8 @@ export function sanitizeCompletedTripForDriver(row, { riderName = '', payments =
   const driverWaitEarningsCents = storedWait ?? Math.max(0, cut.driverNetCents - withoutWait.driverNetCents)
   const earnedBeforeBoost = storedWait == null ? cut.driverNetCents : withoutWait.driverNetCents + storedWait
   const boostCents = canceled ? 0 : driverBoostShareCents(readBoostCents(row))
+  // Tip boost prepaid at booking: 100% to the driver, never in the platform fee.
+  const prepaidTipCents = canceled ? 0 : readPrepaidTipCents(row)
 
   const distance = readDistance(row, bill)
   const duration = readDuration(row, bill)
@@ -309,11 +312,12 @@ export function sanitizeCompletedTripForDriver(row, { riderName = '', payments =
     grossCents: cut.grossCents,
     platformFeeCents: noShow ? Math.max(0, cut.grossCents - (Number(row.driver_wait_earnings_cents) || 0)) : cut.grossCents - earnedBeforeBoost,
     tipCents: canceled ? null : tipCents,
+    prepaidTipCents,
     boostCents,
     waitFeeCents: canceled && !noShow ? null : waitFeeCents,
     cancelFeeCents,
     driverWaitEarningsCents,
-    earnedCents: noShow ? Math.max(0, Number(row.driver_wait_earnings_cents) || 0) : earnedBeforeBoost + boostCents + backupExtras.cents,
+    earnedCents: noShow ? Math.max(0, Number(row.driver_wait_earnings_cents) || 0) : earnedBeforeBoost + boostCents + prepaidTipCents + backupExtras.cents,
     distanceM: distance.meters,
     distanceApproximate: distance.approximate,
     durationS: duration.seconds,
@@ -546,7 +550,7 @@ export function buildAnnualTaxCsv(summary) {
     ['Wait fees (USD)', waitCell],
     ['Cancel fees (USD)', cancelCell],
     ['Gross subject to platform fee (USD)', csvMoney(summary.grossCents)],
-    ['Platform fees 20% of fares, tips, wait, and cancel (USD)', csvMoney(summary.platformFeeCents)],
+    ['Platform fees 20% of fares, wait, and cancel; tips 100% to driver (USD)', csvMoney(summary.platformFeeCents)],
     ['Boost 100% to driver, excluded from platform fee (USD)', csvMoney(summary.boostCents)],
     ['Driver net 80% (USD)', csvMoney(summary.driverNetCents)],
     [],

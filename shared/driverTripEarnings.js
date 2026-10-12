@@ -6,13 +6,15 @@
  *            metadata.driver_net_cents / driver_payout_cents, else 80%)
  *          + driver share of any boost not already in that net
  *          + backup-queue bonus (when promoted from backup)
- *          + driver wait share (completed trips only).
+ *          + driver wait share (completed trips only)
+ *          + 100% of a tip boost prepaid at booking (no platform split).
  * Wait cancellations pay only the wait share; other cancellations pay nothing.
  * Tips are not in this number: they are charged after the trip and shown separately.
  */
 import { resolveDriverNetCents } from './paymentFailure.js'
 import { readBackupQueue, readScheduledBoostCents } from './backupDriverQueue.js'
 import { driverBoostShareCents, readBoostCents } from './scheduledBoost.js'
+import { driverPrepaidTipShareCents, readPrepaidTipCents } from './prepaidTip.js'
 
 const cents = (value) => Math.max(0, Math.round(Number(value) || 0))
 
@@ -35,7 +37,7 @@ export function driverTripEarnings(trip) {
     const waitCents = status === 'cancelled_wait' ? waitShare : 0
     return {
       kind: 'cancel', fareCents, fareNetCents: 0, platformFeeCents: 0, boostCents: 0, backupBonusCents: 0,
-      waitCents, riderWaitFeeCents, tigerHeatBonusCents: 0, platformFundedCents: 0, tipCents, netCents: waitCents,
+      waitCents, riderWaitFeeCents, tigerHeatBonusCents: 0, platformFundedCents: 0, tipCents, prepaidTipCents: 0, netCents: waitCents,
     }
   }
   const heatPay = tigerHeatPayoutCents(trip)
@@ -48,6 +50,7 @@ export function driverTripEarnings(trip) {
     ? cents(queue.bonusCents)
     : 0
   const waitCents = status === 'completed' ? waitShare : 0
+  const prepaidTipCents = driverPrepaidTipShareCents(readPrepaidTipCents(trip))
   const heat = trip?.metadata?.tiger_heat
   return {
     kind: 'trip',
@@ -61,7 +64,8 @@ export function driverTripEarnings(trip) {
     tigerHeatBonusCents: heatPay == null ? 0 : cents(heat?.bonusCents),
     platformFundedCents: heatPay == null ? 0 : cents(heat?.platformFundedCents),
     tipCents,
-    netCents: fareNetCents + boostCents + backupBonusCents + waitCents,
+    prepaidTipCents,
+    netCents: fareNetCents + boostCents + backupBonusCents + waitCents + prepaidTipCents,
   }
 }
 
