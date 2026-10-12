@@ -1,3 +1,4 @@
+import { Glyph } from 'rides-native/icons'
 import { useEffect, useRef, type ReactNode } from 'react'
 import { Animated, Platform, Pressable, Text, TextInput, View } from 'react-native'
 import { lift } from '@/lib/elevation'
@@ -50,7 +51,7 @@ export function BackButton({ onPress }: { onPress: () => void }) {
   const styles = useThemedStyles(makeStyles)
   return (
     <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel="Back" style={[styles.back, lift(colors, 'rest')]}>
-      <Text style={styles.backLabel}>←</Text>
+      <Glyph name="back" size={20} color={colors.title} accessibilityLabel="Back" />
     </Pressable>
   )
 }

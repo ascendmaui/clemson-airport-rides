@@ -1,3 +1,4 @@
+import { Glyph } from 'rides-native/icons'
 import { useEffect, useState } from 'react'
 import { ActivityIndicator, Pressable, Share, Text, View } from 'react-native'
 import { PrimaryButton } from '@/components/Button'
@@ -131,7 +132,10 @@ export function LiveShareCard({
 
   return (
     <View style={[styles.card, lift(colors, 'rest')]}>
-      <Text style={styles.kicker}>LIVE LOCATION</Text>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+        <Glyph name="share" size={16} color={colors.orange} />
+        <Text style={styles.kicker}>LIVE LOCATION</Text>
+      </View>
       <Text style={styles.title}>Share my location</Text>
       {loading ? <ActivityIndicator color={colors.orange} style={styles.spinner} /> : null}
       {!loading && !trip ? (
