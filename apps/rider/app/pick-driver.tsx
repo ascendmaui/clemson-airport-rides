@@ -1,3 +1,4 @@
+import { Glyph } from 'rides-native/icons'
 import { useDemoBusyRoster } from '@/lib/useDemoBusyRoster'
 import { busyRosterFor } from 'rides-native/busyRoster.js'
 import { resolveDriverPortrait } from '../../../shared/driverPortrait.js'
@@ -335,7 +336,7 @@ export default function PickDriver() {
           accessibilityHint="Returns to fare choices"
           hitSlop={8}
         >
-          <Text style={styles.backLabel}>←</Text>
+          <Glyph name="back" size={20} color={colors.title} accessibilityLabel="Back" />
         </Pressable>
         <View style={styles.headerCopy}>
           <Text style={styles.title}>Pick a driver</Text>

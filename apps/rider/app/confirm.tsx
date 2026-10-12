@@ -1,3 +1,4 @@
+import { Glyph } from 'rides-native/icons'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import * as Location from 'expo-location'
 import { useRef, useState } from 'react'
@@ -152,7 +153,7 @@ export default function ConfirmPickup() {
           accessibilityHint="Returns to the previous screen"
           hitSlop={8}
         >
-          <Text style={styles.backLabel}>←</Text>
+          <Glyph name="back" size={20} color={colors.title} accessibilityLabel="Back" />
         </Pressable>
       </View>
       <Animated.View style={[styles.sheetWrap, lift(colors, 'float'), sheetMotion]}>

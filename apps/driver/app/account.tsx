@@ -1,3 +1,4 @@
+import { Glyph } from 'rides-native/icons'
 import { useRouter } from 'expo-router'
 import { useEffect, useMemo, useState } from 'react'
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
@@ -82,7 +83,7 @@ export default function AccountScreen() {
         accessibilityHint="Navigates to previous screen"
         hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
       >
-        <Text style={styles.backText}>←</Text>
+        <Glyph name="back" size={20} color={colors.title} accessibilityLabel="Back" />
       </Pressable>
       <Text style={styles.title}>{name || 'Guest'}</Text>
       {user?.email ? <Text style={styles.copy}>{user.email}</Text> : <Text style={styles.copy}>Sign in with email and password.</Text>}

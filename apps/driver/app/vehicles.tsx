@@ -1,4 +1,4 @@
-import { Ionicons } from '@expo/vector-icons'
+import { Glyph } from 'rides-native/icons'
 import { useRouter, useFocusEffect } from 'expo-router'
 import { useCallback, useState } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
@@ -155,7 +155,7 @@ export default function VehiclesScreen() {
           <Card>
             <View style={[styles.hero, { backgroundColor: colors.track }]}>
               <View style={[styles.swatch, { backgroundColor: paint, borderColor: colors.border }]} />
-              <Ionicons name="car-sport" size={42} color={colors.purple} />
+              <Glyph name="car-sport" size={42} color={colors.purple} />
             </View>
             <View style={styles.titleRow}>
               <Text style={[styles.name, { color: colors.ink }]}>{title || 'Your vehicle'}</Text>

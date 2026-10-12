@@ -3,7 +3,7 @@ import test from 'node:test'
 import { readFileSync } from 'node:fs'
 import { PGlite } from '@electric-sql/pglite'
 
-const sql = readFileSync(new URL('../supabase/migrations/20261012120000_driver_instant_cashout.sql', import.meta.url), 'utf8')
+const sql = readFileSync(new URL('../supabase/migrations/20261012110736_driver_instant_cashout.sql', import.meta.url), 'utf8')
 const D = '11111111-1111-1111-1111-111111111111'
 
 async function boot() {

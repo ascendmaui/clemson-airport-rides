@@ -1,12 +1,12 @@
+import { Glyph, PressScale } from 'rides-native/icons'
 import type { ReactNode } from 'react'
-import { Ionicons } from '@expo/vector-icons'
 import { LinearGradient } from 'expo-linear-gradient'
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useTheme } from '@/lib/theme'
 import { useCardShadow } from '@/components/chrome'
 
-type IconName = keyof typeof Ionicons.glyphMap
+type IconName = string
 
 export function CircleButton({
   icon,
@@ -20,15 +20,15 @@ export function CircleButton({
   const { colors } = useTheme()
   const shadow = useCardShadow()
   return (
-    <Pressable
+    <PressScale
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={label}
       hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
       style={[styles.circle, shadow, { backgroundColor: colors.card }]}
     >
-      <Ionicons name={icon} size={22} color={colors.title} />
-    </Pressable>
+      <Glyph name={icon} size={22} color={colors.title} />
+    </PressScale>
   )
 }
 
@@ -57,17 +57,15 @@ export function GoButton({
       : [colors.goStart, colors.orange] as const
 
   return (
-    <Pressable
+    <PressScale
       onPress={onPress}
       disabled={isDisabled}
       accessibilityRole="button"
       accessibilityLabel={label}
       accessibilityHint={disabled && disabledReason ? disabledReason : online ? 'Takes you offline' : 'Goes online to receive ride requests'}
       accessibilityState={{ disabled: isDisabled, busy }}
-      style={({ pressed }) => ({
-        opacity: isDisabled ? 0.45 : pressed ? 0.92 : 1,
-        transform: [{ scale: pressed && !isDisabled ? 0.98 : 1 }],
-      })}
+      style={{ opacity: isDisabled ? 0.45 : 1 }}
+      scaleTo={isDisabled ? 1 : 0.95}
     >
       <LinearGradient
         colors={gradient}
@@ -81,11 +79,12 @@ export function GoButton({
           elevation: 6,
         }]}
       >
+        <Glyph name="online" size={22} color={disabled ? colors.inkSecondary : colors.onAccent} />
         <Text style={[styles.goText, { color: disabled ? colors.inkSecondary : colors.onAccent }]}>
           {online ? 'END' : 'GO'}
         </Text>
       </LinearGradient>
-    </Pressable>
+    </PressScale>
   )
 }
 
@@ -176,13 +175,13 @@ export function ListRow({
       ]}
     >
       <View style={[styles.rowIcon, { backgroundColor: colors.track }]}>
-        <Ionicons name={icon} size={18} color={colors.purple} />
+        <Glyph name={icon} size={18} color={colors.purple} />
       </View>
       <View style={styles.rowBody}>
         <Text style={[styles.rowTitle, { color: colors.ink }]}>{title}</Text>
         {subtitle ? <Text style={[styles.rowSub, { color: colors.inkSecondary }]}>{subtitle}</Text> : null}
       </View>
-      <Ionicons name="chevron-forward" size={18} color={colors.inkSecondary} />
+      <Glyph name="chevron-forward" size={18} color={colors.inkSecondary} />
     </Pressable>
   )
 }

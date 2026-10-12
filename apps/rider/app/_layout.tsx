@@ -1,3 +1,4 @@
+import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import { Stack, useRouter } from 'expo-router'
 import * as Linking from 'expo-linking'
 import { StatusBar } from 'expo-status-bar'
@@ -77,7 +78,24 @@ function ThemedStack() {
   return (
     <>
       <StatusBar style={colors.statusBar} />
-      <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.background } }} />
+      <Stack
+        screenOptions={{
+          headerShown: false,
+          contentStyle: { backgroundColor: colors.background },
+          // Native-stack push with the iOS full-width back swipe.
+          animation: 'default',
+          gestureEnabled: true,
+          fullScreenGestureEnabled: true,
+          animationMatchesGesture: true,
+        }}
+      >
+        {/* Tab roots cross-fade instead of pushing. */}
+        <Stack.Screen name="index" options={{ animation: 'fade', animationDuration: 180 }} />
+        <Stack.Screen name="history" options={{ animation: 'fade', animationDuration: 180 }} />
+        <Stack.Screen name="billing" options={{ animation: 'fade', animationDuration: 180 }} />
+        <Stack.Screen name="account" options={{ animation: 'fade', animationDuration: 180 }} />
+        <Stack.Screen name="schedule" options={{ animation: 'fade', animationDuration: 180 }} />
+      </Stack>
     </>
   )
 }
@@ -184,21 +202,23 @@ function CheckoutDeepLink() {
 
 export default function RootLayout() {
   return (
-    <ThemeProvider>
-      <AuthProvider>
-        <PasswordRecoveryListener />
-        <AmbassadorDeepLink />
-        <AmbassadorClaim />
-        <RiderPushBridge />
-        <CheckoutDeepLink />
-        <Gate>
-          <ThemedStack />
-          <ApproachHost />
-          <RiderMatchPopup />
-          <ToastMount />
-          <RiderMoments />
-        </Gate>
-      </AuthProvider>
-    </ThemeProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <ThemeProvider>
+        <AuthProvider>
+          <PasswordRecoveryListener />
+          <AmbassadorDeepLink />
+          <AmbassadorClaim />
+          <RiderPushBridge />
+          <CheckoutDeepLink />
+          <Gate>
+            <ThemedStack />
+            <ApproachHost />
+            <RiderMatchPopup />
+            <ToastMount />
+            <RiderMoments />
+          </Gate>
+        </AuthProvider>
+      </ThemeProvider>
+    </GestureHandlerRootView>
   )
 }

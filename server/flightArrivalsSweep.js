@@ -96,7 +96,7 @@ export async function sweepFlightArrivals(sb, { now = new Date(), dryRun = false
     } catch (err) {
       last = { error: err }
     }
-    // Before 20261012150000_flight_arrivals.sql (or on a stub db) there is nothing to do.
+    // Before 20261012112103_flight_arrivals.sql (or on a stub db) there is nothing to do.
     if (last?.error || !last) { result.airports.push({ airport, state: 'unavailable' }); continue }
     const lastMs = last.data?.last_run_at ? Date.parse(last.data.last_run_at) : 0
     if (at.getTime() - lastMs < INGEST_EVERY_MS - 15000) { result.airports.push({ airport, state: 'throttled' }); continue }

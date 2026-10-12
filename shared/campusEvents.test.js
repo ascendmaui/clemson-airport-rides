@@ -44,7 +44,7 @@ test('bonus window and demand weight', () => {
 })
 
 test('supply migration is additive, keeps #436 table shape, cites official sources', () => {
-  const sql = readFileSync(new URL('../supabase/migrations/20261012140000_clemson_events_supply.sql', import.meta.url), 'utf8')
+  const sql = readFileSync(new URL('../supabase/migrations/20261012111710_clemson_events_supply.sql', import.meta.url), 'utf8')
   assert.match(sql, /CREATE TABLE IF NOT EXISTS public\.clemson_events/)
   assert.match(sql, /ADD COLUMN IF NOT EXISTS nudge_sent_at/)
   assert.doesNotMatch(sql.replace(/^--.*$/gm, ""), /DROP TABLE|DROP COLUMN/i)

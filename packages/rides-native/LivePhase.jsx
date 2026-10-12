@@ -1,4 +1,10 @@
 import { Text, View } from 'react-native'
+import { Icon } from './icons/index.js'
+
+const STEP_GLYPHS = {
+  searching: 'searching', offered: 'matched', accepted: 'matched', enroute: 'enRoute', arriving: 'enRoute',
+  arrived: 'arrived', in_trip: 'inTrip', in_progress: 'inTrip', completed: 'complete',
+}
 
 function stepRows(steps) {
   const rows = []
@@ -10,9 +16,17 @@ function StepBar({ step, index, activeIndex, colors, track, readable }) {
   const on = index <= activeIndex
   const current = index === activeIndex
   return (
-    <View style={{ flex: 1, gap: 4, ...(readable ? { minWidth: 0 } : null) }}>
+    <View style={{ flex: 1, gap: 4, alignItems: 'center', ...(readable ? { minWidth: 0 } : null) }}>
+      <Icon
+        name={STEP_GLYPHS[step.id] || 'clock'}
+        size={18}
+        active={current}
+        color={current ? colors.orange : on ? colors.purple : colors.inkSecondary}
+        knockout={colors.card || '#FFFFFF'}
+      />
       <View
         style={{
+          alignSelf: 'stretch',
           height: 4,
           borderRadius: 999,
           backgroundColor: current ? colors.orange : on ? colors.purple : track,
