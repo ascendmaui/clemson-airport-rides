@@ -49,7 +49,7 @@ export async function presentNativeSetupSheet(input: NativeSetupSheetInput): Pro
       primaryButtonLabel: sheet.primaryButtonLabel,
       allowsDelayedPaymentMethods: sheet.allowsDelayedPaymentMethods,
       paymentMethodOrder: sheet.paymentMethodOrder,
-      link: sheet.link,
+      link: sheet.link as NonNullable<Parameters<typeof initPaymentSheet>[0]['link']>,
       setupIntentClientSecret: input.clientSecret,
     }
     if (sheet.applePay && merchantId && Platform.OS === 'ios') initParams.applePay = sheet.applePay

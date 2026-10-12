@@ -6,7 +6,9 @@ import { useEffect, type ReactNode } from 'react'
 import { View } from 'react-native'
 import { ApproachAlert } from '@/components/ApproachAlert'
 import { LostItemBanner } from 'rides-native/LostItemBanner.jsx'
+import { ToastHost } from 'rides-native/ToastHost.jsx'
 import { RiderMatchPopup } from '@/components/RiderMatchPopup'
+import { RiderMoments } from '@/components/RiderMoments'
 import { AuthProvider, useAuth } from '@/lib/auth'
 import { PasswordRecoveryListener } from '@/lib/passwordRecovery'
 import { ThemeProvider, useTheme } from '@/lib/theme'
@@ -26,6 +28,12 @@ import * as Notifications from 'expo-notifications'
 import { registerRiderPush, tripIdFromPush } from '@/lib/push'
 
 setCarpoolApiBase(resolveApiBase())
+
+/** Shared glass toast (packages/rides-native/ToastHost). */
+function ToastMount() {
+  const { scheme } = useTheme()
+  return <ToastHost scheme={scheme} />
+}
 
 function LostItemHost() {
   const { user } = useAuth()
@@ -210,5 +218,21 @@ export default function RootLayout() {
         </AuthProvider>
       </ThemeProvider>
     </GestureHandlerRootView>
+    <ThemeProvider>
+      <AuthProvider>
+        <PasswordRecoveryListener />
+        <AmbassadorDeepLink />
+        <AmbassadorClaim />
+        <RiderPushBridge />
+        <CheckoutDeepLink />
+        <Gate>
+          <ThemedStack />
+          <ApproachHost />
+          <RiderMatchPopup />
+          <ToastMount />
+          <RiderMoments />
+        </Gate>
+      </AuthProvider>
+    </ThemeProvider>
   )
 }

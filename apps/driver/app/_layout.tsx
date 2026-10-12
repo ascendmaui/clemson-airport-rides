@@ -10,13 +10,21 @@ import { AuthProvider, useAuth } from '@/lib/auth'
 import { FeedbackProvider } from '@/lib/feedback'
 import { OfferBridge } from '@/components/OfferBridge'
 import { ActiveTripResume } from '@/components/ActiveTripResume'
+import { DriverMoments } from '@/components/DriverMoments'
 import { LostItemBanner } from 'rides-native/LostItemBanner.jsx'
+import { ToastHost } from 'rides-native/ToastHost.jsx'
 import { registerDriverPush, setRideAlertSurface } from '@/lib/push'
 import { supabase } from '@/lib/supabase'
 import { ThemeProvider, useTheme } from '@/lib/theme'
 import { ProfileRequiredGate } from 'rides-native/PartyScreens'
 import { PasswordRecoveryListener } from '@/lib/passwordRecovery'
 import { reconcileTripBackgroundLocation } from '@/lib/backgroundLocation'
+
+/** Shared glass toast (packages/rides-native/ToastHost). */
+function ToastMount() {
+  const { scheme } = useTheme()
+  return <ToastHost scheme={scheme} />
+}
 
 function LostItemHost() {
   const { user } = useAuth()
@@ -124,5 +132,20 @@ export default function RootLayout() {
         </AuthProvider>
       </ThemeProvider>
     </GestureHandlerRootView>
+    <ThemeProvider>
+      <AuthProvider>
+        <FeedbackProvider>
+          <Gate>
+            <PasswordRecoveryListener />
+            <PushBridge />
+            <OfferBridge />
+            <ThemedStack />
+            <ActiveTripResume />
+            <ToastMount />
+            <DriverMoments />
+          </Gate>
+        </FeedbackProvider>
+      </AuthProvider>
+    </ThemeProvider>
   )
 }
