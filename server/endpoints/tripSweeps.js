@@ -6,11 +6,14 @@ import { sweepCanceledHolds } from '../canceledHoldSweep.js'
 import { sweepWaitAutoCancel } from '../waitAutoCancelSweep.js'
 import { sweepWaitFeeCharge } from '../waitFeeChargeSweep.js'
 import { sweepTripStatusNotices } from '../tripStatusNotices.js'
+import { sweepSearchTimeouts } from '../searchTimeoutSweep.js'
 
 export const SWEEPS = [
   { name: 'canceled_holds', run: sweepCanceledHolds },
   { name: 'wait-auto-cancel', run: sweepWaitAutoCancel },
   { name: 'wait-fee-charge', run: sweepWaitFeeCharge },
+  // Before the notice drain so the rider's push goes out on the same tick.
+  { name: 'search-timeout', run: sweepSearchTimeouts },
   { name: 'trip-status-notices', run: sweepTripStatusNotices },
 ]
 
