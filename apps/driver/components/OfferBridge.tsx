@@ -13,8 +13,7 @@ import { useFeedback } from '@/lib/feedback'
 import { inAppRideAlert, isTripStatusPush, notifyNewRequest, notifyScheduledBoard, setRideAlertSurface } from '@/lib/push'
 import { supabase } from '@/lib/supabase'
 import { newRideAlertAllowed } from 'rides-native/offerAlertGate.js'
-import { fetchNotificationPrefs } from 'rides-native/notificationPrefs.js'
-import { authStorage } from '@/lib/storage'
+import { driverAlertPrefs } from '@/lib/quietHours'
 import { useTheme } from '@/lib/theme'
 import { acceptTrip, loadDriverDesk, markSearchingOffers, subscribeTrips } from 'rides-native/driverDesk'
 import { clemsonMiamiDriverNotification } from 'rides-native/clemsonMiamiPromo.js'
@@ -80,12 +79,9 @@ export function OfferBridge() {
 
     // Notification prefs (quiet hours / DND / ride alerts) are shared with the web app.
     let prefs: unknown = null
-    let prefsAt = 0
     const loadPrefs = async () => {
-      if (Date.now() - prefsAt < 60000) return prefs
-      prefsAt = Date.now()
       try {
-        prefs = (await fetchNotificationPrefs(supabase, authStorage, user.id)).prefs
+        prefs = await driverAlertPrefs(user.id)
       } catch { /* keep the last prefs */ }
       return prefs
     }

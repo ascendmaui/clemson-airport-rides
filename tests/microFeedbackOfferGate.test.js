@@ -3,7 +3,8 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { isQuietNow, newRideAlertAllowed } from '../packages/rides-native/offerAlertGate.js'
 
-const at = (h, m = 0) => new Date(2026, 9, 12, h, m)
+// Clemson time: October is EDT (UTC-4), so NY hh:mm = UTC hh+4.
+const at = (h, m = 0) => new Date(Date.UTC(2026, 9, 12, h + 4, m))
 
 test('offline drivers never get a new-ride alert', () => {
   assert.equal(newRideAlertAllowed({ online: false, prefs: null }), false)
