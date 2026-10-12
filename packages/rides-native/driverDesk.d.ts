@@ -148,3 +148,23 @@ export type DriverPerks = {
 export function loadDriverPerks(supabase: unknown): Promise<DriverPerks>
 export type ReferralSummary = { code: string; link: string; targetTrips: number; bonusCents: number; enabled: boolean; referrals: { status: string; trips: number; target: number }[]; error?: string }
 export function claimDriverReferral(supabase: unknown, code: string): Promise<{ ok: boolean; error?: string }>
+export type CashoutQuote = {
+  state: 'needs_setup' | 'already_today' | 'zero_balance' | 'below_fee' | 'ready'
+  method?: 'instant' | 'standard'
+  grossCents?: number
+  feeCents?: number
+  netCents?: number
+  fallbackReason?: string | null
+  last4?: string | null
+}
+export function loadCashoutQuote(supabase: unknown): Promise<CashoutQuote>
+export function instantCashout(supabase: unknown, feeCents: number): Promise<{
+  ok: boolean
+  error?: string
+  method?: 'instant' | 'standard'
+  fallbackReason?: string | null
+  grossCents?: number
+  feeCents?: number
+  netCents?: number
+  payoutError?: string | null
+}>
