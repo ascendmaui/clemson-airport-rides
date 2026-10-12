@@ -10,6 +10,8 @@
  * fetchDemandCells / topDemandZones without the map.
  */
 
+import { uniqueChannelTopic } from './realtimeChannel.js'
+
 export const DEMAND_RPC = 'driver_demand_cells'
 export const DEMAND_REFRESH_MS = 30_000
 export const DEMAND_NUDGE_DEBOUNCE_MS = 4_000
@@ -272,7 +274,7 @@ export function subscribeDemandCells(supabase, { peak = false, onData, intervalM
   if (supabase?.channel) {
     try {
       channel = supabase
-        .channel(`demand-heat-${Math.random().toString(36).slice(2, 8)}`)
+        .channel(uniqueChannelTopic('demand-heat'))
         .on('postgres_changes', { event: '*', schema: 'public', table: 'trips' }, () => {
           if (nudge) return
           nudge = setTimeout(() => {
