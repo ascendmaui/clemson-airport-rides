@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Card, Primary } from '@/components/chrome'
+import { CampusEventsCard } from '@/components/CampusEventsCard'
 import { useTheme } from '@/lib/theme'
 import { FlightsLandingCard } from '@/components/FlightsLandingCard'
 import { supabase } from '@/lib/supabase'
@@ -119,6 +120,7 @@ export default function DiscoverScreen() {
           {game?.detail ? <Text style={{ color: colors.orange, fontWeight: '800' }}>{game.detail}</Text> : null}
           {game ? <Text style={{ color: colors.inkSecondary, lineHeight: 20 }}>{game.body}</Text> : null}
         </Card>
+        <CampusEventsCard />
         {tigerZones.map((zone: TigerHeatZone) => (
           <Card key={`tiger-${zone.id}`}>
             <View style={styles.spotHead}>

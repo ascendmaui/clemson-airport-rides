@@ -57,17 +57,26 @@ export function resolveDemandRange(mode, windowId = 'now') {
   return { from, to, hourStart, hourEnd }
 }
 
+export function isPermissionDenied(err) {
+  return err?.code === '42501' || /permission denied/i.test(String(err?.message || ''))
+}
+
 export async function fetchRideDemand({ mode = 'busy', windowId = 'now' } = {}) {
   const { from, to, hourStart, hourEnd } = resolveDemandRange(mode, windowId)
   let live = []
   let error = null
   if (supabase) {
-    const { data, error: rpcErr } = await supabase.rpc('get_ride_demand', {
+    const args = {
       p_from: from.toISOString(),
       p_to: to.toISOString(),
       p_hour_start: hourStart,
       p_hour_end: hourEnd,
-    })
+    }
+    let { data, error: rpcErr } = await supabase.rpc('get_ride_demand', args)
+    // Signed-out visitors cannot read fine-grained demand; use the coarse public aggregate.
+    if (rpcErr && isPermissionDenied(rpcErr)) {
+      ({ data, error: rpcErr } = await supabase.rpc('public_ride_demand_coarse', args))
+    }
     if (rpcErr) { error = rpcErr.message; console.warn('[rideDemand]', rpcErr.message) }
     else {
       live = (data || []).map((r) => ({

@@ -50,7 +50,10 @@ export async function addFriendByEmail(email: string) {
     .select('id, full_name, email')
     .ilike('email', normalized)
     .maybeSingle()
-    .then((row) => row, (err) => ({ error: { code: 0, message: err?.message } }))
+    .then((row) => row, (err: { message?: string } | null) => ({
+      data: null,
+      error: { code: 0, message: err?.message },
+    }))
   if (error) throw new Error(friendlyApiError(error.code ?? 400, error.message).message)
   if (!data?.id) throw new Error('No rider with that email yet.')
   const friend: SavedFriend = {
@@ -72,7 +75,10 @@ export async function listFriendActivity(userId: string) {
     .eq('organizer_id', userId)
     .order('created_at', { ascending: false })
     .limit(8)
-    .then((row) => row, (err) => ({ error: { code: 0, message: err?.message } }))
+    .then((row) => row, (err: { message?: string } | null) => ({
+      data: null,
+      error: { code: 0, message: err?.message },
+    }))
   if (error) throw new Error(friendlyApiError(error.code ?? 400, error.message).message)
   return (data || []) as FriendActivity[]
 }
