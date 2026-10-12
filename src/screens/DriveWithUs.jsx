@@ -4,10 +4,13 @@ import { SitePage } from '../components/SitePage'
 import { ONBOARDING_FLOW } from '../../shared/driverOnboarding.js'
 import { APP_STORE_NOTE } from '../content/peaceOfMind.js'
 import { DRIVER_EARNINGS, RELEASE_NOTE } from '../content/differentiators.js'
+import { DrivePerks, RentalSection } from '../components/DrivePerks'
 
 export function DriveWithUs() {
   return (
     <SitePage current="drive">
+      <DrivePerks />
+      <RentalSection />
       <section aria-labelledby="drive-page-heading">
         <div className="mkt-section-head">
           <p className="mkt-kicker">Drive</p>
