@@ -148,6 +148,23 @@ export default function EarningsHub() {
                   <Text style={{ color: colors.title, fontWeight: '800' }}>Cash out and more</Text>
                 </Pressable>
               </Card>
+              <Card>
+                <Text style={[styles.kicker, { color: colors.orange }]}>TAXES</Text>
+                <Text style={{ color: colors.title, fontWeight: '800', fontSize: 18 }}>Year-end summary</Text>
+                <Text style={{ color: colors.inkSecondary, lineHeight: 20 }}>
+                  Gross earnings, tips, platform fees, payouts, deductible miles, and an estimated mileage deduction.
+                </Text>
+                <Pressable
+                  onPress={() => router.push('/tax')}
+                  style={[styles.cash, { backgroundColor: colors.track }]}
+                  accessibilityRole="button"
+                  accessibilityLabel="Open year-end tax summary"
+                  accessibilityHint="Navigates to the yearly mileage log and earnings summary"
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <Text style={{ color: colors.title, fontWeight: '800' }}>Open tax summary</Text>
+                </Pressable>
+              </Card>
               <SectionLabel>Customer fare breakdown</SectionLabel>
               <Card>
                 <Text style={{ color: colors.inkSecondary, lineHeight: 20 }}>

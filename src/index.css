@@ -1959,3 +1959,18 @@ select[aria-invalid="true"]:focus-visible {
   min-height: 22px;
   flex: 0 0 auto;
 }
+
+.tax-print-sheet { display: none; }
+
+@media print {
+  .no-print { display: none !important; }
+  .tax-print-sheet {
+    display: block;
+    padding: 24px;
+    color: #1a1033;
+    font-family: Georgia, serif;
+  }
+  .tax-print-sheet h1 { color: #522D80; font-size: 22px; }
+  .tax-print-sheet table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+  .tax-print-sheet th, .tax-print-sheet td { text-align: left; padding: 6px 8px; border-bottom: 1px solid rgba(82, 45, 128, 0.2); }
+}

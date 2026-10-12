@@ -86,7 +86,7 @@ export default function MenuScreen() {
     { icon: 'shield', title: 'Safety', subtitle: 'Audio, video, live location, and SOS', onPress: () => router.push('/safety') },
   ]
   const money: MenuRow[] = [
-    { icon: 'calculator', title: 'Tax info', subtitle: 'W-9 on your application', onPress: () => router.push('/tax') },
+    { icon: 'calculator', title: 'Tax info', subtitle: 'Year-end mileage and earnings', onPress: () => router.push('/tax') },
     { icon: 'card', title: 'Payout methods', subtitle: 'Stripe balance and cash out', onPress: () => router.push('/payouts') },
   ]
   const resources: MenuRow[] = [

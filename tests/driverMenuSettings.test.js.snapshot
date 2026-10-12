@@ -32,7 +32,7 @@ exports[`Driver Menu snapshot 1`] = `
     {
       "icon": "calculator",
       "title": "Tax info",
-      "subtitle": "W-9 on your application"
+      "subtitle": "Year-end mileage and earnings"
     },
     {
       "icon": "card",
