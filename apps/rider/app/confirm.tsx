@@ -165,7 +165,7 @@ export default function ConfirmPickup() {
       >
         <SheetHandle />
         <Text style={styles.title}>Confirm pickup spot</Text>
-        <Text style={styles.hint}>The location icon on pickup and drop-off pins that stop on the map. You can also type a campus or airport stop.</Text>
+        <Text style={styles.hint}>Drag the map to set your pickup pin, or type a campus or airport stop below.</Text>
         {locateNote ? <Text style={styles.locateNote}>{locateNote}</Text> : null}
         <NeighborhoodPicker
           label="Pickup address"
