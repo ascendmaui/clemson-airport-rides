@@ -29,6 +29,7 @@ import {
 import { SignInToBookModal, useRequireAuthForAction } from '../components/SignInToBookModal'
 import { resolveDriverPortrait } from '../../shared/driverPortrait.js'
 import { setFavoriteDrivers } from '../../packages/rides-native/tigerPassClient.js'
+import { PREPAID_TIP_PRESETS_CENTS, formatTipDollars, parsePrepaidTipDollars } from '../../shared/prepaidTip.js'
 
 const browserStorage = {
   async getItem(key) {
@@ -72,6 +73,9 @@ export function PickDriver({
   const [selected, setSelected] = useState(null)
   const [tripFlash, setTripFlash] = useState(null)
   const [requesting, setRequesting] = useState(false)
+  const [prepaidTipCents, setPrepaidTipCents] = useState(0)
+  const [customTip, setCustomTip] = useState('')
+  const [tipError, setTipError] = useState(null)
   const [promptOpen, setPromptOpen] = useState(false)
   const stadium = pickupPoint(pickup || 'Memorial Stadium')
   const pinLat = finiteCoordinate(pickupLat)
@@ -173,6 +177,7 @@ export function PickDriver({
         isStudent: student.verified,
         listCents,
         billingChoice: billing || null,
+        prepaidTipCents,
       })
       navigate('requested', { dest, trip: trip.id, driver: selected?.name || 'Next driver' })
     } catch (err) {
@@ -370,6 +375,40 @@ export function PickDriver({
             Student pricing is 10% off Standard. This tier stays full price.
           </p>
         ) : null}
+        <fieldset style={{ border: 0, padding: 0, margin: '0 0 10px' }}>
+          <legend style={{ fontSize: 13, fontWeight: 800, color: 'var(--purple)' }}>Tip boost (optional)</legend>
+          <p style={{ fontSize: 12, color: 'var(--ink-secondary)', margin: '2px 0 6px' }}>Held with your fare, 100% to your driver. You can still tip after.</p>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+            {[0, ...PREPAID_TIP_PRESETS_CENTS].map((amount) => (
+              <button
+                key={amount}
+                type="button"
+                className="pressable"
+                aria-pressed={prepaidTipCents === amount}
+                onClick={() => { setPrepaidTipCents(amount); setCustomTip(''); setTipError(null) }}
+                style={{ minHeight: 44, minWidth: 56, borderRadius: 999, fontWeight: 800, border: '1px solid var(--purple)', color: prepaidTipCents === amount ? '#fff' : 'var(--purple)', background: prepaidTipCents === amount ? 'var(--purple)' : 'var(--purple-soft)' }}
+              >
+                {amount ? formatTipDollars(amount) : 'None'}
+              </button>
+            ))}
+            <input
+              aria-label="Custom tip amount in dollars"
+              inputMode="decimal"
+              placeholder="Custom $"
+              value={customTip}
+              onChange={(e) => setCustomTip(e.target.value)}
+              onBlur={() => {
+                if (!customTip.trim()) return
+                const parsed = parsePrepaidTipDollars(customTip)
+                if (!parsed.ok) { setTipError(parsed.error); return }
+                setTipError(null)
+                setPrepaidTipCents(parsed.cents)
+              }}
+              style={{ minHeight: 44, width: 96, borderRadius: 12, border: '1px solid var(--purple)', padding: '0 10px' }}
+            />
+          </div>
+          {tipError ? <p role="alert" style={{ color: 'var(--orange)', fontSize: 12 }}>{tipError}</p> : null}
+        </fieldset>
         <PrimaryButton
           disabled={requesting || (selected ? !selected.online : !anyOnline)}
           loading={requesting}

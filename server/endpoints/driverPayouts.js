@@ -17,7 +17,7 @@ import {
   admin, cors, json, userFromAuth, stripeClient,
 } from '../friendRideLib.js'
 import { stagingCronBlock } from '../cronGuard.js'
-import { buildPayoutRecord, buildWaitCancelPayoutRecord, attemptDriverPayout, attemptStandbyBackupPayout, attemptSwitchFeePayout, loadConnectAccount, writePayout } from '../payouts.js'
+import { buildPayoutRecord, buildWaitCancelPayoutRecord, attemptDriverPayout, attemptStandbyBackupPayout, attemptSwitchFeePayout, attemptTipPayout, loadConnectAccount, writePayout } from '../payouts.js'
 import { payoutIsDue, summarizeDriverEarnings } from '../../shared/paymentFailure.js'
 
 export function cronAuthorized(req, secretOverride) {
@@ -105,6 +105,26 @@ export async function runDuePayouts(sb, trips, connectAccountId, deps = {}) {
   const loadAccountFn = deps.loadConnectAccount || loadConnectAccount
   const results = []
   async function recordExtra(trip, dryRun) {
+    const tip = await (deps.attemptTipPayout || attemptTipPayout)({
+      sb,
+      trip,
+      stripe: dryRun ? null : stripe,
+      now,
+      dryRun,
+    })
+    if (tip?.payout && !tip.idempotent) {
+      results.push({
+        tripId: trip.id,
+        role: 'tip',
+        ok: tip.ok !== false,
+        dryRun: Boolean(dryRun),
+        status: tip.payout.status || null,
+        amountCents: tip.payout.amountCents ?? null,
+        driverId: tip.payout.driverId || null,
+        label: 'Tip',
+        wouldTransfer: dryRun ? tip.payout.amountCents > 0 : undefined,
+      })
+    }
     const standby = await (deps.attemptStandbyBackupPayout || attemptStandbyBackupPayout)({
       sb,
       trip,
@@ -226,7 +246,7 @@ export default async function handler(req, res, deps = {}) {
     const limit = Math.min(Math.max(Number(deps.limit) || 80, 1), 200)
     const listed = await sb
       .from('trips')
-      .select('id, driver_id, fare_cents, status, driver_wait_earnings_cents, metadata, dropoff_label')
+      .select('id, driver_id, fare_cents, tip_cents, status, driver_wait_earnings_cents, metadata, dropoff_label')
       .in('status', ['completed', 'cancelled_wait'])
       .order('completed_at', { ascending: false })
       .limit(limit)
@@ -248,7 +268,7 @@ export default async function handler(req, res, deps = {}) {
   const limit = Math.min(Math.max(Number(deps.limit) || 40, 1), 100)
   const listed = await sb
     .from('trips')
-    .select('id, driver_id, rider_id, fare_cents, status, driver_wait_earnings_cents, metadata, dropoff_label, completed_at')
+    .select('id, driver_id, rider_id, fare_cents, tip_cents, status, driver_wait_earnings_cents, metadata, dropoff_label, completed_at')
     .eq('driver_id', user.id)
     .in('status', ['completed', 'cancelled_wait'])
     .order('completed_at', { ascending: false })
