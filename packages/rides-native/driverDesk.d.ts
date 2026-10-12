@@ -153,3 +153,23 @@ export type Leaderboard = { enabled: boolean; optedOut?: boolean; weekStart?: st
 export function setLeaderboardOptOut(supabase: unknown, optOut: boolean): Promise<{ ok: boolean; optedOut: boolean }>
 export type SurgeZone = { id: string; title: string; label: string | null; lat: number; lng: number; startsAt: string; endsAt: string; live: boolean; source: string }
 export type SurgeView = { enabled: boolean; radiusKm?: number; driverBonusCents?: number; zones: SurgeZone[]; error?: string }
+export type CashoutQuote = {
+  state: 'needs_setup' | 'already_today' | 'zero_balance' | 'below_fee' | 'ready'
+  method?: 'instant' | 'standard'
+  grossCents?: number
+  feeCents?: number
+  netCents?: number
+  fallbackReason?: string | null
+  last4?: string | null
+}
+export function loadCashoutQuote(supabase: unknown): Promise<CashoutQuote>
+export function instantCashout(supabase: unknown, feeCents: number): Promise<{
+  ok: boolean
+  error?: string
+  method?: 'instant' | 'standard'
+  fallbackReason?: string | null
+  grossCents?: number
+  feeCents?: number
+  netCents?: number
+  payoutError?: string | null
+}>
