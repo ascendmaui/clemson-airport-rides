@@ -1,5 +1,6 @@
 /**
  * POST /api/driver?action=signup|submit-review|offer-preview|tip|tip-choice|wait|trip-status|trip-stop|cancel-midride|payouts|cards
+ * GET  /api/driver?action=earnings|tax-summary|payouts|app-config
  * GET  /api/driver?action=earnings|payouts|app-config|forecast
  * Legacy paths are rewritten in vercel.json.
  * trip-wait body.action (arrive|tick|cancel|start|complete) is a sub-action, not the route.
@@ -23,6 +24,7 @@ import handleMatchingRebroadcast from '../server/endpoints/matchingRebroadcast.j
 import { handleMarkOffered, handlePassOffer } from '../server/endpoints/driverOfferDesk.js'
 import { handleSignAgreement } from '../server/agreementHttp.js'
 import handleAppConfig from '../server/endpoints/appConfig.js'
+import handleTaxSummary from '../server/endpoints/driverTaxSummary.js'
 import handleBackupQueue from '../server/endpoints/backupQueue.js'
 import handleDriverPerks from '../server/endpoints/driverPerks.js'
 import handleDriverCashout from '../server/endpoints/driverCashout.js'
@@ -33,6 +35,7 @@ const HANDLERS = {
   signup: handleDriverSignup,
   'submit-review': handleDriverSubmitReview,
   earnings: handleDriverEarnings,
+  'tax-summary': handleTaxSummary,
   'offer-preview': handleOfferPreview,
   tip: handleTripTip,
   'tip-choice': handleRiderTipChoice,
@@ -71,7 +74,7 @@ export default async function handler(req, res, ...rest) {
   const handle = HANDLERS[action]
   if (!handle) {
     return json(res, 400, {
-      error: 'Unknown driver action. Use action=signup, submit-review, earnings, offer-preview, tip, tip-choice, wait, trip-status, trip-stop, cancel-midride, payouts, inbox, cards, mark-offered, pass-offer, sign-agreement, backup-queue, perks, trip-sweeps, cashout, forecast, or app-config.',
+      error: 'Unknown driver action. Use action=signup, submit-review, earnings, tax-summary, offer-preview, tip, tip-choice, wait, trip-status, trip-stop, cancel-midride, payouts, inbox, cards, mark-offered, pass-offer, sign-agreement, backup-queue, trip-sweeps, perks, cashout, forecast, or app-config.',
     })
   }
   return handle(req, res, ...rest)
