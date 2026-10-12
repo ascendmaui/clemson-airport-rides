@@ -151,3 +151,23 @@ export function claimDriverReferral(supabase: unknown, code: string): Promise<{ 
 export type LeaderRow = { rank: number; name: string; trips: number; earningsCents: number; you: boolean }
 export type Leaderboard = { enabled: boolean; optedOut?: boolean; weekStart?: string; byTrips?: LeaderRow[]; byEarnings?: LeaderRow[]; you?: { trips: LeaderRow | null; earnings: LeaderRow | null }; error?: string }
 export function setLeaderboardOptOut(supabase: unknown, optOut: boolean): Promise<{ ok: boolean; optedOut: boolean }>
+export type CashoutQuote = {
+  state: 'needs_setup' | 'already_today' | 'zero_balance' | 'below_fee' | 'ready'
+  method?: 'instant' | 'standard'
+  grossCents?: number
+  feeCents?: number
+  netCents?: number
+  fallbackReason?: string | null
+  last4?: string | null
+}
+export function loadCashoutQuote(supabase: unknown): Promise<CashoutQuote>
+export function instantCashout(supabase: unknown, feeCents: number): Promise<{
+  ok: boolean
+  error?: string
+  method?: 'instant' | 'standard'
+  fallbackReason?: string | null
+  grossCents?: number
+  feeCents?: number
+  netCents?: number
+  payoutError?: string | null
+}>

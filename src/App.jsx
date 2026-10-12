@@ -221,7 +221,7 @@ function Screen({ path, params }) {
     case 'driver-signup':
       return (
         <RequireAuth>
-          <DriverSignup />
+          <DriverSignup needsVehicle={params.needs_vehicle === '1'} />
         </RequireAuth>
       )
     case 'sign-agreement':
