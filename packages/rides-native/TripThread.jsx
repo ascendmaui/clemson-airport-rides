@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { showToast } from './toastStore.js'
 import { Alert, Modal, Pressable, Text, TextInput, View } from 'react-native'
 import { authedJson } from './apiClient.js'
 import { secureStoreAdapter } from './secureStore.js'
@@ -173,7 +174,7 @@ export function TripThread({
         }),
       })
       if (!result?.ticket?.id) throw new Error('Could not confirm the support ticket')
-      Alert.alert(action === 'block' ? 'Blocked' : 'Report sent', `${action === 'block' ? 'Blocked on this device. ' : ''}${CHAT_REPORT_CONFIRMATION} ${CHAT_SUPPORT_COPY}`)
+      showToast({ key: `chat-${action}:${tripId}`, tone: 'success', title: action === 'block' ? 'Blocked' : 'Report sent', body: `${action === 'block' ? 'Blocked on this device. ' : ''}${CHAT_REPORT_CONFIRMATION}`, durationMs: 4500 })
     } catch (err) {
       setError(`${locallyBlocked ? 'Blocked on this device, but the support ticket failed. Use Report to retry. ' : ''}${err instanceof Error ? err.message : 'Could not file the support ticket'}. ${CHAT_SUPPORT_COPY}`)
     } finally {

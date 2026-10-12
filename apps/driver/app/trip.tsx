@@ -146,7 +146,8 @@ export default function TripScreen() {
     seenStatus.current = status
     // Only when it changes while this screen is open, not when opening an already-canceled trip.
     if (!before || !status || before === status || !canceledView) return
-    pulse('complete')
+    // Rider cancel / no-show / early end: an error buzz, not the success chime.
+    pulse('cancel')
     AccessibilityInfo.announceForAccessibility(canceledView.announcement)
   }, [trip?.id, trip?.status, trip?.released])
 
@@ -254,7 +255,7 @@ export default function TripScreen() {
 
   function onDriverCanceled() {
     locationTracking.stop()
-    pulse('complete')
+    pulse('cancel')
     router.replace('/')
   }
 
