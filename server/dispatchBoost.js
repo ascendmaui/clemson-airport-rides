@@ -3,6 +3,7 @@ import { applyDispatchBoosts, priorityBoost } from '../shared/perks/dispatchBoos
 import { isDemoDriverId } from '../shared/demoFleet.js'
 import { isSimulatedDriverId } from '../packages/rides-native/simulatedDrivers.js'
 import { isBusyRosterId } from '../packages/rides-native/busyRoster.js'
+import { surgeExtraBoost } from './surge.js'
 
 export const isFakeDriver = (id) => isDemoDriverId(id) || isSimulatedDriverId(id) || isBusyRosterId(id)
 
@@ -28,9 +29,10 @@ export async function loadPriorityStats(sb, ids) {
  * other perks (game-day zones) add to the score. Returns the input unchanged
  * when config is missing/disabled or any read fails.
  */
-export async function boostAssignableDrivers(sb, drivers, { extraBoost = null } = {}) {
+export async function boostAssignableDrivers(sb, drivers, { extraBoost = null, pickup = null } = {}) {
   if (!sb || !Array.isArray(drivers) || drivers.length < 2) return drivers
   try {
+    if (!extraBoost && pickup) extraBoost = await surgeExtraBoost(sb, pickup, drivers).catch(() => null)
     const cfg = await config(sb, 'priority_dispatch')
     const priorityOn = cfg && cfg.enabled !== false
     const stats = priorityOn ? await loadPriorityStats(sb, drivers.map((d) => d.id)) : null

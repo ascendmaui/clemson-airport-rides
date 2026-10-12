@@ -151,6 +151,8 @@ export function claimDriverReferral(supabase: unknown, code: string): Promise<{ 
 export type LeaderRow = { rank: number; name: string; trips: number; earningsCents: number; you: boolean }
 export type Leaderboard = { enabled: boolean; optedOut?: boolean; weekStart?: string; byTrips?: LeaderRow[]; byEarnings?: LeaderRow[]; you?: { trips: LeaderRow | null; earnings: LeaderRow | null }; error?: string }
 export function setLeaderboardOptOut(supabase: unknown, optOut: boolean): Promise<{ ok: boolean; optedOut: boolean }>
+export type SurgeZone = { id: string; title: string; label: string | null; lat: number; lng: number; startsAt: string; endsAt: string; live: boolean; source: string }
+export type SurgeView = { enabled: boolean; radiusKm?: number; driverBonusCents?: number; zones: SurgeZone[]; error?: string }
 export type CashoutQuote = {
   state: 'needs_setup' | 'already_today' | 'zero_balance' | 'below_fee' | 'ready'
   method?: 'instant' | 'standard'

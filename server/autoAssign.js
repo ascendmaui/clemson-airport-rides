@@ -22,6 +22,7 @@ export async function listAssignableDrivers(sb, {
   riderIsE2E = false,
   preferredIds = [],
   favoriteIds = [],
+  pickup = null,
 } = {}) {
   if (!sb) return { drivers: [], error: 'no_client' }
   const statusRes = await sb.from('driver_status').select('driver_id, online').eq('online', true)
@@ -90,7 +91,7 @@ export async function listAssignableDrivers(sb, {
   }
   const filtered = filterAssignableDrivers(ranked, riderRow, { comfortKnown: !profiles.unavailable })
   // Configurable top-rated boost; only reorders within a dispatch-rank tier.
-  const boosted = await boostAssignableDrivers(sb, sortByDefaultDriverOrder(filtered.drivers))
+  const boosted = await boostAssignableDrivers(sb, sortByDefaultDriverOrder(filtered.drivers), { pickup })
   const ordered = orderDriversForRider(boosted, {
     preferredIds,
     favoriteIds,
