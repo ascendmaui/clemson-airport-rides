@@ -148,6 +148,9 @@ export type DriverPerks = {
 export function loadDriverPerks(supabase: unknown): Promise<DriverPerks>
 export type ReferralSummary = { code: string; link: string; targetTrips: number; bonusCents: number; enabled: boolean; referrals: { status: string; trips: number; target: number }[]; error?: string }
 export function claimDriverReferral(supabase: unknown, code: string): Promise<{ ok: boolean; error?: string }>
+export type LeaderRow = { rank: number; name: string; trips: number; earningsCents: number; you: boolean }
+export type Leaderboard = { enabled: boolean; optedOut?: boolean; weekStart?: string; byTrips?: LeaderRow[]; byEarnings?: LeaderRow[]; you?: { trips: LeaderRow | null; earnings: LeaderRow | null }; error?: string }
+export function setLeaderboardOptOut(supabase: unknown, optOut: boolean): Promise<{ ok: boolean; optedOut: boolean }>
 export type CashoutQuote = {
   state: 'needs_setup' | 'already_today' | 'zero_balance' | 'below_fee' | 'ready'
   method?: 'instant' | 'standard'
