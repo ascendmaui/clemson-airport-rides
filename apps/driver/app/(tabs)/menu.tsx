@@ -74,7 +74,7 @@ export default function MenuScreen() {
     key: 'refer',
     icon: 'gift',
     title: 'Refer friends',
-    subtitle: 'Share Clemson RIDES',
+    subtitle: 'Your code and referral bonus',
     onPress: () => router.push('/refer'),
   })
 

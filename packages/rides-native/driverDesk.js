@@ -741,3 +741,7 @@ export { formatCents }
 export async function loadDriverPerks(supabase) {
   return authedJson(supabase, '/api/driver?action=perks')
 }
+
+export async function claimDriverReferral(supabase, code) {
+  return authedJson(supabase, '/api/driver?action=perks', { method: 'POST', body: { op: 'claim-referral', code } })
+}
