@@ -8,6 +8,7 @@ import { FarePanel } from '@/components/FarePanel'
 import { Card, ErrorText, Primary, Tag, useCardShadow } from '@/components/chrome'
 import { CircleButton, GoButton } from '@/components/shell'
 import { DriverStatusCard } from '@/components/DriverStatusCard'
+import { CommunityMatchChips } from 'rides-native/CommunityMatchChips'
 import { PerksStrip } from '@/components/PerksStrip'
 import { useMyMarker } from '@/lib/myMarker'
 import { ForecastCard } from '@/components/ForecastCard'
@@ -834,6 +835,7 @@ export function RideCard({
             <Text style={{ color: colors.ink, fontSize: 15, lineHeight: 21 }}>{vm.boostLine}</Text>
           ) : null}
           {preferredNote ? <Text style={{ color: colors.orange, fontWeight: '700' }}>{preferredNote}</Text> : null}
+          <CommunityMatchChips supabase={supabase} tripId={card.id} colors={colors} compact />
           <Text style={{ color: colors.ink, fontWeight: '700' }}>Pickup · {card.pickupLabel}</Text>
           <Text style={{ color: colors.ink, fontWeight: '700' }}>Drop-off · {card.dropoffLabel}</Text>
           {card.airportContext ? (

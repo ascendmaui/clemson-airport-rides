@@ -148,6 +148,10 @@ exports[`Driver Offer Card snapshot 1`] = `
               ]
             },
             {
+              "name": "CommunityMatchChips",
+              "children": []
+            },
+            {
               "name": "Text",
               "children": []
             },
