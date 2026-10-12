@@ -3,10 +3,13 @@
  *
  * Public:  POST ?action=click   {code, device_id}            — /r/CODE landing
  *          GET  ?action=lookup&code=CODE                     — show partner name on landing
+ *          GET  ?action=plan                                 — Option C commission plan
  * Signed in:
  *          POST ?action=apply   {partner_type, display_name, …} — /affiliates sign-up
  *          POST ?action=claim   {code, role, device_id}       — attribution at rider/driver signup
  *          GET  ?action=me                                     — dashboard stats + ledger
+ *          POST ?action=connect-start                          — Express account + Account Link
+ *          POST ?action=connect-sync                           — refresh onboarding status after return
  * Admin:   GET  ?action=admin-overview
  *          POST ?action=admin-status   {affiliate_id, status}
  *          POST ?action=admin-rates    {rates}
@@ -26,25 +29,35 @@ import { supabaseCreditStore } from '../credits.js'
 import {
   AFFILIATE_MATERIALS_URL,
   AFFILIATE_PARTNER_TYPES,
-  AFFILIATE_RATES_PLACEHOLDER,
+  AFFILIATE_RATES_DEFAULTS,
 } from '../../shared/affiliates/config.js'
 import {
   affiliateLink,
   attributionDecision,
+  describeAffiliatePlan,
   generateAffiliateCode,
-  isStripeTestKey,
+  isAffiliateTestKey,
+  maskReferralName,
   normalizeAffiliateCode,
   normalizePhone,
+  payoutHistory,
   planPayoutBatch,
   summarizeLedger,
   validateAffiliateApplication,
 } from '../../shared/affiliates/rules.js'
+import {
+  appOriginFromRequest,
+  createExpressAccount,
+  createOnboardingLink,
+  refreshAffiliateConnect,
+  transferApprovedCommissions,
+} from '../affiliateConnect.js'
 
 export const AFFILIATE_ACTIONS = [
-  'click', 'lookup', 'apply', 'claim', 'me',
+  'click', 'lookup', 'plan', 'apply', 'claim', 'me', 'connect-start', 'connect-sync',
   'admin-overview', 'admin-status', 'admin-rates', 'admin-batch-create', 'admin-batch-approve', 'admin-batch-pay', 'admin-entry-void',
 ]
-const GET_ACTIONS = new Set(['lookup', 'me', 'admin-overview'])
+const GET_ACTIONS = new Set(['lookup', 'plan', 'me', 'admin-overview'])
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 export function hashId(value) {
@@ -61,7 +74,7 @@ function clientIp(req) {
 
 async function loadRates(sb) {
   const row = await sb.from('affiliate_config').select('value').eq('key', 'rates').maybeSingle()
-  return { ...AFFILIATE_RATES_PLACEHOLDER, ...(row.data?.value || {}) }
+  return { ...AFFILIATE_RATES_DEFAULTS, ...(row.data?.value || {}), partner_type_bps: { ...AFFILIATE_RATES_DEFAULTS.partner_type_bps, ...(row.data?.value?.partner_type_bps || {}) } }
 }
 
 export function createAffiliatesHandler(deps = {}) {
@@ -87,11 +100,14 @@ export function createAffiliatesHandler(deps = {}) {
     try {
       if (action === 'click') return await click(sb, req, res, body)
       if (action === 'lookup') return await lookup(sb, res, url.searchParams.get('code'))
+      if (action === 'plan') return await publicPlan(sb, res)
       const user = await getUser(req)
       if (!user) return json(res, 401, { error: 'Sign in required' })
       if (action === 'apply') return await apply(sb, res, user, body)
       if (action === 'claim') return await claim(sb, res, user, body)
       if (action === 'me') return await me(sb, res, user)
+      if (action === 'connect-start') return await connectStart(sb, res, user, req, getStripe, stripeKey())
+      if (action === 'connect-sync') return await connectSync(sb, res, user, getStripe, stripeKey())
       const access = await getStaff(sb, user)
       if (!access?.admin) return json(res, 403, { error: 'Admin only' })
       switch (action) {
@@ -99,10 +115,13 @@ export function createAffiliatesHandler(deps = {}) {
         case 'admin-status': return await adminStatus(sb, res, body)
         case 'admin-rates': return await adminRates(sb, res, user, body)
         case 'admin-batch-create': return await batchCreate(sb, res, user, getStripe)
-        case 'admin-batch-approve': return await batchApprove(sb, res, user, body)
+        case 'admin-batch-approve': return await batchApprove(sb, res, user, body, getStripe, stripeKey())
         case 'admin-batch-pay': return await batchPay(sb, res, body, getStripe, stripeKey())
         case 'admin-entry-void': return await entryVoid(sb, res, body)
-        default: return json(res, 400, { error: 'Unknown affiliate action' })
+        default: {
+          const unexpected = /** @type {never} */ (action)
+          return json(res, 400, { error: 'Unknown affiliate action', action: unexpected })
+        }
       }
     } catch (err) {
       console.error('[affiliates]', action, err?.message)
@@ -168,6 +187,8 @@ function publicAffiliate(a) {
   return {
     id: a.id, code: a.code, link: affiliateLink(a.code), status: a.status, partner_type: a.partner_type,
     display_name: a.display_name, org_name: a.org_name, payout_method: a.payout_method, created_at: a.created_at,
+    connect_status: a.stripe_connect_status || (a.stripe_account_id ? 'pending' : 'not_started'),
+    connect_payouts_enabled: a.stripe_payouts_enabled === true,
   }
 }
 
@@ -175,7 +196,7 @@ async function claim(sb, res, user, body) {
   const role = body.role === 'driver' ? 'driver' : 'rider'
   const aff = await activeAffiliateByCode(sb, body.code)
   const [profile, affiliateProfile, existing, prior] = await Promise.all([
-    sb.from('profiles').select('id, email, phone, created_at').eq('id', user.id).maybeSingle(),
+    sb.from('profiles').select('id, email, phone, full_name, created_at').eq('id', user.id).maybeSingle(),
     aff?.user_id ? sb.from('profiles').select('phone').eq('id', aff.user_id).maybeSingle() : Promise.resolve({ data: null }),
     sb.from('affiliate_attributions').select('id, affiliate_id').eq('referred_user_id', user.id).eq('role', role).maybeSingle(),
     sb.from('trips').select('id', { count: 'exact', head: true }).eq(role === 'driver' ? 'driver_id' : 'rider_id', user.id).eq('status', 'completed'),
@@ -192,6 +213,7 @@ async function claim(sb, res, user, body) {
     affiliate_id: aff.id, referred_user_id: user.id, role,
     device_hash: hashId(body.device_id),
     phone_norm: normalizePhone(profile.data?.phone) || null,
+    masked_name: maskReferralName(profile.data?.full_name, profile.data?.email || user.email),
   })
   if (ins.error) {
     if (/duplicate|unique/i.test(ins.error.message)) return json(res, 200, { ok: false, code: 'already_attributed' })
@@ -206,13 +228,20 @@ async function statsFor(sb, affiliateIds) {
     sb.from('affiliate_attributions').select('affiliate_id, role, status, reject_reason, created_at').in('affiliate_id', affiliateIds),
     sb.from('affiliate_ledger').select('*').in('affiliate_id', affiliateIds).order('created_at', { ascending: false }),
   ])
-  const out = new Map(affiliateIds.map((id) => [id, { clicks: 0, signups: 0, rider_signups: 0, driver_signups: 0, qualified: 0, rejected: 0, ledger: [], earnings: summarizeLedger([]) }]))
+  const out = new Map(affiliateIds.map((id) => [id, {
+    clicks: 0, signups: 0, rider_signups: 0, driver_signups: 0,
+    qualified: 0, rider_qualified: 0, driver_qualified: 0, rejected: 0,
+    ledger: [], earnings: summarizeLedger([]),
+  }]))
   for (const c of clicks.data || []) out.get(c.affiliate_id).clicks += 1
   for (const a of atts.data || []) {
     const s = out.get(a.affiliate_id)
     s.signups += 1
     s[`${a.role}_signups`] += 1
-    if (a.status === 'qualified') s.qualified += 1
+    if (a.status === 'qualified') {
+      s.qualified += 1
+      s[`${a.role}_qualified`] += 1
+    }
     if (a.status === 'rejected') s.rejected += 1
   }
   for (const l of ledger.data || []) out.get(l.affiliate_id).ledger.push(l)
@@ -220,19 +249,100 @@ async function statsFor(sb, affiliateIds) {
   return out
 }
 
+async function referralList(sb, affiliateId) {
+  const atts = await sb.from('affiliate_attributions')
+    .select('id, role, status, created_at, qualified_at, masked_name, referred_user_id')
+    .eq('affiliate_id', affiliateId)
+    .order('created_at', { ascending: false })
+    .limit(100)
+  if (atts.error) throw new Error(atts.error.message)
+  const rows = atts.data || []
+  const missing = rows.filter((a) => !a.masked_name && a.referred_user_id).map((a) => a.referred_user_id)
+  const names = new Map()
+  if (missing.length) {
+    const profs = await sb.from('profiles').select('id, full_name, email').in('id', missing)
+    for (const profile of profs.data || []) names.set(profile.id, maskReferralName(profile.full_name, profile.email))
+  }
+  return rows.map((a) => ({
+    id: a.id,
+    masked_name: a.masked_name || names.get(a.referred_user_id) || 'Referral',
+    role: a.role,
+    status: a.status,
+    created_at: a.created_at,
+    qualified_at: a.qualified_at || null,
+  }))
+}
+
 async function me(sb, res, user) {
   const row = await sb.from('affiliates').select('*').eq('user_id', user.id).maybeSingle()
   if (!row.data) return json(res, 200, { affiliate: null })
-  const stats = (await statsFor(sb, [row.data.id])).get(row.data.id)
-  const rates = await loadRates(sb)
+  const [stats, rates, referrals, events] = await Promise.all([
+    statsFor(sb, [row.data.id]).then((map) => map.get(row.data.id)),
+    loadRates(sb),
+    referralList(sb, row.data.id),
+    sb.from('affiliate_payout_events')
+      .select('id, event_type, amount_cents, currency, status, created_at, stripe_object_id')
+      .eq('affiliate_id', row.data.id)
+      .order('created_at', { ascending: false })
+      .limit(50),
+  ])
+  const ledger = stats.ledger.slice(0, 50).map((l) => ({
+    id: l.id, kind: l.kind, amount_cents: l.amount_cents, status: l.status,
+    created_at: l.created_at, paid_at: l.paid_at, payout_method: l.payout_method, payout_ref: l.payout_ref,
+  }))
   return json(res, 200, {
     affiliate: publicAffiliate(row.data),
-    stats: { clicks: stats.clicks, signups: stats.signups, rider_signups: stats.rider_signups, driver_signups: stats.driver_signups, qualified: stats.qualified },
+    stats: {
+      clicks: stats.clicks, signups: stats.signups,
+      rider_signups: stats.rider_signups, driver_signups: stats.driver_signups,
+      qualified: stats.qualified, rider_qualified: stats.rider_qualified, driver_qualified: stats.driver_qualified,
+    },
+    referrals,
     earnings: stats.earnings,
-    ledger: stats.ledger.slice(0, 50).map((l) => ({ id: l.id, kind: l.kind, amount_cents: l.amount_cents, status: l.status, created_at: l.created_at, paid_at: l.paid_at })),
+    ledger,
+    payouts: payoutHistory(events.data || [], stats.ledger).slice(0, 50),
     materials_url: process.env.AFFILIATE_MATERIALS_URL || AFFILIATE_MATERIALS_URL,
-    rates: { rider_first_ride_cents: rates.rider_first_ride_cents, driver_first_trip_cents: rates.driver_first_trip_cents, placeholder: rates.placeholder === true, hold_days: rates.hold_days },
+    plan: describeAffiliatePlan(rates),
   })
+}
+
+async function publicPlan(sb, res) {
+  return json(res, 200, { plan: describeAffiliatePlan(await loadRates(sb)) })
+}
+
+async function connectStart(sb, res, user, req, getStripe, key) {
+  if (!isAffiliateTestKey(key)) return json(res, 403, { error: 'Stripe test mode is required to connect a payout account' })
+  const stripe = getStripe()
+  if (!stripe) return json(res, 503, { error: 'Stripe is not configured' })
+  const row = await sb.from('affiliates').select('*').eq('user_id', user.id).maybeSingle()
+  if (!row.data) return json(res, 404, { error: 'Apply to the partner program first' })
+  if (!['pending', 'active', 'paused'].includes(row.data.status)) return json(res, 409, { error: 'This partner account cannot connect payouts' })
+  let accountId = row.data.stripe_account_id
+  if (!accountId) {
+    const account = await createExpressAccount(stripe, row.data)
+    accountId = account.id
+    const saved = await sb.from('affiliates').update({
+      stripe_account_id: accountId,
+      stripe_connect_status: 'pending',
+      payout_method: 'stripe_connect',
+      updated_at: new Date().toISOString(),
+    }).eq('id', row.data.id)
+    if (saved.error) return json(res, 400, { error: saved.error.message })
+  }
+  const link = await createOnboardingLink(stripe, accountId, appOriginFromRequest(req))
+  const connect_status = row.data.stripe_account_id ? (row.data.stripe_connect_status || 'pending') : 'pending'
+  return json(res, 200, { ok: true, url: link.url, connect_status })
+}
+
+async function connectSync(sb, res, user, getStripe, key) {
+  const row = await sb.from('affiliates').select('*').eq('user_id', user.id).maybeSingle()
+  if (!row.data) return json(res, 404, { error: 'Apply to the partner program first' })
+  if (!row.data.stripe_account_id) return json(res, 200, { ok: true, affiliate: publicAffiliate(row.data) })
+  if (!isAffiliateTestKey(key)) return json(res, 403, { error: 'Stripe test mode is required to refresh payout status' })
+  const stripe = getStripe()
+  if (!stripe) return json(res, 503, { error: 'Stripe is not configured' })
+  const fresh = await refreshAffiliateConnect(sb, row.data, stripe)
+  return json(res, 200, { ok: true, affiliate: publicAffiliate(fresh) })
 }
 
 async function adminOverview(sb, res) {
@@ -246,7 +356,8 @@ async function adminOverview(sb, res) {
   const affiliates = list.map((a) => {
     const s = stats.get(a.id)
     return { ...publicAffiliate(a), contact_email: a.contact_email, phone: a.phone, website: a.website, audience: a.audience,
-      clicks: s.clicks, signups: s.signups, qualified: s.qualified, rejected: s.rejected, earnings: s.earnings }
+      stripe_account_id: a.stripe_account_id, clicks: s.clicks, signups: s.signups, qualified: s.qualified,
+      rider_qualified: s.rider_qualified, driver_qualified: s.driver_qualified, rejected: s.rejected, earnings: s.earnings }
   })
   const pending = []
   for (const s of stats.values()) pending.push(...s.ledger.filter((l) => l.status === 'pending'))
@@ -265,7 +376,7 @@ async function adminStatus(sb, res, body) {
   return json(res, 200, { ok: true, affiliate: publicAffiliate(up.data) })
 }
 
-const RATE_KEYS = ['rider_first_ride_cents', 'driver_first_trip_cents', 'hold_days', 'monthly_cap', 'min_payout_cents']
+const RATE_KEYS = ['rider_first_ride_cents', 'rider_min_fare_cents', 'driver_first_trip_cents', 'hold_days', 'monthly_cap', 'min_payout_cents']
 async function adminRates(sb, res, user, body) {
   const current = await loadRates(sb)
   const next = { ...current }
@@ -283,6 +394,9 @@ async function adminRates(sb, res, user, body) {
     }
   }
   if (typeof body.rates?.placeholder === 'boolean') next.placeholder = body.rates.placeholder
+  if (typeof body.rates?.multipliers_pending_confirmation === 'boolean') {
+    next.multipliers_pending_confirmation = body.rates.multipliers_pending_confirmation
+  }
   const up = await sb.from('affiliate_config').upsert({ key: 'rates', value: next, updated_at: new Date().toISOString(), updated_by: user.id })
   if (up.error) return json(res, 400, { error: up.error.message })
   return json(res, 200, { ok: true, rates: next })
@@ -339,14 +453,47 @@ async function batchCreate(sb, res, user, getStripe) {
   return json(res, 200, { ok: true, batch: batch.data, groups: plan.include, rollover: plan.rollover, voided: voided.length })
 }
 
-async function batchApprove(sb, res, user, body) {
+async function batchApprove(sb, res, user, body, getStripe, key) {
   if (!UUID.test(body.batch_id || '')) return json(res, 400, { error: 'batch_id required' })
   const now = new Date().toISOString()
   const up = await sb.from('affiliate_payout_batches').update({ status: 'approved', approved_by: user.id, approved_at: now })
     .eq('id', body.batch_id).eq('status', 'draft').select('*').maybeSingle()
   if (!up.data) return json(res, 409, { error: 'Batch is not a draft' })
   await sb.from('affiliate_ledger').update({ status: 'approved', approved_at: now }).eq('batch_id', body.batch_id).eq('status', 'pending')
-  return json(res, 200, { ok: true, batch: up.data })
+  const payout = await payApprovedStripe(sb, body.batch_id, getStripe, key)
+  return json(res, 200, { ok: payout.ok, batch: { ...up.data, status: payout.status }, payout })
+}
+
+async function refreshConnectAccounts(sb, byId, stripe) {
+  for (const affiliate of byId.values()) {
+    if (affiliate.payout_method !== 'stripe_connect' || !affiliate.stripe_account_id) continue
+    try {
+      byId.set(affiliate.id, await refreshAffiliateConnect(sb, affiliate, stripe))
+    } catch { /* keep the stored status; transfer stays gated on verified */ }
+  }
+}
+
+/** After admin approval, transfer verified Connect commissions. Fraud and hold gates already ran at batch create. */
+async function payApprovedStripe(sb, batchId, getStripe, key) {
+  const entries = await sb.from('affiliate_ledger').select('*').eq('batch_id', batchId).eq('status', 'approved')
+  const rows = entries.data || []
+  const affIds = [...new Set(rows.map((e) => e.affiliate_id))]
+  const affs = affIds.length ? await sb.from('affiliates').select('*').in('id', affIds) : { data: [] }
+  const byId = new Map((affs.data || []).map((a) => [a.id, a]))
+  const stripe = isAffiliateTestKey(key) ? getStripe() : null
+  if (stripe) await refreshConnectAccounts(sb, byId, stripe)
+  const transferred = await transferApprovedCommissions(sb, rows, byId, stripe, key)
+  const failures = (transferred.results || []).filter((r) => !r.ok)
+  const remaining = await sb.from('affiliate_ledger').select('id').eq('batch_id', batchId).eq('status', 'approved')
+  let status = 'approved'
+  if (failures.length) status = 'failed'
+  else if (rows.length && (remaining.data || []).length === 0 && !transferred.skipped) status = 'paid'
+  await sb.from('affiliate_payout_batches').update({
+    status,
+    paid_at: status === 'paid' ? new Date().toISOString() : null,
+    result: { payout: transferred },
+  }).eq('id', batchId)
+  return { ok: failures.length === 0, status, ...transferred }
 }
 
 async function batchPay(sb, res, body, getStripe, key) {
@@ -358,32 +505,29 @@ async function batchPay(sb, res, body, getStripe, key) {
   const affs = affIds.length ? await sb.from('affiliates').select('*').in('id', affIds) : { data: [] }
   const byId = new Map((affs.data || []).map((a) => [a.id, a]))
   const credits = supabaseCreditStore(sb)
-  const stripe = isStripeTestKey(key) ? getStripe() : null
-  const results = []
+  const stripe = isAffiliateTestKey(key) ? getStripe() : null
+  if (stripe) await refreshConnectAccounts(sb, byId, stripe)
+  const transferred = await transferApprovedCommissions(sb, entries.data || [], byId, stripe, key)
+  const results = [...(transferred.results || [])]
+  if (transferred.skipped) {
+    for (const e of entries.data || []) {
+      if ((byId.get(e.affiliate_id)?.payout_method || 'ride_credit') !== 'stripe_connect') continue
+      results.push({ id: e.id, ok: false, method: 'stripe_connect', error: 'Stripe test key required; live transfers are disabled' })
+    }
+  }
   for (const e of entries.data || []) {
     const a = byId.get(e.affiliate_id)
+    if ((a?.payout_method || 'ride_credit') === 'stripe_connect') continue
     let ref = null
-    let method = a?.payout_method || 'ride_credit'
     try {
-      if (method === 'stripe_connect') {
-        if (!stripe) throw new Error('Stripe test key required; live transfers are disabled')
-        if (!a.stripe_account_id) throw new Error('No connected account')
-        const t = await stripe.transfers.create({
-          amount: e.amount_cents, currency: 'usd', destination: a.stripe_account_id,
-          metadata: { kind: 'affiliate_payout', ledger_id: e.id, batch_id: body.batch_id },
-        }, { idempotencyKey: `affiliate:${e.id}` })
-        ref = t.id
-      } else {
-        if (!a?.user_id) throw new Error('Affiliate has no account for ride credit')
-        const r = await credits.applyCredits(a.user_id, e.amount_cents, { kind: 'adjust', idempotencyKey: `affiliate:${e.id}` })
-        if (!r.ok) throw new Error(r.code || 'credit failed')
-        method = 'ride_credit'
-        ref = `credit:${e.id}`
-      }
-      await sb.from('affiliate_ledger').update({ status: 'paid', paid_at: new Date().toISOString(), payout_method: method, payout_ref: ref }).eq('id', e.id).eq('status', 'approved')
-      results.push({ id: e.id, ok: true, method, ref })
+      if (!a?.user_id) throw new Error('Affiliate has no account for ride credit')
+      const r = await credits.applyCredits(a.user_id, e.amount_cents, { kind: 'adjust', idempotencyKey: `affiliate:${e.id}` })
+      if (!r.ok) throw new Error(r.code || 'credit failed')
+      ref = `credit:${e.id}`
+      await sb.from('affiliate_ledger').update({ status: 'paid', paid_at: new Date().toISOString(), payout_method: 'ride_credit', payout_ref: ref }).eq('id', e.id).eq('status', 'approved')
+      results.push({ id: e.id, ok: true, method: 'ride_credit', ref })
     } catch (err) {
-      results.push({ id: e.id, ok: false, method, error: err.message })
+      results.push({ id: e.id, ok: false, method: 'ride_credit', error: err.message })
     }
   }
   const failed = results.filter((r) => !r.ok).length

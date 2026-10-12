@@ -29,20 +29,32 @@ export function AffiliateAdmin() {
         {err && <div role="alert" style={{ ...card, padding: 12, color: '#c0392b' }}>{err}</div>}
 
         <section style={card}>
-          <h2 style={{ marginTop: 0, fontSize: 18 }}>Rates {rates.placeholder && <span style={{ color: ORANGE, fontSize: 13 }}>(PLACEHOLDER — awaiting approval)</span>}</h2>
+          <h2 style={{ marginTop: 0, fontSize: 18 }}>Option C {rates.multipliers_pending_confirmation && <span style={{ color: ORANGE, fontSize: 13 }}>(partner bonuses — John to confirm)</span>}</h2>
+          <p style={{ fontSize: 13, color: '#6b6478', marginTop: 0 }}>{rates.multipliers_note}</p>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
-            {[['rider_first_ride_cents', 'Rider first ride (¢)'], ['driver_first_trip_cents', 'Driver first trip (¢)'], ['hold_days', 'Hold days'], ['monthly_cap', 'Monthly cap'], ['min_payout_cents', 'Min payout (¢)']].map(([k, l]) => (
+            {[['rider_first_ride_cents', 'Rider bounty (¢)'], ['rider_min_fare_cents', 'Rider min fare (¢)'], ['driver_first_trip_cents', 'Driver first trip (¢)'], ['hold_days', 'Hold days'], ['monthly_cap', 'Monthly cap'], ['min_payout_cents', 'Min payout (¢)']].map(([k, l]) => (
               <label key={k} style={{ display: 'grid', gap: 4, fontSize: 13, fontWeight: 700 }}>{l}
                 <input type="number" min="0" value={rates[k] ?? ''} onChange={(e) => setRates((r) => ({ ...r, [k]: e.target.value }))} style={{ padding: 8, borderRadius: 10, border: '1px solid #ddd', width: 140 }} />
               </label>
             ))}
           </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginTop: 12 }}>
+            {[['student', 'Student bps (10000 = 1x)'], ['campus_org', 'Campus group bps — John to confirm'], ['local_business', 'Business bps — John to confirm'], ['influencer', 'Creator bps — John to confirm']].map(([k, l]) => (
+              <label key={k} style={{ display: 'grid', gap: 4, fontSize: 13, fontWeight: 700 }}>{l}
+                <input type="number" min="0" value={rates.partner_type_bps?.[k] ?? ''} onChange={(e) => setRates((r) => ({ ...r, partner_type_bps: { ...r.partner_type_bps, [k]: e.target.value } }))} style={{ padding: 8, borderRadius: 10, border: '1px solid #ddd', width: 220 }} />
+              </label>
+            ))}
+          </div>
+          <label style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 12, fontSize: 14, fontWeight: 700 }}>
+            <input type="checkbox" checked={rates.multipliers_pending_confirmation !== false} onChange={(e) => setRates((r) => ({ ...r, multipliers_pending_confirmation: e.target.checked }))} />
+            Bonuses still awaiting John's confirmation
+          </label>
           <button type="button" className="pressable" style={{ ...btn(PURPLE), marginTop: 12 }} onClick={() => run('rates', { rates })}>Save rates</button>
         </section>
 
         <section style={card}>
           <h2 style={{ marginTop: 0, fontSize: 18 }}>Payout batches · {data.pending_entries} pending entries</h2>
-          <p style={{ fontSize: 13, color: '#6b6478', marginTop: 0 }}>Payouts are ride credit, or Stripe Connect transfers in test mode only. A live Stripe key refuses to transfer.</p>
+          <p style={{ fontSize: 13, color: '#6b6478', marginTop: 0 }}>Approve still runs the hold, minimum, and duplicate-payment gates. Approving then transfers verified Connect accounts in test mode. Ride credit, retries, and a live key still use Pay — a live key refuses to transfer.</p>
           <button type="button" className="pressable" style={btn()} onClick={() => run('batch-create', {}, (o) => (o.batch ? `Draft batch ${formatCents(o.batch.total_cents)} · ${o.batch.entry_count} entries${o.voided ? ` · ${o.voided} voided as duplicate payment` : ''}` : 'Nothing past the hold period yet'))}>Create batch from pending</button>
           <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: 12 }}>
             <thead><tr><th style={th}>Created</th><th style={th}>Entries</th><th style={th}>Total</th><th style={th}>Status</th><th style={th} /></tr></thead>
@@ -54,7 +66,7 @@ export function AffiliateAdmin() {
                   <td style={td}>{formatCents(b.total_cents)}</td>
                   <td style={td}>{b.status}</td>
                   <td style={td}>
-                    {b.status === 'draft' && <button type="button" className="pressable" style={btn(PURPLE)} onClick={() => run('batch-approve', { batch_id: b.id }, () => 'Batch approved')}>Approve</button>}
+                    {b.status === 'draft' && <button type="button" className="pressable" style={btn(PURPLE)} onClick={() => run('batch-approve', { batch_id: b.id }, (o) => `Batch ${o.batch?.status || 'approved'}`)}>Approve & pay Connect</button>}
                     {(b.status === 'approved' || b.status === 'failed') && <button type="button" className="pressable" style={btn()} onClick={() => run('batch-pay', { batch_id: b.id }, (o) => `Batch ${o.status}`)}>Pay (test mode / credit)</button>}
                   </td>
                 </tr>
@@ -66,7 +78,7 @@ export function AffiliateAdmin() {
         <section style={{ ...card, overflowX: 'auto' }}>
           <h2 style={{ marginTop: 0, fontSize: 18 }}>Partners ({data.affiliates.length})</h2>
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead><tr>{['Partner', 'Type', 'Code', 'Clicks', 'Signups', 'Qualified', 'Pending', 'Paid', 'Payout', 'Status', ''].map((h) => <th key={h} style={th}>{h}</th>)}</tr></thead>
+            <thead><tr>{['Partner', 'Type', 'Code', 'Clicks', 'Signups', 'Qualified', 'Pending', 'Paid', 'Payout', 'Connect', 'Status', ''].map((h) => <th key={h} style={th}>{h}</th>)}</tr></thead>
             <tbody>
               {data.affiliates.map((a) => (
                 <tr key={a.id}>
@@ -84,6 +96,7 @@ export function AffiliateAdmin() {
                       <option value="stripe_connect">Stripe Connect (test)</option>
                     </select>
                   </td>
+                  <td style={td}>{a.connect_status || 'not_started'}</td>
                   <td style={td}>{a.status}</td>
                   <td style={{ ...td, whiteSpace: 'nowrap' }}>
                     {a.status !== 'active' && <button type="button" className="pressable" style={btn()} onClick={() => run('status', { affiliate_id: a.id, status: 'active' })}>Approve</button>}

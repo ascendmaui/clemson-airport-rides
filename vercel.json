@@ -5,6 +5,10 @@
       "destination": "/api/stripe-webhook"
     },
     {
+      "source": "/api/stripe/connect-webhook",
+      "destination": "/api/stripe-connect-webhook"
+    },
+    {
       "source": "/api/carpool-match",
       "destination": "/api/carpool?action=match"
     },
