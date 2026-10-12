@@ -9,6 +9,7 @@ import { Card, ErrorText, Primary, Tag, useCardShadow } from '@/components/chrom
 import { CircleButton, GoButton } from '@/components/shell'
 import { DriverStatusCard } from '@/components/DriverStatusCard'
 import { PerksStrip } from '@/components/PerksStrip'
+import { useMyMarker } from '@/lib/myMarker'
 import { ForecastCard } from '@/components/ForecastCard'
 import { useAuth } from '@/lib/auth'
 import { useFeedback } from '@/lib/feedback'
@@ -122,6 +123,7 @@ export default function DriverHome() {
   const [hiddenOffers, setHiddenOffers] = useState<string[]>([])
   const [selectedOfferId, setSelectedOfferId] = useState<string | null>(null)
   const [gameNotice, setGameNotice] = useState<GameDayNotice | null>(null)
+  const myMarker = useMyMarker()
   const [refreshing, setRefreshing] = useState(false)
   const gate = useMemo(
     () => driverGateView(status, { rejectionReason: reason }),
@@ -365,7 +367,7 @@ export default function DriverHome() {
     : null
   const hotspots = spots.slice().sort((a: BusySpot, b: BusySpot) => b.intensity - a.intensity).slice(0, 4)
   const pins: MapPin[] = []
-  if (self) pins.push({ id: 'me', ...self, title: 'You', pinColor: ORANGE, kind: 'self' })
+  if (self) pins.push({ id: 'me', ...self, title: 'You', pinColor: myMarker?.fill || ORANGE, kind: 'self', marker: myMarker })
   liveOffers.forEach((card: DriverCard) => {
     const pin = driverPickupTarget(card)
     if (!pin) return
