@@ -138,3 +138,24 @@ export const QUEUED_ACTION_TIMEOUT_MS: number
 export function sendQueuedDriverAction(supabase: unknown, action: { id: string; tripId: string; kind: 'status' | 'stop'; op: string; stopIndex?: number }, options?: { timeoutMs?: number }): Promise<any>
 export function advanceResultTrip(result: any): (DriverTripRow & { settle?: { reason?: string; payment?: unknown; payout?: { status?: string; amountCents?: number; waitCents?: number } | null } | null }) | null
 export function driverCancelTrip(supabase: unknown, tripId: string, reason: string, note?: string): Promise<{ ok: boolean; idempotent?: boolean }>
+
+export type CashoutQuote = {
+  state: 'needs_setup' | 'already_today' | 'zero_balance' | 'below_fee' | 'ready'
+  method?: 'instant' | 'standard'
+  grossCents?: number
+  feeCents?: number
+  netCents?: number
+  fallbackReason?: string | null
+  last4?: string | null
+}
+export function loadCashoutQuote(supabase: unknown): Promise<CashoutQuote>
+export function instantCashout(supabase: unknown, feeCents: number): Promise<{
+  ok: boolean
+  error?: string
+  method?: 'instant' | 'standard'
+  fallbackReason?: string | null
+  grossCents?: number
+  feeCents?: number
+  netCents?: number
+  payoutError?: string | null
+}>
