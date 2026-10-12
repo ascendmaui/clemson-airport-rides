@@ -283,6 +283,39 @@ export async function attemptSwitchFeePayout({ sb, trip, stripe, connectAccountI
   })
 }
 
+/**
+ * Post-trip tip (trips.tip_cents). 100% to the driver, its own transfer and ledger row
+ * (backup_driver_payouts role 'tip'), separate from the fare payout so a tip that lands
+ * after the fare was paid still goes out. Idempotent: a paid tip_payout is never re-sent,
+ * and the Stripe idempotency key is payout-tip:<trip>:<attempt>.
+ * Only completed trips; a tip marked refunded (metadata.tip_refunded) is not paid.
+ */
+export function tipPayoutPlan(trip) {
+  if (!trip?.id || trip.status !== 'completed' || !trip.driver_id) return null
+  if (trip.metadata?.e2e_test === true) return null
+  if (trip.metadata?.tip_refunded === true) return null
+  const cents = Math.max(0, Math.round(Number(trip.tip_cents ?? trip.metadata?.tip_cents) || 0))
+  if (!cents) return null
+  return { driverId: trip.driver_id, cents, label: 'Tip', role: 'tip' }
+}
+
+export async function attemptTipPayout({ sb, trip, stripe, connectAccountId, now = Date.now(), dryRun = false }) {
+  const plan = tipPayoutPlan(trip)
+  if (!plan) return null
+  const existing = trip?.metadata?.tip_payout
+  if (existing?.status === 'paid') {
+    if (Number(existing.amountCents) !== plan.cents) {
+      console.error('[payout] tip changed after payout', { tripId: trip.id, paid: existing.amountCents, now: plan.cents })
+    }
+    return { ok: true, payout: existing, idempotent: true }
+  }
+  return attemptRolePayout({
+    sb, trip, stripe, connectAccountId, now, dryRun, plan,
+    metadataKey: 'tip_payout',
+    idempotencyPrefix: 'payout-tip',
+  })
+}
+
 async function attemptRolePayout({
   sb, trip, stripe, connectAccountId, now, dryRun, plan, metadataKey, idempotencyPrefix,
 }) {
