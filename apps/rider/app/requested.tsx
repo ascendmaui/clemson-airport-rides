@@ -1,3 +1,4 @@
+import { Glyph } from 'rides-native/icons'
 import { trackingIssue, staleEtaLine, withTrackingTimeout } from 'rides-native/tracking'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useEffect, useRef, useState } from 'react'
@@ -287,7 +288,7 @@ export default function Requested() {
           onPress={() => router.back()}
           style={[styles.back, lift(colors, 'rest')]}
         >
-          <Text style={styles.backLabel}>←</Text>
+          <Glyph name="back" size={20} color={colors.title} accessibilityLabel="Back" />
         </Pressable>
         <View style={styles.headerCopy}>
           <Text style={styles.kicker}>{ttlCanceled ? 'HOLD EXPIRED' : 'LIVE RIDE'}</Text>
@@ -393,10 +394,16 @@ export default function Requested() {
               <PrimaryButton label="Rate your driver" onPress={() => router.push({ pathname: '/rate', params: { trip: tripId } })} />
             ) : null}
             <Text style={styles.summaryTitle}>{liveDriverTitle(person?.name, driverName)}</Text>
-            <Text style={styles.body}>
-              {shown?.pickup_label || 'Pickup'} → {shown?.dropoff_label || dest || 'your destination'}
-              {loading && !shown?.status ? ' · loading' : ''}
-            </Text>
+            <View style={{ gap: 6 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Glyph name="pickup" size={18} color={colors.orange} active knockout={colors.card} />
+                <Text style={[styles.body, { flex: 1 }]}>{shown?.pickup_label || 'Pickup'}</Text>
+              </View>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Glyph name="dropoff" size={18} color={colors.purple} active />
+                <Text style={[styles.body, { flex: 1 }]}>{shown?.dropoff_label || dest || 'your destination'}{loading && !shown?.status ? ' · loading' : ''}</Text>
+              </View>
+            </View>
             {orderedLiveStops(live).map((stop) => (
               <Text key={stop.id} style={styles.stopLine}>
                 {stop.order} · {stop.label}
@@ -432,8 +439,13 @@ export default function Requested() {
           <LiveShareCard trip={shown} userId={user.id} loading={loading && Boolean(tripId)} />
         )}
         <View style={[styles.sosCard, lift(colors, 'rest')]}>
-          <Text style={styles.kicker}>SOS</Text>
-          <Text style={styles.cardTitle}>Need help on this ride?</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+            <Glyph name="sos" size={22} color={colors.danger} active knockout={colors.card} />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.kicker}>SOS</Text>
+              <Text style={styles.cardTitle}>Need help on this ride?</Text>
+            </View>
+          </View>
           {rideLive ? (
             <Text style={styles.body}>SOS fills the screen in red. The first press confirms and does not dial. Call 911 is the next press.</Text>
           ) : (
@@ -453,7 +465,11 @@ export default function Requested() {
           accessibilityHint="Opens the safety screen"
           hitSlop={16}
         >
-          <Text style={styles.link}>Emergency contacts →</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <Glyph name="call" size={16} color={colors.link} />
+            <Text style={styles.link}>Emergency contacts</Text>
+            <Glyph name="forward" size={14} color={colors.link} />
+          </View>
         </Pressable>
         <PrimaryButton label="Back to rides" onPress={() => router.replace('/')} tone="ghost" />
         {shown?.status === 'searching' ? (

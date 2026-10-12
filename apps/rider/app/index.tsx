@@ -1,4 +1,4 @@
-import { Ionicons } from '@expo/vector-icons'
+import { GlassBadge, Glyph } from 'rides-native/icons'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import * as Location from 'expo-location'
 import { useEffect, useMemo, useRef, useState } from 'react'
@@ -45,11 +45,19 @@ import { useThemedStyles } from '@/lib/useThemedStyles'
 
 const MAP_KINDS: MapKind[] = ['standard', 'satellite', 'hybrid']
 
+const PLACES = [
+  ...SHORTCUTS.map((shortcut) => ({ ...shortcut, glyph: 'campus' })),
+  { id: 'gsp', label: 'GSP Airport', sub: 'GSP', glyph: 'airport' },
+  { id: 'clt', label: 'CLT Airport', sub: 'CLT', glyph: 'airport' },
+]
+
 const QUICK_ACTIONS = [
-  { id: 'schedule', label: 'Schedule a ride', detail: 'Choose a time', icon: 'calendar-outline' as const, href: '/schedule' as const },
-  { id: 'carpool', label: 'Carpool', detail: 'Split the surge', icon: 'people-outline' as const, href: '/friends' as const },
-  { id: 'history', label: 'Your rides', detail: 'Trip history', icon: 'time-outline' as const, href: '/history' as const },
-  { id: 'safety', label: 'Safety', detail: 'Audio, video, tracking, SOS', icon: 'shield-checkmark-outline' as const, href: '/safety' as const },
+  { id: 'schedule', label: 'Schedule a ride', detail: 'Choose a time', icon: 'schedule' as const, href: '/schedule' as const },
+  { id: 'carpool', label: 'Carpool', detail: 'Split the surge', icon: 'carpool' as const, href: '/friends' as const },
+  { id: 'airport', label: 'Airport', detail: 'GSP and CLT', icon: 'airport' as const, href: '/schedule' as const },
+  { id: 'tiger-pass', label: 'Tiger Pass', detail: 'Rider membership', icon: 'pass' as const, href: '/tiger-pass' as const },
+  { id: 'safety', label: 'Safety', detail: 'Audio, video, tracking, SOS', icon: 'shield' as const, href: '/safety' as const },
+  { id: 'history', label: 'Your rides', detail: 'Trip history', icon: 'history' as const, href: '/history' as const },
 ]
 
 export default function RiderHome() {
@@ -62,7 +70,7 @@ export default function RiderHome() {
   const insets = useSafeAreaInsets()
   const { height: windowH } = useWindowDimensions()
   const { user, configured } = useAuth()
-  const { colors } = useTheme()
+  const { colors, scheme } = useTheme()
   const styles = useThemedStyles(makeStyles)
   const mapRef = useRef<CampusMapHandle>(null)
   const [query, setQuery] = useState('')
@@ -495,7 +503,11 @@ export default function RiderHome() {
             onPress={() => goSearch()}
             style={({ pressed }) => [styles.searchLink, pressStyle(pressed)]}
           >
-            <Text style={styles.searchLinkText}>Search destination →</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <Glyph name="search" size={18} color={colors.link} />
+              <Text style={styles.searchLinkText}>Search destination</Text>
+              <Glyph name="forward" size={16} color={colors.link} />
+            </View>
           </Pressable>
           {destError ? <Text style={styles.locateNote}>{destError}</Text> : null}
 
@@ -515,9 +527,7 @@ export default function RiderHome() {
                     }}
                     style={({ pressed }) => [styles.action, lift(colors, 'rest'), pressStyle(pressed)]}
                   >
-                    <View style={styles.actionIcon}>
-                      <Ionicons name={action.icon} size={18} color={colors.orange} />
-                    </View>
+                    <GlassBadge name={action.icon} size={40} tone={action.id === 'safety' ? 'purple' : 'orange'} scheme={scheme} style={styles.actionIcon} />
                     <Text style={styles.actionLabel}>{action.label}</Text>
                     <Text style={styles.actionDetail}>{action.detail}</Text>
                   </Pressable>
@@ -528,7 +538,7 @@ export default function RiderHome() {
 
           <Text style={styles.sectionLabel}>Places</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.shortcuts}>
-            {SHORTCUTS.map((shortcut) => (
+            {PLACES.map((shortcut) => (
               <Pressable
                 key={shortcut.id}
                 onPress={() => goSearch(shortcut.sub)}
@@ -537,7 +547,7 @@ export default function RiderHome() {
                 accessibilityLabel={`${shortcut.label}. ${shortcut.sub}`}
                 accessibilityHint="Requests a ride to this place"
               >
-                <Ionicons name="school-outline" size={22} color={colors.purple} style={styles.shortcutIcon} />
+                <Glyph name={shortcut.glyph} size={22} color={colors.purple} style={styles.shortcutIcon} />
                 <Text style={styles.shortcutLabel}>{shortcut.label}</Text>
                 <Text style={styles.shortcutSub}>{shortcut.sub}</Text>
               </Pressable>
@@ -853,15 +863,7 @@ function makeStyles(colors: Palette) {
       borderWidth: 1,
       borderColor: colors.border,
     },
-    actionIcon: {
-      width: 32,
-      height: 32,
-      borderRadius: 10,
-      backgroundColor: colors.orangeSoft,
-      alignItems: 'center' as const,
-      justifyContent: 'center' as const,
-      marginBottom: 10,
-    },
+    actionIcon: { marginBottom: 10 },
     actionLabel: { fontSize: 14, fontWeight: '700' as const, letterSpacing: -0.2, color: colors.ink },
     actionDetail: { fontSize: 12, color: colors.inkSecondary, marginTop: 2 },
     shortcuts: { gap: 10, paddingRight: 4 },

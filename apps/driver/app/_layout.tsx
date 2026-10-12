@@ -1,4 +1,5 @@
 import '@/lib/backgroundLocation'
+import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import { Stack, useRouter } from 'expo-router'
 import * as Notifications from 'expo-notifications'
 import { StatusBar } from 'expo-status-bar'
@@ -96,7 +97,10 @@ function ThemedStack() {
         screenOptions={{
           headerShown: false,
           contentStyle: { backgroundColor: colors.background },
-          animation: 'slide_from_right',
+          animation: 'default',
+          gestureEnabled: true,
+          fullScreenGestureEnabled: true,
+          animationMatchesGesture: true,
         }}
       />
     </>
@@ -105,18 +109,20 @@ function ThemedStack() {
 
 export default function RootLayout() {
   return (
-    <ThemeProvider>
-      <AuthProvider>
-        <FeedbackProvider>
-          <Gate>
-            <PasswordRecoveryListener />
-            <PushBridge />
-            <OfferBridge />
-            <ThemedStack />
-            <ActiveTripResume />
-          </Gate>
-        </FeedbackProvider>
-      </AuthProvider>
-    </ThemeProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <ThemeProvider>
+        <AuthProvider>
+          <FeedbackProvider>
+            <Gate>
+              <PasswordRecoveryListener />
+              <PushBridge />
+              <OfferBridge />
+              <ThemedStack />
+              <ActiveTripResume />
+            </Gate>
+          </FeedbackProvider>
+        </AuthProvider>
+      </ThemeProvider>
+    </GestureHandlerRootView>
   )
 }

@@ -1,3 +1,4 @@
+import { Glyph } from './icons/index.js'
 import { useEffect, useRef, useState } from 'react'
 import {
   ActivityIndicator,
@@ -41,7 +42,7 @@ function AuthShell({ title, subtitle, mark, onBack, children }) {
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           accessibilityHint="Returns to the previous screen"
         >
-          <Text style={styles.backLabel}>←</Text>
+          <Glyph name="back" size={20} color={PURPLE} accessibilityLabel="Back" />
         </Pressable>
         <View style={styles.card}>
           <View style={styles.mark}>

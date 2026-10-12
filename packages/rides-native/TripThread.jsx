@@ -1,3 +1,4 @@
+import { Glyph } from './icons/index.js'
 import { useCallback, useEffect, useState } from 'react'
 import { Alert, Modal, Pressable, Text, TextInput, View } from 'react-native'
 import { authedJson } from './apiClient.js'
@@ -260,7 +261,10 @@ export function TripThread({
           onPress={() => setOpen((value) => !value)}
           style={{ flex: 1 }}
         >
-          <Text style={{ color: tone.orange, fontWeight: '800', letterSpacing: 1.1, fontSize: 11 }}>RIDE CHAT</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <Glyph name="chat" size={16} color={tone.orange} />
+            <Text style={{ color: tone.orange, fontWeight: '800', letterSpacing: 1.1, fontSize: 11 }}>RIDE CHAT</Text>
+          </View>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
             <Text style={{ color: tone.title, fontSize: 18, fontWeight: '800' }}>{title}</Text>
             {blockReady && !blocked && unread > 0 ? (

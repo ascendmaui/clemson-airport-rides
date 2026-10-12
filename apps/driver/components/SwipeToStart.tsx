@@ -1,6 +1,9 @@
-import { useMemo, useRef, useState } from 'react'
-import { Animated, PanResponder, StyleSheet, Text, View, type LayoutChangeEvent } from 'react-native'
-import { swipeConfirms, swipeOffset } from 'rides-native/swipeConfirm'
+import { Glyph, SPRING } from 'rides-native/icons'
+import { useCallback, useMemo, useRef, useState } from 'react'
+import { StyleSheet, Text, View, type LayoutChangeEvent } from 'react-native'
+import { Gesture, GestureDetector } from 'react-native-gesture-handler'
+import Animated, { Extrapolation, interpolate, runOnJS, useAnimatedStyle, useSharedValue, withSpring, withTiming } from 'react-native-reanimated'
+import { swipeConfirms } from 'rides-native/swipeConfirm'
 import { useTheme } from '@/lib/theme'
 
 const KNOB = 56
@@ -23,39 +26,54 @@ export function SwipeToStart({
 }) {
   const { colors } = useTheme()
   const [track, setTrack] = useState(0)
-  const x = useRef(new Animated.Value(0)).current
+  // Knob position lives on the UI thread; the pan never round-trips through React state.
+  const x = useSharedValue(0)
+  const max = useSharedValue(0)
   const trackRef = useRef(0)
   const disabledRef = useRef(Boolean(disabled))
   disabledRef.current = Boolean(disabled)
   const confirmRef = useRef(onConfirm)
   confirmRef.current = onConfirm
 
-  const reset = () => Animated.spring(x, { toValue: 0, useNativeDriver: false, bounciness: 6 }).start()
+  const finish = useCallback((dx: number) => {
+    const g = { dx }
+    if (!disabledRef.current && swipeConfirms(g.dx, trackRef.current, KNOB)) {
+      x.value = withTiming(Math.max(0, trackRef.current - KNOB), { duration: 120 }, (done) => {
+        if (done) runOnJS(confirmAndReset)()
+      })
+    } else {
+      x.value = withSpring(0, SPRING)
+    }
+  }, [x])
 
-  const responder = useMemo(() => PanResponder.create({
-    onStartShouldSetPanResponder: () => !disabledRef.current,
-    onMoveShouldSetPanResponder: (_e, g) => !disabledRef.current && Math.abs(g.dx) > 4,
-    onPanResponderTerminationRequest: () => false,
-    onPanResponderMove: (_e, g) => x.setValue(swipeOffset(g.dx, trackRef.current, KNOB)),
-    onPanResponderRelease: (_e, g) => {
-      if (!disabledRef.current && swipeConfirms(g.dx, trackRef.current, KNOB)) {
-        Animated.timing(x, { toValue: Math.max(0, trackRef.current - KNOB), duration: 120, useNativeDriver: false }).start(() => {
-          confirmRef.current()
-          reset()
-        })
-      } else {
-        reset()
-      }
-    },
-    onPanResponderTerminate: reset,
-  }), [x])
+  function confirmAndReset() {
+    confirmRef.current()
+    x.value = withSpring(0, SPRING)
+  }
+
+  const pan = useMemo(() => Gesture.Pan()
+    .enabled(!disabled)
+    .activeOffsetX([-4, 4])
+    .onUpdate((e) => {
+      x.value = Math.min(Math.max(0, e.translationX), max.value)
+    })
+    .onEnd((e) => {
+      runOnJS(finish)(e.translationX)
+    })
+    .onFinalize((_e, success) => {
+      if (!success) x.value = withSpring(0, SPRING)
+    }), [disabled, finish, max, x])
 
   function onLayout(event: LayoutChangeEvent) {
     trackRef.current = event.nativeEvent.layout.width
+    max.value = Math.max(0, event.nativeEvent.layout.width - KNOB - 8)
     setTrack(event.nativeEvent.layout.width)
   }
 
-  const fill = x.interpolate({ inputRange: [0, Math.max(1, track - KNOB)], outputRange: [KNOB, Math.max(KNOB, track)], extrapolate: 'clamp' })
+  const knobStyle = useAnimatedStyle(() => ({ transform: [{ translateX: x.value }] }))
+  const fillStyle = useAnimatedStyle(() => ({
+    width: interpolate(x.value, [0, Math.max(1, track - KNOB)], [KNOB, Math.max(KNOB, track)], Extrapolation.CLAMP),
+  }))
 
   return (
     <View
@@ -71,14 +89,13 @@ export function SwipeToStart({
         if (event.nativeEvent.actionName === 'activate' && !disabled) onConfirm()
       }}
     >
-      <Animated.View style={[styles.fill, { width: fill, backgroundColor: colors.fill }]} />
+      <Animated.View style={[styles.fill, { backgroundColor: colors.fill }, fillStyle]} />
       <Text style={[styles.label, { color: colors.title }]} numberOfLines={1}>{label}</Text>
-      <Animated.View
-        {...responder.panHandlers}
-        style={[styles.knob, { backgroundColor: colors.orange, transform: [{ translateX: x }] }]}
-      >
-        <Text style={[styles.arrow, { color: colors.onAccent }]}>→</Text>
-      </Animated.View>
+      <GestureDetector gesture={pan}>
+        <Animated.View style={[styles.knob, { backgroundColor: colors.orange }, knobStyle]}>
+          <Glyph name="forward" size={22} color={colors.onAccent} />
+        </Animated.View>
+      </GestureDetector>
     </View>
   )
 }

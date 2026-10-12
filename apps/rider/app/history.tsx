@@ -1,3 +1,5 @@
+import { GlassBadge, Glyph } from 'rides-native/icons'
+import { MainTabs } from '@/components/MainTabs'
 import { useRouter } from 'expo-router'
 import { useEffect, useState } from 'react'
 import { Pressable, ScrollView, Text, View } from 'react-native'
@@ -31,7 +33,7 @@ function HistoryScreen() {
   const [rows, setRows] = useState<RideRow[]>([])
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
-  const { colors } = useTheme()
+  const { colors, scheme } = useTheme()
   const styles = useThemedStyles(makeStyles)
 
   useEffect(() => {
@@ -58,10 +60,20 @@ function HistoryScreen() {
   return (
     <View style={[styles.screen, { paddingTop: insets.top }]}>
       <View style={styles.header}>
-        <Pressable onPress={() => router.back()} style={[styles.back, lift(colors, 'rest')]}>
-          <Text style={styles.backLabel}>←</Text>
+        <Pressable accessibilityRole="button" accessibilityLabel="Back" onPress={() => (router.canGoBack() ? router.back() : router.replace("/"))} style={[styles.back, lift(colors, 'rest')]}>
+          <Glyph name="back" size={20} color={colors.title} accessibilityLabel="Back" />
         </Pressable>
-        <Text style={styles.title}>Your rides</Text>
+        <Text style={styles.title}>Rides</Text>
+      </View>
+      <View style={styles.segment}>
+        <Pressable accessibilityRole="button" accessibilityLabel="Upcoming and scheduled rides" onPress={() => router.replace('/schedule')} style={[styles.segmentChip, lift(colors, 'rest')]}>
+          <Glyph name="schedule" size={18} color={colors.orange} />
+          <Text style={styles.segmentText}>Upcoming & schedule</Text>
+        </Pressable>
+        <View style={[styles.segmentChip, styles.segmentOn]}>
+          <Glyph name="history" size={18} color={colors.onAccent} />
+          <Text style={[styles.segmentText, { color: colors.onAccent }]}>History</Text>
+        </View>
       </View>
       <ScrollView contentContainerStyle={styles.list}>
         {!user ? (
@@ -73,11 +85,17 @@ function HistoryScreen() {
         {loading ? <Text style={styles.copy}>Loading…</Text> : null}
         {error ? <Text style={styles.error}>{error}</Text> : null}
         {user && !loading && !error && rows.length === 0 ? (
-          <Text style={styles.copy}>No rides yet. Campus → GSP starts from the map.</Text>
+          <View style={styles.empty}>
+            <GlassBadge name="empty" size={56} tone="purple" scheme={scheme} />
+            <Text style={styles.copy}>No rides yet. Campus → GSP starts from the map.</Text>
+          </View>
         ) : null}
         {rows.map((row: RideRow) => (
           <View key={row.id} style={[styles.card, lift(colors, 'rest')]}>
-            <Text style={styles.cardTitle}>{row.dropoff_label || 'Ride'}</Text>
+            <View style={styles.cardHead}>
+              <Glyph name={row.status === 'completed' ? 'complete' : row.status === 'canceled' || row.status === 'cancelled' ? 'close' : 'clock'} size={20} color={row.status === 'completed' ? colors.online : colors.purple} />
+              <Text style={[styles.cardTitle, { flex: 1 }]}>{row.dropoff_label || 'Ride'}</Text>
+            </View>
             <Text style={styles.copy}>{row.pickup_label || 'Pickup'} · {row.status || 'requested'}</Text>
             <Text style={styles.copy}>Fare {formatCents(row.fare_cents || 0)}{row.deposit_cents ? ` · already paid ${formatCents(row.deposit_cents)}` : ''}</Text>
             {row.status === 'completed' && row.driver_id ? (
@@ -116,6 +134,7 @@ function HistoryScreen() {
           </View>
         ))}
       </ScrollView>
+      <MainTabs active="rides" />
     </View>
   )
 }
@@ -128,6 +147,12 @@ function makeStyles(colors: Palette) {
     backLabel: { fontSize: 18, color: colors.title, fontWeight: '700' as const },
     title: { fontSize: 24, fontWeight: '800' as const, color: colors.title },
     list: { padding: 16, gap: 10 },
+    segment: { flexDirection: 'row' as const, gap: 8, paddingHorizontal: 16, paddingBottom: 4 },
+    segmentChip: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 6, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 18, backgroundColor: colors.card },
+    segmentOn: { backgroundColor: colors.purple },
+    segmentText: { fontWeight: '700' as const, color: colors.ink, fontSize: 13 },
+    empty: { alignItems: 'center' as const, gap: 10, paddingVertical: 24 },
+    cardHead: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 8 },
     copy: { color: colors.inkSecondary, fontSize: 14, lineHeight: 20 },
     error: { color: colors.danger, fontSize: 13 },
     card: { backgroundColor: colors.card, borderRadius: 16, padding: 16 },

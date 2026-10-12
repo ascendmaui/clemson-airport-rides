@@ -1,6 +1,6 @@
 import { useRouter } from 'expo-router'
 import { useEffect, useState } from 'react'
-import { Pressable, ScrollView, Text, View } from 'react-native'
+import { Pressable, ScrollView, Switch, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Pill, PrimaryButton } from '@/components/Button'
 import { MainTabs } from '@/components/MainTabs'
@@ -9,7 +9,8 @@ import { useAuth } from '@/lib/auth'
 import { playTigerCue, setSoundsEnabled, soundsEnabled, tapHaptic } from '@/lib/feedback'
 import { lift } from '@/lib/elevation'
 import type { Palette } from '@/lib/palette'
-import { useTheme, type DisplayMode } from '@/lib/theme'
+import { useTheme } from '@/lib/theme'
+import { Glyph } from 'rides-native/icons'
 import { useThemedStyles } from '@/lib/useThemedStyles'
 import { displayFirstName } from 'rides-native/authErrors'
 import { useStudentStatus } from '@/lib/useStudentStatus'
@@ -21,23 +22,31 @@ import { WomenOnlyCard } from 'rides-native/WomenOnlyCard'
 import { loadComfortPreference, saveComfortPreference } from 'rides-native/comfortPreference.js'
 import { supabase } from '@/lib/supabase'
 
-const DISPLAY: { id: DisplayMode; label: string }[] = [
-  { id: 'auto', label: 'Auto' },
-  { id: 'light', label: 'Light' },
-  { id: 'dark', label: 'Dark' },
-]
+type AccountHref = '/tiger-pass' | '/student' | '/notifications' | '/help' | '/support' | '/lost-found' | '/safety'
+type AccountLink = { href: AccountHref; label: string; hint: string; icon: string }
 
-const LINKS: { href: '/billing' | '/tiger-pass' | '/student' | '/promo' | '/notifications' | '/history' | '/schedule' | '/help' | '/support' | '/lost-found'; label: string; hint: string }[] = [
-  { href: '/tiger-pass', label: TIGER_PASS_NAME, hint: 'Frequent-rider discount, preferred drivers, and ride types' },
-  { href: '/billing', label: 'Billing', hint: 'Card on file and ride history' },
-  { href: '/student', label: 'Student', hint: 'Confirmed Clemson email · 10% off Standard' },
-  { href: '/promo', label: 'Promo codes', hint: 'Apply a friend code or share yours' },
-  { href: '/notifications', label: 'Notifications', hint: 'Ride, billing, friends, and promo alerts' },
-  { href: '/history', label: 'Your rides', hint: 'Fare on each trip' },
-  { href: '/schedule', label: 'Airport ride', hint: 'GSP and CLT. The fare is charged when the trip ends' },
-  { href: '/help', label: 'Help', hint: 'How booking, Schedule, friends, and billing work' },
-  { href: '/support', label: 'Support', hint: 'Charge, ride, bug, or safety tickets' },
-  { href: '/lost-found', label: 'Lost & found', hint: 'An item left in the car after a ride' },
+const GROUPS: { title: string; links: AccountLink[] }[] = [
+  {
+    title: 'Membership',
+    links: [
+      { href: '/tiger-pass', label: TIGER_PASS_NAME, hint: 'Frequent-rider discount, preferred drivers, and ride types', icon: 'pass' },
+      { href: '/student', label: 'Student', hint: 'Confirmed Clemson email · 10% off Standard', icon: 'student' },
+    ],
+  },
+  {
+    title: 'Preferences',
+    links: [
+      { href: '/notifications', label: 'Notifications', hint: 'Ride, billing, friends, and promo alerts', icon: 'bell' },
+    ],
+  },
+  {
+    title: 'Help and support',
+    links: [
+      { href: '/help', label: 'Help', hint: 'How booking, Schedule, friends, and billing work', icon: 'help' },
+      { href: '/support', label: 'Support', hint: 'Charge, ride, bug, or safety tickets', icon: 'chat' },
+      { href: '/lost-found', label: 'Lost & found', hint: 'An item left in the car after a ride', icon: 'lostFound' },
+    ],
+  },
 ]
 
 function AccountScreen() {
@@ -45,7 +54,7 @@ function AccountScreen() {
   const insets = useSafeAreaInsets()
   const { user, configured, signOut } = useAuth()
   const student = useStudentStatus()
-  const { colors, displayMode, setDisplayMode, solarPlace } = useTheme()
+  const { colors, scheme, setDisplayMode } = useTheme()
   const styles = useThemedStyles(makeStyles)
   const [error, setError] = useState<string | null>(null)
   const [note, setNote] = useState<string | null>(null)
@@ -191,29 +200,40 @@ function AccountScreen() {
             ? 'Payments, student pricing, promos, and alerts use the same account as the web app.'
             : 'Supabase anon key is missing. Add EXPO_PUBLIC_SUPABASE_ANON_KEY as an EAS environment variable, then rebuild.'}
         </Text>
-        {LINKS.map((link) => (
-          <Pressable key={link.href} onPress={() => router.push(link.href)} style={[styles.row, lift(colors, 'rest')]} accessibilityRole="button">
-            <Text style={styles.rowTitle}>{link.label}</Text>
-            <Text style={styles.copy}>{link.hint}</Text>
-          </Pressable>
-        ))}
-        <View style={[styles.row, lift(colors, 'rest')]}>
-          <Text style={styles.rowTitle}>Display</Text>
-          <Text style={styles.copy}>
-            Auto follows sunrise and sunset for {solarPlace}. Clemson orange and purple stay the same at night.
-          </Text>
-          <View style={styles.pills}>
-            {DISPLAY.map((option) => (
-              <Pill
-                key={option.id}
-                label={option.label}
-                active={displayMode === option.id}
-                onPress={() => {
-                  void tapHaptic()
-                  setDisplayMode(option.id)
-                }}
-              />
+        {GROUPS.map((group) => (
+          <View key={group.title} style={styles.group}>
+            <Text style={styles.groupTitle}>{group.title}</Text>
+            {group.links.map((link) => (
+              <Pressable key={link.href} onPress={() => router.push(link.href)} style={[styles.row, lift(colors, 'rest')]} accessibilityRole="button">
+                <View style={styles.settingLine}>
+                  <Glyph name={link.icon} size={22} color={colors.purple} scheme={scheme} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.rowTitle}>{link.label}</Text>
+                    <Text style={styles.copy}>{link.hint}</Text>
+                  </View>
+                  <Glyph name="forward" size={16} color={colors.inkSecondary} />
+                </View>
+              </Pressable>
             ))}
+          </View>
+        ))}
+        <Text style={styles.groupTitle}>Settings</Text>
+        <View style={[styles.row, lift(colors, 'rest')]}>
+          <View style={styles.settingLine}>
+            <Glyph name={scheme === 'dark' ? 'moon' : 'sun'} size={22} color={colors.orange} active={scheme === 'dark'} scheme={scheme} knockout={colors.card} />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.rowTitle}>Night mode</Text>
+              <Text style={styles.copy}>Opens in light mode. Turn on for dark screens and icons. Saved on this phone.</Text>
+            </View>
+            <Switch
+              value={scheme === 'dark'}
+              onValueChange={(on: boolean) => {
+                void tapHaptic()
+                setDisplayMode(on ? 'dark' : 'light')
+              }}
+              trackColor={{ true: colors.orange, false: colors.track }}
+              accessibilityLabel="Night mode"
+            />
           </View>
         </View>
         <View style={[styles.row, lift(colors, 'rest')]}>
@@ -241,6 +261,7 @@ function AccountScreen() {
             }}
           />
         </View>
+        <Text style={styles.groupTitle}>Legal and privacy</Text>
         <Pressable onPress={() => router.push({ pathname: '/legal', params: { doc: 'privacy' } })} style={[styles.row, lift(colors, 'rest')]} accessibilityRole="button">
           <Text style={styles.rowTitle}>Privacy policy</Text>
           <Text style={styles.copy}>Same policy as the website.</Text>
@@ -296,6 +317,9 @@ function makeStyles(colors: Palette) {
       gap: 4,
     },
     rowTitle: { color: colors.ink, fontWeight: '800' as const, fontSize: 16 },
+    group: { gap: 8 },
+    groupTitle: { color: colors.inkSecondary, fontWeight: '800' as const, fontSize: 12, letterSpacing: 1, textTransform: 'uppercase' as const, marginTop: 8 },
+    settingLine: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 12 },
     pills: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: 8, marginTop: 8 },
     note: { color: colors.link, fontWeight: '700' as const, fontSize: 13 },
     error: { color: colors.danger, fontSize: 13 },

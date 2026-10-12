@@ -420,7 +420,7 @@ export default function DriverHome() {
       />
       <View pointerEvents="box-none" style={styles.overlay}>
         <View style={[styles.top, { paddingTop: dockTop }]} pointerEvents="box-none">
-          <CircleButton icon="home" label="Menu" onPress={() => router.push('/menu')} />
+          <CircleButton icon="inbox" label="Inbox" onPress={() => router.push('/inbox')} />
           <Pressable
             onPress={() => setPeek((open: boolean) => !open)}
             style={[styles.pill, shadow, { backgroundColor: colors.card }]}

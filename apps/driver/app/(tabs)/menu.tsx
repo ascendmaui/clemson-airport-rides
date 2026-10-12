@@ -1,5 +1,5 @@
+import { Glyph } from 'rides-native/icons'
 import { useRouter, useFocusEffect } from 'expo-router'
-import { Ionicons } from '@expo/vector-icons'
 import { useCallback, useState } from 'react'
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -85,9 +85,12 @@ export default function MenuScreen() {
     { icon: 'shield-checkmark', title: 'Insurance', subtitle: 'Your policy and trip coverage notes', onPress: () => router.push('/insurance') },
     { icon: 'shield', title: 'Safety', subtitle: 'Audio, video, live location, and SOS', onPress: () => router.push('/safety') },
   ]
+  const inbox: MenuRow[] = [
+    { icon: 'inbox', title: 'Inbox', subtitle: 'Messages from Clemson RIDES and riders', onPress: () => router.push('/inbox') },
+    { icon: 'discover', title: 'Discover', subtitle: 'Busy spots, game days, and boosts', onPress: () => router.push('/discover') },
+  ]
   const money: MenuRow[] = [
     { icon: 'calculator', title: 'Tax info', subtitle: 'W-9 on your application', onPress: () => router.push('/tax') },
-    { icon: 'card', title: 'Payout methods', subtitle: 'Stripe balance and cash out', onPress: () => router.push('/payouts') },
   ]
   const resources: MenuRow[] = [
     { icon: 'school', title: 'Learning Center', subtitle: quizLabel, onPress: () => router.push('/learning') },
@@ -97,7 +100,6 @@ export default function MenuScreen() {
   const account: MenuRow[] = [
     { icon: 'settings', title: 'Settings', subtitle: 'Display, navigation, and sounds', onPress: () => router.push('/settings') },
     { icon: 'swap-horizontal', title: 'Switch account', subtitle: 'One driver session on this phone', onPress: () => router.push('/switch-account') },
-    { icon: 'car-sport', title: 'Vehicle', subtitle: 'Make, model, and service class', onPress: () => router.push('/vehicles') },
   ]
 
   return (
@@ -109,7 +111,7 @@ export default function MenuScreen() {
               <Text style={[styles.avatarText, { color: colors.onAccent }]}>{initials(name)}</Text>
             </View>
             <View style={styles.profileCopy}>
-              <Text style={[styles.kicker, { color: colors.orange }]}>DRIVER</Text>
+              <Text style={[styles.kicker, { color: colors.orange }]}>ACCOUNT</Text>
               <Text style={[styles.title, { color: colors.title }]}>{name}</Text>
             </View>
           </View>
@@ -128,13 +130,15 @@ export default function MenuScreen() {
             />
           ) : null}
           <RowGroup rows={spotlight} />
-          <SectionLabel>Manage</SectionLabel>
+          <SectionLabel>Inbox</SectionLabel>
+          <RowGroup rows={inbox} />
+          <SectionLabel>Vehicle and documents</SectionLabel>
           <RowGroup rows={manage} />
-          <SectionLabel>Money</SectionLabel>
+          <SectionLabel>Tax</SectionLabel>
           <RowGroup rows={money} />
           <SectionLabel>Resources</SectionLabel>
           <RowGroup rows={resources} />
-          <SectionLabel>Account</SectionLabel>
+          <SectionLabel>Settings</SectionLabel>
           <RowGroup rows={account} />
           <Pressable
             onPress={() => router.push('/delete-account')}
@@ -143,7 +147,7 @@ export default function MenuScreen() {
             accessibilityHint="Opens the account deletion request screen"
             style={[styles.deleteRow, { backgroundColor: colors.card, borderColor: colors.danger }]}
           >
-            <Ionicons name="trash-outline" size={20} color={colors.danger} />
+            <Glyph name="trash-outline" size={20} color={colors.danger} />
             <View style={styles.deleteCopy}>
               <Text style={[styles.deleteTitle, { color: colors.danger }]}>Delete account</Text>
               <Text style={{ color: colors.inkSecondary }}>Request deletion of your account and trip history</Text>
