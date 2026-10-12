@@ -984,6 +984,15 @@ test('saveDriverInfo validates quiz, calls API signup, and falls back to direct 
     () => saveDriverInfo(sb, { id: 'u1' }, { hasCar: true, hasInsurance: true, attestationAccepted: false }),
     /Confirm that you carry valid auto insurance\./,
   )
+  await assert.rejects(
+    () => saveDriverInfo(sb, { id: 'u1', email: 'driver@clemson.edu' }, {
+      hasCar: true,
+      hasInsurance: true,
+      attestationAccepted: true,
+      titleStatus: 'salvage',
+    }),
+    /can't accept a salvage title/,
+  )
 
   const validPayload = {
     hasCar: true,
@@ -995,6 +1004,7 @@ test('saveDriverInfo validates quiz, calls API signup, and falls back to direct 
     model: 'Civic',
     plate: 'ABC-123',
     comfortClass: true,
+    titleStatus: 'clean',
   }
 
   // 3. API happy path
@@ -1320,6 +1330,7 @@ test('approved fallback profile save preserves online status and submit never do
   const saved = await saveDriverInfo(sb, { id: 'approved-driver', email: 'approved@clemson.edu' }, {
     hasCar: true, hasInsurance: true, attestationAccepted: true,
     fullName: 'Approved Driver', phone: '8645550100', make: 'Honda', model: 'Civic', plate: 'TEST',
+    titleStatus: 'rebuilt',
   })
   assert.equal(saved.onboarding_status, 'approved')
   assert.equal(sb.calls.from.some((call) => call.table === 'driver_status'), false)
