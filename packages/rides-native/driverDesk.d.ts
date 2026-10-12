@@ -146,6 +146,8 @@ export type DriverPerks = {
   [key: string]: unknown
 }
 export function loadDriverPerks(supabase: unknown): Promise<DriverPerks>
+export type ReferralSummary = { code: string; link: string; targetTrips: number; bonusCents: number; enabled: boolean; referrals: { status: string; trips: number; target: number }[]; error?: string }
+export function claimDriverReferral(supabase: unknown, code: string): Promise<{ ok: boolean; error?: string }>
 export type CashoutQuote = {
   state: 'needs_setup' | 'already_today' | 'zero_balance' | 'below_fee' | 'ready'
   method?: 'instant' | 'standard'
