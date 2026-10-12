@@ -13,7 +13,7 @@ test('native live trip renders the new sheet only for accepted/arriving and stop
   assert.match(sheet, /if \(scheduled\) return null/)
   assert.match(sheet, /driverCancelTrip\(supabase, tripId, reason/)
   assert.match(sheet, /maxLength=\{200\}/)
-  assert.match(sheet, /Alert.alert\('Trip canceled', DRIVER_CANCEL_SUCCESS\)/)
+  assert.match(sheet, /showToast\(\{ key: 'driver-canceled-self', tone: 'warning', title: 'Trip canceled', body: DRIVER_CANCEL_SUCCESS \}\)/)
 })
 
 test('riders deduplicate cancellation announcements and keep the existing rider controls', () => {

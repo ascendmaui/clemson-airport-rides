@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react'
-import { Alert, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native'
+import { showToast } from 'rides-native/toastStore.js'
+import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { driverCancelTrip } from 'rides-native/driverDesk'
 import { DRIVER_CANCEL_NOTICE, DRIVER_CANCEL_REASONS, DRIVER_CANCEL_SUCCESS, validateDriverCancel } from '../../../shared/driverCancel.js'
@@ -36,7 +37,7 @@ export function DriverCancelSheet({ supabase, tripId, scheduled, disabled, onCan
     }
     setOpen(false)
     onCanceled()
-    Alert.alert('Trip canceled', DRIVER_CANCEL_SUCCESS)
+    showToast({ key: 'driver-canceled-self', tone: 'warning', title: 'Trip canceled', body: DRIVER_CANCEL_SUCCESS })
   }
 
   return <>
