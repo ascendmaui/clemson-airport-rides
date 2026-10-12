@@ -4,18 +4,31 @@
  */
 import { admin, cors, json, parseBody, userFromAuth } from '../friendRideLib.js'
 import { awardBonuses, loadDriverTrips, loadPerkConfig } from '../perks.js'
+import { firstRideDaily } from '../../shared/perks/firstRide.js'
 import { streakProgress } from '../../shared/perks/streaks.js'
 
-export const PERK_CONFIG_KEYS = ['streaks']
+export const PERK_CONFIG_KEYS = ['streaks', 'first_ride_daily']
 
 export async function buildPerks(sb, driverId, { now = new Date() } = {}) {
   const trips = await loadDriverTrips(sb, driverId)
-  const streaks = streakProgress(trips, driverId, await loadPerkConfig(sb, 'streaks', {}), now)
-  await awardBonuses(sb, driverId, streaks.awards).catch((err) => console.error('[perks] award', err.message))
+  const [streakCfg, firstCfg] = await Promise.all([
+    loadPerkConfig(sb, 'streaks', {}),
+    loadPerkConfig(sb, 'first_ride_daily', {}),
+  ])
+  const streaks = streakProgress(trips, driverId, streakCfg, now)
+  const firstRide = firstRideDaily(trips, driverId, firstCfg, now)
+  await awardBonuses(sb, driverId, [...streaks.awards, ...firstRide.awards]).catch((err) => console.error('[perks] award', err.message))
   const ledger = await sb.from('driver_bonus_ledger').select('kind, amount_cents, status, created_at')
     .eq('driver_id', driverId).order('created_at', { ascending: false }).limit(20)
   return {
     streaks: { trips: streaks.trips, days: streaks.days },
+    firstRide: {
+      enabled: firstRide.enabled,
+      bonusCents: firstRide.bonusCents,
+      earned: firstRide.earned,
+      available: firstRide.available,
+      today: firstRide.today,
+    },
     bonuses: (ledger.data || []).map((r) => ({ kind: r.kind, amountCents: r.amount_cents, status: r.status, at: r.created_at })),
   }
 }
@@ -28,7 +41,7 @@ export default async function handleDriverPerks(req, res, deps = {}) {
   const user = deps.user !== undefined ? deps.user : await userFromAuth(req, sb)
   if (!user) return json(res, 401, { error: 'Sign in required' })
   try {
-    if (req.method === 'GET') return json(res, 200, await buildPerks(sb, user.id))
+    if (req.method === 'GET') return json(res, 200, await buildPerks(sb, user.id, { now: deps.now }))
     if (req.method !== 'POST') return json(res, 405, { error: 'Method not allowed' })
     const { body, error } = parseBody(req)
     if (error) return json(res, 400, { error })

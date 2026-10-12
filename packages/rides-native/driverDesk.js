@@ -737,7 +737,9 @@ export async function loadEarnings(supabase, driverId) {
 
 export { formatCents }
 
-/** Driver perks summary (streaks and bonus ledger; later perks add fields). */
+/** Driver perks summary (streaks, first ride of the day, bonus ledger). */
 export async function loadDriverPerks(supabase) {
   return authedJson(supabase, '/api/driver?action=perks')
 }
+
+export { firstRideChipCopy } from '../../shared/perks/firstRide.js'
