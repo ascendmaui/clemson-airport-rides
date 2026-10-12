@@ -4,7 +4,7 @@ export function nativePaymentSheetAvailable() {
   return false
 }
 
-export async function presentNativeSetupSheet(): Promise<NativeSetupResult> {
+export async function presentNativeSetupSheet(_input?: unknown): Promise<NativeSetupResult> {
   return {
     ok: false,
     unavailable: true,

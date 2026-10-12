@@ -146,6 +146,7 @@ export function requestDriverTrip(
     passengers?: number | string | null
     isStudent?: boolean
     note?: string
+    prepaidTipCents?: number
   },
 ): Promise<{ id: string; status: string; driver_id: string | null; dropoff_label?: string; fare_cents?: number | null; deposit_cents?: number | null }>
 

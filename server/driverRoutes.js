@@ -19,6 +19,12 @@ import {
   withVehicleYear,
   writeVehicleWithYearFallback,
 } from '../shared/vehicleYear.js'
+import {
+  allowedTitleStatus,
+  titleStatusRejection,
+  withTitleStatus,
+  writeVehicleWithTitleFallback,
+} from '../shared/vehicleTitle.js'
 
 export async function handleDriverSignup(req, res) {
   if (cors(req, res)) return
@@ -63,6 +69,9 @@ export async function handleDriverSignup(req, res) {
   }
   if (!color) return json(res, 400, { error: 'Vehicle color is required.' })
   if (year == null) return json(res, 400, { error: vehicleYearMessage() })
+  const titleRejection = titleStatusRejection(body)
+  if (titleRejection) return json(res, 400, titleRejection)
+  const titleStatus = allowedTitleStatus(body.titleStatus ?? body.title_status)
 
   const applicantEmail = resolveSignupApplicantEmail(body, user)
   if (!applicantEmail) return json(res, 400, { error: 'A valid email is required.' })
@@ -131,7 +140,7 @@ export async function handleDriverSignup(req, res) {
       .eq('driver_id', user.id)
       .limit(1)
     let vehicle = existingVeh?.[0] || null
-    const vehFields = withVehicleYear({
+    const vehFields = withTitleStatus(withVehicleYear({
       make,
       model,
       color,
@@ -140,13 +149,13 @@ export async function handleDriverSignup(req, res) {
       service_class: body.comfortClass ? 'comfort' : 'standard',
       autonomous_capable: false,
       tier: body.comfortClass ? 'comfort' : 'standard',
-    }, year)
-    const savedVehicle = await writeVehicleWithYearFallback((fields) => {
+    }, year), titleStatus)
+    const savedVehicle = await writeVehicleWithTitleFallback((fields) => writeVehicleWithYearFallback((yearFields) => {
       if (!vehicle) {
-        return sb.from('vehicles').insert({ driver_id: user.id, ...fields }).select('*').single()
+        return sb.from('vehicles').insert({ driver_id: user.id, ...yearFields }).select('*').single()
       }
-      return sb.from('vehicles').update(fields).eq('id', vehicle.id).select('*').single()
-    }, vehFields)
+      return sb.from('vehicles').update(yearFields).eq('id', vehicle.id).select('*').single()
+    }, fields), vehFields)
     if (savedVehicle.error) return json(res, 500, { error: savedVehicle.error.message })
     vehicle = savedVehicle.data
 
