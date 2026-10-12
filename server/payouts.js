@@ -41,6 +41,7 @@ export function buildPayoutRecord(trip) {
     amountCents,
     fareNetCents: earned.fareNetCents,
     boostCents: earned.boostCents,
+    prepaidTipCents: earned.prepaidTipCents,
     waitCents: earned.waitCents,
     tigerHeatBonusCents: earned.tigerHeatBonusCents,
     platformFundedCents: earned.platformFundedCents,
