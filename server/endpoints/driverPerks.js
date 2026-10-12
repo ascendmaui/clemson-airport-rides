@@ -8,8 +8,9 @@ import { streakProgress } from '../../shared/perks/streaks.js'
 import { claimReferral, referralSummary } from '../driverReferral.js'
 import { setLeaderboardOptOut, weeklyLeaderboard } from '../leaderboard.js'
 import { surgeBonusAwards, surgeSummary } from '../surge.js'
+import { partyQueueSummary, setPartyQueueOptIn } from '../partyQueue.js'
 
-export const PERK_CONFIG_KEYS = ['streaks', 'referral', 'leaderboard', 'priority_dispatch', 'game_day_surge']
+export const PERK_CONFIG_KEYS = ['streaks', 'referral', 'leaderboard', 'priority_dispatch', 'game_day_surge', 'party_queue']
 
 export async function buildPerks(sb, driverId, { now = new Date(), firstName = null } = {}) {
   const trips = await loadDriverTrips(sb, driverId)
@@ -22,12 +23,14 @@ export async function buildPerks(sb, driverId, { now = new Date(), firstName = n
     .eq('driver_id', driverId).eq('status', 'completed').gte('completed_at', new Date(Number(now) - 14 * 86400_000).toISOString()).limit(300)
   if (!surgeTrips.error) await awardBonuses(sb, driverId, await surgeBonusAwards(sb, surgeTrips.data, now)).catch((err) => console.error('[perks] surge', err.message))
   const surge = await surgeSummary(sb, now).catch((err) => ({ error: err.message }))
+  const partyQueue = await partyQueueSummary(sb, driverId, now).catch((err) => ({ error: err.message }))
   const leaderboard = await weeklyLeaderboard(sb, driverId, { now }).catch((err) => ({ error: err.message }))
   return {
     streaks: { trips: streaks.trips, days: streaks.days },
     referral,
     leaderboard,
     surge,
+    partyQueue,
     bonuses: (ledger.data || []).map((r) => ({ kind: r.kind, amountCents: r.amount_cents, status: r.status, at: r.created_at })),
   }
 }
@@ -48,6 +51,7 @@ export default async function handleDriverPerks(req, res, deps = {}) {
       const claimed = await claimReferral(sb, user.id, body.code)
       return json(res, claimed.ok ? 200 : 409, claimed)
     }
+    if (body.op === 'party-queue') return json(res, 200, await setPartyQueueOptIn(sb, user.id, body.optIn))
     if (body.op === 'leaderboard-opt-out') return json(res, 200, await setLeaderboardOptOut(sb, user.id, body.optOut))
     if (body.op !== 'config') return json(res, 400, { error: 'Unknown op' })
     const prof = await sb.from('profiles').select('is_admin').eq('id', user.id).maybeSingle()

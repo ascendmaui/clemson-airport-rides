@@ -749,3 +749,7 @@ export async function claimDriverReferral(supabase, code) {
 export async function setLeaderboardOptOut(supabase, optOut) {
   return authedJson(supabase, '/api/driver?action=perks', { method: 'POST', body: { op: 'leaderboard-opt-out', optOut: Boolean(optOut) } })
 }
+
+export async function setPartyQueueOptIn(supabase, optIn) {
+  return authedJson(supabase, '/api/driver?action=perks', { method: 'POST', body: { op: 'party-queue', optIn: Boolean(optIn) } })
+}

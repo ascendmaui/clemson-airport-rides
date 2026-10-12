@@ -5,7 +5,7 @@ import { useCardShadow } from '@/components/chrome'
 import { useAuth } from '@/lib/auth'
 import { supabase } from '@/lib/supabase'
 import { useTheme } from '@/lib/theme'
-import { loadDriverPerks, type DriverPerks, type Leaderboard, type StreakView, type SurgeView } from 'rides-native/driverDesk'
+import { loadDriverPerks, type DriverPerks, type Leaderboard, type StreakView, type SurgeView, type PartyQueueView, setPartyQueueOptIn } from 'rides-native/driverDesk'
 
 const dollars = (cents: number) => `$${(cents / 100).toFixed(cents % 100 ? 2 : 0)}`
 
@@ -31,6 +31,32 @@ export function PerksStrip() {
     chips.push(
       <Pressable key="surge" onPress={() => router.push('/surge')} accessibilityRole="button" accessibilityLabel={`Game-day surge zone ${z.label || z.title}. ${when}`}>
         <PerkChip title={`${z.live ? 'Surge now' : 'Surge soon'} · ${z.label || z.title}`} line={`${when}${surge.driverBonusCents ? ` · +${dollars(surge.driverBonusCents)}/trip` : ''}`} />
+      </Pressable>,
+    )
+  }
+  const party = perks.partyQueue as PartyQueueView | undefined
+  if (party?.enabled) {
+    const hours = `${party.startHour % 12 || 12}${party.startHour >= 12 ? 'pm' : 'am'}–${party.endHour % 12 || 12}${party.endHour >= 12 ? 'pm' : 'am'}`
+    chips.push(
+      <Pressable
+        key="party"
+        accessibilityRole="switch"
+        accessibilityState={{ checked: party.optedIn }}
+        accessibilityLabel={`Party-ride queue, ${party.label}. ${party.optedIn ? 'On' : 'Off'}`}
+        accessibilityHint="Turns late-night party pickups on or off"
+        onPress={() => {
+          if (!supabase) return
+          const next = !party.optedIn
+          setPerks({ ...perks, partyQueue: { ...party, optedIn: next } })
+          setPartyQueueOptIn(supabase, next).then(() => loadDriverPerks(supabase!).then(setPerks)).catch(() => setPerks(perks))
+        }}
+      >
+        <PerkChip
+          title={`Party queue · ${party.optedIn ? 'On' : 'Off'}`}
+          line={party.optedIn
+            ? party.open ? `${party.label} · you’re #${party.position} of ${party.size}` : `${party.label} · opens ${hours}`
+            : `Tap to join ${party.label} late-night pickups`}
+        />
       </Pressable>,
     )
   }

@@ -4,6 +4,7 @@ import { isDemoDriverId } from '../shared/demoFleet.js'
 import { isSimulatedDriverId } from '../packages/rides-native/simulatedDrivers.js'
 import { isBusyRosterId } from '../packages/rides-native/busyRoster.js'
 import { surgeExtraBoost } from './surge.js'
+import { partyExtraBoost } from './partyQueue.js'
 
 export const isFakeDriver = (id) => isDemoDriverId(id) || isSimulatedDriverId(id) || isBusyRosterId(id)
 
@@ -32,7 +33,13 @@ export async function loadPriorityStats(sb, ids) {
 export async function boostAssignableDrivers(sb, drivers, { extraBoost = null, pickup = null } = {}) {
   if (!sb || !Array.isArray(drivers) || drivers.length < 2) return drivers
   try {
-    if (!extraBoost && pickup) extraBoost = await surgeExtraBoost(sb, pickup, drivers).catch(() => null)
+    if (!extraBoost && pickup) {
+      const parts = (await Promise.all([
+        surgeExtraBoost(sb, pickup, drivers).catch(() => null),
+        partyExtraBoost(sb, pickup).catch(() => null),
+      ])).filter(Boolean)
+      if (parts.length) extraBoost = (d) => parts.reduce((sum, fn) => sum + (Number(fn(d)) || 0), 0)
+    }
     const cfg = await config(sb, 'priority_dispatch')
     const priorityOn = cfg && cfg.enabled !== false
     const stats = priorityOn ? await loadPriorityStats(sb, drivers.map((d) => d.id)) : null
