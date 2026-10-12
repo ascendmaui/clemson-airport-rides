@@ -7,6 +7,7 @@ import { sweepWaitAutoCancel } from '../waitAutoCancelSweep.js'
 import { sweepWaitFeeCharge } from '../waitFeeChargeSweep.js'
 import { sweepTripStatusNotices } from '../tripStatusNotices.js'
 import { sweepSearchTimeouts } from '../searchTimeoutSweep.js'
+import { sweepFlightArrivals } from '../flightArrivalsSweep.js'
 import { sweepEventDriverNudges } from '../eventDriverNudges.js'
 
 export const SWEEPS = [
@@ -16,6 +17,8 @@ export const SWEEPS = [
   // Before the notice drain so the rider's push goes out on the same tick.
   { name: 'search-timeout', run: sweepSearchTimeouts },
   { name: 'trip-status-notices', run: sweepTripStatusNotices },
+  // Airport arrivals: provider ingest every 5 min, rider landing times, driver staging pushes.
+  { name: 'flight-arrivals', run: sweepFlightArrivals },
   // Clemson calendar: one pre-event supply push per event, drivers only.
   { name: 'event-driver-nudges', run: sweepEventDriverNudges },
 ]

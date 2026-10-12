@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Card, Primary } from '@/components/chrome'
 import { CampusEventsCard } from '@/components/CampusEventsCard'
 import { useTheme } from '@/lib/theme'
+import { FlightsLandingCard } from '@/components/FlightsLandingCard'
 import { supabase } from '@/lib/supabase'
 import { loadGameDay } from 'rides-native/driverDesk'
 import { gameDayNotice, type GameDayNotice } from 'rides-native/gameDayNotice.js'
@@ -142,6 +143,7 @@ export default function DiscoverScreen() {
             </View>
           </Card>
         ))}
+        <FlightsLandingCard airport="GSP" />
         <Primary label="Open the ride queue" onPress={() => router.push('/queue')} />
       </ScrollView>
     </View>
