@@ -270,3 +270,16 @@ test('two reserves cannot both spend the same margin', async () => {
   const ledger = await loadLedger(null)
   assert.ok(ledger.marginCents >= 0)
 })
+
+test('live pickup density ignores e2e, QA, and canceled trips', async () => {
+  const { loadPickupRequests } = await import('./tigerHeatService.js')
+  const rows = [
+    { id: '1', pickup_lat: 34.68, pickup_lng: -82.83, created_at: new Date().toISOString(), status: 'searching', metadata: {} },
+    { id: '2', pickup_lat: 34.68, pickup_lng: -82.83, created_at: new Date().toISOString(), status: 'searching', metadata: { e2e_test: true } },
+    { id: '3', pickup_lat: 34.68, pickup_lng: -82.83, created_at: new Date().toISOString(), status: 'completed', metadata: { qa_canceled: true } },
+    { id: '4', pickup_lat: 34.68, pickup_lng: -82.83, created_at: new Date().toISOString(), status: 'canceled', metadata: null },
+  ]
+  const sb = { from: () => ({ select: () => Promise.resolve({ data: rows, error: null }) }) }
+  const points = await loadPickupRequests(sb, new Date(Date.now() - 60000).toISOString())
+  assert.equal(points.length, 1)
+})

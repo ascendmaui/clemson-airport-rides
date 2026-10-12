@@ -1,6 +1,6 @@
 /**
  * POST /api/driver?action=signup|submit-review|offer-preview|tip|tip-choice|wait|trip-status|trip-stop|cancel-midride|payouts|cards
- * GET  /api/driver?action=earnings|payouts|app-config
+ * GET  /api/driver?action=earnings|payouts|app-config|forecast
  * Legacy paths are rewritten in vercel.json.
  * trip-wait body.action (arrive|tick|cancel|start|complete) is a sub-action, not the route.
  */
@@ -25,6 +25,7 @@ import { handleSignAgreement } from '../server/agreementHttp.js'
 import handleAppConfig from '../server/endpoints/appConfig.js'
 import handleBackupQueue from '../server/endpoints/backupQueue.js'
 import handleDriverCashout from '../server/endpoints/driverCashout.js'
+import handleEarningsForecast from '../server/endpoints/earningsForecast.js'
 
 const HANDLERS = {
   'app-config': handleAppConfig,
@@ -48,6 +49,7 @@ const HANDLERS = {
   'sign-agreement': handleSignAgreementRoute,
   'backup-queue': handleBackupQueue,
   cashout: handleDriverCashout,
+  forecast: handleEarningsForecast,
 }
 
 const LEGACY = {
@@ -67,7 +69,7 @@ export default async function handler(req, res, ...rest) {
   const handle = HANDLERS[action]
   if (!handle) {
     return json(res, 400, {
-      error: 'Unknown driver action. Use action=signup, submit-review, earnings, offer-preview, tip, tip-choice, wait, trip-status, trip-stop, cancel-midride, payouts, inbox, cards, mark-offered, pass-offer, sign-agreement, backup-queue, cashout, trip-sweeps, or app-config.',
+      error: 'Unknown driver action. Use action=signup, submit-review, earnings, offer-preview, tip, tip-choice, wait, trip-status, trip-stop, cancel-midride, payouts, inbox, cards, mark-offered, pass-offer, sign-agreement, backup-queue, cashout, trip-sweeps, forecast, or app-config.',
     })
   }
   return handle(req, res, ...rest)

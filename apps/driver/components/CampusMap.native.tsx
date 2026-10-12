@@ -1,13 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
-import { Platform, StyleSheet, Text, View } from 'react-native'
+import { AccessibilityInfo, Animated, Easing, Platform, Pressable, StyleSheet, Text, View } from 'react-native'
 import Constants from 'expo-constants'
-import MapView, { Circle, Marker, Polygon, Polyline, PROVIDER_DEFAULT } from 'react-native-maps'
+import MapView, { Circle, Marker, Polyline, PROVIDER_DEFAULT } from 'react-native-maps'
 import { ANDROID_MAP_UNAVAILABLE, googleMapStyle, nativeMapTilesReady } from 'rides-native/googleMapChrome.js'
 import { heatColor } from 'rides-native/heat.js'
 import { DOWNTOWN, ORANGE, PURPLE, STADIUM } from 'rides-native/places.js'
 import type { BusySpot } from '@/lib/busySpots'
-import { fetchTigerHeatMap } from 'rides-native/tigerHeatClient.js'
-import { toNativeRing, type TigerHeatZone } from 'rides-native/tigerHeat.js'
+import { describeCell, type DemandCell } from 'rides-native/demandHeat.js'
+import { DemandHeatLayer } from './DemandHeatLayer'
 import type { MapPin } from './CampusMap'
 
 function rgba(hex: string, alpha: number) {
@@ -32,6 +32,8 @@ export function CampusMap({
   lockOnCenter = false,
   onPinPress,
   showsUserLocation = false,
+  demandCells = [],
+  peak = false,
 }: {
   pins?: MapPin[]
   center?: { latitude: number; longitude: number } | null
@@ -46,9 +48,11 @@ export function CampusMap({
   lockOnCenter?: boolean
   onPinPress?: (id: string) => void
   showsUserLocation?: boolean
+  demandCells?: DemandCell[]
+  peak?: boolean
 }) {
   const mapRef = useRef<MapView>(null)
-  const [tigerZones, setTigerZones] = useState<TigerHeatZone[]>([])
+  const [selected, setSelected] = useState<DemandCell | null>(null)
   const pinsRef = useRef(pins)
   const centerRef = useRef(center)
   pinsRef.current = pins
@@ -63,23 +67,43 @@ export function CampusMap({
 
   const pinKey = (pins || []).map((pin: MapPin) => `${pin.id}:${pin.latitude.toFixed(4)},${pin.longitude.toFixed(4)}`).join('|')
   const centerKey = center ? `${center.latitude.toFixed(4)},${center.longitude.toFixed(4)}` : ''
-  const heatKey = showHeat ? spots.map((spot: BusySpot) => spot.id).join('|') : ''
+  const heatKey = showHeat ? heatWindow : ''
 
   useEffect(() => {
-    if (!showHeat) {
-      setTigerZones([])
+    if (!showHeat) setSelected(null)
+  }, [showHeat])
+
+  // Keep the tapped card in sync with fresh data; drop it if the zone cooled off.
+  const live = selected ? demandCells.find((cell: DemandCell) => cell.id === selected.id && !cell.fading) || null : null
+  const info = live ? describeCell(live, center ? { lat: center.latitude, lng: center.longitude } : null) : null
+  const cardIn = useRef(new Animated.Value(0)).current
+  const darkMap = colorScheme === 'dark'
+
+  useEffect(() => {
+    if (!live) {
+      cardIn.setValue(0)
       return undefined
     }
-    let alive = true
-    fetchTigerHeatMap(heatWindow).then((result) => {
-      if (alive) setTigerZones(result.zones || [])
-    }).catch(() => {
-      if (alive) setTigerZones([])
-    })
-    return () => {
-      alive = false
+    let cancelled = false
+    const play = (reduce: boolean) => {
+      if (cancelled) return
+      if (reduce) {
+        cardIn.setValue(1)
+        return
+      }
+      cardIn.setValue(0)
+      Animated.timing(cardIn, {
+        toValue: 1,
+        duration: 220,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }).start()
     }
-  }, [showHeat, heatWindow])
+    const pending = AccessibilityInfo.isReduceMotionEnabled?.()
+    if (pending && typeof pending.then === 'function') pending.then(play).catch(() => play(false))
+    else play(false)
+    return () => { cancelled = true }
+  }, [cardIn, live?.id])
 
   useEffect(() => {
     if (!mapRef.current) return
@@ -156,51 +180,18 @@ export function CampusMap({
         pitchEnabled={false}
         showsUserLocation={showsUserLocation}
       >
-        {showHeat
-          ? tigerZones.map((zone: TigerHeatZone) => (
-              <Polygon
-                key={`tiger-${zone.id}`}
-                coordinates={toNativeRing(zone.polygon)}
-                fillColor={zone.preview ? 'rgba(245,102,0,0.18)' : 'rgba(245,102,0,0.36)'}
-                strokeColor="#522D80"
-                strokeWidth={2}
-              />
-            ))
-          : null}
-        {showHeat
-          ? tigerZones.map((zone: TigerHeatZone) => (
-              <Polygon
-                key={`tiger-inner-${zone.id}`}
-                coordinates={toNativeRing(zone.innerPolygon)}
-                fillColor="rgba(82,45,128,0.2)"
-                strokeColor="#F56600"
-                strokeWidth={1}
-              />
-            ))
-          : null}
-        {showHeat
-          ? tigerZones.map((zone: TigerHeatZone) => (
-              <Marker
-                key={`tiger-label-${zone.id}`}
-                coordinate={{ latitude: zone.lat, longitude: zone.lng }}
-                anchor={{ x: 0.5, y: 0.5 }}
-                tracksViewChanges={false}
-              >
-                <View style={[styles.tigerChip, zone.preview ? styles.tigerChipPreview : null]}>
-                  <Text style={styles.tigerChipText}>{zone.bonusLabel}</Text>
-                </View>
-              </Marker>
-            ))
-          : null}
-        {showHeat
-          ? spots.map((spot: BusySpot) => (
+        {showHeat ? (
+          <DemandHeatLayer cells={demandCells} scheme={colorScheme} onPress={setSelected} />
+        ) : null}
+        {showHeat && !demandCells.length
+          ? spots.slice(0, 12).map((spot: BusySpot) => (
               <Circle
                 key={spot.id}
                 center={{ latitude: spot.lat, longitude: spot.lng }}
                 radius={spot.radius}
-                fillColor={rgba(heatColor(spot.intensity), 0.28)}
-                strokeColor={heatColor(spot.intensity)}
-                strokeWidth={1}
+                fillColor={rgba(heatColor(spot.intensity), colorScheme === 'dark' ? 0.22 : 0.16)}
+                strokeColor="transparent"
+                strokeWidth={0}
               />
             ))
           : null}
@@ -237,6 +228,40 @@ export function CampusMap({
           />
         ))}
       </MapView>
+      {showHeat && peak ? (
+        <View pointerEvents="none" style={styles.peakBadge}>
+          <Text style={styles.peakText}>Peak mode · 30 min window</Text>
+        </View>
+      ) : null}
+      {info ? (
+        <Animated.View
+          style={[
+            styles.heatCard,
+            {
+              backgroundColor: darkMap ? '#16121F' : '#FFFFFF',
+              borderColor: darkMap ? 'rgba(255,255,255,0.14)' : 'rgba(82,45,128,0.12)',
+              opacity: cardIn,
+              transform: [{ translateY: cardIn.interpolate({ inputRange: [0, 1], outputRange: [8, 0] }) }],
+            },
+          ]}
+          accessibilityRole="summary"
+          accessibilityLabel={`${info.title}. ${info.estimate}. ${info.distance || ''}`}
+        >
+          <Text style={[styles.heatCardTitle, { color: darkMap ? '#FFFFFF' : '#1B1B1F' }]}>{info.title}</Text>
+          <Text style={[styles.heatCardEstimate, { color: darkMap ? '#FFC9A3' : '#9A3F00' }]}>{info.estimate}</Text>
+          {info.detail ? <Text style={[styles.heatCardDetail, { color: darkMap ? '#D5D0DC' : '#3E4654' }]}>{info.detail}</Text> : null}
+          {info.distance ? <Text style={[styles.heatCardDetail, { color: darkMap ? '#D5D0DC' : '#3E4654' }]}>{info.distance}</Text> : null}
+          <Pressable
+            onPress={() => setSelected(null)}
+            style={styles.heatCardClose}
+            accessibilityRole="button"
+            accessibilityLabel="Close demand details"
+            hitSlop={8}
+          >
+            <Text style={[styles.heatCardCloseText, { color: darkMap ? '#FFC9A3' : '#9A3F00' }]}>Close</Text>
+          </Pressable>
+        </Animated.View>
+      ) : null}
       {gameDay ? (
         <View pointerEvents="none" style={styles.zone}>
           <Text style={styles.zoneText}>{gameDayLabel || 'Game day'}</Text>
@@ -248,6 +273,26 @@ export function CampusMap({
 
 const styles = StyleSheet.create({
   fill: { flex: 1 },
+  peakBadge: {
+    position: 'absolute', top: 108, alignSelf: 'center',
+    paddingHorizontal: 14, paddingVertical: 8, borderRadius: 999,
+    backgroundColor: '#522D80',
+    borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(255,255,255,0.28)',
+    shadowColor: '#522D80', shadowOpacity: 0.28, shadowRadius: 14, shadowOffset: { width: 0, height: 6 },
+    elevation: 4,
+  },
+  peakText: { color: '#FFFFFF', fontWeight: '700', fontSize: 12, letterSpacing: 0.3 },
+  heatCard: {
+    position: 'absolute', left: 16, right: 16, top: 156,
+    borderRadius: 22, padding: 16, paddingRight: 88, borderWidth: 1,
+    shadowColor: '#1A1033', shadowOpacity: 0.16, shadowRadius: 24, shadowOffset: { width: 0, height: 12 },
+    elevation: 8,
+  },
+  heatCardTitle: { fontSize: 17, fontWeight: '700', letterSpacing: -0.3 },
+  heatCardEstimate: { fontSize: 14, fontWeight: '700', marginTop: 4, letterSpacing: -0.1 },
+  heatCardDetail: { fontSize: 13, lineHeight: 18, marginTop: 6 },
+  heatCardClose: { position: 'absolute', right: 6, top: 6, minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
+  heatCardCloseText: { fontWeight: '700', fontSize: 13, letterSpacing: 0.2 },
   unavailable: {
     alignItems: 'center',
     justifyContent: 'center',

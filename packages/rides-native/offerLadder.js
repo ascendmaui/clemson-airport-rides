@@ -169,16 +169,22 @@ export function lockedOfferEconomics(trip) {
   return view
 }
 
-export function offerHourly(card, driver) {
+/** Net payout (no tips) plus pickup/trip seconds behind the offer's hourly rate. */
+export function offerLegs(card, driver) {
   const priced = ladderOfferNet(card)
-  const net = (priced ? priced.netCents : fareCentsOf(card)) + driverBoostShareCents(readBoostCents(card))
+  const netCents = (priced ? priced.netCents : fareCentsOf(card)) + driverBoostShareCents(readBoostCents(card))
   const pickup = card?.pickupLat != null && card?.pickupLng != null ? [Number(card.pickupLat), Number(card.pickupLng)] : null
   const drop = card?.dropoffLat != null && card?.dropoffLng != null ? [Number(card.dropoffLat), Number(card.dropoffLng)] : null
   const self = driver?.lat != null && driver?.lng != null ? [Number(driver.lat), Number(driver.lng)] : null
   const toPickup = self && pickup ? estimateLeg(self, pickup) : null
   const routed = Number(card?.routeDurationS)
   const trip = Number.isFinite(routed) && routed > 0 ? { seconds: routed } : (pickup && drop ? estimateLeg(pickup, drop) : null)
-  return hourlyRateCents(net, toPickup?.seconds || 0, trip?.seconds || 0)
+  return { netCents, pickupSeconds: toPickup?.seconds || 0, tripSeconds: trip?.seconds || 0 }
+}
+
+export function offerHourly(card, driver) {
+  const legs = offerLegs(card, driver)
+  return hourlyRateCents(legs.netCents, legs.pickupSeconds, legs.tripSeconds)
 }
 
 export function formatHourlyRate(cents) {

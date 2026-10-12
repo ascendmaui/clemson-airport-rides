@@ -16,6 +16,7 @@ import { carpoolPayFromTrip, tripEarnedCents, tripPayoutCents, weekNetCents } fr
 import { driverBoostShareCents, readBoostCents } from '../../../../shared/scheduledBoost.js'
 import { instantCashout, loadCashoutQuote, loadEarnings, type CashoutQuote } from 'rides-native/driverDesk'
 import { CASHOUT_COPY } from '../../../../shared/cashout.js'
+import { readPrepaidTipCents } from '../../../../shared/prepaidTip.js'
 
 type EarningsState = Awaited<ReturnType<typeof loadEarnings>> | null
 
@@ -104,6 +105,7 @@ export default function EarningsHub() {
   let platform = 0
   let other = 0
   let boostSum = 0
+  let tips = 0
   let carpoolBonus = false
   for (const trip of data?.trips || []) {
     if (trip.status === 'cancelled_wait') {
@@ -121,9 +123,10 @@ export default function EarningsHub() {
     boostSum += boost
     platform += Math.max(0, fare + (trip.wait_fee_cents || 0) - net)
     const payments = (data?.paymentsByTrip?.[trip.id] || []) as TipPayment[]
-    other += tipCentsFromPayments(payments)
+    // Tips (after-ride and prepaid tip boost) are 100% the driver's, shown on their own slice.
+    tips += tipCentsFromPayments(payments) + readPrepaidTipCents(trip)
   }
-  const standard = you + platform + other + boostSum <= 0
+  const standard = you + platform + other + boostSum + tips <= 0
   const segments = standard
     ? [
         { label: 'You', value: 80, color: legendColor(colors, 'you') },
@@ -134,6 +137,7 @@ export default function EarningsHub() {
         { label: 'You', value: you, color: legendColor(colors, 'you') },
         { label: 'Clemson RIDES', value: platform, color: legendColor(colors, 'platform') },
         { label: 'Boost', value: boostSum, color: '#F56600' },
+        { label: 'Tips (100% yours)', value: tips, color: '#22A04B' },
         { label: 'Other', value: other, color: legendColor(colors, 'other') },
       ]
 
@@ -220,8 +224,8 @@ export default function EarningsHub() {
                   {standard
                     ? 'No completed trips yet. The chart shows the standard split until one is on file. You keep 80%.'
                     : carpoolBonus
-                      ? 'Completed trips on this account. Carpool totals are your base net plus the carpool bonus. Tips, when present, sit in Other.'
-                      : 'Completed trips on this account. You keep 80% of the fare. Boost is shown separately and is not in the platform fee. Tips, when present, sit in Other.'}
+                      ? 'Completed trips on this account. Carpool totals are your base net plus the carpool bonus. Tips are 100% yours and shown on their own.'
+                      : 'Completed trips on this account. You keep 80% of the fare. Boost is shown separately and is not in the platform fee. Tips are 100% yours and shown on their own.'}
                 </Text>
                 {earningsPrivate ? (
                   <SoftNote>Amounts are hidden on this phone. Turn off Make earnings private in Settings to see the split.</SoftNote>
