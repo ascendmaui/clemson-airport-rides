@@ -54,6 +54,7 @@ import { ReceiptScreen } from './screens/ReceiptScreen'
 import { FriendRideScreen } from './screens/FriendRide'
 import { CarpoolScreen } from './screens/CarpoolScreen'
 import { CarpoolHub } from './screens/CarpoolHub'
+import { PartyNightScreen } from './screens/PartyNight'
 import { AmbassadorScreen } from './screens/AmbassadorScreen'
 import { ToastProvider, ToastStack } from './lib/toasts'
 import { RideToastWatcher } from './components/RideToastWatcher'
@@ -277,6 +278,8 @@ function Screen({ path, params }) {
       if (params.drive === '1') return <CarpoolScreen token="" />
       if (params.token && params.hub !== '1') return <CarpoolScreen token={params.token} />
       return <CarpoolHub />
+    case 'party-night':
+      return <PartyNightScreen token={params.token || ''} />
     case 'ambassador':
     case 'a':
       return <AmbassadorScreen code={params.code || ''} />
