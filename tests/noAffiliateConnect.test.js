@@ -12,8 +12,8 @@ import {
 import { AFFILIATE_RATES_DEFAULTS } from '../shared/affiliates/config.js'
 
 const programSql = readFileSync(new URL('../supabase/migrations/20261012200000_affiliate_program.sql', import.meta.url), 'utf8')
-const connectSql = readFileSync(new URL('../supabase/migrations/20261012210000_affiliate_connect.sql', import.meta.url), 'utf8')
-const optionSql = readFileSync(new URL('../supabase/migrations/20261012220000_affiliate_option_c.sql', import.meta.url), 'utf8')
+const connectSql = readFileSync(new URL('../supabase/migrations/20261012230000_affiliate_connect.sql', import.meta.url), 'utf8')
+const optionSql = readFileSync(new URL('../supabase/migrations/20261012231000_affiliate_option_c.sql', import.meta.url), 'utf8')
 const U = (n) => `00000000-0000-0000-0000-${String(n).padStart(12, '0')}`
 
 function memorySb(tables) {
