@@ -11,6 +11,7 @@ import { useAuth } from '@/lib/auth'
 import { supabase } from '@/lib/supabase'
 import { loadTigerPass, TIGER_PASS_NAME, type TigerPassStatus } from 'rides-native/tigerPassClient'
 import { oneParam } from '@/lib/oneParam'
+import { RideTypeInfoButton } from 'rides-native/RideTypeSheet'
 import { bookableRideTiers, formatUsd } from 'rides-native/places.js'
 import { rideTypeIconName } from 'rides-native/rideTypeIcons.js'
 import { displayTierPrice, fetchRideQuote, studentSurfaceCopy, withTigerPassQuote, type AirportQuote } from 'rides-native/riderMoney.js'
@@ -128,6 +129,7 @@ export default function RideTiers() {
           <Text style={styles.kicker}>To {dest}</Text>
           <Text style={styles.sub}>Pickup {pickup}</Text>
         </View>
+        <RideTypeInfoButton colors={colors} selectedId={selected} />
       </View>
       <Pressable
         onPress={() => router.push(user ? '/student' : '/sign-in')}

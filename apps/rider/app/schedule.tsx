@@ -27,6 +27,7 @@ import {
   type ScheduledRow,
 } from '@/lib/scheduleApi'
 import { supabase } from '@/lib/supabase'
+import { RideTypeInfoButton } from 'rides-native/RideTypeSheet'
 import { formatUsd } from 'rides-native/places.js'
 import type { Palette } from '@/lib/palette'
 import { useTheme } from '@/lib/theme'
@@ -880,7 +881,10 @@ function ScheduleScreen() {
         ) : (
           <Text style={styles.fine}>Drop-off is {weekendDestination.label}.</Text>
         )}
-        <Text style={styles.label}>Vehicle</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+          <Text style={styles.label}>Vehicle</Text>
+          <RideTypeInfoButton colors={colors} selectedId={fleet} />
+        </View>
         <View style={styles.pills}>
           <Pill label="Standard" active={fleet === 'standard'} onPress={() => chooseFleet('standard')} />
           <Pill label="Wait & Save" active={fleet === 'wait'} onPress={() => chooseFleet('wait')} />

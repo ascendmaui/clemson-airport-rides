@@ -9,6 +9,7 @@ import { createScheduledTrip, fetchScheduleSlots, type RidePlace } from '@/lib/s
 import type { Palette } from '@/lib/palette'
 import { useTheme } from '@/lib/theme'
 import { useThemedStyles } from '@/lib/useThemedStyles'
+import { RideTypeInfoButton } from 'rides-native/RideTypeSheet'
 import { RIDE_PLACES } from 'rides-native/riderShell.js'
 import { NEAR_TERM_MAX_MINUTES, NEAR_TERM_MIN_MINUTES } from '../../../shared/nearTermSlots.js'
 
@@ -117,6 +118,10 @@ export function NearTermSlots() {
       <Text style={styles.kicker}>LEAVE SOON</Text>
       <Text style={styles.title}>Leave in {NEAR_TERM_MIN_MINUTES}–{NEAR_TERM_MAX_MINUTES} minutes</Text>
       <Text style={styles.copy}>Times follow the current wait from drivers who are online. Preview cars are not counted.</Text>
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+        <Text style={styles.label}>Ride type</Text>
+        <RideTypeInfoButton colors={colors} selectedId={tier} />
+      </View>
       <View style={styles.pills}>
         {TIERS.map((option) => (
           <Pill key={option.id} label={option.name} active={tier === option.id} onPress={() => setTier(option.id)} />

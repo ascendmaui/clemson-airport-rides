@@ -55,6 +55,7 @@ import { driverGateView } from 'rides-native/driverGateView'
 import { loadCounterpart } from 'rides-native/partyProfile.js'
 import { offerCardViewModel } from 'rides-native/offerCard'
 import { EXCLUSIVE_SECONDS, exclusiveSecondsLeft, formatHourlyRate, offerHourly, poolSecondsLeft } from 'rides-native/offerLadder.js'
+import { WorthItLegend } from 'rides-native/WorthItLegend'
 
 /** Home map overlay grid: screen-edge gutter, spacing between floating pieces, clearance under the status bar. */
 const EDGE = 16
@@ -679,7 +680,8 @@ export function RideCard({
   const secondsLeft = exclusiveLeft ?? poolLeft
   const pulsing = exclusiveLeft != null && exclusiveLeft > 0
   const vm = offerCardViewModel(secondsLeft == null ? card : { ...card, secondsLeft })
-  const hourly = formatHourlyRate(offerHourly(card, driver).hourlyCents)
+  const hourlyQuote = offerHourly(card, driver)
+  const hourly = formatHourlyRate(hourlyQuote.hourlyCents)
   const preferredNote = preferredRequestNote(card)
   const opacity = useState(() => new Animated.Value(0))[0]
   const glow = useRef(new Animated.Value(0.35)).current
@@ -765,6 +767,7 @@ export function RideCard({
           <Text style={{ color: colors.orange, fontWeight: '800' }} accessibilityLabel={`Hourly rate ${hourly}`}>
             {hourly}
           </Text>
+          <WorthItLegend hourlyCents={hourlyQuote.hourlyCents} colors={colors} />
           {vm.badges.length > 0 ? (
             <View style={styles.tags}>
               {vm.badges.map((b: { id: string; label: string; tone?: 'orange' | 'purple' }) => (
