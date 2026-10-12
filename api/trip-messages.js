@@ -1,19 +1,20 @@
 /**
- * POST /api/trip-messages?action=message|lost-item
+ * POST /api/trip-messages?action=message|lost-item|dispute|dispute-summary
  * Notifies the other party. Inserts stay on trip_messages under RLS.
  */
 import { admin, cors, json, parseBody, userFromAuth } from '../server/friendRideLib.js'
 import { resolveRouteAction } from '../server/routeAction.js'
 import { notifyTripCounterpart } from '../server/tripMessageNotify.js'
+import { handleDispute } from '../server/endpoints/tripDispute.js'
 
-const ACTIONS = ['message', 'lost-item']
+const ACTIONS = ['message', 'lost-item', 'dispute', 'dispute-summary']
 
 export default async function handler(req, res, deps = {}) {
   if (cors(req, res)) return
   if (req.method !== 'POST') return json(res, 405, { error: 'Method not allowed' })
   const action = resolveRouteAction(req, { allowed: ACTIONS, legacy: {} })
   if (!ACTIONS.includes(action)) {
-    return json(res, 400, { error: 'Use action=message or action=lost-item.' })
+    return json(res, 400, { error: 'Use action=message, lost-item, dispute, or dispute-summary.' })
   }
   const sb = deps.sb || admin()
   if (!sb) return json(res, 503, { error: 'SUPABASE_SERVICE_ROLE_KEY not configured' })
@@ -21,6 +22,14 @@ export default async function handler(req, res, deps = {}) {
   if (!user?.id) return json(res, 401, { error: 'Sign in required' })
   const { body, error: parseError } = parseBody(req)
   if (parseError) return json(res, 400, { error: parseError })
+  if (action === 'dispute' || action === 'dispute-summary') {
+    try {
+      return await handleDispute(req, res, { sb, user, body, json, action }, deps)
+    } catch (err) {
+      console.error('[trip-messages] dispute', err?.message || err)
+      return json(res, 500, { error: 'Could not load the dispute.' })
+    }
+  }
   const result = await notifyTripCounterpart({
     sb,
     actorId: user.id,

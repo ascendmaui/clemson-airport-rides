@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Text, View } from 'react-native'
 import { CampusMap, type MapPin } from '@/components/CampusMap'
 import { FarePanel } from '@/components/FarePanel'
+import { DisputeSummaryCard } from '@/components/DisputeSummaryCard'
 import { Card, ErrorText, Primary } from '@/components/chrome'
 import { StackPage } from '@/components/shell'
 import { useAuth } from '@/lib/auth'
@@ -115,6 +116,7 @@ export default function TripDetailsScreen() {
           )}
           <Text style={{ color: colors.inkSecondary }}>Thanks notes are not sent from the driver app yet.</Text>
           {trip.status !== 'cancelled_wait' ? <FarePanel card={trip} /> : null}
+          <DisputeSummaryCard tripId={trip.id} />
           {user ? (
             <TripThread supabase={supabase} tripId={trip.id} userId={user.id} colors={colors} promptLostItem={lost} />
           ) : null}
