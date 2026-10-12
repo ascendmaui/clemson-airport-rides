@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs'
 import { PGlite } from '@electric-sql/pglite'
 
 const migration = readFileSync(
-  new URL('../supabase/migrations/20261012130000_ride_demand_privacy.sql', import.meta.url),
+  new URL('../supabase/migrations/20261012111826_ride_demand_privacy.sql', import.meta.url),
   'utf8',
 )
 const RIDER = '00000000-0000-4000-8000-000000000001'

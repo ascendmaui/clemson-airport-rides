@@ -1,3 +1,4 @@
+import { Glyph, PressScale } from 'rides-native/icons'
 import type { ReactNode } from 'react'
 import { useMemo } from 'react'
 import { Pressable, StyleSheet, Text, TextInput, View, type StyleProp, type ViewStyle } from 'react-native'
@@ -27,7 +28,7 @@ export function BackButton({ onPress }: { onPress: () => void }) {
       accessibilityHint="Navigates to previous screen"
       hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
     >
-      <Text style={[styles.backLabel, { color: colors.title }]}>←</Text>
+      <Glyph name="back" size={20} color={colors.title} accessibilityLabel="Back" />
     </Pressable>
   )
 }
@@ -39,10 +40,12 @@ export function Primary({
   tone = 'orange',
   accessibilityLabel,
   accessibilityRole = 'button',
+  icon,
 }: {
   label: string
   onPress: () => void
   disabled?: boolean
+  icon?: string
   tone?: 'orange' | 'purple' | 'ghost'
   accessibilityLabel?: string
   accessibilityRole?: 'button' | 'link'
@@ -52,24 +55,22 @@ export function Primary({
   const background = tone === 'orange' ? colors.orange : tone === 'purple' ? colors.fill : colors.card
   const color = tone === 'ghost' ? colors.title : colors.onAccent
   return (
-    <Pressable
+    <PressScale
       onPress={onPress}
       disabled={disabled}
       accessibilityRole={accessibilityRole}
       accessibilityLabel={accessibilityLabel || label}
       accessibilityState={{ disabled: Boolean(disabled) }}
-      style={({ pressed }) => [
+      scaleTo={disabled ? 1 : 0.97}
+      style={[
         styles.primary,
         tone === 'ghost' ? null : shadow,
-        {
-          backgroundColor: background,
-          opacity: disabled ? 0.55 : pressed ? 0.92 : 1,
-          transform: [{ scale: pressed && !disabled ? 0.985 : 1 }],
-        },
+        { backgroundColor: background, opacity: disabled ? 0.55 : 1, flexDirection: 'row', gap: 8 },
       ]}
     >
+      {icon ? <Glyph name={icon} size={20} color={color} /> : null}
       <Text style={[styles.primaryLabel, { color }]}>{label}</Text>
-    </Pressable>
+    </PressScale>
   )
 }
 

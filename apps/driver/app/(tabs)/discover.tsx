@@ -119,6 +119,14 @@ export default function DiscoverScreen() {
           </Text>
           {game?.detail ? <Text style={{ color: colors.orange, fontWeight: '800' }}>{game.detail}</Text> : null}
           {game ? <Text style={{ color: colors.inkSecondary, lineHeight: 20 }}>{game.body}</Text> : null}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Open game-day prep, hot times, and the fare multiplier"
+            onPress={() => router.push('/game-day')}
+            style={{ marginTop: 8 }}
+          >
+            <Text style={{ color: '#F56600', fontWeight: '800' }}>Prep, hot times, and the fare →</Text>
+          </Pressable>
         </Card>
         <CampusEventsCard />
         {tigerZones.map((zone: TigerHeatZone) => (

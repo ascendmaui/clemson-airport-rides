@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs'
 import { awardBonuses, payBonusLedger } from './perks.js'
 
 test('ledger migration is additive with idempotent award key', () => {
-  const sql = readFileSync(new URL('../supabase/migrations/20261012130000_driver_perks_ledger_streaks.sql', import.meta.url), 'utf8')
+  const sql = readFileSync(new URL('../supabase/migrations/20261012111102_driver_perks_ledger_streaks.sql', import.meta.url), 'utf8')
   assert.match(sql, /unique \(kind, driver_id, ref\)/)
   assert.match(sql, /on conflict \(key\) do nothing/)
   assert.doesNotMatch(sql, /\b(drop table|delete from|truncate)\b/i)

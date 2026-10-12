@@ -54,7 +54,11 @@ import { ReceiptScreen } from './screens/ReceiptScreen'
 import { FriendRideScreen } from './screens/FriendRide'
 import { CarpoolScreen } from './screens/CarpoolScreen'
 import { CarpoolHub } from './screens/CarpoolHub'
+import { PartyNightScreen } from './screens/PartyNight'
 import { AmbassadorScreen } from './screens/AmbassadorScreen'
+import { AffiliatesScreen, AffiliateLanding } from './screens/Affiliates'
+import { AffiliateAdmin } from './screens/AffiliateAdmin'
+import { AffiliateAttributionSync } from './components/AffiliateAttributionSync'
 import { ToastProvider, ToastStack } from './lib/toasts'
 import { RideToastWatcher } from './components/RideToastWatcher'
 import { RiderMatchPopup } from './components/RiderMatchPopup'
@@ -107,6 +111,8 @@ const SITE_ROUTES = new Set([
   'faq',
   'support',
   'get-the-app',
+  'affiliate',
+  'affiliates',
 ])
 
 function Screen({ path, params }) {
@@ -277,9 +283,22 @@ function Screen({ path, params }) {
       if (params.drive === '1') return <CarpoolScreen token="" />
       if (params.token && params.hub !== '1') return <CarpoolScreen token={params.token} />
       return <CarpoolHub />
+    case 'party-night':
+      return <PartyNightScreen token={params.token || ''} />
     case 'ambassador':
     case 'a':
       return <AmbassadorScreen code={params.code || ''} />
+    case 'affiliate':
+    case 'affiliates':
+      return <AffiliatesScreen />
+    case 'r':
+      return <AffiliateLanding />
+    case 'affiliate-admin':
+      return (
+        <RequireAuth>
+          <AffiliateAdmin />
+        </RequireAuth>
+      )
     case 'account':
       return (
         <RequireAuth>
@@ -376,6 +395,7 @@ export default function App() {
       <div className={site ? 'desktop-frame desktop-frame--site' : 'desktop-frame'}>
         <div className={site ? 'app-shell app-shell--site' : 'app-shell'} style={{ position: 'relative', height: '100%' }}>
           <AccessibleErrorBoundary fallback={() => null}><AmbassadorAttributionSync /></AccessibleErrorBoundary>
+          <AccessibleErrorBoundary fallback={() => null}><AffiliateAttributionSync path={path} /></AccessibleErrorBoundary>
           <AccessibleErrorBoundary fallback={() => null}><RideToastWatcher /></AccessibleErrorBoundary>
           <AccessibleErrorBoundary fallback={() => null}><RiderMatchPopup /></AccessibleErrorBoundary>
           <AccessibleErrorBoundary fallback={() => null}><WeeklyCouponNotice /></AccessibleErrorBoundary>

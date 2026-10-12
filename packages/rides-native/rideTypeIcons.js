@@ -1,10 +1,10 @@
-/** Native picker icons use the Ionicons font bundled by @expo/vector-icons. */
-/** @type {Readonly<Record<string, 'car-outline' | 'time-outline' | 'sparkles-outline' | 'people-outline'>>} */
+/** Ride-type glyphs from the shared Clemson RIDES icon set (packages/rides-native/icons). */
+/** @type {Readonly<Record<string, 'standard' | 'waitSave' | 'comfort' | 'carpool'>>} */
 export const RIDE_TYPE_ICONS = Object.freeze({
-  standard: 'car-outline',
-  wait: 'time-outline',
-  comfort: 'sparkles-outline',
-  carpool: 'people-outline',
+  standard: 'standard',
+  wait: 'waitSave',
+  comfort: 'comfort',
+  carpool: 'carpool',
 })
 
 /** @param {string} id */

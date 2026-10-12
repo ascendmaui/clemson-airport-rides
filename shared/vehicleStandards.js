@@ -1,7 +1,7 @@
 /**
  * Clemson RIDES vehicle standards. ONE config shared by:
  *  - rental partner listings (web form, /api/partners, DB trigger in
- *    supabase/migrations/20261012120000_rental_partner_portal.sql)
+ *    supabase/migrations/20261012111402_rental_partner_portal.sql)
  *  - the driver vehicle check (onboarding vehicle step + admin approval).
  * If you change a number here, change the matching constant in the
  * migration trigger (rental_listing_enforce_standards) and the tests.

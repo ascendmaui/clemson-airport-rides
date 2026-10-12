@@ -5,7 +5,7 @@ import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-nati
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { DonutChart, legendColor } from '@/components/charts'
 import { Card, ErrorText, Primary } from '@/components/chrome'
-import { DayHeader, EmptyState, FadeIn, SoftNote } from '@/components/day'
+import { DayHeader, EmptyState, FadeIn, type MenuRow, RowGroup, SoftNote } from '@/components/day'
 import { SectionLabel } from '@/components/shell'
 import { useAuth } from '@/lib/auth'
 import { currentWeekLabel, tipCentsFromPayments, type TipPayment } from '@/lib/earningsMath'
@@ -98,6 +98,11 @@ export default function EarningsHub() {
   }, [refresh, user]))
 
   const payouts = data?.payouts
+  const moneyRows: MenuRow[] = [
+    { icon: 'payout', title: 'Payouts', subtitle: 'Stripe balance and cash out', onPress: () => router.push('/payouts') },
+    { icon: 'tip', title: 'Tips and activity', subtitle: 'Every fare, tip, and boost', onPress: () => router.push('/earnings-activity') },
+    { icon: 'calculator', title: 'Tax info', subtitle: 'W-9 on your application', onPress: () => router.push('/tax') },
+  ]
   const week = weekNetCents(data?.trips || [])
   const pending = Number(payouts?.pendingCents) || 0
   const nextRetry = payouts?.pending?.find((row: unknown) => row && typeof row === 'object' && 'nextRetryAt' in row) as { nextRetryAt?: string } | undefined
@@ -145,7 +150,8 @@ export default function EarningsHub() {
     <View style={[styles.screen, { backgroundColor: colors.background, paddingTop: insets.top + 12 }]}>
       <ScrollView contentContainerStyle={styles.list} showsVerticalScrollIndicator={false}>
         <FadeIn style={{ gap: 12 }}>
-          <DayHeader kicker="CLEMSON RIDES" title="Earnings" />
+          <DayHeader kicker="MONEY" title="Earnings" />
+          {user ? <RowGroup rows={moneyRows} /> : null}
           {!user ? (
             <EmptyState
               icon="cash"

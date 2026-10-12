@@ -1,12 +1,12 @@
+import { Glyph } from 'rides-native/icons'
 import type { ReactNode } from 'react'
 import { useEffect, useRef } from 'react'
-import { Ionicons } from '@expo/vector-icons'
 import { Animated, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native'
 import { Card, useCardShadow } from '@/components/chrome'
 import { ListRow } from '@/components/shell'
 import { useTheme } from '@/lib/theme'
 
-type IconName = keyof typeof Ionicons.glyphMap
+type IconName = string
 
 export type MenuRow = {
   key?: string
@@ -109,7 +109,7 @@ export function EmptyState({
   return (
     <Card>
       <View style={[styles.badge, { backgroundColor: colors.track }]}>
-        <Ionicons name={icon} size={26} color={colors.purple} />
+        <Glyph name={icon} size={26} color={colors.purple} />
       </View>
       <Text style={[styles.emptyTitle, { color: colors.title }]}>{title}</Text>
       <Text style={[styles.emptyBody, { color: colors.inkSecondary }]}>{body}</Text>

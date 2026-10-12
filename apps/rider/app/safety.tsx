@@ -1,3 +1,4 @@
+import { Glyph } from 'rides-native/icons'
 import { useRouter } from 'expo-router'
 import { useState } from 'react'
 import { Linking, Pressable, ScrollView, Text, View } from 'react-native'
@@ -34,7 +35,7 @@ export default function SafetyScreen() {
     <View style={[styles.screen, { paddingTop: insets.top }]}>
       <View style={styles.header}>
         <Pressable accessibilityRole="button" accessibilityLabel="Back" onPress={() => router.back()} style={[styles.back, lift(colors, 'rest')]}>
-          <Text style={styles.backLabel}>←</Text>
+          <Glyph name="back" size={20} color={colors.title} accessibilityLabel="Back" />
         </Pressable>
         <View style={styles.headerCopy}>
           <Text style={styles.kicker}>SAFETY</Text>

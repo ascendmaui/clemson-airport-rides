@@ -5,6 +5,10 @@
       "destination": "/api/stripe-webhook"
     },
     {
+      "source": "/api/stripe/connect-webhook",
+      "destination": "/api/stripe-connect-webhook"
+    },
+    {
       "source": "/api/carpool-match",
       "destination": "/api/carpool?action=match"
     },
@@ -47,6 +51,10 @@
     {
       "source": "/api/friend-rides/:action",
       "destination": "/api/friend-rides?action=:action"
+    },
+    {
+      "source": "/api/party-night/:action",
+      "destination": "/api/party-night?action=:action"
     },
     {
       "source": "/api/driver-signup",
