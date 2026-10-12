@@ -10,8 +10,9 @@ import { setLeaderboardOptOut, weeklyLeaderboard } from '../leaderboard.js'
 import { surgeBonusAwards, surgeSummary } from '../surge.js'
 import { partyQueueSummary, setPartyQueueOptIn } from '../partyQueue.js'
 import { driverSafetyScore } from '../safetyScore.js'
+import { driverScorecard, setMapMarker } from '../scorecard.js'
 
-export const PERK_CONFIG_KEYS = ['streaks', 'referral', 'leaderboard', 'priority_dispatch', 'game_day_surge', 'party_queue', 'safety_score']
+export const PERK_CONFIG_KEYS = ['streaks', 'referral', 'leaderboard', 'priority_dispatch', 'game_day_surge', 'party_queue', 'safety_score', 'scorecard']
 
 export async function buildPerks(sb, driverId, { now = new Date(), firstName = null } = {}) {
   const trips = await loadDriverTrips(sb, driverId)
@@ -26,6 +27,7 @@ export async function buildPerks(sb, driverId, { now = new Date(), firstName = n
   const surge = await surgeSummary(sb, now).catch((err) => ({ error: err.message }))
   const partyQueue = await partyQueueSummary(sb, driverId, now).catch((err) => ({ error: err.message }))
   const safety = await driverSafetyScore(sb, driverId, now).catch((err) => ({ error: err.message }))
+  const scorecard = await driverScorecard(sb, driverId, now).catch((err) => ({ error: err.message }))
   const leaderboard = await weeklyLeaderboard(sb, driverId, { now }).catch((err) => ({ error: err.message }))
   return {
     streaks: { trips: streaks.trips, days: streaks.days },
@@ -34,6 +36,7 @@ export async function buildPerks(sb, driverId, { now = new Date(), firstName = n
     surge,
     partyQueue,
     safety,
+    scorecard,
     bonuses: (ledger.data || []).map((r) => ({ kind: r.kind, amountCents: r.amount_cents, status: r.status, at: r.created_at })),
   }
 }
@@ -53,6 +56,10 @@ export default async function handleDriverPerks(req, res, deps = {}) {
     if (body.op === 'claim-referral') {
       const claimed = await claimReferral(sb, user.id, body.code)
       return json(res, claimed.ok ? 200 : 409, claimed)
+    }
+    if (body.op === 'map-marker') {
+      const r = await setMapMarker(sb, user.id, body.marker)
+      return json(res, r.ok ? 200 : 409, r)
     }
     if (body.op === 'party-queue') return json(res, 200, await setPartyQueueOptIn(sb, user.id, body.optIn))
     if (body.op === 'leaderboard-opt-out') return json(res, 200, await setLeaderboardOptOut(sb, user.id, body.optOut))

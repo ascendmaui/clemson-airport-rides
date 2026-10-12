@@ -753,3 +753,7 @@ export async function setLeaderboardOptOut(supabase, optOut) {
 export async function setPartyQueueOptIn(supabase, optIn) {
   return authedJson(supabase, '/api/driver?action=perks', { method: 'POST', body: { op: 'party-queue', optIn: Boolean(optIn) } })
 }
+
+export async function setMapMarker(supabase, marker) {
+  return authedJson(supabase, '/api/driver?action=perks', { method: 'POST', body: { op: 'map-marker', marker } })
+}

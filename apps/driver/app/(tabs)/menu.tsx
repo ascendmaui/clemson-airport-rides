@@ -89,6 +89,7 @@ export default function MenuScreen() {
     { icon: 'document-text', title: 'Documents', subtitle: 'License, insurance, registration', onPress: () => router.push('/documents') },
     { icon: 'shield-checkmark', title: 'Insurance', subtitle: 'Your policy and trip coverage notes', onPress: () => router.push('/insurance') },
     { icon: 'shield', title: 'Safety', subtitle: 'Audio, video, live location, and SOS', onPress: () => router.push('/safety') },
+    { icon: 'ribbon', title: 'Scorecard', subtitle: 'Acceptance, completion, rating, and map markers', onPress: () => router.push('/scorecard') },
     { icon: 'speedometer', title: 'Safety score', subtitle: 'Estimate and tips', onPress: () => router.push('/safety-score') },
   ]
   const money: MenuRow[] = [

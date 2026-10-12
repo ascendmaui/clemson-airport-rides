@@ -13,6 +13,8 @@ export type MapPin = {
   title: string
   pinColor?: string
   kind?: 'self' | 'request' | 'place'
+  /** Cosmetic car marker for the driver's own pin (scorecard unlocks). */
+  marker?: { fill: string; accent: string; pattern: string | null; glyph: string } | null
 }
 
 export function CampusMap({

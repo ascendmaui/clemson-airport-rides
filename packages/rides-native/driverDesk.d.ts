@@ -156,3 +156,12 @@ export type SurgeView = { enabled: boolean; radiusKm?: number; driverBonusCents?
 export type PartyQueueView = { enabled: boolean; label: string; open: boolean; startHour: number; endHour: number; days: number[]; optedIn: boolean; position: number | null; size: number; error?: string }
 export function setPartyQueueOptIn(supabase: unknown, optIn: boolean): Promise<{ ok: boolean; optedIn: boolean }>
 export type SafetyScoreView = { enabled: boolean; estimate?: boolean; label?: string; score?: number; hasGps?: boolean; affectsDispatch?: boolean; factors?: { key: string; penalty: number; detail: string }[]; tips?: string[]; error?: string }
+export type ResolvedMarker = { style: string; icon: string; fill: string; accent: string; pattern: string | null; glyph: string }
+export type ScorecardView = {
+  enabled: boolean; windowDays?: number; lifetimeTrips?: number; rating?: number | null; ratingCount?: number
+  acceptance?: { offered: number; accepted: number; rate: number | null }
+  completion?: { completed: number; eligible: number; driverCancels: number; rate: number | null }
+  milestones?: { id: string; metric: string; threshold: number; reached: boolean; current: number | null; unlocks: string[] }[]
+  unlocked?: string[]; marker?: ResolvedMarker; error?: string
+}
+export function setMapMarker(supabase: unknown, marker: { style: string; icon: string }): Promise<{ ok: boolean; error?: string; marker?: ResolvedMarker }>
