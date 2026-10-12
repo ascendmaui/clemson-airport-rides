@@ -1,21 +1,9 @@
 import { quietFromPrefs } from './notificationPrefs.js'
+import { isQuietAt } from '../../shared/quietWindow.js'
 
-function toMinutes(value) {
-  const [h, m] = String(value).split(':').map(Number)
-  return Number.isFinite(h) && Number.isFinite(m) ? h * 60 + m : 0
-}
-
-/** Do-not-disturb switch, or the local clock is inside the quiet window (wraps overnight). */
+/** Do-not-disturb, or Clemson time (America/New_York) is inside the driver's quiet window. Wraps midnight. */
 export function isQuietNow(prefs, now = new Date()) {
-  const q = quietFromPrefs(prefs)
-  if (q.dnd) return true
-  if (!q.scheduleEnabled) return false
-  const mins = now.getHours() * 60 + now.getMinutes()
-  const start = toMinutes(q.start)
-  const end = toMinutes(q.end)
-  if (start === end) return true
-  if (start < end) return mins >= start && mins < end
-  return mins >= start || mins < end
+  return isQuietAt(quietFromPrefs(prefs), now)
 }
 
 /**
