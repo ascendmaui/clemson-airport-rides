@@ -186,6 +186,9 @@ export function OfferBridge() {
     <View pointerEvents="box-none" style={[styles.wrap, { top: insets.top + 8 }]}>
       <Pressable
         onPress={() => {
+          // The driver has seen it: stop the 1.5 s buzz/chime loop right away.
+          if (pulseStop.current) clearTimeout(pulseStop.current)
+          stopRequestPulse()
           setBanner(null)
           router.push('/queue')
         }}
