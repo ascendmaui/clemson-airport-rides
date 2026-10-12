@@ -61,6 +61,12 @@ export function DriveWithUs() {
         <button type="button" className="mkt-text pressable" onClick={() => navigate('driver-signup')}>
           Start the driver application
         </button>
+        <button type="button" className="mkt-text pressable" onClick={() => navigate('drivers/rentals')}>
+          No car? Rent one from a local partner
+        </button>
+        <button type="button" className="mkt-text pressable" onClick={() => navigate('partners/join')}>
+          Own rental cars? Become a Rental Partner
+        </button>
       </section>
     </SitePage>
   )
