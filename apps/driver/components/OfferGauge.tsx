@@ -37,12 +37,12 @@ const STROKE = 4
 /** Gentle, critically-damped spring shared by the gauge (no overshoot wobble on a money number). */
 const SPRING = { damping: 18, stiffness: 140, mass: 0.9 }
 
-/** Semicircle arc built from two clipped rings (no SVG dependency). Fill springs in from 0 on each offer. */
+/** Semicircle arc built from two clipped rings (no SVG dependency). Fill eases in over 240 ms. */
 function Arc({ fill, color, track, still }: { fill: number; color: string; track: string; still: boolean }) {
   const target = Math.max(0, Math.min(1, fill))
   const f = useSharedValue(still ? target : 0)
   useEffect(() => {
-    f.value = still ? target : withSpring(target, SPRING)
+    f.value = still ? target : withTiming(target, { duration: 240, easing: Easing.bezier(0.22, 1, 0.36, 1) })
   }, [target, still, f])
   const fillStyle = useAnimatedStyle(() => ({ transform: [{ rotate: `${-180 + 180 * f.value + 45}deg` }] }))
   return (
@@ -103,7 +103,7 @@ export function OfferGauge({ gauge, offerId }: { gauge: Gauge; offerId: string }
       ), -1, true)
     }
     if (fx.ring) spin.value = withRepeat(withTiming(360, { duration: fx.crown ? 6000 : 4200, easing: Easing.linear }), -1)
-    if (fx.burst) burst.value = withSequence(withSpring(1, SPRING), withTiming(0.6, { duration: 700, easing: Easing.out(Easing.cubic) }))
+    if (fx.burst) burst.value = withSequence(withSpring(1, SPRING), withTiming(0.6, { duration: 280, easing: Easing.out(Easing.cubic) }))
     return () => {
       cancelAnimation(sweep)
       cancelAnimation(glow)
@@ -170,17 +170,17 @@ export function OfferGauge({ gauge, offerId }: { gauge: Gauge; offerId: string }
 const styles = StyleSheet.create({
   wrap: { alignItems: 'center', justifyContent: 'center' },
   pill: {
-    flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 12, paddingVertical: 6,
-    borderRadius: 999, borderWidth: StyleSheet.hairlineWidth * 2, overflow: 'hidden', minHeight: 44,
+    flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14, paddingVertical: 8,
+    borderRadius: 999, borderWidth: 1, overflow: 'hidden', minHeight: 44,
   },
-  // Layered depth: tight contact shadow + soft tinted ambient (iOS); elevation on Android.
-  lift: { borderRadius: 999, shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.22, shadowRadius: 14, elevation: 4 },
+  // Contact shadow plus a soft tinted lift. Kept light so the pay number stays the focus.
+  lift: { borderRadius: 999, shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.16, shadowRadius: 18, elevation: 3 },
   ring: { position: 'absolute', width: ARC, height: ARC, borderRadius: ARC / 2, borderWidth: STROKE },
-  value: { fontSize: 17, fontWeight: '800', fontVariant: ['tabular-nums'], letterSpacing: -0.3 },
-  label: { fontSize: 11, fontWeight: '700', opacity: 0.9, letterSpacing: 0.4, textTransform: 'uppercase' },
-  sweep: { position: 'absolute', top: -20, bottom: -20, width: 36 },
-  glow: { position: 'absolute', top: -6, bottom: -6, left: -6, right: -6, borderRadius: 999, shadowRadius: 14, shadowOffset: { width: 0, height: 0 } },
-  burst: { position: 'absolute', top: -12, bottom: -12, left: -12, right: -12, borderRadius: 999, borderWidth: 1.5 },
-  ring2: { position: 'absolute', top: -4, bottom: -4, left: -4, right: -4, borderRadius: 999, borderWidth: 2 },
-  sparkle: { position: 'absolute', width: 4, height: 4, borderRadius: 2, marginLeft: -2, marginTop: -2 },
+  value: { fontSize: 16, fontWeight: '700', fontVariant: ['tabular-nums'], letterSpacing: -0.4 },
+  label: { fontSize: 10, fontWeight: '700', letterSpacing: 0.8, textTransform: 'uppercase', marginTop: 1 },
+  sweep: { position: 'absolute', top: -20, bottom: -20, width: 28 },
+  glow: { position: 'absolute', top: -8, bottom: -8, left: -8, right: -8, borderRadius: 999, shadowRadius: 16, shadowOffset: { width: 0, height: 0 } },
+  burst: { position: 'absolute', top: -10, bottom: -10, left: -10, right: -10, borderRadius: 999, borderWidth: 1 },
+  ring2: { position: 'absolute', top: -3, bottom: -3, left: -3, right: -3, borderRadius: 999, borderWidth: 1.5 },
+  sparkle: { position: 'absolute', width: 3, height: 3, borderRadius: 1.5, marginLeft: -1.5, marginTop: -1.5 },
 })
