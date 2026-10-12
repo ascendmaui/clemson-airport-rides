@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState } from 'react'
+import * as Haptics from 'expo-haptics'
 import { Animated, PanResponder, StyleSheet, Text, View, type LayoutChangeEvent } from 'react-native'
 import { swipeConfirms, swipeOffset } from 'rides-native/swipeConfirm'
 import { useTheme } from '@/lib/theme'
@@ -30,15 +31,29 @@ export function SwipeToStart({
   const confirmRef = useRef(onConfirm)
   confirmRef.current = onConfirm
 
-  const reset = () => Animated.spring(x, { toValue: 0, useNativeDriver: false, bounciness: 6 }).start()
+  const armedRef = useRef(false)
+  const reset = () => {
+    armedRef.current = false
+    Animated.spring(x, { toValue: 0, useNativeDriver: false, bounciness: 6 }).start()
+  }
 
   const responder = useMemo(() => PanResponder.create({
     onStartShouldSetPanResponder: () => !disabledRef.current,
     onMoveShouldSetPanResponder: (_e, g) => !disabledRef.current && Math.abs(g.dx) > 4,
     onPanResponderTerminationRequest: () => false,
-    onPanResponderMove: (_e, g) => x.setValue(swipeOffset(g.dx, trackRef.current, KNOB)),
+    onPanResponderGrant: () => {
+      Haptics.selectionAsync().catch(() => {})
+    },
+    onPanResponderMove: (_e, g) => {
+      x.setValue(swipeOffset(g.dx, trackRef.current, KNOB))
+      // One tick when the knob crosses the confirm point, so the driver feels it without looking.
+      const armed = swipeConfirms(g.dx, trackRef.current, KNOB)
+      if (armed && !armedRef.current) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {})
+      armedRef.current = armed
+    },
     onPanResponderRelease: (_e, g) => {
       if (!disabledRef.current && swipeConfirms(g.dx, trackRef.current, KNOB)) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {})
         Animated.timing(x, { toValue: Math.max(0, trackRef.current - KNOB), duration: 120, useNativeDriver: false }).start(() => {
           confirmRef.current()
           reset()

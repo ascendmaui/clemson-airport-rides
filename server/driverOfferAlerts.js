@@ -15,6 +15,7 @@ import { readDriverPushToken } from './driverPushToken.js'
 import { dispatchDriverOfferChannels } from './driverOfferChannels.js'
 import { sendExpoPush, PUSH_CREDENTIAL_GAP } from './expoPush.js'
 import { quietFromPrefs } from '../src/lib/quietHours.js'
+import { isQuietAt } from '../shared/quietWindow.js'
 
 export const DRIVER_OFFER_ALERT_CHANNELS = Object.freeze(['in_app', 'push', 'sms', 'email'])
 
@@ -32,37 +33,9 @@ function assertChannel(channel) {
   }
 }
 
-function minutesInNewYork(now) {
-  const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone: 'America/New_York',
-    hour: '2-digit',
-    minute: '2-digit',
-    hourCycle: 'h23',
-  }).formatToParts(now)
-  const hour = Number(parts.find((part) => part.type === 'hour')?.value)
-  const minute = Number(parts.find((part) => part.type === 'minute')?.value)
-  const normalizedHour = hour === 24 ? 0 : hour
-  if (!Number.isFinite(normalizedHour) || !Number.isFinite(minute)) return 0
-  return normalizedHour * 60 + minute
-}
-
-function toMinutes(hhmmValue) {
-  const [h, m] = String(hhmmValue).split(':').map((n) => Number(n))
-  if (!Number.isFinite(h) || !Number.isFinite(m)) return 0
-  return h * 60 + m
-}
-
-/** Quiet hours follow Clemson local time, not the server's UTC clock. */
+/** Quiet hours follow Clemson local time (America/New_York), not the server's UTC clock. Wraps midnight. */
 export function isQuietForDriverOffer(prefs, now = new Date()) {
-  const quiet = quietFromPrefs(prefs)
-  if (quiet.dnd) return true
-  if (!quiet.scheduleEnabled) return false
-  const mins = minutesInNewYork(now)
-  const start = toMinutes(quiet.start)
-  const end = toMinutes(quiet.end)
-  if (start === end) return true
-  if (start < end) return mins >= start && mins < end
-  return mins >= start || mins < end
+  return isQuietAt(quietFromPrefs(prefs), now)
 }
 
 export function offerAlertCopy(trip) {

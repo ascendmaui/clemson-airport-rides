@@ -121,6 +121,15 @@ export default function AccountScreen() {
             <Text style={styles.linkText}>Earnings</Text>
           </Pressable>
           <Pressable
+            onPress={() => router.push('/community')}
+            style={styles.linkRow}
+            accessibilityRole="button"
+            accessibilityLabel="Campus community"
+            accessibilityHint="Optional, off by default. Shows only what you and your rider share"
+          >
+            <Text style={styles.linkText}>Campus community</Text>
+          </Pressable>
+          <Pressable
             onPress={() => router.push('/fleet')}
             style={styles.linkRow}
             accessibilityRole="button"

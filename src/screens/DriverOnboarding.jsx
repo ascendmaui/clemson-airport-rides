@@ -1,3 +1,4 @@
+import { driverVehicleStandardIssue } from '../../shared/vehicleStandards.js'
 import { useEffect, useMemo, useState } from 'react'
 import { MarketingPhoto } from '../components/MarketingPhoto'
 import { useAuth } from '../lib/auth'
@@ -38,6 +39,12 @@ import {
 import { driverRouteForOnboarding } from '../../shared/driverRoute.js'
 import { buildFieldA11yProps, formatAccessibleFormErrorSummary, getFieldErrorProps } from '../lib/formA11y'
 import { loadLatestVehicle, vehicleAccountErrors } from '../../shared/vehicleYear.js'
+import {
+  REBUILT_TITLE_HELPER,
+  SALVAGE_TITLE_MESSAGE,
+  TITLE_STATUS_OPTIONS,
+  titleStatusError,
+} from '../../shared/vehicleTitle.js'
 import { driverQuizError } from '../../shared/driverQuiz.js'
 import { w9ContinueIssue } from '../../shared/driverOnboarding.js'
 import { applicantEmailError } from '../../shared/applicantEmail.js'
@@ -172,6 +179,7 @@ export function DriverOnboarding() {
   const [model, setModel] = useState('')
   const [color, setColor] = useState('')
   const [year, setYear] = useState('')
+  const [titleStatus, setTitleStatus] = useState('')
   const [plate, setPlate] = useState('')
   const [fieldErrors, setFieldErrors] = useState({})
   const [seats, setSeats] = useState('4')
@@ -300,6 +308,7 @@ export function DriverOnboarding() {
           setModel(vehicle.model || '')
           setColor(vehicle.color || '')
           setYear(vehicle.year ? String(vehicle.year) : '')
+          setTitleStatus(vehicle.title_status || '')
           setPlate(vehicle.plate || '')
           setSeats(String(vehicle.seats || 4))
           setIsComfort(vehicle.service_class === 'comfort' || vehicle.service_class === true || vehicle.tier === 'comfort')
@@ -350,6 +359,8 @@ export function DriverOnboarding() {
     setError(null)
     setNote(null)
     const nextErrors = vehicleAccountErrors({ fullName, phone, make, model, color, plate, year })
+    const titleIssue = titleStatusError(titleStatus)
+    if (titleIssue) nextErrors.titleStatus = titleIssue
     const emailIssue = applicantEmailError(applicantEmail)
     if (emailIssue) nextErrors.applicantEmail = emailIssue
     setFieldErrors(nextErrors)
@@ -381,6 +392,7 @@ export function DriverOnboarding() {
         model,
         color,
         year,
+        titleStatus,
         plate,
         seats: Number(seats) || 4,
         comfortClass,
@@ -633,7 +645,12 @@ export function DriverOnboarding() {
                 </p>
               ) : null}
               {q.key === 'hasCar' && answers.hasCar === false ? (
-                <p className="field-error-text" role="alert">{driverQuizError({ hasCar: false, hasInsurance: true, attestation: true })}</p>
+                <>
+                  <p className="field-error-text" role="alert">{driverQuizError({ hasCar: false, hasInsurance: true, attestation: true })}</p>
+                  <p style={{ fontSize: 14, margin: '6px 0 0' }}>
+                    <a href="/drivers/rentals" data-testid="no-car-rent-one">No car? Rent one</a> from a Clemson RIDES rental partner. Rentals open once your license is approved and your background check passes (this also applies to the needs_vehicle path).
+                  </p>
+                </>
               ) : null}
               {q.key === 'hasInsurance' && answers.hasInsurance === false ? (
                 <p className="field-error-text" role="alert">{driverQuizError({ hasCar: true, hasInsurance: false, attestation: true })}</p>
@@ -655,14 +672,50 @@ export function DriverOnboarding() {
           <Field id="make" label="Make" value={make} onChange={setMake} autoComplete="off" error={fieldErrors.make} />
           <Field id="model" label="Model" value={model} onChange={setModel} autoComplete="off" error={fieldErrors.model} />
           <Field id="year" label="Year" value={year} onChange={setYear} inputMode="numeric" autoComplete="off" maxLength={4} error={fieldErrors.year} />
+          {/^\d{4}$/.test(String(year || '')) && driverVehicleStandardIssue({ year: Number(year) }) && (
+            <p className="field-hint" role="status" style={{ fontSize: 13, margin: '4px 0 8px' }}>
+              {driverVehicleStandardIssue({ year: Number(year) }).message} No car that qualifies? <a href="/drivers/rentals">Rent one from a partner</a>.
+            </p>
+          )}
           <Field id="color" label="Color" value={color} onChange={setColor} autoComplete="off" error={fieldErrors.color} />
           <Field id="plate" label="Plate" value={plate} onChange={setPlate} autoComplete="off" error={fieldErrors.plate} />
+          <fieldset className="title-status" data-title-status={titleStatus || 'unset'}>
+            <legend className="title-status-legend" id="title-status-label">Title status *</legend>
+            <div className="title-status-options" role="radiogroup" aria-labelledby="title-status-label" aria-describedby="title-status-help">
+              {TITLE_STATUS_OPTIONS.map((option) => {
+                const selected = titleStatus === option.id
+                const blocked = selected && option.allowed === false
+                return (
+                  <button
+                    key={option.id}
+                    type="button"
+                    role="radio"
+                    aria-checked={selected}
+                    className={`pressable title-status-option${selected ? ' is-selected' : ''}${blocked ? ' is-blocked' : ''}`}
+                    onClick={() => setTitleStatus(option.id)}
+                  >
+                    {option.label}
+                    <span className="title-status-bar" aria-hidden="true" />
+                  </button>
+                )
+              })}
+            </div>
+            <p id="title-status-help" className="title-status-help">{REBUILT_TITLE_HELPER}</p>
+            <div className={`title-status-note${titleStatus === 'salvage' ? ' is-open' : ''}`} aria-hidden={titleStatus !== 'salvage'}>
+              <div className="title-status-note-inner">
+                <p role={titleStatus === 'salvage' ? 'alert' : undefined}>{SALVAGE_TITLE_MESSAGE}</p>
+              </div>
+            </div>
+            {fieldErrors.titleStatus && titleStatus !== 'salvage' ? (
+              <p id="title-status-error" className="field-error-text" role="alert">{fieldErrors.titleStatus}</p>
+            ) : null}
+          </fieldset>
           <Field id="seats" label="Seats" value={seats} onChange={setSeats} type="number" required={false} />
           <label style={{ display: 'flex', gap: 10, alignItems: 'center', fontWeight: 650, marginBottom: 16 }}>
             <input type="checkbox" checked={comfortClass} onChange={(e) => setIsComfort(e.target.checked)} />
             List this car as Extra Comfort
           </label>
-          <PrimaryButton type="submit" disabled={busy}>
+          <PrimaryButton type="submit" disabled={busy || titleStatus === 'salvage'}>
             {busy ? 'Saving…' : `Continue to ${adjacentStep('account', 1)?.label || 'the next step'}`}
           </PrimaryButton>
         </form>
