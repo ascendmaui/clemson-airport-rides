@@ -6,8 +6,9 @@ import { admin, cors, json, parseBody, userFromAuth } from '../friendRideLib.js'
 import { awardBonuses, loadDriverTrips, loadPerkConfig } from '../perks.js'
 import { streakProgress } from '../../shared/perks/streaks.js'
 import { claimReferral, referralSummary } from '../driverReferral.js'
+import { setLeaderboardOptOut, weeklyLeaderboard } from '../leaderboard.js'
 
-export const PERK_CONFIG_KEYS = ['streaks', 'referral']
+export const PERK_CONFIG_KEYS = ['streaks', 'referral', 'leaderboard']
 
 export async function buildPerks(sb, driverId, { now = new Date(), firstName = null } = {}) {
   const trips = await loadDriverTrips(sb, driverId)
@@ -16,9 +17,11 @@ export async function buildPerks(sb, driverId, { now = new Date(), firstName = n
   const ledger = await sb.from('driver_bonus_ledger').select('kind, amount_cents, status, created_at')
     .eq('driver_id', driverId).order('created_at', { ascending: false }).limit(20)
   const referral = await referralSummary(sb, driverId, firstName).catch((err) => ({ error: err.message }))
+  const leaderboard = await weeklyLeaderboard(sb, driverId, { now }).catch((err) => ({ error: err.message }))
   return {
     streaks: { trips: streaks.trips, days: streaks.days },
     referral,
+    leaderboard,
     bonuses: (ledger.data || []).map((r) => ({ kind: r.kind, amountCents: r.amount_cents, status: r.status, at: r.created_at })),
   }
 }
@@ -39,6 +42,7 @@ export default async function handleDriverPerks(req, res, deps = {}) {
       const claimed = await claimReferral(sb, user.id, body.code)
       return json(res, claimed.ok ? 200 : 409, claimed)
     }
+    if (body.op === 'leaderboard-opt-out') return json(res, 200, await setLeaderboardOptOut(sb, user.id, body.optOut))
     if (body.op !== 'config') return json(res, 400, { error: 'Unknown op' })
     const prof = await sb.from('profiles').select('is_admin').eq('id', user.id).maybeSingle()
     if (!prof.data?.is_admin) return json(res, 403, { error: 'Admin only' })
