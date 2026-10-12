@@ -5,7 +5,7 @@ import { useCardShadow } from '@/components/chrome'
 import { useAuth } from '@/lib/auth'
 import { supabase } from '@/lib/supabase'
 import { useTheme } from '@/lib/theme'
-import { loadDriverPerks, type DriverPerks, type Leaderboard, type StreakView } from 'rides-native/driverDesk'
+import { loadDriverPerks, type DriverPerks, type Leaderboard, type StreakView, type SurgeView } from 'rides-native/driverDesk'
 
 const dollars = (cents: number) => `$${(cents / 100).toFixed(cents % 100 ? 2 : 0)}`
 
@@ -22,6 +22,18 @@ export function PerksStrip() {
   }, [user]))
   if (!perks) return null
   const chips: ReactNode[] = []
+  const surge = perks.surge as SurgeView | undefined
+  if (surge?.enabled && surge.zones?.length) {
+    const z = surge.zones[0]
+    const when = z.live
+      ? `Live until ${new Date(z.endsAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`
+      : `${new Date(z.startsAt).toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' })}`
+    chips.push(
+      <Pressable key="surge" onPress={() => router.push('/surge')} accessibilityRole="button" accessibilityLabel={`Game-day surge zone ${z.label || z.title}. ${when}`}>
+        <PerkChip title={`${z.live ? 'Surge now' : 'Surge soon'} · ${z.label || z.title}`} line={`${when}${surge.driverBonusCents ? ` · +${dollars(surge.driverBonusCents)}/trip` : ''}`} />
+      </Pressable>,
+    )
+  }
   const s = perks.streaks
   if (s?.trips?.enabled) chips.push(<StreakChip key="trips" label="Trip streak" unit="trips" view={s.trips} />)
   if (s?.days?.enabled) chips.push(<StreakChip key="days" label="Day streak" unit="days" view={s.days} />)

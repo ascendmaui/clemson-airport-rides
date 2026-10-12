@@ -129,6 +129,7 @@ export default async function handler(req, res, deps = {}) {
       riderIsE2E: e2eRider,
       preferredIds: prefs.preferredIds,
       favoriteIds: prefs.favoriteIds,
+      pickup: places.pickup && Number.isFinite(Number(places.pickup.lat)) ? { lat: Number(places.pickup.lat), lng: Number(places.pickup.lng) } : null,
     })
     if (ordered.error) {
       return json(res, 500, { error: 'Could not choose a driver', code: 'auto_assign_unavailable' })

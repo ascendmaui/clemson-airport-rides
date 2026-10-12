@@ -7,8 +7,9 @@ import { awardBonuses, loadDriverTrips, loadPerkConfig } from '../perks.js'
 import { streakProgress } from '../../shared/perks/streaks.js'
 import { claimReferral, referralSummary } from '../driverReferral.js'
 import { setLeaderboardOptOut, weeklyLeaderboard } from '../leaderboard.js'
+import { surgeBonusAwards, surgeSummary } from '../surge.js'
 
-export const PERK_CONFIG_KEYS = ['streaks', 'referral', 'leaderboard', 'priority_dispatch']
+export const PERK_CONFIG_KEYS = ['streaks', 'referral', 'leaderboard', 'priority_dispatch', 'game_day_surge']
 
 export async function buildPerks(sb, driverId, { now = new Date(), firstName = null } = {}) {
   const trips = await loadDriverTrips(sb, driverId)
@@ -17,11 +18,16 @@ export async function buildPerks(sb, driverId, { now = new Date(), firstName = n
   const ledger = await sb.from('driver_bonus_ledger').select('kind, amount_cents, status, created_at')
     .eq('driver_id', driverId).order('created_at', { ascending: false }).limit(20)
   const referral = await referralSummary(sb, driverId, firstName).catch((err) => ({ error: err.message }))
+  const surgeTrips = await sb.from('trips').select('id, status, pickup_lat, pickup_lng, accepted_at, started_at, completed_at, metadata')
+    .eq('driver_id', driverId).eq('status', 'completed').gte('completed_at', new Date(Number(now) - 14 * 86400_000).toISOString()).limit(300)
+  if (!surgeTrips.error) await awardBonuses(sb, driverId, await surgeBonusAwards(sb, surgeTrips.data, now)).catch((err) => console.error('[perks] surge', err.message))
+  const surge = await surgeSummary(sb, now).catch((err) => ({ error: err.message }))
   const leaderboard = await weeklyLeaderboard(sb, driverId, { now }).catch((err) => ({ error: err.message }))
   return {
     streaks: { trips: streaks.trips, days: streaks.days },
     referral,
     leaderboard,
+    surge,
     bonuses: (ledger.data || []).map((r) => ({ kind: r.kind, amountCents: r.amount_cents, status: r.status, at: r.created_at })),
   }
 }
