@@ -46,6 +46,26 @@ test('first ride migration only seeds config and does not rewrite the ledger', (
   assert.doesNotMatch(sql, /\b(drop table|delete from|truncate|alter table|create table)\b/i)
 })
 
+function emptyRows(data = []) {
+  const result = { data, error: null, count: 0 }
+  const q = {
+    select() { return q },
+    eq() { return q },
+    gte() { return q },
+    lte() { return q },
+    in() { return q },
+    order() { return q },
+    contains() { return q },
+    limit: async () => result,
+    maybeSingle: async () => ({ data: data[0] || null, error: null }),
+    insert() { return q },
+    update() { return q },
+    upsert: async () => ({ error: null }),
+    then(resolve, reject) { return Promise.resolve(result).then(resolve, reject) },
+  }
+  return q
+}
+
 function perkDb({ config = {}, trips = [], isAdmin = false } = {}) {
   const upserts = []
   const configWrites = []
@@ -57,6 +77,7 @@ function perkDb({ config = {}, trips = [], isAdmin = false } = {}) {
         const q = {
           select: () => q,
           eq: (_col, key) => { q.key = key; return q },
+          gte: () => q,
           maybeSingle: async () => ({ data: config[q.key] ? { value: config[q.key] } : null, error: null }),
           upsert: async (row) => { configWrites.push(row); return { error: null } },
         }
@@ -64,12 +85,17 @@ function perkDb({ config = {}, trips = [], isAdmin = false } = {}) {
       }
       if (table === 'trips') {
         let cancels = false
+        const rows = () => ({ data: cancels ? [] : trips, error: null, count: 0 })
         const q = {
           select: () => q,
           eq: () => q,
+          gte: () => q,
+          lte: () => q,
+          in: () => q,
           order: () => q,
           contains: () => { cancels = true; return q },
-          limit: async () => ({ data: cancels ? [] : trips, error: null }),
+          limit: async () => rows(),
+          then(resolve, reject) { return Promise.resolve(rows()).then(resolve, reject) },
         }
         return q
       }
@@ -77,6 +103,8 @@ function perkDb({ config = {}, trips = [], isAdmin = false } = {}) {
         const q = {
           select: () => q,
           eq: () => q,
+          gte: () => q,
+          in: () => q,
           order: () => q,
           limit: async () => ({ data: [], error: null }),
           upsert: async (rows, opts) => { upserts.push({ rows, opts }); return { error: null } },
@@ -87,11 +115,18 @@ function perkDb({ config = {}, trips = [], isAdmin = false } = {}) {
         const q = {
           select: () => q,
           eq: () => q,
+          in: () => q,
           maybeSingle: async () => ({ data: { is_admin: isAdmin }, error: null }),
+          then(resolve, reject) { return Promise.resolve({ data: [], error: null }).then(resolve, reject) },
         }
         return q
       }
-      throw new Error(`unexpected table ${table}`)
+      // Referral codes, referrals, the weekly leaderboard, and game-day surge
+      // all read tables that landed on main after this fake was written.
+      if (table === 'driver_referral_codes' || table === 'driver_referrals' || table === 'game_day_events' || table === 'driver_perk_prefs' || table === 'driver_status') {
+        return emptyRows()
+      }
+      return emptyRows()
     },
   }
   return sb
