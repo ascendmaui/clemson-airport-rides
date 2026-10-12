@@ -1,10 +1,8 @@
 import { useRouter, useFocusEffect } from 'expo-router'
 import { useCallback, useState } from 'react'
-import { ScrollView, StyleSheet, View } from 'react-native'
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { ErrorText, Primary } from '@/components/chrome'
-import { DayHeader, EmptyState, FadeIn, SoftNote } from '@/components/day'
+import { DonutChart, legendColor } from '@/components/charts'
 import {
   BoardNote,
   EarningsHero,
@@ -17,13 +15,16 @@ import {
   TipsCard,
   type DashPeriod,
 } from '@/components/EarningsBoard'
+import { Card, ErrorText, Primary } from '@/components/chrome'
+import { DayHeader, EmptyState, FadeIn, SoftNote } from '@/components/day'
+import { SectionLabel } from '@/components/shell'
 import { useAuth } from '@/lib/auth'
-import { reportPeriod, selectPeriodTrips } from '@/lib/earningsMath'
+import { reportPeriod, selectPeriodTrips, tipCentsFromPayments, type TipPayment } from '@/lib/earningsMath'
 import { shownCents } from '@/lib/shown'
 import { supabase } from '@/lib/supabase'
 import { useTheme } from '@/lib/theme'
 import { authedJson } from 'rides-native/apiClient'
-import { loadEarnings } from 'rides-native/driverDesk'
+import { instantCashout, loadCashoutQuote, loadEarnings, type CashoutQuote } from 'rides-native/driverDesk'
 import {
   forecastHighlights,
   payoutTimeline,
@@ -33,10 +34,8 @@ import {
   type DriverPerks,
   type ForecastPayload,
 } from 'rides-native/earningsDashboard.js'
-import { carpoolPayFromTrip } from 'rides-native/tripTags'
-import { carpoolPayFromTrip, tripEarnedCents, tripPayoutCents, weekNetCents } from 'rides-native/tripTags'
+import { carpoolPayFromTrip, tripEarnedCents } from 'rides-native/tripTags'
 import { driverBoostShareCents, readBoostCents } from '../../../../shared/scheduledBoost.js'
-import { instantCashout, loadCashoutQuote, loadEarnings, type CashoutQuote } from 'rides-native/driverDesk'
 import { CASHOUT_COPY } from '../../../../shared/cashout.js'
 import { readPrepaidTipCents } from '../../../../shared/prepaidTip.js'
 
@@ -64,17 +63,26 @@ export default function EarningsHub() {
   const [forecastNote, setForecastNote] = useState<string | null>(null)
   const [ready, setReady] = useState(!user)
   const [error, setError] = useState<string | null>(null)
-
   const [quote, setQuote] = useState<CashoutQuote | null>(null)
   const [cashing, setCashing] = useState(false)
 
   const refresh = useCallback(async () => {
     if (!user || !supabase) return
-    setData(await loadEarnings(supabase, user.id))
-    setQuote(await loadCashoutQuote(supabase).catch(() => null))
+    const next = await loadEarnings(supabase, user.id)
+    setData(next)
+    const [quoteNext, perkPayload, forecastPayload] = await Promise.all([
+      loadCashoutQuote(supabase).catch(() => null),
+      loadOptional<DriverPerks>('/api/driver?action=perks'),
+      loadOptional<ForecastPayload>('/api/driver?action=forecast'),
+    ])
+    setQuote(quoteNext)
+    setPerks(perkPayload)
+    setForecast(forecastPayload)
+    setPerkNote(perkPayload?.streaks ? null : 'Streaks and bonuses are unavailable right now.')
+    setForecastNote(forecastPayload?.top ? null : 'Best hours and zones are unavailable right now.')
   }, [user])
 
-  const money = (cents?: number) => `$${((cents || 0) / 100).toFixed(2)}`
+  const dollars = (cents?: number) => `$${((cents || 0) / 100).toFixed(2)}`
   const runCashout = useCallback(() => {
     if (!quote || !supabase) return
     if (quote.state === 'needs_setup') {
@@ -84,23 +92,23 @@ export default function EarningsHub() {
     if (quote.state !== 'ready') return
     const instant = quote.method === 'instant'
     const lines = [
-      `Balance ${money(quote.grossCents)}`,
-      instant ? `Instant fee ${money(quote.feeCents)}` : 'No fee (standard payout, 1-2 business days)',
-      `You get ${money(quote.netCents)}${quote.last4 ? ` to •••• ${quote.last4}` : ''}`,
+      `Balance ${dollars(quote.grossCents)}`,
+      instant ? `Instant fee ${dollars(quote.feeCents)}` : 'No fee (standard payout, 1-2 business days)',
+      `You get ${dollars(quote.netCents)}${quote.last4 ? ` to •••• ${quote.last4}` : ''}`,
       'One cash-out per day.',
     ]
     Alert.alert(instant ? 'Instant cash-out' : 'Cash out', lines.join('\n'), [
       { text: 'Cancel', style: 'cancel' },
       {
-        text: `Cash out ${money(quote.netCents)}`,
+        text: `Cash out ${dollars(quote.netCents)}`,
         onPress: async () => {
           setCashing(true)
           try {
             const r = await instantCashout(supabase, quote.feeCents || 0)
             if (r.ok) {
               Alert.alert('Cash-out sent', r.method === 'instant'
-                ? `${money(r.netCents)} is on its way to your debit card.`
-                : `${money(r.netCents)} is on its way by standard payout${r.fallbackReason ? ' (instant was not available for this card)' : ''}.`)
+                ? `${dollars(r.netCents)} is on its way to your debit card.`
+                : `${dollars(r.netCents)} is on its way by standard payout${r.fallbackReason ? ' (instant was not available for this card)' : ''}.`)
             } else {
               Alert.alert('Cash-out not sent', CASHOUT_COPY[r.error as keyof typeof CASHOUT_COPY] || 'Try again in a few minutes.')
             }
@@ -113,7 +121,7 @@ export default function EarningsHub() {
         },
       },
     ])
-  }, [quote, refresh, router])
+  }, [dollars, quote, refresh, router])
 
   useFocusEffect(useCallback(() => {
     if (!user || !supabase) {
@@ -121,20 +129,7 @@ export default function EarningsHub() {
       return undefined
     }
     let alive = true
-    loadEarnings(supabase, user.id)
-      .then(async (next) => {
-        if (!alive) return
-        setData(next)
-        const [perkPayload, forecastPayload] = await Promise.all([
-          loadOptional<DriverPerks>('/api/driver?action=perks'),
-          loadOptional<ForecastPayload>('/api/driver?action=forecast'),
-        ])
-        if (!alive) return
-        setPerks(perkPayload)
-        setForecast(forecastPayload)
-        setPerkNote(perkPayload?.streaks ? null : 'Streaks and bonuses are unavailable right now.')
-        setForecastNote(forecastPayload?.top ? null : 'Best hours and zones are unavailable right now.')
-      })
+    refresh()
       .catch((err: unknown) => {
         if (alive) setError(err instanceof Error ? err.message : 'Could not load earnings')
       })
@@ -144,43 +139,43 @@ export default function EarningsHub() {
     return () => {
       alive = false
     }
-  }, [user]))
+  }, [refresh, user]))
 
   const trips = data?.trips || []
-  const payments = data?.paymentsByTrip || {}
-  const day = reportPeriod(trips, 'day', anchor)
-  const week = reportPeriod(trips, 'week', anchor)
-  const month = reportPeriod(trips, 'month', anchor)
-  const selected = selectedReport(period, day, week, month)
+  const paymentsByTrip = data?.paymentsByTrip || {}
+  const dayReport = reportPeriod(trips, 'day', anchor)
+  const weekReport = reportPeriod(trips, 'week', anchor)
+  const monthReport = reportPeriod(trips, 'month', anchor)
+  const selected = selectedReport(period, dayReport, weekReport, monthReport)
   const inPeriod = selectPeriodTrips(trips, period, anchor)
-  const tips = tipsBreakdown(inPeriod, payments)
-  const rides = rideDetails(inPeriod, payments)
+  const tipBreak = tipsBreakdown(inPeriod, paymentsByTrip)
+  const rides = rideDetails(inPeriod, paymentsByTrip)
   const streaks = streakBoard(perks)
   const outlook = forecastHighlights(forecast)
-  const payouts = payoutTimeline({
+  const timeline = payoutTimeline({
     trips,
     payouts: data?.payouts,
     bonuses: streaks.bonuses,
     now: anchor.getTime(),
   })
-  const money = (cents: number) => shownCents(cents, earningsPrivate)
-  const carpool = inPeriod.some((trip) => trip.status === 'completed' && carpoolPayFromTrip(trip)?.showBonus)
+  const shown = (cents: number) => shownCents(cents, earningsPrivate)
+  const periodCarpool = inPeriod.some((trip) => trip.status === 'completed' && carpoolPayFromTrip(trip)?.showBonus)
   const chartCaption = period === 'day'
     ? 'Night, morning, afternoon, and evening. Bars are the amount you keep.'
-    : carpool
+    : periodCarpool
       ? 'Bars are your payout, including any carpool bonus.'
       : 'Bars are the amount you keep after the platform fee.'
-  const payouts = data?.payouts
-  const week = weekNetCents(data?.trips || [])
-  const pending = Number(payouts?.pendingCents) || 0
-  const nextRetry = payouts?.pending?.find((row: unknown) => row && typeof row === 'object' && 'nextRetryAt' in row) as { nextRetryAt?: string } | undefined
+
+  const wallet = data?.payouts
+  const pending = Number(wallet?.pendingCents) || 0
+  const nextRetry = wallet?.pending?.find((row: unknown) => row && typeof row === 'object' && 'nextRetryAt' in row) as { nextRetryAt?: string } | undefined
   let you = 0
   let platform = 0
   let other = 0
   let boostSum = 0
-  let tips = 0
+  let tipSlice = 0
   let carpoolBonus = false
-  for (const trip of data?.trips || []) {
+  for (const trip of trips) {
     if (trip.status === 'cancelled_wait') {
       const net = tripEarnedCents(trip)
       you += net
@@ -195,11 +190,10 @@ export default function EarningsHub() {
     you += net
     boostSum += boost
     platform += Math.max(0, fare + (trip.wait_fee_cents || 0) - net)
-    const payments = (data?.paymentsByTrip?.[trip.id] || []) as TipPayment[]
-    // Tips (after-ride and prepaid tip boost) are 100% the driver's, shown on their own slice.
-    tips += tipCentsFromPayments(payments) + readPrepaidTipCents(trip)
+    const tripPayments = (paymentsByTrip[trip.id] || []) as TipPayment[]
+    tipSlice += tipCentsFromPayments(tripPayments) + readPrepaidTipCents(trip)
   }
-  const standard = you + platform + other + boostSum + tips <= 0
+  const standard = you + platform + other + boostSum + tipSlice <= 0
   const segments = standard
     ? [
         { label: 'You', value: 80, color: legendColor(colors, 'you') },
@@ -210,7 +204,7 @@ export default function EarningsHub() {
         { label: 'You', value: you, color: legendColor(colors, 'you') },
         { label: 'Clemson RIDES', value: platform, color: legendColor(colors, 'platform') },
         { label: 'Boost', value: boostSum, color: '#F56600' },
-        { label: 'Tips (100% yours)', value: tips, color: '#22A04B' },
+        { label: 'Tips (100% yours)', value: tipSlice, color: '#22A04B' },
         { label: 'Other', value: other, color: legendColor(colors, 'other') },
       ]
 
@@ -234,53 +228,33 @@ export default function EarningsHub() {
             <>
               <EarningsHero
                 period={period}
-                amount={money(selected.totalCents)}
+                amount={shown(selected.totalCents)}
                 label={selected.label}
                 rides={selected.completed}
-                tips={money(tips.tipCents)}
+                tips={shown(tipBreak.tipCents)}
               />
               <PeriodCharts
                 selected={period}
                 onSelect={setPeriod}
-                totals={{ day: money(day.totalCents), week: money(week.totalCents), month: money(month.totalCents) }}
+                totals={{ day: shown(dayReport.totalCents), week: shown(weekReport.totalCents), month: shown(monthReport.totalCents) }}
                 bars={selected.bars}
                 caption={chartCaption}
-                split={`${money(selected.youCents)} you · ${money(selected.platformCents)} Clemson RIDES`}
+                split={`${shown(selected.youCents)} you · ${shown(selected.platformCents)} Clemson RIDES`}
                 hidden={earningsPrivate}
               />
               <BoardNote>
-                {carpool
+                {periodCarpool
                   ? 'This period includes carpool payouts. Totals include the carpool bonus. Tips are listed on their own.'
                   : 'You keep 80% of each fare. Tips, boosts, and streak bonuses are listed apart from that split.'}
               </BoardNote>
-              <TipsCard tips={tips} money={money} />
-              <StreakCardView board={streaks} note={perkNote} money={money} />
-              <ForecastPanel forecast={outlook} note={forecastNote} money={money} />
-              <PayoutPanel timeline={payouts} money={money} onOpen={() => router.push('/payouts')} />
-              <RideList rides={rides} money={money} onOpen={(id) => router.push({ pathname: '/trip-details', params: { id } })} />
-              <LinkRow
-                label="All activity"
-                hint="Opens completed and canceled rides"
-                onPress={() => router.push('/earnings-activity')}
-              />
-              <LinkRow
-                label="Year and earlier periods"
-                hint="Opens earnings details"
-                onPress={() => router.push('/earnings-details')}
-              />
-              {week <= 0 ? (
-                <SoftNote>No completed trips this week. You keep 80% of each fare once a ride finishes. Carpool trips add a carpool bonus to your payout.</SoftNote>
-              ) : (
-                <SoftNote>
-                  {carpoolBonus
-                    ? 'This week includes carpool payouts. Totals include the carpool bonus.'
-                    : 'This week’s total is the 80% you keep. Open details for day, week, month, and year.'}
-                </SoftNote>
-              )}
+              <TipsCard tips={tipBreak} money={shown} />
+              <StreakCardView board={streaks} note={perkNote} money={shown} />
+              <ForecastPanel forecast={outlook} note={forecastNote} money={shown} />
+              <PayoutPanel timeline={timeline} money={shown} onOpen={() => router.push('/payouts')} />
               <SectionLabel>Wallet</SectionLabel>
               <Card>
                 <Text style={[styles.kicker, { color: colors.orange }]}>BALANCE</Text>
-                <Text style={[styles.amount, { color: colors.ink }]}>{shownCents(pending, earningsPrivate)}</Text>
+                <Text style={[styles.amount, { color: colors.ink }]}>{shown(pending)}</Text>
                 <Text style={{ color: colors.inkSecondary, lineHeight: 20 }}>
                   {nextRetry?.nextRetryAt
                     ? `Next payout retry ${new Date(nextRetry.nextRetryAt).toLocaleString()}`
@@ -305,7 +279,7 @@ export default function EarningsHub() {
                   <Text style={{ color: colors.inkSecondary, lineHeight: 20 }}>{CASHOUT_COPY[quote.state]}</Text>
                 ) : quote?.state === 'ready' ? (
                   <Text style={{ color: colors.inkSecondary, lineHeight: 20 }}>
-                    {quote.method === 'instant' ? `Instant fee ${money(quote.feeCents)}. One cash-out per day.` : 'Standard payout, no fee. One cash-out per day.'}
+                    {quote.method === 'instant' ? `Instant fee ${dollars(quote.feeCents)}. One cash-out per day.` : 'Standard payout, no fee. One cash-out per day.'}
                   </Text>
                 ) : null}
                 <Pressable
@@ -334,9 +308,20 @@ export default function EarningsHub() {
                   <DonutChart segments={segments} />
                 )}
                 <Text style={{ color: colors.inkSecondary, lineHeight: 20 }}>
-                  Paid out {shownCents(Number(payouts?.paidCents) || 0, earningsPrivate)} stays in payout history.
+                  Paid out {shown(Number(wallet?.paidCents) || 0)} stays in payout history.
                 </Text>
               </Card>
+              <RideList rides={rides} money={shown} onOpen={(id) => router.push({ pathname: '/trip-details', params: { id } })} />
+              <LinkRow
+                label="All activity"
+                hint="Opens completed and canceled rides"
+                onPress={() => router.push('/earnings-activity')}
+              />
+              <LinkRow
+                label="Year and earlier periods"
+                hint="Opens earnings details"
+                onPress={() => router.push('/earnings-details')}
+              />
             </>
           ) : null}
           {error ? <ErrorText>{error}</ErrorText> : null}
@@ -371,4 +356,7 @@ function selectedReport(
 const styles = StyleSheet.create({
   screen: { flex: 1 },
   list: { padding: 16, paddingBottom: 40, gap: 0 },
+  kicker: { fontWeight: '800', letterSpacing: 1.1, fontSize: 12 },
+  amount: { fontSize: 34, fontWeight: '800', letterSpacing: -0.6 },
+  cash: { borderRadius: 14, paddingVertical: 14, alignItems: 'center' },
 })
