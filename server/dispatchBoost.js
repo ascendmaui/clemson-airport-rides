@@ -5,6 +5,8 @@ import { isSimulatedDriverId } from '../packages/rides-native/simulatedDrivers.j
 import { isBusyRosterId } from '../packages/rides-native/busyRoster.js'
 import { surgeExtraBoost } from './surge.js'
 import { partyExtraBoost } from './partyQueue.js'
+import { driverSafetyScore } from './safetyScore.js'
+import { safetyDispatchBoost } from '../shared/perks/safetyScore.js'
 
 export const isFakeDriver = (id) => isDemoDriverId(id) || isSimulatedDriverId(id) || isBusyRosterId(id)
 
@@ -38,6 +40,13 @@ export async function boostAssignableDrivers(sb, drivers, { extraBoost = null, p
         surgeExtraBoost(sb, pickup, drivers).catch(() => null),
         partyExtraBoost(sb, pickup).catch(() => null),
       ])).filter(Boolean)
+      // Safety score only touches dispatch when an admin sets affectsDispatch.
+      const safetyCfg = await config(sb, 'safety_score')
+      if (safetyCfg?.affectsDispatch === true) {
+        const scores = new Map()
+        for (const d of drivers.slice(0, 10)) scores.set(d.id, await driverSafetyScore(sb, d.id).catch(() => null))
+        parts.push((d) => safetyDispatchBoost(scores.get(d.id), safetyCfg))
+      }
       if (parts.length) extraBoost = (d) => parts.reduce((sum, fn) => sum + (Number(fn(d)) || 0), 0)
     }
     const cfg = await config(sb, 'priority_dispatch')
