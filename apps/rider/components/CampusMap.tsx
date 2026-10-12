@@ -188,8 +188,8 @@ export const CampusMap = forwardRef<CampusMapHandle, CampusMapProps>(function Ca
 function makeStyles(colors: Palette) {
   return {
     map: { flex: 1, position: 'relative' as const, overflow: 'hidden' as const, backgroundColor: colors.mapFallback, alignItems: 'center' as const, justifyContent: 'center' as const },
-    searchStage: { ...StyleSheet.absoluteFillObject, backgroundColor: '#1B2836' },
-    searchField: { ...StyleSheet.absoluteFillObject, backgroundColor: '#243447' },
+    searchStage: { ...StyleSheet.absoluteFill, backgroundColor: '#1B2836' },
+    searchField: { ...StyleSheet.absoluteFill, backgroundColor: '#243447' },
     searchCar: {
       position: 'absolute' as const,
       marginLeft: -7,

@@ -1,7 +1,7 @@
 import { LinearGradient } from 'expo-linear-gradient'
 import { useRouter, useFocusEffect } from 'expo-router'
 import { useCallback, useState } from 'react'
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { DonutChart, legendColor } from '@/components/charts'
 import { Card, ErrorText, Primary } from '@/components/chrome'
@@ -14,7 +14,9 @@ import { supabase } from '@/lib/supabase'
 import { useTheme } from '@/lib/theme'
 import { carpoolPayFromTrip, tripEarnedCents, tripPayoutCents, weekNetCents } from 'rides-native/tripTags'
 import { driverBoostShareCents, readBoostCents } from '../../../../shared/scheduledBoost.js'
-import { loadEarnings } from 'rides-native/driverDesk'
+import { instantCashout, loadCashoutQuote, loadEarnings, type CashoutQuote } from 'rides-native/driverDesk'
+import { CASHOUT_COPY } from '../../../../shared/cashout.js'
+import { readPrepaidTipCents } from '../../../../shared/prepaidTip.js'
 
 type EarningsState = Awaited<ReturnType<typeof loadEarnings>> | null
 
@@ -27,10 +29,55 @@ export default function EarningsHub() {
   const [ready, setReady] = useState(!user)
   const [error, setError] = useState<string | null>(null)
 
+  const [quote, setQuote] = useState<CashoutQuote | null>(null)
+  const [cashing, setCashing] = useState(false)
+
   const refresh = useCallback(async () => {
     if (!user || !supabase) return
     setData(await loadEarnings(supabase, user.id))
+    setQuote(await loadCashoutQuote(supabase).catch(() => null))
   }, [user])
+
+  const money = (cents?: number) => `$${((cents || 0) / 100).toFixed(2)}`
+  const runCashout = useCallback(() => {
+    if (!quote || !supabase) return
+    if (quote.state === 'needs_setup') {
+      router.push('/payouts')
+      return
+    }
+    if (quote.state !== 'ready') return
+    const instant = quote.method === 'instant'
+    const lines = [
+      `Balance ${money(quote.grossCents)}`,
+      instant ? `Instant fee ${money(quote.feeCents)}` : 'No fee (standard payout, 1-2 business days)',
+      `You get ${money(quote.netCents)}${quote.last4 ? ` to •••• ${quote.last4}` : ''}`,
+      'One cash-out per day.',
+    ]
+    Alert.alert(instant ? 'Instant cash-out' : 'Cash out', lines.join('\n'), [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: `Cash out ${money(quote.netCents)}`,
+        onPress: async () => {
+          setCashing(true)
+          try {
+            const r = await instantCashout(supabase, quote.feeCents || 0)
+            if (r.ok) {
+              Alert.alert('Cash-out sent', r.method === 'instant'
+                ? `${money(r.netCents)} is on its way to your debit card.`
+                : `${money(r.netCents)} is on its way by standard payout${r.fallbackReason ? ' (instant was not available for this card)' : ''}.`)
+            } else {
+              Alert.alert('Cash-out not sent', CASHOUT_COPY[r.error as keyof typeof CASHOUT_COPY] || 'Try again in a few minutes.')
+            }
+          } catch (err) {
+            Alert.alert('Cash-out not sent', err instanceof Error ? err.message : 'Try again in a few minutes.')
+          } finally {
+            setCashing(false)
+            refresh().catch(() => {})
+          }
+        },
+      },
+    ])
+  }, [quote, refresh, router])
 
   useFocusEffect(useCallback(() => {
     if (!user) {
@@ -58,6 +105,7 @@ export default function EarningsHub() {
   let platform = 0
   let other = 0
   let boostSum = 0
+  let tips = 0
   let carpoolBonus = false
   for (const trip of data?.trips || []) {
     if (trip.status === 'cancelled_wait') {
@@ -75,9 +123,10 @@ export default function EarningsHub() {
     boostSum += boost
     platform += Math.max(0, fare + (trip.wait_fee_cents || 0) - net)
     const payments = (data?.paymentsByTrip?.[trip.id] || []) as TipPayment[]
-    other += tipCentsFromPayments(payments)
+    // Tips (after-ride and prepaid tip boost) are 100% the driver's, shown on their own slice.
+    tips += tipCentsFromPayments(payments) + readPrepaidTipCents(trip)
   }
-  const standard = you + platform + other + boostSum <= 0
+  const standard = you + platform + other + boostSum + tips <= 0
   const segments = standard
     ? [
         { label: 'You', value: 80, color: legendColor(colors, 'you') },
@@ -88,6 +137,7 @@ export default function EarningsHub() {
         { label: 'You', value: you, color: legendColor(colors, 'you') },
         { label: 'Clemson RIDES', value: platform, color: legendColor(colors, 'platform') },
         { label: 'Boost', value: boostSum, color: '#F56600' },
+        { label: 'Tips (100% yours)', value: tips, color: '#22A04B' },
         { label: 'Other', value: other, color: legendColor(colors, 'other') },
       ]
 
@@ -138,14 +188,34 @@ export default function EarningsHub() {
                       : 'Nothing is waiting to pay out. Completed trips land here after Stripe records them.'}
                 </Text>
                 <Pressable
+                  onPress={runCashout}
+                  disabled={cashing || !quote || (quote.state !== 'ready' && quote.state !== 'needs_setup')}
+                  style={[styles.cash, { backgroundColor: quote?.state === 'ready' ? colors.orange : colors.track, opacity: cashing ? 0.6 : 1 }]}
+                  accessibilityRole="button"
+                  accessibilityLabel="Instant cash-out"
+                  accessibilityHint="Shows the fee and asks you to confirm before sending your balance"
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <Text style={{ color: quote?.state === 'ready' ? '#FFFFFF' : colors.title, fontWeight: '800' }}>
+                    {cashing ? 'Sending…' : quote?.state === 'needs_setup' ? 'Set up payouts to cash out' : 'Instant cash-out'}
+                  </Text>
+                </Pressable>
+                {quote && quote.state !== 'ready' && quote.state !== 'needs_setup' ? (
+                  <Text style={{ color: colors.inkSecondary, lineHeight: 20 }}>{CASHOUT_COPY[quote.state]}</Text>
+                ) : quote?.state === 'ready' ? (
+                  <Text style={{ color: colors.inkSecondary, lineHeight: 20 }}>
+                    {quote.method === 'instant' ? `Instant fee ${money(quote.feeCents)}. One cash-out per day.` : 'Standard payout, no fee. One cash-out per day.'}
+                  </Text>
+                ) : null}
+                <Pressable
                   onPress={() => router.push('/payouts')}
                   style={[styles.cash, { backgroundColor: colors.track }]}
                   accessibilityRole="button"
-                  accessibilityLabel="Cash out and more"
-                  accessibilityHint="Navigates to payouts and cash out options"
+                  accessibilityLabel="Payouts and more"
+                  accessibilityHint="Navigates to payout setup and history"
                   hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 >
-                  <Text style={{ color: colors.title, fontWeight: '800' }}>Cash out and more</Text>
+                  <Text style={{ color: colors.title, fontWeight: '800' }}>Payouts and more</Text>
                 </Pressable>
               </Card>
               <Card>
@@ -171,8 +241,8 @@ export default function EarningsHub() {
                   {standard
                     ? 'No completed trips yet. The chart shows the standard split until one is on file. You keep 80%.'
                     : carpoolBonus
-                      ? 'Completed trips on this account. Carpool totals are your base net plus the carpool bonus. Tips, when present, sit in Other.'
-                      : 'Completed trips on this account. You keep 80% of the fare. Boost is shown separately and is not in the platform fee. Tips, when present, sit in Other.'}
+                      ? 'Completed trips on this account. Carpool totals are your base net plus the carpool bonus. Tips are 100% yours and shown on their own.'
+                      : 'Completed trips on this account. You keep 80% of the fare. Boost is shown separately and is not in the platform fee. Tips are 100% yours and shown on their own.'}
                 </Text>
                 {earningsPrivate ? (
                   <SoftNote>Amounts are hidden on this phone. Turn off Make earnings private in Settings to see the split.</SoftNote>

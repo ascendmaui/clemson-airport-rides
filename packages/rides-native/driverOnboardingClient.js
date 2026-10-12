@@ -27,6 +27,7 @@ import {
   submissionBlockers,
 } from '../../shared/driverOnboarding.js'
 import { vehicleAccountErrors, withVehicleYear, writeVehicleWithYearFallback } from '../../shared/vehicleYear.js'
+import { titleStatusError, withTitleStatus, writeVehicleWithTitleFallback } from '../../shared/vehicleTitle.js'
 import { resolveSignupApplicantEmail, submittedApplicantEmail, writeDriverApplication } from '../../shared/applicantEmail.js'
 import {
   BACKGROUND_CONSENT_VERSION,
@@ -332,7 +333,7 @@ async function saveDriverInfoDirect(supabase, user, payload) {
 }
 
 async function saveVehicle(supabase, userId, payload) {
-  const vehFields = withVehicleYear({
+  const vehFields = withTitleStatus(withVehicleYear({
     make: payload.make,
     model: payload.model,
     color: payload.color || null,
@@ -341,15 +342,15 @@ async function saveVehicle(supabase, userId, payload) {
     service_class: payload.comfortClass ? 'comfort' : 'standard',
     autonomous_capable: false,
     tier: payload.comfortClass ? 'comfort' : 'standard',
-  }, payload.year)
+  }, payload.year), payload.titleStatus ?? payload.title_status)
   const { data: existingVeh } = await supabase.from('vehicles').select('id').eq('driver_id', userId).limit(1)
   const vehicle = existingVeh?.[0]
-  const saved = await writeVehicleWithYearFallback((fields) => {
+  const saved = await writeVehicleWithTitleFallback((fields) => writeVehicleWithYearFallback((yearFields) => {
     if (!vehicle) {
-      return supabase.from('vehicles').insert({ driver_id: userId, ...fields }).select('*').single()
+      return supabase.from('vehicles').insert({ driver_id: userId, ...yearFields }).select('*').single()
     }
-    return supabase.from('vehicles').update(fields).eq('id', vehicle.id).select('*').single()
-  }, vehFields)
+    return supabase.from('vehicles').update(yearFields).eq('id', vehicle.id).select('*').single()
+  }, fields), vehFields)
   if (saved.error) throw new Error(saved.error.message)
   return saved.data
 }
@@ -371,6 +372,8 @@ export async function saveDriverInfo(supabase, user, payload) {
     attestation: payload?.attestationAccepted,
   })
   if (quizError) throw new Error(quizError)
+  const titleError = titleStatusError(payload?.titleStatus ?? payload?.title_status)
+  if (titleError) throw new Error(titleError)
   const applicantEmail = resolveSignupApplicantEmail(payload, user)
   if (!applicantEmail) throw new Error('A valid email is required.')
   const body = { ...payload, email: applicantEmail }

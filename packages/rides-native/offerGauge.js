@@ -136,8 +136,9 @@ export function offerCardGauge(card, driver) {
   const legs = offerLegs(card, driver)
   return offerGauge({
     netCents: legs.netCents,
-    tipCents: card?.prepaidTipCents ?? card?.tipCents,
-    tipPrepaid: Boolean(card?.tipPrepaid || card?.prepaidTipCents),
+    // Only a tip prepaid at booking counts; post-trip tips are never in the gauge.
+    tipCents: card?.prepaidTipCents || 0,
+    tipPrepaid: true,
     pickupMinutes: legs.pickupSeconds / 60,
     tripMinutes: legs.tripSeconds / 60,
   })

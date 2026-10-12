@@ -290,7 +290,7 @@ function makeStyles(colors: Palette) {
       fontSize: 28,
       fontWeight: '700' as const,
       letterSpacing: -0.6,
-      fontVariant: ['tabular-nums'] as const,
+      fontVariant: ['tabular-nums' as const],
     },
     compass: {
       color: accentText,
