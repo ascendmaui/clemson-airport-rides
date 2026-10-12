@@ -20,7 +20,7 @@ const COPY_FILES = [
   ...COLOR_FILES,
   'packages/rides-native/useGameDayExperience.js',
   'apps/driver/app/game-day.tsx',
-  'supabase/migrations/20261012212311_game_day_experience.sql',
+  'supabase/migrations/20261013100000_game_day_experience.sql',
 ]
 
 test('game-day surfaces use the orange and purple palette and avoid retired marks', () => {

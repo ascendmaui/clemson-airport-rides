@@ -17,7 +17,7 @@ import {
   writeVehicleWithTitleFallback,
 } from '../shared/vehicleTitle.js'
 
-const migration = readFileSync(new URL('../supabase/migrations/20261012212308_vehicle_title_status.sql', import.meta.url), 'utf8')
+const migration = readFileSync(new URL('../supabase/migrations/20261012210000_vehicle_title_status.sql', import.meta.url), 'utf8')
 
 test('title status allows clean and rebuilt and blocks salvage', () => {
   assert.deepEqual(TITLE_STATUS_OPTIONS.map((option) => option.id), ['clean', 'rebuilt', 'salvage'])
