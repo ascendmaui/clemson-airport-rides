@@ -8,6 +8,7 @@ import { FarePanel } from '@/components/FarePanel'
 import { Card, ErrorText, Primary, Tag, useCardShadow } from '@/components/chrome'
 import { CircleButton, GoButton } from '@/components/shell'
 import { DriverStatusCard } from '@/components/DriverStatusCard'
+import { ForecastCard } from '@/components/ForecastCard'
 import { useAuth } from '@/lib/auth'
 import { useFeedback } from '@/lib/feedback'
 import { notifyAcceptedRide, setRideAlertSurface } from '@/lib/push'
@@ -539,6 +540,7 @@ export default function DriverHome() {
               {gameNotice.live ? `${gameNotice.detail}. ${gameNotice.body}` : gameNotice.body}
             </Text>
           ) : null}
+          {canSeeOffers && !desk?.active ? <ForecastCard /> : null}
         </View>
 
         <View style={styles.flex} pointerEvents="box-none" />
