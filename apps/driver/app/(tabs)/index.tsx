@@ -57,6 +57,7 @@ import { offerCardViewModel } from 'rides-native/offerCard'
 import { offerCardGauge } from 'rides-native/offerGauge'
 import { fetchOfferPreview, riderInitials } from 'rides-native/offerPreviewClient'
 import { OfferGauge } from '@/components/OfferGauge'
+import { tipBoostOfferLine } from '../../../../shared/prepaidTip.js'
 import { EXCLUSIVE_SECONDS, exclusiveSecondsLeft, poolSecondsLeft } from 'rides-native/offerLadder.js'
 
 /** Home map overlay grid: screen-edge gutter, spacing between floating pieces, clearance under the status bar. */
@@ -695,6 +696,8 @@ export function RideCard({
   const riderFirst = displayFirstName(card.firstName || preview?.firstName || '', 'Rider')
   const avatarUrl = card.riderAvatarUrl || preview?.avatarUrl || null
   const ratingAvg = (card as { riderRating?: number }).riderRating ?? preview?.ratingAvg ?? null
+  const prepaidTipCents = Number((card as { prepaidTipCents?: number }).prepaidTipCents) || 0
+  const tipBoostLine = tipBoostOfferLine(vm.pay.netCents + prepaidTipCents, prepaidTipCents)
   const preferredNote = preferredRequestNote(card)
   const opacity = useState(() => new Animated.Value(0))[0]
   const glow = useRef(new Animated.Value(0.35)).current
@@ -780,6 +783,12 @@ export function RideCard({
             </Text>
             <Text style={[styles.offerFareTag, { color: colors.inkSecondary }]}>net</Text>
           </View>
+          {tipBoostLine ? (
+            <View style={styles.tags} accessibilityLabel={tipBoostLine}>
+              <Text style={{ color: colors.ink, fontWeight: '700' }}>{tipBoostLine}</Text>
+              <Tag label="Tip boost" tone="purple" />
+            </View>
+          ) : null}
           <Text style={{ color: colors.inkSecondary }}>
             {vm.pay.subtext}
           </Text>
