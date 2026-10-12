@@ -308,7 +308,10 @@ export default function PickDriver() {
         params: { dest, trip: trip.id, driver: chosen?.name || 'Next driver' },
       })
     } catch (err) {
-      const redirect = scheduleRedirectForRequestError(err, dest)
+      const redirect = scheduleRedirectForRequestError(
+        err && typeof err === 'object' ? err as { code?: string } : undefined,
+        dest,
+      )
       if (redirect) {
         router.push(redirect.airport
           ? { pathname: '/schedule', params: { airport: redirect.airport } }

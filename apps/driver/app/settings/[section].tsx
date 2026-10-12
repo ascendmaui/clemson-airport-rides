@@ -197,11 +197,12 @@ function usePersistDriverAlerts() {
   const { rideAlerts, autoAccept } = useTheme()
   useEffect(() => {
     if (!user || !supabase) return undefined
+    const client = supabase
     let cancel = false
-    supabase.from('profiles').select('notification_prefs').eq('id', user.id).maybeSingle().then((res: { data?: { notification_prefs?: object } | null; error?: { message?: string } | null }) => {
+    void Promise.resolve(client.from('profiles').select('notification_prefs').eq('id', user.id).maybeSingle()).then((res: { data?: { notification_prefs?: object } | null; error?: { message?: string } | null }) => {
       if (cancel || res.error) return null
       const next = { ...(res.data?.notification_prefs || {}), ride_alerts: rideAlerts, auto_accept: autoAccept }
-      return supabase.from('profiles').update({ notification_prefs: next }).eq('id', user.id)
+      return client.from('profiles').update({ notification_prefs: next }).eq('id', user.id)
     }).catch(() => null)
     return () => {
       cancel = true

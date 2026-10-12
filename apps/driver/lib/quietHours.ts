@@ -28,7 +28,7 @@ export async function saveDriverQuiet(userId: string, quiet: Partial<Notificatio
 }
 
 export function useDriverAlertPrefs(userId: string | null | undefined) {
-  const [prefs, setPrefs] = useState<NotificationPrefs | null>(cached?.userId === userId ? cached.prefs : null)
+  const [prefs, setPrefs] = useState<NotificationPrefs | null>(cached != null && cached.userId === userId ? cached.prefs : null)
   useEffect(() => {
     if (!userId) return undefined
     let alive = true
