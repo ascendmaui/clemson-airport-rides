@@ -25,7 +25,7 @@ export default function LeaderboardScreen() {
     <StackPage title="This week’s leaders" onBack={() => router.back()}>
       <View style={{ flexDirection: 'row', gap: 8 }}>
         {(['trips', 'earnings'] as const).map((k) => (
-          <Pressable key={k} onPress={() => setTab(k)} accessibilityRole="button" accessibilityState={{ selected: tab === k }}
+          <Pressable key={k} onPress={() => setTab(k)} accessibilityRole="button" accessibilityLabel={k === 'trips' ? 'Rank by trips' : 'Rank by earnings'} accessibilityState={{ selected: tab === k }}
             style={{ paddingHorizontal: 14, paddingVertical: 8, borderRadius: 999, backgroundColor: tab === k ? colors.orange : colors.card }}>
             <Text style={{ color: tab === k ? '#fff' : colors.title, fontWeight: '800' }}>{k === 'trips' ? 'Trips' : 'Earnings'}</Text>
           </Pressable>

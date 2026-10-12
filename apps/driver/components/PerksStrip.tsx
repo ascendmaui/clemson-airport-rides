@@ -29,7 +29,7 @@ export function PerksStrip() {
   if (lb?.enabled && !lb.optedOut) {
     const me = lb.you?.trips
     chips.push(
-      <Pressable key="leaderboard" onPress={() => router.push('/leaderboard')} accessibilityRole="button" accessibilityHint="Opens this week's leaderboard">
+      <Pressable key="leaderboard" onPress={() => router.push('/leaderboard')} accessibilityRole="button" accessibilityLabel="Weekly leaderboard" accessibilityHint="Opens this week's leaderboard">
         <PerkChip title="Weekly leaders" line={me ? `You’re #${me.rank} by trips` : 'See this week’s top drivers'} />
       </Pressable>,
     )
