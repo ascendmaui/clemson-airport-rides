@@ -19,6 +19,7 @@ import { AccessibleAlert, AccessibleErrorBoundary } from './components/Accessibl
 import { Marketing } from './screens/Marketing'
 import { WhyClemsonRides } from './screens/WhyClemsonRides'
 import { DriveWithUs } from './screens/DriveWithUs'
+import { PartnerJoin, PartnerDashboard, DriverRentals } from './screens/RentalPartners'
 import {
   FaqPage,
   GetTheAppPage,
@@ -90,7 +91,7 @@ function AmbassadorAttributionSync() {
   return null
 }
 
-const PROTECTED = new Set(['driver', 'driver-onboarding', 'account', 'driver-signup', 'admin', 'admin-dashboard', 'incentives', 'lost-found', 'history', 'earnings', 'sign-agreement'])
+const PROTECTED = new Set(['drivers', 'rentals', 'driver', 'driver-onboarding', 'account', 'driver-signup', 'admin', 'admin-dashboard', 'incentives', 'lost-found', 'history', 'earnings', 'sign-agreement'])
 const SITE_ROUTES = new Set([
   'landing',
   '',
@@ -222,13 +223,27 @@ function Screen({ path, params }) {
     case 'driver-signup':
       return (
         <RequireAuth>
-          <DriverSignup />
+          <DriverSignup needsVehicle={params.needs_vehicle === '1'} />
         </RequireAuth>
       )
     case 'sign-agreement':
       return (
         <RequireAuth>
           <SignAgreement token={params.token || ''} />
+        </RequireAuth>
+      )
+    case 'partners':
+      if (params.sub === 'join') return <PartnerJoin />
+      return (
+        <RequireAuth>
+          <PartnerDashboard />
+        </RequireAuth>
+      )
+    case 'drivers':
+    case 'rentals':
+      return (
+        <RequireAuth>
+          <DriverRentals />
         </RequireAuth>
       )
     case 'admin':
@@ -357,7 +372,7 @@ export default function App() {
 
   const overflow = path === 'driver' ? 'hidden' : 'auto'
   const site = SITE_ROUTES.has(path)
-  const routeKey = `${path}:${params.token || params.id || params.trip || ''}`
+  const routeKey = `${path}:${params.token || params.id || params.trip || params.sub || ''}`
 
   return (
     <ToastProvider>

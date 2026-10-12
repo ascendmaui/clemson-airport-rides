@@ -6,7 +6,7 @@ import { Pill, PrimaryButton } from '@/components/Button'
 import { MainTabs } from '@/components/MainTabs'
 import { loadAccount, saveProfile } from '@/lib/accountApi'
 import { useAuth } from '@/lib/auth'
-import { playTigerCue, setSoundsEnabled, soundsEnabled, tapHaptic } from '@/lib/feedback'
+import { hapticsEnabled, playTigerCue, setHapticsEnabled, setSoundsEnabled, soundsEnabled, tapHaptic } from '@/lib/feedback'
 import { lift } from '@/lib/elevation'
 import type { Palette } from '@/lib/palette'
 import { useTheme, type DisplayMode } from '@/lib/theme'
@@ -27,7 +27,7 @@ const DISPLAY: { id: DisplayMode; label: string }[] = [
   { id: 'dark', label: 'Dark' },
 ]
 
-const LINKS: { href: '/billing' | '/tiger-pass' | '/student' | '/promo' | '/notifications' | '/history' | '/schedule' | '/help' | '/support' | '/lost-found'; label: string; hint: string }[] = [
+const LINKS: { href: '/community' | '/billing' | '/tiger-pass' | '/student' | '/promo' | '/notifications' | '/history' | '/schedule' | '/help' | '/support' | '/lost-found'; label: string; hint: string }[] = [
   { href: '/tiger-pass', label: TIGER_PASS_NAME, hint: 'Frequent-rider discount, preferred drivers, and ride types' },
   { href: '/billing', label: 'Billing', hint: 'Card on file and ride history' },
   { href: '/student', label: 'Student', hint: 'Confirmed Clemson email · 10% off Standard' },
@@ -38,6 +38,7 @@ const LINKS: { href: '/billing' | '/tiger-pass' | '/student' | '/promo' | '/noti
   { href: '/help', label: 'Help', hint: 'How booking, Schedule, friends, and billing work' },
   { href: '/support', label: 'Support', hint: 'Charge, ride, bug, or safety tickets' },
   { href: '/lost-found', label: 'Lost & found', hint: 'An item left in the car after a ride' },
+  { href: '/community', label: 'Campus community', hint: 'Optional, off by default · shows only what you and your driver share' },
 ]
 
 function AccountScreen() {
@@ -54,6 +55,7 @@ function AccountScreen() {
   const [fullName, setFullName] = useState('')
   const [bio, setBio] = useState('')
   const [soundsOn, setSoundsOn] = useState(true)
+  const [hapticsOn, setHapticsOn] = useState(true)
   const [ratingLine, setRatingLine] = useState('New · no ratings yet')
   const [pendingTrip, setPendingTrip] = useState<string | null>(null)
   const [genderIdentity, setGenderIdentity] = useState('unspecified')
@@ -64,6 +66,7 @@ function AccountScreen() {
 
   useEffect(() => {
     let alive = true
+    hapticsEnabled().then(setHapticsOn).catch(() => {})
     soundsEnabled().then((on) => {
       if (alive) setSoundsOn(on)
     })
@@ -238,6 +241,20 @@ function AccountScreen() {
               setSoundsOn(next)
               void tapHaptic()
               if (next) await playTigerCue()
+            }}
+          />
+        </View>
+        <View style={[styles.row, lift(colors, 'rest')]}>
+          <Text style={styles.rowTitle}>Haptics</Text>
+          <Text style={styles.copy}>Vibration for taps, booking, and the driver-approach alert. The orange flash and distance still show when this is off.</Text>
+          <PrimaryButton
+            label={hapticsOn ? 'Haptics · On' : 'Haptics · Off'}
+            tone={hapticsOn ? 'orange' : 'ghost'}
+            onPress={async () => {
+              const next = !hapticsOn
+              await setHapticsEnabled(next)
+              setHapticsOn(next)
+              if (next) void tapHaptic()
             }}
           />
         </View>
