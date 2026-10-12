@@ -20,6 +20,7 @@ import { displayFirstName } from 'rides-native/authErrors'
 import { heatColor } from 'rides-native/heat.js'
 import { HEAT_WINDOWS } from 'rides-native/places.js'
 import { loadBusySpots, type BusySpot } from '@/lib/busySpots'
+import { useDemandHeat } from '@/lib/useDemandHeat'
 import {
   acceptTrip,
   declineDriverOffer,
@@ -110,6 +111,7 @@ export default function DriverHome() {
   const [heatCaption, setHeatCaption] = useState('Popular campus spots from ride requests.')
   const [heatBlended, setHeatBlended] = useState(false)
   const [heatLoading, setHeatLoading] = useState(true)
+  const [peakOverride, setPeakOverride] = useState<boolean | null>(null)
   const [riderLine, setRiderLine] = useState<string | null>(null)
   const [hiddenOffers, setHiddenOffers] = useState<string[]>([])
   const [selectedOfferId, setSelectedOfferId] = useState<string | null>(null)
@@ -403,9 +405,16 @@ export default function DriverHome() {
         ? `You're online, ${name}`
         : 'You\'re offline'
 
+  // Peak mode: auto on game days, driver can flip it either way.
+  const peakMode = peakOverride ?? Boolean(gameNotice?.live)
+  const liveHeat = showHeat && heatWindow === 'now'
+  const demand = useDemandHeat({ enabled: liveHeat, peak: peakMode })
+
   return (
     <View style={[styles.screen, { backgroundColor: colors.background }]}>
       <CampusMap
+        demandCells={liveHeat ? demand.cells : []}
+        peak={liveHeat && peakMode}
         pins={pins}
         center={self}
         colorScheme={scheme}
@@ -500,6 +509,16 @@ export default function DriverHome() {
           </View>
           {showHeat ? (
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.heatWindows}>
+              <Pressable
+                onPress={() => setPeakOverride(!peakMode)}
+                accessibilityRole="switch"
+                accessibilityLabel="Peak mode for game days and airport rushes"
+                accessibilityState={{ checked: peakMode }}
+                hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+                style={[styles.heatChip, { backgroundColor: peakMode ? colors.purple : colors.card }]}
+              >
+                <Text style={{ color: peakMode ? '#fff' : colors.title, fontWeight: '800', fontSize: 12 }}>Peak</Text>
+              </Pressable>
               {HEAT_WINDOWS.map((item: { id: string; label: string }) => {
                 const on = item.id === heatWindow
                 return (
@@ -519,7 +538,13 @@ export default function DriverHome() {
             </ScrollView>
           ) : null}
           <Text style={{ color: colors.inkSecondary, fontSize: 12, marginHorizontal: 16, marginTop: 6 }}>
-            {heatLoading ? 'Loading campus demand…' : showHeat ? `${heatCaption}${heatBlended ? ' · Live + typical' : ''}` : 'Busy areas are hidden.'}
+            {!showHeat
+              ? 'Busy areas are hidden.'
+              : liveHeat
+                ? demand.cells.length
+                  ? `Live demand · last ${peakMode ? 30 : 20} min · tap a zone`
+                  : demand.updatedAt ? 'Quiet right now · updates every 30 s' : 'Loading live demand…'
+                : heatLoading ? 'Loading campus demand…' : `${heatCaption}${heatBlended ? ' · Live + typical' : ''}`}
           </Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.hotspots} style={styles.hotspotRow}>
             <View style={[styles.hotspot, { backgroundColor: gameNotice?.live ? colors.orange : colors.card }]}>

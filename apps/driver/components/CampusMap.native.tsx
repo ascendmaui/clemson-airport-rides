@@ -1,13 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
 import { Platform, StyleSheet, Text, View } from 'react-native'
 import Constants from 'expo-constants'
-import MapView, { Circle, Marker, Polygon, Polyline, PROVIDER_DEFAULT } from 'react-native-maps'
+import MapView, { Circle, Marker, Polyline, PROVIDER_DEFAULT } from 'react-native-maps'
 import { ANDROID_MAP_UNAVAILABLE, googleMapStyle, nativeMapTilesReady } from 'rides-native/googleMapChrome.js'
 import { heatColor } from 'rides-native/heat.js'
 import { DOWNTOWN, ORANGE, PURPLE, STADIUM } from 'rides-native/places.js'
 import type { BusySpot } from '@/lib/busySpots'
-import { fetchTigerHeatMap } from 'rides-native/tigerHeatClient.js'
-import { toNativeRing, type TigerHeatZone } from 'rides-native/tigerHeat.js'
+import { describeCell, type DemandCell } from 'rides-native/demandHeat.js'
+import { DemandHeatLayer } from './DemandHeatLayer'
 import type { MapPin } from './CampusMap'
 
 function rgba(hex: string, alpha: number) {
@@ -32,6 +32,8 @@ export function CampusMap({
   lockOnCenter = false,
   onPinPress,
   showsUserLocation = false,
+  demandCells = [],
+  peak = false,
 }: {
   pins?: MapPin[]
   center?: { latitude: number; longitude: number } | null
@@ -46,9 +48,11 @@ export function CampusMap({
   lockOnCenter?: boolean
   onPinPress?: (id: string) => void
   showsUserLocation?: boolean
+  demandCells?: DemandCell[]
+  peak?: boolean
 }) {
   const mapRef = useRef<MapView>(null)
-  const [tigerZones, setTigerZones] = useState<TigerHeatZone[]>([])
+  const [selected, setSelected] = useState<DemandCell | null>(null)
   const pinsRef = useRef(pins)
   const centerRef = useRef(center)
   pinsRef.current = pins
@@ -63,23 +67,15 @@ export function CampusMap({
 
   const pinKey = (pins || []).map((pin: MapPin) => `${pin.id}:${pin.latitude.toFixed(4)},${pin.longitude.toFixed(4)}`).join('|')
   const centerKey = center ? `${center.latitude.toFixed(4)},${center.longitude.toFixed(4)}` : ''
-  const heatKey = showHeat ? spots.map((spot: BusySpot) => spot.id).join('|') : ''
+  const heatKey = showHeat ? heatWindow : ''
 
   useEffect(() => {
-    if (!showHeat) {
-      setTigerZones([])
-      return undefined
-    }
-    let alive = true
-    fetchTigerHeatMap(heatWindow).then((result) => {
-      if (alive) setTigerZones(result.zones || [])
-    }).catch(() => {
-      if (alive) setTigerZones([])
-    })
-    return () => {
-      alive = false
-    }
-  }, [showHeat, heatWindow])
+    if (!showHeat) setSelected(null)
+  }, [showHeat])
+
+  // Keep the tapped card in sync with fresh data; drop it if the zone cooled off.
+  const live = selected ? demandCells.find((cell: DemandCell) => cell.id === selected.id && !cell.fading) || null : null
+  const info = live ? describeCell(live, center ? { lat: center.latitude, lng: center.longitude } : null) : null
 
   useEffect(() => {
     if (!mapRef.current) return
@@ -156,51 +152,18 @@ export function CampusMap({
         pitchEnabled={false}
         showsUserLocation={showsUserLocation}
       >
-        {showHeat
-          ? tigerZones.map((zone: TigerHeatZone) => (
-              <Polygon
-                key={`tiger-${zone.id}`}
-                coordinates={toNativeRing(zone.polygon)}
-                fillColor={zone.preview ? 'rgba(245,102,0,0.18)' : 'rgba(245,102,0,0.36)'}
-                strokeColor="#522D80"
-                strokeWidth={2}
-              />
-            ))
-          : null}
-        {showHeat
-          ? tigerZones.map((zone: TigerHeatZone) => (
-              <Polygon
-                key={`tiger-inner-${zone.id}`}
-                coordinates={toNativeRing(zone.innerPolygon)}
-                fillColor="rgba(82,45,128,0.2)"
-                strokeColor="#F56600"
-                strokeWidth={1}
-              />
-            ))
-          : null}
-        {showHeat
-          ? tigerZones.map((zone: TigerHeatZone) => (
-              <Marker
-                key={`tiger-label-${zone.id}`}
-                coordinate={{ latitude: zone.lat, longitude: zone.lng }}
-                anchor={{ x: 0.5, y: 0.5 }}
-                tracksViewChanges={false}
-              >
-                <View style={[styles.tigerChip, zone.preview ? styles.tigerChipPreview : null]}>
-                  <Text style={styles.tigerChipText}>{zone.bonusLabel}</Text>
-                </View>
-              </Marker>
-            ))
-          : null}
-        {showHeat
-          ? spots.map((spot: BusySpot) => (
+        {showHeat ? (
+          <DemandHeatLayer cells={demandCells} scheme={colorScheme} onPress={setSelected} />
+        ) : null}
+        {showHeat && !demandCells.length
+          ? spots.slice(0, 12).map((spot: BusySpot) => (
               <Circle
                 key={spot.id}
                 center={{ latitude: spot.lat, longitude: spot.lng }}
                 radius={spot.radius}
-                fillColor={rgba(heatColor(spot.intensity), 0.28)}
-                strokeColor={heatColor(spot.intensity)}
-                strokeWidth={1}
+                fillColor={rgba(heatColor(spot.intensity), colorScheme === 'dark' ? 0.22 : 0.16)}
+                strokeColor="transparent"
+                strokeWidth={0}
               />
             ))
           : null}
@@ -237,6 +200,24 @@ export function CampusMap({
           />
         ))}
       </MapView>
+      {showHeat && peak ? (
+        <View pointerEvents="none" style={[styles.peakBadge, { backgroundColor: colorScheme === 'dark' ? 'rgba(255,64,160,0.9)' : 'rgba(122,20,92,0.9)' }]}>
+          <Text style={styles.peakText}>Peak mode · 30 min window</Text>
+        </View>
+      ) : null}
+      {info ? (
+        <View
+          style={[styles.heatCard, { backgroundColor: colorScheme === 'dark' ? '#1C1C22' : '#FFFFFF' }]}
+          accessibilityRole="summary"
+          accessibilityLabel={`${info.title}. ${info.estimate}. ${info.distance || ''}`}
+        >
+          <Text style={[styles.heatCardTitle, { color: colorScheme === 'dark' ? '#FFFFFF' : '#1B1B1F' }]}>{info.title}</Text>
+          <Text style={styles.heatCardEstimate}>{info.estimate}</Text>
+          {info.detail ? <Text style={[styles.heatCardDetail, { color: colorScheme === 'dark' ? '#C9C9D1' : '#5A5A66' }]}>{info.detail}</Text> : null}
+          {info.distance ? <Text style={[styles.heatCardDetail, { color: colorScheme === 'dark' ? '#C9C9D1' : '#5A5A66' }]}>{info.distance}</Text> : null}
+          <Text onPress={() => setSelected(null)} style={styles.heatCardClose} accessibilityRole="button" accessibilityLabel="Close demand details">Close</Text>
+        </View>
+      ) : null}
       {gameDay ? (
         <View pointerEvents="none" style={styles.zone}>
           <Text style={styles.zoneText}>{gameDayLabel || 'Game day'}</Text>
@@ -248,6 +229,13 @@ export function CampusMap({
 
 const styles = StyleSheet.create({
   fill: { flex: 1 },
+  peakBadge: { position: 'absolute', top: 120, alignSelf: 'center', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 14 },
+  peakText: { color: '#fff', fontWeight: '800', fontSize: 12 },
+  heatCard: { position: 'absolute', left: 16, right: 16, top: 160, borderRadius: 16, padding: 14, shadowColor: '#000', shadowOpacity: 0.18, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, elevation: 6 },
+  heatCardTitle: { fontSize: 16, fontWeight: '800' },
+  heatCardEstimate: { fontSize: 14, fontWeight: '700', color: '#F56600', marginTop: 2 },
+  heatCardDetail: { fontSize: 12, marginTop: 4 },
+  heatCardClose: { position: 'absolute', right: 14, top: 14, color: '#F56600', fontWeight: '800', fontSize: 13 },
   unavailable: {
     alignItems: 'center',
     justifyContent: 'center',
