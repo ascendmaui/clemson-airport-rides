@@ -296,7 +296,8 @@ export default function TripScreen() {
         if (result.settle?.reason === 'no_card_on_file') {
           setSettleNote('Trip complete. No card is on file, so this fare was not charged.')
         } else {
-          const waitNote = payout?.waitCents > 0 ? ` Wait time ${formatCents(payout.waitCents)} included.` : ''
+          const waitCents = payout?.waitCents ?? 0
+          const waitNote = waitCents > 0 ? ` Wait time ${formatCents(waitCents)} included.` : ''
           setSettleNote((payout?.status
             ? `Fare collected. Payout ${payout.status}${payout.amountCents ? ` · ${formatCents(payout.amountCents)}` : ''}.`
             : 'Fare collected from the rider’s saved card or Apple Pay.') + waitNote)

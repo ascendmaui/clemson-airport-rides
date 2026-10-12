@@ -114,7 +114,7 @@ export function advanceTrip(
   supabase: unknown,
   trip: { id: string; status: string },
   driverId: string,
-): Promise<DriverTripRow & { settle?: { reason?: string; payment?: unknown; payout?: { status?: string; amountCents?: number } | null } | null }>
+): Promise<DriverTripRow & { settle?: { reason?: string; payment?: unknown; payout?: { status?: string; amountCents?: number; waitCents?: number } | null } | null }>
 export function loadTrip(supabase: unknown, tripId: string, driverId?: string): Promise<DriverCard | null>
 export function loadEarnings(supabase: unknown, driverId: string): Promise<{
   trips: { id: string; status?: string; canceled_at?: string | null; wait_fee_cents?: number; cancel_fee_cents?: number; driver_wait_earnings_cents?: number; fare_cents?: number; dropoff_label?: string | null; completed_at?: string | null; pickup_label?: string | null; metadata?: Record<string, unknown> | null }[]

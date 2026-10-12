@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { AccessibilityInfo, Animated, Easing, Platform, Pressable, StyleSheet, Text, View } from 'react-native'
 import Constants from 'expo-constants'
-import MapView, { Circle, Marker, Polyline, PROVIDER_DEFAULT } from 'react-native-maps'
+import MapView, { Circle, Marker, Polyline, PROVIDER_DEFAULT, type MapStyleElement } from 'react-native-maps'
 import { ANDROID_MAP_UNAVAILABLE, googleMapStyle, nativeMapTilesReady } from 'rides-native/googleMapChrome.js'
 import { heatColor } from 'rides-native/heat.js'
 import { DOWNTOWN, ORANGE, PURPLE, STADIUM } from 'rides-native/places.js'
@@ -175,7 +175,7 @@ export function CampusMap({
         }}
         mapType="standard"
         userInterfaceStyle={colorScheme}
-        customMapStyle={googleMapStyle(colorScheme)}
+        customMapStyle={googleMapStyle(colorScheme) as MapStyleElement[] | undefined}
         rotateEnabled={false}
         pitchEnabled={false}
         showsUserLocation={showsUserLocation}
