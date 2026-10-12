@@ -6,6 +6,7 @@
  * A manual-capture card hold covers the estimated fare plus a buffer.
  * Schedule does not take that hold and does not take a deposit.
  */
+import { parsePrepaidTipCents } from '../../shared/prepaidTip.js'
 import {
   admin, cors, json, parseBody, userFromAuth, computeRoutes,
 } from '../friendRideLib.js'
@@ -66,6 +67,9 @@ export default async function handler(req, res, deps = {}) {
 
   const { body, error: pe } = parseBody(req)
   if (pe) return json(res, 400, { error: pe })
+  const tipParsed = parsePrepaidTipCents(body.prepaidTipCents ?? body.prepaid_tip_cents)
+  if (!tipParsed.ok) return json(res, 400, { error: tipParsed.error, code: 'invalid_prepaid_tip' })
+  const prepaidTipCents = tipParsed.cents
 
   const driverId = String(body.driverId || '').trim()
   if (driverId === user.id) return json(res, 409, {
@@ -277,6 +281,7 @@ export default async function handler(req, res, deps = {}) {
       rider_pays_cents: priced.fareCents,
     },
     passengers: seats,
+    ...(prepaidTipCents > 0 ? { prepaid_tip_cents: prepaidTipCents } : {}),
     ...(riderNote ? { rider_note: riderNote } : {}),
     ...(flightInput.column ? { flight: flightInput.column } : {}),
     metadata: {
@@ -284,6 +289,7 @@ export default async function handler(req, res, deps = {}) {
       ...(e2eRider ? { e2e_test: true } : {}),
       kind: 'driver_request',
       purpose: 'planned',
+      ...(prepaidTipCents > 0 ? { prepaid_tip_cents: prepaidTipCents } : {}),
       preferred_driver_id: autoAssign ? null : driverId,
       offer_driver_id: offerDriverId || null,
       ...ladderPatch,
@@ -328,7 +334,7 @@ export default async function handler(req, res, deps = {}) {
     authorization = await authorizeRideRequest({
       sb,
       stripe: deps.stripe,
-      trip: { ...inserted.data, metadata: row.metadata, rider_id: user.id },
+      trip: { ...inserted.data, prepaid_tip_cents: prepaidTipCents, metadata: row.metadata, rider_id: user.id },
       riderId: user.id,
       estimatedFareCents: priced.fareCents,
     })
