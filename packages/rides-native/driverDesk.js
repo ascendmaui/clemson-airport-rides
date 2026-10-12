@@ -9,6 +9,7 @@ import { isStaleLiveOffer } from '../../shared/staleLiveOffer.js'
 import { lockedOfferEconomics } from './offerLadder.js'
 import { compareBoostedFirst } from '../../shared/scheduledBoost.js'
 import { missingVehicleYearColumn } from '../../shared/vehicleYear.js'
+import { missingTitleStatusColumn } from '../../shared/vehicleTitle.js'
 import { vehicleServesComfort } from '../../shared/rideOptions.js'
 import { headingOrNull, isLiveLocationStatus, speedOrNull } from './liveFix.js'
 import { authedJson } from './apiClient.js'
@@ -106,9 +107,13 @@ export async function loadGameDay(supabase) {
 
 export async function loadVehicle(supabase, driverId) {
   if (!supabase || !driverId) return null
+  const withTitle = 'id, year, title_status, make, model, color, plate, seats, service_class, autonomous_capable, tier'
   const withYear = 'id, year, make, model, color, plate, seats, service_class, autonomous_capable, tier'
   const base = 'id, make, model, color, plate, seats, service_class, autonomous_capable, tier'
-  let res = await supabase.from('vehicles').select(withYear).eq('driver_id', driverId).limit(1)
+  let res = await supabase.from('vehicles').select(withTitle).eq('driver_id', driverId).limit(1)
+  if (res.error && missingTitleStatusColumn(res.error)) {
+    res = await supabase.from('vehicles').select(withYear).eq('driver_id', driverId).limit(1)
+  }
   if (res.error && missingVehicleYearColumn(res.error)) {
     res = await supabase.from('vehicles').select(base).eq('driver_id', driverId).limit(1)
   }
@@ -743,3 +748,29 @@ export async function loadDriverPerks(supabase) {
 }
 
 export { firstRideChipCopy } from '../../shared/perks/firstRide.js'
+
+export async function claimDriverReferral(supabase, code) {
+  return authedJson(supabase, '/api/driver?action=perks', { method: 'POST', body: { op: 'claim-referral', code } })
+}
+
+export async function setLeaderboardOptOut(supabase, optOut) {
+  return authedJson(supabase, '/api/driver?action=perks', { method: 'POST', body: { op: 'leaderboard-opt-out', optOut: Boolean(optOut) } })
+}
+
+export async function setPartyQueueOptIn(supabase, optIn) {
+  return authedJson(supabase, '/api/driver?action=perks', { method: 'POST', body: { op: 'party-queue', optIn: Boolean(optIn) } })
+}
+
+export async function setMapMarker(supabase, marker) {
+  return authedJson(supabase, '/api/driver?action=perks', { method: 'POST', body: { op: 'map-marker', marker } })
+}
+
+/** Instant cash-out quote: { state, method, grossCents, feeCents, netCents }. */
+export async function loadCashoutQuote(supabase) {
+  return authedJson(supabase, '/api/driver?action=cashout')
+}
+
+/** Execute after the driver confirmed the quoted fee. */
+export async function instantCashout(supabase, feeCents) {
+  return authedJson(supabase, '/api/driver?action=cashout', { method: 'POST', body: { confirm: true, feeCents } })
+}

@@ -50,6 +50,11 @@ import {
   withVehicleYear,
   writeVehicleWithYearFallback,
 } from '../../shared/vehicleYear.js'
+import {
+  titleStatusError,
+  withTitleStatus,
+  writeVehicleWithTitleFallback,
+} from '../../shared/vehicleTitle.js'
 
 export {
   submittedApplicantEmail,
@@ -280,7 +285,7 @@ async function saveDriverInfoDirect(userId, payload, email) {
     .select('id')
     .eq('driver_id', userId)
     .limit(1)
-  const vehFields = withVehicleYear({
+  const vehFields = withTitleStatus(withVehicleYear({
     make: payload.make,
     model: payload.model,
     color: payload.color || null,
@@ -289,14 +294,14 @@ async function saveDriverInfoDirect(userId, payload, email) {
     autonomous_capable: false,
     service_class: payload.comfortClass === true || serviceClassFromBody(payload) === 'comfort' ? 'comfort' : 'standard',
     tier: payload.comfortClass === true || serviceClassFromBody(payload) === 'comfort' ? 'comfort' : 'standard',
-  }, payload.year)
+  }, payload.year), payload.titleStatus ?? payload.title_status)
   let vehicle = existingVeh?.[0] || null
-  const savedVehicle = await writeVehicleWithYearFallback((fields) => {
+  const savedVehicle = await writeVehicleWithTitleFallback((fields) => writeVehicleWithYearFallback((yearFields) => {
     if (!vehicle) {
-      return supabase.from('vehicles').insert({ driver_id: userId, ...fields }).select('*').single()
+      return supabase.from('vehicles').insert({ driver_id: userId, ...yearFields }).select('*').single()
     }
-    return supabase.from('vehicles').update(fields).eq('id', vehicle.id).select('*').single()
-  }, vehFields)
+    return supabase.from('vehicles').update(yearFields).eq('id', vehicle.id).select('*').single()
+  }, fields), vehFields)
   if (savedVehicle.error) throw new Error(savedVehicle.error.message)
   vehicle = savedVehicle.data
 
@@ -321,6 +326,8 @@ async function saveDriverInfoDirect(userId, payload, email) {
 
 export async function saveDriverInfo(user, payload) {
   if (!user?.id) throw new Error('Sign in required')
+  const titleError = titleStatusError(payload?.titleStatus ?? payload?.title_status)
+  if (titleError) throw new Error(titleError)
   const email = resolveSignupApplicantEmail(payload, user)
   if (!email) throw new Error('A valid email is required.')
   const body = { ...payload, email }
@@ -766,9 +773,10 @@ export async function signAgreementWithToken({ token, signatureName, accepted })
   return postJson('/api/driver?action=sign-agreement', { token, signatureName, accepted })
 }
 
-export async function reviewDriverApplication({ profileId, decision, reason, acknowledgeContractMismatch = false, acknowledgeBackgroundReview = false }) {
+export async function reviewDriverApplication({ profileId, decision, reason, acknowledgeContractMismatch = false, acknowledgeBackgroundReview = false, approveLuxuryException = false }) {
   try {
     return await postJson('/api/admin-drivers', {
+      approveLuxuryException: approveLuxuryException === true,
       profileId,
       decision,
       reason,

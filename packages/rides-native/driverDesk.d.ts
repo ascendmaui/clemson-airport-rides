@@ -12,6 +12,7 @@ export type DriverTripRow = Record<string, unknown> & {
 export type VehicleRow = {
   id: string
   year?: number | null
+  title_status?: string | null
   make?: string | null
   model?: string | null
   color?: string | null
@@ -114,7 +115,7 @@ export function advanceTrip(
   supabase: unknown,
   trip: { id: string; status: string },
   driverId: string,
-): Promise<DriverTripRow & { settle?: { reason?: string; payment?: unknown; payout?: { status?: string; amountCents?: number } | null } | null }>
+): Promise<DriverTripRow & { settle?: { reason?: string; payment?: unknown; payout?: { status?: string; amountCents?: number; waitCents?: number } | null } | null }>
 export function loadTrip(supabase: unknown, tripId: string, driverId?: string): Promise<DriverCard | null>
 export function loadEarnings(supabase: unknown, driverId: string): Promise<{
   trips: { id: string; status?: string; canceled_at?: string | null; wait_fee_cents?: number; cancel_fee_cents?: number; driver_wait_earnings_cents?: number; fare_cents?: number; dropoff_label?: string | null; completed_at?: string | null; pickup_label?: string | null; metadata?: Record<string, unknown> | null }[]
@@ -155,3 +156,42 @@ export type DriverPerks = {
 }
 export function loadDriverPerks(supabase: unknown): Promise<DriverPerks>
 export function firstRideChipCopy(view: FirstRideView | null | undefined): { title: string; line: string; tone: 'orange' | 'purple' } | null
+export type ReferralSummary = { code: string; link: string; targetTrips: number; bonusCents: number; enabled: boolean; referrals: { status: string; trips: number; target: number }[]; error?: string }
+export function claimDriverReferral(supabase: unknown, code: string): Promise<{ ok: boolean; error?: string }>
+export type LeaderRow = { rank: number; name: string; trips: number; earningsCents: number; you: boolean }
+export type Leaderboard = { enabled: boolean; optedOut?: boolean; weekStart?: string; byTrips?: LeaderRow[]; byEarnings?: LeaderRow[]; you?: { trips: LeaderRow | null; earnings: LeaderRow | null }; error?: string }
+export function setLeaderboardOptOut(supabase: unknown, optOut: boolean): Promise<{ ok: boolean; optedOut: boolean }>
+export type SurgeZone = { id: string; title: string; label: string | null; lat: number; lng: number; startsAt: string; endsAt: string; live: boolean; source: string }
+export type SurgeView = { enabled: boolean; radiusKm?: number; driverBonusCents?: number; zones: SurgeZone[]; error?: string }
+export type PartyQueueView = { enabled: boolean; label: string; open: boolean; startHour: number; endHour: number; days: number[]; optedIn: boolean; position: number | null; size: number; error?: string }
+export function setPartyQueueOptIn(supabase: unknown, optIn: boolean): Promise<{ ok: boolean; optedIn: boolean }>
+export type SafetyScoreView = { enabled: boolean; estimate?: boolean; label?: string; score?: number; hasGps?: boolean; affectsDispatch?: boolean; factors?: { key: string; penalty: number; detail: string }[]; tips?: string[]; error?: string }
+export type ResolvedMarker = { style: string; icon: string; fill: string; accent: string; pattern: string | null; glyph: string }
+export type ScorecardView = {
+  enabled: boolean; windowDays?: number; lifetimeTrips?: number; rating?: number | null; ratingCount?: number
+  acceptance?: { offered: number; accepted: number; rate: number | null }
+  completion?: { completed: number; eligible: number; driverCancels: number; rate: number | null }
+  milestones?: { id: string; metric: string; threshold: number; reached: boolean; current: number | null; unlocks: string[] }[]
+  unlocked?: string[]; marker?: ResolvedMarker; error?: string
+}
+export function setMapMarker(supabase: unknown, marker: { style: string; icon: string }): Promise<{ ok: boolean; error?: string; marker?: ResolvedMarker }>
+export type CashoutQuote = {
+  state: 'needs_setup' | 'already_today' | 'zero_balance' | 'below_fee' | 'ready'
+  method?: 'instant' | 'standard'
+  grossCents?: number
+  feeCents?: number
+  netCents?: number
+  fallbackReason?: string | null
+  last4?: string | null
+}
+export function loadCashoutQuote(supabase: unknown): Promise<CashoutQuote>
+export function instantCashout(supabase: unknown, feeCents: number): Promise<{
+  ok: boolean
+  error?: string
+  method?: 'instant' | 'standard'
+  fallbackReason?: string | null
+  grossCents?: number
+  feeCents?: number
+  netCents?: number
+  payoutError?: string | null
+}>

@@ -51,6 +51,7 @@ import { driverPickupTarget } from 'rides-native/riderLivePickup'
 import { LivePhase } from 'rides-native/LivePhase'
 import { ORANGE, PURPLE } from 'rides-native/places.js'
 import { CounterpartCard, RateTripPanel, partyColorsFromPalette } from 'rides-native/PartyScreens'
+import { CommunityMatchChips } from 'rides-native/CommunityMatchChips'
 import { loadCounterpart, type CounterpartView } from 'rides-native/partyProfile.js'
 import { useTheme } from '@/lib/theme'
 import type { Palette } from '@/lib/palette'
@@ -146,7 +147,8 @@ export default function TripScreen() {
     seenStatus.current = status
     // Only when it changes while this screen is open, not when opening an already-canceled trip.
     if (!before || !status || before === status || !canceledView) return
-    pulse('complete')
+    // Rider cancel / no-show / early end: an error buzz, not the success chime.
+    pulse('cancel')
     AccessibilityInfo.announceForAccessibility(canceledView.announcement)
   }, [trip?.id, trip?.status, trip?.released])
 
@@ -254,7 +256,7 @@ export default function TripScreen() {
 
   function onDriverCanceled() {
     locationTracking.stop()
-    pulse('complete')
+    pulse('cancel')
     router.replace('/')
   }
 
@@ -295,7 +297,8 @@ export default function TripScreen() {
         if (result.settle?.reason === 'no_card_on_file') {
           setSettleNote('Trip complete. No card is on file, so this fare was not charged.')
         } else {
-          const waitNote = payout?.waitCents > 0 ? ` Wait time ${formatCents(payout.waitCents)} included.` : ''
+          const waitCents = payout?.waitCents ?? 0
+          const waitNote = waitCents > 0 ? ` Wait time ${formatCents(waitCents)} included.` : ''
           setSettleNote((payout?.status
             ? `Fare collected. Payout ${payout.status}${payout.amountCents ? ` · ${formatCents(payout.amountCents)}` : ''}.`
             : 'Fare collected from the rider’s saved card or Apple Pay.') + waitNote)
@@ -593,6 +596,7 @@ export default function TripScreen() {
             ) : trip.status === 'arrived' ? null : (
               <CounterpartCard person={person} colors={partyColors} />
             )}
+            {trip.status === 'arrived' ? null : <CommunityMatchChips supabase={supabase} tripId={trip.id} colors={colors} compact />}
             <Text style={styles.copy}>{trip.pickupLabel} → {trip.dropoffLabel}</Text>
             {trip.airportContext ? (
               <View accessibilityLabel={`Airport: ${trip.airportContext.line}`} style={styles.airport}>
@@ -632,7 +636,7 @@ export default function TripScreen() {
             </View>
             {preferredRequestNote(trip) ? <Text style={styles.note}>{preferredRequestNote(trip)}</Text> : null}
             {trip.status !== 'cancelled_wait' && trip.status !== 'completed' ? <FarePanel card={trip} /> : null}
-            {user ? <TripThread supabase={supabase} tripId={trip.id} userId={user.id} colors={colors} /> : null}
+            {user ? <TripThread supabase={supabase} tripId={trip.id} userId={user.id} colors={colors} assist /> : null}
             {trip.backupEnroute || mapsOffer ? <Text style={styles.copy}>{MAPS_HANDOFF_HELPER}</Text> : null}
             {canceledView ? null : <View style={styles.navRow}>
               {navAppOrder(navApp).map((provider, index) => (
