@@ -633,7 +633,7 @@ export default function TripScreen() {
             </View>
             {preferredRequestNote(trip) ? <Text style={styles.note}>{preferredRequestNote(trip)}</Text> : null}
             {trip.status !== 'cancelled_wait' && trip.status !== 'completed' ? <FarePanel card={trip} /> : null}
-            {user ? <TripThread supabase={supabase} tripId={trip.id} userId={user.id} colors={colors} /> : null}
+            {user ? <TripThread supabase={supabase} tripId={trip.id} userId={user.id} colors={colors} assist /> : null}
             {trip.backupEnroute || mapsOffer ? <Text style={styles.copy}>{MAPS_HANDOFF_HELPER}</Text> : null}
             {canceledView ? null : <View style={styles.navRow}>
               {navAppOrder(navApp).map((provider, index) => (
