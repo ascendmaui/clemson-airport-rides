@@ -43,3 +43,7 @@ export declare const GlassTabBar: ComponentType<{
   bottomInset?: number
   accent?: string
 }>
+export type GlyphLayer = { kind: 'wash' | 'fill' | 'specular' | 'stroke' | 'knock' | 'accent'; d: string; fill?: string; stroke?: string; strokeWidth?: number; opacity?: number; gradient?: [string, string, string] }
+export declare function opticalStroke(size?: number): number
+export declare function glyphLayers(name: string, opts?: { active?: boolean; scheme?: IconScheme; color?: string; knockout?: string; size?: number; strokeWidth?: number }): GlyphLayer[]
+export declare function glyphSvg(name: string, opts?: { active?: boolean; scheme?: IconScheme; color?: string; knockout?: string; size?: number; strokeWidth?: number }): string
