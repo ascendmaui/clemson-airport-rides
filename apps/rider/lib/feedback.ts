@@ -2,12 +2,14 @@ import { createAudioPlayer, setAudioModeAsync, type AudioPlayer } from 'expo-aud
 import * as Haptics from 'expo-haptics'
 import pingSource from '../assets/sounds/ping.wav'
 import tigerSource from '../assets/sounds/tiger.wav'
+import completeSource from '../assets/sounds/complete.wav'
 import { authStorage } from '@/lib/storage'
 
 const SOUNDS_KEY = 'rider.sounds.enabled'
 
 let player: AudioPlayer | null = null
 let pingPlayer: AudioPlayer | null = null
+let completePlayer: AudioPlayer | null = null
 let modeReady = false
 
 export async function soundsEnabled() {
@@ -111,6 +113,31 @@ export async function playTigerCue() {
     if (!player) player = createAudioPlayer(tigerSource)
     await player.seekTo(0)
     player.play()
+  } catch {
+    /* asset or platform audio can fail closed */
+  }
+}
+
+/** Soft three-note trip-complete cue. Honors the sounds toggle and the mute switch. */
+export async function playCompleteCue() {
+  if (!(await soundsEnabled())) return
+  try {
+    if (!modeReady) {
+      await setAudioModeAsync({
+        playsInSilentMode: false,
+        interruptionMode: 'mixWithOthers',
+        allowsRecording: false,
+        shouldPlayInBackground: false,
+        shouldRouteThroughEarpiece: false,
+      })
+      modeReady = true
+    }
+    if (!completePlayer) {
+      completePlayer = createAudioPlayer(completeSource)
+      completePlayer.volume = 0.35
+    }
+    await completePlayer.seekTo(0)
+    completePlayer.play()
   } catch {
     /* asset or platform audio can fail closed */
   }
