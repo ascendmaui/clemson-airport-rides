@@ -156,3 +156,23 @@ export type SurgeView = { enabled: boolean; radiusKm?: number; driverBonusCents?
 export type PartyQueueView = { enabled: boolean; label: string; open: boolean; startHour: number; endHour: number; days: number[]; optedIn: boolean; position: number | null; size: number; error?: string }
 export function setPartyQueueOptIn(supabase: unknown, optIn: boolean): Promise<{ ok: boolean; optedIn: boolean }>
 export type SafetyScoreView = { enabled: boolean; estimate?: boolean; label?: string; score?: number; hasGps?: boolean; affectsDispatch?: boolean; factors?: { key: string; penalty: number; detail: string }[]; tips?: string[]; error?: string }
+export type CashoutQuote = {
+  state: 'needs_setup' | 'already_today' | 'zero_balance' | 'below_fee' | 'ready'
+  method?: 'instant' | 'standard'
+  grossCents?: number
+  feeCents?: number
+  netCents?: number
+  fallbackReason?: string | null
+  last4?: string | null
+}
+export function loadCashoutQuote(supabase: unknown): Promise<CashoutQuote>
+export function instantCashout(supabase: unknown, feeCents: number): Promise<{
+  ok: boolean
+  error?: string
+  method?: 'instant' | 'standard'
+  fallbackReason?: string | null
+  grossCents?: number
+  feeCents?: number
+  netCents?: number
+  payoutError?: string | null
+}>

@@ -128,6 +128,11 @@ exports[`Driver Settings snapshot 1`] = `
       "subtitle": "Chime and vibration by ride type"
     },
     {
+      "icon": "moon",
+      "title": "Quiet hours",
+      "subtitle": "Silent offers overnight, Clemson time"
+    },
+    {
       "icon": "flash",
       "title": "Auto-accept",
       "subtitle": "Distance, hourly rate, favorite riders"

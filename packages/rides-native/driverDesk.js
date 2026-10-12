@@ -753,3 +753,13 @@ export async function setLeaderboardOptOut(supabase, optOut) {
 export async function setPartyQueueOptIn(supabase, optIn) {
   return authedJson(supabase, '/api/driver?action=perks', { method: 'POST', body: { op: 'party-queue', optIn: Boolean(optIn) } })
 }
+
+/** Instant cash-out quote: { state, method, grossCents, feeCents, netCents }. */
+export async function loadCashoutQuote(supabase) {
+  return authedJson(supabase, '/api/driver?action=cashout')
+}
+
+/** Execute after the driver confirmed the quoted fee. */
+export async function instantCashout(supabase, feeCents) {
+  return authedJson(supabase, '/api/driver?action=cashout', { method: 'POST', body: { confirm: true, feeCents } })
+}
