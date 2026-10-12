@@ -165,3 +165,23 @@ export type ScorecardView = {
   unlocked?: string[]; marker?: ResolvedMarker; error?: string
 }
 export function setMapMarker(supabase: unknown, marker: { style: string; icon: string }): Promise<{ ok: boolean; error?: string; marker?: ResolvedMarker }>
+export type CashoutQuote = {
+  state: 'needs_setup' | 'already_today' | 'zero_balance' | 'below_fee' | 'ready'
+  method?: 'instant' | 'standard'
+  grossCents?: number
+  feeCents?: number
+  netCents?: number
+  fallbackReason?: string | null
+  last4?: string | null
+}
+export function loadCashoutQuote(supabase: unknown): Promise<CashoutQuote>
+export function instantCashout(supabase: unknown, feeCents: number): Promise<{
+  ok: boolean
+  error?: string
+  method?: 'instant' | 'standard'
+  fallbackReason?: string | null
+  grossCents?: number
+  feeCents?: number
+  netCents?: number
+  payoutError?: string | null
+}>
