@@ -11,7 +11,7 @@ const HALO_LIMIT = 18
  */
 function Cell({ cell, scheme, halo, onPress }: { cell: DemandCell; scheme: 'light' | 'dark'; halo: boolean; onPress?: (cell: DemandCell) => void }) {
   const colors = heatLayers(cell.intensity, scheme)
-  const coreScale = 0.45 + 0.35 * cell.intensity
+  const coreScale = 0.42 + 0.32 * cell.intensity
   return (
     <>
       {halo ? (

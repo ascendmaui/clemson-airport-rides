@@ -159,10 +159,10 @@ export function describeCell(cell, driver) {
  * the three stacked layers (halo, body, core) so the cell reads as a soft
  * gradient rather than a flat square.
  */
-// Brand ramp: warm amber -> Clemson orange #F56600 -> ember -> Clemson purple #522D80.
-// Dark ramp is lifted so the cool end still reads on a night basemap.
-const RAMP_LIGHT = [[255, 184, 77], [245, 102, 0], [201, 56, 46], [82, 45, 128]]
-const RAMP_DARK = [[255, 214, 150], [255, 128, 40], [240, 84, 92], [168, 120, 232]]
+// Warm amber → Clemson orange #F56600 → ember → Clemson purple #522D80.
+// The night ramp is lifted so the purple end still reads on a dark basemap.
+const RAMP_LIGHT = [[255, 196, 122], [245, 102, 0], [176, 52, 36], [82, 45, 128]]
+const RAMP_DARK = [[255, 214, 170], [255, 138, 46], [232, 96, 84], [186, 148, 232]]
 
 function lerp(a, b, t) {
   return a + (b - a) * t
@@ -184,10 +184,10 @@ export function heatLayers(intensity, scheme = 'light') {
   const boost = scheme === 'dark' ? 1.15 : 1
   const a = (x) => Math.min(0.85, Number((x * boost).toFixed(3)))
   return {
-    halo: `rgba(${r},${g},${b},${a(0.1 + 0.12 * v)})`,
-    body: `rgba(${r},${g},${b},${a(0.16 + 0.22 * v)})`,
-    core: `rgba(${r},${g},${b},${a(0.22 + 0.4 * v)})`,
-    stroke: `rgba(${r},${g},${b},${a(0.35 + 0.4 * v)})`,
+    halo: `rgba(${r},${g},${b},${a(0.08 + 0.1 * v)})`,
+    body: `rgba(${r},${g},${b},${a(0.14 + 0.18 * v)})`,
+    core: `rgba(${r},${g},${b},${a(0.22 + 0.36 * v)})`,
+    stroke: `rgba(${r},${g},${b},${a(0.4 + 0.32 * v)})`,
   }
 }
 

@@ -515,9 +515,9 @@ export default function DriverHome() {
                 accessibilityLabel="Peak mode for game days and airport rushes"
                 accessibilityState={{ checked: peakMode }}
                 hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
-                style={[styles.heatChip, { backgroundColor: peakMode ? colors.purple : colors.card }]}
+                style={[styles.heatChip, peakMode ? styles.heatChipOn : { backgroundColor: colors.card, borderColor: colors.border }]}
               >
-                <Text style={{ color: peakMode ? '#fff' : colors.title, fontWeight: '800', fontSize: 12 }}>Peak</Text>
+                <Text style={{ color: peakMode ? '#FFFFFF' : colors.title, fontWeight: '700', fontSize: 13, letterSpacing: 0.2 }}>Peak</Text>
               </Pressable>
               {HEAT_WINDOWS.map((item: { id: string; label: string }) => {
                 const on = item.id === heatWindow
@@ -880,10 +880,19 @@ const styles = StyleSheet.create({
   dot: { width: 8, height: 8, borderRadius: 4 },
   heatPanel: { marginTop: 8 },
   heatRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16 },
-  heatLabel: { fontSize: 12, fontWeight: '700' },
-  heatToggle: { borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6 },
-  heatWindows: { paddingHorizontal: 16, gap: 8, marginTop: 8 },
-  heatChip: { borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6 },
+  heatLabel: { fontSize: 13, fontWeight: '700', letterSpacing: 0.2 },
+  heatToggle: { borderRadius: 999, paddingHorizontal: 14, minHeight: 36, justifyContent: 'center' },
+  heatWindows: { paddingHorizontal: 16, gap: 8, marginTop: 10 },
+  heatChip: {
+    borderRadius: 999, paddingHorizontal: 14, minHeight: 36, justifyContent: 'center',
+    borderWidth: 1, borderColor: 'transparent',
+  },
+  heatChipOn: {
+    backgroundColor: '#522D80',
+    borderColor: 'rgba(255,255,255,0.16)',
+    shadowColor: '#522D80', shadowOpacity: 0.22, shadowRadius: 10, shadowOffset: { width: 0, height: 4 },
+    elevation: 2,
+  },
   hotspotRow: { flexGrow: 0, marginTop: 10 },
   hotspots: { paddingHorizontal: 16, gap: 8 },
   hotspot: { borderRadius: 999, paddingHorizontal: 12, paddingVertical: 8 },

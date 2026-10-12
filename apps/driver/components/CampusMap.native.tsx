@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Platform, StyleSheet, Text, View } from 'react-native'
+import { AccessibilityInfo, Animated, Easing, Platform, Pressable, StyleSheet, Text, View } from 'react-native'
 import Constants from 'expo-constants'
 import MapView, { Circle, Marker, Polyline, PROVIDER_DEFAULT } from 'react-native-maps'
 import { ANDROID_MAP_UNAVAILABLE, googleMapStyle, nativeMapTilesReady } from 'rides-native/googleMapChrome.js'
@@ -76,6 +76,34 @@ export function CampusMap({
   // Keep the tapped card in sync with fresh data; drop it if the zone cooled off.
   const live = selected ? demandCells.find((cell: DemandCell) => cell.id === selected.id && !cell.fading) || null : null
   const info = live ? describeCell(live, center ? { lat: center.latitude, lng: center.longitude } : null) : null
+  const cardIn = useRef(new Animated.Value(0)).current
+  const darkMap = colorScheme === 'dark'
+
+  useEffect(() => {
+    if (!live) {
+      cardIn.setValue(0)
+      return undefined
+    }
+    let cancelled = false
+    const play = (reduce: boolean) => {
+      if (cancelled) return
+      if (reduce) {
+        cardIn.setValue(1)
+        return
+      }
+      cardIn.setValue(0)
+      Animated.timing(cardIn, {
+        toValue: 1,
+        duration: 220,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }).start()
+    }
+    const pending = AccessibilityInfo.isReduceMotionEnabled?.()
+    if (pending && typeof pending.then === 'function') pending.then(play).catch(() => play(false))
+    else play(false)
+    return () => { cancelled = true }
+  }, [cardIn, live?.id])
 
   useEffect(() => {
     if (!mapRef.current) return
@@ -201,22 +229,38 @@ export function CampusMap({
         ))}
       </MapView>
       {showHeat && peak ? (
-        <View pointerEvents="none" style={[styles.peakBadge, { backgroundColor: colorScheme === 'dark' ? 'rgba(255,64,160,0.9)' : 'rgba(122,20,92,0.9)' }]}>
+        <View pointerEvents="none" style={styles.peakBadge}>
           <Text style={styles.peakText}>Peak mode · 30 min window</Text>
         </View>
       ) : null}
       {info ? (
-        <View
-          style={[styles.heatCard, { backgroundColor: colorScheme === 'dark' ? '#1C1C22' : '#FFFFFF' }]}
+        <Animated.View
+          style={[
+            styles.heatCard,
+            {
+              backgroundColor: darkMap ? '#16121F' : '#FFFFFF',
+              borderColor: darkMap ? 'rgba(255,255,255,0.14)' : 'rgba(82,45,128,0.12)',
+              opacity: cardIn,
+              transform: [{ translateY: cardIn.interpolate({ inputRange: [0, 1], outputRange: [8, 0] }) }],
+            },
+          ]}
           accessibilityRole="summary"
           accessibilityLabel={`${info.title}. ${info.estimate}. ${info.distance || ''}`}
         >
-          <Text style={[styles.heatCardTitle, { color: colorScheme === 'dark' ? '#FFFFFF' : '#1B1B1F' }]}>{info.title}</Text>
-          <Text style={styles.heatCardEstimate}>{info.estimate}</Text>
-          {info.detail ? <Text style={[styles.heatCardDetail, { color: colorScheme === 'dark' ? '#C9C9D1' : '#5A5A66' }]}>{info.detail}</Text> : null}
-          {info.distance ? <Text style={[styles.heatCardDetail, { color: colorScheme === 'dark' ? '#C9C9D1' : '#5A5A66' }]}>{info.distance}</Text> : null}
-          <Text onPress={() => setSelected(null)} style={styles.heatCardClose} accessibilityRole="button" accessibilityLabel="Close demand details">Close</Text>
-        </View>
+          <Text style={[styles.heatCardTitle, { color: darkMap ? '#FFFFFF' : '#1B1B1F' }]}>{info.title}</Text>
+          <Text style={[styles.heatCardEstimate, { color: darkMap ? '#FFC9A3' : '#9A3F00' }]}>{info.estimate}</Text>
+          {info.detail ? <Text style={[styles.heatCardDetail, { color: darkMap ? '#D5D0DC' : '#3E4654' }]}>{info.detail}</Text> : null}
+          {info.distance ? <Text style={[styles.heatCardDetail, { color: darkMap ? '#D5D0DC' : '#3E4654' }]}>{info.distance}</Text> : null}
+          <Pressable
+            onPress={() => setSelected(null)}
+            style={styles.heatCardClose}
+            accessibilityRole="button"
+            accessibilityLabel="Close demand details"
+            hitSlop={8}
+          >
+            <Text style={[styles.heatCardCloseText, { color: darkMap ? '#FFC9A3' : '#9A3F00' }]}>Close</Text>
+          </Pressable>
+        </Animated.View>
       ) : null}
       {gameDay ? (
         <View pointerEvents="none" style={styles.zone}>
@@ -229,13 +273,26 @@ export function CampusMap({
 
 const styles = StyleSheet.create({
   fill: { flex: 1 },
-  peakBadge: { position: 'absolute', top: 120, alignSelf: 'center', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 14 },
-  peakText: { color: '#fff', fontWeight: '800', fontSize: 12 },
-  heatCard: { position: 'absolute', left: 16, right: 16, top: 160, borderRadius: 16, padding: 14, shadowColor: '#000', shadowOpacity: 0.18, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, elevation: 6 },
-  heatCardTitle: { fontSize: 16, fontWeight: '800' },
-  heatCardEstimate: { fontSize: 14, fontWeight: '700', color: '#F56600', marginTop: 2 },
-  heatCardDetail: { fontSize: 12, marginTop: 4 },
-  heatCardClose: { position: 'absolute', right: 14, top: 14, color: '#F56600', fontWeight: '800', fontSize: 13 },
+  peakBadge: {
+    position: 'absolute', top: 108, alignSelf: 'center',
+    paddingHorizontal: 14, paddingVertical: 8, borderRadius: 999,
+    backgroundColor: '#522D80',
+    borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(255,255,255,0.28)',
+    shadowColor: '#522D80', shadowOpacity: 0.28, shadowRadius: 14, shadowOffset: { width: 0, height: 6 },
+    elevation: 4,
+  },
+  peakText: { color: '#FFFFFF', fontWeight: '700', fontSize: 12, letterSpacing: 0.3 },
+  heatCard: {
+    position: 'absolute', left: 16, right: 16, top: 156,
+    borderRadius: 22, padding: 16, paddingRight: 88, borderWidth: 1,
+    shadowColor: '#1A1033', shadowOpacity: 0.16, shadowRadius: 24, shadowOffset: { width: 0, height: 12 },
+    elevation: 8,
+  },
+  heatCardTitle: { fontSize: 17, fontWeight: '700', letterSpacing: -0.3 },
+  heatCardEstimate: { fontSize: 14, fontWeight: '700', marginTop: 4, letterSpacing: -0.1 },
+  heatCardDetail: { fontSize: 13, lineHeight: 18, marginTop: 6 },
+  heatCardClose: { position: 'absolute', right: 6, top: 6, minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
+  heatCardCloseText: { fontWeight: '700', fontSize: 13, letterSpacing: 0.2 },
   unavailable: {
     alignItems: 'center',
     justifyContent: 'center',

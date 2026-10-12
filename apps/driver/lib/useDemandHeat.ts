@@ -3,7 +3,7 @@ import { AppState } from 'react-native'
 import { supabase } from '@/lib/supabase'
 import { quantize, subscribeDemandCells, tweenCells, type DemandCell } from 'rides-native/demandHeat.js'
 
-const TWEEN_MS = 700
+const TWEEN_MS = 280
 const TWEEN_FRAMES = 8
 
 /**
