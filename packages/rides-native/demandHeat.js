@@ -159,8 +159,10 @@ export function describeCell(cell, driver) {
  * the three stacked layers (halo, body, core) so the cell reads as a soft
  * gradient rather than a flat square.
  */
-const RAMP_LIGHT = [[255, 196, 0], [245, 102, 0], [214, 40, 40], [122, 20, 92]]
-const RAMP_DARK = [[255, 230, 120], [255, 150, 40], [255, 80, 60], [255, 64, 160]]
+// Brand ramp: warm amber -> Clemson orange #F56600 -> ember -> Clemson purple #522D80.
+// Dark ramp is lifted so the cool end still reads on a night basemap.
+const RAMP_LIGHT = [[255, 184, 77], [245, 102, 0], [201, 56, 46], [82, 45, 128]]
+const RAMP_DARK = [[255, 214, 150], [255, 128, 40], [240, 84, 92], [168, 120, 232]]
 
 function lerp(a, b, t) {
   return a + (b - a) * t
@@ -170,7 +172,9 @@ export function heatRgb(intensity, scheme = 'light') {
   const ramp = scheme === 'dark' ? RAMP_DARK : RAMP_LIGHT
   const v = clamp01(finite(intensity)) * (ramp.length - 1)
   const i = Math.min(ramp.length - 2, Math.floor(v))
-  const t = v - i
+  // Smoothstep between stops avoids the muddy linear-RGB midpoints and visible banding.
+  const raw = v - i
+  const t = raw * raw * (3 - 2 * raw)
   return ramp[i].map((c, k) => Math.round(lerp(c, ramp[i + 1][k], t)))
 }
 

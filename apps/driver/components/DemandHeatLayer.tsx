@@ -15,14 +15,14 @@ function Cell({ cell, scheme, halo, onPress }: { cell: DemandCell; scheme: 'ligh
   return (
     <>
       {halo ? (
-        <Polygon coordinates={cellRing(cell, 1.5)} fillColor={colors.halo} strokeWidth={0} strokeColor="transparent" zIndex={1} />
+        <Polygon coordinates={cellRing(cell, 1.6)} fillColor={colors.halo} strokeWidth={0} strokeColor="transparent" zIndex={1} />
       ) : null}
       <Polygon coordinates={cellRing(cell, 1.0)} fillColor={colors.body} strokeWidth={0} strokeColor="transparent" zIndex={2} />
       <Polygon
         coordinates={cellRing(cell, coreScale)}
         fillColor={colors.core}
         strokeColor={colors.stroke}
-        strokeWidth={cell.intensity >= 0.75 ? 1.5 : 0}
+        strokeWidth={cell.intensity >= 0.85 ? 1 : 0}
         zIndex={3}
         tappable
         onPress={() => onPress?.(cell)}
