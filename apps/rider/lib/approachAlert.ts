@@ -8,6 +8,8 @@ export const APPROACH_DECREASE_FT = 25
 export const APPROACH_NEAR_FT = 500
 export const APPROACH_CLOSE_FT = 200
 export const APPROACH_HERE_FT = 100
+export const CROWD_MIN_INTERVAL_MS = 2000
+export const CROWD_MAX_INTERVAL_MS = 3000
 
 const FEET_PER_METER = 3.280839895013123
 
@@ -307,14 +309,15 @@ export function approachDirection(
 }
 
 /**
- * Crowd-find cadence inside 500 ft. Closer means a faster ping, a stronger
+ * Crowd-find cadence inside 500 ft. Closer means a (throttled, 2-3 s) faster ping, a stronger
  * buzz, and a brighter orange flash. Outside 500 ft there is no loop.
  */
 export function crowdCue(feet: number | null | undefined): CrowdCue | null {
   const whole = wholeApproachFeet(feet)
   if (whole == null || whole > APPROACH_NEAR_FT) return null
   const span = whole / APPROACH_NEAR_FT
-  const intervalMs = Math.round(500 + span * 2300)
+  // Throttled: at most one buzz + ping every 2-3 s (2 s right beside, 3 s at 500 ft).
+  const intervalMs = Math.round(CROWD_MIN_INTERVAL_MS + span * (CROWD_MAX_INTERVAL_MS - CROWD_MIN_INTERVAL_MS))
   const haptic: ApproachHapticLevel = whole <= APPROACH_HERE_FT
     ? 'heavy'
     : whole <= APPROACH_CLOSE_FT
