@@ -762,9 +762,9 @@ export function RideCard({
               </View>
             )}
             <View style={{ flex: 1 }}>
-              <Text style={{ color: colors.ink, fontWeight: '800', fontSize: 16 }}>{riderFirst}</Text>
+              <Text style={[styles.riderName, { color: colors.ink }]}>{riderFirst}</Text>
               <Text
-                style={{ color: colors.inkSecondary, fontWeight: '600' }}
+                style={[styles.riderMeta, { color: colors.inkSecondary }]}
                 accessibilityLabel={ratingAvg != null ? `Rider rating ${Number(ratingAvg).toFixed(1)} stars` : 'New rider, no rating yet'}
               >
                 {ratingAvg != null ? `★ ${Number(ratingAvg).toFixed(1)}` : '★ New'} · {card.tier === 'wait' ? 'Wait & Save' : card.tier === 'comfort' ? 'Extra Comfort' : card.tier === 'carpool' ? 'Carpool' : 'Standard'}
@@ -909,10 +909,15 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   barText: { fontWeight: '800', fontSize: 16, flex: 1, textAlign: 'center' },
-  riderRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  avatar: { width: 44, height: 44, borderRadius: 22 },
+  riderRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  riderName: { fontWeight: '700', fontSize: 16, letterSpacing: -0.3 },
+  riderMeta: { fontWeight: '600', fontSize: 13, marginTop: 2, letterSpacing: -0.1 },
+  avatar: {
+    width: 44, height: 44, borderRadius: 22,
+    borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(82,45,128,0.28)',
+  },
   avatarFallback: { alignItems: 'center', justifyContent: 'center' },
-  avatarLetter: { color: '#fff', fontWeight: '800', fontSize: 18 },
+  avatarLetter: { color: '#fff', fontWeight: '700', fontSize: 16, letterSpacing: -0.3 },
   offerFareRow: { flexDirection: 'row', alignItems: 'baseline', gap: 6 },
   offerFare: { fontSize: 34, fontWeight: '800', letterSpacing: -0.6 },
   offerFareTag: { fontSize: 16, fontWeight: '700' },
