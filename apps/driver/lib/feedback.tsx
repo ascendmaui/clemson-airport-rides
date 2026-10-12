@@ -5,7 +5,7 @@ import requestSound from '@/assets/sounds/request.wav'
 import { playbackForTier } from 'rides-native/offerLadder.js'
 import { useTheme } from '@/lib/theme'
 
-export type Pulse = 'request' | 'accept' | 'decline' | 'online' | 'complete'
+export type Pulse = 'request' | 'accept' | 'decline' | 'online' | 'complete' | 'cancel'
 
 type PulseOptions = { tier?: string | null }
 
@@ -30,6 +30,7 @@ function hapticFor(kind: Pulse) {
     case 'online':
       return Haptics.NotificationFeedbackType.Success
     case 'decline':
+    case 'cancel':
       return Haptics.NotificationFeedbackType.Error
     default: {
       const unknown: never = kind
