@@ -5,6 +5,7 @@ import { vehicleServesComfort } from '../shared/rideOptions.js'
 import { isSimulatedDriverId } from '../packages/rides-native/simulatedDrivers.js'
 import { orderDriversForRider } from '../shared/riderFavorites.js'
 import { isE2ETestUser } from '../shared/e2eTestAccounts.js'
+import { boostAssignableDrivers } from './dispatchBoost.js'
 
 /**
  * Approved drivers who are online, John then Kim then everyone else.
@@ -88,7 +89,9 @@ export async function listAssignableDrivers(sb, {
     })
   }
   const filtered = filterAssignableDrivers(ranked, riderRow, { comfortKnown: !profiles.unavailable })
-  const ordered = orderDriversForRider(sortByDefaultDriverOrder(filtered.drivers), {
+  // Configurable top-rated boost; only reorders within a dispatch-rank tier.
+  const boosted = await boostAssignableDrivers(sb, sortByDefaultDriverOrder(filtered.drivers))
+  const ordered = orderDriversForRider(boosted, {
     preferredIds,
     favoriteIds,
   })

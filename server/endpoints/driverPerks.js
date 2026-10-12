@@ -8,7 +8,7 @@ import { streakProgress } from '../../shared/perks/streaks.js'
 import { claimReferral, referralSummary } from '../driverReferral.js'
 import { setLeaderboardOptOut, weeklyLeaderboard } from '../leaderboard.js'
 
-export const PERK_CONFIG_KEYS = ['streaks', 'referral', 'leaderboard']
+export const PERK_CONFIG_KEYS = ['streaks', 'referral', 'leaderboard', 'priority_dispatch']
 
 export async function buildPerks(sb, driverId, { now = new Date(), firstName = null } = {}) {
   const trips = await loadDriverTrips(sb, driverId)
