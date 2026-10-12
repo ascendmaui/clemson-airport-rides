@@ -7,6 +7,7 @@ import { ApproachAlert } from '@/components/ApproachAlert'
 import { LostItemBanner } from 'rides-native/LostItemBanner.jsx'
 import { ToastHost } from 'rides-native/ToastHost.jsx'
 import { RiderMatchPopup } from '@/components/RiderMatchPopup'
+import { RiderMoments } from '@/components/RiderMoments'
 import { AuthProvider, useAuth } from '@/lib/auth'
 import { PasswordRecoveryListener } from '@/lib/passwordRecovery'
 import { ThemeProvider, useTheme } from '@/lib/theme'
@@ -195,6 +196,7 @@ export default function RootLayout() {
           <ApproachHost />
           <RiderMatchPopup />
           <ToastMount />
+          <RiderMoments />
         </Gate>
       </AuthProvider>
     </ThemeProvider>
