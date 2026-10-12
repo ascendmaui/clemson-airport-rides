@@ -82,8 +82,8 @@ export default function PromoScreen() {
   }
 
   const rewards = describeRiderSocialRewards(desk?.config)
-  const pending = (desk?.sent || []).filter((row: { status: string }) => row.status === 'pending').length
-  const rewarded = (desk?.sent || []).filter((row: { status: string }) => row.status === 'rewarded').length
+  const pending = (desk?.sent || []).filter((row) => row.status === 'pending').length
+  const rewarded = (desk?.sent || []).filter((row) => row.status === 'rewarded').length
 
   return (
     <View style={[styles.screen, { paddingTop: insets.top }]}>

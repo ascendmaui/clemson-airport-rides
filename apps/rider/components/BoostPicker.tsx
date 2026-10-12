@@ -36,7 +36,7 @@ export function BoostPicker({ cents, onChange, minimumCents = 0, heading = 'Driv
 
   function applyCustom() {
     const parsed = parseBoostDollars(custom)
-    if (!parsed.ok) {
+    if (!parsed.ok || parsed.cents == null) {
       setError(parsed.error || 'Enter a boost amount.')
       return
     }
