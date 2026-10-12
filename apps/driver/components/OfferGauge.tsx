@@ -15,6 +15,7 @@ import Animated, {
   withDelay,
   withRepeat,
   withSequence,
+  withSpring,
   withTiming,
 } from 'react-native-reanimated'
 import { GAUGE_PALETTE, type GaugeEffects, type GaugeTier } from 'rides-native/offerGauge'
@@ -33,13 +34,21 @@ type Gauge = {
 const ARC = 30
 const STROKE = 4
 
-/** Semicircle arc built from two clipped rings (no SVG dependency). */
-function Arc({ fill, color, track }: { fill: number; color: string; track: string }) {
-  const deg = -180 + 180 * Math.max(0, Math.min(1, fill))
+/** Gentle, critically-damped spring shared by the gauge (no overshoot wobble on a money number). */
+const SPRING = { damping: 18, stiffness: 140, mass: 0.9 }
+
+/** Semicircle arc built from two clipped rings (no SVG dependency). Fill eases in over 240 ms. */
+function Arc({ fill, color, track, still }: { fill: number; color: string; track: string; still: boolean }) {
+  const target = Math.max(0, Math.min(1, fill))
+  const f = useSharedValue(still ? target : 0)
+  useEffect(() => {
+    f.value = still ? target : withTiming(target, { duration: 240, easing: Easing.bezier(0.22, 1, 0.36, 1) })
+  }, [target, still, f])
+  const fillStyle = useAnimatedStyle(() => ({ transform: [{ rotate: `${-180 + 180 * f.value + 45}deg` }] }))
   return (
     <View style={{ width: ARC, height: ARC / 2, overflow: 'hidden' }} importantForAccessibility="no-hide-descendants">
       <View style={[styles.ring, { borderColor: track }]} />
-      <View style={[styles.ring, { borderColor: 'transparent', borderTopColor: color, borderLeftColor: color, transform: [{ rotate: `${deg + 45}deg` }] }]} />
+      <Animated.View style={[styles.ring, { borderColor: 'transparent', borderTopColor: color, borderLeftColor: color }, fillStyle]} />
     </View>
   )
 }
@@ -89,12 +98,12 @@ export function OfferGauge({ gauge, offerId }: { gauge: Gauge; offerId: string }
     }
     if (fx.glow > 0) {
       glow.value = withRepeat(withSequence(
-        withTiming(fx.glow, { duration: 900 }),
-        withTiming(fx.glow * 0.45, { duration: 900 }),
+        withTiming(fx.glow, { duration: 1400, easing: Easing.inOut(Easing.sin) }),
+        withTiming(fx.glow * 0.45, { duration: 1400, easing: Easing.inOut(Easing.sin) }),
       ), -1, true)
     }
     if (fx.ring) spin.value = withRepeat(withTiming(360, { duration: fx.crown ? 6000 : 4200, easing: Easing.linear }), -1)
-    if (fx.burst) burst.value = withSequence(withTiming(1, { duration: 420, easing: Easing.out(Easing.back(2)) }), withTiming(0.6, { duration: 600 }))
+    if (fx.burst) burst.value = withSequence(withSpring(1, SPRING), withTiming(0.6, { duration: 280, easing: Easing.out(Easing.cubic) }))
     return () => {
       cancelAnimation(sweep)
       cancelAnimation(glow)
@@ -134,6 +143,7 @@ export function OfferGauge({ gauge, offerId }: { gauge: Gauge; offerId: string }
       {fx.ring ? (
         <Animated.View pointerEvents="none" style={[styles.ring2, { borderTopColor: swatch.accent, borderRightColor: 'transparent', borderBottomColor: 'transparent', borderLeftColor: swatch.accent }, ringStyle]} />
       ) : null}
+      <View style={[styles.lift, { shadowColor: swatch.accent }]}>
       <View style={[styles.pill, { backgroundColor: swatch.bg, borderColor: swatch.accent }]}>
         {fancy ? (
           <LinearGradient colors={swatch.gradient as [string, string, string]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
@@ -143,7 +153,7 @@ export function OfferGauge({ gauge, offerId }: { gauge: Gauge; offerId: string }
             <LinearGradient colors={['rgba(255,255,255,0)', 'rgba(255,255,255,0.55)', 'rgba(255,255,255,0)']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={StyleSheet.absoluteFill} />
           </Animated.View>
         ) : null}
-        <Arc fill={gauge.fill} color={tier === 'crown' ? '#FFFFFF' : swatch.accent} track={scheme === 'dark' ? 'rgba(255,255,255,0.18)' : 'rgba(0,0,0,0.10)'} />
+        <Arc fill={gauge.fill} color={tier === 'crown' ? '#FFFFFF' : swatch.accent} track={scheme === 'dark' ? 'rgba(255,255,255,0.18)' : 'rgba(0,0,0,0.10)'} still={reduce} />
         <View>
           <Text style={[styles.value, { color: swatch.fg }]}>{tier === 'crown' ? '♛ ' : ''}{gauge.text}</Text>
           {gauge.tierLabel ? <Text style={[styles.label, { color: swatch.fg }]}>{gauge.tierLabel}</Text> : null}
@@ -152,6 +162,7 @@ export function OfferGauge({ gauge, offerId }: { gauge: Gauge; offerId: string }
           <Sparkle key={i} index={i} count={sparkles.length} color={tier === 'crown' ? '#FFE9A8' : '#FFFFFF'} still={reduce} />
         ))}
       </View>
+      </View>
     </View>
   )
 }
@@ -159,15 +170,17 @@ export function OfferGauge({ gauge, offerId }: { gauge: Gauge; offerId: string }
 const styles = StyleSheet.create({
   wrap: { alignItems: 'center', justifyContent: 'center' },
   pill: {
-    flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 12, paddingVertical: 6,
-    borderRadius: 999, borderWidth: StyleSheet.hairlineWidth * 2, overflow: 'hidden', minHeight: 44,
+    flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14, paddingVertical: 8,
+    borderRadius: 999, borderWidth: 1, overflow: 'hidden', minHeight: 44,
   },
+  // Contact shadow plus a soft tinted lift. Kept light so the pay number stays the focus.
+  lift: { borderRadius: 999, shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.16, shadowRadius: 18, elevation: 3 },
   ring: { position: 'absolute', width: ARC, height: ARC, borderRadius: ARC / 2, borderWidth: STROKE },
-  value: { fontSize: 17, fontWeight: '800', fontVariant: ['tabular-nums'], letterSpacing: -0.3 },
-  label: { fontSize: 11, fontWeight: '700', opacity: 0.9, letterSpacing: 0.4, textTransform: 'uppercase' },
-  sweep: { position: 'absolute', top: -20, bottom: -20, width: 36 },
-  glow: { position: 'absolute', top: -6, bottom: -6, left: -6, right: -6, borderRadius: 999, shadowRadius: 14, shadowOffset: { width: 0, height: 0 } },
-  burst: { position: 'absolute', top: -12, bottom: -12, left: -12, right: -12, borderRadius: 999, borderWidth: 2, borderStyle: 'dashed' },
-  ring2: { position: 'absolute', top: -4, bottom: -4, left: -4, right: -4, borderRadius: 999, borderWidth: 2 },
-  sparkle: { position: 'absolute', width: 4, height: 4, borderRadius: 2, marginLeft: -2, marginTop: -2 },
+  value: { fontSize: 16, fontWeight: '700', fontVariant: ['tabular-nums'], letterSpacing: -0.4 },
+  label: { fontSize: 10, fontWeight: '700', letterSpacing: 0.8, textTransform: 'uppercase', marginTop: 1 },
+  sweep: { position: 'absolute', top: -20, bottom: -20, width: 28 },
+  glow: { position: 'absolute', top: -8, bottom: -8, left: -8, right: -8, borderRadius: 999, shadowRadius: 16, shadowOffset: { width: 0, height: 0 } },
+  burst: { position: 'absolute', top: -10, bottom: -10, left: -10, right: -10, borderRadius: 999, borderWidth: 1 },
+  ring2: { position: 'absolute', top: -3, bottom: -3, left: -3, right: -3, borderRadius: 999, borderWidth: 1.5 },
+  sparkle: { position: 'absolute', width: 3, height: 3, borderRadius: 1.5, marginLeft: -1.5, marginTop: -1.5 },
 })
