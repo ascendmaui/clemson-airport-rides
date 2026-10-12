@@ -375,8 +375,6 @@ function TaxPrintSheet({ tax, yearEnd, timeZone }) {
       <p>{yearEnd.mileageEstimateNote} {yearEnd.rateLabel}</p>
       <p>{STRIPE_1099_NOTE} {STRIPE_CONNECT_1099_URL}</p>
       <p>1099 info: {FORM_1099_INFO_URL}</p>
-      <p>Timezone: {timeZone}. Platform fee is 20% of fares, tips, wait fees, and cancel fees. Driver net is the remaining 80%.</p>
-      <h1>Clemson RIDES · {tax.year} driver earnings summary</h1>
       <p>{tax.disclaimer}</p>
       <p>Timezone: {timeZone}. Platform fee is 20% of fares, wait fees, and cancel fees. Driver net is the remaining 80%, plus 100% of tips.</p>
       <table>

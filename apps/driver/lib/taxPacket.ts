@@ -15,7 +15,7 @@ import {
 import { driverNetCents, platformFeeCents } from '../../../shared/platformFee.js'
 import { coarseAreaLabel } from '../../../src/lib/privacyDisplay.js'
 
-const TRIP_RECORD_NOTE = 'These totals are from trip records on this account. Platform fees are the remainder after your recorded net and the standard fee on tips and cancel fees. Open this screen again when the tax summary service is available for payment adjustments and payout rows.'
+const TRIP_RECORD_NOTE = 'These totals are from trip records on this account. Platform fees are the remainder after your recorded net. Tips are not in the platform fee. Cancel fees use the standard fee. Open this screen again when the tax summary service is available for payment adjustments and payout rows.'
 
 const FULL_TRIP_COLUMNS = [
   'id',
@@ -233,14 +233,13 @@ function snapshotMoney(trip: TripRow): SnapshotMoney | null {
   }
   if (status !== 'completed') return null
   const tip = knownTip(trip)
-  const tipFee = tip == null ? 0 : platformFeeCents(tip)
-  const tipNet = tip == null ? 0 : driverNetCents(tip)
+  // Tips go 100% to the driver. They are never part of the platform fee.
   const waitFee = Math.max(0, wait - finiteNumber(earnings.waitCents))
   return {
     gross: fare + (tip || 0) + wait,
     tip,
-    fee: finiteNumber(earnings.platformFeeCents) + tipFee + waitFee,
-    net: finiteNumber(earnings.netCents) + tipNet,
+    fee: finiteNumber(earnings.platformFeeCents) + waitFee,
+    net: finiteNumber(earnings.netCents) + (tip || 0),
   }
 }
 

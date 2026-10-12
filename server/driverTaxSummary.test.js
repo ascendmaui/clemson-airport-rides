@@ -90,7 +90,7 @@ test('tax summary is the signed-in driver only, with split miles and an estimate
   assert.equal(res.status, 200)
   assert.equal(res.json.grossEarningsCents, 10250)
   assert.equal(res.json.tipsCents, 250)
-  assert.equal(res.json.platformFeeCents, 2050)
+  assert.equal(res.json.platformFeeCents, 2000)
   assert.equal(res.json.payoutsCents, 6400)
   assert.equal(res.json.onTripMiles, 1)
   assert.equal(res.json.enrouteMiles, 0.4)
