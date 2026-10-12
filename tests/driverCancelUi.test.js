@@ -7,7 +7,7 @@ test('native live trip renders the new sheet only for accepted/arriving and stop
   const source = read('apps/driver/app/trip.tsx')
   assert.match(source, /trip && \['accepted', 'arriving'\]\.includes\(trip.status\) \? <DriverCancelSheet/)
   assert.match(source, /scheduled=\{Boolean\(trip.pickupAt\)\}/)
-  assert.match(source, /function onDriverCanceled\(\) \{\s*locationTracking.stop\(\)\s*pulse\('complete'\)\s*router.replace\('\/'\)/)
+  assert.match(source, /function onDriverCanceled\(\) \{\s*locationTracking.stop\(\)\s*pulse\('cancel'\)\s*router.replace\('\/'\)/)
   assert.equal((source.match(/<DriverCancelSheet /g) || []).length, 1)
   const sheet = read('apps/driver/components/DriverCancelSheet.tsx')
   assert.match(sheet, /if \(scheduled\) return null/)
