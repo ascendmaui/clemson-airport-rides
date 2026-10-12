@@ -1,5 +1,6 @@
 import * as Location from 'expo-location'
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
+import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
+import Animated, { useAnimatedStyle, useSharedValue, withSequence, withTiming } from 'react-native-reanimated'
 import { authStorage } from '@/lib/storage'
 import { paletteFor, type Palette, type Scheme } from '@/lib/palette'
 import { CLEMSON_LAT, CLEMSON_LNG, isDaylight } from '@/lib/solar'
@@ -20,7 +21,7 @@ type ThemeValue = {
 
 const PREFS_KEY = 'rider.ui.prefs'
 const DEFAULT_PREFS: Prefs = {
-  displayMode: 'auto',
+  displayMode: 'light',
 }
 
 const ThemeContext = createContext<ThemeValue | null>(null)
@@ -34,21 +35,22 @@ function readPrefs(raw: string | null): Prefs {
   try {
     const parsed = JSON.parse(raw) as Partial<Prefs>
     return {
-      displayMode: isDisplayMode(parsed.displayMode) ? parsed.displayMode : DEFAULT_PREFS.displayMode,
+      displayMode: isDisplayMode(parsed.displayMode) && parsed.displayMode === 'dark' ? 'dark' : 'light',
     }
   } catch {
     return DEFAULT_PREFS
   }
 }
 
-function resolveScheme(mode: DisplayMode, daylight: boolean): Scheme {
+function resolveScheme(mode: DisplayMode, _daylight: boolean): Scheme {
   switch (mode) {
     case 'light':
       return 'light'
     case 'dark':
       return 'dark'
     case 'auto':
-      return daylight ? 'light' : 'dark'
+      // Night mode is opt-in. Older builds saved 'auto'; it now opens light.
+      return 'light'
     default: {
       const unknown: never = mode
       return unknown
@@ -103,11 +105,30 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     solarPlace: coords ? 'Last known location' : 'Clemson, SC',
   }
 
-  return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>
+  return (
+    <ThemeContext.Provider value={value}>
+      <SchemeFade scheme={scheme}>{children}</SchemeFade>
+    </ThemeContext.Provider>
+  )
 }
 
 export function useTheme(): ThemeValue {
   const value = useContext(ThemeContext)
   if (!value) throw new Error('useTheme must be used inside ThemeProvider')
   return value
+}
+
+/** Soft UI-thread cross-fade when Night mode flips, so the swap never pops. */
+function SchemeFade({ scheme, children }: { scheme: Scheme; children: ReactNode }) {
+  const fade = useSharedValue(1)
+  const first = useRef(true)
+  useEffect(() => {
+    if (first.current) {
+      first.current = false
+      return
+    }
+    fade.value = withSequence(withTiming(0.82, { duration: 90 }), withTiming(1, { duration: 200 }))
+  }, [scheme, fade])
+  const style = useAnimatedStyle(() => ({ opacity: fade.value }))
+  return <Animated.View style={[{ flex: 1 }, style]}>{children}</Animated.View>
 }

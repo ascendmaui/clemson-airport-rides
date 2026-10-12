@@ -42,7 +42,7 @@ test('dispatch is unaffected unless configured', () => {
 
 test('trigger migration never blocks location writes', async () => {
   const { readFileSync } = await import('node:fs')
-  const sql = readFileSync(new URL('../../supabase/migrations/20261012190000_driver_safety_score.sql', import.meta.url), 'utf8')
+  const sql = readFileSync(new URL('../../supabase/migrations/20261012112233_driver_safety_score.sql', import.meta.url), 'utf8')
   assert.match(sql, /exception when others then\s+return new/i)
   assert.match(sql, /'affectsDispatch', false/)
   assert.doesNotMatch(sql, /\b(drop table|delete from|truncate)\b/i)

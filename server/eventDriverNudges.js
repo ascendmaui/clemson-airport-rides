@@ -17,7 +17,7 @@ export async function sweepEventDriverNudges(sb, { now = new Date(), dryRun = fa
   const { data, error } = await sb.from('clemson_events').select(EVENT_COLUMNS)
     .eq('active', true).is('nudge_sent_at', null).gte('event_date', from).lte('event_date', to).limit(20)
   if (error) {
-    // Columns land with 20261012140000_clemson_events_supply.sql; skip quietly before it.
+    // Columns land with 20261012111710_clemson_events_supply.sql; skip quietly before it.
     if (/nudge_sent_at|nudge_lead_hours|does not exist/i.test(error.message || '')) return result
     throw new Error(error.message || 'Could not load events')
   }

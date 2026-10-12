@@ -1,3 +1,4 @@
+import { Glyph } from 'rides-native/icons'
 import { normalizeFlight } from 'rides-native/airportContext'
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -797,7 +798,13 @@ function ScheduleScreen() {
           />
         )}
       >
-        <Text style={styles.kicker}>SCHEDULE</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+          <Text style={styles.kicker}>RIDES · SCHEDULE</Text>
+          <Pressable accessibilityRole="button" accessibilityLabel="Ride history" hitSlop={10} onPress={() => router.replace('/history')} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+            <Glyph name="history" size={18} color={colors.purple} />
+            <Text style={{ color: colors.purple, fontWeight: '700' }}>History</Text>
+          </Pressable>
+        </View>
         <Text style={styles.title}>Schedule a ride</Text>
         <ScheduledRidesExplainer role="rider" colors={colors} />
         <NearTermSlots />
@@ -1194,7 +1201,7 @@ function ScheduleScreen() {
           )
         })}
       </ScrollView>
-      <MainTabs active="schedule" />
+      <MainTabs active="rides" />
       <SignInToBookSheet
         open={promptOpen}
         onClose={() => setPromptOpen(false)}

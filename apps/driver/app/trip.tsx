@@ -1,3 +1,4 @@
+import { Glyph } from 'rides-native/icons'
 import { createTrackingRefresh } from 'rides-native/tracking'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -546,7 +547,10 @@ export default function TripScreen() {
         <View style={[styles.handle, { backgroundColor: colors.track }]} />
         <ScrollView style={styles.sheetScroll} contentContainerStyle={styles.sheetContent} showsVerticalScrollIndicator={false}>
         <View style={styles.sheetHeader}>
-          <Text style={styles.kicker} onPress={() => router.back()}>← LIVE TRIP</Text>
+          <Pressable accessibilityRole="button" accessibilityLabel="Back" onPress={() => router.back()} hitSlop={10} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+            <Glyph name="back" size={18} color={colors.orange} />
+            <Text style={styles.kicker}>LIVE TRIP</Text>
+          </Pressable>
           {sosActive ? <SosButton onPress={() => setSosOpen(true)} /> : null}
         </View>
         <LivePhase
@@ -597,7 +601,16 @@ export default function TripScreen() {
               <CounterpartCard person={person} colors={partyColors} />
             )}
             {trip.status === 'arrived' ? null : <CommunityMatchChips supabase={supabase} tripId={trip.id} colors={colors} compact />}
-            <Text style={styles.copy}>{trip.pickupLabel} → {trip.dropoffLabel}</Text>
+            <View style={{ gap: 6 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Glyph name="pickup" size={18} color={colors.orange} active knockout={colors.card} />
+                <Text style={[styles.copy, { flex: 1 }]}>{trip.pickupLabel}</Text>
+              </View>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Glyph name="dropoff" size={18} color={colors.purple} active />
+                <Text style={[styles.copy, { flex: 1 }]}>{trip.dropoffLabel}</Text>
+              </View>
+            </View>
             {trip.airportContext ? (
               <View accessibilityLabel={`Airport: ${trip.airportContext.line}`} style={styles.airport}>
                 <Text style={styles.airportChip}>{trip.airportContext.chip} · {trip.airportContext.curb}</Text>
@@ -720,6 +733,7 @@ export default function TripScreen() {
             />
             <Primary
               label="Confirm and start navigation"
+              icon="navigate"
               onPress={() => {
                 if (!supabase || !trip.id) return
                 setBusy(true)

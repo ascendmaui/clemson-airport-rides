@@ -1,3 +1,4 @@
+import { Glyph } from './icons/index.js'
 import { useEffect, useState } from 'react'
 import { Image, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
 import { useRouter, useSegments } from 'expo-router'
@@ -413,7 +414,7 @@ export function RateTripPanel({
                 accessibilityState={{ selected: stars === value }}
                 hitSlop={8}
               >
-                <Text style={[styles.star, { color: value <= stars ? colors.orange : colors.inkSecondary }]}>★</Text>
+                <Glyph name="star" size={32} active={value <= stars} color={value <= stars ? colors.orange : colors.inkSecondary} knockout={colors.card} />
               </Pressable>
             ))}
           </View>
