@@ -43,9 +43,15 @@ function OfferPreview() {
           <strong>Jordan R.</strong>
           <span className="dp-rating"><Icon name="star" size={14} /> 4.9</span>
         </div>
-        <span className="dp-chip dp-tier-purple">Purple</span>
+        <span className="dp-chip">Purple</span>
       </div>
-      <div className="dp-offer-pay"><b>$47</b><span>/hr</span></div>
+      <div className="dp-offer-pay">
+        <svg className="dp-mini-arc" viewBox="0 0 36 20" aria-hidden="true" focusable="false">
+          <path d="M3 18a15 15 0 0 1 30 0" />
+          <path className="dp-mini-arc-fill" d="M3 18a15 15 0 0 1 30 0" />
+        </svg>
+        <div><b>$47</b><span>/hr</span></div>
+      </div>
       <p className="dp-offer-meta">Example offer · 38 min · airport run</p>
       <div className="dp-bar" aria-hidden="true"><span style={{ width: '78%' }} /></div>
     </div>
@@ -56,12 +62,14 @@ export function DrivePerks() {
   return (
     <>
       <section className="dp-hero" aria-labelledby="dp-hero-heading">
-        <p className="mkt-kicker">Drive with Clemson RIDES</p>
-        <h1 id="dp-hero-heading">Know the pay. Keep the tips. Cash out today.</h1>
-        <p className="dp-lede">Every offer shows per-hour pay, the rider’s photo and rating, and a color-coded worth-it gauge. Tips are 100% yours.</p>
-        <div className="dp-hero-actions">
-          <button type="button" className="dp-btn dp-btn-primary pressable" onClick={() => navigate('driver-signup')}>Apply to drive</button>
-          <a className="dp-btn dp-btn-ghost" href="#dp-rental">No car? Rent one</a>
+        <div className="dp-hero-copy">
+          <p className="mkt-kicker">Drive with Clemson RIDES</p>
+          <h1 id="dp-hero-heading">Know the pay. Keep the tips. Cash out today.</h1>
+          <p className="dp-lede">Every offer shows per-hour pay, the rider’s photo and rating, and a color-coded worth-it gauge. Tips are 100% yours.</p>
+          <div className="dp-hero-actions">
+            <button type="button" className="dp-btn dp-btn-primary pressable" onClick={() => navigate('driver-signup')}>Apply to drive</button>
+            <a className="dp-btn dp-btn-ghost" href="#dp-rental">No car? Rent one</a>
+          </div>
         </div>
         <OfferPreview />
       </section>

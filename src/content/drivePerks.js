@@ -7,7 +7,7 @@ export const PAY_TIERS = [
   { id: 'green', label: 'Green', range: '$30–35', note: 'Solid', color: '#22C55E' },
   { id: 'blue', label: 'Blue', range: '$35–40', note: 'Strong', color: '#3B82F6' },
   { id: 'gold', label: 'Gold', range: '$40–45', note: 'Great', color: '#EAB308' },
-  { id: 'purple', label: 'Purple', range: '$45–50', note: 'Excellent', color: '#8B5CF6' },
+  { id: 'purple', label: 'Purple', range: '$45–50', note: 'Excellent', color: '#522D80' },
   { id: 'diamond', label: 'Diamond', range: '$50–100', note: 'Escalating effects', color: '#7DD3FC' },
   { id: 'crown', label: 'Crown', range: 'Above $100', note: 'Top tier', color: '#FBBF24' },
 ]
