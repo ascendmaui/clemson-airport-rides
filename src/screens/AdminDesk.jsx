@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { AdminDrivers } from './AdminDrivers'
+import { AdminRentalPartners } from './RentalPartners'
 import { navigate, getHashRoute } from '../lib/navigation'
 import { useAuth } from '../lib/auth'
 import { supabase } from '../lib/supabase'
@@ -23,6 +24,7 @@ const TABS = [
   ['people', 'People'],
   ['trips', 'Trips'],
   ['support', 'Support'],
+  ['rentals', 'Rental partners'],
 ]
 
 const TICKET_FILTERS = [
@@ -125,6 +127,7 @@ export function AdminDesk() {
       {tab === 'people' && <PeoplePanel />}
       {tab === 'trips' && <TripsPanel />}
       {tab === 'support' && <SupportPanel />}
+      {tab === 'rentals' && <AdminRentalPartners />}
     </div>
   )
 }
