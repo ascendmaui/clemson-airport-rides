@@ -1,5 +1,5 @@
 import { navigate } from '../lib/navigation'
-import { PAY_TIERS, PERK_GROUPS, COMPARISON_ROWS, COMPARISON_NOTE, RENTAL } from '../content/drivePerks.js'
+import { PAY_TIERS, PERK_GROUPS, COMPARISON_ROWS, COMPARISON_NOTE, COMPARISON_SOURCE_NOTE, TITLE_HIGHLIGHT, RENTAL } from '../content/drivePerks.js'
 import '../styles/drivePerks.css'
 
 const PATHS = {
@@ -66,6 +66,14 @@ export function DrivePerks() {
         <OfferPreview />
       </section>
 
+      <section className="dp-group dp-highlight" aria-labelledby="dp-rebuilt-titles">
+        <article className="mkt-card dp-card dp-card-highlight">
+          <span className="dp-icon-wrap"><Icon name={TITLE_HIGHLIGHT.icon} /></span>
+          <h2 id="dp-rebuilt-titles">{TITLE_HIGHLIGHT.title}</h2>
+          <p>{TITLE_HIGHLIGHT.body}</p>
+        </article>
+      </section>
+
       {PERK_GROUPS.map((group) => (
         <section key={group.id} className="dp-group" aria-labelledby={`dp-${group.id}`}>
           <h2 id={`dp-${group.id}`}>{group.title}</h2>
@@ -96,6 +104,7 @@ export function DrivePerks() {
             </div>
           ))}
         </div>
+        <p className="dp-fine">{COMPARISON_SOURCE_NOTE}</p>
         <p className="dp-fine">{COMPARISON_NOTE}</p>
       </section>
     </>

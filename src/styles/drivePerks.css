@@ -59,3 +59,5 @@ body .mkt .dp-card, body .mkt .dp-offer, body .mkt .dp-legend, body .mkt .dp-com
 .dp-path { display: grid; gap: 8px; align-content: start; background: rgba(255,255,255,.06) !important; }
 .dp-path .dp-btn { justify-self: start; }
 .dp-soon { margin-left: 8px; padding: 2px 8px; border-radius: 99px; background: rgba(255,255,255,.16); color: #fff; font-size: 11px; letter-spacing: .04em; }
+.dp-card-highlight { border: 2px solid #F56600; background: linear-gradient(135deg, rgba(245,102,0,0.10), transparent 70%); }
+.dp-card-highlight h2 { margin: 8px 0 4px; }

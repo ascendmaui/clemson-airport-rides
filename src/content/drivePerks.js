@@ -12,6 +12,15 @@ export const PAY_TIERS = [
   { id: 'crown', label: 'Crown', range: 'Above $100', note: 'Top tier', color: '#FBBF24' },
 ]
 
+// Highlighted feature on the Drive page. John's rule: rebuilt titles allowed, salvage blocked
+// (matches shared/vehicleStandards.js on the rental-partner branch).
+export const TITLE_HIGHLIGHT = {
+  id: 'rebuilt-titles',
+  icon: 'car',
+  title: 'Rebuilt titles welcome',
+  body: 'Have a car with a rebuilt title? If it passes inspection, you can drive with Clemson RIDES. Salvage titles are not accepted.',
+}
+
 export const PERK_GROUPS = [
   {
     id: 'see-pay',
@@ -80,9 +89,15 @@ export const COMPARISON_ROWS = [
   'Real-time demand heat map',
   'Safety score and driver scorecard with custom car markers',
   'Driver-set quiet hours',
+  'Rebuilt titles accepted',
 ]
 
-export const COMPARISON_NOTE = 'This table lists what you get with Clemson RIDES. It does not describe other apps; their features vary by market and change often, so check them directly. Uber and Lyft are trademarks of their respective owners. Clemson RIDES is not affiliated with or endorsed by either.'
+// Verified 2026-10-12 against official help pages; re-check before changing:
+// https://www.uber.com/us/en/drive/requirements/vehicle-requirements/?city=greenville-sc
+// https://help.lyft.com/hc/en-us/all/articles/115012924087-South-Carolina-Driver-Information
+export const COMPARISON_SOURCE_NOTE = 'Rebuilt titles: as of October 2026, Uber’s and Lyft’s published South Carolina vehicle requirements do not accept rebuilt titles. Requirements change, so check their current rules directly. Clemson RIDES accepts rebuilt titles that pass inspection; salvage titles are not accepted.'
+
+export const COMPARISON_NOTE = 'This table lists what you get with Clemson RIDES. Apart from the sourced rebuilt-title note above, it does not describe other apps; their features vary by market and change often, so check them directly. Uber and Lyft are trademarks of their respective owners. Clemson RIDES is not affiliated with or endorsed by either.'
 
 // No rental partner yet: keep wording "typical" and never name a partner or a guaranteed price.
 export const RENTAL = {
