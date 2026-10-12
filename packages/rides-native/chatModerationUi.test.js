@@ -35,8 +35,9 @@ test('rider and driver chat surfaces render the shared moderated native thread',
 test('web chat exposes Report and Block through confirm, filters blocked messages and gates sending', () => {
   const code = read('../../src/components/RideChat.jsx')
   parse(code, { sourceType: 'module', plugins: ['jsx'] })
-  assert.match(code, /window\.confirm\(`Report trip chat\?/)
-  assert.match(code, /window\.confirm\(blocked \? `Unblock this person\?/)
+  assert.match(code, /await confirm\(\{ title: 'Report trip chat\?'/)
+  assert.match(code, /\{ title: 'Unblock this person\?'/)
+  assert.doesNotMatch(code, /window\.confirm/)
   assert.match(code, /onClick=\{confirmBlock\}/)
   assert.match(code, /CHAT_REPORT_REASONS\.map/)
   assert.match(code, /localStorage\.setItem/)
