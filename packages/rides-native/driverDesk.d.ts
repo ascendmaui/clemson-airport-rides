@@ -12,6 +12,7 @@ export type DriverTripRow = Record<string, unknown> & {
 export type VehicleRow = {
   id: string
   year?: number | null
+  title_status?: string | null
   make?: string | null
   model?: string | null
   color?: string | null
