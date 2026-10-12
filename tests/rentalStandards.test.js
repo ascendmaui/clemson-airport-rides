@@ -84,3 +84,14 @@ test('rental state machine', () => {
   assert.equal(contactVisible('requested'), false)
   assert.equal(contactVisible('accepted'), true)
 })
+
+test('driver own-vehicle check allows rebuilt titles and blocks salvage', () => {
+  assert.equal(driverVehicleStandardIssue({ year: 2020, titleStatus: 'rebuilt' }), null)
+  assert.equal(driverVehicleStandardIssue({ year: 2020, title_status: 'rebuilt' }), null)
+  assert.equal(driverVehicleStandardIssue({ year: 2020, titleStatus: 'clean' }), null)
+  assert.equal(driverVehicleStandardIssue({ year: 2020, titleStatus: 'salvage' }).code, 'vehicle_salvage_title')
+  assert.equal(driverVehicleStandardIssue({ year: 2020, title_status: 'Salvage' }).code, 'vehicle_salvage_title')
+  assert.equal(driverVehicleStandardIssue({ year: 2018, titleStatus: 'salvage' }, { luxuryApproved: true }).code, 'vehicle_salvage_title')
+  assert.equal(driverVehicleStandardIssue({ year: 2020, titleStatus: 'flood' }).code, 'vehicle_title_unknown')
+  assert.equal(driverVehicleStandardIssue({ year: 2018, titleStatus: 'rebuilt' }).code, 'vehicle_luxury_review')
+})

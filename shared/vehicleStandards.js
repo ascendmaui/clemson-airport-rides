@@ -62,7 +62,7 @@ export const VEHICLE_RULES_COPY = [
   'Condition photos required: exterior front, back, driver side, passenger side, and the interior.',
   'Poor condition is rejected regardless of year. A self-reported "poor" condition is auto-rejected, and an admin can reject any vehicle.',
   'Any body style is OK: sedan, small or large SUV, minivan or van, and similar.',
-  'Valid (unexpired) registration and insurance. No salvage titles.',
+  'Valid (unexpired) registration and insurance. Rebuilt titles are welcome if the vehicle passes inspection; salvage titles are not allowed.',
 ]
 
 const VIN_RE = /^[A-HJ-NPR-Z0-9]{17}$/
@@ -157,6 +157,15 @@ export function evaluateVehicleStandards(v = {}, now = new Date()) {
  * Returns null when OK, otherwise a code + message.
  */
 export function driverVehicleStandardIssue(vehicle, { luxuryApproved = false } = {}) {
+  // Title rule (same as rental listings): clean and rebuilt titles are allowed
+  // (rebuilt still has to pass inspection); salvage titles are blocked.
+  const titleStatus = String(vehicle?.titleStatus ?? vehicle?.title_status ?? '').trim().toLowerCase()
+  if (titleStatus === 'salvage') {
+    return { code: 'vehicle_salvage_title', message: 'Salvage titles are not allowed. Rebuilt titles that pass inspection are OK.' }
+  }
+  if (titleStatus && !TITLE_STATUS_IDS.includes(titleStatus)) {
+    return { code: 'vehicle_title_unknown', message: 'Pick the title status: clean or rebuilt.' }
+  }
   const year = Number(vehicle?.year)
   if (!Number.isInteger(year)) return { code: 'vehicle_year_missing', message: 'Vehicle year is missing.' }
   if (year >= VEHICLE_STANDARD_MIN_YEAR || luxuryApproved) return null
