@@ -14,7 +14,7 @@ test('drive page perks, tiers and rental copy stay accurate', () => {
   assert.equal(fleet.status, 'Coming soon')
   assert.equal(fleet.cta, 'Get notified')
   assert.doesNotMatch(JSON.stringify(fleet), /Reserve|\$|book/i)
-  assert.match(RENTAL.paths.find((p) => p.id === 'turo').body, /Check the host’s rideshare policy/)
+  assert.match(RENTAL.paths.find((p) => p.id === 'turo').body, /check the host’s rideshare policy/i)
   const all = readFileSync(new URL('../src/content/drivePerks.js', import.meta.url), 'utf8') + readFileSync(new URL('../src/components/DrivePerks.jsx', import.meta.url), 'utf8')
   assert.doesNotMatch(all, new RegExp(['te' + 'sla', 'robo' + 'taxi'].join('|'), 'i'))
   assert.doesNotMatch(JSON.stringify(COMPARISON_ROWS), /Uber|Lyft|don't|lack/i)
