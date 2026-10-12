@@ -1,21 +1,42 @@
 /**
  * Worth-it gauge tiers for a driver offer, per hour.
- * Labels, ranges, notes, and colors match the Drive page legend.
+ * Names, ranges, and swatches match the offer gauge (packages/rides-native/offerGauge.js).
+ * Shared range edges belong to the higher tier. $100 stays Diamond. Above $100 is Crown.
  */
+
+import { GAUGE_PALETTE, GAUGE_TIERS } from '../packages/rides-native/offerGauge.js'
 
 export const WORTH_IT_LEGEND_TITLE = 'Worth-it gauge tiers (per hour)'
 export const WORTH_IT_LEGEND_LABEL = 'Worth-it gauge tiers, per-hour pay'
 export const WORTH_IT_GAUGE_BODY = 'Each offer lights up by its hourly rate, from orange through Diamond and Crown. See the tier legend below.'
 
-export const PAY_TIERS = Object.freeze([
-  Object.freeze({ id: 'orange', label: 'Orange', range: 'Under $30', note: 'Base', color: '#F56600' }),
-  Object.freeze({ id: 'green', label: 'Green', range: '$30\u201335', note: 'Solid', color: '#22C55E' }),
-  Object.freeze({ id: 'blue', label: 'Blue', range: '$35\u201340', note: 'Strong', color: '#3B82F6' }),
-  Object.freeze({ id: 'gold', label: 'Gold', range: '$40\u201345', note: 'Great', color: '#EAB308' }),
-  Object.freeze({ id: 'purple', label: 'Purple', range: '$45\u201350', note: 'Excellent', color: '#522D80' }),
-  Object.freeze({ id: 'diamond', label: 'Diamond', range: '$50\u2013100', note: 'Escalating effects', color: '#7DD3FC' }),
-  Object.freeze({ id: 'crown', label: 'Crown', range: 'Above $100', note: 'Top tier', color: '#FBBF24' }),
-])
+const RANGE_BY_ID = Object.freeze({
+  orange: 'Under $30',
+  green: '$30\u201335',
+  blue: '$35\u201340',
+  gold: '$40\u201345',
+  purple: '$45\u201350',
+  diamond: '$50\u2013100',
+  crown: 'Above $100',
+})
+
+const NOTE_BY_ID = Object.freeze({
+  orange: 'Orange',
+  green: 'Green',
+  blue: 'Blue',
+  gold: 'Gold',
+  purple: 'Purple',
+  diamond: 'Escalating effects',
+  crown: 'Top tier',
+})
+
+export const PAY_TIERS = Object.freeze(GAUGE_TIERS.map((tier) => Object.freeze({
+  id: tier.id,
+  label: tier.label,
+  range: RANGE_BY_ID[tier.id],
+  note: NOTE_BY_ID[tier.id],
+  color: tier.id === 'crown' ? GAUGE_PALETTE.crown.light.gradient[1] : GAUGE_PALETTE[tier.id].light.accent,
+})))
 
 /**
  * Shared range edges belong to the higher tier.

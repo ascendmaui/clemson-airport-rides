@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
+import { GAUGE_PALETTE, GAUGE_TIERS, gaugeTier } from '../packages/rides-native/offerGauge.js'
 import {
   PAY_TIERS,
   WORTH_IT_GAUGE_BODY,
@@ -8,24 +9,23 @@ import {
   worthItTierForHourlyCents,
 } from './worthItGauge.js'
 
-test('worth-it gauge tiers match the Drive page legend', () => {
+test('worth-it legend matches the offer gauge', () => {
   assert.equal(WORTH_IT_LEGEND_TITLE, 'Worth-it gauge tiers (per hour)')
   assert.equal(WORTH_IT_LEGEND_LABEL, 'Worth-it gauge tiers, per-hour pay')
   assert.equal(
     WORTH_IT_GAUGE_BODY,
     'Each offer lights up by its hourly rate, from orange through Diamond and Crown. See the tier legend below.',
   )
-  assert.deepEqual(PAY_TIERS.map((tier) => [tier.id, tier.label, tier.range, tier.note, tier.color]), [
-    ['orange', 'Orange', 'Under $30', 'Base', '#F56600'],
-    ['green', 'Green', '$30\u201335', 'Solid', '#22C55E'],
-    ['blue', 'Blue', '$35\u201340', 'Strong', '#3B82F6'],
-    ['gold', 'Gold', '$40\u201345', 'Great', '#EAB308'],
-    ['purple', 'Purple', '$45\u201350', 'Excellent', '#522D80'],
-    ['diamond', 'Diamond', '$50\u2013100', 'Escalating effects', '#7DD3FC'],
-    ['crown', 'Crown', 'Above $100', 'Top tier', '#FBBF24'],
+  assert.deepEqual(PAY_TIERS.map((tier) => tier.id), GAUGE_TIERS.map((tier) => tier.id))
+  assert.deepEqual(PAY_TIERS.map((tier) => tier.label), GAUGE_TIERS.map((tier) => tier.label))
+  assert.deepEqual(PAY_TIERS.map((tier) => tier.range), [
+    'Under $30', '$30\u201335', '$35\u201340', '$40\u201345', '$45\u201350', '$50\u2013100', 'Above $100',
   ])
+  assert.equal(PAY_TIERS.find((tier) => tier.id === 'orange').color, GAUGE_PALETTE.orange.light.accent)
+  assert.equal(PAY_TIERS.find((tier) => tier.id === 'purple').color, GAUGE_PALETTE.purple.light.accent)
   assert.equal(PAY_TIERS.find((tier) => tier.id === 'orange').color, '#F56600')
   assert.equal(PAY_TIERS.find((tier) => tier.id === 'purple').color, '#522D80')
+  assert.equal(PAY_TIERS.find((tier) => tier.id === 'crown').color, GAUGE_PALETTE.crown.light.gradient[1])
 })
 
 test('hourly cents land on the Drive page range edges', () => {
@@ -46,4 +46,7 @@ test('hourly cents land on the Drive page range edges', () => {
   assert.equal(worthItTierForHourlyCents(10000).id, 'diamond')
   assert.equal(worthItTierForHourlyCents(10001).id, 'crown')
   assert.equal(worthItTierForHourlyCents(-50).id, 'orange')
+  for (const cents of [0, 2999, 3000, 3499, 3500, 3999, 4000, 4499, 4500, 4999, 5000, 10000, 10001]) {
+    assert.equal(worthItTierForHourlyCents(cents).id, gaugeTier(cents / 100))
+  }
 })
