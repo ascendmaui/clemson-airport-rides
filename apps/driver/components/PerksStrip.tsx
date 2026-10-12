@@ -5,7 +5,7 @@ import { useCardShadow } from '@/components/chrome'
 import { useAuth } from '@/lib/auth'
 import { supabase } from '@/lib/supabase'
 import { useTheme } from '@/lib/theme'
-import { loadDriverPerks, type DriverPerks, type Leaderboard, type StreakView, type SurgeView, type PartyQueueView, setPartyQueueOptIn } from 'rides-native/driverDesk'
+import { loadDriverPerks, type DriverPerks, type Leaderboard, type StreakView, type SurgeView, type PartyQueueView, type SafetyScoreView, setPartyQueueOptIn } from 'rides-native/driverDesk'
 
 const dollars = (cents: number) => `$${(cents / 100).toFixed(cents % 100 ? 2 : 0)}`
 
@@ -57,6 +57,14 @@ export function PerksStrip() {
             ? party.open ? `${party.label} · you’re #${party.position} of ${party.size}` : `${party.label} · opens ${hours}`
             : `Tap to join ${party.label} late-night pickups`}
         />
+      </Pressable>,
+    )
+  }
+  const safety = perks.safety as SafetyScoreView | undefined
+  if (safety?.enabled && typeof safety.score === 'number') {
+    chips.push(
+      <Pressable key="safety" onPress={() => router.push('/safety-score')} accessibilityRole="button" accessibilityLabel={`Estimated safety score ${safety.score}. ${safety.tips?.[0] || ''}`}>
+        <PerkChip title={`Safety ${safety.score} · estimate`} line={safety.tips?.[0] || 'See tips'} />
       </Pressable>,
     )
   }

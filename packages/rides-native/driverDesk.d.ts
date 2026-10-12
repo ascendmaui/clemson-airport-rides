@@ -155,6 +155,7 @@ export type SurgeZone = { id: string; title: string; label: string | null; lat: 
 export type SurgeView = { enabled: boolean; radiusKm?: number; driverBonusCents?: number; zones: SurgeZone[]; error?: string }
 export type PartyQueueView = { enabled: boolean; label: string; open: boolean; startHour: number; endHour: number; days: number[]; optedIn: boolean; position: number | null; size: number; error?: string }
 export function setPartyQueueOptIn(supabase: unknown, optIn: boolean): Promise<{ ok: boolean; optedIn: boolean }>
+export type SafetyScoreView = { enabled: boolean; estimate?: boolean; label?: string; score?: number; hasGps?: boolean; affectsDispatch?: boolean; factors?: { key: string; penalty: number; detail: string }[]; tips?: string[]; error?: string }
 export type CashoutQuote = {
   state: 'needs_setup' | 'already_today' | 'zero_balance' | 'below_fee' | 'ready'
   method?: 'instant' | 'standard'

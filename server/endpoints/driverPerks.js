@@ -9,8 +9,9 @@ import { claimReferral, referralSummary } from '../driverReferral.js'
 import { setLeaderboardOptOut, weeklyLeaderboard } from '../leaderboard.js'
 import { surgeBonusAwards, surgeSummary } from '../surge.js'
 import { partyQueueSummary, setPartyQueueOptIn } from '../partyQueue.js'
+import { driverSafetyScore } from '../safetyScore.js'
 
-export const PERK_CONFIG_KEYS = ['streaks', 'referral', 'leaderboard', 'priority_dispatch', 'game_day_surge', 'party_queue']
+export const PERK_CONFIG_KEYS = ['streaks', 'referral', 'leaderboard', 'priority_dispatch', 'game_day_surge', 'party_queue', 'safety_score']
 
 export async function buildPerks(sb, driverId, { now = new Date(), firstName = null } = {}) {
   const trips = await loadDriverTrips(sb, driverId)
@@ -24,6 +25,7 @@ export async function buildPerks(sb, driverId, { now = new Date(), firstName = n
   if (!surgeTrips.error) await awardBonuses(sb, driverId, await surgeBonusAwards(sb, surgeTrips.data, now)).catch((err) => console.error('[perks] surge', err.message))
   const surge = await surgeSummary(sb, now).catch((err) => ({ error: err.message }))
   const partyQueue = await partyQueueSummary(sb, driverId, now).catch((err) => ({ error: err.message }))
+  const safety = await driverSafetyScore(sb, driverId, now).catch((err) => ({ error: err.message }))
   const leaderboard = await weeklyLeaderboard(sb, driverId, { now }).catch((err) => ({ error: err.message }))
   return {
     streaks: { trips: streaks.trips, days: streaks.days },
@@ -31,6 +33,7 @@ export async function buildPerks(sb, driverId, { now = new Date(), firstName = n
     leaderboard,
     surge,
     partyQueue,
+    safety,
     bonuses: (ledger.data || []).map((r) => ({ kind: r.kind, amountCents: r.amount_cents, status: r.status, at: r.created_at })),
   }
 }

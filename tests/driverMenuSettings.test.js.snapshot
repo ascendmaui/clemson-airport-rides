@@ -26,6 +26,11 @@ exports[`Driver Menu snapshot 1`] = `
       "icon": "shield",
       "title": "Safety",
       "subtitle": "Audio, video, live location, and SOS"
+    },
+    {
+      "icon": "speedometer",
+      "title": "Safety score",
+      "subtitle": "Estimate and tips"
     }
   ],
   "money": [
