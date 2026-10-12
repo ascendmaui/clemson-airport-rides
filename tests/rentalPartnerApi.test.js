@@ -18,10 +18,10 @@ test('notify uses the injected sender (no real email in tests) and skips empty r
   assert.equal(sent[0].to, 'a@example.test')
 })
 
-test('partners API module loads and rejects unknown actions without touching Supabase', async () => {
+test('partners API module loads and rejects unknown actions with 400 (not 404, see selfHost route test) without touching Supabase', async () => {
   const { default: handler } = await import('../api/partners.js')
   let status = 0
   const res = { statusCode: 0, setHeader() {}, status(c) { status = c; return this }, json() { return this }, end() {}, writeHead(c) { status = c } }
   await handler({ method: 'GET', url: '/api/partners?action=nope', headers: {} }, res)
-  assert.ok(status === 404 || res.statusCode === 404)
+  assert.ok(status === 400 || res.statusCode === 400)
 })

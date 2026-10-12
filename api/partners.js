@@ -61,7 +61,7 @@ export default async function handler(req, res) {
   if (cors(req, res)) return
   const url = new URL(req.url || '/', 'http://localhost')
   const action = url.searchParams.get('action') || ''
-  if (!ACTIONS.has(action)) return json(res, 404, { error: 'Unknown action' })
+  if (!ACTIONS.has(action)) return json(res, 400, { error: 'Unknown or missing action' })
   const sb = admin()
   if (!sb) return json(res, 503, { error: 'SUPABASE_SERVICE_ROLE_KEY not configured' })
   const user = await userFromAuth(req)
