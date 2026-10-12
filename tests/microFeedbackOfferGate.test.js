@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { isQuietNow, newRideAlertAllowed } from './offerAlertGate.js'
+import { isQuietNow, newRideAlertAllowed } from '../packages/rides-native/offerAlertGate.js'
 
 const at = (h, m = 0) => new Date(2026, 9, 12, h, m)
 
@@ -22,7 +22,7 @@ test('quiet hours, DND, and ride alerts off silence the alert', () => {
 })
 
 test('OfferBridge gates notifications and pulses on the shared rule', () => {
-  const src = readFileSync(new URL('../../apps/driver/components/OfferBridge.tsx', import.meta.url), 'utf8')
+  const src = readFileSync(new URL('../apps/driver/components/OfferBridge.tsx', import.meta.url), 'utf8')
   assert.match(src, /if \(!next \|\| !desk\.online\) return/)
   assert.doesNotMatch(src, /if \(next\) notifyNewRequest\(next\)/)
   assert.match(src, /if \(alertOk\) armPulse/)
@@ -32,6 +32,6 @@ test('OfferBridge gates notifications and pulses on the shared rule', () => {
 })
 
 test('driver SOS sheet buzzes once when it opens', () => {
-  const src = readFileSync(new URL('../../apps/driver/components/SosSheet.tsx', import.meta.url), 'utf8')
+  const src = readFileSync(new URL('../apps/driver/components/SosSheet.tsx', import.meta.url), 'utf8')
   assert.match(src, /if \(open\) Haptics\.notificationAsync\(Haptics\.NotificationFeedbackType\.Warning\)/)
 })
