@@ -1,4 +1,4 @@
-import { Ionicons } from '@expo/vector-icons'
+import { Glyph } from 'rides-native/icons'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useEffect, useState } from 'react'
 import { Animated, Pressable, Text, View } from 'react-native'
@@ -122,7 +122,7 @@ export default function RideTiers() {
           accessibilityHint="Returns to confirm pickup"
           hitSlop={8}
         >
-          <Text style={styles.backLabel}>←</Text>
+          <Glyph name="back" size={20} color={colors.title} accessibilityLabel="Back" />
         </Pressable>
         <View style={styles.headerCopy}>
           <Text style={styles.kicker}>To {dest}</Text>
@@ -180,7 +180,7 @@ export default function RideTiers() {
               accessibilityState={{ selected: on }}
             >
               <View style={[styles.iconWell, on && styles.iconWellOn]}>
-                <Ionicons name={rideTypeIconName(tier.id)} size={22} color={on ? colors.orange : colors.purple} />
+                <Glyph name={rideTypeIconName(tier.id)} size={22} color={on ? colors.orange : colors.purple} />
               </View>
               <View style={styles.tierCopy}>
                 <Text style={styles.name}>{tier.name}</Text>
