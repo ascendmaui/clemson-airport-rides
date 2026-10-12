@@ -8,6 +8,7 @@ import {
 } from './chatModeration.js'
 import { chatEndedLine, chatOpenLine, messagingGuide } from '../../shared/copy/messaging.js'
 import { MessagingInfoButton } from './MessagingInfo.jsx'
+import { AutoReplyTag, DriverAssistBar, useDriverChatAssist } from './DriverChatAssist.jsx'
 import {
   canOpenLostItemReport,
   fetchLostItemReport,
@@ -55,6 +56,7 @@ export function TripThread({
   userId,
   colors,
   promptLostItem = false,
+  assist = false,
 }) {
   const tone = { ...FALLBACK, ...(colors || {}) }
   const [open, setOpen] = useState(Boolean(promptLostItem))
@@ -140,6 +142,7 @@ export function TripThread({
   }, [promptLostItem])
 
   const mode = rideChatMode(trip, Date.now(), report)
+  const assistState = useDriverChatAssist({ supabase, tripId, trip, rows, userId, enabled: assist && mode === 'compose', onSent: refresh })
   const lost = lostItemReportState(report)
   const canReport = Boolean(role) && canOpenLostItemReport(trip, Date.now(), role) && lost !== 'open'
   if (!tripId || !trip) return null
@@ -325,6 +328,7 @@ export function TripThread({
                   maxWidth: '84%',
                 }}
               >
+                <AutoReplyTag body={row.body} tone={mine ? { inkSecondary: tone.onAccent } : tone} />
                 <Text style={{ color: mine ? tone.onAccent : tone.ink, fontSize: 15, lineHeight: 20 }}>{row.body}</Text>
               </Pressable>
             )
@@ -388,6 +392,9 @@ export function TripThread({
                 </>
               )}
             </View>
+          ) : null}
+          {mode === 'compose' && role && blockReady && !blocked ? (
+            <DriverAssistBar assist={assistState} tone={tone} onUse={setDraft} />
           ) : null}
           {mode === 'compose' && role && blockReady && !blocked ? (
             <>
