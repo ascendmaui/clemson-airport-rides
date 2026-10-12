@@ -10,6 +10,7 @@ import { BOOST_SCHEDULE_NOTE } from '../../shared/copy/boost.js'
 import { formatBoostBadge } from '../../shared/scheduledBoost.js'
 import { depositSurfaceCopy } from '../../packages/rides-native/riderMoney.js'
 import { SignInToBookModal, useRequireAuthForAction } from './SignInToBookModal'
+import { navigate } from '../lib/navigation'
 import {
   AIRPORT_PLACES,
   formatPickupAt,
@@ -338,6 +339,14 @@ export function ScheduledRidePlanner() {
               style={{ padding: '8px 12px', borderRadius: 999, fontWeight: 700, fontSize: 13, color: '#fff', background: '#522D80', border: '1px solid #522D80' }}
             >
               Downtown → campus
+            </button>
+            <button
+              type="button"
+              className="pressable"
+              onClick={() => navigate('party-night')}
+              style={{ padding: '8px 12px', borderRadius: 999, fontWeight: 700, fontSize: 13, color: '#fff', background: '#F56600', border: '1px solid #F56600' }}
+            >
+              Party night with friends
             </button>
           </div>
         </div>

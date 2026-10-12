@@ -222,6 +222,9 @@ export function RiderHome() {
             <Pill icon="👥" tone="purple" onClick={() => navigate('carpool', { hub: '1' })}>
               Carpool · split the surge
             </Pill>
+            <Pill icon="🌙" tone="orange" onClick={() => navigate('party-night')}>
+              Party night
+            </Pill>
             <Pill icon="🧾" tone="purple" onClick={() => navigate('history')}>
               Your rides
             </Pill>

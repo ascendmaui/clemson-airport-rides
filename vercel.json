@@ -49,6 +49,10 @@
       "destination": "/api/friend-rides?action=:action"
     },
     {
+      "source": "/api/party-night/:action",
+      "destination": "/api/party-night?action=:action"
+    },
+    {
       "source": "/api/driver-signup",
       "destination": "/api/driver?action=signup"
     },

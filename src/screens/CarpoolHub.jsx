@@ -233,6 +233,24 @@ export function CarpoolHub() {
             <button
               type="button"
               className="pressable"
+              onClick={() => navigate('party-night')}
+              style={{
+                display: 'block',
+                width: '100%',
+                marginTop: 10,
+                minHeight: 44,
+                padding: 14,
+                borderRadius: 14,
+                fontWeight: 800,
+                color: '#fff',
+                background: 'linear-gradient(135deg, #F56600 0%, #522D80 100%)',
+              }}
+            >
+              Schedule a party night
+            </button>
+            <button
+              type="button"
+              className="pressable"
               onClick={() => navigate('carpool', { drive: '1' })}
               style={{ display: 'block', width: '100%', marginTop: 8, padding: 8, fontWeight: 700, color: 'var(--ink-secondary)' }}
             >
