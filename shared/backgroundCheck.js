@@ -35,6 +35,7 @@ export const BACKGROUND_DISCLOSURES = [
 
 const STATUS_SET = new Set(BACKGROUND_CHECK_STATUSES)
 
+/** @returns {{ conviction: boolean | null, license_action: boolean | null, impaired_driving: boolean | null }} */
 export function emptyDisclosures() {
   return { conviction: null, license_action: null, impaired_driving: null }
 }

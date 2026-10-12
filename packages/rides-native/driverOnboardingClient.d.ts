@@ -70,6 +70,12 @@ export function saveEmploymentVerification(
   input: {
     backgroundAuthorized: boolean
     category: string
+    legalName?: string
+    disclosures?: {
+      conviction?: boolean | null
+      license_action?: boolean | null
+      impaired_driving?: boolean | null
+    } | null
     signatureName?: string
     signedOn?: string
     signatureMark?: unknown

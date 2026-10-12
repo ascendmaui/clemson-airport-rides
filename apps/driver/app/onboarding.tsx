@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Linking, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { BackButton, Card, ErrorText, Field, Primary, Tag } from '@/components/chrome'
+import { TitleStatusField } from '@/components/TitleStatusField'
 import { SignaturePad } from '@/components/SignaturePad'
 import { useAuth } from '@/lib/auth'
 import { supabase } from '@/lib/supabase'
@@ -37,9 +38,10 @@ import { extractReadableText, licensePendingCopy, matchRegistration, reviewLicen
 import { loadDriverProfile, loadVehicle } from 'rides-native/driverDesk'
 import { modelsForMake, VEHICLE_COLORS, VEHICLE_MAKES } from 'rides-native/vehicleCatalog'
 import { useTheme } from '@/lib/theme'
-import { WEB_DRIVER_SIGNUP_URL } from '../../../shared/productLinks.js'
+import { WEB_DRIVER_RENTALS_URL, WEB_DRIVER_SIGNUP_URL } from '../../../shared/productLinks.js'
 import { knowledgeQuizStatus, knowledgeQuizStatusLabel, loadKnowledgeQuiz } from 'rides-native/driverKnowledgeQuiz'
 import { applicantEmailError } from '../../../shared/applicantEmail.js'
+import { titleStatusError } from '../../../shared/vehicleTitle.js'
 import {
   BACKGROUND_DISCLOSURES,
   assessBackgroundAttestation,
@@ -163,6 +165,7 @@ export default function OnboardingScreen() {
   const [color, setColor] = useState('')
   const [plate, setPlate] = useState('')
   const [year, setYear] = useState('')
+  const [titleStatus, setTitleStatus] = useState('')
   const [seats, setSeats] = useState('4')
   const [comfortClass, setIsComfort] = useState(false)
   const [picker, setPicker] = useState<null | 'make' | 'model' | 'color'>(null)
@@ -222,6 +225,7 @@ export default function OnboardingScreen() {
       setModel(String(vehicle.model || ''))
       setColor(String(vehicle.color || ''))
       setYear(vehicle.year ? String(vehicle.year) : '')
+      setTitleStatus(String(vehicle.title_status || ''))
       setPlate(String(vehicle.plate || ''))
       setSeats(String(vehicle.seats || 4))
       setIsComfort(Boolean(vehicle.service_class))
@@ -365,7 +369,11 @@ export default function OnboardingScreen() {
       setError(quizError)
       return
     }
-    const fieldErrors = vehicleAccountErrors({ fullName, phone, make, model, color, plate, year })
+    const fieldErrors = {
+      ...vehicleAccountErrors({ fullName, phone, make, model, color, plate, year }),
+    }
+    const titleIssue = titleStatusError(titleStatus)
+    if (titleIssue) fieldErrors.titleStatus = titleIssue
     const fieldMessages = Object.values(fieldErrors)
     if (fieldMessages.length) {
       setError(fieldMessages.join(' '))
@@ -392,6 +400,7 @@ export default function OnboardingScreen() {
         model,
         color,
         year,
+        titleStatus,
         plate: plate.trim(),
         seats: Number(seats) || 4,
         comfortClass,
@@ -579,6 +588,14 @@ export default function OnboardingScreen() {
         >
           <Text style={styles.link}>Prefer the website? Open the driver application</Text>
         </Pressable>
+        <Pressable
+          onPress={() => { void Linking.openURL(WEB_DRIVER_RENTALS_URL) }}
+          accessibilityRole="link"
+          accessibilityLabel="No car? Rent one"
+          accessibilityHint="Opens weekly rentals from Clemson RIDES partners. Available after your license and background check pass."
+        >
+          <Text style={styles.link}>No car? Rent one from a rental partner</Text>
+        </Pressable>
         <View style={styles.progressTrack}>
           <View style={[styles.progressFill, { width: `${progress.percent}%` }]} />
         </View>
@@ -664,6 +681,7 @@ export default function OnboardingScreen() {
             <PickerField label="Color" value={color || 'Select color'} onPress={() => setPicker('color')} />
             <Field label="Year" value={year} onChangeText={setYear} keyboard="number-pad" />
             <Field label="Plate" value={plate} onChangeText={setPlate} />
+            <TitleStatusField value={titleStatus} onChange={setTitleStatus} />
             <Field label="Seats" value={seats} onChangeText={setSeats} keyboard="number-pad" />
             <Pressable
               onPress={() => setIsComfort((value: boolean) => !value)}
@@ -678,7 +696,7 @@ export default function OnboardingScreen() {
                 <Text style={styles.checkCopy}>List this car as Extra Comfort</Text>
               </View>
             </Pressable>
-            <Primary label={busy ? 'Saving…' : 'Continue to license'} onPress={onSaveAccount} disabled={busy} />
+            <Primary label={busy ? 'Saving…' : 'Continue to license'} onPress={onSaveAccount} disabled={busy || titleStatus === 'salvage'} />
           </Card>
         ) : null}
 

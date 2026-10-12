@@ -12,6 +12,8 @@ import { useAuth } from '@/lib/auth'
 import { useFeedback } from '@/lib/feedback'
 import { inAppRideAlert, isTripStatusPush, notifyNewRequest, notifyScheduledBoard, setRideAlertSurface } from '@/lib/push'
 import { supabase } from '@/lib/supabase'
+import { newRideAlertAllowed } from 'rides-native/offerAlertGate.js'
+import { driverAlertPrefs } from '@/lib/quietHours'
 import { useTheme } from '@/lib/theme'
 import { acceptTrip, loadDriverDesk, markSearchingOffers, subscribeTrips } from 'rides-native/driverDesk'
 import { clemsonMiamiDriverNotification } from 'rides-native/clemsonMiamiPromo.js'
@@ -78,9 +80,19 @@ export function OfferBridge() {
     seen.current = new Set()
     seenBoard.current = new Set()
 
+    // Notification prefs (quiet hours / DND / ride alerts) are shared with the web app.
+    let prefs: unknown = null
+    const loadPrefs = async () => {
+      try {
+        prefs = await driverAlertPrefs(user.id)
+      } catch { /* keep the last prefs */ }
+      return prefs
+    }
+
     const look = async () => {
       try {
         const desk = await loadDriverDesk(supabase, user.id)
+        const alertOk = newRideAlertAllowed({ online: Boolean(desk.online), prefs: await loadPrefs() })
         if (!alive) return
         setRideAlertSurface({ online: Boolean(desk.online) })
         const board = desk.scheduledOpen || []
@@ -93,7 +105,7 @@ export function OfferBridge() {
           const posted = freshBoard[0]
           if (posted) {
             AccessibilityInfo.announceForAccessibility(`Scheduled ride on the board. ${posted.pickupLabel} to ${posted.dropoffLabel}`)
-            notifyScheduledBoard(posted).catch(() => {})
+            if (alertOk) notifyScheduledBoard(posted).catch(() => {})
           }
         }
         const offers = (desk.offers || []).filter((card: DriverCard) => !isSyntheticOffer(card))
@@ -106,10 +118,8 @@ export function OfferBridge() {
         const fresh = offers.filter((card: DriverCard) => !seen.current.has(card.id))
         fresh.forEach((card: DriverCard) => seen.current.add(card.id))
         const next = fresh[0]
-        if (!next || !desk.online) {
-          if (next) notifyNewRequest(next).catch(() => {})
-          return
-        }
+        // Offline drivers get no new-ride notification at all.
+        if (!next || !desk.online) return
         const driver = { lat: desk.lat, lng: desk.lng }
         const decision = shouldAutoAccept({
           riderId: next.riderId,
@@ -130,8 +140,12 @@ export function OfferBridge() {
         if (inAppRideAlert()) {
           showBanner(next, driver)
           armPulse(next.tier || 'standard')
+          showBanner(next)
+          // Quiet hours / DND: the banner still shows, silently.
+          if (alertOk) armPulse(next.tier || 'standard')
           return
         }
+        if (!alertOk) return
         pulse('request', { tier: next.tier })
         notifyNewRequest(next).catch(() => {})
       } catch {
@@ -159,7 +173,7 @@ export function OfferBridge() {
         shownAt: Date.now(),
         hourlyCents: null,
       })
-      armPulse(tier)
+      if (newRideAlertAllowed({ online: true, prefs })) armPulse(tier)
     })
     return () => {
       alive = false
@@ -193,6 +207,23 @@ export function OfferBridge() {
         </Pressable>
         <WorthItLegend hourlyCents={banner.hourlyCents} colors={colors} />
       </View>
+      <Pressable
+        onPress={() => {
+          // The driver has seen it: stop the 1.5 s buzz/chime loop right away.
+          if (pulseStop.current) clearTimeout(pulseStop.current)
+          stopRequestPulse()
+          setBanner(null)
+          router.push('/queue')
+        }}
+        accessibilityRole="button"
+        accessibilityLabel={`${banner.title}. ${banner.body}. ${left} seconds to accept.`}
+        style={[styles.card, { backgroundColor: colors.card, borderColor: colors.orange }]}
+      >
+        <Text style={[styles.kicker, { color: colors.purple }]}>RIDE REQUEST</Text>
+        <Text style={[styles.title, { color: colors.title }]}>{banner.title}</Text>
+        <Text style={{ color: colors.ink }}>{banner.body}</Text>
+        <Text style={[styles.count, { color: colors.orange }]}>{left}s to accept</Text>
+      </Pressable>
     </View>
   )
 }
