@@ -110,7 +110,7 @@ export const RENTAL = {
       id: 'turo',
       kicker: 'Path 2',
       title: 'Rent through Turo',
-      body: 'Browse cars from local hosts on Turo. Turo’s prohibited-uses policy bars paid passenger driving in California, Minnesota, New York and Oregon; South Carolina is not on that list. Check the host’s rideshare policy and Turo’s current terms before you book.',
+      body: 'Turo is a car-sharing marketplace, not a rideshare rental program. Its prohibited-uses policy bars paid passenger driving in California, Minnesota, New York and Oregon; South Carolina is not on that list. Some Turo hosts may allow rideshare use. Confirm with the host first, and check the host’s rideshare policy and Turo’s current terms before you book.',
       cta: 'Browse Turo near Clemson',
       href: 'https://turo.com/us/en/car-rental/united-states/clemson-sc',
       fine: 'Turo is a separate company. Clemson RIDES is not affiliated with or endorsed by Turo.',
