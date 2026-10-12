@@ -89,6 +89,23 @@ export async function approachHaptic(level: ApproachHapticLevel) {
 }
 
 /**
+ * One strong "driver is here" cue when the driver first gets within the
+ * here radius: success notification, a heavy follow-up tap, and one ping.
+ * Each part honors its own setting (haptics / sounds + mute switch).
+ */
+export async function arrivalCue() {
+  if (await hapticsEnabled()) {
+    try {
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
+      setTimeout(() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy).catch(() => {}) }, 140)
+    } catch {
+      /* web and simulators can omit the motor */
+    }
+  }
+  await playApproachPing()
+}
+
+/**
  * Clemson cue via expo-audio. playsInSilentMode is false so iOS mute and
  * Android silent/vibrate suppress the clip.
  */
@@ -135,19 +152,3 @@ export async function playTigerCue() {
   }
 }
 
-/**
- * One strong "driver is here" cue when the driver first gets within the
- * here radius: success notification, a heavy follow-up tap, and one ping.
- * Each part honors its own setting (haptics / sounds + mute switch).
- */
-export async function arrivalCue() {
-  if (await hapticsEnabled()) {
-    try {
-      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
-      setTimeout(() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy).catch(() => {}) }, 140)
-    } catch {
-      /* web and simulators can omit the motor */
-    }
-  }
-  await playApproachPing()
-}
