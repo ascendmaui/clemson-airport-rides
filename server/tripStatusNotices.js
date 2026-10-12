@@ -27,6 +27,7 @@ export const NOTICE_KINDS = Object.freeze({
   rider_no_show: Object.freeze({ role: 'driver', statuses: Object.freeze(['cancelled_wait']) }),
   driver_canceled: Object.freeze({ role: 'rider', statuses: Object.freeze([]), released: 'live' }),
   wait_canceled: Object.freeze({ role: 'rider', statuses: Object.freeze(['cancelled_wait']) }),
+  search_timeout: Object.freeze({ role: 'rider', statuses: Object.freeze(['canceled']) }),
   driver_tipped: Object.freeze({ role: 'driver', statuses: Object.freeze(['completed']) }),
 })
 
@@ -102,6 +103,8 @@ export function tripStatusNoticeCopy(kind, {
       }
     case 'driver_canceled':
       return { title: 'Your driver canceled', body: `We're finding you another driver for ${pickup}.` }
+    case 'search_timeout':
+      return { title: 'Ride canceled', body: "No drivers were available. You weren't charged." }
     case 'wait_canceled':
       return {
         title: 'Ride canceled',
