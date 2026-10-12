@@ -51,6 +51,7 @@ import { driverPickupTarget } from 'rides-native/riderLivePickup'
 import { LivePhase } from 'rides-native/LivePhase'
 import { ORANGE, PURPLE } from 'rides-native/places.js'
 import { CounterpartCard, RateTripPanel, partyColorsFromPalette } from 'rides-native/PartyScreens'
+import { CommunityMatchChips } from 'rides-native/CommunityMatchChips'
 import { loadCounterpart, type CounterpartView } from 'rides-native/partyProfile.js'
 import { useTheme } from '@/lib/theme'
 import type { Palette } from '@/lib/palette'
@@ -593,6 +594,7 @@ export default function TripScreen() {
             ) : trip.status === 'arrived' ? null : (
               <CounterpartCard person={person} colors={partyColors} />
             )}
+            {trip.status === 'arrived' ? null : <CommunityMatchChips supabase={supabase} tripId={trip.id} colors={colors} compact />}
             <Text style={styles.copy}>{trip.pickupLabel} → {trip.dropoffLabel}</Text>
             {trip.airportContext ? (
               <View accessibilityLabel={`Airport: ${trip.airportContext.line}`} style={styles.airport}>

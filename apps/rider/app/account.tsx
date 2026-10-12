@@ -27,7 +27,7 @@ const DISPLAY: { id: DisplayMode; label: string }[] = [
   { id: 'dark', label: 'Dark' },
 ]
 
-const LINKS: { href: '/billing' | '/tiger-pass' | '/student' | '/promo' | '/notifications' | '/history' | '/schedule' | '/help' | '/support' | '/lost-found'; label: string; hint: string }[] = [
+const LINKS: { href: '/community' | '/billing' | '/tiger-pass' | '/student' | '/promo' | '/notifications' | '/history' | '/schedule' | '/help' | '/support' | '/lost-found'; label: string; hint: string }[] = [
   { href: '/tiger-pass', label: TIGER_PASS_NAME, hint: 'Frequent-rider discount, preferred drivers, and ride types' },
   { href: '/billing', label: 'Billing', hint: 'Card on file and ride history' },
   { href: '/student', label: 'Student', hint: 'Confirmed Clemson email · 10% off Standard' },
@@ -38,6 +38,7 @@ const LINKS: { href: '/billing' | '/tiger-pass' | '/student' | '/promo' | '/noti
   { href: '/help', label: 'Help', hint: 'How booking, Schedule, friends, and billing work' },
   { href: '/support', label: 'Support', hint: 'Charge, ride, bug, or safety tickets' },
   { href: '/lost-found', label: 'Lost & found', hint: 'An item left in the car after a ride' },
+  { href: '/community', label: 'Campus community', hint: 'Optional, off by default · shows only what you and your driver share' },
 ]
 
 function AccountScreen() {

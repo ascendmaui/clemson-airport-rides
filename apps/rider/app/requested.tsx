@@ -27,6 +27,7 @@ import { LivePhase } from 'rides-native/LivePhase'
 import { isApproachStatus } from '@/lib/approachAlert'
 import { ORANGE, PURPLE } from 'rides-native/places.js'
 import { CounterpartCard, partyColorsFromPalette } from 'rides-native/PartyScreens'
+import { CommunityMatchChips } from 'rides-native/CommunityMatchChips'
 import { loadCounterpart, type CounterpartView } from 'rides-native/partyProfile.js'
 import { lift } from '@/lib/elevation'
 import type { Palette } from '@/lib/palette'
@@ -356,6 +357,7 @@ export default function Requested() {
               eta={located ? staleEtaLine(locationIssue, driverEta, { placeholder: !driverEta }) : null}
               colors={partyColorsFromPalette(colors)}
             />
+            {person && tripId ? <CommunityMatchChips supabase={supabase} tripId={tripId} colors={colors} /> : null}
             {ttlCanceled ? null : (
               <>
               {locationIssue ? <View accessibilityLiveRegion="polite"><Text style={{ color: colors.title }}>{locationIssue}</Text><Pressable accessibilityRole="button" onPress={() => void reloadMap(true)}><Text style={{ color: colors.title }}>Retry tracking</Text></Pressable></View> : null}
