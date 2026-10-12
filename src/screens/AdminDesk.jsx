@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { AdminDrivers } from './AdminDrivers'
+import { AdminRentalPartners } from './RentalPartners'
 import { navigate, getHashRoute } from '../lib/navigation'
 import { useAuth } from '../lib/auth'
 import { supabase } from '../lib/supabase'
@@ -25,6 +26,7 @@ const TABS = [
   ['trips', 'Trips'],
   ['support', 'Support'],
   ['events', 'Events'],
+  ['rentals', 'Rental partners'],
 ]
 
 const TICKET_FILTERS = [
@@ -128,6 +130,7 @@ export function AdminDesk() {
       {tab === 'trips' && <TripsPanel />}
       {tab === 'support' && <SupportPanel />}
       {tab === 'events' && <AdminEventsPanel />}
+      {tab === 'rentals' && <AdminRentalPartners />}
     </div>
   )
 }
@@ -320,6 +323,13 @@ function SupportPanel() {
                 {detail.profile?.full_name || 'Rider'} · {detail.profile?.email}{detail.profile?.phone ? ` · ${detail.profile.phone}` : ''}
               </div>
               <p style={{ fontSize: 13, whiteSpace: 'pre-wrap' }}>{detail.ticket.body}</p>
+              {detail.disputeSummary?.summary_text ? (
+                <div style={{ margin: '8px 0', padding: 10, borderRadius: 10, background: 'rgba(82,45,128,0.06)' }}>
+                  <div style={{ fontSize: 12, fontWeight: 800, color: '#522D80' }}>Dispute summary (generated from trip records)</div>
+                  <pre style={{ fontSize: 12, whiteSpace: 'pre-wrap', margin: '6px 0 0' }}>{detail.disputeSummary.summary_text}</pre>
+                  <button type="button" onClick={() => navigator.clipboard?.writeText(detail.disputeSummary.summary_text)} style={{ fontSize: 12, marginTop: 6 }}>Copy summary</button>
+                </div>
+              ) : null}
               {(detail.messages || []).map((message) => (
                 <p key={message.id} style={{ fontSize: 13 }}>
                   <strong style={{ color: message.author_role === 'bot' ? '#F56600' : '#522D80' }}>{message.author_role}</strong>

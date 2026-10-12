@@ -8,6 +8,7 @@
  * Change this one constant to revise the split.
  */
 import { fareAuthorizationCents } from './fareAuthorization.js'
+import { clampPrepaidTipCents } from './prepaidTip.js'
 
 /** Driver share of the boost, in basis points. 10000 = 100%. John: confirm. */
 export const BOOST_DRIVER_SHARE_BPS = 10000
@@ -128,14 +129,17 @@ export function driverPayoutWithBoost(fareNetCents, boostCents) {
  * The buffer stays a percent of the estimate only. The boost is added in full.
  * A $0 estimate with a boost still authorizes the boost.
  */
-export function holdQuoteCents(estimatedFareCents, boostCents = 0) {
+export function holdQuoteCents(estimatedFareCents, boostCents = 0, prepaidTipCents = 0) {
   const boost = clampBoostCents(boostCents)
+  const tip = clampPrepaidTipCents(prepaidTipCents)
   const base = fareAuthorizationCents(estimatedFareCents)
   return {
     estimatedFareCents: base.estimatedFareCents,
     bufferCents: base.bufferCents,
     boostCents: boost,
-    authorizationCents: base.authorizationCents + boost,
+    prepaidTipCents: tip,
+    // The tip rides on top of the hold, no buffer on it.
+    authorizationCents: base.authorizationCents + boost + tip,
   }
 }
 
