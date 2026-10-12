@@ -1,3 +1,4 @@
+import { VEHICLE_STANDARD_MIN_YEAR } from '../../shared/vehicleStandards.js'
 import { VehicleFleetEditor } from '../components/VehicleFleetEditor'
 import { useEffect, useState } from 'react'
 import { useAuth } from '../lib/auth'
@@ -61,6 +62,7 @@ export function AdminDrivers({ embedded = false }) {
   const [requestPrompt, setRequestPrompt] = useState('')
   const [signingUrl, setSigningUrl] = useState('')
   const [acceptContractMismatch, setAcceptContractMismatch] = useState(false)
+  const [approveLuxury, setApproveLuxury] = useState(false)
   const [ackBackground, setAckBackground] = useState(false)
   const [particulars, setParticulars] = useState({
     legal_name: '',
@@ -179,6 +181,7 @@ export function AdminDrivers({ embedded = false }) {
         reason,
         acknowledgeContractMismatch: decision === 'approve' && acceptContractMismatch,
         acknowledgeBackgroundReview: decision === 'approve' && ackBackground,
+        approveLuxuryException: decision === 'approve' && approveLuxury,
       })
       setNote(data.message || (decision === 'approve' ? 'Approved' : 'Rejected'))
       setOpenId(null)
@@ -447,6 +450,10 @@ export function AdminDrivers({ embedded = false }) {
                         </label>
                       </div>
                     )}
+                    <label style={{ display: 'flex', gap: 8, alignItems: 'flex-start', fontSize: 13 }}>
+                      <input type="checkbox" checked={approveLuxury} onChange={(e) => setApproveLuxury(e.target.checked)} />
+                      <span>Vehicle is older than {VEHICLE_STANDARD_MIN_YEAR}: approve it as a Luxury exception (checked photos and condition).</span>
+                    </label>
                     {needsBackgroundAck && (
                       <label style={{ display: 'flex', gap: 8, alignItems: 'flex-start', fontSize: 13 }}>
                         <input

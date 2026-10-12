@@ -51,10 +51,18 @@ exports[`Driver Offer Card snapshot 1`] = `
                         {
                           "type": "Conditional",
                           "branches": []
+                        },
+                        {
+                          "type": "Conditional",
+                          "branches": []
                         }
                       ]
                     }
                   ]
+                },
+                {
+                  "name": "OfferGauge",
+                  "children": []
                 },
                 {
                   "type": "Conditional",
@@ -91,8 +99,22 @@ exports[`Driver Offer Card snapshot 1`] = `
               ]
             },
             {
-              "name": "Text",
-              "children": []
+              "type": "Conditional",
+              "branches": [
+                {
+                  "name": "View",
+                  "children": [
+                    {
+                      "name": "Text",
+                      "children": []
+                    },
+                    {
+                      "name": "Tag",
+                      "children": []
+                    }
+                  ]
+                }
+              ]
             },
             {
               "name": "Text",
