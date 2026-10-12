@@ -21,6 +21,7 @@ import { displayFirstName } from 'rides-native/authErrors'
 import { heatColor } from 'rides-native/heat.js'
 import { HEAT_WINDOWS } from 'rides-native/places.js'
 import { loadBusySpots, type BusySpot } from '@/lib/busySpots'
+import { useDemandHeat } from '@/lib/useDemandHeat'
 import {
   acceptTrip,
   declineDriverOffer,
@@ -115,6 +116,7 @@ export default function DriverHome() {
   const [heatCaption, setHeatCaption] = useState('Popular campus spots from ride requests.')
   const [heatBlended, setHeatBlended] = useState(false)
   const [heatLoading, setHeatLoading] = useState(true)
+  const [peakOverride, setPeakOverride] = useState<boolean | null>(null)
   const [riderLine, setRiderLine] = useState<string | null>(null)
   const [hiddenOffers, setHiddenOffers] = useState<string[]>([])
   const [selectedOfferId, setSelectedOfferId] = useState<string | null>(null)
@@ -408,9 +410,16 @@ export default function DriverHome() {
         ? `You're online, ${name}`
         : 'You\'re offline'
 
+  // Peak mode: auto on game days, driver can flip it either way.
+  const peakMode = peakOverride ?? Boolean(gameNotice?.live)
+  const liveHeat = showHeat && heatWindow === 'now'
+  const demand = useDemandHeat({ enabled: liveHeat, peak: peakMode })
+
   return (
     <View style={[styles.screen, { backgroundColor: colors.background }]}>
       <CampusMap
+        demandCells={liveHeat ? demand.cells : []}
+        peak={liveHeat && peakMode}
         pins={pins}
         center={self}
         colorScheme={scheme}
@@ -505,6 +514,16 @@ export default function DriverHome() {
           </View>
           {showHeat ? (
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.heatWindows}>
+              <Pressable
+                onPress={() => setPeakOverride(!peakMode)}
+                accessibilityRole="switch"
+                accessibilityLabel="Peak mode for game days and airport rushes"
+                accessibilityState={{ checked: peakMode }}
+                hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+                style={[styles.heatChip, peakMode ? styles.heatChipOn : { backgroundColor: colors.card, borderColor: colors.border }]}
+              >
+                <Text style={{ color: peakMode ? '#FFFFFF' : colors.title, fontWeight: '700', fontSize: 13, letterSpacing: 0.2 }}>Peak</Text>
+              </Pressable>
               {HEAT_WINDOWS.map((item: { id: string; label: string }) => {
                 const on = item.id === heatWindow
                 return (
@@ -524,7 +543,13 @@ export default function DriverHome() {
             </ScrollView>
           ) : null}
           <Text style={{ color: colors.inkSecondary, fontSize: 12, marginHorizontal: 16, marginTop: 6 }}>
-            {heatLoading ? 'Loading campus demand…' : showHeat ? `${heatCaption}${heatBlended ? ' · Live + typical' : ''}` : 'Busy areas are hidden.'}
+            {!showHeat
+              ? 'Busy areas are hidden.'
+              : liveHeat
+                ? demand.cells.length
+                  ? `Live demand · last ${peakMode ? 30 : 20} min · tap a zone`
+                  : demand.updatedAt ? 'Quiet right now · updates every 30 s' : 'Loading live demand…'
+                : heatLoading ? 'Loading campus demand…' : `${heatCaption}${heatBlended ? ' · Live + typical' : ''}`}
           </Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.hotspots} style={styles.hotspotRow}>
             <View style={[styles.hotspot, { backgroundColor: gameNotice?.live ? colors.orange : colors.card }]}>
@@ -884,10 +909,19 @@ const styles = StyleSheet.create({
   dot: { width: 8, height: 8, borderRadius: 4 },
   heatPanel: { marginTop: 8 },
   heatRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16 },
-  heatLabel: { fontSize: 12, fontWeight: '700' },
-  heatToggle: { borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6 },
-  heatWindows: { paddingHorizontal: 16, gap: 8, marginTop: 8 },
-  heatChip: { borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6 },
+  heatLabel: { fontSize: 13, fontWeight: '700', letterSpacing: 0.2 },
+  heatToggle: { borderRadius: 999, paddingHorizontal: 14, minHeight: 36, justifyContent: 'center' },
+  heatWindows: { paddingHorizontal: 16, gap: 8, marginTop: 10 },
+  heatChip: {
+    borderRadius: 999, paddingHorizontal: 14, minHeight: 36, justifyContent: 'center',
+    borderWidth: 1, borderColor: 'transparent',
+  },
+  heatChipOn: {
+    backgroundColor: '#522D80',
+    borderColor: 'rgba(255,255,255,0.16)',
+    shadowColor: '#522D80', shadowOpacity: 0.22, shadowRadius: 10, shadowOffset: { width: 0, height: 4 },
+    elevation: 2,
+  },
   hotspotRow: { flexGrow: 0, marginTop: 10 },
   hotspots: { paddingHorizontal: 16, gap: 8 },
   hotspot: { borderRadius: 999, paddingHorizontal: 12, paddingVertical: 8 },

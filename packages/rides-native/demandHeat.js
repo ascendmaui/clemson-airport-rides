@@ -172,7 +172,7 @@ export function heatRgb(intensity, scheme = 'light') {
   const ramp = scheme === 'dark' ? RAMP_DARK : RAMP_LIGHT
   const v = clamp01(finite(intensity)) * (ramp.length - 1)
   const i = Math.min(ramp.length - 2, Math.floor(v))
-  // Smoothstep keeps the mid-stops from banding into muddy linear mixes.
+  // Smoothstep between stops avoids the muddy linear-RGB midpoints and visible banding.
   const raw = v - i
   const t = raw * raw * (3 - 2 * raw)
   return ramp[i].map((c, k) => Math.round(lerp(c, ramp[i + 1][k], t)))
