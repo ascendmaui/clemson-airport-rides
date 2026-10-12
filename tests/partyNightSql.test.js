@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const migrationsDir = path.join(root, 'supabase', 'migrations')
-const fileName = '20261013110000_party_night_scheduling.sql'
+const fileName = '20261012212319_party_night_scheduling.sql'
 const sql = readFileSync(path.join(migrationsDir, fileName), 'utf8')
 
 test('party night migration version is unique and starts at 20261013110000', () => {

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { readdirSync, readFileSync } from 'node:fs'
 import { PGlite } from '@electric-sql/pglite'
 
-const file = '20261013100000_game_day_experience.sql'
+const file = '20261012212311_game_day_experience.sql'
 const migration = readFileSync(new URL(`../supabase/migrations/${file}`, import.meta.url), 'utf8')
 const driver = '11111111-1111-4111-8111-111111111111'
 const other = '22222222-2222-4222-8222-222222222222'
