@@ -15,6 +15,8 @@ import { supabase } from '@/lib/supabase'
 import { newRideAlertAllowed } from 'rides-native/offerAlertGate.js'
 import { driverAlertPrefs } from '@/lib/quietHours'
 import { useTheme } from '@/lib/theme'
+import { GlassBadge } from 'rides-native/icons'
+import { rideTypeIconName } from 'rides-native/rideTypeIcons.js'
 import { acceptTrip, loadDriverDesk, markSearchingOffers, subscribeTrips } from 'rides-native/driverDesk'
 import { clemsonMiamiDriverNotification } from 'rides-native/clemsonMiamiPromo.js'
 import { isSyntheticOffer } from 'rides-native/syntheticOffers'
@@ -35,7 +37,7 @@ export function OfferBridge() {
   const router = useRouter()
   const insets = useSafeAreaInsets()
   const { user } = useAuth()
-  const { colors, autoAccept } = useTheme()
+  const { colors, autoAccept, scheme } = useTheme()
   const { pulse, startRequestPulse, stopRequestPulse } = useFeedback()
   const seen = useRef(new Set<string>())
   const seenBoard = useRef(new Set<string>())
@@ -196,7 +198,10 @@ export function OfferBridge() {
         accessibilityLabel={`${banner.title}. ${banner.body}. ${left} seconds to accept.`}
         style={[styles.card, { backgroundColor: colors.card, borderColor: colors.orange }]}
       >
-        <Text style={[styles.kicker, { color: colors.purple }]}>RIDE REQUEST</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <GlassBadge name={rideTypeIconName(banner.tier || 'standard')} size={32} tone="orange" scheme={scheme} active />
+          <Text style={[styles.kicker, { color: colors.purple }]}>RIDE REQUEST</Text>
+        </View>
         <Text style={[styles.title, { color: colors.title }]}>{banner.title}</Text>
         <Text style={{ color: colors.ink }}>{banner.body}</Text>
         <Text style={[styles.count, { color: colors.orange }]}>{left}s to accept</Text>

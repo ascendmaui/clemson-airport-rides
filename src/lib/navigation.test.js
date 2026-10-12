@@ -6,6 +6,7 @@ import {
   friendsInviteUrl,
   getHashRoute,
   navigate,
+  partyNightInviteUrl,
   redirectShareHashToPath,
   shareUrl,
 } from './navigation.js'
@@ -14,6 +15,7 @@ test('share, friends, and carpool URLs format with proper origin and encoding', 
   assert.equal(shareUrl('tok_123'), `${WEB_ORIGIN}/share/tok_123`)
   assert.equal(friendsInviteUrl('friend+abc 123'), `${WEB_ORIGIN}/friends/friend%2Babc%20123`)
   assert.equal(carpoolInviteUrl('carpool/999'), `${WEB_ORIGIN}/carpool/carpool%2F999`)
+  assert.equal(partyNightInviteUrl('night/1'), `${WEB_ORIGIN}/party-night/night%2F1`)
 })
 
 test('getHashRoute defaults to landing in headless Node environment', () => {
@@ -63,6 +65,11 @@ test('getHashRoute parses routing paths and segment parameters under simulated b
     const carpoolRoute = getHashRoute()
     assert.equal(carpoolRoute.path, 'carpool')
     assert.equal(carpoolRoute.params.token, 'cp_789')
+
+    setLocation('', '/party-night/night_1')
+    const partyRoute = getHashRoute()
+    assert.equal(partyRoute.path, 'party-night')
+    assert.equal(partyRoute.params.token, 'night_1')
 
     // 4. Profile route
     setLocation('#/profile/usr_100')
@@ -137,6 +144,10 @@ test('redirectShareHashToPath replaces legacy hash routes with path form', () =>
     assert.equal(redirected, true)
     assert.equal(replacedUrl, 'https://test.clemsonrides.com/share/token_123?ref=test')
 
+    globalThis.window.location.hash = '#/party-night/night_1'
+    assert.equal(redirectShareHashToPath(), true)
+    assert.equal(replacedUrl, 'https://test.clemsonrides.com/party-night/night_1?ref=test')
+
     // Non-redirecting hash
     globalThis.window.location.hash = '#/dashboard'
     assert.equal(redirectShareHashToPath(), false)
@@ -169,6 +180,12 @@ test('navigate sets hash or assigns location URL', () => {
 
     navigate('carpool')
     assert.equal(globalThis.window.location.hash, '#/carpool?hub=1')
+
+    navigate('party-night')
+    assert.equal(globalThis.window.location.hash, '#/party-night')
+
+    navigate('party-night', { token: 'night_1' })
+    assert.equal(assignedUrl, 'https://test.clemsonrides.com/party-night/night_1')
 
     // Path assign navigation for share/friends/carpool with token
     navigate('share', { token: 'tok_live' })

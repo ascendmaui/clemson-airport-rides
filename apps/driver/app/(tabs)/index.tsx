@@ -55,6 +55,8 @@ import { followEtaLine } from 'rides-native/roadFollow'
 import { driverPickupTarget } from 'rides-native/riderLivePickup'
 import { ORANGE, PURPLE } from 'rides-native/places.js'
 import { gameDayNotice, type GameDayNotice } from 'rides-native/gameDayNotice.js'
+import { GameDaySurgeLine } from 'rides-native/GameDayBoard.jsx'
+import { useGameDayExperience } from 'rides-native/useGameDayExperience.js'
 import { approvalGateMessage, isSyntheticOffer } from 'rides-native/syntheticOffers'
 import { driverGateView } from 'rides-native/driverGateView'
 import { loadCounterpart } from 'rides-native/partyProfile.js'
@@ -124,6 +126,7 @@ export default function DriverHome() {
   const [hiddenOffers, setHiddenOffers] = useState<string[]>([])
   const [selectedOfferId, setSelectedOfferId] = useState<string | null>(null)
   const [gameNotice, setGameNotice] = useState<GameDayNotice | null>(null)
+  const gameDayExperience = useGameDayExperience(supabase, { driverId: user?.id || null })
   const myMarker = useMyMarker()
   const [refreshing, setRefreshing] = useState(false)
   const gate = useMemo(
@@ -438,7 +441,7 @@ export default function DriverHome() {
       />
       <View pointerEvents="box-none" style={styles.overlay}>
         <View style={[styles.top, { paddingTop: dockTop }]} pointerEvents="box-none">
-          <CircleButton icon="home" label="Menu" onPress={() => router.push('/menu')} />
+          <CircleButton icon="inbox" label="Inbox" onPress={() => router.push('/inbox')} />
           <Pressable
             onPress={() => setPeek((open: boolean) => !open)}
             style={[styles.pill, shadow, { backgroundColor: colors.card }]}
@@ -647,6 +650,13 @@ export default function DriverHome() {
               }}
               onAccept={() => onAccept(offer)}
               onDecline={() => onDecline(offer)}
+            />
+          ) : null}
+          {!online ? (
+            <GameDaySurgeLine
+              model={gameDayExperience.ready ? gameDayExperience.model : null}
+              online={false}
+              onPress={() => router.push('/game-day')}
             />
           ) : null}
           <View style={styles.controls} pointerEvents="box-none">

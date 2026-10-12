@@ -1,11 +1,12 @@
+import { GlassBadge, Glyph } from 'rides-native/icons'
+import { MainTabs } from '@/components/MainTabs'
 import { useFocusEffect, useRouter } from 'expo-router'
 import * as Linking from 'expo-linking'
 import * as WebBrowser from 'expo-web-browser'
 import { useCallback, useState } from 'react'
-import { Modal, ScrollView, Text, View } from 'react-native'
+import { Modal, Pressable, ScrollView, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { PrimaryButton } from '@/components/Button'
-import { StackHeader } from '@/components/StackHeader'
 import { useAuth } from '@/lib/auth'
 import { supabase } from '@/lib/supabase'
 import { parseCheckoutSessionId } from 'rides-native/checkoutReturn.js'
@@ -55,6 +56,19 @@ type Ride = {
   created_at: string | null
 }
 
+const MONEY_SHORTCUTS: { href: '/promo' | '/tiger-pass' | '/student' | '/history'; label: string; icon: string; tone: 'orange' | 'purple' }[] = [
+  { href: '/promo', label: 'Promos', icon: 'promo', tone: 'orange' },
+  { href: '/tiger-pass', label: 'Tiger Pass', icon: 'pass', tone: 'purple' },
+  { href: '/student', label: 'Student', icon: 'student', tone: 'purple' },
+  { href: '/history', label: 'Tips', icon: 'tip', tone: 'orange' },
+]
+
+function paymentGlyph(type: string): string {
+  if (type.includes('apple')) return 'applePay'
+  if (type.includes('cash') || type.includes('link')) return 'wallet'
+  return 'card'
+}
+
 function BillingScreen() {
   const router = useRouter()
   const insets = useSafeAreaInsets()
@@ -73,7 +87,7 @@ function BillingScreen() {
   const [tiers, setTiers] = useState<PrepaidTier[]>([])
   const [pending, setPending] = useState<PrepaidTier | null>(null)
   const [busy, setBusy] = useState(false)
-  const { colors } = useTheme()
+  const { colors, scheme } = useTheme()
   const styles = useThemedStyles(makeStyles)
 
   const load = useCallback(() => {
@@ -233,9 +247,22 @@ function BillingScreen() {
 
   return (
     <View style={[styles.screen, { paddingTop: insets.top }]}>
-      <StackHeader title="Billing" onBack={() => router.back()} />
+      <View style={styles.moneyHead}>
+        <Text style={styles.moneyTitle} accessibilityRole="header">Money</Text>
+      </View>
       <ScrollView contentContainerStyle={styles.body}>
-        <Text style={styles.creditsLabel} accessibilityRole="header">credits</Text>
+        <View style={styles.shortcuts}>
+          {MONEY_SHORTCUTS.map((item) => (
+            <Pressable key={item.href} accessibilityRole="button" accessibilityLabel={item.label} onPress={() => router.push(item.href)} style={styles.shortcut}>
+              <GlassBadge name={item.icon} size={48} tone={item.tone} scheme={scheme} />
+              <Text style={styles.shortcutLabel}>{item.label}</Text>
+            </Pressable>
+          ))}
+        </View>
+        <View style={styles.labelLine}>
+          <Glyph name="wallet" size={18} color={colors.purple} />
+          <Text style={styles.creditsLabel} accessibilityRole="header">credits</Text>
+        </View>
         <View style={[styles.card, lift(colors, 'rest')]} accessibilityLabel="credits">
           <Text style={styles.cardLast}>
             {!creditsLoaded
@@ -252,7 +279,10 @@ function BillingScreen() {
           const inUse = method.id === defaultPmId
           return (
             <View key={method.id} style={[styles.card, lift(colors, 'rest')]}>
-              <Text style={styles.rowTitle}>{savedPaymentMethodLabel(method)}</Text>
+              <View style={styles.labelLine}>
+                <Glyph name={paymentGlyph(String((method as { type?: string }).type || 'card'))} size={22} color={colors.purple} active={inUse} knockout={colors.card} />
+                <Text style={styles.rowTitle}>{savedPaymentMethodLabel(method)}</Text>
+              </View>
               <Text style={styles.copy}>{inUse ? 'Used for the fare hold' : 'Saved on this account'}</Text>
               {inUse ? null : (
                 <PrimaryButton
@@ -308,7 +338,7 @@ function BillingScreen() {
             <PrimaryButton label="Sign in" onPress={() => router.push('/sign-in')} />
           </>
         ) : null}
-        <Text style={styles.kicker}>CARD</Text>
+        <View style={styles.labelLine}><Glyph name="card" size={16} color={colors.orange} /><Text style={styles.kicker}>CARD</Text></View>
         <View style={[styles.card, lift(colors, 'rest')]}>
           {card ? (
             <>
@@ -334,7 +364,7 @@ function BillingScreen() {
           </View>
         ))}
 
-        <Text style={styles.kicker}>HISTORY</Text>
+        <View style={styles.labelLine}><Glyph name="receipt" size={16} color={colors.orange} /><Text style={styles.kicker}>RECEIPTS</Text></View>
         {rides.length === 0 ? <Text style={styles.copy}>{loading ? 'Loading rides…' : 'No rides yet.'}</Text> : null}
         {rides.map((row: Ride) => (
           <View key={row.id} style={[styles.card, lift(colors, 'rest')]}>
@@ -352,6 +382,7 @@ function BillingScreen() {
         ))}
         {note ? <Text style={styles.error}>{note}</Text> : null}
       </ScrollView>
+      <MainTabs active="money" />
       <Modal visible={Boolean(pendingSummary)} transparent animationType="slide" onRequestClose={() => { if (!busy) setPending(null) }} accessibilityViewIsModal>
         <View style={styles.modalBackdrop}>
           <View style={[styles.card, lift(colors, 'float')]}>
@@ -398,6 +429,12 @@ function makeStyles(colors: Palette) {
     cardBrand: { color: colors.link, fontWeight: '800' as const, letterSpacing: 0.6 },
     cardLast: { color: colors.ink, fontSize: 22, fontWeight: '800' as const },
     rowTitle: { color: colors.ink, fontWeight: '800' as const, fontSize: 16 },
+    moneyHead: { paddingHorizontal: 20, paddingTop: 12, paddingBottom: 4 },
+    moneyTitle: { fontSize: 28, fontWeight: '800' as const, color: colors.title, letterSpacing: -0.4 },
+    shortcuts: { flexDirection: 'row' as const, justifyContent: 'space-between' as const, paddingVertical: 4 },
+    shortcut: { alignItems: 'center' as const, gap: 6, flex: 1 },
+    shortcutLabel: { color: colors.ink, fontSize: 12, fontWeight: '700' as const },
+    labelLine: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 8 },
     copy: { color: colors.inkSecondary, fontSize: 14, lineHeight: 20 },
     error: { color: colors.danger, fontSize: 13, lineHeight: 18 },
   }

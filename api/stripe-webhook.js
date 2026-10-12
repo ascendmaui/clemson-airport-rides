@@ -13,6 +13,7 @@ import { classifyStripeError, failureResult } from '../shared/paymentFailure.js'
 import { releaseFromCheckoutEvent, restoreLiveTripAfterDeposit } from '../server/abandonedCheckout.js'
 import { applyPaidCheckoutSession, recordDeposit } from '../server/checkoutReconcile.js'
 import { activateTigerPassFromCheckout, syncTigerPassFromStripe, tigerPassMeta } from '../server/riderPass.js'
+import { handleAffiliateConnectEvent, isAffiliateConnectEvent } from '../server/affiliateConnect.js'
 
 export { recordDeposit, applyPaidCheckoutSession }
 
@@ -284,6 +285,19 @@ export default async function handler(req, res, deps = {}) {
       }
       const retryable = tigerPass?.ok === false
       return sendWebhookJson(res, retryable ? 500 : 200, { received: true, type: event.type, tigerPass })
+    }
+
+    if (isAffiliateConnectEvent(event.type)) {
+      if (event.livemode === true) {
+        return sendWebhookJson(res, 200, { received: true, type: event.type, affiliate: { skipped: true, reason: 'live_mode' } })
+      }
+      const client = deps.serviceClient ? deps.serviceClient() : serviceClient(activeServiceKey)
+      if (!client) {
+        return sendWebhookJson(res, 200, { received: true, type: event.type, affiliate: { skipped: true, reason: 'no_service_role' } })
+      }
+      const affiliate = await (deps.handleAffiliateConnectEvent || handleAffiliateConnectEvent)(client, event)
+      const retryable = affiliate?.ok === false && affiliate?.retryable === true
+      return sendWebhookJson(res, retryable ? 500 : 200, { received: true, type: event.type, affiliate })
     }
 
     console.log('[stripe-webhook] unhandled', event.type)

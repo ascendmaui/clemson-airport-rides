@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { PGlite } from '@electric-sql/pglite'
 
-const migration = readFileSync(new URL('../supabase/migrations/20261012160000_community_profiles.sql', import.meta.url), 'utf8')
+const migration = readFileSync(new URL('../supabase/migrations/20261012112618_community_profiles.sql', import.meta.url), 'utf8')
 const R = '00000000-0000-0000-0000-00000000000a'
 const D = '00000000-0000-0000-0000-000000000001'
 const D2 = '00000000-0000-0000-0000-000000000002'

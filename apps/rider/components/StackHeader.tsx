@@ -1,3 +1,4 @@
+import { Glyph } from 'rides-native/icons'
 import { Pressable, Text, View } from 'react-native'
 import { lift } from '@/lib/elevation'
 import type { Palette } from '@/lib/palette'
@@ -10,7 +11,7 @@ export function StackHeader({ title, onBack }: { title: string; onBack: () => vo
   return (
     <View style={styles.header}>
       <Pressable onPress={onBack} style={[styles.back, lift(colors, 'rest')]} accessibilityRole="button">
-        <Text style={styles.backLabel}>←</Text>
+        <Glyph name="back" size={20} color={colors.title} accessibilityLabel="Back" />
       </Pressable>
       <Text style={styles.title}>{title}</Text>
     </View>

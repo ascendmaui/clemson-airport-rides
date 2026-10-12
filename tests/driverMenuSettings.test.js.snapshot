@@ -38,16 +38,23 @@ exports[`Driver Menu snapshot 1`] = `
       "subtitle": "Estimate and tips"
     }
   ],
+  "inbox": [
+    {
+      "icon": "inbox",
+      "title": "Inbox",
+      "subtitle": "Messages from Clemson RIDES and riders"
+    },
+    {
+      "icon": "discover",
+      "title": "Discover",
+      "subtitle": "Busy spots, game days, and boosts"
+    }
+  ],
   "money": [
     {
       "icon": "calculator",
       "title": "Tax info",
       "subtitle": "W-9 on your application"
-    },
-    {
-      "icon": "card",
-      "title": "Payout methods",
-      "subtitle": "Stripe balance and cash out"
     }
   ],
   "resources": [
@@ -77,11 +84,6 @@ exports[`Driver Menu snapshot 1`] = `
       "icon": "swap-horizontal",
       "title": "Switch account",
       "subtitle": "One driver session on this phone"
-    },
-    {
-      "icon": "car-sport",
-      "title": "Vehicle",
-      "subtitle": "Make, model, and service class"
     }
   ]
 }
@@ -113,9 +115,9 @@ exports[`Driver Settings snapshot 1`] = `
       "subtitle": "Text size follows the phone"
     },
     {
-      "icon": "sunny",
-      "title": "Display",
-      "subtitle": "Auto, light, or dark"
+      "icon": "moon",
+      "title": "Appearance",
+      "subtitle": "Night mode"
     },
     {
       "icon": "chatbubbles",

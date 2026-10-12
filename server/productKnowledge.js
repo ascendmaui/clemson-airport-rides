@@ -2,7 +2,7 @@ import { TIGER_PASS_NAME } from '../shared/tigerPass.js'
 
 const ACCOUNT_TABS = ['profile', 'notifications', 'billing', 'vehicle', 'student', 'privacy', 'help', 'support']
 const ROUTES = new Set([
-  'schedule', 'friends', 'carpool', 'account', 'home', 'driver',
+  'schedule', 'friends', 'carpool', 'party-night', 'account', 'home', 'driver',
   'driver-signup', 'driver-onboarding', 'rate', 'terms', 'privacy',
   'requested', 'tiers', 'confirm', 'pick-driver',
 ])
@@ -71,6 +71,9 @@ Friends tab → Ride with friends. The organizer needs a registered vehicle. Set
 
 Carpool:
 Friends tab, Marketing, or Account → Vehicle → Offer a carpool. Same lobby as friends with kind=carpool (/carpool/:token). The organizer is the assigned driver. The trip is created as accepted and skips open driver matching. Meant for a Clemson student with a registered car.
+
+Party night:
+Riders open Party night from home, from Carpool, or from Schedule → Weekend / party. A group schedules the ride out at least 30 minutes ahead and invites friends with /party-night/:token, up to 6 people. The estimated fare is split evenly. Each person gets a pre-authorization hold for their share plus a buffer when the ride is released to drivers, about 45 minutes before pickup. That hold is not a deposit and nothing is captured when the night is scheduled or when a friend joins. A pickup reminder shows the day before, about an hour out, about 15 minutes out, and at pickup time. Thursday, Friday, and Saturday, 10pm to 3am Eastern, a ride home from College Ave joins the party-ride return queue. Drivers who opted into that queue are offered those pickups first.
 
 Live location:
 From Friends, after a ride exists, or from an active trip. Creates a token link (/share/:token or /live/:token). Someone with the link sees the live map. Revoking the share stops it. Do not claim location is shared with the whole campus.
@@ -159,6 +162,20 @@ export const TOPICS = [
       'Confirm charges everyone. When all shares are paid, one trip is booked with you assigned.',
     ],
     actions: [action('Offer a carpool', 'carpool'), action('Vehicle tab', 'account', { tab: 'vehicle' })],
+  },
+  {
+    id: 'party-night',
+    roles: ['rider'],
+    keywords: ['party night', 'night out', 'return queue', 'split the fare', 'invite link'],
+    title: 'Schedule a party night',
+    steps: [
+      'Open Party night from home, Carpool, or Schedule → Weekend / party.',
+      'Read how it works, then pick a pickup, drop-off, and an Eastern time at least 30 minutes ahead.',
+      'Share the /party-night link. Friends join the same ride, up to 6 people.',
+      'The estimated fare splits evenly. Each share is a pre-authorization hold plus a buffer, not a deposit. Nothing is captured until the trip ends.',
+      'A reminder shows before pickup. Thursday through Saturday, 10pm to 3am Eastern, join the College Ave return queue for the ride home.',
+    ],
+    actions: [action('Open Party night', 'party-night')],
   },
   {
     id: 'live',

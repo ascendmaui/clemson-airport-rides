@@ -1,3 +1,4 @@
+import { Glyph } from 'rides-native/icons'
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react'
 import { Platform, StyleSheet, Text, View } from 'react-native'
 import Constants from 'expo-constants'
@@ -376,7 +377,7 @@ export const CampusMap = forwardRef<CampusMapHandle, CampusMapProps>(function Ca
                   anchor={{ x: 0.5, y: 0.5 }}
                 >
                   <View style={[styles.car, { backgroundColor: car.color }]}>
-                    <Text style={styles.carGlyph}>🚗</Text>
+                    <Glyph name="vehicle" size={18} color="#FFFFFF" active knockout="#F2701C" />
                   </View>
                 </Marker>
               )

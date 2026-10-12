@@ -16,7 +16,7 @@ import {
   type DashPeriod,
 } from '@/components/EarningsBoard'
 import { Card, ErrorText, Primary } from '@/components/chrome'
-import { DayHeader, EmptyState, FadeIn, SoftNote } from '@/components/day'
+import { DayHeader, EmptyState, FadeIn, type MenuRow, RowGroup, SoftNote } from '@/components/day'
 import { SectionLabel } from '@/components/shell'
 import { useAuth } from '@/lib/auth'
 import { reportPeriod, selectPeriodTrips, tipCentsFromPayments, type TipPayment } from '@/lib/earningsMath'
@@ -169,6 +169,11 @@ export default function EarningsHub() {
   const wallet = data?.payouts
   const pending = Number(wallet?.pendingCents) || 0
   const nextRetry = wallet?.pending?.find((row: unknown) => row && typeof row === 'object' && 'nextRetryAt' in row) as { nextRetryAt?: string } | undefined
+  const moneyRows: MenuRow[] = [
+    { icon: 'payout', title: 'Payouts', subtitle: 'Stripe balance and cash out', onPress: () => router.push('/payouts') },
+    { icon: 'tip', title: 'Tips and activity', subtitle: 'Every fare, tip, and boost', onPress: () => router.push('/earnings-activity') },
+    { icon: 'calculator', title: 'Tax info', subtitle: 'W-9 on your application', onPress: () => router.push('/tax') },
+  ]
   let you = 0
   let platform = 0
   let other = 0
@@ -212,7 +217,8 @@ export default function EarningsHub() {
     <View style={[styles.screen, { backgroundColor: colors.background, paddingTop: insets.top + 12 }]}>
       <ScrollView contentContainerStyle={styles.list} showsVerticalScrollIndicator={false}>
         <FadeIn style={{ gap: 14 }}>
-          <DayHeader kicker="CLEMSON RIDES" title="Earnings" />
+          <DayHeader kicker="MONEY" title="Earnings" />
+          {user ? <RowGroup rows={moneyRows} /> : null}
           {!user ? (
             <EmptyState
               icon="cash"

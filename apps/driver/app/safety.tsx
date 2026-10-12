@@ -1,3 +1,4 @@
+import { Glyph } from 'rides-native/icons'
 import { useFocusEffect, useRouter } from 'expo-router'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { AppState, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
@@ -91,7 +92,7 @@ export default function DriverSafetyScreen() {
     <View style={[styles.screen, { paddingTop: insets.top }]}>
       <View style={styles.header}>
         <Pressable accessibilityRole="button" accessibilityLabel="Back" onPress={() => router.back()} style={styles.back}>
-          <Text style={styles.backLabel}>←</Text>
+          <Glyph name="back" size={20} color={colors.title} accessibilityLabel="Back" />
         </Pressable>
         <View style={{ flex: 1 }}>
           <Text style={styles.kicker}>SAFETY</Text>

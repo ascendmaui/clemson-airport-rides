@@ -1,4 +1,4 @@
-import { Ionicons } from '@expo/vector-icons'
+import { Glyph } from 'rides-native/icons'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useEffect, useState } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
@@ -9,7 +9,7 @@ import { oneParam } from '@/lib/oneParam'
 import { useAuth } from '@/lib/auth'
 import { registerDriverPush, type PushState } from '@/lib/push'
 import { supabase } from '@/lib/supabase'
-import { useTheme, type DisplayMode, type NavApp, type RideAlertMode, type RideAlertTier } from '@/lib/theme'
+import { useTheme, type NavApp, type RideAlertMode, type RideAlertTier } from '@/lib/theme'
 import { loadDriverProfile } from 'rides-native/driverDesk'
 import { QuietHoursChoices } from '@/components/QuietHoursChoices'
 
@@ -23,7 +23,7 @@ function isSection(value: string): value is Section {
 function sectionTitle(section: Section): string {
   switch (section) {
     case 'display':
-      return 'Display'
+      return 'Appearance'
     case 'privacy':
       return 'Privacy'
     case 'address':
@@ -46,12 +46,6 @@ function sectionTitle(section: Section): string {
     }
   }
 }
-
-const DISPLAY_OPTIONS: { id: DisplayMode; label: string; body: string }[] = [
-  { id: 'auto', label: 'Auto (solar)', body: 'Light after sunrise and dark after sunset for your last known location, or Clemson, SC.' },
-  { id: 'light', label: 'Light', body: 'The current Clemson cream, orange, and purple look.' },
-  { id: 'dark', label: 'Dark', body: 'Same orange and purple on the night field (#0E0B14).' },
-]
 
 export default function SettingsSection() {
   const router = useRouter()
@@ -84,16 +78,16 @@ export default function SettingsSection() {
     <StackPage title={sectionTitle(section)} onBack={() => router.back()}>
       <FadeIn style={{ gap: 12 }}>
         {section === 'display' ? (
-          <>
-            <Text style={{ color: colors.inkSecondary, lineHeight: 20 }}>
-              Auto follows the sun. It does not follow the phone’s system appearance. Place used now: {theme.solarPlace}.
-            </Text>
-            <ChoiceCards
-              options={DISPLAY_OPTIONS}
-              value={theme.displayMode}
-              onChange={theme.setDisplayMode}
-            />
-          </>
+          <Card>
+            <View style={styles.row}>
+              <Glyph name={theme.scheme === 'dark' ? 'moon' : 'sun'} size={22} color={colors.orange} active={theme.scheme === 'dark'} scheme={theme.scheme} knockout={colors.card} />
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: colors.ink, fontWeight: '800' }}>Night mode</Text>
+                <Text style={{ color: colors.inkSecondary, lineHeight: 20 }}>The app opens in light mode. Turn this on for a dark map, screens, and icons. Saved on this phone.</Text>
+              </View>
+              <Toggle on={theme.scheme === 'dark'} onPress={() => theme.setDisplayMode(theme.scheme === 'dark' ? 'light' : 'dark')} label="Night mode" />
+            </View>
+          </Card>
         ) : null}
         {section === 'privacy' ? (
           <Card>
@@ -167,7 +161,7 @@ function ChoiceCards<T extends string>({
             <Card style={{ borderColor: on ? colors.orange : colors.border, borderWidth: on ? 1.5 : StyleSheet.hairlineWidth }}>
               <View style={styles.choice}>
                 <Text style={{ color: on ? colors.orange : colors.title, fontWeight: '800', fontSize: 16, flex: 1 }}>{option.label}</Text>
-                {on ? <Ionicons name="checkmark-circle" size={22} color={colors.orange} /> : null}
+                {on ? <Glyph name="checkmark-circle" size={22} color={colors.orange} /> : null}
               </View>
               {option.body ? <Text style={{ color: colors.inkSecondary, lineHeight: 20 }}>{option.body}</Text> : null}
             </Card>

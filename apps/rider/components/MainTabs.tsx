@@ -1,83 +1,52 @@
-import { Ionicons } from '@expo/vector-icons'
 import { useRouter } from 'expo-router'
-import { Pressable, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { lift } from '@/lib/elevation'
-import type { Palette } from '@/lib/palette'
+import { GlassTabBar } from 'rides-native/icons'
 import { useTheme } from '@/lib/theme'
-import { useThemedStyles } from '@/lib/useThemedStyles'
 import { tapHaptic } from '@/lib/feedback'
 import { useAuth } from '@/lib/auth'
 import { setAuthNext } from '@/lib/authNext'
 
-const TABS = [
-  { id: 'home', href: '/', label: 'Rides', icon: 'car-outline' as const },
-  { id: 'schedule', href: '/schedule', label: 'Schedule', icon: 'calendar-outline' as const },
-  { id: 'friends', href: '/friends', label: 'Friends', icon: 'people-outline' as const },
-  { id: 'account', href: '/account', label: 'Account', icon: 'person-outline' as const },
-]
+export const RIDER_TABS = [
+  { id: 'home', href: '/', label: 'Home', icon: 'home' },
+  { id: 'rides', href: '/history', label: 'Rides', icon: 'rides' },
+  { id: 'money', href: '/billing', label: 'Money', icon: 'money' },
+  { id: 'account', href: '/account', label: 'Account', icon: 'account' },
+] as const
 
-export function MainTabs({ active }: { active: 'schedule' | 'friends' | 'account' | 'home' }) {
+export type RiderTab = (typeof RIDER_TABS)[number]['id']
+/** Older call sites: Schedule lives in Rides, Friends/Carpool is a Home shortcut. */
+type LegacyTab = 'schedule' | 'friends'
+
+function tabFor(active: RiderTab | LegacyTab): RiderTab {
+  if (active === 'schedule') return 'rides'
+  if (active === 'friends') return 'home'
+  return active
+}
+
+export function MainTabs({ active }: { active: RiderTab | LegacyTab }) {
   const router = useRouter()
   const { user } = useAuth()
   const insets = useSafeAreaInsets()
-  const { colors } = useTheme()
-  const styles = useThemedStyles(makeStyles)
+  const { scheme } = useTheme()
+  const current = tabFor(active)
+  const index = RIDER_TABS.findIndex((tab) => tab.id === current)
   return (
-    <View style={[styles.bar, lift(colors, 'bar'), { paddingBottom: Math.max(insets.bottom, 10) }]}>
-      {TABS.map((tab) => {
-        const on = tab.id === active
-        const color = on ? colors.orange : colors.tabInactive
-        return (
-          <Pressable
-            key={tab.id}
-            accessibilityRole="button"
-            accessibilityLabel={tab.label}
-            accessibilityHint={on ? undefined : `Opens ${tab.label}`}
-            accessibilityState={{ selected: on }}
-            onPress={() => {
-              if (on) return
-              void tapHaptic()
-              if (tab.id === 'account' && !user) {
-                setAuthNext('/account')
-                router.push('/sign-in')
-                return
-              }
-              router.replace(tab.href)
-            }}
-            style={styles.item}
-          >
-            <View style={[styles.iconWrap, on && styles.iconOn]}>
-              <Ionicons name={tab.icon} size={21} color={color} />
-            </View>
-            <Text style={[styles.label, on && styles.labelOn, { color }]}>{tab.label}</Text>
-          </Pressable>
-        )
-      })}
-    </View>
+    <GlassTabBar
+      tabs={RIDER_TABS.map((tab) => ({ id: tab.id, label: tab.label, icon: tab.icon }))}
+      activeIndex={index}
+      scheme={scheme}
+      bottomInset={insets.bottom}
+      onSelect={(tab: { id: string }) => {
+        const target = RIDER_TABS.find((item) => item.id === tab.id)
+        if (!target || target.id === current) return
+        void tapHaptic()
+        if (target.id !== 'home' && !user) {
+          setAuthNext(target.href)
+          router.push('/sign-in')
+          return
+        }
+        router.replace(target.href)
+      }}
+    />
   )
-}
-
-function makeStyles(colors: Palette) {
-  return {
-    bar: {
-      flexDirection: 'row' as const,
-      backgroundColor: colors.tabBar,
-      borderTopWidth: 1,
-      borderTopColor: colors.border,
-      paddingTop: 8,
-      paddingHorizontal: 6,
-    },
-    item: { flex: 1, alignItems: 'center' as const, gap: 2, paddingVertical: 2 },
-    iconWrap: {
-      width: 48,
-      height: 28,
-      borderRadius: 14,
-      alignItems: 'center' as const,
-      justifyContent: 'center' as const,
-    },
-    iconOn: { backgroundColor: colors.orangeSoft },
-    label: { fontSize: 11, fontWeight: '600' as const, letterSpacing: 0.1 },
-    labelOn: { fontWeight: '700' as const },
-  }
 }
