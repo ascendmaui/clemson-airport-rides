@@ -173,7 +173,7 @@ export type PaymentRow = {
   status?: string
 }
 
-export function formatCents(cents: number): string
+export function formatCents(cents: number | null | undefined): string
 export function driverNetCents(fareCents: number): number
 export function depositSliceCents(fareCents: number, stored?: number | string | null): number
 export function airportDepositRequiredCents(row: Record<string, unknown> | null | undefined): number
@@ -185,6 +185,7 @@ export function zonedWeekdayHour(iso: string | null | undefined, timeZone?: stri
 export function isWeekendPartyWindow(iso: string | null | undefined): boolean
 export function formatPickupAt(iso: string | null | undefined): string
 export function confirmCountdownLabel(closesAt: string | null | undefined, now?: number | Date): string | null
+export function leaveNowCountdownLabel(leaveNowAt: string | null | undefined, now?: number | Date): string | null
 export function isSameZonedDay(iso: string | null | undefined, now?: Date, timeZone?: string): boolean
 export function isDueNow(trip: { pickupAt?: string | null; pickup_at?: string | null; scheduled_for?: string | null } | null, now?: Date): boolean
 export const TAG_LABELS: Record<string, string>
