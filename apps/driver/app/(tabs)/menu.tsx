@@ -1,7 +1,7 @@
 import { Glyph } from 'rides-native/icons'
 import { useRouter, useFocusEffect } from 'expo-router'
 import { useCallback, useState } from 'react'
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Primary, useCardShadow } from '@/components/chrome'
 import { EmptyState, FadeIn, type MenuRow, RowGroup } from '@/components/day'
@@ -10,7 +10,7 @@ import { useAuth } from '@/lib/auth'
 import { supabase } from '@/lib/supabase'
 import { useTheme } from '@/lib/theme'
 import { displayFirstName } from 'rides-native/authErrors'
-import { loadVehicle, type VehicleRow } from 'rides-native/driverDesk'
+import { loadDriverPerks, loadVehicle, setLeaderboardOptOut, type Leaderboard, type VehicleRow } from 'rides-native/driverDesk'
 import { knowledgeQuizStatus, knowledgeQuizStatusLabel, loadKnowledgeQuiz } from 'rides-native/driverKnowledgeQuiz'
 import { loadRatingSummary } from 'rides-native/PartyScreens'
 
@@ -39,6 +39,7 @@ export default function MenuScreen() {
   const [ratingLine, setRatingLine] = useState('New driver · no ratings yet')
   const [pendingTrip, setPendingTrip] = useState<string | null>(null)
   const [quizLabel, setQuizLabel] = useState('Not started')
+  const [onLeaderboard, setOnLeaderboard] = useState<boolean | null>(null)
   const name = user ? displayFirstName(user.user_metadata?.full_name || user.email?.split('@')[0], 'Driver') : 'Guest'
 
   const refresh = useCallback(async () => {
@@ -49,6 +50,10 @@ export default function MenuScreen() {
       loadKnowledgeQuiz(supabase, user.id).catch(() => null),
     ])
     setVehicle(nextVehicle)
+    loadDriverPerks(supabase).then((p) => {
+      const lb = p.leaderboard as Leaderboard | undefined
+      setOnLeaderboard(lb?.enabled ? !lb.optedOut : null)
+    }).catch(() => setOnLeaderboard(null))
     setQuizLabel(knowledgeQuizStatusLabel(knowledgeQuizStatus(quiz?.row)))
     if (summary) {
       setRatingLine(summary.line)
@@ -74,7 +79,7 @@ export default function MenuScreen() {
     key: 'refer',
     icon: 'gift',
     title: 'Refer friends',
-    subtitle: 'Share Clemson RIDES',
+    subtitle: 'Your code and referral bonus',
     onPress: () => router.push('/refer'),
   })
 
@@ -84,6 +89,8 @@ export default function MenuScreen() {
     { icon: 'document-text', title: 'Documents', subtitle: 'License, insurance, registration', onPress: () => router.push('/documents') },
     { icon: 'shield-checkmark', title: 'Insurance', subtitle: 'Your policy and trip coverage notes', onPress: () => router.push('/insurance') },
     { icon: 'shield', title: 'Safety', subtitle: 'Audio, video, live location, and SOS', onPress: () => router.push('/safety') },
+    { icon: 'ribbon', title: 'Scorecard', subtitle: 'Acceptance, completion, rating, and map markers', onPress: () => router.push('/scorecard') },
+    { icon: 'speedometer', title: 'Safety score', subtitle: 'Estimate and tips', onPress: () => router.push('/safety-score') },
   ]
   const inbox: MenuRow[] = [
     { icon: 'inbox', title: 'Inbox', subtitle: 'Messages from Clemson RIDES and riders', onPress: () => router.push('/inbox') },
@@ -140,6 +147,22 @@ export default function MenuScreen() {
           <RowGroup rows={resources} />
           <SectionLabel>Settings</SectionLabel>
           <RowGroup rows={account} />
+          {user && onLeaderboard != null ? (
+            <View style={[styles.toggleRow, { backgroundColor: colors.card }]}>
+              <View style={styles.deleteCopy}>
+                <Text style={[styles.deleteTitle, { color: colors.title }]}>Show me on the weekly leaderboard</Text>
+                <Text style={{ color: colors.inkSecondary }}>First name and last initial only</Text>
+              </View>
+              <Switch
+                value={onLeaderboard}
+                accessibilityLabel="Show me on the weekly leaderboard"
+                onValueChange={(next) => {
+                  setOnLeaderboard(next)
+                  if (supabase) setLeaderboardOptOut(supabase, !next).catch(() => setOnLeaderboard(!next))
+                }}
+              />
+            </View>
+          ) : null}
           <Pressable
             onPress={() => router.push('/delete-account')}
             accessibilityRole="button"
@@ -171,5 +194,6 @@ const styles = StyleSheet.create({
   title: { fontSize: 28, fontWeight: '800', letterSpacing: -0.4 },
   deleteRow: { flexDirection: 'row', alignItems: 'center', gap: 12, borderWidth: 1, borderRadius: 16, padding: 16, marginTop: 8, minHeight: 60 },
   deleteCopy: { flex: 1, gap: 2 },
+  toggleRow: { flexDirection: 'row', alignItems: 'center', gap: 12, borderRadius: 16, padding: 16, minHeight: 60 },
   deleteTitle: { fontWeight: '800', fontSize: 16 },
 })

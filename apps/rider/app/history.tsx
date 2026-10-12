@@ -120,6 +120,17 @@ function HistoryScreen() {
                 <Text style={styles.safety}>Lost & found</Text>
               </Pressable>
             ) : null}
+            {['completed', 'canceled', 'canceled_midride', 'cancelled_wait'].includes(String(row.status)) && row.driver_id ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Dispute fare"
+                accessibilityHint="Tell support what looks wrong with this fare"
+                hitSlop={14}
+                onPress={() => router.push({ pathname: '/dispute', params: { trip: row.id } })}
+              >
+                <Text style={styles.safety}>Dispute fare</Text>
+              </Pressable>
+            ) : null}
             {isShareableTripStatus(row.status) ? (
               <Pressable
                 accessibilityRole="button"
