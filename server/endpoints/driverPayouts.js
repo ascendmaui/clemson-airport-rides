@@ -173,6 +173,8 @@ export async function runDuePayouts(sb, trips, connectAccountId, deps = {}) {
       await recordExtra(trip, true)
       continue
     }
+    // A driver may have claimed this payout for instant cash-out since the list was read.
+    if (await claimedByCashout(sb, trip.id)) continue
     const account = connectAccountId || await loadAccountFn(sb, trip.driver_id)
     const attempt = await attemptFn({ trip, stripe, connectAccountId: account, now })
     await writeFn(sb, trip, attempt.payout)
@@ -187,6 +189,18 @@ export async function runDuePayouts(sb, trips, connectAccountId, deps = {}) {
     await recordExtra(trip, false)
   }
   return results
+}
+
+/** Fresh read of the payout status; cash-out claims flip it to cashout_pending. */
+export async function claimedByCashout(sb, tripId) {
+  if (typeof sb?.from !== 'function') return false
+  try {
+    const fresh = await sb.from('trips').select('metadata').eq('id', tripId).maybeSingle()
+    const status = fresh?.data?.metadata?.payout?.status
+    return status === 'cashout_pending' || (Boolean(fresh?.data?.metadata?.payout?.cashoutId) && status === 'paid')
+  } catch {
+    return false
+  }
 }
 
 export default async function handler(req, res, deps = {}) {
