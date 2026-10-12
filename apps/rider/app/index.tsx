@@ -31,6 +31,8 @@ import { displayFirstName } from 'rides-native/authErrors'
 import { campusOverlays } from 'rides-native/riderShell.js'
 import { loadGameDay } from 'rides-native/driverDesk'
 import { gameDayNotice, type GameDayNotice } from 'rides-native/gameDayNotice.js'
+import { GameDayBanner } from 'rides-native/GameDayBoard.jsx'
+import { useGameDayExperience } from 'rides-native/useGameDayExperience.js'
 import { studentSurfaceCopy } from 'rides-native/riderMoney.js'
 import { dueScheduleReminders } from '../../../src/lib/scheduledRideModel.js'
 import { supabase } from '@/lib/supabase'
@@ -92,6 +94,7 @@ export default function RiderHome() {
   const student = useStudentStatus()
   const studentOffer = studentSurfaceCopy(student, 'home')
   const gameDay = Boolean(gameNotice?.live)
+  const gameDayExperience = useGameDayExperience(supabase)
   const reminders = useMemo(() => dueScheduleReminders(scheduledRows, clock), [scheduledRows, clock])
   const chromeMotion = useEnterMotion(8)
   const sheetMotion = useEnterMotion(16)
@@ -422,7 +425,9 @@ export default function RiderHome() {
               ) : null}
             </>
           )}
-          {gameNotice?.live ? (
+          {gameDayExperience.ready && gameDayExperience.model.phase !== 'off' ? (
+            <GameDayBanner model={gameDayExperience.model} onPress={() => router.push('/game-day')} />
+          ) : !gameDayExperience.ready && gameNotice?.live ? (
             <View
               accessibilityRole="text"
               accessibilityLabel={`${gameNotice.headline}. ${gameNotice.detail || ''}. ${gameNotice.body}`}

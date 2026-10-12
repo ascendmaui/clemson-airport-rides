@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import { GameDayStatus } from '../components/GameDayStatus'
+import { GameDayBoard } from '../components/GameDayBoard'
 import { useGameDayNotice } from '../lib/useGameDayNotice'
+import { useGameDayExperience } from '../../packages/rides-native/useGameDayExperience.js'
 import { useStudentStatus } from '../lib/useStudentStatus'
 import { studentSurfaceCopy } from '../../packages/rides-native/riderMoney.js'
 import { SearchField } from '../components/SearchField'
@@ -21,6 +23,7 @@ import { ownerSavedPlaces, welcomeHeading } from '../lib/homePrivacy'
 
 export function RiderHome() {
   const { notice, ready } = useGameDayNotice()
+  const gameDay = useGameDayExperience(supabase)
   const student = useStudentStatus()
   const studentOffer = studentSurfaceCopy(student, 'home')
   const { user } = useAuth()
@@ -280,8 +283,9 @@ export function RiderHome() {
               showSimulatedFleet />
           </div>
 
-          <div style={{ marginTop: 12 }}>
+          <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 12 }}>
             <GameDayStatus notice={notice} ready={ready} />
+            {gameDay.ready && gameDay.model.phase !== 'off' ? <GameDayBoard model={gameDay.model} audience="rider" /> : null}
           </div>
 
           <RiderWaitBanner />

@@ -7,8 +7,11 @@ import { navigate } from '../lib/navigation'
 import { SignInToBookModal, useRequireAuthForAction } from '../components/SignInToBookModal'
 import { SurgeBadge } from '../components/SurgeBadge'
 import { GameDayStatus } from '../components/GameDayStatus'
+import { GameDaySurgeNote } from '../components/GameDayBoard'
 import { fetchRideQuote } from '../lib/rideBilling'
 import { useGameDayNotice } from '../lib/useGameDayNotice'
+import { useGameDayExperience } from '../../packages/rides-native/useGameDayExperience.js'
+import { supabase } from '../lib/supabase'
 import { useStudentStatus } from '../lib/useStudentStatus'
 import { studentSurfaceCopy } from '../../packages/rides-native/riderMoney.js'
 import { bookableRideTiers } from '../../packages/rides-native/places.js'
@@ -44,6 +47,7 @@ export function RideTiers({
   const student = useStudentStatus()
   const studentOffer = studentSurfaceCopy(student, 'tiers')
   const game = useGameDayNotice()
+  const gameDay = useGameDayExperience(supabase)
 
   useEffect(() => {
     let alive = true
@@ -167,6 +171,7 @@ export function RideTiers({
         ) : null}
         <div style={{ marginTop: 8 }}>
           <GameDayStatus notice={game.notice} ready={game.ready} compact />
+          {gameDay.ready ? <GameDaySurgeNote model={gameDay.model} audience="rider" /> : null}
         </div>
         <p style={{ marginTop: 8, fontSize: 13, color: 'var(--ink-secondary)' }}>
           To <strong style={{ color: 'var(--ink)' }}>{dest}</strong>
