@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { Ionicons } from '@expo/vector-icons'
 import { AccessibilityInfo, Animated, Easing, Platform, Pressable, StyleSheet, Text, View } from 'react-native'
 import Constants from 'expo-constants'
 import MapView, { Circle, Marker, Polyline, PROVIDER_DEFAULT } from 'react-native-maps'
@@ -218,6 +219,19 @@ export function CampusMap({
           >
             <View style={[styles.requestDot, { backgroundColor: pin.pinColor || PURPLE }]} />
           </Marker>
+        ) : pin.kind === 'self' && pin.marker ? (
+          <Marker
+            key={pin.id}
+            coordinate={{ latitude: pin.latitude, longitude: pin.longitude }}
+            title={pin.title}
+            anchor={{ x: 0.5, y: 0.5 }}
+            onPress={() => onPinPress?.(pin.id)}
+          >
+            <View style={[styles.carMarker, { backgroundColor: pin.marker.fill, borderColor: pin.marker.accent, borderStyle: pin.marker.pattern === 'check' ? 'dashed' : 'solid', borderWidth: pin.marker.pattern === 'ring' ? 4 : 2 }]}>
+              {pin.marker.pattern === 'stripe' ? <View style={[styles.carStripe, { backgroundColor: pin.marker.accent }]} /> : null}
+              <Ionicons name={pin.marker.glyph as keyof typeof Ionicons.glyphMap} size={18} color={pin.marker.pattern === 'check' ? pin.marker.accent : '#FFFFFF'} />
+            </View>
+          </Marker>
         ) : (
           <Marker
             key={pin.id}
@@ -273,6 +287,8 @@ export function CampusMap({
 
 const styles = StyleSheet.create({
   fill: { flex: 1 },
+  carMarker: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+  carStripe: { position: 'absolute', width: 6, height: 40, transform: [{ rotate: '35deg' }], opacity: 0.6 },
   peakBadge: {
     position: 'absolute', top: 108, alignSelf: 'center',
     paddingHorizontal: 14, paddingVertical: 8, borderRadius: 999,

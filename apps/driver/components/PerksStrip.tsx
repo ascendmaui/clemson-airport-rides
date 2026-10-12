@@ -5,7 +5,8 @@ import { useCardShadow } from '@/components/chrome'
 import { useAuth } from '@/lib/auth'
 import { supabase } from '@/lib/supabase'
 import { useTheme } from '@/lib/theme'
-import { loadDriverPerks, type DriverPerks, type Leaderboard, type StreakView, type SurgeView, type PartyQueueView, type SafetyScoreView, setPartyQueueOptIn } from 'rides-native/driverDesk'
+import { setMyMarker } from '@/lib/myMarker'
+import { loadDriverPerks, type DriverPerks, type Leaderboard, type StreakView, type SurgeView, type PartyQueueView, type SafetyScoreView, type ScorecardView, setPartyQueueOptIn } from 'rides-native/driverDesk'
 
 const dollars = (cents: number) => `$${(cents / 100).toFixed(cents % 100 ? 2 : 0)}`
 
@@ -17,7 +18,11 @@ export function PerksStrip() {
   useFocusEffect(useCallback(() => {
     if (!user || !supabase) return undefined
     let alive = true
-    loadDriverPerks(supabase).then((p) => { if (alive) setPerks(p) }).catch(() => {})
+    loadDriverPerks(supabase).then((p) => {
+      if (!alive) return
+      setPerks(p)
+      setMyMarker((p.scorecard as ScorecardView | undefined)?.marker)
+    }).catch(() => {})
     return () => { alive = false }
   }, [user]))
   if (!perks) return null
@@ -57,6 +62,16 @@ export function PerksStrip() {
             ? party.open ? `${party.label} · you’re #${party.position} of ${party.size}` : `${party.label} · opens ${hours}`
             : `Tap to join ${party.label} late-night pickups`}
         />
+      </Pressable>,
+    )
+  }
+  const card = perks.scorecard as ScorecardView | undefined
+  if (card?.enabled) {
+    const pct = (r: number | null | undefined) => (r == null ? '—' : `${Math.round(r * 100)}%`)
+    const line = `Accept ${pct(card.acceptance?.rate)} · Complete ${pct(card.completion?.rate)} · ★ ${card.rating != null ? card.rating.toFixed(2) : '—'}`
+    chips.unshift(
+      <Pressable key="scorecard" onPress={() => router.push('/scorecard')} accessibilityRole="button" accessibilityLabel={`Scorecard. ${line}`}>
+        <PerkChip title="Scorecard" line={line} />
       </Pressable>,
     )
   }
