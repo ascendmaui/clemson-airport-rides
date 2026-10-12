@@ -13,8 +13,6 @@ export type MapPin = {
   title: string
   pinColor?: string
   kind?: 'self' | 'request' | 'place'
-  /** Cosmetic car marker for the driver's own pin (scorecard unlocks). */
-  marker?: { fill: string; accent: string; pattern: string | null; glyph: string } | null
 }
 
 export function CampusMap({
@@ -43,9 +41,6 @@ export function CampusMap({
   lockOnCenter?: boolean
   onPinPress?: (id: string) => void
   showsUserLocation?: boolean
-  /** Native-only Tiger Heat grid; web keeps the existing heat view. */
-  demandCells?: unknown[]
-  peak?: boolean
 }) {
   const { colors, scheme } = useTheme()
   const mode = colorScheme || scheme

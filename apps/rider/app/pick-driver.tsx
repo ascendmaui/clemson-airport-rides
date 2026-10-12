@@ -7,7 +7,6 @@ import { useEffect, useState } from 'react'
 import { Animated, Pressable, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { PrimaryButton } from '@/components/Button'
-import { TipBoostPicker } from '@/components/TipBoostPicker'
 import { pressStyle, useEnterMotion } from '@/components/enter'
 import { CampusMap } from '@/components/CampusMap'
 import { ClemsonLoader } from '@/components/ClemsonLoader'
@@ -106,7 +105,6 @@ export default function PickDriver() {
   const [attempt, setAttempt] = useState(0)
   const [selected, setSelected] = useState<string | null>(null)
   const [requesting, setRequesting] = useState(false)
-  const [prepaidTipCents, setPrepaidTipCents] = useState(0)
   const [promptOpen, setPromptOpen] = useState(false)
   const [mapType, setMapType] = useState<MapKind>('standard')
   const [notified, setNotified] = useState(false)
@@ -300,7 +298,6 @@ export default function PickDriver() {
         ...(passengers ? { passengers } : {}),
         isStudent: student.verified,
         note,
-        prepaidTipCents,
       })
       await successHaptic()
       await playTigerCue()
@@ -309,10 +306,7 @@ export default function PickDriver() {
         params: { dest, trip: trip.id, driver: chosen?.name || 'Next driver' },
       })
     } catch (err) {
-      const redirect = scheduleRedirectForRequestError(
-        err && typeof err === 'object' ? err as { code?: string } : undefined,
-        dest,
-      )
+      const redirect = scheduleRedirectForRequestError(err, dest)
       if (redirect) {
         router.push(redirect.airport
           ? { pathname: '/schedule', params: { airport: redirect.airport } }
@@ -432,7 +426,6 @@ export default function PickDriver() {
         {student.verified && tier !== 'standard' ? (
           <Text style={styles.student}>Student pricing is 10% off Standard. This tier stays full price.</Text>
         ) : null}
-        <TipBoostPicker cents={prepaidTipCents} onChange={setPrepaidTipCents} />
         {error && drivers.some((driver: OnlineDriver) => driver.online) ? <Text style={styles.error}>{error}</Text> : null}
         <PrimaryButton
           label={requesting ? 'Requesting…' : selectedDriver ? `Request ${selectedDriver.name}` : (anyOnline ? 'Request next driver' : 'Select a driver')}

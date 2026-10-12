@@ -1,6 +1,5 @@
 import { Glyph } from './icons/index.js'
 import { useCallback, useEffect, useState } from 'react'
-import { showToast } from './toastStore.js'
 import { Alert, Modal, Pressable, Text, TextInput, View } from 'react-native'
 import { authedJson } from './apiClient.js'
 import { secureStoreAdapter } from './secureStore.js'
@@ -10,7 +9,6 @@ import {
 } from './chatModeration.js'
 import { chatEndedLine, chatOpenLine, messagingGuide } from '../../shared/copy/messaging.js'
 import { MessagingInfoButton } from './MessagingInfo.jsx'
-import { AutoReplyTag, DriverAssistBar, useDriverChatAssist } from './DriverChatAssist.jsx'
 import {
   canOpenLostItemReport,
   fetchLostItemReport,
@@ -58,7 +56,6 @@ export function TripThread({
   userId,
   colors,
   promptLostItem = false,
-  assist = false,
 }) {
   const tone = { ...FALLBACK, ...(colors || {}) }
   const [open, setOpen] = useState(Boolean(promptLostItem))
@@ -144,7 +141,6 @@ export function TripThread({
   }, [promptLostItem])
 
   const mode = rideChatMode(trip, Date.now(), report)
-  const assistState = useDriverChatAssist({ supabase, tripId, trip, rows, userId, enabled: assist && mode === 'compose', onSent: refresh })
   const lost = lostItemReportState(report)
   const canReport = Boolean(role) && canOpenLostItemReport(trip, Date.now(), role) && lost !== 'open'
   if (!tripId || !trip) return null
@@ -175,7 +171,7 @@ export function TripThread({
         }),
       })
       if (!result?.ticket?.id) throw new Error('Could not confirm the support ticket')
-      showToast({ key: `chat-${action}:${tripId}`, tone: 'success', title: action === 'block' ? 'Blocked' : 'Report sent', body: `${action === 'block' ? 'Blocked on this device. ' : ''}${CHAT_REPORT_CONFIRMATION}`, durationMs: 4500 })
+      Alert.alert(action === 'block' ? 'Blocked' : 'Report sent', `${action === 'block' ? 'Blocked on this device. ' : ''}${CHAT_REPORT_CONFIRMATION} ${CHAT_SUPPORT_COPY}`)
     } catch (err) {
       setError(`${locallyBlocked ? 'Blocked on this device, but the support ticket failed. Use Report to retry. ' : ''}${err instanceof Error ? err.message : 'Could not file the support ticket'}. ${CHAT_SUPPORT_COPY}`)
     } finally {
@@ -333,7 +329,6 @@ export function TripThread({
                   maxWidth: '84%',
                 }}
               >
-                <AutoReplyTag body={row.body} tone={mine ? { inkSecondary: tone.onAccent } : tone} />
                 <Text style={{ color: mine ? tone.onAccent : tone.ink, fontSize: 15, lineHeight: 20 }}>{row.body}</Text>
               </Pressable>
             )
@@ -397,9 +392,6 @@ export function TripThread({
                 </>
               )}
             </View>
-          ) : null}
-          {mode === 'compose' && role && blockReady && !blocked ? (
-            <DriverAssistBar assist={assistState} tone={tone} onUse={setDraft} />
           ) : null}
           {mode === 'compose' && role && blockReady && !blocked ? (
             <>

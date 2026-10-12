@@ -543,7 +543,6 @@ export async function requestDriverTrip(supabase, {
   passengers = null,
   isStudent = false,
   note = '',
-  prepaidTipCents = 0,
 }) {
   void isStudent
   if (!supabase) throw new Error('Supabase is not configured')
@@ -573,7 +572,6 @@ export async function requestDriverTrip(supabase, {
       tier: tier || 'standard',
       ...(passengers ? { passengers } : {}),
       ...(riderNote ? { note: riderNote } : {}),
-      ...(prepaidTipCents > 0 ? { prepaidTipCents: Math.round(prepaidTipCents) } : {}),
     },
   })
   if (!data?.trip?.id) throw new Error('Could not request trip')

@@ -592,7 +592,7 @@ test('driver push offline and error states', { concurrency: false }, async (t) =
           title: 'Ride accepted',
           body: 'White C → GSP',
           data: { tripId: 'trip-1' },
-          sound: 'accept.wav',
+          sound: 'request.wav',
         },
         trigger: null,
       },

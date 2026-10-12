@@ -6,7 +6,7 @@ import { Pill, PrimaryButton } from '@/components/Button'
 import { MainTabs } from '@/components/MainTabs'
 import { loadAccount, saveProfile } from '@/lib/accountApi'
 import { useAuth } from '@/lib/auth'
-import { hapticsEnabled, playTigerCue, setHapticsEnabled, setSoundsEnabled, soundsEnabled, tapHaptic } from '@/lib/feedback'
+import { playTigerCue, setSoundsEnabled, soundsEnabled, tapHaptic } from '@/lib/feedback'
 import { lift } from '@/lib/elevation'
 import type { Palette } from '@/lib/palette'
 import { useTheme } from '@/lib/theme'
@@ -63,7 +63,6 @@ function AccountScreen() {
   const [fullName, setFullName] = useState('')
   const [bio, setBio] = useState('')
   const [soundsOn, setSoundsOn] = useState(true)
-  const [hapticsOn, setHapticsOn] = useState(true)
   const [ratingLine, setRatingLine] = useState('New · no ratings yet')
   const [pendingTrip, setPendingTrip] = useState<string | null>(null)
   const [genderIdentity, setGenderIdentity] = useState('unspecified')
@@ -74,7 +73,6 @@ function AccountScreen() {
 
   useEffect(() => {
     let alive = true
-    hapticsEnabled().then(setHapticsOn).catch(() => {})
     soundsEnabled().then((on) => {
       if (alive) setSoundsOn(on)
     })
@@ -264,20 +262,6 @@ function AccountScreen() {
           />
         </View>
         <Text style={styles.groupTitle}>Legal and privacy</Text>
-        <View style={[styles.row, lift(colors, 'rest')]}>
-          <Text style={styles.rowTitle}>Haptics</Text>
-          <Text style={styles.copy}>Vibration for taps, booking, and the driver-approach alert. The orange flash and distance still show when this is off.</Text>
-          <PrimaryButton
-            label={hapticsOn ? 'Haptics · On' : 'Haptics · Off'}
-            tone={hapticsOn ? 'orange' : 'ghost'}
-            onPress={async () => {
-              const next = !hapticsOn
-              await setHapticsEnabled(next)
-              setHapticsOn(next)
-              if (next) void tapHaptic()
-            }}
-          />
-        </View>
         <Pressable onPress={() => router.push({ pathname: '/legal', params: { doc: 'privacy' } })} style={[styles.row, lift(colors, 'rest')]} accessibilityRole="button">
           <Text style={styles.rowTitle}>Privacy policy</Text>
           <Text style={styles.copy}>Same policy as the website.</Text>

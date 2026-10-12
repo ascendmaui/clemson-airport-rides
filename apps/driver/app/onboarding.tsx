@@ -37,7 +37,7 @@ import { extractReadableText, licensePendingCopy, matchRegistration, reviewLicen
 import { loadDriverProfile, loadVehicle } from 'rides-native/driverDesk'
 import { modelsForMake, VEHICLE_COLORS, VEHICLE_MAKES } from 'rides-native/vehicleCatalog'
 import { useTheme } from '@/lib/theme'
-import { WEB_DRIVER_RENTALS_URL, WEB_DRIVER_SIGNUP_URL } from '../../../shared/productLinks.js'
+import { WEB_DRIVER_SIGNUP_URL } from '../../../shared/productLinks.js'
 import { knowledgeQuizStatus, knowledgeQuizStatusLabel, loadKnowledgeQuiz } from 'rides-native/driverKnowledgeQuiz'
 import { applicantEmailError } from '../../../shared/applicantEmail.js'
 import {
@@ -578,14 +578,6 @@ export default function OnboardingScreen() {
           accessibilityHint="Opens clemsonrides.com if you would rather finish the application in a browser"
         >
           <Text style={styles.link}>Prefer the website? Open the driver application</Text>
-        </Pressable>
-        <Pressable
-          onPress={() => { void Linking.openURL(WEB_DRIVER_RENTALS_URL) }}
-          accessibilityRole="link"
-          accessibilityLabel="No car? Rent one"
-          accessibilityHint="Opens weekly rentals from Clemson RIDES partners. Available after your license and background check pass."
-        >
-          <Text style={styles.link}>No car? Rent one from a rental partner</Text>
         </Pressable>
         <View style={styles.progressTrack}>
           <View style={[styles.progressFill, { width: `${progress.percent}%` }]} />

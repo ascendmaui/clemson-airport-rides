@@ -50,14 +50,11 @@ async function configFor(sb, override) {
   return resolveTigerHeatConfig(process.env, row)
 }
 
-const NON_DEMAND_STATUSES = new Set(['canceled', 'cancelled_wait'])
-
 export async function loadPickupRequests(sb, fromIso) {
   if (!sb?.from) return []
   try {
-    let query = sb.from('trips').select('id, pickup_lat, pickup_lng, created_at, status, metadata')
+    let query = sb.from('trips').select('id, pickup_lat, pickup_lng, created_at')
     if (typeof query.gte === 'function') query = query.gte('created_at', fromIso)
-    if (typeof query.order === 'function') query = query.order('created_at', { ascending: false })
     if (typeof query.limit === 'function') query = query.limit(1000)
     const result = await query
     if (!result || result.error || !Array.isArray(result.data)) return []
@@ -66,10 +63,6 @@ export async function loadPickupRequests(sb, fromIso) {
       const lat = Number(row.pickup_lat)
       const lng = Number(row.pickup_lng)
       if (!Number.isFinite(lat) || !Number.isFinite(lng)) return false
-      // e2e harness and QA trips never count toward live heat or pay.
-      if (row.metadata?.e2e_test === true || row.metadata?.e2e_test === 'true') return false
-      if (row.metadata?.qa_canceled) return false
-      if (row.status && NON_DEMAND_STATUSES.has(String(row.status))) return false
       if (Number.isFinite(fromMs) && row.created_at) {
         const stamp = Date.parse(row.created_at)
         if (Number.isFinite(stamp) && stamp < fromMs) return false

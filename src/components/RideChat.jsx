@@ -19,7 +19,6 @@ import {
 } from '../lib/tripMessages'
 import { chatOpenLine } from '../../shared/copy/messaging.js'
 import { MessagingInfoButton } from './MessagingInfo'
-import { useConfirm } from './ConfirmDialog'
 import { supabase } from '../lib/supabase'
 import { authedJson } from '../lib/apiClient'
 import {
@@ -180,7 +179,6 @@ export function RideChat({ tripId, userId, initialTrip = null, onClose }) {
   const [report, setReport] = useState(null)
   const [headerName, setHeaderName] = useState('')
   const tone = useChatTone()
-  const { confirm, confirmDialog } = useConfirm()
   const [draft, setDraft] = useState('')
   const [sending, setSending] = useState(false)
   const [error, setError] = useState(null)
@@ -388,20 +386,16 @@ export function RideChat({ tripId, userId, initialTrip = null, onClose }) {
     }
   }
 
-  async function confirmReport(event) {
+  function confirmReport(event) {
     event.preventDefault()
-    const ok = await confirm({ title: 'Report trip chat?', message: `${reason}. Submit for review? ${CHAT_SUPPORT_COPY}`, confirmLabel: 'Report', destructive: true })
-    if (!ok) return
+    if (!window.confirm(`Report trip chat? ${reason}. Submit for review? ${CHAT_SUPPORT_COPY}`)) return
     const message = moderationTarget?.message || null
     setModerationTarget(null)
     void fileModeration('report', message)
   }
 
   async function confirmBlock() {
-    const ok = await confirm(blocked
-      ? { title: 'Unblock this person?', message: `Their messages will be visible and you can send again while chat is open. ${CHAT_SUPPORT_COPY}`, confirmLabel: 'Unblock' }
-      : { title: 'Block this person?', message: CHAT_BLOCK_COPY, confirmLabel: 'Block', destructive: true })
-    if (!ok) return
+    if (!window.confirm(blocked ? `Unblock this person? Their messages will be visible and you can send again while chat is open. ${CHAT_SUPPORT_COPY}` : `Block this person? ${CHAT_BLOCK_COPY}`)) return
     if (!blocked) { await fileModeration('block'); return }
     setSending(true)
     try {
@@ -505,7 +499,6 @@ export function RideChat({ tripId, userId, initialTrip = null, onClose }) {
           <button type="button" className="pressable" disabled={sending || !blockReady} onClick={confirmBlock} style={{ minHeight: 44, color: tone.title }}>{blocked ? 'Unblock' : 'Block'}</button>
         </div>
       )}
-      {confirmDialog}
       {moderationTarget && (
         <form onSubmit={confirmReport} aria-label="Report trip chat" style={{ padding: 16, color: tone.ink }}>
           <label htmlFor="chat-report-reason">Reason for reporting</label>

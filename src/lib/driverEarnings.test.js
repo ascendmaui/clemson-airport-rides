@@ -31,7 +31,7 @@ function trip(partial) {
   }, { riderName: partial.rider || 'Jordan Lee', payments: partial.payments || [] })
 }
 
-test('driver net is 80% after a 20% cut on fares, wait, and cancel, plus 100% of tips', () => {
+test('driver net is 80% after a 20% cut on fares, tips, wait, and cancel', () => {
   assert.equal(PLATFORM_FEE_RATE, 0.2)
   const row = trip({
     id: 't1',
@@ -41,11 +41,11 @@ test('driver net is 80% after a 20% cut on fares, wait, and cancel, plus 100% of
     metadata: { wait_fee_cents: 200, cancel_fee_cents: 300 },
   })
   assert.equal(row.grossCents, 11000)
-  assert.equal(row.platformFeeCents, 2100)
+  assert.equal(row.platformFeeCents, 2200)
   assert.equal(row.tipCents, 500)
   assert.equal(row.waitFeeCents, 200)
   assert.equal(row.cancelFeeCents, 300)
-  assert.equal(row.earnedCents, 8900)
+  assert.equal(row.earnedCents, 8800)
   assert.equal(row.riderFirstName, 'Jordan')
   assert.equal(row.pickupLabel, 'Clemson area')
   assert.equal(JSON.stringify(row).includes('Main Street'), false)
@@ -95,15 +95,15 @@ test('annual tax summary is calendar year, net of 20%, with a records disclaimer
   assert.equal(summary.grossFareCents, 10000)
   assert.equal(summary.tipsCents, 250)
   assert.equal(summary.grossCents, 10250)
-  assert.equal(summary.platformFeeCents, 2000)
+  assert.equal(summary.platformFeeCents, 2050)
   assert.equal(summary.waitFeeCents, null)
   assert.equal(summary.cancelFeeCents, null)
-  assert.equal(summary.driverNetCents, 8250)
+  assert.equal(summary.driverNetCents, 8200)
   assert.equal(summary.disclaimer, TAX_DISCLAIMER)
 
   const csv = buildAnnualTaxCsv(summary)
   assert.match(csv, /not official IRS form — summary for your records/)
-  assert.match(csv, /Platform fees 20% of fares, wait, and cancel; tips 100% to driver/)
+  assert.match(csv, /Platform fees 20% of fares, tips, wait, and cancel/)
   assert.match(csv, /Driver net 80%/)
   assert.match(csv, /not tracked/)
   assert.equal(csv.includes('Main Street'), false)

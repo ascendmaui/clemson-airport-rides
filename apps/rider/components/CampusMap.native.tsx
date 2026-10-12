@@ -2,7 +2,7 @@ import { Glyph } from 'rides-native/icons'
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react'
 import { Platform, StyleSheet, Text, View } from 'react-native'
 import Constants from 'expo-constants'
-import MapView, { Circle, Marker, Polygon, Polyline, PROVIDER_DEFAULT, type MapStyleElement } from 'react-native-maps'
+import MapView, { Circle, Marker, Polygon, Polyline, PROVIDER_DEFAULT } from 'react-native-maps'
 import { ANDROID_MAP_UNAVAILABLE, googleMapStyle, nativeMapTilesReady } from 'rides-native/googleMapChrome.js'
 import { lerpHeading, travelBearing } from 'rides-native/roadFollow.js'
 import { heatColor } from 'rides-native/heat.js'
@@ -12,8 +12,7 @@ import { demoCarPaint, SEARCH_MAP_ZOOM_MS, searchMapRegion } from 'rides-native/
 import { useSimulatedFleet } from 'rides-native/useSimulatedFleet.js'
 import { fetchTigerHeatMap } from 'rides-native/tigerHeatClient.js'
 import { toNativeRing, type TigerHeatZone } from 'rides-native/tigerHeat.js'
-import type { BusySpot } from '@/lib/busySpots'
-import type { CampusMapHandle, CampusMapProps, LatLng, MapPin } from '@/components/mapTypes'
+import type { CampusMapHandle, CampusMapProps, LatLng } from '@/components/mapTypes'
 import { useTheme } from '@/lib/theme'
 
 function rgba(hex: string, alpha: number) {
@@ -282,7 +281,7 @@ export const CampusMap = forwardRef<CampusMapHandle, CampusMapProps>(function Ca
         }}
         mapType={mapType}
         userInterfaceStyle={scheme}
-        customMapStyle={googleMapStyle(scheme) as MapStyleElement[] | undefined}
+        customMapStyle={googleMapStyle(scheme)}
         rotateEnabled={false}
         pitchEnabled={false}
         toolbarEnabled={false}

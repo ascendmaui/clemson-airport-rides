@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react'
 import { Animated, Platform, StyleSheet, Text, View } from 'react-native'
 import { FullWindowOverlay } from 'react-native-screens'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { approachHaptic, arrivalCue, playApproachPing } from '@/lib/feedback'
+import { approachHaptic, playApproachPing } from '@/lib/feedback'
 import { crowdCue, formatApproachFeet } from '@/lib/approachAlert'
 import { useSosEngaged } from '@/lib/sosEngaged'
 import { useDriverApproach } from '@/lib/useDriverApproach'
@@ -31,12 +31,6 @@ export function ApproachAlert({
   const bright = useRef(new Animated.Value(0)).current
   const flash = useRef(new Animated.Value(0)).current
   const cue = crowdCue(reading?.feet)
-  // Latest cue for the crowd loop. GPS updates change the distance every second or so;
-  // the loop reads this ref instead of restarting, so a new fix can never fire an extra buzz.
-  const cueRef = useRef(cue)
-  cueRef.current = cue
-  const lastSpike = useRef(0)
-  const inCrowd = Boolean(cue)
   const lastStageHaptic = useRef<string | null>(null)
   const lastClosingHaptic = useRef(0)
   const pulseMode = attention?.pulseMode ?? 'off'
@@ -54,14 +48,7 @@ export function ApproachAlert({
     if (hapticReason === 'stage') {
       if (lastStageHaptic.current === stage) return
       lastStageHaptic.current = stage
-      // Arrival gets one stronger cue instead of the plain stage buzz.
-      if (stage === 'here') {
-        lastClosingHaptic.current = Date.now()
-        lastSpike.current = Date.now()
-        void arrivalCue()
-      } else {
-        void approachHaptic(haptic)
-      }
+      void approachHaptic(haptic)
       return
     }
     if (hapticReason === 'closing') {
@@ -73,42 +60,38 @@ export function ApproachAlert({
   }, [active, haptic, hapticReason, paused, stage])
 
   useEffect(() => {
-    if (!active || paused || !inCrowd) {
+    if (!active || paused || !cue) {
       flash.stopAnimation()
       Animated.timing(flash, { toValue: 0, duration: 240, useNativeDriver: true }).start()
       return undefined
     }
     let alive = true
-    const tick = () => {
-      const current = cueRef.current
-      if (!alive || !current) return
-      const now = Date.now()
-      if (now - lastSpike.current < current.intervalMs) return
-      lastSpike.current = now
-      void approachHaptic(current.haptic)
+    const spike = () => {
+      if (!alive) return
+      void approachHaptic(cue.haptic)
       void playApproachPing()
-      flash.setValue(current.flash)
+      flash.setValue(cue.flash)
       Animated.timing(flash, {
         toValue: 0,
-        duration: Math.min(420, Math.round(current.intervalMs * 0.45)),
+        duration: Math.min(420, Math.round(cue.intervalMs * 0.45)),
         useNativeDriver: true,
       }).start()
     }
-    tick()
-    const timer = setInterval(tick, 250)
+    spike()
+    const timer = setInterval(spike, cue.intervalMs)
     return () => {
       alive = false
       clearInterval(timer)
     }
-  }, [active, flash, inCrowd, paused])
+  }, [active, cue?.flash, cue?.haptic, cue?.intervalMs, flash, paused])
 
   useEffect(() => {
     let loop: Animated.CompositeAnimation | null = null
     let timer: ReturnType<typeof setTimeout> | undefined
     const fade = () => {
       loop?.stop()
-      Animated.timing(wash, { toValue: 0, duration: 260, useNativeDriver: true }).start()
-      Animated.timing(bright, { toValue: 0, duration: 260, useNativeDriver: true }).start()
+      Animated.timing(wash, { toValue: 0, duration: 480, useNativeDriver: true }).start()
+      Animated.timing(bright, { toValue: 0, duration: 480, useNativeDriver: true }).start()
     }
     if (!active || paused || pulseMode === 'off') {
       if (paused) {
@@ -207,9 +190,6 @@ function approachPrimaryLine(feet: number | null | undefined): string {
 }
 
 function makeStyles(colors: Palette) {
-  const light = colors.statusBar === 'dark'
-  const accentText = light ? '#9A3F00' : '#FFC9A3'
-  const feetColor = light ? '#522D80' : '#E6D4FF'
   return {
     host: {
       ...StyleSheet.absoluteFill,
@@ -229,37 +209,34 @@ function makeStyles(colors: Palette) {
       alignItems: 'center' as const,
       gap: 12,
       backgroundColor: colors.card,
-      borderRadius: 24,
-      borderWidth: 1,
-      borderColor: colors.border,
-      paddingVertical: 16,
+      borderRadius: 22,
+      paddingVertical: 14,
       paddingHorizontal: 16,
     },
     dot: {
-      width: 10,
-      height: 10,
-      borderRadius: 5,
-      backgroundColor: '#F56600',
+      width: 12,
+      height: 12,
+      borderRadius: 6,
+      backgroundColor: colors.orange,
     },
     copy: { flex: 1 },
     kicker: {
-      color: accentText,
+      color: colors.orange,
       fontSize: 11,
-      fontWeight: '700' as const,
-      letterSpacing: 0.8,
+      fontWeight: '800' as const,
+      letterSpacing: 1.1,
     },
     primary: {
       color: colors.title,
       fontSize: 22,
-      fontWeight: '700' as const,
-      letterSpacing: -0.4,
+      fontWeight: '800' as const,
+      letterSpacing: -0.3,
       marginTop: 2,
     },
     secondary: {
       color: colors.inkSecondary,
       fontSize: 13,
-      fontWeight: '500' as const,
-      lineHeight: 18,
+      fontWeight: '600' as const,
       marginTop: 2,
     },
     bubble: {
@@ -267,8 +244,8 @@ function makeStyles(colors: Palette) {
       width: 176,
       height: 176,
       borderRadius: 88,
-      borderWidth: 2,
-      borderColor: light ? 'rgba(245,102,0,0.55)' : 'rgba(255,201,163,0.7)',
+      borderWidth: 3,
+      borderColor: colors.orange,
       backgroundColor: colors.card,
       alignItems: 'center' as const,
       justifyContent: 'center' as const,
@@ -281,31 +258,29 @@ function makeStyles(colors: Palette) {
       justifyContent: 'center' as const,
     },
     arrow: {
-      color: accentText,
-      fontSize: 16,
-      fontWeight: '700' as const,
+      color: colors.orange,
+      fontSize: 18,
+      fontWeight: '800' as const,
     },
     feet: {
-      color: feetColor,
+      color: colors.purple,
       fontSize: 28,
-      fontWeight: '700' as const,
-      letterSpacing: -0.6,
-      fontVariant: ['tabular-nums' as const],
+      fontWeight: '800' as const,
+      letterSpacing: -0.4,
     },
     compass: {
-      color: accentText,
+      color: colors.orange,
       fontSize: 13,
-      fontWeight: '700' as const,
-      letterSpacing: 0.6,
+      fontWeight: '800' as const,
+      letterSpacing: 0.4,
       marginTop: 2,
     },
     facing: {
       color: colors.inkSecondary,
       fontSize: 12,
-      fontWeight: '600' as const,
+      fontWeight: '700' as const,
       textAlign: 'center' as const,
-      lineHeight: 16,
-      marginTop: 4,
+      marginTop: 2,
     },
   }
 }

@@ -35,7 +35,6 @@ test('a zero estimate still authorizes the boost and a small fare keeps the $2 b
     estimatedFareCents: 0,
     bufferCents: 0,
     boostCents: 500,
-    prepaidTipCents: 0,
     authorizationCents: 500,
   })
   const small = holdQuoteCents(500, 1000)

@@ -97,9 +97,7 @@
         {
           "color": "#F56600",
           "sounds": [
-            "./assets/sounds/request.wav",
-            "./assets/sounds/accept.wav",
-            "./assets/sounds/complete.wav"
+            "./assets/sounds/request.wav"
           ]
         }
       ],

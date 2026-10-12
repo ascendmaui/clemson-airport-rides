@@ -29,7 +29,6 @@ export type PartyTrip = {
   driver_id?: string | null
   pickup_label?: string | null
   dropoff_label?: string | null
-  wait_fee_cents?: number | null
   id?: string
 }
 

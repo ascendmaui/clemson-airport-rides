@@ -26,16 +26,6 @@ exports[`Driver Menu snapshot 1`] = `
       "icon": "shield",
       "title": "Safety",
       "subtitle": "Audio, video, live location, and SOS"
-    },
-    {
-      "icon": "ribbon",
-      "title": "Scorecard",
-      "subtitle": "Acceptance, completion, rating, and map markers"
-    },
-    {
-      "icon": "speedometer",
-      "title": "Safety score",
-      "subtitle": "Estimate and tips"
     }
   ],
   "inbox": [
@@ -133,11 +123,6 @@ exports[`Driver Settings snapshot 1`] = `
       "icon": "volume-high",
       "title": "Sounds and voice",
       "subtitle": "Chime and vibration by ride type"
-    },
-    {
-      "icon": "moon",
-      "title": "Quiet hours",
-      "subtitle": "Silent offers overnight, Clemson time"
     },
     {
       "icon": "flash",

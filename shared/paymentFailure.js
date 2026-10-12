@@ -406,30 +406,7 @@ export function summarizeDriverEarnings(trips) {
       })
     }
   }
-  // Post-trip tips: own transfer, 100% to the driver (server/payouts.js attemptTipPayout).
-  let tipsPaidCents = 0
-  let tipsPendingCents = 0
-  for (const trip of trips || []) {
-    const tip = trip?.metadata?.tip_payout
-    if (!tip) continue
-    const amountCents = Math.max(0, Math.round(Number(tip.amountCents) || 0))
-    if (tip.status === 'paid') tipsPaidCents += amountCents
-    else if (tip.status === 'pending' || tip.status === 'failed') {
-      tipsPendingCents += amountCents
-      pending.push({
-        tripId: trip.id, amountCents, status: 'pending', kind: 'tip',
-        attempts: tip.attempts || 0, lastError: tip.lastError || null, nextRetryAt: tip.nextRetryAt || null,
-        dropoffLabel: trip.dropoff_label || null,
-      })
-    }
-  }
-  return {
-    paidCents: paidCents + tipsPaidCents,
-    pendingCents: pendingCents + tipsPendingCents,
-    pending,
-    tipsPaidCents,
-    tipsPendingCents,
-  }
+  return { paidCents, pendingCents, pending }
 }
 
 export function isFareKind(kind) {

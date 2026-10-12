@@ -766,10 +766,9 @@ export async function signAgreementWithToken({ token, signatureName, accepted })
   return postJson('/api/driver?action=sign-agreement', { token, signatureName, accepted })
 }
 
-export async function reviewDriverApplication({ profileId, decision, reason, acknowledgeContractMismatch = false, acknowledgeBackgroundReview = false, approveLuxuryException = false }) {
+export async function reviewDriverApplication({ profileId, decision, reason, acknowledgeContractMismatch = false, acknowledgeBackgroundReview = false }) {
   try {
     return await postJson('/api/admin-drivers', {
-      approveLuxuryException: approveLuxuryException === true,
       profileId,
       decision,
       reason,

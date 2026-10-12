@@ -2,7 +2,6 @@
  * Driver-facing labels for trips the web app already stores.
  * No network and no Stripe calls.
  */
-import { readPrepaidTipCents } from '../../shared/prepaidTip.js'
 import { CLEMSON_MIAMI_PROMO_ID } from './clemsonMiamiPromo.js'
 import { explicitOfferPhase, ladderOfferNet } from './offerLadder.js'
 import { LOOKING_FOR_BACKUP_LABEL, confirmCountdownLabel, driverBackupPresentation, leaveNowCountdownLabel } from '../../shared/backupDriverQueue.js'
@@ -510,7 +509,6 @@ export function toDriverCard(row, options) {
     offerPhase: phase,
     offerShareBps: ladder?.shareBps ?? null,
     offerExpiresAt: row.offer_expires_at || null,
-    prepaidTipCents: readPrepaidTipCents({ ...row, metadata: meta }),
     riderAvatarUrl: typeof meta.rider_avatar_url === 'string' ? meta.rider_avatar_url : null,
     ...carpoolCardFields(row),
     firstName: first,

@@ -18,7 +18,6 @@ export default function SettingsScreen() {
     { icon: 'chatbubbles', title: 'Communication', subtitle: 'Lock screen and in-app ride alerts', onPress: () => router.push('/settings/communication') },
     { icon: 'navigate', title: 'Navigation', subtitle: 'Apple Maps or Google Maps', onPress: () => router.push('/settings/navigation') },
     { icon: 'volume-high', title: 'Sounds and voice', subtitle: 'Chime and vibration by ride type', onPress: () => router.push('/settings/sounds') },
-    { icon: 'moon', title: 'Quiet hours', subtitle: 'Silent offers overnight, Clemson time', onPress: () => router.push('/settings/quiet-hours') },
     { icon: 'flash', title: 'Auto-accept', subtitle: 'Distance, hourly rate, favorite riders', onPress: () => router.push('/settings/auto-accept') },
   ]
 

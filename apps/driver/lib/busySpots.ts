@@ -27,17 +27,12 @@ export async function loadBusySpots(windowId: string) {
 
   if (supabase) {
     const { from, to, hourStart, hourEnd } = resolveDemandRange(windowId)
-    const args = {
+    const { data, error } = await supabase.rpc('get_ride_demand', {
       p_from: from.toISOString(),
       p_to: to.toISOString(),
       p_hour_start: hourStart,
       p_hour_end: hourEnd,
-    }
-    let { data, error } = await supabase.rpc('get_ride_demand', args)
-    // Signed out: fine-grained demand is drivers/riders only; fall back to the coarse public aggregate.
-    if (error && (error.code === '42501' || /permission denied/i.test(error.message || ''))) {
-      ({ data, error } = await supabase.rpc('public_ride_demand_coarse', args))
-    }
+    })
     if (!error && Array.isArray(data) && data.length) {
       const live = (data as DemandRow[])
         .map((row, index) => {

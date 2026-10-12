@@ -26,8 +26,6 @@ export default function PayoutsScreen() {
   const [paid, setPaid] = useState(0)
   const [pendingCents, setPendingCents] = useState(0)
   const [pending, setPending] = useState<Pending[]>([])
-  const [tipsPaid, setTipsPaid] = useState(0)
-  const [tipsPending, setTipsPending] = useState(0)
   const [note, setNote] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -37,8 +35,6 @@ export default function PayoutsScreen() {
     const data = await loadEarnings(supabase, user.id)
     setPaid(Number(data.payouts?.paidCents) || 0)
     setPendingCents(Number(data.payouts?.pendingCents) || 0)
-    setTipsPaid(Number((data.payouts as { tipsPaidCents?: number } | null)?.tipsPaidCents) || 0)
-    setTipsPending(Number((data.payouts as { tipsPendingCents?: number } | null)?.tipsPendingCents) || 0)
     const rows = Array.isArray(data.payouts?.pending) ? data.payouts.pending as Pending[] : []
     setPending(rows)
     if (data.payoutError) setError(data.payoutError)
@@ -71,11 +67,6 @@ export default function PayoutsScreen() {
         <Text style={{ color: colors.inkSecondary, fontWeight: '700' }}>Balance</Text>
         <Text style={{ color: colors.ink, fontSize: 36, fontWeight: '800' }}>{shownCents(pendingCents, earningsPrivate)}</Text>
         <Text style={{ color: colors.inkSecondary }}>Paid out {shownCents(paid, earningsPrivate)}. Cash out retries Stripe transfers that are already due. It does not move money early.</Text>
-        {tipsPaid + tipsPending > 0 ? (
-          <Text style={{ color: colors.ink, fontWeight: '700' }} accessibilityLabel="Tips, 100 percent yours">
-            Tips (100% yours): {shownCents(tipsPaid, earningsPrivate)} paid{tipsPending > 0 ? ` · ${shownCents(tipsPending, earningsPrivate)} pending` : ''}
-          </Text>
-        ) : null}
         <Primary label={busy ? 'Working…' : 'Cash out'} onPress={cashOut} disabled={busy || !user} />
       </Card>
       {note ? <Text style={{ color: colors.title, fontWeight: '700' }}>{note}</Text> : null}
@@ -83,7 +74,7 @@ export default function PayoutsScreen() {
       {pending.map((row: Pending, index: number) => (
         <Card key={row.tripId || row.dropoffLabel || index}>
           <Text style={{ color: colors.title, fontWeight: '800' }}>{row.dropoffLabel || 'Trip'}</Text>
-          <Text style={{ color: colors.ink }}>{(row as { kind?: string }).kind === 'tip' ? 'Tip · ' : ''}{shownCents(row.amountCents || 0, earningsPrivate)} · {row.status || 'pending'}</Text>
+          <Text style={{ color: colors.ink }}>{shownCents(row.amountCents || 0, earningsPrivate)} · {row.status || 'pending'}</Text>
           {row.nextRetryAt ? <Text style={{ color: colors.inkSecondary }}>Retry {new Date(row.nextRetryAt).toLocaleString()}</Text> : null}
           {row.lastError ? <Text style={{ color: colors.danger }}>{row.lastError}</Text> : null}
         </Card>

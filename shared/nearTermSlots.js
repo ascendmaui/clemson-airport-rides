@@ -242,13 +242,6 @@ export function scheduledBoardCopy(trip) {
 /**
  * Rider match pop-up. Distance is how far the driver is from pickup.
  * Pickup time is the scheduled slot, or now plus the straight-line ETA.
- * @param {{
- *   driverName?: string | null,
- *   distanceMi?: number | null,
- *   etaMin?: number | null,
- *   pickupAt?: string | number | Date | null,
- *   now?: Date | string | number,
- * }} [input]
  */
 export function buildRiderMatchNotice({
   driverName,

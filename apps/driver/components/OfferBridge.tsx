@@ -12,8 +12,6 @@ import { useAuth } from '@/lib/auth'
 import { useFeedback } from '@/lib/feedback'
 import { inAppRideAlert, isTripStatusPush, notifyNewRequest, notifyScheduledBoard, setRideAlertSurface } from '@/lib/push'
 import { supabase } from '@/lib/supabase'
-import { newRideAlertAllowed } from 'rides-native/offerAlertGate.js'
-import { driverAlertPrefs } from '@/lib/quietHours'
 import { useTheme } from '@/lib/theme'
 import { GlassBadge } from 'rides-native/icons'
 import { rideTypeIconName } from 'rides-native/rideTypeIcons.js'
@@ -79,19 +77,9 @@ export function OfferBridge() {
     seen.current = new Set()
     seenBoard.current = new Set()
 
-    // Notification prefs (quiet hours / DND / ride alerts) are shared with the web app.
-    let prefs: unknown = null
-    const loadPrefs = async () => {
-      try {
-        prefs = await driverAlertPrefs(user.id)
-      } catch { /* keep the last prefs */ }
-      return prefs
-    }
-
     const look = async () => {
       try {
         const desk = await loadDriverDesk(supabase, user.id)
-        const alertOk = newRideAlertAllowed({ online: Boolean(desk.online), prefs: await loadPrefs() })
         if (!alive) return
         setRideAlertSurface({ online: Boolean(desk.online) })
         const board = desk.scheduledOpen || []
@@ -104,7 +92,7 @@ export function OfferBridge() {
           const posted = freshBoard[0]
           if (posted) {
             AccessibilityInfo.announceForAccessibility(`Scheduled ride on the board. ${posted.pickupLabel} to ${posted.dropoffLabel}`)
-            if (alertOk) notifyScheduledBoard(posted).catch(() => {})
+            notifyScheduledBoard(posted).catch(() => {})
           }
         }
         const offers = (desk.offers || []).filter((card: DriverCard) => !isSyntheticOffer(card))
@@ -117,8 +105,10 @@ export function OfferBridge() {
         const fresh = offers.filter((card: DriverCard) => !seen.current.has(card.id))
         fresh.forEach((card: DriverCard) => seen.current.add(card.id))
         const next = fresh[0]
-        // Offline drivers get no new-ride notification at all.
-        if (!next || !desk.online) return
+        if (!next || !desk.online) {
+          if (next) notifyNewRequest(next).catch(() => {})
+          return
+        }
         const driver = { lat: desk.lat, lng: desk.lng }
         const decision = shouldAutoAccept({
           riderId: next.riderId,
@@ -138,11 +128,9 @@ export function OfferBridge() {
         }
         if (inAppRideAlert()) {
           showBanner(next)
-          // Quiet hours / DND: the banner still shows, silently.
-          if (alertOk) armPulse(next.tier || 'standard')
+          armPulse(next.tier || 'standard')
           return
         }
-        if (!alertOk) return
         pulse('request', { tier: next.tier })
         notifyNewRequest(next).catch(() => {})
       } catch {
@@ -169,7 +157,7 @@ export function OfferBridge() {
         tier,
         shownAt: Date.now(),
       })
-      if (newRideAlertAllowed({ online: true, prefs })) armPulse(tier)
+      armPulse(tier)
     })
     return () => {
       alive = false
@@ -188,9 +176,6 @@ export function OfferBridge() {
     <View pointerEvents="box-none" style={[styles.wrap, { top: insets.top + 8 }]}>
       <Pressable
         onPress={() => {
-          // The driver has seen it: stop the 1.5 s buzz/chime loop right away.
-          if (pulseStop.current) clearTimeout(pulseStop.current)
-          stopRequestPulse()
           setBanner(null)
           router.push('/queue')
         }}

@@ -46,7 +46,6 @@ export function getHashRoute() {
     params.tab = decodeURIComponent(segments[1])
   }
   if (path === 'receipt' && segments[1] && !params.trip) params.trip = segments[1]
-  if ((path === 'partners' || path === 'drivers') && segments[1] && !params.sub) params.sub = segments[1]
 
   // Persist share/friends token so a later hash clear (auth) can recover.
   if (typeof window !== 'undefined' && params.token && (path === 'share' || path === 'live')) {

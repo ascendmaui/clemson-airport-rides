@@ -104,5 +104,3 @@ export const APP_DOWNLOADS = [
  * Do not advertise that project as the current rider or driver install.
  */
 export const FROZEN_EXPO_SLUG = 'clemson-airport-rides'
-export const WEB_DRIVER_RENTALS_URL = `${WEB_ORIGIN}/drivers/rentals`
-export const WEB_PARTNER_JOIN_URL = `${WEB_ORIGIN}/partners/join`

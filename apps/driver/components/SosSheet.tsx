@@ -1,4 +1,3 @@
-import * as Haptics from 'expo-haptics'
 import { useEffect, useMemo, useState } from 'react'
 import { Linking, Modal, Pressable, ScrollView, Share, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -47,11 +46,6 @@ export function SosSheet({ open, onClose, trip, userId, fix }: {
     setLogError(null)
     setActionError(null)
   }, [open, trip?.id])
-
-  // A firm warning buzz when the sheet opens, matching the rider SOS. Once per open.
-  useEffect(() => {
-    if (open) Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {})
-  }, [open])
 
   function onAction(channel: SosChannel) {
     if (!trip || !live) return

@@ -2,12 +2,10 @@ import { createAudioPlayer, setAudioModeAsync, type AudioPlayer } from 'expo-aud
 import * as Haptics from 'expo-haptics'
 import { createContext, useContext, useEffect, useMemo, useRef, type ReactNode } from 'react'
 import requestSound from '@/assets/sounds/request.wav'
-import acceptSound from '@/assets/sounds/accept.wav'
-import completeSound from '@/assets/sounds/complete.wav'
 import { playbackForTier } from 'rides-native/offerLadder.js'
 import { useTheme } from '@/lib/theme'
 
-export type Pulse = 'request' | 'accept' | 'decline' | 'online' | 'complete' | 'cancel'
+export type Pulse = 'request' | 'accept' | 'decline' | 'online' | 'complete'
 
 type PulseOptions = { tier?: string | null }
 
@@ -32,7 +30,6 @@ function hapticFor(kind: Pulse) {
     case 'online':
       return Haptics.NotificationFeedbackType.Success
     case 'decline':
-    case 'cancel':
       return Haptics.NotificationFeedbackType.Error
     default: {
       const unknown: never = kind
@@ -48,9 +45,6 @@ export function FeedbackProvider({ children }: { children: ReactNode }) {
   soundsRef.current = sounds
   alertsRef.current = rideAlerts
   const playerRef = useRef<AudioPlayer | null>(null)
-  // Distinct, quieter cues so accept and trip-complete never sound like a new offer.
-  const acceptRef = useRef<AudioPlayer | null>(null)
-  const completeRef = useRef<AudioPlayer | null>(null)
   const pulseTimer = useRef<ReturnType<typeof setInterval> | null>(null)
 
   useEffect(() => {
@@ -61,30 +55,18 @@ export function FeedbackProvider({ children }: { children: ReactNode }) {
     }).catch(() => {})
     const player = createAudioPlayer(requestSound)
     player.volume = 0.35
-    const accept = createAudioPlayer(acceptSound)
-    accept.volume = 0.3
-    const complete = createAudioPlayer(completeSound)
-    complete.volume = 0.3
-    if (alive) {
-      playerRef.current = player
-      acceptRef.current = accept
-      completeRef.current = complete
-    }
+    if (alive) playerRef.current = player
     return () => {
       alive = false
       if (pulseTimer.current) clearInterval(pulseTimer.current)
       playerRef.current = null
-      acceptRef.current = null
-      completeRef.current = null
       player.release()
-      accept.release()
-      complete.release()
     }
   }, [])
 
   const api = useMemo<FeedbackApi>(() => {
-    function play(kind: Pulse = 'request') {
-      const player = kind === 'accept' ? acceptRef.current : kind === 'complete' ? completeRef.current : playerRef.current
+    function play() {
+      const player = playerRef.current
       if (!player) return
       player.seekTo(0).then(() => player.play()).catch(() => {})
     }
@@ -98,7 +80,7 @@ export function FeedbackProvider({ children }: { children: ReactNode }) {
       const vibrate = requestPlay ? requestPlay.vibrate : true
       const sound = requestPlay ? requestPlay.sound && soundsRef.current : soundsRef.current && (kind === 'accept' || kind === 'complete')
       if (vibrate) Haptics.notificationAsync(hapticFor(kind)).catch(() => {})
-      if (sound) play(kind)
+      if (sound) play()
     }
     return {
       pulse,

@@ -487,18 +487,3 @@ test('fetchSurgeIntensity reads the surge demand window', async () => {
   // Live weight 4 * 1.35 is heavier than any typical point (max 4, scaled by 0.45).
   assert.equal(mild.intensity, (4 * 1.35) / 8)
 })
-
-test('fetchRideDemand falls back to the coarse public aggregate when signed out', async () => {
-  const calls = []
-  setTestSupabase({
-    rpc: async (name, args) => {
-      calls.push(name)
-      if (name === 'get_ride_demand') return { data: null, error: { code: '42501', message: 'permission denied for function get_ride_demand' } }
-      return { data: liveRows(2, 3), error: null }
-    },
-  })
-  const result = await fetchRideDemand({ mode: 'busy', windowId: 'now' })
-  assert.deepEqual(calls, ['get_ride_demand', 'public_ride_demand_coarse'])
-  assert.equal(result.error, null)
-  assert.equal(result.liveCount, 2)
-})

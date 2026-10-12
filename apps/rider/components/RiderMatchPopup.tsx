@@ -56,14 +56,13 @@ export function RiderMatchPopup() {
     }
 
     function consider(row: { id?: string; status?: string | null; driver_id?: string | null; rider_id?: string | null; pickup_at?: string | null; scheduled_for?: string | null; metadata?: { scheduled_pickup_at?: string } | null }) {
-      const id = row.id
-      if (!id) return
+      if (!row?.id) return
       if (row.rider_id && row.rider_id !== user?.id) return
       const matched = Boolean(row.status && MATCHED.includes(row.status) && row.driver_id)
-      const prev = seen.current.get(id)
-      seen.current.set(id, row.status || null)
+      const prev = seen.current.get(row.id)
+      seen.current.set(row.id, row.status || null)
       if (!primed.current || !matched || prev === row.status || prev == null) return
-      present({ ...row, id })
+      present(row)
     }
 
     async function load() {

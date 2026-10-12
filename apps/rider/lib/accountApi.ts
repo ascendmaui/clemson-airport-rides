@@ -78,10 +78,7 @@ export async function loadAccount(userId: string) {
     .eq('id', userId)
     .maybeSingle()
     // A rejected fetch must not throw: the account screen has no .catch.
-    .then((row) => row, (err: { message?: string; name?: string } | null) => ({
-      data: null,
-      error: { code: 0, message: err?.message, name: err?.name },
-    }))
+    .then((row) => row, (err) => ({ error: { code: 0, message: err?.message } }))
   if (!queried) return { profile: null as RiderProfile | null, prefs: localPrefs, error: 'Could not load your account. Check your connection and try again.' }
   const { data, error } = queried
   if (error) return { profile: null as RiderProfile | null, prefs: localPrefs, error: friendlyApiError(error.code ?? (error.name === 'TypeError' || error.message === 'Request timed out' ? 0 : 400), error.message).message }

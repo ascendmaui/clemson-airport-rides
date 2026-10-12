@@ -158,7 +158,7 @@ export async function notifyAcceptedRide(card: {
       title: 'Ride accepted',
       body: `${card.pickupLabel} → ${card.dropoffLabel}`,
       data: { tripId: card.id },
-      sound: 'accept.wav',
+      sound: 'request.wav',
       ...androidChannelFields(),
     },
     trigger: null,

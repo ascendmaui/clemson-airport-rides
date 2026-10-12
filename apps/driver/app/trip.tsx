@@ -147,8 +147,7 @@ export default function TripScreen() {
     seenStatus.current = status
     // Only when it changes while this screen is open, not when opening an already-canceled trip.
     if (!before || !status || before === status || !canceledView) return
-    // Rider cancel / no-show / early end: an error buzz, not the success chime.
-    pulse('cancel')
+    pulse('complete')
     AccessibilityInfo.announceForAccessibility(canceledView.announcement)
   }, [trip?.id, trip?.status, trip?.released])
 
@@ -256,7 +255,7 @@ export default function TripScreen() {
 
   function onDriverCanceled() {
     locationTracking.stop()
-    pulse('cancel')
+    pulse('complete')
     router.replace('/')
   }
 
@@ -297,8 +296,7 @@ export default function TripScreen() {
         if (result.settle?.reason === 'no_card_on_file') {
           setSettleNote('Trip complete. No card is on file, so this fare was not charged.')
         } else {
-          const waitCents = payout?.waitCents ?? 0
-          const waitNote = waitCents > 0 ? ` Wait time ${formatCents(waitCents)} included.` : ''
+          const waitNote = payout?.waitCents > 0 ? ` Wait time ${formatCents(payout.waitCents)} included.` : ''
           setSettleNote((payout?.status
             ? `Fare collected. Payout ${payout.status}${payout.amountCents ? ` · ${formatCents(payout.amountCents)}` : ''}.`
             : 'Fare collected from the rider’s saved card or Apple Pay.') + waitNote)
@@ -647,7 +645,7 @@ export default function TripScreen() {
             </View>
             {preferredRequestNote(trip) ? <Text style={styles.note}>{preferredRequestNote(trip)}</Text> : null}
             {trip.status !== 'cancelled_wait' && trip.status !== 'completed' ? <FarePanel card={trip} /> : null}
-            {user ? <TripThread supabase={supabase} tripId={trip.id} userId={user.id} colors={colors} assist /> : null}
+            {user ? <TripThread supabase={supabase} tripId={trip.id} userId={user.id} colors={colors} /> : null}
             {trip.backupEnroute || mapsOffer ? <Text style={styles.copy}>{MAPS_HANDOFF_HELPER}</Text> : null}
             {canceledView ? null : <View style={styles.navRow}>
               {navAppOrder(navApp).map((provider, index) => (

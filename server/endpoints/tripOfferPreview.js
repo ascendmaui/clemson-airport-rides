@@ -61,13 +61,13 @@ export default async function handler(req, res, deps = {}) {
 
   let riderRes = await sb
     .from('profiles')
-    .select('full_name, avatar_url, rating_avg, rating_count, standing')
+    .select('full_name, rating_avg, rating_count, standing')
     .eq('id', trip.rider_id)
     .maybeSingle()
   if (riderRes.error && /standing|column|schema cache/i.test(riderRes.error.message || '')) {
     riderRes = await sb
       .from('profiles')
-      .select('full_name, avatar_url, rating_avg, rating_count')
+      .select('full_name, rating_avg, rating_count')
       .eq('id', trip.rider_id)
       .maybeSingle()
   }
@@ -76,7 +76,6 @@ export default async function handler(req, res, deps = {}) {
 
   return json(res, 200, {
     riderFirstName: displayFirstName(rider?.full_name, 'Rider'),
-    riderAvatarUrl: typeof rider?.avatar_url === 'string' && /^https:\/\//.test(rider.avatar_url) ? rider.avatar_url : null,
     ratingAvg: rider?.rating_avg != null ? Number(rider.rating_avg) : null,
     ratingCount: Number(rider?.rating_count) || 0,
     standing,

@@ -132,7 +132,7 @@ export default function EarningsActivity() {
                     {trip.status === 'canceled' ? 'No payout' : shownCents(earned, earningsPrivate)}
                   </Text>
                   {trip.status === 'completed' && (trip.driver_wait_earnings_cents || 0) > 0 ? (
-                    <Text style={{ color: colors.inkSecondary }}>Wait time {shownCents(trip.driver_wait_earnings_cents || 0, earningsPrivate)}</Text>
+                    <Text style={{ color: colors.inkSecondary }}>Wait time {shownCents(trip.driver_wait_earnings_cents, earningsPrivate)}</Text>
                   ) : null}
                   {trip.status !== 'canceled' && boost > 0 ? (
                     <Text style={{ color: '#F56600', fontWeight: '800' }}>Boost {formatBoostBadge(boost)}</Text>

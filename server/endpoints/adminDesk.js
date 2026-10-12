@@ -203,18 +203,14 @@ async function tickets(sb, res, status, id) {
       .maybeSingle()
     if (ticket.error) return ticketError(res, ticket.error)
     if (!ticket.data) return json(res, 404, { error: 'Ticket not found' })
-    const [messages, profile, dispute] = await Promise.all([
+    const [messages, profile] = await Promise.all([
       sb.from('support_ticket_messages').select('id, author_role, body, created_at').eq('ticket_id', id).order('created_at', { ascending: true }),
       sb.from('profiles').select('id, full_name, email, phone, role').eq('id', ticket.data.user_id).maybeSingle(),
-      ticket.data.category === 'ride_dispute'
-        ? sb.from('trip_dispute_summaries').select('trip_id, status, reason, summary_text, generated_at').eq('ticket_id', id).maybeSingle()
-        : Promise.resolve({ data: null }),
     ])
     return json(res, 200, {
       ticket: ticket.data,
       messages: messages.error ? [] : (messages.data || []),
       profile: profile.data || null,
-      disputeSummary: dispute?.error ? null : (dispute?.data || null),
     })
   }
 

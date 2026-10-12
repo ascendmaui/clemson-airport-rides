@@ -12,7 +12,7 @@ export async function rebroadcastMissedOffers(sb, {
 } = {}) {
   const at = now.toISOString()
   const due = await sb.from('trips')
-    .select('id, rider_id, driver_id, status, tier, metadata, deposit_cents, fare_cents, pickup_at, scheduled_for, offer_expires_at, pickup_label, dropoff_label, pickup_lat, pickup_lng')
+    .select('id, rider_id, driver_id, status, tier, metadata, deposit_cents, fare_cents, pickup_at, scheduled_for, offer_expires_at, pickup_label, dropoff_label')
     .in('status', ['searching', 'offered']).is('driver_id', null)
     .lte('offer_expires_at', at)
     .order('offer_expires_at', { ascending: true }).order('id', { ascending: true })
@@ -44,7 +44,7 @@ export async function rebroadcastMissedOffers(sb, {
       continue
     }
     try {
-      const eligible = await listAssignableDrivers(sb, { tier: trip.tier || 'standard', riderId: trip.rider_id, pickup: Number.isFinite(Number(trip.pickup_lat)) && trip.pickup_lat != null ? { lat: Number(trip.pickup_lat), lng: Number(trip.pickup_lng) } : null })
+      const eligible = await listAssignableDrivers(sb, { tier: trip.tier || 'standard', riderId: trip.rider_id })
       if (eligible.error) throw new Error(eligible.error)
       const passes = await sb.from('driver_offer_passes').select('driver_id').eq('trip_id', trip.id)
       if (passes.error) throw new Error(passes.error.message)

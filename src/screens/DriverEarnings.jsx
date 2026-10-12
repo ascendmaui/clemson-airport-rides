@@ -64,13 +64,12 @@ function TripDetail({ trip }) {
     <div style={{ marginTop: 10, paddingTop: 4 }} data-testid="trip-breakdown">
       <Line label="Fare" value={money(trip.fareCents)} />
       {trip.refundCents > 0 ? <Line label="Refund" value={`−${money(trip.refundCents)}`} /> : null}
-      {trip.tipCents != null ? <Line label="Tip" value={money(trip.tipCents)} hint="100% yours" /> : null}
-      {trip.prepaidTipCents > 0 ? <Line label="Tip boost (prepaid)" value={money(trip.prepaidTipCents)} hint="100% yours" /> : null}
+      {trip.tipCents != null ? <Line label="Tip" value={money(trip.tipCents)} /> : null}
       {trip.boostCents > 0 ? <Line label="Boost" value={money(trip.boostCents)} hint="100% to you · not in the platform fee" /> : null}
       {trip.driverWaitEarningsCents > 0 ? <Line label="Wait time" value={money(trip.driverWaitEarningsCents)} /> : null}
       {trip.cancelFeeCents != null ? <Line label="Cancel fee" value={money(trip.cancelFeeCents)} /> : null}
       <Line label="Gross" value={money(trip.grossCents)} />
-      <Line label="Platform fee" value={`−${money(trip.platformFeeCents)}`} hint="20% of fares, wait, and cancel fees. Tips are not cut." />
+      <Line label="Platform fee" value={`−${money(trip.platformFeeCents)}`} hint="20% of fares, tips, wait, and cancel fees" />
       <Line label="Your net" value={money(trip.earnedCents)} hint={trip.boostCents > 0 ? 'Fare share plus boost' : '80%'} strong />
       <Line label="Distance" value={formatMiles(trip.distanceM, { approximate: trip.distanceApproximate })} />
       <Line label="Duration" value={formatDuration(trip.durationS, { approximate: trip.durationApproximate })} />
@@ -128,7 +127,7 @@ export function DriverEarningsView({
         <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--orange)', letterSpacing: 0.3 }}>Your net</div>
         <h1 style={{ fontSize: 28, fontWeight: 800, letterSpacing: -0.6, color: 'var(--purple)', marginTop: 2 }}>Earnings</h1>
         <p style={{ fontSize: 13, color: 'var(--ink-secondary)', marginTop: 4, lineHeight: 1.45 }}>
-          Your 80% after the 20% platform fee on fares, wait, and cancel fees, plus 100% of tips.
+          Your 80% after the 20% platform fee on fares, tips, wait, and cancel fees.
         </p>
 
         {error ? (
@@ -282,7 +281,7 @@ function TaxSummary({ tax, years, year, onYear, onDownload }) {
         <Line label="Wait fees" value={trackedMoney(tax.waitFeeCents)} />
         <Line label="Cancel fees" value={trackedMoney(tax.cancelFeeCents)} />
         <Line label="Gross" value={money(tax.grossCents)} />
-        <Line label="Platform fees" value={`−${money(tax.platformFeeCents)}`} hint="20% of fares, wait, and cancel fees. Tips are not cut." />
+        <Line label="Platform fees" value={`−${money(tax.platformFeeCents)}`} hint="20% of fares, tips, wait, and cancel fees" />
         {tax.boostCents > 0 ? <Line label="Boost" value={money(tax.boostCents)} hint="100% to you · not in the platform fee" /> : null}
         <Line label="Driver net" value={money(tax.driverNetCents)} hint={tax.boostCents > 0 ? 'Fare share plus boost' : '80%'} strong />
         <Line label="Trips" value={String(tax.tripCount)} />
@@ -322,7 +321,7 @@ function TaxPrintSheet({ tax, timeZone }) {
     <article className="tax-print-sheet" aria-hidden="true">
       <h1>Clemson RIDES · {tax.year} driver earnings summary</h1>
       <p>{tax.disclaimer}</p>
-      <p>Timezone: {timeZone}. Platform fee is 20% of fares, wait fees, and cancel fees. Driver net is the remaining 80%, plus 100% of tips.</p>
+      <p>Timezone: {timeZone}. Platform fee is 20% of fares, tips, wait fees, and cancel fees. Driver net is the remaining 80%.</p>
       <table>
         <tbody>
           <tr><th>Gross fares</th><td>{money(tax.grossFareCents)}</td></tr>

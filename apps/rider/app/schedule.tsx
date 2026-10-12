@@ -347,7 +347,7 @@ function ScheduleScreen() {
   const depositSectionY = useRef(0)
   const reminders = useMemo(() => dueScheduleReminders(mine, clock), [mine, clock])
   const reminderByTrip = useMemo(() => {
-    const byTrip = new Map(reminders.map((item) => [item.tripId, item]))
+    const byTrip = new Map(reminders.map((item: { tripId?: string }) => [item.tripId, item]))
     return byTrip
   }, [reminders])
   const generation = useRef(0)

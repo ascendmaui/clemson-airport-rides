@@ -14,7 +14,6 @@ import { handleCorrectAgreement, handleEmailAgreement } from '../server/agreemen
 import { serverIsAdmin } from '../server/adminRoster.js'
 import { selectDriverApplicationQueue, submittedApplicantEmail, withSubmittedApplicantEmail } from '../shared/applicantEmail.js'
 import { loadApplicantVehicles } from '../shared/vehicleYear.js'
-import { driverVehicleStandardIssue } from '../shared/vehicleStandards.js'
 import { loadSubmissionContext } from '../server/driverApproval.js'
 import {
   admin, cors, json, parseBody, userFromAuth,
@@ -292,13 +291,6 @@ async function review(sb, res, adminUser, body) {
         acknowledged: body.acknowledgeContractMismatch === true,
       })
       if (denial) return json(res, denial.status, denial.body)
-      // Shared vehicle standards (shared/vehicleStandards.js): pre-2019 needs an explicit Luxury exception.
-      const { data: car } = await sb.from('vehicles').select('year').eq('driver_id', profileId)
-        .order('created_at', { ascending: false }).limit(1).maybeSingle()
-      const issue = car && car.year != null
-        ? driverVehicleStandardIssue(car, { luxuryApproved: body.approveLuxuryException === true })
-        : null
-      if (issue) return json(res, 400, { error: issue.message, code: issue.code, missing: [issue.code] })
     }
   }
 

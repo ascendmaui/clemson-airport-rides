@@ -1,8 +1,7 @@
 /**
  * Shared platform cut.
- * The platform keeps 20% of fares, wait fees, and cancel fees.
- * Tips (post-trip and prepaid) are never cut: 100% goes to the driver.
- * The driver keeps the other 80% of the fee-bearing total plus the whole tip.
+ * The platform keeps 20% of fares, tips, wait fees, and cancel fees.
+ * The driver keeps the other 80% (gross minus the fee, rounded once per total).
  */
 
 export const PLATFORM_FEE_RATE = 0.2
@@ -25,8 +24,7 @@ export function splitPlatformCut({
   const wait = Math.max(0, Math.round(Number(waitFeeCents) || 0))
   const cancel = Math.max(0, Math.round(Number(cancelFeeCents) || 0))
   const grossCents = fare + tip + wait + cancel
-  // Tips pass through untouched (John, 2026-10-12).
-  const fee = platformFeeCents(fare + wait + cancel)
+  const fee = platformFeeCents(grossCents)
   return {
     fareCents: fare,
     tipCents: tip,
