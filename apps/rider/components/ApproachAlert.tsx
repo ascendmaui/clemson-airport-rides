@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react'
 import { Animated, Platform, StyleSheet, Text, View } from 'react-native'
 import { FullWindowOverlay } from 'react-native-screens'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { approachHaptic, playApproachPing } from '@/lib/feedback'
+import { approachHaptic, arrivalCue, playApproachPing } from '@/lib/feedback'
 import { crowdCue, formatApproachFeet } from '@/lib/approachAlert'
 import { useSosEngaged } from '@/lib/sosEngaged'
 import { useDriverApproach } from '@/lib/useDriverApproach'
@@ -31,6 +31,12 @@ export function ApproachAlert({
   const bright = useRef(new Animated.Value(0)).current
   const flash = useRef(new Animated.Value(0)).current
   const cue = crowdCue(reading?.feet)
+  // Latest cue for the crowd loop. GPS updates change the distance every second or so;
+  // the loop reads this ref instead of restarting, so a new fix can never fire an extra buzz.
+  const cueRef = useRef(cue)
+  cueRef.current = cue
+  const lastSpike = useRef(0)
+  const inCrowd = Boolean(cue)
   const lastStageHaptic = useRef<string | null>(null)
   const lastClosingHaptic = useRef(0)
   const pulseMode = attention?.pulseMode ?? 'off'
@@ -48,7 +54,14 @@ export function ApproachAlert({
     if (hapticReason === 'stage') {
       if (lastStageHaptic.current === stage) return
       lastStageHaptic.current = stage
-      void approachHaptic(haptic)
+      // Arrival gets one stronger cue instead of the plain stage buzz.
+      if (stage === 'here') {
+        lastClosingHaptic.current = Date.now()
+        lastSpike.current = Date.now()
+        void arrivalCue()
+      } else {
+        void approachHaptic(haptic)
+      }
       return
     }
     if (hapticReason === 'closing') {
@@ -60,30 +73,34 @@ export function ApproachAlert({
   }, [active, haptic, hapticReason, paused, stage])
 
   useEffect(() => {
-    if (!active || paused || !cue) {
+    if (!active || paused || !inCrowd) {
       flash.stopAnimation()
       Animated.timing(flash, { toValue: 0, duration: 240, useNativeDriver: true }).start()
       return undefined
     }
     let alive = true
-    const spike = () => {
-      if (!alive) return
-      void approachHaptic(cue.haptic)
+    const tick = () => {
+      const current = cueRef.current
+      if (!alive || !current) return
+      const now = Date.now()
+      if (now - lastSpike.current < current.intervalMs) return
+      lastSpike.current = now
+      void approachHaptic(current.haptic)
       void playApproachPing()
-      flash.setValue(cue.flash)
+      flash.setValue(current.flash)
       Animated.timing(flash, {
         toValue: 0,
-        duration: Math.min(420, Math.round(cue.intervalMs * 0.45)),
+        duration: Math.min(420, Math.round(current.intervalMs * 0.45)),
         useNativeDriver: true,
       }).start()
     }
-    spike()
-    const timer = setInterval(spike, cue.intervalMs)
+    tick()
+    const timer = setInterval(tick, 250)
     return () => {
       alive = false
       clearInterval(timer)
     }
-  }, [active, cue?.flash, cue?.haptic, cue?.intervalMs, flash, paused])
+  }, [active, flash, inCrowd, paused])
 
   useEffect(() => {
     let loop: Animated.CompositeAnimation | null = null
