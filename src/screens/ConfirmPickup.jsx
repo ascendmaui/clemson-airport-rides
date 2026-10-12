@@ -179,7 +179,7 @@ export function ConfirmPickup({
           </button>
         </div>
         <p style={{ fontSize: 12, color: 'var(--ink-tertiary)', marginTop: 8, textAlign: 'center' }}>
-          The location icon on pickup and drop-off pins that stop. Drag still moves the pickup pin.
+          Drag the pin to your exact pickup spot, or tap ◎ to use your location.
         </p>
         {locateNote ? (
           <p style={{ fontSize: 12, color: 'var(--danger, #b00020)', marginTop: 4, textAlign: 'center' }}>{locateNote}</p>
