@@ -1,5 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
 import { navigate } from '../lib/navigation'
+import { supportEmail } from '../../shared/productLinks.js'
+
+function SupportMailLink() {
+  const email = supportEmail()
+  return (
+    <a className="mkt-text pressable" href={`mailto:${email}`}>{email}</a>
+  )
+}
 
 const STADIUM = {
   src: '/marketing/clemson-memorial-stadium.jpg',
@@ -98,13 +106,14 @@ export function MarketingChrome({ current = '', home = false, children }) {
           <footer className="mkt-footer">
             <div className="mkt-inner mkt-footer-inner">
               <span>Clemson RIDES</span>
+              <SupportMailLink />
               {menu}
             </div>
           </footer>
         </>
       ) : (
         <>
-          <div className="mkt-footer mkt-menu-bar">{menu}</div>
+          <div className="mkt-footer mkt-menu-bar">{menu}<SupportMailLink /></div>
           <main className="mkt-inner mkt-main mkt-page">{children}</main>
         </>
       )}

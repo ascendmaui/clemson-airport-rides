@@ -99,5 +99,3 @@ try {
 } finally {
   restoreNavigator()
 }
-
-console.log('sosAlert checks passed')

@@ -27,6 +27,7 @@ function missingHeartbeatColumn(message) {
 import { isActiveRideStatus } from '../lib/sosAlert'
 import { MidrideCancelSheet } from '../components/MidrideCancelSheet'
 import { RiderSwitchSheet } from '../components/RiderSwitchSheet'
+import { loadMidrideStarted, riderMayCancelMidride } from '../../shared/riderMidrideCancel.js'
 import { CounterpartChip } from '../components/CounterpartChip'
 import {
   liveTripMapChip,
@@ -75,6 +76,7 @@ export function Requested({ dest = 'GSP Airport', trip = '', driver = 'your driv
   const [rateNudge, setRateNudge] = useState(false)
   const [chatOpen, setChatOpen] = useState(false)
   const [cancelOpen, setCancelOpen] = useState(false)
+  const [midrideStarted, setMidrideStarted] = useState(false)
   const [switchOpen, setSwitchOpen] = useState(false)
   const [stillSearching, setStillSearching] = useState(false)
   const searchStartedAt = useRef(null)
@@ -268,6 +270,14 @@ export function Requested({ dest = 'GSP Airport', trip = '', driver = 'your driv
     setCancelNotice({ ...notice, tripId: trip })
   }, [trip, tripRow])
   const status = tripRow?.status || ''
+  useEffect(() => {
+    let alive = true
+    loadMidrideStarted(supabase, { id: trip, status }).then((started) => {
+      if (alive) setMidrideStarted(started)
+    })
+    return () => { alive = false }
+  }, [trip, status])
+  const canCancelMidride = riderMayCancelMidride(status, midrideStarted)
   const chatMode = rideChatMode(tripRow, Date.now(), lostReport)
   const showMessages = Boolean(user?.id && tripRow?.driver_id && tripRow?.rider_id && chatMode !== 'closed')
   const rideLive = isActiveRideStatus(status)
@@ -375,13 +385,14 @@ export function Requested({ dest = 'GSP Airport', trip = '', driver = 'your driv
   const mapChip = liveTripMapChip(status)
   const mapHeight = liveTripMapHeight({ preview, driverOnMap: Boolean(driverPos), status })
   const routePrefix = liveTripRoutePrefix(driver, driverOnCard)
+  // Cancel is the button below, gated by the server mid-ride rule.
   const secondaryActions = liveTripSecondaryActions({
     status,
     tripId: trip,
     tripMissing,
     showMessages,
     rateNudge,
-  })
+  }).filter((action) => action.id !== 'cancel')
 
   return (
     <div className="fade-in live-trip">
@@ -589,6 +600,15 @@ export function Requested({ dest = 'GSP Airport', trip = '', driver = 'your driv
               onClick={() => setSwitchOpen(true)}
             >
               Change driver
+            </button>
+          )}
+          {canCancelMidride && trip && (
+            <button
+              type="button"
+              className="pressable live-trip-text-btn live-trip-text-btn--danger"
+              onClick={() => setCancelOpen(true)}
+            >
+              Cancel this ride
             </button>
           )}
           <PrimaryButton onClick={() => navigate('home')}>Back home</PrimaryButton>

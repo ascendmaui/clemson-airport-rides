@@ -1,8 +1,9 @@
 /** Best-effort applicant email. Without Resend, the driver app still shows the message. */
+import { resendPayload } from './resendMail.js'
 
-export async function sendApplicantNotice({ to, subject, text }) {
-  const key = (process.env.RESEND_API_KEY || '').trim()
-  const from = (process.env.RESEND_FROM || '').trim()
+export async function sendApplicantNotice({ to, subject, text, env = process.env }) {
+  const key = (env.RESEND_API_KEY || '').trim()
+  const from = (env.RESEND_FROM || '').trim()
   const stub = String(text || '')
   if (!to) return { emailed: false, stub, todo: 'Applicant has no email on the profile.' }
   if (!key || key.includes('placeholder') || !from) {
@@ -20,12 +21,7 @@ export async function sendApplicantNotice({ to, subject, text }) {
         Authorization: `Bearer ${key}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        from,
-        to: [to],
-        subject,
-        text: stub,
-      }),
+      body: JSON.stringify(resendPayload({ from, to, subject, text: stub, env })),
     })
     const body = await res.json().catch(() => ({}))
     if (!res.ok) {

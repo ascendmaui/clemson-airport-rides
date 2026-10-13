@@ -12,6 +12,7 @@ import {
   signLinkMessage,
 } from '../shared/agreementSign.js'
 import { IC_AGREEMENT_VERSION } from '../shared/icAgreement.js'
+import { resendPayload } from './resendMail.js'
 
 export function hashToken(token) {
   return createHash('sha256').update(String(token)).digest('hex')
@@ -193,9 +194,9 @@ export async function sendAgreementForSignature({
         Authorization: `Bearer ${String(env.RESEND_API_KEY).trim()}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
+      body: JSON.stringify(resendPayload({
         from: String(env.RESEND_FROM).trim(),
-        to: [to],
+        to,
         subject: 'Sign your Clemson RIDES contractor agreement',
         text: [
           'An admin asked you to sign the Clemson RIDES independent contractor agreement.',
@@ -203,7 +204,8 @@ export async function sendAgreementForSignature({
           '',
           url,
         ].join('\n'),
-      }),
+        env,
+      })),
     })
     const body = await res.json().catch(() => ({}))
     emailed = Boolean(res.ok)

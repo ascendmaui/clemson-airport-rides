@@ -48,5 +48,3 @@ const mountAt = panel.indexOf('paymentElement.mount')
 const waitAt = panel.lastIndexOf('waitForStripeMountNode', mountAt)
 assert.ok(waitAt !== -1 && waitAt < mountAt, 'mount runs only after the container ref is attached')
 assert.match(panel, /pe\.unmount\(\)/)
-
-console.log('stripe mount target checks passed')

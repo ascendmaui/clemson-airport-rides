@@ -1,7 +1,8 @@
 import { Glyph } from 'rides-native/icons'
 import { useRouter, useFocusEffect } from 'expo-router'
 import { useCallback, useState } from 'react'
-import { Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native'
+import { Linking, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native'
+import { supportEmail, supportMailto } from '../../../../shared/productLinks.js'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Primary, useCardShadow } from '@/components/chrome'
 import { EmptyState, FadeIn, type MenuRow, RowGroup } from '@/components/day'
@@ -101,6 +102,10 @@ export default function MenuScreen() {
   const money: MenuRow[] = [
     { icon: 'calculator', title: 'Tax info', subtitle: 'Year-end mileage and earnings', onPress: () => router.push('/tax') },
   ]
+  const supportRows: MenuRow[] = [
+    { icon: 'help', title: 'Help', subtitle: supportEmail(), onPress: () => { void Linking.openURL(supportMailto('Clemson RIDES help')) } },
+    { icon: 'chat', title: 'Support', subtitle: supportEmail(), onPress: () => { void Linking.openURL(supportMailto('Clemson RIDES support')) } },
+  ]
   const resources: MenuRow[] = [
     { icon: 'school', title: 'Learning Center', subtitle: quizLabel, onPress: () => router.push('/learning') },
     { icon: 'bug', title: 'Bug Reporter', subtitle: 'File a ticket for the driver app', onPress: () => router.push('/bug-report') },
@@ -145,6 +150,8 @@ export default function MenuScreen() {
           <RowGroup rows={manage} />
           <SectionLabel>Tax</SectionLabel>
           <RowGroup rows={money} />
+          <SectionLabel>Help and support</SectionLabel>
+          <RowGroup rows={supportRows} />
           <SectionLabel>Resources</SectionLabel>
           <RowGroup rows={resources} />
           <SectionLabel>Settings</SectionLabel>

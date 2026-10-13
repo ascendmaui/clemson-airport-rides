@@ -20,10 +20,10 @@ export const DRIVER_COMPONENTS_DIR = path.join(REPO_ROOT, 'apps/driver/component
  */
 export const ALLOWLIST = new Set([
   'apps/driver/app/discover.tsx:84',
-  'apps/driver/app/inbox.tsx:201',
+  'apps/driver/app/inbox.tsx:209',
   'apps/driver/app/(tabs)/index.tsx:664',
-  'apps/driver/app/bug-report.tsx:81',
-  'apps/driver/app/bug-report.tsx:90',
+  'apps/driver/app/bug-report.tsx:88',
+  'apps/driver/app/bug-report.tsx:97',
   'apps/driver/app/learning.tsx:166',
 ])
 
@@ -193,8 +193,6 @@ export function isAllowlisted(offender, allowlist = ALLOWLIST) {
 
 test('driver a11y static scanner scans all driver screens and components against allowlist', () => {
   const offenders = scanDriverA11y()
-  console.log(`Driver a11y offenders count: ${offenders.length}`)
-
   const unallowlisted = offenders.filter((o) => !isAllowlisted(o, ALLOWLIST))
   assert.equal(
     unallowlisted.length,

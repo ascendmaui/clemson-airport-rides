@@ -11,6 +11,7 @@ import {
 } from '../shared/driverOnboarding.js'
 import { adminNotifyRecipients } from './adminRoster.js'
 import { WEB_ORIGIN } from '../shared/productLinks.js'
+import { resendPayload } from './resendMail.js'
 import { assessContractIdentity, pickAgreementRow } from '../shared/contractIdentity.js'
 import { missingApplicantEmailColumn, submittedApplicantEmail } from '../shared/applicantEmail.js'
 import {
@@ -256,12 +257,12 @@ export async function notifyAdminOfApplication({ profile, vehicle }) {
         Authorization: `Bearer ${key}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
+      body: JSON.stringify(resendPayload({
         from,
         to: recipients,
         subject: `Driver application ready for review — ${name}`,
         text,
-      }),
+      })),
     })
     const body = await res.json().catch(() => ({}))
     if (!res.ok) {

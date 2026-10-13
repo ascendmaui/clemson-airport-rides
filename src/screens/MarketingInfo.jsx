@@ -6,7 +6,7 @@ import { QrMark } from '../components/QrMark'
 import { FeatureBlock } from '../components/FeatureBlock'
 import { messagingGuide } from '../../shared/copy/messaging.js'
 import { HERO_COLLAGE, NIGHT_VENUES } from '../content/images.js'
-import { APP_DOWNLOADS, SUPPORT_EMAIL } from '../../shared/productLinks.js'
+import { APP_DOWNLOADS, supportEmail } from '../../shared/productLinks.js'
 import { RIDE_TYPE_NOTES, RIDE_TYPE_STUDENT_NOTE } from '../../shared/copy/rideTypes.js'
 import { RIDE_OPTION_CATALOG, SCHEDULE_AHEAD_DISCOUNT_PCT } from '../../shared/rideOptions.js'
 import { CARPOOL_SEAT_FRACTION_BPS, STUDENT_DISCOUNT_BPS } from '../lib/fareRates.js'
@@ -255,7 +255,7 @@ export function PromosPage() {
 export function FaqPage() {
   return (
     <MarketingChrome current="faq">
-      <PageHead kicker="FAQ" title="Common questions" />
+      <PageHead kicker="FAQ" title="Common questions" lede={`Contact ${supportEmail()} if a question is not listed here.`} />
       {FAQ.map((item) => (
         <article key={item.q} className="mkt-card mkt-feature">
           <h2>{item.q}</h2>
@@ -269,7 +269,7 @@ export function FaqPage() {
 export function SupportPage() {
   return (
     <MarketingChrome current="support">
-      <PageHead kicker="Help" title="Support" />
+      <PageHead kicker="Help" title="Support" lede="Contact the support mailbox." />
       <article className="mkt-card mkt-feature">
         <h2>Get help in the apps</h2>
         <p>Rider app: Account → Help for how-to questions, or Account → Support to describe a problem. The in-app assistant can draft a support ticket for you to confirm.</p>
@@ -277,7 +277,7 @@ export function SupportPage() {
       </article>
       <article className="mkt-card mkt-feature">
         <h2>Email</h2>
-        <p>Contact <a href={`mailto:${SUPPORT_EMAIL}`}>{SUPPORT_EMAIL}</a>.</p>
+        <p>Contact <a href={`mailto:${supportEmail()}`}>{supportEmail()}</a>.</p>
       </article>
       <article className="mkt-card mkt-feature">
         <h2>Safety</h2>

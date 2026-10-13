@@ -1,6 +1,9 @@
 /** One privacy policy and terms set for the website and the rider app. */
+import { supportEmail } from './productLinks.js'
 
 export const LEGAL_UPDATED = 'October 13, 2026'
+
+const SUPPORT = supportEmail()
 
 export const PRIVACY_SECTIONS = [
   {
@@ -104,7 +107,7 @@ export const PRIVACY_SECTIONS = [
   {
     heading: 'Article 12. Contact',
     paragraphs: [
-      'Privacy questions and privacy-rights requests may be sent from Account → Support or by mail to Clemson RIDES, 101 North Main Street, Greenville, SC 29601. A mailed notice is effective when we receive it.',
+      `Privacy questions and privacy-rights requests may be sent to ${SUPPORT}, from Account → Support, or by mail to Clemson RIDES, 101 North Main Street, Greenville, SC 29601. A mailed notice is effective when we receive it.`,
     ],
   },
 ]
@@ -327,7 +330,7 @@ export const TERMS_SECTIONS = [
   {
     heading: 'Article 23. Notices and Contact',
     paragraphs: [
-      'For terms or privacy questions related to Clemson RIDES campus airport rides, use Account → Support or your campus program administrator. Notices required by these Terms, including a notice that starts the informal dispute step and an arbitration opt-out, must be mailed to Clemson RIDES, 101 North Main Street, Greenville, SC 29601. A mailed notice is effective when we receive it. The Company may give you notice at the email on your account, and that notice is effective when sent.',
+      `For terms or privacy questions, email ${SUPPORT} or use Account → Support. Notices required by these Terms, including a notice that starts the informal dispute step and an arbitration opt-out, must be mailed to Clemson RIDES, 101 North Main Street, Greenville, SC 29601. A mailed notice is effective when we receive it. The Company may give you notice at the email on your account, and that notice is effective when sent.`,
     ],
   },
 ]
