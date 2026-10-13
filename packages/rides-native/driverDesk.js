@@ -1,4 +1,4 @@
-import { uniqueChannelTopic } from './realtimeChannel.js'
+import { bindRealtimeChannel } from './realtimeReconnect.js'
 /**
  * Driver desk: availability, PickDriver requests, scheduled queue, live status.
  * Payments go through the existing /api/driver and /api/stripe-payment-methods routers.
@@ -349,13 +349,10 @@ export async function loadDriverDesk(supabase, driverId) {
 
 export function subscribeTrips(supabase, onChange) {
   if (!supabase) return () => {}
-  const channel = supabase
-    .channel(uniqueChannelTopic('driver-trips'))
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'trips' }, () => onChange())
-    .subscribe()
-  return () => {
-    supabase.removeChannel(channel)
-  }
+  return bindRealtimeChannel(supabase, {
+    topic: 'driver-trips',
+    onChange: () => onChange?.(),
+  })
 }
 
 export async function listPassedTripIds(supabase, driverId) {
@@ -671,6 +668,13 @@ export async function sendQueuedDriverAction(supabase, action, { timeoutMs = QUE
 export function advanceResultTrip(result) {
   if (!result?.trip) return null
   return { ...result.trip, ...(result.settle ? { settle: result.settle } : {}), ...(result.wait ? { wait: result.wait } : {}), ...(result.idempotent ? { idempotent: true } : {}) }
+}
+
+export async function driverEndTrip(supabase, tripId, reason, note) {
+  if (!tripId) throw new Error('Missing ride')
+  return authedJson(supabase, '/api/driver?action=trip-status', {
+    method: 'POST', body: { tripId, op: 'end-trip', reason, ...(note ? { note } : {}) },
+  })
 }
 
 export async function driverCancelTrip(supabase, tripId, reason, note) {
