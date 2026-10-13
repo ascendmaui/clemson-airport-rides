@@ -2,6 +2,12 @@
 
 Persistent knowledge base for recurring failures. When a matching issue appears, apply the saved fix first.
 
+## 2026-10-13 — Onboarding keeps next-step holds and the background attestation
+
+- **What was wrong:** The friction branch still used the old eligibility form and a Continue button that ignored a salvage title. Current main records a three-step background attestation and does not treat consent as a completed check.
+- **What changed:** Account Continue stays disabled until the quiz and vehicle fields are valid, and also while the title is salvage. Document, W-9, agreement, and submit buttons still use `forwardCtaDisabled`. The employment step stays the attestation wizard, and Sign stays disabled until that attestation, eligibility, and the earlier gap are done. The authorization label stays “Background attestation (consent is not a completed check).”
+- **Files touched:** `src/screens/DriverOnboarding.jsx`, `apps/driver/app/onboarding.tsx`, `shared/driverOnboarding.js`, `tests/onboardingFriction.test.js`, `package.json`, `docs/FIXES.md`
+- **Verified:** `node --experimental-strip-types --test tests/onboardingFriction.test.js tests/driverOnboarding.test.js tests/backgroundCheck.test.js tests/vehicleTitle.test.js` and `npm test` (3584 pass, 0 fail).
 ## 2026-10-13 — Live trip screen keeps chip height and later trip controls
 
 - **What was wrong:** Updating the live-trip polish onto current main collided in `Requested.jsx`. Main sized the map with a fixed 280/220 split and offered Cancel this ride through `isMidrideStatus`, which is only true after the trip is already `canceled_midride`. The polish branch dropped the unread message ids, the lost-item report, and Change driver.
@@ -60,6 +66,28 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
   - `docs/FIXES.md`
 - **Verified:** `node --test tests/gaAuditReconcileAirportCheckoutHardening.test.js` (6/6 passing) and full test runner `npm test`.
 
+## 2026-10-05 — driver onboarding friction UX (t2)
+
+- **What was wrong:** The year, W-9, and unsigned-agreement hints existed only as helpers. The application screens still let a driver tap Continue, Sign, or Submit before the prerequisite was done, and they did not say which single step was next. A blank account form looked ready. Native W-9 Next advanced through empty pages. Employment and agreement sign buttons accepted a tap and then showed an error. A missing vehicle year did not hold later steps, so the driver could leave Account behind. The unsigned agreement was easy to mix up with a blocked submit.
+- **What changed:** The web and driver-app application screens show `nextStepHint` inline on the step it names, on Agreement when the next action is Submit, and on a later step when that gap is holding the forward button. A W-9 hint on a later step waits until W-9 is the earliest unfinished step, so missing documents stay ahead of it. A missing year still shows on every later step, because year is not its own onboarding step. Account Continue stays disabled until the quiz and vehicle fields, including year, are valid, and the first non-year reason is shown next to that button. Document, employment, W-9, agreement, and review forward buttons use `forwardCtaDisabled`: a missing year holds every step after Account, a pending W-9 holds Agreement and Submit, and an unsigned agreement does not disable Submit. Native W-9 Next stays disabled until that page's field is filled. Employment sign and in-app agreement sign stay disabled until eligibility or the review checkbox, the typed name, and the date are present. Native Agreement also offers Continue to Submit, which is the emailed-signature path. No email is sent. Approval blockers and payout rules are unchanged.
+- **Files touched:**
+  - `shared/driverOnboarding.js`
+  - `src/screens/DriverOnboarding.jsx`
+  - `apps/driver/app/onboarding.tsx`
+  - `packages/rides-native/driverOnboardingClient.js`
+  - `packages/rides-native/driverOnboardingClient.d.ts`
+  - `tests/onboardingFriction.test.js`
+  - `docs/FIXES.md`
+
+## 2026-10-05 — driver onboarding next-step hints (t1)
+
+- **What was wrong:** Incomplete onboarding still used generic copy, and three different gaps were easy to mix up. A missing vehicle year was only `Year must be from 1980 to {max}.` and did not send the driver back to Account after the status had already moved on. A pending W-9 showed up as the noun `W-9 legal name and TIN` (or a single field error). An unsigned agreement showed up as `Signed independent contractor agreement`, while submit stayed open and the review list used submission blockers, so the driver was not told that approval is what waits. Skip-ahead, photo, and review copy stayed generic: `Finish the current step before skipping ahead.`, `Add the photos on this step`, `Continue required steps`, and `Still needed · {label}`.
+- **What changed:** Added `vehicleYearNextStepHint`, `w9NextStepHint`, `agreementUnsignedNextStepHint`, and `nextStepHint` in `shared/driverOnboarding.js`. Year wins over a pending W-9, which wins over an unsigned agreement. The hints do not add approval blockers and do not change payout rules. Tests inventory the remaining screen messages and lock the three hints apart.
+- **Files touched:**
+  - `shared/driverOnboarding.js`
+  - `tests/onboardingFriction.test.js`
+  - `package.json`
+  - `docs/FIXES.md`
 ## 2026-10-05 — Weekend/party schedule UX tests already run under npm test
 
 - **Track / machine:** Clemson RIDES · deputy/weekend-party-schedule-ux · pkg-weekend-party-schedule-ux t3

@@ -2,6 +2,7 @@
 
 import { IC_AGREEMENT_VERSION } from './icAgreement.js'
 import { isAdminIdentity } from './adminAccess.js'
+import { VEHICLE_YEAR_MIN, maxVehicleYear, parseVehicleYear } from './vehicleYear.js'
 import { assessContractIdentity } from './contractIdentity.js'
 import { normalizeApplicantEmail } from './applicantEmail.js'
 
@@ -344,6 +345,113 @@ export function blockerLabel(code) {
       const unknown = code
       return String(unknown)
     }
+  }
+}
+
+/**
+ * Next action when the vehicle year, the W-9, or the contractor agreement is open.
+ * Year wins, then W-9, then the unsigned agreement, so the hint names one step.
+ * An omitted vehicleYear or agreement field means "not loaded", not "missing".
+ * taxSaved counts as pending only when it is false.
+ * These hints do not add approval blockers. Submit stays allowed when the only gap is the signature.
+ */
+export function vehicleYearNextStepHint(now = new Date()) {
+  const max = maxVehicleYear(now)
+  return `Enter the vehicle year (${VEHICLE_YEAR_MIN} to ${max}) on Account, then continue to License.`
+}
+
+export function w9NextStepHint() {
+  return 'Finish the W-9 with your legal name and 9-digit TIN, then continue to Agreement.'
+}
+
+export function agreementUnsignedNextStepHint() {
+  return 'The contractor agreement is unsigned. Continue to Submit. You sign the copy an admin emails you, and approval waits on that signature.'
+}
+
+function hasOwn(obj, key) {
+  return Object.prototype.hasOwnProperty.call(obj || {}, key)
+}
+
+function vehicleYearMissing(ctx, now) {
+  if (!hasOwn(ctx, 'vehicleYear')) return false
+  return parseVehicleYear(ctx.vehicleYear, now) == null
+}
+
+function agreementFieldsPresent(ctx) {
+  return hasOwn(ctx, 'agreementSigned') || hasOwn(ctx, 'agreementVersion') || hasOwn(ctx, 'agreementSha256')
+}
+
+export function nextStepHint(ctx = {}, now = new Date()) {
+  if (vehicleYearMissing(ctx, now)) return vehicleYearNextStepHint(now)
+  if (ctx.taxSaved === false) return w9NextStepHint()
+  if (agreementFieldsPresent(ctx) && !agreementSatisfied(ctx)) return agreementUnsignedNextStepHint()
+  return null
+}
+
+/** Screen the hint sends the driver to. Submit stays the target when only the signature is open. */
+export function nextStepTargetId(ctx = {}, now = new Date()) {
+  const hint = nextStepHint(ctx, now)
+  if (hint === vehicleYearNextStepHint(now)) return 'account'
+  if (hint === w9NextStepHint()) return 'w9'
+  if (hint === agreementUnsignedNextStepHint()) return 'review'
+  return null
+}
+
+/**
+ * Disable a forward CTA when an earlier gap is still the next step.
+ * The account step is where the year is entered, and the W-9 step is where tax info is entered.
+ * An unsigned agreement does not disable Submit.
+ */
+export function forwardCtaDisabled(stepId, ctx = {}, now = new Date()) {
+  const target = nextStepTargetId(ctx, now)
+  if (target === 'account') return stepId !== 'account'
+  if (target === 'w9') {
+    const idx = ONBOARDING_FLOW.findIndex((step) => step.id === stepId)
+    const w9Idx = ONBOARDING_FLOW.findIndex((step) => step.id === 'w9')
+    return idx > w9Idx
+  }
+  return false
+}
+
+/**
+ * The hint is inline on the step it names, on Agreement when Submit is the real next action,
+ * and on a later step only when that gap is the earliest unfinished step.
+ * A missing year is not an onboarding step, so it still shows wherever the forward button is held.
+ */
+export function showNextStepHint(stepId, ctx = {}, now = new Date()) {
+  if (!nextStepHint(ctx, now)) return false
+  const target = nextStepTargetId(ctx, now)
+  if (target === stepId) return true
+  if (target === 'review' && stepId === 'agreement') return true
+  if (target === 'account') return forwardCtaDisabled(stepId, ctx, now)
+  if (target === 'w9') return forwardCtaDisabled(stepId, ctx, now) && firstIncompleteStepId(ctx) === 'w9'
+  return false
+}
+
+/**
+ * W-9 wizard pages stay disabled until the field on that page is filled.
+ * Business name is optional. A saved TIN can skip re-entry.
+ */
+export function w9SubstepReady(index, fields = {}) {
+  const legalName = String(fields.legalName || '').trim()
+  const address = String(fields.address || '').trim()
+  const digits = String(fields.tin || '').replace(/\D/g, '')
+  const signed = String(fields.signature || '').trim().length >= 2 && String(fields.signedOn || '').trim().length > 0
+  switch (Number(index)) {
+    case 0:
+      return legalName.length >= 2
+    case 1:
+      return true
+    case 2:
+      return TAX_CLASSIFICATIONS.some((item) => item.id === fields.taxClass)
+    case 3:
+      return address.length >= 4
+    case 4:
+      return fields.taxSaved === true || digits.length === 9
+    case 5:
+      return signed
+    default:
+      return false
   }
 }
 
