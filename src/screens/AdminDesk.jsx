@@ -171,7 +171,9 @@ function NotificationsPanel({ onChanged }) {
           onClick={() => {
             mark(row.id).catch(() => {})
             if (row.entity_type === 'support_ticket') navigate('admin', { tab: 'support' })
-            if (row.entity_type === 'driver_application') navigate('admin', { tab: 'applications' })
+            if (row.entity_type === 'driver_application' || row.entity_type === 'driver_profile_photo') {
+              navigate('admin', { tab: 'applications' })
+            }
           }}
           style={{ display: 'block', width: '100%', textAlign: 'left', marginTop: 10, padding: 14, borderRadius: 16, opacity: row.read_at ? 0.65 : 1 }}
         >

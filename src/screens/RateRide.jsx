@@ -13,6 +13,7 @@ import { RequireAuth } from '../components/RequireAuth'
 import { RideChat, RideMessageButton } from '../components/RideChat'
 import { ReportLostItemButton } from '../components/ReportLostItem'
 import { rideChatMode } from '../lib/tripChatRules'
+import { riderDriverFirstName } from '../../shared/riderDriverPrivacy.js'
 
 function RideMessagesEntry({ trip, userId }) {
   const [open, setOpen] = useState(false)
@@ -255,11 +256,11 @@ function RateForm() {
                 fontWeight: 800,
               }}
             >
-              {!counterpart.avatar_url && (counterpart.full_name || '?').slice(0, 1).toUpperCase()}
+              {!counterpart.avatar_url && (riderDriverFirstName(counterpart.full_name, isRider ? 'Driver' : 'Rider') || '?').slice(0, 1).toUpperCase()}
             </div>
             <div>
               <div style={{ fontWeight: 700, color: 'var(--purple)' }}>
-                {counterpart.full_name || 'Counterpart'}
+                {riderDriverFirstName(counterpart.full_name, isRider ? 'Driver' : 'Rider')}
               </div>
               <div style={{ fontSize: 12, color: 'var(--ink-tertiary)' }}>View profile</div>
             </div>

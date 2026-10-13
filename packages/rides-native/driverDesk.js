@@ -1,8 +1,9 @@
-import { bindRealtimeChannel } from './realtimeReconnect.js'
 /**
  * Driver desk: availability, PickDriver requests, scheduled queue, live status.
  * Payments go through the existing /api/driver and /api/stripe-payment-methods routers.
  */
+import { riderDriverFirstName } from '../../shared/riderDriverPrivacy.js'
+import { bindRealtimeChannel } from './realtimeReconnect.js'
 import { offerVisibleToDriver, visibleOfferQuery } from '../../shared/driverOrder.js'
 import { filterVisibleTrips, pairAllowedByRpc, visibleTripIdSet, WOMEN_ONLY_ACCEPT_ERROR } from './comfortPreference.js'
 import { isStaleLiveOffer } from '../../shared/staleLiveOffer.js'
@@ -143,8 +144,7 @@ export async function loadDriverProfile(supabase, driverId) {
 export function riderFacingCard({ profile, vehicle, online }) {
   const vehicleLabel = [vehicle?.color, vehicle?.make, vehicle?.model].filter(Boolean).join(' ') || 'Vehicle TBD'
   return {
-    name: profile?.full_name || 'Driver',
-    phone: profile?.phone || null,
+    name: riderDriverFirstName(profile?.full_name, 'Driver') || 'Driver',
     ratingAvg: profile?.rating_avg != null ? Number(profile.rating_avg) : null,
     ratingCount: Number(profile?.rating_count) || 0,
     studentVerified: Boolean(profile?.student_verified_at),

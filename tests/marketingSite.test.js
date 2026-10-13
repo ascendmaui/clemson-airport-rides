@@ -345,7 +345,9 @@ test('voice and audio recording is a live nighttime safety card', () => {
   assert.match(peace, /Confirm trip/)
   assert.match(peace, /\$10 or \$15/)
   assert.match(peace, /id: 'switch-cancel'[\s\S]*?status: 'live'/)
-  assert.match(peace, /does not pair you with other riders/)
+  assert.match(peace, /3 or 4 riders share the trip/)
+  assert.match(peace, /There is no deposit/)
+  assert.doesNotMatch(peace, /does not pair you with other riders/)
   assert.doesNotMatch(peace, /Carpool v1/)
   assert.match(peace, /id: 'boosts'[\s\S]*?status: 'live'/)
   assert.match(peace, /boostHowItWorks/)
@@ -496,7 +498,7 @@ test('homepage menu routes are real screens', () => {
   for (const id of ['how-it-works', 'ride-types', 'service-area', 'tiger-pass', 'safety', 'why-clemson-rides', 'drive', 'promos', 'faq', 'privacy', 'terms', 'get-the-app']) {
     assert.match(app, new RegExp(`case '${id}':`))
   }
-  assert.match(info, /CARPOOL_DISCOUNT_BPS \/ 100/)
+  assert.match(info, /CARPOOL_SEAT_FRACTION_BPS \/ 100/)
   assert.match(info, /pre-authorization hold/)
   assert.doesNotMatch(info, /25% deposit/)
   assert.match(area, /AIRPORT_SECTION/)

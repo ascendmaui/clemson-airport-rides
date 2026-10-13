@@ -15,7 +15,7 @@ import { MESSAGING_LOST_ITEM_DAYS } from '../../shared/copy/messaging.js'
 import { TIGER_PASS_DISCOUNT_PCT, TIGER_PASS_NAME, TIGER_PASS_PRICE_CENTS } from '../../shared/tigerPass.js'
 import { BONUS_CAP_CENTS } from '../../packages/rides-native/tigerHeat.js'
 import { SCHEDULE_AHEAD_DISCOUNT_PCT } from '../../shared/rideOptions.js'
-import { CARPOOL_DISCOUNT_BPS, STUDENT_DISCOUNT_BPS } from '../lib/fareRates.js'
+import { CARPOOL_SEAT_FRACTION_BPS, STUDENT_DISCOUNT_BPS } from '../lib/fareRates.js'
 import { MIN_LEAD_MS } from '../lib/scheduledRideModel.js'
 import { DESTINATIONS } from '../store.js'
 
@@ -49,7 +49,7 @@ const boostChoices = choiceList(BOOST_PRESETS_CENTS)
 const backupChoices = choiceList(BACKUP_BONUS_PRESETS_CENTS)
 const boostCap = formatBoostDollars(BOOST_MAX_CENTS)
 const studentPercent = STUDENT_DISCOUNT_BPS / 100
-const carpoolPercent = CARPOOL_DISCOUNT_BPS / 100
+const carpoolPercent = CARPOOL_SEAT_FRACTION_BPS / 100
 const passPrice = formatBoostDollars(TIGER_PASS_PRICE_CENTS)
 const heatCap = formatBoostDollars(BONUS_CAP_CENTS)
 const gspFare = airportFare('gsp')
@@ -144,15 +144,15 @@ export const FEATURES = [
     id: 'carpool',
     title: 'Carpool',
     exclusive: false,
-    what: `Carpool is ${carpoolPercent}% off Standard, for 1 or 2 seats. It does not pair you with other riders.`,
+    what: `Carpool is ${carpoolPercent}% of Standard per seat when 3 or 4 riders split the trip.`,
     steps: [
       'Choose Carpool when you book.',
-      'Pick 1 or 2 seats.',
-      `Each seat is ${carpoolPercent}% off Standard.`,
-      'A driver is matched the same way as a Standard ride.',
-      'Two carpool requests are not combined into one car.',
+      `Each seat is ${carpoolPercent}% of Standard.`,
+      'Riders group when pickup and drop-off are each nearby and the times are close.',
+      'The group books at 3 riders and caps at 4. Each rider is pre-authorized for their own seat.',
+      'There is no deposit. Demo cars do not count.',
     ],
-    why: 'The seat costs less than the full fare. You still book it like a normal ride.',
+    why: 'Splitting the ride costs less than booking Standard alone.',
   },
   {
     id: 'tiger-pass',

@@ -3,6 +3,7 @@
  * Pure helpers so the driver app and tests share the same copy and numbers.
  * Net always equals DriverCard.driverNetCents (shared/driverTripEarnings.js).
  */
+import { riderDriverFirstName } from '../../shared/riderDriverPrivacy.js'
 import { formatCents } from './tripTags.js'
 
 const cents = (value) => Math.max(0, Math.round(Number(value) || 0))
@@ -11,7 +12,7 @@ const cents = (value) => Math.max(0, Math.round(Number(value) || 0))
 export function tipLine(riderFirstName, tipCents) {
   const amount = cents(tipCents)
   if (amount <= 0) return null
-  const who = String(riderFirstName || '').trim().split(/\s+/)[0]
+  const who = riderDriverFirstName(riderFirstName, '')
   const dollars = amount % 100 === 0 ? `$${amount / 100}` : formatCents(amount)
   return `${who && who !== 'Rider' ? who : 'Your rider'} tipped you ${dollars}`
 }

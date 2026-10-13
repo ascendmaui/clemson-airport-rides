@@ -11,6 +11,7 @@ import { registerDriverPush, type PushState } from '@/lib/push'
 import { supabase } from '@/lib/supabase'
 import { useTheme, type NavApp, type RideAlertMode, type RideAlertTier } from '@/lib/theme'
 import { loadDriverProfile } from 'rides-native/driverDesk'
+import { riderDriverFirstName } from '../../../../shared/riderDriverPrivacy.js'
 import { QuietHoursChoices } from '@/components/QuietHoursChoices'
 
 const SECTIONS = ['display', 'privacy', 'address', 'accessibility', 'communication', 'navigation', 'sounds', 'auto-accept', 'quiet-hours'] as const
@@ -303,7 +304,7 @@ function AutoAcceptChoices() {
           <Text style={{ color: colors.ink, fontWeight: '700' }}>No favorite riders yet.</Text>
         ) : autoAccept.favoriteRiders.map((rider) => (
           <View key={rider.id} style={styles.row}>
-            <Text style={{ color: colors.title, fontWeight: '800', flex: 1 }}>{rider.name}</Text>
+            <Text style={{ color: colors.title, fontWeight: '800', flex: 1 }}>{riderDriverFirstName(rider.name, 'Rider') || 'Rider'}</Text>
             <Pressable
               onPress={() => setAutoAccept({ favoriteRiders: autoAccept.favoriteRiders.filter((row) => row.id !== rider.id) })}
               accessibilityRole="button"

@@ -4,6 +4,7 @@
  * In-trip remaining road distance lives in roadFollow.js and does not call Directions.
  */
 import { driverApproach, formatDriverDistance, OPEN_POOL_COPY, PREFERRED_CANCELED_COPY, PREFERRED_MATCH_COPY } from './drivers.js'
+import { riderDriverFirstName } from '../../shared/riderDriverPrivacy.js'
 
 export const DRIVER_CANCELED_RIDER_COPY = "Your driver had to cancel. We're finding you another driver now. You won't be charged for this."
 
@@ -63,10 +64,10 @@ export function showSearchTheater(status) {
 /** Title for the accepted-driver card. The open-pool placeholder is not a person. */
 export function liveDriverTitle(personName, fallback) {
   const assigned = typeof personName === 'string' ? personName.trim() : ''
-  if (assigned) return assigned
+  if (assigned) return riderDriverFirstName(assigned, 'Your driver')
   const name = typeof fallback === 'string' ? fallback.trim() : ''
   if (!name || /^next driver$/i.test(name) || /^your driver$/i.test(name)) return 'Your driver'
-  return name
+  return riderDriverFirstName(name, 'Your driver')
 }
 
 /** Keep a status line when coordinates are missing so the card is not blank. */

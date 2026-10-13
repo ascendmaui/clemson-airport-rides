@@ -9,6 +9,7 @@ import { DRIVER_END_SUCCESS } from '../../shared/driverEndTrip.js'
 import { reconcileActiveTrip, tripTerminalClearReason } from '../../packages/rides-native/activeTripReconcile.js'
 import { sendTripHeartbeat } from '../../packages/rides-native/tripHeartbeat.js'
 import { DriverDeskHeader } from '../components/DriverDeskHeader'
+import { DriverProfilePhoto } from '../components/DriverProfilePhoto'
 import { GameDayStatus } from '../components/GameDayStatus'
 import { GameDayBoard, GameDaySurgeNote } from '../components/GameDayBoard'
 import { useGameDayNotice } from '../lib/useGameDayNotice'
@@ -1067,6 +1068,7 @@ function DriverShell({ driverId }) {
             onStart={() => setShift(true)}
             onStop={() => setShift(false)}
           />
+          <DriverProfilePhoto />
           {online && (
           <p style={{ fontSize: 13, color: 'var(--ink-secondary)', marginBottom: 12 }}>
             Carpool offers pay more than a solo trip — take those first.

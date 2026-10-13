@@ -1,4 +1,5 @@
 import { Text, View } from 'react-native'
+import { riderDriverFirstName } from '../../../shared/riderDriverPrivacy.js'
 import { Card, Primary } from '@/components/chrome'
 import { useTheme } from '@/lib/theme'
 import {
@@ -32,7 +33,7 @@ export function StopList({ stops, busy, onAction }: {
         const active = stop.index === current
         const op = active ? stopNextOp(stop) : null
         const label = active ? stopActionLabel(stop) : null
-        const riderName = (id: string) => stop.riders.find((r) => r.id === id)?.name || 'Rider'
+        const riderName = (id: string) => riderDriverFirstName(stop.riders.find((r) => r.id === id)?.name, 'Rider') || 'Rider'
         return (
           <View
             key={`${stop.index}-${stop.kind}`}
