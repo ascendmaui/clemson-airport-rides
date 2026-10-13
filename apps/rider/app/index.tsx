@@ -433,6 +433,7 @@ export default function RiderHome() {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
           scrollEnabled={sheet.scrollEnabled}
+          pointerEvents={sheet.scrollEnabled ? 'auto' : 'none'}
           refreshControl={(
             <RefreshControl
               refreshing={refreshing}
