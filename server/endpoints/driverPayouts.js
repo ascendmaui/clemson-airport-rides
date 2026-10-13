@@ -13,6 +13,7 @@
  * DISABLE_CRON_ENDPOINTS=1 refuses the sweep and a signed-in retry POST.
  * Dry-run of the sweep is allowed only when ALLOW_STAGING_DRY_RUN=1.
  */
+import { timingSafeEqual } from 'node:crypto'
 import {
   admin, cors, json, userFromAuth, stripeClient,
 } from '../friendRideLib.js'
@@ -28,7 +29,11 @@ export function cronAuthorized(req, secretOverride) {
   const trimmed = String(header).trim()
   const match = trimmed.match(/^Bearer\s+(.+)$/i)
   if (!match) return false
-  return match[1].trim() === secret
+  const token = match[1].trim()
+  const left = Buffer.from(token)
+  const right = Buffer.from(secret)
+  if (left.length === 0 || left.length !== right.length) return false
+  return timingSafeEqual(left, right)
 }
 
 /** Documented Vercel Cron user-agent. https://vercel.com/docs/cron-jobs */
