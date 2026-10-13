@@ -757,7 +757,7 @@ test('fetchOnlineDrivers happy path maps driver profile, status, vehicle, and fi
       color: 'Midnight Silver',
       plate: 'TGR-123',
       seats: 4,
-      service_class: true,
+      service_class: 'comfort',
       autonomous_capable: false,
       tier: 'comfort',
     },

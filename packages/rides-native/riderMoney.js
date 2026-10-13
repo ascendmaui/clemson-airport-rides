@@ -267,6 +267,8 @@ export function parseQuoteResponse(data) {
     tigerPassDiscountCents: num(data?.tigerPassDiscountCents),
     preferredCarTypes: Array.isArray(data?.preferredCarTypes) ? data.preferredCarTypes : [],
     tiers,
+    etaMinutes: num(data?.etaMinutes) || null,
+    tripMinutes: num(data?.tripMinutes) || null,
   }
 }
 

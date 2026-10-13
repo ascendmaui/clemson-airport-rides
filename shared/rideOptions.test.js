@@ -9,6 +9,7 @@ import {
   resolveOfferedTier,
   rideOptionLabel,
   scheduleAheadApplies,
+  standardCardTiming,
   tiersFromDrivers,
   vehicleServesComfort,
 } from './rideOptions.js'
@@ -56,9 +57,11 @@ test('scheduled tiers ignore who is online and hide a class nobody qualified can
   assert.deepEqual(tiersFromDrivers([booked, other], 'scheduled'), ['standard', 'wait', 'carpool'])
 })
 
-test('comfort follows the vehicle class field, not make or model', () => {
+test('comfort matches only service_class comfort, not tier or model', () => {
   assert.equal(vehicleServesComfort({ service_class: 'comfort', make: 'Honda', model: 'Civic' }), true)
-  assert.equal(vehicleServesComfort({ tier: 'comfort' }), true)
+  assert.equal(vehicleServesComfort({ service_class: 'comfort', tier: 'standard' }), true)
+  assert.equal(vehicleServesComfort({ tier: 'comfort' }), false)
+  assert.equal(vehicleServesComfort({ service_class: 'standard', tier: 'comfort' }), false)
   assert.equal(vehicleServesComfort({ service_class: 'standard', tier: 'standard' }), false)
   assert.equal(vehicleServesComfort({ make: 'Honda', model: 'Accord' }), false)
   assert.equal(vehicleServesComfort(null), false)
@@ -122,6 +125,12 @@ test('schedule-ahead 10% applies only past the lead time and does not add an upf
   )
   assert.equal(ignored.fareCents, 2000)
   assert.equal(NO_DRIVERS_AVAILABLE_COPY, 'No drivers available right now')
+})
+
+test('the Standard card shows approximate ETA and trip time', () => {
+  assert.equal(standardCardTiming({ etaMinutes: 4, tripMinutes: 15 }), 'About 4 min away · 15 min trip')
+  assert.equal(standardCardTiming({ etaMinutes: 4 }), 'About 4 min away')
+  assert.equal(standardCardTiming({ tripMinutes: 9 }), '9 min trip')
 })
 
 test('a pickup within 45 minutes conflicts with a reservation', () => {

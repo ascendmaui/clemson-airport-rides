@@ -8,7 +8,7 @@ import { messagingGuide } from '../../shared/copy/messaging.js'
 import { HERO_COLLAGE, NIGHT_VENUES } from '../content/images.js'
 import { APP_DOWNLOADS, SUPPORT_EMAIL } from '../../shared/productLinks.js'
 import { RIDE_OPTION_CATALOG, SCHEDULE_AHEAD_DISCOUNT_PCT } from '../../shared/rideOptions.js'
-import { CARPOOL_DISCOUNT_BPS, STUDENT_DISCOUNT_BPS } from '../lib/fareRates.js'
+import { CARPOOL_SEAT_FRACTION_BPS, STUDENT_DISCOUNT_BPS } from '../lib/fareRates.js'
 import { tigerPassCopy } from '../../shared/tigerPass.js'
 import { STANDING_OFFERS } from '../../shared/standingPromos.js'
 import { currentWeeklyCoupon } from '../../shared/weeklyCoupon.js'
@@ -24,8 +24,8 @@ import {
 const RIDE_TYPE_NOTES = {
   standard: 'The base ride. The fare on the booking screen is the price before you confirm.',
   wait: 'Shown when a driver can serve it. The fare is the quote on that screen. The student discount does not apply.',
-  comfort: 'Newer cars. Only a vehicle marked Extra Comfort can take this ride.',
-  carpool: `${CARPOOL_DISCOUNT_BPS / 100}% off the Standard fare for each seat. Book 1 or 2 seats. Drivers see it labeled Carpool, and it is offered to the same cars as Standard. Two separate carpool requests are not combined into one car.`,
+  comfort: 'Nicer cars. Only a vehicle with service class comfort can take this ride.',
+  carpool: `${CARPOOL_SEAT_FRACTION_BPS / 100}% of the Standard fare per seat when 3 or 4 riders split the trip.`,
 }
 
 const FAQ = [
@@ -35,7 +35,7 @@ const FAQ = [
   },
   {
     q: 'How does carpool pricing work?',
-    a: `Carpool is ${CARPOOL_DISCOUNT_BPS / 100}% off the Standard fare per seat, for 1 or 2 seats. It is dispatched like Standard. Two separate carpool requests are not combined into one car.`,
+    a: `Carpool is ${CARPOOL_SEAT_FRACTION_BPS / 100}% of the Standard fare per seat when 3 or 4 riders split the trip. Pickup and drop-off each need to be nearby, and the times need to fall in the same window. Each rider is pre-authorized for their own seat. There is no deposit.`,
   },
   {
     q: 'Who gets the student discount?',

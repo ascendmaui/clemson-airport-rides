@@ -159,7 +159,7 @@ function fleetNote(fleet: FleetChoice): string {
     case 'comfort':
       return 'Extra Comfort vehicle.'
     case 'carpool':
-      return 'Carpool seat. Any standard-eligible car.'
+      return 'Carpool seat. Half of Standard when 3 or 4 nearby riders share the trip.'
     default: {
       const unknown: never = fleet
       return unknown

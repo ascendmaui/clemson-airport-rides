@@ -115,6 +115,8 @@ test('quote parser drops a stale deposit and uses the new cash remainder', () =>
     tigerPassDiscountCents: 0,
     preferredCarTypes: [],
     tiers: [],
+    etaMinutes: null,
+    tripMinutes: null,
   })
   const passQuote = parseQuoteResponse({
     tigerPassApplied: true,
