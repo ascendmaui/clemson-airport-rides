@@ -7,6 +7,7 @@
 import { planCarpoolFill } from '../shared/carpoolSeatMatch.js'
 import { readDriverPushToken } from './driverPushToken.js'
 import { sendExpoPush } from './expoPush.js'
+import { noteExpoPushResult } from './expoPushReceipts.js'
 
 function queueMissing(error) {
   const message = String(error?.message || error || '')
@@ -128,6 +129,7 @@ export async function enrollCarpoolSeat(sb, input = {}, deps = {}) {
         channelId: 'ride-requests',
         data: plan.push.data,
       })
+      await noteExpoPushResult(sb, { push: sent, token, ownerId: plan.driverId, ownerRole: 'driver' })
     } catch (error) {
       sent = { sent: false, reason: error?.message || 'push_failed' }
     }
