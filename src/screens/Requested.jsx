@@ -1,4 +1,6 @@
 import { uniqueChannelTopic } from '../../packages/rides-native/realtimeChannel.js'
+import { sendTripHeartbeat } from '../../packages/rides-native/tripHeartbeat.js'
+import { canDriverEnd } from '../../shared/driverEndTrip.js'
 import { trackingIssue, staleEtaLine, withTrackingTimeout, onTrackingResume } from '../../packages/rides-native/tracking.js'
 import { useEffect, useRef, useState } from 'react'
 import { PrimaryButton } from '../components/PrimaryButton'
@@ -130,6 +132,7 @@ export function Requested({ dest = 'GSP Airport', trip = '', driver = 'your driv
       }
       if (!alive) return
       setTripRow(row)
+      if (canDriverEnd(row.status)) void sendTripHeartbeat(supabase, row.id)
       setResolvedDriverId(data.driver_id || '')
       const needsTip = shouldPromptRiderTip(row, user?.id)
       if (needsTip && !tipPrompted.current) {

@@ -9,6 +9,7 @@ import { sweepTripStatusNotices } from '../tripStatusNotices.js'
 import { sweepSearchTimeouts } from '../searchTimeoutSweep.js'
 import { sweepFlightArrivals } from '../flightArrivalsSweep.js'
 import { sweepEventDriverNudges } from '../eventDriverNudges.js'
+import { sweepStaleTrips } from '../staleTripSweep.js'
 
 export const SWEEPS = [
   { name: 'canceled_holds', run: sweepCanceledHolds },
@@ -21,6 +22,8 @@ export const SWEEPS = [
   { name: 'flight-arrivals', run: sweepFlightArrivals },
   // Clemson calendar: one pre-event supply push per event, drivers only.
   { name: 'event-driver-nudges', run: sweepEventDriverNudges },
+  // Active trips with no rider and no driver signal. Releases the hold, never captures.
+  { name: 'stale-trips', run: sweepStaleTrips },
 ]
 
 function headerValue(headers, name) {
