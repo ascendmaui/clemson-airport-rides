@@ -97,3 +97,13 @@ export function decideGoPress({ goingOnline, documents, dueAt, now = new Date(),
   }
   return { outcome: 'online', tone: 'green', proceed: true, title: '', items: [] }
 }
+
+/**
+ * Idle GO color, before the driver taps.
+ * Green when documents and inspection are clear and they can go online.
+ * Orange when files are missing, unapproved, overdue, or the application is on hold.
+ */
+export function idleGoTone({ documents, dueAt, now = new Date(), canGoOnline = false } = {}) {
+  const decision = decideGoPress({ goingOnline: true, documents, dueAt, now, canGoOnline })
+  return decision.tone === 'green' ? 'green' : 'orange'
+}

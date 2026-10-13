@@ -25,7 +25,7 @@ import { HOME_CLUTTER_SHIFT, HOME_CLUTTER_SPRING, homeClutterTranslateY } from '
 import { driverPresence, goOffline, goOnline, usePresence } from '@/lib/presence'
 import { fetchDriverApplication } from 'rides-native/drivers'
 import { fetchInspectionDeadline, fetchMyDriverDocuments } from 'rides-native/driverOnboardingClient'
-import { decideGoPress, type GoTone } from 'rides-native/goPress'
+import { decideGoPress, idleGoTone } from 'rides-native/goPress'
 import { offerPayoutFigures } from 'rides-native/offerRoute.js'
 import {
   DOCUMENTS_GO_ONLINE_COPY,
@@ -144,7 +144,6 @@ export default function DriverHome() {
   const [reason, setReason] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
-  const [goTone, setGoTone] = useState<GoTone>('orange')
   const [goCue, setGoCue] = useState(0)
   const [documents, setDocuments] = useState<DocumentRow[] | null>(null)
   const [inspectionDueAt, setInspectionDueAt] = useState<string | null>(null)
@@ -190,6 +189,10 @@ export default function DriverHome() {
   const showDocumentGate = Boolean(user && documentGate && !documentGate.allowed)
   const showInspectionGate = Boolean(user && !showDocumentGate && !inspectionGate.allowed)
   const showInspectionReminder = Boolean(user && !showDocumentGate && inspectionGate.allowed && inspectionReminder)
+  const idleTone = useMemo(
+    () => idleGoTone({ documents, dueAt: inspectionDueAt, canGoOnline }),
+    [documents, inspectionDueAt, canGoOnline],
+  )
   const clutterY = useSharedValue(homeClutterTranslateY(online))
   const [clutterInteractive, setClutterInteractive] = useState(!online)
   useEffect(() => {
@@ -397,19 +400,14 @@ export default function DriverHome() {
         canGoOnline,
       })
       if (decision.outcome === 'attention') {
-        setGoTone('orange')
         setError(null)
         router.push({ pathname: '/documents', params: { attention: '1' } })
         return
       }
       if (decision.outcome !== 'online') {
-        setGoTone('orange')
         setError(gate.body)
         return
       }
-      setGoTone('green')
-    } else {
-      setGoTone('orange')
     }
     setBusy(true)
     setError(null)
@@ -426,7 +424,6 @@ export default function DriverHome() {
       AccessibilityInfo.announceForAccessibility(nextOnline ? 'You are now online' : 'You are now offline')
       await refresh()
     } catch (err) {
-      if (nextOnline) setGoTone('orange')
       setError(err instanceof Error ? err.message : 'Could not update online status')
     } finally {
       setBusy(false)
@@ -642,6 +639,7 @@ export default function DriverHome() {
                         : demand.updatedAt ? 'Quiet right now · updates every 30 s' : 'Loading live demand…'
                       : heatLoading ? 'Loading campus demand…' : `${heatCaption}${heatBlended ? ' · Live + typical' : ''}`}
                 </Text>
+                {canSeeOffers && !desk?.active ? <ForecastCard /> : null}
               </>
             ) : null}
           </View>
@@ -694,7 +692,6 @@ export default function DriverHome() {
               />
             </View>
           ) : null}
-          {canSeeOffers && !desk?.active ? <ForecastCard /> : null}
           {!online ? (
             <GameDaySurgeLine
               model={gameDayExperience.ready ? gameDayExperience.model : null}
@@ -767,7 +764,7 @@ export default function DriverHome() {
               <GoButton
                 online={online}
                 busy={busy}
-                tone={goTone}
+                tone={idleTone}
                 cue={goCue}
                 onPress={toggle}
               />

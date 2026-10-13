@@ -39,3 +39,10 @@ export function decideGoPress(input: {
   now?: Date
   canGoOnline?: boolean
 }): GoDecision
+
+export function idleGoTone(input?: {
+  documents?: unknown[] | null
+  dueAt?: unknown
+  now?: Date
+  canGoOnline?: boolean
+}): 'green' | 'orange'

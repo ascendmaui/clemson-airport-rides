@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { REQUIRED_DOCUMENTS } from '../../shared/driverOnboarding.js'
 import { ATTENTION_COPY } from './documentCategories.js'
-import { attentionRequiredItems, decideGoPress } from './goPress.js'
+import { attentionRequiredItems, decideGoPress, idleGoTone } from './goPress.js'
 
 function approvedRows(overrides = {}) {
   return REQUIRED_DOCUMENTS.map((doc) => ({
@@ -85,6 +85,15 @@ test('approved documents do not go online when the application itself is not cle
   assert.equal(decision.tone, 'orange')
   assert.equal(decision.proceed, false)
   assert.deepEqual(decision.items, [])
+})
+
+test('idle GO is green when the driver is clear and orange when documents are missing', () => {
+  assert.equal(idleGoTone({ documents: approvedRows(), canGoOnline: true }), 'green')
+  assert.equal(idleGoTone({ documents: [], canGoOnline: true }), 'orange')
+  assert.equal(idleGoTone({ documents: null, canGoOnline: true }), 'orange')
+  assert.equal(idleGoTone({ documents: approvedRows(), canGoOnline: false }), 'orange')
+  const overdue = new Date('2020-01-01T00:00:00Z').toISOString()
+  assert.equal(idleGoTone({ documents: approvedRows(), dueAt: overdue, canGoOnline: true }), 'orange')
 })
 
 test('attention items stay empty once every required file is approved', () => {
