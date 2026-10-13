@@ -156,6 +156,14 @@ exports[`Driver Offer Card snapshot 1`] = `
               "children": []
             },
             {
+              "name": "OfferRouteMap",
+              "children": []
+            },
+            {
+              "name": "View",
+              "children": []
+            },
+            {
               "name": "Text",
               "children": []
             },

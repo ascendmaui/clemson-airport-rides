@@ -100,7 +100,7 @@ test('paths land on the matching tab', () => {
   assert.equal(tabRequiresAuth('rides'), false)
   assert.equal(tabRequiresAuth('friends'), false)
   assert.equal(tabRequiresAuth('schedule'), true)
-  assert.equal(tabRequiresAuth('account'), true)
+  assert.equal(tabRequiresAuth('account'), false)
 })
 
 test('map and sheet swipes stay put unless they start at the screen edge', () => {

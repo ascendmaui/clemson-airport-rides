@@ -73,7 +73,7 @@ def circle_path(cx: float, cy: float, radius: float, sweep: int) -> str:
     )
 
 
-def pin_path(cx: float = 512, cy: float = 430, radius: float = 196, tip: float = 804) -> str:
+def pin_path(cx: float = 512, cy: float = 500, radius: float = 196, tip: float = 874) -> str:
     left = cx - radius
     right = cx + radius
     return (
@@ -195,14 +195,11 @@ def rider_svg() -> str:
       <stop offset="55%" stop-color="#FFFFFF" stop-opacity="0.08"/>
       <stop offset="100%" stop-color="#FFFFFF" stop-opacity="0"/>
     </radialGradient>
-    <filter id="innerGlow" x="-35%" y="-35%" width="170%" height="170%" color-interpolation-filters="sRGB">
-      <feGaussianBlur stdDeviation="18"/>
-    </filter>
     <clipPath id="pinClip"><path d="{pin}"/></clipPath>
     <mask id="pinMono" maskUnits="userSpaceOnUse">
       <rect width="1024" height="1024" fill="#000000"/>
       <path d="{pin}" fill="#FFFFFF"/>
-      <g transform="translate(512 448)" fill="#000000">
+      <g transform="translate(512 518)" fill="#000000">
         <path d="{body}"/>
         <circle cx="-62" cy="52" r="20"/>
         <circle cx="64" cy="52" r="20"/>
@@ -217,12 +214,12 @@ def rider_svg() -> str:
   <g id="glyph">
     <path d="{pin}" fill="url(#pinBody)"/>
     <g clip-path="url(#pinClip)">
-      <ellipse cx="430" cy="360" rx="150" ry="90" fill="url(#pinGlow)" filter="url(#innerGlow)"/>
-      <ellipse cx="390" cy="330" rx="120" ry="48" fill="#FFFFFF" fill-opacity="0.55"/>
+      <ellipse cx="430" cy="430" rx="150" ry="90" fill="url(#pinGlow)"/>
+      <ellipse cx="390" cy="400" rx="120" ry="48" fill="#FFFFFF" fill-opacity="0.55"/>
+      <path d="{pin}" fill="none" stroke="url(#pinRim)" stroke-width="10"/>
     </g>
-    <path d="{pin}" fill="none" stroke="url(#pinRim)" stroke-width="10"/>
   </g>
-  <g id="accent" transform="translate(512 448)">
+  <g id="accent" transform="translate(512 518)">
     <path d="{body}" fill="#F56600"/>
     <path d="{window}" fill="#FFF6EA"/>
     <circle cx="-62" cy="52" r="20" fill="#7A2A00"/>
@@ -238,7 +235,7 @@ def rider_svg() -> str:
 
 
 def driver_svg() -> str:
-    cx, cy = 512.0, 528.0
+    cx, cy = 512.0, 512.0
     outer, inner = 214.0, 148.0
     ring = circle_path(cx, cy, outer, 1) + " " + circle_path(cx, cy, inner, 0)
     spokes = " ".join(

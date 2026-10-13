@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """Synthesize an original rider match chime.
 
-Bright three-note rising major triad (E–G#–B) with a soft attack, short
-damped reverb, and no sampled or trademarked material. Writes a 44.1 kHz
-WAV master and an AAC M4A normalized near -16 LUFS with true-peak headroom.
+Short warm rising chime under 400 ms (G4–B4–D5), the same family as the
+driver GO cue. Soft attack, exponential decay, no sampled material.
+Writes a 44.1 kHz WAV master and an AAC M4A normalized near -16 LUFS
+with true peak at or below -1 dBTP.
 """
 
 from __future__ import annotations
@@ -18,12 +19,12 @@ from pathlib import Path
 import numpy as np
 
 SR = 44100
-DURATION = 1.35
-# E major: E5, G#5, B5. Original intervals, not a borrowed melody.
+DURATION = 0.36
+# G4, B4, D5. Warm rising triad, same family as the driver GO chime.
 NOTES = (
-    (659.255, 0.00, 0.72),
-    (830.609, 0.155, 0.86),
-    (987.767, 0.325, 1.00),
+    (392.00, 0.00, 0.55),
+    (493.88, 0.08, 0.62),
+    (587.33, 0.16, 0.70),
 )
 PARTIALS = (
     (1.0, 1.00, 0.42),
@@ -214,7 +215,17 @@ def main() -> None:
     write_wav(raw, synthesize())
     stats = loudnorm_stats(raw)
     print('measured', {k: stats[k] for k in ('input_i', 'input_tp', 'input_lra', 'target_offset')})
-    apply_loudnorm(raw, wav, stats)
+    if stats.get('input_i') in (None, '-inf', 'inf') or stats.get('target_offset') in ('inf', '-inf'):
+        # Under 400 ms there is no integrated LUFS gate. Hold the peak at -1 dBTP.
+        ceiling = 10 ** (-1.0 / 20.0)
+        with wave.open(str(raw), 'rb') as handle:
+            frames = np.frombuffer(handle.readframes(handle.getnframes()), dtype=np.int16).astype(np.float64)
+        peak = float(np.max(np.abs(frames))) or 1.0
+        scaled = np.clip(frames * (ceiling * 32767.0 / peak), -32767, 32767)
+        write_wav(wav, scaled / 32767.0)
+        print('peak-ceiling -1 dBTP')
+    else:
+        apply_loudnorm(raw, wav, stats)
     raw.unlink()
     encode_m4a(wav, m4a)
     measure(wav)

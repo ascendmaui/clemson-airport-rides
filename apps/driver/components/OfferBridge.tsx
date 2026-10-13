@@ -24,6 +24,7 @@ import { isSyntheticOffer } from 'rides-native/syntheticOffers'
 import { formatCents, type DriverCard } from 'rides-native/tripTags'
 import { formatBoostBadge } from '../../../shared/scheduledBoost.js'
 import { offerHourly, pickupMiles, EXCLUSIVE_SECONDS } from 'rides-native/offerLadder.js'
+import { homeIsShowingOffer, offerAcceptSeconds } from 'rides-native/offerStack.js'
 import { WorthItLegend } from 'rides-native/WorthItLegend'
 import { shouldAutoAccept } from 'rides-native/autoAccept.js'
 
@@ -32,7 +33,8 @@ type Banner = {
   title: string
   body: string
   tier: string
-  shownAt: number
+  offerExpiresAt: string | null
+  offerPhase: string | null
   hourlyCents: number | null
 }
 
@@ -62,7 +64,15 @@ export function OfferBridge() {
     const boostBit = (card.boostDriverCents || 0) > 0 ? ` · ${formatBoostBadge(card.boostDriverCents || 0)}` : ''
     const body = promo?.body || `${formatCents(card.driverNetCents)}${boostBit} · ${card.pickupLabel} → ${card.dropoffLabel}`
     const hourlyCents = offerHourly(card, driver && driver.lat != null && driver.lng != null ? { lat: driver.lat, lng: driver.lng } : undefined).hourlyCents
-    setBanner({ id: card.id, title, body, tier: card.tier || 'standard', shownAt: Date.now(), hourlyCents })
+    setBanner({
+      id: card.id,
+      title,
+      body,
+      tier: card.tier || 'standard',
+      offerExpiresAt: card.offerExpiresAt || null,
+      offerPhase: card.offerPhase || null,
+      hourlyCents,
+    })
     AccessibilityInfo.announceForAccessibility(`${title}. ${body}`)
   }
 
@@ -142,8 +152,6 @@ export function OfferBridge() {
         }
         if (inAppRideAlert()) {
           showBanner(next, driver)
-          armPulse(next.tier || 'standard')
-          showBanner(next)
           // Quiet hours / DND: the banner still shows, silently.
           if (alertOk) armPulse(next.tier || 'standard')
           return
@@ -168,12 +176,15 @@ export function OfferBridge() {
       if (tripId && seen.current.has(tripId)) return
       if (tripId) seen.current.add(tripId)
       const tier = typeof content.data?.tier === 'string' ? content.data.tier : 'standard'
+      const expiresAt = typeof content.data?.offerExpiresAt === 'string' ? content.data.offerExpiresAt : null
+      const offerPhase = typeof content.data?.offerPhase === 'string' ? content.data.offerPhase : null
       setBanner({
         id: tripId || `push-${Date.now()}`,
         title: content.title || 'New ride request',
         body: content.body || 'Open the queue to respond.',
         tier,
-        shownAt: Date.now(),
+        offerExpiresAt: expiresAt,
+        offerPhase,
         hourlyCents: null,
       })
       if (newRideAlertAllowed({ online: true, prefs })) armPulse(tier)
@@ -188,38 +199,26 @@ export function OfferBridge() {
     }
   }, [autoAccept, pulse, router, startRequestPulse, stopRequestPulse, user?.id])
 
-  if (!banner) return null
-  const left = Math.max(0, EXCLUSIVE_SECONDS - Math.floor((now - banner.shownAt) / 1000))
-  if (left === 0 && now - banner.shownAt > EXCLUSIVE_SECONDS * 1000 + 400) return null
+  if (!banner || homeIsShowingOffer(banner.id)) return null
+  const clock = offerAcceptSeconds({
+    offerExpiresAt: banner.offerExpiresAt,
+    offerPhase: banner.offerPhase,
+  }, now)
+  if (clock && clock.seconds <= 0) return null
+  const leftLabel = clock
+    ? (clock.kind === 'pool' ? `Pool · ${clock.seconds}s left` : `${clock.seconds}s to accept`)
+    : null
   return (
     <View pointerEvents="box-none" style={[styles.wrap, { top: insets.top + 8 }]}>
-      <GlassCard app="driver" scheme={scheme} selected style={[styles.card, { backgroundColor: colors.card, borderColor: colors.orange }]}>
-        <Pressable
-          onPress={() => {
-            setBanner(null)
-            router.push('/queue')
-          }}
-          accessibilityRole="button"
-          accessibilityLabel={`${banner.title}. ${banner.body}. ${left} seconds to accept.`}
-          style={{ gap: 4 }}
-        >
-          <Text style={[styles.kicker, { color: colors.purple }]}>RIDE REQUEST</Text>
-          <Text style={[styles.title, { color: colors.title }]}>{banner.title}</Text>
-          <Text style={{ color: colors.ink }}>{banner.body}</Text>
-          <Text style={[styles.count, { color: colors.orange }]}>{left}s to accept</Text>
-        </Pressable>
-        <WorthItLegend hourlyCents={banner.hourlyCents} colors={colors} />
-      </GlassCard>
       <Pressable
         onPress={() => {
-          // The driver has seen it: stop the 1.5 s buzz/chime loop right away.
           if (pulseStop.current) clearTimeout(pulseStop.current)
           stopRequestPulse()
           setBanner(null)
           router.push('/queue')
         }}
         accessibilityRole="button"
-        accessibilityLabel={`${banner.title}. ${banner.body}. ${left} seconds to accept.`}
+        accessibilityLabel={leftLabel ? `${banner.title}. ${banner.body}. ${leftLabel}.` : `${banner.title}. ${banner.body}.`}
         style={[styles.card, { backgroundColor: 'transparent', borderColor: colors.orange, overflow: 'hidden' }]}
       >
         <GlassCard app="driver" scheme={scheme} pointerEvents="none" selected style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }} />
@@ -229,7 +228,8 @@ export function OfferBridge() {
         </View>
         <Text style={[styles.title, { color: colors.title }]}>{banner.title}</Text>
         <Text style={{ color: colors.ink }}>{banner.body}</Text>
-        <Text style={[styles.count, { color: colors.orange }]}>{left}s to accept</Text>
+        {leftLabel ? <Text style={[styles.count, { color: colors.orange }]}>{leftLabel}</Text> : null}
+        <WorthItLegend hourlyCents={banner.hourlyCents} colors={colors} />
       </Pressable>
     </View>
   )

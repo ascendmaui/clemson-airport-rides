@@ -280,8 +280,8 @@ export const CampusMap = forwardRef<CampusMapHandle, CampusMapProps>(function Ca
         showsUserLocation={false}
       >
         <DemandHeatLayer spots={spots} zones={tigerZones} scheme={scheme} enabled={showHeat} />
-        <Marker coordinate={STADIUM} pinColor={colors.orange} title="Memorial Stadium" />
-        <Marker coordinate={DOWNTOWN} pinColor={colors.purple} title="Downtown Clemson" />
+        <Marker coordinate={STADIUM} pinColor={colors.orange} title="Memorial Stadium" anchor={{ x: 0.5, y: 1 }} />
+        <Marker coordinate={DOWNTOWN} pinColor={colors.purple} title="Downtown Clemson" anchor={{ x: 0.5, y: 1 }} />
         {showHeat
           ? tigerZones.map((zone: TigerHeatZone) => (
               <Marker
@@ -358,7 +358,7 @@ export const CampusMap = forwardRef<CampusMapHandle, CampusMapProps>(function Ca
             coordinate={{ latitude: pin.latitude, longitude: pin.longitude }}
             title={pin.title}
             pinColor={pin.badge ? undefined : pin.color}
-            anchor={pin.badge ? { x: 0.5, y: 0.5 } : undefined}
+            anchor={pin.badge ? { x: 0.5, y: 0.5 } : { x: 0.5, y: 1 }}
           >
             {pin.badge ? (
               <View style={[styles.stop, { backgroundColor: pin.color }]}>
@@ -368,7 +368,7 @@ export const CampusMap = forwardRef<CampusMapHandle, CampusMapProps>(function Ca
           </Marker>
         ))}
         {userCoordinate ? (
-          <Marker coordinate={userCoordinate} pinColor={colors.purple} title="You" />
+          <Marker coordinate={userCoordinate} pinColor={colors.purple} title="You" anchor={{ x: 0.5, y: 1 }} />
         ) : null}
         {searchMotion
           ? simulatedFleet.map((car) => {
