@@ -103,7 +103,7 @@ export default function DriverHome() {
   const { colors, scheme, earningsPrivate, setEarningsPrivate, autoAccept, setAutoAccept } = useTheme()
   const shadow = useCardShadow()
   const { user, configured } = useAuth()
-  const { pulse } = useFeedback()
+  const { pulse, pulseShift } = useFeedback()
   const [desk, setDesk] = useState<DriverDesk | null>(null)
   const [todayCents, setTodayCents] = useState(0)
   const [weekCents, setWeekCents] = useState(0)
@@ -298,7 +298,7 @@ export default function DriverHome() {
         await publishDriverCapacity(supabase, user.id, desk?.vehicle?.seats)
         setFocusToken((value: number) => value + 1)
       }
-      pulse('online')
+      pulseShift(nextOnline ? 'GO' : 'END')
       AccessibilityInfo.announceForAccessibility(nextOnline ? 'You are now online' : 'You are now offline')
       await refresh()
     } catch (err) {

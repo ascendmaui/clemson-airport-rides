@@ -46,7 +46,7 @@ test('tapping END minimizes the bottom cluster together and GO restores it', () 
   assert.match(home, /setRideAlertSurface\(\{ online \}\)/)
   assert.match(home, /if \(nextOnline\) await goOnline\(user\.id, fix\)/)
   assert.match(home, /else await goOffline\(user\.id\)/)
-  assert.match(home, /pulse\('online'\)/)
+  assert.match(home, /pulseShift\(nextOnline \? 'GO' : 'END'\)/)
   assert.doesNotMatch(home, /barY/)
 
   const restored = shift.tap('GO')
