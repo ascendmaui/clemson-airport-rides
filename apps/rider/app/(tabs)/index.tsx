@@ -1,5 +1,5 @@
 import { GlassBadge, Glyph } from 'rides-native/icons'
-import { useLocalSearchParams, useRouter } from 'expo-router'
+import { useGlobalSearchParams, useRouter } from 'expo-router'
 import * as Location from 'expo-location'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
@@ -19,7 +19,7 @@ import { pressStyle, useEnterMotion } from '@/components/enter'
 import { CampusMap } from '@/components/CampusMap'
 import type { CampusMapHandle, LatLng, MapKind } from '@/components/mapTypes'
 import { mapKindLabel } from '@/components/mapTypes'
-import { MainTabs } from '@/components/MainTabs'
+import { TabSwipeRegion, useTabSwipeMeasure, useTabSwipeRemeasure } from '@/components/MainTabPager'
 import { Skeleton } from '@/components/Skeleton'
 import { loadBusySpots, type BusySpot } from '@/lib/busySpots'
 import { useAuth } from '@/lib/auth'
@@ -34,7 +34,7 @@ import { gameDayNotice, type GameDayNotice } from 'rides-native/gameDayNotice.js
 import { GameDayBanner } from 'rides-native/GameDayBoard.jsx'
 import { useGameDayExperience } from 'rides-native/useGameDayExperience.js'
 import { studentSurfaceCopy } from 'rides-native/riderMoney.js'
-import { dueScheduleReminders } from '../../../src/lib/scheduledRideModel.js'
+import { dueScheduleReminders } from '../../../../src/lib/scheduledRideModel.js'
 import { supabase } from '@/lib/supabase'
 import { useStudentStatus } from '@/lib/useStudentStatus'
 import { RIDER_TRACK_STATUSES, riderLiveView } from 'rides-native/liveTrip'
@@ -64,9 +64,12 @@ const QUICK_ACTIONS = [
   { id: 'history', label: 'Your rides', detail: 'Trip history', icon: 'history' as const, href: '/history' as const },
 ]
 
-export default function RiderHome() {
+export function RiderHome() {
   const router = useRouter()
-  const routeParams = useLocalSearchParams<{ tier?: string | string[] }>()
+  const routeParams = useGlobalSearchParams<{ tier?: string | string[] }>()
+  const mapSwipe = useTabSwipeMeasure('map')
+  const sheetSwipe = useTabSwipeMeasure('sheet')
+  const remeasureTabs = useTabSwipeRemeasure()
   const presetTier = oneParam(routeParams.tier)
   const tierParams = presetTier === 'standard' || presetTier === 'wait' || presetTier === 'comfort' || presetTier === 'carpool'
     ? { tier: presetTier }
@@ -282,7 +285,14 @@ export default function RiderHome() {
 
   return (
     <View style={styles.screen}>
-      <View style={styles.mapSlot}>
+      <View
+        ref={(node) => {
+          mapSwipe.ref.current = node
+        }}
+        onLayout={mapSwipe.onLayout}
+        collapsable={false}
+        style={styles.mapSlot}
+      >
         <CampusMap
           ref={mapRef}
           spots={spots}
@@ -360,7 +370,13 @@ export default function RiderHome() {
         </Animated.View>
       </View>
 
-      <Animated.View style={[styles.sheetWrap, lift(colors, 'float'), sheetMotion]}>
+      <Animated.View
+        ref={(node) => {
+          sheetSwipe.ref.current = node
+        }}
+        onLayout={sheetSwipe.onLayout}
+        style={[styles.sheetWrap, lift(colors, 'float'), sheetMotion]}
+      >
       <Reanimated.View style={[styles.sheet, sheet.sheetStyle]}>
         <GestureDetector gesture={sheet.handlePan}>
           <View
@@ -432,6 +448,8 @@ export default function RiderHome() {
           contentContainerStyle={styles.sheetContent}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
+          onScroll={remeasureTabs}
+          scrollEventThrottle={32}
           scrollEnabled={sheet.scrollEnabled}
           pointerEvents={sheet.scrollEnabled ? 'auto' : 'none'}
           refreshControl={(
@@ -502,6 +520,7 @@ export default function RiderHome() {
               <Text style={styles.liveBody}>{item.body}</Text>
             </Pressable>
           ))}
+          <TabSwipeRegion>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
             {suggestions.map((stop: { id: string; label: string }) => (
               <Pressable
@@ -522,6 +541,7 @@ export default function RiderHome() {
               </Pressable>
             ))}
           </ScrollView>
+          </TabSwipeRegion>
           {query.trim().length >= 2 && suggestions.length === 0 ? (
             <Text style={styles.locateNote}>No campus or airport match. Try Grand Marc, the stadium, or GSP.</Text>
           ) : null}
@@ -567,6 +587,7 @@ export default function RiderHome() {
           </View>
 
           <Text style={styles.sectionLabel}>Places</Text>
+          <TabSwipeRegion>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.shortcuts}>
             {PLACES.map((shortcut) => (
               <Pressable
@@ -583,6 +604,7 @@ export default function RiderHome() {
               </Pressable>
             ))}
           </ScrollView>
+          </TabSwipeRegion>
 
           <View style={[styles.campusCard, lift(colors, 'rest')]}>
             <View style={styles.mapHead}>
@@ -611,6 +633,7 @@ export default function RiderHome() {
               <Skeleton height={32} width="70%" />
             ) : (
               <>
+                <TabSwipeRegion>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
                   {showBusy
                     ? HEAT_WINDOWS.map((window) => (
@@ -625,6 +648,7 @@ export default function RiderHome() {
                   <Pill label={gameNotice == null ? 'Game day…' : gameNotice.headline} active={gameDay} />
                   <Pill label={surge ? 'Surge · On' : 'Surge'} active={surge} onPress={() => setSurge((value: boolean) => !value)} />
                 </ScrollView>
+                </TabSwipeRegion>
                 <Text style={styles.caption}>
                   {showBusy ? caption : 'Busy areas are hidden.'}
                   {showBusy && blended ? <Text style={styles.live}>  Live + typical</Text> : null}
@@ -685,11 +709,12 @@ export default function RiderHome() {
         </ScrollView>
       </Reanimated.View>
       </Animated.View>
-      <View onLayout={sheet.onTabLayout}>
-        <MainTabs active="home" />
-      </View>
     </View>
   )
+}
+
+export default function RidesRoute() {
+  return null
 }
 
 function makeStyles(colors: Palette) {

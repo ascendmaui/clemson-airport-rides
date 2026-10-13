@@ -12,6 +12,7 @@ import {
   type Place,
 } from 'rides-native/shared/carpool.js'
 import { EmptyState } from '@/components/carpool/ui'
+import { TabSwipeRegion } from '@/components/MainTabPager'
 import type { Palette } from '@/lib/palette'
 import { addressFromGeocode } from '@/lib/reverseAddress'
 import { suggestSpots, type SpotCandidate } from '@/lib/spotSuggestions'
@@ -244,6 +245,7 @@ export function NeighborhoodPicker({
         </Pressable>
       </View>
       {locateNote ? <Text style={styles.locateNote}>{locateNote}</Text> : null}
+      <TabSwipeRegion>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
         {hot.map((spot: { id: string; label: string; lat: number; lng: number }) => (
           <Chip
@@ -257,9 +259,10 @@ export function NeighborhoodPicker({
           />
         ))}
       </ScrollView>
+      </TabSwipeRegion>
       {liveSuggest ? null : (
         <>
-          <View style={styles.filters}>
+          <TabSwipeRegion style={styles.filters}>
             {FILTERS.map((item) => {
               const on = !query.trim() && group === item.id
               return (
@@ -280,15 +283,17 @@ export function NeighborhoodPicker({
                 </Pressable>
               )
             })}
-          </View>
+          </TabSwipeRegion>
           {query.trim() && results.length === 0 ? (
             <EmptyState title="No campus or airport match" body="Try Grand Marc, College Ave, the stadium, a downtown bar, or GSP." />
           ) : (
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
-              {listed.map((spot: { id: string; label: string; lat: number; lng: number }) => (
-                <Chip key={`list-${spot.id}`} spot={spot} selected={value.label === spot.label} onPress={() => onChange(placeOf(spot))} />
-              ))}
-            </ScrollView>
+            <TabSwipeRegion>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
+                {listed.map((spot: { id: string; label: string; lat: number; lng: number }) => (
+                  <Chip key={`list-${spot.id}`} spot={spot} selected={value.label === spot.label} onPress={() => onChange(placeOf(spot))} />
+                ))}
+              </ScrollView>
+            </TabSwipeRegion>
           )}
         </>
       )}
