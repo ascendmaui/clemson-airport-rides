@@ -134,6 +134,21 @@ export function verdictFromSignals(signals, options = {}) {
   })
 }
 
+/**
+ * Face-match result written onto the license_front row's match_status.
+ * 'matched' is the value already used for a successful document match.
+ */
+export function licenseMatchStatus(signals, reviewStatus) {
+  if (reviewStatus === 'approved') return 'matched'
+  if (signals?.missingLicense || signals?.unavailable || signals?.error) return 'needs_review'
+  const blurry = asFlag(signals?.blurry)
+  const dark = asFlag(signals?.dark)
+  const oneFace = Number(signals?.faceCount) === 1
+  const match = asFlag(signals?.matchesLicense)
+  if (!blurry && !dark && oneFace && !match) return 'mismatch'
+  return 'needs_review'
+}
+
 export function isStoredVerdict(value) {
   return VERDICTS.includes(value)
 }

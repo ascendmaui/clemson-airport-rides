@@ -1,6 +1,6 @@
-import { useRouter } from 'expo-router'
+import { useFocusEffect, useRouter } from 'expo-router'
 import * as ImagePicker from 'expo-image-picker'
-import { useMemo, useState } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
 import { ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { authedJson } from 'rides-native/apiClient'
@@ -25,12 +25,26 @@ export default function ProfilePhotoScreen() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [note, setNote] = useState<string | null>(null)
+  const request = useRef(0)
+
+  useFocusEffect(useCallback(() => {
+    if (!user || !supabase) return undefined
+    const token = ++request.current
+    let alive = true
+    authedJson(supabase, '/api/driver?action=profile-photo')
+      .then((data) => {
+        const photo = (data as { photo?: { reviewStatus?: string, driverMessage?: string } | null })?.photo
+        if (!alive || token !== request.current || !photo?.reviewStatus) return
+        setNote(photo.driverMessage || driverProfilePhotoMessage(photo.reviewStatus))
+      })
+      .catch(() => {})
+    return () => { alive = false }
+  }, [user]))
 
   async function choose(source: 'library' | 'camera') {
     if (!user || !supabase) return
     setBusy(true)
     setError(null)
-    setNote(null)
     try {
       const permission = source === 'camera'
         ? await ImagePicker.requestCameraPermissionsAsync()
@@ -40,6 +54,8 @@ export default function ProfilePhotoScreen() {
         ? await ImagePicker.launchCameraAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.8 })
         : await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.8 })
       if (shot.canceled || !shot.assets?.[0]) return
+      const token = ++request.current
+      setNote(null)
       const asset = shot.assets[0]
       const mime = asset.mimeType || 'image/jpeg'
       if (!mime.startsWith('image/')) throw new Error('Choose a photo.')
@@ -58,7 +74,9 @@ export default function ProfilePhotoScreen() {
         method: 'POST',
         body: { storagePath: path },
       }) as { driverMessage?: string, reviewStatus?: string }
-      setNote(review.driverMessage || driverProfilePhotoMessage(review.reviewStatus))
+      if (token === request.current) {
+        setNote(review.driverMessage || driverProfilePhotoMessage(review.reviewStatus))
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not save that photo')
     } finally {

@@ -76,7 +76,7 @@ export async function listProfilePhotoQueue(sb) {
   if (ids.length) {
     const [people, docs] = await Promise.all([
       sb.from('profiles').select('id, full_name, email').in('id', ids),
-      sb.from('driver_documents').select('profile_id, doc_type, storage_path').in('profile_id', ids),
+      sb.from('driver_documents').select('profile_id, doc_type, storage_path, match_status').in('profile_id', ids),
     ])
     profiles = people?.data || []
     licenses = (docs?.data || []).filter((doc) => doc.doc_type === 'license_front' || doc.doc_type === 'license_back')
@@ -99,6 +99,7 @@ export async function listProfilePhotoQueue(sb) {
       aiVerdict: row.ai_verdict,
       aiConfidence: row.ai_confidence,
       aiReason: row.ai_reason,
+      licenseMatchStatus: licenseByProfile[row.profile_id]?.match_status || null,
       createdAt: row.created_at,
       url: await signedUrl(sb, row.storage_path),
       licenseUrl: licenseByProfile[row.profile_id]

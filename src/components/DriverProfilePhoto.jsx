@@ -22,8 +22,9 @@ export function DriverProfilePhoto() {
     let alive = true
     authedJson(supabase, '/api/driver?action=profile-photo')
       .then((data) => {
-        if (!alive || !data?.photo?.driverMessage) return
-        setNote(data.photo.driverMessage)
+        const photo = data?.photo
+        if (!alive || !photo?.reviewStatus) return
+        setNote(photo.driverMessage || driverProfilePhotoMessage(photo.reviewStatus))
       })
       .catch(() => {})
     return () => { alive = false }

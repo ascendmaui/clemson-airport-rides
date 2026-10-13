@@ -38,7 +38,7 @@ Applicant messages and info requests show on the web driver application and in t
 
 A new `pending_review` application inserts `admin_notifications` (kind `driver_application`).
 
-Driver profile photos that are not auto-approved show in the same Driver review screen, under **Profile photos**: [https://clemsonrides.com/#/admin?tab=applications](https://clemsonrides.com/#/admin?tab=applications). Approve photo or Reject photo is on that screen. Rejection is admin-only. The notification (kind `other`, entity `driver_profile_photo`) opens this tab and includes the reason.
+Driver profile photos that are not auto-approved show in the same Driver review screen, under **Profile photos**: [https://clemsonrides.com/#/admin?tab=applications](https://clemsonrides.com/#/admin?tab=applications). Photos already stored as `pending_manual_review` are in that list too. Approve photo or Reject photo is on that screen. Rejection is admin-only. The notification (kind `other`, entity `driver_profile_photo`) opens this tab and includes the reason. A clear match sets the license row's `match_status` to `matched`. The driver app reads `review_status` and shows Approved when it is `approved`.
 
 ## Support bot
 

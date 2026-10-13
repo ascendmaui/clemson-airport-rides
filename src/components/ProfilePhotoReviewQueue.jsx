@@ -48,7 +48,7 @@ export function ProfilePhotoReviewQueue() {
     <section aria-label="Profile photo review" style={{ marginTop: 16 }}>
       <h2 style={{ fontSize: 18, fontWeight: 800, color: 'var(--purple)', margin: '0 0 6px' }}>Profile photos</h2>
       <p style={{ color: 'var(--ink-secondary)', fontSize: 13, lineHeight: 1.45, marginTop: 0 }}>
-        A clear photo of one face that matches the license is already approved. These are waiting. Rejection stays with an admin.
+        A clear photo of one face that matches the license is already approved. Photos still marked pending manual review are listed here too. Rejection stays with an admin.
       </p>
       {error ? <p role="alert" style={{ color: 'var(--danger)', fontSize: 13 }}>{error}</p> : null}
       {note ? <p style={{ color: 'var(--purple)', fontWeight: 700, fontSize: 13 }}>{note}</p> : null}
@@ -71,7 +71,7 @@ export function ProfilePhotoReviewQueue() {
                 {photo.aiReason || 'Waiting for admin review.'}
               </div>
               <div style={{ fontSize: 12, color: 'var(--ink-secondary)', marginTop: 4 }}>
-                {[photo.aiVerdict, confidence ? `confidence ${confidence}` : null].filter(Boolean).join(' · ')}
+                {[photo.aiVerdict, confidence ? `confidence ${confidence}` : null, photo.licenseMatchStatus ? `license ${photo.licenseMatchStatus}` : null].filter(Boolean).join(' · ')}
               </div>
               <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
                 {photo.url ? (

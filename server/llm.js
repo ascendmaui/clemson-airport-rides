@@ -59,15 +59,22 @@ export function isVisionModelId(modelId) {
 }
 
 /**
- * Profile photo review uses the AI Gateway only.
- * A direct OPENAI_API_KEY is the pay-per-call API and is not used here.
- * Returns null when the gateway is unset or the configured model cannot see images.
+ * Profile photo review prefers the AI Gateway, then the OpenAI key already
+ * used by Help and Support. Returns null when neither key is set, or when
+ * the configured model cannot see images. Callers then send the photo to
+ * the admin queue.
  */
 export function resolveVisionModel() {
-  const gatewayKey = usable(process.env.AI_GATEWAY_API_KEY)
-  if (!gatewayKey) return null
   const requested = clean(process.env.HELP_CHAT_MODEL) || 'gpt-4o-mini'
-  const modelId = requested.includes('/') ? requested : `openai/${requested}`
-  if (!isVisionModelId(modelId)) return null
-  return { model: gateway(modelId), provider: 'gateway', modelId }
+  const gatewayKey = usable(process.env.AI_GATEWAY_API_KEY)
+  if (gatewayKey) {
+    const modelId = requested.includes('/') ? requested : `openai/${requested}`
+    if (isVisionModelId(modelId)) return { model: gateway(modelId), provider: 'gateway', modelId }
+  }
+  const openaiKey = usable(process.env.OPENAI_API_KEY)
+  if (openaiKey.startsWith('sk-') && isVisionModelId(requested)) {
+    const openai = createOpenAI({ apiKey: openaiKey })
+    return { model: openai(requested), provider: 'openai', modelId: requested }
+  }
+  return null
 }

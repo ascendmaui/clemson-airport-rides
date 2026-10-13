@@ -21,9 +21,11 @@ function memorySb() {
     photos: [],
     notifications: [],
     documents: [{
+      id: 'lic-1',
       profile_id: USER,
       doc_type: 'license_front',
       storage_path: `${USER}/license_front/license.jpg`,
+      match_status: null,
     }],
     profiles: [{ id: USER, full_name: 'Ada Driver', email: 'ada@example.com' }],
     bytes: new Uint8Array(20_000),
@@ -154,6 +156,15 @@ test('a clear license match is approved and does not notify an admin', async () 
   assert.equal(sb.state.photos[0].ai_confidence, 0.93)
   assert.match(sb.state.photos[0].ai_reason, /matches the license/)
   assert.notEqual(sb.state.photos[0].review_status, 'rejected')
+  assert.equal(sb.state.documents[0].match_status, 'matched')
+  const loaded = mockRes()
+  await handleProfilePhoto({
+    method: 'GET',
+    url: '/api/driver?action=profile-photo',
+    headers: {},
+  }, loaded, { sb, user: { id: USER } })
+  assert.equal(loaded.json().photo.reviewStatus, 'approved')
+  assert.equal(loaded.json().photo.driverMessage, 'Approved')
 })
 
 test('a blurry photo goes to admin review and creates a notification', async () => {
@@ -179,6 +190,7 @@ test('a blurry photo goes to admin review and creates a notification', async () 
   assert.match(note.body, /blurry/i)
   assert.match(note.title, /Profile photo/)
   assert.notEqual(sb.state.photos[0].review_status, 'rejected')
+  assert.equal(sb.state.documents[0].match_status, 'needs_review')
   const queue = await listProfilePhotoQueue(sb)
   assert.equal(queue.photos.length, 1)
   assert.match(queue.photos[0].aiReason, /blurry/i)
@@ -204,6 +216,7 @@ test('a face that does not match the license goes to admin review', async () => 
   assert.notEqual(sb.state.photos[0].review_status, 'rejected')
   assert.equal(sb.state.notifications.length, 1)
   assert.match(sb.state.notifications[0].body, /does not match/)
+  assert.equal(sb.state.documents[0].match_status, 'mismatch')
 })
 
 test('an AI error goes to admin review and is not a rejection', async () => {
@@ -293,17 +306,22 @@ test('only an admin can reject, and approval keeps the stored AI reason', async 
   assert.equal(rejected.photo.review_note, 'Not the license holder')
 })
 
-test('profile photo review uses the AI Gateway and ignores a direct OpenAI key', () => {
+test('profile photo review prefers the AI Gateway and uses OpenAI only when the gateway is unset', () => {
   const savedGateway = process.env.AI_GATEWAY_API_KEY
   const savedOpenAI = process.env.OPENAI_API_KEY
   const savedModel = process.env.HELP_CHAT_MODEL
   try {
     delete process.env.AI_GATEWAY_API_KEY
-    process.env.OPENAI_API_KEY = 'sk-pay-per-call'
+    delete process.env.OPENAI_API_KEY
+    process.env.HELP_CHAT_MODEL = 'gpt-4o-mini'
     assert.equal(resolveVisionModel(), null)
-    process.env.AI_GATEWAY_API_KEY = 'gateway-test-key'
+    process.env.OPENAI_API_KEY = 'sk-existing-key'
+    const openai = resolveVisionModel()
+    assert.equal(openai.provider, 'openai')
+    assert.equal(openai.modelId, 'gpt-4o-mini')
     process.env.HELP_CHAT_MODEL = 'gpt-3.5-turbo'
     assert.equal(resolveVisionModel(), null)
+    process.env.AI_GATEWAY_API_KEY = 'gateway-test-key'
     process.env.HELP_CHAT_MODEL = 'gpt-4o-mini'
     const resolved = resolveVisionModel()
     assert.equal(resolved.provider, 'gateway')
@@ -320,6 +338,25 @@ test('profile photo review uses the AI Gateway and ignores a direct OpenAI key',
   }
 })
 
+test('photos already pending manual review stay in the admin queue', async () => {
+  const sb = memorySb()
+  sb.state.photos.push({
+    id: 'legacy-1',
+    profile_id: USER,
+    storage_path: photoPath('legacy'),
+    review_status: 'pending_manual_review',
+    ai_verdict: null,
+    ai_reason: null,
+    created_at: '2026-10-01T00:00:00.000Z',
+  })
+  const queue = await listProfilePhotoQueue(sb)
+  assert.equal(queue.photos.length, 1)
+  assert.equal(queue.photos[0].id, 'legacy-1')
+  assert.equal(queue.photos[0].reviewStatus, 'pending_manual_review')
+  assert.equal(queue.photos[0].aiReason, null)
+  assert.equal(queue.photos[0].name, 'Ada Driver')
+})
+
 test('driver and admin screens use the review copy and the applications queue', () => {
   const app = readFileSync(new URL('../apps/driver/app/profile-photo.tsx', import.meta.url), 'utf8')
   const web = readFileSync(new URL('../src/components/DriverProfilePhoto.jsx', import.meta.url), 'utf8')
@@ -329,8 +366,12 @@ test('driver and admin screens use the review copy and the applications queue', 
   assert.equal(PROFILE_PHOTO_APPROVED_COPY, 'Approved')
   assert.equal(PROFILE_PHOTO_CLOSER_LOOK_COPY, "We're taking a closer look — usually within a day.")
   assert.match(app, /\/api\/driver\?action=profile-photo/)
+  assert.match(app, /photo\.reviewStatus/)
+  assert.match(app, /driverProfilePhotoMessage\(photo\.reviewStatus\)/)
+  assert.match(app, /driverProfilePhotoMessage\(review\.reviewStatus\)/)
   assert.doesNotMatch(app, /pending manual review/i)
-  assert.match(web, /driverMessage/)
+  assert.match(web, /photo\.reviewStatus/)
+  assert.match(web, /driverProfilePhotoMessage\(photo\.reviewStatus\)/)
   assert.match(home, /DriverProfilePhoto/)
   assert.match(queue, /#\/admin\?tab=applications/)
   assert.match(queue, /Reason:/)

@@ -1,7 +1,9 @@
 /**
  * Server-side driver profile photo review.
- * Compares the upload with the license image already on file through the
- * AI Gateway vision model. A clear single-face match is approved.
+ * Compares the upload with the license image already on file. The vision
+ * model prefers the AI Gateway and falls back to OPENAI_API_KEY. A clear
+ * single-face match is approved. If neither key is set, the photo waits
+ * in the admin queue.
  * Anything else, including a model error, waits for an admin.
  * Rejection is admin-only.
  */
@@ -10,6 +12,7 @@ import { resolveVisionModel } from './llm.js'
 import {
   adminFallbackEnabled,
   driverProfilePhotoMessage,
+  licenseMatchStatus,
   profilePhotoStoragePath,
   verdictFromSignals,
 } from '../shared/profilePhotoReview.js'
@@ -76,7 +79,7 @@ async function bytesFromStorage(sb, storagePath) {
 async function licenseOnFile(sb, userId) {
   for (const docType of ['license_front', 'license_back']) {
     const row = await sb.from('driver_documents')
-      .select('storage_path, doc_type')
+      .select('id, storage_path, doc_type')
       .eq('profile_id', userId)
       .eq('doc_type', docType)
       .maybeSingle()
@@ -109,45 +112,58 @@ export async function defaultVision(input, deps = {}) {
 }
 
 async function loadSignals({ sb, userId, storagePath, vision }) {
+  let license = null
   try {
-    const license = await licenseOnFile(sb, userId)
+    license = await licenseOnFile(sb, userId)
     if (!license) {
-      return { missingLicense: true, reason: 'No driver license image is on file.' }
+      return {
+        signals: { missingLicense: true, reason: 'No driver license image is on file.' },
+        license: null,
+      }
     }
     const photoMime = mimeFromPath(storagePath)
     const licenseMime = mimeFromPath(license.storage_path)
     if (!photoMime.startsWith('image/') || !licenseMime.startsWith('image/')) {
       return {
-        clear: false,
-        blurry: false,
-        dark: false,
-        faceCount: 0,
-        matchesLicense: false,
-        confidence: null,
-        reason: 'The profile photo and the license on file both need to be images.',
+        signals: {
+          clear: false,
+          blurry: false,
+          dark: false,
+          faceCount: 0,
+          matchesLicense: false,
+          confidence: null,
+          reason: 'The profile photo and the license on file both need to be images.',
+        },
+        license,
       }
     }
     const photoBytes = await bytesFromStorage(sb, storagePath)
     if (photoBytes.length < 12_000) {
       return {
-        clear: false,
-        blurry: true,
-        dark: false,
-        faceCount: 0,
-        matchesLicense: false,
-        confidence: 0.2,
-        reason: 'The profile photo is too small or looks blank.',
+        signals: {
+          clear: false,
+          blurry: true,
+          dark: false,
+          faceCount: 0,
+          matchesLicense: false,
+          confidence: 0.2,
+          reason: 'The profile photo is too small or looks blank.',
+        },
+        license,
       }
     }
     if (photoBytes.length > 8 * 1024 * 1024) {
       return {
-        clear: false,
-        blurry: false,
-        dark: false,
-        faceCount: 0,
-        matchesLicense: false,
-        confidence: null,
-        reason: 'The profile photo is too large to review automatically.',
+        signals: {
+          clear: false,
+          blurry: false,
+          dark: false,
+          faceCount: 0,
+          matchesLicense: false,
+          confidence: null,
+          reason: 'The profile photo is too large to review automatically.',
+        },
+        license,
       }
     }
     const licenseBytes = await bytesFromStorage(sb, license.storage_path)
@@ -156,11 +172,26 @@ async function loadSignals({ sb, userId, storagePath, vision }) {
       license: { bytes: licenseBytes, mime: licenseMime },
     })
     if (seen?.unavailable) {
-      return { unavailable: true, reason: 'Vision review is not configured. Sent to admin review.' }
+      return {
+        signals: { unavailable: true, reason: 'Vision review is not configured. Sent to admin review.' },
+        license,
+      }
     }
-    return seen || { error: true, reason: 'AI review failed.' }
+    return { signals: seen || { error: true, reason: 'AI review failed.' }, license }
   } catch (err) {
-    return { error: true, reason: safeReviewError(err) }
+    return { signals: { error: true, reason: safeReviewError(err) }, license }
+  }
+}
+
+async function recordLicenseMatch(sb, license, signals, reviewStatus) {
+  if (!license?.storage_path) return
+  const matchStatus = licenseMatchStatus(signals, reviewStatus)
+  try {
+    let query = sb.from('driver_documents').update({ match_status: matchStatus })
+    query = license.id ? query.eq('id', license.id) : query.eq('storage_path', license.storage_path)
+    await query
+  } catch (err) {
+    console.error('[profile-photo] license match', safeReviewError(err))
   }
 }
 
@@ -202,7 +233,8 @@ export async function reviewUploadedProfilePhoto({
     return { status: 400, error: 'Upload the photo to your profile photo folder first.' }
   }
   const inspect = vision || ((input) => defaultVision(input))
-  const signals = await loadSignals({ sb, userId, storagePath: path, vision: inspect })
+  const loaded = await loadSignals({ sb, userId, storagePath: path, vision: inspect })
+  const signals = loaded.signals
   const verdict = verdictFromSignals(signals, { fallbackEnabled: adminFallbackEnabled(env) })
   if (verdict.reviewStatus === 'rejected') {
     verdict.reviewStatus = 'pending_admin_review'
@@ -234,6 +266,9 @@ export async function reviewUploadedProfilePhoto({
   }
   const photoId = inserted?.data?.id
   if (!photoId) return { status: 500, error: 'Could not save the profile photo review.' }
+  if (loaded.license) {
+    await recordLicenseMatch(sb, loaded.license, signals, verdict.reviewStatus)
+  }
   let notified = false
   if (verdict.notifyAdmin) {
     try {
