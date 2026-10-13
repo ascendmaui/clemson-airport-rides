@@ -2,27 +2,18 @@ import { Glyph } from 'rides-native/icons'
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react'
 import { Platform, StyleSheet, Text, View } from 'react-native'
 import Constants from 'expo-constants'
-import MapView, { Circle, Marker, Polygon, Polyline, PROVIDER_DEFAULT, type MapStyleElement } from 'react-native-maps'
+import MapView, { Circle, Marker, Polyline, PROVIDER_DEFAULT, type MapStyleElement } from 'react-native-maps'
 import { ANDROID_MAP_UNAVAILABLE, googleMapStyle, nativeMapTilesReady } from 'rides-native/googleMapChrome.js'
 import { lerpHeading, travelBearing } from 'rides-native/roadFollow.js'
-import { heatColor } from 'rides-native/heat.js'
 import { DOWNTOWN, STADIUM } from 'rides-native/places.js'
 import { SIMULATED_FLEET_BADGE, refuseSimulatedDriverTap } from 'rides-native/simulatedDrivers.js'
 import { demoCarPaint, SEARCH_MAP_ZOOM_MS, searchMapRegion } from 'rides-native/searchPreview.js'
 import { useSimulatedFleet } from 'rides-native/useSimulatedFleet.js'
 import { fetchTigerHeatMap } from 'rides-native/tigerHeatClient.js'
-import { toNativeRing, type TigerHeatZone } from 'rides-native/tigerHeat.js'
-import type { BusySpot } from '@/lib/busySpots'
+import type { TigerHeatZone } from 'rides-native/tigerHeat.js'
+import { DemandHeatLayer } from '@/components/DemandHeatLayer'
 import type { CampusMapHandle, CampusMapProps, LatLng, MapPin } from '@/components/mapTypes'
 import { useTheme } from '@/lib/theme'
-
-function rgba(hex: string, alpha: number) {
-  const raw = hex.replace('#', '')
-  const r = parseInt(raw.slice(0, 2), 16)
-  const g = parseInt(raw.slice(2, 4), 16)
-  const b = parseInt(raw.slice(4, 6), 16)
-  return `rgba(${r},${g},${b},${alpha})`
-}
 
 function SearchFleetGlyph({
   heading,
@@ -288,30 +279,9 @@ export const CampusMap = forwardRef<CampusMapHandle, CampusMapProps>(function Ca
         toolbarEnabled={false}
         showsUserLocation={false}
       >
+        <DemandHeatLayer spots={spots} zones={tigerZones} scheme={scheme} enabled={showHeat} />
         <Marker coordinate={STADIUM} pinColor={colors.orange} title="Memorial Stadium" />
         <Marker coordinate={DOWNTOWN} pinColor={colors.purple} title="Downtown Clemson" />
-        {showHeat
-          ? tigerZones.map((zone: TigerHeatZone) => (
-              <Polygon
-                key={`tiger-${zone.id}`}
-                coordinates={toNativeRing(zone.polygon)}
-                fillColor={zone.preview ? 'rgba(245,102,0,0.18)' : 'rgba(245,102,0,0.36)'}
-                strokeColor="#522D80"
-                strokeWidth={2}
-              />
-            ))
-          : null}
-        {showHeat
-          ? tigerZones.map((zone: TigerHeatZone) => (
-              <Polygon
-                key={`tiger-inner-${zone.id}`}
-                coordinates={toNativeRing(zone.innerPolygon)}
-                fillColor="rgba(82,45,128,0.2)"
-                strokeColor="#F56600"
-                strokeWidth={1}
-              />
-            ))
-          : null}
         {showHeat
           ? tigerZones.map((zone: TigerHeatZone) => (
               <Marker
@@ -324,18 +294,6 @@ export const CampusMap = forwardRef<CampusMapHandle, CampusMapProps>(function Ca
                   <Text style={styles.tigerChipText}>{zone.bonusLabel}</Text>
                 </View>
               </Marker>
-            ))
-          : null}
-        {showHeat
-          ? spots.map((spot: BusySpot) => (
-              <Circle
-                key={spot.id}
-                center={{ latitude: spot.lat, longitude: spot.lng }}
-                radius={spot.radius}
-                fillColor={rgba(heatColor(spot.intensity), 0.28)}
-                strokeColor={heatColor(spot.intensity)}
-                strokeWidth={1}
-              />
             ))
           : null}
         {gameDay ? (
