@@ -41,6 +41,14 @@ test('driver queue renders its filter chips once', () => {
   assert.equal(queue.match(/queueFilters\(\)\.map/g)?.length, 1)
 })
 
+test('a held backup seat confirms instead of accepting again', () => {
+  const queue = read('apps/driver/app/queue.tsx')
+  assert.match(queue, /holdingSeat = card\.backupRole === 'primary' \|\| card\.backupRole === 'backup'/)
+  assert.match(queue, /showAccept = !active && !holdingSeat/)
+  assert.match(queue, /label=\{busy \? 'Saving…' : 'Leave now'\}/)
+  assert.match(queue, /if \(ok === false\) fired\.current = false/)
+})
+
 test('driver promo copy does not name competitors', () => {
   for (const file of ['apps/driver/app/onboarding.tsx', 'packages/rides-native/driverGateView.js']) {
     assert.doesNotMatch(read(file), /\b(uber|lyft)\b/i, file)

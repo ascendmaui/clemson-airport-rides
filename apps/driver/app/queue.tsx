@@ -59,7 +59,7 @@ function ConfirmCountdown({ closesAt }: { closesAt?: string | null }) {
   return <Text style={{ color: '#F56600', fontWeight: '800', fontSize: 22, marginTop: 4 }}>{label}</Text>
 }
 
-function LeaveNowCountdown({ leaveNowAt, onDue }: { leaveNowAt?: string | null; onDue: () => void }) {
+function LeaveNowCountdown({ leaveNowAt, onDue }: { leaveNowAt?: string | null; onDue: () => boolean | Promise<boolean | void> }) {
   const fired = useRef(false)
   const onDueRef = useRef(onDue)
   onDueRef.current = onDue
@@ -73,7 +73,9 @@ function LeaveNowCountdown({ leaveNowAt, onDue }: { leaveNowAt?: string | null; 
       setLabel(next)
       if (next === 'Leave now' && !fired.current) {
         fired.current = true
-        onDueRef.current()
+        void Promise.resolve(onDueRef.current()).then((ok) => {
+          if (ok === false) fired.current = false
+        })
       }
     }
     tick()
@@ -105,10 +107,12 @@ function QueueCard({
   onDecline: () => void | Promise<void>
   onOpen: () => void
   onConfirm: () => void | Promise<void>
-  onDepart: () => void | Promise<void>
+  onDepart: () => boolean | Promise<boolean | void>
   key?: string
 }) {
   const active = card.status === 'accepted' || card.status === 'arriving'
+  const holdingSeat = card.backupRole === 'primary' || card.backupRole === 'backup'
+  const showAccept = !active && !holdingSeat
   const preferredNote = preferredRequestNote(card)
   const styles = useQueueStyles()
   const { colors } = useTheme()
@@ -185,13 +189,14 @@ function QueueCard({
           <Text style={{ color: '#F56600', fontWeight: '800' }}>Leave now</Text>
           <ScheduledRidesHint topic="leave" colors={colors} />
           <LeaveNowCountdown leaveNowAt={card.backupLeaveNowAt} onDue={onDepart} />
+          <Primary label={busy ? 'Saving…' : 'Leave now'} onPress={onDepart} disabled={busy} />
         </View>
       ) : null}
       {active ? (
         <Primary label="Open live trip" onPress={onOpen} tone="purple" />
-      ) : (
+      ) : showAccept ? (
         <Primary label={busy ? 'Saving…' : acceptActionLabel(card.status)} onPress={onAccept} disabled={busy} />
-      )}
+      ) : null}
       {!active ? (
         <Pressable
           onPress={onDecline}
@@ -329,7 +334,7 @@ export default function QueueScreen() {
   }
 
   async function onDepart(card: DriverCard) {
-    if (!supabase) return
+    if (!supabase) return false
     setBusyId(card.id)
     setError(null)
     try {
@@ -337,13 +342,15 @@ export default function QueueScreen() {
       pulse('accept')
       await refresh()
       router.push({ pathname: '/trip', params: { id: card.id } })
+      return true
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Could not start navigation'
       if (/changed|Refresh/i.test(message)) {
         router.push({ pathname: '/trip', params: { id: card.id } })
-      } else {
-        setError(message)
+        return true
       }
+      setError(message)
+      return false
     } finally {
       setBusyId(null)
     }
