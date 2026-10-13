@@ -1,100 +1,203 @@
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import * as Haptics from 'expo-haptics'
-import { Animated, PanResponder, StyleSheet, Text, View, type LayoutChangeEvent } from 'react-native'
-import { swipeConfirms, swipeOffset } from 'rides-native/swipeConfirm'
+import { useNavigation } from 'expo-router'
+import { StyleSheet, Text, View, type LayoutChangeEvent } from 'react-native'
+import { Gesture, GestureDetector, type GestureType } from 'react-native-gesture-handler'
+import Animated, { Extrapolation, interpolate, useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated'
+import {
+  SWIPE_ACTIVE_OFFSET_X,
+  SWIPE_FAIL_OFFSET_Y,
+  createSwipeController,
+  type SwipeCue,
+} from 'rides-native/swipeConfirm'
 import { useTheme } from '@/lib/theme'
 
 const KNOB = 56
+const KNOB_SPRING = { damping: 18, stiffness: 240, mass: 0.7 }
+
+type ScreenGesture = {
+  setOptions?: (options: { gestureEnabled?: boolean; fullScreenGestureEnabled?: boolean }) => void
+}
+
+function screenNavigation(navigation: unknown): ScreenGesture {
+  if (navigation && typeof navigation === 'object' && 'setOptions' in navigation) return navigation as ScreenGesture
+  return {}
+}
 
 /**
  * Swipe the knob to the end to confirm. A tap does nothing, so a pocket or
  * accidental touch cannot start the trip. VoiceOver/TalkBack users get an
  * "activate" action with the same effect.
+ *
+ * The pan is a gesture-handler gesture. PR #472 turned on the native stack's
+ * full-screen back swipe and left this control on PanResponder, which never
+ * joins that gesture arena, so the screen or the sheet scroll took the drag
+ * and the start callback never ran. The screen gesture stays off while this
+ * control is mounted (the knob sits in the back-swipe zone), and the parent
+ * scroll is blocked only while the horizontal pan is active. Crossing the
+ * threshold calls onConfirm once from the release path, with a success haptic.
+ * A short swipe springs back.
  */
 export function SwipeToStart({
   label,
   a11yLabel,
   disabled,
   onConfirm,
+  onSwipeActive,
+  blockGesture,
 }: {
   label: string
   a11yLabel: string
   disabled?: boolean
   onConfirm: () => void
+  /** Parent scroll lock. True only while the horizontal pan is active. */
+  onSwipeActive?: (active: boolean) => void
+  /** Parent native scroll gesture this pan blocks while it is recognizing. */
+  blockGesture?: GestureType
 }) {
   const { colors } = useTheme()
-  const [track, setTrack] = useState(0)
-  const x = useRef(new Animated.Value(0)).current
+  const navigation = useNavigation()
+  const x = useSharedValue(0)
+  const trackWidthSv = useSharedValue(0)
   const trackRef = useRef(0)
   const disabledRef = useRef(Boolean(disabled))
   disabledRef.current = Boolean(disabled)
   const confirmRef = useRef(onConfirm)
   confirmRef.current = onConfirm
+  const activeRef = useRef(onSwipeActive)
+  activeRef.current = onSwipeActive
+  const endedRef = useRef(false)
+  const cueRef = useRef<(cue: SwipeCue) => void>(() => {})
 
-  const armedRef = useRef(false)
-  const reset = () => {
-    armedRef.current = false
-    Animated.spring(x, { toValue: 0, useNativeDriver: false, bounciness: 6 }).start()
+  const controller = useRef(createSwipeController({
+    knobWidth: KNOB,
+    getTrackWidth: () => trackRef.current,
+    isDisabled: () => disabledRef.current,
+    onAccept: () => confirmRef.current(),
+    onCue: (cue) => cueRef.current(cue),
+  })).current
+
+  cueRef.current = (cue) => {
+    switch (cue) {
+      case 'threshold':
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {})
+        return
+      case 'success':
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {})
+        return
+      default: {
+        const neverCue: never = cue
+        return neverCue
+      }
+    }
   }
 
-  const responder = useMemo(() => PanResponder.create({
-    onStartShouldSetPanResponder: () => !disabledRef.current,
-    onMoveShouldSetPanResponder: (_e, g) => !disabledRef.current && Math.abs(g.dx) > 4,
-    onPanResponderTerminationRequest: () => false,
-    onPanResponderGrant: () => {
-      Haptics.selectionAsync().catch(() => {})
-    },
-    onPanResponderMove: (_e, g) => {
-      x.setValue(swipeOffset(g.dx, trackRef.current, KNOB))
-      // One tick when the knob crosses the confirm point, so the driver feels it without looking.
-      const armed = swipeConfirms(g.dx, trackRef.current, KNOB)
-      if (armed && !armedRef.current) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {})
-      armedRef.current = armed
-    },
-    onPanResponderRelease: (_e, g) => {
-      if (!disabledRef.current && swipeConfirms(g.dx, trackRef.current, KNOB)) {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {})
-        Animated.timing(x, { toValue: Math.max(0, trackRef.current - KNOB), duration: 120, useNativeDriver: false }).start(() => {
-          confirmRef.current()
-          reset()
-        })
+  useEffect(() => {
+    // Off for the whole time the control is on screen. Turning it off only after
+    // the pan activates is too late: the back gesture has already claimed the touch.
+    const nav = screenNavigation(navigation)
+    nav.setOptions?.({ gestureEnabled: false, fullScreenGestureEnabled: false })
+    return () => {
+      nav.setOptions?.({ gestureEnabled: true, fullScreenGestureEnabled: true })
+      activeRef.current?.(false)
+    }
+  }, [navigation])
+
+  const handlers = useRef({
+    begin() {},
+    start() {},
+    move(_dx: number) {},
+    end(_dx: number, _success: boolean) {},
+    finalize(_dx: number, _success: boolean) {},
+  })
+  handlers.current.begin = () => {
+    endedRef.current = false
+    controller.begin()
+    x.value = 0
+    screenNavigation(navigation).setOptions?.({ gestureEnabled: false, fullScreenGestureEnabled: false })
+    Haptics.selectionAsync().catch(() => {})
+  }
+  handlers.current.start = () => {
+    activeRef.current?.(true)
+  }
+  handlers.current.move = (dx) => {
+    x.value = controller.move(dx).offset
+  }
+  handlers.current.end = (dx, success) => {
+    // A cancelled pan also emits onEnd, with success false. That must spring back, not accept.
+    if (!success || endedRef.current) return
+    endedRef.current = true
+    const decision = controller.release(dx)
+    x.value = withSpring(decision.offset, KNOB_SPRING)
+  }
+  handlers.current.finalize = (dx, success) => {
+    // onEnd and onFinalize both run when the pan finishes. Release once.
+    if (!endedRef.current) {
+      if (success) {
+        endedRef.current = true
+        const decision = controller.release(dx)
+        x.value = withSpring(decision.offset, KNOB_SPRING)
       } else {
-        reset()
+        controller.cancel()
+        x.value = withSpring(0, KNOB_SPRING)
       }
-    },
-    onPanResponderTerminate: reset,
-  }), [x])
+    }
+    activeRef.current?.(false)
+  }
+
+  const pan = useMemo(() => {
+    const gesture = Gesture.Pan()
+      .runOnJS(true)
+      .enabled(!disabled)
+      .activeOffsetX(SWIPE_ACTIVE_OFFSET_X)
+      .failOffsetY([-SWIPE_FAIL_OFFSET_Y, SWIPE_FAIL_OFFSET_Y])
+      .onBegin(() => { handlers.current.begin() })
+      .onStart(() => { handlers.current.start() })
+      .onUpdate((event) => { handlers.current.move(event.translationX) })
+      .onEnd((event, success) => { handlers.current.end(event.translationX, success) })
+      .onFinalize((event, success) => { handlers.current.finalize(event.translationX, success) })
+    // Block the sheet scroll (and any other native pan wired to this ref) so a
+    // horizontal drag is not stolen. Vertical movement still fails the pan via failOffsetY.
+    return blockGesture ? gesture.blocksExternalGesture(blockGesture) : gesture
+  }, [blockGesture, disabled])
 
   function onLayout(event: LayoutChangeEvent) {
-    trackRef.current = event.nativeEvent.layout.width
-    setTrack(event.nativeEvent.layout.width)
+    const width = event.nativeEvent.layout.width
+    trackRef.current = width
+    trackWidthSv.value = width
   }
 
-  const fill = x.interpolate({ inputRange: [0, Math.max(1, track - KNOB)], outputRange: [KNOB, Math.max(KNOB, track)], extrapolate: 'clamp' })
+  const knobStyle = useAnimatedStyle(() => ({ transform: [{ translateX: x.value }] }))
+  const fillStyle = useAnimatedStyle(() => {
+    const travel = Math.max(1, trackWidthSv.value - KNOB)
+    return {
+      width: interpolate(x.value, [0, travel], [KNOB, Math.max(KNOB, trackWidthSv.value)], Extrapolation.CLAMP),
+    }
+  })
 
   return (
-    <View
-      onLayout={onLayout}
-      style={[styles.track, { backgroundColor: colors.track, opacity: disabled ? 0.6 : 1 }]}
-      accessible
-      accessibilityRole="adjustable"
-      accessibilityLabel={a11yLabel}
-      accessibilityHint="Swipe right to confirm, or use the activate action."
-      accessibilityState={{ disabled: Boolean(disabled) }}
-      accessibilityActions={[{ name: 'activate', label: a11yLabel }]}
-      onAccessibilityAction={(event) => {
-        if (event.nativeEvent.actionName === 'activate' && !disabled) onConfirm()
-      }}
-    >
-      <Animated.View style={[styles.fill, { width: fill, backgroundColor: colors.fill }]} />
-      <Text style={[styles.label, { color: colors.title }]} numberOfLines={1}>{label}</Text>
-      <Animated.View
-        {...responder.panHandlers}
-        style={[styles.knob, { backgroundColor: colors.orange, transform: [{ translateX: x }] }]}
+    <GestureDetector gesture={pan}>
+      <View
+        collapsable={false}
+        onLayout={onLayout}
+        style={[styles.track, { backgroundColor: colors.track, opacity: disabled ? 0.6 : 1 }]}
+        accessible
+        accessibilityRole="adjustable"
+        accessibilityLabel={a11yLabel}
+        accessibilityHint="Swipe right to confirm, or use the activate action."
+        accessibilityState={{ disabled: Boolean(disabled) }}
+        accessibilityActions={[{ name: 'activate', label: a11yLabel }]}
+        onAccessibilityAction={(event) => {
+          if (event.nativeEvent.actionName === 'activate' && !disabled) onConfirm()
+        }}
       >
-        <Text style={[styles.arrow, { color: colors.onAccent }]}>→</Text>
-      </Animated.View>
-    </View>
+        <Animated.View style={[styles.fill, { backgroundColor: colors.fill }, fillStyle]} />
+        <Text style={[styles.label, { color: colors.title }]} numberOfLines={1}>{label}</Text>
+        <Animated.View style={[styles.knob, { backgroundColor: colors.orange }, knobStyle]}>
+          <Text style={[styles.arrow, { color: colors.onAccent }]}>→</Text>
+        </Animated.View>
+      </View>
+    </GestureDetector>
   )
 }
 
