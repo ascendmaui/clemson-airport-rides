@@ -3,10 +3,12 @@ import * as ImagePicker from 'expo-image-picker'
 import { useMemo, useState } from 'react'
 import { ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { authedJson } from 'rides-native/apiClient'
 import { BackButton, Card, ErrorText, Primary } from '@/components/chrome'
 import { useAuth } from '@/lib/auth'
 import { supabase } from '@/lib/supabase'
 import { useTheme } from '@/lib/theme'
+import { driverProfilePhotoMessage } from '../../../shared/profilePhotoReview.js'
 
 export default function ProfilePhotoScreen() {
   const router = useRouter()
@@ -45,21 +47,18 @@ export default function ProfilePhotoScreen() {
       if (asset.fileSize && asset.fileSize > 8 * 1024 * 1024) throw new Error('Each photo must be 8MB or smaller.')
       const response = await fetch(asset.uri)
       const bytes = await response.arrayBuffer()
-      const path = `${user.id}/profile_photo/${Date.now()}.jpg`
+      const ext = mime.includes('png') ? 'png' : mime.includes('webp') ? 'webp' : mime.includes('heic') || mime.includes('heif') ? 'heic' : 'jpg'
+      const path = `${user.id}/profile_photo/${Date.now()}.${ext}`
       const uploaded = await supabase.storage.from('driver-documents').upload(path, bytes, {
         contentType: asset.mimeType || 'image/jpeg',
         upsert: false,
       })
       if (uploaded.error) throw new Error(uploaded.error.message)
-      const row = await supabase.from('driver_profile_photos').insert({
-        profile_id: user.id,
-        storage_path: path,
-        review_status: 'pending_manual_review',
-      })
-      if (row.error && !/driver_profile_photos|schema cache|relation/i.test(row.error.message || '')) {
-        throw new Error(row.error.message)
-      }
-      setNote('Photo received. It is pending manual review and is not approved.')
+      const review = await authedJson(supabase, '/api/driver?action=profile-photo', {
+        method: 'POST',
+        body: { storagePath: path },
+      }) as { driverMessage?: string, reviewStatus?: string }
+      setNote(review.driverMessage || driverProfilePhotoMessage(review.reviewStatus))
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not save that photo')
     } finally {
@@ -73,9 +72,9 @@ export default function ProfilePhotoScreen() {
         <BackButton onPress={() => router.back()} />
         <Text style={styles.title}>Profile photo</Text>
         <Card>
-          <Text style={styles.copy}>Add a photo of yourself from your library or the camera. It is reviewed by hand and does not approve your account.</Text>
+          <Text style={styles.copy}>Add a photo of yourself from your library or the camera. We compare it with the license already on file. A clear match is approved. Anything else waits for an admin, usually within a day.</Text>
           {error ? <ErrorText>{error}</ErrorText> : null}
-          {note ? <Text style={styles.note}>{note}</Text> : null}
+          {note ? <Text style={styles.note} accessibilityLiveRegion="polite">{note}</Text> : null}
           <Primary label={busy ? 'Saving…' : 'Photo library'} onPress={() => choose('library')} disabled={busy || !user} />
           <Primary label="Camera" onPress={() => choose('camera')} disabled={busy || !user} tone="purple" />
         </Card>

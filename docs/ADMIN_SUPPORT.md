@@ -38,6 +38,8 @@ Applicant messages and info requests show on the web driver application and in t
 
 A new `pending_review` application inserts `admin_notifications` (kind `driver_application`).
 
+Driver profile photos that are not auto-approved show in the same Driver review screen, under **Profile photos**: [https://clemsonrides.com/#/admin?tab=applications](https://clemsonrides.com/#/admin?tab=applications). Approve photo or Reject photo is on that screen. Rejection is admin-only. The notification (kind `other`, entity `driver_profile_photo`) opens this tab and includes the reason.
+
 ## Support bot
 
 Tickets use `open`, `bot_handling`, `waiting_user`, `escalated`, and `resolved`.

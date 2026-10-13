@@ -43,6 +43,8 @@ Set **one** of these on Vercel:
 
 If neither AI key is set, both chats still answer from the curated knowledge base and whatever account context loaded. They do not call a model.
 
+Driver profile photos (`#/driver` and the driver app Profile photo screen) are reviewed with the AI Gateway only. A direct `OPENAI_API_KEY` is not used for that check. Admins approve or reject a photo that was not auto-approved at `#/admin?tab=applications`.
+
 Peer riders and drivers are shown by first name only (`displayFirstName` from `src/lib/privacyDisplay.js` when that file is present). Last names are removed from chat replies and from support tickets.
 
 Placeholder Stripe keys are OK for build; checkout returns `{ stub: true }` until a real `sk_` key is set.

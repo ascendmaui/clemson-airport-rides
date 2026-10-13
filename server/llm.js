@@ -49,3 +49,25 @@ export function resolveLanguageModel() {
   warnIfLiveAiOffline()
   return null
 }
+
+/** Vision-capable ids already routed through the AI Gateway. Text-only ids are excluded. */
+export function isVisionModelId(modelId) {
+  const id = String(modelId || '').toLowerCase()
+  if (!id) return false
+  if (/embed|whisper|tts|dall-e|moderation|gpt-3\.5|text-/.test(id)) return false
+  return /gpt-4o|gpt-4\.1|gpt-5|gemini|claude|pixtral|llava|vision/.test(id)
+}
+
+/**
+ * Profile photo review uses the AI Gateway only.
+ * A direct OPENAI_API_KEY is the pay-per-call API and is not used here.
+ * Returns null when the gateway is unset or the configured model cannot see images.
+ */
+export function resolveVisionModel() {
+  const gatewayKey = usable(process.env.AI_GATEWAY_API_KEY)
+  if (!gatewayKey) return null
+  const requested = clean(process.env.HELP_CHAT_MODEL) || 'gpt-4o-mini'
+  const modelId = requested.includes('/') ? requested : `openai/${requested}`
+  if (!isVisionModelId(modelId)) return null
+  return { model: gateway(modelId), provider: 'gateway', modelId }
+}

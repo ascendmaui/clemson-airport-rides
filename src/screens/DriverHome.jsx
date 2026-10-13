@@ -5,6 +5,7 @@ import { CampusMap, CLEMSON } from '../components/CampusMap'
 import { DriverCancelSheet } from '../components/DriverCancelSheet'
 import { DRIVER_CANCEL_SUCCESS } from '../../shared/driverCancel.js'
 import { DriverDeskHeader } from '../components/DriverDeskHeader'
+import { DriverProfilePhoto } from '../components/DriverProfilePhoto'
 import { GameDayStatus } from '../components/GameDayStatus'
 import { GameDayBoard, GameDaySurgeNote } from '../components/GameDayBoard'
 import { useGameDayNotice } from '../lib/useGameDayNotice'
@@ -1041,6 +1042,7 @@ function DriverShell({ driverId }) {
             onStart={() => setShift(true)}
             onStop={() => setShift(false)}
           />
+          <DriverProfilePhoto />
           {online && (
           <p style={{ fontSize: 13, color: 'var(--ink-secondary)', marginBottom: 12 }}>
             Carpool offers pay more than a solo trip — take those first.
