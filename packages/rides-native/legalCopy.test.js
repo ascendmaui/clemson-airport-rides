@@ -150,7 +150,7 @@ test('PRIVACY_SECTIONS contains critical compliance and campus policy statements
 
 test('TERMS_SECTIONS conforms to required structure and unique headings', () => {
   assert.ok(Array.isArray(TERMS_SECTIONS))
-  assert.equal(TERMS_SECTIONS.length, 19)
+  assert.equal(TERMS_SECTIONS.length, 20)
 
   const expectedHeadings = [
     'Agreement',
@@ -161,6 +161,7 @@ test('TERMS_SECTIONS conforms to required structure and unique headings', () => 
     'Payments & earnings',
     'Technology platform',
     'Independent contractors',
+    'Driver Agreement',
     'Assumption of risk',
     'Disclaimers',
     'Limitation of liability',
@@ -291,6 +292,12 @@ test('terms limit liability and privacy states the platform data limits', () => 
   assert.match(termsText, /severability/)
   assert.match(termsText, /South Carolina/)
   assert.match(termsText, /101 North Main Street, Greenville, SC 29601/)
+  assert.match(termsText, /no employment, no agency, and no partnership/)
+  assert.match(termsText, /solely responsible/)
+  assert.match(termsText, /forfeiture of incentives/)
+  assert.match(termsText, /at its sole discretion/)
+  assert.match(termsText, /shall never be held liable, to the fullest extent permitted by law/)
+  assert.match(termsText, /indemnifies and defends the platform/)
 
   assert.match(privacyText, /not a transportation carrier/)
   assert.match(privacyText, /does not provide transportation services/)
@@ -349,7 +356,7 @@ test('simulated app rendering matches rider and web consumer logic', () => {
 
   const nativeTerms = renderNativeScreen('terms')
   assert.equal(nativeTerms.title, 'Terms of Service')
-  assert.equal(nativeTerms.renderedSections.length, 19)
+  assert.equal(nativeTerms.renderedSections.length, 20)
 
   // Emulate rendering logic from src/screens/LegalPages.jsx
   const renderWebBody = (sections) => {
@@ -363,5 +370,5 @@ test('simulated app rendering matches rider and web consumer logic', () => {
   const webPrivacy = renderWebBody(PRIVACY_SECTIONS)
   assert.equal(webPrivacy.length, 10)
   const webTerms = renderWebBody(TERMS_SECTIONS)
-  assert.equal(webTerms.length, 19)
+  assert.equal(webTerms.length, 20)
 })

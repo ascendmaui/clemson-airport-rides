@@ -38,6 +38,7 @@ import { extractReadableText, licensePendingCopy, matchRegistration, reviewLicen
 import { loadDriverProfile, loadVehicle } from 'rides-native/driverDesk'
 import { modelsForMake, VEHICLE_COLORS, VEHICLE_MAKES } from 'rides-native/vehicleCatalog'
 import { useTheme } from '@/lib/theme'
+import { DriverAgreementPrompt } from '@/components/DriverAgreementPrompt'
 import { WEB_DRIVER_RENTALS_URL, WEB_DRIVER_SIGNUP_URL } from '../../../shared/productLinks.js'
 import { knowledgeQuizStatus, knowledgeQuizStatusLabel, loadKnowledgeQuiz } from 'rides-native/driverKnowledgeQuiz'
 import { applicantEmailError } from '../../../shared/applicantEmail.js'
@@ -574,6 +575,7 @@ export default function OnboardingScreen() {
   if (status === 'approved') return <Redirect href="/(tabs)" />
 
   return (
+    <DriverAgreementPrompt onBack={() => router.back()}>
     <View style={[styles.screen, { paddingTop: insets.top + 8 }]}>
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
         <BackButton onPress={() => router.back()} />
@@ -987,6 +989,7 @@ export default function OnboardingScreen() {
         </Pressable>
       </Modal>
     </View>
+    </DriverAgreementPrompt>
   )
 }
 

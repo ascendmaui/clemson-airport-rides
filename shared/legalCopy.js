@@ -146,6 +146,15 @@ export const TERMS_SECTIONS = [
     ],
   },
   {
+    heading: 'Driver Agreement',
+    paragraphs: [
+      'Each driver who uses the Platform is an independent contractor. There is no employment, no agency, and no partnership between a driver and Clemson RIDES. A driver is solely responsible for the driver’s own conduct, for the vehicle the driver uses, for the insurance that covers that driving, and for compliance with traffic law, airport rules, campus rules, and every other legal duty that applies to the driver.',
+      'The platform may hold a driver accountable for access to the software. Accountability can include a warning, a suspension, a deactivation, or forfeiture of incentives, and the Company may use any of those measures at its sole discretion. Those measures decide whether the driver may keep using the Platform. They are not wages, not employee discipline, and not an undertaking to supervise the driving.',
+      'The platform shall never be held liable, to the fullest extent permitted by law, for any legal claim arising from a driver’s acts or omissions. That reaches claims by a rider, another driver, a pedestrian, an airport, a university, an insurer, or any other person, and it reaches injury, death, property damage or loss, harassment, and illegal conduct before, during, or after a ride. The limit applies to the maximum extent permitted by applicable law. It does not reach liability for gross negligence or willful misconduct, or any other liability, where a statute forbids the waiver.',
+      'The driver indemnifies and defends the platform. A driver will defend, indemnify, and hold harmless Clemson RIDES and its owners, members, managers, officers, employees, agents, and affiliates from claims, losses, damages, fines, and reasonable attorney’s fees arising out of the driver’s driving, vehicle, insurance, conduct, or failure to follow the law or these Terms. The Company may direct the defense of a covered claim. This duty continues after access to the Platform ends.',
+    ],
+  },
+  {
     heading: 'Assumption of risk',
     paragraphs: [
       'You use the service, and you take rides, at your own risk and by your own choice. Requesting a pickup, accepting a request, entering a vehicle, or staying in one is voluntary. You may decline a match, cancel under the product rules, or stop using the Platform. Riding in a private vehicle with another person carries risks we cannot remove, including traffic, weather, driver error, a mechanical problem, crime, and the way other people behave.',

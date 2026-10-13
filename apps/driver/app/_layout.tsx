@@ -19,6 +19,7 @@ import { ThemeProvider, useTheme } from '@/lib/theme'
 import { ProfileRequiredGate } from 'rides-native/PartyScreens'
 import { PasswordRecoveryListener } from '@/lib/passwordRecovery'
 import { reconcileTripBackgroundLocation } from '@/lib/backgroundLocation'
+import { DriverAgreementPrompt } from '@/components/DriverAgreementPrompt'
 
 /** Shared glass toast (packages/rides-native/ToastHost). */
 function ToastMount() {
@@ -125,7 +126,9 @@ export default function RootLayout() {
               <PasswordRecoveryListener />
               <PushBridge />
               <OfferBridge />
-              <ThemedStack />
+              <DriverAgreementPrompt>
+                <ThemedStack />
+              </DriverAgreementPrompt>
               <ActiveTripResume />
               <ToastMount />
               <DriverMoments />

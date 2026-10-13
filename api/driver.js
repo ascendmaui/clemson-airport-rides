@@ -23,6 +23,7 @@ import handleTripSweeps from '../server/endpoints/tripSweeps.js'
 import handleMatchingRebroadcast from '../server/endpoints/matchingRebroadcast.js'
 import { handleMarkOffered, handlePassOffer } from '../server/endpoints/driverOfferDesk.js'
 import { handleSignAgreement } from '../server/agreementHttp.js'
+import { handleDriverClickwrap } from '../server/driverClickwrap.js'
 import handleAppConfig from '../server/endpoints/appConfig.js'
 import handleTaxSummary from '../server/endpoints/driverTaxSummary.js'
 import handleBackupQueue from '../server/endpoints/backupQueue.js'
@@ -51,6 +52,7 @@ const HANDLERS = {
   'mark-offered': handleMarkOffered,
   'pass-offer': handlePassOffer,
   'sign-agreement': handleSignAgreementRoute,
+  clickwrap: handleClickwrapRoute,
   'backup-queue': handleBackupQueue,
   perks: handleDriverPerks,
   cashout: handleDriverCashout,
@@ -74,10 +76,18 @@ export default async function handler(req, res, ...rest) {
   const handle = HANDLERS[action]
   if (!handle) {
     return json(res, 400, {
-      error: 'Unknown driver action. Use action=signup, submit-review, earnings, tax-summary, offer-preview, tip, tip-choice, wait, trip-status, trip-stop, cancel-midride, payouts, inbox, cards, mark-offered, pass-offer, sign-agreement, backup-queue, trip-sweeps, perks, cashout, forecast, or app-config.',
+      error: 'Unknown driver action. Use action=signup, submit-review, earnings, tax-summary, offer-preview, tip, tip-choice, wait, trip-status, trip-stop, cancel-midride, payouts, inbox, cards, mark-offered, pass-offer, sign-agreement, clickwrap, backup-queue, trip-sweeps, perks, cashout, forecast, or app-config.',
     })
   }
   return handle(req, res, ...rest)
+}
+
+async function handleClickwrapRoute(req, res) {
+  const sb = admin()
+  if (!sb) return json(res, 503, { error: 'SUPABASE_SERVICE_ROLE_KEY not configured' })
+  const user = await userFromAuth(req)
+  if (!user) return json(res, 401, { error: 'Sign in required' })
+  return handleDriverClickwrap(req, res, { sb, user })
 }
 
 async function handleSignAgreementRoute(req, res) {
