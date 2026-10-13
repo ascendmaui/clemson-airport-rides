@@ -10,6 +10,7 @@ import { listAssignableDrivers } from '../autoAssign.js'
 import { notifyDriverOffer } from '../driverOfferAlerts.js'
 import { stripeClient, stripeOk } from '../friendRideLib.js'
 import { sendExpoPush } from '../expoPush.js'
+import { noteExpoPushResult } from '../expoPushReceipts.js'
 import { loadRiderMatchPreferences } from '../riderPass.js'
 import { insertTripEvent } from '../tripEvents.js'
 import { settleSwitchHold } from '../riderSwitchHold.js'
@@ -23,13 +24,14 @@ async function notifyReleasedDriver(sb, driverId, tripId) {
   try {
     const { token } = await readDriverPushToken(sb, driverId)
     if (!token) return
-    await sendExpoPush({
+    const pushed = await sendExpoPush({
       to: token,
       title: 'Scheduled ride changed',
       body: 'The rider changed this pickup. You are released from the backup seat.',
       data: { tripId, kind: 'backup_released' },
       channelId: 'ride-requests',
     })
+    await noteExpoPushResult(sb, { push: pushed, token, ownerId: driverId, ownerRole: 'driver' })
   } catch (error) {
     console.error('[rider-switch] backup release', error?.message || error)
   }

@@ -14,6 +14,7 @@
 import { readDriverPushToken } from './driverPushToken.js'
 import { dispatchDriverOfferChannels } from './driverOfferChannels.js'
 import { sendExpoPush, PUSH_CREDENTIAL_GAP } from './expoPush.js'
+import { noteExpoPushResult } from './expoPushReceipts.js'
 import { quietFromPrefs } from '../src/lib/quietHours.js'
 import { isQuietAt } from '../shared/quietWindow.js'
 
@@ -168,12 +169,13 @@ export async function dispatchDriverOfferAlert(sb, {
       tokenKind,
       ...(pushed.gap ? { gap: pushed.gap } : {}),
     }
-  }
-
-  if (channels.push.reason === 'device_not_registered') {
-    try {
-      await sb.from('driver_push_tokens').delete().eq('driver_id', driverId).eq('token', contact.pushToken)
-    } catch { /* Best effort; avoid removing a concurrently refreshed token. */ }
+    // Delete only the rejected token. A refresh that landed during the send keeps its row.
+    await noteExpoPushResult(sb, {
+      push: pushed,
+      token: contact.pushToken,
+      ownerId: driverId,
+      ownerRole: 'driver',
+    })
   }
 
   if (!inserted?.error && !suppressed) {

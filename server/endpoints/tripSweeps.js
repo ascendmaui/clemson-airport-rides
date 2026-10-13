@@ -10,6 +10,7 @@ import { sweepSearchTimeouts } from '../searchTimeoutSweep.js'
 import { sweepFlightArrivals } from '../flightArrivalsSweep.js'
 import { sweepEventDriverNudges } from '../eventDriverNudges.js'
 import { sweepStaleTrips } from '../staleTripSweep.js'
+import { sweepExpoPushReceipts } from '../expoPushReceipts.js'
 
 export const SWEEPS = [
   { name: 'canceled_holds', run: sweepCanceledHolds },
@@ -24,6 +25,8 @@ export const SWEEPS = [
   { name: 'event-driver-nudges', run: sweepEventDriverNudges },
   // Active trips with no rider and no driver signal. Releases the hold, never captures.
   { name: 'stale-trips', run: sweepStaleTrips },
+  // Expo receipts arrive after the ticket. Missing table is a no-op until the OPS migration.
+  { name: 'expo-push-receipts', run: sweepExpoPushReceipts },
 ]
 
 function headerValue(headers, name) {

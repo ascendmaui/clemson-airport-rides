@@ -6,6 +6,7 @@
  * Push failures are recorded on the row and never fail the sweep.
  */
 import { sendExpoPush } from './expoPush.js'
+import { noteExpoPushResult } from './expoPushReceipts.js'
 import { GRACE_MS } from '../src/lib/waitFee.js'
 import { riderDriverFirstName, sanitizeRiderNotice } from '../shared/riderDriverPrivacy.js'
 
@@ -256,6 +257,12 @@ export async function sweepTripStatusNotices(sb, { now = new Date(), dryRun = fa
         data: { tripId: trip.id, kind: row.kind, status: trip.status },
         channelId: rider ? RIDER_PUSH_CHANNEL : DRIVER_PUSH_CHANNEL,
       }))
+      await noteExpoPushResult(sb, {
+        push,
+        token,
+        ownerId: row.recipient_id,
+        ownerRole: rider ? 'rider' : 'driver',
+      })
       await finish(sb, row.id, push?.sent ? 'sent' : (push?.reason || 'not_sent'), nowIso)
       if (push?.sent) { result.sent += 1; result.ids.sent.push(row.id) } else skip(row.id)
     } catch (err) {
