@@ -6,11 +6,7 @@ import { useTripWait } from '../lib/useTripWait'
 import { formatUsd } from '../lib/waitFee'
 import { splitPlatformCut } from '../lib/platformFee'
 import { navigate } from '../lib/navigation'
-
-function firstNameOnly(fullName) {
-  const token = String(fullName || '').trim().split(/\s+/)[0]
-  return token || ''
-}
+import { riderDriverFirstName } from '../../shared/riderDriverPrivacy.js'
 
 function chargeNote(charge) {
   if (!charge || charge.status === 'skipped' || charge.status === 'succeeded') return null
@@ -48,10 +44,12 @@ export function WaitFeeCard({
       .eq('id', otherId)
       .maybeSingle()
       .then(({ data }) => {
-        if (alive) setWho(firstNameOnly(data?.full_name))
+        if (alive) {
+          setWho(riderDriverFirstName(data?.full_name, ''))
+        }
       })
     return () => { alive = false }
-  }, [otherId])
+  }, [otherId, role])
 
   if (!trip) return null
 

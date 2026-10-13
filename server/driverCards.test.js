@@ -24,6 +24,8 @@ function cardsSb({ approved = true } = {}) {
                 data: [{
                   id: DEMO,
                   full_name: 'Demo Driver',
+                  last_name: 'Driver',
+                  phone: '8645550199',
                   rating_avg: 0,
                   rating_count: 0,
                   standing: 'good',
@@ -86,7 +88,10 @@ test('loadPublicDriverCards returns the driver name and vehicle without billing 
   const loaded = await loadPublicDriverCards(sb, [DEMO])
   assert.equal(loaded.error, null)
   assert.equal(loaded.drivers.length, 1)
-  assert.equal(loaded.drivers[0].full_name, 'Demo Driver')
+  assert.equal(loaded.drivers[0].first_name, 'Demo')
+  assert.equal('full_name' in loaded.drivers[0], false)
+  assert.equal('phone' in loaded.drivers[0], false)
+  assert.equal('last_name' in loaded.drivers[0], false)
   assert.equal(loaded.drivers[0].make, 'Honda')
   assert.equal(loaded.drivers[0].model, 'Accord')
   assert.equal(loaded.drivers[0].plate, 'DEMO03')
@@ -96,6 +101,8 @@ test('loadPublicDriverCards returns the driver name and vehicle without billing 
   assert.equal(encoded.includes('pm_secret'), false)
   assert.equal(encoded.includes('acct_secret'), false)
   assert.equal(encoded.includes('hidden@example.com'), false)
+  assert.equal(encoded.includes('8645550199'), false)
+  assert.equal(encoded.includes('Driver'), false)
   const profileSelect = selects.find((row) => row.table === 'profiles')
   assert.equal(profileSelect.columns.includes('stripe'), false)
   assert.equal(profileSelect.columns.includes('email'), false)
@@ -115,7 +122,8 @@ test('driver cards endpoint returns the safe card payload', async () => {
   await handleDriverCards({ method: 'POST', body: { ids: [DEMO] } }, res, { sb })
   assert.equal(res.statusCode, 200)
   const body = JSON.parse(res.body)
-  assert.equal(body.drivers[0].full_name, 'Demo Driver')
+  assert.equal(body.drivers[0].first_name, 'Demo')
+  assert.equal(JSON.stringify(body).includes('8645550199'), false)
   assert.equal(body.drivers[0].plate, 'DEMO03')
   assert.equal(JSON.stringify(body).includes('pm_secret'), false)
 })

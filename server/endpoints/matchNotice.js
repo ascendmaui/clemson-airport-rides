@@ -5,6 +5,7 @@
 import { admin, cors, json, parseBody, userFromAuth } from '../friendRideLib.js'
 import { isSimulatedDriverId } from '../../packages/rides-native/simulatedDrivers.js'
 import { approachFromPoints, buildRiderMatchNotice, locationIsFresh } from '../../shared/nearTermSlots.js'
+import { riderDriverFirstName } from '../../shared/riderDriverPrivacy.js'
 
 const MATCHED = new Set(['accepted', 'arriving', 'arrived', 'in_progress'])
 
@@ -57,7 +58,7 @@ export default async function handler(req, res, deps = {}) {
     : null
   const pickupAt = trip.pickup_at || trip.scheduled_for || trip.metadata?.scheduled_pickup_at || null
   const notice = buildRiderMatchNotice({
-    driverName: profileRes.data?.full_name,
+    driverName: riderDriverFirstName(profileRes.data?.full_name, ''),
     distanceMi: approach?.distanceMi ?? null,
     etaMin: approach?.etaMin ?? null,
     pickupAt,

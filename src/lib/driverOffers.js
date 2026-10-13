@@ -1,6 +1,6 @@
 import { supabase } from './supabase'
 import { authedJson } from './apiClient.js'
-import { displayFirstName } from './privacyDisplay.js'
+import { riderDriverFirstName } from '../../shared/riderDriverPrivacy.js'
 
 export const QUEUE_CAP = 2
 export const NEAR_DROPOFF_MINUTES = 5
@@ -26,7 +26,7 @@ export async function fetchOfferPreview(tripId) {
     const data = await res.json().catch(() => ({}))
     if (!res.ok) return empty
     return {
-      riderFirstName: displayFirstName(data.riderFirstName, 'Rider'),
+      riderFirstName: riderDriverFirstName(data.riderFirstName, 'Rider') || 'Rider',
       ratingAvg: data.ratingAvg != null ? Number(data.ratingAvg) : null,
       ratingCount: Number(data.ratingCount) || 0,
       standing: data.standing || 'good',

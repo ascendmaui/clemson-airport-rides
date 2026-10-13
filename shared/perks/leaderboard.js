@@ -1,15 +1,15 @@
 /**
  * Weekly leaderboard (Monday 00:00 America/New_York onward).
- * Names are first name + last initial only. Opted-out, demo, simulated and
+ * Names are the driver's first name only. Opted-out, demo, simulated and
  * e2e test drivers never appear.
  */
 import { driverTripEarnings } from '../driverTripEarnings.js'
+import { riderDriverFirstName } from '../riderDriverPrivacy.js'
 
 export function leaderboardName(fullName) {
-  const parts = String(fullName || '').trim().split(/\s+/).filter(Boolean)
-  if (!parts.length) return 'Driver'
-  const first = parts[0].charAt(0).toUpperCase() + parts[0].slice(1)
-  return parts.length > 1 ? `${first} ${parts[parts.length - 1].charAt(0).toUpperCase()}.` : first
+  const first = riderDriverFirstName(fullName, '')
+  if (!first) return 'Driver'
+  return first.charAt(0).toUpperCase() + first.slice(1)
 }
 
 /**

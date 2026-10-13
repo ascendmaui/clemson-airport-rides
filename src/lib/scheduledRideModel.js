@@ -1,3 +1,4 @@
+import { riderDriverFirstName } from '../../shared/riderDriverPrivacy.js'
 import { zonedCivilToUtc } from '../../shared/rideTime.js'
 import {
   LOOKING_FOR_BACKUP_LABEL,
@@ -49,13 +50,9 @@ export const AIRPORT_PLACES = [
 ]
 
 export function firstName(fullName, fallback = 'Rider') {
-  const raw = String(fullName || '').trim()
-  if (!raw) return fallback
-  const token = raw.split(/\s+/)[0] || ''
-  const cleaned = token.includes('@') ? token.split('@')[0] : token
-  const name = cleaned.replace(/[^a-zA-Z'-]/g, '')
-  if (!name) return fallback
-  return name.charAt(0).toUpperCase() + name.slice(1)
+  const given = riderDriverFirstName(fullName, '')
+  if (!given) return fallback
+  return given.charAt(0).toUpperCase() + given.slice(1)
 }
 
 /**
