@@ -5,14 +5,11 @@
  * transparent, soft orange #F56600, purple #522D80 at the hottest demand.
  * Demo, simulated, and theater cars are dropped before any weight is read.
  *
- * Nearby points collapse into hot areas. Each area is Quiet, Busy, or Very
- * busy from its density, and the single hottest area carries a soft outline.
- * The field breathes on a slow sine so the wash pulses instead of sitting still.
- *
- * react-native-maps Heatmap is the Google heatmap. Android's default provider
- * is Google, so the native layer can mount it. iOS defaults to Apple Maps,
- * which throws if Heatmap is mounted, so that platform paints the same points
- * into a translucent image overlay.
+ * Nearby points collapse into hot areas. Quiet areas keep a label and paint
+ * nothing. Busy areas glow orange and Very busy areas glow purple. Each glow
+ * is a lumpy wash, not a circle or an outline ring, and it breathes slowly.
+ * Both map platforms use that image. The Google heatmap kernel is a circle,
+ * so it is not mounted.
  */
 
 export const DEMAND_HEAT_COLORS = ['rgba(245,102,0,0)', '#F56600', '#522D80'] as const
@@ -29,12 +26,18 @@ export const HEAT_BREATH_FRAMES = 8
 
 /** Live demand in loadBusySpots uses intensity = min(1, weight / 8). */
 const DEMAND_WEIGHT_SCALE = 8
-const LIGHT_OPACITY = 0.34
-const DARK_OPACITY = 0.42
+const LIGHT_OPACITY = 0.48
+const DARK_OPACITY = 0.5
 
 const RASTER_SIZE = 256
-const SIGMA_DEG = 0.0022
-const SIGMA_PAD = 3.4
+const SIGMA_DEG = 0.0028
+const SIGMA_PAD = 3.6
+const ORGANIC_LOBES = [
+  { ox: 0, oy: 0, amp: 1, scale: 1 },
+  { ox: 0.64, oy: 0.16, amp: 0.58, scale: 0.74 },
+  { ox: -0.3, oy: 0.58, amp: 0.46, scale: 0.68 },
+  { ox: 0.12, oy: -0.6, amp: 0.36, scale: 0.6 },
+] as const
 const AREA_MERGE_DEG = 0.0024
 const BUSY_GLOW_MIN_DEG = 0.0017
 
@@ -272,10 +275,10 @@ export function busynessLabel(density: number): BusynessLabel {
   return 'Quiet'
 }
 
-export function busynessColor(label: BusynessLabel): string {
+export function busynessColor(label: BusynessLabel): string | null {
   switch (label) {
     case 'Quiet':
-      return '#F8A15A'
+      return null
     case 'Busy':
       return '#F56600'
     case 'Very busy':
@@ -291,14 +294,17 @@ export function busynessInk(label: BusynessLabel): string {
   switch (label) {
     case 'Quiet':
     case 'Busy':
-      return '#1F1208'
     case 'Very busy':
-      return '#FFFFFF'
+      return '#1F1208'
     default: {
       const unexpected: never = label
       return unexpected
     }
   }
+}
+
+export function demandGlows(weight: number): boolean {
+  return busynessLabel(weight) !== 'Quiet'
 }
 
 function degreesApart(a: { latitude: number; longitude: number }, b: { latitude: number; longitude: number }): number {
@@ -326,40 +332,6 @@ export function hotAreas(points: WeightedHeatPoint[]): HotArea[] {
     spanLat: group.spanLat,
     spanLng: group.spanLng,
   }))
-}
-
-export function busiestOutline(area: HotArea, scale = 1, steps = 36): Array<{ latitude: number; longitude: number }> {
-  const count = Math.max(12, Math.floor(steps))
-  const lat = area.spanLat * (scale > 0 ? scale : 1)
-  const lng = area.spanLng * (scale > 0 ? scale : 1)
-  const ring: Array<{ latitude: number; longitude: number }> = []
-  for (let step = 0; step < count; step += 1) {
-    const theta = (step / count) * Math.PI * 2
-    ring.push({
-      latitude: roundWeight(area.latitude + Math.sin(theta) * lat),
-      longitude: roundWeight(area.longitude + Math.cos(theta) * lng),
-    })
-  }
-  return ring
-}
-
-export function busiestGlowColor(label: BusynessLabel, breath: number, band: 'wide' | 'tight' = 'tight'): string {
-  const [red, green, blue] = parseColor(busynessColor(label))
-  const wave = clamp01(breath)
-  let alpha: number
-  switch (band) {
-    case 'wide':
-      alpha = 0.1 + 0.18 * wave
-      break
-    case 'tight':
-      alpha = 0.28 + 0.36 * wave
-      break
-    default: {
-      const unexpected: never = band
-      return unexpected
-    }
-  }
-  return `rgba(${red},${green},${blue},${roundOpacity(alpha)})`
 }
 
 /** 0 at the rest of the breath, 1 at the peak. One full cycle is HEAT_BREATH_MS. */
@@ -474,12 +446,38 @@ export function heatBloom(weight: number, opacity: number): HeatBloom {
   }
 }
 
-export function nativeDemandHeatSupported(platform: string): boolean {
-  return platform === 'android'
+function blobPhase(latitude: number, longitude: number): number {
+  const raw = Math.sin(latitude * 12.9898 + longitude * 78.233) * 43758.5453
+  return (raw - Math.floor(raw)) * Math.PI * 2
+}
+
+function organicSample(dx: number, dy: number, sigma: number, phase: number): number {
+  const turn = Math.cos(phase)
+  const rise = Math.sin(phase)
+  let total = 0
+  for (const lobe of ORGANIC_LOBES) {
+    const lx = (lobe.ox * turn - lobe.oy * rise) * sigma
+    const ly = (lobe.ox * rise + lobe.oy * turn) * sigma
+    const px = dx - lx
+    const py = dy - ly
+    const theta = Math.atan2(py, px)
+    const warp = Math.max(0.46, 1 + 0.34 * Math.sin(3 * theta + phase) + 0.18 * Math.cos(5 * theta - phase))
+    const spread = sigma * lobe.scale
+    const denom = 2 * spread * spread
+    total += lobe.amp * Math.exp((-(px * px + py * py) * warp * warp) / denom)
+  }
+  return total
+}
+
+function washRgb(label: BusynessLabel): Rgba | null {
+  const color = busynessColor(label)
+  if (!color) return null
+  return parseColor(color)
 }
 
 export function paintDemandHeat(model: DemandHeatModel): HeatRaster | null {
-  if (!model.points.length) return null
+  const glowing = model.points.filter((point) => demandGlows(point.weight))
+  if (!glowing.length) return null
   let north = -Infinity
   let south = Infinity
   let east = -Infinity
@@ -499,13 +497,31 @@ export function paintDemandHeat(model: DemandHeatModel): HeatRaster | null {
   const lngSpan = Math.max(1e-6, east - west)
   const width = RASTER_SIZE
   const height = RASTER_SIZE
-  const sigmaPx = Math.max(8, (SIGMA_DEG / latSpan) * (height - 1))
+  const sigmaPx = Math.max(10, (SIGMA_DEG / latSpan) * (height - 1))
   const field = new Float64Array(width * height)
-  const radius = Math.ceil(sigmaPx * 3)
-  const denom = 2 * sigmaPx * sigmaPx
-  for (const point of model.points) {
+  const owner = new Uint8Array(width * height)
+  const radius = Math.ceil(sigmaPx * 4.4)
+  for (const point of glowing) {
+    const label = busynessLabel(point.weight)
+    let kind: 1 | 2
+    switch (label) {
+      case 'Busy':
+        kind = 1
+        break
+      case 'Very busy':
+        kind = 2
+        break
+      case 'Quiet':
+        continue
+      default: {
+        const unexpected: never = label
+        throw new Error(unexpected)
+      }
+    }
     const x = ((point.longitude - west) / lngSpan) * (width - 1)
     const y = ((north - point.latitude) / latSpan) * (height - 1)
+    const phase = blobPhase(point.latitude, point.longitude)
+    const norm = organicSample(0, 0, sigmaPx, phase) || 1
     const x0 = Math.max(0, Math.floor(x - radius))
     const x1 = Math.min(width - 1, Math.ceil(x + radius))
     const y0 = Math.max(0, Math.floor(y - radius))
@@ -514,17 +530,24 @@ export function paintDemandHeat(model: DemandHeatModel): HeatRaster | null {
       const dy = py - y
       for (let px = x0; px <= x1; px += 1) {
         const dx = px - x
-        field[py * width + px] += point.weight * Math.exp(-(dx * dx + dy * dy) / denom)
+        const strength = point.weight * (organicSample(dx, dy, sigmaPx, phase) / norm)
+        const index = py * width + px
+        if (strength > field[index]) {
+          field[index] = strength
+          owner[index] = kind
+        }
       }
     }
   }
   const rgba = new Uint8Array(width * height * 4)
+  const busy = washRgb('Busy')
+  const very = washRgb('Very busy')
+  if (!busy || !very) return null
   for (let i = 0; i < field.length; i += 1) {
     const density = field[i]
-    if (density <= 0) continue
+    if (density <= 0 || owner[i] === 0) continue
     const ratio = Math.min(1, density)
-    const [r, g, b] = heatRgbaAt(ratio)
-    // Alpha follows the gaussian, so the core fades instead of sitting as a flat disk.
+    const [r, g, b] = owner[i] === 2 ? very : busy
     const alpha = Math.round(model.opacity * ratio * 255)
     if (alpha < 2) continue
     const offset = i * 4

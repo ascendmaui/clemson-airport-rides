@@ -9,11 +9,10 @@ import {
   HEAT_BREATH_MS,
   QUIET_BELOW,
   VERY_BUSY_FROM,
-  busiestGlowColor,
-  busiestOutline,
   busynessColor,
   busynessInk,
   busynessLabel,
+  demandGlows,
   demandPointsToHeat,
   fieldPlacement,
   framePercents,
@@ -23,7 +22,6 @@ import {
   heatBreathOpacity,
   heatRgbaAt,
   hotAreas,
-  nativeDemandHeatSupported,
   paintDemandHeat,
   rasterPixel,
   renderDemandHeatFrames,
@@ -185,22 +183,37 @@ test('heat stays translucent in light and dark map styles', () => {
   assert.ok(quiet.coreOpacity > 0)
 })
 
-test('the painted field is a soft purple core with a clear edge, and the png matches', () => {
+test('quiet demand paints no wash, and busy glows are organic orange or purple', () => {
   const hot = demandPointsToHeat([{ lat: 34.6788, lng: -82.843, intensity: 1 }], { scheme: 'light' })
+  const busy = demandPointsToHeat([{ lat: 34.6788, lng: -82.843, intensity: 0.5 }], { scheme: 'light' })
   const quiet = demandPointsToHeat([{ lat: 34.6788, lng: -82.843, intensity: 0.2 }], { scheme: 'light' })
+  assert.equal(paintDemandHeat(quiet), null)
+  assert.equal(renderDemandHeatImage(quiet), null)
+  assert.equal(quiet.areas[0].label, 'Quiet')
   const hotRaster = paintDemandHeat(hot)
-  const quietRaster = paintDemandHeat(quiet)
+  const busyRaster = paintDemandHeat(busy)
   const hotPixel = rasterPixel(hotRaster, 34.6788, -82.843)
-  const quietPixel = rasterPixel(quietRaster, 34.6788, -82.843)
+  const busyPixel = rasterPixel(busyRaster, 34.6788, -82.843)
   const corner = rasterPixel(hotRaster, hotRaster.north, hotRaster.west)
-  const shoulder = rasterPixel(hotRaster, 34.6788, -82.843 + 0.0022)
-  assert.ok(hotPixel[3] > quietPixel[3])
-  assert.ok(hotPixel[3] > shoulder[3])
-  assert.ok(shoulder[3] > corner[3])
-  assert.ok(hotPixel[3] > 60 && hotPixel[3] < 160)
-  assert.ok(hotPixel[2] > hotPixel[0])
-  assert.ok(quietPixel[0] > quietPixel[2])
+  const rim = []
+  for (let step = 0; step < 8; step += 1) {
+    const theta = (step / 8) * Math.PI * 2
+    rim.push(rasterPixel(hotRaster, 34.6788 + Math.sin(theta) * 0.0024, -82.843 + Math.cos(theta) * 0.0024)[3])
+  }
+  assert.deepEqual(hotPixel.slice(0, 3), [82, 45, 128])
+  assert.deepEqual(busyPixel.slice(0, 3), [245, 102, 0])
+  assert.ok(hotPixel[3] > busyPixel[3])
+  assert.ok(hotPixel[3] > 100 && hotPixel[3] < 160)
+  assert.ok(busyPixel[3] > 20)
+  assert.ok(Math.max(...rim) - Math.min(...rim) > 20)
+  assert.ok(rim.every((alpha) => alpha < hotPixel[3] && alpha > corner[3]))
   assert.ok(corner[3] < 8)
+  const mixed = paintDemandHeat(demandPointsToHeat([
+    { lat: 34.68, lng: -82.84, intensity: 0.2 },
+    { lat: 34.7, lng: -82.8, intensity: 0.9 },
+  ]))
+  assert.equal(rasterPixel(mixed, 34.68, -82.84)[3], 0)
+  assert.deepEqual(rasterPixel(mixed, 34.7, -82.8).slice(0, 3), [82, 45, 128])
   const image = renderDemandHeatImage(hot)
   assert.equal(image.bounds[0][0] > 34.6788, true)
   assert.equal(image.bounds[1][0] < 34.6788, true)
@@ -236,29 +249,19 @@ test('busyness labels follow density thresholds and move from soft orange to pur
   assert.equal(busynessLabel(4), 'Very busy')
   assert.equal(busynessLabel(Number.NaN), 'Quiet')
   assert.equal(busynessLabel(-0.2), 'Quiet')
-  assert.equal(busynessColor('Quiet'), '#F8A15A')
+  assert.equal(busynessColor('Quiet'), null)
   assert.equal(busynessColor('Busy'), '#F56600')
   assert.equal(busynessColor('Very busy'), '#522D80')
   assert.equal(busynessInk('Quiet'), '#1F1208')
   assert.equal(busynessInk('Busy'), '#1F1208')
-  assert.equal(busynessInk('Very busy'), '#FFFFFF')
-  const quiet = busynessColor('Quiet')
-  const busy = busynessColor('Busy')
-  const very = busynessColor('Very busy')
-  assert.equal(quiet.startsWith('#F'), true)
-  assert.equal(busy, '#F56600')
-  assert.equal(very, '#522D80')
-  const rest = busiestGlowColor('Very busy', 0, 'tight')
-  const peak = busiestGlowColor('Very busy', 1, 'tight')
-  const wide = busiestGlowColor('Very busy', 1, 'wide')
-  assert.equal(rest, 'rgba(82,45,128,0.28)')
-  assert.equal(peak, 'rgba(82,45,128,0.64)')
-  assert.equal(wide, 'rgba(82,45,128,0.28)')
-  assert.equal(busiestGlowColor('Quiet', 0, 'wide'), 'rgba(248,161,90,0.1)')
-  assert.equal(busiestGlowColor('Busy', 1, 'tight'), 'rgba(245,102,0,0.64)')
+  assert.equal(busynessInk('Very busy'), '#1F1208')
+  assert.equal(demandGlows(0), false)
+  assert.equal(demandGlows(QUIET_BELOW - 0.001), false)
+  assert.equal(demandGlows(QUIET_BELOW), true)
+  assert.equal(demandGlows(VERY_BUSY_FROM), true)
 })
 
-test('hot areas keep the hotter reading, outline only the busiest, and skip demo cars', () => {
+test('hot areas keep the hotter reading, glow only when busy, and skip demo cars', () => {
   const merged = hotAreas([
     { latitude: 34.68, longitude: -82.84, weight: 0.3 },
     { latitude: 34.681, longitude: -82.8404, weight: 0.8 },
@@ -277,18 +280,11 @@ test('hot areas keep the hotter reading, outline only the busiest, and skip demo
   assert.equal(split[0].busiest, true)
   assert.equal(split[1].label, 'Quiet')
   assert.equal(split[1].busiest, false)
+  assert.equal(demandGlows(split[0].weight), true)
+  assert.equal(demandGlows(split[1].weight), false)
   const alone = hotAreas([{ latitude: 1, longitude: 2, weight: 0.2 }])
-  const ring = busiestOutline(alone[0])
-  assert.equal(ring.length, 36)
-  const latRadius = Math.max(...ring.map((point) => Math.abs(point.latitude - alone[0].latitude)))
-  const lngRadius = Math.max(...ring.map((point) => Math.abs(point.longitude - alone[0].longitude)))
-  assert.ok(latRadius > 0.001)
-  assert.ok(lngRadius > 0.001)
-  assert.equal(ring[0].latitude, alone[0].latitude)
-  assert.ok(ring[0].longitude > alone[0].longitude)
-  const wide = busiestOutline(alone[0], 1.28)
-  const wideRadius = Math.max(...wide.map((point) => Math.abs(point.latitude - alone[0].latitude)))
-  assert.ok(wideRadius > latRadius)
+  assert.equal(alone[0].label, 'Quiet')
+  assert.equal(paintDemandHeat(demandPointsToHeat([{ lat: 1, lng: 2, intensity: 0.2 }])), null)
   const heat = demandPointsToHeat([
     { lat: 34.68, lng: -82.84, intensity: QUIET_BELOW },
     { lat: 34.7, lng: -82.8, intensity: VERY_BUSY_FROM },
@@ -342,12 +338,6 @@ test('the heat breathes slowly from a soft rest to full intensity', () => {
   assert.deepEqual([...decoded.rgba.subarray(offset, offset + 4)], [...peak.rgba.subarray(offset, offset + 4)])
 })
 
-test('native heatmap is the Google layer, which this app has on Android', () => {
-  assert.equal(nativeDemandHeatSupported('android'), true)
-  assert.equal(nativeDemandHeatSupported('ios'), false)
-  assert.equal(nativeDemandHeatSupported('web'), false)
-})
-
 test('the rider map heat layer does not read demo cars or paint demand circles', () => {
   const nativeMap = read('../components/CampusMap.native.tsx')
   const webMap = read('../components/CampusMap.tsx')
@@ -358,18 +348,23 @@ test('the rider map heat layer does not read demo cars or paint demand circles',
   assert.equal(nativeMap.includes('heatColor'), false)
   assert.equal(webMap.includes('heatColor'), false)
   assert.equal(webMap.includes('styles.blob'), false)
-  assert.match(nativeLayer, /<Heatmap/)
+  assert.match(nativeLayer, /<Overlay/)
   assert.match(nativeLayer, /renderDemandHeatFrames/)
-  assert.match(nativeLayer, /busiestOutline/)
-  assert.match(nativeLayer, /heatBreathOpacity/)
+  assert.match(nativeLayer, /area\.label === 'Quiet'/)
   assert.match(nativeLayer, /area\.label/)
+  assert.equal(nativeLayer.includes('<Heatmap'), false)
+  assert.equal(nativeLayer.includes('<Polygon'), false)
   assert.equal(nativeLayer.includes('<Circle'), false)
+  assert.equal(nativeLayer.includes('busiestOutline'), false)
   assert.equal(webLayer.includes('<Circle'), false)
+  assert.equal(webLayer.includes('<Ellipse'), false)
+  assert.equal(webLayer.includes('<Polygon'), false)
+  assert.equal(webLayer.includes('fill="none"'), false)
   assert.match(webLayer, /renderDemandHeatImage/)
-  assert.match(webLayer, /busynessColor/)
   assert.match(webLayer, /HEAT_BREATH_MS/)
-  assert.match(webLayer, /fill="none"/)
+  assert.match(webLayer, /area\.label === 'Quiet'/)
   assert.match(webLayer, /area\.label/)
+  assert.match(webLayer, /backgroundColor: 'transparent'/)
   for (const src of [nativeLayer, webLayer]) {
     assert.equal(src.includes('useSimulatedFleet'), false)
     assert.equal(src.includes('simulatedFleet'), false)
