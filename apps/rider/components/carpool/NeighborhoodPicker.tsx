@@ -236,19 +236,13 @@ export function NeighborhoodPicker({
         </Pressable>
       </View>
       {locateNote ? <Text style={styles.locateNote}>{locateNote}</Text> : null}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
-        {hot.map((spot: { id: string; label: string; lat: number; lng: number }) => (
-          <Chip
-            key={spot.id}
-            spot={spot}
-            selected={value.label === spot.label}
-            onPress={() => {
-              onChange(placeOf(spot))
-              setSuggestOpen(false)
-            }}
-          />
-        ))}
-      </ScrollView>
+      {liveSuggest ? null : (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
+          {hot.map((spot: { id: string; label: string; lat: number; lng: number }) => (
+            <Chip key={spot.id} spot={spot} selected={value.label === spot.label} onPress={() => onChange(placeOf(spot))} />
+          ))}
+        </ScrollView>
+      )}
       {liveSuggest ? null : (
         <>
           <View style={styles.filters}>
