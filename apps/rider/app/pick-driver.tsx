@@ -16,7 +16,7 @@ import { mapKindLabel } from '@/components/mapTypes'
 import { SignInToBookSheet } from '@/components/SignInToBookSheet'
 import { setAuthNext } from '@/lib/authNext'
 import { useAuth } from '@/lib/auth'
-import { playTigerCue, successHaptic, tapHaptic } from '@/lib/feedback'
+import { playDriverBrowseCue, playDriverFoundCue, tapHaptic } from '@/lib/feedback'
 import { oneParam } from '@/lib/oneParam'
 import { authStorage } from '@/lib/storage'
 import { supabase } from '@/lib/supabase'
@@ -143,8 +143,7 @@ export default function PickDriver() {
       setError(extra.error || result.error)
       setPhase('results')
       if (merged.some((driver) => driver.online)) {
-        await successHaptic()
-        await playTigerCue()
+        await playDriverBrowseCue()
       }
     })
     return () => {
@@ -302,8 +301,7 @@ export default function PickDriver() {
         note,
         prepaidTipCents,
       })
-      await successHaptic()
-      await playTigerCue()
+      await playDriverFoundCue()
       router.replace({
         pathname: '/requested',
         params: { dest, trip: trip.id, driver: chosen?.name || 'Next driver' },

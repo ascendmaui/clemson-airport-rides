@@ -37,7 +37,7 @@ test('trip screen starts active tracking, stops all terminal trips, and offers S
   assert.match(trip, /isActiveTripLocationStatus\(trip\?\.status\)/)
   assert.match(trip, /if \(!activeTrip \|\| terminalTrip \|\| !user\)[\s\S]*?stopTripBackgroundLocation\(trip\.id\)/)
   assert.match(trip, /await startTripBackgroundLocation\(trip\.id\)/)
-  assert.match(trip, /\['completed', 'canceled', 'canceled_midride', 'cancelled_wait'\]/)
+  assert.match(trip, /\['completed', 'canceled', 'canceled_midride', 'cancelled_wait', 'expired'\]/)
   assert.match(trip, /if \(!row\) void stopTripBackgroundLocation\(id\)/)
   assert.match(trip, /Set location to Always so your rider can still see you while you use Maps\./)
   assert.match(trip, /Linking\.openSettings\(\)/)

@@ -3,8 +3,10 @@ import type { ReactNode } from 'react'
 import { LinearGradient } from 'expo-linear-gradient'
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { motion, radius, type as typeScale } from 'rides-native/shared/theme.js'
+import { Enter } from '@/lib/enterMotion'
 import { useTheme } from '@/lib/theme'
-import { useCardShadow } from '@/components/chrome'
+import { useCardShadow, useLift } from '@/components/chrome'
 
 type IconName = string
 
@@ -136,7 +138,7 @@ export function Segmented<T extends string>({
             hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
             style={[styles.segment, active && { backgroundColor: colors.segmentOn }]}
           >
-            <Text style={{ color: active ? colors.segmentTextOn : colors.segmentText, fontWeight: '800' }}>
+            <Text style={{ color: active ? colors.segmentTextOn : colors.segmentText, fontWeight: '800', letterSpacing: typeScale.meta.letterSpacing }}>
               {option.label}
             </Text>
           </Pressable>
@@ -170,7 +172,7 @@ export function ListRow({
         {
           borderBottomColor: colors.border,
           borderBottomWidth: last ? 0 : StyleSheet.hairlineWidth,
-          opacity: pressed ? 0.72 : 1,
+          opacity: pressed ? motion.pressOpacity : 1,
         },
       ]}
     >
@@ -206,6 +208,7 @@ export function StackPage({
 }) {
   const insets = useSafeAreaInsets()
   const { colors } = useTheme()
+  const barShadow = useLift('bar')
   return (
     <View style={[styles.page, { backgroundColor: colors.background, paddingTop: insets.top + 8 }]}>
       <View style={styles.pageHead}>
@@ -213,11 +216,11 @@ export function StackPage({
         <Text style={[styles.pageTitle, { color: colors.title }]}>{title}</Text>
         <View style={styles.pageRight}>{right || <View style={styles.circle} />}</View>
       </View>
-      <ScrollView contentContainerStyle={styles.pageBody} showsVerticalScrollIndicator={false}>
-        {children}
+      <ScrollView contentContainerStyle={styles.pageGrow} showsVerticalScrollIndicator={false}>
+        <Enter style={styles.pageBody}>{children}</Enter>
       </ScrollView>
       {footer ? (
-        <View style={[styles.footer, { backgroundColor: colors.card, borderTopColor: colors.border, paddingBottom: insets.bottom + 12 }]}>
+        <View style={[styles.footer, barShadow, { backgroundColor: colors.card, borderTopColor: colors.border, paddingBottom: insets.bottom + 12 }]}>
           {footer}
         </View>
       ) : null}
@@ -248,8 +251,8 @@ const styles = StyleSheet.create({
   goText: { fontSize: 26, fontWeight: '800', letterSpacing: 0.5 },
   switch: { width: 52, height: 30, borderRadius: 999, padding: 3, justifyContent: 'center' },
   knob: { width: 24, height: 24, borderRadius: 12 },
-  segments: { flexDirection: 'row', borderRadius: 999, padding: 4 },
-  segment: { flex: 1, borderRadius: 999, alignItems: 'center', paddingVertical: 10 },
+  segments: { flexDirection: 'row', borderRadius: radius.pill, padding: 4 },
+  segment: { flex: 1, borderRadius: radius.pill, alignItems: 'center', paddingVertical: 10 },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -257,15 +260,16 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     paddingHorizontal: 14,
   },
-  rowIcon: { width: 36, height: 36, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  rowIcon: { width: 36, height: 36, borderRadius: radius.sm, alignItems: 'center', justifyContent: 'center' },
   rowBody: { flex: 1, gap: 2 },
-  rowTitle: { fontWeight: '800', fontSize: 16 },
-  rowSub: { fontSize: 13 },
-  section: { fontSize: 20, fontWeight: '800', marginTop: 18, marginBottom: 4 },
+  rowTitle: { fontWeight: '800', fontSize: 16, letterSpacing: typeScale.button.letterSpacing },
+  rowSub: { fontSize: typeScale.meta.fontSize, letterSpacing: typeScale.meta.letterSpacing },
+  section: { ...typeScale.section, marginTop: 18, marginBottom: 4 },
   page: { flex: 1 },
   pageHead: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, gap: 8 },
-  pageTitle: { flex: 1, textAlign: 'center', fontSize: 18, fontWeight: '800' },
+  pageTitle: { flex: 1, textAlign: 'center', fontSize: typeScale.headline.fontSize, fontWeight: typeScale.headline.fontWeight, letterSpacing: typeScale.headline.letterSpacing },
   pageRight: { width: 48, alignItems: 'flex-end' },
+  pageGrow: { flexGrow: 1 },
   pageBody: { padding: 16, paddingBottom: 40, gap: 12 },
   footer: {
     borderTopWidth: StyleSheet.hairlineWidth,

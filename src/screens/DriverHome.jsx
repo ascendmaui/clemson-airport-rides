@@ -3,7 +3,11 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useAuth } from '../lib/auth'
 import { CampusMap, CLEMSON } from '../components/CampusMap'
 import { DriverCancelSheet } from '../components/DriverCancelSheet'
+import { DriverEndTripSheet } from '../components/DriverEndTripSheet'
 import { DRIVER_CANCEL_SUCCESS } from '../../shared/driverCancel.js'
+import { DRIVER_END_SUCCESS } from '../../shared/driverEndTrip.js'
+import { reconcileActiveTrip, tripTerminalClearReason } from '../../packages/rides-native/activeTripReconcile.js'
+import { sendTripHeartbeat } from '../../packages/rides-native/tripHeartbeat.js'
 import { DriverDeskHeader } from '../components/DriverDeskHeader'
 import { DriverProfilePhoto } from '../components/DriverProfilePhoto'
 import { GameDayStatus } from '../components/GameDayStatus'
@@ -118,8 +122,11 @@ function DriverShell({ driverId }) {
   activeTripRef.current = activeTrip
   const cancelNotified = useRef(null)
   const [payFailure, setPayFailure] = useState(null)
+  const refreshActiveRef = useRef(() => {})
   const clearCanceledTrip = useCallback((row) => {
     const notice = CANCEL_NOTICES[row?.status]
+      || (tripTerminalClearReason(row) === 'completed' ? 'Trip completed' : null)
+      || (tripTerminalClearReason(row) === 'expired' ? 'Trip expired' : null)
     // Ignore an older poll response that arrives after realtime cancellation.
     if (!notice) return Boolean(row?.id && cancelNotified.current === row.id)
     setActiveTrip((current) => current?.id === row.id ? null : current)
@@ -451,6 +458,9 @@ function DriverShell({ driverId }) {
           const latest = await supabase.from('trips').select('*').eq('id', current.id).maybeSingle()
           if (latest.error) throw latest.error
           if (latest.data && CANCEL_NOTICES[latest.data.status]) return latest.data
+          if (reconcileActiveTrip(current, latest.data).action === 'clear') {
+            return latest.data || { id: current.id, status: 'expired' }
+          }
         }
         const { data, error } = await supabase.from('trips').select('*')
           .eq('driver_id', driverId).in('status', ACTIVE_STATUSES)
@@ -466,8 +476,13 @@ function DriverShell({ driverId }) {
       },
       onError: () => {},
     })
+    refreshActiveRef.current = () => { void reader.refresh(true) }
     void reader.refresh()
-    const timer = setInterval(() => void reader.refresh(), 8000)
+    const timer = setInterval(() => {
+      const current = activeTripRef.current
+      if (current?.id && ACTIVE_STATUSES.includes(current.status)) void sendTripHeartbeat(supabase, current.id)
+      void reader.refresh()
+    }, 8000)
     const offResume = onTrackingResume(() => void reader.refresh(true))
     return () => { reader.stop(); offResume(); clearInterval(timer) }
   }, [driverId, clearCanceledTrip])
@@ -476,7 +491,10 @@ function DriverShell({ driverId }) {
     if (!approved) return undefined
     return subscribeTrips((payload) => {
       const row = payload?.new || payload?.record
-      if (!row) return
+      if (!row) {
+        refreshActiveRef.current()
+        return
+      }
       offerRevision.current += 1
       if (isStaleLiveOffer(row)) {
         setOffer((current) => (current?.id === row.id ? null : current))
@@ -769,6 +787,14 @@ function DriverShell({ driverId }) {
     setChatTrip(null)
     setOffer(null)
     pushToast({ kind: 'system', title: DRIVER_CANCEL_SUCCESS })
+  }
+
+  function onDriverEnded() {
+    stopTripLocation.current?.()
+    setActiveTrip(null)
+    setChatTrip(null)
+    setOffer(null)
+    pushToast({ kind: 'system', title: DRIVER_END_SUCCESS })
   }
 
   async function advanceTrip(nextStatus) {
@@ -1399,6 +1425,7 @@ function DriverShell({ driverId }) {
             />
           )}
           {['accepted', 'arriving'].includes(activeTrip.status) && !activeTrip.scheduled_for && !activeTrip.pickup_at && <DriverCancelSheet key={activeTrip.id} supabase={supabase} tripId={activeTrip.id} disabled={advancing} onCanceled={onDriverCanceled} />}
+          {ACTIVE_STATUSES.includes(activeTrip.status) && <DriverEndTripSheet key={`end-${activeTrip.id}`} supabase={supabase} tripId={activeTrip.id} disabled={advancing} onEnded={onDriverEnded} />}
           {activeTrip.status === 'accepted' && (
             <PurpleAcceptButton onClick={() => advanceTrip('arriving')} disabled={advancing}>
               {advancing ? 'Updating…' : statusActionLabel('accepted')}

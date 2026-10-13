@@ -1,6 +1,7 @@
 import * as Location from 'expo-location'
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
 import Animated, { useAnimatedStyle, useSharedValue, withSequence, withTiming } from 'react-native-reanimated'
+import { useReduceMotion } from 'rides-native/shared/reduceMotion.js'
 import { authStorage } from '@/lib/storage'
 import { paletteFor, type Palette, type Scheme } from '@/lib/palette'
 import { CLEMSON_LAT, CLEMSON_LNG, isDaylight } from '@/lib/solar'
@@ -234,13 +235,18 @@ export function useTheme(): ThemeValue {
 function SchemeFade({ scheme, children }: { scheme: Scheme; children: ReactNode }) {
   const fade = useSharedValue(1)
   const first = useRef(true)
+  const reduce = useReduceMotion()
   useEffect(() => {
     if (first.current) {
       first.current = false
       return
     }
+    if (reduce) {
+      fade.value = 1
+      return
+    }
     fade.value = withSequence(withTiming(0.82, { duration: 90 }), withTiming(1, { duration: 200 }))
-  }, [scheme, fade])
+  }, [scheme, fade, reduce])
   const style = useAnimatedStyle(() => ({ opacity: fade.value }))
   return <Animated.View style={[{ flex: 1 }, style]}>{children}</Animated.View>
 }

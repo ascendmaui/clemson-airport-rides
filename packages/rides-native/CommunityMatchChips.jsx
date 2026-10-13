@@ -12,7 +12,11 @@ export function CommunityMatchChips({ supabase, tripId, colors = {}, compact = f
   useEffect(() => {
     let alive = true
     setLines([])
-    loadCommunityMatches(supabase, tripId).then((rows) => { if (alive) setLines(rows) })
+    loadCommunityMatches(supabase, tripId).then((rows) => {
+      if (alive) setLines(rows)
+    }).catch(() => {
+      if (alive) setLines([])
+    })
     return () => { alive = false }
   }, [supabase, tripId])
   if (!lines.length) return null

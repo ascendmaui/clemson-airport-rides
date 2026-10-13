@@ -9,6 +9,7 @@ import { SectionLabel } from '@/components/shell'
 import { useAuth } from '@/lib/auth'
 import { supabase } from '@/lib/supabase'
 import { useTheme } from '@/lib/theme'
+import { radius, type as typeScale } from 'rides-native/shared/theme.js'
 import { displayFirstName } from 'rides-native/authErrors'
 import { loadDriverPerks, loadVehicle, setLeaderboardOptOut, type Leaderboard, type VehicleRow } from 'rides-native/driverDesk'
 import { knowledgeQuizStatus, knowledgeQuizStatusLabel, loadKnowledgeQuiz } from 'rides-native/driverKnowledgeQuiz'
@@ -190,10 +191,10 @@ const styles = StyleSheet.create({
   avatar: { width: 64, height: 64, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
   avatarText: { fontSize: 22, fontWeight: '800', letterSpacing: 0.4 },
   profileCopy: { flex: 1, gap: 2 },
-  kicker: { fontWeight: '800', letterSpacing: 1.1, fontSize: 12 },
-  title: { fontSize: 28, fontWeight: '800', letterSpacing: -0.4 },
-  deleteRow: { flexDirection: 'row', alignItems: 'center', gap: 12, borderWidth: 1, borderRadius: 16, padding: 16, marginTop: 8, minHeight: 60 },
+  kicker: { ...typeScale.kicker },
+  title: { ...typeScale.title },
+  deleteRow: { flexDirection: 'row', alignItems: 'center', gap: 12, borderWidth: 1, borderRadius: radius.lg, padding: 16, marginTop: 8, minHeight: 60 },
   deleteCopy: { flex: 1, gap: 2 },
-  toggleRow: { flexDirection: 'row', alignItems: 'center', gap: 12, borderRadius: 16, padding: 16, minHeight: 60 },
+  toggleRow: { flexDirection: 'row', alignItems: 'center', gap: 12, borderRadius: radius.lg, padding: 16, minHeight: 60 },
   deleteTitle: { fontWeight: '800', fontSize: 16 },
 })

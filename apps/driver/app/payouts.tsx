@@ -9,6 +9,7 @@ import { supabase } from '@/lib/supabase'
 import { useTheme } from '@/lib/theme'
 import { authedJson } from 'rides-native/apiClient'
 import { loadEarnings } from 'rides-native/driverDesk'
+import { type as typeScale } from 'rides-native/shared/theme.js'
 import { cashOutPayout, loadPayoutDesk, startPayoutSetup } from 'rides-native/driverPayoutsClient'
 import { payoutChipLabel } from '../../../shared/driverPayoutMethods.js'
 import { CASHOUT_COPY } from '../../../shared/cashout.js'
@@ -193,11 +194,11 @@ export default function PayoutsScreen() {
   return (
     <StackPage title="Payout methods" onBack={() => router.back()}>
       <Card>
-        <Text style={{ color: colors.inkSecondary, fontWeight: '700' }}>Available balance</Text>
-        <Text style={{ color: colors.ink, fontSize: 36, fontWeight: '800' }}>{shownCents(desk?.availableCents || 0, earningsPrivate)}</Text>
-        <Text style={{ color: colors.inkSecondary, fontWeight: '700' }}>Pending balance</Text>
-        <Text style={{ color: colors.ink, fontSize: 22, fontWeight: '800' }}>{shownCents(desk?.pendingCents || 0, earningsPrivate)}</Text>
-        <Text style={{ color: colors.inkSecondary, lineHeight: 20 }}>
+        <Text style={{ color: colors.inkSecondary, ...typeScale.kicker }}>Available balance</Text>
+        <Text style={{ color: colors.ink, ...typeScale.amount }}>{shownCents(desk?.availableCents || 0, earningsPrivate)}</Text>
+        <Text style={{ color: colors.inkSecondary, ...typeScale.kicker }}>Pending balance</Text>
+        <Text style={{ color: colors.ink, fontSize: 22, fontWeight: '800', letterSpacing: -0.3 }}>{shownCents(desk?.pendingCents || 0, earningsPrivate)}</Text>
+        <Text style={{ color: colors.inkSecondary, ...typeScale.body }}>
           Available is on Stripe now. Pending is still settling. Paid out {shownCents(paid, earningsPrivate)}.
         </Text>
         {tipsPaid + tipsPending > 0 ? (
@@ -271,7 +272,7 @@ export default function PayoutsScreen() {
       {error ? <ErrorText>{error}</ErrorText> : null}
       {pending.map((row: Pending, index: number) => (
         <Card key={row.tripId || row.dropoffLabel || index}>
-          <Text style={{ color: colors.title, fontWeight: '800' }}>{row.dropoffLabel || 'Trip'}</Text>
+          <Text style={{ color: colors.title, ...typeScale.cardTitle }}>{row.dropoffLabel || 'Trip'}</Text>
           <Text style={{ color: colors.ink }}>{row.kind === 'tip' ? 'Tip · ' : ''}{shownCents(row.amountCents || 0, earningsPrivate)} · {row.status || 'pending'}</Text>
           {row.nextRetryAt ? <Text style={{ color: colors.inkSecondary }}>Retry {new Date(row.nextRetryAt).toLocaleString()}</Text> : null}
           {row.lastError ? <Text style={{ color: colors.danger }}>{row.lastError}</Text> : null}
