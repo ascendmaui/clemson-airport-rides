@@ -397,3 +397,10 @@ test('metersToFeet converts without clamping negatives', () => {
   assert.ok(metersToFeet(-2) < 0)
   assert.equal(Number.isFinite(metersToFeet(Number.NaN)), false)
 })
+
+test('the missing-fix card does not call the driver Nearby', () => {
+  const card = readFileSync(new URL('../components/ApproachAlert.tsx', import.meta.url), 'utf8')
+  assert.match(card, /waiting \|\| "Waiting for your driver's location"/)
+  assert.doesNotMatch(card, /approachPrimaryLine/)
+  assert.doesNotMatch(card, /formatApproachFeet/)
+})
