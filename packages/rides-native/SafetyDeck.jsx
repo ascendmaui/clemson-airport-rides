@@ -1,20 +1,30 @@
 import { useEffect, useRef } from 'react'
 import { Animated, Pressable, Text, View } from 'react-native'
 import { SAFETY_FEATURES } from '../../shared/safetyHub.js'
+import { useReduceMotion } from './shared/reduceMotion.js'
+import { radius, type as typeScale } from './shared/theme.js'
 
 export function SafetyDeck({ colors, activeId, onChange, children, description }) {
   const active = SAFETY_FEATURES.find((feature) => feature.id === activeId) || SAFETY_FEATURES[0]
+  const reduceMotion = useReduceMotion()
   const fade = useRef(new Animated.Value(1)).current
   const rise = useRef(new Animated.Value(0)).current
 
   useEffect(() => {
+    if (reduceMotion) {
+      fade.setValue(1)
+      rise.setValue(0)
+      return undefined
+    }
     fade.setValue(0)
     rise.setValue(8)
-    Animated.parallel([
+    const anim = Animated.parallel([
       Animated.timing(fade, { toValue: 1, duration: 220, useNativeDriver: true }),
       Animated.spring(rise, { toValue: 0, friction: 8, tension: 80, useNativeDriver: true }),
-    ]).start()
-  }, [active.id, fade, rise])
+    ])
+    anim.start()
+    return () => anim.stop()
+  }, [active.id, fade, reduceMotion, rise])
 
   return (
     <View style={{ gap: 12 }}>
@@ -23,7 +33,7 @@ export function SafetyDeck({ colors, activeId, onChange, children, description }
         style={{
           flexDirection: 'row',
           backgroundColor: colors.purpleSoft,
-          borderRadius: 16,
+          borderRadius: radius.lg,
           padding: 4,
           gap: 4,
         }}
@@ -40,7 +50,7 @@ export function SafetyDeck({ colors, activeId, onChange, children, description }
               style={{
                 flex: 1,
                 minHeight: 40,
-                borderRadius: 12,
+                borderRadius: radius.sm,
                 alignItems: 'center',
                 justifyContent: 'center',
                 backgroundColor: selected ? colors.orange : 'transparent',
@@ -63,18 +73,18 @@ export function SafetyDeck({ colors, activeId, onChange, children, description }
           opacity: fade,
           transform: [{ translateY: rise }],
           backgroundColor: colors.card,
-          borderRadius: 20,
+          borderRadius: radius.panel,
           padding: 16,
           borderWidth: 1,
           borderColor: selectedBorder(active.id, colors),
           gap: 8,
         }}
       >
-        <Text style={{ color: colors.orange, fontWeight: '800', letterSpacing: 1.1, fontSize: 11 }}>
+        <Text style={{ color: colors.orange, ...typeScale.kickerSm }}>
           {active.label.toUpperCase()}
         </Text>
-        <Text style={{ color: colors.title, fontWeight: '800', fontSize: 20 }}>{active.title}</Text>
-        <Text style={{ color: colors.inkSecondary, fontSize: 14, lineHeight: 20 }}>{description || active.body}</Text>
+        <Text style={{ color: colors.title, fontWeight: '800', fontSize: 20, letterSpacing: -0.3 }}>{active.title}</Text>
+        <Text style={{ color: colors.inkSecondary, ...typeScale.body }}>{description || active.body}</Text>
         {children}
       </Animated.View>
     </View>

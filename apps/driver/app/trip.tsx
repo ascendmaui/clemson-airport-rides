@@ -54,6 +54,7 @@ import { followEtaLine, followMapCoordinates } from 'rides-native/roadFollow'
 import { driverPickupTarget } from 'rides-native/riderLivePickup'
 import { LivePhase } from 'rides-native/LivePhase'
 import { ORANGE, PURPLE } from 'rides-native/places.js'
+import { radius, type as typeScale } from 'rides-native/shared/theme.js'
 import { CounterpartCard, RateTripPanel, partyColorsFromPalette } from 'rides-native/PartyScreens'
 import { CommunityMatchChips } from 'rides-native/CommunityMatchChips'
 import { loadCounterpart, type CounterpartView } from 'rides-native/partyProfile.js'
@@ -777,8 +778,8 @@ export default function TripScreen() {
         ) : null}
         {error ? <ErrorText>{error}</ErrorText> : null}
         {trip?.backupConfirmOpen ? (
-          <View style={{ marginBottom: 12, padding: 12, borderRadius: 14, backgroundColor: 'rgba(245,102,0,0.12)' }}>
-            <Text style={{ color: ORANGE, fontWeight: '800', fontSize: 16 }}>Confirm trip</Text>
+          <View style={{ marginBottom: 12, padding: 16, borderRadius: radius.lg, backgroundColor: colors.orangeSoft }}>
+            <Text style={{ color: ORANGE, fontWeight: '800', fontSize: 16, letterSpacing: -0.2 }}>Confirm trip</Text>
             <Text style={{ marginTop: 4 }}>{trip.backupConfirmCopy}</Text>
             <ScheduledRidesHint topic="confirm" colors={colors} />
             {trip.backupUrgent ? <Text style={{ color: ORANGE, fontWeight: '700', marginTop: 6 }}>You are up. Confirm and start toward pickup.</Text> : null}
@@ -827,8 +828,8 @@ export default function TripScreen() {
           </View>
         ) : null}
         {trip?.backupLeaveNowOpen ? (
-          <View style={{ marginBottom: 12, padding: 12, borderRadius: 14, backgroundColor: 'rgba(245,102,0,0.12)' }}>
-            <Text style={{ color: ORANGE, fontWeight: '800', fontSize: 16 }}>Leave now</Text>
+          <View style={{ marginBottom: 12, padding: 16, borderRadius: radius.lg, backgroundColor: colors.orangeSoft }}>
+            <Text style={{ color: ORANGE, fontWeight: '800', fontSize: 16, letterSpacing: -0.2 }}>Leave now</Text>
             <ScheduledRidesHint topic="leave" colors={colors} />
             <LeaveNowLabel leaveNowAt={trip.backupLeaveNowAt} />
           </View>
@@ -854,8 +855,8 @@ export default function TripScreen() {
 function tripStyles(colors: Palette) {
   return StyleSheet.create({
     screen: { flex: 1, backgroundColor: colors.background },
-    signal: { borderWidth: 2, borderRadius: 14, padding: 10, gap: 2 },
-    signalText: { fontSize: 15, fontWeight: '900' },
+    signal: { borderWidth: 2, borderRadius: radius.lg, padding: 12, gap: 2 },
+    signalText: { fontSize: 15, fontWeight: '800', letterSpacing: -0.2 },
     signalNote: { fontSize: 12, lineHeight: 17 },
     sheet: {
       backgroundColor: colors.card,
@@ -866,23 +867,23 @@ function tripStyles(colors: Palette) {
       gap: 8,
       maxHeight: '78%',
     },
-    handle: { alignSelf: 'center', width: 36, height: 4, borderRadius: 2, marginBottom: 4 },
+    handle: { alignSelf: 'center', width: 36, height: 4, borderRadius: radius.pill, marginBottom: 4 },
     sheetScroll: { flexGrow: 0 },
     sheetContent: { gap: 8, paddingBottom: 8 },
     sheetHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
-    kicker: { color: colors.orange, fontWeight: '800', letterSpacing: 1 },
-    copy: { color: colors.inkSecondary, fontSize: 14, lineHeight: 20 },
+    kicker: { color: colors.orange, ...typeScale.kickerSm },
+    copy: { color: colors.inkSecondary, ...typeScale.body },
     note: { color: colors.orange, fontSize: 13, lineHeight: 18, fontWeight: '700' },
     fare: { color: colors.ink, fontWeight: '800', fontSize: 16 },
     tags: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
     navRow: { flexDirection: 'row', gap: 8 },
-    nav: { flex: 1, backgroundColor: colors.fill, borderRadius: 14, paddingVertical: 12, alignItems: 'center' },
+    nav: { flex: 1, backgroundColor: colors.fill, borderRadius: radius.lg, paddingVertical: 14, alignItems: 'center' },
     navPrimary: { flex: 2 },
-    arrivePrompt: { borderWidth: 2, borderRadius: 18, padding: 14, gap: 8 },
-    arriveTitle: { color: colors.title, fontWeight: '900', fontSize: 28 },
-    navText: { color: colors.onAccent, fontWeight: '800' },
+    arrivePrompt: { borderWidth: 2, borderRadius: radius.lg, padding: 14, gap: 8 },
+    arriveTitle: { color: colors.title, ...typeScale.title },
+    navText: { color: colors.onAccent, fontWeight: '800', letterSpacing: -0.2 },
     settle: { color: colors.title, fontWeight: '700', lineHeight: 20 },
-    airport: { borderRadius: 14, padding: 10, gap: 2, backgroundColor: colors.track },
-    airportChip: { color: colors.purple, fontWeight: '900', letterSpacing: 0.5 },
+    airport: { borderRadius: radius.lg, padding: 12, gap: 2, backgroundColor: colors.purpleSoft },
+    airportChip: { color: colors.purple, fontWeight: '800', letterSpacing: 0.6 },
   })
 }
