@@ -1,4 +1,4 @@
-export { GlassSurface, GlassSheen } from './GlassSurface.jsx'
+export { GlassSurface, GlassSheen, nativeGlassAvailable } from './GlassSurface.jsx'
 export { GlassButton } from './GlassButton.jsx'
 export { GlassCard } from './GlassCard.jsx'
 export { GlassSheet } from './GlassSheet.jsx'
