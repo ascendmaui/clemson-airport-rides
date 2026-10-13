@@ -1,6 +1,6 @@
 # Closed-app iOS push — 5 minute runbook
 
-Do this on John's Mac after the APNs `.p8` is on disk. It uploads that key to both Expo projects and sends one test push. It does not build, prebuild, or change `app.json`.
+Do this on John's Mac. The APNs key is **Key ID `CPH2DULQHJ`**, team `L85AF3V872`, file `AuthKey_CPH2DULQHJ.p8`. John is attaching that key to both Expo projects on his Mac. This runbook does not build, prebuild, or change `app.json`, and it does not start a second `eas credentials` session while that attach is in progress.
 
 Both apps already register Expo tokens and the server already posts to Expo:
 
@@ -14,23 +14,26 @@ Apple team id: `L85AF3V872`.
 ## Before the timer
 
 - `eas whoami` prints the Expo account that owns those two projects (`johnmatveyev`). If it does not, run `eas login` or export `EXPO_TOKEN`. Do not start a build.
-- The `.p8` is the push key from Apple, named like `AuthKey_AB12CD34EF.p8`. The key id is those 10 characters.
+- The `.p8` is `AuthKey_CPH2DULQHJ.p8`. The key id is `CPH2DULQHJ`. If `eas credentials` already shows that key on both Rider and Driver, skip the upload and go to the test send.
 - A phone has opened the Rider or Driver app and allowed notifications, so a row exists in `rider_push_tokens` or `driver_push_tokens`.
 - `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are in the shell for the test send. `EXPO_ACCESS_TOKEN` stays empty unless Enhanced Security for Push is on.
 
-## Minutes 0–2 — upload the key
+## Minutes 0–2 — upload the key, unless it is already attached
 
-From the repo root, with the real path and key id:
+Skip this step when both Expo projects already list push key `CPH2DULQHJ`. Do not run it while John is in an interactive `eas credentials` session on the same account.
+
+From the repo root, after that session is finished:
 
 ```bash
 bash scripts/push/setup-apns.sh \
-  --p8 "$HOME/AuthKey_AB12CD34EF.p8" \
-  --key-id AB12CD34EF
+  --p8 "$HOME/AuthKey_CPH2DULQHJ.p8"
 ```
 
-The script checks both `app.json` files, then runs `eas credentials --platform ios` in each app directory. It picks the **production** profile (the development profile is a simulator build and cannot take a push key), chooses **Push Notifications → Add a new push key**, answers **no** to generating a key, and uploads this `.p8` for team `L85AF3V872`. It assigns the key to that project and exits. It never runs `eas build` or `expo prebuild`.
+`--key-id` is optional. The script reads `CPH2DULQHJ` from `AuthKey_CPH2DULQHJ.p8`. Any other filename defaults to that same key id. Pass `--key-id` only when it is a different 10-character id.
 
-Success is the line `Push Key assigned to` for both `clemson-rides-rider` and `clemson-rides-driver`.
+The script checks both `app.json` files, then runs `eas credentials --platform ios` in each app directory. It picks the **production** profile (the development profile is a simulator build and cannot take a push key). If the menu already shows key `CPH2DULQHJ`, or says that key is already assigned, the script leaves the menus and does not add a second key. Otherwise it chooses **Push Notifications → Add a new push key**, answers **no** to generating a key, and uploads this `.p8` for team `L85AF3V872`. It never runs `eas build` or `expo prebuild`.
+
+Success is `Push Key assigned to` for both `clemson-rides-rider` and `clemson-rides-driver`, or the script finishing because that key was already on the project.
 
 If a prompt does not match, press Ctrl-C and use the same menu by hand. Still do not build.
 

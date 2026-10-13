@@ -5,12 +5,15 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 TEAM_ID="L85AF3V872"
+KNOWN_KEY_ID="CPH2DULQHJ"
 P8=""
 KEY_ID=""
 
 usage() {
-  echo "Usage: scripts/push/setup-apns.sh --p8 /path/AuthKey_XXXXXXXXXX.p8 --key-id XXXXXXXXXX [--team-id L85AF3V872]" >&2
+  echo "Usage: scripts/push/setup-apns.sh --p8 /path/AuthKey_CPH2DULQHJ.p8 [--key-id CPH2DULQHJ] [--team-id L85AF3V872]" >&2
   echo "Uploads the key with eas credentials. Does not start a native build." >&2
+  echo "Omit --key-id to read it from AuthKey_XXXXXXXXXX.p8, or to use ${KNOWN_KEY_ID}." >&2
+  echo "If that key is already on the Expo project, the script leaves the menu and does not add a second key." >&2
 }
 
 while [[ $# -gt 0 ]]; do
@@ -39,9 +42,17 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-if [[ -z "$P8" || -z "$KEY_ID" ]]; then
+if [[ -z "$P8" ]]; then
   usage
   exit 2
+fi
+if [[ -z "$KEY_ID" ]]; then
+  p8_base="$(basename "$P8")"
+  if [[ "$p8_base" =~ ^AuthKey_([A-Z0-9]{10})\.p8$ ]]; then
+    KEY_ID="${BASH_REMATCH[1]}"
+  else
+    KEY_ID="$KNOWN_KEY_ID"
+  fi
 fi
 if [[ "$TEAM_ID" != "L85AF3V872" ]]; then
   echo "Team id must be L85AF3V872." >&2
@@ -103,4 +114,4 @@ upload_one() {
 
 upload_one "$ROOT/apps/rider" "d02319c9-69ef-4523-a0a5-6712c037d5fa" "com.ascendmaui.clemsonrides.rider"
 upload_one "$ROOT/apps/driver" "090d10b8-2f52-4502-ac9d-e8bd0fe35033" "com.ascendmaui.clemsonrides.driver"
-echo "APNs key assigned to both Expo projects. No build was started."
+echo "APNs key ${KEY_ID} is on both Expo projects. No build was started."

@@ -38,6 +38,22 @@ def _down(count: int) -> str:
     return (DOWN * count) + "\r"
 
 
+ALREADY_MARKERS = ("already assigned", "already set up", "already configured")
+
+
+def project_already_has_key(text: str, key_id: str) -> bool:
+    """True when this Expo project is already using the .p8 we were given."""
+    if not key_id or key_id not in text:
+        return False
+    folded = text.lower()
+    if any(marker in folded for marker in ALREADY_MARKERS):
+        return True
+    # The push-credentials summary names the key this project already uses.
+    return "push key" in folded and (
+        "key id" in folded or "key identifier" in folded or "developer portal" in folded
+    )
+
+
 def next_reply(state: dict, chunk: str, p8: str, key_id: str, team_id: str) -> str | None:
     """Return the next keystrokes for new terminal text, or None while waiting."""
     state["pending"] += strip_ansi(chunk)
@@ -46,7 +62,19 @@ def next_reply(state: dict, chunk: str, p8: str, key_id: str, team_id: str) -> s
     reply = None
     if "Push Key assigned to" in text:
         state["assigned"] = True
-    if phase == "profile" and "Which build profile do you want to configure?" in text:
+    # Leave before "Add a new push key". A second upload would duplicate the key
+    # John is attaching by hand.
+    if (
+        phase in {"apple_or_menu", "menu_push", "menu_add"}
+        and "What do you want to do?" in text
+        and project_already_has_key(text, key_id)
+    ):
+        state["assigned"] = True
+        if phase == "menu_add":
+            reply, state["phase"] = _down(BACK_MOVES), "menu_exit"
+        else:
+            reply, state["phase"] = _down(EXIT_MOVES), "done"
+    elif phase == "profile" and "Which build profile do you want to configure?" in text:
         reply, state["phase"] = _down(PRODUCTION_MOVES), "apple_or_menu"
     elif phase == "apple_or_menu" and "log in to your Apple account?" in text:
         reply, state["phase"] = "n\r", "menu_push"
@@ -106,6 +134,27 @@ def self_test() -> int:
         return 1
     if any("eas build" in reply or "prebuild" in reply for reply in state["replies"]):
         print("self-test emitted a build command", file=sys.stderr)
+        return 1
+    already = initial_state()
+    already_script = [
+        ("Which build profile do you want to configure?", _down(PRODUCTION_MOVES)),
+        ("What do you want to do?", _down(PUSH_MENU_MOVES)),
+        (
+            "Push Key\nKey ID: CPH2DULQHJ\nApple Team ID: L85AF3V872\nPush Key CPH2DULQHJ is already assigned to clemson-rides-rider.\nWhat do you want to do?",
+            _down(BACK_MOVES),
+        ),
+        ("What do you want to do?", _down(EXIT_MOVES)),
+    ]
+    for chunk, expected in already_script:
+        got = next_reply(already, chunk, "/tmp/AuthKey_CPH2DULQHJ.p8", "CPH2DULQHJ", "L85AF3V872")
+        if got != expected:
+            print(f"already-assigned mismatch\n chunk={chunk!r}\n got={got!r}\n expected={expected!r}", file=sys.stderr)
+            return 1
+    if not already["assigned"] or already["phase"] != "done":
+        print(f"already-assigned state {already['phase']} assigned={already['assigned']}", file=sys.stderr)
+        return 1
+    if any("eas build" in reply or "prebuild" in reply for reply in already["replies"]):
+        print("already-assigned self-test emitted a build command", file=sys.stderr)
         return 1
     print("apns prompt self-test ok")
     return 0
