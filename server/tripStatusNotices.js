@@ -178,10 +178,10 @@ async function noticeContext(sb, trip, notice) {
   const driverSide = NOTICE_KINDS[notice?.kind]?.role === 'driver'
   let riderName = ''
   if (driverSide) {
-    riderName = clean(meta.rider_first_name)
+    riderName = riderDriverFirstName(clean(meta.rider_first_name), '')
     if (!riderName && trip.rider_id) {
       const rider = await maybeSingle(sb.from('profiles').select('full_name').eq('id', trip.rider_id).maybeSingle())
-      riderName = rider?.full_name || ''
+      riderName = riderDriverFirstName(rider?.full_name, '')
     }
   }
   const base = {

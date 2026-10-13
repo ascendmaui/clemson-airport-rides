@@ -103,19 +103,25 @@ export function filterProfileByPrivacy(profile, { isOwner = false, isMatched = f
   return withoutComfortFields({ ...profile, _access: privacy === 'public' ? 'public' : 'matched' })
 }
 
+const OTHER_PROFILE_COLS = 'id, role, full_name, bio, avatar_url, student_verified_at, rating_avg, rating_count, favorite_spots, music_taste, ride_style, profile_privacy'
+const OTHER_PROFILE_FALLBACK = 'id, role, full_name, avatar_url, bio, rating_avg, rating_count'
+
 export async function fetchFullProfile(userId, { viewerId = null, assumeMatched = false } = {}) {
   if (!supabase || !userId) return null
+  const isOwner = Boolean(viewerId && viewerId === userId)
   let profile = null
   {
     const rich = await supabase
       .from('profiles')
-      .select(PROFILE_COLS)
+      .select(isOwner ? PROFILE_COLS : OTHER_PROFILE_COLS)
       .eq('id', userId)
       .maybeSingle()
     if (rich.error && /column|schema cache|notification_prefs|billing_activated|stripe_card_|is_admin/i.test(rich.error.message || '')) {
       const basic = await supabase
         .from('profiles')
-        .select('id, role, full_name, email, bio, avatar_url, student_verified_at, rating_avg, rating_count, phone, favorite_spots, music_taste, ride_style, profile_privacy, stripe_customer_id, stripe_default_pm_id')
+        .select(isOwner
+          ? 'id, role, full_name, email, bio, avatar_url, student_verified_at, rating_avg, rating_count, phone, favorite_spots, music_taste, ride_style, profile_privacy, stripe_customer_id, stripe_default_pm_id'
+          : OTHER_PROFILE_FALLBACK)
         .eq('id', userId)
         .maybeSingle()
       if (basic.error) throw new Error(basic.error.message)
@@ -128,7 +134,6 @@ export async function fetchFullProfile(userId, { viewerId = null, assumeMatched 
   }
   if (!profile) return null
 
-  const isOwner = viewerId && viewerId === userId
   let isMatched = Boolean(assumeMatched) || isOwner
   if (!isMatched && viewerId && supabase) {
     const { data: trips } = await supabase
@@ -181,15 +186,18 @@ export async function fetchFullProfile(userId, { viewerId = null, assumeMatched 
 
 function riderSafeDriver(profile, isOwner) {
   if (!profile || isOwner) return profile
-  if (profile.role !== 'driver' && profile.role !== 'both') return profile
   const next = { ...profile }
   delete next.phone
+  delete next.phone_number
   delete next.email
+  delete next.last_name
+  delete next.lastName
   delete next.stripe_customer_id
   delete next.stripe_default_pm_id
   delete next.stripe_card_brand
   delete next.stripe_card_last4
-  next.full_name = riderDriverFirstName(next.full_name, 'Driver')
+  const fallback = next.role === 'driver' || next.role === 'both' ? 'Driver' : 'Rider'
+  next.full_name = riderDriverFirstName(next.full_name, fallback)
   return next
 }
 

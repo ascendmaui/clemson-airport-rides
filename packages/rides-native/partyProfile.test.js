@@ -647,7 +647,9 @@ test('counterpart view uses the first name, rider fallback, and raw rating field
   assert.equal(rider.initial, 'S')
   assert.equal(rider.roleLabel, 'Your rider')
   assert.equal(rider.ratingLine, 'New · no ratings yet')
-  assert.equal(rider.phone, '(864) 555-1212')
+  assert.equal('phone' in rider, false)
+  assert.equal(JSON.stringify(rider).includes('8645551212'), false)
+  assert.equal(JSON.stringify(rider).includes('lee'), false)
   // BUG?: rating_avg "" is not null, so ratingAvg becomes Number("") === 0.
   assert.equal(rider.ratingAvg, 0)
   assert.equal(rider.ratingCount, 0)
@@ -943,6 +945,8 @@ test('loadCounterpart shows the other party and a vehicle only to the rider', as
     'driver',
   )
   assert.equal(driverView.name, 'Jordan')
+  assert.equal('phone' in driverView, false)
+  assert.equal(JSON.stringify(driverView).includes('Lee'), false)
   assert.equal(driverView.roleLabel, 'Your rider')
   assert.equal(driverView.vehicle, '')
   assert.equal(asDriver.calls.some((call) => call.table === 'vehicles'), false)

@@ -11,6 +11,7 @@ import { useFeedback } from '@/lib/feedback'
 import { oneParam } from '@/lib/oneParam'
 import { supabase } from '@/lib/supabase'
 import { useTheme } from '@/lib/theme'
+import { riderDriverFirstName } from '../../../shared/riderDriverPrivacy.js'
 import type { Palette } from '@/lib/palette'
 import { acceptTrip, confirmBackupQueueTrip, declineDriverOffer, loadDriverDesk, markSearchingOffers, releaseBackupQueueSeat, subscribeTrips } from 'rides-native/driverDesk'
 import { fetchDriverApplication } from 'rides-native/drivers'
@@ -111,6 +112,7 @@ function QueueCard({
   const { colors } = useTheme()
   const ladder = ladderOfferNet(card)
   const hourly = formatHourlyRate(offerHourly(card).hourlyCents)
+  const riderFirst = riderDriverFirstName(card.firstName, 'Rider') || 'Rider'
   return (
     <Card>
       <View style={styles.riderRow}>
@@ -119,15 +121,15 @@ function QueueCard({
             source={{ uri: card.riderAvatarUrl }}
             style={styles.avatar}
             accessibilityIgnoresInvertColors
-            accessibilityLabel={`${card.firstName || 'Rider'} profile photo`}
+            accessibilityLabel={`${riderFirst} profile photo`}
           />
         ) : (
           <View style={[styles.avatar, styles.avatarFallback]}>
-            <Text style={styles.avatarLetter}>{(card.firstName || 'R').slice(0, 1)}</Text>
+            <Text style={styles.avatarLetter}>{riderFirst.slice(0, 1)}</Text>
           </View>
         )}
         <View style={{ flex: 1 }}>
-          <Text style={styles.cardTitle}>{card.firstName}</Text>
+          <Text style={styles.cardTitle}>{riderFirst}</Text>
           <Text style={styles.copy}>{statusHeadline(card.status)}</Text>
         </View>
       </View>

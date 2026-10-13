@@ -52,9 +52,10 @@ async function peerNames(sb, userId, trips) {
   for (const row of data) {
     const full = String(row.full_name || '').trim()
     if (full) fullNames.push(full)
+    const given = riderDriverFirstName(full, '')
     byId[row.id] = {
-      display: displayFirstName(full),
-      rider: riderDriverFirstName(full, ''),
+      display: given,
+      rider: given,
     }
   }
   return { byId, fullNames }

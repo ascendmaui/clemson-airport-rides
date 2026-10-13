@@ -201,7 +201,6 @@ export function CounterpartCard({ person, eta = null, colors = LIGHT_PARTY }) {
       {person.rideStyle ? <Text style={styles.copy}>Ride style · {person.rideStyle}</Text> : null}
       {person.bio ? <Text style={styles.copy}>{person.bio}</Text> : null}
       {person.spots.length ? <Text style={styles.copy}>Spots · {person.spots.join(', ')}</Text> : null}
-      {person.roleLabel !== 'Your driver' && person.phone ? <Text style={styles.copy}>Phone · {person.phone}</Text> : null}
     </View>
   )
 }

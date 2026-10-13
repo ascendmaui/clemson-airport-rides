@@ -12,6 +12,7 @@
  * - Driver bonus id `driver_carpool_bonus` is the incentives-agent name.
  * - Ambassador code_type is `ambassador`, not rider promo codes.
  */
+import { riderDriverFirstName } from '../../shared/riderDriverPrivacy.js'
 
 export const MAX_RIDERS = 4
 export const PLATFORM_FEE_RATE = 0.2
@@ -305,8 +306,7 @@ export function resolveNeighborhood(point) {
 }
 
 export function firstName(name) {
-  const token = String(name || '').trim().split(/\s+/)[0]
-  return token || 'Tiger'
+  return riderDriverFirstName(name, 'Tiger') || 'Tiger'
 }
 
 /** ~111m. Used on booked/completed public pins. */

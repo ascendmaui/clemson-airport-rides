@@ -1,6 +1,6 @@
 /**
- * Rider-facing driver identity. First name only.
- * Phone, last name, and last initial never go to a rider.
+ * Identity shown to the other person on a trip. First name only.
+ * Phone, last name, and last initial never go to the rider or the driver.
  */
 
 const TITLES = new Set(['mr', 'mrs', 'ms', 'mx', 'dr', 'prof', 'miss', 'professor'])
@@ -11,6 +11,8 @@ const PRIVATE_KEYS = new Set([
   'mobile',
   'tel',
   'driver_phone',
+  'rider_phone',
+  'riderPhone',
   'last_name',
   'lastName',
   'surname',
@@ -44,7 +46,7 @@ export function riderDriverFirstName(value, fallback = '') {
   return token
 }
 
-/** Allowlisted driver card. No phone, email, last name, or full name. */
+/** Allowlisted party card. No phone, email, last name, or full name. */
 export function selectRiderDriver(row, fallback = 'Driver') {
   if (!row || typeof row !== 'object') return null
   const out = {}
@@ -60,7 +62,14 @@ export function selectRiderDriver(row, fallback = 'Driver') {
   return out
 }
 
-/** Push and email bodies sent to a rider. Drops private keys and shortens a driver name field. */
+/** Allowlisted rider card for a driver. No phone, email, last name, or full name. */
+export function selectDriverRider(row, fallback = 'Rider') {
+  return selectRiderDriver(row, fallback)
+}
+
+const NAME_KEYS = new Set(['driverName', 'driver_name', 'riderName', 'rider_name', 'name'])
+
+/** Push and email bodies. Drops private keys and shortens a party name field. */
 export function sanitizeRiderNotice(payload) {
   if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return payload
   const out = {}
@@ -70,7 +79,7 @@ export function sanitizeRiderNotice(payload) {
       out.data = sanitizeRiderNotice(value)
       continue
     }
-    if ((key === 'driverName' || key === 'driver_name' || key === 'name') && typeof value === 'string') {
+    if (NAME_KEYS.has(key) && typeof value === 'string') {
       out[key] = riderDriverFirstName(value, '')
       continue
     }
@@ -79,7 +88,7 @@ export function sanitizeRiderNotice(payload) {
   return out
 }
 
-const PRIVATE_KEY_RE = /^(phone|phone_number|mobile|tel|driver_phone|last_name|lastName|surname|family_name|email)$/i
+const PRIVATE_KEY_RE = /^(phone|phone_number|mobile|tel|driver_phone|rider_phone|riderPhone|last_name|lastName|surname|family_name|email)$/i
 
 /** True when a rider-facing driver object still carries a phone or last name. */
 export function riderDriverLeaks(value, seen = new Set()) {

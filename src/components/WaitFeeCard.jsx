@@ -8,11 +8,6 @@ import { splitPlatformCut } from '../lib/platformFee'
 import { navigate } from '../lib/navigation'
 import { riderDriverFirstName } from '../../shared/riderDriverPrivacy.js'
 
-function firstNameOnly(fullName) {
-  const token = String(fullName || '').trim().split(/\s+/)[0]
-  return token || ''
-}
-
 function chargeNote(charge) {
   if (!charge || charge.status === 'skipped' || charge.status === 'succeeded') return null
   if (charge.status === 'pending') {
@@ -50,8 +45,7 @@ export function WaitFeeCard({
       .maybeSingle()
       .then(({ data }) => {
         if (alive) {
-          const raw = data?.full_name
-          setWho(role === 'driver' ? firstNameOnly(raw) : riderDriverFirstName(raw, ''))
+          setWho(riderDriverFirstName(data?.full_name, ''))
         }
       })
     return () => { alive = false }

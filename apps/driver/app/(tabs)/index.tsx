@@ -21,6 +21,7 @@ import { useTheme } from '@/lib/theme'
 import { driverPresence, goOffline, goOnline, usePresence } from '@/lib/presence'
 import { fetchDriverApplication } from 'rides-native/drivers'
 import { displayFirstName } from 'rides-native/authErrors'
+import { riderDriverFirstName } from '../../../../shared/riderDriverPrivacy.js'
 import { heatColor } from 'rides-native/heat.js'
 import { HEAT_WINDOWS } from 'rides-native/places.js'
 import { loadBusySpots, type BusySpot } from '@/lib/busySpots'
@@ -645,7 +646,7 @@ export default function DriverHome() {
                 setAutoAccept({
                   favoriteRiders: autoAccept.favoriteRiders.some((rider) => rider.id === offer.riderId)
                     ? next
-                    : [{ id: offer.riderId, name: offer.firstName }, ...autoAccept.favoriteRiders].slice(0, 50),
+                    : [{ id: offer.riderId, name: riderDriverFirstName(offer.firstName, 'Rider') || 'Rider' }, ...autoAccept.favoriteRiders].slice(0, 50),
                 })
               }}
               onAccept={() => onAccept(offer)}
@@ -735,7 +736,7 @@ export function RideCard({
     }
     return () => { alive = false }
   }, [card.id])
-  const riderFirst = displayFirstName(card.firstName || preview?.firstName || '', 'Rider')
+  const riderFirst = riderDriverFirstName(card.firstName || preview?.firstName || '', 'Rider') || 'Rider'
   const avatarUrl = card.riderAvatarUrl || preview?.avatarUrl || null
   const ratingAvg = (card as { riderRating?: number }).riderRating ?? preview?.ratingAvg ?? null
   const prepaidTipCents = Number((card as { prepaidTipCents?: number }).prepaidTipCents) || 0

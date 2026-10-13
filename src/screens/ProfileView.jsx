@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react'
 import { useAuth } from '../lib/auth'
 import { getHashRoute } from '../lib/navigation'
 import { fetchFullProfile } from '../lib/profiles'
-import { displayFirstName } from '../lib/privacyDisplay'
 import { riderDriverFirstName } from '../../shared/riderDriverPrivacy.js'
 
 export function ProfileView() {
@@ -47,10 +46,11 @@ export function ProfileView() {
     .map((s) => s.trim())
     .filter(Boolean)
   const gallery = (profile.gallery || []).filter((g) => g.public_url)
-  const driverFacing = profile.role === 'driver' || profile.role === 'both'
-  const peerName = driverFacing
-    ? riderDriverFirstName(profile.full_name, 'Driver')
-    : displayFirstName(profile.full_name, 'Rider')
+  const ownProfile = Boolean(user?.id && profile.id === user.id)
+  const fallback = profile.role === 'driver' || profile.role === 'both' ? 'Driver' : 'Rider'
+  const peerName = ownProfile
+    ? (String(profile.full_name || '').trim() || fallback)
+    : riderDriverFirstName(profile.full_name, fallback)
 
   return (
     <div

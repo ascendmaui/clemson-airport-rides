@@ -1,6 +1,7 @@
--- Rider-facing driver identity. Additive: new helper, view, and RPCs.
+-- Party identity. Additive: helper, rider-facing driver cards, and a driver-facing rider profile.
 -- Existing list_driver_cards and counterpart_profile keep their signatures.
--- A rider never receives the driver's phone, last name, or last initial.
+-- Each party sees the other's first name only. Phone, last name, and last initial stay on the server.
+-- A person reading their own row still gets their full name and phone.
 
 create or replace function public.rider_driver_first_name(p_full_name text)
 returns text
@@ -127,6 +128,51 @@ $$;
 revoke all on function public.rider_driver_profile(uuid) from public;
 grant execute on function public.rider_driver_profile(uuid) to authenticated, service_role;
 
+-- Matched rider profile for the assigned driver. No phone column.
+create or replace function public.driver_rider_profile(target uuid)
+returns table (
+  id uuid,
+  first_name text,
+  avatar_url text,
+  bio text,
+  ride_style text,
+  favorite_spots jsonb,
+  music_taste text,
+  rating_avg numeric,
+  rating_count integer,
+  student_verified_at timestamptz,
+  role text
+)
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select
+    p.id,
+    public.rider_driver_first_name(p.full_name) as first_name,
+    p.avatar_url,
+    p.bio,
+    p.ride_style,
+    to_jsonb(p.favorite_spots) as favorite_spots,
+    p.music_taste,
+    p.rating_avg,
+    p.rating_count,
+    p.student_verified_at,
+    p.role
+  from public.profiles p
+  where p.id = target
+    and exists (
+      select 1 from public.trips t
+      where t.driver_id = auth.uid()
+        and t.rider_id = p.id
+        and t.status::text = any (array['accepted', 'arriving', 'arrived', 'in_progress', 'completed'])
+    );
+$$;
+
+revoke all on function public.driver_rider_profile(uuid) from public;
+grant execute on function public.driver_rider_profile(uuid) to authenticated, service_role;
+
 create or replace view public.rider_driver_cards as
 select
   p.id,
@@ -201,8 +247,8 @@ $$;
 revoke all on function public.list_driver_cards(uuid[]) from public;
 grant execute on function public.list_driver_cards(uuid[]) to anon, authenticated, service_role;
 
--- Same signature. A rider matched to this driver gets the first name and a null phone.
--- The driver on that trip still receives the rider's own name and phone.
+-- Same signature. A matched counterpart gets the first name and a null phone.
+-- The signed-in person still receives their own full name and phone.
 create or replace function public.counterpart_profile(target uuid)
 returns table (
   id uuid,
@@ -227,12 +273,6 @@ as $$
     p.id,
     case
       when p.id = auth.uid() then p.full_name
-      when exists (
-        select 1 from public.trips t
-        where t.driver_id = auth.uid()
-          and t.rider_id = p.id
-          and t.status::text = any (array['accepted', 'arriving', 'arrived', 'in_progress', 'completed'])
-      ) then p.full_name
       else public.rider_driver_first_name(p.full_name)
     end as full_name,
     p.avatar_url,
@@ -245,12 +285,6 @@ as $$
     p.student_verified_at,
     case
       when p.id = auth.uid() then p.phone
-      when exists (
-        select 1 from public.trips t
-        where t.driver_id = auth.uid()
-          and t.rider_id = p.id
-          and t.status::text = any (array['accepted', 'arriving', 'arrived', 'in_progress', 'completed'])
-      ) then p.phone
       else null
     end as phone,
     p.role

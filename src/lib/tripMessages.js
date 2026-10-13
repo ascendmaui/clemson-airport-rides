@@ -1,5 +1,4 @@
 import { supabase } from './supabase'
-import { displayFirstName } from './privacyDisplay'
 import { riderDriverFirstName } from '../../shared/riderDriverPrivacy.js'
 import {
   fetchLostItemReport as fetchLost,
@@ -46,8 +45,7 @@ export async function fetchCounterpartFirstName(counterpartId, fallback) {
     .eq('id', counterpartId)
     .maybeSingle()
   if (error || !data) return fallback
-  if (fallback === 'Driver') return riderDriverFirstName(data.full_name, fallback) || fallback
-  return displayFirstName(data.full_name, fallback)
+  return riderDriverFirstName(data.full_name, fallback) || fallback
 }
 
 export function listTripMessages(tripId, limit) {

@@ -1,3 +1,4 @@
+import { riderDriverFirstName } from '../../shared/riderDriverPrivacy.js'
 import { uniqueChannelTopic } from './realtimeChannel.js'
 /**
  * Driver desk: availability, PickDriver requests, scheduled queue, live status.
@@ -138,8 +139,7 @@ export async function loadDriverProfile(supabase, driverId) {
 export function riderFacingCard({ profile, vehicle, online }) {
   const vehicleLabel = [vehicle?.color, vehicle?.make, vehicle?.model].filter(Boolean).join(' ') || 'Vehicle TBD'
   return {
-    name: profile?.full_name || 'Driver',
-    phone: profile?.phone || null,
+    name: riderDriverFirstName(profile?.full_name, 'Driver') || 'Driver',
     ratingAvg: profile?.rating_avg != null ? Number(profile.rating_avg) : null,
     ratingCount: Number(profile?.rating_count) || 0,
     studentVerified: Boolean(profile?.student_verified_at),

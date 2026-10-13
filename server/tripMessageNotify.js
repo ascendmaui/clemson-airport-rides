@@ -120,7 +120,6 @@ export async function notifyTripCounterpart(input, deps = {}) {
   const sendPush = deps.sendPush || sendExpoPush
   const sendEmail = deps.sendEmail || ((payload) => sendApplicantNotice(payload))
   const token = await pushTokenForUser(sb, recipientId)
-  const toRider = actorId === trip.driver_id
   const push = await sendPush(sanitizeRiderNotice({
     to: token,
     title: copy.title,
@@ -133,7 +132,7 @@ export async function notifyTripCounterpart(input, deps = {}) {
   if (copy.email) {
     const to = await emailForUser(sb, recipientId)
     const mail = { to, subject: copy.subject, text: copy.body }
-    email = await sendEmail(toRider ? sanitizeRiderNotice(mail) : mail)
+    email = await sendEmail(sanitizeRiderNotice(mail))
   }
 
   return {

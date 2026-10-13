@@ -39,9 +39,9 @@ import { readPrepaidTipCents } from '../../shared/prepaidTip.js'
 import { earningsExtrasForDriver } from '../../shared/backupDriverQueue.js'
 import { driverBoostShareCents, readBoostCents } from '../../shared/scheduledBoost.js'
 import { supabase } from './supabase.js'
+import { riderDriverFirstName } from '../../shared/riderDriverPrivacy.js'
 import {
   approximateLatLng,
-  displayFirstName,
   maskCompletedTripForDriver,
   maskedRouteSummary,
 } from './privacyDisplay.js'
@@ -330,7 +330,7 @@ export function sanitizeCompletedTripForDriver(row, { riderName = '', payments =
     routeLabel: maskedRouteSummary(pickupLabel, dropoffLabel),
     pickupApprox: pickup ? { lat: pickup.lat, lng: pickup.lng } : null,
     dropoffApprox: dropoff ? { lat: dropoff.lat, lng: dropoff.lng } : null,
-    riderFirstName: displayFirstName(riderName),
+    riderFirstName: riderDriverFirstName(riderName, 'Rider') || 'Rider',
     fareParts,
   }
 }
@@ -687,7 +687,7 @@ export async function fetchDriverEarningsReport(driverId, { now = new Date(), ti
   if (riderIds.length) {
     const { data: profiles } = await supabase.from('profiles').select('id, full_name').in('id', riderIds)
     for (const profile of profiles || []) {
-      firstNames[profile.id] = displayFirstName(profile.full_name)
+      firstNames[profile.id] = riderDriverFirstName(profile.full_name, '')
     }
   }
 

@@ -10,6 +10,7 @@ import { driverBoostShareCents, readBoostCents } from '../../shared/scheduledBoo
 import { driverTripEarnings, driverTripNetCents, payoutStatusLine } from '../../shared/driverTripEarnings.js'
 import { tripStops } from '../../shared/carpoolStops.js'
 import { airportTripContext } from '../../shared/airportContext.js'
+import { riderDriverFirstName } from '../../shared/riderDriverPrivacy.js'
 
 export { confirmCountdownLabel, leaveNowCountdownLabel }
 
@@ -424,7 +425,7 @@ export function driverStatusDetail(status) {
 
 /** Shown on the driver trip screen once the 500 m pickup geofence (or the driver) marks the trip arriving. */
 export function arrivedPromptCopy({ firstName, pickupLabel } = {}) {
-  const who = String(firstName || '').trim() || 'your rider'
+  const who = riderDriverFirstName(firstName, 'your rider') || 'your rider'
   const where = String(pickupLabel || '').trim() || 'pickup'
   return {
     title: 'Arrived?',
@@ -467,7 +468,7 @@ export function toDriverCard(row, options) {
   const tags = tripTags(row, options)
   const fareCents = Math.round(Number(row.fare_cents) || 0)
   const storedDeposit = row.deposit_cents != null ? row.deposit_cents : meta.depositCents
-  const first = String(meta.rider_first_name || 'Rider').trim().split(/\s+/)[0] || 'Rider'
+  const first = riderDriverFirstName(meta.rider_first_name, 'Rider') || 'Rider'
   const phase = explicitOfferPhase({ ...row, metadata: meta })
   const ladder = phase && phase !== 'expired' ? ladderOfferNet({ ...row, fareCents, status: row.status, metadata: meta, offerPhase: phase }) : null
   const carpool = carpoolPayFromTrip(row)

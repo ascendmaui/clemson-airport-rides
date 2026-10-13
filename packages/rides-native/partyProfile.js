@@ -3,7 +3,7 @@
  * Signup must collect a profile. The other person on an accepted trip can see it.
  * Aggregates live on profiles.rating_avg / rating_count (database trigger).
  */
-import { displayFirstName, normalizePromoCode } from './authErrors.js'
+import { normalizePromoCode } from './authErrors.js'
 import { loadPickerDriverRecord, pickerVehicleLine } from './drivers.js'
 import { riderDriverFirstName } from '../../shared/riderDriverPrivacy.js'
 
@@ -239,9 +239,7 @@ export function toCounterpartView(profile, { viewerIsRider = false } = {}) {
   if (!profile) return null
   const fallback = viewerIsRider ? 'Driver' : 'Rider'
   const source = profile.first_name || profile.full_name
-  const name = viewerIsRider
-    ? riderDriverFirstName(source, fallback)
-    : displayFirstName(source, fallback)
+  const name = riderDriverFirstName(source, fallback)
   const vehicle = vehicleLabelFromRow(profile.vehicle)
   const plate = vehiclePlate(profile.vehicle)
   const view = {
@@ -261,7 +259,6 @@ export function toCounterpartView(profile, { viewerIsRider = false } = {}) {
     photoUrl: safePhotoUrl(profile.avatar_url),
     roleLabel: viewerIsRider ? 'Your driver' : 'Your rider',
   }
-  if (!viewerIsRider) view.phone = formatPhone(profile.phone)
   return view
 }
 
@@ -353,6 +350,17 @@ async function loadRiderDriverProfile(supabase, driverId) {
   return loadPublicProfile(supabase, driverId)
 }
 
+/** First name and vibe for a rider the signed-in driver is matched with. No phone. */
+async function loadDriverRiderProfile(supabase, riderId) {
+  const rpc = await supabase.rpc('driver_rider_profile', { target: riderId })
+  if (!rpc.error) {
+    const row = Array.isArray(rpc.data) ? rpc.data[0] : rpc.data
+    return row || null
+  }
+  if (!rpcMissing(rpc.error, 'driver_rider_profile')) throw new Error(rpc.error.message)
+  return loadPublicProfile(supabase, riderId)
+}
+
 /** Rider view of the accepted driver: first name, photo, and the picker car/plate. */
 export async function loadMatchedDriverCard(supabase, driverId) {
   if (!supabase || !driverId) return null
@@ -378,9 +386,13 @@ export async function loadCounterpart(supabase, trip, userId) {
   const id = counterpartId(trip, userId)
   if (!supabase || !id) return null
   if (trip.rider_id === userId) return loadMatchedDriverCard(supabase, id)
-  const profile = await loadPublicProfile(supabase, id)
+  const profile = await loadDriverRiderProfile(supabase, id)
   if (!profile) return null
-  return toCounterpartView(profile, { viewerIsRider: false })
+  return toCounterpartView({
+    ...profile,
+    full_name: profile.first_name || profile.full_name || '',
+    phone: null,
+  }, { viewerIsRider: false })
 }
 
 export async function fetchTripForRating(supabase, tripId) {

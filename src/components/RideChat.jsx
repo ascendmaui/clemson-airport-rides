@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { displayFirstName } from '../lib/privacyDisplay'
+import { riderDriverFirstName } from '../../shared/riderDriverPrivacy.js'
 import {
   fetchCounterpartFirstName,
   fetchLostItemReport,
@@ -491,7 +491,7 @@ export function RideChat({ tripId, userId, initialTrip = null, onClose }) {
             THIS RIDE
           </div>
           <h1 style={{ fontSize: 20, fontWeight: 800, letterSpacing: -0.3, color: tone.title }}>
-            {displayFirstName(shownName, counterpartFallback)}
+            {riderDriverFirstName(shownName, counterpartFallback) || counterpartFallback}
           </h1>
         </div>
         <div style={{ marginLeft: 'auto' }}>

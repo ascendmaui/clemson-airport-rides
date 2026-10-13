@@ -1,3 +1,5 @@
+import { riderDriverFirstName } from '../../shared/riderDriverPrivacy.js'
+
 /**
  * Swipe-to-confirm math for the driver "Start trip" control. No React here so it is testable.
  * The knob travels from 0 to (track - knob). Release past the threshold confirms; anything less snaps back.
@@ -29,7 +31,7 @@ export function swipeConfirms(dx, trackWidth, knobWidth, threshold = SWIPE_CONFI
 
 /** Rider check shown before Start trip: first name + photo. */
 export function riderConfirmCopy({ firstName, photoUrl } = {}) {
-  const name = String(firstName || '').trim().split(/\s+/)[0] || 'your rider'
+  const name = riderDriverFirstName(firstName, 'your rider') || 'your rider'
   return {
     title: `Is this ${name}?`,
     body: photoUrl

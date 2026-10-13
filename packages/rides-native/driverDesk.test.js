@@ -414,8 +414,7 @@ test('riderFacingCard formats complete profile and vehicle card', () => {
   })
 
   assert.deepEqual(card, {
-    name: 'Alex Hunter',
-    phone: '864-555-0199',
+    name: 'Alex',
     ratingAvg: 4.88,
     ratingCount: 50,
     studentVerified: true,
@@ -432,7 +431,6 @@ test('riderFacingCard provides safe defaults when input is missing or empty', ()
   const card = riderFacingCard({ profile: null, vehicle: null, online: false })
   assert.deepEqual(card, {
     name: 'Driver',
-    phone: null,
     ratingAvg: null,
     ratingCount: 0,
     studentVerified: false,

@@ -256,11 +256,11 @@ function RateForm() {
                 fontWeight: 800,
               }}
             >
-              {!counterpart.avatar_url && (isRider ? riderDriverFirstName(counterpart.full_name, 'Driver') : (counterpart.full_name || '?')).slice(0, 1).toUpperCase()}
+              {!counterpart.avatar_url && (riderDriverFirstName(counterpart.full_name, isRider ? 'Driver' : 'Rider') || '?').slice(0, 1).toUpperCase()}
             </div>
             <div>
               <div style={{ fontWeight: 700, color: 'var(--purple)' }}>
-                {isRider ? riderDriverFirstName(counterpart.full_name, 'Driver') : (counterpart.full_name || 'Counterpart')}
+                {riderDriverFirstName(counterpart.full_name, isRider ? 'Driver' : 'Rider')}
               </div>
               <div style={{ fontSize: 12, color: 'var(--ink-tertiary)' }}>View profile</div>
             </div>

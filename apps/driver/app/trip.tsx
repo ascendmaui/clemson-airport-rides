@@ -1,3 +1,4 @@
+import { riderDriverFirstName } from '../../../shared/riderDriverPrivacy.js'
 import { Glyph } from 'rides-native/icons'
 import { createTrackingRefresh } from 'rides-native/tracking'
 import { useLocalSearchParams, useRouter } from 'expo-router'
@@ -115,6 +116,7 @@ export default function TripScreen() {
   }, [id, user?.id])
   const queueState = useDriverActionQueue(onQueueEvent)
   const trip = useMemo(() => projectQueuedTrip(serverTrip, queueState.actions), [serverTrip, queueState.actions])
+  const riderFirst = riderDriverFirstName(trip?.firstName, 'Rider') || 'Rider'
   const signalLabel = waitingForSignalLabel(queueState.actions.filter((a) => a.tripId === trip?.id).length)
   const sosActive = isActiveRideStatus(trip?.status)
   const [sosOpen, setSosOpen] = useState(false)
@@ -569,7 +571,7 @@ export default function TripScreen() {
           </View>
         ) : null}
         {trip?.status === 'arriving' && !multiStop ? (() => {
-          const prompt = arrivedPromptCopy({ firstName: trip.firstName, pickupLabel: trip.pickupLabel })
+          const prompt = arrivedPromptCopy({ firstName: riderFirst, pickupLabel: trip.pickupLabel })
           return (
             <View accessibilityRole="summary" style={[styles.arrivePrompt, { borderColor: colors.orange }]}>
               <Text style={styles.arriveTitle}>{prompt.title}</Text>
@@ -627,7 +629,7 @@ export default function TripScreen() {
             {multiStop && !terminalTrip ? <StopList stops={stops} busy={busy} onAction={onStopAction} /> : null}
             {trip.status === 'arrived' && !multiStop ? (
               <RiderConfirmCard
-                firstName={trip.firstName}
+                firstName={riderFirst}
                 photoUrl={person?.photoUrl || trip.riderAvatarUrl || null}
                 busy={busy}
                 onStart={onAdvance}
@@ -637,9 +639,9 @@ export default function TripScreen() {
             {waitError ? <ErrorText>{waitError}</ErrorText> : null}
             <Text style={styles.copy}>
               {livePickup && !headingToDropoff
-                ? `${trip.firstName}'s pickup is live from their phone, within a few feet.`
+                ? `${riderFirst}'s pickup is live from their phone, within a few feet.`
                 : rider
-                  ? `${trip.firstName} is sharing a live pin.`
+                  ? `${riderFirst} is sharing a live pin.`
                   : 'Rider pin shows when they share location on this trip. Pickup and drop-off stay on the map.'}
             </Text>
             <View style={styles.tags}>

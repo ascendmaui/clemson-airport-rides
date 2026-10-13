@@ -17,6 +17,7 @@ import {
   tagLabel,
   tagTone,
 } from './tripTags.js'
+import { riderDriverFirstName } from '../../shared/riderDriverPrivacy.js'
 import { formatHourlyRate, ladderOfferNet, offerHourly } from './offerLadder.js'
 import { driverBoostOfferLine } from '../../shared/copy/boost.js'
 import { driverBoostShareCents, formatBoostBadge, readBoostCents } from '../../shared/scheduledBoost.js'
@@ -534,7 +535,7 @@ export function offerCardViewModel(card, options = {}) {
     id: card?.id ?? null,
     status: card?.status ?? 'offered',
     rider: {
-      firstName: card?.firstName || card?.rider_first_name || 'Rider',
+      firstName: riderDriverFirstName(card?.firstName || card?.rider_first_name, 'Rider') || 'Rider',
       rating: card?.riderRating != null ? Number(card.riderRating) : null,
       ratingText: card?.riderRating != null ? card.riderRating.toFixed(1) : null,
       rideType: card?.rideType || card?.purpose || null,

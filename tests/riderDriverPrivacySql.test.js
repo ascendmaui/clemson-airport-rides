@@ -172,11 +172,52 @@ test('rider driver cards and profiles return a first name and never a phone or s
       `select full_name, phone from public.counterpart_profile($1::uuid)`,
       [RIDER],
     )
-    assert.equal(driverSeesRider.rows[0].full_name, 'Sam Okonkwo')
-    assert.equal(driverSeesRider.rows[0].phone, RIDER_PHONE)
+    assert.equal(driverSeesRider.rows[0].full_name, 'Sam')
+    assert.equal(driverSeesRider.rows[0].phone, null)
+    assert.equal(JSON.stringify(driverSeesRider.rows).includes('Okonkwo'), false)
+    assert.equal(JSON.stringify(driverSeesRider.rows).includes(RIDER_PHONE), false)
+
+    const ownRider = await asUser(
+      db,
+      RIDER,
+      `select full_name, phone from public.counterpart_profile($1::uuid)`,
+      [RIDER],
+    )
+    assert.equal(ownRider.rows[0].full_name, 'Sam Okonkwo')
+    assert.equal(ownRider.rows[0].phone, RIDER_PHONE)
+
+    const driverSeesSafe = await asUser(
+      db,
+      DRIVER,
+      `select * from public.driver_rider_profile($1::uuid)`,
+      [RIDER],
+    )
+    assert.equal(driverSeesSafe.rows.length, 1)
+    assert.equal(driverSeesSafe.rows[0].first_name, 'Sam')
+    assert.equal('phone' in driverSeesSafe.rows[0], false)
+    assert.equal('full_name' in driverSeesSafe.rows[0], false)
+    assert.equal('last_name' in driverSeesSafe.rows[0], false)
+    assert.equal(JSON.stringify(driverSeesSafe.rows).includes('Okonkwo'), false)
+    assert.equal(JSON.stringify(driverSeesSafe.rows).includes(RIDER_PHONE), false)
+
+    const riderCannotSeeOwnViaDriverRpc = await asUser(
+      db,
+      RIDER,
+      `select * from public.driver_rider_profile($1::uuid)`,
+      [RIDER],
+    )
+    assert.equal(riderCannotSeeOwnViaDriverRpc.rows.length, 0)
+    const strangerSeesRider = await asUser(
+      db,
+      STRANGER,
+      `select * from public.driver_rider_profile($1::uuid)`,
+      [RIDER],
+    )
+    assert.equal(strangerSeesRider.rows.length, 0)
 
     const listSig = 'public.list_rider_driver_cards(uuid[])'
     const profileSig = 'public.rider_driver_profile(uuid)'
+    const driverRiderSig = 'public.driver_rider_profile(uuid)'
     const helperSig = 'public.rider_driver_first_name(text)'
     const grants = await db.query(`
       select
@@ -185,6 +226,9 @@ test('rider driver cards and profiles return a first name and never a phone or s
         has_function_privilege('anon', '${profileSig}', 'execute') as anon_profile,
         has_function_privilege('authenticated', '${profileSig}', 'execute') as auth_profile,
         has_function_privilege('service_role', '${profileSig}', 'execute') as service_profile,
+        has_function_privilege('anon', '${driverRiderSig}', 'execute') as anon_driver_rider,
+        has_function_privilege('authenticated', '${driverRiderSig}', 'execute') as auth_driver_rider,
+        has_function_privilege('service_role', '${driverRiderSig}', 'execute') as service_driver_rider,
         has_function_privilege('anon', '${helperSig}', 'execute') as anon_helper,
         has_table_privilege('anon', 'public.rider_driver_cards', 'select') as anon_view
     `)
@@ -193,12 +237,19 @@ test('rider driver cards and profiles return a first name and never a phone or s
     assert.equal(grants.rows[0].anon_profile, false)
     assert.equal(grants.rows[0].auth_profile, true)
     assert.equal(grants.rows[0].service_profile, true)
+    assert.equal(grants.rows[0].anon_driver_rider, false)
+    assert.equal(grants.rows[0].auth_driver_rider, true)
+    assert.equal(grants.rows[0].service_driver_rider, true)
     assert.equal(grants.rows[0].anon_helper, false)
     assert.equal(grants.rows[0].anon_view, true)
 
     await db.exec('set role anon')
     await assert.rejects(
       () => db.query(`select * from public.rider_driver_profile($1::uuid)`, [DRIVER]),
+      /permission denied/i,
+    )
+    await assert.rejects(
+      () => db.query(`select * from public.driver_rider_profile($1::uuid)`, [RIDER]),
       /permission denied/i,
     )
   } finally {
