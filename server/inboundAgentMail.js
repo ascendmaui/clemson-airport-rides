@@ -2,15 +2,19 @@
  * POST /api/inbound-mail/hostinger
  *
  * Hostinger Agentic Mail delivers mailbox events as JSON. The webhook secret
- * created with the endpoint is sent on every request as
- * `Authorization: Bearer <secret>` (Mail API: the secret is a bearer token,
- * not a separate HMAC header). Compare it to HOSTINGER_MAIL_WEBHOOK_SECRET.
+ * is sent as `Authorization: Bearer <secret>`. A single
+ * HOSTINGER_MAIL_WEBHOOK_SECRET covers every mailbox, or
+ * HOSTINGER_MAIL_WEBHOOK_SECRETS maps a secret per mailbox.
  *
- * Each accepted event is stored in inbound_agent_mail. When
- * AGENT_INBOX_NOTIFY_URL is set, a JSON copy is POSTed there. An unset URL
- * skips the forward. This module does not send email and does not reply.
+ * Human mailboxes (support, drivers, riders, press, info) store a reply
+ * draft and set status draft_ready. agents@ stores a summary only.
+ * noreply@ is send-only and is never processed.
+ * AGENT_INBOX_NOTIFY_URL, when set, receives a JSON copy for n8n.
+ * This module does not send email and does not reply.
  */
 import { createHash, timingSafeEqual } from 'node:crypto'
+import { mailboxUserPrompt, routeInboundBody } from '../shared/copy/inboundMail.js'
+import { generateInboxText } from './inboundDraft.js'
 import { adminClient } from './supabaseAdmin.js'
 
 const SNIPPET_LIMIT = 500
@@ -52,6 +56,41 @@ export function webhookSecretMatches(expected, supplied) {
   const right = Buffer.from(token)
   if (left.length === 0 || left.length !== right.length) return false
   return timingSafeEqual(left, right)
+}
+
+function rememberSecret(map, key, value) {
+  const secret = String(value || '').trim()
+  const name = String(key || '').trim().toLowerCase()
+  if (!secret || !name) return
+  map.set(name, secret)
+  const at = name.lastIndexOf('@')
+  if (at > 0) map.set(name.slice(0, at), secret)
+}
+
+export function mailboxSecretMap(env) {
+  const map = new Map()
+  const raw = env?.HOSTINGER_MAIL_WEBHOOK_SECRETS
+  let parsed = raw
+  if (typeof raw === 'string' && raw.trim()) {
+    try {
+      parsed = JSON.parse(raw)
+    } catch {
+      parsed = null
+    }
+  }
+  if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+    for (const [key, value] of Object.entries(parsed)) rememberSecret(map, key, value)
+  }
+  return map
+}
+
+export function expectedWebhookSecret(env, route) {
+  const map = mailboxSecretMap(env)
+  if (route) {
+    const specific = map.get(route.address) || map.get(route.local)
+    if (specific) return specific
+  }
+  return env?.HOSTINGER_MAIL_WEBHOOK_SECRET || ''
 }
 
 function formatParty(value, max) {
@@ -184,17 +223,92 @@ export async function insertInboundMail(sb, row) {
   if (!error) {
     return {
       duplicate: false,
-      id: data?.id ?? null,
-      received_at: data?.received_at ?? null,
+      row: {
+        ...row,
+        id: data?.id ?? null,
+        received_at: data?.received_at ?? null,
+      },
     }
   }
   const message = String(error.message || '')
   if (String(error.code) === '23505' || /duplicate key/i.test(message)) {
-    return { duplicate: true, id: null, received_at: null }
+    const existing = await sb
+      .from('inbound_agent_mail')
+      .select('id, received_at, status, draft_reply, summary, mailbox, role, message_id')
+      .eq('message_id', row.message_id)
+      .maybeSingle()
+    if (existing?.error) {
+      const failure = new Error('Could not store inbound mail')
+      failure.cause = existing.error
+      throw failure
+    }
+    return {
+      duplicate: true,
+      row: {
+        ...row,
+        ...(existing?.data || {}),
+      },
+    }
   }
   const failure = new Error('Could not store inbound mail')
   failure.cause = error
   throw failure
+}
+
+export async function updateInboundMail(sb, messageId, patch) {
+  const { data, error } = await sb
+    .from('inbound_agent_mail')
+    .update(patch)
+    .eq('message_id', messageId)
+    .select('id, received_at, status, draft_reply, summary')
+    .maybeSingle()
+  if (error) {
+    const failure = new Error('Could not store inbound mail')
+    failure.cause = error
+    throw failure
+  }
+  return data
+}
+
+function draftPatch(kind, text) {
+  switch (kind) {
+    case 'draft':
+      return { draft_reply: text, summary: null, status: 'draft_ready' }
+    case 'summary':
+      return { summary: text, draft_reply: null, status: 'summarized' }
+    case 'skip':
+      return null
+    default: {
+      const unknown = kind
+      throw new Error(`Unknown mailbox kind ${unknown}`)
+    }
+  }
+}
+
+async function completeMailbox(sb, stored, route, env, deps) {
+  const status = stored.row?.status
+  if (status === 'draft_ready' || status === 'summarized') {
+    return { fresh: false, failed: false }
+  }
+  if (!route.system) return { fresh: false, failed: false }
+  const generated = await generateInboxText({
+    env,
+    system: route.system,
+    user: mailboxUserPrompt(stored.row),
+    fetchImpl: deps.draftFetch,
+    timeoutMs: deps.draftTimeoutMs,
+  })
+  if (!generated.ok) {
+    if (generated.reason === 'unconfigured' || generated.reason === 'blocked_endpoint') {
+      return { fresh: false, failed: false }
+    }
+    return { fresh: false, failed: true }
+  }
+  const patch = draftPatch(route.kind, generated.text)
+  if (!patch) return { fresh: false, failed: false }
+  await updateInboundMail(sb, stored.row.message_id, patch)
+  Object.assign(stored.row, patch)
+  return { fresh: true, failed: false }
 }
 
 export async function forwardInboxNotify(url, payload, fetchImpl, timeoutMs) {
@@ -238,9 +352,14 @@ export default async function handler(req, res, deps = {}) {
     return
   }
   const env = deps.env || process.env
+  const route = routeInboundBody(req.body)
   const token = bearerToken(headerValue(req.headers, 'authorization'))
-  if (!webhookSecretMatches(env.HOSTINGER_MAIL_WEBHOOK_SECRET, token)) {
+  if (!webhookSecretMatches(expectedWebhookSecret(env, route), token)) {
     sendJson(res, 401, { error: 'Unauthorized' })
+    return
+  }
+  if (route?.kind === 'skip') {
+    sendJson(res, 200, { ok: true, skipped: true })
     return
   }
   const sb = deps.sb !== undefined ? deps.sb : adminClient()
@@ -248,7 +367,15 @@ export default async function handler(req, res, deps = {}) {
     sendJson(res, 503, { error: 'Service unavailable' })
     return
   }
-  const row = normalizeInboundEvent(req.body)
+  const event = normalizeInboundEvent(req.body)
+  const row = {
+    ...event,
+    mailbox: route?.address ?? null,
+    role: route?.role ?? null,
+    draft_reply: null,
+    summary: null,
+    status: 'new',
+  }
   let stored
   try {
     stored = await insertInboundMail(sb, row)
@@ -257,22 +384,40 @@ export default async function handler(req, res, deps = {}) {
     sendJson(res, 500, { error: 'Could not store inbound mail' })
     return
   }
-  if (!stored.duplicate) {
+  let processed = { fresh: false, failed: false }
+  if (route && (route.kind === 'draft' || route.kind === 'summary')) {
+    try {
+      processed = await completeMailbox(sb, stored, route, env, deps)
+    } catch {
+      console.error('[inbound-mail] draft failed', { message_id: row.message_id })
+      processed = { fresh: false, failed: true }
+    }
+  }
+  if (!processed.failed && (!stored.duplicate || processed.fresh)) {
     const notifyUrl = env.AGENT_INBOX_NOTIFY_URL
     if (notifyTarget(notifyUrl)) {
       await forwardInboxNotify(notifyUrl, {
         source: 'hostinger-agentic-mail',
-        id: stored.id,
+        send: false,
+        id: stored.row?.id ?? null,
         message_id: row.message_id,
+        mailbox: stored.row?.mailbox ?? row.mailbox,
+        role: stored.row?.role ?? row.role,
         from: row.from,
         to: row.to,
         subject: row.subject,
         snippet: row.snippet,
-        status: 'new',
-        received_at: stored.received_at,
+        status: stored.row?.status || 'new',
+        draft_reply: stored.row?.draft_reply ?? null,
+        summary: stored.row?.summary ?? null,
+        received_at: stored.row?.received_at ?? null,
         raw: row.raw,
       }, deps.fetch, deps.notifyTimeoutMs)
     }
+  }
+  if (processed.failed) {
+    sendJson(res, 500, { error: 'Could not draft inbound mail' })
+    return
   }
   sendJson(res, 200, { ok: true })
 }

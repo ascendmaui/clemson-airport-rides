@@ -4,7 +4,9 @@ import test from 'node:test'
 import { PGlite } from '@electric-sql/pglite'
 
 const fileName = '20261013230000_inbound_agent_mail.sql'
+const draftFile = '20261013240000_inbound_agent_mail_draft.sql'
 const migration = readFileSync(new URL(`../supabase/migrations/${fileName}`, import.meta.url), 'utf8')
+const draftMigration = readFileSync(new URL(`../supabase/migrations/${draftFile}`, import.meta.url), 'utf8')
 
 async function apply(db) {
   await db.exec(`
@@ -22,6 +24,8 @@ async function apply(db) {
   `)
   await db.exec(migration)
   await db.exec(migration)
+  await db.exec(draftMigration)
+  await db.exec(draftMigration)
 }
 
 test('inbound agent mail migration is additive, unique, and service role only', async () => {
@@ -32,6 +36,10 @@ test('inbound agent mail migration is additive, unique, and service role only', 
   assert.match(migration, /constraint inbound_agent_mail_message_id_key unique \(message_id\)/)
   assert.match(migration, /status text not null default 'new'/)
   assert.match(fileName, /^20261013230000_/)
+  assert.match(draftFile, /^20261013240000_/)
+  assert.match(draftMigration, /draft_reply/)
+  assert.match(draftMigration, /status in \('new', 'draft_ready', 'summarized'\)/)
+  assert.equal(/drop table/i.test(draftMigration.replace(/--.*$/gm, '')), false)
 
   const db = new PGlite()
   try {
@@ -69,6 +77,10 @@ test('inbound agent mail migration is additive, unique, and service role only', 
       'snippet',
       'raw',
       'status',
+      'mailbox',
+      'role',
+      'draft_reply',
+      'summary',
     ])
 
     assert.equal((await db.query(`select has_table_privilege('anon', 'public.inbound_agent_mail', 'select') as ok`)).rows[0].ok, false)
@@ -106,6 +118,18 @@ test('inbound agent mail migration is additive, unique, and service role only', 
         values ('<id@example>', '{}'::jsonb)
       `),
       /duplicate key/i,
+    )
+    await db.query(`
+      update public.inbound_agent_mail
+      set draft_reply = 'Thanks for writing. There is no deposit.', status = 'draft_ready', role = 'support', mailbox = 'support@clemsonrides.com'
+      where message_id = '<id@example>'
+    `)
+    const drafted = await db.query(`select status, draft_reply from public.inbound_agent_mail where message_id = '<id@example>'`)
+    assert.equal(drafted.rows[0].status, 'draft_ready')
+    assert.match(drafted.rows[0].draft_reply, /no deposit/)
+    await assert.rejects(
+      () => db.query(`update public.inbound_agent_mail set status = 'sent' where message_id = '<id@example>'`),
+      /check constraint|inbound_agent_mail_status_check/i,
     )
     await db.exec('reset role')
   } finally {

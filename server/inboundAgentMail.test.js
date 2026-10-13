@@ -35,6 +35,9 @@ function mockRes() {
 
 function memoryStore() {
   const rows = []
+  function find(column, value) {
+    return rows.find((existing) => existing[column] === value) || null
+  }
   return {
     rows,
     from(table) {
@@ -61,6 +64,35 @@ function memoryStore() {
                   }
                   rows.push(stored)
                   return { data: { id: stored.id, received_at: stored.received_at }, error: null }
+                },
+              }
+            },
+          }
+        },
+        select() {
+          return {
+            eq(column, value) {
+              return {
+                async maybeSingle() {
+                  return { data: find(column, value), error: null }
+                },
+              }
+            },
+          }
+        },
+        update(patch) {
+          return {
+            eq(column, value) {
+              return {
+                select() {
+                  return {
+                    async maybeSingle() {
+                      const row = find(column, value)
+                      if (!row) return { data: null, error: null }
+                      Object.assign(row, patch)
+                      return { data: row, error: null }
+                    },
+                  }
                 },
               }
             },
@@ -376,11 +408,14 @@ test('documented Hostinger shapes map into the stored columns', () => {
 test('the receiver source never sends mail', () => {
   const source = [
     readFileSync(new URL('./inboundAgentMail.js', import.meta.url), 'utf8'),
+    readFileSync(new URL('./inboundDraft.js', import.meta.url), 'utf8'),
     readFileSync(new URL('../api/inbound-mail.js', import.meta.url), 'utf8'),
   ].join('\n')
-  assert.equal(/resend|nodemailer|smtp|sendMail|api\.resend\.com/i.test(source), false)
-  assert.match(source, /Does not send email|does not send email|does not send or reply/i)
+  assert.equal(/resend|nodemailer|smtp|sendMail|api\.resend\.com|OPENAI_API_KEY/i.test(source), false)
+  assert.match(source, /does not send email/i)
   assert.match(source, /Authorization: Bearer/)
+  assert.match(source, /integrate\.api\.nvidia\.com/)
+  assert.match(source, /api\.openai\.com/)
 })
 
 test('notify helper ignores a non-http URL and posts JSON otherwise', async () => {
@@ -394,6 +429,201 @@ test('notify helper ignores a non-http URL and posts JSON otherwise', async () =
   })
   assert.equal(result.forwarded, true)
   assert.equal(body, JSON.stringify({ hello: 'agent' }))
+})
+
+test('a mailbox secret only opens that mailbox', async () => {
+  const sb = memoryStore()
+  const env = {
+    HOSTINGER_MAIL_WEBHOOK_SECRETS: {
+      support: 'support-secret',
+      drivers: 'drivers-secret',
+    },
+    HOSTINGER_MAIL_WEBHOOK_SECRET: SECRET,
+  }
+  const wrong = await call({
+    method: 'POST',
+    headers: { authorization: 'Bearer drivers-secret' },
+    body: { message: { messageId: '<wrong>', to: 'support@clemsonrides.com', subject: 'Help' } },
+  }, { env, sb, draftFetch: async () => { throw new Error('should not draft') } })
+  assert.equal(wrong.status, 401)
+  assert.equal(sb.rows.length, 0)
+
+  const globalForRiders = await call({
+    method: 'POST',
+    headers: { authorization: `Bearer ${SECRET}` },
+    body: { message: { messageId: '<riders>', to: 'riders@clemsonrides.com', subject: 'Book' } },
+  }, { env, sb, draftFetch: async () => { throw new Error('no key') } })
+  assert.equal(globalForRiders.status, 200)
+  assert.equal(sb.rows[0].role, 'riders')
+  assert.equal(sb.rows[0].status, 'new')
+})
+
+test('noreply is never stored, drafted, or forwarded', async () => {
+  const sb = memoryStore()
+  let drafted = false
+  let notified = false
+  const result = await call({
+    method: 'POST',
+    headers: { authorization: `Bearer ${SECRET}` },
+    body: {
+      message: {
+        messageId: '<receipt>',
+        to: 'noreply@clemsonrides.com',
+        subject: 'Receipt',
+        text: 'Thanks for riding.',
+      },
+    },
+  }, {
+    env: {
+      HOSTINGER_MAIL_WEBHOOK_SECRET: SECRET,
+      AGENT_INBOX_NOTIFY_URL: 'https://n8n.example/hook',
+      NVIDIA_API_KEY: 'nvapi-test-key',
+    },
+    sb,
+    fetch: async () => {
+      notified = true
+      return { ok: true, status: 200 }
+    },
+    draftFetch: async () => {
+      drafted = true
+      throw new Error('should not draft')
+    },
+  })
+  assert.equal(result.status, 200)
+  assert.equal(result.json.skipped, true)
+  assert.equal(sb.rows.length, 0)
+  assert.equal(drafted, false)
+  assert.equal(notified, false)
+})
+
+test('support mail stores a draft for approval and agents mail is summary only', async () => {
+  const sb = memoryStore()
+  const calls = []
+  const env = {
+    HOSTINGER_MAIL_WEBHOOK_SECRET: SECRET,
+    NVIDIA_API_KEY: 'nvapi-test-key',
+    OPENAI_API_KEY: 'sk-should-not-be-used',
+    AGENT_INBOX_NOTIFY_URL: 'https://n8n.example/hook',
+  }
+  const support = await call({
+    method: 'POST',
+    headers: { authorization: `Bearer ${SECRET}` },
+    body: {
+      message: {
+        messageId: '<help@mail>',
+        from: 'ada@example.com',
+        to: 'support@clemsonrides.com',
+        subject: 'Card hold',
+        text: 'Was I charged a deposit?',
+      },
+    },
+  }, {
+    env,
+    sb,
+    fetch: async (url, init) => {
+      calls.push({ kind: 'notify', url, init })
+      return { ok: true, status: 200 }
+    },
+    draftFetch: async (url, init) => {
+      calls.push({ kind: 'draft', url, init })
+      const prompt = JSON.parse(init.body)
+      const reply = prompt.messages[0].content.includes('do not draft a reply')
+        ? 'CI failed on main.'
+        : 'There is no deposit. Stripe places a pre-authorization hold.'
+      return {
+        ok: true,
+        status: 200,
+        async json() {
+          return { choices: [{ message: { content: reply } }] }
+        },
+      }
+    },
+  })
+  assert.equal(support.status, 200)
+  assert.equal(sb.rows[0].mailbox, 'support@clemsonrides.com')
+  assert.equal(sb.rows[0].role, 'support')
+  assert.equal(sb.rows[0].status, 'draft_ready')
+  assert.match(sb.rows[0].draft_reply, /pre-authorization hold/)
+  assert.equal(sb.rows[0].summary, null)
+  const draft = calls.find((item) => item.kind === 'draft')
+  assert.equal(draft.url, 'https://integrate.api.nvidia.com/v1/chat/completions')
+  assert.equal(draft.init.headers.authorization, 'Bearer nvapi-test-key')
+  const prompt = JSON.parse(draft.init.body)
+  assert.equal(prompt.model, 'openai/gpt-oss-120b')
+  assert.match(prompt.messages[0].content, /customer help/i)
+  assert.match(prompt.messages[0].content, /There is no deposit/)
+  const notify = JSON.parse(calls.find((item) => item.kind === 'notify').init.body)
+  assert.equal(notify.send, false)
+  assert.equal(notify.draft_reply, sb.rows[0].draft_reply)
+  assert.equal(calls.some((item) => String(item.url).includes('api.openai.com')), false)
+
+  const agents = await call({
+    method: 'POST',
+    headers: { authorization: `Bearer ${SECRET}` },
+    body: {
+      message: {
+        messageId: '<ci@mail>',
+        to: 'agents@clemsonrides.com',
+        subject: 'Deploy failed',
+        text: 'The production build failed.',
+      },
+    },
+  }, {
+    env,
+    sb,
+    fetch: async () => ({ ok: true, status: 200 }),
+    draftFetch: async (_url, init) => {
+      const prompt = JSON.parse(init.body)
+      assert.match(prompt.messages[0].content, /Do not draft a reply/)
+      assert.equal(prompt.messages[0].content.includes('John approves it before anyone sends it'), false)
+      return {
+        ok: true,
+        status: 200,
+        async json() {
+          return { choices: [{ message: { content: 'Production build failed. No reply needed.' } }] }
+        },
+      }
+    },
+  })
+  assert.equal(agents.status, 200)
+  const alert = sb.rows.find((row) => row.message_id === '<ci@mail>')
+  assert.equal(alert.role, 'agents')
+  assert.equal(alert.status, 'summarized')
+  assert.equal(alert.draft_reply, null)
+  assert.match(alert.summary, /Production build failed/)
+})
+
+test('the draft client refuses a pay-per-call OpenAI host', async () => {
+  const sb = memoryStore()
+  let drafted = false
+  const result = await call({
+    method: 'POST',
+    headers: { authorization: `Bearer ${SECRET}` },
+    body: {
+      message: {
+        messageId: '<blocked>',
+        to: 'press@clemsonrides.com',
+        subject: 'Interview',
+        text: 'Can we talk tomorrow?',
+      },
+    },
+  }, {
+    env: {
+      HOSTINGER_MAIL_WEBHOOK_SECRET: SECRET,
+      NVIDIA_API_KEY: 'nvapi-test-key',
+      OPENAI_API_KEY: 'sk-should-not-be-used',
+      AGENT_DRAFT_BASE_URL: 'https://api.openai.com/v1',
+    },
+    sb,
+    draftFetch: async () => {
+      drafted = true
+      throw new Error('should not call')
+    },
+  })
+  assert.equal(result.status, 200)
+  assert.equal(drafted, false)
+  assert.equal(sb.rows[0].status, 'new')
+  assert.equal(sb.rows[0].draft_reply, null)
 })
 
 function hit(port, pathName, method, headers, body) {
