@@ -251,6 +251,31 @@ function emptyBars(period: EarningsPeriod, anchor: Zoned): EarningBar[] {
   }
 }
 
+function tripTimestamp(trip: EarningTrip): string | null {
+  const timestamp = trip.status === 'cancelled_wait' ? trip.canceled_at : trip.completed_at
+  if (!timestamp) return null
+  const when = new Date(timestamp)
+  if (Number.isNaN(when.getTime())) return null
+  return timestamp
+}
+
+/** Trips whose earnings timestamp falls in the anchored day, week, month, or year. */
+export function selectPeriodTrips(
+  trips: EarningTrip[] | null | undefined,
+  period: EarningsPeriod,
+  anchor: Date,
+): EarningTrip[] {
+  const anchorParts = zoned(anchor)
+  const selected: EarningTrip[] = []
+  for (const trip of trips || []) {
+    const timestamp = tripTimestamp(trip)
+    if (!timestamp) continue
+    if (!inRange(zoned(new Date(timestamp)), anchorParts, period)) continue
+    selected.push(trip)
+  }
+  return selected
+}
+
 function barIndex(period: EarningsPeriod, trip: Zoned, anchor: Zoned, bars: EarningBar[]): number {
   switch (period) {
     case 'day':
@@ -293,13 +318,10 @@ export function reportPeriod(
   let completed = 0
   let canceled = 0
 
-  for (const trip of trips || []) {
-    const timestamp = trip.status === 'cancelled_wait' ? trip.canceled_at : trip.completed_at
+  for (const trip of selectPeriodTrips(trips, period, anchor)) {
+    const timestamp = tripTimestamp(trip)
     if (!timestamp) continue
-    const when = new Date(timestamp)
-    if (Number.isNaN(when.getTime())) continue
-    const parts = zoned(when)
-    if (!inRange(parts, anchorParts, period)) continue
+    const parts = zoned(new Date(timestamp))
     if (trip.status === 'canceled') {
       canceled += 1
       continue

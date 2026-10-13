@@ -35,6 +35,7 @@ import {
   type QueueFilter,
 } from 'rides-native/tripTags'
 import { formatHourlyRate, ladderOfferNet, offerHourly } from 'rides-native/offerLadder.js'
+import { WorthItLegend } from 'rides-native/WorthItLegend'
 import { ScheduledRidesExplainer, ScheduledRidesHint } from 'rides-native/ScheduledRidesInfo'
 import { driverBoostOfferLine } from '../../../shared/copy/boost.js'
 import { compareBoostedFirst, formatBoostBadge } from '../../../shared/scheduledBoost.js'
@@ -110,7 +111,8 @@ function QueueCard({
   const styles = useQueueStyles()
   const { colors } = useTheme()
   const ladder = ladderOfferNet(card)
-  const hourly = formatHourlyRate(offerHourly(card).hourlyCents)
+  const hourlyQuote = offerHourly(card)
+  const hourly = formatHourlyRate(hourlyQuote.hourlyCents)
   return (
     <Card>
       <View style={styles.riderRow}>
@@ -142,6 +144,7 @@ function QueueCard({
       ) : null}
       <Text style={styles.note}>{ladder?.subtext || 'You net 80%'}</Text>
       <Text style={styles.copy}>{hourly}</Text>
+      <WorthItLegend hourlyCents={hourlyQuote.hourlyCents} colors={colors} />
       <Text style={styles.copy}>Pickup · {card.pickupLabel}</Text>
       <Text style={styles.copy}>Drop-off · {card.dropoffLabel}</Text>
       {card.airportContext ? <Text style={styles.note} accessibilityLabel={`Airport: ${card.airportContext.line}`}>{card.airportContext.line}</Text> : null}
