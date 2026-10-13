@@ -1,7 +1,7 @@
 import { useRouter } from 'expo-router'
 import * as Location from 'expo-location'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { AccessibilityInfo, Animated, AppState, Easing, Image, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { AccessibilityInfo, Animated, AppState, Easing, Image, Pressable, RefreshControl, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native'
 import Reanimated, { runOnJS, useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { CampusMap, type MapPin } from '@/components/CampusMap'
@@ -21,7 +21,7 @@ import { notifyAcceptedRide, setRideAlertSurface } from '@/lib/push'
 import { shownCents } from '@/lib/shown'
 import { supabase } from '@/lib/supabase'
 import { useTheme } from '@/lib/theme'
-import { HOME_CLUTTER_SHIFT, HOME_CLUTTER_SPRING, homeClutterTranslateY } from '@/lib/bottomCluster'
+import { HOME_CLUTTER_SPRING, homeClutterTranslateY } from '@/lib/bottomCluster'
 import { driverPresence, goOffline, goOnline, usePresence } from '@/lib/presence'
 import { fetchDriverApplication } from 'rides-native/drivers'
 import { fetchInspectionDeadline, fetchMyDriverDocuments } from 'rides-native/driverOnboardingClient'
@@ -204,19 +204,20 @@ export default function DriverHome() {
     () => idleGoTone({ documents, dueAt: inspectionDueAt, canGoOnline }),
     [documents, inspectionDueAt, canGoOnline],
   )
-  const clutterY = useSharedValue(homeClutterTranslateY(online))
+  const { height: windowHeight } = useWindowDimensions()
+  const clutterY = useSharedValue(homeClutterTranslateY(online, windowHeight))
   const [clutterInteractive, setClutterInteractive] = useState(!online)
   useEffect(() => {
     setRideAlertSurface({ online })
     if (online) {
       setClutterInteractive(false)
-      clutterY.value = withSpring(HOME_CLUTTER_SHIFT, HOME_CLUTTER_SPRING)
+      clutterY.value = withSpring(homeClutterTranslateY(true, windowHeight), HOME_CLUTTER_SPRING)
       return
     }
     clutterY.value = withSpring(homeClutterTranslateY(false), HOME_CLUTTER_SPRING, (finished) => {
       if (finished) runOnJS(setClutterInteractive)(true)
     })
-  }, [clutterY, online])
+  }, [clutterY, online, windowHeight])
   const clutterStyle = useAnimatedStyle(() => ({
     transform: [{ translateY: clutterY.value }],
   }))
@@ -503,10 +504,11 @@ export default function DriverHome() {
   const liveCard = online && offer && !desk?.active ? offer : null
   const offerOwnsBottom = offerSheetOwnsBottom({ offerId: liveCard?.id ?? null, activeTrip: Boolean(desk?.active) })
   useEffect(() => {
-    setHomeOfferId(offer?.id ?? null)
+    setHomeOfferId(liveCard?.id ?? null)
     return () => setHomeOfferId(null)
-  }, [offer?.id])
-  const bannersCollapsed = documentBannersCollapsed({ online, offerId: offer?.id })
+  }, [liveCard?.id])
+  const bannersCollapsed = documentBannersCollapsed({ online, offerId: liveCard?.id })
+  const goOnlineItems = attentionItems.filter((item) => !item.id.startsWith('inspection'))
   const liveFrom = self
     ? { lat: self.latitude, lng: self.longitude }
     : desk?.lat != null && desk?.lng != null
@@ -579,7 +581,7 @@ export default function DriverHome() {
       />
       <View pointerEvents="box-none" style={styles.overlay}>
         <Reanimated.View
-          pointerEvents={clutterInteractive && !offer ? 'box-none' : 'none'}
+          pointerEvents={clutterInteractive && !liveCard ? 'box-none' : 'none'}
           style={[styles.clutter, clutterStyle]}
         >
           <View style={[styles.top, { paddingTop: dockTop }]} pointerEvents="box-none">
@@ -678,7 +680,7 @@ export default function DriverHome() {
             <Pressable
               onPress={() => router.push('/documents')}
               accessibilityRole="link"
-              accessibilityLabel={`${ATTENTION_COPY}. ${DOCUMENTS_GO_ONLINE_COPY}. ${documentGate.sections.map((section) => section.label).join(', ')}. ${attentionItems.map((item) => `${item.label}. ${item.reason}`).join(' ')}. Documents`}
+              accessibilityLabel={`${ATTENTION_COPY}. ${DOCUMENTS_GO_ONLINE_COPY}. ${documentGate.sections.map((section) => section.label).join(', ')}. ${goOnlineItems.map((item) => `${item.label}. ${item.reason}`).join(' ')}. Documents`}
               style={[styles.docGate, { backgroundColor: colors.card, borderColor: colors.orange, zIndex: DOCUMENT_BANNER_Z, elevation: DOCUMENT_BANNER_ELEVATION }]}
             >
               <Text style={[styles.docGateTitle, { color: colors.orange }]}>{ATTENTION_COPY}</Text>
@@ -686,7 +688,7 @@ export default function DriverHome() {
               <Text style={[styles.docGateSections, { color: colors.title }]}>
                 {documentGate.sections.map((section) => section.label).join(', ')}
               </Text>
-              {attentionItems.map((item) => (
+              {goOnlineItems.map((item) => (
                 <Text key={item.id} style={[styles.docGateReason, { color: colors.title }]}>
                   {item.label}: {item.reason}
                 </Text>
@@ -929,7 +931,7 @@ export function RideCard({
   return (
     // flexShrink lets the dock squeeze the card to the room left above the controls;
     // only the details scroll — Accept / Decline stay pinned and visible.
-    <Animated.View style={[styles.offerWrap, { transform: [{ translateY: rise }], zIndex: OFFER_CARD_Z, elevation: OFFER_CARD_ELEVATION }]}>
+    <Animated.View style={[styles.offerWrap, { transform: [{ translateY: rise }], zIndex: OFFER_CARD_Z, elevation: OFFER_CARD_ELEVATION, flex: 1, minHeight: 0 }]}>
       <Card
         variant="offer"
         style={[styles.offerCard, pulsing ? { borderColor: colors.orange, borderWidth: 2 } : null]}
@@ -1152,9 +1154,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   declineText: { fontWeight: '700', fontSize: 15, letterSpacing: -0.1 },
-  offerWrap: { flexShrink: 1, zIndex: OFFER_CARD_Z, elevation: OFFER_CARD_ELEVATION },
-  offerCard: { flexShrink: 1, gap: 0, paddingBottom: 12 },
-  offerScroll: { flexGrow: 0, flexShrink: 1 },
+  offerWrap: { flex: 1, flexShrink: 1, minHeight: 0, zIndex: OFFER_CARD_Z, elevation: OFFER_CARD_ELEVATION },
+  offerCard: { flex: 1, flexShrink: 1, minHeight: 0, gap: 0, paddingBottom: 12 },
+  offerScroll: { flexGrow: 1, flexShrink: 1, minHeight: 0 },
   offerBody: { gap: 10, paddingBottom: 2 },
   offerNotice: { fontWeight: '700', fontSize: 13, lineHeight: 18 },
   offerActions: { gap: 8, paddingTop: 10, flexShrink: 0 },

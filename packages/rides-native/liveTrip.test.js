@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import test from 'node:test'
 import { OPEN_POOL_COPY, PREFERRED_CANCELED_COPY, PREFERRED_MATCH_COPY } from './drivers.js'
 import { acceptActionLabel, declineActionLabel, driverStatusDetail } from './tripTags.js'
@@ -25,6 +26,7 @@ import {
   riderLiveSteps,
   orderedLiveStops,
   riderLiveView,
+  riderStatusPhrase,
   searchingApproxWaitLine,
   searchingEtaLine,
   searchingRidePreview,
@@ -55,6 +57,23 @@ test('rider live states run searching, offered or requested, en route, arrived, 
   assert.equal(riderLiveStepIndex('in_progress'), 4)
   assert.equal(riderLiveStepIndex('completed'), 5)
   assert.equal(riderLiveStepIndex('canceled'), -1)
+})
+
+test('rider lists use phrases instead of database statuses', () => {
+  assert.equal(riderStatusPhrase('in_progress'), 'You are on the way')
+  assert.equal(riderStatusPhrase('searching'), 'Looking for a driver')
+  assert.equal(riderStatusPhrase('canceled_midride'), 'Ended during the trip')
+  assert.equal(riderStatusPhrase('cancelled_wait'), 'This ride was canceled')
+  assert.equal(riderStatusPhrase('scheduled'), 'Pickup is on the calendar')
+  assert.equal(riderStatusPhrase(null), 'Requested')
+  const history = readFileSync(new URL('../../apps/rider/app/history.tsx', import.meta.url), 'utf8')
+  const billing = readFileSync(new URL('../../apps/rider/app/billing.tsx', import.meta.url), 'utf8')
+  const schedule = readFileSync(new URL('../../apps/rider/app/(tabs)/schedule.tsx', import.meta.url), 'utf8')
+  assert.match(history, /riderStatusPhrase\(row\.status\)/)
+  assert.match(billing, /riderStatusPhrase\(row\.status\)/)
+  assert.match(billing, /label: 'History', icon: 'history'/)
+  assert.doesNotMatch(billing, /label: 'Tips'/)
+  assert.match(schedule, /riderStatusPhrase\(row\.status\)/)
 })
 
 test('preferred matching copy cancels instead of falling back to the open pool', () => {

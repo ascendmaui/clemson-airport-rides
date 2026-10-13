@@ -246,8 +246,6 @@ export default function Requested() {
   const locationIssue = trackingIssue(shown?.status, live?.driverLocationAt, trackingNow, live?.driverHeartbeatAt)
   const holdPrompt = failedHoldPrompt({
     metadata: live?.metadata ?? trip?.metadata ?? null,
-    payment_status: null,
-    payment: null,
   })
   const driverFix = live?.driverLat != null && live.driverLng != null ? { lat: live.driverLat, lng: live.driverLng } : null
   const driverEta = followEtaLine(shown?.status || null, driverFix, live)

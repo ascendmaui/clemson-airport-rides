@@ -17,7 +17,6 @@ import { approachHaptic, arrivalCue, playApproachPing } from '@/lib/feedback'
 import {
   approachPulseMotion,
   crowdCue,
-  formatApproachFeet,
   type ApproachPulseEasing,
   type ApproachPulseMode,
 } from '@/lib/approachAlert'
@@ -262,9 +261,9 @@ export function ApproachAlert({
   // PickupBeaconHost is the close-range screen. This card only covers a missing fix.
   if (!active || paused || reading) return null
 
-  const primary = approachPrimaryLine(reading?.feet)
+  const primary = waiting || "Waiting for your driver's location"
   const kicker = statusLine.split(' · ')[0]
-  const secondary = waiting ?? statusLine
+  const secondary = statusLine && statusLine !== primary ? statusLine : ''
   const body = (
     <View pointerEvents="box-none" style={styles.host}>
       <View pointerEvents="none" style={[styles.dock, { bottom: Math.max(insets.bottom, 10) + 74 }]}>
@@ -305,11 +304,6 @@ export function ApproachAlert({
     )
   }
   return body
-}
-
-function approachPrimaryLine(feet: number | null | undefined): string {
-  const label = formatApproachFeet(feet)
-  return label === 'nearby' ? 'Nearby' : label
 }
 
 function makeStyles(colors: Palette) {

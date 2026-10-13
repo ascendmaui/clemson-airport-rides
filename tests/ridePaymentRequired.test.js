@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { readFileSync } from 'node:fs'
+import { failedHoldPrompt } from '../packages/rides-native/rideMoments.js'
 
 function read(path) {
   return readFileSync(new URL(`../${path}`, import.meta.url), 'utf8')
@@ -39,4 +40,25 @@ test('native and web booking block Request and return to the same selections aft
   assert.match(home, /liveRideDistanceLine/)
   assert.match(read('apps/rider/app/requested.tsx'), /driverHeartbeatAt/)
   assert.match(read('apps/rider/app/requested.tsx'), /failedHoldPrompt/)
+})
+
+test('a declined fare hold does not tell the rider to add a card', () => {
+  const declined = failedHoldPrompt({
+    metadata: { fare_authorization: { status: 'failed', code: 'card_declined' } },
+    payment: null,
+    payment_status: null,
+  })
+  assert.equal(declined.title, 'Payment hold failed')
+  assert.match(declined.body, /did not go through/)
+  const missing = failedHoldPrompt({
+    metadata: { fare_authorization: { status: 'failed', code: 'no_payment_method' } },
+    payment: null,
+    payment_status: null,
+  })
+  assert.equal(missing.title, 'Add a payment method')
+  assert.match(missing.body, /Add a card or Apple Pay/)
+  assert.equal(failedHoldPrompt({ payment: null }), null)
+  const popup = read('apps/rider/components/RiderMatchPopup.tsx')
+  assert.match(popup, /failedHoldPrompt/)
+  assert.doesNotMatch(popup, /label="Add a payment method"/)
 })
