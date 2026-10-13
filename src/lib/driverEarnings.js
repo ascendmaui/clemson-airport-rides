@@ -45,6 +45,7 @@ import {
   maskCompletedTripForDriver,
   maskedRouteSummary,
 } from './privacyDisplay.js'
+import { mileageFromTrip } from '../../shared/driverTaxMileage.js'
 
 const TRIP_BASE = [
   'id',
@@ -219,6 +220,8 @@ function haversineMeters(lat1, lng1, lat2, lng2) {
 export function readDistance(row, bill) {
   const billed = Number(bill?.distanceM ?? bill?.distance_m)
   if (Number.isFinite(billed) && billed > 0) return { meters: Math.round(billed), approximate: false }
+  const route = Number(row?.metadata?.route_distance_m)
+  if (Number.isFinite(route) && route > 0) return { meters: Math.round(route), approximate: false }
   const routed = Number(row?.metadata?.distance_m)
   if (Number.isFinite(routed) && routed > 0) return { meters: Math.round(routed), approximate: false }
   const lat1 = Number(row?.pickup_lat)
@@ -699,13 +702,39 @@ export async function fetchDriverEarningsReport(driverId, { now = new Date(), ti
       bill: billsByTrip[row.id] || null,
     })
     if (row.status === 'canceled' && !(trip.cancelFeeCents > 0)) return []
-    return [trip]
+    const mileage = mileageFromTrip(row, { bill: billsByTrip[row.id] || null })
+    const payout = row.metadata?.payout && typeof row.metadata.payout === 'object' ? row.metadata.payout : {}
+    return [{
+      ...trip,
+      ...mileage,
+      payoutStatus: payout.status || null,
+      payoutCents: payout.amountCents ?? null,
+    }]
   })
   const standby = await standbyEarningRows(driverId, new Set(trips.map((trip) => trip.id)))
+  const mileage = await loadMileageSide(driverId)
 
   return {
     trips: [...trips, ...standby],
     summary: summarizeDriverEarnings(trips, { now, timeZone }),
     paymentsLoaded: Boolean(extras),
+    mileageLogs: mileage.logs,
+    mileageRates: mileage.rates,
+  }
+}
+
+async function loadMileageSide(driverId) {
+  if (!supabase || !driverId) return { logs: [], rates: null }
+  try {
+    const [logs, rates] = await Promise.all([
+      supabase.from('driver_mileage_logs').select('trip_id, tax_year, on_trip_miles, on_trip_source, enroute_miles, enroute_source, deductible_miles, completed_at').eq('driver_id', driverId),
+      supabase.from('driver_mileage_rates').select('tax_year, starts_on, ends_on, cents_per_mile, label, source_note'),
+    ])
+    return {
+      logs: logs.error ? [] : (logs.data || []),
+      rates: rates.error ? null : (rates.data || []),
+    }
+  } catch {
+    return { logs: [], rates: null }
   }
 }
