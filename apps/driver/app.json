@@ -10,6 +10,11 @@
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": false,
+      "icon": {
+        "light": "./assets/images/ios-icon-light.png",
+        "dark": "./assets/images/ios-icon-dark.png",
+        "tinted": "./assets/images/ios-icon-tinted.png"
+      },
       "buildNumber": "19",
       "bundleIdentifier": "com.ascendmaui.clemsonrides.driver",
       "infoPlist": {
