@@ -607,7 +607,6 @@ test('strings and comments are not elements', () => {
 test('rider app and components have no unlabeled controls or images outside the allowlist', (t) => {
   const { files, offenders } = scanRiderTree()
   const found = offenders.map((hit) => hit.id)
-  console.log(`rider a11y offenders: ${found.length}`)
   t.diagnostic(`rider a11y offenders: ${found.length}`)
   assert.ok(files.length > 0, 'expected .tsx files under apps/rider/app and apps/rider/components')
   const allow = [...ALLOWLIST].sort()

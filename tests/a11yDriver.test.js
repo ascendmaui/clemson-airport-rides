@@ -193,8 +193,6 @@ export function isAllowlisted(offender, allowlist = ALLOWLIST) {
 
 test('driver a11y static scanner scans all driver screens and components against allowlist', () => {
   const offenders = scanDriverA11y()
-  console.log(`Driver a11y offenders count: ${offenders.length}`)
-
   const unallowlisted = offenders.filter((o) => !isAllowlisted(o, ALLOWLIST))
   assert.equal(
     unallowlisted.length,
