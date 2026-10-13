@@ -18,6 +18,7 @@ import { notifyAcceptedRide, setRideAlertSurface } from '@/lib/push'
 import { shownCents } from '@/lib/shown'
 import { supabase } from '@/lib/supabase'
 import { useTheme } from '@/lib/theme'
+import { BOTTOM_CLUSTER_SHIFT, bottomClusterTranslateY } from '@/lib/bottomCluster'
 import { driverPresence, goOffline, goOnline, usePresence } from '@/lib/presence'
 import { fetchDriverApplication } from 'rides-native/drivers'
 import { displayFirstName } from 'rides-native/authErrors'
@@ -103,7 +104,7 @@ export default function DriverHome() {
   const { colors, scheme, earningsPrivate, setEarningsPrivate, autoAccept, setAutoAccept } = useTheme()
   const shadow = useCardShadow()
   const { user, configured } = useAuth()
-  const { pulse } = useFeedback()
+  const { pulse, pulseShift } = useFeedback()
   const [desk, setDesk] = useState<DriverDesk | null>(null)
   const [todayCents, setTodayCents] = useState(0)
   const [weekCents, setWeekCents] = useState(0)
@@ -138,11 +139,11 @@ export default function DriverHome() {
   const canGoOnline = gate.canGoOnline
   const approved = status === 'approved'
   const online = Boolean(desk?.online)
-  const barY = useRef(new Animated.Value(120)).current
+  const clusterY = useRef(new Animated.Value(BOTTOM_CLUSTER_SHIFT)).current
   useEffect(() => {
     setRideAlertSurface({ online })
-    Animated.timing(barY, { toValue: online ? 0 : 120, duration: 280, useNativeDriver: true }).start()
-  }, [barY, online])
+    Animated.timing(clusterY, { toValue: bottomClusterTranslateY(online), duration: 280, useNativeDriver: true }).start()
+  }, [clusterY, online])
   const name = user ? displayFirstName(user.user_metadata?.full_name || user.email?.split('@')[0], 'Driver') : 'Driver'
   const tabClearance = insets.bottom + 72
   // The dock is pinned between the status bar / Dynamic Island and the tab bar.
@@ -298,7 +299,7 @@ export default function DriverHome() {
         await publishDriverCapacity(supabase, user.id, desk?.vehicle?.seats)
         setFocusToken((value: number) => value + 1)
       }
-      pulse('online')
+      pulseShift(nextOnline ? 'GO' : 'END')
       AccessibilityInfo.announceForAccessibility(nextOnline ? 'You are now online' : 'You are now offline')
       await refresh()
     } catch (err) {
@@ -660,32 +661,38 @@ export default function DriverHome() {
               onPress={() => router.push('/game-day')}
             />
           ) : null}
-          <View style={styles.controls} pointerEvents="box-none">
-            <View style={styles.toolCol}>
-              <CircleButton icon="shield" label="Safety" onPress={() => router.push('/safety')} />
-              <CircleButton icon="sparkles" label="Priority mode" onPress={onPriority} />
-            </View>
-            <GoButton
-              online={online}
-              busy={busy}
-              disabled={!canGoOnline}
-              disabledReason={gate.body}
-              onPress={toggle}
-            />
-            <View style={styles.toolCol}>
-              <CircleButton icon="stats-chart" label="Earnings" onPress={() => router.push('/earnings')} />
-              <CircleButton icon="locate" label="Recenter map" onPress={() => setFocusToken((value: number) => value + 1)} />
-            </View>
-          </View>
+          {/* One transform: END slides the bar, GO, and side icons together; GO restores them. */}
           <Animated.View
-            style={[styles.bar, shadow, { backgroundColor: colors.card, transform: [{ translateY: barY }] }]}
-            accessibilityLiveRegion="polite"
-            accessibilityElementsHidden={!online}
-            pointerEvents={online ? 'auto' : 'none'}
+            pointerEvents="box-none"
+            style={[styles.bottomCluster, { transform: [{ translateY: clusterY }] }]}
           >
-            <CircleButton icon="options" label="Ride queue" onPress={() => router.push('/queue')} />
-            <Text style={[styles.barText, { color: colors.title }]} accessibilityLiveRegion="polite">{online ? statusLine : ''}</Text>
-            <CircleButton icon="list" label="Open queue" onPress={() => router.push('/queue')} />
+            <View style={styles.controls} pointerEvents="box-none">
+              <View style={styles.toolCol}>
+                <CircleButton icon="shield" label="Safety" onPress={() => router.push('/safety')} />
+                <CircleButton icon="sparkles" label="Priority mode" onPress={onPriority} />
+              </View>
+              <GoButton
+                online={online}
+                busy={busy}
+                disabled={!canGoOnline}
+                disabledReason={gate.body}
+                onPress={toggle}
+              />
+              <View style={styles.toolCol}>
+                <CircleButton icon="stats-chart" label="Earnings" onPress={() => router.push('/earnings')} />
+                <CircleButton icon="locate" label="Recenter map" onPress={() => setFocusToken((value: number) => value + 1)} />
+              </View>
+            </View>
+            <View
+              style={[styles.bar, shadow, { backgroundColor: colors.card }]}
+              accessibilityLiveRegion="polite"
+              accessibilityElementsHidden={!online}
+              pointerEvents={online ? 'auto' : 'none'}
+            >
+              <CircleButton icon="options" label="Ride queue" onPress={() => router.push('/queue')} />
+              <Text style={[styles.barText, { color: colors.title }]} accessibilityLiveRegion="polite">{online ? statusLine : ''}</Text>
+              <CircleButton icon="list" label="Open queue" onPress={() => router.push('/queue')} />
+            </View>
           </Animated.View>
         </View>
       </View>
@@ -953,6 +960,7 @@ const styles = StyleSheet.create({
   liveKicker: { fontWeight: '800', fontSize: 11, letterSpacing: 1 },
   liveTitle: { fontWeight: '800', fontSize: 18 },
   controls: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  bottomCluster: { gap: GAP },
   toolCol: { gap: GAP },
   bar: {
     alignSelf: 'stretch',

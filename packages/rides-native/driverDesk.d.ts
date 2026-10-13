@@ -18,7 +18,8 @@ export type VehicleRow = {
   color?: string | null
   plate?: string | null
   seats?: number | null
-  service_class?: boolean | null
+  service_class?: 'standard' | 'comfort'
+  luxury_exception?: boolean | null
   autonomous_capable?: boolean | null
   tier?: string | null
 }
