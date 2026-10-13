@@ -28,10 +28,12 @@ import { fetchInspectionDeadline, fetchMyDriverDocuments } from 'rides-native/dr
 import { decideGoPress, idleGoTone } from 'rides-native/goPress'
 import { offerPayoutFigures } from 'rides-native/offerRoute.js'
 import {
+  ATTENTION_COPY,
   DOCUMENTS_GO_ONLINE_COPY,
   goOnlineDocumentGate,
   type DocumentRow,
 } from 'rides-native/documentCategories'
+import { documentAttentionItems } from '../../../../shared/documentAiReview.js'
 import {
   INSPECTION_OVERDUE_COPY,
   inspectionCountdown,
@@ -174,6 +176,10 @@ export default function DriverHome() {
   const online = Boolean(desk?.online)
   const documentGate = useMemo(
     () => (documents ? goOnlineDocumentGate(documents) : null),
+    [documents],
+  )
+  const attentionItems = useMemo(
+    () => documentAttentionItems(documents || []),
     [documents],
   )
   const inspectionGate = inspectionGoOnlineGate({
@@ -648,13 +654,19 @@ export default function DriverHome() {
             <Pressable
               onPress={() => router.push('/documents')}
               accessibilityRole="link"
-              accessibilityLabel={`${DOCUMENTS_GO_ONLINE_COPY}. ${documentGate.sections.map((section) => section.label).join(', ')}. Documents`}
-              style={[styles.docGate, { backgroundColor: colors.card, borderColor: colors.danger, zIndex: DOCUMENT_BANNER_Z, elevation: DOCUMENT_BANNER_ELEVATION }]}
+              accessibilityLabel={`${ATTENTION_COPY}. ${DOCUMENTS_GO_ONLINE_COPY}. ${documentGate.sections.map((section) => section.label).join(', ')}. ${attentionItems.map((item) => `${item.label}. ${item.reason}`).join(' ')}. Documents`}
+              style={[styles.docGate, { backgroundColor: colors.card, borderColor: colors.orange, zIndex: DOCUMENT_BANNER_Z, elevation: DOCUMENT_BANNER_ELEVATION }]}
             >
-              <Text style={[styles.docGateTitle, { color: colors.danger }]}>{DOCUMENTS_GO_ONLINE_COPY}</Text>
+              <Text style={[styles.docGateTitle, { color: colors.orange }]}>{ATTENTION_COPY}</Text>
+              <Text style={[styles.docGateSections, { color: colors.title }]}>{DOCUMENTS_GO_ONLINE_COPY}</Text>
               <Text style={[styles.docGateSections, { color: colors.title }]}>
                 {documentGate.sections.map((section) => section.label).join(', ')}
               </Text>
+              {attentionItems.map((item) => (
+                <Text key={item.id} style={[styles.docGateReason, { color: colors.title }]}>
+                  {item.label}: {item.reason}
+                </Text>
+              ))}
               <Text style={[styles.docGateLink, { color: colors.orange }]}>Documents</Text>
             </Pressable>
           ) : null}
@@ -665,7 +677,13 @@ export default function DriverHome() {
               accessibilityLabel={`${INSPECTION_OVERDUE_COPY}. Documents`}
               style={[styles.docGate, { backgroundColor: colors.card, borderColor: colors.danger, zIndex: DOCUMENT_BANNER_Z, elevation: DOCUMENT_BANNER_ELEVATION }]}
             >
-              <Text style={[styles.docGateTitle, { color: colors.danger }]}>{INSPECTION_OVERDUE_COPY}</Text>
+              <Text style={[styles.docGateTitle, { color: colors.orange }]}>{ATTENTION_COPY}</Text>
+              <Text style={[styles.docGateSections, { color: colors.title }]}>{INSPECTION_OVERDUE_COPY}</Text>
+              {attentionItems.filter((item) => item.id.startsWith('inspection')).map((item) => (
+                <Text key={item.id} style={[styles.docGateReason, { color: colors.title }]}>
+                  {item.label}: {item.reason}
+                </Text>
+              ))}
               <Text style={[styles.docGateLink, { color: colors.orange }]}>Documents</Text>
             </Pressable>
           ) : null}
@@ -832,7 +850,7 @@ export function RideCard({
     : null
   const preferredNote = preferredRequestNote(card)
   const reduceMotion = useReduceMotion()
-  const opacity = useState(() => new Animated.Value(reduceMotion ? 1 : 0))[0]
+  const rise = useState(() => new Animated.Value(reduceMotion ? 0 : 16))[0]
   const glow = useRef(new Animated.Value(0.35)).current
   const scrollRef = useRef<ScrollView>(null)
   const [viewport, setViewport] = useState(0)
@@ -844,19 +862,19 @@ export function RideCard({
   }, [card.id])
   useEffect(() => {
     if (reduceMotion) {
-      opacity.setValue(1)
+      rise.setValue(0)
       return undefined
     }
-    opacity.setValue(0)
-    const enter = Animated.timing(opacity, {
-      toValue: 1,
+    rise.setValue(16)
+    const enter = Animated.timing(rise, {
+      toValue: 0,
       duration: motion.enterFadeMs,
       easing: Easing.out(Easing.cubic),
       useNativeDriver: true,
     })
     enter.start()
     return () => enter.stop()
-  }, [opacity, reduceMotion])
+  }, [reduceMotion, rise])
   useEffect(() => {
     if (!pulsing || reduceMotion) {
       glow.setValue(1)
@@ -876,7 +894,7 @@ export function RideCard({
   return (
     // flexShrink lets the dock squeeze the card to the room left above the controls;
     // only the details scroll — Accept / Decline stay pinned and visible.
-    <Animated.View style={[styles.offerWrap, { opacity, zIndex: OFFER_CARD_Z, elevation: OFFER_CARD_ELEVATION }]}>
+    <Animated.View style={[styles.offerWrap, { transform: [{ translateY: rise }], zIndex: OFFER_CARD_Z, elevation: OFFER_CARD_ELEVATION }]}>
       <Card
         style={[styles.offerCard, pulsing ? { borderColor: colors.orange, borderWidth: 2 } : null]}
         accessibilityRole="summary"
@@ -1109,6 +1127,7 @@ const styles = StyleSheet.create({
   docGateTitle: { fontWeight: '800', fontSize: 14, lineHeight: 18 },
   docGateSections: { fontWeight: '700', fontSize: 13, lineHeight: 18 },
   docGateLink: { fontWeight: '800', fontSize: 14 },
+  docGateReason: { fontWeight: '600', fontSize: 13, lineHeight: 18 },
   statusWrap: { flexShrink: 1, maxHeight: 400 },
   statusScrollBody: { flexGrow: 1 },
 })

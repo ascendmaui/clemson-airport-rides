@@ -190,6 +190,14 @@ test('navigate sets hash or assigns location URL', () => {
     // Path assign navigation for share/friends/carpool with token
     navigate('share', { token: 'tok_live' })
     assert.equal(assignedUrl, 'https://test.clemsonrides.com/share/tok_live')
+
+    navigate('admin', { tab: 'inbox' })
+    assert.equal(globalThis.window.location.pathname, '/admin')
+    assert.equal(globalThis.window.location.search, '?tab=inbox')
+    assert.equal(globalThis.window.location.hash, '')
+    const adminRoute = getHashRoute()
+    assert.equal(adminRoute.path, 'admin')
+    assert.equal(adminRoute.params.tab, 'inbox')
   } finally {
     globalThis.window = originalWindow
   }
