@@ -4,9 +4,12 @@ import { REQUIRED_DOCUMENTS } from '../../shared/driverOnboarding.js'
 import {
   ATTENTION_COPY,
   DOCUMENT_CATEGORIES,
+  DOCUMENTS_GO_ONLINE_COPY,
   categoryAttention,
   categoryForDocument,
   categorySlots,
+  goOnlineDocumentGate,
+  guardGoPress,
 } from './documentCategories.js'
 
 const EXPECTED = {
@@ -98,4 +101,36 @@ test('the check shows only when every required document in the category is appro
     { doc_type: 'registration', review_status: 'needs_review', storage_path: 'reg.pdf' },
   ]).label, ATTENTION_COPY)
   assert.equal(categoryAttention('unknown', approvedRows(['registration'])).mark, 'x')
+})
+
+test('GO is blocked when any category is unapproved and allowed when all four are approved', () => {
+  const all = approvedRows(REQUIRED_DOCUMENTS.map((doc) => doc.id))
+  const open = goOnlineDocumentGate(all)
+  assert.equal(open.allowed, true)
+  assert.deepEqual(open.sections, [])
+  assert.equal(guardGoPress({ goingOnline: true, documents: all }).proceed, true)
+  assert.equal(guardGoPress({ goingOnline: false, documents: [] }).proceed, true)
+
+  for (const category of DOCUMENT_CATEGORIES) {
+    const rows = all.map((row) => (
+      category.docTypes.includes(row.doc_type) && row.doc_type === category.docTypes[0]
+        ? { ...row, review_status: 'pending' }
+        : row
+    ))
+    const gate = goOnlineDocumentGate(rows)
+    assert.equal(gate.allowed, false)
+    assert.equal(gate.message, DOCUMENTS_GO_ONLINE_COPY)
+    assert.deepEqual(gate.sections.map((section) => section.label), [category.label])
+    const blocked = guardGoPress({ goingOnline: true, documents: rows })
+    assert.equal(blocked.proceed, false)
+    assert.equal(blocked.message, DOCUMENTS_GO_ONLINE_COPY)
+    assert.deepEqual(blocked.sections.map((section) => section.label), [category.label])
+  }
+
+  const missing = guardGoPress({ goingOnline: true, documents: null })
+  assert.equal(missing.proceed, false)
+  assert.deepEqual(
+    missing.sections.map((section) => section.label),
+    ["Driver's License", 'Insurance', 'Registration', 'Vehicle Photos'],
+  )
 })

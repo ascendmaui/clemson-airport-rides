@@ -59,6 +59,28 @@ export function categoryAttention(categoryId, documents) {
   return attention(approved)
 }
 
+export const DOCUMENTS_GO_ONLINE_COPY = 'Your documents need approval before you can go online'
+
+/**
+ * Go-online is allowed only when categoryAttention is approved for every tab.
+ * Admins and demo cars are not skipped: today's go-online write does not exempt them.
+ */
+export function goOnlineDocumentGate(documents) {
+  const sections = DOCUMENT_CATEGORIES
+    .filter((category) => !categoryAttention(category.id, documents).approved)
+    .map((category) => ({ id: category.id, label: category.label }))
+  if (sections.length === 0) return { allowed: true, sections: [], message: '' }
+  return { allowed: false, sections, message: DOCUMENTS_GO_ONLINE_COPY }
+}
+
+/** Call this before the GO handler. Ending a shift is never blocked here. */
+export function guardGoPress({ goingOnline, documents }) {
+  if (!goingOnline) return { proceed: true, message: '', sections: [] }
+  const gate = goOnlineDocumentGate(documents)
+  if (gate.allowed) return { proceed: true, message: '', sections: [] }
+  return { proceed: false, message: gate.message, sections: gate.sections }
+}
+
 export function categorySlots(categoryId, documents) {
   const category = DOCUMENT_CATEGORIES.find((item) => item.id === categoryId) || null
   if (!category) return []

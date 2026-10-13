@@ -20,6 +20,13 @@ import { supabase } from '@/lib/supabase'
 import { useTheme } from '@/lib/theme'
 import { driverPresence, goOffline, goOnline, usePresence } from '@/lib/presence'
 import { fetchDriverApplication } from 'rides-native/drivers'
+import { fetchMyDriverDocuments } from 'rides-native/driverOnboardingClient'
+import {
+  DOCUMENTS_GO_ONLINE_COPY,
+  goOnlineDocumentGate,
+  guardGoPress,
+  type DocumentRow,
+} from 'rides-native/documentCategories'
 import { displayFirstName } from 'rides-native/authErrors'
 import { heatColor } from 'rides-native/heat.js'
 import { HEAT_WINDOWS } from 'rides-native/places.js'
@@ -109,6 +116,7 @@ export default function DriverHome() {
   const [weekCents, setWeekCents] = useState(0)
   const [lastTrip, setLastTrip] = useState<string | null>(null)
   const [status, setStatus] = useState('none')
+  const [documents, setDocuments] = useState<DocumentRow[] | null>(null)
   const [reason, setReason] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -138,6 +146,11 @@ export default function DriverHome() {
   const canGoOnline = gate.canGoOnline
   const approved = status === 'approved'
   const online = Boolean(desk?.online)
+  const documentGate = useMemo(
+    () => (documents ? goOnlineDocumentGate(documents) : null),
+    [documents],
+  )
+  const documentsHoldGo = !online && (documents == null || documentGate?.allowed === false)
   const barY = useRef(new Animated.Value(120)).current
   useEffect(() => {
     setRideAlertSurface({ online })
@@ -166,8 +179,15 @@ export default function DriverHome() {
   }, [])
 
   const refresh = useCallback(async () => {
-    if (!user || !supabase) return
-    const application = await fetchDriverApplication(supabase, user.id)
+    if (!user || !supabase) {
+      setDocuments(null)
+      return
+    }
+    const [application, rows] = await Promise.all([
+      fetchDriverApplication(supabase, user.id),
+      fetchMyDriverDocuments(supabase, user.id).catch(() => null),
+    ])
+    setDocuments(rows)
     if (application.error) {
       setError(application.error)
       return
@@ -282,6 +302,19 @@ export default function DriverHome() {
       router.push('/sign-in')
       return
     }
+    const nextOnline = !online
+    if (nextOnline) {
+      const rows = supabase
+        ? await fetchMyDriverDocuments(supabase, user.id).catch(() => null)
+        : null
+      const decision = guardGoPress({ goingOnline: true, documents: rows })
+      if (!decision.proceed) {
+        if (rows) setDocuments(rows)
+        setError(decision.message)
+        return
+      }
+      if (rows) setDocuments(rows)
+    }
     if (!canGoOnline) {
       setError(gate.body)
       return
@@ -289,7 +322,6 @@ export default function DriverHome() {
     setBusy(true)
     setError(null)
     try {
-      const nextOnline = !online
       const fix = nextOnline ? await currentFix() : null
       if (nextOnline) await goOnline(user.id, fix)
       else await goOffline(user.id)
@@ -660,6 +692,20 @@ export default function DriverHome() {
               onPress={() => router.push('/game-day')}
             />
           ) : null}
+          {user && documentGate && !documentGate.allowed ? (
+            <Pressable
+              onPress={() => router.push('/documents')}
+              accessibilityRole="link"
+              accessibilityLabel={`${DOCUMENTS_GO_ONLINE_COPY}. ${documentGate.sections.map((section) => section.label).join(', ')}. Documents`}
+              style={[styles.docGate, { backgroundColor: colors.card, borderColor: colors.danger }]}
+            >
+              <Text style={[styles.docGateTitle, { color: colors.danger }]}>{DOCUMENTS_GO_ONLINE_COPY}</Text>
+              <Text style={[styles.docGateSections, { color: colors.title }]}>
+                {documentGate.sections.map((section) => section.label).join(', ')}
+              </Text>
+              <Text style={[styles.docGateLink, { color: colors.orange }]}>Documents</Text>
+            </Pressable>
+          ) : null}
           <View style={styles.controls} pointerEvents="box-none">
             <View style={styles.toolCol}>
               <CircleButton icon="shield" label="Safety" onPress={() => router.push('/safety')} />
@@ -668,8 +714,8 @@ export default function DriverHome() {
             <GoButton
               online={online}
               busy={busy}
-              disabled={!canGoOnline}
-              disabledReason={gate.body}
+              disabled={!canGoOnline || documentsHoldGo}
+              disabledReason={documentsHoldGo && documentGate && !documentGate.allowed ? documentGate.message : gate.body}
               onPress={toggle}
             />
             <View style={styles.toolCol}>
@@ -991,6 +1037,10 @@ const styles = StyleSheet.create({
   offerBody: { gap: 10, paddingBottom: 2 },
   offerNotice: { fontWeight: '700', fontSize: 13, lineHeight: 18 },
   offerActions: { gap: 8, paddingTop: 10 },
+  docGate: { borderRadius: 16, borderWidth: 1, padding: 12, gap: 4, marginBottom: 10 },
+  docGateTitle: { fontWeight: '800', fontSize: 14, lineHeight: 18 },
+  docGateSections: { fontWeight: '700', fontSize: 13, lineHeight: 18 },
+  docGateLink: { fontWeight: '800', fontSize: 14 },
   statusWrap: { flexShrink: 1, maxHeight: 400 },
   statusScrollBody: { flexGrow: 1 },
 })

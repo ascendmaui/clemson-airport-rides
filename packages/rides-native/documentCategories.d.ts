@@ -41,4 +41,24 @@ export function documentType(row: DocumentRow | null | undefined): string
 export function categoryForDocument(row: DocumentRow | null | undefined): DocumentCategory | null
 export function isDocumentApproved(row: DocumentRow | null | undefined): boolean
 export function categoryAttention(categoryId: string, documents?: DocumentRow[] | null): CategoryAttention
+
+export const DOCUMENTS_GO_ONLINE_COPY: string
+
+export type GoOnlineSection = {
+  id: string
+  label: string
+}
+
+export type GoOnlineDocumentGate = {
+  allowed: boolean
+  sections: GoOnlineSection[]
+  message: string
+}
+
+export function goOnlineDocumentGate(documents?: DocumentRow[] | null): GoOnlineDocumentGate
+export function guardGoPress(input: {
+  goingOnline: boolean
+  documents?: DocumentRow[] | null
+}): { proceed: boolean; message: string; sections: GoOnlineSection[] }
+
 export function categorySlots(categoryId: string, documents?: DocumentRow[] | null): CategorySlot[]
