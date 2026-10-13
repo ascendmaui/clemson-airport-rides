@@ -431,7 +431,7 @@ export default function Requested() {
               {preview
                 ? RIDER_SEARCH_MOTION_COPY
                 : located
-                  ? 'The orange pin is your driver’s live location. While they are on the way, a live distance in feet stays on screen and the screen pulses orange as they get closer.'
+                  ? 'The orange pin is your driver’s live location. While they are on the way, a live distance in feet stays on screen, with a soft glow around that card as they get closer.'
                   : 'Driver coordinates show up here after someone accepts and shares a location. The line follows the saved road when the trip has one.'}
             </Text>
           </View>

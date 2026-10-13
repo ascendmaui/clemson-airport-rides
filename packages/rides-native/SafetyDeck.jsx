@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react'
 import { Animated, Pressable, Text, View } from 'react-native'
 import { SAFETY_FEATURES } from '../../shared/safetyHub.js'
 
-export function SafetyDeck({ colors, activeId, onChange, children }) {
+export function SafetyDeck({ colors, activeId, onChange, children, description }) {
   const active = SAFETY_FEATURES.find((feature) => feature.id === activeId) || SAFETY_FEATURES[0]
   const fade = useRef(new Animated.Value(1)).current
   const rise = useRef(new Animated.Value(0)).current
@@ -74,7 +74,7 @@ export function SafetyDeck({ colors, activeId, onChange, children }) {
           {active.label.toUpperCase()}
         </Text>
         <Text style={{ color: colors.title, fontWeight: '800', fontSize: 20 }}>{active.title}</Text>
-        <Text style={{ color: colors.inkSecondary, fontSize: 14, lineHeight: 20 }}>{active.body}</Text>
+        <Text style={{ color: colors.inkSecondary, fontSize: 14, lineHeight: 20 }}>{description || active.body}</Text>
         {children}
       </Animated.View>
     </View>

@@ -266,7 +266,7 @@ function AccountScreen() {
         </View>
         <View style={[styles.row, lift(colors, 'rest')]}>
           <Text style={styles.rowTitle}>Haptics</Text>
-          <Text style={styles.copy}>Vibration for taps, booking, and the driver-approach alert. The orange flash and distance still show when this is off.</Text>
+          <Text style={styles.copy}>Vibration for taps, booking, and the driver-approach alert. The distance in feet and a soft glow still show when this is off.</Text>
           <PrimaryButton
             label={hapticsOn ? 'Haptics · On' : 'Haptics · Off'}
             tone={hapticsOn ? 'orange' : 'ghost'}

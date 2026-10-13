@@ -14,6 +14,7 @@ test('party night migration version is unique and starts at 20261013110000', () 
   const versions = names.map((name) => name.slice(0, 14))
   assert.equal(versions.filter((version) => version === '20261013110000').length, 1)
   assert.equal(names.includes(fileName), true)
+  assert.equal(fileName.startsWith('20261013110000'), true)
   assert.equal(new Set(versions).size, versions.length)
 })
 
