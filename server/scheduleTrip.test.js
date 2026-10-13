@@ -1353,6 +1353,29 @@ describe('scheduleTrip endpoint handler', () => {
       assert.equal(saved.row.metadata.party, 'weekend')
     })
 
+    test('carpool stores a seat count and the other ride types keep the party count', async () => {
+      const pickupAt = '2026-10-03T18:00:00.000Z'
+      const party = await schedule({
+        ...defaultPlaces,
+        pickupAt,
+        purpose: 'party_weekend',
+        tier: 'standard',
+        passengers: 6,
+      })
+      assert.equal(party.row.passengers, 6)
+      assert.equal(party.json.passengers, 6)
+      const carpool = await schedule({
+        ...defaultPlaces,
+        pickupAt,
+        purpose: 'planned',
+        tier: 'carpool',
+        passengers: 6,
+      })
+      assert.equal(carpool.row.passengers, 2)
+      assert.equal(carpool.json.passengers, 2)
+      assert.equal(carpool.json.passengerLabel, '2 passengers')
+    })
+
     test('a full car and an over-cap party change the message only', async () => {
       const pickupAt = '2026-10-03T18:00:00.000Z' // Saturday afternoon
       const full = await schedule({
@@ -1411,8 +1434,10 @@ describe('scheduleTrip endpoint handler', () => {
       assert.deepEqual(moneySnapshot(airportOne), moneySnapshot(airportParty))
       assert.equal(airportParty.json.weekendWindowCopy, WEEKEND_WINDOW_COPY)
       assert.equal(airportParty.row.metadata.purpose, 'airport')
-      assert.equal(airportOne.json.depositCents, airportParty.json.depositCents)
-      assert.ok(airportOne.json.depositCents > 0)
+      assert.equal(airportOne.json.depositCents, 0)
+      assert.equal(airportParty.json.depositCents, 0)
+      assert.ok(airportOne.json.fareCents > 0)
+      assert.equal(airportOne.json.fareCents, airportParty.json.fareCents)
     })
 
     test('zero passengers does not fall through to partySize on the displayed count', async () => {
@@ -1585,11 +1610,14 @@ describe('web schedule passenger stepper and weekend window helper', () => {
     assert.match(planner, /<WeekendWindowHelper[^>]*showNote/)
     assert.match(planner, /aria-describedby="weekend-window-note"/)
     assert.match(planner, /No card was charged/)
+    assert.match(planner, /The final fare is charged when the trip ends/)
+    assert.doesNotMatch(planner, /Airport deposit requirements/)
     assert.match(planner, /This is the fare saved on the ride/)
     assert.doesNotMatch(planner, /Friday night through Sunday/)
-    assert.match(saveCall, /passengers: displayedPassengers\(passengers\)/)
-    assert.doesNotMatch(estimateCall, /passengers/)
-    assert.doesNotMatch(quoteCall, /passengers/)
+    assert.match(saveCall, /fleet === 'carpool' \? seats : displayedPassengers\(passengers\)/)
+    assert.doesNotMatch(estimateCall, /displayedPassengers/)
+    assert.match(estimateCall, /fleet === 'carpool' \? seats : 1/)
+    assert.doesNotMatch(quoteCall, /displayedPassengers|passengerCount|partySize/)
     assert.match(rides, /passengers: party/)
     assert.doesNotMatch(rides, /scheduleDiscountPct\s*[:=]\s*(?!10\b)\d+/)
 
