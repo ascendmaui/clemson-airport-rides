@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
+import { planReveals, revealDelay } from '../src/lib/glassMotion.js'
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
@@ -50,6 +51,50 @@ test('liquid glass marketing css keeps blur, a solid fallback, and reduced motio
   assert.match(css, /@media \(prefers-reduced-motion:\s*reduce\)/)
   assert.match(css, /animation:\s*none !important/)
   assert.doesNotMatch(css, /tesla|robotaxi|self-driving/i)
+})
+
+test('scroll reveals stagger by sibling and stay visible above the fold', () => {
+  assert.equal(revealDelay(0), '0ms')
+  assert.equal(revealDelay(1), '70ms')
+  assert.equal(revealDelay(2), '140ms')
+  assert.equal(revealDelay(9), '280ms')
+  const parent = {}
+  const other = {}
+  const plan = planReveals([
+    { top: 10, parentKey: parent },
+    { top: 800, parentKey: parent },
+    { top: 900, parentKey: parent },
+    { top: 40, parentKey: other },
+  ], 700)
+  assert.equal(plan[0].hide, false)
+  assert.equal(plan[0].delay, '0ms')
+  assert.equal(plan[1].hide, true)
+  assert.equal(plan[1].delay, '70ms')
+  assert.equal(plan[2].hide, true)
+  assert.equal(plan[2].delay, '140ms')
+  assert.equal(plan[3].hide, false)
+  assert.equal(plan[3].delay, '0ms')
+})
+
+test('glass motion uses IntersectionObserver and animates transform and opacity only', () => {
+  const js = read('src/lib/glassMotion.js')
+  assert.match(js, /IntersectionObserver/)
+  assert.match(js, /prefers-reduced-motion/)
+  const css = read('src/styles/liquidGlass.css')
+  const frames = [...css.matchAll(/@keyframes glass-[\w-]+ \{[\s\S]*?\n\}/g)].map((match) => match[0]).join('\n')
+  assert.match(frames, /@keyframes glass-rise/)
+  assert.match(frames, /@keyframes glass-fade/)
+  assert.match(frames, /@keyframes glass-sweep/)
+  assert.match(frames, /translate3d/)
+  assert.match(frames, /opacity/)
+  assert.doesNotMatch(frames, /filter:|box-shadow:|background-position:|margin-|width:|left:|top:/)
+  const reduceAt = css.indexOf('@media (prefers-reduced-motion: reduce)')
+  assert.ok(reduceAt > 0)
+  const reduce = css.slice(reduceAt)
+  assert.match(reduce, /animation:\s*none !important/)
+  assert.match(reduce, /transition:\s*none !important/)
+  assert.match(reduce, /opacity:\s*1 !important/)
+  assert.match(reduce, /transform:\s*none !important/)
 })
 
 test('the marketing home renders the existing headline with glass marks', async () => {

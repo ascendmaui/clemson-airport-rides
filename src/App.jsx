@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useGlassMotion } from './lib/glassMotion'
 import { bindKeyboardInset, scrollFocusedFieldIntoView } from './lib/keyboardInset'
 import { getHashRoute, navigate, redirectShareHashToPath } from './lib/navigation'
 import { capturePromoFromLocation } from './lib/riderPromo'
@@ -389,6 +390,7 @@ export default function App() {
   const overflow = path === 'driver' ? 'hidden' : 'auto'
   const site = SITE_ROUTES.has(path)
   const routeKey = `${path}:${params.token || params.id || params.trip || params.sub || ''}`
+  useGlassMotion(routeKey)
 
   return (
     <ToastProvider>

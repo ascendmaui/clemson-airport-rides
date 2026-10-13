@@ -21,7 +21,7 @@ export const card = {
   boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.9), 0 10px 28px rgba(82,45,128,0.10)',
   backdropFilter: 'blur(16px)',
   WebkitBackdropFilter: 'blur(16px)',
-  transition: 'box-shadow .2s ease, transform .2s ease',
+  transition: 'transform .2s ease, opacity .2s ease',
 }
 const page = { minHeight: '100%', background: 'var(--surface, #f6f4f8)', padding: '20px 16px 64px' }
 const wrap = { maxWidth: 760, margin: '0 auto', display: 'grid', gap: 16 }
