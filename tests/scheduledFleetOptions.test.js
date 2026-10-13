@@ -81,7 +81,9 @@ function createFakeSb() {
         },
         in() { return chain },
         then(onFulfilled, onRejected) {
-          const payload = table === 'driver_applications'
+          const payload = table === 'profiles'
+            ? { data: [{ id: 'driver-approved', email: 'driver@example.com' }], error: null }
+            : table === 'driver_applications'
             ? { data: [{ profile_id: 'driver-approved', onboarding_status: 'approved' }], error: null }
             : table === 'driver_status'
               ? { data: [{ driver_id: 'driver-approved', online: true }], error: null }

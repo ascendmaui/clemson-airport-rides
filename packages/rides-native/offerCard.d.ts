@@ -19,6 +19,8 @@ export type DriverNetPayModel = {
   platformFeeCents: number
   formattedPlatformFee: string
   subtext: string
+  boostCents?: number
+  boostDriverCents?: number
 }
 
 export function formatDriverNetPay(card?: DriverCard | Record<string, unknown> | null): DriverNetPayModel
@@ -114,6 +116,7 @@ export type OfferCardViewModel = {
   timeLeft: TimeLeftModel | null
   timeLeftLabel: string | null
   pickupAtText: string | null
+  boostLine: string | null
   accessibilityLabel: string
 }
 

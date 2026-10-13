@@ -1,0 +1,66 @@
+import { useEffect, useRef } from 'react'
+import { StyleSheet, View } from 'react-native'
+import MapView, { Marker, Polyline, PROVIDER_DEFAULT } from 'react-native-maps'
+import { offerRouteLegs, offerRoutePoints, offerRouteRegion } from 'rides-native/offerRoute.js'
+
+type Coord = { latitude: number; longitude: number } | null
+
+const PAD = { top: 28, right: 28, bottom: 28, left: 28 }
+
+export function OfferRouteMap({
+  driver,
+  pickup,
+  dropoff,
+}: {
+  driver: Coord
+  pickup: Coord
+  dropoff: Coord
+}) {
+  const mapRef = useRef<MapView>(null)
+  const points = offerRoutePoints({ driver, pickup, dropoff })
+  const legs = offerRouteLegs({ driver, pickup, dropoff })
+  const region = offerRouteRegion([points.driver, points.pickup, points.dropoff])
+  const fitKey = legs.map((leg) => leg.coordinates.map((point) => `${point.latitude},${point.longitude}`).join('|')).join(';')
+  const legsRef = useRef(legs)
+  legsRef.current = legs
+  useEffect(() => {
+    const coordinates = legsRef.current.flatMap((leg) => leg.coordinates)
+    if (coordinates.length < 2) return undefined
+    const frame = requestAnimationFrame(() => {
+      mapRef.current?.fitToCoordinates(coordinates, { edgePadding: PAD, animated: false })
+    })
+    return () => cancelAnimationFrame(frame)
+  }, [fitKey])
+  if (!region || !legs.length) return null
+  return (
+    <View
+      accessibilityRole="image"
+      accessibilityLabel="Proposed route. Orange is you to pickup. Purple is pickup to drop-off."
+      style={styles.map}
+    >
+      <MapView
+        ref={mapRef}
+        provider={PROVIDER_DEFAULT}
+        style={StyleSheet.absoluteFill}
+        initialRegion={region}
+        pointerEvents="none"
+        scrollEnabled={false}
+        zoomEnabled={false}
+        rotateEnabled={false}
+        pitchEnabled={false}
+        toolbarEnabled={false}
+      >
+        {legs.map((leg) => (
+          <Polyline key={leg.id} coordinates={leg.coordinates} strokeColor={leg.color} strokeWidth={4} />
+        ))}
+        {points.driver ? <Marker coordinate={points.driver} pinColor="#F56600" anchor={{ x: 0.5, y: 1 }} /> : null}
+        {points.pickup ? <Marker coordinate={points.pickup} pinColor="#F56600" anchor={{ x: 0.5, y: 1 }} /> : null}
+        {points.dropoff ? <Marker coordinate={points.dropoff} pinColor="#522D80" anchor={{ x: 0.5, y: 1 }} /> : null}
+      </MapView>
+    </View>
+  )
+}
+
+const styles = StyleSheet.create({
+  map: { height: 148, borderRadius: 16, overflow: 'hidden' },
+})

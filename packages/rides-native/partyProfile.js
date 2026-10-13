@@ -3,8 +3,9 @@
  * Signup must collect a profile. The other person on an accepted trip can see it.
  * Aggregates live on profiles.rating_avg / rating_count (database trigger).
  */
-import { displayFirstName, normalizePromoCode } from './authErrors.js'
+import { normalizePromoCode } from './authErrors.js'
 import { loadPickerDriverRecord, pickerVehicleLine } from './drivers.js'
+import { riderDriverFirstName } from '../../shared/riderDriverPrivacy.js'
 
 export const SIGNUP_PROFILE_DRAFT_KEY = 'clemson_signup_profile_draft'
 
@@ -237,12 +238,11 @@ function vehiclePlate(vehicle) {
 export function toCounterpartView(profile, { viewerIsRider = false } = {}) {
   if (!profile) return null
   const fallback = viewerIsRider ? 'Driver' : 'Rider'
-  const full = typeof profile.full_name === 'string' ? profile.full_name.trim() : ''
-  const first = displayFirstName(profile.full_name, fallback)
-  const name = viewerIsRider && first !== fallback ? full : first
+  const source = profile.first_name || profile.full_name
+  const name = riderDriverFirstName(source, fallback)
   const vehicle = vehicleLabelFromRow(profile.vehicle)
   const plate = vehiclePlate(profile.vehicle)
-  return {
+  const view = {
     id: profile.id,
     name,
     initial: (name || fallback).slice(0, 1).toUpperCase(),
@@ -252,7 +252,6 @@ export function toCounterpartView(profile, { viewerIsRider = false } = {}) {
     bio: String(profile.bio || '').trim(),
     rideStyle: String(profile.ride_style || '').trim(),
     spots: asSpotList(profile.favorite_spots),
-    phone: formatPhone(profile.phone),
     student: Boolean(profile.student_verified_at),
     vehicle,
     plate,
@@ -260,6 +259,7 @@ export function toCounterpartView(profile, { viewerIsRider = false } = {}) {
     photoUrl: safePhotoUrl(profile.avatar_url),
     roleLabel: viewerIsRider ? 'Your driver' : 'Your rider',
   }
+  return view
 }
 
 function explainRatingError(message) {
@@ -334,10 +334,37 @@ async function loadVehicle(supabase, driverId) {
   }
 }
 
-/** Rider view of the accepted driver: full name, photo, and the picker car/plate. */
+function rpcMissing(error, name) {
+  const msg = `${error?.message || ''} ${error?.details || ''} ${error?.code || ''}`
+  return new RegExp(`could not find the function|schema cache|PGRST202|does not exist|missing function|Unknown RPC|${name}`, 'i').test(msg)
+}
+
+/** First name and vibe for a driver the signed-in rider is matched with. No phone. */
+async function loadRiderDriverProfile(supabase, driverId) {
+  const rpc = await supabase.rpc('rider_driver_profile', { target: driverId })
+  if (!rpc.error) {
+    const row = Array.isArray(rpc.data) ? rpc.data[0] : rpc.data
+    return row || null
+  }
+  if (!rpcMissing(rpc.error, 'rider_driver_profile')) throw new Error(rpc.error.message)
+  return loadPublicProfile(supabase, driverId)
+}
+
+/** First name and vibe for a rider the signed-in driver is matched with. No phone. */
+async function loadDriverRiderProfile(supabase, riderId) {
+  const rpc = await supabase.rpc('driver_rider_profile', { target: riderId })
+  if (!rpc.error) {
+    const row = Array.isArray(rpc.data) ? rpc.data[0] : rpc.data
+    return row || null
+  }
+  if (!rpcMissing(rpc.error, 'driver_rider_profile')) throw new Error(rpc.error.message)
+  return loadPublicProfile(supabase, riderId)
+}
+
+/** Rider view of the accepted driver: first name, photo, and the picker car/plate. */
 export async function loadMatchedDriverCard(supabase, driverId) {
   if (!supabase || !driverId) return null
-  const profile = await loadPublicProfile(supabase, driverId)
+  const profile = await loadRiderDriverProfile(supabase, driverId)
   let record = null
   try {
     record = await loadPickerDriverRecord(supabase, driverId)
@@ -348,8 +375,9 @@ export async function loadMatchedDriverCard(supabase, driverId) {
   if (!profile && !vehicle && !record?.full_name) return null
   return toCounterpartView({
     ...(profile || { id: driverId }),
-    full_name: profile?.full_name || record?.full_name || '',
+    full_name: profile?.first_name || profile?.full_name || record?.first_name || record?.full_name || '',
     avatar_url: profile?.avatar_url || record?.avatar_url || null,
+    phone: null,
     vehicle,
   }, { viewerIsRider: true })
 }
@@ -358,16 +386,20 @@ export async function loadCounterpart(supabase, trip, userId) {
   const id = counterpartId(trip, userId)
   if (!supabase || !id) return null
   if (trip.rider_id === userId) return loadMatchedDriverCard(supabase, id)
-  const profile = await loadPublicProfile(supabase, id)
+  const profile = await loadDriverRiderProfile(supabase, id)
   if (!profile) return null
-  return toCounterpartView(profile, { viewerIsRider: false })
+  return toCounterpartView({
+    ...profile,
+    full_name: profile.first_name || profile.full_name || '',
+    phone: null,
+  }, { viewerIsRider: false })
 }
 
 export async function fetchTripForRating(supabase, tripId) {
   if (!supabase || !tripId) return null
   const { data, error } = await supabase
     .from('trips')
-    .select('id, status, rider_id, driver_id, pickup_label, dropoff_label, completed_at')
+    .select('id, status, rider_id, driver_id, pickup_label, dropoff_label, wait_fee_cents, completed_at')
     .eq('id', tripId)
     .maybeSingle()
   if (error) throw new Error(error.message)
@@ -389,7 +421,18 @@ export async function hasRatedTrip(supabase, tripId, raterId) {
   return Boolean(data?.id)
 }
 
-export async function submitPartyRating(supabase, { tripId, raterId, stars, comment }) {
+/** Short labels only; ratings.tags allows at most 5. */
+export function cleanRatingTags(tags) {
+  const out = []
+  for (const tag of Array.isArray(tags) ? tags : []) {
+    const value = String(tag || '').trim().slice(0, 40)
+    if (value && !out.includes(value)) out.push(value)
+    if (out.length >= 5) break
+  }
+  return out
+}
+
+export async function submitPartyRating(supabase, { tripId, raterId, stars, comment, tags }) {
   if (!supabase) throw new Error('Supabase is not configured')
   const starError = validateStars(stars)
   if (starError) throw new Error(starError)
@@ -399,17 +442,20 @@ export async function submitPartyRating(supabase, { tripId, raterId, stars, comm
   if (await hasRatedTrip(supabase, tripId, raterId)) throw new Error('You already rated this trip')
   const rateeId = raterId === trip.rider_id ? trip.driver_id : trip.rider_id
   const note = String(comment || '').trim().slice(0, 280)
-  const { data, error } = await supabase
-    .from('ratings')
-    .insert({
-      trip_id: tripId,
-      rater_id: raterId,
-      ratee_id: rateeId,
-      stars: Number(stars),
-      comment: note || null,
-    })
-    .select('id, stars')
-    .single()
+  const row = {
+    trip_id: tripId,
+    rater_id: raterId,
+    ratee_id: rateeId,
+    stars: Number(stars),
+    comment: note || null,
+  }
+  const cleanTags = cleanRatingTags(tags)
+  const insert = (values) => supabase.from('ratings').insert(values).select('id, stars').single()
+  let { data, error } = await insert(cleanTags.length ? { ...row, tags: cleanTags } : row)
+  // Before the ratings.tags migration lands, save the stars and note without tags.
+  if (error && cleanTags.length && /tags|schema cache|column/i.test(error.message || '')) {
+    ;({ data, error } = await insert(row))
+  }
   if (error) throw new Error(explainRatingError(error.message))
   if (!data?.id) throw new Error('Rating was not saved')
   return data

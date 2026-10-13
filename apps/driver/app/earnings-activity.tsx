@@ -7,8 +7,10 @@ import { useAuth } from '@/lib/auth'
 import { shownCents } from '@/lib/shown'
 import { supabase } from '@/lib/supabase'
 import { useTheme } from '@/lib/theme'
+import { messagingGuide } from '../../../shared/copy/messaging.js'
 import { loadEarnings } from 'rides-native/driverDesk'
-import { carpoolPayFromTrip, tripEarnedCents } from 'rides-native/tripTags'
+import { carpoolPayFromTrip, incentiveLabel, tripPayoutCents } from 'rides-native/tripTags'
+import { formatBoostBadge, readBoostCents } from '../../../shared/scheduledBoost.js'
 
 type Trip = Awaited<ReturnType<typeof loadEarnings>>['trips'][number]
 type Filter = 'all' | 'completed' | 'canceled'
@@ -54,13 +56,13 @@ export default function EarningsActivity() {
 
   const visible = useMemo(() => trips.filter((trip: Trip) => {
     if (filter === 'all') return true
-    return trip.status === filter
+    return trip.status === filter || (filter === 'canceled' && trip.status === 'cancelled_wait')
   }), [filter, trips])
 
   const groups = useMemo(() => {
     const map = new Map<string, Trip[]>()
     for (const trip of visible) {
-      const key = (trip.completed_at || '').slice(0, 10) || 'Undated'
+      const key = (trip.completed_at || trip.canceled_at || '').slice(0, 10) || 'Undated'
       const list = map.get(key) || []
       list.push(trip)
       map.set(key, list)
@@ -111,29 +113,50 @@ export default function EarningsActivity() {
         <View key={day} style={styles.group}>
           <Text style={{ color: colors.inkSecondary, fontWeight: '800' }}>{day}</Text>
           {rows.map((trip: Trip) => {
-            const pay = carpoolPayFromTrip(trip)
+            const noShow = trip.status === 'cancelled_wait'
+            const pay = noShow ? null : carpoolPayFromTrip(trip)
+            const boost = noShow ? 0 : readBoostCents(trip)
+            const earned = trip.status === 'canceled' ? 0 : tripPayoutCents(trip)
             return (
-              <Pressable
-                key={trip.id}
-                onPress={() => router.push({ pathname: '/trip-details', params: { id: trip.id } })}
-                accessibilityRole="button"
-                accessibilityLabel={`${trip.status === 'canceled' ? 'Canceled trip' : 'Completed trip'}, ${trip.pickup_label || 'Pickup'} to ${trip.dropoff_label || 'Drop-off'}, ${trip.status === 'canceled' ? 'No payout' : shownCents(tripEarnedCents(trip), earningsPrivate)}`}
-                accessibilityHint="Opens trip details and breakdown"
-              >
-                <Card>
-                  <Text style={{ color: colors.title, fontWeight: '800' }}>{trip.status === 'canceled' ? 'Canceled' : 'Clemson RIDES'}</Text>
+              <Card key={trip.id}>
+                <Pressable
+                  onPress={() => router.push({ pathname: '/trip-details', params: { id: trip.id } })}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${noShow ? 'No-show fee' : trip.status === 'canceled' ? 'Canceled trip' : 'Completed trip'}, ${trip.pickup_label || 'Pickup'} to ${trip.dropoff_label || 'Drop-off'}, ${trip.status === 'canceled' ? 'No payout' : shownCents(earned, earningsPrivate)}`}
+                  accessibilityHint="Opens trip details and breakdown"
+                >
+                  <Text style={{ color: colors.title, fontWeight: '800' }}>{noShow ? 'No-show fee' : trip.status === 'canceled' ? 'Canceled' : 'Clemson RIDES'}</Text>
                   <Text style={{ color: colors.ink }}>{trip.pickup_label || 'Pickup'}</Text>
                   <Text style={{ color: colors.ink }}>{trip.dropoff_label || 'Drop-off'}</Text>
                   <Text style={{ color: colors.title, fontWeight: '800' }}>
-                    {trip.status === 'canceled' ? 'No payout' : shownCents(tripEarnedCents(trip), earningsPrivate)}
+                    {trip.status === 'canceled' ? 'No payout' : shownCents(earned, earningsPrivate)}
                   </Text>
+                  {trip.status === 'completed' && (trip.driver_wait_earnings_cents || 0) > 0 ? (
+                    <Text style={{ color: colors.inkSecondary }}>Wait time {shownCents(trip.driver_wait_earnings_cents || 0, earningsPrivate)}</Text>
+                  ) : null}
+                  {trip.status !== 'canceled' && boost > 0 ? (
+                    <Text style={{ color: '#F56600', fontWeight: '800' }}>Boost {formatBoostBadge(boost)}</Text>
+                  ) : null}
                   {trip.status !== 'canceled' && pay?.showBonus ? (
                     <Text style={{ color: colors.inkSecondary }}>
-                      Base net {shownCents(pay.baseNetCents, earningsPrivate)} · {pay.incentiveId} {shownCents(pay.bonusCents, earningsPrivate)} · total {shownCents(pay.payoutCents, earningsPrivate)}
+                      Base net {shownCents(pay.baseNetCents, earningsPrivate)} · {incentiveLabel(pay.incentiveId)} {shownCents(pay.bonusCents, earningsPrivate)} · total {shownCents(pay.payoutCents, earningsPrivate)}
                     </Text>
                   ) : null}
-                </Card>
-              </Pressable>
+                </Pressable>
+                {trip.status === 'completed' ? (
+                  <Pressable
+                    onPress={() => router.push({ pathname: '/trip-details', params: { id: trip.id, lost: '1' } })}
+                    accessibilityRole="button"
+                    accessibilityLabel="Report a lost item"
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <Text style={{ color: colors.orange, fontWeight: '800' }}>Report a lost item</Text>
+                    <Text style={{ color: colors.inkSecondary, fontSize: 13, lineHeight: 18, marginTop: 4 }}>
+                      {messagingGuide('driver').reportHint}
+                    </Text>
+                  </Pressable>
+                ) : null}
+              </Card>
             )
           })}
         </View>

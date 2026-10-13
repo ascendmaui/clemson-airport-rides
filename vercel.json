@@ -5,6 +5,10 @@
       "destination": "/api/stripe-webhook"
     },
     {
+      "source": "/api/stripe/connect-webhook",
+      "destination": "/api/stripe-connect-webhook"
+    },
+    {
       "source": "/api/carpool-match",
       "destination": "/api/carpool?action=match"
     },
@@ -47,6 +51,10 @@
     {
       "source": "/api/friend-rides/:action",
       "destination": "/api/friend-rides?action=:action"
+    },
+    {
+      "source": "/api/party-night/:action",
+      "destination": "/api/party-night?action=:action"
     },
     {
       "source": "/api/driver-signup",
@@ -145,6 +153,14 @@
     {
       "path": "/api/driver-payouts",
       "schedule": "0 12 * * *"
+    },
+    {
+      "path": "/api/weekly-coupon?slot=edt",
+      "schedule": "0 16 * * 5"
+    },
+    {
+      "path": "/api/weekly-coupon?slot=est",
+      "schedule": "0 17 * * 5"
     }
   ]
 }

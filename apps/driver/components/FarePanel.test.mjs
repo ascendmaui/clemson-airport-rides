@@ -11,10 +11,11 @@ const source = fs.readFileSync(path.join(here, 'FarePanel.tsx'), 'utf8')
 test('FarePanel keeps the DriverCard card prop and core fare rows', () => {
   assert.match(source, /export function FarePanel\(\{ card \}: \{ card: DriverCard \}\)/)
   assert.match(source, /fareCollection\(card\)/)
-  for (const label of ['Trip fare', '25% deposit', 'Collected on complete']) {
-    assert.match(source, new RegExp(`label=\"${label}\"`))
+  for (const label of ['Trip fare', 'Already paid', 'Charged at trip end']) {
+    assert.match(source, new RegExp(`label="${label}"`))
   }
-  assert.match(source, /label=\{fare\.usesStoredPayout \? 'You net' : 'You net · 80%'\}/)
+  assert.match(source, /label="You net" value=\{formatCents\(fare\.totalNetCents\)\} strong/)
+  assert.match(source, /Fare net · \$\{fare\.sharePercent\}%/)
   assert.match(source, /driverFareNote\(fare\.depositCents\)/)
 })
 
@@ -22,15 +23,20 @@ test('FarePanel fare contract supplies the display fields for a normal driver ca
   const fare = fareCollection({ fareCents: 1001 })
   assert.deepEqual(fare, {
     fareCents: 1001,
-    depositCents: 250,
-    remainderCents: 751,
+    depositCents: 0,
+    remainderCents: 1001,
     driverNetCents: 801,
+    boostNetCents: 0,
+    backupBonusCents: 0,
+    waitNetCents: 0,
+    totalNetCents: 801,
     platformFeeCents: 200,
     shares: [],
     baseNetCents: null,
     carpoolBonusCents: null,
     carpoolIncentiveId: null,
     usesStoredPayout: false,
+    sharePercent: 80,
   })
 })
 
@@ -48,7 +54,7 @@ test('FarePanel carpool contract retains stored payout and split rows', () => {
     },
   })
   assert.equal(fare.fareCents, 2400)
-  assert.equal(fare.depositCents, 600)
+  assert.equal(fare.depositCents, 0)
   assert.equal(fare.driverNetCents, 2200)
   assert.equal(fare.platformFeeCents, 200)
   assert.equal(fare.baseNetCents, 1800)

@@ -1,10 +1,12 @@
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import test, { afterEach, beforeEach, describe } from 'node:test'
 import {
   DEFAULT_MAX_PARTICIPANTS,
   carpoolSeatCap,
   capacityMessage,
   inferVehicleCategory,
+  isComfortServiceClass,
   loadRegisteredVehicle,
   offerCapacity,
   saveRegisteredVehicle,
@@ -602,7 +604,7 @@ describe('saveRegisteredVehicle', () => {
       color: 'Black',
       plate: 'CLEM-1',
       seats: 4,
-      service_class: false,
+      service_class: 'standard',
       autonomous_capable: false,
       tier: 'standard',
     })
@@ -678,7 +680,7 @@ describe('saveRegisteredVehicle', () => {
       color: null,
       plate: 'TSLA-FUN',
       seats: 7,
-      service_class: true,
+      service_class: 'comfort',
       autonomous_capable: false,
       tier: 'comfort',
     })
@@ -828,4 +830,126 @@ describe('saveRegisteredVehicle', () => {
       /Update failure/,
     )
   })
+
+  test('service_class payload is standard or comfort, never a boolean', async () => {
+    const writes = []
+    const supabase = {
+      from() {
+        return {
+          select() {
+            return { eq() { return { limit: async () => ({ data: [], error: null }) } } }
+          },
+          insert(payload) {
+            writes.push(payload)
+            return { select() { return { single: async () => ({ data: payload, error: null }) } } }
+          },
+        }
+      },
+    }
+    await saveRegisteredVehicle(supabase, 'driver-1', { make: 'Honda', model: 'Civic', plate: 'A', comfortClass: false })
+    await saveRegisteredVehicle(supabase, 'driver-1', { make: 'Honda', model: 'Civic', plate: 'A', comfortClass: true })
+    await saveRegisteredVehicle(supabase, 'driver-1', { make: 'Honda', model: 'Civic', plate: 'A' })
+    assert.equal(writes[0].service_class, 'standard')
+    assert.equal(writes[1].service_class, 'comfort')
+    assert.equal(writes[2].service_class, 'standard')
+    for (const row of writes) assert.equal(typeof row.service_class, 'string')
+  })
+
+  test('owned vehicle save writes the year and luxury exception flag', async () => {
+    const writes = []
+    const supabase = {
+      from() {
+        return {
+          select() {
+            return { eq() { return { limit: async () => ({ data: [], error: null }) } } }
+          },
+          insert(payload) {
+            writes.push(payload)
+            return { select() { return { single: async () => ({ data: payload, error: null }) } } }
+          },
+        }
+      },
+    }
+    await saveRegisteredVehicle(supabase, 'driver-1', {
+      make: 'Honda', model: 'Civic', plate: 'A', year: 2020, condition: 'good', luxuryPhotos: [],
+    })
+    await saveRegisteredVehicle(supabase, 'driver-1', {
+      make: 'Lincoln', model: 'Town Car', plate: 'B', year: 2015, condition: 'excellent', luxuryPhotos: ['file://lux.jpg'],
+    })
+    assert.equal(writes[0].year, 2020)
+    assert.equal(writes[0].luxury_exception, false)
+    assert.equal(writes[0].service_class, 'standard')
+    assert.equal(writes[1].year, 2015)
+    assert.equal(writes[1].luxury_exception, true)
+    await assert.rejects(
+      () => saveRegisteredVehicle(supabase, 'driver-1', {
+        make: 'Old', model: 'Car', plate: 'C', year: 2015, condition: 'good', luxuryPhotos: [],
+      }),
+      /Luxury exception/,
+    )
+    await assert.rejects(
+      () => saveRegisteredVehicle(supabase, 'driver-1', {
+        make: 'Old', model: 'Car', plate: 'C', year: 2022, condition: 'poor', luxuryPhotos: [],
+      }),
+      /Poor condition is blocked/,
+    )
+    assert.equal(writes.length, 2)
+  })
+
+  test('a missing luxury_exception column retries without that field', async () => {
+    const writes = []
+    const supabase = {
+      from() {
+        return {
+          select() {
+            return { eq() { return { limit: async () => ({ data: [], error: null }) } } }
+          },
+          insert(payload) {
+            writes.push(payload)
+            return {
+              select() {
+                return {
+                  single: async () => (
+                    Object.prototype.hasOwnProperty.call(payload, 'luxury_exception')
+                      ? { data: null, error: { message: "Could not find the 'luxury_exception' column of 'vehicles' in the schema cache" } }
+                      : { data: payload, error: null }
+                  ),
+                }
+              },
+            }
+          },
+        }
+      },
+    }
+    const saved = await saveRegisteredVehicle(supabase, 'driver-1', {
+      make: 'Honda', model: 'Civic', plate: 'A', year: 2021, condition: 'fair', luxuryPhotos: [],
+    })
+    assert.equal(writes.length, 2)
+    assert.equal(writes[0].luxury_exception, false)
+    assert.equal(Object.prototype.hasOwnProperty.call(writes[1], 'luxury_exception'), false)
+    assert.equal(writes[1].year, 2021)
+    assert.equal(saved.year, 2021)
+  })
+})
+
+test('comfort detection matches only the comfort service class', () => {
+  assert.equal(isComfortServiceClass('comfort'), true)
+  assert.equal(isComfortServiceClass('standard'), false)
+  assert.equal(isComfortServiceClass('true'), false)
+  assert.equal(isComfortServiceClass(true), false)
+  assert.equal(isComfortServiceClass(false), false)
+  assert.equal(isComfortServiceClass(null), false)
+  assert.equal(isComfortServiceClass(''), false)
+
+  const vehicles = readFileSync(new URL('../../../apps/driver/app/vehicles.tsx', import.meta.url), 'utf8')
+  const onboarding = readFileSync(new URL('../../../apps/driver/app/onboarding.tsx', import.meta.url), 'utf8')
+  const types = readFileSync(new URL('../driverDesk.d.ts', import.meta.url), 'utf8')
+  assert.match(vehicles, /comfortClass: vehicle\?\.service_class === 'comfort'/)
+  assert.match(vehicles, /comfortFleetNotice\(vehicle\?\.service_class === 'comfort'\)/)
+  assert.match(vehicles, /vehicle\.service_class === 'comfort'/)
+  assert.doesNotMatch(vehicles, /Boolean\(vehicle\?\.service_class\)/)
+  assert.doesNotMatch(vehicles, /Boolean\(vehicle\.service_class\)/)
+  assert.match(onboarding, /vehicle\.service_class === 'comfort'/)
+  assert.doesNotMatch(onboarding, /Boolean\(vehicle\.service_class\)/)
+  assert.match(types, /service_class\?: 'standard' \| 'comfort'/)
 })

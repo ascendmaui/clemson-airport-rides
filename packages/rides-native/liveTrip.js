@@ -1,9 +1,24 @@
 /**
  * Rider and driver live-trip phases.
- * ETA is straight-line campus pace from coordinates already on the trip or driver_status.
- * TODO: a road-following ETA needs a billed GOOGLE_MAPS_API_KEY (Routes). Do not invent a telemetry API.
+ * etaLineFor stays straight-line campus pace from coordinates already on the trip.
+ * In-trip remaining road distance lives in roadFollow.js and does not call Directions.
  */
 import { driverApproach, formatDriverDistance, OPEN_POOL_COPY, PREFERRED_CANCELED_COPY, PREFERRED_MATCH_COPY } from './drivers.js'
+import { riderDriverFirstName } from '../../shared/riderDriverPrivacy.js'
+
+export const DRIVER_CANCELED_RIDER_COPY = "Your driver had to cancel. We're finding you another driver now. You won't be charged for this."
+
+/** Latest unseen cancellation while the same trip returns to searching. */
+export function driverCancelNotice(trip, lastSeenAt = null) {
+  if (trip?.status !== 'searching') return null
+  const entries = trip?.metadata?.driver_cancels
+  if (!Array.isArray(entries) || !entries.length) return null
+  const latest = entries[entries.length - 1]
+  const timestamp = Date.parse(latest?.at || '')
+  const seen = Date.parse(lastSeenAt || '')
+  if (!Number.isFinite(timestamp) || (Number.isFinite(seen) && timestamp <= seen)) return null
+  return { at: latest.at, message: DRIVER_CANCELED_RIDER_COPY }
+}
 
 export const DRIVER_TRACK_STEPS = [
   { id: 'accepted', label: 'Accepted' },
@@ -31,6 +46,10 @@ export const STILL_SEARCHING_COPY =
 export const SEARCH_PREVIEW_COPY =
   'Orange and purple motion is a preview. Only a real driver accept moves this ride.'
 
+/** Rider looking-for-a-driver screen. The web tracker keeps SEARCH_PREVIEW_COPY. */
+export const RIDER_SEARCH_MOTION_COPY =
+  'Orange and purple motion is a preview. This ride moves forward only when a real driver accepts.'
+
 export const SEARCH_APPROX_WAIT_NOTE =
   'Approximate. No driver has accepted, so this is not a live arrival.'
 
@@ -45,10 +64,10 @@ export function showSearchTheater(status) {
 /** Title for the accepted-driver card. The open-pool placeholder is not a person. */
 export function liveDriverTitle(personName, fallback) {
   const assigned = typeof personName === 'string' ? personName.trim() : ''
-  if (assigned) return assigned
+  if (assigned) return riderDriverFirstName(assigned, 'Your driver')
   const name = typeof fallback === 'string' ? fallback.trim() : ''
   if (!name || /^next driver$/i.test(name) || /^your driver$/i.test(name)) return 'Your driver'
-  return name
+  return riderDriverFirstName(name, 'Your driver')
 }
 
 /** Keep a status line when coordinates are missing so the card is not blank. */

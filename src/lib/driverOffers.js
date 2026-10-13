@@ -1,5 +1,6 @@
 import { supabase } from './supabase'
-import { displayFirstName } from './privacyDisplay.js'
+import { authedJson } from './apiClient.js'
+import { riderDriverFirstName } from '../../shared/riderDriverPrivacy.js'
 
 export const QUEUE_CAP = 2
 export const NEAR_DROPOFF_MINUTES = 5
@@ -25,7 +26,7 @@ export async function fetchOfferPreview(tripId) {
     const data = await res.json().catch(() => ({}))
     if (!res.ok) return empty
     return {
-      riderFirstName: displayFirstName(data.riderFirstName, 'Rider'),
+      riderFirstName: riderDriverFirstName(data.riderFirstName, 'Rider') || 'Rider',
       ratingAvg: data.ratingAvg != null ? Number(data.ratingAvg) : null,
       ratingCount: Number(data.ratingCount) || 0,
       standing: data.standing || 'good',
@@ -68,32 +69,16 @@ export async function passOffer(driverId, tripId) {
   if (error) console.error('[pass]', error.message)
 }
 
+export async function driverTripAction(client, tripId, op) {
+  return authedJson(client, '/api/driver?action=trip-status', {
+    method: 'POST', body: { tripId, op },
+  })
+}
+
 export async function claimTrip(driverId, tripId) {
   if (!supabase || !driverId || !tripId) throw new Error('Missing trip')
-  const acceptedAt = new Date().toISOString()
-  const { data, error } = await supabase
-    .from('trips')
-    .update({
-      status: 'accepted',
-      driver_id: driverId,
-      accepted_at: acceptedAt,
-    })
-    .eq('id', tripId)
-    .in('status', ['searching', 'offered'])
-    .is('driver_id', null)
-    .select('id')
-  if (error) throw new Error(error.message)
-  if (!data?.length) throw new Error('That ride was just taken')
-  const { error: eventError } = await supabase.from('trip_events').insert({
-    trip_id: tripId,
-    kind: 'accepted',
-    payload: { driver_id: driverId, accepted_at: acceptedAt },
-  })
-  if (eventError) {
-    console.error('[trip_events]', 'accepted', eventError.message)
-    throw new Error(eventError.message || 'Could not record trip event')
-  }
-  return { acceptedAt }
+  const result = await driverTripAction(supabase, tripId, 'accept')
+  return { acceptedAt: result.trip.accepted_at }
 }
 
 async function openQueue(driverId) {

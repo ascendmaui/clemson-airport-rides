@@ -84,6 +84,7 @@ function createFakeSb({
               error: null,
             })
           }
+          if (table === 'profiles') return Promise.resolve({ data: [{ id: 'driver-approved', email: 'driver@example.com' }], error: null })
           if (table === 'trips') return Promise.resolve({ data: [], error: null })
           return Promise.resolve({ data: [], error: null })
         },
@@ -725,7 +726,7 @@ describe('scheduleTrip endpoint handler', () => {
       )
       assert.equal(student.res.scheduleDiscountApplied, true)
       assert.equal(regular.res.scheduleDiscountApplied, true)
-      // Stored row, response, and the 20/80 split all agree.
+      // Stored row and response agree. Scheduled rides lock a 75/25 split.
       assert.equal(student.row.fare_cents, student.res.fareCents)
       assert.equal(student.row.platform_fee_cents + student.row.driver_earnings_cents, student.row.fare_cents)
       assert.equal(student.row.fare_breakdown.rider_pays_cents, student.res.fareCents)
@@ -1029,7 +1030,7 @@ describe('scheduleTrip endpoint handler', () => {
   })
 
   describe('Airport trips and special purposes', () => {
-    test('explicit airport GSP overrides pickup to campus and dropoff to GSP with 25% deposit', async () => {
+    test('explicit airport GSP overrides pickup to campus and dropoff to GSP with no upfront deposit', async () => {
       const { sb, tripsInserted } = createFakeSb()
       const futureDate = new Date(Date.now() + 2 * 3600 * 1000).toISOString()
       const res = await callHandler(
@@ -1052,7 +1053,7 @@ describe('scheduleTrip endpoint handler', () => {
       assert.equal(tripsInserted.length, 1)
       assert.equal(tripsInserted[0].pickup_label, 'Memorial Stadium')
       assert.equal(tripsInserted[0].dropoff_label, 'Greenville-Spartanburg International (GSP)')
-      assert.ok(tripsInserted[0].deposit_cents > 0)
+      assert.equal(tripsInserted[0].deposit_cents, 0)
       assert.equal(tripsInserted[0].metadata.airport, 'GSP')
       assert.equal(tripsInserted[0].metadata.purpose, 'airport')
     })

@@ -2,7 +2,17 @@
  * Driver-facing labels for trips the web app already stores.
  * No network and no Stripe calls.
  */
+import { readPrepaidTipCents } from '../../shared/prepaidTip.js'
 import { CLEMSON_MIAMI_PROMO_ID } from './clemsonMiamiPromo.js'
+import { explicitOfferPhase, ladderOfferNet } from './offerLadder.js'
+import { LOOKING_FOR_BACKUP_LABEL, confirmCountdownLabel, driverBackupPresentation, leaveNowCountdownLabel } from '../../shared/backupDriverQueue.js'
+import { driverBoostShareCents, readBoostCents } from '../../shared/scheduledBoost.js'
+import { driverTripEarnings, driverTripNetCents, payoutStatusLine } from '../../shared/driverTripEarnings.js'
+import { tripStops } from '../../shared/carpoolStops.js'
+import { airportTripContext } from '../../shared/airportContext.js'
+import { riderDriverFirstName } from '../../shared/riderDriverPrivacy.js'
+
+export { confirmCountdownLabel, leaveNowCountdownLabel }
 
 export const ACTIONABLE_LEAD_MS = 45 * 60 * 1000
 
@@ -27,6 +37,17 @@ export function formatCents(cents) {
 
 /** Named carpool incentive. Recent earnings use metadata.driver_payout_cents. */
 export const DRIVER_CARPOOL_BONUS_ID = 'driver_carpool_bonus'
+
+const INCENTIVE_LABELS = { [DRIVER_CARPOOL_BONUS_ID]: 'Carpool bonus' }
+
+/** Human label for an incentive id. Never show the raw key to drivers. */
+export function incentiveLabel(id) {
+  const key = String(id || '').trim()
+  if (!key) return ''
+  if (INCENTIVE_LABELS[key]) return INCENTIVE_LABELS[key]
+  const words = key.replace(/^driver_/, '').replace(/[_-]+/g, ' ').trim()
+  return words ? words.charAt(0).toUpperCase() + words.slice(1) : 'Bonus'
+}
 
 /** Driver keeps 80%. Platform fee is 20% of the fare, rounded once. */
 export function driverNetCents(fareCents) {
@@ -76,19 +97,25 @@ export function carpoolPayFromTrip(row) {
 
 /** Recent earnings: carpool uses metadata.driver_payout_cents, otherwise 80% of the fare. */
 export function tripEarnedCents(trip) {
+  if (trip?.status === 'cancelled_wait') return Math.max(0, Math.round(Number(trip.driver_wait_earnings_cents ?? trip.driverWaitEarningsCents) || 0))
   const pay = carpoolPayFromTrip(trip)
-  if (pay) return pay.payoutCents
-  return driverNetCents(trip?.fare_cents ?? trip?.fareCents)
+  const waitCents = trip?.status === 'completed' ? Math.max(0, Math.round(Number(trip.driver_wait_earnings_cents ?? trip.driverWaitEarningsCents) || 0)) : 0
+  return (pay ? pay.payoutCents : driverNetCents(trip?.fare_cents ?? trip?.fareCents)) + waitCents
 }
 
-/** 25% airport deposit. A stored deposit_cents wins over the formula. */
+/** Fare net plus the driver share of an upfront boost. The boost is not commissioned. */
+export function tripPayoutCents(trip) {
+  if (trip?.status === 'cancelled_wait') return tripEarnedCents(trip)
+  return tripEarnedCents(trip) + driverBoostShareCents(readBoostCents(trip))
+}
+
+/** Stored amount already collected on an older trip. New trips are not given a deposit. */
 export function depositSliceCents(fareCents, stored) {
+  void fareCents
   if (stored != null && stored !== '' && Number.isFinite(Number(stored))) {
     return Math.max(0, Math.round(Number(stored)))
   }
-  const fare = Math.max(0, Math.round(Number(fareCents) || 0))
-  if (!fare) return 0
-  return Math.round(fare * 0.25)
+  return 0
 }
 
 function metaOf(row) {
@@ -220,7 +247,7 @@ export const TAG_LABELS = {
   student: 'Student discount',
   game_day: 'Game day',
   weekend_party: 'Weekend / party',
-  carpool: 'Carpool · split fare',
+  carpool: 'Carpool',
   direct: 'Preferred by rider',
   scheduled: 'Scheduled',
   comfort: 'Extra Comfort',
@@ -232,10 +259,10 @@ export const TAG_LABELS = {
  * their own phone and the server settles the remainder off-session on complete.)
  */
 export const APPLE_PAY_DRIVER_COPY =
-  'The rider already paid a 25% deposit. The rest is charged to their card automatically when you complete the trip.'
+  'Part of this fare is already paid. The rest is charged to the rider’s card when you complete the trip.'
 
 export const NO_DEPOSIT_DRIVER_COPY =
-  'The fare is charged to the rider’s card automatically when you complete the trip.'
+  'The final fare is charged to the rider’s card when you complete the trip.'
 
 /** Short payment note for the driver. Only mentions a deposit when one was taken. */
 export function driverFareNote(depositCents) {
@@ -289,6 +316,7 @@ export function tripTags(row, { gameDayLive = false } = {}) {
   }
   const tier = String(row?.tier || meta.ride_option || '').trim().toLowerCase()
   if (tier === 'comfort') tags.push('comfort')
+  if (tier === 'carpool' && !tags.includes('carpool')) tags.push('carpool')
   if (row?.status === 'requested' && row?.driver_id) tags.push('direct')
   if (row?.status === 'scheduled' || meta.kind === 'scheduled') tags.push('scheduled')
   return tags
@@ -325,6 +353,11 @@ export function statusActionLabel(status) {
       return 'Start trip'
     case 'in_progress':
       return 'Complete trip'
+    case 'completed':
+    case 'canceled':
+    case 'canceled_midride':
+    case 'cancelled_wait':
+      return null
     default:
       return null
   }
@@ -351,8 +384,13 @@ export function statusHeadline(status) {
       return 'Completed'
     case 'canceled':
     case 'cancelled':
+      return 'Ride canceled'
+    case 'canceled_midride':
+      return 'Trip ended early'
     case 'cancelled_wait':
-      return 'Canceled'
+      return 'Canceled: rider no-show'
+    case 'expired':
+      return 'Trip expired'
     default:
       return status ? String(status) : 'Ride'
   }
@@ -379,10 +417,26 @@ export function driverStatusDetail(status) {
       return 'This trip is complete.'
     case 'canceled':
     case 'cancelled':
+      return 'This ride is canceled. You can return home.'
+    case 'canceled_midride':
+      return 'The rider ended this trip early. You can return home.'
     case 'cancelled_wait':
-      return 'This trip is canceled.'
+      return 'The rider did not arrive, so this ride is canceled. You can return home.'
+    case 'expired':
+      return 'This ride timed out with no one still on it. You were not charged. You can return home.'
     default:
       return 'Trip status updates as you move through the ride.'
+  }
+}
+
+/** Shown on the driver trip screen once the 500 m pickup geofence (or the driver) marks the trip arriving. */
+export function arrivedPromptCopy({ firstName, pickupLabel } = {}) {
+  const who = riderDriverFirstName(firstName, 'your rider') || 'your rider'
+  const where = String(pickupLabel || '').trim() || 'pickup'
+  return {
+    title: 'Arrived?',
+    body: `You are close to ${where}. Confirm when you are at the curb so ${who} is told and the free wait starts.`,
+    action: "Yes, I've arrived",
   }
 }
 
@@ -412,13 +466,30 @@ export function acceptNeedsDriverOnline(status) {
   }
 }
 
+const DRIVER_EARNINGS_STATUSES = new Set(['accepted', 'arriving', 'arrived', 'in_progress', 'completed', 'cancelled_wait'])
+
 export function toDriverCard(row, options) {
   if (!row?.id) return null
   const meta = metaOf(row)
   const tags = tripTags(row, options)
   const fareCents = Math.round(Number(row.fare_cents) || 0)
   const storedDeposit = row.deposit_cents != null ? row.deposit_cents : meta.depositCents
-  const first = String(meta.rider_first_name || 'Rider').trim().split(/\s+/)[0] || 'Rider'
+  const first = riderDriverFirstName(meta.rider_first_name, 'Rider') || 'Rider'
+  const phase = explicitOfferPhase({ ...row, metadata: meta })
+  const ladder = phase && phase !== 'expired' ? ladderOfferNet({ ...row, fareCents, status: row.status, metadata: meta, offerPhase: phase }) : null
+  const carpool = carpoolPayFromTrip(row)
+  const backup = driverBackupPresentation(row, options?.driverId || null)
+  const tagLabels = tags.map(tagLabel)
+  if (backup?.bonusLabel && !tagLabels.includes(backup.bonusLabel)) tagLabels.push(backup.bonusLabel)
+  if (backup?.lookingForBackup && !tagLabels.includes(LOOKING_FOR_BACKUP_LABEL)) tagLabels.push(LOOKING_FOR_BACKUP_LABEL)
+  const boostCents = readBoostCents(row)
+  const boostDriverCents = driverBoostShareCents(boostCents)
+  const fareNet = carpool?.showBonus
+    ? carpool.payoutCents
+    : (ladder ? ladder.netCents : tripEarnedCents(row))
+  // Once a driver holds the trip, every screen shows the payout-queue number.
+  const assigned = Boolean(row.driver_id) && DRIVER_EARNINGS_STATUSES.has(String(row.status || ''))
+  const earnings = assigned ? driverTripEarnings({ ...row, metadata: meta }) : null
   return {
     id: row.id,
     status: row.status,
@@ -435,19 +506,52 @@ export function toDriverCard(row, options) {
     fareCents,
     depositCents: depositSliceCents(fareCents, storedDeposit),
     depositExplicit: row.deposit_cents != null && row.deposit_cents !== '',
-    driverNetCents: tripEarnedCents(row),
+    driverNetCents: earnings
+      ? driverTripNetCents({ ...row, metadata: meta })
+      : (row.status === 'cancelled_wait' ? tripEarnedCents(row) : fareNet + boostDriverCents),
+    earnings,
+    tipCents: Math.max(0, Math.round(Number(row.tip_cents) || 0)),
+    payoutStatusLine: row.status === 'completed' || row.status === 'cancelled_wait' ? payoutStatusLine({ metadata: meta }) : null,
+    boostCents,
+    boostDriverCents,
+    offerPhase: phase,
+    offerShareBps: ladder?.shareBps ?? null,
+    offerExpiresAt: row.offer_expires_at || null,
+    prepaidTipCents: readPrepaidTipCents({ ...row, metadata: meta }),
+    riderAvatarUrl: typeof meta.rider_avatar_url === 'string' ? meta.rider_avatar_url : null,
     ...carpoolCardFields(row),
     firstName: first,
     purpose: meta.purpose || row.rider_note || '',
     tier: row.tier || null,
     tags,
-    tagLabels: tags.map(tagLabel),
+    tagLabels,
+    backupLabel: backup?.bonusLabel || null,
+    backupRole: backup?.role || null,
+    lookingForBackup: Boolean(backup?.lookingForBackup),
+    backupConfirmOpen: Boolean(backup?.confirmOpen),
+    backupConfirmClosesAt: backup?.confirmClosesAt || null,
+    backupConfirmCopy: backup?.confirmCopy || null,
+    backupLeaveNowAt: backup?.leaveNowAt || null,
+    backupLeaveNowOpen: Boolean(backup?.leaveNowOpen),
+    backupEnroute: Boolean(backup?.enroute),
+    backupStatusLine: backup?.statusLine || null,
+    backupNotice: backup?.notice || null,
+    backupUrgent: Boolean(backup?.urgent),
+    acceptedAt: row.accepted_at || null,
     arrivedAt: row.arrived_at || null,
+    waitFeeCents: Math.max(0, Number(row.wait_fee_cents) || 0),
+    cancelFeeCents: Math.max(0, Number(row.cancel_fee_cents) || 0),
+    driverWaitEarningsCents: Math.max(0, Number(row.driver_wait_earnings_cents) || 0),
     passengers: Math.max(1, Math.round(Number(row.passengers) || 1)),
     shares: carpoolShareLines(meta),
     riderLat: readLiveLat(meta),
     riderLng: readLiveLng(meta),
+    riderFixAt: readLiveAt(meta),
     promoRide: meta.promo === CLEMSON_MIAMI_PROMO_ID || meta.promo_ride === true,
+    // Carpool pools: ordered pickups then drop-offs. Empty for single-rider trips.
+    stops: tripStops({ ...row, metadata: meta }),
+    // GSP / CLT / ATL: terminal or airline, plus the rider's flight when they entered one.
+    airportContext: airportTripContext({ ...row, metadata: meta }),
     routePolyline: typeof meta.route_polyline === 'string' && meta.route_polyline ? meta.route_polyline : null,
     routeDurationS: Number.isFinite(Number(meta.route_duration_s)) && Number(meta.route_duration_s) > 0
       ? Number(meta.route_duration_s)
@@ -465,6 +569,12 @@ function readLiveLng(meta) {
   const live = meta.rider_location || meta.riderLocation || null
   const lng = live?.lng ?? live?.longitude ?? meta.rider_lng
   return lng != null && Number.isFinite(Number(lng)) ? Number(lng) : null
+}
+
+function readLiveAt(meta) {
+  const live = meta.rider_location || meta.riderLocation || null
+  const at = live?.updated_at || live?.updatedAt || null
+  return typeof at === 'string' && at ? at : null
 }
 
 export function carpoolShareLines(metadata) {
@@ -491,7 +601,7 @@ function carpoolCardFields(row) {
   }
 }
 
-/** Fare, 25% deposit, remainder still collected on complete, and the 80/20 split. */
+/** Fare, any amount already paid, the rest charged on complete, and the 80/20 split. */
 export function fareCollection(card) {
   const shares = Array.isArray(card?.shares) ? card.shares : carpoolShareLines(card?.metadata)
   const shareSum = shares.reduce((sum, share) => sum + (Number(share.shareCents) || 0), 0)
@@ -501,18 +611,33 @@ export function fareCollection(card) {
     ? Math.max(0, Math.round(Number(card.depositCents ?? card.deposit_cents) || 0))
     : depositSliceCents(fareCents, shareSum > 0 ? card?.deposit_cents : (card?.depositCents ?? card?.deposit_cents))
   const pay = carpoolPayFromTrip(card)
-  const net = pay ? pay.payoutCents : driverNetCents(fareCents)
+  const earnings = card?.earnings && card.earnings.kind === 'trip' ? card.earnings : null
+  const ladder = earnings || pay ? null : ladderOfferNet({ ...card, fareCents })
+  const net = earnings ? earnings.fareNetCents : (pay ? pay.payoutCents : (ladder ? ladder.netCents : driverNetCents(fareCents)))
+  const extras = earnings || pay ? null : (ladder ? ladder.percent : 80)
+  const boostNetCents = earnings ? earnings.boostCents : driverBoostShareCents(readBoostCents(card))
+  const backupBonusCents = earnings ? earnings.backupBonusCents : 0
+  const waitNetCents = earnings ? earnings.waitCents : 0
+  // Same total as the trip header (card.driverNetCents) once the trip is assigned.
+  const totalNetCents = earnings && Number.isFinite(Number(card.driverNetCents))
+    ? Math.max(0, Math.round(Number(card.driverNetCents)))
+    : net + boostNetCents + backupBonusCents + waitNetCents
   return {
     fareCents,
     depositCents,
     remainderCents: Math.max(0, fareCents - depositCents),
     driverNetCents: net,
+    boostNetCents,
+    backupBonusCents,
+    waitNetCents,
+    totalNetCents,
     platformFeeCents: Math.max(0, fareCents - net),
     shares,
     baseNetCents: pay?.showBonus ? pay.baseNetCents : null,
     carpoolBonusCents: pay?.showBonus ? pay.bonusCents : null,
     carpoolIncentiveId: pay?.showBonus ? (pay.incentiveId || DRIVER_CARPOOL_BONUS_ID) : null,
     usesStoredPayout: Boolean(pay),
+    sharePercent: extras,
   }
 }
 
@@ -543,9 +668,9 @@ export function isSameZonedWeek(iso, now = new Date(), timeZone = 'America/New_Y
 export function weekNetCents(trips, now = new Date()) {
   let total = 0
   for (const trip of trips || []) {
-    if (trip?.status && trip.status !== 'completed') continue
-    if (!isSameZonedWeek(trip?.completed_at, now)) continue
-    total += tripEarnedCents(trip)
+    if (trip?.status && !['completed', 'cancelled_wait'].includes(trip.status)) continue
+    if (!isSameZonedWeek(trip?.status === 'cancelled_wait' ? trip?.canceled_at : trip?.completed_at, now)) continue
+    total += tripPayoutCents(trip)
   }
   return total
 }
@@ -668,10 +793,10 @@ export function summarizeDepositAwareness(trips, paymentsByTrip, now = new Date(
       if (succeeded(row.status)) depositPaidCents += cents
       else depositOpenCents += cents
     }
-    if (trip.status === 'completed') {
+    if (['completed', 'cancelled_wait'].includes(trip.status)) {
       const net = tripEarnedCents(trip)
       driverNetCentsTotal += net
-      if (isSameZonedDay(trip.completed_at, now)) todayNetCents += net
+      if (isSameZonedDay(trip.status === 'cancelled_wait' ? trip.canceled_at : trip.completed_at, now)) todayNetCents += net
     }
     const line = depositStatusLine(payments)
     if (line) {

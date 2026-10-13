@@ -5,6 +5,12 @@ import handleBilling from './endpoints/rideBilling.js'
 import { distanceFareCents } from '../src/lib/scheduledRideModel.js'
 import { tripMeters } from '../src/lib/scheduledRideModel.js'
 import {
+  CARPOOL_SEAT_FRACTION_BPS,
+  COMFORT_FARE_MULTIPLIER_BPS,
+  scaleCents,
+  WAIT_SAVE_MULTIPLIER_BPS,
+} from '../src/lib/fareRates.js'
+import {
   placesForServerFare,
   priceScheduledRequest,
   riderTierQuotes,
@@ -41,6 +47,7 @@ async function call(handler, body, deps) {
 
 function sb() {
   const rowsFor = (table) => {
+    if (table === 'profiles') return [{ id: 'drv-1', email: 'driver@example.com' }]
     if (table === 'driver_applications') {
       return [{ profile_id: 'drv-1', onboarding_status: 'approved' }]
     }
@@ -90,8 +97,25 @@ test('campus tiers use the saved fare, not the catalog placeholder', () => {
   const wait = quotes.tiers.find((row) => row.id === 'wait')
   const comfort = quotes.tiers.find((row) => row.id === 'comfort')
   assert.equal(standard.fareCents, quotes.fareCents)
-  assert.equal(wait.fareCents, standard.fareCents)
-  assert.equal(comfort.fareCents, standard.fareCents)
+  assert.equal(wait.fareCents, scaleCents(standard.fareCents, WAIT_SAVE_MULTIPLIER_BPS))
+  assert.equal(comfort.fareCents, scaleCents(standard.fareCents, COMFORT_FARE_MULTIPLIER_BPS))
+  assert.ok(wait.fareCents < standard.fareCents)
+  assert.ok(standard.fareCents < comfort.fareCents)
+  const carpool = quotes.tiers.find((row) => row.id === 'carpool')
+  assert.equal(carpool.fareCents, scaleCents(standard.fareCents, CARPOOL_SEAT_FRACTION_BPS))
+  assert.ok(carpool.fareCents < standard.fareCents)
+  const twoSeats = priceScheduledRequest({
+    pickup: SIKES,
+    dropoff: COOPER,
+    at: QUIET,
+    isStudent: false,
+    tier: 'carpool',
+    distanceM: 400,
+    durationS: 90,
+    seatCount: 2,
+  })
+  assert.equal(twoSeats.perSeatFareCents, carpool.fareCents)
+  assert.equal(twoSeats.fareCents, carpool.fareCents * 2)
   assert.notEqual(standard.fareCents, 1850)
   assert.ok(standard.fareCents < 1000)
 })
@@ -125,10 +149,19 @@ test('an airport quote is the airport fare on every ride type', () => {
   assert.equal(quotes.fareCents, saved.fareCents)
   assert.ok(quotes.fareCents > 5000)
   assert.equal(quotes.depositCents, saved.depositCents)
-  for (const id of ['standard', 'wait', 'comfort']) {
-    assert.equal(quotes.tiers.find((row) => row.id === id).fareCents, saved.fareCents)
-    assert.notEqual(quotes.tiers.find((row) => row.id === id).fareCents, 1850)
+  const standardFare = quotes.tiers.find((row) => row.id === 'standard').fareCents
+  const waitFare = quotes.tiers.find((row) => row.id === 'wait').fareCents
+  const comfortFare = quotes.tiers.find((row) => row.id === 'comfort').fareCents
+  assert.equal(standardFare, saved.fareCents)
+  assert.equal(waitFare, scaleCents(saved.fareCents, WAIT_SAVE_MULTIPLIER_BPS))
+  assert.equal(comfortFare, scaleCents(saved.fareCents, COMFORT_FARE_MULTIPLIER_BPS))
+  assert.ok(waitFare < standardFare && standardFare < comfortFare)
+  for (const fare of [standardFare, waitFare, comfortFare]) {
+    assert.notEqual(fare, 1850)
   }
+  const carpoolFare = quotes.tiers.find((row) => row.id === 'carpool').fareCents
+  assert.equal(carpoolFare, scaleCents(saved.fareCents, CARPOOL_SEAT_FRACTION_BPS))
+  assert.ok(carpoolFare < saved.fareCents)
 })
 
 test('a game-day schedule quote matches the surged fare that is saved', () => {
@@ -194,7 +227,12 @@ test('quote and confirm ignore client fare, miles, and isStudent', async () => {
   assert.equal(billing.json.fareCents, expected.fareCents)
   assert.equal(quote.json.studentDiscountApplied, false)
   assert.notEqual(quote.json.fareCents, 1850)
-  assert.equal(quote.json.tiers.find((row) => row.id === 'comfort').fareCents, expected.fareCents)
+  assert.equal(
+    quote.json.tiers.find((row) => row.id === 'comfort').fareCents,
+    scaleCents(expected.fareCents, COMFORT_FARE_MULTIPLIER_BPS),
+  )
+  assert.ok(quote.json.tripMinutes > 0)
+  assert.equal(quote.json.tiers.find((row) => row.id === 'standard').etaMinutes, 4)
 })
 
 test('a confirmed Clemson email discounts the quoted fare the same way the trip is saved', async () => {

@@ -8,6 +8,8 @@ import {
   inferVehicleCategory,
   vehicleMaxSeats,
 } from '../../../server/friendRideCapacity.js'
+import { assessOwnedVehicle, missingLuxuryExceptionColumn } from '../../../shared/ownedVehicle.js'
+import { missingVehicleYearColumn } from '../../../shared/vehicleYear.js'
 
 export { DEFAULT_MAX_PARTICIPANTS, inferVehicleCategory, vehicleMaxSeats, carpoolSeatCap }
 
@@ -69,19 +71,63 @@ export async function saveRegisteredVehicle(supabase, userId, payload) {
     color: String(p.color || '').trim() || null,
     plate,
     seats,
-    service_class: Boolean(p.comfortClass),
+    service_class: p.comfortClass ? 'comfort' : 'standard',
     autonomous_capable: false,
     tier: p.comfortClass ? 'comfort' : 'standard',
+  }
+  if (ownsVehicleStandards(p)) {
+    const decision = assessOwnedVehicle({
+      year: p.year,
+      condition: p.condition,
+      luxuryPhotos: p.luxuryPhotos,
+    })
+    if (!decision.ok) throw new Error(decision.message)
+    fields.year = decision.year
+    fields.luxury_exception = decision.luxuryException
   }
   const { data: existing, error: readErr } = await supabase.from('vehicles').select('id').eq('driver_id', userId).limit(1)
   if (readErr) throw new Error(readErr.message)
   const current = existing?.[0]
-  if (!current) {
-    const { data, error } = await supabase.from('vehicles').insert({ driver_id: userId, ...fields }).select(VEHICLE_COLUMNS).single()
-    if (error) throw new Error(error.message)
-    return data
+  const run = (next) => {
+    if (!current) {
+      return supabase.from('vehicles').insert({ driver_id: userId, ...next }).select(VEHICLE_COLUMNS).single()
+    }
+    return supabase.from('vehicles').update(next).eq('id', current.id).select(VEHICLE_COLUMNS).single()
   }
-  const { data, error } = await supabase.from('vehicles').update(fields).eq('id', current.id).select(VEHICLE_COLUMNS).single()
-  if (error) throw new Error(error.message)
-  return data
+  return commitVehicle(run, fields)
+}
+
+function ownsVehicleStandards(payload) {
+  return ['year', 'condition', 'luxuryPhotos'].some((key) => Object.prototype.hasOwnProperty.call(payload, key))
+}
+
+function fieldsAfterMissingColumn(fields, error) {
+  const next = { ...fields }
+  let changed = false
+  if (missingLuxuryExceptionColumn(error) && Object.prototype.hasOwnProperty.call(next, 'luxury_exception')) {
+    delete next.luxury_exception
+    changed = true
+  }
+  if (missingVehicleYearColumn(error) && Object.prototype.hasOwnProperty.call(next, 'year')) {
+    delete next.year
+    changed = true
+  }
+  return changed ? next : null
+}
+
+async function commitVehicle(run, fields) {
+  let next = fields
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const { data, error } = await run(next)
+    if (!error) return data
+    const stripped = fieldsAfterMissingColumn(next, error)
+    if (!stripped) throw new Error(error.message)
+    next = stripped
+  }
+  throw new Error('Could not save the vehicle')
+}
+
+/** Prod vehicles_service_class_check stores standard or comfort. A boolean does not qualify. */
+export function isComfortServiceClass(serviceClass) {
+  return serviceClass === 'comfort'
 }

@@ -1,3 +1,4 @@
+import { uniqueChannelTopic } from '../../packages/rides-native/realtimeChannel.js'
 /**
  * Watches trip / friend_ride / ride_bills changes and emits toasts.
  * Supabase realtime when available; poll fallback on active screens.
@@ -8,6 +9,7 @@ import { supabase } from '../lib/supabase'
 import { pushToast } from '../lib/toasts'
 import { fetchNotificationPrefs } from '../lib/notificationPrefs'
 import { useToasts } from '../lib/toasts'
+import { riderStatusCue } from '../lib/riderStatusCue'
 import { reminderCopy, stampScheduledReminder, takeReminder } from '../lib/scheduledRides'
 
 const TRIP_STATUS_KIND = {
@@ -36,13 +38,17 @@ export function RideToastWatcher() {
   const seenBill = useRef(new Map()) // id -> status
   const seenPay = useRef(new Map()) // id -> status
   const primed = useRef(false)
+  const prefsRef = useRef(null)
 
   // Load prefs into toast cache
   useEffect(() => {
     if (!user?.id) return undefined
     let alive = true
     fetchNotificationPrefs(user.id).then(({ prefs }) => {
-      if (alive) setPrefsCache(prefs)
+      if (alive) {
+        setPrefsCache(prefs)
+        prefsRef.current = prefs
+      }
     })
     return () => { alive = false }
   }, [user?.id, setPrefsCache])
@@ -115,12 +121,8 @@ export function RideToastWatcher() {
         // late discover of existing trip — skip noise
         return
       }
-      if (prev === 'scheduled' && row.status === 'accepted') {
-        pushToast({
-          kind: 'driver_accepted',
-          title: 'Scheduled ride accepted',
-          body: row.metadata?.acceptance_message || `${tripBody(row)}. Your driver accepted this scheduled ride.`,
-        })
+      if (row.status === 'accepted') {
+        // RiderMatchPopup owns the match toast and the screen pop-up.
         return
       }
       const kind = TRIP_STATUS_KIND[row.status] || 'system'
@@ -138,6 +140,10 @@ export function RideToastWatcher() {
         title: titles[kind] || 'Trip update',
         body: tripBody(row),
       })
+      // Rider-side arrived / complete chime + vibration (ride alerts and quiet hours apply).
+      if (row.rider_id === user.id && (row.status === 'arrived' || row.status === 'completed')) {
+        riderStatusCue(row.status, prefsRef.current).catch(() => {})
+      }
       if (row.status === 'completed' && row.metadata?.remainder_uncollected) {
         pushToast({
           kind: 'payment_required',
@@ -216,7 +222,7 @@ export function RideToastWatcher() {
     hydrate().catch(() => { primed.current = true })
 
     const channel = supabase
-      .channel(`toasts-${user.id}`)
+      .channel(uniqueChannelTopic(`toasts-${user.id}`))
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'trips', filter: `rider_id=eq.${user.id}` },

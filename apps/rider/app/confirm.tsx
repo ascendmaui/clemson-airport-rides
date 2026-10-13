@@ -1,11 +1,14 @@
+import { GlassSheet } from 'rides-native/glass'
+import { Glyph } from 'rides-native/icons'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import * as Location from 'expo-location'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Animated, Pressable, ScrollView, Text, TextInput, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { PrimaryButton, SheetHandle } from '@/components/Button'
 import { useEnterMotion } from '@/components/enter'
 import { CampusMap } from '@/components/CampusMap'
+import type { CampusMapHandle } from '@/components/mapTypes'
 import { SignInToBookSheet } from '@/components/SignInToBookSheet'
 import { setAuthNext } from '@/lib/authNext'
 import { useAuth } from '@/lib/auth'
@@ -20,6 +23,7 @@ import {
 } from 'rides-native/riderMoney.js'
 import { useStudentStatus } from '@/lib/useStudentStatus'
 import { NeighborhoodPicker } from '@/components/carpool/NeighborhoodPicker'
+import { addressFromGeocode } from '@/lib/reverseAddress'
 import { lift } from '@/lib/elevation'
 import type { Palette } from '@/lib/palette'
 import { useTheme } from '@/lib/theme'
@@ -28,8 +32,9 @@ import { useThemedStyles } from '@/lib/useThemedStyles'
 export default function ConfirmPickup() {
   const router = useRouter()
   const insets = useSafeAreaInsets()
-  const params = useLocalSearchParams<{ dest?: string }>()
+  const params = useLocalSearchParams<{ dest?: string; tier?: string | string[] }>()
   const dest = oneParam(params.dest, 'GSP Airport')
+  const tier = oneParam(params.tier)
   const { user } = useAuth()
   const student = useStudentStatus()
   const studentOffer = studentSurfaceCopy(student, 'confirm')
@@ -47,10 +52,12 @@ export default function ConfirmPickup() {
   const [pickup, setPickup] = useState<Place>(initialPickup)
   const [dropoff, setDropoff] = useState<Place>(initialDrop)
   const [note, setNote] = useState('')
-  const [locating, setLocating] = useState(false)
+  const [locating, setLocating] = useState<'pickup' | 'dropoff' | null>(null)
   const [locateNote, setLocateNote] = useState<string | null>(null)
+  const mapRef = useRef<CampusMapHandle>(null)
+  const pickupEdited = useRef(false)
   const [promptOpen, setPromptOpen] = useState(false)
-  const { colors } = useTheme()
+  const { colors, scheme } = useTheme()
   const styles = useThemedStyles(makeStyles)
   const sheetMotion = useEnterMotion(18)
 
@@ -62,11 +69,30 @@ export default function ConfirmPickup() {
     pickupLat: String(pickup.lat),
     pickupLng: String(pickup.lng),
     note,
+    ...(tier ? { tier } : {}),
   }
 
   const goTiers = () => {
     router.push({ pathname: '/tiers', params: nextParams })
   }
+
+  useEffect(() => {
+    let alive = true
+    void (async () => {
+      try {
+        const place = await placeFromGps()
+        if (!alive || pickupEdited.current) return
+        setPickup(place)
+        mapRef.current?.animateTo({ latitude: place.lat, longitude: place.lng }, 0.01)
+      } catch (err) {
+        if (!alive || pickupEdited.current) return
+        setLocateNote(err instanceof Error ? err.message : 'Could not read your location. Type a pickup instead.')
+      }
+    })()
+    return () => {
+      alive = false
+    }
+  }, [])
 
   const onConfirm = () => {
     if (user) {
@@ -77,8 +103,8 @@ export default function ConfirmPickup() {
     setPromptOpen(true)
   }
 
-  async function onLocate() {
-    setLocating(true)
+  async function onLocate(which: 'pickup' | 'dropoff') {
+    setLocating(which)
     setLocateNote(null)
     try {
       const permission = await Location.requestForegroundPermissionsAsync()
@@ -86,16 +112,32 @@ export default function ConfirmPickup() {
         setLocateNote('Location permission is off.')
         return
       }
-      const position = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced })
-      setPickup({
-        label: 'Current location',
-        lat: position.coords.latitude,
-        lng: position.coords.longitude,
-      })
+      let position
+      try {
+        position = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.BestForNavigation })
+      } catch {
+        position = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High })
+      }
+      const lat = position.coords.latitude
+      const lng = position.coords.longitude
+      let label = 'Current location'
+      try {
+        const reversed = await Location.reverseGeocodeAsync({ latitude: lat, longitude: lng })
+        label = addressFromGeocode(reversed[0]) || label
+      } catch {
+        label = 'Current location'
+      }
+      const place = { label, lat, lng }
+      if (which === 'dropoff') setDropoff(place)
+      else {
+        pickupEdited.current = true
+        setPickup(place)
+      }
+      mapRef.current?.animateTo({ latitude: place.lat, longitude: place.lng }, 0.01)
     } catch (err) {
       setLocateNote(err instanceof Error ? err.message : 'Could not read your location.')
     } finally {
-      setLocating(false)
+      setLocating(null)
     }
   }
 
@@ -103,6 +145,7 @@ export default function ConfirmPickup() {
     <View style={styles.screen}>
       <View style={styles.map}>
         <CampusMap
+          ref={mapRef}
           spots={[]}
           showHeat={false}
           pins={[{
@@ -111,19 +154,25 @@ export default function ConfirmPickup() {
             longitude: pickup.lng,
             title: pickup.label,
             color: colors.orange,
+          }, {
+            id: 'dropoff',
+            latitude: dropoff.lat,
+            longitude: dropoff.lng,
+            title: dropoff.label,
+            color: colors.purple,
           }]}
         />
         <Pressable
-          onPress={onLocate}
-          disabled={locating}
+          onPress={() => { void onLocate('pickup') }}
+          disabled={locating != null}
           style={[styles.locate, lift(colors, 'float'), { top: insets.top + 10 }]}
           accessibilityRole="button"
           accessibilityLabel="Use current location as pickup"
-          accessibilityHint="Detects your location and sets it as the pickup"
-          accessibilityState={{ busy: locating }}
+          accessibilityHint="Pins your location as the pickup on the map"
+          accessibilityState={{ busy: locating === 'pickup' }}
           hitSlop={8}
         >
-          <Text style={styles.locateLabel}>{locating ? '…' : '◎'}</Text>
+          <Text style={styles.locateLabel}>{locating === 'pickup' ? '…' : '◎'}</Text>
         </Pressable>
         <Pressable
           onPress={() => router.back()}
@@ -133,11 +182,12 @@ export default function ConfirmPickup() {
           accessibilityHint="Returns to the previous screen"
           hitSlop={8}
         >
-          <Text style={styles.backLabel}>←</Text>
+          <Glyph name="back" size={20} color={colors.title} accessibilityLabel="Back" />
         </Pressable>
       </View>
       <Animated.View style={[styles.sheetWrap, lift(colors, 'float'), sheetMotion]}>
       <View style={styles.sheet}>
+      <GlassSheet app="rider" scheme={scheme} pointerEvents="none" style={styles.sheetGlass} />
       <ScrollView
         style={styles.sheetScroll}
         contentContainerStyle={{ paddingBottom: insets.bottom + 28 }}
@@ -146,27 +196,26 @@ export default function ConfirmPickup() {
       >
         <SheetHandle />
         <Text style={styles.title}>Confirm pickup spot</Text>
-        <Text style={styles.hint}>Type a pickup or drop-off and pick a suggestion, or use current location. You do not have to drop a pin.</Text>
+        <Text style={styles.hint}>Pickup uses your current location. Edit it if you need a different spot.</Text>
         {locateNote ? <Text style={styles.locateNote}>{locateNote}</Text> : null}
         <NeighborhoodPicker
+          liveSuggest
           label="Pickup address"
           value={pickup}
-          onChange={setPickup}
+          onChange={(place) => {
+            pickupEdited.current = true
+            setPickup(place)
+            mapRef.current?.animateTo({ latitude: place.lat, longitude: place.lng }, 0.01)
+          }}
         />
         <NeighborhoodPicker
+          liveSuggest
           label="Drop-off address"
           value={dropoff}
-          onChange={setDropoff}
-        />
-        <Text style={styles.fieldLabel}>Add note for driver</Text>
-        <TextInput
-          value={note}
-          onChangeText={setNote}
-          placeholder="e.g. Near the orange gates, wearing purple hoodie"
-          placeholderTextColor={colors.placeholder}
-          style={[styles.input, styles.note]}
-          multiline
-          accessibilityLabel="Note for driver"
+          onChange={(place) => {
+            setDropoff(place)
+            mapRef.current?.animateTo({ latitude: place.lat, longitude: place.lng }, 0.01)
+          }}
         />
         {depositCopy ? <Text style={styles.deposit}>{depositCopy}</Text> : null}
         <Pressable
@@ -180,6 +229,16 @@ export default function ConfirmPickup() {
             {studentOffer.title}
           </Text>
         </Pressable>
+        <Text style={styles.fieldLabel}>Note for driver</Text>
+        <TextInput
+          value={note}
+          onChangeText={setNote}
+          placeholder="e.g. Near the orange gates, wearing purple hoodie"
+          placeholderTextColor={colors.placeholder}
+          style={[styles.input, styles.note]}
+          multiline
+          accessibilityLabel="Note for driver"
+        />
         <PrimaryButton label="Confirm pickup" onPress={onConfirm} />
       </ScrollView>
       </View>
@@ -198,6 +257,32 @@ export default function ConfirmPickup() {
       />
     </View>
   )
+}
+
+async function placeFromGps(): Promise<Place> {
+  const permission = await Location.requestForegroundPermissionsAsync()
+  if (permission.status !== 'granted') {
+    throw new Error('Location permission is off. Type a pickup instead.')
+  }
+  let position
+  try {
+    position = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.BestForNavigation })
+  } catch {
+    position = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High })
+  }
+  const lat = position.coords.latitude
+  const lng = position.coords.longitude
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+    throw new Error('Could not read your location. Type a pickup instead.')
+  }
+  let label = 'Current location'
+  try {
+    const reversed = await Location.reverseGeocodeAsync({ latitude: lat, longitude: lng })
+    label = addressFromGeocode(reversed[0]) || label
+  } catch {
+    label = 'Current location'
+  }
+  return { label, lat, lng }
 }
 
 function makeStyles(colors: Palette) {
@@ -238,12 +323,13 @@ function makeStyles(colors: Palette) {
     sheet: {
       flex: 1,
       overflow: 'hidden' as const,
-      backgroundColor: colors.elevated,
+      backgroundColor: 'transparent',
       borderTopLeftRadius: 28,
       borderTopRightRadius: 28,
       paddingHorizontal: 20,
       paddingTop: 6,
     },
+    sheetGlass: { position: 'absolute' as const, top: 0, right: 0, bottom: 0, left: 0 },
     sheetScroll: { flex: 1 },
     fieldLabel: { fontSize: 13, fontWeight: '700' as const, color: colors.title, marginBottom: 8, letterSpacing: 0.1 },
     input: {

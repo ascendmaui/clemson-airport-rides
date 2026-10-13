@@ -23,11 +23,15 @@ import {
 } from '../shared/paymentFailure.js'
 import { loadGameDayMultiplier } from './creditLots.js'
 import {
+  APPROX_ETA_MINUTES,
   applyScheduleAheadDiscount,
+  carpoolSeatCount,
   isOfferedRideTier,
   resolveOfferedTier,
   scheduleDiscountMetadata,
 } from '../shared/rideOptions.js'
+import { applyTigerPassDiscount, tigerPassMetadata } from '../shared/tigerPass.js'
+import { tigerPassBpsForRider } from './riderPass.js'
 
 /** Stored rows keep their label in the UI. A retired tier is not repriced as a live option. */
 function tierForStoredTrip(raw) {
@@ -83,7 +87,8 @@ function finiteCents(value) {
 
 /**
  * Metered campus → GSP/CLT fare. Student 10% only when isStudent is already
- * decided by studentDiscountGranted. Deposit is 25% of that fare (no credits).
+ * decided by studentDiscountGranted. No upfront deposit; the fare is charged
+ * at trip end.
  */
 export function quoteAirportCheckout({
   airport,
@@ -92,6 +97,8 @@ export function quoteAirportCheckout({
   gameDayMultiplier = null,
   distanceM = null,
   durationS = null,
+  tigerPassBps = 0,
+  tier = 'standard',
 } = {}) {
   const code = String(airport || 'GSP').toUpperCase() === 'CLT' ? 'CLT' : 'GSP'
   const fb = AIRPORT_ROUTE_FALLBACK[code]
@@ -105,11 +112,10 @@ export function quoteAirportCheckout({
     minutes: hasRoute ? undefined : fb.minutes,
     surgeMultiplier: surge.multiplier,
     isStudent: Boolean(isStudent),
-    isCarpool: false,
-    tier: 'standard',
+    tier,
   })
   const fareCents = quote.fareBeforeCreditsCents
-  return {
+  return applyTigerPassDiscount({
     airport: code,
     isStudent: Boolean(isStudent),
     fareCents,
@@ -119,7 +125,7 @@ export function quoteAirportCheckout({
     quote,
     routeSource: hasRoute ? 'google' : 'fallback',
     estimate: false,
-  }
+  }, tigerPassBps)
 }
 
 /**
@@ -138,6 +144,8 @@ export function priceScheduledRequest({
   durationS = null,
   scheduleAhead = false,
   now = new Date(),
+  tigerPassBps = 0,
+  seatCount = 1,
 } = {}) {
   const explicit = airport ? String(airport).toUpperCase() : null
   const fromPlace = airportCodeForPlace(dropoff) || airportCodeForPlace(pickup)
@@ -156,11 +164,13 @@ export function priceScheduledRequest({
       gameDayMultiplier,
       distanceM,
       durationS,
+      tigerPassBps,
+      tier: tierId,
     })
-    return applyScheduleAheadDiscount(
+    return applyCarpoolSeats(applyScheduleAheadDiscount(
       { ...priced, tier: tierId },
       { at: when, now, enabled: scheduleAhead },
-    )
+    ), tierId, seatCount)
   }
 
   const hasRoute = distanceM != null || durationS != null
@@ -191,7 +201,7 @@ export function priceScheduledRequest({
     : { amountCents: fareCents, discountCents: 0, bps: 0 }
   fareCents = studentOff.amountCents
   const split = splitPlatformFee(fareCents)
-  return applyScheduleAheadDiscount({
+  return applyCarpoolSeats(applyScheduleAheadDiscount(applyTigerPassDiscount({
     airport: null,
     isStudent: student,
     fareCents,
@@ -212,7 +222,36 @@ export function priceScheduledRequest({
       platform_fee_cents: split.platformFeeCents,
       driver_earnings_cents: split.driverEarningsCents,
     },
-  }, { at: when, now, enabled: scheduleAhead })
+  }, tigerPassBps), { at: when, now, enabled: scheduleAhead }), tierId, seatCount)
+}
+
+/**
+ * Carpool quotes are per seat. Two seats cost twice the discounted seat.
+ * Other tiers are unchanged. TODO: matching still dispatches each carpool
+ * request on its own standard-eligible car.
+ */
+function applyCarpoolSeats(priced, tierId, seatCount) {
+  if (tierId !== 'carpool') return priced
+  const seats = carpoolSeatCount(tierId, seatCount)
+  const perSeat = Math.max(0, Math.round(Number(priced?.fareCents) || 0))
+  const fareCents = perSeat * seats
+  const split = splitPlatformFee(fareCents)
+  const previous = priced?.breakdown && typeof priced.breakdown === 'object' ? priced.breakdown : {}
+  return {
+    ...priced,
+    fareCents,
+    seatCount: seats,
+    perSeatFareCents: perSeat,
+    breakdown: {
+      ...previous,
+      per_seat_fare_cents: perSeat,
+      seat_count: seats,
+      fare_before_credits_cents: fareCents,
+      rider_pays_cents: fareCents,
+      platform_fee_cents: split.platformFeeCents,
+      driver_earnings_cents: split.driverEarningsCents,
+    },
+  }
 }
 
 /** Checkout Session line amount. Client money fields cannot lower it. */
@@ -224,6 +263,7 @@ export function priceCheckoutBody({
   gameDayMultiplier = null,
   distanceM = null,
   durationS = null,
+  tigerPassBps = 0,
 } = {}) {
   const when = parseRideAt(body, at)
   const tier = resolveOfferedTier(body.tier)
@@ -234,6 +274,8 @@ export function priceCheckoutBody({
     gameDayMultiplier,
     distanceM,
     durationS,
+    tigerPassBps,
+    tier,
   })
   const scheduled = Boolean(body.date || body.pickupAt || body.scheduled_for || body.scheduledFor)
   const priced = applyScheduleAheadDiscount(
@@ -401,7 +443,7 @@ export function placesForServerFare(body = {}) {
   return { pickup, dropoff, airport }
 }
 
-const QUOTED_TIER_IDS = ['standard', 'wait', 'comfort']
+const QUOTED_TIER_IDS = ['standard', 'wait', 'comfort', 'carpool']
 
 /**
  * Fares the rider is shown. Each tier is priced with priceScheduledRequest,
@@ -419,6 +461,8 @@ export function riderTierQuotes({
   distanceM = null,
   durationS = null,
   scheduleAhead = false,
+  tigerPassBps = 0,
+  seatCount = 1,
 } = {}) {
   const requested = resolveOfferedTier(tier)
   const input = {
@@ -432,23 +476,38 @@ export function riderTierQuotes({
     distanceM,
     durationS,
     scheduleAhead,
+    tigerPassBps,
   }
   const tiers = QUOTED_TIER_IDS.map((id) => {
     const priced = priceScheduledRequest({ ...input, tier: id })
+    const timing = quoteTiming(priced, id)
     return {
       id,
       fareCents: priced.fareCents,
       depositCents: priced.depositCents,
       discountCents: priced.discountCents,
+      tigerPassApplied: Boolean(priced.tigerPassApplied),
+      tigerPassDiscountCents: priced.tigerPassDiscountCents || 0,
       estimate: Boolean(priced.estimate),
       airport: priced.airport,
+      ...timing,
     }
   })
-  const selected = priceScheduledRequest({ ...input, tier: requested })
+  const selected = priceScheduledRequest({ ...input, tier: requested, seatCount })
   return {
     ...selected,
     tier: requested,
+    ...quoteTiming(selected, requested),
     tiers,
+  }
+}
+
+function quoteTiming(priced, id) {
+  const minutes = Number(priced?.quote?.minutes)
+  const tripMinutes = Number.isFinite(minutes) && minutes > 0 ? Math.max(1, Math.round(minutes)) : null
+  return {
+    etaMinutes: APPROX_ETA_MINUTES[id] ?? null,
+    tripMinutes,
   }
 }
 
@@ -460,6 +519,8 @@ export function priceDriverRequest(places, {
   gameDayMultiplier = null,
   distanceM = null,
   durationS = null,
+  tigerPassBps = 0,
+  seatCount = 1,
 } = {}) {
   const airport = places?.airport === 'GSP' || places?.airport === 'CLT' ? places.airport : null
   const atl = places?.airport === 'ATL'
@@ -473,6 +534,8 @@ export function priceDriverRequest(places, {
     gameDayMultiplier,
     distanceM,
     durationS,
+    tigerPassBps,
+    seatCount,
   })
 }
 
@@ -486,6 +549,7 @@ export function priceRecordedTrip(trip, {
   isStudent = false,
   at = new Date(),
   gameDayMultiplier = null,
+  tigerPassBps = 0,
 } = {}) {
   const pickup = stopFromTrip(trip, 'pickup')
   const dropoff = stopFromTrip(trip, 'dropoff')
@@ -504,6 +568,7 @@ export function priceRecordedTrip(trip, {
         tier,
         gameDayMultiplier,
         scheduleAhead,
+        tigerPassBps,
       }),
     }
   }
@@ -521,6 +586,7 @@ export function priceRecordedTrip(trip, {
       tier,
       gameDayMultiplier,
       scheduleAhead,
+      tigerPassBps,
     }),
   }
 }
@@ -548,6 +614,7 @@ export function fareRowPatch(trip, priced) {
       studentLabel: priced.discountCents > 0 ? 'Clemson student · 10% off Standard' : null,
       airport: priced.airport || null,
       ...scheduleDiscountMetadata(priced),
+      ...tigerPassMetadata(priced),
     },
   }
   if (trip?.deposit_cents == null || trip.deposit_cents === '') {
@@ -621,10 +688,12 @@ export async function ensureAuthoritativeFare({ sb, trip, at = null } = {}) {
     gameDayMultiplier = null
   }
 
+  const tigerPassBps = await tigerPassBpsForRider(sb, row.rider_id, when)
   const quoted = priceRecordedTrip(row, {
     isStudent: studentDiscountGranted(rider),
     at: when,
     gameDayMultiplier,
+    tigerPassBps,
   })
   if (quoted.error || quoted.priced?.fareCents == null) {
     return {
@@ -658,15 +727,6 @@ export async function ensureAuthoritativeFare({ sb, trip, at = null } = {}) {
   return { error: 'Fare is not set. This trip cannot settle at $0.', status: 409, code: 'fare_not_set', trip: row }
 }
 
-function sumSucceeded(payments, kinds) {
-  return (payments || []).reduce((sum, row) => {
-    if (row?.status !== 'succeeded') return sum
-    const logical = row?.metadata?.logical_kind || row?.kind
-    if (!kinds.has(logical)) return sum
-    return sum + (Number(row.amount_cents) || 0)
-  }, 0)
-}
-
 /**
  * Amount a public collect call may charge. Fare kinds use the trip row.
  * A client amountCents below that figure is ignored. Tips stay rider-chosen.
@@ -694,23 +754,12 @@ export function serverCollectCents({ kind, trip, payments = [], clientAmountCent
       }
     }
     case 'deposit': {
-      if (!trip) return { error: 'tripId required', status: 400 }
-      const fare = storedFareCents(trip)
-      if (fare == null) return { error: 'Fare is not set. This trip cannot be charged as $0.', status: 409, code: 'fare_not_set' }
-      const stored = trip.deposit_cents == null || trip.deposit_cents === ''
-        ? cardDepositCents(fare)
-        : Math.max(0, Math.round(Number(trip.deposit_cents) || 0))
-      const creditsApplied = Number(trip.fare_breakdown?.credits_debited_cents) > 0
-        || trip.metadata?.credits_applied === true
-      const floor = creditsApplied ? 0 : cardDepositCents(fare)
-      const deposit = Math.min(fare, Math.max(stored, floor))
-      const paid = sumSucceeded(payments, new Set(['deposit', 'airport_deposit']))
-      const amountCents = Math.max(0, deposit - paid)
+      // The 25% airport deposit is retired. Full fare is collected as balance.
       const client = finiteCents(clientAmountCents)
       return {
-        amountCents,
-        source: 'server',
-        clientUnderpaid: client != null && client < amountCents,
+        amountCents: 0,
+        source: 'deposit_retired',
+        clientUnderpaid: client != null && client > 0,
       }
     }
     case 'balance':

@@ -26,6 +26,7 @@ export const RIDER_TRACK_STATUSES: string[]
 export const STILL_SEARCHING_MS: number
 export const STILL_SEARCHING_COPY: string
 export const SEARCH_PREVIEW_COPY: string
+export const RIDER_SEARCH_MOTION_COPY: string
 export const SEARCH_APPROX_WAIT_NOTE: string
 export const STRAIGHT_LINE_WAIT: string
 
@@ -98,3 +99,6 @@ export function orderedLiveStops(
   source: unknown,
   options?: { approximate?: boolean },
 ): LiveStopPin[]
+
+export const DRIVER_CANCELED_RIDER_COPY: string
+export function driverCancelNotice(trip: { status?: string | null; metadata?: Record<string, unknown> | null } | null, lastSeenAt?: string | null): { at: string; message: string } | null

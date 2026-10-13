@@ -29,6 +29,7 @@ export type PartyTrip = {
   driver_id?: string | null
   pickup_label?: string | null
   dropoff_label?: string | null
+  wait_fee_cents?: number | null
   id?: string
 }
 
@@ -42,7 +43,7 @@ export type CounterpartView = {
   bio: string
   rideStyle: string
   spots: string[]
-  phone: string
+  phone?: string
   student: boolean
   vehicle: string
   plate: string
@@ -95,6 +96,7 @@ export function fetchTripForRating(supabase: unknown, tripId: string): Promise<P
 export function hasRatedTrip(supabase: unknown, tripId: string, raterId: string): Promise<boolean>
 export function submitPartyRating(
   supabase: unknown,
-  input: { tripId: string; raterId: string; stars: number; comment?: string },
+  input: { tripId: string; raterId: string; stars: number; comment?: string; tags?: string[] },
 ): Promise<{ id: string; stars: number }>
 export function findPendingRating(supabase: unknown, userId: string): Promise<PartyTrip | null>
+export function cleanRatingTags(tags: unknown): string[]

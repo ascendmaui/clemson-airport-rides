@@ -9,6 +9,21 @@ name: Deploy VPS
 # this file from that branch (workflow_dispatch cannot, until it is on main).
 # A non-main push tags the image staging + SHA and deploys the staging
 # service only. It never tags or starts production.
+#
+# Concurrency is chosen from the event so two production merges cannot SSH
+# at the same time, and a skipped PR CI run does not sit on the prod lock.
+#   workflow_dispatch target=production, or CI success on push to main
+#     -> deploy-vps-prod
+#   workflow_dispatch target=staging, or a staging branch push
+#     -> deploy-vps-staging
+#   anything else (PR CI workflow_run, failed CI, other branches)
+#     -> deploy-vps-noop-<run id>  (unique, does not queue behind prod)
+# cancel-in-progress is false so a running deploy is never killed.
+# queue: max keeps every pending prod deploy. Without it GitHub cancels the
+# waiting run when a third one arrives, and that SHA never ships.
+# Staging has its own group so a staging run does not occupy the prod queue.
+# The VPS script also takes a file lock around checkout and the container
+# swap, so the two groups cannot clobber one git checkout or one Traefik backend.
 on:
   workflow_run:
     workflows: ["CI"]
@@ -34,6 +49,11 @@ on:
 permissions:
   contents: read
   packages: write
+
+concurrency:
+  group: ${{ github.event_name == 'workflow_dispatch' && (github.event.inputs.target == 'staging' && 'deploy-vps-staging' || 'deploy-vps-prod') || github.event_name == 'push' && 'deploy-vps-staging' || (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' && github.event.workflow_run.head_branch == 'main' && 'deploy-vps-prod') || format('deploy-vps-noop-{0}', github.run_id) }}
+  cancel-in-progress: false
+  queue: max
 
 jobs:
   deploy:
@@ -181,8 +201,9 @@ jobs:
             -o StrictHostKeyChecking=yes
           )
           dest="$user@$host"
-          ssh "${ssh_opts[@]}" "$dest" "mkdir -p /opt/clemson-rides/src/deploy"
-          scp "${ssh_opts[@]}" deploy/docker-compose.yml "$dest:/opt/clemson-rides/src/deploy/docker-compose.yml"
+          ssh "${ssh_opts[@]}" "$dest" "mkdir -p /opt/clemson-rides/src/deploy /opt/clemson-rides/incoming"
+          # Per-target path so a staging copy cannot replace the file production is applying.
+          scp "${ssh_opts[@]}" deploy/docker-compose.yml "$dest:/opt/clemson-rides/incoming/compose-${TARGET}.yml"
           ssh "${ssh_opts[@]}" "$dest" \
-            "IMAGE_TAG=$(printf '%q' "$SHA") TARGET=$(printf '%q' "$TARGET") BRANCH_PUSH=$(printf '%q' "$BRANCH_PUSH") GHCR_USER=$(printf '%q' "$GHCR_USER") GHCR_TOKEN=$(printf '%q' "$GHCR_TOKEN") bash -s" \
+            "IMAGE_TAG=$(printf '%q' "$SHA") TARGET=$(printf '%q' "$TARGET") BRANCH_PUSH=$(printf '%q' "$BRANCH_PUSH") GHCR_USER=$(printf '%q' "$GHCR_USER") GHCR_TOKEN=$(printf '%q' "$GHCR_TOKEN") COMPOSE_FILE=$(printf '%q' "/opt/clemson-rides/incoming/compose-${TARGET}.yml") bash -s" \
             < deploy/remote-up.sh

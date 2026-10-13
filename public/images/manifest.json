@@ -1,0 +1,125 @@
+{
+  "_note": "Image metadata (alt text) and named->no-name fallback mapping. Images flagged showsRealBusinessNames depict real downtown Clemson bar signage; use unbrandedFallback where permission to show the business name has not been obtained (e.g. paid ads). Not yet consumed by app code.",
+  "images": [
+    {
+      "src": "/images/hero/students-carpool-street.jpg",
+      "alt": "Four Clemson students in orange and purple beside a white SUV on a downtown street",
+      "width": 1280,
+      "height": 720
+    },
+    {
+      "src": "/images/hero/students-stadium-request.jpg",
+      "alt": "Two Clemson students checking a ride request on a phone outside the stadium",
+      "width": 1280,
+      "height": 720
+    },
+    {
+      "src": "/images/lifestyle/night-going-out.jpg",
+      "alt": "Students in Clemson orange and purple heading out downtown on a Friday night",
+      "width": 1280,
+      "height": 720
+    },
+    {
+      "src": "/images/lifestyle/college-ave-request.jpg",
+      "alt": "Two Clemson students requesting a ride on College Avenue",
+      "width": 1280,
+      "height": 720
+    },
+    {
+      "src": "/images/lifestyle/night-orange-screen.jpg",
+      "alt": "Student holding up a glowing orange phone screen to flag her driver on College Avenue at night",
+      "width": 1280,
+      "height": 720
+    },
+    {
+      "src": "/images/lifestyle/airport-on-time.jpg",
+      "alt": "Two Clemson students with suitcases at the airport departures curb beside their ride",
+      "width": 1280,
+      "height": 720
+    },
+    {
+      "src": "/images/lifestyle/gameday-crowd.jpg",
+      "alt": "Clemson fans in orange and purple outside the stadium on game day",
+      "width": 1280,
+      "height": 720
+    },
+    {
+      "src": "/images/lifestyle/studyhall-corner-night.jpg",
+      "alt": "Students lined up outside Study Hall on College Avenue",
+      "width": 1280,
+      "height": 720,
+      "showsRealBusinessNames": true,
+      "unbrandedFallback": "/images/unbranded/college-ave-corner-night-line-nonames.jpg"
+    },
+    {
+      "src": "/images/lifestyle/roar-corner-night.jpg",
+      "alt": "Students lining the corner outside ROAR in downtown Clemson on a Friday night",
+      "width": 1280,
+      "height": 720,
+      "showsRealBusinessNames": true,
+      "unbrandedFallback": "/images/unbranded/earle-corner-night-crowd-nonames.jpg"
+    },
+    {
+      "src": "/images/lifestyle/keller-building-night.jpg",
+      "alt": "Students lined up beneath the historic Keller general merchandise sign in downtown Clemson",
+      "width": 1280,
+      "height": 720,
+      "showsRealBusinessNames": true,
+      "unbrandedFallback": "/images/unbranded/brick-building-night-crowd-nonames.jpg"
+    },
+    {
+      "src": "/images/lifestyle/mural-bar-long-line-night.jpg",
+      "alt": "Long line of students outside the mural bar on College Avenue",
+      "width": 1280,
+      "height": 720,
+      "showsRealBusinessNames": true,
+      "unbrandedFallback": "/images/unbranded/college-ave-night-long-line-nonames.jpg"
+    },
+    {
+      "src": "/images/lifestyle/college-ave-tds-loose-change-ttt.jpg",
+      "alt": "Students on College Avenue outside TD's, Loose Change and Tiger Town Tavern",
+      "width": 1280,
+      "height": 720,
+      "showsRealBusinessNames": true,
+      "unbrandedFallback": "/images/unbranded/college-ave-night-crowd-nonames.jpg"
+    },
+    {
+      "src": "/images/lifestyle/college-ave-csp-356-walkons.jpg",
+      "alt": "Students walking past Charleston Sports Pub, 356 and Walk-On's on College Avenue",
+      "width": 1280,
+      "height": 720,
+      "showsRealBusinessNames": true,
+      "unbrandedFallback": null
+    },
+    {
+      "src": "/images/unbranded/college-ave-night-crowd-nonames.jpg",
+      "alt": "Students walking College Avenue on a busy Friday night",
+      "width": 1280,
+      "height": 720
+    },
+    {
+      "src": "/images/unbranded/earle-corner-night-crowd-nonames.jpg",
+      "alt": "Crowded rooftop bar at the corner of College Ave and Earle St",
+      "width": 1280,
+      "height": 720
+    },
+    {
+      "src": "/images/unbranded/college-ave-corner-night-line-nonames.jpg",
+      "alt": "Students lining the corner of College Avenue on a Friday night",
+      "width": 1280,
+      "height": 720
+    },
+    {
+      "src": "/images/unbranded/college-ave-night-long-line-nonames.jpg",
+      "alt": "Long line of students outside a downtown Clemson bar",
+      "width": 1280,
+      "height": 720
+    },
+    {
+      "src": "/images/unbranded/brick-building-night-crowd-nonames.jpg",
+      "alt": "Students in Clemson orange and purple waiting outside downtown bars",
+      "width": 1280,
+      "height": 720
+    }
+  ]
+}

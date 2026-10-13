@@ -4,7 +4,11 @@ import test from 'node:test'
 import {
   acceptTrip,
   advanceTrip,
+  driverTripAction,
+  declineDriverOffer,
   declineTrip,
+  markSearchingOffers,
+  passOffer,
   formatCents,
   listPassedTripIds,
   loadDriverDesk,
@@ -126,6 +130,8 @@ function createFakeSupabase(initialTables = {}, options = {}) {
         let existingIndex = -1
         if (table === 'driver_status') {
           existingIndex = tableRows.findIndex((row) => row.driver_id === item.driver_id)
+        } else if (table === 'trip_driver_locations') {
+          existingIndex = tableRows.findIndex((row) => row.trip_id === item.trip_id)
         } else if (table === 'driver_offer_passes') {
           existingIndex = tableRows.findIndex(
             (row) => row.driver_id === item.driver_id && row.trip_id === item.trip_id,
@@ -401,15 +407,14 @@ test('riderFacingCard formats complete profile and vehicle card', () => {
       color: 'White',
       plate: 'CLEM-1',
       seats: 4,
-      service_class: true,
+      service_class: 'comfort',
       tier: 'comfort',
     },
     online: true,
   })
 
   assert.deepEqual(card, {
-    name: 'Alex Hunter',
-    phone: '864-555-0199',
+    name: 'Alex',
     ratingAvg: 4.88,
     ratingCount: 50,
     studentVerified: true,
@@ -426,7 +431,6 @@ test('riderFacingCard provides safe defaults when input is missing or empty', ()
   const card = riderFacingCard({ profile: null, vehicle: null, online: false })
   assert.deepEqual(card, {
     name: 'Driver',
-    phone: null,
     ratingAvg: null,
     ratingCount: 0,
     studentVerified: false,
@@ -551,6 +555,38 @@ test('loadVehicle returns vehicle row for driver', async () => {
   assert.equal(vehicle.id, 'v-1')
   assert.equal(vehicle.make, 'Toyota')
   assert.equal(vehicle.model, 'Camry')
+})
+
+test('loadVehicle falls back when luxury_exception is not a column yet', async () => {
+  const selects = []
+  const supabase = {
+    from() {
+      return {
+        select(cols) {
+          selects.push(cols)
+          return {
+            eq() {
+              return {
+                limit() {
+                  if (String(cols).includes('luxury_exception')) {
+                    return Promise.resolve({
+                      data: null,
+                      error: { message: "Could not find the 'luxury_exception' column of 'vehicles' in the schema cache" },
+                    })
+                  }
+                  return Promise.resolve({ data: [{ id: 'v-1', make: 'Honda', service_class: 'standard' }], error: null })
+                },
+              }
+            },
+          }
+        },
+      }
+    },
+  }
+  const vehicle = await loadVehicle(supabase, 'driver-1')
+  assert.equal(vehicle.make, 'Honda')
+  assert.match(selects[0], /luxury_exception/)
+  assert.equal(String(selects[1]).includes('luxury_exception'), false)
 })
 
 test('loadVehicle returns null when client or driverId is missing or vehicle not found', async () => {
@@ -731,6 +767,96 @@ test('publishDriverLocation upserts driver location and normalizes heading', asy
   assert.equal(updated.online, false)
 })
 
+test('publishDriverLocation writes trip telemetry for a live trip and keeps presence', async () => {
+  const supabase = createFakeSupabase({
+    trips: [{ id: 'trip-live', driver_id: 'driver-1', status: 'in_progress', accepted_at: '2026-10-07T00:00:00Z' }],
+  })
+  await publishDriverLocation(supabase, 'driver-1', {
+    lat: 34.68,
+    lng: -82.83,
+    heading: -1,
+    speed: -3,
+    online: true,
+  })
+  const status = supabase._tables.driver_status.find((row) => row.driver_id === 'driver-1')
+  assert.equal(status.lat, 34.68)
+  assert.equal(status.online, true)
+  assert.equal(status.heading, -1)
+  const loc = supabase._tables.trip_driver_locations.find((row) => row.trip_id === 'trip-live')
+  assert.equal(loc.driver_id, 'driver-1')
+  assert.equal(loc.lat, 34.68)
+  assert.equal(loc.lng, -82.83)
+  assert.equal(loc.heading, null)
+  assert.equal(loc.speed, null)
+
+  await publishDriverLocation(supabase, 'driver-1', {
+    lat: 34.681,
+    lng: -82.831,
+    heading: 90,
+    speed: 4,
+    online: true,
+    tripId: 'trip-explicit',
+    tripStatus: 'arriving',
+  })
+  const explicit = supabase._tables.trip_driver_locations.find((row) => row.trip_id === 'trip-explicit')
+  assert.equal(explicit.heading, 90)
+  assert.equal(explicit.speed, 4)
+  assert.equal(supabase._tables.trip_driver_locations.length, 2)
+})
+
+test('publishDriverLocation does not write trip telemetry for a non-live trip', async () => {
+  const supabase = createFakeSupabase({
+    trips: [
+      { id: 'trip-search', driver_id: 'driver-1', status: 'searching' },
+      { id: 'trip-live', driver_id: 'driver-1', status: 'accepted', accepted_at: '2026-10-07T00:00:00Z' },
+    ],
+  })
+  await publishDriverLocation(supabase, 'driver-1', {
+    lat: 34.68,
+    lng: -82.83,
+    tripId: 'trip-search',
+    tripStatus: 'searching',
+  })
+  assert.equal(supabase._tables.trip_driver_locations?.length || 0, 0)
+  const status = supabase._tables.driver_status.find((row) => row.driver_id === 'driver-1')
+  assert.equal(status.lat, 34.68)
+})
+
+test('publishDriverLocation keeps presence when the live-trip lookup fails', async () => {
+  const supabase = createFakeSupabase({}, {
+    onError(table, state) {
+      if (table === 'trips' && state.mode === 'select') return { message: 'trips unavailable' }
+      return null
+    },
+  })
+  await publishDriverLocation(supabase, 'driver-1', { lat: 34.68, lng: -82.83, online: true })
+  assert.equal(supabase._tables.driver_status[0].lat, 34.68)
+  assert.equal(supabase._tables.trip_driver_locations?.length || 0, 0)
+})
+
+test('publishDriverLocation throws when the trip location write fails', async () => {
+  const supabase = createFakeSupabase(
+    {},
+    {
+      tableErrors: {
+        trip_driver_locations: { message: 'trip location rejected' },
+      },
+    },
+  )
+  await assert.rejects(
+    () => publishDriverLocation(supabase, 'driver-1', {
+      lat: 34.68,
+      lng: -82.83,
+      tripId: 'trip-1',
+      tripStatus: 'accepted',
+    }),
+    /trip location rejected/,
+  )
+  // Location-only writes no longer set presence; only the app heartbeat writes online.
+  assert.equal(supabase._tables.driver_status[0].online, undefined)
+  assert.equal(supabase._tables.driver_status[0].lat, 34.68)
+})
+
 test('publishDriverLocation throws on database error', async () => {
   const supabase = createFakeSupabase(
     {},
@@ -779,6 +905,29 @@ test('setServiceClass stores comfort or standard on the vehicle', async () => {
   const reverted = await setServiceClass(supabase, 'driver-1', 'standard')
   assert.equal(reverted.service_class, 'standard')
   assert.equal(reverted.tier, 'standard')
+  const fromToggle = await setServiceClass(supabase, 'driver-1', { enabled: true })
+  assert.equal(fromToggle.service_class, 'comfort')
+  assert.equal(fromToggle.tier, 'comfort')
+  assert.equal(fromToggle.make, 'Honda')
+  const cleared = await setServiceClass(supabase, 'driver-1', { enabled: false })
+  assert.equal(cleared.service_class, 'standard')
+  const fromFleet = await setServiceClass(supabase, 'driver-1', { enabled: true, claimModel3: true })
+  assert.equal(fromFleet.service_class, 'comfort')
+  assert.equal(fromFleet.tier, 'comfort')
+  assert.equal(fromFleet.make, 'Honda')
+  assert.equal(fromFleet.autonomous_capable, undefined)
+  const clearedModel = await setServiceClass(supabase, 'driver-1', { enabled: false, claimModel3: true })
+  assert.equal(clearedModel.service_class, 'standard')
+  assert.equal(clearedModel.tier, 'standard')
+  assert.equal(clearedModel.autonomous_capable, undefined)
+})
+
+test('fleet listing treats only comfort as Comfort', () => {
+  const fleet = readFileSync(new URL('../../apps/driver/app/fleet.tsx', import.meta.url), 'utf8')
+  assert.match(fleet, /service === 'comfort' \|\| service === 'true'/)
+  assert.match(fleet, /String\(vehicle\?\.tier \|\| ''\)\.trim\(\)\.toLowerCase\(\) === 'comfort'/)
+  assert.doesNotMatch(fleet, /Boolean\(vehicle\?\.service_class\)/)
+  assert.doesNotMatch(fleet, /Boolean\(facing\?\.comfortClass\)/)
 })
 
 test('setServiceClass throws on update query error', async () => {
@@ -819,7 +968,7 @@ test('subscribeTrips creates channel and triggers callback on change', () => {
   })
 
   assert.equal(supabase._channels.length, 1)
-  assert.match(supabase._channels[0].name, /^driver-trips-/)
+  assert.match(supabase._channels[0].name, /^driver-trips:/)
 
   supabase._channels[0].trigger()
   assert.equal(callCount, 1)
@@ -985,56 +1134,24 @@ test('acceptTrip accepts scheduled trip via rpc accept_scheduled_trip', async ()
   assert.deepEqual(res, { id: 'trip-sched', status: 'accepted' })
 })
 
-test('acceptTrip accepts on-demand trip and logs trip_events', async () => {
+test('acceptTrip posts an on-demand claim without client writes or events', async () => {
   const supabase = createFakeSupabase({
     trips: [{ id: 'trip-od', status: 'offered' }],
     driver_applications: [{ profile_id: 'driver-1', onboarding_status: 'approved' }],
     driver_status: [{ driver_id: 'driver-1', online: true }],
   })
-
-  const res = await acceptTrip(supabase, { id: 'trip-od', status: 'offered' }, 'driver-1')
-  assert.equal(res.id, 'trip-od')
-  assert.equal(res.status, 'accepted')
-  assert.equal(res.driver_id, 'driver-1')
-  assert.ok(typeof res.accepted_at === 'string')
-
-  const event = supabase._tables.trip_events?.find((e) => e.trip_id === 'trip-od')
-  assert.ok(event)
-  assert.equal(event.kind, 'accepted')
-  assert.equal(event.payload?.driver_id, 'driver-1')
-})
-
-test('acceptTrip returns the committed claim with a warning when the event write fails', async () => {
-  const supabase = createFakeSupabase(
-    {
-      trips: [{ id: 'trip-od-ev', status: 'offered' }],
-      driver_applications: [{ profile_id: 'driver-1', onboarding_status: 'approved' }],
-      driver_status: [{ driver_id: 'driver-1', online: true }],
+  const saved = { id: 'trip-od', status: 'accepted', driver_id: 'driver-1', accepted_at: '2026-10-09T12:00:00Z' }
+  let request
+  await withMockFetch({
+    '/api/driver?action=trip-status': (url, options) => {
+      request = JSON.parse(options.body)
+      assert.equal(options.method, 'POST')
+      return { ok: true, status: 200, text: async () => JSON.stringify({ ok: true, trip: saved }) }
     },
-    {
-      onError(table, state) {
-        if (table === 'trip_events' && state.mode === 'insert') {
-          return { message: 'trip_events insert denied' }
-        }
-        return null
-      },
-    },
-  )
-
-  const logged = []
-  const originalError = console.error
-  console.error = (...args) => { logged.push(args.map(String).join(' ')) }
-  try {
-    const accepted = await acceptTrip(supabase, { id: 'trip-od-ev', status: 'offered' }, 'driver-1')
-    assert.equal(accepted.status, 'accepted')
-    assert.match(accepted.eventWarning, /trip_events insert denied/)
-  } finally {
-    console.error = originalError
-  }
-  assert.equal(logged.some((line) => line.includes('[trip_events]') && line.includes('accepted')), true)
-  // Trip row was already accepted before the event write — failure is visible, not silent.
-  const trip = supabase._tables.trips.find((t) => t.id === 'trip-od-ev')
-  assert.equal(trip.status, 'accepted')
+  }, async () => assert.deepEqual(await acceptTrip(supabase, { id: 'trip-od' }, 'driver-1'), saved))
+  assert.deepEqual(request, { tripId: 'trip-od', op: 'accept' })
+  assert.equal(supabase._tables.trips[0].status, 'offered')
+  assert.equal(supabase._tables.trip_events?.length || 0, 0)
 })
 
 test('acceptTrip throws when on-demand ride is no longer available', async () => {
@@ -1106,22 +1223,16 @@ test('matching regression: an offline driver cannot accept a visible offer', asy
   assert.equal(supabase._tables.trips[0].status, 'offered')
 })
 
-test('matching regression: concurrent accepts produce one accepted row and one event', async () => {
+test('acceptTrip surfaces a server conditional claim conflict', async () => {
   const supabase = createFakeSupabase({
     trips: [{ id: 'trip-race', status: 'searching' }],
     driver_applications: [{ profile_id: 'driver-1', onboarding_status: 'approved' }],
     driver_status: [{ driver_id: 'driver-1', online: true }],
   })
-
-  const attempts = await Promise.allSettled([
-    acceptTrip(supabase, { id: 'trip-race', status: 'searching' }, 'driver-1'),
-    acceptTrip(supabase, { id: 'trip-race', status: 'searching' }, 'driver-1'),
-  ])
-
-  assert.equal(attempts.filter((attempt) => attempt.status === 'fulfilled').length, 1)
-  assert.equal(attempts.filter((attempt) => attempt.status === 'rejected').length, 1)
-  assert.equal(supabase._tables.trips[0].status, 'accepted')
-  assert.equal(supabase._tables.trip_events.filter((event) => event.kind === 'accepted').length, 1)
+  await withMockFetch({ '/api/driver?action=trip-status': { status: 409, body: { code: 'transition_conflict', error: 'That ride is no longer available' } } }, async () => {
+    await assert.rejects(() => acceptTrip(supabase, { id: 'trip-race' }, 'driver-1'), err => err.status === 409 && err.code === 'transition_conflict')
+  })
+  assert.equal(supabase._tables.trips[0].status, 'searching')
 })
 
 // ---------------------------------------------------------------------------
@@ -1248,104 +1359,57 @@ test('advanceTrip throws when next status is invalid or trip is missing', async 
   )
 })
 
-test('advanceTrip advances accepted to arriving', async () => {
-  const supabase = createFakeSupabase({
-    trips: [{ id: 'trip-adv', status: 'accepted', driver_id: 'driver-1' }],
-  })
-
-  const res = await advanceTrip(supabase, { id: 'trip-adv', status: 'accepted' }, 'driver-1')
-  assert.equal(res.status, 'arriving')
-
-  const event = supabase._tables.trip_events.find((e) => e.trip_id === 'trip-adv')
-  assert.ok(event)
-  assert.equal(event.kind, 'arriving')
+test('advanceTrip routes every progress operation to the server without client writes', async () => {
+  for (const [status, op, to] of [['accepted', 'arriving', 'arriving'], ['arriving', 'arrive', 'arrived'], ['arrived', 'start', 'in_progress'], ['in_progress', 'complete', 'completed']]) {
+    const supabase = createFakeSupabase({ trips: [{ id: 'trip-adv', status }] })
+    const saved = { id: 'trip-adv', status: to }
+    const settle = op === 'complete' ? { payout: { status: 'pending', amountCents: 1800 } } : null
+    await withMockFetch({ '/api/driver?action=trip-status': (url, options) => {
+      assert.deepEqual(JSON.parse(options.body), { tripId: 'trip-adv', op })
+      return { ok: true, status: 200, text: async () => JSON.stringify({ ok: true, trip: saved, settle }) }
+    } }, async () => {
+      const res = await advanceTrip(supabase, { id: 'trip-adv', status }, 'driver-1')
+      assert.deepEqual(res, { ...saved, ...(settle ? { settle } : {}) })
+    })
+    assert.equal(supabase._tables.trips[0].status, status)
+    assert.equal(supabase._tables.trip_events?.length || 0, 0)
+  }
 })
 
-test('advanceTrip advances arriving to arrived via API with Supabase fallback on network error', async () => {
-  const supabase = createFakeSupabase({
-    trips: [{ id: 'trip-arr', status: 'arriving', driver_id: 'driver-1' }],
+test('advanceTrip arrival network failure leaves the row untouched', async () => {
+  const supabase = createFakeSupabase({ trips: [{ id: 'trip-arr', status: 'arriving' }] })
+  await withMockFetch({ '/api/driver?action=trip-status': () => { throw new Error('Network failed') } }, async () => {
+    await assert.rejects(() => advanceTrip(supabase, { id: 'trip-arr', status: 'arriving' }, 'driver-1'), /Network failed/)
   })
-
-  // Happy path via API
-  await withMockFetch(
-    {
-      '/api/driver?action=wait': { status: 200, body: { ok: true } },
-    },
-    async () => {
-      const res = await advanceTrip(supabase, { id: 'trip-arr', status: 'arriving' }, 'driver-1')
-      assert.deepEqual(res, { status: 'arrived' })
-    },
-  )
-
-  // Network error fallback to Supabase direct update
-  await withMockFetch(
-    {
-      '/api/driver?action=wait': () => {
-        const err = new Error('Network failed')
-        err.network = true
-        throw err
-      },
-    },
-    async () => {
-      const res = await advanceTrip(supabase, { id: 'trip-arr', status: 'arriving' }, 'driver-1')
-      assert.deepEqual(res, { status: 'arrived' })
-    },
-  )
+  assert.equal(supabase._tables.trips[0].status, 'arriving')
+  assert.equal(supabase._tables.trip_events?.length || 0, 0)
 })
 
-test('advanceTrip advances arrived to in_progress', async () => {
-  const supabase = createFakeSupabase({
-    trips: [{ id: 'trip-prog', status: 'arrived', driver_id: 'driver-1' }],
+test('advanceTrip returns cancelled_wait when starting after the wait deadline', async () => {
+  const wait = { should_charge: true, charge: { status: 'pending' } }
+  await withMockFetch({ '/api/driver?action=trip-status': { ok: true, trip: { id: 't1', status: 'cancelled_wait' }, wait } }, async () => {
+    const result = await advanceTrip({}, { id: 't1', status: 'arrived' }, 'driver-1')
+    assert.equal(result.status, 'cancelled_wait')
+    assert.deepEqual(result.wait, wait)
   })
-
-  const res = await advanceTrip(supabase, { id: 'trip-prog', status: 'arrived' }, 'driver-1')
-  assert.equal(res.status, 'in_progress')
 })
 
-test('advanceTrip advances in_progress to completed and attaches settle receipt', async () => {
-  const supabase = createFakeSupabase({
-    trips: [{ id: 'trip-done', status: 'in_progress', driver_id: 'driver-1' }],
+test('advanceTrip keeps friendly payment copy and failure details on 402', async () => {
+  await withMockFetch({ '/api/driver?action=trip-status': { status: 402, body: { code: 'payment_required', failure: { message: 'Bank declined' } } } }, async () => {
+    await assert.rejects(() => advanceTrip({}, { id: 'trip-fail', status: 'in_progress' }, 'driver-1'), err => {
+      assert.equal(err.message, 'Payment is still required before this trip can complete.')
+      assert.equal(err.status, 402)
+      assert.equal(err.failure.message, 'Bank declined')
+      return true
+    })
   })
-
-  await withMockFetch(
-    {
-      '/api/stripe-payment-methods?action=settle': {
-        status: 200,
-        body: { payout: { status: 'pending', amountCents: 1800 } },
-      },
-    },
-    async () => {
-      const res = await advanceTrip(supabase, { id: 'trip-done', status: 'in_progress' }, 'driver-1')
-      assert.equal(res.status, 'completed')
-      assert.ok(res.completed_at)
-      assert.deepEqual(res.settle, { payout: { status: 'pending', amountCents: 1800 } })
-    },
-  )
 })
 
-test('advanceTrip translates payment_required error when completing', async () => {
-  const supabase = createFakeSupabase(
-    {
-      trips: [{ id: 'trip-fail', status: 'in_progress', driver_id: 'driver-1' }],
-    },
-    {
-      tableErrors: {
-        trips: { message: 'payment_required by rider bank' },
-      },
-    },
-  )
-
-  await withMockFetch(
-    {
-      '/api/stripe-payment-methods?action=settle': { status: 200, body: {} },
-    },
-    async () => {
-      await assert.rejects(
-        () => advanceTrip(supabase, { id: 'trip-fail', status: 'in_progress' }, 'driver-1'),
-        /Payment is still required before this trip can complete\./,
-      )
-    },
-  )
+test('driverTripAction returns idempotency and rejects missing trip id', async () => {
+  await assert.rejects(() => driverTripAction({}, '', 'accept'), /Missing ride/)
+  await withMockFetch({ '/api/driver?action=trip-status': { ok: true, trip: { id: 't1', status: 'accepted' }, idempotent: true } }, async () => {
+    assert.equal((await driverTripAction({}, 't1', 'accept')).idempotent, true)
+  })
 })
 
 // ---------------------------------------------------------------------------
@@ -1641,6 +1705,57 @@ test('driver offer queries do not send the illegal trip_status requested', () =>
   const track = live.match(/export const RIDER_TRACK_STATUSES = \[([\s\S]*?)\]/)
   assert.ok(track)
   assert.doesNotMatch(track[1], /requested/)
+})
+
+test('markSearchingOffers posts searching rows once and skips claimed offers', async () => {
+  const calls = []
+  await withMockFetch(
+    {
+      '/api/driver?action=mark-offered': (url, options) => {
+        calls.push(JSON.parse(options.body))
+        return {
+          ok: true,
+          status: 200,
+          text: async () => JSON.stringify({ status: 'offered' }),
+        }
+      },
+    },
+    async () => {
+      await markSearchingOffers({}, [
+        { id: 'open-1', status: 'searching', driverId: null },
+        { id: 'mine', status: 'searching', driverId: 'driver-1' },
+        { id: 'offered-1', status: 'offered', driverId: null },
+      ])
+      await markSearchingOffers({}, [{ id: 'open-1', status: 'searching', driverId: null }])
+    },
+  )
+  assert.deepEqual(calls, [{ tripId: 'open-1' }])
+})
+
+test('declineDriverOffer uses pass-offer for a matching request', async () => {
+  let body = null
+  await withMockFetch(
+    {
+      '/api/driver?action=pass-offer': (url, options) => {
+        body = JSON.parse(options.body)
+        return {
+          ok: true,
+          status: 200,
+          text: async () => JSON.stringify({ tripId: 'matching', status: 'searching', offerDriverId: 'driver-2' }),
+        }
+      },
+    },
+    async () => {
+      const result = await declineDriverOffer({}, { id: 'matching', status: 'offered', matchingOffer: true }, 'driver-1')
+      assert.equal(result.via, 'api')
+      assert.equal(result.passed, true)
+    },
+  )
+  assert.deepEqual(body, { tripId: 'matching' })
+})
+
+test('passOffer requires a trip id', async () => {
+  await assert.rejects(() => passOffer({}, ''), /Missing ride/)
 })
 
 test('native matching pass never rewrites a newly retargeted trip', async () => {

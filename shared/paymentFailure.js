@@ -250,7 +250,7 @@ export function sumFarePaidCents(payments) {
     if (row?.status !== 'succeeded') return sum
     const logical = row?.metadata?.logical_kind || row?.kind
     if (!FARE_KINDS.has(logical)) return sum
-    return sum + (Number(row.amount_cents) || 0)
+    return sum + (Number(row.metadata?.fare_billed_cents ?? row.amount_cents) || 0)
   }, 0)
 }
 
@@ -327,6 +327,7 @@ export function resolvePlatformFeeCents(grossCents, metadata) {
 }
 
 export function resolveDriverNetCents(trip) {
+  if (trip?.status === 'cancelled_wait') return Math.max(0, Math.round(Number(trip.driver_wait_earnings_cents) || 0))
   const meta = trip?.metadata || {}
   const explicit = meta.driver_net_cents ?? meta.driver_payout_cents ?? meta.payout_cents
   if (explicit != null && explicit !== '') {
@@ -405,7 +406,30 @@ export function summarizeDriverEarnings(trips) {
       })
     }
   }
-  return { paidCents, pendingCents, pending }
+  // Post-trip tips: own transfer, 100% to the driver (server/payouts.js attemptTipPayout).
+  let tipsPaidCents = 0
+  let tipsPendingCents = 0
+  for (const trip of trips || []) {
+    const tip = trip?.metadata?.tip_payout
+    if (!tip) continue
+    const amountCents = Math.max(0, Math.round(Number(tip.amountCents) || 0))
+    if (tip.status === 'paid') tipsPaidCents += amountCents
+    else if (tip.status === 'pending' || tip.status === 'failed') {
+      tipsPendingCents += amountCents
+      pending.push({
+        tripId: trip.id, amountCents, status: 'pending', kind: 'tip',
+        attempts: tip.attempts || 0, lastError: tip.lastError || null, nextRetryAt: tip.nextRetryAt || null,
+        dropoffLabel: trip.dropoff_label || null,
+      })
+    }
+  }
+  return {
+    paidCents: paidCents + tipsPaidCents,
+    pendingCents: pendingCents + tipsPendingCents,
+    pending,
+    tipsPaidCents,
+    tipsPendingCents,
+  }
 }
 
 export function isFareKind(kind) {

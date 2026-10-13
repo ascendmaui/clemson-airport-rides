@@ -8,7 +8,7 @@ import { WEB_ORIGIN } from '../../shared/productLinks.js'
 export function redirectShareHashToPath() {
   if (typeof window === 'undefined') return false
   const hash = window.location.hash || ''
-  const m = hash.match(/^#\/(share|live|friends|carpool)\/([^/?#]+)\/?(?:[?#].*)?$/)
+  const m = hash.match(/^#\/(share|live|friends|carpool|party-night)\/([^/?#]+)\/?(?:[?#].*)?$/)
   if (!m) return false
   const kind = m[1]
   const token = decodeURIComponent(m[2])
@@ -27,16 +27,19 @@ export function getHashRoute() {
     return { path: 'landing', params: {}, segments: [] }
   }
 
-  const hashRaw = (typeof window !== 'undefined' ? window.location.hash : '').replace(/^#\/?/, '')
-  const pathRaw = (typeof window !== 'undefined' ? window.location.pathname : '').replace(/^\//, '')
+  const loc = typeof window !== 'undefined' ? window.location : null
+  const hashRaw = String(loc?.hash || '').replace(/^#\/?/, '')
+  const pathRaw = String(loc?.pathname || '').replace(/^\//, '')
+  const search = String(loc?.search || '')
   // Prefer hash when present; otherwise fall back to pathname.
-  const raw = hashRaw || pathRaw || 'landing'
+  // Path form keeps ?tab= on /admin. A bare /?code= OAuth return stays on landing.
+  const raw = hashRaw || (pathRaw ? `${pathRaw}${pathRaw.includes('?') ? '' : search}` : '') || 'landing'
   const [pathPart, qs] = raw.split('?')
   const segments = pathPart.split('/').filter(Boolean)
   const path = segments[0] || 'landing'
   const params = Object.fromEntries(new URLSearchParams(qs || ''))
   // Support #/share|live|friends|carpool/<token> and path equivalents
-  if ((path === 'share' || path === 'live' || path === 'friends' || path === 'carpool') && segments[1] && !params.token) {
+  if ((path === 'share' || path === 'live' || path === 'friends' || path === 'carpool' || path === 'party-night') && segments[1] && !params.token) {
     params.token = decodeURIComponent(segments[1])
   }
   if (path === 'profile' && segments[1] && !params.id) params.id = segments[1]
@@ -46,6 +49,7 @@ export function getHashRoute() {
     params.tab = decodeURIComponent(segments[1])
   }
   if (path === 'receipt' && segments[1] && !params.trip) params.trip = segments[1]
+  if ((path === 'partners' || path === 'drivers') && segments[1] && !params.sub) params.sub = segments[1]
 
   // Persist share/friends token so a later hash clear (auth) can recover.
   if (typeof window !== 'undefined' && params.token && (path === 'share' || path === 'live')) {
@@ -104,7 +108,7 @@ export function navigate(path, params = {}) {
   if (path.includes('/') && Object.keys(params).length === 0) {
     const clean = path.replace(/^\//, '')
     const [head, ...rest] = clean.split('/')
-    if ((head === 'share' || head === 'live' || head === 'friends' || head === 'carpool') && rest[0]) {
+    if ((head === 'share' || head === 'live' || head === 'friends' || head === 'carpool' || head === 'party-night') && rest[0]) {
       const url = `${window.location.origin}/${head}/${encodeURIComponent(rest[0])}`
       window.location.assign(url)
       return
@@ -113,7 +117,18 @@ export function navigate(path, params = {}) {
     return
   }
   const qs = new URLSearchParams(params).toString()
-  if ((path === 'share' || path === 'live' || path === 'friends' || path === 'carpool') && params.token) {
+  if (path === 'admin' || path === 'admin-dashboard') {
+    const next = `/admin${qs ? `?${qs}` : ''}`
+    window.location.pathname = '/admin'
+    window.location.search = qs ? `?${qs}` : ''
+    window.location.hash = ''
+    if (typeof window.history?.pushState === 'function') {
+      try { window.history.pushState({ screen: 'admin' }, '', next) } catch { /* test doubles */ }
+    }
+    if (typeof window.dispatchEvent === 'function') window.dispatchEvent(new Event('popstate'))
+    return
+  }
+  if ((path === 'share' || path === 'live' || path === 'friends' || path === 'carpool' || path === 'party-night') && params.token) {
     const url = `${window.location.origin}/${path}/${encodeURIComponent(params.token)}`
     window.location.assign(url)
     return
@@ -126,6 +141,10 @@ export function navigate(path, params = {}) {
   if (path === 'carpool' && !params.token) {
     const qs = new URLSearchParams(params).toString()
     window.location.hash = qs ? `#/carpool?${qs}` : '#/carpool?hub=1'
+    return
+  }
+  if (path === 'party-night' && !params.token) {
+    window.location.hash = '#/party-night'
     return
   }
   window.location.hash = qs ? `#/${path}?${qs}` : `#/${path}`
@@ -145,4 +164,9 @@ export function friendsInviteUrl(token) {
 export function carpoolInviteUrl(token) {
   const origin = typeof window !== 'undefined' ? window.location.origin : WEB_ORIGIN
   return `${origin}/carpool/${encodeURIComponent(token)}`
+}
+
+export function partyNightInviteUrl(token) {
+  const origin = typeof window !== 'undefined' ? window.location.origin : WEB_ORIGIN
+  return `${origin}/party-night/${encodeURIComponent(token)}`
 }

@@ -85,7 +85,7 @@ test('rider cancel while searching blocks a later accept', async () => {
   assert.equal(supabase._tables.trip_events.filter((event) => event.kind === 'canceled').length, 1)
 })
 
-test('driver decline stamps rebroadcast path flags and the sweep skips that driver', async () => {
+test('driver decline stamps rebroadcast path flags and an expired exclusive window opens the pool', async () => {
   for (const status of ['searching', 'offered']) {
     const trip = targetedTrip({ status })
     const flags = declineRebroadcastFlags(trip, { driverId: 'driver-1', nextDriverId: 'driver-2', now })
@@ -183,10 +183,12 @@ test('driver decline stamps rebroadcast path flags and the sweep skips that driv
   const stored = supabase._tables.trips[0]
   assert.equal(stored.status, 'searching')
   assert.equal(stored.driver_id, null)
-  assert.equal(stored.metadata.offer_driver_id, 'driver-3')
+  assert.equal(stored.metadata.offer_driver_id, null)
+  assert.equal(stored.metadata.match, 'open')
+  assert.equal(stored.metadata.offer_phase, 'pool')
   assert.ok(stored.metadata.offer_tried_driver_ids.includes('driver-1'))
   assert.ok(stored.metadata.offer_tried_driver_ids.includes('driver-2'))
-  assert.equal(stored.metadata.offer_rebroadcast_reason, 'no_accept_timeout')
+  assert.equal(stored.metadata.offer_rebroadcast_reason, 'exclusive_window_elapsed')
   assert.equal(stored.metadata.preserved, 'yes')
 })
 

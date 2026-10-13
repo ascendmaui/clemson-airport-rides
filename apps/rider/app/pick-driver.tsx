@@ -1,18 +1,22 @@
+import { Glyph } from 'rides-native/icons'
+import { useDemoBusyRoster } from '@/lib/useDemoBusyRoster'
+import { busyRosterFor } from 'rides-native/busyRoster.js'
+import { resolveDriverPortrait } from '../../../shared/driverPortrait.js'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useEffect, useState } from 'react'
 import { Animated, Pressable, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { PrimaryButton } from '@/components/Button'
+import { TipBoostPicker } from '@/components/TipBoostPicker'
 import { pressStyle, useEnterMotion } from '@/components/enter'
 import { CampusMap } from '@/components/CampusMap'
 import { ClemsonLoader } from '@/components/ClemsonLoader'
 import type { MapKind } from '@/components/mapTypes'
 import { mapKindLabel } from '@/components/mapTypes'
 import { SignInToBookSheet } from '@/components/SignInToBookSheet'
-import { Skeleton } from '@/components/Skeleton'
 import { setAuthNext } from '@/lib/authNext'
 import { useAuth } from '@/lib/auth'
-import { playTigerCue, successHaptic, tapHaptic } from '@/lib/feedback'
+import { playDriverBrowseCue, playDriverFoundCue, tapHaptic } from '@/lib/feedback'
 import { oneParam } from '@/lib/oneParam'
 import { authStorage } from '@/lib/storage'
 import { supabase } from '@/lib/supabase'
@@ -21,7 +25,9 @@ import { useStudentStatus } from '@/lib/useStudentStatus'
 import {
   describeDriver,
   fetchDriversByIds,
+  canFavoriteDriver,
   fetchOnlineDrivers,
+  filterDriversForFleet,
   groupDriversForPicker,
   loadFavoriteDriverIds,
   OPEN_POOL_COPY,
@@ -39,6 +45,7 @@ import { useTheme } from '@/lib/theme'
 import { useThemedStyles } from '@/lib/useThemedStyles'
 import { searchDelayMs } from 'rides-native/riderShell.js'
 import { comfortFleetNotice } from 'rides-native/tripTags'
+import { loadTigerPass, setFavoriteDrivers, TIGER_PASS_NAME } from 'rides-native/tigerPassClient'
 
 const MAP_KINDS: MapKind[] = ['standard', 'satellite', 'hybrid']
 const NOTIFY_KEY = 'rider.notify.driver'
@@ -57,14 +64,18 @@ export default function PickDriver() {
     dest?: string
     pickup?: string
     tier?: string
+    note?: string
     pickupLat?: string
     pickupLng?: string
     destLat?: string
     destLng?: string
+    passengers?: string
   }>()
   const dest = oneParam(params.dest, 'GSP Airport')
   const pickup = oneParam(params.pickup, 'Memorial Stadium')
   const tier = oneParam(params.tier, 'standard')
+  const note = oneParam(params.note)
+  const passengers = oneParam(params.passengers)
   const pickupLat = finiteParam(params.pickupLat)
   const pickupLng = finiteParam(params.pickupLng)
   const destLat = finiteParam(params.destLat)
@@ -79,6 +90,7 @@ export default function PickDriver() {
     dest,
     pickup,
     tier,
+    note,
     pickupLat: oneParam(params.pickupLat),
     pickupLng: oneParam(params.pickupLng),
     destLat: oneParam(params.destLat),
@@ -86,16 +98,20 @@ export default function PickDriver() {
   }
   const { user } = useAuth()
   const student = useStudentStatus()
+  const demoBusyRoster = useDemoBusyRoster()
+  const busy = busyRosterFor({ enabled: demoBusyRoster })
   const [drivers, setDrivers] = useState<OnlineDriver[]>([])
   const [error, setError] = useState<string | null>(null)
   const [phase, setPhase] = useState<'loading' | 'results'>('loading')
   const [attempt, setAttempt] = useState(0)
   const [selected, setSelected] = useState<string | null>(null)
-  const [busy, setBusy] = useState(false)
+  const [requesting, setRequesting] = useState(false)
+  const [prepaidTipCents, setPrepaidTipCents] = useState(0)
   const [promptOpen, setPromptOpen] = useState(false)
   const [mapType, setMapType] = useState<MapKind>('standard')
   const [notified, setNotified] = useState(false)
   const [favoriteIds, setFavoriteIds] = useState<string[]>([])
+  const [passPreferredIds, setPassPreferredIds] = useState<string[]>([])
   const [favNote, setFavNote] = useState<string | null>(null)
   const { colors } = useTheme()
   const styles = useThemedStyles(makeStyles)
@@ -109,22 +125,25 @@ export default function PickDriver() {
     const favorites = user?.id
       ? loadFavoriteDriverIds(supabase, authStorage, user.id)
       : Promise.resolve({ ids: [] as string[], note: null })
-    Promise.all([fetchOnlineDrivers(supabase), favorites, wait]).then(async ([result, fav]) => {
+    const pass = user?.id
+      ? loadTigerPass(supabase).catch(() => null)
+      : Promise.resolve(null)
+    Promise.all([fetchOnlineDrivers(supabase), favorites, wait, pass]).then(async ([result, fav, , loadedPass]) => {
       if (!alive) return
       const extraIds = fav.ids.filter((id) => !result.drivers.some((driver) => driver.id === id))
       const extra = extraIds.length
         ? await fetchDriversByIds(supabase, extraIds)
         : { drivers: [] as OnlineDriver[], error: null }
       if (!alive) return
-      const merged = sortPreferredDrivers([...result.drivers, ...extra.drivers], fav.ids, approachPickup)
+      const merged = sortPreferredDrivers(filterDriversForFleet([...result.drivers, ...extra.drivers], tier, user?.id), fav.ids, approachPickup)
       setDrivers(merged)
       setFavoriteIds(fav.ids)
+      setPassPreferredIds(loadedPass?.active ? loadedPass.preferredDriverIds || [] : [])
       setFavNote(fav.note)
       setError(extra.error || result.error)
       setPhase('results')
       if (merged.some((driver) => driver.online)) {
-        await successHaptic()
-        await playTigerCue()
+        await playDriverBrowseCue()
       }
     })
     return () => {
@@ -134,12 +153,20 @@ export default function PickDriver() {
 
   const selectedDriver = drivers.find((row: OnlineDriver) => row.id === selected) || null
   const comfortNotice = comfortFleetNotice(tier === 'comfort' || tier === 'comfort' || Boolean(selectedDriver?.comfortClass))
-  const groups = groupDriversForPicker(sortPreferredDrivers(drivers, favoriteIds, approachPickup), favoriteIds)
+  const groups = groupDriversForPicker(
+    sortPreferredDrivers(drivers, favoriteIds, approachPickup),
+    favoriteIds,
+    passPreferredIds.length ? passPreferredIds : undefined,
+  )
 
   async function toggleFavorite(driverId: string) {
     if (!user) {
       setAuthNext({ pathname: '/pick-driver', params: resumeParams })
       setPromptOpen(true)
+      return
+    }
+    if (!canFavoriteDriver(driverId)) {
+      setFavNote('Map preview cars cannot be saved.')
       return
     }
     const next = favoriteIds.includes(driverId)
@@ -149,6 +176,16 @@ export default function PickDriver() {
     const saved = await saveFavoriteDriverIds(supabase, authStorage, user.id, next)
     setFavoriteIds(saved.ids)
     setFavNote(saved.note)
+    try {
+      const remote = await setFavoriteDrivers(supabase, saved.ids)
+      if (Array.isArray(remote?.favoriteDriverIds)) {
+        setFavoriteIds(remote.favoriteDriverIds)
+        setPassPreferredIds(remote.active ? remote.preferredDriverIds || [] : [])
+        if (remote.demoDriversIgnored) setFavNote(remote.demoNote || 'Preview cars were not saved.')
+      }
+    } catch {
+      /* the profile row is already the matching source when the API is down */
+    }
     await tapHaptic()
   }
 
@@ -203,8 +240,10 @@ export default function PickDriver() {
   }
 
   function renderGroups() {
+    const passFirst = (groups.passPreferred || []).length > 0
     const blocks = [
-      groups.preferred.length ? { title: 'Preferred', rows: groups.preferred } : null,
+      passFirst ? { title: 'Preferred', rows: groups.passPreferred || [] } : null,
+      groups.preferred.length ? { title: passFirst ? 'Favorites' : 'Preferred', rows: groups.preferred } : null,
       groups.online.length ? { title: 'Online now', rows: groups.online } : null,
     ].filter((block): block is { title: string; rows: OnlineDriver[] } => Boolean(block))
     return blocks.map((block) => (
@@ -225,14 +264,20 @@ export default function PickDriver() {
       color: colors.orange,
     }))
 
+  const anyOnline = drivers.some((driver: OnlineDriver) => driver.online)
+
   const onRequest = async () => {
-    const chosen = drivers.find((row: OnlineDriver) => row.id === selected)
-    if (!chosen) {
-      setError('Select a driver first')
+    const chosen = drivers.find((row: OnlineDriver) => row.id === selected) || null
+    if (chosen && !chosen.online) {
+      setError('That driver is offline. This request does not auto-match.')
       return
     }
-    if (!chosen.online) {
-      setError('That driver is offline. This request does not auto-match.')
+    if (!chosen && !anyOnline) {
+      setError('No approved drivers are online right now.')
+      return
+    }
+    if (chosen && tier === 'comfort' && !chosen.comfortClass) {
+      setError('Extra Comfort fleet only. That driver is not listed as Comfort.')
       return
     }
     if (!user) {
@@ -240,27 +285,32 @@ export default function PickDriver() {
       setPromptOpen(true)
       return
     }
-    setBusy(true)
+    setRequesting(true)
     setError(null)
     try {
       const trip = await requestDriverTrip(supabase, {
         riderId: user.id,
-        driverId: chosen.id,
+        ...(chosen ? { driverId: chosen.id } : { autoAssign: true }),
         dest,
         destPoint: dropPoint,
         pickupLabel: pickup,
         pickupPoint: { latitude: approachPickup.lat, longitude: approachPickup.lng },
         tier,
+        ...(passengers ? { passengers } : {}),
         isStudent: student.verified,
+        note,
+        prepaidTipCents,
       })
-      await successHaptic()
-      await playTigerCue()
+      await playDriverFoundCue()
       router.replace({
         pathname: '/requested',
-        params: { dest, trip: trip.id, driver: chosen.name },
+        params: { dest, trip: trip.id, driver: chosen?.name || 'Next driver' },
       })
     } catch (err) {
-      const redirect = scheduleRedirectForRequestError(err, dest)
+      const redirect = scheduleRedirectForRequestError(
+        err && typeof err === 'object' ? err as { code?: string } : undefined,
+        dest,
+      )
       if (redirect) {
         router.push(redirect.airport
           ? { pathname: '/schedule', params: { airport: redirect.airport } }
@@ -269,7 +319,7 @@ export default function PickDriver() {
       }
       setError(err instanceof Error ? err.message : 'Could not request that driver')
     } finally {
-      setBusy(false)
+      setRequesting(false)
     }
   }
 
@@ -284,7 +334,7 @@ export default function PickDriver() {
           accessibilityHint="Returns to fare choices"
           hitSlop={8}
         >
-          <Text style={styles.backLabel}>←</Text>
+          <Glyph name="back" size={20} color={colors.title} accessibilityLabel="Back" />
         </Pressable>
         <View style={styles.headerCopy}>
           <Text style={styles.title}>Pick a driver</Text>
@@ -294,8 +344,10 @@ export default function PickDriver() {
       <View style={styles.mapWrap}>
         <CampusMap spots={[]} showHeat={false} mapType={mapType} theater gameDay={false} surge={false} pins={pins} />
         {phase === 'loading' ? (
-          <View style={styles.loader}>
-            <ClemsonLoader />
+          <View style={styles.loader} pointerEvents="none">
+            <View style={[styles.loaderCard, lift(colors, 'float')]}>
+              <ClemsonLoader />
+            </View>
           </View>
         ) : null}
         <View style={styles.kinds}>
@@ -319,7 +371,6 @@ export default function PickDriver() {
         </View>
       </View>
       <Animated.ScrollView style={[styles.listScroll, listMotion]} contentContainerStyle={styles.list} showsVerticalScrollIndicator={false}>
-        {phase === 'loading' ? <Skeleton height={72} /> : null}
         {phase === 'results' && !drivers.some((driver: OnlineDriver) => driver.online) ? (
           <View style={styles.empty}>
             <Text style={styles.emptyTitle}>{drivers.length ? 'Preferred drivers are offline' : 'Still searching'}</Text>
@@ -340,8 +391,36 @@ export default function PickDriver() {
             <PrimaryButton label="Retry" tone="ghost" onPress={() => setAttempt((value: number) => value + 1)} />
           </View>
         ) : null}
+        {(groups.passPreferred || []).length > 0 ? (
+          <Text style={styles.meta}>{TIGER_PASS_NAME} offers preferred drivers first, then your other saved drivers.</Text>
+        ) : null}
         {favNote ? <Text style={styles.meta}>{favNote}</Text> : null}
         {phase === 'results' ? renderGroups() : null}
+        {/* Busy roster: display only; kept outside real driver sections. */}
+        {busy.length > 0 ? (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>BUSY NOW</Text>
+            {busy.map((driver) => {
+              const portrait = resolveDriverPortrait(driver)
+              return (
+                <View key={driver.id} aria-disabled={true} accessibilityState={{ disabled: true }} style={[styles.card, { opacity: 0.55, borderColor: '#aaa' }]}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                    <View style={{ width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', backgroundColor: portrait.color || '#522D80' }}>
+                      <Text style={{ color: '#fff', fontWeight: '800' }}>{portrait.initials}</Text>
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.name}>{driver.name}</Text>
+                      <Text style={styles.meta}>★ {driver.rating} · {driver.tripCount.toLocaleString('en-US')} trips</Text>
+                      <Text style={styles.sub}>{driver.vehicleLabel}</Text>
+                    </View>
+                    <Text style={{ fontSize: 11, fontWeight: '700', borderRadius: 12, paddingHorizontal: 8, paddingVertical: 5, backgroundColor: driver.status === 'on_trip' ? '#f4dfcc' : '#e5e5e5', color: driver.status === 'on_trip' ? '#855023' : '#555' }}>{driver.statusLabel}</Text>
+                  </View>
+                </View>
+              )
+            })}
+          </View>
+        ) : null}
+        {/* End busy roster. */}
       </Animated.ScrollView>
       <View style={[styles.footer, lift(colors, 'bar'), { paddingBottom: Math.max(insets.bottom, 16) }]}>
         {comfortNotice ? <Text style={styles.comfortNotice}>{comfortNotice}</Text> : null}
@@ -351,11 +430,12 @@ export default function PickDriver() {
         {student.verified && tier !== 'standard' ? (
           <Text style={styles.student}>Student pricing is 10% off Standard. This tier stays full price.</Text>
         ) : null}
+        <TipBoostPicker cents={prepaidTipCents} onChange={setPrepaidTipCents} />
         {error && drivers.some((driver: OnlineDriver) => driver.online) ? <Text style={styles.error}>{error}</Text> : null}
         <PrimaryButton
-          label={busy ? 'Requesting…' : selectedDriver ? `Request ${selectedDriver.name}` : 'Select a driver'}
+          label={requesting ? 'Requesting…' : selectedDriver ? `Request ${selectedDriver.name}` : (anyOnline ? 'Request next driver' : 'Select a driver')}
           onPress={onRequest}
-          disabled={busy || !selectedDriver?.online}
+          disabled={requesting || (selectedDriver ? !selectedDriver.online : !anyOnline)}
         />
       </View>
       <SignInToBookSheet
@@ -386,19 +466,33 @@ function makeStyles(colors: Palette) {
     mapWrap: { height: 248, marginHorizontal: 20, borderRadius: 22, overflow: 'hidden' as const },
     loader: {
       position: 'absolute' as const,
-      top: 64,
-      left: 36,
-      right: 36,
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 46,
       alignItems: 'center' as const,
-      backgroundColor: colors.tabBar,
-      borderRadius: 20,
-      paddingTop: 12,
-      paddingBottom: 14,
-      minHeight: 132,
+      justifyContent: 'center' as const,
     },
-    kinds: { position: 'absolute' as const, left: 10, bottom: 10, flexDirection: 'row' as const, gap: 6 },
-    kind: { backgroundColor: colors.card, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 5 },
-    kindOn: { backgroundColor: colors.purple },
+    loaderCard: {
+      alignItems: 'center' as const,
+      backgroundColor: colors.card,
+      borderRadius: 22,
+      borderWidth: 1,
+      borderColor: colors.border,
+      paddingHorizontal: 22,
+      paddingTop: 16,
+      paddingBottom: 14,
+    },
+    kinds: { position: 'absolute' as const, left: 12, bottom: 12, zIndex: 2, flexDirection: 'row' as const, gap: 6 },
+    kind: {
+      backgroundColor: colors.card,
+      borderRadius: 999,
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    kindOn: { backgroundColor: colors.purple, borderColor: colors.purple },
     kindText: { color: colors.link, fontSize: 11, fontWeight: '800' as const },
     kindTextOn: { color: colors.onAccent },
     listScroll: { flex: 1, marginTop: 12 },

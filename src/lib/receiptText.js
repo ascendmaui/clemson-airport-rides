@@ -10,6 +10,7 @@ export function buildReceiptText(trip, { forDriver = false } = {}) {
   const view = forDriver ? maskCompletedTripForDriver(trip) : trip
   const fare = Number(trip.fare_cents) || 0
   const tip = Number(trip.tip_cents) || 0
+  const wait = Math.max(0, Math.round(Number(trip.wait_fee_cents) || 0))
   const when = trip.completed_at
     ? new Date(trip.completed_at).toLocaleString()
     : ''
@@ -21,8 +22,9 @@ export function buildReceiptText(trip, { forDriver = false } = {}) {
     when ? `Completed: ${when}` : null,
     `Fare: ${money(fare)}`,
     ...depositReceiptLines(trip),
+    wait > 0 ? `Wait time: ${money(wait)}` : null,
     `Tip: ${money(tip)}`,
-    `Total: ${money(fare + tip)}`,
+    `Total: ${money(fare + tip + wait)}`,
   ].filter(Boolean).join('\n')
 }
 

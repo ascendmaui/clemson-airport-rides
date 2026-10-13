@@ -2,9 +2,18 @@ import { onTrackingResume, createTrackingRefresh } from '../../packages/rides-na
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useAuth } from '../lib/auth'
 import { CampusMap, CLEMSON } from '../components/CampusMap'
+import { DriverCancelSheet } from '../components/DriverCancelSheet'
+import { DriverEndTripSheet } from '../components/DriverEndTripSheet'
+import { DRIVER_CANCEL_SUCCESS } from '../../shared/driverCancel.js'
+import { DRIVER_END_SUCCESS } from '../../shared/driverEndTrip.js'
+import { reconcileActiveTrip, tripTerminalClearReason } from '../../packages/rides-native/activeTripReconcile.js'
+import { sendTripHeartbeat } from '../../packages/rides-native/tripHeartbeat.js'
 import { DriverDeskHeader } from '../components/DriverDeskHeader'
+import { DriverProfilePhoto } from '../components/DriverProfilePhoto'
 import { GameDayStatus } from '../components/GameDayStatus'
+import { GameDayBoard, GameDaySurgeNote } from '../components/GameDayBoard'
 import { useGameDayNotice } from '../lib/useGameDayNotice'
+import { useGameDayExperience } from '../../packages/rides-native/useGameDayExperience.js'
 import { DriverIncentiveBanner, useDriverIncentiveWatch } from '../components/DriverIncentiveBanner'
 import { HEAT_WINDOWS, loadMapType, saveMapType } from '../lib/rideDemand'
 import { PurpleAcceptButton } from '../components/PrimaryButton'
@@ -17,7 +26,10 @@ import { grantRiderSocialForTrip } from '../lib/riderReferral'
 import { isLiveTrip, startTripLocationWatch } from '../lib/liveDriverLocation'
 import { DriverApprovalGate } from './DriverApprovalGate'
 import { driverOfferCopy, driverTakeCents, formatUsd } from '../lib/carpoolEngine'
+import { driverBoostOfferLine } from '../../shared/copy/boost.js'
+import { driverBoostShareCents, formatBoostBadge, readBoostCents } from '../../shared/scheduledBoost.js'
 import { RideChat, RideMessageButton } from '../components/RideChat'
+import { ReportLostItemButton } from '../components/ReportLostItem'
 import { rideChatMode } from '../lib/tripChatRules'
 import { SosControl } from '../components/SosControl'
 import { applyTripDriverIncentives, fetchDriverIncentiveExtras } from '../lib/driverIncentives'
@@ -26,15 +38,16 @@ import { fetchFullProfile } from '../lib/profiles'
 import { CounterpartChip } from '../components/CounterpartChip'
 import { PARTY_VISIBLE_STATUSES } from '../../packages/rides-native/partyProfile.js'
 import { useTripWait } from '../lib/useTripWait'
-import { tripWaitAction } from '../lib/tripWaitApi'
+import { driverTripAction } from '../lib/driverOffers'
 import { WaitFeeCard } from '../components/WaitFeeCard'
-import { api, settleTrip } from '../lib/payments'
+import { api } from '../lib/payments'
 import { PaymentFailedSheet } from '../components/PaymentFailedSheet'
 import { formatPickupAt, isDueNow } from '../lib/scheduledRideModel'
 import {
   acceptScheduledTrip,
   listDriverScheduledTrips,
   listOpenScheduledTrips,
+  postBackupQueue,
   reminderCopy,
   takeReminder,
 } from '../lib/scheduledRides'
@@ -42,6 +55,7 @@ import { pushToast } from '../lib/toasts'
 import { playRideRequestAlert, shouldAlertForRide } from '../lib/rideAlert'
 import { loadLocalPrefs } from '../lib/notificationPrefs'
 import { offerVisibleToDriver, visibleOfferQuery } from '../../shared/driverOrder.js'
+import { readBackupQueue } from '../../shared/backupDriverQueue.js'
 import { driverRouteForOnboarding } from '../../shared/driverRoute.js'
 import { isStaleLiveOffer } from '../../shared/staleLiveOffer.js'
 import { acceptTrip, declineTrip, listPassedTripIds } from '../../packages/rides-native/driverDesk.js'
@@ -62,7 +76,12 @@ import {
   offlineWhileOfferedMessage,
   searchingCancelOfferMessage,
 } from '../../server/matchingEdge.js'
-import { DRIVER_TRACK_STEPS, etaHoldLine, etaLineFor } from '../../packages/rides-native/liveTrip.js'
+import { DRIVER_TRACK_STEPS, etaHoldLine } from '../../packages/rides-native/liveTrip.js'
+import { directionsEtaLine, followEtaLine, followRouteLine, legNounForStatus, storedRoadSuffix } from '../../packages/rides-native/roadFollow.js'
+import { navigationLinks, preferredNavigationUrl } from '../../packages/rides-native/mapsLink.js'
+import { leaveNowStartedLine, MAPS_HANDOFF_HELPER } from '../../shared/copy/scheduledRides.js'
+import { ScheduledRidesExplainer } from '../components/ScheduledRidesInfo'
+import { useDrivingLeg } from '../lib/useDrivingLeg'
 import { LivePhase } from '../components/LivePhase'
 
 function ComfortNotice({ row }) {
@@ -80,22 +99,15 @@ function centsToDollars(cents) {
   return `$${(Number(cents) / 100).toFixed(2)}`
 }
 
-async function writeTripEvent(tripId, kind, payload = {}) {
-  if (!supabase || !tripId) return
-  const { error } = await supabase.from('trip_events').insert({
-    trip_id: tripId,
-    kind,
-    payload,
-  })
-  if (error) {
-    console.error('[trip_events]', kind, error.message)
-    throw new Error(error.message || `Could not record trip event (${kind})`)
-  }
+const CANCEL_NOTICES = {
+  canceled: 'Ride canceled',
+  canceled_midride: 'The rider ended this trip early',
+  cancelled_wait: 'Canceled: rider no-show',
 }
 
 const ACTIVE_STATUSES = ['accepted', 'arriving', 'arrived', 'in_progress']
 
-export function DriverHome() {
+export function DriverHome({ openChatTripId = '' }) {
   const { user, loading } = useAuth()
   if (loading) {
     return (
@@ -108,10 +120,33 @@ export function DriverHome() {
 function DriverShell({ driverId }) {
   const { user } = useAuth()
   const game = useGameDayNotice()
+  const gameDay = useGameDayExperience(supabase, { driverId })
   const [priority, setPriority] = useState(false)
   const [offer, setOffer] = useState(null)
   const [activeTrip, setActiveTrip] = useState(null)
+  const activeTripRef = useRef(null)
+  activeTripRef.current = activeTrip
+  const cancelNotified = useRef(null)
   const [payFailure, setPayFailure] = useState(null)
+  const refreshActiveRef = useRef(() => {})
+  const clearCanceledTrip = useCallback((row) => {
+    const notice = CANCEL_NOTICES[row?.status]
+      || (tripTerminalClearReason(row) === 'completed' ? 'Trip completed' : null)
+      || (tripTerminalClearReason(row) === 'expired' ? 'Trip expired' : null)
+    // Ignore an older poll response that arrives after realtime cancellation.
+    if (!notice) return Boolean(row?.id && cancelNotified.current === row.id)
+    setActiveTrip((current) => current?.id === row.id ? null : current)
+    setPayFailure(null)
+    setAdvanceError(null)
+    if (cancelNotified.current !== row.id) {
+      cancelNotified.current = row.id
+      pushToast({ kind: 'system', title: notice })
+    }
+    return true
+  }, [])
+  useEffect(() => {
+    if (activeTrip) clearCanceledTrip(activeTrip)
+  }, [activeTrip, clearCanceledTrip])
   const wait = useTripWait(activeTrip, (next) => {
     setActiveTrip((prev) => (prev && next && prev.id === next.id ? { ...prev, ...next } : prev))
   })
@@ -129,6 +164,7 @@ function DriverShell({ driverId }) {
   const [advancing, setAdvancing] = useState(false)
   const [advanceError, setAdvanceError] = useState(null)
   const [selfPos, setSelfPos] = useState(null)
+  const [selfHeading, setSelfHeading] = useState(null)
   const [mapTypeId, setMapTypeId] = useState(() => loadMapType())
   const [showSurge, setShowSurge] = useState(true)
   const [heatWindow, setHeatWindow] = useState('now')
@@ -139,6 +175,10 @@ function DriverShell({ driverId }) {
   const [activeChecked, setActiveChecked] = useState(false)
   const approved = driverRouteForOnboarding(application?.onboarding_status) === 'driver'
   const [chatTrip, setChatTrip] = useState(null)
+  useEffect(() => {
+    if (!openChatTripId) return
+    setChatTrip({ id: openChatTripId })
+  }, [openChatTripId])
   const [scheduledOpen, setScheduledOpen] = useState([])
   const [scheduledMine, setScheduledMine] = useState([])
   const offerRevision = useRef(0)
@@ -248,19 +288,27 @@ function DriverShell({ driverId }) {
     }
   }, [driverId, approved])
 
+  const stopTripLocation = useRef(null)
   const [locationError, setLocationError] = useState(null)
   const [locationAttempt, setLocationAttempt] = useState(0)
   useEffect(() => {
-    const tracking = Boolean(approved && online && activeTrip?.id && isLiveTrip(activeTrip.status))
-    if (!driverId || !tracking || (!presenceReady && !activeTrip)) return undefined
+    const liveTripId = activeTrip?.id && isLiveTrip(activeTrip.status) ? activeTrip.id : null
+    const backupEnroute = readBackupQueue(activeTrip)?.confirmState === 'enroute'
+    const tracking = Boolean(approved && (online || liveTripId))
+    if (!driverId || !tracking || (!presenceReady && !liveTripId)) return undefined
     const stop = startTripLocationWatch({
-      tripId: activeTrip.id,
+      tripId: liveTripId && (online || backupEnroute) ? liveTripId : null,
       driverId,
-      onFix: (pos) => setSelfPos([pos.coords.latitude, pos.coords.longitude]),
+      onFix: (pos) => {
+        setSelfPos([pos.coords.latitude, pos.coords.longitude])
+        const heading = Number(pos.coords.heading)
+        setSelfHeading(Number.isFinite(heading) && heading >= 0 ? heading : null)
+      },
       onError: setLocationError,
     })
+    stopTripLocation.current = stop
     const offResume = onTrackingResume(() => setLocationAttempt((n) => n + 1))
-    return () => { stop(); offResume() }
+    return () => { stop(); stopTripLocation.current = null; offResume() }
   }, [driverId, approved, activeTrip?.id, activeTrip?.status, online, presenceReady, locationAttempt])
 
   useEffect(() => {
@@ -287,21 +335,25 @@ function DriverShell({ driverId }) {
         listOpenScheduledTrips(),
         listDriverScheduledTrips(driverId),
       ])
+      const seatForMe = (row) => {
+        const queue = readBackupQueue(row)
+        return queue && (queue.primaryDriverId === driverId || queue.backupDriverId === driverId)
+      }
+      const pool = open.filter((row) => {
+        const queue = readBackupQueue(row)
+        if (!queue) return true
+        if (seatForMe(row)) return false
+        return !(queue.primaryDriverId && queue.backupDriverId)
+      })
       const receiving = onShiftRef.current
-      setScheduledOpen(receiving ? open : [])
-      setScheduledMine(mine)
+      setScheduledOpen(receiving ? pool : [])
+      setScheduledMine([...mine, ...open.filter(seatForMe)])
       if (!scheduledPrimed.current || !receiving) {
         open.forEach((row) => knownOpen.current.add(row.id))
         scheduledPrimed.current = true
       } else {
         open.forEach((row) => {
-          if (knownOpen.current.has(row.id)) return
           knownOpen.current.add(row.id)
-          pushToast({
-            kind: 'ride_scheduled',
-            title: 'New scheduled ride',
-            body: `${row.pickup_label || 'Pickup'} → ${row.dropoff_label || 'Drop-off'} · ${formatPickupAt(row.pickup_at)}`,
-          })
         })
       }
       if (receiving) {
@@ -407,31 +459,48 @@ function DriverShell({ driverId }) {
     }
     const reader = createTrackingRefresh({
       load: async () => {
+        const current = activeTripRef.current
+        if (current?.id) {
+          const latest = await supabase.from('trips').select('*').eq('id', current.id).maybeSingle()
+          if (latest.error) throw latest.error
+          if (latest.data && CANCEL_NOTICES[latest.data.status]) return latest.data
+          if (reconcileActiveTrip(current, latest.data).action === 'clear') {
+            return latest.data || { id: current.id, status: 'expired' }
+          }
+        }
         const { data, error } = await supabase.from('trips').select('*')
           .eq('driver_id', driverId).in('status', ACTIVE_STATUSES)
           .order('accepted_at', { ascending: false }).limit(8)
         if (error) throw error
-        return (data || []).find((trip) => isDueNow(trip)) || null
+        return (data || []).find((trip) => isDueNow(trip) || readBackupQueue(trip)?.confirmState === 'enroute') || null
       },
       onData: (row) => {
         offerRevision.current += 1
-        setActiveTrip(row)
+        if (!clearCanceledTrip(row)) setActiveTrip(row)
         if (row) setOffer((prev) => (prev?.id === row.id ? null : prev))
         setActiveChecked(true)
       },
       onError: () => {},
     })
+    refreshActiveRef.current = () => { void reader.refresh(true) }
     void reader.refresh()
-    const timer = setInterval(() => void reader.refresh(), 8000)
+    const timer = setInterval(() => {
+      const current = activeTripRef.current
+      if (current?.id && ACTIVE_STATUSES.includes(current.status)) void sendTripHeartbeat(supabase, current.id)
+      void reader.refresh()
+    }, 8000)
     const offResume = onTrackingResume(() => void reader.refresh(true))
     return () => { reader.stop(); offResume(); clearInterval(timer) }
-  }, [driverId])
+  }, [driverId, clearCanceledTrip])
 
   useEffect(() => {
     if (!approved) return undefined
     return subscribeTrips((payload) => {
       const row = payload?.new || payload?.record
-      if (!row) return
+      if (!row) {
+        refreshActiveRef.current()
+        return
+      }
       offerRevision.current += 1
       if (isStaleLiveOffer(row)) {
         setOffer((current) => (current?.id === row.id ? null : current))
@@ -474,14 +543,14 @@ function DriverShell({ driverId }) {
         }
       }
       if (row.status === 'accepted' && row.driver_id === driverId) {
-        if (isDueNow(row)) {
+        if (isDueNow(row) || readBackupQueue(row)?.confirmState === 'enroute') {
           setActiveTrip(row)
           setOffer((prev) => (prev?.id === row.id ? null : prev))
         } else {
           loadScheduled()
         }
       }
-      if (ACTIVE_STATUSES.includes(row.status) && row.driver_id === driverId && isDueNow(row)) {
+      if (ACTIVE_STATUSES.includes(row.status) && row.driver_id === driverId && (isDueNow(row) || readBackupQueue(row)?.confirmState === 'enroute')) {
         setActiveTrip(row)
       }
       if (row.status === 'completed' && row.driver_id === driverId) {
@@ -498,11 +567,11 @@ function DriverShell({ driverId }) {
           body: cancelMessage,
         })
       }
-      if ((row.status === 'canceled' || row.status === 'cancelled_wait') && activeTrip?.id === row.id) {
-        setActiveTrip(null)
+      if (CANCEL_NOTICES[row.status] && activeTripRef.current?.id === row.id) {
+        clearCanceledTrip(row)
       }
     })
-  }, [approved, online, offer?.id, activeTrip?.id, driverId, loadEarnings, loadScheduled])
+  }, [approved, online, offer?.id, activeTrip?.id, driverId, loadEarnings, loadScheduled, clearCanceledTrip])
 
   async function acceptOffer() {
     if (!approved) return
@@ -547,7 +616,8 @@ function DriverShell({ driverId }) {
     if (!tripId || acceptingScheduledId) return
     setAcceptingScheduledId(tripId)
     try {
-      const accepted = await acceptScheduledTrip(tripId)
+      const row = scheduledOpen.find((ride) => ride.id === tripId)
+      const accepted = await acceptScheduledTrip(tripId, { backup: Boolean(readBackupQueue(row)) })
       pushToast({
         kind: 'driver_accepted',
         title: 'Scheduled ride accepted',
@@ -580,7 +650,12 @@ function DriverShell({ driverId }) {
     }
   }
 
-  const futureMine = scheduledMine.filter((trip) => !isDueNow(trip))
+  const futureMine = scheduledMine.filter((trip) => {
+    const queue = readBackupQueue(trip)
+    const mine = queue && (queue.primaryDriverId === driverId || queue.backupDriverId === driverId)
+    if (mine && queue.confirmState !== 'enroute') return true
+    return !isDueNow(trip)
+  })
   async function setShift(next) {
     if (!driverId || shiftBusy) return
     const change = next ? startShift() : stopShift({ trip: activeTrip })
@@ -621,19 +696,86 @@ function DriverShell({ driverId }) {
     }
   }
 
+  async function releaseScheduled(tripId, role) {
+    if (!tripId) return
+    try {
+      await postBackupQueue(role === 'backup' ? 'release' : 'cancel', tripId)
+      pushToast({
+        kind: 'system',
+        title: role === 'backup' ? 'Backup seat released' : 'Trip released',
+        body: role === 'backup'
+          ? 'The backup seat is open again.'
+          : 'The backup driver is up if one was in line.',
+      })
+      await loadScheduled()
+    } catch (err) {
+      pushToast({
+        kind: 'system',
+        title: 'Could not release',
+        body: err.message || 'Try again.',
+      })
+    }
+  }
+
+  async function confirmScheduled(tripId) {
+    if (!tripId) return
+    try {
+      await postBackupQueue('confirm', tripId)
+      pushToast({
+        kind: 'driver_accepted',
+        title: 'Trip confirmed',
+        body: 'A countdown will tell you when to leave. Navigation starts on its own.',
+      })
+      await loadScheduled()
+    } catch (err) {
+      pushToast({
+        kind: 'system',
+        title: 'Could not confirm',
+        body: err.message || 'Try again.',
+      })
+    }
+  }
+
+  const departScheduled = useCallback(async (tripId) => {
+    if (!tripId || !supabase) return
+    try {
+      await postBackupQueue('navigate', tripId)
+      const { data } = await supabase.from('trips').select('*').eq('id', tripId).maybeSingle()
+      if (data && data.driver_id === driverId && isLiveTrip(data.status)) setActiveTrip(data)
+      pushToast({
+        kind: 'driver_accepted',
+        title: 'Leave now',
+        body: leaveNowStartedLine(),
+      })
+      await loadScheduled()
+    } catch (err) {
+      pushToast({
+        kind: 'system',
+        title: 'Could not start navigation',
+        body: err.message || 'Try again.',
+      })
+    }
+  }, [driverId, loadScheduled])
+
   const scheduledLists = (withEmpty) => (
     <>
+      <ScheduledRidesExplainer role="driver" />
       {online && (
       <ScheduledRideQueue
         rides={scheduledOpen}
         acceptingId={acceptingScheduledId}
         onAccept={acceptScheduled}
+        viewerId={driverId}
         emptyHint={withEmpty ? 'No scheduled rides waiting. Weekend and party airport or campus pickups show up here after a rider confirms a time.' : undefined}
       />
       )}
       <ScheduledRideQueue
         rides={futureMine}
         title="Your upcoming"
+        viewerId={driverId}
+        onConfirm={confirmScheduled}
+        onDepart={departScheduled}
+        onRelease={releaseScheduled}
         emptyHint={withEmpty ? 'Accepted pickups more than 45 minutes out stay in this list.' : undefined}
       />
     </>
@@ -672,44 +814,23 @@ function DriverShell({ driverId }) {
   }
 
   async function markArrived() {
-    if (!activeTrip?.id || !supabase || advancing) return
-    setAdvancing(true)
-    setAdvanceError(null)
-    try {
-      let next = null
-      try {
-        const res = await tripWaitAction('arrive', activeTrip.id)
-        next = res?.trip || null
-      } catch (err) {
-        if (!err.network && !err.unavailable) {
-          setAdvanceError(err.message || 'Could not mark arrived')
-          return
-        }
-      }
-      if (next?.status === 'arrived') {
-        setActiveTrip((prev) => (prev && prev.id === activeTrip.id ? { ...prev, ...next } : prev))
-        return
-      }
-      const { data: saved, error } = await supabase
-        .from('trips')
-        .update({ status: 'arrived' })
-        .eq('id', activeTrip.id)
-        .eq('driver_id', driverId)
-        .select('id, status, driver_id, arrived_at')
-        .maybeSingle()
-      if (error || saved?.status !== 'arrived') {
-        setAdvanceError(error?.message || 'Could not mark arrived')
-        return
-      }
-      await writeTripEvent(activeTrip.id, 'arrived', {
-        driver_id: driverId,
-        from: activeTrip.status,
-        source: 'driver_home',
-      })
-      setActiveTrip((prev) => (prev && prev.id === activeTrip.id ? { ...prev, ...saved } : prev))
-    } finally {
-      setAdvancing(false)
-    }
+    return advanceTrip('arrived')
+  }
+
+  function onDriverCanceled() {
+    stopTripLocation.current?.()
+    setActiveTrip(null)
+    setChatTrip(null)
+    setOffer(null)
+    pushToast({ kind: 'system', title: DRIVER_CANCEL_SUCCESS })
+  }
+
+  function onDriverEnded() {
+    stopTripLocation.current?.()
+    setActiveTrip(null)
+    setChatTrip(null)
+    setOffer(null)
+    pushToast({ kind: 'system', title: DRIVER_END_SUCCESS })
   }
 
   async function advanceTrip(nextStatus) {
@@ -717,45 +838,9 @@ function DriverShell({ driverId }) {
     setAdvancing(true)
     try {
       setAdvanceError(null)
-      const patch = { status: nextStatus }
-      if (nextStatus === 'completed') {
-        try {
-          await settleTrip({ tripId: activeTrip.id, action: 'complete' })
-        } catch (err) {
-          setPayFailure(err.failure || err.payload?.failure || {
-            message: err.message || 'Payment required before this trip can complete',
-            alternatives: ['retry', 'add_card', 'use_credits'],
-          })
-          setAdvanceError(err.message || 'Payment required before this trip can complete')
-          return
-        }
-        patch.completed_at = new Date().toISOString()
-      }
-      const { data: saved, error } = await supabase
-        .from('trips')
-        .update(patch)
-        .eq('id', activeTrip.id)
-        .select('id, status, driver_id, completed_at')
-        .maybeSingle()
-      if (error) {
-        console.error(error)
-        setAdvanceError(error.message || 'Could not update this trip')
-        return
-      }
-      if (!saved || saved.status !== nextStatus) {
-        setAdvanceError(
-          nextStatus === 'completed'
-            ? 'This ride is not completed yet, so rating stays closed.'
-            : 'Trip status did not update.',
-        )
-        return
-      }
-      await writeTripEvent(activeTrip.id, nextStatus, {
-        driver_id: driverId,
-        from: activeTrip.status,
-        source: 'driver_home',
-        ...(patch.completed_at ? { completed_at: patch.completed_at } : {}),
-      })
+      const op = { arriving: 'arriving', arrived: 'arrive', in_progress: 'start', completed: 'complete', cancelled_wait: 'cancel' }[nextStatus]
+      const result = await driverTripAction(supabase, activeTrip.id, op)
+      const saved = result.trip
       if (nextStatus === 'completed') {
         if (!saved.driver_id) {
           setAdvanceError('This trip has no driver yet, so it cannot be rated.')
@@ -774,10 +859,38 @@ function DriverShell({ driverId }) {
       } else {
         setActiveTrip({ ...activeTrip, ...saved })
       }
+    } catch (err) {
+      if (nextStatus === 'completed' && err.status === 402) {
+        setPayFailure(err.failure || err.payload?.failure || {
+          message: err.message || 'Payment required before this trip can complete',
+          alternatives: ['retry', 'add_card', 'use_credits'],
+        })
+      }
+      setAdvanceError(err.status === 402
+        ? 'Payment is still required before this trip can complete.'
+        : err.message || 'Could not update this trip')
     } finally {
       setAdvancing(false)
     }
   }
+
+  const driverFix = selfPos ? { lat: selfPos[0], lng: selfPos[1] } : null
+  const snappedRoad = storedRoadSuffix(activeTrip, driverFix)
+  const legNoun = legNounForStatus(activeTrip?.status)
+  const legDest = legNoun === 'drop-off'
+    ? (activeTrip?.dropoff_lat != null && activeTrip?.dropoff_lng != null
+      ? [Number(activeTrip.dropoff_lat), Number(activeTrip.dropoff_lng)]
+      : null)
+    : legNoun === 'pickup'
+      ? (activeTrip?.pickup_lat != null && activeTrip?.pickup_lng != null
+        ? [Number(activeTrip.pickup_lat), Number(activeTrip.pickup_lng)]
+        : null)
+      : null
+  const drivingLeg = useDrivingLeg(
+    selfPos,
+    legDest,
+    Boolean(activeTrip && selfPos && legDest && !snappedRoad),
+  )
 
   if (application === undefined || !activeChecked) {
     return (
@@ -812,9 +925,29 @@ function DriverShell({ driverId }) {
   const showIdle = !shownOffer && !activeTrip
   const headingToPickup = Boolean(activeTrip) && ['accepted', 'arriving', 'arrived'].includes(activeTrip.status)
   const scheduledNotDone = Boolean(activeTrip?.pickup_at) && activeTrip.status !== 'completed'
-  const driverFix = selfPos ? { lat: selfPos[0], lng: selfPos[1] } : null
-  const activeEta = activeTrip
-    ? etaHoldLine(activeTrip.status, etaLineFor(activeTrip.status, driverFix, activeTrip))
+  const followedEta = activeTrip ? followEtaLine(activeTrip.status, driverFix, activeTrip) : null
+  const roadEta = activeTrip && !snappedRoad && legNoun
+    ? directionsEtaLine({ meters: drivingLeg?.meters, seconds: drivingLeg?.seconds, noun: legNoun })
+    : null
+  const activeEta = activeTrip ? etaHoldLine(activeTrip.status, roadEta || followedEta) : null
+  const followedRoute = activeTrip ? followRouteLine(activeTrip, driverFix) : []
+  const activeRoute = activeTrip && !snappedRoad && drivingLeg?.path?.length > 1 ? drivingLeg.path : followedRoute
+  const headingToDropoff = Boolean(activeTrip) && ['in_progress', 'completed'].includes(activeTrip.status)
+  const navStop = !activeTrip
+    ? null
+    : headingToDropoff
+      ? {
+        latitude: activeTrip.dropoff_lat,
+        longitude: activeTrip.dropoff_lng,
+        label: activeTrip.dropoff_label || 'Drop-off',
+      }
+      : {
+        latitude: activeTrip.pickup_lat,
+        longitude: activeTrip.pickup_lng,
+        label: activeTrip.pickup_label || 'Pickup',
+      }
+  const navHref = navStop && activeTrip && ACTIVE_STATUSES.includes(activeTrip.status)
+    ? preferredNavigationUrl(navStop, typeof navigator !== 'undefined' ? navigator.userAgent : '')
     : null
   const activeStep = activeTrip ? DRIVER_TRACK_STEPS.findIndex((step) => step.id === activeTrip.status) : -1
 
@@ -839,10 +972,17 @@ function DriverShell({ driverId }) {
         heatWindow={heatWindow}
         onHeatMeta={setHeatMeta}
         mapTypeId={mapTypeId}
-        center={selfPos || (!scheduledNotDone && activeTrip?.pickup_lat != null ? [activeTrip.pickup_lat, activeTrip.pickup_lng] : CLEMSON)}
+        center={
+          activeTrip
+            ? (activeTrip.pickup_lat != null
+              ? [Number(activeTrip.pickup_lat), Number(activeTrip.pickup_lng)]
+              : CLEMSON)
+            : (selfPos || CLEMSON)
+        }
         zoom={13}
         marker={selfPos || CLEMSON}
-        animateDriver={headingToPickup && Boolean(selfPos)}
+        animateDriver={Boolean(selfPos)}
+        driverHeading={selfHeading}
         gameDayLabel={game.notice.live ? game.notice.headline : null}
         pickupPosition={
           scheduledNotDone
@@ -851,6 +991,13 @@ function DriverShell({ driverId }) {
               ? [Number(activeTrip.pickup_lat), Number(activeTrip.pickup_lng)]
               : activeTrip ? CLEMSON : null
         }
+        dropoffPosition={
+          activeTrip?.dropoff_lat != null && activeTrip?.dropoff_lng != null
+            ? [Number(activeTrip.dropoff_lat), Number(activeTrip.dropoff_lng)]
+            : null
+        }
+        route={activeRoute.length > 1 ? activeRoute : null}
+        fitRoute={Boolean(activeTrip && activeRoute.length > 1)}
         selfPosition={selfPos}
         driverPosition={selfPos}
       />
@@ -942,12 +1089,22 @@ function DriverShell({ driverId }) {
         >
           <div className="sheet-handle" />
           {scheduledLists(true)}
+          {gameDay.ready ? (
+            <div style={{ marginBottom: 12 }}>
+              {gameDay.model.phase !== 'off' ? (
+                <GameDayBoard model={gameDay.model} audience="driver" onTogglePrep={gameDay.togglePrep} />
+              ) : (
+                <GameDaySurgeNote model={gameDay.model} audience="driver" />
+              )}
+            </div>
+          ) : null}
           <DriverShiftControl
             onShift={online}
             busy={shiftBusy}
             onStart={() => setShift(true)}
             onStop={() => setShift(false)}
           />
+          <DriverProfilePhoto />
           {online && (
           <p style={{ fontSize: 13, color: 'var(--ink-secondary)', marginBottom: 12 }}>
             Carpool offers pay more than a solo trip — take those first.
@@ -963,7 +1120,7 @@ function DriverShell({ driverId }) {
             <div style={{ fontWeight: 800, color: 'var(--purple)' }}>Carpool bonus</div>
             <p style={{ fontSize: 12, color: 'var(--ink-secondary)', margin: '4px 0 0', lineHeight: 1.45 }}>
               Multi-rider hops pay you 80% of the pool, which is built to beat a solo fare plus a
-              <strong> driver_carpool_bonus</strong> ($2 per extra rider and $0.40 per mile). Riders see their split before anyone is charged.
+              <strong> carpool bonus</strong> ($2 per extra rider and $0.40 per mile). Riders see their split before anyone is charged.
             </p>
             <button type="button" className="pressable" onClick={() => navigate('carpool', { drive: '1' })}
               style={{ marginTop: 8, fontWeight: 800, color: '#F56600' }}>
@@ -1081,8 +1238,16 @@ function DriverShell({ driverId }) {
                     <button type="button" className="pressable" onClick={() => navigate('lost-found', { trip: t.id })} style={{ fontWeight: 700, color: 'var(--orange)', fontSize: 12 }}>
                       Lost item
                     </button>
+                    <ReportLostItemButton
+                      trip={{ id: t.id, status: 'completed', completed_at: t.completed_at, driver_id: driverId }}
+                      userId={driverId}
+                      onOpened={() => setChatTrip({ id: t.id, status: 'completed', completed_at: t.completed_at, driver_id: driverId })}
+                    />
                     <strong style={{ color: 'var(--ink)' }}>
                       {centsToDollars(driverTakeCents(t))}
+                      {driverBoostShareCents(readBoostCents(t)) > 0 ? (
+                        <span style={{ color: '#F56600' }}> {formatBoostBadge(driverBoostShareCents(readBoostCents(t)))}</span>
+                      ) : null}
                       {extraByTrip[t.id] ? (
                         <span style={{ color: '#F56600' }}> +{centsToDollars(extraByTrip[t.id])}</span>
                       ) : null}
@@ -1110,12 +1275,22 @@ function DriverShell({ driverId }) {
         >
           <div className="sheet-handle" />
           <div style={{ maxHeight: 168, overflowY: 'auto', marginBottom: 8 }}>{scheduledLists(false)}</div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }}>
             <div style={{ fontSize: 32, fontWeight: 700, letterSpacing: -0.5 }}>
-              {centsToDollars(driverTakeCents(offer))}
+              {centsToDollars(driverTakeCents(offer) + driverBoostShareCents(readBoostCents(offer)))}
             </div>
-            <div style={{ fontSize: 13, color: 'var(--ink-secondary)' }}>
+            <div style={{ fontSize: 13, color: 'var(--ink-secondary)', textAlign: 'right' }}>
               {offer.metadata?.carpool ? 'You net · carpool' : 'Live offer'}
+              {readBoostCents(offer) > 0 ? (
+                <div style={{ marginTop: 6 }}>
+                  <span style={{ display: 'inline-block', background: '#F56600', color: '#fff', fontWeight: 800, fontSize: 12, borderRadius: 999, padding: '4px 10px' }}>
+                    {formatBoostBadge(driverBoostShareCents(readBoostCents(offer)))}
+                  </span>
+                  <div style={{ marginTop: 8, fontSize: 13, lineHeight: 1.4 }}>
+                    {driverBoostOfferLine(driverBoostShareCents(readBoostCents(offer)))}
+                  </div>
+                </div>
+              ) : null}
             </div>
           </div>
           {offer.metadata?.scheduled_pickup_at && <p>Scheduled pickup: {formatPickupAt(offer.metadata.scheduled_pickup_at)}</p>}
@@ -1163,7 +1338,7 @@ function DriverShell({ driverId }) {
         </div>
       )}
 
-      {activeTrip && (
+      {activeTrip && ACTIVE_STATUSES.includes(activeTrip.status) && (
         <div
           className="sheet glass-panel--elevated"
           style={{
@@ -1192,12 +1367,12 @@ function DriverShell({ driverId }) {
               : 'You are off the clock. This trip is still active.'}
           </p>
           <div style={{ marginTop: 10 }}>
-            {/* TODO: road tiles and a traffic ETA need a billed Maps key. This card uses coordinates already on the trip. */}
+            {/* Road line prefers the stored polyline. A short leg can use one Directions request. */}
             {locationError && <div role="status">{locationError} <button type="button" onClick={() => setLocationAttempt((n) => n + 1)}>Retry location</button></div>}
             <LivePhase
               title={statusHeadline(activeTrip.status)}
               body={driverStatusDetail(activeTrip.status)}
-              eta={locationError ? null : activeEta}
+              eta={activeEta}
               steps={DRIVER_TRACK_STEPS}
               activeIndex={activeStep}
             />
@@ -1220,12 +1395,78 @@ function DriverShell({ driverId }) {
               </div>
             </div>
           </div>
+          {readBackupQueue(activeTrip)?.confirmState === 'enroute' && navStop ? (
+            <div style={{ marginTop: 12 }}>
+              <p style={{ fontSize: 13, lineHeight: 1.45, margin: '0 0 8px' }}>{MAPS_HANDOFF_HELPER}</p>
+              <div style={{ display: 'flex', gap: 8 }}>
+                {[
+                  ['apple', 'Apple Maps', navigationLinks(navStop).apple],
+                  ['google', 'Google Maps', navigationLinks(navStop).google],
+                ].map(([id, label, href]) => (
+                  <a
+                    key={id}
+                    href={href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="pressable"
+                    style={{
+                      flex: 1,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      minHeight: 48,
+                      padding: '12px 16px',
+                      borderRadius: 14,
+                      background: id === 'apple' ? '#522D80' : '#F56600',
+                      color: '#fff',
+                      fontWeight: 800,
+                      textDecoration: 'none',
+                    }}
+                  >
+                    {label}
+                  </a>
+                ))}
+              </div>
+            </div>
+          ) : navHref ? (
+            <a
+              href={navHref}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="pressable"
+              aria-label={headingToDropoff ? 'Navigate to drop-off' : 'Navigate to pickup'}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                minHeight: 48,
+                marginTop: 12,
+                padding: '12px 16px',
+                borderRadius: 14,
+                background: '#F56600',
+                color: '#fff',
+                fontWeight: 800,
+                textDecoration: 'none',
+              }}
+            >
+              Navigate
+            </a>
+          ) : null}
 
           {rideChatMode(activeTrip) !== 'closed' && activeTrip.rider_id && (
             <div style={{ marginTop: 16 }}>
-              <RideMessageButton onClick={() => setChatTrip(activeTrip)} />
+              <RideMessageButton tripId={activeTrip.id} userId={driverId} onClick={() => setChatTrip(activeTrip)} />
             </div>
           )}
+          {activeTrip.status === 'completed' && (
+            <ReportLostItemButton
+              trip={activeTrip}
+              userId={driverId}
+              onOpened={() => setChatTrip(activeTrip)}
+            />
+          )}
+          {['accepted', 'arriving'].includes(activeTrip.status) && !activeTrip.scheduled_for && !activeTrip.pickup_at && <DriverCancelSheet key={activeTrip.id} supabase={supabase} tripId={activeTrip.id} disabled={advancing} onCanceled={onDriverCanceled} />}
+          {ACTIVE_STATUSES.includes(activeTrip.status) && <DriverEndTripSheet key={`end-${activeTrip.id}`} supabase={supabase} tripId={activeTrip.id} disabled={advancing} onEnded={onDriverEnded} />}
           {activeTrip.status === 'accepted' && (
             <PurpleAcceptButton onClick={() => advanceTrip('arriving')} disabled={advancing}>
               {advancing ? 'Updating…' : statusActionLabel('accepted')}
@@ -1245,7 +1486,7 @@ function DriverShell({ driverId }) {
               error={wait.error}
               charge={wait.charge}
               onStart={activeTrip.status === 'arrived' ? () => advanceTrip('in_progress') : undefined}
-              onCancel={() => wait.act('cancel')}
+              onCancel={() => advanceTrip('cancelled_wait')}
             />
           )}
           {activeTrip.status === 'in_progress' && (

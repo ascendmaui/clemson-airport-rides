@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
+import { useGlassMotion } from './lib/glassMotion'
 import { bindKeyboardInset, scrollFocusedFieldIntoView } from './lib/keyboardInset'
-import { getHashRoute, redirectShareHashToPath } from './lib/navigation'
+import { getHashRoute, navigate, redirectShareHashToPath } from './lib/navigation'
 import { capturePromoFromLocation } from './lib/riderPromo'
 import {
   hasClemsonMiamiLink,
@@ -15,13 +16,29 @@ import {
   rememberedAmbassador,
 } from './lib/friendRides'
 import { RequireAuth } from './components/RequireAuth'
+import { AccessibleAlert, AccessibleErrorBoundary } from './components/AccessibleAlert'
 import { Marketing } from './screens/Marketing'
+import { WhyClemsonRides } from './screens/WhyClemsonRides'
+import { DriveWithUs } from './screens/DriveWithUs'
+import { PartnerJoin, PartnerDashboard, DriverRentals } from './screens/RentalPartners'
+import {
+  FaqPage,
+  GetTheAppPage,
+  HowItWorks,
+  PromosPage,
+  RideTypesPage,
+  SafetyPage,
+  SupportPage,
+  TigerPassPage,
+} from './screens/MarketingInfo'
 import { RiderHome } from './screens/RiderHome'
 import { ConfirmPickup } from './screens/ConfirmPickup'
 import { RideTiers } from './screens/RideTiers'
 import { ScheduleAirport } from './screens/ScheduleAirport'
 import { DriverHome } from './screens/DriverHome'
 import { DriverEarnings } from './screens/DriverEarnings'
+import { DriverW9 } from './screens/DriverW9'
+import { DriverPayouts } from './screens/DriverPayouts'
 import { FriendsScreen, AccountScreen } from './screens/FriendsAccount'
 import { SignInScreen, SignUpScreen } from './screens/AuthScreens'
 import { DriverOnboarding } from './screens/DriverOnboarding'
@@ -31,6 +48,7 @@ import { AdminDesk } from './screens/AdminDesk'
 import { PickDriver } from './screens/PickDriver'
 import { Requested } from './screens/Requested'
 import { LegalPrivacy, LegalTerms } from './screens/LegalPages'
+import { ServiceArea } from './screens/ServiceArea'
 import { LiveShare } from './screens/LiveShare'
 import { ProfileView } from './screens/ProfileView'
 import { RateRide } from './screens/RateRide'
@@ -39,13 +57,21 @@ import { ReceiptScreen } from './screens/ReceiptScreen'
 import { FriendRideScreen } from './screens/FriendRide'
 import { CarpoolScreen } from './screens/CarpoolScreen'
 import { CarpoolHub } from './screens/CarpoolHub'
+import { PartyNightScreen } from './screens/PartyNight'
 import { AmbassadorScreen } from './screens/AmbassadorScreen'
+import { AffiliatesScreen, AffiliateLanding } from './screens/Affiliates'
+import { AffiliateAdmin } from './screens/AffiliateAdmin'
+import { AffiliateAttributionSync } from './components/AffiliateAttributionSync'
 import { ToastProvider, ToastStack } from './lib/toasts'
 import { RideToastWatcher } from './components/RideToastWatcher'
+import { RiderMatchPopup } from './components/RiderMatchPopup'
+import { WeeklyCouponNotice } from './components/WeeklyCouponNotice'
 import { DriverOfferWatcher } from './components/DriverOfferWatcher'
 import { DriverBillingEntry } from './components/DriverBillingEntry'
 import { IncentivesAdmin } from './screens/IncentivesAdmin'
 import { LostFoundWatcher } from './components/LostFoundWatcher'
+import { TripMessageBanner } from './components/TripMessageBanner'
+import { RiderPickupStream } from './components/RiderPickupStream'
 import { LostFound } from './screens/LostFound'
 import { RidesHistory } from './screens/RidesHistory'
 
@@ -71,8 +97,26 @@ function AmbassadorAttributionSync() {
   return null
 }
 
-const PROTECTED = new Set(['driver', 'driver-onboarding', 'account', 'driver-signup', 'admin', 'admin-dashboard', 'incentives', 'lost-found', 'history', 'earnings', 'sign-agreement'])
-const SITE_ROUTES = new Set(['landing', '', 'privacy', 'terms'])
+const PROTECTED = new Set(['drivers', 'rentals', 'driver', 'driver-onboarding', 'account', 'driver-signup', 'admin', 'admin-dashboard', 'incentives', 'lost-found', 'history', 'earnings', 'sign-agreement'])
+const SITE_ROUTES = new Set([
+  'landing',
+  '',
+  'privacy',
+  'terms',
+  'service-area',
+  'why-clemson-rides',
+  'drive',
+  'how-it-works',
+  'ride-types',
+  'tiger-pass',
+  'safety',
+  'promos',
+  'faq',
+  'support',
+  'get-the-app',
+  'affiliate',
+  'affiliates',
+])
 
 function Screen({ path, params }) {
   switch (path) {
@@ -87,6 +131,28 @@ function Screen({ path, params }) {
       return <LegalPrivacy />
     case 'terms':
       return <LegalTerms />
+    case 'service-area':
+      return <ServiceArea />
+    case 'why-clemson-rides':
+      return <WhyClemsonRides />
+    case 'drive':
+      return <DriveWithUs />
+    case 'how-it-works':
+      return <HowItWorks />
+    case 'ride-types':
+      return <RideTypesPage />
+    case 'tiger-pass':
+      return <TigerPassPage />
+    case 'safety':
+      return <SafetyPage />
+    case 'promos':
+      return <PromosPage />
+    case 'faq':
+      return <FaqPage />
+    case 'support':
+      return <SupportPage />
+    case 'get-the-app':
+      return <GetTheAppPage />
     case 'share':
     case 'live':
       return <LiveShare token={params.token || ''} />
@@ -108,6 +174,7 @@ function Screen({ path, params }) {
           pickup={params.pickup || ''}
           pickupLat={params.pickupLat || ''}
           pickupLng={params.pickupLng || ''}
+          tier={params.tier || ''}
         />
       )
     case 'tiers':
@@ -120,6 +187,8 @@ function Screen({ path, params }) {
           destLat={params.destLat || ''}
           destLng={params.destLng || ''}
           billing={params.billing || ''}
+          tier={params.tier || ''}
+          passengers={params.passengers || ''}
         />
       )
     case 'pick-driver':
@@ -127,6 +196,7 @@ function Screen({ path, params }) {
         <PickDriver
           dest={params.dest || 'GSP Airport'}
           tier={params.tier || 'standard'}
+          passengers={params.passengers || ''}
           listCents={params.listCents || ''}
           pickup={params.pickup || ''}
           pickupLat={params.pickupLat || ''}
@@ -143,13 +213,25 @@ function Screen({ path, params }) {
     case 'driver':
       return (
         <RequireAuth>
-          <DriverHome />
+          <DriverHome openChatTripId={params.chat || ''} />
         </RequireAuth>
       )
     case 'earnings':
       return (
         <RequireAuth>
           <DriverEarnings />
+        </RequireAuth>
+      )
+    case 'driver-w9':
+      return (
+        <RequireAuth>
+          <DriverW9 />
+        </RequireAuth>
+      )
+    case 'driver-payouts':
+      return (
+        <RequireAuth>
+          <DriverPayouts />
         </RequireAuth>
       )
     case 'driver-onboarding':
@@ -161,13 +243,27 @@ function Screen({ path, params }) {
     case 'driver-signup':
       return (
         <RequireAuth>
-          <DriverSignup />
+          <DriverSignup needsVehicle={params.needs_vehicle === '1'} />
         </RequireAuth>
       )
     case 'sign-agreement':
       return (
         <RequireAuth>
           <SignAgreement token={params.token || ''} />
+        </RequireAuth>
+      )
+    case 'partners':
+      if (params.sub === 'join') return <PartnerJoin />
+      return (
+        <RequireAuth>
+          <PartnerDashboard />
+        </RequireAuth>
+      )
+    case 'drivers':
+    case 'rentals':
+      return (
+        <RequireAuth>
+          <DriverRentals />
         </RequireAuth>
       )
     case 'admin':
@@ -202,9 +298,22 @@ function Screen({ path, params }) {
       if (params.drive === '1') return <CarpoolScreen token="" />
       if (params.token && params.hub !== '1') return <CarpoolScreen token={params.token} />
       return <CarpoolHub />
+    case 'party-night':
+      return <PartyNightScreen token={params.token || ''} />
     case 'ambassador':
     case 'a':
       return <AmbassadorScreen code={params.code || ''} />
+    case 'affiliate':
+    case 'affiliates':
+      return <AffiliatesScreen />
+    case 'r':
+      return <AffiliateLanding />
+    case 'affiliate-admin':
+      return (
+        <RequireAuth>
+          <AffiliateAdmin />
+        </RequireAuth>
+      )
     case 'account':
       return (
         <RequireAuth>
@@ -224,6 +333,29 @@ function Screen({ path, params }) {
     default:
       return <Marketing />
   }
+}
+
+function RouteErrorFallback({ path, params, reset }) {
+  const requested = path === 'requested'
+  return (
+    <div className="accessible-error-boundary">
+      <AccessibleAlert
+        title={requested ? 'Unable to display your trip' : 'Unable to display this page'}
+        message={requested
+          ? 'Your ride request may already be placed. Check your trip status before requesting another ride.'
+          : 'Something went wrong while loading this page. Please try again.'}
+        onRetry={reset}
+        onDismiss={() => navigate('home')}
+        dismissLabel="Back home"
+      >
+        {requested && params.trip && (
+          <a className="pressable" href={`#/requested?trip=${encodeURIComponent(params.trip)}`} onClick={reset}>
+            Reopen your trip
+          </a>
+        )}
+      </AccessibleAlert>
+    </div>
+  )
 }
 
 export default function App() {
@@ -271,27 +403,39 @@ export default function App() {
 
   const overflow = path === 'driver' ? 'hidden' : 'auto'
   const site = SITE_ROUTES.has(path)
+  const routeKey = `${path}:${params.token || params.id || params.trip || params.sub || ''}`
+  useGlassMotion(routeKey)
 
   return (
     <ToastProvider>
       <div className={site ? 'desktop-frame desktop-frame--site' : 'desktop-frame'}>
         <div className={site ? 'app-shell app-shell--site' : 'app-shell'} style={{ position: 'relative', height: '100%' }}>
-          <AmbassadorAttributionSync />
-          <RideToastWatcher />
-          <DriverOfferWatcher />
-          <LostFoundWatcher />
+          <AccessibleErrorBoundary fallback={() => null}><AmbassadorAttributionSync /></AccessibleErrorBoundary>
+          <AccessibleErrorBoundary fallback={() => null}><AffiliateAttributionSync path={path} /></AccessibleErrorBoundary>
+          <AccessibleErrorBoundary fallback={() => null}><RideToastWatcher /></AccessibleErrorBoundary>
+          <AccessibleErrorBoundary fallback={() => null}><RiderMatchPopup /></AccessibleErrorBoundary>
+          <AccessibleErrorBoundary fallback={() => null}><WeeklyCouponNotice /></AccessibleErrorBoundary>
+          <AccessibleErrorBoundary fallback={() => null}><DriverOfferWatcher /></AccessibleErrorBoundary>
+          <AccessibleErrorBoundary fallback={() => null}><LostFoundWatcher /></AccessibleErrorBoundary>
+          <AccessibleErrorBoundary fallback={() => null}><TripMessageBanner /></AccessibleErrorBoundary>
+          <AccessibleErrorBoundary fallback={() => null}><RiderPickupStream /></AccessibleErrorBoundary>
           <ToastStack />
           <div
-            key={`${path}:${params.token || params.id || params.trip || ''}`}
+            key={routeKey}
             className={site ? 'route-fade route-site' : 'route-fade'}
             style={site ? undefined : { position: 'absolute', inset: 0, width: '100%', height: '100%', overflow }}
             data-protected={PROTECTED.has(path) ? '1' : '0'}
             data-guest-browse={PROTECTED.has(path) ? '0' : '1'}
             data-route={path}
           >
-            <Screen path={path} params={params} />
+            <AccessibleErrorBoundary
+              key={routeKey}
+              fallback={({ reset }) => <RouteErrorFallback path={path} params={params} reset={reset} />}
+            >
+              <Screen path={path} params={params} />
+            </AccessibleErrorBoundary>
           </div>
-          {path === 'driver' && <DriverBillingEntry />}
+          {path === 'driver' && <AccessibleErrorBoundary fallback={() => null}><DriverBillingEntry /></AccessibleErrorBoundary>}
         </div>
       </div>
     </ToastProvider>
