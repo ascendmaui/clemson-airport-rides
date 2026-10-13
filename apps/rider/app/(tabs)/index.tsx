@@ -4,6 +4,7 @@ import * as Location from 'expo-location'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   Animated,
+  Platform,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -28,6 +29,7 @@ import { listScheduledTrips, type ScheduledRow } from '@/lib/scheduleApi'
 import { playMatchChime, tapHaptic } from '@/lib/feedback'
 import { oneParam } from '@/lib/oneParam'
 import { displayFirstName } from 'rides-native/authErrors'
+import { nativeGlassAvailable } from 'rides-native/glass'
 import { campusOverlays } from 'rides-native/riderShell.js'
 import { loadGameDay } from 'rides-native/driverDesk'
 import { gameDayNotice, type GameDayNotice } from 'rides-native/gameDayNotice.js'
@@ -714,6 +716,7 @@ export function RiderHome() {
 }
 
 export default function RidesRoute() {
+  if (Platform.OS === 'ios' && nativeGlassAvailable()) return <RiderHome />
   return null
 }
 

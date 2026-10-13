@@ -14,6 +14,7 @@ import { displayFirstName } from 'rides-native/authErrors'
 import { loadDriverPerks, loadVehicle, setLeaderboardOptOut, type Leaderboard, type VehicleRow } from 'rides-native/driverDesk'
 import { knowledgeQuizStatus, knowledgeQuizStatusLabel, loadKnowledgeQuiz } from 'rides-native/driverKnowledgeQuiz'
 import { loadRatingSummary } from 'rides-native/PartyScreens'
+import { AdminAccountRow } from 'rides-native/AdminAccountRow.jsx'
 
 function vehicleSubtitle(vehicle: VehicleRow | null): string {
   if (!vehicle) return 'Add the car riders will see'
@@ -148,6 +149,7 @@ export default function MenuScreen() {
           <RowGroup rows={resources} />
           <SectionLabel>Settings</SectionLabel>
           <RowGroup rows={account} />
+          <AdminAccountRow supabase={supabase} colors={colors} onPress={() => router.push('/admin')} />
           {user && onLeaderboard != null ? (
             <View style={[styles.toggleRow, { backgroundColor: colors.card }]}>
               <View style={styles.deleteCopy}>

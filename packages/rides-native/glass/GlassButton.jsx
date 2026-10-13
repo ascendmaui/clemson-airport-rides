@@ -3,12 +3,28 @@ import { Pressable, StyleSheet, Text } from 'react-native'
 import Animated, { useAnimatedStyle, useSharedValue, withSpring, withTiming } from 'react-native-reanimated'
 import { useReduceMotion } from '../shared/reduceMotion.js'
 import { type as typeScale } from '../shared/theme.js'
-import { GlassSurface } from './GlassSurface.jsx'
+import { GlassSurface, nativeGlassAvailable } from './GlassSurface.jsx'
 import { GLASS_PRESS, glassRecipe } from './tokens.js'
 
 const SPRING = Object.freeze({ damping: 16, stiffness: 260, mass: 0.7 })
 
 const LAYOUT_KEYS = ['width', 'height', 'minWidth', 'minHeight', 'maxWidth', 'maxHeight', 'flex', 'flexGrow', 'flexShrink', 'alignSelf']
+
+function mergedSurfaceStyle(variant, style) {
+  const parts = [styles.surface]
+  if (variant === 'chip' || variant === 'fab') parts.push(styles.inline)
+  if (style) parts.push(style)
+  const flat = { ...(StyleSheet.flatten(parts) || {}) }
+  if (flat.padding != null) {
+    delete flat.paddingVertical
+    delete flat.paddingHorizontal
+    delete flat.paddingTop
+    delete flat.paddingBottom
+    delete flat.paddingLeft
+    delete flat.paddingRight
+  }
+  return flat
+}
 
 function pressLayout(style, variant) {
   const flat = StyleSheet.flatten(style) || {}
@@ -22,7 +38,9 @@ function pressLayout(style, variant) {
 }
 
 /**
- * Pressable glass control. Scale and opacity run on the UI thread.
+ * Pressable glass control. Scale runs on the UI thread.
+ * The blur fallback also dips opacity. Native Liquid Glass never animates
+ * opacity, because opacity 0 leaves UIGlassEffect blank.
  * Reduced motion snaps the press state instead of springing it.
  */
 export function GlassButton({
@@ -35,6 +53,7 @@ export function GlassButton({
   scheme = 'light',
   accent,
   selected = false,
+  showStreak = true,
   style,
   accessibilityLabel,
   accessibilityRole = 'button',
@@ -50,10 +69,12 @@ export function GlassButton({
   useEffect(() => {
     disabledSv.value = disabled ? 1 : 0
   }, [disabled, disabledSv])
+  const nativeGlass = nativeGlassAvailable()
   const anim = useAnimatedStyle(() => {
     const down = pressed.value
     const off = disabledSv.value
     const scale = off ? 1 : 1 - down * (1 - GLASS_PRESS.scale)
+    if (nativeGlass) return { transform: [{ scale }] }
     const opacity = (off ? GLASS_PRESS.disabledOpacity : 1) * (1 - down * GLASS_PRESS.opacityDip)
     return { transform: [{ scale }], opacity }
   })
@@ -85,7 +106,7 @@ export function GlassButton({
       style={pressLayout(style, variant)}
     >
       <Animated.View style={anim}>
-        <GlassSurface app={app} scheme={scheme} variant={variant} accent={accent} selected={selected} style={[styles.surface, variant === 'chip' || variant === 'fab' ? styles.inline : null, style]}>
+        <GlassSurface app={app} scheme={scheme} variant={variant} accent={accent} selected={selected} showStreak={showStreak} style={mergedSurfaceStyle(variant, style)}>
           {content}
         </GlassSurface>
       </Animated.View>

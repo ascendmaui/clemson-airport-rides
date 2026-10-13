@@ -1,3 +1,4 @@
+import { inboxActionRequest } from '../../shared/adminInbox.js'
 import { supabase } from './supabase'
 
 async function authHeaders() {
@@ -71,6 +72,35 @@ export function requestApplicantInfo({ profileId, prompt }) {
   return adminRequest('info-request', { method: 'POST', body: { profileId, prompt } })
 }
 
-export function fetchAgentDrafts() {
-  return adminRequest('agent-drafts')
+export function fetchAdminInbox() {
+  return adminRequest('inbox')
+}
+
+export async function runAdminInboxAction(action, { reason } = {}) {
+  const request = inboxActionRequest(action, { reason })
+  if (request.error) {
+    const error = new Error(request.error)
+    error.status = 400
+    throw error
+  }
+  if (request.method === 'GET' && request.navigate) return { ok: true, navigate: request.navigate }
+  if (request.path.startsWith('/api/admin-drivers')) {
+    const headers = await authHeaders()
+    const res = await fetch(request.path, {
+      method: request.method,
+      headers,
+      body: request.body == null ? undefined : JSON.stringify(request.body),
+    })
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) {
+      const error = new Error(data.error || `HTTP ${res.status}`)
+      error.status = res.status
+      error.payload = data
+      throw error
+    }
+    return data
+  }
+  const params = new URL(request.path, 'http://localhost').searchParams
+  const actionName = params.get('action')
+  return adminRequest(actionName, { method: request.method, body: request.body })
 }

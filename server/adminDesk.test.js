@@ -17,7 +17,7 @@ const staff = await import('../tests/fixtures/admin-support/adminDeskStaffAccess
 const mail = await import('../tests/fixtures/admin-support/adminDeskApplicantMail.js')
 const { createFakeSb, hasFilter } = await import('../tests/fixtures/admin-support/adminDeskSb.js')
 
-const GET_ACTIONS = ['overview', 'notifications', 'people', 'trips', 'tickets', 'applicant-thread', 'agent-drafts']
+const GET_ACTIONS = ['overview', 'notifications', 'people', 'trips', 'tickets', 'applicant-thread', 'inbox']
 const POST_ACTIONS = ['mark-notification', 'ticket-reply', 'applicant-message', 'info-request']
 
 const ADMIN_USER = { id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', email: 'ops@clemsonrides.test' }
@@ -698,37 +698,74 @@ test('info-request records the request and the thread note without sending email
   assert.equal(networkHits, 0)
 })
 
-test('agent-drafts lists approval rows for an admin and does not write or send', async () => {
-  const sb = createFakeSb()
-  sb.when((ctx) => ctx.table === 'agent_drafts', () => ({
-    data: [{
-      id: 'draft-1',
-      kind: 'marketing',
-      status: 'draft_ready',
-      subject: 'Campus week',
-      body: 'A draft for approval',
-      source: 'schedule',
-      mailbox: null,
-      message_id: null,
-      slot: 'content',
-      created_at: '2026-10-13T00:00:00Z',
-    }],
-    error: null,
-  }))
-  const res = await invoke({ url: '/api/admin?action=agent-drafts', client: sb })
-  assert.equal(res.status, 200)
-  assert.equal(res.json.send, false)
-  assert.equal(res.json.drafts[0].kind, 'marketing')
-  assert.equal(res.json.migrationRequired, false)
-  assert.equal(sb.calls.some((ctx) => ctx.op === 'insert' || ctx.op === 'update' || ctx.op === 'delete'), false)
-  assert.equal(networkHits, 0)
-
+test('inbox is admin-only and lists manual document reviews', async () => {
   const denied = await invoke({
-    url: '/api/admin?action=agent-drafts',
+    url: '/api/admin?action=inbox',
     access: { admin: false, support: true, profile: { id: ADMIN_USER.id, role: 'support' } },
   })
   assert.equal(denied.status, 403)
   assert.equal(denied.json.error, 'Admin only')
+  assert.equal(http.state.client.calls.length, 0)
+
+  const unsigned = await invoke({ url: '/api/admin?action=inbox', user: null })
+  assert.equal(unsigned.status, 401)
+
+  const sb = createFakeSb()
+  sb.when((ctx) => ctx.table === 'driver_documents' && ctx.op === 'select', {
+    data: [{
+      id: 'doc-1',
+      profile_id: PROFILE_ID,
+      doc_type: 'license_front',
+      review_status: 'pending_manual_review',
+      created_at: '2026-10-01T00:00:00.000Z',
+    }],
+    error: null,
+  })
+  sb.when((ctx) => ctx.table === 'profiles', {
+    data: [{ id: PROFILE_ID, full_name: 'Ada', email: 'ada@clemson.edu' }],
+    error: null,
+  })
+  const res = await invoke({
+    url: '/api/admin?action=inbox',
+    client: sb,
+    user: { ...ADMIN_USER },
+    access: { admin: true, support: true, profile: { id: ADMIN_USER.id, role: 'admin', is_admin: true } },
+  })
+  assert.equal(res.status, 200)
+  assert.equal(res.json.counts.document_review, 1)
+  assert.equal(res.json.items[0].title.includes('license front'), true)
+  assert.equal(res.json.items[0].actions.some((action) => action.method === 'GET' && action.path === '/api/admin-drivers'), true)
+  assert.equal(res.json.items[0].actions.some((action) => action.query?.action === 'info-request'), true)
+  assert.equal(networkHits, 0)
+})
+
+test('inbox lists agent drafts for approval and does not write or send them', async () => {
+  const sb = createFakeSb()
+  sb.when((ctx) => ctx.table === 'agent_drafts', () => ({
+    data: [{
+      id: 'draft-1',
+      kind: 'outreach',
+      status: 'draft_ready',
+      subject: 'Partner onboarding 1',
+      body: 'Welcome aboard\n101 North Main Street, Greenville, SC 29601',
+      source: 'schedule',
+      mailbox: null,
+      slot: 'step-1',
+      created_at: '2026-10-13T00:00:00.000Z',
+    }],
+    error: null,
+  }))
+  const res = await invoke({ url: '/api/admin?action=inbox', client: sb })
+  assert.equal(res.status, 200)
+  const item = res.json.items.find((row) => row.kind === 'agent_draft')
+  assert.ok(item)
+  assert.match(item.title, /Outreach/)
+  assert.match(item.body, /101 North Main Street, Greenville, SC 29601/)
+  assert.equal(item.actions.length, 0)
+  assert.equal(res.json.counts.agent_draft, 1)
+  assert.equal(sb.calls.filter((ctx) => ctx.table === 'agent_drafts').every((ctx) => ctx.op === 'select'), true)
+  assert.equal(sb.calls.some((ctx) => ctx.op === 'insert' || ctx.op === 'update' || ctx.op === 'delete'), false)
+  assert.equal(networkHits, 0)
 })
 
 test('info-request 404s when the applicant is missing and does not email', async () => {

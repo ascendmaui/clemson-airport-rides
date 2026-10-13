@@ -11,6 +11,7 @@ import {
   glassContrastFailures,
   glassFill,
   glassRecipe,
+  glassShowsStreak,
   worstContrast,
 } from './tokens.js'
 
@@ -50,6 +51,20 @@ test('glass primitives draw blur, specular, streak, border, and UI-thread press'
   assert.match(surface, /styles\.specular/)
   assert.match(surface, /styles\.streak/)
   assert.match(surface, /rotate: '-32deg'/)
+  assert.match(surface, /glassShowsStreak/)
+  assert.match(surface, /showStreak \?/)
+  assert.equal(glassShowsStreak({ variant: 'primary', accent: 'orange' }), false)
+  assert.equal(glassShowsStreak({ variant: 'fab', accent: 'orange' }), false)
+  assert.equal(glassShowsStreak({ variant: 'chip', accent: 'orange' }), false)
+  assert.equal(glassShowsStreak({ variant: 'primary', accent: 'purple' }), true)
+  assert.equal(glassShowsStreak({ variant: 'fab', accent: 'purple' }), true)
+  assert.equal(glassShowsStreak({ variant: 'surface', accent: 'orange' }), true)
+  assert.equal(glassShowsStreak({ variant: 'header', accent: 'orange' }), true)
+  assert.equal(glassShowsStreak({ variant: 'sheet', accent: 'orange' }), true)
+  const green = glassRecipe({ app: 'driver', scheme: 'light', variant: 'fab', accent: 'green' })
+  assert.ok(worstContrast(green.text, green.plate) >= GLASS_AA)
+  const greenDark = glassRecipe({ app: 'driver', scheme: 'dark', variant: 'fab', accent: 'green' })
+  assert.ok(worstContrast(greenDark.text, greenDark.plate) >= GLASS_AA)
   assert.match(surface, /borderTopColor/)
   assert.match(surface, /ambientShadow/)
   assert.match(surface, /contactShadow/)
@@ -59,6 +74,15 @@ test('glass primitives draw blur, specular, streak, border, and UI-thread press'
   assert.match(button, /withSpring/)
   assert.match(button, /useReduceMotion/)
   assert.match(button, /GLASS_PRESS\.scale/)
+  assert.match(surface, /isGlassEffectAPIAvailable/)
+  assert.match(surface, /GlassView/)
+  assert.match(surface, /nativeGlassAvailable\(\)/)
+  assert.match(surface, /glassEffectStyle=\{strong \? 'regular' : 'clear'\}/)
+  assert.match(button, /if \(nativeGlass\) return \{ transform: \[\{ scale \}\] \}/)
+  assert.doesNotMatch(button, /opacity:\s*0\b/)
+  assert.doesNotMatch(surface, /opacity:\s*0\b/)
+  assert.match(card, /GlassSurface/)
+  assert.match(sheet, /GlassSurface/)
   assert.match(button, /GLASS_PRESS\.opacityDip/)
   assert.match(button, /pressed\.value = reduce \? 1/)
   assert.match(button, /export function GlassButton/)
@@ -97,6 +121,22 @@ test('rider and driver chrome mount the shared glass primitives', () => {
   assert.match(swipe, /Gesture\.Pan\(\)/)
   assert.doesNotMatch(swipe, /onPress=/)
   assert.match(driverTabs, /app="driver"/)
+  assert.match(driverTabs, /expo-router\/unstable-native-tabs/)
+  assert.match(driverTabs, /nativeGlassAvailable\(\)/)
+  assert.match(driverTabs, /<Tabs/)
+  const riderLayout = read('../../../apps/rider/app/(tabs)/_layout.tsx')
+  assert.match(riderLayout, /expo-router\/unstable-native-tabs/)
+  assert.match(riderLayout, /nativeGlassAvailable\(\)/)
+  assert.match(riderLayout, /<MainTabs/)
+  for (const app of ['rider', 'driver']) {
+    const pkg = read(`../../../apps/${app}/package.json`)
+    assert.match(pkg, /"expo-glass-effect": "~57\.0\.4"/)
+  }
+  assert.match(read('../package.json'), /"expo-glass-effect": "~57\.0\.4"/)
+  assert.doesNotMatch(read('../../../apps/driver/lib/enterMotion.tsx'), /opacity\s*:/)
+  assert.doesNotMatch(read('../../../apps/rider/components/enter.tsx'), /opacity\.setValue\(0\)/)
+  assert.doesNotMatch(read('../../../apps/driver/app/(tabs)/index.tsx'), /opacity\.setValue\(0\)/)
+  assert.doesNotMatch(read('../SafetyDeck.jsx'), /opacity:\s*fade/)
   assert.match(tabBar, /GlassSheen/)
   assert.match(tabBar, /#522D80/)
   assert.match(tabBar, /#F56600/)

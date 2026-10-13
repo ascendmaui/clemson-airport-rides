@@ -2,7 +2,7 @@
  * Admin dashboard API. Service role reads after an admin check.
  * Support staff cannot call this — driver documents and rider PII stay admin-only.
  *
- * GET  /api/admin?action=overview|notifications|people|trips|tickets|applicant-thread|agent-drafts
+ * GET  /api/admin?action=overview|notifications|people|trips|tickets|applicant-thread|inbox
  * POST /api/admin?action=mark-notification|ticket-reply|applicant-message|info-request
  */
 import { isTicketStatus } from '../../shared/adminAccess.js'
@@ -10,7 +10,7 @@ import { cors, json, parseBody, userFromAuth, admin } from '../friendRideLib.js'
 import { resolveRouteAction } from '../routeAction.js'
 import { loadStaffAccess } from '../staffAccess.js'
 import { sendApplicantNotice } from '../applicantMail.js'
-import { listAgentDrafts } from '../agentDrafts.js'
+import { loadAdminInbox } from '../adminInbox.js'
 
 const ACTIONS = [
   'overview',
@@ -19,7 +19,7 @@ const ACTIONS = [
   'trips',
   'tickets',
   'applicant-thread',
-  'agent-drafts',
+  'inbox',
   'mark-notification',
   'ticket-reply',
   'applicant-message',
@@ -33,7 +33,7 @@ const GET_ACTIONS = new Set([
   'trips',
   'tickets',
   'applicant-thread',
-  'agent-drafts',
+  'inbox',
 ])
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -48,7 +48,7 @@ export default async function handler(req, res) {
   const action = resolveRouteAction(req, { allowed: ACTIONS })
   if (!action) {
     return json(res, 400, {
-      error: 'Unknown admin action. Use overview, notifications, people, trips, tickets, applicant-thread, agent-drafts, mark-notification, ticket-reply, applicant-message, or info-request.',
+      error: 'Unknown admin action. Use overview, notifications, people, trips, tickets, applicant-thread, inbox, mark-notification, ticket-reply, applicant-message, or info-request.',
     })
   }
   const expectsGet = GET_ACTIONS.has(action)
@@ -85,8 +85,8 @@ async function read(sb, res, action, url) {
       return tickets(sb, res, url.searchParams.get('status') || '', url.searchParams.get('id') || '')
     case 'applicant-thread':
       return applicantThread(sb, res, url.searchParams.get('profile_id') || '')
-    case 'agent-drafts':
-      return agentDraftList(sb, res)
+    case 'inbox':
+      return inbox(sb, res)
     default: {
       const unknown = action
       return json(res, 400, { error: `Unknown admin read: ${unknown}` })
@@ -111,15 +111,9 @@ async function write(sb, res, action, user, body) {
   }
 }
 
-async function agentDraftList(sb, res) {
-  const result = await listAgentDrafts(sb)
-  if (result.error && !result.migrationRequired) return json(res, 500, { error: result.error })
-  return json(res, 200, {
-    drafts: result.drafts,
-    migrationRequired: Boolean(result.migrationRequired),
-    ...(result.migrationRequired ? { error: result.error } : {}),
-    send: false,
-  })
+async function inbox(sb, res) {
+  const loaded = await loadAdminInbox(sb)
+  return json(res, 200, loaded)
 }
 
 async function safeCount(sb, table, column, value) {

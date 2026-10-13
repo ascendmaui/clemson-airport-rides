@@ -1,10 +1,31 @@
 import { Platform, StyleSheet, View } from 'react-native'
-import { glassFill, glassRecipe } from './tokens.js'
+import { glassFill, glassRecipe, glassShowsStreak } from './tokens.js'
 
 let BlurView = null
 let LinearGradient = null
+let GlassView = null
+let isGlassEffectAPIAvailable = () => false
 try { BlurView = require('expo-blur').BlurView } catch { BlurView = null }
 try { LinearGradient = require('expo-linear-gradient').LinearGradient } catch { LinearGradient = null }
+try {
+  const glass = require('expo-glass-effect')
+  GlassView = glass.GlassView
+  if (typeof glass.isGlassEffectAPIAvailable === 'function') {
+    isGlassEffectAPIAvailable = glass.isGlassEffectAPIAvailable
+  }
+} catch {
+  GlassView = null
+}
+
+/** True only when UIGlassEffect can be constructed. False on web, Android, and iOS before 26. */
+export function nativeGlassAvailable() {
+  if (!GlassView) return false
+  try {
+    return isGlassEffectAPIAvailable() === true
+  } catch {
+    return false
+  }
+}
 
 const PAD_KEYS = [
   'padding', 'paddingHorizontal', 'paddingVertical',
@@ -25,6 +46,7 @@ export function GlassSurface({
   style,
   selected = false,
   edges = 'all',
+  showStreak = true,
   accessibilityRole,
   accessibilityLabel,
   accessibilityState,
@@ -47,6 +69,27 @@ export function GlassSurface({
   const dark = scheme === 'dark'
   const fill = glassFill(recipe)
   const showBlur = Boolean(BlurView) && Platform.OS !== 'web'
+  const paintStreak = showStreak !== false && glassShowsStreak({ variant, accent: recipe.accent })
+  const filled = variant === 'fab' || variant === 'primary' || variant === 'secondary' || variant === 'chip' || variant === 'ghost'
+  if (nativeGlassAvailable()) {
+    const strong = variant === 'primary' || variant === 'fab'
+    const tinted = strong || variant === 'chip' || variant === 'secondary' || variant === 'ghost'
+    return (
+      <GlassView
+        glassEffectStyle={strong ? 'regular' : 'clear'}
+        tintColor={tinted ? recipe.tint : undefined}
+        isInteractive={filled}
+        colorScheme={dark ? 'dark' : 'light'}
+        accessibilityRole={accessibilityRole}
+        accessibilityLabel={accessibilityLabel}
+        accessibilityState={accessibilityState}
+        pointerEvents={pointerEvents}
+        style={[rest, radii]}
+      >
+        <View style={[filled ? styles.fill : styles.content, flow, pad]}>{children}</View>
+      </GlassView>
+    )
+  }
   return (
     <View
       accessibilityRole={accessibilityRole}
@@ -60,9 +103,9 @@ export function GlassSurface({
           ? <BlurView intensity={recipe.blur} tint={dark ? 'dark' : 'light'} style={StyleSheet.absoluteFill} />
           : <View style={[StyleSheet.absoluteFill, styles.fallback, { backgroundColor: fill }]} />}
         <View style={[StyleSheet.absoluteFill, { backgroundColor: fill }]} />
-        <GlassSheen scheme={scheme} radius={radius} selected={selected} tint={recipe.tint} specular={recipe.specular} streak={recipe.streak} edges={edges} />
+        <GlassSheen scheme={scheme} radius={radius} selected={selected} tint={recipe.tint} specular={recipe.specular} streak={recipe.streak} showStreak={paintStreak} edges={edges} />
       </View>
-      <View style={[styles.content, flow, pad]}>{children}</View>
+      <View style={[filled ? styles.fill : styles.content, flow, pad]}>{children}</View>
     </View>
   )
 }
@@ -74,6 +117,7 @@ export function GlassSheen({
   tint = '#F56600',
   specular = 0.62,
   streak = 0.72,
+  showStreak = true,
   edges = 'all',
 }) {
   const dark = scheme === 'dark'
@@ -95,7 +139,7 @@ export function GlassSheen({
       ) : (
         <View style={[styles.specular, { backgroundColor: `rgba(255,255,255,${Math.min(0.28, specular * 0.4)})` }]} />
       )}
-      {LinearGradient ? (
+      {showStreak ? (LinearGradient ? (
         <LinearGradient
           colors={['rgba(255,255,255,0)', 'rgba(255,255,255,0.05)', `rgba(255,255,255,${streak})`, 'rgba(255,255,255,0.05)', 'rgba(255,255,255,0)']}
           locations={[0, 0.42, 0.5, 0.58, 1]}
@@ -105,7 +149,7 @@ export function GlassSheen({
         />
       ) : (
         <View style={[styles.streak, styles.streakFallback]} />
-      )}
+      )) : null}
       <View
         style={[
           StyleSheet.absoluteFill,
@@ -158,6 +202,7 @@ const styles = StyleSheet.create({
   clip: { overflow: 'hidden' },
   fallback: {},
   content: {},
+  fill: { flexGrow: 1, alignItems: 'center', justifyContent: 'center' },
   specular: { position: 'absolute', left: 0, right: 0, top: 0, height: '48%' },
   streak: {
     position: 'absolute',

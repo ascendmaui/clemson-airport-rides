@@ -197,28 +197,6 @@ export async function runScheduledAgent({ kind, sb, env, deps, brief }) {
   }
 }
 
-const MISSING = /schema cache|does not exist|could not find the table/i
-
-export async function listAgentDrafts(sb) {
-  const { data, error } = await sb
-    .from('agent_drafts')
-    .select('id, created_at, kind, status, subject, body, source, mailbox, message_id, slot')
-    .eq('status', 'draft_ready')
-    .order('created_at', { ascending: false })
-    .limit(50)
-  if (error) {
-    if (MISSING.test(error.message || '')) {
-      return {
-        drafts: [],
-        migrationRequired: true,
-        error: 'Apply supabase/migrations/20261013250000_agent_drafts.sql',
-      }
-    }
-    return { drafts: [], error: error.message }
-  }
-  return { drafts: data || [], migrationRequired: false }
-}
-
 function requestBrief(body) {
   const payload = body && typeof body === 'object' && !Array.isArray(body) ? body : {}
   return clip(payload.brief || payload.note || '', BRIEF_LIMIT)

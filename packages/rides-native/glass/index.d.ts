@@ -4,7 +4,7 @@ import type { AccessibilityRole, AccessibilityState, StyleProp, ViewStyle } from
 export type GlassApp = 'rider' | 'driver'
 export type GlassScheme = 'light' | 'dark'
 export type GlassVariant = 'primary' | 'secondary' | 'chip' | 'fab' | 'surface' | 'sheet' | 'header' | 'ghost'
-export type GlassAccent = 'orange' | 'purple'
+export type GlassAccent = 'orange' | 'purple' | 'green'
 
 export type GlassRecipeOptions = {
   app?: GlassApp
@@ -31,6 +31,7 @@ export type GlassRecipe = {
 
 export declare const GLASS_ORANGE: '#F56600'
 export declare const GLASS_PURPLE: '#522D80'
+export declare const GLASS_GREEN: '#1F8A4C'
 export declare const GLASS_INK: string
 export declare const GLASS_LIGHT_TEXT: string
 export declare const GLASS_AA: number
@@ -44,6 +45,8 @@ export declare function glassFill(recipe: GlassRecipe): string
 export declare function glassTextColor(opts?: GlassRecipeOptions): string
 export declare function glassCatalog(): Array<{ app: GlassApp; scheme: GlassScheme; variant: GlassVariant; accent: GlassAccent; recipe: GlassRecipe }>
 export declare function glassContrastFailures(): unknown[]
+export declare function glassShowsStreak(opts?: { variant?: GlassVariant; accent?: GlassAccent }): boolean
+export declare function nativeGlassAvailable(): boolean
 
 type GlassFrame = {
   children?: ReactNode
@@ -61,6 +64,7 @@ export declare function GlassSurface(props: GlassFrame & {
   variant?: GlassVariant
   selected?: boolean
   edges?: 'all' | 'top'
+  showStreak?: boolean
 }): ReactNode
 
 export declare function GlassSheen(props: {
@@ -70,6 +74,7 @@ export declare function GlassSheen(props: {
   tint?: string
   specular?: number
   streak?: number
+  showStreak?: boolean
   edges?: 'all' | 'top'
 }): ReactNode
 
@@ -79,6 +84,7 @@ export declare function GlassButton(props: GlassFrame & {
   disabled?: boolean
   variant?: 'primary' | 'secondary' | 'chip' | 'fab' | 'ghost'
   selected?: boolean
+  showStreak?: boolean
   accessibilityHint?: string
   hitSlop?: number | { top?: number; bottom?: number; left?: number; right?: number }
   onPressIn?: (event: unknown) => void

@@ -19,8 +19,8 @@ export const DRIVER_COMPONENTS_DIR = path.join(REPO_ROOT, 'apps/driver/component
  * Keys are formatted as `${relativePath}:${lineNumber}` or `${relativePath}`.
  */
 export const ALLOWLIST = new Set([
-  'apps/driver/app/(tabs)/discover.tsx:83',
-  'apps/driver/app/(tabs)/inbox.tsx:200',
+  'apps/driver/app/discover.tsx:84',
+  'apps/driver/app/inbox.tsx:201',
   'apps/driver/app/(tabs)/index.tsx:664',
   'apps/driver/app/bug-report.tsx:81',
   'apps/driver/app/bug-report.tsx:90',

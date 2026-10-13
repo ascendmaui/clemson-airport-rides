@@ -354,7 +354,8 @@ test('agent source has no send path and affiliate reads stay selects', () => {
     './webhookSecret.js',
     '../api/agents.js',
     '../shared/copy/agentDrafts.js',
-    '../src/components/AgentDraftsPanel.jsx',
+    '../shared/adminInbox.js',
+    '../src/components/AdminInboxPanel.jsx',
   ]
   const source = files.map((file) => readFileSync(new URL(file, import.meta.url), 'utf8')).join('\n')
   assert.equal(/resend|nodemailer|smtp|sendMail|api\.resend\.com|OPENAI_API_KEY|api\.openai\.com/i.test(source), false)

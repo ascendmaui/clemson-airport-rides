@@ -25,7 +25,8 @@ import {
 import { useToasts, pushToast } from '../lib/toasts'
 import { supabase } from '../lib/supabase'
 import { STUDENT_CLAIM_COPY, STUDENT_DISCOUNT_LABEL, markStudentVerified, studentStatus } from '../../packages/rides-native/riderMoney.js'
-import { fetchMyDriverApplication, isAdminIdentity, onboardingLabel } from '../lib/driverOnboarding'
+import { fetchMyDriverApplication, onboardingLabel } from '../lib/driverOnboarding'
+import { fetchAdminInbox } from '../lib/adminDesk'
 import { SignedAgreementCopy } from '../components/SignedAgreementCopy'
 import { ReferFriendsPanel } from './ReferFriends'
 import { isIncentiveAdmin } from '../lib/driverIncentiveMath'
@@ -119,11 +120,29 @@ export function AccountScreen() {
   const [comfortBusy, setComfortBusy] = useState(false)
   const [comfortNote, setComfortNote] = useState(null)
   const isDriver = profile?.role === 'driver' || profile?.role === 'both'
-  const isAdmin = isAdminIdentity({
-    jwtEmail: user?.email,
-    role: profile?.role,
-    isAdmin: profile?.is_admin,
-  })
+  const [serverAdmin, setServerAdmin] = useState(false)
+  const [inboxTotal, setInboxTotal] = useState(0)
+
+  useEffect(() => {
+    if (!user?.id) {
+      setServerAdmin(false)
+      setInboxTotal(0)
+      return undefined
+    }
+    let alive = true
+    fetchAdminInbox()
+      .then((data) => {
+        if (!alive) return
+        setServerAdmin(true)
+        setInboxTotal(Number(data.total) || 0)
+      })
+      .catch(() => {
+        if (!alive) return
+        setServerAdmin(false)
+        setInboxTotal(0)
+      })
+    return () => { alive = false }
+  }, [user?.id])
 
   async function reload() {
     if (!user?.id) return
@@ -384,6 +403,13 @@ export function AccountScreen() {
         >
         {tab === 'profile' && (
           <>
+            {serverAdmin && (
+              <button type="button" className="pressable" onClick={() => navigate('admin')}
+                style={{ display: 'block', width: '100%', marginTop: 14, padding: 12, borderRadius: 14, fontWeight: 700,
+                  color: '#fff', background: 'linear-gradient(135deg, #522D80, #6b3fa0)' }}>
+                Admin dashboard{inboxTotal ? ` · ${inboxTotal}` : ''}
+              </button>
+            )}
             <div className="glass-panel glass-panel--elevated" style={{ padding: 18, borderRadius: 22, marginTop: 14,
               background: 'linear-gradient(160deg, rgba(255,255,255,0.78), rgba(82,45,128,0.08) 55%, rgba(245,102,0,0.10))' }}>
               <div style={{ display: 'flex', gap: 14, alignItems: 'center' }}>
@@ -660,13 +686,6 @@ export function AccountScreen() {
                 color: '#fff', background: 'linear-gradient(135deg, var(--orange), #ff7a1a)' }}>
               {application?.onboarding_status === 'approved' ? 'View driver application' : 'Continue driver application'}
             </button>
-            {isAdmin && (
-              <button type="button" className="pressable" onClick={() => navigate('admin')}
-                style={{ display: 'block', width: '100%', marginTop: 10, padding: 12, borderRadius: 14, fontWeight: 700,
-                  color: '#fff', background: 'linear-gradient(135deg, #522D80, #6b3fa0)' }}>
-                Admin dashboard
-              </button>
-            )}
             <button type="button" className="pressable" onClick={() => navigate('earnings')}
               style={{ display: 'block', width: '100%', marginTop: 10, padding: 12, borderRadius: 14, fontWeight: 700,
                 color: 'var(--purple)', border: '1.5px solid rgba(82,45,128,0.3)', background: 'rgba(255,255,255,0.55)' }}>
