@@ -3,6 +3,7 @@ import * as DocumentPicker from 'expo-document-picker'
 import * as ImagePicker from 'expo-image-picker'
 import { useCallback, useState } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { type as typeScale } from 'rides-native/shared/theme.js'
 import { Card, ErrorText, Primary } from '@/components/chrome'
 import { StackPage } from '@/components/shell'
 import { useAuth } from '@/lib/auth'
@@ -217,6 +218,7 @@ export default function DocumentsScreen() {
   const sectionStatus = inspectionOpen ? inspectionAttention(documents) : categoryAttention(active.id, documents)
   const slots = inspectionOpen ? inspectionSlots(documents) : categorySlots(active.id, documents)
   const sectionLabel = inspectionOpen ? INSPECTION_TAB_LABEL : active.label
+  const sectionKicker = inspectionOpen || active.id === 'vehicle' ? 'VEHICLE CHECK' : String(active.label).toUpperCase()
   const inspectionReminder = inspectionCountdown({ documents, dueAt: inspectionDueAt, now: new Date() })?.message || ''
   const inspectionGate = inspectionGoOnlineGate({ documents, dueAt: inspectionDueAt, now: new Date() })
   const inspectionInReview = inspectionSubmitted(documents) && !sectionStatus.approved
@@ -321,6 +323,7 @@ export default function DocumentsScreen() {
         </Card>
       ) : (
         <Card>
+          <Text style={{ color: colors.orange, ...typeScale.kickerSm }}>{sectionKicker}</Text>
           <Text style={[styles.sectionTitle, { color: colors.title }]}>{sectionLabel}</Text>
           <StatusMark status={sectionStatus} scheme={scheme} />
           {inspectionOpen && inspectionReminder ? (
