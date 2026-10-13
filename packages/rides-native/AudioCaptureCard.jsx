@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Animated, Pressable, Text, View } from 'react-native'
+import { useReduceMotion } from './shared/reduceMotion.js'
+import { radius, type as typeScale } from './shared/theme.js'
 import { AudioModule, RecordingPresets, setAudioModeAsync, useAudioRecorder } from 'expo-audio'
 import {
   beginRecording,
@@ -22,9 +24,11 @@ export function AudioCaptureCard({ status, colors }) {
   const blocked = recordingBlockReason({ status, permission, mode: 'audio' })
   const recording = session.phase === 'recording'
 
+  const reduceMotion = useReduceMotion()
+
   useEffect(() => {
-    if (!recording) {
-      pulse.setValue(0.4)
+    if (!recording || reduceMotion) {
+      pulse.setValue(reduceMotion ? 1 : 0.4)
       return undefined
     }
     setNow(Date.now())
@@ -38,7 +42,7 @@ export function AudioCaptureCard({ status, colors }) {
       clearInterval(clock)
       loop.stop()
     }
-  }, [pulse, recording])
+  }, [pulse, recording, reduceMotion])
 
   useEffect(() => () => {
     const current = recorderRef.current
@@ -119,14 +123,14 @@ export function AudioCaptureCard({ status, colors }) {
         onPress={onPress}
         style={{
           backgroundColor: recording ? colors.purple : colors.orange,
-          borderRadius: 14,
-          minHeight: 48,
+          borderRadius: radius.lg,
+          minHeight: 52,
           alignItems: 'center',
           justifyContent: 'center',
           opacity: busy ? 0.7 : 1,
         }}
       >
-        <Text style={{ color: colors.onAccent, fontWeight: '800' }}>{label}</Text>
+        <Text style={{ color: colors.onAccent, ...typeScale.button }}>{label}</Text>
       </Pressable>
     </View>
   )

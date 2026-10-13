@@ -10,6 +10,7 @@ import { supabase } from '@/lib/supabase'
 import { exportYearEnd, type ExportKind } from '@/lib/taxExport'
 import { loadYearEnd, type YearEndView } from '@/lib/taxPacket'
 import { useTheme } from '@/lib/theme'
+import { elevation, radius, type as typeScale } from 'rides-native/shared/theme.js'
 import { loadDriverW9 } from 'rides-native/driverW9Client'
 import { w9StatusLabel } from '../../../shared/driverW9.js'
 
@@ -243,12 +244,12 @@ export default function TaxScreen() {
           </Card>
         </>
       ) : null}
-          <Card>
-            <Text style={{ color: colors.title, fontWeight: '800' }}>W-9</Text>
-            <Text style={{ color: colors.inkSecondary, lineHeight: 20 }}>
-              {w9Status} Stripe issues the 1099. This app does not generate that form.
-            </Text>
-          </Card>
+      <Card>
+        <Text style={{ color: colors.title, ...typeScale.cardTitle }}>W-9</Text>
+        <Text style={{ color: colors.inkSecondary, ...typeScale.body }}>
+          {w9Status} Stripe issues the 1099. This app does not generate that form.
+        </Text>
+      </Card>
       {error ? <ErrorText>{error}</ErrorText> : null}
       <Primary
         label="Update W-9"
@@ -274,22 +275,22 @@ function Stat({ label, value, hint }: { label: string; value: string; hint?: str
 
 const styles = StyleSheet.create({
   hero: {
-    borderRadius: 22,
-    padding: 18,
+    borderRadius: radius.sheet,
+    padding: 22,
     gap: 4,
-    shadowColor: '#F56600',
-    shadowOpacity: 0.28,
-    shadowRadius: 18,
-    shadowOffset: { width: 0, height: 10 },
-    elevation: 8,
+    shadowColor: '#522D80',
+    shadowOpacity: elevation.float.shadowOpacity,
+    shadowRadius: elevation.float.shadowRadius,
+    shadowOffset: { width: elevation.float.shadowOffset.width, height: elevation.float.shadowOffset.height },
+    elevation: elevation.float.elevation,
   },
-  heroKicker: { color: '#FFFFFF', fontWeight: '800', letterSpacing: 1.1, fontSize: 12, opacity: 0.9 },
+  heroKicker: { color: '#FFFFFF', ...typeScale.kicker, opacity: 0.9 },
   heroAmount: { color: '#FFFFFF', fontSize: 36, fontWeight: '800', letterSpacing: -1 },
   heroLabel: { color: '#FFFFFF', fontWeight: '700' },
   heroNote: { color: '#FFFFFF', fontSize: 12, lineHeight: 17, opacity: 0.92 },
   years: { gap: 8, paddingVertical: 2 },
-  year: { borderRadius: 999, paddingHorizontal: 14, paddingVertical: 8 },
-  kicker: { fontWeight: '800', letterSpacing: 1.1, fontSize: 12 },
+  year: { borderRadius: radius.pill, paddingHorizontal: 14, paddingVertical: 8 },
+  kicker: { ...typeScale.kicker },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 14 },
   stat: { width: '46%', gap: 2 },
   actions: { flexDirection: 'row', gap: 8 },
