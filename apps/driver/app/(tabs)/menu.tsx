@@ -97,7 +97,7 @@ export default function MenuScreen() {
     { icon: 'discover', title: 'Discover', subtitle: 'Busy spots, game days, and boosts', onPress: () => router.push('/discover') },
   ]
   const money: MenuRow[] = [
-    { icon: 'calculator', title: 'Tax info', subtitle: 'W-9 on your application', onPress: () => router.push('/tax') },
+    { icon: 'calculator', title: 'Tax info', subtitle: 'Year-end mileage and earnings', onPress: () => router.push('/tax') },
   ]
   const resources: MenuRow[] = [
     { icon: 'school', title: 'Learning Center', subtitle: quizLabel, onPress: () => router.push('/learning') },
