@@ -138,6 +138,8 @@ export default async function handler(req, res, deps = {}) {
     ...tigerPassQuoteFields(priced),
     preferredCarTypes: pass?.carTypes || [],
     tiers: priced.tiers,
+    etaMinutes: priced.etaMinutes ?? null,
+    tripMinutes: priced.tripMinutes ?? null,
     quote: {
       fareCents: priced.fareCents,
       cashCents: priced.fareCents,

@@ -9,7 +9,7 @@ import { HERO_COLLAGE, NIGHT_VENUES } from '../content/images.js'
 import { APP_DOWNLOADS, SUPPORT_EMAIL } from '../../shared/productLinks.js'
 import { RIDE_TYPE_NOTES, RIDE_TYPE_STUDENT_NOTE } from '../../shared/copy/rideTypes.js'
 import { RIDE_OPTION_CATALOG, SCHEDULE_AHEAD_DISCOUNT_PCT } from '../../shared/rideOptions.js'
-import { CARPOOL_DISCOUNT_BPS, STUDENT_DISCOUNT_BPS } from '../lib/fareRates.js'
+import { CARPOOL_SEAT_FRACTION_BPS, STUDENT_DISCOUNT_BPS } from '../lib/fareRates.js'
 import { tigerPassCopy } from '../../shared/tigerPass.js'
 import { STANDING_OFFERS } from '../../shared/standingPromos.js'
 import { currentWeeklyCoupon } from '../../shared/weeklyCoupon.js'
@@ -29,7 +29,7 @@ const FAQ = [
   },
   {
     q: 'How does carpool pricing work?',
-    a: `Carpool is ${CARPOOL_DISCOUNT_BPS / 100}% off the Standard fare per seat, for 1 or 2 seats. It is dispatched like Standard. Two separate carpool requests are not combined into one car.`,
+    a: `Carpool is ${CARPOOL_SEAT_FRACTION_BPS / 100}% of the Standard fare per seat when 3 or 4 riders split the trip. Pickup and drop-off each need to be nearby, and the times need to fall in the same window. Each rider is pre-authorized for their own seat. There is no deposit.`,
   },
   {
     q: 'Who gets the student discount?',

@@ -13,6 +13,7 @@ import { loadTigerPass, TIGER_PASS_NAME, type TigerPassStatus } from 'rides-nati
 import { oneParam } from '@/lib/oneParam'
 import { RideTypeInfoButton } from 'rides-native/RideTypeSheet'
 import { bookableRideTiers, formatUsd } from 'rides-native/places.js'
+import { standardCardTiming } from '../../../shared/rideOptions.js'
 import { rideTypeIconName } from 'rides-native/rideTypeIcons.js'
 import { displayTierPrice, fetchRideQuote, studentSurfaceCopy, withTigerPassQuote, type AirportQuote } from 'rides-native/riderMoney.js'
 import { useStudentStatus } from '@/lib/useStudentStatus'
@@ -159,40 +160,51 @@ export default function RideTiers() {
       <Animated.ScrollView style={[{ flex: 1 }, listMotion]} contentContainerStyle={styles.list} showsVerticalScrollIndicator={false}>
         {tiers.map((tier) => {
           const on = tier.id === selected
+          const serverTier = (quote?.tiers || []).find((row) => row.id === tier.id) || null
           const quoted = tierQuote(tier, {
             isStudent: student.verified,
-            serverTier: (quote?.tiers || []).find((row) => row.id === tier.id) || null,
+            serverTier,
             pass,
             passName: quote?.tigerPassName || pass?.name || TIGER_PASS_NAME,
           })
+          const timing = tier.id === 'standard'
+            ? standardCardTiming({
+              etaMinutes: serverTier?.etaMinutes ?? quote?.etaMinutes ?? etaMinutesFromLabel(tier.eta),
+              tripMinutes: serverTier?.tripMinutes ?? quote?.tripMinutes,
+            })
+            : ''
           return (
             <Pressable
               key={tier.id}
               onPress={() => setSelected(tier.id)}
               style={({ pressed }) => [
                 styles.row,
+                tier.id === 'standard' && styles.rowStack,
                 lift(colors, 'rest'),
                 tier.id === 'comfort' && styles.rowFleet,
                 on && styles.rowOn,
                 pressStyle(pressed),
               ]}
               accessibilityRole="button"
-              accessibilityLabel={`${tier.name}, ${formatUsd(quoted.price)}, ${tier.eta}, ${tier.meta}`}
+              accessibilityLabel={timing ? `${tier.name}, ${formatUsd(quoted.price)}, ${timing}` : `${tier.name}, ${formatUsd(quoted.price)}, ${tier.eta}, ${tier.meta}`}
               accessibilityHint="Selects this fare"
               accessibilityState={{ selected: on }}
             >
-              <View style={[styles.iconWell, on && styles.iconWellOn]}>
-                <Glyph name={rideTypeIconName(tier.id)} size={22} color={on ? colors.orange : colors.purple} />
+              <View style={styles.rowMain}>
+                <View style={[styles.iconWell, on && styles.iconWellOn]}>
+                  <Glyph name={rideTypeIconName(tier.id)} size={22} color={on ? colors.orange : colors.purple} />
+                </View>
+                <View style={styles.tierCopy}>
+                  <Text style={styles.name}>{tier.name}</Text>
+                  <Text style={styles.meta}>{tier.eta} · {tier.meta}</Text>
+                  {quoted.label ? <Text style={styles.discount}>{quoted.label}</Text> : null}
+                </View>
+                <View style={styles.priceCol}>
+                  <Text style={styles.price}>{formatUsd(quoted.price)}</Text>
+                  {quoted.discount > 0 ? <Text style={styles.was}>{formatUsd(quoted.was)}</Text> : null}
+                </View>
               </View>
-              <View style={styles.tierCopy}>
-                <Text style={styles.name}>{tier.name}</Text>
-                <Text style={styles.meta}>{tier.eta} · {tier.meta}</Text>
-                {quoted.label ? <Text style={styles.discount}>{quoted.label}</Text> : null}
-              </View>
-              <View style={styles.priceCol}>
-                <Text style={styles.price}>{formatUsd(quoted.price)}</Text>
-                {quoted.discount > 0 ? <Text style={styles.was}>{formatUsd(quoted.was)}</Text> : null}
-              </View>
+              {timing ? <Text style={styles.timing}>{timing}</Text> : null}
             </Pressable>
           )
         })}
@@ -238,6 +250,13 @@ export default function RideTiers() {
       />
     </View>
   )
+}
+
+function etaMinutesFromLabel(label: string): number | null {
+  const match = /(\d+)/.exec(label || '')
+  if (!match) return null
+  const minutes = Number(match[1])
+  return Number.isFinite(minutes) && minutes > 0 ? minutes : null
 }
 
 function tierQuote(
@@ -312,6 +331,9 @@ function makeStyles(colors: Palette) {
       borderWidth: 1.5,
       borderColor: 'transparent',
     },
+    rowStack: { flexDirection: 'column' as const, alignItems: 'stretch' as const },
+    rowMain: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 12 },
+    timing: { color: colors.inkSecondary, fontSize: 12, fontWeight: '600' as const, marginTop: 8 },
     rowOn: { borderColor: colors.orange, backgroundColor: colors.orangeSoft },
     rowFleet: { borderColor: colors.purple, backgroundColor: colors.purpleSoft },
     iconWell: {

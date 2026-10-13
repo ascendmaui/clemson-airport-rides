@@ -407,7 +407,7 @@ test('riderFacingCard formats complete profile and vehicle card', () => {
       color: 'White',
       plate: 'CLEM-1',
       seats: 4,
-      service_class: true,
+      service_class: 'comfort',
       tier: 'comfort',
     },
     online: true,
