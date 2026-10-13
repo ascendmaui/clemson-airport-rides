@@ -1,7 +1,9 @@
 import { useRouter } from 'expo-router'
 import { Text } from 'react-native'
+import { AdminAccountRow } from 'rides-native/AdminAccountRow.jsx'
 import { FadeIn, type MenuRow, RowGroup, SoftNote } from '@/components/day'
 import { SectionLabel, StackPage } from '@/components/shell'
+import { supabase } from '@/lib/supabase'
 import { useTheme } from '@/lib/theme'
 
 export default function SettingsScreen() {
@@ -28,6 +30,7 @@ export default function SettingsScreen() {
         <SoftNote>These choices stay on this phone. Your driver profile, documents, and payouts stay on your Clemson RIDES account.</SoftNote>
         <SectionLabel>Account</SectionLabel>
         <RowGroup rows={account} />
+        <AdminAccountRow supabase={supabase} colors={colors} onPress={() => router.push('/admin')} />
         <SectionLabel>General</SectionLabel>
         <RowGroup rows={general} />
         <Text style={{ color: colors.inkSecondary, lineHeight: 20 }}>

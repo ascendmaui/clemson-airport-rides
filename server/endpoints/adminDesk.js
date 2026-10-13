@@ -10,6 +10,7 @@ import { cors, json, parseBody, userFromAuth, admin } from '../friendRideLib.js'
 import { resolveRouteAction } from '../routeAction.js'
 import { loadStaffAccess } from '../staffAccess.js'
 import { sendApplicantNotice } from '../applicantMail.js'
+import { loadAdminInbox } from '../adminInbox.js'
 
 const ACTIONS = [
   'overview',
@@ -18,6 +19,7 @@ const ACTIONS = [
   'trips',
   'tickets',
   'applicant-thread',
+  'inbox',
   'mark-notification',
   'ticket-reply',
   'applicant-message',
@@ -31,6 +33,7 @@ const GET_ACTIONS = new Set([
   'trips',
   'tickets',
   'applicant-thread',
+  'inbox',
 ])
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -45,7 +48,7 @@ export default async function handler(req, res) {
   const action = resolveRouteAction(req, { allowed: ACTIONS })
   if (!action) {
     return json(res, 400, {
-      error: 'Unknown admin action. Use overview, notifications, people, trips, tickets, applicant-thread, mark-notification, ticket-reply, applicant-message, or info-request.',
+      error: 'Unknown admin action. Use overview, notifications, people, trips, tickets, applicant-thread, inbox, mark-notification, ticket-reply, applicant-message, or info-request.',
     })
   }
   const expectsGet = GET_ACTIONS.has(action)
@@ -82,6 +85,8 @@ async function read(sb, res, action, url) {
       return tickets(sb, res, url.searchParams.get('status') || '', url.searchParams.get('id') || '')
     case 'applicant-thread':
       return applicantThread(sb, res, url.searchParams.get('profile_id') || '')
+    case 'inbox':
+      return inbox(sb, res)
     default: {
       const unknown = action
       return json(res, 400, { error: `Unknown admin read: ${unknown}` })
@@ -104,6 +109,11 @@ async function write(sb, res, action, user, body) {
       return json(res, 400, { error: `Unknown admin write: ${unknown}` })
     }
   }
+}
+
+async function inbox(sb, res) {
+  const loaded = await loadAdminInbox(sb)
+  return json(res, 200, loaded)
 }
 
 async function safeCount(sb, table, column, value) {

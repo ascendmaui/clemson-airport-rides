@@ -20,6 +20,7 @@ import { loadRatingSummary } from 'rides-native/PartyScreens'
 import { WomenOnlyCard } from 'rides-native/WomenOnlyCard'
 import { loadComfortPreference, saveComfortPreference } from 'rides-native/comfortPreference.js'
 import { supabase } from '@/lib/supabase'
+import { AdminAccountRow } from 'rides-native/AdminAccountRow.jsx'
 
 type AccountHref = '/tiger-pass' | '/student' | '/community' | '/billing' | '/notifications' | '/help' | '/support' | '/lost-found' | '/safety'
 type AccountLink = { href: AccountHref; label: string; hint: string; icon: string }
@@ -227,6 +228,7 @@ export function AccountScreen() {
           </View>
         ))}
         <Text style={styles.groupTitle}>Settings</Text>
+        <AdminAccountRow supabase={supabase} colors={colors} onPress={() => router.push('/admin')} />
         <View style={[styles.row, lift(colors, 'rest')]}>
           <View style={styles.settingLine}>
             <Glyph name={scheme === 'dark' ? 'moon' : 'sun'} size={22} color={colors.orange} active={scheme === 'dark'} scheme={scheme} knockout={colors.card} />
