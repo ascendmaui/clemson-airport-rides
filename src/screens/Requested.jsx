@@ -21,7 +21,7 @@ import { SosControl } from '../components/SosControl'
 import { isActiveRideStatus } from '../lib/sosAlert'
 import { MidrideCancelSheet } from '../components/MidrideCancelSheet'
 import { RiderSwitchSheet } from '../components/RiderSwitchSheet'
-import { isMidrideStatus } from '../lib/tripPhase'
+import { loadMidrideStarted, riderMayCancelMidride } from '../../shared/riderMidrideCancel.js'
 import { CounterpartChip } from '../components/CounterpartChip'
 import { PARTY_VISIBLE_STATUSES } from '../../packages/rides-native/partyProfile.js'
 import {
@@ -62,6 +62,7 @@ export function Requested({ dest = 'GSP Airport', trip = '', driver = 'your driv
   const [rateNudge, setRateNudge] = useState(false)
   const [chatOpen, setChatOpen] = useState(false)
   const [cancelOpen, setCancelOpen] = useState(false)
+  const [midrideStarted, setMidrideStarted] = useState(false)
   const [switchOpen, setSwitchOpen] = useState(false)
   const [stillSearching, setStillSearching] = useState(false)
   const searchStartedAt = useRef(null)
@@ -247,6 +248,14 @@ export function Requested({ dest = 'GSP Airport', trip = '', driver = 'your driv
     setCancelNotice({ ...notice, tripId: trip })
   }, [trip, tripRow])
   const status = tripRow?.status || ''
+  useEffect(() => {
+    let alive = true
+    loadMidrideStarted(supabase, { id: trip, status }).then((started) => {
+      if (alive) setMidrideStarted(started)
+    })
+    return () => { alive = false }
+  }, [trip, status])
+  const canCancelMidride = riderMayCancelMidride(status, midrideStarted)
   const chatMode = rideChatMode(tripRow, Date.now(), lostReport)
   const showMessages = Boolean(user?.id && tripRow?.driver_id && tripRow?.rider_id && chatMode !== 'closed')
   const rideLive = isActiveRideStatus(status)
@@ -514,7 +523,7 @@ export function Requested({ dest = 'GSP Airport', trip = '', driver = 'your driv
               Change driver
             </button>
           )}
-          {isMidrideStatus(status) && trip && (
+          {canCancelMidride && trip && (
             <button
               type="button"
               className="pressable"
