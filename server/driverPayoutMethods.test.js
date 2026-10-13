@@ -183,10 +183,12 @@ test('direct deposit setup opens a Stripe Express onboarding link', async () => 
 })
 
 test('instant cash out charges the fee and standard cash out is free', async () => {
+  // Cash-out is paused 11:50–12:30 UTC. Pin the clock so CI does not hit sweep_window.
+  const now = new Date('2026-10-13T15:00:00Z')
   const instantStripe = stripeMock()
   const instant = await call(
     { method: 'POST', headers: {}, body: { op: 'cashout', confirm: true, method: 'instant', feeCents: 75 } },
-    { sb: memory({ account: 'acct_1' }), user: USER, stripe: instantStripe, env: ENV },
+    { sb: memory({ account: 'acct_1' }), user: USER, stripe: instantStripe, env: ENV, now },
   )
   assert.equal(instant.status, 200)
   assert.equal(instant.json.method, 'instant')
@@ -198,7 +200,7 @@ test('instant cash out charges the fee and standard cash out is free', async () 
   const standardStripe = stripeMock()
   const standard = await call(
     { method: 'POST', headers: {}, body: { op: 'cashout', confirm: true, method: 'standard', feeCents: 0 } },
-    { sb: memory({ account: 'acct_1' }), user: USER, stripe: standardStripe, env: ENV },
+    { sb: memory({ account: 'acct_1' }), user: USER, stripe: standardStripe, env: ENV, now },
   )
   assert.equal(standard.status, 200)
   assert.equal(standard.json.method, 'standard')

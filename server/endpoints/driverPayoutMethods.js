@@ -49,6 +49,7 @@ export default async function handleDriverPayoutMethods(req, res, deps = {}) {
         method: body.method,
         expectedFeeCents: body.feeCents,
         env,
+        now: deps.now,
       })
       const { status = 200, quote, ...rest } = result
       if (quote) delete quote.connectAccountId
