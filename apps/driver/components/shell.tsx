@@ -1,12 +1,12 @@
-import { Glyph, PressScale } from 'rides-native/icons'
+import { GlassButton, GlassSurface, glassTextColor } from 'rides-native/glass'
+import { Glyph } from 'rides-native/icons'
 import type { ReactNode } from 'react'
-import { LinearGradient } from 'expo-linear-gradient'
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { motion, radius, type as typeScale } from 'rides-native/shared/theme.js'
 import { Enter } from '@/lib/enterMotion'
 import { useTheme } from '@/lib/theme'
-import { useCardShadow, useLift } from '@/components/chrome'
+import { useLift } from '@/components/chrome'
 
 type IconName = string
 
@@ -19,18 +19,20 @@ export function CircleButton({
   label: string
   onPress: () => void
 }) {
-  const { colors } = useTheme()
-  const shadow = useCardShadow()
+  const { scheme } = useTheme()
+  const ink = glassTextColor({ app: 'driver', scheme, variant: 'fab' })
   return (
-    <PressScale
+    <GlassButton
+      app="driver"
+      scheme={scheme}
+      variant="fab"
       onPress={onPress}
-      accessibilityRole="button"
       accessibilityLabel={label}
       hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-      style={[styles.circle, shadow, { backgroundColor: colors.card }]}
+      style={styles.circle}
     >
-      <Glyph name={icon} size={22} color={colors.title} />
-    </PressScale>
+      <Glyph name={icon} size={22} color={ink} />
+    </GlassButton>
   )
 }
 
@@ -47,46 +49,34 @@ export function GoButton({
   disabledReason?: string | null
   onPress: () => void
 }) {
-  const { colors } = useTheme()
+  const { colors, scheme } = useTheme()
   const isDisabled = Boolean(busy || disabled)
   const label = disabled
     ? (disabledReason ? `Go online disabled: ${disabledReason}` : 'Go online disabled')
     : (online ? 'Go offline' : 'Go online')
-  const gradient = disabled
-    ? [colors.card, colors.track] as const
-    : online
-      ? [colors.purple, '#3C1E66'] as const
-      : [colors.goStart, colors.orange] as const
+  const accent = online ? 'purple' : 'orange'
+  const ink = glassTextColor({ app: 'driver', scheme, variant: 'fab', accent })
+  const mark = isDisabled ? colors.inkSecondary : ink
 
   return (
-    <PressScale
+    <GlassButton
+      app="driver"
+      scheme={scheme}
+      variant="fab"
+      accent={accent}
       onPress={onPress}
       disabled={isDisabled}
       accessibilityRole="button"
       accessibilityLabel={label}
       accessibilityHint={disabled && disabledReason ? disabledReason : online ? 'Takes you offline' : 'Goes online to receive ride requests'}
       accessibilityState={{ disabled: isDisabled, busy }}
-      style={{ opacity: isDisabled ? 0.45 : 1 }}
-      scaleTo={isDisabled ? 1 : 0.95}
+      style={styles.go}
     >
-      <LinearGradient
-        colors={gradient}
-        start={{ x: 0.72, y: 0 }}
-        end={{ x: 0.28, y: 1 }}
-        style={[styles.go, {
-          shadowColor: colors.shadow,
-          shadowOpacity: 0.16,
-          shadowRadius: 12,
-          shadowOffset: { width: 0, height: 8 },
-          elevation: 6,
-        }]}
-      >
-        <Glyph name="online" size={22} color={disabled ? colors.inkSecondary : colors.onAccent} />
-        <Text style={[styles.goText, { color: disabled ? colors.inkSecondary : colors.onAccent }]}>
-          {online ? 'END' : 'GO'}
-        </Text>
-      </LinearGradient>
-    </PressScale>
+      <Glyph name="online" size={22} color={mark} />
+      <Text style={[styles.goText, { color: mark }]}>
+        {online ? 'END' : 'GO'}
+      </Text>
+    </GlassButton>
   )
 }
 
@@ -123,28 +113,33 @@ export function Segmented<T extends string>({
   value: T
   onChange: (id: T) => void
 }) {
-  const { colors } = useTheme()
+  const { scheme } = useTheme()
+  const ink = glassTextColor({ app: 'driver', scheme, variant: 'chip' })
   return (
-    <View style={[styles.segments, { backgroundColor: colors.segment }]}>
+    <GlassSurface app="driver" scheme={scheme} variant="chip" style={styles.segments}>
       {options.map((option) => {
         const active = option.id === value
         return (
-          <Pressable
+          <GlassButton
             key={option.id}
+            app="driver"
+            scheme={scheme}
+            variant="chip"
+            accent={active ? 'orange' : 'purple'}
+            selected={active}
             onPress={() => onChange(option.id)}
-            accessibilityRole="button"
             accessibilityLabel={option.label}
             accessibilityState={{ selected: active }}
             hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
-            style={[styles.segment, active && { backgroundColor: colors.segmentOn }]}
+            style={styles.segment}
           >
-            <Text style={{ color: active ? colors.segmentTextOn : colors.segmentText, fontWeight: '800', letterSpacing: typeScale.meta.letterSpacing }}>
+            <Text style={{ color: ink, fontWeight: '800', letterSpacing: typeScale.meta.letterSpacing }}>
               {option.label}
             </Text>
-          </Pressable>
+          </GlassButton>
         )
       })}
-    </View>
+    </GlassSurface>
   )
 }
 
@@ -207,7 +202,7 @@ export function StackPage({
   right?: ReactNode
 }) {
   const insets = useSafeAreaInsets()
-  const { colors } = useTheme()
+  const { colors, scheme } = useTheme()
   const barShadow = useLift('bar')
   return (
     <View style={[styles.page, { backgroundColor: colors.background, paddingTop: insets.top + 8 }]}>
@@ -220,9 +215,9 @@ export function StackPage({
         <Enter style={styles.pageBody}>{children}</Enter>
       </ScrollView>
       {footer ? (
-        <View style={[styles.footer, barShadow, { backgroundColor: colors.card, borderTopColor: colors.border, paddingBottom: insets.bottom + 12 }]}>
+        <GlassSurface app="driver" scheme={scheme} variant="header" style={[styles.footer, barShadow, { paddingBottom: insets.bottom + 12 }]}>
           {footer}
-        </View>
+        </GlassSurface>
       ) : null}
     </View>
   )
@@ -233,6 +228,7 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 24,
+    padding: 0,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -240,6 +236,7 @@ const styles = StyleSheet.create({
     width: 84,
     height: 84,
     borderRadius: 42,
+    padding: 0,
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#F56600',

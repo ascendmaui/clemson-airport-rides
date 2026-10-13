@@ -24,6 +24,7 @@ function DriverTabBar({ state, navigation }: BarProps) {
       tabs={DRIVER_TABS}
       activeIndex={Math.max(0, DRIVER_TABS.findIndex((tab) => tab.id === activeName))}
       scheme={scheme}
+      app="driver"
       bottomInset={insets.bottom}
       onSelect={(tab: { id: string }) => {
         const route = state.routes.find((item) => item.name === tab.id)

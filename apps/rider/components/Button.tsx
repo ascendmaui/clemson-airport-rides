@@ -1,28 +1,21 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native'
-import { radius, type as typeScale } from 'rides-native/shared/theme.js'
-import { pressStyle } from '@/components/enter'
-import { lift } from '@/lib/elevation'
+import { Text, View } from 'react-native'
+import { GlassButton, GlassSurface, glassTextColor } from 'rides-native/glass'
+import { type as typeScale } from 'rides-native/shared/theme.js'
 import type { Palette } from '@/lib/palette'
 import { useTheme } from '@/lib/theme'
 import { useThemedStyles } from '@/lib/useThemedStyles'
 
 type ButtonTone = 'orange' | 'purple' | 'ghost' | 'outline'
 
-function toneStyle(colors: Palette, tone: ButtonTone) {
+function variantFor(tone: ButtonTone): 'primary' | 'secondary' | 'ghost' {
   switch (tone) {
     case 'orange':
-      return { backgroundColor: colors.orange, color: colors.onAccent, borderColor: 'transparent', borderWidth: 0 }
     case 'purple':
-      return { backgroundColor: colors.purple, color: colors.onAccent, borderColor: 'transparent', borderWidth: 0 }
+      return 'primary'
     case 'ghost':
-      return { backgroundColor: colors.elevated, color: colors.link, borderColor: 'transparent', borderWidth: 0 }
+      return 'ghost'
     case 'outline':
-      return {
-        backgroundColor: colors.purpleSoft,
-        color: colors.link,
-        borderColor: colors.purple,
-        borderWidth: 1.5,
-      }
+      return 'secondary'
     default: {
       const neverTone: never = tone
       return neverTone
@@ -42,29 +35,16 @@ export function PrimaryButton({
   disabled?: boolean
   tone?: ButtonTone
 }) {
-  const { colors } = useTheme()
-  const look = toneStyle(colors, tone)
-  const raised = tone === 'orange' || tone === 'purple'
+  const { scheme } = useTheme()
   return (
-    <Pressable
+    <GlassButton
+      label={label}
       onPress={onPress}
       disabled={disabled}
-      accessibilityRole="button"
-      accessibilityLabel={label}
-      accessibilityState={{ disabled: Boolean(disabled) }}
-      style={({ pressed }) => [
-        styles.btn,
-        raised ? lift(colors, 'rest') : null,
-        {
-          backgroundColor: look.backgroundColor,
-          borderColor: look.borderColor,
-          borderWidth: look.borderWidth,
-        },
-        pressStyle(pressed, Boolean(disabled)),
-      ]}
-    >
-      <Text style={[styles.label, { color: look.color }]}>{label}</Text>
-    </Pressable>
+      app="rider"
+      scheme={scheme}
+      variant={variantFor(tone)}
+    />
   )
 }
 
@@ -78,20 +58,30 @@ export function Pill({
   active?: boolean
   onPress?: () => void
 }) {
+  const { scheme } = useTheme()
   const styles = useThemedStyles(makeStyles)
-  const body = <Text style={[styles.pillLabel, active && styles.pillLabelOn]}>{label}</Text>
-  if (!onPress) return <View style={[styles.pill, active && styles.pillOn]}>{body}</View>
+  const color = glassTextColor({ app: 'rider', scheme, variant: 'chip' })
+  const body = <Text style={[styles.pillLabel, { color }, active && styles.pillLabelOn]}>{label}</Text>
+  if (!onPress) {
+    return (
+      <GlassSurface app="rider" scheme={scheme} variant="chip" selected={Boolean(active)} style={styles.pill}>
+        {body}
+      </GlassSurface>
+    )
+  }
   return (
-    <Pressable
+    <GlassButton
       onPress={onPress}
-      style={[styles.pill, active && styles.pillOn]}
-      accessibilityRole="button"
+      app="rider"
+      scheme={scheme}
+      variant="chip"
+      selected={Boolean(active)}
       accessibilityLabel={label}
       accessibilityState={{ selected: Boolean(active) }}
       hitSlop={8}
     >
       {body}
-    </Pressable>
+    </GlassButton>
   )
 }
 
@@ -106,13 +96,9 @@ function makeStyles(colors: Palette) {
       borderRadius: 999,
       paddingHorizontal: 14,
       paddingVertical: 8,
-      borderWidth: 1,
-      borderColor: colors.border,
-      backgroundColor: colors.chip,
     },
-    pillOn: { borderColor: colors.orange, backgroundColor: colors.orangeSoft },
     pillLabel: { color: colors.link, fontWeight: '700' as const, fontSize: typeScale.meta.fontSize, letterSpacing: typeScale.meta.letterSpacing },
-    pillLabelOn: { color: colors.orange },
+    pillLabelOn: { fontWeight: '800' as const },
     handle: {
       alignSelf: 'center' as const,
       width: 36,
@@ -124,12 +110,3 @@ function makeStyles(colors: Palette) {
     },
   }
 }
-
-const styles = StyleSheet.create({
-  btn: { borderRadius: radius.lg, paddingVertical: 16, alignItems: 'center', paddingHorizontal: 16 },
-  label: {
-    fontWeight: typeScale.button.fontWeight,
-    fontSize: typeScale.button.fontSize,
-    letterSpacing: typeScale.button.letterSpacing,
-  },
-})
