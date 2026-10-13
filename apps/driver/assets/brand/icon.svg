@@ -90,22 +90,22 @@
     <rect width="1024" height="1024" fill="#000000"/>
   </g>
   <g id="glyph" fill="none" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M 298.00 528.00 A 214.00 214.00 0 1 1 726.00 528.00 A 214.00 214.00 0 1 1 298.00 528.00 Z M 364.00 528.00 A 148.00 148.00 0 1 0 660.00 528.00 A 148.00 148.00 0 1 0 364.00 528.00 Z" fill="url(#wheelGlass)" fill-rule="evenodd"/>
-    <path d="M 512.00 482.00 L 512.00 382.00 M 551.84 551.00 L 638.44 601.00 M 472.16 551.00 L 385.56 601.00" stroke="#FFFFFF" stroke-opacity="0.92" stroke-width="34"/>
-    <circle cx="512.00" cy="528.00" r="54" fill="#FFFFFF" fill-opacity="0.92"/>
-    <circle cx="512.00" cy="528.00" r="24" fill="#FFFFFF" fill-opacity="0.45"/>
-    <path d="M 332.76 502.81 A 181.00 181.00 0 0 1 579.80 360.18"
+    <path d="M 298.00 512.00 A 214.00 214.00 0 1 1 726.00 512.00 A 214.00 214.00 0 1 1 298.00 512.00 Z M 364.00 512.00 A 148.00 148.00 0 1 0 660.00 512.00 A 148.00 148.00 0 1 0 364.00 512.00 Z" fill="url(#wheelGlass)" fill-rule="evenodd"/>
+    <path d="M 512.00 466.00 L 512.00 366.00 M 551.84 535.00 L 638.44 585.00 M 472.16 535.00 L 385.56 585.00" stroke="#FFFFFF" stroke-opacity="0.92" stroke-width="34"/>
+    <circle cx="512.00" cy="512.00" r="54" fill="#FFFFFF" fill-opacity="0.92"/>
+    <circle cx="512.00" cy="512.00" r="24" fill="#FFFFFF" fill-opacity="0.45"/>
+    <path d="M 332.76 486.81 A 181.00 181.00 0 0 1 579.80 344.18"
           stroke="#FFFFFF" stroke-opacity="0.9" stroke-width="16"/>
   </g>
   <g id="accent" fill="none" stroke-linecap="round">
-    <path d="M 287.30 418.41 A 250.00 250.00 0 0 1 736.70 418.41" stroke="#F56600" stroke-opacity="0.35" stroke-width="54" filter="url(#arcGlow)"/>
-    <path d="M 287.30 418.41 A 250.00 250.00 0 0 1 736.70 418.41" stroke="#F56600" stroke-width="30"/>
-    <path d="M 287.30 418.41 A 250.00 250.00 0 0 1 736.70 418.41" stroke="#FFD8B0" stroke-width="8"/>
+    <path d="M 287.30 402.41 A 250.00 250.00 0 0 1 736.70 402.41" stroke="#F56600" stroke-opacity="0.35" stroke-width="54" filter="url(#arcGlow)"/>
+    <path d="M 287.30 402.41 A 250.00 250.00 0 0 1 736.70 402.41" stroke="#F56600" stroke-width="30"/>
+    <path d="M 287.30 402.41 A 250.00 250.00 0 0 1 736.70 402.41" stroke="#FFD8B0" stroke-width="8"/>
   </g>
   <g id="mono" fill="none" stroke="#FFFFFF" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M 298.00 528.00 A 214.00 214.00 0 1 1 726.00 528.00 A 214.00 214.00 0 1 1 298.00 528.00 Z M 364.00 528.00 A 148.00 148.00 0 1 0 660.00 528.00 A 148.00 148.00 0 1 0 364.00 528.00 Z" fill="#FFFFFF" fill-rule="evenodd"/>
-    <path d="M 512.00 482.00 L 512.00 382.00 M 551.84 551.00 L 638.44 601.00 M 472.16 551.00 L 385.56 601.00" stroke-width="34"/>
-    <path d="M 458.00 528.00 A 54.00 54.00 0 1 1 566.00 528.00 A 54.00 54.00 0 1 1 458.00 528.00 Z M 490.00 528.00 A 22.00 22.00 0 1 0 534.00 528.00 A 22.00 22.00 0 1 0 490.00 528.00 Z" fill="#FFFFFF" fill-rule="evenodd"/>
-    <path d="M 287.30 418.41 A 250.00 250.00 0 0 1 736.70 418.41" stroke-width="30"/>
+    <path d="M 298.00 512.00 A 214.00 214.00 0 1 1 726.00 512.00 A 214.00 214.00 0 1 1 298.00 512.00 Z M 364.00 512.00 A 148.00 148.00 0 1 0 660.00 512.00 A 148.00 148.00 0 1 0 364.00 512.00 Z" fill="#FFFFFF" fill-rule="evenodd"/>
+    <path d="M 512.00 466.00 L 512.00 366.00 M 551.84 535.00 L 638.44 585.00 M 472.16 535.00 L 385.56 585.00" stroke-width="34"/>
+    <path d="M 458.00 512.00 A 54.00 54.00 0 1 1 566.00 512.00 A 54.00 54.00 0 1 1 458.00 512.00 Z M 490.00 512.00 A 22.00 22.00 0 1 0 534.00 512.00 A 22.00 22.00 0 1 0 490.00 512.00 Z" fill="#FFFFFF" fill-rule="evenodd"/>
+    <path d="M 287.30 402.41 A 250.00 250.00 0 0 1 736.70 402.41" stroke-width="30"/>
   </g>
 </svg>

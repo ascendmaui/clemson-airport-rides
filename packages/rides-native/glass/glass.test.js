@@ -11,6 +11,7 @@ import {
   glassContrastFailures,
   glassFill,
   glassRecipe,
+  glassShowsStreak,
   worstContrast,
 } from './tokens.js'
 
@@ -50,6 +51,20 @@ test('glass primitives draw blur, specular, streak, border, and UI-thread press'
   assert.match(surface, /styles\.specular/)
   assert.match(surface, /styles\.streak/)
   assert.match(surface, /rotate: '-32deg'/)
+  assert.match(surface, /glassShowsStreak/)
+  assert.match(surface, /showStreak \?/)
+  assert.equal(glassShowsStreak({ variant: 'primary', accent: 'orange' }), false)
+  assert.equal(glassShowsStreak({ variant: 'fab', accent: 'orange' }), false)
+  assert.equal(glassShowsStreak({ variant: 'chip', accent: 'orange' }), false)
+  assert.equal(glassShowsStreak({ variant: 'primary', accent: 'purple' }), true)
+  assert.equal(glassShowsStreak({ variant: 'fab', accent: 'purple' }), true)
+  assert.equal(glassShowsStreak({ variant: 'surface', accent: 'orange' }), true)
+  assert.equal(glassShowsStreak({ variant: 'header', accent: 'orange' }), true)
+  assert.equal(glassShowsStreak({ variant: 'sheet', accent: 'orange' }), true)
+  const green = glassRecipe({ app: 'driver', scheme: 'light', variant: 'fab', accent: 'green' })
+  assert.ok(worstContrast(green.text, green.plate) >= GLASS_AA)
+  const greenDark = glassRecipe({ app: 'driver', scheme: 'dark', variant: 'fab', accent: 'green' })
+  assert.ok(worstContrast(greenDark.text, greenDark.plate) >= GLASS_AA)
   assert.match(surface, /borderTopColor/)
   assert.match(surface, /ambientShadow/)
   assert.match(surface, /contactShadow/)
