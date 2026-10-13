@@ -3,6 +3,7 @@ import { createTrackingRefresh } from 'rides-native/tracking'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AccessibilityInfo, AppState, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { Gesture, GestureDetector } from 'react-native-gesture-handler'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { CampusMap, type MapPin } from '@/components/CampusMap'
 import { WaitTimer } from '@/components/WaitTimer'
@@ -130,6 +131,9 @@ export default function TripScreen() {
   const [error, setError] = useState<string | null>(null)
   const [settleNote, setSettleNote] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  // False only while the start-trip thumb is dragging, so the sheet does not scroll with it.
+  const [sheetScrollEnabled, setSheetScrollEnabled] = useState(true)
+  const sheetGesture = useMemo(() => Gesture.Native(), [])
   const [waitAnchor, setWaitAnchor] = useState<WaitAnchor | null>(null)
   const [waitError, setWaitError] = useState<string | null>(null)
   const [mapsOffer, setMapsOffer] = useState(false)
@@ -545,7 +549,8 @@ export default function TripScreen() {
       />
       <View pointerEvents="box-none" style={[styles.sheet, shadow, { paddingBottom: insets.bottom + 12, borderColor: colors.border }]}>
         <View style={[styles.handle, { backgroundColor: colors.track }]} />
-        <ScrollView style={styles.sheetScroll} contentContainerStyle={styles.sheetContent} showsVerticalScrollIndicator={false}>
+        <GestureDetector gesture={sheetGesture}>
+        <ScrollView style={styles.sheetScroll} contentContainerStyle={styles.sheetContent} showsVerticalScrollIndicator={false} scrollEnabled={sheetScrollEnabled}>
         <View style={styles.sheetHeader}>
           <Pressable accessibilityRole="button" accessibilityLabel="Back" onPress={() => router.back()} hitSlop={10} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
             <Glyph name="back" size={18} color={colors.orange} />
@@ -631,6 +636,8 @@ export default function TripScreen() {
                 photoUrl={person?.photoUrl || trip.riderAvatarUrl || null}
                 busy={busy}
                 onStart={onAdvance}
+                onSwipeActive={(active) => setSheetScrollEnabled(!active)}
+                blockGesture={sheetGesture}
               />
             ) : null}
             {trip.status === 'arrived' ? <WaitTimer arrivedAt={trip.arrivedAt} anchor={waitAnchor} busy={busy} onCancel={onNoShow} /> : null}
@@ -774,6 +781,7 @@ export default function TripScreen() {
         {trip && ['accepted', 'arriving'].includes(trip.status) ? <DriverCancelSheet key={trip.id} supabase={supabase} tripId={trip.id} scheduled={Boolean(trip.pickupAt)} disabled={busy} onCanceled={onDriverCanceled} /> : null}
         {action && trip?.status !== 'arriving' && trip?.status !== 'arrived' && (!multiStop || (stopsDone && trip?.status === 'in_progress')) ? <Primary label={busy ? 'Updating…' : action} onPress={onAdvance} disabled={busy} tone="purple" /> : null}
         </ScrollView>
+        </GestureDetector>
       </View>
       <SosSheet
         open={sosOpen && sosActive}

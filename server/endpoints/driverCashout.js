@@ -28,7 +28,8 @@ export default async function handleDriverCashout(req, res, deps = {}) {
     if (error) return json(res, 400, { error })
     if (body.confirm !== true) return json(res, 400, { error: 'confirm_required' })
     if (!stripe) return json(res, 503, { error: 'Stripe not configured' })
-    const result = await executeCashout({ sb, stripe, driverId: user.id, expectedFeeCents: body.feeCents, env })
+    const method = body.method === 'instant' || body.method === 'standard' ? body.method : null
+    const result = await executeCashout({ sb, stripe, driverId: user.id, expectedFeeCents: body.feeCents, method, env })
     const { status = 200, quote, ...rest } = result
     if (quote) delete quote.connectAccountId
     return json(res, result.ok ? 200 : status, quote ? { ...rest, quote } : rest)
