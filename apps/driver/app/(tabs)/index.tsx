@@ -47,6 +47,8 @@ import {
   dedupeOffersById,
   documentBannersCollapsed,
   offerAcceptSeconds,
+  offerSheetBottomInset,
+  offerSheetOwnsBottom,
   setHomeOfferId,
 } from 'rides-native/offerStack.js'
 import { riderDriverFirstName } from '../../../../shared/riderDriverPrivacy.js'
@@ -215,9 +217,9 @@ export default function DriverHome() {
   const clutterStyle = useAnimatedStyle(() => ({
     transform: [{ translateY: clutterY.value }],
   }))
-  const tabClearance = insets.bottom + 72
-  // The dock is pinned between the status bar / Dynamic Island and the tab bar.
-  // Its content stacks from the bottom; an offer card shrinks (and scrolls) to fit.
+  const tabClearance = offerSheetBottomInset(insets.bottom)
+  // The dock sits between the status bar and the tab bar, including the home-indicator inset.
+  // While an offer is up, END, the queue, and the earnings pill step aside so the sheet can use that space.
   const dockTop = insets.top + TOP_MARGIN
 
   useEffect(() => {
@@ -480,6 +482,7 @@ export default function DriverHome() {
     (card: DriverCard) => !isSyntheticOffer(card) && !hiddenOffers.includes(card.id),
   ))
   const offer = liveOffers.find((card: DriverCard) => card.id === selectedOfferId) || liveOffers[0] || null
+  const offerOwnsBottom = offerSheetOwnsBottom({ offerId: offer?.id ?? null, activeTrip: Boolean(desk?.active) })
   useEffect(() => {
     setHomeOfferId(offer?.id ?? null)
     return () => setHomeOfferId(null)
@@ -565,6 +568,7 @@ export default function DriverHome() {
             <View style={styles.topSpacer} />
             <CircleButton icon="search" label="Search and discover" onPress={() => router.push('/discover')} />
           </View>
+          {offerOwnsBottom ? null : (
           <View pointerEvents="box-none" style={[styles.earningsWrap, { top: dockTop }]}>
             <Pressable
               onPress={() => router.push('/earnings')}
@@ -577,6 +581,7 @@ export default function DriverHome() {
               <Text style={{ color: colors.inkSecondary, fontWeight: '800', fontSize: 12 }}>Earnings</Text>
             </Pressable>
           </View>
+          )}
 
           <View style={styles.heatPanel}>
             <Pressable
@@ -754,7 +759,7 @@ export default function DriverHome() {
               }}
             />
           ) : null}
-          {offer && !desk?.active ? (
+          {offerOwnsBottom && offer ? (
             <RideCard
               card={offer}
               busy={busy}
@@ -774,6 +779,7 @@ export default function DriverHome() {
               onDecline={() => onDecline(offer)}
             />
           ) : null}
+          {offerOwnsBottom ? null : (
           <View style={styles.goRow} pointerEvents="box-none">
             {online ? (
               <CircleButton icon="list" label="Ride queue" onPress={() => router.push('/queue')} />
@@ -792,6 +798,7 @@ export default function DriverHome() {
             </View>
             <View style={styles.goSide} />
           </View>
+          )}
         </View>
       </View>
     </View>
@@ -896,6 +903,7 @@ export function RideCard({
     // only the details scroll — Accept / Decline stay pinned and visible.
     <Animated.View style={[styles.offerWrap, { transform: [{ translateY: rise }], zIndex: OFFER_CARD_Z, elevation: OFFER_CARD_ELEVATION }]}>
       <Card
+        variant="offer"
         style={[styles.offerCard, pulsing ? { borderColor: colors.orange, borderWidth: 2 } : null]}
         accessibilityRole="summary"
         accessibilityLabel={vm.accessibilityLabel}

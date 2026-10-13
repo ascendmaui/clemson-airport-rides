@@ -5,6 +5,7 @@ import {
   GLASS_AA,
   GLASS_LAYERS,
   GLASS_ORANGE,
+  OFFER_PLATE_ALPHA,
   GLASS_PRESS,
   GLASS_PURPLE,
   glassCatalog,
@@ -46,7 +47,7 @@ test('glass primitives draw blur, specular, streak, border, and UI-thread press'
   assert.deepEqual([...GLASS_LAYERS], ['shadow', 'blur', 'tint', 'specular', 'streak', 'border'])
   assert.match(surface, /BlurView/)
   assert.match(surface, /styles\.fallback/)
-  assert.match(surface, /backgroundColor: fill/)
+  assert.match(surface, /backgroundColor: opaquePlate \? opaqueFill : fill/)
   assert.match(surface, /GlassSheen/)
   assert.match(surface, /styles\.specular/)
   assert.match(surface, /styles\.streak/)
@@ -77,7 +78,15 @@ test('glass primitives draw blur, specular, streak, border, and UI-thread press'
   assert.match(surface, /isGlassEffectAPIAvailable/)
   assert.match(surface, /GlassView/)
   assert.match(surface, /nativeGlassAvailable\(\)/)
-  assert.match(surface, /glassEffectStyle=\{strong \? 'regular' : 'clear'\}/)
+  assert.match(surface, /glassEffectStyle=\{strong \|\| opaquePlate \? 'regular' : 'clear'\}/)
+  assert.match(surface, /opaquePlate \? opaqueFill/)
+  const offer = glassRecipe({ app: 'driver', scheme: 'light', variant: 'offer' })
+  const offerDark = glassRecipe({ app: 'driver', scheme: 'dark', variant: 'offer' })
+  assert.equal(OFFER_PLATE_ALPHA, 0.98)
+  assert.ok(offer.plate.alpha >= 0.97)
+  assert.ok(offerDark.plate.alpha >= 0.97)
+  assert.ok(worstContrast(offer.text, offer.plate) >= GLASS_AA)
+  assert.ok(worstContrast(offerDark.text, offerDark.plate) >= GLASS_AA)
   assert.match(button, /if \(nativeGlass\) return \{ transform: \[\{ scale \}\] \}/)
   assert.doesNotMatch(button, /opacity:\s*0\b/)
   assert.doesNotMatch(surface, /opacity:\s*0\b/)
@@ -87,7 +96,7 @@ test('glass primitives draw blur, specular, streak, border, and UI-thread press'
   assert.match(button, /pressed\.value = reduce \? 1/)
   assert.match(button, /export function GlassButton/)
   assert.match(card, /export function GlassCard/)
-  assert.match(card, /variant="surface"/)
+  assert.match(card, /variant === 'offer' \? 'offer' : 'surface'/)
   assert.match(sheet, /export function GlassSheet/)
   assert.match(sheet, /variant="sheet"/)
   assert.match(sheet, /edges="top"/)

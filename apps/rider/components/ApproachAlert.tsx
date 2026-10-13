@@ -259,6 +259,8 @@ export function ApproachAlert({
   }, [active, inCrowd, paused])
 
   if (!active || paused) return null
+  // Feet, compass, and meters ('5 ft West 1 m') is a debug readout. User builds stay clear.
+  if (!__DEV__) return null
 
   const primary = approachPrimaryLine(reading?.feet)
   const kicker = statusLine.split(' · ')[0]

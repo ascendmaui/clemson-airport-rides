@@ -141,11 +141,13 @@ export function Card({
   style,
   accessibilityRole,
   accessibilityLabel,
+  variant = 'surface',
 }: {
   children: ReactNode
   style?: StyleProp<ViewStyle>
   accessibilityRole?: string
   accessibilityLabel?: string
+  variant?: 'surface' | 'offer'
   key?: string | number
 }) {
   const { scheme } = useTheme()
@@ -153,6 +155,7 @@ export function Card({
     <GlassCard
       app="driver"
       scheme={scheme}
+      variant={variant}
       accessibilityRole={accessibilityRole as any}
       accessibilityLabel={accessibilityLabel}
       style={[styles.card, style]}

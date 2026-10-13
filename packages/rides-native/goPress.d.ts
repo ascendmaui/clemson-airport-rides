@@ -32,6 +32,12 @@ export function attentionRequiredItems(input: {
   now?: Date
 }): AttentionRequired
 
+export function attentionScreenItems(input: {
+  documents?: unknown[] | null
+  dueAt?: unknown
+  now?: Date
+}): AttentionRequired
+
 export function decideGoPress(input: {
   goingOnline: boolean
   documents?: unknown[] | null

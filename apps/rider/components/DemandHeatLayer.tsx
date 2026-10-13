@@ -7,6 +7,7 @@ import {
   demandPointsToHeat,
   fieldPlacement,
   framePercents,
+  placeHeatLabelPercents,
   HEAT_BREATH_LOW,
   HEAT_BREATH_MS,
   renderDemandHeatImage,
@@ -56,9 +57,9 @@ export function DemandHeatLayer({
     inputRange: [0, 1],
     outputRange: [HEAT_BREATH_LOW, 1],
   })
-  const places = image
+  const places = placeHeatLabelPercents(image
     ? model.areas.map((area) => fieldPlacement(area, image.bounds))
-    : framePercents(model.areas)
+    : framePercents(model.areas))
   return (
     <View pointerEvents="none" style={styles.field}>
       {image ? (
@@ -94,7 +95,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     width: 78,
     marginLeft: -39,
-    marginTop: -28,
+    marginTop: -10,
     alignItems: 'center',
     backgroundColor: 'transparent',
   },

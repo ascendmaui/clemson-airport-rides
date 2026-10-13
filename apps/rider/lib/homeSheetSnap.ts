@@ -19,6 +19,14 @@ export const HOME_SHEET_MAP_MAX_RATIO = 0.64
 /** Gap under the search field so it sits above the tab bar, clear of the home indicator. */
 export const HOME_SHEET_BOTTOM_PADDING = 12
 
+/** Native tab bar content above the home indicator. The screen pads by this plus the inset. */
+export const NATIVE_TAB_CONTENT_HEIGHT = 56
+
+export function homeTabClearance(bottomInset: number): number {
+  const inset = Number.isFinite(bottomInset) ? Math.max(0, bottomInset) : 0
+  return inset + NATIVE_TAB_CONTENT_HEIGHT
+}
+
 /** Until the handle lays out: paddingTop 8 + handle margins and bar (4 + 4 + 10). */
 export const HOME_SHEET_HANDLE_FALLBACK = 26
 
