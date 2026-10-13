@@ -1,3 +1,4 @@
+/** GO and END feedback. Accept and trip-complete keep their own cues. */
 export type ShiftControl = 'GO' | 'END'
 
 export type ShiftSound = 'go' | 'end'
