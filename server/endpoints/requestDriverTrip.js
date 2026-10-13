@@ -35,6 +35,7 @@ import { releaseTigerHeatReservation, reserveTigerHeatOffer } from '../tigerHeat
 import { loadRiderMatchPreferences } from '../riderPass.js'
 import { tigerPassMetadata } from '../../shared/tigerPass.js'
 import { authorizeRideRequest } from '../fareAuthorization.js'
+import { assertRiderPaymentMethod } from '../ridePaymentGate.js'
 import { enrollCarpoolSeat } from '../carpoolSeatBook.js'
 import { isE2ETestUser } from '../../shared/e2eTestAccounts.js'
 
@@ -324,6 +325,15 @@ export default async function handler(req, res, deps = {}) {
   if (!profileRes?.ok) {
     if (tigerHeat) await releaseTigerHeatReservation({ sb, trip: { metadata: { tiger_heat: tigerHeat } } })
     return json(res, 500, { error: 'Could not create your rider profile', code: 'profile_missing' })
+  }
+
+  const paymentGate = await assertRiderPaymentMethod(sb, user.id, body)
+  if (!paymentGate.ok) {
+    if (tigerHeat) await releaseTigerHeatReservation({ sb, trip: { metadata: { tiger_heat: tigerHeat } } })
+    return json(res, paymentGate.status || 402, {
+      error: paymentGate.error,
+      code: paymentGate.code,
+    })
   }
 
   const inserted = await sb.from('trips').insert(row).select('id, status, driver_id, dropoff_label, fare_cents, deposit_cents').single()

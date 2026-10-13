@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase'
 import { pickerVehicleLine } from '../../packages/rides-native/drivers.js'
 import { loadMatchedDriverCard, loadPublicProfile, toCounterpartView } from '../../packages/rides-native/partyProfile.js'
 
-export function CounterpartChip({ profileId, noun = 'rider', eta = null, onOpen }) {
+export function CounterpartChip({ profileId, noun = 'rider', eta = null, onOpen, style }) {
   const [person, setPerson] = useState(null)
 
   useEffect(() => {
@@ -45,6 +45,7 @@ export function CounterpartChip({ profileId, noun = 'rider', eta = null, onOpen 
         borderRadius: 16,
         background: 'rgba(82,45,128,0.08)',
         border: '1px solid rgba(82,45,128,0.16)',
+        ...style,
       }}
     >
       <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: 1, color: '#F56600' }}>

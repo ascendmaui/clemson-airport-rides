@@ -350,6 +350,7 @@ test('approach pulse is a soft eased breath, not a 0/1 flash', () => {
   assert.deepEqual(still.peak, moving.peak)
 
   const src = readFileSync(new URL('../components/ApproachAlert.tsx', import.meta.url), 'utf8')
+  assert.match(src, /if \(!active \|\| paused \|\| reading\) return null/)
   assert.match(src, /approachPulseMotion/)
   assert.match(src, /useReducedMotion/)
   assert.match(src, /if \(!next\.enabled\)/)

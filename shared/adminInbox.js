@@ -22,6 +22,7 @@ export const INBOX_KINDS = [
   'driver_approval',
   'background_attestation',
   'payout_w9',
+  'agent_draft',
 ]
 
 export const INBOX_KIND_LABELS = {
@@ -35,6 +36,7 @@ export const INBOX_KIND_LABELS = {
   driver_approval: 'Driver approvals',
   background_attestation: 'Background attestation',
   payout_w9: 'Payouts and W-9',
+  agent_draft: 'Drafts for approval',
 }
 
 const DOC_REVIEW = new Set([
@@ -73,6 +75,7 @@ const URGENCY = {
   background_attestation: 58,
   inspection_due: 52,
   payout_w9: 48,
+  agent_draft: 44,
 }
 
 export function ageMs(iso, now = new Date()) {
@@ -187,7 +190,7 @@ function infoRequest(id, label, profileId, prompt) {
   }
 }
 
-function makeItem({ kind, sourceId, title, detail, at, urgency, actions }) {
+function makeItem({ kind, sourceId, title, detail, at, urgency, actions, body }) {
   const createdAt = at || null
   return {
     id: `${kind}:${sourceId}`,
@@ -198,6 +201,20 @@ function makeItem({ kind, sourceId, title, detail, at, urgency, actions }) {
     createdAt,
     urgency,
     actions,
+    ...(body ? { body } : {}),
+  }
+}
+
+function agentDraftLabel(kind) {
+  switch (kind) {
+    case 'marketing':
+      return 'Marketing'
+    case 'affiliate':
+      return 'Affiliate'
+    case 'outreach':
+      return 'Outreach'
+    default:
+      return 'Draft'
   }
 }
 
@@ -625,6 +642,25 @@ export function buildAdminInbox(input = {}, now = new Date()) {
         ],
       }))
     }
+  }
+
+  for (const draft of input.agentDrafts || []) {
+    if (norm(draft.status) !== 'draft_ready') continue
+    const text = String(draft.body || '').trim()
+    if (!text || !draft.id) continue
+    const where = [draft.source, draft.mailbox, draft.slot].filter(Boolean).join(' · ')
+    items.push(makeItem({
+      kind: 'agent_draft',
+      sourceId: draft.id,
+      title: `${agentDraftLabel(draft.kind)} · ${draft.subject || 'Untitled draft'}`,
+      detail: where
+        ? `${where}. For approval. This item does not send email.`
+        : 'For approval. This item does not send email.',
+      body: text,
+      at: when(draft.created_at),
+      urgency: URGENCY.agent_draft,
+      actions: [],
+    }))
   }
 
   const aged = items.map((item) => withAge(item, wall))

@@ -44,6 +44,8 @@ test('rider upcoming card keeps fare and deposit for the remaining balance', () 
   assert.equal(card.depositCents, 2250)
   assert.equal(card.purpose, 'Airport')
   assert.equal(card.estimate, false)
+  assert.equal(card.passengers, 1)
+  assert.equal(card.passengerLabel, '1 passenger')
 })
 
 const HOUR = 60 * 60 * 1000

@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { isActiveTripLocationStatus, newestTripLocation, shouldPublishTripLocation } from './backgroundLocation.js'
+import { createTripLocationHeartbeat, isActiveTripLocationStatus, newestTripLocation, shouldPublishTripLocation, TRIP_LOCATION_HEARTBEAT_MS } from './backgroundLocation.js'
 
 const location = (timestamp, latitude = 34.68, longitude = -82.84) => ({
   timestamp, coords: { latitude, longitude, heading: 90, speed: 12 },
@@ -39,4 +39,24 @@ test('foreground and background share an exact four-second publish boundary', ()
   assert.equal(shouldPublishTripLocation(NaN, 10000), true)
   assert.equal(shouldPublishTripLocation(10000, 9000), true, 'recover after a clock correction')
   assert.equal(shouldPublishTripLocation(null, NaN), false)
+})
+
+test('the trip heartbeat republishes the last fix on a clock and skips a stopped trip', async () => {
+  assert.equal(TRIP_LOCATION_HEARTBEAT_MS, 12000)
+  const published = []
+  const beat = createTripLocationHeartbeat({
+    publish: async (fix) => { published.push(fix) },
+    active: async () => true,
+    intervalMs: 12000,
+  })
+  assert.equal(await beat.beat(), false)
+  beat.remember({ lat: 34.68, lng: -82.84, heading: 12, speed: 0 })
+  assert.equal(await beat.beat(), true)
+  assert.deepEqual(published, [{ lat: 34.68, lng: -82.84, heading: 12, speed: 0 }])
+  const paused = createTripLocationHeartbeat({
+    publish: async () => { throw new Error('inactive') },
+    active: async () => false,
+  })
+  paused.remember({ lat: 1, lng: 2 })
+  assert.equal(await paused.beat(), false)
 })

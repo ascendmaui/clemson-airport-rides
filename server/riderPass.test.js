@@ -125,7 +125,7 @@ function fleet(extraProfiles = []) {
     profiles: [
       { id: JOHN, email: 'johnmatveyev@gmail.com' },
       { id: OTHER, email: 'someone@example.com' },
-      { id: RIDER, email: 'rider@example.com', favorite_driver_ids: ['demo-marcus', OTHER, JOHN] },
+      { id: RIDER, email: 'rider@example.com', stripe_default_pm_id: 'pm_test', favorite_driver_ids: ['demo-marcus', OTHER, JOHN] },
       ...extraProfiles,
     ],
   })

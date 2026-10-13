@@ -2,6 +2,46 @@ import { isLiveLocationStatus } from './liveFix.js'
 
 export const LOCATION_PUBLISH_MIN_INTERVAL_MS = 4000
 
+/** Republish the last fix on a clock during an active trip, even when the car is still. */
+export const TRIP_LOCATION_HEARTBEAT_MS = 12000
+
+export function createTripLocationHeartbeat({
+  publish,
+  active,
+  intervalMs = TRIP_LOCATION_HEARTBEAT_MS,
+} = {}) {
+  let timer = null
+  let lastFix = null
+  return {
+    remember(fix) {
+      if (!fix || !Number.isFinite(Number(fix.lat)) || !Number.isFinite(Number(fix.lng))) return
+      lastFix = {
+        lat: Number(fix.lat),
+        lng: Number(fix.lng),
+        heading: fix.heading ?? null,
+        speed: fix.speed ?? null,
+      }
+    },
+    lastFix() { return lastFix },
+    start() {
+      this.stop()
+      if (typeof setInterval !== 'function') return
+      timer = setInterval(() => { void this.beat() }, intervalMs)
+      if (typeof timer.unref === 'function') timer.unref()
+    },
+    stop() {
+      if (timer) clearInterval(timer)
+      timer = null
+    },
+    async beat() {
+      if (!lastFix) return false
+      if (typeof active === 'function' && !await active()) return false
+      if (typeof publish === 'function') await publish(lastFix)
+      return true
+    },
+  }
+}
+
 export function isActiveTripLocationStatus(status) {
   return isLiveLocationStatus(status)
 }

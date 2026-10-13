@@ -739,6 +739,35 @@ test('inbox is admin-only and lists manual document reviews', async () => {
   assert.equal(networkHits, 0)
 })
 
+test('inbox lists agent drafts for approval and does not write or send them', async () => {
+  const sb = createFakeSb()
+  sb.when((ctx) => ctx.table === 'agent_drafts', () => ({
+    data: [{
+      id: 'draft-1',
+      kind: 'outreach',
+      status: 'draft_ready',
+      subject: 'Partner onboarding 1',
+      body: 'Welcome aboard\n101 North Main Street, Greenville, SC 29601',
+      source: 'schedule',
+      mailbox: null,
+      slot: 'step-1',
+      created_at: '2026-10-13T00:00:00.000Z',
+    }],
+    error: null,
+  }))
+  const res = await invoke({ url: '/api/admin?action=inbox', client: sb })
+  assert.equal(res.status, 200)
+  const item = res.json.items.find((row) => row.kind === 'agent_draft')
+  assert.ok(item)
+  assert.match(item.title, /Outreach/)
+  assert.match(item.body, /101 North Main Street, Greenville, SC 29601/)
+  assert.equal(item.actions.length, 0)
+  assert.equal(res.json.counts.agent_draft, 1)
+  assert.equal(sb.calls.filter((ctx) => ctx.table === 'agent_drafts').every((ctx) => ctx.op === 'select'), true)
+  assert.equal(sb.calls.some((ctx) => ctx.op === 'insert' || ctx.op === 'update' || ctx.op === 'delete'), false)
+  assert.equal(networkHits, 0)
+})
+
 test('info-request 404s when the applicant is missing and does not email', async () => {
   const res = await invoke({
     method: 'POST',

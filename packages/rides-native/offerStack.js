@@ -40,6 +40,18 @@ export function documentBannersCollapsed({ online = false, offerId = null } = {}
   return Boolean(online) || Boolean(offerId)
 }
 
+/** The accept sheet owns the bottom of home. END, the queue, and the earnings pill step aside. */
+export function offerSheetOwnsBottom({ offerId = null, activeTrip = false } = {}) {
+  return Boolean(offerId) && !activeTrip
+}
+
+/** Home-indicator inset plus the tab bar the offer sheet has to clear. */
+export function offerSheetBottomInset(bottomInset, tabContent = 72) {
+  const inset = Number.isFinite(bottomInset) ? Math.max(0, bottomInset) : 0
+  const tab = Number.isFinite(tabContent) ? Math.max(0, tabContent) : 0
+  return inset + tab
+}
+
 let homeOfferId = null
 
 export function setHomeOfferId(id) {

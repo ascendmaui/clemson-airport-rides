@@ -1,7 +1,7 @@
 import * as Location from 'expo-location'
 import * as TaskManager from 'expo-task-manager'
 import { Platform } from 'react-native'
-import { isActiveTripLocationStatus, newestTripLocation, shouldPublishTripLocation } from 'rides-native/backgroundLocation'
+import { createTripLocationHeartbeat, isActiveTripLocationStatus, newestTripLocation, shouldPublishTripLocation, TRIP_LOCATION_HEARTBEAT_MS } from 'rides-native/backgroundLocation'
 import { publishDriverLocation as writeDriverLocation } from 'rides-native/driverDesk'
 import { authStorage } from './storage'
 import { supabase } from './supabase'
@@ -25,6 +25,7 @@ function serial<T>(work: () => Promise<T>): Promise<T> {
 
 async function stopUpdates(expectedTripId?: string): Promise<void> {
   if (expectedTripId && await authStorage.getItem(ACTIVE_TRIP_KEY) !== expectedTripId) return
+  tripHeartbeat.stop()
   // Invalidate task uploads even if stopping the OS service fails.
   await authStorage.removeItem(ACTIVE_TRIP_KEY)
   if (native && await Location.hasStartedLocationUpdatesAsync(DRIVER_TRIP_LOCATION_TASK)) {
@@ -46,8 +47,41 @@ async function activeTrip(tripId: string) {
   return { id: trip.id as string, status: trip.status as string, driverId: user.id }
 }
 
+const tripHeartbeat = createTripLocationHeartbeat({
+  intervalMs: TRIP_LOCATION_HEARTBEAT_MS,
+  publish: async (fix) => {
+    try {
+      await serial(async () => {
+        const tripId = await authStorage.getItem(ACTIVE_TRIP_KEY)
+        if (!tripId || !supabase) return
+        const trip = await activeTrip(tripId)
+        if (!trip) {
+          await stopUpdates()
+          return
+        }
+        await publish(supabase, trip.driverId, {
+          lat: fix.lat,
+          lng: fix.lng,
+          heading: fix.heading,
+          speed: fix.speed,
+          tripId: trip.id,
+          tripStatus: trip.status,
+        })
+      })
+    } catch (failure) {
+      console.warn('[trip location]', failure instanceof Error ? failure.message : 'Location heartbeat failed')
+    }
+  },
+  active: async () => Boolean(await authStorage.getItem(ACTIVE_TRIP_KEY)),
+})
+
+function rememberFix(fix: { lat?: number | null; lng?: number | null; heading?: number | null; speed?: number | null } | null) {
+  tripHeartbeat.remember(fix)
+}
+
 async function publish(client: unknown, driverId: string, fix: DriverLocationInput): Promise<void> {
   if (!Number.isFinite(fix.lat) || !Number.isFinite(fix.lng)) return
+  rememberFix(fix)
   const stored = await authStorage.getItem(LAST_PUBLISH_KEY)
   const lastPublishedAt = stored == null ? null : Number(stored)
   if (!shouldPublishTripLocation(lastPublishedAt, Date.now())) return
@@ -93,6 +127,12 @@ TaskManager.defineTask<{ locations: Location.LocationObject[] }>(DRIVER_TRIP_LOC
       if (!trip) { await stopUpdates(); return }
       const location = newestTripLocation(data?.locations)
       if (!location) return
+      rememberFix({
+        lat: location.coords.latitude,
+        lng: location.coords.longitude,
+        heading: location.coords.heading,
+        speed: location.coords.speed,
+      })
       await publish(supabase, trip.driverId, {
         lat: location.coords.latitude,
         lng: location.coords.longitude,
@@ -122,8 +162,11 @@ export function startTripBackgroundLocation(tripId: string): Promise<BackgroundL
       await Location.startLocationUpdatesAsync(DRIVER_TRIP_LOCATION_TASK, {
         accuracy: Location.Accuracy.High,
         activityType: Location.ActivityType.AutomotiveNavigation,
-        timeInterval: 5000,
-        distanceInterval: 15,
+        // timeInterval is Android. deferredUpdatesInterval is iOS.
+        // distanceInterval 0 keeps a stationary car on the clock instead of waiting for 15 m.
+        timeInterval: TRIP_LOCATION_HEARTBEAT_MS,
+        distanceInterval: 0,
+        deferredUpdatesInterval: TRIP_LOCATION_HEARTBEAT_MS,
         pausesUpdatesAutomatically: false,
         showsBackgroundLocationIndicator: true,
         foregroundService: {
@@ -132,6 +175,18 @@ export function startTripBackgroundLocation(tripId: string): Promise<BackgroundL
         },
       })
     }
+    try {
+      const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High })
+      rememberFix({
+        lat: pos.coords.latitude,
+        lng: pos.coords.longitude,
+        heading: pos.coords.heading,
+        speed: pos.coords.speed,
+      })
+    } catch {
+      /* The background task still publishes the next fix the OS delivers. */
+    }
+    tripHeartbeat.start()
     return 'started'
   })
 }

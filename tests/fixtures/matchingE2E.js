@@ -167,7 +167,7 @@ export function seedMatchingScenario({
   const initialTables = {
     trips: [baseTrip],
     profiles: [
-      { id: riderId, full_name: 'Fixture Rider' },
+      { id: riderId, full_name: 'Fixture Rider', email: 'rider@example.com', stripe_default_pm_id: 'pm_test' },
       ...drivers.map((driver) => ({ id: driver.id, full_name: `Fixture ${driver.id}` })),
     ],
     driver_applications: drivers.map((driver) => ({

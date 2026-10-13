@@ -488,6 +488,15 @@ test('requestDriverTrip lets a whitespace id through and still omits the fare fi
   assert.equal(slot.calls[0].body.driverId, '   ')
 })
 
+test('requestDriverTrip forwards applePay only when it is set up', async () => {
+  reset()
+  await requestDriverTrip(priced({ riderId: 'rider-1', driverId: 'driver-9', applePay: false }))
+  assert.equal('applePay' in slot.calls[0].body, false)
+  reset()
+  await requestDriverTrip(priced({ riderId: 'rider-1', driverId: 'driver-9', applePay: true }))
+  assert.equal(slot.calls[0].body.applePay, true)
+})
+
 test('auto-assign posts autoAssign and omits driverId', async () => {
   reset()
   await requestDriverTrip(priced({ riderId: 'rider-1', autoAssign: true }))

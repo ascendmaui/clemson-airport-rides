@@ -47,6 +47,8 @@ import {
   dedupeOffersById,
   documentBannersCollapsed,
   offerAcceptSeconds,
+  offerSheetBottomInset,
+  offerSheetOwnsBottom,
   setHomeOfferId,
 } from 'rides-native/offerStack.js'
 import { riderDriverFirstName } from '../../../../shared/riderDriverPrivacy.js'
@@ -70,6 +72,7 @@ import {
   acceptActionLabel,
   declineActionLabel,
   declineDisposition,
+  driverStatusDetail,
   formatPickupAt,
   preferredRequestNote,
   statusHeadline,
@@ -78,6 +81,7 @@ import {
   weekNetCents,
   type DriverCard,
 } from 'rides-native/tripTags'
+import { declinePassMessage, offlineWhileOfferedMessage } from 'rides-native/matchingMessages'
 import { etaHoldLine } from 'rides-native/liveTrip'
 import { followEtaLine } from 'rides-native/roadFollow'
 import { driverPickupTarget } from 'rides-native/riderLivePickup'
@@ -166,6 +170,7 @@ export default function DriverHome() {
   const gameDayExperience = useGameDayExperience(supabase, { driverId: user?.id || null })
   const myMarker = useMyMarker()
   const [refreshing, setRefreshing] = useState(false)
+  const [offerNote, setOfferNote] = useState<string | null>(null)
   const gate = useMemo(
     () => driverGateView(status, { rejectionReason: reason }),
     [status, reason]
@@ -215,9 +220,9 @@ export default function DriverHome() {
   const clutterStyle = useAnimatedStyle(() => ({
     transform: [{ translateY: clutterY.value }],
   }))
-  const tabClearance = insets.bottom + 72
-  // The dock is pinned between the status bar / Dynamic Island and the tab bar.
-  // Its content stacks from the bottom; an offer card shrinks (and scrolls) to fit.
+  const tabClearance = offerSheetBottomInset(insets.bottom)
+  // The dock sits between the status bar and the tab bar, including the home-indicator inset.
+  // While an offer is up, END, the queue, and the earnings pill step aside so the sheet can use that space.
   const dockTop = insets.top + TOP_MARGIN
 
   useEffect(() => {
@@ -427,7 +432,15 @@ export default function DriverHome() {
         setFocusToken((value: number) => value + 1)
       }
       pulseShift(nextOnline ? 'GO' : 'END')
-      AccessibilityInfo.announceForAccessibility(nextOnline ? 'You are now online' : 'You are now offline')
+      if (nextOnline) {
+        setOfferNote(null)
+        AccessibilityInfo.announceForAccessibility('You are now online')
+      } else {
+        const held = offer && !desk?.active ? { status: offer.status } : null
+        const message = offlineWhileOfferedMessage({ online: false, card: held })
+        setOfferNote(message)
+        AccessibilityInfo.announceForAccessibility(message || 'You are now offline')
+      }
       await refresh()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not update online status')
@@ -466,8 +479,15 @@ export default function DriverHome() {
     setBusy(true)
     setError(null)
     try {
-      await declineDriverOffer(supabase, card, user.id)
+      const result = await declineDriverOffer(supabase, card, user.id)
       pulse('decline')
+      const message = result?.disposition === 'release' && (result.passed || result.released)
+        ? declinePassMessage({ keptSearching: true })
+        : null
+      if (message) {
+        setOfferNote(message)
+        AccessibilityInfo.announceForAccessibility(message)
+      }
       await refresh()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not decline')
@@ -480,6 +500,8 @@ export default function DriverHome() {
     (card: DriverCard) => !isSyntheticOffer(card) && !hiddenOffers.includes(card.id),
   ))
   const offer = liveOffers.find((card: DriverCard) => card.id === selectedOfferId) || liveOffers[0] || null
+  const liveCard = online && offer && !desk?.active ? offer : null
+  const offerOwnsBottom = offerSheetOwnsBottom({ offerId: liveCard?.id ?? null, activeTrip: Boolean(desk?.active) })
   useEffect(() => {
     setHomeOfferId(offer?.id ?? null)
     return () => setHomeOfferId(null)
@@ -565,6 +587,7 @@ export default function DriverHome() {
             <View style={styles.topSpacer} />
             <CircleButton icon="search" label="Search and discover" onPress={() => router.push('/discover')} />
           </View>
+          {offerOwnsBottom ? null : (
           <View pointerEvents="box-none" style={[styles.earningsWrap, { top: dockTop }]}>
             <Pressable
               onPress={() => router.push('/earnings')}
@@ -577,6 +600,7 @@ export default function DriverHome() {
               <Text style={{ color: colors.inkSecondary, fontWeight: '800', fontSize: 12 }}>Earnings</Text>
             </Pressable>
           </View>
+          )}
 
           <View style={styles.heatPanel}>
             <Pressable
@@ -728,6 +752,11 @@ export default function DriverHome() {
             </View>
           ) : null}
           {error ? <ErrorText>{error}</ErrorText> : null}
+          {offerNote && !liveCard ? (
+            <Text accessibilityLiveRegion="polite" style={{ color: colors.ink, fontWeight: '700', fontSize: 14 }}>
+              {offerNote}
+            </Text>
+          ) : null}
           {tripReconciled && desk?.active ? (
             <Pressable
               onPress={() => router.push({ pathname: '/trip', params: { id: desk.active!.id } })}
@@ -754,26 +783,31 @@ export default function DriverHome() {
               }}
             />
           ) : null}
-          {offer && !desk?.active ? (
+          {liveCard ? (
             <RideCard
-              card={offer}
+              card={liveCard}
               busy={busy}
-              notice={null}
+              notice={
+                liveCard.status === 'searching' || liveCard.status === 'offered'
+                  ? driverStatusDetail(liveCard.status)
+                  : null
+              }
               driver={liveFrom ? { lat: liveFrom.lat, lng: liveFrom.lng } : null}
-              favorite={Boolean(offer.riderId && autoAccept.favoriteRiders.some((rider) => rider.id === offer.riderId))}
+              favorite={Boolean(liveCard.riderId && autoAccept.favoriteRiders.some((rider) => rider.id === liveCard.riderId))}
               onFavorite={() => {
-                if (!offer.riderId) return
-                const next = autoAccept.favoriteRiders.filter((rider) => rider.id !== offer.riderId)
+                if (!liveCard.riderId) return
+                const next = autoAccept.favoriteRiders.filter((rider) => rider.id !== liveCard.riderId)
                 setAutoAccept({
-                  favoriteRiders: autoAccept.favoriteRiders.some((rider) => rider.id === offer.riderId)
+                  favoriteRiders: autoAccept.favoriteRiders.some((rider) => rider.id === liveCard.riderId)
                     ? next
-                    : [{ id: offer.riderId, name: riderDriverFirstName(offer.firstName, 'Rider') || 'Rider' }, ...autoAccept.favoriteRiders].slice(0, 50),
+                    : [{ id: liveCard.riderId, name: riderDriverFirstName(liveCard.firstName, 'Rider') || 'Rider' }, ...autoAccept.favoriteRiders].slice(0, 50),
                 })
               }}
-              onAccept={() => onAccept(offer)}
-              onDecline={() => onDecline(offer)}
+              onAccept={() => onAccept(liveCard)}
+              onDecline={() => onDecline(liveCard)}
             />
           ) : null}
+          {offerOwnsBottom ? null : (
           <View style={styles.goRow} pointerEvents="box-none">
             {online ? (
               <CircleButton icon="list" label="Ride queue" onPress={() => router.push('/queue')} />
@@ -792,6 +826,7 @@ export default function DriverHome() {
             </View>
             <View style={styles.goSide} />
           </View>
+          )}
         </View>
       </View>
     </View>
@@ -896,6 +931,7 @@ export function RideCard({
     // only the details scroll — Accept / Decline stay pinned and visible.
     <Animated.View style={[styles.offerWrap, { transform: [{ translateY: rise }], zIndex: OFFER_CARD_Z, elevation: OFFER_CARD_ELEVATION }]}>
       <Card
+        variant="offer"
         style={[styles.offerCard, pulsing ? { borderColor: colors.orange, borderWidth: 2 } : null]}
         accessibilityRole="summary"
         accessibilityLabel={vm.accessibilityLabel}
