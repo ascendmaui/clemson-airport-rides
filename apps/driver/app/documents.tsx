@@ -11,6 +11,7 @@ import { supabase } from '@/lib/supabase'
 import { useTheme } from '@/lib/theme'
 import { loadVehicle, type VehicleRow } from 'rides-native/driverDesk'
 import {
+  fetchInspectionDeadline,
   fetchMyDriverDocuments,
   uploadDriverDocument,
 } from 'rides-native/driverOnboardingClient'
@@ -23,12 +24,25 @@ import {
   type DocumentCategoryId,
   type DocumentRow,
 } from 'rides-native/documentCategories'
+import {
+  INSPECTION_FORM_TYPE,
+  INSPECTION_OVERDUE_COPY,
+  INSPECTION_SOURCES,
+  INSPECTION_TAB_LABEL,
+  inspectionAttention,
+  inspectionCountdown,
+  inspectionGoOnlineGate,
+  inspectionSlots,
+  inspectionSubmitted,
+  isInspectionSource,
+} from 'rides-native/vehicleInspection'
 import { extractReadableText, licensePendingCopy, matchRegistration, reviewLicenseImage } from 'rides-native/documentReview'
 import { Glyph } from 'rides-native/icons'
 
 type PickedFile = { uri: string; name?: string; mimeType?: string; size?: number; width?: number; height?: number }
+type DocumentsTabId = DocumentCategoryId | 'inspection'
 
-function tabIcon(id: DocumentCategoryId): string {
+function tabIcon(id: DocumentsTabId): string {
   switch (id) {
     case 'license':
       return 'card'
@@ -38,6 +52,8 @@ function tabIcon(id: DocumentCategoryId): string {
       return 'document-text'
     case 'vehicle':
       return 'car'
+    case 'inspection':
+      return 'receipt'
     default: {
       const unknown: never = id
       return unknown
@@ -115,7 +131,7 @@ async function pickLibrary(): Promise<PickedFile | null> {
   }
 }
 
-type UploadMeta = { reviewStatus?: string; reviewNote?: string; matchStatus?: string }
+type UploadMeta = { reviewStatus?: string; reviewNote?: string; matchStatus?: string; inspectionSource?: string | null }
 
 async function reviewMeta(docType: string, file: PickedFile, vehicle: VehicleRow | null): Promise<{ meta: UploadMeta; notice: string }> {
   if (docType === 'license_front' || docType === 'license_back') {
@@ -153,8 +169,10 @@ export default function DocumentsScreen() {
   const router = useRouter()
   const { colors, scheme } = useTheme()
   const { user } = useAuth()
-  const [tabId, setTabId] = useState<DocumentCategoryId>('license')
+  const [tabId, setTabId] = useState<DocumentsTabId>('license')
   const [documents, setDocuments] = useState<DocumentRow[]>([])
+  const [inspectionDueAt, setInspectionDueAt] = useState<string | null>(null)
+  const [inspectionSource, setInspectionSource] = useState<string | null>(null)
   const [vehicle, setVehicle] = useState<VehicleRow | null>(null)
   const [loading, setLoading] = useState(true)
   const [busyType, setBusyType] = useState<string | null>(null)
@@ -165,17 +183,22 @@ export default function DocumentsScreen() {
   const refresh = useCallback(async () => {
     if (!user || !supabase) {
       setDocuments([])
+      setInspectionDueAt(null)
       setVehicle(null)
       setLoading(false)
       return
     }
     setLoading(true)
     try {
-      const [docs, car] = await Promise.all([
+      const [docs, car, deadline] = await Promise.all([
         fetchMyDriverDocuments(supabase, user.id),
         loadVehicle(supabase, user.id).catch(() => null),
+        fetchInspectionDeadline(supabase, user.id).catch(() => null),
       ])
       setDocuments(docs)
+      setInspectionDueAt(deadline?.inspection_due_at ?? null)
+      const savedSource = docs.find((row) => (row.doc_type || row.type) === INSPECTION_FORM_TYPE)?.inspection_source
+      if (isInspectionSource(savedSource)) setInspectionSource(String(savedSource))
       setVehicle(car)
       setError(null)
     } catch (err) {
@@ -189,18 +212,37 @@ export default function DocumentsScreen() {
     refresh().catch((err: unknown) => setError(err instanceof Error ? err.message : 'Could not load documents'))
   }, [refresh]))
 
+  const inspectionOpen = tabId === 'inspection'
   const active = DOCUMENT_CATEGORIES.find((category) => category.id === tabId) ?? DOCUMENT_CATEGORIES[0]
-  const sectionStatus = categoryAttention(active?.id || 'license', documents)
-  const slots = categorySlots(active?.id || 'license', documents)
+  const sectionStatus = inspectionOpen ? inspectionAttention(documents) : categoryAttention(active.id, documents)
+  const slots = inspectionOpen ? inspectionSlots(documents) : categorySlots(active.id, documents)
+  const sectionLabel = inspectionOpen ? INSPECTION_TAB_LABEL : active.label
+  const inspectionReminder = inspectionCountdown({ documents, dueAt: inspectionDueAt, now: new Date() })?.message || ''
+  const inspectionGate = inspectionGoOnlineGate({ documents, dueAt: inspectionDueAt, now: new Date() })
+  const inspectionInReview = inspectionSubmitted(documents) && !sectionStatus.approved
+
+  function selectTab(next: DocumentsTabId) {
+    setTabId(next)
+    setChooser(null)
+    setNotice(null)
+  }
 
   async function onUpload(docType: string, file: PickedFile | null) {
     if (!file || !user || !supabase) return
+    if (docType === INSPECTION_FORM_TYPE && !isInspectionSource(inspectionSource)) {
+      setChooser(null)
+      setError('Choose Lyft, Uber, another platform, or an independent inspection.')
+      return
+    }
     setBusyType(docType)
     setError(null)
     setNotice(null)
     try {
       const reviewed = await reviewMeta(docType, file, vehicle)
-      await uploadDriverDocument(supabase, user.id, docType, file, reviewed.meta)
+      await uploadDriverDocument(supabase, user.id, docType, file, {
+        ...reviewed.meta,
+        inspectionSource: docType === INSPECTION_FORM_TYPE ? inspectionSource : null,
+      })
       setChooser(null)
       await refresh()
       setNotice(reviewed.notice)
@@ -222,15 +264,11 @@ export default function DocumentsScreen() {
       <View style={styles.tabs}>
         {DOCUMENT_CATEGORIES.map((category) => {
           const status = categoryAttention(category.id, documents)
-          const selected = category.id === active?.id
+          const selected = category.id === tabId
           return (
             <Pressable
               key={category.id}
-              onPress={() => {
-                setTabId(category.id)
-                setChooser(null)
-                setNotice(null)
-              }}
+              onPress={() => selectTab(category.id)}
               accessibilityRole="tab"
               accessibilityLabel={status.approved ? `${category.label}, approved` : `${category.label}, ${status.label}`}
               accessibilityState={{ selected }}
@@ -251,6 +289,26 @@ export default function DocumentsScreen() {
             </Pressable>
           )
         })}
+        <Pressable
+          onPress={() => selectTab('inspection')}
+          accessibilityRole="tab"
+          accessibilityLabel={inspectionAttention(documents).approved ? `${INSPECTION_TAB_LABEL}, approved` : `${INSPECTION_TAB_LABEL}, ${inspectionAttention(documents).label}`}
+          accessibilityState={{ selected: inspectionOpen }}
+          hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
+          style={[
+            styles.tab,
+            {
+              backgroundColor: inspectionOpen ? colors.orangeSoft : colors.card,
+              borderColor: inspectionOpen ? colors.orange : colors.border,
+            },
+          ]}
+        >
+          <View style={styles.tabTop}>
+            <Glyph name={tabIcon('inspection')} size={18} color={inspectionOpen ? colors.orange : colors.title} />
+            <Text style={[styles.tabLabel, { color: colors.title }]}>{INSPECTION_TAB_LABEL}</Text>
+          </View>
+          <StatusMark status={inspectionAttention(documents)} scheme={scheme} />
+        </Pressable>
       </View>
 
       {!user ? (
@@ -263,13 +321,52 @@ export default function DocumentsScreen() {
         </Card>
       ) : (
         <Card>
-          <Text style={[styles.sectionTitle, { color: colors.title }]}>{active?.label}</Text>
+          <Text style={[styles.sectionTitle, { color: colors.title }]}>{sectionLabel}</Text>
           <StatusMark status={sectionStatus} scheme={scheme} />
+          {inspectionOpen && inspectionReminder ? (
+            <Text style={{ color: colors.orange, fontWeight: '800' }}>{inspectionReminder}</Text>
+          ) : null}
+          {inspectionOpen && !inspectionGate.allowed ? (
+            <Text style={{ color: colors.danger, fontWeight: '800' }}>{INSPECTION_OVERDUE_COPY}</Text>
+          ) : null}
           <Text style={{ color: colors.inkSecondary, lineHeight: 20 }}>
-            {loading ? 'Loading your uploads…' : 'Use Upload for a missing file and Replace to send a new one. A replacement goes back through review.'}
+            {loading
+              ? 'Loading your uploads…'
+              : inspectionOpen
+                ? 'Photograph the front, back, left, and right. Interior is optional. Add the inspection form and choose where it came from.'
+                : 'Use Upload for a missing file and Replace to send a new one. A replacement goes back through review.'}
           </Text>
+          {inspectionOpen && inspectionInReview ? (
+            <Text style={{ color: colors.title, fontWeight: '700' }}>Submitted. You can go online while this is in review.</Text>
+          ) : null}
           {error ? <ErrorText>{error}</ErrorText> : null}
           {notice && !error ? <Text style={{ color: colors.title, fontWeight: '700' }}>{notice}</Text> : null}
+          {inspectionOpen ? (
+            <View style={styles.slot}>
+              <Text style={[styles.slotTitle, { color: colors.ink }]}>Where did this inspection come from?</Text>
+              <View style={styles.choices}>
+                {INSPECTION_SOURCES.map((source) => {
+                  const selected = source.id === inspectionSource
+                  return (
+                    <Pressable
+                      key={source.id}
+                      onPress={() => setInspectionSource(source.id)}
+                      accessibilityRole="button"
+                      accessibilityLabel={source.label}
+                      accessibilityState={{ selected }}
+                      hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                      style={[styles.choice, {
+                        borderColor: selected ? colors.orange : colors.border,
+                        backgroundColor: selected ? colors.orangeSoft : colors.input,
+                      }]}
+                    >
+                      <Text style={{ color: colors.title, fontWeight: '800' }}>{source.label}</Text>
+                    </Pressable>
+                  )
+                })}
+              </View>
+            </View>
+          ) : null}
           {slots.map((slot) => (
             <DocumentSlot
               key={slot.id}

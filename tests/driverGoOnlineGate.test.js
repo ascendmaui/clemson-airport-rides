@@ -81,7 +81,7 @@ test('the driver home checks documents before GO and links the banner to Documen
   assert.match(screen, /documentGate\.sections\.map\(\(section\) => section\.label\)/)
   assert.match(screen, /router\.push\('\/documents'\)/)
   assert.match(screen, /documentsHoldGo/)
-  assert.match(screen, /disabled=\{!canGoOnline \|\| documentsHoldGo\}/)
+  assert.match(screen, /disabled=\{!canGoOnline \|\| documentsHoldGo \|\| inspectionHoldGo\}/)
   assert.doesNotMatch(screen, /review_status\s*===?\s*['"]approved['"]/)
   const npmTest = JSON.parse(read('package.json')).scripts.test
   assert.match(npmTest, /tests\/driverGoOnlineGate\.test\.js/)
