@@ -72,6 +72,44 @@ export function clockTime(fromMs, plusSec) {
   return t.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
 }
 
+/**
+ * Browser Directions fallback when the trip has no snapped road.
+ * Origin is rounded to ~1.1 km so a moving car does not request every fix.
+ * Legs longer than DIRECTIONS_MAX_METERS stay on the straight line (airport
+ * trips should already have a stored polyline from booking).
+ */
+export const DIRECTIONS_MAX_METERS = 12000
+
+const drivingLegCache = new Map()
+
+export function drivingLegKey(origin, dest) {
+  const oLat = Number(origin?.[0])
+  const oLng = Number(origin?.[1])
+  const dLat = Number(dest?.[0])
+  const dLng = Number(dest?.[1])
+  if (![oLat, oLng, dLat, dLng].every(Number.isFinite)) return null
+  return `${oLat.toFixed(2)},${oLng.toFixed(2)}>${dLat.toFixed(4)},${dLng.toFixed(4)}`
+}
+
+export function shouldRequestDrivingLeg(origin, dest) {
+  const meters = haversineMeters(origin?.[0], origin?.[1], dest?.[0], dest?.[1])
+  return meters != null && meters > 40 && meters <= DIRECTIONS_MAX_METERS
+}
+
+export function readDrivingLeg(key) {
+  if (!key) return null
+  return drivingLegCache.get(key) || null
+}
+
+export function rememberDrivingLeg(key, leg) {
+  if (!key || !leg?.path?.length) return
+  if (drivingLegCache.size >= 40) {
+    const oldest = drivingLegCache.keys().next().value
+    drivingLegCache.delete(oldest)
+  }
+  drivingLegCache.set(key, leg)
+}
+
 /** Road path when the Maps JS Directions service is already loaded. */
 export function fetchDrivingLeg(origin, dest) {
   return new Promise((resolve) => {

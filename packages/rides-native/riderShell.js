@@ -79,7 +79,8 @@ export function airportFareCents(code) {
 }
 
 export function depositCents(fareCents) {
-  return Math.round(Number(fareCents) * 0.25)
+  void fareCents
+  return 0
 }
 
 export function applyStudentDiscount(fareCents, isStudent) {

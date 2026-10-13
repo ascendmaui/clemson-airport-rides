@@ -783,7 +783,7 @@ test('holdExpiryPresentation: open unpaid hold in last minute (< 60 seconds)', (
 
 test('hold notice wiring: schedule skips the 12h window; surface loader omits canceled_at', () => {
   const root = join(dirname(fileURLToPath(import.meta.url)), '../..')
-  const schedule = readFileSync(join(root, 'apps/rider/app/schedule.tsx'), 'utf8')
+  const schedule = readFileSync(join(root, 'apps/rider/app/(tabs)/schedule.tsx'), 'utf8')
   const requested = readFileSync(join(root, 'apps/rider/app/requested.tsx'), 'utf8')
   const holdTrip = readFileSync(join(root, 'apps/rider/lib/holdTrip.ts'), 'utf8')
 

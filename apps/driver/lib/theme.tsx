@@ -1,17 +1,38 @@
 import * as Location from 'expo-location'
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
+import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
+import Animated, { useAnimatedStyle, useSharedValue, withSequence, withTiming } from 'react-native-reanimated'
+import { useReduceMotion } from 'rides-native/shared/reduceMotion.js'
 import { authStorage } from '@/lib/storage'
 import { paletteFor, type Palette, type Scheme } from '@/lib/palette'
 import { CLEMSON_LAT, CLEMSON_LNG, isDaylight } from '@/lib/solar'
+import { isNavApp as isKnownNavApp, type NavApp as SharedNavApp } from 'rides-native/mapsLink'
 
 export type DisplayMode = 'auto' | 'light' | 'dark'
-export type NavApp = 'apple' | 'google'
+export type NavApp = SharedNavApp
+export type RideAlertTier = 'standard' | 'wait' | 'comfort' | 'carpool'
+export type RideAlertMode = 'chime_vibrate' | 'chime' | 'vibrate' | 'silent'
+
+export type FavoriteRider = { id: string; name: string }
+
+export type AutoAcceptPrefs = {
+  distanceEnabled: boolean
+  maxPickupMiles: number
+  hourlyEnabled: boolean
+  minHourlyCents: number
+  favoritesEnabled: boolean
+  favoriteRiders: FavoriteRider[]
+}
+
+type RideAlerts = Record<RideAlertTier, RideAlertMode>
 
 type Prefs = {
   displayMode: DisplayMode
   earningsPrivate: boolean
   sounds: boolean
   navApp: NavApp
+  autoNavigate: boolean
+  rideAlerts: RideAlerts
+  autoAccept: AutoAcceptPrefs
 }
 
 type ThemeValue = {
@@ -25,15 +46,69 @@ type ThemeValue = {
   setSounds: (value: boolean) => void
   navApp: NavApp
   setNavApp: (value: NavApp) => void
+  autoNavigate: boolean
+  setAutoNavigate: (value: boolean) => void
+  rideAlerts: RideAlerts
+  setRideAlert: (tier: RideAlertTier, mode: RideAlertMode) => void
+  autoAccept: AutoAcceptPrefs
+  setAutoAccept: (patch: Partial<AutoAcceptPrefs>) => void
   solarPlace: string
 }
 
 const PREFS_KEY = 'driver.ui.prefs'
+const DEFAULT_ALERTS: RideAlerts = { standard: 'chime_vibrate', wait: 'chime_vibrate', comfort: 'chime_vibrate', carpool: 'chime_vibrate' }
+const DEFAULT_AUTO: AutoAcceptPrefs = {
+  distanceEnabled: false,
+  maxPickupMiles: 3,
+  hourlyEnabled: false,
+  minHourlyCents: 2000,
+  favoritesEnabled: false,
+  favoriteRiders: [],
+}
 const DEFAULT_PREFS: Prefs = {
-  displayMode: 'auto',
+  displayMode: 'light',
   earningsPrivate: false,
   sounds: true,
   navApp: 'apple',
+  autoNavigate: true,
+  rideAlerts: DEFAULT_ALERTS,
+  autoAccept: DEFAULT_AUTO,
+}
+
+function isRideMode(value: unknown): value is RideAlertMode {
+  return value === 'chime_vibrate' || value === 'chime' || value === 'vibrate' || value === 'silent'
+}
+
+function readAlerts(raw: unknown): RideAlerts {
+  const source = raw && typeof raw === 'object' ? raw as Partial<Record<RideAlertTier, unknown>> : {}
+  return {
+    standard: isRideMode(source.standard) ? source.standard : DEFAULT_ALERTS.standard,
+    wait: isRideMode(source.wait) ? source.wait : DEFAULT_ALERTS.wait,
+    comfort: isRideMode(source.comfort) ? source.comfort : DEFAULT_ALERTS.comfort,
+    carpool: isRideMode(source.carpool) ? source.carpool : DEFAULT_ALERTS.carpool,
+  }
+}
+
+function readAuto(raw: unknown): AutoAcceptPrefs {
+  const source = raw && typeof raw === 'object' ? raw as Partial<AutoAcceptPrefs> : {}
+  const miles = Number(source.maxPickupMiles)
+  const hourly = Number(source.minHourlyCents)
+  const riders = Array.isArray(source.favoriteRiders)
+    ? source.favoriteRiders.flatMap((row) => {
+      const id = typeof row?.id === 'string' ? row.id.trim() : ''
+      if (!id) return []
+      const name = typeof row?.name === 'string' && row.name.trim() ? row.name.trim() : 'Rider'
+      return [{ id, name }]
+    }).slice(0, 50)
+    : []
+  return {
+    distanceEnabled: Boolean(source.distanceEnabled),
+    maxPickupMiles: Number.isFinite(miles) ? Math.min(50, Math.max(0.5, miles)) : DEFAULT_AUTO.maxPickupMiles,
+    hourlyEnabled: Boolean(source.hourlyEnabled),
+    minHourlyCents: Number.isFinite(hourly) ? Math.min(50000, Math.max(0, Math.round(hourly))) : DEFAULT_AUTO.minHourlyCents,
+    favoritesEnabled: Boolean(source.favoritesEnabled),
+    favoriteRiders: riders,
+  }
 }
 
 const ThemeContext = createContext<ThemeValue | null>(null)
@@ -43,7 +118,7 @@ function isDisplayMode(value: unknown): value is DisplayMode {
 }
 
 function isNavApp(value: unknown): value is NavApp {
-  return value === 'apple' || value === 'google'
+  return isKnownNavApp(value)
 }
 
 function readPrefs(raw: string | null): Prefs {
@@ -51,24 +126,28 @@ function readPrefs(raw: string | null): Prefs {
   try {
     const parsed = JSON.parse(raw) as Partial<Prefs>
     return {
-      displayMode: isDisplayMode(parsed.displayMode) ? parsed.displayMode : DEFAULT_PREFS.displayMode,
+      displayMode: isDisplayMode(parsed.displayMode) && parsed.displayMode === 'dark' ? 'dark' : 'light',
       earningsPrivate: Boolean(parsed.earningsPrivate),
       sounds: parsed.sounds === false ? false : true,
       navApp: isNavApp(parsed.navApp) ? parsed.navApp : DEFAULT_PREFS.navApp,
+      autoNavigate: parsed.autoNavigate === false ? false : true,
+      rideAlerts: readAlerts(parsed.rideAlerts),
+      autoAccept: readAuto(parsed.autoAccept),
     }
   } catch {
     return DEFAULT_PREFS
   }
 }
 
-function resolveScheme(mode: DisplayMode, daylight: boolean): Scheme {
+function resolveScheme(mode: DisplayMode, _daylight: boolean): Scheme {
   switch (mode) {
     case 'light':
       return 'light'
     case 'dark':
       return 'dark'
     case 'auto':
-      return daylight ? 'light' : 'dark'
+      // Night mode is opt-in. Older builds saved 'auto'; it now opens light.
+      return 'light'
     default: {
       const unknown: never = mode
       return unknown
@@ -126,14 +205,48 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     setSounds: (sounds: boolean) => update({ sounds }),
     navApp: prefs.navApp,
     setNavApp: (navApp: Prefs['navApp']) => update({ navApp }),
+    autoNavigate: prefs.autoNavigate,
+    setAutoNavigate: (autoNavigate: boolean) => update({ autoNavigate }),
+    rideAlerts: prefs.rideAlerts,
+    setRideAlert: (tier: RideAlertTier, mode: RideAlertMode) => update({
+      rideAlerts: { ...prefs.rideAlerts, [tier]: mode },
+    }),
+    autoAccept: prefs.autoAccept,
+    setAutoAccept: (patch: Partial<AutoAcceptPrefs>) => update({
+      autoAccept: { ...prefs.autoAccept, ...patch },
+    }),
     solarPlace: coords ? 'Last known location' : 'Clemson, SC',
   }
 
-  return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>
+  return (
+    <ThemeContext.Provider value={value}>
+      <SchemeFade scheme={scheme}>{children}</SchemeFade>
+    </ThemeContext.Provider>
+  )
 }
 
 export function useTheme(): ThemeValue {
   const value = useContext(ThemeContext)
   if (!value) throw new Error('useTheme must be used inside ThemeProvider')
   return value
+}
+
+/** Soft UI-thread cross-fade when Night mode flips, so the swap never pops. */
+function SchemeFade({ scheme, children }: { scheme: Scheme; children: ReactNode }) {
+  const fade = useSharedValue(1)
+  const first = useRef(true)
+  const reduce = useReduceMotion()
+  useEffect(() => {
+    if (first.current) {
+      first.current = false
+      return
+    }
+    if (reduce) {
+      fade.value = 1
+      return
+    }
+    fade.value = withSequence(withTiming(0.82, { duration: 90 }), withTiming(1, { duration: 200 }))
+  }, [scheme, fade, reduce])
+  const style = useAnimatedStyle(() => ({ opacity: fade.value }))
+  return <Animated.View style={[{ flex: 1 }, style]}>{children}</Animated.View>
 }

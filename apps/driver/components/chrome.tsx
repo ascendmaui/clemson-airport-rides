@@ -1,34 +1,41 @@
+import { GlassButton, GlassCard, GlassSurface, glassTextColor } from 'rides-native/glass'
+import { Glyph } from 'rides-native/icons'
 import type { ReactNode } from 'react'
 import { useMemo } from 'react'
-import { Pressable, StyleSheet, Text, TextInput, View, type StyleProp, type ViewStyle } from 'react-native'
+import { StyleSheet, Text, TextInput, View, type StyleProp, type ViewStyle } from 'react-native'
+import { radius, shadowStyle, type as typeScale, type ElevationLevel } from 'rides-native/shared/theme.js'
 import { useTheme } from '@/lib/theme'
 import type { Palette } from '@/lib/palette'
 
-export function useCardShadow() {
+export function useLift(level: ElevationLevel = 'rest') {
   const { colors, scheme } = useTheme()
-  return useMemo(() => ({
-    shadowColor: colors.shadow,
-    shadowOpacity: scheme === 'dark' ? 0.28 : 0.08,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 3,
-  }), [colors.shadow, scheme])
+  return useMemo(
+    () => shadowStyle(colors.shadow, level, scheme),
+    [colors.shadow, level, scheme],
+  )
+}
+
+export function useCardShadow() {
+  return useLift('rest')
 }
 
 export function BackButton({ onPress }: { onPress: () => void }) {
-  const { colors } = useTheme()
-  const shadow = useCardShadow()
+  const { scheme } = useTheme()
+  const ink = glassTextColor({ app: 'driver', scheme, variant: 'fab' })
   return (
-    <Pressable
+    <GlassButton
+      app="driver"
+      scheme={scheme}
+      variant="fab"
       onPress={onPress}
-      style={[styles.back, shadow, { backgroundColor: colors.card }]}
-      accessibilityRole="button"
       accessibilityLabel="Back"
       accessibilityHint="Navigates to previous screen"
       hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+      showStreak={false}
+      style={styles.back}
     >
-      <Text style={[styles.backLabel, { color: colors.title }]}>←</Text>
-    </Pressable>
+      <Glyph name="back" size={20} color={ink} strokeWidth={2.6} accessibilityLabel="Back" />
+    </GlassButton>
   )
 }
 
@@ -39,47 +46,47 @@ export function Primary({
   tone = 'orange',
   accessibilityLabel,
   accessibilityRole = 'button',
+  icon,
 }: {
   label: string
   onPress: () => void
   disabled?: boolean
+  icon?: string
   tone?: 'orange' | 'purple' | 'ghost'
   accessibilityLabel?: string
   accessibilityRole?: 'button' | 'link'
 }) {
-  const { colors } = useTheme()
-  const shadow = useCardShadow()
-  const background = tone === 'orange' ? colors.orange : tone === 'purple' ? colors.fill : colors.card
-  const color = tone === 'ghost' ? colors.title : colors.onAccent
+  const { scheme } = useTheme()
+  const accent = tone === 'orange' ? 'orange' : 'purple'
+  const variant = tone === 'ghost' ? 'ghost' : 'primary'
+  const color = glassTextColor({ app: 'driver', scheme, variant, accent })
   return (
-    <Pressable
+    <GlassButton
+      app="driver"
+      scheme={scheme}
+      variant={variant}
+      accent={accent}
       onPress={onPress}
       disabled={disabled}
       accessibilityRole={accessibilityRole}
       accessibilityLabel={accessibilityLabel || label}
       accessibilityState={{ disabled: Boolean(disabled) }}
-      style={({ pressed }) => [
-        styles.primary,
-        tone === 'ghost' ? null : shadow,
-        {
-          backgroundColor: background,
-          opacity: disabled ? 0.55 : pressed ? 0.92 : 1,
-          transform: [{ scale: pressed && !disabled ? 0.985 : 1 }],
-        },
-      ]}
+      style={[styles.primary, { flexDirection: 'row', gap: 8 }]}
     >
+      {icon ? <Glyph name={icon} size={20} color={color} /> : null}
       <Text style={[styles.primaryLabel, { color }]}>{label}</Text>
-    </Pressable>
+    </GlassButton>
   )
 }
 
 export function Tag({ label, tone = 'purple' }: { label: string; tone?: 'purple' | 'orange'; key?: string | number }) {
-  const { colors } = useTheme()
-  const on = tone === 'orange'
+  const { scheme } = useTheme()
+  const accent = tone === 'orange' ? 'orange' : 'purple'
+  const color = glassTextColor({ app: 'driver', scheme, variant: 'chip', accent })
   return (
-    <View style={[styles.tag, { backgroundColor: on ? 'rgba(245,102,0,0.16)' : colors.track }]}>
-      <Text style={[styles.tagLabel, { color: on ? colors.orange : colors.title }]}>{label}</Text>
-    </View>
+    <GlassSurface app="driver" scheme={scheme} variant="chip" accent={accent} selected={tone === 'orange'} style={styles.tag}>
+      <Text style={[styles.tagLabel, { color }]}>{label}</Text>
+    </GlassSurface>
   )
 }
 
@@ -119,6 +126,7 @@ export function Field({
           {
             backgroundColor: colors.input,
             color: colors.ink,
+            borderColor: colors.border,
             minHeight: multiline ? 96 : undefined,
             textAlignVertical: multiline ? 'top' : 'center',
           },
@@ -140,25 +148,17 @@ export function Card({
   accessibilityLabel?: string
   key?: string | number
 }) {
-  const { colors } = useTheme()
-  const shadow = useCardShadow()
+  const { scheme } = useTheme()
   return (
-    <View
+    <GlassCard
+      app="driver"
+      scheme={scheme}
       accessibilityRole={accessibilityRole as any}
       accessibilityLabel={accessibilityLabel}
-      style={[
-        styles.card,
-        shadow,
-        {
-          backgroundColor: colors.card,
-          borderColor: colors.border,
-          borderWidth: StyleSheet.hairlineWidth,
-        },
-        style,
-      ]}
+      style={[styles.card, style]}
     >
       {children}
-    </View>
+    </GlassCard>
   )
 }
 
@@ -170,9 +170,9 @@ export function ErrorText({ children }: { children: string }) {
 export function screenColors(colors: Palette) {
   return {
     screen: { flex: 1, backgroundColor: colors.background },
-    kicker: { color: colors.orange, fontWeight: '800' as const, letterSpacing: 1.1, fontSize: 12 },
-    title: { fontSize: 28, fontWeight: '800' as const, color: colors.title, letterSpacing: -0.4 },
-    copy: { color: colors.inkSecondary, fontSize: 14, lineHeight: 20 },
+    kicker: { color: colors.orange, ...typeScale.kicker },
+    title: { ...typeScale.title, color: colors.title },
+    copy: { color: colors.inkSecondary, ...typeScale.body },
   }
 }
 
@@ -180,30 +180,36 @@ const styles = StyleSheet.create({
   back: {
     width: 40,
     height: 40,
-    borderRadius: 14,
+    borderRadius: radius.control,
+    padding: 0,
     alignItems: 'center',
     justifyContent: 'center',
   },
   backLabel: { fontSize: 18, fontWeight: '700' },
   primary: {
-    borderRadius: 16,
-    minHeight: 48,
-    paddingVertical: 14,
+    borderRadius: radius.lg,
+    minHeight: 52,
+    paddingVertical: 16,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 16,
   },
-  primaryLabel: { fontWeight: '700', fontSize: 16 },
-  tag: { borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5 },
-  tagLabel: { fontSize: 11, fontWeight: '800' },
+  primaryLabel: {
+    fontWeight: typeScale.button.fontWeight,
+    fontSize: typeScale.button.fontSize,
+    letterSpacing: typeScale.button.letterSpacing,
+  },
+  tag: { borderRadius: radius.pill, paddingHorizontal: 10, paddingVertical: 5 },
+  tagLabel: { fontSize: typeScale.kickerSm.fontSize, fontWeight: '800', letterSpacing: 0.2 },
   field: { gap: 6 },
-  fieldLabel: { fontSize: 13, fontWeight: '700' },
+  fieldLabel: { fontSize: 13, fontWeight: '700', letterSpacing: 0.1 },
   input: {
-    borderRadius: 14,
+    borderRadius: radius.lg,
+    borderWidth: 1,
     paddingHorizontal: 14,
     paddingVertical: 12,
     fontSize: 16,
   },
-  card: { borderRadius: 22, padding: 16, gap: 10 },
+  card: { borderRadius: radius.xl, padding: 16, gap: 10 },
   error: { fontSize: 13, lineHeight: 18 },
 })

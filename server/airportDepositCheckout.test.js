@@ -1,7 +1,7 @@
 /**
- * Website airport deposit: the server Checkout Session is 25% of the
- * server fare. Client fare, deposit, amount, total, and isStudent are
- * ignored. The webhook stamps the deposit paid so drivers can see the trip.
+ * Website airport booking charges nothing up front. Client fare, deposit,
+ * amount, total, and isStudent are ignored. A legacy Checkout webhook still
+ * stamps an already-paid deposit so that trip can be claimed.
  * Stripe is mocked. No live charges.
  */
 import assert from 'node:assert/strict'
@@ -15,7 +15,6 @@ for (const key of Object.keys(process.env)) {
 const { default: createCheckoutSessionHandler } = await import('../api/create-checkout-session.js')
 const { default: webhookHandler } = await import('../api/stripe-webhook.js')
 const { priceCheckoutBody } = await import('./authoritativeFare.js')
-const { cardDepositCents } = await import('../src/lib/fareRates.js')
 const { decideUnpaidAirportHoldTtl, UNPAID_AIRPORT_HOLD_TTL_MS } = await import('./abandonedCheckout.js')
 const { isOpenPoolClaimable, isUnpaidAirportDepositTrip } = await import('../packages/rides-native/tripTags.js')
 
@@ -237,59 +236,56 @@ async function openCheckout(user, extra = {}) {
   return { res, created, sb }
 }
 
-test('airport checkout charges 25% of the server fare and ignores client money', async () => {
+test('airport checkout books the server fare and does not open a Checkout session', async () => {
   const { res, created, sb } = await openCheckout(GMAIL)
   assert.equal(res.status, 200, JSON.stringify(res.json))
-  assert.equal(created.length, 1)
-  const line = created[0].line_items[0].price_data.unit_amount
-  assert.equal(line, res.json.depositCents)
-  assert.equal(line, cardDepositCents(res.json.fareCents))
-  assert.equal(line, Math.round(res.json.fareCents * 0.25))
-  assert.ok(line > SPOOF.depositCents)
+  assert.equal(created.length, 0)
+  assert.equal(res.json.depositCents, 0)
+  assert.equal(res.json.charged, false)
+  assert.equal(res.json.url, undefined)
   assert.equal(res.json.clientFareIgnored, true)
-  assert.equal(created[0].metadata.kind, 'airport_deposit')
-  assert.equal(created[0].metadata.depositCents, String(line))
-  assert.equal(created[0].mode, 'payment')
-  assert.equal(res.json.url, 'https://checkout.stripe.com/c/pay/cs_test_airport_deposit')
+  assert.equal(res.json.dueAtTripEndCents, res.json.fareCents)
   const trip = sb.tripsInserted[0]
   assert.equal(trip.status, 'searching')
-  assert.equal(trip.deposit_cents, line)
-  assert.equal(isUnpaidAirportDepositTrip(trip), true)
-  assert.equal(isOpenPoolClaimable(trip), false)
+  assert.equal(trip.deposit_cents, 0)
+  assert.equal(isUnpaidAirportDepositTrip(trip), false)
+  assert.equal(isOpenPoolClaimable(trip), true)
 
   const expected = priceCheckoutBody({
     body: { airport: 'GSP', ...SPOOF },
     user: GMAIL,
     at: new Date(),
   })
-  assert.equal(line, expected.unitAmount)
+  assert.equal(res.json.fareCents, expected.fareCents)
+  assert.equal(expected.unitAmount, 0)
 })
 
-test('a confirmed Clemson email still deposits 25% of the discounted server fare', async () => {
+test('a confirmed Clemson email books the discounted server fare with nothing due now', async () => {
   const guest = await openCheckout(GMAIL, { isStudent: false })
   const student = await openCheckout(TIGER, { isStudent: false })
   assert.equal(guest.res.status, 200)
   assert.equal(student.res.status, 200)
   assert.ok(student.res.json.fareCents < guest.res.json.fareCents)
-  const line = student.created[0].line_items[0].price_data.unit_amount
-  assert.equal(line, cardDepositCents(student.res.json.fareCents))
-  assert.equal(line, Math.round(student.res.json.fareCents * 0.25))
+  assert.equal(student.created.length, 0)
+  assert.equal(student.res.json.depositCents, 0)
+  assert.equal(student.res.json.charged, false)
   assert.equal(student.res.json.studentDiscountApplied, true)
-  assert.notEqual(line, SPOOF.amount)
+  assert.notEqual(student.res.json.fareCents, SPOOF.amount)
 })
 
-test('the webhook marks the airport deposit paid so the trip enters matching', async () => {
-  const { res, created, sb } = await openCheckout(GMAIL)
+test('the webhook marks a legacy airport deposit paid so the trip enters matching', async () => {
+  const { res, sb } = await openCheckout(GMAIL)
   assert.equal(res.status, 200, JSON.stringify(res.json))
-  const params = created[0]
   const inserted = sb.tripsInserted[0]
+  const legacyDeposit = 2500
   const stale = new Date(Date.now() - UNPAID_AIRPORT_HOLD_TTL_MS - 1000).toISOString()
-  const unpaid = { ...inserted, created_at: stale }
+  const unpaid = { ...inserted, deposit_cents: legacyDeposit, created_at: stale }
   assert.equal(decideUnpaidAirportHoldTtl({ trip: unpaid, payments: [], now: Date.now() }).action, 'cancel')
 
   const db = memoryDb()
   db.trips.set(inserted.id, {
     ...inserted,
+    deposit_cents: legacyDeposit,
     driver_id: null,
     created_at: stale,
     metadata: { ...(inserted.metadata || {}) },
@@ -299,9 +295,15 @@ test('the webhook marks the airport deposit paid so the trip enters matching', a
     object: 'checkout.session',
     payment_status: 'paid',
     status: 'complete',
-    amount_total: params.line_items[0].price_data.unit_amount,
+    amount_total: legacyDeposit,
     payment_intent: 'pi_test_airport_deposit',
-    metadata: params.metadata,
+    metadata: {
+      kind: 'airport_deposit',
+      tripId: inserted.id,
+      riderId: inserted.rider_id,
+      depositCents: String(legacyDeposit),
+      airport: 'GSP',
+    },
   }
   const hookRes = mockRes()
   await webhookHandler(webhookReq({
@@ -329,7 +331,7 @@ test('the webhook marks the airport deposit paid so the trip enters matching', a
   assert.equal(db.payments.length, 1)
   assert.equal(db.payments[0].kind, 'deposit')
   assert.equal(db.payments[0].status, 'succeeded')
-  assert.equal(db.payments[0].amount_cents, params.line_items[0].price_data.unit_amount)
+  assert.equal(db.payments[0].amount_cents, legacyDeposit)
   assert.equal(decideUnpaidAirportHoldTtl({ trip, payments: db.payments, now: Date.now() }).action, 'keep')
   assert.equal(decideUnpaidAirportHoldTtl({ trip, payments: db.payments, now: Date.now() }).reason, 'paid')
 })

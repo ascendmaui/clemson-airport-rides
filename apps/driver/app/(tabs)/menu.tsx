@@ -1,6 +1,7 @@
+import { Glyph } from 'rides-native/icons'
 import { useRouter, useFocusEffect } from 'expo-router'
 import { useCallback, useState } from 'react'
-import { ScrollView, StyleSheet, Text, View } from 'react-native'
+import { Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Primary, useCardShadow } from '@/components/chrome'
 import { EmptyState, FadeIn, type MenuRow, RowGroup } from '@/components/day'
@@ -8,8 +9,9 @@ import { SectionLabel } from '@/components/shell'
 import { useAuth } from '@/lib/auth'
 import { supabase } from '@/lib/supabase'
 import { useTheme } from '@/lib/theme'
+import { radius, type as typeScale } from 'rides-native/shared/theme.js'
 import { displayFirstName } from 'rides-native/authErrors'
-import { loadVehicle, type VehicleRow } from 'rides-native/driverDesk'
+import { loadDriverPerks, loadVehicle, setLeaderboardOptOut, type Leaderboard, type VehicleRow } from 'rides-native/driverDesk'
 import { knowledgeQuizStatus, knowledgeQuizStatusLabel, loadKnowledgeQuiz } from 'rides-native/driverKnowledgeQuiz'
 import { loadRatingSummary } from 'rides-native/PartyScreens'
 
@@ -38,6 +40,7 @@ export default function MenuScreen() {
   const [ratingLine, setRatingLine] = useState('New driver · no ratings yet')
   const [pendingTrip, setPendingTrip] = useState<string | null>(null)
   const [quizLabel, setQuizLabel] = useState('Not started')
+  const [onLeaderboard, setOnLeaderboard] = useState<boolean | null>(null)
   const name = user ? displayFirstName(user.user_metadata?.full_name || user.email?.split('@')[0], 'Driver') : 'Guest'
 
   const refresh = useCallback(async () => {
@@ -48,6 +51,10 @@ export default function MenuScreen() {
       loadKnowledgeQuiz(supabase, user.id).catch(() => null),
     ])
     setVehicle(nextVehicle)
+    loadDriverPerks(supabase).then((p) => {
+      const lb = p.leaderboard as Leaderboard | undefined
+      setOnLeaderboard(lb?.enabled ? !lb.optedOut : null)
+    }).catch(() => setOnLeaderboard(null))
     setQuizLabel(knowledgeQuizStatusLabel(knowledgeQuizStatus(quiz?.row)))
     if (summary) {
       setRatingLine(summary.line)
@@ -73,7 +80,7 @@ export default function MenuScreen() {
     key: 'refer',
     icon: 'gift',
     title: 'Refer friends',
-    subtitle: 'Share Clemson RIDES',
+    subtitle: 'Your code and referral bonus',
     onPress: () => router.push('/refer'),
   })
 
@@ -82,10 +89,16 @@ export default function MenuScreen() {
     { icon: 'car', title: 'Vehicles', subtitle: vehicleSubtitle(vehicle), onPress: () => router.push('/vehicles') },
     { icon: 'document-text', title: 'Documents', subtitle: 'License, insurance, registration', onPress: () => router.push('/documents') },
     { icon: 'shield-checkmark', title: 'Insurance', subtitle: 'Your policy and trip coverage notes', onPress: () => router.push('/insurance') },
+    { icon: 'shield', title: 'Safety', subtitle: 'Audio, video, live location, and SOS', onPress: () => router.push('/safety') },
+    { icon: 'ribbon', title: 'Scorecard', subtitle: 'Acceptance, completion, rating, and map markers', onPress: () => router.push('/scorecard') },
+    { icon: 'speedometer', title: 'Safety score', subtitle: 'Estimate and tips', onPress: () => router.push('/safety-score') },
+  ]
+  const inbox: MenuRow[] = [
+    { icon: 'inbox', title: 'Inbox', subtitle: 'Messages from Clemson RIDES and riders', onPress: () => router.push('/inbox') },
+    { icon: 'discover', title: 'Discover', subtitle: 'Busy spots, game days, and boosts', onPress: () => router.push('/discover') },
   ]
   const money: MenuRow[] = [
-    { icon: 'calculator', title: 'Tax info', subtitle: 'W-9 on your application', onPress: () => router.push('/tax') },
-    { icon: 'card', title: 'Payout methods', subtitle: 'Stripe balance and cash out', onPress: () => router.push('/payouts') },
+    { icon: 'calculator', title: 'Tax info', subtitle: 'Year-end mileage and earnings', onPress: () => router.push('/tax') },
   ]
   const resources: MenuRow[] = [
     { icon: 'school', title: 'Learning Center', subtitle: quizLabel, onPress: () => router.push('/learning') },
@@ -95,7 +108,6 @@ export default function MenuScreen() {
   const account: MenuRow[] = [
     { icon: 'settings', title: 'Settings', subtitle: 'Display, navigation, and sounds', onPress: () => router.push('/settings') },
     { icon: 'swap-horizontal', title: 'Switch account', subtitle: 'One driver session on this phone', onPress: () => router.push('/switch-account') },
-    { icon: 'car-sport', title: 'Vehicle', subtitle: 'Make, model, and service class', onPress: () => router.push('/vehicles') },
   ]
 
   return (
@@ -107,7 +119,7 @@ export default function MenuScreen() {
               <Text style={[styles.avatarText, { color: colors.onAccent }]}>{initials(name)}</Text>
             </View>
             <View style={styles.profileCopy}>
-              <Text style={[styles.kicker, { color: colors.orange }]}>DRIVER</Text>
+              <Text style={[styles.kicker, { color: colors.orange }]}>ACCOUNT</Text>
               <Text style={[styles.title, { color: colors.title }]}>{name}</Text>
             </View>
           </View>
@@ -126,14 +138,45 @@ export default function MenuScreen() {
             />
           ) : null}
           <RowGroup rows={spotlight} />
-          <SectionLabel>Manage</SectionLabel>
+          <SectionLabel>Inbox</SectionLabel>
+          <RowGroup rows={inbox} />
+          <SectionLabel>Vehicle and documents</SectionLabel>
           <RowGroup rows={manage} />
-          <SectionLabel>Money</SectionLabel>
+          <SectionLabel>Tax</SectionLabel>
           <RowGroup rows={money} />
           <SectionLabel>Resources</SectionLabel>
           <RowGroup rows={resources} />
-          <SectionLabel>Account</SectionLabel>
+          <SectionLabel>Settings</SectionLabel>
           <RowGroup rows={account} />
+          {user && onLeaderboard != null ? (
+            <View style={[styles.toggleRow, { backgroundColor: colors.card }]}>
+              <View style={styles.deleteCopy}>
+                <Text style={[styles.deleteTitle, { color: colors.title }]}>Show me on the weekly leaderboard</Text>
+                <Text style={{ color: colors.inkSecondary }}>First name and last initial only</Text>
+              </View>
+              <Switch
+                value={onLeaderboard}
+                accessibilityLabel="Show me on the weekly leaderboard"
+                onValueChange={(next) => {
+                  setOnLeaderboard(next)
+                  if (supabase) setLeaderboardOptOut(supabase, !next).catch(() => setOnLeaderboard(!next))
+                }}
+              />
+            </View>
+          ) : null}
+          <Pressable
+            onPress={() => router.push('/delete-account')}
+            accessibilityRole="button"
+            accessibilityLabel="Delete account"
+            accessibilityHint="Opens the account deletion request screen"
+            style={[styles.deleteRow, { backgroundColor: colors.card, borderColor: colors.danger }]}
+          >
+            <Glyph name="trash-outline" size={20} color={colors.danger} />
+            <View style={styles.deleteCopy}>
+              <Text style={[styles.deleteTitle, { color: colors.danger }]}>Delete account</Text>
+              <Text style={{ color: colors.inkSecondary }}>Request deletion of your account and trip history</Text>
+            </View>
+          </Pressable>
         </FadeIn>
       </ScrollView>
     </View>
@@ -148,6 +191,10 @@ const styles = StyleSheet.create({
   avatar: { width: 64, height: 64, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
   avatarText: { fontSize: 22, fontWeight: '800', letterSpacing: 0.4 },
   profileCopy: { flex: 1, gap: 2 },
-  kicker: { fontWeight: '800', letterSpacing: 1.1, fontSize: 12 },
-  title: { fontSize: 28, fontWeight: '800', letterSpacing: -0.4 },
+  kicker: { ...typeScale.kicker },
+  title: { ...typeScale.title },
+  deleteRow: { flexDirection: 'row', alignItems: 'center', gap: 12, borderWidth: 1, borderRadius: radius.lg, padding: 16, marginTop: 8, minHeight: 60 },
+  deleteCopy: { flex: 1, gap: 2 },
+  toggleRow: { flexDirection: 'row', alignItems: 'center', gap: 12, borderRadius: radius.lg, padding: 16, minHeight: 60 },
+  deleteTitle: { fontWeight: '800', fontSize: 16 },
 })

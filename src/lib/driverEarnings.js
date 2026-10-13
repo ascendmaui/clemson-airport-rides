@@ -17,6 +17,9 @@
  *   When the 28 days before this Monday also have trips, pace is
  *   70% this-week pace + 30% (those nets ÷ 28).
  *   A quiet week with older trips uses that 28-day average alone.
+ * Boost: trips.boost_cents or metadata.boost_cents. 100% to the driver by default
+ *   (BOOST_DRIVER_SHARE_BPS). It is not part of the 20% platform fee and is
+ *   not the post-trip tip. Shown on its own Boost line.
  * Tips: trips.tip_cents when the column is present, else metadata.tip_cents,
  *   else succeeded payments with kind "tip". Hidden on the week cards when none exist.
  *   The year-end summary always has a tip line (amount, or "not tracked").
@@ -32,13 +35,17 @@
  * GET /api/driver-earnings, which checks the caller and returns aggregates only.
  */
 import { PLATFORM_FEE_RATE, splitPlatformCut } from './platformFee.js'
+import { readPrepaidTipCents } from '../../shared/prepaidTip.js'
+import { earningsExtrasForDriver } from '../../shared/backupDriverQueue.js'
+import { driverBoostShareCents, readBoostCents } from '../../shared/scheduledBoost.js'
 import { supabase } from './supabase.js'
+import { riderDriverFirstName } from '../../shared/riderDriverPrivacy.js'
 import {
   approximateLatLng,
-  displayFirstName,
   maskCompletedTripForDriver,
   maskedRouteSummary,
 } from './privacyDisplay.js'
+import { mileageFromTrip } from '../../shared/driverTaxMileage.js'
 
 const TRIP_BASE = [
   'id',
@@ -56,6 +63,9 @@ const TRIP_BASE = [
   'accepted_at',
   'requested_at',
   'canceled_at',
+  'wait_fee_cents',
+  'cancel_fee_cents',
+  'driver_wait_earnings_cents',
   'metadata',
 ].join(', ')
 
@@ -210,6 +220,8 @@ function haversineMeters(lat1, lng1, lat2, lng2) {
 export function readDistance(row, bill) {
   const billed = Number(bill?.distanceM ?? bill?.distance_m)
   if (Number.isFinite(billed) && billed > 0) return { meters: Math.round(billed), approximate: false }
+  const route = Number(row?.metadata?.route_distance_m)
+  if (Number.isFinite(route) && route > 0) return { meters: Math.round(route), approximate: false }
   const routed = Number(row?.metadata?.distance_m)
   if (Number.isFinite(routed) && routed > 0) return { meters: Math.round(routed), approximate: false }
   const lat1 = Number(row?.pickup_lat)
@@ -248,20 +260,29 @@ export function sanitizeCompletedTripForDriver(row, { riderName = '', payments =
     .filter((p) => p.kind === 'refund')
     .reduce((sum, p) => sum + paymentAmount(p), 0)
   const collected = succeeded
-    .filter((p) => p.kind !== 'refund' && p.kind !== 'tip' && !CANCEL_PAYMENT_KINDS.has(String(p.kind)))
-    .reduce((sum, p) => sum + paymentAmount(p), 0)
+    .filter((p) => p.kind !== 'refund' && p.kind !== 'tip' && p.kind !== 'wait_fee' && !CANCEL_PAYMENT_KINDS.has(String(p.kind)))
+    .reduce((sum, p) => sum + Math.max(0, paymentAmount(p) - (Number(p.waitFeeBilledCents ?? p.metadata?.wait_fee_billed_cents) || 0)), 0)
   const waitFeeCents = readWaitFeeCents(row)
   const cancelFeeCents = readCancelFeeCents(row, payments)
-  const canceled = row?.status === 'canceled'
+  const noShow = row?.status === 'cancelled_wait'
+  const canceled = row?.status === 'canceled' || noShow
   const grossFareCents = fareCents > 0 ? fareCents : collected
   const refundCents = Math.min(refunds, grossFareCents)
   const fareAfterRefundCents = canceled ? 0 : Math.max(0, grossFareCents - refundCents)
   const cut = splitPlatformCut({
     fareCents: fareAfterRefundCents,
     tipCents: canceled ? 0 : (tipCents || 0),
-    waitFeeCents: canceled ? 0 : (waitFeeCents || 0),
+    waitFeeCents: canceled && !noShow ? 0 : (waitFeeCents || 0),
     cancelFeeCents: cancelFeeCents || 0,
   })
+  const storedWait = row?.status === 'completed' && row.driver_wait_earnings_cents != null
+    ? Math.max(0, Math.round(Number(row.driver_wait_earnings_cents) || 0)) : null
+  const withoutWait = splitPlatformCut({ fareCents: fareAfterRefundCents, tipCents: canceled ? 0 : (tipCents || 0), cancelFeeCents: cancelFeeCents || 0 })
+  const driverWaitEarningsCents = storedWait ?? Math.max(0, cut.driverNetCents - withoutWait.driverNetCents)
+  const earnedBeforeBoost = storedWait == null ? cut.driverNetCents : withoutWait.driverNetCents + storedWait
+  const boostCents = canceled ? 0 : driverBoostShareCents(readBoostCents(row))
+  // Tip boost prepaid at booking: 100% to the driver, never in the platform fee.
+  const prepaidTipCents = canceled ? 0 : readPrepaidTipCents(row)
 
   const distance = readDistance(row, bill)
   const duration = readDuration(row, bill)
@@ -270,14 +291,17 @@ export function sanitizeCompletedTripForDriver(row, { riderName = '', payments =
 
   /** @type {{ label: string, cents: number }[]} */
   const fareParts = []
+  if (noShow) fareParts.push({ label: 'No-show fee', cents: Math.max(0, Number(row.driver_wait_earnings_cents) || 0) })
   const base = Number(bill?.baseCents ?? bill?.base_cents) || 0
   const distCents = Number(bill?.distanceCents ?? bill?.distance_cents) || 0
   const timeCents = Number(bill?.timeCents ?? bill?.time_cents) || 0
   const surgeCents = Number(bill?.surgeCents ?? bill?.surge_cents) || 0
-  if (base) fareParts.push({ label: 'Base', cents: base })
-  if (distCents) fareParts.push({ label: 'Distance charge', cents: distCents })
-  if (timeCents) fareParts.push({ label: 'Time', cents: timeCents })
-  if (surgeCents) fareParts.push({ label: 'Surge', cents: surgeCents })
+  if (!noShow && base) fareParts.push({ label: 'Base', cents: base })
+  if (!noShow && distCents) fareParts.push({ label: 'Distance charge', cents: distCents })
+  if (!noShow && timeCents) fareParts.push({ label: 'Time', cents: timeCents })
+  if (!noShow && surgeCents) fareParts.push({ label: 'Surge', cents: surgeCents })
+  const backupExtras = earningsExtrasForDriver(row, row?.driver_id)
+  if (!noShow) for (const part of backupExtras.parts) fareParts.push(part)
 
   const pickupLabel = masked.pickup_label || 'Trip completed'
   const dropoffLabel = masked.dropoff_label || 'Trip completed'
@@ -289,11 +313,14 @@ export function sanitizeCompletedTripForDriver(row, { riderName = '', payments =
     fareCents: fareAfterRefundCents,
     refundCents: canceled ? 0 : refundCents,
     grossCents: cut.grossCents,
-    platformFeeCents: cut.platformFeeCents,
+    platformFeeCents: noShow ? Math.max(0, cut.grossCents - (Number(row.driver_wait_earnings_cents) || 0)) : cut.grossCents - earnedBeforeBoost,
     tipCents: canceled ? null : tipCents,
-    waitFeeCents: canceled ? null : waitFeeCents,
+    prepaidTipCents,
+    boostCents,
+    waitFeeCents: canceled && !noShow ? null : waitFeeCents,
     cancelFeeCents,
-    earnedCents: cut.driverNetCents,
+    driverWaitEarningsCents,
+    earnedCents: noShow ? Math.max(0, Number(row.driver_wait_earnings_cents) || 0) : earnedBeforeBoost + boostCents + prepaidTipCents + backupExtras.cents,
     distanceM: distance.meters,
     distanceApproximate: distance.approximate,
     durationS: duration.seconds,
@@ -303,7 +330,7 @@ export function sanitizeCompletedTripForDriver(row, { riderName = '', payments =
     routeLabel: maskedRouteSummary(pickupLabel, dropoffLabel),
     pickupApprox: pickup ? { lat: pickup.lat, lng: pickup.lng } : null,
     dropoffApprox: dropoff ? { lat: dropoff.lat, lng: dropoff.lng } : null,
-    riderFirstName: displayFirstName(riderName),
+    riderFirstName: riderDriverFirstName(riderName, 'Rider') || 'Rider',
     fareParts,
   }
 }
@@ -405,11 +432,13 @@ export function summarizeDriverEarnings(trips, { now = new Date(), timeZone = 'A
     todayPlatformFeeCents: sumField(todayTrips, 'platformFeeCents'),
     todayTripCount: todayTrips.length,
     todayTipsCents: tipsTracked ? sumTips(todayTrips) : null,
+    todayBoostCents: sumField(todayTrips, 'boostCents'),
     weekEarningsCents,
     weekGrossCents: sumField(weekTrips, 'grossCents'),
     weekPlatformFeeCents: sumField(weekTrips, 'platformFeeCents'),
     weekTripCount: weekTrips.length,
     weekTipsCents: tipsTracked ? sumTips(weekTrips) : null,
+    weekBoostCents: sumField(weekTrips, 'boostCents'),
     elapsedDays,
     remainingDays,
     projectedRemainderCents,
@@ -473,6 +502,7 @@ export function buildAnnualTaxSummary(trips, { year, timeZone = 'America/New_Yor
   const refundCents = sumField(inYear, 'refundCents')
   const platformFeeCentsTotal = sumField(inYear, 'platformFeeCents')
   const tipsCents = tipsTracked ? inYear.reduce((sum, trip) => sum + (trip.tipCents || 0), 0) : null
+  const boostCents = sumField(inYear, 'boostCents')
   const waitFeeCents = waitTracked ? inYear.reduce((sum, trip) => sum + (trip.waitFeeCents || 0), 0) : null
   const cancelFeeCents = cancelTracked ? inYear.reduce((sum, trip) => sum + (trip.cancelFeeCents || 0), 0) : null
   const grossCents = sumField(inYear, 'grossCents')
@@ -487,6 +517,7 @@ export function buildAnnualTaxSummary(trips, { year, timeZone = 'America/New_Yor
     platformFeeCents: platformFeeCentsTotal,
     platformFeeRate: PLATFORM_FEE_RATE,
     tipsCents,
+    boostCents,
     waitFeeCents,
     cancelFeeCents,
     driverNetCents,
@@ -522,16 +553,18 @@ export function buildAnnualTaxCsv(summary) {
     ['Wait fees (USD)', waitCell],
     ['Cancel fees (USD)', cancelCell],
     ['Gross subject to platform fee (USD)', csvMoney(summary.grossCents)],
-    ['Platform fees 20% of fares, tips, wait, and cancel (USD)', csvMoney(summary.platformFeeCents)],
+    ['Platform fees 20% of fares, wait, and cancel; tips 100% to driver (USD)', csvMoney(summary.platformFeeCents)],
+    ['Boost 100% to driver, excluded from platform fee (USD)', csvMoney(summary.boostCents)],
     ['Driver net 80% (USD)', csvMoney(summary.driverNetCents)],
     [],
-    ['Completed at', 'Rider first name', 'Area', 'Fare (USD)', 'Tips (USD)', 'Wait fee (USD)', 'Cancel fee (USD)', 'Platform fee (USD)', 'Driver net (USD)'],
+    ['Completed at', 'Rider first name', 'Area', 'Fare (USD)', 'Tips (USD)', 'Boost (USD)', 'Wait fee (USD)', 'Cancel fee (USD)', 'Platform fee (USD)', 'Driver net (USD)'],
     ...(summary.trips || []).map((trip) => [
       trip.completedAt || '',
       trip.riderFirstName || '',
       trip.routeLabel || 'Trip completed',
       csvMoney(trip.fareCents),
       trip.tipCents == null ? '' : csvMoney(trip.tipCents),
+      csvMoney(trip.boostCents),
       trip.waitFeeCents == null ? '' : csvMoney(trip.waitFeeCents),
       trip.cancelFeeCents == null ? '' : csvMoney(trip.cancelFeeCents),
       csvMoney(trip.platformFeeCents),
@@ -545,12 +578,64 @@ export function annualTaxCsvFilename(year) {
   return `clemson-rides-earnings-${year}.csv`
 }
 
+async function standbyEarningRows(driverId, seenIds) {
+  if (!supabase || !driverId) return []
+  try {
+    const listed = await supabase
+      .from('trips')
+      .select('id, driver_id, status, pickup_label, dropoff_label, completed_at, metadata')
+      .eq('status', 'completed')
+      .filter('metadata->backup_queue->>backupDriverId', 'eq', driverId)
+      .limit(100)
+    if (listed.error) return []
+    const canceled = await supabase
+      .from('trips')
+      .select('id, driver_id, status, pickup_label, dropoff_label, canceled_at, metadata')
+      .eq('status', 'canceled')
+      .filter('metadata->backup_queue->>cancelFeeDriverId', 'eq', driverId)
+      .limit(100)
+    const rows = [...(listed.data || []), ...((canceled.error ? [] : canceled.data) || [])]
+    return rows.flatMap((row) => {
+      if (!row?.id || seenIds.has(row.id) || row.driver_id === driverId) return []
+      const extras = earningsExtrasForDriver(row, driverId)
+      if (!extras.cents) return []
+      return [{
+        id: `${row.id}:standby`,
+        status: row.status || 'completed',
+        completedAt: row.completed_at || row.canceled_at || null,
+        fareCents: 0,
+        refundCents: 0,
+        grossCents: extras.cents,
+        platformFeeCents: 0,
+        tipCents: null,
+        waitFeeCents: null,
+        cancelFeeCents: extras.parts.find((part) => part.label === 'Cancellation fee')?.cents || 0,
+        earnedCents: extras.cents,
+        distanceM: null,
+        distanceApproximate: false,
+        durationS: null,
+        durationApproximate: false,
+        pickupLabel: row.pickup_label || 'Backup standby',
+        dropoffLabel: row.dropoff_label || 'Backup standby',
+        routeLabel: extras.parts[0]?.label || 'Backup standby',
+        pickupApprox: null,
+        dropoffApprox: null,
+        riderFirstName: 'Rider',
+        fareParts: extras.parts,
+        backupStandby: true,
+      }]
+    })
+  } catch {
+    return []
+  }
+}
+
 async function selectCompletedTrips(driverId) {
   const baseQuery = () => supabase
     .from('trips')
     .select(`${TRIP_BASE}, tip_cents`)
     .eq('driver_id', driverId)
-    .in('status', ['completed', 'canceled'])
+    .in('status', ['completed', 'canceled', 'cancelled_wait'])
     .order('completed_at', { ascending: false })
     .limit(1000)
 
@@ -561,7 +646,7 @@ async function selectCompletedTrips(driverId) {
     .from('trips')
     .select(TRIP_BASE)
     .eq('driver_id', driverId)
-    .in('status', ['completed', 'canceled'])
+    .in('status', ['completed', 'canceled', 'cancelled_wait'])
     .order('completed_at', { ascending: false })
     .limit(1000)
 }
@@ -602,7 +687,7 @@ export async function fetchDriverEarningsReport(driverId, { now = new Date(), ti
   if (riderIds.length) {
     const { data: profiles } = await supabase.from('profiles').select('id, full_name').in('id', riderIds)
     for (const profile of profiles || []) {
-      firstNames[profile.id] = displayFirstName(profile.full_name)
+      firstNames[profile.id] = riderDriverFirstName(profile.full_name, '')
     }
   }
 
@@ -617,12 +702,55 @@ export async function fetchDriverEarningsReport(driverId, { now = new Date(), ti
       bill: billsByTrip[row.id] || null,
     })
     if (row.status === 'canceled' && !(trip.cancelFeeCents > 0)) return []
-    return [trip]
+    const mileage = mileageFromTrip(row, { bill: billsByTrip[row.id] || null })
+    const payout = row.metadata?.payout && typeof row.metadata.payout === 'object' ? row.metadata.payout : {}
+    return [{
+      ...trip,
+      ...mileage,
+      payoutStatus: payout.status || null,
+      payoutCents: payout.amountCents ?? null,
+    }]
   })
+  const standby = await standbyEarningRows(driverId, new Set(trips.map((trip) => trip.id)))
+  const mileage = await loadMileageSide(driverId)
+  const bonuses = await loadBonusLedger(driverId)
 
   return {
-    trips,
+    trips: [...trips, ...standby],
     summary: summarizeDriverEarnings(trips, { now, timeZone }),
     paymentsLoaded: Boolean(extras),
+    mileageLogs: mileage.logs,
+    mileageRates: mileage.rates,
+    bonuses,
+  }
+}
+
+async function loadBonusLedger(driverId) {
+  if (!supabase || !driverId) return []
+  try {
+    const listed = await supabase
+      .from('driver_bonus_ledger')
+      .select('amount_cents, status, created_at, paid_at, kind')
+      .eq('driver_id', driverId)
+    if (listed.error) return []
+    return listed.data || []
+  } catch {
+    return []
+  }
+}
+
+async function loadMileageSide(driverId) {
+  if (!supabase || !driverId) return { logs: [], rates: null }
+  try {
+    const [logs, rates] = await Promise.all([
+      supabase.from('driver_mileage_logs').select('trip_id, tax_year, on_trip_miles, on_trip_source, enroute_miles, enroute_source, deductible_miles, completed_at').eq('driver_id', driverId),
+      supabase.from('driver_mileage_rates').select('tax_year, starts_on, ends_on, cents_per_mile, label, source_note'),
+    ])
+    return {
+      logs: logs.error ? [] : (logs.data || []),
+      rates: rates.error ? null : (rates.data || []),
+    }
+  } catch {
+    return { logs: [], rates: null }
   }
 }

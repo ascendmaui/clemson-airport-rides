@@ -6,16 +6,15 @@
  * A real driver never receives a demo headshot.
  */
 import { demoDriverById } from './demoFleet.js'
+import { riderDriverFirstName } from './riderDriverPrivacy.js'
 
 export const PORTRAIT_ORANGE = '#F56600'
 export const PORTRAIT_PURPLE = '#522D80'
 
 export function nameInitials(name) {
-  const parts = String(name || '').trim().split(/\s+/).filter(Boolean)
-  if (!parts.length) return '?'
-  const first = parts[0].slice(0, 1)
-  const last = parts.length > 1 ? parts[parts.length - 1].slice(0, 1) : ''
-  return (first + last).toUpperCase()
+  const first = riderDriverFirstName(name, '')
+  const letter = first.replace(/^[^A-Za-z0-9]+/, '').slice(0, 1)
+  return (letter || '?').toUpperCase()
 }
 
 export function initialsBadgeColor(name) {
@@ -51,7 +50,7 @@ export function resolveDriverPortrait(driver) {
   if (photo) {
     return { kind: 'photo', url: photo, initials: null, color: null, isDemo: false }
   }
-  const name = driver?.full_name || driver?.fullName || driver?.name || ''
+  const name = riderDriverFirstName(driver?.full_name || driver?.fullName || driver?.name, '')
   return {
     kind: 'initials',
     url: null,

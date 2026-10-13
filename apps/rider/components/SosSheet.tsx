@@ -1,3 +1,4 @@
+import { Glyph } from 'rides-native/icons'
 import { LinearGradient } from 'expo-linear-gradient'
 import { StatusBar } from 'expo-status-bar'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
@@ -34,6 +35,7 @@ export function SosButton({ onPress }: { onPress: () => void }) {
       onPress={onPress}
       style={[styles.fab, { backgroundColor: colors.danger, shadowColor: colors.danger }]}
     >
+      <Glyph name="sos" size={16} color="#FFFFFF" />
       <Text style={styles.fabText}>SOS</Text>
     </Pressable>
   )
@@ -87,7 +89,7 @@ export function SosIncomingBanner({
         hitSlop={12}
         onPress={() => setDismissedId(event.id)}
       >
-        <Text style={styles.bannerDismiss}>×</Text>
+        <Glyph name="close" size={18} color={colors.inkSecondary} accessibilityLabel="Dismiss" />
       </Pressable>
     </View>
   )

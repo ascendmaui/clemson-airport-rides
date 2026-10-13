@@ -15,6 +15,7 @@ const KIND_META = {
   ride_scheduled: { title: 'Scheduled ride', Icon: IconCar, tone: 'orange' },
   ride_reminder: { title: 'Pickup reminder', Icon: IconBell, tone: 'purple' },
   driver_accepted: { title: 'Driver accepted', Icon: IconCar, tone: 'purple' },
+  driver_matched: { title: 'Driver matched', Icon: IconCar, tone: 'purple' },
   driver_en_route: { title: 'Driver en route', Icon: IconCar, tone: 'orange' },
   arrived_pickup: { title: 'Arrived at pickup', Icon: IconCar, tone: 'purple' },
   ride_wait_cancelled: { title: 'Ride canceled', Icon: IconCar, tone: 'orange' },
@@ -30,7 +31,10 @@ const KIND_META = {
   carpool_booked: { title: 'Carpool booked', Icon: IconCarpool, tone: 'orange' },
   location_shared: { title: 'Location shared', Icon: IconShare, tone: 'purple' },
   driver_incentive: { title: 'Driver incentive', Icon: IconBell, tone: 'orange' },
+  promo_weekly: { title: 'This week’s coupon', Icon: IconBell, tone: 'orange' },
   ride_lost_found: { title: 'Lost & found', Icon: IconBell, tone: 'orange' },
+  trip_message: { title: 'Ride message', Icon: IconBell, tone: 'purple' },
+  trip_lost_item: { title: 'Lost item', Icon: IconBell, tone: 'orange' },
   system: { title: 'Update', Icon: IconBell, tone: 'purple' },
 }
 

@@ -28,8 +28,10 @@ test('45-minute boundary releases once, preserves pickup, and uses existing rebr
   assert.equal((await releaseScheduledRides(sb, quiet)).released, 0)
   // Production's existing deadline trigger supplies this timestamp.
   trip.offer_expires_at = now.toISOString()
-  assert.equal((await rebroadcastMissedOffers(sb, quiet)).advanced, 1)
-  assert.equal(sb._tables.trips[0].metadata.offer_driver_id, 'driver-2')
+  assert.equal((await rebroadcastMissedOffers(sb, quiet)).pooled, 1)
+  assert.equal(sb._tables.trips[0].metadata.offer_phase, 'pool')
+  assert.equal(sb._tables.trips[0].metadata.offer_share_bps, 7000)
+  assert.equal(sb._tables.trips[0].metadata.offer_driver_id, null)
 })
 
 test('future, assigned, terminal and deposit rides never release', async () => {

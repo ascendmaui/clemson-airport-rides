@@ -1,0 +1,39 @@
+import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+import test from 'node:test'
+import { HOME_CLUTTER_SHIFT, HOME_CLUTTER_SPRING, homeClutterTranslateY } from '../apps/driver/lib/bottomCluster.ts'
+
+const read = (rel) => readFileSync(new URL(`../${rel}`, import.meta.url), 'utf8')
+
+test('going online springs home clutter away and END brings it back', () => {
+  const home = read('apps/driver/app/(tabs)/index.tsx')
+  const shell = read('apps/driver/components/shell.tsx')
+  assert.match(shell, /\{online \? 'END' : 'GO'\}/)
+  assert.equal(HOME_CLUTTER_SHIFT, 720)
+  assert.equal(homeClutterTranslateY(true), HOME_CLUTTER_SHIFT)
+  assert.equal(homeClutterTranslateY(false), 0)
+  assert.equal(HOME_CLUTTER_SPRING.damping, 18)
+  assert.match(home, /withSpring\(HOME_CLUTTER_SHIFT, HOME_CLUTTER_SPRING\)/)
+  assert.match(home, /withSpring\(homeClutterTranslateY\(false\), HOME_CLUTTER_SPRING/)
+  assert.match(home, /pointerEvents=\{clutterInteractive && !offer \? 'box-none' : 'none'\}/)
+  assert.match(home, /setRideAlertSurface\(\{ online \}\)/)
+  assert.match(home, /if \(nextOnline\) await goOnline\(user\.id, fix\)/)
+  assert.match(home, /else await goOffline\(user\.id\)/)
+  assert.match(home, /pulseShift\(nextOnline \? 'GO' : 'END'\)/)
+  assert.match(home, /icon="list"/)
+  assert.match(home, /router\.push\('\/queue'\)/)
+  assert.match(home, /You're online/)
+  assert.doesNotMatch(home, /icon="shield"/)
+  assert.doesNotMatch(home, /icon="sparkles"/)
+  assert.doesNotMatch(home, /icon="stats-chart"/)
+  assert.doesNotMatch(home, /icon="locate"/)
+  assert.doesNotMatch(home, /styles\.bar/)
+  assert.doesNotMatch(home, /onPriority/)
+  assert.doesNotMatch(home, /clusterY/)
+  assert.doesNotMatch(home, /barY/)
+  const clutterAt = home.indexOf('styles.clutter')
+  const goAt = home.indexOf('<GoButton')
+  assert.ok(clutterAt > 0 && goAt > clutterAt)
+  const between = home.slice(clutterAt, goAt)
+  assert.match(between, /<\/Reanimated\.View>/)
+})

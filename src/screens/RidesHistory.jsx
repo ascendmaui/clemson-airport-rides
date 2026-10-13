@@ -3,6 +3,7 @@ import { BottomTabs } from '../components/BottomTabs'
 import { RequireAuth } from '../components/RequireAuth'
 import { useAuth } from '../lib/auth'
 import { fetchRecentLostFoundTrips } from '../lib/lostFound'
+import { ReportLostItemButton } from '../components/ReportLostItem'
 import { SkeletonRideCard } from '../components/LoadingSkeleton'
 import { navigate } from '../lib/navigation'
 
@@ -106,6 +107,17 @@ function HistoryInner() {
               >
                 Left something in the car?
               </button>
+              <ReportLostItemButton
+                trip={{
+                  id: t.id,
+                  status: 'completed',
+                  completed_at: t.completedAt,
+                  rider_id: t.otherRole === 'driver' ? user.id : t.otherId,
+                  driver_id: t.otherRole === 'rider' ? user.id : t.otherId,
+                }}
+                userId={user.id}
+                onOpened={() => navigate('requested', { trip: t.id })}
+              />
             </div>
           ))}
         </div>

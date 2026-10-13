@@ -36,10 +36,10 @@ export function midrideChargeSummary(quote) {
   const ride = formatMidrideMoney(quote.ridePortionCents)
   const now = formatMidrideMoney(quote.toCollectCents)
   if ((quote.depositPaidCents || 0) > 0 && (quote.toCollectCents || 0) === 0) {
-    return `${total} trip charge (${ride} so far + ${fee} cancel fee). Your deposit covers it — no extra card charge.`
+    return `${total} trip charge (${ride} so far + ${fee} cancel fee). Amount already paid covers it — no extra card charge.`
   }
   if ((quote.depositPaidCents || 0) > 0) {
-    return `${total} trip charge (${ride} so far + ${fee} cancel fee). Card charge now ${now} after your deposit.`
+    return `${total} trip charge (${ride} so far + ${fee} cancel fee). Card charge now ${now} after the amount already paid.`
   }
   return `${total} (${ride} for distance and time so far + ${fee} cancel fee).`
 }

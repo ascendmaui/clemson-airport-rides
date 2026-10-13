@@ -33,6 +33,21 @@ export function waitChargeKey(tripId, userId) {
   return `wait:${tripId}:${userId}:charge`
 }
 
+/** Wait may be collected separately or as part of the final fare capture. */
+export function waitFeeBilledCents(trip, payments = []) {
+  const stored = Math.max(0, Math.round(Number(trip?.metadata?.wait_fee_billed_cents) || 0))
+  const recorded = payments.reduce((sum, row) => {
+    if (!['succeeded', 'pending'].includes(row.status)) return sum
+    // A separate pending charge owns the wait fee under waitChargeKey. Never
+    // start a second charge for it under the final fare's idempotency key.
+    const amount = row.kind === 'wait_fee'
+      ? Math.max(Number(trip?.wait_fee_cents) || 0, Number(row.amount_cents) || 0)
+      : row.metadata?.wait_fee_billed_cents
+    return sum + Math.max(0, Math.round(Number(amount) || 0))
+  }, 0)
+  return Math.max(stored, recorded)
+}
+
 /** Card PaymentIntent idempotency key. Derived from the charge key; no amount. */
 export function cardIntentKey(chargeKey, attempt = null) {
   if (!chargeKey) return null

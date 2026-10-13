@@ -36,8 +36,8 @@ export function creditsCoverFare(balanceCents, fareCents) {
 
 /**
  * Payment choices for a server-priced ride.
- * Campus rides stay completable with no card.
- * Airport rides keep the priced deposit (25% from the fare card).
+ * Scheduling does not take a deposit. Credits or no card.
+ * A card hold for the estimate plus a buffer happens when the ride is requested.
  */
 export function billingOffer({
   fareCents,
@@ -47,29 +47,23 @@ export function billingOffer({
   airport = null,
 } = {}) {
   const fare = finiteCents(fareCents)
-  const deposit = finiteCents(depositCents) ?? 0
   const balance = balanceKnown ? (finiteCents(balanceCents) ?? 0) : null
-  const campus = !airport && deposit <= 0
+  const campus = !airport
   const creditsSelectable = balance != null && creditsCoverFare(balance, fare)
-  const options = campus
-    ? [
-      { id: 'no_card', enabled: true },
-      { id: 'credits', enabled: creditsSelectable },
-    ]
-    : [
-      { id: 'deposit', enabled: deposit > 0 },
-      { id: 'credits', enabled: creditsSelectable },
-    ]
+  void depositCents
   return {
     fareCents: fare,
-    depositCents: deposit,
-    remainingCents: fare == null ? null : Math.max(0, fare - deposit),
+    depositCents: 0,
+    remainingCents: fare,
     balanceCents: balance,
     balanceKnown: Boolean(balanceKnown),
     airport: airport || null,
     campus,
     creditsSelectable,
-    options,
+    options: [
+      { id: 'no_card', enabled: true },
+      { id: 'credits', enabled: creditsSelectable },
+    ],
   }
 }
 
@@ -97,12 +91,12 @@ export function resolveBillingChoice({
     return {
       ok: true,
       recorded: false,
-      choice: offer.campus ? 'no_card' : 'deposit',
+      choice: 'no_card',
       offer,
     }
   }
   if (requested === 'invalid') {
-    return { ok: false, status: 400, error: 'Choose no card, the 25% deposit, or ride credits.', code: 'billing_choice_invalid' }
+    return { ok: false, status: 400, error: 'Choose no card or ride credits.', code: 'billing_choice_invalid' }
   }
 
   switch (requested) {
@@ -121,27 +115,10 @@ export function resolveBillingChoice({
       }
       return { ok: true, recorded: true, choice: 'credits', offer }
     case 'no_card':
-      if (!offer.campus) {
-        return {
-          ok: false,
-          status: 409,
-          error: 'Airport rides request a 25% deposit.',
-          code: 'airport_deposit_required',
-          offer,
-        }
-      }
       return { ok: true, recorded: true, choice: 'no_card', offer }
     case 'deposit':
-      if (offer.campus || offer.depositCents <= 0) {
-        return {
-          ok: false,
-          status: 409,
-          error: 'Campus rides are requested with no card.',
-          code: 'campus_no_card',
-          offer,
-        }
-      }
-      return { ok: true, recorded: true, choice: 'deposit', offer }
+      // Older clients still send this choice. It books the ride with no upfront charge.
+      return { ok: true, recorded: true, choice: 'no_card', offer }
     default: {
       const unknown = requested
       throw new Error(`Unhandled billing choice: ${String(unknown)}`)

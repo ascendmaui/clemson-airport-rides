@@ -8,6 +8,24 @@ export function normalizeApplicantEmail(value) {
   return email
 }
 
+export function applicantEmailError(value) {
+  if (!String(value ?? '').trim()) return 'Email is required.'
+  if (!normalizeApplicantEmail(value)) return 'Enter a valid email address.'
+  return null
+}
+
+/**
+ * Address collected on the application. A typed value wins, including a blank
+ * field the applicant cleared. Auth email is the fallback when the form did
+ * not send one.
+ */
+export function resolveSignupApplicantEmail(body, user) {
+  const typed = body?.email ?? body?.applicantEmail
+  if (typed != null && String(typed).trim() !== '') return normalizeApplicantEmail(typed)
+  if (typed != null) return ''
+  return normalizeApplicantEmail(user?.email)
+}
+
 /** Stored application email wins. Profile email is the fallback for rows saved before that column. */
 export function submittedApplicantEmail(application, profile) {
   return normalizeApplicantEmail(application?.applicant_email)

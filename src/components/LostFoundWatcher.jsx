@@ -1,3 +1,4 @@
+import { uniqueChannelTopic } from '../../packages/rides-native/realtimeChannel.js'
 import { useEffect, useRef } from 'react'
 import { useAuth } from '../lib/auth'
 import { supabase } from '../lib/supabase'
@@ -65,7 +66,7 @@ export function LostFoundWatcher() {
     hydrate()
 
     const channel = supabase
-      .channel(`lost-found-${user.id}`)
+      .channel(uniqueChannelTopic(`lost-found-${user.id}`))
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'lost_found_reports' },

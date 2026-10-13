@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { existsSync, readFileSync } from 'node:fs'
 import { registerHooks } from 'node:module'
 import test from 'node:test'
 
@@ -202,6 +203,23 @@ test('driver push offline and error states', { concurrency: false }, async (t) =
       shouldPlaySound: true,
       shouldSetBadge: false,
     })
+  })
+
+  await t.test('an open online driver suppresses the system toast', async () => {
+    push.setRideAlertSurface({ active: true, online: true })
+    const inApp = await state().handler.handleNotification()
+    assert.equal(push.inAppRideAlert(), true)
+    assert.deepEqual(inApp, {
+      shouldShowBanner: false,
+      shouldShowList: true,
+      shouldPlaySound: false,
+      shouldSetBadge: false,
+    })
+    push.setRideAlertSurface({ active: false, online: true })
+    const locked = await state().handler.handleNotification()
+    assert.equal(locked.shouldShowBanner, true)
+    assert.equal(locked.shouldPlaySound, true)
+    push.setRideAlertSurface({ active: true, online: false })
   })
 
   await t.test('registerDriverPush asks the driver to sign in when there is no id', async () => {
@@ -457,6 +475,7 @@ test('driver push offline and error states', { concurrency: false }, async (t) =
       assert.equal(op.payload.token, 'ExponentPushToken[abc]')
       assert.equal(op.payload.platform, 'android')
       assert.equal(op.payload.updated_at, updatedAt)
+      assert.deepEqual(op.payload.features, ['trip_status_v1'])
       assertIso(op.payload.updated_at)
       return { error: null }
     })
@@ -489,6 +508,33 @@ test('driver push offline and error states', { concurrency: false }, async (t) =
     assert.equal(result.stored, true)
     assert.equal(result.detail, REGISTERED)
     assert.equal(state().ops.length, 2)
+  })
+
+  await t.test('a database without driver_push_tokens.features still stores the token', async () => {
+    const payloads = []
+    const client = supabaseClient((op) => {
+      if (op.table === 'driver_status') return { error: { message: 'schema cache' } }
+      payloads.push(op.payload)
+      if (op.payload.features) return { error: { message: "Could not find the 'features' column of 'driver_push_tokens' in the schema cache" } }
+      return { error: null }
+    })
+    const result = await push.registerDriverPush(client, 'driver-1')
+    assert.equal(result.stored, true)
+    assert.equal(payloads.length, 2)
+    assert.equal('features' in payloads[1], false)
+  })
+
+  await t.test('the status-push feature flag matches the server', async () => {
+    const server = await import('../../../server/tripStatusNotices.js')
+    assert.equal(push.TRIP_STATUS_PUSH_FEATURE, server.DRIVER_STATUS_PUSH_FEATURE)
+  })
+
+  await t.test('trip status pushes are told apart from ride offers', () => {
+    assert.equal(push.isTripStatusPush({ kind: 'arrive_prompt', tripId: 't' }), true)
+    assert.equal(push.isTripStatusPush({ kind: 'rider_canceled' }), true)
+    assert.equal(push.isTripStatusPush({ tripId: 't' }), false)
+    assert.equal(push.isTripStatusPush({ kind: 'scheduled_board' }), false)
+    assert.equal(push.isTripStatusPush(null), false)
   })
 
   await t.test('a failed fallback upsert stays unstored with a readable detail', async () => {
@@ -547,11 +593,23 @@ test('driver push offline and error states', { concurrency: false }, async (t) =
           title: 'Ride accepted',
           body: 'White C → GSP',
           data: { tripId: 'trip-1' },
-          sound: 'request.wav',
+          sound: 'accept.wav',
         },
         trigger: null,
       },
     ])
+  })
+
+  await t.test('notifyAcceptedRide falls back to the default sound when scheduling throws', async () => {
+    state().scheduleError = new Error('invalid sound')
+    await push.notifyAcceptedRide(CARD)
+    assert.equal(state().scheduled.length, 2)
+    assert.equal(state().scheduled[0].content.sound, 'accept.wav')
+    assert.equal(state().scheduled[1].content.sound, 'default')
+    assert.equal(state().scheduled[1].content.title, 'Ride accepted')
+    assert.equal(state().scheduled[1].content.body, 'White C → GSP')
+    assert.deepEqual(state().scheduled[1].content.data, { tripId: 'trip-1' })
+    assert.equal(state().scheduled[1].trigger, null)
   })
 
   await t.test('notifyNewRequest copies the trip into a local notification', async () => {
@@ -641,4 +699,21 @@ test('driver push offline and error states', { concurrency: false }, async (t) =
     const stacked = await rejectionOf(push.notifyNewRequest(CARD))
     assert.equal(stacked.message, RAW_STACK)
   })
+})
+
+test('push notification sound filenames are bundled in the driver app', () => {
+  const root = new URL('../../../', import.meta.url)
+  const source = readFileSync(new URL('./push.ts', import.meta.url), 'utf8')
+  const app = JSON.parse(readFileSync(new URL('../app.json', import.meta.url), 'utf8'))
+  const plugin = app.expo.plugins.find((entry) => Array.isArray(entry) && entry[0] === 'expo-notifications')
+  const bundled = plugin[1].sounds
+  const names = [...new Set([...source.matchAll(/sound:\s*'([^']+)'/g)].map((match) => match[1]))]
+  assert.ok(names.includes('accept.wav'))
+  for (const name of names) {
+    if (!name.endsWith('.wav')) continue
+    const listed = `./assets/sounds/${name}`
+    assert.ok(bundled.includes(listed), `${name} missing from expo-notifications sounds`)
+    assert.equal(existsSync(new URL(`../assets/sounds/${name}`, import.meta.url)), true, name)
+    assert.equal(existsSync(new URL(`apps/driver/assets/sounds/${name}`, root)), true, name)
+  }
 })

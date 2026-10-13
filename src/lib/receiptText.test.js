@@ -46,7 +46,7 @@ test('buildReceiptText: includes deposit receipt lines when airport deposit was 
   }
   const text = buildReceiptText(trip)
   assert.ok(text.includes('Fare: $90.00'))
-  assert.ok(text.includes('25% deposit: $22.50'))
+  assert.ok(text.includes('Already paid: $22.50'))
   assert.ok(text.includes('Remaining balance: $67.50'))
   assert.ok(text.includes('Tip: $10.00'))
   assert.ok(text.includes('Total: $100.00'))
