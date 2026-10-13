@@ -1,6 +1,7 @@
 import { navigate } from '../lib/navigation'
 import { SitePage } from '../components/SitePage'
 import { MarketingPhoto } from '../components/MarketingPhoto'
+import { GlassGlyph } from '../components/GlassGlyph'
 import { FEATURES, ONLY_AT_CLEMSON_RIDES } from '../content/features.js'
 
 const WHY_IDS = ['backup-driver', 'confirm', 'switch-cancel', 'boosts', 'student', 'tiger-pass', 'clemson']
@@ -10,6 +11,7 @@ function WhyCard({ feature, photoId }) {
     <article className={`mkt-card mkt-feature${feature.id === 'clemson' ? ' mkt-why-span' : ''}`}>
       {photoId ? <MarketingPhoto id={photoId} /> : null}
       {feature.exclusive ? <p className="mkt-kicker">{ONLY_AT_CLEMSON_RIDES}</p> : null}
+      <GlassGlyph name={feature.id} />
       <h3>{feature.title}</h3>
       <p>{feature.what}</p>
       <p><strong>Why it matters. </strong>{feature.why}</p>

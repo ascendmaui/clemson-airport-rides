@@ -5,6 +5,7 @@ import { ONBOARDING_FLOW } from '../../shared/driverOnboarding.js'
 import { APP_STORE_NOTE } from '../content/peaceOfMind.js'
 import { DRIVER_EARNINGS, RELEASE_NOTE } from '../content/differentiators.js'
 import { DrivePerks, RentalSection } from '../components/DrivePerks'
+import { GlassGlyph } from '../components/GlassGlyph'
 
 export function DriveWithUs() {
   return (
@@ -53,6 +54,7 @@ export function DriveWithUs() {
           {DRIVER_EARNINGS.map((item, index) => (
             <article key={item.id} className="mkt-card mkt-feature">
               <p className="mkt-kicker">{index + 1}</p>
+              <GlassGlyph name={item.id} />
               <h3>{item.title}</h3>
               <ol className="mkt-guide">
                 {item.steps.map((step) => <li key={step}>{step}</li>)}

@@ -21,7 +21,7 @@ export function Marketing() {
       <section className="mkt-stage" aria-label="Clemson RIDES">
         <div className="mkt-stage-copy">
           <div className="mkt-hero-brand">
-            <span className="mkt-brand-mark" aria-hidden="true">CR</span>
+            <img className="mkt-brand-mark" src="/brand/rider-icon.svg" alt="" width="64" height="64" />
             <p className="mkt-hero-name">Clemson RIDES</p>
           </div>
           <h1>{HOMEPAGE_HEADLINE}</h1>

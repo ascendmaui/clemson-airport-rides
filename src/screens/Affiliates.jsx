@@ -14,15 +14,20 @@ import { describeAffiliatePlan, normalizeAffiliateCode, referralStatusLabel } fr
 export const ORANGE = '#F56600'
 export const PURPLE = '#522D80'
 export const card = {
-  background: '#fff', borderRadius: 16, padding: 20,
-  boxShadow: '0 1px 2px rgba(17,12,34,0.06), 0 8px 24px rgba(82,45,128,0.06)',
-  transition: 'box-shadow .2s ease, transform .2s ease',
+  background: 'rgba(255, 252, 248, 0.82)',
+  borderRadius: 20,
+  padding: 20,
+  border: '1px solid rgba(255,255,255,0.85)',
+  boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.9), 0 10px 28px rgba(82,45,128,0.10)',
+  backdropFilter: 'blur(16px)',
+  WebkitBackdropFilter: 'blur(16px)',
+  transition: 'transform .2s ease, opacity .2s ease',
 }
-const page = { minHeight: '100%', background: 'var(--surface, #f6f4f8)', padding: '20px 16px 64px' }
+const page = { minHeight: '100%', background: '#F7F4F0', padding: '20px 16px 64px' }
 const wrap = { maxWidth: 760, margin: '0 auto', display: 'grid', gap: 16 }
 const labelStyle = { display: 'grid', gap: 6, fontWeight: 700, fontSize: 14, color: '#2a2438' }
-const input = { padding: '12px 14px', borderRadius: 12, border: '1px solid #e3e0ea', fontSize: 16, background: '#fff' }
-const eyebrow = { fontSize: 12, fontWeight: 800, letterSpacing: 1.2, color: ORANGE }
+const input = { padding: '12px 14px', borderRadius: 18, border: '1px solid rgba(82,45,128,0.12)', fontSize: 17, fontWeight: 600, color: '#0B1220', background: '#fff' }
+const eyebrow = { fontSize: 11, fontWeight: 800, letterSpacing: 1.1, color: ORANGE }
 const DRAFT_KEY = 'clemson_affiliate_draft'
 
 const CONNECT = {
@@ -126,7 +131,7 @@ export function AffiliateSignup({ user, onDone, loadError }) {
   return (
     <div style={page}>
       <div style={wrap}>
-        <div style={{ ...card, background: `linear-gradient(160deg, ${PURPLE} 0%, #6b3fa0 70%, #8a4fbf 100%)`, color: '#fff' }}>
+        <div className="rider-card rider-card--invert" style={{ ...card, background: `linear-gradient(160deg, ${PURPLE} 0%, #6b3fa0 70%, #8a4fbf 100%)`, color: '#fff' }}>
           <div style={{ ...eyebrow, color: '#ffd2b0' }}>CLEMSON RIDES PARTNERS</div>
           <h1 style={{ fontSize: 32, fontWeight: 800, margin: '6px 0', letterSpacing: -0.6 }}>Share rides. Earn rewards.</h1>
           <p style={{ opacity: 0.92, lineHeight: 1.5, margin: 0 }}>
@@ -136,14 +141,14 @@ export function AffiliateSignup({ user, onDone, loadError }) {
         <AffiliatePlan plan={plan} />
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12 }}>
           {[['1', 'Get your code', 'clemsonrides.com/r/YOURCODE'], ['2', 'Share it', 'Flyers, group chats, socials'], ['3', 'Earn', 'After the first qualifying ride']].map(([n, t, d]) => (
-            <div key={n} style={card}>
+            <div key={n} className="rider-card" style={card}>
               <div style={{ width: 28, height: 28, borderRadius: 14, background: ORANGE, color: '#fff', display: 'grid', placeItems: 'center', fontWeight: 800 }}>{n}</div>
               <div style={{ fontWeight: 800, marginTop: 8 }}>{t}</div>
               <div style={{ color: '#6b6478', fontSize: 14 }}>{d}</div>
             </div>
           ))}
         </div>
-        <form onSubmit={submit} style={{ ...card, display: 'grid', gap: 14 }} noValidate>
+        <form onSubmit={submit} className="rider-card" style={{ ...card, display: 'grid', gap: 14 }} noValidate>
           <h2 style={{ margin: 0, fontSize: 20, color: PURPLE }}>Apply to be a partner</h2>
           <fieldset style={{ border: 0, padding: 0, margin: 0, display: 'flex', flexWrap: 'wrap', gap: 8 }}>
             <legend style={{ ...labelStyle, marginBottom: 6 }}>I am a…</legend>
@@ -179,7 +184,7 @@ export function AffiliateSignup({ user, onDone, loadError }) {
 export function AffiliatePlan({ plan }) {
   const rows = plan?.partners || []
   return (
-    <section style={card} aria-label="Commission plan">
+    <section className="rider-card" style={card} aria-label="Commission plan">
       <div style={eyebrow}>{plan?.plan_label || 'Option C'}</div>
       <h2 style={{ margin: '4px 0 12px', color: PURPLE, fontSize: 22 }}>How partners earn</h2>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 10 }}>
@@ -226,7 +231,7 @@ function Field({ label: text, error, children }) {
 
 function Stat({ label: text, value, tone = PURPLE }) {
   return (
-    <div style={{ ...card, padding: 16 }}>
+    <div className="rider-card" style={{ ...card, padding: 16 }}>
       <div style={{ fontSize: 13, color: '#6b6478', fontWeight: 700 }}>{text}</div>
       <div style={{ fontSize: 26, fontWeight: 800, color: tone, letterSpacing: -0.4 }}>{value}</div>
     </div>
@@ -277,7 +282,7 @@ export function AffiliateDashboard({ data, live = false, loadError = null, onRef
     <div style={page}>
       <style>{'@keyframes affiliate-live{0%,100%{opacity:1}50%{opacity:.35}}'}</style>
       <div style={wrap}>
-        <div style={card}>
+        <div className="rider-card" style={card}>
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center' }}>
             <div style={eyebrow}>PARTNER DASHBOARD</div>
             <div aria-live="polite" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 800, color: live ? '#0f7b4c' : '#6b6478' }}>
@@ -289,11 +294,11 @@ export function AffiliateDashboard({ data, live = false, loadError = null, onRef
           <div style={{ color: '#6b6478', fontSize: 14 }}>{AFFILIATE_PARTNER_LABELS[affiliate.partner_type]} · {affiliate.status === 'active' ? 'Active' : affiliate.status === 'pending' ? 'Pending review — your link works once approved' : affiliate.status}</div>
           <div style={{ marginTop: 14, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
             <code style={{ background: '#f4f1f8', padding: '10px 12px', borderRadius: 12, fontSize: 15, fontWeight: 700, wordBreak: 'break-all' }}>{affiliate.link}</code>
-            <button type="button" className="pressable" onClick={copy} style={{ minHeight: 44, padding: '0 16px', borderRadius: 12, background: ORANGE, color: '#fff', fontWeight: 800 }}>{copied ? 'Copied' : 'Copy link'}</button>
+            <button type="button" className="pressable mkt-glass-primary" onClick={copy} style={{ minHeight: 44, padding: '0 16px', borderRadius: 12, background: ORANGE, color: '#fff', fontWeight: 800 }}>{copied ? 'Copied' : 'Copy link'}</button>
           </div>
         </div>
 
-        <section style={card} aria-label="Payout account">
+        <section className="rider-card" style={card} aria-label="Payout account">
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
             <div>
               <div style={eyebrow}>PAYOUTS</div>
@@ -304,7 +309,7 @@ export function AffiliateDashboard({ data, live = false, loadError = null, onRef
           <p style={{ margin: '8px 0 0', color: '#4a4358', lineHeight: 1.5 }}>{connect.hint} Transfers run in Stripe test mode after an admin approves a commission.</p>
           {connectErr && <p role="alert" style={{ color: '#c0392b' }}>{connectErr}</p>}
           {connect.cta && (
-            <button type="button" className="pressable" disabled={connectBusy} onClick={beginConnect}
+            <button type="button" className="pressable mkt-glass-primary" disabled={connectBusy} onClick={beginConnect}
               style={{ marginTop: 12, minHeight: 48, padding: '0 18px', borderRadius: 14, background: ORANGE, color: '#fff', fontWeight: 800, width: '100%' }}>
               {connectBusy ? 'Opening Stripe…' : connect.cta}
             </button>
@@ -335,7 +340,7 @@ export function AffiliateDashboard({ data, live = false, loadError = null, onRef
         {tab === 'earnings' && (
           <div style={{ display: 'grid', gap: 12 }}>
             <BalanceRow earnings={earnings} />
-            <div style={card}>
+            <div className="rider-card" style={card}>
               <h2 style={{ margin: '0 0 8px', fontSize: 18, color: PURPLE }}>Commissions</h2>
               {ledger.length === 0 && <p style={{ margin: 0, color: '#6b6478' }}>No rewards yet. Share your link to get started.</p>}
               {ledger.map((entry) => (
@@ -345,7 +350,7 @@ export function AffiliateDashboard({ data, live = false, loadError = null, onRef
                 </div>
               ))}
             </div>
-            <div style={card}>
+            <div className="rider-card" style={card}>
               <h2 style={{ margin: '0 0 8px', fontSize: 18, color: PURPLE }}>Payout history</h2>
               {payouts.length === 0 && <p style={{ margin: 0, color: '#6b6478' }}>Payouts show up here after a commission is approved.</p>}
               {payouts.map((payout) => (
@@ -358,14 +363,14 @@ export function AffiliateDashboard({ data, live = false, loadError = null, onRef
           </div>
         )}
         {tab === 'materials' && (
-          <div style={{ ...card, display: 'grid', gap: 12 }}>
+          <div className="rider-card" style={{ ...card, display: 'grid', gap: 12 }}>
             <div>
               <div style={{ fontSize: 13, color: '#6b6478', fontWeight: 700 }}>Your code</div>
               <div style={{ fontSize: 34, fontWeight: 900, letterSpacing: 2, color: ORANGE }}>{affiliate.code}</div>
               <div style={{ color: '#4a4358' }}>Link: <strong>{affiliate.link}</strong></div>
             </div>
             <p style={{ margin: 0, color: '#4a4358', lineHeight: 1.5 }}>Logos, flyers, social posts and brand colors (orange #F56600, purple #522D80) live in the shared Drive folder. Put your code or link on anything you share.</p>
-            <a href={materials} target="_blank" rel="noreferrer" className="pressable"
+            <a href={materials} target="_blank" rel="noreferrer" className="pressable mkt-glass-secondary"
               style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', minHeight: 48, borderRadius: 14, background: PURPLE, color: '#fff', fontWeight: 800, textDecoration: 'none' }}>
               Open marketing materials
             </a>
@@ -395,7 +400,7 @@ function BalanceRow({ earnings }) {
 
 function ReferralList({ referrals, empty }) {
   return (
-    <div style={card}>
+    <div className="rider-card" style={card}>
       <h2 style={{ margin: '0 0 8px', fontSize: 18, color: PURPLE }}>Referrals</h2>
       {referrals.length === 0 && <p style={{ margin: 0, color: '#6b6478' }}>{empty}</p>}
       {referrals.map((row) => (
@@ -427,7 +432,7 @@ export function AffiliateLanding() {
   return (
     <div style={page}>
       <div style={wrap}>
-        <div style={card}>
+        <div className="rider-card" style={card}>
           <div style={eyebrow}>INVITED TO CLEMSON RIDES</div>
           <h1 style={{ color: PURPLE, fontSize: 28, margin: '6px 0' }}>
             {partner ? `${partner.display_name} sent you` : partner === null ? 'Welcome to Clemson Rides' : 'Loading…'}

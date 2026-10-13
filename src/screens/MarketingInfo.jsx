@@ -307,6 +307,13 @@ export function GetTheAppPage() {
       <PageHead kicker="Get the App" title="Rider and driver" lede={APP_STORE_NOTE} />
       {APP_DOWNLOADS.map((app) => (
         <article key={app.id} className="mkt-card mkt-feature" id={app.id === 'rider' ? 'get-the-app' : undefined}>
+          <img
+            className="mkt-app-icon"
+            src={app.id === 'driver' ? '/brand/driver-icon.svg' : '/brand/rider-icon.svg'}
+            alt=""
+            width="72"
+            height="72"
+          />
           <h2>{app.product}</h2>
           <p>{app.blurb}</p>
           <p>{app.iosNote}</p>
