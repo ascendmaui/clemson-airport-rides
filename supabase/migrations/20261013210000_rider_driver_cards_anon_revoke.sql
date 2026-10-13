@@ -12,3 +12,7 @@ begin
   end if;
 end
 $$;
+
+-- Run the view with the caller's permissions so profiles/vehicles RLS applies.
+-- No app code reads this view directly; riders use list_rider_driver_cards.
+alter view public.rider_driver_cards set (security_invoker = true);
