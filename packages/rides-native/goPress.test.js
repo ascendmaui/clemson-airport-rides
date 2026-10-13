@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { REQUIRED_DOCUMENTS } from '../../shared/driverOnboarding.js'
 import { ATTENTION_COPY } from './documentCategories.js'
-import { attentionRequiredItems, decideGoPress, idleGoTone } from './goPress.js'
+import { attentionRequiredItems, attentionScreenItems, decideGoPress, idleGoTone } from './goPress.js'
 
 function approvedRows(overrides = {}) {
   return REQUIRED_DOCUMENTS.map((doc) => ({
@@ -94,6 +94,37 @@ test('idle GO is green when the driver is clear and orange when documents are mi
   assert.equal(idleGoTone({ documents: approvedRows(), canGoOnline: false }), 'orange')
   const overdue = new Date('2020-01-01T00:00:00Z').toISOString()
   assert.equal(idleGoTone({ documents: approvedRows(), dueAt: overdue, canGoOnline: true }), 'orange')
+})
+
+test('the attention screen lists a flagged inspection and stays quiet only when nothing is flagged', () => {
+  const pending = [
+    ...approvedRows(),
+    { doc_type: 'inspection_front', storage_path: 'front.jpg', review_status: 'pending' },
+  ]
+  const flagged = attentionScreenItems({ documents: pending, dueAt: null })
+  assert.ok(flagged.items.some((item) => item.id === 'inspection_front' && item.section === 'Inspection'))
+  assert.ok(flagged.items.length > 0)
+  const decision = decideGoPress({
+    goingOnline: true,
+    documents: pending,
+    dueAt: null,
+    canGoOnline: true,
+  })
+  assert.equal(decision.outcome, 'online')
+  assert.deepEqual(decision.items, [])
+
+  const clear = attentionScreenItems({
+    documents: [
+      ...approvedRows(),
+      { doc_type: 'inspection_front', storage_path: 'front.jpg', review_status: 'approved' },
+      { doc_type: 'inspection_back', storage_path: 'back.jpg', review_status: 'approved' },
+      { doc_type: 'inspection_left', storage_path: 'left.jpg', review_status: 'approved' },
+      { doc_type: 'inspection_right', storage_path: 'right.jpg', review_status: 'approved' },
+      { doc_type: 'inspection_form', storage_path: 'form.jpg', review_status: 'approved', inspection_source: 'lyft' },
+    ],
+    dueAt: null,
+  })
+  assert.deepEqual(clear.items, [])
 })
 
 test('attention items stay empty once every required file is approved', () => {

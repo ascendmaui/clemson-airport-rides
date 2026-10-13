@@ -8,6 +8,7 @@ export function GlassCard({
   accent,
   style,
   selected = false,
+  variant = 'surface',
   accessibilityRole,
   accessibilityLabel,
   accessibilityState,
@@ -17,7 +18,7 @@ export function GlassCard({
     <GlassSurface
       app={app}
       scheme={scheme}
-      variant="surface"
+      variant={variant === 'offer' ? 'offer' : 'surface'}
       accent={accent}
       style={style}
       selected={selected}

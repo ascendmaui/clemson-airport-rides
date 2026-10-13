@@ -25,7 +25,10 @@ const BACKDROPS = Object.freeze({
   darkMap: '#0E0B14',
 })
 
-const VARIANTS = ['primary', 'secondary', 'chip', 'fab', 'surface', 'sheet', 'header', 'ghost']
+const VARIANTS = ['primary', 'secondary', 'chip', 'fab', 'surface', 'sheet', 'header', 'ghost', 'offer']
+
+/** Offer sheets sit on a map. The plate stays nearly opaque so fare text does not show the map. */
+export const OFFER_PLATE_ALPHA = 0.98
 const APPS = ['rider', 'driver']
 const SCHEMES = ['light', 'dark']
 
@@ -150,6 +153,7 @@ function radiusFor(variant) {
     case 'header':
     case 'secondary':
     case 'surface':
+    case 'offer':
       return 22
     case 'primary':
     case 'ghost':
@@ -180,6 +184,11 @@ function pickPlate(app, scheme, variant, accent) {
   }
   if (dark && strong && accent !== 'orange') {
     return { text: '#F4F2F8', plate: plate([46, 22, 78], 0.94) }
+  }
+  if (variant === 'offer') {
+    return dark
+      ? { text: GLASS_LIGHT_TEXT, plate: plate([16, 12, 24], OFFER_PLATE_ALPHA) }
+      : { text: GLASS_INK, plate: plate([255, 252, 248], OFFER_PLATE_ALPHA) }
   }
   if (!dark && app === 'rider') {
     return { text: GLASS_INK, plate: plate([255, 236, 222], variant === 'chip' ? 0.9 : 0.88) }

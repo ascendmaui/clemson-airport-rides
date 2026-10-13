@@ -7,6 +7,7 @@
 import {
   ATTENTION_COPY,
   DOCUMENT_CATEGORIES,
+  categoryAttention,
   categorySlots,
   goOnlineDocumentGate,
   isDocumentApproved,
@@ -15,8 +16,10 @@ import {
   INSPECTION_FORM_TYPE,
   INSPECTION_SLOTS,
   INSPECTION_TAB_LABEL,
+  inspectionAttention,
   inspectionGoOnlineGate,
   inspectionSlots,
+  isInspectionSource,
 } from './vehicleInspection.js'
 
 function slotReason(slot) {
@@ -73,6 +76,59 @@ export function attentionRequiredItems({ documents, dueAt, now = new Date() }) {
     inspectionAllowed: inspection.allowed,
     title: ATTENTION_COPY,
   }
+}
+
+function inspectionSlotReason(slot) {
+  const spec = INSPECTION_SLOTS.find((row) => row.id === slot.id)
+  const status = String(slot.row?.review_status || '').trim()
+  if (!slot.uploaded) return 'Missing'
+  if (status === 'rejected') return 'Rejected'
+  if (spec?.kind === 'form' && !isInspectionSource(slot.row?.inspection_source)) return 'Needs approval'
+  return 'Needs approval'
+}
+
+/**
+ * Rows for the Needs your attention screen. Includes every flagged required
+ * file, including an inspection that is not yet overdue. Go-online still uses
+ * attentionRequiredItems, which waits out the inspection deadline.
+ */
+export function attentionScreenItems({ documents, dueAt, now = new Date() }) {
+  const base = attentionRequiredItems({ documents, dueAt, now })
+  const items = [...base.items]
+  const seen = new Set(items.map((item) => item.id))
+  function push(item) {
+    if (seen.has(item.id)) return
+    seen.add(item.id)
+    items.push(item)
+  }
+  for (const category of DOCUMENT_CATEGORIES) {
+    if (categoryAttention(category.id, documents).approved) continue
+    for (const slot of categorySlots(category.id, documents)) {
+      if (isDocumentApproved(slot.row)) continue
+      push({
+        id: slot.id,
+        label: slot.label,
+        section: category.label,
+        reason: slotReason(slot),
+      })
+    }
+  }
+  if (!inspectionAttention(documents).approved) {
+    for (const slot of inspectionSlots(documents)) {
+      const spec = INSPECTION_SLOTS.find((row) => row.id === slot.id)
+      if (!spec?.required) continue
+      const status = String(slot.row?.review_status || '').trim()
+      const formReady = spec.kind !== 'form' || isInspectionSource(slot.row?.inspection_source)
+      if (status === 'approved' && formReady) continue
+      push({
+        id: slot.id,
+        label: spec.label,
+        section: INSPECTION_TAB_LABEL,
+        reason: inspectionSlotReason(slot),
+      })
+    }
+  }
+  return { ...base, items }
 }
 
 /**

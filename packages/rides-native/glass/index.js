@@ -8,6 +8,7 @@ export {
   GLASS_LAYERS,
   GLASS_LIGHT_TEXT,
   GLASS_ORANGE,
+  OFFER_PLATE_ALPHA,
   GLASS_PRESS,
   GLASS_PURPLE,
   compositePlate,

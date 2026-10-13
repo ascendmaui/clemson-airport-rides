@@ -12,6 +12,7 @@ import {
   HOME_SHEET_SNAP_PROJECTION_S,
   HOME_SHEET_SPRING,
   buildHomeSheetSnapPoints,
+  homeTabClearance,
   collapsedSheetHeight,
   collapsedSheetPadding,
   expandedSheetHeights,
@@ -24,6 +25,16 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../.
 function read(rel) {
   return readFileSync(path.join(root, rel), 'utf8')
 }
+
+test('native tabs keep the home sheet above the tab bar and the home indicator', () => {
+  assert.equal(homeTabClearance(34), 90)
+  assert.equal(homeTabClearance(0), 56)
+  assert.equal(homeTabClearance(Number.NaN), 56)
+  const home = read('apps/rider/app/(tabs)/index.tsx')
+  assert.match(home, /homeTabClearance\(insets\.bottom\)/)
+  assert.match(home, /nativeTabs \? \{ paddingBottom: homeTabClearance\(insets\.bottom\) \}/)
+  assert.match(home, /liveTrip \? liveCardH \+ 12 : 0/)
+})
 
 test('collapsed snap height is the search field plus padding', () => {
   assert.equal(collapsedSheetHeight(56, 20), 76)

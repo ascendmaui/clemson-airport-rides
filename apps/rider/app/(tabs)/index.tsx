@@ -44,7 +44,7 @@ import { useHomeLiveTrip } from '@/lib/useHomeLiveTrip'
 import { HEAT_WINDOWS, SHORTCUTS } from 'rides-native/places.js'
 import { hotCatalogPlaces, lookupCatalogPlace, searchCatalogPlaces } from 'rides-native/shared/carpool.js'
 import { lift } from '@/lib/elevation'
-import { HOME_SHEET_BOTTOM_PADDING } from '@/lib/homeSheetSnap'
+import { HOME_SHEET_BOTTOM_PADDING, homeTabClearance } from '@/lib/homeSheetSnap'
 import { useHomeSheetSnap } from '@/lib/useHomeSheetSnap'
 import type { Palette } from '@/lib/palette'
 import { useTheme } from '@/lib/theme'
@@ -80,16 +80,18 @@ export function RiderHome() {
   const insets = useSafeAreaInsets()
   const inputRef = useRef<TextInput>(null)
   const scrollRef = useRef<ScrollView>(null)
+  const { user, configured } = useAuth()
+  const liveTrip = useHomeLiveTrip(user?.id)
+  const [liveCardH, setLiveCardH] = useState(120)
+  const nativeTabs = Platform.OS === 'ios' && nativeGlassAvailable()
   const sheet = useHomeSheetSnap(() => {
     inputRef.current?.focus()
-  })
-  const { user, configured } = useAuth()
+  }, liveTrip ? liveCardH + 12 : 0)
   const { colors, scheme } = useTheme()
   const styles = useThemedStyles(makeStyles)
   const mapRef = useRef<CampusMapHandle>(null)
   const [query, setQuery] = useState('')
   const [destError, setDestError] = useState<string | null>(null)
-  const liveTrip = useHomeLiveTrip(user?.id)
   const suggestions = useMemo(() => {
     const found = searchCatalogPlaces(query)
     if (query.trim().length >= 2) return found.slice(0, 6)
@@ -270,7 +272,7 @@ export function RiderHome() {
   }
 
   return (
-    <View style={styles.screen}>
+    <View style={[styles.screen, nativeTabs ? { paddingBottom: homeTabClearance(insets.bottom) } : null]}>
       <View
         ref={(node) => {
           mapSwipe.ref.current = node
@@ -428,6 +430,23 @@ export function RiderHome() {
             </GestureDetector>
           ) : null}
         </View>
+        {liveTrip ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`Live ride. ${riderLiveView(liveTrip.status).title}. ${liveDistance || `Open tracking for ${liveTrip.dropoff_label || 'this trip'}.`}`}
+            accessibilityHint="Opens live trip tracking"
+            onLayout={(event) => {
+              const next = Math.ceil(event.nativeEvent.layout.height)
+              setLiveCardH((current) => (next > 0 && next !== current ? next : current))
+            }}
+            onPress={() => router.push({ pathname: '/requested', params: { trip: liveTrip.id, dest: liveTrip.dropoff_label || '' } })}
+            style={({ pressed }) => [styles.liveCard, lift(colors, 'rest'), pressStyle(pressed)]}
+          >
+            <Text style={styles.liveKicker}>LIVE RIDE</Text>
+            <Text style={styles.liveTitle}>{riderLiveView(liveTrip.status).title}</Text>
+            <Text style={styles.liveBody}>{liveDistance || `Open tracking for ${liveTrip.dropoff_label || 'this trip'}.`}</Text>
+          </Pressable>
+        ) : null}
         <ScrollView
           ref={scrollRef}
           style={styles.sheetScroll}
@@ -462,19 +481,6 @@ export function RiderHome() {
           ) : (
             <Text style={styles.welcome}>Welcome, {name}</Text>
           )}
-          {liveTrip ? (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={`Live ride. ${riderLiveView(liveTrip.status).title}. ${liveDistance || `Open tracking for ${liveTrip.dropoff_label || 'this trip'}.`}`}
-              accessibilityHint="Opens live trip tracking"
-              onPress={() => router.push({ pathname: '/requested', params: { trip: liveTrip.id, dest: liveTrip.dropoff_label || '' } })}
-              style={({ pressed }) => [styles.liveCard, lift(colors, 'rest'), pressStyle(pressed)]}
-            >
-              <Text style={styles.liveKicker}>LIVE RIDE</Text>
-              <Text style={styles.liveTitle}>{riderLiveView(liveTrip.status).title}</Text>
-              <Text style={styles.liveBody}>{liveDistance || `Open tracking for ${liveTrip.dropoff_label || 'this trip'}.`}</Text>
-            </Pressable>
-          ) : null}
           {gameDayExperience.ready && gameDayExperience.model.phase !== 'off' ? (
             <GameDayBanner model={gameDayExperience.model} onPress={() => router.push('/game-day')} />
           ) : !gameDayExperience.ready && gameNotice?.live ? (
