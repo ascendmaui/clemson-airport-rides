@@ -85,6 +85,44 @@ function freshState() {
   return globalThis[KEY]
 }
 
+function wavInfo(filePath) {
+  const buf = readFileSync(filePath)
+  assert.equal(buf.toString('ascii', 0, 4), 'RIFF')
+  assert.equal(buf.toString('ascii', 8, 12), 'WAVE')
+  let offset = 12
+  let rate = 0
+  let channels = 0
+  let bits = 0
+  let dataStart = 0
+  let dataSize = 0
+  while (offset + 8 <= buf.length) {
+    const id = buf.toString('ascii', offset, offset + 4)
+    const size = buf.readUInt32LE(offset + 4)
+    const body = offset + 8
+    if (id === 'fmt ') {
+      channels = buf.readUInt16LE(body + 2)
+      rate = buf.readUInt32LE(body + 4)
+      bits = buf.readUInt16LE(body + 14)
+    } else if (id === 'data') {
+      dataStart = body
+      dataSize = size
+      break
+    }
+    offset = body + size + (size % 2)
+  }
+  assert.ok(rate > 0 && dataSize > 0)
+  const bytesPerSample = bits / 8
+  let peak = 0
+  for (let i = dataStart; i + bytesPerSample <= dataStart + dataSize; i += bytesPerSample) {
+    const abs = Math.abs(buf.readInt16LE(i))
+    if (abs > peak) peak = abs
+  }
+  return {
+    seconds: dataSize / (rate * channels * bytesPerSample),
+    peak,
+  }
+}
+
 function m4aDuration(filePath) {
   const buf = readFileSync(filePath)
   function walk(start, end) {
@@ -122,9 +160,14 @@ function m4aDuration(filePath) {
 
 test('match chime asset exists, is at most two seconds, and replaces the old cue', () => {
   const asset = path.join(ROOT, 'apps/rider/assets/sounds/match-chime.m4a')
+  const master = path.join(ROOT, 'apps/rider/assets/sounds/match-chime.wav')
   assert.ok(statSync(asset).size > 1000)
+  assert.ok(statSync(master).size > 1000)
   const seconds = m4aDuration(asset)
+  const wav = wavInfo(master)
   assert.ok(seconds > 0.8 && seconds <= 2, `match chime is ${seconds}s`)
+  assert.ok(wav.seconds > 0.8 && wav.seconds <= 2, `wav master is ${wav.seconds}s`)
+  assert.ok(wav.peak > 0 && wav.peak < 32767, `wav peak ${wav.peak} is outside the safe 16-bit range`)
   assert.equal(existsSync(path.join(ROOT, 'apps/rider/assets/sounds/tiger.wav')), false)
   const feedback = readFileSync(path.join(ROOT, 'apps/rider/lib/feedback.ts'), 'utf8')
   const screen = readFileSync(path.join(ROOT, 'apps/rider/app/pick-driver.tsx'), 'utf8')
