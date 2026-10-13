@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import test from 'node:test'
 import * as nativeLegal from './legalCopy.js'
 import {
@@ -28,14 +29,14 @@ test('legalCopy exports match shared legal copy module exactly', () => {
 test('LEGAL_UPDATED date string is well-formed and parseable', () => {
   // BUG?: LEGAL_UPDATED is formatted as human-readable text rather than ISO-8601 (YYYY-MM-DD)
   assert.equal(typeof LEGAL_UPDATED, 'string')
-  assert.equal(LEGAL_UPDATED, 'September 22, 2026')
+  assert.equal(LEGAL_UPDATED, 'October 13, 2026')
 
   const parsed = Date.parse(LEGAL_UPDATED)
   assert.ok(!Number.isNaN(parsed), 'LEGAL_UPDATED must parse as a valid timestamp')
   const dateObj = new Date(parsed)
   assert.equal(dateObj.getFullYear(), 2026)
-  assert.equal(dateObj.getMonth(), 8) // 0-indexed September
-  assert.equal(dateObj.getDate(), 22)
+  assert.equal(dateObj.getMonth(), 9) // 0-indexed October
+  assert.equal(dateObj.getDate(), 13)
 })
 
 test('PRIVACY_SECTIONS and TERMS_SECTIONS are frozen against accidental edits', () => {
@@ -58,21 +59,26 @@ test('PRIVACY_SECTIONS and TERMS_SECTIONS are frozen against accidental edits', 
     PRIVACY_SECTIONS[0].heading = 'Changed'
   }, TypeError)
   assert.equal(PRIVACY_SECTIONS[0].heading, privacyHeading)
-  assert.equal(PRIVACY_SECTIONS.length, 7)
+  assert.equal(PRIVACY_SECTIONS.length, 12)
 })
 
 test('PRIVACY_SECTIONS conforms to required structure and unique headings', () => {
   assert.ok(Array.isArray(PRIVACY_SECTIONS))
-  assert.equal(PRIVACY_SECTIONS.length, 7)
+  assert.equal(PRIVACY_SECTIONS.length, 12)
 
   const expectedHeadings = [
-    'Who we are',
-    'Information we collect',
-    'How we use information',
-    'Sharing',
-    'Retention & security',
-    'Your choices',
-    'Children',
+    'Article 1. Who We Are',
+    'Article 2. Definitions',
+    'Article 3. Information We Collect',
+    'Article 4. How We Use Information',
+    'Article 5. Sharing',
+    'Article 6. Recordings',
+    'Article 7. Names and Phone Numbers',
+    'Article 8. Retention and Security',
+    'Article 9. Your Rights and Choices',
+    'Article 10. Children',
+    'Article 11. No Duty from This Policy',
+    'Article 12. Contact',
   ]
 
   const headings = PRIVACY_SECTIONS.map((s) => s.heading)
@@ -119,47 +125,61 @@ test('PRIVACY_SECTIONS conforms to required structure and unique headings', () =
 })
 
 test('PRIVACY_SECTIONS contains critical compliance and campus policy statements', () => {
-  const whoWeAre = PRIVACY_SECTIONS.find((s) => s.heading === 'Who we are')
+  const whoWeAre = PRIVACY_SECTIONS.find((s) => s.heading === 'Article 1. Who We Are')
   assert.ok(whoWeAre)
   assert.match(whoWeAre.paragraphs[0], /Clemson RIDES/)
   assert.match(whoWeAre.paragraphs[0], /GSP\/CLT/)
 
-  const infoCollect = PRIVACY_SECTIONS.find((s) => s.heading === 'Information we collect')
+  const infoCollect = PRIVACY_SECTIONS.find((s) => s.heading === 'Article 3. Information We Collect')
   assert.ok(infoCollect)
   assert.ok(infoCollect.bullets.some((b) => b.includes('Supabase Auth')))
   assert.ok(infoCollect.bullets.some((b) => b.includes('@clemson.edu')))
   assert.ok(infoCollect.bullets.some((b) => b.includes('student_verified_at')))
   assert.ok(infoCollect.bullets.some((b) => b.includes('Stripe Checkout')))
 
-  const howWeUse = PRIVACY_SECTIONS.find((s) => s.heading === 'How we use information')
+  const howWeUse = PRIVACY_SECTIONS.find((s) => s.heading === 'Article 4. How We Use Information')
   assert.ok(howWeUse)
   assert.match(howWeUse.paragraphs[0], /We do not sell your personal information\./)
 
-  const choices = PRIVACY_SECTIONS.find((s) => s.heading === 'Your choices')
+  const choices = PRIVACY_SECTIONS.find((s) => s.heading === 'Article 9. Your Rights and Choices')
   assert.ok(choices)
   assert.match(choices.paragraphs[0], /Account/)
   assert.match(choices.paragraphs[0], /request deletion/)
 
-  const children = PRIVACY_SECTIONS.find((s) => s.heading === 'Children')
+  const children = PRIVACY_SECTIONS.find((s) => s.heading === 'Article 10. Children')
   assert.ok(children)
   assert.match(children.paragraphs[0], /under 13/)
+  assert.match(children.paragraphs[0], /under 18/)
 })
 
 test('TERMS_SECTIONS conforms to required structure and unique headings', () => {
   assert.ok(Array.isArray(TERMS_SECTIONS))
-  assert.equal(TERMS_SECTIONS.length, 10)
+  assert.equal(TERMS_SECTIONS.length, 23)
 
   const expectedHeadings = [
-    'Agreement',
-    'Eligibility',
-    'The service',
-    'Rider responsibilities',
-    'Driver responsibilities',
-    'Payments & earnings',
-    'Disclaimers',
-    'Termination',
-    'Changes',
-    'Contact',
+    'Article 1. Agreement',
+    'Article 2. Definitions',
+    'Article 3. Eligibility',
+    'Article 4. The Services',
+    'Article 5. Rider Responsibilities',
+    'Article 6. Driver Responsibilities',
+    'Article 7. Payments & earnings',
+    'Article 8. Technology Platform',
+    'Article 9. Independent Contractors',
+    'Article 10. Driver Agreement',
+    'Article 11. South Carolina TNC Compliance',
+    'Article 12. Assumption of Risk',
+    'Article 13. Disclaimers',
+    'Article 14. Limitation of Liability',
+    'Article 15. Release and Waiver',
+    'Article 16. Indemnification and Defense',
+    'Article 17. Safety Cooperation',
+    'Article 18. Dispute Resolution',
+    'Article 19. Governing Law and Venue',
+    'Article 20. General Provisions',
+    'Article 21. Termination',
+    'Article 22. Changes',
+    'Article 23. Notices and Contact',
   ]
 
   const headings = TERMS_SECTIONS.map((s) => s.heading)
@@ -203,23 +223,23 @@ test('TERMS_SECTIONS conforms to required structure and unique headings', () => 
 })
 
 test('TERMS_SECTIONS contains core financial, operational, and fee rules', () => {
-  const service = TERMS_SECTIONS.find((s) => s.heading === 'The service')
+  const service = TERMS_SECTIONS.find((s) => s.heading === 'Article 4. The Services')
   assert.ok(service)
   assert.match(service.paragraphs[0], /card hold for the estimated fare plus a buffer/)
   assert.match(service.paragraphs[0], /GSP and CLT/)
 
-  const riderResp = TERMS_SECTIONS.find((s) => s.heading === 'Rider responsibilities')
+  const riderResp = TERMS_SECTIONS.find((s) => s.heading === 'Article 5. Rider Responsibilities')
   assert.ok(riderResp)
   assert.equal(riderResp.paragraphs, undefined)
   assert.equal(riderResp.bullets.length, 4)
 
-  const driverResp = TERMS_SECTIONS.find((s) => s.heading === 'Driver responsibilities')
+  const driverResp = TERMS_SECTIONS.find((s) => s.heading === 'Article 6. Driver Responsibilities')
   assert.ok(driverResp)
   assert.equal(driverResp.paragraphs, undefined)
   assert.equal(driverResp.bullets.length, 3)
   assert.ok(driverResp.bullets.some((b) => b.includes('3-minute grace')))
 
-  const payments = TERMS_SECTIONS.find((s) => s.heading === 'Payments & earnings')
+  const payments = TERMS_SECTIONS.find((s) => s.heading === 'Article 7. Payments & earnings')
   assert.ok(payments)
   const paymentsText = payments.paragraphs[0]
   // 20/80 revenue split
@@ -234,10 +254,120 @@ test('TERMS_SECTIONS contains core financial, operational, and fee rules', () =>
   assert.match(paymentsText, /charged \$5 \(\$4 wait \+ \$1 cancellation fee\)/)
   assert.match(paymentsText, /driver keeps \$4, and the platform keeps \$1/)
 
-  const disclaimers = TERMS_SECTIONS.find((s) => s.heading === 'Disclaimers')
+  const disclaimers = TERMS_SECTIONS.find((s) => s.heading === 'Article 13. Disclaimers')
   assert.ok(disclaimers)
   assert.match(disclaimers.paragraphs[0], /independent drivers/)
   assert.match(disclaimers.paragraphs[0], /not a common carrier/)
+  assert.match(disclaimers.paragraphs.join(' '), /AS IS/)
+})
+
+test('terms limit liability and privacy states the platform data limits', () => {
+  const termsText = TERMS_SECTIONS.flatMap((section) => [
+    section.heading,
+    ...(section.paragraphs || []),
+    ...(section.bullets || []),
+  ]).join('\n')
+  const privacyText = PRIVACY_SECTIONS.flatMap((section) => [
+    section.heading,
+    ...(section.paragraphs || []),
+    ...(section.bullets || []),
+  ]).join('\n')
+
+  assert.match(termsText, /technology platform/)
+  assert.match(termsText, /not a transportation carrier/)
+  assert.match(termsText, /does not provide transportation services/)
+  assert.match(termsText, /independent contractors/)
+  assert.match(termsText, /not employees, agents/)
+  assert.match(termsText, /at your own risk and by your own choice/)
+  assert.match(termsText, /SOS/)
+  assert.match(termsText, /call 911/)
+  assert.match(termsText, /trip sharing/)
+  assert.match(termsText, /safety numbers/)
+  assert.match(termsText, /sexual misconduct/)
+  assert.match(termsText, /consequential/)
+  assert.match(termsText, /punitive damages/)
+  assert.match(termsText, /US\$100/)
+  assert.match(termsText, /indemnify/)
+  assert.match(termsText, /release and forever discharge/)
+  assert.match(termsText, /binding individual arbitration/)
+  assert.match(termsText, /class-action waiver/)
+  assert.match(termsText, /small-claims carve-out/)
+  assert.match(termsText, /sole discretion/)
+  assert.match(termsText, /do not create a duty of care/)
+  assert.match(termsText, /to the maximum extent permitted by applicable law/)
+  assert.match(termsText, /gross negligence or willful misconduct/)
+  assert.match(termsText, /severability/)
+  assert.match(termsText, /South Carolina/)
+  assert.match(termsText, /101 North Main Street, Greenville, SC 29601/)
+  assert.match(termsText, /no employment, no agency, and no partnership/)
+  assert.match(termsText, /solely responsible/)
+  assert.match(termsText, /forfeiture of incentives/)
+  assert.match(termsText, /at its sole discretion/)
+  assert.match(termsText, /shall never be held liable, to the fullest extent permitted by law/)
+  assert.match(termsText, /indemnifies and defends the platform/)
+  assert.match(termsText, /S\.C\. Code Ann\. Title 58, Chapter 23, Article 16/)
+  assert.match(termsText, /58-23-1610/)
+  assert.match(termsText, /Zero-Tolerance Policy/)
+  assert.match(termsText, /service animals/i)
+  assert.match(termsText, /national sex-offender registry/)
+  assert.match(termsText, /one million dollars/)
+  assert.match(termsText, /Federal Arbitration Act/)
+  assert.match(termsText, /collective action/i)
+  assert.match(termsText, /thirty \(30\) days/)
+  assert.match(termsText, /Consumer Arbitration Rules/)
+  assert.match(termsText, /batches of 25/)
+  assert.match(termsText, /delegation clause/)
+  assert.match(termsText, /WAIVE ANY RIGHT TO A TRIAL BY JURY/)
+  assert.match(termsText, /blue pencil/)
+  assert.match(termsText, /Section 20\.2\. Survival/)
+  assert.match(termsText, /Section 20\.3\. Entire agreement/)
+  assert.match(termsText, /Section 20\.4\. No waiver/)
+  assert.match(termsText, /Section 20\.5\. Assignment/)
+  assert.match(termsText, /Section 20\.6\. Force majeure/)
+  assert.match(termsText, /15 U\.S\.C\. § 7001/)
+  assert.match(termsText, /electronic signature/)
+  for (const heading of [
+    'Article 12. Assumption of Risk',
+    'Article 13. Disclaimers',
+    'Article 14. Limitation of Liability',
+    'Article 15. Release and Waiver',
+  ]) {
+    const section = TERMS_SECTIONS.find((item) => item.heading === heading)
+    const body = (section?.paragraphs || []).join('\n')
+    assert.match(body, /to the fullest extent permitted by law/i)
+    assert.match(body, /motor vehicle accidents, collisions, and crashes/i)
+    assert.match(body, /bodily injury, death, or property damage/i)
+    assert.match(body, /before, during, or after any Ride/i)
+  }
+  assert.match(termsText, /Accident claims shall be directed to the applicable Driver/)
+  assert.match(termsText, /the Driver and the Driver’s automobile insurance carrier\(s\) are solely responsible for any accidents and all resulting liability, including injuries, death, and property damage/)
+  const driverAgreement = TERMS_SECTIONS.find((section) => section.heading === 'Article 10. Driver Agreement')
+  const driverAgreementText = (driverAgreement?.paragraphs || []).join('\n')
+  assert.match(driverAgreementText, /automobile insurance carrier\(s\) are solely responsible for any accidents/)
+  assert.match(driverAgreementText, /fifty thousand dollars for death and bodily injury per person/)
+  assert.match(driverAgreementText, /one million dollars for death, bodily injury, and property damage/)
+  assert.match(driverAgreementText, /standard commercial general liability policy for its own business operations/)
+  assert.match(driverAgreementText, /does not extend to or cover, any Ride, Driver, or Rider incident, accident, injury, or interaction, except as otherwise required by applicable law/)
+  assert.match(termsText, /standard commercial general liability policy for its own business operations/)
+  assert.match(readFileSync(new URL('../../shared/legalCopy.js', import.meta.url), 'utf8'), /ATTORNEY CONFIRMATION: S\.C\. Code Ann\. § 58-23-1630\(D\)/)
+  assert.match(termsText, /statutorily required TNC insurance coverage, not to the Company/)
+  assert.match(termsText, /report an accident promptly through the app/)
+  assert.match(privacyText, /under 18/)
+  assert.match(privacyText, /state privacy law/)
+
+  assert.match(privacyText, /not a transportation carrier/)
+  assert.match(privacyText, /does not provide transportation services/)
+  assert.match(privacyText, /independent contractors/)
+  assert.match(privacyText, /safety reports/)
+  assert.match(privacyText, /law enforcement/)
+  assert.match(privacyText, /keep those recordings local/)
+  assert.match(privacyText, /stored on the driver’s device/)
+  assert.match(privacyText, /dashcam/)
+  assert.match(privacyText, /first name only/)
+  assert.match(privacyText, /Phone numbers are never shared between riders and drivers/)
+  assert.match(privacyText, /to the maximum extent permitted by applicable law/)
+  assert.match(privacyText, /gross negligence or willful misconduct/)
+  assert.match(privacyText, /101 North Main Street, Greenville, SC 29601/)
 })
 
 test('legalCopy content has no placeholder tokens or corrupted text', () => {
@@ -278,11 +408,11 @@ test('simulated app rendering matches rider and web consumer logic', () => {
 
   const nativePrivacy = renderNativeScreen('privacy')
   assert.equal(nativePrivacy.title, 'Privacy Policy')
-  assert.equal(nativePrivacy.renderedSections.length, 7)
+  assert.equal(nativePrivacy.renderedSections.length, 12)
 
   const nativeTerms = renderNativeScreen('terms')
   assert.equal(nativeTerms.title, 'Terms of Service')
-  assert.equal(nativeTerms.renderedSections.length, 10)
+  assert.equal(nativeTerms.renderedSections.length, 23)
 
   // Emulate rendering logic from src/screens/LegalPages.jsx
   const renderWebBody = (sections) => {
@@ -294,7 +424,7 @@ test('simulated app rendering matches rider and web consumer logic', () => {
   }
 
   const webPrivacy = renderWebBody(PRIVACY_SECTIONS)
-  assert.equal(webPrivacy.length, 7)
+  assert.equal(webPrivacy.length, 12)
   const webTerms = renderWebBody(TERMS_SECTIONS)
-  assert.equal(webTerms.length, 10)
+  assert.equal(webTerms.length, 23)
 })

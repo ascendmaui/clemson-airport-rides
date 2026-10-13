@@ -50,8 +50,8 @@ test('account deletion ticket matches the support validator', () => {
 })
 
 test('legal copy is shared and the install links are the current apps', () => {
-  assert.ok(PRIVACY_SECTIONS.some((section) => section.heading === 'Your choices'))
-  assert.ok(TERMS_SECTIONS.some((section) => section.heading === 'Payments & earnings'))
+  assert.ok(PRIVACY_SECTIONS.some((section) => section.heading.includes('Your Rights and Choices')))
+  assert.ok(TERMS_SECTIONS.some((section) => section.heading.includes('Payments & earnings')))
   assert.equal(WEB_BOOK_URL, 'https://clemsonrides.com/#/home')
   assert.equal(WEB_DRIVER_URL, 'https://clemsonrides.com/#/driver')
   assert.doesNotMatch(`${WEB_BOOK_URL} ${WEB_DRIVER_URL}`, /expo\.dev|expo\.go|exp:\/\//)

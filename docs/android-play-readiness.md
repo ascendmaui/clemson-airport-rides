@@ -135,7 +135,7 @@ Create two apps. Package names must match the table above on the first upload. T
 - [ ] Category (John picks; Maps & Navigation or Travel & Local are the closest fits).
 - [ ] Contact email. Product support constant is `rides@clemsonrides.com` (`SUPPORT_EMAIL`). John confirms that address is the Play listing contact.
 - [ ] Website: `https://clemsonrides.com` is the public host.
-- [ ] Privacy policy URL. The live page is `https://clemsonrides.com/#/privacy` (last updated September 22, 2026, `shared/legalCopy.js`). John confirms Play accepts that hash URL. If it does not, a path URL is still required. Terms are `https://clemsonrides.com/#/terms`.
+- [ ] Privacy policy URL. The live page is `https://clemsonrides.com/#/privacy` (last updated October 13, 2026, `shared/legalCopy.js`). John confirms Play accepts that hash URL. If it does not, a path URL is still required. Terms are `https://clemsonrides.com/#/terms`.
 
 ### Policy forms (John answers in the console)
 
