@@ -32,7 +32,7 @@ test('every rider haptic honors the haptics setting, and Account exposes it', ()
     assert.match(fb, new RegExp(`export async function ${fn}\\([^)]*\\) \\{\\s*if \\(!\\(await hapticsEnabled\\(\\)\\)\\) return`), fn)
   }
   assert.match(fb, /const HAPTICS_KEY = 'rider\.haptics\.enabled'/)
-  const account = read('apps/rider/app/account.tsx')
+  const account = read('apps/rider/app/(tabs)/account.tsx')
   assert.match(account, /label=\{hapticsOn \? 'Haptics · On' : 'Haptics · Off'\}/)
   assert.match(account, /await setHapticsEnabled\(next\)/)
 })

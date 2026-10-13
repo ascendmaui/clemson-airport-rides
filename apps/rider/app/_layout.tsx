@@ -89,12 +89,10 @@ function ThemedStack() {
           animationMatchesGesture: true,
         }}
       >
-        {/* Tab roots cross-fade instead of pushing. */}
-        <Stack.Screen name="index" options={{ animation: 'fade', animationDuration: 180 }} />
+        {/* Tab roots slide in the pager. History and billing fade in over them. */}
+        <Stack.Screen name="(tabs)" options={{ animation: 'fade', animationDuration: 180 }} />
         <Stack.Screen name="history" options={{ animation: 'fade', animationDuration: 180 }} />
         <Stack.Screen name="billing" options={{ animation: 'fade', animationDuration: 180 }} />
-        <Stack.Screen name="account" options={{ animation: 'fade', animationDuration: 180 }} />
-        <Stack.Screen name="schedule" options={{ animation: 'fade', animationDuration: 180 }} />
       </Stack>
     </>
   )

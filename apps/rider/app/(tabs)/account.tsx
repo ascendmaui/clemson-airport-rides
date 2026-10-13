@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 import { Pressable, ScrollView, Switch, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Pill, PrimaryButton } from '@/components/Button'
-import { MainTabs } from '@/components/MainTabs'
+import { TabSwipeRegion, useTabSwipeRemeasure } from '@/components/MainTabPager'
 import { loadAccount, saveProfile } from '@/lib/accountApi'
 import { useAuth } from '@/lib/auth'
 import { hapticsEnabled, playTigerCue, setHapticsEnabled, setSoundsEnabled, soundsEnabled, tapHaptic } from '@/lib/feedback'
@@ -17,12 +17,11 @@ import { useStudentStatus } from '@/lib/useStudentStatus'
 import { FAVORITE_SPOTS } from 'rides-native/riderShell.js'
 import { TIGER_PASS_NAME } from 'rides-native/tigerPassClient'
 import { loadRatingSummary } from 'rides-native/PartyScreens'
-import { RequireAuth } from '@/components/RequireAuth'
 import { WomenOnlyCard } from 'rides-native/WomenOnlyCard'
 import { loadComfortPreference, saveComfortPreference } from 'rides-native/comfortPreference.js'
 import { supabase } from '@/lib/supabase'
 
-type AccountHref = '/tiger-pass' | '/student' | '/community' | '/notifications' | '/help' | '/support' | '/lost-found' | '/safety'
+type AccountHref = '/tiger-pass' | '/student' | '/community' | '/billing' | '/notifications' | '/help' | '/support' | '/lost-found' | '/safety'
 type AccountLink = { href: AccountHref; label: string; hint: string; icon: string }
 
 const GROUPS: { title: string; links: AccountLink[] }[] = [
@@ -32,6 +31,12 @@ const GROUPS: { title: string; links: AccountLink[] }[] = [
       { href: '/tiger-pass', label: TIGER_PASS_NAME, hint: 'Frequent-rider discount, preferred drivers, and ride types', icon: 'pass' },
       { href: '/student', label: 'Student', hint: 'Confirmed Clemson email · 10% off Standard', icon: 'student' },
       { href: '/community', label: 'Campus community', hint: 'Optional, off by default · shows only what you and your driver share', icon: 'people' },
+    ],
+  },
+  {
+    title: 'Payments',
+    links: [
+      { href: '/billing', label: 'Billing', hint: 'Card, deposits, and ride fares', icon: 'money' },
     ],
   },
   {
@@ -50,7 +55,8 @@ const GROUPS: { title: string; links: AccountLink[] }[] = [
   },
 ]
 
-function AccountScreen() {
+export function AccountScreen() {
+  const remeasureTabs = useTabSwipeRemeasure()
   const router = useRouter()
   const insets = useSafeAreaInsets()
   const { user, configured, signOut } = useAuth()
@@ -168,7 +174,7 @@ function AccountScreen() {
 
   return (
     <View style={[styles.screen, { paddingTop: insets.top + 16 }]}>
-      <ScrollView contentContainerStyle={styles.body}>
+      <ScrollView contentContainerStyle={styles.body} onScroll={remeasureTabs} scrollEventThrottle={32}>
         <Text style={styles.kicker}>ACCOUNT</Text>
         <Text style={styles.title}>{name || 'Guest'}</Text>
         {user?.email ? <Text style={styles.copy}>{user.email}</Text> : null}
@@ -242,11 +248,11 @@ function AccountScreen() {
         <View style={[styles.row, lift(colors, 'rest')]}>
           <Text style={styles.rowTitle}>Favorite spots</Text>
           <Text style={styles.copy}>Pick up to six, including White C and Bigsby.</Text>
-          <View style={styles.pills}>
+          <TabSwipeRegion style={styles.pills}>
             {FAVORITE_SPOTS.map((spot) => (
               <Pill key={spot} label={spot} active={spots.includes(spot)} onPress={() => toggleSpot(spot)} />
             ))}
-          </View>
+          </TabSwipeRegion>
           <PrimaryButton label={busy ? 'Saving…' : 'Save spots'} onPress={onSaveSpots} disabled={busy} tone="ghost" />
         </View>
         <View style={[styles.row, lift(colors, 'rest')]}>
@@ -302,7 +308,6 @@ function AccountScreen() {
           </View>
         )}
       </ScrollView>
-      <MainTabs active="account" />
     </View>
   )
 }
@@ -345,9 +350,5 @@ function makeStyles(colors: Palette) {
 
 
 export default function AccountScreenRoute() {
-  return (
-    <RequireAuth>
-      <AccountScreen />
-    </RequireAuth>
-  )
+  return null
 }
