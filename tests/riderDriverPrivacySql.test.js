@@ -241,7 +241,7 @@ test('rider driver cards and profiles return a first name and never a phone or s
     assert.equal(grants.rows[0].auth_driver_rider, true)
     assert.equal(grants.rows[0].service_driver_rider, true)
     assert.equal(grants.rows[0].anon_helper, false)
-    assert.equal(grants.rows[0].anon_view, true)
+    assert.equal(grants.rows[0].anon_view, false)
 
     await db.exec('set role anon')
     await assert.rejects(
