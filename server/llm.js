@@ -1,5 +1,15 @@
 import { gateway } from 'ai'
 import { createOpenAI } from '@ai-sdk/openai'
+import { createOpenAICompatible } from '@ai-sdk/openai-compatible'
+
+/**
+ * Document review calls NVIDIA directly. The default is Llama 3.2 90B vision.
+ * nvidia/nemotron-nano-12b-v2-vl returned HTTP 410 on integrate.api.nvidia.com
+ * (2026-10-13). Set NVIDIA_DOC_MODEL to that id if NVIDIA serves it again.
+ * If the configured id is not served, the caller retries the 11B vision model.
+ */
+export const NVIDIA_DOC_MODEL_DEFAULT = 'meta/llama-3.2-90b-vision-instruct'
+export const NVIDIA_DOC_MODEL_FALLBACK = 'meta/llama-3.2-11b-vision-instruct'
 
 function clean(value) {
   return String(value || '').trim()
@@ -77,4 +87,32 @@ export function resolveVisionModel() {
     return { model: openai(requested), provider: 'openai', modelId: requested }
   }
   return null
+}
+
+/**
+ * Direct NVIDIA connection for driver documents. No OpenAI key and no AI Gateway.
+ * Returns null when NVIDIA_API_KEY is missing so every document waits for a person.
+ */
+export function resolveNvidiaDocumentModel(env = process.env) {
+  const apiKey = usable(env?.NVIDIA_API_KEY)
+  if (!apiKey) return null
+  const modelId = clean(env?.NVIDIA_DOC_MODEL) || NVIDIA_DOC_MODEL_DEFAULT
+  const client = createOpenAICompatible({
+    name: 'nvidia',
+    baseURL: env?.NVIDIA_BASE_URL ?? 'https://integrate.api.nvidia.com/v1',
+    apiKey,
+  })
+  return {
+    provider: 'nvidia',
+    modelId,
+    fallbackModelId: modelId === NVIDIA_DOC_MODEL_FALLBACK ? null : NVIDIA_DOC_MODEL_FALLBACK,
+    client,
+  }
+}
+
+export function nvidiaModelNotServed(err) {
+  const status = Number(err?.statusCode || err?.status || err?.cause?.statusCode || err?.cause?.status || 0)
+  if (status === 404 || status === 410) return true
+  const message = String(err?.message || err || '').toLowerCase()
+  return /410|gone|not found|does not exist|unknown model|model_not_found|is not served|no such model/.test(message)
 }

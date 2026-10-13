@@ -241,13 +241,13 @@ export default function DocumentsScreen() {
     setNotice(null)
     try {
       const reviewed = await reviewMeta(docType, file, vehicle)
-      await uploadDriverDocument(supabase, user.id, docType, file, {
+      const saved = await uploadDriverDocument(supabase, user.id, docType, file, {
         ...reviewed.meta,
         inspectionSource: docType === INSPECTION_FORM_TYPE ? inspectionSource : null,
       })
       setChooser(null)
       await refresh()
-      setNotice(reviewed.notice)
+      setNotice(saved.driverMessage || reviewed.notice)
       if (docType === 'registration' && reviewed.meta.matchStatus && reviewed.meta.matchStatus !== 'matched') {
         setError(reviewed.notice)
       }
