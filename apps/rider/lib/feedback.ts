@@ -1,7 +1,7 @@
 import { createAudioPlayer, setAudioModeAsync, type AudioPlayer } from 'expo-audio'
 import * as Haptics from 'expo-haptics'
 import pingSource from '../assets/sounds/ping.wav'
-import tigerSource from '../assets/sounds/tiger.wav'
+import matchChimeSource from '../assets/sounds/match-chime.m4a'
 import completeSource from '../assets/sounds/complete.wav'
 import { authStorage } from '@/lib/storage'
 
@@ -9,7 +9,7 @@ const SOUNDS_KEY = 'rider.sounds.enabled'
 const HAPTICS_KEY = 'rider.haptics.enabled'
 let hapticsCache: boolean | null = null
 
-let player: AudioPlayer | null = null
+let matchPlayer: AudioPlayer | null = null
 let pingPlayer: AudioPlayer | null = null
 let completePlayer: AudioPlayer | null = null
 let modeReady = false
@@ -107,10 +107,6 @@ export async function arrivalCue() {
   await playApproachPing()
 }
 
-/**
- * Clemson cue via expo-audio. playsInSilentMode is false so iOS mute and
- * Android silent/vibrate suppress the clip.
- */
 /** Short locator ping for the crowd-find approach alert. Honors the mute switch. */
 export async function playApproachPing() {
   if (!(await soundsEnabled())) return
@@ -133,7 +129,11 @@ export async function playApproachPing() {
   }
 }
 
-export async function playTigerCue() {
+/**
+ * Bright rising major match chime. playsInSilentMode is false so iOS mute and
+ * Android silent/vibrate suppress the clip. Honors the sounds toggle.
+ */
+export async function playMatchChime() {
   if (!(await soundsEnabled())) return
   try {
     if (!modeReady) {
@@ -146,12 +146,18 @@ export async function playTigerCue() {
       })
       modeReady = true
     }
-    if (!player) player = createAudioPlayer(tigerSource)
-    await player.seekTo(0)
-    player.play()
+    if (!matchPlayer) matchPlayer = createAudioPlayer(matchChimeSource)
+    await matchPlayer.seekTo(0)
+    matchPlayer.play()
   } catch {
     /* asset or platform audio can fail closed */
   }
+}
+
+/** Driver found: match chime plus a light success haptic. Each part honors its own setting. */
+export async function playDriverFoundCue() {
+  await successHaptic()
+  await playMatchChime()
 }
 
 /** Soft three-note trip-complete cue. Honors the sounds toggle and the mute switch. */

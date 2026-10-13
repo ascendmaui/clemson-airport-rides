@@ -6,7 +6,7 @@ import { Pill, PrimaryButton } from '@/components/Button'
 import { MainTabs } from '@/components/MainTabs'
 import { loadAccount, saveProfile } from '@/lib/accountApi'
 import { useAuth } from '@/lib/auth'
-import { hapticsEnabled, playTigerCue, setHapticsEnabled, setSoundsEnabled, soundsEnabled, tapHaptic } from '@/lib/feedback'
+import { hapticsEnabled, playMatchChime, setHapticsEnabled, setSoundsEnabled, soundsEnabled, tapHaptic } from '@/lib/feedback'
 import { lift } from '@/lib/elevation'
 import type { Palette } from '@/lib/palette'
 import { useTheme } from '@/lib/theme'
@@ -260,7 +260,7 @@ function AccountScreen() {
               await setSoundsEnabled(next)
               setSoundsOn(next)
               void tapHaptic()
-              if (next) await playTigerCue()
+              if (next) await playMatchChime()
             }}
           />
         </View>
