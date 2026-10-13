@@ -32,6 +32,9 @@ export const CAMPUS_SPOTS = [
   'Loose Change',
   '356',
   'Study Hall',
+  'Charleston Sports Pub',
+  'ROAR',
+  'The Wien',
 ]
 
 export const RIDE_STYLES = [
