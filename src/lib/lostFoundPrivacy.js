@@ -31,6 +31,9 @@ const CAMPUS_SPOTS = [
   'Loose Change',
   '356',
   'Study Hall',
+  'Charleston Sports Pub',
+  'ROAR',
+  'The Wien',
 ]
 
 export function firstNameOnly(fullName, fallback = 'Them') {

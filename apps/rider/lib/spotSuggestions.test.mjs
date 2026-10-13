@@ -28,11 +28,29 @@ test('suggestSpots ranks Clemson Stadium, College Avenue, a bar, a typo, and emp
 
 test('suggestion dataset covers downtown bars, hot spots, and landmarks', () => {
   const bars = neighborhoodsInGroup('bars')
-  assert.ok(bars.length >= 7 && bars.length <= 12)
+  assert.deepEqual(bars.map((bar) => bar.label), [
+    'Tiger Town Tavern',
+    "TD's",
+    'The Esso Club',
+    'Backstreets',
+    "Nick's Tavern",
+    'Study Hall',
+    'Loose Change',
+    '356',
+    'Charleston Sports Pub',
+    'ROAR',
+    'The Wien',
+  ])
   for (const bar of bars) {
     assert.equal(suggestSpots(bar.label)[0]?.id, bar.id, bar.label)
+    assert.equal(Number.isFinite(bar.lat), true, bar.label)
+    assert.equal(Number.isFinite(bar.lng), true, bar.label)
   }
-  assert.equal(suggestSpots("TD's")[0]?.id, 'tiger-town')
+  assert.equal(suggestSpots("TD's")[0]?.id, 'tds')
+  assert.notEqual(suggestSpots("TD's")[0]?.id, 'tiger-town')
+  assert.equal(suggestSpots('Tiger Town')[0]?.id, 'tiger-town')
+  assert.equal(suggestSpots('ROAR')[0]?.id, 'roar')
+  assert.equal(suggestSpots("It's Your Wiener")[0]?.id, 'the-wien')
   assert.equal(suggestSpots('Memorial Stadium')[0]?.id, 'memorial-stadium')
   assert.equal(suggestSpots('College Ave')[0]?.id, 'college-ave')
   assert.equal(suggestSpots('Grand Marc')[0]?.id, 'grand-marc')
