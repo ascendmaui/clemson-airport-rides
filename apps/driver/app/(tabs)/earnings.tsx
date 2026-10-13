@@ -99,7 +99,7 @@ export default function EarningsHub() {
 
   const payouts = data?.payouts
   const moneyRows: MenuRow[] = [
-    { icon: 'payout', title: 'Payouts', subtitle: 'Stripe balance and cash out', onPress: () => router.push('/payouts') },
+    { icon: 'payout', title: 'Payout methods', subtitle: 'Bank, debit card, and cash out', onPress: () => router.push('/payouts') },
     { icon: 'tip', title: 'Tips and activity', subtitle: 'Every fare, tip, and boost', onPress: () => router.push('/earnings-activity') },
     { icon: 'calculator', title: 'Tax info', subtitle: 'W-9 status and year-end summary', onPress: () => router.push('/tax') },
   ]

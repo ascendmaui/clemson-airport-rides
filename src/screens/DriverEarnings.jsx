@@ -173,6 +173,14 @@ export function DriverEarningsView({
         <p style={{ fontSize: 13, color: 'var(--ink-secondary)', marginTop: 4, lineHeight: 1.45 }}>
           Your 80% after the 20% platform fee on fares, wait, and cancel fees, plus 100% of tips.
         </p>
+        <button
+          type="button"
+          className="pressable"
+          onClick={() => navigate('driver-payouts')}
+          style={{ marginTop: 10, fontWeight: 800, color: 'var(--purple)' }}
+        >
+          Payout methods
+        </button>
 
         {error ? (
           <p role="alert" style={{ marginTop: 12, color: 'var(--danger)', fontWeight: 600, fontSize: 13 }}>{error}</p>

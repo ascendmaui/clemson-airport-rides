@@ -29,6 +29,7 @@ import handleDriverW9 from '../server/endpoints/driverW9.js'
 import handleBackupQueue from '../server/endpoints/backupQueue.js'
 import handleDriverPerks from '../server/endpoints/driverPerks.js'
 import handleDriverCashout from '../server/endpoints/driverCashout.js'
+import handleDriverPayoutMethods from '../server/endpoints/driverPayoutMethods.js'
 import handleEarningsForecast from '../server/endpoints/earningsForecast.js'
 
 const HANDLERS = {
@@ -56,6 +57,7 @@ const HANDLERS = {
   'backup-queue': handleBackupQueue,
   perks: handleDriverPerks,
   cashout: handleDriverCashout,
+  'payout-methods': handleDriverPayoutMethods,
   forecast: handleEarningsForecast,
 }
 
@@ -76,7 +78,7 @@ export default async function handler(req, res, ...rest) {
   const handle = HANDLERS[action]
   if (!handle) {
     return json(res, 400, {
-      error: 'Unknown driver action. Use action=signup, submit-review, earnings, tax-summary, w9, offer-preview, tip, tip-choice, wait, trip-status, trip-stop, cancel-midride, payouts, inbox, cards, mark-offered, pass-offer, sign-agreement, backup-queue, trip-sweeps, perks, cashout, forecast, or app-config.',
+      error: 'Unknown driver action. Use action=signup, submit-review, earnings, tax-summary, w9, offer-preview, tip, tip-choice, wait, trip-status, trip-stop, cancel-midride, payouts, payout-methods, inbox, cards, mark-offered, pass-offer, sign-agreement, backup-queue, trip-sweeps, perks, cashout, forecast, or app-config.',
     })
   }
   return handle(req, res, ...rest)
