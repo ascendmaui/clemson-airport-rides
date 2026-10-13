@@ -47,7 +47,8 @@ export type OnboardingBundle = {
 }
 
 export function fetchMyDriverApplication(supabase: unknown, userId: string): Promise<Record<string, unknown> | null>
-export function fetchMyDriverDocuments(supabase: unknown, userId: string): Promise<{ id?: string; doc_type: string; storage_path?: string; review_status?: string | null; match_status?: string | null; review_note?: string | null }[]>
+export function fetchMyDriverDocuments(supabase: unknown, userId: string): Promise<{ id?: string; doc_type: string; storage_path?: string; review_status?: string | null; match_status?: string | null; review_note?: string | null; inspection_source?: string | null }[]>
+export function fetchInspectionDeadline(supabase: unknown, userId: string): Promise<{ first_approved_at?: string; inspection_due_at?: string } | null>
 export function fetchMyTaxProfile(supabase: unknown, userId: string): Promise<{ legal_name?: string; tin_last4?: string; tax_classification?: string } | null>
 export function fetchMyAgreement(supabase: unknown, userId: string): Promise<{ signature_name?: string; signed_at?: string; agreement_version?: string } | null>
 export function recordFormSignature(
@@ -61,7 +62,7 @@ export function uploadDriverDocument(
   userId: string,
   docType: string,
   file: { uri: string; name?: string; mimeType?: string; size?: number; width?: number; height?: number },
-  meta?: { reviewStatus?: string | null; reviewNote?: string | null; matchStatus?: string | null },
+  meta?: { reviewStatus?: string | null; reviewNote?: string | null; matchStatus?: string | null; inspectionSource?: string | null },
 ): Promise<{ doc_type: string; storage_path: string }>
 export function saveDriverInfo(supabase: unknown, user: { id: string; email?: string | null }, payload: Record<string, unknown>): Promise<Record<string, unknown>>
 export function saveEmploymentVerification(
