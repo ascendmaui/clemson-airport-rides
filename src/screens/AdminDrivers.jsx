@@ -35,6 +35,7 @@ import {
 } from '../../shared/contractIdentity.js'
 import { fetchApplicantThread, messageApplicant, requestApplicantInfo } from '../lib/adminDesk'
 import { AdminAccessDenied } from '../components/AdminAccessDenied'
+import { ProfilePhotoReviewQueue } from '../components/ProfilePhotoReviewQueue'
 
 const FILTERS = [
   ['pending_review', 'Needs review'],
@@ -300,6 +301,8 @@ export function AdminDrivers({ embedded = false }) {
           </button>
         ))}
       </div>
+
+      <ProfilePhotoReviewQueue />
 
       {error && <p style={{ color: 'var(--danger)', marginTop: 12 }}>{error}</p>}
       {note && <p style={{ color: 'var(--purple)', fontWeight: 700, marginTop: 12 }}>{note}</p>}

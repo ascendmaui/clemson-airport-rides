@@ -259,7 +259,7 @@ test('home, confirm, and tiers promise 10% off Standard only for a confirmed Cle
     '../../src/screens/RiderHome.jsx',
     '../../src/screens/ConfirmPickup.jsx',
     '../../src/screens/RideTiers.jsx',
-    '../../apps/rider/app/index.tsx',
+    '../../apps/rider/app/(tabs)/index.tsx',
     '../../apps/rider/app/confirm.tsx',
     '../../apps/rider/app/tiers.tsx',
   ]

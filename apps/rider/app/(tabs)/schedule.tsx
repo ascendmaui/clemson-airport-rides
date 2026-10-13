@@ -1,12 +1,13 @@
 import { Glyph } from 'rides-native/icons'
 import { normalizeFlight } from 'rides-native/airportContext'
-import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
+import { useFocusEffect, useGlobalSearchParams, usePathname, useRouter } from 'expo-router'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AccessibilityInfo, Image, Pressable, RefreshControl, ScrollView, Text, TextInput, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Pill, PrimaryButton } from '@/components/Button'
 import { HoldExpiryNotice } from '@/components/HoldExpiryNotice'
-import { MainTabs } from '@/components/MainTabs'
+import { TabSwipeRegion, useTabSwipeRemeasure } from '@/components/MainTabPager'
+import { normalizeTabPath } from '@/lib/tabSwipe'
 import { SignInToBookSheet } from '@/components/SignInToBookSheet'
 import { Skeleton } from '@/components/Skeleton'
 import { setAuthNext } from '@/lib/authNext'
@@ -57,12 +58,11 @@ import {
 } from 'rides-native/holdExpiryNotice.js'
 import { localDateInput, localTimeInput, nextPickupDate, RIDE_PLACES } from 'rides-native/riderShell.js'
 import { formatCents, formatPickupAt } from 'rides-native/tripTags.js'
-import { boostNudge } from '../../../shared/copy/boost.js'
-import { BOOST_MAX_CENTS, boostIsEditable, formatBoostBadge, readBoostCents } from '../../../shared/scheduledBoost.js'
-import { dueScheduleReminders } from '../../../src/lib/scheduledRideModel.js'
-import { BOOK_BACKUP_COPY, LOOKING_FOR_BACKUP_LABEL, riderBackupPresentation } from '../../../shared/backupDriverQueue.js'
+import { boostNudge } from '../../../../shared/copy/boost.js'
+import { BOOST_MAX_CENTS, boostIsEditable, formatBoostBadge, readBoostCents } from '../../../../shared/scheduledBoost.js'
+import { dueScheduleReminders } from '../../../../src/lib/scheduledRideModel.js'
+import { BOOK_BACKUP_COPY, LOOKING_FOR_BACKUP_LABEL, riderBackupPresentation } from '../../../../shared/backupDriverQueue.js'
 import { ScheduledRidesExplainer, ScheduledRidesHint } from 'rides-native/ScheduledRidesInfo'
-import { RequireAuth } from '@/components/RequireAuth'
 import { NearTermSlots } from '@/components/NearTermSlots'
 import { BoostPicker } from '@/components/BoostPicker'
 
@@ -255,7 +255,7 @@ function BackupPicker({
     { cents: 1500, label: '$15' },
   ]
   return (
-    <View style={{ marginTop: 8 }}>
+    <TabSwipeRegion style={{ marginTop: 8 }}>
       <Text style={{ color: colors.purple, fontWeight: '800' }}>{BOOK_BACKUP_COPY}</Text>
       <ScheduledRidesHint topic="booking" colors={colors} />
       <View style={{ flexDirection: 'row', gap: 8 }}>
@@ -281,7 +281,7 @@ function BackupPicker({
           )
         })}
       </View>
-    </View>
+    </TabSwipeRegion>
   )
 }
 
@@ -298,12 +298,13 @@ function spotLabel(spot: WeekendSpot) {
   }
 }
 
-function ScheduleScreen() {
+export function ScheduleScreen() {
   const router = useRouter()
-  const params = useLocalSearchParams<{ trip?: string | string[]; airport?: string | string[] }>()
+  const params = useGlobalSearchParams<{ trip?: string | string[]; airport?: string | string[] }>()
   const linkedTripId = oneParam(params.trip, '')
   const linkedAirport = oneParam(params.airport, '')
-  const returnParams = useLocalSearchParams<{ paid?: string | string[] }>()
+  const returnParams = useGlobalSearchParams<{ paid?: string | string[] }>()
+  const remeasureTabs = useTabSwipeRemeasure()
   const returnPaid = oneParam(returnParams.paid)
   const insets = useSafeAreaInsets()
   const { user } = useAuth()
@@ -369,9 +370,14 @@ function ScheduleScreen() {
   )
   const weekendWhen = nextPickupDate({ date: weekendDate, time: weekendTime })
 
+  const pathname = usePathname()
   useFocusEffect(useCallback(() => {
     setFocusTick((n: number) => n + 1)
   }, []))
+  // Screens stay mounted in the pager, so a tab change is the visit.
+  useEffect(() => {
+    if (normalizeTabPath(pathname) === '/schedule') setFocusTick((n: number) => n + 1)
+  }, [pathname])
 
   useEffect(() => {
     if (!user || !supabase) {
@@ -786,6 +792,8 @@ function ScheduleScreen() {
         ref={scrollRef}
         contentContainerStyle={styles.body}
         keyboardShouldPersistTaps="handled"
+        onScroll={remeasureTabs}
+        scrollEventThrottle={32}
         refreshControl={(
           <RefreshControl
             refreshing={refreshing}
@@ -823,11 +831,13 @@ function ScheduleScreen() {
         <Text style={styles.copy}>
           Friday night through Sunday. Airport runs and campus hops use the same confirm step. Drivers see these in the Weekend filter.
         </Text>
-        <View style={styles.pills}>
+        <TabSwipeRegion>
+<View style={styles.pills}>
           {(['airport', 'campus'] as const).map((spot) => (
             <Pill key={spot} label={spotLabel(spot)} active={weekendSpot === spot} onPress={() => chooseWeekendSpot(spot)} />
           ))}
         </View>
+</TabSwipeRegion>
         {weekendSpot === 'airport' ? (
           <View style={styles.choices}>
             {(['GSP', 'CLT'] as const).map((code) => {
@@ -871,19 +881,23 @@ function ScheduleScreen() {
         />
         <Text style={styles.fine}>Friday 9:00 PM is filled in. Change it for another slot, at least 30 minutes ahead.</Text>
         <Text style={styles.label}>Pickup</Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.pills}>
+        <TabSwipeRegion>
+<ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.pills}>
           {RIDE_PLACES.map((place) => (
             <Pill key={`wpu-${place.label}`} label={place.label} active={weekendPickup.label === place.label} onPress={() => setWeekendPickup(place)} />
           ))}
         </ScrollView>
+</TabSwipeRegion>
         {weekendSpot === 'campus' ? (
           <>
             <Text style={styles.label}>Drop-off</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.pills}>
+            <TabSwipeRegion>
+<ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.pills}>
               {RIDE_PLACES.map((place) => (
                 <Pill key={`wdo-${place.label}`} label={place.label} active={weekendDropoff.label === place.label} onPress={() => setWeekendDropoff(place)} />
               ))}
             </ScrollView>
+</TabSwipeRegion>
           </>
         ) : (
           <Text style={styles.fine}>Drop-off is {weekendDestination.label}.</Text>
@@ -892,17 +906,21 @@ function ScheduleScreen() {
           <Text style={styles.label}>Vehicle</Text>
           <RideTypeInfoButton colors={colors} selectedId={fleet} />
         </View>
-        <View style={styles.pills}>
+        <TabSwipeRegion>
+<View style={styles.pills}>
           <Pill label="Standard" active={fleet === 'standard'} onPress={() => chooseFleet('standard')} />
           <Pill label="Wait & Save" active={fleet === 'wait'} onPress={() => chooseFleet('wait')} />
           <Pill label="Extra Comfort" active={fleet === 'comfort'} onPress={() => chooseFleet('comfort')} />
           <Pill label="Carpool" active={fleet === 'carpool'} onPress={() => chooseFleet('carpool')} />
         </View>
+</TabSwipeRegion>
         {fleet === 'carpool' ? (
-          <View style={styles.pills}>
+          <TabSwipeRegion>
+<View style={styles.pills}>
             <Pill label="1 seat" active={seats === 1} onPress={() => setSeats(1)} />
             <Pill label="2 seats" active={seats === 2} onPress={() => setSeats(2)} />
           </View>
+</TabSwipeRegion>
         ) : null}
         <View style={styles.panel}>
           <Text style={styles.cardLine}>Confirm weekend / party</Text>
@@ -925,7 +943,9 @@ function ScheduleScreen() {
           </Text>
         </View>
         <BackupPicker value={backupBonusCents} onChange={setBackupBonusCents} />
-        <BoostPicker cents={weekendBoost} onChange={setWeekendBoost} />
+        <TabSwipeRegion>
+<BoostPicker cents={weekendBoost} onChange={setWeekendBoost} />
+</TabSwipeRegion>
         <PrimaryButton
           label={busy ? 'Confirming…' : 'Confirm weekend ride'}
           onPress={confirmWeekend}
@@ -1072,13 +1092,16 @@ function ScheduleScreen() {
 
         <Text style={styles.section}>Class, planned, and weekly rides</Text>
         <Text style={styles.copy}>These rides save a pickup. Weekend and party trips use the confirm step above. Airport rides use the fare above.</Text>
-        <View style={styles.pills}>
+        <TabSwipeRegion>
+<View style={styles.pills}>
           {CAMPUS_PURPOSES.map((id) => (
             <Pill key={id} label={purposeLabel(id)} active={purpose === id} onPress={() => choosePurpose(id)} />
           ))}
         </View>
+</TabSwipeRegion>
         {purpose === 'recurring' ? (
-          <View style={styles.pills}>
+          <TabSwipeRegion>
+<View style={styles.pills}>
             {WEEKDAYS.map((day) => {
               const on = weekdays.includes(day.id)
               return (
@@ -1091,23 +1114,28 @@ function ScheduleScreen() {
               )
             })}
           </View>
+</TabSwipeRegion>
         ) : null}
         <Text style={styles.label}>{purpose === 'recurring' ? 'First date (optional)' : 'Date'}</Text>
         <TextInput value={campusDate} onChangeText={setCampusDate} placeholder="YYYY-MM-DD" placeholderTextColor={colors.placeholder} style={styles.input} autoCapitalize="none" accessibilityLabel="Ride date" />
         <Text style={styles.label}>Pickup time</Text>
         <TextInput value={campusTime} onChangeText={setCampusTime} placeholder="HH:MM" placeholderTextColor={colors.placeholder} style={styles.input} autoCapitalize="none" accessibilityLabel="Ride pickup time" />
         <Text style={styles.label}>Pickup</Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.pills}>
+        <TabSwipeRegion>
+<ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.pills}>
           {RIDE_PLACES.map((place) => (
             <Pill key={`pu-${place.label}`} label={place.label} active={pickup.label === place.label} onPress={() => setPickup(place)} />
           ))}
         </ScrollView>
+</TabSwipeRegion>
         <Text style={styles.label}>Drop-off</Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.pills}>
+        <TabSwipeRegion>
+<ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.pills}>
           {RIDE_PLACES.map((place) => (
             <Pill key={`do-${place.label}`} label={place.label} active={dropoff.label === place.label} onPress={() => setDropoff(place)} />
           ))}
         </ScrollView>
+</TabSwipeRegion>
         <View style={styles.panel}>
           <Text style={styles.cardLine}>{quote.estimate ? 'Fare estimate' : 'Fare'} · {formatUsd(quote.fareCents / 100)}</Text>
           {quote.label ? <Text style={styles.student}>{quote.label}</Text> : null}
@@ -1121,7 +1149,9 @@ function ScheduleScreen() {
           </Text>
         </View>
         <BackupPicker value={backupBonusCents} onChange={setBackupBonusCents} />
-        <BoostPicker cents={campusBoost} onChange={setCampusBoost} />
+        <TabSwipeRegion>
+<BoostPicker cents={campusBoost} onChange={setCampusBoost} />
+</TabSwipeRegion>
         <PrimaryButton label={busy ? 'Scheduling…' : 'Schedule ride'} onPress={onSchedule} disabled={busy} tone="purple" />
 
         <Text style={styles.section}>Upcoming</Text>
@@ -1162,7 +1192,8 @@ function ScheduleScreen() {
             {boostCents > 0 ? <Text style={styles.student}>{formatBoostBadge(boostCents)} · 100% to your driver</Text> : null}
             {nudge ? <Text style={styles.fine}>{nudge.body}</Text> : null}
             {canBump ? (
-              <BoostPicker
+              <TabSwipeRegion>
+<BoostPicker
                 cents={0}
                 minimumCents={boostCents + 1}
                 heading={boostCents > 0 ? 'Raise the boost' : 'Add a boost'}
@@ -1172,6 +1203,7 @@ function ScheduleScreen() {
                   })
                 }}
               />
+</TabSwipeRegion>
             ) : null}
             {row.deposit_cents ? (
               <Text style={styles.balance}>
@@ -1201,7 +1233,6 @@ function ScheduleScreen() {
           )
         })}
       </ScrollView>
-      <MainTabs active="rides" />
       <SignInToBookSheet
         open={promptOpen}
         onClose={() => setPromptOpen(false)}
@@ -1319,9 +1350,5 @@ function rowPurpose(row: ScheduledRow) {
 
 
 export default function ScheduleScreenRoute() {
-  return (
-    <RequireAuth>
-      <ScheduleScreen />
-    </RequireAuth>
-  )
+  return null
 }

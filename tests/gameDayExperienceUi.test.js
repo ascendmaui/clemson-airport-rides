@@ -36,7 +36,7 @@ test('game-day surfaces use the orange and purple palette and avoid retired mark
 })
 
 test('rider, driver, and web home screens mount the game-day experience', () => {
-  const rider = read('apps/rider/app/index.tsx')
+  const rider = read('apps/rider/app/(tabs)/index.tsx')
   const driver = read('apps/driver/app/(tabs)/index.tsx')
   const discover = read('apps/driver/app/(tabs)/discover.tsx')
   const webRider = read('src/screens/RiderHome.jsx')

@@ -2,6 +2,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useEffect, useMemo, useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import { Pill, PrimaryButton } from '@/components/Button'
+import { TabSwipeRegion } from '@/components/MainTabPager'
 import { setAuthNext } from '@/lib/authNext'
 import { useAuth } from '@/lib/auth'
 import { oneParam } from '@/lib/oneParam'
@@ -122,26 +123,30 @@ export function NearTermSlots() {
         <Text style={styles.label}>Ride type</Text>
         <RideTypeInfoButton colors={colors} selectedId={tier} />
       </View>
-      <View style={styles.pills}>
+      <TabSwipeRegion style={styles.pills}>
+
         {TIERS.map((option) => (
           <Pill key={option.id} label={option.name} active={tier === option.id} onPress={() => setTier(option.id)} />
         ))}
-      </View>
+      </TabSwipeRegion>
       <Text style={styles.label}>Pickup</Text>
-      <View style={styles.pills}>
+      <TabSwipeRegion style={styles.pills}>
+
         {RIDE_PLACES.map((place) => (
           <Pill key={`near-pu-${place.label}`} label={place.label} active={pickup.label === place.label} onPress={() => setPickup(place)} />
         ))}
-      </View>
+      </TabSwipeRegion>
       <Text style={styles.label}>Drop-off</Text>
-      <View style={styles.pills}>
+      <TabSwipeRegion style={styles.pills}>
+
         {RIDE_PLACES.map((place) => (
           <Pill key={`near-do-${place.label}`} label={place.label} active={dropoff.label === place.label} onPress={() => setDropoff(place)} />
         ))}
-      </View>
+      </TabSwipeRegion>
       {waitLabel ? <Text style={styles.wait}>Current wait {waitLabel}</Text> : null}
       {emptyMessage ? <Text style={styles.copy}>{emptyMessage}</Text> : null}
-      <View style={styles.pills}>
+      <TabSwipeRegion style={styles.pills}>
+
         {slots.map((slot) => {
           const on = slot.id === selectedId
           return (
@@ -156,7 +161,7 @@ export function NearTermSlots() {
             </Pressable>
           )
         })}
-      </View>
+      </TabSwipeRegion>
       {error ? <Text style={styles.error}>{error}</Text> : null}
       {saved ? <Text style={styles.saved}>{saved}</Text> : null}
       <PrimaryButton label={busy ? 'Scheduling…' : 'Schedule this pickup'} onPress={book} disabled={busy || !selected} />
