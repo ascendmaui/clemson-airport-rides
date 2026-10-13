@@ -1,9 +1,26 @@
 import { useEffect, useRef } from 'react'
-import { Animated, Platform, StyleSheet, Text, View } from 'react-native'
+import { Platform, StyleSheet, Text, View } from 'react-native'
+import Animated, {
+  Easing,
+  cancelAnimation,
+  useAnimatedStyle,
+  useReducedMotion,
+  useSharedValue,
+  withRepeat,
+  withSequence,
+  withTiming,
+  type SharedValue,
+} from 'react-native-reanimated'
 import { FullWindowOverlay } from 'react-native-screens'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { approachHaptic, arrivalCue, playApproachPing } from '@/lib/feedback'
-import { crowdCue, formatApproachFeet } from '@/lib/approachAlert'
+import {
+  approachPulseMotion,
+  crowdCue,
+  formatApproachFeet,
+  type ApproachPulseEasing,
+  type ApproachPulseMode,
+} from '@/lib/approachAlert'
 import { useSosEngaged } from '@/lib/sosEngaged'
 import { useDriverApproach } from '@/lib/useDriverApproach'
 import { lift } from '@/lib/elevation'
@@ -12,6 +29,159 @@ import { useTheme } from '@/lib/theme'
 import { useThemedStyles } from '@/lib/useThemedStyles'
 
 const STAGE_HAPTIC_GAP_MS = 12000
+
+const glowStyles = StyleSheet.create({
+  halo: {
+    position: 'absolute',
+  },
+  haloOuter: {
+    top: -18,
+    left: -18,
+    right: -18,
+    bottom: -18,
+    shadowOpacity: 0.45,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 0 },
+  },
+  haloInner: {
+    top: -8,
+    left: -8,
+    right: -8,
+    bottom: -8,
+  },
+})
+
+function pulseEasing(easing: ApproachPulseEasing) {
+  switch (easing) {
+    case 'inOutSin':
+      return Easing.inOut(Easing.sin)
+    default: {
+      const neverEasing: never = easing
+      return neverEasing
+    }
+  }
+}
+
+function breathe(
+  value: SharedValue<number>,
+  from: number,
+  to: number,
+  durationMs: number,
+  easing: ApproachPulseEasing,
+) {
+  const timing = { duration: durationMs, easing: pulseEasing(easing) }
+  value.value = withRepeat(
+    withSequence(
+      withTiming(to, timing),
+      withTiming(from, timing),
+    ),
+    -1,
+    false,
+  )
+}
+
+/**
+ * Soft orange-to-purple glow around the driver card.
+ * Opacity and scale run on the UI thread. Reduce motion holds the rest keyframe.
+ */
+function ApproachGlow({
+  round,
+  orange,
+  purple,
+  reduceMotion,
+  pulseMode,
+}: {
+  round: boolean
+  orange: string
+  purple: string
+  reduceMotion: boolean
+  pulseMode: Exclude<ApproachPulseMode, 'off'>
+}) {
+  const motion = approachPulseMotion(reduceMotion)
+  const orangeOpacity = useSharedValue(motion.rest.opacity)
+  const purpleOpacity = useSharedValue(motion.enabled ? motion.peak.opacity : motion.rest.opacity)
+  const scale = useSharedValue(motion.rest.scale)
+
+  useEffect(() => {
+    const next = approachPulseMotion(reduceMotion)
+    cancelAnimation(orangeOpacity)
+    cancelAnimation(purpleOpacity)
+    cancelAnimation(scale)
+    if (!next.enabled) {
+      orangeOpacity.value = next.rest.opacity
+      purpleOpacity.value = next.rest.opacity
+      scale.value = next.rest.scale
+      return undefined
+    }
+    const timing = { duration: next.durationMs, easing: pulseEasing(next.easing) }
+    breathe(orangeOpacity, next.rest.opacity, next.peak.opacity, next.durationMs, next.easing)
+    breathe(purpleOpacity, next.peak.opacity, next.rest.opacity, next.durationMs, next.easing)
+    breathe(scale, next.rest.scale, next.peak.scale, next.durationMs, next.easing)
+    let timer: ReturnType<typeof setTimeout> | undefined
+    switch (pulseMode) {
+      case 'burst':
+        timer = setTimeout(() => {
+          cancelAnimation(orangeOpacity)
+          cancelAnimation(purpleOpacity)
+          cancelAnimation(scale)
+          orangeOpacity.value = withTiming(next.rest.opacity, timing)
+          purpleOpacity.value = withTiming(next.rest.opacity, timing)
+          scale.value = withTiming(next.rest.scale, timing)
+        }, next.durationMs * 6)
+        break
+      case 'steady':
+        break
+      default: {
+        const neverMode: never = pulseMode
+        return neverMode
+      }
+    }
+    return () => {
+      if (timer) clearTimeout(timer)
+      cancelAnimation(orangeOpacity)
+      cancelAnimation(purpleOpacity)
+      cancelAnimation(scale)
+    }
+  }, [orangeOpacity, purpleOpacity, pulseMode, reduceMotion, scale])
+
+  const orangeStyle = useAnimatedStyle(() => ({
+    opacity: orangeOpacity.value,
+    transform: [{ scale: scale.value }],
+  }))
+  const purpleStyle = useAnimatedStyle(() => ({
+    opacity: purpleOpacity.value,
+    transform: [{ scale: scale.value }],
+  }))
+
+  const outerRadius = round ? 108 : 36
+  const innerRadius = round ? 96 : 28
+  return (
+    <>
+      <Animated.View
+        pointerEvents="none"
+        accessible={false}
+        importantForAccessibility="no"
+        style={[
+          glowStyles.halo,
+          glowStyles.haloOuter,
+          { borderRadius: outerRadius, backgroundColor: orange, shadowColor: orange },
+          orangeStyle,
+        ]}
+      />
+      <Animated.View
+        pointerEvents="none"
+        accessible={false}
+        importantForAccessibility="no"
+        style={[
+          glowStyles.halo,
+          glowStyles.haloInner,
+          { borderRadius: innerRadius, backgroundColor: purple },
+          purpleStyle,
+        ]}
+      />
+    </>
+  )
+}
 
 export function ApproachAlert({
   status,
@@ -26,10 +196,8 @@ export function ApproachAlert({
   const { colors } = useTheme()
   const styles = useThemedStyles(makeStyles)
   const paused = useSosEngaged()
+  const reduceMotion = useReducedMotion() === true
   const { active, reading, direction, attention, statusLine, waiting } = useDriverApproach(status, driverId, tripId)
-  const wash = useRef(new Animated.Value(0)).current
-  const bright = useRef(new Animated.Value(0)).current
-  const flash = useRef(new Animated.Value(0)).current
   const cue = crowdCue(reading?.feet)
   // Latest cue for the crowd loop. GPS updates change the distance every second or so;
   // the loop reads this ref instead of restarting, so a new fix can never fire an extra buzz.
@@ -40,8 +208,6 @@ export function ApproachAlert({
   const lastStageHaptic = useRef<string | null>(null)
   const lastClosingHaptic = useRef(0)
   const pulseMode = attention?.pulseMode ?? 'off'
-  const washPeak = attention?.washPeak ?? 0
-  const brightPeak = attention?.brightPeak ?? 0
   const stage = attention?.stage ?? null
   const haptic = attention?.haptic ?? null
   const hapticReason = attention?.hapticReason ?? null
@@ -73,11 +239,7 @@ export function ApproachAlert({
   }, [active, haptic, hapticReason, paused, stage])
 
   useEffect(() => {
-    if (!active || paused || !inCrowd) {
-      flash.stopAnimation()
-      Animated.timing(flash, { toValue: 0, duration: 240, useNativeDriver: true }).start()
-      return undefined
-    }
+    if (!active || paused || !inCrowd) return undefined
     let alive = true
     const tick = () => {
       const current = cueRef.current
@@ -87,12 +249,6 @@ export function ApproachAlert({
       lastSpike.current = now
       void approachHaptic(current.haptic)
       void playApproachPing()
-      flash.setValue(current.flash)
-      Animated.timing(flash, {
-        toValue: 0,
-        duration: Math.min(420, Math.round(current.intervalMs * 0.45)),
-        useNativeDriver: true,
-      }).start()
     }
     tick()
     const timer = setInterval(tick, 250)
@@ -100,92 +256,55 @@ export function ApproachAlert({
       alive = false
       clearInterval(timer)
     }
-  }, [active, flash, inCrowd, paused])
-
-  useEffect(() => {
-    let loop: Animated.CompositeAnimation | null = null
-    let timer: ReturnType<typeof setTimeout> | undefined
-    const fade = () => {
-      loop?.stop()
-      Animated.timing(wash, { toValue: 0, duration: 260, useNativeDriver: true }).start()
-      Animated.timing(bright, { toValue: 0, duration: 260, useNativeDriver: true }).start()
-    }
-    if (!active || paused || pulseMode === 'off') {
-      if (paused) {
-        wash.stopAnimation()
-        bright.stopAnimation()
-        wash.setValue(0)
-        bright.setValue(0)
-      } else {
-        fade()
-      }
-      return () => {
-        loop?.stop()
-      }
-    }
-    const half = stage === 'here' ? 820 : 980
-    wash.setValue(0.04)
-    bright.setValue(0)
-    loop = Animated.loop(
-      Animated.sequence([
-        Animated.parallel([
-          Animated.timing(wash, { toValue: washPeak, duration: half, useNativeDriver: true }),
-          Animated.timing(bright, { toValue: brightPeak, duration: half, useNativeDriver: true }),
-        ]),
-        Animated.parallel([
-          Animated.timing(wash, { toValue: 0.04, duration: half, useNativeDriver: true }),
-          Animated.timing(bright, { toValue: 0, duration: half, useNativeDriver: true }),
-        ]),
-      ]),
-    )
-    loop.start()
-    if (pulseMode === 'burst') timer = setTimeout(fade, half * 6)
-    return () => {
-      if (timer) clearTimeout(timer)
-      loop?.stop()
-    }
-  }, [active, bright, brightPeak, paused, pulseMode, stage, wash, washPeak])
+  }, [active, inCrowd, paused])
 
   if (!active || paused) return null
 
   const primary = approachPrimaryLine(reading?.feet)
   const kicker = statusLine.split(' · ')[0]
   const secondary = reading?.secondary ?? waiting ?? statusLine
-
   const body = (
     <View pointerEvents="box-none" style={styles.host}>
-      <Animated.View pointerEvents="none" style={[styles.wash, { backgroundColor: colors.orange, opacity: wash }]} />
-      <Animated.View pointerEvents="none" style={[styles.wash, { backgroundColor: colors.orangeBright, opacity: bright }]} />
-      <Animated.View pointerEvents="none" style={[styles.wash, { backgroundColor: colors.orange, opacity: flash }]} />
       <View pointerEvents="none" style={[styles.dock, { bottom: Math.max(insets.bottom, 10) + 74 }]}>
-        <View
-          accessible
-          accessibilityRole="text"
-          accessibilityLiveRegion="polite"
-          accessibilityLabel={reading
-            ? `${direction?.compass || 'Driver'} ${primary}. ${direction?.facing || reading.secondary}. ${statusLine}`
-            : `${primary}. ${waiting ?? statusLine}`}
-          style={reading ? [styles.bubble, lift(colors, 'float')] : [styles.card, lift(colors, 'float')]}
-        >
-          {reading ? (
-            <>
-              <View style={[styles.arrowWrap, { transform: [{ rotate: `${direction?.bearing ?? 0}deg` }] }]}>
-                <Text style={styles.arrow}>▲</Text>
-              </View>
-              <Text style={styles.feet}>{formatApproachFeet(reading.feet)}</Text>
-              <Text style={styles.compass}>{direction?.compass || 'Driver'}</Text>
-              <Text style={styles.facing}>{direction?.facing || secondary}</Text>
-            </>
-          ) : (
-            <>
-              <View style={styles.dot} />
-              <View style={styles.copy}>
-                <Text style={styles.kicker}>{kicker.toUpperCase()}</Text>
-                <Text style={styles.primary}>{primary}</Text>
-                <Text style={styles.secondary}>{secondary}</Text>
-              </View>
-            </>
+        <View style={[styles.glowFrame, reading ? styles.glowFrameBubble : styles.glowFrameCard]}>
+          {pulseMode === 'off' ? null : (
+            <ApproachGlow
+              round={Boolean(reading)}
+              orange={colors.orange}
+              purple={colors.purple}
+              reduceMotion={reduceMotion}
+              pulseMode={pulseMode}
+            />
           )}
+          <View
+            accessible
+            accessibilityRole="text"
+            accessibilityLiveRegion="polite"
+            accessibilityLabel={reading
+              ? `${direction?.compass || 'Driver'} ${primary}. ${direction?.facing || reading.secondary}. ${statusLine}`
+              : `${primary}. ${waiting ?? statusLine}`}
+            style={reading ? [styles.bubble, lift(colors, 'float')] : [styles.card, lift(colors, 'float')]}
+          >
+            {reading ? (
+              <>
+                <View style={[styles.arrowWrap, { transform: [{ rotate: `${direction?.bearing ?? 0}deg` }] }]}>
+                  <Text style={styles.arrow}>▲</Text>
+                </View>
+                <Text style={styles.feet}>{formatApproachFeet(reading.feet)}</Text>
+                <Text style={styles.compass}>{direction?.compass || 'Driver'}</Text>
+                <Text style={styles.facing}>{direction?.facing || secondary}</Text>
+              </>
+            ) : (
+              <>
+                <View style={styles.dot} />
+                <View style={styles.copy}>
+                  <Text style={styles.kicker}>{kicker.toUpperCase()}</Text>
+                  <Text style={styles.primary}>{primary}</Text>
+                  <Text style={styles.secondary}>{secondary}</Text>
+                </View>
+              </>
+            )}
+          </View>
         </View>
       </View>
     </View>
@@ -216,13 +335,20 @@ function makeStyles(colors: Palette) {
       zIndex: 40,
       elevation: 40,
     },
-    wash: {
-      ...StyleSheet.absoluteFill,
-    },
     dock: {
       position: 'absolute' as const,
       left: 16,
       right: 16,
+    },
+    glowFrame: {
+      position: 'relative' as const,
+    },
+    glowFrameBubble: {
+      alignSelf: 'center' as const,
+      width: 176,
+    },
+    glowFrameCard: {
+      alignSelf: 'stretch' as const,
     },
     card: {
       flexDirection: 'row' as const,
@@ -263,7 +389,6 @@ function makeStyles(colors: Palette) {
       marginTop: 2,
     },
     bubble: {
-      alignSelf: 'center' as const,
       width: 176,
       height: 176,
       borderRadius: 88,
