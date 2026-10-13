@@ -1,5 +1,5 @@
 import * as Location from 'expo-location'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Pressable, ScrollView, Text, TextInput, View } from 'react-native'
 import {
   catalogStops,
@@ -14,8 +14,12 @@ import {
 import { EmptyState } from '@/components/carpool/ui'
 import { TabSwipeRegion } from '@/components/MainTabPager'
 import type { Palette } from '@/lib/palette'
+import { addressFromGeocode } from '@/lib/reverseAddress'
+import { suggestSpots, type SpotCandidate } from '@/lib/spotSuggestions'
 import { useTheme } from '@/lib/theme'
 import { useThemedStyles } from '@/lib/useThemedStyles'
+
+const SUGGEST_DEBOUNCE_MS = 200
 
 type GroupFilter = NeighborhoodGroup['id'] | 'airports' | 'all'
 
@@ -44,28 +48,108 @@ function stopsForGroup(group: GroupFilter): { id: string; label: string; lat: nu
   }
 }
 
+function useDebouncedQuery(value: string, delayMs: number): string {
+  const [debounced, setDebounced] = useState(value)
+  useEffect(() => {
+    if (!value.trim()) {
+      setDebounced('')
+      return undefined
+    }
+    const timer = setTimeout(() => setDebounced(value), delayMs)
+    return () => clearTimeout(timer)
+  }, [value, delayMs])
+  return debounced
+}
+
+async function geocodedPlaces(query: string): Promise<SpotCandidate[]> {
+  try {
+    const hits = await Location.geocodeAsync(query)
+    const hit = hits.find((row) => Number.isFinite(row.latitude) && Number.isFinite(row.longitude))
+    if (!hit) return []
+    const reversed = await Location.reverseGeocodeAsync({ latitude: hit.latitude, longitude: hit.longitude })
+    const label = addressFromGeocode(reversed[0])
+    if (!label) return []
+    return [{
+      id: `geo:${hit.latitude.toFixed(5)},${hit.longitude.toFixed(5)}`,
+      label,
+      lat: hit.latitude,
+      lng: hit.longitude,
+    }]
+  } catch {
+    return []
+  }
+}
+
 export function NeighborhoodPicker({
   label,
   value,
   onChange,
+  liveSuggest = false,
 }: {
   label: string
   value: Place
   onChange: (next: Place) => void
+  liveSuggest?: boolean
 }) {
   const [query, setQuery] = useState('')
+  const [editing, setEditing] = useState(false)
   const [group, setGroup] = useState<GroupFilter>('housing')
   const [locating, setLocating] = useState(false)
   const [locateNote, setLocateNote] = useState<string | null>(null)
+  const [suggestOpen, setSuggestOpen] = useState(false)
+  const [extraPlaces, setExtraPlaces] = useState<SpotCandidate[]>([])
+  const debouncedQuery = useDebouncedQuery(liveSuggest ? query : '', SUGGEST_DEBOUNCE_MS)
   const hot = useMemo(() => hotCatalogPlaces(), [])
-  const results = useMemo(() => searchCatalogPlaces(query), [query])
+  const results = useMemo(() => (liveSuggest ? [] : searchCatalogPlaces(query)), [liveSuggest, query])
   const listed = query.trim() ? results : stopsForGroup(group)
+  const suggestions = useMemo(
+    () => (liveSuggest && debouncedQuery.trim() ? suggestSpots(debouncedQuery, extraPlaces) : []),
+    [liveSuggest, debouncedQuery, extraPlaces],
+  )
+  const fieldText = liveSuggest && !editing ? value.label : query
+  const dropdownOn = liveSuggest
+    && suggestOpen
+    && editing
+    && query.trim().length > 0
+    && query.trim() === debouncedQuery.trim()
+    && suggestions.length > 0
   const cluster = clusterOf(value)
   const { colors } = useTheme()
   const styles = useThemedStyles(makeStyles)
   const locateLabel = /drop/i.test(label)
     ? 'Use current location as drop-off'
     : 'Use current location as pickup'
+
+  useEffect(() => {
+    if (!liveSuggest) return undefined
+    const q = debouncedQuery.trim()
+    if (q.length < 3) {
+      setExtraPlaces([])
+      return undefined
+    }
+    let alive = true
+    setExtraPlaces([])
+    void geocodedPlaces(q).then((rows) => {
+      if (alive) setExtraPlaces(rows)
+    })
+    return () => {
+      alive = false
+    }
+  }, [liveSuggest, debouncedQuery])
+
+  function chooseSuggestion(spot: SpotCandidate) {
+    onChange({ label: spot.label, lat: spot.lat, lng: spot.lng })
+    setEditing(false)
+    setQuery('')
+    setSuggestOpen(false)
+  }
+
+  function chooseChip(spot: { label: string; lat: number; lng: number }) {
+    onChange(placeOf(spot))
+    setEditing(false)
+    setQuery('')
+    setSuggestOpen(false)
+  }
 
   async function onLocate() {
     setLocating(true)
@@ -88,8 +172,17 @@ export function NeighborhoodPicker({
         setLocateNote('Could not read your location.')
         return
       }
-      onChange({ label: 'Current location', lat, lng })
+      let placeLabel = 'Current location'
+      try {
+        const reversed = await Location.reverseGeocodeAsync({ latitude: lat, longitude: lng })
+        placeLabel = addressFromGeocode(reversed[0]) || placeLabel
+      } catch {
+        placeLabel = 'Current location'
+      }
+      onChange({ label: placeLabel, lat, lng })
+      setEditing(false)
       setQuery('')
+      setSuggestOpen(false)
     } catch (err) {
       setLocateNote(err instanceof Error ? err.message : 'Could not read your location.')
     } finally {
@@ -100,17 +193,44 @@ export function NeighborhoodPicker({
   return (
     <View style={styles.wrap}>
       <Text style={styles.label}>{label}</Text>
-      <View style={styles.searchRow}>
-        <TextInput
-          value={query}
-          onChangeText={setQuery}
-          placeholder="Grand Marc, stadium, GSP…"
-          placeholderTextColor={colors.placeholder}
-          autoCorrect={false}
-          autoCapitalize="words"
-          style={styles.search}
-          accessibilityLabel={`Search ${label.toLowerCase()}`}
-        />
+      <View style={[styles.searchRow, dropdownOn && styles.searchRowOpen]}>
+        <View style={styles.searchColumn}>
+          <TextInput
+            value={fieldText}
+            onChangeText={(text) => {
+              setEditing(true)
+              setQuery(text)
+              setSuggestOpen(true)
+            }}
+            onFocus={() => {
+              if (editing && query.trim()) setSuggestOpen(true)
+            }}
+            placeholder="Grand Marc, stadium, GSP…"
+            placeholderTextColor={colors.placeholder}
+            autoCorrect={false}
+            autoCapitalize="words"
+            style={[styles.search, dropdownOn && styles.searchOpen]}
+            accessibilityLabel={`Search ${label.toLowerCase()}`}
+          />
+          {dropdownOn ? (
+            <View style={styles.dropdown} accessibilityLiveRegion="polite">
+              {suggestions.map((spot, index) => (
+                <Pressable
+                  key={spot.id}
+                  accessibilityRole="button"
+                  accessibilityLabel={spot.label}
+                  accessibilityHint="Sets this stop and moves the map"
+                  accessibilityState={{ selected: value.label === spot.label }}
+                  hitSlop={4}
+                  onPress={() => chooseSuggestion(spot)}
+                  style={[styles.suggestion, index > 0 && styles.suggestionRule, value.label === spot.label && styles.suggestionOn]}
+                >
+                  <Text style={styles.suggestionText} numberOfLines={1}>{spot.label}</Text>
+                </Pressable>
+              ))}
+            </View>
+          ) : null}
+        </View>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={locateLabel}
@@ -128,46 +248,60 @@ export function NeighborhoodPicker({
       <TabSwipeRegion>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
         {hot.map((spot: { id: string; label: string; lat: number; lng: number }) => (
-          <Chip key={spot.id} spot={spot} selected={value.label === spot.label} onPress={() => onChange(placeOf(spot))} />
+          <Chip
+            key={spot.id}
+            spot={spot}
+            selected={value.label === spot.label}
+            onPress={() => {
+              if (liveSuggest) chooseChip(spot)
+              else onChange(placeOf(spot))
+            }}
+          />
         ))}
       </ScrollView>
       </TabSwipeRegion>
-      <TabSwipeRegion style={styles.filters}>
-        {FILTERS.map((item) => {
-          const on = !query.trim() && group === item.id
-          return (
-            <Pressable
-              key={item.id}
-              accessibilityRole="button"
-              accessibilityLabel={item.label}
-              accessibilityHint={`Shows ${item.label.toLowerCase()} stops`}
-              accessibilityState={{ selected: on }}
-              hitSlop={10}
-              onPress={() => {
-                setQuery('')
-                setGroup(item.id)
-              }}
-              style={[styles.filter, on && styles.filterOn]}
-            >
-              <Text style={[styles.filterText, on && styles.filterTextOn]}>{item.label}</Text>
-            </Pressable>
-          )
-        })}
-      </TabSwipeRegion>
-      {query.trim() && results.length === 0 ? (
-        <EmptyState title="No campus or airport match" body="Try Grand Marc, College Ave, the stadium, a downtown bar, or GSP." />
-      ) : (
-        <TabSwipeRegion>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
-          {listed.map((spot: { id: string; label: string; lat: number; lng: number }) => (
-            <Chip key={`list-${spot.id}`} spot={spot} selected={value.label === spot.label} onPress={() => onChange(placeOf(spot))} />
-          ))}
-        </ScrollView>
-        </TabSwipeRegion>
+      {liveSuggest ? null : (
+        <>
+          <TabSwipeRegion style={styles.filters}>
+            {FILTERS.map((item) => {
+              const on = !query.trim() && group === item.id
+              return (
+                <Pressable
+                  key={item.id}
+                  accessibilityRole="button"
+                  accessibilityLabel={item.label}
+                  accessibilityHint={`Shows ${item.label.toLowerCase()} stops`}
+                  accessibilityState={{ selected: on }}
+                  hitSlop={10}
+                  onPress={() => {
+                    setQuery('')
+                    setGroup(item.id)
+                  }}
+                  style={[styles.filter, on && styles.filterOn]}
+                >
+                  <Text style={[styles.filterText, on && styles.filterTextOn]}>{item.label}</Text>
+                </Pressable>
+              )
+            })}
+          </TabSwipeRegion>
+          {query.trim() && results.length === 0 ? (
+            <EmptyState title="No campus or airport match" body="Try Grand Marc, College Ave, the stadium, a downtown bar, or GSP." />
+          ) : (
+            <TabSwipeRegion>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
+                {listed.map((spot: { id: string; label: string; lat: number; lng: number }) => (
+                  <Chip key={`list-${spot.id}`} spot={spot} selected={value.label === spot.label} onPress={() => onChange(placeOf(spot))} />
+                ))}
+              </ScrollView>
+            </TabSwipeRegion>
+          )}
+        </>
       )}
-      <Text style={styles.cluster}>
-        {cluster ? `Cluster · ${cluster.label}` : 'Outside the named Clemson clusters'}
-      </Text>
+      {liveSuggest ? null : (
+        <Text style={styles.cluster}>
+          {cluster ? `Cluster · ${cluster.label}` : 'Outside the named Clemson clusters'}
+        </Text>
+      )}
     </View>
   )
 }
@@ -199,8 +333,10 @@ function makeStyles(colors: Palette) {
       gap: 8,
       marginBottom: 12,
     },
+    searchRowOpen: { alignItems: 'flex-start' as const },
+    searchColumn: { flex: 1 },
     search: {
-      flex: 1,
+      width: '100%',
       backgroundColor: colors.input,
       borderWidth: 1,
       borderColor: colors.border,
@@ -210,6 +346,30 @@ function makeStyles(colors: Palette) {
       fontSize: 16,
       color: colors.ink,
     },
+    searchOpen: {
+      borderBottomLeftRadius: 0,
+      borderBottomRightRadius: 0,
+    },
+    dropdown: {
+      width: '100%',
+      borderWidth: 1,
+      borderTopWidth: 0,
+      borderColor: colors.border,
+      backgroundColor: colors.card,
+      borderBottomLeftRadius: 16,
+      borderBottomRightRadius: 16,
+      overflow: 'hidden' as const,
+    },
+    suggestion: {
+      paddingHorizontal: 14,
+      paddingVertical: 12,
+    },
+    suggestionRule: {
+      borderTopWidth: 1,
+      borderTopColor: colors.border,
+    },
+    suggestionOn: { backgroundColor: colors.purpleSoft },
+    suggestionText: { color: colors.ink, fontSize: 15, fontWeight: '600' as const },
     locate: {
       width: 44,
       height: 44,

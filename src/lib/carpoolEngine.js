@@ -93,13 +93,17 @@ export const NEIGHBORHOODS = [
   { id: 'enclave', label: 'The Enclave', lat: 34.692, lng: -82.805, aliases: ['enclave'] },
   { id: 'hartwell', label: 'Hartwell Landing', lat: 34.6775, lng: -82.814, aliases: ['hartwell'] },
   { id: 'patrick-square', label: 'Patrick Square', lat: 34.71, lng: -82.79, aliases: ['patrick square'] },
-  { id: 'tiger-town', label: 'Tiger Town Tavern', lat: 34.6844, lng: -82.8362, aliases: ['tiger town', "triple t", 'td\'s', 'tds'] },
-  { id: 'esso', label: 'The Esso Club', lat: 34.6856, lng: -82.8376, aliases: ['esso'] },
-  { id: 'backstreets', label: 'Backstreets', lat: 34.6842, lng: -82.8354, aliases: ['backstreets'] },
-  { id: 'nicks', label: "Nick's Tavern", lat: 34.6838, lng: -82.8369, aliases: ["nick"] },
+  { id: 'tiger-town', label: 'Tiger Town Tavern', lat: 34.6844, lng: -82.8362, aliases: ['tiger town', 'triple t', "triple t's", 'ttt'] },
+  { id: 'tds', label: "TD's", lat: 34.6828, lng: -82.8374, aliases: ["td's", 'tds', "td's of clemson"] },
+  { id: 'esso', label: 'The Esso Club', lat: 34.6856, lng: -82.8376, aliases: ['esso', 'esso club'] },
+  { id: 'backstreets', label: 'Backstreets', lat: 34.6842, lng: -82.8354, aliases: ['backstreets', 'backstreet'] },
+  { id: 'nicks', label: "Nick's Tavern", lat: 34.6838, lng: -82.8369, aliases: ["nick", "nick's"] },
   { id: 'study-hall', label: 'Study Hall', lat: 34.6835, lng: -82.8368, aliases: ['study hall'] },
   { id: 'loose-change', label: 'Loose Change', lat: 34.6846, lng: -82.8364, aliases: ['loose change'] },
-  { id: 'bar-356', label: '356', lat: 34.6841, lng: -82.8358, aliases: ['356'] },
+  { id: 'bar-356', label: '356', lat: 34.6841, lng: -82.8358, aliases: ['356', '356 sushi'] },
+  { id: 'charleston-sports', label: 'Charleston Sports Pub', lat: 34.6829, lng: -82.8375, aliases: ['charleston', "charleston's", 'charlestons', 'charleston sports pub'] },
+  { id: 'roar', label: 'ROAR', lat: 34.6838, lng: -82.8373, aliases: ['roar', 'roar clemson'] },
+  { id: 'the-wien', label: 'The Wien', lat: 34.6841, lng: -82.8361, aliases: ['the wien', 'wien', "it's your wiener", 'its your wiener', 'itsurwiener'] },
 ]
 
 const GEOHASH_BASE = '0123456789bcdefghjkmnpqrstuvwxyz'

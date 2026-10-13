@@ -28,6 +28,7 @@ import { notifyDriverOffer } from '../driverOfferAlerts.js'
 import { exclusiveOfferPatch, netCentsForShare, poolOfferPatch, EXCLUSIVE_SHARE_BPS, POOL_SHARE_BPS } from '../../packages/rides-native/offerLadder.js'
 import { billingForPricedRide } from '../rideBilling.js'
 import { carpoolSeatCount, resolveOfferedTier, vehicleServesComfort } from '../../shared/rideOptions.js'
+import { rideRequestNote } from '../../packages/rides-native/driverNote.js'
 import { isSimulatedDriverId } from '../../packages/rides-native/simulatedDrivers.js'
 import { assertTierAvailable } from '../rideAvailability.js'
 import { releaseTigerHeatReservation, reserveTigerHeatOffer } from '../tigerHeatService.js'
@@ -245,7 +246,7 @@ export default async function handler(req, res, deps = {}) {
       error: error?.message || String(error),
     }))
   }
-  const riderNote = String(body.note || body.riderNote || '').replace(/\s+/g, ' ').trim().slice(0, 280)
+  const riderNote = rideRequestNote(body.note || body.riderNote).rider_note || ''
   const riderFirst = firstName(
     user.user_metadata?.full_name || user.user_metadata?.name || user.email?.split('@')[0],
     'Rider',
