@@ -150,6 +150,98 @@ test('a request without the Hostinger bearer is 401 and does not store', async (
   assert.equal(unset.status, 401)
 })
 
+test('a valid ?token= stores the mail and the query secret is not logged', async () => {
+  const sb = memoryStore()
+  const logs = []
+  const originalError = console.error
+  const originalLog = console.log
+  console.error = (...args) => { logs.push(args) }
+  console.log = (...args) => { logs.push(args) }
+  try {
+    const stored = await call({
+      method: 'POST',
+      url: `/api/inbound-mail/hostinger?token=${encodeURIComponent(SECRET)}`,
+      body: {
+        message: {
+          messageId: '<token-ok@mail>',
+          from: 'ada@example.com',
+          to: 'agents@clemsonrides.com',
+          subject: 'Queued',
+          text: 'Build finished.',
+        },
+      },
+    }, { env: { HOSTINGER_MAIL_WEBHOOK_SECRET: SECRET }, sb })
+    assert.equal(stored.status, 200)
+    assert.deepEqual(stored.json, { ok: true })
+    assert.equal(sb.rows.length, 1)
+    assert.equal(sb.rows[0].message_id, '<token-ok@mail>')
+    assert.equal(sb.rows[0].subject, 'Queued')
+    assert.equal(sb.rows[0].status, 'new')
+
+    const bearerStill = await call({
+      method: 'POST',
+      url: `/api/inbound-mail/hostinger?token=${encodeURIComponent('wrong-token')}`,
+      headers: { authorization: `Bearer ${SECRET}` },
+      body: {
+        message: {
+          messageId: '<bearer-still@mail>',
+          to: 'agents@clemsonrides.com',
+          subject: 'Bearer still works',
+        },
+      },
+    }, { env: { HOSTINGER_MAIL_WEBHOOK_SECRET: SECRET }, sb })
+    assert.equal(bearerStill.status, 200)
+    assert.equal(sb.rows.length, 2)
+
+    const flat = JSON.stringify(logs)
+    assert.equal(flat.includes(SECRET), false)
+    assert.equal(flat.includes('token='), false)
+  } finally {
+    console.error = originalError
+    console.log = originalLog
+  }
+})
+
+test('a wrong or missing ?token= is 401 and stores nothing', async () => {
+  const sb = memoryStore()
+  const logs = []
+  const originalError = console.error
+  const originalLog = console.log
+  console.error = (...args) => { logs.push(args) }
+  console.log = (...args) => { logs.push(args) }
+  try {
+    const wrong = await call({
+      method: 'POST',
+      url: `/api/inbound-mail/hostinger?token=${encodeURIComponent(SECRET + 'x')}`,
+      body: { message: { messageId: '<bad>', to: 'agents@clemsonrides.com', subject: 'No' } },
+    }, { env: { HOSTINGER_MAIL_WEBHOOK_SECRET: SECRET }, sb })
+    assert.equal(wrong.status, 401)
+    assert.equal(wrong.json.error, 'Unauthorized')
+
+    const missing = await call({
+      method: 'POST',
+      url: '/api/inbound-mail/hostinger',
+      body: { message: { messageId: '<none>', to: 'agents@clemsonrides.com', subject: 'No' } },
+    }, { env: { HOSTINGER_MAIL_WEBHOOK_SECRET: SECRET }, sb })
+    assert.equal(missing.status, 401)
+
+    const empty = await call({
+      method: 'POST',
+      url: '/api/inbound-mail/hostinger?token=',
+      body: { message: { messageId: '<empty>', to: 'agents@clemsonrides.com', subject: 'No' } },
+    }, { env: { HOSTINGER_MAIL_WEBHOOK_SECRET: SECRET }, sb })
+    assert.equal(empty.status, 401)
+    assert.equal(sb.rows.length, 0)
+
+    const flat = JSON.stringify(logs)
+    assert.equal(flat.includes(SECRET), false)
+    assert.equal(flat.includes('token='), false)
+  } finally {
+    console.error = originalError
+    console.log = originalLog
+  }
+})
+
 test('GET is not a webhook and does not store', async () => {
   const sb = memoryStore()
   const result = await call({ method: 'GET', headers: { authorization: `Bearer ${SECRET}` } }, {
@@ -456,6 +548,21 @@ test('a mailbox secret only opens that mailbox', async () => {
   assert.equal(globalForRiders.status, 200)
   assert.equal(sb.rows[0].role, 'riders')
   assert.equal(sb.rows[0].status, 'new')
+
+  const queryGlobal = await call({
+    method: 'POST',
+    url: `/api/inbound-mail/hostinger?token=${encodeURIComponent(SECRET)}`,
+    body: { message: { messageId: '<q-global>', to: 'support@clemsonrides.com', subject: 'Help' } },
+  }, { env, sb, draftFetch: async () => { throw new Error('should not draft') } })
+  assert.equal(queryGlobal.status, 401)
+
+  const queryMailbox = await call({
+    method: 'POST',
+    url: `/api/inbound-mail/hostinger?token=${encodeURIComponent('support-secret')}`,
+    body: { message: { messageId: '<q-support>', to: 'support@clemsonrides.com', subject: 'Help' } },
+  }, { env, sb, draftFetch: async () => { throw new Error('no key') } })
+  assert.equal(queryMailbox.status, 200)
+  assert.equal(sb.rows.some((row) => row.message_id === '<q-support>'), true)
 })
 
 test('noreply is never stored, drafted, or forwarded', async () => {

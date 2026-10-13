@@ -2,9 +2,10 @@
  * POST /api/inbound-mail/hostinger
  *
  * Hostinger Agentic Mail delivers mailbox events as JSON. The webhook secret
- * is sent as `Authorization: Bearer <secret>`. A single
- * HOSTINGER_MAIL_WEBHOOK_SECRET covers every mailbox, or
- * HOSTINGER_MAIL_WEBHOOK_SECRETS maps a secret per mailbox.
+ * is `Authorization: Bearer <secret>`, or the same secret as `?token=` when
+ * hPanel can only set a URL. A single HOSTINGER_MAIL_WEBHOOK_SECRET covers
+ * every mailbox, or HOSTINGER_MAIL_WEBHOOK_SECRETS maps a secret per mailbox.
+ * The query string is not logged.
  *
  * Human mailboxes (support, drivers, riders, press, info) store a reply
  * draft and set status draft_ready. agents@ stores a summary only.
@@ -19,7 +20,7 @@ import { mailboxUserPrompt, routeInboundBody } from '../shared/copy/inboundMail.
 import { draftInboundAgents } from './agentDrafts.js'
 import { generateInboxText } from './inboundDraft.js'
 import { adminClient } from './supabaseAdmin.js'
-import { bearerToken, expectedWebhookSecret, headerValue, webhookSecretMatches } from './webhookSecret.js'
+import { bearerToken, expectedWebhookSecret, headerValue, queryToken, redactQueryToken, webhookSecretMatches } from './webhookSecret.js'
 
 export { bearerToken, expectedWebhookSecret, webhookSecretMatches } from './webhookSecret.js'
 
@@ -293,8 +294,16 @@ export default async function handler(req, res, deps = {}) {
   }
   const env = deps.env || process.env
   const route = routeInboundBody(req.body)
-  const token = bearerToken(headerValue(req.headers, 'authorization'))
-  if (!webhookSecretMatches(expectedWebhookSecret(env, route), token)) {
+  const expected = expectedWebhookSecret(env, route)
+  const headerToken = bearerToken(headerValue(req.headers, 'authorization'))
+  const urlToken = queryToken(req.url)
+  if (req.url) req.url = redactQueryToken(req.url)
+  if (req.originalUrl) req.originalUrl = redactQueryToken(req.originalUrl)
+  if (req.query && Object.prototype.hasOwnProperty.call(req.query, 'token')) {
+    delete req.query.token
+  }
+  const allowed = webhookSecretMatches(expected, headerToken) || webhookSecretMatches(expected, urlToken)
+  if (!allowed) {
     sendJson(res, 401, { error: 'Unauthorized' })
     return
   }

@@ -1,6 +1,7 @@
 /**
- * Bearer comparison for Hostinger mailbox webhooks and the draft-agent
- * schedule routes. Query-string secrets are ignored by the callers.
+ * Secret comparison for Hostinger mailbox webhooks and the draft-agent
+ * schedule routes. The inbound webhook accepts Authorization: Bearer or
+ * ?token= on the URL. Callers must not log the query string.
  */
 import { timingSafeEqual } from 'node:crypto'
 
@@ -8,6 +9,51 @@ export function bearerToken(header) {
   const match = /^Bearer\s+(\S.*?)\s*$/i.exec(String(header || '').trim())
   if (!match) return ''
   return match[1].replace(/^["']|["']$/g, '').trim()
+}
+
+function decodeQueryComponent(value) {
+  try {
+    return decodeURIComponent(String(value).replace(/\+/g, '%2B')).trim()
+  } catch {
+    return ''
+  }
+}
+
+/** First ?token= value. Malformed encoding yields an empty string and is not logged. */
+export function queryToken(url) {
+  const raw = String(url || '')
+  const queryStart = raw.indexOf('?')
+  if (queryStart < 0) return ''
+  const query = raw.slice(queryStart + 1).split('#', 1)[0]
+  for (const part of query.split('&')) {
+    if (!part) continue
+    const eq = part.indexOf('=')
+    const key = decodeQueryComponent(eq < 0 ? part : part.slice(0, eq))
+    if (key !== 'token') continue
+    if (eq < 0) return ''
+    return decodeQueryComponent(part.slice(eq + 1))
+  }
+  return ''
+}
+
+/** Path plus any query keys other than token. The token value is dropped. */
+export function redactQueryToken(url) {
+  const raw = String(url || '')
+  const hashAt = raw.indexOf('#')
+  const beforeHash = hashAt < 0 ? raw : raw.slice(0, hashAt)
+  const fragment = hashAt < 0 ? '' : raw.slice(hashAt)
+  const queryStart = beforeHash.indexOf('?')
+  if (queryStart < 0) return raw
+  const path = beforeHash.slice(0, queryStart)
+  const kept = []
+  for (const part of beforeHash.slice(queryStart + 1).split('&')) {
+    if (!part) continue
+    const eq = part.indexOf('=')
+    const key = decodeQueryComponent(eq < 0 ? part : part.slice(0, eq))
+    if (key === 'token') continue
+    kept.push(part)
+  }
+  return (kept.length ? `${path}?${kept.join('&')}` : path) + fragment
 }
 
 export function webhookSecretMatches(expected, supplied) {

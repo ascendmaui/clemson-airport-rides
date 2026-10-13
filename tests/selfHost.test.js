@@ -134,6 +134,10 @@ test('vercel.json rewrites resolve to the same destinations Vercel uses', () => 
   assert.equal(inboundMail.pathname, '/api/inbound-mail')
   assert.equal(inboundMail.search, '')
 
+  const inboundToken = applyRewrites('/api/inbound-mail/hostinger', '?token=abc', rules)
+  assert.equal(inboundToken.pathname, '/api/inbound-mail')
+  assert.match(inboundToken.search, /token=abc/)
+
   for (const kind of ['marketing', 'affiliate', 'outreach']) {
     const agent = applyRewrites(`/api/agents/${kind}`, '', rules)
     assert.equal(agent.pathname, '/api/agents')
