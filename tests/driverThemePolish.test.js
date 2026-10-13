@@ -65,7 +65,7 @@ test('gesture and cluster logic stay in place', () => {
   const swipe = read('apps/driver/components/SwipeToStart.tsx')
   assert.match(shell, /\{online \? 'END' : 'GO'\}/)
   assert.match(home, /styles\.clutter/)
-  assert.match(home, /withSpring\(HOME_CLUTTER_SHIFT, HOME_CLUTTER_SPRING\)/)
+  assert.match(home, /withSpring\(homeClutterTranslateY\(true, windowHeight\), HOME_CLUTTER_SPRING\)/)
   assert.match(home, /homeClutterTranslateY\(false\)/)
   // Gesture-handler pan, not a tap. The knob logic stays with the slider.
   assert.match(swipe, /Gesture\.Pan\(\)/)
