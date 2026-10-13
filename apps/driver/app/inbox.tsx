@@ -1,6 +1,7 @@
 import { useRouter, useFocusEffect } from 'expo-router'
 import { useCallback, useState } from 'react'
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { supportEmail, supportMailto } from '../../../shared/productLinks.js'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { BackButton, Card, Primary, Tag } from '@/components/chrome'
 import { DayHeader, EmptyState, FadeIn, SoftNote } from '@/components/day'
@@ -141,8 +142,15 @@ export default function InboxScreen() {
           ) : (
             <>
               <SoftNote>
-                Tickets filed from Bug Reporter. Email rides@clemsonrides.com if the ticket service is down.
+                Tickets filed from Bug Reporter. Email support if the ticket service is down.
               </SoftNote>
+              <Pressable
+                accessibilityRole="link"
+                accessibilityLabel={`Email support at ${supportEmail()}`}
+                onPress={() => { void Linking.openURL(supportMailto('Clemson RIDES support')) }}
+              >
+                <Text style={{ color: colors.orange, fontWeight: '800' }}>Email {supportEmail()}</Text>
+              </Pressable>
               {!user ? (
                 <EmptyState
                   icon="log-in"

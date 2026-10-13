@@ -7,6 +7,7 @@
  * (src/components/WeeklyCouponNotice.jsx), once per coupon id.
  */
 import { emailSenderConfigured } from '../shared/agreementSign.js'
+import { resendPayload } from './resendMail.js'
 import {
   currentWeeklyCoupon,
   fridayDropEmail,
@@ -33,12 +34,13 @@ export async function sendResendPromo({ to, subject, text, env, fetchImpl }) {
       Authorization: `Bearer ${String(env.RESEND_API_KEY).trim()}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({
+    body: JSON.stringify(resendPayload({
       from: String(env.RESEND_FROM).trim(),
-      to: [to],
+      to,
       subject,
       text,
-    }),
+      env,
+    })),
   })
   const body = await res.json().catch(() => ({}))
   if (!res.ok) {

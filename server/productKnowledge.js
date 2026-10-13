@@ -1,3 +1,4 @@
+import { supportEmail } from '../shared/productLinks.js'
 import { TIGER_PASS_NAME } from '../shared/tigerPass.js'
 
 const ACCOUNT_TABS = ['profile', 'notifications', 'billing', 'vehicle', 'student', 'privacy', 'help', 'support']
@@ -102,7 +103,7 @@ Profile: name, bio, music, favorite campus spots, ride style, avatar, gallery.
 Alerts: Ride updates, Billing and receipts, Friends / carpool, Promotions (off by default), System.
 Privacy: Public, Matched rides, or Private.
 
-Support contact if someone needs a person: Account → Support, or email rides@clemsonrides.com. Help does not file that request.
+Support contact if someone needs a person: Account → Support, or email ${supportEmail()}. Help does not file that request.
 `.trim()
 
 export const TOPICS = [

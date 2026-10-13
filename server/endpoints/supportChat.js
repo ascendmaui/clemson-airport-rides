@@ -2,6 +2,7 @@
  * POST /api/support-chat
  * Rider/Driver Support. Prepares a ticket draft. Filing is /api/support-ticket after confirm.
  */
+import { supportEmail } from '../../shared/productLinks.js'
 import { adminClient, userFromAuth } from '../supabaseAdmin.js'
 import { cors, json, parseBody, rateLimit, sanitizeMessages } from '../agentHttp.js'
 import { loadUserContext, resolveRoleVariant } from '../userContext.js'
@@ -52,7 +53,7 @@ export default async function handler(req, res) {
   if (!rateLimit(req, { bucket: 'support', userId: loaded.userId, limit: 16, windowMs: 60_000 })) {
     return json(res, 429, {
       error: 'Too many Support messages. Wait a minute and try again.',
-      reply: 'Too many Support messages. Wait a minute. You can still email rides@clemsonrides.com.',
+      reply: `Too many Support messages. Wait a minute. You can still email ${supportEmail()}.`,
       source: 'offline',
     })
   }

@@ -57,6 +57,18 @@ exports[`Driver Menu snapshot 1`] = `
       "subtitle": "Year-end mileage and earnings"
     }
   ],
+  "supportRows": [
+    {
+      "icon": "help",
+      "title": "Help",
+      "subtitle": "[Function: supportEmail]"
+    },
+    {
+      "icon": "chat",
+      "title": "Support",
+      "subtitle": "[Function: supportEmail]"
+    }
+  ],
   "resources": [
     {
       "icon": "school",

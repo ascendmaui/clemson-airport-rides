@@ -1,5 +1,6 @@
 import { useRouter } from 'expo-router'
-import { ScrollView, Text, View } from 'react-native'
+import { Linking, Pressable, ScrollView, Text, View } from 'react-native'
+import { supportEmail, supportMailto } from '../../../shared/productLinks.js'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { AssistChat } from '@/components/AssistChat'
 import { RequireAuth } from '@/components/RequireAuth'
@@ -21,6 +22,13 @@ function SupportScreen() {
         <Text style={styles.copy}>
           Problems only. A ticket is filed after you confirm the draft. How-to questions belong in Help.
         </Text>
+        <Pressable
+          accessibilityRole="link"
+          accessibilityLabel={`Email support at ${supportEmail()}`}
+          onPress={() => { void Linking.openURL(supportMailto('Clemson RIDES support')) }}
+        >
+          <Text style={styles.link}>Email {supportEmail()}</Text>
+        </Pressable>
         <AssistChat
           endpoint={apiUrl('/api/admin-drivers?action=support-chat')}
           ticketUrl={ticketUrl}
@@ -38,6 +46,7 @@ function makeStyles(colors: Palette) {
     screen: { flex: 1, backgroundColor: colors.background },
     body: { padding: 16, gap: 12, paddingBottom: 40 },
     copy: { color: colors.inkSecondary, fontSize: 14, lineHeight: 20 },
+    link: { color: colors.orange, fontWeight: '800' as const, fontSize: 16, lineHeight: 22 },
   }
 }
 

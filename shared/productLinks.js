@@ -15,7 +15,45 @@ export const WEB_DRIVER_URL = `${WEB_ORIGIN}/#/driver`
 /** Driver onboarding / signup. */
 export const WEB_DRIVER_SIGNUP_URL = `${WEB_ORIGIN}/#/driver-signup`
 
-export const SUPPORT_EMAIL = 'rides@clemsonrides.com'
+/** Public support mailbox. Override with SUPPORT_EMAIL; web and apps may set the prefixed aliases. */
+export const DEFAULT_SUPPORT_EMAIL = 'rides@clemsonrides.com'
+
+const SUPPORT_ADDRESS = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
+function pickSupportAddress(value) {
+  const trimmed = typeof value === 'string' ? value.trim() : ''
+  return SUPPORT_ADDRESS.test(trimmed) ? trimmed : ''
+}
+
+/**
+ * Support mailbox for Reply-To, mailto links, and contact copy.
+ * Pass an env object in tests. With no argument, reads SUPPORT_EMAIL, then
+ * VITE_SUPPORT_EMAIL, then EXPO_PUBLIC_SUPPORT_EMAIL. Those member reads stay
+ * direct so Vite and Expo can inline them.
+ */
+export function supportEmail(env) {
+  if (env && typeof env === 'object') {
+    return pickSupportAddress(env.SUPPORT_EMAIL)
+      || pickSupportAddress(env.VITE_SUPPORT_EMAIL)
+      || pickSupportAddress(env.EXPO_PUBLIC_SUPPORT_EMAIL)
+      || DEFAULT_SUPPORT_EMAIL
+  }
+  const server = typeof process !== 'undefined' ? process.env.SUPPORT_EMAIL : ''
+  const web = typeof process !== 'undefined' ? process.env.VITE_SUPPORT_EMAIL : ''
+  const app = typeof process !== 'undefined' ? process.env.EXPO_PUBLIC_SUPPORT_EMAIL : ''
+  return pickSupportAddress(server) || pickSupportAddress(web) || pickSupportAddress(app) || DEFAULT_SUPPORT_EMAIL
+}
+
+/** Canonical default. Call supportEmail() when the env override should apply. */
+export const SUPPORT_EMAIL = DEFAULT_SUPPORT_EMAIL
+
+export function supportMailto(subject, body) {
+  const email = supportEmail()
+  const params = []
+  if (subject) params.push(`subject=${encodeURIComponent(subject)}`)
+  if (body) params.push(`body=${encodeURIComponent(body)}`)
+  return params.length ? `mailto:${email}?${params.join('&')}` : `mailto:${email}`
+}
 
 /**
  * Public App Store and Google Play URLs.

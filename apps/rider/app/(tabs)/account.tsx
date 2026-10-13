@@ -1,6 +1,7 @@
 import { useRouter } from 'expo-router'
 import { useEffect, useState } from 'react'
-import { Pressable, ScrollView, Switch, Text, View } from 'react-native'
+import { Linking, Pressable, ScrollView, Switch, Text, View } from 'react-native'
+import { supportEmail, supportMailto } from '../../../../shared/productLinks.js'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Pill, PrimaryButton } from '@/components/Button'
 import { TabSwipeRegion, useTabSwipeRemeasure } from '@/components/MainTabPager'
@@ -24,7 +25,7 @@ import { AdminAccountRow } from 'rides-native/AdminAccountRow.jsx'
 import { SignInScreen } from 'rides-native/AuthScreens'
 
 type AccountHref = '/tiger-pass' | '/student' | '/community' | '/billing' | '/notifications' | '/help' | '/support' | '/lost-found' | '/safety'
-type AccountLink = { href: AccountHref; label: string; hint: string; icon: string }
+type AccountLink = { href?: AccountHref; label: string; hint: string; icon: string; mailSubject?: string }
 
 const GROUPS: { title: string; links: AccountLink[] }[] = [
   {
@@ -52,6 +53,8 @@ const GROUPS: { title: string; links: AccountLink[] }[] = [
     links: [
       { href: '/help', label: 'Help', hint: 'How booking, Schedule, friends, and billing work', icon: 'help' },
       { href: '/support', label: 'Support', hint: 'Charge, ride, bug, or safety tickets', icon: 'chat' },
+      { label: 'Email help', hint: 'Mailto the support mailbox', icon: 'mail', mailSubject: 'Clemson RIDES help' },
+      { label: 'Email support', hint: 'Mailto the support mailbox', icon: 'mail', mailSubject: 'Clemson RIDES support' },
       { href: '/lost-found', label: 'Lost & found', hint: 'An item left in the car after a ride', icon: 'lostFound' },
     ],
   },
@@ -226,12 +229,24 @@ export function AccountScreen() {
           <View key={group.title} style={styles.group}>
             <Text style={styles.groupTitle}>{group.title}</Text>
             {group.links.map((link) => (
-              <Pressable key={link.href} onPress={() => router.push(link.href)} style={[styles.row, lift(colors, 'rest')]} accessibilityRole="button">
+              <Pressable
+                key={link.href || link.mailSubject || link.label}
+                onPress={() => {
+                  if (link.mailSubject) {
+                    void Linking.openURL(supportMailto(link.mailSubject))
+                    return
+                  }
+                  if (link.href) router.push(link.href)
+                }}
+                style={[styles.row, lift(colors, 'rest')]}
+                accessibilityRole={link.mailSubject ? 'link' : 'button'}
+                accessibilityLabel={link.mailSubject ? `${link.label}, ${supportEmail()}` : link.label}
+              >
                 <View style={styles.settingLine}>
                   <Glyph name={link.icon} size={22} color={colors.purple} scheme={scheme} />
                   <View style={{ flex: 1 }}>
                     <Text style={styles.rowTitle}>{link.label}</Text>
-                    <Text style={styles.copy}>{link.hint}</Text>
+                    <Text style={styles.copy}>{link.mailSubject ? supportEmail() : link.hint}</Text>
                   </View>
                   <Glyph name="forward" size={16} color={colors.inkSecondary} />
                 </View>

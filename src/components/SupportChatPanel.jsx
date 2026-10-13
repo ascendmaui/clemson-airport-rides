@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { supportEmail, supportMailto } from '../../shared/productLinks.js'
 import { SUPPORT_CHIPS, categoryLabel } from '../../server/agentChips.js'
 import {
   ChatShell, ChipRow, Composer, MessageList, Segment, SpeechBanner, openAction,
@@ -14,9 +15,7 @@ function welcome(role) {
 }
 
 function mailtoFor(draft) {
-  const subject = encodeURIComponent(draft?.subject || 'Clemson RIDES support')
-  const body = encodeURIComponent(draft?.body || '')
-  return `mailto:rides@clemsonrides.com?subject=${subject}&body=${body}`
+  return supportMailto(draft?.subject || 'Clemson RIDES support', draft?.body || '')
 }
 
 export function SupportChatPanel({ accountRole = null, active = true }) {
@@ -84,7 +83,7 @@ export function SupportChatPanel({ accountRole = null, active = true }) {
       chat.setMessages((current) => [...current, {
         id: `file-err-${Date.now()}`,
         role: 'assistant',
-        content: `${error.message || 'Could not file the ticket.'} You can email rides@clemsonrides.com with the same details.`,
+        content: `${error.message || 'Could not file the ticket.'} You can email ${supportEmail()} with the same details.`,
       }])
     } finally {
       setFiling(false)
