@@ -28,14 +28,14 @@ test('legalCopy exports match shared legal copy module exactly', () => {
 test('LEGAL_UPDATED date string is well-formed and parseable', () => {
   // BUG?: LEGAL_UPDATED is formatted as human-readable text rather than ISO-8601 (YYYY-MM-DD)
   assert.equal(typeof LEGAL_UPDATED, 'string')
-  assert.equal(LEGAL_UPDATED, 'September 22, 2026')
+  assert.equal(LEGAL_UPDATED, 'October 13, 2026')
 
   const parsed = Date.parse(LEGAL_UPDATED)
   assert.ok(!Number.isNaN(parsed), 'LEGAL_UPDATED must parse as a valid timestamp')
   const dateObj = new Date(parsed)
   assert.equal(dateObj.getFullYear(), 2026)
-  assert.equal(dateObj.getMonth(), 8) // 0-indexed September
-  assert.equal(dateObj.getDate(), 22)
+  assert.equal(dateObj.getMonth(), 9) // 0-indexed October
+  assert.equal(dateObj.getDate(), 13)
 })
 
 test('PRIVACY_SECTIONS and TERMS_SECTIONS are frozen against accidental edits', () => {
@@ -58,21 +58,24 @@ test('PRIVACY_SECTIONS and TERMS_SECTIONS are frozen against accidental edits', 
     PRIVACY_SECTIONS[0].heading = 'Changed'
   }, TypeError)
   assert.equal(PRIVACY_SECTIONS[0].heading, privacyHeading)
-  assert.equal(PRIVACY_SECTIONS.length, 7)
+  assert.equal(PRIVACY_SECTIONS.length, 10)
 })
 
 test('PRIVACY_SECTIONS conforms to required structure and unique headings', () => {
   assert.ok(Array.isArray(PRIVACY_SECTIONS))
-  assert.equal(PRIVACY_SECTIONS.length, 7)
+  assert.equal(PRIVACY_SECTIONS.length, 10)
 
   const expectedHeadings = [
     'Who we are',
     'Information we collect',
     'How we use information',
     'Sharing',
+    'Recordings',
+    'Names and phone numbers',
     'Retention & security',
     'Your choices',
     'Children',
+    'No duty from this policy',
   ]
 
   const headings = PRIVACY_SECTIONS.map((s) => s.heading)
@@ -147,7 +150,7 @@ test('PRIVACY_SECTIONS contains critical compliance and campus policy statements
 
 test('TERMS_SECTIONS conforms to required structure and unique headings', () => {
   assert.ok(Array.isArray(TERMS_SECTIONS))
-  assert.equal(TERMS_SECTIONS.length, 10)
+  assert.equal(TERMS_SECTIONS.length, 19)
 
   const expectedHeadings = [
     'Agreement',
@@ -156,7 +159,16 @@ test('TERMS_SECTIONS conforms to required structure and unique headings', () => 
     'Rider responsibilities',
     'Driver responsibilities',
     'Payments & earnings',
+    'Technology platform',
+    'Independent contractors',
+    'Assumption of risk',
     'Disclaimers',
+    'Limitation of liability',
+    'Release of claims',
+    'Indemnification',
+    'Safety cooperation',
+    'Dispute resolution',
+    'Governing law',
     'Termination',
     'Changes',
     'Contact',
@@ -238,6 +250,61 @@ test('TERMS_SECTIONS contains core financial, operational, and fee rules', () =>
   assert.ok(disclaimers)
   assert.match(disclaimers.paragraphs[0], /independent drivers/)
   assert.match(disclaimers.paragraphs[0], /not a common carrier/)
+  assert.match(disclaimers.paragraphs.join(' '), /AS IS/)
+})
+
+test('terms limit liability and privacy states the platform data limits', () => {
+  const termsText = TERMS_SECTIONS.flatMap((section) => [
+    section.heading,
+    ...(section.paragraphs || []),
+    ...(section.bullets || []),
+  ]).join('\n')
+  const privacyText = PRIVACY_SECTIONS.flatMap((section) => [
+    section.heading,
+    ...(section.paragraphs || []),
+    ...(section.bullets || []),
+  ]).join('\n')
+
+  assert.match(termsText, /technology platform/)
+  assert.match(termsText, /not a transportation carrier/)
+  assert.match(termsText, /does not provide transportation services/)
+  assert.match(termsText, /independent contractors/)
+  assert.match(termsText, /not employees, agents/)
+  assert.match(termsText, /at your own risk and by your own choice/)
+  assert.match(termsText, /SOS/)
+  assert.match(termsText, /call 911/)
+  assert.match(termsText, /trip sharing/)
+  assert.match(termsText, /safety numbers/)
+  assert.match(termsText, /sexual misconduct/)
+  assert.match(termsText, /consequential/)
+  assert.match(termsText, /punitive damages/)
+  assert.match(termsText, /US\$100/)
+  assert.match(termsText, /indemnify/)
+  assert.match(termsText, /release and forever discharge/)
+  assert.match(termsText, /binding individual arbitration/)
+  assert.match(termsText, /class-action waiver/)
+  assert.match(termsText, /small-claims carve-out/)
+  assert.match(termsText, /sole discretion/)
+  assert.match(termsText, /do not create a duty of care/)
+  assert.match(termsText, /to the maximum extent permitted by applicable law/)
+  assert.match(termsText, /gross negligence or willful misconduct/)
+  assert.match(termsText, /severability/)
+  assert.match(termsText, /South Carolina/)
+  assert.match(termsText, /101 North Main Street, Greenville, SC 29601/)
+
+  assert.match(privacyText, /not a transportation carrier/)
+  assert.match(privacyText, /does not provide transportation services/)
+  assert.match(privacyText, /independent contractors/)
+  assert.match(privacyText, /safety reports/)
+  assert.match(privacyText, /law enforcement/)
+  assert.match(privacyText, /keep those recordings local/)
+  assert.match(privacyText, /stored on the driver’s device/)
+  assert.match(privacyText, /dashcam/)
+  assert.match(privacyText, /first name only/)
+  assert.match(privacyText, /Phone numbers are never shared between riders and drivers/)
+  assert.match(privacyText, /to the maximum extent permitted by applicable law/)
+  assert.match(privacyText, /gross negligence or willful misconduct/)
+  assert.match(privacyText, /101 North Main Street, Greenville, SC 29601/)
 })
 
 test('legalCopy content has no placeholder tokens or corrupted text', () => {
@@ -278,11 +345,11 @@ test('simulated app rendering matches rider and web consumer logic', () => {
 
   const nativePrivacy = renderNativeScreen('privacy')
   assert.equal(nativePrivacy.title, 'Privacy Policy')
-  assert.equal(nativePrivacy.renderedSections.length, 7)
+  assert.equal(nativePrivacy.renderedSections.length, 10)
 
   const nativeTerms = renderNativeScreen('terms')
   assert.equal(nativeTerms.title, 'Terms of Service')
-  assert.equal(nativeTerms.renderedSections.length, 10)
+  assert.equal(nativeTerms.renderedSections.length, 19)
 
   // Emulate rendering logic from src/screens/LegalPages.jsx
   const renderWebBody = (sections) => {
@@ -294,7 +361,7 @@ test('simulated app rendering matches rider and web consumer logic', () => {
   }
 
   const webPrivacy = renderWebBody(PRIVACY_SECTIONS)
-  assert.equal(webPrivacy.length, 7)
+  assert.equal(webPrivacy.length, 10)
   const webTerms = renderWebBody(TERMS_SECTIONS)
-  assert.equal(webTerms.length, 10)
+  assert.equal(webTerms.length, 19)
 })
