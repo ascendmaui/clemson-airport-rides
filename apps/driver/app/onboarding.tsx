@@ -228,7 +228,7 @@ export default function OnboardingScreen() {
       setTitleStatus(String(vehicle.title_status || ''))
       setPlate(String(vehicle.plate || ''))
       setSeats(String(vehicle.seats || 4))
-      setIsComfort(Boolean(vehicle.service_class))
+      setIsComfort(vehicle.service_class === 'comfort')
     }
     if (tax?.legal_name) setLegalName(String(tax.legal_name))
     if (tax?.tax_classification) setTaxClass(String(tax.tax_classification))
