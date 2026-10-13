@@ -5,6 +5,7 @@ import {
   DEMAND_HEAT_COLORS,
   DEMAND_HEAT_STARTS,
   demandPointsToHeat,
+  framePercents,
   heatBloom,
   heatRgbaAt,
   nativeDemandHeatSupported,
@@ -190,6 +191,18 @@ test('the painted field is a soft purple core with a clear edge, and the png mat
   const y = Math.round(((hotRaster.north - 34.6788) / (hotRaster.north - hotRaster.south)) * (hotRaster.height - 1))
   const offset = (y * decoded.width + x) * 4
   assert.deepEqual([...decoded.rgba.subarray(offset, offset + 4)], hotPixel)
+})
+
+test('a single demand point sits in the middle of the preview frame', () => {
+  const heat = demandPointsToHeat([{ lat: 34.68, lng: -82.84, intensity: 0.5 }])
+  assert.deepEqual(framePercents(heat.points), [{ left: 50, top: 50 }])
+  const spread = demandPointsToHeat([
+    { lat: 34.67, lng: -82.85, intensity: 0.2 },
+    { lat: 34.69, lng: -82.83, intensity: 0.8 },
+  ])
+  const frames = framePercents(spread.points)
+  assert.equal(frames[0].top > frames[1].top, true)
+  assert.equal(frames[0].left < frames[1].left, true)
 })
 
 test('native heatmap is the Google layer, which this app has on Android', () => {
