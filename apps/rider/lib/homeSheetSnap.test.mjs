@@ -93,7 +93,7 @@ test('the spring config is a clamped UI-thread spring', () => {
 })
 
 test('rider home wires the snap helper through gesture-handler and does not touch the driver swipe', () => {
-  const home = read('apps/rider/app/index.tsx')
+  const home = read('apps/rider/app/(tabs)/index.tsx')
   const hook = read('apps/rider/lib/useHomeSheetSnap.ts')
   const swipe = read('apps/driver/components/SwipeToStart.tsx')
   assert.match(home, /useHomeSheetSnap/)

@@ -272,7 +272,7 @@ test('demo fleet source does not insert driver rows, charge cards, or notify', (
   assert.match(drivers, /busy and cannot be requested/)
 
   const home = read('src/screens/RiderHome.jsx')
-  const nativeHome = read('apps/rider/app/index.tsx')
+  const nativeHome = read('apps/rider/app/(tabs)/index.tsx')
   assert.match(home, /showSimulatedFleet/)
   assert.match(nativeHome, /showSimulatedFleet/)
 

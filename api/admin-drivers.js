@@ -23,6 +23,7 @@ import { resolveRouteAction } from '../server/routeAction.js'
 import handleHelpChat from '../server/endpoints/helpChat.js'
 import handleSupportChat from '../server/endpoints/supportChat.js'
 import handleSupportTicket from '../server/endpoints/supportTicket.js'
+import { handleAdminProfilePhotoDecision, handleAdminProfilePhotoQueue } from '../server/endpoints/profilePhoto.js'
 
 const SUPPORT_HANDLERS = {
   'help-chat': handleHelpChat,
@@ -76,6 +77,7 @@ export default async function handler(req, res) {
 
   if (req.method === 'GET') {
     const url = new URL(req.url || '/', 'http://localhost')
+    if (url.searchParams.get('queue') === 'profile-photos') return handleAdminProfilePhotoQueue(sb, res)
     const profileId = url.searchParams.get('profile_id')
     if (profileId) return detail(sb, res, profileId)
     const status = url.searchParams.get('status')
@@ -88,6 +90,7 @@ export default async function handler(req, res) {
   if (locked) return json(res, locked.status, locked.body)
   if (body.action === 'email-agreement') return handleEmailAgreement(sb, res, user, body)
   if (body.action === 'correct-agreement') return handleCorrectAgreement(sb, res, body)
+  if (body.action === 'review-profile-photo') return handleAdminProfilePhotoDecision(sb, res, user, body)
   if (body.action === 'vehicle') {
     const make = String(body.make || '').trim().slice(0, 80)
     const model = String(body.model || '').trim().slice(0, 80)

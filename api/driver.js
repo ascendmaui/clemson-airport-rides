@@ -31,6 +31,7 @@ import handleDriverPerks from '../server/endpoints/driverPerks.js'
 import handleDriverCashout from '../server/endpoints/driverCashout.js'
 import handleDriverPayoutMethods from '../server/endpoints/driverPayoutMethods.js'
 import handleEarningsForecast from '../server/endpoints/earningsForecast.js'
+import handleProfilePhoto from '../server/endpoints/profilePhoto.js'
 
 const HANDLERS = {
   'app-config': handleAppConfig,
@@ -59,6 +60,7 @@ const HANDLERS = {
   cashout: handleDriverCashout,
   'payout-methods': handleDriverPayoutMethods,
   forecast: handleEarningsForecast,
+  'profile-photo': handleProfilePhoto,
 }
 
 const LEGACY = {
@@ -78,7 +80,7 @@ export default async function handler(req, res, ...rest) {
   const handle = HANDLERS[action]
   if (!handle) {
     return json(res, 400, {
-      error: 'Unknown driver action. Use action=signup, submit-review, earnings, tax-summary, w9, offer-preview, tip, tip-choice, wait, trip-status, trip-stop, cancel-midride, payouts, payout-methods, inbox, cards, mark-offered, pass-offer, sign-agreement, backup-queue, trip-sweeps, perks, cashout, forecast, or app-config.',
+      error: 'Unknown driver action. Use action=signup, submit-review, earnings, tax-summary, w9, offer-preview, tip, tip-choice, wait, trip-status, trip-stop, cancel-midride, payouts, payout-methods, inbox, cards, mark-offered, pass-offer, sign-agreement, backup-queue, trip-sweeps, perks, cashout, forecast, profile-photo, or app-config.',
     })
   }
   return handle(req, res, ...rest)
