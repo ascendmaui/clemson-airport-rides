@@ -18,6 +18,12 @@ import { ReportLostItemButton } from '../components/ReportLostItem'
 import { rideChatMode } from '../lib/tripChatRules'
 import { fetchLostItemReport, subscribeLostItemReports } from '../lib/tripMessages'
 import { SosControl } from '../components/SosControl'
+
+const TRIP_SELECT = 'id, status, rider_id, driver_id, pickup_label, dropoff_label, pickup_lat, pickup_lng, dropoff_lat, dropoff_lng, completed_at, canceled_at, requested_at, stops, metadata'
+
+function missingHeartbeatColumn(message) {
+  return /driver_heartbeat_at/i.test(message || '') && /column|schema cache/i.test(message || '')
+}
 import { isActiveRideStatus } from '../lib/sosAlert'
 import { MidrideCancelSheet } from '../components/MidrideCancelSheet'
 import { RiderSwitchSheet } from '../components/RiderSwitchSheet'
@@ -42,6 +48,7 @@ import {
   STILL_SEARCHING_MS,
 } from '../../packages/rides-native/liveTrip.js'
 import { followEtaLine, followRouteLine, legNounForStatus, storedRoadSuffix, directionsEtaLine } from '../../packages/rides-native/roadFollow.js'
+import { failedHoldPrompt } from '../../packages/rides-native/rideMoments.js'
 import { useDrivingLeg } from '../lib/useDrivingLeg'
 import { COMFORT_FLEET_NOTICE, tripTags } from '../../packages/rides-native/tripTags.js'
 import { LivePhase } from '../components/LivePhase'
@@ -102,11 +109,19 @@ export function Requested({ dest = 'GSP Airport', trip = '', driver = 'your driv
       if (loading || !alive) return
       loading = true
       try {
-      const { data, error: loadError } = await withTrackingTimeout(supabase
+      let loaded = await withTrackingTimeout(supabase
         .from('trips')
-        .select('id, status, rider_id, driver_id, pickup_label, dropoff_label, pickup_lat, pickup_lng, dropoff_lat, dropoff_lng, completed_at, canceled_at, requested_at, stops, metadata')
+        .select(`${TRIP_SELECT}, driver_heartbeat_at`)
         .eq('id', trip)
         .maybeSingle())
+      if (loaded.error && missingHeartbeatColumn(loaded.error.message)) {
+        loaded = await withTrackingTimeout(supabase
+          .from('trips')
+          .select(TRIP_SELECT)
+          .eq('id', trip)
+          .maybeSingle())
+      }
+      const { data, error: loadError } = loaded
       if (!alive) return
       if (loadError) { setError('Could not refresh trip status. Retrying automatically.'); return }
       if (!data) {
@@ -286,7 +301,8 @@ export function Requested({ dest = 'GSP Airport', trip = '', driver = 'your driv
   const declineNote = riderDeclineRebroadcastMessage(tripRow)
   const phaseBody = declineNote ? `${phase.body} ${declineNote}` : phase.body
   const driverFix = driverPos ? { lat: driverPos[0], lng: driverPos[1] } : null
-  const locationIssue = trackingIssue(status, locationAt, trackingNow)
+  const locationIssue = trackingIssue(status, locationAt, trackingNow, tripRow?.driver_heartbeat_at || null)
+  const holdPrompt = failedHoldPrompt(tripRow)
   const showMap = Boolean(trip) || Boolean(status) || preferred
   const preview = showSearchTheater(status) && !tripRow?.driver_id && !driverPos
   const searchPreview = preview ? searchingRidePreview(tripRow) : null
@@ -421,6 +437,16 @@ export function Requested({ dest = 'GSP Airport', trip = '', driver = 'your driv
             {error || 'This trip is not on your account. Request a ride again if you still need a driver.'}
           </p>
         )}
+        {holdPrompt ? (
+          <button
+            type="button"
+            onClick={() => navigate('account', { tab: 'billing', setup: 'card' })}
+            style={{ textAlign: 'left', background: '#fff4ea', border: 0, borderRadius: 14, padding: 14, marginBottom: 12 }}
+          >
+            <strong>{holdPrompt.title}</strong>
+            <div>{holdPrompt.body}</div>
+          </button>
+        ) : null}
         {(locationIssue || trackingError) && !['completed', 'canceled', 'cancelled', 'cancelled_wait'].includes(status) && <div role="status">{locationIssue || trackingError} <button type="button" onClick={() => setTrackingAttempt((n) => n + 1)}>Retry tracking</button></div>}
         <LivePhase
           kicker={phase.kicker}

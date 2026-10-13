@@ -204,6 +204,8 @@ function Screen({ path, params }) {
           destLat={params.destLat || ''}
           destLng={params.destLng || ''}
           billing={params.billing || ''}
+          driver={params.driver || ''}
+          tip={params.tip || ''}
         />
       )
     case 'requested':

@@ -1263,6 +1263,28 @@ test('requestDriverTrip applies default destination and stadium pickup points', 
   }
 })
 
+test('requestDriverTrip sends applePay only when the rider has it set up', async () => {
+  const originalFetch = globalThis.fetch
+  try {
+    let captured = null
+    globalThis.fetch = async (_url, options) => {
+      captured = JSON.parse(options.body)
+      return {
+        ok: true,
+        status: 200,
+        text: async () => JSON.stringify({ trip: { id: 'trip-apple', status: 'searching' } }),
+      }
+    }
+    const supabase = makeFakeSupabase({ sessionToken: 'bearer-token-xyz' })
+    await requestDriverTrip(supabase, { riderId: 'rider-1', driverId: A, applePay: false })
+    assert.equal('applePay' in captured, false)
+    await requestDriverTrip(supabase, { riderId: 'rider-1', driverId: A, applePay: true })
+    assert.equal(captured.applePay, true)
+  } finally {
+    globalThis.fetch = originalFetch
+  }
+})
+
 test('requestDriverTrip propagates HTTP errors, missing trip responses, and network failures', async () => {
   const originalFetch = globalThis.fetch
   try {

@@ -49,6 +49,8 @@ import { useThemedStyles } from '@/lib/useThemedStyles'
 import { searchDelayMs } from 'rides-native/riderShell.js'
 import { comfortFleetNotice } from 'rides-native/tripTags'
 import { loadTigerPass, setFavoriteDrivers, TIGER_PASS_NAME } from 'rides-native/tigerPassClient'
+import { paymentMethodRequiredError, riderPaymentMethodReady } from '../../../shared/ridePaymentReady.js'
+import { applePaySetUp } from '@/lib/applePayReady'
 
 const MAP_KINDS: MapKind[] = ['standard', 'satellite', 'hybrid']
 const NOTIFY_KEY = 'rider.notify.driver'
@@ -73,12 +75,16 @@ export default function PickDriver() {
     destLat?: string
     destLng?: string
     passengers?: string
+    driver?: string
+    tip?: string
   }>()
   const dest = oneParam(params.dest, 'GSP Airport')
   const pickup = oneParam(params.pickup, 'Memorial Stadium')
   const tier = oneParam(params.tier, 'standard')
   const note = oneParam(params.note)
   const passengers = oneParam(params.passengers)
+  const driverParam = oneParam(params.driver)
+  const tipParam = oneParam(params.tip)
   const pickupLat = finiteParam(params.pickupLat)
   const pickupLng = finiteParam(params.pickupLng)
   const destLat = finiteParam(params.destLat)
@@ -98,6 +104,7 @@ export default function PickDriver() {
     pickupLng: oneParam(params.pickupLng),
     destLat: oneParam(params.destLat),
     destLng: oneParam(params.destLng),
+    passengers,
   }
   const { user } = useAuth()
   const student = useStudentStatus()
@@ -123,7 +130,6 @@ export default function PickDriver() {
   useEffect(() => {
     let alive = true
     setPhase('loading')
-    setSelected(null)
     const wait = new Promise((resolve) => setTimeout(resolve, searchDelayMs()))
     const favorites = user?.id
       ? loadFavoriteDriverIds(supabase, authStorage, user.id)
@@ -144,6 +150,11 @@ export default function PickDriver() {
       setPassPreferredIds(loadedPass?.active ? loadedPass.preferredDriverIds || [] : [])
       setFavNote(fav.note)
       setError(extra.error || result.error)
+      setSelected((current) => {
+        if (current && merged.some((driver) => driver.id === current)) return current
+        if (driverParam && merged.some((driver) => driver.id === driverParam)) return driverParam
+        return current && !merged.some((driver) => driver.id === current) ? null : current
+      })
       setPhase('results')
       if (merged.some((driver) => driver.online)) {
         await playDriverBrowseCue()
@@ -152,7 +163,13 @@ export default function PickDriver() {
     return () => {
       alive = false
     }
-  }, [attempt, pickup, approachPickup.lat, approachPickup.lng, user?.id])
+  }, [attempt, pickup, approachPickup.lat, approachPickup.lng, user?.id, driverParam])
+
+  useEffect(() => {
+    const cents = Number(tipParam)
+    if (!tipParam || !Number.isFinite(cents) || cents < 0) return
+    setPrepaidTipCents(Math.round(cents))
+  }, [tipParam])
 
   const selectedDriver = drivers.find((row: OnlineDriver) => row.id === selected) || null
   const comfortNotice = comfortFleetNotice(tier === 'comfort' || tier === 'comfort' || Boolean(selectedDriver?.comfortClass))
@@ -284,6 +301,32 @@ export default function PickDriver() {
 
   const anyOnline = drivers.some((driver: OnlineDriver) => driver.online)
 
+  function openAddCard() {
+    router.push({
+      pathname: '/billing',
+      params: {
+        returnTo: 'pick-driver',
+        add: '1',
+        ...resumeParams,
+        tip: String(prepaidTipCents),
+        driver: selected || driverParam,
+      },
+    })
+  }
+
+  async function paymentForRequest() {
+    const applePay = await applePaySetUp()
+    if (!supabase || !user) return { ready: false, source: null as string | null }
+    const { data, error: lookupError } = await supabase
+      .from('profiles')
+      .select('stripe_default_pm_id, stripe_card_brand')
+      .eq('id', user.id)
+      .maybeSingle()
+    if (lookupError) return { ready: true, source: applePay ? 'apple_pay' : null }
+    const ready = riderPaymentMethodReady(data, { applePay })
+    return { ready: ready.ok, source: ready.source }
+  }
+
   const onRequest = async () => {
     const chosen = drivers.find((row: OnlineDriver) => row.id === selected) || null
     if (chosen && !chosen.online) {
@@ -306,6 +349,11 @@ export default function PickDriver() {
     setRequesting(true)
     setError(null)
     try {
+      const gate = await paymentForRequest()
+      if (!gate.ready) {
+        openAddCard()
+        return
+      }
       const trip = await requestDriverTrip(supabase, {
         riderId: user.id,
         ...(chosen ? { driverId: chosen.id } : { autoAssign: true }),
@@ -318,6 +366,7 @@ export default function PickDriver() {
         isStudent: student.verified,
         note,
         prepaidTipCents,
+        ...(gate.source === 'apple_pay' ? { applePay: true } : {}),
       })
       await playDriverFoundCue()
       router.replace({
@@ -325,6 +374,10 @@ export default function PickDriver() {
         params: { dest, trip: trip.id, driver: chosen?.name || 'Next driver' },
       })
     } catch (err) {
+      if (paymentMethodRequiredError(err)) {
+        openAddCard()
+        return
+      }
       const redirect = scheduleRedirectForRequestError(
         err && typeof err === 'object' ? err as { code?: string } : undefined,
         dest,

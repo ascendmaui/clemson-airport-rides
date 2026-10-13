@@ -361,6 +361,48 @@ function storedRouteDurationS(trip) {
   return seconds
 }
 
+function storedRouteDistanceM(trip) {
+  const meta = trip?.metadata && typeof trip.metadata === 'object' ? trip.metadata : {}
+  const raw = meta.route_distance_m ?? trip?.route_distance_m ?? trip?.routeDistanceM ?? null
+  const meters = Number(raw)
+  if (!Number.isFinite(meters) || meters <= 0) return null
+  return meters
+}
+
+/**
+ * The booked pickup → drop-off route. Shown only once the trip is in progress,
+ * and labeled as that route so it is not read as the driver's live ETA.
+ */
+export function pickupToDropoffRouteLine(trip) {
+  const seconds = storedRouteDurationS(trip)
+  const meters = storedRouteDistanceM(trip)
+  if (seconds == null && meters == null) return null
+  const parts = ['Pickup to drop-off']
+  if (seconds != null) parts.push(`about ${Math.max(1, Math.round(seconds / 60))} min`)
+  if (meters != null) {
+    const miles = Math.round((meters / 1609.344) * 10) / 10
+    parts.push(`${miles} mi`)
+  }
+  return parts.join(' · ')
+}
+
+/**
+ * Before pickup, distance is the driver to the pickup pin.
+ * In progress, the line is the full pickup to drop-off route.
+ */
+export function liveRideDistanceLine(status, from, places) {
+  switch (status) {
+    case 'accepted':
+    case 'arriving':
+    case 'arrived':
+      return etaLineFor(status, from, places)
+    case 'in_progress':
+      return pickupToDropoffRouteLine(places) || etaLineFor(status, from, places)
+    default:
+      return null
+  }
+}
+
 function chosenEnds(trip) {
   return {
     pickup: point(trip?.pickup_lat ?? trip?.pickupLat, trip?.pickup_lng ?? trip?.pickupLng),

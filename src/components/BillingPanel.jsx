@@ -19,7 +19,8 @@ import {
   walletUnavailableCopy,
 } from '../../shared/ridePaymentMethods.js'
 import { fetchMyRideBills } from '../lib/rideBills'
-import { getHashRoute } from '../lib/navigation'
+import { getHashRoute, navigate } from '../lib/navigation'
+import { consumeRideRequestDraft } from '../lib/rideRequestDraft.js'
 import { supabase } from '../lib/supabase'
 import { pushToast } from '../lib/toasts'
 
@@ -97,6 +98,7 @@ export function BillingPanel({ profile, onProfileRefresh }) {
   const elementsRef = useRef(null)
   const paymentElementRef = useRef(null)
   const redirectHandled = useRef(false)
+  const setupOpened = useRef(false)
   const mountRef = useRef(null)
   const persistRef = useRef(null)
   const [card, setCard] = useState(() => loadCardDisplay(user?.id))
@@ -124,6 +126,12 @@ export function BillingPanel({ profile, onProfileRefresh }) {
     }
     setCard(null)
     saveCardDisplay(user?.id, null)
+  }
+
+  function returnToPendingRequest() {
+    const next = consumeRideRequestDraft()
+    if (!next) return
+    navigate('pick-driver', next)
   }
 
   function applySaved(saved) {
@@ -218,6 +226,7 @@ export function BillingPanel({ profile, onProfileRefresh }) {
           : 'Account activated — card on file.')
         clearSetupRedirect()
         onProfileRefresh?.()
+        returnToPendingRequest()
       } catch (e) {
         if (alive) setErr(e.message || 'Could not save card after redirect')
       } finally {
@@ -226,6 +235,16 @@ export function BillingPanel({ profile, onProfileRefresh }) {
     })()
     return () => { alive = false }
   }, [user?.id]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!user?.id || setupOpened.current) return undefined
+    const route = getHashRoute().params || {}
+    if (route.tab === 'billing' && route.setup === 'card') {
+      setupOpened.current = true
+      openCardForm(ADD_ANOTHER_PAYMENT_METHOD_ID)
+    }
+    return undefined
+  }, [user?.id])
 
   // Fetch the SetupIntent only after the form is open. Mount happens in the next effect.
   useEffect(() => {
@@ -406,6 +425,7 @@ export function BillingPanel({ profile, onProfileRefresh }) {
     }
     closeCardForm()
     onProfileRefresh?.()
+    returnToPendingRequest()
   }
   persistRef.current = persistSetupIntent
 
@@ -446,6 +466,7 @@ export function BillingPanel({ profile, onProfileRefresh }) {
       if (saved.last4 || saved.brand) rememberCard({ brand: saved.brand, last4: saved.last4 })
       setMsg('This card will be charged for ride fares.')
       onProfileRefresh?.()
+      returnToPendingRequest()
     } catch (e) {
       setErr(e.message || 'Could not set default card')
     } finally {

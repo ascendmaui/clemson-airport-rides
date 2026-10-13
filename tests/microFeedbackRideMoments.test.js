@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import {
-  backOnlineMoment, chatMessageMoment, driverTipMoment, paymentFailedMoment, riderTripMoment, riderTripSnapshot,
+  backOnlineMoment, chatMessageMoment, driverTipMoment, failedHoldPrompt, paymentFailedMoment, riderTripMoment, riderTripSnapshot,
 } from '../packages/rides-native/rideMoments.js'
 
 const trip = (over = {}) => ({ id: 't1', status: 'arriving', pickup_label: 'Core Campus', dropoff_label: 'GSP', metadata: {}, ...over })
@@ -35,6 +35,16 @@ test('fare hold failed fires once for rider and driver copy', () => {
   assert.equal(paymentFailedMoment('failed', failed), null)
   assert.equal(paymentFailedMoment(null, failed, 'driver').title, 'Rider payment hold failed')
   assert.equal(paymentFailedMoment(null, trip({ metadata: { fare_authorization: { status: 'requires_capture' } } })), null)
+  const missing = paymentFailedMoment(null, trip({ metadata: { fare_authorization: { status: 'failed', code: 'no_payment_method' } } }))
+  assert.equal(missing.title, 'Add a payment method')
+  assert.match(missing.body, /Add a card or Apple Pay/)
+  assert.equal(missing.action, 'billing')
+  assert.match(paymentFailedMoment(null, failed).body, /\$24\.50/)
+  const prompt = failedHoldPrompt({ metadata: { fare_authorization: { status: 'failed', code: 'no_payment_method' } }, payment: null, payment_status: null })
+  assert.equal(prompt.title, 'Add a payment method')
+  assert.equal(prompt.pathname, '/billing')
+  assert.equal(failedHoldPrompt({ payment: null }), null)
+  assert.equal(failedHoldPrompt(null), null)
 })
 
 test('driver tip, chat, and back-online moments', () => {
@@ -57,6 +67,14 @@ test('RiderMoments is mounted, primes before toasting, and maps each cue', () =>
   assert.match(src, /case 'canceled':\s*void warningHaptic\(\)/)
   assert.match(src, /if \(!\(await hapticsEnabled\(\)\)\) return\s*Haptics\.notificationAsync\(Haptics\.NotificationFeedbackType\.Error\)/)
   assert.match(src, /showToast\(\{/)
+  assert.match(src, /afterRiderModal/)
+  assert.match(src, /pathname: '\/billing'/)
+  assert.doesNotMatch(src, /pathname: '\/account'/)
+  const popup = readFileSync(new URL('../apps/rider/components/RiderMatchPopup.tsx', import.meta.url), 'utf8')
+  assert.match(popup, /onDismiss=\{onModalDismiss\}/)
+  assert.match(popup, /function dismissThen/)
+  assert.match(popup, /Add a payment method/)
+  assert.doesNotMatch(popup, /setNotice\(null\)[\s\S]{0,80}router\.push/)
   const layout = readFileSync(new URL('../apps/rider/app/_layout.tsx', import.meta.url), 'utf8')
   assert.match(layout, /<RiderMoments \/>/)
 })

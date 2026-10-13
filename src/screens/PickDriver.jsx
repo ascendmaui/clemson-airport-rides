@@ -33,6 +33,9 @@ import { SignInToBookModal, useRequireAuthForAction } from '../components/SignIn
 import { resolveDriverPortrait } from '../../shared/driverPortrait.js'
 import { setFavoriteDrivers } from '../../packages/rides-native/tigerPassClient.js'
 import { PREPAID_TIP_PRESETS_CENTS, formatTipDollars, parsePrepaidTipDollars } from '../../shared/prepaidTip.js'
+import { paymentMethodRequiredError, riderPaymentMethodReady } from '../../shared/ridePaymentReady.js'
+import { saveRideRequestDraft } from '../lib/rideRequestDraft.js'
+import { webApplePaySetUp } from '../lib/applePayReady.js'
 
 const browserStorage = {
   async getItem(key) {
@@ -62,6 +65,8 @@ export function PickDriver({
   destLat = '',
   destLng = '',
   billing = '',
+  driver = '',
+  tip = '',
 }) {
   const { user } = useAuth()
   const student = useStudentStatus()
@@ -76,7 +81,10 @@ export function PickDriver({
   const [selected, setSelected] = useState(null)
   const [tripFlash, setTripFlash] = useState(null)
   const [requesting, setRequesting] = useState(false)
-  const [prepaidTipCents, setPrepaidTipCents] = useState(0)
+  const [prepaidTipCents, setPrepaidTipCents] = useState(() => {
+    const cents = Number(tip)
+    return Number.isFinite(cents) && cents > 0 ? Math.round(cents) : 0
+  })
   const [customTip, setCustomTip] = useState('')
   const [tipError, setTipError] = useState(null)
   const [promptOpen, setPromptOpen] = useState(false)
@@ -106,7 +114,7 @@ export function PickDriver({
       approachPickup,
     )
     setDrivers(merged)
-    setSelected((current) => merged.find((driver) => driver.id === current?.id) || null)
+    setSelected((current) => merged.find((row) => row.id === current?.id) || merged.find((row) => row.id === driver) || null)
     setFavoriteIds(fav.ids)
     setFavNote(fav.note)
     setError(extra.error || err)
@@ -120,7 +128,13 @@ export function PickDriver({
       load()
     })
     return unsub
-  }, [user?.id, tier])
+  }, [user?.id, tier, driver])
+
+  useEffect(() => {
+    const cents = Number(tip)
+    if (tip === '' || tip == null || !Number.isFinite(cents) || cents < 0) return
+    setPrepaidTipCents(Math.round(cents))
+  }, [tip])
 
   const toggleFavorite = async (driverId) => {
     if (!user?.id) {
@@ -163,6 +177,37 @@ export function PickDriver({
     }
   }
 
+  function rememberRequest() {
+    saveRideRequestDraft({
+      dest,
+      pickup,
+      tier,
+      passengers,
+      listCents,
+      pickupLat,
+      pickupLng,
+      destLat,
+      destLng,
+      billing,
+      driverId: selected?.id || driver || '',
+      tip: prepaidTipCents,
+    })
+    navigate('account', { tab: 'billing', setup: 'card' })
+  }
+
+  async function paymentForRequest() {
+    const applePay = webApplePaySetUp()
+    if (!supabase || !user?.id) return { ready: false, source: null }
+    const { data, error: lookupError } = await supabase
+      .from('profiles')
+      .select('stripe_default_pm_id, stripe_card_brand')
+      .eq('id', user.id)
+      .maybeSingle()
+    if (lookupError) return { ready: true, source: applePay ? 'apple_pay' : null }
+    const ready = riderPaymentMethodReady(data, { applePay })
+    return { ready: ready.ok, source: ready.source }
+  }
+
   const onRequest = async () => {
     const someoneOnline = drivers.some((driver) => driver.online)
     if (selected && !selected.online) {
@@ -180,6 +225,11 @@ export function PickDriver({
     setRequesting(true)
     setError(null)
     try {
+      const gate = await paymentForRequest()
+      if (!gate.ready) {
+        rememberRequest()
+        return
+      }
       const trip = await requestDriverTrip({
         riderId: user.id,
         ...(selected ? { driverId: selected.id } : { autoAssign: true }),
@@ -195,9 +245,14 @@ export function PickDriver({
         listCents,
         billingChoice: billing || null,
         prepaidTipCents,
+        ...(gate.source === 'apple_pay' ? { applePay: true } : {}),
       })
       navigate('requested', { dest, trip: trip.id, driver: selected?.name || 'Next driver' })
     } catch (err) {
+      if (paymentMethodRequiredError(err)) {
+        rememberRequest()
+        return
+      }
       const redirect = scheduleRedirectForRequestError(err, dest)
       if (redirect) {
         navigate('schedule', {

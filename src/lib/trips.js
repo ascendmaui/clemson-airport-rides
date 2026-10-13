@@ -35,6 +35,7 @@ export async function requestDriverTrip({
   autoAssign = false,
   billingChoice = null,
   prepaidTipCents = 0,
+  applePay = false,
 }) {
   void isStudent
   void listCents
@@ -69,6 +70,7 @@ export async function requestDriverTrip({
     ...(passengers ? { passengers } : {}),
     ...(billingChoice ? { billingChoice } : {}),
     ...(prepaidTipCents > 0 ? { prepaidTipCents: Math.round(prepaidTipCents) } : {}),
+    ...(applePay === true ? { applePay: true } : {}),
   })
   if (!data?.trip?.id) throw new Error('Could not request trip')
   return data.trip

@@ -302,7 +302,10 @@ test('requestDriverTrip skips a pending_review driver and opens a campus offer f
   assert.equal(pendingSb.tables.trips?.length || 0, 0)
 
   const approvedSb = memorySb({
-    profiles: [{ id: 'driver-approved', email: 'driver@example.com' }],
+    profiles: [
+      { id: 'driver-approved', email: 'driver@example.com' },
+      { id: 'rider-1', email: 'rider@clemson.edu', stripe_default_pm_id: 'pm_test' },
+    ],
     driver_applications: [{ profile_id: 'driver-approved', onboarding_status: 'approved' }],
     driver_status: [{ driver_id: 'driver-approved', online: true }],
     vehicles: [{ driver_id: 'driver-approved', service_class: 'standard', tier: 'standard' }],
@@ -325,7 +328,10 @@ test('requestDriverTrip skips a pending_review driver and opens a campus offer f
 
 test('requestDriverTrip books an airport ride from pick-a-driver with no upfront deposit', async () => {
   const approvedSb = memorySb({
-    profiles: [{ id: 'driver-approved', email: 'driver@example.com' }],
+    profiles: [
+      { id: 'driver-approved', email: 'driver@example.com' },
+      { id: 'rider-1', email: 'rider@clemson.edu', stripe_default_pm_id: 'pm_test' },
+    ],
     driver_applications: [{ profile_id: 'driver-approved', onboarding_status: 'approved' }],
     driver_status: [{ driver_id: 'driver-approved', online: true }],
     vehicles: [{ driver_id: 'driver-approved', service_class: 'standard', tier: 'standard' }],
@@ -356,7 +362,10 @@ test('requestDriverTrip books an airport ride from pick-a-driver with no upfront
 
 test('requestDriverTrip keeps the campus trip when the event insert fails', async () => {
   const approvedSb = memorySb({
-    profiles: [{ id: 'driver-approved', email: 'driver@example.com' }],
+    profiles: [
+      { id: 'driver-approved', email: 'driver@example.com' },
+      { id: 'rider-1', email: 'rider@clemson.edu', stripe_default_pm_id: 'pm_test' },
+    ],
     driver_applications: [{ profile_id: 'driver-approved', onboarding_status: 'approved' }],
     driver_status: [{ driver_id: 'driver-approved', online: true }],
     vehicles: [{ driver_id: 'driver-approved', service_class: 'standard', tier: 'standard' }],
@@ -481,6 +490,7 @@ test('requestDriverTrip auto-assigns John before Kim and keeps a picked offer op
       { profile_id: other, onboarding_status: 'approved' },
     ],
     profiles: [
+      { id: 'rider-1', email: 'rider@clemson.edu', stripe_default_pm_id: 'pm_test' },
       { id: other, email: 'someone@example.com' },
       { id: kim, email: 'kimubermaui@gmail.com' },
       { id: john, email: 'johnmatveyev@gmail.com' },
@@ -506,7 +516,10 @@ test('requestDriverTrip auto-assigns John before Kim and keeps a picked offer op
   assert.equal(empty.json.code, 'ride_option_unavailable')
 
   const pickSb = memorySb({
-    profiles: [{ id: kim, email: 'kim@example.com' }],
+    profiles: [
+      { id: kim, email: 'kim@example.com' },
+      { id: 'rider-1', email: 'rider@clemson.edu', stripe_default_pm_id: 'pm_test' },
+    ],
     driver_applications: [{ profile_id: kim, onboarding_status: 'approved' }],
     driver_status: [{ driver_id: kim, online: true }],
     vehicles: [{ driver_id: kim, service_class: 'standard', tier: 'standard' }],
@@ -537,7 +550,7 @@ test('women-only comfort preference skips drivers who do not match and blocks a 
       { profile_id: woman, onboarding_status: 'approved' },
     ],
     profiles: [
-      { id: rider, email: 'rider@clemson.edu', gender_identity: 'woman', women_only_matching: true },
+      { id: rider, email: 'rider@clemson.edu', gender_identity: 'woman', women_only_matching: true, stripe_default_pm_id: 'pm_test' },
       { id: man, email: 'man@example.com', gender_identity: 'man', women_only_matching: false },
       { id: woman, email: 'woman@example.com', gender_identity: 'woman', women_only_matching: false },
     ],
