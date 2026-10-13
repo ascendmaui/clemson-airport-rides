@@ -4,7 +4,7 @@
  * them; settle marks them paid or returns them to pending.
  */
 import {
-  DEFAULT_INSTANT_FEE_BPS, DEFAULT_INSTANT_FEE_MIN_CENTS, cashoutBalanceCents,
+  DEFAULT_INSTANT_FEE_BPS, DEFAULT_INSTANT_FEE_MIN_CENTS, cashoutBalanceCents, cashoutBreakdown,
   cashoutKeyAllowed, cashoutState, sweepWindowBlocked, isInstantIneligibleError, nyDay, payoutDestination,
 } from '../shared/cashout.js'
 import { loadConnectAccount } from './payouts.js'
@@ -31,17 +31,42 @@ export async function cashedOutToday(sb, driverId, now = new Date()) {
   return (res.data || []).length > 0
 }
 
-export async function cashoutQuote({ sb, stripe, driverId, env = process.env, now = new Date() }) {
+function destinationForMethod(destination, method) {
+  if (method !== 'instant' && method !== 'standard') return { destination, blocked: null }
+  if (!destination) return { destination: null, blocked: null }
+  if (method === 'instant' && destination.method !== 'instant') return { destination, blocked: 'instant_unavailable' }
+  return {
+    destination: {
+      ...destination,
+      method,
+      fallbackReason: method === 'standard' ? null : destination.fallbackReason || null,
+    },
+    blocked: null,
+  }
+}
+
+export async function cashoutQuote({ sb, stripe, driverId, env = process.env, now = new Date(), method = null }) {
   const account = await loadConnectAccount(sb, driverId)
   let destination = null
   if (account) destination = payoutDestination(await listDestinations(stripe, account))
+  const picked = destinationForMethod(destination, method)
   const trips = await sb.from('trips').select('id, status, metadata')
     .eq('driver_id', driverId).in('status', ['completed', 'cancelled_wait'])
   if (trips.error) throw new Error(trips.error.message)
   const today = account ? await cashedOutToday(sb, driverId, now) : false
   const fee = cashoutFeeConfig(env)
+  const balanceCents = cashoutBalanceCents(trips.data)
+  if (picked.blocked === 'instant_unavailable') {
+    return {
+      state: 'instant_unavailable',
+      method: 'instant',
+      ...cashoutBreakdown(balanceCents, { method: 'instant', ...fee }),
+      last4: destination?.last4 || null,
+      connectAccountId: account,
+    }
+  }
   return {
-    ...cashoutState({ connectAccountId: account, destination, balanceCents: cashoutBalanceCents(trips.data), cashedOutToday: today, ...fee }),
+    ...cashoutState({ connectAccountId: account, destination: picked.destination, balanceCents, cashedOutToday: today, ...fee }),
     connectAccountId: account,
   }
 }
@@ -53,10 +78,10 @@ const CLAIM_ERRORS = ['already_cashed_out_today', 'zero_balance', 'balance_below
  * match the fee the server would charge now, so a stale confirm can't charge
  * a different fee.
  */
-export async function executeCashout({ sb, stripe, driverId, expectedFeeCents, env = process.env, now = new Date() }) {
+export async function executeCashout({ sb, stripe, driverId, expectedFeeCents, env = process.env, now = new Date(), method: requestedMethod = null }) {
   if (!cashoutKeyAllowed(env.STRIPE_SECRET_KEY, env)) return { ok: false, status: 403, error: 'live_keys_blocked' }
   if (sweepWindowBlocked(now)) return { ok: false, status: 409, error: 'sweep_window' }
-  const quote = await cashoutQuote({ sb, stripe, driverId, env, now })
+  const quote = await cashoutQuote({ sb, stripe, driverId, env, now, method: requestedMethod })
   if (quote.state !== 'ready') return { ok: false, status: 409, error: quote.state, quote }
   if (Number(expectedFeeCents) !== quote.feeCents) return { ok: false, status: 409, error: 'fee_changed', quote }
 
