@@ -1,10 +1,11 @@
 import { useRouter } from 'expo-router'
 import * as Location from 'expo-location'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { AccessibilityInfo, Animated, Image, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { AccessibilityInfo, Animated, AppState, Easing, Image, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { CampusMap, type MapPin } from '@/components/CampusMap'
 import { FarePanel } from '@/components/FarePanel'
+import { DriverEndTripSheet } from '@/components/DriverEndTripSheet'
 import { Card, ErrorText, Primary, Tag, useCardShadow } from '@/components/chrome'
 import { CircleButton, GoButton } from '@/components/shell'
 import { DriverStatusCard } from '@/components/DriverStatusCard'
@@ -55,6 +56,8 @@ import { etaHoldLine } from 'rides-native/liveTrip'
 import { followEtaLine } from 'rides-native/roadFollow'
 import { driverPickupTarget } from 'rides-native/riderLivePickup'
 import { ORANGE, PURPLE } from 'rides-native/places.js'
+import { useReduceMotion } from 'rides-native/shared/reduceMotion.js'
+import { motion } from 'rides-native/shared/theme.js'
 import { gameDayNotice, type GameDayNotice } from 'rides-native/gameDayNotice.js'
 import { GameDaySurgeLine } from 'rides-native/GameDayBoard.jsx'
 import { useGameDayExperience } from 'rides-native/useGameDayExperience.js'
@@ -68,6 +71,9 @@ import { offerCardGauge } from 'rides-native/offerGauge'
 import { fetchOfferPreview, riderInitials } from 'rides-native/offerPreviewClient'
 import { OfferGauge } from '@/components/OfferGauge'
 import { tipBoostOfferLine } from '../../../../shared/prepaidTip.js'
+import { ACTIVE_TRIP_RECONCILE_MS, reconcileActiveTrip } from 'rides-native/activeTripReconcile'
+import { sendTripHeartbeat } from 'rides-native/tripHeartbeat'
+import { canDriverEnd } from '../../../../shared/driverEndTrip.js'
 
 /** Home map overlay grid: screen-edge gutter, spacing between floating pieces, clearance under the status bar. */
 const EDGE = 16
@@ -106,6 +112,7 @@ export default function DriverHome() {
   const { user, configured } = useAuth()
   const { pulse, pulseShift } = useFeedback()
   const [desk, setDesk] = useState<DriverDesk | null>(null)
+  const [tripReconciled, setTripReconciled] = useState(false)
   const [todayCents, setTodayCents] = useState(0)
   const [weekCents, setWeekCents] = useState(0)
   const [lastTrip, setLastTrip] = useState<string | null>(null)
@@ -182,7 +189,12 @@ export default function DriverHome() {
     if (currentGate.canSeeOffers) {
       const loaded = await loadDriverDesk(supabase, user.id)
       if (loaded.online) markSearchingOffers(supabase, loaded.offers).catch(() => {})
-      setDesk(loaded)
+      const active = loaded.active
+      const decision = active
+        ? reconcileActiveTrip({ id: active.id, status: active.status }, { id: active.id, status: active.status })
+        : null
+      setDesk(decision?.action === 'clear' ? { ...loaded, active: null } : loaded)
+      setTripReconciled(true)
       if (loaded.lat != null && loaded.lng != null) {
         setSelf({ latitude: Number(loaded.lat), longitude: Number(loaded.lng) })
       }
@@ -195,6 +207,7 @@ export default function DriverHome() {
       }
     } else {
       setDesk(null)
+      setTripReconciled(true)
     }
   }, [user])
 
@@ -240,6 +253,25 @@ export default function DriverHome() {
       refresh().catch(() => {})
     })
   }, [canSeeOffers, refresh])
+
+  const deskRef = useRef(desk)
+  deskRef.current = desk
+  useEffect(() => {
+    if (!supabase || !user || !canSeeOffers) return undefined
+    const reconcile = () => {
+      const active = deskRef.current?.active
+      if (active?.id && canDriverEnd(active.status)) void sendTripHeartbeat(supabase, active.id)
+      refresh().catch(() => {})
+    }
+    const timer = setInterval(reconcile, ACTIVE_TRIP_RECONCILE_MS)
+    const listener = AppState.addEventListener('change', (state) => {
+      if (state === 'active') reconcile()
+    })
+    return () => {
+      clearInterval(timer)
+      listener.remove()
+    }
+  }, [canSeeOffers, refresh, user])
 
   useEffect(() => {
     let alive = true
@@ -619,7 +651,7 @@ export default function DriverHome() {
               />
             </ScrollView>
           ) : null}
-          {desk?.active ? (
+          {tripReconciled && desk?.active ? (
             <Pressable
               onPress={() => router.push({ pathname: '/trip', params: { id: desk.active!.id } })}
               accessibilityRole="button"
@@ -633,6 +665,17 @@ export default function DriverHome() {
               {liveEta && !locationTracking.error ? <Text style={{ color: colors.orange, fontWeight: '800' }}>{liveEta}</Text> : null}
               {riderLine ? <Text style={{ color: colors.onAccent, fontWeight: '700' }}>{riderLine}</Text> : null}
             </Pressable>
+          ) : null}
+          {tripReconciled && desk?.active && canDriverEnd(desk.active.status) ? (
+            <DriverEndTripSheet
+              supabase={supabase}
+              tripId={desk.active.id}
+              disabled={busy}
+              onEnded={() => {
+                pulse('cancel')
+                refresh().catch(() => {})
+              }}
+            />
           ) : null}
           {offer && !desk?.active ? (
             <RideCard
@@ -750,7 +793,8 @@ export function RideCard({
   const prepaidTipCents = Number((card as { prepaidTipCents?: number }).prepaidTipCents) || 0
   const tipBoostLine = tipBoostOfferLine(vm.pay.netCents + prepaidTipCents, prepaidTipCents)
   const preferredNote = preferredRequestNote(card)
-  const opacity = useState(() => new Animated.Value(0))[0]
+  const reduceMotion = useReduceMotion()
+  const opacity = useState(() => new Animated.Value(reduceMotion ? 1 : 0))[0]
   const glow = useRef(new Animated.Value(0.35)).current
   const scrollRef = useRef<ScrollView>(null)
   const [viewport, setViewport] = useState(0)
@@ -761,10 +805,22 @@ export function RideCard({
     return () => clearInterval(timer)
   }, [card.id])
   useEffect(() => {
-    Animated.timing(opacity, { toValue: 1, duration: 280, useNativeDriver: true }).start()
-  }, [opacity])
+    if (reduceMotion) {
+      opacity.setValue(1)
+      return undefined
+    }
+    opacity.setValue(0)
+    const enter = Animated.timing(opacity, {
+      toValue: 1,
+      duration: motion.enterFadeMs,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    })
+    enter.start()
+    return () => enter.stop()
+  }, [opacity, reduceMotion])
   useEffect(() => {
-    if (!pulsing) {
+    if (!pulsing || reduceMotion) {
       glow.setValue(1)
       return undefined
     }
@@ -774,7 +830,7 @@ export function RideCard({
     ]))
     loop.start()
     return () => loop.stop()
-  }, [glow, pulsing])
+  }, [glow, pulsing, reduceMotion])
   useEffect(() => {
     // Hint that the breakdown scrolls when the card had to shrink to fit.
     if (overflows) scrollRef.current?.flashScrollIndicators()
@@ -943,9 +999,9 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: 'transparent',
   },
   heatChipOn: {
-    backgroundColor: '#522D80',
+    backgroundColor: PURPLE,
     borderColor: 'rgba(255,255,255,0.16)',
-    shadowColor: '#522D80', shadowOpacity: 0.22, shadowRadius: 10, shadowOffset: { width: 0, height: 4 },
+    shadowColor: PURPLE, shadowOpacity: 0.22, shadowRadius: 10, shadowOffset: { width: 0, height: 4 },
     elevation: 2,
   },
   hotspotRow: { flexGrow: 0, marginTop: 10 },
@@ -957,7 +1013,7 @@ const styles = StyleSheet.create({
   dock: { position: 'absolute', left: EDGE, right: EDGE, gap: GAP, justifyContent: 'flex-end' },
   cardTitle: { fontWeight: '800', fontSize: 18 },
   live: { alignSelf: 'stretch', borderRadius: 18, padding: 14, gap: 4 },
-  liveKicker: { fontWeight: '800', fontSize: 11, letterSpacing: 1 },
+  liveKicker: { fontWeight: '800', fontSize: 11, letterSpacing: 1.1 },
   liveTitle: { fontWeight: '800', fontSize: 18 },
   controls: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   bottomCluster: { gap: GAP },
@@ -992,7 +1048,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 16,
   },
-  declineText: { fontWeight: '700', fontSize: 15 },
+  declineText: { fontWeight: '700', fontSize: 15, letterSpacing: -0.1 },
   offerWrap: { flexShrink: 1 },
   offerCard: { flexShrink: 1, gap: 0, paddingBottom: 12 },
   offerScroll: { flexGrow: 0, flexShrink: 1 },

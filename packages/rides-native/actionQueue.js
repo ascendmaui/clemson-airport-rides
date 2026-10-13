@@ -52,7 +52,18 @@ export function isQueueableAction(action) {
 }
 
 const STATUS_AFTER_OP = { arriving: 'arriving', arrive: 'arrived', start: 'in_progress', complete: 'completed' }
-export const TERMINAL_TRIP_STATUSES = Object.freeze(['completed', 'canceled', 'canceled_midride', 'cancelled_wait'])
+const STATUS_RANK = { accepted: 0, arriving: 1, arrived: 2, in_progress: 3, completed: 4 }
+export const TERMINAL_TRIP_STATUSES = Object.freeze(['completed', 'canceled', 'canceled_midride', 'cancelled_wait', 'expired'])
+
+/** A saved tap may move the card forward. It must not rewind a later server status. */
+export function displayedStatusAfterOp(current, next) {
+  if (!next) return current
+  const nextRank = STATUS_RANK[next]
+  const currentRank = STATUS_RANK[current]
+  if (nextRank == null) return current
+  if (currentRank == null || nextRank > currentRank) return next
+  return current
+}
 
 /** Trip status as the driver will see it once the queued taps land. */
 export function projectTripStatus(status, actions = [], tripId = null) {
@@ -61,7 +72,7 @@ export function projectTripStatus(status, actions = [], tripId = null) {
   let current = status
   for (const action of actions) {
     if (tripId && action.tripId !== tripId) continue
-    if (action.kind === 'status' && STATUS_AFTER_OP[action.op]) current = STATUS_AFTER_OP[action.op]
+    if (action.kind === 'status') current = displayedStatusAfterOp(current, STATUS_AFTER_OP[action.op])
   }
   return current
 }

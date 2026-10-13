@@ -7,6 +7,7 @@ import { shownCents } from '@/lib/shown'
 import { useTheme } from '@/lib/theme'
 import type { EarningBar } from '@/lib/earningsMath'
 import { formatPayoutEta } from 'rides-native/earningsDashboard.js'
+import { radius, type as typeScale } from 'rides-native/shared/theme.js'
 import type {
   ForecastHighlights,
   PayoutTimeline,
@@ -454,7 +455,7 @@ export function BoardNote({ children }: { children: ReactNode }) {
 
 const styles = StyleSheet.create({
   hero: {
-    borderRadius: 28,
+    borderRadius: radius.sheet,
     paddingHorizontal: 22,
     paddingVertical: 22,
     gap: 4,
@@ -467,7 +468,7 @@ const styles = StyleSheet.create({
   heroDark: {
     borderWidth: 1,
   },
-  kicker: { fontWeight: '800', letterSpacing: 1.4, fontSize: 12 },
+  kicker: { ...typeScale.kicker },
   heroAmount: { fontSize: 48, fontWeight: '800', letterSpacing: -1.4 },
   heroLabel: { fontSize: 16, fontWeight: '700' },
   heroMeta: { fontSize: 14, fontWeight: '600', marginTop: 6 },
@@ -475,7 +476,7 @@ const styles = StyleSheet.create({
   periodTile: {
     flex: 1,
     minHeight: 64,
-    borderRadius: 16,
+    borderRadius: radius.lg,
     borderWidth: 1,
     paddingHorizontal: 10,
     paddingVertical: 10,
@@ -483,9 +484,9 @@ const styles = StyleSheet.create({
   },
   periodName: { fontSize: 12, fontWeight: '800', letterSpacing: 0.4 },
   periodAmount: { fontSize: 16, fontWeight: '800' },
-  cardTitle: { fontSize: 22, fontWeight: '800', letterSpacing: -0.3 },
+  cardTitle: { ...typeScale.headline },
   statRow: { flexDirection: 'row', gap: 8 },
-  stat: { flex: 1, borderRadius: 14, paddingHorizontal: 10, paddingVertical: 10, gap: 4, minHeight: 64 },
+  stat: { flex: 1, borderRadius: radius.lg, paddingHorizontal: 10, paddingVertical: 10, gap: 4, minHeight: 64 },
   statLabel: { fontSize: 10, fontWeight: '800', letterSpacing: 0.6 },
   statValue: { fontSize: 16, fontWeight: '800' },
   line: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingTop: 10, borderTopWidth: StyleSheet.hairlineWidth },
@@ -494,14 +495,14 @@ const styles = StyleSheet.create({
   fill: { height: 6, borderRadius: 999 },
   subhead: { fontWeight: '800', marginTop: 4 },
   estimate: { borderRadius: 999, paddingHorizontal: 8, paddingVertical: 4 },
-  zone: { borderRadius: 14, paddingHorizontal: 12, paddingVertical: 12, flexDirection: 'row', alignItems: 'center', gap: 8 },
+  zone: { borderRadius: radius.lg, paddingHorizontal: 12, paddingVertical: 12, flexDirection: 'row', alignItems: 'center', gap: 8 },
   eta: { fontSize: 28, fontWeight: '800', letterSpacing: -0.4 },
-  cash: { borderRadius: 16, minHeight: 48, alignItems: 'center', justifyContent: 'center' },
-  cashLabel: { fontWeight: '800', fontSize: 16 },
+  cash: { borderRadius: radius.lg, minHeight: 52, alignItems: 'center', justifyContent: 'center' },
+  cashLabel: { ...typeScale.button, fontWeight: '800' },
   ride: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12, borderTopWidth: StyleSheet.hairlineWidth, minHeight: 64 },
   link: {
     minHeight: 52,
-    borderRadius: 18,
+    borderRadius: radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
     paddingHorizontal: 16,
     flexDirection: 'row',

@@ -15,6 +15,7 @@ import {
   runningOnVercel,
 } from './driverPayouts.js'
 import { runScheduledDispatchTick } from '../backupDriverDispatch.js'
+import { sweepStaleTrips } from '../staleTripSweep.js'
 
 export default async function handler(req, res, deps = {}) {
   if (cors(req, res)) return
@@ -38,12 +39,20 @@ export default async function handler(req, res, deps = {}) {
   const blocked = stagingCronBlock(env, { dryRun })
   if (blocked) return json(res, blocked.status, blocked.body)
   try {
+    const now = deps.now ? new Date(deps.now) : new Date()
     const summary = await runScheduledDispatchTick(sb, {
-      now: deps.now ? new Date(deps.now) : new Date(),
+      now,
       dryRun,
       limit: deps.limit,
     })
-    return json(res, 200, { ok: true, dryRun, ...summary })
+    let staleTrips = null
+    try {
+      staleTrips = await sweepStaleTrips(sb, { now, dryRun, stripe: deps.stripe })
+    } catch (error) {
+      console.error('[scheduled-dispatch-tick] stale trips', error?.message || error)
+      staleTrips = { error: 'stale_sweep_failed' }
+    }
+    return json(res, 200, { ok: true, dryRun, ...summary, staleTrips })
   } catch (error) {
     console.error('[scheduled-dispatch-tick]', error?.message || error)
     return json(res, 500, { error: error?.message || 'Dispatch tick failed' })
