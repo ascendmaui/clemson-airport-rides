@@ -3,6 +3,7 @@
  * Returns the pickup code only to that trip's rider or its matched driver.
  */
 import { admin, cors, json, parseBody, userFromAuth } from '../server/friendRideLib.js'
+import { clientErrorMessage } from '../server/clientError.js'
 import { readPickupBeacon } from '../server/pickupBeacon.js'
 
 function requestedTripId(req) {
@@ -29,6 +30,7 @@ export default async function handler(req, res, deps = {}) {
     const result = await readPickupBeacon(sb, user, requestedTripId(req))
     return json(res, result.status, result.body)
   } catch (err) {
-    return json(res, 500, { ok: false, error: err?.message || 'Could not load the pickup code' })
+    console.error('[pickup-beacon]', err?.message || err)
+    return json(res, 500, { ok: false, error: clientErrorMessage(err, 'Could not load the pickup code') })
   }
 }

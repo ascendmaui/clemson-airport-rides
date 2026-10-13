@@ -16,6 +16,7 @@ import {
 } from './driverPayouts.js'
 import { runScheduledDispatchTick } from '../backupDriverDispatch.js'
 import { sweepStaleTrips } from '../staleTripSweep.js'
+import { clientErrorMessage } from '../clientError.js'
 
 export default async function handler(req, res, deps = {}) {
   if (cors(req, res)) return
@@ -55,6 +56,6 @@ export default async function handler(req, res, deps = {}) {
     return json(res, 200, { ok: true, dryRun, ...summary, staleTrips })
   } catch (error) {
     console.error('[scheduled-dispatch-tick]', error?.message || error)
-    return json(res, 500, { error: error?.message || 'Dispatch tick failed' })
+    return json(res, 500, { error: clientErrorMessage(error, 'Dispatch tick failed') })
   }
 }
