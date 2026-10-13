@@ -59,6 +59,66 @@ function hapticFor(kind: Pulse) {
   }
 }
 
+function releasePlayer(player: AudioPlayer | null) {
+  if (!player) return
+  try {
+    player.release()
+  } catch {
+    /* already released, or the native player never came up */
+  }
+}
+
+function createCuePlayer(source: number, volume: number): AudioPlayer | null {
+  let player: AudioPlayer | null = null
+  try {
+    player = createAudioPlayer(source)
+    player.volume = volume
+    return player
+  } catch {
+    releasePlayer(player)
+    return null
+  }
+}
+
+function asThenable(value: unknown): Promise<unknown> | null {
+  if (value && typeof (value as { then?: unknown }).then === 'function') return value as Promise<unknown>
+  return null
+}
+
+/** seekTo/play can throw or reject when an asset fails to bind. Swallow both. */
+function safeSeekAndPlay(player: AudioPlayer) {
+  let pending: unknown
+  try {
+    pending = player.seekTo(0)
+  } catch {
+    return
+  }
+  const start = () => {
+    try {
+      const playing = player.play() as unknown
+      const task = asThenable(playing)
+      if (task) void task.then(() => {}, () => {})
+    } catch {
+      /* play() can throw on a broken native player */
+    }
+  }
+  try {
+    const task = asThenable(pending)
+    if (task) void task.then(start, () => {})
+    else start()
+  } catch {
+    /* attaching a handler to a broken thenable must not escape */
+  }
+}
+
+function fireNotification(kind: Pulse) {
+  try {
+    void Haptics.notificationAsync(hapticFor(kind)).catch(() => {})
+  } catch {
+    /* simulators can omit the motor */
+  }
+}
+
 export function FeedbackProvider({ children }: { children: ReactNode }) {
   const { sounds, rideAlerts } = useTheme()
   const soundsRef = useRef(sounds)
@@ -66,7 +126,7 @@ export function FeedbackProvider({ children }: { children: ReactNode }) {
   soundsRef.current = sounds
   alertsRef.current = rideAlerts
   const playerRef = useRef<AudioPlayer | null>(null)
-  // Distinct, quieter cues so accept and trip-complete never sound like a new offer.
+  // Accept and complete are created on first play. A bad asset must not crash startup or Start trip.
   const acceptRef = useRef<AudioPlayer | null>(null)
   const completeRef = useRef<AudioPlayer | null>(null)
   const goRef = useRef<AudioPlayer | null>(null)
@@ -75,48 +135,57 @@ export function FeedbackProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let alive = true
-    setAudioModeAsync({
-      playsInSilentMode: false,
-      interruptionMode: 'mixWithOthers',
-    }).catch(() => {})
-    const player = createAudioPlayer(requestSound)
-    player.volume = 0.35
-    const accept = createAudioPlayer(acceptSound)
-    accept.volume = 0.3
-    const complete = createAudioPlayer(completeSound)
-    complete.volume = 0.3
-    const go = createAudioPlayer(goSound)
-    go.volume = 0.7
-    const end = createAudioPlayer(endSound)
-    end.volume = 0.35
+    try {
+      void setAudioModeAsync({
+        playsInSilentMode: false,
+        interruptionMode: 'mixWithOthers',
+      }).catch(() => {})
+    } catch {
+      /* audio session setup can fail closed */
+    }
+    const player = createCuePlayer(requestSound, 0.35)
+    const go = createCuePlayer(goSound, 0.7)
+    const end = createCuePlayer(endSound, 0.35)
     if (alive) {
       playerRef.current = player
-      acceptRef.current = accept
-      completeRef.current = complete
       goRef.current = go
       endRef.current = end
     }
     return () => {
       alive = false
       if (pulseTimer.current) clearInterval(pulseTimer.current)
+      const requestPlayer = playerRef.current
+      const acceptPlayer = acceptRef.current
+      const completePlayer = completeRef.current
+      const goPlayer = goRef.current
+      const endPlayer = endRef.current
       playerRef.current = null
       acceptRef.current = null
       completeRef.current = null
       goRef.current = null
       endRef.current = null
-      player.release()
-      accept.release()
-      complete.release()
-      go.release()
-      end.release()
+      releasePlayer(requestPlayer)
+      if (acceptPlayer !== requestPlayer) releasePlayer(acceptPlayer)
+      if (completePlayer !== requestPlayer) releasePlayer(completePlayer)
+      releasePlayer(goPlayer)
+      releasePlayer(endPlayer)
     }
   }, [])
 
   const api = useMemo<FeedbackApi>(() => {
     function play(kind: Pulse = 'request') {
-      const player = kind === 'accept' ? acceptRef.current : kind === 'complete' ? completeRef.current : playerRef.current
-      if (!player) return
-      player.seekTo(0).then(() => player.play()).catch(() => {})
+      try {
+        if (kind === 'accept' || kind === 'complete') {
+          const ref = kind === 'accept' ? acceptRef : completeRef
+          const source = kind === 'accept' ? acceptSound : completeSound
+          if (!ref.current) ref.current = createCuePlayer(source, 0.3) ?? playerRef.current
+        }
+        const player = kind === 'accept' ? acceptRef.current : kind === 'complete' ? completeRef.current : playerRef.current
+        if (!player) return
+        safeSeekAndPlay(player)
+      } catch {
+        /* creation or playback must not escape pulse() */
+      }
     }
     function playerFor(sound: ShiftSound) {
       switch (sound) {
@@ -136,7 +205,7 @@ export function FeedbackProvider({ children }: { children: ReactNode }) {
         play: (sound) => {
           const player = playerFor(sound)
           if (!player) return
-          player.seekTo(0).then(() => player.play()).catch(() => {})
+          safeSeekAndPlay(player)
         },
         impact: (style) => {
           Haptics.impactAsync(impactStyle(style)).catch(() => {})
@@ -151,14 +220,18 @@ export function FeedbackProvider({ children }: { children: ReactNode }) {
     }
     function pulse(kind: Pulse, options?: PulseOptions) {
       if (kind === 'online') {
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {})
+        try {
+          void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {})
+        } catch {
+          /* simulators can omit the motor */
+        }
         if (soundsRef.current) play()
         return
       }
       const requestPlay = kind === 'request' ? playbackForTier(alertsRef.current, options?.tier) : null
       const vibrate = requestPlay ? requestPlay.vibrate : true
       const sound = requestPlay ? requestPlay.sound && soundsRef.current : soundsRef.current && (kind === 'accept' || kind === 'complete')
-      if (vibrate) Haptics.notificationAsync(hapticFor(kind)).catch(() => {})
+      if (vibrate) fireNotification(kind)
       if (sound) play(kind)
     }
     return {
