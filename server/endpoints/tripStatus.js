@@ -10,6 +10,16 @@ import { cancelDriverTrip } from '../driverCancel.js'
 import { endDriverTrip, recordTripHeartbeat } from '../driverEndTrip.js'
 import { insertTripEvent } from '../tripEvents.js'
 import { withActionReceipts } from '../actionReceipts.js'
+import { ensureTripPickupCode, viewerMayReadPickupCode } from '../pickupBeacon.js'
+
+async function matchedPickupCode(sb, user, trip) {
+  if (!viewerMayReadPickupCode(trip, user?.id)) return null
+  return ensureTripPickupCode(sb, trip.id)
+}
+
+function withPickupCode(body, pickupCode) {
+  return pickupCode ? { ...body, pickupCode } : body
+}
 
 export default async function handleTripStatus(req, res, deps = {}) {
   if (cors(req, res)) return
@@ -81,7 +91,8 @@ async function runTripStatus(req, res, deps = {}) {
     if (transition.error) return json(res, 409, { ok: false, code: transition.error, error: op === 'accept' ? 'That ride is no longer available' : transition.error, ...(transition.hint ? { hint: transition.hint } : {}) })
     if (transition.idempotent) {
       if (op === 'accept' && trip.driver_id !== user.id) return fail(409, 'offer_unavailable', 'That ride is no longer available')
-      return json(res, 200, { ok: true, trip, idempotent: true })
+      const pickupCode = op === 'accept' ? await matchedPickupCode(sb, user, trip) : null
+      return json(res, 200, withPickupCode({ ok: true, trip, idempotent: true }, pickupCode))
     }
     if (transition.via === 'wait') {
       const wait = await (deps.applyTripWait || applyTripWait)(sb, { action: op, tripId, actorId: user.id })
@@ -116,7 +127,8 @@ async function runTripStatus(req, res, deps = {}) {
     if (!saved.data) return fail(409, 'transition_conflict', op === 'accept' ? 'That ride is no longer available' : 'That ride changed. Refresh and try again.')
     const event = await insertTripEvent(sb, { trip_id: tripId, kind: transition.to, payload: { driver_id: user.id, from: trip.status, source: 'trip_status' } })
     if (event.error) return fail(500, 'trip_event_failed', event.error.message)
-    return json(res, 200, { ok: true, trip: saved.data })
+    const pickupCode = op === 'accept' ? await matchedPickupCode(sb, user, saved.data) : null
+    return json(res, 200, withPickupCode({ ok: true, trip: saved.data }, pickupCode))
   } catch (err) {
     const message = err.message || 'Trip update failed'
     const status = err.status || (err.code === '22P02' ? 400
