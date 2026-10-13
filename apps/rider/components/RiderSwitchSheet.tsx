@@ -3,6 +3,7 @@ import { Modal, Pressable, ScrollView, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { authedJson } from 'rides-native/apiClient'
 import { riderSwitchGuide } from '../../../shared/copy/riderSwitch.js'
+import { GlassSheet } from 'rides-native/glass'
 import { PrimaryButton } from '@/components/Button'
 import { supabase } from '@/lib/supabase'
 import type { Palette } from '@/lib/palette'
@@ -48,7 +49,7 @@ export function RiderSwitchSheet({
   onDone: (result: SwitchResult) => void
 }) {
   const insets = useSafeAreaInsets()
-  const { colors } = useTheme()
+  const { colors, scheme } = useTheme()
   const styles = useThemedStyles(makeStyles)
   const [preview, setPreview] = useState<SwitchPreview | null>(null)
   const [loading, setLoading] = useState(false)
@@ -91,7 +92,8 @@ export function RiderSwitchSheet({
   return (
     <Modal visible={open} animationType="slide" transparent onRequestClose={onClose}>
       <Pressable accessibilityRole="button" accessibilityLabel="Close" onPress={onClose} style={styles.backdrop}>
-        <Pressable accessibilityRole="none" onPress={() => {}} style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, 16), backgroundColor: colors.card }]}>
+        <Pressable accessibilityRole="none" onPress={() => {}} style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, 16), backgroundColor: 'transparent', overflow: 'hidden' }]}>
+          <GlassSheet app="rider" scheme={scheme} pointerEvents="none" style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }} />
           <View style={[styles.handle, { backgroundColor: colors.track }]} />
           <ScrollView contentContainerStyle={styles.content}>
             <Text style={styles.kicker}>BEFORE PICKUP</Text>

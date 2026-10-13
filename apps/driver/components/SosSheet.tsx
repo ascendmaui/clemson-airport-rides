@@ -4,6 +4,7 @@ import { Linking, Modal, Pressable, ScrollView, Share, StyleSheet, Text, View } 
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { buildSosText, CUPD_PHONE_DISPLAY, isActiveRideStatus, logSosEvent, sosChannelHref, tripShareMessage, type SosChannel } from 'rides-native/safety.js'
 import { supabase } from '@/lib/supabase'
+import { GlassSheet } from 'rides-native/glass'
 import { useTheme } from '@/lib/theme'
 import type { Palette } from '@/lib/palette'
 
@@ -83,7 +84,8 @@ export function SosSheet({ open, onClose, trip, userId, fix }: {
   return (
     <Modal visible={open} transparent animationType="slide" onRequestClose={onClose}>
       <View style={styles.overlay}>
-        <View accessibilityViewIsModal style={[styles.sheet, { paddingBottom: insets.bottom + 16, maxHeight: '90%' }]}>
+        <View accessibilityViewIsModal style={[styles.sheet, { paddingBottom: insets.bottom + 16, maxHeight: '90%', backgroundColor: 'transparent', overflow: 'hidden' }]}>
+          <GlassSheet app="driver" scheme={scheme} pointerEvents="none" style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }} />
           <ScrollView contentContainerStyle={styles.content}>
             <View style={styles.header}>
               <Text accessibilityRole="header" style={styles.title}>Emergency SOS</Text>

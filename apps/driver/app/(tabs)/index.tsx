@@ -18,6 +18,7 @@ import { useFeedback } from '@/lib/feedback'
 import { notifyAcceptedRide, setRideAlertSurface } from '@/lib/push'
 import { shownCents } from '@/lib/shown'
 import { supabase } from '@/lib/supabase'
+import { GlassSurface } from 'rides-native/glass'
 import { useTheme } from '@/lib/theme'
 import { BOTTOM_CLUSTER_SHIFT, bottomClusterTranslateY } from '@/lib/bottomCluster'
 import { driverPresence, goOffline, goOnline, usePresence } from '@/lib/presence'
@@ -551,13 +552,14 @@ export default function DriverHome() {
           <CircleButton icon="inbox" label="Inbox" onPress={() => router.push('/inbox')} />
           <Pressable
             onPress={() => setPeek((open: boolean) => !open)}
-            style={[styles.pill, shadow, { backgroundColor: colors.card }]}
+            style={[styles.pill, shadow, { backgroundColor: 'transparent', overflow: 'hidden' }]}
             accessibilityRole="button"
             accessibilityLabel="Earnings"
             accessibilityHint="Expands today's and this week's earnings preview"
             accessibilityState={{ expanded: peek }}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
+            <GlassSurface app="driver" scheme={scheme} variant="chip" pointerEvents="none" style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }} />
             <Text style={[styles.pillText, { color: colors.title }]}>{shownCents(todayCents, earningsPrivate)}</Text>
             <Text style={{ color: colors.inkSecondary, fontWeight: '800' }}>{peek ? '▴' : '▾'}</Text>
           </Pressable>
@@ -842,11 +844,12 @@ export default function DriverHome() {
               </View>
             </View>
             <View
-              style={[styles.bar, shadow, { backgroundColor: colors.card }]}
+              style={[styles.bar, shadow, { backgroundColor: 'transparent', overflow: 'hidden' }]}
               accessibilityLiveRegion="polite"
               accessibilityElementsHidden={!online}
               pointerEvents={online ? 'auto' : 'none'}
             >
+              <GlassSurface app="driver" scheme={scheme} variant="header" pointerEvents="none" accent="orange" style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }} />
               <CircleButton icon="options" label="Ride queue" onPress={() => router.push('/queue')} />
               <Text style={[styles.barText, { color: colors.title }]} accessibilityLiveRegion="polite">{online ? statusLine : ''}</Text>
               <CircleButton icon="list" label="Open queue" onPress={() => router.push('/queue')} />
