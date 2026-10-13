@@ -325,6 +325,22 @@ test('terms limit liability and privacy states the platform data limits', () => 
   assert.match(termsText, /Section 20\.6\. Force majeure/)
   assert.match(termsText, /15 U\.S\.C\. § 7001/)
   assert.match(termsText, /electronic signature/)
+  for (const heading of [
+    'Article 12. Assumption of Risk',
+    'Article 13. Disclaimers',
+    'Article 14. Limitation of Liability',
+    'Article 15. Release and Waiver',
+  ]) {
+    const section = TERMS_SECTIONS.find((item) => item.heading === heading)
+    const body = (section?.paragraphs || []).join('\n')
+    assert.match(body, /to the fullest extent permitted by law/i)
+    assert.match(body, /motor vehicle accidents, collisions, and crashes/i)
+    assert.match(body, /bodily injury, death, or property damage/i)
+    assert.match(body, /before, during, or after any Ride/i)
+  }
+  assert.match(termsText, /Accident claims shall be directed to the applicable Driver/)
+  assert.match(termsText, /statutorily required TNC insurance coverage, not to the Company/)
+  assert.match(termsText, /report an accident promptly through the app/)
   assert.match(privacyText, /under 18/)
   assert.match(privacyText, /state privacy law/)
 

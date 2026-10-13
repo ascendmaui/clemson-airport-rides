@@ -5,11 +5,11 @@
 
 import { PRIVACY_SECTIONS, TERMS_SECTIONS } from './legalCopy.js'
 
-export const DRIVER_CLICKWRAP_VERSION = 'driver-clickwrap-2026-10-13-r2'
+export const DRIVER_CLICKWRAP_VERSION = 'driver-clickwrap-2026-10-13-r3'
 
 export const CLICKWRAP_STORAGE_KEY = 'clemson.driver.clickwrap.version'
 
-export const DRIVER_CLICKWRAP_SUMMARY = 'You are an independent contractor. You have no employment, agency, or partnership with Clemson RIDES, and you are solely responsible for your conduct, vehicle, insurance, and legal compliance, including the South Carolina transportation-network acknowledgments. The platform may warn, suspend, or deactivate you, or forfeit incentives, at its sole discretion. To the fullest extent permitted by law, the platform is not liable for a legal claim arising from your acts or omissions, and you indemnify and defend the platform. Checking the box and tapping I Agree is your electronic signature under the E-SIGN Act.'
+export const DRIVER_CLICKWRAP_SUMMARY = 'You are an independent contractor. You have no employment, agency, or partnership with Clemson RIDES, and you are solely responsible for your conduct, vehicle, insurance, and legal compliance, including the South Carolina transportation-network acknowledgments. The platform may warn, suspend, or deactivate you, or forfeit incentives, at its sole discretion. To the fullest extent permitted by law, the platform is not liable for a legal claim arising from your acts or omissions, including a motor vehicle accident, collision, or crash and any bodily injury, death, or property damage before, during, or after a ride, and you indemnify and defend the platform. Accident claims go to your insurance and any statutorily required TNC coverage, not to the platform. Checking the box and tapping I Agree is your electronic signature under the E-SIGN Act.'
 
 export function agreeButtonDisabled(checked) {
   return checked !== true
