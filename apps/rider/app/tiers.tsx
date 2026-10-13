@@ -1,3 +1,4 @@
+import { GlassButton, GlassCard, GlassSheet } from 'rides-native/glass'
 import { Glyph } from 'rides-native/icons'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useEffect, useState } from 'react'
@@ -13,6 +14,7 @@ import { loadTigerPass, TIGER_PASS_NAME, type TigerPassStatus } from 'rides-nati
 import { oneParam } from '@/lib/oneParam'
 import { RideTypeInfoButton } from 'rides-native/RideTypeSheet'
 import { bookableRideTiers, formatUsd } from 'rides-native/places.js'
+import { standardCardTiming } from '../../../shared/rideOptions.js'
 import { rideTypeIconName } from 'rides-native/rideTypeIcons.js'
 import { displayTierPrice, fetchRideQuote, studentSurfaceCopy, withTigerPassQuote, type AirportQuote } from 'rides-native/riderMoney.js'
 import { useStudentStatus } from '@/lib/useStudentStatus'
@@ -53,7 +55,7 @@ export default function RideTiers() {
   const [selected, setSelected] = useState(tiers.some((tier) => tier.id === presetTier) ? presetTier : tiers[0].id)
   const [seats, setSeats] = useState(presetSeats)
   const [promptOpen, setPromptOpen] = useState(false)
-  const { colors } = useTheme()
+  const { colors, scheme } = useTheme()
   const styles = useThemedStyles(makeStyles)
   const listMotion = useEnterMotion(14)
 
@@ -115,16 +117,18 @@ export default function RideTiers() {
   return (
     <View style={[styles.screen, { paddingTop: insets.top + 8 }]}>
       <View style={styles.header}>
-        <Pressable
+        <GlassButton
+          app="rider"
+          scheme={scheme}
+          variant="fab"
           onPress={() => router.back()}
-          style={[styles.back, lift(colors, 'rest')]}
-          accessibilityRole="button"
+          style={styles.back}
           accessibilityLabel="Back"
           accessibilityHint="Returns to confirm pickup"
           hitSlop={8}
         >
           <Glyph name="back" size={20} color={colors.title} accessibilityLabel="Back" />
-        </Pressable>
+        </GlassButton>
         <View style={styles.headerCopy}>
           <Text style={styles.kicker}>To {dest}</Text>
           <Text style={styles.sub}>Pickup {pickup}</Text>
@@ -159,45 +163,56 @@ export default function RideTiers() {
       <Animated.ScrollView style={[{ flex: 1 }, listMotion]} contentContainerStyle={styles.list} showsVerticalScrollIndicator={false}>
         {tiers.map((tier) => {
           const on = tier.id === selected
+          const serverTier = (quote?.tiers || []).find((row) => row.id === tier.id) || null
           const quoted = tierQuote(tier, {
             isStudent: student.verified,
-            serverTier: (quote?.tiers || []).find((row) => row.id === tier.id) || null,
+            serverTier,
             pass,
             passName: quote?.tigerPassName || pass?.name || TIGER_PASS_NAME,
           })
+          const timing = tier.id === 'standard'
+            ? standardCardTiming({
+              etaMinutes: serverTier?.etaMinutes ?? quote?.etaMinutes ?? etaMinutesFromLabel(tier.eta),
+              tripMinutes: serverTier?.tripMinutes ?? quote?.tripMinutes,
+            })
+            : ''
           return (
             <Pressable
               key={tier.id}
               onPress={() => setSelected(tier.id)}
               style={({ pressed }) => [
                 styles.row,
-                lift(colors, 'rest'),
+                tier.id === 'standard' && styles.rowStack,
                 tier.id === 'comfort' && styles.rowFleet,
                 on && styles.rowOn,
                 pressStyle(pressed),
               ]}
               accessibilityRole="button"
-              accessibilityLabel={`${tier.name}, ${formatUsd(quoted.price)}, ${tier.eta}, ${tier.meta}`}
+              accessibilityLabel={timing ? `${tier.name}, ${formatUsd(quoted.price)}, ${timing}` : `${tier.name}, ${formatUsd(quoted.price)}, ${tier.eta}, ${tier.meta}`}
               accessibilityHint="Selects this fare"
               accessibilityState={{ selected: on }}
             >
-              <View style={[styles.iconWell, on && styles.iconWellOn]}>
-                <Glyph name={rideTypeIconName(tier.id)} size={22} color={on ? colors.orange : colors.purple} />
+              <GlassCard app="rider" scheme={scheme} pointerEvents="none" selected={on} style={styles.cardGlass} />
+              <View style={styles.rowMain}>
+                <View style={[styles.iconWell, on && styles.iconWellOn]}>
+                  <Glyph name={rideTypeIconName(tier.id)} size={22} color={on ? colors.orange : colors.purple} />
+                </View>
+                <View style={styles.tierCopy}>
+                  <Text style={styles.name}>{tier.name}</Text>
+                  <Text style={styles.meta}>{tier.eta} · {tier.meta}</Text>
+                  {quoted.label ? <Text style={styles.discount}>{quoted.label}</Text> : null}
+                </View>
+                <View style={styles.priceCol}>
+                  <Text style={styles.price}>{formatUsd(quoted.price)}</Text>
+                  {quoted.discount > 0 ? <Text style={styles.was}>{formatUsd(quoted.was)}</Text> : null}
+                </View>
               </View>
-              <View style={styles.tierCopy}>
-                <Text style={styles.name}>{tier.name}</Text>
-                <Text style={styles.meta}>{tier.eta} · {tier.meta}</Text>
-                {quoted.label ? <Text style={styles.discount}>{quoted.label}</Text> : null}
-              </View>
-              <View style={styles.priceCol}>
-                <Text style={styles.price}>{formatUsd(quoted.price)}</Text>
-                {quoted.discount > 0 ? <Text style={styles.was}>{formatUsd(quoted.was)}</Text> : null}
-              </View>
+              {timing ? <Text style={styles.timing}>{timing}</Text> : null}
             </Pressable>
           )
         })}
       </Animated.ScrollView>
-      <View style={[styles.footer, lift(colors, 'bar'), { paddingBottom: Math.max(insets.bottom, 16) }]}>
+      <GlassSheet app="rider" scheme={scheme} style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 16) }]}>
         {selected === 'carpool' ? (
           <View style={{ flexDirection: 'row', gap: 8, marginBottom: 10 }}>
             {[1, 2].map((count) => (
@@ -223,7 +238,7 @@ export default function RideTiers() {
           </View>
         ) : null}
         <PrimaryButton label={selected === 'comfort' ? 'Request Extra Comfort' : selected === 'carpool' ? 'Request Carpool' : 'Choose a driver'} onPress={onConfirm} tone={selected === 'comfort' ? 'purple' : 'orange'} />
-      </View>
+      </GlassSheet>
       <SignInToBookSheet
         open={promptOpen}
         onClose={() => setPromptOpen(false)}
@@ -238,6 +253,13 @@ export default function RideTiers() {
       />
     </View>
   )
+}
+
+function etaMinutesFromLabel(label: string): number | null {
+  const match = /(\d+)/.exec(label || '')
+  if (!match) return null
+  const minutes = Number(match[1])
+  return Number.isFinite(minutes) && minutes > 0 ? minutes : null
 }
 
 function tierQuote(
@@ -284,7 +306,7 @@ function makeStyles(colors: Palette) {
     screen: { flex: 1, backgroundColor: colors.background },
     header: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 12, paddingHorizontal: 20, paddingBottom: 12 },
     headerCopy: { flex: 1 },
-    back: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.card, alignItems: 'center' as const, justifyContent: 'center' as const },
+    back: { width: 44, height: 44, borderRadius: 22, padding: 0, alignItems: 'center' as const, justifyContent: 'center' as const },
     backLabel: { fontSize: 18, color: colors.title, fontWeight: '700' as const },
     kicker: { fontSize: 22, fontWeight: '700' as const, letterSpacing: -0.4, color: colors.title },
     sub: { color: colors.inkSecondary, fontSize: 13, lineHeight: 18, marginTop: 2 },
@@ -302,16 +324,18 @@ function makeStyles(colors: Palette) {
     promoDetail: { color: colors.inkSecondary, fontSize: 13, lineHeight: 18, marginTop: 4 },
     passLine: { marginHorizontal: 20, marginBottom: 8 },
     list: { paddingHorizontal: 20, paddingTop: 8, paddingBottom: 20, gap: 10 },
+    cardGlass: { position: 'absolute' as const, top: 0, right: 0, bottom: 0, left: 0 },
     row: {
       flexDirection: 'row' as const,
       alignItems: 'center' as const,
       gap: 12,
-      backgroundColor: colors.card,
       borderRadius: 18,
       padding: 14,
-      borderWidth: 1.5,
-      borderColor: 'transparent',
+      overflow: 'hidden' as const,
     },
+    rowStack: { flexDirection: 'column' as const, alignItems: 'stretch' as const },
+    rowMain: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 12 },
+    timing: { color: colors.inkSecondary, fontSize: 12, fontWeight: '600' as const, marginTop: 8 },
     rowOn: { borderColor: colors.orange, backgroundColor: colors.orangeSoft },
     rowFleet: { borderColor: colors.purple, backgroundColor: colors.purpleSoft },
     iconWell: {

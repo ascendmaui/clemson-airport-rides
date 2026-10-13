@@ -1,3 +1,5 @@
+import { riderDriverFirstName } from '../../shared/riderDriverPrivacy.js'
+
 /**
  * Driver-side "Ride canceled" state: what to say and how to get back to offers
  * when the rider cancels, switches away, ends early, or no-shows.
@@ -25,7 +27,7 @@ export function nextDriverTripCard(previous, row) {
 
 export function driverCanceledView(card) {
   if (!card) return null
-  const first = String(card.firstName || '').trim() || 'The rider'
+  const first = riderDriverFirstName(card.firstName, 'The rider') || 'The rider'
   if (card.released) {
     return {
       title: 'Ride canceled',

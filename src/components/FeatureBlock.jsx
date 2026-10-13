@@ -1,4 +1,5 @@
 import { useId, useState } from 'react'
+import { GlassGlyph } from './GlassGlyph'
 import { MarketingPhoto } from './MarketingPhoto'
 
 export function StatusPill({ status }) {
@@ -20,6 +21,7 @@ export function FeatureBlock({ feature, onBook }) {
   return (
     <article className="mkt-card mkt-feature mkt-peace">
       {feature.imageId ? <MarketingPhoto id={feature.imageId} /> : null}
+      <GlassGlyph name={feature.id} />
       <StatusPill status={feature.status} />
       <h3>{feature.title}</h3>
       <p><strong>What it is. </strong>{feature.what}</p>

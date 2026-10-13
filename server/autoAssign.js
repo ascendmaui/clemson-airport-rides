@@ -10,10 +10,9 @@ import { boostAssignableDrivers } from './dispatchBoost.js'
 /**
  * Approved drivers who are online, John then Kim then everyone else.
  * Email is used for rank and is not returned.
- * Extra Comfort keeps drivers whose vehicle class qualifies.
- * Carpool uses the same approved drivers as Standard.
- * TODO: same-direction pooling of two carpool requests is not built;
- * each carpool booking is offered to one standard-eligible vehicle.
+ * Extra Comfort keeps drivers whose vehicle service_class is comfort.
+ * Carpool uses the same approved drivers as Standard. Nearby riders are
+ * grouped separately; demo cars never count toward that match.
  */
 export async function listAssignableDrivers(sb, {
   tier = 'standard',

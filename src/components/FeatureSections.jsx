@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { GlassGlyph } from './GlassGlyph'
 import { FEATURES, FEATURES_HEADING, ONLY_AT_CLEMSON_RIDES, featureAnchor } from '../content/features.js'
 
 const DESKTOP_QUERY = '(min-width: 960px)'
@@ -53,6 +54,7 @@ export function FeatureSections() {
         {FEATURES.map((item) => (
           <article key={item.id} id={featureAnchor(item.id)} className="mkt-card mkt-feature">
             {item.exclusive ? <p className="mkt-kicker">{ONLY_AT_CLEMSON_RIDES}</p> : null}
+            <GlassGlyph name={item.id} />
             <h3>{item.title}</h3>
             <div className="mkt-part">
               <p className="mkt-kicker">What it is</p>

@@ -85,6 +85,57 @@ export const STUDENT_DISCOUNT_BPS = 1000
 export const CARPOOL_DISCOUNT_BPS = 1500
 
 /**
+ * Wait & Save is this fraction of the Standard fare (basis points).
+ * 8200 is 18% under Standard, inside the 15–20% band. Override with
+ * WAIT_SAVE_MULTIPLIER as a fraction (0.80–0.85) or as basis points.
+ * quoteFare uses an explicit waitDiscountBps when a discount already exists.
+ */
+export const WAIT_SAVE_MULTIPLIER_BPS = 8200
+
+/** Extra Comfort is this multiple of Standard. 14000 is 1.40×, inside 1.3–1.5×. */
+export const COMFORT_FARE_MULTIPLIER_BPS = 14000
+
+/** Carpool per-seat fare is half of Standard when 3–4 riders split. */
+export const CARPOOL_SEAT_FRACTION_BPS = 5000
+
+function boundedBps(envName, fallback, min, max) {
+  const raw = process.env[envName]
+  if (raw == null || String(raw).trim() === '') return fallback
+  const n = Number(raw)
+  if (!Number.isFinite(n) || n <= 0) return fallback
+  const bps = n <= 5 ? Math.round(n * 10000) : Math.round(n)
+  if (bps < min || bps > max) return fallback
+  return bps
+}
+
+/**
+ * Scale applied to the metered Standard fare for a ride tier.
+ * Standard stays 10000. Wait uses an existing discount when one is passed,
+ * otherwise the configurable multiplier. Comfort and Carpool use their constants.
+ */
+export function tierScaleBps(tier, { waitDiscountBps = null } = {}) {
+  const id = String(tier ?? 'standard').trim().toLowerCase()
+  if (id === 'wait') {
+    const existing = waitDiscountBps == null || waitDiscountBps === ''
+      ? null
+      : Math.round(Number(waitDiscountBps))
+    if (existing != null && Number.isFinite(existing) && existing > 0 && existing < 10000) {
+      return 10000 - existing
+    }
+    return boundedBps('WAIT_SAVE_MULTIPLIER', WAIT_SAVE_MULTIPLIER_BPS, 8000, 8500)
+  }
+  if (id === 'comfort') {
+    return boundedBps('COMFORT_FARE_MULTIPLIER', COMFORT_FARE_MULTIPLIER_BPS, 13000, 15000)
+  }
+  if (id === 'carpool') return CARPOOL_SEAT_FRACTION_BPS
+  return 10000
+}
+
+export function scaleCents(cents, bps) {
+  return Math.round((Math.round(Number(cents) || 0) * Math.round(Number(bps) || 0)) / 10000)
+}
+
+/**
  * Prepaid packs. discountBps is what rides cost when THIS lot is spent.
  * $100 → 10% is the required anchor. Top tier stays inside the 10–15% band.
  */
@@ -382,6 +433,7 @@ export function quoteFare({
   isCarpool = false,
   isStudent = false,
   tier = 'standard',
+  waitDiscountBps = null,
   useCredits = false,
   creditLots = [],
 } = {}) {
@@ -397,12 +449,17 @@ export function quoteFare({
   const meteredCents = FARE_CARD.baseCents + FARE_CARD.bookingFeeCents + distanceCents + timeCents
   const minFareApplied = meteredCents < FARE_CARD.minFareCents
   const rawCents = Math.max(FARE_CARD.minFareCents, meteredCents)
-  const vehicleMul = Math.max(0, Number(vehicleMultiplier) || 1)
-  const classedCents = Math.round(rawCents * vehicleMul)
+  const tierId = String(tier ?? 'standard').trim().toLowerCase() || 'standard'
+  const scaleBps = tierScaleBps(tierId, { waitDiscountBps })
+  const callerMul = Math.max(0, Number(vehicleMultiplier) || 1)
+  const vehicleMul = Math.round(callerMul * scaleBps) / 10000
+  const classedCents = Math.round(Math.round(rawCents * callerMul) * scaleBps / 10000)
   const surgeMul = clampSurge(surgeMultiplier)
   const surgedCents = Math.round(classedCents * surgeMul)
 
-  const sharedSeat = Boolean(isCarpool) || String(tier ?? '').trim().toLowerCase() === 'carpool'
+  // Friend-ride carpool keeps CARPOOL_DISCOUNT_BPS. The ride-tier carpool
+  // price is the seat fraction above, so it is not discounted a second time.
+  const sharedSeat = Boolean(isCarpool) && tierId !== 'carpool'
   const carpool = sharedSeat
     ? percentOffCents(surgedCents, CARPOOL_DISCOUNT_BPS)
     : { amountCents: surgedCents, discountCents: 0, bps: 0 }
@@ -442,6 +499,7 @@ export function quoteFare({
       min_fare_applied: minFareApplied,
       subtotal_cents: classedCents,
       vehicle_multiplier: vehicleMul,
+      tier_scale_bps: scaleBps,
       surge_multiplier: surgeMul,
       surge_cents: surgedCents - classedCents,
       surged_cents: surgedCents,

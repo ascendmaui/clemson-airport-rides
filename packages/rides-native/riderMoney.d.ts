@@ -16,7 +16,9 @@ export type AirportQuote = {
   tigerPassDiscountBps?: number
   tigerPassDiscountCents?: number
   preferredCarTypes?: string[]
-  tiers?: { id: string; fareCents: number; discountCents?: number; tigerPassApplied?: boolean; tigerPassDiscountCents?: number }[]
+  etaMinutes?: number | null
+  tripMinutes?: number | null
+  tiers?: { id: string; fareCents: number; discountCents?: number; tigerPassApplied?: boolean; tigerPassDiscountCents?: number; etaMinutes?: number | null; tripMinutes?: number | null }[]
 }
 
 export function withTigerPassQuote<T extends { fareCents?: number; depositCents?: number; tigerPassApplied?: boolean }>(

@@ -13,12 +13,13 @@ import { ActiveTripResume } from '@/components/ActiveTripResume'
 import { DriverMoments } from '@/components/DriverMoments'
 import { LostItemBanner } from 'rides-native/LostItemBanner.jsx'
 import { ToastHost } from 'rides-native/ToastHost.jsx'
-import { registerDriverPush, setRideAlertSurface } from '@/lib/push'
+import { registerDriverPush, setRideAlertSurface, tripIdFromNotificationData } from '@/lib/push'
 import { supabase } from '@/lib/supabase'
 import { ThemeProvider, useTheme } from '@/lib/theme'
 import { ProfileRequiredGate } from 'rides-native/PartyScreens'
 import { PasswordRecoveryListener } from '@/lib/passwordRecovery'
 import { reconcileTripBackgroundLocation } from '@/lib/backgroundLocation'
+import { DriverAgreementPrompt } from '@/components/DriverAgreementPrompt'
 
 /** Shared glass toast (packages/rides-native/ToastHost). */
 function ToastMount() {
@@ -83,14 +84,23 @@ function PushBridge() {
       return undefined
     }
     registerDriverPush(supabase, user.id).catch(() => {})
-    const sub = Notifications.addNotificationResponseReceivedListener((response: Notifications.NotificationResponse) => {
-      const tripId = response.notification.request.content.data?.tripId
-      if (typeof tripId === 'string' && tripId) {
+    const opened = new Set<string>()
+    const openFromPush = (response: Notifications.NotificationResponse | null) => {
+      if (!response) return
+      const key = response.notification.request.identifier || ''
+      if (key && opened.has(key)) return
+      if (key) opened.add(key)
+      const tripId = tripIdFromNotificationData(response.notification.request.content.data)
+      if (tripId) {
         router.push({ pathname: '/trip', params: { id: tripId } })
         return
       }
       router.push('/queue')
-    })
+    }
+    const sub = Notifications.addNotificationResponseReceivedListener(openFromPush)
+    // A tap that launches a closed app is already the last response when this listener attaches.
+    const readLast = (Notifications as { getLastNotificationResponseAsync?: () => Promise<Notifications.NotificationResponse | null> }).getLastNotificationResponseAsync
+    readLast?.().then(openFromPush).catch(() => {})
     return () => sub.remove()
   }, [router, user])
   return null
@@ -125,8 +135,10 @@ export default function RootLayout() {
               <PasswordRecoveryListener />
               <PushBridge />
               <OfferBridge />
-              <ThemedStack />
-              <ActiveTripResume />
+              <DriverAgreementPrompt>
+                <ThemedStack />
+                <ActiveTripResume />
+              </DriverAgreementPrompt>
               <ToastMount />
               <DriverMoments />
             </Gate>

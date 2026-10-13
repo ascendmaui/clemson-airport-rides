@@ -15,6 +15,7 @@ import { supabase } from '@/lib/supabase'
 import { newRideAlertAllowed } from 'rides-native/offerAlertGate.js'
 import { driverAlertPrefs } from '@/lib/quietHours'
 import { useTheme } from '@/lib/theme'
+import { GlassCard } from 'rides-native/glass'
 import { GlassBadge } from 'rides-native/icons'
 import { rideTypeIconName } from 'rides-native/rideTypeIcons.js'
 import { acceptTrip, loadDriverDesk, markSearchingOffers, subscribeTrips } from 'rides-native/driverDesk'
@@ -192,7 +193,7 @@ export function OfferBridge() {
   if (left === 0 && now - banner.shownAt > EXCLUSIVE_SECONDS * 1000 + 400) return null
   return (
     <View pointerEvents="box-none" style={[styles.wrap, { top: insets.top + 8 }]}>
-      <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.orange }]}>
+      <GlassCard app="driver" scheme={scheme} selected style={[styles.card, { backgroundColor: colors.card, borderColor: colors.orange }]}>
         <Pressable
           onPress={() => {
             setBanner(null)
@@ -208,7 +209,7 @@ export function OfferBridge() {
           <Text style={[styles.count, { color: colors.orange }]}>{left}s to accept</Text>
         </Pressable>
         <WorthItLegend hourlyCents={banner.hourlyCents} colors={colors} />
-      </View>
+      </GlassCard>
       <Pressable
         onPress={() => {
           // The driver has seen it: stop the 1.5 s buzz/chime loop right away.
@@ -219,8 +220,9 @@ export function OfferBridge() {
         }}
         accessibilityRole="button"
         accessibilityLabel={`${banner.title}. ${banner.body}. ${left} seconds to accept.`}
-        style={[styles.card, { backgroundColor: colors.card, borderColor: colors.orange }]}
+        style={[styles.card, { backgroundColor: 'transparent', borderColor: colors.orange, overflow: 'hidden' }]}
       >
+        <GlassCard app="driver" scheme={scheme} pointerEvents="none" selected style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }} />
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
           <GlassBadge name={rideTypeIconName(banner.tier || 'standard')} size={32} tone="orange" scheme={scheme} active />
           <Text style={[styles.kicker, { color: colors.purple }]}>RIDE REQUEST</Text>
