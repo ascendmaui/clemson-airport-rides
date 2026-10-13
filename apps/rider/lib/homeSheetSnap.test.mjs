@@ -1,0 +1,109 @@
+import assert from 'node:assert/strict'
+import test from 'node:test'
+import { readFileSync } from 'node:fs'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
+import {
+  HOME_SHEET_BOTTOM_PADDING,
+  HOME_SHEET_HANDLE_FALLBACK,
+  HOME_SHEET_MAP_MAX_RATIO,
+  HOME_SHEET_MAP_MIN_RATIO,
+  HOME_SHEET_SEARCH_FALLBACK,
+  HOME_SHEET_SNAP_PROJECTION_S,
+  HOME_SHEET_SPRING,
+  buildHomeSheetSnapPoints,
+  collapsedSheetHeight,
+  collapsedSheetPadding,
+  expandedSheetHeights,
+  homeSheetSnapPoints,
+  snapHomeSheet,
+} from './homeSheetSnap.ts'
+
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..')
+
+function read(rel) {
+  return readFileSync(path.join(root, rel), 'utf8')
+}
+
+test('collapsed snap height is the search field plus padding', () => {
+  assert.equal(collapsedSheetHeight(56, 20), 76)
+  assert.equal(collapsedSheetHeight(106, 38), 144)
+  assert.equal(collapsedSheetHeight(HOME_SHEET_SEARCH_FALLBACK, collapsedSheetPadding(HOME_SHEET_HANDLE_FALLBACK, HOME_SHEET_BOTTOM_PADDING)), 144)
+  assert.equal(collapsedSheetHeight(-8, 12), 12)
+  assert.equal(collapsedSheetHeight(40, -4), 40)
+})
+
+test('snap points keep a collapsed search-field height and the existing expanded map sizes', () => {
+  assert.equal(HOME_SHEET_MAP_MIN_RATIO, 0.38)
+  assert.equal(HOME_SHEET_MAP_MAX_RATIO, 0.64)
+  assert.deepEqual(expandedSheetHeights(800, 80), [208, 416])
+  assert.equal(Math.round(800 * 0.38), 304)
+  assert.equal(800 - 80 - 304, 416)
+  assert.equal(800 - 80 - Math.round(800 * 0.64), 208)
+
+  const points = buildHomeSheetSnapPoints({
+    windowHeight: 800,
+    tabBarHeight: 80,
+    searchFieldHeight: 106,
+    handleHeight: 26,
+    bottomPadding: HOME_SHEET_BOTTOM_PADDING,
+  })
+  assert.equal(points[0], collapsedSheetHeight(106, collapsedSheetPadding(26, HOME_SHEET_BOTTOM_PADDING)))
+  assert.deepEqual(points, [144, 208, 416])
+
+  assert.deepEqual(homeSheetSnapPoints({
+    searchFieldHeight: 64,
+    padding: 28,
+    expandedHeights: [416, 50, 208, 208, Number.NaN],
+  }), [92, 208, 416])
+})
+
+test('release snaps to collapsed or expanded from velocity and position', () => {
+  const snapPoints = [144, 208, 416]
+  assert.equal(HOME_SHEET_SNAP_PROJECTION_S, 0.35)
+
+  const resting = (position) => snapHomeSheet({ position, velocity: 0, snapPoints })
+  assert.deepEqual(resting(150), { height: 144, detent: 'collapsed' })
+  assert.deepEqual(resting(190), { height: 208, detent: 'expanded' })
+  assert.deepEqual(resting(400), { height: 416, detent: 'expanded' })
+  // Exactly between collapsed and the shorter expanded sheet, stay expanded.
+  assert.deepEqual(resting(176), { height: 208, detent: 'expanded' })
+
+  // Same spot, opposite flicks: down collapses, up opens the full sheet.
+  assert.deepEqual(snapHomeSheet({ position: 200, velocity: 400, snapPoints }), { height: 144, detent: 'collapsed' })
+  assert.deepEqual(snapHomeSheet({ position: 200, velocity: -800, snapPoints }), { height: 416, detent: 'expanded' })
+
+  // Same downward speed lands on different detents depending on where the finger is.
+  assert.deepEqual(snapHomeSheet({ position: 416, velocity: 500, snapPoints }), { height: 208, detent: 'expanded' })
+  assert.deepEqual(snapHomeSheet({ position: 180, velocity: 500, snapPoints }), { height: 144, detent: 'collapsed' })
+
+  // A firm swipe down from the open sheet leaves only the collapsed search field.
+  assert.deepEqual(snapHomeSheet({ position: 416, velocity: 2000, snapPoints }), { height: 144, detent: 'collapsed' })
+  // A firm swipe up from the peek opens the tallest expanded sheet.
+  assert.deepEqual(snapHomeSheet({ position: 144, velocity: -2000, snapPoints }), { height: 416, detent: 'expanded' })
+
+  assert.deepEqual(snapHomeSheet({ position: 10, velocity: Number.NaN, snapPoints: [] }), { height: 0, detent: 'collapsed' })
+  assert.deepEqual(snapHomeSheet({ position: 80, velocity: 50, snapPoints: [80] }), { height: 80, detent: 'collapsed' })
+})
+
+test('the spring config is a clamped UI-thread spring', () => {
+  assert.equal(typeof HOME_SHEET_SPRING.damping, 'number')
+  assert.equal(typeof HOME_SHEET_SPRING.stiffness, 'number')
+  assert.equal(HOME_SHEET_SPRING.overshootClamping, true)
+})
+
+test('rider home wires the snap helper through gesture-handler and does not touch the driver swipe', () => {
+  const home = read('apps/rider/app/index.tsx')
+  const hook = read('apps/rider/lib/useHomeSheetSnap.ts')
+  const swipe = read('apps/driver/components/SwipeToStart.tsx')
+  assert.match(home, /useHomeSheetSnap/)
+  assert.match(home, /expandFromSearch/)
+  assert.doesNotMatch(home, /PanResponder/)
+  assert.match(hook, /from 'react-native-gesture-handler'/)
+  assert.match(hook, /withSpring\([^)]*HOME_SHEET_SPRING/)
+  assert.match(hook, /snapHomeSheet\(/)
+  assert.match(hook, /tapHaptic/)
+  assert.match(hook, /collapsedSheetHeight|buildHomeSheetSnapPoints/)
+  assert.match(swipe, /PanResponder/)
+  assert.doesNotMatch(swipe, /homeSheetSnap|useHomeSheetSnap/)
+})

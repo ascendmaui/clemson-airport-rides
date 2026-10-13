@@ -10,7 +10,8 @@ import { supabase } from '@/lib/supabase'
 import { exportYearEnd, type ExportKind } from '@/lib/taxExport'
 import { loadYearEnd, type YearEndView } from '@/lib/taxPacket'
 import { useTheme } from '@/lib/theme'
-import { displayTinLast4, loadOnboarding } from 'rides-native/driverOnboardingClient'
+import { loadDriverW9 } from 'rides-native/driverW9Client'
+import { w9StatusLabel } from '../../../shared/driverW9.js'
 
 function milesText(miles: number | null | undefined): string {
   if (miles == null) return '—'
@@ -29,19 +30,18 @@ export default function TaxScreen() {
   const { colors, earningsPrivate } = useTheme()
   const [packet, setPacket] = useState<YearEndView | null>(null)
   const [selectedYear, setSelectedYear] = useState<number | null>(null)
-  const [last4, setLast4] = useState<string | null>(null)
+  const [w9Status, setW9Status] = useState('Not on file')
   const [ready, setReady] = useState(!user)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState<ExportKind | null>(null)
 
   const refresh = useCallback(async () => {
     if (!user || !supabase) return
-    const [bundle, view] = await Promise.all([
-      loadOnboarding(supabase, user.id),
+    const [desk, view] = await Promise.all([
+      loadDriverW9(supabase, user.id),
       loadYearEnd(supabase, user.id, selectedYear),
     ])
-    const tin = bundle?.tax?.tin_last4
-    setLast4(tin ? displayTinLast4(String(tin)) : null)
+    setW9Status(w9StatusLabel(desk))
     setPacket(view)
     setError(null)
   }, [selectedYear, user])
@@ -208,16 +208,55 @@ export default function TaxScreen() {
               <Text style={{ color: colors.purple, fontWeight: '800' }}>How Stripe files them</Text>
             </Pressable>
           </Card>
+          <Card>
+            <Text style={[styles.kicker, { color: colors.orange }]}>YEARLY EARNINGS SUMMARY</Text>
+            <Text style={{ color: colors.title, fontWeight: '800', fontSize: 18 }}>
+              {packet.year === packet.years[0] ? `${packet.year} to date` : packet.year}
+            </Text>
+            <View style={styles.grid}>
+              <Stat label="Gross fares" value={moneyText(packet.grossFareCents, earningsPrivate)} />
+              <Stat label="Tips (100% yours)" value={moneyText(packet.tipsCents, earningsPrivate, 'Not tracked')} />
+              <Stat label="Platform fees" value={moneyText(packet.platformFeeCents, earningsPrivate)} />
+              <Stat label="Bonuses and perks" value={moneyText(packet.bonusPerkCents, earningsPrivate)} />
+              <Stat label="Net payouts" value={moneyText(packet.netPayoutCents, earningsPrivate)} hint="Paid transfers for this year’s trips" />
+            </View>
+            <Text style={{ color: colors.title, fontWeight: '800' }}>Monthly breakdown</Text>
+            {packet.months.length === 0 ? (
+              <Text style={{ color: colors.inkSecondary, lineHeight: 20 }}>No months in this year yet.</Text>
+            ) : packet.months.map((month) => (
+              <View key={month.month} style={styles.month}>
+                <Text style={{ color: colors.ink, fontWeight: '800' }}>{month.label}</Text>
+                <Text style={{ color: colors.inkSecondary, lineHeight: 18 }}>
+                  Fares {moneyText(month.grossFareCents, earningsPrivate)} · Tips {moneyText(month.tipsCents, earningsPrivate)} · Fees {moneyText(month.platformFeeCents, earningsPrivate)} · Bonuses {moneyText(month.bonusPerkCents, earningsPrivate)} · Net {moneyText(month.netCents, earningsPrivate)}
+                </Text>
+              </View>
+            ))}
+            {packet.taxEstimate ? (
+              <View style={styles.month}>
+                <Text style={{ color: colors.title, fontWeight: '800' }}>Tax estimate</Text>
+                <Text style={{ color: colors.inkSecondary, lineHeight: 20 }}>
+                  Mileage deduction {moneyText(packet.estimatedDeductionCents, earningsPrivate, 'Rate not configured')}. Taxable after that deduction {moneyText(packet.taxEstimate.taxableEarningsCents, earningsPrivate)}. Estimated self-employment tax {moneyText(packet.taxEstimate.selfEmploymentTaxCents, earningsPrivate)}. Quarterly set-aside {moneyText(packet.taxEstimate.quarterlySetAsideCents, earningsPrivate)}.
+                </Text>
+                <Text style={{ color: colors.inkSecondary, lineHeight: 20 }}>{packet.taxEstimate.note}</Text>
+              </View>
+            ) : null}
+          </Card>
         </>
       ) : null}
-      <Card>
-        <Text style={{ color: colors.title, fontWeight: '800' }}>W-9</Text>
-        <Text style={{ color: colors.inkSecondary, lineHeight: 20 }}>
-          {last4 ? `Last four on file: ${last4}.` : 'No W-9 last four on file yet.'} The full tax id is saved only by the existing tax function. Stripe issues the 1099. This app does not generate that form.
-        </Text>
-      </Card>
+          <Card>
+            <Text style={{ color: colors.title, fontWeight: '800' }}>W-9</Text>
+            <Text style={{ color: colors.inkSecondary, lineHeight: 20 }}>
+              {w9Status} Stripe issues the 1099. This app does not generate that form.
+            </Text>
+          </Card>
       {error ? <ErrorText>{error}</ErrorText> : null}
-      <Primary label="Update W-9" tone="ghost" onPress={() => router.push('/onboarding')} />
+      <Primary
+        label="Update W-9"
+        tone="ghost"
+        onPress={() => router.push('/w9')}
+        accessibilityLabel="Update W-9"
+        accessibilityRole="link"
+      />
     </StackPage>
   )
 }
@@ -255,4 +294,5 @@ const styles = StyleSheet.create({
   stat: { width: '46%', gap: 2 },
   actions: { flexDirection: 'row', gap: 8 },
   action: { flex: 1 },
+  month: { gap: 2 },
 })

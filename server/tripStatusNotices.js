@@ -123,7 +123,7 @@ export function tripStatusNoticeCopy(kind, {
       if (amount <= 0) return null
       const dollars = amount % 100 === 0 ? `$${amount / 100}` : money(amount)
       const who = rider === 'The rider' ? 'Your rider' : rider
-      return { title: `${who} tipped you ${dollars}`, body: 'It shows in Other on your Earnings tab.' }
+      return { title: `${who} tipped you ${dollars}`, body: 'It shows in the tips breakdown on your Earnings tab.' }
     }
     default:
       return null
