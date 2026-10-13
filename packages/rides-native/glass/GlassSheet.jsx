@@ -1,6 +1,6 @@
 import { GlassSurface } from './GlassSurface.jsx'
 
-/** Bottom sheet shell: top radii, heavier blur, same specular streak and rim. */
+/** Bottom sheet shell. Renders GlassSurface, which mounts GlassView when Liquid Glass is available. */
 export function GlassSheet({
   children,
   app = 'rider',

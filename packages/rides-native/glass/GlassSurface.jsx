@@ -3,8 +3,29 @@ import { glassFill, glassRecipe, glassShowsStreak } from './tokens.js'
 
 let BlurView = null
 let LinearGradient = null
+let GlassView = null
+let isGlassEffectAPIAvailable = () => false
 try { BlurView = require('expo-blur').BlurView } catch { BlurView = null }
 try { LinearGradient = require('expo-linear-gradient').LinearGradient } catch { LinearGradient = null }
+try {
+  const glass = require('expo-glass-effect')
+  GlassView = glass.GlassView
+  if (typeof glass.isGlassEffectAPIAvailable === 'function') {
+    isGlassEffectAPIAvailable = glass.isGlassEffectAPIAvailable
+  }
+} catch {
+  GlassView = null
+}
+
+/** True only when UIGlassEffect can be constructed. False on web, Android, and iOS before 26. */
+export function nativeGlassAvailable() {
+  if (!GlassView) return false
+  try {
+    return isGlassEffectAPIAvailable() === true
+  } catch {
+    return false
+  }
+}
 
 const PAD_KEYS = [
   'padding', 'paddingHorizontal', 'paddingVertical',
@@ -50,6 +71,25 @@ export function GlassSurface({
   const showBlur = Boolean(BlurView) && Platform.OS !== 'web'
   const paintStreak = showStreak !== false && glassShowsStreak({ variant, accent: recipe.accent })
   const filled = variant === 'fab' || variant === 'primary' || variant === 'secondary' || variant === 'chip' || variant === 'ghost'
+  if (nativeGlassAvailable()) {
+    const strong = variant === 'primary' || variant === 'fab'
+    const tinted = strong || variant === 'chip' || variant === 'secondary' || variant === 'ghost'
+    return (
+      <GlassView
+        glassEffectStyle={strong ? 'regular' : 'clear'}
+        tintColor={tinted ? recipe.tint : undefined}
+        isInteractive={filled}
+        colorScheme={dark ? 'dark' : 'light'}
+        accessibilityRole={accessibilityRole}
+        accessibilityLabel={accessibilityLabel}
+        accessibilityState={accessibilityState}
+        pointerEvents={pointerEvents}
+        style={[rest, radii]}
+      >
+        <View style={[filled ? styles.fill : styles.content, flow, pad]}>{children}</View>
+      </GlassView>
+    )
+  }
   return (
     <View
       accessibilityRole={accessibilityRole}

@@ -1,6 +1,6 @@
 import { GlassSurface } from './GlassSurface.jsx'
 
-/** Frosted card. Body copy uses the recipe ink so it stays readable on both map styles. */
+/** Frosted card. Renders GlassSurface, which mounts GlassView when Liquid Glass is available. */
 export function GlassCard({
   children,
   app = 'rider',
