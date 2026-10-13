@@ -16,14 +16,14 @@ import {
   HOME_SHEET_SEARCH_FALLBACK,
   HOME_SHEET_SPRING,
   buildHomeSheetSnapPoints,
+  homeTabClearance,
   indexOfSnap,
   snapHomeSheet,
   type HomeSheetDetent,
 } from '@/lib/homeSheetSnap'
 
 function estimateTabBar(bottomInset: number) {
-  // Glass tab bar content plus the bottom safe-area pad (at least 10).
-  return 69 + Math.max(bottomInset, 10)
+  return homeTabClearance(bottomInset)
 }
 
 /**
@@ -31,7 +31,7 @@ function estimateTabBar(bottomInset: number) {
  * snap point. The sheet is a flex sibling of the map, so a collapsed sheet
  * leaves the map free to receive touches.
  */
-export function useHomeSheetSnap(onFocusSearch: () => void) {
+export function useHomeSheetSnap(onFocusSearch: () => void, extraCollapsed = 0) {
   const { height: windowH } = useWindowDimensions()
   const insets = useSafeAreaInsets()
   const [tabH, setTabH] = useState(() => estimateTabBar(insets.bottom))
@@ -39,12 +39,13 @@ export function useHomeSheetSnap(onFocusSearch: () => void) {
   const [handleH, setHandleH] = useState(HOME_SHEET_HANDLE_FALLBACK)
   const [detent, setDetent] = useState<HomeSheetDetent>('expanded')
 
+  const extra = Number.isFinite(extraCollapsed) ? Math.max(0, extraCollapsed) : 0
   const points = buildHomeSheetSnapPoints({
     windowHeight: windowH,
     tabBarHeight: tabH,
     searchFieldHeight: searchH,
     handleHeight: handleH,
-    bottomPadding: HOME_SHEET_BOTTOM_PADDING,
+    bottomPadding: HOME_SHEET_BOTTOM_PADDING + extra,
   })
   const initialIndex = Math.max(0, points.length - 1)
   const snapPoints = useSharedValue(points)
@@ -98,7 +99,7 @@ export function useHomeSheetSnap(onFocusSearch: () => void) {
       tabBarHeight: tabH,
       searchFieldHeight: searchH,
       handleHeight: handleH,
-      bottomPadding: HOME_SHEET_BOTTOM_PADDING,
+      bottomPadding: HOME_SHEET_BOTTOM_PADDING + extra,
     })
     snapPoints.value = nextPoints
     if (dragging.value || nextPoints.length === 0) return
@@ -112,7 +113,7 @@ export function useHomeSheetSnap(onFocusSearch: () => void) {
     if (Math.abs(sheetH.value - target) < 0.5) return
     dragOrigin.value = target
     sheetH.value = touched.value ? withSpring(target, HOME_SHEET_SPRING) : target
-  }, [windowH, tabH, searchH, handleH, dragOrigin, dragging, restingIndex, sheetH, snapPoints, touched])
+  }, [extra, windowH, tabH, searchH, handleH, dragOrigin, dragging, restingIndex, sheetH, snapPoints, touched])
 
   useEffect(() => {
     if (!pendingFocus.current || detent !== 'expanded') return

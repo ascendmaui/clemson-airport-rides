@@ -415,6 +415,54 @@ export function framePercents(points: WeightedHeatPoint[]): Array<{ left: number
   })
 }
 
+/** North of the heat point, clear of the pin head at the home map zoom. */
+export const HEAT_LABEL_LIFT_DEG = 0.0022
+const HEAT_LABEL_GAP_DEG = 0.0016
+
+/** Percent lift for the web heat labels. Smaller top is higher on the map. */
+export const HEAT_LABEL_LIFT_PERCENT = 10
+const HEAT_LABEL_GAP_PERCENT = 12
+
+function tooClose(a: { latitude: number; longitude: number }, b: { latitude: number; longitude: number }, gap: number) {
+  return Math.hypot(a.latitude - b.latitude, a.longitude - b.longitude) < gap
+}
+
+/** Place each busyness label above its pin, then nudge any label that still collides. */
+export function placeHeatLabels(
+  areas: Array<{ latitude: number; longitude: number }>,
+): Array<{ latitude: number; longitude: number }> {
+  const placed: Array<{ latitude: number; longitude: number }> = []
+  for (const area of areas) {
+    let latitude = area.latitude + HEAT_LABEL_LIFT_DEG
+    let longitude = area.longitude
+    let guard = 0
+    while (placed.some((point) => tooClose(point, { latitude, longitude }, HEAT_LABEL_GAP_DEG)) && guard < 8) {
+      longitude += HEAT_LABEL_GAP_DEG
+      guard += 1
+    }
+    placed.push({ latitude, longitude })
+  }
+  return placed
+}
+
+/** Same clearance in the web layer's percent frame. */
+export function placeHeatLabelPercents(
+  places: Array<{ left: number; top: number }>,
+): Array<{ left: number; top: number }> {
+  const placed: Array<{ left: number; top: number }> = []
+  for (const place of places) {
+    let top = Math.max(8, Math.round((place.top - HEAT_LABEL_LIFT_PERCENT) * 10) / 10)
+    let left = place.left
+    let guard = 0
+    while (placed.some((point) => Math.hypot(point.left - left, point.top - top) < HEAT_LABEL_GAP_PERCENT) && guard < 6) {
+      left = Math.min(90, Math.round((left + HEAT_LABEL_GAP_PERCENT) * 10) / 10)
+      guard += 1
+    }
+    placed.push({ left, top })
+  }
+  return placed
+}
+
 export function fieldPlacement(
   area: Pick<HotArea, 'latitude' | 'longitude' | 'spanLat' | 'spanLng'>,
   bounds: [[number, number], [number, number]],
